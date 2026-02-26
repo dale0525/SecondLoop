@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/backend/app_backend.dart';
 import '../../core/session/session_scope.dart';
+import '../../core/sync/sync_key_manager.dart';
 import '../../i18n/strings.g.dart';
 import 'setup_master_password_page.dart';
 import 'unlock_page.dart';
@@ -65,11 +66,18 @@ class _LockGateState extends State<LockGate> {
   }
 
   void _lock() {
+    SyncKeyManager.setSessionKey(null);
     setState(() {
       _sessionKey = null;
       _bootstrapFuture = null;
       _forceSetupOnNextBootstrap = true;
     });
+  }
+
+  @override
+  void dispose() {
+    SyncKeyManager.setSessionKey(null);
+    super.dispose();
   }
 
   Future<_GateBootstrapResult> _bootstrap() async {
@@ -116,6 +124,7 @@ class _LockGateState extends State<LockGate> {
   @override
   Widget build(BuildContext context) {
     if (_sessionKey case final key?) {
+      SyncKeyManager.setSessionKey(key);
       return SessionScope(sessionKey: key, lock: _lock, child: widget.child);
     }
 
@@ -140,29 +149,38 @@ class _LockGateState extends State<LockGate> {
 
         final result = snapshot.data ?? const _GateBootstrapResult.needsSetup();
         return switch (result) {
-          _GateBootstrapSetup() => Overlay(
-              initialEntries: [
-                OverlayEntry(
-                  builder: (_) => SetupMasterPasswordPage(
-                    onUnlocked: (key) => setState(() => _sessionKey = key),
+          _GateBootstrapSetup() => () {
+              SyncKeyManager.setSessionKey(null);
+              return Overlay(
+                initialEntries: [
+                  OverlayEntry(
+                    builder: (_) => SetupMasterPasswordPage(
+                      onUnlocked: (key) => setState(() => _sessionKey = key),
+                    ),
                   ),
-                ),
-              ],
-            ),
-          _GateBootstrapUnlock() => Overlay(
-              initialEntries: [
-                OverlayEntry(
-                  builder: (_) => UnlockPage(
-                    onUnlocked: (key) => setState(() => _sessionKey = key),
+                ],
+              );
+            }(),
+          _GateBootstrapUnlock() => () {
+              SyncKeyManager.setSessionKey(null);
+              return Overlay(
+                initialEntries: [
+                  OverlayEntry(
+                    builder: (_) => UnlockPage(
+                      onUnlocked: (key) => setState(() => _sessionKey = key),
+                    ),
                   ),
-                ),
-              ],
-            ),
-          _GateBootstrapUnlocked(:final sessionKey) => SessionScope(
-              sessionKey: sessionKey,
-              lock: _lock,
-              child: widget.child,
-            ),
+                ],
+              );
+            }(),
+          _GateBootstrapUnlocked(:final sessionKey) => () {
+              SyncKeyManager.setSessionKey(sessionKey);
+              return SessionScope(
+                sessionKey: sessionKey,
+                lock: _lock,
+                child: widget.child,
+              );
+            }(),
         };
       },
     );

@@ -1219,8 +1219,21 @@ Stream<String> ragAskAiStreamCloudGatewayWithEmbeddingsTimeWindow(
             modelName: modelName,
             embeddingsModelName: embeddingsModelName);
 
+/// Deprecated compatibility path:
+/// keep deterministic fixed-salt derivation only for legacy migration flows.
+/// New recovery flows should use `sync::recovery_key` envelope APIs.
 Future<Uint8List> syncDeriveKey({required String passphrase}) =>
     RustLib.instance.api.crateApiCoreSyncDeriveKey(passphrase: passphrase);
+
+Future<String> syncCreateRecoveryEnvelope(
+        {required List<int> syncKey, required String passphrase}) =>
+    RustLib.instance.api.crateApiCoreSyncCreateRecoveryEnvelope(
+        syncKey: syncKey, passphrase: passphrase);
+
+Future<Uint8List> syncRecoverSyncKeyFromEnvelope(
+        {required String envelopeJson, required String passphrase}) =>
+    RustLib.instance.api.crateApiCoreSyncRecoverSyncKeyFromEnvelope(
+        envelopeJson: envelopeJson, passphrase: passphrase);
 
 Future<void> syncWebdavTestConnection(
         {required String baseUrl,

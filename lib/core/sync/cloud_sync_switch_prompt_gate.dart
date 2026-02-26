@@ -21,6 +21,7 @@ import 'sync_config_store.dart';
 import 'sync_engine.dart';
 import 'sync_engine_gate.dart';
 import 'background_sync.dart';
+import 'sync_key_manager.dart';
 
 final class CloudSyncSwitchPromptGate extends StatefulWidget {
   const CloudSyncSwitchPromptGate({
@@ -627,18 +628,11 @@ final class _CloudSyncSwitchPromptGateState
     if (backendScope == null) return;
     final backend = backendScope.backend;
 
-    final existing = await _store.readSyncKey();
+    await SyncKeyManager.loadOrCreate(
+      read: _store.readSyncKey,
+      write: _store.writeSyncKey,
+    );
     if (!mounted) return;
-
-    if (existing == null || existing.length != 32) {
-      final passphrase = await _promptForPassphrase();
-      if (!mounted) return;
-      if (passphrase == null || passphrase.trim().isEmpty) return;
-
-      final derived = await backend.deriveSyncKey(passphrase.trim());
-      if (!mounted) return;
-      await _store.writeSyncKey(derived);
-    }
 
     await _store.writeBackendType(SyncBackendType.managedVault);
     await _store.writeRemoteRoot(uid);
@@ -651,7 +645,7 @@ final class _CloudSyncSwitchPromptGateState
 
     final sessionKey =
         context.getInheritedWidgetOfExactType<SessionScope>()?.sessionKey;
-    final syncKey = await _store.readSyncKey();
+    final syncKey = await SyncKeyManager.load(read: _store.readSyncKey);
     final baseUrl = await _store.resolveManagedVaultBaseUrl();
     String? idToken;
     try {
@@ -699,52 +693,6 @@ final class _CloudSyncSwitchPromptGateState
       engine?.triggerPullNow();
       engine?.triggerPushNow();
     }
-  }
-
-  Future<String?> _promptForPassphrase() async {
-    final dialogContext = widget.navigatorKey?.currentContext;
-    final effectiveContext = dialogContext ?? context;
-
-    final t = effectiveContext.t;
-    final controller = TextEditingController();
-    final passphrase = await showDialog<String?>(
-      context: effectiveContext,
-      builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setState) {
-            final canSubmit = controller.text.trim().isNotEmpty;
-            return AlertDialog(
-              title: Text(t.sync.cloudManagedVault.setPassphraseDialog.title),
-              content: TextField(
-                controller: controller,
-                autofocus: true,
-                obscureText: true,
-                decoration: InputDecoration(
-                  labelText: t.sync.fields.passphrase.label,
-                  helperText: t.sync.fields.passphrase.helper,
-                  helperMaxLines: 3,
-                ),
-                onChanged: (_) => setState(() {}),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.of(context).pop(null),
-                  child: Text(t.common.actions.cancel),
-                ),
-                FilledButton(
-                  onPressed: canSubmit
-                      ? () => Navigator.of(context).pop(controller.text.trim())
-                      : null,
-                  child: Text(
-                      t.sync.cloudManagedVault.setPassphraseDialog.confirm),
-                ),
-              ],
-            );
-          },
-        );
-      },
-    );
-    return passphrase;
   }
 
   @override

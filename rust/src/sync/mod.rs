@@ -3,6 +3,7 @@
 
 pub mod localdir;
 pub mod managed_vault;
+pub mod recovery_key;
 pub mod webdav;
 
 include!("parts/01_prelude.rs");

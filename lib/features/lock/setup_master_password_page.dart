@@ -28,6 +28,21 @@ class _SetupMasterPasswordPageState extends State<SetupMasterPasswordPage> {
   bool _busy = false;
   String? _error;
 
+  bool _isZh() {
+    return Localizations.localeOf(context)
+        .languageCode
+        .toLowerCase()
+        .startsWith('zh');
+  }
+
+  String _setupTitle() => _isZh() ? '设置应用锁密码' : 'Set app lock password';
+  String _passwordLabel() => _isZh() ? '应用锁密码' : 'App lock password';
+  String _passwordRequired() =>
+      _isZh() ? '请输入应用锁密码' : 'App lock password is required';
+  String _setupHint() => _isZh()
+      ? '创建应用锁密码以保护本地数据。'
+      : 'Create an app lock password to protect local data.';
+
   @override
   void dispose() {
     _passwordController.dispose();
@@ -47,7 +62,7 @@ class _SetupMasterPasswordPageState extends State<SetupMasterPasswordPage> {
     final confirm = _confirmController.text;
 
     if (password.isEmpty) {
-      setState(() => _error = context.t.lock.masterPasswordRequired);
+      setState(() => _error = _passwordRequired());
       return;
     }
     if (password != confirm) {
@@ -94,7 +109,7 @@ class _SetupMasterPasswordPageState extends State<SetupMasterPasswordPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text(context.t.lock.setupTitle)),
+      appBar: AppBar(title: Text(_setupTitle())),
       body: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 460),
@@ -107,7 +122,7 @@ class _SetupMasterPasswordPageState extends State<SetupMasterPasswordPage> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   Text(
-                    context.t.lock.masterPasswordRequired,
+                    _setupHint(),
                     style: Theme.of(context).textTheme.titleMedium,
                   ),
                   const SizedBox(height: 16),
@@ -116,7 +131,7 @@ class _SetupMasterPasswordPageState extends State<SetupMasterPasswordPage> {
                     controller: _passwordController,
                     obscureText: true,
                     decoration: InputDecoration(
-                      labelText: context.t.common.fields.masterPassword,
+                      labelText: _passwordLabel(),
                     ),
                   ),
                   const SizedBox(height: 12),

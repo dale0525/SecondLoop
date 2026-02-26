@@ -128,7 +128,7 @@ void main() {
     expect(find.byType(AlertDialog), findsOneWidget);
   });
 
-  testWidgets('Switching to Cloud requires sync passphrase if missing',
+  testWidgets('Switching to Cloud auto-generates sync key if missing',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
     final store = SyncConfigStore();
@@ -164,19 +164,6 @@ void main() {
     await tester.pumpAndSettle();
 
     await tester.tap(find.text('Switch'));
-    await tester.pumpAndSettle();
-
-    expect(find.text('Set sync passphrase'), findsOneWidget);
-
-    await tester.enterText(
-      find.byWidgetPredicate(
-        (w) => w is TextField && w.decoration?.labelText == 'Sync passphrase',
-      ),
-      'passphrase',
-    );
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.text('Save passphrase'));
     await tester.pumpAndSettle();
 
     expect(await store.readBackendType(), SyncBackendType.managedVault);

@@ -247,11 +247,41 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
     return false;
   }
 
+  Future<_ManagedVaultAuthContext?> _resolveManagedVaultAuthContext() async {
+    if (_backendType != SyncBackendType.managedVault) return null;
+    final cloudAuth = CloudAuthScope.maybeOf(context)?.controller;
+    if (cloudAuth == null) return null;
+
+    String? idToken;
+    try {
+      idToken = await cloudAuth.getIdToken();
+    } catch (_) {
+      idToken = null;
+    }
+    final vaultId = cloudAuth.uid?.trim();
+    final baseUrl = (await _store.resolveManagedVaultBaseUrl())?.trim();
+    if (idToken == null ||
+        idToken.trim().isEmpty ||
+        vaultId == null ||
+        vaultId.isEmpty ||
+        baseUrl == null ||
+        baseUrl.isEmpty) {
+      return null;
+    }
+
+    return _ManagedVaultAuthContext(
+      baseUrl: baseUrl,
+      vaultId: vaultId,
+      idToken: idToken.trim(),
+    );
+  }
+
   Future<void> _save() async {
     if (_busy) return;
     _setState(() => _busy = true);
 
     final t = context.t;
+    var shouldHideRecoveryHint = false;
     try {
       final before = await _store.readAll();
       if (!mounted) return;
@@ -272,25 +302,118 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
           _backendType == SyncBackendType.localDir;
       final passphrase = _optionalTrimmed(_syncPassphraseController);
       final hasNewPassphrase = passphrase != null && !_passphraseIsPlaceholder;
-      if (requiresSyncKey && !hasNewPassphrase) {
-        final existing = await _loadSyncKey();
-        if (existing == null || existing.length != 32) {
-          _showSnack(t.sync.missingSyncKey);
-          return;
-        }
-      }
 
       final persisted = await _persistBackendConfig();
       if (!persisted) return;
 
+      Uint8List? syncKey = await _loadSyncKey();
       if (hasNewPassphrase) {
         final passphrase = _optionalTrimmed(_syncPassphraseController);
         if (passphrase == null) {
           _showSnack(t.sync.missingSyncKey);
           return;
         }
-        final derived = await backend.deriveSyncKey(passphrase);
-        await _store.writeSyncKey(derived);
+
+        Uint8List resolvedSyncKey;
+        if (syncKey != null && syncKey.length == 32) {
+          resolvedSyncKey = syncKey;
+        } else {
+          final managedVaultAuth = await _resolveManagedVaultAuthContext();
+          String? existingEnvelopeJson =
+              await _store.readRecoveryEnvelopeJson();
+          Object? recoveryEnvelopeFetchError;
+          if ((existingEnvelopeJson == null ||
+                  existingEnvelopeJson.trim().isEmpty) &&
+              managedVaultAuth != null) {
+            try {
+              final fetchedEnvelopeJson =
+                  await _vaultRecoveryEnvelopeClient.fetchRecoveryEnvelope(
+                managedVaultBaseUrl: managedVaultAuth.baseUrl,
+                vaultId: managedVaultAuth.vaultId,
+                idToken: managedVaultAuth.idToken,
+              );
+              if (fetchedEnvelopeJson != null &&
+                  fetchedEnvelopeJson.trim().isNotEmpty) {
+                existingEnvelopeJson = fetchedEnvelopeJson;
+                await _store.writeRecoveryEnvelopeJson(fetchedEnvelopeJson);
+              }
+            } catch (e) {
+              recoveryEnvelopeFetchError = e;
+            }
+          }
+
+          final hasEnvelope = existingEnvelopeJson != null &&
+              existingEnvelopeJson.trim().isNotEmpty;
+          if (!hasEnvelope &&
+              _backendType == SyncBackendType.managedVault &&
+              (managedVaultAuth == null ||
+                  recoveryEnvelopeFetchError != null)) {
+            _showSnack(
+              t.sync.recoveryHint.fetchFailed(
+                error:
+                    '${recoveryEnvelopeFetchError ?? 'missing_managed_vault_auth_context'}',
+              ),
+            );
+            return;
+          }
+
+          if (hasEnvelope) {
+            try {
+              final recovered = await backend.recoverSyncKeyFromEnvelope(
+                existingEnvelopeJson,
+                passphrase,
+              );
+              if (recovered.length != 32) {
+                _showSnack(
+                  t.sync.recoveryHint.recoverFailed(error: 'invalid_sync_key'),
+                );
+                return;
+              }
+              resolvedSyncKey = recovered;
+            } catch (e) {
+              _showSnack(t.sync.recoveryHint.recoverFailed(error: '$e'));
+              return;
+            }
+          } else {
+            resolvedSyncKey = await backend.deriveSyncKey(passphrase);
+          }
+        }
+
+        await SyncKeyManager.save(
+          write: _store.writeSyncKey,
+          key: resolvedSyncKey,
+        );
+        try {
+          final envelopeJson = await backend.createSyncRecoveryEnvelope(
+            resolvedSyncKey,
+            passphrase,
+          );
+          await _store.writeRecoveryEnvelopeJson(envelopeJson);
+          final managedVaultAuth = await _resolveManagedVaultAuthContext();
+          if (managedVaultAuth != null) {
+            try {
+              await _vaultRecoveryEnvelopeClient.putRecoveryEnvelope(
+                managedVaultBaseUrl: managedVaultAuth.baseUrl,
+                vaultId: managedVaultAuth.vaultId,
+                idToken: managedVaultAuth.idToken,
+                envelopeJson: envelopeJson,
+              );
+            } catch (_) {
+              // Best-effort: do not block user flow on network transient errors.
+            }
+          }
+        } catch (_) {
+          // Best-effort: keep legacy deterministic flow working even if
+          // recovery envelope generation is unavailable on current backend.
+        }
+        syncKey = resolvedSyncKey;
+        shouldHideRecoveryHint = true;
+        _syncPassphraseController.text =
+            _SyncSettingsPageState._kPassphrasePlaceholder;
+        _passphraseIsPlaceholder = true;
+      } else if (requiresSyncKey && (syncKey == null || syncKey.length != 32)) {
+        syncKey = await _loadOrCreateSyncKey();
+        shouldHideRecoveryHint = true;
         _syncPassphraseController.text =
             _SyncSettingsPageState._kPassphrasePlaceholder;
         _passphraseIsPlaceholder = true;
@@ -325,11 +448,11 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
           final sessionScope =
               context.getInheritedWidgetOfExactType<SessionScope>();
           final sessionKey = sessionScope?.sessionKey;
-          final syncKey = await _loadSyncKey();
           if (sessionKey != null &&
               syncKey != null &&
               syncKey.length == 32 &&
               mounted) {
+            final activeSyncKey = syncKey;
             switch (newBackendType) {
               case SyncBackendType.webdav:
                 await _runSaveSyncWithProgress(
@@ -339,7 +462,7 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
                     await _consumeRustProgressStream(
                       backend.syncWebdavPullProgress(
                         sessionKey,
-                        syncKey,
+                        activeSyncKey,
                         baseUrl: newWebdavBaseUrl,
                         username: _optionalTrimmed(_usernameController),
                         password: _optionalTrimmed(_passwordController),
@@ -356,7 +479,7 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
                     await _consumeRustProgressStream(
                       backend.syncWebdavPushOpsOnlyProgress(
                         sessionKey,
-                        syncKey,
+                        activeSyncKey,
                         baseUrl: newWebdavBaseUrl,
                         username: _optionalTrimmed(_usernameController),
                         password: _optionalTrimmed(_passwordController),
@@ -380,7 +503,7 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
                         client: WebDavCloudMediaBackupClient(
                           backend: backend,
                           sessionKey: sessionKey,
-                          syncKey: syncKey,
+                          syncKey: activeSyncKey,
                           baseUrl: newWebdavBaseUrl,
                           username: _optionalTrimmed(_usernameController),
                           password: _optionalTrimmed(_passwordController),
@@ -420,7 +543,7 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
                     await _consumeRustProgressStream(
                       backend.syncLocaldirPullProgress(
                         sessionKey,
-                        syncKey,
+                        activeSyncKey,
                         localDir: newLocalDir,
                         remoteRoot: newRemoteRoot,
                       ),
@@ -435,7 +558,7 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
                     await _consumeRustProgressStream(
                       backend.syncLocaldirPushProgress(
                         sessionKey,
-                        syncKey,
+                        activeSyncKey,
                         localDir: newLocalDir,
                         remoteRoot: newRemoteRoot,
                       ),
@@ -486,7 +609,7 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
                       await _consumeRustProgressStream(
                         backend.syncManagedVaultPullProgress(
                           sessionKey,
-                          syncKey,
+                          activeSyncKey,
                           baseUrl: baseUrlTrimmed,
                           vaultId: vaultId,
                           idToken: idTokenTrimmed,
@@ -502,7 +625,7 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
                       await _consumeRustProgressStream(
                         backend.syncManagedVaultPushOpsOnlyProgress(
                           sessionKey,
-                          syncKey,
+                          activeSyncKey,
                           baseUrl: baseUrlTrimmed,
                           vaultId: vaultId,
                           idToken: idTokenTrimmed,
@@ -525,7 +648,7 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
                           client: ManagedVaultCloudMediaBackupClient(
                             backend: backend,
                             sessionKey: sessionKey,
-                            syncKey: syncKey,
+                            syncKey: activeSyncKey,
                             baseUrl: baseUrlTrimmed,
                             vaultId: vaultId,
                             idToken: idTokenTrimmed,
@@ -579,7 +702,14 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
     } catch (e) {
       _showSnack(t.sync.saveFailed(error: '$e'));
     } finally {
-      if (mounted) _setState(() => _busy = false);
+      if (mounted) {
+        _setState(() {
+          _busy = false;
+          if (shouldHideRecoveryHint) {
+            _showRecoveryHintBanner = false;
+          }
+        });
+      }
     }
   }
 
@@ -615,11 +745,7 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
       final persisted = await _persistBackendConfig();
       if (!persisted) return;
 
-      final syncKey = await _loadSyncKey();
-      if (syncKey == null || syncKey.length != 32) {
-        _showSnack(t.sync.missingSyncKey);
-        return;
-      }
+      final syncKey = await _loadOrCreateSyncKey();
 
       final pushed = await (switch (_backendType) {
         SyncBackendType.webdav => _consumeRustProgressStream(
@@ -725,11 +851,7 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
       final persisted = await _persistBackendConfig();
       if (!persisted) return;
 
-      final syncKey = await _loadSyncKey();
-      if (syncKey == null || syncKey.length != 32) {
-        _showSnack(t.sync.missingSyncKey);
-        return;
-      }
+      final syncKey = await _loadOrCreateSyncKey();
 
       final pulled = await (switch (_backendType) {
         SyncBackendType.webdav => _consumeRustProgressStream(
@@ -828,4 +950,16 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
       }
     }
   }
+}
+
+final class _ManagedVaultAuthContext {
+  const _ManagedVaultAuthContext({
+    required this.baseUrl,
+    required this.vaultId,
+    required this.idToken,
+  });
+
+  final String baseUrl;
+  final String vaultId;
+  final String idToken;
 }

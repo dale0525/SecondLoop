@@ -139,6 +139,35 @@ void main() {
     expect(backend.clearSavedSessionKeyCalls, 0);
   });
 
+  testWidgets('Settings: system unlock subtitle uses app lock password wording',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({
+      'app_lock_enabled_v1': true,
+      'biometric_unlock_enabled_v1': true,
+    });
+
+    final backend = _CountingBackend();
+
+    await tester.pumpWidget(
+      AppBackendScope(
+        backend: backend,
+        child: SessionScope(
+          sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+          lock: () {},
+          child: wrapWithI18n(
+            const MaterialApp(home: Scaffold(body: SettingsPage())),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text('Unlock with biometrics instead of app lock password'),
+      findsOneWidget,
+    );
+  });
+
   testWidgets(
       'Settings (windows desktop): enabling Auto lock keeps saved key (default system unlock)',
       (tester) async {

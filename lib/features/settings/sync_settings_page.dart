@@ -8,12 +8,14 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/backend/app_backend.dart';
 import '../../core/cloud/cloud_auth_scope.dart';
+import '../../core/cloud/vault_recovery_envelope_client.dart';
 import '../../core/sync/cloud_sync_switch_prefs.dart';
 import '../../core/session/session_scope.dart';
 import '../../core/sync/background_sync.dart';
 import '../../core/sync/sync_config_store.dart';
 import '../../core/sync/sync_engine.dart';
 import '../../core/sync/sync_engine_gate.dart';
+import '../../core/sync/sync_key_manager.dart';
 import '../../i18n/strings.g.dart';
 import '../../src/rust/db.dart';
 import '../../ui/sl_surface.dart';
@@ -51,9 +53,11 @@ class SyncSettingsPage extends StatefulWidget {
   const SyncSettingsPage({
     super.key,
     this.configStore,
+    this.vaultRecoveryEnvelopeClient,
   });
 
   final SyncConfigStore? configStore;
+  final VaultRecoveryEnvelopeClient? vaultRecoveryEnvelopeClient;
 
   @override
   State<SyncSettingsPage> createState() => _SyncSettingsPageState();
@@ -64,6 +68,10 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
   static const _kSaveSyncProgressKey = ValueKey('sync_save_progress');
   static const _kSaveSyncProgressPercentKey =
       ValueKey('sync_save_progress_percent');
+  static const _kRecoveryHintBannerKey = ValueKey('sync_recovery_hint_banner');
+  static const _kRecoveryHintActionKey = ValueKey('sync_recovery_hint_action');
+  static const _kRecoveryPassphraseFieldKey =
+      ValueKey('sync_recovery_passphrase_field');
 
   final _baseUrlController = TextEditingController();
   final _managedVaultBaseUrlController = TextEditingController();
@@ -72,6 +80,7 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
   final _localDirController = TextEditingController();
   final _remoteRootController = TextEditingController(text: 'SecondLoop');
   final _syncPassphraseController = TextEditingController();
+  final _recoveryPassphraseFieldAnchorKey = GlobalKey();
 
   bool _busy = false;
   _ManualSyncAction? _manualSyncAction;
@@ -79,8 +88,13 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
   bool _manualSyncHasTotal = false;
   bool _passphraseIsPlaceholder = false;
   bool _showManagedVaultEndpointOverride = false;
+  bool _showRecoveryHintBanner = false;
 
   late final SyncConfigStore _store = widget.configStore ?? SyncConfigStore();
+  late final VaultRecoveryEnvelopeClient _vaultRecoveryEnvelopeClient =
+      widget.vaultRecoveryEnvelopeClient ?? VaultRecoveryEnvelopeClient();
+  late final bool _ownsVaultRecoveryEnvelopeClient =
+      widget.vaultRecoveryEnvelopeClient == null;
 
   SyncBackendType _backendType = SyncBackendType.webdav;
   bool _autoEnabled = true;
@@ -105,6 +119,9 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
     _localDirController.dispose();
     _remoteRootController.dispose();
     _syncPassphraseController.dispose();
+    if (_ownsVaultRecoveryEnvelopeClient) {
+      _vaultRecoveryEnvelopeClient.dispose();
+    }
     super.dispose();
   }
 
@@ -128,6 +145,50 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
     });
   }
 
+  Future<void> _tryHydrateManagedVaultRecoveryEnvelope({
+    required SyncBackendType backendType,
+  }) async {
+    if (backendType != SyncBackendType.managedVault) return;
+
+    final cloudAuth = CloudAuthScope.maybeOf(context)?.controller;
+    if (cloudAuth == null) return;
+
+    final existing = await _store.readRecoveryEnvelopeJson();
+    if (existing != null && existing.trim().isNotEmpty) return;
+
+    String? idToken;
+    try {
+      idToken = await cloudAuth.getIdToken();
+    } catch (_) {
+      idToken = null;
+    }
+    final vaultId = cloudAuth.uid?.trim();
+    final baseUrl = (await _store.resolveManagedVaultBaseUrl())?.trim();
+    if (idToken == null ||
+        idToken.trim().isEmpty ||
+        vaultId == null ||
+        vaultId.isEmpty ||
+        baseUrl == null ||
+        baseUrl.isEmpty) {
+      return;
+    }
+
+    try {
+      final fetchedEnvelopeJson =
+          await _vaultRecoveryEnvelopeClient.fetchRecoveryEnvelope(
+        managedVaultBaseUrl: baseUrl,
+        vaultId: vaultId,
+        idToken: idToken.trim(),
+      );
+      if (fetchedEnvelopeJson != null &&
+          fetchedEnvelopeJson.trim().isNotEmpty) {
+        await _store.writeRecoveryEnvelopeJson(fetchedEnvelopeJson);
+      }
+    } catch (_) {
+      // Best-effort prefetch.
+    }
+  }
+
   Future<void> _load() async {
     final all = await _store.readAll();
     final backendType = switch (all[SyncConfigStore.kBackendType]) {
@@ -141,10 +202,13 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
     final baseUrl = all[SyncConfigStore.kWebdavBaseUrl];
     final managedVaultBaseUrl = all[SyncConfigStore.kManagedVaultBaseUrl];
     final username = all[SyncConfigStore.kWebdavUsername];
-    final password = all[SyncConfigStore.kWebdavPassword];
+    final password = await _store.readWebdavPassword();
     final remoteRoot = all[SyncConfigStore.kRemoteRoot];
     final localDir = all[SyncConfigStore.kLocalDir];
-    final hasSyncKey = (all[SyncConfigStore.kSyncKeyB64] ?? '').isNotEmpty;
+    await _tryHydrateManagedVaultRecoveryEnvelope(backendType: backendType);
+    final hasSyncKey = (await _store.readSyncKey()) != null;
+    final hasRecoveryEnvelope =
+        (await _store.readRecoveryEnvelopeJson())?.trim().isNotEmpty == true;
     final mediaDownloadsWifiOnly =
         (all[SyncConfigStore.kMediaDownloadsWifiOnly] ?? '1') == '1';
     final cloudMediaBackupEnabled =
@@ -170,6 +234,9 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
               backendType == SyncBackendType.webdav)
           ? _maybeLoadCloudMediaBackupSummary()
           : null;
+      _showRecoveryHintBanner = backendType == SyncBackendType.managedVault &&
+          hasRecoveryEnvelope &&
+          !hasSyncKey;
       if (hasSyncKey) {
         _syncPassphraseController.text = _kPassphrasePlaceholder;
         _passphraseIsPlaceholder = true;
@@ -177,8 +244,35 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
     });
   }
 
+  void _handleRecoveryHintAction() {
+    if (_busy) return;
+    final passphrase = _optionalTrimmed(_syncPassphraseController);
+    if (passphrase == null || passphrase.isEmpty || _passphraseIsPlaceholder) {
+      _showSnack(context.t.sync.recoveryHint.enterPassphraseFirst);
+      final fieldContext = _recoveryPassphraseFieldAnchorKey.currentContext;
+      if (fieldContext != null) {
+        unawaited(
+          Scrollable.ensureVisible(
+            fieldContext,
+            duration: const Duration(milliseconds: 220),
+            curve: Curves.easeOutCubic,
+          ),
+        );
+      }
+      return;
+    }
+    unawaited(_save());
+  }
+
   Future<Uint8List?> _loadSyncKey() async {
-    return _store.readSyncKey();
+    return SyncKeyManager.load(read: _store.readSyncKey);
+  }
+
+  Future<Uint8List> _loadOrCreateSyncKey() async {
+    return SyncKeyManager.loadOrCreate(
+      read: _store.readSyncKey,
+      write: _store.writeSyncKey,
+    );
   }
 
   void _setState(VoidCallback fn) => setState(fn);
@@ -193,6 +287,13 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
 
   @override
   Widget build(BuildContext context) {
+    final t = context.t;
+    final recoveryPassphraseLabel = t.sync.fields.passphrase.label;
+    final recoveryPassphraseHelper = t.sync.fields.passphrase.helper;
+    final recoveryHintTitle = t.sync.recoveryHint.title;
+    final recoveryHintMessage = t.sync.recoveryHint.message;
+    final recoveryHintAction = t.sync.recoveryHint.action;
+
     final engine = SyncEngineScope.maybeOf(context);
     final cloudUid = CloudAuthScope.maybeOf(context)?.controller.uid?.trim();
     if (_backendType == SyncBackendType.managedVault &&
@@ -640,11 +741,53 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
             Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                if (_showRecoveryHintBanner) ...[
+                  Container(
+                    key: _kRecoveryHintBannerKey,
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.primaryContainer,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          recoveryHintTitle,
+                          style:
+                              Theme.of(context).textTheme.titleSmall?.copyWith(
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          recoveryHintMessage,
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                        const SizedBox(height: 10),
+                        Align(
+                          alignment: Alignment.centerRight,
+                          child: FilledButton.tonal(
+                            key: _kRecoveryHintActionKey,
+                            onPressed: _busy ? null : _handleRecoveryHintAction,
+                            child: Text(recoveryHintAction),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                ],
+                SizedBox(
+                  key: _recoveryPassphraseFieldAnchorKey,
+                  child: const SizedBox.shrink(),
+                ),
                 TextField(
+                  key: _kRecoveryPassphraseFieldKey,
                   controller: _syncPassphraseController,
                   decoration: InputDecoration(
-                    labelText: context.t.sync.fields.passphrase.label,
-                    helperText: context.t.sync.fields.passphrase.helper,
+                    labelText: recoveryPassphraseLabel,
+                    helperText: recoveryPassphraseHelper,
                     helperMaxLines: 3,
                   ),
                   enabled: !_busy,

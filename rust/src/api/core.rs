@@ -2727,6 +2727,9 @@ pub fn rag_ask_ai_stream_cloud_gateway_with_embeddings_time_window(
     finish_ask_ai_stream(&sink, result)
 }
 
+/// Deprecated compatibility path:
+/// keep deterministic fixed-salt derivation only for legacy migration flows.
+/// New recovery flows should use `sync::recovery_key` envelope APIs.
 #[flutter_rust_bridge::frb]
 pub fn sync_derive_key(passphrase: String) -> Result<Vec<u8>> {
     let kdf = KdfParams {
@@ -2735,6 +2738,24 @@ pub fn sync_derive_key(passphrase: String) -> Result<Vec<u8>> {
         p_cost: 1,
     };
     let key = derive_root_key(&passphrase, b"secondloop-sync1", &kdf)?;
+    Ok(key.to_vec())
+}
+
+#[flutter_rust_bridge::frb]
+pub fn sync_create_recovery_envelope(sync_key: Vec<u8>, passphrase: String) -> Result<String> {
+    let sync_key = sync_key_from_bytes(sync_key)?;
+    let envelope = sync::recovery_key::create_recovery_envelope(&sync_key, &passphrase)?;
+    serde_json::to_string(&envelope).map_err(|e| anyhow!("serialize recovery envelope failed: {e}"))
+}
+
+#[flutter_rust_bridge::frb]
+pub fn sync_recover_sync_key_from_envelope(
+    envelope_json: String,
+    passphrase: String,
+) -> Result<Vec<u8>> {
+    let envelope: sync::recovery_key::RecoveryEnvelope =
+        serde_json::from_str(&envelope_json).map_err(|_| anyhow!("invalid recovery envelope"))?;
+    let key = sync::recovery_key::recover_sync_key(&envelope, &passphrase)?;
     Ok(key.to_vec())
 }
 

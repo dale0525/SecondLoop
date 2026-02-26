@@ -14,6 +14,7 @@ import '../../features/media_backup/cloud_media_backup_runner.dart';
 import 'background_sync_orchestrator.dart';
 import 'sync_config_store.dart';
 import 'sync_engine.dart';
+import 'sync_key_manager.dart';
 
 const _kAppId = String.fromEnvironment(
   'SECONDLOOP_APP_ID',
@@ -110,6 +111,7 @@ final class BackgroundSync {
       await rescheduleIfNeeded();
       return true;
     }
+    SyncKeyManager.setSessionKey(sessionKey);
 
     final wifiOnly = await store.readAutoWifiOnly();
     if (wifiOnly) {
@@ -255,6 +257,7 @@ final class BackgroundSync {
       await rescheduleIfNeeded();
       return false;
     } finally {
+      SyncKeyManager.setSessionKey(null);
       cloudAuth?.dispose();
     }
   }

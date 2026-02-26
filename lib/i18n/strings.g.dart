@@ -4,9 +4,9 @@
 /// To regenerate, run: `dart run slang`
 ///
 /// Locales: 2
-/// Strings: 1762 (881 per locale)
+/// Strings: 1774 (887 per locale)
 ///
-/// Built on 2026-02-25 at 17:44 UTC
+/// Built on 2026-02-26 at 06:18 UTC
 
 // coverage:ignore-file
 // ignore_for_file: type=lint
@@ -381,13 +381,13 @@ class _StringsLockEn {
   final Translations _root; // ignore: unused_field
 
   // Translations
-  String get masterPasswordRequired => 'Master password required';
+  String get masterPasswordRequired => 'App lock password required';
   String get passwordsDoNotMatch => 'Passwords do not match';
-  String get setupTitle => 'Set master password';
+  String get setupTitle => 'Set app lock password';
   String get unlockTitle => 'Unlock';
   String get unlockReason => 'Unlock SecondLoop';
   String get missingSavedSessionKey =>
-      'Missing saved session key. Unlock with master password once.';
+      'Missing saved session key. Unlock with app lock password once.';
   String get creating => 'Creating…';
   String get unlocking => 'Unlocking…';
 }
@@ -560,7 +560,10 @@ class _StringsSyncEn {
   String connectionFailed({required Object error}) =>
       'Connection failed: ${error}';
   String saveFailed({required Object error}) => 'Save failed: ${error}';
-  String get missingSyncKey => 'Enter your sync passphrase and tap Save first.';
+  String get missingSyncKey =>
+      'Enter your recovery passphrase and tap Save first.';
+  late final _StringsSyncRecoveryHintEn recoveryHint =
+      _StringsSyncRecoveryHintEn._(_root);
   String pushedOps({required Object count}) => 'Uploaded ${count} changes';
   String pulledOps({required Object count}) => 'Downloaded ${count} changes';
   String get noNewChanges => 'No new changes';
@@ -690,7 +693,7 @@ class _StringsCommonFieldsEn {
   final Translations _root; // ignore: unused_field
 
   // Translations
-  String get masterPassword => 'Master password';
+  String get masterPassword => 'App lock password';
   String get confirm => 'Confirm';
   String get message => 'Message';
   String get quickCapture => 'Quick capture';
@@ -1051,9 +1054,9 @@ class _StringsSettingsSystemUnlockEn {
   String get titleMobile => 'Use biometrics';
   String get titleDesktop => 'Use system unlock';
   String get subtitleMobile =>
-      'Unlock with biometrics instead of master password';
+      'Unlock with biometrics instead of app lock password';
   String get subtitleDesktop =>
-      'Unlock with Touch ID / Windows Hello instead of master password';
+      'Unlock with Touch ID / Windows Hello instead of app lock password';
 }
 
 // Path: settings.lockNow
@@ -1362,7 +1365,7 @@ class _StringsSettingsResetLocalDataThisDeviceOnlyEn {
   // Translations
   String get dialogTitle => 'Reset local data?';
   String get dialogBody =>
-      'This will delete local messages and clear synced remote data for this device only. It will NOT delete your master password or your AI/sync settings. You will need to unlock again.';
+      'This will delete local messages and clear synced remote data for this device only. It will NOT delete your app lock password or your AI/sync settings. You will need to unlock again.';
   String failed({required Object error}) => 'Reset failed: ${error}';
 }
 
@@ -1375,7 +1378,7 @@ class _StringsSettingsResetLocalDataAllDevicesEn {
   // Translations
   String get dialogTitle => 'Reset local data?';
   String get dialogBody =>
-      'This will delete local messages and clear all synced remote data. It will NOT delete your master password or your AI/sync settings. You will need to unlock again.';
+      'This will delete local messages and clear all synced remote data. It will NOT delete your app lock password or your AI/sync settings. You will need to unlock again.';
   String failed({required Object error}) => 'Reset failed: ${error}';
 }
 
@@ -1632,7 +1635,7 @@ class _StringsChatAskAiConsentEn {
   // Translations
   String get title => 'Before we use AI';
   String get body =>
-      'SecondLoop may send the text you type and a few relevant snippets to your chosen AI provider to power AI features.\n\nIt will not upload your master password or your full history.';
+      'SecondLoop may send the text you type and a few relevant snippets to your chosen AI provider to power AI features.\n\nIt will not upload your app lock password or your full history.';
   String get dontShowAgain => 'Don\'t show again';
 }
 
@@ -1899,6 +1902,23 @@ class _StringsSyncCloudManagedVaultEn {
   late final _StringsSyncCloudManagedVaultSetPassphraseDialogEn
       setPassphraseDialog =
       _StringsSyncCloudManagedVaultSetPassphraseDialogEn._(_root);
+}
+
+// Path: sync.recoveryHint
+class _StringsSyncRecoveryHintEn {
+  _StringsSyncRecoveryHintEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get title => 'Recovery package detected';
+  String get message =>
+      'A cloud recovery package is available. Enter your recovery passphrase and tap Recover now.';
+  String get action => 'Recover now';
+  String get enterPassphraseFirst => 'Enter your recovery passphrase first.';
+  String recoverFailed({required Object error}) => 'Recovery failed: ${error}';
+  String fetchFailed({required Object error}) =>
+      'Unable to verify cloud recovery package: ${error}';
 }
 
 // Path: sync.fields
@@ -3104,8 +3124,8 @@ class _StringsSyncCloudManagedVaultSetPassphraseDialogEn {
   final Translations _root; // ignore: unused_field
 
   // Translations
-  String get title => 'Set sync passphrase';
-  String get confirm => 'Save passphrase';
+  String get title => 'Set recovery passphrase (Advanced)';
+  String get confirm => 'Save recovery passphrase';
 }
 
 // Path: sync.fields.baseUrl
@@ -3192,9 +3212,9 @@ class _StringsSyncFieldsPassphraseEn {
   final Translations _root; // ignore: unused_field
 
   // Translations
-  String get label => 'Sync passphrase';
+  String get label => 'Recovery passphrase (Advanced)';
   String get helper =>
-      'Use the same passphrase on all devices. It’s never uploaded.';
+      'Use the same recovery passphrase on all devices. It’s never uploaded.';
 }
 
 // Path: embeddingProfiles.reindexDialog.actions
@@ -4210,17 +4230,17 @@ class _StringsLockZhCn extends _StringsLockEn {
 
   // Translations
   @override
-  String get masterPasswordRequired => '需要主密码';
+  String get masterPasswordRequired => '需要应用锁密码';
   @override
   String get passwordsDoNotMatch => '两次输入的密码不一致';
   @override
-  String get setupTitle => '设置主密码';
+  String get setupTitle => '设置应用锁密码';
   @override
   String get unlockTitle => '解锁';
   @override
   String get unlockReason => '解锁 SecondLoop';
   @override
-  String get missingSavedSessionKey => '缺少已保存的会话密钥。请先用主密码解锁一次。';
+  String get missingSavedSessionKey => '缺少已保存的会话密钥。请先用应用锁密码解锁一次。';
   @override
   String get creating => '正在创建…';
   @override
@@ -4489,7 +4509,10 @@ class _StringsSyncZhCn extends _StringsSyncEn {
   @override
   String saveFailed({required Object error}) => '保存失败：${error}';
   @override
-  String get missingSyncKey => '缺少同步口令。请先输入口令并点击保存。';
+  String get missingSyncKey => '缺少恢复口令。请先输入口令并点击保存。';
+  @override
+  late final _StringsSyncRecoveryHintZhCn recoveryHint =
+      _StringsSyncRecoveryHintZhCn._(_root);
   @override
   String pushedOps({required Object count}) => '已上传 ${count} 个更改';
   @override
@@ -4700,7 +4723,7 @@ class _StringsCommonFieldsZhCn extends _StringsCommonFieldsEn {
 
   // Translations
   @override
-  String get masterPassword => '主密码';
+  String get masterPassword => '应用锁密码';
   @override
   String get confirm => '确认';
   @override
@@ -5252,9 +5275,9 @@ class _StringsSettingsSystemUnlockZhCn extends _StringsSettingsSystemUnlockEn {
   @override
   String get titleDesktop => '使用系统解锁';
   @override
-  String get subtitleMobile => '使用生物识别解锁，而不是主密码';
+  String get subtitleMobile => '使用生物识别解锁，而不是应用锁密码';
   @override
-  String get subtitleDesktop => '使用 Touch ID / Windows Hello 解锁，而不是主密码';
+  String get subtitleDesktop => '使用 Touch ID / Windows Hello 解锁，而不是应用锁密码';
 }
 
 // Path: settings.lockNow
@@ -5708,7 +5731,7 @@ class _StringsSettingsResetLocalDataThisDeviceOnlyZhCn
   String get dialogTitle => '重置本地数据？';
   @override
   String get dialogBody =>
-      '这将删除本地消息，并清空「当前设备」已同步的远端数据（不影响其他设备）。不会删除你的主密码或本地 AI/同步设置。你需要重新解锁。';
+      '这将删除本地消息，并清空「当前设备」已同步的远端数据（不影响其他设备）。不会删除你的应用锁密码或本地 AI/同步设置。你需要重新解锁。';
   @override
   String failed({required Object error}) => '重置失败：${error}';
 }
@@ -5728,7 +5751,7 @@ class _StringsSettingsResetLocalDataAllDevicesZhCn
   String get dialogTitle => '重置本地数据？';
   @override
   String get dialogBody =>
-      '这将删除本地消息，并清空「所有设备」已同步的远端数据。不会删除你的主密码或本地 AI/同步设置。你需要重新解锁。';
+      '这将删除本地消息，并清空「所有设备」已同步的远端数据。不会删除你的应用锁密码或本地 AI/同步设置。你需要重新解锁。';
   @override
   String failed({required Object error}) => '重置失败：${error}';
 }
@@ -6113,7 +6136,7 @@ class _StringsChatAskAiConsentZhCn extends _StringsChatAskAiConsentEn {
   String get title => '使用 AI 前确认';
   @override
   String get body =>
-      'SecondLoop 可能会将你输入的文本及少量相关片段发送到你选择的 AI 服务商，以提供 AI 功能。\n\n不会上传你的主密码或完整历史。';
+      'SecondLoop 可能会将你输入的文本及少量相关片段发送到你选择的 AI 服务商，以提供 AI 功能。\n\n不会上传你的应用锁密码或完整历史。';
   @override
   String get dontShowAgain => '不再提示';
 }
@@ -6511,6 +6534,30 @@ class _StringsSyncCloudManagedVaultZhCn
   late final _StringsSyncCloudManagedVaultSetPassphraseDialogZhCn
       setPassphraseDialog =
       _StringsSyncCloudManagedVaultSetPassphraseDialogZhCn._(_root);
+}
+
+// Path: sync.recoveryHint
+class _StringsSyncRecoveryHintZhCn extends _StringsSyncRecoveryHintEn {
+  _StringsSyncRecoveryHintZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get title => '检测到可恢复的同步密钥';
+  @override
+  String get message => '已检测到云端恢复包。输入恢复口令后，点击“立即恢复”即可恢复同步。';
+  @override
+  String get action => '立即恢复';
+  @override
+  String get enterPassphraseFirst => '请先输入恢复口令，再点击“立即恢复”。';
+  @override
+  String recoverFailed({required Object error}) => '恢复失败：${error}';
+  @override
+  String fetchFailed({required Object error}) => '无法确认云端恢复包：${error}';
 }
 
 // Path: sync.fields
@@ -8328,9 +8375,9 @@ class _StringsSyncCloudManagedVaultSetPassphraseDialogZhCn
 
   // Translations
   @override
-  String get title => '设置同步口令';
+  String get title => '设置恢复口令（高级）';
   @override
-  String get confirm => '保存口令';
+  String get confirm => '保存恢复口令';
 }
 
 // Path: sync.fields.baseUrl
@@ -8455,9 +8502,9 @@ class _StringsSyncFieldsPassphraseZhCn extends _StringsSyncFieldsPassphraseEn {
 
   // Translations
   @override
-  String get label => '同步口令';
+  String get label => '恢复口令（高级）';
   @override
-  String get helper => '所有设备请使用同一口令。口令不会被上传。';
+  String get helper => '所有设备请使用同一恢复口令。恢复口令不会被上传。';
 }
 
 // Path: embeddingProfiles.reindexDialog.actions
@@ -9551,7 +9598,7 @@ extension on Translations {
       case 'common.actions.lockNow':
         return 'Lock now';
       case 'common.fields.masterPassword':
-        return 'Master password';
+        return 'App lock password';
       case 'common.fields.confirm':
         return 'Confirm';
       case 'common.fields.message':
@@ -9914,9 +9961,9 @@ extension on Translations {
       case 'settings.systemUnlock.titleDesktop':
         return 'Use system unlock';
       case 'settings.systemUnlock.subtitleMobile':
-        return 'Unlock with biometrics instead of master password';
+        return 'Unlock with biometrics instead of app lock password';
       case 'settings.systemUnlock.subtitleDesktop':
-        return 'Unlock with Touch ID / Windows Hello instead of master password';
+        return 'Unlock with Touch ID / Windows Hello instead of app lock password';
       case 'settings.lockNow.title':
         return 'Lock now';
       case 'settings.lockNow.subtitle':
@@ -10504,13 +10551,13 @@ extension on Translations {
       case 'settings.resetLocalDataThisDeviceOnly.dialogTitle':
         return 'Reset local data?';
       case 'settings.resetLocalDataThisDeviceOnly.dialogBody':
-        return 'This will delete local messages and clear synced remote data for this device only. It will NOT delete your master password or your AI/sync settings. You will need to unlock again.';
+        return 'This will delete local messages and clear synced remote data for this device only. It will NOT delete your app lock password or your AI/sync settings. You will need to unlock again.';
       case 'settings.resetLocalDataThisDeviceOnly.failed':
         return ({required Object error}) => 'Reset failed: ${error}';
       case 'settings.resetLocalDataAllDevices.dialogTitle':
         return 'Reset local data?';
       case 'settings.resetLocalDataAllDevices.dialogBody':
-        return 'This will delete local messages and clear all synced remote data. It will NOT delete your master password or your AI/sync settings. You will need to unlock again.';
+        return 'This will delete local messages and clear all synced remote data. It will NOT delete your app lock password or your AI/sync settings. You will need to unlock again.';
       case 'settings.resetLocalDataAllDevices.failed':
         return ({required Object error}) => 'Reset failed: ${error}';
       case 'settings.debugResetLocalDataThisDeviceOnly.title':
@@ -10572,17 +10619,17 @@ extension on Translations {
       case 'welcomeGuide.reopen.subtitle':
         return 'Review AI, sync, and permissions setup links again';
       case 'lock.masterPasswordRequired':
-        return 'Master password required';
+        return 'App lock password required';
       case 'lock.passwordsDoNotMatch':
         return 'Passwords do not match';
       case 'lock.setupTitle':
-        return 'Set master password';
+        return 'Set app lock password';
       case 'lock.unlockTitle':
         return 'Unlock';
       case 'lock.unlockReason':
         return 'Unlock SecondLoop';
       case 'lock.missingSavedSessionKey':
-        return 'Missing saved session key. Unlock with master password once.';
+        return 'Missing saved session key. Unlock with app lock password once.';
       case 'lock.creating':
         return 'Creating…';
       case 'lock.unlocking':
@@ -10786,7 +10833,7 @@ extension on Translations {
       case 'chat.askAiConsent.title':
         return 'Before we use AI';
       case 'chat.askAiConsent.body':
-        return 'SecondLoop may send the text you type and a few relevant snippets to your chosen AI provider to power AI features.\n\nIt will not upload your master password or your full history.';
+        return 'SecondLoop may send the text you type and a few relevant snippets to your chosen AI provider to power AI features.\n\nIt will not upload your app lock password or your full history.';
       case 'chat.askAiConsent.dontShowAgain':
         return 'Don\'t show again';
       case 'chat.embeddingsConsent.title':
@@ -11136,9 +11183,9 @@ extension on Translations {
       case 'sync.cloudManagedVault.switchDialog.confirm':
         return 'Switch';
       case 'sync.cloudManagedVault.setPassphraseDialog.title':
-        return 'Set sync passphrase';
+        return 'Set recovery passphrase (Advanced)';
       case 'sync.cloudManagedVault.setPassphraseDialog.confirm':
-        return 'Save passphrase';
+        return 'Save recovery passphrase';
       case 'sync.remoteRootRequired':
         return 'Folder name is required';
       case 'sync.baseUrlRequired':
@@ -11152,7 +11199,20 @@ extension on Translations {
       case 'sync.saveFailed':
         return ({required Object error}) => 'Save failed: ${error}';
       case 'sync.missingSyncKey':
-        return 'Enter your sync passphrase and tap Save first.';
+        return 'Enter your recovery passphrase and tap Save first.';
+      case 'sync.recoveryHint.title':
+        return 'Recovery package detected';
+      case 'sync.recoveryHint.message':
+        return 'A cloud recovery package is available. Enter your recovery passphrase and tap Recover now.';
+      case 'sync.recoveryHint.action':
+        return 'Recover now';
+      case 'sync.recoveryHint.enterPassphraseFirst':
+        return 'Enter your recovery passphrase first.';
+      case 'sync.recoveryHint.recoverFailed':
+        return ({required Object error}) => 'Recovery failed: ${error}';
+      case 'sync.recoveryHint.fetchFailed':
+        return ({required Object error}) =>
+            'Unable to verify cloud recovery package: ${error}';
       case 'sync.pushedOps':
         return ({required Object count}) => 'Uploaded ${count} changes';
       case 'sync.pulledOps':
@@ -11190,9 +11250,9 @@ extension on Translations {
       case 'sync.fields.remoteRoot.hint':
         return 'SecondLoop';
       case 'sync.fields.passphrase.label':
-        return 'Sync passphrase';
+        return 'Recovery passphrase (Advanced)';
       case 'sync.fields.passphrase.helper':
-        return 'Use the same passphrase on all devices. It’s never uploaded.';
+        return 'Use the same recovery passphrase on all devices. It’s never uploaded.';
       case 'llmProfiles.title':
         return 'AI profiles';
       case 'llmProfiles.refreshTooltip':
@@ -11359,7 +11419,7 @@ extension on _StringsZhCn {
       case 'common.actions.lockNow':
         return '立即锁定';
       case 'common.fields.masterPassword':
-        return '主密码';
+        return '应用锁密码';
       case 'common.fields.confirm':
         return '确认';
       case 'common.fields.message':
@@ -11720,9 +11780,9 @@ extension on _StringsZhCn {
       case 'settings.systemUnlock.titleDesktop':
         return '使用系统解锁';
       case 'settings.systemUnlock.subtitleMobile':
-        return '使用生物识别解锁，而不是主密码';
+        return '使用生物识别解锁，而不是应用锁密码';
       case 'settings.systemUnlock.subtitleDesktop':
-        return '使用 Touch ID / Windows Hello 解锁，而不是主密码';
+        return '使用 Touch ID / Windows Hello 解锁，而不是应用锁密码';
       case 'settings.lockNow.title':
         return '立即锁定';
       case 'settings.lockNow.subtitle':
@@ -12301,13 +12361,13 @@ extension on _StringsZhCn {
       case 'settings.resetLocalDataThisDeviceOnly.dialogTitle':
         return '重置本地数据？';
       case 'settings.resetLocalDataThisDeviceOnly.dialogBody':
-        return '这将删除本地消息，并清空「当前设备」已同步的远端数据（不影响其他设备）。不会删除你的主密码或本地 AI/同步设置。你需要重新解锁。';
+        return '这将删除本地消息，并清空「当前设备」已同步的远端数据（不影响其他设备）。不会删除你的应用锁密码或本地 AI/同步设置。你需要重新解锁。';
       case 'settings.resetLocalDataThisDeviceOnly.failed':
         return ({required Object error}) => '重置失败：${error}';
       case 'settings.resetLocalDataAllDevices.dialogTitle':
         return '重置本地数据？';
       case 'settings.resetLocalDataAllDevices.dialogBody':
-        return '这将删除本地消息，并清空「所有设备」已同步的远端数据。不会删除你的主密码或本地 AI/同步设置。你需要重新解锁。';
+        return '这将删除本地消息，并清空「所有设备」已同步的远端数据。不会删除你的应用锁密码或本地 AI/同步设置。你需要重新解锁。';
       case 'settings.resetLocalDataAllDevices.failed':
         return ({required Object error}) => '重置失败：${error}';
       case 'settings.debugResetLocalDataThisDeviceOnly.title':
@@ -12369,17 +12429,17 @@ extension on _StringsZhCn {
       case 'welcomeGuide.reopen.subtitle':
         return '再次查看 AI、同步与权限设置入口';
       case 'lock.masterPasswordRequired':
-        return '需要主密码';
+        return '需要应用锁密码';
       case 'lock.passwordsDoNotMatch':
         return '两次输入的密码不一致';
       case 'lock.setupTitle':
-        return '设置主密码';
+        return '设置应用锁密码';
       case 'lock.unlockTitle':
         return '解锁';
       case 'lock.unlockReason':
         return '解锁 SecondLoop';
       case 'lock.missingSavedSessionKey':
-        return '缺少已保存的会话密钥。请先用主密码解锁一次。';
+        return '缺少已保存的会话密钥。请先用应用锁密码解锁一次。';
       case 'lock.creating':
         return '正在创建…';
       case 'lock.unlocking':
@@ -12583,7 +12643,7 @@ extension on _StringsZhCn {
       case 'chat.askAiConsent.title':
         return '使用 AI 前确认';
       case 'chat.askAiConsent.body':
-        return 'SecondLoop 可能会将你输入的文本及少量相关片段发送到你选择的 AI 服务商，以提供 AI 功能。\n\n不会上传你的主密码或完整历史。';
+        return 'SecondLoop 可能会将你输入的文本及少量相关片段发送到你选择的 AI 服务商，以提供 AI 功能。\n\n不会上传你的应用锁密码或完整历史。';
       case 'chat.askAiConsent.dontShowAgain':
         return '不再提示';
       case 'chat.embeddingsConsent.title':
@@ -12928,9 +12988,9 @@ extension on _StringsZhCn {
       case 'sync.cloudManagedVault.switchDialog.confirm':
         return '切换';
       case 'sync.cloudManagedVault.setPassphraseDialog.title':
-        return '设置同步口令';
+        return '设置恢复口令（高级）';
       case 'sync.cloudManagedVault.setPassphraseDialog.confirm':
-        return '保存口令';
+        return '保存恢复口令';
       case 'sync.remoteRootRequired':
         return '必须填写文件夹名称';
       case 'sync.baseUrlRequired':
@@ -12944,7 +13004,19 @@ extension on _StringsZhCn {
       case 'sync.saveFailed':
         return ({required Object error}) => '保存失败：${error}';
       case 'sync.missingSyncKey':
-        return '缺少同步口令。请先输入口令并点击保存。';
+        return '缺少恢复口令。请先输入口令并点击保存。';
+      case 'sync.recoveryHint.title':
+        return '检测到可恢复的同步密钥';
+      case 'sync.recoveryHint.message':
+        return '已检测到云端恢复包。输入恢复口令后，点击“立即恢复”即可恢复同步。';
+      case 'sync.recoveryHint.action':
+        return '立即恢复';
+      case 'sync.recoveryHint.enterPassphraseFirst':
+        return '请先输入恢复口令，再点击“立即恢复”。';
+      case 'sync.recoveryHint.recoverFailed':
+        return ({required Object error}) => '恢复失败：${error}';
+      case 'sync.recoveryHint.fetchFailed':
+        return ({required Object error}) => '无法确认云端恢复包：${error}';
       case 'sync.pushedOps':
         return ({required Object count}) => '已上传 ${count} 个更改';
       case 'sync.pulledOps':
@@ -12982,9 +13054,9 @@ extension on _StringsZhCn {
       case 'sync.fields.remoteRoot.hint':
         return 'SecondLoop';
       case 'sync.fields.passphrase.label':
-        return '同步口令';
+        return '恢复口令（高级）';
       case 'sync.fields.passphrase.helper':
-        return '所有设备请使用同一口令。口令不会被上传。';
+        return '所有设备请使用同一恢复口令。恢复口令不会被上传。';
       case 'llmProfiles.title':
         return 'AI 配置';
       case 'llmProfiles.refreshTooltip':

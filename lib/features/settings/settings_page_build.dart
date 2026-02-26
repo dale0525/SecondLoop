@@ -18,6 +18,12 @@ extension _SettingsPageBuild on _SettingsPageState {
         .toLowerCase()
         .startsWith('zh');
     final featureSettingsTitle = isZh ? '功能设置' : 'Feature settings';
+    final systemUnlockSubtitleMobile = isZh
+        ? '使用生物识别代替应用锁密码'
+        : 'Unlock with biometrics instead of app lock password';
+    final systemUnlockSubtitleDesktop = isZh
+        ? '使用 Touch ID / Windows Hello 代替应用锁密码'
+        : 'Unlock with Touch ID / Windows Hello instead of app lock password';
 
     Widget sectionCard(List<Widget> children) {
       return SlSurface(
@@ -124,8 +130,8 @@ extension _SettingsPageBuild on _SettingsPageState {
               ),
               subtitle: Text(
                 isMobile
-                    ? context.t.settings.systemUnlock.subtitleMobile
-                    : context.t.settings.systemUnlock.subtitleDesktop,
+                    ? systemUnlockSubtitleMobile
+                    : systemUnlockSubtitleDesktop,
               ),
               value: biometricEnabled ?? false,
               onChanged: (_busy || biometricEnabled == null)

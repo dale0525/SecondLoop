@@ -7,7 +7,8 @@ import 'package:secondloop/core/sync/sync_config_store.dart';
 import 'package:secondloop/core/sync/sync_engine.dart';
 
 void main() {
-  test('SyncConfigStore stores config in a single preferences entry', () async {
+  test('SyncConfigStore splits public and secret preferences entries',
+      () async {
     SharedPreferences.setMockInitialValues({});
     final store = SyncConfigStore();
 
@@ -20,6 +21,6 @@ void main() {
     await store.writeSyncKey(Uint8List.fromList(List<int>.filled(32, 1)));
 
     final prefs = await SharedPreferences.getInstance();
-    expect(prefs.getKeys().length, 1);
+    expect(prefs.getKeys().length, 2);
   });
 }

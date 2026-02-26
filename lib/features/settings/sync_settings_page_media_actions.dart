@@ -71,12 +71,8 @@ extension _SyncSettingsPageMediaActions on _SyncSettingsPageState {
       final backend = AppBackendScope.of(context);
       final sessionKey = SessionScope.of(context).sessionKey;
 
-      final syncKey = await _loadSyncKey();
+      final syncKey = await _loadOrCreateSyncKey();
       if (!mounted) return;
-      if (syncKey == null || syncKey.length != 32) {
-        _showSnack(t.sync.missingSyncKey);
-        return;
-      }
 
       CloudMediaBackupRunner? runner;
       switch (_backendType) {
