@@ -748,6 +748,7 @@ impl CloudGatewayMediaAnnotationClient {
         }
 
         let url = cloud_gateway_chat_completions_url(&self.gateway_base_url);
+        let _request_guard = crate::llm::request_limiter::acquire_remote_llm_request_slot();
         let resp = match self
             .client
             .post(url)
@@ -820,6 +821,7 @@ impl OpenAiCompatibleMediaAnnotationClient {
         );
 
         let url = openai_compatible_chat_completions_url(&self.base_url);
+        let _request_guard = crate::llm::request_limiter::acquire_remote_llm_request_slot();
         let resp = self
             .client
             .post(url)

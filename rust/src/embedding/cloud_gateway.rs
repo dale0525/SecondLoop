@@ -141,6 +141,7 @@ impl Embedder for CloudGatewayEmbedder {
             input: texts.to_vec(),
             encoding_format: "float".to_string(),
         };
+        let _request_guard = crate::llm::request_limiter::acquire_remote_llm_request_slot();
 
         let resp = self
             .client

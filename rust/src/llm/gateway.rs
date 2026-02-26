@@ -103,6 +103,7 @@ impl crate::rag::AnswerProvider for CloudGatewayProvider {
             text_delta: String::new(),
             done: false,
         })?;
+        let _request_guard = super::request_limiter::acquire_remote_llm_request_slot();
 
         let mut resp = self
             .client

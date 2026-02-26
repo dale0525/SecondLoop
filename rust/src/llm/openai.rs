@@ -102,6 +102,7 @@ impl crate::rag::AnswerProvider for OpenAiCompatibleProvider {
 
         let request_timeout =
             crate::llm::timeouts::ask_ai_timeout_for_prompt_chars(prompt.chars().count());
+        let _request_guard = super::request_limiter::acquire_remote_llm_request_slot();
 
         let mut resp = self
             .client
