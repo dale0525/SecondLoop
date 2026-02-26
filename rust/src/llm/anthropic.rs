@@ -86,6 +86,7 @@ impl crate::rag::AnswerProvider for AnthropicCompatibleProvider {
     ) -> Result<()> {
         let url = messages_url(&self.base_url);
         let req = build_messages_request(prompt, &self.model_name, self.max_tokens);
+        let _request_guard = super::request_limiter::acquire_remote_llm_request_slot();
 
         let mut resp = self
             .client

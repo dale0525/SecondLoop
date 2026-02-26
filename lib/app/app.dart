@@ -28,6 +28,7 @@ import '../i18n/strings.g.dart';
 import '../ui/sl_background.dart';
 import 'router.dart';
 import 'theme.dart';
+import 'theme_palette_prefs.dart';
 import 'theme_mode_prefs.dart';
 import '../features/lock/lock_gate.dart';
 import '../features/quick_capture/quick_capture_overlay.dart';
@@ -80,6 +81,7 @@ class _SecondLoopAppState extends State<SecondLoopApp> {
     super.initState();
     unawaited(AppLocaleBootstrap.ensureInitialized());
     unawaited(AppThemeModePrefs.ensureInitialized());
+    unawaited(AppThemePalettePrefs.ensureInitialized());
     _cloudAuthController.addListener(_onCloudAuthChanged);
     unawaited(_subscriptionController.refresh());
   }
@@ -113,17 +115,23 @@ class _SecondLoopAppState extends State<SecondLoopApp> {
               child: Builder(
                 builder: (context) {
                   final locale = TranslationProvider.of(context).flutterLocale;
-                  return ValueListenableBuilder(
-                    valueListenable: AppThemeModePrefs.value,
-                    builder: (context, themeMode, _) {
+                  return ListenableBuilder(
+                    listenable: Listenable.merge([
+                      AppThemeModePrefs.value,
+                      AppThemePalettePrefs.value,
+                    ]),
+                    builder: (context, _) {
+                      final themeMode = AppThemeModePrefs.value.value;
+                      final palette = AppThemePalettePrefs.value.value;
                       return MaterialApp(
                         locale: TranslationProvider.of(context).flutterLocale,
                         supportedLocales: AppLocaleUtils.supportedLocales,
                         localizationsDelegates:
                             GlobalMaterialLocalizations.delegates,
                         onGenerateTitle: (context) => context.t.app.title,
-                        theme: AppTheme.light(locale: locale),
-                        darkTheme: AppTheme.dark(locale: locale),
+                        theme: AppTheme.light(locale: locale, palette: palette),
+                        darkTheme:
+                            AppTheme.dark(locale: locale, palette: palette),
                         themeMode: themeMode,
                         navigatorKey: _navigatorKey,
                         home: const AutoUpgradeGate(

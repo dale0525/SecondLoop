@@ -86,4 +86,39 @@ void main() {
 
     expect(cloud.containsKey('gateway_base_url'), isFalse);
   });
+
+  testWidgets('Diagnostics page no longer shows update actions',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+
+    await tester.pumpWidget(
+      AppBackendScope(
+        backend: TestAppBackend(),
+        child: SessionScope(
+          sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+          lock: () {},
+          child: wrapWithI18n(
+            const MaterialApp(home: Scaffold(body: SettingsPage())),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final diagnosticsFinder =
+        find.byKey(const ValueKey('settings_diagnostics'));
+    await tester.scrollUntilVisible(
+      diagnosticsFinder,
+      200,
+      scrollable: find.byType(Scrollable),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(diagnosticsFinder);
+    await tester.pumpAndSettle();
+
+    expect(
+        find.byKey(const ValueKey('diagnostics_check_updates')), findsNothing);
+    expect(
+        find.byKey(const ValueKey('diagnostics_apply_update')), findsNothing);
+  });
 }

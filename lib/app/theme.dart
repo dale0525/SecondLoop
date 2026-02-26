@@ -1,6 +1,8 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+import 'theme_palette_prefs.dart';
+import 'theme_specs.dart';
 import '../ui/sl_tokens.dart';
 
 class AppTheme {
@@ -20,14 +22,11 @@ class AppTheme {
   static const _darkSurface2 = Color(0xFF171724);
   static const _darkBorder = Color(0xFF24243A);
 
-  static const _radiusSm = 10.0;
-  static const _radiusMd = 14.0;
-  static const _radiusLg = 18.0;
-
   static dynamic _cardThemeForThemeData({
-    required bool isDark,
     required Color surface,
     required Color outline,
+    required double radiusLg,
+    required double borderOpacity,
   }) {
     final dynamic cardTheme = CardTheme(
       color: surface,
@@ -35,10 +34,8 @@ class AppTheme {
       elevation: 0,
       margin: EdgeInsets.zero,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(_radiusLg),
-        side: BorderSide(
-          color: isDark ? outline.withOpacity(0.65) : outline.withOpacity(0.9),
-        ),
+        borderRadius: BorderRadius.circular(radiusLg),
+        side: BorderSide(color: outline.withOpacity(borderOpacity)),
       ),
     );
 
@@ -56,12 +53,15 @@ class AppTheme {
     }
   }
 
-  static dynamic _dialogThemeForThemeData({required Color surface}) {
+  static dynamic _dialogThemeForThemeData({
+    required Color surface,
+    required double radiusLg,
+  }) {
     final dynamic dialogTheme = DialogTheme(
       backgroundColor: surface,
       surfaceTintColor: Colors.transparent,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(_radiusLg),
+        borderRadius: BorderRadius.circular(radiusLg),
       ),
     );
 
@@ -79,29 +79,54 @@ class AppTheme {
     }
   }
 
-  static ThemeData light({Locale? locale, TargetPlatform? platform}) {
+  static ThemeData light({
+    Locale? locale,
+    TargetPlatform? platform,
+    AppThemePalette palette = AppThemePalette.studio,
+  }) {
     return _build(
-        brightness: Brightness.light, locale: locale, platform: platform);
+      brightness: Brightness.light,
+      locale: locale,
+      platform: platform,
+      palette: palette,
+    );
   }
 
-  static ThemeData dark({Locale? locale, TargetPlatform? platform}) {
+  static ThemeData dark({
+    Locale? locale,
+    TargetPlatform? platform,
+    AppThemePalette palette = AppThemePalette.studio,
+  }) {
     return _build(
-        brightness: Brightness.dark, locale: locale, platform: platform);
+      brightness: Brightness.dark,
+      locale: locale,
+      platform: platform,
+      palette: palette,
+    );
   }
 
   static ThemeData _build({
     required Brightness brightness,
     required Locale? locale,
     required TargetPlatform? platform,
+    required AppThemePalette palette,
   }) {
     final isDark = brightness == Brightness.dark;
     final effectivePlatform = platform ?? defaultTargetPlatform;
     final fontFamily = _primaryFontFamily(effectivePlatform);
     final fontFamilyFallback =
         _fontFamilyFallbackFor(locale, effectivePlatform);
+    final spec = _specForPalette(palette);
+    final radii = spec.corners;
 
-    final scheme = isDark ? _darkScheme() : _lightScheme();
-    final tokens = isDark ? _darkTokens() : _lightTokens();
+    final scheme = isDark
+        ? _darkScheme(palette: palette, spec: spec)
+        : _lightScheme(palette: palette, spec: spec);
+    final tokens = _tokens(
+      brightness: brightness,
+      scheme: scheme,
+      spec: spec,
+    );
 
     final base = ThemeData(
       useMaterial3: true,
@@ -136,23 +161,30 @@ class AppTheme {
         thickness: 1,
       ),
       cardTheme: _cardThemeForThemeData(
-        isDark: isDark,
         surface: surface,
         outline: outline,
+        radiusLg: radii.lg,
+        borderOpacity:
+            isDark ? spec.darkCardBorderOpacity : spec.lightCardBorderOpacity,
       ),
-      dialogTheme: _dialogThemeForThemeData(surface: surface),
+      dialogTheme: _dialogThemeForThemeData(
+        surface: surface,
+        radiusLg: radii.lg,
+      ),
       popupMenuTheme: PopupMenuThemeData(
         color: surface,
         surfaceTintColor: Colors.transparent,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(_radiusLg),
+          borderRadius: BorderRadius.circular(radii.lg),
         ),
       ),
       bottomSheetTheme: BottomSheetThemeData(
         backgroundColor: surface,
         surfaceTintColor: Colors.transparent,
-        shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(
+            top: Radius.circular(radii.lg + 2),
+          ),
         ),
       ),
       snackBarTheme: SnackBarThemeData(
@@ -160,12 +192,12 @@ class AppTheme {
         backgroundColor: scheme.inverseSurface,
         contentTextStyle: TextStyle(color: scheme.onInverseSurface),
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(_radiusMd),
+          borderRadius: BorderRadius.circular(radii.md),
         ),
       ),
       listTileTheme: ListTileThemeData(
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(_radiusMd),
+          borderRadius: BorderRadius.circular(radii.md),
         ),
         iconColor: scheme.onSurfaceVariant,
         textColor: scheme.onSurface,
@@ -175,14 +207,16 @@ class AppTheme {
         elevation: 0,
         height: 72,
         indicatorShape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(_radiusMd),
+          borderRadius: BorderRadius.circular(radii.md),
         ),
       ),
       navigationRailTheme: NavigationRailThemeData(
         backgroundColor: Colors.transparent,
-        indicatorColor: scheme.primary.withOpacity(isDark ? 0.18 : 0.12),
+        indicatorColor: scheme.primary.withOpacity(
+          isDark ? spec.darkIndicatorOpacity : spec.lightIndicatorOpacity,
+        ),
         indicatorShape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(_radiusMd),
+          borderRadius: BorderRadius.circular(radii.md),
         ),
         selectedIconTheme: IconThemeData(color: scheme.primary),
         unselectedIconTheme: IconThemeData(color: scheme.onSurfaceVariant),
@@ -196,26 +230,26 @@ class AppTheme {
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: isDark ? tokens.surface2 : _lightSurface,
+        fillColor: tokens.surface2,
         contentPadding: const EdgeInsets.symmetric(
           horizontal: 14,
           vertical: 12,
         ),
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(_radiusMd),
+          borderRadius: BorderRadius.circular(radii.md),
           borderSide: BorderSide(color: outline.withOpacity(0.9)),
         ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(_radiusMd),
+          borderRadius: BorderRadius.circular(radii.md),
           borderSide:
               BorderSide(color: outline.withOpacity(isDark ? 0.7 : 0.85)),
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(_radiusMd),
+          borderRadius: BorderRadius.circular(radii.md),
           borderSide: BorderSide(color: scheme.primary, width: 1.5),
         ),
         errorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(_radiusMd),
+          borderRadius: BorderRadius.circular(radii.md),
           borderSide: BorderSide(color: scheme.error),
         ),
       ),
@@ -226,7 +260,7 @@ class AppTheme {
           ),
           shape: MaterialStatePropertyAll(
             RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(_radiusMd),
+              borderRadius: BorderRadius.circular(radii.md),
             ),
           ),
         ),
@@ -238,7 +272,7 @@ class AppTheme {
           ),
           shape: MaterialStatePropertyAll(
             RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(_radiusMd),
+              borderRadius: BorderRadius.circular(radii.md),
             ),
           ),
         ),
@@ -247,7 +281,7 @@ class AppTheme {
         style: ButtonStyle(
           shape: MaterialStatePropertyAll(
             RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(_radiusMd),
+              borderRadius: BorderRadius.circular(radii.md),
             ),
           ),
         ),
@@ -260,113 +294,244 @@ class AppTheme {
     );
   }
 
-  static ColorScheme _darkScheme() {
-    return const ColorScheme(
+  static const ColorScheme _studioDarkScheme = ColorScheme(
+    brightness: Brightness.dark,
+    primary: _primary,
+    onPrimary: Colors.white,
+    primaryContainer: Color(0xFF1B1B2E),
+    onPrimaryContainer: Color(0xFFE7E7F0),
+    secondary: _accent,
+    onSecondary: _darkBackground,
+    secondaryContainer: Color(0xFF25213A),
+    onSecondaryContainer: Color(0xFFEDE9FE),
+    tertiary: Color(0xFF22D3EE),
+    onTertiary: Color(0xFF001216),
+    tertiaryContainer: Color(0xFF0B2A33),
+    onTertiaryContainer: Color(0xFFCFFAFE),
+    error: Color(0xFFF87171),
+    onError: Color(0xFF2B0000),
+    errorContainer: Color(0xFF3A0B0B),
+    onErrorContainer: Color(0xFFFEE2E2),
+    background: _darkBackground,
+    onBackground: Color(0xFFE7E7F0),
+    surface: _darkSurface,
+    onSurface: Color(0xFFE7E7F0),
+    surfaceVariant: _darkSurface2,
+    onSurfaceVariant: Color(0xFFB9B9CE),
+    outline: Color(0xFF2F2F4A),
+    outlineVariant: _darkBorder,
+    shadow: Colors.black,
+    scrim: Colors.black,
+    inverseSurface: Color(0xFFE7E7F0),
+    onInverseSurface: Color(0xFF101018),
+    inversePrimary: Color(0xFF4F46E5),
+  );
+
+  static const ColorScheme _studioLightScheme = ColorScheme(
+    brightness: Brightness.light,
+    primary: _primary,
+    onPrimary: Colors.white,
+    primaryContainer: Color(0xFFE0E7FF),
+    onPrimaryContainer: Color(0xFF1E1B4B),
+    secondary: Color(0xFF7C3AED),
+    onSecondary: Colors.white,
+    secondaryContainer: Color(0xFFF3E8FF),
+    onSecondaryContainer: Color(0xFF3B0764),
+    tertiary: Color(0xFF0891B2),
+    onTertiary: Colors.white,
+    tertiaryContainer: Color(0xFFCFFAFE),
+    onTertiaryContainer: Color(0xFF083344),
+    error: Color(0xFFDC2626),
+    onError: Colors.white,
+    errorContainer: Color(0xFFFEE2E2),
+    onErrorContainer: Color(0xFF450A0A),
+    background: _lightBackground,
+    onBackground: Color(0xFF0F172A),
+    surface: _lightSurface,
+    onSurface: Color(0xFF0F172A),
+    surfaceVariant: _lightSurface2,
+    onSurfaceVariant: Color(0xFF475569),
+    outline: Color(0xFFD0D4E0),
+    outlineVariant: _lightBorder,
+    shadow: Colors.black,
+    scrim: Colors.black,
+    inverseSurface: Color(0xFF0F172A),
+    onInverseSurface: Color(0xFFF8FAFC),
+    inversePrimary: Color(0xFF4F46E5),
+  );
+
+  static AppThemeStyleSpec _specForPalette(AppThemePalette palette) {
+    return kAppThemeStyleSpecs[palette] ??
+        kAppThemeStyleSpecs[AppThemePalette.studio]!;
+  }
+
+  static ColorScheme _darkScheme({
+    required AppThemePalette palette,
+    required AppThemeStyleSpec spec,
+  }) {
+    return _schemeForPalette(
+      palette: palette,
+      spec: spec,
       brightness: Brightness.dark,
-      primary: _primary,
-      onPrimary: Colors.white,
-      primaryContainer: Color(0xFF1B1B2E),
-      onPrimaryContainer: Color(0xFFE7E7F0),
-      secondary: _accent,
-      onSecondary: _darkBackground,
-      secondaryContainer: Color(0xFF25213A),
-      onSecondaryContainer: Color(0xFFEDE9FE),
-      tertiary: Color(0xFF22D3EE),
-      onTertiary: Color(0xFF001216),
-      tertiaryContainer: Color(0xFF0B2A33),
-      onTertiaryContainer: Color(0xFFCFFAFE),
-      error: Color(0xFFF87171),
-      onError: Color(0xFF2B0000),
-      errorContainer: Color(0xFF3A0B0B),
-      onErrorContainer: Color(0xFFFEE2E2),
-      background: _darkBackground,
-      onBackground: Color(0xFFE7E7F0),
-      surface: _darkSurface,
-      onSurface: Color(0xFFE7E7F0),
-      surfaceVariant: _darkSurface2,
-      onSurfaceVariant: Color(0xFFB9B9CE),
-      outline: Color(0xFF2F2F4A),
-      outlineVariant: _darkBorder,
-      shadow: Colors.black,
-      scrim: Colors.black,
-      inverseSurface: Color(0xFFE7E7F0),
-      onInverseSurface: Color(0xFF101018),
-      inversePrimary: Color(0xFF4F46E5),
+      base: _studioDarkScheme,
     );
   }
 
-  static ColorScheme _lightScheme() {
-    return const ColorScheme(
+  static ColorScheme _lightScheme({
+    required AppThemePalette palette,
+    required AppThemeStyleSpec spec,
+  }) {
+    return _schemeForPalette(
+      palette: palette,
+      spec: spec,
       brightness: Brightness.light,
-      primary: _primary,
-      onPrimary: Colors.white,
-      primaryContainer: Color(0xFFE0E7FF),
-      onPrimaryContainer: Color(0xFF1E1B4B),
-      secondary: Color(0xFF7C3AED),
-      onSecondary: Colors.white,
-      secondaryContainer: Color(0xFFF3E8FF),
-      onSecondaryContainer: Color(0xFF3B0764),
-      tertiary: Color(0xFF0891B2),
-      onTertiary: Colors.white,
-      tertiaryContainer: Color(0xFFCFFAFE),
-      onTertiaryContainer: Color(0xFF083344),
-      error: Color(0xFFDC2626),
-      onError: Colors.white,
-      errorContainer: Color(0xFFFEE2E2),
-      onErrorContainer: Color(0xFF450A0A),
-      background: _lightBackground,
-      onBackground: Color(0xFF0F172A),
-      surface: _lightSurface,
-      onSurface: Color(0xFF0F172A),
-      surfaceVariant: _lightSurface2,
-      onSurfaceVariant: Color(0xFF475569),
-      outline: Color(0xFFD0D4E0),
-      outlineVariant: _lightBorder,
-      shadow: Colors.black,
-      scrim: Colors.black,
-      inverseSurface: Color(0xFF0F172A),
-      onInverseSurface: Color(0xFFF8FAFC),
-      inversePrimary: Color(0xFF4F46E5),
+      base: _studioLightScheme,
     );
   }
 
-  static SlTokens _darkTokens() {
-    return const SlTokens(
-      background: _darkBackground,
-      surface: _darkSurface,
-      surface2: _darkSurface2,
-      border: _darkBorder,
-      borderSubtle: Color(0xFF1F1F33),
-      ring: _accent,
-      sidebarBackground: Color(0xCC12121A),
-      sidebarBorder: Color(0x3324243A),
-      sidebarItemHover: Color(0x1A6366F1),
-      sidebarItemActive: Color(0x266366F1),
-      sidebarItemForeground: Color(0xFFB9B9CE),
-      sidebarItemActiveForeground: Color(0xFFE7E7F0),
-      radiusSm: _radiusSm,
-      radiusMd: _radiusMd,
-      radiusLg: _radiusLg,
+  static Color _onColorForSurface(Color color, {required bool isDark}) {
+    final contrast = ThemeData.estimateBrightnessForColor(color);
+    final prefersLightForeground = contrast == Brightness.dark;
+    if (prefersLightForeground) {
+      return isDark ? const Color(0xFFE7E7F0) : const Color(0xFFF8FAFC);
+    }
+    return isDark ? const Color(0xFFDDE7F2) : const Color(0xFF0F172A);
+  }
+
+  static ColorScheme _schemeForPalette({
+    required AppThemePalette palette,
+    required AppThemeStyleSpec spec,
+    required Brightness brightness,
+    required ColorScheme base,
+  }) {
+    if (palette == AppThemePalette.studio) {
+      return base;
+    }
+
+    final seeded = ColorScheme.fromSeed(
+      seedColor: spec.seed,
+      brightness: brightness,
+    );
+    final isDark = brightness == Brightness.dark;
+    final background = spec.background(brightness);
+    final surface = spec.surface(brightness);
+    final surface2 = spec.surface2(brightness);
+    final border = spec.border(brightness);
+    final onBackground = _onColorForSurface(background, isDark: isDark);
+    final onSurface = _onColorForSurface(surface, isDark: isDark);
+    final isMonochrome = palette == AppThemePalette.monochrome;
+    final onSurfaceVariant = _onColorForSurface(
+      surface2,
+      isDark: isDark,
+    ).withOpacity(isDark ? 0.78 : 0.72);
+    final outline = Color.alphaBlend(
+      seeded.primary.withOpacity(isDark ? 0.28 : 0.18),
+      border,
+    );
+    final primary = isMonochrome
+        ? (isDark ? const Color(0xFFE2E2E2) : const Color(0xFF2A2A2A))
+        : seeded.primary;
+    final onPrimary = isMonochrome
+        ? (isDark ? const Color(0xFF121212) : const Color(0xFFF8F8F8))
+        : seeded.onPrimary;
+    final primaryContainer = isMonochrome
+        ? (isDark ? const Color(0xFF252525) : const Color(0xFFE4E4E4))
+        : seeded.primaryContainer;
+    final onPrimaryContainer = isMonochrome
+        ? (isDark ? const Color(0xFFF2F2F2) : const Color(0xFF1B1B1B))
+        : seeded.onPrimaryContainer;
+    final secondary = isMonochrome
+        ? (isDark ? const Color(0xFFBFBFBF) : const Color(0xFF444444))
+        : seeded.secondary;
+    final onSecondary = isMonochrome
+        ? (isDark ? const Color(0xFF181818) : const Color(0xFFFFFFFF))
+        : seeded.onSecondary;
+    final secondaryContainer = isMonochrome
+        ? (isDark ? const Color(0xFF2B2B2B) : const Color(0xFFE9E9E9))
+        : seeded.secondaryContainer;
+    final onSecondaryContainer = isMonochrome
+        ? (isDark ? const Color(0xFFECECEC) : const Color(0xFF222222))
+        : seeded.onSecondaryContainer;
+    final tertiary = isMonochrome
+        ? (isDark ? const Color(0xFFA5A5A5) : const Color(0xFF5A5A5A))
+        : seeded.tertiary;
+    final onTertiary = isMonochrome
+        ? (isDark ? const Color(0xFF141414) : const Color(0xFFFFFFFF))
+        : seeded.onTertiary;
+    final tertiaryContainer = isMonochrome
+        ? (isDark ? const Color(0xFF313131) : const Color(0xFFDFDFDF))
+        : seeded.tertiaryContainer;
+    final onTertiaryContainer = isMonochrome
+        ? (isDark ? const Color(0xFFE8E8E8) : const Color(0xFF262626))
+        : seeded.onTertiaryContainer;
+    final inversePrimary = isMonochrome
+        ? (isDark ? const Color(0xFF3A3A3A) : const Color(0xFFCFCFCF))
+        : seeded.inversePrimary;
+
+    return seeded.copyWith(
+      primary: primary,
+      onPrimary: onPrimary,
+      primaryContainer: primaryContainer,
+      onPrimaryContainer: onPrimaryContainer,
+      secondary: secondary,
+      onSecondary: onSecondary,
+      secondaryContainer: secondaryContainer,
+      onSecondaryContainer: onSecondaryContainer,
+      tertiary: tertiary,
+      onTertiary: onTertiary,
+      tertiaryContainer: tertiaryContainer,
+      onTertiaryContainer: onTertiaryContainer,
+      background: background,
+      onBackground: onBackground,
+      surface: surface,
+      onSurface: onSurface,
+      surfaceVariant: surface2,
+      onSurfaceVariant: onSurfaceVariant,
+      outline: outline,
+      outlineVariant: border,
+      inversePrimary: inversePrimary,
     );
   }
 
-  static SlTokens _lightTokens() {
-    return const SlTokens(
-      background: _lightBackground,
-      surface: _lightSurface,
-      surface2: _lightSurface2,
-      border: _lightBorder,
-      borderSubtle: Color(0xFFDDE1EC),
-      ring: _accent,
-      sidebarBackground: Color(0xCCFFFFFF),
-      sidebarBorder: Color(0x66E6E8F0),
-      sidebarItemHover: Color(0x146366F1),
-      sidebarItemActive: Color(0x1F6366F1),
-      sidebarItemForeground: Color(0xFF475569),
-      sidebarItemActiveForeground: Color(0xFF0F172A),
-      radiusSm: _radiusSm,
-      radiusMd: _radiusMd,
-      radiusLg: _radiusLg,
+  static SlTokens _tokens({
+    required Brightness brightness,
+    required ColorScheme scheme,
+    required AppThemeStyleSpec spec,
+  }) {
+    final isDark = brightness == Brightness.dark;
+    final background = spec.background(brightness);
+    final surface = spec.surface(brightness);
+    final surface2 = spec.surface2(brightness);
+    final border = spec.border(brightness);
+    final borderSubtle = isDark
+        ? Color.alphaBlend(Colors.black.withOpacity(0.25), border)
+        : Color.alphaBlend(Colors.white.withOpacity(0.22), border);
+    final sidebarBackground = isDark
+        ? Color.alphaBlend(Colors.black.withOpacity(0.25), surface)
+        : Color.alphaBlend(Colors.white.withOpacity(0.82), surface);
+    final sidebarBorder =
+        isDark ? border.withOpacity(0.58) : border.withOpacity(0.74);
+    final sidebarItemHover = scheme.primary.withOpacity(isDark ? 0.14 : 0.1);
+    final sidebarItemActive = scheme.primary.withOpacity(isDark ? 0.22 : 0.16);
+    final sidebarItemForeground =
+        scheme.onSurfaceVariant.withOpacity(isDark ? 0.95 : 0.92);
+
+    return SlTokens(
+      background: background,
+      surface: surface,
+      surface2: surface2,
+      border: border,
+      borderSubtle: borderSubtle,
+      ring: spec.ring,
+      sidebarBackground: sidebarBackground,
+      sidebarBorder: sidebarBorder,
+      sidebarItemHover: sidebarItemHover,
+      sidebarItemActive: sidebarItemActive,
+      sidebarItemForeground: sidebarItemForeground,
+      sidebarItemActiveForeground: scheme.onSurface,
+      radiusSm: spec.corners.sm,
+      radiusMd: spec.corners.md,
+      radiusLg: spec.corners.lg,
     );
   }
 

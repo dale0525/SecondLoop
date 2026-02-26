@@ -73,6 +73,25 @@ extension _SettingsPageBuild on _SettingsPageState {
             onTap: _busy ? null : _selectThemeMode,
           ),
           ListTile(
+            key: const ValueKey('settings_theme_palette'),
+            title: Text(_themePaletteTitle(context)),
+            subtitle: Text(_themePaletteSubtitle(context)),
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ValueListenableBuilder(
+                  valueListenable: AppThemePalettePrefs.value,
+                  builder: (context, palette, child) {
+                    return Text(_themePaletteLabel(context, palette));
+                  },
+                ),
+                const SizedBox(width: 4),
+                const Icon(Icons.chevron_right),
+              ],
+            ),
+            onTap: _busy ? null : _selectThemePalette,
+          ),
+          ListTile(
             title: Text(context.t.settings.language.title),
             subtitle: Text(context.t.settings.language.subtitle),
             trailing: Row(

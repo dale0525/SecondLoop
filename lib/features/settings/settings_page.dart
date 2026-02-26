@@ -7,6 +7,7 @@ import 'package:hotkey_manager/hotkey_manager.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../app/theme_palette_prefs.dart';
 import '../../app/theme_mode_prefs.dart';
 import '../../core/ai/ai_routing.dart';
 import '../../core/ai/embeddings_data_consent_prefs.dart';
@@ -39,6 +40,7 @@ import 'oplog_maintenance_scope.dart';
 import '../welcome/welcome_page.dart';
 
 part 'settings_page_build.dart';
+part 'settings_page_theme.dart';
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
@@ -496,65 +498,6 @@ class _SettingsPageState extends State<SettingsPage> {
       );
     }
     return _localeLabel(context, override);
-  }
-
-  String _themeModeLabel(BuildContext context, ThemeMode mode) {
-    final t = context.t;
-    return switch (mode) {
-      ThemeMode.system => t.settings.theme.options.system,
-      ThemeMode.light => t.settings.theme.options.light,
-      ThemeMode.dark => t.settings.theme.options.dark,
-    };
-  }
-
-  Future<void> _selectThemeMode() async {
-    if (_busy) return;
-
-    final selected = await showDialog<ThemeMode>(
-      context: context,
-      builder: (context) {
-        final t = context.t;
-        final current = AppThemeModePrefs.value.value;
-        return AlertDialog(
-          title: Text(t.settings.theme.dialogTitle),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              RadioListTile<ThemeMode>(
-                title: Text(t.settings.theme.options.system),
-                value: ThemeMode.system,
-                groupValue: current,
-                onChanged: (value) => Navigator.of(context).pop(value),
-              ),
-              RadioListTile<ThemeMode>(
-                title: Text(t.settings.theme.options.light),
-                value: ThemeMode.light,
-                groupValue: current,
-                onChanged: (value) => Navigator.of(context).pop(value),
-              ),
-              RadioListTile<ThemeMode>(
-                title: Text(t.settings.theme.options.dark),
-                value: ThemeMode.dark,
-                groupValue: current,
-                onChanged: (value) => Navigator.of(context).pop(value),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(current),
-              child: Text(t.common.actions.cancel),
-            ),
-          ],
-        );
-      },
-    );
-
-    if (!mounted) return;
-    final current = AppThemeModePrefs.value.value;
-    if (selected == null || selected == current) return;
-
-    await AppThemeModePrefs.setThemeMode(selected);
   }
 
   Future<void> _selectLanguage() async {

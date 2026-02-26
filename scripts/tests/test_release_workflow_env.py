@@ -234,6 +234,35 @@ class ReleaseWorkflowEnvTests(unittest.TestCase):
         self.assertNotIn('choco install ffmpeg --yes --no-progress', workflow_text)
         self.assertNotIn('--source-bin "C:\\ProgramData\\chocolatey\\bin\\ffmpeg.exe"', workflow_text)
 
+    def test_desktop_release_prunes_non_target_ffmpeg_assets_before_build(self) -> None:
+        workflow_text = self._workflow_text()
+
+        self.assertIn("name: Prune non-target FFmpeg assets (windows)", workflow_text)
+        self.assertIn("name: Prune non-target FFmpeg assets (macos)", workflow_text)
+        self.assertIn("name: Prune non-target FFmpeg assets (linux)", workflow_text)
+
+        self.assertIn("$removeDirs = @('macos', 'linux')", workflow_text)
+        self.assertIn('rm -rf assets/bin/ffmpeg/windows assets/bin/ffmpeg/linux', workflow_text)
+        self.assertIn('rm -rf assets/bin/ffmpeg/windows assets/bin/ffmpeg/macos', workflow_text)
+
+        windows_prune_idx = workflow_text.find("name: Prune non-target FFmpeg assets (windows)")
+        windows_build_idx = workflow_text.find("flutter build windows --release -v @buildArgs @defines")
+        self.assertNotEqual(-1, windows_prune_idx)
+        self.assertNotEqual(-1, windows_build_idx)
+        self.assertLess(windows_prune_idx, windows_build_idx)
+
+        macos_prune_idx = workflow_text.find("name: Prune non-target FFmpeg assets (macos)")
+        macos_build_idx = workflow_text.find("flutter build macos --release --config-only")
+        self.assertNotEqual(-1, macos_prune_idx)
+        self.assertNotEqual(-1, macos_build_idx)
+        self.assertLess(macos_prune_idx, macos_build_idx)
+
+        linux_prune_idx = workflow_text.find("name: Prune non-target FFmpeg assets (linux)")
+        linux_build_idx = workflow_text.find("flutter build linux --release")
+        self.assertNotEqual(-1, linux_prune_idx)
+        self.assertNotEqual(-1, linux_build_idx)
+        self.assertLess(linux_prune_idx, linux_build_idx)
+
     def test_windows_release_packages_and_uploads_velopack_artifacts(self) -> None:
         workflow_text = self._workflow_text()
 

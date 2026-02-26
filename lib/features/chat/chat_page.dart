@@ -98,6 +98,7 @@ import 'audio_recording_recovery_store.dart';
 
 part 'chat_page_methods_a.dart';
 part 'chat_page_methods_b.dart';
+part 'chat_page_methods_b_task_hub_quick_actions.dart';
 part 'chat_page_methods_b_attachments.dart';
 part 'chat_page_methods_c.dart';
 part 'chat_page_methods_d.dart';
@@ -444,6 +445,8 @@ class _ChatPageState extends State<ChatPage> {
   String? _activeCloudIdToken;
   TaskHubUndoTicket? _taskHubUndoTicket;
   Timer? _taskHubQuickActionSnackAutoDismissTimer;
+  ScaffoldMessengerState? _taskHubQuickActionSnackMessenger;
+  Object? _taskHubQuickActionSnackToken;
 
   AudioRecorder? _audioRecorderInstance;
   _PendingAudioUploadRetry? _pendingAudioUploadRetry;
@@ -500,7 +503,14 @@ class _ChatPageState extends State<ChatPage> {
     _messageAutoActionsQueue?.dispose();
     _askSub?.cancel();
     _detachedAskRecoveryTimer?.cancel();
+    if (_taskHubQuickActionSnackToken != null) {
+      _taskHubQuickActionSnackMessenger?.hideCurrentSnackBar();
+    }
     _taskHubQuickActionSnackAutoDismissTimer?.cancel();
+    _taskHubQuickActionSnackAutoDismissTimer = null;
+    _taskHubQuickActionSnackMessenger = null;
+    _taskHubQuickActionSnackToken = null;
+    _taskHubUndoTicket = null;
     unawaited(_audioRecorderInstance?.dispose());
     unawaited(AudioRecordingForegroundService.stopIfSupported());
     _controller.dispose();

@@ -118,6 +118,7 @@ impl crate::rag::AnswerProvider for GeminiCompatibleProvider {
     ) -> Result<()> {
         let url = stream_generate_content_url(&self.base_url, &self.model_name, &self.api_key);
         let req = build_generate_content_request(prompt);
+        let _request_guard = super::request_limiter::acquire_remote_llm_request_slot();
 
         let mut resp = self
             .client

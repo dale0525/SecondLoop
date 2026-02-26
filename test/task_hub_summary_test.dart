@@ -75,9 +75,15 @@ void main() {
             .millisecondsSinceEpoch,
       ),
       todo(
-        id: 'done-ignored',
-        title: 'Done',
+        id: 'done-older',
+        title: 'Done older',
         updatedAtMs: 900,
+        status: 'done',
+      ),
+      todo(
+        id: 'done-latest',
+        title: 'Done latest',
+        updatedAtMs: 950,
         status: 'done',
       ),
     ];
@@ -94,6 +100,7 @@ void main() {
     expect(summary.upcomingCount, 1);
     expect(summary.unscheduledCount, 2);
     expect(summary.dueReviewCount, 1);
+    expect(summary.doneCount, 2);
 
     expect(
       summary.scheduledPreviewTodos.map((e) => e.id).toList(growable: false),
@@ -103,7 +110,36 @@ void main() {
       summary.unscheduledPreviewTodos.map((e) => e.id).toList(growable: false),
       <String>['review-due', 'unscheduled-a'],
     );
+    expect(
+      summary.doneTodos.map((e) => e.id).toList(growable: false),
+      <String>['done-latest', 'done-older'],
+    );
     expect(summary.hasOverdue, isTrue);
     expect(summary.hasDueReview, isTrue);
+  });
+
+  test('keeps done todos available even when actionable buckets are empty', () {
+    final nowLocal = DateTime(2026, 2, 24, 12, 0);
+    final summary = TaskHubSummary.fromTodos(
+      const <Todo>[
+        Todo(
+          id: 'done-only',
+          title: 'Done only',
+          dueAtMs: null,
+          status: 'done',
+          sourceEntryId: null,
+          createdAtMs: 0,
+          updatedAtMs: 100,
+          reviewStage: null,
+          nextReviewAtMs: null,
+          lastReviewAtMs: null,
+        ),
+      ],
+      nowLocal: nowLocal,
+    );
+
+    expect(summary.isEmpty, isTrue);
+    expect(summary.doneCount, 1);
+    expect(summary.doneTodos.map((todo) => todo.id), <String>['done-only']);
   });
 }
