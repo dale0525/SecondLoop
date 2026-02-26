@@ -420,6 +420,61 @@ void main() {
     expect(syncKey!.length, 32);
   });
 
+  testWidgets(
+      'Save prefers recovery envelope over legacy derive when passphrase is provided',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final store = SyncConfigStore();
+    await store.writeBackendType(SyncBackendType.webdav);
+    await store.writeRemoteRoot('SecondLoop');
+    await store.writeWebdavBaseUrl('https://example.com/dav');
+    await store.writeRecoveryEnvelopeJson(
+      '{"version":1,"wrapped_sync_key_b64":"abc","kdf":{"version":1}}',
+    );
+
+    final recoveredSyncKey = Uint8List.fromList(List<int>.filled(32, 6));
+    final backend = _SyncSettingsBackend(recoveredSyncKey: recoveredSyncKey);
+
+    await tester.pumpWidget(_wrap(
+      backend: backend,
+      store: store,
+      engine: null,
+    ));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.byWidgetPredicate(
+        (w) => w is TextField && w.decoration?.labelText == 'Server address',
+      ),
+      'https://example.com/dav',
+    );
+    await tester.pump();
+
+    await tester.drag(find.byType(ListView), const Offset(0, -800));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.byWidgetPredicate(
+        (w) =>
+            w is TextField &&
+            w.decoration?.labelText == 'Recovery passphrase (Advanced)',
+      ),
+      'recover-me',
+    );
+
+    final saveButton = find.widgetWithText(FilledButton, 'Save');
+    await tester.ensureVisible(saveButton);
+    await tester.pumpAndSettle();
+    await tester.tapAt(tester.getTopLeft(saveButton) + const Offset(4, 4));
+    await tester.pumpAndSettle();
+
+    expect(backend.recoverSyncKeyFromEnvelopeCalls, 1);
+    expect(backend.deriveSyncKeyCalls, 0);
+
+    final syncKey = await store.readSyncKey();
+    expect(syncKey, recoveredSyncKey);
+  });
+
   testWidgets('Manual Pull notifies sync listeners when ops were applied',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
@@ -741,11 +796,20 @@ class _SyncSettingsBackend extends AppBackend {
   _SyncSettingsBackend({
     this.webdavPullResult = 0,
     this.managedVaultPullResult = 0,
-  });
+    Uint8List? derivedSyncKey,
+    Uint8List? recoveredSyncKey,
+  })  : _derivedSyncKey =
+            derivedSyncKey ?? Uint8List.fromList(List<int>.filled(32, 9)),
+        _recoveredSyncKey =
+            recoveredSyncKey ?? Uint8List.fromList(List<int>.filled(32, 6));
 
   int webdavTestCalls = 0;
+  int deriveSyncKeyCalls = 0;
+  int recoverSyncKeyFromEnvelopeCalls = 0;
   final int webdavPullResult;
   final int managedVaultPullResult;
+  final Uint8List _derivedSyncKey;
+  final Uint8List _recoveredSyncKey;
 
   @override
   Future<void> init() async {}
@@ -897,8 +961,19 @@ class _SyncSettingsBackend extends AppBackend {
       const Stream<String>.empty();
 
   @override
-  Future<Uint8List> deriveSyncKey(String passphrase) async =>
-      Uint8List.fromList(List<int>.filled(32, 9));
+  Future<Uint8List> deriveSyncKey(String passphrase) async {
+    deriveSyncKeyCalls += 1;
+    return Uint8List.fromList(_derivedSyncKey);
+  }
+
+  @override
+  Future<Uint8List> recoverSyncKeyFromEnvelope(
+    String envelopeJson,
+    String passphrase,
+  ) async {
+    recoverSyncKeyFromEnvelopeCalls += 1;
+    return Uint8List.fromList(_recoveredSyncKey);
+  }
 
   @override
   Future<void> syncWebdavTestConnection({

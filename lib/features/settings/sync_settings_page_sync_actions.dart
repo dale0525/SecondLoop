@@ -283,17 +283,41 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
           _showSnack(t.sync.missingSyncKey);
           return;
         }
-        final derived = await backend.deriveSyncKey(passphrase);
-        await SyncKeyManager.save(write: _store.writeSyncKey, key: derived);
+
+        final existingEnvelopeJson = await _store.readRecoveryEnvelopeJson();
+        Uint8List resolvedSyncKey;
+        if (existingEnvelopeJson != null &&
+            existingEnvelopeJson.trim().isNotEmpty) {
+          try {
+            final recovered = await backend.recoverSyncKeyFromEnvelope(
+              existingEnvelopeJson,
+              passphrase,
+            );
+            if (recovered.length == 32) {
+              resolvedSyncKey = recovered;
+            } else {
+              resolvedSyncKey = await backend.deriveSyncKey(passphrase);
+            }
+          } catch (_) {
+            resolvedSyncKey = await backend.deriveSyncKey(passphrase);
+          }
+        } else {
+          resolvedSyncKey = await backend.deriveSyncKey(passphrase);
+        }
+
+        await SyncKeyManager.save(
+          write: _store.writeSyncKey,
+          key: resolvedSyncKey,
+        );
         try {
-          final envelopeJson =
-              await backend.createSyncRecoveryEnvelope(derived, passphrase);
+          final envelopeJson = await backend.createSyncRecoveryEnvelope(
+              resolvedSyncKey, passphrase);
           await _store.writeRecoveryEnvelopeJson(envelopeJson);
         } catch (_) {
           // Best-effort: keep legacy deterministic flow working even if
           // recovery envelope generation is unavailable on current backend.
         }
-        syncKey = derived;
+        syncKey = resolvedSyncKey;
         _syncPassphraseController.text =
             _SyncSettingsPageState._kPassphrasePlaceholder;
         _passphraseIsPlaceholder = true;
