@@ -122,7 +122,7 @@ void main() {
     expect(find.byType(TaskHubPage), findsOneWidget);
   });
 
-  testWidgets('Task hub banner auto-collapses after 10 seconds',
+  testWidgets('Task hub banner stays expanded after 10 seconds',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
 
@@ -175,7 +175,7 @@ void main() {
 
     await tester.pump(const Duration(seconds: 10));
     await tester.pump();
-    expect(find.byKey(const ValueKey('task_hub_preview_list')), findsNothing);
+    expect(find.byKey(const ValueKey('task_hub_preview_list')), findsOneWidget);
   });
 
   testWidgets(

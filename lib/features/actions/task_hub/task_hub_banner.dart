@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 
 import '../../../i18n/strings.g.dart';
@@ -29,50 +27,27 @@ class TaskHubBanner extends StatefulWidget {
 }
 
 class _TaskHubBannerState extends State<TaskHubBanner> {
-  static const _kAutoCollapseDelay = Duration(seconds: 10);
   static const _kExpandedPreviewMaxHeightFactor = 0.5;
 
   var _expanded = false;
-  Timer? _autoCollapseTimer;
-
-  void _cancelAutoCollapseTimer() {
-    _autoCollapseTimer?.cancel();
-    _autoCollapseTimer = null;
-  }
 
   void _setExpanded(bool expanded) {
     if (_expanded == expanded) return;
-
     setState(() => _expanded = expanded);
-    _cancelAutoCollapseTimer();
-
-    if (!expanded) return;
-    _autoCollapseTimer = Timer(_kAutoCollapseDelay, () {
-      if (!mounted) return;
-      _setExpanded(false);
-    });
   }
 
   @override
   void didUpdateWidget(covariant TaskHubBanner oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.collapseSignal == oldWidget.collapseSignal) return;
-    _cancelAutoCollapseTimer();
     if (_expanded) {
       setState(() => _expanded = false);
     }
   }
 
   @override
-  void dispose() {
-    _cancelAutoCollapseTimer();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
     if (widget.summary.isEmpty) {
-      _cancelAutoCollapseTimer();
       return const SizedBox.shrink();
     }
 
