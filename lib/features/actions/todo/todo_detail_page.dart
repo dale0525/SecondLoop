@@ -32,6 +32,8 @@ import '../../../ui/sl_icon_button.dart';
 import '../../../ui/sl_surface.dart';
 import '../../../ui/sl_tokens.dart';
 import '../../attachments/attachment_card.dart';
+import '../../attachments/attachment_draft_send_contract.dart';
+import '../../attachments/attachment_draft_send_coordinator.dart';
 import '../../attachments/attachment_ingest_pipeline.dart';
 import '../../attachments/attachment_viewer_page.dart';
 import '../../chat/chat_composer_inline_button.dart';
@@ -82,7 +84,9 @@ class _TodoDetailPageState extends State<TodoDetailPage> {
       <String, Future<List<Attachment>>>{};
   final Map<String, Future<List<Attachment>>> _attachmentsFuturesByActivityId =
       <String, Future<List<Attachment>>>{};
-  final List<Attachment> _pendingAttachments = <Attachment>[];
+  final List<AttachmentDraftPayload> _pendingAttachments =
+      <AttachmentDraftPayload>[];
+  var _pendingAttachmentDraftSeq = 0;
   AudioRecorder? _audioRecorder;
   SyncEngine? _syncEngine;
   VoidCallback? _syncListener;
@@ -448,54 +452,119 @@ class _TodoDetailPageState extends State<TodoDetailPage> {
   Future<void> _appendNote() async {
     if (_sendingNote) return;
     final text = _noteController.text.trim();
-    final pending = List<Attachment>.from(_pendingAttachments);
+    final pending = List<AttachmentDraftPayload>.from(_pendingAttachments);
     if (text.isEmpty && pending.isEmpty) return;
+    final content = text.isNotEmpty
+        ? text
+        : context.t.actions.todoDetail.attachmentNoteDefault;
     setState(() => _sendingNote = true);
-    _noteController.clear();
 
     try {
-      final backend = AppBackendScope.of(context);
+      final backendAny = AppBackendScope.of(context);
+      if (backendAny is! NativeAppBackend) {
+        throw Exception('native_backend_required');
+      }
+      final backend = backendAny;
       final syncEngine = SyncEngineScope.maybeOf(context);
-      final attachmentsBackend =
-          backend is AttachmentsBackend ? backend as AttachmentsBackend : null;
+      final attachmentsBackend = backend as AttachmentsBackend;
       final sessionKey = SessionScope.of(context).sessionKey;
-      final content = text.isNotEmpty
-          ? text
-          : context.t.actions.todoDetail.attachmentNoteDefault;
+      const coordinator = AttachmentDraftSendCoordinator();
+      TodoActivity? createdActivity;
 
-      final activity = await backend.appendTodoNote(
-        sessionKey,
-        todoId: _todo.id,
-        content: content,
-      );
-
-      syncEngine?.notifyLocalMutation();
-
-      final activityMessageId = activity.sourceMessageId;
-      for (final attachment in pending) {
-        try {
-          if (attachmentsBackend != null && activityMessageId != null) {
-            await attachmentsBackend.linkAttachmentToMessage(
-              sessionKey,
-              activityMessageId,
-              attachmentSha256: attachment.sha256,
-            );
-          } else {
-            await backend.linkAttachmentToTodoActivity(
-              sessionKey,
-              activityId: activity.id,
-              attachmentSha256: attachment.sha256,
+      final result = await coordinator.send(
+        text: content,
+        drafts: pending,
+        createUserMessage: (noteContent) async {
+          final activity = await backend.appendTodoNote(
+            sessionKey,
+            todoId: _todo.id,
+            content: noteContent,
+          );
+          createdActivity ??= activity;
+          final sourceMessageId = activity.sourceMessageId?.trim() ?? '';
+          if (sourceMessageId.isNotEmpty) {
+            try {
+              final existing = await backend.getMessageById(
+                sessionKey,
+                sourceMessageId,
+              );
+              if (existing != null) return existing;
+            } catch (_) {
+              // ignore
+            }
+            return Message(
+              id: sourceMessageId,
+              conversationId: 'todo_${_todo.id}',
+              role: 'user',
+              content: noteContent,
+              createdAtMs: DateTime.now().millisecondsSinceEpoch,
+              isMemory: false,
             );
           }
-        } catch (_) {
-          // ignore
-        }
-      }
+          return Message(
+            id: 'todo_activity_${activity.id}',
+            conversationId: 'todo_${_todo.id}',
+            role: 'user',
+            content: noteContent,
+            createdAtMs: DateTime.now().millisecondsSinceEpoch,
+            isMemory: false,
+          );
+        },
+        ingestAttachment: (draft) =>
+            _ingestPendingAttachmentDraft(backend, sessionKey, draft),
+        linkAttachmentToMessage: (_, attachmentSha256) async {
+          final activity = createdActivity;
+          if (activity == null) {
+            throw StateError('todo_activity_not_created');
+          }
+
+          final sourceMessageId = activity.sourceMessageId?.trim() ?? '';
+          if (sourceMessageId.isNotEmpty) {
+            await attachmentsBackend.linkAttachmentToMessage(
+              sessionKey,
+              sourceMessageId,
+              attachmentSha256: attachmentSha256,
+            );
+          }
+          await backend.linkAttachmentToTodoActivity(
+            sessionKey,
+            activityId: activity.id,
+            attachmentSha256: attachmentSha256,
+          );
+        },
+        onAttachmentLinked: (attachmentSha256, draft) async {
+          try {
+            unawaited(
+              const RustAttachmentMetadataStore().upsert(
+                sessionKey,
+                attachmentSha256: attachmentSha256,
+                filenames: [draft.normalizedFilename],
+              ).catchError((_) {}),
+            );
+          } catch (_) {}
+        },
+      );
 
       if (!mounted) return;
-      setState(_pendingAttachments.clear);
-      _refreshActivities();
-      syncEngine?.notifyLocalMutation();
+      final failedDrafts = dedupeAttachmentDraftPayloads(
+        result.failedItems
+            .map((failed) => failed.payload)
+            .toList(growable: false),
+      );
+
+      setState(() {
+        _pendingAttachments
+          ..clear()
+          ..addAll(failedDrafts);
+        if (createdActivity != null) {
+          _noteController.clear();
+        }
+      });
+
+      if (createdActivity != null) {
+        _refreshActivities();
+        syncEngine?.notifyLocalMutation();
+      }
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -773,13 +842,13 @@ class _TodoDetailPageState extends State<TodoDetailPage> {
     return _pickTodoDetailAttachment(this);
   }
 
-  void _appendPendingAttachment(Attachment selected) {
+  void _appendPendingAttachment(AttachmentDraftPayload selected) {
     setState(() {
-      final alreadySelected =
-          _pendingAttachments.any((a) => a.sha256 == selected.sha256);
-      if (!alreadySelected) {
-        _pendingAttachments.add(selected);
-      }
+      final merged = dedupeAttachmentDraftPayloads(
+        <AttachmentDraftPayload>[..._pendingAttachments, selected],
+      );
+      _pendingAttachments.clear();
+      _pendingAttachments.addAll(merged);
     });
   }
 

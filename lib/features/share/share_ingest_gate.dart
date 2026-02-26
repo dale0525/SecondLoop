@@ -160,32 +160,51 @@ final class _ShareIngestGateState extends State<ShareIngestGate>
     );
   }
 
-  Future<void> _maybeEnqueueAudioTranscribeEnrichment(
+  Future<void> _enqueueShareAttachmentPostLinkEnrichment(
     NativeAppBackend backend,
     Uint8List sessionKey,
     String attachmentSha256, {
-    required String mimeType,
+    required String candidateMimeType,
+    required String lang,
   }) async {
-    final normalizedMimeType = mimeType.trim().toLowerCase();
-    final canTranscribe = normalizedMimeType.startsWith('audio/') ||
-        normalizedMimeType.startsWith('video/');
-    if (!canTranscribe) return;
+    final normalizedMimeType = candidateMimeType.trim().toLowerCase();
+    if (normalizedMimeType.isEmpty) return;
 
-    ContentEnrichmentConfig? config;
-    try {
-      config = await const RustContentEnrichmentConfigStore()
-          .readContentEnrichment(sessionKey);
-    } catch (_) {
-      config = null;
+    if (normalizedMimeType.startsWith('image/')) {
+      try {
+        await _maybeEnqueueAttachmentAnnotationEnrichment(
+          backend,
+          sessionKey,
+          attachmentSha256,
+          lang: lang,
+        );
+      } catch (_) {}
+
+      try {
+        final exif = await backend.readAttachmentExifMetadata(
+          sessionKey,
+          sha256: attachmentSha256,
+        );
+        final lat = exif?.latitude;
+        final lon = exif?.longitude;
+        final hasValidLocation = lat != null &&
+            lon != null &&
+            !(lat == 0.0 && lon == 0.0) &&
+            !lat.isNaN &&
+            !lon.isNaN;
+        if (!hasValidLocation) return;
+
+        await _maybeEnqueueAttachmentPlaceEnrichment(
+          backend,
+          sessionKey,
+          attachmentSha256,
+          lang: lang,
+        );
+      } catch (_) {}
+      return;
     }
-    if (!(config?.audioTranscribeEnabled ?? true)) return;
 
-    await backend.enqueueAttachmentAnnotation(
-      sessionKey,
-      attachmentSha256: attachmentSha256,
-      lang: 'und',
-      nowMs: DateTime.now().millisecondsSinceEpoch,
-    );
+    return;
   }
 
   Future<void> _drain() async {
@@ -234,11 +253,13 @@ final class _ShareIngestGateState extends State<ShareIngestGate>
       Future<String> Function(String path, String mimeType, String? filename)?
           onFile;
       Future<String> Function(String url)? onUrlManifest;
+      Future<void> Function(String attachmentSha256)? onAttachmentLinked;
       Future<void> Function(
         String attachmentSha256,
         ShareIngestAttachmentMetadata metadata,
       )? onUpsertAttachmentMetadata;
       if (backend is NativeAppBackend) {
+        final candidateMimeTypeBySha = <String, String>{};
         const metadataStore = RustAttachmentMetadataStore();
         onUpsertAttachmentMetadata = (sha256, metadata) async {
           try {
@@ -267,7 +288,7 @@ final class _ShareIngestGateState extends State<ShareIngestGate>
           final bytes = await compute(_readFileBytes, path);
           final normalizedMimeType = mimeType.trim();
           try {
-            return await ingestFileAttachmentBytes(
+            final attachmentSha256 = await ingestFileAttachmentBytes(
               backend: backend,
               sessionKey: sessionKey,
               rawBytes: bytes,
@@ -284,15 +305,12 @@ final class _ShareIngestGateState extends State<ShareIngestGate>
                 sessionKey,
                 attachmentSha256,
               ),
-              onMaybeEnqueueAudioTranscribe:
-                  (attachmentSha256, candidateMimeType) =>
-                      _maybeEnqueueAudioTranscribeEnrichment(
-                backend,
-                sessionKey,
-                attachmentSha256,
-                mimeType: candidateMimeType,
-              ),
             );
+            candidateMimeTypeBySha.putIfAbsent(
+              attachmentSha256,
+              () => normalizedMimeType,
+            );
+            return attachmentSha256;
           } finally {
             try {
               await File(path).delete();
@@ -326,20 +344,10 @@ final class _ShareIngestGateState extends State<ShareIngestGate>
                 sessionKey,
                 attachmentSha256,
               ),
-              onMaybeEnqueuePlace: (attachmentSha256, lang) =>
-                  _maybeEnqueueAttachmentPlaceEnrichment(
-                backend,
-                sessionKey,
-                attachmentSha256,
-                lang: lang,
-              ),
-              onMaybeEnqueueAnnotation: (attachmentSha256, lang) =>
-                  _maybeEnqueueAttachmentAnnotationEnrichment(
-                backend,
-                sessionKey,
-                attachmentSha256,
-                lang: lang,
-              ),
+            );
+            candidateMimeTypeBySha.putIfAbsent(
+              ingested.attachmentSha256,
+              () => mimeType.trim(),
             );
             return ingested.attachmentSha256;
           } finally {
@@ -350,6 +358,21 @@ final class _ShareIngestGateState extends State<ShareIngestGate>
             }
           }
         };
+
+        onAttachmentLinked = (attachmentSha256) async {
+          final candidateMimeType =
+              candidateMimeTypeBySha[attachmentSha256]?.trim();
+          if (candidateMimeType == null || candidateMimeType.isEmpty) return;
+          unawaited(
+            _enqueueShareAttachmentPostLinkEnrichment(
+              backend,
+              sessionKey,
+              attachmentSha256,
+              candidateMimeType: candidateMimeType,
+              lang: lang,
+            ).catchError((_) {}),
+          );
+        };
       }
 
       await ShareIngest.drainQueue(
@@ -359,6 +382,7 @@ final class _ShareIngestGateState extends State<ShareIngestGate>
         onImage: onImage,
         onFile: onFile,
         onUrlManifest: onUrlManifest,
+        onAttachmentLinked: onAttachmentLinked,
         onUpsertAttachmentMetadata: onUpsertAttachmentMetadata,
       );
     } finally {

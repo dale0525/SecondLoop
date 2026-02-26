@@ -75,5 +75,34 @@ Future<void> _pickTodoDetailAttachment(_TodoDetailPageState state) async {
   if (!state.mounted) return;
   if (selected == null) return;
 
-  state._appendPendingAttachment(selected);
+  try {
+    final bytes = await attachmentsBackend.readAttachmentBytes(
+      sessionKey,
+      sha256: selected.sha256,
+    );
+    if (bytes.isEmpty) {
+      throw Exception('attachment_bytes_empty');
+    }
+
+    final normalizedPath = selected.path.trim().replaceAll('\\', '/');
+    final filename = normalizedPath.isEmpty
+        ? 'attachment.bin'
+        : normalizedPath.split('/').last.trim();
+    state._appendPendingAttachment(
+      AttachmentDraftPayload(
+        localId: state._nextPendingAttachmentDraftLocalId(),
+        filename: filename.isEmpty ? 'attachment.bin' : filename,
+        mimeType: selected.mimeType,
+        bytes: bytes,
+      ),
+    );
+  } catch (e) {
+    if (!state.mounted) return;
+    ScaffoldMessenger.of(state.context).showSnackBar(
+      SnackBar(
+        content: Text(state.context.t.errors.loadFailed(error: '$e')),
+        duration: const Duration(seconds: 3),
+      ),
+    );
+  }
 }

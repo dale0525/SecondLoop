@@ -97,4 +97,216 @@ extension _ChatPageStateMethodsHMessageAttachments on _ChatPageState {
     final hasAttachment = await _messageHasAttachment(message.id);
     return !hasAttachment;
   }
+
+  Widget _buildMessageAttachmentSection({
+    required BuildContext context,
+    required Message message,
+    required bool isUser,
+    required ColorScheme colorScheme,
+    required bool hasContentAboveAttachments,
+    required AttachmentsBackend attachmentsBackend,
+    required Uint8List sessionKey,
+    required Map<String, AttachmentAnnotationJob> annotationJobsBySha256,
+  }) {
+    return FutureBuilder(
+      initialData: _attachmentsCacheByMessageId[message.id],
+      future: _loadMessageAttachmentsForUi(
+        messageId: message.id,
+        attachmentsBackend: attachmentsBackend,
+        sessionKey: sessionKey,
+      ),
+      builder: (context, snapshot) {
+        final items = snapshot.data ?? const <Attachment>[];
+        if (items.isEmpty) {
+          return const SizedBox.shrink();
+        }
+
+        return Padding(
+          padding: EdgeInsets.only(
+            top: hasContentAboveAttachments ? 8 : 0,
+          ),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              const spacing = 8.0;
+              final estimatedRowWidth = _estimateAttachmentRowWidth(
+                items,
+                spacing: spacing,
+              );
+              final shouldScroll = estimatedRowWidth > constraints.maxWidth;
+              Widget buildAttachmentTile(
+                Attachment attachment,
+              ) {
+                final normalizedMime = attachment.mimeType.trim().toLowerCase();
+                final useVisualThumbnail =
+                    normalizedMime.startsWith('image/') ||
+                        normalizedMime == kSecondLoopVideoManifestMimeType;
+                if (useVisualThumbnail) {
+                  return ChatImageAttachmentThumbnail(
+                    key: ValueKey(
+                      'chat_attachment_image_${attachment.sha256}',
+                    ),
+                    attachment: attachment,
+                    attachmentsBackend: attachmentsBackend,
+                    onTap: () => unawaited(_openAttachmentDetail(attachment)),
+                  );
+                }
+                return AttachmentCard(
+                  attachment: attachment,
+                  annotationJob: annotationJobsBySha256[attachment.sha256],
+                  onTap: () => unawaited(_openAttachmentDetail(attachment)),
+                );
+              }
+
+              final rowChildren = <Widget>[
+                for (var i = 0; i < items.length; i++)
+                  Padding(
+                    padding: EdgeInsets.only(
+                      right: i == items.length - 1 ? 0 : spacing,
+                    ),
+                    child: buildAttachmentTile(items[i]),
+                  ),
+              ];
+
+              final canUseGrid = !shouldScroll && items.length > 1;
+              final targetColumns = constraints.maxWidth >= 520 ? 2 : 1;
+              final gridTileMaxWidth = targetColumns == 1
+                  ? constraints.maxWidth
+                  : (constraints.maxWidth - spacing) / 2;
+
+              Widget attachmentsLayout;
+              if (shouldScroll) {
+                attachmentsLayout = SizedBox(
+                  width: constraints.maxWidth,
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: rowChildren,
+                    ),
+                  ),
+                );
+              } else if (canUseGrid) {
+                attachmentsLayout = Wrap(
+                  spacing: spacing,
+                  runSpacing: spacing,
+                  children: [
+                    for (final attachment in items)
+                      ConstrainedBox(
+                        constraints: BoxConstraints(
+                          maxWidth: gridTileMaxWidth,
+                        ),
+                        child: buildAttachmentTile(attachment),
+                      ),
+                  ],
+                );
+              } else {
+                attachmentsLayout = buildAttachmentTile(items.first);
+              }
+
+              Attachment? firstImage;
+              for (final a in items) {
+                if (a.mimeType.startsWith('image/')) {
+                  firstImage = a;
+                  break;
+                }
+              }
+
+              final imageSha256 = firstImage?.sha256;
+              final double? enrichmentWidth = firstImage == null
+                  ? null
+                  : _estimateAttachmentPreviewWidth(firstImage)
+                      .clamp(0.0, constraints.maxWidth)
+                      .toDouble();
+
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    key: ValueKey('chat_message_attachments_${message.id}'),
+                    alignment: Alignment.centerLeft,
+                    child: attachmentsLayout,
+                  ),
+                  if (imageSha256 != null && enrichmentWidth != null)
+                    FutureBuilder(
+                      initialData:
+                          _attachmentEnrichmentCacheBySha256[imageSha256],
+                      future: _attachmentEnrichmentFuturesBySha256.putIfAbsent(
+                        imageSha256,
+                        () => _loadAttachmentEnrichment(
+                          attachmentsBackend,
+                          sessionKey,
+                          imageSha256,
+                        ).then((value) {
+                          _attachmentEnrichmentCacheBySha256[imageSha256] =
+                              value;
+                          return value;
+                        }),
+                      ),
+                      builder: (context, snapshot) {
+                        final enrichment = snapshot.data;
+                        final place = enrichment?.placeDisplayName?.trim();
+                        final caption = enrichment?.captionLong?.trim();
+
+                        final hasPlace = place != null && place.isNotEmpty;
+                        final hasCaption =
+                            caption != null && caption.isNotEmpty;
+                        if (!hasPlace && !hasCaption) {
+                          return const SizedBox.shrink();
+                        }
+
+                        final textStyle =
+                            Theme.of(context).textTheme.bodySmall?.copyWith(
+                                  color: isUser
+                                      ? colorScheme.onPrimaryContainer
+                                          .withOpacity(0.78)
+                                      : colorScheme.onSurfaceVariant
+                                          .withOpacity(0.86),
+                                );
+
+                        return ConstrainedBox(
+                          constraints: BoxConstraints(
+                            maxWidth: enrichmentWidth,
+                          ),
+                          child: Padding(
+                            padding: const EdgeInsets.only(top: 6),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                if (hasPlace)
+                                  Text(
+                                    place,
+                                    key: ValueKey(
+                                      'chat_image_enrichment_location_$imageSha256',
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: textStyle,
+                                  ),
+                                if (hasPlace && hasCaption)
+                                  const SizedBox(height: 2),
+                                if (hasCaption)
+                                  Text(
+                                    caption,
+                                    key: ValueKey(
+                                      'chat_image_enrichment_caption_$imageSha256',
+                                    ),
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: textStyle,
+                                  ),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                ],
+              );
+            },
+          ),
+        );
+      },
+    );
+  }
 }

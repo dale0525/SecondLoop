@@ -263,6 +263,46 @@ EOF
   exit 1
 }
 
+sanitize_macos_native_toolchain_env() {
+  if [[ "$(uname -s)" != "Darwin" ]]; then
+    return 0
+  fi
+
+  local polluted_var
+  for polluted_var in \
+    AR CC CFLAGS CPPFLAGS CXX CXXFLAGS LD LDFLAGS NM RANLIB STRIP SDKROOT \
+    MACOSX_DEPLOYMENT_TARGET \
+    CMAKE_ARGS CMAKE_PREFIX_PATH CMAKE_OSX_SYSROOT CMAKE_OSX_ARCHITECTURES CMAKE_OSX_DEPLOYMENT_TARGET
+  do
+    unset "${polluted_var}" || true
+  done
+
+  local pixi_bin="${repo_root}/.pixi/envs/default/bin"
+  local original_path="${PATH:-}"
+  local cleaned_path=""
+  local path_item
+  IFS=':' read -r -a path_items <<< "${original_path}"
+  for path_item in "${path_items[@]}"; do
+    if [[ -z "${path_item}" ]]; then
+      continue
+    fi
+    if [[ "${path_item}" == "${pixi_bin}" ]]; then
+      continue
+    fi
+    if [[ -z "${cleaned_path}" ]]; then
+      cleaned_path="${path_item}"
+    else
+      cleaned_path="${cleaned_path}:${path_item}"
+    fi
+  done
+
+  if [[ -n "${cleaned_path}" ]]; then
+    export PATH="${cleaned_path}"
+  fi
+}
+
+sanitize_macos_native_toolchain_env
+
 if (( ${#defines[@]} > 0 )); then
   run_flutter_command "${all_args[@]}" "${defines[@]}"
 fi

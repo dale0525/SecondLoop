@@ -68,9 +68,17 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('chat_attach_pick_media')));
       await tester.pumpAndSettle();
+
+      expect(backend.insertAttachmentCalls, 0);
+      expect(backend.linkCalls, 0);
+      expect(backend.insertMessageCalls, 0);
+      expect(find.byKey(const ValueKey('chat_send')), findsOneWidget);
+
+      await tester.tap(find.byKey(const ValueKey('chat_send')));
+      await tester.pump();
       await _pumpUntil(
         tester,
-        () => backend.insertAttachmentCalls >= 1,
+        () => backend.linkCalls >= 1,
         maxTicks: 300,
       );
 
@@ -136,6 +144,14 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('chat_attach')));
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('chat_attach_pick_media')));
+      await tester.pump();
+
+      expect(
+        find.byKey(const ValueKey('chat_attachment_send_feedback')),
+        findsNothing,
+      );
+
+      await tester.tap(find.byKey(const ValueKey('chat_send')));
       await tester.pump();
 
       await _pumpUntil(
@@ -260,6 +276,14 @@ void main() {
 
       expect(
           find.byKey(const ValueKey('chat_attach_pick_media')), findsNothing);
+      expect(find.byKey(const ValueKey('chat_send')), findsOneWidget);
+      expect(backend.insertAttachmentCalls, 0);
+      expect(backend.linkCalls, 0);
+      expect(backend.insertMessageCalls, 0);
+
+      await tester.tap(find.byKey(const ValueKey('chat_send')));
+      await tester.pump();
+      await _pumpUntil(tester, () => backend.linkCalls >= 1, maxTicks: 300);
 
       expect(backend.insertAttachmentCalls, 1);
       expect(backend.linkCalls, 1);
@@ -324,12 +348,19 @@ void main() {
 
       await tester.tap(find.byKey(const ValueKey('chat_attach')));
       await tester.pumpAndSettle();
-      await _pumpUntil(tester, () => backend.insertAttachmentCalls >= 2);
+      expect(find.byKey(const ValueKey('chat_send')), findsOneWidget);
+      expect(backend.insertAttachmentCalls, 0);
+      expect(backend.linkCalls, 0);
+      expect(backend.insertMessageCalls, 0);
+
+      await tester.tap(find.byKey(const ValueKey('chat_send')));
+      await tester.pump();
+      await _pumpUntil(tester, () => backend.linkCalls >= 2, maxTicks: 300);
 
       expect(picker.allowMultipleCalls, [true]);
       expect(backend.insertAttachmentCalls, 2);
       expect(backend.linkCalls, 2);
-      expect(backend.insertMessageCalls, 2);
+      expect(backend.insertMessageCalls, 1);
       expect(backend.insertedAttachmentMimeTypes, contains('text/plain'));
     } finally {
       FilePicker.platform = oldPicker ?? _TestFilePicker(result: null);
@@ -385,21 +416,32 @@ void main() {
       await tester.pumpAndSettle();
 
       await tester.tap(find.byKey(const ValueKey('chat_attach')));
+      await tester.pumpAndSettle();
+      expect(backend.insertAttachmentStartedCalls, 0);
+      expect(backend.insertMessageCalls, 0);
+
+      await tester.tap(find.byKey(const ValueKey('chat_send')));
       await tester.pump();
       await _pumpUntil(
         tester,
-        () => backend.insertMessageCalls >= 1,
+        () => backend.insertAttachmentStartedCalls >= 1,
         maxTicks: 20,
         step: const Duration(milliseconds: 20),
       );
 
       expect(backend.insertAttachmentStartedCalls, 1);
       expect(backend.insertAttachmentCompletedCalls, 0);
-      expect(backend.insertMessageCalls, 1);
+      expect(backend.insertMessageCalls, 0);
 
       await _pumpUntil(
         tester,
         () => backend.insertAttachmentCompletedCalls >= 1,
+        maxTicks: 120,
+        step: const Duration(milliseconds: 20),
+      );
+      await _pumpUntil(
+        tester,
+        () => backend.insertMessageCalls >= 1,
         maxTicks: 120,
         step: const Duration(milliseconds: 20),
       );
@@ -461,6 +503,13 @@ void main() {
       await tester.pumpAndSettle();
 
       await tester.tap(find.byKey(const ValueKey('chat_attach')));
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('chat_attachment_send_feedback')),
+        findsNothing,
+      );
+
+      await tester.tap(find.byKey(const ValueKey('chat_send')));
       await tester.pump();
       await _pumpUntil(
         tester,
@@ -583,11 +632,18 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      await _pumpUntil(tester, () => backend.insertAttachmentCalls >= 2);
+      expect(backend.insertAttachmentCalls, 0);
+      expect(backend.linkCalls, 0);
+      expect(backend.insertMessageCalls, 0);
+      expect(find.byKey(const ValueKey('chat_send')), findsOneWidget);
+
+      await tester.tap(find.byKey(const ValueKey('chat_send')));
+      await tester.pump();
+      await _pumpUntil(tester, () => backend.linkCalls >= 2, maxTicks: 300);
 
       expect(backend.insertAttachmentCalls, 2);
       expect(backend.linkCalls, 2);
-      expect(backend.insertMessageCalls, 2);
+      expect(backend.insertMessageCalls, 1);
     } finally {
       debugDefaultTargetPlatformOverride = oldPlatform;
     }
@@ -652,7 +708,9 @@ void main() {
 
       await tester.tap(find.byKey(const ValueKey('chat_attach')));
       await tester.pumpAndSettle();
-      await _pumpUntil(tester, () => backend.insertAttachmentCalls >= 1);
+      await tester.tap(find.byKey(const ValueKey('chat_send')));
+      await tester.pump();
+      await _pumpUntil(tester, () => backend.linkCalls >= 1, maxTicks: 300);
 
       expect(backend.insertAttachmentCalls, 1);
       expect(backend.insertedAttachmentMimeTypes, contains('audio/mp4'));
@@ -728,7 +786,9 @@ void main() {
 
       await tester.tap(find.byKey(const ValueKey('chat_attach')));
       await tester.pumpAndSettle();
-      await _pumpUntil(tester, () => backend.insertAttachmentCalls >= 1);
+      await tester.tap(find.byKey(const ValueKey('chat_send')));
+      await tester.pump();
+      await _pumpUntil(tester, () => backend.linkCalls >= 1, maxTicks: 300);
 
       expect(transcodeCalls, 1);
       expect(backend.insertAttachmentCalls, 1);
@@ -807,7 +867,9 @@ void main() {
 
       await tester.tap(find.byKey(const ValueKey('chat_attach')));
       await tester.pumpAndSettle();
-      await _pumpUntil(tester, () => backend.insertAttachmentCalls >= 1);
+      await tester.tap(find.byKey(const ValueKey('chat_send')));
+      await tester.pump();
+      await _pumpUntil(tester, () => backend.linkCalls >= 1, maxTicks: 300);
 
       expect(localTranscodeCalls, 3);
       expect(backend.insertAttachmentCalls, 1);

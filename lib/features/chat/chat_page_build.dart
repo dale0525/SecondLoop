@@ -388,254 +388,280 @@ extension _ChatPageStateBuild on _ChatPageState {
                       16,
                       isMobileKeyboardVisible ? 8 : 16,
                     ),
-                    child: useCompactComposer
-                        ? SlFocusRing(
-                            key: const ValueKey('chat_input_ring'),
-                            borderRadius:
-                                BorderRadius.circular(tokens.radiusLg),
-                            child: SlSurface(
-                              color: tokens.surface2,
-                              borderColor: tokens.borderSubtle,
-                              borderRadius:
-                                  BorderRadius.circular(tokens.radiusLg),
-                              padding: const EdgeInsets.fromLTRB(8, 6, 8, 6),
-                              child: Row(
-                                crossAxisAlignment: CrossAxisAlignment.end,
-                                children: [
-                                  Expanded(
-                                    child: Focus(
-                                      // ignore: deprecated_member_use
-                                      onKey: _handleComposerOnKey,
-                                      child: TextField(
-                                        key: const ValueKey('chat_input'),
-                                        focusNode: _inputFocusNode,
-                                        controller: _controller,
-                                        decoration: InputDecoration(
-                                          hintText:
-                                              context.t.common.fields.message,
-                                          border: InputBorder.none,
-                                          filled: false,
-                                          isDense: true,
-                                        ),
-                                        keyboardType: TextInputType.multiline,
-                                        textInputAction:
-                                            TextInputAction.newline,
-                                        minLines: 1,
-                                        maxLines: 6,
-                                      ),
-                                    ),
-                                  ),
-                                  _buildCompactComposerActions(
-                                    context,
-                                    tokens: tokens,
-                                    colorScheme: colorScheme,
-                                  ),
-                                ],
-                              ),
-                            ),
-                          )
-                        : _buildDesktopDropTargetComposer(
-                            context,
-                            tokens: tokens,
-                            colorScheme: colorScheme,
-                            child: SlFocusRing(
-                              key: const ValueKey('chat_input_ring'),
-                              borderRadius:
-                                  BorderRadius.circular(tokens.radiusLg),
-                              child: SlSurface(
-                                color: tokens.surface2,
-                                borderColor: tokens.borderSubtle,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        _buildComposerDraftAttachmentStrip(
+                          context,
+                          tokens: tokens,
+                        ),
+                        useCompactComposer
+                            ? SlFocusRing(
+                                key: const ValueKey('chat_input_ring'),
                                 borderRadius:
                                     BorderRadius.circular(tokens.radiusLg),
-                                padding: const EdgeInsets.all(12),
-                                child: Row(
-                                  children: [
-                                    Expanded(
-                                      child: Focus(
-                                        // ignore: deprecated_member_use
-                                        onKey: _handleComposerOnKey,
-                                        child: TextField(
-                                          key: const ValueKey('chat_input'),
-                                          focusNode: _inputFocusNode,
-                                          controller: _controller,
-                                          decoration: InputDecoration(
-                                            hintText:
-                                                context.t.common.fields.message,
-                                            border: InputBorder.none,
-                                            filled: false,
+                                child: SlSurface(
+                                  color: tokens.surface2,
+                                  borderColor: tokens.borderSubtle,
+                                  borderRadius:
+                                      BorderRadius.circular(tokens.radiusLg),
+                                  padding:
+                                      const EdgeInsets.fromLTRB(8, 6, 8, 6),
+                                  child: Row(
+                                    crossAxisAlignment: CrossAxisAlignment.end,
+                                    children: [
+                                      Expanded(
+                                        child: Focus(
+                                          // ignore: deprecated_member_use
+                                          onKey: _handleComposerOnKey,
+                                          child: TextField(
+                                            key: const ValueKey('chat_input'),
+                                            focusNode: _inputFocusNode,
+                                            controller: _controller,
+                                            decoration: InputDecoration(
+                                              hintText: context
+                                                  .t.common.fields.message,
+                                              border: InputBorder.none,
+                                              filled: false,
+                                              isDense: true,
+                                            ),
+                                            keyboardType:
+                                                TextInputType.multiline,
+                                            textInputAction:
+                                                TextInputAction.newline,
+                                            minLines: 1,
+                                            maxLines: 6,
                                           ),
-                                          keyboardType: TextInputType.multiline,
-                                          textInputAction:
-                                              TextInputAction.newline,
-                                          minLines: 1,
-                                          maxLines: 6,
                                         ),
                                       ),
-                                    ),
-                                    const SizedBox(width: 8),
-                                    ListenableBuilder(
-                                      listenable: _inputFocusNode,
-                                      builder: (context, child) {
-                                        if (!_inputFocusNode.hasFocus) {
-                                          return const SizedBox.shrink();
-                                        }
-                                        return Row(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            _buildDesktopMarkdownEditorButton(
-                                              context,
-                                            ),
-                                            if (_supportsImageUpload ||
-                                                _supportsDesktopRecordAudioAction)
-                                              const SizedBox(width: 8),
-                                          ],
-                                        );
-                                      },
-                                    ),
-                                    if (_supportsImageUpload ||
-                                        _supportsDesktopRecordAudioAction) ...[
-                                      if (_supportsDesktopRecordAudioAction) ...[
-                                        Semantics(
-                                          label:
-                                              context.t.chat.attachRecordAudio,
-                                          button: true,
-                                          child: SlIconButton(
-                                            key: const ValueKey(
-                                                'chat_record_audio'),
-                                            icon: Icons.mic_rounded,
-                                            size: 44,
-                                            iconSize: 22,
-                                            tooltip: context
-                                                .t.chat.attachRecordAudio,
-                                            onPressed: _isComposerBusy
-                                                ? null
-                                                : () => unawaited(
-                                                      _recordAndSendAudioFromSheet(),
-                                                    ),
-                                          ),
-                                        ),
-                                        const SizedBox(width: 8),
-                                      ],
-                                      if (_supportsImageUpload) ...[
-                                        Semantics(
-                                          label: context.t.chat.attachTooltip,
-                                          button: true,
-                                          child: SlIconButton(
-                                            key: const ValueKey('chat_attach'),
-                                            icon: Icons.add_rounded,
-                                            size: 44,
-                                            iconSize: 22,
-                                            tooltip:
-                                                context.t.chat.attachTooltip,
-                                            onPressed: _isComposerBusy
-                                                ? null
-                                                : _openAttachmentSheet,
-                                          ),
-                                        ),
-                                        const SizedBox(width: 8),
-                                      ],
+                                      _buildCompactComposerActions(
+                                        context,
+                                        tokens: tokens,
+                                        colorScheme: colorScheme,
+                                      ),
                                     ],
-                                    ValueListenableBuilder<TextEditingValue>(
-                                      valueListenable: _controller,
-                                      builder: (context, value, child) {
-                                        final hasText =
-                                            value.text.trim().isNotEmpty;
-
-                                        if (_asking) {
-                                          return SlButton(
-                                            buttonKey:
-                                                const ValueKey('chat_stop'),
-                                            icon: const Icon(
-                                              Icons.stop_circle_outlined,
-                                              size: 18,
+                                  ),
+                                ),
+                              )
+                            : _buildDesktopDropTargetComposer(
+                                context,
+                                tokens: tokens,
+                                colorScheme: colorScheme,
+                                child: SlFocusRing(
+                                  key: const ValueKey('chat_input_ring'),
+                                  borderRadius:
+                                      BorderRadius.circular(tokens.radiusLg),
+                                  child: SlSurface(
+                                    color: tokens.surface2,
+                                    borderColor: tokens.borderSubtle,
+                                    borderRadius:
+                                        BorderRadius.circular(tokens.radiusLg),
+                                    padding: const EdgeInsets.all(12),
+                                    child: Row(
+                                      children: [
+                                        Expanded(
+                                          child: Focus(
+                                            // ignore: deprecated_member_use
+                                            onKey: _handleComposerOnKey,
+                                            child: TextField(
+                                              key: const ValueKey('chat_input'),
+                                              focusNode: _inputFocusNode,
+                                              controller: _controller,
+                                              decoration: InputDecoration(
+                                                hintText: context
+                                                    .t.common.fields.message,
+                                                border: InputBorder.none,
+                                                filled: false,
+                                              ),
+                                              keyboardType:
+                                                  TextInputType.multiline,
+                                              textInputAction:
+                                                  TextInputAction.newline,
+                                              minLines: 1,
+                                              maxLines: 6,
                                             ),
-                                            variant: SlButtonVariant.outline,
-                                            onPressed: _stopRequested
-                                                ? null
-                                                : _stopAsk,
-                                            child: Text(
-                                              _stopRequested
-                                                  ? context
-                                                      .t.common.actions.stopping
-                                                  : context
-                                                      .t.common.actions.stop,
-                                            ),
-                                          );
-                                        }
-
-                                        if (!hasText) {
-                                          return const SizedBox.shrink();
-                                        }
-
-                                        return Row(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            if (_showConfigureAiEntry) ...[
-                                              SlButton(
-                                                buttonKey: const ValueKey(
-                                                  'chat_configure_ai',
+                                          ),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        ListenableBuilder(
+                                          listenable: _inputFocusNode,
+                                          builder: (context, child) {
+                                            if (!_inputFocusNode.hasFocus) {
+                                              return const SizedBox.shrink();
+                                            }
+                                            return Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                _buildDesktopMarkdownEditorButton(
+                                                  context,
                                                 ),
-                                                icon: const Icon(
-                                                  Icons
-                                                      .settings_suggest_rounded,
-                                                  size: 18,
-                                                ),
-                                                variant:
-                                                    SlButtonVariant.secondary,
+                                                if (_supportsImageUpload ||
+                                                    _supportsDesktopRecordAudioAction)
+                                                  const SizedBox(width: 8),
+                                              ],
+                                            );
+                                          },
+                                        ),
+                                        if (_supportsImageUpload ||
+                                            _supportsDesktopRecordAudioAction) ...[
+                                          if (_supportsDesktopRecordAudioAction) ...[
+                                            Semantics(
+                                              label: context
+                                                  .t.chat.attachRecordAudio,
+                                              button: true,
+                                              child: SlIconButton(
+                                                key: const ValueKey(
+                                                    'chat_record_audio'),
+                                                icon: Icons.mic_rounded,
+                                                size: 44,
+                                                iconSize: 22,
+                                                tooltip: context
+                                                    .t.chat.attachRecordAudio,
                                                 onPressed: _isComposerBusy
                                                     ? null
-                                                    : _openAskAiSettingsFromComposer,
-                                                child: Text(
-                                                  context.t.common.actions
-                                                      .configureAi,
-                                                ),
-                                              ),
-                                              const SizedBox(width: 8),
-                                            ] else if (_canAskAiNow) ...[
-                                              SlButton(
-                                                buttonKey: const ValueKey(
-                                                  'chat_ask_ai',
-                                                ),
-                                                icon: const Icon(
-                                                  Icons.auto_awesome_rounded,
-                                                  size: 18,
-                                                ),
-                                                variant:
-                                                    SlButtonVariant.secondary,
-                                                onPressed: _isComposerBusy
-                                                    ? null
-                                                    : _askAi,
-                                                child: Text(
-                                                  context
-                                                      .t.common.actions.askAi,
-                                                ),
-                                              ),
-                                              const SizedBox(width: 8),
-                                            ],
-                                            SlButton(
-                                              buttonKey:
-                                                  const ValueKey('chat_send'),
-                                              icon: const Icon(
-                                                Icons.send_rounded,
-                                                size: 18,
-                                              ),
-                                              variant: SlButtonVariant.primary,
-                                              onPressed: _isComposerBusy
-                                                  ? null
-                                                  : _send,
-                                              child: Text(
-                                                context.t.common.actions.send,
+                                                    : () => unawaited(
+                                                          _recordAndAttachAudioFromSheet(),
+                                                        ),
                                               ),
                                             ),
+                                            const SizedBox(width: 8),
                                           ],
-                                        );
-                                      },
+                                          if (_supportsImageUpload) ...[
+                                            Semantics(
+                                              label:
+                                                  context.t.chat.attachTooltip,
+                                              button: true,
+                                              child: SlIconButton(
+                                                key: const ValueKey(
+                                                    'chat_attach'),
+                                                icon: Icons.add_rounded,
+                                                size: 44,
+                                                iconSize: 22,
+                                                tooltip: context
+                                                    .t.chat.attachTooltip,
+                                                onPressed: _isComposerBusy
+                                                    ? null
+                                                    : _openAttachmentSheet,
+                                              ),
+                                            ),
+                                            const SizedBox(width: 8),
+                                          ],
+                                        ],
+                                        ValueListenableBuilder<
+                                            TextEditingValue>(
+                                          valueListenable: _controller,
+                                          builder: (context, value, child) {
+                                            final hasText =
+                                                value.text.trim().isNotEmpty;
+                                            final hasDraftAttachments =
+                                                _composerDraftAttachments
+                                                    .isNotEmpty;
+
+                                            if (_asking) {
+                                              return SlButton(
+                                                buttonKey:
+                                                    const ValueKey('chat_stop'),
+                                                icon: const Icon(
+                                                  Icons.stop_circle_outlined,
+                                                  size: 18,
+                                                ),
+                                                variant:
+                                                    SlButtonVariant.outline,
+                                                onPressed: _stopRequested
+                                                    ? null
+                                                    : _stopAsk,
+                                                child: Text(
+                                                  _stopRequested
+                                                      ? context.t.common.actions
+                                                          .stopping
+                                                      : context.t.common.actions
+                                                          .stop,
+                                                ),
+                                              );
+                                            }
+
+                                            if (!hasText &&
+                                                !hasDraftAttachments) {
+                                              return const SizedBox.shrink();
+                                            }
+
+                                            return Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                if (hasText &&
+                                                    _showConfigureAiEntry) ...[
+                                                  SlButton(
+                                                    buttonKey: const ValueKey(
+                                                      'chat_configure_ai',
+                                                    ),
+                                                    icon: const Icon(
+                                                      Icons
+                                                          .settings_suggest_rounded,
+                                                      size: 18,
+                                                    ),
+                                                    variant: SlButtonVariant
+                                                        .secondary,
+                                                    onPressed: _isComposerBusy
+                                                        ? null
+                                                        : _openAskAiSettingsFromComposer,
+                                                    child: Text(
+                                                      context.t.common.actions
+                                                          .configureAi,
+                                                    ),
+                                                  ),
+                                                  const SizedBox(width: 8),
+                                                ] else if (hasText &&
+                                                    _canAskAiNow) ...[
+                                                  SlButton(
+                                                    buttonKey: const ValueKey(
+                                                      'chat_ask_ai',
+                                                    ),
+                                                    icon: const Icon(
+                                                      Icons
+                                                          .auto_awesome_rounded,
+                                                      size: 18,
+                                                    ),
+                                                    variant: SlButtonVariant
+                                                        .secondary,
+                                                    onPressed: _isComposerBusy
+                                                        ? null
+                                                        : _askAi,
+                                                    child: Text(
+                                                      context.t.common.actions
+                                                          .askAi,
+                                                    ),
+                                                  ),
+                                                  const SizedBox(width: 8),
+                                                ],
+                                                SlButton(
+                                                  buttonKey: const ValueKey(
+                                                      'chat_send'),
+                                                  icon: const Icon(
+                                                    Icons.send_rounded,
+                                                    size: 18,
+                                                  ),
+                                                  variant:
+                                                      SlButtonVariant.primary,
+                                                  onPressed: _isComposerBusy
+                                                      ? null
+                                                      : _send,
+                                                  child: Text(
+                                                    context
+                                                        .t.common.actions.send,
+                                                  ),
+                                                ),
+                                              ],
+                                            );
+                                          },
+                                        ),
+                                      ],
                                     ),
-                                  ],
+                                  ),
                                 ),
                               ),
-                            ),
-                          ),
+                      ],
+                    ),
                   ),
                 ),
               ),

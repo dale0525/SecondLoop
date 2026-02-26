@@ -98,6 +98,7 @@ clangxx_osx-arm64 = ">=21.1.8,<22"
 
 [target.osx-arm64.tasks]
 prepare-ffmpeg-macos = "bash scripts/setup_ffmpeg_macos.sh && dart pub global run fvm:main dart run tools/prepare_bundled_ffmpeg.dart --platform=macos"
+flutter = { cmd = "env LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 bash scripts/flutter_with_defines.sh {{ command }} {{ command_args }}", args = ["command", { arg = "command_args", default = "" }] }
 run-macos = { cmd = "export SECONDLOOP_APP_ID=com.secondloop.secondloopdev SECONDLOOP_APP_NAME='SecondLoop Dev' && gem list -i cocoapods -v 1.16.2 || gem install cocoapods -v 1.16.2 && dart pub global run fvm:main dart run tools/prepare_desktop_runtime.dart --platform=macos && dart pub global run fvm:main dart run tools/sync_desktop_runtime_to_appdir.dart --platform=macos && env -u AR -u CC -u CFLAGS -u CPPFLAGS -u CXX -u CXXFLAGS -u LD -u LDFLAGS -u NM -u RANLIB -u SDKROOT -u STRIP LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 bash scripts/flutter_with_defines.sh run -d macos", depends-on = ["bootstrap-shared-worktree-env", "setup-flutter", "init-env", "prepare-ffmpeg-macos"] }
 
 [target.linux-64.dependencies]
