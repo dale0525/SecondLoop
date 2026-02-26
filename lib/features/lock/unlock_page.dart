@@ -31,6 +31,19 @@ class _UnlockPageState extends State<UnlockPage> {
   bool _busy = false;
   String? _error;
 
+  bool _isZh() {
+    return Localizations.localeOf(context)
+        .languageCode
+        .toLowerCase()
+        .startsWith('zh');
+  }
+
+  String _unlockTitle() =>
+      _isZh() ? '使用应用锁密码解锁' : 'Unlock with app lock password';
+  String _passwordLabel() => _isZh() ? '应用锁密码' : 'App lock password';
+  String _passwordRequired() =>
+      _isZh() ? '请输入应用锁密码' : 'App lock password is required';
+
   @override
   void initState() {
     super.initState();
@@ -61,7 +74,7 @@ class _UnlockPageState extends State<UnlockPage> {
 
     final password = _passwordController.text;
     if (password.isEmpty) {
-      setState(() => _error = context.t.lock.masterPasswordRequired);
+      setState(() => _error = _passwordRequired());
       return;
     }
 
@@ -158,7 +171,7 @@ class _UnlockPageState extends State<UnlockPage> {
         ? context.t.settings.systemUnlock.titleMobile
         : context.t.settings.systemUnlock.titleDesktop;
     return Scaffold(
-      appBar: AppBar(title: Text(context.t.lock.unlockTitle)),
+      appBar: AppBar(title: Text(_unlockTitle())),
       body: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 460),
@@ -175,7 +188,7 @@ class _UnlockPageState extends State<UnlockPage> {
                     controller: _passwordController,
                     obscureText: true,
                     decoration: InputDecoration(
-                      labelText: context.t.common.fields.masterPassword,
+                      labelText: _passwordLabel(),
                     ),
                   ),
                   if (showSystemUnlock) ...[

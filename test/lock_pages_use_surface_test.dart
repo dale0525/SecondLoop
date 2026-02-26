@@ -9,7 +9,7 @@ import 'package:secondloop/ui/sl_surface.dart';
 import 'test_i18n.dart';
 
 void main() {
-  testWidgets('Setup master password uses SlSurface', (tester) async {
+  testWidgets('Setup app lock password uses SlSurface', (tester) async {
     SharedPreferences.setMockInitialValues({});
 
     await tester.pumpWidget(
@@ -21,7 +21,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Set master password'), findsOneWidget);
+    expect(find.text('Set app lock password'), findsOneWidget);
     expect(find.byType(SlSurface), findsWidgets);
   });
 
@@ -40,7 +40,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Unlock'), findsOneWidget);
+    expect(find.text('Unlock with app lock password'), findsOneWidget);
     expect(find.byType(SlSurface), findsWidgets);
   });
 }
