@@ -1,6 +1,8 @@
 import 'dart:convert';
+import 'dart:math';
 import 'dart:typed_data';
 
+import 'package:cryptography/cryptography.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 final class SyncSecretStore {
@@ -11,6 +13,14 @@ final class SyncSecretStore {
   static const kPrefsBlobKeyForTest = _kPrefsBlobKey;
   static const kWebdavPasswordB64 = 'sync_webdav_password_b64';
   static const kSyncKeyB64 = 'sync_webdav_sync_key_b64';
+  static const _kDeferredSessionKeyB64PrefsKey = 'deferred_session_key_b64_v1';
+  static const _kEncryptedPrefix = 'enc1:';
+  static const _kPlainPrefix = 'plain1:';
+  static const _kNonceLength = 12;
+  static const _kAad = 'sync-secret-store-v1';
+
+  static final Cipher _cipher = AesGcm.with256bits();
+  static Uint8List? _processSessionKey;
 
   Future<void> _tail = Future<void>.value();
   Future<SharedPreferences>? _prefsFuture;
@@ -18,6 +28,21 @@ final class SyncSecretStore {
   bool _loaded = false;
   String? _lastRaw;
   Map<String, String> _cache = <String, String>{};
+
+  static void setProcessSessionKey(Uint8List? key) {
+    if (key == null) {
+      _processSessionKey = null;
+      return;
+    }
+    if (key.length != 32) {
+      throw ArgumentError('session key must be 32 bytes');
+    }
+    _processSessionKey = Uint8List.fromList(key);
+  }
+
+  static void setProcessSessionKeyForTest(Uint8List? key) {
+    setProcessSessionKey(key);
+  }
 
   Future<T> _serial<T>(Future<T> Function() action) {
     final next = _tail.then((_) => action());
@@ -33,10 +58,10 @@ final class SyncSecretStore {
     return _serial(() async {
       await _ensureLoaded();
       await _reloadIfChanged();
-      final encoded = _cache[kWebdavPasswordB64];
-      if (encoded == null || encoded.isEmpty) return null;
+      final bytes = await _decodeSecretBytes(_cache[kWebdavPasswordB64]);
+      if (bytes == null || bytes.isEmpty) return null;
       try {
-        final decoded = utf8.decode(base64Decode(encoded));
+        final decoded = utf8.decode(bytes);
         return decoded.isEmpty ? null : decoded;
       } catch (_) {
         return null;
@@ -56,7 +81,9 @@ final class SyncSecretStore {
         return;
       }
 
-      final encoded = base64Encode(utf8.encode(password));
+      final encoded = await _encodeSecretBytes(Uint8List.fromList(
+        utf8.encode(password),
+      ));
       if (_cache[kWebdavPasswordB64] == encoded) return;
       _cache[kWebdavPasswordB64] = encoded;
       await _persistCache();
@@ -67,15 +94,9 @@ final class SyncSecretStore {
     return _serial(() async {
       await _ensureLoaded();
       await _reloadIfChanged();
-      final b64 = _cache[kSyncKeyB64];
-      if (b64 == null || b64.isEmpty) return null;
-      try {
-        final bytes = base64Decode(b64);
-        if (bytes.length != 32) return null;
-        return Uint8List.fromList(bytes);
-      } catch (_) {
-        return null;
-      }
+      final bytes = await _decodeSecretBytes(_cache[kSyncKeyB64]);
+      if (bytes == null || bytes.length != 32) return null;
+      return Uint8List.fromList(bytes);
     });
   }
 
@@ -84,12 +105,112 @@ final class SyncSecretStore {
       await _ensureLoaded();
       await _reloadIfChanged();
 
-      final encoded = base64Encode(key);
+      if (key.length != 32) {
+        throw ArgumentError('sync key must be 32 bytes');
+      }
+      final encoded = await _encodeSecretBytes(Uint8List.fromList(key));
       if (_cache[kSyncKeyB64] == encoded) return;
 
       _cache[kSyncKeyB64] = encoded;
       await _persistCache();
     });
+  }
+
+  Future<Uint8List?> _decodeSecretBytes(String? encoded) async {
+    if (encoded == null || encoded.isEmpty) return null;
+
+    if (encoded.startsWith(_kEncryptedPrefix)) {
+      final payloadB64 = encoded.substring(_kEncryptedPrefix.length);
+      final payload = _decodeBase64(payloadB64);
+      if (payload == null || payload.length <= _kNonceLength) return null;
+
+      final key = await _resolveSessionKey();
+      if (key == null || key.length != 32) return null;
+
+      final nonce = payload.sublist(0, _kNonceLength);
+      final macBytes = _cipher.macAlgorithm.macLength;
+      if (payload.length < _kNonceLength + macBytes) return null;
+      final cipherText = payload.sublist(
+        _kNonceLength,
+        payload.length - macBytes,
+      );
+      final mac = payload.sublist(payload.length - macBytes);
+
+      try {
+        final clear = await _cipher.decrypt(
+          SecretBox(
+            cipherText,
+            nonce: nonce,
+            mac: Mac(mac),
+          ),
+          secretKey: SecretKey(key),
+          aad: utf8.encode(_kAad),
+        );
+        return Uint8List.fromList(clear);
+      } catch (_) {
+        return null;
+      }
+    }
+
+    if (encoded.startsWith(_kPlainPrefix)) {
+      final payloadB64 = encoded.substring(_kPlainPrefix.length);
+      final bytes = _decodeBase64(payloadB64);
+      return bytes == null ? null : Uint8List.fromList(bytes);
+    }
+
+    final legacy = _decodeBase64(encoded);
+    return legacy == null ? null : Uint8List.fromList(legacy);
+  }
+
+  Future<String> _encodeSecretBytes(Uint8List bytes) async {
+    final key = await _resolveSessionKey();
+    if (key == null || key.length != 32) {
+      return '$_kPlainPrefix${base64Encode(bytes)}';
+    }
+
+    final nonce = _randomBytes(_kNonceLength);
+    final box = await _cipher.encrypt(
+      bytes,
+      secretKey: SecretKey(key),
+      nonce: nonce,
+      aad: utf8.encode(_kAad),
+    );
+    final payload = Uint8List.fromList([
+      ...nonce,
+      ...box.cipherText,
+      ...box.mac.bytes,
+    ]);
+    return '$_kEncryptedPrefix${base64Encode(payload)}';
+  }
+
+  Future<Uint8List?> _resolveSessionKey() async {
+    final process = _processSessionKey;
+    if (process != null && process.length == 32) {
+      return Uint8List.fromList(process);
+    }
+
+    final prefs = await _prefs();
+    final deferredB64 = prefs.getString(_kDeferredSessionKeyB64PrefsKey);
+    if (deferredB64 == null || deferredB64.isEmpty) return null;
+
+    final decoded = _decodeBase64(deferredB64);
+    if (decoded == null || decoded.length != 32) return null;
+    return Uint8List.fromList(decoded);
+  }
+
+  Uint8List? _decodeBase64(String input) {
+    try {
+      return Uint8List.fromList(base64Decode(input));
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Uint8List _randomBytes(int length) {
+    final random = Random.secure();
+    return Uint8List.fromList(
+      List<int>.generate(length, (_) => random.nextInt(256)),
+    );
   }
 
   Future<void> clearAll() async {

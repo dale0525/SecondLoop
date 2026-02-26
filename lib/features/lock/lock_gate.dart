@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/backend/app_backend.dart';
 import '../../core/session/session_scope.dart';
+import '../../core/sync/sync_secret_store.dart';
 import '../../i18n/strings.g.dart';
 import 'setup_master_password_page.dart';
 import 'unlock_page.dart';
@@ -65,6 +66,7 @@ class _LockGateState extends State<LockGate> {
   }
 
   void _lock() {
+    SyncSecretStore.setProcessSessionKey(null);
     setState(() {
       _sessionKey = null;
       _bootstrapFuture = null;
@@ -116,6 +118,7 @@ class _LockGateState extends State<LockGate> {
   @override
   Widget build(BuildContext context) {
     if (_sessionKey case final key?) {
+      SyncSecretStore.setProcessSessionKey(key);
       return SessionScope(sessionKey: key, lock: _lock, child: widget.child);
     }
 
@@ -140,29 +143,38 @@ class _LockGateState extends State<LockGate> {
 
         final result = snapshot.data ?? const _GateBootstrapResult.needsSetup();
         return switch (result) {
-          _GateBootstrapSetup() => Overlay(
-              initialEntries: [
-                OverlayEntry(
-                  builder: (_) => SetupMasterPasswordPage(
-                    onUnlocked: (key) => setState(() => _sessionKey = key),
+          _GateBootstrapSetup() => () {
+              SyncSecretStore.setProcessSessionKey(null);
+              return Overlay(
+                initialEntries: [
+                  OverlayEntry(
+                    builder: (_) => SetupMasterPasswordPage(
+                      onUnlocked: (key) => setState(() => _sessionKey = key),
+                    ),
                   ),
-                ),
-              ],
-            ),
-          _GateBootstrapUnlock() => Overlay(
-              initialEntries: [
-                OverlayEntry(
-                  builder: (_) => UnlockPage(
-                    onUnlocked: (key) => setState(() => _sessionKey = key),
+                ],
+              );
+            }(),
+          _GateBootstrapUnlock() => () {
+              SyncSecretStore.setProcessSessionKey(null);
+              return Overlay(
+                initialEntries: [
+                  OverlayEntry(
+                    builder: (_) => UnlockPage(
+                      onUnlocked: (key) => setState(() => _sessionKey = key),
+                    ),
                   ),
-                ),
-              ],
-            ),
-          _GateBootstrapUnlocked(:final sessionKey) => SessionScope(
-              sessionKey: sessionKey,
-              lock: _lock,
-              child: widget.child,
-            ),
+                ],
+              );
+            }(),
+          _GateBootstrapUnlocked(:final sessionKey) => () {
+              SyncSecretStore.setProcessSessionKey(sessionKey);
+              return SessionScope(
+                sessionKey: sessionKey,
+                lock: _lock,
+                child: widget.child,
+              );
+            }(),
         };
       },
     );
