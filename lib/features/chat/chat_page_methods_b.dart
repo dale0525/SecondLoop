@@ -446,6 +446,7 @@ extension _ChatPageStateMethodsB on _ChatPageState {
 
     final actionLabel = _taskHubActionLabel(action);
     final messenger = ScaffoldMessenger.maybeOf(context);
+    _taskHubQuickActionSnackMessenger = messenger;
     messenger?.hideCurrentSnackBar();
     _taskHubQuickActionSnackAutoDismissTimer?.cancel();
     _taskHubQuickActionSnackAutoDismissTimer = null;
@@ -498,6 +499,7 @@ extension _ChatPageStateMethodsB on _ChatPageState {
         if (identical(
             _taskHubQuickActionSnackAutoDismissTimer, autoDismissTimer)) {
           _taskHubQuickActionSnackAutoDismissTimer = null;
+          _taskHubQuickActionSnackMessenger = null;
         }
         if (!mounted) return;
         if (_taskHubUndoTicket == ticket) {

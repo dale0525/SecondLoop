@@ -444,6 +444,7 @@ class _ChatPageState extends State<ChatPage> {
   String? _activeCloudIdToken;
   TaskHubUndoTicket? _taskHubUndoTicket;
   Timer? _taskHubQuickActionSnackAutoDismissTimer;
+  ScaffoldMessengerState? _taskHubQuickActionSnackMessenger;
 
   AudioRecorder? _audioRecorderInstance;
   _PendingAudioUploadRetry? _pendingAudioUploadRetry;
@@ -500,7 +501,13 @@ class _ChatPageState extends State<ChatPage> {
     _messageAutoActionsQueue?.dispose();
     _askSub?.cancel();
     _detachedAskRecoveryTimer?.cancel();
+    if (_taskHubQuickActionSnackAutoDismissTimer != null) {
+      _taskHubQuickActionSnackMessenger?.hideCurrentSnackBar();
+    }
     _taskHubQuickActionSnackAutoDismissTimer?.cancel();
+    _taskHubQuickActionSnackAutoDismissTimer = null;
+    _taskHubQuickActionSnackMessenger = null;
+    _taskHubUndoTicket = null;
     unawaited(_audioRecorderInstance?.dispose());
     unawaited(AudioRecordingForegroundService.stopIfSupported());
     _controller.dispose();

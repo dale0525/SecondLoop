@@ -29,11 +29,18 @@ class _TaskHubPageState extends State<TaskHubPage> {
   Future<TaskHubSummary>? _summaryFuture;
   TaskHubUndoTicket? _undoTicket;
   Timer? _quickActionSnackAutoDismissTimer;
+  ScaffoldMessengerState? _quickActionSnackMessenger;
   var _doneVisibleCount = _kDonePageSize;
 
   @override
   void dispose() {
+    if (_quickActionSnackAutoDismissTimer != null) {
+      _quickActionSnackMessenger?.hideCurrentSnackBar();
+    }
     _quickActionSnackAutoDismissTimer?.cancel();
+    _quickActionSnackAutoDismissTimer = null;
+    _quickActionSnackMessenger = null;
+    _undoTicket = null;
     super.dispose();
   }
 
@@ -200,6 +207,7 @@ class _TaskHubPageState extends State<TaskHubPage> {
     if (!mounted) return;
 
     final messenger = ScaffoldMessenger.maybeOf(context);
+    _quickActionSnackMessenger = messenger;
     messenger?.hideCurrentSnackBar();
     _quickActionSnackAutoDismissTimer?.cancel();
     _quickActionSnackAutoDismissTimer = null;
@@ -246,6 +254,7 @@ class _TaskHubPageState extends State<TaskHubPage> {
         autoDismissTimer.cancel();
         if (identical(_quickActionSnackAutoDismissTimer, autoDismissTimer)) {
           _quickActionSnackAutoDismissTimer = null;
+          _quickActionSnackMessenger = null;
         }
         if (!mounted) return;
         if (_undoTicket == ticket) {

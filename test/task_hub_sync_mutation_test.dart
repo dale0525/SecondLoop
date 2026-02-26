@@ -196,6 +196,90 @@ void main() {
     await tester.pump();
     expect(find.byType(SnackBar), findsNothing);
   });
+
+  testWidgets(
+      'task hub quick action snackbar does not linger after leaving page',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({
+      'actions.review.day_end_minutes_v1': (23 * 60) + 59,
+    });
+
+    final nowUtcMs = DateTime.now().toUtc().millisecondsSinceEpoch;
+    final dueReviewAtMs = _dueReviewAtMsForToday();
+    final backend = _TaskHubBackend(
+      todos: <Todo>[
+        Todo(
+          id: 'todo:1',
+          title: 'review this',
+          status: 'inbox',
+          createdAtMs: nowUtcMs - 1000,
+          updatedAtMs: nowUtcMs - 1000,
+          reviewStage: 0,
+          nextReviewAtMs: dueReviewAtMs,
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      SyncEngineScope(
+        engine: SyncEngine(
+          syncRunner: _NoopSyncRunner(),
+          loadConfig: () async => null,
+          pullOnStart: false,
+        ),
+        child: AppBackendScope(
+          backend: backend,
+          child: SessionScope(
+            sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+            lock: () {},
+            child: wrapWithI18n(
+              MaterialApp(
+                builder: (context, child) => MediaQuery(
+                  data: MediaQuery.of(context)
+                      .copyWith(accessibleNavigation: true),
+                  child: child!,
+                ),
+                home: Builder(
+                  builder: (context) => Scaffold(
+                    appBar: AppBar(title: const Text('Home')),
+                    body: Center(
+                      child: ElevatedButton(
+                        key: const ValueKey('open_task_hub_page'),
+                        onPressed: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => const TaskHubPage(),
+                            ),
+                          );
+                        },
+                        child: const Text('Open task hub'),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('open_task_hub_page')));
+    await tester.pumpAndSettle();
+
+    await tester
+        .tap(find.byKey(const ValueKey('task_hub_page_quick_todo:1_later')));
+    await tester.pump();
+    expect(find.byType(SnackBar), findsOneWidget);
+
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+
+    await tester.pump(const Duration(seconds: 4));
+    await tester.pump();
+    expect(find.byType(SnackBar), findsNothing);
+  });
 }
 
 final class _NoopSyncRunner implements SyncRunner {
