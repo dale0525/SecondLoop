@@ -189,6 +189,13 @@ class _SettingsPageState extends State<SettingsPage> {
         message.contains('timeout');
   }
 
+  String _normalizeAppLockWording(String text) {
+    return text
+        .replaceAll('master password', 'app lock password')
+        .replaceAll('Master password', 'App lock password')
+        .replaceAll('主密码', '应用锁密码');
+  }
+
   rust_oplog_maintenance.OplogMaintenanceBackend _maintenanceBackendFor(
     SyncBackendType backendType,
   ) {
@@ -270,9 +277,9 @@ class _SettingsPageState extends State<SettingsPage> {
     final dialogTitle = clearAllRemoteData
         ? t.settings.resetLocalDataAllDevices.dialogTitle
         : t.settings.resetLocalDataThisDeviceOnly.dialogTitle;
-    final dialogBody = clearAllRemoteData
+    final dialogBody = _normalizeAppLockWording(clearAllRemoteData
         ? t.settings.resetLocalDataAllDevices.dialogBody
-        : t.settings.resetLocalDataThisDeviceOnly.dialogBody;
+        : t.settings.resetLocalDataThisDeviceOnly.dialogBody);
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) {

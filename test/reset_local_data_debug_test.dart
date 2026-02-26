@@ -134,6 +134,10 @@ void main() {
     });
     await pumpAndSettleShort();
     expect(find.text('Reset local data?'), findsOneWidget);
+    expect(
+      find.textContaining('app lock password'),
+      findsOneWidget,
+    );
 
     await tester.runAsync(() async {
       await tester.tap(find.text('Reset'));
