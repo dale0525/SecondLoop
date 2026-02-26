@@ -142,10 +142,10 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
     final baseUrl = all[SyncConfigStore.kWebdavBaseUrl];
     final managedVaultBaseUrl = all[SyncConfigStore.kManagedVaultBaseUrl];
     final username = all[SyncConfigStore.kWebdavUsername];
-    final password = all[SyncConfigStore.kWebdavPassword];
+    final password = await _store.readWebdavPassword();
     final remoteRoot = all[SyncConfigStore.kRemoteRoot];
     final localDir = all[SyncConfigStore.kLocalDir];
-    final hasSyncKey = (all[SyncConfigStore.kSyncKeyB64] ?? '').isNotEmpty;
+    final hasSyncKey = (await _store.readSyncKey()) != null;
     final mediaDownloadsWifiOnly =
         (all[SyncConfigStore.kMediaDownloadsWifiOnly] ?? '1') == '1';
     final cloudMediaBackupEnabled =

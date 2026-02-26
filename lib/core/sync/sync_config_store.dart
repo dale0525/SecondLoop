@@ -7,21 +7,26 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../storage/secure_blob_store.dart';
 import 'sync_engine.dart';
+import 'sync_secret_store.dart';
 
 final class SyncConfigStore {
   SyncConfigStore({
     FlutterSecureStorage? storage,
+    SyncSecretStore? secretStore,
     String managedVaultDefaultBaseUrl = const String.fromEnvironment(
       'SECONDLOOP_MANAGED_VAULT_BASE_URL',
       defaultValue: '',
     ),
   })  : _unusedLegacySecureStorage = storage,
+        _secretStore = secretStore ?? SyncSecretStore(),
         _managedVaultDefaultBaseUrl = managedVaultDefaultBaseUrl;
 
   final FlutterSecureStorage? _unusedLegacySecureStorage;
+  final SyncSecretStore _secretStore;
   final String _managedVaultDefaultBaseUrl;
 
   static const _kPrefsBlobKey = 'sync_config_plain_json_v1';
+  static const prefsBlobKeyForTest = _kPrefsBlobKey;
 
   Future<void> _tail = Future<void>.value();
   Future<SharedPreferences>? _prefsFuture;
@@ -122,17 +127,31 @@ final class SyncConfigStore {
   }
 
   Future<Uint8List?> readSyncKey() async {
+    final secret = await _secretStore.readSyncKey();
+    if (secret != null && secret.length == 32) return secret;
+
     final b64 = (await _loadConfigMap())[kSyncKeyB64];
     if (b64 == null || b64.isEmpty) return null;
+    Uint8List? legacy;
     try {
-      return Uint8List.fromList(base64Decode(b64));
+      final decoded = base64Decode(b64);
+      if (decoded.length == 32) {
+        legacy = Uint8List.fromList(decoded);
+      }
     } catch (_) {
-      return null;
+      legacy = null;
     }
+
+    if (legacy != null) {
+      await _secretStore.writeSyncKey(legacy);
+    }
+    await _writeConfigUpdates({kSyncKeyB64: null});
+    return legacy;
   }
 
   Future<void> writeSyncKey(Uint8List key) async {
-    await _writeConfigUpdates({kSyncKeyB64: base64Encode(key)});
+    await _secretStore.writeSyncKey(key);
+    await _writeConfigUpdates({kSyncKeyB64: null});
   }
 
   Future<String?> readWebdavBaseUrl() async =>
@@ -148,8 +167,17 @@ final class SyncConfigStore {
 
   Future<String?> readWebdavUsername() async =>
       (await _loadConfigMap())[kWebdavUsername];
-  Future<String?> readWebdavPassword() async =>
-      (await _loadConfigMap())[kWebdavPassword];
+  Future<String?> readWebdavPassword() async {
+    final secret = await _secretStore.readWebdavPassword();
+    if (secret != null && secret.isNotEmpty) return secret;
+
+    final legacy = (await _loadConfigMap())[kWebdavPassword];
+    if (legacy == null || legacy.isEmpty) return null;
+    await _secretStore.writeWebdavPassword(legacy);
+    await _writeConfigUpdates({kWebdavPassword: null});
+    return legacy;
+  }
+
   Future<String?> readRemoteRoot() async =>
       (await _loadConfigMap())[kRemoteRoot];
   Future<String?> readLocalDir() async => (await _loadConfigMap())[kLocalDir];
@@ -170,11 +198,8 @@ final class SyncConfigStore {
   }
 
   Future<void> writeWebdavPassword(String? password) async {
-    if (password == null || password.isEmpty) {
-      await _writeConfigUpdates({kWebdavPassword: null});
-      return;
-    }
-    await _writeConfigUpdates({kWebdavPassword: password});
+    await _secretStore.writeWebdavPassword(password);
+    await _writeConfigUpdates({kWebdavPassword: null});
   }
 
   Future<void> writeLocalDir(String? localDir) async {
@@ -244,7 +269,13 @@ final class SyncConfigStore {
   Future<SyncConfig?> loadConfiguredSync() async {
     final all = await _loadConfigMap();
     if (all.isEmpty) return null;
-    return _parseConfiguredSync(all);
+    final syncKey = await readSyncKey();
+    final webdavPassword = await readWebdavPassword();
+    return _parseConfiguredSync(
+      all,
+      syncKey: syncKey,
+      webdavPassword: webdavPassword,
+    );
   }
 
   Future<SyncConfig?> loadConfiguredSyncIfAutoEnabled() async {
@@ -252,21 +283,21 @@ final class SyncConfigStore {
     if (all.isEmpty) return null;
     final auto = all[kAutoEnabled];
     if (auto != null && auto != '1') return null;
-    return _parseConfiguredSync(all);
+    final syncKey = await readSyncKey();
+    final webdavPassword = await readWebdavPassword();
+    return _parseConfiguredSync(
+      all,
+      syncKey: syncKey,
+      webdavPassword: webdavPassword,
+    );
   }
 
-  SyncConfig? _parseConfiguredSync(Map<String, String> all) {
+  SyncConfig? _parseConfiguredSync(
+    Map<String, String> all, {
+    required Uint8List? syncKey,
+    required String? webdavPassword,
+  }) {
     if (all.isEmpty) return null;
-
-    final b64 = all[kSyncKeyB64];
-    if (b64 == null || b64.isEmpty) return null;
-
-    Uint8List? syncKey;
-    try {
-      syncKey = Uint8List.fromList(base64Decode(b64));
-    } catch (_) {
-      syncKey = null;
-    }
     if (syncKey == null || syncKey.length != 32) return null;
 
     final remoteRoot = all[kRemoteRoot]?.trim();
@@ -282,13 +313,14 @@ final class SyncConfigStore {
         final baseUrl = all[kWebdavBaseUrl]?.trim();
         if (baseUrl == null || baseUrl.isEmpty) return null;
         final username = all[kWebdavUsername]?.trim();
-        final password = all[kWebdavPassword];
         return SyncConfig.webdav(
           syncKey: syncKey,
           remoteRoot: remoteRoot,
           baseUrl: baseUrl,
           username: username == null || username.isEmpty ? null : username,
-          password: password == null || password.isEmpty ? null : password,
+          password: webdavPassword == null || webdavPassword.isEmpty
+              ? null
+              : webdavPassword,
         );
       case SyncBackendType.localDir:
         final localDir = all[kLocalDir]?.trim();
@@ -314,6 +346,7 @@ final class SyncConfigStore {
     return _serial(() async {
       await _ensureLoaded();
       await _reloadIfChanged();
+      await _migrateSensitiveFieldsFromPublicCacheIfNeeded();
       return Map<String, String>.from(_cache);
     });
   }
@@ -345,6 +378,7 @@ final class SyncConfigStore {
     await _serial(() async {
       final prefs = await _prefs();
       await prefs.remove(_kPrefsBlobKey);
+      await _secretStore.clearAll();
       _lastRaw = null;
       _cache = <String, String>{};
       _loaded = true;
@@ -366,6 +400,7 @@ final class SyncConfigStore {
 
     _lastRaw = raw;
     _cache = _decodeRawConfigMap(raw);
+    await _migrateSensitiveFieldsFromPublicCacheIfNeeded();
   }
 
   Map<String, String> _decodeRawConfigMap(String raw) {
@@ -414,6 +449,7 @@ final class SyncConfigStore {
     _cache = _decodeRawConfigMap(raw);
 
     _loaded = true;
+    await _migrateSensitiveFieldsFromPublicCacheIfNeeded();
   }
 
   Future<Map<String, String>> _tryMigrateFromSecureStore() async {
@@ -446,16 +482,58 @@ final class SyncConfigStore {
       kLocalDir,
       kWebdavBaseUrl,
       kWebdavUsername,
-      kWebdavPassword,
       kRemoteRoot,
-      kSyncKeyB64,
     ]) {
       final v = legacy[key];
       if (v != null && v.isNotEmpty) {
         migrated[key] = v;
       }
     }
+
+    final legacyPassword = legacy[kWebdavPassword];
+    if (legacyPassword != null && legacyPassword.isNotEmpty) {
+      await _secretStore.writeWebdavPassword(legacyPassword);
+    }
+
+    final legacySyncKeyB64 = legacy[kSyncKeyB64];
+    if (legacySyncKeyB64 != null && legacySyncKeyB64.isNotEmpty) {
+      try {
+        final decoded = base64Decode(legacySyncKeyB64);
+        if (decoded.length == 32) {
+          await _secretStore.writeSyncKey(Uint8List.fromList(decoded));
+        }
+      } catch (_) {
+        // Ignore malformed legacy sync key.
+      }
+    }
     return migrated;
+  }
+
+  Future<void> _migrateSensitiveFieldsFromPublicCacheIfNeeded() async {
+    final legacyPassword = _cache[kWebdavPassword];
+    final legacySyncKeyB64 = _cache[kSyncKeyB64];
+    if ((legacyPassword == null || legacyPassword.isEmpty) &&
+        (legacySyncKeyB64 == null || legacySyncKeyB64.isEmpty)) {
+      return;
+    }
+
+    if (legacyPassword != null && legacyPassword.isNotEmpty) {
+      await _secretStore.writeWebdavPassword(legacyPassword);
+    }
+    if (legacySyncKeyB64 != null && legacySyncKeyB64.isNotEmpty) {
+      try {
+        final decoded = base64Decode(legacySyncKeyB64);
+        if (decoded.length == 32) {
+          await _secretStore.writeSyncKey(Uint8List.fromList(decoded));
+        }
+      } catch (_) {
+        // Ignore malformed legacy sync key.
+      }
+    }
+
+    _cache.remove(kWebdavPassword);
+    _cache.remove(kSyncKeyB64);
+    await _persistCache();
   }
 
   Future<void> _persistCache() async {

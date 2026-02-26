@@ -160,7 +160,7 @@ void main() {
     expect(remainingSyncConfig[SyncConfigStore.kBackendType], isNotNull);
     expect(remainingSyncConfig[SyncConfigStore.kLocalDir], tempRemote.path);
     expect(remainingSyncConfig[SyncConfigStore.kRemoteRoot], remoteRoot);
-    expect(remainingSyncConfig[SyncConfigStore.kSyncKeyB64], isNotNull);
+    expect(await SyncConfigStore().readSyncKey(), isNotNull);
 
     expect(
       Directory('${tempRemote.path}${Platform.pathSeparator}$remoteRoot')
