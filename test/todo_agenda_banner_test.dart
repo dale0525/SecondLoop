@@ -240,6 +240,89 @@ void main() {
 
     expect(find.byType(SnackBar), findsNothing);
   });
+
+  testWidgets(
+      'Task hub banner quick action snackbar does not linger after page is replaced',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+
+    final backend = _AgendaBackend(
+      todos: [
+        const Todo(
+          id: 'todo:snack',
+          title: 'Review metrics',
+          dueAtMs: null,
+          status: 'open',
+          sourceEntryId: null,
+          createdAtMs: 0,
+          updatedAtMs: 0,
+          reviewStage: null,
+          nextReviewAtMs: null,
+          lastReviewAtMs: null,
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: Builder(
+            builder: (context) => Scaffold(
+              appBar: AppBar(title: const Text('Home')),
+              body: Center(
+                child: ElevatedButton(
+                  key: const ValueKey('open_chat_page'),
+                  onPressed: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => AppBackendScope(
+                          backend: backend,
+                          child: SessionScope(
+                            sessionKey:
+                                Uint8List.fromList(List<int>.filled(32, 1)),
+                            lock: () {},
+                            child: const ChatPage(
+                              conversation: Conversation(
+                                id: 'loop_home',
+                                title: 'Loop',
+                                createdAtMs: 0,
+                                updatedAtMs: 0,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                  child: const Text('Open chat'),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('open_chat_page')));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('task_hub_banner')));
+    await tester.pumpAndSettle();
+    await tester
+        .tap(find.byKey(const ValueKey('task_hub_quick_todo:snack_done')));
+    await tester.pump();
+    expect(find.byType(SnackBar), findsOneWidget);
+
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+
+    expect(find.byType(SnackBar), findsNothing);
+
+    await tester.pump(const Duration(seconds: 4));
+    await tester.pump();
+    expect(find.byType(SnackBar), findsNothing);
+  });
 }
 
 final class _AgendaBackend extends TestAppBackend {
