@@ -15,7 +15,8 @@ pub fn desktop_ocr_pdf(
     bytes: Vec<u8>,
     max_pages: u32,
     dpi: u32,
+    start_page: u32,
     language_hints: String,
 ) -> Result<desktop_media::ocr::OcrPayload> {
-    desktop_media::ocr::desktop_ocr_pdf(&bytes, max_pages, dpi, &language_hints)
+    desktop_media::ocr::desktop_ocr_pdf(&bytes, max_pages, dpi, start_page, &language_hints)
 }

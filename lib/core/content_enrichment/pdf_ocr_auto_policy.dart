@@ -24,6 +24,30 @@ int _asMillis(Object? raw) {
   return 0;
 }
 
+bool _asBool(Object? raw) {
+  if (raw is bool) return raw;
+  if (raw is num) return raw != 0;
+  if (raw is String) {
+    final normalized = raw.trim().toLowerCase();
+    return normalized == 'true' || normalized == '1' || normalized == 'yes';
+  }
+  return false;
+}
+
+bool _hasNonEmptyFailedRanges(Object? raw) {
+  if (raw is! List) return false;
+  for (final item in raw) {
+    if (item is Map && item.isNotEmpty) {
+      return true;
+    }
+    final text = item?.toString().trim() ?? '';
+    if (text.isNotEmpty) {
+      return true;
+    }
+  }
+  return false;
+}
+
 bool shouldAutoRunPdfOcr(
   Map<String, Object?> payload, {
   int autoMaxPages = 0,
@@ -39,7 +63,9 @@ bool shouldAutoRunPdfOcr(
   if (autoMaxPages > 0 && pageCount > autoMaxPages) return false;
 
   final existingEngine = (payload['ocr_engine'] ?? '').toString().trim();
-  if (existingEngine.isNotEmpty) return false;
+  final allowPartialRetry = _asBool(payload['ocr_partial']) &&
+      _hasNonEmptyFailedRanges(payload['ocr_failed_ranges']);
+  if (existingEngine.isNotEmpty && !allowPartialRetry) return false;
 
   final now = nowMs ?? DateTime.now().millisecondsSinceEpoch;
   final status =

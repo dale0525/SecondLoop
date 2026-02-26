@@ -213,6 +213,14 @@ fn choose_ocr_page_worker_count_scales_by_pages_and_cpu() {
     assert_eq!(choose_ocr_page_worker_count(48, 3), 3);
 }
 
+#[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
+#[test]
+fn render_pdf_page_window_selects_expected_range() {
+    let page_numbers: Vec<u32> = (1..=25).collect();
+    let selected = ocr_pdf_render::resolve_page_window(&page_numbers, 11, 10);
+    assert_eq!(selected, (11..=20).collect::<Vec<u32>>());
+}
+
 fn build_pdf_with_single_byte_tounicode_mapping() -> Vec<u8> {
     let content = "BT /F1 18 Tf 72 120 Td <212223> Tj ET\n";
     let cmap = "/CIDInit /ProcSet findresource begin\n\

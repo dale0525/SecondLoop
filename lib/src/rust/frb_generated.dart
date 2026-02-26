@@ -1064,6 +1064,7 @@ abstract class RustLibApi extends BaseApi {
       {required List<int> bytes,
       required int maxPages,
       required int dpi,
+      required int startPage,
       required String languageHints});
 
   Future<MediaAnnotationConfig>
@@ -7048,6 +7049,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       {required List<int> bytes,
       required int maxPages,
       required int dpi,
+      required int startPage,
       required String languageHints}) {
     return handler.executeNormal(NormalTask(
       callFfi: (port_) {
@@ -7055,6 +7057,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_list_prim_u_8_loose(bytes, serializer);
         sse_encode_u_32(maxPages, serializer);
         sse_encode_u_32(dpi, serializer);
+        sse_encode_u_32(startPage, serializer);
         sse_encode_String(languageHints, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
             funcId: 150, port: port_);
@@ -7064,7 +7067,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         decodeErrorData: sse_decode_AnyhowException,
       ),
       constMeta: kCrateApiDesktopMediaDesktopOcrPdfConstMeta,
-      argValues: [bytes, maxPages, dpi, languageHints],
+      argValues: [bytes, maxPages, dpi, startPage, languageHints],
       apiImpl: this,
     ));
   }
@@ -7072,7 +7075,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   TaskConstMeta get kCrateApiDesktopMediaDesktopOcrPdfConstMeta =>
       const TaskConstMeta(
         debugName: "desktop_ocr_pdf",
-        argNames: ["bytes", "maxPages", "dpi", "languageHints"],
+        argNames: ["bytes", "maxPages", "dpi", "startPage", "languageHints"],
       );
 
   @override

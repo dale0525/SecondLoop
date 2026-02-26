@@ -42,6 +42,24 @@ void main() {
     expect(shouldAutoRunPdfOcr(payloadWithEngine, autoMaxPages: 30), isFalse);
   });
 
+  test(
+    'shouldAutoRunPdfOcr allows retry when OCR is partial with failed ranges',
+    () {
+      final payload = <String, Object?>{
+        'mime_type': 'application/pdf',
+        'needs_ocr': true,
+        'page_count': 25,
+        'ocr_engine': 'multimodal_cloud_ocr_markdown:gpt-4.1-mini+partial',
+        'ocr_partial': true,
+        'ocr_failed_ranges': [
+          {'start_page': 11, 'end_page': 20},
+        ],
+      };
+
+      expect(shouldAutoRunPdfOcr(payload, autoMaxPages: 30), isTrue);
+    },
+  );
+
   test('shouldAutoRunPdfOcr skips while auto OCR is running recently', () {
     const nowMs = 1760000000000;
     final payload = <String, Object?>{

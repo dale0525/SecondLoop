@@ -16,9 +16,11 @@ Future<OcrPayload> desktopOcrPdf(
         {required List<int> bytes,
         required int maxPages,
         required int dpi,
+        required int startPage,
         required String languageHints}) =>
     RustLib.instance.api.crateApiDesktopMediaDesktopOcrPdf(
         bytes: bytes,
         maxPages: maxPages,
         dpi: dpi,
+        startPage: startPage,
         languageHints: languageHints);

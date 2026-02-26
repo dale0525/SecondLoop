@@ -65,9 +65,11 @@ pub fn render_pdf_to_long_image_payload(
     bytes: &[u8],
     max_pages: u32,
     dpi: u32,
+    start_page: u32,
 ) -> Result<OcrPayload> {
     let safe_max_pages = max_pages.clamp(1, 10_000);
     let safe_dpi = dpi.clamp(72, 600);
+    let safe_start_page = start_page.clamp(1, 10_000);
     let doc = Document::load_mem(bytes).map_err(|e| anyhow!("invalid pdf: {e}"))?;
     let pages = doc.get_pages();
     if pages.is_empty() {
@@ -83,16 +85,14 @@ pub fn render_pdf_to_long_image_payload(
     let page_count = pages.len().min(u32::MAX as usize) as u32;
     let mut page_numbers: Vec<u32> = pages.keys().cloned().collect();
     page_numbers.sort_unstable();
-    let take_count = usize::try_from(safe_max_pages)
-        .unwrap_or(usize::MAX)
-        .min(page_numbers.len());
+    let selected_page_numbers = resolve_page_window(&page_numbers, safe_start_page, safe_max_pages);
 
     let mut rendered_images: Vec<RgbImage> = Vec::new();
     let mut output_width: u32 = 0;
     let mut output_height: u32 = 0;
     let mut processed_pages: u32 = 0;
 
-    for page_number in page_numbers.into_iter().take(take_count) {
+    for page_number in selected_page_numbers {
         let Some(page_id) = pages.get(&page_number).copied() else {
             continue;
         };
@@ -217,6 +217,7 @@ pub fn render_pdf_to_long_image_payload(
     bytes: &[u8],
     max_pages: u32,
     _dpi: u32,
+    _start_page: u32,
 ) -> Result<OcrPayload> {
     let safe_max_pages = max_pages.clamp(1, 10_000);
     let extracted = extract_pdf_text_with_limit(bytes, safe_max_pages)?;
@@ -227,4 +228,30 @@ pub fn render_pdf_to_long_image_payload(
         "desktop_rust_pdf_render_unsupported",
         false,
     ))
+}
+
+pub(super) fn resolve_page_window(
+    page_numbers: &[u32],
+    start_page: u32,
+    max_pages: u32,
+) -> Vec<u32> {
+    if page_numbers.is_empty() {
+        return Vec::new();
+    }
+    let safe_start_page = start_page.max(1);
+    let safe_max_pages = max_pages.clamp(1, 10_000);
+    let start_index = page_numbers
+        .iter()
+        .position(|page| *page >= safe_start_page)
+        .unwrap_or(page_numbers.len());
+    if start_index >= page_numbers.len() {
+        return Vec::new();
+    }
+    let take_count = usize::try_from(safe_max_pages).unwrap_or(usize::MAX);
+    page_numbers
+        .iter()
+        .skip(start_index)
+        .take(take_count)
+        .copied()
+        .collect()
 }

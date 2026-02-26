@@ -29,12 +29,14 @@ class OcrAndPdfChannelHandler(
     val id: String,
     val maxPages: Int,
     val dpi: Int,
+    val startPage: Int,
   )
 
   private val commonPdfOcrPreset = PdfRenderPreset(
     id = "common_ocr_v1",
     maxPages = 10_000,
     dpi = 180,
+    startPage = 1,
   )
 
   fun handle(call: MethodCall, result: MethodChannel.Result) {
@@ -105,7 +107,7 @@ class OcrAndPdfChannelHandler(
     Thread {
       val payload =
         try {
-          runRenderPdfToLongImage(bytes, preset.maxPages, preset.dpi)
+          runRenderPdfToLongImage(bytes, preset.maxPages, preset.dpi, preset.startPage)
         } catch (_: Throwable) {
           null
         }
@@ -131,16 +133,15 @@ class OcrAndPdfChannelHandler(
   private fun resolvePdfRenderPreset(args: Map<*, *>?): PdfRenderPreset {
     val presetId =
       (args?.get("ocr_model_preset") as? String)?.trim()?.lowercase(Locale.US).orEmpty()
-    if (presetId == commonPdfOcrPreset.id) {
-      return commonPdfOcrPreset
-    }
 
     val maxPages = normalizePositiveInt(args?.get("max_pages"), fallback = commonPdfOcrPreset.maxPages, upperBound = 10_000)
     val dpi = normalizePositiveInt(args?.get("dpi"), fallback = commonPdfOcrPreset.dpi, upperBound = 600)
+    val startPage = normalizePositiveInt(args?.get("start_page"), fallback = commonPdfOcrPreset.startPage, upperBound = 10_000)
     return PdfRenderPreset(
       id = if (presetId.isEmpty()) commonPdfOcrPreset.id else presetId,
       maxPages = maxPages,
       dpi = dpi,
+      startPage = startPage,
     )
   }
 
@@ -290,6 +291,7 @@ class OcrAndPdfChannelHandler(
     pdfBytes: ByteArray,
     maxPages: Int,
     dpi: Int,
+    startPage: Int,
   ): Map<String, Any>? {
     if (pdfBytes.isEmpty()) return null
 
@@ -308,7 +310,9 @@ class OcrAndPdfChannelHandler(
       val pageCount = renderer.pageCount
       if (pageCount <= 0) return null
 
-      val targetPages = pageCount.coerceAtMost(maxPages)
+      val startIndex = (startPage - 1).coerceAtLeast(0)
+      if (startIndex >= pageCount) return null
+      val targetPages = (pageCount - startIndex).coerceAtMost(maxPages)
       val maxOutputWidth = 1536
       val maxOutputHeight = 20_000
       val maxOutputPixels = 20_000_000L
@@ -317,8 +321,9 @@ class OcrAndPdfChannelHandler(
       var outputWidth = 0
       var processedPages = 0
 
-      for (index in 0 until targetPages) {
-        val page = renderer.openPage(index)
+      for (offset in 0 until targetPages) {
+        val pageIndex = startIndex + offset
+        val page = renderer.openPage(pageIndex)
         try {
           val scale = (dpi.toFloat() / 72f).coerceIn(1.0f, 6.0f)
           val sourceWidth = (page.width * scale).toInt().coerceAtLeast(1)

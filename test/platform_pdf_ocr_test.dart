@@ -499,8 +499,12 @@ void main() {
       nativeRenderInvoke:
           (bytes, {required PlatformPdfRenderPreset preset}) async => null,
       runtimeRenderInvoke: (bytes,
-          {required maxPages, required dpi, required languageHints}) async {
+          {required maxPages,
+          required dpi,
+          required languageHints,
+          required startPage}) async {
         expect(languageHints, kDesktopRuntimeRenderLongImageHint);
+        expect(startPage, 1);
         return <String, Object?>{
           'ocr_text_full': 'AQID',
           'ocr_text_excerpt': 'ignored',

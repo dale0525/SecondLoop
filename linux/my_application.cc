@@ -45,6 +45,7 @@ constexpr int64_t kPdfRenderMaxOutputPixels = 20000000;
 struct PdfRenderPreset {
   int max_pages;
   int dpi;
+  int start_page;
 };
 
 int clamp_positive_int(int value, int fallback, int upper_bound) {
@@ -100,17 +101,10 @@ std::string read_string_arg(FlValue* args, const char* key) {
 }
 
 PdfRenderPreset resolve_pdf_render_preset(FlValue* args) {
-  const auto preset_id = read_string_arg(args, "ocr_model_preset");
-  if (g_ascii_strcasecmp(preset_id.c_str(), kCommonPdfOcrPreset) == 0) {
-    return PdfRenderPreset{
-        kCommonPdfOcrMaxPages,
-        kCommonPdfOcrDpi,
-    };
-  }
-
   return PdfRenderPreset{
       read_positive_int_arg(args, "max_pages", kCommonPdfOcrMaxPages, 10000),
       read_positive_int_arg(args, "dpi", kCommonPdfOcrDpi, 600),
+      read_positive_int_arg(args, "start_page", 1, 10000),
   };
 }
 
@@ -610,7 +604,12 @@ FlValue* run_render_pdf_to_long_image(FlValue* args) {
     return nullptr;
   }
 
-  const int target_pages = std::min(page_count, preset.max_pages);
+  const int start_index = std::max(0, preset.start_page - 1);
+  if (start_index >= page_count) {
+    g_object_unref(document);
+    return nullptr;
+  }
+  const int target_pages = std::min(page_count - start_index, preset.max_pages);
   GPtrArray* page_surfaces =
       g_ptr_array_new_with_free_func(reinterpret_cast<GDestroyNotify>(cairo_surface_destroy));
 
@@ -618,7 +617,8 @@ FlValue* run_render_pdf_to_long_image(FlValue* args) {
   int output_height = 0;
   int processed_pages = 0;
 
-  for (int index = 0; index < target_pages; ++index) {
+  for (int offset = 0; offset < target_pages; ++offset) {
+    const int index = start_index + offset;
     PopplerPage* page = poppler_document_get_page(document, index);
     if (page == nullptr) {
       continue;

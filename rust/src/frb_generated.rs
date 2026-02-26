@@ -6227,6 +6227,7 @@ fn wire__crate__api__desktop_media__desktop_ocr_pdf_impl(
             let api_bytes = <Vec<u8>>::sse_decode(&mut deserializer);
             let api_max_pages = <u32>::sse_decode(&mut deserializer);
             let api_dpi = <u32>::sse_decode(&mut deserializer);
+            let api_start_page = <u32>::sse_decode(&mut deserializer);
             let api_language_hints = <String>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
@@ -6235,6 +6236,7 @@ fn wire__crate__api__desktop_media__desktop_ocr_pdf_impl(
                         api_bytes,
                         api_max_pages,
                         api_dpi,
+                        api_start_page,
                         api_language_hints,
                     )
                 })())

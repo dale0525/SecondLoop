@@ -1,29 +1,5 @@
 part of 'media_enrichment_gate.dart';
 
-String _autoPdfOcrStatusFromPayload(Map<String, Object?>? payload) {
-  return (payload?['ocr_auto_status'] ?? '').toString().trim().toLowerCase();
-}
-
-bool shouldNotifyAutoPdfOcrStatusTransition({
-  required Map<String, Object?>? previousPayload,
-  required Map<String, Object?> nextPayload,
-}) {
-  final previousStatus = _autoPdfOcrStatusFromPayload(previousPayload);
-  final nextStatus = _autoPdfOcrStatusFromPayload(nextPayload);
-  if (nextStatus.isEmpty || previousStatus == nextStatus) {
-    return false;
-  }
-
-  if (nextStatus == 'running') return true;
-
-  if (previousStatus == 'running' &&
-      (nextStatus == 'ok' || nextStatus == 'failed')) {
-    return true;
-  }
-
-  return false;
-}
-
 extension _MediaEnrichmentGateAutoOcr on _MediaEnrichmentGateState {
   Future<int> _runAutoPdfOcrForRecentScannedPdfs({
     required NativeAppBackend backend,
@@ -140,42 +116,23 @@ extension _MediaEnrichmentGateAutoOcr on _MediaEnrichmentGateState {
         final updatedPayload = Map<String, Object?>.from(runningPayload);
         updatedPayload.remove('ocr_auto_running_ms');
         if (ocr != null) {
-          final extractedFull =
-              (payload['extracted_text_full'] ?? '').toString();
-          final extractedExcerpt =
-              (payload['extracted_text_excerpt'] ?? '').toString();
-          final preferredOcr = maybePreferExtractedTextForRuntimeOcr(
+          final successMs = DateTime.now().millisecondsSinceEpoch;
+          final succeededPayload = buildAutoPdfOcrSuccessPayload(
+            runningPayload: runningPayload,
+            sourcePayload: payload,
             ocr: ocr,
-            extractedFull: extractedFull,
-            extractedExcerpt: extractedExcerpt,
+            languageHints: languageHints,
+            dpi: dpi,
+            nowMs: successMs,
           );
-          final extractedText = (extractedExcerpt.trim().isNotEmpty
-                  ? extractedExcerpt
-                  : extractedFull)
-              .trim();
-          updatedPayload['needs_ocr'] =
-              preferredOcr.fullText.trim().isEmpty && extractedText.isEmpty;
-          updatedPayload['ocr_text_full'] = preferredOcr.fullText;
-          updatedPayload['ocr_text_excerpt'] = preferredOcr.excerpt;
-          updatedPayload['ocr_engine'] = preferredOcr.engine;
-          updatedPayload['ocr_lang_hints'] = languageHints;
-          updatedPayload['ocr_dpi'] = dpi;
-          updatedPayload['ocr_retry_attempted'] = preferredOcr.retryAttempted;
-          updatedPayload['ocr_retry_attempts'] = preferredOcr.retryAttempts;
-          updatedPayload['ocr_retry_hints'] =
-              preferredOcr.retryHintsTried.join(',');
-          updatedPayload['ocr_is_truncated'] = preferredOcr.isTruncated;
-          updatedPayload['ocr_page_count'] = preferredOcr.pageCount;
-          updatedPayload['ocr_processed_pages'] = preferredOcr.processedPages;
-          updatedPayload['ocr_auto_status'] = 'ok';
-          updatedPayload['ocr_auto_last_success_ms'] =
-              DateTime.now().millisecondsSinceEpoch;
-          updatedPayload.remove('ocr_auto_last_failure_ms');
           await persistPayload(
-            updatedPayload,
-            updatedPayload['ocr_auto_last_success_ms'] as int,
+            succeededPayload,
+            successMs,
           );
-          _autoOcrCompletedShas.add(attachment.sha256);
+          final isPartial = succeededPayload['ocr_partial'] == true;
+          if (!isPartial) {
+            _autoOcrCompletedShas.add(attachment.sha256);
+          }
           updated += 1;
         } else {
           updatedPayload['ocr_auto_status'] = 'failed';

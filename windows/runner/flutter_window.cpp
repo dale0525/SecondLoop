@@ -53,6 +53,7 @@ struct PdfRenderPreset {
   std::string id;
   int max_pages;
   int dpi;
+  int start_page;
 };
 
 std::string Trim(std::string text) {
@@ -328,21 +329,15 @@ std::string ReadStringArg(const flutter::EncodableMap* args, const char* key) {
 
 PdfRenderPreset ResolvePdfRenderPreset(const flutter::EncodableMap* args) {
   const auto preset_id = ReadStringArg(args, "ocr_model_preset");
-  if (preset_id == kCommonPdfOcrPreset) {
-    return PdfRenderPreset{
-        std::string(kCommonPdfOcrPreset),
-        kCommonPdfOcrMaxPages,
-        kCommonPdfOcrDpi,
-    };
-  }
-
   const int max_pages =
       ClampPositiveInt(args, "max_pages", kCommonPdfOcrMaxPages, 10'000);
   const int dpi = ClampPositiveInt(args, "dpi", kCommonPdfOcrDpi, 600);
+  const int start_page = ClampPositiveInt(args, "start_page", 1, 10'000);
   return PdfRenderPreset{
       preset_id.empty() ? std::string(kCommonPdfOcrPreset) : preset_id,
       max_pages,
       dpi,
+      start_page,
   };
 }
 
@@ -417,7 +412,7 @@ std::optional<std::vector<uint8_t>> EncodeJpegFromBgra(
 }
 
 std::optional<flutter::EncodableMap> RunPdfRenderToLongImage(
-    const std::vector<uint8_t>& bytes, int max_pages, int dpi) {
+    const std::vector<uint8_t>& bytes, int max_pages, int dpi, int start_page) {
   try {
     auto stream = BytesToStream(bytes);
     auto document = PdfDocument::LoadFromStreamAsync(stream).get();
@@ -426,8 +421,12 @@ std::optional<flutter::EncodableMap> RunPdfRenderToLongImage(
       return std::nullopt;
     }
 
+    const uint32_t start_index = static_cast<uint32_t>(std::max(start_page - 1, 0));
+    if (start_index >= page_count) {
+      return std::nullopt;
+    }
     const uint32_t target_pages =
-        std::min(page_count, static_cast<uint32_t>(max_pages));
+        std::min(page_count - start_index, static_cast<uint32_t>(max_pages));
 
     std::vector<SoftwareBitmap> page_bitmaps;
     page_bitmaps.reserve(target_pages);
@@ -436,7 +435,8 @@ std::optional<flutter::EncodableMap> RunPdfRenderToLongImage(
     uint32_t output_height = 0;
     uint32_t processed_pages = 0;
 
-    for (uint32_t index = 0; index < target_pages; ++index) {
+    for (uint32_t offset = 0; offset < target_pages; ++offset) {
+      const uint32_t index = start_index + offset;
       auto page = document.GetPage(index);
       auto size = page.Size();
 
@@ -819,7 +819,11 @@ void FlutterWindow::HandleOcrMethodCall(
   if (method == "renderPdfToLongImage") {
     const auto preset = ResolvePdfRenderPreset(args);
     auto payload = RunOnMtaThread([&]() {
-      return RunPdfRenderToLongImage(*maybe_bytes, preset.max_pages, preset.dpi);
+      return RunPdfRenderToLongImage(
+          *maybe_bytes,
+          preset.max_pages,
+          preset.dpi,
+          preset.start_page);
     });
     if (!payload.has_value()) {
       result->Success(flutter::EncodableValue());
