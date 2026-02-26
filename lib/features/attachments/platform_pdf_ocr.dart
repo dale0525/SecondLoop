@@ -10,20 +10,37 @@ const kDesktopRuntimeRenderLongImageHint =
 const kCommonPdfOcrModelPreset = 'common_ocr_v1';
 
 final class PlatformPdfRenderPreset {
-  const PlatformPdfRenderPreset._({
+  const PlatformPdfRenderPreset({
     required this.id,
     required this.maxPages,
     required this.dpi,
+    this.startPage = 1,
   });
 
   final String id;
   final int maxPages;
   final int dpi;
+  final int startPage;
 
-  static const PlatformPdfRenderPreset common = PlatformPdfRenderPreset._(
+  PlatformPdfRenderPreset copyWith({
+    String? id,
+    int? maxPages,
+    int? dpi,
+    int? startPage,
+  }) {
+    return PlatformPdfRenderPreset(
+      id: id ?? this.id,
+      maxPages: maxPages ?? this.maxPages,
+      dpi: dpi ?? this.dpi,
+      startPage: startPage ?? this.startPage,
+    );
+  }
+
+  static const PlatformPdfRenderPreset common = PlatformPdfRenderPreset(
     id: kCommonPdfOcrModelPreset,
     maxPages: 10000,
     dpi: 180,
+    startPage: 1,
   );
 }
 
@@ -36,6 +53,14 @@ typedef DesktopOcrPdfInvoke = Future<dynamic> Function(
 
 typedef DesktopOcrImageInvoke = Future<dynamic> Function(
   Uint8List bytes, {
+  required String languageHints,
+});
+
+typedef DesktopPdfRenderInvoke = Future<dynamic> Function(
+  Uint8List bytes, {
+  required int maxPages,
+  required int dpi,
+  required int startPage,
   required String languageHints,
 });
 
@@ -70,7 +95,7 @@ final class PlatformPdfRender {
     Uint8List bytes, {
     PlatformPdfRenderPreset preset = PlatformPdfRenderPreset.common,
     PdfRenderLongImageInvoke? nativeRenderInvoke,
-    DesktopOcrPdfInvoke? runtimeRenderInvoke,
+    DesktopPdfRenderInvoke? runtimeRenderInvoke,
   }) async {
     _lastErrorMessage = null;
     if (kIsWeb || bytes.isEmpty) {
@@ -80,11 +105,17 @@ final class PlatformPdfRender {
 
     final safeMaxPages = preset.maxPages.clamp(1, 10000);
     final safeDpi = preset.dpi.clamp(72, 600);
+    final safeStartPage = preset.startPage.clamp(1, 10000);
+    final safePreset = preset.copyWith(
+      maxPages: safeMaxPages,
+      dpi: safeDpi,
+      startPage: safeStartPage,
+    );
 
     final nativeRaw = await _invokeSafely(
       () => (nativeRenderInvoke ?? _invokeNativeRenderPdfToLongImage)(
         bytes,
-        preset: preset,
+        preset: safePreset,
       ),
     );
     final nativeParsed = _parseNativePayload(nativeRaw);
@@ -103,6 +134,7 @@ final class PlatformPdfRender {
         bytes,
         maxPages: safeMaxPages,
         dpi: safeDpi,
+        startPage: safeStartPage,
         languageHints: kDesktopRuntimeRenderLongImageHint,
       ),
     );
@@ -132,6 +164,9 @@ final class PlatformPdfRender {
       <String, Object?>{
         'bytes': bytes,
         'ocr_model_preset': preset.id,
+        'max_pages': preset.maxPages,
+        'dpi': preset.dpi,
+        'start_page': preset.startPage,
       },
     );
   }
@@ -140,12 +175,14 @@ final class PlatformPdfRender {
     Uint8List bytes, {
     required int maxPages,
     required int dpi,
+    required int startPage,
     required String languageHints,
   }) {
     return rust_desktop_media.desktopOcrPdf(
       bytes: bytes,
       maxPages: maxPages,
       dpi: dpi,
+      startPage: startPage,
       languageHints: languageHints,
     );
   }
@@ -236,6 +273,10 @@ final class PlatformPdfOcrResult {
     this.retryAttempted = false,
     this.retryAttempts = 0,
     this.retryHintsTried = const <String>[],
+    this.partial = false,
+    this.retryable = false,
+    this.failedRanges = const <Map<String, int>>[],
+    this.completedRanges = const <Map<String, int>>[],
   });
 
   final String fullText;
@@ -247,6 +288,10 @@ final class PlatformPdfOcrResult {
   final bool retryAttempted;
   final int retryAttempts;
   final List<String> retryHintsTried;
+  final bool partial;
+  final bool retryable;
+  final List<Map<String, int>> failedRanges;
+  final List<Map<String, int>> completedRanges;
 
   PlatformPdfOcrResult copyWith({
     String? fullText,
@@ -258,6 +303,10 @@ final class PlatformPdfOcrResult {
     bool? retryAttempted,
     int? retryAttempts,
     List<String>? retryHintsTried,
+    bool? partial,
+    bool? retryable,
+    List<Map<String, int>>? failedRanges,
+    List<Map<String, int>>? completedRanges,
   }) {
     return PlatformPdfOcrResult(
       fullText: fullText ?? this.fullText,
@@ -269,6 +318,10 @@ final class PlatformPdfOcrResult {
       retryAttempted: retryAttempted ?? this.retryAttempted,
       retryAttempts: retryAttempts ?? this.retryAttempts,
       retryHintsTried: retryHintsTried ?? this.retryHintsTried,
+      partial: partial ?? this.partial,
+      retryable: retryable ?? this.retryable,
+      failedRanges: failedRanges ?? this.failedRanges,
+      completedRanges: completedRanges ?? this.completedRanges,
     );
   }
 }
@@ -577,6 +630,7 @@ final class PlatformPdfOcr {
       bytes: bytes,
       maxPages: maxPages,
       dpi: dpi,
+      startPage: 1,
       languageHints: languageHints,
     );
   }

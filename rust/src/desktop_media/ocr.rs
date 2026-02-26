@@ -210,6 +210,7 @@ pub fn desktop_ocr_pdf(
     bytes: &[u8],
     max_pages: u32,
     dpi: u32,
+    start_page: u32,
     language_hints: &str,
 ) -> Result<OcrPayload> {
     if bytes.is_empty() {
@@ -217,7 +218,7 @@ pub fn desktop_ocr_pdf(
     }
 
     if language_hints.trim() == PDF_RENDER_MODE_HINT {
-        return render_pdf_to_long_image_payload(bytes, max_pages, dpi);
+        return render_pdf_to_long_image_payload(bytes, max_pages, dpi, start_page);
     }
 
     let safe_max_pages = max_pages.clamp(1, 10_000);
@@ -278,6 +279,7 @@ pub fn desktop_ocr_pdf(
     bytes: &[u8],
     max_pages: u32,
     dpi: u32,
+    start_page: u32,
     _language_hints: &str,
 ) -> Result<OcrPayload> {
     if bytes.is_empty() {
@@ -285,7 +287,7 @@ pub fn desktop_ocr_pdf(
     }
 
     if _language_hints.trim() == PDF_RENDER_MODE_HINT {
-        return render_pdf_to_long_image_payload(bytes, max_pages, dpi);
+        return render_pdf_to_long_image_payload(bytes, max_pages, dpi, start_page);
     }
 
     let safe_max_pages = max_pages.clamp(1, 10_000);

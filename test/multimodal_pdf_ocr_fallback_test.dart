@@ -50,7 +50,8 @@ void main() {
           {preset = PlatformPdfRenderPreset.common}) async {
         expect(bytes, pdfBytes);
         expect(preset.id, kCommonPdfOcrModelPreset);
-        expect(preset.maxPages, 10000);
+        expect(preset.maxPages, 6);
+        expect(preset.startPage, 1);
         expect(preset.dpi, 180);
         return PlatformPdfRenderedImage(
           imageBytes: renderedBytes,
@@ -224,6 +225,92 @@ void main() {
     expect(result, isNull);
     expect(cloudCalls, 0);
     expect(byokCalls, 0);
+  });
+
+  test('chunked mode keeps cloud-first then BYOK fallback order', () async {
+    final callOrder = <String>[];
+
+    final result = await tryConfiguredMultimodalPdfOcr(
+      backend: _NoopNativeBackend(),
+      sessionKey: sessionKey,
+      pdfBytes: pdfBytes,
+      pageCountHint: 25,
+      languageHints: 'device_plus_en',
+      subscriptionStatus: SubscriptionStatus.entitled,
+      mediaAnnotationConfig: const MediaAnnotationConfig(
+        annotateEnabled: true,
+        searchEnabled: true,
+        allowCellular: true,
+        providerMode: 'cloud_gateway',
+      ),
+      llmProfiles: const <LlmProfile>[
+        LlmProfile(
+          id: 'p1',
+          name: 'BYOK',
+          providerType: 'openai-compatible',
+          baseUrl: 'https://example.com',
+          modelName: 'gpt-4.1-mini',
+          isActive: true,
+          createdAtMs: 0,
+          updatedAtMs: 0,
+        )
+      ],
+      cloudGatewayBaseUrl: 'https://gateway.example',
+      cloudIdToken: 'token',
+      cloudModelName: 'cloud-ocr-model',
+      renderPdfToImage: (bytes,
+          {preset = PlatformPdfRenderPreset.common}) async {
+        final remaining = (25 - preset.startPage + 1).clamp(0, 10000).toInt();
+        final processed =
+            remaining > preset.maxPages ? preset.maxPages : remaining;
+        return PlatformPdfRenderedImage(
+          imageBytes: Uint8List.fromList(<int>[preset.startPage]),
+          mimeType: 'image/jpeg',
+          pageCount: 25,
+          processedPages: processed,
+        );
+      },
+      tryCloudOcr: ({
+        required mimeType,
+        required mediaBytes,
+        required pageCountHint,
+      }) async {
+        callOrder.add('cloud:${mediaBytes.first}');
+        throw StateError('cloud failed');
+      },
+      tryByokOcr: ({
+        required profileId,
+        required modelName,
+        required mimeType,
+        required mediaBytes,
+        required pageCountHint,
+      }) async {
+        callOrder.add('byok:${mediaBytes.first}');
+        return PlatformPdfOcrResult(
+          fullText: 'ok-${mediaBytes.first}',
+          excerpt: 'ok-${mediaBytes.first}',
+          engine: 'multimodal_byok_ocr_markdown:$modelName',
+          isTruncated: false,
+          pageCount: pageCountHint,
+          processedPages: pageCountHint,
+        );
+      },
+    );
+
+    expect(
+      callOrder,
+      <String>[
+        'cloud:1',
+        'byok:1',
+        'cloud:11',
+        'byok:11',
+        'cloud:21',
+        'byok:21',
+      ],
+    );
+    expect(result, isNotNull);
+    expect(result!.processedPages, 25);
+    expect(result.engine, 'multimodal_byok_ocr_markdown:gpt-4.1-mini');
   });
 }
 

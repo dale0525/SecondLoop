@@ -9,10 +9,12 @@ import '../../src/rust/db.dart';
 import '../ai/ai_routing.dart';
 import '../backend/native_app_dir.dart';
 import '../backend/native_backend.dart';
+import 'multimodal_pdf_chunked_ocr.dart';
 
 const _kOcrMarkdownLangPrefix = 'ocr_markdown:';
 const _kVideoExtractLangPrefix = 'video_extract:';
 const _kDefaultLanguageHints = 'device_plus_en';
+const kMultimodalPdfOcrChunkSize = 10;
 const _kCloudDetachedRequestIdPayloadKey = 'secondloop_cloud_request_id';
 final RegExp _kCloudDetachedRequestIdPattern = RegExp(
   r'^[A-Za-z0-9][A-Za-z0-9:_-]{5,127}$',
@@ -584,34 +586,36 @@ Future<PlatformPdfOcrResult?> tryConfiguredMultimodalPdfOcr({
   TryCloudOcrForPdf? tryCloudOcr,
   TryByokOcrForPdf? tryByokOcr,
 }) async {
-  final rendered =
-      await (renderPdfToImage ?? PlatformPdfRender.tryRenderPdfToLongImage)(
-    pdfBytes,
-    preset: PlatformPdfRenderPreset.common,
-  );
-  if (rendered == null || rendered.imageBytes.isEmpty) {
-    return null;
-  }
-
-  final normalizedPageCount = rendered.processedPages > 0
-      ? rendered.processedPages
-      : (rendered.pageCount > 0 ? rendered.pageCount : pageCountHint);
-
-  return tryConfiguredMultimodalMediaOcr(
-    backend: backend,
-    sessionKey: sessionKey,
-    mimeType: rendered.mimeType,
-    mediaBytes: rendered.imageBytes,
-    pageCountHint: normalizedPageCount,
-    languageHints: languageHints,
-    subscriptionStatus: subscriptionStatus,
-    mediaAnnotationConfig: mediaAnnotationConfig,
-    llmProfiles: llmProfiles,
-    cloudGatewayBaseUrl: cloudGatewayBaseUrl,
-    cloudIdToken: cloudIdToken,
-    cloudModelName: cloudModelName,
-    tryCloudOcr: tryCloudOcr,
-    tryByokOcr: tryByokOcr,
+  return runChunkedMultimodalPdfOcr(
+    pdfBytes: pdfBytes,
+    pageCountHint: pageCountHint,
+    chunkSize: kMultimodalPdfOcrChunkSize,
+    renderPdfToImage:
+        renderPdfToImage ?? PlatformPdfRender.tryRenderPdfToLongImage,
+    runChunkMediaOcr: ({
+      required String mimeType,
+      required Uint8List mediaBytes,
+      required int pageCountHint,
+    }) {
+      return tryConfiguredMultimodalMediaOcr(
+        backend: backend,
+        sessionKey: sessionKey,
+        mimeType: mimeType,
+        mediaBytes: mediaBytes,
+        pageCountHint: pageCountHint,
+        languageHints: languageHints,
+        subscriptionStatus: subscriptionStatus,
+        mediaAnnotationConfig: mediaAnnotationConfig,
+        llmProfiles: llmProfiles,
+        cloudGatewayBaseUrl: cloudGatewayBaseUrl,
+        cloudIdToken: cloudIdToken,
+        cloudModelName: cloudModelName,
+        tryCloudOcr: tryCloudOcr,
+        tryByokOcr: tryByokOcr,
+      );
+    },
+    resolveDominantEngine: _dominantNonEmptyMultimodalEngine,
+    buildExcerpt: (fullText) => _buildExcerpt(fullText),
   );
 }
 

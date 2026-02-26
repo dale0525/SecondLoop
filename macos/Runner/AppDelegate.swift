@@ -11,12 +11,14 @@ class AppDelegate: FlutterAppDelegate {
     let id: String
     let maxPages: Int
     let dpi: Int
+    let startPage: Int
   }
 
   private let commonPdfOcrPreset = PdfRenderPreset(
     id: "common_ocr_v1",
     maxPages: 10_000,
-    dpi: 180
+    dpi: 180,
+    startPage: 1
   )
 
   private var didConfigureMethodChannels = false
@@ -395,7 +397,8 @@ class AppDelegate: FlutterAppDelegate {
       let payload = self.renderPdfToLongImage(
         pdfData: typed.data,
         maxPages: preset.maxPages,
-        dpi: preset.dpi
+        dpi: preset.dpi,
+        startPage: preset.startPage
       )
       DispatchQueue.main.async {
         result(payload)
@@ -407,9 +410,6 @@ class AppDelegate: FlutterAppDelegate {
     let presetId = (args["ocr_model_preset"] as? String)?
       .trimmingCharacters(in: .whitespacesAndNewlines)
       .lowercased() ?? ""
-    if presetId == commonPdfOcrPreset.id {
-      return commonPdfOcrPreset
-    }
 
     let maxPages = normalizePositiveInt(
       args["max_pages"],
@@ -421,10 +421,16 @@ class AppDelegate: FlutterAppDelegate {
       fallback: commonPdfOcrPreset.dpi,
       upperBound: 600
     )
+    let startPage = normalizePositiveInt(
+      args["start_page"],
+      fallback: commonPdfOcrPreset.startPage,
+      upperBound: 10_000
+    )
     return PdfRenderPreset(
       id: presetId.isEmpty ? commonPdfOcrPreset.id : presetId,
       maxPages: maxPages,
-      dpi: dpi
+      dpi: dpi,
+      startPage: startPage
     )
   }
 
@@ -595,7 +601,8 @@ class AppDelegate: FlutterAppDelegate {
   private func renderPdfToLongImage(
     pdfData: Data,
     maxPages: Int,
-    dpi: Int
+    dpi: Int,
+    startPage: Int
   ) -> [String: Any]? {
     guard let document = PDFDocument(data: pdfData) else {
       return nil
@@ -605,7 +612,11 @@ class AppDelegate: FlutterAppDelegate {
       return nil
     }
 
-    let targetPages = min(pageCount, maxPages)
+    let startIndex = max(0, startPage - 1)
+    if startIndex >= pageCount {
+      return nil
+    }
+    let targetPages = min(pageCount - startIndex, maxPages)
     let maxOutputWidth = 1536
     let maxOutputHeight = 20_000
     let maxOutputPixels = 20_000_000
@@ -615,7 +626,8 @@ class AppDelegate: FlutterAppDelegate {
     var outputWidth = 0
     var processedPages = 0
 
-    for index in 0..<targetPages {
+    for offset in 0..<targetPages {
+      let index = startIndex + offset
       guard let page = document.page(at: index),
             let rawImage = renderPdfPageAsCgImage(page: page, dpi: dpi) else {
         continue
