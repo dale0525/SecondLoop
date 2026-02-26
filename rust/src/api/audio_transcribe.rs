@@ -692,6 +692,7 @@ pub fn audio_transcribe_byok_profile(
         crate::llm::timeouts::audio_transcribe_timeout_for_audio_bytes(audio_bytes_len, false);
 
     let client = Client::new();
+    let _request_guard = crate::llm::request_limiter::acquire_remote_llm_request_slot();
     let response = client
         .post(url)
         .bearer_auth(api_key)
@@ -835,6 +836,7 @@ pub fn audio_transcribe_byok_profile_multimodal(
         crate::llm::timeouts::audio_transcribe_timeout_for_audio_bytes(audio_bytes_len, true);
 
     let client = Client::new();
+    let _request_guard = crate::llm::request_limiter::acquire_remote_llm_request_slot();
     let response = client
         .post(openai_chat_completions_url(&base_url))
         .bearer_auth(api_key)

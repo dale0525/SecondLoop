@@ -1,6 +1,7 @@
 package com.secondloop.secondloop
 
 import android.Manifest
+import android.content.ComponentName
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.location.Location
@@ -17,6 +18,7 @@ import android.media.MediaCodecInfo
 import android.media.MediaExtractor
 import android.media.MediaFormat
 import android.media.MediaMuxer
+import android.provider.Settings
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
 import androidx.exifinterface.media.ExifInterface
@@ -125,6 +127,11 @@ class MainActivity : FlutterFragmentActivity() {
 
               pendingMediaLocationPermissionResult = result
               requestMediaLocationPermissionLauncher.launch(Manifest.permission.ACCESS_MEDIA_LOCATION)
+            }
+            "openPermissionSettings" -> {
+              val args = call.arguments as? Map<*, *>
+              val item = (args?.get("item") as? String)?.trim().orEmpty()
+              result.success(openPermissionSettingsShortcut(item))
             }
             else -> result.notImplemented()
           }
@@ -288,6 +295,170 @@ class MainActivity : FlutterFragmentActivity() {
     } catch (_: Throwable) {
       // ignore
     }
+  }
+
+  private fun openPermissionSettingsShortcut(item: String): Boolean {
+    val intents =
+      when (item) {
+        "microphone" ->
+          listOf(
+            appDetailsIntent(),
+            settingsIntent(Settings.ACTION_PRIVACY_SETTINGS),
+            settingsIntent(Settings.ACTION_MANAGE_APPLICATIONS_SETTINGS),
+          )
+        "notifications" -> notificationPermissionIntents()
+        "exact_alarm" -> exactAlarmPermissionIntents()
+        "location" ->
+          listOf(
+            appDetailsIntent(),
+            settingsIntent(Settings.ACTION_LOCATION_SOURCE_SETTINGS),
+            settingsIntent(Settings.ACTION_PRIVACY_SETTINGS),
+          )
+        "auto_start" -> autoStartPermissionIntents()
+        "battery_unrestricted" -> batteryUnrestrictedPermissionIntents()
+        else -> emptyList()
+      }
+
+    return launchFirstResolvableIntent(intents)
+  }
+
+  private fun notificationPermissionIntents(): List<Intent> {
+    val result = mutableListOf<Intent>()
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+      result.add(
+        settingsIntent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
+          putExtra(Settings.EXTRA_APP_PACKAGE, packageName)
+        }
+      )
+    } else {
+      result.add(
+        settingsIntent("android.settings.APP_NOTIFICATION_SETTINGS").apply {
+          putExtra("app_package", packageName)
+          putExtra("app_uid", applicationInfo.uid)
+        }
+      )
+    }
+    result.add(appDetailsIntent())
+    result.add(settingsIntent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
+    return result
+  }
+
+  private fun exactAlarmPermissionIntents(): List<Intent> {
+    val result = mutableListOf<Intent>()
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+      result.add(
+        settingsIntent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM).apply {
+          data = Uri.parse("package:$packageName")
+        }
+      )
+    }
+    result.addAll(notificationPermissionIntents())
+    return result
+  }
+
+  private fun autoStartPermissionIntents(): List<Intent> {
+    val result = mutableListOf<Intent>()
+    result.addAll(manufacturerAutoStartIntents())
+    result.addAll(batteryUnrestrictedPermissionIntents())
+    result.add(appDetailsIntent())
+    result.add(settingsIntent(Settings.ACTION_MANAGE_APPLICATIONS_SETTINGS))
+    return result
+  }
+
+  private fun batteryUnrestrictedPermissionIntents(): List<Intent> {
+    val result = mutableListOf<Intent>()
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+      result.add(
+        settingsIntent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+          data = Uri.parse("package:$packageName")
+        }
+      )
+      result.add(settingsIntent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
+    }
+    result.add(settingsIntent(Settings.ACTION_BATTERY_SAVER_SETTINGS))
+    result.add(appDetailsIntent())
+    return result
+  }
+
+  private fun manufacturerAutoStartIntents(): List<Intent> {
+    val manufacturer = Build.MANUFACTURER.lowercase(Locale.US)
+    return when {
+      manufacturer.contains("xiaomi") ->
+        listOf(
+          componentIntent(
+            "com.miui.securitycenter",
+            "com.miui.permcenter.autostart.AutoStartManagementActivity",
+          ),
+        )
+      manufacturer.contains("oppo") ->
+        listOf(
+          componentIntent(
+            "com.coloros.safecenter",
+            "com.coloros.safecenter.permission.startup.StartupAppListActivity",
+          ),
+          componentIntent(
+            "com.oplus.safecenter",
+            "com.oplus.safecenter.permission.startup.StartupAppListActivity",
+          ),
+        )
+      manufacturer.contains("vivo") ->
+        listOf(
+          componentIntent(
+            "com.iqoo.secure",
+            "com.iqoo.secure.ui.phoneoptimize.AddWhiteListActivity",
+          ),
+          componentIntent(
+            "com.vivo.permissionmanager",
+            "com.vivo.permissionmanager.activity.BgStartUpManagerActivity",
+          ),
+        )
+      manufacturer.contains("huawei") ->
+        listOf(
+          componentIntent(
+            "com.huawei.systemmanager",
+            "com.huawei.systemmanager.startupmgr.ui.StartupNormalAppListActivity",
+          ),
+        )
+      manufacturer.contains("samsung") ->
+        listOf(
+          componentIntent(
+            "com.samsung.android.lool",
+            "com.samsung.android.sm.ui.battery.BatteryActivity",
+          ),
+        )
+      else -> emptyList()
+    }
+  }
+
+  private fun settingsIntent(action: String): Intent {
+    return Intent(action).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+  }
+
+  private fun appDetailsIntent(): Intent {
+    return settingsIntent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+      data = Uri.fromParts("package", packageName, null)
+    }
+  }
+
+  private fun componentIntent(packageName: String, className: String): Intent {
+    return Intent().apply {
+      component = ComponentName(packageName, className)
+      addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    }
+  }
+
+  private fun launchFirstResolvableIntent(intents: List<Intent>): Boolean {
+    for (candidate in intents) {
+      try {
+        if (candidate.resolveActivity(packageManager) != null) {
+          startActivity(candidate)
+          return true
+        }
+      } catch (_: Throwable) {
+        // Try next candidate intent.
+      }
+    }
+    return false
   }
 
   private fun startAudioRecordingForegroundService(): Boolean {

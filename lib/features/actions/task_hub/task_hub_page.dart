@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
@@ -23,10 +24,13 @@ class TaskHubPage extends StatefulWidget {
 }
 
 class _TaskHubPageState extends State<TaskHubPage> {
+  static const _kDonePageSize = 20;
+
   Future<TaskHubSummary>? _summaryFuture;
   TaskHubUndoTicket? _undoTicket;
   Timer? _quickActionSnackAutoDismissTimer;
   ScaffoldMessengerState? _quickActionSnackMessenger;
+  var _doneVisibleCount = _kDonePageSize;
 
   @override
   void dispose() {
@@ -129,6 +133,17 @@ class _TaskHubPageState extends State<TaskHubPage> {
     if (!mounted) return;
     setState(() {
       _summaryFuture = _loadSummary();
+      _doneVisibleCount = _kDonePageSize;
+    });
+  }
+
+  void _loadMoreDone(int totalDoneCount) {
+    if (_doneVisibleCount >= totalDoneCount) return;
+    setState(() {
+      _doneVisibleCount = math.min(
+        _doneVisibleCount + _kDonePageSize,
+        totalDoneCount,
+      );
     });
   }
 
@@ -281,14 +296,25 @@ class _TaskHubPageState extends State<TaskHubPage> {
               }
 
               final summary = snapshot.data ?? const TaskHubSummary.empty();
-              if (summary.isEmpty) {
-                return Center(child: Text(context.t.actions.agenda.empty));
-              }
-
               final scheduled = <Todo>[
                 ...summary.dueTodos,
                 ...summary.upcomingTodos,
               ];
+              final doneVisibleCount = math.min(
+                _doneVisibleCount,
+                summary.doneTodos.length,
+              );
+              final doneVisibleTodos = summary.doneTodos
+                  .take(doneVisibleCount)
+                  .toList(growable: false);
+              final hasMoreDone = doneVisibleCount < summary.doneTodos.length;
+              final hasTodos = scheduled.isNotEmpty ||
+                  summary.dueReviewTodos.isNotEmpty ||
+                  summary.unscheduledTodos.isNotEmpty ||
+                  summary.doneTodos.isNotEmpty;
+              if (!hasTodos) {
+                return Center(child: Text(context.t.actions.agenda.empty));
+              }
 
               return ListView(
                 padding: const EdgeInsets.all(16),
@@ -314,6 +340,21 @@ class _TaskHubPageState extends State<TaskHubPage> {
                     onQuickAction: _applyQuickAction,
                     onOpenTodo: _openTodoDetail,
                   ),
+                  _TaskHubPageSection(
+                    key: const ValueKey('task_hub_page_section_done'),
+                    title: context.t.actions.todoStatus.done,
+                    todos: doneVisibleTodos,
+                    totalCount: summary.doneTodos.length,
+                    showQuickActions: false,
+                    onQuickAction: _applyQuickAction,
+                    onOpenTodo: _openTodoDetail,
+                    footer: hasMoreDone
+                        ? _TaskHubPageDoneLoadMoreButton(
+                            onPressed: () =>
+                                _loadMoreDone(summary.doneTodos.length),
+                          )
+                        : null,
+                  ),
                 ],
               );
             },
@@ -330,18 +371,24 @@ class _TaskHubPageSection extends StatelessWidget {
     required this.todos,
     required this.onQuickAction,
     required this.onOpenTodo,
+    this.totalCount,
+    this.showQuickActions = true,
+    this.footer,
     super.key,
   });
 
   final String title;
   final List<Todo> todos;
+  final int? totalCount;
+  final bool showQuickActions;
+  final Widget? footer;
   final Future<void> Function(Todo todo, TaskHubQuickAction action)
       onQuickAction;
   final Future<void> Function(Todo todo) onOpenTodo;
 
   @override
   Widget build(BuildContext context) {
-    if (todos.isEmpty) return const SizedBox.shrink();
+    if (todos.isEmpty && footer == null) return const SizedBox.shrink();
     final theme = Theme.of(context);
     final tokens = SlTokens.of(context);
     final colorScheme = theme.colorScheme;
@@ -374,7 +421,7 @@ class _TaskHubPageSection extends StatelessWidget {
                     padding:
                         const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                     child: Text(
-                      todos.length.toString(),
+                      (totalCount ?? todos.length).toString(),
                       style: theme.textTheme.labelSmall?.copyWith(
                         color: colorScheme.onSurfaceVariant,
                         fontWeight: FontWeight.w700,
@@ -384,18 +431,44 @@ class _TaskHubPageSection extends StatelessWidget {
                 ),
               ],
             ),
-            const SizedBox(height: 8),
-            for (var i = 0; i < todos.length; i++)
-              Padding(
-                padding: EdgeInsets.only(bottom: i == todos.length - 1 ? 0 : 8),
-                child: _TaskHubPageTodoRow(
-                  todo: todos[i],
-                  onQuickAction: onQuickAction,
-                  onOpenTodo: onOpenTodo,
+            if (todos.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              for (var i = 0; i < todos.length; i++)
+                Padding(
+                  padding:
+                      EdgeInsets.only(bottom: i == todos.length - 1 ? 0 : 8),
+                  child: _TaskHubPageTodoRow(
+                    todo: todos[i],
+                    onQuickAction: onQuickAction,
+                    onOpenTodo: onOpenTodo,
+                    showQuickActions: showQuickActions,
+                  ),
                 ),
-              ),
+            ],
+            if (footer != null) ...[
+              if (todos.isNotEmpty) const SizedBox(height: 8),
+              footer!,
+            ],
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _TaskHubPageDoneLoadMoreButton extends StatelessWidget {
+  const _TaskHubPageDoneLoadMoreButton({required this.onPressed});
+
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: IconButton(
+        key: const ValueKey('task_hub_page_done_load_more'),
+        tooltip: context.t.actions.agenda.viewAll,
+        onPressed: onPressed,
+        icon: const Icon(Icons.more_horiz_rounded),
       ),
     );
   }
@@ -406,9 +479,11 @@ class _TaskHubPageTodoRow extends StatelessWidget {
     required this.todo,
     required this.onQuickAction,
     required this.onOpenTodo,
+    this.showQuickActions = true,
   });
 
   final Todo todo;
+  final bool showQuickActions;
   final Future<void> Function(Todo todo, TaskHubQuickAction action)
       onQuickAction;
   final Future<void> Function(Todo todo) onOpenTodo;
@@ -522,47 +597,50 @@ class _TaskHubPageTodoRow extends StatelessWidget {
                 ),
               ),
             ),
-            const SizedBox(height: 6),
-            Wrap(
-              spacing: 6,
-              runSpacing: 6,
-              children: [
-                _TaskHubPageQuickButton(
-                  key: ValueKey('task_hub_page_quick_${todo.id}_today'),
-                  icon: Icons.today_rounded,
-                  label: context.t.actions.taskHub.actions.today,
-                  onPressed: () =>
-                      onQuickAction(todo, TaskHubQuickAction.today),
-                ),
-                _TaskHubPageQuickButton(
-                  key: ValueKey('task_hub_page_quick_${todo.id}_tomorrow'),
-                  icon: Icons.event_rounded,
-                  label: context.t.actions.taskHub.actions.tomorrow,
-                  onPressed: () =>
-                      onQuickAction(todo, TaskHubQuickAction.tomorrow),
-                ),
-                _TaskHubPageQuickButton(
-                  key: ValueKey('task_hub_page_quick_${todo.id}_this_week'),
-                  icon: Icons.date_range_rounded,
-                  label: context.t.actions.taskHub.actions.thisWeek,
-                  onPressed: () =>
-                      onQuickAction(todo, TaskHubQuickAction.thisWeek),
-                ),
-                _TaskHubPageQuickButton(
-                  key: ValueKey('task_hub_page_quick_${todo.id}_later'),
-                  icon: Icons.schedule_send_rounded,
-                  label: context.t.actions.taskHub.actions.later,
-                  onPressed: () =>
-                      onQuickAction(todo, TaskHubQuickAction.later),
-                ),
-                _TaskHubPageQuickButton(
-                  key: ValueKey('task_hub_page_quick_${todo.id}_done'),
-                  icon: Icons.check_rounded,
-                  label: context.t.actions.taskHub.actions.done,
-                  onPressed: () => onQuickAction(todo, TaskHubQuickAction.done),
-                ),
-              ],
-            ),
+            if (showQuickActions) ...[
+              const SizedBox(height: 6),
+              Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: [
+                  _TaskHubPageQuickButton(
+                    key: ValueKey('task_hub_page_quick_${todo.id}_today'),
+                    icon: Icons.today_rounded,
+                    label: context.t.actions.taskHub.actions.today,
+                    onPressed: () =>
+                        onQuickAction(todo, TaskHubQuickAction.today),
+                  ),
+                  _TaskHubPageQuickButton(
+                    key: ValueKey('task_hub_page_quick_${todo.id}_tomorrow'),
+                    icon: Icons.event_rounded,
+                    label: context.t.actions.taskHub.actions.tomorrow,
+                    onPressed: () =>
+                        onQuickAction(todo, TaskHubQuickAction.tomorrow),
+                  ),
+                  _TaskHubPageQuickButton(
+                    key: ValueKey('task_hub_page_quick_${todo.id}_this_week'),
+                    icon: Icons.date_range_rounded,
+                    label: context.t.actions.taskHub.actions.thisWeek,
+                    onPressed: () =>
+                        onQuickAction(todo, TaskHubQuickAction.thisWeek),
+                  ),
+                  _TaskHubPageQuickButton(
+                    key: ValueKey('task_hub_page_quick_${todo.id}_later'),
+                    icon: Icons.schedule_send_rounded,
+                    label: context.t.actions.taskHub.actions.later,
+                    onPressed: () =>
+                        onQuickAction(todo, TaskHubQuickAction.later),
+                  ),
+                  _TaskHubPageQuickButton(
+                    key: ValueKey('task_hub_page_quick_${todo.id}_done'),
+                    icon: Icons.check_rounded,
+                    label: context.t.actions.taskHub.actions.done,
+                    onPressed: () =>
+                        onQuickAction(todo, TaskHubQuickAction.done),
+                  ),
+                ],
+              ),
+            ],
           ],
         ),
       ),

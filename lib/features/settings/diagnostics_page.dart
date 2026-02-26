@@ -7,7 +7,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/backend/app_backend.dart';
 import '../../core/cloud/cloud_auth_scope.dart';
@@ -15,18 +14,10 @@ import '../../core/session/session_scope.dart';
 import '../../core/subscription/subscription_scope.dart';
 import '../../core/sync/sync_config_store.dart';
 import '../../core/sync/sync_engine.dart';
-import '../../core/update/app_update_service.dart';
 import '../../i18n/strings.g.dart';
 
 class DiagnosticsPage extends StatefulWidget {
-  const DiagnosticsPage({
-    super.key,
-    this.updateService,
-    this.externalUriLauncher,
-  });
-
-  final AppUpdateService? updateService;
-  final Future<bool> Function(Uri uri)? externalUriLauncher;
+  const DiagnosticsPage({super.key});
 
   @override
   State<DiagnosticsPage> createState() => _DiagnosticsPageState();
@@ -35,14 +26,6 @@ class DiagnosticsPage extends StatefulWidget {
 class _DiagnosticsPageState extends State<DiagnosticsPage> {
   Future<String>? _jsonFuture;
   bool _busy = false;
-  bool _checkingUpdate = false;
-  bool _updating = false;
-  AppUpdateCheckResult? _updateResult;
-
-  late final AppUpdateService _updateService;
-  AppUpdateService? _ownedUpdateService;
-
-  _DiagnosticsUpdateText get _updateText => _DiagnosticsUpdateText.of(context);
 
   Future<String> _buildDiagnosticsJson() async {
     final backend = AppBackendScope.of(context);
@@ -190,219 +173,6 @@ class _DiagnosticsPageState extends State<DiagnosticsPage> {
     }
   }
 
-  Future<void> _checkForUpdates({bool showMessage = true}) async {
-    if (_checkingUpdate || _updating) return;
-
-    setState(() => _checkingUpdate = true);
-    final updatesT = _updateText;
-
-    try {
-      final result = await _updateService.checkForUpdates();
-      if (!mounted) return;
-
-      setState(() {
-        _updateResult = result;
-      });
-
-      if (!showMessage) return;
-      if (result.errorMessage != null) {
-        _showMessage(
-            updatesT.messages.checkFailed(error: result.errorMessage!));
-      } else if (result.update == null) {
-        _showMessage(updatesT.messages.upToDate);
-      } else {
-        _showMessage(
-          updatesT.messages.updateAvailable(version: result.update!.latestTag),
-        );
-      }
-    } catch (e) {
-      if (!mounted) return;
-      _showMessage(updatesT.messages.checkFailed(error: '$e'));
-    } finally {
-      if (mounted) setState(() => _checkingUpdate = false);
-    }
-  }
-
-  Future<void> _openUpdateExternally(Uri uri) async {
-    final updatesT = _updateText;
-    try {
-      final launcher = widget.externalUriLauncher;
-      final opened = launcher != null
-          ? await launcher(uri)
-          : await launchUrl(uri, mode: LaunchMode.externalApplication);
-      if (!opened) {
-        _showMessage(updatesT.messages.openFailed);
-      }
-    } catch (_) {
-      _showMessage(updatesT.messages.openFailed);
-    }
-  }
-
-  Future<void> _applyUpdate() async {
-    if (_checkingUpdate || _updating) return;
-    final update = _updateResult?.update;
-    if (update == null) return;
-
-    final updatesT = _updateText;
-    if (!update.canSeamlessInstall && !update.canStageForNextLaunch) {
-      await _openUpdateExternally(update.downloadUri);
-      return;
-    }
-
-    setState(() => _updating = true);
-    try {
-      if (update.canSeamlessInstall) {
-        _showMessage(updatesT.messages.installStarting);
-        await _updateService.installAndRestart(update);
-      } else {
-        _showMessage(updatesT.messages.stageStarting);
-        await _updateService.stageUpdateForNextLaunch(update);
-        _showMessage(updatesT.messages.stageReady);
-      }
-    } catch (e) {
-      if (update.canStageForNextLaunch) {
-        _showMessage(updatesT.messages.stageFailed(error: '$e'));
-      } else {
-        _showMessage(updatesT.messages.installFailed(error: '$e'));
-      }
-    } finally {
-      if (mounted) setState(() => _updating = false);
-    }
-  }
-
-  String _updateStatusText() {
-    final updatesT = _updateText;
-    if (_checkingUpdate) return updatesT.status.checking;
-    final result = _updateResult;
-    if (result == null) return updatesT.status.idle;
-    if (result.errorMessage != null) {
-      return updatesT.status.failed(error: result.errorMessage!);
-    }
-    final update = result.update;
-    if (update == null) return updatesT.status.upToDate;
-    if (update.canSeamlessInstall) {
-      return updatesT.status.availableSeamless(version: update.latestTag);
-    }
-    if (update.canStageForNextLaunch) {
-      return updatesT.status.availableStaged(version: update.latestTag);
-    }
-    return updatesT.status.availableExternal(version: update.latestTag);
-  }
-
-  Widget _buildUpdateCard() {
-    final updatesT = _updateText;
-    final update = _updateResult?.update;
-    final latestVersionText = update == null
-        ? null
-        : updatesT.latestVersion(version: update.latestTag);
-
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        border: Border.all(color: Theme.of(context).dividerColor),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              updatesT.title,
-              style: Theme.of(context)
-                  .textTheme
-                  .titleSmall
-                  ?.copyWith(fontWeight: FontWeight.w600),
-            ),
-            const SizedBox(height: 8),
-            Text(_updateStatusText()),
-            const SizedBox(height: 4),
-            Text(
-              updatesT.currentVersion(
-                version:
-                    _updateResult?.currentVersion ?? updatesT.unknownVersion,
-              ),
-            ),
-            if (latestVersionText != null) ...[
-              const SizedBox(height: 4),
-              Text(latestVersionText),
-            ],
-            const SizedBox(height: 12),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                OutlinedButton.icon(
-                  key: const ValueKey('diagnostics_check_updates'),
-                  onPressed:
-                      (_checkingUpdate || _updating) ? null : _checkForUpdates,
-                  icon: _checkingUpdate
-                      ? const SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Icon(Icons.system_update_alt_rounded),
-                  label: Text(
-                    _checkingUpdate
-                        ? updatesT.actions.checking
-                        : updatesT.actions.check,
-                  ),
-                ),
-                if (update != null)
-                  FilledButton.icon(
-                    key: const ValueKey('diagnostics_apply_update'),
-                    onPressed:
-                        (_checkingUpdate || _updating) ? null : _applyUpdate,
-                    icon: _updating
-                        ? const SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : Icon(
-                            update.canSeamlessInstall
-                                ? Icons.restart_alt_rounded
-                                : update.canStageForNextLaunch
-                                    ? Icons.download_done_rounded
-                                    : Icons.open_in_new_rounded,
-                          ),
-                    label: Text(
-                      _updating
-                          ? updatesT.actions.updating
-                          : update.canSeamlessInstall
-                              ? updatesT.actions.updateAndRestart
-                              : update.canStageForNextLaunch
-                                  ? updatesT.actions.stageForNextLaunch
-                                  : updatesT.actions.openDownload,
-                    ),
-                  ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  @override
-  void initState() {
-    super.initState();
-    final provided = widget.updateService;
-    if (provided != null) {
-      _updateService = provided;
-    } else {
-      final owned = AppUpdateService();
-      _updateService = owned;
-      _ownedUpdateService = owned;
-    }
-  }
-
-  @override
-  void dispose() {
-    _ownedUpdateService?.dispose();
-    super.dispose();
-  }
-
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -449,8 +219,6 @@ class _DiagnosticsPageState extends State<DiagnosticsPage> {
           return ListView(
             padding: const EdgeInsets.all(16),
             children: [
-              _buildUpdateCard(),
-              const SizedBox(height: 12),
               Text(context.t.settings.diagnostics.privacyNote),
               const SizedBox(height: 12),
               DecoratedBox(
@@ -472,102 +240,4 @@ class _DiagnosticsPageState extends State<DiagnosticsPage> {
       ),
     );
   }
-}
-
-class _DiagnosticsUpdateText {
-  const _DiagnosticsUpdateText._(this._t);
-
-  final Translations _t;
-
-  static _DiagnosticsUpdateText of(BuildContext context) {
-    return _DiagnosticsUpdateText._(context.t);
-  }
-
-  String get title => _t.settings.diagnostics.updates.title;
-  String get unknownVersion => _t.settings.diagnostics.updates.unknownVersion;
-
-  String currentVersion({required String version}) =>
-      _t.settings.diagnostics.updates.currentVersion(version: version);
-
-  String latestVersion({required String version}) =>
-      _t.settings.diagnostics.updates.latestVersion(version: version);
-
-  _DiagnosticsUpdateStatusText get status => _DiagnosticsUpdateStatusText(_t);
-  _DiagnosticsUpdateActionText get actions => _DiagnosticsUpdateActionText(_t);
-  _DiagnosticsUpdateMessageText get messages =>
-      _DiagnosticsUpdateMessageText(_t);
-}
-
-class _DiagnosticsUpdateStatusText {
-  const _DiagnosticsUpdateStatusText(this._t);
-
-  final Translations _t;
-
-  String get idle => _t.settings.diagnostics.updates.status.idle;
-  String get checking => _t.settings.diagnostics.updates.status.checking;
-  String get upToDate => _t.settings.diagnostics.updates.status.upToDate;
-
-  String availableSeamless({required String version}) =>
-      _t.settings.diagnostics.updates.status.availableSeamless(
-        version: version,
-      );
-
-  String availableStaged({required String version}) =>
-      _t.settings.diagnostics.updates.status.availableStaged(
-        version: version,
-      );
-
-  String availableExternal({required String version}) =>
-      _t.settings.diagnostics.updates.status.availableExternal(
-        version: version,
-      );
-
-  String failed({required String error}) =>
-      _t.settings.diagnostics.updates.status.failed(error: error);
-}
-
-class _DiagnosticsUpdateActionText {
-  const _DiagnosticsUpdateActionText(this._t);
-
-  final Translations _t;
-
-  String get check => _t.settings.diagnostics.updates.actions.check;
-  String get checking => _t.settings.diagnostics.updates.actions.checking;
-  String get updateAndRestart =>
-      _t.settings.diagnostics.updates.actions.updateAndRestart;
-  String get stageForNextLaunch =>
-      _t.settings.diagnostics.updates.actions.stageForNextLaunch;
-  String get openDownload =>
-      _t.settings.diagnostics.updates.actions.openDownload;
-  String get updating => _t.settings.diagnostics.updates.actions.updating;
-}
-
-class _DiagnosticsUpdateMessageText {
-  const _DiagnosticsUpdateMessageText(this._t);
-
-  final Translations _t;
-
-  String get upToDate => _t.settings.diagnostics.updates.messages.upToDate;
-
-  String updateAvailable({required String version}) =>
-      _t.settings.diagnostics.updates.messages.updateAvailable(
-        version: version,
-      );
-
-  String checkFailed({required String error}) =>
-      _t.settings.diagnostics.updates.messages.checkFailed(error: error);
-
-  String get installStarting =>
-      _t.settings.diagnostics.updates.messages.installStarting;
-  String get stageStarting =>
-      _t.settings.diagnostics.updates.messages.stageStarting;
-  String get stageReady => _t.settings.diagnostics.updates.messages.stageReady;
-
-  String installFailed({required String error}) =>
-      _t.settings.diagnostics.updates.messages.installFailed(error: error);
-
-  String stageFailed({required String error}) =>
-      _t.settings.diagnostics.updates.messages.stageFailed(error: error);
-
-  String get openFailed => _t.settings.diagnostics.updates.messages.openFailed;
 }

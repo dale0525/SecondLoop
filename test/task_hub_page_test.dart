@@ -61,6 +61,18 @@ void main() {
           nextReviewAtMs: null,
           lastReviewAtMs: null,
         ),
+        const Todo(
+          id: 'done',
+          title: 'Finished task',
+          dueAtMs: null,
+          status: 'done',
+          sourceEntryId: null,
+          createdAtMs: 0,
+          updatedAtMs: 40,
+          reviewStage: null,
+          nextReviewAtMs: null,
+          lastReviewAtMs: null,
+        ),
       ],
     );
 
@@ -85,6 +97,8 @@ void main() {
         findsOneWidget);
     expect(find.byKey(const ValueKey('task_hub_page_section_unscheduled')),
         findsOneWidget);
+    expect(find.byKey(const ValueKey('task_hub_page_section_done')),
+        findsOneWidget);
 
     expect(
         find.byKey(const ValueKey('task_hub_page_item_due')), findsOneWidget);
@@ -92,6 +106,71 @@ void main() {
         findsOneWidget);
     expect(find.byKey(const ValueKey('task_hub_page_item_unscheduled')),
         findsOneWidget);
+    expect(
+        find.byKey(const ValueKey('task_hub_page_item_done')), findsOneWidget);
+  });
+
+  testWidgets('task hub page loads done todos in batches on demand',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+
+    final backend = _TaskHubBackend(
+      todos: <Todo>[
+        for (var i = 0; i < 25; i++)
+          Todo(
+            id: 'done-$i',
+            title: 'Done $i',
+            dueAtMs: null,
+            status: 'done',
+            sourceEntryId: null,
+            createdAtMs: i,
+            updatedAtMs: i,
+            reviewStage: null,
+            nextReviewAtMs: null,
+            lastReviewAtMs: null,
+          ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        AppBackendScope(
+          backend: backend,
+          child: SessionScope(
+            sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+            lock: () {},
+            child: const MaterialApp(home: TaskHubPage()),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('task_hub_page_done_load_more')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('task_hub_page_item_done-0')),
+      findsNothing,
+    );
+
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('task_hub_page_done_load_more')),
+    );
+    await tester.pumpAndSettle();
+    await tester
+        .tap(find.byKey(const ValueKey('task_hub_page_done_load_more')));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('task_hub_page_item_done-0')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('task_hub_page_done_load_more')),
+      findsNothing,
+    );
   });
 
   testWidgets('task hub page quick action done updates backend',

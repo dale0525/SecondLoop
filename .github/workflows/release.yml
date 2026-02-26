@@ -261,6 +261,25 @@ jobs:
       - name: Prepare bundled FFmpeg
         shell: pwsh
         run: dart run tools/prepare_bundled_ffmpeg.dart --platform=windows
+      - name: Prune non-target FFmpeg assets (windows)
+        shell: pwsh
+        run: |
+          $ffmpegRoot = Join-Path $Env:GITHUB_WORKSPACE 'assets/bin/ffmpeg'
+          $targetFfmpeg = Join-Path $ffmpegRoot 'windows/ffmpeg.exe'
+          if (-not (Test-Path -LiteralPath $targetFfmpeg)) {
+            throw "Expected bundled windows ffmpeg not found: $targetFfmpeg"
+          }
+
+          $removeDirs = @('macos', 'linux')
+          foreach ($name in $removeDirs) {
+            $dir = Join-Path $ffmpegRoot $name
+            if (Test-Path -LiteralPath $dir) {
+              Remove-Item -LiteralPath $dir -Recurse -Force
+            }
+            New-Item -ItemType Directory -Path $dir -Force | Out-Null
+            New-Item -ItemType File -Path (Join-Path $dir '.gitkeep') -Force | Out-Null
+            Write-Host "Pruned non-target ffmpeg directory: $dir"
+          }
       - name: Ensure Ninja is available
         shell: pwsh
         run: |
@@ -428,6 +447,14 @@ jobs:
       - name: Prepare bundled FFmpeg
         shell: bash
         run: dart run tools/prepare_bundled_ffmpeg.dart --platform=macos
+      - name: Prune non-target FFmpeg assets (macos)
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f assets/bin/ffmpeg/macos/ffmpeg
+          rm -rf assets/bin/ffmpeg/windows assets/bin/ffmpeg/linux
+          mkdir -p assets/bin/ffmpeg/windows assets/bin/ffmpeg/linux
+          touch assets/bin/ffmpeg/windows/.gitkeep assets/bin/ffmpeg/linux/.gitkeep
       - name: Build (prod)
         shell: bash
         run: |
@@ -588,6 +615,14 @@ jobs:
       - name: Prepare bundled FFmpeg
         shell: bash
         run: dart run tools/prepare_bundled_ffmpeg.dart --platform=linux
+      - name: Prune non-target FFmpeg assets (linux)
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f assets/bin/ffmpeg/linux/ffmpeg
+          rm -rf assets/bin/ffmpeg/windows assets/bin/ffmpeg/macos
+          mkdir -p assets/bin/ffmpeg/windows assets/bin/ffmpeg/macos
+          touch assets/bin/ffmpeg/windows/.gitkeep assets/bin/ffmpeg/macos/.gitkeep
       - name: Build (prod)
         shell: bash
         run: |
