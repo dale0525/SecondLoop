@@ -139,6 +139,50 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
     });
   }
 
+  Future<void> _tryHydrateManagedVaultRecoveryEnvelope({
+    required SyncBackendType backendType,
+  }) async {
+    if (backendType != SyncBackendType.managedVault) return;
+
+    final cloudAuth = CloudAuthScope.maybeOf(context)?.controller;
+    if (cloudAuth == null) return;
+
+    final existing = await _store.readRecoveryEnvelopeJson();
+    if (existing != null && existing.trim().isNotEmpty) return;
+
+    String? idToken;
+    try {
+      idToken = await cloudAuth.getIdToken();
+    } catch (_) {
+      idToken = null;
+    }
+    final vaultId = cloudAuth.uid?.trim();
+    final baseUrl = (await _store.resolveManagedVaultBaseUrl())?.trim();
+    if (idToken == null ||
+        idToken.trim().isEmpty ||
+        vaultId == null ||
+        vaultId.isEmpty ||
+        baseUrl == null ||
+        baseUrl.isEmpty) {
+      return;
+    }
+
+    try {
+      final fetchedEnvelopeJson =
+          await _vaultRecoveryEnvelopeClient.fetchRecoveryEnvelope(
+        managedVaultBaseUrl: baseUrl,
+        vaultId: vaultId,
+        idToken: idToken.trim(),
+      );
+      if (fetchedEnvelopeJson != null &&
+          fetchedEnvelopeJson.trim().isNotEmpty) {
+        await _store.writeRecoveryEnvelopeJson(fetchedEnvelopeJson);
+      }
+    } catch (_) {
+      // Best-effort prefetch.
+    }
+  }
+
   Future<void> _load() async {
     final all = await _store.readAll();
     final backendType = switch (all[SyncConfigStore.kBackendType]) {
@@ -155,6 +199,7 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
     final password = await _store.readWebdavPassword();
     final remoteRoot = all[SyncConfigStore.kRemoteRoot];
     final localDir = all[SyncConfigStore.kLocalDir];
+    await _tryHydrateManagedVaultRecoveryEnvelope(backendType: backendType);
     final hasSyncKey = (await _store.readSyncKey()) != null;
     final mediaDownloadsWifiOnly =
         (all[SyncConfigStore.kMediaDownloadsWifiOnly] ?? '1') == '1';

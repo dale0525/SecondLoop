@@ -533,6 +533,48 @@ void main() {
     expect(recoveryClient.lastPutVaultId, 'uid_1');
   });
 
+  testWidgets('Managed Vault page load auto-fetches recovery envelope',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final store = SyncConfigStore(
+      managedVaultDefaultBaseUrl: 'https://vault.default.example',
+    );
+    await store.writeBackendType(SyncBackendType.managedVault);
+
+    final backend = _SyncSettingsBackend();
+    final cloudAuth = _FakeCloudAuthController();
+    final recoveryClient = _FakeVaultRecoveryEnvelopeClient(
+      fetchedEnvelopeJson:
+          '{"version":1,"wrapped_sync_key_b64":"auto","kdf":{"version":1}}',
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: backend,
+            child: CloudAuthScope(
+              controller: cloudAuth,
+              child: Scaffold(
+                body: SyncSettingsPage(
+                  configStore: store,
+                  vaultRecoveryEnvelopeClient: recoveryClient,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(recoveryClient.fetchCalls, 1);
+    expect(
+      await store.readRecoveryEnvelopeJson(),
+      '{"version":1,"wrapped_sync_key_b64":"auto","kdf":{"version":1}}',
+    );
+  });
+
   testWidgets(
       'Managed Vault save fetches remote recovery envelope before recovering key',
       (tester) async {
