@@ -12,7 +12,7 @@ void main() {
   test('migrates sensitive fields out of public config blob', () async {
     final syncKey = Uint8List.fromList(List<int>.generate(32, (i) => i + 1));
     SharedPreferences.setMockInitialValues({
-      SyncConfigStore.prefsBlobKeyForTest: jsonEncode({
+      SyncConfigStore.legacyPrefsBlobKeyForTest: jsonEncode({
         SyncConfigStore.kBackendType: 'webdav',
         SyncConfigStore.kAutoEnabled: '1',
         SyncConfigStore.kRemoteRoot: 'SecondLoop',
@@ -44,6 +44,11 @@ void main() {
     final prefs = await SharedPreferences.getInstance();
     final migratedRaw = prefs.getString(SyncConfigStore.prefsBlobKeyForTest);
     expect(migratedRaw, isNotNull);
+    expect(prefs.getString(SyncConfigStore.legacyPrefsBlobKeyForTest), isNull);
+    expect(
+      prefs.getInt(SyncConfigStore.syncSecretStoreVersionPrefsKeyForTest),
+      1,
+    );
     expect(migratedRaw, isNot(contains('plain-password')));
 
     final migratedMap = jsonDecode(migratedRaw!) as Map<String, dynamic>;
@@ -82,6 +87,7 @@ void main() {
         prefs.getString(SyncConfigStore.prefsBlobKeyForTest) ?? '';
     expect(publicRaw, isNot(contains('p1')));
     expect(publicRaw, isNot(contains(base64Encode(List<int>.filled(32, 7)))));
+    expect(prefs.getString(SyncConfigStore.legacyPrefsBlobKeyForTest), isNull);
 
     final configured = await store.loadConfiguredSync();
     expect(configured, isNotNull);

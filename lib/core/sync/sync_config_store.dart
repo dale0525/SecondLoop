@@ -6,6 +6,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../storage/secure_blob_store.dart';
+import 'sync_config_migrator.dart';
 import 'sync_engine.dart';
 import 'sync_key_manager.dart';
 import 'sync_secret_store.dart';
@@ -25,9 +26,15 @@ final class SyncConfigStore {
   final FlutterSecureStorage? _unusedLegacySecureStorage;
   final SyncSecretStore _secretStore;
   final String _managedVaultDefaultBaseUrl;
+  late final SyncConfigMigrator _migrator =
+      SyncConfigMigrator(secretStore: _secretStore);
 
-  static const _kPrefsBlobKey = 'sync_config_plain_json_v1';
+  static const _kPrefsBlobKey = SyncConfigMigrator.publicPrefsBlobKey;
+  static const _kLegacyPrefsBlobKey = SyncConfigMigrator.legacyPrefsBlobKey;
   static const prefsBlobKeyForTest = _kPrefsBlobKey;
+  static const legacyPrefsBlobKeyForTest = _kLegacyPrefsBlobKey;
+  static const syncSecretStoreVersionPrefsKeyForTest =
+      SyncConfigMigrator.secretStoreVersionPrefsKey;
 
   Future<void> _tail = Future<void>.value();
   Future<SharedPreferences>? _prefsFuture;
@@ -46,9 +53,9 @@ final class SyncConfigStore {
 
   static const kWebdavBaseUrl = 'sync_webdav_base_url';
   static const kWebdavUsername = 'sync_webdav_username';
-  static const kWebdavPassword = 'sync_webdav_password';
+  static const kWebdavPassword = SyncConfigMigrator.webdavPasswordKey;
   static const kRemoteRoot = 'sync_webdav_remote_root';
-  static const kSyncKeyB64 = 'sync_webdav_sync_key_b64';
+  static const kSyncKeyB64 = SyncConfigMigrator.syncKeyB64Key;
   static const kManagedVaultBaseUrl = 'sync_managed_vault_base_url';
 
   static const kCloudMediaBackupEnabled = 'cloud_media_backup_enabled'; // 1|0
@@ -397,6 +404,8 @@ final class SyncConfigStore {
     await _serial(() async {
       final prefs = await _prefs();
       await prefs.remove(_kPrefsBlobKey);
+      await prefs.remove(_kLegacyPrefsBlobKey);
+      await prefs.remove(SyncConfigMigrator.secretStoreVersionPrefsKey);
       await _secretStore.clearAll();
       SyncKeyManager.clearSyncKeyCache();
       _lastRaw = null;
@@ -405,11 +414,19 @@ final class SyncConfigStore {
     });
   }
 
+  String? _readRawConfigBlob(SharedPreferences prefs) {
+    final raw = prefs.getString(_kPrefsBlobKey);
+    if (raw != null && raw.trim().isNotEmpty) return raw;
+    final legacyRaw = prefs.getString(_kLegacyPrefsBlobKey);
+    if (legacyRaw != null && legacyRaw.trim().isNotEmpty) return legacyRaw;
+    return null;
+  }
+
   Future<void> _reloadIfChanged() async {
     if (!_loaded) return;
 
     final prefs = await _prefs();
-    final raw = prefs.getString(_kPrefsBlobKey);
+    final raw = _readRawConfigBlob(prefs);
     if (raw == _lastRaw) return;
 
     if (raw == null || raw.trim().isEmpty) {
@@ -419,29 +436,14 @@ final class SyncConfigStore {
     }
 
     _lastRaw = raw;
-    _cache = _decodeRawConfigMap(raw);
+    _cache = _migrator.decodeRawConfigMap(raw);
     await _migrateSensitiveFieldsFromPublicCacheIfNeeded();
-  }
-
-  Map<String, String> _decodeRawConfigMap(String raw) {
-    try {
-      final decoded = jsonDecode(raw);
-      if (decoded is! Map<String, dynamic>) return <String, String>{};
-
-      final result = <String, String>{};
-      for (final entry in decoded.entries) {
-        final key = entry.key;
-        final value = entry.value;
-        if (value is String) {
-          result[key] = value;
-          continue;
-        }
-        if (value == null) continue;
-        result[key] = value.toString();
-      }
-      return result;
-    } catch (_) {
-      return <String, String>{};
+    final hasPublicBlob =
+        prefs.getString(_kPrefsBlobKey)?.trim().isNotEmpty == true;
+    final hasLegacyBlob =
+        prefs.getString(_kLegacyPrefsBlobKey)?.trim().isNotEmpty == true;
+    if (!hasPublicBlob && hasLegacyBlob) {
+      await _persistCache();
     }
   }
 
@@ -449,7 +451,7 @@ final class SyncConfigStore {
     if (_loaded) return;
 
     final prefs = await _prefs();
-    final raw = prefs.getString(_kPrefsBlobKey);
+    final raw = _readRawConfigBlob(prefs);
     if (raw == null || raw.trim().isEmpty) {
       final migrated = await _tryMigrateFromSecureStore();
       if (migrated.isNotEmpty) {
@@ -466,10 +468,17 @@ final class SyncConfigStore {
     }
 
     _lastRaw = raw;
-    _cache = _decodeRawConfigMap(raw);
+    _cache = _migrator.decodeRawConfigMap(raw);
 
     _loaded = true;
     await _migrateSensitiveFieldsFromPublicCacheIfNeeded();
+    final hasPublicBlob =
+        prefs.getString(_kPrefsBlobKey)?.trim().isNotEmpty == true;
+    final hasLegacyBlob =
+        prefs.getString(_kLegacyPrefsBlobKey)?.trim().isNotEmpty == true;
+    if (!hasPublicBlob && hasLegacyBlob) {
+      await _persistCache();
+    }
   }
 
   Future<Map<String, String>> _tryMigrateFromSecureStore() async {
@@ -511,8 +520,10 @@ final class SyncConfigStore {
     }
 
     final legacyPassword = legacy[kWebdavPassword];
+    var migratedSecret = false;
     if (legacyPassword != null && legacyPassword.isNotEmpty) {
       await _secretStore.writeWebdavPassword(legacyPassword);
+      migratedSecret = true;
     }
 
     final legacySyncKeyB64 = legacy[kSyncKeyB64];
@@ -523,52 +534,51 @@ final class SyncConfigStore {
           final key = Uint8List.fromList(decoded);
           await _secretStore.writeSyncKey(key);
           SyncKeyManager.cacheSyncKey(key);
+          migratedSecret = true;
         }
       } catch (_) {
         // Ignore malformed legacy sync key.
       }
+    }
+    if (migratedSecret) {
+      await _markSecretStoreVersion();
     }
     return migrated;
   }
 
   Future<void> _migrateSensitiveFieldsFromPublicCacheIfNeeded() async {
-    final legacyPassword = _cache[kWebdavPassword];
-    final legacySyncKeyB64 = _cache[kSyncKeyB64];
-    if ((legacyPassword == null || legacyPassword.isEmpty) &&
-        (legacySyncKeyB64 == null || legacySyncKeyB64.isEmpty)) {
+    final migrationResult =
+        await _migrator.migrateSensitiveFieldsFromPublicConfig(_cache);
+    if (!migrationResult.movedSensitiveFields) {
       return;
     }
 
-    if (legacyPassword != null && legacyPassword.isNotEmpty) {
-      await _secretStore.writeWebdavPassword(legacyPassword);
-    }
-    if (legacySyncKeyB64 != null && legacySyncKeyB64.isNotEmpty) {
-      try {
-        final decoded = base64Decode(legacySyncKeyB64);
-        if (decoded.length == 32) {
-          final key = Uint8List.fromList(decoded);
-          await _secretStore.writeSyncKey(key);
-          SyncKeyManager.cacheSyncKey(key);
-        }
-      } catch (_) {
-        // Ignore malformed legacy sync key.
-      }
-    }
-
-    _cache.remove(kWebdavPassword);
-    _cache.remove(kSyncKeyB64);
+    _cache = migrationResult.publicConfig;
+    await _markSecretStoreVersion();
     await _persistCache();
+  }
+
+  Future<void> _markSecretStoreVersion() async {
+    final prefs = await _prefs();
+    final current = prefs.getInt(SyncConfigMigrator.secretStoreVersionPrefsKey);
+    if (current == SyncConfigMigrator.secretStoreVersion) return;
+    await prefs.setInt(
+      SyncConfigMigrator.secretStoreVersionPrefsKey,
+      SyncConfigMigrator.secretStoreVersion,
+    );
   }
 
   Future<void> _persistCache() async {
     final prefs = await _prefs();
     if (_cache.isEmpty) {
       await prefs.remove(_kPrefsBlobKey);
+      await prefs.remove(_kLegacyPrefsBlobKey);
       _lastRaw = null;
       return;
     }
     final raw = jsonEncode(_cache);
     await prefs.setString(_kPrefsBlobKey, raw);
+    await prefs.remove(_kLegacyPrefsBlobKey);
     _lastRaw = raw;
   }
 }
