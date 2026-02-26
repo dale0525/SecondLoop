@@ -1804,6 +1804,28 @@ class NativeAppBackend
   }
 
   @override
+  Future<String> createSyncRecoveryEnvelope(
+    Uint8List syncKey,
+    String passphrase,
+  ) async {
+    return rust_core.syncCreateRecoveryEnvelope(
+      syncKey: syncKey,
+      passphrase: passphrase,
+    );
+  }
+
+  @override
+  Future<Uint8List> recoverSyncKeyFromEnvelope(
+    String envelopeJson,
+    String passphrase,
+  ) async {
+    return rust_core.syncRecoverSyncKeyFromEnvelope(
+      envelopeJson: envelopeJson,
+      passphrase: passphrase,
+    );
+  }
+
+  @override
   Future<void> syncWebdavTestConnection({
     required String baseUrl,
     String? username,

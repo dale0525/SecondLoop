@@ -655,6 +655,20 @@ abstract class AppBackend {
 
   Future<Uint8List> deriveSyncKey(String passphrase);
 
+  Future<String> createSyncRecoveryEnvelope(
+    Uint8List syncKey,
+    String passphrase,
+  ) {
+    throw UnimplementedError('createSyncRecoveryEnvelope');
+  }
+
+  Future<Uint8List> recoverSyncKeyFromEnvelope(
+    String envelopeJson,
+    String passphrase,
+  ) {
+    throw UnimplementedError('recoverSyncKeyFromEnvelope');
+  }
+
   Future<void> syncWebdavTestConnection({
     required String baseUrl,
     String? username,

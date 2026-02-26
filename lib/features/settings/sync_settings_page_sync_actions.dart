@@ -284,7 +284,15 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
           return;
         }
         final derived = await backend.deriveSyncKey(passphrase);
-        await _store.writeSyncKey(derived);
+        await SyncKeyManager.save(write: _store.writeSyncKey, key: derived);
+        try {
+          final envelopeJson =
+              await backend.createSyncRecoveryEnvelope(derived, passphrase);
+          await _store.writeRecoveryEnvelopeJson(envelopeJson);
+        } catch (_) {
+          // Best-effort: keep legacy deterministic flow working even if
+          // recovery envelope generation is unavailable on current backend.
+        }
         syncKey = derived;
         _syncPassphraseController.text =
             _SyncSettingsPageState._kPassphrasePlaceholder;

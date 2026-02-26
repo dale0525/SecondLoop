@@ -11,10 +11,10 @@ import '../cloud/cloud_auth_scope.dart';
 import '../cloud/firebase_identity_toolkit.dart';
 import '../../features/media_enrichment/media_enrichment_runner.dart';
 import '../../features/media_backup/cloud_media_backup_runner.dart';
-import 'sync_secret_store.dart';
 import 'background_sync_orchestrator.dart';
 import 'sync_config_store.dart';
 import 'sync_engine.dart';
+import 'sync_key_manager.dart';
 
 const _kAppId = String.fromEnvironment(
   'SECONDLOOP_APP_ID',
@@ -111,7 +111,7 @@ final class BackgroundSync {
       await rescheduleIfNeeded();
       return true;
     }
-    SyncSecretStore.setProcessSessionKey(sessionKey);
+    SyncKeyManager.setSessionKey(sessionKey);
 
     final wifiOnly = await store.readAutoWifiOnly();
     if (wifiOnly) {
@@ -257,7 +257,7 @@ final class BackgroundSync {
       await rescheduleIfNeeded();
       return false;
     } finally {
-      SyncSecretStore.setProcessSessionKey(null);
+      SyncKeyManager.setSessionKey(null);
       cloudAuth?.dispose();
     }
   }

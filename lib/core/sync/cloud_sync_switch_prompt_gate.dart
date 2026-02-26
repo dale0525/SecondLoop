@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -22,6 +21,7 @@ import 'sync_config_store.dart';
 import 'sync_engine.dart';
 import 'sync_engine_gate.dart';
 import 'background_sync.dart';
+import 'sync_key_manager.dart';
 
 final class CloudSyncSwitchPromptGate extends StatefulWidget {
   const CloudSyncSwitchPromptGate({
@@ -628,16 +628,11 @@ final class _CloudSyncSwitchPromptGateState
     if (backendScope == null) return;
     final backend = backendScope.backend;
 
-    final existing = await _store.readSyncKey();
+    await SyncKeyManager.loadOrCreate(
+      read: _store.readSyncKey,
+      write: _store.writeSyncKey,
+    );
     if (!mounted) return;
-
-    if (existing == null || existing.length != 32) {
-      final random = Random.secure();
-      final generated = Uint8List.fromList(
-        List<int>.generate(32, (_) => random.nextInt(256)),
-      );
-      await _store.writeSyncKey(generated);
-    }
 
     await _store.writeBackendType(SyncBackendType.managedVault);
     await _store.writeRemoteRoot(uid);
@@ -650,7 +645,7 @@ final class _CloudSyncSwitchPromptGateState
 
     final sessionKey =
         context.getInheritedWidgetOfExactType<SessionScope>()?.sessionKey;
-    final syncKey = await _store.readSyncKey();
+    final syncKey = await SyncKeyManager.load(read: _store.readSyncKey);
     final baseUrl = await _store.resolveManagedVaultBaseUrl();
     String? idToken;
     try {

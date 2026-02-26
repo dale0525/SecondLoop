@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../storage/secure_blob_store.dart';
 import 'sync_engine.dart';
+import 'sync_key_manager.dart';
 import 'sync_secret_store.dart';
 
 final class SyncConfigStore {
@@ -127,8 +128,14 @@ final class SyncConfigStore {
   }
 
   Future<Uint8List?> readSyncKey() async {
+    final cached = SyncKeyManager.readCachedSyncKey();
+    if (cached != null && cached.length == 32) return cached;
+
     final secret = await _secretStore.readSyncKey();
-    if (secret != null && secret.length == 32) return secret;
+    if (secret != null && secret.length == 32) {
+      SyncKeyManager.cacheSyncKey(secret);
+      return secret;
+    }
 
     final b64 = (await _loadConfigMap())[kSyncKeyB64];
     if (b64 == null || b64.isEmpty) return null;
@@ -144,6 +151,9 @@ final class SyncConfigStore {
 
     if (legacy != null) {
       await _secretStore.writeSyncKey(legacy);
+      SyncKeyManager.cacheSyncKey(legacy);
+    } else {
+      SyncKeyManager.clearSyncKeyCache();
     }
     await _writeConfigUpdates({kSyncKeyB64: null});
     return legacy;
@@ -151,6 +161,7 @@ final class SyncConfigStore {
 
   Future<void> writeSyncKey(Uint8List key) async {
     await _secretStore.writeSyncKey(key);
+    SyncKeyManager.cacheSyncKey(key);
     await _writeConfigUpdates({kSyncKeyB64: null});
   }
 
@@ -178,6 +189,10 @@ final class SyncConfigStore {
     return legacy;
   }
 
+  Future<String?> readRecoveryEnvelopeJson() async {
+    return _secretStore.readRecoveryEnvelopeJson();
+  }
+
   Future<String?> readRemoteRoot() async =>
       (await _loadConfigMap())[kRemoteRoot];
   Future<String?> readLocalDir() async => (await _loadConfigMap())[kLocalDir];
@@ -200,6 +215,10 @@ final class SyncConfigStore {
   Future<void> writeWebdavPassword(String? password) async {
     await _secretStore.writeWebdavPassword(password);
     await _writeConfigUpdates({kWebdavPassword: null});
+  }
+
+  Future<void> writeRecoveryEnvelopeJson(String? envelopeJson) async {
+    await _secretStore.writeRecoveryEnvelopeJson(envelopeJson);
   }
 
   Future<void> writeLocalDir(String? localDir) async {
@@ -379,6 +398,7 @@ final class SyncConfigStore {
       final prefs = await _prefs();
       await prefs.remove(_kPrefsBlobKey);
       await _secretStore.clearAll();
+      SyncKeyManager.clearSyncKeyCache();
       _lastRaw = null;
       _cache = <String, String>{};
       _loaded = true;
@@ -500,7 +520,9 @@ final class SyncConfigStore {
       try {
         final decoded = base64Decode(legacySyncKeyB64);
         if (decoded.length == 32) {
-          await _secretStore.writeSyncKey(Uint8List.fromList(decoded));
+          final key = Uint8List.fromList(decoded);
+          await _secretStore.writeSyncKey(key);
+          SyncKeyManager.cacheSyncKey(key);
         }
       } catch (_) {
         // Ignore malformed legacy sync key.
@@ -524,7 +546,9 @@ final class SyncConfigStore {
       try {
         final decoded = base64Decode(legacySyncKeyB64);
         if (decoded.length == 32) {
-          await _secretStore.writeSyncKey(Uint8List.fromList(decoded));
+          final key = Uint8List.fromList(decoded);
+          await _secretStore.writeSyncKey(key);
+          SyncKeyManager.cacheSyncKey(key);
         }
       } catch (_) {
         // Ignore malformed legacy sync key.

@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:math';
 
 import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
@@ -15,6 +14,7 @@ import '../../core/sync/background_sync.dart';
 import '../../core/sync/sync_config_store.dart';
 import '../../core/sync/sync_engine.dart';
 import '../../core/sync/sync_engine_gate.dart';
+import '../../core/sync/sync_key_manager.dart';
 import '../../i18n/strings.g.dart';
 import '../../src/rust/db.dart';
 import '../../ui/sl_surface.dart';
@@ -179,23 +179,14 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
   }
 
   Future<Uint8List?> _loadSyncKey() async {
-    return _store.readSyncKey();
-  }
-
-  Uint8List _createSyncKey() {
-    final random = Random.secure();
-    return Uint8List.fromList(
-      List<int>.generate(32, (_) => random.nextInt(256)),
-    );
+    return SyncKeyManager.load(read: _store.readSyncKey);
   }
 
   Future<Uint8List> _loadOrCreateSyncKey() async {
-    final existing = await _loadSyncKey();
-    if (existing != null && existing.length == 32) return existing;
-
-    final generated = _createSyncKey();
-    await _store.writeSyncKey(generated);
-    return generated;
+    return SyncKeyManager.loadOrCreate(
+      read: _store.readSyncKey,
+      write: _store.writeSyncKey,
+    );
   }
 
   void _setState(VoidCallback fn) => setState(fn);

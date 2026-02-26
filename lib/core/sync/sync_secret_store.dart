@@ -13,6 +13,7 @@ final class SyncSecretStore {
   static const kPrefsBlobKeyForTest = _kPrefsBlobKey;
   static const kWebdavPasswordB64 = 'sync_webdav_password_b64';
   static const kSyncKeyB64 = 'sync_webdav_sync_key_b64';
+  static const kRecoveryEnvelopeJsonB64 = 'sync_recovery_envelope_json_b64';
   static const _kDeferredSessionKeyB64PrefsKey = 'deferred_session_key_b64_v1';
   static const _kEncryptedPrefix = 'enc1:';
   static const _kPlainPrefix = 'plain1:';
@@ -58,11 +59,19 @@ final class SyncSecretStore {
     return _serial(() async {
       await _ensureLoaded();
       await _reloadIfChanged();
-      final bytes = await _decodeSecretBytes(_cache[kWebdavPasswordB64]);
+      final decoded = await _decodeSecret(_cache[kWebdavPasswordB64]);
+      final bytes = decoded?.bytes;
       if (bytes == null || bytes.isEmpty) return null;
       try {
-        final decoded = utf8.decode(bytes);
-        return decoded.isEmpty ? null : decoded;
+        final password = utf8.decode(bytes);
+        if (password.isEmpty) return null;
+        if (decoded != null) {
+          await _maybeRewrapSecretIfNeeded(
+            cacheKey: kWebdavPasswordB64,
+            decoded: decoded,
+          );
+        }
+        return password;
       } catch (_) {
         return null;
       }
@@ -94,8 +103,15 @@ final class SyncSecretStore {
     return _serial(() async {
       await _ensureLoaded();
       await _reloadIfChanged();
-      final bytes = await _decodeSecretBytes(_cache[kSyncKeyB64]);
+      final decoded = await _decodeSecret(_cache[kSyncKeyB64]);
+      final bytes = decoded?.bytes;
       if (bytes == null || bytes.length != 32) return null;
+      if (decoded != null) {
+        await _maybeRewrapSecretIfNeeded(
+          cacheKey: kSyncKeyB64,
+          decoded: decoded,
+        );
+      }
       return Uint8List.fromList(bytes);
     });
   }
@@ -116,7 +132,51 @@ final class SyncSecretStore {
     });
   }
 
-  Future<Uint8List?> _decodeSecretBytes(String? encoded) async {
+  Future<String?> readRecoveryEnvelopeJson() async {
+    return _serial(() async {
+      await _ensureLoaded();
+      await _reloadIfChanged();
+      final decoded = await _decodeSecret(_cache[kRecoveryEnvelopeJsonB64]);
+      final bytes = decoded?.bytes;
+      if (bytes == null || bytes.isEmpty) return null;
+      try {
+        final envelopeJson = utf8.decode(bytes);
+        if (envelopeJson.isEmpty) return null;
+        if (decoded != null) {
+          await _maybeRewrapSecretIfNeeded(
+            cacheKey: kRecoveryEnvelopeJsonB64,
+            decoded: decoded,
+          );
+        }
+        return envelopeJson;
+      } catch (_) {
+        return null;
+      }
+    });
+  }
+
+  Future<void> writeRecoveryEnvelopeJson(String? envelopeJson) async {
+    await _serial(() async {
+      await _ensureLoaded();
+      await _reloadIfChanged();
+
+      final value = envelopeJson?.trim();
+      if (value == null || value.isEmpty) {
+        if (_cache.remove(kRecoveryEnvelopeJsonB64) != null) {
+          await _persistCache();
+        }
+        return;
+      }
+
+      final encoded =
+          await _encodeSecretBytes(Uint8List.fromList(utf8.encode(value)));
+      if (_cache[kRecoveryEnvelopeJsonB64] == encoded) return;
+      _cache[kRecoveryEnvelopeJsonB64] = encoded;
+      await _persistCache();
+    });
+  }
+
+  Future<_DecodedSecret?> _decodeSecret(String? encoded) async {
     if (encoded == null || encoded.isEmpty) return null;
 
     if (encoded.startsWith(_kEncryptedPrefix)) {
@@ -146,7 +206,10 @@ final class SyncSecretStore {
           secretKey: SecretKey(key),
           aad: utf8.encode(_kAad),
         );
-        return Uint8List.fromList(clear);
+        return _DecodedSecret(
+          bytes: Uint8List.fromList(clear),
+          format: _SecretFormat.encrypted,
+        );
       } catch (_) {
         return null;
       }
@@ -155,11 +218,21 @@ final class SyncSecretStore {
     if (encoded.startsWith(_kPlainPrefix)) {
       final payloadB64 = encoded.substring(_kPlainPrefix.length);
       final bytes = _decodeBase64(payloadB64);
-      return bytes == null ? null : Uint8List.fromList(bytes);
+      return bytes == null
+          ? null
+          : _DecodedSecret(
+              bytes: Uint8List.fromList(bytes),
+              format: _SecretFormat.plainPrefixed,
+            );
     }
 
     final legacy = _decodeBase64(encoded);
-    return legacy == null ? null : Uint8List.fromList(legacy);
+    return legacy == null
+        ? null
+        : _DecodedSecret(
+            bytes: Uint8List.fromList(legacy),
+            format: _SecretFormat.legacyBase64,
+          );
   }
 
   Future<String> _encodeSecretBytes(Uint8List bytes) async {
@@ -167,7 +240,10 @@ final class SyncSecretStore {
     if (key == null || key.length != 32) {
       return '$_kPlainPrefix${base64Encode(bytes)}';
     }
+    return _encryptSecretBytes(bytes, key);
+  }
 
+  Future<String> _encryptSecretBytes(Uint8List bytes, Uint8List key) async {
     final nonce = _randomBytes(_kNonceLength);
     final box = await _cipher.encrypt(
       bytes,
@@ -181,6 +257,20 @@ final class SyncSecretStore {
       ...box.mac.bytes,
     ]);
     return '$_kEncryptedPrefix${base64Encode(payload)}';
+  }
+
+  Future<void> _maybeRewrapSecretIfNeeded({
+    required String cacheKey,
+    required _DecodedSecret decoded,
+  }) async {
+    if (decoded.format == _SecretFormat.encrypted) return;
+    final key = await _resolveSessionKey();
+    if (key == null || key.length != 32) return;
+
+    final rewrapped = await _encryptSecretBytes(decoded.bytes, key);
+    if (_cache[cacheKey] == rewrapped) return;
+    _cache[cacheKey] = rewrapped;
+    await _persistCache();
   }
 
   Future<Uint8List?> _resolveSessionKey() async {
@@ -290,4 +380,20 @@ final class SyncSecretStore {
     await prefs.setString(_kPrefsBlobKey, raw);
     _lastRaw = raw;
   }
+}
+
+enum _SecretFormat {
+  encrypted,
+  plainPrefixed,
+  legacyBase64,
+}
+
+final class _DecodedSecret {
+  const _DecodedSecret({
+    required this.bytes,
+    required this.format,
+  });
+
+  final Uint8List bytes;
+  final _SecretFormat format;
 }
