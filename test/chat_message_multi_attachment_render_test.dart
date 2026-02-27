@@ -324,6 +324,10 @@ void main() {
         tester.getSize(cardSurface.first).width,
         lessThanOrEqualTo(230),
       );
+      expect(
+        tester.getSize(find.byKey(const ValueKey('message_bubble_m1'))).width,
+        lessThanOrEqualTo(300),
+      );
     } finally {
       debugDefaultTargetPlatformOverride = oldPlatform;
     }

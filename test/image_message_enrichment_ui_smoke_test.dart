@@ -91,6 +91,10 @@ void main() {
     final captionSize = tester.getSize(
         find.byKey(const ValueKey('chat_image_enrichment_caption_abc')));
     expect(captionSize.width, thumbSize.width);
+    expect(
+      tester.getSize(find.byKey(const ValueKey('message_bubble_m1'))).width,
+      lessThanOrEqualTo(260),
+    );
   });
 }
 
