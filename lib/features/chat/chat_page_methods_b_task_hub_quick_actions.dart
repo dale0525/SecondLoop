@@ -3,12 +3,21 @@ part of 'chat_page.dart';
 extension _ChatPageStateMethodsBTaskHubQuickActions on _ChatPageState {
   String _taskHubActionLabel(TaskHubQuickAction action) => switch (action) {
         TaskHubQuickAction.today => context.t.actions.taskHub.actions.today,
+        TaskHubQuickAction.tonight => context.t.actions.taskHub.actions.tonight,
         TaskHubQuickAction.tomorrow =>
           context.t.actions.taskHub.actions.tomorrow,
+        TaskHubQuickAction.pauseTomorrow =>
+          context.t.actions.taskHub.actions.pauseTomorrow,
         TaskHubQuickAction.thisWeek =>
           context.t.actions.taskHub.actions.thisWeek,
         TaskHubQuickAction.later => context.t.actions.taskHub.actions.later,
+        TaskHubQuickAction.start => context.t.actions.taskHub.actions.start,
+        TaskHubQuickAction.moveToInbox =>
+          context.t.actions.taskHub.actions.moveToInbox,
         TaskHubQuickAction.done => context.t.actions.taskHub.actions.done,
+        TaskHubQuickAction.reopen => context.t.actions.taskHub.actions.reopen,
+        TaskHubQuickAction.redo => context.t.actions.taskHub.actions.redo,
+        TaskHubQuickAction.dismiss => context.t.common.actions.delete,
       };
 
   Future<void> _applyTaskHubQuickAction(

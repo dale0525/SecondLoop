@@ -4,9 +4,9 @@
 /// To regenerate, run: `dart run slang`
 ///
 /// Locales: 2
-/// Strings: 1774 (887 per locale)
+/// Strings: 1790 (895 per locale)
 ///
-/// Built on 2026-02-26 at 06:18 UTC
+/// Built on 2026-02-26 at 17:13 UTC
 
 // coverage:ignore-file
 // ignore_for_file: type=lint
@@ -2143,10 +2143,18 @@ class _StringsActionsTaskHubActionsEn {
 
   // Translations
   String get today => 'Today';
+  String get todayProcess => 'Handle today';
+  String get tonight => 'Tonight';
   String get tomorrow => 'Tomorrow';
+  String get pauseTomorrow => 'Pause to tomorrow';
   String get thisWeek => 'This week';
   String get later => 'Later';
+  String get start => 'Start';
+  String get moveToInbox => 'Move to inbox';
   String get done => 'Done';
+  String get reopen => 'Undo done';
+  String get redo => 'Do again';
+  String get more => 'More';
 }
 
 // Path: settings.actionsReview.morningTime
@@ -6899,13 +6907,29 @@ class _StringsActionsTaskHubActionsZhCn
   @override
   String get today => '今天';
   @override
+  String get todayProcess => '今天处理';
+  @override
+  String get tonight => '延后到今晚';
+  @override
   String get tomorrow => '明天';
+  @override
+  String get pauseTomorrow => '暂停到明天';
   @override
   String get thisWeek => '本周';
   @override
   String get later => '稍后';
   @override
+  String get start => '开始';
+  @override
+  String get moveToInbox => '移回收件箱';
+  @override
   String get done => '完成';
+  @override
+  String get reopen => '撤销完成';
+  @override
+  String get redo => '再做一次';
+  @override
+  String get more => '更多';
 }
 
 // Path: settings.actionsReview.morningTime
@@ -9785,14 +9809,30 @@ extension on Translations {
             '${action} "${title}"';
       case 'actions.taskHub.actions.today':
         return 'Today';
+      case 'actions.taskHub.actions.todayProcess':
+        return 'Handle today';
+      case 'actions.taskHub.actions.tonight':
+        return 'Tonight';
       case 'actions.taskHub.actions.tomorrow':
         return 'Tomorrow';
+      case 'actions.taskHub.actions.pauseTomorrow':
+        return 'Pause to tomorrow';
       case 'actions.taskHub.actions.thisWeek':
         return 'This week';
       case 'actions.taskHub.actions.later':
         return 'Later';
+      case 'actions.taskHub.actions.start':
+        return 'Start';
+      case 'actions.taskHub.actions.moveToInbox':
+        return 'Move to inbox';
       case 'actions.taskHub.actions.done':
         return 'Done';
+      case 'actions.taskHub.actions.reopen':
+        return 'Undo done';
+      case 'actions.taskHub.actions.redo':
+        return 'Do again';
+      case 'actions.taskHub.actions.more':
+        return 'More';
       case 'actions.calendar.title':
         return 'Add to calendar?';
       case 'actions.calendar.pickTime':
@@ -11605,14 +11645,30 @@ extension on _StringsZhCn {
             '${action}「${title}」';
       case 'actions.taskHub.actions.today':
         return '今天';
+      case 'actions.taskHub.actions.todayProcess':
+        return '今天处理';
+      case 'actions.taskHub.actions.tonight':
+        return '延后到今晚';
       case 'actions.taskHub.actions.tomorrow':
         return '明天';
+      case 'actions.taskHub.actions.pauseTomorrow':
+        return '暂停到明天';
       case 'actions.taskHub.actions.thisWeek':
         return '本周';
       case 'actions.taskHub.actions.later':
         return '稍后';
+      case 'actions.taskHub.actions.start':
+        return '开始';
+      case 'actions.taskHub.actions.moveToInbox':
+        return '移回收件箱';
       case 'actions.taskHub.actions.done':
         return '完成';
+      case 'actions.taskHub.actions.reopen':
+        return '撤销完成';
+      case 'actions.taskHub.actions.redo':
+        return '再做一次';
+      case 'actions.taskHub.actions.more':
+        return '更多';
       case 'actions.calendar.title':
         return '添加到日历？';
       case 'actions.calendar.pickTime':

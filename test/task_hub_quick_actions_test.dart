@@ -90,6 +90,70 @@ void main() {
     expect(ticket, isNotNull);
     expect(backend.current('t3').status, 'done');
   });
+
+  test('start action moves todo to in_progress', () async {
+    SharedPreferences.setMockInitialValues({});
+
+    final initial = todo(id: 't4', title: 'Task 4', updatedAtMs: 10);
+    final backend = _QuickActionBackend(initialTodos: [initial]);
+    final controller = TaskHubQuickActionsController(
+      backend: backend,
+      sessionKey: Uint8List(32),
+    );
+
+    final ticket = await controller.apply(initial, TaskHubQuickAction.start);
+    expect(ticket, isNotNull);
+    expect(backend.current('t4').status, 'in_progress');
+  });
+
+  test('reopen action reopens done todo', () async {
+    SharedPreferences.setMockInitialValues({});
+
+    final initial = todo(
+      id: 't5',
+      title: 'Task 5',
+      updatedAtMs: 10,
+      status: 'done',
+    );
+    final backend = _QuickActionBackend(initialTodos: [initial]);
+    final controller = TaskHubQuickActionsController(
+      backend: backend,
+      sessionKey: Uint8List(32),
+    );
+
+    final ticket = await controller.apply(initial, TaskHubQuickAction.reopen);
+    expect(ticket, isNotNull);
+    expect(backend.current('t5').status, 'open');
+  });
+
+  test('redo action creates a new open todo and can undo', () async {
+    SharedPreferences.setMockInitialValues({});
+
+    final initial = todo(
+      id: 't6',
+      title: 'Task 6',
+      updatedAtMs: 10,
+      status: 'done',
+    );
+    final backend = _QuickActionBackend(initialTodos: [initial]);
+    final controller = TaskHubQuickActionsController(
+      backend: backend,
+      sessionKey: Uint8List(32),
+    );
+
+    final beforeCount = backend.all().length;
+    final ticket = await controller.apply(initial, TaskHubQuickAction.redo);
+    expect(ticket, isNotNull);
+    final afterCreate = backend.all();
+    expect(afterCreate.length, beforeCount + 1);
+    final created = afterCreate.firstWhere((todo) => todo.id != initial.id);
+    expect(created.status, 'open');
+    expect(created.dueAtMs, isNotNull);
+
+    await controller.undo(ticket!);
+    final restored = backend.current(created.id);
+    expect(restored.status, 'dismissed');
+  });
 }
 
 final class _QuickActionBackend extends AppBackend {
@@ -101,6 +165,7 @@ final class _QuickActionBackend extends AppBackend {
   final Map<String, Todo> _todosById;
 
   Todo current(String id) => _todosById[id]!;
+  List<Todo> all() => _todosById.values.toList(growable: false);
 
   @override
   Future<Todo> upsertTodo(

@@ -183,6 +183,75 @@ void main() {
     expect(calls.length, 1);
     expect(calls.first.$1, 'u1');
     expect(calls.first.$2, TaskHubQuickAction.today);
+
+    await tester.tap(find.byKey(const ValueKey('task_hub_quick_u1_more')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Later'));
+    await tester.pumpAndSettle();
+
+    expect(calls.length, 2);
+    expect(calls.last.$1, 'u1');
+    expect(calls.last.$2, TaskHubQuickAction.later);
+  });
+
+  testWidgets('expanded merged unscheduled section keeps review done action',
+      (tester) async {
+    final now = DateTime(2026, 2, 24, 12);
+    final summary = TaskHubSummary.fromTodos(
+      <Todo>[
+        todo(
+          id: 'review',
+          title: 'Needs review',
+          updatedAtMs: 1,
+          reviewStage: 0,
+          nextReviewAtMs: now
+              .subtract(const Duration(hours: 1))
+              .toUtc()
+              .millisecondsSinceEpoch,
+        ),
+        todo(
+          id: 'unscheduled',
+          title: 'Backlog',
+          updatedAtMs: 2,
+        ),
+      ],
+      nowLocal: now,
+    );
+
+    final calls = <(String todoId, TaskHubQuickAction action)>[];
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: Scaffold(
+            body: TaskHubBanner(
+              summary: summary,
+              onQuickAction: (todo, action) async {
+                calls.add((todo.id, action));
+              },
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.byKey(const ValueKey('task_hub_banner')));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('task_hub_banner_section_unscheduled_review')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('task_hub_banner_section_unscheduled_plain')),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.byKey(const ValueKey('task_hub_quick_review_done')));
+    await tester.pumpAndSettle();
+
+    expect(calls.length, 1);
+    expect(calls.first.$1, 'review');
+    expect(calls.first.$2, TaskHubQuickAction.done);
   });
 
   testWidgets('expanded list keeps view-all visible on small screens',

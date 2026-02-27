@@ -93,9 +93,14 @@ void main() {
     expect(find.byKey(const ValueKey('task_hub_page')), findsOneWidget);
     expect(find.byKey(const ValueKey('task_hub_page_section_scheduled')),
         findsOneWidget);
-    expect(find.byKey(const ValueKey('task_hub_page_section_review')),
+    expect(
+        find.byKey(const ValueKey('task_hub_page_section_unscheduled_merged')),
         findsOneWidget);
-    expect(find.byKey(const ValueKey('task_hub_page_section_unscheduled')),
+    expect(
+        find.byKey(const ValueKey('task_hub_page_section_unscheduled_review')),
+        findsOneWidget);
+    expect(
+        find.byKey(const ValueKey('task_hub_page_section_unscheduled_plain')),
         findsOneWidget);
     expect(find.byKey(const ValueKey('task_hub_page_section_done')),
         findsOneWidget);
@@ -173,7 +178,7 @@ void main() {
     );
   });
 
-  testWidgets('task hub page quick action done updates backend',
+  testWidgets('task hub page quick action today updates backend',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
 
@@ -209,10 +214,54 @@ void main() {
     await tester.pumpAndSettle();
 
     await tester
-        .tap(find.byKey(const ValueKey('task_hub_page_quick_todo-1_done')));
+        .tap(find.byKey(const ValueKey('task_hub_page_quick_todo-1_today')));
     await tester.pumpAndSettle();
 
-    expect(backend.current('todo-1').status, 'done');
+    expect(backend.current('todo-1').status, 'open');
+    expect(backend.current('todo-1').dueAtMs, isNotNull);
+  });
+
+  testWidgets('task hub page done section exposes reopen quick action',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+
+    final backend = _TaskHubBackend(
+      todos: const <Todo>[
+        Todo(
+          id: 'done-1',
+          title: 'Finished task',
+          dueAtMs: null,
+          status: 'done',
+          sourceEntryId: null,
+          createdAtMs: 0,
+          updatedAtMs: 0,
+          reviewStage: null,
+          nextReviewAtMs: null,
+          lastReviewAtMs: null,
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        AppBackendScope(
+          backend: backend,
+          child: SessionScope(
+            sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+            lock: () {},
+            child: const MaterialApp(home: TaskHubPage()),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(
+      find.byKey(const ValueKey('task_hub_page_quick_done-1_reopen')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(backend.current('done-1').status, 'open');
   });
 
   testWidgets('task hub page task row opens todo detail page', (tester) async {
