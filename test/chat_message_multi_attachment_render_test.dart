@@ -11,6 +11,7 @@ import 'package:secondloop/core/backend/native_backend.dart';
 import 'package:secondloop/core/session/session_scope.dart';
 import 'package:secondloop/features/chat/chat_page.dart';
 import 'package:secondloop/src/rust/db.dart';
+import 'package:secondloop/ui/sl_surface.dart';
 
 import 'test_i18n.dart';
 
@@ -157,6 +158,172 @@ void main() {
         findsOneWidget,
       );
       expect(find.byType(InputChip), findsOneWidget);
+    } finally {
+      debugDefaultTargetPlatformOverride = oldPlatform;
+    }
+  });
+
+  testWidgets('Chat wraps 3+ non-image attachments instead of horizontal clip',
+      (tester) async {
+    final oldPlatform = debugDefaultTargetPlatformOverride;
+    debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+    try {
+      await tester.binding.setSurfaceSize(const Size(380, 860));
+      final backend = _Backend(
+        initialMessages: const <Message>[
+          Message(
+            id: 'm1',
+            conversationId: 'c1',
+            role: 'user',
+            content: 'files',
+            createdAtMs: 1,
+            isMemory: true,
+          ),
+        ],
+        initialAttachmentsByMessageId: {
+          'm1': const <Attachment>[
+            Attachment(
+              sha256: 'sha1',
+              mimeType: 'application/pdf',
+              path: 'attachments/sha1.bin',
+              byteLen: 10,
+              createdAtMs: 1,
+            ),
+            Attachment(
+              sha256: 'sha2',
+              mimeType: 'application/pdf',
+              path: 'attachments/sha2.bin',
+              byteLen: 10,
+              createdAtMs: 1,
+            ),
+            Attachment(
+              sha256: 'sha3',
+              mimeType: 'application/pdf',
+              path: 'attachments/sha3.bin',
+              byteLen: 10,
+              createdAtMs: 1,
+            ),
+          ],
+        },
+      );
+
+      await tester.pumpWidget(
+        wrapWithI18n(
+          MaterialApp(
+            home: AppBackendScope(
+              backend: backend,
+              child: SessionScope(
+                sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+                lock: () {},
+                child: const ChatPage(
+                  conversation: Conversation(
+                    id: 'c1',
+                    title: 'Loop',
+                    createdAtMs: 0,
+                    updatedAtMs: 0,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+      await _pumpUntil(
+        tester,
+        () => find
+            .byKey(const ValueKey('chat_message_attachments_m1'))
+            .evaluate()
+            .isNotEmpty,
+      );
+
+      final attachmentsContainer =
+          find.byKey(const ValueKey('chat_message_attachments_m1'));
+      expect(attachmentsContainer, findsOneWidget);
+      expect(
+        find.descendant(
+          of: attachmentsContainer,
+          matching: find.byType(SingleChildScrollView),
+        ),
+        findsNothing,
+      );
+    } finally {
+      await tester.binding.setSurfaceSize(null);
+      debugDefaultTargetPlatformOverride = oldPlatform;
+    }
+  });
+
+  testWidgets('Chat keeps single non-image attachment card compact',
+      (tester) async {
+    final oldPlatform = debugDefaultTargetPlatformOverride;
+    debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+    try {
+      final backend = _Backend(
+        initialMessages: const <Message>[
+          Message(
+            id: 'm1',
+            conversationId: 'c1',
+            role: 'user',
+            content: 'file',
+            createdAtMs: 1,
+            isMemory: true,
+          ),
+        ],
+        initialAttachmentsByMessageId: {
+          'm1': const <Attachment>[
+            Attachment(
+              sha256: 'sha1',
+              mimeType: 'application/pdf',
+              path: 'attachments/sha1.bin',
+              byteLen: 10,
+              createdAtMs: 1,
+            ),
+          ],
+        },
+      );
+
+      await tester.pumpWidget(
+        wrapWithI18n(
+          MaterialApp(
+            home: AppBackendScope(
+              backend: backend,
+              child: SessionScope(
+                sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+                lock: () {},
+                child: const ChatPage(
+                  conversation: Conversation(
+                    id: 'c1',
+                    title: 'Loop',
+                    createdAtMs: 0,
+                    updatedAtMs: 0,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+      await _pumpUntil(
+        tester,
+        () => find
+            .byKey(const ValueKey('chat_message_attachments_m1'))
+            .evaluate()
+            .isNotEmpty,
+      );
+
+      final attachmentsContainer =
+          find.byKey(const ValueKey('chat_message_attachments_m1'));
+      expect(attachmentsContainer, findsOneWidget);
+      final cardSurface = find.descendant(
+        of: attachmentsContainer,
+        matching: find.byType(SlSurface),
+      );
+      expect(cardSurface, findsOneWidget);
+      expect(
+        tester.getSize(cardSurface.first).width,
+        lessThanOrEqualTo(230),
+      );
     } finally {
       debugDefaultTargetPlatformOverride = oldPlatform;
     }

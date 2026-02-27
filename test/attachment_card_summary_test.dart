@@ -72,6 +72,24 @@ void main() {
     expect(subtitle, 'Canceled');
   });
 
+  test(
+      'attachment card fallback does not keep preparing after OCR completed with no text',
+      () {
+    final subtitle = resolveAttachmentCardFallbackSubtitle(
+      ocrRunning: false,
+      jobStatus: null,
+      preparingText: 'Preparing...',
+      ocrRunningText: 'OCR running...',
+      failedText: 'Failed',
+      canceledText: 'Canceled',
+      autoOcrStatus: 'ok',
+      hasAnnotationPayload: true,
+      completedText: 'Preview unavailable',
+    );
+
+    expect(subtitle, 'Preview unavailable');
+  });
+
   test('attachment card summary uses transcript excerpt when present', () {
     final summary = extractAttachmentCardSummaryFromPayload(
       const <String, Object?>{
