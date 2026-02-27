@@ -230,7 +230,7 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('task_hub_banner')));
     await tester.pumpAndSettle();
     await tester
-        .tap(find.byKey(const ValueKey('task_hub_quick_todo:snack_done')));
+        .tap(find.byKey(const ValueKey('task_hub_quick_todo:snack_today')));
     await tester.pump();
 
     expect(find.byType(SnackBar), findsOneWidget);
@@ -310,7 +310,7 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('task_hub_banner')));
     await tester.pumpAndSettle();
     await tester
-        .tap(find.byKey(const ValueKey('task_hub_quick_todo:snack_done')));
+        .tap(find.byKey(const ValueKey('task_hub_quick_todo:snack_today')));
     await tester.pump();
     expect(find.byType(SnackBar), findsOneWidget);
 

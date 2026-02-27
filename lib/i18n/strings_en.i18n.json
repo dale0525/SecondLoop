@@ -176,10 +176,18 @@
       "snackActionApplied": "$action \"$title\"",
       "actions": {
         "today": "Today",
+        "todayProcess": "Handle today",
+        "tonight": "Tonight",
         "tomorrow": "Tomorrow",
+        "pauseTomorrow": "Pause to tomorrow",
         "thisWeek": "This week",
         "later": "Later",
-        "done": "Done"
+        "start": "Start",
+        "moveToInbox": "Move to inbox",
+        "done": "Done",
+        "reopen": "Undo done",
+        "redo": "Do again",
+        "more": "More"
       }
     },
     "calendar": {

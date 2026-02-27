@@ -1,9 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../../i18n/strings.g.dart';
 import '../../../src/rust/db.dart';
 import '../../../ui/sl_surface.dart';
 import '../../../ui/sl_tokens.dart';
+import 'task_hub_quick_action_layout.dart';
 import 'task_hub_quick_actions.dart';
 import 'task_hub_summary.dart';
 
@@ -64,6 +67,21 @@ class _TaskHubBannerState extends State<TaskHubBanner> {
         : summary.unscheduledPreviewTodos.isNotEmpty
             ? summary.unscheduledPreviewTodos.first.title
             : null;
+    final nowUtcMs = DateTime.now().toUtc().millisecondsSinceEpoch;
+    final dueReviewPreview = summary.unscheduledPreviewTodos
+        .where(
+          (todo) =>
+              todo.reviewStage != null &&
+              todo.nextReviewAtMs != null &&
+              todo.nextReviewAtMs! <= nowUtcMs,
+        )
+        .toList(growable: false);
+    final unscheduledPreview = summary.unscheduledPreviewTodos
+        .where(
+          (todo) =>
+              !dueReviewPreview.any((candidate) => candidate.id == todo.id),
+        )
+        .toList(growable: false);
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
@@ -148,6 +166,7 @@ class _TaskHubBannerState extends State<TaskHubBanner> {
                           _TaskHubSection(
                             title: context.t.actions.taskHub.scheduledSection,
                             todos: summary.scheduledPreviewTodos,
+                            sectionKind: _TaskHubBannerSectionKind.scheduled,
                             onQuickAction: widget.onQuickAction,
                           ),
                         if (summary.scheduledPreviewTodos.isNotEmpty &&
@@ -158,9 +177,9 @@ class _TaskHubBannerState extends State<TaskHubBanner> {
                             color: tokens.borderSubtle.withOpacity(0.9),
                           ),
                         if (summary.unscheduledPreviewTodos.isNotEmpty)
-                          _TaskHubSection(
-                            title: context.t.actions.taskHub.reviewSection,
-                            todos: summary.unscheduledPreviewTodos,
+                          _TaskHubMergedUnscheduledSection(
+                            dueReviewTodos: dueReviewPreview,
+                            unscheduledTodos: unscheduledPreview,
                             onQuickAction: widget.onQuickAction,
                           ),
                       ],
@@ -204,20 +223,29 @@ class _TaskHubBannerState extends State<TaskHubBanner> {
   }
 }
 
+enum _TaskHubBannerSectionKind {
+  scheduled,
+  dueReview,
+  unscheduled,
+}
+
 class _TaskHubSection extends StatelessWidget {
   const _TaskHubSection({
     required this.title,
     required this.todos,
+    required this.sectionKind,
     required this.onQuickAction,
   });
 
   final String title;
   final List<Todo> todos;
+  final _TaskHubBannerSectionKind sectionKind;
   final Future<void> Function(Todo todo, TaskHubQuickAction action)?
       onQuickAction;
 
   @override
   Widget build(BuildContext context) {
+    if (todos.isEmpty) return const SizedBox.shrink();
     return Padding(
       padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
       child: Column(
@@ -226,7 +254,8 @@ class _TaskHubSection extends StatelessWidget {
           Text(
             title,
             style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                color: Theme.of(context).colorScheme.onSurfaceVariant),
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
           ),
           const SizedBox(height: 4),
           for (var i = 0; i < todos.length; i++)
@@ -234,6 +263,7 @@ class _TaskHubSection extends StatelessWidget {
               padding: EdgeInsets.only(top: i == 0 ? 6 : 8),
               child: _TaskHubTodoRow(
                 todo: todos[i],
+                sectionKind: sectionKind,
                 onQuickAction: onQuickAction,
               ),
             ),
@@ -243,10 +273,143 @@ class _TaskHubSection extends StatelessWidget {
   }
 }
 
+class _TaskHubMergedUnscheduledSection extends StatelessWidget {
+  const _TaskHubMergedUnscheduledSection({
+    required this.dueReviewTodos,
+    required this.unscheduledTodos,
+    required this.onQuickAction,
+  });
+
+  final List<Todo> dueReviewTodos;
+  final List<Todo> unscheduledTodos;
+  final Future<void> Function(Todo todo, TaskHubQuickAction action)?
+      onQuickAction;
+
+  @override
+  Widget build(BuildContext context) {
+    if (dueReviewTodos.isEmpty && unscheduledTodos.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    final tokens = SlTokens.of(context);
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            context.t.actions.taskHub.unscheduledSection,
+            style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                  color: colorScheme.onSurfaceVariant,
+                ),
+          ),
+          const SizedBox(height: 4),
+          if (dueReviewTodos.isNotEmpty) ...[
+            _TaskHubSubheader(
+              key: const ValueKey('task_hub_banner_section_unscheduled_review'),
+              title: context.t.actions.taskHub.reviewSection,
+              count: dueReviewTodos.length,
+            ),
+            for (var i = 0; i < dueReviewTodos.length; i++)
+              Padding(
+                padding: EdgeInsets.only(top: i == 0 ? 6 : 8),
+                child: _TaskHubTodoRow(
+                  todo: dueReviewTodos[i],
+                  sectionKind: _TaskHubBannerSectionKind.dueReview,
+                  onQuickAction: onQuickAction,
+                ),
+              ),
+          ],
+          if (dueReviewTodos.isNotEmpty && unscheduledTodos.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Divider(
+              height: 1,
+              thickness: 1,
+              color: tokens.borderSubtle.withOpacity(0.9),
+            ),
+            const SizedBox(height: 8),
+          ],
+          if (unscheduledTodos.isNotEmpty) ...[
+            _TaskHubSubheader(
+              key: const ValueKey('task_hub_banner_section_unscheduled_plain'),
+              title: context.t.actions.taskHub.unscheduledSection,
+              count: unscheduledTodos.length,
+            ),
+            for (var i = 0; i < unscheduledTodos.length; i++)
+              Padding(
+                padding: EdgeInsets.only(top: i == 0 ? 6 : 8),
+                child: _TaskHubTodoRow(
+                  todo: unscheduledTodos[i],
+                  sectionKind: _TaskHubBannerSectionKind.unscheduled,
+                  onQuickAction: onQuickAction,
+                ),
+              ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _TaskHubSubheader extends StatelessWidget {
+  const _TaskHubSubheader({
+    required this.title,
+    required this.count,
+    super.key,
+  });
+
+  final String title;
+  final int count;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = SlTokens.of(context);
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Row(
+      children: [
+        Text(
+          title,
+          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                color: colorScheme.onSurfaceVariant,
+                fontWeight: FontWeight.w700,
+              ),
+        ),
+        const SizedBox(width: 6),
+        DecoratedBox(
+          decoration: BoxDecoration(
+            color: tokens.surface2,
+            borderRadius: BorderRadius.circular(99),
+            border: Border.all(
+              color: tokens.borderSubtle.withOpacity(0.9),
+            ),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+            child: Text(
+              count.toString(),
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                    fontWeight: FontWeight.w700,
+                  ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 class _TaskHubTodoRow extends StatelessWidget {
-  const _TaskHubTodoRow({required this.todo, required this.onQuickAction});
+  const _TaskHubTodoRow({
+    required this.todo,
+    required this.sectionKind,
+    required this.onQuickAction,
+  });
 
   final Todo todo;
+  final _TaskHubBannerSectionKind sectionKind;
   final Future<void> Function(Todo todo, TaskHubQuickAction action)?
       onQuickAction;
 
@@ -263,6 +426,12 @@ class _TaskHubTodoRow extends StatelessWidget {
         : MaterialLocalizations.of(context).formatShortDate(dueAtLocal);
     final overdue = dueAtLocal != null && dueAtLocal.isBefore(DateTime.now());
     final dotColor = overdue ? colorScheme.error : colorScheme.primary;
+    final actionLayout = buildTaskHubQuickActionLayout(
+      context,
+      todo: todo,
+      sectionKind: _resolveQuickActionSectionKind(),
+      dueAtLocal: dueAtLocal,
+    );
 
     return DecoratedBox(
       decoration: BoxDecoration(
@@ -329,52 +498,42 @@ class _TaskHubTodoRow extends StatelessWidget {
               spacing: 4,
               runSpacing: 4,
               children: [
-                _QuickActionButton(
-                  key: ValueKey('task_hub_quick_${todo.id}_today'),
-                  icon: Icons.today_rounded,
-                  label: context.t.actions.taskHub.actions.today,
-                  onPressed: onQuickAction == null
-                      ? null
-                      : () => onQuickAction!(todo, TaskHubQuickAction.today),
-                ),
-                _QuickActionButton(
-                  key: ValueKey('task_hub_quick_${todo.id}_tomorrow'),
-                  icon: Icons.event_rounded,
-                  label: context.t.actions.taskHub.actions.tomorrow,
-                  onPressed: onQuickAction == null
-                      ? null
-                      : () => onQuickAction!(todo, TaskHubQuickAction.tomorrow),
-                ),
-                _QuickActionButton(
-                  key: ValueKey('task_hub_quick_${todo.id}_this_week'),
-                  icon: Icons.date_range_rounded,
-                  label: context.t.actions.taskHub.actions.thisWeek,
-                  onPressed: onQuickAction == null
-                      ? null
-                      : () => onQuickAction!(todo, TaskHubQuickAction.thisWeek),
-                ),
-                _QuickActionButton(
-                  key: ValueKey('task_hub_quick_${todo.id}_later'),
-                  icon: Icons.schedule_send_rounded,
-                  label: context.t.actions.taskHub.actions.later,
-                  onPressed: onQuickAction == null
-                      ? null
-                      : () => onQuickAction!(todo, TaskHubQuickAction.later),
-                ),
-                _QuickActionButton(
-                  key: ValueKey('task_hub_quick_${todo.id}_done'),
-                  icon: Icons.check_rounded,
-                  label: context.t.actions.taskHub.actions.done,
-                  onPressed: onQuickAction == null
-                      ? null
-                      : () => onQuickAction!(todo, TaskHubQuickAction.done),
-                ),
+                for (final action in actionLayout.$1)
+                  _QuickActionButton(
+                    key: ValueKey(
+                        'task_hub_quick_${todo.id}_${action.action.name}'),
+                    icon: action.icon,
+                    label: action.label,
+                    tone: action.tone,
+                    onPressed: onQuickAction == null
+                        ? null
+                        : () => onQuickAction!(todo, action.action),
+                  ),
+                if (actionLayout.$2.isNotEmpty)
+                  _QuickActionMenu(
+                    key: ValueKey('task_hub_quick_${todo.id}_more'),
+                    items: actionLayout.$2,
+                    onSelected: onQuickAction == null
+                        ? null
+                        : (action) => unawaited(onQuickAction!(todo, action)),
+                  ),
               ],
             ),
           ],
         ),
       ),
     );
+  }
+
+  TaskHubQuickActionSectionKind _resolveQuickActionSectionKind() {
+    return switch (sectionKind) {
+      _TaskHubBannerSectionKind.scheduled =>
+        TaskHubQuickActionSectionKind.scheduled,
+      _TaskHubBannerSectionKind.dueReview =>
+        TaskHubQuickActionSectionKind.dueReview,
+      _TaskHubBannerSectionKind.unscheduled =>
+        TaskHubQuickActionSectionKind.unscheduled,
+    };
   }
 }
 
@@ -383,12 +542,14 @@ class _QuickActionButton extends StatelessWidget {
     required this.label,
     required this.onPressed,
     required this.icon,
+    this.tone = TaskHubQuickActionTone.secondary,
     super.key,
   });
 
   final String label;
   final VoidCallback? onPressed;
   final IconData icon;
+  final TaskHubQuickActionTone tone;
 
   @override
   Widget build(BuildContext context) {
@@ -410,6 +571,15 @@ class _QuickActionButton extends StatelessWidget {
       ),
     );
 
+    if (tone == TaskHubQuickActionTone.primary) {
+      return FilledButton.icon(
+        onPressed: onPressed,
+        style: baseStyle,
+        icon: Icon(icon, size: 14),
+        label: Text(label),
+      );
+    }
+
     return OutlinedButton.icon(
       onPressed: onPressed,
       style: baseStyle.copyWith(
@@ -419,6 +589,52 @@ class _QuickActionButton extends StatelessWidget {
       ),
       icon: Icon(icon, size: 14),
       label: Text(label),
+    );
+  }
+}
+
+class _QuickActionMenu extends StatelessWidget {
+  const _QuickActionMenu({
+    required this.items,
+    required this.onSelected,
+    super.key,
+  });
+
+  final List<TaskHubQuickActionItem> items;
+  final ValueChanged<TaskHubQuickAction>? onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = SlTokens.of(context);
+    return PopupMenuButton<TaskHubQuickAction>(
+      tooltip: context.t.actions.taskHub.actions.more,
+      onSelected: onSelected,
+      enabled: onSelected != null,
+      itemBuilder: (_) => [
+        for (final item in items)
+          PopupMenuItem<TaskHubQuickAction>(
+            value: item.action,
+            child: Row(
+              children: [
+                Icon(item.icon, size: 16),
+                const SizedBox(width: 8),
+                Text(item.label),
+              ],
+            ),
+          ),
+      ],
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(99),
+          border: Border.all(
+            color: tokens.borderSubtle.withOpacity(0.9),
+          ),
+        ),
+        child: const Padding(
+          padding: EdgeInsets.symmetric(horizontal: 8, vertical: 7),
+          child: Icon(Icons.more_horiz_rounded, size: 16),
+        ),
+      ),
     );
   }
 }

@@ -176,10 +176,18 @@
       "snackActionApplied": "$action「$title」",
       "actions": {
         "today": "今天",
+        "todayProcess": "今天处理",
+        "tonight": "延后到今晚",
         "tomorrow": "明天",
+        "pauseTomorrow": "暂停到明天",
         "thisWeek": "本周",
         "later": "稍后",
-        "done": "完成"
+        "start": "开始",
+        "moveToInbox": "移回收件箱",
+        "done": "完成",
+        "reopen": "撤销完成",
+        "redo": "再做一次",
+        "more": "更多"
       }
     },
     "calendar": {
