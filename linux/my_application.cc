@@ -35,7 +35,6 @@ namespace {
 constexpr char kOcrChannelName[] = "secondloop/ocr";
 
 #ifdef SECONDLOOP_HAS_POPPLER
-constexpr char kCommonPdfOcrPreset[] = "common_ocr_v1";
 constexpr int kCommonPdfOcrMaxPages = 10000;
 constexpr int kCommonPdfOcrDpi = 180;
 constexpr int kPdfRenderMaxOutputWidth = 1536;
