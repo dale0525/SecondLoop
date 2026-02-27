@@ -15,6 +15,12 @@ import 'package:secondloop/src/rust/db.dart';
 
 import 'test_i18n.dart';
 
+Future<void> _pumpUi(WidgetTester tester, {int cycles = 12}) async {
+  for (var i = 0; i < cycles; i += 1) {
+    await tester.pump(const Duration(milliseconds: 32));
+  }
+}
+
 void main() {
   testWidgets('Settings does not show Cloud usage card', (tester) async {
     SharedPreferences.setMockInitialValues({});
@@ -38,7 +44,7 @@ void main() {
         ),
       ),
     );
-    await tester.pumpAndSettle();
+    await _pumpUi(tester);
 
     expect(find.text('Cloud usage'), findsNothing);
   });
@@ -62,7 +68,7 @@ void main() {
         ),
       ),
     );
-    await tester.pumpAndSettle();
+    await _pumpUi(tester);
 
     expect(find.text('Ask AI:'), findsOneWidget);
     expect(find.text('60%'), findsOneWidget);
@@ -94,16 +100,16 @@ void main() {
         ),
       ),
     );
-    await tester.pumpAndSettle();
+    await _pumpUi(tester);
 
     await tester.tap(find.text('Cloud account'));
-    await tester.pumpAndSettle();
+    await _pumpUi(tester);
 
     await tester.scrollUntilVisible(
       find.byKey(const ValueKey('cloud_usage_refresh')),
       200,
     );
-    await tester.pumpAndSettle();
+    await _pumpUi(tester);
 
     expect(find.text('Cloud usage'), findsOneWidget);
   });
@@ -130,13 +136,13 @@ void main() {
         ),
       ),
     );
-    await tester.pumpAndSettle();
+    await _pumpUi(tester);
 
     await tester.tap(find.text('Cloud account'));
-    await tester.pumpAndSettle();
+    await _pumpUi(tester);
 
     await tester.drag(find.byType(ListView), const Offset(0, -1200));
-    await tester.pumpAndSettle();
+    await _pumpUi(tester);
 
     expect(find.text('Vault storage'), findsOneWidget);
   });

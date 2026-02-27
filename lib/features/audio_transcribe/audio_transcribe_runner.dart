@@ -6,7 +6,9 @@ import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
+import 'audio_transcribe_chunk_progress.dart';
 import 'audio_transcribe_error_classification.dart';
+import 'audio_transcribe_media_preprocess.dart' as audio_preprocess;
 import '../../core/ai/audio_transcribe_gateway_limit_prefs.dart';
 import '../../core/ai/audio_transcribe_whisper_model_store.dart';
 import '../../core/backend/native_app_dir.dart';
@@ -28,6 +30,7 @@ final class AudioTranscribeJob {
     required this.attempts,
     required this.nextRetryAtMs,
     this.mimeTypeHint = '',
+    this.lastError,
   });
 
   final String attachmentSha256;
@@ -36,6 +39,7 @@ final class AudioTranscribeJob {
   final int attempts;
   final int? nextRetryAtMs;
   final String mimeTypeHint;
+  final String? lastError;
 }
 
 abstract class AudioTranscribeStore {
@@ -85,6 +89,58 @@ final class AudioTranscribeResponse {
   final String transcriptFull;
   final List<AudioTranscriptSegment> segments;
   final int? durationMs;
+}
+
+final class _AudioTranscribeChunkResponse {
+  const _AudioTranscribeChunkResponse({
+    required this.offsetMs,
+    required this.durationMs,
+    required this.response,
+  });
+
+  final int offsetMs;
+  final int durationMs;
+  final AudioTranscribeResponse response;
+}
+
+final class _AudioTranscribeChunkFailure {
+  const _AudioTranscribeChunkFailure({
+    required this.index,
+    required this.error,
+  });
+
+  final int index;
+  final Object error;
+}
+
+final class _AudioTranscribeChunkingResult {
+  const _AudioTranscribeChunkingResult.success(this.response)
+      : persistedError = null,
+        retryError = null;
+
+  const _AudioTranscribeChunkingResult.failure({
+    required this.persistedError,
+    required this.retryError,
+  }) : response = null;
+
+  final AudioTranscribeResponse? response;
+  final String? persistedError;
+  final Object? retryError;
+
+  bool get isSuccess => response != null;
+}
+
+final class _AudioTranscribePersistedFailure implements Exception {
+  const _AudioTranscribePersistedFailure({
+    required this.persistedError,
+    required this.retryError,
+  });
+
+  final String persistedError;
+  final Object retryError;
+
+  @override
+  String toString() => persistedError;
 }
 
 abstract class AudioTranscribeClient {
@@ -331,11 +387,15 @@ final class AudioTranscribeRunner {
     required this.store,
     required this.client,
     AudioTranscribeNowMs? nowMs,
-  }) : _nowMs = nowMs ?? (() => DateTime.now().millisecondsSinceEpoch);
+    AudioTranscribeLocalRuntimeAudioDecode? decodeAudioToWavForChunking,
+  })  : _nowMs = nowMs ?? (() => DateTime.now().millisecondsSinceEpoch),
+        _decodeAudioToWavForChunking = decodeAudioToWavForChunking ??
+            _decodeAudioToWavForLocalRuntimeDefault;
 
   final AudioTranscribeStore store;
   final AudioTranscribeClient client;
   final AudioTranscribeNowMs _nowMs;
+  final AudioTranscribeLocalRuntimeAudioDecode _decodeAudioToWavForChunking;
 
   Future<AudioTranscribeRunResult> runOnce({int limit = 5}) async {
     final processLimit = limit < 1 ? 1 : limit;
@@ -374,20 +434,63 @@ final class AudioTranscribeRunner {
         if (mimeType == null) continue;
 
         final maxInputBytes = client.maxInputBytes;
-        if (maxInputBytes != null &&
-            maxInputBytes > 0 &&
-            bytes.lengthInBytes > maxInputBytes) {
-          throw StateError(
-            'audio_transcribe_payload_too_large_local_check:'
-            '${bytes.lengthInBytes}:$maxInputBytes',
+        List<audio_preprocess.AudioTranscribeWavChunk> chunks =
+            const <audio_preprocess.AudioTranscribeWavChunk>[];
+        try {
+          final normalizedWavBytes = await _decodeAudioToWavForChunking(
+            mimeType: mimeType,
+            audioBytes: bytes,
           );
+          if (normalizedWavBytes.isNotEmpty) {
+            if (maxInputBytes != null &&
+                maxInputBytes > 0 &&
+                maxInputBytes <=
+                    audio_preprocess.kAudioTranscribeWavHeaderBytes) {
+              throw StateError(
+                'audio_transcribe_payload_too_large_local_check:'
+                '${normalizedWavBytes.lengthInBytes}:$maxInputBytes',
+              );
+            }
+            chunks = audio_preprocess.splitNormalizedWavIntoChunks(
+              normalizedWavBytes,
+              maxChunkBytes: maxInputBytes,
+            );
+          }
+        } catch (_) {
+          chunks = const <audio_preprocess.AudioTranscribeWavChunk>[];
         }
 
-        final response = await client.transcribe(
-          lang: job.lang,
-          mimeType: mimeType,
-          audioBytes: bytes,
-        );
+        AudioTranscribeResponse response;
+        if (chunks.isNotEmpty) {
+          final chunking = await _transcribeWithChunking(
+            lang: job.lang,
+            chunks: chunks,
+            previousProgress:
+                decodeAudioTranscribeChunkPartialProgress(job.lastError ?? ''),
+            maxConcurrency: processLimit,
+          );
+          if (!chunking.isSuccess) {
+            throw _AudioTranscribePersistedFailure(
+              persistedError: chunking.persistedError ?? 'chunking_failed',
+              retryError: chunking.retryError ?? StateError('chunking_failed'),
+            );
+          }
+          response = chunking.response!;
+        } else {
+          if (maxInputBytes != null &&
+              maxInputBytes > 0 &&
+              bytes.lengthInBytes > maxInputBytes) {
+            throw StateError(
+              'audio_transcribe_payload_too_large_local_check:'
+              '${bytes.lengthInBytes}:$maxInputBytes',
+            );
+          }
+          response = await client.transcribe(
+            lang: job.lang,
+            mimeType: mimeType,
+            audioBytes: bytes,
+          );
+        }
 
         final payload = _buildPayload(
           response: response,
@@ -404,15 +507,21 @@ final class AudioTranscribeRunner {
         processed += 1;
         handled += 1;
       } catch (e) {
+        var persistedError = e.toString();
+        var retryError = e;
+        if (e is _AudioTranscribePersistedFailure) {
+          persistedError = e.persistedError;
+          retryError = e.retryError;
+        }
         final attempts = job.attempts + 1;
         final nextRetryAtMs = _nextRetryAtMsForError(
           nowMs: nowMs,
           attempts: attempts,
-          error: e,
+          error: retryError,
         );
         await store.markAnnotationFailed(
           attachmentSha256: job.attachmentSha256,
-          error: e.toString(),
+          error: persistedError,
           attempts: attempts,
           nextRetryAtMs: nextRetryAtMs,
           nowMs: nowMs,
@@ -447,6 +556,182 @@ final class AudioTranscribeRunner {
       case AudioTranscribeFailureClass.retryable:
         return nowMs + _backoffMs(attempts);
     }
+  }
+
+  Future<_AudioTranscribeChunkingResult> _transcribeWithChunking({
+    required String lang,
+    required List<audio_preprocess.AudioTranscribeWavChunk> chunks,
+    required int maxConcurrency,
+    AudioTranscribeChunkPartialProgress? previousProgress,
+  }) async {
+    if (chunks.isEmpty) {
+      return const _AudioTranscribeChunkingResult.success(
+        AudioTranscribeResponse(
+          transcriptFull: '',
+          segments: <AudioTranscriptSegment>[],
+        ),
+      );
+    }
+
+    final completedByIndex = <int, _AudioTranscribeChunkResponse>{};
+    final normalizedPrevious =
+        previousProgress != null && previousProgress.chunkCount == chunks.length
+            ? previousProgress
+            : null;
+    if (normalizedPrevious != null) {
+      for (final chunk in normalizedPrevious.completedResults) {
+        if (chunk.index < 0 || chunk.index >= chunks.length) {
+          continue;
+        }
+        final chunkMeta = chunks[chunk.index];
+        completedByIndex[chunk.index] = _AudioTranscribeChunkResponse(
+          offsetMs: chunkMeta.offsetMs,
+          durationMs: chunkMeta.durationMs,
+          response: _partialChunkResultToResponse(chunk),
+        );
+      }
+    }
+
+    final pendingIndices = <int>[
+      for (var i = 0; i < chunks.length; i += 1)
+        if (!completedByIndex.containsKey(i)) i,
+    ];
+    final failures = <_AudioTranscribeChunkFailure>[];
+    if (pendingIndices.isNotEmpty) {
+      final sanitizedConcurrency = maxConcurrency < 1 ? 1 : maxConcurrency;
+      final workerCount = pendingIndices.length < sanitizedConcurrency
+          ? pendingIndices.length
+          : sanitizedConcurrency;
+      var cursor = 0;
+
+      Future<void> worker() async {
+        while (true) {
+          if (cursor >= pendingIndices.length) return;
+          final chunkIndex = pendingIndices[cursor];
+          cursor += 1;
+
+          final chunk = chunks[chunkIndex];
+          try {
+            final response = await client.transcribe(
+              lang: lang,
+              mimeType: 'audio/wav',
+              audioBytes: chunk.wavBytes,
+            );
+            completedByIndex[chunkIndex] = _AudioTranscribeChunkResponse(
+              offsetMs: chunk.offsetMs,
+              durationMs: chunk.durationMs,
+              response: response,
+            );
+          } catch (error) {
+            failures.add(
+              _AudioTranscribeChunkFailure(index: chunkIndex, error: error),
+            );
+          }
+        }
+      }
+
+      await Future.wait<void>(
+        List<Future<void>>.generate(workerCount, (_) => worker()),
+      );
+    }
+
+    if (failures.isNotEmpty) {
+      failures.sort((a, b) => a.index.compareTo(b.index));
+      final firstFailure = failures.first;
+      final completedPartials =
+          _chunkResponsesToPartialResults(completedByIndex);
+      if (completedPartials.isNotEmpty) {
+        final progress = AudioTranscribeChunkPartialProgress(
+          chunkCount: chunks.length,
+          completedResults: completedPartials,
+          failedChunkIndices: failures
+              .map((item) => item.index)
+              .toSet()
+              .toList(growable: false),
+          retryError: firstFailure.error.toString(),
+        );
+        return _AudioTranscribeChunkingResult.failure(
+          persistedError: encodeAudioTranscribeChunkPartialProgress(progress),
+          retryError: firstFailure.error,
+        );
+      }
+
+      return _AudioTranscribeChunkingResult.failure(
+        persistedError:
+            'audio_transcribe_chunk_failed:${firstFailure.index}:${firstFailure.error}',
+        retryError: firstFailure.error,
+      );
+    }
+
+    return _AudioTranscribeChunkingResult.success(
+      _mergeChunkResponses(completedByIndex),
+    );
+  }
+
+  AudioTranscribeResponse _partialChunkResultToResponse(
+    AudioTranscribePartialChunkResult chunk,
+  ) {
+    final segments = chunk.segments
+        .map(
+          (item) => AudioTranscriptSegment(
+            tMs: item.tMs,
+            text: item.text,
+          ),
+        )
+        .toList(growable: false);
+    return AudioTranscribeResponse(
+      transcriptFull: chunk.transcriptFull,
+      segments: segments,
+      durationMs: chunk.transcriptDurationMs,
+    );
+  }
+
+  List<AudioTranscribePartialChunkResult> _chunkResponsesToPartialResults(
+    Map<int, _AudioTranscribeChunkResponse> completedByIndex,
+  ) {
+    final entries = completedByIndex.entries.toList(growable: false)
+      ..sort((a, b) => a.key.compareTo(b.key));
+    return entries
+        .map(
+          (entry) => AudioTranscribePartialChunkResult(
+            index: entry.key,
+            offsetMs: entry.value.offsetMs,
+            durationMs: entry.value.durationMs,
+            transcriptDurationMs: entry.value.response.durationMs,
+            transcriptFull: entry.value.response.transcriptFull.trim(),
+            segments: entry.value.response.segments
+                .map(
+                  (segment) => AudioTranscribePartialSegment(
+                    tMs: segment.tMs,
+                    text: segment.text,
+                  ),
+                )
+                .toList(growable: false),
+          ),
+        )
+        .toList(growable: false);
+  }
+
+  AudioTranscribeResponse _mergeChunkResponses(
+    Map<int, _AudioTranscribeChunkResponse> completedByIndex,
+  ) {
+    final merged = mergeAudioTranscribePartialChunkResults(
+      _chunkResponsesToPartialResults(completedByIndex),
+    );
+    final segments = merged.segments
+        .map(
+          (segment) => AudioTranscriptSegment(
+            tMs: segment.tMs,
+            text: segment.text,
+          ),
+        )
+        .toList(growable: false);
+
+    return AudioTranscribeResponse(
+      durationMs: merged.durationMs,
+      transcriptFull: merged.transcriptFull,
+      segments: segments,
+    );
   }
 
   static Map<String, Object?> _buildPayload({
@@ -529,6 +814,7 @@ final class BackendAudioTranscribeStore implements AudioTranscribeStore {
             attempts: r.attempts,
             nextRetryAtMs: r.nextRetryAtMs,
             mimeTypeHint: mimeTypeBySha[r.attachmentSha256] ?? '',
+            lastError: r.lastError,
           ),
         )
         .toList(growable: false);

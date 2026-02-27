@@ -331,6 +331,19 @@ extension _ChatPageStateMethodsBAttachments on _ChatPageState {
       return;
     }
 
+    if (isAudioTranscribeCandidateMimeType(normalizedMimeType)) {
+      try {
+        await maybeEnqueueAudioTranscribe(
+          backend: backend,
+          sessionKey: sessionKey,
+          attachmentSha256: attachmentSha256,
+          mimeType: normalizedMimeType,
+          lang: 'und',
+        );
+      } catch (_) {}
+      return;
+    }
+
     return;
   }
 

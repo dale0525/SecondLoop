@@ -26,6 +26,8 @@ import '../../core/session/session_scope.dart';
 import '../../core/subscription/subscription_scope.dart';
 import '../../core/sync/sync_engine.dart';
 import '../../core/sync/sync_engine_gate.dart';
+import '../audio_transcribe/audio_transcribe_chunk_progress.dart';
+import '../audio_transcribe/audio_transcribe_enqueue.dart';
 import '../media_backup/cloud_media_download.dart';
 import '../media_backup/cloud_media_download_ui.dart';
 import '../../i18n/strings.g.dart';
@@ -651,6 +653,7 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
     final sessionKey = SessionScope.of(context).sessionKey;
     final nowMs = DateTime.now().millisecondsSinceEpoch;
     final lang = Localizations.localeOf(context).toLanguageTag();
+    final normalizedMimeType = widget.attachment.mimeType.trim().toLowerCase();
 
     _stopAnnotationRetryPolling(clearState: false);
     setState(() {
@@ -674,12 +677,24 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
         lastError: 'manual_retry',
         nowMs: nowMs,
       );
-      await backend.enqueueAttachmentAnnotation(
-        sessionKey,
-        attachmentSha256: widget.attachment.sha256,
-        lang: lang,
-        nowMs: nowMs,
-      );
+      if (isAudioTranscribeCandidateMimeType(normalizedMimeType)) {
+        await maybeEnqueueAudioTranscribe(
+          backend: backend,
+          sessionKey: sessionKey,
+          attachmentSha256: widget.attachment.sha256,
+          mimeType: normalizedMimeType,
+          lang: 'und',
+          respectFeatureToggle: false,
+          nowMs: nowMs,
+        );
+      } else {
+        await backend.enqueueAttachmentAnnotation(
+          sessionKey,
+          attachmentSha256: widget.attachment.sha256,
+          lang: lang,
+          nowMs: nowMs,
+        );
+      }
 
       if (!mounted) return;
       _startAnnotationCaptionLoad();

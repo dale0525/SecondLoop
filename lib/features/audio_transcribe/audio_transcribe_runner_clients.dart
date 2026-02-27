@@ -705,79 +705,15 @@ bool shouldBypassLocalRuntimeDecodeForWav({
   required String mimeType,
   required Uint8List audioBytes,
 }) {
-  final normalizedMimeType = mimeType.trim().toLowerCase();
-  final isWavMimeType = normalizedMimeType == 'audio/wav' ||
-      normalizedMimeType == 'audio/wave' ||
-      normalizedMimeType == 'audio/x-wav';
-  if (!isWavMimeType) {
-    return false;
-  }
-  return isCanonicalPcm16Mono16kWavBytes(audioBytes);
+  return audio_preprocess.shouldBypassLocalRuntimeDecodeForWav(
+    mimeType: mimeType,
+    audioBytes: audioBytes,
+  );
 }
 
 @visibleForTesting
 bool isCanonicalPcm16Mono16kWavBytes(Uint8List bytes) {
-  if (bytes.lengthInBytes < 44) {
-    return false;
-  }
-
-  bool hasAscii(int offset, String value) {
-    final units = value.codeUnits;
-    if (offset < 0 || offset + units.length > bytes.lengthInBytes) {
-      return false;
-    }
-    for (var i = 0; i < units.length; i++) {
-      if (bytes[offset + i] != units[i]) {
-        return false;
-      }
-    }
-    return true;
-  }
-
-  int readUint16Le(int offset) {
-    return bytes[offset] | (bytes[offset + 1] << 8);
-  }
-
-  int readUint32Le(int offset) {
-    return bytes[offset] |
-        (bytes[offset + 1] << 8) |
-        (bytes[offset + 2] << 16) |
-        (bytes[offset + 3] << 24);
-  }
-
-  if (!hasAscii(0, 'RIFF') || !hasAscii(8, 'WAVE')) {
-    return false;
-  }
-  if (!hasAscii(12, 'fmt ') || !hasAscii(36, 'data')) {
-    return false;
-  }
-
-  final fmtChunkSize = readUint32Le(16);
-  if (fmtChunkSize < 16) {
-    return false;
-  }
-
-  final audioFormat = readUint16Le(20);
-  final channelCount = readUint16Le(22);
-  final sampleRate = readUint32Le(24);
-  final bitsPerSample = readUint16Le(34);
-  if (audioFormat != 1 ||
-      channelCount != 1 ||
-      sampleRate != 16000 ||
-      bitsPerSample != 16) {
-    return false;
-  }
-
-  final dataLength = readUint32Le(40);
-  const payloadOffset = 44;
-  if (dataLength <= 0) {
-    return false;
-  }
-  if (payloadOffset + dataLength > bytes.lengthInBytes) {
-    return false;
-  }
-
-  return true;
+  return audio_preprocess.isCanonicalPcm16Mono16kWavBytes(bytes);
 }
 
 Future<Uint8List> _decodeAudioToWavForLocalRuntimeDefault({
