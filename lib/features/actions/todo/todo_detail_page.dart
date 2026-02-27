@@ -600,6 +600,46 @@ class _TodoDetailPageState extends State<TodoDetailPage> {
     return attachmentsBackend.listMessageAttachments(sessionKey, messageId);
   }
 
+  Future<List<Attachment>> _loadTimelineActivityAttachments(
+    TodoActivity activity,
+  ) async {
+    final futures = <Future<List<Attachment>>>[];
+
+    final sourceMessageId = activity.sourceMessageId?.trim() ?? '';
+    if (sourceMessageId.isNotEmpty) {
+      futures.add(
+        _attachmentsFuturesByMessageId.putIfAbsent(
+          sourceMessageId,
+          () => _loadMessageAttachments(sourceMessageId),
+        ),
+      );
+    }
+
+    futures.add(
+      _attachmentsFuturesByActivityId.putIfAbsent(
+        activity.id,
+        () async {
+          final backend = AppBackendScope.of(context);
+          final sessionKey = SessionScope.of(context).sessionKey;
+          return backend.listTodoActivityAttachments(sessionKey, activity.id);
+        },
+      ),
+    );
+
+    final groups = await Future.wait(futures);
+    final merged = <Attachment>[];
+    final seenShas = <String>{};
+    for (final group in groups) {
+      for (final attachment in group) {
+        final sha = attachment.sha256.trim();
+        final dedupeKey = sha.isEmpty ? attachment.path : sha;
+        if (!seenShas.add(dedupeKey)) continue;
+        merged.add(attachment);
+      }
+    }
+    return merged;
+  }
+
   Widget _buildActivityTile(BuildContext context, TodoActivity activity) {
     final theme = Theme.of(context);
     final tokens = SlTokens.of(context);
@@ -686,14 +726,10 @@ class _TodoDetailPageState extends State<TodoDetailPage> {
                       color: colorScheme.onSurfaceVariant,
                     ),
                   ),
-                  if (sourceMessageId != null &&
-                      activity.activityType != 'status_change') ...[
+                  if (activity.activityType != 'status_change') ...[
                     const SizedBox(height: 10),
                     FutureBuilder<List<Attachment>>(
-                      future: _attachmentsFuturesByMessageId.putIfAbsent(
-                        sourceMessageId,
-                        () => _loadMessageAttachments(sourceMessageId),
-                      ),
+                      future: _loadTimelineActivityAttachments(activity),
                       builder: (context, snapshot) {
                         if (snapshot.connectionState != ConnectionState.done) {
                           return const SizedBox.shrink();
@@ -724,47 +760,6 @@ class _TodoDetailPageState extends State<TodoDetailPage> {
                       },
                     ),
                   ],
-                  FutureBuilder<List<Attachment>>(
-                    future: _attachmentsFuturesByActivityId.putIfAbsent(
-                      activity.id,
-                      () async {
-                        final backend = AppBackendScope.of(context);
-                        final sessionKey = SessionScope.of(context).sessionKey;
-                        return backend.listTodoActivityAttachments(
-                            sessionKey, activity.id);
-                      },
-                    ),
-                    builder: (context, snapshot) {
-                      if (snapshot.connectionState != ConnectionState.done) {
-                        return const SizedBox.shrink();
-                      }
-                      final attachments = snapshot.data ?? const <Attachment>[];
-                      if (attachments.isEmpty) return const SizedBox.shrink();
-
-                      return Padding(
-                        padding: const EdgeInsets.only(top: 10),
-                        child: Wrap(
-                          spacing: 8,
-                          runSpacing: 8,
-                          children: [
-                            for (final attachment in attachments)
-                              AttachmentCard(
-                                attachment: attachment,
-                                onTap: () {
-                                  Navigator.of(context).push(
-                                    MaterialPageRoute(
-                                      builder: (_) => AttachmentViewerPage(
-                                        attachment: attachment,
-                                      ),
-                                    ),
-                                  );
-                                },
-                              ),
-                          ],
-                        ),
-                      );
-                    },
-                  ),
                 ],
               ),
             ),

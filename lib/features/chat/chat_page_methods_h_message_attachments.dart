@@ -13,18 +13,6 @@ extension _ChatPageStateMethodsHMessageAttachments on _ChatPageState {
     return 220 + 2;
   }
 
-  double _estimateAttachmentRowWidth(
-    List<Attachment> items, {
-    double spacing = 8,
-  }) {
-    var sum = 0.0;
-    for (var i = 0; i < items.length; i++) {
-      sum += _estimateAttachmentPreviewWidth(items[i]);
-      if (i != items.length - 1) sum += spacing;
-    }
-    return sum;
-  }
-
   bool _messageHasAttachmentInCache(String messageId) {
     if (_attachmentLinkingMessageIds.contains(messageId)) {
       return true;
@@ -128,11 +116,6 @@ extension _ChatPageStateMethodsHMessageAttachments on _ChatPageState {
           child: LayoutBuilder(
             builder: (context, constraints) {
               const spacing = 8.0;
-              final estimatedRowWidth = _estimateAttachmentRowWidth(
-                items,
-                spacing: spacing,
-              );
-              final shouldScroll = estimatedRowWidth > constraints.maxWidth;
               Widget buildAttachmentTile(
                 Attachment attachment,
               ) {
@@ -157,35 +140,17 @@ extension _ChatPageStateMethodsHMessageAttachments on _ChatPageState {
                 );
               }
 
-              final rowChildren = <Widget>[
-                for (var i = 0; i < items.length; i++)
-                  Padding(
-                    padding: EdgeInsets.only(
-                      right: i == items.length - 1 ? 0 : spacing,
-                    ),
-                    child: buildAttachmentTile(items[i]),
-                  ),
-              ];
-
-              final canUseGrid = !shouldScroll && items.length > 1;
               final targetColumns = constraints.maxWidth >= 520 ? 2 : 1;
               final gridTileMaxWidth = targetColumns == 1
                   ? constraints.maxWidth
                   : (constraints.maxWidth - spacing) / 2;
+              final singleTileMaxWidth =
+                  _estimateAttachmentPreviewWidth(items.first)
+                      .clamp(0.0, constraints.maxWidth)
+                      .toDouble();
 
               Widget attachmentsLayout;
-              if (shouldScroll) {
-                attachmentsLayout = SizedBox(
-                  width: constraints.maxWidth,
-                  child: SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: rowChildren,
-                    ),
-                  ),
-                );
-              } else if (canUseGrid) {
+              if (items.length > 1) {
                 attachmentsLayout = Wrap(
                   spacing: spacing,
                   runSpacing: spacing,
@@ -200,7 +165,10 @@ extension _ChatPageStateMethodsHMessageAttachments on _ChatPageState {
                   ],
                 );
               } else {
-                attachmentsLayout = buildAttachmentTile(items.first);
+                attachmentsLayout = ConstrainedBox(
+                  constraints: BoxConstraints(maxWidth: singleTileMaxWidth),
+                  child: buildAttachmentTile(items.first),
+                );
               }
 
               Attachment? firstImage;
