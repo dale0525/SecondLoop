@@ -15,9 +15,15 @@ import 'test_i18n.dart';
 
 void main() {
   testWidgets('task hub page groups todos by urgency sections', (tester) async {
-    SharedPreferences.setMockInitialValues({});
-
     final now = DateTime.now();
+    final dayEndCandidate = now.add(const Duration(minutes: 1));
+    final dayEndMinutes = dayEndCandidate.day == now.day
+        ? dayEndCandidate.hour * 60 + dayEndCandidate.minute
+        : (23 * 60 + 59);
+    SharedPreferences.setMockInitialValues({
+      'actions.review.day_end_minutes_v1': dayEndMinutes,
+    });
+
     final backend = _TaskHubBackend(
       todos: <Todo>[
         Todo(
@@ -96,9 +102,16 @@ void main() {
     expect(
         find.byKey(const ValueKey('task_hub_page_section_unscheduled_merged')),
         findsOneWidget);
+    final reviewTodo = backend.current('review');
+    final expectDueReviewSection = reviewTodo.reviewStage != null &&
+        reviewTodo.nextReviewAtMs != null &&
+        reviewTodo.nextReviewAtMs! <= now.toUtc().millisecondsSinceEpoch;
+    final dueReviewSectionFinder =
+        find.byKey(const ValueKey('task_hub_page_section_unscheduled_review'));
     expect(
-        find.byKey(const ValueKey('task_hub_page_section_unscheduled_review')),
-        findsOneWidget);
+      dueReviewSectionFinder,
+      expectDueReviewSection ? findsOneWidget : findsNothing,
+    );
     expect(
         find.byKey(const ValueKey('task_hub_page_section_unscheduled_plain')),
         findsOneWidget);

@@ -13,6 +13,7 @@ import 'package:secondloop/core/subscription/subscription_scope.dart';
 import 'package:secondloop/core/sync/cloud_sync_switch_prompt_gate.dart';
 import 'package:secondloop/core/sync/sync_config_store.dart';
 import 'package:secondloop/core/sync/sync_engine.dart';
+import 'package:secondloop/core/sync/sync_engine_gate.dart';
 import 'package:secondloop/src/rust/db.dart';
 
 import 'test_i18n.dart';
@@ -306,6 +307,77 @@ void main() {
     expect(
         find.text('Use cloud embeddings for semantic search?'), findsOneWidget);
   });
+
+  testWidgets(
+      'Switching to Cloud falls back to engine pull/push when progress sync fails',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({
+      'embeddings_data_consent_v1': false,
+    });
+
+    final store = SyncConfigStore();
+    await store.writeBackendType(SyncBackendType.webdav);
+    await store.writeRemoteRoot('SecondLoop');
+    await store.writeSyncKey(Uint8List.fromList(List<int>.filled(32, 7)));
+    await store.writeManagedVaultBaseUrl('https://vault.example.com');
+
+    final backend = _FailingPullBackend();
+    final cloudAuth = _FakeCloudAuthController();
+    final subscription =
+        _FakeSubscriptionController(SubscriptionStatus.entitled);
+    final syncRunner = _CountingSyncRunner();
+    final engine = SyncEngine(
+      syncRunner: syncRunner,
+      loadConfig: () async => SyncConfig.managedVault(
+        syncKey: Uint8List.fromList(List<int>.filled(32, 1)),
+        vaultId: 'uid_1',
+        baseUrl: 'https://vault.example.com',
+      ),
+      pushDebounce: const Duration(days: 1),
+      pullInterval: const Duration(days: 1),
+      pullJitter: Duration.zero,
+      pullOnStart: false,
+    );
+    engine.start();
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: backend,
+            child: SessionScope(
+              sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+              lock: () {},
+              child: SyncEngineScope(
+                engine: engine,
+                child: CloudAuthScope(
+                  controller: cloudAuth,
+                  child: SubscriptionScope(
+                    controller: subscription,
+                    child: CloudSyncSwitchPromptGate(
+                      configStore: store,
+                      child: const Scaffold(body: Text('home')),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Switch'), findsOneWidget);
+    await tester.tap(find.text('Switch'));
+    await tester.pumpAndSettle();
+
+    expect(backend.calls, contains('syncManagedVaultPull'));
+    expect(syncRunner.pullCalls, 1);
+    expect(syncRunner.pushCalls, 1);
+
+    engine.stop();
+  });
 }
 
 final class _FakeSubscriptionController extends ChangeNotifier
@@ -591,5 +663,50 @@ final class _SyncingBackend extends _Backend {
     calls.add('syncManagedVaultPushOpsOnly');
     await Future<void>.delayed(const Duration(milliseconds: 500));
     return 1;
+  }
+}
+
+final class _FailingPullBackend extends _Backend {
+  final List<String> calls = <String>[];
+
+  @override
+  Future<int> syncManagedVaultPull(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String baseUrl,
+    required String vaultId,
+    required String idToken,
+  }) async {
+    calls.add('syncManagedVaultPull');
+    throw StateError('managed_vault_pull_failed');
+  }
+
+  @override
+  Future<int> syncManagedVaultPushOpsOnly(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String baseUrl,
+    required String vaultId,
+    required String idToken,
+  }) async {
+    calls.add('syncManagedVaultPushOpsOnly');
+    return 0;
+  }
+}
+
+final class _CountingSyncRunner implements SyncRunner {
+  int pullCalls = 0;
+  int pushCalls = 0;
+
+  @override
+  Future<int> pull(SyncConfig config) async {
+    pullCalls += 1;
+    return 0;
+  }
+
+  @override
+  Future<int> push(SyncConfig config) async {
+    pushCalls += 1;
+    return 0;
   }
 }

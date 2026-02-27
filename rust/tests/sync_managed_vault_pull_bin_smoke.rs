@@ -25,9 +25,25 @@ struct StoredOp {
 struct ServerState {
     vault_devices: BTreeMap<String, Vec<String>>,
     ops: BTreeMap<(String, String), Vec<StoredOp>>, // (vault_id, device_id) -> ops
+    pull_requests: u64,
+    pull_bin_requests: u64,
 }
 
 const PULL_BIN_MAGIC_V1: &[u8; 5] = b"SLVB1";
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum PullBehavior {
+    PullBinOnly,
+    PullBinTemporaryErrorFallbackJson,
+}
+
+fn bench_ops_target(default_ops: usize) -> usize {
+    std::env::var("SYNC_BENCH_OPS")
+        .ok()
+        .and_then(|value| value.trim().parse::<usize>().ok())
+        .filter(|value| *value > 0)
+        .unwrap_or(default_ops)
+}
 
 fn read_request(stream: &mut TcpStream) -> (String, String, String, Vec<u8>) {
     let mut buf = Vec::<u8>::new();
@@ -83,7 +99,9 @@ fn write_json_response(stream: &mut TcpStream, status: u16, body: serde_json::Va
         401 => "Unauthorized",
         403 => "Forbidden",
         404 => "Not Found",
+        429 => "Too Many Requests",
         409 => "Conflict",
+        503 => "Service Unavailable",
         _ => "OK",
     };
     let resp = format!(
@@ -131,6 +149,26 @@ fn encode_pull_bin(ops: &[StoredOp]) -> Vec<u8> {
 }
 
 fn start_mock_server_pull_bin_only() -> (
+    String,
+    mpsc::Sender<()>,
+    Arc<Mutex<ServerState>>,
+    thread::JoinHandle<()>,
+) {
+    start_mock_server(PullBehavior::PullBinOnly)
+}
+
+fn start_mock_server_pull_bin_temporary_error_fallback_json() -> (
+    String,
+    mpsc::Sender<()>,
+    Arc<Mutex<ServerState>>,
+    thread::JoinHandle<()>,
+) {
+    start_mock_server(PullBehavior::PullBinTemporaryErrorFallbackJson)
+}
+
+fn start_mock_server(
+    pull_behavior: PullBehavior,
+) -> (
     String,
     mpsc::Sender<()>,
     Arc<Mutex<ServerState>>,
@@ -251,15 +289,114 @@ fn start_mock_server_pull_bin_only() -> (
                 }
 
                 if tail == "ops:pull" {
+                    let decoded: serde_json::Value =
+                        serde_json::from_slice(&body).expect("pull json");
+                    let requester_device_id = decoded
+                        .get("device_id")
+                        .and_then(|v| v.as_str())
+                        .expect("device_id");
+                    let since = decoded
+                        .get("since")
+                        .cloned()
+                        .unwrap_or(serde_json::json!({}));
+                    let limit =
+                        decoded.get("limit").and_then(|v| v.as_u64()).unwrap_or(500) as usize;
+
+                    if pull_behavior == PullBehavior::PullBinOnly {
+                        write_json_response(
+                            &mut stream,
+                            404,
+                            serde_json::json!({ "error": "not_found" }),
+                        );
+                        continue;
+                    }
+
+                    let devices: Vec<String> = {
+                        let st = state_clone.lock().expect("lock");
+                        st.vault_devices.get(&vault_id).cloned().unwrap_or_default()
+                    };
+
+                    let mut out_ops: Vec<StoredOp> = Vec::new();
+                    for dev in devices {
+                        if out_ops.len() >= limit {
+                            break;
+                        }
+                        if dev == requester_device_id {
+                            continue;
+                        }
+
+                        let since_seq = since.get(&dev).and_then(|v| v.as_i64()).unwrap_or(0);
+                        let ops_for_dev: Vec<StoredOp> = {
+                            let st = state_clone.lock().expect("lock");
+                            st.ops
+                                .get(&(vault_id.clone(), dev.clone()))
+                                .cloned()
+                                .unwrap_or_default()
+                        };
+
+                        for op in ops_for_dev {
+                            if out_ops.len() >= limit {
+                                break;
+                            }
+                            if op.seq <= since_seq {
+                                continue;
+                            }
+                            out_ops.push(op);
+                        }
+                    }
+
+                    let mut next = serde_json::Map::new();
+                    for op in &out_ops {
+                        let entry = next
+                            .entry(op.device_id.clone())
+                            .or_insert_with(|| serde_json::Value::from(0));
+                        let current = entry.as_i64().unwrap_or(0);
+                        if op.seq > current {
+                            *entry = serde_json::Value::from(op.seq);
+                        }
+                    }
+
+                    {
+                        let mut st = state_clone.lock().expect("lock");
+                        st.pull_requests += 1;
+                    }
+
+                    let ops_json: Vec<serde_json::Value> = out_ops
+                        .into_iter()
+                        .map(|op| {
+                            serde_json::json!({
+                                "device_id": op.device_id,
+                                "seq": op.seq,
+                                "op_id": op.op_id,
+                                "ciphertext_b64": op.ciphertext_b64,
+                            })
+                        })
+                        .collect();
                     write_json_response(
                         &mut stream,
-                        404,
-                        serde_json::json!({ "error": "not_found" }),
+                        200,
+                        serde_json::json!({
+                            "ops": ops_json,
+                            "next": serde_json::Value::Object(next),
+                        }),
                     );
                     continue;
                 }
 
                 if tail == "ops:pull_bin" {
+                    if pull_behavior == PullBehavior::PullBinTemporaryErrorFallbackJson {
+                        {
+                            let mut st = state_clone.lock().expect("lock");
+                            st.pull_bin_requests += 1;
+                        }
+                        write_json_response(
+                            &mut stream,
+                            503,
+                            serde_json::json!({ "error": "temporarily_unavailable" }),
+                        );
+                        continue;
+                    }
+
                     let decoded: serde_json::Value =
                         serde_json::from_slice(&body).expect("pull json");
                     let requester_device_id = decoded
@@ -307,6 +444,11 @@ fn start_mock_server_pull_bin_only() -> (
                         }
                     }
 
+                    {
+                        let mut st = state_clone.lock().expect("lock");
+                        st.pull_bin_requests += 1;
+                    }
+
                     let body = encode_pull_bin(&out_ops);
                     write_bytes_response(&mut stream, 200, body);
                     continue;
@@ -341,7 +483,11 @@ fn managed_vault_pull_bin_copies_messages() {
         auth::init_master_password(&app_dir_a, "pw-a", KdfParams::for_test()).expect("init A");
     let conn_a = db::open(&app_dir_a).expect("open A db");
     let conv_a = db::create_conversation(&conn_a, &key_a, "Inbox").expect("create convo A");
-    db::insert_message(&conn_a, &key_a, &conv_a.id, "user", "hello").expect("insert msg A");
+    let message_count = bench_ops_target(1);
+    for idx in 0..message_count {
+        let content = format!("hello-{idx}");
+        db::insert_message(&conn_a, &key_a, &conv_a.id, "user", &content).expect("insert msg A");
+    }
 
     // Device B is a fresh install.
     let temp_b = tempfile::tempdir().expect("tempdir B");
@@ -374,8 +520,68 @@ fn managed_vault_pull_bin_copies_messages() {
     assert_eq!(convs_b[0].id, conv_a.id);
 
     let msgs_b = db::list_messages(&conn_b, &key_b, &convs_b[0].id).expect("list msgs B");
+    assert_eq!(msgs_b.len(), message_count);
+    assert_eq!(msgs_b[0].content, "hello-0");
+    let expected_last = format!("hello-{}", message_count - 1);
+    assert_eq!(
+        msgs_b.last().map(|m| m.content.as_str()),
+        Some(expected_last.as_str())
+    );
+
+    let _ = stop_tx.send(());
+    handle.join().expect("join");
+}
+
+#[test]
+fn managed_vault_pull_falls_back_to_json_after_pull_bin_temporary_error() {
+    let (base_url, stop_tx, state, handle) =
+        start_mock_server_pull_bin_temporary_error_fallback_json();
+    let vault_id = "v1".to_string();
+    let id_token = "test_uid".to_string();
+
+    let temp_a = tempfile::tempdir().expect("tempdir A");
+    let app_dir_a = temp_a.path().join("secondloop_a");
+    let key_a =
+        auth::init_master_password(&app_dir_a, "pw-a", KdfParams::for_test()).expect("init A");
+    let conn_a = db::open(&app_dir_a).expect("open A db");
+    let conv_a = db::create_conversation(&conn_a, &key_a, "Inbox").expect("create convo A");
+    db::insert_message(&conn_a, &key_a, &conv_a.id, "user", "hello").expect("insert msg A");
+
+    let temp_b = tempfile::tempdir().expect("tempdir B");
+    let app_dir_b = temp_b.path().join("secondloop_b");
+    let key_b =
+        auth::init_master_password(&app_dir_b, "pw-b", KdfParams::for_test()).expect("init B");
+    let conn_b = db::open(&app_dir_b).expect("open B db");
+
+    let sync_key = derive_root_key(
+        "sync-passphrase",
+        b"secondloop-sync1",
+        &KdfParams::for_test(),
+    )
+    .expect("derive sync key");
+
+    let pushed =
+        sync::managed_vault::push(&conn_a, &key_a, &sync_key, &base_url, &vault_id, &id_token)
+            .expect("push");
+    assert!(pushed > 0);
+
+    let applied =
+        sync::managed_vault::pull(&conn_b, &key_b, &sync_key, &base_url, &vault_id, &id_token)
+            .expect("pull");
+    assert!(applied > 0);
+
+    let convs_b = db::list_conversations(&conn_b, &key_b).expect("list convs B");
+    assert_eq!(convs_b.len(), 1);
+    assert_eq!(convs_b[0].title, "Inbox");
+
+    let msgs_b = db::list_messages(&conn_b, &key_b, &convs_b[0].id).expect("list msgs B");
     assert_eq!(msgs_b.len(), 1);
     assert_eq!(msgs_b[0].content, "hello");
+
+    let snapshot = state.lock().expect("lock");
+    assert!(snapshot.pull_bin_requests >= 1);
+    assert!(snapshot.pull_requests >= 1);
+    drop(snapshot);
 
     let _ = stop_tx.send(());
     handle.join().expect("join");

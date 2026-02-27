@@ -7,6 +7,14 @@ use secondloop_rust::crypto::{derive_root_key, KdfParams};
 use secondloop_rust::db;
 use secondloop_rust::sync;
 
+fn bench_ops_target(default_ops: usize) -> usize {
+    std::env::var("SYNC_BENCH_OPS")
+        .ok()
+        .and_then(|value| value.trim().parse::<usize>().ok())
+        .filter(|value| *value > 0)
+        .unwrap_or(default_ops)
+}
+
 struct LimitedParallelPutRemote {
     target_id: String,
     inner: sync::InMemoryRemoteStore,
@@ -28,6 +36,10 @@ impl LimitedParallelPutRemote {
 
     fn max_seen_ops(&self) -> usize {
         self.max_seen_ops.load(Ordering::Relaxed)
+    }
+
+    fn reset_max_seen_ops(&self) {
+        self.max_seen_ops.store(0, Ordering::Relaxed);
     }
 
     fn track_active_op_start(&self) -> usize {
@@ -100,7 +112,11 @@ fn push_ops_only_retries_with_lower_parallelism_when_remote_limits_concurrency()
     let key = auth::init_master_password(&app_dir, "pw", KdfParams::for_test()).expect("init");
     let conn = db::open(&app_dir).expect("open db");
 
-    for idx in 0..36 {
+    let total_ops = bench_ops_target(60).max(2);
+    let first_batch = ((total_ops * 3) / 5).max(1);
+    let second_batch = total_ops - first_batch;
+
+    for idx in 0..first_batch {
         let title = format!("Conversation {idx}");
         let _ = db::create_conversation(&conn, &key, &title).expect("create conversation");
     }
@@ -116,9 +132,23 @@ fn push_ops_only_retries_with_lower_parallelism_when_remote_limits_concurrency()
     let pushed = sync::push_ops_only(&conn, &key, &sync_key, &remote, remote_root)
         .expect("push should adapt to remote limit");
 
-    assert_eq!(pushed, 36);
+    assert_eq!(pushed, first_batch as u64);
     assert!(
         remote.max_seen_ops() > 2,
         "expected initial high parallel attempt before fallback"
+    );
+
+    remote.reset_max_seen_ops();
+    for idx in first_batch..(first_batch + second_batch) {
+        let title = format!("Conversation {idx}");
+        let _ = db::create_conversation(&conn, &key, &title).expect("create conversation");
+    }
+
+    let pushed_second = sync::push_ops_only(&conn, &key, &sync_key, &remote, remote_root)
+        .expect("second push should reuse lowered parallelism cap");
+    assert_eq!(pushed_second, second_batch as u64);
+    assert!(
+        remote.max_seen_ops() <= 2,
+        "expected penalty cap to avoid repeated high-concurrency spikes"
     );
 }

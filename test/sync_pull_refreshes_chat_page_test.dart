@@ -7,13 +7,15 @@ import 'package:secondloop/core/backend/app_backend.dart';
 import 'package:secondloop/core/session/session_scope.dart';
 import 'package:secondloop/core/sync/sync_engine.dart';
 import 'package:secondloop/core/sync/sync_engine_gate.dart';
+import 'package:secondloop/core/sync/sync_result.dart';
 import 'package:secondloop/features/chat/chat_page.dart';
 import 'package:secondloop/src/rust/db.dart';
 
 import 'test_i18n.dart';
 
 void main() {
-  testWidgets('ChatPage refreshes after sync pull applies ops', (tester) async {
+  testWidgets('ChatPage refreshes after sync pull requests refresh hint',
+      (tester) async {
     final backend = _MutableBackend();
     final runner = _SyncingRunner(backend);
     final engine = SyncEngine(
@@ -70,7 +72,7 @@ SyncConfig _webdavConfig() => SyncConfig.webdav(
       password: 'p',
     );
 
-final class _SyncingRunner implements SyncRunner {
+final class _SyncingRunner implements SyncRunner, SyncPullResultRunner {
   _SyncingRunner(this.backend);
 
   final _MutableBackend backend;
@@ -93,7 +95,16 @@ final class _SyncingRunner implements SyncRunner {
         isMemory: true,
       ),
     );
-    return 1;
+    return 0;
+  }
+
+  @override
+  Future<SyncPullResult> pullWithResult(SyncConfig config) async {
+    final applied = await pull(config);
+    return SyncPullResult(
+      applied: applied,
+      shouldRefreshUi: true,
+    );
   }
 }
 

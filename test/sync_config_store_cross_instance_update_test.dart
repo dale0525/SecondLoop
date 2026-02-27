@@ -25,4 +25,23 @@ void main() {
     expect(config!.baseUrl, 'https://example.com/dav');
     expect(config.remoteRoot, 'SecondLoop');
   });
+
+  test('SyncConfigStore rollout flags default enabled and sync cross-instance',
+      () async {
+    SharedPreferences.setMockInitialValues({});
+
+    final staleReader = SyncConfigStore();
+    expect(await staleReader.readSyncRefreshV2Enabled(), isTrue);
+    expect(await staleReader.readSyncBackgroundDiagV1Enabled(), isTrue);
+    expect(await staleReader.readSyncBackoffV1Enabled(), isTrue);
+
+    final writer = SyncConfigStore();
+    await writer.writeSyncRefreshV2Enabled(false);
+    await writer.writeSyncBackgroundDiagV1Enabled(false);
+    await writer.writeSyncBackoffV1Enabled(false);
+
+    expect(await staleReader.readSyncRefreshV2Enabled(), isFalse);
+    expect(await staleReader.readSyncBackgroundDiagV1Enabled(), isFalse);
+    expect(await staleReader.readSyncBackoffV1Enabled(), isFalse);
+  });
 }
