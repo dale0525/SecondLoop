@@ -451,7 +451,7 @@ final class _CloudSyncSwitchPromptGateState
     );
   }
 
-  Future<void> _runManagedVaultSyncWithProgress({
+  Future<bool> _runManagedVaultSyncWithProgress({
     required BuildContext dialogContext,
     required AppBackend backend,
     required Uint8List sessionKey,
@@ -467,6 +467,7 @@ final class _CloudSyncSwitchPromptGateState
     // pumpAndSettle time out.
     final progress = ValueNotifier<double>(0.0);
 
+    var completed = true;
     bool started = false;
     _dialogShowing = true;
     try {
@@ -557,6 +558,7 @@ final class _CloudSyncSwitchPromptGateState
                 progress.value = 1.0;
               } catch (_) {
                 // Best-effort: avoid blocking the user on transient sync errors.
+                completed = false;
               } finally {
                 if (context.mounted) {
                   Navigator.of(context).pop();
@@ -620,6 +622,7 @@ final class _CloudSyncSwitchPromptGateState
       stage.dispose();
       progress.dispose();
     }
+    return completed;
   }
 
   Future<void> _switchToCloud(String uid) async {
@@ -674,7 +677,7 @@ final class _CloudSyncSwitchPromptGateState
         idToken.trim().isNotEmpty &&
         effectiveContext.mounted &&
         canShowDialog) {
-      await _runManagedVaultSyncWithProgress(
+      didSync = await _runManagedVaultSyncWithProgress(
         dialogContext: effectiveContext,
         backend: backend,
         sessionKey: sessionKey,
@@ -683,7 +686,6 @@ final class _CloudSyncSwitchPromptGateState
         vaultId: uid,
         idToken: idToken.trim(),
       );
-      didSync = true;
     }
 
     if (!mounted) return;
