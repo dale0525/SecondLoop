@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../storage/secure_blob_store.dart';
 import 'sync_config_migrator.dart';
+import 'sync_diagnostics.dart';
 import 'sync_engine.dart';
 import 'sync_key_manager.dart';
 import 'sync_secret_store.dart';
@@ -63,6 +64,12 @@ final class SyncConfigStore {
       'cloud_media_backup_wifi_only'; // 1|0
   static const _kCloudMediaBackupBackfillDonePrefix =
       'cloud_media_backup_backfill_done:';
+  static const _kBackgroundSyncResultPrefix = 'sync_background_result:';
+  static const _kBackgroundSyncBackoffPrefix = 'sync_background_backoff:';
+  static const _kSyncRefreshV2Enabled = 'sync_refresh_v2_enabled'; // 1|0
+  static const _kSyncBackgroundDiagV1Enabled =
+      'sync_background_diag_v1_enabled'; // 1|0
+  static const _kSyncBackoffV1Enabled = 'sync_backoff_v1_enabled'; // 1|0
 
   Future<T> _serial<T>(Future<T> Function() action) {
     final next = _tail.then((_) => action());
@@ -256,6 +263,38 @@ final class SyncConfigStore {
     await _writeConfigUpdates({kCloudMediaBackupWifiOnly: enabled ? '1' : '0'});
   }
 
+  Future<bool> readSyncRefreshV2Enabled() async {
+    final v = (await _loadConfigMap())[_kSyncRefreshV2Enabled];
+    if (v == null) return true;
+    return v == '1';
+  }
+
+  Future<void> writeSyncRefreshV2Enabled(bool enabled) async {
+    await _writeConfigUpdates({_kSyncRefreshV2Enabled: enabled ? '1' : '0'});
+  }
+
+  Future<bool> readSyncBackgroundDiagV1Enabled() async {
+    final v = (await _loadConfigMap())[_kSyncBackgroundDiagV1Enabled];
+    if (v == null) return true;
+    return v == '1';
+  }
+
+  Future<void> writeSyncBackgroundDiagV1Enabled(bool enabled) async {
+    await _writeConfigUpdates({
+      _kSyncBackgroundDiagV1Enabled: enabled ? '1' : '0',
+    });
+  }
+
+  Future<bool> readSyncBackoffV1Enabled() async {
+    final v = (await _loadConfigMap())[_kSyncBackoffV1Enabled];
+    if (v == null) return true;
+    return v == '1';
+  }
+
+  Future<void> writeSyncBackoffV1Enabled(bool enabled) async {
+    await _writeConfigUpdates({_kSyncBackoffV1Enabled: enabled ? '1' : '0'});
+  }
+
   Future<bool> readCloudMediaBackupBackfillDone({
     required String scopeId,
   }) async {
@@ -276,6 +315,64 @@ final class SyncConfigStore {
     await _writeConfigUpdates({key: done ? '1' : null});
   }
 
+  Future<SyncBackgroundResult?> readBackgroundSyncResult({
+    required SyncBackendType backendType,
+  }) async {
+    final key =
+        '$_kBackgroundSyncResultPrefix${_backendTypeToken(backendType)}';
+    final raw = (await _loadConfigMap())[key];
+    if (raw == null || raw.trim().isEmpty) return null;
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map<String, dynamic>) return null;
+      return SyncBackgroundResult.fromJson(decoded);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> writeBackgroundSyncResult(
+    SyncBackgroundResult? result, {
+    required SyncBackendType backendType,
+  }) async {
+    final key =
+        '$_kBackgroundSyncResultPrefix${_backendTypeToken(backendType)}';
+    if (result == null) {
+      await _writeConfigUpdates({key: null});
+      return;
+    }
+    await _writeConfigUpdates({key: jsonEncode(result.toJson())});
+  }
+
+  Future<SyncBackgroundBackoffState?> readBackgroundSyncBackoffState({
+    required SyncBackendType backendType,
+  }) async {
+    final key =
+        '$_kBackgroundSyncBackoffPrefix${_backendTypeToken(backendType)}';
+    final raw = (await _loadConfigMap())[key];
+    if (raw == null || raw.trim().isEmpty) return null;
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map<String, dynamic>) return null;
+      return SyncBackgroundBackoffState.fromJson(decoded);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> writeBackgroundSyncBackoffState(
+    SyncBackgroundBackoffState? state, {
+    required SyncBackendType backendType,
+  }) async {
+    final key =
+        '$_kBackgroundSyncBackoffPrefix${_backendTypeToken(backendType)}';
+    if (state == null) {
+      await _writeConfigUpdates({key: null});
+      return;
+    }
+    await _writeConfigUpdates({key: jsonEncode(state.toJson())});
+  }
+
   String cloudMediaBackupBackfillScopeId(SyncConfig config) {
     final backend = switch (config.backendType) {
       SyncBackendType.webdav => 'webdav',
@@ -290,6 +387,14 @@ final class SyncConfigStore {
       config.remoteRoot.trim(),
     ].join('|');
     return base64Url.encode(utf8.encode(raw));
+  }
+
+  static String _backendTypeToken(SyncBackendType backendType) {
+    return switch (backendType) {
+      SyncBackendType.webdav => 'webdav',
+      SyncBackendType.localDir => 'localdir',
+      SyncBackendType.managedVault => 'managedvault',
+    };
   }
 
   Future<SyncConfig?> loadConfiguredSync() async {

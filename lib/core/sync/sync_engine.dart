@@ -4,6 +4,8 @@ import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart' show Listenable, ValueNotifier;
 
+import 'sync_result.dart';
+
 enum SyncBackendType {
   webdav,
   localDir,
@@ -80,8 +82,13 @@ abstract class SyncRunner {
   Future<int> pull(SyncConfig config);
 }
 
+abstract class SyncPullResultRunner {
+  Future<SyncPullResult> pullWithResult(SyncConfig config);
+}
+
 typedef SyncConfigLoader = Future<SyncConfig?> Function();
 typedef SyncAutoRunGate = Future<bool> Function();
+typedef SyncFeatureFlagProvider = Future<bool> Function();
 
 enum SyncWriteGateKind {
   open,
@@ -159,9 +166,13 @@ final class SyncEngine {
     this.pullInterval = const Duration(seconds: 20),
     this.pullJitter = const Duration(seconds: 5),
     this.pullOnStart = true,
+    this.zeroApplyRefreshMinInterval = const Duration(seconds: 60),
+    this.syncRefreshV2EnabledProvider,
     this.autoRunGate,
     Random? random,
-  }) : _random = random ?? Random();
+    int Function()? nowMsProvider,
+  })  : _random = random ?? Random(),
+        _nowMsProvider = nowMsProvider ?? _defaultNowMs;
 
   final SyncRunner syncRunner;
   final SyncConfigLoader loadConfig;
@@ -170,8 +181,11 @@ final class SyncEngine {
   final Duration pullInterval;
   final Duration pullJitter;
   final bool pullOnStart;
+  final Duration zeroApplyRefreshMinInterval;
+  final SyncFeatureFlagProvider? syncRefreshV2EnabledProvider;
   final SyncAutoRunGate? autoRunGate;
   final Random _random;
+  final int Function() _nowMsProvider;
 
   final ValueNotifier<int> _changeCounter = ValueNotifier<int>(0);
   Listenable get changes => _changeCounter;
@@ -190,6 +204,11 @@ final class SyncEngine {
 
   Timer? _pushDebounceTimer;
   Timer? _pullTimer;
+  int? _lastZeroApplyRefreshAtMs;
+
+  static int _defaultNowMs() => DateTime.now().millisecondsSinceEpoch;
+
+  int _nowMs() => _nowMsProvider();
 
   void start() {
     if (_running) return;
@@ -322,7 +341,7 @@ final class SyncEngine {
       if (backendType != SyncBackendType.managedVault) {
         _setWriteGate(const SyncWriteGateState.open());
       } else {
-        final nowMs = DateTime.now().millisecondsSinceEpoch;
+        final nowMs = _nowMs();
         if (_isPushBlocked(nowMs)) return;
       }
 
@@ -375,7 +394,7 @@ final class SyncEngine {
     try {
       config = await loadConfig();
       if (!_running || config == null) return;
-      final applied = await syncRunner.pull(config);
+      final pullResult = await _pullWithResult(config);
 
       if (config.backendType == SyncBackendType.managedVault &&
           (writeGate.value.kind == SyncWriteGateKind.paymentRequired ||
@@ -383,8 +402,13 @@ final class SyncEngine {
         _setWriteGate(const SyncWriteGateState.open());
       }
 
-      if (applied > 0) {
+      if (pullResult.hasAppliedChanges) {
         _notifyChange();
+      } else if (pullResult.shouldRefreshUi) {
+        final enabled = await _isSyncRefreshV2Enabled();
+        if (enabled && _canNotifyZeroApplyRefresh(_nowMs())) {
+          _notifyChange();
+        }
       }
     } catch (e) {
       if (config?.backendType != SyncBackendType.managedVault) {
@@ -401,5 +425,38 @@ final class SyncEngine {
 
       // Best-effort: avoid crashing the app on transient sync errors.
     } finally {}
+  }
+
+  Future<SyncPullResult> _pullWithResult(SyncConfig config) async {
+    final runner = syncRunner;
+    if (runner is SyncPullResultRunner) {
+      return (runner as SyncPullResultRunner).pullWithResult(config);
+    }
+    final applied = await runner.pull(config);
+    return SyncPullResult(applied: applied);
+  }
+
+  Future<bool> _isSyncRefreshV2Enabled() async {
+    final provider = syncRefreshV2EnabledProvider;
+    if (provider == null) return true;
+    try {
+      return await provider();
+    } catch (_) {
+      return true;
+    }
+  }
+
+  bool _canNotifyZeroApplyRefresh(int nowMs) {
+    if (zeroApplyRefreshMinInterval <= Duration.zero) {
+      _lastZeroApplyRefreshAtMs = nowMs;
+      return true;
+    }
+    final last = _lastZeroApplyRefreshAtMs;
+    if (last == null ||
+        nowMs - last >= zeroApplyRefreshMinInterval.inMilliseconds) {
+      _lastZeroApplyRefreshAtMs = nowMs;
+      return true;
+    }
+    return false;
   }
 }

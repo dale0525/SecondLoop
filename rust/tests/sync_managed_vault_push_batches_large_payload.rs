@@ -10,6 +10,14 @@ use secondloop_rust::crypto::{derive_root_key, KdfParams};
 use secondloop_rust::db;
 use secondloop_rust::sync;
 
+fn bench_ops_target(default_ops: usize) -> usize {
+    std::env::var("SYNC_BENCH_OPS")
+        .ok()
+        .and_then(|value| value.trim().parse::<usize>().ok())
+        .filter(|value| *value > 0)
+        .unwrap_or(default_ops)
+}
+
 #[derive(Default)]
 struct ServerState {
     push_calls: usize,
@@ -213,7 +221,8 @@ fn managed_vault_push_ops_only_splits_large_payload_into_batches() {
     let key = auth::init_master_password(&app_dir, "pw-a", KdfParams::for_test()).expect("init A");
     let conn = db::open(&app_dir).expect("open A db");
 
-    for i in 0..510 {
+    let total_ops = bench_ops_target(510);
+    for i in 0..total_ops {
         let title = format!("Conversation {i}");
         let _ = db::create_conversation(&conn, &key, &title).expect("create conversation");
     }
@@ -228,10 +237,14 @@ fn managed_vault_push_ops_only_splits_large_payload_into_batches() {
     let pushed =
         sync::managed_vault::push_ops_only(&conn, &key, &sync_key, &base_url, &vault_id, &id_token)
             .expect("push");
-    assert_eq!(pushed, 510);
+    assert_eq!(pushed, total_ops as u64);
 
     let st = state.lock().expect("lock");
-    assert!(st.push_calls >= 3, "expected multiple push requests");
+    let expected_push_calls = (total_ops + 199) / 200;
+    assert_eq!(
+        st.push_calls, expected_push_calls,
+        "expected push calls to follow batch size cap"
+    );
     assert!(
         st.max_ops_per_push <= 200,
         "expected each push request to be capped"

@@ -5,6 +5,7 @@ import 'package:fake_async/fake_async.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:secondloop/core/sync/sync_engine.dart';
+import 'package:secondloop/core/sync/sync_result.dart';
 
 void main() {
   test('debounces push after local mutations', () {
@@ -130,6 +131,109 @@ void main() {
       engine.stop();
     });
   });
+
+  test('notifies when pull result requests refresh with zero applied', () {
+    fakeAsync((async) {
+      final runner = _HintPullRunner(
+        const <SyncPullResult>[
+          SyncPullResult(applied: 0, shouldRefreshUi: true),
+        ],
+      );
+      final engine = SyncEngine(
+        syncRunner: runner,
+        loadConfig: () async => _webdavConfig(),
+        pushDebounce: const Duration(days: 1),
+        pullInterval: const Duration(days: 1),
+        pullJitter: Duration.zero,
+        pullOnStart: true,
+        zeroApplyRefreshMinInterval: Duration.zero,
+      );
+
+      var changeNotifications = 0;
+      engine.changes.addListener(() => changeNotifications++);
+
+      engine.start();
+      async.flushMicrotasks();
+
+      expect(runner.pullCalls, 1);
+      expect(changeNotifications, 1);
+
+      engine.stop();
+    });
+  });
+
+  test('throttles zero-applied refresh hints', () {
+    fakeAsync((async) {
+      final runner = _HintPullRunner(
+        const <SyncPullResult>[
+          SyncPullResult(applied: 0, shouldRefreshUi: true),
+          SyncPullResult(applied: 0, shouldRefreshUi: true),
+          SyncPullResult(applied: 0, shouldRefreshUi: true),
+        ],
+      );
+      final engine = SyncEngine(
+        syncRunner: runner,
+        loadConfig: () async => _webdavConfig(),
+        pushDebounce: const Duration(days: 1),
+        pullInterval: const Duration(days: 1),
+        pullJitter: Duration.zero,
+        pullOnStart: false,
+        zeroApplyRefreshMinInterval: const Duration(seconds: 60),
+        nowMsProvider: () => async.elapsed.inMilliseconds,
+      );
+
+      var changeNotifications = 0;
+      engine.changes.addListener(() => changeNotifications++);
+      engine.start();
+
+      engine.triggerPullNow();
+      async.flushMicrotasks();
+      expect(changeNotifications, 1);
+
+      async.elapse(const Duration(seconds: 10));
+      engine.triggerPullNow();
+      async.flushMicrotasks();
+      expect(changeNotifications, 1);
+
+      async.elapse(const Duration(seconds: 60));
+      engine.triggerPullNow();
+      async.flushMicrotasks();
+      expect(changeNotifications, 2);
+
+      engine.stop();
+    });
+  });
+
+  test('does not notify zero-applied refresh when refresh_v2 is disabled', () {
+    fakeAsync((async) {
+      final runner = _HintPullRunner(
+        const <SyncPullResult>[
+          SyncPullResult(applied: 0, shouldRefreshUi: true),
+        ],
+      );
+      final engine = SyncEngine(
+        syncRunner: runner,
+        loadConfig: () async => _webdavConfig(),
+        pushDebounce: const Duration(days: 1),
+        pullInterval: const Duration(days: 1),
+        pullJitter: Duration.zero,
+        pullOnStart: true,
+        zeroApplyRefreshMinInterval: Duration.zero,
+        syncRefreshV2EnabledProvider: () async => false,
+      );
+
+      var changeNotifications = 0;
+      engine.changes.addListener(() => changeNotifications++);
+
+      engine.start();
+      async.flushMicrotasks();
+
+      expect(runner.pullCalls, 1);
+      expect(changeNotifications, 0);
+
+      engine.stop();
+    });
+  });
 }
 
 SyncConfig _webdavConfig() => SyncConfig.webdav(
@@ -173,5 +277,35 @@ final class _BlockingPullRunner implements SyncRunner {
     pullCalls++;
     _pullCompleter ??= Completer<int>();
     return _pullCompleter!.future;
+  }
+}
+
+final class _HintPullRunner implements SyncRunner, SyncPullResultRunner {
+  _HintPullRunner(this._results);
+
+  final List<SyncPullResult> _results;
+
+  int pushCalls = 0;
+  int pullCalls = 0;
+
+  @override
+  Future<int> push(SyncConfig config) async {
+    pushCalls++;
+    return 0;
+  }
+
+  @override
+  Future<int> pull(SyncConfig config) async {
+    pullCalls++;
+    return 0;
+  }
+
+  @override
+  Future<SyncPullResult> pullWithResult(SyncConfig config) async {
+    final index = pullCalls;
+    pullCalls++;
+    if (_results.isEmpty) return const SyncPullResult(applied: 0);
+    if (index >= _results.length) return _results.last;
+    return _results[index];
   }
 }

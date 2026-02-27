@@ -76,3 +76,20 @@ fn localdir_allows_valid_paths() {
     let got = remote.get("/safe/hello.txt").expect("read valid path");
     assert_eq!(got, b"ok");
 }
+
+#[test]
+fn localdir_put_atomically_overwrites_existing_file() {
+    let root = tempfile::tempdir().expect("root");
+    let remote =
+        LocalDirRemoteStore::new(root.path().to_path_buf()).expect("create localdir remote");
+
+    remote
+        .put("/safe/atomic.txt", b"v1".to_vec())
+        .expect("write v1");
+    remote
+        .put("/safe/atomic.txt", b"v2-updated".to_vec())
+        .expect("write v2");
+
+    let got = remote.get("/safe/atomic.txt").expect("read latest");
+    assert_eq!(got, b"v2-updated");
+}

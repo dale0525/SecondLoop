@@ -347,6 +347,11 @@ fn decode_pull_bin_response(bytes: &[u8]) -> Result<Vec<PullOpBin>> {
     Ok(out)
 }
 
+fn should_fallback_to_json_pull(status: reqwest::StatusCode) -> bool {
+    let code = status.as_u16();
+    code == 404 || code == 408 || code == 429 || status.is_server_error()
+}
+
 fn ensure_device_registered(
     http: &Client,
     base_url: &str,
@@ -834,7 +839,7 @@ pub fn pull(
                 .send()?;
 
             let status = resp.status();
-            if status.as_u16() == 404 {
+            if should_fallback_to_json_pull(status) {
                 pull_bin_supported = Some(false);
             } else {
                 if !status.is_success() {

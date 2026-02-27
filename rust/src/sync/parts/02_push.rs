@@ -225,6 +225,7 @@ fn push_internal(
 
         const OP_UPLOAD_BATCH_SIZE: usize = 64;
         const OP_UPLOAD_MAX_CONCURRENCY: usize = 8;
+        const OP_UPLOAD_PENALTY_WINDOW_MS: i64 = 10 * 60 * 1000;
 
         let mut rows = stmt.query(params![ctx.device_id, after_seq])?;
         enum AttachmentAction {
@@ -238,11 +239,31 @@ fn push_internal(
         let mut touched_pack_chunks: BTreeSet<i64> = BTreeSet::new();
         let mut pending_op_uploads: Vec<(String, Vec<u8>)> =
             Vec::with_capacity(OP_UPLOAD_BATCH_SIZE);
+        let op_upload_penalty_cap_key =
+            format!("sync.push.op_upload_concurrency_cap:{scope_id}");
+        let op_upload_penalty_until_key =
+            format!("sync.push.op_upload_concurrency_cap_until_ms:{scope_id}");
+        let penalty_cap = kv_get_i64(ctx.conn, &op_upload_penalty_cap_key)?;
+        let penalty_until_ms = kv_get_i64(ctx.conn, &op_upload_penalty_until_key)?;
+        let now_ms = current_unix_ms();
         let mut op_upload_concurrency = OP_UPLOAD_MAX_CONCURRENCY;
+        if let (Some(cap), Some(until_ms)) = (penalty_cap, penalty_until_ms) {
+            if cap > 0 && until_ms > now_ms {
+                op_upload_concurrency = op_upload_concurrency.min(cap as usize);
+            }
+        }
 
         let mut flush_pending_op_uploads = |pending: &mut Vec<(String, Vec<u8>)>| -> Result<()> {
-            let uploaded =
+            let (uploaded, lowered_concurrency) =
                 upload_ops_files_batch(ctx.remote, pending, &mut op_upload_concurrency)?;
+            if let Some(cap) = lowered_concurrency {
+                kv_set_i64(ctx.conn, &op_upload_penalty_cap_key, cap as i64)?;
+                kv_set_i64(
+                    ctx.conn,
+                    &op_upload_penalty_until_key,
+                    current_unix_ms() + OP_UPLOAD_PENALTY_WINDOW_MS,
+                )?;
+            }
             if uploaded > 0 && progress.is_some() {
                 done_ops = (done_ops + uploaded as u64).min(total_ops);
                 if let Some(cb) = progress.as_deref_mut() {
@@ -415,24 +436,34 @@ fn maybe_run_oplog_retention_after_push(
     Ok(())
 }
 
+fn current_unix_ms() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis() as i64
+}
+
 fn upload_ops_files_batch(
     remote: &impl RemoteStore,
     pending: &mut Vec<(String, Vec<u8>)>,
     concurrency: &mut usize,
-) -> Result<usize> {
+) -> Result<(usize, Option<usize>)> {
     let upload_count = pending.len();
     if upload_count == 0 {
-        return Ok(0);
+        return Ok((0, None));
     }
 
     let uploads = std::mem::take(pending);
     let mut attempt_concurrency = (*concurrency).max(1).min(upload_count);
+    let initial_concurrency = attempt_concurrency;
 
     loop {
         match upload_ops_files_batch_once(remote, &uploads, attempt_concurrency) {
             Ok(()) => {
                 *concurrency = attempt_concurrency;
-                return Ok(upload_count);
+                let lowered_concurrency =
+                    (attempt_concurrency < initial_concurrency).then_some(attempt_concurrency);
+                return Ok((upload_count, lowered_concurrency));
             }
             Err(_) if attempt_concurrency > 1 => {
                 attempt_concurrency = (attempt_concurrency / 2).max(1);

@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:workmanager/workmanager.dart';
 
+import '../ai/ai_routing.dart';
 import '../backend/app_backend.dart';
 import '../backend/native_backend.dart';
 import '../cloud/cloud_auth_controller.dart';
@@ -13,6 +14,7 @@ import '../../features/media_enrichment/media_enrichment_runner.dart';
 import '../../features/media_backup/cloud_media_backup_runner.dart';
 import 'background_sync_orchestrator.dart';
 import 'sync_config_store.dart';
+import 'sync_diagnostics.dart';
 import 'sync_engine.dart';
 import 'sync_key_manager.dart';
 
@@ -24,6 +26,9 @@ const _kWorkmanagerTaskId = '$_kAppId.backgroundSync';
 const _kWorkmanagerUniqueName = _kWorkmanagerTaskId;
 const _kWorkmanagerTaskName = _kWorkmanagerTaskId;
 
+const Duration _kBackgroundSyncBackoffBase = Duration(minutes: 1);
+const Duration _kBackgroundSyncBackoffMax = Duration(minutes: 60);
+
 @pragma('vm:entry-point')
 void backgroundSyncCallbackDispatcher() {
   Workmanager().executeTask((task, inputData) async {
@@ -31,6 +36,77 @@ void backgroundSyncCallbackDispatcher() {
     ui.DartPluginRegistrant.ensureInitialized();
     return BackgroundSync.runOnce(taskName: task);
   });
+}
+
+enum _BackgroundOpStatus {
+  success,
+  skipped,
+  failure,
+}
+
+final class _BackgroundSyncOpResult {
+  const _BackgroundSyncOpResult._({
+    required this.status,
+    required this.applied,
+    required this.durationMs,
+    this.statusCode,
+    this.errorCode,
+    this.errorMessage,
+    this.userMessage,
+    this.retryable = false,
+  });
+
+  factory _BackgroundSyncOpResult.success({
+    required int applied,
+    required int durationMs,
+  }) {
+    return _BackgroundSyncOpResult._(
+      status: _BackgroundOpStatus.success,
+      applied: applied,
+      durationMs: durationMs,
+    );
+  }
+
+  factory _BackgroundSyncOpResult.skipped({
+    required int durationMs,
+    String? userMessage,
+  }) {
+    return _BackgroundSyncOpResult._(
+      status: _BackgroundOpStatus.skipped,
+      applied: 0,
+      durationMs: durationMs,
+      userMessage: userMessage,
+    );
+  }
+
+  factory _BackgroundSyncOpResult.failure({
+    required int durationMs,
+    required bool retryable,
+    int? statusCode,
+    String? errorCode,
+    String? errorMessage,
+    String? userMessage,
+  }) {
+    return _BackgroundSyncOpResult._(
+      status: _BackgroundOpStatus.failure,
+      applied: 0,
+      durationMs: durationMs,
+      statusCode: statusCode,
+      errorCode: errorCode,
+      errorMessage: errorMessage,
+      userMessage: userMessage,
+      retryable: retryable,
+    );
+  }
+
+  final _BackgroundOpStatus status;
+  final int applied;
+  final int durationMs;
+  final int? statusCode;
+  final String? errorCode;
+  final String? errorMessage;
+  final String? userMessage;
+  final bool retryable;
 }
 
 final class BackgroundSync {
@@ -106,6 +182,20 @@ final class BackgroundSync {
       return true;
     }
 
+    final backgroundDiagEnabled = await store.readSyncBackgroundDiagV1Enabled();
+    final backoffEnabled = await store.readSyncBackoffV1Enabled();
+
+    final nowMs = DateTime.now().millisecondsSinceEpoch;
+    if (backoffEnabled) {
+      final backoffState = await store.readBackgroundSyncBackoffState(
+        backendType: config.backendType,
+      );
+      if (backoffState != null && nowMs < backoffState.nextAllowedAtMs) {
+        await rescheduleIfNeeded();
+        return true;
+      }
+    }
+
     final sessionKey = await backend.loadSavedSessionKey();
     if (sessionKey == null || sessionKey.length != 32) {
       await rescheduleIfNeeded();
@@ -150,18 +240,59 @@ final class BackgroundSync {
         }
       }
 
-      await _pullOnce(
+      final pullResult = await _pullOnce(
         backend: backend,
         sessionKey: sessionKey,
         config: config,
         managedVaultIdToken: idToken,
       );
-      await _pushOnce(
+      final pushResult = await _pushOnce(
         backend: backend,
         sessionKey: sessionKey,
         config: config,
         managedVaultIdToken: idToken,
       );
+
+      final retryableFailure = switch ((
+        pullResult.retryable,
+        pushResult.retryable,
+      )) {
+        (true, _) => pullResult,
+        (_, true) => pushResult,
+        _ => null,
+      };
+
+      final retryCount = backoffEnabled
+          ? await _updateBackoffState(
+              store: store,
+              backendType: config.backendType,
+              nowMs: DateTime.now().millisecondsSinceEpoch,
+              retryableFailure: retryableFailure,
+            )
+          : null;
+      if (!backoffEnabled) {
+        await store.writeBackgroundSyncBackoffState(
+          null,
+          backendType: config.backendType,
+        );
+      }
+
+      if (backgroundDiagEnabled) {
+        await _writeBackgroundResult(
+          store: store,
+          backendType: config.backendType,
+          direction: SyncBackgroundDirection.pull,
+          result: pullResult,
+          retryCount: pullResult.retryable ? retryCount : null,
+        );
+        await _writeBackgroundResult(
+          store: store,
+          backendType: config.backendType,
+          direction: SyncBackgroundDirection.push,
+          result: pushResult,
+          retryCount: pushResult.retryable ? retryCount : null,
+        );
+      }
 
       if (mediaUploadsEnabled) {
         final wifiOnly = await store.readCloudMediaBackupWifiOnly();
@@ -262,89 +393,273 @@ final class BackgroundSync {
     }
   }
 
-  static Future<int> _pullOnce({
+  static Future<_BackgroundSyncOpResult> _pullOnce({
     required AppBackend backend,
     required Uint8List sessionKey,
     required SyncConfig config,
     required String? managedVaultIdToken,
   }) async {
-    return switch (config.backendType) {
-      SyncBackendType.webdav => backend.syncWebdavPull(
-          sessionKey,
-          config.syncKey,
-          baseUrl: config.baseUrl ?? '',
-          username: config.username,
-          password: config.password,
-          remoteRoot: config.remoteRoot,
-        ),
-      SyncBackendType.localDir => backend.syncLocaldirPull(
-          sessionKey,
-          config.syncKey,
-          localDir: config.localDir ?? '',
-          remoteRoot: config.remoteRoot,
-        ),
-      SyncBackendType.managedVault => () async {
-          final idToken = managedVaultIdToken;
-          if (idToken == null || idToken.trim().isEmpty) return 0;
-          try {
-            return await backend.syncManagedVaultPull(
+    final startMs = DateTime.now().millisecondsSinceEpoch;
+    try {
+      final applied = await switch (config.backendType) {
+        SyncBackendType.webdav => backend.syncWebdavPull(
+            sessionKey,
+            config.syncKey,
+            baseUrl: config.baseUrl ?? '',
+            username: config.username,
+            password: config.password,
+            remoteRoot: config.remoteRoot,
+          ),
+        SyncBackendType.localDir => backend.syncLocaldirPull(
+            sessionKey,
+            config.syncKey,
+            localDir: config.localDir ?? '',
+            remoteRoot: config.remoteRoot,
+          ),
+        SyncBackendType.managedVault => () async {
+            final idToken = managedVaultIdToken;
+            if (idToken == null || idToken.trim().isEmpty) {
+              return -1;
+            }
+            return backend.syncManagedVaultPull(
               sessionKey,
               config.syncKey,
               baseUrl: config.baseUrl ?? '',
               vaultId: config.remoteRoot,
               idToken: idToken,
             );
-          } catch (e) {
-            final msg = e.toString();
-            if (msg.contains('HTTP 402')) return 0;
-            return 0;
-          }
-        }(),
-    };
+          }(),
+      };
+      final durationMs = DateTime.now().millisecondsSinceEpoch - startMs;
+      if (applied < 0) {
+        return _BackgroundSyncOpResult.skipped(
+          durationMs: durationMs,
+          userMessage: 'Sign in required for cloud sync.',
+        );
+      }
+      return _BackgroundSyncOpResult.success(
+        applied: applied,
+        durationMs: durationMs,
+      );
+    } catch (error) {
+      return _failureFromError(
+        error,
+        durationMs: DateTime.now().millisecondsSinceEpoch - startMs,
+      );
+    }
   }
 
-  static Future<int> _pushOnce({
+  static Future<_BackgroundSyncOpResult> _pushOnce({
     required AppBackend backend,
     required Uint8List sessionKey,
     required SyncConfig config,
     required String? managedVaultIdToken,
   }) async {
-    return switch (config.backendType) {
-      SyncBackendType.webdav => backend.syncWebdavPushOpsOnly(
-          sessionKey,
-          config.syncKey,
-          baseUrl: config.baseUrl ?? '',
-          username: config.username,
-          password: config.password,
-          remoteRoot: config.remoteRoot,
-        ),
-      SyncBackendType.localDir => backend.syncLocaldirPush(
-          sessionKey,
-          config.syncKey,
-          localDir: config.localDir ?? '',
-          remoteRoot: config.remoteRoot,
-        ),
-      SyncBackendType.managedVault => () async {
-          final idToken = managedVaultIdToken;
-          if (idToken == null || idToken.trim().isEmpty) return 0;
-          try {
-            return await backend.syncManagedVaultPushOpsOnly(
+    final startMs = DateTime.now().millisecondsSinceEpoch;
+    try {
+      final pushed = await switch (config.backendType) {
+        SyncBackendType.webdav => backend.syncWebdavPushOpsOnly(
+            sessionKey,
+            config.syncKey,
+            baseUrl: config.baseUrl ?? '',
+            username: config.username,
+            password: config.password,
+            remoteRoot: config.remoteRoot,
+          ),
+        SyncBackendType.localDir => backend.syncLocaldirPush(
+            sessionKey,
+            config.syncKey,
+            localDir: config.localDir ?? '',
+            remoteRoot: config.remoteRoot,
+          ),
+        SyncBackendType.managedVault => () async {
+            final idToken = managedVaultIdToken;
+            if (idToken == null || idToken.trim().isEmpty) {
+              return -1;
+            }
+            return backend.syncManagedVaultPushOpsOnly(
               sessionKey,
               config.syncKey,
               baseUrl: config.baseUrl ?? '',
               vaultId: config.remoteRoot,
               idToken: idToken,
             );
-          } catch (e) {
-            final msg = e.toString();
-            if (msg.contains('HTTP 402')) return 0;
-            if (msg.contains('HTTP 403') && msg.contains('"grace_readonly"')) {
-              return 0;
-            }
-            return 0;
-          }
-        }(),
+          }(),
+      };
+      final durationMs = DateTime.now().millisecondsSinceEpoch - startMs;
+      if (pushed < 0) {
+        return _BackgroundSyncOpResult.skipped(
+          durationMs: durationMs,
+          userMessage: 'Sign in required for cloud sync.',
+        );
+      }
+      return _BackgroundSyncOpResult.success(
+        applied: pushed,
+        durationMs: durationMs,
+      );
+    } catch (error) {
+      return _failureFromError(
+        error,
+        durationMs: DateTime.now().millisecondsSinceEpoch - startMs,
+      );
+    }
+  }
+
+  static _BackgroundSyncOpResult _failureFromError(
+    Object error, {
+    required int durationMs,
+  }) {
+    final statusCode = parseHttpStatusFromError(error);
+    final errorCode = parseCloudErrorCodeFromError(error);
+    final errorMessage = error.toString();
+    return _BackgroundSyncOpResult.failure(
+      durationMs: durationMs,
+      retryable: isRetryableBackgroundSyncFailure(
+        statusCode: statusCode,
+        errorCode: errorCode,
+        message: errorMessage,
+      ),
+      statusCode: statusCode,
+      errorCode: errorCode,
+      errorMessage: errorMessage,
+      userMessage: userReadableSyncErrorMessage(
+        statusCode: statusCode,
+        errorCode: errorCode,
+      ),
+    );
+  }
+
+  @visibleForTesting
+  static Duration retryBackoffDelayForFailureCount(
+    int failureCount, {
+    Duration base = _kBackgroundSyncBackoffBase,
+    Duration max = _kBackgroundSyncBackoffMax,
+  }) {
+    if (failureCount <= 0) return Duration.zero;
+    final exponent = (failureCount - 1).clamp(0, 30);
+    final multiplier = 1 << exponent;
+    final delayMs = base.inMilliseconds * multiplier;
+    final cappedMs =
+        delayMs > max.inMilliseconds ? max.inMilliseconds : delayMs;
+    return Duration(milliseconds: cappedMs);
+  }
+
+  @visibleForTesting
+  static bool isRetryableBackgroundSyncFailure({
+    int? statusCode,
+    String? errorCode,
+    String? message,
+  }) {
+    if (statusCode != null) {
+      if (statusCode == 401 || statusCode == 408 || statusCode == 429) {
+        return true;
+      }
+      if (statusCode >= 500) return true;
+      if (statusCode == 402) return false;
+      if (statusCode == 403) {
+        if (errorCode == 'grace_readonly' ||
+            errorCode == 'storage_quota_exceeded') {
+          return false;
+        }
+        return false;
+      }
+    }
+
+    final normalized = (message ?? '').toLowerCase();
+    if (normalized.contains('socketexception') ||
+        normalized.contains('timeout') ||
+        normalized.contains('timed out') ||
+        normalized.contains('network')) {
+      return true;
+    }
+    return false;
+  }
+
+  @visibleForTesting
+  static String userReadableSyncErrorMessage({
+    int? statusCode,
+    String? errorCode,
+  }) {
+    if (statusCode == 401) {
+      return 'Sign-in expired. Please sign in again.';
+    }
+    if (statusCode == 402) {
+      return 'Cloud subscription required to continue sync.';
+    }
+    if (statusCode == 403 && errorCode == 'grace_readonly') {
+      return 'Cloud sync is read-only during grace period.';
+    }
+    if (statusCode == 403 && errorCode == 'storage_quota_exceeded') {
+      return 'Cloud storage quota exceeded. Please free space or upgrade.';
+    }
+    if (statusCode == 429) {
+      return 'Sync is being throttled. Retrying later.';
+    }
+    if (statusCode != null && statusCode >= 500) {
+      return 'Server is temporarily unavailable. Retrying later.';
+    }
+    return 'Sync failed. Retrying automatically when possible.';
+  }
+
+  static Future<int?> _updateBackoffState({
+    required SyncConfigStore store,
+    required SyncBackendType backendType,
+    required int nowMs,
+    required _BackgroundSyncOpResult? retryableFailure,
+  }) async {
+    if (retryableFailure == null) {
+      await store.writeBackgroundSyncBackoffState(
+        null,
+        backendType: backendType,
+      );
+      return null;
+    }
+    final previous = await store.readBackgroundSyncBackoffState(
+      backendType: backendType,
+    );
+    final retryCount = (previous?.retryCount ?? 0) + 1;
+    final delay = retryBackoffDelayForFailureCount(retryCount);
+    await store.writeBackgroundSyncBackoffState(
+      SyncBackgroundBackoffState(
+        backendType: backendType,
+        retryCount: retryCount,
+        nextAllowedAtMs: nowMs + delay.inMilliseconds,
+        updatedAtMs: nowMs,
+        lastStatusCode: retryableFailure.statusCode,
+        lastErrorCode: retryableFailure.errorCode,
+      ),
+      backendType: backendType,
+    );
+    return retryCount;
+  }
+
+  static Future<void> _writeBackgroundResult({
+    required SyncConfigStore store,
+    required SyncBackendType backendType,
+    required SyncBackgroundDirection direction,
+    required _BackgroundSyncOpResult result,
+    required int? retryCount,
+  }) async {
+    final status = switch (result.status) {
+      _BackgroundOpStatus.success => SyncBackgroundResultStatus.success,
+      _BackgroundOpStatus.skipped => SyncBackgroundResultStatus.skipped,
+      _BackgroundOpStatus.failure => SyncBackgroundResultStatus.failure,
     };
+    await store.writeBackgroundSyncResult(
+      SyncBackgroundResult(
+        backendType: backendType,
+        direction: direction,
+        status: status,
+        timestampMs: DateTime.now().millisecondsSinceEpoch,
+        statusCode: result.statusCode,
+        errorCode: result.errorCode,
+        errorMessage: result.errorMessage,
+        userMessage: result.userMessage,
+        retryCount: retryCount,
+        durationMs: result.durationMs,
+      ),
+      backendType: backendType,
+    );
   }
 }
 

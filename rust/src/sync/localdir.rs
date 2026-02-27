@@ -1,9 +1,13 @@
 use std::collections::BTreeSet;
 use std::fs;
 use std::io::ErrorKind;
+use std::io::Write;
 use std::path::{Component, Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use anyhow::{anyhow, Result};
+
+static LOCALDIR_TMP_SEQ: AtomicU64 = AtomicU64::new(1);
 
 fn normalize_dir(path: &str) -> String {
     let trimmed = path.trim_matches('/');
@@ -75,6 +79,50 @@ impl LocalDirRemoteStore {
                 .ok_or_else(|| anyhow!("invalid path: {}", local.display()))?;
         }
     }
+
+    fn atomic_write_file(&self, local: &Path, bytes: &[u8]) -> Result<()> {
+        let Some(parent) = local.parent() else {
+            return Err(anyhow!("invalid localdir file path: {}", local.display()));
+        };
+        fs::create_dir_all(parent)?;
+
+        let seq = LOCALDIR_TMP_SEQ.fetch_add(1, Ordering::Relaxed);
+        let tmp_name = format!(".secondloop_tmp_{seq}.bin");
+        let tmp_path = parent.join(tmp_name);
+        self.ensure_within_root(&tmp_path)?;
+
+        let write_result: Result<()> = (|| {
+            let mut file = fs::OpenOptions::new()
+                .create_new(true)
+                .write(true)
+                .open(&tmp_path)?;
+            file.write_all(bytes)?;
+            file.sync_all()?;
+
+            match fs::rename(&tmp_path, local) {
+                Ok(()) => {}
+                Err(e) if e.kind() == ErrorKind::AlreadyExists => {
+                    fs::remove_file(local)?;
+                    fs::rename(&tmp_path, local)?;
+                }
+                Err(e) => return Err(e.into()),
+            }
+
+            #[cfg(unix)]
+            {
+                if let Ok(dir_handle) = fs::File::open(parent) {
+                    let _ = dir_handle.sync_all();
+                }
+            }
+
+            Ok(())
+        })();
+
+        if write_result.is_err() {
+            let _ = fs::remove_file(&tmp_path);
+        }
+        write_result
+    }
 }
 
 impl super::RemoteStore for LocalDirRemoteStore {
@@ -141,11 +189,7 @@ impl super::RemoteStore for LocalDirRemoteStore {
         }
 
         let local = self.resolve_virtual_path(path.trim_start_matches('/'))?;
-        if let Some(parent) = local.parent() {
-            fs::create_dir_all(parent)?;
-        }
-        fs::write(local, bytes)?;
-        Ok(())
+        self.atomic_write_file(&local, &bytes)
     }
 
     fn delete(&self, path: &str) -> Result<()> {

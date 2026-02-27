@@ -11,6 +11,7 @@ import '../subscription/subscription_scope.dart';
 import '../../features/media_backup/cloud_media_backup_runner.dart';
 import 'sync_config_store.dart';
 import 'sync_engine.dart';
+import 'sync_result.dart';
 
 final class SyncEngineGate extends StatefulWidget {
   const SyncEngineGate({required this.child, super.key});
@@ -93,6 +94,7 @@ final class _SyncEngineGateState extends State<SyncEngineGate>
     final engine = SyncEngine(
       syncRunner: runner,
       loadConfig: _configStore.loadConfiguredSyncIfAutoEnabled,
+      syncRefreshV2EnabledProvider: _configStore.readSyncRefreshV2Enabled,
       autoRunGate: _autoRunGate,
       pushDebounce: const Duration(seconds: 2),
       pullInterval: const Duration(seconds: 20),
@@ -173,7 +175,7 @@ final class SyncEngineScope extends InheritedWidget {
       engine != oldWidget.engine;
 }
 
-final class _AppBackendSyncRunner implements SyncRunner {
+final class _AppBackendSyncRunner implements SyncRunner, SyncPullResultRunner {
   _AppBackendSyncRunner({
     required this.backend,
     required SyncConfigStore configStore,
@@ -374,5 +376,14 @@ final class _AppBackendSyncRunner implements SyncRunner {
     };
     await _runCloudMediaBackupIfEnabled(config);
     return applied;
+  }
+
+  @override
+  Future<SyncPullResult> pullWithResult(SyncConfig config) async {
+    final applied = await pull(config);
+    return SyncPullResult(
+      applied: applied,
+      shouldRefreshUi: true,
+    );
   }
 }
