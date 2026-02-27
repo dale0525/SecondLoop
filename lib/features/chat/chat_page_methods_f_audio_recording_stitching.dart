@@ -36,111 +36,11 @@ final class _RecordedAudioSegmentFileTracker {
 }
 
 Uint8List extractPcm16Mono16kFromWav(Uint8List wavBytes) {
-  if (wavBytes.lengthInBytes < 44) return Uint8List(0);
-
-  String readChunkId(int offset) {
-    if (offset + 4 > wavBytes.lengthInBytes) return '';
-    return ascii.decode(
-      wavBytes.sublist(offset, offset + 4),
-      allowInvalid: true,
-    );
-  }
-
-  final header = ByteData.sublistView(wavBytes);
-  if (readChunkId(0) != 'RIFF' || readChunkId(8) != 'WAVE') {
-    return Uint8List(0);
-  }
-
-  int? audioFormat;
-  int? numChannels;
-  int? sampleRate;
-  int? bitsPerSample;
-  Uint8List? pcmBytes;
-
-  var offset = 12;
-  while (offset + 8 <= wavBytes.lengthInBytes) {
-    final chunkId = readChunkId(offset);
-    final chunkSize = header.getUint32(offset + 4, Endian.little);
-    final chunkDataOffset = offset + 8;
-    final chunkDataEnd = chunkDataOffset + chunkSize;
-    if (chunkDataEnd > wavBytes.lengthInBytes) {
-      return Uint8List(0);
-    }
-
-    if (chunkId == 'fmt ' && chunkSize >= 16) {
-      final fmt = ByteData.sublistView(
-        wavBytes,
-        chunkDataOffset,
-        chunkDataOffset + 16,
-      );
-      audioFormat = fmt.getUint16(0, Endian.little);
-      numChannels = fmt.getUint16(2, Endian.little);
-      sampleRate = fmt.getUint32(4, Endian.little);
-      bitsPerSample = fmt.getUint16(14, Endian.little);
-    } else if (chunkId == 'data') {
-      pcmBytes = Uint8List.fromList(
-        wavBytes.sublist(chunkDataOffset, chunkDataEnd),
-      );
-    }
-
-    final paddedChunkSize = chunkSize.isOdd ? chunkSize + 1 : chunkSize;
-    offset = chunkDataOffset + paddedChunkSize;
-  }
-
-  final isExpectedFormat = audioFormat == 1 &&
-      numChannels == 1 &&
-      sampleRate == 16000 &&
-      bitsPerSample == 16;
-  if (!isExpectedFormat || pcmBytes == null || pcmBytes.isEmpty) {
-    return Uint8List(0);
-  }
-  return pcmBytes;
+  return audio_preprocess.extractPcm16Mono16kFromWav(wavBytes);
 }
 
 Uint8List buildWavFromPcm16Mono16k(List<Uint8List> pcmChunks) {
-  final combined = BytesBuilder(copy: false);
-  for (final chunk in pcmChunks) {
-    if (chunk.isEmpty) continue;
-    combined.add(chunk);
-  }
-  final pcmBytes = combined.takeBytes();
-  if (pcmBytes.isEmpty) return Uint8List(0);
-
-  final dataSize = pcmBytes.lengthInBytes;
-  const byteRate = 16000 * 1 * 16 ~/ 8;
-  const blockAlign = 1 * 16 ~/ 8;
-
-  final header = ByteData(44)
-    ..setUint8(0, 0x52)
-    ..setUint8(1, 0x49)
-    ..setUint8(2, 0x46)
-    ..setUint8(3, 0x46)
-    ..setUint32(4, 36 + dataSize, Endian.little)
-    ..setUint8(8, 0x57)
-    ..setUint8(9, 0x41)
-    ..setUint8(10, 0x56)
-    ..setUint8(11, 0x45)
-    ..setUint8(12, 0x66)
-    ..setUint8(13, 0x6d)
-    ..setUint8(14, 0x74)
-    ..setUint8(15, 0x20)
-    ..setUint32(16, 16, Endian.little)
-    ..setUint16(20, 1, Endian.little)
-    ..setUint16(22, 1, Endian.little)
-    ..setUint32(24, 16000, Endian.little)
-    ..setUint32(28, byteRate, Endian.little)
-    ..setUint16(32, blockAlign, Endian.little)
-    ..setUint16(34, 16, Endian.little)
-    ..setUint8(36, 0x64)
-    ..setUint8(37, 0x61)
-    ..setUint8(38, 0x74)
-    ..setUint8(39, 0x61)
-    ..setUint32(40, dataSize, Endian.little);
-
-  final out = BytesBuilder(copy: false)
-    ..add(header.buffer.asUint8List())
-    ..add(pcmBytes);
-  return out.takeBytes();
+  return audio_preprocess.buildWavFromPcm16Mono16k(pcmChunks);
 }
 
 Future<Uint8List> stitchAudioRecordingSegmentsAsM4a(

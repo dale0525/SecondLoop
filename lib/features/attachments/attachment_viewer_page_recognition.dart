@@ -13,6 +13,7 @@ final class _AttachmentRecognitionIssue {
 extension _AttachmentViewerPageRecognition on _AttachmentViewerPageState {
   static const int _annotationJobLookupNowMs = 4102444800000;
   static const int _annotationJobLookupLimit = 500;
+  static const String _audioTranscriptSchema = 'secondloop.audio_transcript.v1';
 
   void _startAnnotationJobLoad() {
     if (_loadingAnnotationJob) return;
@@ -75,6 +76,58 @@ extension _AttachmentViewerPageRecognition on _AttachmentViewerPageState {
     return existing.isEmpty ? null : existing;
   }
 
+  Map<String, Object?>? _resolvePartialTranscribePayload({
+    required Map<String, Object?>? payload,
+    AttachmentAnnotationJob? job,
+  }) {
+    final current = job ?? _annotationJob;
+    if (current == null) return null;
+
+    final rawError = (current.lastError ?? '').trim();
+    if (rawError.isEmpty) return null;
+
+    final progress = decodeAudioTranscribeChunkPartialProgress(rawError);
+    if (progress == null || progress.completedResults.isEmpty) {
+      return null;
+    }
+
+    final merged =
+        mergeAudioTranscribePartialChunkResults(progress.completedResults);
+    final transcriptFull = merged.transcriptFull.trim();
+    if (transcriptFull.isEmpty && merged.segments.isEmpty) {
+      return null;
+    }
+
+    final failedChunkIndices =
+        progress.failedChunkIndices.toList(growable: false)..sort();
+    final next =
+        Map<String, Object?>.from(payload ?? const <String, Object?>{});
+    next['schema'] = (next['schema'] ?? '').toString().trim().isEmpty
+        ? _audioTranscriptSchema
+        : next['schema'];
+    if (merged.durationMs != null && merged.durationMs! > 0) {
+      next['duration_ms'] = merged.durationMs;
+    }
+    next['transcript_full'] = transcriptFull;
+    next['transcript_excerpt'] = merged.transcriptExcerpt;
+    next['transcript_segments'] = merged.segments
+        .map(
+          (segment) => <String, Object?>{
+            't_ms': segment.tMs,
+            'text': segment.text,
+          },
+        )
+        .toList(growable: false);
+    next['transcript_partial'] = true;
+    next['transcript_partial_chunk_count'] = progress.chunkCount;
+    next['transcript_partial_failed_chunk_indices'] = failedChunkIndices;
+    final retryError = progress.retryError.trim();
+    if (retryError.isNotEmpty) {
+      next['transcript_retry_error'] = retryError;
+    }
+    return next;
+  }
+
   Map<String, Object?>? _resolveDisplayAnnotationPayload(
     Map<String, Object?>? nextPayload,
   ) {
@@ -85,6 +138,14 @@ extension _AttachmentViewerPageRecognition on _AttachmentViewerPageState {
       _documentOcrStatusText = null;
       _lastNonEmptyAnnotationPayload = nextPayload;
       return nextPayload;
+    }
+
+    final partialTranscribePayload =
+        _resolvePartialTranscribePayload(payload: nextPayload);
+    if (partialTranscribePayload != null) {
+      _preserveRetryFallbackText = true;
+      _lastNonEmptyAnnotationPayload = partialTranscribePayload;
+      return partialTranscribePayload;
     }
 
     final recognitionIssue = _resolveAttachmentRecognitionIssue();
@@ -134,16 +195,28 @@ extension _AttachmentViewerPageRecognition on _AttachmentViewerPageState {
     final rawError = (current.lastError ?? '').trim();
     if (rawError.isEmpty) return null;
 
-    final reason = detectAudioTranscribeFailureReasonToken(rawError);
+    final partialProgress = decodeAudioTranscribeChunkPartialProgress(rawError);
+    final reason = detectAudioTranscribeFailureReasonToken(
+      partialProgress?.retryError ?? rawError,
+    );
     if (reason == null) return null;
 
     return _AttachmentRecognitionIssue(
       reason: reason,
-      rawError: rawError,
+      rawError: partialProgress?.retryError ?? rawError,
     );
   }
 
   void _applyAttachmentRecognitionIssueState() {
+    final partialPayload = _resolvePartialTranscribePayload(
+      payload: _annotationPayload,
+    );
+    if (partialPayload != null) {
+      _annotationPayload = partialPayload;
+      _annotationPayloadFuture = Future.value(partialPayload);
+      _lastNonEmptyAnnotationPayload = partialPayload;
+    }
+
     final issue = _resolveAttachmentRecognitionIssue();
     if (issue == null) return;
 

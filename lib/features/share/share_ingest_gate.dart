@@ -20,6 +20,7 @@ import '../../src/rust/db.dart';
 import '../attachments/attachment_ingest_pipeline.dart';
 import '../attachments/attachment_send_feedback_banner.dart';
 import '../attachments/platform_exif_metadata.dart';
+import '../audio_transcribe/audio_transcribe_enqueue.dart';
 import '../media_backup/audio_transcode_policy.dart';
 import 'share_ingest.dart';
 
@@ -199,6 +200,19 @@ final class _ShareIngestGateState extends State<ShareIngestGate>
           sessionKey,
           attachmentSha256,
           lang: lang,
+        );
+      } catch (_) {}
+      return;
+    }
+
+    if (isAudioTranscribeCandidateMimeType(normalizedMimeType)) {
+      try {
+        await maybeEnqueueAudioTranscribe(
+          backend: backend,
+          sessionKey: sessionKey,
+          attachmentSha256: attachmentSha256,
+          mimeType: normalizedMimeType,
+          lang: 'und',
         );
       } catch (_) {}
       return;
