@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../i18n/strings.g.dart';
 import 'app_update_service.dart';
+import 'update_badge_prefs.dart';
 
 class AutoUpgradeGate extends StatefulWidget {
   const AutoUpgradeGate({
@@ -86,8 +87,11 @@ class _AutoUpgradeGateState extends State<AutoUpgradeGate> {
       final result = await _updateService.checkForUpdates();
       final update = result.update;
       if (update == null) {
+        await UpdateBadgePrefs.clear();
         return;
       }
+
+      await UpdateBadgePrefs.setAvailableVersion(update.latestTag);
       if (update.canSeamlessInstall) {
         await _updateService.installAndRestart(update);
         return;

@@ -45,27 +45,81 @@ void main() {
     expect(resolved, siblingUpdater.path);
   });
 
-  test('stageAsset throws when updater exits non-zero', () async {
+  test('stageAsset downloads package into local packages directory', () async {
     final root = await Directory.systemTemp.createTemp('velopack_stage_');
     final updater = File('${root.path}${Platform.pathSeparator}Update.exe')
       ..writeAsStringSync('stub');
+    final sourceDir = Directory('${root.path}${Platform.pathSeparator}source')
+      ..createSync(recursive: true);
+    final sourcePackage = File(
+      '${sourceDir.path}${Platform.pathSeparator}com.secondloop.secondloop-1.2.0-full.nupkg',
+    )..writeAsStringSync('nupkg-content');
+
+    var runnerCalls = 0;
     final client = VelopackUpdateClient(
       updateExecutablePath: updater.path,
       processRunner: (executable, arguments) async {
-        return ProcessResult(123, 1, '', 'boom');
+        runnerCalls += 1;
+        return ProcessResult(123, 0, '', '');
       },
     );
 
-    expect(
-      () => client.stageAsset(Uri.parse('https://cdn.example.com/win.nupkg')),
-      throwsA(
-        isA<StateError>().having(
-          (error) => error.message,
-          'message',
-          contains('windows_velopack_stage_failed_'),
-        ),
-      ),
+    await client.stageAsset(sourcePackage.uri);
+
+    final stagedPackage = File(
+      '${root.path}${Platform.pathSeparator}packages${Platform.pathSeparator}com.secondloop.secondloop-1.2.0-full.nupkg',
     );
+    expect(stagedPackage.existsSync(), isTrue);
+    expect(stagedPackage.readAsStringSync(), 'nupkg-content');
+    expect(runnerCalls, 0);
+  });
+
+  test('installAssetAndRestart starts detached apply command', () async {
+    final root = await Directory.systemTemp.createTemp('velopack_install_');
+    final updater = File('${root.path}${Platform.pathSeparator}Update.exe')
+      ..writeAsStringSync('stub');
+    final sourceDir = Directory('${root.path}${Platform.pathSeparator}source')
+      ..createSync(recursive: true);
+    final sourcePackage = File(
+      '${sourceDir.path}${Platform.pathSeparator}com.secondloop.secondloop-2.0.0-full.nupkg',
+    )..writeAsStringSync('nupkg-content');
+
+    var starterCalls = 0;
+    late String startedExecutable;
+    late List<String> startedArgs;
+    late ProcessStartMode startedMode;
+    final client = VelopackUpdateClient(
+      updateExecutablePath: updater.path,
+      processStarter: (executable, arguments,
+          {mode = ProcessStartMode.normal}) async {
+        starterCalls += 1;
+        startedExecutable = executable;
+        startedArgs = arguments;
+        startedMode = mode;
+        return Process.start(
+          Platform.resolvedExecutable,
+          const ['--version'],
+        );
+      },
+    );
+
+    await client.installAssetAndRestart(
+      sourcePackage.uri,
+      waitPid: 4321,
+    );
+
+    expect(starterCalls, 1);
+    expect(startedExecutable, updater.path);
+    expect(startedMode, ProcessStartMode.detached);
+    expect(startedArgs[0], 'apply');
+    expect(startedArgs, containsAllInOrder(['--waitPid', '4321']));
+    expect(startedArgs, contains('--package'));
+    final packageIndex = startedArgs.indexOf('--package');
+    expect(packageIndex, greaterThanOrEqualTo(0));
+    final packagePath = startedArgs[packageIndex + 1];
+    final stagedPackage = File(packagePath);
+    expect(stagedPackage.existsSync(), isTrue);
+    expect(stagedPackage.readAsStringSync(), 'nupkg-content');
   });
 
   test('applyPendingOnStartup throws when updater exits non-zero', () async {

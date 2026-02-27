@@ -112,6 +112,20 @@ class PixiWindowsTasksTests(unittest.TestCase):
 
         self.assertIn("setup_windows_libclang.ps1", script)
 
+    def test_run_windows_script_prunes_stale_rust_artifacts_before_flutter_run(self) -> None:
+        script = (REPO_ROOT / "scripts/run_windows.ps1").read_text(encoding="utf-8")
+
+        self.assertIn("Get-LatestRustSourceWriteTimeUtc", script)
+        self.assertIn("Remove-StaleWindowsRustArtifacts", script)
+        self.assertIn("Stale Rust artifacts detected", script)
+        self.assertIn("before flutter run", script)
+
+    def test_run_windows_script_sets_frb_native_lib_dir_to_debug_runner(self) -> None:
+        script = (REPO_ROOT / "scripts/run_windows.ps1").read_text(encoding="utf-8")
+
+        self.assertIn("FRB_DART_LOAD_EXTERNAL_LIBRARY_NATIVE_LIB_DIR", script)
+        self.assertIn("build/windows/x64/runner/Debug", script)
+
     def test_windows_libclang_setup_script_handles_versioned_libclang_dll(self) -> None:
         script = WINDOWS_LIBCLANG_SETUP_SCRIPT.read_text(encoding="utf-8")
 

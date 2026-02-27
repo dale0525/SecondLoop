@@ -132,6 +132,7 @@ class AppUpdateService {
     String? releaseApiOriginOverride,
     String? releaseRepoOverride,
     WindowsStagedUpdateClient? windowsStagedUpdateClient,
+    void Function(int code)? processExit,
   })  : _httpClient = httpClient ?? HttpClient(),
         _releaseJsonFetcher = releaseJsonFetcher,
         _currentVersionLoader = currentVersionLoader,
@@ -139,7 +140,8 @@ class AppUpdateService {
         _releaseModeOverride = releaseModeOverride,
         _releaseApiOriginOverride = releaseApiOriginOverride,
         _releaseRepoOverride = releaseRepoOverride,
-        _windowsStagedUpdateClient = windowsStagedUpdateClient;
+        _windowsStagedUpdateClient = windowsStagedUpdateClient,
+        _processExit = processExit;
 
   final HttpClient _httpClient;
   final AppUpdateReleaseJsonFetcher? _releaseJsonFetcher;
@@ -149,6 +151,7 @@ class AppUpdateService {
   final String? _releaseApiOriginOverride;
   final String? _releaseRepoOverride;
   final WindowsStagedUpdateClient? _windowsStagedUpdateClient;
+  final void Function(int code)? _processExit;
 
   AppUpdatePlatform get _platform => _platformOverride ?? _detectPlatform();
 
@@ -156,6 +159,7 @@ class AppUpdateService {
   String get _releaseApiOrigin =>
       _releaseApiOriginOverride ?? _defaultReleaseApiOrigin;
   String get _releaseRepo => _releaseRepoOverride ?? _defaultReleaseRepo;
+  void _exitProcess(int code) => (_processExit ?? exit)(code);
 
   Future<AppUpdateCheckResult> checkForUpdates() async {
     final runtimeVersion = await _loadCurrentVersion();
@@ -236,6 +240,20 @@ class AppUpdateService {
     }
 
     final platform = _platform;
+    if (platform == AppUpdatePlatform.windows) {
+      final client = _windowsStagedUpdateClient ?? VelopackUpdateClient();
+      if (!client.isAvailable()) {
+        throw StateError('windows_velopack_unavailable');
+      }
+
+      await client.installAssetAndRestart(
+        asset.downloadUri,
+        waitPid: pid,
+      );
+      _exitProcess(0);
+      return;
+    }
+
     if (platform != AppUpdatePlatform.linux) {
       throw StateError('seamless_update_not_supported_for_$platform');
     }
@@ -274,7 +292,7 @@ class AppUpdateService {
       [script.path],
       mode: ProcessStartMode.detached,
     );
-    exit(0);
+    _exitProcess(0);
   }
 
   Future<void> stageUpdateForNextLaunch(AppUpdateAvailability update) async {
@@ -500,7 +518,7 @@ class AppUpdateService {
         AppUpdateInstallMode.seamlessRestart,
       AppUpdatePlatform.windows
           when windowsStagedRuntimeAvailable && isWindowsStagedPackage =>
-        AppUpdateInstallMode.stagedNextLaunch,
+        AppUpdateInstallMode.seamlessRestart,
       _ => AppUpdateInstallMode.externalDownload,
     };
   }

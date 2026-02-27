@@ -4,6 +4,7 @@ import '../core/backend/app_backend.dart';
 import '../core/quick_capture/quick_capture_controller.dart';
 import '../core/quick_capture/quick_capture_scope.dart';
 import '../core/session/session_scope.dart';
+import '../core/update/update_badge_prefs.dart';
 import '../features/chat/chat_page.dart';
 import '../features/settings/settings_page.dart';
 import '../i18n/strings.g.dart';
@@ -119,8 +120,22 @@ class _AppShellState extends State<AppShell> {
                                     destinations: [
                                       for (final t in AppTab.values)
                                         NavigationRailDestination(
-                                          icon: Icon(t.icon),
-                                          selectedIcon: Icon(t.selectedIcon),
+                                          icon: t == AppTab.settings
+                                              ? _AppUpdateBadgeIcon(
+                                                  icon: t.icon,
+                                                  badgeKey: const ValueKey(
+                                                    'app_tab_settings_update_badge',
+                                                  ),
+                                                )
+                                              : Icon(t.icon),
+                                          selectedIcon: t == AppTab.settings
+                                              ? _AppUpdateBadgeIcon(
+                                                  icon: t.selectedIcon,
+                                                  badgeKey: const ValueKey(
+                                                    'app_tab_settings_update_badge_selected',
+                                                  ),
+                                                )
+                                              : Icon(t.selectedIcon),
                                           label: Text(t.label(context)),
                                         ),
                                     ],
@@ -160,6 +175,46 @@ class _AppShellState extends State<AppShell> {
                       ),
                     ),
           bottomNavigationBar: null,
+        );
+      },
+    );
+  }
+}
+
+final class _AppUpdateBadgeIcon extends StatelessWidget {
+  const _AppUpdateBadgeIcon({
+    required this.icon,
+    required this.badgeKey,
+  });
+
+  final IconData icon;
+  final Key badgeKey;
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<String?>(
+      valueListenable: UpdateBadgePrefs.value,
+      builder: (context, latestTag, child) {
+        final hasUpdate = latestTag != null && latestTag.trim().isNotEmpty;
+        return Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Icon(icon),
+            if (hasUpdate)
+              Positioned(
+                top: -2,
+                right: -2,
+                child: Container(
+                  key: badgeKey,
+                  width: 8,
+                  height: 8,
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.error,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+              ),
+          ],
         );
       },
     );

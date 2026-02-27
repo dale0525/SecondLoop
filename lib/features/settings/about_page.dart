@@ -5,6 +5,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/update/app_update_service.dart';
+import '../../core/update/update_badge_prefs.dart';
 import '../../i18n/strings.g.dart';
 
 typedef AboutRuntimeVersionLoader = Future<AppRuntimeVersion> Function();
@@ -129,8 +130,10 @@ class _AboutPageState extends State<AboutPage> {
       if (result.errorMessage != null) {
         _showMessage(_text.messages.checkFailed(error: result.errorMessage!));
       } else if (result.update == null) {
+        await UpdateBadgePrefs.clear();
         _showMessage(_text.messages.upToDate);
       } else {
+        await UpdateBadgePrefs.setAvailableVersion(result.update!.latestTag);
         _showMessage(
           _text.messages.updateAvailable(version: result.update!.latestTag),
         );

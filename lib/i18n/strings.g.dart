@@ -2783,7 +2783,7 @@ class _StringsSettingsAboutActionsEn {
   // Translations
   String get check => 'Check updates';
   String get checking => 'Checking…';
-  String get autoUpdate => 'Auto-update and restart';
+  String get autoUpdate => 'Update now';
   String get stageUpdate => 'Prepare update';
   String get manualUpdate => 'Manual update';
   String get updating => 'Updating…';
@@ -7882,7 +7882,7 @@ class _StringsSettingsAboutActionsZhCn extends _StringsSettingsAboutActionsEn {
   @override
   String get checking => '检查中…';
   @override
-  String get autoUpdate => '自动更新并重启';
+  String get autoUpdate => '立即更新';
   @override
   String get stageUpdate => '后台准备更新';
   @override
@@ -10478,7 +10478,7 @@ extension on Translations {
       case 'settings.about.actions.checking':
         return 'Checking…';
       case 'settings.about.actions.autoUpdate':
-        return 'Auto-update and restart';
+        return 'Update now';
       case 'settings.about.actions.stageUpdate':
         return 'Prepare update';
       case 'settings.about.actions.manualUpdate':
@@ -12310,7 +12310,7 @@ extension on _StringsZhCn {
       case 'settings.about.actions.checking':
         return '检查中…';
       case 'settings.about.actions.autoUpdate':
-        return '自动更新并重启';
+        return '立即更新';
       case 'settings.about.actions.stageUpdate':
         return '后台准备更新';
       case 'settings.about.actions.manualUpdate':

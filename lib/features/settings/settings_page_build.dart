@@ -238,6 +238,30 @@ extension _SettingsPageBuild on _SettingsPageState {
             title: Text(isZh ? '关于' : 'About'),
             subtitle:
                 Text(isZh ? '项目主页、版本号与更新' : 'Homepage, version, and updates'),
+            trailing: ValueListenableBuilder<String?>(
+              valueListenable: UpdateBadgePrefs.value,
+              builder: (context, latestTag, child) {
+                final hasUpdate =
+                    latestTag != null && latestTag.trim().isNotEmpty;
+                return Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (hasUpdate)
+                      Container(
+                        key: const ValueKey('settings_about_update_badge'),
+                        width: 8,
+                        height: 8,
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).colorScheme.error,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                    if (hasUpdate) const SizedBox(width: 8),
+                    const Icon(Icons.chevron_right),
+                  ],
+                );
+              },
+            ),
             onTap: _busy
                 ? null
                 : () {

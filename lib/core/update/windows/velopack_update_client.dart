@@ -7,10 +7,21 @@ typedef VelopackProcessRunner = Future<ProcessResult> Function(
   List<String> arguments,
 );
 
+typedef VelopackProcessStarter = Future<Process> Function(
+  String executable,
+  List<String> arguments, {
+  ProcessStartMode mode,
+});
+
 abstract class WindowsStagedUpdateClient {
   bool isAvailable();
 
   Future<void> stageAsset(Uri assetDownloadUri);
+
+  Future<void> installAssetAndRestart(
+    Uri assetDownloadUri, {
+    required int waitPid,
+  });
 
   Future<void> applyPendingOnStartup();
 }
@@ -19,11 +30,14 @@ class VelopackUpdateClient implements WindowsStagedUpdateClient {
   VelopackUpdateClient({
     String? updateExecutablePath,
     VelopackProcessRunner? processRunner,
+    VelopackProcessStarter? processStarter,
   })  : _updateExecutablePath = updateExecutablePath,
-        _processRunner = processRunner ?? _defaultProcessRunner;
+        _processRunner = processRunner ?? _defaultProcessRunner,
+        _processStarter = processStarter ?? _defaultProcessStarter;
 
   final String? _updateExecutablePath;
   final VelopackProcessRunner _processRunner;
+  final VelopackProcessStarter _processStarter;
 
   String get _updateExePath =>
       _updateExecutablePath ?? resolveVelopackUpdateExePath();
@@ -39,15 +53,31 @@ class VelopackUpdateClient implements WindowsStagedUpdateClient {
       throw StateError('windows_velopack_unavailable');
     }
 
-    final result = await _processRunner(_updateExePath, [
-      'stage',
-      '--package',
-      assetDownloadUri.toString(),
-    ]);
+    await _stageAssetFile(assetDownloadUri);
+  }
 
-    if (result.exitCode != 0) {
-      throw StateError('windows_velopack_stage_failed_${result.stderr}');
+  @override
+  Future<void> installAssetAndRestart(
+    Uri assetDownloadUri, {
+    required int waitPid,
+  }) async {
+    if (!isAvailable()) {
+      throw StateError('windows_velopack_unavailable');
     }
+
+    final packageFile = await _stageAssetFile(assetDownloadUri);
+    await _processStarter(
+      _updateExePath,
+      [
+        'apply',
+        '--silent',
+        '--waitPid',
+        waitPid.toString(),
+        '--package',
+        packageFile.path,
+      ],
+      mode: ProcessStartMode.detached,
+    );
   }
 
   @override
@@ -68,6 +98,68 @@ class VelopackUpdateClient implements WindowsStagedUpdateClient {
 
     if (result.exitCode != 0) {
       throw StateError('windows_velopack_apply_failed_${result.stderr}');
+    }
+  }
+
+  Future<File> _stageAssetFile(Uri assetDownloadUri) async {
+    final updateExePath = _updateExePath;
+    final packagesDir = _resolvePackagesDirectory(updateExePath);
+    await packagesDir.create(recursive: true);
+
+    final packageFile = File(
+      '${packagesDir.path}${Platform.pathSeparator}${_resolveLocalPackageFileName(assetDownloadUri)}',
+    );
+    await _downloadAssetToFile(assetDownloadUri, packageFile);
+    return packageFile;
+  }
+
+  static Directory _resolvePackagesDirectory(String updateExecutablePath) {
+    final appRoot = File(updateExecutablePath).absolute.parent.path;
+    return Directory('$appRoot${Platform.pathSeparator}packages');
+  }
+
+  static String _resolveLocalPackageFileName(Uri assetDownloadUri) {
+    final rawName = assetDownloadUri.pathSegments.isEmpty
+        ? ''
+        : assetDownloadUri.pathSegments.last.trim();
+    final normalized = Uri.decodeComponent(rawName);
+    final fallback =
+        'secondloop-update-${DateTime.now().millisecondsSinceEpoch}.nupkg';
+    final source = normalized.isEmpty ? fallback : normalized;
+    final sanitized = source.replaceAll(RegExp(r'[<>:"/\\|?*]'), '_');
+    if (sanitized.isEmpty) {
+      return fallback;
+    }
+    return sanitized;
+  }
+
+  static Future<void> _downloadAssetToFile(Uri uri, File destination) async {
+    if (destination.existsSync()) {
+      await destination.delete();
+    }
+    if (uri.scheme == 'file') {
+      final sourcePath = uri.toFilePath();
+      await File(sourcePath).copy(destination.path);
+      return;
+    }
+
+    final client = HttpClient();
+    try {
+      final request = await client.getUrl(uri);
+      final response = await request.close();
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        throw StateError(
+            'windows_velopack_stage_failed_http_${response.statusCode}');
+      }
+
+      final sink = destination.openWrite();
+      try {
+        await response.pipe(sink);
+      } finally {
+        await sink.close();
+      }
+    } finally {
+      client.close(force: true);
     }
   }
 
@@ -199,5 +291,17 @@ class VelopackUpdateClient implements WindowsStagedUpdateClient {
     List<String> arguments,
   ) {
     return Process.run(executable, arguments);
+  }
+
+  static Future<Process> _defaultProcessStarter(
+    String executable,
+    List<String> arguments, {
+    ProcessStartMode mode = ProcessStartMode.normal,
+  }) {
+    return Process.start(
+      executable,
+      arguments,
+      mode: mode,
+    );
   }
 }

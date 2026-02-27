@@ -729,7 +729,7 @@
       "actions": {
         "check": "Check updates",
         "checking": "Checking…",
-        "autoUpdate": "Auto-update and restart",
+        "autoUpdate": "Update now",
         "stageUpdate": "Prepare update",
         "manualUpdate": "Manual update",
         "updating": "Updating…"

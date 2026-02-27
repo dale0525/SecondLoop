@@ -22,6 +22,7 @@ import '../core/desktop/desktop_quick_capture_service.dart';
 import '../core/quick_capture/quick_capture_controller.dart';
 import '../core/quick_capture/quick_capture_scope.dart';
 import '../core/update/auto_upgrade_gate.dart';
+import '../core/update/update_badge_prefs.dart';
 import '../core/update/release_notes_first_launch_gate.dart';
 import '../i18n/locale_prefs.dart';
 import '../i18n/strings.g.dart';
@@ -82,6 +83,7 @@ class _SecondLoopAppState extends State<SecondLoopApp> {
     unawaited(AppLocaleBootstrap.ensureInitialized());
     unawaited(AppThemeModePrefs.ensureInitialized());
     unawaited(AppThemePalettePrefs.ensureInitialized());
+    unawaited(UpdateBadgePrefs.ensureInitialized());
     _cloudAuthController.addListener(_onCloudAuthChanged);
     unawaited(_subscriptionController.refresh());
   }

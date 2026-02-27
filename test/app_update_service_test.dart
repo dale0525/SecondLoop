@@ -8,7 +8,9 @@ class _FakeWindowsStagedUpdateClient implements WindowsStagedUpdateClient {
 
   final bool available;
   final List<Uri> stagedAssets = <Uri>[];
+  final List<Uri> installedAssets = <Uri>[];
   int applyPendingCalls = 0;
+  int installCalls = 0;
 
   @override
   bool isAvailable() => available;
@@ -16,6 +18,15 @@ class _FakeWindowsStagedUpdateClient implements WindowsStagedUpdateClient {
   @override
   Future<void> stageAsset(Uri assetDownloadUri) async {
     stagedAssets.add(assetDownloadUri);
+  }
+
+  @override
+  Future<void> installAssetAndRestart(
+    Uri assetDownloadUri, {
+    required int waitPid,
+  }) async {
+    installCalls += 1;
+    installedAssets.add(assetDownloadUri);
   }
 
   @override
@@ -73,7 +84,7 @@ void main() {
     });
 
     test(
-        'returns staged Windows update from Velopack nupkg when runtime is available',
+        'returns seamless Windows update from Velopack nupkg when runtime is available',
         () async {
       final stagedClient = _FakeWindowsStagedUpdateClient(available: true);
       final service = AppUpdateService(
@@ -104,7 +115,7 @@ void main() {
       expect(result.update, isNotNull);
       expect(
         result.update!.installMode,
-        AppUpdateInstallMode.stagedNextLaunch,
+        AppUpdateInstallMode.seamlessRestart,
       );
       expect(
         result.update!.downloadUri.toString(),
@@ -285,7 +296,7 @@ void main() {
       );
     });
 
-    test('returns staged Windows update when Velopack runtime is available',
+    test('returns seamless Windows update when Velopack runtime is available',
         () async {
       final stagedClient = _FakeWindowsStagedUpdateClient(available: true);
       final service = AppUpdateService(
@@ -312,7 +323,7 @@ void main() {
       expect(result.update, isNotNull);
       expect(
         result.update!.installMode,
-        AppUpdateInstallMode.stagedNextLaunch,
+        AppUpdateInstallMode.seamlessRestart,
       );
     });
   });
