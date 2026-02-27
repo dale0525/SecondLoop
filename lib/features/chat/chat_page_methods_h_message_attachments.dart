@@ -193,7 +193,7 @@ extension _ChatPageStateMethodsHMessageAttachments on _ChatPageState {
                   Align(
                     key: ValueKey('chat_message_attachments_${message.id}'),
                     alignment: Alignment.centerLeft,
-                    widthFactor: items.length == 1 ? 1 : null,
+                    widthFactor: 1,
                     child: attachmentsLayout,
                   ),
                   if (imageSha256 != null && enrichmentWidth != null)

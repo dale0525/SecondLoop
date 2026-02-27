@@ -332,6 +332,87 @@ void main() {
       debugDefaultTargetPlatformOverride = oldPlatform;
     }
   });
+
+  testWidgets('Chat keeps two non-image attachments compact', (tester) async {
+    final oldPlatform = debugDefaultTargetPlatformOverride;
+    debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+    try {
+      final backend = _Backend(
+        initialMessages: const <Message>[
+          Message(
+            id: 'm1',
+            conversationId: 'c1',
+            role: 'user',
+            content: '',
+            createdAtMs: 1,
+            isMemory: true,
+          ),
+        ],
+        initialAttachmentsByMessageId: {
+          'm1': const <Attachment>[
+            Attachment(
+              sha256: 'sha1',
+              mimeType: 'application/pdf',
+              path: 'attachments/sha1.bin',
+              byteLen: 10,
+              createdAtMs: 1,
+            ),
+            Attachment(
+              sha256: 'sha2',
+              mimeType: 'application/pdf',
+              path: 'attachments/sha2.bin',
+              byteLen: 10,
+              createdAtMs: 1,
+            ),
+          ],
+        },
+      );
+
+      await tester.pumpWidget(
+        wrapWithI18n(
+          MaterialApp(
+            home: AppBackendScope(
+              backend: backend,
+              child: SessionScope(
+                sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+                lock: () {},
+                child: const ChatPage(
+                  conversation: Conversation(
+                    id: 'c1',
+                    title: 'Loop',
+                    createdAtMs: 0,
+                    updatedAtMs: 0,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+      await _pumpUntil(
+        tester,
+        () => find
+            .byKey(const ValueKey('chat_message_attachments_m1'))
+            .evaluate()
+            .isNotEmpty,
+      );
+
+      final attachmentsContainer =
+          find.byKey(const ValueKey('chat_message_attachments_m1'));
+      expect(attachmentsContainer, findsOneWidget);
+      expect(
+        tester.getSize(attachmentsContainer).width,
+        lessThanOrEqualTo(460),
+      );
+      expect(
+        tester.getSize(find.byKey(const ValueKey('message_bubble_m1'))).width,
+        lessThanOrEqualTo(500),
+      );
+    } finally {
+      debugDefaultTargetPlatformOverride = oldPlatform;
+    }
+  });
 }
 
 Future<void> _pumpUntil(
