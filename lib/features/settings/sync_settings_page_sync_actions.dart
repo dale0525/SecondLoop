@@ -103,6 +103,43 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
     );
   }
 
+  int? _extractHttpStatusCode(Object error) {
+    final message = error.toString();
+    final statusText =
+        RegExp(r'\bHTTP\s+(\d{3})\b').firstMatch(message)?.group(1);
+    if (statusText == null) return null;
+    return int.tryParse(statusText);
+  }
+
+  Future<void> _writeLastSyncLog({
+    required SyncBackgroundDirection direction,
+    required SyncBackgroundResultStatus status,
+    required int durationMs,
+    int? statusCode,
+    String? errorMessage,
+    String? userMessage,
+  }) async {
+    try {
+      await _store.writeBackgroundSyncResult(
+        SyncBackgroundResult(
+          backendType: _backendType,
+          direction: direction,
+          status: status,
+          timestampMs: DateTime.now().millisecondsSinceEpoch,
+          statusCode: statusCode,
+          errorCode: null,
+          errorMessage: errorMessage,
+          userMessage: userMessage,
+          retryCount: null,
+          durationMs: durationMs,
+        ),
+        backendType: _backendType,
+      );
+    } catch (_) {
+      // Diagnostics persistence is best-effort and should never block sync UX.
+    }
+  }
+
   Future<void> _runConnectionTest() async {
     final backend = AppBackendScope.of(context);
     final remoteRoot = _requiredTrimmed(_remoteRootController);
@@ -699,6 +736,7 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
     _scheduleManualSyncIndeterminateFallback();
 
     final t = context.t;
+    final stopwatch = Stopwatch()..start();
     try {
       final backend = AppBackendScope.of(context);
       final sessionKey = SessionScope.of(context).sessionKey;
@@ -775,9 +813,26 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
             );
           }(),
       });
-      _showSnack(t.sync.pushedOps(count: pushed));
+      final successMessage = t.sync.pushedOps(count: pushed);
+      await _writeLastSyncLog(
+        direction: SyncBackgroundDirection.push,
+        status: SyncBackgroundResultStatus.success,
+        durationMs: stopwatch.elapsedMilliseconds,
+        userMessage: successMessage,
+      );
+      _showSnack(successMessage);
     } catch (e) {
-      _showSnack(t.sync.pushFailed(error: '$e'));
+      final errorMessage = '$e';
+      final failedMessage = t.sync.pushFailed(error: errorMessage);
+      await _writeLastSyncLog(
+        direction: SyncBackgroundDirection.push,
+        status: SyncBackgroundResultStatus.failure,
+        durationMs: stopwatch.elapsedMilliseconds,
+        statusCode: _extractHttpStatusCode(e),
+        errorMessage: errorMessage,
+        userMessage: failedMessage,
+      );
+      _showSnack(failedMessage);
     } finally {
       if (mounted) {
         _setState(() {
@@ -806,6 +861,7 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
     _scheduleManualSyncIndeterminateFallback();
 
     final t = context.t;
+    final stopwatch = Stopwatch()..start();
     final engine = SyncEngineScope.maybeOf(context);
     try {
       final backend = AppBackendScope.of(context);
@@ -884,21 +940,35 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
           }(),
       });
       if (mounted) engine?.notifyExternalChange();
-      _showSnack(
-        pulled == 0 ? t.sync.noNewChanges : t.sync.pulledOps(count: pulled),
+      final successMessage =
+          pulled == 0 ? t.sync.noNewChanges : t.sync.pulledOps(count: pulled);
+      await _writeLastSyncLog(
+        direction: SyncBackgroundDirection.pull,
+        status: SyncBackgroundResultStatus.success,
+        durationMs: stopwatch.elapsedMilliseconds,
+        userMessage: successMessage,
       );
+      _showSnack(successMessage);
     } catch (e) {
       if (_backendType == SyncBackendType.managedVault) {
-        final message = e.toString();
-        final status =
-            RegExp(r'\\bHTTP\\s+(\\d{3})\\b').firstMatch(message)?.group(1);
-        if (status == '402') {
+        final statusCode = _extractHttpStatusCode(e);
+        if (statusCode == 402) {
           if (engine != null) {
             engine.writeGate.value = const SyncWriteGateState.paymentRequired();
           }
         }
       }
-      _showSnack(t.sync.pullFailed(error: '$e'));
+      final errorMessage = '$e';
+      final failedMessage = t.sync.pullFailed(error: errorMessage);
+      await _writeLastSyncLog(
+        direction: SyncBackgroundDirection.pull,
+        status: SyncBackgroundResultStatus.failure,
+        durationMs: stopwatch.elapsedMilliseconds,
+        statusCode: _extractHttpStatusCode(e),
+        errorMessage: errorMessage,
+        userMessage: failedMessage,
+      );
+      _showSnack(failedMessage);
     } finally {
       if (mounted) {
         _setState(() {

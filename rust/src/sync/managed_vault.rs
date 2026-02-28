@@ -246,6 +246,33 @@ fn apply_pending_ops_until_stable(
     Ok(())
 }
 
+fn rewind_since_for_unresolved_pending_devices(
+    conn: &Connection,
+    pending: &BTreeSet<String>,
+    next_since: &mut BTreeMap<String, i64>,
+) -> Result<()> {
+    if pending.is_empty() {
+        return Ok(());
+    }
+
+    let mut pending_devices: BTreeSet<String> = BTreeSet::new();
+    let mut stmt = conn.prepare_cached(r#"SELECT device_id FROM oplog WHERE op_id = ?1"#)?;
+    for op_id in pending {
+        let device_id: Option<String> = stmt
+            .query_row(params![op_id], |row| row.get(0))
+            .optional()?;
+        if let Some(device_id) = device_id {
+            pending_devices.insert(device_id);
+        }
+    }
+
+    for device_id in pending_devices {
+        next_since.insert(device_id, 0);
+    }
+
+    Ok(())
+}
+
 fn update_since_map(conn: &Connection, scope_id: &str, next: &BTreeMap<String, i64>) -> Result<()> {
     for (device_id, last_seq) in next {
         let key = format!("managed_vault.last_pulled_seq:{scope_id}:{device_id}");
@@ -905,6 +932,7 @@ pub fn pull(
                     }
 
                     apply_pending_ops_until_stable(conn, db_key, &scope_id, &mut pending)?;
+                    rewind_since_for_unresolved_pending_devices(conn, &pending, &mut next_since)?;
 
                     if next_since != since {
                         update_since_map(conn, &scope_id, &next_since)?;
@@ -988,6 +1016,7 @@ pub fn pull(
             }
 
             apply_pending_ops_until_stable(conn, db_key, &scope_id, &mut pending)?;
+            rewind_since_for_unresolved_pending_devices(conn, &pending, &mut next_since)?;
 
             if next_since != since {
                 update_since_map(conn, &scope_id, &next_since)?;

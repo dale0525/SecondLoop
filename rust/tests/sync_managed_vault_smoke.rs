@@ -494,6 +494,135 @@ fn managed_vault_push_then_pull_copies_messages() {
 }
 
 #[test]
+fn managed_vault_pull_recovers_when_missing_prerequisite_arrives_later() {
+    let (base_url, stop_tx, state, handle) = start_mock_managed_vault_server();
+    let vault_id = "v1".to_string();
+    let id_token = "test_uid".to_string();
+
+    let sync_key = derive_root_key(
+        "sync-passphrase",
+        b"secondloop-sync1",
+        &KdfParams::for_test(),
+    )
+    .expect("derive sync key");
+
+    // Device A registers first.
+    let temp_a = tempfile::tempdir().expect("tempdir A");
+    let app_dir_a = temp_a.path().join("secondloop_a");
+    let key_a =
+        auth::init_master_password(&app_dir_a, "pw-a", KdfParams::for_test()).expect("init A");
+    let conn_a = db::open(&app_dir_a).expect("open A db");
+    conn_a
+        .execute(
+            r#"INSERT INTO kv(key, value) VALUES ('device_id', 'devA')
+               ON CONFLICT(key) DO UPDATE SET value = excluded.value"#,
+            [],
+        )
+        .expect("force device_id devA");
+    let _ = sync::managed_vault::pull(&conn_a, &key_a, &sync_key, &base_url, &vault_id, &id_token)
+        .expect("pull A (register)");
+
+    // Device C registers second and acts as the receiver.
+    let temp_c = tempfile::tempdir().expect("tempdir C");
+    let app_dir_c = temp_c.path().join("secondloop_c");
+    let key_c =
+        auth::init_master_password(&app_dir_c, "pw-c", KdfParams::for_test()).expect("init C");
+    let conn_c = db::open(&app_dir_c).expect("open C db");
+    conn_c
+        .execute(
+            r#"INSERT INTO kv(key, value) VALUES ('device_id', 'devC')
+               ON CONFLICT(key) DO UPDATE SET value = excluded.value"#,
+            [],
+        )
+        .expect("force device_id devC");
+    let _ = sync::managed_vault::pull(&conn_c, &key_c, &sync_key, &base_url, &vault_id, &id_token)
+        .expect("pull C (register)");
+
+    let todo_id = "todo:missing-prerequisite";
+    let activity_id = "activity:missing-prerequisite";
+
+    let op_a2 = serde_json::json!({
+        "op_id": "opA2",
+        "device_id": "devA",
+        "seq": 2,
+        "ts_ms": 2000,
+        "type": "todo.activity.append.v1",
+        "payload": {
+            "activity_id": activity_id,
+            "todo_id": todo_id,
+            "activity_type": "status_change",
+            "from_status": "open",
+            "to_status": "done",
+            "created_at_ms": 2000,
+        }
+    });
+    let op_a1 = serde_json::json!({
+        "op_id": "opA1",
+        "device_id": "devA",
+        "seq": 1,
+        "ts_ms": 1000,
+        "type": "todo.upsert.v1",
+        "payload": {
+            "todo_id": todo_id,
+            "title": "todo title",
+            "status": "open",
+            "created_at_ms": 1000,
+            "updated_at_ms": 1000,
+        }
+    });
+
+    let make_stored = |device_id: &str, seq: i64, op_json: &serde_json::Value| -> StoredOp {
+        let plaintext = serde_json::to_vec(op_json).expect("op json");
+        let aad = format!("sync.ops:{device_id}:{seq}");
+        let ciphertext = encrypt_bytes(&sync_key, &plaintext, aad.as_bytes()).expect("encrypt");
+        StoredOp {
+            device_id: device_id.to_string(),
+            seq,
+            op_id: op_json["op_id"].as_str().unwrap_or("").to_string(),
+            ciphertext_b64: B64_STD.encode(ciphertext),
+        }
+    };
+
+    // First pull only sees seq=2 (missing prerequisite seq=1).
+    {
+        let mut st = state.lock().expect("lock");
+        st.ops
+            .entry((vault_id.clone(), "devA".to_string()))
+            .or_default()
+            .push(make_stored("devA", 2, &op_a2));
+    }
+
+    let first_applied =
+        sync::managed_vault::pull(&conn_c, &key_c, &sync_key, &base_url, &vault_id, &id_token)
+            .expect("first pull C");
+    assert_eq!(first_applied, 0);
+    assert!(db::get_todo(&conn_c, &key_c, todo_id).is_err());
+
+    // Later, the missing prerequisite arrives on the server.
+    {
+        let mut st = state.lock().expect("lock");
+        st.ops
+            .entry((vault_id.clone(), "devA".to_string()))
+            .or_default()
+            .push(make_stored("devA", 1, &op_a1));
+    }
+
+    let second_applied =
+        sync::managed_vault::pull(&conn_c, &key_c, &sync_key, &base_url, &vault_id, &id_token)
+            .expect("second pull C");
+    assert!(second_applied > 0);
+
+    let todo = db::get_todo(&conn_c, &key_c, todo_id).expect("get todo C");
+    assert_eq!(todo.id, todo_id);
+    let activities = db::list_todo_activities(&conn_c, &key_c, todo_id).expect("list activities");
+    assert_eq!(activities.len(), 1);
+    assert_eq!(activities[0].id, activity_id);
+
+    let _ = stop_tx.send(());
+    handle.join().expect("join");
+}
+
+#[test]
 fn managed_vault_pull_paginates_until_caught_up() {
     let (base_url, stop_tx, state, handle) = start_mock_managed_vault_server();
     let vault_id = "v1".to_string();

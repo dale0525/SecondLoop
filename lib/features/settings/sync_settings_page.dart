@@ -12,6 +12,7 @@ import '../../core/sync/cloud_sync_switch_prefs.dart';
 import '../../core/session/session_scope.dart';
 import '../../core/sync/background_sync.dart';
 import '../../core/sync/sync_config_store.dart';
+import '../../core/sync/sync_diagnostics.dart';
 import '../../core/sync/sync_engine.dart';
 import '../../core/sync/sync_engine_gate.dart';
 import '../../core/sync/sync_key_manager.dart';
