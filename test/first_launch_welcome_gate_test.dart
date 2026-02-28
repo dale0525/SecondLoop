@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:secondloop/features/settings/ai_settings_page.dart';
+import 'package:secondloop/features/settings/sync_settings_page.dart';
 import 'package:secondloop/features/welcome/first_launch_welcome_gate.dart';
 import 'package:secondloop/features/welcome/welcome_page.dart';
 
@@ -74,5 +76,37 @@ void main() {
     expect(prefs.getBool(FirstLaunchWelcomeGate.seenPrefsKey), isTrue);
     expect(find.byType(WelcomePage), findsNothing);
     expect(find.text('app shell child'), findsOneWidget);
+  });
+
+  testWidgets('welcome in app builder can open AI and sync settings',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: const Scaffold(
+            body: Center(child: Text('app shell child')),
+          ),
+          builder: (context, child) {
+            return FirstLaunchWelcomeGate(
+              child: child ?? const SizedBox.shrink(),
+            );
+          },
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('welcome_guide_card_ai_open')));
+    await tester.pumpAndSettle();
+    expect(find.byType(AiSettingsPage), findsOneWidget);
+
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+    await tester
+        .tap(find.byKey(const ValueKey('welcome_guide_card_sync_open')));
+    await tester.pumpAndSettle();
+    expect(find.byType(SyncSettingsPage), findsOneWidget);
   });
 }

@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -319,5 +320,66 @@ void main() {
       find.byKey(const ValueKey('welcome_guide_permission_launch_failed')),
       findsOneWidget,
     );
+  });
+
+  testWidgets('permissions section auto-detects permission status',
+      (tester) async {
+    final originalPlatformOverride = debugDefaultTargetPlatformOverride;
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+    SharedPreferences.setMockInitialValues({});
+    const permissionChannel = MethodChannel('secondloop/permissions');
+    final messenger =
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+    try {
+      messenger.setMockMethodCallHandler(permissionChannel, (call) async {
+        if (call.method != 'queryPermissionStatus') return null;
+        final args = call.arguments as Map<Object?, Object?>?;
+        final item = (args?['item'] as String?) ?? '';
+        return switch (item) {
+          'microphone' => 'enabled',
+          'notifications' => 'disabled',
+          _ => 'unknown',
+        };
+      });
+
+      await pumpWelcomePage(
+        tester,
+        onSkip: () {},
+        onFinish: () {},
+        statusLoader: (_) async => const WelcomeGuideStatus(
+          aiReady: false,
+          syncReady: false,
+        ),
+        uriLauncher: (_) async => true,
+      );
+
+      expect(
+        find.byKey(
+          const ValueKey('welcome_guide_permission_status_microphone_enabled'),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(
+          const ValueKey(
+              'welcome_guide_permission_status_notifications_disabled'),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(
+          const ValueKey('welcome_guide_permission_status_auto_start_unknown'),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(
+            const ValueKey('welcome_guide_permissions_status_needs_review')),
+        findsOneWidget,
+      );
+    } finally {
+      messenger.setMockMethodCallHandler(permissionChannel, null);
+      debugDefaultTargetPlatformOverride = originalPlatformOverride;
+    }
   });
 }
