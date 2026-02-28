@@ -6,11 +6,14 @@ extension _ChatPageStateMessageEditMethods on _ChatPageState {
     final sessionKey = SessionScope.of(context).sessionKey;
     final syncEngine = SyncEngineScope.maybeOf(context);
     final messenger = ScaffoldMessenger.of(context);
+    final initialText = message.role == 'assistant'
+        ? _displayTextForMessage(message)
+        : message.content;
 
     try {
       final markdownResult = await openChatMarkdownEditor(
         context,
-        initialText: message.content,
+        initialText: initialText,
         title: context.t.chat.editMessageTitle,
         saveLabel: context.t.common.actions.save,
         inputFieldKey: const ValueKey('edit_message_content'),
@@ -21,7 +24,10 @@ extension _ChatPageStateMessageEditMethods on _ChatPageState {
       if (markdownResult == null) return;
 
       final trimmed = markdownResult.text.trim();
-      if (trimmed == message.content) return;
+      final noChange = message.role == 'assistant'
+          ? trimmed == initialText.trim()
+          : trimmed == message.content;
+      if (noChange) return;
 
       await backend.editMessage(sessionKey, message.id, trimmed);
 
