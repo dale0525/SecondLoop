@@ -77,4 +77,39 @@ void main() {
     expect(find.byKey(const ValueKey('settings_about_update_badge')),
         findsOneWidget);
   });
+
+  testWidgets('settings about entry does not show right chevron',
+      (tester) async {
+    await tester.pumpWidget(
+      AppBackendScope(
+        backend: TestAppBackend(),
+        child: SessionScope(
+          sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+          lock: () {},
+          child: wrapWithI18n(
+            const MaterialApp(
+              home: Scaffold(body: SettingsPage()),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final aboutEntry = find.byKey(const ValueKey('settings_about'));
+    await tester.dragUntilVisible(
+      aboutEntry,
+      find.byType(ListView),
+      const Offset(0, -240),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.descendant(
+        of: aboutEntry,
+        matching: find.byIcon(Icons.chevron_right),
+      ),
+      findsNothing,
+    );
+  });
 }
