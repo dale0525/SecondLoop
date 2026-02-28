@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../core/backend/app_backend.dart';
@@ -516,6 +517,9 @@ class _SemanticParseJobStatusRowState extends State<SemanticParseJobStatusRow> {
     final ageMs = DateTime.now().millisecondsSinceEpoch - createdAtMs;
 
     final isPending = status == 'pending' || status == 'running';
+    final isMobilePlatform = !kIsWeb &&
+        (defaultTargetPlatform == TargetPlatform.android ||
+            defaultTargetPlatform == TargetPlatform.iOS);
     final shouldShowPending = ageMs >= _kSoftDelay.inMilliseconds;
     final isSlow = ageMs >= _kSlowThreshold.inMilliseconds;
 
@@ -535,6 +539,7 @@ class _SemanticParseJobStatusRowState extends State<SemanticParseJobStatusRow> {
     }
 
     final undone = widget.job.undoneAtMs != null;
+    final showMobileStayOpenHint = !undone && isPending && isMobilePlatform;
 
     String label;
     late Widget leading;
@@ -693,11 +698,28 @@ class _SemanticParseJobStatusRowState extends State<SemanticParseJobStatusRow> {
           leading,
           const SizedBox(width: 6),
           Flexible(
-            child: Text(
-              label,
-              style: textStyle,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: textStyle,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                if (showMobileStayOpenHint) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    t.chat.semanticParseMobileStayOpenHint,
+                    style: textStyle?.copyWith(
+                      color: colorScheme.onSurfaceVariant.withOpacity(0.68),
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ],
             ),
           ),
           if (actions.isNotEmpty) ...[

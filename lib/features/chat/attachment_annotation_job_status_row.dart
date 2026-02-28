@@ -304,6 +304,9 @@ class _AttachmentAnnotationJobStatusRowState
 
     final t = context.t;
     final colorScheme = Theme.of(context).colorScheme;
+    final isMobilePlatform = !kIsWeb &&
+        (defaultTargetPlatform == TargetPlatform.android ||
+            defaultTargetPlatform == TargetPlatform.iOS);
     final zh = Localizations.localeOf(context)
         .languageCode
         .toLowerCase()
@@ -363,6 +366,7 @@ class _AttachmentAnnotationJobStatusRowState
     }
 
     final isSlow = isPending && _passedSlowThreshold;
+    final showMobileStayOpenHint = isPending && isMobilePlatform;
 
     final showSpeechPackInstallAction = isFailed &&
         widget.onInstallSpeechPack != null &&
@@ -459,11 +463,28 @@ class _AttachmentAnnotationJobStatusRowState
           leading,
           const SizedBox(width: 6),
           Flexible(
-            child: Text(
-              label,
-              style: textStyle,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: textStyle,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                if (showMobileStayOpenHint) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    t.chat.semanticParseMobileStayOpenHint,
+                    style: textStyle?.copyWith(
+                      color: colorScheme.onSurfaceVariant.withOpacity(0.68),
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ],
             ),
           ),
           if (actions.isNotEmpty) ...[

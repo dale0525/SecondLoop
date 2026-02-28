@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -117,6 +118,47 @@ void main() {
     expect(backend.lastTagSuggestionState, 'dismissed');
     expect(
         backend.lastSuggestedTags, equals(const <String>['work', 'finance']));
+  });
+
+  testWidgets('shows mobile stay-open reminder while AI is analyzing',
+      (WidgetTester tester) async {
+    final previous = debugDefaultTargetPlatformOverride;
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+
+    try {
+      final nowMs = DateTime.now().millisecondsSinceEpoch;
+      final job = SemanticParseJob(
+        messageId: message.id,
+        status: 'pending',
+        attempts: PlatformInt64Util.from(0),
+        nextRetryAtMs: null,
+        lastError: null,
+        appliedActionKind: null,
+        appliedTodoId: null,
+        appliedTodoTitle: null,
+        appliedPrevTodoStatus: null,
+        suggestedTags: null,
+        suggestedTagConfidence: null,
+        tagSuggestionState: null,
+        appliedTagIds: null,
+        undoneAtMs: null,
+        createdAtMs: PlatformInt64Util.from(nowMs - 2000),
+        updatedAtMs: PlatformInt64Util.from(nowMs - 2000),
+      );
+
+      await tester.pumpWidget(_buildHost(message: message, job: job));
+      await tester.pump();
+
+      expect(find.text('AI analyzing…'), findsOneWidget);
+      expect(
+        find.text(
+          'Keep the app open while AI analyzes. Leaving may interrupt analysis.',
+        ),
+        findsOneWidget,
+      );
+    } finally {
+      debugDefaultTargetPlatformOverride = previous;
+    }
   });
 }
 

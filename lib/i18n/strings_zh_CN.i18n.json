@@ -1037,6 +1037,7 @@
     },
     "semanticParseStatusRunning": "AI 分析中…",
     "semanticParseStatusSlow": "AI 分析较慢，后台继续…",
+    "semanticParseMobileStayOpenHint": "AI 分析时请勿离开 App，否则分析可能会中断。",
     "attachmentAnnotationNeedsSetup": "图片注释需要先配置",
     "semanticParseStatusFailed": "AI 分析失败",
     "audioTranscribeFailurePayloadTooLarge": "音频文件过大。请压缩或分段后重试。",

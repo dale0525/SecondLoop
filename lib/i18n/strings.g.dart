@@ -4,9 +4,9 @@
 /// To regenerate, run: `dart run slang`
 ///
 /// Locales: 2
-/// Strings: 1798 (899 per locale)
+/// Strings: 1800 (900 per locale)
 ///
-/// Built on 2026-02-28 at 13:26 UTC
+/// Built on 2026-02-28 at 17:40 UTC
 
 // coverage:ignore-file
 // ignore_for_file: type=lint
@@ -451,6 +451,8 @@ class _StringsChatEn {
   String get semanticParseStatusRunning => 'AI analyzing…';
   String get semanticParseStatusSlow =>
       'AI is taking longer. Continuing in background…';
+  String get semanticParseMobileStayOpenHint =>
+      'Keep the app open while AI analyzes. Leaving may interrupt analysis.';
   String get attachmentAnnotationNeedsSetup => 'Image annotations need setup';
   String get semanticParseStatusFailed => 'AI analysis failed';
   String get audioTranscribeFailurePayloadTooLarge =>
@@ -4377,6 +4379,8 @@ class _StringsChatZhCn extends _StringsChatEn {
   String get semanticParseStatusRunning => 'AI 分析中…';
   @override
   String get semanticParseStatusSlow => 'AI 分析较慢，后台继续…';
+  @override
+  String get semanticParseMobileStayOpenHint => 'AI 分析时请勿离开 App，否则分析可能会中断。';
   @override
   String get attachmentAnnotationNeedsSetup => '图片注释需要先配置';
   @override
@@ -10964,6 +10968,8 @@ extension on Translations {
         return 'AI analyzing…';
       case 'chat.semanticParseStatusSlow':
         return 'AI is taking longer. Continuing in background…';
+      case 'chat.semanticParseMobileStayOpenHint':
+        return 'Keep the app open while AI analyzes. Leaving may interrupt analysis.';
       case 'chat.attachmentAnnotationNeedsSetup':
         return 'Image annotations need setup';
       case 'chat.semanticParseStatusFailed':
@@ -12799,6 +12805,8 @@ extension on _StringsZhCn {
         return 'AI 分析中…';
       case 'chat.semanticParseStatusSlow':
         return 'AI 分析较慢，后台继续…';
+      case 'chat.semanticParseMobileStayOpenHint':
+        return 'AI 分析时请勿离开 App，否则分析可能会中断。';
       case 'chat.attachmentAnnotationNeedsSetup':
         return '图片注释需要先配置';
       case 'chat.semanticParseStatusFailed':
