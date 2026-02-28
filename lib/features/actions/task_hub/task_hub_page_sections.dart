@@ -134,7 +134,7 @@ class TaskHubPageMergedUnscheduledSection extends StatelessWidget {
 
     Widget buildSubgroup({
       required String keySuffix,
-      required String title,
+      String? title,
       required List<Todo> todos,
       required TaskHubPageSectionKind sectionKind,
     }) {
@@ -143,39 +143,41 @@ class TaskHubPageMergedUnscheduledSection extends StatelessWidget {
         key: ValueKey('task_hub_page_section_unscheduled_$keySuffix'),
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Text(
-                title,
-                style: theme.textTheme.titleSmall?.copyWith(
-                  fontWeight: FontWeight.w700,
-                  color: colorScheme.onSurfaceVariant,
-                ),
-              ),
-              const SizedBox(width: 8),
-              DecoratedBox(
-                decoration: BoxDecoration(
-                  color: tokens.surface2,
-                  borderRadius: BorderRadius.circular(99),
-                  border: Border.all(
-                    color: tokens.borderSubtle.withOpacity(0.9),
+          if (title != null) ...[
+            Row(
+              children: [
+                Text(
+                  title,
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    color: colorScheme.onSurfaceVariant,
                   ),
                 ),
-                child: Padding(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                  child: Text(
-                    todos.length.toString(),
-                    style: theme.textTheme.labelSmall?.copyWith(
-                      color: colorScheme.onSurfaceVariant,
-                      fontWeight: FontWeight.w700,
+                const SizedBox(width: 8),
+                DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: tokens.surface2,
+                    borderRadius: BorderRadius.circular(99),
+                    border: Border.all(
+                      color: tokens.borderSubtle.withOpacity(0.9),
+                    ),
+                  ),
+                  child: Padding(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    child: Text(
+                      todos.length.toString(),
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                   ),
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 6),
+              ],
+            ),
+            const SizedBox(height: 6),
+          ],
           for (var i = 0; i < todos.length; i++)
             Padding(
               padding: EdgeInsets.only(bottom: i == todos.length - 1 ? 0 : 8),
@@ -246,7 +248,6 @@ class TaskHubPageMergedUnscheduledSection extends StatelessWidget {
             ],
             buildSubgroup(
               keySuffix: 'plain',
-              title: context.t.actions.taskHub.unscheduledSection,
               todos: unscheduledTodos,
               sectionKind: TaskHubPageSectionKind.unscheduled,
             ),
@@ -407,8 +408,8 @@ class _TaskHubPageTodoRow extends StatelessWidget {
             if (actionLayout.$1.isNotEmpty || actionLayout.$2.isNotEmpty) ...[
               const SizedBox(height: 6),
               Wrap(
-                spacing: 6,
-                runSpacing: 6,
+                spacing: 8,
+                runSpacing: 8,
                 children: [
                   for (final actionChip in actionLayout.$1)
                     _TaskHubPageQuickButton(
@@ -469,17 +470,15 @@ class _TaskHubPageQuickButton extends StatelessWidget {
     final borderRadius = BorderRadius.circular(99);
     final colorScheme = Theme.of(context).colorScheme;
     final baseStyle = ButtonStyle(
-      minimumSize: const MaterialStatePropertyAll(Size(0, 30)),
+      minimumSize: const MaterialStatePropertyAll(Size(0, 40)),
       padding: const MaterialStatePropertyAll(
-        EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+        EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       ),
-      visualDensity: const VisualDensity(horizontal: -2, vertical: -2),
-      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
       shape: MaterialStatePropertyAll(
         RoundedRectangleBorder(borderRadius: borderRadius),
       ),
       textStyle: MaterialStatePropertyAll(
-        Theme.of(context).textTheme.labelSmall?.copyWith(
+        Theme.of(context).textTheme.labelMedium?.copyWith(
               fontWeight: FontWeight.w600,
             ),
       ),
@@ -489,7 +488,7 @@ class _TaskHubPageQuickButton extends StatelessWidget {
         ? FilledButton.icon(
             onPressed: onPressed,
             style: baseStyle,
-            icon: Icon(icon, size: 14),
+            icon: Icon(icon, size: 16),
             label: Text(label),
           )
         : OutlinedButton.icon(
@@ -499,7 +498,7 @@ class _TaskHubPageQuickButton extends StatelessWidget {
                 BorderSide(color: tokens.borderSubtle.withOpacity(0.9)),
               ),
             ),
-            icon: Icon(icon, size: 14),
+            icon: Icon(icon, size: 16),
             label: Text(label),
           );
 
@@ -553,9 +552,12 @@ class _TaskHubPageQuickMenu extends StatelessWidget {
             color: tokens.borderSubtle.withOpacity(0.9),
           ),
         ),
-        child: const Padding(
-          padding: EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-          child: Icon(Icons.more_horiz_rounded, size: 16),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minWidth: 44, minHeight: 40),
+          child: const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+            child: Icon(Icons.more_horiz_rounded, size: 18),
+          ),
         ),
       ),
     );

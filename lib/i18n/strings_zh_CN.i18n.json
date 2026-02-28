@@ -1027,6 +1027,14 @@
         "enableCloud": "开启云端向量"
       }
     },
+    "semanticParseConsent": {
+      "title": "是否开启云端智能理解？",
+      "body": "开启后，SecondLoop 会使用云端 AI 更好地理解你的消息内容，帮助你更准确地自动整理待办。\n\n文本会被保密处理（不写入日志/不存储），不会上传你的 vault key 和 sync key。\n\n这会消耗 Cloud 额度。",
+      "actions": {
+        "useLocal": "保持本地模式",
+        "enableCloud": "开启云端理解"
+      }
+    },
     "semanticParseStatusRunning": "AI 分析中…",
     "semanticParseStatusSlow": "AI 分析较慢，后台继续…",
     "attachmentAnnotationNeedsSetup": "图片注释需要先配置",

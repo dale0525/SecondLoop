@@ -87,10 +87,17 @@ Use `pixi run release` (no positional version) to run preflight + AI bump decisi
 Required env/secrets for release automation:
 - `RELEASE_LLM_API_KEY`
 - `RELEASE_LLM_MODEL`
+- `HOMEBREW_TAP_TOKEN` (PAT with `contents:write` to `dale0525/SecondLoopHomebrew`)
+- `WINGET_PKGS_TOKEN` (PAT that can push to your `winget-pkgs` fork and open PRs)
 - Optional secret: `RELEASE_LLM_BASE_URL`
 - Optional local env: `RELEASE_LLM_ENDPOINT` (full endpoint override, e.g. `/chat/completions`)
 - Optional local env: `RELEASE_LLM_AUTH_HEADER` / `RELEASE_LLM_AUTH_SCHEME` (custom auth header for non-standard gateways)
 - Optional local env: `RELEASE_LLM_CA_BUNDLE` (CA file path when custom LLM endpoint uses private CA)
 - Optional variable: `RELEASE_NOTES_LOCALES`
+- Optional variable: `WINGET_PKGS_FORK_REPO` (default: `<github.repository_owner>/winget-pkgs`)
+
+Notes:
+- `WINGET_PKGS_FORK_REPO` must already exist as a fork of `microsoft/winget-pkgs`.
+- Release workflow now auto-opens a WinGet PR and updates `dale0525/SecondLoopHomebrew` on each `vX.Y.Z` tag.
 
 See `RELEASE_CHECKLIST.md` for the full checklist, including Android signing + Play/App Store readiness notes.

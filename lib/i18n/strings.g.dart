@@ -4,7 +4,7 @@
 /// To regenerate, run: `dart run slang`
 ///
 /// Locales: 2
-/// Strings: 1790 (895 per locale)
+/// Strings: 1798 (899 per locale)
 ///
 /// Built on 2026-02-28 at 13:26 UTC
 
@@ -446,6 +446,8 @@ class _StringsChatEn {
       _StringsChatAskAiConsentEn._(_root);
   late final _StringsChatEmbeddingsConsentEn embeddingsConsent =
       _StringsChatEmbeddingsConsentEn._(_root);
+  late final _StringsChatSemanticParseConsentEn semanticParseConsent =
+      _StringsChatSemanticParseConsentEn._(_root);
   String get semanticParseStatusRunning => 'AI analyzing…';
   String get semanticParseStatusSlow =>
       'AI is taking longer. Continuing in background…';
@@ -1652,6 +1654,20 @@ class _StringsChatEmbeddingsConsentEn {
   String get dontShowAgain => 'Remember my choice';
   late final _StringsChatEmbeddingsConsentActionsEn actions =
       _StringsChatEmbeddingsConsentActionsEn._(_root);
+}
+
+// Path: chat.semanticParseConsent
+class _StringsChatSemanticParseConsentEn {
+  _StringsChatSemanticParseConsentEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get title => 'Enable cloud smart understanding?';
+  String get body =>
+      'When enabled, SecondLoop can use cloud AI to better understand your messages and improve automatic task organization.\n\nYour text is handled confidentially (not logged or stored), and your vault key and sync key are never uploaded.\n\nThis uses your Cloud quota.';
+  late final _StringsChatSemanticParseConsentActionsEn actions =
+      _StringsChatSemanticParseConsentActionsEn._(_root);
 }
 
 // Path: chat.tagFilter
@@ -3004,6 +3020,17 @@ class _StringsChatEmbeddingsConsentActionsEn {
   String get enableCloud => 'Enable cloud embeddings';
 }
 
+// Path: chat.semanticParseConsent.actions
+class _StringsChatSemanticParseConsentActionsEn {
+  _StringsChatSemanticParseConsentActionsEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get useLocal => 'Keep local only';
+  String get enableCloud => 'Enable cloud understanding';
+}
+
 // Path: chat.tagFilter.sheet
 class _StringsChatTagFilterSheetEn {
   _StringsChatTagFilterSheetEn._(this._root);
@@ -4343,6 +4370,9 @@ class _StringsChatZhCn extends _StringsChatEn {
   @override
   late final _StringsChatEmbeddingsConsentZhCn embeddingsConsent =
       _StringsChatEmbeddingsConsentZhCn._(_root);
+  @override
+  late final _StringsChatSemanticParseConsentZhCn semanticParseConsent =
+      _StringsChatSemanticParseConsentZhCn._(_root);
   @override
   String get semanticParseStatusRunning => 'AI 分析中…';
   @override
@@ -6169,6 +6199,27 @@ class _StringsChatEmbeddingsConsentZhCn
   @override
   late final _StringsChatEmbeddingsConsentActionsZhCn actions =
       _StringsChatEmbeddingsConsentActionsZhCn._(_root);
+}
+
+// Path: chat.semanticParseConsent
+class _StringsChatSemanticParseConsentZhCn
+    extends _StringsChatSemanticParseConsentEn {
+  _StringsChatSemanticParseConsentZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get title => '是否开启云端智能理解？';
+  @override
+  String get body =>
+      '开启后，SecondLoop 会使用云端 AI 更好地理解你的消息内容，帮助你更准确地自动整理待办。\n\n文本会被保密处理（不写入日志/不存储），不会上传你的 vault key 和 sync key。\n\n这会消耗 Cloud 额度。';
+  @override
+  late final _StringsChatSemanticParseConsentActionsZhCn actions =
+      _StringsChatSemanticParseConsentActionsZhCn._(_root);
 }
 
 // Path: chat.tagFilter
@@ -8207,6 +8258,23 @@ class _StringsChatEmbeddingsConsentActionsZhCn
   String get useLocal => '使用本地';
   @override
   String get enableCloud => '开启云端向量';
+}
+
+// Path: chat.semanticParseConsent.actions
+class _StringsChatSemanticParseConsentActionsZhCn
+    extends _StringsChatSemanticParseConsentActionsEn {
+  _StringsChatSemanticParseConsentActionsZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get useLocal => '保持本地模式';
+  @override
+  String get enableCloud => '开启云端理解';
 }
 
 // Path: chat.tagFilter.sheet
@@ -10884,6 +10952,14 @@ extension on Translations {
         return 'Use local';
       case 'chat.embeddingsConsent.actions.enableCloud':
         return 'Enable cloud embeddings';
+      case 'chat.semanticParseConsent.title':
+        return 'Enable cloud smart understanding?';
+      case 'chat.semanticParseConsent.body':
+        return 'When enabled, SecondLoop can use cloud AI to better understand your messages and improve automatic task organization.\n\nYour text is handled confidentially (not logged or stored), and your vault key and sync key are never uploaded.\n\nThis uses your Cloud quota.';
+      case 'chat.semanticParseConsent.actions.useLocal':
+        return 'Keep local only';
+      case 'chat.semanticParseConsent.actions.enableCloud':
+        return 'Enable cloud understanding';
       case 'chat.semanticParseStatusRunning':
         return 'AI analyzing…';
       case 'chat.semanticParseStatusSlow':
@@ -12711,6 +12787,14 @@ extension on _StringsZhCn {
         return '使用本地';
       case 'chat.embeddingsConsent.actions.enableCloud':
         return '开启云端向量';
+      case 'chat.semanticParseConsent.title':
+        return '是否开启云端智能理解？';
+      case 'chat.semanticParseConsent.body':
+        return '开启后，SecondLoop 会使用云端 AI 更好地理解你的消息内容，帮助你更准确地自动整理待办。\n\n文本会被保密处理（不写入日志/不存储），不会上传你的 vault key 和 sync key。\n\n这会消耗 Cloud 额度。';
+      case 'chat.semanticParseConsent.actions.useLocal':
+        return '保持本地模式';
+      case 'chat.semanticParseConsent.actions.enableCloud':
+        return '开启云端理解';
       case 'chat.semanticParseStatusRunning':
         return 'AI 分析中…';
       case 'chat.semanticParseStatusSlow':

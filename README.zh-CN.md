@@ -58,6 +58,15 @@ SecondLoop 是一个（Community Edition）**开源**、隐私优先的 “Secon
 - 最新动态请关注官网：https://secondloop.app
 - 想立即从源码体验，请查看 `CONTRIBUTING.md`。
 
+### 包管理器安装（Beta）
+
+- macOS（Homebrew）：
+  - `brew tap dale0525/SecondLoopHomebrew`
+  - `brew install --cask secondloop`
+- Windows（WinGet）：
+  - `winget install --id SecondLoop.SecondLoop --exact`
+- 新标签发布后，包管理器索引可能会比 GitHub Releases 略晚几分钟到几十分钟同步。
+
 ### 快速上手
 
 1) **创建 Vault（首次启动）**
