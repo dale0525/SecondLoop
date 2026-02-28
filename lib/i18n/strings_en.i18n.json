@@ -1177,15 +1177,15 @@
       "preparing": "Preparing…",
       "pulling": "Downloading changes…",
       "pushing": "Uploading changes…",
-      "uploadingMedia": "Uploading media…",
+      "uploadingMedia": "Uploading files…",
       "finalizing": "Finalizing…"
     },
     "sections": {
       "automation": "Auto sync",
       "backend": "Sync method",
-      "mediaPreview": "Media downloads",
-      "mediaBackup": "Media uploads",
-      "securityActions": "Security & manual sync"
+      "mediaPreview": "File downloads",
+      "mediaBackup": "File uploads",
+      "securityActions": "Manual sync & maintenance"
     },
     "autoSync": {
       "title": "Auto sync",
@@ -1194,25 +1194,25 @@
       "wifiOnlySubtitle": "Save mobile data by syncing automatically only on Wi‑Fi"
     },
     "mediaPreview": {
-      "chatThumbnailsWifiOnlyTitle": "Download media files on Wi‑Fi only",
-      "chatThumbnailsWifiOnlySubtitle": "If an attachment isn't on this device yet, download it only on Wi‑Fi"
+      "chatThumbnailsWifiOnlyTitle": "Download files on Wi‑Fi only",
+      "chatThumbnailsWifiOnlySubtitle": "If a file isn't on this device yet, download it only on Wi‑Fi"
     },
     "mediaBackup": {
-      "title": "Media uploads",
-      "subtitle": "Uploads encrypted images for cross‑device viewing and memory recall",
+      "title": "File uploads",
+      "subtitle": "Uploads encrypted photos, videos, audio, and other files in the background for cross-device access",
       "wifiOnlyTitle": "Upload on Wi‑Fi only",
       "wifiOnlySubtitle": "Avoid using mobile data for large uploads",
-      "description": "Uploads encrypted image attachments to your sync storage. Images are downloaded on demand when viewing on another device.",
+      "description": "New files are encrypted and uploaded in the background so they stay available across your devices. Missing files are downloaded on demand when you open them.",
       "stats": "Queued $pending · Failed $failed · Uploaded $uploaded",
       "lastUploaded": "Last upload: $at",
       "lastError": "Last error: $error",
       "lastErrorWithTime": "Last error ($at): $error",
-      "backfillButton": "Queue existing images",
+      "backfillButton": "Queue existing files",
       "uploadNowButton": "Upload now",
-      "backfillEnqueued": "Queued $count images for upload",
-      "backfillFailed": "Couldn't queue existing images: $error",
-      "notEnabled": "Turn on Media uploads first.",
-      "managedVaultOnly": "Media uploads are available with WebDAV or SecondLoop Cloud sync.",
+      "backfillEnqueued": "Queued $count existing files for upload",
+      "backfillFailed": "Couldn't queue existing files: $error",
+      "notEnabled": "Turn on File uploads first.",
+      "managedVaultOnly": "File uploads are available with WebDAV or SecondLoop Cloud sync.",
       "wifiOnlyBlocked": "Wi‑Fi only is on. Connect to Wi‑Fi, or allow mobile data just this once.",
       "uploaded": "Upload complete",
       "nothingToUpload": "Nothing to upload",

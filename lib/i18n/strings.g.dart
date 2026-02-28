@@ -6,7 +6,7 @@
 /// Locales: 2
 /// Strings: 1798 (899 per locale)
 ///
-/// Built on 2026-02-28 at 13:01 UTC
+/// Built on 2026-02-28 at 13:26 UTC
 
 // coverage:ignore-file
 // ignore_for_file: type=lint
@@ -1794,7 +1794,7 @@ class _StringsSyncProgressDialogEn {
   String get preparing => 'Preparing…';
   String get pulling => 'Downloading changes…';
   String get pushing => 'Uploading changes…';
-  String get uploadingMedia => 'Uploading media…';
+  String get uploadingMedia => 'Uploading files…';
   String get finalizing => 'Finalizing…';
 }
 
@@ -1807,9 +1807,9 @@ class _StringsSyncSectionsEn {
   // Translations
   String get automation => 'Auto sync';
   String get backend => 'Sync method';
-  String get mediaPreview => 'Media downloads';
-  String get mediaBackup => 'Media uploads';
-  String get securityActions => 'Security & manual sync';
+  String get mediaPreview => 'File downloads';
+  String get mediaBackup => 'File uploads';
+  String get securityActions => 'Manual sync & maintenance';
 }
 
 // Path: sync.autoSync
@@ -1833,10 +1833,9 @@ class _StringsSyncMediaPreviewEn {
   final Translations _root; // ignore: unused_field
 
   // Translations
-  String get chatThumbnailsWifiOnlyTitle =>
-      'Download media files on Wi‑Fi only';
+  String get chatThumbnailsWifiOnlyTitle => 'Download files on Wi‑Fi only';
   String get chatThumbnailsWifiOnlySubtitle =>
-      'If an attachment isn\'t on this device yet, download it only on Wi‑Fi';
+      'If a file isn\'t on this device yet, download it only on Wi‑Fi';
 }
 
 // Path: sync.mediaBackup
@@ -1846,13 +1845,13 @@ class _StringsSyncMediaBackupEn {
   final Translations _root; // ignore: unused_field
 
   // Translations
-  String get title => 'Media uploads';
+  String get title => 'File uploads';
   String get subtitle =>
-      'Uploads encrypted images for cross‑device viewing and memory recall';
+      'Uploads encrypted photos, videos, audio, and other files in the background for cross-device access';
   String get wifiOnlyTitle => 'Upload on Wi‑Fi only';
   String get wifiOnlySubtitle => 'Avoid using mobile data for large uploads';
   String get description =>
-      'Uploads encrypted image attachments to your sync storage. Images are downloaded on demand when viewing on another device.';
+      'New files are encrypted and uploaded in the background so they stay available across your devices. Missing files are downloaded on demand when you open them.';
   String stats(
           {required Object pending,
           required Object failed,
@@ -1862,15 +1861,15 @@ class _StringsSyncMediaBackupEn {
   String lastError({required Object error}) => 'Last error: ${error}';
   String lastErrorWithTime({required Object at, required Object error}) =>
       'Last error (${at}): ${error}';
-  String get backfillButton => 'Queue existing images';
+  String get backfillButton => 'Queue existing files';
   String get uploadNowButton => 'Upload now';
   String backfillEnqueued({required Object count}) =>
-      'Queued ${count} images for upload';
+      'Queued ${count} existing files for upload';
   String backfillFailed({required Object error}) =>
-      'Couldn\'t queue existing images: ${error}';
-  String get notEnabled => 'Turn on Media uploads first.';
+      'Couldn\'t queue existing files: ${error}';
+  String get notEnabled => 'Turn on File uploads first.';
   String get managedVaultOnly =>
-      'Media uploads are available with WebDAV or SecondLoop Cloud sync.';
+      'File uploads are available with WebDAV or SecondLoop Cloud sync.';
   String get wifiOnlyBlocked =>
       'Wi‑Fi only is on. Connect to Wi‑Fi, or allow mobile data just this once.';
   String get uploaded => 'Upload complete';
@@ -6417,7 +6416,7 @@ class _StringsSyncProgressDialogZhCn extends _StringsSyncProgressDialogEn {
   @override
   String get pushing => '正在上传更改…';
   @override
-  String get uploadingMedia => '正在上传媒体…';
+  String get uploadingMedia => '正在上传文件…';
   @override
   String get finalizing => '正在收尾…';
 }
@@ -6437,11 +6436,11 @@ class _StringsSyncSectionsZhCn extends _StringsSyncSectionsEn {
   @override
   String get backend => '同步方式';
   @override
-  String get mediaPreview => '媒体下载';
+  String get mediaPreview => '文件下载';
   @override
-  String get mediaBackup => '媒体上传';
+  String get mediaBackup => '文件上传';
   @override
-  String get securityActions => '安全与手动同步';
+  String get securityActions => '手动同步与维护';
 }
 
 // Path: sync.autoSync
@@ -6475,9 +6474,9 @@ class _StringsSyncMediaPreviewZhCn extends _StringsSyncMediaPreviewEn {
 
   // Translations
   @override
-  String get chatThumbnailsWifiOnlyTitle => '仅在 Wi‑Fi 下下载媒体文件';
+  String get chatThumbnailsWifiOnlyTitle => '仅在 Wi‑Fi 下下载文件';
   @override
-  String get chatThumbnailsWifiOnlySubtitle => '当附件在本机缺失时，仅在 Wi‑Fi 下自动下载';
+  String get chatThumbnailsWifiOnlySubtitle => '当文件在本机缺失时，仅在 Wi‑Fi 下自动下载';
 }
 
 // Path: sync.mediaBackup
@@ -6491,16 +6490,15 @@ class _StringsSyncMediaBackupZhCn extends _StringsSyncMediaBackupEn {
 
   // Translations
   @override
-  String get title => '媒体上传';
+  String get title => '文件上传';
   @override
-  String get subtitle => '后台上传加密图片，用于跨设备回看与回溯记忆';
+  String get subtitle => '后台加密上传图片、视频、音频等文件，便于跨设备查看';
   @override
   String get wifiOnlyTitle => '仅在 Wi‑Fi 下上传';
   @override
   String get wifiOnlySubtitle => '节省流量：只在 Wi‑Fi 下上传';
   @override
-  String get description =>
-      '将加密的图片附件上传到同步存储，用于跨设备回看，并支持后续的回溯记忆功能。附件在本机缺失时可按需下载。';
+  String get description => '新发送的文件会在后台加密上传到同步存储，换设备后也能随时查看。若本机缺失文件，会在查看时按需下载。';
   @override
   String stats(
           {required Object pending,
@@ -6515,17 +6513,17 @@ class _StringsSyncMediaBackupZhCn extends _StringsSyncMediaBackupEn {
   String lastErrorWithTime({required Object at, required Object error}) =>
       '最近一次错误（${at}）：${error}';
   @override
-  String get backfillButton => '加入历史图片';
+  String get backfillButton => '补齐历史文件';
   @override
   String get uploadNowButton => '立即上传';
   @override
-  String backfillEnqueued({required Object count}) => '已将 ${count} 张图片加入上传队列';
+  String backfillEnqueued({required Object count}) => '已将 ${count} 个历史文件加入上传队列';
   @override
   String backfillFailed({required Object error}) => '加入失败：${error}';
   @override
-  String get notEnabled => '请先开启媒体上传。';
+  String get notEnabled => '请先开启文件上传。';
   @override
-  String get managedVaultOnly => '媒体上传仅适用于 WebDAV 或 SecondLoop 云同步。';
+  String get managedVaultOnly => '文件上传仅适用于 WebDAV 或 SecondLoop 云同步。';
   @override
   String get wifiOnlyBlocked => '已开启仅 Wi‑Fi。请连接 Wi‑Fi，或仅本次允许使用蜂窝数据。';
   @override
@@ -11181,7 +11179,7 @@ extension on Translations {
       case 'sync.progressDialog.pushing':
         return 'Uploading changes…';
       case 'sync.progressDialog.uploadingMedia':
-        return 'Uploading media…';
+        return 'Uploading files…';
       case 'sync.progressDialog.finalizing':
         return 'Finalizing…';
       case 'sync.sections.automation':
@@ -11189,11 +11187,11 @@ extension on Translations {
       case 'sync.sections.backend':
         return 'Sync method';
       case 'sync.sections.mediaPreview':
-        return 'Media downloads';
+        return 'File downloads';
       case 'sync.sections.mediaBackup':
-        return 'Media uploads';
+        return 'File uploads';
       case 'sync.sections.securityActions':
-        return 'Security & manual sync';
+        return 'Manual sync & maintenance';
       case 'sync.autoSync.title':
         return 'Auto sync';
       case 'sync.autoSync.subtitle':
@@ -11203,19 +11201,19 @@ extension on Translations {
       case 'sync.autoSync.wifiOnlySubtitle':
         return 'Save mobile data by syncing automatically only on Wi‑Fi';
       case 'sync.mediaPreview.chatThumbnailsWifiOnlyTitle':
-        return 'Download media files on Wi‑Fi only';
+        return 'Download files on Wi‑Fi only';
       case 'sync.mediaPreview.chatThumbnailsWifiOnlySubtitle':
-        return 'If an attachment isn\'t on this device yet, download it only on Wi‑Fi';
+        return 'If a file isn\'t on this device yet, download it only on Wi‑Fi';
       case 'sync.mediaBackup.title':
-        return 'Media uploads';
+        return 'File uploads';
       case 'sync.mediaBackup.subtitle':
-        return 'Uploads encrypted images for cross‑device viewing and memory recall';
+        return 'Uploads encrypted photos, videos, audio, and other files in the background for cross-device access';
       case 'sync.mediaBackup.wifiOnlyTitle':
         return 'Upload on Wi‑Fi only';
       case 'sync.mediaBackup.wifiOnlySubtitle':
         return 'Avoid using mobile data for large uploads';
       case 'sync.mediaBackup.description':
-        return 'Uploads encrypted image attachments to your sync storage. Images are downloaded on demand when viewing on another device.';
+        return 'New files are encrypted and uploaded in the background so they stay available across your devices. Missing files are downloaded on demand when you open them.';
       case 'sync.mediaBackup.stats':
         return (
                 {required Object pending,
@@ -11230,18 +11228,19 @@ extension on Translations {
         return ({required Object at, required Object error}) =>
             'Last error (${at}): ${error}';
       case 'sync.mediaBackup.backfillButton':
-        return 'Queue existing images';
+        return 'Queue existing files';
       case 'sync.mediaBackup.uploadNowButton':
         return 'Upload now';
       case 'sync.mediaBackup.backfillEnqueued':
-        return ({required Object count}) => 'Queued ${count} images for upload';
+        return ({required Object count}) =>
+            'Queued ${count} existing files for upload';
       case 'sync.mediaBackup.backfillFailed':
         return ({required Object error}) =>
-            'Couldn\'t queue existing images: ${error}';
+            'Couldn\'t queue existing files: ${error}';
       case 'sync.mediaBackup.notEnabled':
-        return 'Turn on Media uploads first.';
+        return 'Turn on File uploads first.';
       case 'sync.mediaBackup.managedVaultOnly':
-        return 'Media uploads are available with WebDAV or SecondLoop Cloud sync.';
+        return 'File uploads are available with WebDAV or SecondLoop Cloud sync.';
       case 'sync.mediaBackup.wifiOnlyBlocked':
         return 'Wi‑Fi only is on. Connect to Wi‑Fi, or allow mobile data just this once.';
       case 'sync.mediaBackup.uploaded':
@@ -13012,7 +13011,7 @@ extension on _StringsZhCn {
       case 'sync.progressDialog.pushing':
         return '正在上传更改…';
       case 'sync.progressDialog.uploadingMedia':
-        return '正在上传媒体…';
+        return '正在上传文件…';
       case 'sync.progressDialog.finalizing':
         return '正在收尾…';
       case 'sync.sections.automation':
@@ -13020,11 +13019,11 @@ extension on _StringsZhCn {
       case 'sync.sections.backend':
         return '同步方式';
       case 'sync.sections.mediaPreview':
-        return '媒体下载';
+        return '文件下载';
       case 'sync.sections.mediaBackup':
-        return '媒体上传';
+        return '文件上传';
       case 'sync.sections.securityActions':
-        return '安全与手动同步';
+        return '手动同步与维护';
       case 'sync.autoSync.title':
         return '自动同步';
       case 'sync.autoSync.subtitle':
@@ -13034,19 +13033,19 @@ extension on _StringsZhCn {
       case 'sync.autoSync.wifiOnlySubtitle':
         return '节省流量：自动同步只在 Wi‑Fi 下进行';
       case 'sync.mediaPreview.chatThumbnailsWifiOnlyTitle':
-        return '仅在 Wi‑Fi 下下载媒体文件';
+        return '仅在 Wi‑Fi 下下载文件';
       case 'sync.mediaPreview.chatThumbnailsWifiOnlySubtitle':
-        return '当附件在本机缺失时，仅在 Wi‑Fi 下自动下载';
+        return '当文件在本机缺失时，仅在 Wi‑Fi 下自动下载';
       case 'sync.mediaBackup.title':
-        return '媒体上传';
+        return '文件上传';
       case 'sync.mediaBackup.subtitle':
-        return '后台上传加密图片，用于跨设备回看与回溯记忆';
+        return '后台加密上传图片、视频、音频等文件，便于跨设备查看';
       case 'sync.mediaBackup.wifiOnlyTitle':
         return '仅在 Wi‑Fi 下上传';
       case 'sync.mediaBackup.wifiOnlySubtitle':
         return '节省流量：只在 Wi‑Fi 下上传';
       case 'sync.mediaBackup.description':
-        return '将加密的图片附件上传到同步存储，用于跨设备回看，并支持后续的回溯记忆功能。附件在本机缺失时可按需下载。';
+        return '新发送的文件会在后台加密上传到同步存储，换设备后也能随时查看。若本机缺失文件，会在查看时按需下载。';
       case 'sync.mediaBackup.stats':
         return (
                 {required Object pending,
@@ -13061,17 +13060,17 @@ extension on _StringsZhCn {
         return ({required Object at, required Object error}) =>
             '最近一次错误（${at}）：${error}';
       case 'sync.mediaBackup.backfillButton':
-        return '加入历史图片';
+        return '补齐历史文件';
       case 'sync.mediaBackup.uploadNowButton':
         return '立即上传';
       case 'sync.mediaBackup.backfillEnqueued':
-        return ({required Object count}) => '已将 ${count} 张图片加入上传队列';
+        return ({required Object count}) => '已将 ${count} 个历史文件加入上传队列';
       case 'sync.mediaBackup.backfillFailed':
         return ({required Object error}) => '加入失败：${error}';
       case 'sync.mediaBackup.notEnabled':
-        return '请先开启媒体上传。';
+        return '请先开启文件上传。';
       case 'sync.mediaBackup.managedVaultOnly':
-        return '媒体上传仅适用于 WebDAV 或 SecondLoop 云同步。';
+        return '文件上传仅适用于 WebDAV 或 SecondLoop 云同步。';
       case 'sync.mediaBackup.wifiOnlyBlocked':
         return '已开启仅 Wi‑Fi。请连接 Wi‑Fi，或仅本次允许使用蜂窝数据。';
       case 'sync.mediaBackup.uploaded':

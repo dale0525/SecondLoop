@@ -32,7 +32,7 @@ extension _SyncSettingsPageMediaActions on _SyncSettingsPageState {
     _showSnack(copied);
   }
 
-  Future<void> _backfillCloudMediaBackupImages() async {
+  Future<void> _backfillCloudMediaBackupFiles() async {
     if (_busy) return;
     _setState(() => _busy = true);
 

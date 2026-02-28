@@ -115,8 +115,8 @@ void main() {
       'passphrase',
     );
 
-    final saveButton = find.widgetWithText(FilledButton, 'Save');
-    await tester.ensureVisible(saveButton);
+    final saveButton = find.byKey(const ValueKey('sync_save_button'));
+    await _ensureListItemVisible(tester, saveButton);
     await tester.pumpAndSettle();
     await tester.tapAt(tester.getTopLeft(saveButton) + const Offset(4, 4));
     await tester.pump();
@@ -187,8 +187,8 @@ void main() {
     await tester.drag(find.byType(ListView), const Offset(0, -800));
     await tester.pumpAndSettle();
 
-    final saveButton = find.widgetWithText(FilledButton, 'Save');
-    await tester.ensureVisible(saveButton);
+    final saveButton = find.byKey(const ValueKey('sync_save_button'));
+    await _ensureListItemVisible(tester, saveButton);
     await tester.pumpAndSettle();
     await tester.tapAt(tester.getTopLeft(saveButton) + const Offset(4, 4));
     await tester.pump();
@@ -250,8 +250,8 @@ void main() {
     await tester.drag(find.byType(ListView), const Offset(0, -800));
     await tester.pumpAndSettle();
 
-    final saveButton = find.widgetWithText(FilledButton, 'Save');
-    await tester.ensureVisible(saveButton);
+    final saveButton = find.byKey(const ValueKey('sync_save_button'));
+    await _ensureListItemVisible(tester, saveButton);
     await tester.pumpAndSettle();
     await tester.tapAt(tester.getTopLeft(saveButton) + const Offset(4, 4));
     await tester.pump();
@@ -316,8 +316,8 @@ void main() {
     await tester.drag(find.byType(ListView), const Offset(0, -800));
     await tester.pumpAndSettle();
 
-    final saveButton = find.widgetWithText(FilledButton, 'Save');
-    await tester.ensureVisible(saveButton);
+    final saveButton = find.byKey(const ValueKey('sync_save_button'));
+    await _ensureListItemVisible(tester, saveButton);
     await tester.pumpAndSettle();
     await tester.tapAt(tester.getTopLeft(saveButton) + const Offset(4, 4));
     await tester.pump();
@@ -358,8 +358,8 @@ void main() {
     await tester.drag(find.byType(ListView), const Offset(0, -800));
     await tester.pumpAndSettle();
 
-    final saveButton = find.widgetWithText(FilledButton, 'Save');
-    await tester.ensureVisible(saveButton);
+    final saveButton = find.byKey(const ValueKey('sync_save_button'));
+    await _ensureListItemVisible(tester, saveButton);
     await tester.pumpAndSettle();
     await tester.tapAt(tester.getTopLeft(saveButton) + const Offset(4, 4));
     await tester.pumpAndSettle();
@@ -405,8 +405,8 @@ void main() {
     await tester.drag(find.byType(ListView), const Offset(0, -800));
     await tester.pumpAndSettle();
 
-    final saveButton = find.widgetWithText(FilledButton, 'Save');
-    await tester.ensureVisible(saveButton);
+    final saveButton = find.byKey(const ValueKey('sync_save_button'));
+    await _ensureListItemVisible(tester, saveButton);
     await tester.pumpAndSettle();
     await tester.tapAt(tester.getTopLeft(saveButton) + const Offset(4, 4));
     await tester.pumpAndSettle();
@@ -462,8 +462,8 @@ void main() {
       'recover-me',
     );
 
-    final saveButton = find.widgetWithText(FilledButton, 'Save');
-    await tester.ensureVisible(saveButton);
+    final saveButton = find.byKey(const ValueKey('sync_save_button'));
+    await _ensureListItemVisible(tester, saveButton);
     await tester.pumpAndSettle();
     await tester.tapAt(tester.getTopLeft(saveButton) + const Offset(4, 4));
     await tester.pumpAndSettle();
@@ -508,8 +508,8 @@ void main() {
     await tester.drag(find.byType(ListView), const Offset(0, -800));
     await tester.pumpAndSettle();
 
-    final saveButton = find.widgetWithText(FilledButton, 'Save');
-    await tester.ensureVisible(saveButton);
+    final saveButton = find.byKey(const ValueKey('sync_save_button'));
+    await _ensureListItemVisible(tester, saveButton);
     await tester.pumpAndSettle();
     await tester.tapAt(tester.getTopLeft(saveButton) + const Offset(4, 4));
     await tester.pumpAndSettle();
@@ -586,8 +586,8 @@ void main() {
     await tester.drag(find.byType(ListView), const Offset(0, -800));
     await tester.pumpAndSettle();
 
-    final saveButton = find.widgetWithText(FilledButton, 'Save');
-    await tester.ensureVisible(saveButton);
+    final saveButton = find.byKey(const ValueKey('sync_save_button'));
+    await _ensureListItemVisible(tester, saveButton);
     await tester.pumpAndSettle();
     await tester.tapAt(tester.getTopLeft(saveButton) + const Offset(4, 4));
     await tester.pumpAndSettle();
@@ -649,7 +649,7 @@ void main() {
     await tester.pumpAndSettle();
 
     final downloadButton = find.widgetWithText(OutlinedButton, 'Download');
-    await tester.ensureVisible(downloadButton);
+    await _ensureListItemVisible(tester, downloadButton);
     await tester.pumpAndSettle();
     await tester.tapAt(tester.getTopLeft(downloadButton) + const Offset(4, 4));
     await tester.pumpAndSettle();
@@ -720,7 +720,7 @@ void main() {
     await tester.pumpAndSettle();
 
     final downloadButton = find.widgetWithText(OutlinedButton, 'Download');
-    await tester.ensureVisible(downloadButton);
+    await _ensureListItemVisible(tester, downloadButton);
     await tester.pumpAndSettle();
     await tester.tapAt(tester.getTopLeft(downloadButton) + const Offset(4, 4));
     await tester.pumpAndSettle();
@@ -769,12 +769,82 @@ void main() {
     await tester.pumpAndSettle();
 
     final downloadButton = find.widgetWithText(OutlinedButton, 'Download');
-    await tester.ensureVisible(downloadButton);
+    await _ensureListItemVisible(tester, downloadButton);
     await tester.pumpAndSettle();
     await tester.tapAt(tester.getTopLeft(downloadButton) + const Offset(4, 4));
     await tester.pumpAndSettle();
 
     expect(find.text('No new changes'), findsOneWidget);
+  });
+
+  testWidgets('Sync settings separates security and manual actions sections',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final store = SyncConfigStore();
+    final backend = _SyncSettingsBackend();
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: backend,
+            child: SessionScope(
+              sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+              lock: () {},
+              child: Scaffold(
+                body: SyncSettingsPage(configStore: store),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await _ensureListItemVisible(tester, find.text('Security'));
+    expect(find.text('Security'), findsOneWidget);
+
+    await _ensureListItemVisible(
+      tester,
+      find.text('Manual sync & maintenance'),
+    );
+    expect(find.text('Manual sync & maintenance'), findsOneWidget);
+    expect(find.text('Security & manual sync'), findsNothing);
+  });
+
+  testWidgets('Managed Vault hides security section', (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final store = SyncConfigStore(
+      managedVaultDefaultBaseUrl: 'https://vault.default.example',
+    );
+    await store.writeBackendType(SyncBackendType.managedVault);
+    await store.writeSyncKey(Uint8List.fromList(List<int>.filled(32, 7)));
+    final backend = _SyncSettingsBackend();
+    final cloudAuth = _FakeCloudAuthController();
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: backend,
+            child: CloudAuthScope(
+              controller: cloudAuth,
+              child: SessionScope(
+                sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+                lock: () {},
+                child: Scaffold(
+                  body: SyncSettingsPage(configStore: store),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Security'), findsNothing);
+    expect(find.byKey(const ValueKey('sync_save_button')), findsOneWidget);
   });
 
   testWidgets('Manual Upload/Download shows progress indicator',
@@ -831,6 +901,7 @@ void main() {
     await tester.pump();
 
     expect(tester.widget<OutlinedButton>(uploadButton).onPressed, isNull);
+    expect(find.text('Syncing…'), findsOneWidget);
     expect(find.byKey(const ValueKey('sync_manual_progress')), findsOneWidget);
     expect(find.byKey(const ValueKey('sync_manual_progress_percent')),
         findsOneWidget);
@@ -854,6 +925,7 @@ void main() {
     await tester.tap(downloadButton);
     await tester.pump();
 
+    expect(find.text('Syncing…'), findsOneWidget);
     expect(find.byKey(const ValueKey('sync_manual_progress')), findsOneWidget);
     expect(find.byKey(const ValueKey('sync_manual_progress_percent')),
         findsOneWidget);
@@ -867,6 +939,24 @@ void main() {
     expect(find.byKey(const ValueKey('sync_manual_progress_percent')),
         findsNothing);
   });
+}
+
+Future<void> _ensureListItemVisible(WidgetTester tester, Finder target) async {
+  final scrollable = find.byType(Scrollable).first;
+  try {
+    await tester.scrollUntilVisible(
+      target,
+      180,
+      scrollable: scrollable,
+    );
+  } catch (_) {
+    await tester.scrollUntilVisible(
+      target,
+      -180,
+      scrollable: scrollable,
+    );
+  }
+  await tester.pumpAndSettle();
 }
 
 Widget _wrap({
