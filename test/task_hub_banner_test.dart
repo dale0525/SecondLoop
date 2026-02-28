@@ -176,8 +176,16 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const ValueKey('task_hub_preview_list')), findsOneWidget);
+    final todayQuickAction =
+        find.byKey(const ValueKey('task_hub_quick_u1_today'));
+    final moreQuickAction =
+        find.byKey(const ValueKey('task_hub_quick_u1_more'));
+    expect(todayQuickAction, findsOneWidget);
+    expect(moreQuickAction, findsOneWidget);
+    expect(tester.getSize(todayQuickAction).height, greaterThanOrEqualTo(40));
+    expect(tester.getSize(moreQuickAction).height, greaterThanOrEqualTo(40));
 
-    await tester.tap(find.byKey(const ValueKey('task_hub_quick_u1_today')));
+    await tester.tap(todayQuickAction);
     await tester.pumpAndSettle();
 
     expect(calls.length, 1);
@@ -245,6 +253,7 @@ void main() {
       find.byKey(const ValueKey('task_hub_banner_section_unscheduled_plain')),
       findsOneWidget,
     );
+    expect(find.text('Unscheduled'), findsOneWidget);
 
     await tester.tap(find.byKey(const ValueKey('task_hub_quick_review_done')));
     await tester.pumpAndSettle();
