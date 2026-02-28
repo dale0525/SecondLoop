@@ -474,6 +474,7 @@ class _TaskHubPageQuickButton extends StatelessWidget {
       padding: const MaterialStatePropertyAll(
         EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       ),
+      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
       shape: MaterialStatePropertyAll(
         RoundedRectangleBorder(borderRadius: borderRadius),
       ),
@@ -531,6 +532,7 @@ class _TaskHubPageQuickMenu extends StatelessWidget {
     final tokens = SlTokens.of(context);
     return PopupMenuButton<TaskHubQuickAction>(
       tooltip: context.t.actions.taskHub.actions.more,
+      padding: EdgeInsets.zero,
       onSelected: onSelected,
       itemBuilder: (_) => [
         for (final item in items)
@@ -553,7 +555,11 @@ class _TaskHubPageQuickMenu extends StatelessWidget {
           ),
         ),
         child: ConstrainedBox(
-          constraints: const BoxConstraints(minWidth: 44, minHeight: 40),
+          constraints: const BoxConstraints(
+            minWidth: 44,
+            minHeight: 40,
+            maxHeight: 40,
+          ),
           child: const Padding(
             padding: EdgeInsets.symmetric(horizontal: 12, vertical: 11),
             child: Icon(Icons.more_horiz_rounded, size: 18),
