@@ -216,6 +216,7 @@ final class _CloudSyncSwitchPromptGateState
     final backendType = await _store.readBackendType();
     if (!mounted) return;
     if (backendType == SyncBackendType.managedVault) {
+      await _ensureManagedVaultSyncKey(uid);
       _promptedForUid = true;
       await _maybePromptEnableCloudEmbeddings();
       return;
@@ -631,11 +632,14 @@ final class _CloudSyncSwitchPromptGateState
     if (backendScope == null) return;
     final backend = backendScope.backend;
 
-    await SyncKeyManager.loadOrCreate(
-      read: _store.readSyncKey,
-      write: _store.writeSyncKey,
+    final syncKey = await SyncKeyManager.deriveManagedVaultSyncKey(
+      vaultId: uid,
+      deriveSyncKey: backend.deriveSyncKey,
     );
-    if (!mounted) return;
+    await SyncKeyManager.save(
+      write: _store.writeSyncKey,
+      key: syncKey,
+    );
 
     await _store.writeBackendType(SyncBackendType.managedVault);
     await _store.writeRemoteRoot(uid);
@@ -648,7 +652,6 @@ final class _CloudSyncSwitchPromptGateState
 
     final sessionKey =
         context.getInheritedWidgetOfExactType<SessionScope>()?.sessionKey;
-    final syncKey = await SyncKeyManager.load(read: _store.readSyncKey);
     final baseUrl = await _store.resolveManagedVaultBaseUrl();
     String? idToken;
     try {
@@ -669,8 +672,6 @@ final class _CloudSyncSwitchPromptGateState
 
     var didSync = false;
     if (sessionKey != null &&
-        syncKey != null &&
-        syncKey.length == 32 &&
         baseUrl != null &&
         baseUrl.trim().isNotEmpty &&
         idToken != null &&
@@ -694,6 +695,25 @@ final class _CloudSyncSwitchPromptGateState
     if (!didSync) {
       engine?.triggerPullNow();
       engine?.triggerPushNow();
+    }
+  }
+
+  Future<void> _ensureManagedVaultSyncKey(String uid) async {
+    final backendScope =
+        context.getInheritedWidgetOfExactType<AppBackendScope>();
+    if (backendScope == null) return;
+    final backend = backendScope.backend;
+    try {
+      final syncKey = await SyncKeyManager.deriveManagedVaultSyncKey(
+        vaultId: uid,
+        deriveSyncKey: backend.deriveSyncKey,
+      );
+      await SyncKeyManager.save(
+        write: _store.writeSyncKey,
+        key: syncKey,
+      );
+    } catch (_) {
+      // Best-effort self-heal for managed-vault key policy.
     }
   }
 

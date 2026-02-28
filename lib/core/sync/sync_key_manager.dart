@@ -6,9 +6,12 @@ import 'sync_secret_store.dart';
 
 typedef SyncKeyReader = Future<Uint8List?> Function();
 typedef SyncKeyWriter = Future<void> Function(Uint8List key);
+typedef SyncPassphraseDeriver = Future<Uint8List> Function(String passphrase);
 
 final class SyncKeyManager {
   SyncKeyManager._();
+
+  static const _kManagedVaultPassphrasePrefix = 'managed-vault-sync-v1';
 
   static Uint8List? _sessionKey;
   static Uint8List? _cachedSyncKey;
@@ -80,6 +83,25 @@ final class SyncKeyManager {
     final next = Uint8List.fromList(key);
     await write(next);
     cacheSyncKey(next);
+  }
+
+  static String managedVaultPassphraseForVaultId(String vaultId) {
+    final normalized = vaultId.trim();
+    if (normalized.isEmpty) {
+      throw ArgumentError('vaultId must not be empty');
+    }
+    return '$_kManagedVaultPassphrasePrefix::$normalized';
+  }
+
+  static Future<Uint8List> deriveManagedVaultSyncKey({
+    required String vaultId,
+    required SyncPassphraseDeriver deriveSyncKey,
+  }) async {
+    final key = await deriveSyncKey(managedVaultPassphraseForVaultId(vaultId));
+    if (key.length != 32) {
+      throw StateError('invalid_managed_vault_sync_key_length');
+    }
+    return Uint8List.fromList(key);
   }
 
   static Future<Uint8List> loadOrCreate({

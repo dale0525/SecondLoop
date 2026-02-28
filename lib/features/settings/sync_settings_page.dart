@@ -8,7 +8,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/backend/app_backend.dart';
 import '../../core/cloud/cloud_auth_scope.dart';
-import '../../core/cloud/vault_recovery_envelope_client.dart';
 import '../../core/sync/cloud_sync_switch_prefs.dart';
 import '../../core/session/session_scope.dart';
 import '../../core/sync/background_sync.dart';
@@ -53,11 +52,9 @@ class SyncSettingsPage extends StatefulWidget {
   const SyncSettingsPage({
     super.key,
     this.configStore,
-    this.vaultRecoveryEnvelopeClient,
   });
 
   final SyncConfigStore? configStore;
-  final VaultRecoveryEnvelopeClient? vaultRecoveryEnvelopeClient;
 
   @override
   State<SyncSettingsPage> createState() => _SyncSettingsPageState();
@@ -91,10 +88,6 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
   bool _showRecoveryHintBanner = false;
 
   late final SyncConfigStore _store = widget.configStore ?? SyncConfigStore();
-  late final VaultRecoveryEnvelopeClient _vaultRecoveryEnvelopeClient =
-      widget.vaultRecoveryEnvelopeClient ?? VaultRecoveryEnvelopeClient();
-  late final bool _ownsVaultRecoveryEnvelopeClient =
-      widget.vaultRecoveryEnvelopeClient == null;
 
   SyncBackendType _backendType = SyncBackendType.webdav;
   bool _autoEnabled = true;
@@ -119,9 +112,6 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
     _localDirController.dispose();
     _remoteRootController.dispose();
     _syncPassphraseController.dispose();
-    if (_ownsVaultRecoveryEnvelopeClient) {
-      _vaultRecoveryEnvelopeClient.dispose();
-    }
     super.dispose();
   }
 
@@ -145,50 +135,6 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
     });
   }
 
-  Future<void> _tryHydrateManagedVaultRecoveryEnvelope({
-    required SyncBackendType backendType,
-  }) async {
-    if (backendType != SyncBackendType.managedVault) return;
-
-    final cloudAuth = CloudAuthScope.maybeOf(context)?.controller;
-    if (cloudAuth == null) return;
-
-    final existing = await _store.readRecoveryEnvelopeJson();
-    if (existing != null && existing.trim().isNotEmpty) return;
-
-    String? idToken;
-    try {
-      idToken = await cloudAuth.getIdToken();
-    } catch (_) {
-      idToken = null;
-    }
-    final vaultId = cloudAuth.uid?.trim();
-    final baseUrl = (await _store.resolveManagedVaultBaseUrl())?.trim();
-    if (idToken == null ||
-        idToken.trim().isEmpty ||
-        vaultId == null ||
-        vaultId.isEmpty ||
-        baseUrl == null ||
-        baseUrl.isEmpty) {
-      return;
-    }
-
-    try {
-      final fetchedEnvelopeJson =
-          await _vaultRecoveryEnvelopeClient.fetchRecoveryEnvelope(
-        managedVaultBaseUrl: baseUrl,
-        vaultId: vaultId,
-        idToken: idToken.trim(),
-      );
-      if (fetchedEnvelopeJson != null &&
-          fetchedEnvelopeJson.trim().isNotEmpty) {
-        await _store.writeRecoveryEnvelopeJson(fetchedEnvelopeJson);
-      }
-    } catch (_) {
-      // Best-effort prefetch.
-    }
-  }
-
   Future<void> _load() async {
     final all = await _store.readAll();
     final backendType = switch (all[SyncConfigStore.kBackendType]) {
@@ -205,7 +151,6 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
     final password = await _store.readWebdavPassword();
     final remoteRoot = all[SyncConfigStore.kRemoteRoot];
     final localDir = all[SyncConfigStore.kLocalDir];
-    await _tryHydrateManagedVaultRecoveryEnvelope(backendType: backendType);
     final hasSyncKey = (await _store.readSyncKey()) != null;
     final hasRecoveryEnvelope =
         (await _store.readRecoveryEnvelopeJson())?.trim().isNotEmpty == true;
@@ -234,10 +179,13 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
               backendType == SyncBackendType.webdav)
           ? _maybeLoadCloudMediaBackupSummary()
           : null;
-      _showRecoveryHintBanner = backendType == SyncBackendType.managedVault &&
+      _showRecoveryHintBanner = backendType != SyncBackendType.managedVault &&
           hasRecoveryEnvelope &&
           !hasSyncKey;
-      if (hasSyncKey) {
+      if (backendType == SyncBackendType.managedVault) {
+        _syncPassphraseController.clear();
+        _passphraseIsPlaceholder = false;
+      } else if (hasSyncKey) {
         _syncPassphraseController.text = _kPassphrasePlaceholder;
         _passphraseIsPlaceholder = true;
       }
@@ -778,33 +726,35 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
                   ),
                   const SizedBox(height: 12),
                 ],
-                SizedBox(
-                  key: _recoveryPassphraseFieldAnchorKey,
-                  child: const SizedBox.shrink(),
-                ),
-                TextField(
-                  key: _kRecoveryPassphraseFieldKey,
-                  controller: _syncPassphraseController,
-                  decoration: InputDecoration(
-                    labelText: recoveryPassphraseLabel,
-                    helperText: recoveryPassphraseHelper,
-                    helperMaxLines: 3,
+                if (_backendType != SyncBackendType.managedVault) ...[
+                  SizedBox(
+                    key: _recoveryPassphraseFieldAnchorKey,
+                    child: const SizedBox.shrink(),
                   ),
-                  enabled: !_busy,
-                  obscureText: true,
-                  obscuringCharacter: '*',
-                  onTap: _passphraseIsPlaceholder
-                      ? () {
-                          _syncPassphraseController.clear();
-                          setState(() => _passphraseIsPlaceholder = false);
-                        }
-                      : null,
-                  onChanged: (_) {
-                    if (!_passphraseIsPlaceholder) return;
-                    setState(() => _passphraseIsPlaceholder = false);
-                  },
-                ),
-                const SizedBox(height: 12),
+                  TextField(
+                    key: _kRecoveryPassphraseFieldKey,
+                    controller: _syncPassphraseController,
+                    decoration: InputDecoration(
+                      labelText: recoveryPassphraseLabel,
+                      helperText: recoveryPassphraseHelper,
+                      helperMaxLines: 3,
+                    ),
+                    enabled: !_busy,
+                    obscureText: true,
+                    obscuringCharacter: '*',
+                    onTap: _passphraseIsPlaceholder
+                        ? () {
+                            _syncPassphraseController.clear();
+                            setState(() => _passphraseIsPlaceholder = false);
+                          }
+                        : null,
+                    onChanged: (_) {
+                      if (!_passphraseIsPlaceholder) return;
+                      setState(() => _passphraseIsPlaceholder = false);
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                ],
                 FilledButton(
                   onPressed: _busy ? null : _save,
                   child: Text(context.t.common.actions.save),

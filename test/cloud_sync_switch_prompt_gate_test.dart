@@ -129,7 +129,7 @@ void main() {
     expect(find.byType(AlertDialog), findsOneWidget);
   });
 
-  testWidgets('Switching to Cloud auto-generates sync key if missing',
+  testWidgets('Switching to Cloud derives managed vault sync key from uid',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
     final store = SyncConfigStore();
@@ -171,7 +171,9 @@ void main() {
     expect(await store.readRemoteRoot(), 'uid_1');
     final syncKey = await store.readSyncKey();
     expect(syncKey, isNotNull);
-    expect(syncKey!.length, 32);
+    expect(syncKey, Uint8List.fromList(List<int>.filled(32, 9)));
+    expect(find.text('Enter your recovery passphrase and tap Save first.'),
+        findsNothing);
   });
 
   testWidgets(
