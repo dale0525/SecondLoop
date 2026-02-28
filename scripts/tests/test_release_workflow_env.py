@@ -301,6 +301,34 @@ class ReleaseWorkflowEnvTests(unittest.TestCase):
         self.assertIn('"releases.$Channel.json"', script_text)
         self.assertIn('"assets.$Channel.json"', script_text)
 
+    def test_windows_release_publishes_setup_checksum_asset(self) -> None:
+        workflow_text = self._workflow_text()
+
+        self.assertIn("SecondLoop-win-Setup.exe.sha256", workflow_text)
+        self.assertIn("dist/*Setup*.exe.sha256", workflow_text)
+
+    def test_release_workflow_generates_winget_manifests(self) -> None:
+        workflow_text = self._workflow_text()
+
+        self.assertIn("Generate WinGet manifests", workflow_text)
+        self.assertIn("scripts/generate_winget_manifests.py", workflow_text)
+        self.assertIn("SecondLoop.SecondLoop", workflow_text)
+        self.assertIn("dist/winget-manifests", workflow_text)
+        self.assertIn("SecondLoop-winget-manifests-${GITHUB_REF_NAME}.zip", workflow_text)
+
+    def test_release_workflow_publishes_winget_manifest_bundle(self) -> None:
+        workflow_text = self._workflow_text()
+
+        self.assertIn("dist/SecondLoop-winget-manifests-*.zip", workflow_text)
+
+    def test_release_workflow_publishes_homebrew_cask_to_external_tap(self) -> None:
+        workflow_text = self._workflow_text()
+
+        self.assertIn("publish_homebrew_cask:", workflow_text)
+        self.assertIn("HOMEBREW_TAP_TOKEN", workflow_text)
+        self.assertIn("SecondLoopHomebrew", workflow_text)
+        self.assertIn("scripts/publish_homebrew_cask.sh", workflow_text)
+
 
 
 if __name__ == "__main__":

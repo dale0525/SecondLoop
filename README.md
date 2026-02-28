@@ -57,6 +57,15 @@ The core mental model is **One Timeline** (a single “Main Stream”): capture 
 - Follow updates via the website: https://secondloop.app
 - If you want to try it from source today, see `CONTRIBUTING.md`.
 
+### Package manager install (beta)
+
+- macOS (Homebrew):
+  - `brew tap dale0525/SecondLoopHomebrew`
+  - `brew install --cask secondloop`
+- Windows (WinGet):
+  - `winget install --id SecondLoop.SecondLoop --exact`
+- Package indexes may lag behind GitHub Releases for a short period after each tag.
+
 ### Quick walkthrough
 
 1) **Create your vault** (first run)

@@ -363,11 +363,16 @@ jobs:
           if ($null -eq $nupkgPath) {
             throw "Velopack nupkg not found in dist"
           }
+
+          $setupSha256 = (Get-FileHash -Path $setupPath.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+          $setupShaFile = Join-Path $setupPath.DirectoryName 'SecondLoop-win-Setup.exe.sha256'
+          "$setupSha256  $($setupPath.Name)" | Set-Content -Path $setupShaFile -Encoding ascii
       - uses: actions/upload-artifact@v4
         with:
           name: windows
           path: |
             dist/*Setup*.exe
+            dist/*Setup*.exe.sha256
             dist/releases.*.json
             dist/assets.*.json
             dist/*RELEASES*
@@ -694,6 +699,27 @@ jobs:
             echo "Invalid app release tag: ${GITHUB_REF_NAME}. Expected vX.Y.Z"
             exit 1
           fi
+      - name: Generate WinGet manifests
+        shell: bash
+        run: |
+          set -euo pipefail
+          setup_exe="$(find dist -maxdepth 1 -type f -iname '*setup*.exe' | head -n 1)"
+          if [[ -z "${setup_exe}" ]]; then
+            echo "Windows setup executable not found under dist/"
+            exit 1
+          fi
+          python3 scripts/generate_winget_manifests.py \
+            --release-tag "${GITHUB_REF_NAME}" \
+            --repo "${GITHUB_REPOSITORY}" \
+            --installer-path "${setup_exe}" \
+            --output-dir dist/winget-manifests \
+            --package-identifier SecondLoop.SecondLoop \
+            --package-name SecondLoop \
+            --publisher SecondLoop
+          (
+            cd dist
+            zip -r "SecondLoop-winget-manifests-${GITHUB_REF_NAME}.zip" winget-manifests >/dev/null
+          )
       - name: Collect release facts
         shell: bash
         run: |
@@ -751,6 +777,10 @@ jobs:
             echo "## Checksum Verification"
             echo "- SHA256 checksum files are published as \\`*.dmg.sha256\\` assets."
             echo "- Verify on macOS with \\`shasum -a 256 -c <dmg-file>.sha256\\`."
+            echo
+            echo "## Package Manager Install (Beta)"
+            echo "- Homebrew: \\`brew tap dale0525/SecondLoopHomebrew && brew install --cask secondloop\\`"
+            echo "- WinGet: \\`winget install --id SecondLoop.SecondLoop --exact\\`"
           } >> dist/release-notes.md
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
@@ -761,10 +791,37 @@ jobs:
             dist/*.dmg
             dist/*.dmg.sha256
             dist/*Setup*.exe
+            dist/*Setup*.exe.sha256
             dist/releases.*.json
             dist/assets.*.json
             dist/*RELEASES*
             dist/*.nupkg
             dist/*.tar.gz
+            dist/SecondLoop-winget-manifests-*.zip
             dist/release-notes/*.json
             dist/release-notes.md
+
+  publish_homebrew_cask:
+    runs-on: ubuntu-latest
+    needs: [publish]
+    if: startsWith(github.ref, 'refs/tags/')
+    env:
+      HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+      HOMEBREW_TAP_REPO: dale0525/SecondLoopHomebrew
+      GH_TOKEN: ${{ github.token }}
+      GITHUB_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate homebrew tap config
+        shell: bash
+        run: |
+          : "${HOMEBREW_TAP_TOKEN:?Missing secret HOMEBREW_TAP_TOKEN}"
+      - name: Publish Homebrew cask
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/publish_homebrew_cask.sh \
+            --tap-repo "${HOMEBREW_TAP_REPO}" \
+            --source-repo "${GITHUB_REPOSITORY}" \
+            --release-tag "${GITHUB_REF_NAME}" \
+            --token "${HOMEBREW_TAP_TOKEN}"
