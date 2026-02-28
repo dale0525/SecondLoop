@@ -281,6 +281,58 @@ fn update_since_map(conn: &Connection, scope_id: &str, next: &BTreeMap<String, i
     Ok(())
 }
 
+fn cursor_repair_marker_key(scope_id: &str, device_id: &str) -> String {
+    format!("managed_vault.cursor_repaired:{scope_id}:{device_id}")
+}
+
+fn has_local_oplog_for_device(conn: &Connection, device_id: &str) -> Result<bool> {
+    let row: Option<i64> = conn
+        .query_row(
+            r#"SELECT 1 FROM oplog WHERE device_id = ?1 LIMIT 1"#,
+            params![device_id],
+            |row| row.get(0),
+        )
+        .optional()?;
+    Ok(row.is_some())
+}
+
+fn maybe_recover_stale_since_map(
+    conn: &Connection,
+    scope_id: &str,
+    local_device_id: &str,
+    since: &mut BTreeMap<String, i64>,
+) -> Result<bool> {
+    if since.is_empty() {
+        return Ok(false);
+    }
+
+    let mut changed = false;
+    for (device_id, last_seq) in since.clone() {
+        if device_id == local_device_id || last_seq <= 0 {
+            continue;
+        }
+
+        let marker_key = cursor_repair_marker_key(scope_id, &device_id);
+        if super::kv_get_i64(conn, &marker_key)?.unwrap_or(0) > 0 {
+            continue;
+        }
+
+        if has_local_oplog_for_device(conn, &device_id)? {
+            continue;
+        }
+
+        since.insert(device_id.clone(), 0);
+        super::kv_set_i64(conn, &marker_key, 1)?;
+        changed = true;
+    }
+
+    if changed {
+        update_since_map(conn, scope_id, since)?;
+    }
+
+    Ok(changed)
+}
+
 fn decode_pull_bin_response(bytes: &[u8]) -> Result<Vec<PullOpBin>> {
     if bytes.len() < PULL_BIN_MAGIC_V1.len() + 4 {
         return Err(anyhow!("invalid pull_bin response: too short"));
@@ -851,6 +903,7 @@ pub fn pull(
     let endpoint_bin = url(base_url, &format!("/v1/vaults/{vault_id}/ops:pull_bin"))?;
     let mut applied: u64 = 0;
     let mut pull_bin_supported: Option<bool> = None;
+    let mut stale_cursor_recovery_attempted = false;
     loop {
         let request = PullRequest {
             device_id: local_device_id.as_str(),
@@ -890,6 +943,14 @@ pub fn pull(
 
                 if next_since == since && !ops.is_empty() {
                     return Err(anyhow!("managed-vault pull made no progress"));
+                }
+
+                if ops.is_empty()
+                    && !stale_cursor_recovery_attempted
+                    && maybe_recover_stale_since_map(conn, &scope_id, &local_device_id, &mut since)?
+                {
+                    stale_cursor_recovery_attempted = true;
+                    continue;
                 }
 
                 let mut batch_applied = 0u64;
@@ -972,6 +1033,14 @@ pub fn pull(
 
         if next_since == since && !parsed.ops.is_empty() {
             return Err(anyhow!("managed-vault pull made no progress"));
+        }
+
+        if parsed.ops.is_empty()
+            && !stale_cursor_recovery_attempted
+            && maybe_recover_stale_since_map(conn, &scope_id, &local_device_id, &mut since)?
+        {
+            stale_cursor_recovery_attempted = true;
+            continue;
         }
 
         let mut batch_applied = 0u64;
