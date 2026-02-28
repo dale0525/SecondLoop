@@ -13,6 +13,7 @@ import '../../core/cloud/cloud_auth_scope.dart';
 import '../../core/session/session_scope.dart';
 import '../../core/subscription/subscription_scope.dart';
 import '../../core/sync/sync_config_store.dart';
+import '../../core/sync/sync_diagnostics.dart';
 import '../../core/sync/sync_engine.dart';
 import '../../i18n/strings.g.dart';
 
@@ -26,6 +27,75 @@ class DiagnosticsPage extends StatefulWidget {
 class _DiagnosticsPageState extends State<DiagnosticsPage> {
   Future<String>? _jsonFuture;
   bool _busy = false;
+
+  String _backendTypeToken(SyncBackendType backendType) {
+    return switch (backendType) {
+      SyncBackendType.webdav => 'webdav',
+      SyncBackendType.localDir => 'localdir',
+      SyncBackendType.managedVault => 'managedvault',
+    };
+  }
+
+  Map<String, Object?> _syncResultToDiagnosticsJson(
+      SyncBackgroundResult result) {
+    final localTime = DateTime.fromMillisecondsSinceEpoch(result.timestampMs);
+    return <String, Object?>{
+      ...result.toJson(),
+      'timestampLocal': localTime.toIso8601String(),
+      'timestampUtc': localTime.toUtc().toIso8601String(),
+    };
+  }
+
+  Map<String, Object?> _syncBackoffToDiagnosticsJson(
+    SyncBackgroundBackoffState state,
+  ) {
+    final nextAllowedLocal =
+        DateTime.fromMillisecondsSinceEpoch(state.nextAllowedAtMs);
+    final updatedLocal = DateTime.fromMillisecondsSinceEpoch(state.updatedAtMs);
+    return <String, Object?>{
+      ...state.toJson(),
+      'nextAllowedAtLocal': nextAllowedLocal.toIso8601String(),
+      'nextAllowedAtUtc': nextAllowedLocal.toUtc().toIso8601String(),
+      'updatedAtLocal': updatedLocal.toIso8601String(),
+      'updatedAtUtc': updatedLocal.toUtc().toIso8601String(),
+    };
+  }
+
+  Future<Map<String, Object?>> _buildSyncDiagnostics() async {
+    final store = SyncConfigStore();
+    final syncLogsByBackend = <String, Object?>{};
+    final syncBackoffByBackend = <String, Object?>{};
+    SyncBackgroundResult? latestSyncLog;
+
+    for (final backendType in SyncBackendType.values) {
+      final token = _backendTypeToken(backendType);
+      final log =
+          await store.readBackgroundSyncResult(backendType: backendType);
+      if (log != null) {
+        syncLogsByBackend[token] = _syncResultToDiagnosticsJson(log);
+        if (latestSyncLog == null ||
+            log.timestampMs > latestSyncLog.timestampMs) {
+          latestSyncLog = log;
+        }
+      }
+
+      final backoff =
+          await store.readBackgroundSyncBackoffState(backendType: backendType);
+      if (backoff != null) {
+        syncBackoffByBackend[token] = _syncBackoffToDiagnosticsJson(backoff);
+      }
+    }
+
+    return <String, Object?>{
+      'last_sync_log': latestSyncLog == null
+          ? null
+          : _syncResultToDiagnosticsJson(latestSyncLog),
+      'sync_logs_by_backend':
+          syncLogsByBackend.isEmpty ? null : syncLogsByBackend,
+      'sync_backoff_by_backend':
+          syncBackoffByBackend.isEmpty ? null : syncBackoffByBackend,
+    };
+  }
 
   Future<String> _buildDiagnosticsJson() async {
     final backend = AppBackendScope.of(context);
@@ -79,6 +149,17 @@ class _DiagnosticsPageState extends State<DiagnosticsPage> {
       syncConfig = null;
     }
 
+    Map<String, Object?> syncDiagnostics;
+    try {
+      syncDiagnostics = await _buildSyncDiagnostics();
+    } catch (_) {
+      syncDiagnostics = const <String, Object?>{
+        'last_sync_log': null,
+        'sync_logs_by_backend': null,
+        'sync_backoff_by_backend': null,
+      };
+    }
+
     final data = <String, Object?>{
       'generated_at_local': now.toIso8601String(),
       'generated_at_utc': now.toUtc().toIso8601String(),
@@ -108,6 +189,7 @@ class _DiagnosticsPageState extends State<DiagnosticsPage> {
         'local_dir': syncConfig?.backendType == SyncBackendType.localDir
             ? syncConfig?.localDir
             : null,
+        ...syncDiagnostics,
       },
       'embeddings': <String, Object?>{
         'active_model': activeEmbeddingModel,

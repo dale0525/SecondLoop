@@ -7,6 +7,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:secondloop/core/backend/app_backend.dart';
 import 'package:secondloop/core/session/session_scope.dart';
+import 'package:secondloop/core/sync/sync_config_store.dart';
+import 'package:secondloop/core/sync/sync_diagnostics.dart';
+import 'package:secondloop/core/sync/sync_engine.dart';
 import 'package:secondloop/features/settings/settings_page.dart';
 
 import 'test_backend.dart';
@@ -85,6 +88,68 @@ void main() {
     final cloud = diagnosticsJson['cloud'] as Map<String, Object?>;
 
     expect(cloud.containsKey('gateway_base_url'), isFalse);
+  });
+
+  testWidgets('Diagnostics JSON includes last sync log', (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final store = SyncConfigStore();
+    await store.writeBackgroundSyncResult(
+      const SyncBackgroundResult(
+        backendType: SyncBackendType.managedVault,
+        direction: SyncBackgroundDirection.pull,
+        status: SyncBackgroundResultStatus.failure,
+        timestampMs: 1730000000000,
+        statusCode: 429,
+        errorCode: 'rate_limited',
+        errorMessage: 'managed-vault pull failed: HTTP 429',
+        userMessage: 'Sync is being throttled. Retrying later.',
+        retryCount: 2,
+        durationMs: 520,
+      ),
+      backendType: SyncBackendType.managedVault,
+    );
+
+    await tester.pumpWidget(
+      AppBackendScope(
+        backend: TestAppBackend(),
+        child: SessionScope(
+          sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+          lock: () {},
+          child: wrapWithI18n(
+            const MaterialApp(home: Scaffold(body: SettingsPage())),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final diagnosticsFinder =
+        find.byKey(const ValueKey('settings_diagnostics'));
+    await tester.scrollUntilVisible(
+      diagnosticsFinder,
+      200,
+      scrollable: find.byType(Scrollable),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(diagnosticsFinder);
+    await tester.pumpAndSettle();
+
+    final diagnosticsJsonText = tester.widget<SelectableText>(
+      find.descendant(
+        of: find.byKey(const ValueKey('diagnostics_page')),
+        matching: find.byType(SelectableText),
+      ),
+    );
+    final diagnosticsJson =
+        jsonDecode(diagnosticsJsonText.data!) as Map<String, Object?>;
+    final sync = diagnosticsJson['sync'] as Map<String, Object?>;
+    final lastSyncLog = sync['last_sync_log'] as Map<String, Object?>?;
+
+    expect(lastSyncLog, isNotNull);
+    expect(lastSyncLog!['backendType'], 'managedvault');
+    expect(lastSyncLog['direction'], 'pull');
+    expect(lastSyncLog['status'], 'failure');
+    expect(lastSyncLog['statusCode'], 429);
   });
 
   testWidgets('Diagnostics page no longer shows update actions',
