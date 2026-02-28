@@ -129,7 +129,8 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    if (find.text('Use cloud for media understanding?').evaluate().isNotEmpty) {
+    var guard = 0;
+    while (find.byType(AlertDialog).evaluate().isNotEmpty && guard < 4) {
       await tester.tap(
         find.descendant(
           of: find.byType(AlertDialog),
@@ -137,6 +138,7 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
+      guard += 1;
     }
 
     final aiEntry = find.byKey(const ValueKey('settings_ai_source'));

@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../ai/ai_routing.dart';
 import '../ai/embeddings_data_consent_prefs.dart';
+import '../ai/semantic_parse_data_consent_prefs.dart';
 import '../backend/app_backend.dart';
 import '../cloud/cloud_auth_controller.dart';
 import '../cloud/cloud_auth_scope.dart';
@@ -51,6 +52,7 @@ final class _CloudSyncSwitchPromptGateState
   bool _dialogShowing = false;
   bool _promptScheduled = false;
   bool _embeddingsPromptScheduled = false;
+  bool _semanticParsePromptScheduled = false;
   bool _mediaPromptScheduled = false;
 
   static const _kSyncProgressIndicatorKey =
@@ -64,6 +66,8 @@ final class _CloudSyncSwitchPromptGateState
 
   static const _kCloudEmbeddingsUpgradePromptedUidPrefsKey =
       'cloud_embeddings_upgrade_prompted_uid_v1';
+  static const _kCloudSemanticParseUpgradePromptedUidPrefsKey =
+      'cloud_semantic_parse_upgrade_prompted_uid_v1';
   static const _kCloudMediaUnderstandingUpgradePromptedUidPrefsKey =
       'cloud_media_understanding_upgrade_prompted_uid_v1';
 
@@ -172,6 +176,17 @@ final class _CloudSyncSwitchPromptGateState
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _mediaPromptScheduled = false;
       unawaited(_maybePromptEnableCloudMediaUnderstanding());
+    });
+  }
+
+  void _scheduleSemanticParsePrompt() {
+    if (!mounted) return;
+    if (_semanticParsePromptScheduled) return;
+
+    _semanticParsePromptScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _semanticParsePromptScheduled = false;
+      unawaited(_maybePromptEnableCloudSemanticParse());
     });
   }
 
@@ -288,12 +303,12 @@ final class _CloudSyncSwitchPromptGateState
         (prefs.getString(_kCloudEmbeddingsUpgradePromptedUidPrefsKey) ?? '')
             .trim();
     if (alreadyPromptedUid == uid) {
-      await _maybePromptEnableCloudMediaUnderstanding();
+      await _maybePromptEnableCloudSemanticParse();
       return;
     }
     if ((prefs.getBool(EmbeddingsDataConsentPrefs.prefsKey) ?? false) == true) {
       await prefs.setString(_kCloudEmbeddingsUpgradePromptedUidPrefsKey, uid);
-      await _maybePromptEnableCloudMediaUnderstanding();
+      await _maybePromptEnableCloudSemanticParse();
       return;
     }
     if (!mounted) return;
@@ -334,6 +349,82 @@ final class _CloudSyncSwitchPromptGateState
 
     await EmbeddingsDataConsentPrefs.setEnabled(prefs, enable == true);
     await prefs.setString(_kCloudEmbeddingsUpgradePromptedUidPrefsKey, uid);
+    await _maybePromptEnableCloudSemanticParse();
+  }
+
+  Future<void> _maybePromptEnableCloudSemanticParse() async {
+    if (!mounted) return;
+    if (_dialogShowing) {
+      _scheduleSemanticParsePrompt();
+      return;
+    }
+
+    final uid = _lastUid?.trim();
+    if (uid == null || uid.isEmpty) return;
+
+    final subscriptionStatus =
+        _subscriptionController?.status ?? SubscriptionStatus.unknown;
+    if (subscriptionStatus != SubscriptionStatus.entitled) return;
+
+    final prefs = await SharedPreferences.getInstance();
+    if ((prefs.getBool(cloudSyncSwitchInProgressPrefsKey) ?? false) == true) {
+      _scheduleSemanticParsePrompt();
+      return;
+    }
+    final alreadyPromptedUid =
+        (prefs.getString(_kCloudSemanticParseUpgradePromptedUidPrefsKey) ?? '')
+            .trim();
+    if (alreadyPromptedUid == uid) {
+      await _maybePromptEnableCloudMediaUnderstanding();
+      return;
+    }
+    if ((prefs.getBool(SemanticParseDataConsentPrefs.prefsKey) ?? false) ==
+        true) {
+      await prefs.setString(
+        _kCloudSemanticParseUpgradePromptedUidPrefsKey,
+        uid,
+      );
+      await _maybePromptEnableCloudMediaUnderstanding();
+      return;
+    }
+    if (!mounted) return;
+
+    final dialogContext = widget.navigatorKey?.currentContext;
+    if (widget.navigatorKey != null && dialogContext == null) {
+      _scheduleSemanticParsePrompt();
+      return;
+    }
+    final effectiveContext = dialogContext ?? context;
+    if (!effectiveContext.mounted) {
+      _scheduleSemanticParsePrompt();
+      return;
+    }
+
+    final t = effectiveContext.t;
+    _dialogShowing = true;
+    final enable = await showDialog<bool>(
+      context: effectiveContext,
+      builder: (context) {
+        return AlertDialog(
+          title: Text(t.chat.semanticParseConsent.title),
+          content: Text(t.chat.semanticParseConsent.body),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: Text(t.chat.semanticParseConsent.actions.useLocal),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: Text(t.chat.semanticParseConsent.actions.enableCloud),
+            ),
+          ],
+        );
+      },
+    );
+    _dialogShowing = false;
+
+    await SemanticParseDataConsentPrefs.setEnabled(prefs, enable == true);
+    await prefs.setString(_kCloudSemanticParseUpgradePromptedUidPrefsKey, uid);
     await _maybePromptEnableCloudMediaUnderstanding();
   }
 

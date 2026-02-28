@@ -1027,6 +1027,14 @@
         "enableCloud": "Enable cloud embeddings"
       }
     },
+    "semanticParseConsent": {
+      "title": "Enable cloud smart understanding?",
+      "body": "When enabled, SecondLoop can use cloud AI to better understand your messages and improve automatic task organization.\n\nYour text is handled confidentially (not logged or stored), and your vault key and sync key are never uploaded.\n\nThis uses your Cloud quota.",
+      "actions": {
+        "useLocal": "Keep local only",
+        "enableCloud": "Enable cloud understanding"
+      }
+    },
     "semanticParseStatusRunning": "AI analyzing…",
     "semanticParseStatusSlow": "AI is taking longer. Continuing in background…",
     "attachmentAnnotationNeedsSetup": "Image annotations need setup",
