@@ -33,7 +33,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.0.0-dev.38";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -690514435;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 909925920;
 
 // Section: executor
 
@@ -6468,6 +6468,46 @@ fn wire__crate__api__simple__init_app_impl(
         },
     )
 }
+fn wire__crate__api__sync_diagnostics__sync_managed_vault_cursor_diagnostics_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "sync_managed_vault_cursor_diagnostics",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_app_dir = <String>::sse_decode(&mut deserializer);
+            let api_base_url = <String>::sse_decode(&mut deserializer);
+            let api_vault_id = <String>::sse_decode(&mut deserializer);
+            let api_firebase_id_token = <Option<String>>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse((move || {
+                    crate::api::sync_diagnostics::sync_managed_vault_cursor_diagnostics(
+                        api_app_dir,
+                        api_base_url,
+                        api_vault_id,
+                        api_firebase_id_token,
+                    )
+                })())
+            }
+        },
+    )
+}
 fn wire__crate__api__sync_progress__sync_localdir_pull_progress_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -8903,71 +8943,77 @@ fn pde_ffi_dispatcher_primary_impl(
             data_len,
         ),
         156 => wire__crate__api__simple__init_app_impl(port, ptr, rust_vec_len, data_len),
-        157 => wire__crate__api__sync_progress__sync_localdir_pull_progress_impl(
+        157 => wire__crate__api__sync_diagnostics__sync_managed_vault_cursor_diagnostics_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        158 => wire__crate__api__sync_progress__sync_localdir_push_progress_impl(
+        158 => wire__crate__api__sync_progress__sync_localdir_pull_progress_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        159 => wire__crate__api__sync_progress__sync_managed_vault_pull_progress_impl(
+        159 => wire__crate__api__sync_progress__sync_localdir_push_progress_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        160 => wire__crate__api__sync_progress__sync_managed_vault_push_ops_only_progress_impl(
+        160 => wire__crate__api__sync_progress__sync_managed_vault_pull_progress_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        161 => wire__crate__api__sync_progress__sync_webdav_pull_progress_impl(
+        161 => wire__crate__api__sync_progress__sync_managed_vault_push_ops_only_progress_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        162 => wire__crate__api__sync_progress__sync_webdav_push_ops_only_progress_impl(
+        162 => wire__crate__api__sync_progress__sync_webdav_pull_progress_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        163 => wire__crate__api__tags__db_list_message_ids_by_tag_ids_impl(
+        163 => wire__crate__api__sync_progress__sync_webdav_push_ops_only_progress_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        164 => wire__crate__api__tags__db_list_message_suggested_tags_impl(
+        164 => wire__crate__api__tags__db_list_message_ids_by_tag_ids_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        165 => wire__crate__api__tags__db_list_message_tags_impl(port, ptr, rust_vec_len, data_len),
-        166 => wire__crate__api__tags__db_list_tag_merge_suggestions_impl(
+        165 => wire__crate__api__tags__db_list_message_suggested_tags_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        167 => wire__crate__api__tags__db_list_tags_impl(port, ptr, rust_vec_len, data_len),
-        168 => wire__crate__api__tags__db_merge_tags_impl(port, ptr, rust_vec_len, data_len),
-        169 => wire__crate__api__tags__db_record_tag_merge_feedback_impl(
+        166 => wire__crate__api__tags__db_list_message_tags_impl(port, ptr, rust_vec_len, data_len),
+        167 => wire__crate__api__tags__db_list_tag_merge_suggestions_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        170 => wire__crate__api__tags__db_set_message_tags_impl(port, ptr, rust_vec_len, data_len),
-        171 => wire__crate__api__tags__db_upsert_tag_impl(port, ptr, rust_vec_len, data_len),
+        168 => wire__crate__api__tags__db_list_tags_impl(port, ptr, rust_vec_len, data_len),
+        169 => wire__crate__api__tags__db_merge_tags_impl(port, ptr, rust_vec_len, data_len),
+        170 => wire__crate__api__tags__db_record_tag_merge_feedback_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        171 => wire__crate__api__tags__db_set_message_tags_impl(port, ptr, rust_vec_len, data_len),
+        172 => wire__crate__api__tags__db_upsert_tag_impl(port, ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }

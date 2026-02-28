@@ -16,6 +16,7 @@ import 'api/desktop_media.dart';
 import 'api/media_annotation.dart';
 import 'api/oplog_maintenance.dart';
 import 'api/simple.dart';
+import 'api/sync_diagnostics.dart';
 import 'api/sync_progress.dart';
 import 'api/tags.dart';
 import 'dart:async';
