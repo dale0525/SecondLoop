@@ -35,3 +35,6 @@ mod content_extract_jobs_tests;
 
 #[cfg(test)]
 mod message_tag_autofill_tests;
+
+#[cfg(test)]
+mod todo_status_auto_schedule_tests;

@@ -160,16 +160,10 @@ class TaskHubQuickActionsController {
         }
       case TaskHubQuickAction.start:
         {
-          final updated = await backend.upsertTodo(
+          final updated = await backend.setTodoStatus(
             sessionKey,
-            id: todo.id,
-            title: todo.title,
-            dueAtMs: todo.dueAtMs,
-            status: 'in_progress',
-            sourceEntryId: todo.sourceEntryId,
-            reviewStage: todo.reviewStage,
-            nextReviewAtMs: todo.nextReviewAtMs,
-            lastReviewAtMs: nowUtcMs,
+            todoId: todo.id,
+            newStatus: 'in_progress',
           );
           return TaskHubUndoTicket(
             todo: todo,

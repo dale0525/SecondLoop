@@ -727,13 +727,21 @@ VALUES (?1, ?2, 'status_change', ?3, ?4, NULL, ?5, ?6, 1)
     } else {
         (existing.review_stage, existing.next_review_at_ms)
     };
+    let due_at_ms = if existing.due_at_ms.is_none()
+        && existing.status == "open"
+        && (new_status == "in_progress" || new_status == "done")
+    {
+        Some(now)
+    } else {
+        existing.due_at_ms
+    };
 
     let updated = upsert_todo(
         conn,
         key,
         todo_id,
         &existing.title,
-        existing.due_at_ms,
+        due_at_ms,
         new_status,
         existing.source_entry_id.as_deref(),
         review_stage,
