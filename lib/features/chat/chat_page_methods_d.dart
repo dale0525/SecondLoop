@@ -258,6 +258,24 @@ extension _ChatPageStateMethodsD on _ChatPageState {
                                 ),
                               ],
                             ),
+                            if (_supportsCamera) ...[
+                              const SizedBox(height: 4),
+                              Text(
+                                context.t.chat.semanticParseMobileStayOpenHint,
+                                key: const ValueKey(
+                                  'todo_note_link_ai_mobile_stay_hint',
+                                ),
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .labelSmall
+                                    ?.copyWith(
+                                      color: Theme.of(context)
+                                          .colorScheme
+                                          .onSurfaceVariant
+                                          .withOpacity(0.68),
+                                    ),
+                              ),
+                            ],
                           ],
                           const SizedBox(height: 12),
                           Flexible(

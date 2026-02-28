@@ -46,6 +46,52 @@ void main() {
   });
 
   testWidgets(
+      'AttachmentAnnotationJobStatusRow shows mobile stay-open reminder while pending on mobile',
+      (tester) async {
+    final previous = debugDefaultTargetPlatformOverride;
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+
+    try {
+      final now = DateTime.now().millisecondsSinceEpoch;
+      final job = AttachmentAnnotationJob(
+        attachmentSha256: 'mobile-hint',
+        status: 'pending',
+        lang: 'en',
+        modelName: null,
+        attempts: 0,
+        nextRetryAtMs: null,
+        lastError: null,
+        createdAtMs: now - 2000,
+        updatedAtMs: now - 2000,
+      );
+
+      await tester.pumpWidget(
+        wrapWithI18n(
+          MaterialApp(
+            home: Scaffold(
+              body: AttachmentAnnotationJobStatusRow(
+                job: job,
+                annotateEnabled: true,
+                canAnnotateNow: true,
+              ),
+            ),
+          ),
+        ),
+      );
+
+      expect(find.text('AI analyzing…'), findsOneWidget);
+      expect(
+        find.text(
+          'Keep the app open while AI analyzes. Leaving may interrupt analysis.',
+        ),
+        findsOneWidget,
+      );
+    } finally {
+      debugDefaultTargetPlatformOverride = previous;
+    }
+  });
+
+  testWidgets(
       'AttachmentAnnotationJobStatusRow shows install speech pack action on Windows missing recognizer error',
       (tester) async {
     final previous = debugDefaultTargetPlatformOverride;

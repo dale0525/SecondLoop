@@ -1037,6 +1037,7 @@
     },
     "semanticParseStatusRunning": "AI analyzing…",
     "semanticParseStatusSlow": "AI is taking longer. Continuing in background…",
+    "semanticParseMobileStayOpenHint": "Keep the app open while AI analyzes. Leaving may interrupt analysis.",
     "attachmentAnnotationNeedsSetup": "Image annotations need setup",
     "semanticParseStatusFailed": "AI analysis failed",
     "audioTranscribeFailurePayloadTooLarge": "Audio file is too large. Compress or split it and try again.",
