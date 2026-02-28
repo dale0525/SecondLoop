@@ -31,23 +31,49 @@ class WelcomePage extends StatefulWidget {
   State<WelcomePage> createState() => _WelcomePageState();
 }
 
-class _WelcomePageState extends State<WelcomePage> {
+class _WelcomePageState extends State<WelcomePage> with WidgetsBindingObserver {
   static const _kPermissionLaunchFailedKey =
       ValueKey('welcome_guide_permission_launch_failed');
   static const _kPermissionChannel = MethodChannel('secondloop/permissions');
 
   bool _statusLoaded = false;
+  bool _permissionStatusLoaded = false;
+  int _permissionStatusGeneration = 0;
   WelcomeGuideStatus _status = const WelcomeGuideStatus(
     aiReady: false,
     syncReady: false,
   );
+  Map<_PermissionItem, _PermissionStatus> _permissionStatusMap =
+      const <_PermissionItem, _PermissionStatus>{};
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.resumed) return;
+    unawaited(_reloadPermissionStatuses());
+  }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    if (_statusLoaded) return;
-    _statusLoaded = true;
-    unawaited(_reloadStatus());
+    if (!_statusLoaded) {
+      _statusLoaded = true;
+      unawaited(_reloadStatus());
+    }
+    if (_permissionStatusLoaded) return;
+    _permissionStatusLoaded = true;
+    unawaited(_reloadPermissionStatuses());
   }
 
   Future<void> _reloadStatus() async {
@@ -90,12 +116,12 @@ class _WelcomePageState extends State<WelcomePage> {
     return languageCode.toLowerCase().startsWith('zh') ? zh : en;
   }
 
-  List<_PermissionTileData> _permissionTiles() {
+  List<_PermissionItem> _permissionItems() {
     if (kIsWeb) {
-      return const <_PermissionTileData>[];
+      return const <_PermissionItem>[];
     }
 
-    final items = switch (defaultTargetPlatform) {
+    return switch (defaultTargetPlatform) {
       TargetPlatform.android => <_PermissionItem>[
           _PermissionItem.microphone,
           _PermissionItem.notifications,
@@ -122,8 +148,10 @@ class _WelcomePageState extends State<WelcomePage> {
       TargetPlatform.linux => const <_PermissionItem>[],
       TargetPlatform.fuchsia => const <_PermissionItem>[],
     };
+  }
 
-    return items
+  List<_PermissionTileData> _permissionTiles() {
+    return _permissionItems()
         .map(
           (item) => _PermissionTileData(
             item: item,
@@ -131,9 +159,83 @@ class _WelcomePageState extends State<WelcomePage> {
             icon: _permissionIcon(item),
             label: _permissionLabel(item),
             reason: _permissionReason(item),
+            status: _permissionStatusMap[item] ?? _PermissionStatus.unknown,
           ),
         )
         .toList(growable: false);
+  }
+
+  Future<void> _reloadPermissionStatuses() async {
+    final items = _permissionItems();
+    final generation = ++_permissionStatusGeneration;
+    final resolved = <_PermissionItem, _PermissionStatus>{};
+    for (final item in items) {
+      resolved[item] = await _resolvePermissionStatus(item);
+    }
+    if (!mounted || generation != _permissionStatusGeneration) return;
+    setState(() => _permissionStatusMap = resolved);
+  }
+
+  Future<_PermissionStatus> _resolvePermissionStatus(
+    _PermissionItem item,
+  ) async {
+    if (kIsWeb) return _PermissionStatus.unknown;
+    switch (defaultTargetPlatform) {
+      case TargetPlatform.android:
+        return _resolveAndroidPermissionStatus(item);
+      case TargetPlatform.iOS:
+      case TargetPlatform.macOS:
+      case TargetPlatform.windows:
+      case TargetPlatform.linux:
+      case TargetPlatform.fuchsia:
+        return _PermissionStatus.unknown;
+    }
+  }
+
+  Future<_PermissionStatus> _resolveAndroidPermissionStatus(
+    _PermissionItem item,
+  ) async {
+    try {
+      final status = await _kPermissionChannel.invokeMethod<String>(
+        'queryPermissionStatus',
+        <String, Object?>{'item': item.channelValue},
+      );
+      return _permissionStatusFromChannelValue(status);
+    } on MissingPluginException {
+      return _PermissionStatus.unknown;
+    } on PlatformException {
+      return _PermissionStatus.unknown;
+    } catch (_) {
+      return _PermissionStatus.unknown;
+    }
+  }
+
+  String _permissionStatusLabel(_PermissionStatus status) {
+    return switch (status) {
+      _PermissionStatus.enabled => _localized(zh: '已开启', en: 'Enabled'),
+      _PermissionStatus.disabled => _localized(zh: '未开启', en: 'Disabled'),
+      _PermissionStatus.unknown => _localized(zh: '无法检测', en: 'Unknown'),
+    };
+  }
+
+  String _permissionSummaryStatusLabel() {
+    final statuses = _permissionTiles()
+        .map((tile) => tile.status)
+        .where((status) => status != _PermissionStatus.unknown)
+        .toList(growable: false);
+    if (statuses.isNotEmpty &&
+        statuses.every((status) => status == _PermissionStatus.enabled)) {
+      return _localized(zh: '已开启', en: 'Enabled');
+    }
+    return context.t.welcomeGuide.permissions.statusNeedsReview;
+  }
+
+  _PermissionStatus _permissionStatusFromChannelValue(String? value) {
+    return switch (value) {
+      'enabled' => _PermissionStatus.enabled,
+      'disabled' => _PermissionStatus.disabled,
+      _ => _PermissionStatus.unknown,
+    };
   }
 
   IconData _permissionIcon(_PermissionItem item) {
@@ -203,6 +305,7 @@ class _WelcomePageState extends State<WelcomePage> {
       final openedByNative =
           await _openPermissionSettingsViaPlatformChannel(item);
       if (openedByNative) {
+        unawaited(_reloadPermissionStatuses());
         return;
       }
     }
@@ -211,6 +314,7 @@ class _WelcomePageState extends State<WelcomePage> {
       try {
         final launched = await _launch(uri);
         if (launched) {
+          unawaited(_reloadPermissionStatuses());
           return;
         }
       } catch (_) {
@@ -350,6 +454,12 @@ class _WelcomePageState extends State<WelcomePage> {
   Widget build(BuildContext context) {
     final t = context.t.welcomeGuide;
     final permissionTiles = _permissionTiles();
+    final permissionSummaryStatusLabel = _permissionSummaryStatusLabel();
+    final permissionSummaryStatusKey = ValueKey(
+      permissionSummaryStatusLabel == t.permissions.statusNeedsReview
+          ? 'welcome_guide_permissions_status_needs_review'
+          : 'welcome_guide_permissions_status_enabled',
+    );
     return Scaffold(
       key: const ValueKey('welcome_guide_page'),
       body: SafeArea(
@@ -429,10 +539,8 @@ class _WelcomePageState extends State<WelcomePage> {
                                   ),
                                 ),
                                 _StatusBadge(
-                                  label: t.permissions.statusNeedsReview,
-                                  badgeKey: const ValueKey(
-                                    'welcome_guide_permissions_status_needs_review',
-                                  ),
+                                  label: permissionSummaryStatusLabel,
+                                  badgeKey: permissionSummaryStatusKey,
                                 ),
                               ],
                             ),
@@ -455,6 +563,11 @@ class _WelcomePageState extends State<WelcomePage> {
                                 icon: permissionTiles[i].icon,
                                 label: permissionTiles[i].label,
                                 reason: permissionTiles[i].reason,
+                                statusLabel: _permissionStatusLabel(
+                                    permissionTiles[i].status),
+                                statusKey: ValueKey(
+                                  'welcome_guide_permission_status_${permissionTiles[i].item.keySuffix}_${permissionTiles[i].status.keySuffix}',
+                                ),
                                 onTap: () => unawaited(
                                   _openPermissionSettings(
                                       permissionTiles[i].item),
@@ -599,6 +712,8 @@ class _PermissionTile extends StatelessWidget {
     required this.icon,
     required this.label,
     required this.reason,
+    required this.statusLabel,
+    required this.statusKey,
     required this.onTap,
   });
 
@@ -606,6 +721,8 @@ class _PermissionTile extends StatelessWidget {
   final IconData icon;
   final String label;
   final String reason;
+  final String statusLabel;
+  final Key statusKey;
   final VoidCallback onTap;
 
   @override
@@ -633,7 +750,21 @@ class _PermissionTile extends StatelessWidget {
                 ],
               ),
             ),
-            const Icon(Icons.open_in_new_rounded, size: 16),
+            const SizedBox(width: 10),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text(
+                  statusLabel,
+                  key: statusKey,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                ),
+                const SizedBox(height: 4),
+                const Icon(Icons.open_in_new_rounded, size: 16),
+              ],
+            ),
           ],
         ),
       ),
@@ -648,6 +779,12 @@ enum _PermissionItem {
   location,
   autoStart,
   batteryUnrestricted,
+}
+
+enum _PermissionStatus {
+  enabled,
+  disabled,
+  unknown,
 }
 
 extension on _PermissionItem {
@@ -674,6 +811,16 @@ extension on _PermissionItem {
   }
 }
 
+extension on _PermissionStatus {
+  String get keySuffix {
+    return switch (this) {
+      _PermissionStatus.enabled => 'enabled',
+      _PermissionStatus.disabled => 'disabled',
+      _PermissionStatus.unknown => 'unknown',
+    };
+  }
+}
+
 class _PermissionTileData {
   const _PermissionTileData({
     required this.item,
@@ -681,6 +828,7 @@ class _PermissionTileData {
     required this.icon,
     required this.label,
     required this.reason,
+    required this.status,
   });
 
   final _PermissionItem item;
@@ -688,4 +836,5 @@ class _PermissionTileData {
   final IconData icon;
   final String label;
   final String reason;
+  final _PermissionStatus status;
 }

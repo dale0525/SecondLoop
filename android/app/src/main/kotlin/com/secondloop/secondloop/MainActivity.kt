@@ -7,12 +7,14 @@ import android.content.pm.PackageManager
 import android.location.Location
 import android.location.LocationListener
 import android.location.LocationManager
+import android.app.AlarmManager
 import android.os.CancellationSignal
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.net.Uri
 import android.os.Build
+import android.os.PowerManager
 import android.media.MediaCodec
 import android.media.MediaCodecInfo
 import android.media.MediaExtractor
@@ -21,6 +23,7 @@ import android.media.MediaMuxer
 import android.provider.Settings
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
+import androidx.core.app.NotificationManagerCompat
 import androidx.exifinterface.media.ExifInterface
 import io.flutter.embedding.android.FlutterFragmentActivity
 import io.flutter.embedding.engine.FlutterEngine
@@ -132,6 +135,11 @@ class MainActivity : FlutterFragmentActivity() {
               val args = call.arguments as? Map<*, *>
               val item = (args?.get("item") as? String)?.trim().orEmpty()
               result.success(openPermissionSettingsShortcut(item))
+            }
+            "queryPermissionStatus" -> {
+              val args = call.arguments as? Map<*, *>
+              val item = (args?.get("item") as? String)?.trim().orEmpty()
+              result.success(queryPermissionStatus(item))
             }
             else -> result.notImplemented()
           }
@@ -294,6 +302,67 @@ class MainActivity : FlutterFragmentActivity() {
       shareChannel?.invokeMethod(kPendingSharesChangedMethod, null)
     } catch (_: Throwable) {
       // ignore
+    }
+  }
+
+  private fun queryPermissionStatus(item: String): String {
+    return when (item) {
+      "microphone" -> {
+        val granted =
+          ContextCompat.checkSelfPermission(
+            this,
+            Manifest.permission.RECORD_AUDIO
+          ) == PackageManager.PERMISSION_GRANTED
+        if (granted) "enabled" else "disabled"
+      }
+      "notifications" -> if (areNotificationsEnabled()) "enabled" else "disabled"
+      "exact_alarm" -> if (canScheduleExactAlarms()) "enabled" else "disabled"
+      "location" -> {
+        val fineGranted =
+          ContextCompat.checkSelfPermission(
+            this,
+            Manifest.permission.ACCESS_FINE_LOCATION
+          ) == PackageManager.PERMISSION_GRANTED
+        val coarseGranted =
+          ContextCompat.checkSelfPermission(
+            this,
+            Manifest.permission.ACCESS_COARSE_LOCATION
+          ) == PackageManager.PERMISSION_GRANTED
+        if (fineGranted || coarseGranted) "enabled" else "disabled"
+      }
+      "auto_start" -> "unknown"
+      "battery_unrestricted" -> batteryOptimizationPermissionStatus()
+      else -> "unknown"
+    }
+  }
+
+  private fun areNotificationsEnabled(): Boolean {
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+      val granted =
+        ContextCompat.checkSelfPermission(
+          this,
+          Manifest.permission.POST_NOTIFICATIONS
+        ) == PackageManager.PERMISSION_GRANTED
+      if (!granted) return false
+    }
+    return NotificationManagerCompat.from(this).areNotificationsEnabled()
+  }
+
+  private fun canScheduleExactAlarms(): Boolean {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return true
+    val alarmManager = getSystemService(ALARM_SERVICE) as? AlarmManager ?: return false
+    return alarmManager.canScheduleExactAlarms()
+  }
+
+  private fun batteryOptimizationPermissionStatus(): String {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) {
+      return "enabled"
+    }
+    val powerManager = getSystemService(POWER_SERVICE) as? PowerManager ?: return "unknown"
+    return if (powerManager.isIgnoringBatteryOptimizations(packageName)) {
+      "enabled"
+    } else {
+      "disabled"
     }
   }
 

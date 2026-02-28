@@ -58,9 +58,15 @@ class _FirstLaunchWelcomeGateState extends State<FirstLaunchWelcomeGate> {
 
     if (seen) return widget.child;
 
-    return WelcomePage(
-      onSkipForNow: () => unawaited(_completeWelcome()),
-      onFinishSetup: () => unawaited(_completeWelcome()),
+    return Navigator(
+      onGenerateRoute: (_) {
+        return MaterialPageRoute<void>(
+          builder: (_) => WelcomePage(
+            onSkipForNow: () => unawaited(_completeWelcome()),
+            onFinishSetup: () => unawaited(_completeWelcome()),
+          ),
+        );
+      },
     );
   }
 }
