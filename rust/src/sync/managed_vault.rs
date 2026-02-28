@@ -966,7 +966,8 @@ pub fn pull(
                         let op_id = op_json["op_id"]
                             .as_str()
                             .ok_or_else(|| anyhow!("sync op missing op_id"))?;
-                        if op_id != op.op_id.as_str() {
+                        let envelope_op_id = op.op_id.trim();
+                        if !envelope_op_id.is_empty() && op_id != envelope_op_id {
                             return Err(anyhow!(
                                 "managed vault pull op_id mismatch: envelope={} plaintext={}",
                                 op.op_id,
@@ -1059,7 +1060,8 @@ pub fn pull(
                 let op_id = op_json["op_id"]
                     .as_str()
                     .ok_or_else(|| anyhow!("sync op missing op_id"))?;
-                if op_id != op.op_id.as_str() {
+                let envelope_op_id = op.op_id.trim();
+                if !envelope_op_id.is_empty() && op_id != envelope_op_id {
                     return Err(anyhow!(
                         "managed vault pull op_id mismatch: envelope={} plaintext={}",
                         op.op_id,
