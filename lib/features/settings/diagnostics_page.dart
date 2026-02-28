@@ -9,6 +9,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../core/backend/app_backend.dart';
+import '../../core/backend/native_backend.dart';
 import '../../core/cloud/cloud_auth_scope.dart';
 import '../../core/session/session_scope.dart';
 import '../../core/subscription/subscription_scope.dart';
@@ -16,6 +17,7 @@ import '../../core/sync/sync_config_store.dart';
 import '../../core/sync/sync_diagnostics.dart';
 import '../../core/sync/sync_engine.dart';
 import '../../i18n/strings.g.dart';
+import '../../src/rust/api/sync_diagnostics.dart' as rust_sync_diagnostics;
 
 class DiagnosticsPage extends StatefulWidget {
   const DiagnosticsPage({super.key});
@@ -97,6 +99,71 @@ class _DiagnosticsPageState extends State<DiagnosticsPage> {
     };
   }
 
+  Map<String, Object?> _toStringKeyMap(Map<Object?, Object?> raw) {
+    final out = <String, Object?>{};
+    raw.forEach((key, value) {
+      out['$key'] = value;
+    });
+    return out;
+  }
+
+  Future<Map<String, Object?>> _buildManagedVaultCursorRemoteDiagnostics({
+    required AppBackend backend,
+    required SyncConfig? syncConfig,
+    required CloudAuthScope? cloudScope,
+  }) async {
+    if (backend is! NativeAppBackend) return const <String, Object?>{};
+    if (syncConfig?.backendType != SyncBackendType.managedVault) {
+      return const <String, Object?>{};
+    }
+
+    final baseUrl = syncConfig?.baseUrl?.trim() ?? '';
+    final vaultId = syncConfig?.remoteRoot.trim() ?? '';
+    if (baseUrl.isEmpty || vaultId.isEmpty) {
+      return const <String, Object?>{
+        'managed_vault_cursor_remote_diagnostics': null,
+        'managed_vault_cursor_remote_diagnostics_error':
+            'missing_base_url_or_vault_id',
+      };
+    }
+
+    String? idToken;
+    try {
+      idToken = await cloudScope?.controller.getIdToken();
+    } catch (_) {
+      idToken = null;
+    }
+
+    final token = idToken?.trim();
+    final appDir = (await getApplicationSupportDirectory()).path;
+    final payload =
+        await rust_sync_diagnostics.syncManagedVaultCursorDiagnostics(
+      appDir: appDir,
+      baseUrl: baseUrl,
+      vaultId: vaultId,
+      firebaseIdToken: (token == null || token.isEmpty) ? null : token,
+    );
+    final decoded = jsonDecode(payload);
+
+    if (decoded is Map<String, dynamic>) {
+      return <String, Object?>{
+        'managed_vault_cursor_remote_diagnostics':
+            Map<String, Object?>.from(decoded),
+      };
+    }
+    if (decoded is Map<Object?, Object?>) {
+      return <String, Object?>{
+        'managed_vault_cursor_remote_diagnostics': _toStringKeyMap(decoded),
+      };
+    }
+
+    return const <String, Object?>{
+      'managed_vault_cursor_remote_diagnostics': null,
+      'managed_vault_cursor_remote_diagnostics_error':
+          'invalid_managed_vault_cursor_payload',
+    };
+  }
+
   Future<String> _buildDiagnosticsJson() async {
     final backend = AppBackendScope.of(context);
     final sessionKey = SessionScope.of(context).sessionKey;
@@ -160,6 +227,21 @@ class _DiagnosticsPageState extends State<DiagnosticsPage> {
       };
     }
 
+    Map<String, Object?> managedVaultCursorRemoteDiagnostics;
+    try {
+      managedVaultCursorRemoteDiagnostics =
+          await _buildManagedVaultCursorRemoteDiagnostics(
+        backend: backend,
+        syncConfig: syncConfig,
+        cloudScope: cloudScope,
+      );
+    } catch (e) {
+      managedVaultCursorRemoteDiagnostics = <String, Object?>{
+        'managed_vault_cursor_remote_diagnostics': null,
+        'managed_vault_cursor_remote_diagnostics_error': '$e',
+      };
+    }
+
     final data = <String, Object?>{
       'generated_at_local': now.toIso8601String(),
       'generated_at_utc': now.toUtc().toIso8601String(),
@@ -190,6 +272,7 @@ class _DiagnosticsPageState extends State<DiagnosticsPage> {
             ? syncConfig?.localDir
             : null,
         ...syncDiagnostics,
+        ...managedVaultCursorRemoteDiagnostics,
       },
       'embeddings': <String, Object?>{
         'active_model': activeEmbeddingModel,

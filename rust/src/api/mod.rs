@@ -12,5 +12,6 @@ pub mod desktop_media;
 pub mod media_annotation;
 pub mod oplog_maintenance;
 pub mod simple;
+pub mod sync_diagnostics;
 pub mod sync_progress;
 pub mod tags;
