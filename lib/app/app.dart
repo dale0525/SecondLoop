@@ -8,6 +8,7 @@ import '../core/app_bootstrap.dart';
 import '../core/ai/embeddings_index_gate.dart';
 import '../core/ai/message_embeddings_index_gate.dart';
 import '../core/ai/semantic_parse_auto_actions_gate.dart';
+import '../core/ai/detached_ask_recovery_gate.dart';
 import '../core/backend/app_backend.dart';
 import '../core/backend/native_backend.dart';
 import '../core/cloud/cloud_auth_controller.dart';
@@ -364,29 +365,33 @@ class _SecondLoopAppState extends State<SecondLoopApp> {
                                       child: ShareIntentListener(
                                         child: LockGate(
                                           child: SyncEngineGate(
-                                            child:
-                                                ReviewReminderNotificationsGate(
-                                              navigatorKey: _navigatorKey,
-                                              child: MediaEnrichmentGate(
-                                                child:
-                                                    SemanticParseAutoActionsGate(
+                                            child: DetachedAskRecoveryGate(
+                                              child:
+                                                  ReviewReminderNotificationsGate(
+                                                navigatorKey: _navigatorKey,
+                                                child: MediaEnrichmentGate(
                                                   child:
-                                                      MessageEmbeddingsIndexGate(
-                                                    child: EmbeddingsIndexGate(
+                                                      SemanticParseAutoActionsGate(
+                                                    child:
+                                                        MessageEmbeddingsIndexGate(
                                                       child:
-                                                          CloudSyncSwitchPromptGate(
-                                                        navigatorKey:
-                                                            _navigatorKey,
-                                                        child: ShareIngestGate(
+                                                          EmbeddingsIndexGate(
+                                                        child:
+                                                            CloudSyncSwitchPromptGate(
+                                                          navigatorKey:
+                                                              _navigatorKey,
                                                           child:
-                                                              QuickCaptureOverlay(
-                                                            navigatorKey:
-                                                                _navigatorKey,
+                                                              ShareIngestGate(
                                                             child:
-                                                                FirstLaunchWelcomeGate(
-                                                              child: child ??
-                                                                  const SizedBox
-                                                                      .shrink(),
+                                                                QuickCaptureOverlay(
+                                                              navigatorKey:
+                                                                  _navigatorKey,
+                                                              child:
+                                                                  FirstLaunchWelcomeGate(
+                                                                child: child ??
+                                                                    const SizedBox
+                                                                        .shrink(),
+                                                              ),
                                                             ),
                                                           ),
                                                         ),

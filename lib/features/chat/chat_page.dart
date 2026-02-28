@@ -18,6 +18,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/ai/ai_routing.dart';
 import '../../core/ai/ask_ai_source_prefs.dart';
 import '../../core/ai/detached_ask_recovery_policy.dart';
+import '../../core/ai/detached_ask_recovery_service.dart';
 import '../../core/ai/embeddings_data_consent_prefs.dart';
 import '../../core/ai/semantic_parse_edit_policy.dart';
 import '../../core/ai/semantic_parse.dart';
@@ -36,6 +37,7 @@ import '../../core/sync/sync_engine.dart';
 import '../../core/sync/sync_engine_gate.dart';
 import '../../core/sync/sync_config_store.dart';
 import '../../core/platform/audio_recording_foreground_service.dart';
+import '../../core/platform/ask_ai_foreground_service.dart';
 import '../../i18n/strings.g.dart';
 import '../../src/rust/api/ask_scope.dart' as rust_ask_scope;
 import '../../src/rust/db.dart';
@@ -115,6 +117,8 @@ part 'chat_page_methods_h_message_attachments.dart';
 part 'chat_page_methods_k_tags.dart';
 part 'chat_page_methods_l_ask_scope.dart';
 part 'chat_page_methods_m_ask_scope_empty_card.dart';
+part 'chat_page_methods_n_detached_snapshot.dart';
+part 'chat_page_methods_p_ask_ai_meta.dart';
 part 'chat_page_methods_o_focus_routing.dart';
 part 'chat_page_input_key_handler.dart';
 part 'chat_page_message_item_builder.dart';
@@ -384,7 +388,7 @@ class ChatPage extends StatefulWidget {
   State<ChatPage> createState() => _ChatPageState();
 }
 
-class _ChatPageState extends State<ChatPage> {
+class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
   final _controller = TextEditingController();
   final _inputFocusNode = FocusNode();
   final _scrollController = ScrollController();
@@ -496,12 +500,14 @@ class _ChatPageState extends State<ChatPage> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _scrollController.addListener(_onScroll);
     unawaited(_loadEmbeddingsDataConsentPreference());
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     final oldEngine = _syncEngine;
     final oldListener = _syncListener;
     if (oldEngine != null && oldListener != null) {
@@ -535,6 +541,14 @@ class _ChatPageState extends State<ChatPage> {
     unawaited(_refreshComposerAskAiRoute());
     unawaited(_recoverDetachedAskAiIfNeeded());
     unawaited(_checkPendingRecordedAudioRecoveryIfNeeded());
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _detachedAskRecoveryChecked = false;
+      unawaited(_recoverDetachedAskAiIfNeeded());
+    }
   }
 
   @override
