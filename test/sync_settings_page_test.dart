@@ -8,7 +8,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:secondloop/core/backend/app_backend.dart';
 import 'package:secondloop/core/cloud/cloud_auth_controller.dart';
 import 'package:secondloop/core/cloud/cloud_auth_scope.dart';
-import 'package:secondloop/core/cloud/vault_recovery_envelope_client.dart';
 import 'package:secondloop/core/session/session_scope.dart';
 import 'package:secondloop/core/sync/sync_config_store.dart';
 import 'package:secondloop/core/sync/sync_engine.dart';
@@ -476,8 +475,7 @@ void main() {
     expect(syncKey, recoveredSyncKey);
   });
 
-  testWidgets(
-      'Managed Vault save uploads recovery envelope after passphrase save',
+  testWidgets('Managed Vault save does not upload recovery envelope',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
     final store = SyncConfigStore(
@@ -487,7 +485,6 @@ void main() {
 
     final backend = _SyncSettingsBackend();
     final cloudAuth = _FakeCloudAuthController();
-    final recoveryClient = _FakeVaultRecoveryEnvelopeClient();
 
     await tester.pumpWidget(
       wrapWithI18n(
@@ -499,7 +496,6 @@ void main() {
               child: Scaffold(
                 body: SyncSettingsPage(
                   configStore: store,
-                  vaultRecoveryEnvelopeClient: recoveryClient,
                 ),
               ),
             ),
@@ -512,28 +508,18 @@ void main() {
     await tester.drag(find.byType(ListView), const Offset(0, -800));
     await tester.pumpAndSettle();
 
-    await tester.enterText(
-      find.byWidgetPredicate(
-        (w) =>
-            w is TextField &&
-            w.decoration?.labelText == 'Recovery passphrase (Advanced)',
-      ),
-      'cloud-passphrase',
-    );
-
     final saveButton = find.widgetWithText(FilledButton, 'Save');
     await tester.ensureVisible(saveButton);
     await tester.pumpAndSettle();
     await tester.tapAt(tester.getTopLeft(saveButton) + const Offset(4, 4));
     await tester.pumpAndSettle();
 
-    expect(recoveryClient.putCalls, 1);
-    expect(recoveryClient.lastPutEnvelopeJson, isNotNull);
-    expect(recoveryClient.lastPutBaseUrl, 'https://vault.default.example');
-    expect(recoveryClient.lastPutVaultId, 'uid_1');
+    expect(backend.deriveSyncKeyCalls, 1);
+    expect(backend.createSyncRecoveryEnvelopeCalls, 0);
+    expect(await store.readSyncKey(), isNotNull);
   });
 
-  testWidgets('Managed Vault page load auto-fetches recovery envelope',
+  testWidgets('Managed Vault page load does not auto-fetch recovery envelope',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
     final store = SyncConfigStore(
@@ -543,10 +529,6 @@ void main() {
 
     final backend = _SyncSettingsBackend();
     final cloudAuth = _FakeCloudAuthController();
-    final recoveryClient = _FakeVaultRecoveryEnvelopeClient(
-      fetchedEnvelopeJson:
-          '{"version":1,"wrapped_sync_key_b64":"auto","kdf":{"version":1}}',
-    );
 
     await tester.pumpWidget(
       wrapWithI18n(
@@ -558,7 +540,6 @@ void main() {
               child: Scaffold(
                 body: SyncSettingsPage(
                   configStore: store,
-                  vaultRecoveryEnvelopeClient: recoveryClient,
                 ),
               ),
             ),
@@ -568,15 +549,10 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(recoveryClient.fetchCalls, 1);
-    expect(
-      await store.readRecoveryEnvelopeJson(),
-      '{"version":1,"wrapped_sync_key_b64":"auto","kdf":{"version":1}}',
-    );
+    expect(await store.readRecoveryEnvelopeJson(), isNull);
   });
 
-  testWidgets(
-      'Managed Vault save fetches remote recovery envelope before recovering key',
+  testWidgets('Managed Vault save ignores remote recovery envelope',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
     final store = SyncConfigStore(
@@ -587,10 +563,6 @@ void main() {
     final recoveredSyncKey = Uint8List.fromList(List<int>.filled(32, 4));
     final backend = _SyncSettingsBackend(recoveredSyncKey: recoveredSyncKey);
     final cloudAuth = _FakeCloudAuthController();
-    final recoveryClient = _FakeVaultRecoveryEnvelopeClient(
-      fetchedEnvelopeJson:
-          '{"version":1,"wrapped_sync_key_b64":"remote","kdf":{"version":1}}',
-    );
 
     await tester.pumpWidget(
       wrapWithI18n(
@@ -602,7 +574,6 @@ void main() {
               child: Scaffold(
                 body: SyncSettingsPage(
                   configStore: store,
-                  vaultRecoveryEnvelopeClient: recoveryClient,
                 ),
               ),
             ),
@@ -615,25 +586,15 @@ void main() {
     await tester.drag(find.byType(ListView), const Offset(0, -800));
     await tester.pumpAndSettle();
 
-    await tester.enterText(
-      find.byWidgetPredicate(
-        (w) =>
-            w is TextField &&
-            w.decoration?.labelText == 'Recovery passphrase (Advanced)',
-      ),
-      'recover-from-cloud',
-    );
-
     final saveButton = find.widgetWithText(FilledButton, 'Save');
     await tester.ensureVisible(saveButton);
     await tester.pumpAndSettle();
     await tester.tapAt(tester.getTopLeft(saveButton) + const Offset(4, 4));
     await tester.pumpAndSettle();
 
-    expect(recoveryClient.fetchCalls, 1);
-    expect(backend.recoverSyncKeyFromEnvelopeCalls, 1);
-    expect(backend.deriveSyncKeyCalls, 0);
-    expect(await store.readSyncKey(), recoveredSyncKey);
+    expect(backend.recoverSyncKeyFromEnvelopeCalls, 0);
+    expect(backend.deriveSyncKeyCalls, 1);
+    expect(await store.readSyncKey(), isNot(recoveredSyncKey));
   });
 
   testWidgets('Manual Pull notifies sync listeners when ops were applied',
@@ -912,7 +873,6 @@ Widget _wrap({
   required AppBackend backend,
   required SyncConfigStore store,
   required SyncEngine? engine,
-  VaultRecoveryEnvelopeClient? vaultRecoveryEnvelopeClient,
 }) {
   return wrapWithI18n(
     MaterialApp(
@@ -923,7 +883,6 @@ Widget _wrap({
           child: Scaffold(
             body: SyncSettingsPage(
               configStore: store,
-              vaultRecoveryEnvelopeClient: vaultRecoveryEnvelopeClient,
             ),
           ),
         ),
@@ -1401,41 +1360,4 @@ final class _FakeCloudAuthController implements CloudAuthController {
 
   @override
   Future<void> signOut() async {}
-}
-
-final class _FakeVaultRecoveryEnvelopeClient
-    extends VaultRecoveryEnvelopeClient {
-  _FakeVaultRecoveryEnvelopeClient({
-    this.fetchedEnvelopeJson,
-  }) : super(httpClient: null);
-
-  final String? fetchedEnvelopeJson;
-  int fetchCalls = 0;
-  int putCalls = 0;
-  String? lastPutBaseUrl;
-  String? lastPutVaultId;
-  String? lastPutEnvelopeJson;
-
-  @override
-  Future<String?> fetchRecoveryEnvelope({
-    required String managedVaultBaseUrl,
-    required String vaultId,
-    required String idToken,
-  }) async {
-    fetchCalls += 1;
-    return fetchedEnvelopeJson;
-  }
-
-  @override
-  Future<void> putRecoveryEnvelope({
-    required String managedVaultBaseUrl,
-    required String vaultId,
-    required String idToken,
-    required String envelopeJson,
-  }) async {
-    putCalls += 1;
-    lastPutBaseUrl = managedVaultBaseUrl;
-    lastPutVaultId = vaultId;
-    lastPutEnvelopeJson = envelopeJson;
-  }
 }

@@ -67,4 +67,25 @@ void main() {
     SyncKeyManager.setSessionKey(null);
     expect(SyncKeyManager.readCachedSyncKey(), isNull);
   });
+
+  test('managed vault passphrase is namespaced by vault id', () {
+    final passphrase = SyncKeyManager.managedVaultPassphraseForVaultId('uid_1');
+    expect(passphrase, 'managed-vault-sync-v1::uid_1');
+  });
+
+  test('deriveManagedVaultSyncKey uses managed vault passphrase', () async {
+    String? receivedPassphrase;
+    final key = Uint8List.fromList(List<int>.filled(32, 7));
+
+    final derived = await SyncKeyManager.deriveManagedVaultSyncKey(
+      vaultId: 'uid_1',
+      deriveSyncKey: (passphrase) async {
+        receivedPassphrase = passphrase;
+        return Uint8List.fromList(key);
+      },
+    );
+
+    expect(receivedPassphrase, 'managed-vault-sync-v1::uid_1');
+    expect(derived, key);
+  });
 }

@@ -139,6 +139,8 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
 
     final stage = ValueNotifier<String>(t.sync.progressDialog.preparing);
     final progress = ValueNotifier<double?>(0.0);
+    Object? runError;
+    StackTrace? runErrorStackTrace;
 
     bool started = false;
     try {
@@ -151,8 +153,9 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
             unawaited(() async {
               try {
                 await run(stage, progress);
-              } catch (_) {
-                // Best-effort: sync errors should not block the user.
+              } catch (e, st) {
+                runError = e;
+                runErrorStackTrace = st;
               } finally {
                 if (context.mounted) {
                   Navigator.of(context).pop();
@@ -213,6 +216,14 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
           );
         },
       );
+      if (runError != null) {
+        final error = runError!;
+        final stackTrace = runErrorStackTrace;
+        if (stackTrace != null) {
+          Error.throwWithStackTrace(error, stackTrace);
+        }
+        throw error;
+      }
     } finally {
       stage.dispose();
       progress.dispose();
@@ -247,33 +258,20 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
     return false;
   }
 
-  Future<_ManagedVaultAuthContext?> _resolveManagedVaultAuthContext() async {
-    if (_backendType != SyncBackendType.managedVault) return null;
-    final cloudAuth = CloudAuthScope.maybeOf(context)?.controller;
-    if (cloudAuth == null) return null;
-
-    String? idToken;
-    try {
-      idToken = await cloudAuth.getIdToken();
-    } catch (_) {
-      idToken = null;
+  Future<Uint8List> _deriveManagedVaultSyncKey(AppBackend backend) async {
+    final vaultId = CloudAuthScope.maybeOf(context)?.controller.uid?.trim();
+    if (vaultId == null || vaultId.isEmpty) {
+      throw StateError('missing_managed_vault_uid');
     }
-    final vaultId = cloudAuth.uid?.trim();
-    final baseUrl = (await _store.resolveManagedVaultBaseUrl())?.trim();
-    if (idToken == null ||
-        idToken.trim().isEmpty ||
-        vaultId == null ||
-        vaultId.isEmpty ||
-        baseUrl == null ||
-        baseUrl.isEmpty) {
-      return null;
-    }
-
-    return _ManagedVaultAuthContext(
-      baseUrl: baseUrl,
+    final syncKey = await SyncKeyManager.deriveManagedVaultSyncKey(
       vaultId: vaultId,
-      idToken: idToken.trim(),
+      deriveSyncKey: backend.deriveSyncKey,
     );
+    await SyncKeyManager.save(
+      write: _store.writeSyncKey,
+      key: syncKey,
+    );
+    return syncKey;
   }
 
   Future<void> _save() async {
@@ -298,15 +296,25 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
       final backend = AppBackendScope.of(context);
 
       final requiresSyncKey = _backendType == SyncBackendType.webdav ||
-          _backendType == SyncBackendType.managedVault ||
           _backendType == SyncBackendType.localDir;
       final passphrase = _optionalTrimmed(_syncPassphraseController);
-      final hasNewPassphrase = passphrase != null && !_passphraseIsPlaceholder;
+      final hasNewPassphrase = _backendType != SyncBackendType.managedVault &&
+          passphrase != null &&
+          !_passphraseIsPlaceholder;
 
       final persisted = await _persistBackendConfig();
       if (!persisted) return;
 
-      Uint8List? syncKey = await _loadSyncKey();
+      Uint8List? syncKey;
+      if (_backendType == SyncBackendType.managedVault) {
+        syncKey = await _deriveManagedVaultSyncKey(backend);
+        shouldHideRecoveryHint = true;
+        _syncPassphraseController.clear();
+        _passphraseIsPlaceholder = false;
+      } else {
+        syncKey = await _loadSyncKey();
+      }
+
       if (hasNewPassphrase) {
         final passphrase = _optionalTrimmed(_syncPassphraseController);
         if (passphrase == null) {
@@ -318,45 +326,11 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
         if (syncKey != null && syncKey.length == 32) {
           resolvedSyncKey = syncKey;
         } else {
-          final managedVaultAuth = await _resolveManagedVaultAuthContext();
           String? existingEnvelopeJson =
               await _store.readRecoveryEnvelopeJson();
-          Object? recoveryEnvelopeFetchError;
-          if ((existingEnvelopeJson == null ||
-                  existingEnvelopeJson.trim().isEmpty) &&
-              managedVaultAuth != null) {
-            try {
-              final fetchedEnvelopeJson =
-                  await _vaultRecoveryEnvelopeClient.fetchRecoveryEnvelope(
-                managedVaultBaseUrl: managedVaultAuth.baseUrl,
-                vaultId: managedVaultAuth.vaultId,
-                idToken: managedVaultAuth.idToken,
-              );
-              if (fetchedEnvelopeJson != null &&
-                  fetchedEnvelopeJson.trim().isNotEmpty) {
-                existingEnvelopeJson = fetchedEnvelopeJson;
-                await _store.writeRecoveryEnvelopeJson(fetchedEnvelopeJson);
-              }
-            } catch (e) {
-              recoveryEnvelopeFetchError = e;
-            }
-          }
 
           final hasEnvelope = existingEnvelopeJson != null &&
               existingEnvelopeJson.trim().isNotEmpty;
-          if (!hasEnvelope &&
-              _backendType == SyncBackendType.managedVault &&
-              (managedVaultAuth == null ||
-                  recoveryEnvelopeFetchError != null)) {
-            _showSnack(
-              t.sync.recoveryHint.fetchFailed(
-                error:
-                    '${recoveryEnvelopeFetchError ?? 'missing_managed_vault_auth_context'}',
-              ),
-            );
-            return;
-          }
-
           if (hasEnvelope) {
             try {
               final recovered = await backend.recoverSyncKeyFromEnvelope(
@@ -389,19 +363,6 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
             passphrase,
           );
           await _store.writeRecoveryEnvelopeJson(envelopeJson);
-          final managedVaultAuth = await _resolveManagedVaultAuthContext();
-          if (managedVaultAuth != null) {
-            try {
-              await _vaultRecoveryEnvelopeClient.putRecoveryEnvelope(
-                managedVaultBaseUrl: managedVaultAuth.baseUrl,
-                vaultId: managedVaultAuth.vaultId,
-                idToken: managedVaultAuth.idToken,
-                envelopeJson: envelopeJson,
-              );
-            } catch (_) {
-              // Best-effort: do not block user flow on network transient errors.
-            }
-          }
         } catch (_) {
           // Best-effort: keep legacy deterministic flow working even if
           // recovery envelope generation is unavailable on current backend.
@@ -745,7 +706,9 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
       final persisted = await _persistBackendConfig();
       if (!persisted) return;
 
-      final syncKey = await _loadOrCreateSyncKey();
+      final syncKey = _backendType == SyncBackendType.managedVault
+          ? await _deriveManagedVaultSyncKey(backend)
+          : await _loadOrCreateSyncKey();
 
       final pushed = await (switch (_backendType) {
         SyncBackendType.webdav => _consumeRustProgressStream(
@@ -851,7 +814,9 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
       final persisted = await _persistBackendConfig();
       if (!persisted) return;
 
-      final syncKey = await _loadOrCreateSyncKey();
+      final syncKey = _backendType == SyncBackendType.managedVault
+          ? await _deriveManagedVaultSyncKey(backend)
+          : await _loadOrCreateSyncKey();
 
       final pulled = await (switch (_backendType) {
         SyncBackendType.webdav => _consumeRustProgressStream(
@@ -950,16 +915,4 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
       }
     }
   }
-}
-
-final class _ManagedVaultAuthContext {
-  const _ManagedVaultAuthContext({
-    required this.baseUrl,
-    required this.vaultId,
-    required this.idToken,
-  });
-
-  final String baseUrl;
-  final String vaultId;
-  final String idToken;
 }
