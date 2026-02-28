@@ -331,20 +331,23 @@ class _TaskHubMergedUnscheduledSection extends StatelessWidget {
             const SizedBox(height: 8),
           ],
           if (unscheduledTodos.isNotEmpty) ...[
-            _TaskHubSubheader(
+            KeyedSubtree(
               key: const ValueKey('task_hub_banner_section_unscheduled_plain'),
-              title: context.t.actions.taskHub.unscheduledSection,
-              count: unscheduledTodos.length,
-            ),
-            for (var i = 0; i < unscheduledTodos.length; i++)
-              Padding(
-                padding: EdgeInsets.only(top: i == 0 ? 6 : 8),
-                child: _TaskHubTodoRow(
-                  todo: unscheduledTodos[i],
-                  sectionKind: _TaskHubBannerSectionKind.unscheduled,
-                  onQuickAction: onQuickAction,
-                ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  for (var i = 0; i < unscheduledTodos.length; i++)
+                    Padding(
+                      padding: EdgeInsets.only(top: i == 0 ? 0 : 8),
+                      child: _TaskHubTodoRow(
+                        todo: unscheduledTodos[i],
+                        sectionKind: _TaskHubBannerSectionKind.unscheduled,
+                        onQuickAction: onQuickAction,
+                      ),
+                    ),
+                ],
               ),
+            ),
           ],
         ],
       ),
@@ -495,8 +498,8 @@ class _TaskHubTodoRow extends StatelessWidget {
             ),
             const SizedBox(height: 6),
             Wrap(
-              spacing: 4,
-              runSpacing: 4,
+              spacing: 8,
+              runSpacing: 8,
               children: [
                 for (final action in actionLayout.$1)
                   _QuickActionButton(
@@ -555,17 +558,15 @@ class _QuickActionButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final tokens = SlTokens.of(context);
     final baseStyle = ButtonStyle(
-      minimumSize: const MaterialStatePropertyAll(Size(0, 28)),
+      minimumSize: const MaterialStatePropertyAll(Size(0, 40)),
       padding: const MaterialStatePropertyAll(
-        EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+        EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       ),
-      visualDensity: const VisualDensity(horizontal: -2, vertical: -2),
-      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
       shape: MaterialStatePropertyAll(
         RoundedRectangleBorder(borderRadius: BorderRadius.circular(99)),
       ),
       textStyle: MaterialStatePropertyAll(
-        Theme.of(context).textTheme.labelSmall?.copyWith(
+        Theme.of(context).textTheme.labelMedium?.copyWith(
               fontWeight: FontWeight.w600,
             ),
       ),
@@ -575,7 +576,7 @@ class _QuickActionButton extends StatelessWidget {
       return FilledButton.icon(
         onPressed: onPressed,
         style: baseStyle,
-        icon: Icon(icon, size: 14),
+        icon: Icon(icon, size: 16),
         label: Text(label),
       );
     }
@@ -587,7 +588,7 @@ class _QuickActionButton extends StatelessWidget {
           BorderSide(color: tokens.borderSubtle.withOpacity(0.9)),
         ),
       ),
-      icon: Icon(icon, size: 14),
+      icon: Icon(icon, size: 16),
       label: Text(label),
     );
   }
@@ -630,9 +631,12 @@ class _QuickActionMenu extends StatelessWidget {
             color: tokens.borderSubtle.withOpacity(0.9),
           ),
         ),
-        child: const Padding(
-          padding: EdgeInsets.symmetric(horizontal: 8, vertical: 7),
-          child: Icon(Icons.more_horiz_rounded, size: 16),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minWidth: 44, minHeight: 40),
+          child: const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+            child: Icon(Icons.more_horiz_rounded, size: 18),
+          ),
         ),
       ),
     );
