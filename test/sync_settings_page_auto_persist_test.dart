@@ -9,6 +9,7 @@ import 'package:secondloop/core/backend/app_backend.dart';
 import 'package:secondloop/core/session/session_scope.dart';
 import 'package:secondloop/core/sync/sync_config_store.dart';
 import 'package:secondloop/features/settings/sync_settings_page.dart';
+import 'package:secondloop/i18n/strings.g.dart';
 import 'package:secondloop/src/rust/db.dart';
 
 import 'test_i18n.dart';
@@ -46,8 +47,9 @@ void main() {
 
     await tester.drag(find.byType(ListView), const Offset(0, -800));
     await tester.pumpAndSettle();
-    final uploadButton = find.widgetWithText(OutlinedButton, 'Upload');
-    await tester.ensureVisible(uploadButton);
+    final uploadButton =
+        find.widgetWithText(OutlinedButton, t.common.actions.push);
+    await _ensureListItemVisible(tester, uploadButton);
     await tester.pumpAndSettle();
     await tester.tapAt(tester.getTopLeft(uploadButton) + const Offset(4, 4));
     await tester.pumpAndSettle();
@@ -91,8 +93,8 @@ void main() {
     await tester.drag(find.byType(ListView), const Offset(0, -800));
     await tester.pumpAndSettle();
 
-    final saveButton = find.widgetWithText(FilledButton, 'Save');
-    await tester.ensureVisible(saveButton);
+    final saveButton = find.byKey(const ValueKey('sync_save_button'));
+    await _ensureListItemVisible(tester, saveButton);
     await tester.pumpAndSettle();
     await tester.tapAt(tester.getTopLeft(saveButton) + const Offset(4, 4));
     await tester.pumpAndSettle();
@@ -139,14 +141,15 @@ void main() {
     await tester.drag(find.byType(ListView), const Offset(0, -800));
     await tester.pumpAndSettle();
 
-    final uploadButton = find.widgetWithText(OutlinedButton, 'Upload');
-    await tester.ensureVisible(uploadButton);
+    final uploadButton =
+        find.widgetWithText(OutlinedButton, t.common.actions.push);
+    await _ensureListItemVisible(tester, uploadButton);
     await tester.pumpAndSettle();
     await tester.tapAt(tester.getTopLeft(uploadButton) + const Offset(4, 4));
     await tester.pump();
 
     final pushButton = tester.widget<OutlinedButton>(
-      find.widgetWithText(OutlinedButton, 'Upload'),
+      find.widgetWithText(OutlinedButton, t.common.actions.push),
     );
     expect(pushButton.onPressed, isNull);
 
@@ -154,10 +157,28 @@ void main() {
     await tester.pumpAndSettle();
 
     final pushButtonAfter = tester.widget<OutlinedButton>(
-      find.widgetWithText(OutlinedButton, 'Upload'),
+      find.widgetWithText(OutlinedButton, t.common.actions.push),
     );
     expect(pushButtonAfter.onPressed, isNotNull);
   });
+}
+
+Future<void> _ensureListItemVisible(WidgetTester tester, Finder target) async {
+  final scrollable = find.byType(Scrollable).first;
+  try {
+    await tester.scrollUntilVisible(
+      target,
+      180,
+      scrollable: scrollable,
+    );
+  } catch (_) {
+    await tester.scrollUntilVisible(
+      target,
+      -180,
+      scrollable: scrollable,
+    );
+  }
+  await tester.pumpAndSettle();
 }
 
 class _FakeBackend extends AppBackend {

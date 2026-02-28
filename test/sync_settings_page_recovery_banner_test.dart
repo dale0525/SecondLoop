@@ -94,8 +94,8 @@ void main() {
     await tester.drag(find.byType(ListView), const Offset(0, -800));
     await tester.pumpAndSettle();
 
-    final saveButton = find.widgetWithText(FilledButton, 'Save');
-    await tester.ensureVisible(saveButton);
+    final saveButton = find.byKey(const ValueKey('sync_save_button'));
+    await _ensureListItemVisible(tester, saveButton);
     await tester.pumpAndSettle();
     await tester.tapAt(tester.getTopLeft(saveButton) + const Offset(4, 4));
     await tester.pumpAndSettle();
@@ -104,6 +104,24 @@ void main() {
     expect(backend.lastPassphrase, contains('uid_1'));
     expect(await store.readSyncKey(), backend.derivedSyncKey);
   });
+}
+
+Future<void> _ensureListItemVisible(WidgetTester tester, Finder target) async {
+  final scrollable = find.byType(Scrollable).first;
+  try {
+    await tester.scrollUntilVisible(
+      target,
+      180,
+      scrollable: scrollable,
+    );
+  } catch (_) {
+    await tester.scrollUntilVisible(
+      target,
+      -180,
+      scrollable: scrollable,
+    );
+  }
+  await tester.pumpAndSettle();
 }
 
 Widget _wrap({

@@ -24,11 +24,6 @@ import '../media_backup/cloud_media_backup_runner.dart';
 part 'sync_settings_page_media_actions.dart';
 part 'sync_settings_page_sync_actions.dart';
 
-enum _ManualSyncAction {
-  push,
-  pull,
-}
-
 String _formatTimestamp(int ms) {
   final dt = DateTime.fromMillisecondsSinceEpoch(ms).toLocal();
   final y = dt.year.toString().padLeft(4, '0');
@@ -66,6 +61,9 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
   static const _kSaveSyncProgressKey = ValueKey('sync_save_progress');
   static const _kSaveSyncProgressPercentKey =
       ValueKey('sync_save_progress_percent');
+  static const _kManualSyncProgressKey = ValueKey('sync_manual_progress');
+  static const _kManualSyncProgressPercentKey =
+      ValueKey('sync_manual_progress_percent');
   static const _kRecoveryHintBannerKey = ValueKey('sync_recovery_hint_banner');
   static const _kRecoveryHintActionKey = ValueKey('sync_recovery_hint_action');
   static const _kRecoveryPassphraseFieldKey =
@@ -81,9 +79,6 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
   final _recoveryPassphraseFieldAnchorKey = GlobalKey();
 
   bool _busy = false;
-  _ManualSyncAction? _manualSyncAction;
-  double? _manualSyncProgress;
-  bool _manualSyncHasTotal = false;
   bool _passphraseIsPlaceholder = false;
   bool _showManagedVaultEndpointOverride = false;
   bool _showRecoveryHintBanner = false;
@@ -523,10 +518,101 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
                       ? false
                       : !_busy,
                 ),
+                if (_backendType == SyncBackendType.managedVault) ...[
+                  const SizedBox(height: 12),
+                  FilledButton(
+                    key: const ValueKey('sync_save_button'),
+                    onPressed: _busy ? null : _save,
+                    child: Text(context.t.common.actions.save),
+                  ),
+                ],
               ],
             ),
           ),
           const SizedBox(height: 16),
+          if (_backendType != SyncBackendType.managedVault) ...[
+            sectionTitle(context.t.settings.sections.security),
+            sectionCard(
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  if (_showRecoveryHintBanner) ...[
+                    Container(
+                      key: _kRecoveryHintBannerKey,
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).colorScheme.primaryContainer,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            recoveryHintTitle,
+                            style: Theme.of(context)
+                                .textTheme
+                                .titleSmall
+                                ?.copyWith(
+                                  fontWeight: FontWeight.w700,
+                                ),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            recoveryHintMessage,
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                          const SizedBox(height: 10),
+                          Align(
+                            alignment: Alignment.centerRight,
+                            child: FilledButton.tonal(
+                              key: _kRecoveryHintActionKey,
+                              onPressed:
+                                  _busy ? null : _handleRecoveryHintAction,
+                              child: Text(recoveryHintAction),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                  ],
+                  SizedBox(
+                    key: _recoveryPassphraseFieldAnchorKey,
+                    child: const SizedBox.shrink(),
+                  ),
+                  TextField(
+                    key: _kRecoveryPassphraseFieldKey,
+                    controller: _syncPassphraseController,
+                    decoration: InputDecoration(
+                      labelText: recoveryPassphraseLabel,
+                      helperText: recoveryPassphraseHelper,
+                      helperMaxLines: 3,
+                    ),
+                    enabled: !_busy,
+                    obscureText: true,
+                    obscuringCharacter: '*',
+                    onTap: _passphraseIsPlaceholder
+                        ? () {
+                            _syncPassphraseController.clear();
+                            setState(() => _passphraseIsPlaceholder = false);
+                          }
+                        : null,
+                    onChanged: (_) {
+                      if (!_passphraseIsPlaceholder) return;
+                      setState(() => _passphraseIsPlaceholder = false);
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  FilledButton(
+                    key: const ValueKey('sync_save_button'),
+                    onPressed: _busy ? null : _save,
+                    child: Text(context.t.common.actions.save),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+          ],
           sectionTitle(context.t.sync.sections.mediaPreview),
           sectionCard(
             SwitchListTile(
@@ -663,7 +749,7 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
                         child: OutlinedButton(
                           onPressed: _busy || !_cloudMediaBackupEnabled
                               ? null
-                              : _backfillCloudMediaBackupImages,
+                              : _backfillCloudMediaBackupFiles,
                           child:
                               Text(context.t.sync.mediaBackup.backfillButton),
                         ),
@@ -690,77 +776,6 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
             Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                if (_showRecoveryHintBanner) ...[
-                  Container(
-                    key: _kRecoveryHintBannerKey,
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.primaryContainer,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          recoveryHintTitle,
-                          style:
-                              Theme.of(context).textTheme.titleSmall?.copyWith(
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          recoveryHintMessage,
-                          style: Theme.of(context).textTheme.bodySmall,
-                        ),
-                        const SizedBox(height: 10),
-                        Align(
-                          alignment: Alignment.centerRight,
-                          child: FilledButton.tonal(
-                            key: _kRecoveryHintActionKey,
-                            onPressed: _busy ? null : _handleRecoveryHintAction,
-                            child: Text(recoveryHintAction),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                ],
-                if (_backendType != SyncBackendType.managedVault) ...[
-                  SizedBox(
-                    key: _recoveryPassphraseFieldAnchorKey,
-                    child: const SizedBox.shrink(),
-                  ),
-                  TextField(
-                    key: _kRecoveryPassphraseFieldKey,
-                    controller: _syncPassphraseController,
-                    decoration: InputDecoration(
-                      labelText: recoveryPassphraseLabel,
-                      helperText: recoveryPassphraseHelper,
-                      helperMaxLines: 3,
-                    ),
-                    enabled: !_busy,
-                    obscureText: true,
-                    obscuringCharacter: '*',
-                    onTap: _passphraseIsPlaceholder
-                        ? () {
-                            _syncPassphraseController.clear();
-                            setState(() => _passphraseIsPlaceholder = false);
-                          }
-                        : null,
-                    onChanged: (_) {
-                      if (!_passphraseIsPlaceholder) return;
-                      setState(() => _passphraseIsPlaceholder = false);
-                    },
-                  ),
-                  const SizedBox(height: 12),
-                ],
-                FilledButton(
-                  onPressed: _busy ? null : _save,
-                  child: Text(context.t.common.actions.save),
-                ),
-                const SizedBox(height: 12),
                 if (_backendType == SyncBackendType.managedVault &&
                     (cloudUid == null || cloudUid.isEmpty))
                   Padding(
@@ -770,47 +785,6 @@ class _SyncSettingsPageState extends State<SyncSettingsPage> {
                       style: Theme.of(context).textTheme.bodySmall,
                     ),
                   ),
-                Builder(
-                  builder: (context) {
-                    final active = _manualSyncAction != null;
-                    final progressValue = _manualSyncProgress;
-                    final percentText = progressValue == null
-                        ? ''
-                        : '${(progressValue * 100).floor().clamp(0, 100)}%';
-
-                    return SizedBox(
-                      height: active ? 24 : 4,
-                      child: !active
-                          ? const SizedBox.shrink()
-                          : Row(
-                              children: [
-                                Expanded(
-                                  child: SizedBox(
-                                    height: 4,
-                                    child: LinearProgressIndicator(
-                                      key: const ValueKey(
-                                          'sync_manual_progress'),
-                                      value: progressValue,
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                SizedBox(
-                                  width: 48,
-                                  child: Text(
-                                    percentText,
-                                    key: const ValueKey(
-                                        'sync_manual_progress_percent'),
-                                    textAlign: TextAlign.right,
-                                    style:
-                                        Theme.of(context).textTheme.bodySmall,
-                                  ),
-                                ),
-                              ],
-                            ),
-                    );
-                  },
-                ),
                 if (engine == null)
                   Row(
                     children: [

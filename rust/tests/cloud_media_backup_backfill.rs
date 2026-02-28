@@ -1,7 +1,7 @@
 use secondloop_rust::db;
 
 #[test]
-fn cloud_media_backup_backfill_enqueues_images_only() {
+fn cloud_media_backup_backfill_enqueues_all_attachments() {
     let temp_dir = tempfile::tempdir().expect("tempdir");
     let app_dir = temp_dir.path().join("secondloop");
     let conn = db::open(&app_dir).expect("open db");
@@ -15,9 +15,9 @@ fn cloud_media_backup_backfill_enqueues_images_only() {
     assert!(affected > 0);
 
     let due = db::list_due_cloud_media_backups(&conn, 1234, 100).expect("list due");
-    assert_eq!(due.len(), 1);
-    assert_eq!(due[0].attachment_sha256, img.sha256);
-
-    // Ensure the non-image attachment was not enqueued.
-    assert_ne!(due[0].attachment_sha256, doc.sha256);
+    assert_eq!(due.len(), 2);
+    let shas: std::collections::HashSet<String> =
+        due.into_iter().map(|item| item.attachment_sha256).collect();
+    assert!(shas.contains(&img.sha256));
+    assert!(shas.contains(&doc.sha256));
 }

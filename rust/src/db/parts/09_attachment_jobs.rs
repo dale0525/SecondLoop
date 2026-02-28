@@ -716,7 +716,7 @@ INSERT INTO cloud_media_backup(
 )
 SELECT sha256, ?1, 'pending', 0, NULL, NULL, ?2
 FROM attachments
-WHERE mime_type LIKE 'image/%'
+WHERE 1 = 1
 ON CONFLICT(attachment_sha256) DO UPDATE SET
   desired_variant = excluded.desired_variant,
   status = CASE

@@ -1169,15 +1169,15 @@
       "preparing": "正在准备…",
       "pulling": "正在下载更改…",
       "pushing": "正在上传更改…",
-      "uploadingMedia": "正在上传媒体…",
+      "uploadingMedia": "正在上传文件…",
       "finalizing": "正在收尾…"
     },
     "sections": {
       "automation": "自动同步",
       "backend": "同步方式",
-      "mediaPreview": "媒体下载",
-      "mediaBackup": "媒体上传",
-      "securityActions": "安全与手动同步"
+      "mediaPreview": "文件下载",
+      "mediaBackup": "文件上传",
+      "securityActions": "手动同步与维护"
     },
     "autoSync": {
       "title": "自动同步",
@@ -1186,25 +1186,25 @@
       "wifiOnlySubtitle": "节省流量：自动同步只在 Wi‑Fi 下进行"
     },
     "mediaPreview": {
-      "chatThumbnailsWifiOnlyTitle": "仅在 Wi‑Fi 下下载媒体文件",
-      "chatThumbnailsWifiOnlySubtitle": "当附件在本机缺失时，仅在 Wi‑Fi 下自动下载"
+      "chatThumbnailsWifiOnlyTitle": "仅在 Wi‑Fi 下下载文件",
+      "chatThumbnailsWifiOnlySubtitle": "当文件在本机缺失时，仅在 Wi‑Fi 下自动下载"
     },
     "mediaBackup": {
-      "title": "媒体上传",
-      "subtitle": "后台上传加密图片，用于跨设备回看与回溯记忆",
+      "title": "文件上传",
+      "subtitle": "后台加密上传图片、视频、音频等文件，便于跨设备查看",
       "wifiOnlyTitle": "仅在 Wi‑Fi 下上传",
       "wifiOnlySubtitle": "节省流量：只在 Wi‑Fi 下上传",
-      "description": "将加密的图片附件上传到同步存储，用于跨设备回看，并支持后续的回溯记忆功能。附件在本机缺失时可按需下载。",
+      "description": "新发送的文件会在后台加密上传到同步存储，换设备后也能随时查看。若本机缺失文件，会在查看时按需下载。",
       "stats": "待上传 $pending · 失败 $failed · 已上传 $uploaded",
       "lastUploaded": "最近一次上传：$at",
       "lastError": "最近一次错误：$error",
       "lastErrorWithTime": "最近一次错误（$at）：$error",
-      "backfillButton": "加入历史图片",
+      "backfillButton": "补齐历史文件",
       "uploadNowButton": "立即上传",
-      "backfillEnqueued": "已将 $count 张图片加入上传队列",
+      "backfillEnqueued": "已将 $count 个历史文件加入上传队列",
       "backfillFailed": "加入失败：$error",
-      "notEnabled": "请先开启媒体上传。",
-      "managedVaultOnly": "媒体上传仅适用于 WebDAV 或 SecondLoop 云同步。",
+      "notEnabled": "请先开启文件上传。",
+      "managedVaultOnly": "文件上传仅适用于 WebDAV 或 SecondLoop 云同步。",
       "wifiOnlyBlocked": "已开启仅 Wi‑Fi。请连接 Wi‑Fi，或仅本次允许使用蜂窝数据。",
       "uploaded": "上传完成",
       "nothingToUpload": "暂无可上传内容",

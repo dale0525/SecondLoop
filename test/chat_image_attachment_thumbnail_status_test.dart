@@ -14,6 +14,7 @@ import 'package:secondloop/core/sync/sync_config_store.dart';
 import 'package:secondloop/features/chat/chat_image_attachment_thumbnail.dart';
 import 'package:secondloop/features/media_backup/cloud_media_backup_runner.dart';
 import 'package:secondloop/features/media_backup/cloud_media_download.dart';
+import 'package:secondloop/i18n/strings.g.dart';
 import 'package:secondloop/src/rust/db.dart';
 
 import 'test_i18n.dart';
@@ -108,7 +109,8 @@ void main() {
 
       expect(find.byKey(const ValueKey('chat_image_attachment_status_text')),
           findsOneWidget);
-      expect(find.text('Download media files on Wi‑Fi only'), findsOneWidget);
+      expect(find.text(t.sync.mediaPreview.chatThumbnailsWifiOnlyTitle),
+          findsOneWidget);
     } finally {
       await fakeConnectivity.close();
       ConnectivityPlatform.instance = oldPlatform;
@@ -169,7 +171,8 @@ void main() {
 
       expect(backend.syncDownloadCalls, 1);
       expect(find.byType(Image), findsOneWidget);
-      expect(find.text('Download media files on Wi‑Fi only'), findsNothing);
+      expect(find.text(t.sync.mediaPreview.chatThumbnailsWifiOnlyTitle),
+          findsNothing);
     } finally {
       await fakeConnectivity.close();
       ConnectivityPlatform.instance = oldPlatform;
