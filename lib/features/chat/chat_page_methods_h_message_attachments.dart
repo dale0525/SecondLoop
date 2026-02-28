@@ -79,7 +79,9 @@ extension _ChatPageStateMethodsHMessageAttachments on _ChatPageState {
 
   Future<bool> _canEditMessage(Message message) async {
     if (_isTransientPendingMessage(message)) return false;
-    if (message.role != 'user' || message.id == _kFailedAskMessageId) {
+    final isEditableRole = message.role == 'user' ||
+        (message.role == 'assistant' && !message.isMemory);
+    if (!isEditableRole || message.id == _kFailedAskMessageId) {
       return false;
     }
     final hasAttachment = await _messageHasAttachment(message.id);

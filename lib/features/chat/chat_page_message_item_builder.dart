@@ -216,7 +216,9 @@ extension _ChatPageStateMessageItemBuilder on _ChatPageState {
         );
       }
 
-      final canEditMessage = isUser &&
+      final editableRole = stableMsg.role == 'user' ||
+          (stableMsg.role == 'assistant' && !stableMsg.isMemory);
+      final canEditMessage = editableRole &&
           stableMsg.id != _kFailedAskMessageId &&
           !isPending &&
           (!supportsAttachments ||
