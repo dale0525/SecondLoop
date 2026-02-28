@@ -18,3 +18,9 @@
 -keep,allowobfuscation,allowshrinking class * extends com.google.gson.reflect.TypeToken
 
 -keep class com.dexterous.flutterlocalnotifications.models.** { *; }
+
+## Keep XmlPullParser interfaces stable for Android framework parser interop.
+## Prevents release-only IncompatibleClassChangeError in image_picker/FileProvider
+## where framework XmlBlock$Parser is cast to obfuscated app-side interfaces.
+-keep class org.xmlpull.v1.** { *; }
+-keep interface org.xmlpull.v1.** { *; }
