@@ -96,9 +96,49 @@ void main() {
     expect(find.text(caption), findsWidgets);
     expect(
       find.byKey(const ValueKey('attachment_text_summary_display')),
-      findsNothing,
+      findsOneWidget,
     );
     expect(find.textContaining('token_79'), findsWidgets);
+  });
+
+  testWidgets('AttachmentViewerPage uses a larger image preview container',
+      (tester) async {
+    final backend = _NativeImageBackend(
+      bytesBySha: {'abc': _tinyPngBytes()},
+      annotationCaptionBySha: const {'abc': 'A long caption'},
+      annotationPayloadJsonBySha: const {
+        'abc': '{"caption_long":"A long caption"}',
+      },
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: backend,
+            child: SessionScope(
+              sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+              lock: () {},
+              child: const AttachmentViewerPage(
+                attachment: Attachment(
+                  sha256: 'abc',
+                  mimeType: 'image/png',
+                  path: 'attachments/abc.bin',
+                  byteLen: 67,
+                  createdAtMs: 0,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final previewBox = tester.widget<SizedBox>(
+      find.byKey(const ValueKey('attachment_image_preview_box')),
+    );
+    expect(previewBox.height ?? 0, greaterThan(260));
   });
 
   testWidgets(
@@ -393,6 +433,14 @@ void main() {
     expect(
       find.byKey(const ValueKey('attachment_text_full_regenerate')),
       findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('attachment_text_summary_display')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey('attachment_text_summary_empty')),
+      findsNothing,
     );
   });
 

@@ -66,6 +66,7 @@ extension _AttachmentViewerPageImage on _AttachmentViewerPageState {
         annotationCaption: annotationCaption,
         mimeTypeOverride: widget.attachment.mimeType,
       );
+      final summaryText = textContent.summary.trim();
       final canRetryRecognition = _canRetryAttachmentRecognition;
       final trailing = canRetryRecognition
           ? IconButton(
@@ -111,9 +112,9 @@ extension _AttachmentViewerPageImage on _AttachmentViewerPageState {
                 buildSection(
                   SlSurface(
                     key: const ValueKey('attachment_image_preview_surface'),
-                    padding: const EdgeInsets.all(12),
+                    padding: const EdgeInsets.all(10),
                     child: ClipRRect(
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: BorderRadius.circular(14),
                       child: Material(
                         color: Colors.transparent,
                         child: InkWell(
@@ -124,26 +125,66 @@ extension _AttachmentViewerPageImage on _AttachmentViewerPageState {
                               unawaited(_showFullSizeImagePreview(bytes)),
                           child: LayoutBuilder(
                             builder: (context, constraints) {
-                              final previewHeight =
-                                  (constraints.maxWidth * 0.30)
-                                      .clamp(120.0, 220.0);
+                              final colorScheme = Theme.of(context).colorScheme;
+                              final previewHeight = _imagePreviewHeightForWidth(
+                                constraints.maxWidth,
+                              );
                               return SizedBox(
                                 key: const ValueKey(
                                     'attachment_image_preview_box'),
                                 height: previewHeight,
-                                child: DecoratedBox(
-                                  decoration: BoxDecoration(
-                                    color: Theme.of(context)
-                                        .colorScheme
-                                        .surfaceVariant,
-                                  ),
-                                  child: Center(
-                                    child: Image.memory(
-                                      bytes,
-                                      fit: BoxFit.contain,
-                                      gaplessPlayback: true,
+                                child: Stack(
+                                  fit: StackFit.expand,
+                                  children: [
+                                    DecoratedBox(
+                                      decoration: BoxDecoration(
+                                        gradient: LinearGradient(
+                                          begin: Alignment.topCenter,
+                                          end: Alignment.bottomCenter,
+                                          colors: [
+                                            colorScheme.surfaceVariant
+                                                .withOpacity(0.92),
+                                            colorScheme.surface
+                                                .withOpacity(0.98),
+                                          ],
+                                        ),
+                                      ),
                                     ),
-                                  ),
+                                    Padding(
+                                      padding: const EdgeInsets.all(14),
+                                      child: Center(
+                                        child: ClipRRect(
+                                          borderRadius:
+                                              BorderRadius.circular(10),
+                                          child: Image.memory(
+                                            bytes,
+                                            fit: BoxFit.contain,
+                                            gaplessPlayback: true,
+                                            filterQuality: FilterQuality.high,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                    Positioned(
+                                      right: 10,
+                                      bottom: 10,
+                                      child: DecoratedBox(
+                                        decoration: BoxDecoration(
+                                          color: Colors.black.withOpacity(0.35),
+                                          borderRadius:
+                                              BorderRadius.circular(999),
+                                        ),
+                                        child: const Padding(
+                                          padding: EdgeInsets.all(6),
+                                          child: Icon(
+                                            Icons.zoom_in_rounded,
+                                            size: 16,
+                                            color: Colors.white,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               );
                             },
@@ -193,12 +234,26 @@ extension _AttachmentViewerPageImage on _AttachmentViewerPageState {
                     maxWidth: 820,
                   ),
                 ],
+                if (summaryText.isNotEmpty) ...[
+                  const SizedBox(height: 14),
+                  buildSection(
+                    AttachmentTextEditorCard(
+                      fieldKeyPrefix: 'attachment_text_summary',
+                      label: context.t.attachments.content.summary,
+                      text: summaryText,
+                      emptyText: attachmentDetailEmptyTextLabel(context),
+                      onSave: _canEditAttachmentText
+                          ? (value) => _saveAttachmentText(summary: value)
+                          : null,
+                    ),
+                    maxWidth: 820,
+                  ),
+                ],
                 const SizedBox(height: 14),
                 buildSection(
                   AttachmentTextEditorCard(
                     fieldKeyPrefix: 'attachment_text_full',
                     label: context.t.attachments.content.fullText,
-                    showLabel: false,
                     text: textContent.full,
                     markdown: true,
                     emptyText: attachmentDetailEmptyTextLabel(context),
@@ -245,4 +300,9 @@ extension _AttachmentViewerPageImage on _AttachmentViewerPageState {
       },
     );
   }
+}
+
+double _imagePreviewHeightForWidth(double width) {
+  final safeWidth = width.isFinite && width > 0 ? width : 360;
+  return (safeWidth * 0.82).clamp(280.0, 560.0).toDouble();
 }
