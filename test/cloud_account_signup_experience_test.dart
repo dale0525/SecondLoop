@@ -120,9 +120,40 @@ void main() {
     expect(find.text('Email is verified. You can continue to subscribe.'),
         findsOneWidget);
   });
+
+  testWidgets('forgot password sends reset email for entered address',
+      (tester) async {
+    final cloudAuth = _MutableCloudAuthController();
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: CloudAuthScope(
+            controller: cloudAuth,
+            child: const CloudAccountPage(),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.byType(TextField).first,
+      'forgot@example.com',
+    );
+
+    await tester.drag(find.byType(ListView).first, const Offset(0, -220));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('cloud_forgot_password')));
+    await tester.pumpAndSettle();
+
+    expect(cloudAuth.sendPasswordResetCalls, 1);
+    expect(cloudAuth.lastPasswordResetEmail, 'forgot@example.com');
+  });
 }
 
-final class _MutableCloudAuthController implements CloudAuthController {
+final class _MutableCloudAuthController
+    implements CloudAuthController, CloudPasswordRecoveryController {
   _MutableCloudAuthController({
     String? initialUid,
     String? initialEmail,
@@ -144,6 +175,8 @@ final class _MutableCloudAuthController implements CloudAuthController {
 
   int signUpCalls = 0;
   int sendEmailVerificationCalls = 0;
+  int sendPasswordResetCalls = 0;
+  String? lastPasswordResetEmail;
 
   @override
   String? get uid => _uid;
@@ -174,6 +207,12 @@ final class _MutableCloudAuthController implements CloudAuthController {
       }
       throw sendVerificationError!;
     }
+  }
+
+  @override
+  Future<void> sendPasswordResetEmail({required String email}) async {
+    sendPasswordResetCalls += 1;
+    lastPasswordResetEmail = email;
   }
 
   @override

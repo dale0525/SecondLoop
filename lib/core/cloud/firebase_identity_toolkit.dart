@@ -59,7 +59,8 @@ abstract class FirebaseIdentityToolkit {
 
   Future<void> sendOobCode({
     required String requestType,
-    required String idToken,
+    String? idToken,
+    String? email,
   });
 
   Future<FirebaseUserInfo> lookup({
@@ -168,14 +169,23 @@ final class FirebaseIdentityToolkitHttp implements FirebaseIdentityToolkit {
   @override
   Future<void> sendOobCode({
     required String requestType,
-    required String idToken,
+    String? idToken,
+    String? email,
   }) async {
+    final payload = <String, dynamic>{
+      'requestType': requestType,
+    };
+    final normalizedToken = idToken?.trim();
+    if (normalizedToken != null && normalizedToken.isNotEmpty) {
+      payload['idToken'] = normalizedToken;
+    }
+    final normalizedEmail = email?.trim();
+    if (normalizedEmail != null && normalizedEmail.isNotEmpty) {
+      payload['email'] = normalizedEmail;
+    }
     await _postJson(
       _accountsUri('sendOobCode'),
-      {
-        'requestType': requestType,
-        'idToken': idToken,
-      },
+      payload,
     );
   }
 
