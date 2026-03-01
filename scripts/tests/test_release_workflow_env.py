@@ -54,6 +54,14 @@ class ReleaseWorkflowEnvTests(unittest.TestCase):
         cmake_path = Path(__file__).resolve().parents[2] / "rust_builder/cargokit/cmake/cargokit.cmake"
         return cmake_path.read_text(encoding="utf-8")
 
+    def _publish_homebrew_script_text(self) -> str:
+        script_path = Path(__file__).resolve().parents[2] / "scripts/publish_homebrew_cask.sh"
+        return script_path.read_text(encoding="utf-8")
+
+    def _publish_winget_script_text(self) -> str:
+        script_path = Path(__file__).resolve().parents[2] / "scripts/publish_winget_manifest.sh"
+        return script_path.read_text(encoding="utf-8")
+
     def test_publish_job_forwards_extended_llm_env(self) -> None:
         env_keys = self._publish_env_keys()
         self.assertIn("RELEASE_LLM_API_KEY", env_keys)
@@ -336,6 +344,18 @@ class ReleaseWorkflowEnvTests(unittest.TestCase):
         self.assertIn("WINGET_PKGS_TOKEN", workflow_text)
         self.assertIn("microsoft/winget-pkgs", workflow_text)
         self.assertIn("scripts/publish_winget_manifest.sh", workflow_text)
+
+    def test_publish_homebrew_cask_script_stages_then_checks_cached_diff(self) -> None:
+        script_text = self._publish_homebrew_script_text()
+
+        self.assertIn("git add Casks/secondloop.rb", script_text)
+        self.assertIn("git diff --cached --quiet -- Casks/secondloop.rb", script_text)
+
+    def test_publish_winget_manifest_script_stages_then_checks_cached_diff(self) -> None:
+        script_text = self._publish_winget_script_text()
+
+        self.assertIn('git add "${target_rel_dir}"', script_text)
+        self.assertIn("git diff --cached --quiet", script_text)
 
 
 

@@ -133,7 +133,8 @@ git checkout -B "${branch_name}" upstream/master
 mkdir -p "${target_rel_dir}"
 cp -f "${manifest_dir}/"*.yaml "${target_rel_dir}/"
 
-if git diff --quiet; then
+git add "${target_rel_dir}"
+if git diff --cached --quiet; then
   echo "No winget manifest changes for ${release_tag}"
   popd >/dev/null
   exit 0
@@ -141,27 +142,27 @@ fi
 
 git config user.name "${GITHUB_ACTOR:-github-actions[bot]}"
 git config user.email "${GITHUB_ACTOR:-github-actions[bot]}@users.noreply.github.com"
-git add "${target_rel_dir}"
 git commit -m "Add ${package_id} version ${version}"
 git push "https://x-access-token:${token}@github.com/${fork_repo}.git" "${branch_name}:${branch_name}" --force
 popd >/dev/null
 
 fork_owner="${fork_repo%%/*}"
-existing_pr_number="$(
+existing_pr_url="$(
   gh pr list \
     --repo "${upstream_repo}" \
     --head "${fork_owner}:${branch_name}" \
     --base master \
     --state open \
-    --json number \
-    --jq '.[0].number // empty'
+    --json url \
+    --jq '.[0].url // empty'
 )"
 
-if [[ -n "${existing_pr_number}" ]]; then
-  echo "Existing PR already open: #${existing_pr_number}"
+if [[ -n "${existing_pr_url}" ]]; then
+  echo "Existing PR already open: ${existing_pr_url}"
   exit 0
 fi
 
+created_pr_url="$(
 gh pr create \
   --repo "${upstream_repo}" \
   --base master \
@@ -176,5 +177,6 @@ gh pr create \
 
 - Installer URL and SHA256 were generated from GitHub release assets
 - Manifest files were produced by scripts/generate_winget_manifests.py"
+)"
 
-echo "Opened WinGet PR for ${package_id} ${version}"
+echo "Opened WinGet PR for ${package_id} ${version}: ${created_pr_url}"
