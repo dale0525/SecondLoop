@@ -1,6 +1,5 @@
-import 'dart:typed_data';
-
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -16,6 +15,36 @@ import 'package:secondloop/src/rust/db.dart';
 import 'test_i18n.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
+  const serviceChannel = MethodChannel('secondloop/audio_recording_lifecycle');
+  const notificationsChannel =
+      MethodChannel('dexterous.com/flutter/local_notifications');
+  final serviceCalls = <MethodCall>[];
+
+  setUp(() {
+    serviceCalls.clear();
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(serviceChannel, (call) async {
+      serviceCalls.add(call);
+      if (call.method == 'startForegroundAskAi') return true;
+      if (call.method == 'stopForegroundAskAi') return true;
+      return null;
+    });
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(notificationsChannel, (call) async {
+      if (call.method == 'requestNotificationsPermission') return true;
+      return null;
+    });
+  });
+
+  tearDown(() {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(serviceChannel, null);
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(notificationsChannel, null);
+  });
+
   testWidgets('Ask AI skips cloud when not entitled', (tester) async {
     SharedPreferences.setMockInitialValues({'ask_ai_data_consent_v1': true});
 
@@ -61,9 +90,14 @@ void main() {
     await tester.pump();
     await tester.tap(find.byKey(const ValueKey('chat_ask_ai')));
     await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds: 50));
 
     expect(backend.calls, isNot(contains('askAiStreamCloudGateway')));
     expect(backend.calls, contains('askAiStream'));
+    expect(
+      serviceCalls.any((call) => call.method == 'startForegroundAskAi'),
+      isTrue,
+    );
   });
 }
 
