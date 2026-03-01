@@ -15,6 +15,7 @@ class TaskHubBanner extends StatefulWidget {
     required this.summary,
     this.collapseSignal = 0,
     this.onViewAll,
+    this.onOpenTodo,
     this.onQuickAction,
     super.key,
   });
@@ -22,6 +23,7 @@ class TaskHubBanner extends StatefulWidget {
   final TaskHubSummary summary;
   final int collapseSignal;
   final VoidCallback? onViewAll;
+  final Future<void> Function(Todo todo)? onOpenTodo;
   final Future<void> Function(Todo todo, TaskHubQuickAction action)?
       onQuickAction;
 
@@ -167,6 +169,7 @@ class _TaskHubBannerState extends State<TaskHubBanner> {
                             title: context.t.actions.taskHub.scheduledSection,
                             todos: summary.scheduledPreviewTodos,
                             sectionKind: _TaskHubBannerSectionKind.scheduled,
+                            onOpenTodo: widget.onOpenTodo,
                             onQuickAction: widget.onQuickAction,
                           ),
                         if (summary.scheduledPreviewTodos.isNotEmpty &&
@@ -180,6 +183,7 @@ class _TaskHubBannerState extends State<TaskHubBanner> {
                           _TaskHubMergedUnscheduledSection(
                             dueReviewTodos: dueReviewPreview,
                             unscheduledTodos: unscheduledPreview,
+                            onOpenTodo: widget.onOpenTodo,
                             onQuickAction: widget.onQuickAction,
                           ),
                       ],
@@ -234,12 +238,14 @@ class _TaskHubSection extends StatelessWidget {
     required this.title,
     required this.todos,
     required this.sectionKind,
+    required this.onOpenTodo,
     required this.onQuickAction,
   });
 
   final String title;
   final List<Todo> todos;
   final _TaskHubBannerSectionKind sectionKind;
+  final Future<void> Function(Todo todo)? onOpenTodo;
   final Future<void> Function(Todo todo, TaskHubQuickAction action)?
       onQuickAction;
 
@@ -264,6 +270,7 @@ class _TaskHubSection extends StatelessWidget {
               child: _TaskHubTodoRow(
                 todo: todos[i],
                 sectionKind: sectionKind,
+                onOpenTodo: onOpenTodo,
                 onQuickAction: onQuickAction,
               ),
             ),
@@ -277,11 +284,13 @@ class _TaskHubMergedUnscheduledSection extends StatelessWidget {
   const _TaskHubMergedUnscheduledSection({
     required this.dueReviewTodos,
     required this.unscheduledTodos,
+    required this.onOpenTodo,
     required this.onQuickAction,
   });
 
   final List<Todo> dueReviewTodos;
   final List<Todo> unscheduledTodos;
+  final Future<void> Function(Todo todo)? onOpenTodo;
   final Future<void> Function(Todo todo, TaskHubQuickAction action)?
       onQuickAction;
 
@@ -317,6 +326,7 @@ class _TaskHubMergedUnscheduledSection extends StatelessWidget {
                 child: _TaskHubTodoRow(
                   todo: dueReviewTodos[i],
                   sectionKind: _TaskHubBannerSectionKind.dueReview,
+                  onOpenTodo: onOpenTodo,
                   onQuickAction: onQuickAction,
                 ),
               ),
@@ -342,6 +352,7 @@ class _TaskHubMergedUnscheduledSection extends StatelessWidget {
                       child: _TaskHubTodoRow(
                         todo: unscheduledTodos[i],
                         sectionKind: _TaskHubBannerSectionKind.unscheduled,
+                        onOpenTodo: onOpenTodo,
                         onQuickAction: onQuickAction,
                       ),
                     ),
@@ -408,11 +419,13 @@ class _TaskHubTodoRow extends StatelessWidget {
   const _TaskHubTodoRow({
     required this.todo,
     required this.sectionKind,
+    required this.onOpenTodo,
     required this.onQuickAction,
   });
 
   final Todo todo;
   final _TaskHubBannerSectionKind sectionKind;
+  final Future<void> Function(Todo todo)? onOpenTodo;
   final Future<void> Function(Todo todo, TaskHubQuickAction action)?
       onQuickAction;
 
@@ -449,52 +462,76 @@ class _TaskHubTodoRow extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  width: 8,
-                  height: 8,
-                  margin: const EdgeInsets.only(top: 6),
-                  decoration: BoxDecoration(
-                    color: dotColor,
-                    borderRadius: BorderRadius.circular(99),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Column(
+            Material(
+              color: Colors.transparent,
+              child: InkWell(
+                key: ValueKey('task_hub_banner_item_${todo.id}'),
+                borderRadius: BorderRadius.circular(tokens.radiusSm),
+                onTap: onOpenTodo == null
+                    ? null
+                    : () => unawaited(onOpenTodo!(todo)),
+                child: Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                  child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        todo.title,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                              fontWeight: FontWeight.w600,
-                            ),
+                      Container(
+                        width: 8,
+                        height: 8,
+                        margin: const EdgeInsets.only(top: 6),
+                        decoration: BoxDecoration(
+                          color: dotColor,
+                          borderRadius: BorderRadius.circular(99),
+                        ),
                       ),
-                      if (dueAtText != null) ...[
-                        const SizedBox(height: 2),
-                        Row(
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Icon(
-                              Icons.schedule_rounded,
-                              size: 14,
-                              color: colorScheme.onSurfaceVariant,
-                            ),
-                            const SizedBox(width: 4),
                             Text(
-                              dueAtText,
-                              style: Theme.of(context).textTheme.bodySmall,
+                              todo.title,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .bodyMedium
+                                  ?.copyWith(
+                                    fontWeight: FontWeight.w600,
+                                  ),
                             ),
+                            if (dueAtText != null) ...[
+                              const SizedBox(height: 2),
+                              Row(
+                                children: [
+                                  Icon(
+                                    Icons.schedule_rounded,
+                                    size: 14,
+                                    color: colorScheme.onSurfaceVariant,
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    dueAtText,
+                                    style:
+                                        Theme.of(context).textTheme.bodySmall,
+                                  ),
+                                ],
+                              ),
+                            ],
                           ],
                         ),
-                      ],
+                      ),
+                      const SizedBox(width: 8),
+                      Icon(
+                        Icons.chevron_right_rounded,
+                        size: 18,
+                        color: colorScheme.onSurfaceVariant,
+                      ),
                     ],
                   ),
                 ),
-              ],
+              ),
             ),
             const SizedBox(height: 6),
             Wrap(

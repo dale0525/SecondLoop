@@ -202,6 +202,75 @@ void main() {
     expect(calls.last.$2, TaskHubQuickAction.later);
   });
 
+  testWidgets('expanded list opens todo detail from every section',
+      (tester) async {
+    final now = DateTime(2026, 2, 24, 12);
+    final summary = TaskHubSummary.fromTodos(
+      <Todo>[
+        todo(
+          id: 'scheduled',
+          title: 'Scheduled item',
+          updatedAtMs: 1,
+          dueAtMs:
+              now.add(const Duration(hours: 2)).toUtc().millisecondsSinceEpoch,
+        ),
+        todo(
+          id: 'review',
+          title: 'Due review item',
+          updatedAtMs: 2,
+          reviewStage: 0,
+          nextReviewAtMs: now
+              .subtract(const Duration(hours: 1))
+              .toUtc()
+              .millisecondsSinceEpoch,
+        ),
+        todo(
+          id: 'unscheduled',
+          title: 'Unscheduled item',
+          updatedAtMs: 3,
+        ),
+      ],
+      nowLocal: now,
+    );
+
+    final openedTodoIds = <String>[];
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: Scaffold(
+            body: TaskHubBanner(
+              summary: summary,
+              onOpenTodo: (todo) async {
+                openedTodoIds.add(todo.id);
+              },
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.byKey(const ValueKey('task_hub_banner')));
+    await tester.pumpAndSettle();
+
+    final scheduledItem =
+        find.byKey(const ValueKey('task_hub_banner_item_scheduled'));
+    await tester.ensureVisible(scheduledItem);
+    await tester.tap(scheduledItem);
+    await tester.pumpAndSettle();
+    final reviewItem =
+        find.byKey(const ValueKey('task_hub_banner_item_review'));
+    await tester.ensureVisible(reviewItem);
+    await tester.tap(reviewItem);
+    await tester.pumpAndSettle();
+    final unscheduledItem =
+        find.byKey(const ValueKey('task_hub_banner_item_unscheduled'));
+    await tester.ensureVisible(unscheduledItem);
+    await tester.tap(unscheduledItem);
+    await tester.pumpAndSettle();
+
+    expect(openedTodoIds, <String>['scheduled', 'review', 'unscheduled']);
+  });
+
   testWidgets('expanded merged unscheduled section keeps review done action',
       (tester) async {
     final now = DateTime(2026, 2, 24, 12);
