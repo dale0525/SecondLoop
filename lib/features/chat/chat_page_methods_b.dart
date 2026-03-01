@@ -3,6 +3,7 @@ part of 'chat_page.dart';
 extension _ChatPageStateMethodsB on _ChatPageState {
   void _showAskAiFailure(String question, {String? message}) {
     final failureMessage = message ?? context.t.chat.askAiFailedTemporary;
+    unawaited(AskAiForegroundService.stopIfSupported());
 
     _setState(() {
       _askError = null;

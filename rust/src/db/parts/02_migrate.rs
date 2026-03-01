@@ -810,6 +810,24 @@ PRAGMA user_version = 27;
         )?;
     }
 
+    if user_version < 28 {
+        // v28: detached ask completion claims for transaction-level idempotency.
+        conn.execute_batch(
+            r#"
+CREATE TABLE IF NOT EXISTS detached_ask_completion_claims (
+  request_id TEXT PRIMARY KEY,
+  conversation_id TEXT NOT NULL,
+  created_at_ms INTEGER NOT NULL,
+  updated_at_ms INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_detached_ask_completion_claims_conversation
+  ON detached_ask_completion_claims(conversation_id, created_at_ms DESC);
+
+PRAGMA user_version = 28;
+"#,
+        )?;
+    }
+
     Ok(())
 }
 
@@ -882,6 +900,7 @@ DELETE FROM todo_activities;
 DELETE FROM todo_recurrences;
 DELETE FROM todo_series;
 DELETE FROM events;
+DELETE FROM detached_ask_completion_claims;
 DELETE FROM oplog;
 DELETE FROM kv WHERE key != 'embedding.active_model_name';
 "#,

@@ -231,6 +231,12 @@ class MainActivity : FlutterFragmentActivity() {
             "stopForegroundRecording" -> {
               result.success(stopAudioRecordingForegroundService())
             }
+            "startForegroundAskAi" -> {
+              result.success(startAskAiForegroundService())
+            }
+            "stopForegroundAskAi" -> {
+              result.success(stopAskAiForegroundService())
+            }
             else -> result.notImplemented()
           }
         }
@@ -547,6 +553,29 @@ class MainActivity : FlutterFragmentActivity() {
   private fun stopAudioRecordingForegroundService(): Boolean {
     return try {
       stopService(AudioRecordingForegroundService.stopIntent(this))
+      true
+    } catch (_: Throwable) {
+      false
+    }
+  }
+
+  private fun startAskAiForegroundService(): Boolean {
+    return try {
+      val intent = AskAiForegroundService.startIntent(this)
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+        ContextCompat.startForegroundService(this, intent)
+      } else {
+        startService(intent)
+      }
+      true
+    } catch (_: Throwable) {
+      false
+    }
+  }
+
+  private fun stopAskAiForegroundService(): Boolean {
+    return try {
+      stopService(AskAiForegroundService.stopIntent(this))
       true
     } catch (_: Throwable) {
       false

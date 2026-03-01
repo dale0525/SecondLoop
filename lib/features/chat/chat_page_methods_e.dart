@@ -43,6 +43,7 @@ extension _ChatPageStateMethodsE on _ChatPageState {
 
     if (!mounted) return;
     _setState(() => _stopRequested = false);
+    unawaited(AskAiForegroundService.stopIfSupported());
   }
 
   Future<void> _askAi({
@@ -299,6 +300,26 @@ extension _ChatPageStateMethodsE on _ChatPageState {
       stream = tagScopedStream;
     }
 
+    if (route == AskAiRouteKind.cloudGateway) {
+      await DetachedAskRecoveryService.persistSnapshot(
+        requestId: null,
+        question: question,
+        conversationId: widget.conversation.id,
+        gatewayBaseUrl: cloudGatewayConfig.baseUrl,
+        state: DetachedAskSnapshotState.streamingConnected,
+      );
+      unawaited(
+        DetachedAskRecoveryService.trackMetric(
+          backend: backend,
+          sessionKey: sessionKey,
+          metric:
+              DetachedAskRecoveryService.metricAskAiDetachedSnapshotPersisted,
+          conversationId: widget.conversation.id,
+          detail: 'pre_snapshot',
+        ),
+      );
+    }
+
     Future<void> startStream(
       Stream<String> stream, {
       required bool fromCloud,
@@ -308,6 +329,19 @@ extension _ChatPageStateMethodsE on _ChatPageState {
     }) async {
       late final StreamSubscription<String> sub;
       var sawError = false;
+
+      unawaited(AskAiForegroundService.startIfSupported());
+      if (fromCloud) {
+        unawaited(
+          DetachedAskRecoveryService.trackMetric(
+            backend: backend,
+            sessionKey: sessionKey,
+            metric: DetachedAskRecoveryService.metricAskAiStreamStart,
+            conversationId: widget.conversation.id,
+            detail: 'cloud_stream_connected',
+          ),
+        );
+      }
 
       if (fromCloud) {
         _activeCloudRequestId = null;
@@ -459,6 +493,65 @@ extension _ChatPageStateMethodsE on _ChatPageState {
 
           if (!mounted) return;
           if (!identical(_askSub, sub)) return;
+          if (fromCloud) {
+            final requestId = _activeCloudRequestId?.trim() ?? '';
+            if (requestId.isNotEmpty) {
+              unawaited(AskAiForegroundService.stopIfSupported());
+              unawaited(
+                DetachedAskRecoveryService.trackMetric(
+                  backend: backend,
+                  sessionKey: sessionKey,
+                  metric:
+                      DetachedAskRecoveryService.metricAskAiStreamDisconnect,
+                  conversationId: widget.conversation.id,
+                  requestId: requestId,
+                  detail: 'stream_error_enter_recovery',
+                ),
+              );
+              final languageCode = Localizations.localeOf(context).languageCode;
+              final recoveringText = languageCode.startsWith('zh')
+                  ? '云端结果恢复中…'
+                  : 'Recovering cloud answer…';
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(recoveringText),
+                  duration: const Duration(seconds: 2),
+                ),
+              );
+              _setState(() {
+                _askSub = null;
+                _asking = false;
+                _pendingQuestion = null;
+                _streamingAnswer = '';
+                _askAttemptCreatedAtMs = null;
+                _askAttemptAnchorMessageId = null;
+              });
+              _detachedAskRecoveryChecked = false;
+              unawaited(
+                DetachedAskRecoveryService.persistSnapshot(
+                  requestId: requestId,
+                  question: question,
+                  conversationId: widget.conversation.id,
+                  gatewayBaseUrl: _activeCloudGatewayBaseUrl,
+                  state:
+                      DetachedAskSnapshotState.streamingDisconnectedRecovering,
+                ),
+              );
+              unawaited(
+                DetachedAskRecoveryService.trackMetric(
+                  backend: backend,
+                  sessionKey: sessionKey,
+                  metric: DetachedAskRecoveryService
+                      .metricAskAiDetachedSnapshotPersisted,
+                  conversationId: widget.conversation.id,
+                  requestId: requestId,
+                  detail: 'stream_disconnected_recovering',
+                ),
+              );
+              unawaited(_recoverDetachedAskAiIfNeeded());
+              return;
+            }
+          }
           final message = fromCloud
               ? null
               : '${context.t.chat.askAiFailedTemporary}\n\n${e.toString()}';
@@ -507,6 +600,7 @@ extension _ChatPageStateMethodsE on _ChatPageState {
           );
         },
         onDone: () {
+          unawaited(AskAiForegroundService.stopIfSupported());
           if (!mounted) return;
           if (!identical(_askSub, sub)) return;
           if (sawError) {
@@ -692,91 +786,6 @@ extension _ChatPageStateMethodsE on _ChatPageState {
     return true;
   }
 
-  Future<void> _handleCloudAskMetaDelta(
-    String delta, {
-    required String question,
-    String? gatewayBaseUrl,
-    String? idToken,
-  }) async {
-    if (!delta.startsWith(_kAskAiMetaPrefix)) return;
-    final rawPayload = delta.substring(_kAskAiMetaPrefix.length).trim();
-    if (rawPayload.isEmpty) return;
-
-    Map<String, dynamic> payload;
-    try {
-      final decoded = jsonDecode(rawPayload);
-      if (decoded is! Map<String, dynamic>) return;
-      payload = decoded;
-    } catch (_) {
-      return;
-    }
-
-    if ((payload['type'] as String?)?.trim() != 'cloud_request_id') {
-      return;
-    }
-
-    final requestId = (payload['request_id'] as String?)?.trim();
-    if (requestId == null || requestId.isEmpty) return;
-
-    _activeCloudRequestId = requestId;
-    if ((gatewayBaseUrl ?? '').trim().isNotEmpty) {
-      _activeCloudGatewayBaseUrl = gatewayBaseUrl!.trim();
-    }
-    if ((idToken ?? '').trim().isNotEmpty) {
-      _activeCloudIdToken = idToken!.trim();
-    }
-
-    await _persistDetachedAskSnapshot(
-      requestId: requestId,
-      question: question,
-      gatewayBaseUrl: _activeCloudGatewayBaseUrl,
-    );
-  }
-
-  Future<void> _persistDetachedAskSnapshot({
-    required String requestId,
-    required String question,
-    String? gatewayBaseUrl,
-  }) async {
-    if (requestId.trim().isEmpty) return;
-    if (question.trim().isEmpty) return;
-
-    final prefs = await SharedPreferences.getInstance();
-    final payload = <String, Object?>{
-      'request_id': requestId.trim(),
-      'question': question,
-      'conversation_id': widget.conversation.id,
-      'gateway_base_url': gatewayBaseUrl?.trim(),
-      'created_at_ms': DateTime.now().millisecondsSinceEpoch,
-    };
-    await prefs.setString(_kAskAiDetachedJobPrefsKey, jsonEncode(payload));
-  }
-
-  Future<void> _clearDetachedAskSnapshot({String? expectedRequestId}) async {
-    final prefs = await SharedPreferences.getInstance();
-    if (expectedRequestId == null || expectedRequestId.trim().isEmpty) {
-      await prefs.remove(_kAskAiDetachedJobPrefsKey);
-      return;
-    }
-
-    final raw = prefs.getString(_kAskAiDetachedJobPrefsKey);
-    if (raw == null) return;
-
-    try {
-      final decoded = jsonDecode(raw);
-      if (decoded is! Map<String, dynamic>) {
-        await prefs.remove(_kAskAiDetachedJobPrefsKey);
-        return;
-      }
-      final currentRequestId = (decoded['request_id'] as String?)?.trim();
-      if (currentRequestId == expectedRequestId.trim()) {
-        await prefs.remove(_kAskAiDetachedJobPrefsKey);
-      }
-    } catch (_) {
-      await prefs.remove(_kAskAiDetachedJobPrefsKey);
-    }
-  }
-
   Future<void> _recoverDetachedAskAiIfNeeded() async {
     if (!mounted) return;
     if (_detachedAskRecoveryChecked) return;
@@ -834,7 +843,15 @@ extension _ChatPageStateMethodsE on _ChatPageState {
 
     final requestId = (snapshot['request_id'] as String?)?.trim();
     if (requestId == null || requestId.isEmpty) {
-      await prefs.remove(_kAskAiDetachedJobPrefsKey);
+      final pollDelay = detachedAskRecoveryPollDelay(
+        nowMs: nowMs,
+        createdAtMs: createdAtMs,
+      );
+      _detachedAskRecoveryChecked = false;
+      _detachedAskRecoveryTimer = Timer(pollDelay, () {
+        if (!mounted) return;
+        unawaited(_recoverDetachedAskAiIfNeeded());
+      });
       return;
     }
 
@@ -897,17 +914,15 @@ extension _ChatPageStateMethodsE on _ChatPageState {
         return;
       }
 
-      await backend.insertMessage(
-        sessionKey,
-        widget.conversation.id,
-        role: 'user',
-        content: question,
-      );
-      await backend.insertMessage(
-        sessionKey,
-        widget.conversation.id,
-        role: 'assistant',
-        content: resultText,
+      final applied =
+          await DetachedAskRecoveryService.applyCompletionOnceViaEventMarker(
+        backend: backend,
+        sessionKey: sessionKey,
+        requestId: requestId,
+        conversationId: widget.conversation.id,
+        question: question,
+        answer: resultText,
+        gatewayBaseUrl: gatewayBaseUrl,
       );
       await _finalizeDetachedAskSnapshot(
         requestId: requestId,
@@ -918,78 +933,18 @@ extension _ChatPageStateMethodsE on _ChatPageState {
       if (!mounted) return;
       _refresh();
       SyncEngineScope.maybeOf(context)?.notifyLocalMutation();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          key: _kAskAiDetachedRecoveredSnackKey,
-          content: Text(context.t.chat.askAiRecoveredDetached),
-          duration: const Duration(seconds: 3),
-        ),
-      );
+      if (applied) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            key: _kAskAiDetachedRecoveredSnackKey,
+            content: Text(context.t.chat.askAiRecoveredDetached),
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
       return;
     }
 
     await prefs.remove(_kAskAiDetachedJobPrefsKey);
-  }
-
-  Future<Map<String, dynamic>?> _fetchDetachedAskJobStatus({
-    required String gatewayBaseUrl,
-    required String idToken,
-    required String requestId,
-  }) async {
-    final base = gatewayBaseUrl.trim();
-    final token = idToken.trim();
-    final rid = requestId.trim();
-    if (base.isEmpty || token.isEmpty || rid.isEmpty) return null;
-
-    final client = HttpClient();
-    try {
-      final uri = Uri.parse(base).resolve('/v1/chat/jobs/$rid');
-      final req = await client.getUrl(uri).timeout(const Duration(seconds: 12));
-      req.headers.set(HttpHeaders.authorizationHeader, 'Bearer $token');
-      req.headers.set(HttpHeaders.acceptHeader, 'application/json');
-
-      final resp = await req.close().timeout(const Duration(seconds: 45));
-      final text =
-          await utf8.decodeStream(resp).timeout(const Duration(seconds: 45));
-      if (resp.statusCode == 404) {
-        return <String, dynamic>{'status': 'not_found'};
-      }
-      if (resp.statusCode < 200 || resp.statusCode >= 300) return null;
-
-      final decoded = jsonDecode(text);
-      if (decoded is! Map<String, dynamic>) return null;
-      return decoded;
-    } catch (_) {
-      return null;
-    } finally {
-      client.close(force: true);
-    }
-  }
-
-  Future<void> _cancelDetachedAskJob({
-    required String gatewayBaseUrl,
-    required String idToken,
-    required String requestId,
-  }) async {
-    final base = gatewayBaseUrl.trim();
-    final token = idToken.trim();
-    final rid = requestId.trim();
-    if (base.isEmpty || token.isEmpty || rid.isEmpty) return;
-
-    final client = HttpClient();
-    try {
-      final uri = Uri.parse(base).resolve('/v1/chat/jobs/$rid/cancel');
-      final req =
-          await client.postUrl(uri).timeout(const Duration(seconds: 12));
-      req.headers.set(HttpHeaders.authorizationHeader, 'Bearer $token');
-      req.headers.set(HttpHeaders.contentTypeHeader, 'application/json');
-      req.add(utf8.encode('{}'));
-      final resp = await req.close().timeout(const Duration(seconds: 45));
-      await utf8.decodeStream(resp).timeout(const Duration(seconds: 45));
-    } catch (_) {
-      return;
-    } finally {
-      client.close(force: true);
-    }
   }
 }
