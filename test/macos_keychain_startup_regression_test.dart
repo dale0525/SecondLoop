@@ -178,7 +178,8 @@ final class _RefreshingIdentityToolkit implements FirebaseIdentityToolkit {
   @override
   Future<void> sendOobCode({
     required String requestType,
-    required String idToken,
+    String? idToken,
+    String? email,
   }) {
     throw UnimplementedError();
   }
@@ -214,7 +215,8 @@ final class _NeverCalledIdentityToolkit implements FirebaseIdentityToolkit {
   @override
   Future<void> sendOobCode({
     required String requestType,
-    required String idToken,
+    String? idToken,
+    String? email,
   }) {
     throw UnimplementedError();
   }

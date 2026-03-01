@@ -29,6 +29,23 @@ abstract class CloudAuthController {
   Future<void> signOut();
 }
 
+abstract class CloudPasswordRecoveryController {
+  Future<void> sendPasswordResetEmail({
+    required String email,
+  });
+}
+
+Future<void> sendCloudPasswordResetEmail({
+  required CloudAuthController controller,
+  required String email,
+}) async {
+  if (controller is! CloudPasswordRecoveryController) {
+    throw StateError('password_reset_not_supported');
+  }
+  final recoveryController = controller as CloudPasswordRecoveryController;
+  await recoveryController.sendPasswordResetEmail(email: email);
+}
+
 Future<String?> readCloudIdTokenForBackground(CloudAuthController? controller) {
   if (controller == null) {
     return Future<String?>.value();
@@ -40,7 +57,7 @@ Future<String?> readCloudIdTokenForBackground(CloudAuthController? controller) {
 }
 
 final class CloudAuthControllerImpl extends ChangeNotifier
-    implements CloudAuthController {
+    implements CloudAuthController, CloudPasswordRecoveryController {
   CloudAuthControllerImpl({
     required FirebaseIdentityToolkit identityToolkit,
     CloudAuthStore? store,
@@ -203,5 +220,19 @@ final class CloudAuthControllerImpl extends ChangeNotifier
     return normalized.contains('missing_id_token') ||
         normalized.contains('invalid_id_token') ||
         normalized.contains('token_expired');
+  }
+
+  @override
+  Future<void> sendPasswordResetEmail({
+    required String email,
+  }) async {
+    final normalizedEmail = email.trim();
+    if (normalizedEmail.isEmpty) {
+      throw StateError('missing_email');
+    }
+    await _identityToolkit.sendOobCode(
+      requestType: 'PASSWORD_RESET',
+      email: normalizedEmail,
+    );
   }
 }

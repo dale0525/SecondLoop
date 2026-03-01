@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../core/ai/ai_routing.dart';
+import '../../core/cloud/cloud_auth_controller.dart';
 import '../../core/cloud/firebase_identity_toolkit.dart';
 import '../../core/cloud/cloud_auth_scope.dart';
 import '../../core/subscription/cloud_subscription_controller.dart';
@@ -370,6 +371,14 @@ class _CloudAccountPageState extends State<CloudAccountPage> {
   }
 
   String _formatCloudAuthError(BuildContext context, Object error) {
+    final code = _extractErrorCode(error);
+    if (code == 'missing_email') {
+      return _passwordResetMissingEmailMessage(context);
+    }
+    if (code == 'password_reset_not_supported') {
+      return _passwordResetNotSupportedMessage(context);
+    }
+
     if (error is FirebaseAuthException) {
       if (error.code == 'missing_web_api_key' ||
           error.code == 'missing_wwb_api_key') {
@@ -382,6 +391,32 @@ class _CloudAccountPageState extends State<CloudAccountPage> {
       return context.t.settings.cloudAccount.errors.missingWebApiKey;
     }
     return message;
+  }
+
+  bool _isChineseLocale(BuildContext context) {
+    return Localizations.localeOf(context).languageCode.toLowerCase() == 'zh';
+  }
+
+  String _forgotPasswordLabel(BuildContext context) {
+    return _isChineseLocale(context) ? '忘记密码？' : 'Forgot password?';
+  }
+
+  String _passwordResetSentMessage(BuildContext context) {
+    return _isChineseLocale(context)
+        ? '重置密码邮件已发送，请检查邮箱。'
+        : 'Password reset email sent. Please check your inbox.';
+  }
+
+  String _passwordResetMissingEmailMessage(BuildContext context) {
+    return _isChineseLocale(context)
+        ? '请先输入邮箱地址。'
+        : 'Please enter your email first.';
+  }
+
+  String _passwordResetNotSupportedMessage(BuildContext context) {
+    return _isChineseLocale(context)
+        ? '当前环境暂不支持密码找回，请稍后再试。'
+        : 'Password recovery is not supported in this environment.';
   }
 
   Future<void> _signIn() async {
@@ -404,6 +439,42 @@ class _CloudAccountPageState extends State<CloudAccountPage> {
         _passwordController.clear();
       });
       unawaited(_refreshUserInfo());
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _error = _formatCloudAuthError(context, e));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _forgotPassword() async {
+    if (_busy) return;
+    final email = _emailController.text.trim();
+    if (email.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(_passwordResetMissingEmailMessage(context)),
+          duration: const Duration(seconds: 3),
+        ),
+      );
+      return;
+    }
+
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+
+    try {
+      final controller = CloudAuthScope.of(context).controller;
+      await sendCloudPasswordResetEmail(controller: controller, email: email);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(_passwordResetSentMessage(context)),
+          duration: const Duration(seconds: 3),
+        ),
+      );
     } catch (e) {
       if (!mounted) return;
       setState(() => _error = _formatCloudAuthError(context, e));
@@ -622,6 +693,15 @@ class _CloudAccountPageState extends State<CloudAccountPage> {
                         ),
                       ),
                     ],
+                  ),
+                  const SizedBox(height: 8),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: TextButton(
+                      key: const ValueKey('cloud_forgot_password'),
+                      onPressed: _busy ? null : _forgotPassword,
+                      child: Text(_forgotPasswordLabel(context)),
+                    ),
                   ),
                 ],
               ),

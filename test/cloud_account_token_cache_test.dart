@@ -98,6 +98,24 @@ void main() {
   test('background token read returns null for missing controller', () async {
     expect(await readCloudIdTokenForBackground(null), isNull);
   });
+
+  test('password reset delegates email to firebase oob endpoint', () async {
+    final clock = _FakeClockMs(1000);
+    final toolkit = _FakeIdentityToolkit(clock: clock);
+    final store = _InMemoryCloudAuthStore();
+
+    final controller = CloudAuthControllerImpl(
+      identityToolkit: toolkit,
+      store: store,
+      nowMs: clock.nowMs,
+    );
+
+    await controller.sendPasswordResetEmail(email: 'reset@example.com');
+
+    expect(toolkit.lastOobRequestType, 'PASSWORD_RESET');
+    expect(toolkit.lastOobEmail, 'reset@example.com');
+    expect(toolkit.lastOobIdToken, isNull);
+  });
 }
 
 final class _FakeClockMs {
@@ -127,6 +145,9 @@ final class _FakeIdentityToolkit implements FirebaseIdentityToolkit {
   int signInCalls = 0;
   int refreshCalls = 0;
   int lookupCalls = 0;
+  String? lastOobRequestType;
+  String? lastOobIdToken;
+  String? lastOobEmail;
 
   @override
   Future<FirebaseAuthTokens> signInWithPassword({
@@ -165,8 +186,13 @@ final class _FakeIdentityToolkit implements FirebaseIdentityToolkit {
   @override
   Future<void> sendOobCode({
     required String requestType,
-    required String idToken,
-  }) async {}
+    String? idToken,
+    String? email,
+  }) async {
+    lastOobRequestType = requestType;
+    lastOobIdToken = idToken;
+    lastOobEmail = email;
+  }
 
   @override
   Future<FirebaseUserInfo> lookup({required String idToken}) async {
