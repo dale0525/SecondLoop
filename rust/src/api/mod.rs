@@ -9,6 +9,7 @@ pub mod content_enrichment;
 pub mod content_extract;
 pub mod core;
 pub mod desktop_media;
+pub mod detached_ask;
 pub mod media_annotation;
 pub mod oplog_maintenance;
 pub mod simple;

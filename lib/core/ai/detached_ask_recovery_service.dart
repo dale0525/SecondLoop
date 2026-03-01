@@ -5,6 +5,8 @@ import 'dart:typed_data';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../backend/app_backend.dart';
+import '../backend/native_app_dir.dart';
+import '../../src/rust/api/detached_ask.dart' as rust_detached_ask;
 import 'detached_ask_recovery_policy.dart';
 
 const kAskAiDetachedJobPrefsKey = 'ask_ai_detached_job_v1';
@@ -342,16 +344,48 @@ final class DetachedAskRecoveryService {
       return false;
     }
 
+    try {
+      final appDir = await getNativeAppDir();
+      return await rust_detached_ask.dbApplyDetachedAskCompletionOnce(
+        appDir: appDir,
+        key: sessionKey,
+        requestId: rid,
+        conversationId: cid,
+        question: q,
+        answer: a,
+      );
+    } catch (_) {
+      return _applyCompletionViaLegacyEventMarker(
+        backend: backend,
+        sessionKey: sessionKey,
+        requestId: rid,
+        conversationId: cid,
+        question: q,
+        answer: a,
+        gatewayBaseUrl: gatewayBaseUrl,
+      );
+    }
+  }
+
+  static Future<bool> _applyCompletionViaLegacyEventMarker({
+    required AppBackend backend,
+    required Uint8List sessionKey,
+    required String requestId,
+    required String conversationId,
+    required String question,
+    required String answer,
+    String? gatewayBaseUrl,
+  }) async {
     final nowMs = DateTime.now().millisecondsSinceEpoch;
     final marker = await backend.upsertEvent(
       sessionKey,
-      id: 'detached_ask_completion:$rid',
+      id: 'detached_ask_completion:$requestId',
       title:
           'detached_ask_completion_marker_v1:${gatewayBaseUrl?.trim() ?? ''}',
       startAtMs: nowMs,
       endAtMs: nowMs + 1,
       tz: 'UTC',
-      sourceEntryId: cid,
+      sourceEntryId: conversationId,
     );
 
     final firstClaim = marker.createdAtMs == marker.updatedAtMs;
@@ -359,15 +393,15 @@ final class DetachedAskRecoveryService {
 
     await backend.insertMessage(
       sessionKey,
-      cid,
+      conversationId,
       role: 'user',
-      content: q,
+      content: question,
     );
     await backend.insertMessage(
       sessionKey,
-      cid,
+      conversationId,
       role: 'assistant',
-      content: a,
+      content: answer,
     );
 
     return true;
