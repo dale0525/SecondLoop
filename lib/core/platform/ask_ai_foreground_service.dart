@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 final class AskAiForegroundService {
   static const MethodChannel _channel = MethodChannel(
@@ -9,6 +10,8 @@ final class AskAiForegroundService {
   static Future<bool> startIfSupported() async {
     if (kIsWeb) return true;
     if (defaultTargetPlatform != TargetPlatform.android) return true;
+
+    await _requestNotificationsPermissionBestEffort();
 
     try {
       final started =
@@ -29,6 +32,15 @@ final class AskAiForegroundService {
       return stopped == true;
     } catch (_) {
       return false;
+    }
+  }
+
+  static Future<void> _requestNotificationsPermissionBestEffort() async {
+    try {
+      final androidImpl = AndroidFlutterLocalNotificationsPlugin();
+      await androidImpl.requestNotificationsPermission();
+    } catch (_) {
+      // Best-effort only.
     }
   }
 }
