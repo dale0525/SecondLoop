@@ -330,8 +330,8 @@ extension _ChatPageStateMethodsE on _ChatPageState {
       late final StreamSubscription<String> sub;
       var sawError = false;
 
+      unawaited(AskAiForegroundService.startIfSupported());
       if (fromCloud) {
-        unawaited(AskAiForegroundService.startIfSupported());
         unawaited(
           DetachedAskRecoveryService.trackMetric(
             backend: backend,
@@ -341,8 +341,6 @@ extension _ChatPageStateMethodsE on _ChatPageState {
             detail: 'cloud_stream_connected',
           ),
         );
-      } else {
-        unawaited(AskAiForegroundService.stopIfSupported());
       }
 
       if (fromCloud) {
