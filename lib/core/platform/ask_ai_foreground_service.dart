@@ -14,8 +14,7 @@ final class AskAiForegroundService {
     await _requestNotificationsPermissionBestEffort();
 
     try {
-      final started =
-          await _channel.invokeMethod<bool>('startForegroundRecording');
+      final started = await _channel.invokeMethod<bool>('startForegroundAskAi');
       return started == true;
     } catch (_) {
       return false;
@@ -27,8 +26,7 @@ final class AskAiForegroundService {
     if (defaultTargetPlatform != TargetPlatform.android) return true;
 
     try {
-      final stopped =
-          await _channel.invokeMethod<bool>('stopForegroundRecording');
+      final stopped = await _channel.invokeMethod<bool>('stopForegroundAskAi');
       return stopped == true;
     } catch (_) {
       return false;

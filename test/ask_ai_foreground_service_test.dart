@@ -21,8 +21,8 @@ void main() {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(serviceChannel, (call) async {
       serviceCalls.add(call);
-      if (call.method == 'startForegroundRecording') return true;
-      if (call.method == 'stopForegroundRecording') return true;
+      if (call.method == 'startForegroundAskAi') return true;
+      if (call.method == 'stopForegroundAskAi') return true;
       return null;
     });
 
@@ -56,7 +56,19 @@ void main() {
       isTrue,
     );
     expect(
-      serviceCalls.any((call) => call.method == 'startForegroundRecording'),
+      serviceCalls.any((call) => call.method == 'startForegroundAskAi'),
+      isTrue,
+    );
+  });
+
+  test('stop calls ask-ai foreground stop method on Android', () async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+
+    final stopped = await AskAiForegroundService.stopIfSupported();
+
+    expect(stopped, isTrue);
+    expect(
+      serviceCalls.any((call) => call.method == 'stopForegroundAskAi'),
       isTrue,
     );
   });

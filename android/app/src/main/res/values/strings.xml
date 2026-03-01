@@ -4,4 +4,8 @@
     <string name="audio_recording_foreground_channel_description">Foreground service while chat audio recording is active</string>
     <string name="audio_recording_foreground_title">Recording audio</string>
     <string name="audio_recording_foreground_text">Tap to return to SecondLoop</string>
+    <string name="ask_ai_foreground_channel_name">AI analysis</string>
+    <string name="ask_ai_foreground_channel_description">Foreground service while AI analysis is running in background</string>
+    <string name="ask_ai_foreground_title">AI analysis running</string>
+    <string name="ask_ai_foreground_text">Tap to return to SecondLoop</string>
 </resources>
