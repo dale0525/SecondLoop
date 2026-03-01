@@ -130,7 +130,8 @@ end
 CASK
 
 pushd "${tap_dir}" >/dev/null
-if git diff --quiet -- Casks/secondloop.rb; then
+git add Casks/secondloop.rb
+if git diff --cached --quiet -- Casks/secondloop.rb; then
   echo "No Homebrew cask change for ${release_tag}"
   popd >/dev/null
   exit 0
@@ -138,7 +139,6 @@ fi
 
 git config user.name "${GITHUB_ACTOR:-github-actions[bot]}"
 git config user.email "${GITHUB_ACTOR:-github-actions[bot]}@users.noreply.github.com"
-git add Casks/secondloop.rb
 git commit -m "chore(cask): update secondloop ${release_tag}"
 git push origin HEAD
 popd >/dev/null
