@@ -61,7 +61,8 @@ void main() {
     expect(find.text('Image attachment'), findsNothing);
   });
 
-  testWidgets('Image attachment uses compact unified layout', (tester) async {
+  testWidgets('Image attachment uses taller unified preview layout',
+      (tester) async {
     final backend = _Backend(
       bytesBySha: {'abc': _tinyPngBytes()},
     );
@@ -104,7 +105,8 @@ void main() {
     );
     final previewSize = tester
         .getSize(find.byKey(const ValueKey('attachment_image_preview_box')));
-    expect(previewSize.height, lessThanOrEqualTo(220));
+    expect(previewSize.height, greaterThanOrEqualTo(280));
+    expect(previewSize.height, lessThanOrEqualTo(560));
   });
 
   testWidgets('Attachment viewer hides metadata cards even when EXIF exists',
