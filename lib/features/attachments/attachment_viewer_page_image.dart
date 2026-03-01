@@ -64,6 +64,7 @@ extension _AttachmentViewerPageImage on _AttachmentViewerPageState {
       final textContent = resolveAttachmentDetailTextContent(
         annotationPayload,
         annotationCaption: annotationCaption,
+        mimeTypeOverride: widget.attachment.mimeType,
       );
       final canRetryRecognition = _canRetryAttachmentRecognition;
       final trailing = canRetryRecognition

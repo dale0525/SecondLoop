@@ -287,7 +287,10 @@ class _AudioAttachmentPlayerViewState extends State<AudioAttachmentPlayerView> {
     BuildContext context, {
     required Map<String, Object?>? payload,
   }) {
-    final textContent = resolveAttachmentDetailTextContent(payload);
+    final textContent = resolveAttachmentDetailTextContent(
+      payload,
+      mimeTypeOverride: widget.attachment.mimeType,
+    );
     final fullText = textContent.full;
     final retryButton = widget.onRetryRecognition == null
         ? null

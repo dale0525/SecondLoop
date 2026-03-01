@@ -78,6 +78,37 @@ void main() {
     expect(content.full, 'Sunset over the lake with orange reflections.');
   });
 
+  test('image detail full keeps AI summary and OCR text together', () {
+    final content = resolveAttachmentDetailTextContent(
+      const <String, Object?>{
+        'mime_type': 'image/png',
+        'caption_long': 'AI: A white cat sleeping on a blue sofa.',
+        'ocr_text_full': 'OCR: noon 12:30 · call mom',
+      },
+    );
+
+    expect(
+      content.full,
+      'AI: A white cat sleeping on a blue sofa.\n\nOCR: noon 12:30 · call mom',
+    );
+  });
+
+  test('mimeTypeOverride forces image merge when payload lacks mime_type', () {
+    final content = resolveAttachmentDetailTextContent(
+      const <String, Object?>{
+        'caption_long': 'AI says this is a calendar screenshot.',
+        'ocr_text': 'OCR found: meeting with team at 14:00',
+      },
+      mimeTypeOverride: 'image/png',
+    );
+
+    expect(
+      content.full,
+      'AI says this is a calendar screenshot.\n\n'
+      'OCR found: meeting with team at 14:00',
+    );
+  });
+
   test('non-image detail full keeps preferring extracted text', () {
     final content = resolveAttachmentDetailTextContent(
       const <String, Object?>{
