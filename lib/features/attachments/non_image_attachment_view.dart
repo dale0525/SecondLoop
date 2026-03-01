@@ -619,7 +619,10 @@ class _NonImageAttachmentViewState extends State<NonImageAttachmentView> {
     required ValueChanged<String>? onOcrLanguageHintsChanged,
   }) {
     final selectedTextContent = selectAttachmentDisplayText(payload);
-    final textContent = resolveAttachmentDetailTextContent(payload);
+    final textContent = resolveAttachmentDetailTextContent(
+      payload,
+      mimeTypeOverride: attachment.mimeType,
+    );
     final fullText = textContent.full;
     final hasFullText = fullText.trim().isNotEmpty;
 

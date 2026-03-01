@@ -378,6 +378,7 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
     return resolveAttachmentDetailTextContent(
       payload,
       annotationCaption: null,
+      mimeTypeOverride: widget.attachment.mimeType,
     );
   }
 
@@ -729,6 +730,7 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
     return resolveAttachmentDetailTextContent(
       _annotationPayload,
       annotationCaption: _annotationCaption,
+      mimeTypeOverride: widget.attachment.mimeType,
     );
   }
 

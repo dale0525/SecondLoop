@@ -51,7 +51,7 @@ void main() {
   });
 
   testWidgets(
-      'AttachmentViewerPage shows full OCR text when image fallback payload exists',
+      'AttachmentViewerPage shows AI caption and OCR text when both exist',
       (tester) async {
     final longOcr = List<String>.generate(80, (i) => 'token_$i').join(' ');
     final caption =
@@ -93,7 +93,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text(caption), findsNothing);
+    expect(find.text(caption), findsWidgets);
     expect(
       find.byKey(const ValueKey('attachment_text_summary_display')),
       findsNothing,

@@ -24,6 +24,7 @@ String attachmentDetailEmptyTextLabel(BuildContext context) {
 AttachmentDetailTextContent resolveAttachmentDetailTextContent(
   Map<String, Object?>? payload, {
   String? annotationCaption,
+  String? mimeTypeOverride,
 }) {
   String read(String key, {bool normalizeOcr = false}) {
     final raw = (payload?[key] ?? '').toString();
@@ -44,6 +45,11 @@ AttachmentDetailTextContent resolveAttachmentDetailTextContent(
     read('caption_long'),
     annotationCaption,
   ]);
+  final ocrFull = firstNonEmpty(<String?>[
+    read('ocr_text_full', normalizeOcr: true),
+    read('ocr_text', normalizeOcr: true),
+    read('ocr_text_excerpt', normalizeOcr: true),
+  ]);
 
   final summary = firstNonEmpty(<String?>[
     read('manual_summary'),
@@ -59,7 +65,10 @@ AttachmentDetailTextContent resolveAttachmentDetailTextContent(
     read('extracted_text_excerpt'),
   ]);
 
-  final normalizedMime = read('mime_type').toLowerCase();
+  final normalizedMime = firstNonEmpty(<String?>[
+    mimeTypeOverride,
+    read('mime_type'),
+  ]).toLowerCase();
   final isImagePayload = normalizedMime.startsWith('image/');
   final hasVideoPayloadSignal = payload != null &&
       (payload.containsKey('video_segment_count') ||
@@ -67,23 +76,48 @@ AttachmentDetailTextContent resolveAttachmentDetailTextContent(
           payload.containsKey('video_content_kind') ||
           payload.containsKey('video_proxy_sha256'));
 
-  final imageFull = firstNonEmpty(<String?>[
+  final selectedNonOcr = selected.source == AttachmentTextSource.ocr
+      ? ''
+      : firstNonEmpty(<String?>[
+          selected.full,
+          selected.excerpt,
+        ]);
+
+  final imageManualFull = firstNonEmpty(<String?>[
     read('manual_full_text'),
-    read('full_text'),
     read('manual_summary'),
+  ]);
+
+  final imageAiFull = firstNonEmpty(<String?>[
     read('summary'),
     caption,
+    selectedNonOcr,
+    read('full_text'),
+    read('transcript_full'),
+    read('transcript_excerpt'),
+    read('readable_text_full'),
+    read('extracted_text_full'),
+    read('readable_text_excerpt'),
+    read('extracted_text_excerpt'),
+  ]);
+  final imageCombinedFull = _mergeWithBlankLine(imageAiFull, ocrFull);
+  final imageFallbackFull = firstNonEmpty(<String?>[
     selected.full,
     selected.excerpt,
     read('transcript_full'),
     read('transcript_excerpt'),
-    read('ocr_text_full', normalizeOcr: true),
-    read('ocr_text', normalizeOcr: true),
+    read('full_text'),
     read('readable_text_full'),
     read('extracted_text_full'),
-    read('ocr_text_excerpt', normalizeOcr: true),
     read('readable_text_excerpt'),
     read('extracted_text_excerpt'),
+  ]);
+  final imageFull = firstNonEmpty(<String?>[
+    imageManualFull,
+    imageCombinedFull,
+    imageFallbackFull,
+    caption,
+    ocrFull,
   ]);
 
   final videoFull = firstNonEmpty(<String?>[
@@ -116,11 +150,9 @@ AttachmentDetailTextContent resolveAttachmentDetailTextContent(
     selected.excerpt,
     read('transcript_excerpt'),
     caption,
-    read('ocr_text_full', normalizeOcr: true),
-    read('ocr_text', normalizeOcr: true),
+    ocrFull,
     read('readable_text_full'),
     read('extracted_text_full'),
-    read('ocr_text_excerpt', normalizeOcr: true),
     read('readable_text_excerpt'),
     read('extracted_text_excerpt'),
   ]);
@@ -165,4 +197,15 @@ Map<String, Object?> buildManualAttachmentTextPayload({
   }
 
   return next;
+}
+
+String _mergeWithBlankLine(String first, String second) {
+  final a = first.trim();
+  final b = second.trim();
+  if (a.isEmpty) return b;
+  if (b.isEmpty) return a;
+  if (a == b) return a;
+  if (a.contains(b)) return a;
+  if (b.contains(a)) return b;
+  return '$a\n\n$b';
 }
