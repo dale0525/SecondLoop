@@ -278,20 +278,33 @@ extension _ChatPageStateComposerUi on _ChatPageState {
     BuildContext context, {
     double size = 40,
     double iconSize = 20,
+    bool iconOnly = true,
   }) {
     return Semantics(
       button: true,
       label: context.t.chat.markdownEditor.openButton,
-      child: SlIconButton(
-        key: const ValueKey('chat_open_markdown_editor'),
-        icon: Icons.open_in_full_rounded,
-        size: size,
-        iconSize: iconSize,
-        tooltip: context.t.chat.markdownEditor.openButton,
-        canRequestFocus: false,
-        triggerOnTapDown: true,
-        onPressed: _isComposerBusy ? null : _openMarkdownEditor,
-      ),
+      child: iconOnly
+          ? SlIconButton(
+              key: const ValueKey('chat_open_markdown_editor'),
+              icon: Icons.data_object_rounded,
+              size: size,
+              iconSize: iconSize,
+              tooltip: context.t.chat.markdownEditor.openButton,
+              canRequestFocus: false,
+              triggerOnTapDown: true,
+              onPressed: _isComposerBusy ? null : _openMarkdownEditor,
+            )
+          : _buildComposerInlineButton(
+              context,
+              key: const ValueKey('chat_open_markdown_editor'),
+              label: context.t.chat.markdownEditor.title,
+              icon: Icons.data_object_rounded,
+              onPressed: _isComposerBusy ? null : _openMarkdownEditor,
+              backgroundColor: Colors.transparent,
+              foregroundColor: Theme.of(context).colorScheme.onSurfaceVariant,
+              borderColor: Theme.of(context).colorScheme.outlineVariant,
+              iconOnly: false,
+            ),
     );
   }
 
@@ -301,6 +314,7 @@ extension _ChatPageStateComposerUi on _ChatPageState {
 
   Widget _buildCompactComposerQuickActions(
     BuildContext context, {
+    required SlTokens tokens,
     required ColorScheme colorScheme,
   }) {
     return ListenableBuilder(
@@ -316,42 +330,58 @@ extension _ChatPageStateComposerUi on _ChatPageState {
             final hasText = value.text.trim().isNotEmpty;
             final showAiAction =
                 hasText && (_showConfigureAiEntry || _canAskAiNow);
+            final showConfigure = showAiAction && _showConfigureAiEntry;
+            final showAskAi = showAiAction && !showConfigure && _canAskAiNow;
 
             return Padding(
               key: const ValueKey('chat_compact_quick_actions'),
               padding: const EdgeInsets.only(bottom: 8),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  _buildComposerMarkdownEditorButton(context),
-                  if (showAiAction) ...[
-                    const SizedBox(width: 8),
-                    if (_showConfigureAiEntry)
-                      _buildComposerInlineButton(
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 180),
+                  curve: Curves.easeOutCubic,
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    color: tokens.surface,
+                    borderRadius: BorderRadius.circular(tokens.radiusMd),
+                    border: Border.all(color: tokens.borderSubtle),
+                  ),
+                  child: Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: [
+                      _buildComposerMarkdownEditorButton(
                         context,
-                        key: const ValueKey('chat_configure_ai'),
-                        label: context.t.common.actions.configureAi,
-                        icon: Icons.settings_suggest_rounded,
-                        onPressed: _isComposerBusy
-                            ? null
-                            : _openAskAiSettingsFromComposer,
-                        backgroundColor: colorScheme.secondaryContainer,
-                        foregroundColor: colorScheme.onSecondaryContainer,
-                        iconOnly: true,
-                      )
-                    else
-                      _buildComposerInlineButton(
-                        context,
-                        key: const ValueKey('chat_ask_ai'),
-                        label: context.t.common.actions.askAi,
-                        icon: Icons.auto_awesome_rounded,
-                        onPressed: _isComposerBusy ? null : _askAi,
-                        backgroundColor: colorScheme.secondaryContainer,
-                        foregroundColor: colorScheme.onSecondaryContainer,
-                        iconOnly: true,
+                        iconOnly: false,
                       ),
-                  ],
-                ],
+                      if (showConfigure)
+                        _buildComposerInlineButton(
+                          context,
+                          key: const ValueKey('chat_configure_ai'),
+                          label: context.t.common.actions.configureAi,
+                          icon: Icons.settings_suggest_rounded,
+                          onPressed: _isComposerBusy
+                              ? null
+                              : _openAskAiSettingsFromComposer,
+                          backgroundColor: colorScheme.secondaryContainer,
+                          foregroundColor: colorScheme.onSecondaryContainer,
+                          iconOnly: false,
+                        ),
+                      if (showAskAi)
+                        _buildComposerInlineButton(
+                          context,
+                          key: const ValueKey('chat_ask_ai'),
+                          label: context.t.common.actions.askAi,
+                          icon: Icons.auto_awesome_rounded,
+                          onPressed: _isComposerBusy ? null : _askAi,
+                          backgroundColor: colorScheme.secondaryContainer,
+                          foregroundColor: colorScheme.onSecondaryContainer,
+                          iconOnly: false,
+                        ),
+                    ],
+                  ),
+                ),
               ),
             );
           },

@@ -409,6 +409,7 @@ extension _ChatPageStateBuild on _ChatPageState {
                         if (useCompactComposer)
                           _buildCompactComposerQuickActions(
                             context,
+                            tokens: tokens,
                             colorScheme: colorScheme,
                           ),
                         useCompactComposer

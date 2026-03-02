@@ -28,6 +28,13 @@ void main() {
       find.byKey(const ValueKey('chat_open_markdown_editor')),
       findsOneWidget,
     );
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('chat_open_markdown_editor')),
+        matching: find.byIcon(Icons.data_object_rounded),
+      ),
+      findsOneWidget,
+    );
     expect(find.byKey(const ValueKey('chat_configure_ai')), findsNothing);
     expect(find.byKey(const ValueKey('chat_ask_ai')), findsNothing);
 
@@ -41,6 +48,13 @@ void main() {
       find.byKey(const ValueKey('chat_open_markdown_editor')),
       findsOneWidget,
     );
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('chat_open_markdown_editor')),
+        matching: find.byIcon(Icons.data_object_rounded),
+      ),
+      findsOneWidget,
+    );
 
     final sendSize = tester.getSize(find.byKey(const ValueKey('chat_send')));
     final configureFinder = find.byKey(const ValueKey('chat_configure_ai'));
@@ -50,12 +64,6 @@ void main() {
 
     expect(sendSize.width, lessThanOrEqualTo(64));
     expect(hasConfigure || hasAsk, isTrue);
-    if (hasConfigure || hasAsk) {
-      final aiActionSize = hasConfigure
-          ? tester.getSize(configureFinder)
-          : tester.getSize(askFinder);
-      expect(aiActionSize.width, lessThanOrEqualTo(64));
-    }
 
     expect(tester.takeException(), isNull);
   });
