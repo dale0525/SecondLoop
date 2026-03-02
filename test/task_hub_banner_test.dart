@@ -357,6 +357,10 @@ void main() {
     await tester.pumpWidget(
       wrapWithI18n(
         MaterialApp(
+          theme: ThemeData(
+            useMaterial3: true,
+            platform: TargetPlatform.macOS,
+          ),
           home: MediaQuery(
             data: const MediaQueryData(
               size: Size(420, 600),
@@ -378,13 +382,16 @@ void main() {
     final laterButton =
         find.byKey(const ValueKey('task_hub_quick_review_later'));
     final doneButton = find.byKey(const ValueKey('task_hub_quick_review_done'));
+    final moreButton = find.byKey(const ValueKey('task_hub_quick_review_more'));
 
     final todayHeight = tester.getSize(todayButton).height;
     final laterHeight = tester.getSize(laterButton).height;
     final doneHeight = tester.getSize(doneButton).height;
+    final moreHeight = tester.getSize(moreButton).height;
 
     expect(todayHeight, equals(laterHeight));
     expect(todayHeight, equals(doneHeight));
+    expect(todayHeight, equals(moreHeight));
   });
 
   testWidgets('expanded list keeps view-all visible on small screens',
