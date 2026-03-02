@@ -615,7 +615,12 @@ class _QuickActionButton extends StatelessWidget {
         onPressed: onPressed,
         style: baseStyle,
         icon: Icon(icon, size: 16),
-        label: Text(label),
+        label: Text(
+          label,
+          maxLines: 1,
+          softWrap: false,
+          overflow: TextOverflow.ellipsis,
+        ),
       );
     }
 
@@ -627,7 +632,12 @@ class _QuickActionButton extends StatelessWidget {
         ),
       ),
       icon: Icon(icon, size: 16),
-      label: Text(label),
+      label: Text(
+        label,
+        maxLines: 1,
+        softWrap: false,
+        overflow: TextOverflow.ellipsis,
+      ),
     );
   }
 }

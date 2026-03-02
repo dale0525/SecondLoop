@@ -490,7 +490,12 @@ class _TaskHubPageQuickButton extends StatelessWidget {
             onPressed: onPressed,
             style: baseStyle,
             icon: Icon(icon, size: 16),
-            label: Text(label),
+            label: Text(
+              label,
+              maxLines: 1,
+              softWrap: false,
+              overflow: TextOverflow.ellipsis,
+            ),
           )
         : OutlinedButton.icon(
             onPressed: onPressed,
@@ -500,7 +505,12 @@ class _TaskHubPageQuickButton extends StatelessWidget {
               ),
             ),
             icon: Icon(icon, size: 16),
-            label: Text(label),
+            label: Text(
+              label,
+              maxLines: 1,
+              softWrap: false,
+              overflow: TextOverflow.ellipsis,
+            ),
           );
 
     return Tooltip(

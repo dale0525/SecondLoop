@@ -332,6 +332,61 @@ void main() {
     expect(calls.first.$2, TaskHubQuickAction.done);
   });
 
+  testWidgets('due-review quick buttons keep consistent height',
+      (tester) async {
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.binding.setSurfaceSize(const Size(420, 600));
+
+    final now = DateTime(2026, 2, 24, 12);
+    final summary = TaskHubSummary.fromTodos(
+      <Todo>[
+        todo(
+          id: 'review',
+          title: 'Needs review',
+          updatedAtMs: 1,
+          reviewStage: 0,
+          nextReviewAtMs: now
+              .subtract(const Duration(hours: 1))
+              .toUtc()
+              .millisecondsSinceEpoch,
+        ),
+      ],
+      nowLocal: now,
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: MediaQuery(
+            data: const MediaQueryData(
+              size: Size(420, 600),
+              textScaler: TextScaler.linear(1.4),
+            ),
+            child: Scaffold(
+              body: TaskHubBanner(summary: summary),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.byKey(const ValueKey('task_hub_banner')));
+    await tester.pumpAndSettle();
+
+    final todayButton =
+        find.byKey(const ValueKey('task_hub_quick_review_today'));
+    final laterButton =
+        find.byKey(const ValueKey('task_hub_quick_review_later'));
+    final doneButton = find.byKey(const ValueKey('task_hub_quick_review_done'));
+
+    final todayHeight = tester.getSize(todayButton).height;
+    final laterHeight = tester.getSize(laterButton).height;
+    final doneHeight = tester.getSize(doneButton).height;
+
+    expect(todayHeight, equals(laterHeight));
+    expect(todayHeight, equals(doneHeight));
+  });
+
   testWidgets('expanded list keeps view-all visible on small screens',
       (tester) async {
     addTearDown(() => tester.binding.setSurfaceSize(null));
