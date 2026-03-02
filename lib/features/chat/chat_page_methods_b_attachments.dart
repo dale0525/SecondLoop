@@ -12,6 +12,63 @@ extension _ChatPageStateMethodsBAttachments on _ChatPageState {
     return true;
   }
 
+  String _buildSharedUrlDraftFilename(String url) {
+    final trimmed = url.trim();
+    if (trimmed.isEmpty) return 'shared-link.url';
+    final uri = Uri.tryParse(trimmed);
+    final host = uri?.host.trim() ?? '';
+    if (host.isNotEmpty) return host;
+    if (trimmed.length <= 96) return trimmed;
+    return '${trimmed.substring(0, 93)}...';
+  }
+
+  String? _readUrlFromManifestDraft(AttachmentDraftPayload draft) {
+    final mimeType = draft.normalizedMimeType.trim().toLowerCase();
+    if (mimeType != kSecondLoopUrlManifestMimeType) return null;
+
+    try {
+      final decoded =
+          jsonDecode(utf8.decode(draft.bytes, allowMalformed: false));
+      if (decoded is! Map) return null;
+      final schema = decoded['schema'];
+      if (schema is! String || schema.trim() != kSecondLoopUrlManifestSchema) {
+        return null;
+      }
+      final url = decoded['url'];
+      if (url is! String) return null;
+      final normalized = url.trim();
+      if (!_looksLikeHttpUrlText(normalized)) return null;
+      return normalized;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> _consumePendingSharedUrlDrafts() async {
+    if (!mounted) return;
+    if (!_supportsCamera) return;
+    if (widget.conversation.id != 'loop_home') return;
+
+    final urls = await ShareDraftInbox.consumePendingUrls();
+    if (urls.isEmpty) return;
+
+    final drafts = <AttachmentDraftPayload>[];
+    for (final url in urls) {
+      final normalized = url.trim();
+      if (!_looksLikeHttpUrlText(normalized)) continue;
+      drafts.add(
+        AttachmentDraftPayload(
+          localId: _nextComposerAttachmentDraftLocalId(),
+          filename: _buildSharedUrlDraftFilename(normalized),
+          mimeType: kSecondLoopUrlManifestMimeType,
+          bytes: buildUrlManifestAttachmentBytes(normalized),
+        ),
+      );
+    }
+    if (drafts.isEmpty || !mounted) return;
+    _appendComposerAttachmentDrafts(drafts);
+  }
+
   String _inferMimeTypeFromFilename(String filename) {
     final lower = filename.toLowerCase();
 

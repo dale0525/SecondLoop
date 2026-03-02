@@ -85,6 +85,7 @@ import '../tags/tag_repository.dart';
 import '../settings/cloud_account_page.dart';
 import '../settings/ai_settings_page.dart';
 import '../settings/settings_page.dart';
+import '../share/share_draft_inbox.dart';
 import 'chat_composer_inline_button.dart';
 import 'chat_attachment_send_failure_chip.dart';
 import 'chat_image_attachment_thumbnail.dart';
@@ -460,6 +461,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
   int _composerAttachmentDraftSeq = 0;
 
   AudioRecorder? _audioRecorderInstance;
+  StreamSubscription<void>? _shareDraftSubscription;
 
   void _setState(VoidCallback fn) => setState(fn);
 
@@ -502,6 +504,9 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _scrollController.addListener(_onScroll);
+    _shareDraftSubscription = ShareDraftInbox.pendingDraftEvents.listen((_) {
+      unawaited(_consumePendingSharedUrlDrafts());
+    });
     unawaited(_loadEmbeddingsDataConsentPreference());
   }
 
@@ -524,6 +529,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
     _taskHubQuickActionSnackMessenger = null;
     _taskHubQuickActionSnackToken = null;
     _taskHubUndoTicket = null;
+    _shareDraftSubscription?.cancel();
     unawaited(_audioRecorderInstance?.dispose());
     unawaited(AudioRecordingForegroundService.stopIfSupported());
     _controller.dispose();
@@ -541,6 +547,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
     unawaited(_refreshComposerAskAiRoute());
     unawaited(_recoverDetachedAskAiIfNeeded());
     unawaited(_checkPendingRecordedAudioRecoveryIfNeeded());
+    unawaited(_consumePendingSharedUrlDrafts());
   }
 
   @override
@@ -548,6 +555,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
     if (state == AppLifecycleState.resumed) {
       _detachedAskRecoveryChecked = false;
       unawaited(_recoverDetachedAskAiIfNeeded());
+      unawaited(_consumePendingSharedUrlDrafts());
     }
   }
 

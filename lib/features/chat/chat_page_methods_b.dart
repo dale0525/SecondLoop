@@ -466,6 +466,7 @@ extension _ChatPageStateMethodsB on _ChatPageState {
           ),
           onAttachmentLinked: (attachmentSha256, draft) async {
             try {
+              final urlFromManifest = _readUrlFromManifestDraft(draft);
               unawaited(
                 _enqueueDraftAttachmentPostLinkEnrichment(
                   nativeBackend,
@@ -475,11 +476,17 @@ extension _ChatPageStateMethodsB on _ChatPageState {
                 ).catchError((_) {}),
               );
               unawaited(
-                const RustAttachmentMetadataStore().upsert(
-                  sessionKey,
-                  attachmentSha256: attachmentSha256,
-                  filenames: [draft.normalizedFilename],
-                ).catchError((_) {}),
+                const RustAttachmentMetadataStore()
+                    .upsert(
+                      sessionKey,
+                      attachmentSha256: attachmentSha256,
+                      title: urlFromManifest,
+                      filenames: [draft.normalizedFilename],
+                      sourceUrls: urlFromManifest == null
+                          ? const <String>[]
+                          : <String>[urlFromManifest],
+                    )
+                    .catchError((_) {}),
               );
             } catch (_) {}
           },
