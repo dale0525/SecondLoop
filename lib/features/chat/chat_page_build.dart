@@ -406,6 +406,11 @@ extension _ChatPageStateBuild on _ChatPageState {
                           context,
                           tokens: tokens,
                         ),
+                        if (useCompactComposer)
+                          _buildCompactComposerQuickActions(
+                            context,
+                            colorScheme: colorScheme,
+                          ),
                         useCompactComposer
                             ? SlFocusRing(
                                 key: const ValueKey('chat_input_ring'),
@@ -419,7 +424,7 @@ extension _ChatPageStateBuild on _ChatPageState {
                                   padding:
                                       const EdgeInsets.fromLTRB(8, 6, 8, 6),
                                   child: LayoutBuilder(
-                                    builder: (context, constraints) {
+                                    builder: (context, _) {
                                       return Row(
                                         crossAxisAlignment:
                                             CrossAxisAlignment.end,
@@ -453,8 +458,6 @@ extension _ChatPageStateBuild on _ChatPageState {
                                             context,
                                             tokens: tokens,
                                             colorScheme: colorScheme,
-                                            maxComposerWidth:
-                                                constraints.maxWidth,
                                           ),
                                         ],
                                       );

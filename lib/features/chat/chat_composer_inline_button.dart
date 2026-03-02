@@ -7,7 +7,6 @@ class ChatComposerInlineButton extends StatelessWidget {
     required this.label,
     required this.icon,
     required this.onPressed,
-    this.onLongPress,
     required this.backgroundColor,
     required this.foregroundColor,
     this.borderColor,
@@ -19,7 +18,6 @@ class ChatComposerInlineButton extends StatelessWidget {
   final String label;
   final IconData icon;
   final VoidCallback? onPressed;
-  final VoidCallback? onLongPress;
   final Color backgroundColor;
   final Color foregroundColor;
   final Color? borderColor;
@@ -54,7 +52,6 @@ class ChatComposerInlineButton extends StatelessWidget {
         ),
         child: InkWell(
           onTap: onPressed,
-          onLongPress: onLongPress,
           canRequestFocus: false,
           borderRadius: borderRadius,
           child: ConstrainedBox(

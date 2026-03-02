@@ -24,6 +24,13 @@ void main() {
     await tester.tap(inputFinder);
     await tester.pump();
 
+    expect(
+      find.byKey(const ValueKey('chat_open_markdown_editor')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const ValueKey('chat_configure_ai')), findsNothing);
+    expect(find.byKey(const ValueKey('chat_ask_ai')), findsNothing);
+
     await tester.enterText(inputFinder, 'hello from compact composer');
     await tester.pumpAndSettle();
 
@@ -40,24 +47,14 @@ void main() {
     final askFinder = find.byKey(const ValueKey('chat_ask_ai'));
     final hasConfigure = configureFinder.evaluate().isNotEmpty;
     final hasAsk = askFinder.evaluate().isNotEmpty;
-    final sendInkWellFinder = find.descendant(
-      of: find.byKey(const ValueKey('chat_send')),
-      matching: find.byType(InkWell),
-    );
 
     expect(sendSize.width, lessThanOrEqualTo(64));
-    expect(sendInkWellFinder, findsOneWidget);
+    expect(hasConfigure || hasAsk, isTrue);
     if (hasConfigure || hasAsk) {
       final aiActionSize = hasConfigure
           ? tester.getSize(configureFinder)
           : tester.getSize(askFinder);
       expect(aiActionSize.width, lessThanOrEqualTo(64));
-      expect(tester.widget<InkWell>(sendInkWellFinder).onLongPress, isNull);
-    } else {
-      expect(
-        tester.widget<InkWell>(sendInkWellFinder).onLongPress,
-        isNotNull,
-      );
     }
 
     expect(tester.takeException(), isNull);
