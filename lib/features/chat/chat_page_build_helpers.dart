@@ -274,20 +274,37 @@ extension _ChatPageStateComposerUi on _ChatPageState {
     );
   }
 
-  Widget _buildComposerMarkdownEditorButton(BuildContext context) {
+  Widget _buildComposerMarkdownEditorButton(
+    BuildContext context, {
+    double size = 40,
+    double iconSize = 20,
+    bool iconOnly = true,
+  }) {
     return Semantics(
       button: true,
       label: context.t.chat.markdownEditor.openButton,
-      child: SlIconButton(
-        key: const ValueKey('chat_open_markdown_editor'),
-        icon: Icons.open_in_full_rounded,
-        size: 40,
-        iconSize: 20,
-        tooltip: context.t.chat.markdownEditor.openButton,
-        canRequestFocus: false,
-        triggerOnTapDown: true,
-        onPressed: _isComposerBusy ? null : _openMarkdownEditor,
-      ),
+      child: iconOnly
+          ? SlIconButton(
+              key: const ValueKey('chat_open_markdown_editor'),
+              icon: Icons.data_object_rounded,
+              size: size,
+              iconSize: iconSize,
+              tooltip: context.t.chat.markdownEditor.openButton,
+              canRequestFocus: false,
+              triggerOnTapDown: true,
+              onPressed: _isComposerBusy ? null : _openMarkdownEditor,
+            )
+          : _buildComposerInlineButton(
+              context,
+              key: const ValueKey('chat_open_markdown_editor'),
+              label: context.t.chat.markdownEditor.title,
+              icon: Icons.data_object_rounded,
+              onPressed: _isComposerBusy ? null : _openMarkdownEditor,
+              backgroundColor: Colors.transparent,
+              foregroundColor: Theme.of(context).colorScheme.onSurfaceVariant,
+              borderColor: Theme.of(context).colorScheme.outlineVariant,
+              iconOnly: false,
+            ),
     );
   }
 
@@ -295,7 +312,58 @@ extension _ChatPageStateComposerUi on _ChatPageState {
     return _buildComposerMarkdownEditorButton(context);
   }
 
-  Widget _buildCompactComposerActions(
+  Widget _buildCompactComposerSendButton(
+    BuildContext context, {
+    required ColorScheme colorScheme,
+  }) {
+    final isEnabled = !_isComposerBusy;
+    final borderRadius = BorderRadius.circular(14);
+
+    final backgroundColor =
+        isEnabled ? colorScheme.primary : colorScheme.primary.withOpacity(0.52);
+    final foregroundColor = isEnabled
+        ? colorScheme.onPrimary
+        : colorScheme.onPrimary.withOpacity(0.62);
+
+    return Padding(
+      padding: const EdgeInsets.only(left: 8),
+      child: Semantics(
+        button: true,
+        label: context.t.common.actions.send,
+        child: Tooltip(
+          message: context.t.common.actions.send,
+          child: Material(
+            key: const ValueKey('chat_send'),
+            color: backgroundColor,
+            elevation: isEnabled ? 1.5 : 0.5,
+            shadowColor: colorScheme.shadow.withOpacity(0.24),
+            shape: RoundedRectangleBorder(
+              borderRadius: borderRadius,
+              side: BorderSide(
+                color: colorScheme.primaryContainer.withOpacity(0.45),
+              ),
+            ),
+            child: InkWell(
+              onTap: isEnabled ? _send : null,
+              canRequestFocus: false,
+              borderRadius: borderRadius,
+              child: SizedBox(
+                width: 44,
+                height: 44,
+                child: Icon(
+                  Icons.send_rounded,
+                  size: 18,
+                  color: foregroundColor,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCompactComposerQuickActions(
     BuildContext context, {
     required SlTokens tokens,
     required ColorScheme colorScheme,
@@ -303,118 +371,124 @@ extension _ChatPageStateComposerUi on _ChatPageState {
     return ListenableBuilder(
       listenable: _inputFocusNode,
       builder: (context, child) {
-        final showMarkdownButton = _inputFocusNode.hasFocus;
+        if (!_inputFocusNode.hasFocus || _asking) {
+          return const SizedBox.shrink();
+        }
 
         return ValueListenableBuilder<TextEditingValue>(
           valueListenable: _controller,
           builder: (context, value, child) {
             final hasText = value.text.trim().isNotEmpty;
-            final hasDraftAttachments = _composerDraftAttachments.isNotEmpty;
-            final hasAttachActions =
-                _supportsImageUpload || _supportsAudioRecording;
-
-            if (_asking) {
-              return Padding(
-                padding: const EdgeInsets.only(left: 8),
-                child: _buildComposerInlineButton(
-                  context,
-                  key: const ValueKey('chat_stop'),
-                  label: _stopRequested
-                      ? context.t.common.actions.stopping
-                      : context.t.common.actions.stop,
-                  icon: Icons.stop_circle_outlined,
-                  onPressed: _stopRequested ? null : _stopAsk,
-                  backgroundColor: Colors.transparent,
-                  foregroundColor: colorScheme.onSurface,
-                  borderColor: tokens.borderSubtle,
-                  iconOnly: true,
-                ),
-              );
-            }
-
-            if (!hasText && !hasDraftAttachments) {
-              if (!hasAttachActions) {
-                if (!showMarkdownButton) {
-                  return const SizedBox.shrink();
-                }
-                return Padding(
-                  padding: const EdgeInsets.only(left: 8),
-                  child: _buildComposerMarkdownEditorButton(context),
-                );
-              }
-
-              return Padding(
-                padding: const EdgeInsets.only(left: 8),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (showMarkdownButton) ...[
-                      _buildComposerMarkdownEditorButton(context),
-                      const SizedBox(width: 8),
-                    ],
-                    if (hasAttachActions)
-                      _buildCompactAttachButton(
-                        context,
-                        includeLeadingPadding: false,
-                      ),
-                  ],
-                ),
-              );
-            }
+            final showAiAction =
+                hasText && (_showConfigureAiEntry || _canAskAiNow);
+            final showConfigure = showAiAction && _showConfigureAiEntry;
+            final showAskAi = showAiAction && !showConfigure && _canAskAiNow;
 
             return Padding(
-              padding: const EdgeInsets.only(left: 8),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (!hasText && hasAttachActions) ...[
-                    _buildCompactAttachButton(
-                      context,
-                      includeLeadingPadding: false,
-                    ),
-                    const SizedBox(width: 8),
-                  ],
-                  if (hasText && _showConfigureAiEntry) ...[
-                    _buildComposerInlineButton(
-                      context,
-                      key: const ValueKey('chat_configure_ai'),
-                      label: context.t.common.actions.configureAi,
-                      icon: Icons.settings_suggest_rounded,
-                      onPressed: _isComposerBusy
-                          ? null
-                          : _openAskAiSettingsFromComposer,
-                      backgroundColor: colorScheme.secondaryContainer,
-                      foregroundColor: colorScheme.onSecondaryContainer,
-                      iconOnly: true,
-                    ),
-                    const SizedBox(width: 8),
-                  ] else if (hasText && _canAskAiNow) ...[
-                    _buildComposerInlineButton(
-                      context,
-                      key: const ValueKey('chat_ask_ai'),
-                      label: context.t.common.actions.askAi,
-                      icon: Icons.auto_awesome_rounded,
-                      onPressed: _isComposerBusy ? null : _askAi,
-                      backgroundColor: colorScheme.secondaryContainer,
-                      foregroundColor: colorScheme.onSecondaryContainer,
-                      iconOnly: true,
-                    ),
-                    const SizedBox(width: 8),
-                  ],
-                  _buildComposerInlineButton(
-                    context,
-                    key: const ValueKey('chat_send'),
-                    label: context.t.common.actions.send,
-                    icon: Icons.send_rounded,
-                    onPressed: _isComposerBusy ? null : _send,
-                    backgroundColor: colorScheme.primary,
-                    foregroundColor: colorScheme.onPrimary,
-                    iconOnly: true,
+              key: const ValueKey('chat_compact_quick_actions'),
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 180),
+                  curve: Curves.easeOutCubic,
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    color: tokens.surface,
+                    borderRadius: BorderRadius.circular(tokens.radiusMd),
+                    border: Border.all(color: tokens.borderSubtle),
                   ),
-                ],
+                  child: Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: [
+                      _buildComposerMarkdownEditorButton(
+                        context,
+                        iconOnly: false,
+                      ),
+                      if (showConfigure)
+                        _buildComposerInlineButton(
+                          context,
+                          key: const ValueKey('chat_configure_ai'),
+                          label: context.t.common.actions.configureAi,
+                          icon: Icons.settings_suggest_rounded,
+                          onPressed: _isComposerBusy
+                              ? null
+                              : _openAskAiSettingsFromComposer,
+                          backgroundColor: colorScheme.secondaryContainer,
+                          foregroundColor: colorScheme.onSecondaryContainer,
+                          iconOnly: false,
+                        ),
+                      if (showAskAi)
+                        _buildComposerInlineButton(
+                          context,
+                          key: const ValueKey('chat_ask_ai'),
+                          label: context.t.common.actions.askAi,
+                          icon: Icons.auto_awesome_rounded,
+                          onPressed: _isComposerBusy ? null : _askAi,
+                          backgroundColor: colorScheme.secondaryContainer,
+                          foregroundColor: colorScheme.onSecondaryContainer,
+                          iconOnly: false,
+                        ),
+                    ],
+                  ),
+                ),
               ),
             );
           },
+        );
+      },
+    );
+  }
+
+  Widget _buildCompactComposerActions(
+    BuildContext context, {
+    required SlTokens tokens,
+    required ColorScheme colorScheme,
+  }) {
+    return ValueListenableBuilder<TextEditingValue>(
+      valueListenable: _controller,
+      builder: (context, value, child) {
+        final hasText = value.text.trim().isNotEmpty;
+        final hasDraftAttachments = _composerDraftAttachments.isNotEmpty;
+        final hasAttachActions =
+            _supportsImageUpload || _supportsAudioRecording;
+
+        if (_asking) {
+          return Padding(
+            padding: const EdgeInsets.only(left: 8),
+            child: _buildComposerInlineButton(
+              context,
+              key: const ValueKey('chat_stop'),
+              label: _stopRequested
+                  ? context.t.common.actions.stopping
+                  : context.t.common.actions.stop,
+              icon: Icons.stop_circle_outlined,
+              onPressed: _stopRequested ? null : _stopAsk,
+              backgroundColor: Colors.transparent,
+              foregroundColor: colorScheme.onSurface,
+              borderColor: tokens.borderSubtle,
+              iconOnly: true,
+            ),
+          );
+        }
+
+        if (!hasText && !hasDraftAttachments) {
+          if (!hasAttachActions) {
+            return const SizedBox.shrink();
+          }
+          return Padding(
+            padding: const EdgeInsets.only(left: 8),
+            child: _buildCompactAttachButton(
+              context,
+              includeLeadingPadding: false,
+            ),
+          );
+        }
+
+        return _buildCompactComposerSendButton(
+          context,
+          colorScheme: colorScheme,
         );
       },
     );

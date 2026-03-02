@@ -7,12 +7,47 @@ import 'package:secondloop/core/backend/app_backend.dart';
 import 'package:secondloop/core/session/session_scope.dart';
 import 'package:secondloop/features/chat/chat_page.dart';
 import 'package:secondloop/src/rust/db.dart';
-import 'package:secondloop/ui/sl_icon_button.dart';
 
 import 'test_backend.dart';
 import 'test_i18n.dart';
 
 void main() {
+  testWidgets(
+      'Compact composer keeps markdown editor entry visible while typing',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+
+    await tester.pumpWidget(_wrapChat(backend: TestAppBackend()));
+    await tester.pumpAndSettle();
+
+    const inputKey = ValueKey('chat_input');
+    const editorOpenKey = ValueKey('chat_open_markdown_editor');
+
+    await tester.tap(find.byKey(inputKey));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(editorOpenKey), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byKey(editorOpenKey),
+        matching: find.byIcon(Icons.data_object_rounded),
+      ),
+      findsOneWidget,
+    );
+
+    await tester.enterText(find.byKey(inputKey), 'Draft markdown text');
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(editorOpenKey), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byKey(editorOpenKey),
+        matching: find.byIcon(Icons.data_object_rounded),
+      ),
+      findsOneWidget,
+    );
+  });
+
   testWidgets('Chat composer opens markdown editor and sends on save',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
@@ -34,7 +69,13 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(editorOpenKey), findsOneWidget);
-    expect(tester.widget<SlIconButton>(find.byKey(editorOpenKey)), isNotNull);
+    expect(
+      find.descendant(
+        of: find.byKey(editorOpenKey),
+        matching: find.byIcon(Icons.data_object_rounded),
+      ),
+      findsOneWidget,
+    );
 
     await tester.tap(find.byKey(editorOpenKey));
     await tester.pumpAndSettle();
@@ -80,6 +121,13 @@ void main() {
 
       expect(
         find.byKey(const ValueKey('chat_open_markdown_editor')),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: find.byKey(const ValueKey('chat_open_markdown_editor')),
+          matching: find.byIcon(Icons.data_object_rounded),
+        ),
         findsOneWidget,
       );
     } finally {

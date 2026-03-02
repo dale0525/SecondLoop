@@ -24,26 +24,52 @@ void main() {
     await tester.tap(inputFinder);
     await tester.pump();
 
+    expect(
+      find.byKey(const ValueKey('chat_open_markdown_editor')),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('chat_open_markdown_editor')),
+        matching: find.byIcon(Icons.data_object_rounded),
+      ),
+      findsOneWidget,
+    );
+    expect(find.byKey(const ValueKey('chat_configure_ai')), findsNothing);
+    expect(find.byKey(const ValueKey('chat_ask_ai')), findsNothing);
+
     await tester.enterText(inputFinder, 'hello from compact composer');
     await tester.pumpAndSettle();
 
     final inputSize = tester.getSize(inputFinder);
     expect(inputSize.width, greaterThanOrEqualTo(150));
 
+    expect(
+      find.byKey(const ValueKey('chat_open_markdown_editor')),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('chat_open_markdown_editor')),
+        matching: find.byIcon(Icons.data_object_rounded),
+      ),
+      findsOneWidget,
+    );
+
     final sendSize = tester.getSize(find.byKey(const ValueKey('chat_send')));
+    final sendMaterial =
+        tester.widget<Material>(find.byKey(const ValueKey('chat_send')));
     final configureFinder = find.byKey(const ValueKey('chat_configure_ai'));
     final askFinder = find.byKey(const ValueKey('chat_ask_ai'));
     final hasConfigure = configureFinder.evaluate().isNotEmpty;
     final hasAsk = askFinder.evaluate().isNotEmpty;
 
-    expect(hasConfigure || hasAsk, isTrue);
-
-    final aiActionSize = hasConfigure
-        ? tester.getSize(configureFinder)
-        : tester.getSize(askFinder);
-
     expect(sendSize.width, lessThanOrEqualTo(64));
-    expect(aiActionSize.width, lessThanOrEqualTo(64));
+    expect(hasConfigure || hasAsk, isTrue);
+    expect(sendMaterial.elevation, greaterThan(0));
+    expect(sendMaterial.shape, isA<RoundedRectangleBorder>());
+    final sendShape = sendMaterial.shape! as RoundedRectangleBorder;
+    expect(sendShape.borderRadius, BorderRadius.circular(14));
 
     expect(tester.takeException(), isNull);
   });
