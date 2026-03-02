@@ -105,6 +105,7 @@ Widget _buildComposerInlineButton(
   required String label,
   required IconData icon,
   required VoidCallback? onPressed,
+  VoidCallback? onLongPress,
   required Color backgroundColor,
   required Color foregroundColor,
   Color? borderColor,
@@ -116,6 +117,7 @@ Widget _buildComposerInlineButton(
     label: label,
     icon: icon,
     onPressed: onPressed,
+    onLongPress: onLongPress,
     backgroundColor: backgroundColor,
     foregroundColor: foregroundColor,
     borderColor: borderColor,
@@ -319,7 +321,16 @@ extension _ChatPageStateComposerUi on _ChatPageState {
                 _supportsImageUpload || _supportsAudioRecording;
             final prioritizeInputWidth =
                 showMarkdownButton && hasText && maxComposerWidth <= 340;
-            final showAiAction = hasText && !prioritizeInputWidth;
+            final canAskAiFromComposer = _showConfigureAiEntry || _canAskAiNow;
+            final showAiAction =
+                hasText && canAskAiFromComposer && !prioritizeInputWidth;
+            final collapseAiActionIntoSend =
+                hasText && canAskAiFromComposer && prioritizeInputWidth;
+            final sendLongPressAction = collapseAiActionIntoSend
+                ? (_showConfigureAiEntry
+                    ? (_isComposerBusy ? null : _openAskAiSettingsFromComposer)
+                    : (_canAskAiNow ? (_isComposerBusy ? null : _askAi) : null))
+                : null;
 
             if (_asking) {
               return Padding(
@@ -419,6 +430,7 @@ extension _ChatPageStateComposerUi on _ChatPageState {
                     label: context.t.common.actions.send,
                     icon: Icons.send_rounded,
                     onPressed: _isComposerBusy ? null : _send,
+                    onLongPress: sendLongPressAction,
                     backgroundColor: colorScheme.primary,
                     foregroundColor: colorScheme.onPrimary,
                     iconOnly: true,
