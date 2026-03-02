@@ -15,6 +15,8 @@ void main() {
         MediaSourcePreference.auto);
     expect(await MediaCapabilitySourcePrefs.readDocumentOcr(),
         MediaSourcePreference.auto);
+    expect(await MediaCapabilitySourcePrefs.readUrlFetch(),
+        MediaSourcePreference.auto);
   });
 
   test('source prefs persist independently', () async {
@@ -29,6 +31,8 @@ void main() {
         MediaSourcePreference.byok);
     expect(await MediaCapabilitySourcePrefs.readDocumentOcr(),
         MediaSourcePreference.auto);
+    expect(await MediaCapabilitySourcePrefs.readUrlFetch(),
+        MediaSourcePreference.auto);
 
     await MediaCapabilitySourcePrefs.write(
       MediaCapabilitySourceScope.documentOcr,
@@ -39,6 +43,20 @@ void main() {
         MediaSourcePreference.byok);
     expect(await MediaCapabilitySourcePrefs.readDocumentOcr(),
         MediaSourcePreference.cloud);
+    expect(await MediaCapabilitySourcePrefs.readUrlFetch(),
+        MediaSourcePreference.auto);
+
+    await MediaCapabilitySourcePrefs.write(
+      MediaCapabilitySourceScope.urlFetch,
+      preference: MediaSourcePreference.local,
+    );
+
+    expect(await MediaCapabilitySourcePrefs.readAudio(),
+        MediaSourcePreference.byok);
+    expect(await MediaCapabilitySourcePrefs.readDocumentOcr(),
+        MediaSourcePreference.cloud);
+    expect(await MediaCapabilitySourcePrefs.readUrlFetch(),
+        MediaSourcePreference.local);
   });
 
   test('audio source local falls back to auto on unsupported platforms',

@@ -6,11 +6,13 @@ import 'media_source_prefs.dart';
 enum MediaCapabilitySourceScope {
   audioTranscribe,
   documentOcr,
+  urlFetch,
 }
 
 final class MediaCapabilitySourcePrefs {
   static const _audioSourceKey = 'media_capability_audio_source_preference_v1';
   static const _ocrSourceKey = 'media_capability_ocr_source_preference_v1';
+  static const _urlSourceKey = 'media_capability_url_source_preference_v1';
 
   static Future<MediaSourcePreference> readAudio() async {
     final prefs = await SharedPreferences.getInstance();
@@ -25,6 +27,11 @@ final class MediaCapabilitySourcePrefs {
   static Future<MediaSourcePreference> readDocumentOcr() async {
     final prefs = await SharedPreferences.getInstance();
     return _decode(prefs.getString(_ocrSourceKey));
+  }
+
+  static Future<MediaSourcePreference> readUrlFetch() async {
+    final prefs = await SharedPreferences.getInstance();
+    return _decode(prefs.getString(_urlSourceKey));
   }
 
   static Future<void> write(
@@ -44,6 +51,7 @@ final class MediaCapabilitySourcePrefs {
     return switch (scope) {
       MediaCapabilitySourceScope.audioTranscribe => _audioSourceKey,
       MediaCapabilitySourceScope.documentOcr => _ocrSourceKey,
+      MediaCapabilitySourceScope.urlFetch => _urlSourceKey,
     };
   }
 

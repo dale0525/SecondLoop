@@ -77,6 +77,32 @@ abstract class UrlEnrichmentFetcher {
   Future<UrlFetchResponse> fetch(Uri uri);
 }
 
+class UrlEnrichmentEnhancerResult {
+  const UrlEnrichmentEnhancerResult({
+    this.title,
+    this.summary,
+    this.tags = const <String>[],
+  });
+
+  final String? title;
+  final String? summary;
+  final List<String> tags;
+}
+
+abstract class UrlEnrichmentEnhancer {
+  String get modelName;
+  String get source;
+
+  Future<UrlEnrichmentEnhancerResult?> enhance({
+    required String originalUrl,
+    required String finalUrl,
+    required String site,
+    required String? title,
+    required String readableTextExcerpt,
+    required String readableTextFull,
+  });
+}
+
 class UrlEnrichmentSecurityPolicy {
   UrlEnrichmentSecurityPolicy({
     this.allowLocalhost = false,
@@ -251,11 +277,13 @@ class UrlEnrichmentRunner {
   UrlEnrichmentRunner({
     required this.store,
     required this.fetcher,
+    this.enhancers = const <UrlEnrichmentEnhancer>[],
     int Function()? nowMs,
   }) : _nowMs = nowMs ?? (() => DateTime.now().millisecondsSinceEpoch);
 
   final UrlEnrichmentStore store;
   final UrlEnrichmentFetcher fetcher;
+  final List<UrlEnrichmentEnhancer> enhancers;
   final int Function() _nowMs;
 
   Future<UrlEnrichmentRunResult> runOnce({int limit = 5}) async {
@@ -286,27 +314,79 @@ class UrlEnrichmentRunner {
           kUrlEnrichmentMaxExcerptBytes,
         );
 
+        var selectedTitle = extracted.title;
+        var selectedModelName = kUrlEnrichmentModelName;
+        var enrichmentSource = 'local';
+        String? llmSummary;
+        List<String> llmTags = const <String>[];
+
+        for (final enhancer in enhancers) {
+          try {
+            final enhanced = await enhancer.enhance(
+              originalUrl: manifest.url,
+              finalUrl: fetched.finalUri.toString(),
+              site: extracted.site ?? '',
+              title: selectedTitle,
+              readableTextExcerpt: excerpt,
+              readableTextFull: fullText,
+            );
+            if (enhanced == null) continue;
+
+            final enhancedTitle = enhanced.title?.trim();
+            if (enhancedTitle != null && enhancedTitle.isNotEmpty) {
+              selectedTitle = enhancedTitle;
+            }
+
+            final summary = enhanced.summary?.trim();
+            if (summary != null && summary.isNotEmpty) {
+              llmSummary = summary;
+            } else {
+              llmSummary = null;
+            }
+
+            llmTags = _normalizeTagList(enhanced.tags);
+
+            final modelName = enhancer.modelName.trim();
+            if (modelName.isNotEmpty) {
+              selectedModelName = modelName;
+            }
+
+            final source = enhancer.source.trim();
+            if (source.isNotEmpty) {
+              enrichmentSource = source;
+            } else {
+              enrichmentSource = 'unknown';
+            }
+            break;
+          } catch (_) {
+            continue;
+          }
+        }
+
         final payload = jsonEncode({
           'schema': kSecondLoopUrlEnrichmentSchema,
           'url': manifest.url,
           'final_url': fetched.finalUri.toString(),
           'canonical_url': extracted.canonicalUrl,
           'site': extracted.site,
-          'title': extracted.title,
+          'title': selectedTitle,
           'readable_text_full': fullText,
           'readable_text_excerpt': excerpt,
+          'enrichment_source': enrichmentSource,
+          if (llmSummary != null) 'llm_summary': llmSummary,
+          if (llmTags.isNotEmpty) 'llm_tags': llmTags,
           'fetched_at_ms': nowMs,
         });
 
         await store.markAnnotationOk(
           attachmentSha256: job.attachmentSha256,
           lang: job.lang,
-          modelName: kUrlEnrichmentModelName,
+          modelName: selectedModelName,
           payloadJson: payload,
           nowMs: nowMs,
         );
 
-        final title = (extracted.title ?? '').trim();
+        final title = (selectedTitle ?? '').trim();
         if (title.isNotEmpty) {
           await store.upsertAttachmentTitle(
             attachmentSha256: job.attachmentSha256,
@@ -618,6 +698,22 @@ class UrlEnrichmentRunner {
     }
 
     return String.fromCharCodes(out).trim();
+  }
+
+  static List<String> _normalizeTagList(List<String> rawTags) {
+    if (rawTags.isEmpty) return const <String>[];
+
+    final deduped = <String>[];
+    final seen = <String>{};
+    for (final raw in rawTags) {
+      final normalized = raw.trim();
+      if (normalized.isEmpty) continue;
+      final key = normalized.toLowerCase();
+      if (!seen.add(key)) continue;
+      deduped.add(normalized);
+      if (deduped.length >= 8) break;
+    }
+    return deduped;
   }
 }
 

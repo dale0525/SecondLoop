@@ -63,6 +63,17 @@ extension _MediaAnnotationSettingsPageEmbeddedExtension
     };
   }
 
+  String _urlFetchTitle(BuildContext context) {
+    return _isZhLocale(context) ? '链接内容理解' : 'URL content understanding';
+  }
+
+  String _urlFetchDescription(BuildContext context) {
+    if (_isZhLocale(context)) {
+      return '先在本地抓取并清洗网页文本，再按你选择的来源（Cloud/BYOK/本地）做智能提炼。';
+    }
+    return 'Preprocess URL content locally, then enrich with your selected source (Cloud/BYOK/Local).';
+  }
+
   Widget _buildOpenApiKeysTile({required Key tileKey}) {
     return ListTile(
       key: tileKey,
@@ -523,6 +534,62 @@ extension _MediaAnnotationSettingsPageEmbeddedExtension
                 ]),
               ],
               const SizedBox(height: 16),
+              ...() {
+                final urlRoute = _resolveCapabilityRoute(_urlSourcePreference);
+                return <Widget>[
+                  mediaAnnotationCapabilityCard(
+                    key: const ValueKey('media_annotation_settings_url_card'),
+                    context: context,
+                    title: _urlFetchTitle(context),
+                    description: _urlFetchDescription(context),
+                    statusLabel: _capabilityRouteLabel(urlRoute),
+                    actions: [
+                      _buildSourcePreferenceTile(
+                        value: MediaSourcePreference.auto,
+                        groupValue: _urlSourcePreference,
+                        onChanged: _setUrlSourcePreference,
+                        tileKey:
+                            MediaAnnotationSettingsPage.urlSourceAutoTileKey,
+                        title: sourceLabels.auto.title,
+                        subtitle: sourceLabels.auto.description,
+                      ),
+                      _buildSourcePreferenceTile(
+                        value: MediaSourcePreference.cloud,
+                        groupValue: _urlSourcePreference,
+                        onChanged: _setUrlSourcePreference,
+                        tileKey:
+                            MediaAnnotationSettingsPage.urlSourceCloudTileKey,
+                        title: sourceLabels.cloud.title,
+                        subtitle: sourceLabels.cloud.description,
+                      ),
+                      _buildSourcePreferenceTile(
+                        value: MediaSourcePreference.byok,
+                        groupValue: _urlSourcePreference,
+                        onChanged: _setUrlSourcePreference,
+                        tileKey:
+                            MediaAnnotationSettingsPage.urlSourceByokTileKey,
+                        title: sourceLabels.byok.title,
+                        subtitle: sourceLabels.byok.description,
+                      ),
+                      _buildSourcePreferenceTile(
+                        value: MediaSourcePreference.local,
+                        groupValue: _urlSourcePreference,
+                        onChanged: _setUrlSourcePreference,
+                        tileKey:
+                            MediaAnnotationSettingsPage.urlSourceLocalTileKey,
+                        title: sourceLabels.local.title,
+                        subtitle: sourceLabels.local.description,
+                      ),
+                      _buildOpenApiKeysTile(
+                        tileKey: const ValueKey(
+                          'media_annotation_settings_url_open_api_keys',
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                ];
+              }(),
               ..._buildDocumentOcrSection(
                 context,
                 showWifiOnly: embedded,

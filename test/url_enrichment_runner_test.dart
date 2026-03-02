@@ -79,6 +79,37 @@ final class _FakeFetcher implements UrlEnrichmentFetcher {
   Future<UrlFetchResponse> fetch(Uri uri) async => response;
 }
 
+final class _FakeEnhancer implements UrlEnrichmentEnhancer {
+  _FakeEnhancer({
+    required this.modelName,
+    required this.source,
+    this.result,
+    this.error,
+  });
+
+  @override
+  final String modelName;
+
+  @override
+  final String source;
+
+  final UrlEnrichmentEnhancerResult? result;
+  final Object? error;
+
+  @override
+  Future<UrlEnrichmentEnhancerResult?> enhance({
+    required String originalUrl,
+    required String finalUrl,
+    required String site,
+    required String? title,
+    required String readableTextExcerpt,
+    required String readableTextFull,
+  }) async {
+    if (error != null) throw error!;
+    return result;
+  }
+}
+
 void main() {
   test('enriches URL manifest: title + canonical + text excerpt/full',
       () async {
@@ -144,5 +175,141 @@ void main() {
 
     expect(store.titleBySha['a'], 'Hi & Bye');
     expect(store.failedBySha, isEmpty);
+  });
+
+  test('uses enhancer output and model/source when enhancer succeeds',
+      () async {
+    final manifest = jsonEncode({
+      'schema': kSecondLoopUrlManifestSchema,
+      'url': 'https://example.com/page',
+    });
+
+    final store = _MemStore(
+      jobs: const [
+        UrlEnrichmentJob(
+          attachmentSha256: 'b',
+          lang: 'und',
+          status: 'pending',
+          attempts: 0,
+          nextRetryAtMs: null,
+        ),
+      ],
+      bytesBySha: {
+        'b': Uint8List.fromList(utf8.encode(manifest)),
+      },
+    );
+
+    const html = '''
+<html>
+  <head><title>Local Title</title></head>
+  <body><p>Local body</p></body>
+</html>
+''';
+
+    final fetcher = _FakeFetcher(
+      response: UrlFetchResponse(
+        finalUri: Uri.parse('https://example.com/page'),
+        statusCode: 200,
+        contentType: 'text/html',
+        bodyBytes: Uint8List.fromList(utf8.encode(html)),
+      ),
+    );
+
+    final runner = UrlEnrichmentRunner(
+      store: store,
+      fetcher: fetcher,
+      nowMs: () => 2000,
+      enhancers: [
+        _FakeEnhancer(
+          modelName: 'url_enrich.cloud',
+          source: 'cloud',
+          result: const UrlEnrichmentEnhancerResult(
+            title: 'Cloud Title',
+            summary: 'Cloud summary',
+            tags: ['news', 'example'],
+          ),
+        ),
+      ],
+    );
+
+    final result = await runner.runOnce();
+    expect(result.didEnrichAny, isTrue);
+
+    final payloadRaw = store.okPayloadBySha['b'];
+    expect(payloadRaw, isNotNull);
+    final payload = jsonDecode(payloadRaw!) as Map;
+    expect(payload['title'], 'Cloud Title');
+    expect(payload['enrichment_source'], 'cloud');
+    expect(payload['llm_summary'], 'Cloud summary');
+    expect(payload['llm_tags'], const ['news', 'example']);
+    expect(store.titleBySha['b'], 'Cloud Title');
+  });
+
+  test('falls back to next enhancer then local when needed', () async {
+    final manifest = jsonEncode({
+      'schema': kSecondLoopUrlManifestSchema,
+      'url': 'https://example.com/page',
+    });
+
+    final store = _MemStore(
+      jobs: const [
+        UrlEnrichmentJob(
+          attachmentSha256: 'c',
+          lang: 'und',
+          status: 'pending',
+          attempts: 0,
+          nextRetryAtMs: null,
+        ),
+      ],
+      bytesBySha: {
+        'c': Uint8List.fromList(utf8.encode(manifest)),
+      },
+    );
+
+    const html = '''
+<html>
+  <head><title>Local Title</title></head>
+  <body><p>Local body</p></body>
+</html>
+''';
+
+    final fetcher = _FakeFetcher(
+      response: UrlFetchResponse(
+        finalUri: Uri.parse('https://example.com/page'),
+        statusCode: 200,
+        contentType: 'text/html',
+        bodyBytes: Uint8List.fromList(utf8.encode(html)),
+      ),
+    );
+
+    final runner = UrlEnrichmentRunner(
+      store: store,
+      fetcher: fetcher,
+      nowMs: () => 3000,
+      enhancers: [
+        _FakeEnhancer(
+          modelName: 'url_enrich.cloud',
+          source: 'cloud',
+          error: StateError('cloud_failed'),
+        ),
+        _FakeEnhancer(
+          modelName: 'url_enrich.byok',
+          source: 'byok',
+          result: null,
+        ),
+      ],
+    );
+
+    final result = await runner.runOnce();
+    expect(result.didEnrichAny, isTrue);
+
+    final payloadRaw = store.okPayloadBySha['c'];
+    expect(payloadRaw, isNotNull);
+    final payload = jsonDecode(payloadRaw!) as Map;
+    expect(payload['title'], 'Local Title');
+    expect(payload['enrichment_source'], 'local');
+    expect(payload.containsKey('llm_summary'), isFalse);
+    expect(payload.containsKey('llm_tags'), isFalse);
+    expect(store.titleBySha['c'], 'Local Title');
   });
 }
