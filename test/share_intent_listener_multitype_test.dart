@@ -6,6 +6,7 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:secondloop/features/share/share_draft_inbox.dart';
 import 'package:secondloop/features/share/share_intent_listener.dart';
 
 Future<void> _sendShareChannelMethodCall(String method) async {
@@ -23,7 +24,8 @@ Future<void> _sendShareChannelMethodCall(String method) async {
 }
 
 void main() {
-  testWidgets('ShareIntentListener enqueues file + url shares', (tester) async {
+  testWidgets('ShareIntentListener enqueues file share and routes URL to draft',
+      (tester) async {
     TestWidgetsFlutterBinding.ensureInitialized();
     SharedPreferences.setMockInitialValues({});
 
@@ -62,7 +64,7 @@ void main() {
     final prefs = await SharedPreferences.getInstance();
     final queue = prefs.getStringList('share_ingest_queue_v1');
     expect(queue, isNotNull);
-    expect(queue!.length, 2);
+    expect(queue!.length, 1);
 
     final first = jsonDecode(queue[0]) as Map;
     expect(first['type'], 'file');
@@ -70,9 +72,9 @@ void main() {
     expect(first['mimeType'], 'application/pdf');
     expect(first['filename'], 'report.pdf');
 
-    final second = jsonDecode(queue[1]) as Map;
-    expect(second['type'], 'url');
-    expect(second['content'], 'https://example.com');
+    final urlDraftQueue = prefs.getStringList(ShareDraftInbox.urlQueuePrefsKey);
+    expect(urlDraftQueue, isNotNull);
+    expect(urlDraftQueue, const <String>['https://example.com']);
   });
 
   testWidgets('ShareIntentListener falls back mimeType for file share',
@@ -117,6 +119,45 @@ void main() {
     expect(first['path'], '/tmp/shared-no-mime.bin');
     expect(first['mimeType'], 'application/octet-stream');
     expect(first['filename'], 'shared-no-mime.bin');
+  });
+
+  testWidgets('ShareIntentListener routes explicit url share to draft queue',
+      (tester) async {
+    TestWidgetsFlutterBinding.ensureInitialized();
+    SharedPreferences.setMockInitialValues({});
+
+    const channel = MethodChannel('secondloop/share_intent');
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (call) async {
+      if (call.method == 'consumePendingShares') {
+        return <Map<String, Object?>>[
+          {
+            'type': 'url',
+            'content': 'https://secondloop.app',
+          },
+        ];
+      }
+      return null;
+    });
+    addTearDown(() {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, null);
+    });
+
+    await tester.pumpWidget(
+      const Directionality(
+        textDirection: TextDirection.ltr,
+        child: ShareIntentListener(child: SizedBox.shrink()),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final prefs = await SharedPreferences.getInstance();
+    expect(prefs.getStringList('share_ingest_queue_v1'), isNull);
+    expect(
+      prefs.getStringList(ShareDraftInbox.urlQueuePrefsKey),
+      const <String>['https://secondloop.app'],
+    );
   });
 
   testWidgets('ShareIntentListener keeps filename for image shares',

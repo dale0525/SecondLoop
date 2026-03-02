@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
+import 'share_draft_inbox.dart';
 import 'share_ingest.dart';
 
 final class ShareIntentListener extends StatefulWidget {
@@ -69,7 +70,7 @@ final class _ShareIntentListenerState extends State<ShareIntentListener>
       );
       if (raw == null || raw.isEmpty) return;
 
-      var enqueuedAny = false;
+      var enqueuedIngestAny = false;
       for (final item in raw) {
         if (item is! Map) continue;
         final map = Map<String, dynamic>.from(item);
@@ -79,8 +80,7 @@ final class _ShareIntentListenerState extends State<ShareIntentListener>
 
         switch (type) {
           case 'url':
-            await ShareIngest.enqueueUrl(content);
-            enqueuedAny = true;
+            await ShareDraftInbox.enqueueUrl(content);
             break;
           case 'file':
             final mimeType = map['mimeType'];
@@ -94,7 +94,7 @@ final class _ShareIntentListenerState extends State<ShareIntentListener>
               mimeType: normalizedMimeType,
               filename: filename is String ? filename : null,
             );
-            enqueuedAny = true;
+            enqueuedIngestAny = true;
             break;
           case 'image':
             final mimeType = map['mimeType'];
@@ -105,20 +105,20 @@ final class _ShareIntentListenerState extends State<ShareIntentListener>
               mimeType: mimeType,
               filename: filename is String ? filename : null,
             );
-            enqueuedAny = true;
+            enqueuedIngestAny = true;
             break;
           case 'text':
           default:
             if (_looksLikeUrl(content)) {
-              await ShareIngest.enqueueUrl(content);
+              await ShareDraftInbox.enqueueUrl(content);
             } else {
               await ShareIngest.enqueueText(content);
+              enqueuedIngestAny = true;
             }
-            enqueuedAny = true;
         }
       }
 
-      if (enqueuedAny) {
+      if (enqueuedIngestAny) {
         ShareIngest.requestDrain();
       }
     } on MissingPluginException {
