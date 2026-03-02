@@ -57,6 +57,8 @@ void main() {
     );
 
     final sendSize = tester.getSize(find.byKey(const ValueKey('chat_send')));
+    final sendMaterial =
+        tester.widget<Material>(find.byKey(const ValueKey('chat_send')));
     final configureFinder = find.byKey(const ValueKey('chat_configure_ai'));
     final askFinder = find.byKey(const ValueKey('chat_ask_ai'));
     final hasConfigure = configureFinder.evaluate().isNotEmpty;
@@ -64,6 +66,10 @@ void main() {
 
     expect(sendSize.width, lessThanOrEqualTo(64));
     expect(hasConfigure || hasAsk, isTrue);
+    expect(sendMaterial.elevation, greaterThan(0));
+    expect(sendMaterial.shape, isA<RoundedRectangleBorder>());
+    final sendShape = sendMaterial.shape! as RoundedRectangleBorder;
+    expect(sendShape.borderRadius, BorderRadius.circular(14));
 
     expect(tester.takeException(), isNull);
   });

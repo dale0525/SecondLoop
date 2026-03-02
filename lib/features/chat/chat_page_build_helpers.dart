@@ -312,6 +312,57 @@ extension _ChatPageStateComposerUi on _ChatPageState {
     return _buildComposerMarkdownEditorButton(context);
   }
 
+  Widget _buildCompactComposerSendButton(
+    BuildContext context, {
+    required ColorScheme colorScheme,
+  }) {
+    final isEnabled = !_isComposerBusy;
+    final borderRadius = BorderRadius.circular(14);
+
+    final backgroundColor =
+        isEnabled ? colorScheme.primary : colorScheme.primary.withOpacity(0.52);
+    final foregroundColor = isEnabled
+        ? colorScheme.onPrimary
+        : colorScheme.onPrimary.withOpacity(0.62);
+
+    return Padding(
+      padding: const EdgeInsets.only(left: 8),
+      child: Semantics(
+        button: true,
+        label: context.t.common.actions.send,
+        child: Tooltip(
+          message: context.t.common.actions.send,
+          child: Material(
+            key: const ValueKey('chat_send'),
+            color: backgroundColor,
+            elevation: isEnabled ? 1.5 : 0.5,
+            shadowColor: colorScheme.shadow.withOpacity(0.24),
+            shape: RoundedRectangleBorder(
+              borderRadius: borderRadius,
+              side: BorderSide(
+                color: colorScheme.primaryContainer.withOpacity(0.45),
+              ),
+            ),
+            child: InkWell(
+              onTap: isEnabled ? _send : null,
+              canRequestFocus: false,
+              borderRadius: borderRadius,
+              child: SizedBox(
+                width: 44,
+                height: 44,
+                child: Icon(
+                  Icons.send_rounded,
+                  size: 18,
+                  color: foregroundColor,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildCompactComposerQuickActions(
     BuildContext context, {
     required SlTokens tokens,
@@ -435,18 +486,9 @@ extension _ChatPageStateComposerUi on _ChatPageState {
           );
         }
 
-        return Padding(
-          padding: const EdgeInsets.only(left: 8),
-          child: _buildComposerInlineButton(
-            context,
-            key: const ValueKey('chat_send'),
-            label: context.t.common.actions.send,
-            icon: Icons.send_rounded,
-            onPressed: _isComposerBusy ? null : _send,
-            backgroundColor: colorScheme.primary,
-            foregroundColor: colorScheme.onPrimary,
-            iconOnly: true,
-          ),
+        return _buildCompactComposerSendButton(
+          context,
+          colorScheme: colorScheme,
         );
       },
     );
