@@ -202,6 +202,75 @@ void main() {
     expect(calls.last.$2, TaskHubQuickAction.later);
   });
 
+  testWidgets('expanded list opens todo detail from every section',
+      (tester) async {
+    final now = DateTime(2026, 2, 24, 12);
+    final summary = TaskHubSummary.fromTodos(
+      <Todo>[
+        todo(
+          id: 'scheduled',
+          title: 'Scheduled item',
+          updatedAtMs: 1,
+          dueAtMs:
+              now.add(const Duration(hours: 2)).toUtc().millisecondsSinceEpoch,
+        ),
+        todo(
+          id: 'review',
+          title: 'Due review item',
+          updatedAtMs: 2,
+          reviewStage: 0,
+          nextReviewAtMs: now
+              .subtract(const Duration(hours: 1))
+              .toUtc()
+              .millisecondsSinceEpoch,
+        ),
+        todo(
+          id: 'unscheduled',
+          title: 'Unscheduled item',
+          updatedAtMs: 3,
+        ),
+      ],
+      nowLocal: now,
+    );
+
+    final openedTodoIds = <String>[];
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: Scaffold(
+            body: TaskHubBanner(
+              summary: summary,
+              onOpenTodo: (todo) async {
+                openedTodoIds.add(todo.id);
+              },
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.byKey(const ValueKey('task_hub_banner')));
+    await tester.pumpAndSettle();
+
+    final scheduledItem =
+        find.byKey(const ValueKey('task_hub_banner_item_scheduled'));
+    await tester.ensureVisible(scheduledItem);
+    await tester.tap(scheduledItem);
+    await tester.pumpAndSettle();
+    final reviewItem =
+        find.byKey(const ValueKey('task_hub_banner_item_review'));
+    await tester.ensureVisible(reviewItem);
+    await tester.tap(reviewItem);
+    await tester.pumpAndSettle();
+    final unscheduledItem =
+        find.byKey(const ValueKey('task_hub_banner_item_unscheduled'));
+    await tester.ensureVisible(unscheduledItem);
+    await tester.tap(unscheduledItem);
+    await tester.pumpAndSettle();
+
+    expect(openedTodoIds, <String>['scheduled', 'review', 'unscheduled']);
+  });
+
   testWidgets('expanded merged unscheduled section keeps review done action',
       (tester) async {
     final now = DateTime(2026, 2, 24, 12);
@@ -261,6 +330,68 @@ void main() {
     expect(calls.length, 1);
     expect(calls.first.$1, 'review');
     expect(calls.first.$2, TaskHubQuickAction.done);
+  });
+
+  testWidgets('due-review quick buttons keep consistent height',
+      (tester) async {
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.binding.setSurfaceSize(const Size(420, 600));
+
+    final now = DateTime(2026, 2, 24, 12);
+    final summary = TaskHubSummary.fromTodos(
+      <Todo>[
+        todo(
+          id: 'review',
+          title: 'Needs review',
+          updatedAtMs: 1,
+          reviewStage: 0,
+          nextReviewAtMs: now
+              .subtract(const Duration(hours: 1))
+              .toUtc()
+              .millisecondsSinceEpoch,
+        ),
+      ],
+      nowLocal: now,
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          theme: ThemeData(
+            useMaterial3: true,
+            platform: TargetPlatform.macOS,
+          ),
+          home: MediaQuery(
+            data: const MediaQueryData(
+              size: Size(420, 600),
+              textScaler: TextScaler.linear(1.4),
+            ),
+            child: Scaffold(
+              body: TaskHubBanner(summary: summary),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.byKey(const ValueKey('task_hub_banner')));
+    await tester.pumpAndSettle();
+
+    final todayButton =
+        find.byKey(const ValueKey('task_hub_quick_review_today'));
+    final laterButton =
+        find.byKey(const ValueKey('task_hub_quick_review_later'));
+    final doneButton = find.byKey(const ValueKey('task_hub_quick_review_done'));
+    final moreButton = find.byKey(const ValueKey('task_hub_quick_review_more'));
+
+    final todayHeight = tester.getSize(todayButton).height;
+    final laterHeight = tester.getSize(laterButton).height;
+    final doneHeight = tester.getSize(doneButton).height;
+    final moreHeight = tester.getSize(moreButton).height;
+
+    expect(todayHeight, equals(laterHeight));
+    expect(todayHeight, equals(doneHeight));
+    expect(todayHeight, equals(moreHeight));
   });
 
   testWidgets('expanded list keeps view-all visible on small screens',

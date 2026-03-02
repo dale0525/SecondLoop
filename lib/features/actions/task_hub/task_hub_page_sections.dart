@@ -490,7 +490,12 @@ class _TaskHubPageQuickButton extends StatelessWidget {
             onPressed: onPressed,
             style: baseStyle,
             icon: Icon(icon, size: 16),
-            label: Text(label),
+            label: Text(
+              label,
+              maxLines: 1,
+              softWrap: false,
+              overflow: TextOverflow.ellipsis,
+            ),
           )
         : OutlinedButton.icon(
             onPressed: onPressed,
@@ -500,7 +505,12 @@ class _TaskHubPageQuickButton extends StatelessWidget {
               ),
             ),
             icon: Icon(icon, size: 16),
-            label: Text(label),
+            label: Text(
+              label,
+              maxLines: 1,
+              softWrap: false,
+              overflow: TextOverflow.ellipsis,
+            ),
           );
 
     return Tooltip(
@@ -530,6 +540,19 @@ class _TaskHubPageQuickMenu extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final tokens = SlTokens.of(context);
+    final style = ButtonStyle(
+      minimumSize: const MaterialStatePropertyAll(Size(44, 40)),
+      padding: const MaterialStatePropertyAll(
+        EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      ),
+      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      shape: MaterialStatePropertyAll(
+        RoundedRectangleBorder(borderRadius: BorderRadius.circular(99)),
+      ),
+      side: MaterialStatePropertyAll(
+        BorderSide(color: tokens.borderSubtle.withOpacity(0.9)),
+      ),
+    );
     return PopupMenuButton<TaskHubQuickAction>(
       tooltip: context.t.actions.taskHub.actions.more,
       padding: EdgeInsets.zero,
@@ -547,23 +570,11 @@ class _TaskHubPageQuickMenu extends StatelessWidget {
             ),
           ),
       ],
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(99),
-          border: Border.all(
-            color: tokens.borderSubtle.withOpacity(0.9),
-          ),
-        ),
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(
-            minWidth: 44,
-            minHeight: 40,
-            maxHeight: 40,
-          ),
-          child: const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 12, vertical: 11),
-            child: Icon(Icons.more_horiz_rounded, size: 18),
-          ),
+      child: IgnorePointer(
+        child: OutlinedButton(
+          onPressed: () {},
+          style: style,
+          child: const Icon(Icons.more_horiz_rounded, size: 18),
         ),
       ),
     );

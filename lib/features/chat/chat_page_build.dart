@@ -86,6 +86,16 @@ extension _ChatPageStateBuild on _ChatPageState {
                 return TaskHubBanner(
                   summary: summary,
                   collapseSignal: _todoAgendaBannerCollapseSignal,
+                  onOpenTodo: (todo) async {
+                    await _pushRouteFromChat(
+                      MaterialPageRoute(
+                        builder: (context) => TodoDetailPage(initialTodo: todo),
+                      ),
+                    );
+                    if (!mounted) return;
+                    _collapseTodoAgendaBanner();
+                    _refresh();
+                  },
                   onQuickAction: (todo, action) async {
                     await _applyTaskHubQuickAction(todo, action);
                   },
