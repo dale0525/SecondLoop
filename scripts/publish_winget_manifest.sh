@@ -124,6 +124,17 @@ compose_cla_agreement_body() {
   printf '@microsoft-github-policy-service agree'
 }
 
+has_cla_prompt_comment() {
+  local pr_number="$1"
+  local cla_prompt
+  cla_prompt="$(
+    gh api "repos/${upstream_repo}/issues/${pr_number}/comments?per_page=100" \
+      --jq '.[] | select(.user.login == "microsoft-github-policy-service[bot]") | .body' |
+      grep -F "Contributor License Agreement" || true
+  )"
+  [[ -n "${cla_prompt}" ]]
+}
+
 maybe_post_cla_agreement() {
   local pr_ref="$1"
   local agreement_body
@@ -136,6 +147,11 @@ maybe_post_cla_agreement() {
 
   local pr_number
   pr_number="$(gh pr view "${pr_ref}" --repo "${upstream_repo}" --json number --jq '.number')"
+  if ! has_cla_prompt_comment "${pr_number}"; then
+    echo "Skipping CLA auto-agreement on PR #${pr_number}: no CLA prompt from microsoft-github-policy-service[bot]."
+    return 0
+  fi
+
   local current_login
   current_login="$(gh api user --jq '.login')"
   local existing_comment

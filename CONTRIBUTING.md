@@ -100,7 +100,7 @@ Required env/secrets for release automation:
 
 Notes:
 - `WINGET_PKGS_FORK_REPO` must already exist as a fork of `microsoft/winget-pkgs`.
-- WinGet PRs can trigger a Microsoft CLA check. The release workflow now auto-posts `@microsoft-github-policy-service agree` using `WINGET_PKGS_TOKEN` when `WINGET_AUTO_AGREE_CLA=true`.
+- WinGet PRs can trigger a Microsoft CLA check. When `WINGET_AUTO_AGREE_CLA=true`, the release workflow auto-posts the CLA reply only after detecting a CLA prompt comment from `microsoft-github-policy-service[bot]`.
 - If submissions are made on behalf of a company, set `WINGET_CLA_COMPANY` so automation posts `@microsoft-github-policy-service agree company="<your-company>"` instead.
 - Set `WINGET_AUTO_AGREE_CLA=false` to disable auto-commenting and handle CLA replies manually.
 - Release workflow now auto-opens a WinGet PR and updates `dale0525/SecondLoopHomebrew` on each `vX.Y.Z` tag.

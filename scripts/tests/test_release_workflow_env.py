@@ -369,6 +369,10 @@ class ReleaseWorkflowEnvTests(unittest.TestCase):
         script_text = self._publish_winget_script_text()
 
         self.assertIn("compose_cla_agreement_body", script_text)
+        self.assertIn("has_cla_prompt_comment", script_text)
+        self.assertIn("Contributor License Agreement", script_text)
+        self.assertIn("microsoft-github-policy-service[bot]", script_text)
+        self.assertIn("Skipping CLA auto-agreement", script_text)
         self.assertIn("@microsoft-github-policy-service agree", script_text)
         self.assertIn("gh pr comment", script_text)
         self.assertIn("--auto-agree-cla", script_text)
