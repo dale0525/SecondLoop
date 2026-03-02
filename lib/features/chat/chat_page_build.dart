@@ -418,39 +418,47 @@ extension _ChatPageStateBuild on _ChatPageState {
                                       BorderRadius.circular(tokens.radiusLg),
                                   padding:
                                       const EdgeInsets.fromLTRB(8, 6, 8, 6),
-                                  child: Row(
-                                    crossAxisAlignment: CrossAxisAlignment.end,
-                                    children: [
-                                      Expanded(
-                                        child: Focus(
-                                          // ignore: deprecated_member_use
-                                          onKey: _handleComposerOnKey,
-                                          child: TextField(
-                                            key: const ValueKey('chat_input'),
-                                            focusNode: _inputFocusNode,
-                                            controller: _controller,
-                                            decoration: InputDecoration(
-                                              hintText: context
-                                                  .t.common.fields.message,
-                                              border: InputBorder.none,
-                                              filled: false,
-                                              isDense: true,
+                                  child: LayoutBuilder(
+                                    builder: (context, constraints) {
+                                      return Row(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.end,
+                                        children: [
+                                          Expanded(
+                                            child: Focus(
+                                              // ignore: deprecated_member_use
+                                              onKey: _handleComposerOnKey,
+                                              child: TextField(
+                                                key: const ValueKey(
+                                                    'chat_input'),
+                                                focusNode: _inputFocusNode,
+                                                controller: _controller,
+                                                decoration: InputDecoration(
+                                                  hintText: context
+                                                      .t.common.fields.message,
+                                                  border: InputBorder.none,
+                                                  filled: false,
+                                                  isDense: true,
+                                                ),
+                                                keyboardType:
+                                                    TextInputType.multiline,
+                                                textInputAction:
+                                                    TextInputAction.newline,
+                                                minLines: 1,
+                                                maxLines: 6,
+                                              ),
                                             ),
-                                            keyboardType:
-                                                TextInputType.multiline,
-                                            textInputAction:
-                                                TextInputAction.newline,
-                                            minLines: 1,
-                                            maxLines: 6,
                                           ),
-                                        ),
-                                      ),
-                                      _buildCompactComposerActions(
-                                        context,
-                                        tokens: tokens,
-                                        colorScheme: colorScheme,
-                                      ),
-                                    ],
+                                          _buildCompactComposerActions(
+                                            context,
+                                            tokens: tokens,
+                                            colorScheme: colorScheme,
+                                            maxComposerWidth:
+                                                constraints.maxWidth,
+                                          ),
+                                        ],
+                                      );
+                                    },
                                   ),
                                 ),
                               )

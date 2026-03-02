@@ -274,15 +274,19 @@ extension _ChatPageStateComposerUi on _ChatPageState {
     );
   }
 
-  Widget _buildComposerMarkdownEditorButton(BuildContext context) {
+  Widget _buildComposerMarkdownEditorButton(
+    BuildContext context, {
+    double size = 40,
+    double iconSize = 20,
+  }) {
     return Semantics(
       button: true,
       label: context.t.chat.markdownEditor.openButton,
       child: SlIconButton(
         key: const ValueKey('chat_open_markdown_editor'),
         icon: Icons.open_in_full_rounded,
-        size: 40,
-        iconSize: 20,
+        size: size,
+        iconSize: iconSize,
         tooltip: context.t.chat.markdownEditor.openButton,
         canRequestFocus: false,
         triggerOnTapDown: true,
@@ -299,6 +303,7 @@ extension _ChatPageStateComposerUi on _ChatPageState {
     BuildContext context, {
     required SlTokens tokens,
     required ColorScheme colorScheme,
+    required double maxComposerWidth,
   }) {
     return ListenableBuilder(
       listenable: _inputFocusNode,
@@ -312,6 +317,9 @@ extension _ChatPageStateComposerUi on _ChatPageState {
             final hasDraftAttachments = _composerDraftAttachments.isNotEmpty;
             final hasAttachActions =
                 _supportsImageUpload || _supportsAudioRecording;
+            final prioritizeInputWidth =
+                showMarkdownButton && hasText && maxComposerWidth <= 340;
+            final showAiAction = hasText && !prioritizeInputWidth;
 
             if (_asking) {
               return Padding(
@@ -367,6 +375,10 @@ extension _ChatPageStateComposerUi on _ChatPageState {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
+                  if (showMarkdownButton) ...[
+                    _buildComposerMarkdownEditorButton(context),
+                    const SizedBox(width: 8),
+                  ],
                   if (!hasText && hasAttachActions) ...[
                     _buildCompactAttachButton(
                       context,
@@ -374,7 +386,7 @@ extension _ChatPageStateComposerUi on _ChatPageState {
                     ),
                     const SizedBox(width: 8),
                   ],
-                  if (hasText && _showConfigureAiEntry) ...[
+                  if (showAiAction && _showConfigureAiEntry) ...[
                     _buildComposerInlineButton(
                       context,
                       key: const ValueKey('chat_configure_ai'),
@@ -388,7 +400,7 @@ extension _ChatPageStateComposerUi on _ChatPageState {
                       iconOnly: true,
                     ),
                     const SizedBox(width: 8),
-                  ] else if (hasText && _canAskAiNow) ...[
+                  ] else if (showAiAction && _canAskAiNow) ...[
                     _buildComposerInlineButton(
                       context,
                       key: const ValueKey('chat_ask_ai'),

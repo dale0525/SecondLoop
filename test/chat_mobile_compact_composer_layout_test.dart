@@ -30,20 +30,24 @@ void main() {
     final inputSize = tester.getSize(inputFinder);
     expect(inputSize.width, greaterThanOrEqualTo(150));
 
+    expect(
+      find.byKey(const ValueKey('chat_open_markdown_editor')),
+      findsOneWidget,
+    );
+
     final sendSize = tester.getSize(find.byKey(const ValueKey('chat_send')));
     final configureFinder = find.byKey(const ValueKey('chat_configure_ai'));
     final askFinder = find.byKey(const ValueKey('chat_ask_ai'));
     final hasConfigure = configureFinder.evaluate().isNotEmpty;
     final hasAsk = askFinder.evaluate().isNotEmpty;
 
-    expect(hasConfigure || hasAsk, isTrue);
-
-    final aiActionSize = hasConfigure
-        ? tester.getSize(configureFinder)
-        : tester.getSize(askFinder);
-
     expect(sendSize.width, lessThanOrEqualTo(64));
-    expect(aiActionSize.width, lessThanOrEqualTo(64));
+    if (hasConfigure || hasAsk) {
+      final aiActionSize = hasConfigure
+          ? tester.getSize(configureFinder)
+          : tester.getSize(askFinder);
+      expect(aiActionSize.width, lessThanOrEqualTo(64));
+    }
 
     expect(tester.takeException(), isNull);
   });

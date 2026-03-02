@@ -13,6 +13,28 @@ import 'test_backend.dart';
 import 'test_i18n.dart';
 
 void main() {
+  testWidgets(
+      'Compact composer keeps markdown editor entry visible while typing',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+
+    await tester.pumpWidget(_wrapChat(backend: TestAppBackend()));
+    await tester.pumpAndSettle();
+
+    const inputKey = ValueKey('chat_input');
+    const editorOpenKey = ValueKey('chat_open_markdown_editor');
+
+    await tester.tap(find.byKey(inputKey));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(editorOpenKey), findsOneWidget);
+
+    await tester.enterText(find.byKey(inputKey), 'Draft markdown text');
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(editorOpenKey), findsOneWidget);
+  });
+
   testWidgets('Chat composer opens markdown editor and sends on save',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
