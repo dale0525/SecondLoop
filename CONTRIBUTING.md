@@ -95,9 +95,14 @@ Required env/secrets for release automation:
 - Optional local env: `RELEASE_LLM_CA_BUNDLE` (CA file path when custom LLM endpoint uses private CA)
 - Optional variable: `RELEASE_NOTES_LOCALES`
 - Optional variable: `WINGET_PKGS_FORK_REPO` (default: `<github.repository_owner>/winget-pkgs`)
+- Optional variable: `WINGET_AUTO_AGREE_CLA` (default: `true`)
+- Optional variable: `WINGET_CLA_COMPANY` (example: `Microsoft`)
 
 Notes:
 - `WINGET_PKGS_FORK_REPO` must already exist as a fork of `microsoft/winget-pkgs`.
+- WinGet PRs can trigger a Microsoft CLA check. The release workflow now auto-posts `@microsoft-github-policy-service agree` using `WINGET_PKGS_TOKEN` when `WINGET_AUTO_AGREE_CLA=true`.
+- If submissions are made on behalf of a company, set `WINGET_CLA_COMPANY` so automation posts `@microsoft-github-policy-service agree company="<your-company>"` instead.
+- Set `WINGET_AUTO_AGREE_CLA=false` to disable auto-commenting and handle CLA replies manually.
 - Release workflow now auto-opens a WinGet PR and updates `dale0525/SecondLoopHomebrew` on each `vX.Y.Z` tag.
 
 See `RELEASE_CHECKLIST.md` for the full checklist, including Android signing + Play/App Store readiness notes.
