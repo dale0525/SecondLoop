@@ -84,7 +84,7 @@ void main() {
     });
 
     test(
-        'returns seamless Windows update from Velopack nupkg when runtime is available',
+        'returns staged Windows update from Velopack nupkg when runtime is available',
         () async {
       final stagedClient = _FakeWindowsStagedUpdateClient(available: true);
       final service = AppUpdateService(
@@ -115,7 +115,7 @@ void main() {
       expect(result.update, isNotNull);
       expect(
         result.update!.installMode,
-        AppUpdateInstallMode.seamlessRestart,
+        AppUpdateInstallMode.stagedNextLaunch,
       );
       expect(
         result.update!.downloadUri.toString(),
@@ -296,7 +296,7 @@ void main() {
       );
     });
 
-    test('returns seamless Windows update when Velopack runtime is available',
+    test('returns staged Windows update when Velopack runtime is available',
         () async {
       final stagedClient = _FakeWindowsStagedUpdateClient(available: true);
       final service = AppUpdateService(
@@ -323,7 +323,7 @@ void main() {
       expect(result.update, isNotNull);
       expect(
         result.update!.installMode,
-        AppUpdateInstallMode.seamlessRestart,
+        AppUpdateInstallMode.stagedNextLaunch,
       );
     });
   });

@@ -40,6 +40,8 @@ class _AutoUpgradeGateState extends State<AutoUpgradeGate> {
 
   late final AppUpdateService _updateService;
   AppUpdateService? _ownedUpdateService;
+  bool get _isWindowsPlatform =>
+      !kIsWeb && defaultTargetPlatform == TargetPlatform.windows;
 
   @override
   void initState() {
@@ -88,6 +90,14 @@ class _AutoUpgradeGateState extends State<AutoUpgradeGate> {
       final update = result.update;
       if (update == null) {
         await UpdateBadgePrefs.clear();
+        return;
+      }
+
+      if (_isWindowsPlatform) {
+        await UpdateBadgePrefs.clear();
+        if (update.canStageForNextLaunch || update.canSeamlessInstall) {
+          await _updateService.stageUpdateForNextLaunch(update);
+        }
         return;
       }
 

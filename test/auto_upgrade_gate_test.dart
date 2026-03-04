@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:secondloop/core/update/app_update_service.dart';
 import 'package:secondloop/core/update/auto_upgrade_gate.dart';
+import 'package:secondloop/core/update/update_badge_prefs.dart';
 
 import 'test_i18n.dart';
 
@@ -157,6 +158,43 @@ void main() {
     expect(service.applyPendingCalls, 1);
     expect(service.staged?.latestTag, 'v1.1.0');
   });
+
+  testWidgets('windows update stages silently without badge or reminder',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    UpdateBadgePrefs.resetForTests();
+
+    final update = AppUpdateAvailability(
+      currentVersion: '1.0.1+99',
+      latestTag: 'v1.2.0',
+      releasePageUri: Uri.parse(
+        'https://github.com/dale0525/SecondLoop/releases/tag/v1.2.0',
+      ),
+      installMode: AppUpdateInstallMode.stagedNextLaunch,
+      asset: AppUpdateAsset(
+        name: 'com.secondloop.secondloop-1.2.0-full.nupkg',
+        downloadUri: Uri.parse('https://cdn.example.com/win-v1.2.0.nupkg'),
+      ),
+    );
+    final service = _FakeAutoUpdateService(
+      result: AppUpdateCheckResult(
+        currentVersion: '1.0.1+99',
+        update: update,
+      ),
+    );
+
+    await pumpGate(tester, service: service);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 120));
+
+    expect(service.installCalls, 0);
+    expect(service.stageCalls, 1);
+    expect(UpdateBadgePrefs.value.value, isNull);
+    expect(find.byType(SnackBar), findsNothing);
+  },
+      variant: const TargetPlatformVariant(<TargetPlatform>{
+        TargetPlatform.windows,
+      }));
 
   testWidgets('continues update check when pending apply fails',
       (tester) async {
