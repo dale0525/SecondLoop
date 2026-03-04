@@ -705,12 +705,211 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const ValueKey('message_action_convert_todo')),
-        findsNothing);
+        findsOneWidget);
     expect(
         find.byKey(const ValueKey('message_action_open_todo')), findsOneWidget);
+    expect(find.byKey(const ValueKey('message_action_convert_to_info')),
+        findsOneWidget);
     expect(
         find.byKey(const ValueKey('message_action_link_todo')), findsOneWidget);
     expect(find.text('Link to another task'), findsOneWidget);
+  });
+
+  testWidgets('Linked note convert to todo detaches it from previous task',
+      (tester) async {
+    final backend = MessageActionsBackend(
+      messages: [
+        const Message(
+          id: 'm2',
+          conversationId: 'loop_home',
+          role: 'user',
+          content: 'note',
+          createdAtMs: 0,
+          isMemory: true,
+        ),
+      ],
+      todos: const [
+        Todo(
+          id: 't1',
+          title: 'Task A',
+          status: 'open',
+          sourceEntryId: 'm1',
+          createdAtMs: 0,
+          updatedAtMs: 0,
+        ),
+      ],
+      activities: const [
+        TodoActivity(
+          id: 'a1',
+          todoId: 't1',
+          activityType: 'note',
+          sourceMessageId: 'm2',
+          createdAtMs: 0,
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(wrapChatForTests(backend: backend));
+    await tester.pumpAndSettle();
+
+    await tester.longPress(find.text('note'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('message_action_convert_todo')));
+    await tester.pumpAndSettle();
+
+    await tester.ensureVisible(find.text('Save'));
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+
+    expect(
+      backend.movedActivityOps,
+      contains((activityId: 'a1', toTodoId: 'todo:m2')),
+    );
+
+    final activities = await backend.listTodoActivitiesInRange(
+      Uint8List(0),
+      startAtMsInclusive: 0,
+      endAtMsExclusive: DateTime.now().toUtc().millisecondsSinceEpoch + 1,
+    );
+    expect(
+      activities.any((a) => a.todoId == 't1' && a.sourceMessageId == 'm2'),
+      isFalse,
+    );
+  });
+
+  testWidgets('Linked note link-to-other detaches it from previous task',
+      (tester) async {
+    final backend = MessageActionsBackend(
+      messages: [
+        const Message(
+          id: 'm2',
+          conversationId: 'loop_home',
+          role: 'user',
+          content: 'note',
+          createdAtMs: 0,
+          isMemory: true,
+        ),
+      ],
+      todos: const [
+        Todo(
+          id: 't1',
+          title: 'Task A',
+          status: 'open',
+          sourceEntryId: 'm1',
+          createdAtMs: 0,
+          updatedAtMs: 0,
+        ),
+        Todo(
+          id: 't2',
+          title: 'Task B',
+          status: 'open',
+          createdAtMs: 0,
+          updatedAtMs: 0,
+        ),
+      ],
+      activities: const [
+        TodoActivity(
+          id: 'a1',
+          todoId: 't1',
+          activityType: 'note',
+          sourceMessageId: 'm2',
+          createdAtMs: 0,
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(wrapChatForTests(backend: backend));
+    await tester.pumpAndSettle();
+
+    await tester.longPress(find.text('note'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('message_action_link_todo')));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Task B'));
+    await tester.pumpAndSettle();
+
+    expect(
+      backend.movedActivityOps,
+      contains((activityId: 'a1', toTodoId: 't2')),
+    );
+
+    final activities = await backend.listTodoActivitiesInRange(
+      Uint8List(0),
+      startAtMsInclusive: 0,
+      endAtMsExclusive: DateTime.now().toUtc().millisecondsSinceEpoch + 1,
+    );
+    expect(
+      activities.any((a) => a.todoId == 't1' && a.sourceMessageId == 'm2'),
+      isFalse,
+    );
+  });
+
+  testWidgets('Linked note convert to info detaches it from previous task',
+      (tester) async {
+    final backend = MessageActionsBackend(
+      messages: [
+        const Message(
+          id: 'm2',
+          conversationId: 'loop_home',
+          role: 'user',
+          content: 'note',
+          createdAtMs: 0,
+          isMemory: true,
+        ),
+      ],
+      todos: const [
+        Todo(
+          id: 't1',
+          title: 'Task A',
+          status: 'open',
+          sourceEntryId: 'm1',
+          createdAtMs: 0,
+          updatedAtMs: 0,
+        ),
+      ],
+      activities: const [
+        TodoActivity(
+          id: 'a1',
+          todoId: 't1',
+          activityType: 'note',
+          sourceMessageId: 'm2',
+          createdAtMs: 0,
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(wrapChatForTests(backend: backend));
+    await tester.pumpAndSettle();
+
+    await tester.longPress(find.text('note'));
+    await tester.pumpAndSettle();
+
+    await tester
+        .tap(find.byKey(const ValueKey('message_action_convert_to_info')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Convert to note?'), findsOneWidget);
+
+    await tester.tap(find.text('Confirm'));
+    await tester.pumpAndSettle();
+
+    expect(
+      backend.movedActivityOps,
+      contains((activityId: 'a1', toTodoId: 'todo:_detached_message_link:m2')),
+    );
+
+    final activities = await backend.listTodoActivitiesInRange(
+      Uint8List(0),
+      startAtMsInclusive: 0,
+      endAtMsExclusive: DateTime.now().toUtc().millisecondsSinceEpoch + 1,
+    );
+    expect(
+      activities.any((a) => a.todoId == 't1' && a.sourceMessageId == 'm2'),
+      isFalse,
+    );
   });
 
   testWidgets('AI messages are not editable', (tester) async {
@@ -767,6 +966,7 @@ class MessageActionsBackend extends AppBackend {
   final List<String> deletedMessageIds = [];
   final List<String> deletedTodoIds = [];
   final List<Todo> upsertedTodos = [];
+  final List<({String activityId, String toTodoId})> movedActivityOps = [];
   String? lastUpdatedDueTodoId;
   int? lastUpdatedDueAtMs;
   TodoRecurrenceEditScope? lastUpdatedDueScope;
@@ -951,7 +1151,9 @@ class MessageActionsBackend extends AppBackend {
     Uint8List key,
     String todoId,
   ) async =>
-      const <TodoActivity>[];
+      _activities
+          .where((activity) => activity.todoId == todoId)
+          .toList(growable: false);
 
   @override
   Future<List<TodoActivity>> listTodoActivitiesInRange(
@@ -960,6 +1162,95 @@ class MessageActionsBackend extends AppBackend {
     required int endAtMsExclusive,
   }) async =>
       List<TodoActivity>.from(_activities);
+
+  @override
+  Future<Todo> setTodoStatus(
+    Uint8List key, {
+    required String todoId,
+    required String newStatus,
+    String? sourceMessageId,
+  }) async {
+    final index = _todos.indexWhere((todo) => todo.id == todoId);
+    if (index < 0) {
+      throw StateError('todo_not_found:$todoId');
+    }
+    final existing = _todos[index];
+    final updated = Todo(
+      id: existing.id,
+      title: existing.title,
+      dueAtMs: existing.dueAtMs,
+      status: newStatus,
+      sourceEntryId: existing.sourceEntryId,
+      createdAtMs: existing.createdAtMs,
+      updatedAtMs: DateTime.now().toUtc().millisecondsSinceEpoch,
+      reviewStage: existing.reviewStage,
+      nextReviewAtMs: existing.nextReviewAtMs,
+      lastReviewAtMs: existing.lastReviewAtMs,
+    );
+    _todos[index] = updated;
+    return updated;
+  }
+
+  @override
+  Future<TodoActivity> appendTodoNote(
+    Uint8List key, {
+    required String todoId,
+    required String content,
+    String? sourceMessageId,
+  }) async {
+    final nowMs = DateTime.now().toUtc().millisecondsSinceEpoch;
+    final activity = TodoActivity(
+      id: 'a${_activities.length + 1}',
+      todoId: todoId,
+      activityType: 'note',
+      content: content,
+      sourceMessageId: sourceMessageId,
+      createdAtMs: nowMs,
+    );
+    _activities.add(activity);
+    return activity;
+  }
+
+  @override
+  Future<TodoActivity> moveTodoActivity(
+    Uint8List key, {
+    required String activityId,
+    required String toTodoId,
+  }) async {
+    final index =
+        _activities.indexWhere((activity) => activity.id == activityId);
+    if (index < 0) {
+      throw StateError('activity_not_found:$activityId');
+    }
+    final existing = _activities[index];
+    final moved = TodoActivity(
+      id: existing.id,
+      todoId: toTodoId,
+      activityType: existing.activityType,
+      fromStatus: existing.fromStatus,
+      toStatus: existing.toStatus,
+      content: existing.content,
+      sourceMessageId: existing.sourceMessageId,
+      createdAtMs: existing.createdAtMs,
+    );
+    _activities[index] = moved;
+    movedActivityOps.add((activityId: activityId, toTodoId: toTodoId));
+    return moved;
+  }
+
+  @override
+  Future<List<SemanticParseJob>> listSemanticParseJobsByMessageIds(
+    Uint8List key, {
+    required List<String> messageIds,
+  }) async =>
+      const <SemanticParseJob>[];
+
+  @override
+  Future<void> markSemanticParseJobUndone(
+    Uint8List key, {
+    required String messageId,
+    required int nowMs,
+  }) async {}
 
   @override
   Future<int> processPendingMessageEmbeddings(

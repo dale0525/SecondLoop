@@ -86,27 +86,11 @@ extension _ChatPageStateMethodsD on _ChatPageState {
 
     try {
       if (shouldMoveExisting && linkedTodoInfo.todo.id != selected.id) {
-        String? sourceActivityId;
-        try {
-          final activities = await backend.listTodoActivities(
-              sessionKey, linkedTodoInfo.todo.id);
-          for (final activity in activities) {
-            if (activity.sourceMessageId == message.id) {
-              sourceActivityId = activity.id;
-              break;
-            }
-          }
-        } catch (_) {
-          sourceActivityId = null;
-        }
-
-        if (sourceActivityId != null) {
-          await backend.moveTodoActivity(
-            sessionKey,
-            activityId: sourceActivityId,
-            toTodoId: selected.id,
-          );
-        } else {
+        final moved = await _moveLinkedTodoActivitiesForMessage(
+          messageId: message.id,
+          toTodoId: selected.id,
+        );
+        if (moved <= 0) {
           final activity = await backend.appendTodoNote(
             sessionKey,
             todoId: selected.id,

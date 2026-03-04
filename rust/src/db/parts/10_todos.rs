@@ -511,14 +511,32 @@ pub fn move_todo_activity(
             return Ok(activity);
         }
 
+        let todo_exists: Option<i64> = conn
+            .query_row(
+                r#"SELECT 1 FROM todos WHERE id = ?1"#,
+                params![to_todo_id],
+                |row| row.get(0),
+            )
+            .optional()?;
+        if todo_exists.is_none() {
+            // Keep behavior aligned with sync apply path:
+            // allow moving to a temporary/orphan todo id so source-message
+            // links can be detached without deleting the original message.
+            conn.execute_batch("PRAGMA foreign_keys = OFF;")?;
+        }
+
         let now = now_ms();
-        conn.execute(
+        let update_result = conn.execute(
             r#"UPDATE todo_activities
                SET todo_id = ?2,
                    needs_embedding = 1
                WHERE id = ?1"#,
             params![activity_id, to_todo_id],
-        )?;
+        );
+        if todo_exists.is_none() {
+            let _ = conn.execute_batch("PRAGMA foreign_keys = ON;");
+        }
+        update_result?;
 
         // Persist move metadata to prevent older remote ops overriding local moves.
         let moved_at_key = format!("todo_activity.todo_id_updated_at:{activity_id}");
