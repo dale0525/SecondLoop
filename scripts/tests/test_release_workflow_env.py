@@ -394,6 +394,11 @@ class ReleaseWorkflowEnvTests(unittest.TestCase):
         self.assertIn("PackageDependencies:", script_text)
         self.assertIn("Microsoft.VCRedist.2015+.x64", script_text)
 
+    def test_generate_winget_manifest_script_sets_user_scope(self) -> None:
+        script_text = self._generate_winget_script_text()
+
+        self.assertIn("Scope: user", script_text)
+
     def test_generate_winget_manifest_script_emits_schema_headers(self) -> None:
         script_path = (
             Path(__file__).resolve().parents[2] / "scripts/generate_winget_manifests.py"
