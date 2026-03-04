@@ -87,13 +87,19 @@ class _MediaEnrichmentGateState extends State<MediaEnrichmentGate>
       case AppLifecycleState.resumed:
         _schedule(const Duration(milliseconds: 800));
         break;
-      case AppLifecycleState.inactive:
-      case AppLifecycleState.paused:
       case AppLifecycleState.detached:
-      case AppLifecycleState.hidden:
         _timer?.cancel();
         _timer = null;
         _nextRunAt = null;
+        break;
+      case AppLifecycleState.inactive:
+      case AppLifecycleState.paused:
+      case AppLifecycleState.hidden:
+        if (_shouldPauseInBackground()) {
+          _timer?.cancel();
+          _timer = null;
+          _nextRunAt = null;
+        }
         break;
     }
   }
@@ -113,6 +119,12 @@ class _MediaEnrichmentGateState extends State<MediaEnrichmentGate>
 
     _attachSyncEngine(SyncEngineScope.maybeOf(context));
     _schedule(const Duration(seconds: 2));
+  }
+
+  bool _shouldPauseInBackground() {
+    if (kIsWeb) return false;
+    return defaultTargetPlatform == TargetPlatform.android ||
+        defaultTargetPlatform == TargetPlatform.iOS;
   }
 
   void _attachSyncEngine(SyncEngine? engine) {
@@ -520,7 +532,6 @@ class _MediaEnrichmentGateState extends State<MediaEnrichmentGate>
             preference: urlPreference,
             cloudAvailable: cloudAvailable,
             byokProfile: effectiveOpenAiProfile(),
-            backend: backend,
             sessionKey: Uint8List.fromList(sessionKey),
             gatewayBaseUrl: gatewayConfig.baseUrl,
             cloudIdToken: idToken?.trim() ?? '',

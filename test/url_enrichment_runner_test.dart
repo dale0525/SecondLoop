@@ -312,4 +312,72 @@ void main() {
     expect(payload.containsKey('llm_tags'), isFalse);
     expect(store.titleBySha['c'], 'Local Title');
   });
+
+  test('prefers main content and strips header/footer boilerplate', () async {
+    final manifest = jsonEncode({
+      'schema': kSecondLoopUrlManifestSchema,
+      'url': 'https://github.com/org/repo',
+    });
+
+    final store = _MemStore(
+      jobs: const [
+        UrlEnrichmentJob(
+          attachmentSha256: 'd',
+          lang: 'und',
+          status: 'pending',
+          attempts: 0,
+          nextRetryAtMs: null,
+        ),
+      ],
+      bytesBySha: {
+        'd': Uint8List.fromList(utf8.encode(manifest)),
+      },
+    );
+
+    const html = '''
+<html>
+  <head><title>repo</title></head>
+  <body>
+    <header class="Header">
+      <nav>Sign in Pricing Explore Marketplace</nav>
+    </header>
+    <main id="js-repo-pjax-container">
+      <article>
+        <h1>owner/repo</h1>
+        <p>High-performance data sync toolkit for notes.</p>
+        <p>Supports incremental pull/push and conflict resolution.</p>
+      </article>
+    </main>
+    <footer role="contentinfo">
+      Terms Privacy Security Contact
+    </footer>
+  </body>
+</html>
+''';
+
+    final fetcher = _FakeFetcher(
+      response: UrlFetchResponse(
+        finalUri: Uri.parse('https://github.com/org/repo'),
+        statusCode: 200,
+        contentType: 'text/html',
+        bodyBytes: Uint8List.fromList(utf8.encode(html)),
+      ),
+    );
+
+    final runner =
+        UrlEnrichmentRunner(store: store, fetcher: fetcher, nowMs: () => 4000);
+    final result = await runner.runOnce();
+    expect(result.didEnrichAny, isTrue);
+
+    final payloadRaw = store.okPayloadBySha['d'];
+    expect(payloadRaw, isNotNull);
+    final payload = jsonDecode(payloadRaw!) as Map;
+    final fullText = payload['readable_text_full'] as String;
+
+    expect(fullText, contains('High-performance data sync toolkit for notes.'));
+    expect(fullText, contains('incremental pull/push'));
+    expect(fullText.toLowerCase(), isNot(contains('sign in')));
+    expect(fullText.toLowerCase(), isNot(contains('pricing')));
+    expect(fullText.toLowerCase(), isNot(contains('terms privacy security')));
+  });
 }

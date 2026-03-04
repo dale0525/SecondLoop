@@ -468,7 +468,11 @@ class UrlEnrichmentRunner {
     final title = _extractTitle(html);
     final canonical = _extractCanonicalUrl(html, baseUri: baseUri);
     final site = baseUri.host.trim().isEmpty ? null : baseUri.host.trim();
-    final text = _htmlToTextV1(html);
+    final preferredHtml = _extractPrimaryContentBlock(html);
+    var text = _htmlToTextV1(preferredHtml);
+    if (preferredHtml != html && text.runes.length < 120) {
+      text = _htmlToTextV1(html);
+    }
     return _ExtractedHtml(
       title: title,
       canonicalUrl: canonical,
@@ -523,11 +527,30 @@ class UrlEnrichmentRunner {
     return resolved.toString();
   }
 
+  static String _extractPrimaryContentBlock(String html) {
+    for (final tag in const <String>['main', 'article']) {
+      final block = RegExp(
+        '<$tag\\b[^>]*>[\\s\\S]*?<\\/$tag>',
+        caseSensitive: false,
+      ).firstMatch(html);
+      final raw = block?.group(0);
+      if (raw == null) continue;
+      if (raw.trim().isEmpty) continue;
+      return raw;
+    }
+    return html;
+  }
+
   static String _htmlToTextV1(String html) {
     var s = html;
+    s = s.replaceAll(RegExp(r'<!--[\s\S]*?-->'), ' ');
     s = _stripTagBlocks(s, 'script');
     s = _stripTagBlocks(s, 'style');
     s = _stripTagBlocks(s, 'noscript');
+    s = _stripTagBlocks(s, 'template');
+    s = _stripTagBlocks(s, 'svg');
+    s = _stripTagBlocks(s, 'canvas');
+    s = _stripLikelyBoilerplateBlocks(s);
 
     const blockTags = <String>{
       'p',
@@ -576,6 +599,41 @@ class UrlEnrichmentRunner {
 
     final decoded = _decodeHtmlEntities(out.toString());
     return _normalizeWhitespaceKeepParagraphs(decoded);
+  }
+
+  static String _stripLikelyBoilerplateBlocks(String html) {
+    var s = html;
+    s = _stripBlocksByPattern(
+      s,
+      RegExp(
+        r'<(header|footer|nav|aside)\b[^>]*>[\s\S]*?<\/\1>',
+        caseSensitive: false,
+      ),
+    );
+    s = _stripBlocksByPattern(
+      s,
+      RegExp(
+        r'''<(div|section|ul|ol|form)\b[^>]*(?:id|class|role|aria-label)\s*=\s*["'][^"']*(?:header|footer|nav|menu|breadcrumb|sidebar|masthead|topbar|navbar|site-nav|global-nav|global-header|global-footer|gh-header|repohead|skip-link)[^"']*["'][^>]*>[\s\S]*?<\/\1>''',
+        caseSensitive: false,
+      ),
+    );
+    s = _stripBlocksByPattern(
+      s,
+      RegExp(
+        r'''<([a-z][a-z0-9:_-]*)\b[^>]*\brole\s*=\s*["'](?:banner|contentinfo|navigation|complementary|search)["'][^>]*>[\s\S]*?<\/\1>''',
+        caseSensitive: false,
+      ),
+    );
+    return s;
+  }
+
+  static String _stripBlocksByPattern(String html, RegExp pattern) {
+    var current = html;
+    while (true) {
+      final next = current.replaceAll(pattern, ' ');
+      if (next == current) return current;
+      current = next;
+    }
   }
 
   static String _stripTagBlocks(String html, String tag) {

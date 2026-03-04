@@ -37,3 +37,49 @@ Future<String> mediaAnnotationByokProfile(
         lang: lang,
         mimeType: mimeType,
         imageBytes: imageBytes);
+
+Future<String> urlEnrichmentByokProfile(
+        {required String appDir,
+        required List<int> key,
+        required String profileId,
+        required String originalUrl,
+        required String finalUrl,
+        required String site,
+        String? title,
+        required String readableTextExcerpt,
+        required String readableTextFull}) =>
+    RustLib.instance.api.crateApiMediaAnnotationUrlEnrichmentByokProfile(
+        appDir: appDir,
+        key: key,
+        profileId: profileId,
+        originalUrl: originalUrl,
+        finalUrl: finalUrl,
+        site: site,
+        title: title,
+        readableTextExcerpt: readableTextExcerpt,
+        readableTextFull: readableTextFull);
+
+Future<String> urlEnrichmentCloudGateway(
+        {required String appDir,
+        required List<int> key,
+        required String gatewayBaseUrl,
+        required String firebaseIdToken,
+        required String modelName,
+        required String originalUrl,
+        required String finalUrl,
+        required String site,
+        String? title,
+        required String readableTextExcerpt,
+        required String readableTextFull}) =>
+    RustLib.instance.api.crateApiMediaAnnotationUrlEnrichmentCloudGateway(
+        appDir: appDir,
+        key: key,
+        gatewayBaseUrl: gatewayBaseUrl,
+        firebaseIdToken: firebaseIdToken,
+        modelName: modelName,
+        originalUrl: originalUrl,
+        finalUrl: finalUrl,
+        site: site,
+        title: title,
+        readableTextExcerpt: readableTextExcerpt,
+        readableTextFull: readableTextFull);

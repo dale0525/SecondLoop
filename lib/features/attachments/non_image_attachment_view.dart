@@ -92,6 +92,9 @@ String normalizeAttachmentOcrLanguageHint(String value) {
   return 'device_plus_en';
 }
 
+const String _kSecondLoopUrlManifestMimeType =
+    'application/x.secondloop.url+json';
+
 String attachmentOcrLanguageHintLabel(BuildContext context, String hint) {
   final labels =
       context.t.settings.mediaAnnotation.documentOcr.languageHints.labels;
@@ -192,6 +195,7 @@ class NonImageAttachmentView extends StatefulWidget {
     this.onRunOcr,
     this.ocrRunning = false,
     this.ocrStatusText,
+    this.onRetryRecognition,
     this.ocrLanguageHints = 'device_plus_en',
     this.onOcrLanguageHintsChanged,
     this.onSaveFull,
@@ -207,6 +211,7 @@ class NonImageAttachmentView extends StatefulWidget {
   final Map<String, Object?>? initialAnnotationPayload;
   final AttachmentAnnotationJob? annotationJob;
   final Future<void> Function()? onRunOcr;
+  final Future<void> Function()? onRetryRecognition;
   final bool ocrRunning;
   final String? ocrStatusText;
   final String ocrLanguageHints;
@@ -644,6 +649,7 @@ class _NonImageAttachmentViewState extends State<NonImageAttachmentView> {
     final mime = attachment.mimeType.trim().toLowerCase();
     final isPdf = mime == 'application/pdf';
     final isDocx = isDocxMimeType(mime);
+    final isUrlManifest = mime == _kSecondLoopUrlManifestMimeType;
     final isVideoManifest = mime == kSecondLoopVideoManifestMimeType;
     final supportsOcr = isPdf || isDocx || isVideoManifest;
     final canRunOcr = supportsOcr && onRunOcr != null;
@@ -729,6 +735,23 @@ class _NonImageAttachmentViewState extends State<NonImageAttachmentView> {
             icon: const Icon(Icons.auto_awesome_rounded),
           )
         : null;
+    final retryRecognitionButton =
+        widget.onRetryRecognition == null || !isUrlManifest
+            ? null
+            : IconButton(
+                key: const ValueKey('attachment_text_full_regenerate'),
+                tooltip: context.t.attachments.content.rerunOcr,
+                onPressed: ocrInProgress
+                    ? null
+                    : () => unawaited(widget.onRetryRecognition!()),
+                icon: ocrInProgress
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.auto_awesome_rounded),
+              );
 
     Widget buildSection(
       Widget child, {
@@ -861,7 +884,7 @@ class _NonImageAttachmentViewState extends State<NonImageAttachmentView> {
                   text: fullText,
                   markdown: true,
                   emptyText: attachmentDetailEmptyTextLabel(context),
-                  trailing: regenerateButton,
+                  trailing: regenerateButton ?? retryRecognitionButton,
                   onSave: widget.onSaveFull,
                 ),
                 maxWidth: 820,

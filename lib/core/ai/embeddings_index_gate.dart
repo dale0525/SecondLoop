@@ -1,6 +1,6 @@
 import 'dart:async';
-import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -66,13 +66,19 @@ class _EmbeddingsIndexGateState extends State<EmbeddingsIndexGate>
       case AppLifecycleState.resumed:
         _schedule(const Duration(milliseconds: 600));
         break;
-      case AppLifecycleState.inactive:
-      case AppLifecycleState.paused:
       case AppLifecycleState.detached:
-      case AppLifecycleState.hidden:
         _timer?.cancel();
         _timer = null;
         _nextRunAt = null;
+        break;
+      case AppLifecycleState.inactive:
+      case AppLifecycleState.paused:
+      case AppLifecycleState.hidden:
+        if (_shouldPauseInBackground()) {
+          _timer?.cancel();
+          _timer = null;
+          _nextRunAt = null;
+        }
         break;
     }
   }
@@ -92,6 +98,12 @@ class _EmbeddingsIndexGateState extends State<EmbeddingsIndexGate>
 
     _attachSyncEngine(SyncEngineScope.maybeOf(context));
     _schedule(const Duration(seconds: 2));
+  }
+
+  bool _shouldPauseInBackground() {
+    if (kIsWeb) return false;
+    return defaultTargetPlatform == TargetPlatform.android ||
+        defaultTargetPlatform == TargetPlatform.iOS;
   }
 
   void _attachSyncEngine(SyncEngine? engine) {

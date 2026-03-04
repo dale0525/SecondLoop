@@ -294,7 +294,9 @@ class _SemanticParseJobStatusRowState extends State<SemanticParseJobStatusRow> {
     final status = job.status;
     final undoneAtMs = job.undoneAtMs?.toInt();
 
-    if (undoneAtMs == null && status != 'succeeded') return;
+    if (undoneAtMs == null && status != 'succeeded' && status != 'canceled') {
+      return;
+    }
     if (status == 'succeeded' &&
         (job.appliedActionKind == null || job.appliedActionKind == 'none') &&
         !_isTagSuggestionApplied(job)) {
@@ -594,16 +596,7 @@ class _SemanticParseJobStatusRowState extends State<SemanticParseJobStatusRow> {
           ];
           break;
         case 'canceled':
-          label = t.chat.semanticParseStatusCanceled;
-          leading =
-              Icon(Icons.block_rounded, size: 14, color: colorScheme.outline);
-          actions = [
-            TextButton(
-              onPressed: _retryJob,
-              child: Text(t.common.actions.retry),
-            ),
-          ];
-          break;
+          return const SizedBox.shrink();
         case 'succeeded':
           final kind = widget.job.appliedActionKind;
           if (kind == null || kind == 'none') {

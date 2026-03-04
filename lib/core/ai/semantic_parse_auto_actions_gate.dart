@@ -1,6 +1,6 @@
 import 'dart:async';
-import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -13,6 +13,7 @@ import '../session/session_scope.dart';
 import '../subscription/subscription_scope.dart';
 import '../sync/sync_engine.dart';
 import '../sync/sync_engine_gate.dart';
+import '../../src/rust/db.dart';
 import 'ai_routing.dart';
 import 'embeddings_data_consent_prefs.dart';
 import 'embeddings_source_prefs.dart';
@@ -71,13 +72,19 @@ class _SemanticParseAutoActionsGateState
         _nextRunAt = null;
         _schedule(const Duration(milliseconds: 800));
         break;
-      case AppLifecycleState.inactive:
-      case AppLifecycleState.paused:
       case AppLifecycleState.detached:
-      case AppLifecycleState.hidden:
         _timer?.cancel();
         _timer = null;
         _nextRunAt = null;
+        break;
+      case AppLifecycleState.inactive:
+      case AppLifecycleState.paused:
+      case AppLifecycleState.hidden:
+        if (_shouldPauseInBackground()) {
+          _timer?.cancel();
+          _timer = null;
+          _nextRunAt = null;
+        }
         break;
     }
   }
@@ -156,6 +163,13 @@ class _SemanticParseAutoActionsGateState
       final enabled =
           prefs.getBool(SemanticParseDataConsentPrefs.prefsKey) ?? false;
       if (!enabled || !mounted) {
+        final canceled = await _cancelDueSemanticParseJobs(
+          backend,
+          sessionKey: sessionKey,
+        );
+        if (canceled) {
+          syncEngine?.notifyExternalChange();
+        }
         _schedule(_kIdleInterval);
         return;
       }
@@ -190,6 +204,13 @@ class _SemanticParseAutoActionsGateState
 
       if (!mounted) return;
       if (askAiRoute == AskAiRouteKind.needsSetup) {
+        final canceled = await _cancelDueSemanticParseJobs(
+          backend,
+          sessionKey: sessionKey,
+        );
+        if (canceled) {
+          syncEngine?.notifyExternalChange();
+        }
         _schedule(_kIdleInterval);
         return;
       }
@@ -279,6 +300,50 @@ class _SemanticParseAutoActionsGateState
     } finally {
       _running = false;
     }
+  }
+
+  bool _shouldPauseInBackground() {
+    if (kIsWeb) return false;
+    return defaultTargetPlatform == TargetPlatform.android ||
+        defaultTargetPlatform == TargetPlatform.iOS;
+  }
+
+  Future<bool> _cancelDueSemanticParseJobs(
+    NativeAppBackend backend, {
+    required Uint8List sessionKey,
+  }) async {
+    final nowMs = DateTime.now().millisecondsSinceEpoch;
+    List<SemanticParseJob> dueJobs;
+    try {
+      dueJobs = await backend.listDueSemanticParseJobs(
+        Uint8List.fromList(sessionKey),
+        nowMs: nowMs,
+        limit: _kBatchLimit,
+      );
+    } catch (_) {
+      return false;
+    }
+
+    var didCancelAny = false;
+    for (final job in dueJobs) {
+      final status = job.status.trim().toLowerCase();
+      if (status == 'succeeded' || status == 'failed' || status == 'canceled') {
+        continue;
+      }
+      final messageId = job.messageId.trim();
+      if (messageId.isEmpty) continue;
+      try {
+        await backend.markSemanticParseJobCanceled(
+          Uint8List.fromList(sessionKey),
+          messageId: messageId,
+          nowMs: nowMs,
+        );
+        didCancelAny = true;
+      } catch (_) {
+        continue;
+      }
+    }
+    return didCancelAny;
   }
 
   @override

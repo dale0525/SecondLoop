@@ -125,6 +125,92 @@ void main() {
     expect(find.text('Full Heading'), findsOneWidget);
   });
 
+  testWidgets('NonImageAttachmentView retries URL understanding',
+      (tester) async {
+    const attachment = Attachment(
+      sha256: 'sha-url-retry',
+      mimeType: 'application/x.secondloop.url+json',
+      path: 'attachments/sha-url-retry.bin',
+      byteLen: 128,
+      createdAtMs: 0,
+    );
+    final bytes = Uint8List.fromList(
+      utf8.encode(
+        jsonEncode({
+          'schema': 'secondloop.url_manifest.v1',
+          'url': 'https://example.com/retry',
+        }),
+      ),
+    );
+    var retried = 0;
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: NonImageAttachmentView(
+            attachment: attachment,
+            bytes: bytes,
+            displayTitle: 'Attachment',
+            initialAnnotationPayload: const <String, Object?>{
+              'full_text': 'URL summary content',
+            },
+            onRetryRecognition: () async {
+              retried += 1;
+            },
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final retryFinder =
+        find.byKey(const ValueKey('attachment_text_full_regenerate'));
+    expect(retryFinder, findsOneWidget);
+
+    await tester.tap(retryFinder);
+    await tester.pumpAndSettle();
+
+    expect(retried, 1);
+  });
+
+  testWidgets(
+      'NonImageAttachmentView hides retry understanding for non-URL attachments',
+      (tester) async {
+    const attachment = Attachment(
+      sha256: 'sha-text-retry',
+      mimeType: 'text/plain',
+      path: 'attachments/sha-text-retry.bin',
+      byteLen: 64,
+      createdAtMs: 0,
+    );
+    var retried = 0;
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: NonImageAttachmentView(
+            attachment: attachment,
+            bytes: Uint8List.fromList(utf8.encode('plain text')),
+            displayTitle: 'Text attachment',
+            initialAnnotationPayload: const <String, Object?>{
+              'full_text': 'plain text',
+            },
+            onRetryRecognition: () async {
+              retried += 1;
+            },
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('attachment_text_full_regenerate')),
+      findsNothing,
+    );
+    expect(retried, 0);
+  });
+
   testWidgets('NonImageAttachmentView shows None when full text is missing',
       (tester) async {
     const attachment = Attachment(
