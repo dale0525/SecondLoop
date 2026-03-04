@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 from pathlib import Path
+import subprocess
+import sys
+import tempfile
 import tomllib
 import unittest
 
@@ -383,6 +386,62 @@ class ReleaseWorkflowEnvTests(unittest.TestCase):
 
         self.assertIn('MANIFEST_VERSION = "1.10.0"', script_text)
         self.assertNotIn("ManifestVersion: 1.9.0", script_text)
+
+    def test_generate_winget_manifest_script_emits_schema_headers(self) -> None:
+        script_path = (
+            Path(__file__).resolve().parents[2] / "scripts/generate_winget_manifests.py"
+        )
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            tmp_root = Path(tmp_dir)
+            installer_path = tmp_root / "SecondLoop-win-Setup.exe"
+            installer_path.write_bytes(b"test-installer")
+            output_dir = tmp_root / "out"
+
+            subprocess.run(
+                [
+                    sys.executable,
+                    str(script_path),
+                    "--release-tag",
+                    "v1.20.0",
+                    "--repo",
+                    "dale0525/SecondLoop",
+                    "--installer-path",
+                    str(installer_path),
+                    "--output-dir",
+                    str(output_dir),
+                    "--package-identifier",
+                    "SecondLoop.SecondLoop",
+                ],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+
+            version_manifest = (output_dir / "SecondLoop.SecondLoop.yaml").read_text(
+                encoding="utf-8"
+            )
+            installer_manifest = (
+                output_dir / "SecondLoop.SecondLoop.installer.yaml"
+            ).read_text(encoding="utf-8")
+            locale_manifest = (
+                output_dir / "SecondLoop.SecondLoop.locale.en-US.yaml"
+            ).read_text(encoding="utf-8")
+
+            self.assertTrue(
+                version_manifest.startswith(
+                    "# yaml-language-server: $schema=https://aka.ms/winget-manifest.version.1.10.0.schema.json"
+                )
+            )
+            self.assertTrue(
+                installer_manifest.startswith(
+                    "# yaml-language-server: $schema=https://aka.ms/winget-manifest.installer.1.10.0.schema.json"
+                )
+            )
+            self.assertTrue(
+                locale_manifest.startswith(
+                    "# yaml-language-server: $schema=https://aka.ms/winget-manifest.defaultLocale.1.10.0.schema.json"
+                )
+            )
 
 
 
