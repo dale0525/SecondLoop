@@ -384,6 +384,13 @@ class ReleaseWorkflowEnvTests(unittest.TestCase):
         self.assertIn('MANIFEST_VERSION = "1.10.0"', script_text)
         self.assertNotIn("ManifestVersion: 1.9.0", script_text)
 
+    def test_generate_winget_manifest_script_declares_vcredist_dependency(self) -> None:
+        script_text = self._generate_winget_script_text()
+
+        self.assertIn("Dependencies:", script_text)
+        self.assertIn("PackageDependencies:", script_text)
+        self.assertIn("Microsoft.VCRedist.2015+.x64", script_text)
+
 
 
 if __name__ == "__main__":
