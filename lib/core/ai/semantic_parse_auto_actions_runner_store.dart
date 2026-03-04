@@ -17,8 +17,12 @@ final class BackendSemanticParseAutoActionsStore
   static const int _kMaxAttachmentSemanticSnippets = 10;
   static const int _kMaxAttachmentSnippetRunes = 320;
   static const int _kMaxSemanticAnalysisRunes = 2400;
+  static const String _kUrlAttachmentMimeType =
+      'application/x.secondloop.url+json';
   static const List<String> _kAttachmentSemanticPayloadKeys = <String>[
     'caption_long',
+    'manual_summary',
+    'llm_summary',
     'summary',
     'video_summary',
     'extracted_text_excerpt',
@@ -114,6 +118,34 @@ final class BackendSemanticParseAutoActionsStore
     for (final attachment in attachments) {
       if (snippets.length >= _kMaxAttachmentSemanticSnippets) break;
 
+      final attachmentMime = attachment.mimeType.trim().toLowerCase();
+      final isUrlAttachment = attachmentMime == _kUrlAttachmentMimeType;
+      var skipCaptionForAttachment = false;
+
+      if (backend is NativeAppBackend) {
+        try {
+          final payloadJson = await backend.readAttachmentAnnotationPayloadJson(
+            _sessionKey,
+            sha256: attachment.sha256,
+          );
+          if (payloadJson != null && payloadJson.trim().isNotEmpty) {
+            final payloadSnippets =
+                _extractSemanticSnippetsFromPayload(payloadJson);
+            if (isUrlAttachment && payloadSnippets.hasPreferredSummary) {
+              skipCaptionForAttachment = true;
+            }
+            for (final snippet in payloadSnippets.snippets) {
+              addSnippet(snippet);
+              if (snippets.length >= _kMaxAttachmentSemanticSnippets) break;
+            }
+          }
+        } catch (_) {
+          // Ignore and continue with other attachments.
+        }
+      }
+
+      if (skipCaptionForAttachment) continue;
+
       try {
         final caption =
             await attachmentsBackend.readAttachmentAnnotationCaptionLong(
@@ -124,49 +156,74 @@ final class BackendSemanticParseAutoActionsStore
       } catch (_) {
         // Ignore and continue with other signals.
       }
-
-      if (backend is NativeAppBackend) {
-        try {
-          final payloadJson = await backend.readAttachmentAnnotationPayloadJson(
-            _sessionKey,
-            sha256: attachment.sha256,
-          );
-          if (payloadJson != null && payloadJson.trim().isNotEmpty) {
-            for (final snippet in _extractSemanticSnippetsFromPayload(
-              payloadJson,
-            )) {
-              addSnippet(snippet);
-              if (snippets.length >= _kMaxAttachmentSemanticSnippets) break;
-            }
-          }
-        } catch (_) {
-          // Ignore and continue with other attachments.
-        }
-      }
     }
 
     return snippets;
   }
 
-  static List<String> _extractSemanticSnippetsFromPayload(String payloadJson) {
+  static _SemanticPayloadSnippetResult _extractSemanticSnippetsFromPayload(
+    String payloadJson,
+  ) {
     Object? decoded;
     try {
       decoded = jsonDecode(payloadJson);
     } catch (_) {
-      return const <String>[];
+      return const _SemanticPayloadSnippetResult(
+        snippets: <String>[],
+      );
     }
-    if (decoded is! Map) return const <String>[];
+    if (decoded is! Map) {
+      return const _SemanticPayloadSnippetResult(
+        snippets: <String>[],
+      );
+    }
 
     final payload = Map<String, Object?>.from(decoded);
+    if (_isUrlSemanticPayload(payload)) {
+      final preferredSummary = _extractPreferredUrlSummarySnippet(payload);
+      if (preferredSummary != null) {
+        return _SemanticPayloadSnippetResult(
+          snippets: <String>[preferredSummary],
+          hasPreferredSummary: true,
+        );
+      }
+    }
+
     final out = <String>[];
     for (final key in _kAttachmentSemanticPayloadKeys) {
       final value = payload[key];
-      if (value is! String) continue;
-      final normalized = _normalizeSemanticSnippet(value);
+      if (value == null) continue;
+      final normalized = _normalizeSemanticSnippet(value.toString());
       if (normalized == null) continue;
       out.add(normalized);
     }
-    return out;
+    return _SemanticPayloadSnippetResult(snippets: out);
+  }
+
+  static bool _isUrlSemanticPayload(Map<String, Object?> payload) {
+    final mimeType =
+        payload['mime_type']?.toString().trim().toLowerCase() ?? '';
+    if (mimeType == _kUrlAttachmentMimeType) return true;
+    const urlKeys = <String>['final_url', 'canonical_url', 'original_url'];
+    for (final key in urlKeys) {
+      final value = payload[key]?.toString().trim() ?? '';
+      if (value.isNotEmpty) return true;
+    }
+    return false;
+  }
+
+  static String? _extractPreferredUrlSummarySnippet(
+    Map<String, Object?> payload,
+  ) {
+    const summaryKeys = <String>['manual_summary', 'llm_summary', 'summary'];
+    for (final key in summaryKeys) {
+      final value = payload[key];
+      if (value == null) continue;
+      final normalized = _normalizeSemanticSnippet(value.toString());
+      if (normalized == null) continue;
+      return normalized;
+    }
+    return null;
   }
 
   static String? _normalizeSemanticSnippet(String? raw) {
@@ -457,4 +514,14 @@ final class BackendSemanticParseAutoActionsStore
     );
     return prev;
   }
+}
+
+final class _SemanticPayloadSnippetResult {
+  const _SemanticPayloadSnippetResult({
+    required this.snippets,
+    this.hasPreferredSummary = false,
+  });
+
+  final List<String> snippets;
+  final bool hasPreferredSummary;
 }

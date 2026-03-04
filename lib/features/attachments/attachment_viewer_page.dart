@@ -13,6 +13,8 @@ import '../../core/backend/app_backend.dart';
 import '../../core/backend/native_backend.dart';
 import '../../core/attachments/attachment_metadata_store.dart';
 import '../../core/ai/ai_routing.dart';
+import '../../core/ai/media_capability_source_prefs.dart';
+import '../../core/ai/media_source_prefs.dart';
 import '../../core/cloud/cloud_auth_scope.dart';
 import '../../core/content_enrichment/content_enrichment_config_store.dart';
 import '../../core/content_enrichment/docx_ocr.dart';
@@ -80,6 +82,9 @@ class AttachmentViewerPage extends StatefulWidget {
 }
 
 class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
+  static const String _kSecondLoopUrlManifestMimeType =
+      'application/x.secondloop.url+json';
+
   final Uint8List _nonImagePlaceholderBytes = Uint8List(0);
   Future<Uint8List>? _bytesFuture;
   Future<AttachmentExifMetadata?>? _exifFuture;
@@ -105,6 +110,8 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
   String? _documentOcrStatusText;
   String _documentOcrLanguageHints = 'device_plus_en';
   bool _attemptedSyncDownload = false;
+  bool? _retryRouteAvailable;
+  bool _probingRetryRoute = false;
   SyncEngine? _syncEngine;
   VoidCallback? _syncListener;
   Timer? _annotationRetryPollTimer;
@@ -228,6 +235,7 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
       }
     }
     _attachSyncEngine();
+    _probeRetryRouteAvailability();
   }
 
   @override
@@ -525,7 +533,7 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
   }
 
   Future<Map<String, Object?>?> _loadAnnotationPayload() async {
-    final backend = AppBackendScope.of(context);
+    final backend = AppBackendScope.maybeOf(context);
     if (backend is! NativeAppBackend) return null;
     final sessionKey = SessionScope.of(context).sessionKey;
     try {
@@ -546,8 +554,186 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
   String get _effectiveDocumentOcrLanguageHints =>
       normalizeAttachmentOcrLanguageHint(_documentOcrLanguageHints);
 
-  bool get _canRetryAttachmentRecognition =>
-      AppBackendScope.of(context) is NativeAppBackend;
+  bool get _canRetryAttachmentRecognition {
+    if (AppBackendScope.maybeOf(context) is! NativeAppBackend) return false;
+    return _retryRouteAvailable ?? true;
+  }
+
+  bool _hasAvailableMediaRoute(
+    MediaSourcePreference preference, {
+    required bool cloudAvailable,
+    required bool hasByokProfile,
+    required bool hasLocalCapability,
+  }) {
+    final orderedRoutes = mediaSourceFallbackOrder(preference);
+    for (final route in orderedRoutes) {
+      switch (route) {
+        case MediaSourceRouteKind.cloudGateway:
+          if (cloudAvailable) return true;
+          break;
+        case MediaSourceRouteKind.byok:
+          if (hasByokProfile) return true;
+          break;
+        case MediaSourceRouteKind.local:
+          if (hasLocalCapability) return true;
+          break;
+      }
+    }
+    return false;
+  }
+
+  bool _isCloudRouteAvailableNow() {
+    final subscriptionStatus = SubscriptionScope.maybeOf(context)?.status ??
+        SubscriptionStatus.unknown;
+    if (subscriptionStatus != SubscriptionStatus.entitled) {
+      return false;
+    }
+
+    final cloudScope = CloudAuthScope.maybeOf(context);
+    final hasGateway =
+        (cloudScope?.gatewayConfig.baseUrl ?? '').trim().isNotEmpty;
+    final hasCloudAccount =
+        (cloudScope?.controller.uid ?? '').trim().isNotEmpty;
+    return hasGateway && hasCloudAccount;
+  }
+
+  Future<bool> _hasOpenAiByokProfile({
+    required NativeAppBackend backend,
+    required Uint8List sessionKey,
+    required String selectedProfileId,
+  }) async {
+    List<LlmProfile> profiles = const <LlmProfile>[];
+    try {
+      profiles = await backend.listLlmProfiles(Uint8List.fromList(sessionKey));
+    } catch (_) {
+      return false;
+    }
+
+    final selectedId = selectedProfileId.trim();
+    if (selectedId.isNotEmpty) {
+      for (final profile in profiles) {
+        if (profile.id != selectedId) continue;
+        return profile.providerType == 'openai-compatible';
+      }
+    }
+
+    for (final profile in profiles) {
+      if (!profile.isActive) continue;
+      if (profile.providerType != 'openai-compatible') continue;
+      return true;
+    }
+    return false;
+  }
+
+  Future<bool> _computeRetryRouteAvailability() async {
+    final backendAny = AppBackendScope.maybeOf(context);
+    final sessionScope = SessionScope.maybeOf(context);
+    if (backendAny is! NativeAppBackend || sessionScope == null) {
+      return false;
+    }
+
+    final sessionKey = Uint8List.fromList(sessionScope.sessionKey);
+    final mime = widget.attachment.mimeType.trim().toLowerCase();
+    final isImage = mime.startsWith('image/');
+    final isAudio = isAudioTranscribeCandidateMimeType(mime);
+    final isUrlManifest = mime == _kSecondLoopUrlManifestMimeType;
+    if (!isImage && !isAudio && !isUrlManifest) {
+      return false;
+    }
+
+    ContentEnrichmentConfig? contentConfig;
+    try {
+      contentConfig = await const RustContentEnrichmentConfigStore()
+          .readContentEnrichment(Uint8List.fromList(sessionKey));
+    } catch (_) {
+      contentConfig = null;
+    }
+
+    final backgroundEnabled = contentConfig?.mobileBackgroundEnabled ?? true;
+    if (!backgroundEnabled) {
+      return false;
+    }
+
+    MediaAnnotationConfig? mediaConfig;
+    try {
+      mediaConfig =
+          await const RustMediaAnnotationConfigStore().read(sessionKey);
+    } catch (_) {
+      mediaConfig = null;
+    }
+
+    final hasCloudRoute = _isCloudRouteAvailableNow();
+    final hasByokRoute = await _hasOpenAiByokProfile(
+      backend: backendAny,
+      sessionKey: sessionKey,
+      selectedProfileId: mediaConfig?.byokProfileId ?? '',
+    );
+
+    if (isUrlManifest) {
+      final urlFetchEnabled = contentConfig?.urlFetchEnabled ?? true;
+      if (!urlFetchEnabled) return false;
+      MediaSourcePreference preference;
+      try {
+        preference = await MediaCapabilitySourcePrefs.readUrlFetch();
+      } catch (_) {
+        preference = MediaSourcePreference.auto;
+      }
+      return _hasAvailableMediaRoute(
+        preference,
+        cloudAvailable: hasCloudRoute,
+        hasByokProfile: hasByokRoute,
+        hasLocalCapability: true,
+      );
+    }
+
+    if (isAudio) {
+      final audioEnabled = contentConfig?.audioTranscribeEnabled ?? false;
+      if (!audioEnabled) return false;
+      MediaSourcePreference preference;
+      try {
+        preference = await MediaCapabilitySourcePrefs.readAudio();
+      } catch (_) {
+        preference = MediaSourcePreference.auto;
+      }
+      return _hasAvailableMediaRoute(
+        preference,
+        cloudAvailable: hasCloudRoute,
+        hasByokProfile: hasByokRoute,
+        hasLocalCapability:
+            MediaCapabilitySourcePrefs.supportsPlatformLocalAudioTranscribe(),
+      );
+    }
+
+    final ocrEnabled = contentConfig?.ocrEnabled ?? true;
+    MediaSourcePreference preference;
+    try {
+      preference = await MediaSourcePrefs.read();
+    } catch (_) {
+      preference = MediaSourcePreference.auto;
+    }
+    return _hasAvailableMediaRoute(
+      preference,
+      cloudAvailable: hasCloudRoute,
+      hasByokProfile: hasByokRoute,
+      hasLocalCapability: ocrEnabled,
+    );
+  }
+
+  void _probeRetryRouteAvailability() {
+    if (_retryRouteAvailable != null || _probingRetryRoute) return;
+    _probingRetryRoute = true;
+    Future<bool>.sync(_computeRetryRouteAvailability)
+        .then((available) {
+          if (!mounted) return;
+          setState(() {
+            _retryRouteAvailable = available;
+          });
+        })
+        .catchError((_) {})
+        .whenComplete(() {
+          _probingRetryRoute = false;
+        });
+  }
 
   void _updateDocumentOcrLanguageHints(String value) {
     final normalized = normalizeAttachmentOcrLanguageHint(value);
@@ -903,6 +1089,9 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
                     initialAnnotationPayload: _annotationPayload,
                     annotationJob: _annotationJob,
                     onRunOcr: runOcr,
+                    onRetryRecognition: _canRetryAttachmentRecognition
+                        ? _retryAttachmentRecognition
+                        : null,
                     ocrRunning: _runningDocumentOcr,
                     ocrStatusText: _documentOcrStatusText,
                     ocrLanguageHints: _effectiveDocumentOcrLanguageHints,

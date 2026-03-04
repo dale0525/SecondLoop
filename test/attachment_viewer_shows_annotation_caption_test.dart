@@ -444,6 +444,63 @@ void main() {
     );
   });
 
+  testWidgets('AttachmentViewerPage retries URL understanding from detail page',
+      (tester) async {
+    final manifestBytes = Uint8List.fromList(
+      utf8.encode(
+        jsonEncode({
+          'schema': 'secondloop.url_manifest.v1',
+          'url': 'https://example.com/retry-target',
+        }),
+      ),
+    );
+    final backend = _NativeImageBackend(
+      bytesBySha: {'url-sha': manifestBytes},
+      annotationCaptionBySha: {'url-sha': 'URL content'},
+      annotationPayloadJsonBySha: {
+        'url-sha': jsonEncode({
+          'full_text': 'URL content',
+        }),
+      },
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: backend,
+            child: SessionScope(
+              sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+              lock: () {},
+              child: const AttachmentViewerPage(
+                attachment: Attachment(
+                  sha256: 'url-sha',
+                  mimeType: 'application/x.secondloop.url+json',
+                  path: 'attachments/url-sha.bin',
+                  byteLen: 67,
+                  createdAtMs: 0,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final retryFinder =
+        find.byKey(const ValueKey('attachment_text_full_regenerate'));
+    expect(retryFinder, findsOneWidget);
+
+    await tester.ensureVisible(retryFinder);
+    await tester.tap(retryFinder);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 120));
+
+    expect(backend.retryEnqueueCalls, 1);
+    expect(backend.retryMarkFailedCalls, 1);
+  });
+
   testWidgets(
       'AttachmentViewerPage allows editing full text and saves unified payload',
       (tester) async {

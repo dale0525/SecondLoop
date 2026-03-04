@@ -49,6 +49,20 @@ void main() {
       );
     });
 
+    test('byok does not fall back to cloud when local capability is missing',
+        () {
+      expect(
+        resolveEmbeddingsSourceRoute(
+          EmbeddingsSourcePreference.byok,
+          cloudEmbeddingsSelected: true,
+          cloudAvailable: true,
+          hasByokProfile: false,
+          hasLocalCapability: false,
+        ),
+        EmbeddingsSourceRouteKind.local,
+      );
+    });
+
     test('cloud falls back to byok/local when cloud is unavailable', () {
       expect(
         resolveEmbeddingsSourceRoute(
@@ -108,6 +122,19 @@ void main() {
           MediaSourcePreference.byok,
           cloudAvailable: true,
           hasByokProfile: false,
+        ),
+        MediaSourceRouteKind.local,
+      );
+    });
+
+    test('byok does not fall back to cloud when local capability is missing',
+        () {
+      expect(
+        resolveMediaSourceRoute(
+          MediaSourcePreference.byok,
+          cloudAvailable: true,
+          hasByokProfile: false,
+          hasLocalCapability: false,
         ),
         MediaSourceRouteKind.local,
       );

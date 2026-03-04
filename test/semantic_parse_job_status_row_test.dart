@@ -160,6 +160,34 @@ void main() {
       debugDefaultTargetPlatformOverride = previous;
     }
   });
+
+  testWidgets('canceled status row stays hidden', (WidgetTester tester) async {
+    final nowMs = DateTime.now().millisecondsSinceEpoch;
+    final job = SemanticParseJob(
+      messageId: message.id,
+      status: 'canceled',
+      attempts: PlatformInt64Util.from(0),
+      nextRetryAtMs: null,
+      lastError: null,
+      appliedActionKind: null,
+      appliedTodoId: null,
+      appliedTodoTitle: null,
+      appliedPrevTodoStatus: null,
+      suggestedTags: null,
+      suggestedTagConfidence: null,
+      tagSuggestionState: null,
+      appliedTagIds: null,
+      undoneAtMs: null,
+      createdAtMs: PlatformInt64Util.from(nowMs - 2000),
+      updatedAtMs: PlatformInt64Util.from(nowMs - 2000),
+    );
+
+    await tester.pumpWidget(_buildHost(message: message, job: job));
+    await tester.pump();
+
+    expect(find.text('AI analysis canceled'), findsNothing);
+    expect(find.text('Retry'), findsNothing);
+  });
 }
 
 Widget _buildHost({

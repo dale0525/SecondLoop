@@ -115,6 +115,18 @@ void main() {
   test('attachment card summary prefers readable excerpt over transcript', () {
     final summary = extractAttachmentCardSummaryFromPayload(
       const <String, Object?>{
+        'llm_summary': 'Cloud summary',
+        'readable_text_excerpt': 'readable excerpt',
+        'transcript_excerpt': 'transcript excerpt',
+      },
+    );
+
+    expect(summary, 'Cloud summary');
+  });
+
+  test('attachment card summary falls back to readable excerpt', () {
+    final summary = extractAttachmentCardSummaryFromPayload(
+      const <String, Object?>{
         'readable_text_excerpt': 'readable excerpt',
         'transcript_excerpt': 'transcript excerpt',
       },

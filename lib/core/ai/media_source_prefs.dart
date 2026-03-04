@@ -60,45 +60,41 @@ MediaSourceRouteKind resolveMediaSourceRoute(
   final canUseByok = hasByokProfile;
   final canUseLocal = hasLocalCapability;
 
-  MediaSourceRouteKind byPriority({
-    required bool preferCloud,
-    required bool preferByok,
-    required bool preferLocal,
-  }) {
-    if (preferCloud && canUseCloud) {
-      return MediaSourceRouteKind.cloudGateway;
+  final preferredOrder = mediaSourceFallbackOrder(preference);
+  for (final route in preferredOrder) {
+    switch (route) {
+      case MediaSourceRouteKind.cloudGateway:
+        if (canUseCloud) return MediaSourceRouteKind.cloudGateway;
+        break;
+      case MediaSourceRouteKind.byok:
+        if (canUseByok) return MediaSourceRouteKind.byok;
+        break;
+      case MediaSourceRouteKind.local:
+        if (canUseLocal) return MediaSourceRouteKind.local;
+        break;
     }
-    if (preferByok && canUseByok) {
-      return MediaSourceRouteKind.byok;
-    }
-    if (preferLocal && canUseLocal) {
-      return MediaSourceRouteKind.local;
-    }
-    if (canUseByok) return MediaSourceRouteKind.byok;
-    if (canUseCloud) return MediaSourceRouteKind.cloudGateway;
-    return MediaSourceRouteKind.local;
   }
 
+  return MediaSourceRouteKind.local;
+}
+
+List<MediaSourceRouteKind> mediaSourceFallbackOrder(
+  MediaSourcePreference preference,
+) {
   return switch (preference) {
-    MediaSourcePreference.auto => byPriority(
-        preferCloud: true,
-        preferByok: true,
-        preferLocal: true,
-      ),
-    MediaSourcePreference.cloud => byPriority(
-        preferCloud: true,
-        preferByok: true,
-        preferLocal: true,
-      ),
-    MediaSourcePreference.byok => byPriority(
-        preferCloud: false,
-        preferByok: true,
-        preferLocal: true,
-      ),
-    MediaSourcePreference.local => byPriority(
-        preferCloud: false,
-        preferByok: false,
-        preferLocal: true,
-      ),
+    MediaSourcePreference.auto ||
+    MediaSourcePreference.cloud =>
+      const <MediaSourceRouteKind>[
+        MediaSourceRouteKind.cloudGateway,
+        MediaSourceRouteKind.byok,
+        MediaSourceRouteKind.local,
+      ],
+    MediaSourcePreference.byok => const <MediaSourceRouteKind>[
+        MediaSourceRouteKind.byok,
+        MediaSourceRouteKind.local,
+      ],
+    MediaSourcePreference.local => const <MediaSourceRouteKind>[
+        MediaSourceRouteKind.local,
+      ],
   };
 }

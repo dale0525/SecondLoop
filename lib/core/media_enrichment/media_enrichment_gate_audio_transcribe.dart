@@ -15,7 +15,8 @@ final class _AudioTranscribeClientSelection {
 extension _MediaEnrichmentGateAudioTranscribeExtension
     on _MediaEnrichmentGateState {
   _AudioTranscribeClientSelection _buildAudioTranscribeClientSelection({
-    required bool cloudEnabled,
+    required MediaSourcePreference preference,
+    required bool cloudAvailable,
     required LlmProfile? byokProfile,
     required String effectiveEngine,
     required String whisperModel,
@@ -36,13 +37,14 @@ extension _MediaEnrichmentGateAudioTranscribeExtension
         ),
     ];
 
-    final networkChain = <AudioTranscribeClient>[
-      if (cloudEnabled)
-        CloudGatewayWhisperAudioTranscribeClient(
-          gatewayBaseUrl: gatewayBaseUrl,
-          idToken: cloudIdToken,
-          modelName: whisperModel,
-        ),
+    final cloudClient = cloudAvailable
+        ? CloudGatewayWhisperAudioTranscribeClient(
+            gatewayBaseUrl: gatewayBaseUrl,
+            idToken: cloudIdToken,
+            modelName: whisperModel,
+          )
+        : null;
+    final byokChain = <AudioTranscribeClient>[
       if (normalizedEngine == 'multimodal_llm' && byokProfile != null)
         ByokMultimodalAudioTranscribeClient(
           sessionKey: Uint8List.fromList(sessionKey),
@@ -55,8 +57,29 @@ extension _MediaEnrichmentGateAudioTranscribeExtension
           profileId: byokProfile.id,
           modelName: byokProfile.modelName,
         ),
-      ...localRuntimeChain,
     ];
+
+    final networkChain = <AudioTranscribeClient>[];
+    final orderedRoutes = mediaSourceFallbackOrder(preference);
+    for (final route in orderedRoutes) {
+      switch (route) {
+        case MediaSourceRouteKind.cloudGateway:
+          if (cloudClient != null) {
+            networkChain.add(cloudClient);
+          }
+          break;
+        case MediaSourceRouteKind.byok:
+          if (byokChain.isNotEmpty) {
+            networkChain.addAll(byokChain);
+          }
+          break;
+        case MediaSourceRouteKind.local:
+          if (localRuntimeChain.isNotEmpty) {
+            networkChain.addAll(localRuntimeChain);
+          }
+          break;
+      }
+    }
 
     return _AudioTranscribeClientSelection(
       networkClient: _buildFallbackAudioTranscribeClient(networkChain),

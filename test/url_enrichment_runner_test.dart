@@ -15,6 +15,7 @@ final class _MemStore implements UrlEnrichmentStore {
   final Map<String, Uint8List> bytesBySha;
 
   final Map<String, String> okPayloadBySha = <String, String>{};
+  final Map<String, String> okLangBySha = <String, String>{};
   final Map<String, String> failedBySha = <String, String>{};
   final Map<String, String> titleBySha = <String, String>{};
 
@@ -48,6 +49,7 @@ final class _MemStore implements UrlEnrichmentStore {
     required int nowMs,
   }) async {
     okPayloadBySha[attachmentSha256] = payloadJson;
+    okLangBySha[attachmentSha256] = lang;
   }
 
   @override
@@ -77,6 +79,44 @@ final class _FakeFetcher implements UrlEnrichmentFetcher {
 
   @override
   Future<UrlFetchResponse> fetch(Uri uri) async => response;
+}
+
+final class _FakeEnhancer implements UrlEnrichmentEnhancer {
+  _FakeEnhancer({
+    required this.modelName,
+    required this.source,
+    this.result,
+    this.error,
+  });
+
+  @override
+  final String modelName;
+
+  @override
+  final String source;
+
+  final UrlEnrichmentEnhancerResult? result;
+  final Object? error;
+  String? lastLang;
+  String? lastReadableTextExcerpt;
+  String? lastReadableTextFull;
+
+  @override
+  Future<UrlEnrichmentEnhancerResult?> enhance({
+    required String lang,
+    required String originalUrl,
+    required String finalUrl,
+    required String site,
+    required String? title,
+    required String readableTextExcerpt,
+    required String readableTextFull,
+  }) async {
+    lastLang = lang;
+    lastReadableTextExcerpt = readableTextExcerpt;
+    lastReadableTextFull = readableTextFull;
+    if (error != null) throw error!;
+    return result;
+  }
 }
 
 void main() {
@@ -144,5 +184,329 @@ void main() {
 
     expect(store.titleBySha['a'], 'Hi & Bye');
     expect(store.failedBySha, isEmpty);
+  });
+
+  test('uses enhancer output and model/source when enhancer succeeds',
+      () async {
+    final manifest = jsonEncode({
+      'schema': kSecondLoopUrlManifestSchema,
+      'url': 'https://example.com/page',
+    });
+
+    final store = _MemStore(
+      jobs: const [
+        UrlEnrichmentJob(
+          attachmentSha256: 'b',
+          lang: 'und',
+          status: 'pending',
+          attempts: 0,
+          nextRetryAtMs: null,
+        ),
+      ],
+      bytesBySha: {
+        'b': Uint8List.fromList(utf8.encode(manifest)),
+      },
+    );
+
+    const html = '''
+<html>
+  <head><title>Local Title</title></head>
+  <body><p>Local body</p></body>
+</html>
+''';
+
+    final fetcher = _FakeFetcher(
+      response: UrlFetchResponse(
+        finalUri: Uri.parse('https://example.com/page'),
+        statusCode: 200,
+        contentType: 'text/html',
+        bodyBytes: Uint8List.fromList(utf8.encode(html)),
+      ),
+    );
+
+    final enhancer = _FakeEnhancer(
+      modelName: 'url_enrich.cloud',
+      source: 'cloud',
+      result: const UrlEnrichmentEnhancerResult(
+        title: 'Cloud Title',
+        summary: 'Cloud summary',
+        tags: ['news', 'example'],
+      ),
+    );
+
+    final runner = UrlEnrichmentRunner(
+      store: store,
+      fetcher: fetcher,
+      nowMs: () => 2000,
+      enhancers: [enhancer],
+    );
+
+    final result = await runner.runOnce();
+    expect(result.didEnrichAny, isTrue);
+
+    final payloadRaw = store.okPayloadBySha['b'];
+    expect(payloadRaw, isNotNull);
+    final payload = jsonDecode(payloadRaw!) as Map;
+    expect(payload['title'], 'Cloud Title');
+    expect(payload['enrichment_source'], 'cloud');
+    expect(payload['llm_summary'], 'Cloud summary');
+    expect(payload['llm_tags'], const ['news', 'example']);
+    expect(store.titleBySha['b'], 'Cloud Title');
+    expect(enhancer.lastLang, 'und');
+  });
+
+  test('falls back to next enhancer then local when needed', () async {
+    final manifest = jsonEncode({
+      'schema': kSecondLoopUrlManifestSchema,
+      'url': 'https://example.com/page',
+    });
+
+    final store = _MemStore(
+      jobs: const [
+        UrlEnrichmentJob(
+          attachmentSha256: 'c',
+          lang: 'und',
+          status: 'pending',
+          attempts: 0,
+          nextRetryAtMs: null,
+        ),
+      ],
+      bytesBySha: {
+        'c': Uint8List.fromList(utf8.encode(manifest)),
+      },
+    );
+
+    const html = '''
+<html>
+  <head><title>Local Title</title></head>
+  <body><p>Local body</p></body>
+</html>
+''';
+
+    final fetcher = _FakeFetcher(
+      response: UrlFetchResponse(
+        finalUri: Uri.parse('https://example.com/page'),
+        statusCode: 200,
+        contentType: 'text/html',
+        bodyBytes: Uint8List.fromList(utf8.encode(html)),
+      ),
+    );
+
+    final runner = UrlEnrichmentRunner(
+      store: store,
+      fetcher: fetcher,
+      nowMs: () => 3000,
+      enhancers: [
+        _FakeEnhancer(
+          modelName: 'url_enrich.cloud',
+          source: 'cloud',
+          error: StateError('cloud_failed'),
+        ),
+        _FakeEnhancer(
+          modelName: 'url_enrich.byok',
+          source: 'byok',
+          result: null,
+        ),
+      ],
+    );
+
+    final result = await runner.runOnce();
+    expect(result.didEnrichAny, isTrue);
+
+    final payloadRaw = store.okPayloadBySha['c'];
+    expect(payloadRaw, isNotNull);
+    final payload = jsonDecode(payloadRaw!) as Map;
+    expect(payload['title'], 'Local Title');
+    expect(payload['enrichment_source'], 'local');
+    expect(payload.containsKey('llm_summary'), isFalse);
+    expect(payload.containsKey('llm_tags'), isFalse);
+    expect(store.titleBySha['c'], 'Local Title');
+  });
+
+  test('prefers main content and strips header/footer boilerplate', () async {
+    final manifest = jsonEncode({
+      'schema': kSecondLoopUrlManifestSchema,
+      'url': 'https://github.com/org/repo',
+    });
+
+    final store = _MemStore(
+      jobs: const [
+        UrlEnrichmentJob(
+          attachmentSha256: 'd',
+          lang: 'und',
+          status: 'pending',
+          attempts: 0,
+          nextRetryAtMs: null,
+        ),
+      ],
+      bytesBySha: {
+        'd': Uint8List.fromList(utf8.encode(manifest)),
+      },
+    );
+
+    const html = '''
+<html>
+  <head><title>repo</title></head>
+  <body>
+    <header class="Header">
+      <nav>Sign in Pricing Explore Marketplace</nav>
+    </header>
+    <main id="js-repo-pjax-container">
+      <article>
+        <h1>owner/repo</h1>
+        <p>High-performance data sync toolkit for notes.</p>
+        <p>Supports incremental pull/push and conflict resolution.</p>
+      </article>
+    </main>
+    <footer role="contentinfo">
+      Terms Privacy Security Contact
+    </footer>
+  </body>
+</html>
+''';
+
+    final fetcher = _FakeFetcher(
+      response: UrlFetchResponse(
+        finalUri: Uri.parse('https://github.com/org/repo'),
+        statusCode: 200,
+        contentType: 'text/html',
+        bodyBytes: Uint8List.fromList(utf8.encode(html)),
+      ),
+    );
+
+    final runner =
+        UrlEnrichmentRunner(store: store, fetcher: fetcher, nowMs: () => 4000);
+    final result = await runner.runOnce();
+    expect(result.didEnrichAny, isTrue);
+
+    final payloadRaw = store.okPayloadBySha['d'];
+    expect(payloadRaw, isNotNull);
+    final payload = jsonDecode(payloadRaw!) as Map;
+    final fullText = payload['readable_text_full'] as String;
+
+    expect(fullText, contains('High-performance data sync toolkit for notes.'));
+    expect(fullText, contains('incremental pull/push'));
+    expect(fullText.toLowerCase(), isNot(contains('sign in')));
+    expect(fullText.toLowerCase(), isNot(contains('pricing')));
+    expect(fullText.toLowerCase(), isNot(contains('terms privacy security')));
+  });
+
+  test('uses fallback language when queued job language is und', () async {
+    final manifest = jsonEncode({
+      'schema': kSecondLoopUrlManifestSchema,
+      'url': 'https://example.com/page',
+    });
+
+    final store = _MemStore(
+      jobs: const [
+        UrlEnrichmentJob(
+          attachmentSha256: 'e',
+          lang: 'und',
+          status: 'pending',
+          attempts: 0,
+          nextRetryAtMs: null,
+        ),
+      ],
+      bytesBySha: {
+        'e': Uint8List.fromList(utf8.encode(manifest)),
+      },
+    );
+
+    const html = '''
+<html>
+  <head><title>Local Title</title></head>
+  <body><p>Local body</p></body>
+</html>
+''';
+
+    final fetcher = _FakeFetcher(
+      response: UrlFetchResponse(
+        finalUri: Uri.parse('https://example.com/page'),
+        statusCode: 200,
+        contentType: 'text/html',
+        bodyBytes: Uint8List.fromList(utf8.encode(html)),
+      ),
+    );
+
+    final enhancer = _FakeEnhancer(
+      modelName: 'url_enrich.cloud',
+      source: 'cloud',
+      result: const UrlEnrichmentEnhancerResult(summary: 'Cloud summary'),
+    );
+
+    final runner = UrlEnrichmentRunner(
+      store: store,
+      fetcher: fetcher,
+      nowMs: () => 5000,
+      enhancers: [enhancer],
+      fallbackLang: 'zh-CN',
+    );
+
+    final result = await runner.runOnce();
+    expect(result.didEnrichAny, isTrue);
+    expect(enhancer.lastLang, 'zh-CN');
+    expect(store.okLangBySha['e'], 'zh-CN');
+  });
+
+  test('passes untruncated extracted text to enhancer', () async {
+    final manifest = jsonEncode({
+      'schema': kSecondLoopUrlManifestSchema,
+      'url': 'https://example.com/page',
+    });
+
+    final store = _MemStore(
+      jobs: const [
+        UrlEnrichmentJob(
+          attachmentSha256: 'f',
+          lang: 'zh-CN',
+          status: 'pending',
+          attempts: 0,
+          nextRetryAtMs: null,
+        ),
+      ],
+      bytesBySha: {
+        'f': Uint8List.fromList(utf8.encode(manifest)),
+      },
+    );
+
+    final longMain =
+        '${List<String>.filled(kUrlEnrichmentMaxExcerptBytes + 256, 'A').join()}TAIL_TOKEN';
+    final html = '''
+<html>
+  <head><title>Local Title</title></head>
+  <body><main><p>$longMain</p></main></body>
+</html>
+''';
+
+    final fetcher = _FakeFetcher(
+      response: UrlFetchResponse(
+        finalUri: Uri.parse('https://example.com/page'),
+        statusCode: 200,
+        contentType: 'text/html',
+        bodyBytes: Uint8List.fromList(utf8.encode(html)),
+      ),
+    );
+
+    final enhancer = _FakeEnhancer(
+      modelName: 'url_enrich.cloud',
+      source: 'cloud',
+      result: const UrlEnrichmentEnhancerResult(summary: 'Cloud summary'),
+    );
+
+    final runner = UrlEnrichmentRunner(
+      store: store,
+      fetcher: fetcher,
+      nowMs: () => 6000,
+      enhancers: [enhancer],
+    );
+
+    final result = await runner.runOnce();
+    expect(result.didEnrichAny, isTrue);
+    expect(enhancer.lastReadableTextFull, contains('TAIL_TOKEN'));
+    expect(enhancer.lastReadableTextExcerpt, contains('TAIL_TOKEN'));
+    expect(
+      enhancer.lastReadableTextFull!.length,
+      greaterThan(kUrlEnrichmentMaxExcerptBytes),
+    );
   });
 }

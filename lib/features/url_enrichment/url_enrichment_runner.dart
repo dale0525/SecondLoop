@@ -77,6 +77,33 @@ abstract class UrlEnrichmentFetcher {
   Future<UrlFetchResponse> fetch(Uri uri);
 }
 
+class UrlEnrichmentEnhancerResult {
+  const UrlEnrichmentEnhancerResult({
+    this.title,
+    this.summary,
+    this.tags = const <String>[],
+  });
+
+  final String? title;
+  final String? summary;
+  final List<String> tags;
+}
+
+abstract class UrlEnrichmentEnhancer {
+  String get modelName;
+  String get source;
+
+  Future<UrlEnrichmentEnhancerResult?> enhance({
+    required String lang,
+    required String originalUrl,
+    required String finalUrl,
+    required String site,
+    required String? title,
+    required String readableTextExcerpt,
+    required String readableTextFull,
+  });
+}
+
 class UrlEnrichmentSecurityPolicy {
   UrlEnrichmentSecurityPolicy({
     this.allowLocalhost = false,
@@ -251,11 +278,15 @@ class UrlEnrichmentRunner {
   UrlEnrichmentRunner({
     required this.store,
     required this.fetcher,
+    this.enhancers = const <UrlEnrichmentEnhancer>[],
+    this.fallbackLang = 'und',
     int Function()? nowMs,
   }) : _nowMs = nowMs ?? (() => DateTime.now().millisecondsSinceEpoch);
 
   final UrlEnrichmentStore store;
   final UrlEnrichmentFetcher fetcher;
+  final List<UrlEnrichmentEnhancer> enhancers;
+  final String fallbackLang;
   final int Function() _nowMs;
 
   Future<UrlEnrichmentRunResult> runOnce({int limit = 5}) async {
@@ -277,6 +308,9 @@ class UrlEnrichmentRunner {
         final html = _decodeBestEffortUtf8(fetched.bodyBytes);
         final extracted = _extractFromHtml(html, baseUri: fetched.finalUri);
 
+        final llmReadableTextFull = extracted.readableText;
+        final llmReadableTextExcerpt = llmReadableTextFull;
+
         final fullText = _truncateUtf8ToMaxBytes(
           extracted.readableText,
           kUrlEnrichmentMaxFullTextBytes,
@@ -285,6 +319,57 @@ class UrlEnrichmentRunner {
           fullText,
           kUrlEnrichmentMaxExcerptBytes,
         );
+        final effectiveLang = _resolveJobLang(job.lang, fallbackLang);
+
+        var selectedTitle = extracted.title;
+        var selectedModelName = kUrlEnrichmentModelName;
+        var enrichmentSource = 'local';
+        String? llmSummary;
+        List<String> llmTags = const <String>[];
+
+        for (final enhancer in enhancers) {
+          try {
+            final enhanced = await enhancer.enhance(
+              lang: effectiveLang,
+              originalUrl: manifest.url,
+              finalUrl: fetched.finalUri.toString(),
+              site: extracted.site ?? '',
+              title: selectedTitle,
+              readableTextExcerpt: llmReadableTextExcerpt,
+              readableTextFull: llmReadableTextFull,
+            );
+            if (enhanced == null) continue;
+
+            final enhancedTitle = enhanced.title?.trim();
+            if (enhancedTitle != null && enhancedTitle.isNotEmpty) {
+              selectedTitle = enhancedTitle;
+            }
+
+            final summary = enhanced.summary?.trim();
+            if (summary != null && summary.isNotEmpty) {
+              llmSummary = summary;
+            } else {
+              llmSummary = null;
+            }
+
+            llmTags = _normalizeTagList(enhanced.tags);
+
+            final modelName = enhancer.modelName.trim();
+            if (modelName.isNotEmpty) {
+              selectedModelName = modelName;
+            }
+
+            final source = enhancer.source.trim();
+            if (source.isNotEmpty) {
+              enrichmentSource = source;
+            } else {
+              enrichmentSource = 'unknown';
+            }
+            break;
+          } catch (_) {
+            continue;
+          }
+        }
 
         final payload = jsonEncode({
           'schema': kSecondLoopUrlEnrichmentSchema,
@@ -292,21 +377,24 @@ class UrlEnrichmentRunner {
           'final_url': fetched.finalUri.toString(),
           'canonical_url': extracted.canonicalUrl,
           'site': extracted.site,
-          'title': extracted.title,
+          'title': selectedTitle,
           'readable_text_full': fullText,
           'readable_text_excerpt': excerpt,
+          'enrichment_source': enrichmentSource,
+          if (llmSummary != null) 'llm_summary': llmSummary,
+          if (llmTags.isNotEmpty) 'llm_tags': llmTags,
           'fetched_at_ms': nowMs,
         });
 
         await store.markAnnotationOk(
           attachmentSha256: job.attachmentSha256,
-          lang: job.lang,
-          modelName: kUrlEnrichmentModelName,
+          lang: effectiveLang,
+          modelName: selectedModelName,
           payloadJson: payload,
           nowMs: nowMs,
         );
 
-        final title = (extracted.title ?? '').trim();
+        final title = (selectedTitle ?? '').trim();
         if (title.isNotEmpty) {
           await store.upsertAttachmentTitle(
             attachmentSha256: job.attachmentSha256,
@@ -335,6 +423,25 @@ class UrlEnrichmentRunner {
     final clamped = attempts.clamp(1, 10);
     final seconds = 5 * (1 << (clamped - 1));
     return Duration(seconds: seconds).inMilliseconds;
+  }
+
+  static String _resolveJobLang(String jobLang, String fallbackLang) {
+    final normalizedJobLang = jobLang.trim();
+    final normalizedJobLangLower = normalizedJobLang.toLowerCase();
+    final normalizedFallbackLang = fallbackLang.trim();
+
+    if (normalizedJobLang.isNotEmpty &&
+        normalizedJobLangLower != 'und' &&
+        normalizedJobLangLower != 'auto') {
+      return normalizedJobLang;
+    }
+    if (normalizedFallbackLang.isNotEmpty) {
+      return normalizedFallbackLang;
+    }
+    if (normalizedJobLang.isNotEmpty) {
+      return normalizedJobLang;
+    }
+    return 'und';
   }
 
   static _UrlManifest _parseUrlManifest(Uint8List bytes) {
@@ -388,7 +495,11 @@ class UrlEnrichmentRunner {
     final title = _extractTitle(html);
     final canonical = _extractCanonicalUrl(html, baseUri: baseUri);
     final site = baseUri.host.trim().isEmpty ? null : baseUri.host.trim();
-    final text = _htmlToTextV1(html);
+    final preferredHtml = _extractPrimaryContentBlock(html);
+    var text = _htmlToTextV1(preferredHtml);
+    if (preferredHtml != html && text.runes.length < 120) {
+      text = _htmlToTextV1(html);
+    }
     return _ExtractedHtml(
       title: title,
       canonicalUrl: canonical,
@@ -443,11 +554,30 @@ class UrlEnrichmentRunner {
     return resolved.toString();
   }
 
+  static String _extractPrimaryContentBlock(String html) {
+    for (final tag in const <String>['main', 'article']) {
+      final block = RegExp(
+        '<$tag\\b[^>]*>[\\s\\S]*?<\\/$tag>',
+        caseSensitive: false,
+      ).firstMatch(html);
+      final raw = block?.group(0);
+      if (raw == null) continue;
+      if (raw.trim().isEmpty) continue;
+      return raw;
+    }
+    return html;
+  }
+
   static String _htmlToTextV1(String html) {
     var s = html;
+    s = s.replaceAll(RegExp(r'<!--[\s\S]*?-->'), ' ');
     s = _stripTagBlocks(s, 'script');
     s = _stripTagBlocks(s, 'style');
     s = _stripTagBlocks(s, 'noscript');
+    s = _stripTagBlocks(s, 'template');
+    s = _stripTagBlocks(s, 'svg');
+    s = _stripTagBlocks(s, 'canvas');
+    s = _stripLikelyBoilerplateBlocks(s);
 
     const blockTags = <String>{
       'p',
@@ -496,6 +626,41 @@ class UrlEnrichmentRunner {
 
     final decoded = _decodeHtmlEntities(out.toString());
     return _normalizeWhitespaceKeepParagraphs(decoded);
+  }
+
+  static String _stripLikelyBoilerplateBlocks(String html) {
+    var s = html;
+    s = _stripBlocksByPattern(
+      s,
+      RegExp(
+        r'<(header|footer|nav|aside)\b[^>]*>[\s\S]*?<\/\1>',
+        caseSensitive: false,
+      ),
+    );
+    s = _stripBlocksByPattern(
+      s,
+      RegExp(
+        r'''<(div|section|ul|ol|form)\b[^>]*(?:id|class|role|aria-label)\s*=\s*["'][^"']*(?:header|footer|nav|menu|breadcrumb|sidebar|masthead|topbar|navbar|site-nav|global-nav|global-header|global-footer|gh-header|repohead|skip-link)[^"']*["'][^>]*>[\s\S]*?<\/\1>''',
+        caseSensitive: false,
+      ),
+    );
+    s = _stripBlocksByPattern(
+      s,
+      RegExp(
+        r'''<([a-z][a-z0-9:_-]*)\b[^>]*\brole\s*=\s*["'](?:banner|contentinfo|navigation|complementary|search)["'][^>]*>[\s\S]*?<\/\1>''',
+        caseSensitive: false,
+      ),
+    );
+    return s;
+  }
+
+  static String _stripBlocksByPattern(String html, RegExp pattern) {
+    var current = html;
+    while (true) {
+      final next = current.replaceAll(pattern, ' ');
+      if (next == current) return current;
+      current = next;
+    }
   }
 
   static String _stripTagBlocks(String html, String tag) {
@@ -618,6 +783,22 @@ class UrlEnrichmentRunner {
     }
 
     return String.fromCharCodes(out).trim();
+  }
+
+  static List<String> _normalizeTagList(List<String> rawTags) {
+    if (rawTags.isEmpty) return const <String>[];
+
+    final deduped = <String>[];
+    final seen = <String>{};
+    for (final raw in rawTags) {
+      final normalized = raw.trim();
+      if (normalized.isEmpty) continue;
+      final key = normalized.toLowerCase();
+      if (!seen.add(key)) continue;
+      deduped.add(normalized);
+      if (deduped.length >= 8) break;
+    }
+    return deduped;
   }
 }
 

@@ -43,6 +43,7 @@ part 'media_enrichment_gate_audio_transcribe.dart';
 part 'media_enrichment_gate_auto_ocr.dart';
 part 'media_enrichment_gate_auto_ocr_helpers.dart';
 part 'media_enrichment_gate_video_transcript_backfill.dart';
+part 'media_enrichment_gate_url_enrichment.dart';
 
 class MediaEnrichmentGate extends StatefulWidget {
   const MediaEnrichmentGate({required this.child, super.key});
@@ -88,13 +89,19 @@ class _MediaEnrichmentGateState extends State<MediaEnrichmentGate>
       case AppLifecycleState.resumed:
         _schedule(const Duration(milliseconds: 800));
         break;
-      case AppLifecycleState.inactive:
-      case AppLifecycleState.paused:
       case AppLifecycleState.detached:
-      case AppLifecycleState.hidden:
         _timer?.cancel();
         _timer = null;
         _nextRunAt = null;
+        break;
+      case AppLifecycleState.inactive:
+      case AppLifecycleState.paused:
+      case AppLifecycleState.hidden:
+        if (_shouldPauseInBackground()) {
+          _timer?.cancel();
+          _timer = null;
+          _nextRunAt = null;
+        }
         break;
     }
   }
@@ -114,6 +121,12 @@ class _MediaEnrichmentGateState extends State<MediaEnrichmentGate>
 
     _attachSyncEngine(SyncEngineScope.maybeOf(context));
     _schedule(const Duration(seconds: 2));
+  }
+
+  bool _shouldPauseInBackground() {
+    if (kIsWeb) return false;
+    return defaultTargetPlatform == TargetPlatform.android ||
+        defaultTargetPlatform == TargetPlatform.iOS;
   }
 
   void _attachSyncEngine(SyncEngine? engine) {
@@ -220,6 +233,7 @@ class _MediaEnrichmentGateState extends State<MediaEnrichmentGate>
     final backend = backendAny;
     final sessionKey = SessionScope.of(context).sessionKey;
     final syncEngine = SyncEngineScope.maybeOf(context);
+    final localeTag = Localizations.localeOf(context).toLanguageTag();
 
     _running = true;
     _restartBlockToken = UpdateRestartActivity.blockAiAnalysis();
@@ -358,6 +372,7 @@ class _MediaEnrichmentGateState extends State<MediaEnrichmentGate>
       MediaSourcePreference imagePreference;
       MediaSourcePreference audioPreference;
       MediaSourcePreference ocrPreference;
+      MediaSourcePreference urlPreference;
       try {
         imagePreference = await MediaSourcePrefs.read();
       } catch (_) {
@@ -373,23 +388,27 @@ class _MediaEnrichmentGateState extends State<MediaEnrichmentGate>
       } catch (_) {
         ocrPreference = MediaSourcePreference.auto;
       }
+      try {
+        urlPreference = await MediaCapabilitySourcePrefs.readUrlFetch();
+      } catch (_) {
+        urlPreference = MediaSourcePreference.auto;
+      }
 
       final effectiveRoute = resolveMediaSourceRoute(
         imagePreference,
         cloudAvailable: cloudAvailable,
         hasByokProfile: hasOpenAiByokProfile,
       );
-      final audioRoute = resolveMediaSourceRoute(
-        audioPreference,
-        cloudAvailable: cloudAvailable,
-        hasByokProfile: hasOpenAiByokProfile,
-        hasLocalCapability: false,
-      );
       final ocrRoute = resolveMediaSourceRoute(
         ocrPreference,
         cloudAvailable: cloudAvailable,
         hasByokProfile: hasOpenAiByokProfile,
       );
+      final ocrDesiredMode = switch (ocrRoute) {
+        MediaSourceRouteKind.cloudGateway => 'cloud_gateway',
+        MediaSourceRouteKind.byok => 'byok_profile',
+        MediaSourceRouteKind.local => 'follow_ask_ai',
+      };
       final effectiveDesiredMode = switch (effectiveRoute) {
         MediaSourceRouteKind.cloudGateway => 'cloud_gateway',
         MediaSourceRouteKind.byok => 'byok_profile',
@@ -406,6 +425,26 @@ class _MediaEnrichmentGateState extends State<MediaEnrichmentGate>
             : mediaAnnotationConfig.byokProfileId,
         cloudModelName: mediaAnnotationConfig.cloudModelName,
       );
+      final effectiveOcrMediaAnnotationConfig = MediaAnnotationConfig(
+        annotateEnabled: mediaAnnotationConfig.annotateEnabled,
+        searchEnabled: mediaAnnotationConfig.searchEnabled,
+        allowCellular: mediaAnnotationConfig.allowCellular,
+        providerMode: ocrDesiredMode,
+        byokProfileId: ocrRoute == MediaSourceRouteKind.local
+            ? null
+            : mediaAnnotationConfig.byokProfileId,
+        cloudModelName: mediaAnnotationConfig.cloudModelName,
+      );
+      final ocrCloudGatewayBaseUrl =
+          ocrRoute == MediaSourceRouteKind.cloudGateway
+              ? gatewayConfig.baseUrl
+              : '';
+      final ocrCloudIdToken = ocrRoute == MediaSourceRouteKind.cloudGateway
+          ? (idToken?.trim() ?? '')
+          : '';
+      final ocrCloudModelName = ocrRoute == MediaSourceRouteKind.cloudGateway
+          ? gatewayConfig.modelName
+          : '';
 
       var hasCloudAnnotationModel = false;
       if (effectiveMediaAnnotationConfig.annotateEnabled) {
@@ -442,19 +481,14 @@ class _MediaEnrichmentGateState extends State<MediaEnrichmentGate>
               (annotationPrimaryClient != null ||
                   hasCloudAnnotationModel ||
                   allowImageOcrFallback);
-      final audioTranscribeCloudEnabled =
-          audioRoute != MediaSourceRouteKind.byok && cloudAvailable;
-      final audioTranscribeByokProfile =
-          audioRoute == MediaSourceRouteKind.cloudGateway
-              ? null
-              : effectiveOpenAiProfile();
       final effectiveAudioEngine = normalizeAudioTranscribeEngine(
         contentConfig?.audioTranscribeEngine ?? 'whisper',
       );
       await ensureGatewayMaxAudioBytesLoaded();
       final audioTranscribeSelection = _buildAudioTranscribeClientSelection(
-        cloudEnabled: audioTranscribeCloudEnabled,
-        byokProfile: audioTranscribeByokProfile,
+        preference: audioPreference,
+        cloudAvailable: cloudAvailable,
+        byokProfile: effectiveOpenAiProfile(),
         effectiveEngine: effectiveAudioEngine,
         whisperModel: audioWhisperModel,
         gatewayBaseUrl: gatewayConfig.baseUrl,
@@ -498,6 +532,15 @@ class _MediaEnrichmentGateState extends State<MediaEnrichmentGate>
         final allowedByNetwork = network != MediaEnrichmentNetwork.offline &&
             (!contentRequiresWifi || network == MediaEnrichmentNetwork.wifi);
         if (allowedByNetwork) {
+          final urlEnrichers = _buildUrlEnrichmentEnhancers(
+            preference: urlPreference,
+            cloudAvailable: cloudAvailable,
+            byokProfile: effectiveOpenAiProfile(),
+            sessionKey: Uint8List.fromList(sessionKey),
+            gatewayBaseUrl: gatewayConfig.baseUrl,
+            cloudIdToken: idToken?.trim() ?? '',
+            cloudModelName: gatewayConfig.modelName,
+          );
           final store = _BackendUrlEnrichmentStore(
             backend: backend,
             sessionKey: Uint8List.fromList(sessionKey),
@@ -507,6 +550,8 @@ class _MediaEnrichmentGateState extends State<MediaEnrichmentGate>
             fetcher: HttpUrlEnrichmentFetcher(
               securityPolicy: UrlEnrichmentSecurityPolicy(),
             ),
+            enhancers: urlEnrichers,
+            fallbackLang: localeTag,
           );
           final result = await runner.runOnce(limit: 5);
           processedUrl = result.processed;
@@ -552,11 +597,11 @@ class _MediaEnrichmentGateState extends State<MediaEnrichmentGate>
                       pageCountHint: pageCount,
                       languageHints: configuredOcrHints,
                       subscriptionStatus: subscriptionStatus,
-                      mediaAnnotationConfig: effectiveMediaAnnotationConfig,
+                      mediaAnnotationConfig: effectiveOcrMediaAnnotationConfig,
                       llmProfiles: llmProfiles,
-                      cloudGatewayBaseUrl: gatewayConfig.baseUrl,
-                      cloudIdToken: idToken?.trim() ?? '',
-                      cloudModelName: gatewayConfig.modelName,
+                      cloudGatewayBaseUrl: ocrCloudGatewayBaseUrl,
+                      cloudIdToken: ocrCloudIdToken,
+                      cloudModelName: ocrCloudModelName,
                     );
                   }
                 : (bytes, {required pageCount}) async => null,
@@ -587,11 +632,11 @@ class _MediaEnrichmentGateState extends State<MediaEnrichmentGate>
                 pageCountHint: pageCount,
                 languageHints: languageHints,
                 subscriptionStatus: subscriptionStatus,
-                mediaAnnotationConfig: effectiveMediaAnnotationConfig,
+                mediaAnnotationConfig: effectiveOcrMediaAnnotationConfig,
                 llmProfiles: llmProfiles,
-                cloudGatewayBaseUrl: gatewayConfig.baseUrl,
-                cloudIdToken: idToken?.trim() ?? '',
-                cloudModelName: gatewayConfig.modelName,
+                cloudGatewayBaseUrl: ocrCloudGatewayBaseUrl,
+                cloudIdToken: ocrCloudIdToken,
+                cloudModelName: ocrCloudModelName,
               );
             },
           );
@@ -651,11 +696,11 @@ class _MediaEnrichmentGateState extends State<MediaEnrichmentGate>
             canUseNetworkOcr: canUseNetworkOcr,
             audioTranscribeEnabled: audioTranscribeEnabled,
             subscriptionStatus: subscriptionStatus,
-            mediaAnnotationConfig: effectiveMediaAnnotationConfig,
+            mediaAnnotationConfig: effectiveOcrMediaAnnotationConfig,
             llmProfiles: llmProfiles,
-            cloudGatewayBaseUrl: gatewayConfig.baseUrl,
-            cloudIdToken: idToken?.trim() ?? '',
-            cloudModelName: gatewayConfig.modelName,
+            cloudGatewayBaseUrl: ocrCloudGatewayBaseUrl,
+            cloudIdToken: ocrCloudIdToken,
+            cloudModelName: ocrCloudModelName,
           );
         } catch (_) {
           processedAutoVideoOcr = 0;

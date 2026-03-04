@@ -345,6 +345,9 @@ String? extractAttachmentCardSummaryFromPayload(Map<String, Object?> payload) {
       _normalizedTextSnippet(payload['manual_summary']?.toString());
   if (manualSummary.isNotEmpty) return manualSummary;
 
+  final llmSummary = _normalizedTextSnippet(payload['llm_summary']?.toString());
+  if (llmSummary.isNotEmpty) return llmSummary;
+
   final summary = _normalizedTextSnippet(payload['summary']?.toString());
   if (summary.isNotEmpty) return summary;
 

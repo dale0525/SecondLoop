@@ -68,6 +68,14 @@ class MediaAnnotationSettingsPage extends StatefulWidget {
       ValueKey('media_annotation_settings_audio_wifi_only_switch');
   static const ocrWifiOnlySwitchKey =
       ValueKey('media_annotation_settings_ocr_wifi_only_switch');
+  static const urlSourceAutoTileKey =
+      ValueKey('media_annotation_settings_url_mode_auto');
+  static const urlSourceCloudTileKey =
+      ValueKey('media_annotation_settings_url_mode_cloud');
+  static const urlSourceByokTileKey =
+      ValueKey('media_annotation_settings_url_mode_byok');
+  static const urlSourceLocalTileKey =
+      ValueKey('media_annotation_settings_url_mode_local');
   static const imageWifiOnlySwitchKey =
       ValueKey('media_annotation_settings_image_wifi_only_switch');
   static const audioApiProfileTileKey =
@@ -123,6 +131,7 @@ class _MediaAnnotationSettingsPageState
   bool _ocrWifiOnly = true;
   MediaSourcePreference _audioSourcePreference = MediaSourcePreference.auto;
   MediaSourcePreference _ocrSourcePreference = MediaSourcePreference.auto;
+  MediaSourcePreference _urlSourcePreference = MediaSourcePreference.auto;
   String _audioWhisperModel = kDefaultAudioTranscribeWhisperModel;
   AudioTranscribeWhisperModelStore? _audioWhisperModelStoreCached;
   bool _audioWhisperModelDownloading = false;
@@ -540,6 +549,7 @@ class _MediaAnnotationSettingsPageState
 
       var audioSourcePreference = MediaSourcePreference.auto;
       var ocrSourcePreference = MediaSourcePreference.auto;
+      var urlSourcePreference = MediaSourcePreference.auto;
       try {
         audioSourcePreference = await MediaCapabilitySourcePrefs.readAudio();
         if (audioSourcePreference == MediaSourcePreference.local) {
@@ -553,10 +563,12 @@ class _MediaAnnotationSettingsPageState
         }
         ocrSourcePreference =
             await MediaCapabilitySourcePrefs.readDocumentOcr();
+        urlSourcePreference = await MediaCapabilitySourcePrefs.readUrlFetch();
         audioWhisperModel = await AudioTranscribeWhisperModelPrefs.read();
       } catch (_) {
         audioSourcePreference = MediaSourcePreference.auto;
         ocrSourcePreference = MediaSourcePreference.auto;
+        urlSourcePreference = MediaSourcePreference.auto;
         audioWhisperModel = kDefaultAudioTranscribeWhisperModel;
       }
       if (store.supportsRuntimeDownload) {
@@ -579,6 +591,7 @@ class _MediaAnnotationSettingsPageState
         _ocrWifiOnly = ocrWifiOnly;
         _audioSourcePreference = audioSourcePreference;
         _ocrSourcePreference = ocrSourcePreference;
+        _urlSourcePreference = urlSourcePreference;
         _audioWhisperModel = audioWhisperModel;
         _audioWhisperRuntimeInstalled = audioWhisperRuntimeInstalled;
         _audioWhisperRuntimeStatusReady = true;
@@ -696,6 +709,31 @@ class _MediaAnnotationSettingsPageState
       );
       if (!mounted) return;
       setState(() => _ocrSourcePreference = next);
+    } catch (e) {
+      if (!mounted) return;
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(context.t.errors.saveFailed(error: '$e')),
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _setUrlSourcePreference(MediaSourcePreference next) async {
+    if (_busy || _urlSourcePreference == next) return;
+    final messenger = ScaffoldMessenger.of(context);
+
+    setState(() => _busy = true);
+    try {
+      await MediaCapabilitySourcePrefs.write(
+        MediaCapabilitySourceScope.urlFetch,
+        preference: next,
+      );
+      if (!mounted) return;
+      setState(() => _urlSourcePreference = next);
     } catch (e) {
       if (!mounted) return;
       messenger.showSnackBar(
