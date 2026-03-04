@@ -19,9 +19,17 @@ extension _ChatPageStateLinkedTodoBadgeLoader on _ChatPageState {
       final byMessageId = <String, _TodoMessageBadgeMeta>{};
       final todosById = <String, Todo>{for (final todo in todos) todo.id: todo};
       final messageIds = messagesById.keys.toList(growable: false);
+      var semanticParseConsented = false;
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        semanticParseConsented =
+            prefs.getBool(SemanticParseDataConsentPrefs.prefsKey) ?? false;
+      } catch (_) {
+        semanticParseConsented = false;
+      }
 
       final undoneFollowupCutoffByMessageId = <String, int>{};
-      if (messageIds.isNotEmpty) {
+      if (semanticParseConsented && messageIds.isNotEmpty) {
         try {
           final jobs = await backend.listSemanticParseJobsByMessageIds(
             sessionKey,
