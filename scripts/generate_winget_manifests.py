@@ -77,6 +77,13 @@ def write_manifest(path: Path, content: str) -> None:
     path.write_text(content, encoding="utf-8")
 
 
+def schema_header(manifest_type: str) -> str:
+    return (
+        "# yaml-language-server: "
+        f"$schema=https://aka.ms/winget-manifest.{manifest_type}.{MANIFEST_VERSION}.schema.json"
+    )
+
+
 def main() -> int:
     args = parse_args()
     version = ensure_release_tag(args.release_tag)
@@ -96,6 +103,8 @@ def main() -> int:
 
     version_manifest = dedent(
         f"""\
+        {schema_header("version")}
+
         PackageIdentifier: {args.package_identifier}
         PackageVersion: {version}
         DefaultLocale: en-US
@@ -106,6 +115,8 @@ def main() -> int:
 
     installer_manifest = dedent(
         f"""\
+        {schema_header("installer")}
+
         PackageIdentifier: {args.package_identifier}
         PackageVersion: {version}
         InstallerType: exe
@@ -132,6 +143,8 @@ def main() -> int:
 
     locale_manifest = dedent(
         f"""\
+        {schema_header("defaultLocale")}
+
         PackageIdentifier: {args.package_identifier}
         PackageVersion: {version}
         PackageLocale: en-US
