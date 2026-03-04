@@ -4,7 +4,6 @@ use serde_json::{Map, Value};
 use crate::llm::ChatDelta;
 use crate::rag::AnswerProvider;
 
-const MAX_PROMPT_SOURCE_CHARS: usize = 6000;
 const MAX_TAGS: usize = 6;
 
 fn normalize_user_lang(user_lang: &str) -> String {
@@ -39,13 +38,12 @@ fn build_url_enrichment_prompt(
         .map(str::trim)
         .filter(|value| !value.is_empty())
         .unwrap_or("(none)");
-    let source = if readable_text_excerpt.trim().is_empty() {
-        readable_text_full
-    } else {
+    let source = if readable_text_full.trim().is_empty() {
         readable_text_excerpt
+    } else {
+        readable_text_full
     };
 
-    let clipped_source: String = source.chars().take(MAX_PROMPT_SOURCE_CHARS).collect();
     let normalized_user_lang = normalize_user_lang(user_lang);
     let language_instruction = prompt_language_instruction(user_lang);
 
@@ -77,7 +75,7 @@ extracted_text:
         final_url.trim(),
         site.trim(),
         safe_title,
-        clipped_source
+        source
     )
 }
 
@@ -261,22 +259,38 @@ mod tests {
     }
 
     #[test]
-    fn prompt_uses_excerpt_and_clips_length() {
-        let long_text = "A".repeat(MAX_PROMPT_SOURCE_CHARS + 100);
+    fn prompt_uses_full_text_without_clipping() {
+        let long_text = "A".repeat(9000);
         let prompt = build_url_enrichment_prompt(
             "https://a",
             "https://b",
             "example.com",
             "zh-CN",
             Some("Title"),
+            "excerpt",
             &long_text,
-            "",
         );
         assert!(prompt.contains("original_url: https://a"));
         assert!(prompt.contains("current_title: Title"));
         assert!(prompt.contains("user's language (zh-CN)"));
         assert!(prompt.contains("user_language: zh-CN"));
-        assert!(!prompt.contains(&"A".repeat(MAX_PROMPT_SOURCE_CHARS + 50)));
+        assert!(prompt.contains(&long_text));
+    }
+
+    #[test]
+    fn prompt_falls_back_to_excerpt_when_full_is_empty() {
+        let prompt = build_url_enrichment_prompt(
+            "https://a",
+            "https://b",
+            "example.com",
+            "zh-CN",
+            Some("Title"),
+            "excerpt only",
+            "",
+        );
+        assert!(prompt.contains("original_url: https://a"));
+        assert!(prompt.contains("current_title: Title"));
+        assert!(prompt.contains("extracted_text:\nexcerpt only"));
     }
 
     #[test]

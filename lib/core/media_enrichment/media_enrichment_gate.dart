@@ -231,6 +231,7 @@ class _MediaEnrichmentGateState extends State<MediaEnrichmentGate>
     final backend = backendAny;
     final sessionKey = SessionScope.of(context).sessionKey;
     final syncEngine = SyncEngineScope.maybeOf(context);
+    final localeTag = Localizations.localeOf(context).toLanguageTag();
 
     _running = true;
     try {
@@ -547,6 +548,7 @@ class _MediaEnrichmentGateState extends State<MediaEnrichmentGate>
               securityPolicy: UrlEnrichmentSecurityPolicy(),
             ),
             enhancers: urlEnrichers,
+            fallbackLang: localeTag,
           );
           final result = await runner.runOnce(limit: 5);
           processedUrl = result.processed;

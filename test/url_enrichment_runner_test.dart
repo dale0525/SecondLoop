@@ -15,6 +15,7 @@ final class _MemStore implements UrlEnrichmentStore {
   final Map<String, Uint8List> bytesBySha;
 
   final Map<String, String> okPayloadBySha = <String, String>{};
+  final Map<String, String> okLangBySha = <String, String>{};
   final Map<String, String> failedBySha = <String, String>{};
   final Map<String, String> titleBySha = <String, String>{};
 
@@ -48,6 +49,7 @@ final class _MemStore implements UrlEnrichmentStore {
     required int nowMs,
   }) async {
     okPayloadBySha[attachmentSha256] = payloadJson;
+    okLangBySha[attachmentSha256] = lang;
   }
 
   @override
@@ -96,6 +98,8 @@ final class _FakeEnhancer implements UrlEnrichmentEnhancer {
   final UrlEnrichmentEnhancerResult? result;
   final Object? error;
   String? lastLang;
+  String? lastReadableTextExcerpt;
+  String? lastReadableTextFull;
 
   @override
   Future<UrlEnrichmentEnhancerResult?> enhance({
@@ -108,6 +112,8 @@ final class _FakeEnhancer implements UrlEnrichmentEnhancer {
     required String readableTextFull,
   }) async {
     lastLang = lang;
+    lastReadableTextExcerpt = readableTextExcerpt;
+    lastReadableTextFull = readableTextFull;
     if (error != null) throw error!;
     return result;
   }
@@ -383,5 +389,124 @@ void main() {
     expect(fullText.toLowerCase(), isNot(contains('sign in')));
     expect(fullText.toLowerCase(), isNot(contains('pricing')));
     expect(fullText.toLowerCase(), isNot(contains('terms privacy security')));
+  });
+
+  test('uses fallback language when queued job language is und', () async {
+    final manifest = jsonEncode({
+      'schema': kSecondLoopUrlManifestSchema,
+      'url': 'https://example.com/page',
+    });
+
+    final store = _MemStore(
+      jobs: const [
+        UrlEnrichmentJob(
+          attachmentSha256: 'e',
+          lang: 'und',
+          status: 'pending',
+          attempts: 0,
+          nextRetryAtMs: null,
+        ),
+      ],
+      bytesBySha: {
+        'e': Uint8List.fromList(utf8.encode(manifest)),
+      },
+    );
+
+    const html = '''
+<html>
+  <head><title>Local Title</title></head>
+  <body><p>Local body</p></body>
+</html>
+''';
+
+    final fetcher = _FakeFetcher(
+      response: UrlFetchResponse(
+        finalUri: Uri.parse('https://example.com/page'),
+        statusCode: 200,
+        contentType: 'text/html',
+        bodyBytes: Uint8List.fromList(utf8.encode(html)),
+      ),
+    );
+
+    final enhancer = _FakeEnhancer(
+      modelName: 'url_enrich.cloud',
+      source: 'cloud',
+      result: const UrlEnrichmentEnhancerResult(summary: 'Cloud summary'),
+    );
+
+    final runner = UrlEnrichmentRunner(
+      store: store,
+      fetcher: fetcher,
+      nowMs: () => 5000,
+      enhancers: [enhancer],
+      fallbackLang: 'zh-CN',
+    );
+
+    final result = await runner.runOnce();
+    expect(result.didEnrichAny, isTrue);
+    expect(enhancer.lastLang, 'zh-CN');
+    expect(store.okLangBySha['e'], 'zh-CN');
+  });
+
+  test('passes untruncated extracted text to enhancer', () async {
+    final manifest = jsonEncode({
+      'schema': kSecondLoopUrlManifestSchema,
+      'url': 'https://example.com/page',
+    });
+
+    final store = _MemStore(
+      jobs: const [
+        UrlEnrichmentJob(
+          attachmentSha256: 'f',
+          lang: 'zh-CN',
+          status: 'pending',
+          attempts: 0,
+          nextRetryAtMs: null,
+        ),
+      ],
+      bytesBySha: {
+        'f': Uint8List.fromList(utf8.encode(manifest)),
+      },
+    );
+
+    final longMain =
+        '${List<String>.filled(kUrlEnrichmentMaxExcerptBytes + 256, 'A').join()}TAIL_TOKEN';
+    final html = '''
+<html>
+  <head><title>Local Title</title></head>
+  <body><main><p>$longMain</p></main></body>
+</html>
+''';
+
+    final fetcher = _FakeFetcher(
+      response: UrlFetchResponse(
+        finalUri: Uri.parse('https://example.com/page'),
+        statusCode: 200,
+        contentType: 'text/html',
+        bodyBytes: Uint8List.fromList(utf8.encode(html)),
+      ),
+    );
+
+    final enhancer = _FakeEnhancer(
+      modelName: 'url_enrich.cloud',
+      source: 'cloud',
+      result: const UrlEnrichmentEnhancerResult(summary: 'Cloud summary'),
+    );
+
+    final runner = UrlEnrichmentRunner(
+      store: store,
+      fetcher: fetcher,
+      nowMs: () => 6000,
+      enhancers: [enhancer],
+    );
+
+    final result = await runner.runOnce();
+    expect(result.didEnrichAny, isTrue);
+    expect(enhancer.lastReadableTextFull, contains('TAIL_TOKEN'));
+    expect(enhancer.lastReadableTextExcerpt, contains('TAIL_TOKEN'));
+    expect(
+      enhancer.lastReadableTextFull!.length,
+      greaterThan(kUrlEnrichmentMaxExcerptBytes),
+    );
   });
 }

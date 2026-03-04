@@ -279,12 +279,14 @@ class UrlEnrichmentRunner {
     required this.store,
     required this.fetcher,
     this.enhancers = const <UrlEnrichmentEnhancer>[],
+    this.fallbackLang = 'und',
     int Function()? nowMs,
   }) : _nowMs = nowMs ?? (() => DateTime.now().millisecondsSinceEpoch);
 
   final UrlEnrichmentStore store;
   final UrlEnrichmentFetcher fetcher;
   final List<UrlEnrichmentEnhancer> enhancers;
+  final String fallbackLang;
   final int Function() _nowMs;
 
   Future<UrlEnrichmentRunResult> runOnce({int limit = 5}) async {
@@ -306,6 +308,9 @@ class UrlEnrichmentRunner {
         final html = _decodeBestEffortUtf8(fetched.bodyBytes);
         final extracted = _extractFromHtml(html, baseUri: fetched.finalUri);
 
+        final llmReadableTextFull = extracted.readableText;
+        final llmReadableTextExcerpt = llmReadableTextFull;
+
         final fullText = _truncateUtf8ToMaxBytes(
           extracted.readableText,
           kUrlEnrichmentMaxFullTextBytes,
@@ -314,6 +319,7 @@ class UrlEnrichmentRunner {
           fullText,
           kUrlEnrichmentMaxExcerptBytes,
         );
+        final effectiveLang = _resolveJobLang(job.lang, fallbackLang);
 
         var selectedTitle = extracted.title;
         var selectedModelName = kUrlEnrichmentModelName;
@@ -324,13 +330,13 @@ class UrlEnrichmentRunner {
         for (final enhancer in enhancers) {
           try {
             final enhanced = await enhancer.enhance(
-              lang: job.lang,
+              lang: effectiveLang,
               originalUrl: manifest.url,
               finalUrl: fetched.finalUri.toString(),
               site: extracted.site ?? '',
               title: selectedTitle,
-              readableTextExcerpt: excerpt,
-              readableTextFull: fullText,
+              readableTextExcerpt: llmReadableTextExcerpt,
+              readableTextFull: llmReadableTextFull,
             );
             if (enhanced == null) continue;
 
@@ -382,7 +388,7 @@ class UrlEnrichmentRunner {
 
         await store.markAnnotationOk(
           attachmentSha256: job.attachmentSha256,
-          lang: job.lang,
+          lang: effectiveLang,
           modelName: selectedModelName,
           payloadJson: payload,
           nowMs: nowMs,
@@ -417,6 +423,25 @@ class UrlEnrichmentRunner {
     final clamped = attempts.clamp(1, 10);
     final seconds = 5 * (1 << (clamped - 1));
     return Duration(seconds: seconds).inMilliseconds;
+  }
+
+  static String _resolveJobLang(String jobLang, String fallbackLang) {
+    final normalizedJobLang = jobLang.trim();
+    final normalizedJobLangLower = normalizedJobLang.toLowerCase();
+    final normalizedFallbackLang = fallbackLang.trim();
+
+    if (normalizedJobLang.isNotEmpty &&
+        normalizedJobLangLower != 'und' &&
+        normalizedJobLangLower != 'auto') {
+      return normalizedJobLang;
+    }
+    if (normalizedFallbackLang.isNotEmpty) {
+      return normalizedFallbackLang;
+    }
+    if (normalizedJobLang.isNotEmpty) {
+      return normalizedJobLang;
+    }
+    return 'und';
   }
 
   static _UrlManifest _parseUrlManifest(Uint8List bytes) {
