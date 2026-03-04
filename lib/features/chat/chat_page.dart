@@ -470,6 +470,13 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
     setState(() => _todoAgendaBannerCollapseSignal++);
   }
 
+  void _dismissTransientChatUiByBlankTap() {
+    _inputFocusNode.unfocus();
+    FocusScope.of(context).unfocus();
+    FocusManager.instance.primaryFocus?.unfocus();
+    _collapseTodoAgendaBanner();
+  }
+
   @override
   void didUpdateWidget(covariant ChatPage oldWidget) {
     super.didUpdateWidget(oldWidget);
