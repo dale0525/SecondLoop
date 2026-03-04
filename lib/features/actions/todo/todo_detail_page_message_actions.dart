@@ -160,6 +160,26 @@ extension _TodoDetailPageStateMessageActions on _TodoDetailPageState {
       }
     }
 
+    int? undoneFollowupCutoffMs;
+    try {
+      final jobs = await backend.listSemanticParseJobsByMessageIds(
+        sessionKey,
+        messageIds: <String>[message.id],
+      );
+      for (final job in jobs) {
+        if (job.messageId != message.id) continue;
+        if ((job.appliedActionKind ?? '').trim() != 'followup') continue;
+        final undoneAtMs = job.undoneAtMs?.toInt();
+        if (undoneAtMs == null) continue;
+        if (undoneFollowupCutoffMs == null ||
+            undoneAtMs > undoneFollowupCutoffMs) {
+          undoneFollowupCutoffMs = undoneAtMs;
+        }
+      }
+    } catch (_) {
+      undoneFollowupCutoffMs = null;
+    }
+
     try {
       final activities = await backend.listTodoActivitiesInRange(
         sessionKey,
@@ -168,6 +188,11 @@ extension _TodoDetailPageStateMessageActions on _TodoDetailPageState {
       );
       for (final activity in activities) {
         if (activity.sourceMessageId != message.id) continue;
+        if (undoneFollowupCutoffMs != null &&
+            activity.activityType == 'status_change' &&
+            activity.createdAtMs.toInt() <= undoneFollowupCutoffMs) {
+          continue;
+        }
         final todo = todosById[activity.todoId];
         if (todo != null) return (todo: todo, isSourceEntry: false);
       }
@@ -458,9 +483,8 @@ extension _TodoDetailPageStateMessageActions on _TodoDetailPageState {
 
     final linkedTodoInfo = await _resolveLinkedTodoInfo(message);
     if (!mounted) return;
-    final shouldMoveExisting = linkedTodoInfo != null &&
-        !linkedTodoInfo.isSourceEntry &&
-        sourceActivityId != null;
+    final shouldMoveExisting =
+        linkedTodoInfo != null && !linkedTodoInfo.isSourceEntry;
 
     late final List<Todo> todos;
     try {
@@ -509,11 +533,60 @@ extension _TodoDetailPageStateMessageActions on _TodoDetailPageState {
 
     try {
       if (shouldMoveExisting) {
-        await backend.moveTodoActivity(
+        var moved = 0;
+        if (sourceActivityId != null) {
+          await backend.moveTodoActivity(
+            sessionKey,
+            activityId: sourceActivityId,
+            toTodoId: selected.id,
+          );
+          moved += 1;
+        }
+        final activities = await backend.listTodoActivitiesInRange(
           sessionKey,
-          activityId: sourceActivityId,
-          toTodoId: selected.id,
+          startAtMsInclusive: 0,
+          endAtMsExclusive: DateTime.now().toUtc().millisecondsSinceEpoch + 1,
         );
+        for (final activity in activities) {
+          if (activity.sourceMessageId != message.id) continue;
+          if (sourceActivityId != null && activity.id == sourceActivityId) {
+            continue;
+          }
+          if (activity.todoId == selected.id) continue;
+          await backend.moveTodoActivity(
+            sessionKey,
+            activityId: activity.id,
+            toTodoId: selected.id,
+          );
+          moved += 1;
+        }
+        if (moved <= 0) {
+          final activity = await backend.appendTodoNote(
+            sessionKey,
+            todoId: selected.id,
+            content: message.content.trim(),
+            sourceMessageId: message.id,
+          );
+
+          final attachmentsBackend = backend is AttachmentsBackend
+              ? backend as AttachmentsBackend
+              : null;
+          if (attachmentsBackend != null) {
+            try {
+              final attachments = await attachmentsBackend
+                  .listMessageAttachments(sessionKey, message.id);
+              for (final attachment in attachments) {
+                await backend.linkAttachmentToTodoActivity(
+                  sessionKey,
+                  activityId: activity.id,
+                  attachmentSha256: attachment.sha256,
+                );
+              }
+            } catch (_) {
+              // ignore
+            }
+          }
+        }
       } else {
         final activity = await backend.appendTodoNote(
           sessionKey,

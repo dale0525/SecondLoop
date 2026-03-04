@@ -1,6 +1,8 @@
 part of 'chat_page.dart';
 
 const _kCloudDetachedRequestIdPayloadKey = 'secondloop_cloud_request_id';
+const _kDetachedTodoIdPrefix = 'todo:_detached_message_link:';
+const _kDetachedTodoTitlePrefix = '[detached] ';
 final RegExp _kCloudDetachedRequestIdPattern = RegExp(
   r'^[A-Za-z0-9][A-Za-z0-9:_-]{5,127}$',
 );
@@ -102,9 +104,12 @@ extension _ChatPageStateMethodsA on _ChatPageState {
                       snapshot.connectionState == ConnectionState.done
                           ? snapshot.data
                           : null;
-                  final canConvertToTodo = resolvedTodo == null &&
-                      displayText.isNotEmpty &&
-                      snapshot.connectionState == ConnectionState.done;
+                  final isLinkedNonSource =
+                      resolvedTodo != null && !resolvedTodo.isSourceEntry;
+                  final canConvertToTodo =
+                      snapshot.connectionState == ConnectionState.done &&
+                          displayText.isNotEmpty &&
+                          (resolvedTodo == null || isLinkedNonSource);
 
                   final showLinkTodo = resolvedTodo == null ||
                       resolvedTodo.isSourceEntry == false;
@@ -134,8 +139,8 @@ extension _ChatPageStateMethodsA on _ChatPageState {
                                   context.t.chat.messageActions.convertToTodo),
                               onTap: () => Navigator.of(context)
                                   .pop(_MessageAction.convertTodo),
-                            )
-                          else if (resolvedTodo != null) ...[
+                            ),
+                          if (resolvedTodo != null) ...[
                             ListTile(
                               key: const ValueKey('message_action_open_todo'),
                               leading: const Icon(Icons.chevron_right_rounded),
@@ -144,16 +149,15 @@ extension _ChatPageStateMethodsA on _ChatPageState {
                               onTap: () => Navigator.of(context)
                                   .pop(_MessageAction.openTodo),
                             ),
-                            if (resolvedTodo.isSourceEntry)
-                              ListTile(
-                                key: const ValueKey(
-                                    'message_action_convert_to_info'),
-                                leading: const Icon(Icons.undo_rounded),
-                                title: Text(context
-                                    .t.chat.messageActions.convertTodoToInfo),
-                                onTap: () => Navigator.of(context)
-                                    .pop(_MessageAction.convertTodoToInfo),
-                              ),
+                            ListTile(
+                              key: const ValueKey(
+                                  'message_action_convert_to_info'),
+                              leading: const Icon(Icons.undo_rounded),
+                              title: Text(context
+                                  .t.chat.messageActions.convertTodoToInfo),
+                              onTap: () => Navigator.of(context)
+                                  .pop(_MessageAction.convertTodoToInfo),
+                            ),
                           ],
                         ],
                         if (canEdit)
@@ -398,7 +402,8 @@ extension _ChatPageStateMethodsA on _ChatPageState {
     final canEdit = await _canEditMessage(message);
     final linkedTodo = await _resolveLinkedTodoInfo(message);
     final canConvertToTodo =
-        linkedTodo == null && _displayTextForMessage(message).trim().isNotEmpty;
+        _displayTextForMessage(message).trim().isNotEmpty &&
+            (linkedTodo == null || !linkedTodo.isSourceEntry);
     if (!mounted) return;
 
     final overlay = Overlay.of(context).context.findRenderObject() as RenderBox;
@@ -418,14 +423,14 @@ extension _ChatPageStateMethodsA on _ChatPageState {
             key: const ValueKey('message_context_convert_todo'),
             value: _MessageAction.convertTodo,
             child: Text(context.t.chat.messageActions.convertToTodo),
-          )
-        else if (linkedTodo != null)
+          ),
+        if (linkedTodo != null)
           PopupMenuItem<_MessageAction>(
             key: const ValueKey('message_context_open_todo'),
             value: _MessageAction.openTodo,
             child: Text(context.t.chat.messageActions.openTodo),
           ),
-        if (linkedTodo != null && linkedTodo.isSourceEntry)
+        if (linkedTodo != null)
           PopupMenuItem<_MessageAction>(
             key: const ValueKey('message_context_convert_to_info'),
             value: _MessageAction.convertTodoToInfo,
@@ -543,6 +548,26 @@ extension _ChatPageStateMethodsA on _ChatPageState {
       return (todo: sorted.first, isSourceEntry: true);
     }
 
+    int? undoneFollowupCutoffMs;
+    try {
+      final jobs = await backend.listSemanticParseJobsByMessageIds(
+        sessionKey,
+        messageIds: <String>[message.id],
+      );
+      for (final job in jobs) {
+        if (job.messageId != message.id) continue;
+        if ((job.appliedActionKind ?? '').trim() != 'followup') continue;
+        final undoneAtMs = job.undoneAtMs?.toInt();
+        if (undoneAtMs == null) continue;
+        if (undoneFollowupCutoffMs == null ||
+            undoneAtMs > undoneFollowupCutoffMs) {
+          undoneFollowupCutoffMs = undoneAtMs;
+        }
+      }
+    } catch (_) {
+      undoneFollowupCutoffMs = null;
+    }
+
     try {
       final activities = await backend.listTodoActivitiesInRange(
         sessionKey,
@@ -551,6 +576,11 @@ extension _ChatPageStateMethodsA on _ChatPageState {
       );
       for (final activity in activities) {
         if (activity.sourceMessageId != message.id) continue;
+        if (undoneFollowupCutoffMs != null &&
+            activity.activityType == 'status_change' &&
+            activity.createdAtMs.toInt() <= undoneFollowupCutoffMs) {
+          continue;
+        }
         final todo = todosById[activity.todoId];
         if (todo == null || todo.status == 'dismissed') continue;
         return (todo: todo, isSourceEntry: false);
@@ -572,6 +602,8 @@ extension _ChatPageStateMethodsA on _ChatPageState {
     final backend = AppBackendScope.of(context);
     final sessionKey = SessionScope.of(context).sessionKey;
     final syncEngine = SyncEngineScope.maybeOf(context);
+    final linkedTodoInfo = await _resolveLinkedTodoInfo(message);
+    if (!mounted) return;
     final todoId = 'todo:${message.id}';
 
     final locale = Localizations.localeOf(context);
@@ -640,6 +672,12 @@ extension _ChatPageStateMethodsA on _ChatPageState {
         nextReviewAtMs: nextReviewAtMs,
         lastReviewAtMs: DateTime.now().toUtc().millisecondsSinceEpoch,
       );
+      if (linkedTodoInfo != null && !linkedTodoInfo.isSourceEntry) {
+        await _moveLinkedTodoActivitiesForMessage(
+          messageId: message.id,
+          toTodoId: todoId,
+        );
+      }
     } catch (_) {
       return;
     }
@@ -652,7 +690,6 @@ extension _ChatPageStateMethodsA on _ChatPageState {
   Future<void> _convertMessageTodoToInfo(
       Message message, Todo? linkedTodo) async {
     if (linkedTodo == null) return;
-    if (linkedTodo.sourceEntryId != message.id) return;
     if (!mounted) return;
 
     final shouldConvert = await _showDialogFromChat<bool>(
@@ -678,42 +715,64 @@ extension _ChatPageStateMethodsA on _ChatPageState {
     );
     if (shouldConvert != true || !mounted) return;
 
+    if (linkedTodo.sourceEntryId != message.id) {
+      await _undoFollowupLinkForMessage(message, linkedTodo: linkedTodo);
+      return;
+    }
+
     final backend = AppBackendScope.of(context);
     final sessionKey = SessionScope.of(context).sessionKey;
     final syncEngine = SyncEngineScope.maybeOf(context);
     final nowMs = DateTime.now().millisecondsSinceEpoch;
     final linkedMessageIds = <String>{message.id};
+    final sourceTodos = <Todo>[];
 
     try {
-      final activities = await backend.listTodoActivities(
-        sessionKey,
-        linkedTodo.id,
-      );
-      for (final activity in activities) {
-        final sourceMessageId = activity.sourceMessageId?.trim();
-        if (sourceMessageId == null || sourceMessageId.isEmpty) {
-          continue;
+      final todos = await backend.listTodos(sessionKey);
+      for (final todo in todos) {
+        if (todo.sourceEntryId == message.id) {
+          sourceTodos.add(todo);
         }
-        linkedMessageIds.add(sourceMessageId);
       }
     } catch (_) {
       // ignore
     }
+    if (sourceTodos.isEmpty) {
+      sourceTodos.add(linkedTodo);
+    }
 
-    try {
-      await backend.upsertTodo(
-        sessionKey,
-        id: linkedTodo.id,
-        title: linkedTodo.title,
-        dueAtMs: null,
-        status: 'dismissed',
-        sourceEntryId: null,
-        reviewStage: null,
-        nextReviewAtMs: null,
-        lastReviewAtMs: linkedTodo.lastReviewAtMs,
-      );
-    } catch (_) {
-      return;
+    for (final sourceTodo in sourceTodos) {
+      try {
+        final activities = await backend.listTodoActivities(
+          sessionKey,
+          sourceTodo.id,
+        );
+        for (final activity in activities) {
+          final sourceMessageId = activity.sourceMessageId?.trim();
+          if (sourceMessageId == null || sourceMessageId.isEmpty) {
+            continue;
+          }
+          linkedMessageIds.add(sourceMessageId);
+        }
+      } catch (_) {
+        // ignore
+      }
+
+      try {
+        await backend.upsertTodo(
+          sessionKey,
+          id: sourceTodo.id,
+          title: sourceTodo.title,
+          dueAtMs: null,
+          status: 'dismissed',
+          sourceEntryId: null,
+          reviewStage: null,
+          nextReviewAtMs: null,
+          lastReviewAtMs: sourceTodo.lastReviewAtMs,
+        );
+      } catch (_) {
+        return;
+      }
     }
 
     for (final linkedMessageId in linkedMessageIds) {
@@ -731,6 +790,166 @@ extension _ChatPageStateMethodsA on _ChatPageState {
     if (!mounted) return;
     syncEngine?.notifyLocalMutation();
     _refresh();
+  }
+
+  Future<void> _ensureDetachedTodoExistsForMessage(
+    Message message, {
+    Todo? linkedTodo,
+  }) async {
+    final backend = AppBackendScope.of(context);
+    final sessionKey = SessionScope.of(context).sessionKey;
+    final nowMs = DateTime.now().toUtc().millisecondsSinceEpoch;
+    final detachedTodoId = '$_kDetachedTodoIdPrefix${message.id}';
+    final linkedTitle = linkedTodo?.title.trim() ?? '';
+    final fallbackTitle = _displayTextForMessage(message).trim();
+    final title = linkedTitle.isNotEmpty
+        ? linkedTitle
+        : fallbackTitle.isEmpty
+            ? '$_kDetachedTodoTitlePrefix${message.id}'
+            : '$_kDetachedTodoTitlePrefix$fallbackTitle';
+
+    await backend.upsertTodo(
+      sessionKey,
+      id: detachedTodoId,
+      title: title.trim(),
+      dueAtMs: null,
+      status: 'dismissed',
+      sourceEntryId: null,
+      reviewStage: null,
+      nextReviewAtMs: null,
+      lastReviewAtMs: nowMs,
+    );
+  }
+
+  Future<void> _undoFollowupLinkForMessage(
+    Message message, {
+    Todo? linkedTodo,
+  }) async {
+    if (!mounted) return;
+
+    final backend = AppBackendScope.of(context);
+    final sessionKey = SessionScope.of(context).sessionKey;
+    final syncEngine = SyncEngineScope.maybeOf(context);
+    final detachedTodoId = '$_kDetachedTodoIdPrefix${message.id}';
+
+    try {
+      await _ensureDetachedTodoExistsForMessage(
+        message,
+        linkedTodo: linkedTodo,
+      );
+    } catch (_) {
+      return;
+    }
+
+    try {
+      await _moveLinkedTodoActivitiesForMessage(
+        messageId: message.id,
+        toTodoId: detachedTodoId,
+      );
+    } catch (_) {
+      return;
+    }
+
+    SemanticParseJob? latestFollowup;
+    try {
+      final jobs = await backend.listSemanticParseJobsByMessageIds(
+        sessionKey,
+        messageIds: <String>[message.id],
+      );
+      for (final job in jobs) {
+        if (job.messageId != message.id) continue;
+        if ((job.appliedActionKind ?? '').trim() != 'followup') continue;
+        if (job.undoneAtMs != null) continue;
+        final appliedTodoId = job.appliedTodoId?.trim();
+        if (linkedTodo != null &&
+            appliedTodoId != null &&
+            appliedTodoId.isNotEmpty &&
+            appliedTodoId != linkedTodo.id) {
+          continue;
+        }
+        if (latestFollowup == null ||
+            job.updatedAtMs.toInt() > latestFollowup.updatedAtMs.toInt()) {
+          latestFollowup = job;
+        }
+      }
+    } catch (_) {
+      latestFollowup = null;
+    }
+
+    try {
+      final todoId = latestFollowup?.appliedTodoId?.trim();
+      final prevStatus = latestFollowup?.appliedPrevTodoStatus?.trim();
+      if (todoId != null &&
+          todoId.isNotEmpty &&
+          prevStatus != null &&
+          prevStatus.isNotEmpty) {
+        await backend.setTodoStatus(
+          sessionKey,
+          todoId: todoId,
+          newStatus: prevStatus,
+        );
+      }
+    } catch (_) {
+      // ignore
+    }
+
+    try {
+      await backend.markSemanticParseJobUndone(
+        sessionKey,
+        messageId: message.id,
+        nowMs: DateTime.now().millisecondsSinceEpoch,
+      );
+    } catch (_) {
+      // ignore
+    }
+
+    if (!mounted) return;
+    syncEngine?.notifyLocalMutation();
+    _refresh();
+  }
+
+  Future<List<TodoActivity>> _listLinkedTodoActivitiesForMessage({
+    required String messageId,
+  }) async {
+    final backend = AppBackendScope.of(context);
+    final sessionKey = SessionScope.of(context).sessionKey;
+    final normalizedMessageId = messageId.trim();
+    if (normalizedMessageId.isEmpty) return const <TodoActivity>[];
+
+    final activities = await backend.listTodoActivitiesInRange(
+      sessionKey,
+      startAtMsInclusive: 0,
+      endAtMsExclusive: DateTime.now().toUtc().millisecondsSinceEpoch + 1,
+    );
+    return activities
+        .where((activity) => activity.sourceMessageId == normalizedMessageId)
+        .toList(growable: false);
+  }
+
+  Future<int> _moveLinkedTodoActivitiesForMessage({
+    required String messageId,
+    required String toTodoId,
+  }) async {
+    final backend = AppBackendScope.of(context);
+    final sessionKey = SessionScope.of(context).sessionKey;
+    final normalizedTargetTodoId = toTodoId.trim();
+    if (normalizedTargetTodoId.isEmpty) return 0;
+
+    final activities = await _listLinkedTodoActivitiesForMessage(
+      messageId: messageId,
+    );
+
+    var moved = 0;
+    for (final activity in activities) {
+      if (activity.todoId == normalizedTargetTodoId) continue;
+      await backend.moveTodoActivity(
+        sessionKey,
+        activityId: activity.id,
+        toTodoId: normalizedTargetTodoId,
+      );
+      moved += 1;
+    }
+    return moved;
   }
 
   Future<void> _openLinkedTodo(Todo? linkedTodo) async {

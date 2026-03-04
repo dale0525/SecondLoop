@@ -18,6 +18,37 @@ extension _ChatPageStateLinkedTodoBadgeLoader on _ChatPageState {
       final todos = await backend.listTodos(sessionKey);
       final byMessageId = <String, _TodoMessageBadgeMeta>{};
       final todosById = <String, Todo>{for (final todo in todos) todo.id: todo};
+      final messageIds = messagesById.keys.toList(growable: false);
+      var semanticParseConsented = false;
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        semanticParseConsented =
+            prefs.getBool(SemanticParseDataConsentPrefs.prefsKey) ?? false;
+      } catch (_) {
+        semanticParseConsented = false;
+      }
+
+      final undoneFollowupCutoffByMessageId = <String, int>{};
+      if (semanticParseConsented && messageIds.isNotEmpty) {
+        try {
+          final jobs = await backend.listSemanticParseJobsByMessageIds(
+            sessionKey,
+            messageIds: messageIds,
+          );
+          for (final job in jobs) {
+            if ((job.appliedActionKind ?? '').trim() != 'followup') continue;
+            final undoneAtMs = job.undoneAtMs?.toInt();
+            if (undoneAtMs == null) continue;
+            final currentCutoff =
+                undoneFollowupCutoffByMessageId[job.messageId];
+            if (currentCutoff == null || undoneAtMs > currentCutoff) {
+              undoneFollowupCutoffByMessageId[job.messageId] = undoneAtMs;
+            }
+          }
+        } catch (_) {
+          undoneFollowupCutoffByMessageId.clear();
+        }
+      }
 
       for (final todo in todos) {
         final sourceMessageId = todo.sourceEntryId?.trim();
@@ -40,6 +71,12 @@ extension _ChatPageStateLinkedTodoBadgeLoader on _ChatPageState {
         final sourceMessageId = activity.sourceMessageId?.trim();
         if (sourceMessageId == null || sourceMessageId.isEmpty) continue;
         if (!messagesById.containsKey(sourceMessageId)) continue;
+        final cutoffMs = undoneFollowupCutoffByMessageId[sourceMessageId];
+        if (cutoffMs != null &&
+            activity.activityType == 'status_change' &&
+            activity.createdAtMs.toInt() <= cutoffMs) {
+          continue;
+        }
         if (byMessageId.containsKey(sourceMessageId)) continue;
         final todo = todosById[activity.todoId];
         if (todo == null || todo.status == 'dismissed') continue;
