@@ -120,4 +120,18 @@ void main() {
 
     expect(content.full, 'Document full text body');
   });
+
+  test('url detail summary prefers llm_summary when available', () {
+    final content = resolveAttachmentDetailTextContent(
+      const <String, Object?>{
+        'mime_type': 'application/x.secondloop.url+json',
+        'llm_summary': 'Cloud generated concise summary.',
+        'readable_text_excerpt': 'Local extracted excerpt.',
+        'readable_text_full': 'Local extracted full text.',
+      },
+    );
+
+    expect(content.summary, 'Cloud generated concise summary.');
+    expect(content.full, 'Local extracted full text.');
+  });
 }

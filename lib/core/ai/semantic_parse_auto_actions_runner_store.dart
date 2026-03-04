@@ -19,6 +19,7 @@ final class BackendSemanticParseAutoActionsStore
   static const int _kMaxSemanticAnalysisRunes = 2400;
   static const List<String> _kAttachmentSemanticPayloadKeys = <String>[
     'caption_long',
+    'llm_summary',
     'summary',
     'video_summary',
     'extracted_text_excerpt',

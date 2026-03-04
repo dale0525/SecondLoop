@@ -53,6 +53,7 @@ AttachmentDetailTextContent resolveAttachmentDetailTextContent(
 
   final summary = firstNonEmpty(<String?>[
     read('manual_summary'),
+    read('llm_summary'),
     read('summary'),
     read('knowledge_markdown_excerpt'),
     read('video_description_excerpt'),
@@ -89,6 +90,7 @@ AttachmentDetailTextContent resolveAttachmentDetailTextContent(
   ]);
 
   final imageAiFull = firstNonEmpty(<String?>[
+    read('llm_summary'),
     read('summary'),
     caption,
     selectedNonOcr,
@@ -146,6 +148,7 @@ AttachmentDetailTextContent resolveAttachmentDetailTextContent(
     selected.full,
     read('transcript_full'),
     read('manual_summary'),
+    read('llm_summary'),
     read('summary'),
     selected.excerpt,
     read('transcript_excerpt'),

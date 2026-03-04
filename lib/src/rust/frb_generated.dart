@@ -1099,6 +1099,7 @@ abstract class RustLibApi extends BaseApi {
       {required String appDir,
       required List<int> key,
       required String profileId,
+      required String lang,
       required String originalUrl,
       required String finalUrl,
       required String site,
@@ -1112,6 +1113,7 @@ abstract class RustLibApi extends BaseApi {
       required String gatewayBaseUrl,
       required String firebaseIdToken,
       required String modelName,
+      required String lang,
       required String originalUrl,
       required String finalUrl,
       required String site,
@@ -7274,6 +7276,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       {required String appDir,
       required List<int> key,
       required String profileId,
+      required String lang,
       required String originalUrl,
       required String finalUrl,
       required String site,
@@ -7286,6 +7289,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(appDir, serializer);
         sse_encode_list_prim_u_8_loose(key, serializer);
         sse_encode_String(profileId, serializer);
+        sse_encode_String(lang, serializer);
         sse_encode_String(originalUrl, serializer);
         sse_encode_String(finalUrl, serializer);
         sse_encode_String(site, serializer);
@@ -7304,6 +7308,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         appDir,
         key,
         profileId,
+        lang,
         originalUrl,
         finalUrl,
         site,
@@ -7322,6 +7327,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           "appDir",
           "key",
           "profileId",
+          "lang",
           "originalUrl",
           "finalUrl",
           "site",
@@ -7338,6 +7344,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       required String gatewayBaseUrl,
       required String firebaseIdToken,
       required String modelName,
+      required String lang,
       required String originalUrl,
       required String finalUrl,
       required String site,
@@ -7352,6 +7359,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(gatewayBaseUrl, serializer);
         sse_encode_String(firebaseIdToken, serializer);
         sse_encode_String(modelName, serializer);
+        sse_encode_String(lang, serializer);
         sse_encode_String(originalUrl, serializer);
         sse_encode_String(finalUrl, serializer);
         sse_encode_String(site, serializer);
@@ -7372,6 +7380,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         gatewayBaseUrl,
         firebaseIdToken,
         modelName,
+        lang,
         originalUrl,
         finalUrl,
         site,
@@ -7393,6 +7402,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
               "gatewayBaseUrl",
               "firebaseIdToken",
               "modelName",
+              "lang",
               "originalUrl",
               "finalUrl",
               "site",

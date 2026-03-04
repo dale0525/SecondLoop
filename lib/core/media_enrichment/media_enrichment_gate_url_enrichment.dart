@@ -119,6 +119,7 @@ final class _RustUrlEnrichmentEnhancer implements UrlEnrichmentEnhancer {
 
   @override
   Future<UrlEnrichmentEnhancerResult?> enhance({
+    required String lang,
     required String originalUrl,
     required String finalUrl,
     required String site,
@@ -136,6 +137,7 @@ final class _RustUrlEnrichmentEnhancer implements UrlEnrichmentEnhancer {
           gatewayBaseUrl: gatewayBaseUrl ?? '',
           firebaseIdToken: cloudIdToken ?? '',
           modelName: modelName,
+          lang: lang,
           originalUrl: originalUrl,
           finalUrl: finalUrl,
           site: site,
@@ -148,6 +150,7 @@ final class _RustUrlEnrichmentEnhancer implements UrlEnrichmentEnhancer {
           appDir: appDir,
           key: _sessionKey,
           profileId: profileId ?? '',
+          lang: lang,
           originalUrl: originalUrl,
           finalUrl: finalUrl,
           site: site,

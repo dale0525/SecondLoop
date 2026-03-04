@@ -95,9 +95,11 @@ final class _FakeEnhancer implements UrlEnrichmentEnhancer {
 
   final UrlEnrichmentEnhancerResult? result;
   final Object? error;
+  String? lastLang;
 
   @override
   Future<UrlEnrichmentEnhancerResult?> enhance({
+    required String lang,
     required String originalUrl,
     required String finalUrl,
     required String site,
@@ -105,6 +107,7 @@ final class _FakeEnhancer implements UrlEnrichmentEnhancer {
     required String readableTextExcerpt,
     required String readableTextFull,
   }) async {
+    lastLang = lang;
     if (error != null) throw error!;
     return result;
   }
@@ -215,21 +218,21 @@ void main() {
       ),
     );
 
+    final enhancer = _FakeEnhancer(
+      modelName: 'url_enrich.cloud',
+      source: 'cloud',
+      result: const UrlEnrichmentEnhancerResult(
+        title: 'Cloud Title',
+        summary: 'Cloud summary',
+        tags: ['news', 'example'],
+      ),
+    );
+
     final runner = UrlEnrichmentRunner(
       store: store,
       fetcher: fetcher,
       nowMs: () => 2000,
-      enhancers: [
-        _FakeEnhancer(
-          modelName: 'url_enrich.cloud',
-          source: 'cloud',
-          result: const UrlEnrichmentEnhancerResult(
-            title: 'Cloud Title',
-            summary: 'Cloud summary',
-            tags: ['news', 'example'],
-          ),
-        ),
-      ],
+      enhancers: [enhancer],
     );
 
     final result = await runner.runOnce();
@@ -243,6 +246,7 @@ void main() {
     expect(payload['llm_summary'], 'Cloud summary');
     expect(payload['llm_tags'], const ['news', 'example']);
     expect(store.titleBySha['b'], 'Cloud Title');
+    expect(enhancer.lastLang, 'und');
   });
 
   test('falls back to next enhancer then local when needed', () async {

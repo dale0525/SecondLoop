@@ -94,6 +94,7 @@ abstract class UrlEnrichmentEnhancer {
   String get source;
 
   Future<UrlEnrichmentEnhancerResult?> enhance({
+    required String lang,
     required String originalUrl,
     required String finalUrl,
     required String site,
@@ -323,6 +324,7 @@ class UrlEnrichmentRunner {
         for (final enhancer in enhancers) {
           try {
             final enhanced = await enhancer.enhance(
+              lang: job.lang,
               originalUrl: manifest.url,
               finalUrl: fetched.finalUri.toString(),
               site: extracted.site ?? '',

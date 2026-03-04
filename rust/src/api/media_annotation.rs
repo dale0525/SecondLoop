@@ -110,6 +110,7 @@ pub fn url_enrichment_byok_profile(
     app_dir: String,
     key: Vec<u8>,
     profile_id: String,
+    lang: String,
     original_url: String,
     final_url: String,
     site: String,
@@ -133,6 +134,7 @@ pub fn url_enrichment_byok_profile(
     let provider = llm::answer_provider_from_profile(&profile)?;
     url_enrichment_ai::enrich_url_content_json(
         provider.as_ref(),
+        &lang,
         &original_url,
         &final_url,
         &site,
@@ -150,6 +152,7 @@ pub fn url_enrichment_cloud_gateway(
     gateway_base_url: String,
     firebase_id_token: String,
     model_name: String,
+    lang: String,
     original_url: String,
     final_url: String,
     site: String,
@@ -179,6 +182,7 @@ pub fn url_enrichment_cloud_gateway(
 
     url_enrichment_ai::enrich_url_content_json(
         &provider,
+        &lang,
         &original_url,
         &final_url,
         &site,

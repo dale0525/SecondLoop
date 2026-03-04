@@ -6433,6 +6433,7 @@ fn wire__crate__api__media_annotation__url_enrichment_byok_profile_impl(
             let api_app_dir = <String>::sse_decode(&mut deserializer);
             let api_key = <Vec<u8>>::sse_decode(&mut deserializer);
             let api_profile_id = <String>::sse_decode(&mut deserializer);
+            let api_lang = <String>::sse_decode(&mut deserializer);
             let api_original_url = <String>::sse_decode(&mut deserializer);
             let api_final_url = <String>::sse_decode(&mut deserializer);
             let api_site = <String>::sse_decode(&mut deserializer);
@@ -6446,6 +6447,7 @@ fn wire__crate__api__media_annotation__url_enrichment_byok_profile_impl(
                         api_app_dir,
                         api_key,
                         api_profile_id,
+                        api_lang,
                         api_original_url,
                         api_final_url,
                         api_site,
@@ -6485,6 +6487,7 @@ fn wire__crate__api__media_annotation__url_enrichment_cloud_gateway_impl(
             let api_gateway_base_url = <String>::sse_decode(&mut deserializer);
             let api_firebase_id_token = <String>::sse_decode(&mut deserializer);
             let api_model_name = <String>::sse_decode(&mut deserializer);
+            let api_lang = <String>::sse_decode(&mut deserializer);
             let api_original_url = <String>::sse_decode(&mut deserializer);
             let api_final_url = <String>::sse_decode(&mut deserializer);
             let api_site = <String>::sse_decode(&mut deserializer);
@@ -6500,6 +6503,7 @@ fn wire__crate__api__media_annotation__url_enrichment_cloud_gateway_impl(
                         api_gateway_base_url,
                         api_firebase_id_token,
                         api_model_name,
+                        api_lang,
                         api_original_url,
                         api_final_url,
                         api_site,

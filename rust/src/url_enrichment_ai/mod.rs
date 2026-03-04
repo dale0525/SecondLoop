@@ -7,10 +7,22 @@ use crate::rag::AnswerProvider;
 const MAX_PROMPT_SOURCE_CHARS: usize = 6000;
 const MAX_TAGS: usize = 6;
 
+fn prompt_language_instruction(user_lang: &str) -> String {
+    let trimmed = user_lang.trim();
+    if trimmed.is_empty()
+        || trimmed.eq_ignore_ascii_case("und")
+        || trimmed.eq_ignore_ascii_case("auto")
+    {
+        return "Respond in the user's language.".to_string();
+    }
+    format!("Respond in the user's language ({trimmed}).")
+}
+
 fn build_url_enrichment_prompt(
     original_url: &str,
     final_url: &str,
     site: &str,
+    user_lang: &str,
     title: Option<&str>,
     readable_text_excerpt: &str,
     readable_text_full: &str,
@@ -26,6 +38,7 @@ fn build_url_enrichment_prompt(
     };
 
     let clipped_source: String = source.chars().take(MAX_PROMPT_SOURCE_CHARS).collect();
+    let language_instruction = prompt_language_instruction(user_lang);
 
     format!(
         r#"You are enriching shared URL content for a note-taking app.
@@ -40,6 +53,7 @@ Rules:
 - "summary" should be 2-4 sentences, no markdown.
 - "tags" should contain 0-6 short topical tags.
 - Do not include any additional keys.
+{}
 
 original_url: {}
 final_url: {}
@@ -47,6 +61,7 @@ site: {}
 current_title: {}
 extracted_text:
 {}"#,
+        language_instruction,
         original_url.trim(),
         final_url.trim(),
         site.trim(),
@@ -182,6 +197,7 @@ fn normalize_url_enrichment_payload(payload: Value) -> Result<Value> {
 
 pub fn enrich_url_content_json(
     provider: &dyn AnswerProvider,
+    user_lang: &str,
     original_url: &str,
     final_url: &str,
     site: &str,
@@ -193,6 +209,7 @@ pub fn enrich_url_content_json(
         original_url,
         final_url,
         site,
+        user_lang,
         title,
         readable_text_excerpt,
         readable_text_full,
@@ -239,12 +256,14 @@ mod tests {
             "https://a",
             "https://b",
             "example.com",
+            "zh-CN",
             Some("Title"),
             &long_text,
             "",
         );
         assert!(prompt.contains("original_url: https://a"));
         assert!(prompt.contains("current_title: Title"));
+        assert!(prompt.contains("user's language (zh-CN)"));
         assert!(!prompt.contains(&"A".repeat(MAX_PROMPT_SOURCE_CHARS + 50)));
     }
 
@@ -273,6 +292,7 @@ mod tests {
         };
         let out = enrich_url_content_json(
             &provider,
+            "en-US",
             "https://o",
             "https://f",
             "example.com",
