@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:secondloop/core/update/app_update_service.dart';
 import 'package:secondloop/core/update/auto_upgrade_gate.dart';
 import 'package:secondloop/core/update/update_badge_prefs.dart';
+import 'package:secondloop/core/update/update_restart_activity.dart';
 
 import 'test_i18n.dart';
 
@@ -20,6 +21,7 @@ class _FakeAutoUpdateService extends AppUpdateService {
   int checkCalls = 0;
   int installCalls = 0;
   int stageCalls = 0;
+  int applyStagedRestartCalls = 0;
   int applyPendingCalls = 0;
   AppUpdateAvailability? installed;
   AppUpdateAvailability? staged;
@@ -48,6 +50,11 @@ class _FakeAutoUpdateService extends AppUpdateService {
     if (throwOnApplyPending) {
       throw StateError('apply_pending_failed');
     }
+  }
+
+  @override
+  Future<void> applyStagedUpdateAndRestart() async {
+    applyStagedRestartCalls += 1;
   }
 }
 
@@ -191,6 +198,51 @@ void main() {
     expect(service.stageCalls, 1);
     expect(UpdateBadgePrefs.value.value, isNull);
     expect(find.byType(SnackBar), findsNothing);
+  },
+      variant: const TargetPlatformVariant(<TargetPlatform>{
+        TargetPlatform.windows,
+      }));
+
+  testWidgets('windows update restarts after leaving editing context',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    UpdateBadgePrefs.resetForTests();
+    UpdateRestartActivity.resetForTests();
+    final editingBlocker = UpdateRestartActivity.blockEditing();
+    addTearDown(() {
+      editingBlocker.release();
+      UpdateRestartActivity.resetForTests();
+    });
+
+    final update = AppUpdateAvailability(
+      currentVersion: '1.0.1+99',
+      latestTag: 'v1.3.0',
+      releasePageUri: Uri.parse(
+        'https://github.com/dale0525/SecondLoop/releases/tag/v1.3.0',
+      ),
+      installMode: AppUpdateInstallMode.stagedNextLaunch,
+      asset: AppUpdateAsset(
+        name: 'com.secondloop.secondloop-1.3.0-full.nupkg',
+        downloadUri: Uri.parse('https://cdn.example.com/win-v1.3.0.nupkg'),
+      ),
+    );
+    final service = _FakeAutoUpdateService(
+      result: AppUpdateCheckResult(
+        currentVersion: '1.0.1+99',
+        update: update,
+      ),
+    );
+
+    await pumpGate(tester, service: service);
+    await tester.pumpAndSettle();
+
+    expect(service.stageCalls, 1);
+    expect(service.applyStagedRestartCalls, 0);
+
+    editingBlocker.release();
+    await tester.pump();
+
+    expect(service.applyStagedRestartCalls, 1);
   },
       variant: const TargetPlatformVariant(<TargetPlatform>{
         TargetPlatform.windows,

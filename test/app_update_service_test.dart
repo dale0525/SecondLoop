@@ -10,6 +10,7 @@ class _FakeWindowsStagedUpdateClient implements WindowsStagedUpdateClient {
   final List<Uri> stagedAssets = <Uri>[];
   final List<Uri> installedAssets = <Uri>[];
   int applyPendingCalls = 0;
+  int applyPendingAndRestartCalls = 0;
   int installCalls = 0;
 
   @override
@@ -32,6 +33,11 @@ class _FakeWindowsStagedUpdateClient implements WindowsStagedUpdateClient {
   @override
   Future<void> applyPendingOnStartup() async {
     applyPendingCalls += 1;
+  }
+
+  @override
+  Future<void> applyPendingAndRestart({required int waitPid}) async {
+    applyPendingAndRestartCalls += 1;
   }
 }
 
@@ -351,6 +357,23 @@ void main() {
       await service.applyPendingUpdateOnStartup();
 
       expect(stagedClient.applyPendingCalls, 0);
+    });
+  });
+
+  group('AppUpdateService.applyStagedUpdateAndRestart', () {
+    test('calls Windows staged client applyPendingAndRestart', () async {
+      final stagedClient = _FakeWindowsStagedUpdateClient(available: true);
+      var exitedCode = -1;
+      final service = AppUpdateService(
+        platformOverride: AppUpdatePlatform.windows,
+        windowsStagedUpdateClient: stagedClient,
+        processExit: (code) => exitedCode = code,
+      );
+
+      await service.applyStagedUpdateAndRestart();
+
+      expect(stagedClient.applyPendingAndRestartCalls, 1);
+      expect(exitedCode, 0);
     });
   });
 }

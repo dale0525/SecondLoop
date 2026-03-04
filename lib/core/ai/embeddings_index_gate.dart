@@ -14,6 +14,7 @@ import '../session/session_scope.dart';
 import '../subscription/subscription_scope.dart';
 import '../sync/sync_engine.dart';
 import '../sync/sync_engine_gate.dart';
+import '../update/update_restart_activity.dart';
 
 class EmbeddingsIndexGate extends StatefulWidget {
   const EmbeddingsIndexGate({required this.child, super.key});
@@ -42,6 +43,7 @@ class _EmbeddingsIndexGateState extends State<EmbeddingsIndexGate>
   Timer? _timer;
   DateTime? _nextRunAt;
   bool _running = false;
+  UpdateRestartBlockToken? _restartBlockToken;
 
   SyncEngine? _syncEngine;
   VoidCallback? _syncListener;
@@ -147,6 +149,7 @@ class _EmbeddingsIndexGateState extends State<EmbeddingsIndexGate>
     final sessionKey = SessionScope.of(context).sessionKey;
 
     _running = true;
+    _restartBlockToken = UpdateRestartActivity.blockAiAnalysis();
     try {
       final subscriptionStatus = SubscriptionScope.maybeOf(context)?.status ??
           SubscriptionStatus.unknown;
@@ -216,6 +219,8 @@ class _EmbeddingsIndexGateState extends State<EmbeddingsIndexGate>
       if (!mounted) return;
       _schedule(_kFailureInterval);
     } finally {
+      _restartBlockToken?.release();
+      _restartBlockToken = null;
       _running = false;
     }
   }

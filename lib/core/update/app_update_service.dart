@@ -334,6 +334,21 @@ class AppUpdateService {
     await client.applyPendingOnStartup();
   }
 
+  Future<void> applyStagedUpdateAndRestart() async {
+    if (_platform != AppUpdatePlatform.windows) {
+      throw StateError(
+          'staged_update_restart_not_supported_for_${_platform.name}');
+    }
+
+    final client = _windowsStagedUpdateClient ?? VelopackUpdateClient();
+    if (!client.isAvailable()) {
+      throw StateError('windows_velopack_unavailable');
+    }
+
+    await client.applyPendingAndRestart(waitPid: pid);
+    _exitProcess(0);
+  }
+
   void dispose() {
     _httpClient.close(force: true);
   }
