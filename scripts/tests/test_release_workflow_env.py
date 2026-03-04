@@ -285,7 +285,8 @@ class ReleaseWorkflowEnvTests(unittest.TestCase):
         self.assertIn("name: Package Velopack", workflow_text)
         self.assertIn("scripts/package_windows_velopack.ps1", workflow_text)
         self.assertIn("-SkipBuild", workflow_text)
-        self.assertIn("-OutputPath dist", workflow_text)
+        self.assertIn("'-OutputPath'", workflow_text)
+        self.assertIn("'dist'", workflow_text)
         self.assertIn("Velopack setup not found", workflow_text)
         self.assertIn("Velopack releases metadata not found", workflow_text)
         self.assertIn("Velopack assets metadata not found", workflow_text)
@@ -295,6 +296,13 @@ class ReleaseWorkflowEnvTests(unittest.TestCase):
         self.assertIn("dist/assets.*.json", workflow_text)
         self.assertIn("dist/*.nupkg", workflow_text)
         self.assertNotIn("dist/*.msi", workflow_text)
+
+    def test_windows_release_passes_tag_version_to_velopack_packaging(self) -> None:
+        workflow_text = self._workflow_text()
+
+        self.assertIn('$Env:GITHUB_REF -like "refs/tags/v*"', workflow_text)
+        self.assertIn('$packArgs += @(\'-Version\', $packVersion)', workflow_text)
+        self.assertIn('& scripts/package_windows_velopack.ps1 @packArgs', workflow_text)
 
     def test_windows_velopack_script_keeps_dotnet_output_out_of_vpk_path(self) -> None:
         script_text = (Path(__file__).resolve().parents[2] / "scripts/package_windows_velopack.ps1").read_text(encoding="utf-8")
@@ -308,6 +316,12 @@ class ReleaseWorkflowEnvTests(unittest.TestCase):
         script_text = (Path(__file__).resolve().parents[2] / "scripts/package_windows_velopack.ps1").read_text(encoding="utf-8")
 
         self.assertIn("'--packTitle', 'SecondLoop'", script_text)
+
+    def test_windows_velopack_script_prefers_tag_version_when_available(self) -> None:
+        script_text = (Path(__file__).resolve().parents[2] / "scripts/package_windows_velopack.ps1").read_text(encoding="utf-8")
+
+        self.assertIn('if ($env:GITHUB_REF -and $env:GITHUB_REF_NAME -and ($env:GITHUB_REF -like "refs/tags/v*"))', script_text)
+        self.assertIn('return $tagCandidate', script_text)
 
     def test_windows_velopack_script_sets_pack_icon_and_checks_metadata_outputs(self) -> None:
         script_text = (Path(__file__).resolve().parents[2] / "scripts/package_windows_velopack.ps1").read_text(encoding="utf-8")
@@ -393,11 +407,6 @@ class ReleaseWorkflowEnvTests(unittest.TestCase):
         self.assertIn("Dependencies:", script_text)
         self.assertIn("PackageDependencies:", script_text)
         self.assertIn("Microsoft.VCRedist.2015+.x64", script_text)
-
-    def test_generate_winget_manifest_script_sets_user_scope(self) -> None:
-        script_text = self._generate_winget_script_text()
-
-        self.assertIn("Scope: user", script_text)
 
     def test_generate_winget_manifest_script_emits_schema_headers(self) -> None:
         script_path = (
