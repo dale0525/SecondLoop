@@ -128,6 +128,12 @@ class ReleaseWorkflowEnvTests(unittest.TestCase):
 
         self.assertIn("libvulkan-dev", workflow_text)
 
+    def test_release_workflow_exposes_github_token_for_desktop_runtime_download(self) -> None:
+        workflow_text = self._workflow_text()
+
+        self.assertGreaterEqual(workflow_text.count("GH_TOKEN: ${{ github.token }}"), 4)
+        self.assertGreaterEqual(workflow_text.count("GITHUB_TOKEN: ${{ github.token }}"), 4)
+
     def test_release_workflow_installs_android_ndk(self) -> None:
         workflow_text = self._workflow_text()
 
