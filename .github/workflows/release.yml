@@ -834,6 +834,8 @@ jobs:
       WINGET_PKGS_TOKEN: ${{ secrets.WINGET_PKGS_TOKEN }}
       WINGET_PKGS_UPSTREAM_REPO: microsoft/winget-pkgs
       WINGET_PKGS_FORK_REPO: ${{ vars.WINGET_PKGS_FORK_REPO || format('{0}/winget-pkgs', github.repository_owner) }}
+      WINGET_AUTO_AGREE_CLA: ${{ vars.WINGET_AUTO_AGREE_CLA || 'true' }}
+      WINGET_CLA_COMPANY: ${{ vars.WINGET_CLA_COMPANY || '' }}
     steps:
       - uses: actions/checkout@v4
       - name: Validate winget config
@@ -851,4 +853,6 @@ jobs:
             --upstream-repo "${WINGET_PKGS_UPSTREAM_REPO}" \
             --fork-repo "${WINGET_PKGS_FORK_REPO}" \
             --token "${WINGET_PKGS_TOKEN}" \
+            --auto-agree-cla="${WINGET_AUTO_AGREE_CLA}" \
+            --cla-company "${WINGET_CLA_COMPANY}" \
             --package-id "SecondLoop.SecondLoop"
