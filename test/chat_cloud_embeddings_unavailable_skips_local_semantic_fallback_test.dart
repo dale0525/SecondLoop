@@ -19,7 +19,7 @@ import 'test_i18n.dart';
 
 void main() {
   testWidgets(
-      'Todo linking uses local semantic first, then BYOK fallback when cloud embeddings unavailable',
+      'Todo linking uses BYOK semantic first, then local fallback when cloud embeddings unavailable',
       (tester) async {
     SharedPreferences.setMockInitialValues({
       'embeddings_data_consent_v1': true,
@@ -31,6 +31,18 @@ void main() {
           id: 't1',
           title: 'Buy milk',
           status: 'open',
+          createdAtMs: 0,
+          updatedAtMs: 0,
+        ),
+      ],
+      embeddingProfiles: const <EmbeddingProfile>[
+        EmbeddingProfile(
+          id: 'embed_1',
+          name: 'Active',
+          providerType: 'openai-compatible',
+          baseUrl: 'https://api.openai.com/v1',
+          modelName: 'text-embedding-3-small',
+          isActive: true,
           createdAtMs: 0,
           updatedAtMs: 0,
         ),
@@ -81,7 +93,7 @@ void main() {
 
     expect(
       backend.calls,
-      <String>['searchSimilarTodoThreads', 'searchSimilarTodoThreadsBrok'],
+      <String>['searchSimilarTodoThreadsBrok', 'searchSimilarTodoThreads'],
     );
     expect(
       backend.calls,
@@ -101,6 +113,18 @@ void main() {
           id: 't1',
           title: 'Buy milk',
           status: 'open',
+          createdAtMs: 0,
+          updatedAtMs: 0,
+        ),
+      ],
+      embeddingProfiles: const <EmbeddingProfile>[
+        EmbeddingProfile(
+          id: 'embed_1',
+          name: 'Active',
+          providerType: 'openai-compatible',
+          baseUrl: 'https://api.openai.com/v1',
+          modelName: 'text-embedding-3-small',
+          isActive: true,
           createdAtMs: 0,
           updatedAtMs: 0,
         ),
@@ -154,12 +178,20 @@ void main() {
 }
 
 final class _Backend extends TestAppBackend {
-  _Backend({required List<Todo> todos})
-      : _todos = List<Todo>.from(todos),
+  _Backend({
+    required List<Todo> todos,
+    this.embeddingProfiles = const <EmbeddingProfile>[],
+  })  : _todos = List<Todo>.from(todos),
         super();
 
   final List<Todo> _todos;
+  final List<EmbeddingProfile> embeddingProfiles;
   final List<String> calls = <String>[];
+
+  @override
+  Future<List<EmbeddingProfile>> listEmbeddingProfiles(Uint8List key) async {
+    return embeddingProfiles;
+  }
 
   @override
   Future<List<Todo>> listTodos(Uint8List key) async => List<Todo>.from(_todos);

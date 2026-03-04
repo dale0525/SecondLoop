@@ -11,6 +11,8 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import '../../features/actions/todo/todo_thread_match.dart';
 import '../storage/secure_blob_store.dart';
 import '../../src/rust/api/content_extract.dart' as rust_content_extract;
+import '../../src/rust/api/embedding_lifecycle.dart'
+    as rust_embedding_lifecycle;
 import '../../src/rust/api/core.dart' as rust_core;
 import '../../src/rust/api/attachments.dart' as rust_attachments;
 import '../../src/rust/api/sync_progress.dart' as rust_sync_progress;
@@ -36,6 +38,12 @@ typedef DbProcessPendingMessageEmbeddingsFn = Future<int> Function({
   required int limit,
 });
 
+typedef DbReleaseLocalEmbeddingModelIfIdleFn = Future<bool> Function({
+  required String appDir,
+  required List<int> key,
+  required int maxIdleMs,
+});
+
 typedef DbInsertAttachmentFn = Future<Attachment> Function({
   required String appDir,
   required List<int> key,
@@ -54,6 +62,7 @@ class NativeAppBackend
     DbInsertMessageFn? dbInsertMessage,
     DbInsertAttachmentFn? dbInsertAttachment,
     DbProcessPendingMessageEmbeddingsFn? dbProcessPendingMessageEmbeddings,
+    DbReleaseLocalEmbeddingModelIfIdleFn? dbReleaseLocalEmbeddingModelIfIdle,
   })  : _secureBlobStore = SecureBlobStore(storage: secureStorage),
         _appDirProvider = appDirProvider ?? _defaultAppDirProvider,
         _dbInsertMessage = dbInsertMessage ?? rust_core.dbInsertMessage,
@@ -61,13 +70,18 @@ class NativeAppBackend
             dbInsertAttachment ?? rust_core.dbInsertAttachment,
         _dbProcessPendingMessageEmbeddings =
             dbProcessPendingMessageEmbeddings ??
-                rust_core.dbProcessPendingMessageEmbeddings;
+                rust_core.dbProcessPendingMessageEmbeddings,
+        _dbReleaseLocalEmbeddingModelIfIdle =
+            dbReleaseLocalEmbeddingModelIfIdle ??
+                rust_embedding_lifecycle.dbReleaseLocalEmbeddingModelIfIdle;
 
   final SecureBlobStore _secureBlobStore;
   final AppDirProvider _appDirProvider;
   final DbInsertMessageFn _dbInsertMessage;
   final DbInsertAttachmentFn _dbInsertAttachment;
   final DbProcessPendingMessageEmbeddingsFn _dbProcessPendingMessageEmbeddings;
+  final DbReleaseLocalEmbeddingModelIfIdleFn
+      _dbReleaseLocalEmbeddingModelIfIdle;
 
   String? _appDir;
 
@@ -1009,6 +1023,19 @@ class NativeAppBackend
       appDir: appDir,
       key: key,
       limit: limit,
+    );
+  }
+
+  @override
+  Future<bool> releaseLocalEmbeddingModelIfIdle(
+    Uint8List key, {
+    int maxIdleMs = 180000,
+  }) async {
+    final appDir = await _getAppDir();
+    return _dbReleaseLocalEmbeddingModelIfIdle(
+      appDir: appDir,
+      key: key,
+      maxIdleMs: maxIdleMs,
     );
   }
 

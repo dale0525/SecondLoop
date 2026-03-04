@@ -113,6 +113,48 @@ void main() {
     expect(backend.calls, contains('byok'));
     expect(backend.calls, isNot(contains('cloud')));
   });
+
+  testWidgets('Embeddings remote route triggers local idle release',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({
+      'embeddings_source_preference_v1': 'byok',
+      'embeddings_data_consent_v1': false,
+    });
+
+    final backend = _FakeEmbeddingsNativeBackend(
+      embeddingProfiles: const <EmbeddingProfile>[
+        EmbeddingProfile(
+          id: 'embed_1',
+          name: 'Active',
+          providerType: 'openai-compatible',
+          baseUrl: 'https://api.openai.com/v1',
+          modelName: 'text-embedding-3-small',
+          isActive: true,
+          createdAtMs: 0,
+          updatedAtMs: 0,
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: AppBackendScope(
+          backend: backend,
+          child: SessionScope(
+            sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+            lock: () {},
+            child: const EmbeddingsIndexGate(child: SizedBox.shrink()),
+          ),
+        ),
+      ),
+    );
+
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 3));
+
+    expect(backend.calls, contains('byok'));
+    expect(backend.calls, contains('releaseLocalEmbeddingModelIfIdle'));
+  });
 }
 
 final class _FakeEmbeddingsNativeBackend extends NativeAppBackend {
@@ -164,6 +206,15 @@ final class _FakeEmbeddingsNativeBackend extends NativeAppBackend {
   }) async {
     calls.add('local');
     return 0;
+  }
+
+  @override
+  Future<bool> releaseLocalEmbeddingModelIfIdle(
+    Uint8List key, {
+    int maxIdleMs = 180000,
+  }) async {
+    calls.add('releaseLocalEmbeddingModelIfIdle');
+    return true;
   }
 }
 

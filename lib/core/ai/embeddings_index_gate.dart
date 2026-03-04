@@ -39,6 +39,7 @@ class _EmbeddingsIndexGateState extends State<EmbeddingsIndexGate>
   static const _kDrainIntervalLocal = Duration(milliseconds: 600);
   static const _kDrainIntervalRemote = Duration(seconds: 2);
   static const _kFailureInterval = Duration(seconds: 10);
+  static const _kLocalEmbeddingIdleReleaseMs = 180000;
 
   Timer? _timer;
   DateTime? _nextRunAt;
@@ -208,6 +209,17 @@ class _EmbeddingsIndexGateState extends State<EmbeddingsIndexGate>
         cloudIdToken: cloudIdToken,
         cloudGatewayBaseUrl: cloudGatewayConfig.baseUrl,
       );
+
+      if (route != EmbeddingsSourceRouteKind.local) {
+        try {
+          await backend.releaseLocalEmbeddingModelIfIdle(
+            sessionKey,
+            maxIdleMs: _kLocalEmbeddingIdleReleaseMs,
+          );
+        } catch (_) {
+          // Best-effort memory cleanup for remote-first routes.
+        }
+      }
 
       if (!mounted) return;
       if (result.processed <= 0) {

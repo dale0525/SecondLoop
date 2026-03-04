@@ -257,6 +257,12 @@ abstract class AppBackend {
     int limit = 32,
   });
 
+  Future<bool> releaseLocalEmbeddingModelIfIdle(
+    Uint8List key, {
+    int maxIdleMs = 180000,
+  }) async =>
+      false;
+
   Future<int> processPendingTodoThreadEmbeddings(
     Uint8List key, {
     int todoLimit = 32,

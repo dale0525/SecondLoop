@@ -2,6 +2,7 @@ use std::fs::{self, File};
 use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, OnceLock};
+use std::time::{Duration, Instant};
 
 use anyhow::{anyhow, Context, Result};
 use flate2::read::GzDecoder;
@@ -21,33 +22,151 @@ struct FastEmbedderInner {
     model: Mutex<fastembed::TextEmbedding>,
 }
 
-impl FastEmbedder {
-    pub fn get_or_try_init(app_dir: &Path) -> Result<Self> {
-        static CACHE: OnceLock<Mutex<Option<FastEmbedder>>> = OnceLock::new();
-        let cache = CACHE.get_or_init(|| Mutex::new(None));
+struct FastEmbedCacheState {
+    embedder: Option<FastEmbedder>,
+    last_used_at: Option<Instant>,
+    #[cfg(test)]
+    test_initialized: bool,
+}
 
-        {
-            let guard = match cache.lock() {
-                Ok(g) => g,
-                Err(poisoned) => poisoned.into_inner(),
-            };
-            if let Some(existing) = guard.as_ref() {
-                return Ok(existing.clone());
+impl FastEmbedCacheState {
+    fn new() -> Self {
+        Self {
+            embedder: None,
+            last_used_at: None,
+            #[cfg(test)]
+            test_initialized: false,
+        }
+    }
+
+    fn is_initialized(&self) -> bool {
+        self.embedder.is_some() || {
+            #[cfg(test)]
+            {
+                self.test_initialized
+            }
+            #[cfg(not(test))]
+            {
+                false
             }
         }
+    }
+}
 
-        let embedder =
-            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| Self::try_new(app_dir)))
-                .map_err(|p| {
-                    anyhow!("fastembed init panicked: {}", panic_payload_to_string(&p))
-                })??;
+fn fastembed_cache_state() -> &'static Mutex<FastEmbedCacheState> {
+    static CACHE: OnceLock<Mutex<FastEmbedCacheState>> = OnceLock::new();
+    CACHE.get_or_init(|| Mutex::new(FastEmbedCacheState::new()))
+}
 
+pub fn acquire_or_init_fastembed(app_dir: &Path) -> Result<FastEmbedder> {
+    let cache = fastembed_cache_state();
+
+    {
         let mut guard = match cache.lock() {
             Ok(g) => g,
             Err(poisoned) => poisoned.into_inner(),
         };
-        *guard = Some(embedder.clone());
-        Ok(embedder)
+        if let Some(existing) = guard.embedder.as_ref().cloned() {
+            guard.last_used_at = Some(Instant::now());
+            return Ok(existing);
+        }
+    }
+
+    let embedder = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        FastEmbedder::try_new(app_dir)
+    }))
+    .map_err(|p| anyhow!("fastembed init panicked: {}", panic_payload_to_string(&p)))??;
+
+    let mut guard = match cache.lock() {
+        Ok(g) => g,
+        Err(poisoned) => poisoned.into_inner(),
+    };
+    if let Some(existing) = guard.embedder.as_ref().cloned() {
+        guard.last_used_at = Some(Instant::now());
+        return Ok(existing);
+    }
+
+    guard.embedder = Some(embedder.clone());
+    guard.last_used_at = Some(Instant::now());
+    #[cfg(test)]
+    {
+        guard.test_initialized = false;
+    }
+    Ok(embedder)
+}
+
+pub fn mark_fastembed_used() {
+    let cache = fastembed_cache_state();
+    let mut guard = match cache.lock() {
+        Ok(g) => g,
+        Err(poisoned) => poisoned.into_inner(),
+    };
+    if guard.is_initialized() {
+        guard.last_used_at = Some(Instant::now());
+    }
+}
+
+pub fn release_fastembed_if_idle(max_idle: Duration) -> bool {
+    let cache = fastembed_cache_state();
+    let mut guard = match cache.lock() {
+        Ok(g) => g,
+        Err(poisoned) => poisoned.into_inner(),
+    };
+    if !guard.is_initialized() {
+        return false;
+    }
+
+    let idle_for = guard
+        .last_used_at
+        .map(|instant| instant.elapsed())
+        .unwrap_or(max_idle);
+    if idle_for < max_idle {
+        return false;
+    }
+
+    guard.embedder = None;
+    guard.last_used_at = None;
+    #[cfg(test)]
+    {
+        guard.test_initialized = false;
+    }
+    true
+}
+
+#[cfg(test)]
+fn seed_fastembed_cache_for_test_with_last_used(age: Duration) {
+    let cache = fastembed_cache_state();
+    let mut guard = match cache.lock() {
+        Ok(g) => g,
+        Err(poisoned) => poisoned.into_inner(),
+    };
+    guard.embedder = None;
+    guard.last_used_at = Instant::now()
+        .checked_sub(age)
+        .or_else(|| Some(Instant::now()));
+    guard.test_initialized = true;
+}
+
+#[cfg(test)]
+fn reset_fastembed_cache_for_test() {
+    let cache = fastembed_cache_state();
+    let mut guard = match cache.lock() {
+        Ok(g) => g,
+        Err(poisoned) => poisoned.into_inner(),
+    };
+    guard.embedder = None;
+    guard.last_used_at = None;
+    guard.test_initialized = false;
+}
+
+#[cfg(test)]
+fn release_fastembed_if_idle_for_test(max_idle: Duration) -> bool {
+    release_fastembed_if_idle(max_idle)
+}
+
+impl FastEmbedder {
+    pub fn get_or_try_init(app_dir: &Path) -> Result<Self> {
+        acquire_or_init_fastembed(app_dir)
     }
 
     pub fn try_new(app_dir: &Path) -> Result<Self> {
@@ -105,6 +224,7 @@ impl Embedder for FastEmbedder {
             return Err(anyhow!("fastembed returned unexpected embedding dimension"));
         }
 
+        mark_fastembed_used();
         Ok(embeddings)
     }
 }
@@ -426,9 +546,11 @@ fn onnxruntime_main_dylib_name() -> Result<&'static str> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::time::Duration;
 
     #[test]
     fn ensure_onnxruntime_loaded_does_not_panic_or_poison_on_panic() {
+        reset_fastembed_cache_for_test();
         let temp_dir = tempfile::tempdir().expect("tempdir");
         set_test_force_panic_onnxruntime_init(true);
 
@@ -438,5 +560,28 @@ mod tests {
             .expect_err("forced panic should be caught as error again");
 
         set_test_force_panic_onnxruntime_init(false);
+    }
+
+    #[test]
+    fn release_if_idle_is_noop_when_uninitialized() {
+        reset_fastembed_cache_for_test();
+        let released = release_fastembed_if_idle_for_test(Duration::from_secs(180));
+        assert!(!released);
+    }
+
+    #[test]
+    fn release_if_idle_evicts_when_last_used_is_old() {
+        reset_fastembed_cache_for_test();
+        seed_fastembed_cache_for_test_with_last_used(Duration::from_secs(181));
+        let released = release_fastembed_if_idle_for_test(Duration::from_secs(180));
+        assert!(released);
+    }
+
+    #[test]
+    fn release_if_idle_keeps_recent_cache() {
+        reset_fastembed_cache_for_test();
+        seed_fastembed_cache_for_test_with_last_used(Duration::from_secs(60));
+        let released = release_fastembed_if_idle_for_test(Duration::from_secs(180));
+        assert!(!released);
     }
 }

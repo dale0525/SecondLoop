@@ -305,6 +305,28 @@ extension _ChatPageStateMethodsB on _ChatPageState {
     required int topK,
     bool requireCloud = false,
   }) async {
+    final route = await _resolveTodoSemanticRouteForSendFlow(
+      backend,
+      sessionKey,
+    );
+    if (route != EmbeddingsSourceRouteKind.local) {
+      final remoteMatches = await _searchRemoteTodoSemanticMatches(
+        backend,
+        sessionKey,
+        query: query,
+        topK: topK,
+        requireCloud: requireCloud,
+      );
+      if (remoteMatches.isNotEmpty) return remoteMatches;
+
+      return _searchLocalTodoSemanticMatches(
+        backend,
+        sessionKey,
+        query: query,
+        topK: topK,
+      );
+    }
+
     final localMatches = await _searchLocalTodoSemanticMatches(
       backend,
       sessionKey,
@@ -324,6 +346,58 @@ extension _ChatPageStateMethodsB on _ChatPageState {
     );
     if (remoteMatches.isNotEmpty) return remoteMatches;
     return localMatches;
+  }
+
+  Future<EmbeddingsSourceRouteKind> _resolveTodoSemanticRouteForSendFlow(
+    AppBackend backend,
+    Uint8List sessionKey,
+  ) async {
+    final subscriptionScope = SubscriptionScope.maybeOf(context);
+    final cloudAuthScope = CloudAuthScope.maybeOf(context);
+
+    final prefs = await SharedPreferences.getInstance();
+    final preference = switch (
+        (prefs.getString('embeddings_source_preference_v1') ?? '').trim()) {
+      'cloud' => EmbeddingsSourcePreference.cloud,
+      'byok' => EmbeddingsSourcePreference.byok,
+      'local' => EmbeddingsSourcePreference.local,
+      _ => EmbeddingsSourcePreference.auto,
+    };
+    final cloudEmbeddingsSelected =
+        prefs.getBool(_kEmbeddingsDataConsentPrefsKey) ??
+            _cloudEmbeddingsConsented;
+
+    final subscriptionStatus =
+        subscriptionScope?.status ?? SubscriptionStatus.unknown;
+    final cloudGatewayConfig =
+        cloudAuthScope?.gatewayConfig ?? CloudGatewayConfig.defaultConfig;
+
+    String? cloudIdToken;
+    try {
+      cloudIdToken = await cloudAuthScope?.controller.getIdToken();
+    } catch (_) {
+      cloudIdToken = null;
+    }
+
+    final cloudAvailable = subscriptionStatus == SubscriptionStatus.entitled &&
+        cloudIdToken != null &&
+        cloudIdToken.trim().isNotEmpty &&
+        cloudGatewayConfig.baseUrl.trim().isNotEmpty;
+
+    var hasByokProfile = false;
+    try {
+      final profiles = await backend.listEmbeddingProfiles(sessionKey);
+      hasByokProfile = profiles.any((p) => p.isActive);
+    } catch (_) {
+      hasByokProfile = false;
+    }
+
+    return resolveEmbeddingsSourceRoute(
+      preference,
+      cloudEmbeddingsSelected: cloudEmbeddingsSelected,
+      cloudAvailable: cloudAvailable,
+      hasByokProfile: hasByokProfile,
+    );
   }
 
   Future<List<TodoThreadMatch>> _searchLocalTodoSemanticMatches(

@@ -19,7 +19,15 @@ mod fastembed;
     any(target_os = "windows", target_os = "macos", target_os = "linux"),
     not(frb_expand)
 ))]
-pub use fastembed::FastEmbedder;
+pub use fastembed::{release_fastembed_if_idle, FastEmbedder};
+
+#[cfg(not(all(
+    any(target_os = "windows", target_os = "macos", target_os = "linux"),
+    not(frb_expand)
+)))]
+pub fn release_fastembed_if_idle(_max_idle: std::time::Duration) -> bool {
+    false
+}
 
 pub trait Embedder {
     fn model_name(&self) -> &str;
