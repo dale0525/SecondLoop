@@ -8,6 +8,7 @@ import '../cloud/cloud_auth_controller.dart';
 import '../cloud/cloud_auth_scope.dart';
 import '../session/session_scope.dart';
 import '../sync/sync_engine_gate.dart';
+import '../update/update_restart_activity.dart';
 import 'detached_ask_recovery_service.dart';
 
 class DetachedAskRecoveryGate extends StatefulWidget {
@@ -28,6 +29,7 @@ class _DetachedAskRecoveryGateState extends State<DetachedAskRecoveryGate>
   Timer? _timer;
   DateTime? _nextRunAt;
   bool _running = false;
+  UpdateRestartBlockToken? _restartBlockToken;
 
   @override
   void initState() {
@@ -105,6 +107,7 @@ class _DetachedAskRecoveryGateState extends State<DetachedAskRecoveryGate>
     final gatewayBaseUrl = (cloudAuthScope?.gatewayConfig.baseUrl ?? '').trim();
 
     _running = true;
+    _restartBlockToken = UpdateRestartActivity.blockAiAnalysis();
     try {
       final idToken = await readCloudIdTokenForBackground(
         cloudAuthScope?.controller,
@@ -141,6 +144,8 @@ class _DetachedAskRecoveryGateState extends State<DetachedAskRecoveryGate>
       if (!mounted) return;
       _schedule(_kFailureInterval);
     } finally {
+      _restartBlockToken?.release();
+      _restartBlockToken = null;
       _running = false;
     }
   }

@@ -296,10 +296,6 @@ class AppUpdateService {
   }
 
   Future<void> stageUpdateForNextLaunch(AppUpdateAvailability update) async {
-    if (update.installMode != AppUpdateInstallMode.stagedNextLaunch) {
-      throw StateError('staged_update_not_supported');
-    }
-
     final asset = update.asset;
     if (asset == null) {
       throw StateError('missing_update_asset');
@@ -307,6 +303,14 @@ class AppUpdateService {
 
     if (_platform != AppUpdatePlatform.windows) {
       throw StateError('staged_update_not_supported_for_${_platform.name}');
+    }
+
+    final canStage =
+        update.installMode == AppUpdateInstallMode.stagedNextLaunch ||
+            (update.installMode == AppUpdateInstallMode.seamlessRestart &&
+                _isWindowsVelopackNupkgName(asset.name));
+    if (!canStage) {
+      throw StateError('staged_update_not_supported');
     }
 
     final client = _windowsStagedUpdateClient ?? VelopackUpdateClient();
@@ -328,6 +332,21 @@ class AppUpdateService {
     }
 
     await client.applyPendingOnStartup();
+  }
+
+  Future<void> applyStagedUpdateAndRestart() async {
+    if (_platform != AppUpdatePlatform.windows) {
+      throw StateError(
+          'staged_update_restart_not_supported_for_${_platform.name}');
+    }
+
+    final client = _windowsStagedUpdateClient ?? VelopackUpdateClient();
+    if (!client.isAvailable()) {
+      throw StateError('windows_velopack_unavailable');
+    }
+
+    await client.applyPendingAndRestart(waitPid: pid);
+    _exitProcess(0);
   }
 
   void dispose() {
@@ -518,7 +537,7 @@ class AppUpdateService {
         AppUpdateInstallMode.seamlessRestart,
       AppUpdatePlatform.windows
           when windowsStagedRuntimeAvailable && isWindowsStagedPackage =>
-        AppUpdateInstallMode.seamlessRestart,
+        AppUpdateInstallMode.stagedNextLaunch,
       _ => AppUpdateInstallMode.externalDownload,
     };
   }

@@ -24,6 +24,10 @@ abstract class WindowsStagedUpdateClient {
   });
 
   Future<void> applyPendingOnStartup();
+
+  Future<void> applyPendingAndRestart({
+    required int waitPid,
+  });
 }
 
 class VelopackUpdateClient implements WindowsStagedUpdateClient {
@@ -99,6 +103,31 @@ class VelopackUpdateClient implements WindowsStagedUpdateClient {
     if (result.exitCode != 0) {
       throw StateError('windows_velopack_apply_failed_${result.stderr}');
     }
+  }
+
+  @override
+  Future<void> applyPendingAndRestart({
+    required int waitPid,
+  }) async {
+    final updateExePath = _updateExePath;
+    if (!File(updateExePath).existsSync()) {
+      throw StateError('windows_velopack_unavailable');
+    }
+
+    if (!_hasPendingPackageUpdate(updateExePath)) {
+      throw StateError('windows_velopack_no_pending_update');
+    }
+
+    await _processStarter(
+      updateExePath,
+      [
+        'apply',
+        '--silent',
+        '--waitPid',
+        waitPid.toString(),
+      ],
+      mode: ProcessStartMode.detached,
+    );
   }
 
   Future<File> _stageAssetFile(Uri assetDownloadUri) async {

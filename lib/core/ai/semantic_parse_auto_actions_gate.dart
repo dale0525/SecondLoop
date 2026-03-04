@@ -13,6 +13,7 @@ import '../session/session_scope.dart';
 import '../subscription/subscription_scope.dart';
 import '../sync/sync_engine.dart';
 import '../sync/sync_engine_gate.dart';
+import '../update/update_restart_activity.dart';
 import 'ai_routing.dart';
 import 'embeddings_data_consent_prefs.dart';
 import 'embeddings_source_prefs.dart';
@@ -44,6 +45,7 @@ class _SemanticParseAutoActionsGateState
   Timer? _timer;
   DateTime? _nextRunAt;
   bool _running = false;
+  UpdateRestartBlockToken? _restartBlockToken;
 
   SyncEngine? _syncEngine;
   VoidCallback? _syncListener;
@@ -151,6 +153,7 @@ class _SemanticParseAutoActionsGateState
     final syncEngine = SyncEngineScope.maybeOf(context);
 
     _running = true;
+    _restartBlockToken = UpdateRestartActivity.blockAiAnalysis();
     try {
       final prefs = await SharedPreferences.getInstance();
       final enabled =
@@ -277,6 +280,8 @@ class _SemanticParseAutoActionsGateState
       if (!mounted) return;
       _schedule(_kFailureInterval);
     } finally {
+      _restartBlockToken?.release();
+      _restartBlockToken = null;
       _running = false;
     }
   }

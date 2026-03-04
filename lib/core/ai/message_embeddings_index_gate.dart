@@ -8,6 +8,7 @@ import '../backend/native_backend.dart';
 import '../session/session_scope.dart';
 import '../sync/sync_engine.dart';
 import '../sync/sync_engine_gate.dart';
+import '../update/update_restart_activity.dart';
 
 class MessageEmbeddingsIndexGate extends StatefulWidget {
   const MessageEmbeddingsIndexGate({required this.child, super.key});
@@ -29,6 +30,7 @@ class _MessageEmbeddingsIndexGateState extends State<MessageEmbeddingsIndexGate>
   Timer? _timer;
   DateTime? _nextRunAt;
   bool _running = false;
+  UpdateRestartBlockToken? _restartBlockToken;
 
   SyncEngine? _syncEngine;
   VoidCallback? _syncListener;
@@ -133,6 +135,7 @@ class _MessageEmbeddingsIndexGateState extends State<MessageEmbeddingsIndexGate>
     final sessionKey = SessionScope.of(context).sessionKey;
 
     _running = true;
+    _restartBlockToken = UpdateRestartActivity.blockAiAnalysis();
     try {
       final processed = await backend.processPendingMessageEmbeddings(
         Uint8List.fromList(sessionKey),
@@ -149,6 +152,8 @@ class _MessageEmbeddingsIndexGateState extends State<MessageEmbeddingsIndexGate>
       if (!mounted) return;
       _schedule(_kFailureInterval);
     } finally {
+      _restartBlockToken?.release();
+      _restartBlockToken = null;
       _running = false;
     }
   }
