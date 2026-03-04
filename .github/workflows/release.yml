@@ -349,13 +349,12 @@ jobs:
             }
           }
 
-          $packArgs = @(
-            '-SkipBuild',
-            '-OutputPath',
-            'dist'
-          )
+          $packArgs = @{
+            SkipBuild = $true
+            OutputPath = 'dist'
+          }
           if ($packVersion) {
-            $packArgs += @('-Version', $packVersion)
+            $packArgs.Version = $packVersion
           }
 
           & scripts/package_windows_velopack.ps1 @packArgs

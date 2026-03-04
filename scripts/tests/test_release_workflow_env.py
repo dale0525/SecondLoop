@@ -284,9 +284,8 @@ class ReleaseWorkflowEnvTests(unittest.TestCase):
         self.assertNotIn("name: Package MSI", workflow_text)
         self.assertIn("name: Package Velopack", workflow_text)
         self.assertIn("scripts/package_windows_velopack.ps1", workflow_text)
-        self.assertIn("-SkipBuild", workflow_text)
-        self.assertIn("'-OutputPath'", workflow_text)
-        self.assertIn("'dist'", workflow_text)
+        self.assertIn("SkipBuild = $true", workflow_text)
+        self.assertIn("OutputPath = 'dist'", workflow_text)
         self.assertIn("Velopack setup not found", workflow_text)
         self.assertIn("Velopack releases metadata not found", workflow_text)
         self.assertIn("Velopack assets metadata not found", workflow_text)
@@ -301,7 +300,7 @@ class ReleaseWorkflowEnvTests(unittest.TestCase):
         workflow_text = self._workflow_text()
 
         self.assertIn('$Env:GITHUB_REF -like "refs/tags/v*"', workflow_text)
-        self.assertIn('$packArgs += @(\'-Version\', $packVersion)', workflow_text)
+        self.assertIn('$packArgs.Version = $packVersion', workflow_text)
         self.assertIn('& scripts/package_windows_velopack.ps1 @packArgs', workflow_text)
 
     def test_windows_velopack_script_keeps_dotnet_output_out_of_vpk_path(self) -> None:
