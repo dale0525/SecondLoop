@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../i18n/strings.g.dart';
+import '../../core/update/update_restart_activity.dart';
 import 'chat_markdown_editor_page.dart';
 
 typedef ChatMarkdownEditorRoutePusher = Future<ChatMarkdownEditorResult?>
@@ -32,8 +33,10 @@ Future<ChatMarkdownEditorResult?> openChatMarkdownEditor(
   );
 
   if (routePusher != null) {
-    return routePusher(route);
+    final blockToken = UpdateRestartActivity.blockEditing();
+    return routePusher(route).whenComplete(blockToken.release);
   }
 
-  return Navigator.of(context).push(route);
+  final blockToken = UpdateRestartActivity.blockEditing();
+  return Navigator.of(context).push(route).whenComplete(blockToken.release);
 }

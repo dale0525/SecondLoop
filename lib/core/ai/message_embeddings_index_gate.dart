@@ -2,12 +2,19 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
+import 'ai_routing.dart';
+import 'embeddings_source_prefs.dart';
 import '../backend/app_backend.dart';
 import '../backend/native_backend.dart';
+import '../cloud/cloud_auth_controller.dart';
+import '../cloud/cloud_auth_scope.dart';
 import '../session/session_scope.dart';
+import '../subscription/subscription_scope.dart';
 import '../sync/sync_engine.dart';
 import '../sync/sync_engine_gate.dart';
+import '../update/update_restart_activity.dart';
 
 class MessageEmbeddingsIndexGate extends StatefulWidget {
   const MessageEmbeddingsIndexGate({required this.child, super.key});
@@ -21,14 +28,17 @@ class MessageEmbeddingsIndexGate extends StatefulWidget {
 
 class _MessageEmbeddingsIndexGateState extends State<MessageEmbeddingsIndexGate>
     with WidgetsBindingObserver {
+  static const _kEmbeddingsDataConsentPrefsKey = 'embeddings_data_consent_v1';
   static const _kIdleInterval = Duration(seconds: 30);
   static const _kDrainInterval = Duration(milliseconds: 600);
   static const _kFailureInterval = Duration(seconds: 10);
   static const _kBatchLimit = 256;
+  static const _kLocalEmbeddingIdleReleaseMs = 180000;
 
   Timer? _timer;
   DateTime? _nextRunAt;
   bool _running = false;
+  UpdateRestartBlockToken? _restartBlockToken;
 
   SyncEngine? _syncEngine;
   VoidCallback? _syncListener;
@@ -145,11 +155,30 @@ class _MessageEmbeddingsIndexGateState extends State<MessageEmbeddingsIndexGate>
     final sessionKey = SessionScope.of(context).sessionKey;
 
     _running = true;
+    _restartBlockToken = UpdateRestartActivity.blockAiAnalysis();
     try {
-      final processed = await backend.processPendingMessageEmbeddings(
-        Uint8List.fromList(sessionKey),
-        limit: _kBatchLimit,
+      final route = await _resolveRouteForBackground(
+        backend,
+        sessionKey,
       );
+      final keyBytes = Uint8List.fromList(sessionKey);
+
+      int processed = 0;
+      if (route == EmbeddingsSourceRouteKind.local) {
+        processed = await backend.processPendingMessageEmbeddings(
+          keyBytes,
+          limit: _kBatchLimit,
+        );
+      } else {
+        try {
+          await backend.releaseLocalEmbeddingModelIfIdle(
+            keyBytes,
+            maxIdleMs: _kLocalEmbeddingIdleReleaseMs,
+          );
+        } catch (_) {
+          // Best-effort memory cleanup in remote routes.
+        }
+      }
 
       if (!mounted) return;
       if (processed <= 0) {
@@ -161,8 +190,62 @@ class _MessageEmbeddingsIndexGateState extends State<MessageEmbeddingsIndexGate>
       if (!mounted) return;
       _schedule(_kFailureInterval);
     } finally {
+      _restartBlockToken?.release();
+      _restartBlockToken = null;
       _running = false;
     }
+  }
+
+  Future<EmbeddingsSourceRouteKind> _resolveRouteForBackground(
+    NativeAppBackend backend,
+    Uint8List sessionKey,
+  ) async {
+    final subscriptionStatus = SubscriptionScope.maybeOf(context)?.status ??
+        SubscriptionStatus.unknown;
+    final cloudAuthScope = CloudAuthScope.maybeOf(context);
+    final cloudGatewayConfig =
+        cloudAuthScope?.gatewayConfig ?? CloudGatewayConfig.defaultConfig;
+
+    final prefs = await SharedPreferences.getInstance();
+    final cloudEmbeddingsSelected =
+        prefs.getBool(_kEmbeddingsDataConsentPrefsKey) ?? false;
+
+    final preference = switch (
+        (prefs.getString(EmbeddingsSourcePrefs.prefsKey) ?? '').trim()) {
+      'cloud' => EmbeddingsSourcePreference.cloud,
+      'byok' => EmbeddingsSourcePreference.byok,
+      'local' => EmbeddingsSourcePreference.local,
+      _ => EmbeddingsSourcePreference.auto,
+    };
+
+    String? cloudIdToken;
+    try {
+      cloudIdToken = await readCloudIdTokenForBackground(
+        cloudAuthScope?.controller,
+      );
+    } catch (_) {
+      cloudIdToken = null;
+    }
+
+    final cloudAvailable = subscriptionStatus == SubscriptionStatus.entitled &&
+        cloudIdToken != null &&
+        cloudIdToken.trim().isNotEmpty &&
+        cloudGatewayConfig.baseUrl.trim().isNotEmpty;
+
+    var hasByokProfile = false;
+    try {
+      final profiles = await backend.listEmbeddingProfiles(sessionKey);
+      hasByokProfile = profiles.any((p) => p.isActive);
+    } catch (_) {
+      hasByokProfile = false;
+    }
+
+    return resolveEmbeddingsSourceRoute(
+      preference,
+      cloudEmbeddingsSelected: cloudEmbeddingsSelected,
+      cloudAvailable: cloudAvailable,
+      hasByokProfile: hasByokProfile,
+    );
   }
 
   @override

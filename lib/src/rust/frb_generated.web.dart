@@ -14,6 +14,7 @@ import 'api/content_extract.dart';
 import 'api/core.dart';
 import 'api/desktop_media.dart';
 import 'api/detached_ask.dart';
+import 'api/embedding_lifecycle.dart';
 import 'api/media_annotation.dart';
 import 'api/oplog_maintenance.dart';
 import 'api/simple.dart';

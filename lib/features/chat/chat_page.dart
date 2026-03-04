@@ -20,6 +20,7 @@ import '../../core/ai/ask_ai_source_prefs.dart';
 import '../../core/ai/detached_ask_recovery_policy.dart';
 import '../../core/ai/detached_ask_recovery_service.dart';
 import '../../core/ai/embeddings_data_consent_prefs.dart';
+import '../../core/ai/embeddings_source_prefs.dart';
 import '../../core/ai/semantic_parse_edit_policy.dart';
 import '../../core/ai/semantic_parse.dart';
 import '../../core/ai/semantic_parse_data_consent_prefs.dart';

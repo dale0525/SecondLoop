@@ -32,6 +32,7 @@ import '../session/session_scope.dart';
 import '../sync/sync_engine.dart';
 import '../subscription/subscription_scope.dart';
 import '../sync/sync_engine_gate.dart';
+import '../update/update_restart_activity.dart';
 import 'media_enrichment_availability.dart';
 import '../../src/rust/api/media_annotation.dart' as rust_media_annotation;
 import '../../src/rust/db.dart';
@@ -62,6 +63,7 @@ class _MediaEnrichmentGateState extends State<MediaEnrichmentGate>
   Timer? _timer;
   DateTime? _nextRunAt;
   bool _running = false;
+  UpdateRestartBlockToken? _restartBlockToken;
   bool _cellularPromptShown = false;
   final Set<String> _autoOcrCompletedShas = <String>{};
   SyncEngine? _syncEngine;
@@ -234,6 +236,7 @@ class _MediaEnrichmentGateState extends State<MediaEnrichmentGate>
     final localeTag = Localizations.localeOf(context).toLanguageTag();
 
     _running = true;
+    _restartBlockToken = UpdateRestartActivity.blockAiAnalysis();
     try {
       final subscriptionStatus = SubscriptionScope.maybeOf(context)?.status ??
           SubscriptionStatus.unknown;
@@ -820,6 +823,8 @@ class _MediaEnrichmentGateState extends State<MediaEnrichmentGate>
       if (!mounted) return;
       _schedule(_kFailureInterval);
     } finally {
+      _restartBlockToken?.release();
+      _restartBlockToken = null;
       _running = false;
     }
   }

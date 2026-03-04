@@ -14,6 +14,7 @@ import '../session/session_scope.dart';
 import '../subscription/subscription_scope.dart';
 import '../sync/sync_engine.dart';
 import '../sync/sync_engine_gate.dart';
+import '../update/update_restart_activity.dart';
 
 class EmbeddingsIndexGate extends StatefulWidget {
   const EmbeddingsIndexGate({required this.child, super.key});
@@ -38,10 +39,12 @@ class _EmbeddingsIndexGateState extends State<EmbeddingsIndexGate>
   static const _kDrainIntervalLocal = Duration(milliseconds: 600);
   static const _kDrainIntervalRemote = Duration(seconds: 2);
   static const _kFailureInterval = Duration(seconds: 10);
+  static const _kLocalEmbeddingIdleReleaseMs = 180000;
 
   Timer? _timer;
   DateTime? _nextRunAt;
   bool _running = false;
+  UpdateRestartBlockToken? _restartBlockToken;
 
   SyncEngine? _syncEngine;
   VoidCallback? _syncListener;
@@ -159,6 +162,7 @@ class _EmbeddingsIndexGateState extends State<EmbeddingsIndexGate>
     final sessionKey = SessionScope.of(context).sessionKey;
 
     _running = true;
+    _restartBlockToken = UpdateRestartActivity.blockAiAnalysis();
     try {
       final subscriptionStatus = SubscriptionScope.maybeOf(context)?.status ??
           SubscriptionStatus.unknown;
@@ -218,6 +222,17 @@ class _EmbeddingsIndexGateState extends State<EmbeddingsIndexGate>
         cloudGatewayBaseUrl: cloudGatewayConfig.baseUrl,
       );
 
+      if (route != EmbeddingsSourceRouteKind.local) {
+        try {
+          await backend.releaseLocalEmbeddingModelIfIdle(
+            sessionKey,
+            maxIdleMs: _kLocalEmbeddingIdleReleaseMs,
+          );
+        } catch (_) {
+          // Best-effort memory cleanup for remote-first routes.
+        }
+      }
+
       if (!mounted) return;
       if (result.processed <= 0) {
         _schedule(_kIdleInterval);
@@ -228,6 +243,8 @@ class _EmbeddingsIndexGateState extends State<EmbeddingsIndexGate>
       if (!mounted) return;
       _schedule(_kFailureInterval);
     } finally {
+      _restartBlockToken?.release();
+      _restartBlockToken = null;
       _running = false;
     }
   }

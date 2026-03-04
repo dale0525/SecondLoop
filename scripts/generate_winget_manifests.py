@@ -6,6 +6,8 @@ import hashlib
 from pathlib import Path
 from textwrap import dedent
 
+MANIFEST_VERSION = "1.10.0"
+
 
 def compute_sha256_upper(path: Path) -> str:
     hasher = hashlib.sha256()
@@ -98,7 +100,7 @@ def main() -> int:
         PackageVersion: {version}
         DefaultLocale: en-US
         ManifestType: version
-        ManifestVersion: 1.9.0
+        ManifestVersion: {MANIFEST_VERSION}
         """
     )
 
@@ -121,7 +123,7 @@ def main() -> int:
             InstallerSha256: {installer_sha}
             InstallerLocale: en-US
         ManifestType: installer
-        ManifestVersion: 1.9.0
+        ManifestVersion: {MANIFEST_VERSION}
         """
     )
 
@@ -147,7 +149,7 @@ def main() -> int:
           - productivity
         ReleaseNotesUrl: {release_notes_url}
         ManifestType: defaultLocale
-        ManifestVersion: 1.9.0
+        ManifestVersion: {MANIFEST_VERSION}
         """
     )
 

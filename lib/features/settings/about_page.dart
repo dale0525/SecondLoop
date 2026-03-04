@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -42,6 +43,8 @@ class _AboutPageState extends State<AboutPage> {
   AppUpdateService? _ownedUpdateService;
 
   _AboutText get _text => _AboutText.of(context);
+  bool get _isWindowsPlatform =>
+      !kIsWeb && defaultTargetPlatform == TargetPlatform.windows;
 
   @override
   void initState() {
@@ -133,7 +136,11 @@ class _AboutPageState extends State<AboutPage> {
         await UpdateBadgePrefs.clear();
         _showMessage(_text.messages.upToDate);
       } else {
-        await UpdateBadgePrefs.setAvailableVersion(result.update!.latestTag);
+        if (_isWindowsPlatform) {
+          await UpdateBadgePrefs.clear();
+        } else {
+          await UpdateBadgePrefs.setAvailableVersion(result.update!.latestTag);
+        }
         _showMessage(
           _text.messages.updateAvailable(version: result.update!.latestTag),
         );
@@ -151,17 +158,25 @@ class _AboutPageState extends State<AboutPage> {
     if (update == null) return;
 
     setState(() => _updating = true);
+    var stagedFlow = false;
     try {
-      if (update.canSeamlessInstall) {
+      if (_isWindowsPlatform &&
+          (update.canStageForNextLaunch || update.canSeamlessInstall)) {
+        stagedFlow = true;
+        _showMessage(_text.messages.stageStarting);
+        await _updateService.stageUpdateForNextLaunch(update);
+        _showMessage(_text.messages.stageReady);
+      } else if (update.canSeamlessInstall) {
         _showMessage(_text.messages.installStarting);
         await _updateService.installAndRestart(update);
       } else if (update.canStageForNextLaunch) {
+        stagedFlow = true;
         _showMessage(_text.messages.stageStarting);
         await _updateService.stageUpdateForNextLaunch(update);
         _showMessage(_text.messages.stageReady);
       }
     } catch (error) {
-      if (update.canStageForNextLaunch) {
+      if (stagedFlow) {
         _showMessage(_text.messages.stageFailed(error: '$error'));
       } else {
         _showMessage(_text.messages.installFailed(error: '$error'));

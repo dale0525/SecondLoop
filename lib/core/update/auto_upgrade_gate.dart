@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../i18n/strings.g.dart';
 import 'app_update_service.dart';
 import 'update_badge_prefs.dart';
+import 'update_restart_activity.dart';
 
 class AutoUpgradeGate extends StatefulWidget {
   const AutoUpgradeGate({
@@ -37,9 +38,13 @@ class _AutoUpgradeGateState extends State<AutoUpgradeGate> {
   bool _checkScheduled = false;
   bool _noticeSessionInitialized = false;
   bool _updateNoticeDismissedInSession = false;
+  bool _applyingWindowsStagedRestart = false;
 
   late final AppUpdateService _updateService;
   AppUpdateService? _ownedUpdateService;
+  AppUpdateAvailability? _pendingWindowsStagedUpdate;
+  bool get _isWindowsPlatform =>
+      !kIsWeb && defaultTargetPlatform == TargetPlatform.windows;
 
   @override
   void initState() {
@@ -52,6 +57,8 @@ class _AutoUpgradeGateState extends State<AutoUpgradeGate> {
       _updateService = owned;
       _ownedUpdateService = owned;
     }
+
+    UpdateRestartActivity.changes.addListener(_onRestartActivityChanged);
   }
 
   @override
@@ -66,8 +73,13 @@ class _AutoUpgradeGateState extends State<AutoUpgradeGate> {
 
   @override
   void dispose() {
+    UpdateRestartActivity.changes.removeListener(_onRestartActivityChanged);
     _ownedUpdateService?.dispose();
     super.dispose();
+  }
+
+  void _onRestartActivityChanged() {
+    unawaited(_maybeApplyWindowsStagedRestartWhenSafe());
   }
 
   Future<void> _maybeAutoUpgrade() async {
@@ -88,6 +100,16 @@ class _AutoUpgradeGateState extends State<AutoUpgradeGate> {
       final update = result.update;
       if (update == null) {
         await UpdateBadgePrefs.clear();
+        return;
+      }
+
+      if (_isWindowsPlatform) {
+        await UpdateBadgePrefs.clear();
+        if (update.canStageForNextLaunch || update.canSeamlessInstall) {
+          await _updateService.stageUpdateForNextLaunch(update);
+          _pendingWindowsStagedUpdate = update;
+          await _maybeApplyWindowsStagedRestartWhenSafe();
+        }
         return;
       }
 
@@ -217,6 +239,27 @@ class _AutoUpgradeGateState extends State<AutoUpgradeGate> {
     if (updateTag != null && updateTag.trim().isNotEmpty) {
       await prefs.setString(
           AutoUpgradeGate.updateReadyAckTagPrefsKey, updateTag);
+    }
+  }
+
+  Future<void> _maybeApplyWindowsStagedRestartWhenSafe() async {
+    if (!mounted || !_isWindowsPlatform) return;
+    if (_applyingWindowsStagedRestart) return;
+    if (!UpdateRestartActivity.canRestartNow) return;
+
+    final pending = _pendingWindowsStagedUpdate;
+    if (pending == null) return;
+
+    _applyingWindowsStagedRestart = true;
+    _pendingWindowsStagedUpdate = null;
+    try {
+      await _updateService.applyStagedUpdateAndRestart();
+    } catch (error, stackTrace) {
+      _pendingWindowsStagedUpdate = pending;
+      debugPrint('auto_upgrade_windows_staged_restart_skipped: $error');
+      debugPrintStack(stackTrace: stackTrace);
+    } finally {
+      _applyingWindowsStagedRestart = false;
     }
   }
 
