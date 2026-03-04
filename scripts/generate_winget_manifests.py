@@ -121,7 +121,6 @@ def main() -> int:
         PackageVersion: {version}
         InstallerType: exe
         UpgradeBehavior: install
-        Scope: user
         InstallModes:
           - interactive
           - silent

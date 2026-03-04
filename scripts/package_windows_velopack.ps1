@@ -86,6 +86,19 @@ function Resolve-PackageVersion {
     return $Version
   }
 
+  if ($env:GITHUB_REF -and $env:GITHUB_REF_NAME -and ($env:GITHUB_REF -like "refs/tags/v*")) {
+    $tagCandidate = $env:GITHUB_REF_NAME.Trim()
+    if ($tagCandidate.StartsWith('v')) {
+      $tagCandidate = $tagCandidate.Substring(1)
+    }
+
+    if ($tagCandidate -match '^[0-9]+\.[0-9]+\.[0-9]+$') {
+      return $tagCandidate
+    }
+
+    throw "Invalid release tag version: $($env:GITHUB_REF_NAME)"
+  }
+
   $pubspecPath = Join-Path $repoRootPath 'pubspec.yaml'
   if (-not (Test-Path $pubspecPath)) {
     throw "pubspec.yaml not found at $pubspecPath"
