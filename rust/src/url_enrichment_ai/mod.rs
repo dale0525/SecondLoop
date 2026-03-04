@@ -7,15 +7,23 @@ use crate::rag::AnswerProvider;
 const MAX_PROMPT_SOURCE_CHARS: usize = 6000;
 const MAX_TAGS: usize = 6;
 
-fn prompt_language_instruction(user_lang: &str) -> String {
+fn normalize_user_lang(user_lang: &str) -> String {
     let trimmed = user_lang.trim();
-    if trimmed.is_empty()
-        || trimmed.eq_ignore_ascii_case("und")
-        || trimmed.eq_ignore_ascii_case("auto")
-    {
-        return "Respond in the user's language.".to_string();
+    if trimmed.is_empty() {
+        "und".to_string()
+    } else {
+        trimmed.to_string()
     }
-    format!("Respond in the user's language ({trimmed}).")
+}
+
+fn prompt_language_instruction(user_lang: &str) -> String {
+    let normalized = normalize_user_lang(user_lang);
+    if normalized.eq_ignore_ascii_case("und") || normalized.eq_ignore_ascii_case("auto") {
+        return format!(
+            "Respond in the user's language (language tag: {normalized}). If the language tag is undetermined, infer from the extracted text."
+        );
+    }
+    format!("Respond in the user's language ({normalized}).")
 }
 
 fn build_url_enrichment_prompt(
@@ -38,6 +46,7 @@ fn build_url_enrichment_prompt(
     };
 
     let clipped_source: String = source.chars().take(MAX_PROMPT_SOURCE_CHARS).collect();
+    let normalized_user_lang = normalize_user_lang(user_lang);
     let language_instruction = prompt_language_instruction(user_lang);
 
     format!(
@@ -55,6 +64,7 @@ Rules:
 - Do not include any additional keys.
 {}
 
+user_language: {}
 original_url: {}
 final_url: {}
 site: {}
@@ -62,6 +72,7 @@ current_title: {}
 extracted_text:
 {}"#,
         language_instruction,
+        normalized_user_lang,
         original_url.trim(),
         final_url.trim(),
         site.trim(),
@@ -264,6 +275,7 @@ mod tests {
         assert!(prompt.contains("original_url: https://a"));
         assert!(prompt.contains("current_title: Title"));
         assert!(prompt.contains("user's language (zh-CN)"));
+        assert!(prompt.contains("user_language: zh-CN"));
         assert!(!prompt.contains(&"A".repeat(MAX_PROMPT_SOURCE_CHARS + 50)));
     }
 
@@ -282,6 +294,21 @@ mod tests {
         assert_eq!(tags.len(), 2);
         assert_eq!(tags[0], "ai");
         assert_eq!(tags[1], "speech");
+    }
+
+    #[test]
+    fn prompt_includes_explicit_language_tag_when_unknown() {
+        let prompt = build_url_enrichment_prompt(
+            "https://a",
+            "https://b",
+            "example.com",
+            "und",
+            None,
+            "excerpt",
+            "",
+        );
+        assert!(prompt.contains("user_language: und"));
+        assert!(prompt.contains("language tag: und"));
     }
 
     #[test]

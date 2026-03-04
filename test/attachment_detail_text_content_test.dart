@@ -132,6 +132,20 @@ void main() {
     );
 
     expect(content.summary, 'Cloud generated concise summary.');
+    expect(content.full, 'Cloud generated concise summary.');
+  });
+
+  test('url detail full falls back to local extracted text when no summary',
+      () {
+    final content = resolveAttachmentDetailTextContent(
+      const <String, Object?>{
+        'mime_type': 'application/x.secondloop.url+json',
+        'readable_text_excerpt': 'Local extracted excerpt.',
+        'readable_text_full': 'Local extracted full text.',
+      },
+    );
+
+    expect(content.summary, 'Local extracted excerpt.');
     expect(content.full, 'Local extracted full text.');
   });
 }

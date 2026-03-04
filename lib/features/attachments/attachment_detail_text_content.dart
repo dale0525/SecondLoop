@@ -71,6 +71,7 @@ AttachmentDetailTextContent resolveAttachmentDetailTextContent(
     read('mime_type'),
   ]).toLowerCase();
   final isImagePayload = normalizedMime.startsWith('image/');
+  final isUrlPayload = normalizedMime == 'application/x.secondloop.url+json';
   final hasVideoPayloadSignal = payload != null &&
       (payload.containsKey('video_segment_count') ||
           payload.containsKey('video_segments') ||
@@ -159,10 +160,19 @@ AttachmentDetailTextContent resolveAttachmentDetailTextContent(
     read('readable_text_excerpt'),
     read('extracted_text_excerpt'),
   ]);
+  final urlSummaryForFull = firstNonEmpty(<String?>[
+    read('manual_summary'),
+    read('llm_summary'),
+    read('summary'),
+  ]);
+  final urlFull =
+      urlSummaryForFull.isNotEmpty ? urlSummaryForFull : nonImageFallbackFull;
 
   final full = hasVideoPayloadSignal
       ? videoFull
-      : (isImagePayload ? imageFull : nonImageFallbackFull);
+      : (isImagePayload
+          ? imageFull
+          : (isUrlPayload ? urlFull : nonImageFallbackFull));
 
   return AttachmentDetailTextContent(summary: summary, full: full);
 }
