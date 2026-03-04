@@ -62,6 +62,10 @@ class ReleaseWorkflowEnvTests(unittest.TestCase):
         script_path = Path(__file__).resolve().parents[2] / "scripts/publish_winget_manifest.sh"
         return script_path.read_text(encoding="utf-8")
 
+    def _generate_winget_script_text(self) -> str:
+        script_path = Path(__file__).resolve().parents[2] / "scripts/generate_winget_manifests.py"
+        return script_path.read_text(encoding="utf-8")
+
     def test_publish_job_forwards_extended_llm_env(self) -> None:
         env_keys = self._publish_env_keys()
         self.assertIn("RELEASE_LLM_API_KEY", env_keys)
@@ -344,6 +348,10 @@ class ReleaseWorkflowEnvTests(unittest.TestCase):
         self.assertIn("WINGET_PKGS_TOKEN", workflow_text)
         self.assertIn("microsoft/winget-pkgs", workflow_text)
         self.assertIn("scripts/publish_winget_manifest.sh", workflow_text)
+        self.assertIn("WINGET_AUTO_AGREE_CLA", workflow_text)
+        self.assertIn("WINGET_CLA_COMPANY", workflow_text)
+        self.assertIn('--auto-agree-cla="${WINGET_AUTO_AGREE_CLA}"', workflow_text)
+        self.assertIn('--cla-company "${WINGET_CLA_COMPANY}"', workflow_text)
 
     def test_publish_homebrew_cask_script_stages_then_checks_cached_diff(self) -> None:
         script_text = self._publish_homebrew_script_text()
@@ -356,6 +364,25 @@ class ReleaseWorkflowEnvTests(unittest.TestCase):
 
         self.assertIn('git add "${target_rel_dir}"', script_text)
         self.assertIn("git diff --cached --quiet", script_text)
+
+    def test_publish_winget_manifest_script_can_post_cla_agreement_comment(self) -> None:
+        script_text = self._publish_winget_script_text()
+
+        self.assertIn("compose_cla_agreement_body", script_text)
+        self.assertIn("has_cla_prompt_comment", script_text)
+        self.assertIn("Contributor License Agreement", script_text)
+        self.assertIn("microsoft-github-policy-service[bot]", script_text)
+        self.assertIn("Skipping CLA auto-agreement", script_text)
+        self.assertIn("@microsoft-github-policy-service agree", script_text)
+        self.assertIn("gh pr comment", script_text)
+        self.assertIn("--auto-agree-cla", script_text)
+        self.assertIn("--cla-company", script_text)
+
+    def test_generate_winget_manifest_script_uses_manifest_schema_1_10(self) -> None:
+        script_text = self._generate_winget_script_text()
+
+        self.assertIn('MANIFEST_VERSION = "1.10.0"', script_text)
+        self.assertNotIn("ManifestVersion: 1.9.0", script_text)
 
 
 

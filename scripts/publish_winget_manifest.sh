@@ -3,7 +3,7 @@ set -euo pipefail
 
 usage() {
   cat <<'USAGE'
-Usage: publish_winget_manifest.sh --release-tag <vX.Y.Z> --source-repo <owner/repo> --fork-repo <owner/repo> --token <github-token> [--upstream-repo <owner/repo>] [--package-id <id>]
+Usage: publish_winget_manifest.sh --release-tag <vX.Y.Z> --source-repo <owner/repo> --fork-repo <owner/repo> --token <github-token> [--upstream-repo <owner/repo>] [--package-id <id>] [--auto-agree-cla[=true|false]] [--cla-company <name>]
 
 Generate WinGet manifests for the given release and open a PR against microsoft/winget-pkgs.
 USAGE
@@ -15,6 +15,26 @@ fork_repo=''
 token=''
 upstream_repo='microsoft/winget-pkgs'
 package_id='SecondLoop.SecondLoop'
+auto_agree_cla="${WINGET_AUTO_AGREE_CLA:-false}"
+cla_company="${WINGET_CLA_COMPANY:-}"
+
+normalize_bool() {
+  local raw="${1:-}"
+  local lowered
+  lowered="$(tr '[:upper:]' '[:lower:]' <<<"${raw}")"
+  case "${lowered}" in
+    1|true|yes|on)
+      echo "true"
+      ;;
+    0|false|no|off|'')
+      echo "false"
+      ;;
+    *)
+      echo "Invalid boolean value: ${raw}" >&2
+      exit 1
+      ;;
+  esac
+}
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -42,6 +62,22 @@ while [[ $# -gt 0 ]]; do
       package_id="${2:-}"
       shift 2
       ;;
+    --auto-agree-cla)
+      auto_agree_cla='true'
+      shift
+      ;;
+    --auto-agree-cla=*)
+      auto_agree_cla="${1#*=}"
+      shift
+      ;;
+    --cla-company)
+      cla_company="${2:-}"
+      shift 2
+      ;;
+    --cla-company=*)
+      cla_company="${1#*=}"
+      shift
+      ;;
     -h|--help)
       usage
       exit 0
@@ -58,6 +94,7 @@ if [[ -z "${release_tag}" || -z "${source_repo}" || -z "${fork_repo}" || -z "${t
   usage >&2
   exit 2
 fi
+auto_agree_cla="$(normalize_bool "${auto_agree_cla}")"
 
 if [[ ! "${release_tag}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
   echo "Invalid release tag: ${release_tag}. Expected vX.Y.Z" >&2
@@ -78,6 +115,59 @@ if ! command -v python3 >/dev/null 2>&1; then
 fi
 
 export GH_TOKEN="${token}"
+
+compose_cla_agreement_body() {
+  if [[ -n "${cla_company}" ]]; then
+    printf '@microsoft-github-policy-service agree company="%s"' "${cla_company}"
+    return
+  fi
+  printf '@microsoft-github-policy-service agree'
+}
+
+has_cla_prompt_comment() {
+  local pr_number="$1"
+  local cla_prompt
+  cla_prompt="$(
+    gh api "repos/${upstream_repo}/issues/${pr_number}/comments?per_page=100" \
+      --jq '.[] | select(.user.login == "microsoft-github-policy-service[bot]") | .body' |
+      grep -F "Contributor License Agreement" || true
+  )"
+  [[ -n "${cla_prompt}" ]]
+}
+
+maybe_post_cla_agreement() {
+  local pr_ref="$1"
+  local agreement_body
+  agreement_body="$(compose_cla_agreement_body)"
+
+  if [[ "${auto_agree_cla}" != "true" ]]; then
+    echo "Automatic CLA agreement is disabled. If prompted, comment on ${pr_ref}: ${agreement_body}"
+    return 0
+  fi
+
+  local pr_number
+  pr_number="$(gh pr view "${pr_ref}" --repo "${upstream_repo}" --json number --jq '.number')"
+  if ! has_cla_prompt_comment "${pr_number}"; then
+    echo "Skipping CLA auto-agreement on PR #${pr_number}: no CLA prompt from microsoft-github-policy-service[bot]."
+    return 0
+  fi
+
+  local current_login
+  current_login="$(gh api user --jq '.login')"
+  local existing_comment
+  existing_comment="$(
+    gh api "repos/${upstream_repo}/issues/${pr_number}/comments?per_page=100" \
+      --jq ".[] | select(.user.login == \"${current_login}\") | .body" |
+      grep -Fx "${agreement_body}" || true
+  )"
+  if [[ -n "${existing_comment}" ]]; then
+    echo "CLA agreement comment already exists on PR #${pr_number}."
+    return 0
+  fi
+
+  gh pr comment "${pr_ref}" --repo "${upstream_repo}" --body "${agreement_body}" >/dev/null
+  echo "Posted CLA agreement comment on PR #${pr_number}."
+}
 
 if ! gh repo view "${fork_repo}" >/dev/null 2>&1; then
   echo "Fork repo not found or inaccessible: ${fork_repo}" >&2
@@ -159,6 +249,7 @@ existing_pr_url="$(
 
 if [[ -n "${existing_pr_url}" ]]; then
   echo "Existing PR already open: ${existing_pr_url}"
+  maybe_post_cla_agreement "${existing_pr_url}"
   exit 0
 fi
 
@@ -180,3 +271,4 @@ gh pr create \
 )"
 
 echo "Opened WinGet PR for ${package_id} ${version}: ${created_pr_url}"
+maybe_post_cla_agreement "${created_pr_url}"
