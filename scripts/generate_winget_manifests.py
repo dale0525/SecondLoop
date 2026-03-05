@@ -150,6 +150,13 @@ def main() -> int:
                 "    - PackageIdentifier: Microsoft.VCRedist.2015+.x64",
             ],
         )
+    if installer_type == "msi":
+        installer_manifest_parts.extend(
+            [
+                "InstallerSwitches:",
+                "  Custom: SECONDLOOP_LAUNCH_AFTER_INSTALL=0",
+            ],
+        )
     installer_manifest_parts.extend(
         [
             "Installers:",
