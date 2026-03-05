@@ -132,12 +132,12 @@ def main() -> int:
         f"PackageIdentifier: {args.package_identifier}",
         f"PackageVersion: {version}",
         f"InstallerType: {installer_type}",
-        "Scope: user",
         "UpgradeBehavior: install",
     ]
     if installer_type == "exe":
         installer_manifest_parts.extend(
             [
+                "Scope: user",
                 "InstallModes:",
                 "  - interactive",
                 "  - silent",
