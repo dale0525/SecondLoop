@@ -145,13 +145,13 @@ def main() -> int:
                 "InstallerSwitches:",
                 "  Silent: --silent",
                 "  SilentWithProgress: --silent",
+                "Dependencies:",
+                "  PackageDependencies:",
+                "    - PackageIdentifier: Microsoft.VCRedist.2015+.x64",
             ],
         )
     installer_manifest_parts.extend(
         [
-            "Dependencies:",
-            "  PackageDependencies:",
-            "    - PackageIdentifier: Microsoft.VCRedist.2015+.x64",
             "Installers:",
             "  - Architecture: x64",
             f"    InstallerUrl: {installer_url}",
