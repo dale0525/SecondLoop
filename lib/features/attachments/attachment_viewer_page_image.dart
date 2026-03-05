@@ -68,24 +68,18 @@ extension _AttachmentViewerPageImage on _AttachmentViewerPageState {
       );
       final summaryText = textContent.summary.trim();
       final canRetryRecognition = _canRetryAttachmentRecognition;
-      final trailing = canRetryRecognition
-          ? IconButton(
-              key: const ValueKey('attachment_text_full_regenerate'),
+      final extraAction = canRetryRecognition
+          ? AttachmentTextEditorCardAction(
+              id: 'regenerate',
+              icon: Icons.auto_awesome_rounded,
+              label: context.t.attachments.content.rerunOcr,
               tooltip: context.t.attachments.content.rerunOcr,
+              buttonKey: const ValueKey('attachment_text_full_regenerate'),
               onPressed: _retryingAttachmentRecognition
                   ? null
-                  : () => unawaited(
-                        _retryImageRecognitionWithOptionalOcrDialog(
-                          annotationPayload,
-                        ),
+                  : () => _retryImageRecognitionWithOptionalOcrDialog(
+                        annotationPayload,
                       ),
-              icon: _retryingAttachmentRecognition
-                  ? const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.auto_awesome_rounded),
             )
           : null;
       final recognitionStatus = (() {
@@ -257,7 +251,7 @@ extension _AttachmentViewerPageImage on _AttachmentViewerPageState {
                     text: textContent.full,
                     markdown: true,
                     emptyText: attachmentDetailEmptyTextLabel(context),
-                    trailing: trailing,
+                    extraAction: extraAction,
                     onSave: _canEditAttachmentText ? _saveAttachmentFull : null,
                   ),
                   maxWidth: 820,

@@ -1,8 +1,9 @@
 import 'dart:convert';
-import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:secondloop/core/backend/app_backend.dart';
@@ -565,6 +566,105 @@ void main() {
         backend.savedPayloadJsons.single.contains('manual_full_text'), isTrue);
     expect(backend.savedPayloadJsons.single.contains('# New full markdown'),
         isTrue);
+  });
+
+  testWidgets(
+      'AttachmentViewerPage summary/full cards support context-menu copy on right-click and long-press',
+      (tester) async {
+    final originalPlatformOverride = debugDefaultTargetPlatformOverride;
+    debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+    try {
+      String? clipboardText;
+      final messenger =
+          TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+      messenger.setMockMethodCallHandler(SystemChannels.platform, (call) async {
+        switch (call.method) {
+          case 'Clipboard.setData':
+            clipboardText = (call.arguments as Map)['text'] as String?;
+            return null;
+          case 'Clipboard.getData':
+            return <String, dynamic>{'text': clipboardText};
+        }
+        return null;
+      });
+      addTearDown(
+        () => messenger.setMockMethodCallHandler(SystemChannels.platform, null),
+      );
+
+      final backend = _NativeImageBackend(
+        bytesBySha: {'abc': _tinyPngBytes()},
+        annotationCaptionBySha: const {'abc': null},
+        annotationPayloadJsonBySha: {
+          'abc': jsonEncode({
+            'manual_summary': 'Summary from payload',
+            'manual_full_text': '# Full from payload\nLine 2',
+          }),
+        },
+      );
+
+      await tester.pumpWidget(
+        wrapWithI18n(
+          MaterialApp(
+            home: AppBackendScope(
+              backend: backend,
+              child: SessionScope(
+                sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+                lock: () {},
+                child: const AttachmentViewerPage(
+                  attachment: Attachment(
+                    sha256: 'abc',
+                    mimeType: 'image/png',
+                    path: 'attachments/abc.bin',
+                    byteLen: 67,
+                    createdAtMs: 0,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final summaryCardFinder =
+          find.byKey(const ValueKey('attachment_text_summary_card'));
+      final fullCardFinder =
+          find.byKey(const ValueKey('attachment_text_full_card'));
+      expect(summaryCardFinder, findsOneWidget);
+      expect(fullCardFinder, findsOneWidget);
+
+      final summaryDetector = tester.widget<GestureDetector>(summaryCardFinder);
+      summaryDetector.onSecondaryTapDown?.call(
+        TapDownDetails(
+          globalPosition: tester.getCenter(summaryCardFinder),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(
+        find.byKey(const ValueKey('attachment_text_summary_menu_copy')),
+      );
+      await tester.pumpAndSettle();
+      expect(clipboardText, 'Summary from payload');
+
+      await tester.ensureVisible(fullCardFinder);
+      await tester.pumpAndSettle();
+      final fullDetector = tester.widget<GestureDetector>(fullCardFinder);
+      fullDetector.onLongPressStart?.call(
+        LongPressStartDetails(
+          globalPosition: tester.getCenter(fullCardFinder),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(
+        find.byKey(const ValueKey('attachment_text_full_menu_copy')),
+      );
+      await tester.pumpAndSettle();
+      expect(clipboardText, '# Full from payload\nLine 2');
+    } finally {
+      debugDefaultTargetPlatformOverride = originalPlatformOverride;
+    }
   });
 }
 
