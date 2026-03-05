@@ -68,6 +68,7 @@ import '../actions/time/date_time_picker_dialog.dart';
 import '../actions/time/time_resolver.dart';
 import '../attachments/attachment_card.dart';
 import '../attachments/attachment_deeplink.dart';
+import '../attachments/attachment_detail_text_content.dart';
 import '../attachments/attachment_draft_send_contract.dart';
 import '../attachments/attachment_draft_send_coordinator.dart';
 import '../attachments/attachment_ingest_pipeline.dart';
