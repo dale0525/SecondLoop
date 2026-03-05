@@ -54,7 +54,7 @@ SecondLoop 是一个（Community Edition）**开源**、隐私优先的 “Secon
 
 ### 获取方式
 
-- 请从 GitHub Releases 下载（包含 macOS/Windows/Android/Linux 资产）：https://github.com/dale0525/SecondLoop/releases
+- 请从 [GitHub Releases](https://github.com/dale0525/SecondLoop/releases) 下载（包含 macOS/Windows/Android/Linux 资产）。
 - iOS **暂未上线**。
 - 若需从源码运行，请查看 `CONTRIBUTING.md`。
 

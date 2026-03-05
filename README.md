@@ -53,7 +53,7 @@ The core mental model is **One Timeline** (a single “Main Stream”): capture 
 
 ### Availability
 
-- Download from GitHub Releases (macOS/Windows/Android/Linux assets): https://github.com/dale0525/SecondLoop/releases
+- Download from [GitHub Releases](https://github.com/dale0525/SecondLoop/releases) (macOS/Windows/Android/Linux assets).
 - iOS is **not live yet**.
 - If you want to run from source, see `CONTRIBUTING.md`.
 
