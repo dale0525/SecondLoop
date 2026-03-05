@@ -153,6 +153,9 @@ def main() -> int:
     if installer_type == "msi":
         installer_manifest_parts.extend(
             [
+                "InstallModes:",
+                "  - silent",
+                "  - silentWithProgress",
                 "InstallerSwitches:",
                 "  Custom: SECONDLOOP_LAUNCH_AFTER_INSTALL=0",
             ],
