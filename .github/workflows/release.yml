@@ -387,12 +387,52 @@ jobs:
           $setupSha256 = (Get-FileHash -Path $setupPath.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
           $setupShaFile = Join-Path $setupPath.DirectoryName 'SecondLoop-win-Setup.exe.sha256'
           "$setupSha256  $($setupPath.Name)" | Set-Content -Path $setupShaFile -Encoding ascii
+      - name: Package MSI
+        shell: pwsh
+        run: |
+          $msiVersion = $null
+          if ($Env:GITHUB_REF -like "refs/tags/v*") {
+            $candidate = $Env:GITHUB_REF_NAME.Substring(1)
+            if ($candidate -match '^\d+\.\d+\.\d+$') {
+              $msiVersion = $candidate
+            } else {
+              throw "Invalid release tag version: $Env:GITHUB_REF_NAME"
+            }
+          }
+
+          $releaseDir = Join-Path (Resolve-Path '.') 'build/windows/x64/runner/Release'
+          if (-not (Test-Path $releaseDir)) {
+            throw "Windows release output not found: $releaseDir"
+          }
+
+          $msiArgs = @{
+            SourceDir = $releaseDir
+            OutputPath = 'dist'
+            OutputName = 'SecondLoop-win'
+            PassThru = $true
+          }
+          if ($msiVersion) {
+            $msiArgs.Version = $msiVersion
+          }
+
+          $msiPathOutput = & scripts/create_windows_msi.ps1 @msiArgs
+          if ($LASTEXITCODE -ne 0) {
+            throw "MSI packaging failed with exit code $LASTEXITCODE"
+          }
+
+          $msiPath = $msiPathOutput | Select-Object -Last 1
+          if (-not $msiPath -or -not (Test-Path $msiPath)) {
+            throw "MSI package not found in dist"
+          }
+
+          Write-Host "MSI package ready: $msiPath"
       - uses: actions/upload-artifact@v4
         with:
           name: windows
           path: |
             dist/*Setup*.exe
             dist/*Setup*.exe.sha256
+            dist/*.msi
             dist/releases.*.json
             dist/assets.*.json
             dist/*RELEASES*
@@ -727,15 +767,19 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          setup_exe="$(find dist -maxdepth 1 -type f -iname '*setup*.exe' | head -n 1)"
-          if [[ -z "${setup_exe}" ]]; then
-            echo "Windows setup executable not found under dist/"
+          installer_path="$(find dist -maxdepth 1 -type f -iname '*.msi' | head -n 1)"
+          if [[ -z "${installer_path}" ]]; then
+            installer_path="$(find dist -maxdepth 1 -type f -iname '*setup*.exe' | head -n 1)"
+          fi
+          if [[ -z "${installer_path}" ]]; then
+            echo "Windows installer asset (.msi or *setup*.exe) not found under dist/"
             exit 1
           fi
+          echo "Using installer for WinGet manifest: ${installer_path}"
           python3 scripts/generate_winget_manifests.py \
             --release-tag "${GITHUB_REF_NAME}" \
             --repo "${GITHUB_REPOSITORY}" \
-            --installer-path "${setup_exe}" \
+            --installer-path "${installer_path}" \
             --output-dir dist/winget-manifests \
             --package-identifier SecondLoop.SecondLoop \
             --package-name SecondLoop \
@@ -816,6 +860,7 @@ jobs:
             dist/*.dmg.sha256
             dist/*Setup*.exe
             dist/*Setup*.exe.sha256
+            dist/*.msi
             dist/releases.*.json
             dist/assets.*.json
             dist/*RELEASES*

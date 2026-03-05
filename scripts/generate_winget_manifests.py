@@ -26,7 +26,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--installer-path",
         required=True,
-        help="Path to the Windows setup executable asset",
+        help="Path to the Windows installer asset (.exe or .msi)",
     )
     parser.add_argument(
         "--output-dir",
@@ -84,12 +84,25 @@ def schema_header(manifest_type: str) -> str:
     )
 
 
+def infer_installer_type(installer_path: Path) -> str:
+    suffix = installer_path.suffix.lower()
+    if suffix == ".exe":
+        return "exe"
+    if suffix == ".msi":
+        return "msi"
+
+    raise ValueError(
+        f"unsupported installer extension: {installer_path.name}. expected .exe or .msi",
+    )
+
+
 def main() -> int:
     args = parse_args()
     version = ensure_release_tag(args.release_tag)
     installer_path = Path(args.installer_path).resolve()
     if not installer_path.is_file():
         raise FileNotFoundError(f"installer not found: {installer_path}")
+    installer_type = infer_installer_type(installer_path)
 
     installer_sha = compute_sha256_upper(installer_path)
     installer_name = installer_path.name
@@ -113,33 +126,43 @@ def main() -> int:
         """
     )
 
-    installer_manifest = dedent(
-        f"""\
-        {schema_header("installer")}
-
-        PackageIdentifier: {args.package_identifier}
-        PackageVersion: {version}
-        InstallerType: exe
-        UpgradeBehavior: install
-        InstallModes:
-          - interactive
-          - silent
-          - silentWithProgress
-        InstallerSwitches:
-          Silent: --silent
-          SilentWithProgress: --silent
-        Dependencies:
-          PackageDependencies:
-            - PackageIdentifier: Microsoft.VCRedist.2015+.x64
-        Installers:
-          - Architecture: x64
-            InstallerUrl: {installer_url}
-            InstallerSha256: {installer_sha}
-            InstallerLocale: en-US
-        ManifestType: installer
-        ManifestVersion: {MANIFEST_VERSION}
-        """
+    installer_manifest_parts = [
+        schema_header("installer"),
+        "",
+        f"PackageIdentifier: {args.package_identifier}",
+        f"PackageVersion: {version}",
+        f"InstallerType: {installer_type}",
+        "Scope: user",
+        "UpgradeBehavior: install",
+    ]
+    if installer_type == "exe":
+        installer_manifest_parts.extend(
+            [
+                "InstallModes:",
+                "  - interactive",
+                "  - silent",
+                "  - silentWithProgress",
+                "InstallerSwitches:",
+                "  Silent: --silent",
+                "  SilentWithProgress: --silent",
+            ],
+        )
+    installer_manifest_parts.extend(
+        [
+            "Dependencies:",
+            "  PackageDependencies:",
+            "    - PackageIdentifier: Microsoft.VCRedist.2015+.x64",
+            "Installers:",
+            "  - Architecture: x64",
+            f"    InstallerUrl: {installer_url}",
+            f"    InstallerSha256: {installer_sha}",
+            "    InstallerLocale: en-US",
+            "ManifestType: installer",
+            f"ManifestVersion: {MANIFEST_VERSION}",
+            "",
+        ],
     )
+    installer_manifest = "\n".join(installer_manifest_parts)
 
     locale_manifest = dedent(
         f"""\

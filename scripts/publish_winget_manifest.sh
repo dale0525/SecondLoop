@@ -190,19 +190,24 @@ mkdir -p "${release_dir}" "${manifest_dir}"
 
 gh release download "${release_tag}" \
   --repo "${source_repo}" \
+  --pattern "*.msi" \
   --pattern "*Setup*.exe" \
   --dir "${release_dir}"
 
-setup_exe="$(find "${release_dir}" -maxdepth 1 -type f -iname '*setup*.exe' | head -n 1)"
-if [[ -z "${setup_exe}" ]]; then
-  echo "No setup exe found in release assets for ${release_tag}" >&2
+installer_path="$(find "${release_dir}" -maxdepth 1 -type f -iname '*.msi' | head -n 1)"
+if [[ -z "${installer_path}" ]]; then
+  installer_path="$(find "${release_dir}" -maxdepth 1 -type f -iname '*setup*.exe' | head -n 1)"
+fi
+if [[ -z "${installer_path}" ]]; then
+  echo "No supported installer asset (.msi or *Setup*.exe) found in release assets for ${release_tag}" >&2
   exit 1
 fi
+echo "Selected WinGet installer asset: ${installer_path}"
 
 python3 scripts/generate_winget_manifests.py \
   --release-tag "${release_tag}" \
   --repo "${source_repo}" \
-  --installer-path "${setup_exe}" \
+  --installer-path "${installer_path}" \
   --output-dir "${manifest_dir}" \
   --package-identifier "${package_id}" \
   --package-name "SecondLoop" \

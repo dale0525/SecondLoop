@@ -287,20 +287,22 @@ class ReleaseWorkflowEnvTests(unittest.TestCase):
     def test_windows_release_packages_and_uploads_velopack_artifacts(self) -> None:
         workflow_text = self._workflow_text()
 
-        self.assertNotIn("name: Package MSI", workflow_text)
         self.assertIn("name: Package Velopack", workflow_text)
+        self.assertIn("name: Package MSI", workflow_text)
         self.assertIn("scripts/package_windows_velopack.ps1", workflow_text)
+        self.assertIn("scripts/create_windows_msi.ps1", workflow_text)
         self.assertIn("SkipBuild = $true", workflow_text)
+        self.assertIn("OutputName = 'SecondLoop-win'", workflow_text)
         self.assertIn("OutputPath = 'dist'", workflow_text)
         self.assertIn("Velopack setup not found", workflow_text)
         self.assertIn("Velopack releases metadata not found", workflow_text)
         self.assertIn("Velopack assets metadata not found", workflow_text)
         self.assertIn("Velopack nupkg not found", workflow_text)
         self.assertIn("dist/*Setup*.exe", workflow_text)
+        self.assertIn("dist/*.msi", workflow_text)
         self.assertIn("dist/releases.*.json", workflow_text)
         self.assertIn("dist/assets.*.json", workflow_text)
         self.assertIn("dist/*.nupkg", workflow_text)
-        self.assertNotIn("dist/*.msi", workflow_text)
 
     def test_windows_release_passes_tag_version_to_velopack_packaging(self) -> None:
         workflow_text = self._workflow_text()
@@ -346,6 +348,8 @@ class ReleaseWorkflowEnvTests(unittest.TestCase):
 
         self.assertIn("Generate WinGet manifests", workflow_text)
         self.assertIn("scripts/generate_winget_manifests.py", workflow_text)
+        self.assertIn("find dist -maxdepth 1 -type f -iname '*.msi'", workflow_text)
+        self.assertIn("Using installer for WinGet manifest", workflow_text)
         self.assertIn("SecondLoop.SecondLoop", workflow_text)
         self.assertIn("dist/winget-manifests", workflow_text)
         self.assertIn("SecondLoop-winget-manifests-${GITHUB_REF_NAME}.zip", workflow_text)
@@ -387,6 +391,15 @@ class ReleaseWorkflowEnvTests(unittest.TestCase):
         self.assertIn('git add "${target_rel_dir}"', script_text)
         self.assertIn("git diff --cached --quiet", script_text)
 
+    def test_publish_winget_manifest_script_prefers_msi_then_falls_back_to_setup_exe(self) -> None:
+        script_text = self._publish_winget_script_text()
+
+        self.assertIn('--pattern "*.msi"', script_text)
+        self.assertIn('--pattern "*Setup*.exe"', script_text)
+        self.assertIn("Selected WinGet installer asset", script_text)
+        self.assertIn("find \"${release_dir}\" -maxdepth 1 -type f -iname '*.msi'", script_text)
+        self.assertIn("find \"${release_dir}\" -maxdepth 1 -type f -iname '*setup*.exe'", script_text)
+
     def test_publish_winget_manifest_script_can_post_cla_agreement_comment(self) -> None:
         script_text = self._publish_winget_script_text()
 
@@ -412,6 +425,13 @@ class ReleaseWorkflowEnvTests(unittest.TestCase):
         self.assertIn("Dependencies:", script_text)
         self.assertIn("PackageDependencies:", script_text)
         self.assertIn("Microsoft.VCRedist.2015+.x64", script_text)
+
+    def test_generate_winget_manifest_script_infers_installer_type_from_extension(self) -> None:
+        script_text = self._generate_winget_script_text()
+
+        self.assertIn("def infer_installer_type", script_text)
+        self.assertIn('if suffix == ".exe"', script_text)
+        self.assertIn('if suffix == ".msi"', script_text)
 
     def test_generate_winget_manifest_script_emits_schema_headers(self) -> None:
         script_path = (
@@ -463,11 +483,54 @@ class ReleaseWorkflowEnvTests(unittest.TestCase):
                     "# yaml-language-server: $schema=https://aka.ms/winget-manifest.installer.1.10.0.schema.json"
                 )
             )
+            self.assertIn("InstallerType: exe", installer_manifest)
+            self.assertIn("Scope: user", installer_manifest)
+            self.assertIn("InstallerSwitches:", installer_manifest)
+            self.assertIn("Silent: --silent", installer_manifest)
             self.assertTrue(
                 locale_manifest.startswith(
                     "# yaml-language-server: $schema=https://aka.ms/winget-manifest.defaultLocale.1.10.0.schema.json"
                 )
             )
+
+    def test_generate_winget_manifest_script_emits_msi_installer_without_exe_switches(self) -> None:
+        script_path = (
+            Path(__file__).resolve().parents[2] / "scripts/generate_winget_manifests.py"
+        )
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            tmp_root = Path(tmp_dir)
+            installer_path = tmp_root / "SecondLoop-win.msi"
+            installer_path.write_bytes(b"test-installer")
+            output_dir = tmp_root / "out"
+
+            subprocess.run(
+                [
+                    sys.executable,
+                    str(script_path),
+                    "--release-tag",
+                    "v1.20.0",
+                    "--repo",
+                    "dale0525/SecondLoop",
+                    "--installer-path",
+                    str(installer_path),
+                    "--output-dir",
+                    str(output_dir),
+                    "--package-identifier",
+                    "SecondLoop.SecondLoop",
+                ],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+
+            installer_manifest = (
+                output_dir / "SecondLoop.SecondLoop.installer.yaml"
+            ).read_text(encoding="utf-8")
+
+            self.assertIn("InstallerType: msi", installer_manifest)
+            self.assertIn("Scope: user", installer_manifest)
+            self.assertNotIn("InstallerSwitches:", installer_manifest)
+            self.assertNotIn("Silent: --silent", installer_manifest)
 
 
 
