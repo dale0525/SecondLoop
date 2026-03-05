@@ -849,6 +849,16 @@ jobs:
             echo "## Package Manager Install (Beta)"
             echo "- Homebrew: \\`brew tap dale0525/SecondLoopHomebrew && brew install --cask secondloop\\`"
             echo "- WinGet: \\`winget install --id SecondLoop.SecondLoop --exact\\`"
+            echo
+            echo "## Windows Installer Choice"
+            echo "- Recommended for most users: \\`SecondLoop-win-Setup.exe\\` (better default update experience)."
+            echo "- \\`SecondLoop-win.msi\\` is mainly for WinGet or enterprise-managed deployment."
+            echo "- With MSI installs, follow-up updates are typically manual or policy-managed."
+            echo
+            echo "## Windows 安装包选择建议"
+            echo "- 普通用户推荐使用 \\`SecondLoop-win-Setup.exe\\`（默认更新体验更顺滑）。"
+            echo "- \\`SecondLoop-win.msi\\` 主要用于 WinGet 或企业托管分发。"
+            echo "- 通过 MSI 安装后，后续更新通常由手动或企业策略管理。"
           } >> dist/release-notes.md
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
