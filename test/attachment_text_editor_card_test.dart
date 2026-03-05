@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:secondloop/features/attachments/attachment_text_editor_card.dart';
@@ -11,14 +13,16 @@ void main() {
       'AttachmentTextEditorCard markdown display enables soft line breaks and normalizes escaped newlines',
       (tester) async {
     await tester.pumpWidget(
-      const MaterialApp(
-        home: Scaffold(
-          body: AttachmentTextEditorCard(
-            fieldKeyPrefix: 'attachment_text_full',
-            text: r'# Title\nLine 2',
-            emptyText: 'None',
-            markdown: true,
-            showLabel: false,
+      wrapWithI18n(
+        const MaterialApp(
+          home: Scaffold(
+            body: AttachmentTextEditorCard(
+              fieldKeyPrefix: 'attachment_text_full',
+              text: r'# Title\nLine 2',
+              emptyText: 'None',
+              markdown: true,
+              showLabel: false,
+            ),
           ),
         ),
       ),
@@ -41,15 +45,17 @@ void main() {
     );
 
     await tester.pumpWidget(
-      MaterialApp(
-        theme: darkTheme,
-        home: const Scaffold(
-          body: AttachmentTextEditorCard(
-            fieldKeyPrefix: 'attachment_text_full',
-            text: '> quote\n\n`inline`\n\n```dart\nprint("ok");\n```',
-            emptyText: 'None',
-            markdown: true,
-            showLabel: false,
+      wrapWithI18n(
+        MaterialApp(
+          theme: darkTheme,
+          home: const Scaffold(
+            body: AttachmentTextEditorCard(
+              fieldKeyPrefix: 'attachment_text_full',
+              text: '> quote\n\n`inline`\n\n```dart\nprint("ok");\n```',
+              emptyText: 'None',
+              markdown: true,
+              showLabel: false,
+            ),
           ),
         ),
       ),
@@ -131,5 +137,117 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(saved, '# Updated');
+  });
+
+  testWidgets(
+      'AttachmentTextEditorCard shows copy action and copies display text',
+      (tester) async {
+    String? clipboardText;
+    final messenger =
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+    messenger.setMockMethodCallHandler(SystemChannels.platform, (call) async {
+      switch (call.method) {
+        case 'Clipboard.setData':
+          clipboardText = (call.arguments as Map)['text'] as String?;
+          return null;
+        case 'Clipboard.getData':
+          return <String, dynamic>{'text': clipboardText};
+      }
+      return null;
+    });
+    addTearDown(
+      () => messenger.setMockMethodCallHandler(SystemChannels.platform, null),
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        const MaterialApp(
+          home: Scaffold(
+            body: AttachmentTextEditorCard(
+              fieldKeyPrefix: 'attachment_text_full',
+              text: 'copy me',
+              emptyText: 'None',
+              markdown: true,
+              showLabel: false,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.byKey(const ValueKey('attachment_text_full_copy')));
+    await tester.pumpAndSettle();
+
+    expect(clipboardText, 'copy me');
+  });
+
+  testWidgets(
+      'AttachmentTextEditorCard long-press and right-click menus mirror header actions',
+      (tester) async {
+    var regenerated = 0;
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: Scaffold(
+            body: AttachmentTextEditorCard(
+              fieldKeyPrefix: 'attachment_text_full',
+              text: 'before',
+              emptyText: 'None',
+              markdown: true,
+              showLabel: false,
+              onSave: (_) async {},
+              extraAction: AttachmentTextEditorCardAction(
+                id: 'regenerate',
+                icon: Icons.auto_awesome_rounded,
+                label: 'Regenerate',
+                tooltip: 'Regenerate',
+                buttonKey: const ValueKey('attachment_text_full_regenerate'),
+                onPressed: () async {
+                  regenerated += 1;
+                },
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.byKey(const ValueKey('attachment_text_full_copy')),
+        findsOneWidget);
+    expect(find.byKey(const ValueKey('attachment_text_full_regenerate')),
+        findsOneWidget);
+    expect(find.byKey(const ValueKey('attachment_text_full_edit')),
+        findsOneWidget);
+
+    await tester
+        .longPress(find.byKey(const ValueKey('attachment_text_full_card')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('attachment_text_full_menu_copy')),
+        findsOneWidget);
+    expect(find.byKey(const ValueKey('attachment_text_full_menu_regenerate')),
+        findsOneWidget);
+    expect(find.byKey(const ValueKey('attachment_text_full_menu_edit')),
+        findsOneWidget);
+
+    await tester.tap(
+        find.byKey(const ValueKey('attachment_text_full_menu_regenerate')));
+    await tester.pumpAndSettle();
+    expect(regenerated, 1);
+
+    final gesture = await tester.startGesture(
+      tester.getCenter(find.byKey(const ValueKey('attachment_text_full_card'))),
+      kind: PointerDeviceKind.mouse,
+      buttons: kSecondaryMouseButton,
+    );
+    await gesture.up();
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('attachment_text_full_menu_copy')),
+        findsOneWidget);
+    expect(find.byKey(const ValueKey('attachment_text_full_menu_regenerate')),
+        findsOneWidget);
+    expect(find.byKey(const ValueKey('attachment_text_full_menu_edit')),
+        findsOneWidget);
   });
 }
