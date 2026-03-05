@@ -532,7 +532,8 @@ class ReleaseWorkflowEnvTests(unittest.TestCase):
             self.assertIn("InstallerType: msi", installer_manifest)
             self.assertIn("Scope: user", installer_manifest)
             self.assertNotIn("Dependencies:", installer_manifest)
-            self.assertNotIn("InstallerSwitches:", installer_manifest)
+            self.assertIn("InstallerSwitches:", installer_manifest)
+            self.assertIn("Custom: SECONDLOOP_LAUNCH_AFTER_INSTALL=0", installer_manifest)
             self.assertNotIn("Silent: --silent", installer_manifest)
 
 
