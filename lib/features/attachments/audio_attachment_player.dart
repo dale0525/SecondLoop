@@ -292,13 +292,15 @@ class _AudioAttachmentPlayerViewState extends State<AudioAttachmentPlayerView> {
       mimeTypeOverride: widget.attachment.mimeType,
     );
     final fullText = textContent.full;
-    final retryButton = widget.onRetryRecognition == null
+    final retryAction = widget.onRetryRecognition == null
         ? null
-        : IconButton(
-            key: const ValueKey('attachment_text_full_regenerate'),
+        : AttachmentTextEditorCardAction(
+            id: 'regenerate',
+            icon: Icons.auto_awesome_rounded,
+            label: context.t.attachments.content.rerunOcr,
             tooltip: context.t.attachments.content.rerunOcr,
-            onPressed: () => unawaited(widget.onRetryRecognition!()),
-            icon: const Icon(Icons.auto_awesome_rounded),
+            buttonKey: const ValueKey('attachment_text_full_regenerate'),
+            onPressed: widget.onRetryRecognition,
           );
 
     Widget buildSection(
@@ -323,7 +325,7 @@ class _AudioAttachmentPlayerViewState extends State<AudioAttachmentPlayerView> {
         text: fullText,
         markdown: true,
         emptyText: attachmentDetailEmptyTextLabel(context),
-        trailing: retryButton,
+        extraAction: retryAction,
         onSave: widget.onSaveFull,
       ),
       maxWidth: 820,

@@ -3,6 +3,7 @@ part of 'chat_page.dart';
 const _kCloudDetachedRequestIdPayloadKey = 'secondloop_cloud_request_id';
 const _kDetachedTodoIdPrefix = 'todo:_detached_message_link:';
 const _kDetachedTodoTitlePrefix = '[detached] ';
+const _kMessageCopyCardDivider = '\n\n----------\n\n';
 final RegExp _kCloudDetachedRequestIdPattern = RegExp(
   r'^[A-Za-z0-9][A-Za-z0-9:_-]{5,127}$',
 );
@@ -254,10 +255,130 @@ extension _ChatPageStateMethodsA on _ChatPageState {
     return trimmed == 'Photo' || trimmed == '照片';
   }
 
+  Future<String> _resolveCopyTextForMessage(Message message) async {
+    final displayText = _displayTextForMessage(message).trim();
+    if (displayText.isNotEmpty) {
+      return displayText;
+    }
+    final detailText = await _buildMessageDetailCopyText(message);
+    return detailText.trim();
+  }
+
+  Future<String> _buildMessageDetailCopyText(Message message) async {
+    final backendAny = AppBackendScope.of(context);
+    if (backendAny is! AttachmentsBackend) return '';
+    final attachmentsBackend = backendAny as AttachmentsBackend;
+    final sessionKey = SessionScope.of(context).sessionKey;
+
+    List<Attachment> attachments;
+    try {
+      attachments = await _loadMessageAttachmentsForUi(
+        messageId: message.id,
+        attachmentsBackend: attachmentsBackend,
+        sessionKey: sessionKey,
+      );
+    } catch (_) {
+      return '';
+    }
+    if (attachments.isEmpty) return '';
+
+    final blocks = <String>[];
+    for (final attachment in attachments) {
+      final block = await _buildAttachmentDetailCopyBlock(
+        attachment: attachment,
+        attachmentsBackend: attachmentsBackend,
+        backendAny: backendAny,
+        sessionKey: sessionKey,
+      );
+      if (block.isNotEmpty) {
+        blocks.add(block);
+      }
+    }
+    return blocks.join(_kMessageCopyCardDivider);
+  }
+
+  Future<String> _buildAttachmentDetailCopyBlock({
+    required Attachment attachment,
+    required AttachmentsBackend attachmentsBackend,
+    required AppBackend backendAny,
+    required Uint8List sessionKey,
+  }) async {
+    String placeDisplayName = '';
+    try {
+      placeDisplayName =
+          (await attachmentsBackend.readAttachmentPlaceDisplayName(
+                    sessionKey,
+                    sha256: attachment.sha256,
+                  ) ??
+                  '')
+              .trim();
+    } catch (_) {
+      placeDisplayName = '';
+    }
+
+    String annotationCaption = '';
+    try {
+      annotationCaption =
+          (await attachmentsBackend.readAttachmentAnnotationCaptionLong(
+                    sessionKey,
+                    sha256: attachment.sha256,
+                  ) ??
+                  '')
+              .trim();
+    } catch (_) {
+      annotationCaption = '';
+    }
+
+    Map<String, Object?>? payload;
+    if (backendAny is NativeAppBackend) {
+      try {
+        final payloadJson =
+            await backendAny.readAttachmentAnnotationPayloadJson(
+          sessionKey,
+          sha256: attachment.sha256,
+        );
+        final raw = payloadJson?.trim();
+        if (raw != null && raw.isNotEmpty) {
+          final decoded = jsonDecode(raw);
+          if (decoded is Map) {
+            payload = decoded.map<String, Object?>(
+              (key, value) => MapEntry(key.toString(), value),
+            );
+          }
+        }
+      } catch (_) {
+        payload = null;
+      }
+    }
+
+    final textContent = resolveAttachmentDetailTextContent(
+      payload,
+      annotationCaption: annotationCaption,
+      mimeTypeOverride: attachment.mimeType,
+    );
+
+    final blockParts = <String>[];
+    if (placeDisplayName.isNotEmpty) {
+      blockParts.add(placeDisplayName);
+    }
+
+    final summary = textContent.summary.trim();
+    final full = textContent.full.trim();
+    if (summary.isNotEmpty) {
+      blockParts.add(summary);
+    }
+    if (full.isNotEmpty && full != summary) {
+      blockParts.add(full);
+    }
+
+    return blockParts.join('\n\n');
+  }
+
   Future<void> _copyMessageToClipboard(Message message) async {
+    final copyText = await _resolveCopyTextForMessage(message);
     try {
       await Clipboard.setData(
-        ClipboardData(text: _displayTextForMessage(message)),
+        ClipboardData(text: copyText),
       );
     } catch (_) {
       return;

@@ -717,40 +717,34 @@ class _NonImageAttachmentViewState extends State<NonImageAttachmentView> {
       pageCount: pageCount,
     );
 
-    final regenerateButton = canRunOcr
-        ? IconButton(
-            key: const ValueKey('attachment_text_full_regenerate'),
+    final regenerateAction = canRunOcr
+        ? AttachmentTextEditorCardAction(
+            id: 'regenerate',
+            icon: Icons.auto_awesome_rounded,
+            label: context.t.attachments.content.rerunOcr,
             tooltip: context.t.attachments.content.rerunOcr,
+            buttonKey: const ValueKey('attachment_text_full_regenerate'),
             onPressed: ocrInProgress
                 ? null
-                : () => unawaited(
-                      _onRegeneratePressed(
-                        supportsOcr: supportsOcr,
-                        ocrInProgress: ocrInProgress,
-                        ocrLanguageHints: ocrLanguageHints,
-                        onOcrLanguageHintsChanged: onOcrLanguageHintsChanged,
-                        run: onRunOcr,
-                      ),
+                : () => _onRegeneratePressed(
+                      supportsOcr: supportsOcr,
+                      ocrInProgress: ocrInProgress,
+                      ocrLanguageHints: ocrLanguageHints,
+                      onOcrLanguageHintsChanged: onOcrLanguageHintsChanged,
+                      run: onRunOcr,
                     ),
-            icon: const Icon(Icons.auto_awesome_rounded),
           )
         : null;
-    final retryRecognitionButton =
+    final retryRecognitionAction =
         widget.onRetryRecognition == null || !isUrlManifest
             ? null
-            : IconButton(
-                key: const ValueKey('attachment_text_full_regenerate'),
+            : AttachmentTextEditorCardAction(
+                id: 'regenerate',
+                icon: Icons.auto_awesome_rounded,
+                label: context.t.attachments.content.rerunOcr,
                 tooltip: context.t.attachments.content.rerunOcr,
-                onPressed: ocrInProgress
-                    ? null
-                    : () => unawaited(widget.onRetryRecognition!()),
-                icon: ocrInProgress
-                    ? const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.auto_awesome_rounded),
+                buttonKey: const ValueKey('attachment_text_full_regenerate'),
+                onPressed: ocrInProgress ? null : widget.onRetryRecognition!,
               );
 
     Widget buildSection(
@@ -884,7 +878,7 @@ class _NonImageAttachmentViewState extends State<NonImageAttachmentView> {
                   text: fullText,
                   markdown: true,
                   emptyText: attachmentDetailEmptyTextLabel(context),
-                  trailing: regenerateButton ?? retryRecognitionButton,
+                  extraAction: regenerateAction ?? retryRecognitionAction,
                   onSave: widget.onSaveFull,
                 ),
                 maxWidth: 820,

@@ -1,11 +1,36 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../i18n/strings.g.dart';
 import '../../ui/sl_surface.dart';
 import '../chat/chat_markdown_editor_launcher.dart';
 import '../chat/chat_markdown_preview.dart';
+
+class AttachmentTextEditorCardAction {
+  const AttachmentTextEditorCardAction({
+    required this.id,
+    required this.icon,
+    required this.label,
+    this.tooltip,
+    this.buttonKey,
+    this.onPressed,
+  });
+
+  final String id;
+  final IconData icon;
+  final String label;
+  final String? tooltip;
+  final Key? buttonKey;
+  final Future<void> Function()? onPressed;
+}
+
+enum _AttachmentTextEditorMenuAction {
+  copy,
+  edit,
+  extra,
+}
 
 class AttachmentTextEditorCard extends StatefulWidget {
   const AttachmentTextEditorCard({
@@ -16,7 +41,7 @@ class AttachmentTextEditorCard extends StatefulWidget {
     this.showLabel = true,
     this.onSave,
     this.markdown = false,
-    this.trailing,
+    this.extraAction,
     super.key,
   });
 
@@ -27,7 +52,7 @@ class AttachmentTextEditorCard extends StatefulWidget {
   final String emptyText;
   final Future<void> Function(String value)? onSave;
   final bool markdown;
-  final Widget? trailing;
+  final AttachmentTextEditorCardAction? extraAction;
 
   @override
   State<AttachmentTextEditorCard> createState() =>
@@ -104,6 +129,99 @@ class _AttachmentTextEditorCardState extends State<AttachmentTextEditorCard> {
     await _persistValue(result.text.trim());
   }
 
+  Future<void> _copyDisplayText() async {
+    final text = widget.text.trim();
+    try {
+      await Clipboard.setData(ClipboardData(text: text));
+    } catch (_) {
+      return;
+    }
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(context.t.actions.history.actions.copied),
+        duration: const Duration(seconds: 2),
+      ),
+    );
+  }
+
+  Future<void> _runExtraAction() async {
+    if (_saving) return;
+    final callback = widget.extraAction?.onPressed;
+    if (callback == null) return;
+    await callback();
+  }
+
+  Widget _buildMenuItemLabel(IconData icon, String label) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 18),
+        const SizedBox(width: 8),
+        Flexible(child: Text(label)),
+      ],
+    );
+  }
+
+  Future<void> _showActionsMenuAt(Offset globalPosition) async {
+    if (_editing) return;
+    final overlay = Overlay.maybeOf(context);
+    final overlayObject = overlay?.context.findRenderObject();
+    if (overlayObject is! RenderBox) return;
+
+    final extraAction = widget.extraAction;
+    final selected = await showMenu<_AttachmentTextEditorMenuAction>(
+      context: context,
+      position: RelativeRect.fromRect(
+        Rect.fromLTWH(globalPosition.dx, globalPosition.dy, 0, 0),
+        Offset.zero & overlayObject.size,
+      ),
+      items: [
+        PopupMenuItem<_AttachmentTextEditorMenuAction>(
+          key: ValueKey('${widget.fieldKeyPrefix}_menu_copy'),
+          value: _AttachmentTextEditorMenuAction.copy,
+          child: _buildMenuItemLabel(
+            Icons.copy_all_rounded,
+            context.t.common.actions.copy,
+          ),
+        ),
+        if (extraAction != null)
+          PopupMenuItem<_AttachmentTextEditorMenuAction>(
+            key: ValueKey('${widget.fieldKeyPrefix}_menu_${extraAction.id}'),
+            value: _AttachmentTextEditorMenuAction.extra,
+            enabled: !_saving && extraAction.onPressed != null,
+            child: _buildMenuItemLabel(
+              extraAction.icon,
+              extraAction.label,
+            ),
+          ),
+        if (widget.onSave != null)
+          PopupMenuItem<_AttachmentTextEditorMenuAction>(
+            key: ValueKey('${widget.fieldKeyPrefix}_menu_edit'),
+            value: _AttachmentTextEditorMenuAction.edit,
+            enabled: !_saving,
+            child: _buildMenuItemLabel(
+              Icons.edit_outlined,
+              context.t.common.actions.edit,
+            ),
+          ),
+      ],
+    );
+    if (!mounted || selected == null) return;
+
+    switch (selected) {
+      case _AttachmentTextEditorMenuAction.copy:
+        await _copyDisplayText();
+        break;
+      case _AttachmentTextEditorMenuAction.edit:
+        _beginEdit();
+        break;
+      case _AttachmentTextEditorMenuAction.extra:
+        await _runExtraAction();
+        break;
+    }
+  }
+
   void _cancelEdit() {
     _controller?.dispose();
     _controller = null;
@@ -116,95 +234,123 @@ class _AttachmentTextEditorCardState extends State<AttachmentTextEditorCard> {
     final canEdit = widget.onSave != null;
     final resolvedLabel = (widget.label ?? '').trim();
     final hasLabel = widget.showLabel && resolvedLabel.isNotEmpty;
-    final showHeader =
-        hasLabel || (!_editing && (widget.trailing != null || canEdit));
+    final showHeader = hasLabel || !_editing;
+    final extraAction = widget.extraAction;
 
-    return SlSurface(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          if (showHeader)
-            Row(
-              children: [
-                if (hasLabel)
-                  Expanded(
-                    child: Text(
-                      resolvedLabel,
-                      style: Theme.of(context).textTheme.labelMedium,
+    return GestureDetector(
+      key: ValueKey('${widget.fieldKeyPrefix}_card'),
+      behavior: HitTestBehavior.opaque,
+      onSecondaryTapDown: _editing
+          ? null
+          : (details) => unawaited(_showActionsMenuAt(details.globalPosition)),
+      onLongPressStart: _editing
+          ? null
+          : (details) => unawaited(_showActionsMenuAt(details.globalPosition)),
+      child: SlSurface(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (showHeader)
+              Row(
+                children: [
+                  if (hasLabel)
+                    Expanded(
+                      child: Text(
+                        resolvedLabel,
+                        style: Theme.of(context).textTheme.labelMedium,
+                      ),
+                    )
+                  else
+                    const Spacer(),
+                  if (!_editing)
+                    IconButton(
+                      key: ValueKey('${widget.fieldKeyPrefix}_copy'),
+                      icon: const Icon(Icons.copy_all_rounded),
+                      tooltip: context.t.common.actions.copy,
+                      onPressed:
+                          _saving ? null : () => unawaited(_copyDisplayText()),
                     ),
-                  )
-                else
-                  const Spacer(),
-                if (!_editing && widget.trailing != null) widget.trailing!,
-                if (!_editing && canEdit)
-                  IconButton(
-                    key: ValueKey('${widget.fieldKeyPrefix}_edit'),
-                    icon: const Icon(Icons.edit_outlined),
-                    tooltip: context.t.common.actions.edit,
-                    onPressed: _saving ? null : _beginEdit,
+                  if (!_editing && extraAction != null)
+                    IconButton(
+                      key: extraAction.buttonKey ??
+                          ValueKey(
+                              '${widget.fieldKeyPrefix}_${extraAction.id}'),
+                      icon: Icon(extraAction.icon),
+                      tooltip: extraAction.tooltip ?? extraAction.label,
+                      onPressed: _saving || extraAction.onPressed == null
+                          ? null
+                          : () => unawaited(_runExtraAction()),
+                    ),
+                  if (!_editing && canEdit)
+                    IconButton(
+                      key: ValueKey('${widget.fieldKeyPrefix}_edit'),
+                      icon: const Icon(Icons.edit_outlined),
+                      tooltip: context.t.common.actions.edit,
+                      onPressed: _saving ? null : _beginEdit,
+                    ),
+                ],
+              ),
+            if (showHeader) const SizedBox(height: 6),
+            if (!_editing)
+              if (text.isEmpty)
+                Text(
+                  widget.emptyText,
+                  key: ValueKey('${widget.fieldKeyPrefix}_empty'),
+                  style: Theme.of(context)
+                      .textTheme
+                      .bodySmall
+                      ?.copyWith(fontStyle: FontStyle.italic),
+                )
+              else if (widget.markdown)
+                ChatMarkdownPreviewPanel(
+                  padding: const EdgeInsets.fromLTRB(12, 10, 12, 14),
+                  child: buildChatMarkdownPreviewBody(
+                    context,
+                    key: ValueKey('${widget.fieldKeyPrefix}_markdown_display'),
+                    text: text,
+                    selectable: true,
+                    restoreEscapedNewlines: true,
+                    bodyStyle: Theme.of(context).textTheme.bodySmall,
                   ),
-              ],
-            ),
-          if (showHeader) const SizedBox(height: 6),
-          if (!_editing)
-            if (text.isEmpty)
-              Text(
-                widget.emptyText,
-                key: ValueKey('${widget.fieldKeyPrefix}_empty'),
-                style: Theme.of(context)
-                    .textTheme
-                    .bodySmall
-                    ?.copyWith(fontStyle: FontStyle.italic),
-              )
-            else if (widget.markdown)
-              ChatMarkdownPreviewPanel(
-                padding: const EdgeInsets.fromLTRB(12, 10, 12, 14),
-                child: buildChatMarkdownPreviewBody(
-                  context,
-                  key: ValueKey('${widget.fieldKeyPrefix}_markdown_display'),
-                  text: text,
-                  selectable: true,
-                  restoreEscapedNewlines: true,
-                  bodyStyle: Theme.of(context).textTheme.bodySmall,
+                )
+              else
+                SelectableText(
+                  text,
+                  key: ValueKey('${widget.fieldKeyPrefix}_display'),
+                  style: Theme.of(context).textTheme.bodySmall,
                 ),
-              )
-            else
-              SelectableText(
-                text,
-                key: ValueKey('${widget.fieldKeyPrefix}_display'),
-                style: Theme.of(context).textTheme.bodySmall,
+            if (_editing) ...[
+              TextField(
+                key: ValueKey('${widget.fieldKeyPrefix}_field'),
+                controller: _controller,
+                enabled: !_saving,
+                maxLines: null,
+                decoration: const InputDecoration(
+                  border: OutlineInputBorder(),
+                  isDense: true,
+                ),
               ),
-          if (_editing) ...[
-            TextField(
-              key: ValueKey('${widget.fieldKeyPrefix}_field'),
-              controller: _controller,
-              enabled: !_saving,
-              maxLines: null,
-              decoration: const InputDecoration(
-                border: OutlineInputBorder(),
-                isDense: true,
+              const SizedBox(height: 8),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  TextButton(
+                    key: ValueKey('${widget.fieldKeyPrefix}_cancel'),
+                    onPressed: _saving ? null : _cancelEdit,
+                    child: Text(context.t.common.actions.cancel),
+                  ),
+                  const SizedBox(width: 8),
+                  FilledButton(
+                    key: ValueKey('${widget.fieldKeyPrefix}_save'),
+                    onPressed: _saving ? null : () => unawaited(_save()),
+                    child: Text(context.t.common.actions.save),
+                  ),
+                ],
               ),
-            ),
-            const SizedBox(height: 8),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                TextButton(
-                  key: ValueKey('${widget.fieldKeyPrefix}_cancel'),
-                  onPressed: _saving ? null : _cancelEdit,
-                  child: Text(context.t.common.actions.cancel),
-                ),
-                const SizedBox(width: 8),
-                FilledButton(
-                  key: ValueKey('${widget.fieldKeyPrefix}_save'),
-                  onPressed: _saving ? null : () => unawaited(_save()),
-                  child: Text(context.t.common.actions.save),
-                ),
-              ],
-            ),
+            ],
           ],
-        ],
+        ),
       ),
     );
   }
