@@ -14,8 +14,8 @@
 
 </div>
 
-> 🚧 **Work in progress / 未正式上线**
-> SecondLoop is under active development and not officially launched yet. Expect breaking changes while we ship toward a stable public release.
+> ✅ **Official launch**
+> SecondLoop Community Edition is now officially launched for macOS, Windows, Android, and Linux (x64). We no longer plan destructive data format changes in normal releases.
 
 ## ✨ What is SecondLoop?
 
@@ -47,17 +47,17 @@ The core mental model is **One Timeline** (a single “Main Stream”): capture 
 - `Local` means native on-device processing in iOS / Android / macOS / Windows / Linux clients.
 - `BYOK` means you connect your own model service and API key in settings.
 - `Pro` means an active SecondLoop Pro entitlement with a signed-in cloud account.
-- This repository is still work in progress; capabilities may evolve before public launch.
+- Capabilities will continue to evolve, while public release compatibility remains a priority.
 
 ## 🚀 Usage
 
 ### Availability
 
-- SecondLoop is **not launched yet** (no stable App Store / Play Store release).
-- Follow updates via the website: https://secondloop.app
-- If you want to try it from source today, see `CONTRIBUTING.md`.
+- Download from [GitHub Releases](https://github.com/dale0525/SecondLoop/releases) (macOS/Windows/Android/Linux assets).
+- iOS is **not live yet**.
+- If you want to run from source, see `CONTRIBUTING.md`.
 
-### Package manager install (beta)
+### Package manager install (optional)
 
 - macOS (Homebrew):
   - `brew tap dale0525/SecondLoopHomebrew`
@@ -65,6 +65,12 @@ The core mental model is **One Timeline** (a single “Main Stream”): capture 
 - Windows (WinGet):
   - `winget install --id SecondLoop.SecondLoop --exact`
 - Package indexes may lag behind GitHub Releases for a short period after each tag.
+
+### Linux notes (current limitations)
+
+- Linux currently ships as a portable `.tar.gz` package (no Snap/Flatpak/APT package yet).
+- Markdown → PDF export is not available on Linux yet.
+- Desktop biometric unlock integration is not available on Linux yet; use your app password to unlock.
 
 ### Quick walkthrough
 

@@ -14,8 +14,8 @@
 
 </div>
 
-> 🚧 **开发中 / 未正式上线**
-> SecondLoop 正在快速迭代中，尚未正式发布。短期内可能出现破坏性变更（breaking changes）。
+> ✅ **正式发布**
+> SecondLoop Community Edition 已正式上线（macOS / Windows / Android / Linux x64）。常规版本不再计划引入破坏性数据格式变更。
 
 ## ✨ SecondLoop 是什么？
 
@@ -48,24 +48,30 @@ SecondLoop 是一个（Community Edition）**开源**、隐私优先的 “Secon
 - `本地` 表示 iOS / Android / macOS / Windows / Linux 客户端内的设备侧处理。
 - `BYOK` 表示你在设置中连接自己的模型服务与 API Key。
 - `Pro` 表示账号具备 SecondLoop Pro 权益且已登录云端账号。
-- 本仓库仍在快速迭代中，正式发布前能力细节可能继续调整。
+- 能力会继续迭代，但公开版本会优先保证兼容性与可升级性。
 
 ## 🚀 用法
 
 ### 获取方式
 
-- SecondLoop **尚未正式上线**（暂无稳定的 App Store / Play Store 发布）。
-- 最新动态请关注官网：https://secondloop.app
-- 想立即从源码体验，请查看 `CONTRIBUTING.md`。
+- 请从 [GitHub Releases](https://github.com/dale0525/SecondLoop/releases) 下载（包含 macOS/Windows/Android/Linux 资产）。
+- iOS **暂未上线**。
+- 若需从源码运行，请查看 `CONTRIBUTING.md`。
 
-### 包管理器安装（Beta）
+### 包管理器安装（可选）
 
 - macOS（Homebrew）：
   - `brew tap dale0525/SecondLoopHomebrew`
   - `brew install --cask secondloop`
 - Windows（WinGet）：
   - `winget install --id SecondLoop.SecondLoop --exact`
-- 新标签发布后，包管理器索引可能会比 GitHub Releases 略晚几分钟到几十分钟同步。
+- 新标签发布后，包管理器索引相对 GitHub Releases 可能会有短暂延迟。
+
+### Linux 版本说明（当前限制）
+
+- Linux 目前提供便携式 `.tar.gz` 包（暂未提供 Snap/Flatpak/APT 包）。
+- Linux 暂不支持 Markdown 导出 PDF。
+- Linux 暂不支持桌面生物识别快捷解锁，应用锁定后需要输入应用密码解锁。
 
 ### 快速上手
 
