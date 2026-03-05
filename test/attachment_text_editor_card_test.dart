@@ -1,5 +1,5 @@
-import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -137,6 +137,57 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(saved, '# Updated');
+  });
+
+  testWidgets(
+      'AttachmentTextEditorCard defers large markdown preview until expanded',
+      (tester) async {
+    final longMarkdown = List<String>.generate(
+      240,
+      (i) => '## Section ${i + 1}\nLine ${i + 1}',
+    ).join('\n\n');
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: Scaffold(
+            body: SingleChildScrollView(
+              child: AttachmentTextEditorCard(
+                fieldKeyPrefix: 'attachment_text_full',
+                text: longMarkdown,
+                emptyText: 'None',
+                markdown: true,
+                showLabel: false,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.byType(MarkdownBody), findsNothing);
+    expect(
+      find.byKey(const ValueKey('attachment_text_full_markdown_deferred')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('attachment_text_full_markdown_expand')),
+      findsOneWidget,
+    );
+
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('attachment_text_full_markdown_expand')),
+    );
+    await tester.tap(
+      find.byKey(const ValueKey('attachment_text_full_markdown_expand')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('attachment_text_full_markdown_display')),
+      findsOneWidget,
+    );
   });
 
   testWidgets(

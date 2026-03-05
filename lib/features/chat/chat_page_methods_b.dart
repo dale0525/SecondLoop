@@ -55,6 +55,118 @@ extension _ChatPageStateMethodsB on _ChatPageState {
     return messages.first.createdAtMs >= messages.last.createdAtMs;
   }
 
+  List<Message> _normalizeMessagesForList(List<Message> messages) {
+    if (!_usePagination || messages.length < 2) return messages;
+    final newestFirst = messages.first.createdAtMs >= messages.last.createdAtMs;
+    if (newestFirst) return messages;
+    return messages.reversed.toList(growable: false);
+  }
+
+  String _messageSupplementCacheKeyFor(List<Message> messages) {
+    final key = StringBuffer(widget.conversation.id);
+    for (final message in messages) {
+      if (message.id.startsWith('pending_')) continue;
+      key
+        ..write('|')
+        ..write(message.id)
+        ..write('@')
+        ..write(message.createdAtMs);
+    }
+    return key.toString();
+  }
+
+  Future<_ChatMessageSupplementData> _loadChatMessageSupplementData({
+    required AppBackend backend,
+    required Uint8List sessionKey,
+    required List<Message> messages,
+  }) async {
+    if (messages.isEmpty) {
+      return (
+        semanticJobs: const <SemanticParseJob>[],
+        linkedTodoBadges: const <String, _TodoMessageBadgeMeta>{},
+        annotationJobs: const <AttachmentAnnotationJob>[],
+        attachmentAnnotationEnabled: false,
+        attachmentAnnotationCanRunNow: false,
+      );
+    }
+
+    final ids = messages
+        .map((m) => m.id)
+        .where((id) => !id.startsWith('pending_'))
+        .toList(growable: false);
+
+    final semanticJobsFuture = Future<List<SemanticParseJob>>.sync(() async {
+      if (ids.isEmpty) return const <SemanticParseJob>[];
+
+      final prefs = await SharedPreferences.getInstance();
+      final semanticParseConsented =
+          prefs.getBool(SemanticParseDataConsentPrefs.prefsKey) ?? false;
+      if (!semanticParseConsented) return const <SemanticParseJob>[];
+
+      return backend.listSemanticParseJobsByMessageIds(
+        sessionKey,
+        messageIds: ids,
+      );
+    }).catchError((_) => const <SemanticParseJob>[]);
+
+    final nativeBackend = backend is NativeAppBackend ? backend : null;
+    final annotationJobsFuture = Future<List<AttachmentAnnotationJob>>.sync(() {
+      if (nativeBackend == null) return const <AttachmentAnnotationJob>[];
+
+      const maxI64 = 9223372036854775807;
+      return nativeBackend.listDueAttachmentAnnotations(
+        sessionKey,
+        nowMs: maxI64,
+        limit: 500,
+      );
+    }).catchError((_) => const <AttachmentAnnotationJob>[]);
+
+    final linkedTodoBadgeFuture = _loadLinkedTodoBadgesForMessages(
+      backend: backend,
+      sessionKey: sessionKey,
+      messages: messages,
+    );
+
+    final semanticJobs = await semanticJobsFuture;
+    final annotationJobs = await annotationJobsFuture;
+    final linkedTodoBadges = await linkedTodoBadgeFuture;
+    final annotationUi = nativeBackend == null || annotationJobs.isEmpty
+        ? (enabled: false, canRunNow: false)
+        : await _loadAttachmentAnnotationUiState(
+            nativeBackend,
+            sessionKey,
+          ).catchError((_) => (enabled: false, canRunNow: false));
+
+    return (
+      semanticJobs: semanticJobs,
+      linkedTodoBadges: linkedTodoBadges,
+      annotationJobs: annotationJobs,
+      attachmentAnnotationEnabled: annotationUi.enabled,
+      attachmentAnnotationCanRunNow: annotationUi.canRunNow,
+    );
+  }
+
+  Future<_ChatMessageSupplementData> _cachedChatMessageSupplementDataFuture({
+    required AppBackend backend,
+    required Uint8List sessionKey,
+    required List<Message> messages,
+  }) {
+    final cacheKey = _messageSupplementCacheKeyFor(messages);
+    final cachedFuture = _messageSupplementFuture;
+    if (cachedFuture != null && _messageSupplementCacheKey == cacheKey) {
+      return cachedFuture;
+    }
+
+    final future = _loadChatMessageSupplementData(
+      backend: backend,
+      sessionKey: sessionKey,
+      messages: messages,
+    );
+    _messageSupplementCacheKey = cacheKey;
+    _messageSupplementFuture = future;
+    return future;
+  }
+
   List<Message> _messagesWithFailedAskQuestion(List<Message> source) {
     final question = _askFailureQuestion;
     final failureMessage = _askFailureMessage;
@@ -113,38 +225,40 @@ extension _ChatPageStateMethodsB on _ChatPageState {
         widget.conversation.id,
         limit: _kMessagePageSize,
       );
+      final normalizedPage = _normalizeMessagesForList(page);
       if (mounted) {
         _setState(() {
-          _paginatedMessages = page;
-          _latestLoadedMessages = page;
+          _paginatedMessages = normalizedPage;
+          _latestLoadedMessages = normalizedPage;
           _hasMoreMessages = page.length == _kMessagePageSize;
           _loadingMoreMessages = false;
         });
       } else {
-        _latestLoadedMessages = page;
+        _latestLoadedMessages = normalizedPage;
       }
-      return page;
+      return normalizedPage;
     }
 
     final list = await backend.listMessages(sessionKey, widget.conversation.id);
     final filtered = await _filterMessagesBySelectedTags(sessionKey, list);
+    final normalizedFiltered = _normalizeMessagesForList(filtered);
 
     if (_usePagination) {
       if (mounted) {
         _setState(() {
-          _paginatedMessages = filtered;
-          _latestLoadedMessages = filtered;
+          _paginatedMessages = normalizedFiltered;
+          _latestLoadedMessages = normalizedFiltered;
           _hasMoreMessages = false;
           _loadingMoreMessages = false;
         });
       } else {
-        _latestLoadedMessages = filtered;
+        _latestLoadedMessages = normalizedFiltered;
       }
-      return filtered;
+      return normalizedFiltered;
     }
 
-    _latestLoadedMessages = filtered;
-    return filtered;
+    _latestLoadedMessages = normalizedFiltered;
+    return normalizedFiltered;
   }
 
   Future<void> _loadOlderMessages() async {
@@ -481,6 +595,8 @@ extension _ChatPageStateMethodsB on _ChatPageState {
       }
       _messagesFuture = _loadMessages();
       _taskHubSummaryFuture = _loadTaskHubSummary();
+      _messageSupplementFuture = null;
+      _messageSupplementCacheKey = '';
       _attachmentsFuturesByMessageId.clear();
       _attachmentEnrichmentFuturesBySha256.clear();
     });
