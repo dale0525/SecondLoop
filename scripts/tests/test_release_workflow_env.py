@@ -115,6 +115,14 @@ class ReleaseWorkflowEnvTests(unittest.TestCase):
         self.assertIn('## Build Provenance', workflow_text)
         self.assertIn('actions/runs/${GITHUB_RUN_ID}', workflow_text)
 
+    def test_release_notes_include_windows_installer_choice_guidance(self) -> None:
+        workflow_text = self._workflow_text()
+
+        self.assertIn('## Windows Installer Choice', workflow_text)
+        self.assertIn('SecondLoop-win-Setup.exe', workflow_text)
+        self.assertIn('SecondLoop-win.msi', workflow_text)
+        self.assertIn('## Windows 安装包选择建议', workflow_text)
+
     def test_release_workflow_installs_vulkan_sdk_for_linux_and_windows(self) -> None:
         workflow_text = self._workflow_text()
 
