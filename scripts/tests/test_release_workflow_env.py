@@ -487,6 +487,8 @@ class ReleaseWorkflowEnvTests(unittest.TestCase):
             self.assertIn("Scope: user", installer_manifest)
             self.assertIn("InstallerSwitches:", installer_manifest)
             self.assertIn("Silent: --silent", installer_manifest)
+            self.assertIn("Dependencies:", installer_manifest)
+            self.assertIn("Microsoft.VCRedist.2015+.x64", installer_manifest)
             self.assertTrue(
                 locale_manifest.startswith(
                     "# yaml-language-server: $schema=https://aka.ms/winget-manifest.defaultLocale.1.10.0.schema.json"
@@ -529,6 +531,7 @@ class ReleaseWorkflowEnvTests(unittest.TestCase):
 
             self.assertIn("InstallerType: msi", installer_manifest)
             self.assertIn("Scope: user", installer_manifest)
+            self.assertNotIn("Dependencies:", installer_manifest)
             self.assertNotIn("InstallerSwitches:", installer_manifest)
             self.assertNotIn("Silent: --silent", installer_manifest)
 
