@@ -53,13 +53,8 @@ The core mental model is **One Timeline** (a single “Main Stream”): capture 
 
 ### Availability
 
-- Official download links:
-  - macOS (DMG): https://secondloop.app/downloads/macos
-  - Windows (Setup EXE): https://secondloop.app/downloads/windows
-  - Android (APK): https://secondloop.app/downloads/android
-  - Linux (x64, tar.gz): https://secondloop.app/downloads/linux
+- Download from GitHub Releases (macOS/Windows/Android/Linux assets): https://github.com/dale0525/SecondLoop/releases
 - iOS is **not live yet**.
-- All release assets: https://github.com/dale0525/SecondLoop/releases
 - If you want to run from source, see `CONTRIBUTING.md`.
 
 ### Package manager install (optional)
@@ -69,7 +64,7 @@ The core mental model is **One Timeline** (a single “Main Stream”): capture 
   - `brew install --cask secondloop`
 - Windows (WinGet):
   - `winget install --id SecondLoop.SecondLoop --exact`
-- Package indexes may lag behind official download links for a short period after each tag.
+- Package indexes may lag behind GitHub Releases for a short period after each tag.
 
 ### Linux notes (current limitations)
 

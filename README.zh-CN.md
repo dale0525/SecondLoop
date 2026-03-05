@@ -54,13 +54,8 @@ SecondLoop 是一个（Community Edition）**开源**、隐私优先的 “Secon
 
 ### 获取方式
 
-- 官方下载入口：
-  - macOS（DMG）：https://secondloop.app/downloads/macos
-  - Windows（Setup EXE）：https://secondloop.app/downloads/windows
-  - Android（APK）：https://secondloop.app/downloads/android
-  - Linux（x64，tar.gz）：https://secondloop.app/downloads/linux
+- 请从 GitHub Releases 下载（包含 macOS/Windows/Android/Linux 资产）：https://github.com/dale0525/SecondLoop/releases
 - iOS **暂未上线**。
-- 全部发行资产： https://github.com/dale0525/SecondLoop/releases
 - 若需从源码运行，请查看 `CONTRIBUTING.md`。
 
 ### 包管理器安装（可选）
@@ -70,7 +65,7 @@ SecondLoop 是一个（Community Edition）**开源**、隐私优先的 “Secon
   - `brew install --cask secondloop`
 - Windows（WinGet）：
   - `winget install --id SecondLoop.SecondLoop --exact`
-- 新标签发布后，包管理器索引相对官方下载入口可能会有短暂延迟。
+- 新标签发布后，包管理器索引相对 GitHub Releases 可能会有短暂延迟。
 
 ### Linux 版本说明（当前限制）
 
