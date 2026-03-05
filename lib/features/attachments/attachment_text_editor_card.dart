@@ -7,6 +7,47 @@ import '../../ui/sl_surface.dart';
 import '../chat/chat_markdown_editor_launcher.dart';
 import '../chat/chat_markdown_preview.dart';
 
+const _kAttachmentMarkdownDeferredCharThreshold = 3200;
+const _kAttachmentMarkdownDeferredLineThreshold = 120;
+const _kAttachmentMarkdownDeferredPreviewCharLimit = 1200;
+const _kAttachmentMarkdownDeferredPreviewLineLimit = 42;
+
+@visibleForTesting
+bool shouldDeferAttachmentMarkdownPreview(String value) {
+  final trimmed = value.trim();
+  if (trimmed.isEmpty) return false;
+  if (trimmed.length >= _kAttachmentMarkdownDeferredCharThreshold) {
+    return true;
+  }
+  final lineCount = '\n'.allMatches(trimmed).length + 1;
+  return lineCount >= _kAttachmentMarkdownDeferredLineThreshold;
+}
+
+@visibleForTesting
+String buildDeferredAttachmentMarkdownPreview(String value) {
+  final trimmed = value.trim();
+  if (trimmed.isEmpty) return '';
+
+  final lines = trimmed.split('\n');
+  final takeLineCount =
+      lines.length > _kAttachmentMarkdownDeferredPreviewLineLimit
+          ? _kAttachmentMarkdownDeferredPreviewLineLimit
+          : lines.length;
+  var preview = lines.take(takeLineCount).join('\n');
+  var truncated = takeLineCount < lines.length;
+
+  if (preview.length > _kAttachmentMarkdownDeferredPreviewCharLimit) {
+    preview = preview
+        .substring(0, _kAttachmentMarkdownDeferredPreviewCharLimit)
+        .trimRight();
+    truncated = true;
+  }
+
+  if (!truncated) return preview;
+  if (preview.endsWith('…')) return preview;
+  return '$preview\n…';
+}
+
 class AttachmentTextEditorCard extends StatefulWidget {
   const AttachmentTextEditorCard({
     required this.fieldKeyPrefix,
@@ -38,11 +79,21 @@ class _AttachmentTextEditorCardState extends State<AttachmentTextEditorCard> {
   TextEditingController? _controller;
   bool _editing = false;
   bool _saving = false;
+  bool _markdownPreviewExpanded = false;
 
   @override
   void dispose() {
     _controller?.dispose();
     super.dispose();
+  }
+
+  @override
+  void didUpdateWidget(covariant AttachmentTextEditorCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.text != widget.text ||
+        oldWidget.markdown != widget.markdown) {
+      _markdownPreviewExpanded = false;
+    }
   }
 
   Future<void> _persistValue(String nextValue) async {
@@ -113,6 +164,11 @@ class _AttachmentTextEditorCardState extends State<AttachmentTextEditorCard> {
   @override
   Widget build(BuildContext context) {
     final text = widget.text.trim();
+    final deferredMarkdownPreview = widget.markdown &&
+        !_editing &&
+        text.isNotEmpty &&
+        !_markdownPreviewExpanded &&
+        shouldDeferAttachmentMarkdownPreview(text);
     final canEdit = widget.onSave != null;
     final resolvedLabel = (widget.label ?? '').trim();
     final hasLabel = widget.showLabel && resolvedLabel.isNotEmpty;
@@ -158,17 +214,49 @@ class _AttachmentTextEditorCardState extends State<AttachmentTextEditorCard> {
                     ?.copyWith(fontStyle: FontStyle.italic),
               )
             else if (widget.markdown)
-              ChatMarkdownPreviewPanel(
-                padding: const EdgeInsets.fromLTRB(12, 10, 12, 14),
-                child: buildChatMarkdownPreviewBody(
-                  context,
-                  key: ValueKey('${widget.fieldKeyPrefix}_markdown_display'),
-                  text: text,
-                  selectable: true,
-                  restoreEscapedNewlines: true,
-                  bodyStyle: Theme.of(context).textTheme.bodySmall,
-                ),
-              )
+              deferredMarkdownPreview
+                  ? Column(
+                      key: ValueKey(
+                          '${widget.fieldKeyPrefix}_markdown_deferred'),
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Text(
+                          buildDeferredAttachmentMarkdownPreview(text),
+                          key: ValueKey(
+                            '${widget.fieldKeyPrefix}_markdown_deferred_text',
+                          ),
+                          maxLines: 14,
+                          overflow: TextOverflow.fade,
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                        const SizedBox(height: 8),
+                        Align(
+                          alignment: Alignment.centerRight,
+                          child: TextButton.icon(
+                            key: ValueKey(
+                              '${widget.fieldKeyPrefix}_markdown_expand',
+                            ),
+                            onPressed: () {
+                              setState(() => _markdownPreviewExpanded = true);
+                            },
+                            icon: const Icon(Icons.visibility_rounded),
+                            label: Text(context.t.chat.viewFull),
+                          ),
+                        ),
+                      ],
+                    )
+                  : ChatMarkdownPreviewPanel(
+                      padding: const EdgeInsets.fromLTRB(12, 10, 12, 14),
+                      child: buildChatMarkdownPreviewBody(
+                        context,
+                        key: ValueKey(
+                            '${widget.fieldKeyPrefix}_markdown_display'),
+                        text: text,
+                        selectable: true,
+                        restoreEscapedNewlines: true,
+                        bodyStyle: Theme.of(context).textTheme.bodySmall,
+                      ),
+                    )
             else
               SelectableText(
                 text,

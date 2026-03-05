@@ -163,6 +163,14 @@ const _kAiTimeWindowParseMinConfidence = 0.75;
 const _kTodoSemanticVeryHighConfidenceDistance = 0.12;
 const _kTodoSemanticVeryHighConfidenceGap = 0.12;
 
+typedef _ChatMessageSupplementData = ({
+  List<SemanticParseJob> semanticJobs,
+  Map<String, _TodoMessageBadgeMeta> linkedTodoBadges,
+  List<AttachmentAnnotationJob> annotationJobs,
+  bool attachmentAnnotationEnabled,
+  bool attachmentAnnotationCanRunNow,
+});
+
 bool _looksLikeBareTodoStatusUpdate(String text) {
   return looksLikeBareTodoStatusUpdateForSemanticParse(text);
 }
@@ -413,6 +421,8 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
   final Map<String, Tag> _selectedTagExcludeTagById = <String, Tag>{};
   List<Message> _paginatedMessages = <Message>[];
   List<Message> _latestLoadedMessages = const <Message>[];
+  Future<_ChatMessageSupplementData>? _messageSupplementFuture;
+  String _messageSupplementCacheKey = '';
   bool _loadingMoreMessages = false;
   bool _hasMoreMessages = true;
   bool _isAtBottom = true;
@@ -478,7 +488,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
     }
   }
 
-  bool get _usePagination => widget.conversation.id == 'loop_home';
+  bool get _usePagination => true;
   bool get _isDesktopPlatform =>
       !kIsWeb &&
       (defaultTargetPlatform == TargetPlatform.macOS ||

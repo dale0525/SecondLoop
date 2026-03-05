@@ -56,15 +56,60 @@ void main() {
 
     expect(find.text('m1'), findsOneWidget);
   });
+
+  testWidgets('Non-loop conversation paginates older messages', (tester) async {
+    const conversationId = 'work_chat';
+    final backend = PagingBackend(
+      messageCount: 65,
+      conversationId: conversationId,
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: backend,
+            child: SessionScope(
+              sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+              lock: () {},
+              child: const ChatPage(
+                conversation: Conversation(
+                  id: conversationId,
+                  title: 'Work',
+                  createdAtMs: 0,
+                  updatedAtMs: 0,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(backend.pageCalls.length, 1);
+    expect(find.text('m65'), findsOneWidget);
+    expect(find.text('m1'), findsNothing);
+
+    final list = find.byKey(const ValueKey('chat_message_list'));
+    for (var i = 0; i < 20 && backend.pageCalls.length < 2; i++) {
+      await tester.drag(list, const Offset(0, 800));
+      await tester.pumpAndSettle();
+    }
+
+    expect(backend.pageCalls.length, 2);
+  });
 }
 
 class PagingBackend extends AppBackend {
-  PagingBackend({required int messageCount})
-      : _messages = List.generate(
+  PagingBackend({
+    required int messageCount,
+    this.conversationId = 'loop_home',
+  }) : _messages = List.generate(
           messageCount,
           (i) => Message(
             id: 'm${i + 1}',
-            conversationId: 'loop_home',
+            conversationId: conversationId,
             role: 'user',
             content: 'm${i + 1}',
             createdAtMs: i + 1,
@@ -72,6 +117,7 @@ class PagingBackend extends AppBackend {
           ),
         );
 
+  final String conversationId;
   final List<Message> _messages;
   final List<PageCall> pageCalls = [];
 

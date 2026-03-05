@@ -166,89 +166,14 @@ extension _ChatPageStateBuild on _ChatPageState {
                         final attachmentsBackend = backend is AttachmentsBackend
                             ? backend as AttachmentsBackend
                             : null;
-                        final semanticJobsFuture =
-                            Future<List<SemanticParseJob>>.sync(() async {
-                          if (messages.isEmpty) {
-                            return const <SemanticParseJob>[];
-                          }
-
-                          final prefs = await SharedPreferences.getInstance();
-                          final semanticParseConsented = prefs.getBool(
-                                SemanticParseDataConsentPrefs.prefsKey,
-                              ) ??
-                              false;
-                          if (!semanticParseConsented) {
-                            return const <SemanticParseJob>[];
-                          }
-
-                          final ids = messages
-                              .map((m) => m.id)
-                              .where((id) => !id.startsWith('pending_'))
-                              .toList(growable: false);
-                          if (ids.isEmpty) {
-                            return const <SemanticParseJob>[];
-                          }
-
-                          return backend.listSemanticParseJobsByMessageIds(
-                            sessionKey,
-                            messageIds: ids,
-                          );
-                        }).catchError((_) => const <SemanticParseJob>[]);
-
-                        final nativeBackend =
-                            backend is NativeAppBackend ? backend : null;
-                        final annotationJobsFuture =
-                            Future<List<AttachmentAnnotationJob>>.sync(() {
-                          if (nativeBackend == null) {
-                            return const <AttachmentAnnotationJob>[];
-                          }
-
-                          // For chat UI we want *all* non-ok jobs, regardless of next_retry_at.
-                          const maxI64 = 9223372036854775807;
-                          return nativeBackend.listDueAttachmentAnnotations(
-                            sessionKey,
-                            nowMs: maxI64,
-                            limit: 500,
-                          );
-                        }).catchError((_) => const <AttachmentAnnotationJob>[]);
-
-                        final linkedTodoBadgeFuture =
-                            _loadLinkedTodoBadgesForMessages(
+                        final combinedJobsFuture =
+                            _cachedChatMessageSupplementDataFuture(
                           backend: backend,
                           sessionKey: sessionKey,
                           messages: messages,
                         );
 
-                        final combinedJobsFuture = (() async {
-                          final semanticJobs = await semanticJobsFuture;
-                          final annotationJobs = await annotationJobsFuture;
-                          final linkedTodoBadges = await linkedTodoBadgeFuture;
-                          final annotationUi =
-                              nativeBackend == null || annotationJobs.isEmpty
-                                  ? (enabled: false, canRunNow: false)
-                                  : await _loadAttachmentAnnotationUiState(
-                                      nativeBackend,
-                                      sessionKey,
-                                    );
-                          return (
-                            semanticJobs: semanticJobs,
-                            linkedTodoBadges: linkedTodoBadges,
-                            annotationJobs: annotationJobs,
-                            attachmentAnnotationEnabled: annotationUi.enabled,
-                            attachmentAnnotationCanRunNow:
-                                annotationUi.canRunNow,
-                          );
-                        })();
-
-                        return FutureBuilder<
-                            ({
-                              List<SemanticParseJob> semanticJobs,
-                              Map<String,
-                                  _TodoMessageBadgeMeta> linkedTodoBadges,
-                              List<AttachmentAnnotationJob> annotationJobs,
-                              bool attachmentAnnotationEnabled,
-                              bool attachmentAnnotationCanRunNow,
-                            })>(
+                        return FutureBuilder<_ChatMessageSupplementData>(
                           future: combinedJobsFuture,
                           builder: (context, snapshotJobs) {
                             final jobs = snapshotJobs.data?.semanticJobs ??
