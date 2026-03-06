@@ -12,6 +12,16 @@ fn find_suggestion<'a>(
         .expect("missing expected merge suggestion")
 }
 
+fn has_pair_suggestion(
+    suggestions: &[db::TagMergeSuggestion],
+    source_tag_id: &str,
+    target_tag_id: &str,
+) -> bool {
+    suggestions
+        .iter()
+        .any(|item| item.source_tag.id == source_tag_id && item.target_tag.id == target_tag_id)
+}
+
 #[test]
 fn tag_merge_feedback_adjusts_suggestion_scores() {
     let temp = tempfile::tempdir().expect("tempdir");
@@ -89,9 +99,9 @@ fn tag_merge_feedback_adjusts_suggestion_scores() {
         &alias_compact.id,
         &canonical.id,
         &compact_before.reason,
-        "dismiss",
+        "later",
     )
-    .expect("record compact dismiss");
+    .expect("record compact later");
     db::record_tag_merge_feedback(
         &conn,
         &alias_compact.id,
@@ -107,9 +117,9 @@ fn tag_merge_feedback_adjusts_suggestion_scores() {
             &alias_contains.id,
             &canonical.id,
             &contains_before.reason,
-            "dismiss",
+            "later",
         )
-        .expect("record contains dismiss");
+        .expect("record contains later");
     }
 
     let after_negative =
@@ -159,4 +169,94 @@ fn tag_merge_feedback_rejects_invalid_inputs() {
     let err = db::record_tag_merge_feedback(&conn, "source", "target", "name_contains", "noop")
         .expect_err("invalid action should fail");
     assert!(err.to_string().contains("unsupported feedback action"));
+}
+
+#[test]
+fn dismiss_feedback_hides_pair_but_later_keeps_it_visible() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let app_dir = temp.path().join("secondloop");
+    let key = auth::init_master_password(&app_dir, "pw", KdfParams::for_test()).expect("init auth");
+    let conn = db::open(&app_dir).expect("open db");
+
+    let conversation = db::create_conversation(&conn, &key, "Main").expect("create conversation");
+
+    let canonical = db::upsert_tag(&conn, &key, "Weekly Review").expect("upsert canonical");
+    let alias_dismiss = db::upsert_tag(&conn, &key, "weekly-review").expect("upsert dismiss alias");
+    let alias_later = db::upsert_tag(&conn, &key, "weekly revi").expect("upsert later alias");
+
+    for index in 0..4 {
+        let message = db::insert_message(
+            &conn,
+            &key,
+            &conversation.id,
+            "user",
+            &format!("canonical message {index}"),
+        )
+        .expect("insert canonical message");
+        db::set_message_tags(
+            &conn,
+            &key,
+            &message.id,
+            std::slice::from_ref(&canonical.id),
+        )
+        .expect("set canonical tag");
+    }
+
+    let dismiss_message = db::insert_message(
+        &conn,
+        &key,
+        &conversation.id,
+        "user",
+        "dismiss alias message",
+    )
+    .expect("insert dismiss alias message");
+    db::set_message_tags(
+        &conn,
+        &key,
+        &dismiss_message.id,
+        std::slice::from_ref(&alias_dismiss.id),
+    )
+    .expect("set dismiss alias tag");
+
+    let later_message =
+        db::insert_message(&conn, &key, &conversation.id, "user", "later alias message")
+            .expect("insert later alias message");
+    db::set_message_tags(
+        &conn,
+        &key,
+        &later_message.id,
+        std::slice::from_ref(&alias_later.id),
+    )
+    .expect("set later alias tag");
+
+    let before = db::list_tag_merge_suggestions(&conn, &key, 10).expect("list suggestions before");
+    let dismiss_before = find_suggestion(&before, &alias_dismiss.id);
+    let later_before = find_suggestion(&before, &alias_later.id);
+
+    db::record_tag_merge_feedback(
+        &conn,
+        &alias_dismiss.id,
+        &canonical.id,
+        &dismiss_before.reason,
+        "dismiss",
+    )
+    .expect("record dismiss feedback");
+    db::record_tag_merge_feedback(
+        &conn,
+        &alias_later.id,
+        &canonical.id,
+        &later_before.reason,
+        "later",
+    )
+    .expect("record later feedback");
+
+    let after =
+        db::list_tag_merge_suggestions(&conn, &key, 10).expect("list suggestions after feedback");
+
+    assert!(!has_pair_suggestion(
+        &after,
+        &alias_dismiss.id,
+        &canonical.id
+    ));
+    assert!(has_pair_suggestion(&after, &alias_later.id, &canonical.id));
 }

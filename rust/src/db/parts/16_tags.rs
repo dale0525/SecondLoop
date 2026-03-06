@@ -338,6 +338,7 @@ pub fn list_tag_merge_suggestions(
     }
 
     let usage_counts = load_tag_usage_counts(conn)?;
+    let hidden_pairs = load_hidden_tag_merge_pairs(conn)?;
     let mut system_by_key = std::collections::BTreeMap::<String, Tag>::new();
     for tag in &tags {
         if !tag.is_system {
@@ -371,6 +372,9 @@ pub fn list_tag_merge_suggestions(
 
         let source_usage = usage_counts.get(&source.id).copied().unwrap_or(0);
         let target_usage = usage_counts.get(&target.id).copied().unwrap_or(0);
+        if hidden_pairs.contains(&(source.id.clone(), target.id.clone())) {
+            continue;
+        }
         push_merge_candidate(
             &mut best_by_source,
             source,
@@ -412,6 +416,10 @@ pub fn list_tag_merge_suggestions(
 
             let (source, target, source_usage, target_usage) =
                 choose_merge_direction(left, right, &usage_counts);
+
+            if hidden_pairs.contains(&(source.id.clone(), target.id.clone())) {
+                continue;
+            }
 
             push_merge_candidate(
                 &mut best_by_source,

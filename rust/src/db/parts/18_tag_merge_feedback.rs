@@ -221,6 +221,34 @@ fn load_pair_feedback_adjustments(
     Ok(out)
 }
 
+pub fn load_hidden_tag_merge_pairs(
+    conn: &Connection,
+) -> Result<std::collections::BTreeSet<(String, String)>> {
+    let mut stmt = conn.prepare(
+        r#"SELECT source_tag_id,
+                  target_tag_id,
+                  SUM(accept_count) AS accept_total,
+                  SUM(dismiss_count) AS dismiss_total
+           FROM tag_merge_feedback
+           GROUP BY source_tag_id, target_tag_id"#,
+    )?;
+    let mut rows = stmt.query([])?;
+
+    let mut out = std::collections::BTreeSet::<(String, String)>::new();
+    while let Some(row) = rows.next()? {
+        let source_tag_id: String = row.get(0)?;
+        let target_tag_id: String = row.get(1)?;
+        let accept_total: i64 = row.get(2)?;
+        let dismiss_total: i64 = row.get(3)?;
+
+        if dismiss_total > accept_total {
+            out.insert((source_tag_id, target_tag_id));
+        }
+    }
+
+    Ok(out)
+}
+
 fn load_reason_feedback_adjustments(conn: &Connection) -> Result<std::collections::BTreeMap<String, f64>> {
     let mut stmt = conn.prepare(
         r#"SELECT reason,
