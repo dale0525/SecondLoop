@@ -96,6 +96,17 @@ pub fn db_merge_tags(
 }
 
 #[flutter_rust_bridge::frb]
+pub fn db_list_hidden_tag_merge_suggestions(
+    app_dir: String,
+    key: Vec<u8>,
+    limit: u32,
+) -> Result<Vec<db::TagMergeSuggestion>> {
+    let key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    db::list_hidden_tag_merge_suggestions(&conn, &key, limit as usize)
+}
+
+#[flutter_rust_bridge::frb]
 pub fn db_delete_tag(app_dir: String, key: Vec<u8>, tag_id: String) -> Result<()> {
     let key = key_from_bytes(key)?;
     let conn = db::open(Path::new(&app_dir))?;
@@ -114,6 +125,18 @@ pub fn db_record_tag_merge_feedback(
     let _ = key_from_bytes(key)?;
     let conn = db::open(Path::new(&app_dir))?;
     db::record_tag_merge_feedback(&conn, &source_tag_id, &target_tag_id, &reason, &action)
+}
+
+#[flutter_rust_bridge::frb]
+pub fn db_clear_tag_merge_feedback(
+    app_dir: String,
+    key: Vec<u8>,
+    source_tag_id: String,
+    target_tag_id: String,
+) -> Result<()> {
+    let _ = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    db::clear_tag_merge_feedback(&conn, &source_tag_id, &target_tag_id)
 }
 
 #[flutter_rust_bridge::frb]

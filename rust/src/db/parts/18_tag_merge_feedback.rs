@@ -179,6 +179,34 @@ pub fn record_tag_merge_feedback(
     Ok(())
 }
 
+pub fn clear_tag_merge_feedback(
+    conn: &Connection,
+    source_tag_id: &str,
+    target_tag_id: &str,
+) -> Result<()> {
+    let source_tag_id = source_tag_id.trim();
+    if source_tag_id.is_empty() {
+        return Err(anyhow!("source_tag_id cannot be empty"));
+    }
+
+    let target_tag_id = target_tag_id.trim();
+    if target_tag_id.is_empty() {
+        return Err(anyhow!("target_tag_id cannot be empty"));
+    }
+
+    if source_tag_id == target_tag_id {
+        return Err(anyhow!("source_tag_id and target_tag_id must differ"));
+    }
+
+    conn.execute(
+        r#"DELETE FROM tag_merge_feedback
+           WHERE source_tag_id = ?1 AND target_tag_id = ?2"#,
+        params![source_tag_id, target_tag_id],
+    )?;
+
+    Ok(())
+}
+
 fn feedback_pair_adjustment(accept_count: i64, dismiss_count: i64, later_count: i64) -> f64 {
     let accepted = accept_count.max(0) as f64;
     let dismissed = dismiss_count.max(0) as f64;

@@ -1086,6 +1086,9 @@
       "mergeApplied": "Merged $count messages",
       "mergeDismissed": "Merge suggestion dismissed",
       "mergeSavedForLater": "Merge suggestion saved for later",
+      "hiddenMergeSuggestions": "Ignored merge suggestions",
+      "hiddenMergeRestoreAction": "Show again",
+      "hiddenMergeRestored": "Merge suggestion restored",
       "deleteDialog": {
         "title": "Delete tag?",
         "message": "Delete \"$name\"? This removes it from tagged messages and strips matching manual #tags from message text.",

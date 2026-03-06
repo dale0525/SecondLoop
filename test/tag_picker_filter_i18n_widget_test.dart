@@ -52,19 +52,26 @@ class _FakeTagRepository extends TagRepository {
     List<Tag> messageTags = const <Tag>[],
     List<String> suggestedTags = const <String>[],
     List<TagMergeSuggestion> mergeSuggestions = const <TagMergeSuggestion>[],
+    List<TagMergeSuggestion> hiddenMergeSuggestions =
+        const <TagMergeSuggestion>[],
   })  : _tags = List<Tag>.from(tags),
         _messageTags = List<Tag>.from(messageTags),
         _suggestedTags = List<String>.from(suggestedTags),
-        _mergeSuggestions = List<TagMergeSuggestion>.from(mergeSuggestions);
+        _mergeSuggestions = List<TagMergeSuggestion>.from(mergeSuggestions),
+        _hiddenMergeSuggestions =
+            List<TagMergeSuggestion>.from(hiddenMergeSuggestions);
 
   final List<Tag> _tags;
   final List<Tag> _messageTags;
   final List<String> _suggestedTags;
   final List<TagMergeSuggestion> _mergeSuggestions;
+  final List<TagMergeSuggestion> _hiddenMergeSuggestions;
   List<String>? lastSetTagIds;
   String? lastMergeSourceTagId;
   String? lastMergeTargetTagId;
   String? lastDeletedTagId;
+  String? lastClearedMergeSourceTagId;
+  String? lastClearedMergeTargetTagId;
   final List<String> feedbackRecords = <String>[];
 
   @override
@@ -92,6 +99,14 @@ class _FakeTagRepository extends TagRepository {
   }
 
   @override
+  Future<List<TagMergeSuggestion>> listHiddenTagMergeSuggestions(
+    Uint8List key, {
+    int limit = 10,
+  }) async {
+    return List<TagMergeSuggestion>.from(_hiddenMergeSuggestions.take(limit));
+  }
+
+  @override
   Future<int> mergeTags(
     Uint8List key, {
     required String sourceTagId,
@@ -100,6 +115,10 @@ class _FakeTagRepository extends TagRepository {
     lastMergeSourceTagId = sourceTagId;
     lastMergeTargetTagId = targetTagId;
     _mergeSuggestions.removeWhere(
+      (item) =>
+          item.sourceTag.id == sourceTagId && item.targetTag.id == targetTagId,
+    );
+    _hiddenMergeSuggestions.removeWhere(
       (item) =>
           item.sourceTag.id == sourceTagId && item.targetTag.id == targetTagId,
     );
@@ -128,6 +147,33 @@ class _FakeTagRepository extends TagRepository {
     feedbackRecords.add(
       '${action.wireValue}:$sourceTagId:$targetTagId:$reason',
     );
+    if (action == TagMergeFeedbackAction.dismiss) {
+      final index = _mergeSuggestions.indexWhere(
+        (item) =>
+            item.sourceTag.id == sourceTagId &&
+            item.targetTag.id == targetTagId,
+      );
+      if (index >= 0) {
+        _hiddenMergeSuggestions.add(_mergeSuggestions.removeAt(index));
+      }
+    }
+  }
+
+  @override
+  Future<void> clearTagMergeFeedback(
+    Uint8List key, {
+    required String sourceTagId,
+    required String targetTagId,
+  }) async {
+    lastClearedMergeSourceTagId = sourceTagId;
+    lastClearedMergeTargetTagId = targetTagId;
+    final index = _hiddenMergeSuggestions.indexWhere(
+      (item) =>
+          item.sourceTag.id == sourceTagId && item.targetTag.id == targetTagId,
+    );
+    if (index >= 0) {
+      _mergeSuggestions.insert(0, _hiddenMergeSuggestions.removeAt(index));
+    }
   }
 
   @override
@@ -630,6 +676,75 @@ void main() {
 
     expect(repository.lastMergeSourceTagId, 'custom.alias');
     expect(repository.lastMergeTargetTagId, 'custom.canonical');
+  });
+
+  testWidgets('message tag picker can restore ignored merge suggestion', (
+    tester,
+  ) async {
+    LocaleSettings.setLocale(AppLocale.en);
+
+    final alias = _tag(id: 'custom.hidden_alias', name: 'weekly-review');
+    final canonical =
+        _tag(id: 'custom.hidden_canonical', name: 'Weekly Review');
+
+    final repository = _FakeTagRepository(
+      tags: <Tag>[canonical, alias],
+      hiddenMergeSuggestions: <TagMergeSuggestion>[
+        _mergeSuggestion(
+          sourceTag: alias,
+          targetTag: canonical,
+          reason: 'name_compact_match',
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      _host(
+        locale: const Locale('en'),
+        child: Builder(
+          builder: (context) {
+            return ElevatedButton(
+              key: const ValueKey('open_tag_picker_restore_hidden'),
+              onPressed: () async {
+                await showMessageTagPicker(
+                  context: context,
+                  sessionKey: Uint8List.fromList(sessionKey),
+                  messageId: 'm1',
+                  repository: repository,
+                );
+              },
+              child: const Text('open'),
+            );
+          },
+        ),
+      ),
+    );
+
+    await tester
+        .tap(find.byKey(const ValueKey('open_tag_picker_restore_hidden')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('tag_picker_hidden_merge_title')),
+        findsOneWidget);
+    await tester.tap(
+      find.byKey(
+        const ValueKey(
+          'tag_picker_hidden_merge_restore_custom.hidden_alias_custom.hidden_canonical',
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(repository.lastClearedMergeSourceTagId, 'custom.hidden_alias');
+    expect(repository.lastClearedMergeTargetTagId, 'custom.hidden_canonical');
+    expect(
+      find.byKey(
+        const ValueKey(
+          'tag_picker_merge_apply_custom.hidden_alias_custom.hidden_canonical',
+        ),
+      ),
+      findsOneWidget,
+    );
   });
 
   testWidgets('message tag picker only allows deleting custom tags',

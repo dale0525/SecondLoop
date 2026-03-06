@@ -51,6 +51,8 @@ class _MessageTagPickerSheetState extends State<_MessageTagPickerSheet> {
   List<Tag> _allTags = const <Tag>[];
   List<String> _suggestedTags = const <String>[];
   List<TagMergeSuggestion> _mergeSuggestions = const <TagMergeSuggestion>[];
+  List<TagMergeSuggestion> _hiddenMergeSuggestions =
+      const <TagMergeSuggestion>[];
   bool _loading = true;
   bool _saving = false;
   String? _error;
@@ -75,6 +77,7 @@ class _MessageTagPickerSheetState extends State<_MessageTagPickerSheet> {
         widget.repository
             .listMessageSuggestedTags(widget.sessionKey, widget.messageId),
         widget.repository.listTagMergeSuggestions(widget.sessionKey),
+        widget.repository.listHiddenTagMergeSuggestions(widget.sessionKey),
       ]);
 
       if (!mounted) return;
@@ -82,6 +85,7 @@ class _MessageTagPickerSheetState extends State<_MessageTagPickerSheet> {
       final applied = values[1] as List<Tag>;
       final suggested = values[2] as List<String>;
       final mergeSuggestions = values[3] as List<TagMergeSuggestion>;
+      final hiddenMergeSuggestions = values[4] as List<TagMergeSuggestion>;
 
       setState(() {
         _allTags = tags;
@@ -90,6 +94,7 @@ class _MessageTagPickerSheetState extends State<_MessageTagPickerSheet> {
           ..addAll(applied.map((tag) => tag.id));
         _suggestedTags = suggested;
         _mergeSuggestions = mergeSuggestions;
+        _hiddenMergeSuggestions = hiddenMergeSuggestions;
         _loading = false;
         _error = null;
       });
@@ -386,6 +391,42 @@ class _MessageTagPickerSheetState extends State<_MessageTagPickerSheet> {
     }
   }
 
+  Future<void> _restoreHiddenMergeSuggestion(
+      TagMergeSuggestion suggestion) async {
+    if (_saving) return;
+
+    setState(() {
+      _saving = true;
+      _error = null;
+    });
+
+    try {
+      await widget.repository.clearTagMergeFeedback(
+        widget.sessionKey,
+        sourceTagId: suggestion.sourceTag.id,
+        targetTagId: suggestion.targetTag.id,
+      );
+      if (!mounted) return;
+
+      await _load();
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(context.t.chat.tagPicker.hiddenMergeRestored),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _error = '$e');
+    } finally {
+      if (mounted) {
+        setState(() => _saving = false);
+      }
+    }
+  }
+
   Future<void> _confirmAndDeleteTag(Tag tag) async {
     if (_saving || tag.isSystem) return;
 
@@ -454,6 +495,9 @@ class _MessageTagPickerSheetState extends State<_MessageTagPickerSheet> {
     final mergeActionLabel = context.t.chat.tagPicker.mergeAction;
     final mergeDismissLabel = context.t.chat.tagPicker.mergeDismissAction;
     final mergeLaterLabel = context.t.chat.tagPicker.mergeLaterAction;
+    final hiddenMergeTitle = context.t.chat.tagPicker.hiddenMergeSuggestions;
+    final hiddenMergeRestoreLabel =
+        context.t.chat.tagPicker.hiddenMergeRestoreAction;
     final allTitle = context.t.chat.tagPicker.all;
     final manualMergeLabel = context.t.chat.tagPicker.manualMergeAction;
     final addHint = context.t.chat.tagPicker.inputHint;
@@ -626,6 +670,73 @@ class _MessageTagPickerSheetState extends State<_MessageTagPickerSheet> {
                                                     ),
                                                   ),
                                           child: Text(mergeLaterLabel),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          }).toList(growable: false),
+                        ),
+                        const SizedBox(height: 16),
+                      ],
+                      if (_hiddenMergeSuggestions.isNotEmpty) ...[
+                        Text(
+                          hiddenMergeTitle,
+                          key: const ValueKey('tag_picker_hidden_merge_title'),
+                          style: Theme.of(context).textTheme.titleSmall,
+                        ),
+                        const SizedBox(height: 8),
+                        Column(
+                          key: const ValueKey(
+                              'tag_picker_hidden_merge_suggestions'),
+                          children: _hiddenMergeSuggestions.map((suggestion) {
+                            final sourceLabel =
+                                localizeTagName(locale, suggestion.sourceTag);
+                            final targetLabel =
+                                localizeTagName(locale, suggestion.targetTag);
+                            final sourceUsage =
+                                suggestion.sourceUsageCount.toInt();
+                            final mergeTitle = '$sourceLabel -> $targetLabel';
+                            final mergeSubtitle =
+                                '${_mergeReasonLabel(suggestion.reason)} · ${context.t.chat.tagPicker.mergeSuggestionMessages(count: sourceUsage)}';
+
+                            return Container(
+                              margin: const EdgeInsets.only(bottom: 8),
+                              decoration: BoxDecoration(
+                                border: Border.all(
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .outlineVariant,
+                                ),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Padding(
+                                padding:
+                                    const EdgeInsets.fromLTRB(12, 8, 12, 8),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(mergeTitle),
+                                    const SizedBox(height: 4),
+                                    Text(mergeSubtitle),
+                                    const SizedBox(height: 8),
+                                    Wrap(
+                                      spacing: 8,
+                                      children: [
+                                        TextButton(
+                                          key: ValueKey(
+                                            'tag_picker_hidden_merge_restore_${suggestion.sourceTag.id}_${suggestion.targetTag.id}',
+                                          ),
+                                          onPressed: _saving
+                                              ? null
+                                              : () => unawaited(
+                                                    _restoreHiddenMergeSuggestion(
+                                                      suggestion,
+                                                    ),
+                                                  ),
+                                          child: Text(hiddenMergeRestoreLabel),
                                         ),
                                       ],
                                     ),

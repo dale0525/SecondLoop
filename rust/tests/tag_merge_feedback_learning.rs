@@ -260,3 +260,90 @@ fn dismiss_feedback_hides_pair_but_later_keeps_it_visible() {
     ));
     assert!(has_pair_suggestion(&after, &alias_later.id, &canonical.id));
 }
+
+#[test]
+fn dismissed_merge_suggestions_can_be_restored() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let app_dir = temp.path().join("secondloop");
+    let key = auth::init_master_password(&app_dir, "pw", KdfParams::for_test()).expect("init auth");
+    let conn = db::open(&app_dir).expect("open db");
+
+    let conversation = db::create_conversation(&conn, &key, "Main").expect("create conversation");
+    let canonical = db::upsert_tag(&conn, &key, "Weekly Review").expect("upsert canonical");
+    let alias = db::upsert_tag(&conn, &key, "weekly-review").expect("upsert alias");
+
+    for index in 0..3 {
+        let message = db::insert_message(
+            &conn,
+            &key,
+            &conversation.id,
+            "user",
+            &format!("canonical message {index}"),
+        )
+        .expect("insert canonical message");
+        db::set_message_tags(
+            &conn,
+            &key,
+            &message.id,
+            std::slice::from_ref(&canonical.id),
+        )
+        .expect("set canonical tag");
+    }
+
+    let alias_message = db::insert_message(&conn, &key, &conversation.id, "user", "alias message")
+        .expect("insert alias message");
+    db::set_message_tags(
+        &conn,
+        &key,
+        &alias_message.id,
+        std::slice::from_ref(&alias.id),
+    )
+    .expect("set alias tag");
+
+    let before = db::list_tag_merge_suggestions(&conn, &key, 10).expect("list visible suggestions");
+    let suggestion = find_suggestion(&before, &alias.id);
+    assert_eq!(suggestion.target_tag.id, canonical.id);
+
+    db::record_tag_merge_feedback(
+        &conn,
+        &alias.id,
+        &canonical.id,
+        &suggestion.reason,
+        "dismiss",
+    )
+    .expect("record dismiss feedback");
+
+    let visible_after_dismiss =
+        db::list_tag_merge_suggestions(&conn, &key, 10).expect("list visible after dismiss");
+    let hidden_after_dismiss =
+        db::list_hidden_tag_merge_suggestions(&conn, &key, 10).expect("list hidden after dismiss");
+
+    assert!(!has_pair_suggestion(
+        &visible_after_dismiss,
+        &alias.id,
+        &canonical.id
+    ));
+    assert!(has_pair_suggestion(
+        &hidden_after_dismiss,
+        &alias.id,
+        &canonical.id
+    ));
+
+    db::clear_tag_merge_feedback(&conn, &alias.id, &canonical.id).expect("clear merge feedback");
+
+    let visible_after_restore =
+        db::list_tag_merge_suggestions(&conn, &key, 10).expect("list visible after restore");
+    let hidden_after_restore =
+        db::list_hidden_tag_merge_suggestions(&conn, &key, 10).expect("list hidden after restore");
+
+    assert!(has_pair_suggestion(
+        &visible_after_restore,
+        &alias.id,
+        &canonical.id
+    ));
+    assert!(!has_pair_suggestion(
+        &hidden_after_restore,
+        &alias.id,
+        &canonical.id
+    ));
+}

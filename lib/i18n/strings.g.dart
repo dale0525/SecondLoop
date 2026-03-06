@@ -4,9 +4,9 @@
 /// To regenerate, run: `dart run slang`
 ///
 /// Locales: 2
-/// Strings: 1814 (907 per locale)
+/// Strings: 1820 (910 per locale)
 ///
-/// Built on 2026-03-06 at 13:43 UTC
+/// Built on 2026-03-06 at 14:03 UTC
 
 // coverage:ignore-file
 // ignore_for_file: type=lint
@@ -1713,6 +1713,9 @@ class _StringsChatTagPickerEn {
   String mergeApplied({required Object count}) => 'Merged ${count} messages';
   String get mergeDismissed => 'Merge suggestion dismissed';
   String get mergeSavedForLater => 'Merge suggestion saved for later';
+  String get hiddenMergeSuggestions => 'Ignored merge suggestions';
+  String get hiddenMergeRestoreAction => 'Show again';
+  String get hiddenMergeRestored => 'Merge suggestion restored';
   late final _StringsChatTagPickerDeleteDialogEn deleteDialog =
       _StringsChatTagPickerDeleteDialogEn._(_root);
   String get deleted => 'Tag deleted';
@@ -6312,6 +6315,12 @@ class _StringsChatTagPickerZhCn extends _StringsChatTagPickerEn {
   String get mergeDismissed => '已忽略该合并建议';
   @override
   String get mergeSavedForLater => '已暂存该合并建议';
+  @override
+  String get hiddenMergeSuggestions => '已忽略的合并建议';
+  @override
+  String get hiddenMergeRestoreAction => '恢复显示';
+  @override
+  String get hiddenMergeRestored => '已恢复该合并建议';
   @override
   late final _StringsChatTagPickerDeleteDialogZhCn deleteDialog =
       _StringsChatTagPickerDeleteDialogZhCn._(_root);
@@ -11103,6 +11112,12 @@ extension on Translations {
         return 'Merge suggestion dismissed';
       case 'chat.tagPicker.mergeSavedForLater':
         return 'Merge suggestion saved for later';
+      case 'chat.tagPicker.hiddenMergeSuggestions':
+        return 'Ignored merge suggestions';
+      case 'chat.tagPicker.hiddenMergeRestoreAction':
+        return 'Show again';
+      case 'chat.tagPicker.hiddenMergeRestored':
+        return 'Merge suggestion restored';
       case 'chat.tagPicker.deleteDialog.title':
         return 'Delete tag?';
       case 'chat.tagPicker.deleteDialog.message':
@@ -12955,6 +12970,12 @@ extension on _StringsZhCn {
         return '已忽略该合并建议';
       case 'chat.tagPicker.mergeSavedForLater':
         return '已暂存该合并建议';
+      case 'chat.tagPicker.hiddenMergeSuggestions':
+        return '已忽略的合并建议';
+      case 'chat.tagPicker.hiddenMergeRestoreAction':
+        return '恢复显示';
+      case 'chat.tagPicker.hiddenMergeRestored':
+        return '已恢复该合并建议';
       case 'chat.tagPicker.deleteDialog.title':
         return '删除标签？';
       case 'chat.tagPicker.deleteDialog.message':

@@ -23,6 +23,9 @@ void main() {
                     Text(context.t.chat.tagPicker.tagActionLabel),
                     Text(context.t.chat.tagPicker.mergeSuggestions),
                     Text(context.t.chat.tagPicker.mergeAction),
+                    Text(context.t.chat.tagPicker.manualMergeAction),
+                    Text(context.t.chat.tagPicker.hiddenMergeSuggestions),
+                    Text(context.t.chat.tagPicker.hiddenMergeRestoreAction),
                     Text(
                       context.t.chat.tagPicker
                           .mergeSuggestionMessages(count: 3),
@@ -58,6 +61,9 @@ void main() {
     expect(find.text('Tags'), findsOneWidget);
     expect(find.text('Merge suggestions'), findsOneWidget);
     expect(find.text('Merge'), findsOneWidget);
+    expect(find.text('Manual merge'), findsOneWidget);
+    expect(find.text('Ignored merge suggestions'), findsOneWidget);
+    expect(find.text('Show again'), findsOneWidget);
     expect(find.text('Affects 3 tagged messages'), findsOneWidget);
     expect(find.text('No results in current scope'), findsOneWidget);
     expect(find.text('Expand time window'), findsOneWidget);

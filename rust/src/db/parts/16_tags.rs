@@ -321,10 +321,11 @@ pub fn list_tags(conn: &Connection, db_key: &[u8; 32]) -> Result<Vec<Tag>> {
     Ok(out)
 }
 
-pub fn list_tag_merge_suggestions(
+fn list_tag_merge_suggestions_with_visibility(
     conn: &Connection,
     db_key: &[u8; 32],
     limit: usize,
+    hidden_only: bool,
 ) -> Result<Vec<TagMergeSuggestion>> {
     ensure_system_tags(conn, db_key)?;
 
@@ -372,7 +373,8 @@ pub fn list_tag_merge_suggestions(
 
         let source_usage = usage_counts.get(&source.id).copied().unwrap_or(0);
         let target_usage = usage_counts.get(&target.id).copied().unwrap_or(0);
-        if hidden_pairs.contains(&(source.id.clone(), target.id.clone())) {
+        let is_hidden_pair = hidden_pairs.contains(&(source.id.clone(), target.id.clone()));
+        if is_hidden_pair != hidden_only {
             continue;
         }
         push_merge_candidate(
@@ -417,7 +419,8 @@ pub fn list_tag_merge_suggestions(
             let (source, target, source_usage, target_usage) =
                 choose_merge_direction(left, right, &usage_counts);
 
-            if hidden_pairs.contains(&(source.id.clone(), target.id.clone())) {
+            let is_hidden_pair = hidden_pairs.contains(&(source.id.clone(), target.id.clone()));
+            if is_hidden_pair != hidden_only {
                 continue;
             }
 
@@ -446,6 +449,22 @@ pub fn list_tag_merge_suggestions(
 
     out.truncate(limit.min(50));
     Ok(out)
+}
+
+pub fn list_tag_merge_suggestions(
+    conn: &Connection,
+    db_key: &[u8; 32],
+    limit: usize,
+) -> Result<Vec<TagMergeSuggestion>> {
+    list_tag_merge_suggestions_with_visibility(conn, db_key, limit, false)
+}
+
+pub fn list_hidden_tag_merge_suggestions(
+    conn: &Connection,
+    db_key: &[u8; 32],
+    limit: usize,
+) -> Result<Vec<TagMergeSuggestion>> {
+    list_tag_merge_suggestions_with_visibility(conn, db_key, limit, true)
 }
 
 pub fn merge_tags(
