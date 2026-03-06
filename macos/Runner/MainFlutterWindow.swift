@@ -16,4 +16,37 @@ class MainFlutterWindow: NSWindow {
 
     super.awakeFromNib()
   }
+
+  override func sendEvent(_ event: NSEvent) {
+    if isCommandOnlyModifierEvent(event) {
+      return
+    }
+
+    super.sendEvent(event)
+  }
+
+  private func isCommandOnlyModifierEvent(_ event: NSEvent) -> Bool {
+    guard event.type == .flagsChanged else {
+      return false
+    }
+
+    guard event.keyCode == 54 || event.keyCode == 55 else {
+      return false
+    }
+
+    let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+    let nonCommandFlags: NSEvent.ModifierFlags = [
+      .capsLock,
+      .shift,
+      .control,
+      .option,
+      .function,
+    ]
+
+    if flags.contains(.command) {
+      return flags.intersection(nonCommandFlags).isEmpty
+    }
+
+    return flags.intersection(nonCommandFlags).isEmpty
+  }
 }
