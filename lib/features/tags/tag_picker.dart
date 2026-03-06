@@ -184,12 +184,16 @@ class _MessageTagPickerSheetState extends State<_MessageTagPickerSheet> {
     };
   }
 
-  Future<void> _confirmAndApplyMerge(TagMergeSuggestion suggestion) async {
+  Future<void> _confirmAndApplyMergePair({
+    required Tag sourceTag,
+    required Tag targetTag,
+    String? feedbackReason,
+  }) async {
     if (_saving) return;
 
     final locale = Localizations.localeOf(context);
-    final sourceLabel = localizeTagName(locale, suggestion.sourceTag);
-    final targetLabel = localizeTagName(locale, suggestion.targetTag);
+    final sourceLabel = localizeTagName(locale, sourceTag);
+    final targetLabel = localizeTagName(locale, targetTag);
 
     final confirmed = await showDialog<bool>(
       context: context,
@@ -227,19 +231,21 @@ class _MessageTagPickerSheetState extends State<_MessageTagPickerSheet> {
     try {
       final updated = await widget.repository.mergeTags(
         widget.sessionKey,
-        sourceTagId: suggestion.sourceTag.id,
-        targetTagId: suggestion.targetTag.id,
+        sourceTagId: sourceTag.id,
+        targetTagId: targetTag.id,
       );
 
-      unawaited(
-        widget.repository.recordTagMergeFeedback(
-          widget.sessionKey,
-          sourceTagId: suggestion.sourceTag.id,
-          targetTagId: suggestion.targetTag.id,
-          reason: suggestion.reason,
-          action: TagMergeFeedbackAction.accept,
-        ),
-      );
+      if (feedbackReason != null) {
+        unawaited(
+          widget.repository.recordTagMergeFeedback(
+            widget.sessionKey,
+            sourceTagId: sourceTag.id,
+            targetTagId: targetTag.id,
+            reason: feedbackReason,
+            action: TagMergeFeedbackAction.accept,
+          ),
+        );
+      }
 
       if (!mounted) return;
 
@@ -260,6 +266,72 @@ class _MessageTagPickerSheetState extends State<_MessageTagPickerSheet> {
         setState(() => _saving = false);
       }
     }
+  }
+
+  Future<void> _confirmAndApplyMerge(TagMergeSuggestion suggestion) async {
+    await _confirmAndApplyMergePair(
+      sourceTag: suggestion.sourceTag,
+      targetTag: suggestion.targetTag,
+      feedbackReason: suggestion.reason,
+    );
+  }
+
+  Future<Tag?> _pickManualMergeTag({
+    required String title,
+    required List<Tag> tags,
+    required String keyPrefix,
+  }) async {
+    if (tags.isEmpty) return null;
+
+    final locale = Localizations.localeOf(context);
+    return showDialog<Tag>(
+      context: context,
+      builder: (dialogContext) {
+        return SimpleDialog(
+          title: Text(title),
+          children: tags
+              .map(
+                (tag) => SimpleDialogOption(
+                  key: ValueKey('${keyPrefix}_${tag.id}'),
+                  onPressed: () => Navigator.of(dialogContext).pop(tag),
+                  child: Text(localizeTagName(locale, tag)),
+                ),
+              )
+              .toList(growable: false),
+        );
+      },
+    );
+  }
+
+  Future<void> _startManualMergeFlow() async {
+    if (_saving) return;
+
+    final sourceCandidates =
+        _allTags.where((tag) => !tag.isSystem).toList(growable: false);
+    if (sourceCandidates.isEmpty || _allTags.length < 2) {
+      return;
+    }
+
+    final sourceTag = await _pickManualMergeTag(
+      title: context.t.chat.tagPicker.manualMergeSourceTitle,
+      tags: sourceCandidates,
+      keyPrefix: 'tag_picker_manual_merge_source',
+    );
+    if (sourceTag == null || !mounted) return;
+
+    final targetCandidates =
+        _allTags.where((tag) => tag.id != sourceTag.id).toList(growable: false);
+    final targetTag = await _pickManualMergeTag(
+      title: context.t.chat.tagPicker.manualMergeTargetTitle,
+      tags: targetCandidates,
+      keyPrefix: 'tag_picker_manual_merge_target',
+    );
+    if (targetTag == null || !mounted) return;
+
+    await _confirmAndApplyMergePair(
+      sourceTag: sourceTag,
+      targetTag: targetTag,
+    );
   }
 
   void _removeMergeSuggestion(TagMergeSuggestion suggestion) {
@@ -383,6 +455,7 @@ class _MessageTagPickerSheetState extends State<_MessageTagPickerSheet> {
     final mergeDismissLabel = context.t.chat.tagPicker.mergeDismissAction;
     final mergeLaterLabel = context.t.chat.tagPicker.mergeLaterAction;
     final allTitle = context.t.chat.tagPicker.all;
+    final manualMergeLabel = context.t.chat.tagPicker.manualMergeAction;
     final addHint = context.t.chat.tagPicker.inputHint;
     final addLabel = context.t.chat.tagPicker.add;
     final saveLabel = context.t.chat.tagPicker.save;
@@ -564,9 +637,25 @@ class _MessageTagPickerSheetState extends State<_MessageTagPickerSheet> {
                         ),
                         const SizedBox(height: 16),
                       ],
-                      Text(
-                        allTitle,
-                        style: Theme.of(context).textTheme.titleSmall,
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              allTitle,
+                              style: Theme.of(context).textTheme.titleSmall,
+                            ),
+                          ),
+                          TextButton.icon(
+                            key: const ValueKey('tag_picker_manual_merge'),
+                            onPressed: _saving ||
+                                    _allTags.length < 2 ||
+                                    !_allTags.any((tag) => !tag.isSystem)
+                                ? null
+                                : () => unawaited(_startManualMergeFlow()),
+                            icon: const Icon(Icons.merge_type),
+                            label: Text(manualMergeLabel),
+                          ),
+                        ],
                       ),
                       const SizedBox(height: 8),
                       Wrap(

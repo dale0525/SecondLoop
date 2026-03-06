@@ -548,6 +548,90 @@ void main() {
     expect(find.text('ProjectX'), findsOneWidget);
   });
 
+  testWidgets('message tag picker can manually merge tags', (tester) async {
+    LocaleSettings.setLocale(AppLocale.en);
+
+    final alias = _tag(id: 'custom.alias', name: 'weekly-review');
+    final canonical = _tag(id: 'custom.canonical', name: 'Weekly Review');
+    final system = _tag(
+      id: 'system.tag.work',
+      name: 'work',
+      systemKey: 'work',
+      isSystem: true,
+    );
+
+    final repository = _FakeTagRepository(
+      tags: <Tag>[system, canonical, alias],
+      mergeSuggestions: <TagMergeSuggestion>[
+        _mergeSuggestion(
+          sourceTag: alias,
+          targetTag: canonical,
+          reason: 'name_compact_match',
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      _host(
+        locale: const Locale('en'),
+        child: Builder(
+          builder: (context) {
+            return ElevatedButton(
+              key: const ValueKey('open_tag_picker_manual_merge'),
+              onPressed: () async {
+                await showMessageTagPicker(
+                  context: context,
+                  sessionKey: Uint8List.fromList(sessionKey),
+                  messageId: 'm1',
+                  repository: repository,
+                );
+              },
+              child: const Text('open'),
+            );
+          },
+        ),
+      ),
+    );
+
+    await tester
+        .tap(find.byKey(const ValueKey('open_tag_picker_manual_merge')));
+    await tester.pumpAndSettle();
+
+    await tester.tap(
+      find.byKey(
+        const ValueKey(
+            'tag_picker_merge_dismiss_custom.alias_custom.canonical'),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Merge suggestion dismissed'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('tag_picker_manual_merge')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Choose source tag'), findsOneWidget);
+    await tester.tap(
+      find.byKey(const ValueKey('tag_picker_manual_merge_source_custom.alias')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Merge into'), findsOneWidget);
+    await tester.tap(
+      find.byKey(
+        const ValueKey('tag_picker_manual_merge_target_custom.canonical'),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Merge tags?'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('tag_picker_merge_confirm')));
+    await tester.pumpAndSettle();
+
+    expect(repository.lastMergeSourceTagId, 'custom.alias');
+    expect(repository.lastMergeTargetTagId, 'custom.canonical');
+  });
+
   testWidgets('message tag picker only allows deleting custom tags',
       (tester) async {
     LocaleSettings.setLocale(AppLocale.en);

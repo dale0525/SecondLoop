@@ -4,9 +4,9 @@
 /// To regenerate, run: `dart run slang`
 ///
 /// Locales: 2
-/// Strings: 1808 (904 per locale)
+/// Strings: 1814 (907 per locale)
 ///
-/// Built on 2026-03-06 at 05:13 UTC
+/// Built on 2026-03-06 at 13:43 UTC
 
 // coverage:ignore-file
 // ignore_for_file: type=lint
@@ -1698,6 +1698,9 @@ class _StringsChatTagPickerEn {
       'AI confidence is low. Please confirm before applying.';
   String get mergeSuggestions => 'Merge suggestions';
   String get mergeAction => 'Merge';
+  String get manualMergeAction => 'Manual merge';
+  String get manualMergeSourceTitle => 'Choose source tag';
+  String get manualMergeTargetTitle => 'Merge into';
   String get mergeDismissAction => 'Dismiss';
   String get mergeLaterAction => 'Later';
   String mergeSuggestionMessages({required Object count}) =>
@@ -6281,6 +6284,12 @@ class _StringsChatTagPickerZhCn extends _StringsChatTagPickerEn {
   String get mergeSuggestions => '合并建议';
   @override
   String get mergeAction => '合并';
+  @override
+  String get manualMergeAction => '手动合并';
+  @override
+  String get manualMergeSourceTitle => '选择来源标签';
+  @override
+  String get manualMergeTargetTitle => '合并到';
   @override
   String get mergeDismissAction => '忽略';
   @override
@@ -11063,6 +11072,12 @@ extension on Translations {
         return 'Merge suggestions';
       case 'chat.tagPicker.mergeAction':
         return 'Merge';
+      case 'chat.tagPicker.manualMergeAction':
+        return 'Manual merge';
+      case 'chat.tagPicker.manualMergeSourceTitle':
+        return 'Choose source tag';
+      case 'chat.tagPicker.manualMergeTargetTitle':
+        return 'Merge into';
       case 'chat.tagPicker.mergeDismissAction':
         return 'Dismiss';
       case 'chat.tagPicker.mergeLaterAction':
@@ -12909,6 +12924,12 @@ extension on _StringsZhCn {
         return '合并建议';
       case 'chat.tagPicker.mergeAction':
         return '合并';
+      case 'chat.tagPicker.manualMergeAction':
+        return '手动合并';
+      case 'chat.tagPicker.manualMergeSourceTitle':
+        return '选择来源标签';
+      case 'chat.tagPicker.manualMergeTargetTitle':
+        return '合并到';
       case 'chat.tagPicker.mergeDismissAction':
         return '忽略';
       case 'chat.tagPicker.mergeLaterAction':
