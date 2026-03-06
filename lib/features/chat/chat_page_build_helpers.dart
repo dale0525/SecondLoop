@@ -58,14 +58,12 @@ extension _ChatPageStateAttachmentAnnotationUiState on _ChatPageState {
         cloudAuthScope?.gatewayConfig ?? CloudGatewayConfig.defaultConfig;
 
     final hasGateway = gatewayConfig.baseUrl.trim().isNotEmpty;
-    String? idToken;
-    if (subscriptionStatus == SubscriptionStatus.entitled) {
-      try {
-        idToken = await cloudAuthScope?.controller.getIdToken();
-      } catch (_) {
-        idToken = null;
-      }
-    }
+    final idToken = subscriptionStatus == SubscriptionStatus.entitled
+        ? await readCloudCapabilityIdToken(
+            cloudAuthScope?.controller,
+            mode: CloudCapabilityAuthMode.interactive,
+          )
+        : null;
     final hasIdToken = (idToken?.trim() ?? '').isNotEmpty;
 
     List<LlmProfile> llmProfiles = const <LlmProfile>[];
@@ -144,14 +142,12 @@ extension _ChatPageStateAttachmentAnnotationUiState on _ChatPageState {
         cloudAuthScope?.gatewayConfig ?? CloudGatewayConfig.defaultConfig;
     final hasGateway = gatewayConfig.baseUrl.trim().isNotEmpty;
 
-    String? idToken;
-    if (subscriptionStatus == SubscriptionStatus.entitled) {
-      try {
-        idToken = await cloudAuthScope?.controller.getIdToken();
-      } catch (_) {
-        idToken = null;
-      }
-    }
+    final idToken = subscriptionStatus == SubscriptionStatus.entitled
+        ? await readCloudCapabilityIdToken(
+            cloudAuthScope?.controller,
+            mode: CloudCapabilityAuthMode.interactive,
+          )
+        : null;
     final hasIdToken = (idToken?.trim() ?? '').isNotEmpty;
 
     MediaAnnotationConfig? mediaConfig;

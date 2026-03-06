@@ -12,6 +12,7 @@ import '../../core/ai/semantic_parse_data_consent_prefs.dart';
 import '../../core/ai/media_source_prefs.dart';
 import '../../core/backend/app_backend.dart';
 import '../../core/cloud/cloud_auth_scope.dart';
+import '../../core/cloud/cloud_capability_auth.dart';
 import '../../core/session/session_scope.dart';
 import '../../core/subscription/subscription_scope.dart';
 import '../../i18n/strings.g.dart';
@@ -157,12 +158,10 @@ class _AiSettingsPageState extends State<AiSettingsPage> {
     final subscriptionStatus = SubscriptionScope.maybeOf(context)?.status ??
         SubscriptionStatus.unknown;
 
-    String? cloudIdToken;
-    try {
-      cloudIdToken = await cloudAuthScope?.controller.getIdToken();
-    } catch (_) {
-      cloudIdToken = null;
-    }
+    final cloudIdToken = await readCloudCapabilityIdToken(
+      cloudAuthScope?.controller,
+      mode: CloudCapabilityAuthMode.interactive,
+    );
 
     final token = cloudIdToken?.trim() ?? '';
     final baseUrl = cloudGatewayConfig.baseUrl.trim();
@@ -187,12 +186,10 @@ class _AiSettingsPageState extends State<AiSettingsPage> {
     final subscriptionStatus = SubscriptionScope.maybeOf(context)?.status ??
         SubscriptionStatus.unknown;
 
-    String? cloudIdToken;
-    try {
-      cloudIdToken = await cloudAuthScope?.controller.getIdToken();
-    } catch (_) {
-      cloudIdToken = null;
-    }
+    final cloudIdToken = await readCloudCapabilityIdToken(
+      cloudAuthScope?.controller,
+      mode: CloudCapabilityAuthMode.interactive,
+    );
 
     AskAiRouteKind defaultRoute;
     try {

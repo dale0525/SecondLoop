@@ -60,12 +60,10 @@ extension _ChatPageStateMethodsE on _ChatPageState {
     final backend = AppBackendScope.of(context);
     final sessionKey = SessionScope.of(context).sessionKey;
     final cloudAuthScope = CloudAuthScope.maybeOf(context);
-    String? cloudIdToken;
-    try {
-      cloudIdToken = await cloudAuthScope?.controller.getIdToken();
-    } catch (_) {
-      cloudIdToken = null;
-    }
+    final cloudIdToken = await readCloudCapabilityIdToken(
+      cloudAuthScope?.controller,
+      mode: CloudCapabilityAuthMode.interactive,
+    );
 
     if (!mounted) return;
     final cloudGatewayConfig =
@@ -861,12 +859,10 @@ extension _ChatPageStateMethodsE on _ChatPageState {
       return;
     }
 
-    String? idToken;
-    try {
-      idToken = await cloudAuthScope.controller.getIdToken();
-    } catch (_) {
-      idToken = null;
-    }
+    final idToken = await readCloudCapabilityIdToken(
+      cloudAuthScope.controller,
+      mode: CloudCapabilityAuthMode.interactive,
+    );
     if ((idToken ?? '').trim().isEmpty) {
       _detachedAskRecoveryChecked = false;
       return;

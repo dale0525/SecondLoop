@@ -9,6 +9,7 @@ import 'package:window_manager/window_manager.dart';
 
 import '../../i18n/strings.g.dart';
 import '../ai/ai_routing.dart';
+import '../cloud/cloud_auth_access.dart';
 import '../cloud/cloud_auth_controller.dart';
 import '../cloud/cloud_auth_scope.dart';
 import '../cloud/cloud_usage_client.dart';
@@ -379,7 +380,10 @@ class _DesktopBackgroundServiceState extends State<DesktopBackgroundService>
 
     String? idToken;
     try {
-      idToken = await readCloudIdTokenForBackground(controller);
+      idToken = await readCloudAuthIdToken(
+        controller,
+        mode: CloudAuthAccessMode.background,
+      );
     } catch (_) {
       idToken = null;
     }

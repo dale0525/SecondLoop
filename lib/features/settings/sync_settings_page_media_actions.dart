@@ -105,7 +105,10 @@ extension _SyncSettingsPageMediaActions on _SyncSettingsPageState {
           break;
         case SyncBackendType.managedVault:
           final cloudAuth = CloudAuthScope.of(context).controller;
-          final idToken = await cloudAuth.getIdToken();
+          final idToken = await readCloudAuthIdToken(
+            cloudAuth,
+            mode: CloudAuthAccessMode.interactive,
+          );
           if (!mounted) return;
           if (idToken == null || idToken.trim().isEmpty) {
             _showSnack(t.sync.cloudManagedVault.signInRequired);

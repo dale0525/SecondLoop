@@ -1152,12 +1152,10 @@ extension _ChatPageStateMethodsA on _ChatPageState {
     final gatewayBaseUrl = (cloudScope?.gatewayConfig.baseUrl ?? '').trim();
     if (gatewayBaseUrl.isEmpty) return;
 
-    String? idToken;
-    try {
-      idToken = await cloudScope?.controller.getIdToken();
-    } catch (_) {
-      idToken = null;
-    }
+    final idToken = await readCloudCapabilityIdToken(
+      cloudScope?.controller,
+      mode: CloudCapabilityAuthMode.interactive,
+    );
     if ((idToken ?? '').trim().isEmpty) return;
 
     if (backend is! NativeAppBackend) return;

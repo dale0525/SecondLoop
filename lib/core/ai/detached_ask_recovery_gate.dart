@@ -4,7 +4,7 @@ import 'package:flutter/widgets.dart';
 
 import '../backend/app_backend.dart';
 import '../backend/native_backend.dart';
-import '../cloud/cloud_auth_controller.dart';
+import '../cloud/cloud_capability_auth.dart';
 import '../cloud/cloud_auth_scope.dart';
 import '../session/session_scope.dart';
 import '../sync/sync_engine_gate.dart';
@@ -109,8 +109,9 @@ class _DetachedAskRecoveryGateState extends State<DetachedAskRecoveryGate>
     _running = true;
     _restartBlockToken = UpdateRestartActivity.blockAiAnalysis();
     try {
-      final idToken = await readCloudIdTokenForBackground(
+      final idToken = await readCloudCapabilityIdToken(
         cloudAuthScope?.controller,
+        mode: CloudCapabilityAuthMode.background,
       );
 
       final result = await DetachedAskRecoveryService.recoverIfNeeded(

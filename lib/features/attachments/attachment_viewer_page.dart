@@ -16,6 +16,7 @@ import '../../core/ai/ai_routing.dart';
 import '../../core/ai/media_capability_source_prefs.dart';
 import '../../core/ai/media_source_prefs.dart';
 import '../../core/cloud/cloud_auth_scope.dart';
+import '../../core/cloud/cloud_capability_auth.dart';
 import '../../core/content_enrichment/content_enrichment_config_store.dart';
 import '../../core/content_enrichment/docx_ocr.dart';
 import '../../core/content_enrichment/docx_ocr_policy.dart';
@@ -838,6 +839,7 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
 
     final backend = backendAny;
     final sessionKey = SessionScope.of(context).sessionKey;
+    final cloudAuthController = CloudAuthScope.maybeOf(context)?.controller;
     final nowMs = DateTime.now().millisecondsSinceEpoch;
     final lang = Localizations.localeOf(context).toLanguageTag();
     final normalizedMimeType = widget.attachment.mimeType.trim().toLowerCase();
@@ -873,11 +875,11 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
           lang: 'und',
           respectFeatureToggle: false,
           nowMs: nowMs,
-          beforeEnqueue: () async {
-            await CloudAuthScope.maybeOf(context)?.controller.getIdToken();
-          },
+          beforeEnqueue: () =>
+              bestEffortWarmCloudCapabilityAuth(cloudAuthController),
         );
       } else {
+        await bestEffortWarmCloudCapabilityAuth(cloudAuthController);
         await backend.enqueueAttachmentAnnotation(
           sessionKey,
           attachmentSha256: widget.attachment.sha256,

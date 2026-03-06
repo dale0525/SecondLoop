@@ -62,12 +62,10 @@ extension _ChatPageStateAskAiEntry on _ChatPageState {
     final subscriptionStatus = SubscriptionScope.maybeOf(context)?.status ??
         SubscriptionStatus.unknown;
 
-    String? cloudIdToken;
-    try {
-      cloudIdToken = await cloudAuthScope?.controller.getIdToken();
-    } catch (_) {
-      cloudIdToken = null;
-    }
+    final cloudIdToken = await readCloudCapabilityIdToken(
+      cloudAuthScope?.controller,
+      mode: CloudCapabilityAuthMode.interactive,
+    );
 
     final nextRoute = await _resolveAskAiRouteWithPreference(
       backend,

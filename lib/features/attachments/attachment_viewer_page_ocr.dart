@@ -468,14 +468,12 @@ extension _AttachmentViewerPageOcr on _AttachmentViewerPageState {
       });
       final gatewayConfig =
           cloudAuthScope?.gatewayConfig ?? CloudGatewayConfig.defaultConfig;
-      String? idToken;
-      if (subscriptionStatus == SubscriptionStatus.entitled) {
-        try {
-          idToken = await cloudAuthScope?.controller.getIdToken();
-        } catch (_) {
-          idToken = null;
-        }
-      }
+      final idToken = subscriptionStatus == SubscriptionStatus.entitled
+          ? await readCloudCapabilityIdToken(
+              cloudAuthScope?.controller,
+              mode: CloudCapabilityAuthMode.interactive,
+            )
+          : null;
 
       final isPdf = _isPdfAttachment();
       final pageCountHint = asInt(existingPayload['page_count']) ?? 1;

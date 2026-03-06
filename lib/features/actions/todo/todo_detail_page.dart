@@ -19,6 +19,7 @@ import '../../../core/backend/app_backend.dart';
 import '../../../core/backend/attachments_backend.dart';
 import '../../../core/backend/native_backend.dart';
 import '../../../core/cloud/cloud_auth_scope.dart';
+import '../../../core/cloud/cloud_capability_auth.dart';
 import '../../../core/session/session_scope.dart';
 import '../../../core/subscription/subscription_scope.dart';
 import '../../../core/sync/sync_engine.dart';

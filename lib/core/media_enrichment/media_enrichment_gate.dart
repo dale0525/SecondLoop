@@ -18,7 +18,7 @@ import '../backend/app_backend.dart';
 import '../backend/native_app_dir.dart';
 import '../backend/native_backend.dart';
 import '../attachments/attachment_metadata_store.dart';
-import '../cloud/cloud_auth_controller.dart';
+import '../cloud/cloud_capability_auth.dart';
 import '../cloud/cloud_auth_scope.dart';
 import '../content_enrichment/content_enrichment_config_store.dart';
 import '../content_enrichment/docx_ocr.dart';
@@ -244,14 +244,10 @@ class _MediaEnrichmentGateState extends State<MediaEnrichmentGate>
       final gatewayConfig =
           cloudAuthScope?.gatewayConfig ?? CloudGatewayConfig.defaultConfig;
 
-      String? idToken;
-      try {
-        idToken = await readCloudIdTokenForBackground(
-          cloudAuthScope?.controller,
-        );
-      } catch (_) {
-        idToken = null;
-      }
+      final idToken = await readCloudCapabilityIdToken(
+        cloudAuthScope?.controller,
+        mode: CloudCapabilityAuthMode.background,
+      );
       if (!mounted) return;
 
       final availability = resolveMediaEnrichmentAvailability(

@@ -89,12 +89,10 @@ extension _ChatPageStateMethodsC on _ChatPageState {
       final consented =
           prefs.getBool(SemanticParseDataConsentPrefs.prefsKey) ?? false;
       if (consented && mounted) {
-        String? cloudIdToken;
-        try {
-          cloudIdToken = await cloudAuthScope?.controller.getIdToken();
-        } catch (_) {
-          cloudIdToken = null;
-        }
+        final cloudIdToken = await readCloudCapabilityIdToken(
+          cloudAuthScope?.controller,
+          mode: CloudCapabilityAuthMode.interactive,
+        );
 
         AskAiRouteKind route;
         try {
@@ -111,6 +109,9 @@ extension _ChatPageStateMethodsC on _ChatPageState {
 
         if (route != AskAiRouteKind.needsSetup) {
           try {
+            await bestEffortWarmCloudCapabilityAuth(
+              cloudAuthScope?.controller,
+            );
             await backend.enqueueSemanticParseJob(
               sessionKey,
               messageId: message.id,

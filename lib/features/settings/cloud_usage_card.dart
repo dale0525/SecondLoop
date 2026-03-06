@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../core/cloud/cloud_auth_access.dart';
 import '../../core/cloud/cloud_auth_scope.dart';
 import '../../core/cloud/cloud_usage_client.dart';
 import '../../core/ai/ai_routing.dart';
@@ -110,7 +111,10 @@ class _CloudUsageCardState extends State<CloudUsageCard> {
 
     String? idToken;
     try {
-      idToken = await controller.getIdToken();
+      idToken = await readCloudAuthIdToken(
+        controller,
+        mode: CloudAuthAccessMode.interactive,
+      );
     } catch (_) {
       idToken = null;
     }

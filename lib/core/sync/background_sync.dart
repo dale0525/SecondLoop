@@ -7,6 +7,7 @@ import 'package:workmanager/workmanager.dart';
 import '../ai/ai_routing.dart';
 import '../backend/app_backend.dart';
 import '../backend/native_backend.dart';
+import '../cloud/cloud_auth_access.dart';
 import '../cloud/cloud_auth_controller.dart';
 import '../cloud/cloud_auth_scope.dart';
 import '../cloud/firebase_identity_toolkit.dart';
@@ -234,7 +235,10 @@ final class BackgroundSync {
           identityToolkit: FirebaseIdentityToolkitHttp(webApiKey: webApiKey),
         );
         try {
-          idToken = await cloudAuth.getIdToken();
+          idToken = await readCloudAuthIdToken(
+            cloudAuth,
+            mode: CloudAuthAccessMode.background,
+          );
         } catch (_) {
           idToken = null;
         }

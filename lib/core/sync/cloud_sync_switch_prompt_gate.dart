@@ -9,6 +9,7 @@ import '../ai/ai_routing.dart';
 import '../ai/embeddings_data_consent_prefs.dart';
 import '../ai/semantic_parse_data_consent_prefs.dart';
 import '../backend/app_backend.dart';
+import '../cloud/cloud_auth_access.dart';
 import '../cloud/cloud_auth_controller.dart';
 import '../cloud/cloud_auth_scope.dart';
 import '../media_annotation/media_annotation_config_store.dart';
@@ -746,7 +747,10 @@ final class _CloudSyncSwitchPromptGateState
     final baseUrl = await _store.resolveManagedVaultBaseUrl();
     String? idToken;
     try {
-      idToken = await _cloudAuthController?.getIdToken();
+      idToken = await readCloudAuthIdToken(
+        _cloudAuthController,
+        mode: CloudAuthAccessMode.interactive,
+      );
     } catch (_) {
       idToken = null;
     }

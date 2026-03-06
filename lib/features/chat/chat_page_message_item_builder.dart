@@ -720,13 +720,15 @@ extension _ChatPageStateMessageItemBuilder on _ChatPageState {
                           lang: lang,
                           respectFeatureToggle: false,
                           nowMs: nowMs,
-                          beforeEnqueue: () async {
-                            await CloudAuthScope.maybeOf(context)
-                                ?.controller
-                                .getIdToken();
-                          },
+                          beforeEnqueue: () =>
+                              bestEffortWarmCloudCapabilityAuth(
+                            CloudAuthScope.maybeOf(context)?.controller,
+                          ),
                         );
                       } else {
+                        await bestEffortWarmCloudCapabilityAuth(
+                          CloudAuthScope.maybeOf(context)?.controller,
+                        );
                         await backendAny.enqueueAttachmentAnnotation(
                           sessionKey,
                           attachmentSha256: attachment.sha256,

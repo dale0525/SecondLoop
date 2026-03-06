@@ -3,6 +3,7 @@ import 'package:flutter/widgets.dart';
 import '../../core/ai/ai_routing.dart';
 import '../../core/backend/app_backend.dart';
 import '../../core/cloud/cloud_auth_scope.dart';
+import '../../core/cloud/cloud_capability_auth.dart';
 import '../../core/session/session_scope.dart';
 import '../../core/subscription/subscription_scope.dart';
 import '../../core/sync/sync_config_store.dart';
@@ -40,12 +41,10 @@ Future<bool> _resolveAiReady(BuildContext context) async {
   final subscriptionStatus =
       SubscriptionScope.maybeOf(context)?.status ?? SubscriptionStatus.unknown;
 
-  String? cloudIdToken;
-  try {
-    cloudIdToken = await cloudAuthScope?.controller.getIdToken();
-  } catch (_) {
-    cloudIdToken = null;
-  }
+  final cloudIdToken = await readCloudCapabilityIdToken(
+    cloudAuthScope?.controller,
+    mode: CloudCapabilityAuthMode.interactive,
+  );
 
   try {
     final route = await decideAskAiRoute(

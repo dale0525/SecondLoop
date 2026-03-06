@@ -9,6 +9,7 @@ import '../../core/attachments/attachment_metadata_store.dart';
 import '../../core/backend/app_backend.dart';
 import '../../core/backend/native_backend.dart';
 import '../../core/cloud/cloud_auth_scope.dart';
+import '../../core/cloud/cloud_capability_auth.dart';
 import '../../core/content_enrichment/content_enrichment_config_store.dart';
 import '../../core/media_annotation/media_annotation_config_store.dart';
 import '../../core/session/session_scope.dart';
@@ -146,6 +147,8 @@ final class _ShareIngestGateState extends State<ShareIngestGate>
     String attachmentSha256, {
     required String lang,
   }) async {
+    final cloudAuthController = CloudAuthScope.maybeOf(context)?.controller;
+
     MediaAnnotationConfig? config;
     try {
       config = await const RustMediaAnnotationConfigStore().read(sessionKey);
@@ -154,6 +157,7 @@ final class _ShareIngestGateState extends State<ShareIngestGate>
     }
     if (config == null || !config.annotateEnabled) return;
 
+    await bestEffortWarmCloudCapabilityAuth(cloudAuthController);
     await backend.enqueueAttachmentAnnotation(
       sessionKey,
       attachmentSha256: attachmentSha256,
@@ -214,9 +218,9 @@ final class _ShareIngestGateState extends State<ShareIngestGate>
           attachmentSha256: attachmentSha256,
           mimeType: normalizedMimeType,
           lang: 'und',
-          beforeEnqueue: () async {
-            await CloudAuthScope.maybeOf(context)?.controller.getIdToken();
-          },
+          beforeEnqueue: () => bestEffortWarmCloudCapabilityAuth(
+            CloudAuthScope.maybeOf(context)?.controller,
+          ),
         );
       } catch (_) {}
       return;
