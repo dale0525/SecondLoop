@@ -1,3 +1,17 @@
+fn parse_manual_tag_token(token: &str) -> Option<String> {
+    let raw_name = token.strip_prefix('#')?;
+    if raw_name.is_empty() || raw_name.starts_with('#') {
+        return None;
+    }
+
+    let normalized = normalize_tag_name(raw_name);
+    if normalized.is_empty() {
+        return None;
+    }
+
+    Some(normalized)
+}
+
 fn parse_manual_message_tag_names(content: &str) -> Vec<String> {
     let mut out = Vec::<String>::new();
     let mut seen = std::collections::HashSet::<String>::new();
@@ -9,11 +23,10 @@ fn parse_manual_message_tag_names(content: &str) -> Vec<String> {
         }
 
         for token in trimmed.split_whitespace() {
-            let Some(raw_name) = token.strip_prefix('#') else {
+            let Some(normalized) = parse_manual_tag_token(token) else {
                 continue;
             };
-            let normalized = normalize_tag_name(raw_name);
-            if normalized.is_empty() || !seen.insert(normalized.clone()) {
+            if !seen.insert(normalized.clone()) {
                 continue;
             }
             out.push(normalized);
@@ -38,17 +51,17 @@ fn build_manual_tag_cleanup_content(content: &str, deleted_tag_name: &str) -> St
         let mut kept_tokens = Vec::<&str>::new();
         let mut removed_any = false;
 
-        for token in trimmed.split_whitespace() {
-            let Some(raw_name) = token.strip_prefix('#') else {
-                kept_tokens.push(token);
-                continue;
-            };
-            if normalize_tag_name(raw_name) == deleted_tag_name {
-                removed_any = true;
-                continue;
-            }
-            kept_tokens.push(token);
-        }
+for token in trimmed.split_whitespace() {
+    let Some(normalized_tag_name) = parse_manual_tag_token(token) else {
+        kept_tokens.push(token);
+        continue;
+    };
+    if normalized_tag_name == deleted_tag_name {
+        removed_any = true;
+        continue;
+    }
+    kept_tokens.push(token);
+}
 
         if !removed_any {
             lines.push(line.to_string());

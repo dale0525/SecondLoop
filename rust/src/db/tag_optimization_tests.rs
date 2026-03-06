@@ -195,3 +195,27 @@ fn manual_tag_autofill_and_delete_flow_stays_consistent() {
         BTreeSet::from(["finance".to_string(), "travel".to_string()])
     );
 }
+
+#[test]
+fn markdown_headings_do_not_become_manual_tags() {
+    let dir = tempdir().expect("tempdir");
+    let conn = open(dir.path()).expect("open");
+
+    let key = [61u8; 32];
+    let conversation = get_or_create_loop_home_conversation(&conn, &key).expect("conversation");
+    let content = "#alpha\n\n# 高中语文作文课 V1 功能需求与设计文档\n\n## 1. 文档目的\n";
+    let message =
+        insert_message(&conn, &key, &conversation.id, "user", content).expect("insert message");
+
+    let names = tag_names(list_message_tags(&conn, &key, &message.id).expect("message tags"));
+    assert_eq!(names, BTreeSet::from(["alpha".to_string()]));
+
+    let alpha = upsert_tag(&conn, &key, "alpha").expect("alpha");
+    delete_tag(&conn, &key, &alpha.id).expect("delete alpha");
+
+    let reloaded = get_message_by_id(&conn, &key, &message.id).expect("reloaded message");
+    assert_eq!(
+        reloaded.content,
+        "\n# 高中语文作文课 V1 功能需求与设计文档\n\n## 1. 文档目的\n"
+    );
+}
