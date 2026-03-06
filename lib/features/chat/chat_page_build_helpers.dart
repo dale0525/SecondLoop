@@ -1,5 +1,28 @@
 part of 'chat_page.dart';
 
+bool _hasAvailableMediaRoute(
+  MediaSourcePreference preference, {
+  required bool cloudAvailable,
+  required bool hasByokProfile,
+  required bool hasLocalCapability,
+}) {
+  final orderedRoutes = mediaSourceFallbackOrder(preference);
+  for (final route in orderedRoutes) {
+    switch (route) {
+      case MediaSourceRouteKind.cloudGateway:
+        if (cloudAvailable) return true;
+        break;
+      case MediaSourceRouteKind.byok:
+        if (hasByokProfile) return true;
+        break;
+      case MediaSourceRouteKind.local:
+        if (hasLocalCapability) return true;
+        break;
+    }
+  }
+  return false;
+}
+
 extension _ChatPageStateAttachmentAnnotationUiState on _ChatPageState {
   Future<({bool enabled, bool canRunNow})> _loadAttachmentAnnotationUiState(
     NativeAppBackend backend,
@@ -95,6 +118,98 @@ extension _ChatPageStateAttachmentAnnotationUiState on _ChatPageState {
     }
 
     final canRun = canUseOpenAiProfile(activeProfile());
+    return (enabled: true, canRunNow: canRun);
+  }
+
+  Future<({bool enabled, bool canRunNow})> _loadAudioTranscribeUiState(
+    NativeAppBackend backend,
+    Uint8List sessionKey,
+  ) async {
+    final subscriptionStatus = SubscriptionScope.maybeOf(context)?.status ??
+        SubscriptionStatus.unknown;
+    final cloudAuthScope = CloudAuthScope.maybeOf(context);
+
+    ContentEnrichmentConfig? contentConfig;
+    try {
+      contentConfig = await const RustContentEnrichmentConfigStore()
+          .readContentEnrichment(sessionKey);
+    } catch (_) {
+      contentConfig = null;
+    }
+    if (contentConfig == null || !contentConfig.audioTranscribeEnabled) {
+      return (enabled: false, canRunNow: false);
+    }
+
+    final gatewayConfig =
+        cloudAuthScope?.gatewayConfig ?? CloudGatewayConfig.defaultConfig;
+    final hasGateway = gatewayConfig.baseUrl.trim().isNotEmpty;
+
+    String? idToken;
+    if (subscriptionStatus == SubscriptionStatus.entitled) {
+      try {
+        idToken = await cloudAuthScope?.controller.getIdToken();
+      } catch (_) {
+        idToken = null;
+      }
+    }
+    final hasIdToken = (idToken?.trim() ?? '').isNotEmpty;
+
+    MediaAnnotationConfig? mediaConfig;
+    try {
+      mediaConfig =
+          await const RustMediaAnnotationConfigStore().read(sessionKey);
+    } catch (_) {
+      mediaConfig = null;
+    }
+
+    List<LlmProfile> llmProfiles = const <LlmProfile>[];
+    try {
+      llmProfiles = await backend.listLlmProfiles(sessionKey);
+    } catch (_) {
+      llmProfiles = const <LlmProfile>[];
+    }
+
+    LlmProfile? findProfile(String id) {
+      for (final p in llmProfiles) {
+        if (p.id == id) return p;
+      }
+      return null;
+    }
+
+    LlmProfile? selectedProfile() {
+      final id = mediaConfig?.byokProfileId?.trim();
+      if (id == null || id.isEmpty) return null;
+      final selected = findProfile(id);
+      if (selected == null) return null;
+      if (selected.providerType != 'openai-compatible') return null;
+      return selected;
+    }
+
+    LlmProfile? activeProfile() {
+      for (final p in llmProfiles) {
+        if (!p.isActive) continue;
+        if (p.providerType != 'openai-compatible') continue;
+        return p;
+      }
+      return null;
+    }
+
+    MediaSourcePreference preference;
+    try {
+      preference = await MediaCapabilitySourcePrefs.readAudio();
+    } catch (_) {
+      preference = MediaSourcePreference.auto;
+    }
+
+    final canRun = _hasAvailableMediaRoute(
+      preference,
+      cloudAvailable: subscriptionStatus == SubscriptionStatus.entitled &&
+          hasGateway &&
+          hasIdToken,
+      hasByokProfile: selectedProfile() != null || activeProfile() != null,
+      hasLocalCapability:
+          MediaCapabilitySourcePrefs.supportsPlatformLocalAudioTranscribe(),
+    );
     return (enabled: true, canRunNow: canRun);
   }
 }

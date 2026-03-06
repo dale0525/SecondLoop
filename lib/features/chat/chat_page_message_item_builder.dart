@@ -15,6 +15,8 @@ extension _ChatPageStateMessageItemBuilder on _ChatPageState {
     required Map<String, AttachmentAnnotationJob> annotationJobsBySha256,
     required bool attachmentAnnotationEnabled,
     required bool attachmentAnnotationCanRunNow,
+    required bool audioTranscribeEnabled,
+    required bool audioTranscribeCanRunNow,
     required ColorScheme colorScheme,
     required SlTokens tokens,
     required bool isDesktopPlatform,
@@ -718,13 +720,27 @@ extension _ChatPageStateMessageItemBuilder on _ChatPageState {
                     }
                   }
 
+                  final jobUiState = resolveAttachmentAnnotationJobUiState(
+                    mimeType: attachment.mimeType,
+                    t: context.t,
+                    isZhLocale: Localizations.localeOf(context)
+                        .languageCode
+                        .toLowerCase()
+                        .startsWith('zh'),
+                    annotationEnabled: attachmentAnnotationEnabled,
+                    annotationCanRunNow: attachmentAnnotationCanRunNow,
+                    audioTranscribeEnabled: audioTranscribeEnabled,
+                    audioTranscribeCanRunNow: audioTranscribeCanRunNow,
+                  );
+
                   return Align(
                     alignment:
                         isUser ? Alignment.centerRight : Alignment.centerLeft,
                     child: AttachmentAnnotationJobStatusRow(
                       job: job,
-                      annotateEnabled: attachmentAnnotationEnabled,
-                      canAnnotateNow: attachmentAnnotationCanRunNow,
+                      annotateEnabled: jobUiState.enabled,
+                      canAnnotateNow: jobUiState.canRunNow,
+                      setupRequiredLabel: jobUiState.setupRequiredLabel,
                       onOpenSetup: () async {
                         await _pushRouteFromChat(
                           MaterialPageRoute(

@@ -21,6 +21,8 @@ import '../../core/ai/detached_ask_recovery_policy.dart';
 import '../../core/ai/detached_ask_recovery_service.dart';
 import '../../core/ai/embeddings_data_consent_prefs.dart';
 import '../../core/ai/embeddings_source_prefs.dart';
+import '../../core/ai/media_capability_source_prefs.dart';
+import '../../core/ai/media_source_prefs.dart';
 import '../../core/ai/semantic_parse_edit_policy.dart';
 import '../../core/ai/semantic_parse.dart';
 import '../../core/ai/semantic_parse_data_consent_prefs.dart';
@@ -88,6 +90,7 @@ import '../settings/cloud_account_page.dart';
 import '../settings/ai_settings_page.dart';
 import '../settings/settings_page.dart';
 import '../share/share_draft_inbox.dart';
+import 'attachment_annotation_job_ui_state.dart';
 import 'chat_composer_inline_button.dart';
 import 'chat_attachment_send_failure_chip.dart';
 import 'chat_image_attachment_thumbnail.dart';
@@ -170,6 +173,8 @@ typedef _ChatMessageSupplementData = ({
   List<AttachmentAnnotationJob> annotationJobs,
   bool attachmentAnnotationEnabled,
   bool attachmentAnnotationCanRunNow,
+  bool audioTranscribeEnabled,
+  bool audioTranscribeCanRunNow,
 });
 
 bool _looksLikeBareTodoStatusUpdate(String text) {
