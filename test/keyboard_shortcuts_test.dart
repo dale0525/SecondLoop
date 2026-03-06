@@ -101,6 +101,40 @@ void main() {
     expect(field.controller!.selection.baseOffset, 11);
   });
 
+  testWidgets('Cmd+A still selects all text in chat input on macOS',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({
+      'welcome_guide_seen_v1': true,
+    });
+
+    await tester.pumpWidget(MyApp(backend: _AutoUnlockedBackend()));
+    await tester.pumpAndSettle();
+
+    final input = find.byKey(const ValueKey('chat_input'));
+    expect(input, findsOneWidget);
+
+    await tester.tap(input);
+    await tester.pump();
+    await tester.enterText(input, 'hello');
+    await tester.pumpAndSettle();
+
+    final fieldBeforeSelectAll = tester.widget<TextField>(input);
+    fieldBeforeSelectAll.controller!.selection = const TextSelection.collapsed(
+      offset: 5,
+    );
+    await tester.pump();
+
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.metaLeft,
+        platform: 'macos');
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyA, platform: 'macos');
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.metaLeft, platform: 'macos');
+    await tester.pumpAndSettle();
+
+    final fieldAfterSelectAll = tester.widget<TextField>(input);
+    expect(fieldAfterSelectAll.controller!.selection.baseOffset, 0);
+    expect(fieldAfterSelectAll.controller!.selection.extentOffset, 5);
+  });
+
   testWidgets('Pressing Cmd alone keeps chat selection collapsed',
       (tester) async {
     SharedPreferences.setMockInitialValues({
