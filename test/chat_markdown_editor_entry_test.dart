@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -134,6 +135,41 @@ void main() {
       debugDefaultTargetPlatformOverride = null;
     }
   });
+
+  testWidgets(
+    'Desktop mouse click opens markdown editor without losing the entry first',
+    (tester) async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+      SharedPreferences.setMockInitialValues({});
+
+      try {
+        await tester.pumpWidget(_wrapChat(backend: TestAppBackend()));
+        await tester.pumpAndSettle();
+
+        const inputKey = ValueKey('chat_input');
+        const editorOpenKey = ValueKey('chat_open_markdown_editor');
+        const editorPageKey = ValueKey('chat_markdown_editor_page');
+
+        await tester.tap(find.byKey(inputKey));
+        await tester.pumpAndSettle();
+
+        final editorButton = find.byKey(editorOpenKey);
+        expect(editorButton, findsOneWidget);
+
+        final gesture = await tester.startGesture(
+          tester.getCenter(editorButton),
+          kind: PointerDeviceKind.mouse,
+        );
+        await tester.pump();
+        await gesture.up();
+        await tester.pumpAndSettle();
+
+        expect(find.byKey(editorPageKey), findsOneWidget);
+      } finally {
+        debugDefaultTargetPlatformOverride = null;
+      }
+    },
+  );
 }
 
 Widget _wrapChat({required AppBackend backend}) {

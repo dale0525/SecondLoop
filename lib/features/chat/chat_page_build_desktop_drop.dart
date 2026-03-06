@@ -10,41 +10,53 @@ extension _ChatPageStateDesktopDropComposer on _ChatPageState {
     if (!_isDesktopPlatform) return child;
     bool routeIsCurrent() => ModalRoute.of(context)?.isCurrent ?? true;
 
-    return DropTarget(
-      key: const ValueKey('chat_desktop_drop_target'),
-      onDragEntered: (_) {
+    return MouseRegion(
+      onEnter: (_) {
         if (!routeIsCurrent()) return;
-        if (!mounted || _desktopDropActive) return;
-        _setState(() => _desktopDropActive = true);
+        if (!mounted || _desktopComposerHovered) return;
+        _setState(() => _desktopComposerHovered = true);
       },
-      onDragExited: (_) {
+      onExit: (_) {
         if (!routeIsCurrent()) return;
-        if (!mounted || !_desktopDropActive) return;
-        _setState(() => _desktopDropActive = false);
+        if (!mounted || !_desktopComposerHovered) return;
+        _setState(() => _desktopComposerHovered = false);
       },
-      onDragDone: (detail) {
-        if (!routeIsCurrent()) return;
-        if (mounted && _desktopDropActive) {
+      child: DropTarget(
+        key: const ValueKey('chat_desktop_drop_target'),
+        onDragEntered: (_) {
+          if (!routeIsCurrent()) return;
+          if (!mounted || _desktopDropActive) return;
+          _setState(() => _desktopDropActive = true);
+        },
+        onDragExited: (_) {
+          if (!routeIsCurrent()) return;
+          if (!mounted || !_desktopDropActive) return;
           _setState(() => _desktopDropActive = false);
-        }
-        unawaited(_addDroppedDesktopFilesToComposerDraft(detail.files));
-      },
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 120),
-        curve: Curves.easeOutCubic,
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(tokens.radiusLg),
-          border: Border.all(
+        },
+        onDragDone: (detail) {
+          if (!routeIsCurrent()) return;
+          if (mounted && _desktopDropActive) {
+            _setState(() => _desktopDropActive = false);
+          }
+          unawaited(_addDroppedDesktopFilesToComposerDraft(detail.files));
+        },
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 120),
+          curve: Curves.easeOutCubic,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(tokens.radiusLg),
+            border: Border.all(
+              color: _desktopDropActive
+                  ? colorScheme.primary.withOpacity(0.5)
+                  : Colors.transparent,
+              width: _desktopDropActive ? 2 : 1,
+            ),
             color: _desktopDropActive
-                ? colorScheme.primary.withOpacity(0.5)
+                ? colorScheme.primaryContainer.withOpacity(0.16)
                 : Colors.transparent,
-            width: _desktopDropActive ? 2 : 1,
           ),
-          color: _desktopDropActive
-              ? colorScheme.primaryContainer.withOpacity(0.16)
-              : Colors.transparent,
+          child: child,
         ),
-        child: child,
       ),
     );
   }

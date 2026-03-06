@@ -2,6 +2,16 @@ part of 'chat_page.dart';
 
 extension _ChatPageStateInputKeyHandler on _ChatPageState {
   // ignore: deprecated_member_use
+  KeyEventResult _handleComposerFocusNodeOnKey(
+      FocusNode node, RawKeyEvent event) {
+    if (isMacOsCommandModifierKeyDown(event)) {
+      return KeyEventResult.handled;
+    }
+
+    return KeyEventResult.ignored;
+  }
+
+  // ignore: deprecated_member_use
   KeyEventResult _handleComposerOnKey(FocusNode node, RawKeyEvent event) {
     // ignore: deprecated_member_use
     if (event is! RawKeyDownEvent) {
@@ -9,27 +19,6 @@ extension _ChatPageStateInputKeyHandler on _ChatPageState {
     }
 
     final key = event.logicalKey;
-    bool isShortcutChar(String char) =>
-        char == 'a' || char == 'c' || char == 'v' || char == 'x';
-
-    String? keyChar;
-    final keyLabel = event.data.keyLabel;
-    if (keyLabel.length == 1) {
-      final lowered = keyLabel.toLowerCase();
-      if (isShortcutChar(lowered)) {
-        keyChar = lowered;
-      }
-    }
-    if (keyChar == null) {
-      final rawChar = event.character;
-      if (rawChar != null && rawChar.length == 1) {
-        final lowered = rawChar.toLowerCase();
-        if (isShortcutChar(lowered)) {
-          keyChar = lowered;
-        }
-      }
-    }
-
     final composing = _controller.value.composing;
     final isComposing = composing.isValid && !composing.isCollapsed;
 
@@ -41,18 +30,27 @@ extension _ChatPageStateInputKeyHandler on _ChatPageState {
         modifierData.isModifierPressed(ModifierKey.controlModifier);
     final shiftPressed = hardware.isShiftPressed ||
         modifierData.isModifierPressed(ModifierKey.shiftModifier);
-    final hasModifier = metaPressed || controlPressed;
+    final shortcut = resolveTextEditingShortcut(
+      key: key,
+      keyLabel: event.data.keyLabel,
+      character: event.character,
+      metaPressed: metaPressed,
+      controlPressed: controlPressed,
+      shiftPressed: shiftPressed,
+      supportedShortcuts: const <TextEditingShortcut>{
+        TextEditingShortcut.selectAll,
+        TextEditingShortcut.copy,
+        TextEditingShortcut.paste,
+        TextEditingShortcut.cut,
+      },
+    );
 
-    final isPaste = key == LogicalKeyboardKey.paste ||
-        ((keyChar == 'v' || key == LogicalKeyboardKey.keyV) && hasModifier);
-    if (isPaste) {
+    if (shortcut == TextEditingShortcut.paste) {
       unawaited(_pasteIntoChatInput());
       return KeyEventResult.handled;
     }
 
-    final isSelectAll = hasModifier &&
-        (keyChar == 'a' || (keyChar == null && key == LogicalKeyboardKey.keyA));
-    if (isSelectAll) {
+    if (shortcut == TextEditingShortcut.selectAll) {
       final textLength = _controller.value.text.length;
       _controller.selection = TextSelection(
         baseOffset: 0,
@@ -61,11 +59,7 @@ extension _ChatPageStateInputKeyHandler on _ChatPageState {
       return KeyEventResult.handled;
     }
 
-    final isCopy = (key == LogicalKeyboardKey.copy ||
-            keyChar == 'c' ||
-            key == LogicalKeyboardKey.keyC) &&
-        hasModifier;
-    if (isCopy) {
+    if (shortcut == TextEditingShortcut.copy) {
       final value = _controller.value;
       final selection = value.selection;
       if (selection.isValid && !selection.isCollapsed) {
@@ -84,11 +78,7 @@ extension _ChatPageStateInputKeyHandler on _ChatPageState {
       return KeyEventResult.handled;
     }
 
-    final isCut = (key == LogicalKeyboardKey.cut ||
-            keyChar == 'x' ||
-            key == LogicalKeyboardKey.keyX) &&
-        hasModifier;
-    if (isCut) {
+    if (shortcut == TextEditingShortcut.cut) {
       final value = _controller.value;
       final selection = value.selection;
       if (selection.isValid && !selection.isCollapsed) {

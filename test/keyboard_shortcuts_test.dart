@@ -39,13 +39,135 @@ void main() {
     await tester.tap(input);
     await tester.pump();
 
-    await tester.sendKeyDownEvent(LogicalKeyboardKey.metaLeft);
-    await tester.sendKeyEvent(LogicalKeyboardKey.keyV);
-    await tester.sendKeyUpEvent(LogicalKeyboardKey.metaLeft);
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.metaLeft,
+        platform: 'macos');
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyV, platform: 'macos');
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.metaLeft, platform: 'macos');
     await tester.pumpAndSettle();
 
     final field = tester.widget<TextField>(input);
     expect(field.controller!.text, 'pasted');
+  });
+
+  testWidgets('Cmd+V keeps existing text when caret is collapsed',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({
+      'welcome_guide_seen_v1': true,
+    });
+
+    String? clipboardText = ' world';
+    final messenger =
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+    messenger.setMockMethodCallHandler(SystemChannels.platform, (call) async {
+      switch (call.method) {
+        case 'Clipboard.getData':
+          return <String, dynamic>{'text': clipboardText};
+        case 'Clipboard.setData':
+          clipboardText = (call.arguments as Map)['text'] as String?;
+          return null;
+      }
+      return null;
+    });
+    addTearDown(
+      () => messenger.setMockMethodCallHandler(SystemChannels.platform, null),
+    );
+
+    await tester.pumpWidget(MyApp(backend: _AutoUnlockedBackend()));
+    await tester.pumpAndSettle();
+
+    final input = find.byKey(const ValueKey('chat_input'));
+    expect(input, findsOneWidget);
+
+    await tester.tap(input);
+    await tester.pump();
+    await tester.enterText(input, 'hello');
+    await tester.pumpAndSettle();
+
+    final fieldBeforePaste = tester.widget<TextField>(input);
+    fieldBeforePaste.controller!.selection = const TextSelection.collapsed(
+      offset: 5,
+    );
+    await tester.pump();
+
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.metaLeft,
+        platform: 'macos');
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyV, platform: 'macos');
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.metaLeft, platform: 'macos');
+    await tester.pumpAndSettle();
+
+    final field = tester.widget<TextField>(input);
+    expect(field.controller!.text, 'hello world');
+    expect(field.controller!.selection.isCollapsed, isTrue);
+    expect(field.controller!.selection.baseOffset, 11);
+  });
+
+  testWidgets('Cmd+A still selects all text in chat input on macOS',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({
+      'welcome_guide_seen_v1': true,
+    });
+
+    await tester.pumpWidget(MyApp(backend: _AutoUnlockedBackend()));
+    await tester.pumpAndSettle();
+
+    final input = find.byKey(const ValueKey('chat_input'));
+    expect(input, findsOneWidget);
+
+    await tester.tap(input);
+    await tester.pump();
+    await tester.enterText(input, 'hello');
+    await tester.pumpAndSettle();
+
+    final fieldBeforeSelectAll = tester.widget<TextField>(input);
+    fieldBeforeSelectAll.controller!.selection = const TextSelection.collapsed(
+      offset: 5,
+    );
+    await tester.pump();
+
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.metaLeft,
+        platform: 'macos');
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyA, platform: 'macos');
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.metaLeft, platform: 'macos');
+    await tester.pumpAndSettle();
+
+    final fieldAfterSelectAll = tester.widget<TextField>(input);
+    expect(fieldAfterSelectAll.controller!.selection.baseOffset, 0);
+    expect(fieldAfterSelectAll.controller!.selection.extentOffset, 5);
+  });
+
+  testWidgets('Pressing Cmd alone keeps chat selection collapsed',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({
+      'welcome_guide_seen_v1': true,
+    });
+
+    await tester.pumpWidget(MyApp(backend: _AutoUnlockedBackend()));
+    await tester.pumpAndSettle();
+
+    final input = find.byKey(const ValueKey('chat_input'));
+    expect(input, findsOneWidget);
+
+    await tester.tap(input);
+    await tester.pump();
+    await tester.enterText(input, 'hello');
+    await tester.pumpAndSettle();
+
+    final fieldBeforeCmd = tester.widget<TextField>(input);
+    fieldBeforeCmd.controller!.selection = const TextSelection.collapsed(
+      offset: 5,
+    );
+    await tester.pump();
+
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.metaLeft,
+        platform: 'macos');
+    await tester.pump();
+
+    final fieldAfterCmdDown = tester.widget<TextField>(input);
+    expect(fieldAfterCmdDown.controller!.selection.isCollapsed, isTrue);
+    expect(fieldAfterCmdDown.controller!.selection.baseOffset, 5);
+
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.metaLeft, platform: 'macos');
+    await tester.pumpAndSettle();
   });
 }
 

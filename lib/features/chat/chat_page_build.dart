@@ -452,7 +452,8 @@ extension _ChatPageStateBuild on _ChatPageState {
                                           ListenableBuilder(
                                             listenable: _inputFocusNode,
                                             builder: (context, child) {
-                                              if (!_inputFocusNode.hasFocus) {
+                                              if (!_inputFocusNode.hasFocus &&
+                                                  !_desktopComposerHovered) {
                                                 return const SizedBox.shrink();
                                               }
                                               return Row(
