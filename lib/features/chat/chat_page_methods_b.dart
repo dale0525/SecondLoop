@@ -87,6 +87,8 @@ extension _ChatPageStateMethodsB on _ChatPageState {
         annotationJobs: const <AttachmentAnnotationJob>[],
         attachmentAnnotationEnabled: false,
         attachmentAnnotationCanRunNow: false,
+        audioTranscribeEnabled: false,
+        audioTranscribeCanRunNow: false,
       );
     }
 
@@ -136,6 +138,12 @@ extension _ChatPageStateMethodsB on _ChatPageState {
             nativeBackend,
             sessionKey,
           ).catchError((_) => (enabled: false, canRunNow: false));
+    final audioUi = nativeBackend == null || annotationJobs.isEmpty
+        ? (enabled: false, canRunNow: false)
+        : await _loadAudioTranscribeUiState(
+            nativeBackend,
+            sessionKey,
+          ).catchError((_) => (enabled: false, canRunNow: false));
 
     return (
       semanticJobs: semanticJobs,
@@ -143,6 +151,8 @@ extension _ChatPageStateMethodsB on _ChatPageState {
       annotationJobs: annotationJobs,
       attachmentAnnotationEnabled: annotationUi.enabled,
       attachmentAnnotationCanRunNow: annotationUi.canRunNow,
+      audioTranscribeEnabled: audioUi.enabled,
+      audioTranscribeCanRunNow: audioUi.canRunNow,
     );
   }
 

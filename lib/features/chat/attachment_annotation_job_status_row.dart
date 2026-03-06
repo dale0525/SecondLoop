@@ -19,6 +19,7 @@ class AttachmentAnnotationJobStatusRow extends StatefulWidget {
     required this.job,
     required this.annotateEnabled,
     required this.canAnnotateNow,
+    this.setupRequiredLabel,
     this.onOpenSetup,
     this.onOpenLocalCapabilityDownload,
     this.onRetry,
@@ -30,6 +31,7 @@ class AttachmentAnnotationJobStatusRow extends StatefulWidget {
   final AttachmentAnnotationJob job;
   final bool annotateEnabled;
   final bool canAnnotateNow;
+  final String? setupRequiredLabel;
   final Future<void> Function()? onOpenSetup;
   final Future<void> Function()? onOpenLocalCapabilityDownload;
   final Future<void> Function()? onRetry;
@@ -345,7 +347,8 @@ class _AttachmentAnnotationJobStatusRowState
             const SizedBox(width: 6),
             Flexible(
               child: Text(
-                t.chat.attachmentAnnotationNeedsSetup,
+                widget.setupRequiredLabel ??
+                    t.chat.attachmentAnnotationNeedsSetup,
                 style: textStyle,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,

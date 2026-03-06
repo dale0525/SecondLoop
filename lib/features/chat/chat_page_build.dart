@@ -268,6 +268,12 @@ extension _ChatPageStateBuild on _ChatPageState {
                                           .data
                                           ?.attachmentAnnotationCanRunNow ??
                                       false,
+                                  audioTranscribeEnabled: snapshotJobs
+                                          .data?.audioTranscribeEnabled ??
+                                      false,
+                                  audioTranscribeCanRunNow: snapshotJobs
+                                          .data?.audioTranscribeCanRunNow ??
+                                      false,
                                   colorScheme: colorScheme,
                                   tokens: tokens,
                                   isDesktopPlatform: isDesktopPlatform,

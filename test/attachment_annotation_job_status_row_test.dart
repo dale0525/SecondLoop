@@ -369,4 +369,39 @@ void main() {
       findsOneWidget,
     );
   });
+
+  testWidgets(
+      'AttachmentAnnotationJobStatusRow uses provided setup label when capability is unavailable',
+      (tester) async {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final job = AttachmentAnnotationJob(
+      attachmentSha256: 'setup-audio',
+      status: 'pending',
+      lang: 'en',
+      modelName: null,
+      attempts: 0,
+      nextRetryAtMs: null,
+      lastError: null,
+      createdAtMs: now - 2000,
+      updatedAtMs: now - 2000,
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: Scaffold(
+            body: AttachmentAnnotationJobStatusRow(
+              job: job,
+              annotateEnabled: true,
+              canAnnotateNow: false,
+              setupRequiredLabel: 'Audio transcription needs setup',
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('Audio transcription needs setup'), findsOneWidget);
+    expect(find.text('Image annotations need setup'), findsNothing);
+  });
 }
