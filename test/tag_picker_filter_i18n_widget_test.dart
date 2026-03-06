@@ -360,7 +360,7 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('open_tag_filter_mode')));
     await tester.pumpAndSettle();
 
-    expect(find.text('Tap: Include  ·  Tap again: Exclude'), findsOneWidget);
+    expect(find.text('Tap: Include · Tap again: Exclude'), findsOneWidget);
 
     await tester
         .tap(find.byKey(const ValueKey('tag_filter_chip_system.tag.work')));
@@ -426,7 +426,7 @@ void main() {
     expect(
         find.byKey(const ValueKey('tag_picker_merge_title')), findsOneWidget);
     expect(find.text('Merge suggestions'), findsOneWidget);
-    expect(find.text('weekly-review -> Weekly Review'), findsOneWidget);
+    expect(find.text('weekly-review → Weekly Review'), findsOneWidget);
 
     await tester.tap(
       find.byKey(
@@ -797,6 +797,7 @@ void main() {
       find.byKey(const ValueKey('manual_tag_merge_hidden_title')),
       findsOneWidget,
     );
+    expect(find.text('Ignored merge suggestions (6)'), findsOneWidget);
 
     await tester
         .tap(find.byKey(const ValueKey('manual_tag_merge_hidden_expand')));

@@ -517,9 +517,19 @@ class _MessageTagPickerSheetState extends State<_MessageTagPickerSheet> {
                                 localizeTagName(locale, suggestion.targetTag);
                             final sourceUsage =
                                 suggestion.sourceUsageCount.toInt();
-                            final mergeTitle = '$sourceLabel -> $targetLabel';
-                            final mergeSubtitle =
-                                '${_mergeReasonLabel(suggestion.reason)} · ${context.t.chat.tagPicker.mergeSuggestionMessages(count: sourceUsage)}';
+                            final mergeTitle =
+                                context.t.chat.tagPicker.mergeSuggestionTitle(
+                              source: sourceLabel,
+                              target: targetLabel,
+                            );
+                            final mergeSubtitle = context.t.chat.tagPicker
+                                .mergeSuggestionSubtitle(
+                              reason: _mergeReasonLabel(suggestion.reason),
+                              messages: context.t.chat.tagPicker
+                                  .mergeSuggestionMessages(
+                                count: sourceUsage,
+                              ),
+                            );
 
                             return Container(
                               margin: const EdgeInsets.only(bottom: 8),

@@ -291,9 +291,16 @@ class _ManualTagMergeSheetState extends State<_ManualTagMergeSheet> {
     final sourceLabel = localizeTagName(locale, suggestion.sourceTag);
     final targetLabel = localizeTagName(locale, suggestion.targetTag);
     final sourceUsage = suggestion.sourceUsageCount.toInt();
-    final mergeTitle = '$sourceLabel → $targetLabel';
-    final mergeSubtitle =
-        '${_mergeReasonLabel(suggestion.reason)} · ${context.t.chat.tagPicker.mergeSuggestionMessages(count: sourceUsage)}';
+    final mergeTitle = context.t.chat.tagPicker.mergeSuggestionTitle(
+      source: sourceLabel,
+      target: targetLabel,
+    );
+    final mergeSubtitle = context.t.chat.tagPicker.mergeSuggestionSubtitle(
+      reason: _mergeReasonLabel(suggestion.reason),
+      messages: context.t.chat.tagPicker.mergeSuggestionMessages(
+        count: sourceUsage,
+      ),
+    );
 
     return Material(
       color: colorScheme.surface,
@@ -335,8 +342,9 @@ class _ManualTagMergeSheetState extends State<_ManualTagMergeSheet> {
     final canSubmit = _selectedSourceTag != null && _selectedTargetTag != null;
     final showHiddenSearch =
         _hiddenSuggestions.length >= _hiddenSearchThreshold && _hiddenExpanded;
-    final hiddenTitle =
-        '${context.t.chat.tagPicker.hiddenMergeSuggestions} (${_hiddenSuggestions.length})';
+    final hiddenTitle = context.t.chat.tagPicker.hiddenMergeSuggestionsCount(
+      count: _hiddenSuggestions.length,
+    );
     final hiddenListHeight = math.min(
       320.0,
       math.max(120.0, filteredHiddenSuggestions.length * 88.0),

@@ -1060,6 +1060,7 @@
         "clear": "Clear",
         "includeHint": "Tap: Include",
         "excludeHint": "Tap again: Exclude",
+        "modeHint": "$includeHint · $excludeHint",
         "empty": "No tags yet"
       }
     },
@@ -1084,6 +1085,8 @@
       "manualMergeSystemTagsSection": "System tags",
       "mergeDismissAction": "Dismiss",
       "mergeLaterAction": "Later",
+      "mergeSuggestionTitle": "$source → $target",
+      "mergeSuggestionSubtitle": "$reason · $messages",
       "mergeSuggestionMessages": "Affects $count tagged messages",
       "mergeReasonSystemDomain": "Matches system domain",
       "mergeReasonNameCompact": "Likely duplicate name",
@@ -1097,6 +1100,7 @@
       "mergeDismissed": "Merge suggestion dismissed",
       "mergeSavedForLater": "Merge suggestion saved for later",
       "hiddenMergeSuggestions": "Ignored merge suggestions",
+      "hiddenMergeSuggestionsCount": "Ignored merge suggestions ($count)",
       "hiddenMergeAcceptAction": "Accept",
       "hiddenMergeRestoreAction": "Show again",
       "hiddenMergeRestored": "Merge suggestion restored",

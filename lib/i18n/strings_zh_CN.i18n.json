@@ -1060,6 +1060,7 @@
         "clear": "清空",
         "includeHint": "点击：包含",
         "excludeHint": "再次点击：排除",
+        "modeHint": "$includeHint · $excludeHint",
         "empty": "暂无标签"
       }
     },
@@ -1084,6 +1085,8 @@
       "manualMergeSystemTagsSection": "系统标签",
       "mergeDismissAction": "忽略",
       "mergeLaterAction": "稍后",
+      "mergeSuggestionTitle": "$source → $target",
+      "mergeSuggestionSubtitle": "$reason · $messages",
       "mergeSuggestionMessages": "将影响 $count 条已打标签消息",
       "mergeReasonSystemDomain": "匹配系统领域标签",
       "mergeReasonNameCompact": "可能是重复标签",
@@ -1097,6 +1100,7 @@
       "mergeDismissed": "已忽略该合并建议",
       "mergeSavedForLater": "已暂存该合并建议",
       "hiddenMergeSuggestions": "已忽略的合并建议",
+      "hiddenMergeSuggestionsCount": "已忽略的合并建议（$count）",
       "hiddenMergeAcceptAction": "接受",
       "hiddenMergeRestoreAction": "恢复显示",
       "hiddenMergeRestored": "已恢复该合并建议",
