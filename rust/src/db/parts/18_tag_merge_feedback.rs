@@ -179,6 +179,34 @@ pub fn record_tag_merge_feedback(
     Ok(())
 }
 
+pub fn clear_tag_merge_feedback(
+    conn: &Connection,
+    source_tag_id: &str,
+    target_tag_id: &str,
+) -> Result<()> {
+    let source_tag_id = source_tag_id.trim();
+    if source_tag_id.is_empty() {
+        return Err(anyhow!("source_tag_id cannot be empty"));
+    }
+
+    let target_tag_id = target_tag_id.trim();
+    if target_tag_id.is_empty() {
+        return Err(anyhow!("target_tag_id cannot be empty"));
+    }
+
+    if source_tag_id == target_tag_id {
+        return Err(anyhow!("source_tag_id and target_tag_id must differ"));
+    }
+
+    conn.execute(
+        r#"DELETE FROM tag_merge_feedback
+           WHERE source_tag_id = ?1 AND target_tag_id = ?2"#,
+        params![source_tag_id, target_tag_id],
+    )?;
+
+    Ok(())
+}
+
 fn feedback_pair_adjustment(accept_count: i64, dismiss_count: i64, later_count: i64) -> f64 {
     let accepted = accept_count.max(0) as f64;
     let dismissed = dismiss_count.max(0) as f64;
@@ -216,6 +244,34 @@ fn load_pair_feedback_adjustments(
         }
 
         out.insert((source_tag_id, target_tag_id), adjustment);
+    }
+
+    Ok(out)
+}
+
+pub fn load_hidden_tag_merge_pairs(
+    conn: &Connection,
+) -> Result<std::collections::BTreeSet<(String, String)>> {
+    let mut stmt = conn.prepare(
+        r#"SELECT source_tag_id,
+                  target_tag_id,
+                  SUM(accept_count) AS accept_total,
+                  SUM(dismiss_count) AS dismiss_total
+           FROM tag_merge_feedback
+           GROUP BY source_tag_id, target_tag_id"#,
+    )?;
+    let mut rows = stmt.query([])?;
+
+    let mut out = std::collections::BTreeSet::<(String, String)>::new();
+    while let Some(row) = rows.next()? {
+        let source_tag_id: String = row.get(0)?;
+        let target_tag_id: String = row.get(1)?;
+        let accept_total: i64 = row.get(2)?;
+        let dismiss_total: i64 = row.get(3)?;
+
+        if dismiss_total > accept_total {
+            out.insert((source_tag_id, target_tag_id));
+        }
     }
 
     Ok(out)

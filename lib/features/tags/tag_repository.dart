@@ -114,6 +114,21 @@ class TagRepository {
     );
   }
 
+  Future<List<TagMergeSuggestion>> listHiddenTagMergeSuggestions(
+    Uint8List key, {
+    int limit = 10,
+  }) async {
+    final appDir = await _resolveAppDirOrNull();
+    if (appDir == null) return const <TagMergeSuggestion>[];
+
+    final clampedLimit = limit <= 0 ? 10 : (limit > 50 ? 50 : limit);
+    return rust_tags.dbListHiddenTagMergeSuggestions(
+      appDir: appDir,
+      key: key,
+      limit: clampedLimit,
+    );
+  }
+
   Future<int> mergeTags(
     Uint8List key, {
     required String sourceTagId,
@@ -148,6 +163,20 @@ class TagRepository {
       targetTagId: targetTagId,
       reason: reason,
       action: action.wireValue,
+    );
+  }
+
+  Future<void> clearTagMergeFeedback(
+    Uint8List key, {
+    required String sourceTagId,
+    required String targetTagId,
+  }) async {
+    final appDir = await _requireAppDir();
+    await rust_tags.dbClearTagMergeFeedback(
+      appDir: appDir,
+      key: key,
+      sourceTagId: sourceTagId,
+      targetTagId: targetTagId,
     );
   }
 

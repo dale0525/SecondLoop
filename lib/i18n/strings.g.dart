@@ -4,9 +4,9 @@
 /// To regenerate, run: `dart run slang`
 ///
 /// Locales: 2
-/// Strings: 1808 (904 per locale)
+/// Strings: 1850 (925 per locale)
 ///
-/// Built on 2026-03-06 at 05:13 UTC
+/// Built on 2026-03-06 at 16:00 UTC
 
 // coverage:ignore-file
 // ignore_for_file: type=lint
@@ -1698,8 +1698,27 @@ class _StringsChatTagPickerEn {
       'AI confidence is low. Please confirm before applying.';
   String get mergeSuggestions => 'Merge suggestions';
   String get mergeAction => 'Merge';
+  String get manualMergeAction => 'Manual merge';
+  String get manualMergeSourceTitle => 'Choose source tag';
+  String get manualMergeSourceHint => 'Pick the tag you want to merge from';
+  String get manualMergeTargetTitle => 'Merge into';
+  String get manualMergeTargetHint => 'Pick the destination tag';
+  String get manualMergeSelectSourceFirst => 'Select a source tag first';
+  String get manualMergeSearchHint => 'Search tags';
+  String get manualMergeNoMatches => 'No matching tags';
+  String get manualMergeSelectedSection => 'Selected';
+  String get manualMergeBestMatchesSection => 'Best matches';
+  String get manualMergeOtherMatchesSection => 'Other matches';
+  String get manualMergeCustomTagsSection => 'Custom tags';
+  String get manualMergeSystemTagsSection => 'System tags';
   String get mergeDismissAction => 'Dismiss';
   String get mergeLaterAction => 'Later';
+  String mergeSuggestionTitle(
+          {required Object source, required Object target}) =>
+      '${source} → ${target}';
+  String mergeSuggestionSubtitle(
+          {required Object reason, required Object messages}) =>
+      '${reason} · ${messages}';
   String mergeSuggestionMessages({required Object count}) =>
       'Affects ${count} tagged messages';
   String get mergeReasonSystemDomain => 'Matches system domain';
@@ -1710,6 +1729,12 @@ class _StringsChatTagPickerEn {
   String mergeApplied({required Object count}) => 'Merged ${count} messages';
   String get mergeDismissed => 'Merge suggestion dismissed';
   String get mergeSavedForLater => 'Merge suggestion saved for later';
+  String get hiddenMergeSuggestions => 'Ignored merge suggestions';
+  String hiddenMergeSuggestionsCount({required Object count}) =>
+      'Ignored merge suggestions (${count})';
+  String get hiddenMergeAcceptAction => 'Accept';
+  String get hiddenMergeRestoreAction => 'Show again';
+  String get hiddenMergeRestored => 'Merge suggestion restored';
   late final _StringsChatTagPickerDeleteDialogEn deleteDialog =
       _StringsChatTagPickerDeleteDialogEn._(_root);
   String get deleted => 'Tag deleted';
@@ -3048,6 +3073,8 @@ class _StringsChatTagFilterSheetEn {
   String get clear => 'Clear';
   String get includeHint => 'Tap: Include';
   String get excludeHint => 'Tap again: Exclude';
+  String modeHint({required Object includeHint, required Object excludeHint}) =>
+      '${includeHint} · ${excludeHint}';
   String get empty => 'No tags yet';
 }
 
@@ -6282,9 +6309,43 @@ class _StringsChatTagPickerZhCn extends _StringsChatTagPickerEn {
   @override
   String get mergeAction => '合并';
   @override
+  String get manualMergeAction => '手动合并';
+  @override
+  String get manualMergeSourceTitle => '选择来源标签';
+  @override
+  String get manualMergeSourceHint => '选择要被合并掉的标签';
+  @override
+  String get manualMergeTargetTitle => '合并到';
+  @override
+  String get manualMergeTargetHint => '选择要保留下来的目标标签';
+  @override
+  String get manualMergeSelectSourceFirst => '请先选择来源标签';
+  @override
+  String get manualMergeSearchHint => '搜索标签';
+  @override
+  String get manualMergeNoMatches => '没有匹配的标签';
+  @override
+  String get manualMergeSelectedSection => '当前选择';
+  @override
+  String get manualMergeBestMatchesSection => '最佳匹配';
+  @override
+  String get manualMergeOtherMatchesSection => '其他匹配';
+  @override
+  String get manualMergeCustomTagsSection => '自定义标签';
+  @override
+  String get manualMergeSystemTagsSection => '系统标签';
+  @override
   String get mergeDismissAction => '忽略';
   @override
   String get mergeLaterAction => '稍后';
+  @override
+  String mergeSuggestionTitle(
+          {required Object source, required Object target}) =>
+      '${source} → ${target}';
+  @override
+  String mergeSuggestionSubtitle(
+          {required Object reason, required Object messages}) =>
+      '${reason} · ${messages}';
   @override
   String mergeSuggestionMessages({required Object count}) =>
       '将影响 ${count} 条已打标签消息';
@@ -6303,6 +6364,17 @@ class _StringsChatTagPickerZhCn extends _StringsChatTagPickerEn {
   String get mergeDismissed => '已忽略该合并建议';
   @override
   String get mergeSavedForLater => '已暂存该合并建议';
+  @override
+  String get hiddenMergeSuggestions => '已忽略的合并建议';
+  @override
+  String hiddenMergeSuggestionsCount({required Object count}) =>
+      '已忽略的合并建议（${count}）';
+  @override
+  String get hiddenMergeAcceptAction => '接受';
+  @override
+  String get hiddenMergeRestoreAction => '恢复显示';
+  @override
+  String get hiddenMergeRestored => '已恢复该合并建议';
   @override
   late final _StringsChatTagPickerDeleteDialogZhCn deleteDialog =
       _StringsChatTagPickerDeleteDialogZhCn._(_root);
@@ -8322,6 +8394,9 @@ class _StringsChatTagFilterSheetZhCn extends _StringsChatTagFilterSheetEn {
   String get includeHint => '点击：包含';
   @override
   String get excludeHint => '再次点击：排除';
+  @override
+  String modeHint({required Object includeHint, required Object excludeHint}) =>
+      '${includeHint} · ${excludeHint}';
   @override
   String get empty => '暂无标签';
 }
@@ -11051,6 +11126,9 @@ extension on Translations {
         return 'Tap: Include';
       case 'chat.tagFilter.sheet.excludeHint':
         return 'Tap again: Exclude';
+      case 'chat.tagFilter.sheet.modeHint':
+        return ({required Object includeHint, required Object excludeHint}) =>
+            '${includeHint} · ${excludeHint}';
       case 'chat.tagFilter.sheet.empty':
         return 'No tags yet';
       case 'chat.tagPicker.title':
@@ -11063,10 +11141,42 @@ extension on Translations {
         return 'Merge suggestions';
       case 'chat.tagPicker.mergeAction':
         return 'Merge';
+      case 'chat.tagPicker.manualMergeAction':
+        return 'Manual merge';
+      case 'chat.tagPicker.manualMergeSourceTitle':
+        return 'Choose source tag';
+      case 'chat.tagPicker.manualMergeSourceHint':
+        return 'Pick the tag you want to merge from';
+      case 'chat.tagPicker.manualMergeTargetTitle':
+        return 'Merge into';
+      case 'chat.tagPicker.manualMergeTargetHint':
+        return 'Pick the destination tag';
+      case 'chat.tagPicker.manualMergeSelectSourceFirst':
+        return 'Select a source tag first';
+      case 'chat.tagPicker.manualMergeSearchHint':
+        return 'Search tags';
+      case 'chat.tagPicker.manualMergeNoMatches':
+        return 'No matching tags';
+      case 'chat.tagPicker.manualMergeSelectedSection':
+        return 'Selected';
+      case 'chat.tagPicker.manualMergeBestMatchesSection':
+        return 'Best matches';
+      case 'chat.tagPicker.manualMergeOtherMatchesSection':
+        return 'Other matches';
+      case 'chat.tagPicker.manualMergeCustomTagsSection':
+        return 'Custom tags';
+      case 'chat.tagPicker.manualMergeSystemTagsSection':
+        return 'System tags';
       case 'chat.tagPicker.mergeDismissAction':
         return 'Dismiss';
       case 'chat.tagPicker.mergeLaterAction':
         return 'Later';
+      case 'chat.tagPicker.mergeSuggestionTitle':
+        return ({required Object source, required Object target}) =>
+            '${source} → ${target}';
+      case 'chat.tagPicker.mergeSuggestionSubtitle':
+        return ({required Object reason, required Object messages}) =>
+            '${reason} · ${messages}';
       case 'chat.tagPicker.mergeSuggestionMessages':
         return ({required Object count}) => 'Affects ${count} tagged messages';
       case 'chat.tagPicker.mergeReasonSystemDomain':
@@ -11088,6 +11198,17 @@ extension on Translations {
         return 'Merge suggestion dismissed';
       case 'chat.tagPicker.mergeSavedForLater':
         return 'Merge suggestion saved for later';
+      case 'chat.tagPicker.hiddenMergeSuggestions':
+        return 'Ignored merge suggestions';
+      case 'chat.tagPicker.hiddenMergeSuggestionsCount':
+        return ({required Object count}) =>
+            'Ignored merge suggestions (${count})';
+      case 'chat.tagPicker.hiddenMergeAcceptAction':
+        return 'Accept';
+      case 'chat.tagPicker.hiddenMergeRestoreAction':
+        return 'Show again';
+      case 'chat.tagPicker.hiddenMergeRestored':
+        return 'Merge suggestion restored';
       case 'chat.tagPicker.deleteDialog.title':
         return 'Delete tag?';
       case 'chat.tagPicker.deleteDialog.message':
@@ -12897,6 +13018,9 @@ extension on _StringsZhCn {
         return '点击：包含';
       case 'chat.tagFilter.sheet.excludeHint':
         return '再次点击：排除';
+      case 'chat.tagFilter.sheet.modeHint':
+        return ({required Object includeHint, required Object excludeHint}) =>
+            '${includeHint} · ${excludeHint}';
       case 'chat.tagFilter.sheet.empty':
         return '暂无标签';
       case 'chat.tagPicker.title':
@@ -12909,10 +13033,42 @@ extension on _StringsZhCn {
         return '合并建议';
       case 'chat.tagPicker.mergeAction':
         return '合并';
+      case 'chat.tagPicker.manualMergeAction':
+        return '手动合并';
+      case 'chat.tagPicker.manualMergeSourceTitle':
+        return '选择来源标签';
+      case 'chat.tagPicker.manualMergeSourceHint':
+        return '选择要被合并掉的标签';
+      case 'chat.tagPicker.manualMergeTargetTitle':
+        return '合并到';
+      case 'chat.tagPicker.manualMergeTargetHint':
+        return '选择要保留下来的目标标签';
+      case 'chat.tagPicker.manualMergeSelectSourceFirst':
+        return '请先选择来源标签';
+      case 'chat.tagPicker.manualMergeSearchHint':
+        return '搜索标签';
+      case 'chat.tagPicker.manualMergeNoMatches':
+        return '没有匹配的标签';
+      case 'chat.tagPicker.manualMergeSelectedSection':
+        return '当前选择';
+      case 'chat.tagPicker.manualMergeBestMatchesSection':
+        return '最佳匹配';
+      case 'chat.tagPicker.manualMergeOtherMatchesSection':
+        return '其他匹配';
+      case 'chat.tagPicker.manualMergeCustomTagsSection':
+        return '自定义标签';
+      case 'chat.tagPicker.manualMergeSystemTagsSection':
+        return '系统标签';
       case 'chat.tagPicker.mergeDismissAction':
         return '忽略';
       case 'chat.tagPicker.mergeLaterAction':
         return '稍后';
+      case 'chat.tagPicker.mergeSuggestionTitle':
+        return ({required Object source, required Object target}) =>
+            '${source} → ${target}';
+      case 'chat.tagPicker.mergeSuggestionSubtitle':
+        return ({required Object reason, required Object messages}) =>
+            '${reason} · ${messages}';
       case 'chat.tagPicker.mergeSuggestionMessages':
         return ({required Object count}) => '将影响 ${count} 条已打标签消息';
       case 'chat.tagPicker.mergeReasonSystemDomain':
@@ -12934,6 +13090,16 @@ extension on _StringsZhCn {
         return '已忽略该合并建议';
       case 'chat.tagPicker.mergeSavedForLater':
         return '已暂存该合并建议';
+      case 'chat.tagPicker.hiddenMergeSuggestions':
+        return '已忽略的合并建议';
+      case 'chat.tagPicker.hiddenMergeSuggestionsCount':
+        return ({required Object count}) => '已忽略的合并建议（${count}）';
+      case 'chat.tagPicker.hiddenMergeAcceptAction':
+        return '接受';
+      case 'chat.tagPicker.hiddenMergeRestoreAction':
+        return '恢复显示';
+      case 'chat.tagPicker.hiddenMergeRestored':
+        return '已恢复该合并建议';
       case 'chat.tagPicker.deleteDialog.title':
         return '删除标签？';
       case 'chat.tagPicker.deleteDialog.message':

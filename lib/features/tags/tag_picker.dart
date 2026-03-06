@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 
 import '../../i18n/strings.g.dart';
 import '../../src/rust/db.dart';
+import 'manual_tag_merge_sheet.dart';
 import 'tag_localization.dart';
 import 'tag_repository.dart';
 
@@ -184,12 +185,16 @@ class _MessageTagPickerSheetState extends State<_MessageTagPickerSheet> {
     };
   }
 
-  Future<void> _confirmAndApplyMerge(TagMergeSuggestion suggestion) async {
+  Future<void> _confirmAndApplyMergePair({
+    required Tag sourceTag,
+    required Tag targetTag,
+    String? feedbackReason,
+  }) async {
     if (_saving) return;
 
     final locale = Localizations.localeOf(context);
-    final sourceLabel = localizeTagName(locale, suggestion.sourceTag);
-    final targetLabel = localizeTagName(locale, suggestion.targetTag);
+    final sourceLabel = localizeTagName(locale, sourceTag);
+    final targetLabel = localizeTagName(locale, targetTag);
 
     final confirmed = await showDialog<bool>(
       context: context,
@@ -227,19 +232,21 @@ class _MessageTagPickerSheetState extends State<_MessageTagPickerSheet> {
     try {
       final updated = await widget.repository.mergeTags(
         widget.sessionKey,
-        sourceTagId: suggestion.sourceTag.id,
-        targetTagId: suggestion.targetTag.id,
+        sourceTagId: sourceTag.id,
+        targetTagId: targetTag.id,
       );
 
-      unawaited(
-        widget.repository.recordTagMergeFeedback(
-          widget.sessionKey,
-          sourceTagId: suggestion.sourceTag.id,
-          targetTagId: suggestion.targetTag.id,
-          reason: suggestion.reason,
-          action: TagMergeFeedbackAction.accept,
-        ),
-      );
+      if (feedbackReason != null) {
+        unawaited(
+          widget.repository.recordTagMergeFeedback(
+            widget.sessionKey,
+            sourceTagId: sourceTag.id,
+            targetTagId: targetTag.id,
+            reason: feedbackReason,
+            action: TagMergeFeedbackAction.accept,
+          ),
+        );
+      }
 
       if (!mounted) return;
 
@@ -259,6 +266,43 @@ class _MessageTagPickerSheetState extends State<_MessageTagPickerSheet> {
       if (mounted) {
         setState(() => _saving = false);
       }
+    }
+  }
+
+  Future<void> _confirmAndApplyMerge(TagMergeSuggestion suggestion) async {
+    await _confirmAndApplyMergePair(
+      sourceTag: suggestion.sourceTag,
+      targetTag: suggestion.targetTag,
+      feedbackReason: suggestion.reason,
+    );
+  }
+
+  Future<void> _openManualMergeSheet() async {
+    if (_saving ||
+        _allTags.length < 2 ||
+        !_allTags.any((tag) => !tag.isSystem)) {
+      return;
+    }
+
+    final result = await showManualTagMergeSheet(
+      context: context,
+      sessionKey: widget.sessionKey,
+      allTags: _allTags,
+      repository: widget.repository,
+    );
+    if (result == null || !mounted) return;
+
+    if (result.sourceTag != null && result.targetTag != null) {
+      await _confirmAndApplyMergePair(
+        sourceTag: result.sourceTag!,
+        targetTag: result.targetTag!,
+        feedbackReason: result.feedbackReason,
+      );
+      return;
+    }
+
+    if (result.didChangeSuggestions) {
+      await _load();
     }
   }
 
@@ -383,6 +427,7 @@ class _MessageTagPickerSheetState extends State<_MessageTagPickerSheet> {
     final mergeDismissLabel = context.t.chat.tagPicker.mergeDismissAction;
     final mergeLaterLabel = context.t.chat.tagPicker.mergeLaterAction;
     final allTitle = context.t.chat.tagPicker.all;
+    final manualMergeLabel = context.t.chat.tagPicker.manualMergeAction;
     final addHint = context.t.chat.tagPicker.inputHint;
     final addLabel = context.t.chat.tagPicker.add;
     final saveLabel = context.t.chat.tagPicker.save;
@@ -472,9 +517,19 @@ class _MessageTagPickerSheetState extends State<_MessageTagPickerSheet> {
                                 localizeTagName(locale, suggestion.targetTag);
                             final sourceUsage =
                                 suggestion.sourceUsageCount.toInt();
-                            final mergeTitle = '$sourceLabel -> $targetLabel';
-                            final mergeSubtitle =
-                                '${_mergeReasonLabel(suggestion.reason)} · ${context.t.chat.tagPicker.mergeSuggestionMessages(count: sourceUsage)}';
+                            final mergeTitle =
+                                context.t.chat.tagPicker.mergeSuggestionTitle(
+                              source: sourceLabel,
+                              target: targetLabel,
+                            );
+                            final mergeSubtitle = context.t.chat.tagPicker
+                                .mergeSuggestionSubtitle(
+                              reason: _mergeReasonLabel(suggestion.reason),
+                              messages: context.t.chat.tagPicker
+                                  .mergeSuggestionMessages(
+                                count: sourceUsage,
+                              ),
+                            );
 
                             return Container(
                               margin: const EdgeInsets.only(bottom: 8),
@@ -564,9 +619,25 @@ class _MessageTagPickerSheetState extends State<_MessageTagPickerSheet> {
                         ),
                         const SizedBox(height: 16),
                       ],
-                      Text(
-                        allTitle,
-                        style: Theme.of(context).textTheme.titleSmall,
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              allTitle,
+                              style: Theme.of(context).textTheme.titleSmall,
+                            ),
+                          ),
+                          TextButton.icon(
+                            key: const ValueKey('tag_picker_manual_merge'),
+                            onPressed: _saving ||
+                                    _allTags.length < 2 ||
+                                    !_allTags.any((tag) => !tag.isSystem)
+                                ? null
+                                : () => unawaited(_openManualMergeSheet()),
+                            icon: const Icon(Icons.merge_type),
+                            label: Text(manualMergeLabel),
+                          ),
+                        ],
                       ),
                       const SizedBox(height: 8),
                       Wrap(

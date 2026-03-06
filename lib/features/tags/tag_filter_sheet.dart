@@ -175,7 +175,10 @@ class _TagFilterSheetState extends State<_TagFilterSheet> {
     final emptyLabel = context.t.chat.tagFilter.sheet.empty;
     final includeHint = context.t.chat.tagFilter.sheet.includeHint;
     final excludeHint = context.t.chat.tagFilter.sheet.excludeHint;
-    final modeHintLabel = '$includeHint  ·  $excludeHint';
+    final modeHintLabel = context.t.chat.tagFilter.sheet.modeHint(
+      includeHint: includeHint,
+      excludeHint: excludeHint,
+    );
 
     return SizedBox(
       height: MediaQuery.sizeOf(context).height * 0.65,

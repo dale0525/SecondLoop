@@ -65,6 +65,11 @@ Future<int> dbMergeTags(
         sourceTagId: sourceTagId,
         targetTagId: targetTagId);
 
+Future<List<TagMergeSuggestion>> dbListHiddenTagMergeSuggestions(
+        {required String appDir, required List<int> key, required int limit}) =>
+    RustLib.instance.api.crateApiTagsDbListHiddenTagMergeSuggestions(
+        appDir: appDir, key: key, limit: limit);
+
 Future<void> dbDeleteTag(
         {required String appDir,
         required List<int> key,
@@ -86,6 +91,17 @@ Future<void> dbRecordTagMergeFeedback(
         targetTagId: targetTagId,
         reason: reason,
         action: action);
+
+Future<void> dbClearTagMergeFeedback(
+        {required String appDir,
+        required List<int> key,
+        required String sourceTagId,
+        required String targetTagId}) =>
+    RustLib.instance.api.crateApiTagsDbClearTagMergeFeedback(
+        appDir: appDir,
+        key: key,
+        sourceTagId: sourceTagId,
+        targetTagId: targetTagId);
 
 Future<List<String>> dbListMessageIdsByTagIds(
         {required String appDir,

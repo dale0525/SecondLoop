@@ -321,10 +321,11 @@ pub fn list_tags(conn: &Connection, db_key: &[u8; 32]) -> Result<Vec<Tag>> {
     Ok(out)
 }
 
-pub fn list_tag_merge_suggestions(
+fn list_tag_merge_suggestions_with_visibility(
     conn: &Connection,
     db_key: &[u8; 32],
     limit: usize,
+    hidden_only: bool,
 ) -> Result<Vec<TagMergeSuggestion>> {
     ensure_system_tags(conn, db_key)?;
 
@@ -338,6 +339,7 @@ pub fn list_tag_merge_suggestions(
     }
 
     let usage_counts = load_tag_usage_counts(conn)?;
+    let hidden_pairs = load_hidden_tag_merge_pairs(conn)?;
     let mut system_by_key = std::collections::BTreeMap::<String, Tag>::new();
     for tag in &tags {
         if !tag.is_system {
@@ -371,6 +373,10 @@ pub fn list_tag_merge_suggestions(
 
         let source_usage = usage_counts.get(&source.id).copied().unwrap_or(0);
         let target_usage = usage_counts.get(&target.id).copied().unwrap_or(0);
+        let is_hidden_pair = hidden_pairs.contains(&(source.id.clone(), target.id.clone()));
+        if is_hidden_pair != hidden_only {
+            continue;
+        }
         push_merge_candidate(
             &mut best_by_source,
             source,
@@ -413,6 +419,11 @@ pub fn list_tag_merge_suggestions(
             let (source, target, source_usage, target_usage) =
                 choose_merge_direction(left, right, &usage_counts);
 
+            let is_hidden_pair = hidden_pairs.contains(&(source.id.clone(), target.id.clone()));
+            if is_hidden_pair != hidden_only {
+                continue;
+            }
+
             push_merge_candidate(
                 &mut best_by_source,
                 source,
@@ -438,6 +449,22 @@ pub fn list_tag_merge_suggestions(
 
     out.truncate(limit.min(50));
     Ok(out)
+}
+
+pub fn list_tag_merge_suggestions(
+    conn: &Connection,
+    db_key: &[u8; 32],
+    limit: usize,
+) -> Result<Vec<TagMergeSuggestion>> {
+    list_tag_merge_suggestions_with_visibility(conn, db_key, limit, false)
+}
+
+pub fn list_hidden_tag_merge_suggestions(
+    conn: &Connection,
+    db_key: &[u8; 32],
+    limit: usize,
+) -> Result<Vec<TagMergeSuggestion>> {
+    list_tag_merge_suggestions_with_visibility(conn, db_key, limit, true)
 }
 
 pub fn merge_tags(
