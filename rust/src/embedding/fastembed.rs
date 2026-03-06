@@ -133,8 +133,27 @@ pub fn release_fastembed_if_idle(max_idle: Duration) -> bool {
     true
 }
 
+#[cfg_attr(not(test), allow(dead_code))]
+pub(crate) fn fastembed_lifecycle_status() -> crate::local_model_lifecycle::LocalModelLifecycleStatus
+{
+    let guard = match fastembed_cache_state().lock() {
+        Ok(g) => g,
+        Err(poisoned) => poisoned.into_inner(),
+    };
+    let loaded = guard.is_initialized();
+    let last_used_ms_ago = guard.last_used_at.map(|instant| {
+        let millis = instant.elapsed().as_millis();
+        millis.min(u128::from(u64::MAX)) as u64
+    });
+    crate::local_model_lifecycle::LocalModelLifecycleStatus::cached(
+        loaded,
+        if loaded { 1 } else { 0 },
+        last_used_ms_ago,
+    )
+}
+
 #[cfg(test)]
-fn seed_fastembed_cache_for_test_with_last_used(age: Duration) {
+pub(crate) fn seed_fastembed_cache_for_test_with_last_used(age: Duration) {
     let cache = fastembed_cache_state();
     let mut guard = match cache.lock() {
         Ok(g) => g,
@@ -148,7 +167,7 @@ fn seed_fastembed_cache_for_test_with_last_used(age: Duration) {
 }
 
 #[cfg(test)]
-fn reset_fastembed_cache_for_test() {
+pub(crate) fn reset_fastembed_cache_for_test() {
     let cache = fastembed_cache_state();
     let mut guard = match cache.lock() {
         Ok(g) => g,

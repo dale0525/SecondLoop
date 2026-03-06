@@ -604,6 +604,7 @@ pub fn audio_transcribe_local_whisper(
         payload.insert("language".to_string(), Value::String(lang_code));
     }
 
+    crate::local_model_lifecycle::mark_local_whisper_used();
     Ok(Value::Object(payload).to_string())
 }
 

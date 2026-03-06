@@ -33,6 +33,8 @@ use paddle_ocr_rs::ocr_lite::OcrLite;
 use std::collections::HashMap;
 #[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
 use std::sync::{Arc, Condvar, Mutex, OnceLock};
+#[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
+use std::time::{Duration, Instant};
 
 const MAX_FULL_TEXT_BYTES: usize = 256 * 1024;
 const MAX_EXCERPT_TEXT_BYTES: usize = 8 * 1024;
@@ -599,12 +601,18 @@ fn run_ocr_with_cached_model(
         if !guard.contains_key(&cache_key) {
             let mut ocr = OcrLite::new();
             init_ocr_model(&mut ocr, config)?;
-            guard.insert(cache_key.clone(), Arc::new(Mutex::new(ocr)));
+            guard.insert(
+                cache_key.clone(),
+                OcrCacheEntry {
+                    handle: Arc::new(Mutex::new(ocr)),
+                    last_used_at: Instant::now(),
+                },
+            );
         }
 
         guard
             .get(&cache_key)
-            .cloned()
+            .map(|entry| entry.handle.clone())
             .ok_or_else(|| anyhow!("ocr model cache unavailable"))?
     };
 
@@ -632,6 +640,7 @@ fn run_ocr_with_cached_model(
         .map_err(|e| anyhow!("paddle detect failed: {e}"))?;
     let mut best = build_ocr_text_result(primary);
     if should_accept_primary_orientation(&best) {
+        mark_ocr_cache_entry_used(&cache_key);
         return Ok(best);
     }
 
@@ -658,6 +667,7 @@ fn run_ocr_with_cached_model(
         }
     }
 
+    mark_ocr_cache_entry_used(&cache_key);
     Ok(best)
 }
 
@@ -962,10 +972,113 @@ fn panic_payload_to_string(payload: &(dyn std::any::Any + Send)) -> String {
 type OcrModelHandle = Arc<Mutex<OcrLite>>;
 
 #[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
-fn ocr_cache() -> &'static Mutex<HashMap<String, OcrModelHandle>> {
-    static CACHE: OnceLock<Mutex<HashMap<String, OcrModelHandle>>> = OnceLock::new();
+struct OcrCacheEntry {
+    handle: OcrModelHandle,
+    last_used_at: Instant,
+}
+
+#[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
+fn ocr_cache() -> &'static Mutex<HashMap<String, OcrCacheEntry>> {
+    static CACHE: OnceLock<Mutex<HashMap<String, OcrCacheEntry>>> = OnceLock::new();
     CACHE.get_or_init(|| Mutex::new(HashMap::new()))
 }
+
+#[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
+fn mark_ocr_cache_entry_used(cache_key: &str) {
+    let mut guard = match ocr_cache().lock() {
+        Ok(g) => g,
+        Err(poisoned) => poisoned.into_inner(),
+    };
+    if let Some(entry) = guard.get_mut(cache_key) {
+        entry.last_used_at = Instant::now();
+    }
+}
+
+#[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
+#[cfg_attr(not(test), allow(dead_code))]
+pub(crate) fn ocr_lifecycle_status() -> crate::local_model_lifecycle::LocalModelLifecycleStatus {
+    let guard = match ocr_cache().lock() {
+        Ok(g) => g,
+        Err(poisoned) => poisoned.into_inner(),
+    };
+    let loaded = !guard.is_empty();
+    let last_used_ms_ago = guard
+        .values()
+        .map(|entry| {
+            let millis = entry.last_used_at.elapsed().as_millis();
+            millis.min(u128::from(u64::MAX)) as u64
+        })
+        .min();
+    crate::local_model_lifecycle::LocalModelLifecycleStatus::cached(
+        loaded,
+        u32::try_from(guard.len()).unwrap_or(u32::MAX),
+        last_used_ms_ago,
+    )
+}
+
+#[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
+pub(crate) fn release_ocr_if_idle(max_idle: Duration) -> u32 {
+    let mut guard = match ocr_cache().lock() {
+        Ok(g) => g,
+        Err(poisoned) => poisoned.into_inner(),
+    };
+    let stale_keys = guard
+        .iter()
+        .filter_map(|(cache_key, entry)| {
+            (entry.last_used_at.elapsed() >= max_idle).then_some(cache_key.clone())
+        })
+        .collect::<Vec<_>>();
+    let released = stale_keys.len();
+    for cache_key in stale_keys {
+        guard.remove(&cache_key);
+    }
+    u32::try_from(released).unwrap_or(u32::MAX)
+}
+
+#[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "linux")))]
+#[cfg_attr(not(test), allow(dead_code))]
+pub(crate) fn ocr_lifecycle_status() -> crate::local_model_lifecycle::LocalModelLifecycleStatus {
+    crate::local_model_lifecycle::LocalModelLifecycleStatus::cached(false, 0, None)
+}
+
+#[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "linux")))]
+pub(crate) fn release_ocr_if_idle(_max_idle: std::time::Duration) -> u32 {
+    0
+}
+
+#[cfg(test)]
+#[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
+pub(crate) fn seed_ocr_cache_entry_for_test(cache_key: String, age: Duration) {
+    let mut guard = match ocr_cache().lock() {
+        Ok(g) => g,
+        Err(poisoned) => poisoned.into_inner(),
+    };
+    guard.insert(
+        cache_key,
+        OcrCacheEntry {
+            handle: Arc::new(Mutex::new(OcrLite::new())),
+            last_used_at: Instant::now().checked_sub(age).unwrap_or_else(Instant::now),
+        },
+    );
+}
+
+#[cfg(test)]
+#[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
+pub(crate) fn reset_ocr_cache_for_test() {
+    let mut guard = match ocr_cache().lock() {
+        Ok(g) => g,
+        Err(poisoned) => poisoned.into_inner(),
+    };
+    guard.clear();
+}
+
+#[cfg(test)]
+#[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "linux")))]
+pub(crate) fn seed_ocr_cache_entry_for_test(_cache_key: String, _age: std::time::Duration) {}
+
+#[cfg(test)]
+#[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "linux")))]
+pub(crate) fn reset_ocr_cache_for_test() {}
 
 #[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
 fn find_existing_file(root: &Path, aliases: &[&str]) -> Option<PathBuf> {

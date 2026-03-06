@@ -46,6 +46,7 @@ void main() {
 
     expect(backend.canceledMessageIds, containsAll(<String>['m1', 'm2']));
     expect(backend.canceledMessageIds, isNot(contains('m3')));
+    expect(backend.releaseCalls, greaterThanOrEqualTo(1));
   });
 }
 
@@ -80,6 +81,7 @@ final class _FakeSemanticParseGateBackend extends NativeAppBackend {
 
   final List<SemanticParseJob> dueJobs;
   final List<String> canceledMessageIds = <String>[];
+  int releaseCalls = 0;
 
   @override
   Future<List<LlmProfile>> listLlmProfiles(Uint8List key) async {
@@ -102,5 +104,14 @@ final class _FakeSemanticParseGateBackend extends NativeAppBackend {
     required int nowMs,
   }) async {
     canceledMessageIds.add(messageId);
+  }
+
+  @override
+  Future<bool> releaseLocalEmbeddingModelIfIdle(
+    Uint8List key, {
+    int maxIdleMs = 180000,
+  }) async {
+    releaseCalls += 1;
+    return false;
   }
 }

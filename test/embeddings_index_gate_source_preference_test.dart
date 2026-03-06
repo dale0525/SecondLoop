@@ -155,6 +155,37 @@ void main() {
     expect(backend.calls, contains('byok'));
     expect(backend.calls, contains('releaseLocalEmbeddingModelIfIdle'));
   });
+
+  testWidgets('Embeddings local route also triggers local idle release',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({
+      'embeddings_source_preference_v1': 'local',
+      'embeddings_data_consent_v1': false,
+    });
+
+    final backend = _FakeEmbeddingsNativeBackend(
+      embeddingProfiles: const <EmbeddingProfile>[],
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: AppBackendScope(
+          backend: backend,
+          child: SessionScope(
+            sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+            lock: () {},
+            child: const EmbeddingsIndexGate(child: SizedBox.shrink()),
+          ),
+        ),
+      ),
+    );
+
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 3));
+
+    expect(backend.calls, contains('local'));
+    expect(backend.calls, contains('releaseLocalEmbeddingModelIfIdle'));
+  });
 }
 
 final class _FakeEmbeddingsNativeBackend extends NativeAppBackend {

@@ -169,15 +169,6 @@ class _MessageEmbeddingsIndexGateState extends State<MessageEmbeddingsIndexGate>
           keyBytes,
           limit: _kBatchLimit,
         );
-      } else {
-        try {
-          await backend.releaseLocalEmbeddingModelIfIdle(
-            keyBytes,
-            maxIdleMs: _kLocalEmbeddingIdleReleaseMs,
-          );
-        } catch (_) {
-          // Best-effort memory cleanup in remote routes.
-        }
       }
 
       if (!mounted) return;
@@ -190,6 +181,14 @@ class _MessageEmbeddingsIndexGateState extends State<MessageEmbeddingsIndexGate>
       if (!mounted) return;
       _schedule(_kFailureInterval);
     } finally {
+      try {
+        await backend.releaseLocalEmbeddingModelIfIdle(
+          Uint8List.fromList(sessionKey),
+          maxIdleMs: _kLocalEmbeddingIdleReleaseMs,
+        );
+      } catch (_) {
+        // Best-effort local model cleanup.
+      }
       _restartBlockToken?.release();
       _restartBlockToken = null;
       _running = false;

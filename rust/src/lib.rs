@@ -8,6 +8,7 @@ pub mod embedding;
 mod frb_generated;
 pub mod geo;
 pub mod llm;
+pub mod local_model_lifecycle;
 pub mod media_annotation;
 pub mod rag;
 pub mod semantic_parse;

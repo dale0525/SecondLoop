@@ -218,17 +218,6 @@ class _EmbeddingsIndexGateState extends State<EmbeddingsIndexGate>
         cloudGatewayBaseUrl: cloudGatewayConfig.baseUrl,
       );
 
-      if (route != EmbeddingsSourceRouteKind.local) {
-        try {
-          await backend.releaseLocalEmbeddingModelIfIdle(
-            sessionKey,
-            maxIdleMs: _kLocalEmbeddingIdleReleaseMs,
-          );
-        } catch (_) {
-          // Best-effort memory cleanup for remote-first routes.
-        }
-      }
-
       if (!mounted) return;
       if (result.processed <= 0) {
         _schedule(_kIdleInterval);
@@ -239,6 +228,14 @@ class _EmbeddingsIndexGateState extends State<EmbeddingsIndexGate>
       if (!mounted) return;
       _schedule(_kFailureInterval);
     } finally {
+      try {
+        await backend.releaseLocalEmbeddingModelIfIdle(
+          Uint8List.fromList(sessionKey),
+          maxIdleMs: _kLocalEmbeddingIdleReleaseMs,
+        );
+      } catch (_) {
+        // Best-effort local model cleanup.
+      }
       _restartBlockToken?.release();
       _restartBlockToken = null;
       _running = false;

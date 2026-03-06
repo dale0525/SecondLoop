@@ -819,6 +819,14 @@ class _MediaEnrichmentGateState extends State<MediaEnrichmentGate>
       if (!mounted) return;
       _schedule(_kFailureInterval);
     } finally {
+      try {
+        await backend.releaseLocalEmbeddingModelIfIdle(
+          Uint8List.fromList(sessionKey),
+          maxIdleMs: 180000,
+        );
+      } catch (_) {
+        // Best-effort local model cleanup.
+      }
       _restartBlockToken?.release();
       _restartBlockToken = null;
       _running = false;

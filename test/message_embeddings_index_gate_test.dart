@@ -21,6 +21,7 @@ void main() {
 
     var remaining = 3;
     var calls = 0;
+    var releaseCalls = 0;
 
     final backend = NativeAppBackend(
       appDirProvider: () async => '/tmp/secondloop-test',
@@ -33,6 +34,14 @@ void main() {
         if (remaining <= 0) return 0;
         remaining -= 1;
         return 1;
+      },
+      dbReleaseLocalEmbeddingModelIfIdle: ({
+        required String appDir,
+        required List<int> key,
+        required int maxIdleMs,
+      }) async {
+        releaseCalls += 1;
+        return false;
       },
     );
 
@@ -56,6 +65,7 @@ void main() {
 
     await tester.pump(const Duration(seconds: 6));
     expect(calls, greaterThanOrEqualTo(4));
+    expect(releaseCalls, greaterThanOrEqualTo(1));
   });
 
   testWidgets(
