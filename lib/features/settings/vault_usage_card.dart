@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/backend/app_backend.dart';
 import '../../core/backend/attachments_backend.dart';
+import '../../core/cloud/cloud_auth_access.dart';
 import '../../core/cloud/cloud_auth_scope.dart';
 import '../../core/cloud/vault_attachments_client.dart';
 import '../../core/cloud/vault_usage_client.dart';
@@ -236,7 +237,10 @@ class _VaultUsageCardState extends State<VaultUsageCard> {
 
     String? idToken;
     try {
-      idToken = await controller.getIdToken();
+      idToken = await readCloudAuthIdToken(
+        controller,
+        mode: CloudAuthAccessMode.interactive,
+      );
     } catch (_) {
       idToken = null;
     }

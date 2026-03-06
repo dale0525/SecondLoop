@@ -708,12 +708,34 @@ extension _ChatPageStateMessageItemBuilder on _ChatPageState {
                         : Localizations.localeOf(context).toLanguageTag();
 
                     try {
-                      await backendAny.enqueueAttachmentAnnotation(
-                        sessionKey,
-                        attachmentSha256: attachment.sha256,
-                        lang: lang,
-                        nowMs: DateTime.now().millisecondsSinceEpoch,
-                      );
+                      final nowMs = DateTime.now().millisecondsSinceEpoch;
+                      if (isAudioTranscribeCandidateMimeType(
+                        attachment.mimeType,
+                      )) {
+                        await maybeEnqueueAudioTranscribe(
+                          backend: backendAny,
+                          sessionKey: sessionKey,
+                          attachmentSha256: attachment.sha256,
+                          mimeType: attachment.mimeType,
+                          lang: lang,
+                          respectFeatureToggle: false,
+                          nowMs: nowMs,
+                          beforeEnqueue: () =>
+                              bestEffortWarmCloudCapabilityAuth(
+                            CloudAuthScope.maybeOf(context)?.controller,
+                          ),
+                        );
+                      } else {
+                        await bestEffortWarmCloudCapabilityAuth(
+                          CloudAuthScope.maybeOf(context)?.controller,
+                        );
+                        await backendAny.enqueueAttachmentAnnotation(
+                          sessionKey,
+                          attachmentSha256: attachment.sha256,
+                          lang: lang,
+                          nowMs: nowMs,
+                        );
+                      }
                       syncEngine?.notifyExternalChange();
                     } catch (_) {
                       // ignore

@@ -12,6 +12,7 @@ import '../../app/theme_mode_prefs.dart';
 import '../../core/ai/ai_routing.dart';
 import '../../core/ai/embeddings_data_consent_prefs.dart';
 import '../../core/backend/app_backend.dart';
+import '../../core/cloud/cloud_auth_access.dart';
 import '../../core/cloud/cloud_auth_controller.dart';
 import '../../core/notifications/review_reminder_in_app_fallback_prefs.dart';
 import '../../core/cloud/cloud_auth_scope.dart';
@@ -334,9 +335,10 @@ class _SettingsPageState extends State<SettingsPage> {
                     : _joinRemotePath(sync.remoteRoot, deviceId),
               ),
             SyncBackendType.managedVault => () async {
-                final idToken = await CloudAuthScope.maybeOf(context)
-                    ?.controller
-                    .getIdToken();
+                final idToken = await readCloudAuthIdToken(
+                  CloudAuthScope.maybeOf(context)?.controller,
+                  mode: CloudAuthAccessMode.interactive,
+                );
                 if (idToken == null || idToken.trim().isEmpty) {
                   throw StateError('missing_cloud_id_token');
                 }

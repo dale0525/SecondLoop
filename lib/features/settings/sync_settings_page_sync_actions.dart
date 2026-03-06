@@ -577,7 +577,10 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
                 final cloudAuth = CloudAuthScope.maybeOf(context)?.controller;
                 String? idToken;
                 try {
-                  idToken = await cloudAuth?.getIdToken();
+                  idToken = await readCloudAuthIdToken(
+                    cloudAuth,
+                    mode: CloudAuthAccessMode.interactive,
+                  );
                 } catch (_) {
                   idToken = null;
                 }
@@ -776,7 +779,10 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
               ),
             SyncBackendType.managedVault => () async {
                 final cloudAuth = CloudAuthScope.of(context).controller;
-                final idToken = await cloudAuth.getIdToken();
+                final idToken = await readCloudAuthIdToken(
+                  cloudAuth,
+                  mode: CloudAuthAccessMode.interactive,
+                );
                 if (idToken == null || idToken.trim().isEmpty) {
                   throw StateError('missing_id_token');
                 }
@@ -899,7 +905,10 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
               ),
             SyncBackendType.managedVault => () async {
                 final cloudAuth = CloudAuthScope.of(context).controller;
-                final idToken = await cloudAuth.getIdToken();
+                final idToken = await readCloudAuthIdToken(
+                  cloudAuth,
+                  mode: CloudAuthAccessMode.interactive,
+                );
                 if (idToken == null || idToken.trim().isEmpty) {
                   throw StateError('missing_id_token');
                 }

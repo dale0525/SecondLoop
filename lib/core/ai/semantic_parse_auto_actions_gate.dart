@@ -7,7 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../features/actions/settings/actions_settings_store.dart';
 import '../backend/app_backend.dart';
 import '../backend/native_backend.dart';
-import '../cloud/cloud_auth_controller.dart';
+import '../cloud/cloud_capability_auth.dart';
 import '../cloud/cloud_auth_scope.dart';
 import '../session/session_scope.dart';
 import '../subscription/subscription_scope.dart';
@@ -183,14 +183,10 @@ class _SemanticParseAutoActionsGateState
       final gatewayConfig =
           cloudAuthScope?.gatewayConfig ?? CloudGatewayConfig.defaultConfig;
 
-      String? idToken;
-      try {
-        idToken = await readCloudIdTokenForBackground(
-          cloudAuthScope?.controller,
-        );
-      } catch (_) {
-        idToken = null;
-      }
+      final idToken = await readCloudCapabilityIdToken(
+        cloudAuthScope?.controller,
+        mode: CloudCapabilityAuthMode.background,
+      );
 
       AskAiRouteKind askAiRoute;
       try {

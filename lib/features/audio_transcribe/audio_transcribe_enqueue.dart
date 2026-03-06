@@ -17,6 +17,7 @@ Future<void> maybeEnqueueAudioTranscribe({
   String lang = 'und',
   bool respectFeatureToggle = true,
   int? nowMs,
+  Future<void> Function()? beforeEnqueue,
 }) async {
   final normalizedSha = attachmentSha256.trim();
   if (normalizedSha.isEmpty) return;
@@ -37,6 +38,12 @@ Future<void> maybeEnqueueAudioTranscribe({
     if (!enabled) {
       return;
     }
+  }
+
+  if (beforeEnqueue != null) {
+    try {
+      await beforeEnqueue();
+    } catch (_) {}
   }
 
   await backend.enqueueAttachmentAnnotation(

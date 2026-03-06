@@ -11,6 +11,7 @@ import 'package:share_plus/share_plus.dart';
 import '../../core/backend/app_backend.dart';
 import '../../core/backend/native_backend.dart';
 import '../../core/cloud/cloud_auth_scope.dart';
+import '../../core/cloud/cloud_capability_auth.dart';
 import '../../core/session/session_scope.dart';
 import '../../core/subscription/subscription_scope.dart';
 import '../../core/sync/sync_config_store.dart';
@@ -127,12 +128,10 @@ class _DiagnosticsPageState extends State<DiagnosticsPage> {
       };
     }
 
-    String? idToken;
-    try {
-      idToken = await cloudScope?.controller.getIdToken();
-    } catch (_) {
-      idToken = null;
-    }
+    final idToken = await readCloudCapabilityIdToken(
+      cloudScope?.controller,
+      mode: CloudCapabilityAuthMode.interactive,
+    );
 
     final token = idToken?.trim();
     final appDir = (await getApplicationSupportDirectory()).path;

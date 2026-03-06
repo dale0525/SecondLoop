@@ -11,6 +11,7 @@ import '../../core/ai/media_capability_wifi_prefs.dart';
 import '../../core/ai/media_source_prefs.dart';
 import '../../core/backend/app_backend.dart';
 import '../../core/cloud/cloud_auth_scope.dart';
+import '../../core/cloud/cloud_capability_auth.dart';
 import '../../core/content_enrichment/content_enrichment_config_store.dart';
 import '../../core/content_enrichment/linux_ocr_model_store.dart';
 import '../../core/content_enrichment/multimodal_ocr.dart';
@@ -314,14 +315,12 @@ class _MediaAnnotationSettingsPageState
         cloudAuthScope?.gatewayConfig ?? CloudGatewayConfig.defaultConfig;
 
     final hasGateway = gatewayConfig.baseUrl.trim().isNotEmpty;
-    String? idToken;
-    if (subscriptionStatus == SubscriptionStatus.entitled) {
-      try {
-        idToken = await cloudAuthScope?.controller.getIdToken();
-      } catch (_) {
-        idToken = null;
-      }
-    }
+    final idToken = subscriptionStatus == SubscriptionStatus.entitled
+        ? await readCloudCapabilityIdToken(
+            cloudAuthScope?.controller,
+            mode: CloudCapabilityAuthMode.interactive,
+          )
+        : null;
     final hasIdToken = (idToken?.trim() ?? '').isNotEmpty;
     if (!mounted) return null;
 

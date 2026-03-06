@@ -11,6 +11,7 @@ import '../core/ai/semantic_parse_auto_actions_gate.dart';
 import '../core/ai/detached_ask_recovery_gate.dart';
 import '../core/backend/app_backend.dart';
 import '../core/backend/native_backend.dart';
+import '../core/cloud/cloud_auth_access.dart';
 import '../core/cloud/cloud_auth_controller.dart';
 import '../core/cloud/cloud_auth_scope.dart';
 import '../core/cloud/firebase_identity_toolkit.dart';
@@ -74,7 +75,10 @@ class _SecondLoopAppState extends State<SecondLoopApp> {
   );
   late final CloudSubscriptionController _subscriptionController =
       CloudSubscriptionController(
-    idTokenGetter: () => readCloudIdTokenForBackground(_cloudAuthController),
+    idTokenGetter: () => readCloudAuthIdToken(
+      _cloudAuthController,
+      mode: CloudAuthAccessMode.background,
+    ),
     cloudGatewayBaseUrl: CloudGatewayConfig.defaultConfig.baseUrl,
   );
 

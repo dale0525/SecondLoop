@@ -97,12 +97,10 @@ extension _ChatPageStateMessageEditMethods on _ChatPageState {
             prefs.getBool(SemanticParseDataConsentPrefs.prefsKey) ?? false;
 
         if (consented) {
-          String? cloudIdToken;
-          try {
-            cloudIdToken = await cloudAuthScope?.controller.getIdToken();
-          } catch (_) {
-            cloudIdToken = null;
-          }
+          final cloudIdToken = await readCloudCapabilityIdToken(
+            cloudAuthScope?.controller,
+            mode: CloudCapabilityAuthMode.interactive,
+          );
 
           AskAiRouteKind route;
           try {
@@ -119,6 +117,9 @@ extension _ChatPageStateMessageEditMethods on _ChatPageState {
 
           if (route != AskAiRouteKind.needsSetup) {
             try {
+              await bestEffortWarmCloudCapabilityAuth(
+                cloudAuthScope?.controller,
+              );
               await backend.enqueueSemanticParseJob(
                 sessionKey,
                 messageId: message.id,

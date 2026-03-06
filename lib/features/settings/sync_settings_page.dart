@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/backend/app_backend.dart';
+import '../../core/cloud/cloud_auth_access.dart';
 import '../../core/cloud/cloud_auth_scope.dart';
 import '../../core/sync/cloud_sync_switch_prefs.dart';
 import '../../core/session/session_scope.dart';

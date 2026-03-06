@@ -396,6 +396,9 @@ extension _ChatPageStateMethodsBAttachments on _ChatPageState {
           attachmentSha256: attachmentSha256,
           mimeType: normalizedMimeType,
           lang: 'und',
+          beforeEnqueue: () => bestEffortWarmCloudCapabilityAuth(
+            CloudAuthScope.maybeOf(context)?.controller,
+          ),
         );
       } catch (_) {}
       return;
