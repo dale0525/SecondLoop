@@ -314,6 +314,62 @@ class _MessageTagPickerSheetState extends State<_MessageTagPickerSheet> {
     }
   }
 
+  Future<void> _confirmAndDeleteTag(Tag tag) async {
+    if (_saving || tag.isSystem) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: Text(context.t.chat.tagPicker.deleteDialog.title),
+          content: Text(
+            context.t.chat.tagPicker.deleteDialog.message(name: tag.name),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: Text(context.t.common.actions.cancel),
+            ),
+            FilledButton(
+              key: const ValueKey('tag_picker_delete_confirm'),
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: Text(context.t.chat.tagPicker.deleteDialog.confirm),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    setState(() {
+      _saving = true;
+      _error = null;
+    });
+
+    try {
+      await widget.repository.deleteTag(widget.sessionKey, tag.id);
+      if (!mounted) return;
+
+      await _load();
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(context.t.chat.tagPicker.deleted),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _error = '$e');
+    } finally {
+      if (mounted) {
+        setState(() => _saving = false);
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final locale = Localizations.localeOf(context);
@@ -331,6 +387,7 @@ class _MessageTagPickerSheetState extends State<_MessageTagPickerSheet> {
     final addLabel = context.t.chat.tagPicker.add;
     final saveLabel = context.t.chat.tagPicker.save;
     final closeLabel = context.t.common.actions.cancel;
+    final deleteLabel = context.t.common.actions.delete;
 
     return Padding(
       padding: EdgeInsets.only(bottom: insets.bottom),
@@ -518,6 +575,7 @@ class _MessageTagPickerSheetState extends State<_MessageTagPickerSheet> {
                         children: _allTags.map((tag) {
                           final selected = _selectedTagIds.contains(tag.id);
                           return FilterChip(
+                            key: ValueKey('tag_picker_chip_${tag.id}'),
                             label: Text(localizeTagName(locale, tag)),
                             selected: selected,
                             onSelected: _saving
@@ -531,6 +589,14 @@ class _MessageTagPickerSheetState extends State<_MessageTagPickerSheet> {
                                       }
                                     });
                                   },
+                            deleteIcon: Icon(
+                              Icons.close,
+                              key: ValueKey('tag_picker_delete_${tag.id}'),
+                            ),
+                            deleteButtonTooltipMessage: deleteLabel,
+                            onDeleted: _saving || tag.isSystem
+                                ? null
+                                : () => unawaited(_confirmAndDeleteTag(tag)),
                           );
                         }).toList(growable: false),
                       ),

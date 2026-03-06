@@ -4,9 +4,9 @@
 /// To regenerate, run: `dart run slang`
 ///
 /// Locales: 2
-/// Strings: 1800 (900 per locale)
+/// Strings: 1808 (904 per locale)
 ///
-/// Built on 2026-02-28 at 17:40 UTC
+/// Built on 2026-03-06 at 05:13 UTC
 
 // coverage:ignore-file
 // ignore_for_file: type=lint
@@ -1710,6 +1710,9 @@ class _StringsChatTagPickerEn {
   String mergeApplied({required Object count}) => 'Merged ${count} messages';
   String get mergeDismissed => 'Merge suggestion dismissed';
   String get mergeSavedForLater => 'Merge suggestion saved for later';
+  late final _StringsChatTagPickerDeleteDialogEn deleteDialog =
+      _StringsChatTagPickerDeleteDialogEn._(_root);
+  String get deleted => 'Tag deleted';
   String get all => 'All tags';
   String get inputHint => 'Type a tag name';
   String get add => 'Add';
@@ -3059,6 +3062,19 @@ class _StringsChatTagPickerMergeDialogEn {
   String message({required Object source, required Object target}) =>
       'Merge "${source}" into "${target}"? This updates existing message tags.';
   String get confirm => 'Merge';
+}
+
+// Path: chat.tagPicker.deleteDialog
+class _StringsChatTagPickerDeleteDialogEn {
+  _StringsChatTagPickerDeleteDialogEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get title => 'Delete tag?';
+  String message({required Object name}) =>
+      'Delete "${name}"? This removes it from tagged messages and strips matching manual #tags from message text.';
+  String get confirm => 'Delete';
 }
 
 // Path: chat.askScopeEmpty.actions
@@ -6288,6 +6304,11 @@ class _StringsChatTagPickerZhCn extends _StringsChatTagPickerEn {
   @override
   String get mergeSavedForLater => '已暂存该合并建议';
   @override
+  late final _StringsChatTagPickerDeleteDialogZhCn deleteDialog =
+      _StringsChatTagPickerDeleteDialogZhCn._(_root);
+  @override
+  String get deleted => '标签已删除';
+  @override
   String get all => '全部标签';
   @override
   String get inputHint => '输入标签名称';
@@ -8323,6 +8344,26 @@ class _StringsChatTagPickerMergeDialogZhCn
       '将“${source}”合并到“${target}”？这会更新已有消息上的标签。';
   @override
   String get confirm => '合并';
+}
+
+// Path: chat.tagPicker.deleteDialog
+class _StringsChatTagPickerDeleteDialogZhCn
+    extends _StringsChatTagPickerDeleteDialogEn {
+  _StringsChatTagPickerDeleteDialogZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get title => '删除标签？';
+  @override
+  String message({required Object name}) =>
+      '删除“${name}”？这会从已打标签消息中移除它，并清理消息正文里匹配的手动 #tag。';
+  @override
+  String get confirm => '删除';
 }
 
 // Path: chat.askScopeEmpty.actions
@@ -11047,6 +11088,15 @@ extension on Translations {
         return 'Merge suggestion dismissed';
       case 'chat.tagPicker.mergeSavedForLater':
         return 'Merge suggestion saved for later';
+      case 'chat.tagPicker.deleteDialog.title':
+        return 'Delete tag?';
+      case 'chat.tagPicker.deleteDialog.message':
+        return ({required Object name}) =>
+            'Delete "${name}"? This removes it from tagged messages and strips matching manual #tags from message text.';
+      case 'chat.tagPicker.deleteDialog.confirm':
+        return 'Delete';
+      case 'chat.tagPicker.deleted':
+        return 'Tag deleted';
       case 'chat.tagPicker.all':
         return 'All tags';
       case 'chat.tagPicker.inputHint':
@@ -12884,6 +12934,15 @@ extension on _StringsZhCn {
         return '已忽略该合并建议';
       case 'chat.tagPicker.mergeSavedForLater':
         return '已暂存该合并建议';
+      case 'chat.tagPicker.deleteDialog.title':
+        return '删除标签？';
+      case 'chat.tagPicker.deleteDialog.message':
+        return ({required Object name}) =>
+            '删除“${name}”？这会从已打标签消息中移除它，并清理消息正文里匹配的手动 #tag。';
+      case 'chat.tagPicker.deleteDialog.confirm':
+        return '删除';
+      case 'chat.tagPicker.deleted':
+        return '标签已删除';
       case 'chat.tagPicker.all':
         return '全部标签';
       case 'chat.tagPicker.inputHint':

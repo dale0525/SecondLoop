@@ -189,3 +189,66 @@ fn attachment_annotation_enqueues_and_processes_autofill_for_linked_messages() {
         "shadow mode should not auto-apply from attachment suggestions"
     );
 }
+
+#[test]
+fn attachment_annotations_apply_multiple_tags_up_to_manual_budget() {
+    let dir = tempdir().expect("tempdir");
+    let app_dir = dir.path().to_path_buf();
+    let conn = open(&app_dir).expect("open");
+
+    let key = [37u8; 32];
+    let conversation = get_or_create_loop_home_conversation(&conn, &key).expect("conversation");
+    let message = insert_message(
+        &conn,
+        &key,
+        &conversation.id,
+        "user",
+        "#alpha\ntrip budget docs",
+    )
+    .expect("insert message");
+    let attachment_a =
+        insert_attachment(&conn, &key, &app_dir, b"img-a", "image/png").expect("attachment a");
+    let attachment_b =
+        insert_attachment(&conn, &key, &app_dir, b"img-b", "image/png").expect("attachment b");
+    link_attachment_to_message(&conn, &key, &message.id, &attachment_a.sha256).expect("link a");
+    link_attachment_to_message(&conn, &key, &message.id, &attachment_b.sha256).expect("link b");
+
+    let payload = serde_json::json!({
+        "suggested_tags": ["finance", "travel", "work"]
+    });
+
+    mark_attachment_annotation_ok(
+        &conn,
+        &key,
+        &attachment_a.sha256,
+        "und",
+        "vision.v1",
+        &payload,
+        12_000,
+    )
+    .expect("mark annotation a ok");
+    mark_attachment_annotation_ok(
+        &conn,
+        &key,
+        &attachment_b.sha256,
+        "und",
+        "vision.v1",
+        &payload,
+        13_000,
+    )
+    .expect("mark annotation b ok");
+
+    let message_tags = list_message_tags(&conn, &key, &message.id).expect("message tags");
+    let names = message_tags
+        .into_iter()
+        .map(|tag| normalize_tag_name(&tag.name))
+        .collect::<std::collections::BTreeSet<_>>();
+    assert_eq!(
+        names,
+        std::collections::BTreeSet::from([
+            "alpha".to_string(),
+            "finance".to_string(),
+            "travel".to_string(),
+        ])
+    );
+}

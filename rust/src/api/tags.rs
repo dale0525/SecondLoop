@@ -62,6 +62,17 @@ pub fn db_list_message_suggested_tags(
 }
 
 #[flutter_rust_bridge::frb]
+pub fn db_list_manual_message_tag_names(
+    app_dir: String,
+    key: Vec<u8>,
+    message_id: String,
+) -> Result<Vec<String>> {
+    let key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    db::list_manual_message_tag_names(&conn, &key, &message_id)
+}
+
+#[flutter_rust_bridge::frb]
 pub fn db_list_tag_merge_suggestions(
     app_dir: String,
     key: Vec<u8>,
@@ -82,6 +93,13 @@ pub fn db_merge_tags(
     let key = key_from_bytes(key)?;
     let conn = db::open(Path::new(&app_dir))?;
     db::merge_tags(&conn, &key, &source_tag_id, &target_tag_id)
+}
+
+#[flutter_rust_bridge::frb]
+pub fn db_delete_tag(app_dir: String, key: Vec<u8>, tag_id: String) -> Result<()> {
+    let key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    db::delete_tag(&conn, &key, &tag_id)
 }
 
 #[flutter_rust_bridge::frb]

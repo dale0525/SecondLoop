@@ -42,6 +42,13 @@ Future<List<String>> dbListMessageSuggestedTags(
     RustLib.instance.api.crateApiTagsDbListMessageSuggestedTags(
         appDir: appDir, key: key, messageId: messageId);
 
+Future<List<String>> dbListManualMessageTagNames(
+        {required String appDir,
+        required List<int> key,
+        required String messageId}) =>
+    RustLib.instance.api.crateApiTagsDbListManualMessageTagNames(
+        appDir: appDir, key: key, messageId: messageId);
+
 Future<List<TagMergeSuggestion>> dbListTagMergeSuggestions(
         {required String appDir, required List<int> key, required int limit}) =>
     RustLib.instance.api.crateApiTagsDbListTagMergeSuggestions(
@@ -57,6 +64,13 @@ Future<int> dbMergeTags(
         key: key,
         sourceTagId: sourceTagId,
         targetTagId: targetTagId);
+
+Future<void> dbDeleteTag(
+        {required String appDir,
+        required List<int> key,
+        required String tagId}) =>
+    RustLib.instance.api
+        .crateApiTagsDbDeleteTag(appDir: appDir, key: key, tagId: tagId);
 
 Future<void> dbRecordTagMergeFeedback(
         {required String appDir,

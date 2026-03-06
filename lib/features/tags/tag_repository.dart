@@ -86,6 +86,19 @@ class TagRepository {
     );
   }
 
+  Future<List<String>> listManualMessageTagNames(
+    Uint8List key,
+    String messageId,
+  ) async {
+    final appDir = await _resolveAppDirOrNull();
+    if (appDir == null) return const <String>[];
+    return rust_tags.dbListManualMessageTagNames(
+      appDir: appDir,
+      key: key,
+      messageId: messageId,
+    );
+  }
+
   Future<List<TagMergeSuggestion>> listTagMergeSuggestions(
     Uint8List key, {
     int limit = 10,
@@ -113,6 +126,11 @@ class TagRepository {
       sourceTagId: sourceTagId,
       targetTagId: targetTagId,
     );
+  }
+
+  Future<void> deleteTag(Uint8List key, String tagId) async {
+    final appDir = await _requireAppDir();
+    await rust_tags.dbDeleteTag(appDir: appDir, key: key, tagId: tagId);
   }
 
   Future<void> recordTagMergeFeedback(

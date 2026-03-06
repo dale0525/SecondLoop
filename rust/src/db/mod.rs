@@ -19,6 +19,7 @@ include!("parts/15_todo_recurrence.rs");
 include!("parts/11_events.rs");
 include!("parts/12_media_annotation_config.rs");
 include!("parts/16_tags.rs");
+include!("parts/17_tags_manual_and_delete.rs");
 include!("parts/18_tag_merge_feedback.rs");
 include!("parts/19_suggested_tags.rs");
 include!("parts/20_message_tag_autofill.rs");
@@ -36,6 +37,9 @@ mod content_extract_jobs_tests;
 
 #[cfg(test)]
 mod message_tag_autofill_tests;
+
+#[cfg(test)]
+mod tag_optimization_tests;
 
 #[cfg(test)]
 mod todo_status_auto_schedule_tests;

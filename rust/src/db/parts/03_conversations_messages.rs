@@ -202,6 +202,7 @@ fn insert_message_with_is_memory(
     insert_oplog(conn, key, &op)?;
 
     if role == "user" {
+        sync_manual_message_tags_for_content_change(conn, key, &id, None, content)?;
         run_message_tag_autofill_for_message(conn, key, &id, "message_insert", now)?;
     }
 
@@ -215,11 +216,12 @@ fn insert_message_with_is_memory(
     })
 }
 
-pub fn edit_message(
+fn edit_message_internal(
     conn: &Connection,
     key: &[u8; 32],
     message_id: &str,
     content: &str,
+    rerun_tag_autofill: bool,
 ) -> Result<()> {
     let (existing, is_memory) = get_message_by_id_with_is_memory(conn, key, message_id)?;
     if existing.content == content {
@@ -276,7 +278,29 @@ pub fn edit_message(
         params![conversation_id, now],
     )?;
 
+    if role == "user" {
+        sync_manual_message_tags_for_content_change(
+            conn,
+            key,
+            message_id,
+            Some(existing.content.as_str()),
+            content,
+        )?;
+        if rerun_tag_autofill {
+            run_message_tag_autofill_for_message(conn, key, message_id, "message_edit", now)?;
+        }
+    }
+
     Ok(())
+}
+
+pub fn edit_message(
+    conn: &Connection,
+    key: &[u8; 32],
+    message_id: &str,
+    content: &str,
+) -> Result<()> {
+    edit_message_internal(conn, key, message_id, content, true)
 }
 
 pub fn set_message_deleted(
