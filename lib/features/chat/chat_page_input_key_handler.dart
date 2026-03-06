@@ -2,6 +2,16 @@ part of 'chat_page.dart';
 
 extension _ChatPageStateInputKeyHandler on _ChatPageState {
   // ignore: deprecated_member_use
+  KeyEventResult _handleComposerFocusNodeOnKey(
+      FocusNode node, RawKeyEvent event) {
+    if (isMacOsCommandModifierKeyDown(event)) {
+      return KeyEventResult.handled;
+    }
+
+    return KeyEventResult.ignored;
+  }
+
+  // ignore: deprecated_member_use
   KeyEventResult _handleComposerOnKey(FocusNode node, RawKeyEvent event) {
     // ignore: deprecated_member_use
     if (event is! RawKeyDownEvent) {

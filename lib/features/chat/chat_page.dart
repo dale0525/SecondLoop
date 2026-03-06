@@ -531,6 +531,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _inputFocusNode.onKey = _handleComposerFocusNodeOnKey;
     _scrollController.addListener(_onScroll);
     _shareDraftSubscription = ShareDraftInbox.pendingDraftEvents.listen((_) {
       unawaited(_consumePendingSharedUrlDrafts());

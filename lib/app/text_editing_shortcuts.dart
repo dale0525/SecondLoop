@@ -124,3 +124,16 @@ String? _resolveShortcutCharacter({
 
   return normalize(keyLabel) ?? normalize(character);
 }
+
+bool isMacOsCommandModifierKeyDown(RawKeyEvent event) {
+  if (event is! RawKeyDownEvent) {
+    return false;
+  }
+
+  final data = event.data;
+  if (data is! RawKeyEventDataMacOs) {
+    return false;
+  }
+
+  return data.keyCode == 54 || data.keyCode == 55;
+}

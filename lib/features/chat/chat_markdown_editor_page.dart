@@ -16,6 +16,7 @@ import 'package:syncfusion_flutter_pdf/pdf.dart';
 import '../../i18n/strings.g.dart';
 import '../../ui/sl_surface.dart';
 import '../../ui/sl_tokens.dart';
+import '../../app/text_editing_shortcuts.dart';
 import 'chat_markdown_clipboard_export.dart';
 import 'chat_markdown_editing_utils.dart';
 import 'chat_markdown_export_filename.dart';
@@ -147,6 +148,7 @@ class _ChatMarkdownEditorPageState extends State<ChatMarkdownEditorPage>
     _controller = TextEditingController(text: widget.initialText);
     _lastValidSelection =
         _controller.selection.isValid ? _controller.selection : null;
+    _editorFocusNode.onKey = _handleEditorFocusNodeOnKey;
     _controller.addListener(_rememberValidSelection);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
@@ -187,6 +189,16 @@ class _ChatMarkdownEditorPageState extends State<ChatMarkdownEditorPage>
   void _showCompactPreview() {
     if (_compactPane == ChatMarkdownCompactPane.preview) return;
     setState(() => _compactPane = ChatMarkdownCompactPane.preview);
+  }
+
+  // ignore: deprecated_member_use
+  KeyEventResult _handleEditorFocusNodeOnKey(
+      FocusNode node, RawKeyEvent event) {
+    if (isMacOsCommandModifierKeyDown(event)) {
+      return KeyEventResult.handled;
+    }
+
+    return KeyEventResult.ignored;
   }
 
   void _rememberValidSelection() {

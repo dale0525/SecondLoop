@@ -41,4 +41,34 @@ void main() {
 
     expect(shortcut, TextEditingShortcut.paste);
   });
+
+  test('macOS command modifier keydown is detected', () {
+    final isCommandOnly = isMacOsCommandModifierKeyDown(
+      const RawKeyDownEvent(
+        data: RawKeyEventDataMacOs(
+          keyCode: 55,
+          modifiers: RawKeyEventDataMacOs.modifierCommand |
+              RawKeyEventDataMacOs.modifierLeftCommand,
+        ),
+      ),
+    );
+
+    expect(isCommandOnly, isTrue);
+  });
+
+  test('macOS command+a is not treated as command-only modifier event', () {
+    final isCommandOnly = isMacOsCommandModifierKeyDown(
+      const RawKeyDownEvent(
+        data: RawKeyEventDataMacOs(
+          characters: 'a',
+          charactersIgnoringModifiers: 'a',
+          keyCode: 0,
+          modifiers: RawKeyEventDataMacOs.modifierCommand |
+              RawKeyEventDataMacOs.modifierLeftCommand,
+        ),
+      ),
+    );
+
+    expect(isCommandOnly, isFalse);
+  });
 }
