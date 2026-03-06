@@ -53,6 +53,27 @@ void main() {
     expect(backend.enqueueCalls.first.nowMs, 123);
   });
 
+  test('maybeEnqueueAudioTranscribe prepares cloud route before enqueue',
+      () async {
+    final backend = _CaptureNativeBackend();
+    var prepareCalls = 0;
+
+    await maybeEnqueueAudioTranscribe(
+      backend: backend,
+      sessionKey: Uint8List(32),
+      attachmentSha256: 'sha-123',
+      mimeType: 'audio/mpeg',
+      respectFeatureToggle: false,
+      nowMs: 123,
+      beforeEnqueue: () async {
+        prepareCalls += 1;
+      },
+    );
+
+    expect(prepareCalls, 1);
+    expect(backend.enqueueCalls, hasLength(1));
+  });
+
   test('maybeEnqueueAudioTranscribe skips non-media mime types', () async {
     final backend = _CaptureNativeBackend();
 

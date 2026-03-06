@@ -873,6 +873,9 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
           lang: 'und',
           respectFeatureToggle: false,
           nowMs: nowMs,
+          beforeEnqueue: () async {
+            await CloudAuthScope.maybeOf(context)?.controller.getIdToken();
+          },
         );
       } else {
         await backend.enqueueAttachmentAnnotation(
