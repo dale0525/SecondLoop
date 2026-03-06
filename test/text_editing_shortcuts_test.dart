@@ -71,4 +71,18 @@ void main() {
 
     expect(isCommandOnly, isFalse);
   });
+
+  test('text editing shortcut dispatch ignores macOS command-only keydown', () {
+    final shouldIgnore = shouldIgnoreTextEditingShortcutEvent(
+      const RawKeyDownEvent(
+        data: RawKeyEventDataMacOs(
+          keyCode: 55,
+          modifiers: RawKeyEventDataMacOs.modifierCommand |
+              RawKeyEventDataMacOs.modifierLeftCommand,
+        ),
+      ),
+    );
+
+    expect(shouldIgnore, isTrue);
+  });
 }

@@ -125,6 +125,10 @@ String? _resolveShortcutCharacter({
   return normalize(keyLabel) ?? normalize(character);
 }
 
+bool shouldIgnoreTextEditingShortcutEvent(RawKeyEvent event) {
+  return isMacOsCommandModifierKeyDown(event);
+}
+
 bool isMacOsCommandModifierKeyDown(RawKeyEvent event) {
   if (event is! RawKeyDownEvent) {
     return false;

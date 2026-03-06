@@ -165,6 +165,10 @@ class _SecondLoopAppState extends State<SecondLoopApp> {
                                 return KeyEventResult.ignored;
                               }
 
+                              if (shouldIgnoreTextEditingShortcutEvent(event)) {
+                                return KeyEventResult.handled;
+                              }
+
                               // ignore: deprecated_member_use
                               final metaPressed = event.isMetaPressed;
                               // ignore: deprecated_member_use
