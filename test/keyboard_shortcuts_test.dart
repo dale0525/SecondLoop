@@ -47,6 +47,57 @@ void main() {
     final field = tester.widget<TextField>(input);
     expect(field.controller!.text, 'pasted');
   });
+
+  testWidgets('Cmd+V keeps existing text when caret is collapsed',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({
+      'welcome_guide_seen_v1': true,
+    });
+
+    String? clipboardText = ' world';
+    final messenger =
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+    messenger.setMockMethodCallHandler(SystemChannels.platform, (call) async {
+      switch (call.method) {
+        case 'Clipboard.getData':
+          return <String, dynamic>{'text': clipboardText};
+        case 'Clipboard.setData':
+          clipboardText = (call.arguments as Map)['text'] as String?;
+          return null;
+      }
+      return null;
+    });
+    addTearDown(
+      () => messenger.setMockMethodCallHandler(SystemChannels.platform, null),
+    );
+
+    await tester.pumpWidget(MyApp(backend: _AutoUnlockedBackend()));
+    await tester.pumpAndSettle();
+
+    final input = find.byKey(const ValueKey('chat_input'));
+    expect(input, findsOneWidget);
+
+    await tester.tap(input);
+    await tester.pump();
+    await tester.enterText(input, 'hello');
+    await tester.pumpAndSettle();
+
+    final fieldBeforePaste = tester.widget<TextField>(input);
+    fieldBeforePaste.controller!.selection = const TextSelection.collapsed(
+      offset: 5,
+    );
+    await tester.pump();
+
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.metaLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyV);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.metaLeft);
+    await tester.pumpAndSettle();
+
+    final field = tester.widget<TextField>(input);
+    expect(field.controller!.text, 'hello world');
+    expect(field.controller!.selection.isCollapsed, isTrue);
+    expect(field.controller!.selection.baseOffset, 11);
+  });
 }
 
 final class _AutoUnlockedBackend extends AppBackend {

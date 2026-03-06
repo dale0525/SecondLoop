@@ -42,6 +42,7 @@ import '../features/welcome/first_launch_welcome_gate.dart';
 import '../core/sync/cloud_sync_switch_prompt_gate.dart';
 import '../core/sync/sync_engine_gate.dart';
 import '../core/notifications/review_reminder_notifications_gate.dart';
+import 'text_editing_shortcuts.dart';
 
 class SecondLoopApp extends StatefulWidget {
   SecondLoopApp({
@@ -170,108 +171,57 @@ class _SecondLoopAppState extends State<SecondLoopApp> {
                               final controlPressed = event.isControlPressed;
                               // ignore: deprecated_member_use
                               final shiftPressed = event.isShiftPressed;
-                              final hasModifier = metaPressed || controlPressed;
-                              if (!hasModifier) {
-                                return KeyEventResult.ignored;
-                              }
-
                               final key = event.logicalKey;
-                              bool isTextEditingShortcutChar(String char) =>
-                                  char == 'a' ||
-                                  char == 'c' ||
-                                  char == 'v' ||
-                                  char == 'x' ||
-                                  char == 'z' ||
-                                  char == 'y';
-
-                              String? keyChar;
-                              final keyLabel = event.data.keyLabel;
-                              if (keyLabel.length == 1) {
-                                final lowered = keyLabel.toLowerCase();
-                                if (isTextEditingShortcutChar(lowered)) {
-                                  keyChar = lowered;
-                                }
-                              }
-                              if (keyChar == null) {
-                                final rawChar = event.character;
-                                if (rawChar != null && rawChar.length == 1) {
-                                  final lowered = rawChar.toLowerCase();
-                                  if (isTextEditingShortcutChar(lowered)) {
-                                    keyChar = lowered;
-                                  }
-                                }
+                              final shortcut = resolveTextEditingShortcut(
+                                key: key,
+                                keyLabel: event.data.keyLabel,
+                                character: event.character,
+                                metaPressed: metaPressed,
+                                controlPressed: controlPressed,
+                                shiftPressed: shiftPressed,
+                                supportedShortcuts: const <TextEditingShortcut>{
+                                  TextEditingShortcut.selectAll,
+                                  TextEditingShortcut.copy,
+                                  TextEditingShortcut.paste,
+                                  TextEditingShortcut.cut,
+                                  TextEditingShortcut.undo,
+                                  TextEditingShortcut.redo,
+                                },
+                              );
+                              if (shortcut == null) {
+                                return KeyEventResult.ignored;
                               }
 
                               Intent? intent;
-                              switch (keyChar) {
-                                case 'a':
+                              switch (shortcut) {
+                                case TextEditingShortcut.selectAll:
                                   intent = const SelectAllTextIntent(
                                     SelectionChangedCause.keyboard,
                                   );
                                   break;
-                                case 'c':
+                                case TextEditingShortcut.copy:
                                   intent = CopySelectionTextIntent.copy;
                                   break;
-                                case 'x':
-                                  intent = const CopySelectionTextIntent.cut(
-                                    SelectionChangedCause.keyboard,
-                                  );
-                                  break;
-                                case 'v':
+                                case TextEditingShortcut.paste:
                                   intent = const PasteTextIntent(
                                     SelectionChangedCause.keyboard,
                                   );
                                   break;
-                                case 'z':
-                                  intent = shiftPressed
-                                      ? const RedoTextIntent(
-                                          SelectionChangedCause.keyboard,
-                                        )
-                                      : const UndoTextIntent(
-                                          SelectionChangedCause.keyboard,
-                                        );
-                                  break;
-                                case 'y':
-                                  intent = const RedoTextIntent(
-                                    SelectionChangedCause.keyboard,
-                                  );
-                                  break;
-                              }
-
-                              if (intent == null) {
-                                if (key == LogicalKeyboardKey.keyA) {
-                                  intent = const SelectAllTextIntent(
-                                    SelectionChangedCause.keyboard,
-                                  );
-                                } else if (key == LogicalKeyboardKey.keyC ||
-                                    key == LogicalKeyboardKey.copy) {
-                                  intent = CopySelectionTextIntent.copy;
-                                } else if (key == LogicalKeyboardKey.keyX ||
-                                    key == LogicalKeyboardKey.cut) {
+                                case TextEditingShortcut.cut:
                                   intent = const CopySelectionTextIntent.cut(
                                     SelectionChangedCause.keyboard,
                                   );
-                                } else if (key == LogicalKeyboardKey.keyV ||
-                                    key == LogicalKeyboardKey.paste) {
-                                  intent = const PasteTextIntent(
-                                    SelectionChangedCause.keyboard,
-                                  );
-                                } else if (key == LogicalKeyboardKey.keyZ &&
-                                    !shiftPressed) {
+                                  break;
+                                case TextEditingShortcut.undo:
                                   intent = const UndoTextIntent(
                                     SelectionChangedCause.keyboard,
                                   );
-                                } else if (key == LogicalKeyboardKey.keyY ||
-                                    (key == LogicalKeyboardKey.keyZ &&
-                                        shiftPressed)) {
+                                  break;
+                                case TextEditingShortcut.redo:
                                   intent = const RedoTextIntent(
                                     SelectionChangedCause.keyboard,
                                   );
-                                }
-                              }
-
-                              if (intent == null) {
-                                return KeyEventResult.ignored;
+                                  break;
                               }
 
                               final focusContext =

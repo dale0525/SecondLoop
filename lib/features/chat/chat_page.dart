@@ -40,6 +40,7 @@ import '../../core/subscription/subscription_scope.dart';
 import '../../core/sync/sync_engine.dart';
 import '../../core/sync/sync_engine_gate.dart';
 import '../../core/sync/sync_config_store.dart';
+import '../../app/text_editing_shortcuts.dart';
 import '../../core/platform/audio_recording_foreground_service.dart';
 import '../../core/platform/ask_ai_foreground_service.dart';
 import '../../i18n/strings.g.dart';
@@ -445,6 +446,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
   bool _audioRecordingRecoveryChecked = false;
   bool _thisThreadOnly = false;
   bool _hoverActionsEnabled = false;
+  bool _desktopComposerHovered = false;
   bool _cloudEmbeddingsConsented = false;
   bool _composerAskAiRouteLoading = true;
   String? _hoveredMessageId;
