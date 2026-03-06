@@ -243,10 +243,6 @@ class _SecondLoopAppState extends State<SecondLoopApp> {
                             },
                             child: Shortcuts(
                               shortcuts: const <ShortcutActivator, Intent>{
-                                CharacterActivator('c', control: true):
-                                    CopySelectionTextIntent.copy,
-                                CharacterActivator('c', meta: true):
-                                    CopySelectionTextIntent.copy,
                                 SingleActivator(LogicalKeyboardKey.keyC,
                                         control: true):
                                     CopySelectionTextIntent.copy,
@@ -254,12 +250,6 @@ class _SecondLoopAppState extends State<SecondLoopApp> {
                                     meta: true): CopySelectionTextIntent.copy,
                                 SingleActivator(LogicalKeyboardKey.copy):
                                     CopySelectionTextIntent.copy,
-                                CharacterActivator('v', control: true):
-                                    PasteTextIntent(
-                                        SelectionChangedCause.keyboard),
-                                CharacterActivator('v', meta: true):
-                                    PasteTextIntent(
-                                        SelectionChangedCause.keyboard),
                                 SingleActivator(LogicalKeyboardKey.keyV,
                                         control: true):
                                     PasteTextIntent(
@@ -271,14 +261,6 @@ class _SecondLoopAppState extends State<SecondLoopApp> {
                                 SingleActivator(LogicalKeyboardKey.paste):
                                     PasteTextIntent(
                                         SelectionChangedCause.keyboard),
-                                CharacterActivator('x', control: true):
-                                    CopySelectionTextIntent.cut(
-                                  SelectionChangedCause.keyboard,
-                                ),
-                                CharacterActivator('x', meta: true):
-                                    CopySelectionTextIntent.cut(
-                                  SelectionChangedCause.keyboard,
-                                ),
                                 SingleActivator(LogicalKeyboardKey.keyX,
                                     control: true): CopySelectionTextIntent.cut(
                                   SelectionChangedCause.keyboard,
@@ -291,12 +273,12 @@ class _SecondLoopAppState extends State<SecondLoopApp> {
                                     CopySelectionTextIntent.cut(
                                   SelectionChangedCause.keyboard,
                                 ),
-                                CharacterActivator('a', control: true):
-                                    SelectAllTextIntent(
+                                SingleActivator(LogicalKeyboardKey.keyA,
+                                    control: true): SelectAllTextIntent(
                                   SelectionChangedCause.keyboard,
                                 ),
-                                CharacterActivator('a', meta: true):
-                                    SelectAllTextIntent(
+                                SingleActivator(LogicalKeyboardKey.keyA,
+                                    meta: true): SelectAllTextIntent(
                                   SelectionChangedCause.keyboard,
                                 ),
                               },

@@ -39,9 +39,10 @@ void main() {
     await tester.tap(input);
     await tester.pump();
 
-    await tester.sendKeyDownEvent(LogicalKeyboardKey.metaLeft);
-    await tester.sendKeyEvent(LogicalKeyboardKey.keyV);
-    await tester.sendKeyUpEvent(LogicalKeyboardKey.metaLeft);
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.metaLeft,
+        platform: 'macos');
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyV, platform: 'macos');
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.metaLeft, platform: 'macos');
     await tester.pumpAndSettle();
 
     final field = tester.widget<TextField>(input);
@@ -88,15 +89,51 @@ void main() {
     );
     await tester.pump();
 
-    await tester.sendKeyDownEvent(LogicalKeyboardKey.metaLeft);
-    await tester.sendKeyEvent(LogicalKeyboardKey.keyV);
-    await tester.sendKeyUpEvent(LogicalKeyboardKey.metaLeft);
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.metaLeft,
+        platform: 'macos');
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyV, platform: 'macos');
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.metaLeft, platform: 'macos');
     await tester.pumpAndSettle();
 
     final field = tester.widget<TextField>(input);
     expect(field.controller!.text, 'hello world');
     expect(field.controller!.selection.isCollapsed, isTrue);
     expect(field.controller!.selection.baseOffset, 11);
+  });
+
+  testWidgets('Pressing Cmd alone keeps chat selection collapsed',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({
+      'welcome_guide_seen_v1': true,
+    });
+
+    await tester.pumpWidget(MyApp(backend: _AutoUnlockedBackend()));
+    await tester.pumpAndSettle();
+
+    final input = find.byKey(const ValueKey('chat_input'));
+    expect(input, findsOneWidget);
+
+    await tester.tap(input);
+    await tester.pump();
+    await tester.enterText(input, 'hello');
+    await tester.pumpAndSettle();
+
+    final fieldBeforeCmd = tester.widget<TextField>(input);
+    fieldBeforeCmd.controller!.selection = const TextSelection.collapsed(
+      offset: 5,
+    );
+    await tester.pump();
+
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.metaLeft,
+        platform: 'macos');
+    await tester.pump();
+
+    final fieldAfterCmdDown = tester.widget<TextField>(input);
+    expect(fieldAfterCmdDown.controller!.selection.isCollapsed, isTrue);
+    expect(fieldAfterCmdDown.controller!.selection.baseOffset, 5);
+
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.metaLeft, platform: 'macos');
+    await tester.pumpAndSettle();
   });
 }
 
