@@ -64,6 +64,7 @@ class _FakeTagRepository extends TagRepository {
   List<String>? lastSetTagIds;
   String? lastMergeSourceTagId;
   String? lastMergeTargetTagId;
+  String? lastDeletedTagId;
   final List<String> feedbackRecords = <String>[];
 
   @override
@@ -103,6 +104,17 @@ class _FakeTagRepository extends TagRepository {
           item.sourceTag.id == sourceTagId && item.targetTag.id == targetTagId,
     );
     return 2;
+  }
+
+  @override
+  Future<void> deleteTag(Uint8List key, String tagId) async {
+    lastDeletedTagId = tagId;
+    _tags.removeWhere((tag) => tag.id == tagId);
+    _messageTags.removeWhere((tag) => tag.id == tagId);
+    _mergeSuggestions.removeWhere(
+      (suggestion) =>
+          suggestion.sourceTag.id == tagId || suggestion.targetTag.id == tagId,
+    );
   }
 
   @override
@@ -534,5 +546,63 @@ void main() {
     expect(find.text('Cancel'), findsWidgets);
     expect(find.text('Work'), findsWidgets);
     expect(find.text('ProjectX'), findsOneWidget);
+  });
+
+  testWidgets('message tag picker only allows deleting custom tags',
+      (tester) async {
+    LocaleSettings.setLocale(AppLocale.en);
+
+    final repository = _FakeTagRepository(
+      tags: <Tag>[
+        _tag(
+          id: 'system.tag.work',
+          name: 'work',
+          systemKey: 'work',
+          isSystem: true,
+        ),
+        _tag(id: 'custom.1', name: 'ProjectX'),
+      ],
+    );
+
+    await tester.pumpWidget(
+      _host(
+        locale: const Locale('en'),
+        child: Builder(
+          builder: (context) {
+            return ElevatedButton(
+              key: const ValueKey('open_tag_picker_delete'),
+              onPressed: () async {
+                await showMessageTagPicker(
+                  context: context,
+                  sessionKey: Uint8List.fromList(sessionKey),
+                  messageId: 'm1',
+                  repository: repository,
+                );
+              },
+              child: const Text('open'),
+            );
+          },
+        ),
+      ),
+    );
+
+    await tester.tap(find.byKey(const ValueKey('open_tag_picker_delete')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('tag_picker_delete_system.tag.work')),
+        findsNothing);
+    expect(find.byKey(const ValueKey('tag_picker_delete_custom.1')),
+        findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('tag_picker_delete_custom.1')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Delete tag?'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('tag_picker_delete_confirm')));
+    await tester.pumpAndSettle();
+
+    expect(repository.lastDeletedTagId, 'custom.1');
+    expect(find.text('ProjectX'), findsNothing);
+    expect(find.text('Work'), findsWidgets);
   });
 }

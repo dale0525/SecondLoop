@@ -378,15 +378,43 @@ final class BackendSemanticParseAutoActionsStore
       );
     }
 
+    final manualTagNames = await _tagRepository.listManualMessageTagNames(
+      _sessionKey,
+      messageId,
+    );
+    if (manualTagNames.length >= kMaxSemanticTagsPerMessage) {
+      return const SemanticParseTagApplyResult(
+        appliedCount: 0,
+        appliedTagIds: <String>[],
+      );
+    }
+
+    final manualTagNameSet = manualTagNames
+        .map((name) => normalizeSemanticTagName(name))
+        .whereType<String>()
+        .toSet();
+    final allowedAutoFillCount =
+        kMaxSemanticTagsPerMessage - manualTagNameSet.length;
+    if (allowedAutoFillCount <= 0) {
+      return const SemanticParseTagApplyResult(
+        appliedCount: 0,
+        appliedTagIds: <String>[],
+      );
+    }
+
     final existingMessageTags =
         await _tagRepository.listMessageTags(_sessionKey, messageId);
     final nextTagIds = existingMessageTags.map((tag) => tag.id).toSet();
 
     final appliedTagIds = <String>[];
     for (final tagName in dedupedTagNames) {
+      if (manualTagNameSet.contains(tagName)) continue;
       final tag = await _tagRepository.upsertTag(_sessionKey, tagName);
       if (nextTagIds.add(tag.id)) {
         appliedTagIds.add(tag.id);
+        if (appliedTagIds.length >= allowedAutoFillCount) {
+          break;
+        }
       }
     }
 

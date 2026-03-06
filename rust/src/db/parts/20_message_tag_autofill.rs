@@ -1,6 +1,5 @@
 const KV_MESSAGE_TAG_AUTOFILL_APPLY_ENABLED: &str = "tag_autofill.apply_enabled";
 const MESSAGE_TAG_AUTOFILL_SCORE_THRESHOLD: f64 = 0.90;
-const MESSAGE_TAG_AUTOFILL_MARGIN_THRESHOLD: f64 = 0.18;
 const MESSAGE_TAG_AUTOFILL_MIN_SOURCE_COUNT: usize = 2;
 
 #[derive(Clone, Debug)]
@@ -16,11 +15,17 @@ struct MessageTagAutofillCandidateScore {
 }
 
 #[derive(Clone, Debug)]
-struct MessageTagAutofillDecision {
-    candidate_tag: Option<String>,
+struct MessageTagAutofillRankedCandidate {
+    candidate_tag: String,
     score: f64,
     margin: f64,
     source_count: usize,
+    sources: Vec<String>,
+}
+
+#[derive(Clone, Debug)]
+struct MessageTagAutofillDecision {
+    candidates: Vec<MessageTagAutofillRankedCandidate>,
     decision: &'static str,
     evidence: serde_json::Value,
 }
@@ -102,24 +107,26 @@ fn direct_system_key_token_match(content: &str) -> Option<&'static str> {
     map_to_system_key(&normalized)
 }
 
-fn list_attachment_suggested_tags_for_autofill(
+fn list_attachment_suggested_tag_signals_for_autofill(
     conn: &Connection,
     db_key: &[u8; 32],
     message_id: &str,
-) -> Result<Vec<String>> {
+) -> Result<Vec<(String, String)>> {
     let payloads = list_message_attachment_annotation_payloads(conn, db_key, message_id)?;
 
-    let mut out = Vec::<String>::new();
-    let mut seen = std::collections::HashSet::<String>::new();
+    let mut out = Vec::<(String, String)>::new();
 
-    for payload in &payloads {
-        collect_suggested_tags_from_payload(payload, &mut out, &mut seen, 0);
-        if out.len() >= MAX_SUGGESTED_TAGS_PER_MESSAGE {
-            break;
+    for (index, payload) in payloads.iter().enumerate() {
+        let mut payload_tags = Vec::<String>::new();
+        let mut payload_seen = std::collections::HashSet::<String>::new();
+        collect_suggested_tags_from_payload(payload, &mut payload_tags, &mut payload_seen, 0);
+        payload_tags.truncate(MAX_SUGGESTED_TAGS_PER_MESSAGE);
+
+        for tag in payload_tags {
+            out.push((tag, format!("attachment_suggested_tag:{index}")));
         }
     }
 
-    out.truncate(MAX_SUGGESTED_TAGS_PER_MESSAGE);
     Ok(out)
 }
 
@@ -132,10 +139,7 @@ fn evaluate_message_tag_autofill(
         Some(value) => value,
         None => {
             return Ok(MessageTagAutofillDecision {
-                candidate_tag: None,
-                score: 0.0,
-                margin: 0.0,
-                source_count: 0,
+                candidates: Vec::new(),
                 decision: "skip",
                 evidence: serde_json::json!({
                     "reason": "message_missing"
@@ -146,10 +150,7 @@ fn evaluate_message_tag_autofill(
 
     if message.role != "user" {
         return Ok(MessageTagAutofillDecision {
-            candidate_tag: None,
-            score: 0.0,
-            margin: 0.0,
-            source_count: 0,
+            candidates: Vec::new(),
             decision: "skip",
             evidence: serde_json::json!({
                 "reason": "not_user_message"
@@ -183,21 +184,18 @@ fn evaluate_message_tag_autofill(
         );
     }
 
-    for suggested in list_attachment_suggested_tags_for_autofill(conn, db_key, message_id)? {
+    for (suggested, source) in list_attachment_suggested_tag_signals_for_autofill(conn, db_key, message_id)? {
         add_candidate_signal(
             &mut candidates,
             &suggested,
-            "attachment_suggested_tag",
+            &source,
             0.78,
         );
     }
 
     if candidates.is_empty() {
         return Ok(MessageTagAutofillDecision {
-            candidate_tag: None,
-            score: 0.0,
-            margin: 0.0,
-            source_count: 0,
+            candidates: Vec::new(),
             decision: "skip",
             evidence: serde_json::json!({
                 "reason": "no_candidates"
@@ -208,56 +206,74 @@ fn evaluate_message_tag_autofill(
     let mut ranked = candidates
         .iter()
         .map(|(candidate, info)| {
-            (
-                candidate.to_string(),
-                combined_confidence(&info.scores),
-                info.sources.len(),
-                info.sources.iter().cloned().collect::<Vec<_>>(),
-            )
+            MessageTagAutofillRankedCandidate {
+                candidate_tag: candidate.to_string(),
+                score: combined_confidence(&info.scores),
+                margin: 0.0,
+                source_count: info.sources.len(),
+                sources: info.sources.iter().cloned().collect::<Vec<_>>(),
+            }
         })
         .collect::<Vec<_>>();
 
     ranked.sort_by(|a, b| {
-        b.1.partial_cmp(&a.1)
+        b.score
+            .partial_cmp(&a.score)
             .unwrap_or(std::cmp::Ordering::Equal)
-            .then_with(|| b.2.cmp(&a.2))
-            .then_with(|| a.0.cmp(&b.0))
+            .then_with(|| b.source_count.cmp(&a.source_count))
+            .then_with(|| a.candidate_tag.cmp(&b.candidate_tag))
     });
 
-    let top = ranked[0].clone();
-    let second_score = ranked.get(1).map(|item| item.1).unwrap_or(0.0);
-    let margin = (top.1 - second_score).max(0.0);
+    for index in 0..ranked.len() {
+        let next_score = ranked.get(index + 1).map(|item| item.score).unwrap_or(0.0);
+        ranked[index].margin = (ranked[index].score - next_score).max(0.0);
+    }
 
-    let decision = if top.1 >= MESSAGE_TAG_AUTOFILL_SCORE_THRESHOLD
-        && margin >= MESSAGE_TAG_AUTOFILL_MARGIN_THRESHOLD
-        && top.2 >= MESSAGE_TAG_AUTOFILL_MIN_SOURCE_COUNT
-    {
-        "apply_candidate"
-    } else {
+    let mut selected_candidates = ranked
+        .iter()
+        .filter(|candidate| {
+            candidate.score >= MESSAGE_TAG_AUTOFILL_SCORE_THRESHOLD
+                && candidate.source_count >= MESSAGE_TAG_AUTOFILL_MIN_SOURCE_COUNT
+                && SYSTEM_TAG_KEYS.contains(&candidate.candidate_tag.as_str())
+        })
+        .take(MAX_SUGGESTED_TAGS_PER_MESSAGE)
+        .cloned()
+        .collect::<Vec<_>>();
+
+    let decision = if selected_candidates.is_empty() {
+        selected_candidates = ranked
+            .iter()
+            .take(MAX_SUGGESTED_TAGS_PER_MESSAGE)
+            .cloned()
+            .collect::<Vec<_>>();
         "suggest_only"
+    } else {
+        "apply_candidate"
     };
 
     let evidence_candidates = ranked
         .iter()
         .take(3)
-        .map(|(candidate, score, source_count, sources)| {
+        .map(|candidate| {
             serde_json::json!({
-                "candidate": candidate,
-                "score": score,
-                "source_count": source_count,
-                "sources": sources,
+                "candidate": candidate.candidate_tag,
+                "score": candidate.score,
+                "margin": candidate.margin,
+                "source_count": candidate.source_count,
+                "sources": candidate.sources,
             })
         })
         .collect::<Vec<_>>();
 
     Ok(MessageTagAutofillDecision {
-        candidate_tag: Some(top.0),
-        score: top.1,
-        margin,
-        source_count: top.2,
+        candidates: selected_candidates.clone(),
         decision,
         evidence: serde_json::json!({
             "candidates": evidence_candidates,
+            "selected_candidate_tags": selected_candidates
+                .iter()
+                .map(|candidate| candidate.candidate_tag.clone())
+                .collect::<Vec<_>>(),
             "content_len": content.chars().count(),
         }),
     })
@@ -355,11 +371,41 @@ fn write_message_tag_autofill_event(
     conn: &Connection,
     message_id: &str,
     decision: &MessageTagAutofillDecision,
-    applied: bool,
+    applied_candidate_tags: &std::collections::BTreeSet<String>,
     now_ms: i64,
 ) -> Result<()> {
-    conn.execute(
-        r#"
+    let evidence_json = serde_json::to_string(&decision.evidence)?;
+    if decision.candidates.is_empty() {
+        conn.execute(
+            r#"
+INSERT INTO message_tag_autofill_events(
+  id,
+  message_id,
+  candidate_tag,
+  score,
+  margin,
+  source_count,
+  decision,
+  applied,
+  evidence_json,
+  created_at_ms
+)
+VALUES (?1, ?2, NULL, 0, 0, 0, ?3, 0, ?4, ?5)
+"#,
+            params![
+                uuid::Uuid::new_v4().to_string(),
+                message_id,
+                decision.decision,
+                evidence_json,
+                now_ms,
+            ],
+        )?;
+        return Ok(());
+    }
+
+    for candidate in &decision.candidates {
+        conn.execute(
+            r#"
 INSERT INTO message_tag_autofill_events(
   id,
   message_id,
@@ -374,62 +420,146 @@ INSERT INTO message_tag_autofill_events(
 )
 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
 "#,
-        params![
-            uuid::Uuid::new_v4().to_string(),
-            message_id,
-            decision.candidate_tag.as_deref(),
-            decision.score,
-            decision.margin,
-            decision.source_count as i64,
-            decision.decision,
-            if applied { 1i64 } else { 0i64 },
-            serde_json::to_string(&decision.evidence)?,
-            now_ms,
-        ],
-    )?;
+            params![
+                uuid::Uuid::new_v4().to_string(),
+                message_id,
+                candidate.candidate_tag.as_str(),
+                candidate.score,
+                candidate.margin,
+                candidate.source_count as i64,
+                decision.decision,
+                if applied_candidate_tags.contains(&candidate.candidate_tag) {
+                    1i64
+                } else {
+                    0i64
+                },
+                evidence_json,
+                now_ms,
+            ],
+        )?;
+    }
     Ok(())
 }
 
-fn apply_message_tag_autofill_candidate(
+fn apply_message_tag_autofill_candidates(
     conn: &Connection,
     db_key: &[u8; 32],
     message_id: &str,
-    candidate_tag: &str,
-) -> Result<bool> {
+    candidate_tags: &[String],
+) -> Result<std::collections::BTreeSet<String>> {
     if !message_tag_autofill_apply_enabled(conn) {
-        return Ok(false);
+        return Ok(std::collections::BTreeSet::new());
     }
 
-    let candidate_tag = candidate_tag.trim();
-    if candidate_tag.is_empty() {
-        return Ok(false);
+    if candidate_tags.is_empty() {
+        return Ok(std::collections::BTreeSet::new());
     }
 
-    let tag = upsert_tag(conn, db_key, candidate_tag)?;
-    if !tag.is_system {
-        return Ok(false);
+    let manual_tag_names = list_manual_message_tag_names(conn, db_key, message_id)?;
+    if manual_tag_names.len() >= MAX_SUGGESTED_TAGS_PER_MESSAGE {
+        return Ok(std::collections::BTreeSet::new());
     }
 
+    let manual_tag_name_set = manual_tag_names.into_iter().collect::<std::collections::HashSet<_>>();
     let existing = list_message_tags(conn, db_key, message_id)?;
-    if existing.iter().any(|item| item.id == tag.id) {
-        return Ok(false);
+    let existing_tag_name_set = existing
+        .iter()
+        .map(|tag| normalize_tag_name(&tag.name))
+        .collect::<std::collections::HashSet<_>>();
+    let existing_autofill_tag_name_set = list_message_tag_autofill_applied_tag_names(conn, message_id)?
+        .into_iter()
+        .filter(|tag_name| existing_tag_name_set.contains(tag_name))
+        .collect::<std::collections::HashSet<_>>();
+    let remaining_budget = MAX_SUGGESTED_TAGS_PER_MESSAGE
+        .saturating_sub(manual_tag_name_set.len())
+        .saturating_sub(existing_autofill_tag_name_set.len());
+    if remaining_budget == 0 {
+        return Ok(std::collections::BTreeSet::new());
+    }
+
+    let mut next_tag_ids = existing
+        .iter()
+        .map(|item| item.id.clone())
+        .collect::<std::collections::BTreeSet<_>>();
+    let mut newly_inserted_tag_ids = Vec::<String>::new();
+    let mut applied_candidate_tags = std::collections::BTreeSet::<String>::new();
+
+    for raw_candidate_tag in candidate_tags {
+        if applied_candidate_tags.len() >= remaining_budget {
+            break;
+        }
+
+        let candidate_tag = raw_candidate_tag.trim();
+        if candidate_tag.is_empty() {
+            continue;
+        }
+
+        let normalized_candidate_tag = normalize_tag_name(candidate_tag);
+        if normalized_candidate_tag.is_empty()
+            || manual_tag_name_set.contains(&normalized_candidate_tag)
+            || existing_autofill_tag_name_set.contains(&normalized_candidate_tag)
+            || applied_candidate_tags.contains(&normalized_candidate_tag)
+        {
+            continue;
+        }
+
+        let tag = upsert_tag(conn, db_key, candidate_tag)?;
+        if !tag.is_system {
+            continue;
+        }
+
+        if next_tag_ids.insert(tag.id.clone()) {
+            newly_inserted_tag_ids.push(tag.id);
+            applied_candidate_tags.insert(normalized_candidate_tag);
+        }
+    }
+
+    if applied_candidate_tags.is_empty() {
+        return Ok(applied_candidate_tags);
     }
 
     if conn.is_autocommit() {
-        let mut next_tag_ids = existing.into_iter().map(|item| item.id).collect::<Vec<_>>();
-        next_tag_ids.push(tag.id);
-        next_tag_ids.sort();
-        next_tag_ids.dedup();
+        let next_tag_ids = next_tag_ids.into_iter().collect::<Vec<_>>();
         set_message_tags(conn, db_key, message_id, &next_tag_ids)?;
-        return Ok(true);
+        return Ok(applied_candidate_tags);
     }
 
-    let inserted = conn.execute(
-        r#"INSERT OR IGNORE INTO message_tags(message_id, tag_id, created_at_ms)
-           VALUES (?1, ?2, ?3)"#,
-        params![message_id, tag.id, now_ms()],
+    let created_at_ms = now_ms();
+    for tag_id in newly_inserted_tag_ids {
+        let _ = conn.execute(
+            r#"INSERT OR IGNORE INTO message_tags(message_id, tag_id, created_at_ms)
+               VALUES (?1, ?2, ?3)"#,
+            params![message_id, tag_id, created_at_ms],
+        )?;
+    }
+    Ok(applied_candidate_tags)
+}
+
+fn list_message_tag_autofill_applied_tag_names(
+    conn: &Connection,
+    message_id: &str,
+) -> Result<std::collections::HashSet<String>> {
+    let mut stmt = conn.prepare(
+        r#"
+SELECT candidate_tag
+FROM message_tag_autofill_events
+WHERE message_id = ?1
+  AND applied = 1
+  AND candidate_tag IS NOT NULL
+"#,
     )?;
-    Ok(inserted > 0)
+    let mut rows = stmt.query(params![message_id])?;
+    let mut out = std::collections::HashSet::<String>::new();
+    while let Some(row) = rows.next()? {
+        let Some(candidate_tag) = row.get::<_, Option<String>>(0)? else {
+            continue;
+        };
+        let normalized = normalize_tag_name(&candidate_tag);
+        if !normalized.is_empty() {
+            out.insert(normalized);
+        }
+    }
+    Ok(out)
 }
 
 pub fn enqueue_message_tag_autofill_job(
@@ -519,19 +649,24 @@ pub fn process_pending_message_tag_autofill_jobs(
 
             let decision = evaluate_message_tag_autofill(conn, db_key, &message_id)?;
 
-            let mut applied = false;
+            let mut applied_candidate_tags = std::collections::BTreeSet::<String>::new();
             if decision.decision == "apply_candidate" {
-                if let Some(candidate_tag) = decision.candidate_tag.as_deref() {
-                    applied = apply_message_tag_autofill_candidate(
-                        conn,
-                        db_key,
-                        &message_id,
-                        candidate_tag,
-                    )?;
-                }
+                let candidate_tags = decision
+                    .candidates
+                    .iter()
+                    .map(|candidate| candidate.candidate_tag.clone())
+                    .collect::<Vec<_>>();
+                applied_candidate_tags =
+                    apply_message_tag_autofill_candidates(conn, db_key, &message_id, &candidate_tags)?;
             }
 
-            write_message_tag_autofill_event(conn, &message_id, &decision, applied, now_ms)?;
+            write_message_tag_autofill_event(
+                conn,
+                &message_id,
+                &decision,
+                &applied_candidate_tags,
+                now_ms,
+            )?;
             mark_message_tag_autofill_job_succeeded(conn, &message_id, now_ms)?;
 
             Ok(())

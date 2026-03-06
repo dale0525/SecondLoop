@@ -1806,6 +1806,7 @@ pub fn ai_semantic_parse_message_action(
 
         let (profile_id, profile) = db::load_active_llm_profile_config(&conn, &key)?
             .ok_or_else(|| anyhow!("no active LLM profile configured"))?;
+        let available_tags = db::list_available_tags_for_semantic_parse(&conn, &key, 200)?;
 
         let provider = llm::answer_provider_from_profile(&profile)?;
         let result = semantic_parse::semantic_parse_message_action_json(
@@ -1815,6 +1816,7 @@ pub fn ai_semantic_parse_message_action(
             locale.trim(),
             day_end_minutes,
             &candidates,
+            &available_tags,
         );
 
         match result {
@@ -1875,8 +1877,9 @@ pub fn ai_semantic_parse_message_action_cloud_gateway(
         return Err(anyhow!("missing firebase_id_token"));
     }
 
-    let _key = key_from_bytes(key)?;
-    let _conn = db::open(Path::new(&app_dir))?;
+    let key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    let available_tags = db::list_available_tags_for_semantic_parse(&conn, &key, 200)?;
 
     let provider = llm::gateway::CloudGatewayProvider::new_with_purpose(
         gateway_base_url,
@@ -1893,6 +1896,7 @@ pub fn ai_semantic_parse_message_action_cloud_gateway(
         locale.trim(),
         day_end_minutes,
         &candidates,
+        &available_tags,
     )
 }
 

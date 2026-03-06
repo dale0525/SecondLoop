@@ -1083,6 +1083,12 @@
   "mergeApplied": "Merged $count messages",
   "mergeDismissed": "Merge suggestion dismissed",
   "mergeSavedForLater": "Merge suggestion saved for later",
+  "deleteDialog": {
+        "title": "Delete tag?",
+        "message": "Delete \"$name\"? This removes it from tagged messages and strips matching manual #tags from message text.",
+        "confirm": "Delete"
+  },
+  "deleted": "Tag deleted",
   "all": "All tags",
       "inputHint": "Type a tag name",
       "add": "Add",

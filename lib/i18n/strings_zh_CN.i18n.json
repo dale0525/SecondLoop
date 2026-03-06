@@ -1083,6 +1083,12 @@
   "mergeApplied": "已合并 $count 条消息",
   "mergeDismissed": "已忽略该合并建议",
   "mergeSavedForLater": "已暂存该合并建议",
+  "deleteDialog": {
+        "title": "删除标签？",
+        "message": "删除“$name”？这会从已打标签消息中移除它，并清理消息正文里匹配的手动 #tag。",
+        "confirm": "删除"
+  },
+  "deleted": "标签已删除",
   "all": "全部标签",
       "inputHint": "输入标签名称",
       "add": "添加",

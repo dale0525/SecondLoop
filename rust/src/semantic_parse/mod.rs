@@ -71,6 +71,7 @@ fn build_message_action_prompt(
     locale: &str,
     day_end_minutes: i32,
     candidates: &[TodoCandidate],
+    available_tags: &[String],
 ) -> String {
     let mut out = String::new();
     out.push_str("You are a strict JSON generator.\n");
@@ -123,9 +124,20 @@ fn build_message_action_prompt(
         "- status/new_status MUST use canonical enum values even if user text is non-English.\n",
     );
     out.push_str("- suggested_tags MUST contain at most 3 concise tags.\n");
-    out.push_str(
-        "- Prefer these canonical tags when relevant: work|personal|family|health|finance|study|travel|social|home|hobby.\n",
-    );
+    if available_tags.is_empty() {
+        out.push_str(
+            "- Prefer these canonical tags when relevant: work|personal|family|health|finance|study|travel|social|home|hobby.\n",
+        );
+    } else {
+        out.push_str("- Prefer tags from available_tags when relevant.\n");
+        out.push_str(
+            "- Only suggest tags from available_tags; if none fit, return suggested_tags as [].\n",
+        );
+        out.push_str(&format!(
+            "available_tags: {}\n",
+            serde_json::to_string(available_tags).expect("serialize available_tags")
+        ));
+    }
     out.push_str(
         "- If no useful tag is inferred, return suggested_tags as [] and tag_confidence as 0.\n\n",
     );
@@ -168,9 +180,16 @@ pub fn semantic_parse_message_action_json(
     locale: &str,
     day_end_minutes: i32,
     candidates: &[TodoCandidate],
+    available_tags: &[String],
 ) -> Result<String> {
-    let prompt =
-        build_message_action_prompt(text, now_local_iso, locale, day_end_minutes, candidates);
+    let prompt = build_message_action_prompt(
+        text,
+        now_local_iso,
+        locale,
+        day_end_minutes,
+        candidates,
+        available_tags,
+    );
     let mut out = String::new();
     provider.stream_answer(&prompt, &mut |ev: ChatDelta| {
         out.push_str(&ev.text_delta);
@@ -291,6 +310,7 @@ mod tests {
                 status: "open".to_string(),
                 due_local_iso: None,
             }],
+            &[],
         );
         assert!(prompt.contains("Output ONLY JSON"));
         assert!(prompt.contains("todo:1"));
@@ -303,9 +323,29 @@ mod tests {
 
     #[test]
     fn prompt_allows_create_when_no_candidate_matches() {
-        let prompt =
-            build_message_action_prompt("fix the tv", "2026-02-03T12:00:00", "en", 21 * 60, &[]);
+        let prompt = build_message_action_prompt(
+            "fix the tv",
+            "2026-02-03T12:00:00",
+            "en",
+            21 * 60,
+            &[],
+            &[],
+        );
         assert!(prompt.contains("even if no candidates match"));
+    }
+
+    #[test]
+    fn prompt_includes_available_tags_guidance() {
+        let prompt = build_message_action_prompt(
+            "plan trip",
+            "2026-02-03T12:00:00",
+            "en",
+            21 * 60,
+            &[],
+            &["travel".to_string(), "projectx".to_string()],
+        );
+        assert!(prompt.contains("available_tags"));
+        assert!(prompt.contains("Prefer tags from available_tags"));
     }
 
     #[test]
@@ -322,6 +362,7 @@ mod tests {
             "2026-02-03T12:00:00",
             "en",
             21 * 60,
+            &[],
             &[],
         )
         .expect("should parse");
