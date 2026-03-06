@@ -5,6 +5,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 
 import 'package:secondloop/features/tags/tag_filter_sheet.dart';
 import 'package:secondloop/features/tags/tag_picker.dart';
+import 'package:secondloop/features/tags/tag_merge_tag_selector_sheet.dart';
 import 'package:secondloop/features/tags/tag_repository.dart';
 import 'package:secondloop/i18n/strings.g.dart';
 import 'package:secondloop/src/rust/db.dart';
@@ -607,7 +608,14 @@ void main() {
     );
 
     final repository = _FakeTagRepository(
-      tags: <Tag>[system, canonical, alias],
+      tags: <Tag>[
+        system,
+        canonical,
+        alias,
+        _tag(id: 'custom.alpha', name: 'Alpha'),
+        _tag(id: 'custom.beta', name: 'Beta'),
+        _tag(id: 'custom.gamma', name: 'Gamma'),
+      ],
       mergeSuggestions: <TagMergeSuggestion>[
         _mergeSuggestion(
           sourceTag: alias,
@@ -643,31 +651,74 @@ void main() {
         .tap(find.byKey(const ValueKey('open_tag_picker_manual_merge')));
     await tester.pumpAndSettle();
 
-    await tester.tap(
-      find.byKey(
-        const ValueKey(
-            'tag_picker_merge_dismiss_custom.alias_custom.canonical'),
-      ),
-    );
-    await tester.pumpAndSettle();
-
-    expect(find.text('Merge suggestion dismissed'), findsOneWidget);
-
     await tester.tap(find.byKey(const ValueKey('tag_picker_manual_merge')));
     await tester.pumpAndSettle();
 
-    expect(find.text('Choose source tag'), findsOneWidget);
-    await tester.tap(
-      find.byKey(const ValueKey('tag_picker_manual_merge_source_custom.alias')),
+    expect(
+      find.byKey(const ValueKey('manual_tag_merge_title')),
+      findsOneWidget,
+    );
+
+    await tester
+        .tap(find.byKey(const ValueKey('manual_tag_merge_pick_source')));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('manual_tag_merge_source_selector_title')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(
+        const ValueKey(
+            'manual_tag_merge_source_selector_option_system.tag.work'),
+      ),
+      findsNothing,
+    );
+
+    await tester.enterText(
+      find.byKey(const ValueKey('manual_tag_merge_source_selector_search')),
+      'weekly-',
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Merge into'), findsOneWidget);
     await tester.tap(
       find.byKey(
-        const ValueKey('tag_picker_manual_merge_target_custom.canonical'),
+        const ValueKey('manual_tag_merge_source_selector_option_custom.alias'),
       ),
     );
+    await tester.pumpAndSettle();
+
+    await tester
+        .tap(find.byKey(const ValueKey('manual_tag_merge_pick_target')));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('manual_tag_merge_target_selector_title')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(
+        const ValueKey('manual_tag_merge_target_selector_option_custom.alias'),
+      ),
+      findsNothing,
+    );
+
+    await tester.enterText(
+      find.byKey(const ValueKey('manual_tag_merge_target_selector_search')),
+      'weekly',
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(
+      find.byKey(
+        const ValueKey(
+          'manual_tag_merge_target_selector_option_custom.canonical',
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('manual_tag_merge_submit')));
     await tester.pumpAndSettle();
 
     expect(find.text('Merge tags?'), findsOneWidget);
@@ -678,24 +729,30 @@ void main() {
     expect(repository.lastMergeTargetTagId, 'custom.canonical');
   });
 
-  testWidgets('message tag picker can restore ignored merge suggestion', (
+  testWidgets('manual merge sheet hosts ignored merge suggestions', (
     tester,
   ) async {
     LocaleSettings.setLocale(AppLocale.en);
 
-    final alias = _tag(id: 'custom.hidden_alias', name: 'weekly-review');
-    final canonical =
-        _tag(id: 'custom.hidden_canonical', name: 'Weekly Review');
+    final canonical = _tag(id: 'custom.canonical', name: 'Weekly Review');
+    final hiddenSuggestions = List<TagMergeSuggestion>.generate(
+      6,
+      (index) => _mergeSuggestion(
+        sourceTag: _tag(
+          id: 'custom.hidden_$index',
+          name: 'weekly-review-$index',
+        ),
+        targetTag: canonical,
+        reason: 'name_compact_match',
+      ),
+    );
 
     final repository = _FakeTagRepository(
-      tags: <Tag>[canonical, alias],
-      hiddenMergeSuggestions: <TagMergeSuggestion>[
-        _mergeSuggestion(
-          sourceTag: alias,
-          targetTag: canonical,
-          reason: 'name_compact_match',
-        ),
+      tags: <Tag>[
+        canonical,
+        ...hiddenSuggestions.map((item) => item.sourceTag),
       ],
+      hiddenMergeSuggestions: hiddenSuggestions,
     );
 
     await tester.pumpWidget(
@@ -724,26 +781,206 @@ void main() {
         .tap(find.byKey(const ValueKey('open_tag_picker_restore_hidden')));
     await tester.pumpAndSettle();
 
-    expect(find.byKey(const ValueKey('tag_picker_hidden_merge_title')),
-        findsOneWidget);
-    await tester.tap(
-      find.byKey(
-        const ValueKey(
-          'tag_picker_hidden_merge_restore_custom.hidden_alias_custom.hidden_canonical',
-        ),
-      ),
+    expect(
+      find.byKey(const ValueKey('tag_picker_hidden_merge_title')),
+      findsNothing,
     );
+
+    await tester.tap(find.byKey(const ValueKey('tag_picker_manual_merge')));
     await tester.pumpAndSettle();
 
-    expect(repository.lastClearedMergeSourceTagId, 'custom.hidden_alias');
-    expect(repository.lastClearedMergeTargetTagId, 'custom.hidden_canonical');
+    expect(
+      find.byKey(const ValueKey('manual_tag_merge_title')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('manual_tag_merge_hidden_title')),
+      findsOneWidget,
+    );
+
+    await tester
+        .tap(find.byKey(const ValueKey('manual_tag_merge_hidden_expand')));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('manual_tag_merge_hidden_search')),
+      findsOneWidget,
+    );
+    await tester.enterText(
+      find.byKey(const ValueKey('manual_tag_merge_hidden_search')),
+      '5',
+    );
+    tester.testTextInput.hide();
+    await tester.pumpAndSettle();
+
     expect(
       find.byKey(
         const ValueKey(
-          'tag_picker_merge_apply_custom.hidden_alias_custom.hidden_canonical',
+          'manual_tag_merge_accept_custom.hidden_5_custom.canonical',
         ),
       ),
       findsOneWidget,
+    );
+    expect(
+      find.byKey(
+        const ValueKey(
+          'manual_tag_merge_accept_custom.hidden_1_custom.canonical',
+        ),
+      ),
+      findsNothing,
+    );
+
+    final acceptSuggestion = find.byKey(
+      const ValueKey(
+        'manual_tag_merge_accept_custom.hidden_5_custom.canonical',
+      ),
+    );
+    await tester.dragUntilVisible(
+      acceptSuggestion,
+      find.byType(ListView).last,
+      const Offset(0, -120),
+    );
+    await tester.drag(find.byType(ListView).last, const Offset(0, -120));
+    await tester.pumpAndSettle();
+    await tester.tap(acceptSuggestion);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Merge tags?'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('tag_picker_merge_confirm')));
+    await tester.pumpAndSettle();
+
+    expect(repository.lastMergeSourceTagId, 'custom.hidden_5');
+    expect(repository.lastMergeTargetTagId, 'custom.canonical');
+    expect(
+      repository.feedbackRecords,
+      contains('accept:custom.hidden_5:custom.canonical:name_compact_match'),
+    );
+    expect(repository.lastClearedMergeSourceTagId, isNull);
+    expect(repository.lastClearedMergeTargetTagId, isNull);
+  });
+
+  testWidgets('tag merge selector groups selected custom and system tags',
+      (tester) async {
+    LocaleSettings.setLocale(AppLocale.en);
+
+    final selected = _tag(id: 'custom.selected', name: 'Pinned');
+    final alpha = _tag(id: 'custom.alpha', name: 'Alpha');
+    final beta = _tag(id: 'custom.beta', name: 'Beta');
+    final system = _tag(
+      id: 'system.tag.work',
+      name: 'work',
+      systemKey: 'work',
+      isSystem: true,
+    );
+
+    await tester.pumpWidget(
+      _host(
+        locale: const Locale('en'),
+        child: Builder(
+          builder: (context) {
+            return ElevatedButton(
+              key: const ValueKey('open_tag_merge_selector_grouped'),
+              onPressed: () async {
+                await showTagMergeTagSelectorSheet(
+                  context: context,
+                  title: 'Pick a tag',
+                  tags: <Tag>[system, beta, selected, alpha],
+                  keyPrefix: 'selector_test',
+                  selectedTag: selected,
+                );
+              },
+              child: const Text('open'),
+            );
+          },
+        ),
+      ),
+    );
+
+    await tester
+        .tap(find.byKey(const ValueKey('open_tag_merge_selector_grouped')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Selected'), findsOneWidget);
+    expect(find.text('Custom tags'), findsOneWidget);
+    expect(find.text('System tags'), findsOneWidget);
+
+    final selectedOption =
+        find.byKey(const ValueKey('selector_test_option_custom.selected'));
+    final alphaOption =
+        find.byKey(const ValueKey('selector_test_option_custom.alpha'));
+    final systemOption =
+        find.byKey(const ValueKey('selector_test_option_system.tag.work'));
+
+    expect(
+      tester.getTopLeft(selectedOption).dy,
+      lessThan(tester.getTopLeft(alphaOption).dy),
+    );
+    expect(
+      tester.getTopLeft(alphaOption).dy,
+      lessThan(tester.getTopLeft(systemOption).dy),
+    );
+  });
+
+  testWidgets('tag merge selector prioritizes best matches above other matches',
+      (tester) async {
+    LocaleSettings.setLocale(AppLocale.en);
+
+    final exact = _tag(id: 'custom.exact', name: 'Review');
+    final prefix = _tag(id: 'custom.prefix', name: 'Review Later');
+    final contains = _tag(id: 'custom.contains', name: 'Weekly Review Archive');
+    final unrelated = _tag(id: 'custom.unrelated', name: 'Alpha');
+
+    await tester.pumpWidget(
+      _host(
+        locale: const Locale('en'),
+        child: Builder(
+          builder: (context) {
+            return ElevatedButton(
+              key: const ValueKey('open_tag_merge_selector_search_ranked'),
+              onPressed: () async {
+                await showTagMergeTagSelectorSheet(
+                  context: context,
+                  title: 'Pick a tag',
+                  tags: <Tag>[contains, unrelated, prefix, exact],
+                  keyPrefix: 'selector_search_test',
+                );
+              },
+              child: const Text('open'),
+            );
+          },
+        ),
+      ),
+    );
+
+    await tester.tap(find.byKey(
+      const ValueKey('open_tag_merge_selector_search_ranked'),
+    ));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.byKey(const ValueKey('selector_search_test_search')),
+      'review',
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Best matches'), findsOneWidget);
+    expect(find.text('Other matches'), findsOneWidget);
+
+    final exactOption =
+        find.byKey(const ValueKey('selector_search_test_option_custom.exact'));
+    final prefixOption =
+        find.byKey(const ValueKey('selector_search_test_option_custom.prefix'));
+    final containsOption = find.byKey(
+      const ValueKey('selector_search_test_option_custom.contains'),
+    );
+
+    expect(
+      tester.getTopLeft(exactOption).dy,
+      lessThan(tester.getTopLeft(prefixOption).dy),
+    );
+    expect(
+      tester.getTopLeft(prefixOption).dy,
+      lessThan(tester.getTopLeft(containsOption).dy),
     );
   });
 
