@@ -6,6 +6,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
 
+import '../../i18n/strings.g.dart';
 import 'video_attachment_player_page.dart';
 import 'video_proxy_open_helper.dart';
 
@@ -503,8 +504,12 @@ class _VideoAttachmentInlinePlayerState
     final currentPositionLabel =
         _formatDuration(Duration(milliseconds: clampedPosition.round()));
     final totalDurationLabel = _formatDuration(actualDuration);
-    final timeLabel = '$currentPositionLabel / $totalDurationLabel';
-    final speedLabel = '${_formatSpeed(_selectedSpeed)}x';
+    final timeLabel = t.common.labels.playbackProgress(
+      current: currentPositionLabel,
+      total: totalDurationLabel,
+    );
+    final speedLabel =
+        t.common.labels.playbackSpeed(value: _formatSpeed(_selectedSpeed));
 
     return DecoratedBox(
       decoration: BoxDecoration(
@@ -589,7 +594,9 @@ class _VideoAttachmentInlinePlayerState
                   onSelected: (next) => unawaited(_setVolume(controller, next)),
                   itemBuilder: (context) {
                     return _volumeOptions.map((option) {
-                      final optionLabel = '${(option * 100).round()}%';
+                      final optionLabel = t.common.labels.percent(
+                        value: (option * 100).round(),
+                      );
                       return PopupMenuItem<double>(
                         value: option,
                         child: Text(optionLabel),
@@ -616,7 +623,9 @@ class _VideoAttachmentInlinePlayerState
                       unawaited(_setPlaybackSpeed(controller, next)),
                   itemBuilder: (context) {
                     return _speedOptions.map((option) {
-                      final optionLabel = '${_formatSpeed(option)}x';
+                      final optionLabel = t.common.labels.playbackSpeed(
+                        value: _formatSpeed(option),
+                      );
                       return PopupMenuItem<double>(
                         value: option,
                         child: Text(optionLabel),

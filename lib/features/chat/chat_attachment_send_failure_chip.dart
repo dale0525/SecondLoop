@@ -20,7 +20,6 @@ final class ChatAttachmentSendFailureChip extends StatelessWidget {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final tokens = SlTokens.of(context);
-    final countText = '$failedCount';
     return SlSurface(
       color: colorScheme.errorContainer.withOpacity(0.35),
       borderColor: colorScheme.error.withOpacity(0.35),
@@ -36,7 +35,7 @@ final class ChatAttachmentSendFailureChip extends StatelessWidget {
           ),
           const SizedBox(width: 6),
           Text(
-            countText,
+            failedCount.toString(),
             style: theme.textTheme.labelMedium?.copyWith(
               color: colorScheme.onErrorContainer,
               fontWeight: FontWeight.w700,

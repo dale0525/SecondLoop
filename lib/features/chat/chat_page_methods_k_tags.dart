@@ -142,7 +142,9 @@ extension _ChatPageStateMethodsKTags on _ChatPageState {
     final excludeChips = _selectedTagExcludeIds.map((tagId) {
       final tag = _selectedTagExcludeTagById[tagId];
       final baseLabel = tag == null ? tagId : localizeTagName(locale, tag);
-      final excludeLabel = '- $baseLabel';
+      final excludeLabel = context.t.chat.tagFilter.excludeTagLabel(
+        tag: baseLabel,
+      );
       return Padding(
         padding: const EdgeInsets.only(right: 8),
         child: InputChip(

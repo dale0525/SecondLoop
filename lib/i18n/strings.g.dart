@@ -4,9 +4,9 @@
 /// To regenerate, run: `dart run slang`
 ///
 /// Locales: 2
-/// Strings: 1850 (925 per locale)
+/// Strings: 1874 (937 per locale)
 ///
-/// Built on 2026-03-06 at 16:00 UTC
+/// Built on 2026-03-06 at 17:50 UTC
 
 // coverage:ignore-file
 // ignore_for_file: type=lint
@@ -477,6 +477,8 @@ class _StringsChatEn {
       _StringsChatTagFilterEn._(_root);
   late final _StringsChatTagPickerEn tagPicker =
       _StringsChatTagPickerEn._(_root);
+  late final _StringsChatTodoMessageBadgeEn todoMessageBadge =
+      _StringsChatTodoMessageBadgeEn._(_root);
   late final _StringsChatAskScopeEmptyEn askScopeEmpty =
       _StringsChatAskScopeEmptyEn._(_root);
 }
@@ -713,6 +715,14 @@ class _StringsCommonLabelsEn {
   // Translations
   String elapsedSeconds({required Object seconds}) => 'Elapsed: ${seconds}s';
   String get topK => 'Top‑K:';
+  String percent({required Object value}) => '${value}%';
+  String playbackSpeed({required Object value}) => '${value}x';
+  String playbackProgress({required Object current, required Object total}) =>
+      '${current} / ${total}';
+  String seekBackwardSeconds({required Object seconds}) => '-${seconds}s';
+  String seekForwardSeconds({required Object seconds}) => '+${seconds}s';
+  String labeledValue({required Object label, required Object value}) =>
+      '${label}: ${value}';
 }
 
 // Path: actions.capture
@@ -1567,6 +1577,8 @@ class _StringsChatMarkdownEditorEn {
   String get exportCopyClipboard => 'Copy to Clipboard';
   String get exportCopied => 'Copied to clipboard';
   String exportDone({required Object format}) => 'Exported as ${format}';
+  String exportDoneSavedPath({required Object format, required Object path}) =>
+      'Exported as ${format}\nSaved to ${path}';
   String exportSavedPath({required Object path}) => 'Saved to ${path}';
   String exportFailed({required Object error}) => 'Export failed: ${error}';
   String get exportReasonNoWindowsBrowser =>
@@ -1681,6 +1693,7 @@ class _StringsChatTagFilterEn {
   // Translations
   String get tooltip => 'Tag filter';
   String get clearFilter => 'Clear tag filter';
+  String excludeTagLabel({required Object tag}) => '- ${tag}';
   late final _StringsChatTagFilterSheetEn sheet =
       _StringsChatTagFilterSheetEn._(_root);
 }
@@ -1743,6 +1756,18 @@ class _StringsChatTagPickerEn {
   String get add => 'Add';
   String get save => 'Save';
   String get tagActionLabel => 'Tags';
+}
+
+// Path: chat.todoMessageBadge
+class _StringsChatTodoMessageBadgeEn {
+  _StringsChatTodoMessageBadgeEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get task => 'Task';
+  String get related => 'Related task';
+  String quote({required Object title}) => '「${title}」';
 }
 
 // Path: chat.askScopeEmpty
@@ -2350,6 +2375,7 @@ class _StringsSettingsDesktopTrayProEn {
 
   // Translations
   String get signedIn => 'Signed in';
+  String signedInAs({required Object email}) => 'Signed in: ${email}';
   String get aiUsage => 'AI usage';
   String get storageUsage => 'Storage usage';
 }
@@ -4462,6 +4488,9 @@ class _StringsChatZhCn extends _StringsChatEn {
   late final _StringsChatTagPickerZhCn tagPicker =
       _StringsChatTagPickerZhCn._(_root);
   @override
+  late final _StringsChatTodoMessageBadgeZhCn todoMessageBadge =
+      _StringsChatTodoMessageBadgeZhCn._(_root);
+  @override
   late final _StringsChatAskScopeEmptyZhCn askScopeEmpty =
       _StringsChatAskScopeEmptyZhCn._(_root);
 }
@@ -4832,6 +4861,20 @@ class _StringsCommonLabelsZhCn extends _StringsCommonLabelsEn {
   String elapsedSeconds({required Object seconds}) => '耗时：${seconds}s';
   @override
   String get topK => 'Top‑K：';
+  @override
+  String percent({required Object value}) => '${value}%';
+  @override
+  String playbackSpeed({required Object value}) => '${value}x';
+  @override
+  String playbackProgress({required Object current, required Object total}) =>
+      '${current} / ${total}';
+  @override
+  String seekBackwardSeconds({required Object seconds}) => '-${seconds}s';
+  @override
+  String seekForwardSeconds({required Object seconds}) => '+${seconds}s';
+  @override
+  String labeledValue({required Object label, required Object value}) =>
+      '${label}：${value}';
 }
 
 // Path: actions.capture
@@ -6121,6 +6164,9 @@ class _StringsChatMarkdownEditorZhCn extends _StringsChatMarkdownEditorEn {
   @override
   String exportDone({required Object format}) => '已导出为 ${format}';
   @override
+  String exportDoneSavedPath({required Object format, required Object path}) =>
+      '已导出为 ${format}\n已保存到：${path}';
+  @override
   String exportSavedPath({required Object path}) => '已保存到：${path}';
   @override
   String exportFailed({required Object error}) => '导出失败：${error}';
@@ -6284,6 +6330,8 @@ class _StringsChatTagFilterZhCn extends _StringsChatTagFilterEn {
   @override
   String get clearFilter => '清空标签筛选';
   @override
+  String excludeTagLabel({required Object tag}) => '- ${tag}';
+  @override
   late final _StringsChatTagFilterSheetZhCn sheet =
       _StringsChatTagFilterSheetZhCn._(_root);
 }
@@ -6390,6 +6438,24 @@ class _StringsChatTagPickerZhCn extends _StringsChatTagPickerEn {
   String get save => '保存';
   @override
   String get tagActionLabel => '标签';
+}
+
+// Path: chat.todoMessageBadge
+class _StringsChatTodoMessageBadgeZhCn extends _StringsChatTodoMessageBadgeEn {
+  _StringsChatTodoMessageBadgeZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get task => '事项';
+  @override
+  String get related => '关联事项';
+  @override
+  String quote({required Object title}) => '「${title}」';
 }
 
 // Path: chat.askScopeEmpty
@@ -7308,6 +7374,8 @@ class _StringsSettingsDesktopTrayProZhCn
   // Translations
   @override
   String get signedIn => '已登录';
+  @override
+  String signedInAs({required Object email}) => '已登录：${email}';
   @override
   String get aiUsage => 'AI 用量';
   @override
@@ -9821,6 +9889,20 @@ extension on Translations {
         return ({required Object seconds}) => 'Elapsed: ${seconds}s';
       case 'common.labels.topK':
         return 'Top‑K:';
+      case 'common.labels.percent':
+        return ({required Object value}) => '${value}%';
+      case 'common.labels.playbackSpeed':
+        return ({required Object value}) => '${value}x';
+      case 'common.labels.playbackProgress':
+        return ({required Object current, required Object total}) =>
+            '${current} / ${total}';
+      case 'common.labels.seekBackwardSeconds':
+        return ({required Object seconds}) => '-${seconds}s';
+      case 'common.labels.seekForwardSeconds':
+        return ({required Object seconds}) => '+${seconds}s';
+      case 'common.labels.labeledValue':
+        return ({required Object label, required Object value}) =>
+            '${label}: ${value}';
       case 'errors.initFailed':
         return ({required Object error}) => 'Init failed: ${error}';
       case 'errors.loadFailed':
@@ -10132,6 +10214,8 @@ extension on Translations {
         return 'Quit';
       case 'settings.desktopTray.pro.signedIn':
         return 'Signed in';
+      case 'settings.desktopTray.pro.signedInAs':
+        return ({required Object email}) => 'Signed in: ${email}';
       case 'settings.desktopTray.pro.aiUsage':
         return 'AI usage';
       case 'settings.desktopTray.pro.storageUsage':
@@ -10975,6 +11059,9 @@ extension on Translations {
         return 'Copied to clipboard';
       case 'chat.markdownEditor.exportDone':
         return ({required Object format}) => 'Exported as ${format}';
+      case 'chat.markdownEditor.exportDoneSavedPath':
+        return ({required Object format, required Object path}) =>
+            'Exported as ${format}\nSaved to ${path}';
       case 'chat.markdownEditor.exportSavedPath':
         return ({required Object path}) => 'Saved to ${path}';
       case 'chat.markdownEditor.exportFailed':
@@ -11116,6 +11203,8 @@ extension on Translations {
         return 'Tag filter';
       case 'chat.tagFilter.clearFilter':
         return 'Clear tag filter';
+      case 'chat.tagFilter.excludeTagLabel':
+        return ({required Object tag}) => '- ${tag}';
       case 'chat.tagFilter.sheet.title':
         return 'Filter by tags';
       case 'chat.tagFilter.sheet.apply':
@@ -11228,6 +11317,12 @@ extension on Translations {
         return 'Save';
       case 'chat.tagPicker.tagActionLabel':
         return 'Tags';
+      case 'chat.todoMessageBadge.task':
+        return 'Task';
+      case 'chat.todoMessageBadge.related':
+        return 'Related task';
+      case 'chat.todoMessageBadge.quote':
+        return ({required Object title}) => '「${title}」';
       case 'chat.askScopeEmpty.title':
         return 'No results in current scope';
       case 'chat.askScopeEmpty.actions.expandTimeWindow':
@@ -11724,6 +11819,20 @@ extension on _StringsZhCn {
         return ({required Object seconds}) => '耗时：${seconds}s';
       case 'common.labels.topK':
         return 'Top‑K：';
+      case 'common.labels.percent':
+        return ({required Object value}) => '${value}%';
+      case 'common.labels.playbackSpeed':
+        return ({required Object value}) => '${value}x';
+      case 'common.labels.playbackProgress':
+        return ({required Object current, required Object total}) =>
+            '${current} / ${total}';
+      case 'common.labels.seekBackwardSeconds':
+        return ({required Object seconds}) => '-${seconds}s';
+      case 'common.labels.seekForwardSeconds':
+        return ({required Object seconds}) => '+${seconds}s';
+      case 'common.labels.labeledValue':
+        return ({required Object label, required Object value}) =>
+            '${label}：${value}';
       case 'errors.initFailed':
         return ({required Object error}) => '初始化失败：${error}';
       case 'errors.loadFailed':
@@ -12033,6 +12142,8 @@ extension on _StringsZhCn {
         return '退出';
       case 'settings.desktopTray.pro.signedIn':
         return '已登录';
+      case 'settings.desktopTray.pro.signedInAs':
+        return ({required Object email}) => '已登录：${email}';
       case 'settings.desktopTray.pro.aiUsage':
         return 'AI 用量';
       case 'settings.desktopTray.pro.storageUsage':
@@ -12867,6 +12978,9 @@ extension on _StringsZhCn {
         return '已复制到剪贴板';
       case 'chat.markdownEditor.exportDone':
         return ({required Object format}) => '已导出为 ${format}';
+      case 'chat.markdownEditor.exportDoneSavedPath':
+        return ({required Object format, required Object path}) =>
+            '已导出为 ${format}\n已保存到：${path}';
       case 'chat.markdownEditor.exportSavedPath':
         return ({required Object path}) => '已保存到：${path}';
       case 'chat.markdownEditor.exportFailed':
@@ -13008,6 +13122,8 @@ extension on _StringsZhCn {
         return '标签筛选';
       case 'chat.tagFilter.clearFilter':
         return '清空标签筛选';
+      case 'chat.tagFilter.excludeTagLabel':
+        return ({required Object tag}) => '- ${tag}';
       case 'chat.tagFilter.sheet.title':
         return '按标签筛选';
       case 'chat.tagFilter.sheet.apply':
@@ -13119,6 +13235,12 @@ extension on _StringsZhCn {
         return '保存';
       case 'chat.tagPicker.tagActionLabel':
         return '标签';
+      case 'chat.todoMessageBadge.task':
+        return '事项';
+      case 'chat.todoMessageBadge.related':
+        return '关联事项';
+      case 'chat.todoMessageBadge.quote':
+        return ({required Object title}) => '「${title}」';
       case 'chat.askScopeEmpty.title':
         return '当前范围未找到结果';
       case 'chat.askScopeEmpty.actions.expandTimeWindow':

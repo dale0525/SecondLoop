@@ -678,7 +678,8 @@ final class _CloudSyncSwitchPromptGateState
                     builder: (context, value, _) {
                       final percent =
                           (value * 100).floor().clamp(0, 100).toString();
-                      final percentLabel = '$percent%';
+                      final percentLabel =
+                          t.common.labels.percent(value: percent);
                       return Row(
                         children: [
                           Expanded(

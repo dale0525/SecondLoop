@@ -3,7 +3,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../ui/sl_surface.dart';
-import 'desktop_tray_menu_controller.dart' show DesktopTrayProUsage;
+import 'desktop_tray_menu_controller.dart'
+    show DesktopTrayProUsage, formatTraySignedInLabel, formatTrayUsagePercent;
 
 final class DesktopTrayPopupLabels {
   const DesktopTrayPopupLabels({
@@ -292,7 +293,7 @@ class _ProUsageBlock extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final signedInLabel = '${labels.signedIn}: ${usage.email}';
+    final signedInLabel = formatTraySignedInLabel(usage.email);
 
     return Container(
       margin: const EdgeInsets.only(top: 6),
@@ -353,7 +354,7 @@ class _UsageProgressRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final clamped = percent?.clamp(0, 100);
-    final label = clamped == null ? '--%' : '$clamped%';
+    final label = formatTrayUsagePercent(percent);
     final value = clamped == null ? 0.0 : clamped / 100;
 
     return Column(

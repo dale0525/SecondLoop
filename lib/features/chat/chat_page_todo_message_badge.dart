@@ -47,12 +47,10 @@ extension _ChatPageStateTodoMessageBadge on _ChatPageState {
     BuildContext context,
     _TodoMessageBadgeMeta meta,
   ) {
-    final isZh = Localizations.localeOf(context)
-        .languageCode
-        .toLowerCase()
-        .startsWith('zh');
-    if (isZh) return meta.isRelated ? '关联事项' : '事项';
-    return meta.isRelated ? 'Related task' : 'Task';
+    if (meta.isRelated) {
+      return context.t.chat.todoMessageBadge.related;
+    }
+    return context.t.chat.todoMessageBadge.task;
   }
 
   Future<bool> _openTodoFromBadge(_TodoMessageBadgeMeta meta) async {
@@ -124,7 +122,9 @@ extension _ChatPageStateTodoMessageBadge on _ChatPageState {
   }) {
     final trimmedTitle = meta.todoTitle.trim();
     if (!meta.isRelated || trimmedTitle.isEmpty) return const SizedBox.shrink();
-    final quoteText = '「$trimmedTitle」';
+    final quoteText = context.t.chat.todoMessageBadge.quote(
+      title: trimmedTitle,
+    );
 
     return Padding(
       padding: const EdgeInsets.only(top: 8),
