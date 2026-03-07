@@ -833,31 +833,31 @@ jobs:
             echo "- If macOS blocks first launch, Control-click the app, choose Open, then click Open again."
             echo
             echo "## Build Provenance"
-            echo "- Commit: \\`${GITHUB_SHA}\\`"
+            printf -- '- Commit: `%s`\n' "${GITHUB_SHA}"
             echo "- Workflow run: [#${GITHUB_RUN_ID}](https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID})"
-            echo "- Workflow attempt: \\`${GITHUB_RUN_ATTEMPT}\\`"
-            echo "- Generated at (UTC): \\`${generated_at_utc}\\`"
+            printf -- '- Workflow attempt: `%s`\n' "${GITHUB_RUN_ATTEMPT}"
+            printf -- '- Generated at (UTC): `%s`\n' "${generated_at_utc}"
             echo
             echo "## macOS 安装提示（未签名 DMG）"
             echo "- 当前 macOS 安装包未使用 Apple Developer 签名或公证。"
             echo "- 若首次启动被系统拦截，请按住 Control 点击应用，选择 打开，然后再次确认 打开。"
             echo
             echo "## Checksum Verification"
-            echo "- SHA256 checksum files are published as \\`*.dmg.sha256\\` assets."
-            echo "- Verify on macOS with \\`shasum -a 256 -c <dmg-file>.sha256\\`."
+            printf '%s\n' '- SHA256 checksum files are published as `*.dmg.sha256` assets.'
+            printf '%s\n' '- Verify on macOS with `shasum -a 256 -c <dmg-file>.sha256`.'
             echo
             echo "## Package Manager Install (Beta)"
-            echo "- Homebrew: \\`brew tap dale0525/SecondLoopHomebrew && brew install --cask secondloop\\`"
-            echo "- WinGet: \\`winget install --id SecondLoop.SecondLoop --exact\\`"
+            printf '%s\n' '- Homebrew: `brew tap dale0525/SecondLoopHomebrew && brew install --cask secondloop`'
+            printf '%s\n' '- WinGet: `winget install --id SecondLoop.SecondLoop --exact`'
             echo
             echo "## Windows Installer Choice"
-            echo "- Recommended for most users: \\`SecondLoop-win-Setup.exe\\` (better default update experience)."
-            echo "- \\`SecondLoop-win.msi\\` is mainly for WinGet or enterprise-managed deployment."
+            printf '%s\n' '- Recommended for most users: `SecondLoop-win-Setup.exe` (better default update experience).'
+            printf '%s\n' '- `SecondLoop-win.msi` is mainly for WinGet or enterprise-managed deployment.'
             echo "- With MSI installs, follow-up updates are typically manual or policy-managed."
             echo
             echo "## Windows 安装包选择建议"
-            echo "- 普通用户推荐使用 \\`SecondLoop-win-Setup.exe\\`（默认更新体验更顺滑）。"
-            echo "- \\`SecondLoop-win.msi\\` 主要用于 WinGet 或企业托管分发。"
+            printf '%s\n' '- 普通用户推荐使用 `SecondLoop-win-Setup.exe`（默认更新体验更顺滑）。'
+            printf '%s\n' '- `SecondLoop-win.msi` 主要用于 WinGet 或企业托管分发。'
             echo "- 通过 MSI 安装后，后续更新通常由手动或企业策略管理。"
           } >> dist/release-notes.md
       - name: Publish GitHub Release

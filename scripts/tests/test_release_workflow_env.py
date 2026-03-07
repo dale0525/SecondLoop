@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -48,6 +49,43 @@ class ReleaseWorkflowEnvTests(unittest.TestCase):
     def _workflow_text(self) -> str:
         workflow_path = Path(__file__).resolve().parents[2] / ".github/workflows/release.yml"
         return workflow_path.read_text(encoding="utf-8")
+
+    def _publish_step_run_script(self, step_name: str) -> str:
+        workflow_path = Path(__file__).resolve().parents[2] / ".github/workflows/release.yml"
+        lines = workflow_path.read_text(encoding="utf-8").splitlines()
+
+        in_publish = False
+        in_target_step = False
+        in_run_block = False
+        script_lines: list[str] = []
+
+        for line in lines:
+            if not in_publish:
+                if line.startswith("  publish:"):
+                    in_publish = True
+                continue
+
+            if line.startswith("  ") and not line.startswith("    "):
+                break
+
+            if not in_target_step:
+                if line == f"      - name: {step_name}":
+                    in_target_step = True
+                continue
+
+            if not in_run_block:
+                if line == "        run: |":
+                    in_run_block = True
+                continue
+
+            if line.startswith("          "):
+                script_lines.append(line[10:])
+                continue
+
+            break
+
+        self.assertTrue(script_lines, f"missing run block for step: {step_name}")
+        return "\n".join(script_lines) + "\n"
 
     def _macos_dmg_script_text(self) -> str:
         script_path = Path(__file__).resolve().parents[2] / "scripts/package_macos_dmg.sh"
@@ -122,6 +160,90 @@ class ReleaseWorkflowEnvTests(unittest.TestCase):
         self.assertIn('SecondLoop-win-Setup.exe', workflow_text)
         self.assertIn('SecondLoop-win.msi', workflow_text)
         self.assertIn('## Windows 安装包选择建议', workflow_text)
+
+    def test_release_notes_append_step_renders_concrete_values(self) -> None:
+        script_text = self._publish_step_run_script("Append install guidance and build provenance")
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            temp_path = Path(tmpdir)
+            dist_path = temp_path / "dist"
+            dist_path.mkdir()
+            notes_path = dist_path / "release-notes.md"
+            notes_path.write_text("# Existing notes\n", encoding="utf-8")
+
+            bin_path = temp_path / "bin"
+            bin_path.mkdir()
+            stub_commands = {
+                "brew": "#!/usr/bin/env bash\nexit 0\n",
+                "winget": "#!/usr/bin/env bash\nexit 0\n",
+                "shasum": "#!/usr/bin/env bash\nexit 0\n",
+                "SecondLoop-win-Setup.exe": "#!/usr/bin/env bash\nexit 0\n",
+                "SecondLoop-win.msi": "#!/usr/bin/env bash\nexit 0\n",
+            }
+            for command_name, command_text in stub_commands.items():
+                command_path = bin_path / command_name
+                command_path.write_text(command_text, encoding="utf-8")
+                command_path.chmod(0o755)
+
+            (temp_path / "dmg-file").write_text("placeholder\n", encoding="utf-8")
+
+            env = os.environ.copy()
+            env.update(
+                {
+                    "GITHUB_SHA": "abc123def456",
+                    "GITHUB_RUN_ID": "22790340272",
+                    "GITHUB_REPOSITORY": "dale0525/SecondLoop",
+                    "GITHUB_RUN_ATTEMPT": "7",
+                    "PATH": f"{bin_path}:{env.get('PATH', '')}",
+                }
+            )
+
+            result = subprocess.run(
+                ["bash", "-lc", script_text],
+                capture_output=True,
+                cwd=temp_path,
+                env=env,
+                text=True,
+            )
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+
+            rendered_notes = notes_path.read_text(encoding="utf-8")
+            self.assertIn("- Commit: `abc123def456`", rendered_notes)
+            self.assertIn(
+                "- Workflow run: [#22790340272](https://github.com/dale0525/SecondLoop/actions/runs/22790340272)",
+                rendered_notes,
+            )
+            self.assertIn("- Workflow attempt: `7`", rendered_notes)
+            self.assertRegex(
+                rendered_notes,
+                r"- Generated at \(UTC\): `\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z`",
+            )
+            self.assertIn(
+                "- SHA256 checksum files are published as `*.dmg.sha256` assets.",
+                rendered_notes,
+            )
+            self.assertIn(
+                "- Verify on macOS with `shasum -a 256 -c <dmg-file>.sha256`.",
+                rendered_notes,
+            )
+            self.assertIn(
+                "- Homebrew: `brew tap dale0525/SecondLoopHomebrew && brew install --cask secondloop`",
+                rendered_notes,
+            )
+            self.assertIn(
+                "- WinGet: `winget install --id SecondLoop.SecondLoop --exact`",
+                rendered_notes,
+            )
+            self.assertIn(
+                "- Recommended for most users: `SecondLoop-win-Setup.exe` (better default update experience).",
+                rendered_notes,
+            )
+            self.assertIn(
+                "- `SecondLoop-win.msi` is mainly for WinGet or enterprise-managed deployment.",
+                rendered_notes,
+            )
+            self.assertNotIn("\\`", rendered_notes)
 
     def test_release_workflow_installs_vulkan_sdk_for_linux_and_windows(self) -> None:
         workflow_text = self._workflow_text()
