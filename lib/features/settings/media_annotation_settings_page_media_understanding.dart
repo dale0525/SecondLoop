@@ -43,46 +43,30 @@ extension _MediaAnnotationSettingsPageMediaUnderstandingExtension
         contentConfig.ocrEnabled;
   }
 
-  bool _isZhLocale(BuildContext context) {
-    return Localizations.localeOf(context)
-        .languageCode
-        .toLowerCase()
-        .startsWith('zh');
-  }
-
   String _mediaUnderstandingTitle(BuildContext context) {
-    return _isZhLocale(context) ? '智能化（旧版入口）' : 'Intelligence (legacy entry)';
+    return context.t.settings.mediaAnnotation.legacyEntry.title;
   }
 
   String _mediaUnderstandingSubtitle(BuildContext context) {
-    if (_isZhLocale(context)) {
-      return '旧版兼容入口：统一控制音频转写、文档 OCR 和图片注释。';
-    }
-    return 'Legacy compatibility entry: one switch controls audio transcription, document OCR, and image annotations.';
+    return context.t.settings.mediaAnnotation.legacyEntry.subtitle;
   }
 
   String _useSecondLoopCloudTitle(BuildContext context) {
-    return _isZhLocale(context)
-        ? '使用 SecondLoop Cloud'
-        : 'Use SecondLoop Cloud';
+    return context
+        .t.settings.mediaAnnotation.legacyEntry.useSecondLoopCloudTitle;
   }
 
   String _useSecondLoopCloudSubtitle(BuildContext context) {
-    if (_isZhLocale(context)) {
-      return '开启后相关媒体数据会上传到 SecondLoop Cloud 处理。我们采用传输加密、严格访问控制与最小化保留策略。';
-    }
-    return 'When enabled, relevant media data is uploaded to SecondLoop Cloud for processing. We protect it with encrypted transport, strict access controls, and minimized retention.';
+    return context
+        .t.settings.mediaAnnotation.legacyEntry.useSecondLoopCloudSubtitle;
   }
 
   String _mediaUnderstandingWifiOnlyTitle(BuildContext context) {
-    return _isZhLocale(context) ? '仅 Wi-Fi' : 'Wi-Fi only';
+    return context.t.settings.mediaAnnotation.legacyEntry.wifiOnlyTitle;
   }
 
   String _mediaUnderstandingWifiOnlySubtitle(BuildContext context) {
-    if (_isZhLocale(context)) {
-      return '仅在 Wi-Fi 下执行云端/BYOK 处理，本地能力不受影响。';
-    }
-    return 'Run cloud/BYOK processing only on Wi-Fi. Local capability is unaffected.';
+    return context.t.settings.mediaAnnotation.legacyEntry.wifiOnlySubtitle;
   }
 
   Future<void> _setMediaUnderstandingEnabled({

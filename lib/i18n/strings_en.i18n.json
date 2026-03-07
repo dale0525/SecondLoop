@@ -520,6 +520,22 @@
             "body": "Local desktop OCR may stop working until models are downloaded again.",
             "confirm": "Delete"
           }
+        },
+        "engineMode": {
+          "title": "OCR recognition mode",
+          "labels": {
+            "platformNative": "Local OCR",
+            "multimodalLlm": "BYOK multimodal"
+          },
+          "descriptions": {
+            "platformNative": "Runs entirely on-device and does not upload content.",
+            "multimodalLlm": "Use your OpenAI-compatible API profile for OCR."
+          },
+          "subtitles": {
+            "proCloudEnabled": "Pro can use SecondLoop Cloud. Cloud OCR usage is counted under Ask AI.",
+            "proCloudDisabled": "Pro can enable Use SecondLoop Cloud to run OCR in cloud and count usage under Ask AI.",
+            "free": "Free users can choose between local OCR and BYOK multimodal OCR."
+          }
         }
       },
       "audioTranscribe": {
@@ -553,7 +569,39 @@
           "openApiKeys": "Open API keys"
         },
         "whisperModel": {
-          "downloaded": "Downloaded $modelLabel for local transcription."
+          "downloaded": "Downloaded $modelLabel for local transcription.",
+          "title": "Whisper model",
+          "subtitle": "Used for Whisper transcription path. Tiny by default on mobile, Base on desktop.",
+          "downloadingWithTotal": "Downloading $modelLabel: $percent% ($received/$total)",
+          "downloading": "Downloading $modelLabel: $received",
+          "labels": {
+            "tiny": "Tiny (Fastest)",
+            "base": "Base",
+            "small": "Small (Better quality)",
+            "medium": "Medium (High quality)",
+            "largeV3Turbo": "Large V3 Turbo",
+            "largeV3": "Large V3"
+          }
+        },
+        "apiProfile": {
+          "followActiveSubtitle": "Default follows the active API profile. You can choose an existing OpenAI-compatible API profile."
+        },
+        "localRuntime": {
+          "title": "Local capability",
+          "descriptionMobile": "Download Whisper runtime manually for mobile local transcription.",
+          "descriptionDesktop": "Manage local Whisper runtime for transcription.",
+          "statusSummary": {
+            "downloading": "Status: downloading",
+            "checking": "Status: checking",
+            "installed": "Status: installed",
+            "missing": "Status: missing"
+          },
+          "statusDetails": {
+            "checking": "Checking local Whisper runtime status.",
+            "error": "Failed to read runtime status: $error",
+            "installed": "Runtime installed (current model: $modelLabel).",
+            "missing": "Local runtime missing. Download to enable local transcription."
+          }
         }
       },
       "connectivity": {
@@ -661,6 +709,18 @@
       "allowCellularConfirm": {
         "title": "Use cellular data for image annotations?",
         "body": "Annotating images may upload photos to your chosen AI provider and can use significant data."
+      },
+      "urlFetch": {
+        "title": "URL content understanding",
+        "description": "Preprocess URL content locally, then enrich with your selected source (Cloud/BYOK/Local)."
+      },
+      "legacyEntry": {
+        "title": "Intelligence (legacy entry)",
+        "subtitle": "Legacy compatibility entry: one switch controls audio transcription, document OCR, and image annotations.",
+        "useSecondLoopCloudTitle": "Use SecondLoop Cloud",
+        "useSecondLoopCloudSubtitle": "When enabled, relevant media data is uploaded to SecondLoop Cloud for processing. We protect it with encrypted transport, strict access controls, and minimized retention.",
+        "wifiOnlyTitle": "Wi-Fi only",
+        "wifiOnlySubtitle": "Run cloud/BYOK processing only on Wi-Fi. Local capability is unaffected."
       }
     },
     "cloudEmbeddings": {

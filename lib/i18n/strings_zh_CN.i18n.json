@@ -520,6 +520,22 @@
             "body": "删除后，桌面端本地 OCR 可能不可用，直到再次下载。",
             "confirm": "删除"
           }
+        },
+        "engineMode": {
+          "title": "OCR 识别方案",
+          "labels": {
+            "platformNative": "本地 OCR",
+            "multimodalLlm": "BYOK 多模态"
+          },
+          "descriptions": {
+            "platformNative": "完全在设备端完成识别，不上传内容。",
+            "multimodalLlm": "使用你配置的 OpenAI-compatible API 识别文字。"
+          },
+          "subtitles": {
+            "proCloudEnabled": "Pro 订阅用户可使用 SecondLoop Cloud，云端 OCR 用量计入 Ask AI。",
+            "proCloudDisabled": "Pro 订阅用户可启用“使用 SecondLoop Cloud”来执行云端 OCR，并计入 Ask AI 用量。",
+            "free": "免费版可在本地 OCR 与 BYOK 多模态 OCR 之间选择。"
+          }
         }
       },
       "audioTranscribe": {
@@ -553,7 +569,39 @@
           "openApiKeys": "打开 API Key"
         },
         "whisperModel": {
-          "downloaded": "已下载 $modelLabel 模型，可用于本地转写。"
+          "downloaded": "已下载 $modelLabel 模型，可用于本地转写。",
+          "title": "Whisper 模型",
+          "subtitle": "用于 Whisper 转写路径。移动端默认 Tiny，桌面端默认 Base。",
+          "downloadingWithTotal": "正在下载 $modelLabel：$percent%（$received/$total）",
+          "downloading": "正在下载 $modelLabel：$received",
+          "labels": {
+            "tiny": "Tiny（最快）",
+            "base": "Base",
+            "small": "Small（更准）",
+            "medium": "Medium（高精度）",
+            "largeV3Turbo": "Large V3 Turbo（推荐高性能）",
+            "largeV3": "Large V3（最高精度）"
+          }
+        },
+        "apiProfile": {
+          "followActiveSubtitle": "默认跟随当前激活的 API profile，可改为已有 OpenAI-compatible API profile。"
+        },
+        "localRuntime": {
+          "title": "本地能力",
+          "descriptionMobile": "在移动端手动下载 Whisper 本地转写运行时。",
+          "descriptionDesktop": "管理本地 Whisper 转写运行时。",
+          "statusSummary": {
+            "downloading": "状态：下载中",
+            "checking": "状态：检查中",
+            "installed": "状态：已安装",
+            "missing": "状态：未安装"
+          },
+          "statusDetails": {
+            "checking": "正在检查本地 Whisper 运行时状态。",
+            "error": "运行时状态读取失败：$error",
+            "installed": "已安装本地运行时（当前模型：$modelLabel）。",
+            "missing": "未检测到本地运行时。点击下载后可使用本地转写。"
+          }
         }
       },
       "connectivity": {
@@ -661,6 +709,18 @@
       "allowCellularConfirm": {
         "title": "允许使用蜂窝网络注释图片？",
         "body": "图片注释可能会向你选择的 AI 服务商上传图片，并消耗一定流量。"
+      },
+      "urlFetch": {
+        "title": "链接内容理解",
+        "description": "先在本地抓取并清洗网页文本，再按你选择的来源（Cloud/BYOK/本地）做智能提炼。"
+      },
+      "legacyEntry": {
+        "title": "智能化（旧版入口）",
+        "subtitle": "旧版兼容入口：统一控制音频转写、文档 OCR 和图片注释。",
+        "useSecondLoopCloudTitle": "使用 SecondLoop Cloud",
+        "useSecondLoopCloudSubtitle": "开启后相关媒体数据会上传到 SecondLoop Cloud 处理。我们采用传输加密、严格访问控制与最小化保留策略。",
+        "wifiOnlyTitle": "仅 Wi-Fi",
+        "wifiOnlySubtitle": "仅在 Wi-Fi 下执行云端/BYOK 处理，本地能力不受影响。"
       }
     },
     "cloudEmbeddings": {

@@ -2,13 +2,6 @@ part of 'media_annotation_settings_page.dart';
 
 extension _MediaAnnotationSettingsPageEmbeddedExtension
     on _MediaAnnotationSettingsPageState {
-  bool _isZhLocale(BuildContext context) {
-    return Localizations.localeOf(context)
-        .languageCode
-        .toLowerCase()
-        .startsWith('zh');
-  }
-
   String _wifiOnlyTitle(BuildContext context) {
     return context.t.settings.mediaAnnotation.connectivity.wifiOnlyTitle;
   }
@@ -61,14 +54,11 @@ extension _MediaAnnotationSettingsPageEmbeddedExtension
   }
 
   String _urlFetchTitle(BuildContext context) {
-    return _isZhLocale(context) ? '链接内容理解' : 'URL content understanding';
+    return context.t.settings.mediaAnnotation.urlFetch.title;
   }
 
   String _urlFetchDescription(BuildContext context) {
-    if (_isZhLocale(context)) {
-      return '先在本地抓取并清洗网页文本，再按你选择的来源（Cloud/BYOK/本地）做智能提炼。';
-    }
-    return 'Preprocess URL content locally, then enrich with your selected source (Cloud/BYOK/Local).';
+    return context.t.settings.mediaAnnotation.urlFetch.description;
   }
 
   Widget _buildOpenApiKeysTile({required Key tileKey}) {

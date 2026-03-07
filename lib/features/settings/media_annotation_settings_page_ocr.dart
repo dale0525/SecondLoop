@@ -2,24 +2,17 @@ part of 'media_annotation_settings_page.dart';
 
 extension _MediaAnnotationSettingsPageOcrExtension
     on _MediaAnnotationSettingsPageState {
-  bool _isZhOcrLocale(BuildContext context) {
-    return Localizations.localeOf(context)
-        .languageCode
-        .toLowerCase()
-        .startsWith('zh');
-  }
-
   String _documentOcrEngineTitle(BuildContext context) {
-    return _isZhOcrLocale(context) ? 'OCR 识别方案' : 'OCR recognition mode';
+    return context.t.settings.mediaAnnotation.documentOcr.engineMode.title;
   }
 
   String _documentOcrEngineLabel(BuildContext context, String mode) {
-    final normalized = normalizeOcrEngineMode(mode);
-    final zh = _isZhOcrLocale(context);
-    if (normalized == 'multimodal_llm') {
-      return zh ? 'BYOK 多模态' : 'BYOK multimodal';
-    }
-    return zh ? '本地 OCR' : 'Local OCR';
+    final labels =
+        context.t.settings.mediaAnnotation.documentOcr.engineMode.labels;
+    return switch (normalizeOcrEngineMode(mode)) {
+      'multimodal_llm' => labels.multimodalLlm,
+      _ => labels.platformNative,
+    };
   }
 
   String _documentOcrEngineSubtitle(
@@ -27,21 +20,14 @@ extension _MediaAnnotationSettingsPageOcrExtension
     required bool proUser,
     required bool cloudEnabled,
   }) {
-    final zh = _isZhOcrLocale(context);
+    final subtitles =
+        context.t.settings.mediaAnnotation.documentOcr.engineMode.subtitles;
     if (proUser) {
-      if (zh) {
-        return cloudEnabled
-            ? 'Pro 订阅用户可使用 SecondLoop Cloud，云端 OCR 用量计入 Ask AI。'
-            : 'Pro 订阅用户可启用“使用 SecondLoop Cloud”来执行云端 OCR，并计入 Ask AI 用量。';
-      }
       return cloudEnabled
-          ? 'Pro can use SecondLoop Cloud. Cloud OCR usage is counted under Ask AI.'
-          : 'Pro can enable Use SecondLoop Cloud to run OCR in cloud and count usage under Ask AI.';
+          ? subtitles.proCloudEnabled
+          : subtitles.proCloudDisabled;
     }
-    if (zh) {
-      return '免费版可在本地 OCR 与 BYOK 多模态 OCR 之间选择。';
-    }
-    return 'Free users can choose between local OCR and BYOK multimodal OCR.';
+    return subtitles.free;
   }
 
   Future<void> _pickDocumentOcrEngineMode(
@@ -53,7 +39,7 @@ extension _MediaAnnotationSettingsPageOcrExtension
         SubscriptionStatus.unknown;
     if (subscriptionStatus == SubscriptionStatus.entitled) return;
 
-    final zh = _isZhOcrLocale(context);
+    final t = context.t.settings.mediaAnnotation.documentOcr.engineMode;
     final currentMode = normalizeOcrEngineMode(contentConfig.ocrEngineMode);
     final selected = await showDialog<String>(
       context: context,
@@ -88,18 +74,14 @@ extension _MediaAnnotationSettingsPageOcrExtension
                   children: [
                     option(
                       mode: 'platform_native',
-                      title: zh ? '本地 OCR' : 'Local OCR',
-                      subtitle: zh
-                          ? '完全在设备端完成识别，不上传内容。'
-                          : 'Runs entirely on-device and does not upload content.',
+                      title: t.labels.platformNative,
+                      subtitle: t.descriptions.platformNative,
                       setInnerState: setInnerState,
                     ),
                     option(
                       mode: 'multimodal_llm',
-                      title: zh ? 'BYOK 多模态' : 'BYOK multimodal',
-                      subtitle: zh
-                          ? '使用你配置的 OpenAI-compatible API 识别文字。'
-                          : 'Use your OpenAI-compatible API profile for OCR.',
+                      title: t.labels.multimodalLlm,
+                      subtitle: t.descriptions.multimodalLlm,
                       setInnerState: setInnerState,
                     ),
                   ],
@@ -178,14 +160,8 @@ extension _MediaAnnotationSettingsPageOcrExtension
   }
 
   String _audioTranscribeApiProfileSubtitle(BuildContext context) {
-    final zh = Localizations.localeOf(context)
-        .languageCode
-        .toLowerCase()
-        .startsWith('zh');
-    if (zh) {
-      return '默认跟随当前激活的 API profile，可改为已有 OpenAI-compatible API profile。';
-    }
-    return 'Default follows the active API profile. You can choose an existing OpenAI-compatible API profile.';
+    return context.t.settings.mediaAnnotation.audioTranscribe.apiProfile
+        .followActiveSubtitle;
   }
 
   String _audioTranscribeEngineLabel(BuildContext context, String engine) {
@@ -200,33 +176,27 @@ extension _MediaAnnotationSettingsPageOcrExtension
   }
 
   String _audioWhisperModelTitle(BuildContext context) {
-    final zh = _isZhOcrLocale(context);
-    return zh ? 'Whisper 模型' : 'Whisper model';
+    return context
+        .t.settings.mediaAnnotation.audioTranscribe.whisperModel.title;
   }
 
   String _audioWhisperModelLabel(BuildContext context, String model) {
-    final normalized = normalizeAudioTranscribeWhisperModel(model);
-    final zh = _isZhOcrLocale(context);
-    switch (normalized) {
-      case 'tiny':
-        return zh ? 'Tiny（最快）' : 'Tiny (Fastest)';
-      case 'base':
-        return zh ? 'Base' : 'Base';
-      case 'small':
-        return zh ? 'Small（更准）' : 'Small (Better quality)';
-      case 'medium':
-        return zh ? 'Medium（高精度）' : 'Medium (High quality)';
-      case 'large-v3-turbo':
-        return zh ? 'Large V3 Turbo（推荐高性能）' : 'Large V3 Turbo';
-      case 'large-v3':
-        return zh ? 'Large V3（最高精度）' : 'Large V3';
-      default:
-        return normalized;
-    }
+    final labels =
+        context.t.settings.mediaAnnotation.audioTranscribe.whisperModel.labels;
+    return switch (normalizeAudioTranscribeWhisperModel(model)) {
+      'tiny' => labels.tiny,
+      'base' => labels.base,
+      'small' => labels.small,
+      'medium' => labels.medium,
+      'large-v3-turbo' => labels.largeV3Turbo,
+      'large-v3' => labels.largeV3,
+      _ => normalizeAudioTranscribeWhisperModel(model),
+    };
   }
 
   String _audioWhisperModelSubtitle(BuildContext context) {
-    final zh = _isZhOcrLocale(context);
+    final whisperModel =
+        context.t.settings.mediaAnnotation.audioTranscribe.whisperModel;
 
     if (_audioWhisperModelDownloading) {
       final targetModel = normalizeAudioTranscribeWhisperModel(
@@ -241,75 +211,70 @@ extension _MediaAnnotationSettingsPageOcrExtension
         final percent =
             ((received / total) * 100).clamp(0, 100).toStringAsFixed(1);
         final totalLabel = _formatWhisperModelByteSize(total);
-        return zh
-            ? '正在下载 $targetLabel：$percent%（$receivedLabel/$totalLabel）'
-            : 'Downloading $targetLabel: $percent% ($receivedLabel/$totalLabel)';
+        return whisperModel.downloadingWithTotal(
+          modelLabel: targetLabel,
+          percent: percent,
+          received: receivedLabel,
+          total: totalLabel,
+        );
       }
 
-      return zh
-          ? '正在下载 $targetLabel：$receivedLabel'
-          : 'Downloading $targetLabel: $receivedLabel';
+      return whisperModel.downloading(
+        modelLabel: targetLabel,
+        received: receivedLabel,
+      );
     }
 
-    return zh
-        ? '用于 Whisper 转写路径。移动端默认 Tiny，桌面端默认 Base。'
-        : 'Used for Whisper transcription path. Tiny by default on mobile, Base on desktop.';
+    return whisperModel.subtitle;
   }
 
   String _audioWhisperRuntimeCardTitle(BuildContext context) {
-    final zh = _isZhOcrLocale(context);
-    return zh ? '本地能力' : 'Local capability';
+    return context
+        .t.settings.mediaAnnotation.audioTranscribe.localRuntime.title;
   }
 
   String _audioWhisperRuntimeCardDescription(BuildContext context) {
-    final zh = _isZhOcrLocale(context);
+    final localRuntime =
+        context.t.settings.mediaAnnotation.audioTranscribe.localRuntime;
     if (_supportsMobileWhisperRuntimeDownload()) {
-      return zh
-          ? '在移动端手动下载 Whisper 本地转写运行时。'
-          : 'Download Whisper runtime manually for mobile local transcription.';
+      return localRuntime.descriptionMobile;
     }
-    return zh
-        ? '管理本地 Whisper 转写运行时。'
-        : 'Manage local Whisper runtime for transcription.';
+    return localRuntime.descriptionDesktop;
   }
 
   String _audioWhisperRuntimeStatusLabel(BuildContext context) {
-    final zh = _isZhOcrLocale(context);
+    final statusSummary = context
+        .t.settings.mediaAnnotation.audioTranscribe.localRuntime.statusSummary;
     if (_audioWhisperModelDownloading) {
-      return zh ? '状态：下载中' : 'Status: downloading';
+      return statusSummary.downloading;
     }
     if (!_audioWhisperRuntimeStatusReady) {
-      return zh ? '状态：检查中' : 'Status: checking';
+      return statusSummary.checking;
     }
     if (_audioWhisperRuntimeInstalled) {
-      return zh ? '状态：已安装' : 'Status: installed';
+      return statusSummary.installed;
     }
-    return zh ? '状态：未安装' : 'Status: missing';
+    return statusSummary.missing;
   }
 
   String _audioWhisperRuntimeStatusSubtitle(BuildContext context) {
-    final zh = _isZhOcrLocale(context);
+    final statusDetails = context
+        .t.settings.mediaAnnotation.audioTranscribe.localRuntime.statusDetails;
     if (_audioWhisperModelDownloading) {
       return _audioWhisperModelSubtitle(context);
     }
     if (!_audioWhisperRuntimeStatusReady) {
-      return zh
-          ? '正在检查本地 Whisper 运行时状态。'
-          : 'Checking local Whisper runtime status.';
+      return statusDetails.checking;
     }
     final error = _audioWhisperRuntimeStatusError;
     if (error != null) {
-      return zh ? '运行时状态读取失败：$error' : 'Failed to read runtime status: $error';
+      return statusDetails.error(error: '$error');
     }
     if (_audioWhisperRuntimeInstalled) {
       final modelLabel = _audioWhisperModelLabel(context, _audioWhisperModel);
-      return zh
-          ? '已安装本地运行时（当前模型：$modelLabel）。'
-          : 'Runtime installed (current model: $modelLabel).';
+      return statusDetails.installed(modelLabel: modelLabel);
     }
-    return zh
-        ? '未检测到本地运行时。点击下载后可使用本地转写。'
-        : 'Local runtime missing. Download to enable local transcription.';
+    return statusDetails.missing;
   }
 
   Future<void> _pickAudioWhisperModel() async {

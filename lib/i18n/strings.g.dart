@@ -4,9 +4,9 @@
 /// To regenerate, run: `dart run slang`
 ///
 /// Locales: 2
-/// Strings: 2108 (1054 per locale)
+/// Strings: 2184 (1092 per locale)
 ///
-/// Built on 2026-03-07 at 09:24 UTC
+/// Built on 2026-03-07 at 10:04 UTC
 
 // coverage:ignore-file
 // ignore_for_file: type=lint
@@ -1216,6 +1216,10 @@ class _StringsSettingsMediaAnnotationEn {
   late final _StringsSettingsMediaAnnotationAllowCellularConfirmEn
       allowCellularConfirm =
       _StringsSettingsMediaAnnotationAllowCellularConfirmEn._(_root);
+  late final _StringsSettingsMediaAnnotationUrlFetchEn urlFetch =
+      _StringsSettingsMediaAnnotationUrlFetchEn._(_root);
+  late final _StringsSettingsMediaAnnotationLegacyEntryEn legacyEntry =
+      _StringsSettingsMediaAnnotationLegacyEntryEn._(_root);
 }
 
 // Path: settings.cloudEmbeddings
@@ -2693,6 +2697,8 @@ class _StringsSettingsMediaAnnotationDocumentOcrEn {
   late final _StringsSettingsMediaAnnotationDocumentOcrLinuxModelsEn
       linuxModels =
       _StringsSettingsMediaAnnotationDocumentOcrLinuxModelsEn._(_root);
+  late final _StringsSettingsMediaAnnotationDocumentOcrEngineModeEn engineMode =
+      _StringsSettingsMediaAnnotationDocumentOcrEngineModeEn._(_root);
 }
 
 // Path: settings.mediaAnnotation.audioTranscribe
@@ -2713,6 +2719,12 @@ class _StringsSettingsMediaAnnotationAudioTranscribeEn {
   late final _StringsSettingsMediaAnnotationAudioTranscribeWhisperModelEn
       whisperModel =
       _StringsSettingsMediaAnnotationAudioTranscribeWhisperModelEn._(_root);
+  late final _StringsSettingsMediaAnnotationAudioTranscribeApiProfileEn
+      apiProfile =
+      _StringsSettingsMediaAnnotationAudioTranscribeApiProfileEn._(_root);
+  late final _StringsSettingsMediaAnnotationAudioTranscribeLocalRuntimeEn
+      localRuntime =
+      _StringsSettingsMediaAnnotationAudioTranscribeLocalRuntimeEn._(_root);
 }
 
 // Path: settings.mediaAnnotation.connectivity
@@ -2901,6 +2913,36 @@ class _StringsSettingsMediaAnnotationAllowCellularConfirmEn {
   String get title => 'Use cellular data for image annotations?';
   String get body =>
       'Annotating images may upload photos to your chosen AI provider and can use significant data.';
+}
+
+// Path: settings.mediaAnnotation.urlFetch
+class _StringsSettingsMediaAnnotationUrlFetchEn {
+  _StringsSettingsMediaAnnotationUrlFetchEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get title => 'URL content understanding';
+  String get description =>
+      'Preprocess URL content locally, then enrich with your selected source (Cloud/BYOK/Local).';
+}
+
+// Path: settings.mediaAnnotation.legacyEntry
+class _StringsSettingsMediaAnnotationLegacyEntryEn {
+  _StringsSettingsMediaAnnotationLegacyEntryEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get title => 'Intelligence (legacy entry)';
+  String get subtitle =>
+      'Legacy compatibility entry: one switch controls audio transcription, document OCR, and image annotations.';
+  String get useSecondLoopCloudTitle => 'Use SecondLoop Cloud';
+  String get useSecondLoopCloudSubtitle =>
+      'When enabled, relevant media data is uploaded to SecondLoop Cloud for processing. We protect it with encrypted transport, strict access controls, and minimized retention.';
+  String get wifiOnlyTitle => 'Wi-Fi only';
+  String get wifiOnlySubtitle =>
+      'Run cloud/BYOK processing only on Wi-Fi. Local capability is unaffected.';
 }
 
 // Path: settings.cloudEmbeddings.dialogActions
@@ -3757,6 +3799,26 @@ class _StringsSettingsMediaAnnotationDocumentOcrLinuxModelsEn {
           _root);
 }
 
+// Path: settings.mediaAnnotation.documentOcr.engineMode
+class _StringsSettingsMediaAnnotationDocumentOcrEngineModeEn {
+  _StringsSettingsMediaAnnotationDocumentOcrEngineModeEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get title => 'OCR recognition mode';
+  late final _StringsSettingsMediaAnnotationDocumentOcrEngineModeLabelsEn
+      labels =
+      _StringsSettingsMediaAnnotationDocumentOcrEngineModeLabelsEn._(_root);
+  late final _StringsSettingsMediaAnnotationDocumentOcrEngineModeDescriptionsEn
+      descriptions =
+      _StringsSettingsMediaAnnotationDocumentOcrEngineModeDescriptionsEn._(
+          _root);
+  late final _StringsSettingsMediaAnnotationDocumentOcrEngineModeSubtitlesEn
+      subtitles =
+      _StringsSettingsMediaAnnotationDocumentOcrEngineModeSubtitlesEn._(_root);
+}
+
 // Path: settings.mediaAnnotation.audioTranscribe.enabled
 class _StringsSettingsMediaAnnotationAudioTranscribeEnabledEn {
   _StringsSettingsMediaAnnotationAudioTranscribeEnabledEn._(this._root);
@@ -3813,6 +3875,54 @@ class _StringsSettingsMediaAnnotationAudioTranscribeWhisperModelEn {
   // Translations
   String downloaded({required Object modelLabel}) =>
       'Downloaded ${modelLabel} for local transcription.';
+  String get title => 'Whisper model';
+  String get subtitle =>
+      'Used for Whisper transcription path. Tiny by default on mobile, Base on desktop.';
+  String downloadingWithTotal(
+          {required Object modelLabel,
+          required Object percent,
+          required Object received,
+          required Object total}) =>
+      'Downloading ${modelLabel}: ${percent}% (${received}/${total})';
+  String downloading({required Object modelLabel, required Object received}) =>
+      'Downloading ${modelLabel}: ${received}';
+  late final _StringsSettingsMediaAnnotationAudioTranscribeWhisperModelLabelsEn
+      labels =
+      _StringsSettingsMediaAnnotationAudioTranscribeWhisperModelLabelsEn._(
+          _root);
+}
+
+// Path: settings.mediaAnnotation.audioTranscribe.apiProfile
+class _StringsSettingsMediaAnnotationAudioTranscribeApiProfileEn {
+  _StringsSettingsMediaAnnotationAudioTranscribeApiProfileEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get followActiveSubtitle =>
+      'Default follows the active API profile. You can choose an existing OpenAI-compatible API profile.';
+}
+
+// Path: settings.mediaAnnotation.audioTranscribe.localRuntime
+class _StringsSettingsMediaAnnotationAudioTranscribeLocalRuntimeEn {
+  _StringsSettingsMediaAnnotationAudioTranscribeLocalRuntimeEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get title => 'Local capability';
+  String get descriptionMobile =>
+      'Download Whisper runtime manually for mobile local transcription.';
+  String get descriptionDesktop =>
+      'Manage local Whisper runtime for transcription.';
+  late final _StringsSettingsMediaAnnotationAudioTranscribeLocalRuntimeStatusSummaryEn
+      statusSummary =
+      _StringsSettingsMediaAnnotationAudioTranscribeLocalRuntimeStatusSummaryEn
+          ._(_root);
+  late final _StringsSettingsMediaAnnotationAudioTranscribeLocalRuntimeStatusDetailsEn
+      statusDetails =
+      _StringsSettingsMediaAnnotationAudioTranscribeLocalRuntimeStatusDetailsEn
+          ._(_root);
 }
 
 // Path: settings.mediaAnnotation.localCapability.actions
@@ -4223,6 +4333,45 @@ class _StringsSettingsMediaAnnotationDocumentOcrLinuxModelsConfirmDeleteEn {
   String get confirm => 'Delete';
 }
 
+// Path: settings.mediaAnnotation.documentOcr.engineMode.labels
+class _StringsSettingsMediaAnnotationDocumentOcrEngineModeLabelsEn {
+  _StringsSettingsMediaAnnotationDocumentOcrEngineModeLabelsEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get platformNative => 'Local OCR';
+  String get multimodalLlm => 'BYOK multimodal';
+}
+
+// Path: settings.mediaAnnotation.documentOcr.engineMode.descriptions
+class _StringsSettingsMediaAnnotationDocumentOcrEngineModeDescriptionsEn {
+  _StringsSettingsMediaAnnotationDocumentOcrEngineModeDescriptionsEn._(
+      this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get platformNative =>
+      'Runs entirely on-device and does not upload content.';
+  String get multimodalLlm => 'Use your OpenAI-compatible API profile for OCR.';
+}
+
+// Path: settings.mediaAnnotation.documentOcr.engineMode.subtitles
+class _StringsSettingsMediaAnnotationDocumentOcrEngineModeSubtitlesEn {
+  _StringsSettingsMediaAnnotationDocumentOcrEngineModeSubtitlesEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get proCloudEnabled =>
+      'Pro can use SecondLoop Cloud. Cloud OCR usage is counted under Ask AI.';
+  String get proCloudDisabled =>
+      'Pro can enable Use SecondLoop Cloud to run OCR in cloud and count usage under Ask AI.';
+  String get free =>
+      'Free users can choose between local OCR and BYOK multimodal OCR.';
+}
+
 // Path: settings.mediaAnnotation.audioTranscribe.engine.labels
 class _StringsSettingsMediaAnnotationAudioTranscribeEngineLabelsEn {
   _StringsSettingsMediaAnnotationAudioTranscribeEngineLabelsEn._(this._root);
@@ -4249,6 +4398,53 @@ class _StringsSettingsMediaAnnotationAudioTranscribeEngineDescriptionsEn {
   String get auto => 'Let SecondLoop choose the best available engine.';
   String get byokWhisper => 'Transcribe with BYOK Whisper capability.';
   String get byokMultimodal => 'Transcribe with BYOK multimodal model.';
+}
+
+// Path: settings.mediaAnnotation.audioTranscribe.whisperModel.labels
+class _StringsSettingsMediaAnnotationAudioTranscribeWhisperModelLabelsEn {
+  _StringsSettingsMediaAnnotationAudioTranscribeWhisperModelLabelsEn._(
+      this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get tiny => 'Tiny (Fastest)';
+  String get base => 'Base';
+  String get small => 'Small (Better quality)';
+  String get medium => 'Medium (High quality)';
+  String get largeV3Turbo => 'Large V3 Turbo';
+  String get largeV3 => 'Large V3';
+}
+
+// Path: settings.mediaAnnotation.audioTranscribe.localRuntime.statusSummary
+class _StringsSettingsMediaAnnotationAudioTranscribeLocalRuntimeStatusSummaryEn {
+  _StringsSettingsMediaAnnotationAudioTranscribeLocalRuntimeStatusSummaryEn._(
+      this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get downloading => 'Status: downloading';
+  String get checking => 'Status: checking';
+  String get installed => 'Status: installed';
+  String get missing => 'Status: missing';
+}
+
+// Path: settings.mediaAnnotation.audioTranscribe.localRuntime.statusDetails
+class _StringsSettingsMediaAnnotationAudioTranscribeLocalRuntimeStatusDetailsEn {
+  _StringsSettingsMediaAnnotationAudioTranscribeLocalRuntimeStatusDetailsEn._(
+      this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get checking => 'Checking local Whisper runtime status.';
+  String error({required Object error}) =>
+      'Failed to read runtime status: ${error}';
+  String installed({required Object modelLabel}) =>
+      'Runtime installed (current model: ${modelLabel}).';
+  String get missing =>
+      'Local runtime missing. Download to enable local transcription.';
 }
 
 // Path: settings.cloudAccount.benefits.items.purchase
@@ -5917,6 +6113,12 @@ class _StringsSettingsMediaAnnotationZhCn
   late final _StringsSettingsMediaAnnotationAllowCellularConfirmZhCn
       allowCellularConfirm =
       _StringsSettingsMediaAnnotationAllowCellularConfirmZhCn._(_root);
+  @override
+  late final _StringsSettingsMediaAnnotationUrlFetchZhCn urlFetch =
+      _StringsSettingsMediaAnnotationUrlFetchZhCn._(_root);
+  @override
+  late final _StringsSettingsMediaAnnotationLegacyEntryZhCn legacyEntry =
+      _StringsSettingsMediaAnnotationLegacyEntryZhCn._(_root);
 }
 
 // Path: settings.cloudEmbeddings
@@ -8161,6 +8363,10 @@ class _StringsSettingsMediaAnnotationDocumentOcrZhCn
   late final _StringsSettingsMediaAnnotationDocumentOcrLinuxModelsZhCn
       linuxModels =
       _StringsSettingsMediaAnnotationDocumentOcrLinuxModelsZhCn._(_root);
+  @override
+  late final _StringsSettingsMediaAnnotationDocumentOcrEngineModeZhCn
+      engineMode =
+      _StringsSettingsMediaAnnotationDocumentOcrEngineModeZhCn._(_root);
 }
 
 // Path: settings.mediaAnnotation.audioTranscribe
@@ -8190,6 +8396,14 @@ class _StringsSettingsMediaAnnotationAudioTranscribeZhCn
   late final _StringsSettingsMediaAnnotationAudioTranscribeWhisperModelZhCn
       whisperModel =
       _StringsSettingsMediaAnnotationAudioTranscribeWhisperModelZhCn._(_root);
+  @override
+  late final _StringsSettingsMediaAnnotationAudioTranscribeApiProfileZhCn
+      apiProfile =
+      _StringsSettingsMediaAnnotationAudioTranscribeApiProfileZhCn._(_root);
+  @override
+  late final _StringsSettingsMediaAnnotationAudioTranscribeLocalRuntimeZhCn
+      localRuntime =
+      _StringsSettingsMediaAnnotationAudioTranscribeLocalRuntimeZhCn._(_root);
 }
 
 // Path: settings.mediaAnnotation.connectivity
@@ -8468,6 +8682,49 @@ class _StringsSettingsMediaAnnotationAllowCellularConfirmZhCn
   String get title => '允许使用蜂窝网络注释图片？';
   @override
   String get body => '图片注释可能会向你选择的 AI 服务商上传图片，并消耗一定流量。';
+}
+
+// Path: settings.mediaAnnotation.urlFetch
+class _StringsSettingsMediaAnnotationUrlFetchZhCn
+    extends _StringsSettingsMediaAnnotationUrlFetchEn {
+  _StringsSettingsMediaAnnotationUrlFetchZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get title => '链接内容理解';
+  @override
+  String get description => '先在本地抓取并清洗网页文本，再按你选择的来源（Cloud/BYOK/本地）做智能提炼。';
+}
+
+// Path: settings.mediaAnnotation.legacyEntry
+class _StringsSettingsMediaAnnotationLegacyEntryZhCn
+    extends _StringsSettingsMediaAnnotationLegacyEntryEn {
+  _StringsSettingsMediaAnnotationLegacyEntryZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get title => '智能化（旧版入口）';
+  @override
+  String get subtitle => '旧版兼容入口：统一控制音频转写、文档 OCR 和图片注释。';
+  @override
+  String get useSecondLoopCloudTitle => '使用 SecondLoop Cloud';
+  @override
+  String get useSecondLoopCloudSubtitle =>
+      '开启后相关媒体数据会上传到 SecondLoop Cloud 处理。我们采用传输加密、严格访问控制与最小化保留策略。';
+  @override
+  String get wifiOnlyTitle => '仅 Wi-Fi';
+  @override
+  String get wifiOnlySubtitle => '仅在 Wi-Fi 下执行云端/BYOK 处理，本地能力不受影响。';
 }
 
 // Path: settings.cloudEmbeddings.dialogActions
@@ -9750,6 +10007,35 @@ class _StringsSettingsMediaAnnotationDocumentOcrLinuxModelsZhCn
           _root);
 }
 
+// Path: settings.mediaAnnotation.documentOcr.engineMode
+class _StringsSettingsMediaAnnotationDocumentOcrEngineModeZhCn
+    extends _StringsSettingsMediaAnnotationDocumentOcrEngineModeEn {
+  _StringsSettingsMediaAnnotationDocumentOcrEngineModeZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get title => 'OCR 识别方案';
+  @override
+  late final _StringsSettingsMediaAnnotationDocumentOcrEngineModeLabelsZhCn
+      labels =
+      _StringsSettingsMediaAnnotationDocumentOcrEngineModeLabelsZhCn._(_root);
+  @override
+  late final _StringsSettingsMediaAnnotationDocumentOcrEngineModeDescriptionsZhCn
+      descriptions =
+      _StringsSettingsMediaAnnotationDocumentOcrEngineModeDescriptionsZhCn._(
+          _root);
+  @override
+  late final _StringsSettingsMediaAnnotationDocumentOcrEngineModeSubtitlesZhCn
+      subtitles =
+      _StringsSettingsMediaAnnotationDocumentOcrEngineModeSubtitlesZhCn._(
+          _root);
+}
+
 // Path: settings.mediaAnnotation.audioTranscribe.enabled
 class _StringsSettingsMediaAnnotationAudioTranscribeEnabledZhCn
     extends _StringsSettingsMediaAnnotationAudioTranscribeEnabledEn {
@@ -9836,6 +10122,72 @@ class _StringsSettingsMediaAnnotationAudioTranscribeWhisperModelZhCn
   @override
   String downloaded({required Object modelLabel}) =>
       '已下载 ${modelLabel} 模型，可用于本地转写。';
+  @override
+  String get title => 'Whisper 模型';
+  @override
+  String get subtitle => '用于 Whisper 转写路径。移动端默认 Tiny，桌面端默认 Base。';
+  @override
+  String downloadingWithTotal(
+          {required Object modelLabel,
+          required Object percent,
+          required Object received,
+          required Object total}) =>
+      '正在下载 ${modelLabel}：${percent}%（${received}/${total}）';
+  @override
+  String downloading({required Object modelLabel, required Object received}) =>
+      '正在下载 ${modelLabel}：${received}';
+  @override
+  late final _StringsSettingsMediaAnnotationAudioTranscribeWhisperModelLabelsZhCn
+      labels =
+      _StringsSettingsMediaAnnotationAudioTranscribeWhisperModelLabelsZhCn._(
+          _root);
+}
+
+// Path: settings.mediaAnnotation.audioTranscribe.apiProfile
+class _StringsSettingsMediaAnnotationAudioTranscribeApiProfileZhCn
+    extends _StringsSettingsMediaAnnotationAudioTranscribeApiProfileEn {
+  _StringsSettingsMediaAnnotationAudioTranscribeApiProfileZhCn._(
+      _StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get followActiveSubtitle =>
+      '默认跟随当前激活的 API profile，可改为已有 OpenAI-compatible API profile。';
+}
+
+// Path: settings.mediaAnnotation.audioTranscribe.localRuntime
+class _StringsSettingsMediaAnnotationAudioTranscribeLocalRuntimeZhCn
+    extends _StringsSettingsMediaAnnotationAudioTranscribeLocalRuntimeEn {
+  _StringsSettingsMediaAnnotationAudioTranscribeLocalRuntimeZhCn._(
+      _StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get title => '本地能力';
+  @override
+  String get descriptionMobile => '在移动端手动下载 Whisper 本地转写运行时。';
+  @override
+  String get descriptionDesktop => '管理本地 Whisper 转写运行时。';
+  @override
+  late final _StringsSettingsMediaAnnotationAudioTranscribeLocalRuntimeStatusSummaryZhCn
+      statusSummary =
+      _StringsSettingsMediaAnnotationAudioTranscribeLocalRuntimeStatusSummaryZhCn
+          ._(_root);
+  @override
+  late final _StringsSettingsMediaAnnotationAudioTranscribeLocalRuntimeStatusDetailsZhCn
+      statusDetails =
+      _StringsSettingsMediaAnnotationAudioTranscribeLocalRuntimeStatusDetailsZhCn
+          ._(_root);
 }
 
 // Path: settings.mediaAnnotation.localCapability.actions
@@ -10455,6 +10807,64 @@ class _StringsSettingsMediaAnnotationDocumentOcrLinuxModelsConfirmDeleteZhCn
   String get confirm => '删除';
 }
 
+// Path: settings.mediaAnnotation.documentOcr.engineMode.labels
+class _StringsSettingsMediaAnnotationDocumentOcrEngineModeLabelsZhCn
+    extends _StringsSettingsMediaAnnotationDocumentOcrEngineModeLabelsEn {
+  _StringsSettingsMediaAnnotationDocumentOcrEngineModeLabelsZhCn._(
+      _StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get platformNative => '本地 OCR';
+  @override
+  String get multimodalLlm => 'BYOK 多模态';
+}
+
+// Path: settings.mediaAnnotation.documentOcr.engineMode.descriptions
+class _StringsSettingsMediaAnnotationDocumentOcrEngineModeDescriptionsZhCn
+    extends _StringsSettingsMediaAnnotationDocumentOcrEngineModeDescriptionsEn {
+  _StringsSettingsMediaAnnotationDocumentOcrEngineModeDescriptionsZhCn._(
+      _StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get platformNative => '完全在设备端完成识别，不上传内容。';
+  @override
+  String get multimodalLlm => '使用你配置的 OpenAI-compatible API 识别文字。';
+}
+
+// Path: settings.mediaAnnotation.documentOcr.engineMode.subtitles
+class _StringsSettingsMediaAnnotationDocumentOcrEngineModeSubtitlesZhCn
+    extends _StringsSettingsMediaAnnotationDocumentOcrEngineModeSubtitlesEn {
+  _StringsSettingsMediaAnnotationDocumentOcrEngineModeSubtitlesZhCn._(
+      _StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get proCloudEnabled =>
+      'Pro 订阅用户可使用 SecondLoop Cloud，云端 OCR 用量计入 Ask AI。';
+  @override
+  String get proCloudDisabled =>
+      'Pro 订阅用户可启用“使用 SecondLoop Cloud”来执行云端 OCR，并计入 Ask AI 用量。';
+  @override
+  String get free => '免费版可在本地 OCR 与 BYOK 多模态 OCR 之间选择。';
+}
+
 // Path: settings.mediaAnnotation.audioTranscribe.engine.labels
 class _StringsSettingsMediaAnnotationAudioTranscribeEngineLabelsZhCn
     extends _StringsSettingsMediaAnnotationAudioTranscribeEngineLabelsEn {
@@ -10497,6 +10907,77 @@ class _StringsSettingsMediaAnnotationAudioTranscribeEngineDescriptionsZhCn
   String get byokWhisper => '通过 BYOK Whisper 能力执行转写。';
   @override
   String get byokMultimodal => '通过 BYOK 多模态模型执行转写。';
+}
+
+// Path: settings.mediaAnnotation.audioTranscribe.whisperModel.labels
+class _StringsSettingsMediaAnnotationAudioTranscribeWhisperModelLabelsZhCn
+    extends _StringsSettingsMediaAnnotationAudioTranscribeWhisperModelLabelsEn {
+  _StringsSettingsMediaAnnotationAudioTranscribeWhisperModelLabelsZhCn._(
+      _StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get tiny => 'Tiny（最快）';
+  @override
+  String get base => 'Base';
+  @override
+  String get small => 'Small（更准）';
+  @override
+  String get medium => 'Medium（高精度）';
+  @override
+  String get largeV3Turbo => 'Large V3 Turbo（推荐高性能）';
+  @override
+  String get largeV3 => 'Large V3（最高精度）';
+}
+
+// Path: settings.mediaAnnotation.audioTranscribe.localRuntime.statusSummary
+class _StringsSettingsMediaAnnotationAudioTranscribeLocalRuntimeStatusSummaryZhCn
+    extends _StringsSettingsMediaAnnotationAudioTranscribeLocalRuntimeStatusSummaryEn {
+  _StringsSettingsMediaAnnotationAudioTranscribeLocalRuntimeStatusSummaryZhCn._(
+      _StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get downloading => '状态：下载中';
+  @override
+  String get checking => '状态：检查中';
+  @override
+  String get installed => '状态：已安装';
+  @override
+  String get missing => '状态：未安装';
+}
+
+// Path: settings.mediaAnnotation.audioTranscribe.localRuntime.statusDetails
+class _StringsSettingsMediaAnnotationAudioTranscribeLocalRuntimeStatusDetailsZhCn
+    extends _StringsSettingsMediaAnnotationAudioTranscribeLocalRuntimeStatusDetailsEn {
+  _StringsSettingsMediaAnnotationAudioTranscribeLocalRuntimeStatusDetailsZhCn._(
+      _StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get checking => '正在检查本地 Whisper 运行时状态。';
+  @override
+  String error({required Object error}) => '运行时状态读取失败：${error}';
+  @override
+  String installed({required Object modelLabel}) =>
+      '已安装本地运行时（当前模型：${modelLabel}）。';
+  @override
+  String get missing => '未检测到本地运行时。点击下载后可使用本地转写。';
 }
 
 // Path: settings.cloudAccount.benefits.items.purchase
@@ -11251,6 +11732,22 @@ extension on Translations {
         return 'Local desktop OCR may stop working until models are downloaded again.';
       case 'settings.mediaAnnotation.documentOcr.linuxModels.confirmDelete.confirm':
         return 'Delete';
+      case 'settings.mediaAnnotation.documentOcr.engineMode.title':
+        return 'OCR recognition mode';
+      case 'settings.mediaAnnotation.documentOcr.engineMode.labels.platformNative':
+        return 'Local OCR';
+      case 'settings.mediaAnnotation.documentOcr.engineMode.labels.multimodalLlm':
+        return 'BYOK multimodal';
+      case 'settings.mediaAnnotation.documentOcr.engineMode.descriptions.platformNative':
+        return 'Runs entirely on-device and does not upload content.';
+      case 'settings.mediaAnnotation.documentOcr.engineMode.descriptions.multimodalLlm':
+        return 'Use your OpenAI-compatible API profile for OCR.';
+      case 'settings.mediaAnnotation.documentOcr.engineMode.subtitles.proCloudEnabled':
+        return 'Pro can use SecondLoop Cloud. Cloud OCR usage is counted under Ask AI.';
+      case 'settings.mediaAnnotation.documentOcr.engineMode.subtitles.proCloudDisabled':
+        return 'Pro can enable Use SecondLoop Cloud to run OCR in cloud and count usage under Ask AI.';
+      case 'settings.mediaAnnotation.documentOcr.engineMode.subtitles.free':
+        return 'Free users can choose between local OCR and BYOK multimodal OCR.';
       case 'settings.mediaAnnotation.audioTranscribe.title':
         return 'Audio transcription';
       case 'settings.mediaAnnotation.audioTranscribe.enabled.title':
@@ -11292,6 +11789,58 @@ extension on Translations {
       case 'settings.mediaAnnotation.audioTranscribe.whisperModel.downloaded':
         return ({required Object modelLabel}) =>
             'Downloaded ${modelLabel} for local transcription.';
+      case 'settings.mediaAnnotation.audioTranscribe.whisperModel.title':
+        return 'Whisper model';
+      case 'settings.mediaAnnotation.audioTranscribe.whisperModel.subtitle':
+        return 'Used for Whisper transcription path. Tiny by default on mobile, Base on desktop.';
+      case 'settings.mediaAnnotation.audioTranscribe.whisperModel.downloadingWithTotal':
+        return (
+                {required Object modelLabel,
+                required Object percent,
+                required Object received,
+                required Object total}) =>
+            'Downloading ${modelLabel}: ${percent}% (${received}/${total})';
+      case 'settings.mediaAnnotation.audioTranscribe.whisperModel.downloading':
+        return ({required Object modelLabel, required Object received}) =>
+            'Downloading ${modelLabel}: ${received}';
+      case 'settings.mediaAnnotation.audioTranscribe.whisperModel.labels.tiny':
+        return 'Tiny (Fastest)';
+      case 'settings.mediaAnnotation.audioTranscribe.whisperModel.labels.base':
+        return 'Base';
+      case 'settings.mediaAnnotation.audioTranscribe.whisperModel.labels.small':
+        return 'Small (Better quality)';
+      case 'settings.mediaAnnotation.audioTranscribe.whisperModel.labels.medium':
+        return 'Medium (High quality)';
+      case 'settings.mediaAnnotation.audioTranscribe.whisperModel.labels.largeV3Turbo':
+        return 'Large V3 Turbo';
+      case 'settings.mediaAnnotation.audioTranscribe.whisperModel.labels.largeV3':
+        return 'Large V3';
+      case 'settings.mediaAnnotation.audioTranscribe.apiProfile.followActiveSubtitle':
+        return 'Default follows the active API profile. You can choose an existing OpenAI-compatible API profile.';
+      case 'settings.mediaAnnotation.audioTranscribe.localRuntime.title':
+        return 'Local capability';
+      case 'settings.mediaAnnotation.audioTranscribe.localRuntime.descriptionMobile':
+        return 'Download Whisper runtime manually for mobile local transcription.';
+      case 'settings.mediaAnnotation.audioTranscribe.localRuntime.descriptionDesktop':
+        return 'Manage local Whisper runtime for transcription.';
+      case 'settings.mediaAnnotation.audioTranscribe.localRuntime.statusSummary.downloading':
+        return 'Status: downloading';
+      case 'settings.mediaAnnotation.audioTranscribe.localRuntime.statusSummary.checking':
+        return 'Status: checking';
+      case 'settings.mediaAnnotation.audioTranscribe.localRuntime.statusSummary.installed':
+        return 'Status: installed';
+      case 'settings.mediaAnnotation.audioTranscribe.localRuntime.statusSummary.missing':
+        return 'Status: missing';
+      case 'settings.mediaAnnotation.audioTranscribe.localRuntime.statusDetails.checking':
+        return 'Checking local Whisper runtime status.';
+      case 'settings.mediaAnnotation.audioTranscribe.localRuntime.statusDetails.error':
+        return ({required Object error}) =>
+            'Failed to read runtime status: ${error}';
+      case 'settings.mediaAnnotation.audioTranscribe.localRuntime.statusDetails.installed':
+        return ({required Object modelLabel}) =>
+            'Runtime installed (current model: ${modelLabel}).';
+      case 'settings.mediaAnnotation.audioTranscribe.localRuntime.statusDetails.missing':
+        return 'Local runtime missing. Download to enable local transcription.';
       case 'settings.mediaAnnotation.connectivity.wifiOnlyTitle':
         return 'Wi-Fi only';
       case 'settings.mediaAnnotation.connectivity.wifiOnlySubtitle':
@@ -11422,6 +11971,22 @@ extension on Translations {
         return 'Use cellular data for image annotations?';
       case 'settings.mediaAnnotation.allowCellularConfirm.body':
         return 'Annotating images may upload photos to your chosen AI provider and can use significant data.';
+      case 'settings.mediaAnnotation.urlFetch.title':
+        return 'URL content understanding';
+      case 'settings.mediaAnnotation.urlFetch.description':
+        return 'Preprocess URL content locally, then enrich with your selected source (Cloud/BYOK/Local).';
+      case 'settings.mediaAnnotation.legacyEntry.title':
+        return 'Intelligence (legacy entry)';
+      case 'settings.mediaAnnotation.legacyEntry.subtitle':
+        return 'Legacy compatibility entry: one switch controls audio transcription, document OCR, and image annotations.';
+      case 'settings.mediaAnnotation.legacyEntry.useSecondLoopCloudTitle':
+        return 'Use SecondLoop Cloud';
+      case 'settings.mediaAnnotation.legacyEntry.useSecondLoopCloudSubtitle':
+        return 'When enabled, relevant media data is uploaded to SecondLoop Cloud for processing. We protect it with encrypted transport, strict access controls, and minimized retention.';
+      case 'settings.mediaAnnotation.legacyEntry.wifiOnlyTitle':
+        return 'Wi-Fi only';
+      case 'settings.mediaAnnotation.legacyEntry.wifiOnlySubtitle':
+        return 'Run cloud/BYOK processing only on Wi-Fi. Local capability is unaffected.';
       case 'settings.cloudEmbeddings.title':
         return 'Smarter search';
       case 'settings.cloudEmbeddings.subtitleEnabled':
@@ -13421,6 +13986,22 @@ extension on _StringsZhCn {
         return '删除后，桌面端本地 OCR 可能不可用，直到再次下载。';
       case 'settings.mediaAnnotation.documentOcr.linuxModels.confirmDelete.confirm':
         return '删除';
+      case 'settings.mediaAnnotation.documentOcr.engineMode.title':
+        return 'OCR 识别方案';
+      case 'settings.mediaAnnotation.documentOcr.engineMode.labels.platformNative':
+        return '本地 OCR';
+      case 'settings.mediaAnnotation.documentOcr.engineMode.labels.multimodalLlm':
+        return 'BYOK 多模态';
+      case 'settings.mediaAnnotation.documentOcr.engineMode.descriptions.platformNative':
+        return '完全在设备端完成识别，不上传内容。';
+      case 'settings.mediaAnnotation.documentOcr.engineMode.descriptions.multimodalLlm':
+        return '使用你配置的 OpenAI-compatible API 识别文字。';
+      case 'settings.mediaAnnotation.documentOcr.engineMode.subtitles.proCloudEnabled':
+        return 'Pro 订阅用户可使用 SecondLoop Cloud，云端 OCR 用量计入 Ask AI。';
+      case 'settings.mediaAnnotation.documentOcr.engineMode.subtitles.proCloudDisabled':
+        return 'Pro 订阅用户可启用“使用 SecondLoop Cloud”来执行云端 OCR，并计入 Ask AI 用量。';
+      case 'settings.mediaAnnotation.documentOcr.engineMode.subtitles.free':
+        return '免费版可在本地 OCR 与 BYOK 多模态 OCR 之间选择。';
       case 'settings.mediaAnnotation.audioTranscribe.title':
         return '音频转写';
       case 'settings.mediaAnnotation.audioTranscribe.enabled.title':
@@ -13462,6 +14043,57 @@ extension on _StringsZhCn {
       case 'settings.mediaAnnotation.audioTranscribe.whisperModel.downloaded':
         return ({required Object modelLabel}) =>
             '已下载 ${modelLabel} 模型，可用于本地转写。';
+      case 'settings.mediaAnnotation.audioTranscribe.whisperModel.title':
+        return 'Whisper 模型';
+      case 'settings.mediaAnnotation.audioTranscribe.whisperModel.subtitle':
+        return '用于 Whisper 转写路径。移动端默认 Tiny，桌面端默认 Base。';
+      case 'settings.mediaAnnotation.audioTranscribe.whisperModel.downloadingWithTotal':
+        return (
+                {required Object modelLabel,
+                required Object percent,
+                required Object received,
+                required Object total}) =>
+            '正在下载 ${modelLabel}：${percent}%（${received}/${total}）';
+      case 'settings.mediaAnnotation.audioTranscribe.whisperModel.downloading':
+        return ({required Object modelLabel, required Object received}) =>
+            '正在下载 ${modelLabel}：${received}';
+      case 'settings.mediaAnnotation.audioTranscribe.whisperModel.labels.tiny':
+        return 'Tiny（最快）';
+      case 'settings.mediaAnnotation.audioTranscribe.whisperModel.labels.base':
+        return 'Base';
+      case 'settings.mediaAnnotation.audioTranscribe.whisperModel.labels.small':
+        return 'Small（更准）';
+      case 'settings.mediaAnnotation.audioTranscribe.whisperModel.labels.medium':
+        return 'Medium（高精度）';
+      case 'settings.mediaAnnotation.audioTranscribe.whisperModel.labels.largeV3Turbo':
+        return 'Large V3 Turbo（推荐高性能）';
+      case 'settings.mediaAnnotation.audioTranscribe.whisperModel.labels.largeV3':
+        return 'Large V3（最高精度）';
+      case 'settings.mediaAnnotation.audioTranscribe.apiProfile.followActiveSubtitle':
+        return '默认跟随当前激活的 API profile，可改为已有 OpenAI-compatible API profile。';
+      case 'settings.mediaAnnotation.audioTranscribe.localRuntime.title':
+        return '本地能力';
+      case 'settings.mediaAnnotation.audioTranscribe.localRuntime.descriptionMobile':
+        return '在移动端手动下载 Whisper 本地转写运行时。';
+      case 'settings.mediaAnnotation.audioTranscribe.localRuntime.descriptionDesktop':
+        return '管理本地 Whisper 转写运行时。';
+      case 'settings.mediaAnnotation.audioTranscribe.localRuntime.statusSummary.downloading':
+        return '状态：下载中';
+      case 'settings.mediaAnnotation.audioTranscribe.localRuntime.statusSummary.checking':
+        return '状态：检查中';
+      case 'settings.mediaAnnotation.audioTranscribe.localRuntime.statusSummary.installed':
+        return '状态：已安装';
+      case 'settings.mediaAnnotation.audioTranscribe.localRuntime.statusSummary.missing':
+        return '状态：未安装';
+      case 'settings.mediaAnnotation.audioTranscribe.localRuntime.statusDetails.checking':
+        return '正在检查本地 Whisper 运行时状态。';
+      case 'settings.mediaAnnotation.audioTranscribe.localRuntime.statusDetails.error':
+        return ({required Object error}) => '运行时状态读取失败：${error}';
+      case 'settings.mediaAnnotation.audioTranscribe.localRuntime.statusDetails.installed':
+        return ({required Object modelLabel}) =>
+            '已安装本地运行时（当前模型：${modelLabel}）。';
+      case 'settings.mediaAnnotation.audioTranscribe.localRuntime.statusDetails.missing':
+        return '未检测到本地运行时。点击下载后可使用本地转写。';
       case 'settings.mediaAnnotation.connectivity.wifiOnlyTitle':
         return '仅Wi-Fi';
       case 'settings.mediaAnnotation.connectivity.wifiOnlySubtitle':
@@ -13592,6 +14224,22 @@ extension on _StringsZhCn {
         return '允许使用蜂窝网络注释图片？';
       case 'settings.mediaAnnotation.allowCellularConfirm.body':
         return '图片注释可能会向你选择的 AI 服务商上传图片，并消耗一定流量。';
+      case 'settings.mediaAnnotation.urlFetch.title':
+        return '链接内容理解';
+      case 'settings.mediaAnnotation.urlFetch.description':
+        return '先在本地抓取并清洗网页文本，再按你选择的来源（Cloud/BYOK/本地）做智能提炼。';
+      case 'settings.mediaAnnotation.legacyEntry.title':
+        return '智能化（旧版入口）';
+      case 'settings.mediaAnnotation.legacyEntry.subtitle':
+        return '旧版兼容入口：统一控制音频转写、文档 OCR 和图片注释。';
+      case 'settings.mediaAnnotation.legacyEntry.useSecondLoopCloudTitle':
+        return '使用 SecondLoop Cloud';
+      case 'settings.mediaAnnotation.legacyEntry.useSecondLoopCloudSubtitle':
+        return '开启后相关媒体数据会上传到 SecondLoop Cloud 处理。我们采用传输加密、严格访问控制与最小化保留策略。';
+      case 'settings.mediaAnnotation.legacyEntry.wifiOnlyTitle':
+        return '仅 Wi-Fi';
+      case 'settings.mediaAnnotation.legacyEntry.wifiOnlySubtitle':
+        return '仅在 Wi-Fi 下执行云端/BYOK 处理，本地能力不受影响。';
       case 'settings.cloudEmbeddings.title':
         return '云端增强检索（Embedding）';
       case 'settings.cloudEmbeddings.subtitleEnabled':
