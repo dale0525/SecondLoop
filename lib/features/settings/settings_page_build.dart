@@ -195,6 +195,25 @@ extension _SettingsPageBuild on _SettingsPageState {
                   },
           ),
           if (supportsDesktopHotkey)
+            ListTile(
+              key: const ValueKey('settings_external_import'),
+              title: Text(isZh ? '导入外部知识' : 'Import External Knowledge'),
+              subtitle: Text(
+                isZh
+                    ? '导入 Obsidian、思源或 Markdown 导出（只读）'
+                    : 'Import Obsidian, SiYuan, or Markdown exports (readonly)',
+              ),
+              onTap: _busy
+                  ? null
+                  : () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => const ExternalImportPage(),
+                        ),
+                      );
+                    },
+            ),
+          if (supportsDesktopHotkey)
             SwitchListTile(
               key: const ValueKey('settings_start_with_system_switch'),
               title: Text(context.t.settings.desktopBoot.startWithSystem.title),

@@ -842,7 +842,7 @@ pub fn open(app_dir: &Path) -> Result<Connection> {
     Ok(conn)
 }
 
-fn app_dir_from_conn(conn: &Connection) -> Result<PathBuf> {
+pub(crate) fn app_dir_from_conn(conn: &Connection) -> Result<PathBuf> {
     let mut stmt = conn.prepare("PRAGMA database_list")?;
     let mut rows = stmt.query([])?;
     while let Some(row) = rows.next()? {

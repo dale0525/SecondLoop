@@ -9,6 +9,7 @@ pub(crate) enum ContextSource {
     Event,
     TodoActivity,
     AttachmentChunk,
+    ExternalDocument,
 }
 
 #[derive(Clone, Debug)]
@@ -354,6 +355,7 @@ pub(crate) fn build_contexts_v2(
             ContextSource::Event => Some(format!("EVENT id={}\n", item.id)),
             ContextSource::TodoActivity => Some(format!("TODO_ACTIVITY id={}\n", item.id)),
             ContextSource::AttachmentChunk => Some(format!("ATTACHMENT_CHUNK id={}\n", item.id)),
+            ContextSource::ExternalDocument => Some(format!("EXTERNAL_DOCUMENT id={}\n", item.id)),
         };
         if let Some(p) = prefix {
             let mut combined = String::with_capacity(p.len() + text.len());
