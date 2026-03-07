@@ -161,7 +161,7 @@ class PixiWindowsTasksTests(unittest.TestCase):
         windows_deps = target_config['cfg(target_os = "windows")']["dependencies"]
         windows_whisper_dep = windows_deps["whisper-rs"]
 
-        self.assertEqual(windows_whisper_dep.get("features"), ["vulkan"])
+        self.assertNotIn("features", windows_whisper_dep)
 
         linux_deps = target_config['cfg(target_os = "linux")']["dependencies"]
         linux_whisper_dep = linux_deps["whisper-rs"]
