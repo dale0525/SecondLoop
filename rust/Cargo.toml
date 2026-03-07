@@ -39,7 +39,7 @@ tar = "0.4"
 whisper-rs = { version = "0.15.1", default-features = false, features = ["metal"] }
 
 [target.'cfg(target_os = "windows")'.dependencies]
-whisper-rs = { version = "0.15.1", default-features = false, features = ["vulkan"] }
+whisper-rs = { version = "0.15.1", default-features = false }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 whisper-rs = { version = "0.15.1", default-features = false, features = ["vulkan"] }
