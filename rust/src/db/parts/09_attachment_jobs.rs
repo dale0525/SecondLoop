@@ -666,7 +666,17 @@ pub fn enqueue_cloud_media_backup(
         return Err(anyhow!("desired_variant is required"));
     }
 
-    conn.execute(
+    upsert_cloud_media_backup_row(conn, attachment_sha256, desired_variant, now_ms)?;
+    Ok(())
+}
+
+fn upsert_cloud_media_backup_row(
+    conn: &Connection,
+    attachment_sha256: &str,
+    desired_variant: &str,
+    now_ms: i64,
+) -> Result<u64> {
+    let affected = conn.execute(
         r#"
 INSERT INTO cloud_media_backup(
   attachment_sha256,
@@ -690,7 +700,45 @@ ON CONFLICT(attachment_sha256) DO UPDATE SET
 "#,
         params![attachment_sha256, desired_variant, now_ms],
     )?;
-    Ok(())
+    Ok(affected as u64)
+}
+
+fn prune_cloud_media_backup_rows_missing_local_bytes(conn: &Connection) -> Result<u64> {
+    let Ok(app_dir) = app_dir_from_conn(conn) else {
+        return Ok(0);
+    };
+
+    let mut stmt = conn.prepare(
+        r#"
+SELECT cmb.attachment_sha256, a.path
+FROM cloud_media_backup cmb
+LEFT JOIN attachments a ON a.sha256 = cmb.attachment_sha256
+"#,
+    )?;
+
+    let mut rows = stmt.query([])?;
+    let mut stale_attachment_sha256s = Vec::new();
+    while let Some(row) = rows.next()? {
+        let attachment_sha256: String = row.get(0)?;
+        let path: Option<String> = row.get(1)?;
+        let Some(path) = path else {
+            stale_attachment_sha256s.push(attachment_sha256);
+            continue;
+        };
+
+        if !app_dir.join(path).is_file() {
+            stale_attachment_sha256s.push(attachment_sha256);
+        }
+    }
+
+    let mut pruned = 0u64;
+    for attachment_sha256 in stale_attachment_sha256s {
+        pruned += conn.execute(
+            r#"DELETE FROM cloud_media_backup WHERE attachment_sha256 = ?1"#,
+            params![attachment_sha256],
+        )? as u64;
+    }
+    Ok(pruned)
 }
 
 pub fn backfill_cloud_media_backup_images(
@@ -703,34 +751,34 @@ pub fn backfill_cloud_media_backup_images(
         return Err(anyhow!("desired_variant is required"));
     }
 
-    let affected = conn.execute(
+    let _ = prune_cloud_media_backup_rows_missing_local_bytes(conn)?;
+
+    let Ok(app_dir) = app_dir_from_conn(conn) else {
+        return Ok(0);
+    };
+
+    let mut stmt = conn.prepare(
         r#"
-INSERT INTO cloud_media_backup(
-  attachment_sha256,
-  desired_variant,
-  status,
-  attempts,
-  next_retry_at,
-  last_error,
-  updated_at
-)
-SELECT sha256, ?1, 'pending', 0, NULL, NULL, ?2
+SELECT sha256, path
 FROM attachments
-WHERE 1 = 1
-ON CONFLICT(attachment_sha256) DO UPDATE SET
-  desired_variant = excluded.desired_variant,
-  status = CASE
-    WHEN cloud_media_backup.status = 'uploaded' THEN 'uploaded'
-    ELSE 'pending'
-  END,
-  next_retry_at = NULL,
-  last_error = NULL,
-  updated_at = excluded.updated_at
+ORDER BY created_at ASC, sha256 ASC
 "#,
-        params![desired_variant, now_ms],
     )?;
 
-    Ok(affected as u64)
+    let mut rows = stmt.query([])?;
+    let mut affected = 0u64;
+    while let Some(row) = rows.next()? {
+        let attachment_sha256: String = row.get(0)?;
+        let path: String = row.get(1)?;
+        if !app_dir.join(path).is_file() {
+            continue;
+        }
+
+        affected +=
+            upsert_cloud_media_backup_row(conn, &attachment_sha256, desired_variant, now_ms)?;
+    }
+
+    Ok(affected)
 }
 
 pub fn list_due_cloud_media_backups(
@@ -738,6 +786,8 @@ pub fn list_due_cloud_media_backups(
     now_ms: i64,
     limit: i64,
 ) -> Result<Vec<CloudMediaBackup>> {
+    let _ = prune_cloud_media_backup_rows_missing_local_bytes(conn)?;
+
     let limit = limit.clamp(1, 500);
     let mut stmt = conn.prepare(
         r#"
@@ -824,6 +874,8 @@ WHERE attachment_sha256 = ?1
 }
 
 pub fn cloud_media_backup_summary(conn: &Connection) -> Result<CloudMediaBackupSummary> {
+    let _ = prune_cloud_media_backup_rows_missing_local_bytes(conn)?;
+
     let mut pending = 0i64;
     let mut failed = 0i64;
     let mut uploaded = 0i64;

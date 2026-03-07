@@ -22,6 +22,84 @@ fn list_due_cloud_media_backups_includes_byte_len() {
 }
 
 #[test]
+fn backfill_cloud_media_backup_skips_attachments_without_local_bytes() {
+    let dir = tempdir().expect("tempdir");
+    let app_dir = dir.path().to_path_buf();
+    let conn = open(&app_dir).expect("open");
+
+    let key = [4u8; 32];
+    let local = insert_attachment(&conn, &key, &app_dir, b"local", "image/png")
+        .expect("insert local attachment");
+
+    conn.execute(
+        r#"INSERT INTO attachments(sha256, mime_type, path, byte_len, created_at)
+           VALUES (?1, ?2, ?3, ?4, ?5)"#,
+        params![
+            "remote-only-sha",
+            "image/png",
+            "attachments/remote-only-sha.bin",
+            42i64,
+            999i64
+        ],
+    )
+    .expect("insert remote-only attachment metadata");
+
+    let affected = backfill_cloud_media_backup_images(&conn, "original", 1_234).expect("backfill");
+    assert_eq!(affected, 1, "only local attachments should be enqueued");
+
+    let due = list_due_cloud_media_backups(&conn, 1_234, 10).expect("list due");
+    assert_eq!(due.len(), 1);
+    assert_eq!(due[0].attachment_sha256, local.sha256);
+}
+
+#[test]
+fn cloud_media_backup_prunes_rows_without_local_bytes() {
+    let dir = tempdir().expect("tempdir");
+    let app_dir = dir.path().to_path_buf();
+    let conn = open(&app_dir).expect("open");
+
+    conn.execute(
+        r#"INSERT INTO attachments(sha256, mime_type, path, byte_len, created_at)
+           VALUES (?1, ?2, ?3, ?4, ?5)"#,
+        params![
+            "remote-only-sha",
+            "image/png",
+            "attachments/remote-only-sha.bin",
+            42i64,
+            999i64
+        ],
+    )
+    .expect("insert remote-only attachment metadata");
+
+    enqueue_cloud_media_backup(&conn, "remote-only-sha", "original", 1_000)
+        .expect("enqueue backup");
+    mark_cloud_media_backup_failed(
+        &conn,
+        "remote-only-sha",
+        1,
+        1_000,
+        "missing_local_attachment_bytes:remote-only-sha",
+        1_000,
+    )
+    .expect("mark failed");
+
+    let due = list_due_cloud_media_backups(&conn, 1_000, 10).expect("list due");
+    assert!(due.is_empty(), "missing local files should not stay due");
+
+    let summary = cloud_media_backup_summary(&conn).expect("summary");
+    assert_eq!(summary.pending, 0);
+    assert_eq!(summary.failed, 0);
+    assert_eq!(summary.uploaded, 0);
+
+    let remaining: i64 = conn
+        .query_row(r#"SELECT COUNT(*) FROM cloud_media_backup"#, [], |row| {
+            row.get(0)
+        })
+        .expect("count backup rows");
+    assert_eq!(remaining, 0, "stale rows should be pruned");
+}
+
+#[test]
 fn purge_message_attachments_cleans_enrichment_and_backup_jobs() {
     let dir = tempdir().expect("tempdir");
     let app_dir = dir.path().to_path_buf();
