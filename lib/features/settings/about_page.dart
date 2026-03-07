@@ -157,6 +157,11 @@ class _AboutPageState extends State<AboutPage> {
     final update = _updateResult?.update;
     if (update == null) return;
 
+    if (_isWindowsPlatform) {
+      await _manualUpdate();
+      return;
+    }
+
     setState(() => _updating = true);
     var stagedFlow = false;
     try {
@@ -215,6 +220,9 @@ class _AboutPageState extends State<AboutPage> {
     final update = result.update;
     if (update == null) {
       return _text.status.upToDate;
+    }
+    if (_isWindowsPlatform) {
+      return _text.status.availableExternal(version: update.latestTag);
     }
     if (update.canSeamlessInstall) {
       return _text.status.availableSeamless(version: update.latestTag);
@@ -319,7 +327,8 @@ class _AboutPageState extends State<AboutPage> {
                               : text.actions.check,
                         ),
                       ),
-                      if (update != null &&
+                      if (!_isWindowsPlatform &&
+                          update != null &&
                           (update.canSeamlessInstall ||
                               update.canStageForNextLaunch))
                         FilledButton.icon(

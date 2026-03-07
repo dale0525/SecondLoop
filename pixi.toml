@@ -118,10 +118,16 @@ dotnet-aspnetcore = "8.0.*"
 # - init-env uses PowerShell (no bash dependency)
 # - setup-flutter enables git long-path support before FVM clone/checkouts
 # - run-windows defaults to flutter hot-reload/debugger flow
+# - msi-dev packages + installs isolated local dev MSI
+# - uninstall-dev-msi removes isolated local dev MSI
 frb-generate = "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/frb_generate.ps1"
 bootstrap-shared-worktree-env = "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/bootstrap_shared_worktree_env.ps1"
 init-env = "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/init_env.ps1"
-setup-flutter = "git config --global core.longpaths true && dart pub global activate --no-executables fvm 2.4.1 && dart pub global run fvm:main install 3.22.3 && dart pub global run fvm:main use 3.22.3 --force && dart pub global run fvm:main flutter pub get"
+setup-flutter = "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/setup_flutter_windows.ps1"
+flutter = { cmd = "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_fvm_tool.ps1 -Tool flutter -Command {{ command }} {{ command_args }}", args = ["command", { arg = "command_args", default = "" }] }
+dart = { cmd = "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_fvm_tool.ps1 -Tool dart -Command {{ command }} {{ command_args }}", args = ["command", { arg = "command_args", default = "" }] }
 prepare-ffmpeg-windows = "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/prepare_ffmpeg_windows.ps1"
 run-windows = { cmd = "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_windows.ps1 -UseFlutterRun", depends-on = ["bootstrap-shared-worktree-env", "setup-flutter", "init-env", "prepare-ffmpeg-windows"] }
+msi-dev = { cmd = "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_windows.ps1", depends-on = ["bootstrap-shared-worktree-env", "setup-flutter", "init-env", "prepare-ffmpeg-windows"] }
+uninstall-dev-msi = { cmd = "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/uninstall_windows_msi.ps1 -ProductName 'SecondLoop Dev' -InstallDirName 'SecondLoop Dev' -Quiet" }
 package-windows-velopack = { cmd = "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package_windows_velopack.ps1", depends-on = ["bootstrap-shared-worktree-env", "setup-flutter", "init-env", "prepare-ffmpeg-windows"] }

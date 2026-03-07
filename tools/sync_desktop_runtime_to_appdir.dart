@@ -3,8 +3,10 @@ import 'dart:io';
 
 const String _kDefaultRuntimeSourceDir = 'assets/ocr/desktop_runtime';
 const String _kDefaultBundleId = 'com.secondloop.secondloop';
+const String _kDefaultDevBundleId = 'com.secondloop.secondloopdev';
 const String _kDefaultWindowsCompanyName = 'com.secondloop';
 const String _kDefaultWindowsProductName = 'SecondLoop';
+const String _kDefaultWindowsDevProductName = 'SecondLoop Dev';
 const String _kReleaseMarker = '_secondloop_desktop_runtime_release.json';
 const String _kRuntimeManifest = '_secondloop_desktop_runtime_manifest.json';
 
@@ -48,12 +50,14 @@ final class _Config {
   const _Config({
     required this.platform,
     required this.bundleId,
+    required this.appName,
     required this.sourceDir,
     required this.dryRun,
   });
 
   final _DesktopPlatform platform;
   final String bundleId;
+  final String appName;
   final String sourceDir;
   final bool dryRun;
 }
@@ -93,6 +97,7 @@ Future<void> main(List<String> args) async {
   final appSupportDir = _resolveAppSupportDir(
     platform: config.platform,
     bundleId: config.bundleId,
+    appName: config.appName,
   );
   final runtimeDir = Directory(_joinPath(appSupportDir, 'ocr/desktop/runtime'));
 
@@ -142,7 +147,9 @@ Future<void> main(List<String> args) async {
 _Config _parseArgs(List<String> args) {
   var platform = _detectHostPlatform();
   final envBundleId = Platform.environment['SECONDLOOP_APP_ID']?.trim() ?? '';
+  final envAppName = Platform.environment['SECONDLOOP_APP_NAME']?.trim() ?? '';
   var bundleId = envBundleId.isNotEmpty ? envBundleId : _kDefaultBundleId;
+  var appName = envAppName;
   var sourceDir = _kDefaultRuntimeSourceDir;
   var dryRun = false;
 
@@ -173,6 +180,17 @@ _Config _parseArgs(List<String> args) {
       i += 1;
       continue;
     }
+    if (arg.startsWith('--app-name=')) {
+      final value = arg.substring('--app-name='.length).trim();
+      if (value.isNotEmpty) appName = value;
+      continue;
+    }
+    if (arg == '--app-name') {
+      final value = _requireNextValue(args, i, '--app-name').trim();
+      if (value.isNotEmpty) appName = value;
+      i += 1;
+      continue;
+    }
     if (arg.startsWith('--source-dir=')) {
       final value = arg.substring('--source-dir='.length).trim();
       if (value.isNotEmpty) sourceDir = value;
@@ -190,6 +208,7 @@ _Config _parseArgs(List<String> args) {
   return _Config(
     platform: platform,
     bundleId: bundleId,
+    appName: appName,
     sourceDir: sourceDir,
     dryRun: dryRun,
   );
@@ -224,6 +243,7 @@ _DesktopPlatform _parsePlatform(String raw) {
 String _resolveAppSupportDir({
   required _DesktopPlatform platform,
   required String bundleId,
+  required String appName,
 }) {
   switch (platform) {
     case _DesktopPlatform.macos:
@@ -242,6 +262,7 @@ String _resolveAppSupportDir({
       return _resolveWindowsAppSupportDir(
         appData: appData,
         bundleId: bundleId,
+        appName: appName,
       );
   }
 }
@@ -249,26 +270,59 @@ String _resolveAppSupportDir({
 String _resolveWindowsAppSupportDir({
   required String appData,
   required String bundleId,
+  required String appName,
 }) {
   final normalizedBundleId = bundleId.trim();
-  if (normalizedBundleId.isNotEmpty &&
-      normalizedBundleId != _kDefaultBundleId) {
+  final normalizedAppName = appName.trim();
+  if (!_isSecondLoopWindowsIdentity(
+    bundleId: normalizedBundleId,
+    appName: normalizedAppName,
+  )) {
     return _joinPath(appData, normalizedBundleId);
   }
 
   return _joinPath(
     _joinPath(appData, _kDefaultWindowsCompanyName),
-    _kDefaultWindowsProductName,
+    _resolveSecondLoopWindowsProductName(
+      bundleId: normalizedBundleId,
+      appName: normalizedAppName,
+    ),
   );
+}
+
+bool _isSecondLoopWindowsIdentity({
+  required String bundleId,
+  required String appName,
+}) {
+  if (bundleId == _kDefaultBundleId || bundleId == _kDefaultDevBundleId) {
+    return true;
+  }
+
+  final isKnownAppName = appName == _kDefaultWindowsProductName ||
+      appName == _kDefaultWindowsDevProductName;
+  return bundleId.startsWith('com.secondloop.') && isKnownAppName;
+}
+
+String _resolveSecondLoopWindowsProductName({
+  required String bundleId,
+  required String appName,
+}) {
+  if (appName.isNotEmpty) return appName;
+  if (bundleId == _kDefaultDevBundleId) {
+    return _kDefaultWindowsDevProductName;
+  }
+  return _kDefaultWindowsProductName;
 }
 
 String resolveWindowsAppSupportDirForTest({
   required String appData,
   required String bundleId,
+  required String appName,
 }) {
   return _resolveWindowsAppSupportDir(
     appData: appData,
     bundleId: bundleId,
+    appName: appName,
   );
 }
 

@@ -134,7 +134,10 @@ extension DemoView on DemoWidget {
     final offenders = scanLibForHardcodedUserFacingStrings();
 
     expect(offenders, isNotEmpty);
-    expect(offenders.join('\n'), contains('lib/demo_view.dart'));
+    expect(
+      _normalizePathSeparators(offenders.join('\n')),
+      contains('lib/demo_view.dart'),
+    );
   });
 
   test('Flags helper parameters forwarded into user-facing sinks', () {
@@ -234,4 +237,8 @@ class Demo {
 String _formatFailureReason(List<String> offenders) {
   if (offenders.isEmpty) return i18nGuardPolicy;
   return '$i18nGuardPolicy\n${offenders.join('\n')}';
+}
+
+String _normalizePathSeparators(String input) {
+  return input.replaceAll('\\', '/');
 }

@@ -104,7 +104,7 @@ void main() {
 
     expect(service.checkCalls, 1);
     expect(service.installCalls, 1);
-    expect(service.applyPendingCalls, 1);
+    expect(service.applyPendingCalls, 0);
     expect(service.installed?.latestTag, 'v1.1.0');
   });
 
@@ -132,10 +132,10 @@ void main() {
     expect(service.checkCalls, 1);
     expect(service.installCalls, 0);
     expect(service.stageCalls, 0);
-    expect(service.applyPendingCalls, 1);
+    expect(service.applyPendingCalls, 0);
   });
 
-  testWidgets('stages windows update for next launch', (tester) async {
+  testWidgets('does not stage windows update for next launch', (tester) async {
     SharedPreferences.setMockInitialValues({});
     final update = AppUpdateAvailability(
       currentVersion: '1.0.1+99',
@@ -161,12 +161,15 @@ void main() {
 
     expect(service.checkCalls, 1);
     expect(service.installCalls, 0);
-    expect(service.stageCalls, 1);
-    expect(service.applyPendingCalls, 1);
-    expect(service.staged?.latestTag, 'v1.1.0');
-  });
+    expect(service.stageCalls, 0);
+    expect(service.applyPendingCalls, 0);
+    expect(service.staged, isNull);
+  },
+      variant: const TargetPlatformVariant(<TargetPlatform>{
+        TargetPlatform.windows,
+      }));
 
-  testWidgets('windows update stages silently without badge or reminder',
+  testWidgets('windows update shows manual reminder and badge state',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
     UpdateBadgePrefs.resetForTests();
@@ -177,10 +180,11 @@ void main() {
       releasePageUri: Uri.parse(
         'https://github.com/dale0525/SecondLoop/releases/tag/v1.2.0',
       ),
-      installMode: AppUpdateInstallMode.stagedNextLaunch,
+      installMode: AppUpdateInstallMode.externalDownload,
       asset: AppUpdateAsset(
-        name: 'com.secondloop.secondloop-1.2.0-full.nupkg',
-        downloadUri: Uri.parse('https://cdn.example.com/win-v1.2.0.nupkg'),
+        name: 'SecondLoop-win.msi',
+        downloadUri:
+            Uri.parse('https://cdn.example.com/SecondLoop-win-v1.2.0.msi'),
       ),
     );
     final service = _FakeAutoUpdateService(
@@ -195,24 +199,19 @@ void main() {
     await tester.pump(const Duration(milliseconds: 120));
 
     expect(service.installCalls, 0);
-    expect(service.stageCalls, 1);
-    expect(UpdateBadgePrefs.value.value, isNull);
-    expect(find.byType(SnackBar), findsNothing);
+    expect(service.stageCalls, 0);
+    expect(UpdateBadgePrefs.value.value, 'v1.2.0');
+    expect(find.byType(SnackBar), findsOneWidget);
   },
       variant: const TargetPlatformVariant(<TargetPlatform>{
         TargetPlatform.windows,
       }));
 
-  testWidgets('windows update restarts after leaving editing context',
-      (tester) async {
+  testWidgets('windows update never requests staged restart', (tester) async {
     SharedPreferences.setMockInitialValues({});
     UpdateBadgePrefs.resetForTests();
     UpdateRestartActivity.resetForTests();
-    final editingBlocker = UpdateRestartActivity.blockEditing();
-    addTearDown(() {
-      editingBlocker.release();
-      UpdateRestartActivity.resetForTests();
-    });
+    addTearDown(UpdateRestartActivity.resetForTests);
 
     final update = AppUpdateAvailability(
       currentVersion: '1.0.1+99',
@@ -220,10 +219,11 @@ void main() {
       releasePageUri: Uri.parse(
         'https://github.com/dale0525/SecondLoop/releases/tag/v1.3.0',
       ),
-      installMode: AppUpdateInstallMode.stagedNextLaunch,
+      installMode: AppUpdateInstallMode.externalDownload,
       asset: AppUpdateAsset(
-        name: 'com.secondloop.secondloop-1.3.0-full.nupkg',
-        downloadUri: Uri.parse('https://cdn.example.com/win-v1.3.0.nupkg'),
+        name: 'SecondLoop-win.msi',
+        downloadUri:
+            Uri.parse('https://cdn.example.com/SecondLoop-win-v1.3.0.msi'),
       ),
     );
     final service = _FakeAutoUpdateService(
@@ -236,19 +236,14 @@ void main() {
     await pumpGate(tester, service: service);
     await tester.pumpAndSettle();
 
-    expect(service.stageCalls, 1);
+    expect(service.stageCalls, 0);
     expect(service.applyStagedRestartCalls, 0);
-
-    editingBlocker.release();
-    await tester.pump();
-
-    expect(service.applyStagedRestartCalls, 1);
   },
       variant: const TargetPlatformVariant(<TargetPlatform>{
         TargetPlatform.windows,
       }));
 
-  testWidgets('continues update check when pending apply fails',
+  testWidgets('skips pending apply and still checks for updates',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
     final service = _FakeAutoUpdateService(
@@ -259,7 +254,7 @@ void main() {
     await pumpGate(tester, service: service);
     await tester.pumpAndSettle();
 
-    expect(service.applyPendingCalls, 1);
+    expect(service.applyPendingCalls, 0);
     expect(service.checkCalls, 1);
     expect(find.text('home'), findsOneWidget);
   });

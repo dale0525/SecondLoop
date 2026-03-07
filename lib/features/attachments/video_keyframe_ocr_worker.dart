@@ -2,10 +2,10 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
-import 'package:flutter/services.dart';
 
 import '../media_backup/video_kind_classifier.dart';
 import '../media_backup/video_transcode_worker.dart';
+import '../../core/media/ffmpeg_executable_resolver.dart';
 import 'platform_pdf_ocr.dart';
 
 const String kSecondLoopVideoManifestMimeType =
@@ -860,52 +860,6 @@ String _extensionForMimeType(String sourceMimeType) {
   }
 }
 
-String? _cachedBundledFfmpegExecutablePath;
-
-Future<String?> _resolveBundledFfmpegExecutablePath() async {
-  final cachedPath = _cachedBundledFfmpegExecutablePath;
-  if (cachedPath != null) {
-    try {
-      if (await File(cachedPath).exists()) return cachedPath;
-    } catch (_) {
-      // ignore
-    }
-    _cachedBundledFfmpegExecutablePath = null;
-  }
-
-  if (kIsWeb) return null;
-  final assetPath = _bundledFfmpegAssetPathForCurrentPlatform();
-  if (assetPath == null) return null;
-
-  try {
-    final data = await rootBundle.load(assetPath);
-    final bytes =
-        data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes);
-    if (bytes.isEmpty) return null;
-
-    final tempDir =
-        Directory('${Directory.systemTemp.path}/secondloop_ffmpeg_bundle');
-    await tempDir.create(recursive: true);
-    final executableName = Platform.isWindows ? 'ffmpeg.exe' : 'ffmpeg';
-    final executable = File('${tempDir.path}/$executableName');
-    await executable.writeAsBytes(bytes, flush: true);
-
-    if (!Platform.isWindows) {
-      final chmodResult = await Process.run('chmod', ['755', executable.path]);
-      if (chmodResult.exitCode != 0) return null;
-    }
-
-    _cachedBundledFfmpegExecutablePath = executable.path;
-    return executable.path;
-  } catch (_) {
-    return null;
-  }
-}
-
-String? _bundledFfmpegAssetPathForCurrentPlatform() {
-  if (kIsWeb) return null;
-  if (Platform.isMacOS) return 'assets/bin/ffmpeg/macos/ffmpeg';
-  if (Platform.isLinux) return 'assets/bin/ffmpeg/linux/ffmpeg';
-  if (Platform.isWindows) return 'assets/bin/ffmpeg/windows/ffmpeg.exe';
-  return null;
+Future<String?> _resolveBundledFfmpegExecutablePath() {
+  return resolveBundledFfmpegExecutablePath();
 }

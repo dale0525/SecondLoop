@@ -92,9 +92,11 @@ When Ask AI uses a remote model (BYOK or SecondLoop Cloud), the client uploads *
 
 ## 🔄 Desktop update strategy (current)
 
-- **Windows (Velopack install)**: background staged update, applied on next launch.
+- **Windows**: MSI-only release path; updates are manual via MSI download, release page, or WinGet.
+- **Windows artifact contract**: the official release asset is `SecondLoop-win.msi`, with checksum file `SecondLoop-win.msi.sha256`.
 - **macOS**: manual DMG download/update (no paid signing/notarization yet).
-- Release operations and verification steps: `docs/runbooks/windows-velopack-release.md`.
+- If release-note generation fails in GitHub Actions, rerun the workflow manually; there is no automatic fallback notes path.
+- Windows release automation uses `.github/workflows/release.yml` and `scripts/publish_winget_manifest.sh`.
 
 ## 🧩 Editions (Community vs Cloud)
 

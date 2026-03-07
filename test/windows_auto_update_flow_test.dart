@@ -35,7 +35,7 @@ class _StartupFlowUpdateService extends AppUpdateService {
 }
 
 void main() {
-  testWidgets('pending apply failure does not block app startup',
+  testWidgets('startup skips pending apply and does not block app startup',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
     final service = _StartupFlowUpdateService(
@@ -59,7 +59,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('home'), findsOneWidget);
-    expect(service.applyPendingCalls, 1);
+    expect(service.applyPendingCalls, 0);
     expect(service.checkCalls, 1);
   });
 }

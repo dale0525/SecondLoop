@@ -8,5 +8,5 @@ if ($LASTEXITCODE -ne 0) {
   exit $LASTEXITCODE
 }
 
-& dart pub global run fvm:main dart run tools/prepare_bundled_ffmpeg.dart --platform=windows
+& (Join-Path $PSScriptRoot 'run_fvm_tool.ps1') -Tool dart -Command run tools/prepare_bundled_ffmpeg.dart --platform=windows
 exit $LASTEXITCODE

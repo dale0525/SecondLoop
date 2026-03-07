@@ -8,6 +8,7 @@ project(runner LANGUAGES CXX)
 # Any new source files that you add to the application should be added here.
 set(SECONDLOOP_APP_ID "$ENV{SECONDLOOP_APP_ID}")
 set(SECONDLOOP_APP_NAME "$ENV{SECONDLOOP_APP_NAME}")
+set(SECONDLOOP_COMPANY_NAME "com.secondloop")
 if("${SECONDLOOP_APP_NAME}" STREQUAL "")
   if("${SECONDLOOP_APP_ID}" STREQUAL "com.secondloop.secondloopdev")
     set(SECONDLOOP_APP_NAME "SecondLoop Dev")
@@ -15,6 +16,10 @@ if("${SECONDLOOP_APP_NAME}" STREQUAL "")
     set(SECONDLOOP_APP_NAME "SecondLoop")
   endif()
 endif()
+set(SECONDLOOP_FILE_DESCRIPTION "${SECONDLOOP_APP_NAME}")
+set(SECONDLOOP_PRODUCT_NAME "${SECONDLOOP_APP_NAME}")
+set(SECONDLOOP_INTERNAL_NAME "${BINARY_NAME}")
+set(SECONDLOOP_ORIGINAL_FILENAME "${BINARY_NAME}.exe")
 add_executable(${BINARY_NAME} WIN32
   "flutter_window.cpp"
   "main.cpp"
@@ -36,6 +41,11 @@ target_compile_definitions(${BINARY_NAME} PRIVATE "FLUTTER_VERSION_MINOR=${FLUTT
 target_compile_definitions(${BINARY_NAME} PRIVATE "FLUTTER_VERSION_PATCH=${FLUTTER_VERSION_PATCH}")
 target_compile_definitions(${BINARY_NAME} PRIVATE "FLUTTER_VERSION_BUILD=${FLUTTER_VERSION_BUILD}")
 target_compile_definitions(${BINARY_NAME} PRIVATE "SECONDLOOP_WINDOW_TITLE=L\"${SECONDLOOP_APP_NAME}\"")
+target_compile_definitions(${BINARY_NAME} PRIVATE "SECONDLOOP_COMPANY_NAME=\"${SECONDLOOP_COMPANY_NAME}\"")
+target_compile_definitions(${BINARY_NAME} PRIVATE "SECONDLOOP_FILE_DESCRIPTION=\"${SECONDLOOP_FILE_DESCRIPTION}\"")
+target_compile_definitions(${BINARY_NAME} PRIVATE "SECONDLOOP_PRODUCT_NAME=\"${SECONDLOOP_PRODUCT_NAME}\"")
+target_compile_definitions(${BINARY_NAME} PRIVATE "SECONDLOOP_INTERNAL_NAME=\"${SECONDLOOP_INTERNAL_NAME}\"")
+target_compile_definitions(${BINARY_NAME} PRIVATE "SECONDLOOP_ORIGINAL_FILENAME=\"${SECONDLOOP_ORIGINAL_FILENAME}\"")
 
 # Disable Windows macros that collide with C++ standard library functions.
 target_compile_definitions(${BINARY_NAME} PRIVATE "NOMINMAX")

@@ -1,5 +1,7 @@
 import 'dart:io';
 
+import 'package:archive/archive.dart';
+
 import 'prepare_bundled_ffmpeg_lib.dart';
 
 Future<void> main(List<String> args) async {
@@ -62,7 +64,7 @@ Future<void> main(List<String> args) async {
     outputRoot,
     <String>[
       desktopPlatformFolderName(platform),
-      bundledExecutableName(platform),
+      bundledAssetName(platform),
     ],
   );
 
@@ -92,10 +94,44 @@ Future<void> main(List<String> args) async {
 
   final targetFile = File(targetPath);
   targetFile.parent.createSync(recursive: true);
+  for (final legacyAssetName in bundledLegacyAssetNames(platform)) {
+    final legacyPath = _joinAll(
+      outputRoot,
+      <String>[desktopPlatformFolderName(platform), legacyAssetName],
+    );
+    if (_pathsEqual(legacyPath, targetPath, platform)) {
+      continue;
+    }
+    final legacyFile = File(legacyPath);
+    if (legacyFile.existsSync()) {
+      legacyFile.deleteSync();
+      stdout.writeln(
+        'prepare-bundled-ffmpeg: removed stale bundled asset $legacyPath',
+      );
+    }
+  }
 
-  sourceFile.copySync(targetPath);
+  if (platform == DesktopPlatform.windows) {
+    final sourceBytes = sourceFile.readAsBytesSync();
+    final archive = Archive();
+    archive.addFile(
+      ArchiveFile(
+        bundledExecutableName(platform),
+        sourceBytes.length,
+        sourceBytes,
+      ),
+    );
+    final encoded = ZipEncoder().encode(archive);
+    if (encoded.isEmpty) {
+      stderr.writeln(
+        'prepare-bundled-ffmpeg: failed to encode bundled Windows ffmpeg zip',
+      );
+      exit(1);
+    }
+    targetFile.writeAsBytesSync(encoded, flush: true);
+  } else {
+    sourceFile.copySync(targetPath);
 
-  if (platform != DesktopPlatform.windows) {
     final chmodResult =
         await Process.run('chmod', <String>['0755', targetPath]);
     if (chmodResult.exitCode != 0) {
@@ -105,23 +141,37 @@ Future<void> main(List<String> args) async {
     }
   }
 
-  final verify = await Process.run(targetPath, const <String>['-version']);
-  if (verify.exitCode != 0) {
-    stderr.writeln(
-      'prepare-bundled-ffmpeg: bundled ffmpeg verification failed '
-      '(exit=${verify.exitCode})',
-    );
-    final verifyStderr = '${verify.stderr}'.trim();
-    final verifyStdout = '${verify.stdout}'.trim();
-    if (verifyStderr.isNotEmpty) {
-      stderr.writeln(verifyStderr);
-    } else if (verifyStdout.isNotEmpty) {
-      stderr.writeln(verifyStdout);
+  String firstLine = '';
+  if (platform == DesktopPlatform.windows) {
+    final archive = ZipDecoder().decodeBytes(targetFile.readAsBytesSync());
+    final executableEntry = archive.findFile(bundledExecutableName(platform));
+    if (executableEntry == null || executableEntry.size <= 0) {
+      stderr.writeln(
+        'prepare-bundled-ffmpeg: bundled Windows ffmpeg zip verification failed',
+      );
+      exit(1);
     }
-    exit(verify.exitCode == 0 ? 1 : verify.exitCode);
+    firstLine =
+        'verified ${bundledExecutableName(platform)} in ${bundledAssetName(platform)}';
+  } else {
+    final verify = await Process.run(targetPath, const <String>['-version']);
+    if (verify.exitCode != 0) {
+      stderr.writeln(
+        'prepare-bundled-ffmpeg: bundled ffmpeg verification failed '
+        '(exit=${verify.exitCode})',
+      );
+      final verifyStderr = '${verify.stderr}'.trim();
+      final verifyStdout = '${verify.stdout}'.trim();
+      if (verifyStderr.isNotEmpty) {
+        stderr.writeln(verifyStderr);
+      } else if (verifyStdout.isNotEmpty) {
+        stderr.writeln(verifyStdout);
+      }
+      exit(verify.exitCode == 0 ? 1 : verify.exitCode);
+    }
+    firstLine = '${verify.stdout}'.split('\n').first.trim();
   }
 
-  final firstLine = '${verify.stdout}'.split('\n').first.trim();
   stdout.writeln(
     'prepare-bundled-ffmpeg: copied ${sourceFile.absolute.path} -> $targetPath',
   );

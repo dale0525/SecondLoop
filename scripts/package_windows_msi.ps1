@@ -3,8 +3,9 @@ param(
   [string]$OutputPath = 'dist',
   [string]$OutputName = '',
   [string]$ProductName = 'SecondLoop',
-  [string]$Manufacturer = 'SecondLoop Contributors',
+  [string]$Manufacturer = 'SecondLoop',
   [string]$UpgradeCode = '8B5A0942-79D3-4B5A-A4E5-3FB906DA63A1',
+  [switch]$DisableCloseApplication,
   [switch]$SkipBuild,
   [switch]$PassThru
 )
@@ -112,19 +113,19 @@ if (Test-Path $nugetExe) {
 }
 
 Write-Host 'Running: flutter pub get'
-& dart pub global run fvm:main flutter pub get
+& (Join-Path $PSScriptRoot 'run_fvm_tool.ps1') -Tool flutter -Command pub get
 if ($LASTEXITCODE -ne 0) {
   exit $LASTEXITCODE
 }
 
 Write-Host 'Running: prepare_desktop_runtime.dart --platform windows --arch x64'
-& dart pub global run fvm:main dart run tools/prepare_desktop_runtime.dart --platform=windows --arch=x64
+& (Join-Path $PSScriptRoot 'run_fvm_tool.ps1') -Tool dart -Command run tools/prepare_desktop_runtime.dart --platform=windows --arch=x64
 if ($LASTEXITCODE -ne 0) {
   exit $LASTEXITCODE
 }
 
 Write-Host 'Running: sync_desktop_runtime_to_appdir.dart --platform windows'
-& dart pub global run fvm:main dart run tools/sync_desktop_runtime_to_appdir.dart --platform=windows
+& (Join-Path $PSScriptRoot 'run_fvm_tool.ps1') -Tool dart -Command run tools/sync_desktop_runtime_to_appdir.dart --platform=windows
 if ($LASTEXITCODE -ne 0) {
   exit $LASTEXITCODE
 }
@@ -133,7 +134,7 @@ if (-not $SkipBuild) {
   $buildArgs = @('build', 'windows', '--release')
   $buildArgs += Build-DartDefines
   Write-Host ('Running: flutter ' + ($buildArgs -join ' '))
-  & dart pub global run fvm:main flutter @buildArgs
+  & (Join-Path $PSScriptRoot 'run_fvm_tool.ps1') -Tool flutter -Command build windows --release @((Build-DartDefines))
   if ($LASTEXITCODE -ne 0) {
     exit $LASTEXITCODE
   }
@@ -162,6 +163,10 @@ $createArgs = @{
   ProductName = $ProductName
   Manufacturer = $Manufacturer
   UpgradeCode = $UpgradeCode
+}
+
+if ($DisableCloseApplication) {
+  $createArgs.DisableCloseApplication = $true
 }
 
 if ($PassThru) {

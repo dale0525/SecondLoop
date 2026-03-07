@@ -13,6 +13,9 @@ WINDOWS_VELOPACK_SCRIPT = REPO_ROOT / "scripts/package_windows_velopack.ps1"
 WINDOWS_MSI_SCRIPT = REPO_ROOT / "scripts/package_windows_msi.ps1"
 WINDOWS_LIBCLANG_SETUP_SCRIPT = REPO_ROOT / "scripts/setup_windows_libclang.ps1"
 WINDOWS_VULKAN_SETUP_SCRIPT = REPO_ROOT / "scripts/setup_windows_vulkan_sdk.ps1"
+WINDOWS_FVM_TOOL_RUNNER_SCRIPT = REPO_ROOT / "scripts/run_fvm_tool.ps1"
+WINDOWS_UNINSTALL_MSI_SCRIPT = REPO_ROOT / "scripts/uninstall_windows_msi.ps1"
+WINDOWS_SETUP_FLUTTER_SCRIPT = REPO_ROOT / "scripts/setup_flutter_windows.ps1"
 
 
 class PixiWindowsTasksTests(unittest.TestCase):
@@ -40,6 +43,15 @@ class PixiWindowsTasksTests(unittest.TestCase):
         bootstrap_task = win_tasks["bootstrap-shared-worktree-env"]
         self.assertIsInstance(bootstrap_task, str)
         self.assertIn("scripts/bootstrap_shared_worktree_env.ps1", bootstrap_task)
+
+    def test_windows_setup_flutter_task_uses_powershell_script(self) -> None:
+        win_tasks = self._load_win_tasks()
+
+        setup_flutter_task = win_tasks["setup-flutter"]
+
+        self.assertIsInstance(setup_flutter_task, str)
+        self.assertIn("scripts/setup_flutter_windows.ps1", setup_flutter_task)
+        self.assertNotIn("dart pub global run fvm:main flutter pub get", setup_flutter_task)
 
     def test_run_windows_depends_on_bootstrap_shared_worktree_env(self) -> None:
         win_tasks = self._load_win_tasks()
@@ -75,6 +87,28 @@ class PixiWindowsTasksTests(unittest.TestCase):
             run_windows_task.get("depends-on", []),
         )
         self.assertIn("scripts/package_windows_velopack.ps1", velopack_task.get("cmd", ""))
+
+    def test_windows_dev_msi_task_reuses_windows_bootstrap_dependencies(self) -> None:
+        win_tasks = self._load_win_tasks()
+
+        msi_dev_task = win_tasks["msi-dev"]
+        run_windows_task = win_tasks["run-windows"]
+
+        self.assertEqual(
+            msi_dev_task.get("depends-on", []),
+            run_windows_task.get("depends-on", []),
+        )
+        self.assertIn("scripts/run_windows.ps1", msi_dev_task.get("cmd", ""))
+        self.assertNotIn("-UseFlutterRun", msi_dev_task.get("cmd", ""))
+
+    def test_windows_uninstall_dev_msi_task_uses_dedicated_uninstall_script(self) -> None:
+        win_tasks = self._load_win_tasks()
+
+        uninstall_task = win_tasks["uninstall-dev-msi"]
+        command = uninstall_task.get("cmd", "")
+
+        self.assertIn("scripts/uninstall_windows_msi.ps1", command)
+        self.assertIn("SecondLoop Dev", command)
 
     def test_windows_bootstrap_script_links_shared_tool_and_pixi_envs(self) -> None:
         script = WINDOWS_BOOTSTRAP_SCRIPT.read_text(encoding="utf-8")
@@ -168,6 +202,77 @@ class PixiWindowsTasksTests(unittest.TestCase):
 
         self.assertEqual(linux_whisper_dep.get("features"), ["vulkan"])
 
+    def test_windows_flutter_task_uses_direct_fvm_tool_runner(self) -> None:
+        win_tasks = self._load_win_tasks()
+
+        flutter_task = win_tasks["flutter"]
+        command = flutter_task.get("cmd", "")
+
+        self.assertIn("scripts/run_fvm_tool.ps1 -Tool flutter", command)
+        self.assertNotIn("dart pub global run fvm:main flutter", command)
+
+    def test_windows_dart_task_uses_direct_fvm_tool_runner(self) -> None:
+        win_tasks = self._load_win_tasks()
+
+        dart_task = win_tasks["dart"]
+        command = dart_task.get("cmd", "")
+
+        self.assertIn("scripts/run_fvm_tool.ps1 -Tool dart", command)
+        self.assertNotIn("dart pub global run fvm:main dart", command)
+
+    def test_windows_fvm_tool_runner_uses_local_fvm_batch_wrappers(self) -> None:
+        self.assertTrue(WINDOWS_FVM_TOOL_RUNNER_SCRIPT.exists())
+
+        script = WINDOWS_FVM_TOOL_RUNNER_SCRIPT.read_text(encoding="utf-8")
+
+        self.assertIn(".fvm", script)
+        self.assertIn("flutter.bat", script)
+        self.assertIn("dart.bat", script)
+        self.assertIn("ValueFromRemainingArguments", script)
+        self.assertIn("exit $LASTEXITCODE", script)
+
+    def test_windows_uninstall_msi_script_uses_registry_install_metadata(self) -> None:
+        self.assertTrue(WINDOWS_UNINSTALL_MSI_SCRIPT.exists())
+
+        script = WINDOWS_UNINSTALL_MSI_SCRIPT.read_text(encoding="utf-8")
+
+        self.assertIn("[string]$ProductName = 'SecondLoop Dev'", script)
+        self.assertIn("[string]$InstallDirName = 'SecondLoop Dev'", script)
+        self.assertIn("HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall", script)
+        self.assertIn("HKLM:\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall", script)
+        self.assertIn("UninstallString", script)
+        self.assertIn("InstallLocation", script)
+        self.assertIn("msiexec.exe", script)
+        self.assertIn("/x", script)
+
+    def test_windows_setup_flutter_script_uses_local_fvm_sdk_after_install(self) -> None:
+        self.assertTrue(WINDOWS_SETUP_FLUTTER_SCRIPT.exists())
+
+        script = WINDOWS_SETUP_FLUTTER_SCRIPT.read_text(encoding="utf-8")
+
+        self.assertIn("core.longpaths true", script)
+        self.assertIn("dart pub global activate --no-executables fvm 2.4.1", script)
+        self.assertIn("dart pub global run fvm:main install 3.22.3", script)
+        self.assertIn("dart pub global run fvm:main use 3.22.3 --force", script)
+        self.assertIn(".fvm/flutter_sdk/bin/flutter.bat", script)
+        self.assertIn("pub", script)
+        self.assertIn("get", script)
+        self.assertIn("exit $LASTEXITCODE", script)
+
+    def test_prepare_ffmpeg_windows_script_uses_direct_fvm_dart_runner(self) -> None:
+        script = (REPO_ROOT / "scripts/prepare_ffmpeg_windows.ps1").read_text(encoding="utf-8")
+
+        self.assertIn("run_fvm_tool.ps1", script)
+        self.assertIn("-Tool dart", script)
+        self.assertIn("-Command run", script)
+        self.assertNotIn("dart pub global run fvm:main dart run", script)
+
+
+
+    def test_gitignore_ignores_generated_windows_ffmpeg_zip(self) -> None:
+        gitignore = (REPO_ROOT / ".gitignore").read_text(encoding="utf-8")
+
+        self.assertIn("assets/bin/ffmpeg/windows/ffmpeg.zip", gitignore)
 
 if __name__ == "__main__":
     unittest.main()

@@ -72,6 +72,26 @@ IDI_APP_ICON            ICON                    "resources\\app_icon.ico"
 #define VERSION_AS_STRING "1.0.0"
 #endif
 
+#ifndef SECONDLOOP_COMPANY_NAME
+#define SECONDLOOP_COMPANY_NAME "com.secondloop"
+#endif
+
+#ifndef SECONDLOOP_FILE_DESCRIPTION
+#define SECONDLOOP_FILE_DESCRIPTION "SecondLoop"
+#endif
+
+#ifndef SECONDLOOP_PRODUCT_NAME
+#define SECONDLOOP_PRODUCT_NAME "SecondLoop"
+#endif
+
+#ifndef SECONDLOOP_INTERNAL_NAME
+#define SECONDLOOP_INTERNAL_NAME "secondloop"
+#endif
+
+#ifndef SECONDLOOP_ORIGINAL_FILENAME
+#define SECONDLOOP_ORIGINAL_FILENAME "secondloop.exe"
+#endif
+
 VS_VERSION_INFO VERSIONINFO
  FILEVERSION VERSION_AS_NUMBER
  PRODUCTVERSION VERSION_AS_NUMBER
@@ -89,13 +109,13 @@ BEGIN
     BEGIN
         BLOCK "040904e4"
         BEGIN
-            VALUE "CompanyName", "com.secondloop" "\0"
-            VALUE "FileDescription", "SecondLoop" "\0"
+            VALUE "CompanyName", SECONDLOOP_COMPANY_NAME "\0"
+            VALUE "FileDescription", SECONDLOOP_FILE_DESCRIPTION "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
-            VALUE "InternalName", "secondloop" "\0"
+            VALUE "InternalName", SECONDLOOP_INTERNAL_NAME "\0"
             VALUE "LegalCopyright", "Copyright (C) 2026 com.secondloop. All rights reserved." "\0"
-            VALUE "OriginalFilename", "secondloop.exe" "\0"
-            VALUE "ProductName", "SecondLoop" "\0"
+            VALUE "OriginalFilename", SECONDLOOP_ORIGINAL_FILENAME "\0"
+            VALUE "ProductName", SECONDLOOP_PRODUCT_NAME "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END

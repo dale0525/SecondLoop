@@ -267,7 +267,7 @@ jobs:
         shell: pwsh
         run: |
           $ffmpegRoot = Join-Path $Env:GITHUB_WORKSPACE 'assets/bin/ffmpeg'
-          $targetFfmpeg = Join-Path $ffmpegRoot 'windows/ffmpeg.exe'
+          $targetFfmpeg = Join-Path $ffmpegRoot 'windows/ffmpeg.zip'
           if (-not (Test-Path -LiteralPath $targetFfmpeg)) {
             throw "Expected bundled windows ffmpeg not found: $targetFfmpeg"
           }
@@ -338,55 +338,6 @@ jobs:
             }
             cmd /c subst W: /d > $null 2>&1
           }
-      - name: Package Velopack
-        shell: pwsh
-        run: |
-          $packVersion = $null
-          if ($Env:GITHUB_REF -like "refs/tags/v*") {
-            $candidate = $Env:GITHUB_REF_NAME.Substring(1)
-            if ($candidate -match '^\d+\.\d+\.\d+$') {
-              $packVersion = $candidate
-            } else {
-              throw "Invalid release tag version: $Env:GITHUB_REF_NAME"
-            }
-          }
-
-          $packArgs = @{
-            SkipBuild = $true
-            OutputPath = 'dist'
-          }
-          if ($packVersion) {
-            $packArgs.Version = $packVersion
-          }
-
-          & scripts/package_windows_velopack.ps1 @packArgs
-          if ($LASTEXITCODE -ne 0) {
-            throw "Velopack packaging failed with exit code $LASTEXITCODE"
-          }
-
-          $setupPath = Get-ChildItem -Path dist -Filter '*Setup*.exe' -File | Select-Object -First 1
-          if ($null -eq $setupPath) {
-            throw "Velopack setup not found in dist"
-          }
-
-          $releasesMetadataPath = Get-ChildItem -Path dist -Filter 'releases.*.json' -File | Select-Object -First 1
-          if ($null -eq $releasesMetadataPath) {
-            throw "Velopack releases metadata not found in dist"
-          }
-
-          $assetsMetadataPath = Get-ChildItem -Path dist -Filter 'assets.*.json' -File | Select-Object -First 1
-          if ($null -eq $assetsMetadataPath) {
-            throw "Velopack assets metadata not found in dist"
-          }
-
-          $nupkgPath = Get-ChildItem -Path dist -Filter '*.nupkg' -File | Select-Object -First 1
-          if ($null -eq $nupkgPath) {
-            throw "Velopack nupkg not found in dist"
-          }
-
-          $setupSha256 = (Get-FileHash -Path $setupPath.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
-          $setupShaFile = Join-Path $setupPath.DirectoryName 'SecondLoop-win-Setup.exe.sha256'
-          "$setupSha256  $($setupPath.Name)" | Set-Content -Path $setupShaFile -Encoding ascii
       - name: Package MSI
         shell: pwsh
         run: |
@@ -425,18 +376,36 @@ jobs:
             throw "MSI package not found in dist"
           }
 
+          $msiLeafName = [System.IO.Path]::GetFileName($msiPath)
+          if ($msiLeafName -ne 'SecondLoop-win.msi') {
+            throw "Unexpected MSI asset name: $msiLeafName"
+          }
+
+          $msiShaPath = Join-Path (Split-Path -Parent $msiPath) ($msiLeafName + '.sha256')
+          $msiHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $msiPath).Hash.ToLowerInvariant()
+          [System.IO.File]::WriteAllText($msiShaPath, "$msiHash  $msiLeafName`n", [System.Text.UTF8Encoding]::new($false))
+
+          $msiMetadataPath = Join-Path (Split-Path -Parent $msiPath) 'SecondLoop-win.metadata.json'
+          $msiMetadataOutput = & powershell -NoProfile -ExecutionPolicy Bypass -File scripts/export_windows_msi_metadata.ps1 -MsiPath $msiPath -OutputPath $msiMetadataPath
+          if ($LASTEXITCODE -ne 0) {
+            throw "MSI metadata export failed with exit code $LASTEXITCODE"
+          }
+
+          $resolvedMetadataPath = $msiMetadataOutput | Select-Object -Last 1
+          if (-not $resolvedMetadataPath -or -not (Test-Path $resolvedMetadataPath)) {
+            throw "MSI metadata file not found in dist"
+          }
+
           Write-Host "MSI package ready: $msiPath"
+          Write-Host "MSI checksum ready: $msiShaPath"
+          Write-Host "MSI metadata ready: $resolvedMetadataPath"
       - uses: actions/upload-artifact@v4
         with:
           name: windows
           path: |
-            dist/*Setup*.exe
-            dist/*Setup*.exe.sha256
-            dist/*.msi
-            dist/releases.*.json
-            dist/assets.*.json
-            dist/*RELEASES*
-            dist/*.nupkg
+            dist/SecondLoop-win.msi
+            dist/SecondLoop-win.msi.sha256
+            dist/SecondLoop-win.metadata.json
 
   macos:
     needs: preflight
@@ -767,23 +736,19 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          installer_path="$(find dist -maxdepth 1 -type f -iname '*.msi' | head -n 1)"
-          if [[ -z "${installer_path}" ]]; then
-            installer_path="$(find dist -maxdepth 1 -type f -iname '*setup*.exe' | head -n 1)"
+          installer_path="dist/SecondLoop-win.msi"
+          metadata_path="dist/SecondLoop-win.metadata.json"
+          if [[ ! -f "${installer_path}" ]]; then
+            echo "Windows installer asset not found under dist/: ${installer_path}"
+            exit 1
           fi
-          if [[ -z "${installer_path}" ]]; then
-            echo "Windows installer asset (.msi or *setup*.exe) not found under dist/"
+          if [[ ! -f "${metadata_path}" ]]; then
+            echo "Windows installer metadata asset not found under dist/: ${metadata_path}"
             exit 1
           fi
           echo "Using installer for WinGet manifest: ${installer_path}"
-          python3 scripts/generate_winget_manifests.py \
-            --release-tag "${GITHUB_REF_NAME}" \
-            --repo "${GITHUB_REPOSITORY}" \
-            --installer-path "${installer_path}" \
-            --output-dir dist/winget-manifests \
-            --package-identifier SecondLoop.SecondLoop \
-            --package-name SecondLoop \
-            --publisher SecondLoop
+          echo "Using installer metadata for WinGet manifest: ${metadata_path}"
+          python3 scripts/generate_winget_manifests.py --release-tag "${GITHUB_REF_NAME}" --repo "${GITHUB_REPOSITORY}" --installer-path "${installer_path}" --installer-metadata-path "${metadata_path}" --output-dir dist/winget-manifests --package-identifier SecondLoop.SecondLoop --package-name SecondLoop --publisher SecondLoop
           (
             cd dist
             zip -r "SecondLoop-winget-manifests-${GITHUB_REF_NAME}.zip" winget-manifests >/dev/null
@@ -828,39 +793,16 @@ jobs:
             echo
             echo "---"
             echo
-            echo "## macOS Installation Note (Unsigned DMG)"
-            echo "- This macOS build is distributed without Apple Developer signing or notarization."
-            echo "- If macOS blocks first launch, Control-click the app, choose Open, then click Open again."
-            echo
             echo "## Build Provenance"
             printf -- '- Commit: `%s`\n' "${GITHUB_SHA}"
             echo "- Workflow run: [#${GITHUB_RUN_ID}](https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID})"
             printf -- '- Workflow attempt: `%s`\n' "${GITHUB_RUN_ATTEMPT}"
             printf -- '- Generated at (UTC): `%s`\n' "${generated_at_utc}"
             echo
-            echo "## macOS 安装提示（未签名 DMG）"
-            echo "- 当前 macOS 安装包未使用 Apple Developer 签名或公证。"
-            echo "- 若首次启动被系统拦截，请按住 Control 点击应用，选择 打开，然后再次确认 打开。"
-            echo
-            echo "## Checksum Verification"
-            printf '%s\n' '- SHA256 checksum files are published as `*.dmg.sha256` assets.'
-            printf '%s\n' '- Verify on macOS with `shasum -a 256 -c <dmg-file>.sha256`.'
-            echo
-            echo "## Package Manager Install (Beta)"
-            printf '%s\n' '- Homebrew: `brew tap dale0525/SecondLoopHomebrew && brew install --cask secondloop`'
-            printf '%s\n' '- WinGet: `winget install --id SecondLoop.SecondLoop --exact`'
-            echo
-            echo "## Windows Installer Choice"
-            printf '%s\n' '- Recommended for most users: `SecondLoop-win-Setup.exe` (better default update experience).'
-            printf '%s\n' '- `SecondLoop-win.msi` is mainly for WinGet or enterprise-managed deployment.'
-            echo "- With MSI installs, follow-up updates are typically manual or policy-managed."
-            echo
-            echo "## Windows 安装包选择建议"
-            printf '%s\n' '- 普通用户推荐使用 `SecondLoop-win-Setup.exe`（默认更新体验更顺滑）。'
-            printf '%s\n' '- `SecondLoop-win.msi` 主要用于 WinGet 或企业托管分发。'
-            echo "- 通过 MSI 安装后，后续更新通常由手动或企业策略管理。"
+            cat scripts/release_notes_install_guidance.md
           } >> dist/release-notes.md
       - name: Publish GitHub Release
+        id: publish_github_release
         uses: softprops/action-gh-release@v2
         with:
           body_path: dist/release-notes.md
@@ -868,17 +810,66 @@ jobs:
             dist/*.apk
             dist/*.dmg
             dist/*.dmg.sha256
-            dist/*Setup*.exe
-            dist/*Setup*.exe.sha256
-            dist/*.msi
-            dist/releases.*.json
-            dist/assets.*.json
-            dist/*RELEASES*
-            dist/*.nupkg
+            dist/SecondLoop-win.msi
+            dist/SecondLoop-win.msi.sha256
+            dist/SecondLoop-win.metadata.json
             dist/*.tar.gz
             dist/SecondLoop-winget-manifests-*.zip
             dist/release-notes/*.json
             dist/release-notes.md
+      - name: Summarize GitHub Release publication
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo "## Release pipeline status"
+            echo
+            echo "- GitHub Release published: ${{ steps.publish_github_release.outcome }}"
+            echo "- WinGet manifest validation: pending"
+            echo "- WinGet upstream PR publication: pending"
+          } >> "${GITHUB_STEP_SUMMARY}"
+  validate_winget_manifest:
+    runs-on: windows-latest
+    needs: [windows]
+    if: startsWith(github.ref, 'refs/tags/')
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: windows
+          path: dist
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Generate WinGet manifests for validation
+        shell: pwsh
+        run: |
+          $distDir = (Resolve-Path 'dist').Path
+          $installerPath = Join-Path $distDir 'SecondLoop-win.msi'
+          $metadataPath = Join-Path $distDir 'SecondLoop-win.metadata.json'
+          if (-not (Test-Path $installerPath)) {
+            throw "Windows installer asset not found: $installerPath"
+          }
+          if (-not (Test-Path $metadataPath)) {
+            throw "Windows installer metadata asset not found: $metadataPath"
+          }
+          python scripts/generate_winget_manifests.py --release-tag "$Env:GITHUB_REF_NAME" --repo "$Env:GITHUB_REPOSITORY" --installer-path "$installerPath" --installer-metadata-path "$metadataPath" --output-dir dist/winget-manifests --package-identifier SecondLoop.SecondLoop --package-name SecondLoop --publisher SecondLoop
+      - name: Validate WinGet manifest
+        id: validate_winget
+        shell: pwsh
+        run: |
+          powershell -NoProfile -ExecutionPolicy Bypass -File scripts/validate_winget_manifest.ps1 -ManifestDir dist/winget-manifests
+      - name: Summarize WinGet validation
+        if: always()
+        shell: pwsh
+        run: |
+          @"
+          ## Release pipeline status
+
+          - GitHub Release published: handled in publish job
+          - WinGet manifest validation: ${{ steps.validate_winget.outcome }}
+          - WinGet upstream PR publication: pending
+          "@ | Out-File -FilePath $Env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
 
   publish_homebrew_cask:
     runs-on: ubuntu-latest
@@ -907,7 +898,7 @@ jobs:
 
   publish_winget_manifest:
     runs-on: ubuntu-latest
-    needs: [publish]
+    needs: [publish, validate_winget_manifest]
     if: startsWith(github.ref, 'refs/tags/')
     env:
       WINGET_PKGS_TOKEN: ${{ secrets.WINGET_PKGS_TOKEN }}
@@ -923,6 +914,7 @@ jobs:
           : "${WINGET_PKGS_TOKEN:?Missing secret WINGET_PKGS_TOKEN}"
           : "${WINGET_PKGS_FORK_REPO:?Missing WINGET_PKGS_FORK_REPO}"
       - name: Publish WinGet manifest PR
+        id: publish_winget_pr
         shell: bash
         run: |
           set -euo pipefail
@@ -935,3 +927,14 @@ jobs:
             --auto-agree-cla="${WINGET_AUTO_AGREE_CLA}" \
             --cla-company "${WINGET_CLA_COMPANY}" \
             --package-id "SecondLoop.SecondLoop"
+      - name: Summarize WinGet publication
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo "## Release pipeline status"
+            echo
+            echo "- GitHub Release published: completed in publish job"
+            echo "- WinGet manifest validation: completed in validate_winget_manifest job"
+            echo "- WinGet upstream PR publication: ${{ steps.publish_winget_pr.outcome }}"
+          } >> "${GITHUB_STEP_SUMMARY}"

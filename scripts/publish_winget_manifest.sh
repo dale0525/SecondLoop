@@ -17,6 +17,8 @@ upstream_repo='microsoft/winget-pkgs'
 package_id='SecondLoop.SecondLoop'
 auto_agree_cla="${WINGET_AUTO_AGREE_CLA:-false}"
 cla_company="${WINGET_CLA_COMPANY:-}"
+cla_wait_attempts="${WINGET_CLA_WAIT_ATTEMPTS:-6}"
+cla_wait_seconds="${WINGET_CLA_WAIT_SECONDS:-10}"
 
 normalize_bool() {
   local raw="${1:-}"
@@ -34,6 +36,23 @@ normalize_bool() {
       exit 1
       ;;
   esac
+}
+
+normalize_positive_int() {
+  local raw="${1:-}"
+  if [[ ! "${raw}" =~ ^[0-9]+$ ]]; then
+    echo "Invalid integer value: ${raw}" >&2
+    exit 1
+  fi
+  printf '%s' "${raw}"
+}
+
+append_step_summary() {
+  if [[ -z "${GITHUB_STEP_SUMMARY:-}" ]]; then
+    return 0
+  fi
+
+  printf '%s\n' "$1" >> "${GITHUB_STEP_SUMMARY}"
 }
 
 while [[ $# -gt 0 ]]; do
@@ -95,6 +114,8 @@ if [[ -z "${release_tag}" || -z "${source_repo}" || -z "${fork_repo}" || -z "${t
   exit 2
 fi
 auto_agree_cla="$(normalize_bool "${auto_agree_cla}")"
+cla_wait_attempts="$(normalize_positive_int "${cla_wait_attempts}")"
+cla_wait_seconds="$(normalize_positive_int "${cla_wait_seconds}")"
 
 if [[ ! "${release_tag}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
   echo "Invalid release tag: ${release_tag}. Expected vX.Y.Z" >&2
@@ -116,6 +137,22 @@ fi
 
 export GH_TOKEN="${token}"
 
+resolve_upstream_default_branch() {
+  local resolved_branch
+  resolved_branch="$(
+    gh repo view "${upstream_repo}" --json defaultBranchRef --jq '.defaultBranchRef.name // empty' 2>/dev/null || true
+  )"
+  if [[ -z "${resolved_branch}" ]]; then
+    resolved_branch="$(gh api "repos/${upstream_repo}" --jq '.default_branch // empty' 2>/dev/null || true)"
+  fi
+  if [[ -z "${resolved_branch}" ]]; then
+    resolved_branch='master'
+    echo "Falling back to upstream default branch master for ${upstream_repo}." >&2
+  fi
+
+  printf '%s' "${resolved_branch}"
+}
+
 compose_cla_agreement_body() {
   if [[ -n "${cla_company}" ]]; then
     printf '@microsoft-github-policy-service agree company="%s"' "${cla_company}"
@@ -135,6 +172,26 @@ has_cla_prompt_comment() {
   [[ -n "${cla_prompt}" ]]
 }
 
+wait_for_cla_prompt_comment() {
+  local pr_number="$1"
+  local attempt
+
+  for (( attempt = 1; attempt <= cla_wait_attempts; attempt++ )); do
+    if has_cla_prompt_comment "${pr_number}"; then
+      echo "Detected CLA prompt on PR #${pr_number}."
+      return 0
+    fi
+
+    if (( attempt < cla_wait_attempts )); then
+      echo "CLA prompt not found on PR #${pr_number} yet (attempt ${attempt}/${cla_wait_attempts}); sleeping ${cla_wait_seconds}s before retry."
+      sleep "${cla_wait_seconds}"
+    fi
+  done
+
+  echo "Timed out waiting for CLA prompt on PR #${pr_number} after ${cla_wait_attempts} attempts."
+  return 1
+}
+
 maybe_post_cla_agreement() {
   local pr_ref="$1"
   local agreement_body
@@ -147,8 +204,9 @@ maybe_post_cla_agreement() {
 
   local pr_number
   pr_number="$(gh pr view "${pr_ref}" --repo "${upstream_repo}" --json number --jq '.number')"
-  if ! has_cla_prompt_comment "${pr_number}"; then
+  if ! wait_for_cla_prompt_comment "${pr_number}"; then
     echo "Skipping CLA auto-agreement on PR #${pr_number}: no CLA prompt from microsoft-github-policy-service[bot]."
+    append_step_summary "- CLA auto-agreement: skipped (no prompt detected for PR #${pr_number})"
     return 0
   fi
 
@@ -162,11 +220,13 @@ maybe_post_cla_agreement() {
   )"
   if [[ -n "${existing_comment}" ]]; then
     echo "CLA agreement comment already exists on PR #${pr_number}."
+    append_step_summary "- CLA auto-agreement: already present on PR #${pr_number}"
     return 0
   fi
 
   gh pr comment "${pr_ref}" --repo "${upstream_repo}" --body "${agreement_body}" >/dev/null
   echo "Posted CLA agreement comment on PR #${pr_number}."
+  append_step_summary "- CLA auto-agreement: posted on PR #${pr_number}"
 }
 
 if ! gh repo view "${fork_repo}" >/dev/null 2>&1; then
@@ -174,6 +234,9 @@ if ! gh repo view "${fork_repo}" >/dev/null 2>&1; then
   echo "Create a fork of ${upstream_repo} first, then set WINGET_PKGS_FORK_REPO." >&2
   exit 1
 fi
+
+upstream_default_branch="$(resolve_upstream_default_branch)"
+echo "Using upstream default branch: ${upstream_default_branch}"
 
 version="${release_tag#v}"
 tmp_root="$(mktemp -d)"
@@ -190,24 +253,28 @@ mkdir -p "${release_dir}" "${manifest_dir}"
 
 gh release download "${release_tag}" \
   --repo "${source_repo}" \
-  --pattern "*.msi" \
-  --pattern "*Setup*.exe" \
+  --pattern "SecondLoop-win.msi" \
+  --pattern "SecondLoop-win.metadata.json" \
   --dir "${release_dir}"
 
-installer_path="$(find "${release_dir}" -maxdepth 1 -type f -iname '*.msi' | head -n 1)"
-if [[ -z "${installer_path}" ]]; then
-  installer_path="$(find "${release_dir}" -maxdepth 1 -type f -iname '*setup*.exe' | head -n 1)"
+installer_path="${release_dir}/SecondLoop-win.msi"
+if [[ ! -f "${installer_path}" ]]; then
+  echo "No MSI installer asset found in release assets for ${release_tag}: ${installer_path}" >&2
+  exit 1
 fi
-if [[ -z "${installer_path}" ]]; then
-  echo "No supported installer asset (.msi or *Setup*.exe) found in release assets for ${release_tag}" >&2
+metadata_path="${release_dir}/SecondLoop-win.metadata.json"
+if [[ ! -f "${metadata_path}" ]]; then
+  echo "No installer metadata asset found in release assets for ${release_tag}: ${metadata_path}" >&2
   exit 1
 fi
 echo "Selected WinGet installer asset: ${installer_path}"
+echo "Selected WinGet installer metadata asset: ${metadata_path}"
 
 python3 scripts/generate_winget_manifests.py \
   --release-tag "${release_tag}" \
   --repo "${source_repo}" \
   --installer-path "${installer_path}" \
+  --installer-metadata-path "${metadata_path}" \
   --output-dir "${manifest_dir}" \
   --package-identifier "${package_id}" \
   --package-name "SecondLoop" \
@@ -220,10 +287,10 @@ target_rel_dir="manifests/${first_letter}/${package_path}/${version}"
 git clone "https://x-access-token:${token}@github.com/${fork_repo}.git" "${fork_dir}"
 pushd "${fork_dir}" >/dev/null
 git remote add upstream "https://github.com/${upstream_repo}.git"
-git fetch upstream master --depth=1
+git fetch upstream "${upstream_default_branch}" --depth=1
 
 branch_name="secondloop-${version}"
-git checkout -B "${branch_name}" upstream/master
+git checkout -B "${branch_name}" "upstream/${upstream_default_branch}"
 
 mkdir -p "${target_rel_dir}"
 cp -f "${manifest_dir}/"*.yaml "${target_rel_dir}/"
@@ -246,7 +313,7 @@ existing_pr_url="$(
   gh pr list \
     --repo "${upstream_repo}" \
     --head "${fork_owner}:${branch_name}" \
-    --base master \
+    --base "${upstream_default_branch}" \
     --state open \
     --json url \
     --jq '.[0].url // empty'
@@ -254,6 +321,9 @@ existing_pr_url="$(
 
 if [[ -n "${existing_pr_url}" ]]; then
   echo "Existing PR already open: ${existing_pr_url}"
+  append_step_summary "### WinGet publication details"
+  append_step_summary "- Upstream default branch: ${upstream_default_branch}"
+  append_step_summary "- WinGet upstream PR publication: already open (${existing_pr_url})"
   maybe_post_cla_agreement "${existing_pr_url}"
   exit 0
 fi
@@ -261,7 +331,7 @@ fi
 created_pr_url="$(
 gh pr create \
   --repo "${upstream_repo}" \
-  --base master \
+  --base "${upstream_default_branch}" \
   --head "${fork_owner}:${branch_name}" \
   --title "Add ${package_id} version ${version}" \
   --body "## Summary
@@ -276,4 +346,7 @@ gh pr create \
 )"
 
 echo "Opened WinGet PR for ${package_id} ${version}: ${created_pr_url}"
+append_step_summary "### WinGet publication details"
+append_step_summary "- Upstream default branch: ${upstream_default_branch}"
+append_step_summary "- WinGet upstream PR publication: created (${created_pr_url})"
 maybe_post_cla_agreement "${created_pr_url}"

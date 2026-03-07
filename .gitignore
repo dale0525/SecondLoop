@@ -39,6 +39,9 @@ build/
 # Local logs
 logs/
 
+# Local generated Windows FFmpeg bundle payload
+assets/bin/ffmpeg/windows/ffmpeg.zip
+
 # Local desktop runtime payload cache (downloaded from GitHub Releases)
 # Keep directory skeleton tracked to avoid analyzer warnings on clean clones.
 assets/ocr/desktop_runtime/**
@@ -55,3 +58,5 @@ assets/ocr/desktop_runtime/**
 .worktrees/
 dist/
 scripts/__pycache__/
+**/__pycache__/
+*.pyc

@@ -11,6 +11,7 @@ void main() {
     final resolved = runtime_sync.resolveWindowsAppSupportDirForTest(
       appData: appData,
       bundleId: 'com.secondloop.secondloop',
+      appName: 'SecondLoop',
     );
 
     final expected = [
@@ -26,10 +27,28 @@ void main() {
     final resolved = runtime_sync.resolveWindowsAppSupportDirForTest(
       appData: appData,
       bundleId: 'org.example.custom',
+      appName: 'Example Custom',
     );
 
     final expected =
         [appData, 'org.example.custom'].join(Platform.pathSeparator);
+    expect(resolved, expected);
+  });
+
+  test('windows dev identity resolves to shared company and dev product path',
+      () {
+    const appData = 'appdata-root';
+    final resolved = runtime_sync.resolveWindowsAppSupportDirForTest(
+      appData: appData,
+      bundleId: 'com.secondloop.secondloopdev',
+      appName: 'SecondLoop Dev',
+    );
+
+    final expected = [
+      appData,
+      'com.secondloop',
+      'SecondLoop Dev',
+    ].join(Platform.pathSeparator);
     expect(resolved, expected);
   });
 }
