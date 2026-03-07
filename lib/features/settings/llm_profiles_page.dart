@@ -101,22 +101,13 @@ class _LlmProfilesPageState extends State<LlmProfilesPage> {
         .toList(growable: false);
   }
 
-  bool _isZhLocale(BuildContext context) {
-    return Localizations.localeOf(context)
-        .languageCode
-        .toLowerCase()
-        .startsWith('zh');
-  }
-
   String _activeProfileHelpText(BuildContext context) {
     if (widget.providerFilter !=
         LlmProfilesProviderFilter.openAiCompatibleOnly) {
       return context.t.llmProfiles.activeProfileHelp;
     }
 
-    return _isZhLocale(context)
-        ? '媒体 BYOK 仅支持 OpenAI-compatible，列表已隐藏不兼容配置（如 Gemini/Anthropic）。'
-        : 'Media BYOK only supports OpenAI-compatible profiles. Incompatible profiles (for example Gemini/Anthropic) are hidden here.';
+    return context.t.llmProfiles.mediaByokOpenAiCompatibleHelp;
   }
 
   String _noVisibleProfilesText(BuildContext context) {
@@ -125,9 +116,7 @@ class _LlmProfilesPageState extends State<LlmProfilesPage> {
       return context.t.llmProfiles.noProfilesYet;
     }
 
-    return _isZhLocale(context)
-        ? '没有可用的 OpenAI-compatible 配置。请先新增一个 OpenAI-compatible profile。'
-        : 'No OpenAI-compatible profiles are available. Create an OpenAI-compatible profile first.';
+    return context.t.llmProfiles.noOpenAiCompatibleProfiles;
   }
 
   List<DropdownMenuItem<String>> _providerTypeItems(BuildContext context) {

@@ -61,7 +61,10 @@
     "loadFailed": "加载失败：$error",
     "saveFailed": "保存失败：$error",
     "lockGateError": "锁定流程错误：$error",
-    "missingLoopHomeConversation": "缺少记录会话"
+    "missingLoopHomeConversation": "缺少记录会话",
+    "attachmentNotFoundLocally": "附件当前未在本地可用。",
+    "attachmentBytesUnavailable": "附件内容当前不可用。",
+    "couldNotOpenExternally": "无法使用系统应用打开。"
   },
   "actions": {
     "capture": {
@@ -654,6 +657,12 @@
         "signUp": "创建账号",
         "signOut": "退出登录"
       },
+      "passwordReset": {
+        "forgotPassword": "忘记密码？",
+        "sent": "重置密码邮件已发送，请检查邮箱。",
+        "missingEmail": "请先输入邮箱地址。",
+        "notSupported": "当前环境暂不支持密码找回，请稍后再试。"
+      },
       "emailVerification": {
         "title": "邮箱验证",
         "status": {
@@ -849,6 +858,68 @@
     "debugSemanticSearch": {
       "title": "调试：语义检索",
       "subtitle": "搜索相似消息 + 重建向量索引"
+    },
+    "externalImport": {
+      "chooseImportFolder": "选择导入文件夹",
+      "chooseZipExport": "选择 zip 导出包",
+      "importPreparingTryAgain": "导入尚在准备中，请稍候再取消",
+      "cancelImportTitle": "取消导入？",
+      "cancelImportBody": "当前导入会进入回滚并清理已写入的数据，完成后才会返回正常状态。",
+      "keepImporting": "继续导入",
+      "confirmCancel": "确认取消",
+      "deleteImportBatchTitle": "删除导入批次？",
+      "deleteImportBatchBody": "这会永久删除该批次的文档、索引和仅由该批次引用的附件。",
+      "importBatchDeleted": "已删除导入批次",
+      "title": "导入外部知识",
+      "introTitle": "只读导入你的 Obsidian、思源或 Markdown 导出",
+      "introBody": "导入后的内容仅参与检索，不会回写源应用。导入过程中会复制附件、构建 Phase A 索引，并支持取消后回滚清理。",
+      "sourceSectionTitle": "1. 选择导入源",
+      "chooseFolder": "选择文件夹",
+      "chooseZip": "选择 zip",
+      "rescan": "重新扫描",
+      "scanSummaryTitle": "2. 预扫描摘要",
+      "detectedType": "识别类型",
+      "sourceLabel": "来源标签",
+      "notes": "笔记数",
+      "attachments": "附件数",
+      "estimatedDiskUsage": "预计占用",
+      "compatibilityWarnings": "兼容性提示",
+      "startImport": "开始导入",
+      "latestImportCancelledAndCleaned": "最近一次导入：已取消并清理",
+      "latestImportCompleted": "最近一次导入：已完成",
+      "latestImport": "最近一次导入",
+      "status": "状态",
+      "failed": "失败数",
+      "copiedData": "复制数据",
+      "lastError": "最后错误",
+      "deleteThisBatch": "删除这个批次",
+      "error": "错误",
+      "importedBatches": "已导入批次",
+      "noImportBatchesYet": "还没有导入批次。",
+      "batchId": "批次 ID",
+      "createdAt": "创建时间",
+      "updatedAt": "更新时间",
+      "completedAt": "完成时间",
+      "importingTitle": "正在导入外部知识",
+      "requestingCancel": "正在请求取消",
+      "cancelImport": "取消导入",
+      "cannotLeaveHint": "导入完成或回滚清理结束前，不能返回上一页。",
+      "stagePreparing": "准备中",
+      "stageScanning": "扫描中",
+      "stageParsing": "解析中",
+      "stageCopyingAttachments": "复制附件中",
+      "stageIndexingPhaseA": "建立 Phase A 索引中",
+      "stageVerifying": "校验中",
+      "stageRollback": "回滚清理中",
+      "stageCancelled": "已取消并清理",
+      "stageCompleted": "已完成",
+      "statusInProgress": "进行中",
+      "statusCancelling": "取消中",
+      "statusCancelled": "已取消",
+      "statusCompleted": "已完成",
+      "statusFailed": "失败",
+      "progress": "进度",
+      "processed": "已处理"
     }
   },
   "welcomeGuide": {
@@ -894,7 +965,9 @@
     "unlockReason": "解锁 SecondLoop",
     "missingSavedSessionKey": "缺少已保存的会话密钥。请先用应用锁密码解锁一次。",
     "creating": "正在创建…",
-    "unlocking": "正在解锁…"
+    "unlocking": "正在解锁…",
+    "setupHint": "创建应用锁密码以保护本地数据。",
+    "unlockWithPassword": "使用应用锁密码解锁"
   },
   "chat": {
     "loopTitle": "记录",
@@ -1137,6 +1210,14 @@
         "removeIncludeTags": "移除包含标签",
         "switchScopeToAll": "切换范围到全部"
       }
+    },
+    "audioRecording": {
+      "interruptionRecoveredSnack": "检测到来电中断，已自动恢复并拼接录音。",
+      "openSettingsFailedMicrophone": "无法自动打开系统设置，请手动前往系统隐私里开启麦克风权限。",
+      "openSettingsFailedSpeechPack": "无法自动打开系统设置。请前往 设置 > 时间和语言 > 语言和区域，安装带“语音”组件的语言包。"
+    },
+    "recordingRecovery": {
+      "recoveredToDraftSnack": "检测到未完成录音，已恢复到草稿区，发送后会提交。"
     }
   },
   "attachments": {
@@ -1193,7 +1274,8 @@
           "segments": "分段处理",
           "summary": "视频概要"
         }
-      }
+      },
+      "emptyText": "无"
     }
   },
   "semanticSearch": {
@@ -1355,7 +1437,9 @@
     "title": "AI 配置",
     "refreshTooltip": "刷新",
     "activeProfileHelp": "当前选择的配置会作为通用 LLM API 配置，被多项智能能力复用。",
+    "mediaByokOpenAiCompatibleHelp": "媒体 BYOK 仅支持 OpenAI-compatible，列表已隐藏不兼容配置（如 Gemini/Anthropic）。",
     "noProfilesYet": "暂无配置。",
+    "noOpenAiCompatibleProfiles": "没有可用的 OpenAI-compatible 配置。请先新增一个 OpenAI-compatible profile。",
     "addProfile": "添加配置",
     "deleted": "配置已删除",
     "validationError": "名称、API Key 和模型名称为必填项。",

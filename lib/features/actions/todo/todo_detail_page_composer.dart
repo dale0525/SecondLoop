@@ -372,8 +372,7 @@ extension _TodoDetailPageStateComposer on _TodoDetailPageState {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content:
-              Text(context.t.errors.loadFailed(error: 'permission_denied')),
+          content: Text(context.t.chat.audioRecordPermissionDenied),
           duration: const Duration(seconds: 3),
         ),
       );

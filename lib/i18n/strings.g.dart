@@ -4,9 +4,9 @@
 /// To regenerate, run: `dart run slang`
 ///
 /// Locales: 2
-/// Strings: 1874 (937 per locale)
+/// Strings: 2026 (1013 per locale)
 ///
-/// Built on 2026-03-06 at 17:50 UTC
+/// Built on 2026-03-07 at 09:00 UTC
 
 // coverage:ignore-file
 // ignore_for_file: type=lint
@@ -244,6 +244,10 @@ class _StringsErrorsEn {
   String saveFailed({required Object error}) => 'Save failed: ${error}';
   String lockGateError({required Object error}) => 'LockGate error: ${error}';
   String get missingLoopHomeConversation => 'Missing Loop conversation';
+  String get attachmentNotFoundLocally =>
+      'Attachment is not available locally.';
+  String get attachmentBytesUnavailable => 'Attachment bytes are unavailable.';
+  String get couldNotOpenExternally => 'Could not open with the system app.';
 }
 
 // Path: actions
@@ -352,6 +356,8 @@ class _StringsSettingsEn {
       _StringsSettingsDebugResetLocalDataAllDevicesEn._(_root);
   late final _StringsSettingsDebugSemanticSearchEn debugSemanticSearch =
       _StringsSettingsDebugSemanticSearchEn._(_root);
+  late final _StringsSettingsExternalImportEn externalImport =
+      _StringsSettingsExternalImportEn._(_root);
 }
 
 // Path: welcomeGuide
@@ -390,6 +396,8 @@ class _StringsLockEn {
       'Missing saved session key. Unlock with app lock password once.';
   String get creating => 'Creating…';
   String get unlocking => 'Unlocking…';
+  String get setupHint => 'Create an app lock password to protect local data.';
+  String get unlockWithPassword => 'Unlock with app lock password';
 }
 
 // Path: chat
@@ -481,6 +489,10 @@ class _StringsChatEn {
       _StringsChatTodoMessageBadgeEn._(_root);
   late final _StringsChatAskScopeEmptyEn askScopeEmpty =
       _StringsChatAskScopeEmptyEn._(_root);
+  late final _StringsChatAudioRecordingEn audioRecording =
+      _StringsChatAudioRecordingEn._(_root);
+  late final _StringsChatRecordingRecoveryEn recordingRecovery =
+      _StringsChatRecordingRecoveryEn._(_root);
 }
 
 // Path: attachments
@@ -589,7 +601,11 @@ class _StringsLlmProfilesEn {
   String get refreshTooltip => 'Refresh';
   String get activeProfileHelp =>
       'The active profile is reused as the general LLM API profile across intelligence features.';
+  String get mediaByokOpenAiCompatibleHelp =>
+      'Media BYOK only supports OpenAI-compatible profiles. Incompatible profiles (for example Gemini/Anthropic) are hidden here.';
   String get noProfilesYet => 'No profiles yet.';
+  String get noOpenAiCompatibleProfiles =>
+      'No OpenAI-compatible profiles are available. Create an OpenAI-compatible profile first.';
   String get addProfile => 'Add profile';
   String get deleted => 'AI profile deleted';
   String get validationError => 'Name, API key, and model are required.';
@@ -1231,6 +1247,8 @@ class _StringsSettingsCloudAccountEn {
       _StringsSettingsCloudAccountFieldsEn._(_root);
   late final _StringsSettingsCloudAccountActionsEn actions =
       _StringsSettingsCloudAccountActionsEn._(_root);
+  late final _StringsSettingsCloudAccountPasswordResetEn passwordReset =
+      _StringsSettingsCloudAccountPasswordResetEn._(_root);
   late final _StringsSettingsCloudAccountEmailVerificationEn emailVerification =
       _StringsSettingsCloudAccountEmailVerificationEn._(_root);
 }
@@ -1428,6 +1446,82 @@ class _StringsSettingsDebugSemanticSearchEn {
   // Translations
   String get title => 'Debug: Semantic search';
   String get subtitle => 'Search similar messages + rebuild embeddings index';
+}
+
+// Path: settings.externalImport
+class _StringsSettingsExternalImportEn {
+  _StringsSettingsExternalImportEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get chooseImportFolder => 'Choose import folder';
+  String get chooseZipExport => 'Choose zip export';
+  String get importPreparingTryAgain =>
+      'Import is still preparing. Try again in a moment.';
+  String get cancelImportTitle => 'Cancel import?';
+  String get cancelImportBody =>
+      'The current import will roll back and clean any written data before returning to normal.';
+  String get keepImporting => 'Keep importing';
+  String get confirmCancel => 'Confirm cancel';
+  String get deleteImportBatchTitle => 'Delete import batch?';
+  String get deleteImportBatchBody =>
+      'This permanently deletes the batch documents, indexes, and attachments referenced only by this batch.';
+  String get importBatchDeleted => 'Import batch deleted';
+  String get title => 'Import External Knowledge';
+  String get introTitle =>
+      'Readonly import for Obsidian, SiYuan, or Markdown exports';
+  String get introBody =>
+      'Imported content participates in retrieval only. It does not write back to the source app. The import copies attachments, builds Phase A indexes, and supports cancel with rollback cleanup.';
+  String get sourceSectionTitle => '1. Choose import source';
+  String get chooseFolder => 'Choose folder';
+  String get chooseZip => 'Choose zip';
+  String get rescan => 'Rescan';
+  String get scanSummaryTitle => '2. Scan summary';
+  String get detectedType => 'Detected type';
+  String get sourceLabel => 'Source label';
+  String get notes => 'Notes';
+  String get attachments => 'Attachments';
+  String get estimatedDiskUsage => 'Estimated disk usage';
+  String get compatibilityWarnings => 'Compatibility warnings';
+  String get startImport => 'Start import';
+  String get latestImportCancelledAndCleaned =>
+      'Latest import: cancelled and cleaned';
+  String get latestImportCompleted => 'Latest import: completed';
+  String get latestImport => 'Latest import';
+  String get status => 'Status';
+  String get failed => 'Failed';
+  String get copiedData => 'Copied data';
+  String get lastError => 'Last error';
+  String get deleteThisBatch => 'Delete this batch';
+  String get error => 'Error';
+  String get importedBatches => 'Imported batches';
+  String get noImportBatchesYet => 'No import batches yet.';
+  String get batchId => 'Batch ID';
+  String get createdAt => 'Created at';
+  String get updatedAt => 'Updated at';
+  String get completedAt => 'Completed at';
+  String get importingTitle => 'Importing external knowledge';
+  String get requestingCancel => 'Requesting cancel';
+  String get cancelImport => 'Cancel import';
+  String get cannotLeaveHint =>
+      'You cannot leave this page until the import finishes or rollback cleanup completes.';
+  String get stagePreparing => 'Preparing';
+  String get stageScanning => 'Scanning';
+  String get stageParsing => 'Parsing';
+  String get stageCopyingAttachments => 'Copying attachments';
+  String get stageIndexingPhaseA => 'Indexing Phase A';
+  String get stageVerifying => 'Verifying';
+  String get stageRollback => 'Rolling back';
+  String get stageCancelled => 'Cancelled and cleaned';
+  String get stageCompleted => 'Completed';
+  String get statusInProgress => 'In progress';
+  String get statusCancelling => 'Cancelling';
+  String get statusCancelled => 'Cancelled';
+  String get statusCompleted => 'Completed';
+  String get statusFailed => 'Failed';
+  String get progress => 'Progress';
+  String get processed => 'Processed';
 }
 
 // Path: welcomeGuide.ai
@@ -1782,6 +1876,32 @@ class _StringsChatAskScopeEmptyEn {
       _StringsChatAskScopeEmptyActionsEn._(_root);
 }
 
+// Path: chat.audioRecording
+class _StringsChatAudioRecordingEn {
+  _StringsChatAudioRecordingEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get interruptionRecoveredSnack =>
+      'Recording resumed after interruption and segments were stitched automatically.';
+  String get openSettingsFailedMicrophone =>
+      'Unable to open system settings automatically. Please enable microphone permission manually.';
+  String get openSettingsFailedSpeechPack =>
+      'Unable to open system settings automatically. Go to Settings > Time & language > Language & region and install a language pack with Speech.';
+}
+
+// Path: chat.recordingRecovery
+class _StringsChatRecordingRecoveryEn {
+  _StringsChatRecordingRecoveryEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get recoveredToDraftSnack =>
+      'Recovered recording was added to draft. Tap Send to submit.';
+}
+
 // Path: attachments.metadata
 class _StringsAttachmentsMetadataEn {
   _StringsAttachmentsMetadataEn._(this._root);
@@ -1836,6 +1956,7 @@ class _StringsAttachmentsContentEn {
       _StringsAttachmentsContentSpeechTranscribeIssueEn._(_root);
   late final _StringsAttachmentsContentVideoInsightsEn videoInsights =
       _StringsAttachmentsContentVideoInsightsEn._(_root);
+  String get emptyText => 'None';
 }
 
 // Path: sync.progressDialog
@@ -2747,6 +2868,20 @@ class _StringsSettingsCloudAccountActionsEn {
   String get signIn => 'Sign in';
   String get signUp => 'Create account';
   String get signOut => 'Sign out';
+}
+
+// Path: settings.cloudAccount.passwordReset
+class _StringsSettingsCloudAccountPasswordResetEn {
+  _StringsSettingsCloudAccountPasswordResetEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get forgotPassword => 'Forgot password?';
+  String get sent => 'Password reset email sent. Please check your inbox.';
+  String get missingEmail => 'Please enter your email first.';
+  String get notSupported =>
+      'Password recovery is not supported in this environment.';
 }
 
 // Path: settings.cloudAccount.emailVerification
@@ -4128,6 +4263,12 @@ class _StringsErrorsZhCn extends _StringsErrorsEn {
   String lockGateError({required Object error}) => '锁定流程错误：${error}';
   @override
   String get missingLoopHomeConversation => '缺少记录会话';
+  @override
+  String get attachmentNotFoundLocally => '附件当前未在本地可用。';
+  @override
+  String get attachmentBytesUnavailable => '附件内容当前不可用。';
+  @override
+  String get couldNotOpenExternally => '无法使用系统应用打开。';
 }
 
 // Path: actions
@@ -4291,6 +4432,9 @@ class _StringsSettingsZhCn extends _StringsSettingsEn {
   @override
   late final _StringsSettingsDebugSemanticSearchZhCn debugSemanticSearch =
       _StringsSettingsDebugSemanticSearchZhCn._(_root);
+  @override
+  late final _StringsSettingsExternalImportZhCn externalImport =
+      _StringsSettingsExternalImportZhCn._(_root);
 }
 
 // Path: welcomeGuide
@@ -4350,6 +4494,10 @@ class _StringsLockZhCn extends _StringsLockEn {
   String get creating => '正在创建…';
   @override
   String get unlocking => '正在解锁…';
+  @override
+  String get setupHint => '创建应用锁密码以保护本地数据。';
+  @override
+  String get unlockWithPassword => '使用应用锁密码解锁';
 }
 
 // Path: chat
@@ -4493,6 +4641,12 @@ class _StringsChatZhCn extends _StringsChatEn {
   @override
   late final _StringsChatAskScopeEmptyZhCn askScopeEmpty =
       _StringsChatAskScopeEmptyZhCn._(_root);
+  @override
+  late final _StringsChatAudioRecordingZhCn audioRecording =
+      _StringsChatAudioRecordingZhCn._(_root);
+  @override
+  late final _StringsChatRecordingRecoveryZhCn recordingRecovery =
+      _StringsChatRecordingRecoveryZhCn._(_root);
 }
 
 // Path: attachments
@@ -4657,7 +4811,13 @@ class _StringsLlmProfilesZhCn extends _StringsLlmProfilesEn {
   @override
   String get activeProfileHelp => '当前选择的配置会作为通用 LLM API 配置，被多项智能能力复用。';
   @override
+  String get mediaByokOpenAiCompatibleHelp =>
+      '媒体 BYOK 仅支持 OpenAI-compatible，列表已隐藏不兼容配置（如 Gemini/Anthropic）。';
+  @override
   String get noProfilesYet => '暂无配置。';
+  @override
+  String get noOpenAiCompatibleProfiles =>
+      '没有可用的 OpenAI-compatible 配置。请先新增一个 OpenAI-compatible profile。';
   @override
   String get addProfile => '添加配置';
   @override
@@ -5642,6 +5802,9 @@ class _StringsSettingsCloudAccountZhCn extends _StringsSettingsCloudAccountEn {
   late final _StringsSettingsCloudAccountActionsZhCn actions =
       _StringsSettingsCloudAccountActionsZhCn._(_root);
   @override
+  late final _StringsSettingsCloudAccountPasswordResetZhCn passwordReset =
+      _StringsSettingsCloudAccountPasswordResetZhCn._(_root);
+  @override
   late final _StringsSettingsCloudAccountEmailVerificationZhCn
       emailVerification =
       _StringsSettingsCloudAccountEmailVerificationZhCn._(_root);
@@ -5932,6 +6095,140 @@ class _StringsSettingsDebugSemanticSearchZhCn
   String get title => '调试：语义检索';
   @override
   String get subtitle => '搜索相似消息 + 重建向量索引';
+}
+
+// Path: settings.externalImport
+class _StringsSettingsExternalImportZhCn
+    extends _StringsSettingsExternalImportEn {
+  _StringsSettingsExternalImportZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get chooseImportFolder => '选择导入文件夹';
+  @override
+  String get chooseZipExport => '选择 zip 导出包';
+  @override
+  String get importPreparingTryAgain => '导入尚在准备中，请稍候再取消';
+  @override
+  String get cancelImportTitle => '取消导入？';
+  @override
+  String get cancelImportBody => '当前导入会进入回滚并清理已写入的数据，完成后才会返回正常状态。';
+  @override
+  String get keepImporting => '继续导入';
+  @override
+  String get confirmCancel => '确认取消';
+  @override
+  String get deleteImportBatchTitle => '删除导入批次？';
+  @override
+  String get deleteImportBatchBody => '这会永久删除该批次的文档、索引和仅由该批次引用的附件。';
+  @override
+  String get importBatchDeleted => '已删除导入批次';
+  @override
+  String get title => '导入外部知识';
+  @override
+  String get introTitle => '只读导入你的 Obsidian、思源或 Markdown 导出';
+  @override
+  String get introBody =>
+      '导入后的内容仅参与检索，不会回写源应用。导入过程中会复制附件、构建 Phase A 索引，并支持取消后回滚清理。';
+  @override
+  String get sourceSectionTitle => '1. 选择导入源';
+  @override
+  String get chooseFolder => '选择文件夹';
+  @override
+  String get chooseZip => '选择 zip';
+  @override
+  String get rescan => '重新扫描';
+  @override
+  String get scanSummaryTitle => '2. 预扫描摘要';
+  @override
+  String get detectedType => '识别类型';
+  @override
+  String get sourceLabel => '来源标签';
+  @override
+  String get notes => '笔记数';
+  @override
+  String get attachments => '附件数';
+  @override
+  String get estimatedDiskUsage => '预计占用';
+  @override
+  String get compatibilityWarnings => '兼容性提示';
+  @override
+  String get startImport => '开始导入';
+  @override
+  String get latestImportCancelledAndCleaned => '最近一次导入：已取消并清理';
+  @override
+  String get latestImportCompleted => '最近一次导入：已完成';
+  @override
+  String get latestImport => '最近一次导入';
+  @override
+  String get status => '状态';
+  @override
+  String get failed => '失败数';
+  @override
+  String get copiedData => '复制数据';
+  @override
+  String get lastError => '最后错误';
+  @override
+  String get deleteThisBatch => '删除这个批次';
+  @override
+  String get error => '错误';
+  @override
+  String get importedBatches => '已导入批次';
+  @override
+  String get noImportBatchesYet => '还没有导入批次。';
+  @override
+  String get batchId => '批次 ID';
+  @override
+  String get createdAt => '创建时间';
+  @override
+  String get updatedAt => '更新时间';
+  @override
+  String get completedAt => '完成时间';
+  @override
+  String get importingTitle => '正在导入外部知识';
+  @override
+  String get requestingCancel => '正在请求取消';
+  @override
+  String get cancelImport => '取消导入';
+  @override
+  String get cannotLeaveHint => '导入完成或回滚清理结束前，不能返回上一页。';
+  @override
+  String get stagePreparing => '准备中';
+  @override
+  String get stageScanning => '扫描中';
+  @override
+  String get stageParsing => '解析中';
+  @override
+  String get stageCopyingAttachments => '复制附件中';
+  @override
+  String get stageIndexingPhaseA => '建立 Phase A 索引中';
+  @override
+  String get stageVerifying => '校验中';
+  @override
+  String get stageRollback => '回滚清理中';
+  @override
+  String get stageCancelled => '已取消并清理';
+  @override
+  String get stageCompleted => '已完成';
+  @override
+  String get statusInProgress => '进行中';
+  @override
+  String get statusCancelling => '取消中';
+  @override
+  String get statusCancelled => '已取消';
+  @override
+  String get statusCompleted => '已完成';
+  @override
+  String get statusFailed => '失败';
+  @override
+  String get progress => '进度';
+  @override
+  String get processed => '已处理';
 }
 
 // Path: welcomeGuide.ai
@@ -6475,6 +6772,40 @@ class _StringsChatAskScopeEmptyZhCn extends _StringsChatAskScopeEmptyEn {
       _StringsChatAskScopeEmptyActionsZhCn._(_root);
 }
 
+// Path: chat.audioRecording
+class _StringsChatAudioRecordingZhCn extends _StringsChatAudioRecordingEn {
+  _StringsChatAudioRecordingZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get interruptionRecoveredSnack => '检测到来电中断，已自动恢复并拼接录音。';
+  @override
+  String get openSettingsFailedMicrophone => '无法自动打开系统设置，请手动前往系统隐私里开启麦克风权限。';
+  @override
+  String get openSettingsFailedSpeechPack =>
+      '无法自动打开系统设置。请前往 设置 > 时间和语言 > 语言和区域，安装带“语音”组件的语言包。';
+}
+
+// Path: chat.recordingRecovery
+class _StringsChatRecordingRecoveryZhCn
+    extends _StringsChatRecordingRecoveryEn {
+  _StringsChatRecordingRecoveryZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get recoveredToDraftSnack => '检测到未完成录音，已恢复到草稿区，发送后会提交。';
+}
+
 // Path: attachments.metadata
 class _StringsAttachmentsMetadataZhCn extends _StringsAttachmentsMetadataEn {
   _StringsAttachmentsMetadataZhCn._(_StringsZhCn root)
@@ -6558,6 +6889,8 @@ class _StringsAttachmentsContentZhCn extends _StringsAttachmentsContentEn {
   @override
   late final _StringsAttachmentsContentVideoInsightsZhCn videoInsights =
       _StringsAttachmentsContentVideoInsightsZhCn._(_root);
+  @override
+  String get emptyText => '无';
 }
 
 // Path: sync.progressDialog
@@ -7928,6 +8261,27 @@ class _StringsSettingsCloudAccountActionsZhCn
   String get signUp => '创建账号';
   @override
   String get signOut => '退出登录';
+}
+
+// Path: settings.cloudAccount.passwordReset
+class _StringsSettingsCloudAccountPasswordResetZhCn
+    extends _StringsSettingsCloudAccountPasswordResetEn {
+  _StringsSettingsCloudAccountPasswordResetZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get forgotPassword => '忘记密码？';
+  @override
+  String get sent => '重置密码邮件已发送，请检查邮箱。';
+  @override
+  String get missingEmail => '请先输入邮箱地址。';
+  @override
+  String get notSupported => '当前环境暂不支持密码找回，请稍后再试。';
 }
 
 // Path: settings.cloudAccount.emailVerification
@@ -9913,6 +10267,12 @@ extension on Translations {
         return ({required Object error}) => 'LockGate error: ${error}';
       case 'errors.missingLoopHomeConversation':
         return 'Missing Loop conversation';
+      case 'errors.attachmentNotFoundLocally':
+        return 'Attachment is not available locally.';
+      case 'errors.attachmentBytesUnavailable':
+        return 'Attachment bytes are unavailable.';
+      case 'errors.couldNotOpenExternally':
+        return 'Could not open with the system app.';
       case 'actions.capture.title':
         return 'Turn this into a reminder?';
       case 'actions.capture.pickTime':
@@ -10633,6 +10993,14 @@ extension on Translations {
         return 'Create account';
       case 'settings.cloudAccount.actions.signOut':
         return 'Sign out';
+      case 'settings.cloudAccount.passwordReset.forgotPassword':
+        return 'Forgot password?';
+      case 'settings.cloudAccount.passwordReset.sent':
+        return 'Password reset email sent. Please check your inbox.';
+      case 'settings.cloudAccount.passwordReset.missingEmail':
+        return 'Please enter your email first.';
+      case 'settings.cloudAccount.passwordReset.notSupported':
+        return 'Password recovery is not supported in this environment.';
       case 'settings.cloudAccount.emailVerification.title':
         return 'Email verification';
       case 'settings.cloudAccount.emailVerification.status.unknown':
@@ -10882,6 +11250,126 @@ extension on Translations {
         return 'Debug: Semantic search';
       case 'settings.debugSemanticSearch.subtitle':
         return 'Search similar messages + rebuild embeddings index';
+      case 'settings.externalImport.chooseImportFolder':
+        return 'Choose import folder';
+      case 'settings.externalImport.chooseZipExport':
+        return 'Choose zip export';
+      case 'settings.externalImport.importPreparingTryAgain':
+        return 'Import is still preparing. Try again in a moment.';
+      case 'settings.externalImport.cancelImportTitle':
+        return 'Cancel import?';
+      case 'settings.externalImport.cancelImportBody':
+        return 'The current import will roll back and clean any written data before returning to normal.';
+      case 'settings.externalImport.keepImporting':
+        return 'Keep importing';
+      case 'settings.externalImport.confirmCancel':
+        return 'Confirm cancel';
+      case 'settings.externalImport.deleteImportBatchTitle':
+        return 'Delete import batch?';
+      case 'settings.externalImport.deleteImportBatchBody':
+        return 'This permanently deletes the batch documents, indexes, and attachments referenced only by this batch.';
+      case 'settings.externalImport.importBatchDeleted':
+        return 'Import batch deleted';
+      case 'settings.externalImport.title':
+        return 'Import External Knowledge';
+      case 'settings.externalImport.introTitle':
+        return 'Readonly import for Obsidian, SiYuan, or Markdown exports';
+      case 'settings.externalImport.introBody':
+        return 'Imported content participates in retrieval only. It does not write back to the source app. The import copies attachments, builds Phase A indexes, and supports cancel with rollback cleanup.';
+      case 'settings.externalImport.sourceSectionTitle':
+        return '1. Choose import source';
+      case 'settings.externalImport.chooseFolder':
+        return 'Choose folder';
+      case 'settings.externalImport.chooseZip':
+        return 'Choose zip';
+      case 'settings.externalImport.rescan':
+        return 'Rescan';
+      case 'settings.externalImport.scanSummaryTitle':
+        return '2. Scan summary';
+      case 'settings.externalImport.detectedType':
+        return 'Detected type';
+      case 'settings.externalImport.sourceLabel':
+        return 'Source label';
+      case 'settings.externalImport.notes':
+        return 'Notes';
+      case 'settings.externalImport.attachments':
+        return 'Attachments';
+      case 'settings.externalImport.estimatedDiskUsage':
+        return 'Estimated disk usage';
+      case 'settings.externalImport.compatibilityWarnings':
+        return 'Compatibility warnings';
+      case 'settings.externalImport.startImport':
+        return 'Start import';
+      case 'settings.externalImport.latestImportCancelledAndCleaned':
+        return 'Latest import: cancelled and cleaned';
+      case 'settings.externalImport.latestImportCompleted':
+        return 'Latest import: completed';
+      case 'settings.externalImport.latestImport':
+        return 'Latest import';
+      case 'settings.externalImport.status':
+        return 'Status';
+      case 'settings.externalImport.failed':
+        return 'Failed';
+      case 'settings.externalImport.copiedData':
+        return 'Copied data';
+      case 'settings.externalImport.lastError':
+        return 'Last error';
+      case 'settings.externalImport.deleteThisBatch':
+        return 'Delete this batch';
+      case 'settings.externalImport.error':
+        return 'Error';
+      case 'settings.externalImport.importedBatches':
+        return 'Imported batches';
+      case 'settings.externalImport.noImportBatchesYet':
+        return 'No import batches yet.';
+      case 'settings.externalImport.batchId':
+        return 'Batch ID';
+      case 'settings.externalImport.createdAt':
+        return 'Created at';
+      case 'settings.externalImport.updatedAt':
+        return 'Updated at';
+      case 'settings.externalImport.completedAt':
+        return 'Completed at';
+      case 'settings.externalImport.importingTitle':
+        return 'Importing external knowledge';
+      case 'settings.externalImport.requestingCancel':
+        return 'Requesting cancel';
+      case 'settings.externalImport.cancelImport':
+        return 'Cancel import';
+      case 'settings.externalImport.cannotLeaveHint':
+        return 'You cannot leave this page until the import finishes or rollback cleanup completes.';
+      case 'settings.externalImport.stagePreparing':
+        return 'Preparing';
+      case 'settings.externalImport.stageScanning':
+        return 'Scanning';
+      case 'settings.externalImport.stageParsing':
+        return 'Parsing';
+      case 'settings.externalImport.stageCopyingAttachments':
+        return 'Copying attachments';
+      case 'settings.externalImport.stageIndexingPhaseA':
+        return 'Indexing Phase A';
+      case 'settings.externalImport.stageVerifying':
+        return 'Verifying';
+      case 'settings.externalImport.stageRollback':
+        return 'Rolling back';
+      case 'settings.externalImport.stageCancelled':
+        return 'Cancelled and cleaned';
+      case 'settings.externalImport.stageCompleted':
+        return 'Completed';
+      case 'settings.externalImport.statusInProgress':
+        return 'In progress';
+      case 'settings.externalImport.statusCancelling':
+        return 'Cancelling';
+      case 'settings.externalImport.statusCancelled':
+        return 'Cancelled';
+      case 'settings.externalImport.statusCompleted':
+        return 'Completed';
+      case 'settings.externalImport.statusFailed':
+        return 'Failed';
+      case 'settings.externalImport.progress':
+        return 'Progress';
+      case 'settings.externalImport.processed':
+        return 'Processed';
       case 'welcomeGuide.title':
         return 'Welcome to SecondLoop';
       case 'welcomeGuide.subtitle':
@@ -10944,6 +11432,10 @@ extension on Translations {
         return 'Creating…';
       case 'lock.unlocking':
         return 'Unlocking…';
+      case 'lock.setupHint':
+        return 'Create an app lock password to protect local data.';
+      case 'lock.unlockWithPassword':
+        return 'Unlock with app lock password';
       case 'chat.loopTitle':
         return 'Loop';
       case 'chat.attachTooltip':
@@ -11331,6 +11823,14 @@ extension on Translations {
         return 'Remove include tags';
       case 'chat.askScopeEmpty.actions.switchScopeToAll':
         return 'Switch scope to All';
+      case 'chat.audioRecording.interruptionRecoveredSnack':
+        return 'Recording resumed after interruption and segments were stitched automatically.';
+      case 'chat.audioRecording.openSettingsFailedMicrophone':
+        return 'Unable to open system settings automatically. Please enable microphone permission manually.';
+      case 'chat.audioRecording.openSettingsFailedSpeechPack':
+        return 'Unable to open system settings automatically. Go to Settings > Time & language > Language & region and install a language pack with Speech.';
+      case 'chat.recordingRecovery.recoveredToDraftSnack':
+        return 'Recovered recording was added to draft. Tap Send to submit.';
       case 'attachments.metadata.format':
         return 'Format';
       case 'attachments.metadata.size':
@@ -11409,6 +11909,8 @@ extension on Translations {
         return 'Segments';
       case 'attachments.content.videoInsights.fields.summary':
         return 'Video summary';
+      case 'attachments.content.emptyText':
+        return 'None';
       case 'semanticSearch.preparing':
         return 'Preparing semantic search…';
       case 'semanticSearch.indexingMessages':
@@ -11646,8 +12148,12 @@ extension on Translations {
         return 'Refresh';
       case 'llmProfiles.activeProfileHelp':
         return 'The active profile is reused as the general LLM API profile across intelligence features.';
+      case 'llmProfiles.mediaByokOpenAiCompatibleHelp':
+        return 'Media BYOK only supports OpenAI-compatible profiles. Incompatible profiles (for example Gemini/Anthropic) are hidden here.';
       case 'llmProfiles.noProfilesYet':
         return 'No profiles yet.';
+      case 'llmProfiles.noOpenAiCompatibleProfiles':
+        return 'No OpenAI-compatible profiles are available. Create an OpenAI-compatible profile first.';
       case 'llmProfiles.addProfile':
         return 'Add profile';
       case 'llmProfiles.deleted':
@@ -11843,6 +12349,12 @@ extension on _StringsZhCn {
         return ({required Object error}) => '锁定流程错误：${error}';
       case 'errors.missingLoopHomeConversation':
         return '缺少记录会话';
+      case 'errors.attachmentNotFoundLocally':
+        return '附件当前未在本地可用。';
+      case 'errors.attachmentBytesUnavailable':
+        return '附件内容当前不可用。';
+      case 'errors.couldNotOpenExternally':
+        return '无法使用系统应用打开。';
       case 'actions.capture.title':
         return '要把它变成提醒吗？';
       case 'actions.capture.pickTime':
@@ -12561,6 +13073,14 @@ extension on _StringsZhCn {
         return '创建账号';
       case 'settings.cloudAccount.actions.signOut':
         return '退出登录';
+      case 'settings.cloudAccount.passwordReset.forgotPassword':
+        return '忘记密码？';
+      case 'settings.cloudAccount.passwordReset.sent':
+        return '重置密码邮件已发送，请检查邮箱。';
+      case 'settings.cloudAccount.passwordReset.missingEmail':
+        return '请先输入邮箱地址。';
+      case 'settings.cloudAccount.passwordReset.notSupported':
+        return '当前环境暂不支持密码找回，请稍后再试。';
       case 'settings.cloudAccount.emailVerification.title':
         return '邮箱验证';
       case 'settings.cloudAccount.emailVerification.status.unknown':
@@ -12801,6 +13321,126 @@ extension on _StringsZhCn {
         return '调试：语义检索';
       case 'settings.debugSemanticSearch.subtitle':
         return '搜索相似消息 + 重建向量索引';
+      case 'settings.externalImport.chooseImportFolder':
+        return '选择导入文件夹';
+      case 'settings.externalImport.chooseZipExport':
+        return '选择 zip 导出包';
+      case 'settings.externalImport.importPreparingTryAgain':
+        return '导入尚在准备中，请稍候再取消';
+      case 'settings.externalImport.cancelImportTitle':
+        return '取消导入？';
+      case 'settings.externalImport.cancelImportBody':
+        return '当前导入会进入回滚并清理已写入的数据，完成后才会返回正常状态。';
+      case 'settings.externalImport.keepImporting':
+        return '继续导入';
+      case 'settings.externalImport.confirmCancel':
+        return '确认取消';
+      case 'settings.externalImport.deleteImportBatchTitle':
+        return '删除导入批次？';
+      case 'settings.externalImport.deleteImportBatchBody':
+        return '这会永久删除该批次的文档、索引和仅由该批次引用的附件。';
+      case 'settings.externalImport.importBatchDeleted':
+        return '已删除导入批次';
+      case 'settings.externalImport.title':
+        return '导入外部知识';
+      case 'settings.externalImport.introTitle':
+        return '只读导入你的 Obsidian、思源或 Markdown 导出';
+      case 'settings.externalImport.introBody':
+        return '导入后的内容仅参与检索，不会回写源应用。导入过程中会复制附件、构建 Phase A 索引，并支持取消后回滚清理。';
+      case 'settings.externalImport.sourceSectionTitle':
+        return '1. 选择导入源';
+      case 'settings.externalImport.chooseFolder':
+        return '选择文件夹';
+      case 'settings.externalImport.chooseZip':
+        return '选择 zip';
+      case 'settings.externalImport.rescan':
+        return '重新扫描';
+      case 'settings.externalImport.scanSummaryTitle':
+        return '2. 预扫描摘要';
+      case 'settings.externalImport.detectedType':
+        return '识别类型';
+      case 'settings.externalImport.sourceLabel':
+        return '来源标签';
+      case 'settings.externalImport.notes':
+        return '笔记数';
+      case 'settings.externalImport.attachments':
+        return '附件数';
+      case 'settings.externalImport.estimatedDiskUsage':
+        return '预计占用';
+      case 'settings.externalImport.compatibilityWarnings':
+        return '兼容性提示';
+      case 'settings.externalImport.startImport':
+        return '开始导入';
+      case 'settings.externalImport.latestImportCancelledAndCleaned':
+        return '最近一次导入：已取消并清理';
+      case 'settings.externalImport.latestImportCompleted':
+        return '最近一次导入：已完成';
+      case 'settings.externalImport.latestImport':
+        return '最近一次导入';
+      case 'settings.externalImport.status':
+        return '状态';
+      case 'settings.externalImport.failed':
+        return '失败数';
+      case 'settings.externalImport.copiedData':
+        return '复制数据';
+      case 'settings.externalImport.lastError':
+        return '最后错误';
+      case 'settings.externalImport.deleteThisBatch':
+        return '删除这个批次';
+      case 'settings.externalImport.error':
+        return '错误';
+      case 'settings.externalImport.importedBatches':
+        return '已导入批次';
+      case 'settings.externalImport.noImportBatchesYet':
+        return '还没有导入批次。';
+      case 'settings.externalImport.batchId':
+        return '批次 ID';
+      case 'settings.externalImport.createdAt':
+        return '创建时间';
+      case 'settings.externalImport.updatedAt':
+        return '更新时间';
+      case 'settings.externalImport.completedAt':
+        return '完成时间';
+      case 'settings.externalImport.importingTitle':
+        return '正在导入外部知识';
+      case 'settings.externalImport.requestingCancel':
+        return '正在请求取消';
+      case 'settings.externalImport.cancelImport':
+        return '取消导入';
+      case 'settings.externalImport.cannotLeaveHint':
+        return '导入完成或回滚清理结束前，不能返回上一页。';
+      case 'settings.externalImport.stagePreparing':
+        return '准备中';
+      case 'settings.externalImport.stageScanning':
+        return '扫描中';
+      case 'settings.externalImport.stageParsing':
+        return '解析中';
+      case 'settings.externalImport.stageCopyingAttachments':
+        return '复制附件中';
+      case 'settings.externalImport.stageIndexingPhaseA':
+        return '建立 Phase A 索引中';
+      case 'settings.externalImport.stageVerifying':
+        return '校验中';
+      case 'settings.externalImport.stageRollback':
+        return '回滚清理中';
+      case 'settings.externalImport.stageCancelled':
+        return '已取消并清理';
+      case 'settings.externalImport.stageCompleted':
+        return '已完成';
+      case 'settings.externalImport.statusInProgress':
+        return '进行中';
+      case 'settings.externalImport.statusCancelling':
+        return '取消中';
+      case 'settings.externalImport.statusCancelled':
+        return '已取消';
+      case 'settings.externalImport.statusCompleted':
+        return '已完成';
+      case 'settings.externalImport.statusFailed':
+        return '失败';
+      case 'settings.externalImport.progress':
+        return '进度';
+      case 'settings.externalImport.processed':
+        return '已处理';
       case 'welcomeGuide.title':
         return '欢迎使用 SecondLoop';
       case 'welcomeGuide.subtitle':
@@ -12863,6 +13503,10 @@ extension on _StringsZhCn {
         return '正在创建…';
       case 'lock.unlocking':
         return '正在解锁…';
+      case 'lock.setupHint':
+        return '创建应用锁密码以保护本地数据。';
+      case 'lock.unlockWithPassword':
+        return '使用应用锁密码解锁';
       case 'chat.loopTitle':
         return '记录';
       case 'chat.attachTooltip':
@@ -13249,6 +13893,14 @@ extension on _StringsZhCn {
         return '移除包含标签';
       case 'chat.askScopeEmpty.actions.switchScopeToAll':
         return '切换范围到全部';
+      case 'chat.audioRecording.interruptionRecoveredSnack':
+        return '检测到来电中断，已自动恢复并拼接录音。';
+      case 'chat.audioRecording.openSettingsFailedMicrophone':
+        return '无法自动打开系统设置，请手动前往系统隐私里开启麦克风权限。';
+      case 'chat.audioRecording.openSettingsFailedSpeechPack':
+        return '无法自动打开系统设置。请前往 设置 > 时间和语言 > 语言和区域，安装带“语音”组件的语言包。';
+      case 'chat.recordingRecovery.recoveredToDraftSnack':
+        return '检测到未完成录音，已恢复到草稿区，发送后会提交。';
       case 'attachments.metadata.format':
         return '格式';
       case 'attachments.metadata.size':
@@ -13327,6 +13979,8 @@ extension on _StringsZhCn {
         return '分段处理';
       case 'attachments.content.videoInsights.fields.summary':
         return '视频概要';
+      case 'attachments.content.emptyText':
+        return '无';
       case 'semanticSearch.preparing':
         return '正在准备语义检索…';
       case 'semanticSearch.indexingMessages':
@@ -13557,8 +14211,12 @@ extension on _StringsZhCn {
         return '刷新';
       case 'llmProfiles.activeProfileHelp':
         return '当前选择的配置会作为通用 LLM API 配置，被多项智能能力复用。';
+      case 'llmProfiles.mediaByokOpenAiCompatibleHelp':
+        return '媒体 BYOK 仅支持 OpenAI-compatible，列表已隐藏不兼容配置（如 Gemini/Anthropic）。';
       case 'llmProfiles.noProfilesYet':
         return '暂无配置。';
+      case 'llmProfiles.noOpenAiCompatibleProfiles':
+        return '没有可用的 OpenAI-compatible 配置。请先新增一个 OpenAI-compatible profile。';
       case 'llmProfiles.addProfile':
         return '添加配置';
       case 'llmProfiles.deleted':

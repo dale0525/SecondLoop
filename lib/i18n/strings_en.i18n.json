@@ -61,7 +61,10 @@
     "loadFailed": "Load failed: $error",
     "saveFailed": "Save failed: $error",
     "lockGateError": "LockGate error: $error",
-    "missingLoopHomeConversation": "Missing Loop conversation"
+    "missingLoopHomeConversation": "Missing Loop conversation",
+    "attachmentNotFoundLocally": "Attachment is not available locally.",
+    "attachmentBytesUnavailable": "Attachment bytes are unavailable.",
+    "couldNotOpenExternally": "Could not open with the system app."
   },
   "actions": {
     "capture": {
@@ -654,6 +657,12 @@
         "signUp": "Create account",
         "signOut": "Sign out"
       },
+      "passwordReset": {
+        "forgotPassword": "Forgot password?",
+        "sent": "Password reset email sent. Please check your inbox.",
+        "missingEmail": "Please enter your email first.",
+        "notSupported": "Password recovery is not supported in this environment."
+      },
       "emailVerification": {
         "title": "Email verification",
         "status": {
@@ -849,6 +858,68 @@
     "debugSemanticSearch": {
       "title": "Debug: Semantic search",
       "subtitle": "Search similar messages + rebuild embeddings index"
+    },
+    "externalImport": {
+      "chooseImportFolder": "Choose import folder",
+      "chooseZipExport": "Choose zip export",
+      "importPreparingTryAgain": "Import is still preparing. Try again in a moment.",
+      "cancelImportTitle": "Cancel import?",
+      "cancelImportBody": "The current import will roll back and clean any written data before returning to normal.",
+      "keepImporting": "Keep importing",
+      "confirmCancel": "Confirm cancel",
+      "deleteImportBatchTitle": "Delete import batch?",
+      "deleteImportBatchBody": "This permanently deletes the batch documents, indexes, and attachments referenced only by this batch.",
+      "importBatchDeleted": "Import batch deleted",
+      "title": "Import External Knowledge",
+      "introTitle": "Readonly import for Obsidian, SiYuan, or Markdown exports",
+      "introBody": "Imported content participates in retrieval only. It does not write back to the source app. The import copies attachments, builds Phase A indexes, and supports cancel with rollback cleanup.",
+      "sourceSectionTitle": "1. Choose import source",
+      "chooseFolder": "Choose folder",
+      "chooseZip": "Choose zip",
+      "rescan": "Rescan",
+      "scanSummaryTitle": "2. Scan summary",
+      "detectedType": "Detected type",
+      "sourceLabel": "Source label",
+      "notes": "Notes",
+      "attachments": "Attachments",
+      "estimatedDiskUsage": "Estimated disk usage",
+      "compatibilityWarnings": "Compatibility warnings",
+      "startImport": "Start import",
+      "latestImportCancelledAndCleaned": "Latest import: cancelled and cleaned",
+      "latestImportCompleted": "Latest import: completed",
+      "latestImport": "Latest import",
+      "status": "Status",
+      "failed": "Failed",
+      "copiedData": "Copied data",
+      "lastError": "Last error",
+      "deleteThisBatch": "Delete this batch",
+      "error": "Error",
+      "importedBatches": "Imported batches",
+      "noImportBatchesYet": "No import batches yet.",
+      "batchId": "Batch ID",
+      "createdAt": "Created at",
+      "updatedAt": "Updated at",
+      "completedAt": "Completed at",
+      "importingTitle": "Importing external knowledge",
+      "requestingCancel": "Requesting cancel",
+      "cancelImport": "Cancel import",
+      "cannotLeaveHint": "You cannot leave this page until the import finishes or rollback cleanup completes.",
+      "stagePreparing": "Preparing",
+      "stageScanning": "Scanning",
+      "stageParsing": "Parsing",
+      "stageCopyingAttachments": "Copying attachments",
+      "stageIndexingPhaseA": "Indexing Phase A",
+      "stageVerifying": "Verifying",
+      "stageRollback": "Rolling back",
+      "stageCancelled": "Cancelled and cleaned",
+      "stageCompleted": "Completed",
+      "statusInProgress": "In progress",
+      "statusCancelling": "Cancelling",
+      "statusCancelled": "Cancelled",
+      "statusCompleted": "Completed",
+      "statusFailed": "Failed",
+      "progress": "Progress",
+      "processed": "Processed"
     }
   },
   "welcomeGuide": {
@@ -894,7 +965,9 @@
     "unlockReason": "Unlock SecondLoop",
     "missingSavedSessionKey": "Missing saved session key. Unlock with app lock password once.",
     "creating": "Creating…",
-    "unlocking": "Unlocking…"
+    "unlocking": "Unlocking…",
+    "setupHint": "Create an app lock password to protect local data.",
+    "unlockWithPassword": "Unlock with app lock password"
   },
   "chat": {
     "loopTitle": "Loop",
@@ -1137,6 +1210,14 @@
         "removeIncludeTags": "Remove include tags",
         "switchScopeToAll": "Switch scope to All"
       }
+    },
+    "audioRecording": {
+      "interruptionRecoveredSnack": "Recording resumed after interruption and segments were stitched automatically.",
+      "openSettingsFailedMicrophone": "Unable to open system settings automatically. Please enable microphone permission manually.",
+      "openSettingsFailedSpeechPack": "Unable to open system settings automatically. Go to Settings > Time & language > Language & region and install a language pack with Speech."
+    },
+    "recordingRecovery": {
+      "recoveredToDraftSnack": "Recovered recording was added to draft. Tap Send to submit."
     }
   },
   "attachments": {
@@ -1193,7 +1274,8 @@
           "segments": "Segments",
           "summary": "Video summary"
         }
-      }
+      },
+      "emptyText": "None"
     }
   },
   "semanticSearch": {
@@ -1355,7 +1437,9 @@
     "title": "AI profiles",
     "refreshTooltip": "Refresh",
     "activeProfileHelp": "The active profile is reused as the general LLM API profile across intelligence features.",
+    "mediaByokOpenAiCompatibleHelp": "Media BYOK only supports OpenAI-compatible profiles. Incompatible profiles (for example Gemini/Anthropic) are hidden here.",
     "noProfilesYet": "No profiles yet.",
+    "noOpenAiCompatibleProfiles": "No OpenAI-compatible profiles are available. Create an OpenAI-compatible profile first.",
     "addProfile": "Add profile",
     "deleted": "AI profile deleted",
     "validationError": "Name, API key, and model are required.",

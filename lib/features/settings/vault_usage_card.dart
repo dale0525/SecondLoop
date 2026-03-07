@@ -383,7 +383,7 @@ class _VaultUsageCardState extends State<VaultUsageCard> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            context.t.errors.loadFailed(error: 'attachment_not_found_locally'),
+            context.t.errors.attachmentNotFoundLocally,
           ),
           duration: const Duration(seconds: 3),
         ),

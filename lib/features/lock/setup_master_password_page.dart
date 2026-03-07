@@ -28,20 +28,10 @@ class _SetupMasterPasswordPageState extends State<SetupMasterPasswordPage> {
   bool _busy = false;
   String? _error;
 
-  bool _isZh() {
-    return Localizations.localeOf(context)
-        .languageCode
-        .toLowerCase()
-        .startsWith('zh');
-  }
-
-  String _setupTitle() => _isZh() ? '设置应用锁密码' : 'Set app lock password';
-  String _passwordLabel() => _isZh() ? '应用锁密码' : 'App lock password';
-  String _passwordRequired() =>
-      _isZh() ? '请输入应用锁密码' : 'App lock password is required';
-  String _setupHint() => _isZh()
-      ? '创建应用锁密码以保护本地数据。'
-      : 'Create an app lock password to protect local data.';
+  String _setupTitle() => context.t.lock.setupTitle;
+  String _passwordLabel() => context.t.common.fields.masterPassword;
+  String _passwordRequired() => context.t.lock.masterPasswordRequired;
+  String _setupHint() => context.t.lock.setupHint;
 
   @override
   void dispose() {

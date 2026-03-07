@@ -168,8 +168,7 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
       if (!launched && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(context.t.errors
-                .loadFailed(error: 'could not open externally')),
+            content: Text(context.t.errors.couldNotOpenExternally),
             duration: const Duration(seconds: 3),
           ),
         );
