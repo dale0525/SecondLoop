@@ -1018,6 +1018,35 @@ abstract class AppBackend {
   Future<CloudMediaBackupSummary> cloudMediaBackupSummary(Uint8List key) {
     throw UnimplementedError('cloudMediaBackupSummary');
   }
+
+  Future<ExternalImportScanSummary> scanExternalImportSource({
+    required String sourcePath,
+  }) {
+    throw UnimplementedError('scanExternalImportSource');
+  }
+
+  Future<List<ExternalImportBatchSummary>> listExternalImportBatches() {
+    throw UnimplementedError('listExternalImportBatches');
+  }
+
+  Stream<String> runExternalImportProgress(
+    Uint8List key, {
+    required String sourcePath,
+  }) {
+    throw UnimplementedError('runExternalImportProgress');
+  }
+
+  Future<void> deleteExternalImportBatch({
+    required String batchId,
+  }) {
+    throw UnimplementedError('deleteExternalImportBatch');
+  }
+
+  Future<void> requestExternalImportCancel({
+    required String batchId,
+  }) {
+    throw UnimplementedError('requestExternalImportCancel');
+  }
 }
 
 class AppBackendScope extends InheritedWidget {

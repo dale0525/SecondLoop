@@ -392,6 +392,14 @@ pub fn ask_ai_with_provider(
     let similar_todos = db::search_similar_todo_threads_default(conn, key, question, top_k)?;
     let attachment_resources =
         collect_attachment_resources_default(conn, key, question, top_k).unwrap_or_default();
+    let app_dir = db::app_dir_from_conn(conn).ok();
+    let external_chunks = app_dir
+        .as_ref()
+        .map(|app_dir| {
+            db::search_similar_external_document_chunks_default(app_dir, key, question, top_k)
+                .unwrap_or_default()
+        })
+        .unwrap_or_default();
 
     let mut contexts_with_distance: Vec<(f64, String)> = Vec::new();
     for sm in similar_messages {
@@ -420,6 +428,20 @@ pub fn ask_ai_with_provider(
             chunk.attachment_sha256, chunk.kind, chunk.chunk_index, chunk.text, citation
         );
         contexts_with_distance.push((chunk.distance, context));
+    }
+    if let Some(app_dir) = app_dir.as_ref() {
+        for chunk in external_chunks {
+            let context = match db::build_external_document_chunk_rag_context(
+                app_dir,
+                key,
+                &chunk.doc_id,
+                chunk.chunk_index,
+            ) {
+                Ok(v) => v,
+                Err(_) => continue,
+            };
+            contexts_with_distance.push((chunk.distance, context));
+        }
     }
     contexts_with_distance
         .sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal));
@@ -517,6 +539,22 @@ pub fn ask_ai_with_provider_using_embedder<E: Embedder + ?Sized>(
             top_k,
         )
         .unwrap_or_default();
+        let app_dir = db::app_dir_from_conn(conn).ok();
+        let external_chunks = app_dir
+            .as_ref()
+            .map(|app_dir| {
+                let _ =
+                    db::process_pending_external_document_embeddings(app_dir, key, embedder, 1024);
+                db::search_similar_external_document_chunks_by_embedding(
+                    app_dir,
+                    key,
+                    embedder.model_name(),
+                    &query_vector,
+                    top_k,
+                )
+                .unwrap_or_default()
+            })
+            .unwrap_or_default();
 
         let mut contexts_with_distance: Vec<(f64, String)> = Vec::new();
         for sm in similar_messages {
@@ -546,6 +584,20 @@ pub fn ask_ai_with_provider_using_embedder<E: Embedder + ?Sized>(
                 chunk.attachment_sha256, chunk.kind, chunk.chunk_index, chunk.text, citation
             );
             contexts_with_distance.push((chunk.distance, context));
+        }
+        if let Some(app_dir) = app_dir.as_ref() {
+            for chunk in external_chunks {
+                let context = match db::build_external_document_chunk_rag_context(
+                    app_dir,
+                    key,
+                    &chunk.doc_id,
+                    chunk.chunk_index,
+                ) {
+                    Ok(v) => v,
+                    Err(_) => continue,
+                };
+                contexts_with_distance.push((chunk.distance, context));
+            }
         }
         contexts_with_distance
             .sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal));
@@ -630,6 +682,13 @@ pub fn ask_ai_with_provider_using_active_embeddings(
         let attachment_resources =
             collect_attachment_resources_active(conn, key, app_dir, question, top_k)
                 .unwrap_or_default();
+        let external_chunks = db::search_similar_external_document_chunks_active(
+            app_dir,
+            key,
+            question,
+            top_k_candidate_messages,
+        )
+        .unwrap_or_default();
 
         let mut candidates: Vec<ContextItem> = Vec::new();
         for sm in similar_messages {
@@ -679,6 +738,25 @@ pub fn ask_ai_with_provider_using_active_embeddings(
                     "{}:{}:{}",
                     chunk.attachment_sha256, chunk.kind, chunk.chunk_index
                 ),
+                created_at_ms: chunk.created_at_ms,
+                distance: Some(chunk.distance),
+                text: context,
+            });
+        }
+
+        for chunk in external_chunks {
+            let context = match db::build_external_document_chunk_rag_context(
+                app_dir,
+                key,
+                &chunk.doc_id,
+                chunk.chunk_index,
+            ) {
+                Ok(v) => v,
+                Err(_) => continue,
+            };
+            candidates.push(ContextItem {
+                source: ContextSource::ExternalDocument,
+                id: format!("{}:{}", chunk.doc_id, chunk.chunk_index),
                 created_at_ms: chunk.created_at_ms,
                 distance: Some(chunk.distance),
                 text: context,

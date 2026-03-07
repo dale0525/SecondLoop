@@ -13,6 +13,7 @@ import '../storage/secure_blob_store.dart';
 import '../../src/rust/api/content_extract.dart' as rust_content_extract;
 import '../../src/rust/api/embedding_lifecycle.dart'
     as rust_embedding_lifecycle;
+import '../../src/rust/api/external_import.dart' as rust_external_import;
 import '../../src/rust/api/core.dart' as rust_core;
 import '../../src/rust/api/attachments.dart' as rust_attachments;
 import '../../src/rust/api/sync_progress.dart' as rust_sync_progress;
@@ -2263,6 +2264,60 @@ class NativeAppBackend
       baseUrl: baseUrl,
       vaultId: vaultId,
       idToken: idToken,
+    );
+  }
+
+  @override
+  Future<ExternalImportScanSummary> scanExternalImportSource({
+    required String sourcePath,
+  }) async {
+    final appDir = await _getAppDir();
+    return rust_external_import.externalImportScanSource(
+      appDir: appDir,
+      sourcePath: sourcePath,
+    );
+  }
+
+  @override
+  Future<List<ExternalImportBatchSummary>> listExternalImportBatches() async {
+    final appDir = await _getAppDir();
+    return rust_external_import.externalImportListBatches(
+      appDir: appDir,
+    );
+  }
+
+  @override
+  Stream<String> runExternalImportProgress(
+    Uint8List key, {
+    required String sourcePath,
+  }) async* {
+    final appDir = await _getAppDir();
+    yield* rust_external_import.externalImportRunProgress(
+      appDir: appDir,
+      key: key,
+      sourcePath: sourcePath,
+    );
+  }
+
+  @override
+  Future<void> deleteExternalImportBatch({
+    required String batchId,
+  }) async {
+    final appDir = await _getAppDir();
+    await rust_external_import.externalImportDeleteBatch(
+      appDir: appDir,
+      batchId: batchId,
+    );
+  }
+
+  @override
+  Future<void> requestExternalImportCancel({
+    required String batchId,
+  }) async {
+    final appDir = await _getAppDir();
+    await rust_external_import.externalImportRequestCancel(
+      appDir: appDir,
+      batchId: batchId,
     );
   }
 

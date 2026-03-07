@@ -12,6 +12,7 @@ import 'api/core.dart';
 import 'api/desktop_media.dart';
 import 'api/detached_ask.dart';
 import 'api/embedding_lifecycle.dart';
+import 'api/external_import.dart';
 import 'api/media_annotation.dart';
 import 'api/oplog_maintenance.dart';
 import 'api/simple.dart';
@@ -114,6 +115,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   Event dco_decode_event(dynamic raw);
 
   @protected
+  ExternalImportBatchSummary dco_decode_external_import_batch_summary(
+      dynamic raw);
+
+  @protected
+  ExternalImportScanSummary dco_decode_external_import_scan_summary(
+      dynamic raw);
+
+  @protected
   double dco_decode_f_64(dynamic raw);
 
   @protected
@@ -146,6 +155,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<Event> dco_decode_list_event(dynamic raw);
+
+  @protected
+  List<ExternalImportBatchSummary>
+      dco_decode_list_external_import_batch_summary(dynamic raw);
 
   @protected
   List<LlmProfile> dco_decode_list_llm_profile(dynamic raw);
@@ -360,6 +373,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   Event sse_decode_event(SseDeserializer deserializer);
 
   @protected
+  ExternalImportBatchSummary sse_decode_external_import_batch_summary(
+      SseDeserializer deserializer);
+
+  @protected
+  ExternalImportScanSummary sse_decode_external_import_scan_summary(
+      SseDeserializer deserializer);
+
+  @protected
   double sse_decode_f_64(SseDeserializer deserializer);
 
   @protected
@@ -395,6 +416,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<Event> sse_decode_list_event(SseDeserializer deserializer);
+
+  @protected
+  List<ExternalImportBatchSummary>
+      sse_decode_list_external_import_batch_summary(
+          SseDeserializer deserializer);
 
   @protected
   List<LlmProfile> sse_decode_list_llm_profile(SseDeserializer deserializer);
@@ -630,6 +656,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_event(Event self, SseSerializer serializer);
 
   @protected
+  void sse_encode_external_import_batch_summary(
+      ExternalImportBatchSummary self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_external_import_scan_summary(
+      ExternalImportScanSummary self, SseSerializer serializer);
+
+  @protected
   void sse_encode_f_64(double self, SseSerializer serializer);
 
   @protected
@@ -667,6 +701,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_list_event(List<Event> self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_external_import_batch_summary(
+      List<ExternalImportBatchSummary> self, SseSerializer serializer);
 
   @protected
   void sse_encode_list_llm_profile(

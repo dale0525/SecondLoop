@@ -541,6 +541,108 @@ class Event {
           updatedAtMs == other.updatedAtMs;
 }
 
+class ExternalImportBatchSummary {
+  final String batchId;
+  final String sourceKind;
+  final String sourceLabel;
+  final String status;
+  final PlatformInt64 notesCount;
+  final PlatformInt64 attachmentsCount;
+  final PlatformInt64 failedCount;
+  final PlatformInt64 copiedBytes;
+  final PlatformInt64 createdAtMs;
+  final PlatformInt64 updatedAtMs;
+  final PlatformInt64? completedAtMs;
+  final String? lastError;
+
+  const ExternalImportBatchSummary({
+    required this.batchId,
+    required this.sourceKind,
+    required this.sourceLabel,
+    required this.status,
+    required this.notesCount,
+    required this.attachmentsCount,
+    required this.failedCount,
+    required this.copiedBytes,
+    required this.createdAtMs,
+    required this.updatedAtMs,
+    this.completedAtMs,
+    this.lastError,
+  });
+
+  @override
+  int get hashCode =>
+      batchId.hashCode ^
+      sourceKind.hashCode ^
+      sourceLabel.hashCode ^
+      status.hashCode ^
+      notesCount.hashCode ^
+      attachmentsCount.hashCode ^
+      failedCount.hashCode ^
+      copiedBytes.hashCode ^
+      createdAtMs.hashCode ^
+      updatedAtMs.hashCode ^
+      completedAtMs.hashCode ^
+      lastError.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ExternalImportBatchSummary &&
+          runtimeType == other.runtimeType &&
+          batchId == other.batchId &&
+          sourceKind == other.sourceKind &&
+          sourceLabel == other.sourceLabel &&
+          status == other.status &&
+          notesCount == other.notesCount &&
+          attachmentsCount == other.attachmentsCount &&
+          failedCount == other.failedCount &&
+          copiedBytes == other.copiedBytes &&
+          createdAtMs == other.createdAtMs &&
+          updatedAtMs == other.updatedAtMs &&
+          completedAtMs == other.completedAtMs &&
+          lastError == other.lastError;
+}
+
+class ExternalImportScanSummary {
+  final String detectedSourceKind;
+  final String sourceLabel;
+  final PlatformInt64 notesCount;
+  final PlatformInt64 attachmentsCount;
+  final PlatformInt64 estimatedDiskUsageBytes;
+  final List<String> warnings;
+
+  const ExternalImportScanSummary({
+    required this.detectedSourceKind,
+    required this.sourceLabel,
+    required this.notesCount,
+    required this.attachmentsCount,
+    required this.estimatedDiskUsageBytes,
+    required this.warnings,
+  });
+
+  @override
+  int get hashCode =>
+      detectedSourceKind.hashCode ^
+      sourceLabel.hashCode ^
+      notesCount.hashCode ^
+      attachmentsCount.hashCode ^
+      estimatedDiskUsageBytes.hashCode ^
+      warnings.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ExternalImportScanSummary &&
+          runtimeType == other.runtimeType &&
+          detectedSourceKind == other.detectedSourceKind &&
+          sourceLabel == other.sourceLabel &&
+          notesCount == other.notesCount &&
+          attachmentsCount == other.attachmentsCount &&
+          estimatedDiskUsageBytes == other.estimatedDiskUsageBytes &&
+          warnings == other.warnings;
+}
+
 class LlmProfile {
   final String id;
   final String name;
