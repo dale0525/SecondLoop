@@ -648,9 +648,17 @@ class _TodoDetailPageState extends State<TodoDetailPage> {
     final tsLocal =
         DateTime.fromMillisecondsSinceEpoch(activity.createdAtMs, isUtc: true)
             .toLocal();
-    final timeText =
-        '${tsLocal.year}-${tsLocal.month.toString().padLeft(2, '0')}-${tsLocal.day.toString().padLeft(2, '0')} '
-        '${tsLocal.hour.toString().padLeft(2, '0')}:${tsLocal.minute.toString().padLeft(2, '0')}';
+
+    String activityTimeLabel() {
+      final localizations = MaterialLocalizations.of(context);
+      final dateLabel = localizations.formatCompactDate(tsLocal);
+      final timeLabel = localizations.formatTimeOfDay(
+        TimeOfDay.fromDateTime(tsLocal),
+        alwaysUse24HourFormat:
+            MediaQuery.maybeOf(context)?.alwaysUse24HourFormat ?? false,
+      );
+      return '$dateLabel $timeLabel';
+    }
 
     String statusLabelOrFallback(String? status) {
       if (status == null || status.isEmpty) return '—';
@@ -722,7 +730,7 @@ class _TodoDetailPageState extends State<TodoDetailPage> {
                   contentWidget,
                   const SizedBox(height: 6),
                   Text(
-                    timeText,
+                    activityTimeLabel(),
                     style: theme.textTheme.bodySmall?.copyWith(
                       color: colorScheme.onSurfaceVariant,
                     ),

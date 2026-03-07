@@ -41,16 +41,12 @@ void main() {
         break;
       }
 
-      if (!entity.path.startsWith('lib/features/tags/')) {
-        continue;
-      }
-
       final parsed = parseString(
         content: content,
         path: entity.path,
         throwIfDiagnostics: false,
       );
-      final visitor = _TagFeatureHardcodedStringVisitor(entity.path);
+      final visitor = _HardcodedUserFacingStringVisitor(entity.path);
       parsed.unit.visitChildren(visitor);
       offenders.addAll(visitor.offenders);
     }
@@ -59,8 +55,8 @@ void main() {
   });
 }
 
-class _TagFeatureHardcodedStringVisitor extends RecursiveAstVisitor<void> {
-  _TagFeatureHardcodedStringVisitor(this.path);
+class _HardcodedUserFacingStringVisitor extends RecursiveAstVisitor<void> {
+  _HardcodedUserFacingStringVisitor(this.path);
 
   final String path;
   final List<String> offenders = <String>[];
@@ -103,19 +99,22 @@ class _TagFeatureHardcodedStringVisitor extends RecursiveAstVisitor<void> {
   }
 
   void _checkExpression(Expression expression, {required String sink}) {
-    if (!_isHardcodedComposedExpression(expression, <String>{})) {
+    if (!_isHardcodedUserFacingExpression(expression, <String>{})) {
       return;
     }
     offenders.add(
         '$path: $sink uses composed hardcoded string via ${expression.toSource()}');
   }
 
-  bool _isHardcodedComposedExpression(
+  bool _isHardcodedUserFacingExpression(
     Expression expression,
     Set<String> resolvingNames,
   ) {
     final unwrapped = expression.unParenthesized;
 
+    if (unwrapped is SimpleStringLiteral) {
+      return unwrapped.value.trim().isNotEmpty;
+    }
     if (unwrapped is StringInterpolation) {
       return true;
     }
@@ -125,9 +124,9 @@ class _TagFeatureHardcodedStringVisitor extends RecursiveAstVisitor<void> {
     if (unwrapped is BinaryExpression && unwrapped.operator.lexeme == '+') {
       return _containsDirectDisplayString(unwrapped.leftOperand) ||
           _containsDirectDisplayString(unwrapped.rightOperand) ||
-          _isHardcodedComposedExpression(
+          _isHardcodedUserFacingExpression(
               unwrapped.leftOperand, resolvingNames) ||
-          _isHardcodedComposedExpression(
+          _isHardcodedUserFacingExpression(
               unwrapped.rightOperand, resolvingNames);
     }
     if (unwrapped is SimpleIdentifier) {
@@ -141,7 +140,7 @@ class _TagFeatureHardcodedStringVisitor extends RecursiveAstVisitor<void> {
         return false;
       }
       final result =
-          _isHardcodedComposedExpression(initializer, resolvingNames);
+          _isHardcodedUserFacingExpression(initializer, resolvingNames);
       resolvingNames.remove(name);
       return result;
     }

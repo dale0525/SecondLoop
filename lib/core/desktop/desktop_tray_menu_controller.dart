@@ -1,18 +1,19 @@
 import 'package:menu_base/menu_base.dart';
 
+import '../../i18n/strings.g.dart';
+
 const kDesktopTrayMenuOpenKey = 'tray_open';
 const kDesktopTrayMenuSettingsKey = 'tray_settings';
 const kDesktopTrayMenuStartWithSystemKey = 'tray_start_with_system';
 const kDesktopTrayMenuQuitKey = 'tray_quit';
 
 String formatTrayUsagePercent(int? percent) {
-  if (percent == null) {
-    return '--%';
-  }
-
-  final clamped = percent.clamp(0, 100);
-  return '$clamped%';
+  final value = percent == null ? '--' : percent.clamp(0, 100).toString();
+  return t.common.labels.percent(value: value);
 }
+
+String formatTraySignedInLabel(String email) =>
+    t.settings.desktopTray.pro.signedInAs(email: email);
 
 final class DesktopTrayMenuLabels {
   const DesktopTrayMenuLabels({
@@ -90,21 +91,25 @@ final class DesktopTrayMenuController {
     if (proUsage != null) {
       items.add(
         MenuItem(
-          label: '${labels.signedIn}: ${proUsage.email}',
+          label: formatTraySignedInLabel(proUsage.email),
           disabled: true,
         ),
       );
       items.add(
         MenuItem(
-          label:
-              '${labels.aiUsage}: ${formatTrayUsagePercent(proUsage.aiUsagePercent)}',
+          label: t.common.labels.labeledValue(
+            label: labels.aiUsage,
+            value: formatTrayUsagePercent(proUsage.aiUsagePercent),
+          ),
           disabled: true,
         ),
       );
       items.add(
         MenuItem(
-          label:
-              '${labels.storageUsage}: ${formatTrayUsagePercent(proUsage.storageUsagePercent)}',
+          label: t.common.labels.labeledValue(
+            label: labels.storageUsage,
+            value: formatTrayUsagePercent(proUsage.storageUsagePercent),
+          ),
           disabled: true,
         ),
       );

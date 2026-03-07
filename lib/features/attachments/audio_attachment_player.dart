@@ -134,13 +134,13 @@ class _AudioAttachmentPlayerViewState extends State<AudioAttachmentPlayerView> {
 
   static String _speedLabel(double speed) {
     final rounded = speed.toStringAsFixed(speed % 1 == 0 ? 1 : 2);
-    return '${rounded}x';
+    return t.common.labels.playbackSpeed(value: rounded);
   }
 
   Widget _buildPlayerCard(BuildContext context) {
     final loadError = _loadError;
-    const rewindTooltip = '-15s';
-    const forwardTooltip = '+15s';
+    final rewindTooltip = t.common.labels.seekBackwardSeconds(seconds: 15);
+    final forwardTooltip = t.common.labels.seekForwardSeconds(seconds: 15);
     if (loadError != null) {
       return SlSurface(
         padding: const EdgeInsets.all(12),

@@ -84,9 +84,10 @@ mixin _ChatMarkdownEditorExportMixin on State<ChatMarkdownEditorPage> {
 
       if (!mounted) return;
       final formatLabel = format == _MarkdownExportFormat.png ? 'PNG' : 'PDF';
-      final doneMessage =
-          '${context.t.chat.markdownEditor.exportDone(format: formatLabel)}\n'
-          '${context.t.chat.markdownEditor.exportSavedPath(path: file.path)}';
+      final doneMessage = context.t.chat.markdownEditor.exportDoneSavedPath(
+        format: formatLabel,
+        path: file.path,
+      );
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(doneMessage),

@@ -47,7 +47,13 @@
     },
     "labels": {
       "elapsedSeconds": "Elapsed: ${seconds}s",
-      "topK": "Top‑K:"
+      "topK": "Top‑K:",
+      "percent": "$value%",
+      "playbackSpeed": "${value}x",
+      "playbackProgress": "$current / $total",
+      "seekBackwardSeconds": "-${seconds}s",
+      "seekForwardSeconds": "+${seconds}s",
+      "labeledValue": "$label: $value"
     }
   },
   "errors": {
@@ -282,6 +288,7 @@
       },
       "pro": {
         "signedIn": "Signed in",
+        "signedInAs": "Signed in: $email",
         "aiUsage": "AI usage",
         "storageUsage": "Storage usage"
       }
@@ -958,6 +965,7 @@
       "exportCopyClipboard": "Copy to Clipboard",
       "exportCopied": "Copied to clipboard",
       "exportDone": "Exported as $format",
+      "exportDoneSavedPath": "Exported as $format\nSaved to $path",
       "exportSavedPath": "Saved to $path",
       "exportFailed": "Export failed: $error",
       "exportReasonNoWindowsBrowser": "No supported browser was found on Windows. Install Microsoft Edge or Google Chrome and try again.",
@@ -1054,6 +1062,7 @@
     "tagFilter": {
       "tooltip": "Tag filter",
       "clearFilter": "Clear tag filter",
+      "excludeTagLabel": "- $tag",
       "sheet": {
         "title": "Filter by tags",
         "apply": "Apply",
@@ -1115,6 +1124,11 @@
       "add": "Add",
       "save": "Save",
       "tagActionLabel": "Tags"
+    },
+    "todoMessageBadge": {
+      "task": "Task",
+      "related": "Related task",
+      "quote": "「$title」"
     },
     "askScopeEmpty": {
       "title": "No results in current scope",
