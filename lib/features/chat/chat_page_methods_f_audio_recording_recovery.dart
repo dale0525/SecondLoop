@@ -115,10 +115,7 @@ extension _ChatPageStateMethodsFAudioRecordingRecovery on _ChatPageState {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            _localizedByLanguage(
-              zh: '检测到未完成录音，已恢复到草稿区，发送后会提交。',
-              en: 'Recovered recording was added to draft. Tap Send to submit.',
-            ),
+            context.t.chat.recordingRecovery.recoveredToDraftSnack,
           ),
           duration: const Duration(seconds: 3),
         ),

@@ -339,10 +339,7 @@ extension _ChatPageStateMethodsFAudioRecording on _ChatPageState {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              _localizedByLanguage(
-                zh: '检测到来电中断，已自动恢复并拼接录音。',
-                en: 'Recording resumed after interruption and segments were stitched automatically.',
-              ),
+              context.t.chat.audioRecording.interruptionRecoveredSnack,
             ),
             duration: const Duration(seconds: 3),
           ),
@@ -806,10 +803,7 @@ extension _ChatPageStateMethodsFAudioRecording on _ChatPageState {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
-          _localizedByLanguage(
-            zh: '无法自动打开系统设置，请手动前往系统隐私里开启麦克风权限。',
-            en: 'Unable to open system settings automatically. Please enable microphone permission manually.',
-          ),
+          context.t.chat.audioRecording.openSettingsFailedMicrophone,
         ),
         duration: const Duration(seconds: 3),
       ),
@@ -833,10 +827,7 @@ extension _ChatPageStateMethodsFAudioRecording on _ChatPageState {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
-          _localizedByLanguage(
-            zh: '无法自动打开系统设置。请前往 设置 > 时间和语言 > 语言和区域，安装带“语音”组件的语言包。',
-            en: 'Unable to open system settings automatically. Go to Settings > Time & language > Language & region and install a language pack with Speech.',
-          ),
+          context.t.chat.audioRecording.openSettingsFailedSpeechPack,
         ),
         duration: const Duration(seconds: 3),
       ),

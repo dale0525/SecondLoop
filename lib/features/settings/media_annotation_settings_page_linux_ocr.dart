@@ -101,9 +101,7 @@ extension _MediaAnnotationSettingsPageLinuxOcrExtension
               Text(
                 proUser
                     ? (cloudEnabled
-                        ? (_isZhOcrLocale(context)
-                            ? 'SecondLoop Cloud'
-                            : 'SecondLoop Cloud')
+                        ? t.providerMode.labels.cloudGateway
                         : _documentOcrEngineLabel(
                             context,
                             contentConfig.ocrEngineMode,
@@ -139,12 +137,10 @@ extension _MediaAnnotationSettingsPageLinuxOcrExtension
 
     final status = _linuxOcrModelStatus;
 
+    final mediaAnnotation = context.t.settings.mediaAnnotation;
+    final localCapability = mediaAnnotation.localCapability;
     final actionEnabled = !_busy && !_linuxOcrBusy && status.supported;
     final colorScheme = Theme.of(context).colorScheme;
-    final zh = Localizations.localeOf(context)
-        .languageCode
-        .toLowerCase()
-        .startsWith('zh');
     final isMacOS = platform == TargetPlatform.macOS;
     final isWindows = platform == TargetPlatform.windows;
     final statusIcon = !status.supported
@@ -159,25 +155,19 @@ extension _MediaAnnotationSettingsPageLinuxOcrExtension
       key: MediaAnnotationSettingsPage.linuxOcrModelTileKey,
       anchorKey: _desktopLocalCapabilityCardAnchorKey,
       context: context,
-      title: zh ? '本地能力引擎' : 'Local Capability Engine',
+      title: localCapability.title,
       description: isMacOS
-          ? (zh
-              ? 'macOS 默认优先使用系统原生 STT；此处展示共享 runtime 状态（与 OCR 共用）。'
-              : 'macOS prefers native STT by default; this shows shared runtime health (also used by OCR).')
+          ? localCapability.descriptionMacos
           : isWindows
-              ? (zh
-                  ? '此处仅展示本地 OCR runtime 状态。Windows 音频转写走系统原生 STT，不依赖这里的 runtime。'
-                  : 'This card only shows local OCR runtime status. Windows audio transcription uses native STT and does not depend on this runtime.')
-              : (zh
-                  ? '本地转写与 OCR 共用同一套桌面 runtime，可在此修复或清理。'
-                  : 'Local transcription and OCR share this desktop runtime. You can repair or clear it here.'),
+              ? localCapability.descriptionWindows
+              : localCapability.descriptionDesktop,
       statusLabel: _desktopRuntimeSummaryLabel(context, status),
       actions: [
         ListTile(
           key: const ValueKey(
             'media_annotation_settings_local_capability_status_tile',
           ),
-          title: Text(zh ? '运行时状态' : 'Runtime status'),
+          title: Text(localCapability.runtimeStatusTitle),
           subtitle: Text(statusLabel),
           trailing: Icon(
             statusIcon,
@@ -206,16 +196,14 @@ extension _MediaAnnotationSettingsPageLinuxOcrExtension
                 key: MediaAnnotationSettingsPage.linuxOcrModelDownloadButtonKey,
                 onPressed: actionEnabled ? _downloadLinuxOcrModels : null,
                 icon: const Icon(Icons.build_circle_outlined),
-                label: Text(
-                  zh ? '修复安装' : 'Repair Install',
-                ),
+                label: Text(localCapability.actions.repairInstall),
               ),
               if (status.installed && status.supported)
                 OutlinedButton.icon(
                   key: MediaAnnotationSettingsPage.linuxOcrModelDeleteButtonKey,
                   onPressed: actionEnabled ? _deleteLinuxOcrModels : null,
                   icon: const Icon(Icons.delete_outline_rounded),
-                  label: Text(zh ? '清除运行时' : 'Clear Runtime'),
+                  label: Text(localCapability.actions.clearRuntime),
                 ),
             ],
           ),
@@ -229,23 +217,21 @@ extension _MediaAnnotationSettingsPageLinuxOcrExtension
     LinuxOcrModelStatus status,
   ) {
     final isWindows = Theme.of(context).platform == TargetPlatform.windows;
-    final zh = Localizations.localeOf(context)
-        .languageCode
-        .toLowerCase()
-        .startsWith('zh');
+    final statusText =
+        context.t.settings.mediaAnnotation.localCapability.statusSummary;
     if (_linuxOcrBusy) {
-      return zh ? '状态：修复中' : 'Status: repairing';
+      return statusText.repairing;
     }
     if (!status.supported) {
-      return zh ? '状态：不可用' : 'Status: unavailable';
+      return statusText.unavailable;
     }
     if (!status.installed) {
-      return zh ? '状态：未安装' : 'Status: runtime missing';
+      return statusText.runtimeMissing;
     }
     if (isWindows) {
-      return zh ? '状态：OCR运行时健康' : 'Status: OCR runtime healthy';
+      return statusText.ocrRuntimeHealthy;
     }
-    return zh ? '状态：健康' : 'Status: healthy';
+    return statusText.healthy;
   }
 
   String _desktopRuntimeStatusLabel(
@@ -253,53 +239,41 @@ extension _MediaAnnotationSettingsPageLinuxOcrExtension
     LinuxOcrModelStatus status,
   ) {
     final isWindows = Theme.of(context).platform == TargetPlatform.windows;
-    final zh = Localizations.localeOf(context)
-        .languageCode
-        .toLowerCase()
-        .startsWith('zh');
+    final details =
+        context.t.settings.mediaAnnotation.localCapability.statusDetails;
     if (_linuxOcrBusy) {
-      return zh ? '正在修复运行时...' : 'Repairing runtime...';
+      return details.repairing;
     }
     if (!status.supported) {
-      return zh
-          ? '当前无法读取本地 runtime 状态。可先尝试“修复安装”。'
-          : 'Runtime status unavailable right now. Try Repair Install first.';
+      return details.unavailable;
     }
     if (!status.installed) {
       final reason = status.message?.trim();
-      final mapped = _desktopRuntimeMissingReasonLabel(
-        zh: zh,
-        reason: reason,
-      );
+      final mapped = _desktopRuntimeMissingReasonLabel(reason: reason);
       if (mapped != null) return mapped;
       if (reason != null && reason.isNotEmpty) {
-        return zh ? '运行时缺失（$reason）' : 'Runtime missing ($reason)';
+        return details.runtimeMissingReason(reason: reason);
       }
-      return zh ? '运行时缺失' : 'Runtime missing';
+      return details.runtimeMissing;
     }
     final size = _formatDataSize(status.totalBytes);
     if (isWindows) {
-      return zh
-          ? 'OCR运行时健康（${status.modelCount} 文件, $size）'
-          : 'OCR runtime healthy (${status.modelCount} files, $size)';
+      return details.ocrRuntimeHealthy(count: status.modelCount, size: size);
     }
-    return zh
-        ? '运行时健康（${status.modelCount} 文件, $size）'
-        : 'Runtime healthy (${status.modelCount} files, $size)';
+    return details.healthy(count: status.modelCount, size: size);
   }
 
   String? _desktopRuntimeMissingReasonLabel({
-    required bool zh,
     required String? reason,
   }) {
     if (reason == null || reason.isEmpty) return null;
+    final details =
+        context.t.settings.mediaAnnotation.localCapability.statusDetails;
     if (reason == 'runtime_payload_incomplete') {
-      return zh
-          ? '运行时文件不完整，请点击“修复安装”重新安装。'
-          : 'Runtime files are incomplete. Please run Repair Install again.';
+      return details.runtimeIncomplete;
     }
     if (reason == 'runtime_missing' || reason == 'runtime_not_initialized') {
-      return zh ? '运行时缺失' : 'Runtime missing';
+      return details.runtimeMissing;
     }
     return null;
   }
@@ -327,23 +301,17 @@ extension _MediaAnnotationSettingsPageLinuxOcrExtension
   Future<void> _deleteLinuxOcrModels() async {
     if (_busy || _linuxOcrBusy) return;
     final isWindows = Theme.of(context).platform == TargetPlatform.windows;
-    final zh = Localizations.localeOf(context)
-        .languageCode
-        .toLowerCase()
-        .startsWith('zh');
+    final confirmDelete =
+        context.t.settings.mediaAnnotation.localCapability.confirmDelete;
     final confirmed = (await showDialog<bool>(
           context: context,
           builder: (dialogContext) {
             return AlertDialog(
-              title: Text(zh ? '清除本地运行时' : 'Clear Local Runtime'),
+              title: Text(confirmDelete.title),
               content: Text(
                 isWindows
-                    ? (zh
-                        ? '清除后会删除本地 OCR runtime 文件。Windows 音频转写仍走系统原生 STT。'
-                        : 'This removes local OCR runtime files. Windows audio transcription still uses native STT.')
-                    : (zh
-                        ? '清除后会删除本地 OCR/转写共用的桌面 runtime 文件。'
-                        : 'This removes shared desktop runtime files used by local OCR/transcription.'),
+                    ? confirmDelete.bodyWindows
+                    : confirmDelete.bodyDesktop,
               ),
               actions: [
                 TextButton(
@@ -352,7 +320,7 @@ extension _MediaAnnotationSettingsPageLinuxOcrExtension
                 ),
                 FilledButton(
                   onPressed: () => Navigator.of(dialogContext).pop(true),
-                  child: Text(zh ? '确认清除' : 'Clear Runtime'),
+                  child: Text(confirmDelete.confirm),
                 ),
               ],
             );

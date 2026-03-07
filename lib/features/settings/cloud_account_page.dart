@@ -393,30 +393,20 @@ class _CloudAccountPageState extends State<CloudAccountPage> {
     return message;
   }
 
-  bool _isChineseLocale(BuildContext context) {
-    return Localizations.localeOf(context).languageCode.toLowerCase() == 'zh';
-  }
-
   String _forgotPasswordLabel(BuildContext context) {
-    return _isChineseLocale(context) ? '忘记密码？' : 'Forgot password?';
+    return context.t.settings.cloudAccount.passwordReset.forgotPassword;
   }
 
   String _passwordResetSentMessage(BuildContext context) {
-    return _isChineseLocale(context)
-        ? '重置密码邮件已发送，请检查邮箱。'
-        : 'Password reset email sent. Please check your inbox.';
+    return context.t.settings.cloudAccount.passwordReset.sent;
   }
 
   String _passwordResetMissingEmailMessage(BuildContext context) {
-    return _isChineseLocale(context)
-        ? '请先输入邮箱地址。'
-        : 'Please enter your email first.';
+    return context.t.settings.cloudAccount.passwordReset.missingEmail;
   }
 
   String _passwordResetNotSupportedMessage(BuildContext context) {
-    return _isChineseLocale(context)
-        ? '当前环境暂不支持密码找回，请稍后再试。'
-        : 'Password recovery is not supported in this environment.';
+    return context.t.settings.cloudAccount.passwordReset.notSupported;
   }
 
   Future<void> _signIn() async {

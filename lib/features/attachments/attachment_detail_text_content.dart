@@ -1,5 +1,7 @@
 import 'package:flutter/widgets.dart';
 
+import '../../i18n/strings.g.dart';
+
 import 'attachment_ocr_text_normalizer.dart';
 import 'attachment_text_source_policy.dart';
 
@@ -16,9 +18,7 @@ final class AttachmentDetailTextContent {
 }
 
 String attachmentDetailEmptyTextLabel(BuildContext context) {
-  final code = Localizations.localeOf(context).languageCode.toLowerCase();
-  if (code.startsWith('zh')) return '无';
-  return 'None';
+  return context.t.attachments.content.emptyText;
 }
 
 AttachmentDetailTextContent resolveAttachmentDetailTextContent(

@@ -2,22 +2,12 @@ part of 'media_annotation_settings_page.dart';
 
 extension _MediaAnnotationSettingsPageEmbeddedExtension
     on _MediaAnnotationSettingsPageState {
-  bool _isZhLocale(BuildContext context) {
-    return Localizations.localeOf(context)
-        .languageCode
-        .toLowerCase()
-        .startsWith('zh');
-  }
-
   String _wifiOnlyTitle(BuildContext context) {
-    return _isZhLocale(context) ? '仅Wi-Fi' : 'Wi-Fi only';
+    return context.t.settings.mediaAnnotation.connectivity.wifiOnlyTitle;
   }
 
   String _wifiOnlySubtitle(BuildContext context) {
-    if (_isZhLocale(context)) {
-      return '仅对 SecondLoop Cloud / BYOK 生效，本地能力不受此限制。';
-    }
-    return 'Only applies to SecondLoop Cloud and BYOK. Local capability is unaffected.';
+    return context.t.settings.mediaAnnotation.connectivity.wifiOnlySubtitle;
   }
 
   bool _isCloudAvailableForCapability(BuildContext context) {
@@ -64,14 +54,11 @@ extension _MediaAnnotationSettingsPageEmbeddedExtension
   }
 
   String _urlFetchTitle(BuildContext context) {
-    return _isZhLocale(context) ? '链接内容理解' : 'URL content understanding';
+    return context.t.settings.mediaAnnotation.urlFetch.title;
   }
 
   String _urlFetchDescription(BuildContext context) {
-    if (_isZhLocale(context)) {
-      return '先在本地抓取并清洗网页文本，再按你选择的来源（Cloud/BYOK/本地）做智能提炼。';
-    }
-    return 'Preprocess URL content locally, then enrich with your selected source (Cloud/BYOK/Local).';
+    return context.t.settings.mediaAnnotation.urlFetch.description;
   }
 
   Widget _buildOpenApiKeysTile({required Key tileKey}) {
@@ -182,7 +169,7 @@ extension _MediaAnnotationSettingsPageEmbeddedExtension
   }
 
   Widget _buildAudioWhisperRuntimeTile() {
-    final zh = _isZhLocale(context);
+    final localCapability = context.t.settings.mediaAnnotation.localCapability;
     final actionEnabled = !_busy && !_audioWhisperModelDownloading;
 
     return mediaAnnotationCapabilityCard(
@@ -198,7 +185,7 @@ extension _MediaAnnotationSettingsPageEmbeddedExtension
           key: const ValueKey(
             'media_annotation_settings_audio_whisper_runtime_status_tile',
           ),
-          title: Text(zh ? '运行时状态' : 'Runtime status'),
+          title: Text(localCapability.runtimeStatusTitle),
           subtitle: Text(_audioWhisperRuntimeStatusSubtitle(context)),
           trailing: _audioWhisperModelDownloading
               ? const SizedBox(
@@ -232,7 +219,7 @@ extension _MediaAnnotationSettingsPageEmbeddedExtension
             ),
             onPressed: actionEnabled ? _downloadAudioWhisperRuntime : null,
             icon: const Icon(Icons.download_rounded),
-            label: Text(zh ? '下载本地运行时' : 'Download local runtime'),
+            label: Text(localCapability.actions.downloadLocalRuntime),
           ),
         ),
       ],
@@ -242,7 +229,6 @@ extension _MediaAnnotationSettingsPageEmbeddedExtension
   Future<void> _pickAudioByokEngine(ContentEnrichmentConfig config) async {
     if (_busy) return;
     final t = context.t.settings.mediaAnnotation.audioTranscribe.engine;
-    final zh = _isZhLocale(context);
 
     final selected = await showDialog<String>(
       context: context,
@@ -265,11 +251,7 @@ extension _MediaAnnotationSettingsPageEmbeddedExtension
                       value: 'whisper',
                       groupValue: value,
                       title: Text(t.labels.whisper),
-                      subtitle: Text(
-                        zh
-                            ? '通过 BYOK Whisper 能力执行转写。'
-                            : 'Transcribe with BYOK Whisper capability.',
-                      ),
+                      subtitle: Text(t.descriptions.byokWhisper),
                       onChanged: (next) {
                         if (next == null) return;
                         setInnerState(() => value = next);
@@ -279,11 +261,7 @@ extension _MediaAnnotationSettingsPageEmbeddedExtension
                       value: 'multimodal_llm',
                       groupValue: value,
                       title: Text(t.labels.multimodalLlm),
-                      subtitle: Text(
-                        zh
-                            ? '通过 BYOK 多模态模型执行转写。'
-                            : 'Transcribe with BYOK multimodal model.',
-                      ),
+                      subtitle: Text(t.descriptions.byokMultimodal),
                       onChanged: (next) {
                         if (next == null) return;
                         setInnerState(() => value = next);

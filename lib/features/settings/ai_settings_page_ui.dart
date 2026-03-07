@@ -475,7 +475,9 @@ extension _AiSettingsPageUiExtension on _AiSettingsPageState {
               ),
               SwitchListTile(
                 key: const ValueKey('ai_settings_media_image_wifi_only'),
-                title: Text(_isZhLocale(context) ? '仅Wi-Fi' : 'Wi-Fi only'),
+                title: Text(
+                  context.t.settings.mediaAnnotation.connectivity.wifiOnlyTitle,
+                ),
                 subtitle: Text(_wifiOnlyHint(context)),
                 value: _imageWifiOnly,
                 onChanged: _mediaLoading || _imageWifiSaving

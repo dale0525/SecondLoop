@@ -294,10 +294,7 @@ class _WelcomePageState extends State<WelcomePage> with WidgetsBindingObserver {
   }
 
   String _permissionUnavailableHint() {
-    return _localized(
-      zh: '当前平台暂不提供系统权限快捷跳转，请手动在系统设置中检查。',
-      en: 'This platform has no direct permission shortcut. Please review settings manually.',
-    );
+    return context.t.welcomeGuide.permissions.openFailed;
   }
 
   Future<void> _openPermissionSettings(_PermissionItem item) async {

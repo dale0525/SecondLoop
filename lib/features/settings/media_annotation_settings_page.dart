@@ -796,17 +796,12 @@ class _MediaAnnotationSettingsPageState
       });
 
       if (ensureResult?.status == AudioWhisperModelEnsureStatus.downloaded) {
-        final zh = Localizations.localeOf(context)
-            .languageCode
-            .toLowerCase()
-            .startsWith('zh');
         final modelLabel = _audioWhisperModelLabel(context, normalized);
         messenger.showSnackBar(
           SnackBar(
             content: Text(
-              zh
-                  ? '已下载 $modelLabel 模型，可用于本地转写。'
-                  : 'Downloaded $modelLabel for local transcription.',
+              context.t.settings.mediaAnnotation.audioTranscribe.whisperModel
+                  .downloaded(modelLabel: modelLabel),
             ),
             duration: const Duration(seconds: 3),
           ),

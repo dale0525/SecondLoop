@@ -5,9 +5,73 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
 import '../../core/backend/app_backend.dart';
+import '../../i18n/strings.g.dart';
 import '../../core/session/session_scope.dart';
 import '../../src/rust/db.dart';
 import '../../ui/sl_surface.dart';
+
+enum _ExternalImportText {
+  chooseImportFolder,
+  chooseZipExport,
+  importPreparingTryAgain,
+  cancelImportTitle,
+  cancelImportBody,
+  keepImporting,
+  confirmCancel,
+  deleteImportBatchTitle,
+  deleteImportBatchBody,
+  importBatchDeleted,
+  title,
+  introTitle,
+  introBody,
+  sourceSectionTitle,
+  chooseFolder,
+  chooseZip,
+  rescan,
+  scanSummaryTitle,
+  detectedType,
+  sourceLabel,
+  notes,
+  attachments,
+  estimatedDiskUsage,
+  compatibilityWarnings,
+  startImport,
+  latestImportCancelledAndCleaned,
+  latestImportCompleted,
+  latestImport,
+  status,
+  failedCount,
+  copiedData,
+  lastError,
+  deleteThisBatch,
+  error,
+  importedBatches,
+  noImportBatchesYet,
+  batchId,
+  createdAt,
+  updatedAt,
+  completedAt,
+  importingTitle,
+  requestingCancel,
+  cancelImport,
+  cannotLeaveHint,
+  stagePreparing,
+  stageScanning,
+  stageParsing,
+  stageCopyingAttachments,
+  stageIndexingPhaseA,
+  stageVerifying,
+  stageRollback,
+  stageCancelled,
+  stageCompleted,
+  statusInProgress,
+  statusCancelling,
+  statusCancelled,
+  statusCompleted,
+  statusFailed,
+  progress,
+  processed,
+}
 
 class ExternalImportPage extends StatefulWidget {
   const ExternalImportPage({super.key});
@@ -54,12 +118,72 @@ class _ExternalImportPageState extends State<ExternalImportPage> {
 
   bool get _isBusy => _scanning || _importing || _deletingBatchId != null;
 
-  bool get _isZh => Localizations.localeOf(context)
-      .languageCode
-      .toLowerCase()
-      .startsWith('zh');
-
-  String _text(String zh, String en) => _isZh ? zh : en;
+  String _text(_ExternalImportText text) {
+    final t = context.t.settings.externalImport;
+    return switch (text) {
+      _ExternalImportText.chooseImportFolder => t.chooseImportFolder,
+      _ExternalImportText.chooseZipExport => t.chooseZipExport,
+      _ExternalImportText.importPreparingTryAgain => t.importPreparingTryAgain,
+      _ExternalImportText.cancelImportTitle => t.cancelImportTitle,
+      _ExternalImportText.cancelImportBody => t.cancelImportBody,
+      _ExternalImportText.keepImporting => t.keepImporting,
+      _ExternalImportText.confirmCancel => t.confirmCancel,
+      _ExternalImportText.deleteImportBatchTitle => t.deleteImportBatchTitle,
+      _ExternalImportText.deleteImportBatchBody => t.deleteImportBatchBody,
+      _ExternalImportText.importBatchDeleted => t.importBatchDeleted,
+      _ExternalImportText.title => t.title,
+      _ExternalImportText.introTitle => t.introTitle,
+      _ExternalImportText.introBody => t.introBody,
+      _ExternalImportText.sourceSectionTitle => t.sourceSectionTitle,
+      _ExternalImportText.chooseFolder => t.chooseFolder,
+      _ExternalImportText.chooseZip => t.chooseZip,
+      _ExternalImportText.rescan => t.rescan,
+      _ExternalImportText.scanSummaryTitle => t.scanSummaryTitle,
+      _ExternalImportText.detectedType => t.detectedType,
+      _ExternalImportText.sourceLabel => t.sourceLabel,
+      _ExternalImportText.notes => t.notes,
+      _ExternalImportText.attachments => t.attachments,
+      _ExternalImportText.estimatedDiskUsage => t.estimatedDiskUsage,
+      _ExternalImportText.compatibilityWarnings => t.compatibilityWarnings,
+      _ExternalImportText.startImport => t.startImport,
+      _ExternalImportText.latestImportCancelledAndCleaned =>
+        t.latestImportCancelledAndCleaned,
+      _ExternalImportText.latestImportCompleted => t.latestImportCompleted,
+      _ExternalImportText.latestImport => t.latestImport,
+      _ExternalImportText.status => t.status,
+      _ExternalImportText.failedCount => t.failed,
+      _ExternalImportText.copiedData => t.copiedData,
+      _ExternalImportText.lastError => t.lastError,
+      _ExternalImportText.deleteThisBatch => t.deleteThisBatch,
+      _ExternalImportText.error => t.error,
+      _ExternalImportText.importedBatches => t.importedBatches,
+      _ExternalImportText.noImportBatchesYet => t.noImportBatchesYet,
+      _ExternalImportText.batchId => t.batchId,
+      _ExternalImportText.createdAt => t.createdAt,
+      _ExternalImportText.updatedAt => t.updatedAt,
+      _ExternalImportText.completedAt => t.completedAt,
+      _ExternalImportText.importingTitle => t.importingTitle,
+      _ExternalImportText.requestingCancel => t.requestingCancel,
+      _ExternalImportText.cancelImport => t.cancelImport,
+      _ExternalImportText.cannotLeaveHint => t.cannotLeaveHint,
+      _ExternalImportText.stagePreparing => t.stagePreparing,
+      _ExternalImportText.stageScanning => t.stageScanning,
+      _ExternalImportText.stageParsing => t.stageParsing,
+      _ExternalImportText.stageCopyingAttachments => t.stageCopyingAttachments,
+      _ExternalImportText.stageIndexingPhaseA => t.stageIndexingPhaseA,
+      _ExternalImportText.stageVerifying => t.stageVerifying,
+      _ExternalImportText.stageRollback => t.stageRollback,
+      _ExternalImportText.stageCancelled => t.stageCancelled,
+      _ExternalImportText.stageCompleted => t.stageCompleted,
+      _ExternalImportText.statusInProgress => t.statusInProgress,
+      _ExternalImportText.statusCancelling => t.statusCancelling,
+      _ExternalImportText.statusCancelled => t.statusCancelled,
+      _ExternalImportText.statusCompleted => t.statusCompleted,
+      _ExternalImportText.statusFailed => t.statusFailed,
+      _ExternalImportText.progress => t.progress,
+      _ExternalImportText.processed => t.processed,
+    };
+  }
 
   Future<void> _loadBatches({bool clearError = true}) async {
     setState(() {
@@ -93,7 +217,7 @@ class _ExternalImportPageState extends State<ExternalImportPage> {
   Future<void> _pickDirectory() async {
     if (_isBusy) return;
     final path = await FilePicker.platform.getDirectoryPath(
-      dialogTitle: _text('选择导入文件夹', 'Choose import folder'),
+      dialogTitle: _text(_ExternalImportText.chooseImportFolder),
     );
     if (path == null || path.trim().isEmpty) return;
     await _scanSource(path.trim());
@@ -106,7 +230,7 @@ class _ExternalImportPageState extends State<ExternalImportPage> {
       type: FileType.custom,
       allowedExtensions: const <String>['zip'],
       lockParentWindow: true,
-      dialogTitle: _text('选择 zip 导出包', 'Choose zip export'),
+      dialogTitle: _text(_ExternalImportText.chooseZipExport),
     );
     final path = picked?.files.singleOrNull?.path?.trim();
     if (path == null || path.isEmpty) return;
@@ -218,8 +342,7 @@ class _ExternalImportPageState extends State<ExternalImportPage> {
   Future<void> _confirmCancelImport() async {
     if (_progressBatchId == null || _requestingCancel) {
       _showSnack(
-        _text('导入尚在准备中，请稍候再取消',
-            'Import is still preparing. Try again in a moment.'),
+        _text(_ExternalImportText.importPreparingTryAgain),
       );
       return;
     }
@@ -227,21 +350,18 @@ class _ExternalImportPageState extends State<ExternalImportPage> {
     final confirmed = await showDialog<bool>(
           context: context,
           builder: (context) => AlertDialog(
-            title: Text(_text('取消导入？', 'Cancel import?')),
+            title: Text(_text(_ExternalImportText.cancelImportTitle)),
             content: Text(
-              _text(
-                '当前导入会进入回滚并清理已写入的数据，完成后才会返回正常状态。',
-                'The current import will roll back and clean any written data before returning to normal.',
-              ),
+              _text(_ExternalImportText.cancelImportBody),
             ),
             actions: [
               TextButton(
                 onPressed: () => Navigator.of(context).pop(false),
-                child: Text(_text('继续导入', 'Keep importing')),
+                child: Text(_text(_ExternalImportText.keepImporting)),
               ),
               FilledButton(
                 onPressed: () => Navigator.of(context).pop(true),
-                child: Text(_text('确认取消', 'Confirm cancel')),
+                child: Text(_text(_ExternalImportText.confirmCancel)),
               ),
             ],
           ),
@@ -270,21 +390,18 @@ class _ExternalImportPageState extends State<ExternalImportPage> {
     final confirmed = await showDialog<bool>(
           context: context,
           builder: (context) => AlertDialog(
-            title: Text(_text('删除导入批次？', 'Delete import batch?')),
+            title: Text(_text(_ExternalImportText.deleteImportBatchTitle)),
             content: Text(
-              _text(
-                '这会永久删除该批次的文档、索引和仅由该批次引用的附件。',
-                'This permanently deletes the batch documents, indexes, and attachments referenced only by this batch.',
-              ),
+              _text(_ExternalImportText.deleteImportBatchBody),
             ),
             actions: [
               TextButton(
                 onPressed: () => Navigator.of(context).pop(false),
-                child: Text(_text('取消', 'Cancel')),
+                child: Text(context.t.common.actions.cancel),
               ),
               FilledButton(
                 onPressed: () => Navigator.of(context).pop(true),
-                child: Text(_text('删除', 'Delete')),
+                child: Text(context.t.common.actions.delete),
               ),
             ],
           ),
@@ -306,7 +423,7 @@ class _ExternalImportPageState extends State<ExternalImportPage> {
       });
       await _loadBatches();
       if (!mounted) return;
-      _showSnack(_text('已删除导入批次', 'Import batch deleted'));
+      _showSnack(_text(_ExternalImportText.importBatchDeleted));
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -327,7 +444,7 @@ class _ExternalImportPageState extends State<ExternalImportPage> {
       canPop: !_importing,
       child: Scaffold(
         appBar: AppBar(
-          title: Text(_text('导入外部知识', 'Import External Knowledge')),
+          title: Text(_text(_ExternalImportText.title)),
         ),
         body: Stack(
           children: [
@@ -368,8 +485,7 @@ class _ExternalImportPageState extends State<ExternalImportPage> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              _text('只读导入你的 Obsidian、思源或 Markdown 导出',
-                  'Readonly import for Obsidian, SiYuan, or Markdown exports'),
+              _text(_ExternalImportText.introTitle),
               style: Theme.of(context)
                   .textTheme
                   .titleMedium
@@ -377,10 +493,7 @@ class _ExternalImportPageState extends State<ExternalImportPage> {
             ),
             const SizedBox(height: 8),
             Text(
-              _text(
-                '导入后的内容仅参与检索，不会回写源应用。导入过程中会复制附件、构建 Phase A 索引，并支持取消后回滚清理。',
-                'Imported content participates in retrieval only. It does not write back to the source app. The import copies attachments, builds Phase A indexes, and supports cancel with rollback cleanup.',
-              ),
+              _text(_ExternalImportText.introBody),
             ),
           ],
         ),
@@ -396,7 +509,7 @@ class _ExternalImportPageState extends State<ExternalImportPage> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              _text('1. 选择导入源', '1. Choose import source'),
+              _text(_ExternalImportText.sourceSectionTitle),
               style: Theme.of(context)
                   .textTheme
                   .titleMedium
@@ -411,13 +524,13 @@ class _ExternalImportPageState extends State<ExternalImportPage> {
                   key: const ValueKey('external_import_choose_folder'),
                   onPressed: _isBusy ? null : _pickDirectory,
                   icon: const Icon(Icons.folder_open),
-                  label: Text(_text('选择文件夹', 'Choose folder')),
+                  label: Text(_text(_ExternalImportText.chooseFolder)),
                 ),
                 OutlinedButton.icon(
                   key: const ValueKey('external_import_choose_zip'),
                   onPressed: _isBusy ? null : _pickZip,
                   icon: const Icon(Icons.archive_outlined),
-                  label: Text(_text('选择 zip', 'Choose zip')),
+                  label: Text(_text(_ExternalImportText.chooseZip)),
                 ),
                 if (_sourcePath != null)
                   OutlinedButton.icon(
@@ -425,7 +538,7 @@ class _ExternalImportPageState extends State<ExternalImportPage> {
                     onPressed:
                         _isBusy ? null : () => _scanSource(_sourcePath!.trim()),
                     icon: const Icon(Icons.refresh),
-                    label: Text(_text('重新扫描', 'Rescan')),
+                    label: Text(_text(_ExternalImportText.rescan)),
                   ),
               ],
             ),
@@ -458,27 +571,29 @@ class _ExternalImportPageState extends State<ExternalImportPage> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              _text('2. 预扫描摘要', '2. Scan summary'),
+              _text(_ExternalImportText.scanSummaryTitle),
               style: Theme.of(context)
                   .textTheme
                   .titleMedium
                   ?.copyWith(fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: 12),
+            _infoRow(_text(_ExternalImportText.detectedType),
+                summary.detectedSourceKind),
             _infoRow(
-                _text('识别类型', 'Detected type'), summary.detectedSourceKind),
-            _infoRow(_text('来源标签', 'Source label'), summary.sourceLabel),
-            _infoRow(_text('笔记数', 'Notes'), '${summary.notesCount.toInt()}'),
-            _infoRow(_text('附件数', 'Attachments'),
+                _text(_ExternalImportText.sourceLabel), summary.sourceLabel),
+            _infoRow(_text(_ExternalImportText.notes),
+                '${summary.notesCount.toInt()}'),
+            _infoRow(_text(_ExternalImportText.attachments),
                 '${summary.attachmentsCount.toInt()}'),
             _infoRow(
-              _text('预计占用', 'Estimated disk usage'),
+              _text(_ExternalImportText.estimatedDiskUsage),
               _formatBytes(summary.estimatedDiskUsageBytes.toInt()),
             ),
             if (summary.warnings.isNotEmpty) ...[
               const SizedBox(height: 12),
               Text(
-                _text('兼容性提示', 'Compatibility warnings'),
+                _text(_ExternalImportText.compatibilityWarnings),
                 style: Theme.of(context)
                     .textTheme
                     .titleSmall
@@ -496,7 +611,7 @@ class _ExternalImportPageState extends State<ExternalImportPage> {
               key: const ValueKey('external_import_start'),
               onPressed: _importing ? null : _startImport,
               icon: const Icon(Icons.play_arrow),
-              label: Text(_text('开始导入', 'Start import')),
+              label: Text(_text(_ExternalImportText.startImport)),
             ),
           ],
         ),
@@ -507,10 +622,10 @@ class _ExternalImportPageState extends State<ExternalImportPage> {
   Widget _buildLastResultCard(ExternalImportBatchSummary batch) {
     final isCancelled = batch.status == 'cancelled';
     final title = isCancelled
-        ? _text('最近一次导入：已取消并清理', 'Latest import: cancelled and cleaned')
+        ? _text(_ExternalImportText.latestImportCancelledAndCleaned)
         : batch.status == 'completed'
-            ? _text('最近一次导入：已完成', 'Latest import: completed')
-            : _text('最近一次导入', 'Latest import');
+            ? _text(_ExternalImportText.latestImportCompleted)
+            : _text(_ExternalImportText.latestImport);
 
     return _surface(
       child: Padding(
@@ -526,22 +641,26 @@ class _ExternalImportPageState extends State<ExternalImportPage> {
                   ?.copyWith(fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: 12),
-            _infoRow(_text('来源标签', 'Source label'), batch.sourceLabel),
-            _infoRow(_text('状态', 'Status'), _statusLabel(batch.status)),
-            _infoRow(_text('笔记数', 'Notes'), '${batch.notesCount.toInt()}'),
-            _infoRow(_text('附件数', 'Attachments'),
+            _infoRow(_text(_ExternalImportText.sourceLabel), batch.sourceLabel),
+            _infoRow(
+                _text(_ExternalImportText.status), _statusLabel(batch.status)),
+            _infoRow(_text(_ExternalImportText.notes),
+                '${batch.notesCount.toInt()}'),
+            _infoRow(_text(_ExternalImportText.attachments),
                 '${batch.attachmentsCount.toInt()}'),
-            _infoRow(_text('失败数', 'Failed'), '${batch.failedCount.toInt()}'),
-            _infoRow(_text('复制数据', 'Copied data'),
+            _infoRow(_text(_ExternalImportText.failedCount),
+                '${batch.failedCount.toInt()}'),
+            _infoRow(_text(_ExternalImportText.copiedData),
                 _formatBytes(batch.copiedBytes.toInt())),
             if (batch.lastError != null && batch.lastError!.trim().isNotEmpty)
-              _infoRow(_text('最后错误', 'Last error'), batch.lastError!.trim()),
+              _infoRow(_text(_ExternalImportText.lastError),
+                  batch.lastError!.trim()),
             const SizedBox(height: 16),
             OutlinedButton.icon(
               key: const ValueKey('external_import_delete_latest_batch'),
               onPressed: _isBusy ? null : () => _confirmDeleteBatch(batch),
               icon: const Icon(Icons.delete_outline),
-              label: Text(_text('删除这个批次', 'Delete this batch')),
+              label: Text(_text(_ExternalImportText.deleteThisBatch)),
             ),
           ],
         ),
@@ -557,7 +676,7 @@ class _ExternalImportPageState extends State<ExternalImportPage> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              _text('错误', 'Error'),
+              _text(_ExternalImportText.error),
               style: Theme.of(context).textTheme.titleMedium?.copyWith(
                     color: Theme.of(context).colorScheme.error,
                     fontWeight: FontWeight.w700,
@@ -576,7 +695,7 @@ class _ExternalImportPageState extends State<ExternalImportPage> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          _text('已导入批次', 'Imported batches'),
+          _text(_ExternalImportText.importedBatches),
           style: Theme.of(context)
               .textTheme
               .titleMedium
@@ -593,7 +712,7 @@ class _ExternalImportPageState extends State<ExternalImportPage> {
             child: Padding(
               padding: const EdgeInsets.all(16),
               child: Text(
-                _text('还没有导入批次。', 'No import batches yet.'),
+                _text(_ExternalImportText.noImportBatchesYet),
               ),
             ),
           )
@@ -651,33 +770,36 @@ class _ExternalImportPageState extends State<ExternalImportPage> {
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
                       : const Icon(Icons.delete_outline),
-                  label: Text(_text('删除', 'Delete')),
+                  label: Text(context.t.common.actions.delete),
                 ),
               ],
             ),
             const SizedBox(height: 12),
-            _infoRow(_text('批次 ID', 'Batch ID'), batch.batchId),
-            _infoRow(_text('笔记数', 'Notes'), '${batch.notesCount.toInt()}'),
-            _infoRow(_text('附件数', 'Attachments'),
+            _infoRow(_text(_ExternalImportText.batchId), batch.batchId),
+            _infoRow(_text(_ExternalImportText.notes),
+                '${batch.notesCount.toInt()}'),
+            _infoRow(_text(_ExternalImportText.attachments),
                 '${batch.attachmentsCount.toInt()}'),
-            _infoRow(_text('失败数', 'Failed'), '${batch.failedCount.toInt()}'),
-            _infoRow(_text('复制数据', 'Copied data'),
+            _infoRow(_text(_ExternalImportText.failedCount),
+                '${batch.failedCount.toInt()}'),
+            _infoRow(_text(_ExternalImportText.copiedData),
                 _formatBytes(batch.copiedBytes.toInt())),
             _infoRow(
-              _text('创建时间', 'Created at'),
+              _text(_ExternalImportText.createdAt),
               _formatTimestamp(batch.createdAtMs.toInt()),
             ),
             _infoRow(
-              _text('更新时间', 'Updated at'),
+              _text(_ExternalImportText.updatedAt),
               _formatTimestamp(batch.updatedAtMs.toInt()),
             ),
             if (batch.completedAtMs != null)
               _infoRow(
-                _text('完成时间', 'Completed at'),
+                _text(_ExternalImportText.completedAt),
                 _formatTimestamp(batch.completedAtMs!.toInt()),
               ),
             if (batch.lastError != null && batch.lastError!.trim().isNotEmpty)
-              _infoRow(_text('最后错误', 'Last error'), batch.lastError!.trim()),
+              _infoRow(_text(_ExternalImportText.lastError),
+                  batch.lastError!.trim()),
           ],
         ),
       ),
@@ -710,7 +832,7 @@ class _ExternalImportPageState extends State<ExternalImportPage> {
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
                           Text(
-                            _text('正在导入外部知识', 'Importing external knowledge'),
+                            _text(_ExternalImportText.importingTitle),
                             style: Theme.of(context)
                                 .textTheme
                                 .titleLarge
@@ -731,7 +853,12 @@ class _ExternalImportPageState extends State<ExternalImportPage> {
                               Text(_progressPercentSummary(percentLabel)),
                               Text(_progressProcessedSummary()),
                               Text(_progressFailedSummary()),
-                              Text(_progressStatusSummary()),
+                              Text(
+                                context.t.common.labels.labeledValue(
+                                  label: _text(_ExternalImportText.status),
+                                  value: _statusLabel(_progressStatus),
+                                ),
+                              ),
                             ],
                           ),
                           if (_progressBatchId != null) ...[
@@ -757,15 +884,12 @@ class _ExternalImportPageState extends State<ExternalImportPage> {
                                   )
                                 : const Icon(Icons.stop_circle_outlined),
                             label: Text(_requestingCancel
-                                ? _text('正在请求取消', 'Requesting cancel')
-                                : _text('取消导入', 'Cancel import')),
+                                ? _text(_ExternalImportText.requestingCancel)
+                                : _text(_ExternalImportText.cancelImport)),
                           ),
                           const SizedBox(height: 8),
                           Text(
-                            _text(
-                              '导入完成或回滚清理结束前，不能返回上一页。',
-                              'You cannot leave this page until the import finishes or rollback cleanup completes.',
-                            ),
+                            _text(_ExternalImportText.cannotLeaveHint),
                             style: Theme.of(context).textTheme.bodySmall,
                           ),
                         ],
@@ -815,26 +939,27 @@ class _ExternalImportPageState extends State<ExternalImportPage> {
 
   String _stageLabel(String stage) {
     return switch (stage) {
-      'preparing' => _text('准备中', 'Preparing'),
-      'scanning' => _text('扫描中', 'Scanning'),
-      'parsing' => _text('解析中', 'Parsing'),
-      'copying_attachments' => _text('复制附件中', 'Copying attachments'),
-      'indexing_phase_a' => _text('建立 Phase A 索引中', 'Indexing Phase A'),
-      'verifying' => _text('校验中', 'Verifying'),
-      'rollback' => _text('回滚清理中', 'Rolling back'),
-      'cancelled' => _text('已取消并清理', 'Cancelled and cleaned'),
-      'completed' => _text('已完成', 'Completed'),
+      'preparing' => _text(_ExternalImportText.stagePreparing),
+      'scanning' => _text(_ExternalImportText.stageScanning),
+      'parsing' => _text(_ExternalImportText.stageParsing),
+      'copying_attachments' =>
+        _text(_ExternalImportText.stageCopyingAttachments),
+      'indexing_phase_a' => _text(_ExternalImportText.stageIndexingPhaseA),
+      'verifying' => _text(_ExternalImportText.stageVerifying),
+      'rollback' => _text(_ExternalImportText.stageRollback),
+      'cancelled' => _text(_ExternalImportText.stageCancelled),
+      'completed' => _text(_ExternalImportText.stageCompleted),
       _ => stage,
     };
   }
 
   String _statusLabel(String status) {
     return switch (status) {
-      'in_progress' => _text('进行中', 'In progress'),
-      'cancelling' => _text('取消中', 'Cancelling'),
-      'cancelled' => _text('已取消', 'Cancelled'),
-      'completed' => _text('已完成', 'Completed'),
-      'failed' => _text('失败', 'Failed'),
+      'in_progress' => _text(_ExternalImportText.statusInProgress),
+      'cancelling' => _text(_ExternalImportText.statusCancelling),
+      'cancelled' => _text(_ExternalImportText.statusCancelled),
+      'completed' => _text(_ExternalImportText.stageCompleted),
+      'failed' => _text(_ExternalImportText.statusFailed),
       _ => status,
     };
   }
@@ -845,19 +970,16 @@ class _ExternalImportPageState extends State<ExternalImportPage> {
       '${_statusLabel(batch.status)} · ${batch.sourceKind}';
 
   String _progressPercentSummary(String percentLabel) =>
-      '${_text('进度', 'Progress')}: $percentLabel';
+      '${_text(_ExternalImportText.progress)}: $percentLabel';
 
   String _progressProcessedSummary() =>
-      '${_text('已处理', 'Processed')}: $_progressDone / $_progressTotal';
+      '${_text(_ExternalImportText.processed)}: $_progressDone / $_progressTotal';
 
   String _progressFailedSummary() =>
-      '${_text('失败', 'Failed')}: $_progressFailedCount';
-
-  String _progressStatusSummary() =>
-      '${_text('状态', 'Status')}: ${_statusLabel(_progressStatus)}';
+      '${_text(_ExternalImportText.statusFailed)}: $_progressFailedCount';
 
   String _progressBatchIdSummary() =>
-      '${_text('批次 ID', 'Batch ID')}: $_progressBatchId';
+      '${_text(_ExternalImportText.batchId)}: $_progressBatchId';
 
   String _formatBytes(int bytes) {
     const units = <String>['B', 'KB', 'MB', 'GB', 'TB'];

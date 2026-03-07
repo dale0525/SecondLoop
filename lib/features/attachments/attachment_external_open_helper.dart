@@ -18,7 +18,7 @@ Future<void> openAttachmentBytesWithSystem(
     if (!context.mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(context.t.errors.loadFailed(error: 'bytes unavailable')),
+        content: Text(context.t.errors.attachmentBytesUnavailable),
         duration: const Duration(seconds: 3),
       ),
     );
@@ -38,7 +38,7 @@ Future<void> openAttachmentBytesWithSystem(
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            context.t.errors.loadFailed(error: 'could not open externally'),
+            context.t.errors.couldNotOpenExternally,
           ),
           duration: const Duration(seconds: 3),
         ),

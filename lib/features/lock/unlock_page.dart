@@ -31,18 +31,9 @@ class _UnlockPageState extends State<UnlockPage> {
   bool _busy = false;
   String? _error;
 
-  bool _isZh() {
-    return Localizations.localeOf(context)
-        .languageCode
-        .toLowerCase()
-        .startsWith('zh');
-  }
-
-  String _unlockTitle() =>
-      _isZh() ? '使用应用锁密码解锁' : 'Unlock with app lock password';
-  String _passwordLabel() => _isZh() ? '应用锁密码' : 'App lock password';
-  String _passwordRequired() =>
-      _isZh() ? '请输入应用锁密码' : 'App lock password is required';
+  String _unlockTitle() => context.t.lock.unlockWithPassword;
+  String _passwordLabel() => context.t.common.fields.masterPassword;
+  String _passwordRequired() => context.t.lock.masterPasswordRequired;
 
   @override
   void initState() {

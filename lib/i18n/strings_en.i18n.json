@@ -61,7 +61,10 @@
     "loadFailed": "Load failed: $error",
     "saveFailed": "Save failed: $error",
     "lockGateError": "LockGate error: $error",
-    "missingLoopHomeConversation": "Missing Loop conversation"
+    "missingLoopHomeConversation": "Missing Loop conversation",
+    "attachmentNotFoundLocally": "Attachment is not available locally.",
+    "attachmentBytesUnavailable": "Attachment bytes are unavailable.",
+    "couldNotOpenExternally": "Could not open with the system app."
   },
   "actions": {
     "capture": {
@@ -517,6 +520,22 @@
             "body": "Local desktop OCR may stop working until models are downloaded again.",
             "confirm": "Delete"
           }
+        },
+        "engineMode": {
+          "title": "OCR recognition mode",
+          "labels": {
+            "platformNative": "Local OCR",
+            "multimodalLlm": "BYOK multimodal"
+          },
+          "descriptions": {
+            "platformNative": "Runs entirely on-device and does not upload content.",
+            "multimodalLlm": "Use your OpenAI-compatible API profile for OCR."
+          },
+          "subtitles": {
+            "proCloudEnabled": "Pro can use SecondLoop Cloud. Cloud OCR usage is counted under Ask AI.",
+            "proCloudDisabled": "Pro can enable Use SecondLoop Cloud to run OCR in cloud and count usage under Ask AI.",
+            "free": "Free users can choose between local OCR and BYOK multimodal OCR."
+          }
         }
       },
       "audioTranscribe": {
@@ -537,7 +556,9 @@
           "descriptions": {
             "whisper": "Stable default for speech transcription. (Recommended)",
             "multimodalLlm": "Use a multimodal chat model when available.",
-            "auto": "Let SecondLoop choose the best available engine."
+            "auto": "Let SecondLoop choose the best available engine.",
+            "byokWhisper": "Transcribe with BYOK Whisper capability.",
+            "byokMultimodal": "Transcribe with BYOK multimodal model."
           }
         },
         "configureApi": {
@@ -546,6 +567,79 @@
           "body": "Audio transcription can run with SecondLoop Cloud (requires Pro + sign-in) or an OpenAI-compatible API key profile from Ask AI settings.",
           "openCloud": "Open Cloud account",
           "openApiKeys": "Open API keys"
+        },
+        "whisperModel": {
+          "downloaded": "Downloaded $modelLabel for local transcription.",
+          "title": "Whisper model",
+          "subtitle": "Used for Whisper transcription path. Tiny by default on mobile, Base on desktop.",
+          "downloadingWithTotal": "Downloading $modelLabel: $percent% ($received/$total)",
+          "downloading": "Downloading $modelLabel: $received",
+          "labels": {
+            "tiny": "Tiny (Fastest)",
+            "base": "Base",
+            "small": "Small (Better quality)",
+            "medium": "Medium (High quality)",
+            "largeV3Turbo": "Large V3 Turbo",
+            "largeV3": "Large V3"
+          }
+        },
+        "apiProfile": {
+          "followActiveSubtitle": "Default follows the active API profile. You can choose an existing OpenAI-compatible API profile."
+        },
+        "localRuntime": {
+          "title": "Local capability",
+          "descriptionMobile": "Download Whisper runtime manually for mobile local transcription.",
+          "descriptionDesktop": "Manage local Whisper runtime for transcription.",
+          "statusSummary": {
+            "downloading": "Status: downloading",
+            "checking": "Status: checking",
+            "installed": "Status: installed",
+            "missing": "Status: missing"
+          },
+          "statusDetails": {
+            "checking": "Checking local Whisper runtime status.",
+            "error": "Failed to read runtime status: $error",
+            "installed": "Runtime installed (current model: $modelLabel).",
+            "missing": "Local runtime missing. Download to enable local transcription."
+          }
+        }
+      },
+      "connectivity": {
+        "wifiOnlyTitle": "Wi-Fi only",
+        "wifiOnlySubtitle": "Only applies to SecondLoop Cloud and BYOK. Local capability is unaffected."
+      },
+      "localCapability": {
+        "title": "Local capability engine",
+        "descriptionMacos": "macOS prefers native STT by default; this shows shared runtime health (also used by OCR).",
+        "descriptionWindows": "This card only shows local OCR runtime status. Windows audio transcription uses native STT and does not depend on this runtime.",
+        "descriptionDesktop": "Local transcription and OCR share this desktop runtime. You can repair or clear it here.",
+        "runtimeStatusTitle": "Runtime status",
+        "actions": {
+          "repairInstall": "Repair Install",
+          "clearRuntime": "Clear Runtime",
+          "downloadLocalRuntime": "Download local runtime"
+        },
+        "statusSummary": {
+          "repairing": "Status: repairing",
+          "unavailable": "Status: unavailable",
+          "runtimeMissing": "Status: runtime missing",
+          "ocrRuntimeHealthy": "Status: OCR runtime healthy",
+          "healthy": "Status: healthy"
+        },
+        "statusDetails": {
+          "repairing": "Repairing runtime...",
+          "unavailable": "Runtime status unavailable right now. Try Repair Install first.",
+          "runtimeMissing": "Runtime missing",
+          "runtimeIncomplete": "Runtime files are incomplete. Please run Repair Install again.",
+          "runtimeMissingReason": "Runtime missing ($reason)",
+          "ocrRuntimeHealthy": "OCR runtime healthy ($count files, $size)",
+          "healthy": "Runtime healthy ($count files, $size)"
+        },
+        "confirmDelete": {
+          "title": "Clear Local Runtime",
+          "bodyWindows": "This removes local OCR runtime files. Windows audio transcription still uses native STT.",
+          "bodyDesktop": "This removes shared desktop runtime files used by local OCR/transcription.",
+          "confirm": "Clear Runtime"
         }
       },
       "imageCaption": {
@@ -615,6 +709,18 @@
       "allowCellularConfirm": {
         "title": "Use cellular data for image annotations?",
         "body": "Annotating images may upload photos to your chosen AI provider and can use significant data."
+      },
+      "urlFetch": {
+        "title": "URL content understanding",
+        "description": "Preprocess URL content locally, then enrich with your selected source (Cloud/BYOK/Local)."
+      },
+      "legacyEntry": {
+        "title": "Intelligence (legacy entry)",
+        "subtitle": "Legacy compatibility entry: one switch controls audio transcription, document OCR, and image annotations.",
+        "useSecondLoopCloudTitle": "Use SecondLoop Cloud",
+        "useSecondLoopCloudSubtitle": "When enabled, relevant media data is uploaded to SecondLoop Cloud for processing. We protect it with encrypted transport, strict access controls, and minimized retention.",
+        "wifiOnlyTitle": "Wi-Fi only",
+        "wifiOnlySubtitle": "Run cloud/BYOK processing only on Wi-Fi. Local capability is unaffected."
       }
     },
     "cloudEmbeddings": {
@@ -653,6 +759,12 @@
         "signIn": "Sign in",
         "signUp": "Create account",
         "signOut": "Sign out"
+      },
+      "passwordReset": {
+        "forgotPassword": "Forgot password?",
+        "sent": "Password reset email sent. Please check your inbox.",
+        "missingEmail": "Please enter your email first.",
+        "notSupported": "Password recovery is not supported in this environment."
       },
       "emailVerification": {
         "title": "Email verification",
@@ -718,6 +830,7 @@
     },
     "about": {
       "title": "About",
+      "subtitle": "Homepage, version, and updates",
       "productName": "SecondLoop",
       "updatesTitle": "App updates",
       "openHomepage": "Project homepage",
@@ -849,6 +962,74 @@
     "debugSemanticSearch": {
       "title": "Debug: Semantic search",
       "subtitle": "Search similar messages + rebuild embeddings index"
+    },
+    "debugOplogMaintenance": {
+      "title": "Run oplog maintenance",
+      "subtitle": "Manually run local oplog retention for current sync config",
+      "completed": "Oplog maintenance finished: pruned $pruned rows ($before -> $after).",
+      "failed": "Oplog maintenance failed: $error"
+    },
+    "externalImport": {
+      "chooseImportFolder": "Choose import folder",
+      "chooseZipExport": "Choose zip export",
+      "importPreparingTryAgain": "Import is still preparing. Try again in a moment.",
+      "cancelImportTitle": "Cancel import?",
+      "cancelImportBody": "The current import will roll back and clean any written data before returning to normal.",
+      "keepImporting": "Keep importing",
+      "confirmCancel": "Confirm cancel",
+      "deleteImportBatchTitle": "Delete import batch?",
+      "deleteImportBatchBody": "This permanently deletes the batch documents, indexes, and attachments referenced only by this batch.",
+      "importBatchDeleted": "Import batch deleted",
+      "title": "Import External Knowledge",
+      "introTitle": "Readonly import for Obsidian, SiYuan, or Markdown exports",
+      "introBody": "Imported content participates in retrieval only. It does not write back to the source app. The import copies attachments, builds Phase A indexes, and supports cancel with rollback cleanup.",
+      "sourceSectionTitle": "1. Choose import source",
+      "chooseFolder": "Choose folder",
+      "chooseZip": "Choose zip",
+      "rescan": "Rescan",
+      "scanSummaryTitle": "2. Scan summary",
+      "detectedType": "Detected type",
+      "sourceLabel": "Source label",
+      "notes": "Notes",
+      "attachments": "Attachments",
+      "estimatedDiskUsage": "Estimated disk usage",
+      "compatibilityWarnings": "Compatibility warnings",
+      "startImport": "Start import",
+      "latestImportCancelledAndCleaned": "Latest import: cancelled and cleaned",
+      "latestImportCompleted": "Latest import: completed",
+      "latestImport": "Latest import",
+      "status": "Status",
+      "failed": "Failed",
+      "copiedData": "Copied data",
+      "lastError": "Last error",
+      "deleteThisBatch": "Delete this batch",
+      "error": "Error",
+      "importedBatches": "Imported batches",
+      "noImportBatchesYet": "No import batches yet.",
+      "batchId": "Batch ID",
+      "createdAt": "Created at",
+      "updatedAt": "Updated at",
+      "completedAt": "Completed at",
+      "importingTitle": "Importing external knowledge",
+      "requestingCancel": "Requesting cancel",
+      "cancelImport": "Cancel import",
+      "cannotLeaveHint": "You cannot leave this page until the import finishes or rollback cleanup completes.",
+      "stagePreparing": "Preparing",
+      "stageScanning": "Scanning",
+      "stageParsing": "Parsing",
+      "stageCopyingAttachments": "Copying attachments",
+      "stageIndexingPhaseA": "Indexing Phase A",
+      "stageVerifying": "Verifying",
+      "stageRollback": "Rolling back",
+      "stageCancelled": "Cancelled and cleaned",
+      "stageCompleted": "Completed",
+      "statusInProgress": "In progress",
+      "statusCancelling": "Cancelling",
+      "statusCancelled": "Cancelled",
+      "statusCompleted": "Completed",
+      "statusFailed": "Failed",
+      "progress": "Progress",
+      "processed": "Processed"
     }
   },
   "welcomeGuide": {
@@ -894,7 +1075,9 @@
     "unlockReason": "Unlock SecondLoop",
     "missingSavedSessionKey": "Missing saved session key. Unlock with app lock password once.",
     "creating": "Creating…",
-    "unlocking": "Unlocking…"
+    "unlocking": "Unlocking…",
+    "setupHint": "Create an app lock password to protect local data.",
+    "unlockWithPassword": "Unlock with app lock password"
   },
   "chat": {
     "loopTitle": "Loop",
@@ -1047,6 +1230,15 @@
     "semanticParseStatusSlow": "AI is taking longer. Continuing in background…",
     "semanticParseMobileStayOpenHint": "Keep the app open while AI analyzes. Leaving may interrupt analysis.",
     "attachmentAnnotationNeedsSetup": "Image annotations need setup",
+    "attachmentAnnotation": {
+      "errorDetailsTitle": "Transcribe error details",
+      "errorDetailsCopied": "Error details copied",
+      "viewError": "Details",
+      "installSpeechPack": "Install speech pack",
+      "downloadRuntime": "Download runtime",
+      "missingLocalRuntime": "Local capability runtime is missing. Download it to transcribe.",
+      "speechPackMissing": "Speech recognition language pack is missing."
+    },
     "semanticParseStatusFailed": "AI analysis failed",
     "audioTranscribeFailurePayloadTooLarge": "Audio file is too large. Compress or split it and try again.",
     "audioTranscribeFailureModelNotAllowed": "This model is not allowed for audio transcription. Change model or engine in settings.",
@@ -1137,6 +1329,14 @@
         "removeIncludeTags": "Remove include tags",
         "switchScopeToAll": "Switch scope to All"
       }
+    },
+    "audioRecording": {
+      "interruptionRecoveredSnack": "Recording resumed after interruption and segments were stitched automatically.",
+      "openSettingsFailedMicrophone": "Unable to open system settings automatically. Please enable microphone permission manually.",
+      "openSettingsFailedSpeechPack": "Unable to open system settings automatically. Go to Settings > Time & language > Language & region and install a language pack with Speech."
+    },
+    "recordingRecovery": {
+      "recoveredToDraftSnack": "Recovered recording was added to draft. Tap Send to submit."
     }
   },
   "attachments": {
@@ -1193,7 +1393,8 @@
           "segments": "Segments",
           "summary": "Video summary"
         }
-      }
+      },
+      "emptyText": "None"
     }
   },
   "semanticSearch": {
@@ -1355,7 +1556,9 @@
     "title": "AI profiles",
     "refreshTooltip": "Refresh",
     "activeProfileHelp": "The active profile is reused as the general LLM API profile across intelligence features.",
+    "mediaByokOpenAiCompatibleHelp": "Media BYOK only supports OpenAI-compatible profiles. Incompatible profiles (for example Gemini/Anthropic) are hidden here.",
     "noProfilesYet": "No profiles yet.",
+    "noOpenAiCompatibleProfiles": "No OpenAI-compatible profiles are available. Create an OpenAI-compatible profile first.",
     "addProfile": "Add profile",
     "deleted": "AI profile deleted",
     "validationError": "Name, API key, and model are required.",

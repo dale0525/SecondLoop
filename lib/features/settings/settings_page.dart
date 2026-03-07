@@ -239,33 +239,27 @@ class _SettingsPageState extends State<SettingsPage> {
       );
 
       if (!mounted) return;
-      final isZh = Localizations.localeOf(context)
-          .languageCode
-          .toLowerCase()
-          .startsWith('zh');
       final before = stats.beforeCount.toString();
       final after = stats.afterCount.toString();
       final pruned = stats.prunedCount.toString();
       messenger.showSnackBar(
         SnackBar(
           content: Text(
-            isZh
-                ? 'Oplog 维护完成：清理 $pruned 条（$before -> $after）'
-                : 'Oplog maintenance finished: pruned $pruned rows ($before -> $after).',
+            context.t.settings.debugOplogMaintenance.completed(
+              pruned: pruned,
+              before: before,
+              after: after,
+            ),
           ),
           duration: const Duration(seconds: 3),
         ),
       );
     } catch (e) {
       if (!mounted) return;
-      final isZh = Localizations.localeOf(context)
-          .languageCode
-          .toLowerCase()
-          .startsWith('zh');
       messenger.showSnackBar(
         SnackBar(
           content: Text(
-            isZh ? 'Oplog 维护失败：$e' : 'Oplog maintenance failed: $e',
+            context.t.settings.debugOplogMaintenance.failed(error: '$e'),
           ),
           duration: const Duration(seconds: 3),
         ),
