@@ -540,7 +540,9 @@
           "descriptions": {
             "whisper": "Stable default for speech transcription. (Recommended)",
             "multimodalLlm": "Use a multimodal chat model when available.",
-            "auto": "Let SecondLoop choose the best available engine."
+            "auto": "Let SecondLoop choose the best available engine.",
+            "byokWhisper": "Transcribe with BYOK Whisper capability.",
+            "byokMultimodal": "Transcribe with BYOK multimodal model."
           }
         },
         "configureApi": {
@@ -549,6 +551,47 @@
           "body": "Audio transcription can run with SecondLoop Cloud (requires Pro + sign-in) or an OpenAI-compatible API key profile from Ask AI settings.",
           "openCloud": "Open Cloud account",
           "openApiKeys": "Open API keys"
+        },
+        "whisperModel": {
+          "downloaded": "Downloaded $modelLabel for local transcription."
+        }
+      },
+      "connectivity": {
+        "wifiOnlyTitle": "Wi-Fi only",
+        "wifiOnlySubtitle": "Only applies to SecondLoop Cloud and BYOK. Local capability is unaffected."
+      },
+      "localCapability": {
+        "title": "Local capability engine",
+        "descriptionMacos": "macOS prefers native STT by default; this shows shared runtime health (also used by OCR).",
+        "descriptionWindows": "This card only shows local OCR runtime status. Windows audio transcription uses native STT and does not depend on this runtime.",
+        "descriptionDesktop": "Local transcription and OCR share this desktop runtime. You can repair or clear it here.",
+        "runtimeStatusTitle": "Runtime status",
+        "actions": {
+          "repairInstall": "Repair Install",
+          "clearRuntime": "Clear Runtime",
+          "downloadLocalRuntime": "Download local runtime"
+        },
+        "statusSummary": {
+          "repairing": "Status: repairing",
+          "unavailable": "Status: unavailable",
+          "runtimeMissing": "Status: runtime missing",
+          "ocrRuntimeHealthy": "Status: OCR runtime healthy",
+          "healthy": "Status: healthy"
+        },
+        "statusDetails": {
+          "repairing": "Repairing runtime...",
+          "unavailable": "Runtime status unavailable right now. Try Repair Install first.",
+          "runtimeMissing": "Runtime missing",
+          "runtimeIncomplete": "Runtime files are incomplete. Please run Repair Install again.",
+          "runtimeMissingReason": "Runtime missing ($reason)",
+          "ocrRuntimeHealthy": "OCR runtime healthy ($count files, $size)",
+          "healthy": "Runtime healthy ($count files, $size)"
+        },
+        "confirmDelete": {
+          "title": "Clear Local Runtime",
+          "bodyWindows": "This removes local OCR runtime files. Windows audio transcription still uses native STT.",
+          "bodyDesktop": "This removes shared desktop runtime files used by local OCR/transcription.",
+          "confirm": "Clear Runtime"
         }
       },
       "imageCaption": {
@@ -727,6 +770,7 @@
     },
     "about": {
       "title": "About",
+      "subtitle": "Homepage, version, and updates",
       "productName": "SecondLoop",
       "updatesTitle": "App updates",
       "openHomepage": "Project homepage",
@@ -858,6 +902,12 @@
     "debugSemanticSearch": {
       "title": "Debug: Semantic search",
       "subtitle": "Search similar messages + rebuild embeddings index"
+    },
+    "debugOplogMaintenance": {
+      "title": "Run oplog maintenance",
+      "subtitle": "Manually run local oplog retention for current sync config",
+      "completed": "Oplog maintenance finished: pruned $pruned rows ($before -> $after).",
+      "failed": "Oplog maintenance failed: $error"
     },
     "externalImport": {
       "chooseImportFolder": "Choose import folder",
@@ -1120,6 +1170,15 @@
     "semanticParseStatusSlow": "AI is taking longer. Continuing in background…",
     "semanticParseMobileStayOpenHint": "Keep the app open while AI analyzes. Leaving may interrupt analysis.",
     "attachmentAnnotationNeedsSetup": "Image annotations need setup",
+    "attachmentAnnotation": {
+      "errorDetailsTitle": "Transcribe error details",
+      "errorDetailsCopied": "Error details copied",
+      "viewError": "Details",
+      "installSpeechPack": "Install speech pack",
+      "downloadRuntime": "Download runtime",
+      "missingLocalRuntime": "Local capability runtime is missing. Download it to transcribe.",
+      "speechPackMissing": "Speech recognition language pack is missing."
+    },
     "semanticParseStatusFailed": "AI analysis failed",
     "audioTranscribeFailurePayloadTooLarge": "Audio file is too large. Compress or split it and try again.",
     "audioTranscribeFailureModelNotAllowed": "This model is not allowed for audio transcription. Change model or engine in settings.",

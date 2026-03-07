@@ -246,16 +246,14 @@ class _AttachmentAnnotationJobStatusRowState
   }
 
   Future<void> _showLastErrorDialog(String errorText) async {
-    final zh = Localizations.localeOf(context)
-        .languageCode
-        .toLowerCase()
-        .startsWith('zh');
+    final t = context.t;
+    final attachmentAnnotation = t.chat.attachmentAnnotation;
     FocusManager.instance.primaryFocus?.unfocus();
     await showDialog<void>(
       context: context,
       builder: (dialogContext) {
         return AlertDialog(
-          title: Text(zh ? '转写错误详情' : 'Transcribe error details'),
+          title: Text(attachmentAnnotation.errorDetailsTitle),
           content: SingleChildScrollView(
             child: SelectableText(errorText),
           ),
@@ -272,13 +270,13 @@ class _AttachmentAnnotationJobStatusRowState
                   if (!mounted) return;
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
-                      content: Text(zh ? '错误详情已复制' : 'Error details copied'),
+                      content: Text(attachmentAnnotation.errorDetailsCopied),
                       duration: const Duration(seconds: 2),
                     ),
                   );
                 }());
               },
-              child: Text(zh ? '复制' : 'Copy'),
+              child: Text(t.common.actions.copy),
             ),
           ],
         );
@@ -305,14 +303,11 @@ class _AttachmentAnnotationJobStatusRowState
     }
 
     final t = context.t;
+    final attachmentAnnotation = t.chat.attachmentAnnotation;
     final colorScheme = Theme.of(context).colorScheme;
     final isMobilePlatform = !kIsWeb &&
         (defaultTargetPlatform == TargetPlatform.android ||
             defaultTargetPlatform == TargetPlatform.iOS);
-    final zh = Localizations.localeOf(context)
-        .languageCode
-        .toLowerCase()
-        .startsWith('zh');
 
     final showMissingLocalRuntimeHint =
         isFailed && _isAudioLocalRuntimeMissing(job);
@@ -379,17 +374,13 @@ class _AttachmentAnnotationJobStatusRowState
                 _windowsSpeechRecognizerInstalled == false));
 
     final label = showMissingLocalRuntimeHint
-        ? (zh
-            ? '本地能力运行时缺失，需先下载后再转写。'
-            : 'Local capability runtime is missing. Download it to transcribe.')
+        ? attachmentAnnotation.missingLocalRuntime
         : isPending
             ? (isSlow
                 ? t.chat.semanticParseStatusSlow
                 : t.chat.semanticParseStatusRunning)
             : (showSpeechPackInstallAction
-                ? (zh
-                    ? '缺少语音识别语言包，请先安装后再重试。'
-                    : 'Speech recognition language pack is missing.')
+                ? attachmentAnnotation.speechPackMissing
                 : (audioTranscribeFailureHint == null
                     ? t.chat.semanticParseStatusFailed
                     : _audioTranscribeFailureHintText(
@@ -432,7 +423,7 @@ class _AttachmentAnnotationJobStatusRowState
       actions.add(
         TextButton(
           onPressed: () => unawaited(_showLastErrorDialog(lastError)),
-          child: Text(zh ? '查看错误' : 'Details'),
+          child: Text(attachmentAnnotation.viewError),
         ),
       );
     }
@@ -440,7 +431,7 @@ class _AttachmentAnnotationJobStatusRowState
       actions.add(
         TextButton(
           onPressed: () => unawaited(widget.onInstallSpeechPack!()),
-          child: Text(zh ? '安装语音包' : 'Install speech pack'),
+          child: Text(attachmentAnnotation.installSpeechPack),
         ),
       );
     }
@@ -449,7 +440,7 @@ class _AttachmentAnnotationJobStatusRowState
       actions.add(
         TextButton(
           onPressed: () => unawaited(widget.onOpenLocalCapabilityDownload!()),
-          child: Text(zh ? '下载本地能力' : 'Download runtime'),
+          child: Text(attachmentAnnotation.downloadRuntime),
         ),
       );
     }

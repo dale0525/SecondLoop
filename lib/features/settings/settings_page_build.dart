@@ -197,12 +197,8 @@ extension _SettingsPageBuild on _SettingsPageState {
           if (supportsDesktopHotkey)
             ListTile(
               key: const ValueKey('settings_external_import'),
-              title: Text(isZh ? '导入外部知识' : 'Import External Knowledge'),
-              subtitle: Text(
-                isZh
-                    ? '导入 Obsidian、思源或 Markdown 导出（只读）'
-                    : 'Import Obsidian, SiYuan, or Markdown exports (readonly)',
-              ),
+              title: Text(context.t.settings.externalImport.title),
+              subtitle: Text(context.t.settings.externalImport.introTitle),
               onTap: _busy
                   ? null
                   : () {
@@ -254,9 +250,8 @@ extension _SettingsPageBuild on _SettingsPageState {
         sectionCard([
           ListTile(
             key: const ValueKey('settings_about'),
-            title: Text(isZh ? '关于' : 'About'),
-            subtitle:
-                Text(isZh ? '项目主页、版本号与更新' : 'Homepage, version, and updates'),
+            title: Text(context.t.settings.about.title),
+            subtitle: Text(context.t.settings.about.subtitle),
             trailing: ValueListenableBuilder<String?>(
               valueListenable: UpdateBadgePrefs.value,
               builder: (context, latestTag, child) {
@@ -425,11 +420,9 @@ extension _SettingsPageBuild on _SettingsPageState {
             ),
             ListTile(
               key: const ValueKey('settings_debug_run_oplog_maintenance'),
-              title: Text(isZh ? '执行 Oplog 维护' : 'Run oplog maintenance'),
+              title: Text(context.t.settings.debugOplogMaintenance.title),
               subtitle: Text(
-                isZh
-                    ? '按当前同步配置手动触发一次本地 Oplog 裁剪'
-                    : 'Manually run local oplog retention for current sync config',
+                context.t.settings.debugOplogMaintenance.subtitle,
               ),
               onTap: _busy ? null : _runOplogMaintenanceDebug,
             ),

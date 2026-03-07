@@ -751,9 +751,7 @@ class _AiSettingsPageState extends State<AiSettingsPage> {
   }
 
   String _wifiOnlyHint(BuildContext context) {
-    return _isZhLocale(context)
-        ? '仅Wi-Fi（仅对 SecondLoop Cloud / BYOK 生效，本地能力不受影响）'
-        : 'Wi-Fi only (applies to SecondLoop Cloud / BYOK only; local capability is unaffected).';
+    return context.t.settings.mediaAnnotation.connectivity.wifiOnlySubtitle;
   }
 
   String _mediaUnavailableHint(BuildContext context) {

@@ -4,9 +4,9 @@
 /// To regenerate, run: `dart run slang`
 ///
 /// Locales: 2
-/// Strings: 2026 (1013 per locale)
+/// Strings: 2108 (1054 per locale)
 ///
-/// Built on 2026-03-07 at 09:00 UTC
+/// Built on 2026-03-07 at 09:24 UTC
 
 // coverage:ignore-file
 // ignore_for_file: type=lint
@@ -356,6 +356,8 @@ class _StringsSettingsEn {
       _StringsSettingsDebugResetLocalDataAllDevicesEn._(_root);
   late final _StringsSettingsDebugSemanticSearchEn debugSemanticSearch =
       _StringsSettingsDebugSemanticSearchEn._(_root);
+  late final _StringsSettingsDebugOplogMaintenanceEn debugOplogMaintenance =
+      _StringsSettingsDebugOplogMaintenanceEn._(_root);
   late final _StringsSettingsExternalImportEn externalImport =
       _StringsSettingsExternalImportEn._(_root);
 }
@@ -462,6 +464,8 @@ class _StringsChatEn {
   String get semanticParseMobileStayOpenHint =>
       'Keep the app open while AI analyzes. Leaving may interrupt analysis.';
   String get attachmentAnnotationNeedsSetup => 'Image annotations need setup';
+  late final _StringsChatAttachmentAnnotationEn attachmentAnnotation =
+      _StringsChatAttachmentAnnotationEn._(_root);
   String get semanticParseStatusFailed => 'AI analysis failed';
   String get audioTranscribeFailurePayloadTooLarge =>
       'Audio file is too large. Compress or split it and try again.';
@@ -1181,6 +1185,10 @@ class _StringsSettingsMediaAnnotationEn {
       _StringsSettingsMediaAnnotationDocumentOcrEn._(_root);
   late final _StringsSettingsMediaAnnotationAudioTranscribeEn audioTranscribe =
       _StringsSettingsMediaAnnotationAudioTranscribeEn._(_root);
+  late final _StringsSettingsMediaAnnotationConnectivityEn connectivity =
+      _StringsSettingsMediaAnnotationConnectivityEn._(_root);
+  late final _StringsSettingsMediaAnnotationLocalCapabilityEn localCapability =
+      _StringsSettingsMediaAnnotationLocalCapabilityEn._(_root);
   late final _StringsSettingsMediaAnnotationImageCaptionEn imageCaption =
       _StringsSettingsMediaAnnotationImageCaptionEn._(_root);
   late final _StringsSettingsMediaAnnotationProviderSettingsEn
@@ -1291,6 +1299,7 @@ class _StringsSettingsAboutEn {
 
   // Translations
   String get title => 'About';
+  String get subtitle => 'Homepage, version, and updates';
   String get productName => 'SecondLoop';
   String get updatesTitle => 'App updates';
   String get openHomepage => 'Project homepage';
@@ -1446,6 +1455,25 @@ class _StringsSettingsDebugSemanticSearchEn {
   // Translations
   String get title => 'Debug: Semantic search';
   String get subtitle => 'Search similar messages + rebuild embeddings index';
+}
+
+// Path: settings.debugOplogMaintenance
+class _StringsSettingsDebugOplogMaintenanceEn {
+  _StringsSettingsDebugOplogMaintenanceEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get title => 'Run oplog maintenance';
+  String get subtitle =>
+      'Manually run local oplog retention for current sync config';
+  String completed(
+          {required Object pruned,
+          required Object before,
+          required Object after}) =>
+      'Oplog maintenance finished: pruned ${pruned} rows (${before} -> ${after}).';
+  String failed({required Object error}) =>
+      'Oplog maintenance failed: ${error}';
 }
 
 // Path: settings.externalImport
@@ -1776,6 +1804,24 @@ class _StringsChatSemanticParseConsentEn {
       'When enabled, SecondLoop can use cloud AI to better understand your messages and improve automatic task organization.\n\nYour text is handled confidentially (not logged or stored), and your vault key and sync key are never uploaded.\n\nThis uses your Cloud quota.';
   late final _StringsChatSemanticParseConsentActionsEn actions =
       _StringsChatSemanticParseConsentActionsEn._(_root);
+}
+
+// Path: chat.attachmentAnnotation
+class _StringsChatAttachmentAnnotationEn {
+  _StringsChatAttachmentAnnotationEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get errorDetailsTitle => 'Transcribe error details';
+  String get errorDetailsCopied => 'Error details copied';
+  String get viewError => 'Details';
+  String get installSpeechPack => 'Install speech pack';
+  String get downloadRuntime => 'Download runtime';
+  String get missingLocalRuntime =>
+      'Local capability runtime is missing. Download it to transcribe.';
+  String get speechPackMissing =>
+      'Speech recognition language pack is missing.';
 }
 
 // Path: chat.tagFilter
@@ -2664,6 +2710,49 @@ class _StringsSettingsMediaAnnotationAudioTranscribeEn {
   late final _StringsSettingsMediaAnnotationAudioTranscribeConfigureApiEn
       configureApi =
       _StringsSettingsMediaAnnotationAudioTranscribeConfigureApiEn._(_root);
+  late final _StringsSettingsMediaAnnotationAudioTranscribeWhisperModelEn
+      whisperModel =
+      _StringsSettingsMediaAnnotationAudioTranscribeWhisperModelEn._(_root);
+}
+
+// Path: settings.mediaAnnotation.connectivity
+class _StringsSettingsMediaAnnotationConnectivityEn {
+  _StringsSettingsMediaAnnotationConnectivityEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get wifiOnlyTitle => 'Wi-Fi only';
+  String get wifiOnlySubtitle =>
+      'Only applies to SecondLoop Cloud and BYOK. Local capability is unaffected.';
+}
+
+// Path: settings.mediaAnnotation.localCapability
+class _StringsSettingsMediaAnnotationLocalCapabilityEn {
+  _StringsSettingsMediaAnnotationLocalCapabilityEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get title => 'Local capability engine';
+  String get descriptionMacos =>
+      'macOS prefers native STT by default; this shows shared runtime health (also used by OCR).';
+  String get descriptionWindows =>
+      'This card only shows local OCR runtime status. Windows audio transcription uses native STT and does not depend on this runtime.';
+  String get descriptionDesktop =>
+      'Local transcription and OCR share this desktop runtime. You can repair or clear it here.';
+  String get runtimeStatusTitle => 'Runtime status';
+  late final _StringsSettingsMediaAnnotationLocalCapabilityActionsEn actions =
+      _StringsSettingsMediaAnnotationLocalCapabilityActionsEn._(_root);
+  late final _StringsSettingsMediaAnnotationLocalCapabilityStatusSummaryEn
+      statusSummary =
+      _StringsSettingsMediaAnnotationLocalCapabilityStatusSummaryEn._(_root);
+  late final _StringsSettingsMediaAnnotationLocalCapabilityStatusDetailsEn
+      statusDetails =
+      _StringsSettingsMediaAnnotationLocalCapabilityStatusDetailsEn._(_root);
+  late final _StringsSettingsMediaAnnotationLocalCapabilityConfirmDeleteEn
+      confirmDelete =
+      _StringsSettingsMediaAnnotationLocalCapabilityConfirmDeleteEn._(_root);
 }
 
 // Path: settings.mediaAnnotation.imageCaption
@@ -3715,6 +3804,79 @@ class _StringsSettingsMediaAnnotationAudioTranscribeConfigureApiEn {
   String get openApiKeys => 'Open API keys';
 }
 
+// Path: settings.mediaAnnotation.audioTranscribe.whisperModel
+class _StringsSettingsMediaAnnotationAudioTranscribeWhisperModelEn {
+  _StringsSettingsMediaAnnotationAudioTranscribeWhisperModelEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String downloaded({required Object modelLabel}) =>
+      'Downloaded ${modelLabel} for local transcription.';
+}
+
+// Path: settings.mediaAnnotation.localCapability.actions
+class _StringsSettingsMediaAnnotationLocalCapabilityActionsEn {
+  _StringsSettingsMediaAnnotationLocalCapabilityActionsEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get repairInstall => 'Repair Install';
+  String get clearRuntime => 'Clear Runtime';
+  String get downloadLocalRuntime => 'Download local runtime';
+}
+
+// Path: settings.mediaAnnotation.localCapability.statusSummary
+class _StringsSettingsMediaAnnotationLocalCapabilityStatusSummaryEn {
+  _StringsSettingsMediaAnnotationLocalCapabilityStatusSummaryEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get repairing => 'Status: repairing';
+  String get unavailable => 'Status: unavailable';
+  String get runtimeMissing => 'Status: runtime missing';
+  String get ocrRuntimeHealthy => 'Status: OCR runtime healthy';
+  String get healthy => 'Status: healthy';
+}
+
+// Path: settings.mediaAnnotation.localCapability.statusDetails
+class _StringsSettingsMediaAnnotationLocalCapabilityStatusDetailsEn {
+  _StringsSettingsMediaAnnotationLocalCapabilityStatusDetailsEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get repairing => 'Repairing runtime...';
+  String get unavailable =>
+      'Runtime status unavailable right now. Try Repair Install first.';
+  String get runtimeMissing => 'Runtime missing';
+  String get runtimeIncomplete =>
+      'Runtime files are incomplete. Please run Repair Install again.';
+  String runtimeMissingReason({required Object reason}) =>
+      'Runtime missing (${reason})';
+  String ocrRuntimeHealthy({required Object count, required Object size}) =>
+      'OCR runtime healthy (${count} files, ${size})';
+  String healthy({required Object count, required Object size}) =>
+      'Runtime healthy (${count} files, ${size})';
+}
+
+// Path: settings.mediaAnnotation.localCapability.confirmDelete
+class _StringsSettingsMediaAnnotationLocalCapabilityConfirmDeleteEn {
+  _StringsSettingsMediaAnnotationLocalCapabilityConfirmDeleteEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get title => 'Clear Local Runtime';
+  String get bodyWindows =>
+      'This removes local OCR runtime files. Windows audio transcription still uses native STT.';
+  String get bodyDesktop =>
+      'This removes shared desktop runtime files used by local OCR/transcription.';
+  String get confirm => 'Clear Runtime';
+}
+
 // Path: settings.mediaAnnotation.setupRequired.reasons
 class _StringsSettingsMediaAnnotationSetupRequiredReasonsEn {
   _StringsSettingsMediaAnnotationSetupRequiredReasonsEn._(this._root);
@@ -4085,6 +4247,8 @@ class _StringsSettingsMediaAnnotationAudioTranscribeEngineDescriptionsEn {
       'Stable default for speech transcription. (Recommended)';
   String get multimodalLlm => 'Use a multimodal chat model when available.';
   String get auto => 'Let SecondLoop choose the best available engine.';
+  String get byokWhisper => 'Transcribe with BYOK Whisper capability.';
+  String get byokMultimodal => 'Transcribe with BYOK multimodal model.';
 }
 
 // Path: settings.cloudAccount.benefits.items.purchase
@@ -4433,6 +4597,9 @@ class _StringsSettingsZhCn extends _StringsSettingsEn {
   late final _StringsSettingsDebugSemanticSearchZhCn debugSemanticSearch =
       _StringsSettingsDebugSemanticSearchZhCn._(_root);
   @override
+  late final _StringsSettingsDebugOplogMaintenanceZhCn debugOplogMaintenance =
+      _StringsSettingsDebugOplogMaintenanceZhCn._(_root);
+  @override
   late final _StringsSettingsExternalImportZhCn externalImport =
       _StringsSettingsExternalImportZhCn._(_root);
 }
@@ -4600,6 +4767,9 @@ class _StringsChatZhCn extends _StringsChatEn {
   String get semanticParseMobileStayOpenHint => 'AI 分析时请勿离开 App，否则分析可能会中断。';
   @override
   String get attachmentAnnotationNeedsSetup => '图片注释需要先配置';
+  @override
+  late final _StringsChatAttachmentAnnotationZhCn attachmentAnnotation =
+      _StringsChatAttachmentAnnotationZhCn._(_root);
   @override
   String get semanticParseStatusFailed => 'AI 分析失败';
   @override
@@ -5701,6 +5871,13 @@ class _StringsSettingsMediaAnnotationZhCn
       audioTranscribe =
       _StringsSettingsMediaAnnotationAudioTranscribeZhCn._(_root);
   @override
+  late final _StringsSettingsMediaAnnotationConnectivityZhCn connectivity =
+      _StringsSettingsMediaAnnotationConnectivityZhCn._(_root);
+  @override
+  late final _StringsSettingsMediaAnnotationLocalCapabilityZhCn
+      localCapability =
+      _StringsSettingsMediaAnnotationLocalCapabilityZhCn._(_root);
+  @override
   late final _StringsSettingsMediaAnnotationImageCaptionZhCn imageCaption =
       _StringsSettingsMediaAnnotationImageCaptionZhCn._(_root);
   @override
@@ -5866,6 +6043,8 @@ class _StringsSettingsAboutZhCn extends _StringsSettingsAboutEn {
   // Translations
   @override
   String get title => '关于';
+  @override
+  String get subtitle => '项目主页、版本号与更新';
   @override
   String get productName => 'SecondLoop';
   @override
@@ -6095,6 +6274,31 @@ class _StringsSettingsDebugSemanticSearchZhCn
   String get title => '调试：语义检索';
   @override
   String get subtitle => '搜索相似消息 + 重建向量索引';
+}
+
+// Path: settings.debugOplogMaintenance
+class _StringsSettingsDebugOplogMaintenanceZhCn
+    extends _StringsSettingsDebugOplogMaintenanceEn {
+  _StringsSettingsDebugOplogMaintenanceZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get title => '执行 Oplog 维护';
+  @override
+  String get subtitle => '按当前同步配置手动触发一次本地 Oplog 裁剪';
+  @override
+  String completed(
+          {required Object pruned,
+          required Object before,
+          required Object after}) =>
+      'Oplog 维护完成：清理 ${pruned} 条（${before} -> ${after}）';
+  @override
+  String failed({required Object error}) => 'Oplog 维护失败：${error}';
 }
 
 // Path: settings.externalImport
@@ -6610,6 +6814,33 @@ class _StringsChatSemanticParseConsentZhCn
   @override
   late final _StringsChatSemanticParseConsentActionsZhCn actions =
       _StringsChatSemanticParseConsentActionsZhCn._(_root);
+}
+
+// Path: chat.attachmentAnnotation
+class _StringsChatAttachmentAnnotationZhCn
+    extends _StringsChatAttachmentAnnotationEn {
+  _StringsChatAttachmentAnnotationZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get errorDetailsTitle => '转写错误详情';
+  @override
+  String get errorDetailsCopied => '错误详情已复制';
+  @override
+  String get viewError => '查看错误';
+  @override
+  String get installSpeechPack => '安装语音包';
+  @override
+  String get downloadRuntime => '下载本地能力';
+  @override
+  String get missingLocalRuntime => '本地能力运行时缺失，需先下载后再转写。';
+  @override
+  String get speechPackMissing => '缺少语音识别语言包，请先安装后再重试。';
 }
 
 // Path: chat.tagFilter
@@ -7955,6 +8186,67 @@ class _StringsSettingsMediaAnnotationAudioTranscribeZhCn
   late final _StringsSettingsMediaAnnotationAudioTranscribeConfigureApiZhCn
       configureApi =
       _StringsSettingsMediaAnnotationAudioTranscribeConfigureApiZhCn._(_root);
+  @override
+  late final _StringsSettingsMediaAnnotationAudioTranscribeWhisperModelZhCn
+      whisperModel =
+      _StringsSettingsMediaAnnotationAudioTranscribeWhisperModelZhCn._(_root);
+}
+
+// Path: settings.mediaAnnotation.connectivity
+class _StringsSettingsMediaAnnotationConnectivityZhCn
+    extends _StringsSettingsMediaAnnotationConnectivityEn {
+  _StringsSettingsMediaAnnotationConnectivityZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get wifiOnlyTitle => '仅Wi-Fi';
+  @override
+  String get wifiOnlySubtitle => '仅对 SecondLoop Cloud / BYOK 生效，本地能力不受此限制。';
+}
+
+// Path: settings.mediaAnnotation.localCapability
+class _StringsSettingsMediaAnnotationLocalCapabilityZhCn
+    extends _StringsSettingsMediaAnnotationLocalCapabilityEn {
+  _StringsSettingsMediaAnnotationLocalCapabilityZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get title => '本地能力引擎';
+  @override
+  String get descriptionMacos =>
+      'macOS 默认优先使用系统原生 STT；此处展示共享 runtime 状态（与 OCR 共用）。';
+  @override
+  String get descriptionWindows =>
+      '此处仅展示本地 OCR runtime 状态。Windows 音频转写走系统原生 STT，不依赖这里的 runtime。';
+  @override
+  String get descriptionDesktop => '本地转写与 OCR 共用同一套桌面 runtime，可在此修复或清理。';
+  @override
+  String get runtimeStatusTitle => '运行时状态';
+  @override
+  late final _StringsSettingsMediaAnnotationLocalCapabilityActionsZhCn actions =
+      _StringsSettingsMediaAnnotationLocalCapabilityActionsZhCn._(_root);
+  @override
+  late final _StringsSettingsMediaAnnotationLocalCapabilityStatusSummaryZhCn
+      statusSummary =
+      _StringsSettingsMediaAnnotationLocalCapabilityStatusSummaryZhCn._(_root);
+  @override
+  late final _StringsSettingsMediaAnnotationLocalCapabilityStatusDetailsZhCn
+      statusDetails =
+      _StringsSettingsMediaAnnotationLocalCapabilityStatusDetailsZhCn._(_root);
+  @override
+  late final _StringsSettingsMediaAnnotationLocalCapabilityConfirmDeleteZhCn
+      confirmDelete =
+      _StringsSettingsMediaAnnotationLocalCapabilityConfirmDeleteZhCn._(_root);
 }
 
 // Path: settings.mediaAnnotation.imageCaption
@@ -9529,6 +9821,118 @@ class _StringsSettingsMediaAnnotationAudioTranscribeConfigureApiZhCn
   String get openApiKeys => '打开 API Key';
 }
 
+// Path: settings.mediaAnnotation.audioTranscribe.whisperModel
+class _StringsSettingsMediaAnnotationAudioTranscribeWhisperModelZhCn
+    extends _StringsSettingsMediaAnnotationAudioTranscribeWhisperModelEn {
+  _StringsSettingsMediaAnnotationAudioTranscribeWhisperModelZhCn._(
+      _StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String downloaded({required Object modelLabel}) =>
+      '已下载 ${modelLabel} 模型，可用于本地转写。';
+}
+
+// Path: settings.mediaAnnotation.localCapability.actions
+class _StringsSettingsMediaAnnotationLocalCapabilityActionsZhCn
+    extends _StringsSettingsMediaAnnotationLocalCapabilityActionsEn {
+  _StringsSettingsMediaAnnotationLocalCapabilityActionsZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get repairInstall => '修复安装';
+  @override
+  String get clearRuntime => '清除运行时';
+  @override
+  String get downloadLocalRuntime => '下载本地运行时';
+}
+
+// Path: settings.mediaAnnotation.localCapability.statusSummary
+class _StringsSettingsMediaAnnotationLocalCapabilityStatusSummaryZhCn
+    extends _StringsSettingsMediaAnnotationLocalCapabilityStatusSummaryEn {
+  _StringsSettingsMediaAnnotationLocalCapabilityStatusSummaryZhCn._(
+      _StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get repairing => '状态：修复中';
+  @override
+  String get unavailable => '状态：不可用';
+  @override
+  String get runtimeMissing => '状态：未安装';
+  @override
+  String get ocrRuntimeHealthy => '状态：OCR运行时健康';
+  @override
+  String get healthy => '状态：健康';
+}
+
+// Path: settings.mediaAnnotation.localCapability.statusDetails
+class _StringsSettingsMediaAnnotationLocalCapabilityStatusDetailsZhCn
+    extends _StringsSettingsMediaAnnotationLocalCapabilityStatusDetailsEn {
+  _StringsSettingsMediaAnnotationLocalCapabilityStatusDetailsZhCn._(
+      _StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get repairing => '正在修复运行时...';
+  @override
+  String get unavailable => '当前无法读取本地 runtime 状态。可先尝试“修复安装”。';
+  @override
+  String get runtimeMissing => '运行时缺失';
+  @override
+  String get runtimeIncomplete => '运行时文件不完整，请点击“修复安装”重新安装。';
+  @override
+  String runtimeMissingReason({required Object reason}) => '运行时缺失（${reason}）';
+  @override
+  String ocrRuntimeHealthy({required Object count, required Object size}) =>
+      'OCR运行时健康（${count} 文件, ${size}）';
+  @override
+  String healthy({required Object count, required Object size}) =>
+      '运行时健康（${count} 文件, ${size}）';
+}
+
+// Path: settings.mediaAnnotation.localCapability.confirmDelete
+class _StringsSettingsMediaAnnotationLocalCapabilityConfirmDeleteZhCn
+    extends _StringsSettingsMediaAnnotationLocalCapabilityConfirmDeleteEn {
+  _StringsSettingsMediaAnnotationLocalCapabilityConfirmDeleteZhCn._(
+      _StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get title => '清除本地运行时';
+  @override
+  String get bodyWindows => '清除后会删除本地 OCR runtime 文件。Windows 音频转写仍走系统原生 STT。';
+  @override
+  String get bodyDesktop => '清除后会删除本地 OCR/转写共用的桌面 runtime 文件。';
+  @override
+  String get confirm => '确认清除';
+}
+
 // Path: settings.mediaAnnotation.setupRequired.reasons
 class _StringsSettingsMediaAnnotationSetupRequiredReasonsZhCn
     extends _StringsSettingsMediaAnnotationSetupRequiredReasonsEn {
@@ -10089,6 +10493,10 @@ class _StringsSettingsMediaAnnotationAudioTranscribeEngineDescriptionsZhCn
   String get multimodalLlm => '可用时使用多模态聊天模型。';
   @override
   String get auto => '由 SecondLoop 自动选择最可用的引擎。';
+  @override
+  String get byokWhisper => '通过 BYOK Whisper 能力执行转写。';
+  @override
+  String get byokMultimodal => '通过 BYOK 多模态模型执行转写。';
 }
 
 // Path: settings.cloudAccount.benefits.items.purchase
@@ -10867,6 +11275,10 @@ extension on Translations {
         return 'Use a multimodal chat model when available.';
       case 'settings.mediaAnnotation.audioTranscribe.engine.descriptions.auto':
         return 'Let SecondLoop choose the best available engine.';
+      case 'settings.mediaAnnotation.audioTranscribe.engine.descriptions.byokWhisper':
+        return 'Transcribe with BYOK Whisper capability.';
+      case 'settings.mediaAnnotation.audioTranscribe.engine.descriptions.byokMultimodal':
+        return 'Transcribe with BYOK multimodal model.';
       case 'settings.mediaAnnotation.audioTranscribe.configureApi.title':
         return 'Configure transcription API';
       case 'settings.mediaAnnotation.audioTranscribe.configureApi.subtitle':
@@ -10877,6 +11289,63 @@ extension on Translations {
         return 'Open Cloud account';
       case 'settings.mediaAnnotation.audioTranscribe.configureApi.openApiKeys':
         return 'Open API keys';
+      case 'settings.mediaAnnotation.audioTranscribe.whisperModel.downloaded':
+        return ({required Object modelLabel}) =>
+            'Downloaded ${modelLabel} for local transcription.';
+      case 'settings.mediaAnnotation.connectivity.wifiOnlyTitle':
+        return 'Wi-Fi only';
+      case 'settings.mediaAnnotation.connectivity.wifiOnlySubtitle':
+        return 'Only applies to SecondLoop Cloud and BYOK. Local capability is unaffected.';
+      case 'settings.mediaAnnotation.localCapability.title':
+        return 'Local capability engine';
+      case 'settings.mediaAnnotation.localCapability.descriptionMacos':
+        return 'macOS prefers native STT by default; this shows shared runtime health (also used by OCR).';
+      case 'settings.mediaAnnotation.localCapability.descriptionWindows':
+        return 'This card only shows local OCR runtime status. Windows audio transcription uses native STT and does not depend on this runtime.';
+      case 'settings.mediaAnnotation.localCapability.descriptionDesktop':
+        return 'Local transcription and OCR share this desktop runtime. You can repair or clear it here.';
+      case 'settings.mediaAnnotation.localCapability.runtimeStatusTitle':
+        return 'Runtime status';
+      case 'settings.mediaAnnotation.localCapability.actions.repairInstall':
+        return 'Repair Install';
+      case 'settings.mediaAnnotation.localCapability.actions.clearRuntime':
+        return 'Clear Runtime';
+      case 'settings.mediaAnnotation.localCapability.actions.downloadLocalRuntime':
+        return 'Download local runtime';
+      case 'settings.mediaAnnotation.localCapability.statusSummary.repairing':
+        return 'Status: repairing';
+      case 'settings.mediaAnnotation.localCapability.statusSummary.unavailable':
+        return 'Status: unavailable';
+      case 'settings.mediaAnnotation.localCapability.statusSummary.runtimeMissing':
+        return 'Status: runtime missing';
+      case 'settings.mediaAnnotation.localCapability.statusSummary.ocrRuntimeHealthy':
+        return 'Status: OCR runtime healthy';
+      case 'settings.mediaAnnotation.localCapability.statusSummary.healthy':
+        return 'Status: healthy';
+      case 'settings.mediaAnnotation.localCapability.statusDetails.repairing':
+        return 'Repairing runtime...';
+      case 'settings.mediaAnnotation.localCapability.statusDetails.unavailable':
+        return 'Runtime status unavailable right now. Try Repair Install first.';
+      case 'settings.mediaAnnotation.localCapability.statusDetails.runtimeMissing':
+        return 'Runtime missing';
+      case 'settings.mediaAnnotation.localCapability.statusDetails.runtimeIncomplete':
+        return 'Runtime files are incomplete. Please run Repair Install again.';
+      case 'settings.mediaAnnotation.localCapability.statusDetails.runtimeMissingReason':
+        return ({required Object reason}) => 'Runtime missing (${reason})';
+      case 'settings.mediaAnnotation.localCapability.statusDetails.ocrRuntimeHealthy':
+        return ({required Object count, required Object size}) =>
+            'OCR runtime healthy (${count} files, ${size})';
+      case 'settings.mediaAnnotation.localCapability.statusDetails.healthy':
+        return ({required Object count, required Object size}) =>
+            'Runtime healthy (${count} files, ${size})';
+      case 'settings.mediaAnnotation.localCapability.confirmDelete.title':
+        return 'Clear Local Runtime';
+      case 'settings.mediaAnnotation.localCapability.confirmDelete.bodyWindows':
+        return 'This removes local OCR runtime files. Windows audio transcription still uses native STT.';
+      case 'settings.mediaAnnotation.localCapability.confirmDelete.bodyDesktop':
+        return 'This removes shared desktop runtime files used by local OCR/transcription.';
+      case 'settings.mediaAnnotation.localCapability.confirmDelete.confirm':
+        return 'Clear Runtime';
       case 'settings.mediaAnnotation.imageCaption.title':
         return 'Image captions';
       case 'settings.mediaAnnotation.providerSettings.title':
@@ -11082,6 +11551,8 @@ extension on Translations {
         return ({required Object error}) => 'Failed to load: ${error}';
       case 'settings.about.title':
         return 'About';
+      case 'settings.about.subtitle':
+        return 'Homepage, version, and updates';
       case 'settings.about.productName':
         return 'SecondLoop';
       case 'settings.about.updatesTitle':
@@ -11250,6 +11721,19 @@ extension on Translations {
         return 'Debug: Semantic search';
       case 'settings.debugSemanticSearch.subtitle':
         return 'Search similar messages + rebuild embeddings index';
+      case 'settings.debugOplogMaintenance.title':
+        return 'Run oplog maintenance';
+      case 'settings.debugOplogMaintenance.subtitle':
+        return 'Manually run local oplog retention for current sync config';
+      case 'settings.debugOplogMaintenance.completed':
+        return (
+                {required Object pruned,
+                required Object before,
+                required Object after}) =>
+            'Oplog maintenance finished: pruned ${pruned} rows (${before} -> ${after}).';
+      case 'settings.debugOplogMaintenance.failed':
+        return ({required Object error}) =>
+            'Oplog maintenance failed: ${error}';
       case 'settings.externalImport.chooseImportFolder':
         return 'Choose import folder';
       case 'settings.externalImport.chooseZipExport':
@@ -11667,6 +12151,20 @@ extension on Translations {
         return 'Keep the app open while AI analyzes. Leaving may interrupt analysis.';
       case 'chat.attachmentAnnotationNeedsSetup':
         return 'Image annotations need setup';
+      case 'chat.attachmentAnnotation.errorDetailsTitle':
+        return 'Transcribe error details';
+      case 'chat.attachmentAnnotation.errorDetailsCopied':
+        return 'Error details copied';
+      case 'chat.attachmentAnnotation.viewError':
+        return 'Details';
+      case 'chat.attachmentAnnotation.installSpeechPack':
+        return 'Install speech pack';
+      case 'chat.attachmentAnnotation.downloadRuntime':
+        return 'Download runtime';
+      case 'chat.attachmentAnnotation.missingLocalRuntime':
+        return 'Local capability runtime is missing. Download it to transcribe.';
+      case 'chat.attachmentAnnotation.speechPackMissing':
+        return 'Speech recognition language pack is missing.';
       case 'chat.semanticParseStatusFailed':
         return 'AI analysis failed';
       case 'chat.audioTranscribeFailurePayloadTooLarge':
@@ -12947,6 +13445,10 @@ extension on _StringsZhCn {
         return '可用时使用多模态聊天模型。';
       case 'settings.mediaAnnotation.audioTranscribe.engine.descriptions.auto':
         return '由 SecondLoop 自动选择最可用的引擎。';
+      case 'settings.mediaAnnotation.audioTranscribe.engine.descriptions.byokWhisper':
+        return '通过 BYOK Whisper 能力执行转写。';
+      case 'settings.mediaAnnotation.audioTranscribe.engine.descriptions.byokMultimodal':
+        return '通过 BYOK 多模态模型执行转写。';
       case 'settings.mediaAnnotation.audioTranscribe.configureApi.title':
         return '配置转写 API';
       case 'settings.mediaAnnotation.audioTranscribe.configureApi.subtitle':
@@ -12957,6 +13459,63 @@ extension on _StringsZhCn {
         return '打开 Cloud 账号';
       case 'settings.mediaAnnotation.audioTranscribe.configureApi.openApiKeys':
         return '打开 API Key';
+      case 'settings.mediaAnnotation.audioTranscribe.whisperModel.downloaded':
+        return ({required Object modelLabel}) =>
+            '已下载 ${modelLabel} 模型，可用于本地转写。';
+      case 'settings.mediaAnnotation.connectivity.wifiOnlyTitle':
+        return '仅Wi-Fi';
+      case 'settings.mediaAnnotation.connectivity.wifiOnlySubtitle':
+        return '仅对 SecondLoop Cloud / BYOK 生效，本地能力不受此限制。';
+      case 'settings.mediaAnnotation.localCapability.title':
+        return '本地能力引擎';
+      case 'settings.mediaAnnotation.localCapability.descriptionMacos':
+        return 'macOS 默认优先使用系统原生 STT；此处展示共享 runtime 状态（与 OCR 共用）。';
+      case 'settings.mediaAnnotation.localCapability.descriptionWindows':
+        return '此处仅展示本地 OCR runtime 状态。Windows 音频转写走系统原生 STT，不依赖这里的 runtime。';
+      case 'settings.mediaAnnotation.localCapability.descriptionDesktop':
+        return '本地转写与 OCR 共用同一套桌面 runtime，可在此修复或清理。';
+      case 'settings.mediaAnnotation.localCapability.runtimeStatusTitle':
+        return '运行时状态';
+      case 'settings.mediaAnnotation.localCapability.actions.repairInstall':
+        return '修复安装';
+      case 'settings.mediaAnnotation.localCapability.actions.clearRuntime':
+        return '清除运行时';
+      case 'settings.mediaAnnotation.localCapability.actions.downloadLocalRuntime':
+        return '下载本地运行时';
+      case 'settings.mediaAnnotation.localCapability.statusSummary.repairing':
+        return '状态：修复中';
+      case 'settings.mediaAnnotation.localCapability.statusSummary.unavailable':
+        return '状态：不可用';
+      case 'settings.mediaAnnotation.localCapability.statusSummary.runtimeMissing':
+        return '状态：未安装';
+      case 'settings.mediaAnnotation.localCapability.statusSummary.ocrRuntimeHealthy':
+        return '状态：OCR运行时健康';
+      case 'settings.mediaAnnotation.localCapability.statusSummary.healthy':
+        return '状态：健康';
+      case 'settings.mediaAnnotation.localCapability.statusDetails.repairing':
+        return '正在修复运行时...';
+      case 'settings.mediaAnnotation.localCapability.statusDetails.unavailable':
+        return '当前无法读取本地 runtime 状态。可先尝试“修复安装”。';
+      case 'settings.mediaAnnotation.localCapability.statusDetails.runtimeMissing':
+        return '运行时缺失';
+      case 'settings.mediaAnnotation.localCapability.statusDetails.runtimeIncomplete':
+        return '运行时文件不完整，请点击“修复安装”重新安装。';
+      case 'settings.mediaAnnotation.localCapability.statusDetails.runtimeMissingReason':
+        return ({required Object reason}) => '运行时缺失（${reason}）';
+      case 'settings.mediaAnnotation.localCapability.statusDetails.ocrRuntimeHealthy':
+        return ({required Object count, required Object size}) =>
+            'OCR运行时健康（${count} 文件, ${size}）';
+      case 'settings.mediaAnnotation.localCapability.statusDetails.healthy':
+        return ({required Object count, required Object size}) =>
+            '运行时健康（${count} 文件, ${size}）';
+      case 'settings.mediaAnnotation.localCapability.confirmDelete.title':
+        return '清除本地运行时';
+      case 'settings.mediaAnnotation.localCapability.confirmDelete.bodyWindows':
+        return '清除后会删除本地 OCR runtime 文件。Windows 音频转写仍走系统原生 STT。';
+      case 'settings.mediaAnnotation.localCapability.confirmDelete.bodyDesktop':
+        return '清除后会删除本地 OCR/转写共用的桌面 runtime 文件。';
+      case 'settings.mediaAnnotation.localCapability.confirmDelete.confirm':
+        return '确认清除';
       case 'settings.mediaAnnotation.imageCaption.title':
         return '图片注释';
       case 'settings.mediaAnnotation.providerSettings.title':
@@ -13161,6 +13720,8 @@ extension on _StringsZhCn {
         return ({required Object error}) => '加载失败：${error}';
       case 'settings.about.title':
         return '关于';
+      case 'settings.about.subtitle':
+        return '项目主页、版本号与更新';
       case 'settings.about.productName':
         return 'SecondLoop';
       case 'settings.about.updatesTitle':
@@ -13321,6 +13882,18 @@ extension on _StringsZhCn {
         return '调试：语义检索';
       case 'settings.debugSemanticSearch.subtitle':
         return '搜索相似消息 + 重建向量索引';
+      case 'settings.debugOplogMaintenance.title':
+        return '执行 Oplog 维护';
+      case 'settings.debugOplogMaintenance.subtitle':
+        return '按当前同步配置手动触发一次本地 Oplog 裁剪';
+      case 'settings.debugOplogMaintenance.completed':
+        return (
+                {required Object pruned,
+                required Object before,
+                required Object after}) =>
+            'Oplog 维护完成：清理 ${pruned} 条（${before} -> ${after}）';
+      case 'settings.debugOplogMaintenance.failed':
+        return ({required Object error}) => 'Oplog 维护失败：${error}';
       case 'settings.externalImport.chooseImportFolder':
         return '选择导入文件夹';
       case 'settings.externalImport.chooseZipExport':
@@ -13738,6 +14311,20 @@ extension on _StringsZhCn {
         return 'AI 分析时请勿离开 App，否则分析可能会中断。';
       case 'chat.attachmentAnnotationNeedsSetup':
         return '图片注释需要先配置';
+      case 'chat.attachmentAnnotation.errorDetailsTitle':
+        return '转写错误详情';
+      case 'chat.attachmentAnnotation.errorDetailsCopied':
+        return '错误详情已复制';
+      case 'chat.attachmentAnnotation.viewError':
+        return '查看错误';
+      case 'chat.attachmentAnnotation.installSpeechPack':
+        return '安装语音包';
+      case 'chat.attachmentAnnotation.downloadRuntime':
+        return '下载本地能力';
+      case 'chat.attachmentAnnotation.missingLocalRuntime':
+        return '本地能力运行时缺失，需先下载后再转写。';
+      case 'chat.attachmentAnnotation.speechPackMissing':
+        return '缺少语音识别语言包，请先安装后再重试。';
       case 'chat.semanticParseStatusFailed':
         return 'AI 分析失败';
       case 'chat.audioTranscribeFailurePayloadTooLarge':

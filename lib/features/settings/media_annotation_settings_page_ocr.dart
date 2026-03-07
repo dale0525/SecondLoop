@@ -314,7 +314,6 @@ extension _MediaAnnotationSettingsPageOcrExtension
 
   Future<void> _pickAudioWhisperModel() async {
     if (_busy) return;
-    final zh = _isZhOcrLocale(context);
     final selected = await showDialog<String>(
       context: context,
       builder: (dialogContext) {
@@ -357,7 +356,7 @@ extension _MediaAnnotationSettingsPageOcrExtension
             ),
             FilledButton(
               onPressed: () => Navigator.of(dialogContext).pop(value),
-              child: Text(zh ? '保存' : 'Save'),
+              child: Text(context.t.common.actions.save),
             ),
           ],
         );

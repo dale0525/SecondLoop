@@ -41,6 +41,7 @@ final RegExp _displayTextPattern =
 const String _i18nGuardPolicy =
     'This test exists to enforce i18n for user-facing copy. '
     'Do not bypass it with helper wrappers, locale branches, or string composition. '
+    'Add new copy to lib/i18n/strings_*.i18n.json and regenerate with `pixi run i18n-gen`. '
     'Move display text into generated i18n keys instead.';
 
 void main() {
@@ -61,7 +62,7 @@ class Demo {
     );
 
     expect(offenders, isNotEmpty);
-    expect(offenders.single, contains('hidden behind helper'));
+    expect(offenders.single, contains('indirection'));
   });
 
   test('Flags helper wrappers with literal copy passed into user-facing sinks',
@@ -82,7 +83,47 @@ class Demo {
     );
 
     expect(offenders, isNotEmpty);
-    expect(offenders.single, contains('hidden behind helper'));
+    expect(offenders.single, contains('indirection'));
+  });
+
+  test('Flags locale branches passed directly into user-facing sinks', () {
+    final offenders = _scanSourceForHardcodedUserFacingStrings(
+      content: r'''
+class Demo {
+  void build() {
+    Text(_isZh ? '设置' : 'Settings');
+    InputDecoration(labelText: zh ? '保存' : 'Save');
+  }
+
+  bool get _isZh => true;
+  bool get zh => true;
+}
+''',
+      path: 'snippet_direct_locale_branch.dart',
+    );
+
+    expect(offenders, hasLength(2));
+    expect(offenders.first, contains('indirection'));
+    expect(offenders.last, contains('indirection'));
+  });
+
+  test('Does not flag locale branches inside i18n method arguments', () {
+    final offenders = _scanSourceForHardcodedUserFacingStrings(
+      content: r'''
+class Demo {
+  void build() {
+    Text(
+      context.t.releaseNotes.updatedTo(
+        version: hasNotes ? version : 'v$appVersion',
+      ),
+    );
+  }
+}
+''',
+      path: 'snippet_i18n_method_argument.dart',
+    );
+
+    expect(offenders, isEmpty);
   });
 
   test('Does not flag non-linguistic formatting helpers', () {
@@ -256,11 +297,14 @@ class _HardcodedUserFacingStringVisitor extends RecursiveAstVisitor<void> {
   }
 
   void _checkExpression(Expression expression, {required String sink}) {
-    if (!_isHardcodedUserFacingExpression(expression, _ResolutionContext())) {
+    if (!_isHardcodedUserFacingExpression(
+      expression,
+      _ResolutionContext(allowBranching: true),
+    )) {
       return;
     }
     offenders.add(
-      '$path: $sink uses hardcoded user-facing string hidden behind helper indirection via ${expression.toSource()}',
+      '$path: $sink uses hardcoded user-facing string hidden behind helper or branch indirection via ${expression.toSource()}',
     );
   }
 
@@ -274,9 +318,15 @@ class _HardcodedUserFacingStringVisitor extends RecursiveAstVisitor<void> {
       return _isHardcodedUserFacingExpression(unwrapped.expression, context);
     }
     if (unwrapped is SimpleStringLiteral) {
+      if (_looksLikeInternalCodeLiteral(unwrapped.value)) {
+        return false;
+      }
       return _containsDisplayTextLiteral(unwrapped.value);
     }
     if (unwrapped is StringInterpolation) {
+      if (_looksLikeInternalCodeInterpolation(unwrapped)) {
+        return false;
+      }
       for (final element in unwrapped.elements) {
         if (element is InterpolationString &&
             _containsDisplayTextLiteral(element.value)) {
@@ -402,6 +452,30 @@ class _HardcodedUserFacingStringVisitor extends RecursiveAstVisitor<void> {
     final trimmed = value.trim();
     if (trimmed.isEmpty) return false;
     return _displayTextPattern.hasMatch(trimmed);
+  }
+
+  bool _looksLikeInternalCodeLiteral(String value) {
+    final trimmed = value.trim();
+    if (trimmed.isEmpty || RegExp(r'\s').hasMatch(trimmed)) {
+      return false;
+    }
+    return RegExp(r'^[a-z0-9_./:-]+$').hasMatch(trimmed) &&
+        RegExp(r'[0-9_./:-]').hasMatch(trimmed);
+  }
+
+  bool _looksLikeInternalCodeInterpolation(StringInterpolation interpolation) {
+    final literalParts = interpolation.elements
+        .whereType<InterpolationString>()
+        .map((element) => element.value)
+        .join()
+        .trim();
+    if (literalParts.isEmpty || RegExp(r'\s').hasMatch(literalParts)) {
+      return false;
+    }
+    if (!RegExp(r'^[a-z0-9_./:-]*$').hasMatch(literalParts)) {
+      return false;
+    }
+    return interpolation.elements.any((e) => e is InterpolationExpression);
   }
 
   Expression? _resolveVariable(String name) {
