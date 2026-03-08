@@ -18,9 +18,9 @@ pub fn db_get_knowledge_index_status(
     app_dir: String,
     key: Vec<u8>,
 ) -> Result<knowledge::KnowledgeIndexStatus> {
-    let _key = key_from_bytes(key)?;
+    let key = key_from_bytes(key)?;
     let conn = db::open(Path::new(&app_dir))?;
-    knowledge::read_knowledge_index_status(&conn)
+    knowledge::read_knowledge_index_status(&conn, &key)
 }
 
 #[flutter_rust_bridge::frb]
@@ -55,9 +55,9 @@ pub fn db_process_pending_knowledge_index_jobs(
 
 #[flutter_rust_bridge::frb]
 pub fn db_cancel_knowledge_rebuild(app_dir: String, key: Vec<u8>) -> Result<()> {
-    let _key = key_from_bytes(key)?;
+    let key = key_from_bytes(key)?;
     let conn = db::open(Path::new(&app_dir))?;
-    knowledge::cancel_knowledge_rebuild(&conn)
+    knowledge::cancel_knowledge_rebuild(&conn, &key)
 }
 
 #[flutter_rust_bridge::frb]

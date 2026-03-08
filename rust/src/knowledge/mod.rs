@@ -27,7 +27,7 @@ pub use rebuild::{
     read_knowledge_index_status,
 };
 pub use segment::{segment_document_text, SegmentDraft};
-pub use source_adapters::collect_source_knowledge_documents;
+pub use source_adapters::{collect_source_knowledge_documents, visit_source_knowledge_documents};
 
 #[cfg(test)]
 mod chunk_tests;

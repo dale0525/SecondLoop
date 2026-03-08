@@ -19,7 +19,8 @@ fn knowledge_compat_old_message_embeddings_still_work_before_knowledge_rebuild()
     assert!(!hits.is_empty());
     assert!(hits[0].message.content.contains("apple orchard"));
 
-    let status = crate::knowledge::read_knowledge_index_status(&conn).expect("knowledge status");
+    let status =
+        crate::knowledge::read_knowledge_index_status(&conn, &key).expect("knowledge status");
     assert_eq!(status.status, "empty");
 }
 
@@ -95,7 +96,7 @@ fn knowledge_rebuild_can_cancel_and_resume() {
     .expect("message");
 
     crate::knowledge::ensure_knowledge_rebuild_requested(&conn).expect("request rebuild");
-    crate::knowledge::cancel_knowledge_rebuild(&conn).expect("cancel");
+    crate::knowledge::cancel_knowledge_rebuild(&conn, &key).expect("cancel");
     let processed = crate::knowledge::process_pending_knowledge_index_jobs_active(
         &conn,
         &key,
@@ -104,7 +105,7 @@ fn knowledge_rebuild_can_cancel_and_resume() {
     )
     .expect("process after cancel");
     assert_eq!(processed, 0);
-    let cancelled = crate::knowledge::read_knowledge_index_status(&conn).expect("status");
+    let cancelled = crate::knowledge::read_knowledge_index_status(&conn, &key).expect("status");
     assert_eq!(cancelled.status, "cancelled");
 
     crate::knowledge::ensure_knowledge_rebuild_requested(&conn).expect("request rebuild again");
@@ -116,6 +117,6 @@ fn knowledge_rebuild_can_cancel_and_resume() {
     )
     .expect("process resumed");
     assert!(resumed > 0);
-    let status = crate::knowledge::read_knowledge_index_status(&conn).expect("status");
+    let status = crate::knowledge::read_knowledge_index_status(&conn, &key).expect("status");
     assert_eq!(status.status, "complete");
 }

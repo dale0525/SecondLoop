@@ -180,7 +180,7 @@ pub fn list_knowledge_units(
     Ok(out)
 }
 
-pub fn cancel_knowledge_rebuild(conn: &Connection) -> Result<()> {
+pub fn cancel_knowledge_rebuild(conn: &Connection, _key: &[u8; 32]) -> Result<()> {
     conn.execute(
         "UPDATE knowledge_rebuild_state SET cancel_requested = 1 WHERE state_key = 1",
         [],
@@ -188,7 +188,10 @@ pub fn cancel_knowledge_rebuild(conn: &Connection) -> Result<()> {
     Ok(())
 }
 
-pub fn read_knowledge_index_status(conn: &Connection) -> Result<KnowledgeIndexStatus> {
+pub fn read_knowledge_index_status(
+    conn: &Connection,
+    _key: &[u8; 32],
+) -> Result<KnowledgeIndexStatus> {
     let row = conn
         .query_row(
             r#"SELECT knowledge_schema_version,

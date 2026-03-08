@@ -74,7 +74,7 @@ final class _RetryKnowledgeBackend extends TestAppBackend
   Future<KnowledgeIndexStatus> getKnowledgeIndexStatus(Uint8List key) async {
     return KnowledgeIndexStatus(
       status: running ? 'running' : 'failed',
-      rebuildRequired: !running,
+      rebuildRequired: false,
       staleReason: running ? null : 'embedding_model_changed',
       lastError: running ? null : 'vector provider timeout',
       lastRebuildStartedAtMs: 10,

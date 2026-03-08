@@ -38,16 +38,19 @@ struct DocumentSeed {
     raw_text: String,
 }
 
-fn push_document_if_text(out: &mut Vec<ContentKnowledgeDocument>, seed: DocumentSeed) {
+fn emit_document_if_text(
+    emit: &mut impl FnMut(ContentKnowledgeDocument) -> Result<()>,
+    seed: DocumentSeed,
+) -> Result<()> {
     let trimmed = seed.raw_text.trim();
     if trimmed.is_empty() {
-        return;
+        return Ok(());
     }
     let normalized_text = normalize_text_for_source(seed.source_kind, trimmed);
     if normalized_text.trim().is_empty() {
-        return;
+        return Ok(());
     }
-    out.push(ContentKnowledgeDocument {
+    emit(ContentKnowledgeDocument {
         document_id: seed.document_id,
         origin_type: seed.origin_type,
         source_kind: seed.source_kind,
@@ -62,13 +65,13 @@ fn push_document_if_text(out: &mut Vec<ContentKnowledgeDocument>, seed: Document
         summary: snippet(&normalized_text, 120),
         raw_text: trimmed.to_string(),
         normalized_text,
-    });
+    })
 }
 
 fn collect_message_documents(
     conn: &Connection,
     key: &[u8; 32],
-    out: &mut Vec<ContentKnowledgeDocument>,
+    emit: &mut impl FnMut(ContentKnowledgeDocument) -> Result<()>,
 ) -> Result<()> {
     let mut stmt = conn.prepare(
         r#"SELECT id, conversation_id, role, content, created_at, updated_at
@@ -93,8 +96,8 @@ fn collect_message_documents(
         } else {
             Some(role_value)
         };
-        push_document_if_text(
-            out,
+        emit_document_if_text(
+            emit,
             DocumentSeed {
                 document_id: format!("message:{message_id}"),
                 origin_type: KnowledgeOriginType::Message,
@@ -110,7 +113,7 @@ fn collect_message_documents(
                 title,
                 raw_text: content,
             },
-        );
+        )?;
     }
     Ok(())
 }
@@ -192,7 +195,7 @@ fn attachment_source_candidates(
 fn collect_attachment_documents(
     conn: &Connection,
     key: &[u8; 32],
-    out: &mut Vec<ContentKnowledgeDocument>,
+    emit: &mut impl FnMut(ContentKnowledgeDocument) -> Result<()>,
 ) -> Result<()> {
     let mut stmt = conn.prepare(
         r#"SELECT sha256, created_at
@@ -226,8 +229,8 @@ fn collect_attachment_documents(
                 metadata_lines.push(format!("filenames: {}", metadata.filenames.join(", ")));
             }
             if !metadata_lines.is_empty() {
-                push_document_if_text(
-                    out,
+                emit_document_if_text(
+                    emit,
                     DocumentSeed {
                         document_id: format!("attachment:{attachment_sha256}:metadata"),
                         origin_type: KnowledgeOriginType::Attachment,
@@ -239,7 +242,7 @@ fn collect_attachment_documents(
                         title: source_filename.clone(),
                         raw_text: metadata_lines.join("\n"),
                     },
-                );
+                )?;
             }
         }
 
@@ -251,8 +254,8 @@ fn collect_attachment_documents(
         let payload: serde_json::Value = serde_json::from_str(&payload_json)
             .map_err(|error| anyhow!("invalid attachment annotation payload json: {error}"))?;
         for (source_kind, role, text) in attachment_source_candidates(&payload) {
-            push_document_if_text(
-                out,
+            emit_document_if_text(
+                emit,
                 DocumentSeed {
                     document_id: format!("attachment:{attachment_sha256}:{source_kind:?}")
                         .to_ascii_lowercase(),
@@ -265,7 +268,7 @@ fn collect_attachment_documents(
                     title: source_filename.clone(),
                     raw_text: text,
                 },
-            );
+            )?;
         }
     }
     Ok(())
@@ -279,7 +282,7 @@ fn decrypt_external_text(key: &[u8; 32], aad: Vec<u8>, blob: &[u8]) -> Result<St
 fn collect_external_documents(
     conn: &Connection,
     key: &[u8; 32],
-    out: &mut Vec<ContentKnowledgeDocument>,
+    emit: &mut impl FnMut(ContentKnowledgeDocument) -> Result<()>,
 ) -> Result<()> {
     let app_dir = crate::db::app_dir_from_conn(conn)?;
     let external_conn = db::open_external_readonly_db(&app_dir)?;
@@ -307,8 +310,8 @@ fn collect_external_documents(
             format!("external_document.body:{doc_id}").into_bytes(),
             &body_blob,
         )?;
-        push_document_if_text(
-            out,
+        emit_document_if_text(
+            emit,
             DocumentSeed {
                 document_id: format!("external:{doc_id}"),
                 origin_type: KnowledgeOriginType::ImportedExternal,
@@ -323,8 +326,19 @@ fn collect_external_documents(
                 title: snippet(&title, 80),
                 raw_text: body,
             },
-        );
+        )?;
     }
+    Ok(())
+}
+
+pub fn visit_source_knowledge_documents(
+    conn: &Connection,
+    key: &[u8; 32],
+    mut emit: impl FnMut(ContentKnowledgeDocument) -> Result<()>,
+) -> Result<()> {
+    collect_message_documents(conn, key, &mut emit)?;
+    collect_attachment_documents(conn, key, &mut emit)?;
+    collect_external_documents(conn, key, &mut emit)?;
     Ok(())
 }
 
@@ -333,9 +347,10 @@ pub fn collect_source_knowledge_documents(
     key: &[u8; 32],
 ) -> Result<Vec<ContentKnowledgeDocument>> {
     let mut documents = Vec::<ContentKnowledgeDocument>::new();
-    collect_message_documents(conn, key, &mut documents)?;
-    collect_attachment_documents(conn, key, &mut documents)?;
-    collect_external_documents(conn, key, &mut documents)?;
+    visit_source_knowledge_documents(conn, key, |document| {
+        documents.push(document);
+        Ok(())
+    })?;
     documents.sort_by(|left, right| {
         left.created_at_ms
             .cmp(&right.created_at_ms)

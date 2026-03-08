@@ -7,10 +7,9 @@ use sha2::{Digest, Sha256};
 
 use crate::knowledge::embedding_batch::{batch_embedding_inputs, EmbeddingBatchPolicy};
 use crate::knowledge::{
-    build_chunk_units, build_section_units, build_segment_units,
-    collect_source_knowledge_documents, list_knowledge_units, normalize_text_for_source,
-    segment_document_text, ContentKnowledgeDocument, KnowledgeUnit, KnowledgeUnitKind,
-    KnowledgeVersionSet,
+    build_chunk_units, build_section_units, build_segment_units, list_knowledge_units,
+    normalize_text_for_source, segment_document_text, visit_source_knowledge_documents,
+    ContentKnowledgeDocument, KnowledgeUnit, KnowledgeUnitKind, KnowledgeVersionSet, SegmentDraft,
 };
 
 const JOB_STAGES: &[&str] = &["normalize", "segment", "chunk", "embed", "finalize"];
@@ -28,7 +27,7 @@ fn upsert_document(
     document: &ContentKnowledgeDocument,
 ) -> Result<()> {
     conn.execute(
-        r#"INSERT OR REPLACE INTO knowledge_documents(
+        r#"INSERT INTO knowledge_documents(
                document_id,
                origin_type,
                source_kind,
@@ -48,7 +47,26 @@ fn upsert_document(
                embedding_policy_version,
                retrieval_policy_version,
                last_indexed_at_ms
-           ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19)"#,
+           ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19)
+           ON CONFLICT(document_id) DO UPDATE SET
+               origin_type = excluded.origin_type,
+               source_kind = excluded.source_kind,
+               role = excluded.role,
+               language = excluded.language,
+               quality_score = excluded.quality_score,
+               title = excluded.title,
+               summary = excluded.summary,
+               anchor_json = excluded.anchor_json,
+               raw_text = excluded.raw_text,
+               normalized_text = excluded.normalized_text,
+               created_at_ms = excluded.created_at_ms,
+               updated_at_ms = excluded.updated_at_ms,
+               schema_version = excluded.schema_version,
+               normalization_version = excluded.normalization_version,
+               segmentation_version = excluded.segmentation_version,
+               embedding_policy_version = excluded.embedding_policy_version,
+               retrieval_policy_version = excluded.retrieval_policy_version,
+               last_indexed_at_ms = excluded.last_indexed_at_ms"#,
         params![
             document.document_id,
             serde_json::to_string(&document.origin_type)?.trim_matches('"').to_string(),
@@ -79,16 +97,27 @@ fn upsert_document(
     Ok(())
 }
 
-fn replace_units(
-    conn: &Connection,
-    key: &[u8; 32],
-    document_id: &str,
-    units: &[KnowledgeUnit],
-) -> Result<()> {
-    conn.execute(
-        "DELETE FROM knowledge_units WHERE document_id = ?1",
-        params![document_id],
-    )?;
+fn with_immediate_transaction<T>(conn: &Connection, f: impl FnOnce() -> Result<T>) -> Result<T> {
+    conn.execute_batch("BEGIN IMMEDIATE;")?;
+    match f() {
+        Ok(value) => {
+            conn.execute_batch("COMMIT;")?;
+            Ok(value)
+        }
+        Err(error) => {
+            let _ = conn.execute_batch("ROLLBACK;");
+            Err(error)
+        }
+    }
+}
+
+fn unit_kind_name(unit_kind: KnowledgeUnitKind) -> Result<String> {
+    Ok(serde_json::to_string(&unit_kind)?
+        .trim_matches('"')
+        .to_string())
+}
+
+fn insert_units(conn: &Connection, key: &[u8; 32], units: &[KnowledgeUnit]) -> Result<()> {
     for unit in units {
         conn.execute(
             r#"INSERT INTO knowledge_units(
@@ -112,9 +141,7 @@ fn replace_units(
                 unit.unit_id,
                 unit.document_id,
                 unit.parent_unit_id,
-                serde_json::to_string(&unit.unit_kind)?
-                    .trim_matches('"')
-                    .to_string(),
+                unit_kind_name(unit.unit_kind)?,
                 serde_json::to_string(&unit.source_kind)?
                     .trim_matches('"')
                     .to_string(),
@@ -139,6 +166,33 @@ fn replace_units(
         )?;
     }
     Ok(())
+}
+
+fn replace_units(
+    conn: &Connection,
+    key: &[u8; 32],
+    document_id: &str,
+    units: &[KnowledgeUnit],
+) -> Result<()> {
+    conn.execute(
+        "DELETE FROM knowledge_units WHERE document_id = ?1",
+        params![document_id],
+    )?;
+    insert_units(conn, key, units)
+}
+
+fn replace_units_of_kind(
+    conn: &Connection,
+    key: &[u8; 32],
+    document_id: &str,
+    unit_kind: KnowledgeUnitKind,
+    units: &[KnowledgeUnit],
+) -> Result<()> {
+    conn.execute(
+        "DELETE FROM knowledge_units WHERE document_id = ?1 AND unit_kind = ?2",
+        params![document_id, unit_kind_name(unit_kind)?],
+    )?;
+    insert_units(conn, key, units)
 }
 
 fn deterministic_embedding(text: &str, dim: usize) -> Vec<f32> {
@@ -235,33 +289,48 @@ fn queue_jobs_for_document(conn: &Connection, document_id: &str) -> Result<()> {
 }
 
 fn initialize_rebuild(conn: &Connection, key: &[u8; 32]) -> Result<()> {
-    crate::db::reset_knowledge_index(conn)?;
-    let mut documents = collect_source_knowledge_documents(conn, key)?;
-    for document in &mut documents {
-        document.versions = KnowledgeVersionSet::current();
-    }
-    for document in &documents {
-        upsert_document(conn, key, document)?;
-        queue_jobs_for_document(conn, &document.document_id)?;
-    }
-    conn.execute(
-        r#"UPDATE knowledge_rebuild_state
-           SET status = 'running',
-               rebuild_required = 0,
-               stale_reason = NULL,
-               last_error = NULL,
-               last_rebuild_started_at_ms = ?1,
-               current_document_id = NULL,
-               current_stage = NULL,
-               documents_indexed = 0,
-               units_indexed = 0,
-               embeddings_indexed = 0,
-               total_documents = ?2,
-               cancel_requested = 0
-           WHERE state_key = 1"#,
-        params![now_ms(), documents.len() as i64],
-    )?;
-    Ok(())
+    with_immediate_transaction(conn, || {
+        crate::db::reset_knowledge_index(conn)?;
+        let rebuild_started_at_ms = now_ms();
+        let mut total_documents = 0i64;
+        visit_source_knowledge_documents(conn, key, |mut document| {
+            document.versions = KnowledgeVersionSet::current();
+            upsert_document(conn, key, &document)?;
+            queue_jobs_for_document(conn, &document.document_id)?;
+            total_documents += 1;
+            Ok(())
+        })?;
+        conn.execute(
+            r#"UPDATE knowledge_rebuild_state
+               SET status = 'running',
+                   rebuild_required = 0,
+                   stale_reason = NULL,
+                   last_error = NULL,
+                   last_rebuild_started_at_ms = ?1,
+                   current_document_id = NULL,
+                   current_stage = NULL,
+                   documents_indexed = 0,
+                   units_indexed = 0,
+                   embeddings_indexed = 0,
+                   total_documents = ?2,
+                   cancel_requested = 0
+               WHERE state_key = 1"#,
+            params![rebuild_started_at_ms, total_documents],
+        )?;
+        Ok(())
+    })
+}
+
+fn segment_drafts_from_units(units: &[KnowledgeUnit]) -> Vec<SegmentDraft> {
+    units
+        .iter()
+        .map(|unit| SegmentDraft {
+            ordinal: unit.ordinal,
+            text: unit.normalized_text.clone(),
+            role: unit.role,
+            anchors: unit.anchors.clone(),
+        })
+        .collect()
 }
 
 fn document_by_id(
@@ -413,11 +482,22 @@ fn process_stage(conn: &Connection, key: &[u8; 32], document_id: &str, stage: &s
         }
         "chunk" => {
             let document = document_by_id(conn, key, document_id)?;
-            let segments = segment_document_text(&document);
-            let mut units = build_section_units(&document, &segments);
-            units.extend(build_segment_units(&document, &segments));
-            units.extend(build_chunk_units(&document, &segments, 192, 256));
-            replace_units(conn, key, document_id, &units)?;
+            let segment_units = list_knowledge_units(
+                conn,
+                key,
+                document_id,
+                Some(KnowledgeUnitKind::Segment),
+                10_000,
+                0,
+            )?;
+            if segment_units.is_empty() {
+                return Err(anyhow!(
+                    "segment units missing for chunk stage: {document_id}"
+                ));
+            }
+            let segments = segment_drafts_from_units(&segment_units);
+            let chunks = build_chunk_units(&document, &segments, 192, 256);
+            replace_units_of_kind(conn, key, document_id, KnowledgeUnitKind::Chunk, &chunks)?;
         }
         "embed" => {
             conn.execute(
