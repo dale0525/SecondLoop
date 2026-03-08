@@ -8,11 +8,9 @@ import '../../i18n/strings.g.dart';
 import '../../src/rust/db.dart';
 import '../../ui/sl_surface.dart';
 import '../../ui/sl_tokens.dart';
+import 'attachment_detail_workspace.dart';
 import 'attachment_detail_text_content.dart';
 import 'attachment_text_editor_card.dart';
-
-const double _kAttachmentDetailPageMaxWidth = 920;
-const double _kAttachmentDetailContentMaxWidth = 820;
 
 String normalizeAudioPlaybackMimeType(String mimeType) {
   final normalized = mimeType.trim().toLowerCase();
@@ -46,6 +44,7 @@ class AudioAttachmentPlayerView extends StatefulWidget {
     this.initialAnnotationPayload,
     this.onRetryRecognition,
     this.onSaveFull,
+    this.actions = const <AttachmentDetailAction>[],
     super.key,
   });
 
@@ -58,6 +57,7 @@ class AudioAttachmentPlayerView extends StatefulWidget {
   final Map<String, Object?>? initialAnnotationPayload;
   final Future<void> Function()? onRetryRecognition;
   final Future<void> Function(String value)? onSaveFull;
+  final List<AttachmentDetailAction> actions;
 
   @override
   State<AudioAttachmentPlayerView> createState() =>
@@ -219,27 +219,13 @@ class _AudioAttachmentPlayerViewState extends State<AudioAttachmentPlayerView> {
               ),
               const SizedBox(width: 12),
               Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      widget.displayTitle,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.titleSmall?.copyWith(
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      widget.attachment.mimeType,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: scheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ],
+                child: Text(
+                  widget.attachment.mimeType,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ),
             ],
@@ -382,76 +368,123 @@ class _AudioAttachmentPlayerViewState extends State<AudioAttachmentPlayerView> {
             onPressed: widget.onRetryRecognition,
           );
 
-    Widget buildSection(
-      Widget child, {
-      required double maxWidth,
-      Alignment alignment = Alignment.center,
-    }) {
-      return Align(
-        alignment: alignment,
-        child: ConstrainedBox(
-          constraints: BoxConstraints(maxWidth: maxWidth),
-          child: child,
+    return AttachmentTextEditorCard(
+      fieldKeyPrefix: 'attachment_text_full',
+      label: context.t.attachments.content.fullText,
+      showLabel: false,
+      text: fullText,
+      markdown: true,
+      emptyText: attachmentDetailEmptyTextLabel(context),
+      extraAction: retryAction,
+      onSave: widget.onSaveFull,
+    );
+  }
+
+  List<AttachmentDetailMetric> _buildWorkspaceMetrics(
+    Map<String, Object?>? payload,
+  ) {
+    final metrics = <AttachmentDetailMetric>[
+      AttachmentDetailMetric(
+        label: context.t.attachments.workspace.metrics.type,
+        value: widget.attachment.mimeType,
+      ),
+    ];
+    final durationMs = _asInt(payload?['duration_ms']);
+    if (durationMs != null && durationMs > 0) {
+      metrics.add(
+        AttachmentDetailMetric(
+          label: context.t.attachments.workspace.metrics.duration,
+          value: formatAttachmentDurationLabel(
+            Duration(milliseconds: durationMs),
+          ),
+        ),
+      );
+    }
+    return metrics;
+  }
+
+  List<AttachmentDetailMetadataItem> _buildMetadataItems(
+    BuildContext context, {
+    required AttachmentMetadata? metadata,
+    required Map<String, Object?>? payload,
+  }) {
+    final items = <AttachmentDetailMetadataItem>[
+      AttachmentDetailMetadataItem(
+        label: context.t.attachments.metadata.format,
+        value: widget.attachment.mimeType,
+      ),
+      AttachmentDetailMetadataItem(
+        label: context.t.attachments.metadata.size,
+        value: formatAttachmentByteSize(widget.attachment.byteLen.toInt()),
+      ),
+    ];
+
+    final durationMs = _asInt(payload?['duration_ms']);
+    if (durationMs != null && durationMs > 0) {
+      items.add(
+        AttachmentDetailMetadataItem(
+          label: context.t.attachments.workspace.metadata.duration,
+          value: formatAttachmentDurationLabel(
+            Duration(milliseconds: durationMs),
+          ),
         ),
       );
     }
 
-    return buildSection(
-      AttachmentTextEditorCard(
-        fieldKeyPrefix: 'attachment_text_full',
-        label: context.t.attachments.content.fullText,
-        showLabel: false,
-        text: fullText,
-        markdown: true,
-        emptyText: attachmentDetailEmptyTextLabel(context),
-        extraAction: retryAction,
-        onSave: widget.onSaveFull,
-      ),
-      maxWidth: _kAttachmentDetailContentMaxWidth,
-    );
+    final filename =
+        metadata?.filenames.isNotEmpty == true ? metadata!.filenames.first : '';
+    if (filename.trim().isNotEmpty) {
+      items.add(
+        AttachmentDetailMetadataItem(
+          label: context.t.attachments.workspace.metadata.filename,
+          value: filename.trim(),
+        ),
+      );
+    }
+
+    final sourceUrl = metadata?.sourceUrls.isNotEmpty == true
+        ? metadata!.sourceUrls.first.trim()
+        : '';
+    if (sourceUrl.isNotEmpty) {
+      items.add(
+        AttachmentDetailMetadataItem(
+          label: context.t.attachments.workspace.metadata.source,
+          value: sourceUrl,
+        ),
+      );
+    }
+
+    return items;
+  }
+
+  int? _asInt(Object? value) {
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    return int.tryParse(value?.toString() ?? '');
   }
 
   Widget _buildView(
     BuildContext context, {
+    required AttachmentMetadata? metadata,
     required Map<String, Object?>? payload,
   }) {
-    Widget buildSection(
-      Widget child, {
-      required double maxWidth,
-      Alignment alignment = Alignment.center,
-    }) {
-      return Align(
-        alignment: alignment,
-        child: ConstrainedBox(
-          constraints: BoxConstraints(maxWidth: maxWidth),
-          child: child,
-        ),
-      );
-    }
-
-    return Center(
+    return KeyedSubtree(
       key: const ValueKey('audio_attachment_player_view'),
-      child: ConstrainedBox(
-        constraints:
-            const BoxConstraints(maxWidth: _kAttachmentDetailPageMaxWidth),
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              buildSection(
-                _buildPlayerCard(context),
-                maxWidth: _kAttachmentDetailContentMaxWidth,
-                alignment: Alignment.center,
-              ),
-              const SizedBox(height: 14),
-              _buildFullSection(
-                context,
-                payload: payload,
-              ),
-            ],
-          ),
+      child: AttachmentDetailWorkspace(
+        title: widget.displayTitle,
+        typeLabel: context.t.attachments.workspace.types.audio,
+        metrics: _buildWorkspaceMetrics(payload),
+        preview: _buildPlayerCard(context),
+        content: _buildFullSection(
+          context,
+          payload: payload,
         ),
+        metadataItems: _buildMetadataItems(
+          context,
+          metadata: metadata,
+          payload: payload,
+        ),
+        actions: widget.actions,
       ),
     );
   }
@@ -459,11 +492,12 @@ class _AudioAttachmentPlayerViewState extends State<AudioAttachmentPlayerView> {
   @override
   Widget build(BuildContext context) {
     Widget buildWith(
-      AttachmentMetadata? _,
+      AttachmentMetadata? metadata,
       Map<String, Object?>? payload,
     ) {
       return _buildView(
         context,
+        metadata: metadata,
         payload: payload,
       );
     }

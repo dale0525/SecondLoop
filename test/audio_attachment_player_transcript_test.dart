@@ -111,6 +111,7 @@ void main() {
               displayTitle: 'Audio attachment',
               initialAnnotationPayload: const <String, Object?>{
                 'transcript_full': 'A full transcript shown in the detail page',
+                'duration_ms': 42000,
               },
             ),
           ),
@@ -125,13 +126,23 @@ void main() {
     final transcriptCardFinder =
         find.byKey(const ValueKey('attachment_text_full_card'));
 
+    expect(find.byKey(const ValueKey('attachment_detail_workspace')),
+        findsOneWidget);
+    expect(find.byKey(const ValueKey('attachment_detail_header_bar')),
+        findsOneWidget);
+    expect(find.byKey(const ValueKey('attachment_detail_inspector')),
+        findsOneWidget);
+    expect(find.text('Audio attachment'), findsOneWidget);
+    expect(find.text('audio/mp4'), findsWidgets);
+    expect(find.text('00:42'), findsOneWidget);
+    expect(find.text('Content'), findsOneWidget);
+    expect(find.text('Metadata'), findsOneWidget);
     expect(playerCardFinder, findsOneWidget);
     expect(transcriptCardFinder, findsOneWidget);
 
     final playerSize = tester.getSize(playerCardFinder);
     final transcriptSize = tester.getSize(transcriptCardFinder);
-    expect(
-        (playerSize.width - transcriptSize.width).abs(), lessThanOrEqualTo(1));
+    expect(transcriptSize.width, lessThanOrEqualTo(playerSize.width));
 
     final sliderFinder =
         find.byKey(const ValueKey('audio_attachment_seek_slider'));
@@ -151,6 +162,12 @@ void main() {
       sliderThemeData.activeTrackColor,
       isNot(equals(sliderThemeData.inactiveTrackColor)),
     );
+
+    await tester
+        .tap(find.byKey(const ValueKey('attachment_detail_tab_metadata')));
+    await tester.pumpAndSettle();
+    expect(find.text('Size'), findsOneWidget);
+    expect(find.text('16 B'), findsOneWidget);
   });
 }
 

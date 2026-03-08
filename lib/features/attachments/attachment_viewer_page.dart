@@ -37,6 +37,7 @@ import '../../i18n/strings.g.dart';
 import '../../src/rust/db.dart';
 import '../../ui/sl_surface.dart';
 import 'audio_attachment_player.dart';
+import 'attachment_detail_workspace.dart';
 import 'attachment_detail_text_content.dart';
 import 'attachment_text_editor_card.dart';
 import 'attachment_payload_refresh_policy.dart';
@@ -996,6 +997,31 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
     return _saveAttachmentText(full: value);
   }
 
+  List<AttachmentDetailAction> _buildWorkspaceActions(Uint8List? bytes) {
+    final disabled = bytes == null || bytes.isEmpty;
+    return [
+      AttachmentDetailAction(
+        key: const ValueKey('attachment_detail_action_share'),
+        label: context.t.common.actions.share,
+        icon: Icons.share_rounded,
+        onPressed: disabled ? null : () => _shareAttachment(bytes),
+      ),
+      AttachmentDetailAction(
+        key: const ValueKey('attachment_detail_action_open_with_system'),
+        label: context.t.attachments.content.openWithSystem,
+        icon: Icons.open_in_new_rounded,
+        onPressed: disabled ? null : () => _openAttachmentWithSystem(bytes),
+      ),
+      AttachmentDetailAction(
+        key: const ValueKey('attachment_detail_action_download'),
+        label: context.t.common.actions.pull,
+        icon: Icons.download_rounded,
+        primary: true,
+        onPressed: disabled ? null : () => _downloadAttachment(bytes),
+      ),
+    ];
+  }
+
   @override
   Widget build(BuildContext context) {
     final bytesFuture = _bytesFuture;
@@ -1102,6 +1128,9 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
                     onOcrLanguageHintsChanged: _updateDocumentOcrLanguageHints,
                     onSaveFull:
                         _canEditAttachmentText ? _saveAttachmentFull : null,
+                    actions: _buildWorkspaceActions(
+                      bytes.isEmpty ? null : bytes,
+                    ),
                   ),
                 );
               }
@@ -1175,11 +1204,15 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
                           : null,
                       onSaveFull:
                           _canEditAttachmentText ? _saveAttachmentFull : null,
+                      actions: _buildWorkspaceActions(bytes),
                     ),
                   );
                 }
 
-                return _buildImageAttachmentDetail(bytes);
+                return _buildImageAttachmentDetail(
+                  bytes,
+                  actions: _buildWorkspaceActions(bytes),
+                );
               },
             );
           }(),

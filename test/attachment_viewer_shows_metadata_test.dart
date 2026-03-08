@@ -57,7 +57,19 @@ void main() {
       find.byKey(const ValueKey('attachment_viewer_download')),
       findsOneWidget,
     );
-    expect(find.text('abc.png'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('attachment_detail_action_share')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('attachment_detail_action_open_with_system')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('attachment_detail_action_download')),
+      findsOneWidget,
+    );
+    expect(find.text('abc.png'), findsWidgets);
     expect(find.text('Image attachment'), findsNothing);
   });
 
@@ -91,6 +103,18 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    expect(
+      find.byKey(const ValueKey('attachment_detail_workspace')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('attachment_detail_header_bar')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('attachment_detail_inspector')),
+      findsOneWidget,
+    );
     expect(
       find.byKey(const ValueKey('attachment_image_detail_scroll')),
       findsOneWidget,
@@ -252,7 +276,7 @@ void main() {
     );
     expect(find.byKey(const ValueKey('attachment_text_full_empty')),
         findsOneWidget);
-    expect(find.text('application/pdf'), findsOneWidget);
+    expect(find.text('application/pdf'), findsWidgets);
 
     pendingBytes.complete(Uint8List.fromList(<int>[1, 2, 3]));
     await tester.pump();

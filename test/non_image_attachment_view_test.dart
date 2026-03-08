@@ -102,6 +102,18 @@ void main() {
     );
     await tester.pump();
 
+    expect(
+      find.byKey(const ValueKey('attachment_detail_workspace')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('attachment_detail_header_bar')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('attachment_detail_inspector')),
+      findsOneWidget,
+    );
     expect(find.text('Example Title'), findsNothing);
     expect(find.text('Original URL'), findsNothing);
     expect(find.text('https://example.com/p'), findsNothing);

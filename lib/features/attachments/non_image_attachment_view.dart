@@ -11,6 +11,7 @@ import '../../i18n/strings.g.dart';
 import '../../src/rust/db.dart';
 import '../../ui/sl_surface.dart';
 import '../media_backup/cloud_media_download.dart';
+import 'attachment_detail_workspace.dart';
 import 'attachment_detail_text_content.dart';
 import 'attachment_text_editor_card.dart';
 import 'attachment_text_source_policy.dart';
@@ -199,6 +200,7 @@ class NonImageAttachmentView extends StatefulWidget {
     this.ocrLanguageHints = 'device_plus_en',
     this.onOcrLanguageHintsChanged,
     this.onSaveFull,
+    this.actions = const <AttachmentDetailAction>[],
     super.key,
   });
 
@@ -217,6 +219,7 @@ class NonImageAttachmentView extends StatefulWidget {
   final String ocrLanguageHints;
   final ValueChanged<String>? onOcrLanguageHintsChanged;
   final Future<void> Function(String value)? onSaveFull;
+  final List<AttachmentDetailAction> actions;
 
   @override
   State<NonImageAttachmentView> createState() => _NonImageAttachmentViewState();
@@ -615,6 +618,7 @@ class _NonImageAttachmentViewState extends State<NonImageAttachmentView> {
   Widget _buildView(
     BuildContext context, {
     required Attachment attachment,
+    required AttachmentMetadata? metadata,
     required Map<String, Object?>? payload,
     required Future<void> Function()? onRunOcr,
     required AttachmentAnnotationJob? annotationJob,
@@ -747,155 +751,205 @@ class _NonImageAttachmentViewState extends State<NonImageAttachmentView> {
                 onPressed: ocrInProgress ? null : widget.onRetryRecognition!,
               );
 
-    Widget buildSection(
-      Widget child, {
-      required double maxWidth,
-      Alignment alignment = Alignment.center,
-    }) {
-      return Align(
-        alignment: alignment,
-        child: ConstrainedBox(
-          constraints: BoxConstraints(maxWidth: maxWidth),
-          child: child,
-        ),
-      );
-    }
-
-    return Center(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 960),
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
+    final previewChildren = <Widget>[];
+    if (hasPreviewSignal || debugMarker != null) {
+      previewChildren.add(
+        SlSurface(
+          key: const ValueKey('attachment_non_image_preview_surface'),
+          padding: const EdgeInsets.all(14),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              if (hasPreviewSignal || debugMarker != null) ...[
-                buildSection(
-                  SlSurface(
-                    key: const ValueKey('attachment_non_image_preview_surface'),
-                    padding: const EdgeInsets.all(14),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Container(
-                          width: 36,
-                          height: 36,
-                          decoration: BoxDecoration(
-                            color: Theme.of(context)
-                                .colorScheme
-                                .secondaryContainer,
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          alignment: Alignment.center,
-                          child: Icon(
-                            _previewIconForMime(mime),
-                            color: Theme.of(context)
-                                .colorScheme
-                                .onSecondaryContainer,
-                            size: 20,
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                mime,
-                                style: Theme.of(context).textTheme.labelMedium,
-                              ),
-                              if (previewHint.isNotEmpty) ...[
-                                const SizedBox(height: 4),
-                                if (showPreparingTextState)
-                                  Row(
-                                    children: [
-                                      const SizedBox(
-                                        width: 14,
-                                        height: 14,
-                                        child: CircularProgressIndicator(
-                                          strokeWidth: 2,
-                                        ),
-                                      ),
-                                      const SizedBox(width: 8),
-                                      Expanded(
-                                        child: Text(
-                                          previewHint,
-                                          style: Theme.of(context)
-                                              .textTheme
-                                              .bodySmall,
-                                        ),
-                                      ),
-                                    ],
-                                  )
-                                else
-                                  Text(
-                                    previewHint,
-                                    style:
-                                        Theme.of(context).textTheme.bodySmall,
-                                  ),
-                              ],
-                              if (debugMarker != null) ...[
-                                const SizedBox(height: 6),
-                                SelectableText(
-                                  debugMarker,
-                                  style: Theme.of(context).textTheme.bodySmall,
-                                ),
-                              ],
-                            ],
-                          ),
-                        ),
-                      ],
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.secondaryContainer,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                alignment: Alignment.center,
+                child: Icon(
+                  _previewIconForMime(mime),
+                  color: Theme.of(context).colorScheme.onSecondaryContainer,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      mime,
+                      style: Theme.of(context).textTheme.labelMedium,
                     ),
-                  ),
-                  maxWidth: 820,
+                    if (previewHint.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      if (showPreparingTextState)
+                        Row(
+                          children: [
+                            const SizedBox(
+                              width: 14,
+                              height: 14,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                previewHint,
+                                style: Theme.of(context).textTheme.bodySmall,
+                              ),
+                            ),
+                          ],
+                        )
+                      else
+                        Text(
+                          previewHint,
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                    ],
+                    if (debugMarker != null) ...[
+                      const SizedBox(height: 6),
+                      SelectableText(
+                        debugMarker,
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                    ],
+                  ],
                 ),
-                const SizedBox(height: 14),
-              ],
-              if (videoManifestFuture != null) ...[
-                buildSection(
-                  FutureBuilder<ParsedVideoManifest?>(
-                    future: videoManifestFuture,
-                    builder: (context, snapshot) {
-                      final manifest = snapshot.data;
-                      if (manifest == null) return const SizedBox.shrink();
-
-                      return _buildVideoManifestPreviewCard(
-                        context,
-                        manifest,
-                        payload: payload,
-                      );
-                    },
-                  ),
-                  maxWidth: 820,
-                ),
-                const SizedBox(height: 14),
-              ],
-              buildSection(
-                AttachmentTextEditorCard(
-                  fieldKeyPrefix: 'attachment_text_full',
-                  label: context.t.attachments.content.fullText,
-                  showLabel: false,
-                  text: fullText,
-                  markdown: true,
-                  emptyText: attachmentDetailEmptyTextLabel(context),
-                  extraAction: regenerateAction ?? retryRecognitionAction,
-                  onSave: widget.onSaveFull,
-                ),
-                maxWidth: 820,
               ),
             ],
           ),
         ),
+      );
+    }
+    if (videoManifestFuture != null) {
+      previewChildren.add(
+        FutureBuilder<ParsedVideoManifest?>(
+          future: videoManifestFuture,
+          builder: (context, snapshot) {
+            final manifest = snapshot.data;
+            if (manifest == null) return const SizedBox.shrink();
+
+            return _buildVideoManifestPreviewCard(
+              context,
+              manifest,
+              payload: payload,
+            );
+          },
+        ),
+      );
+    }
+
+    final preview = previewChildren.isEmpty
+        ? null
+        : Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              for (var index = 0; index < previewChildren.length; index++) ...[
+                if (index > 0) const SizedBox(height: 14),
+                previewChildren[index],
+              ],
+            ],
+          );
+
+    final metrics = <AttachmentDetailMetric>[
+      AttachmentDetailMetric(
+          label: context.t.attachments.workspace.metrics.type, value: mime),
+      if (pageCount > 0)
+        AttachmentDetailMetric(
+            label: context.t.attachments.workspace.metrics.pages,
+            value: '$pageCount'),
+    ];
+
+    final metadataItems = <AttachmentDetailMetadataItem>[
+      AttachmentDetailMetadataItem(
+        label: context.t.attachments.metadata.format,
+        value: mime,
       ),
+      AttachmentDetailMetadataItem(
+        label: context.t.attachments.metadata.size,
+        value: formatAttachmentByteSize(attachment.byteLen.toInt()),
+      ),
+      if (pageCount > 0)
+        AttachmentDetailMetadataItem(
+            label: context.t.attachments.workspace.metadata.pages,
+            value: '$pageCount'),
+      if (ocrEngine.isNotEmpty)
+        AttachmentDetailMetadataItem(
+            label: context.t.attachments.workspace.metadata.ocrEngine,
+            value: ocrEngine),
+      if (ocrLangHints.isNotEmpty)
+        AttachmentDetailMetadataItem(
+          label: context.t.attachments.workspace.metadata.languageHints,
+          value: ocrLangHints,
+        ),
+      if (metadata?.sourceUrls.isNotEmpty == true)
+        AttachmentDetailMetadataItem(
+          label: context.t.attachments.workspace.metadata.source,
+          value: metadata!.sourceUrls.first.trim(),
+        ),
+    ];
+
+    final actions = <AttachmentDetailAction>[
+      if (canRunOcr)
+        AttachmentDetailAction(
+          label: context.t.attachments.content.rerunOcr,
+          icon: Icons.auto_awesome_rounded,
+          onPressed: ocrInProgress
+              ? null
+              : () => _onRegeneratePressed(
+                    supportsOcr: supportsOcr,
+                    ocrInProgress: ocrInProgress,
+                    ocrLanguageHints: ocrLanguageHints,
+                    onOcrLanguageHintsChanged: onOcrLanguageHintsChanged,
+                    run: onRunOcr,
+                  ),
+        )
+      else if (widget.onRetryRecognition != null && isUrlManifest)
+        AttachmentDetailAction(
+          label: context.t.attachments.content.rerunOcr,
+          icon: Icons.auto_awesome_rounded,
+          onPressed: ocrInProgress ? null : widget.onRetryRecognition,
+        ),
+    ];
+
+    return AttachmentDetailWorkspace(
+      title: widget.displayTitle,
+      typeLabel: isUrlManifest
+          ? context.t.attachments.workspace.types.link
+          : (isVideoManifest
+              ? context.t.attachments.workspace.types.video
+              : (isPdf || isDocx
+                  ? context.t.attachments.workspace.types.document
+                  : context.t.attachments.workspace.types.attachment)),
+      metrics: metrics,
+      preview: preview,
+      content: AttachmentTextEditorCard(
+        fieldKeyPrefix: 'attachment_text_full',
+        label: context.t.attachments.content.fullText,
+        showLabel: false,
+        text: fullText,
+        markdown: true,
+        emptyText: attachmentDetailEmptyTextLabel(context),
+        extraAction: regenerateAction ?? retryRecognitionAction,
+        onSave: widget.onSaveFull,
+      ),
+      metadataItems: metadataItems,
+      actions: [...widget.actions, ...actions],
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    Widget buildWith(AttachmentMetadata? _, Map<String, Object?>? payload) {
+    Widget buildWith(
+        AttachmentMetadata? metadata, Map<String, Object?>? payload) {
       return _buildView(
         context,
         attachment: widget.attachment,
+        metadata: metadata,
         payload: payload,
         onRunOcr: widget.onRunOcr,
         annotationJob: widget.annotationJob,
