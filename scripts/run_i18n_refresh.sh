@@ -60,7 +60,6 @@ resolve_dart_bin() {
   exit 1
 }
 
-
 run_windows_batch_tool() {
   local tool_name="$1"
   local tool_bin="$2"
