@@ -57,6 +57,16 @@ void main() {
     expect(stage, AttachmentProcessingStage.recognizingText);
   });
 
+  test('pdf pending job without payload still maps to recognizing text', () {
+    final stage = resolveAttachmentProcessingStage(
+      mimeType: 'application/pdf',
+      jobStatus: 'pending',
+      payload: null,
+    );
+
+    expect(stage, AttachmentProcessingStage.recognizingText);
+  });
+
   test('image pending job maps to analyzing image', () {
     final stage = resolveAttachmentProcessingStage(
       mimeType: 'image/jpeg',

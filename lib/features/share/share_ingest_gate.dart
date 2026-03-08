@@ -236,6 +236,7 @@ final class _ShareIngestGateState extends State<ShareIngestGate>
               inferredMimeType: mimeType,
               lang: lang,
               platformExif: platformExif,
+              onStage: _setFeedbackStage,
               onBackupCandidate: (attachmentSha256) =>
                   _maybeEnqueueCloudMediaBackup(
                 backend,

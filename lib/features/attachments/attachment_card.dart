@@ -68,8 +68,7 @@ class AttachmentCard extends StatelessWidget {
           completedText: context.t.attachments.content.previewUnavailable,
           autoOcrStatus: autoOcrStatus,
           hasAnnotationPayload: hasAnnotationPayload,
-          mimeType: attachment.mimeType,
-          payload: annotationPayload,
+          processingStage: processingStage,
           t: context.t,
         );
         final subtitle = _resolveDisplaySummary(
@@ -224,20 +223,15 @@ String resolveAttachmentCardFallbackSubtitle({
   String? completedText,
   String? autoOcrStatus,
   bool hasAnnotationPayload = false,
-  String? mimeType,
-  Map<String, Object?>? payload,
+  AttachmentProcessingStage? processingStage,
   Translations? t,
 }) {
   final normalizedStatus = (jobStatus ?? '').trim().toLowerCase();
   final normalizedAutoStatus = (autoOcrStatus ?? '').trim().toLowerCase();
   final normalizedCompletedText = (completedText ?? '').trim();
 
-  if (mimeType != null && t != null) {
-    final stage = resolveAttachmentProcessingStage(
-      mimeType: mimeType,
-      jobStatus: jobStatus,
-      payload: payload,
-    );
+  if (processingStage != null && t != null) {
+    final stage = processingStage;
     if (stage == AttachmentProcessingStage.failed) {
       return failedText;
     }

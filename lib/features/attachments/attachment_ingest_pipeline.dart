@@ -406,6 +406,7 @@ Future<ImageAttachmentIngestResult> ingestImageAttachmentBytes({
   required String lang,
   int? fallbackCapturedAtMs,
   PlatformExifMetadata? platformExif,
+  AttachmentProcessingStageCallback? onStage,
   AttachmentShaCallback? onBackupCandidate,
   AttachmentShaLangCallback? onMaybeEnqueuePlace,
   AttachmentShaLangCallback? onMaybeEnqueueAnnotation,
@@ -435,6 +436,7 @@ Future<ImageAttachmentIngestResult> ingestImageAttachmentBytes({
   final latitude = latLon?.$1;
   final longitude = latLon?.$2;
 
+  onStage?.call(AttachmentProcessingStage.finalizingAttachment);
   final attachment = await backend.insertAttachment(
     sessionKey,
     bytes: compressed.bytes,

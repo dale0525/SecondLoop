@@ -125,6 +125,12 @@ AttachmentProcessingStage resolveAttachmentProcessingStage({
     return AttachmentProcessingStage.transcribingAudio;
   }
 
+  if (isDocument &&
+      (normalizedJobStatus == 'pending' || normalizedJobStatus == 'running') &&
+      payload == null) {
+    return AttachmentProcessingStage.recognizingText;
+  }
+
   if ((isDocument ||
           needsOcr ||
           attachmentProcessingOcrInProgressFromPayload(payload)) &&

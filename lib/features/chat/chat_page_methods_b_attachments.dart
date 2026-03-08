@@ -161,6 +161,7 @@ extension _ChatPageStateMethodsBAttachments on _ChatPageState {
         rawBytes: draft.bytes,
         inferredMimeType: normalizedMimeType,
         lang: lang,
+        onStage: onStage,
         onBackupCandidate: (attachmentSha256) async {
           try {
             await _maybeEnqueueCloudMediaBackup(
