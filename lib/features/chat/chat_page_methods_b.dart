@@ -671,7 +671,9 @@ extension _ChatPageStateMethodsB on _ChatPageState {
           ),
           onProgress: (progress) {
             if (!mounted) return;
-            if (progress.status == AttachmentDraftItemStatus.linked) {
+            if (progress.status == AttachmentDraftItemStatus.linked &&
+                _attachmentSendFeedbackStage !=
+                    AttachmentProcessingStage.finalizingAttachment) {
               _setState(
                 () => _attachmentSendFeedbackStage =
                     AttachmentProcessingStage.finalizingAttachment,

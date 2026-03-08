@@ -86,6 +86,10 @@ AttachmentProcessingStage resolveAttachmentProcessingStage({
   final hasLinkedAudio = _payloadString(payload, 'audio_sha256').isNotEmpty ||
       _payloadString(payload, 'audio_mime_type').startsWith('audio/');
   final needsOcr = payload?['needs_ocr'] == true;
+  final hasOcrText = _hasAnyReadableText(
+    payload,
+    const <String>['ocr_text_excerpt', 'ocr_text_full', 'ocr_text'],
+  );
 
   final isVideoManifest =
       normalizedMimeType == 'application/x.secondloop.video+json' ||
@@ -127,7 +131,7 @@ AttachmentProcessingStage resolveAttachmentProcessingStage({
 
   if (isDocument &&
       (normalizedJobStatus == 'pending' || normalizedJobStatus == 'running') &&
-      payload == null) {
+      !hasOcrText) {
     return AttachmentProcessingStage.recognizingText;
   }
 
@@ -137,11 +141,7 @@ AttachmentProcessingStage resolveAttachmentProcessingStage({
       (autoOcrStatus == 'queued' ||
           autoOcrStatus == 'running' ||
           autoOcrStatus == 'retrying' ||
-          (needsOcr &&
-              !_hasAnyReadableText(
-                payload,
-                const <String>['ocr_text_excerpt', 'ocr_text_full', 'ocr_text'],
-              )))) {
+          (needsOcr && !hasOcrText))) {
     return AttachmentProcessingStage.recognizingText;
   }
 

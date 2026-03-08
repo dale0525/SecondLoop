@@ -82,6 +82,54 @@ void main() {
   });
 
   testWidgets(
+      'AttachmentAnnotationJobStatusRow does not reload payload on theme-only dependency changes',
+      (tester) async {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final job = AttachmentAnnotationJob(
+      attachmentSha256: 'payload-stable',
+      status: 'pending',
+      lang: 'en',
+      modelName: null,
+      attempts: 0,
+      nextRetryAtMs: null,
+      lastError: null,
+      createdAtMs: now - 2000,
+      updatedAtMs: now - 2000,
+    );
+    final backend = _PayloadBackend(
+      annotationPayloadJsonBySha: const {
+        'payload-stable':
+            '{"schema":"secondloop.video_extract.v1","ocr_auto_status":"queued","audio_sha256":"sha_audio","transcript_full":"","transcript_excerpt":""}',
+      },
+    );
+
+    Widget buildApp(ThemeData theme) {
+      return _wrapWithBackend(
+        backend: backend,
+        child: MaterialApp(
+          theme: theme,
+          home: Scaffold(
+            body: AttachmentAnnotationJobStatusRow(
+              job: job,
+              annotateEnabled: true,
+              canAnnotateNow: true,
+              mimeType: 'application/x.secondloop.video+json',
+            ),
+          ),
+        ),
+      );
+    }
+
+    await tester.pumpWidget(buildApp(ThemeData.light()));
+    await tester.pump();
+    expect(backend.payloadReadCount, 1);
+
+    await tester.pumpWidget(buildApp(ThemeData.dark()));
+    await tester.pump();
+    expect(backend.payloadReadCount, 1);
+  });
+
+  testWidgets(
       'AttachmentAnnotationJobStatusRow uses payload to show video-specific pending stage',
       (tester) async {
     final now = DateTime.now().millisecondsSinceEpoch;
@@ -543,12 +591,14 @@ final class _PayloadBackend extends NativeAppBackend {
         super(appDirProvider: () async => '/tmp/secondloop_test');
 
   final Map<String, String?> _annotationPayloadJsonBySha;
+  int payloadReadCount = 0;
 
   @override
   Future<String?> readAttachmentAnnotationPayloadJson(
     Uint8List key, {
     required String sha256,
   }) async {
+    payloadReadCount += 1;
     return _annotationPayloadJsonBySha[sha256];
   }
 }

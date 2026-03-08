@@ -63,6 +63,12 @@ class _AttachmentAnnotationJobStatusRowState
   bool? _windowsSpeechRecognizerInstalled;
   Map<String, Object?>? _annotationPayload;
   int _payloadLoadVersion = 0;
+  bool _hasLoadedAnnotationPayload = false;
+  String? _lastLoadedPayloadSha256;
+  String? _lastLoadedPayloadStatus;
+  int? _lastLoadedPayloadUpdatedAtMs;
+  Object? _lastLoadedPayloadBackend;
+  String? _lastLoadedPayloadSessionFingerprint;
 
   @override
   void initState() {
@@ -123,6 +129,12 @@ class _AttachmentAnnotationJobStatusRowState
     final shouldLoad = normalizedMimeType.isNotEmpty &&
         (status == 'pending' || status == 'running');
     if (!shouldLoad) {
+      _hasLoadedAnnotationPayload = false;
+      _lastLoadedPayloadSha256 = null;
+      _lastLoadedPayloadStatus = null;
+      _lastLoadedPayloadUpdatedAtMs = null;
+      _lastLoadedPayloadBackend = null;
+      _lastLoadedPayloadSessionFingerprint = null;
       if (_annotationPayload == null) return;
       if (!mounted) {
         _annotationPayload = null;
@@ -135,6 +147,12 @@ class _AttachmentAnnotationJobStatusRowState
     final backendAny = AppBackendScope.maybeOf(context);
     final sessionScope = SessionScope.maybeOf(context);
     if (backendAny is! NativeAppBackend || sessionScope == null) {
+      _hasLoadedAnnotationPayload = false;
+      _lastLoadedPayloadSha256 = null;
+      _lastLoadedPayloadStatus = null;
+      _lastLoadedPayloadUpdatedAtMs = null;
+      _lastLoadedPayloadBackend = null;
+      _lastLoadedPayloadSessionFingerprint = null;
       if (_annotationPayload == null) return;
       if (!mounted) {
         _annotationPayload = null;
@@ -144,15 +162,35 @@ class _AttachmentAnnotationJobStatusRowState
       return;
     }
 
+    final sessionFingerprint = base64Encode(sessionScope.sessionKey);
+    final attachmentSha256 = widget.job.attachmentSha256;
+    final updatedAtMs = widget.job.updatedAtMs;
+    if (_hasLoadedAnnotationPayload &&
+        _lastLoadedPayloadSha256 == attachmentSha256 &&
+        _lastLoadedPayloadStatus == status &&
+        _lastLoadedPayloadUpdatedAtMs == updatedAtMs &&
+        identical(_lastLoadedPayloadBackend, backendAny) &&
+        _lastLoadedPayloadSessionFingerprint == sessionFingerprint) {
+      return;
+    }
+
     final loadVersion = ++_payloadLoadVersion;
     try {
       final payloadJson = await backendAny.readAttachmentAnnotationPayloadJson(
         sessionScope.sessionKey,
-        sha256: widget.job.attachmentSha256,
+        sha256: attachmentSha256,
       );
       final nextPayload = _decodePayloadObject(payloadJson);
       if (!mounted || loadVersion != _payloadLoadVersion) return;
-      setState(() => _annotationPayload = nextPayload);
+      setState(() {
+        _annotationPayload = nextPayload;
+        _hasLoadedAnnotationPayload = true;
+        _lastLoadedPayloadSha256 = attachmentSha256;
+        _lastLoadedPayloadStatus = status;
+        _lastLoadedPayloadUpdatedAtMs = updatedAtMs;
+        _lastLoadedPayloadBackend = backendAny;
+        _lastLoadedPayloadSessionFingerprint = sessionFingerprint;
+      });
     } catch (_) {
       if (!mounted || loadVersion != _payloadLoadVersion) return;
       setState(() => _annotationPayload = null);
