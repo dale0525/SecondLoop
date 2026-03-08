@@ -50,7 +50,8 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
 
-    expect(find.byKey(const ValueKey('attachment_viewer_open_with_system')),
+    expect(
+        find.byKey(const ValueKey('attachment_detail_action_open_with_system')),
         findsOneWidget);
   });
 }

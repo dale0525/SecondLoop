@@ -16,7 +16,8 @@ import 'test_backend.dart';
 import 'test_i18n.dart';
 
 void main() {
-  testWidgets('Attachment viewer keeps core app bar actions', (tester) async {
+  testWidgets('Attachment viewer exposes core actions in workspace header',
+      (tester) async {
     final backend = _Backend(
       bytesBySha: {'abc': _tinyPngBytes()},
     );
@@ -47,17 +48,29 @@ void main() {
 
     expect(
       find.byKey(const ValueKey('attachment_viewer_share')),
-      findsOneWidget,
+      findsNothing,
     );
     expect(
       find.byKey(const ValueKey('attachment_viewer_open_with_system')),
-      findsOneWidget,
+      findsNothing,
     );
     expect(
       find.byKey(const ValueKey('attachment_viewer_download')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey('attachment_detail_action_share')),
       findsOneWidget,
     );
-    expect(find.text('abc.png'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('attachment_detail_action_open_with_system')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('attachment_detail_action_download')),
+      findsOneWidget,
+    );
+    expect(find.text('abc.png'), findsWidgets);
     expect(find.text('Image attachment'), findsNothing);
   });
 
@@ -91,6 +104,18 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    expect(
+      find.byKey(const ValueKey('attachment_detail_workspace')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('attachment_detail_header_bar')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('attachment_detail_inspector')),
+      findsOneWidget,
+    );
     expect(
       find.byKey(const ValueKey('attachment_image_detail_scroll')),
       findsOneWidget,
@@ -252,7 +277,7 @@ void main() {
     );
     expect(find.byKey(const ValueKey('attachment_text_full_empty')),
         findsOneWidget);
-    expect(find.text('application/pdf'), findsOneWidget);
+    expect(find.text('application/pdf'), findsWidgets);
 
     pendingBytes.complete(Uint8List.fromList(<int>[1, 2, 3]));
     await tester.pump();

@@ -1435,6 +1435,33 @@
         }
       },
       "emptyText": "None"
+    },
+    "workspace": {
+      "tabs": {
+        "content": "Content",
+        "metadata": "Metadata"
+      },
+      "types": {
+        "audio": "Audio",
+        "image": "Image",
+        "document": "Document",
+        "link": "Link",
+        "video": "Video",
+        "attachment": "Attachment"
+      },
+      "metrics": {
+        "type": "Type",
+        "duration": "Duration",
+        "pages": "Pages"
+      },
+      "metadata": {
+        "filename": "Filename",
+        "source": "Source",
+        "duration": "Duration",
+        "pages": "Pages",
+        "ocrEngine": "OCR engine",
+        "languageHints": "Language hints"
+      }
     }
   },
   "semanticSearch": {

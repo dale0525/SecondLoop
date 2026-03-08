@@ -1435,6 +1435,33 @@
         }
       },
       "emptyText": "无"
+    },
+    "workspace": {
+      "tabs": {
+        "content": "内容",
+        "metadata": "元数据"
+      },
+      "types": {
+        "audio": "音频",
+        "image": "图片",
+        "document": "文档",
+        "link": "链接",
+        "video": "视频",
+        "attachment": "附件"
+      },
+      "metrics": {
+        "type": "类型",
+        "duration": "时长",
+        "pages": "页数"
+      },
+      "metadata": {
+        "filename": "文件名",
+        "source": "来源",
+        "duration": "时长",
+        "pages": "页数",
+        "ocrEngine": "OCR 引擎",
+        "languageHints": "语言提示"
+      }
     }
   },
   "semanticSearch": {

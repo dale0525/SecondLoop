@@ -4,9 +4,9 @@
 /// To regenerate, run: `dart run slang`
 ///
 /// Locales: 2
-/// Strings: 2264 (1132 per locale)
+/// Strings: 2298 (1149 per locale)
 ///
-/// Built on 2026-03-08 at 03:09 UTC
+/// Built on 2026-03-08 at 05:04 UTC
 
 // coverage:ignore-file
 // ignore_for_file: type=lint
@@ -511,6 +511,8 @@ class _StringsAttachmentsEn {
   late final _StringsAttachmentsUrlEn url = _StringsAttachmentsUrlEn._(_root);
   late final _StringsAttachmentsContentEn content =
       _StringsAttachmentsContentEn._(_root);
+  late final _StringsAttachmentsWorkspaceEn workspace =
+      _StringsAttachmentsWorkspaceEn._(_root);
 }
 
 // Path: semanticSearch
@@ -2054,6 +2056,23 @@ class _StringsAttachmentsContentEn {
   String get emptyText => 'None';
 }
 
+// Path: attachments.workspace
+class _StringsAttachmentsWorkspaceEn {
+  _StringsAttachmentsWorkspaceEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  late final _StringsAttachmentsWorkspaceTabsEn tabs =
+      _StringsAttachmentsWorkspaceTabsEn._(_root);
+  late final _StringsAttachmentsWorkspaceTypesEn types =
+      _StringsAttachmentsWorkspaceTypesEn._(_root);
+  late final _StringsAttachmentsWorkspaceMetricsEn metrics =
+      _StringsAttachmentsWorkspaceMetricsEn._(_root);
+  late final _StringsAttachmentsWorkspaceMetadataEn metadata =
+      _StringsAttachmentsWorkspaceMetadataEn._(_root);
+}
+
 // Path: sync.progressDialog
 class _StringsSyncProgressDialogEn {
   _StringsSyncProgressDialogEn._(this._root);
@@ -3491,6 +3510,59 @@ class _StringsAttachmentsContentVideoInsightsEn {
       _StringsAttachmentsContentVideoInsightsDetailEn._(_root);
   late final _StringsAttachmentsContentVideoInsightsFieldsEn fields =
       _StringsAttachmentsContentVideoInsightsFieldsEn._(_root);
+}
+
+// Path: attachments.workspace.tabs
+class _StringsAttachmentsWorkspaceTabsEn {
+  _StringsAttachmentsWorkspaceTabsEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get content => 'Content';
+  String get metadata => 'Metadata';
+}
+
+// Path: attachments.workspace.types
+class _StringsAttachmentsWorkspaceTypesEn {
+  _StringsAttachmentsWorkspaceTypesEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get audio => 'Audio';
+  String get image => 'Image';
+  String get document => 'Document';
+  String get link => 'Link';
+  String get video => 'Video';
+  String get attachment => 'Attachment';
+}
+
+// Path: attachments.workspace.metrics
+class _StringsAttachmentsWorkspaceMetricsEn {
+  _StringsAttachmentsWorkspaceMetricsEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get type => 'Type';
+  String get duration => 'Duration';
+  String get pages => 'Pages';
+}
+
+// Path: attachments.workspace.metadata
+class _StringsAttachmentsWorkspaceMetadataEn {
+  _StringsAttachmentsWorkspaceMetadataEn._(this._root);
+
+  final Translations _root; // ignore: unused_field
+
+  // Translations
+  String get filename => 'Filename';
+  String get source => 'Source';
+  String get duration => 'Duration';
+  String get pages => 'Pages';
+  String get ocrEngine => 'OCR engine';
+  String get languageHints => 'Language hints';
 }
 
 // Path: sync.mediaBackup.cellularDialog
@@ -5079,6 +5151,9 @@ class _StringsAttachmentsZhCn extends _StringsAttachmentsEn {
   @override
   late final _StringsAttachmentsContentZhCn content =
       _StringsAttachmentsContentZhCn._(_root);
+  @override
+  late final _StringsAttachmentsWorkspaceZhCn workspace =
+      _StringsAttachmentsWorkspaceZhCn._(_root);
 }
 
 // Path: semanticSearch
@@ -7451,6 +7526,30 @@ class _StringsAttachmentsContentZhCn extends _StringsAttachmentsContentEn {
   String get emptyText => '无';
 }
 
+// Path: attachments.workspace
+class _StringsAttachmentsWorkspaceZhCn extends _StringsAttachmentsWorkspaceEn {
+  _StringsAttachmentsWorkspaceZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  late final _StringsAttachmentsWorkspaceTabsZhCn tabs =
+      _StringsAttachmentsWorkspaceTabsZhCn._(_root);
+  @override
+  late final _StringsAttachmentsWorkspaceTypesZhCn types =
+      _StringsAttachmentsWorkspaceTypesZhCn._(_root);
+  @override
+  late final _StringsAttachmentsWorkspaceMetricsZhCn metrics =
+      _StringsAttachmentsWorkspaceMetricsZhCn._(_root);
+  @override
+  late final _StringsAttachmentsWorkspaceMetadataZhCn metadata =
+      _StringsAttachmentsWorkspaceMetadataZhCn._(_root);
+}
+
 // Path: sync.progressDialog
 class _StringsSyncProgressDialogZhCn extends _StringsSyncProgressDialogEn {
   _StringsSyncProgressDialogZhCn._(_StringsZhCn root)
@@ -9609,6 +9708,92 @@ class _StringsAttachmentsContentVideoInsightsZhCn
   @override
   late final _StringsAttachmentsContentVideoInsightsFieldsZhCn fields =
       _StringsAttachmentsContentVideoInsightsFieldsZhCn._(_root);
+}
+
+// Path: attachments.workspace.tabs
+class _StringsAttachmentsWorkspaceTabsZhCn
+    extends _StringsAttachmentsWorkspaceTabsEn {
+  _StringsAttachmentsWorkspaceTabsZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get content => '内容';
+  @override
+  String get metadata => '元数据';
+}
+
+// Path: attachments.workspace.types
+class _StringsAttachmentsWorkspaceTypesZhCn
+    extends _StringsAttachmentsWorkspaceTypesEn {
+  _StringsAttachmentsWorkspaceTypesZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get audio => '音频';
+  @override
+  String get image => '图片';
+  @override
+  String get document => '文档';
+  @override
+  String get link => '链接';
+  @override
+  String get video => '视频';
+  @override
+  String get attachment => '附件';
+}
+
+// Path: attachments.workspace.metrics
+class _StringsAttachmentsWorkspaceMetricsZhCn
+    extends _StringsAttachmentsWorkspaceMetricsEn {
+  _StringsAttachmentsWorkspaceMetricsZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get type => '类型';
+  @override
+  String get duration => '时长';
+  @override
+  String get pages => '页数';
+}
+
+// Path: attachments.workspace.metadata
+class _StringsAttachmentsWorkspaceMetadataZhCn
+    extends _StringsAttachmentsWorkspaceMetadataEn {
+  _StringsAttachmentsWorkspaceMetadataZhCn._(_StringsZhCn root)
+      : this._root = root,
+        super._(root);
+
+  @override
+  final _StringsZhCn _root; // ignore: unused_field
+
+  // Translations
+  @override
+  String get filename => '文件名';
+  @override
+  String get source => '来源';
+  @override
+  String get duration => '时长';
+  @override
+  String get pages => '页数';
+  @override
+  String get ocrEngine => 'OCR 引擎';
+  @override
+  String get languageHints => '语言提示';
 }
 
 // Path: sync.mediaBackup.cellularDialog
@@ -13180,6 +13365,40 @@ extension on Translations {
         return 'Video summary';
       case 'attachments.content.emptyText':
         return 'None';
+      case 'attachments.workspace.tabs.content':
+        return 'Content';
+      case 'attachments.workspace.tabs.metadata':
+        return 'Metadata';
+      case 'attachments.workspace.types.audio':
+        return 'Audio';
+      case 'attachments.workspace.types.image':
+        return 'Image';
+      case 'attachments.workspace.types.document':
+        return 'Document';
+      case 'attachments.workspace.types.link':
+        return 'Link';
+      case 'attachments.workspace.types.video':
+        return 'Video';
+      case 'attachments.workspace.types.attachment':
+        return 'Attachment';
+      case 'attachments.workspace.metrics.type':
+        return 'Type';
+      case 'attachments.workspace.metrics.duration':
+        return 'Duration';
+      case 'attachments.workspace.metrics.pages':
+        return 'Pages';
+      case 'attachments.workspace.metadata.filename':
+        return 'Filename';
+      case 'attachments.workspace.metadata.source':
+        return 'Source';
+      case 'attachments.workspace.metadata.duration':
+        return 'Duration';
+      case 'attachments.workspace.metadata.pages':
+        return 'Pages';
+      case 'attachments.workspace.metadata.ocrEngine':
+        return 'OCR engine';
+      case 'attachments.workspace.metadata.languageHints':
+        return 'Language hints';
       case 'semanticSearch.preparing':
         return 'Preparing semantic search…';
       case 'semanticSearch.indexingMessages':
@@ -15504,6 +15723,40 @@ extension on _StringsZhCn {
         return '视频概要';
       case 'attachments.content.emptyText':
         return '无';
+      case 'attachments.workspace.tabs.content':
+        return '内容';
+      case 'attachments.workspace.tabs.metadata':
+        return '元数据';
+      case 'attachments.workspace.types.audio':
+        return '音频';
+      case 'attachments.workspace.types.image':
+        return '图片';
+      case 'attachments.workspace.types.document':
+        return '文档';
+      case 'attachments.workspace.types.link':
+        return '链接';
+      case 'attachments.workspace.types.video':
+        return '视频';
+      case 'attachments.workspace.types.attachment':
+        return '附件';
+      case 'attachments.workspace.metrics.type':
+        return '类型';
+      case 'attachments.workspace.metrics.duration':
+        return '时长';
+      case 'attachments.workspace.metrics.pages':
+        return '页数';
+      case 'attachments.workspace.metadata.filename':
+        return '文件名';
+      case 'attachments.workspace.metadata.source':
+        return '来源';
+      case 'attachments.workspace.metadata.duration':
+        return '时长';
+      case 'attachments.workspace.metadata.pages':
+        return '页数';
+      case 'attachments.workspace.metadata.ocrEngine':
+        return 'OCR 引擎';
+      case 'attachments.workspace.metadata.languageHints':
+        return '语言提示';
       case 'semanticSearch.preparing':
         return '正在准备语义检索…';
       case 'semanticSearch.indexingMessages':
