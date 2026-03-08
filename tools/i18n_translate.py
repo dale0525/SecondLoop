@@ -14,9 +14,10 @@ from typing import Any
 
 
 SOURCE_FILE_SUFFIX = ".i18n.json"
-LOCALE_SEPARATOR_PATTERN = re.compile(
-    r"^(?P<namespace>.+?)(?:[_-](?P<locale>[A-Za-z]{2,3}(?:[_-][A-Za-z0-9]+)*))?$"
-)
+LANGUAGE_CODE_PATTERN = re.compile(r"^[a-z]{2,3}$")
+SCRIPT_CODE_PATTERN = re.compile(r"^[A-Z][a-z]{3}$")
+REGION_CODE_PATTERN = re.compile(r"^(?:[A-Z]{2}|[0-9]{3})$")
+VARIANT_CODE_PATTERN = re.compile(r"^(?:[A-Za-z0-9]{5,8}|[0-9][A-Za-z0-9]{3})$")
 
 
 def _iter_string_leaves(node: Any, path: list[str] | None = None):
@@ -78,6 +79,50 @@ def _normalize_locale_tag(locale: str) -> str:
     return locale.replace("-", "_")
 
 
+def _is_probable_locale_tag(locale: str) -> bool:
+    parts = _normalize_locale_tag(locale).split("_")
+    if not parts or not LANGUAGE_CODE_PATTERN.fullmatch(parts[0]):
+        return False
+
+    for part in parts[1:]:
+        if SCRIPT_CODE_PATTERN.fullmatch(part):
+            continue
+        if REGION_CODE_PATTERN.fullmatch(part):
+            continue
+        if VARIANT_CODE_PATTERN.fullmatch(part):
+            continue
+        return False
+
+    return True
+
+
+def _split_namespace_and_locale(base_name: str, source_locale: str) -> tuple[str, str]:
+    normalized_source_locale = _normalize_locale_tag(source_locale)
+    candidates: list[tuple[str, str]] = []
+
+    for index, char in enumerate(base_name):
+        if char not in {"_", "-"}:
+            continue
+
+        namespace = base_name[:index]
+        locale = base_name[index + 1 :]
+        if not namespace or not locale:
+            continue
+
+        normalized_locale = _normalize_locale_tag(locale)
+        if _is_probable_locale_tag(normalized_locale):
+            candidates.append((namespace, normalized_locale))
+
+    if not candidates:
+        return base_name, normalized_source_locale
+
+    source_locale_matches = [candidate for candidate in candidates if candidate[1] == normalized_source_locale]
+    if source_locale_matches:
+        return max(source_locale_matches, key=lambda candidate: len(candidate[0]))
+
+    return max(candidates, key=lambda candidate: len(candidate[1]))
+
+
 def _parse_translation_file_name(
     path: Path,
     *,
@@ -87,13 +132,11 @@ def _parse_translation_file_name(
         raise ValueError(f"{path} is not a supported translation file")
 
     base_name = path.name[: -len(SOURCE_FILE_SUFFIX)]
-    match = LOCALE_SEPARATOR_PATTERN.match(base_name)
-    if not match:
+    namespace, locale = _split_namespace_and_locale(base_name, source_locale)
+    if not namespace:
         raise ValueError(f"Unsupported translation file name: {path.name}")
 
-    namespace = match.group("namespace")
-    locale = match.group("locale") or source_locale
-    return namespace, _normalize_locale_tag(locale)
+    return namespace, locale
 
 
 def discover_translation_pairs(

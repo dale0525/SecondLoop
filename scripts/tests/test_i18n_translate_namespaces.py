@@ -24,6 +24,15 @@ class I18nTranslateNamespacesTests(unittest.TestCase):
         self.assertEqual(namespace, "semantic_search")
         self.assertEqual(locale, "zh_CN")
 
+    def test_parses_snake_case_namespace_with_two_letter_locale_suffix(self) -> None:
+        namespace, locale = MODULE._parse_translation_file_name(
+            Path("foo_bar_en.i18n.json"),
+            source_locale="en",
+        )
+
+        self.assertEqual(namespace, "foo_bar")
+        self.assertEqual(locale, "en")
+
     def test_discovers_namespace_pairs_for_directory_mode(self) -> None:
         with TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)

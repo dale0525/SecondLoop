@@ -54,6 +54,12 @@ class PreCommitHookTests(unittest.TestCase):
 
         self.assertIn('if [[ "${file}" == *.dart && -f "${file}" ]]; then', script)
 
+    def test_pre_commit_hook_only_runs_i18n_analyze_for_i18n_source_changes(self) -> None:
+        script = PRE_COMMIT_HOOK.read_text(encoding="utf-8")
+
+        self.assertIn('if [[ ${run_i18n_refresh_needed} -ne 0 ]]; then', script)
+        self.assertIn('run_i18n_analyze', script)
+
     def test_pre_commit_hook_supports_windows_local_fvm_batch_wrappers(self) -> None:
         script = PRE_COMMIT_HOOK.read_text(encoding="utf-8")
 
