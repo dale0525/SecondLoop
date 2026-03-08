@@ -41,6 +41,21 @@ void main() {
     expect(view.turns.last.text, 'second point');
   });
 
+  test('hard gap still starts a new turn even when next fragment is short', () {
+    final view = buildAudioTranscriptTurnView(
+      const <AudioTranscriptTurnSourceSegment>[
+        AudioTranscriptTurnSourceSegment(tMs: 0, text: 'we start here'),
+        AudioTranscriptTurnSourceSegment(tMs: 5000, text: 'yeah'),
+        AudioTranscriptTurnSourceSegment(tMs: 6000, text: 'next topic'),
+      ],
+    );
+
+    expect(view.status, AudioTranscriptTurnViewStatus.ok);
+    expect(view.turns, hasLength(2));
+    expect(view.turns.first.text, 'we start here');
+    expect(view.turns.last.text, 'yeah next topic');
+  });
+
   test('does not break only because a chunk boundary is crossed', () {
     final view = buildAudioTranscriptTurnView(
       const <AudioTranscriptTurnSourceSegment>[
@@ -90,5 +105,20 @@ void main() {
     expect(full, contains('[00:12–00:12] hello everyone thanks for joining'));
     expect(full, contains('[00:40–00:40] next topic starts here'));
     expect(excerpt, isNotEmpty);
+  });
+
+  test('excerpt truncates at a word boundary when possible', () {
+    final view = buildAudioTranscriptTurnView(
+      const <AudioTranscriptTurnSourceSegment>[
+        AudioTranscriptTurnSourceSegment(
+          tMs: 12000,
+          text: 'hello everyone thanks for joining',
+        ),
+      ],
+    );
+
+    final excerpt = excerptAudioTranscriptTurnView(view, maxChars: 24);
+
+    expect(excerpt, '[00:12–00:12] hello…');
   });
 }

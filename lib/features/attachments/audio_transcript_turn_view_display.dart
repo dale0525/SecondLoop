@@ -1,5 +1,10 @@
 import '../audio_transcribe/audio_transcribe_turn_view.dart';
 
+final Expando<_AudioTranscriptTurnViewCacheEntry>
+    _audioTranscriptTurnViewCache = Expando<_AudioTranscriptTurnViewCacheEntry>(
+  'audio_transcript_turn_view_cache',
+);
+
 String resolveAudioTranscriptTurnViewDisplayFull(
   Map<String, Object?>? payload,
 ) {
@@ -29,14 +34,38 @@ AudioTranscriptTurnView? _resolveAudioTranscriptTurnView(
     return persisted;
   }
 
+  if (payload == null) {
+    return null;
+  }
+
+  final cached = _audioTranscriptTurnViewCache[payload];
+  if (cached != null) {
+    return cached.view;
+  }
+
   final legacySegments = audioTranscriptTurnSourceSegmentsFromJson(
-    payload?['transcript_segments'],
+    payload['transcript_segments'],
   );
-  if (legacySegments.isEmpty) return null;
+  if (legacySegments.isEmpty) {
+    _audioTranscriptTurnViewCache[payload] =
+        const _AudioTranscriptTurnViewCacheEntry(null);
+    return null;
+  }
 
   final built = buildAudioTranscriptTurnView(legacySegments);
   if (built.status != AudioTranscriptTurnViewStatus.ok || built.turns.isEmpty) {
+    _audioTranscriptTurnViewCache[payload] =
+        const _AudioTranscriptTurnViewCacheEntry(null);
     return null;
   }
+  _audioTranscriptTurnViewCache[payload] = _AudioTranscriptTurnViewCacheEntry(
+    built,
+  );
   return built;
+}
+
+final class _AudioTranscriptTurnViewCacheEntry {
+  const _AudioTranscriptTurnViewCacheEntry(this.view);
+
+  final AudioTranscriptTurnView? view;
 }

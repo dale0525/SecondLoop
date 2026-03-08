@@ -39,6 +39,7 @@ class AttachmentCard extends StatelessWidget {
         : _loadAttachmentCardData(
             sessionKey,
             attachmentSha256: attachment.sha256,
+            mimeType: attachment.mimeType,
           );
 
     final child = FutureBuilder(
@@ -190,6 +191,7 @@ class AttachmentCard extends StatelessWidget {
 Future<_AttachmentCardData> _loadAttachmentCardData(
   Uint8List sessionKey, {
   required String attachmentSha256,
+  required String mimeType,
 }) async {
   final metadataFuture = const RustAttachmentMetadataStore()
       .read(sessionKey, attachmentSha256: attachmentSha256)
@@ -197,6 +199,7 @@ Future<_AttachmentCardData> _loadAttachmentCardData(
   final summaryFuture = _readPayloadSummaryFromPayload(
     sessionKey,
     attachmentSha256: attachmentSha256,
+    mimeType: mimeType,
   );
 
   final values = await Future.wait<Object?>([
@@ -284,6 +287,7 @@ bool attachmentCardOcrInProgressFromPayload(Map<String, Object?> payload) {
 Future<_AttachmentCardPayloadSummary> _readPayloadSummaryFromPayload(
   Uint8List sessionKey, {
   required String attachmentSha256,
+  required String mimeType,
 }) async {
   try {
     final appDir = await getNativeAppDir();
@@ -326,7 +330,10 @@ Future<_AttachmentCardPayloadSummary> _readPayloadSummaryFromPayload(
       );
     }
     final payload = Map<String, Object?>.from(decoded);
-    final summary = extractAttachmentCardSummaryFromPayload(payload);
+    final summary = extractAttachmentCardSummaryFromPayload(
+      payload,
+      mimeTypeHint: mimeType,
+    );
     return _AttachmentCardPayloadSummary(
       summary: summary,
       ocrRunning: _isAttachmentOcrRunning(payload),
@@ -350,7 +357,10 @@ String _normalizedTextSnippet(String? raw) {
   return text;
 }
 
-String? extractAttachmentCardSummaryFromPayload(Map<String, Object?> payload) {
+String? extractAttachmentCardSummaryFromPayload(
+  Map<String, Object?> payload, {
+  String? mimeTypeHint,
+}) {
   final manualSummary =
       _normalizedTextSnippet(payload['manual_summary']?.toString());
   if (manualSummary.isNotEmpty) return manualSummary;
@@ -368,8 +378,14 @@ String? extractAttachmentCardSummaryFromPayload(Map<String, Object?> payload) {
   final preferredFull = _normalizedTextSnippet(preferred.full);
   if (preferredFull.isNotEmpty) return preferredFull;
 
+  final resolvedMimeType = (mimeTypeHint ?? payload['mime_type'] ?? '')
+      .toString()
+      .trim()
+      .toLowerCase();
   final audioTurnExcerpt = _normalizedTextSnippet(
-    resolveAudioTranscriptTurnViewDisplayExcerpt(payload),
+    resolvedMimeType.startsWith('audio/')
+        ? resolveAudioTranscriptTurnViewDisplayExcerpt(payload)
+        : null,
   );
   if (audioTurnExcerpt.isNotEmpty) return audioTurnExcerpt;
 

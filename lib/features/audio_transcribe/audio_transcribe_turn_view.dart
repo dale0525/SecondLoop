@@ -1,3 +1,5 @@
+import 'dart:developer' as developer;
+
 final class AudioTranscriptTurnSourceSegment {
   const AudioTranscriptTurnSourceSegment({
     required this.tMs,
@@ -196,6 +198,8 @@ AudioTranscriptTurnView buildAudioTranscriptTurnView(
     var sourceStartIndex = normalized.first.index;
     var sourceEndIndex = normalized.first.index;
     var partCount = 0;
+    var currentTextLength = 0;
+    var currentEndsWithStrongPunctuation = false;
     final textBuffer = <String>[];
 
     void flushTurn() {
@@ -218,10 +222,17 @@ AudioTranscriptTurnView buildAudioTranscriptTurnView(
         startMs = segment.tMs;
         sourceStartIndex = segment.index;
         partCount = 0;
+        currentTextLength = 0;
       }
       endMs = segment.tMs;
       sourceEndIndex = segment.index;
       partCount += 1;
+      if (textBuffer.isNotEmpty) {
+        currentTextLength += 1;
+      }
+      currentTextLength += segment.text.length;
+      currentEndsWithStrongPunctuation =
+          _endsWithStrongPunctuation(segment.text);
       textBuffer.add(segment.text);
     }
 
@@ -229,19 +240,20 @@ AudioTranscriptTurnView buildAudioTranscriptTurnView(
 
     for (final segment in normalized.skip(1)) {
       final gapMs = segment.tMs - endMs;
-      final currentText = _joinTurnText(textBuffer);
       final currentDurationMs = endMs - startMs;
       final segmentIsShort =
           _visibleCharCount(segment.text) <= minFragmentChars;
       final shouldSplitHard = gapMs >= hardGapMs ||
           currentDurationMs >= maxTurnDurationMs ||
-          currentText.length >= maxTurnChars;
+          currentTextLength >= maxTurnChars;
       final shouldSplitSoft =
-          gapMs >= softGapMs && _endsWithStrongPunctuation(currentText);
+          gapMs >= softGapMs && currentEndsWithStrongPunctuation;
 
-      if (!segmentIsShort && (shouldSplitHard || shouldSplitSoft)) {
+      if (shouldSplitHard || (!segmentIsShort && shouldSplitSoft)) {
         flushTurn();
         textBuffer.clear();
+        currentTextLength = 0;
+        currentEndsWithStrongPunctuation = false;
       }
       appendSegment(segment);
     }
@@ -263,7 +275,16 @@ AudioTranscriptTurnView buildAudioTranscriptTurnView(
       turns: List<AudioTranscriptTurn>.unmodifiable(turns),
       params: Map<String, Object?>.unmodifiable(params),
     );
-  } catch (_) {
+  } catch (error, stackTrace) {
+    assert(() {
+      developer.log(
+        'AudioTranscriptTurnView builder error',
+        name: 'audio_transcribe_turn_view',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      return true;
+    }());
     return AudioTranscriptTurnView(
       builderVersion: kAudioTranscriptTurnViewBuilderVersion,
       status: AudioTranscriptTurnViewStatus.fallbackBuilderError,
@@ -292,7 +313,9 @@ String excerptAudioTranscriptTurnView(
   final full = formatAudioTranscriptTurnViewFull(view).trim();
   if (full.isEmpty) return '';
   if (full.length <= maxChars) return full;
-  return '${full.substring(0, maxChars)}...';
+  final cut = full.lastIndexOf(' ', maxChars);
+  final breakAt = cut > 0 ? cut : maxChars;
+  return '${full.substring(0, breakAt)}…';
 }
 
 List<AudioTranscriptTurnSourceSegment>
@@ -324,7 +347,7 @@ String _joinTurnText(List<String> parts) {
 }
 
 int _visibleCharCount(String raw) {
-  return raw.replaceAll(RegExp(r'\s+'), '').trim().length;
+  return raw.replaceAll(RegExp(r'\s+'), '').length;
 }
 
 bool _endsWithStrongPunctuation(String text) {
