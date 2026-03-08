@@ -19,6 +19,11 @@ Future<List<ExternalImportBatchSummary>> externalImportListBatches(
     RustLib.instance.api
         .crateApiExternalImportExternalImportListBatches(appDir: appDir);
 
+Future<String> externalImportBatchReportJson(
+        {required String appDir, required String batchId}) =>
+    RustLib.instance.api.crateApiExternalImportExternalImportBatchReportJson(
+        appDir: appDir, batchId: batchId);
+
 Future<void> externalImportDeleteBatch(
         {required String appDir, required String batchId}) =>
     RustLib.instance.api.crateApiExternalImportExternalImportDeleteBatch(

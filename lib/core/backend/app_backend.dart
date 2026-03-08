@@ -1029,6 +1029,12 @@ abstract class AppBackend {
     throw UnimplementedError('listExternalImportBatches');
   }
 
+  Future<String> readExternalImportBatchReport({
+    required String batchId,
+  }) {
+    throw UnimplementedError('readExternalImportBatchReport');
+  }
+
   Stream<String> runExternalImportProgress(
     Uint8List key, {
     required String sourcePath,

@@ -33,7 +33,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.0.0-dev.38";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 1500547796;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 890046932;
 
 // Section: executor
 
@@ -6326,6 +6326,42 @@ fn wire__crate__api__embedding_lifecycle__db_release_local_embedding_model_if_id
         },
     )
 }
+fn wire__crate__api__external_import__external_import_batch_report_json_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "external_import_batch_report_json",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_app_dir = <String>::sse_decode(&mut deserializer);
+            let api_batch_id = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse((move || {
+                    crate::api::external_import::external_import_batch_report_json(
+                        api_app_dir,
+                        api_batch_id,
+                    )
+                })())
+            }
+        },
+    )
+}
 fn wire__crate__api__external_import__external_import_delete_batch_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -9636,181 +9672,187 @@ fn pde_ffi_dispatcher_primary_impl(
                 data_len,
             )
         }
-        153 => wire__crate__api__external_import__external_import_delete_batch_impl(
+        153 => wire__crate__api__external_import__external_import_batch_report_json_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        154 => wire__crate__api__external_import__external_import_list_batches_impl(
+        154 => wire__crate__api__external_import__external_import_delete_batch_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        155 => wire__crate__api__external_import__external_import_phase_b_estimate_json_impl(
+        155 => wire__crate__api__external_import__external_import_list_batches_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        156 => wire__crate__api__external_import__external_import_phase_b_run_progress_impl(
+        156 => wire__crate__api__external_import__external_import_phase_b_estimate_json_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        157 => wire__crate__api__external_import__external_import_phase_b_state_json_impl(
+        157 => wire__crate__api__external_import__external_import_phase_b_run_progress_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        158 => wire__crate__api__external_import__external_import_request_cancel_impl(
+        158 => wire__crate__api__external_import__external_import_phase_b_state_json_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        159 => wire__crate__api__external_import__external_import_run_progress_impl(
+        159 => wire__crate__api__external_import__external_import_request_cancel_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        160 => wire__crate__api__external_import__external_import_scan_source_impl(
+        160 => wire__crate__api__external_import__external_import_run_progress_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        161 => wire__crate__api__media_annotation__db_get_media_annotation_config_impl(
+        161 => wire__crate__api__external_import__external_import_scan_source_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        162 => wire__crate__api__media_annotation__db_set_media_annotation_config_impl(
+        162 => wire__crate__api__media_annotation__db_get_media_annotation_config_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        163 => wire__crate__api__media_annotation__media_annotation_byok_profile_impl(
+        163 => wire__crate__api__media_annotation__db_set_media_annotation_config_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        164 => wire__crate__api__media_annotation__url_enrichment_byok_profile_impl(
+        164 => wire__crate__api__media_annotation__media_annotation_byok_profile_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        165 => wire__crate__api__media_annotation__url_enrichment_cloud_gateway_impl(
+        165 => wire__crate__api__media_annotation__url_enrichment_byok_profile_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        166 => wire__crate__api__oplog_maintenance__db_run_oplog_maintenance_impl(
+        166 => wire__crate__api__media_annotation__url_enrichment_cloud_gateway_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        168 => wire__crate__api__simple__init_app_impl(port, ptr, rust_vec_len, data_len),
-        169 => wire__crate__api__sync_diagnostics__sync_managed_vault_cursor_diagnostics_impl(
+        167 => wire__crate__api__oplog_maintenance__db_run_oplog_maintenance_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        170 => wire__crate__api__sync_progress__sync_localdir_pull_progress_impl(
+        169 => wire__crate__api__simple__init_app_impl(port, ptr, rust_vec_len, data_len),
+        170 => wire__crate__api__sync_diagnostics__sync_managed_vault_cursor_diagnostics_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        171 => wire__crate__api__sync_progress__sync_localdir_push_progress_impl(
+        171 => wire__crate__api__sync_progress__sync_localdir_pull_progress_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        172 => wire__crate__api__sync_progress__sync_managed_vault_pull_progress_impl(
+        172 => wire__crate__api__sync_progress__sync_localdir_push_progress_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        173 => wire__crate__api__sync_progress__sync_managed_vault_push_ops_only_progress_impl(
+        173 => wire__crate__api__sync_progress__sync_managed_vault_pull_progress_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        174 => wire__crate__api__sync_progress__sync_webdav_pull_progress_impl(
+        174 => wire__crate__api__sync_progress__sync_managed_vault_push_ops_only_progress_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        175 => wire__crate__api__sync_progress__sync_webdav_push_ops_only_progress_impl(
+        175 => wire__crate__api__sync_progress__sync_webdav_pull_progress_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        176 => wire__crate__api__tags__db_clear_tag_merge_feedback_impl(
+        176 => wire__crate__api__sync_progress__sync_webdav_push_ops_only_progress_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        177 => wire__crate__api__tags__db_delete_tag_impl(port, ptr, rust_vec_len, data_len),
-        178 => wire__crate__api__tags__db_list_hidden_tag_merge_suggestions_impl(
+        177 => wire__crate__api__tags__db_clear_tag_merge_feedback_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        179 => wire__crate__api__tags__db_list_manual_message_tag_names_impl(
+        178 => wire__crate__api__tags__db_delete_tag_impl(port, ptr, rust_vec_len, data_len),
+        179 => wire__crate__api__tags__db_list_hidden_tag_merge_suggestions_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        180 => wire__crate__api__tags__db_list_message_ids_by_tag_ids_impl(
+        180 => wire__crate__api__tags__db_list_manual_message_tag_names_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        181 => wire__crate__api__tags__db_list_message_suggested_tags_impl(
+        181 => wire__crate__api__tags__db_list_message_ids_by_tag_ids_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        182 => wire__crate__api__tags__db_list_message_tags_impl(port, ptr, rust_vec_len, data_len),
-        183 => wire__crate__api__tags__db_list_tag_merge_suggestions_impl(
+        182 => wire__crate__api__tags__db_list_message_suggested_tags_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        184 => wire__crate__api__tags__db_list_tags_impl(port, ptr, rust_vec_len, data_len),
-        185 => wire__crate__api__tags__db_merge_tags_impl(port, ptr, rust_vec_len, data_len),
-        186 => wire__crate__api__tags__db_record_tag_merge_feedback_impl(
+        183 => wire__crate__api__tags__db_list_message_tags_impl(port, ptr, rust_vec_len, data_len),
+        184 => wire__crate__api__tags__db_list_tag_merge_suggestions_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        187 => wire__crate__api__tags__db_set_message_tags_impl(port, ptr, rust_vec_len, data_len),
-        188 => wire__crate__api__tags__db_upsert_tag_impl(port, ptr, rust_vec_len, data_len),
+        185 => wire__crate__api__tags__db_list_tags_impl(port, ptr, rust_vec_len, data_len),
+        186 => wire__crate__api__tags__db_merge_tags_impl(port, ptr, rust_vec_len, data_len),
+        187 => wire__crate__api__tags__db_record_tag_merge_feedback_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        188 => wire__crate__api__tags__db_set_message_tags_impl(port, ptr, rust_vec_len, data_len),
+        189 => wire__crate__api__tags__db_upsert_tag_impl(port, ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }
@@ -9823,7 +9865,7 @@ fn pde_ffi_dispatcher_sync_impl(
 ) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
     // Codec=Pde (Serialization + dispatch), see doc to use other codecs
     match func_id {
-        167 => wire__crate__api__simple__greet_impl(ptr, rust_vec_len, data_len),
+        168 => wire__crate__api__simple__greet_impl(ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }

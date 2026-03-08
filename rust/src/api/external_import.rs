@@ -64,6 +64,11 @@ pub fn external_import_list_batches(
 }
 
 #[flutter_rust_bridge::frb]
+pub fn external_import_batch_report_json(app_dir: String, batch_id: String) -> Result<String> {
+    db::read_external_import_batch_report_json(Path::new(&app_dir), &batch_id)
+}
+
+#[flutter_rust_bridge::frb]
 pub fn external_import_delete_batch(app_dir: String, batch_id: String) -> Result<()> {
     db::delete_external_import_batch(Path::new(&app_dir), &batch_id)
 }

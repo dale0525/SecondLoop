@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../core/backend/app_backend.dart';
 import '../../core/session/session_scope.dart';
@@ -11,6 +12,7 @@ import '../../src/rust/db.dart';
 import '../../ui/sl_surface.dart';
 import 'external_import_phase_b_models.dart';
 import 'external_import_phase_b_prefs.dart';
+import 'external_import_report_models.dart';
 
 part 'external_import_page_phase_b.dart';
 part 'external_import_page_ui.dart';
@@ -47,7 +49,11 @@ enum _ExternalImportText {
   status,
   failedCount,
   copiedData,
+  successCount,
+  copiedAttachments,
+  diskUsage,
   lastError,
+  viewReport,
   deleteThisBatch,
   error,
   importedBatches,
@@ -82,6 +88,8 @@ enum _ExternalImportText {
   progress,
   processed,
   elapsed,
+  eta,
+  estimatingEta,
   phaseBTitle,
   phaseBDescription,
   phaseBStartLatest,
@@ -101,6 +109,14 @@ enum _ExternalImportText {
   phaseBAttachmentRefs,
   phaseBElapsed,
   phaseBLastError,
+  reportTitle,
+  reportDiagnostics,
+  reportNoDiagnostics,
+  reportCode,
+  reportStage,
+  reportSeverity,
+  reportSourcePath,
+  reportCopied,
 }
 
 class ExternalImportPage extends StatefulWidget {
@@ -116,8 +132,10 @@ class _ExternalImportPageState extends State<ExternalImportPage> {
   List<ExternalImportBatchSummary> _batches =
       const <ExternalImportBatchSummary>[];
   ExternalImportBatchSummary? _lastFinishedBatch;
+  ExternalImportBatchReport? _latestBatchReport;
   ExternalImportPhaseBState? _phaseBState;
   bool _loadingBatches = true;
+  bool _loadingBatchReport = false;
   bool _scanning = false;
   bool _importing = false;
   bool _phaseBRunning = false;
@@ -131,6 +149,10 @@ class _ExternalImportPageState extends State<ExternalImportPage> {
   int _progressDone = 0;
   int _progressTotal = 0;
   int _progressFailedCount = 0;
+  int? _progressSampleAtMs;
+  int? _previousProgressDone;
+  int? _etaMs;
+  String? _batchReportLoadedBatchId;
   String? _phaseBLoadedBatchId;
   String? _phaseBAutoStartedBatchId;
   bool _didLoadInitialBatches = false;
@@ -185,7 +207,11 @@ class _ExternalImportPageState extends State<ExternalImportPage> {
       _ExternalImportText.status => t.status,
       _ExternalImportText.failedCount => t.failed,
       _ExternalImportText.copiedData => t.copiedData,
+      _ExternalImportText.successCount => t.successCount,
+      _ExternalImportText.copiedAttachments => t.copiedAttachments,
+      _ExternalImportText.diskUsage => t.diskUsage,
       _ExternalImportText.lastError => t.lastError,
+      _ExternalImportText.viewReport => t.viewReport,
       _ExternalImportText.deleteThisBatch => t.deleteThisBatch,
       _ExternalImportText.error => t.error,
       _ExternalImportText.importedBatches => t.importedBatches,
@@ -220,6 +246,8 @@ class _ExternalImportPageState extends State<ExternalImportPage> {
       _ExternalImportText.progress => t.progress,
       _ExternalImportText.processed => t.processed,
       _ExternalImportText.elapsed => t.elapsed,
+      _ExternalImportText.eta => t.eta,
+      _ExternalImportText.estimatingEta => t.estimatingEta,
       _ExternalImportText.phaseBTitle => t.phaseBTitle,
       _ExternalImportText.phaseBDescription => t.phaseBDescription,
       _ExternalImportText.phaseBStartLatest => t.phaseBStartLatest,
@@ -242,6 +270,14 @@ class _ExternalImportPageState extends State<ExternalImportPage> {
       _ExternalImportText.phaseBAttachmentRefs => t.phaseBAttachmentRefs,
       _ExternalImportText.phaseBElapsed => t.phaseBElapsed,
       _ExternalImportText.phaseBLastError => t.phaseBLastError,
+      _ExternalImportText.reportTitle => t.reportTitle,
+      _ExternalImportText.reportDiagnostics => t.reportDiagnostics,
+      _ExternalImportText.reportNoDiagnostics => t.reportNoDiagnostics,
+      _ExternalImportText.reportCode => t.reportCode,
+      _ExternalImportText.reportStage => t.reportStage,
+      _ExternalImportText.reportSeverity => t.reportSeverity,
+      _ExternalImportText.reportSourcePath => t.reportSourcePath,
+      _ExternalImportText.reportCopied => t.reportCopied,
     };
   }
 
@@ -264,7 +300,13 @@ class _ExternalImportPageState extends State<ExternalImportPage> {
       setState(() {
         _batches = batches;
         _lastFinishedBatch = lastFinishedBatch;
+        if (lastFinishedBatch == null) {
+          _batchReportLoadedBatchId = null;
+          _latestBatchReport = null;
+          _loadingBatchReport = false;
+        }
       });
+      unawaited(_refreshBatchReportForBatch(lastFinishedBatch));
       if (refreshPhaseB) {
         unawaited(_refreshPhaseBStateForBatch(latestCompletedBatch));
       }
@@ -354,7 +396,13 @@ class _ExternalImportPageState extends State<ExternalImportPage> {
       _progressDone = 0;
       _progressTotal = 0;
       _progressFailedCount = 0;
+      _progressSampleAtMs = null;
+      _previousProgressDone = null;
+      _etaMs = null;
       _lastFinishedBatch = null;
+      _latestBatchReport = null;
+      _batchReportLoadedBatchId = null;
+      _loadingBatchReport = false;
       _phaseBState = null;
       _phaseBLoadedBatchId = null;
       _phaseBAutoStartedBatchId = null;
@@ -395,13 +443,25 @@ class _ExternalImportPageState extends State<ExternalImportPage> {
     final type = payload['type']?.toString();
     if (type == 'progress') {
       if (!mounted) return;
+      final done = _toInt(payload['done']);
+      final total = _toInt(payload['total']);
+      final nowMs = DateTime.now().millisecondsSinceEpoch;
+      final etaMs = _estimateEtaMs(nowMs: nowMs, done: done, total: total);
       setState(() {
         _progressBatchId = payload['batch_id']?.toString() ?? _progressBatchId;
         _progressStage = payload['stage']?.toString() ?? _progressStage;
         _progressStatus = payload['status']?.toString() ?? _progressStatus;
-        _progressDone = _toInt(payload['done']);
-        _progressTotal = _toInt(payload['total']);
+        _progressDone = done;
+        _progressTotal = total;
         _progressFailedCount = _toInt(payload['failed_count']);
+        _etaMs = etaMs;
+        if (total > 0 && done >= 0 && done < total) {
+          _progressSampleAtMs = nowMs;
+          _previousProgressDone = done;
+        } else {
+          _progressSampleAtMs = null;
+          _previousProgressDone = null;
+        }
       });
       return;
     }
@@ -411,6 +471,9 @@ class _ExternalImportPageState extends State<ExternalImportPage> {
       setState(() {
         _progressBatchId = payload['batch_id']?.toString() ?? _progressBatchId;
         _progressStatus = payload['status']?.toString() ?? _progressStatus;
+        _etaMs = null;
+        _progressSampleAtMs = null;
+        _previousProgressDone = null;
       });
       return;
     }
@@ -422,6 +485,9 @@ class _ExternalImportPageState extends State<ExternalImportPage> {
         _progressBatchId = payload['batch_id']?.toString() ?? _progressBatchId;
         _progressStage = 'completed';
         _progressStatus = state?.phaseBStatus ?? 'completed';
+        _etaMs = null;
+        _progressSampleAtMs = null;
+        _previousProgressDone = null;
         if (state != null) {
           _phaseBLoadedBatchId = state.batchId;
           _phaseBState = state;
@@ -431,6 +497,116 @@ class _ExternalImportPageState extends State<ExternalImportPage> {
         }
       });
     }
+  }
+
+  Future<ExternalImportBatchReport?> _refreshBatchReportForBatch(
+    ExternalImportBatchSummary? batch,
+  ) async {
+    final batchId = batch?.batchId.trim();
+    if (batchId == null || batchId.isEmpty) {
+      _mutateState(() {
+        _batchReportLoadedBatchId = null;
+        _latestBatchReport = null;
+        _loadingBatchReport = false;
+      });
+      return null;
+    }
+
+    _mutateState(() {
+      _loadingBatchReport = true;
+      if (_batchReportLoadedBatchId != batchId) {
+        _batchReportLoadedBatchId = batchId;
+        _latestBatchReport = null;
+      }
+    });
+
+    try {
+      final raw =
+          await _backend.readExternalImportBatchReport(batchId: batchId);
+      final report = ExternalImportBatchReport.fromJsonString(raw);
+      _mutateState(() {
+        _batchReportLoadedBatchId = report.batchId;
+        _latestBatchReport = report;
+      });
+      return report;
+    } catch (error) {
+      _mutateState(() {
+        _errorMessage = error.toString();
+      });
+      return null;
+    } finally {
+      _mutateState(() {
+        _loadingBatchReport = false;
+      });
+    }
+  }
+
+  Future<void> _showBatchReportDialog(ExternalImportBatchSummary batch) async {
+    var report = _latestBatchReportForBatch(batch);
+    report ??= await _refreshBatchReportForBatch(batch);
+    if (!mounted || report == null) return;
+    final resolvedReport = report;
+
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        key: const ValueKey('external_import_report_dialog'),
+        title: Text(_text(_ExternalImportText.reportTitle)),
+        content: SizedBox(
+          width: 560,
+          child: SingleChildScrollView(
+            child: _buildBatchReportDialogContent(resolvedReport),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => _copyBatchReportToClipboard(resolvedReport),
+            child: Text(context.t.common.actions.copy),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: Text(context.t.common.actions.cancel),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _copyBatchReportToClipboard(
+    ExternalImportBatchReport report,
+  ) async {
+    try {
+      await Clipboard.setData(ClipboardData(text: report.toPrettyJson()));
+      if (!mounted) return;
+      _showSnack(_text(_ExternalImportText.reportCopied));
+    } catch (error) {
+      if (!mounted) return;
+      _showSnack(
+        context.t.settings.externalImport.reportCopyFailed(
+          error: error.toString(),
+        ),
+      );
+    }
+  }
+
+  int? _estimateEtaMs({
+    required int nowMs,
+    required int done,
+    required int total,
+  }) {
+    if (total <= 0 || done <= 0 || done >= total) return null;
+    final previousAtMs = _progressSampleAtMs;
+    final previousDone = _previousProgressDone;
+    if (previousAtMs == null || previousDone == null) return null;
+    if (done <= previousDone || nowMs <= previousAtMs) return null;
+
+    final deltaDone = done - previousDone;
+    final deltaMs = nowMs - previousAtMs;
+    final remaining = total - done;
+    if (deltaDone <= 0 || deltaMs <= 0 || remaining <= 0) return null;
+
+    final etaMs = ((deltaMs / deltaDone) * remaining).round();
+    return etaMs < 0 ? null : etaMs;
   }
 
   Future<void> _confirmCancelImport() async {

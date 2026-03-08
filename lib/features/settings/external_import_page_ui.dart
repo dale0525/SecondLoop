@@ -157,6 +157,9 @@ extension _ExternalImportPageUiExtension on _ExternalImportPageState {
             ? _text(_ExternalImportText.latestImportCompleted)
             : _text(_ExternalImportText.latestImport);
     final phaseBState = _phaseBStateForBatch(batch);
+    final report = _latestBatchReportForBatch(batch);
+    final loadingReport =
+        _loadingBatchReport && _batchReportLoadedBatchId == batch.batchId;
 
     return _surface(
       child: Padding(
@@ -189,6 +192,19 @@ extension _ExternalImportPageUiExtension on _ExternalImportPageState {
                     label: Text(_phaseBActionLabel(phaseBState!)),
                   ),
                 OutlinedButton.icon(
+                  key: const ValueKey('external_import_view_latest_report'),
+                  onPressed:
+                      _isBusy ? null : () => _showBatchReportDialog(batch),
+                  icon: loadingReport
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.description_outlined),
+                  label: Text(_text(_ExternalImportText.viewReport)),
+                ),
+                OutlinedButton.icon(
                   key: const ValueKey('external_import_delete_latest_batch'),
                   onPressed: _isBusy ? null : () => _confirmDeleteBatch(batch),
                   icon: const Icon(Icons.delete_outline),
@@ -218,6 +234,24 @@ extension _ExternalImportPageUiExtension on _ExternalImportPageState {
               _text(_ExternalImportText.copiedData),
               _formatBytes(batch.copiedBytes.toInt()),
             ),
+            if (report != null) ...[
+              _infoRow(
+                _text(_ExternalImportText.successCount),
+                '${report.successCount}',
+              ),
+              _infoRow(
+                _text(_ExternalImportText.copiedAttachments),
+                '${report.copiedAttachmentCount}',
+              ),
+              _infoRow(
+                _text(_ExternalImportText.diskUsage),
+                _formatBytes(report.diskUsageBytes),
+              ),
+              _infoRow(
+                _text(_ExternalImportText.elapsed),
+                _formatDuration(report.elapsedMs),
+              ),
+            ],
             if (batch.lastError != null && batch.lastError!.trim().isNotEmpty)
               _infoRow(
                 _text(_ExternalImportText.lastError),
@@ -506,6 +540,8 @@ extension _ExternalImportPageUiExtension on _ExternalImportPageState {
                             children: [
                               Text(_progressPercentSummary(percentLabel)),
                               Text(_progressProcessedSummary()),
+                              Text(_text(_ExternalImportText.eta)),
+                              Text(_progressEtaValueSummary()),
                               Text(_progressFailedSummary()),
                               Text(
                                 context.t.common.labels.labeledValue(
@@ -634,11 +670,117 @@ extension _ExternalImportPageUiExtension on _ExternalImportPageState {
   String _batchStatusSummary(ExternalImportBatchSummary batch) =>
       '${_statusLabel(batch.status)} · ${batch.sourceKind}';
 
+  ExternalImportBatchReport? _latestBatchReportForBatch(
+    ExternalImportBatchSummary batch,
+  ) {
+    if (_batchReportLoadedBatchId != batch.batchId) {
+      return null;
+    }
+    return _latestBatchReport;
+  }
+
+  Widget _buildBatchReportDialogContent(ExternalImportBatchReport report) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _infoRow(_text(_ExternalImportText.sourceLabel), report.sourceLabel),
+        _infoRow(
+            _text(_ExternalImportText.status), _statusLabel(report.status)),
+        _infoRow(_text(_ExternalImportText.notes), '${report.notesCount}'),
+        _infoRow(
+          _text(_ExternalImportText.attachments),
+          '${report.attachmentsCount}',
+        ),
+        _infoRow(
+          _text(_ExternalImportText.successCount),
+          '${report.successCount}',
+        ),
+        _infoRow(
+            _text(_ExternalImportText.failedCount), '${report.failedCount}'),
+        _infoRow(
+          _text(_ExternalImportText.copiedAttachments),
+          '${report.copiedAttachmentCount}',
+        ),
+        _infoRow(
+          _text(_ExternalImportText.copiedData),
+          _formatBytes(report.copiedBytes),
+        ),
+        _infoRow(
+          _text(_ExternalImportText.diskUsage),
+          _formatBytes(report.diskUsageBytes),
+        ),
+        _infoRow(_text(_ExternalImportText.elapsed),
+            _formatDuration(report.elapsedMs)),
+        if (report.lastError != null && report.lastError!.trim().isNotEmpty)
+          _infoRow(
+              _text(_ExternalImportText.lastError), report.lastError!.trim()),
+        const SizedBox(height: 8),
+        Text(
+          _text(_ExternalImportText.reportDiagnostics),
+          style: Theme.of(context)
+              .textTheme
+              .titleSmall
+              ?.copyWith(fontWeight: FontWeight.w700),
+        ),
+        const SizedBox(height: 8),
+        if (!report.hasDiagnostics)
+          Text(_text(_ExternalImportText.reportNoDiagnostics))
+        else
+          for (final diagnostic in report.diagnostics)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: _surface(
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      SelectableText(diagnostic.message),
+                      const SizedBox(height: 8),
+                      Text(
+                        context.t.common.labels.labeledValue(
+                          label: _text(_ExternalImportText.reportStage),
+                          value: diagnostic.stage,
+                        ),
+                      ),
+                      Text(
+                        context.t.common.labels.labeledValue(
+                          label: _text(_ExternalImportText.reportSeverity),
+                          value: diagnostic.severity,
+                        ),
+                      ),
+                      Text(
+                        context.t.common.labels.labeledValue(
+                          label: _text(_ExternalImportText.reportCode),
+                          value: diagnostic.code,
+                        ),
+                      ),
+                      if (diagnostic.sourceRelPath != null)
+                        Text(
+                          context.t.common.labels.labeledValue(
+                            label: _text(_ExternalImportText.reportSourcePath),
+                            value: diagnostic.sourceRelPath!,
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+      ],
+    );
+  }
+
   String _progressPercentSummary(String percentLabel) =>
       '${_text(_ExternalImportText.progress)}: $percentLabel';
 
   String _progressProcessedSummary() =>
       '${_text(_ExternalImportText.processed)}: $_progressDone / $_progressTotal';
+
+  String _progressEtaValueSummary() => _etaMs == null
+      ? _text(_ExternalImportText.estimatingEta)
+      : _formatDuration(_etaMs!);
 
   String _progressFailedSummary() =>
       '${_text(_ExternalImportText.statusFailed)}: $_progressFailedCount';

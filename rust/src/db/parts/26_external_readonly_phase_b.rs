@@ -10,6 +10,7 @@ struct ExternalPhaseBAttachment {
     doc_id: String,
     attachment_sha256: String,
     attachment_name: String,
+    size_bytes: i64,
     mime_type: String,
     status: String,
     last_error: Option<String>,
@@ -58,15 +59,60 @@ fn normalize_external_phase_b_status(status: Option<&str>, eligible_count: i64) 
     normalized.to_string()
 }
 
-fn estimate_phase_b_runtime_seconds_for_mime(mime_type: &str) -> i64 {
-    let normalized = mime_type.trim().to_ascii_lowercase();
+fn ceil_div_i64(value: i64, divisor: i64) -> i64 {
+    if divisor <= 0 {
+        return 0;
+    }
+    let safe = value.max(0);
+    if safe == 0 {
+        return 0;
+    }
+    (safe + divisor - 1) / divisor
+}
+
+fn estimate_phase_b_runtime_seconds(item: &ExternalPhaseBAttachment) -> i64 {
+    let normalized = item.mime_type.trim().to_ascii_lowercase();
+    let size = item.size_bytes.max(0);
     if normalized == PDF_MIME {
-        return 4;
+        return 4 + ceil_div_i64(size, 512_000);
     }
     if normalized.starts_with("image/") {
-        return 2;
+        return 2 + ceil_div_i64(size, 1_048_576);
     }
-    1
+    if normalized.starts_with("text/") {
+        return 1 + ceil_div_i64(size, 256_000);
+    }
+    2 + ceil_div_i64(size, 768_000)
+}
+
+fn estimate_phase_b_cloud_tokens(item: &ExternalPhaseBAttachment) -> i64 {
+    let normalized = item.mime_type.trim().to_ascii_lowercase();
+    let size = item.size_bytes.max(0);
+    if normalized == PDF_MIME {
+        return 600 + ceil_div_i64(size, 1_024);
+    }
+    if normalized.starts_with("image/") {
+        return 400 + ceil_div_i64(size, 2_048);
+    }
+    if normalized.starts_with("text/") {
+        return 64 + ceil_div_i64(size, 8);
+    }
+    200 + ceil_div_i64(size, 16)
+}
+
+fn estimate_phase_b_local_work_units(item: &ExternalPhaseBAttachment) -> i64 {
+    let normalized = item.mime_type.trim().to_ascii_lowercase();
+    let size = item.size_bytes.max(0);
+    if normalized == PDF_MIME {
+        return 4 + ceil_div_i64(size, 1_048_576);
+    }
+    if normalized.starts_with("image/") {
+        return 3 + ceil_div_i64(size, 2_097_152);
+    }
+    if normalized.starts_with("text/") {
+        return 1 + ceil_div_i64(size, 512_000);
+    }
+    2 + ceil_div_i64(size, 1_048_576)
 }
 
 fn is_external_phase_b_mime_eligible(mime_type: &str) -> bool {
@@ -83,6 +129,7 @@ fn list_external_phase_b_eligible_attachments(
                   d.doc_id,
                   a.sha256,
                   da.attachment_name,
+                  a.size_bytes,
                   a.mime_type,
                   COALESCE(pa.status, 'pending') AS phase_b_status,
                   COALESCE(pa.generated_chunk_count, 0) AS generated_chunk_count,
@@ -103,9 +150,10 @@ fn list_external_phase_b_eligible_attachments(
             doc_id: row.get(1)?,
             attachment_sha256: row.get(2)?,
             attachment_name: row.get(3)?,
-            mime_type: row.get(4)?,
-            status: row.get(5)?,
-            last_error: row.get(7)?,
+            size_bytes: row.get(4)?,
+            mime_type: row.get(5)?,
+            status: row.get(6)?,
+            last_error: row.get(8)?,
         };
         if is_external_phase_b_mime_eligible(&item.mime_type) {
             out.push(item);
@@ -543,27 +591,34 @@ pub fn estimate_external_import_phase_b(app_dir: &Path, batch_id: &str) -> Resul
         params![batch_id],
         |row| row.get(0),
     )?;
-    let estimated_runtime_seconds = eligible
+    let remaining = eligible
         .iter()
-        .map(|item| estimate_phase_b_runtime_seconds_for_mime(&item.mime_type))
+        .filter(|item| item.status != EXTERNAL_PHASE_B_STATUS_COMPLETED)
+        .collect::<Vec<_>>();
+    let estimated_runtime_seconds = remaining
+        .iter()
+        .map(|item| estimate_phase_b_runtime_seconds(item))
         .fold(0i64, |acc, value| acc.saturating_add(value));
-    let estimated_local_bytes = eligible.iter().try_fold(0i64, |acc, item| {
-        let size: i64 = conn.query_row(
-            r#"SELECT size_bytes FROM external_attachments WHERE sha256 = ?1"#,
-            params![item.attachment_sha256],
-            |row| row.get(0),
-        )?;
-        Ok::<i64, anyhow::Error>(acc.saturating_add(size.max(0)))
-    })?;
+    let estimated_cloud_tokens = remaining
+        .iter()
+        .map(|item| estimate_phase_b_cloud_tokens(item))
+        .fold(0i64, |acc, value| acc.saturating_add(value));
+    let estimated_local_bytes = remaining.iter().fold(0i64, |acc, item| {
+        acc.saturating_add(item.size_bytes.max(0))
+    });
+    let estimated_local_work_units = remaining
+        .iter()
+        .map(|item| estimate_phase_b_local_work_units(item))
+        .fold(0i64, |acc, value| acc.saturating_add(value));
     let state = external_import_phase_b_state_json_from_conn(&conn, batch_id)?;
     Ok(serde_json::json!({
         "batch_id": batch_id,
         "eligible_attachment_count": i64::try_from(eligible.len()).unwrap_or(i64::MAX),
         "remaining_attachment_count": (i64::try_from(eligible.len()).unwrap_or(i64::MAX) - processed_count).max(0),
         "estimated_runtime_seconds": estimated_runtime_seconds.max(0),
-        "estimated_cloud_tokens": 0,
+        "estimated_cloud_tokens": estimated_cloud_tokens.max(0),
         "estimated_local_bytes": estimated_local_bytes.max(0),
-        "estimated_local_work_units": i64::try_from(eligible.len()).unwrap_or(i64::MAX),
+        "estimated_local_work_units": estimated_local_work_units.max(0),
         "phase_b_status": state["phase_b_status"].clone(),
     }))
 }

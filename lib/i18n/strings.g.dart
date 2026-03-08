@@ -4,9 +4,9 @@
 /// To regenerate, run: `dart run slang`
 ///
 /// Locales: 2
-/// Strings: 2234 (1117 per locale)
+/// Strings: 2264 (1132 per locale)
 ///
-/// Built on 2026-03-08 at 01:33 UTC
+/// Built on 2026-03-08 at 03:09 UTC
 
 // coverage:ignore-file
 // ignore_for_file: type=lint
@@ -1524,7 +1524,11 @@ class _StringsSettingsExternalImportEn {
   String get status => 'Status';
   String get failed => 'Failed';
   String get copiedData => 'Copied data';
+  String get successCount => 'Success';
+  String get copiedAttachments => 'Copied attachments';
+  String get diskUsage => 'Disk usage';
   String get lastError => 'Last error';
+  String get viewReport => 'View report';
   String get deleteThisBatch => 'Delete this batch';
   String get error => 'Error';
   String get importedBatches => 'Imported batches';
@@ -1555,6 +1559,8 @@ class _StringsSettingsExternalImportEn {
   String get progress => 'Progress';
   String get processed => 'Processed';
   String get elapsed => 'Elapsed';
+  String get eta => 'ETA';
+  String get estimatingEta => 'Estimating…';
   String get phaseBTitle => 'Phase B enrichment';
   String get phaseBDescription =>
       'Extract attachment text and append richer readonly search chunks.';
@@ -1577,6 +1583,16 @@ class _StringsSettingsExternalImportEn {
   String get phaseBAttachmentRefs => 'Attachment refs';
   String get phaseBElapsed => 'Phase B elapsed';
   String get phaseBLastError => 'Phase B last error';
+  String get reportTitle => 'Import report';
+  String get reportDiagnostics => 'Diagnostics';
+  String get reportNoDiagnostics => 'No diagnostics recorded.';
+  String get reportCode => 'Code';
+  String get reportStage => 'Stage';
+  String get reportSeverity => 'Severity';
+  String get reportSourcePath => 'Source path';
+  String get reportCopied => 'Import report copied';
+  String reportCopyFailed({required Object error}) =>
+      'Failed to copy import report: ${error}';
   String get phaseBRunningTitle => 'Running Phase B enrichment';
   String get phaseBCannotLeaveHint =>
       'Stay on this page until Phase B enrichment finishes.';
@@ -6607,7 +6623,15 @@ class _StringsSettingsExternalImportZhCn
   @override
   String get copiedData => '复制数据';
   @override
+  String get successCount => '成功数';
+  @override
+  String get copiedAttachments => '已复制附件';
+  @override
+  String get diskUsage => '磁盘占用';
+  @override
   String get lastError => '最后错误';
+  @override
+  String get viewReport => '查看报告';
   @override
   String get deleteThisBatch => '删除这个批次';
   @override
@@ -6667,6 +6691,10 @@ class _StringsSettingsExternalImportZhCn
   @override
   String get elapsed => '总耗时';
   @override
+  String get eta => '预计剩余';
+  @override
+  String get estimatingEta => '估算中…';
+  @override
   String get phaseBTitle => 'Phase B 增强';
   @override
   String get phaseBDescription => '提取附件文本并补充只读检索分块，提升后续召回效果。';
@@ -6704,6 +6732,24 @@ class _StringsSettingsExternalImportZhCn
   String get phaseBElapsed => 'Phase B 耗时';
   @override
   String get phaseBLastError => 'Phase B 最后错误';
+  @override
+  String get reportTitle => '导入报告';
+  @override
+  String get reportDiagnostics => '诊断信息';
+  @override
+  String get reportNoDiagnostics => '暂无诊断记录。';
+  @override
+  String get reportCode => '代码';
+  @override
+  String get reportStage => '阶段';
+  @override
+  String get reportSeverity => '级别';
+  @override
+  String get reportSourcePath => '来源路径';
+  @override
+  String get reportCopied => '导入报告已复制';
+  @override
+  String reportCopyFailed({required Object error}) => '复制导入报告失败：${error}';
   @override
   String get phaseBRunningTitle => '正在执行 Phase B 增强';
   @override
@@ -12440,8 +12486,16 @@ extension on Translations {
         return 'Failed';
       case 'settings.externalImport.copiedData':
         return 'Copied data';
+      case 'settings.externalImport.successCount':
+        return 'Success';
+      case 'settings.externalImport.copiedAttachments':
+        return 'Copied attachments';
+      case 'settings.externalImport.diskUsage':
+        return 'Disk usage';
       case 'settings.externalImport.lastError':
         return 'Last error';
+      case 'settings.externalImport.viewReport':
+        return 'View report';
       case 'settings.externalImport.deleteThisBatch':
         return 'Delete this batch';
       case 'settings.externalImport.error':
@@ -12500,6 +12554,10 @@ extension on Translations {
         return 'Processed';
       case 'settings.externalImport.elapsed':
         return 'Elapsed';
+      case 'settings.externalImport.eta':
+        return 'ETA';
+      case 'settings.externalImport.estimatingEta':
+        return 'Estimating…';
       case 'settings.externalImport.phaseBTitle':
         return 'Phase B enrichment';
       case 'settings.externalImport.phaseBDescription':
@@ -12538,6 +12596,25 @@ extension on Translations {
         return 'Phase B elapsed';
       case 'settings.externalImport.phaseBLastError':
         return 'Phase B last error';
+      case 'settings.externalImport.reportTitle':
+        return 'Import report';
+      case 'settings.externalImport.reportDiagnostics':
+        return 'Diagnostics';
+      case 'settings.externalImport.reportNoDiagnostics':
+        return 'No diagnostics recorded.';
+      case 'settings.externalImport.reportCode':
+        return 'Code';
+      case 'settings.externalImport.reportStage':
+        return 'Stage';
+      case 'settings.externalImport.reportSeverity':
+        return 'Severity';
+      case 'settings.externalImport.reportSourcePath':
+        return 'Source path';
+      case 'settings.externalImport.reportCopied':
+        return 'Import report copied';
+      case 'settings.externalImport.reportCopyFailed':
+        return ({required Object error}) =>
+            'Failed to copy import report: ${error}';
       case 'settings.externalImport.phaseBRunningTitle':
         return 'Running Phase B enrichment';
       case 'settings.externalImport.phaseBCannotLeaveHint':
@@ -14735,8 +14812,16 @@ extension on _StringsZhCn {
         return '失败数';
       case 'settings.externalImport.copiedData':
         return '复制数据';
+      case 'settings.externalImport.successCount':
+        return '成功数';
+      case 'settings.externalImport.copiedAttachments':
+        return '已复制附件';
+      case 'settings.externalImport.diskUsage':
+        return '磁盘占用';
       case 'settings.externalImport.lastError':
         return '最后错误';
+      case 'settings.externalImport.viewReport':
+        return '查看报告';
       case 'settings.externalImport.deleteThisBatch':
         return '删除这个批次';
       case 'settings.externalImport.error':
@@ -14795,6 +14880,10 @@ extension on _StringsZhCn {
         return '已处理';
       case 'settings.externalImport.elapsed':
         return '总耗时';
+      case 'settings.externalImport.eta':
+        return '预计剩余';
+      case 'settings.externalImport.estimatingEta':
+        return '估算中…';
       case 'settings.externalImport.phaseBTitle':
         return 'Phase B 增强';
       case 'settings.externalImport.phaseBDescription':
@@ -14833,6 +14922,24 @@ extension on _StringsZhCn {
         return 'Phase B 耗时';
       case 'settings.externalImport.phaseBLastError':
         return 'Phase B 最后错误';
+      case 'settings.externalImport.reportTitle':
+        return '导入报告';
+      case 'settings.externalImport.reportDiagnostics':
+        return '诊断信息';
+      case 'settings.externalImport.reportNoDiagnostics':
+        return '暂无诊断记录。';
+      case 'settings.externalImport.reportCode':
+        return '代码';
+      case 'settings.externalImport.reportStage':
+        return '阶段';
+      case 'settings.externalImport.reportSeverity':
+        return '级别';
+      case 'settings.externalImport.reportSourcePath':
+        return '来源路径';
+      case 'settings.externalImport.reportCopied':
+        return '导入报告已复制';
+      case 'settings.externalImport.reportCopyFailed':
+        return ({required Object error}) => '复制导入报告失败：${error}';
       case 'settings.externalImport.phaseBRunningTitle':
         return '正在执行 Phase B 增强';
       case 'settings.externalImport.phaseBCannotLeaveHint':

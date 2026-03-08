@@ -51,6 +51,16 @@ fn create_siyuan_source(root: &Path) -> PathBuf {
     source
 }
 
+fn create_obsidian_source_with_missing_attachment(root: &Path) -> PathBuf {
+    let source = root.join("obsidian-vault-missing-attachment");
+    fs::create_dir_all(source.join(".obsidian")).expect("obsidian dir");
+    write_text(
+        &source.join("travel/plan.md"),
+        "# Trip Plan\n\nAttachment is referenced but missing.\n\n[Missing](assets/missing.pdf)\n",
+    );
+    source
+}
+
 #[test]
 fn external_import_scan_detects_obsidian_notes_and_attachments() {
     let dir = tempdir().expect("tempdir");
@@ -212,4 +222,51 @@ fn external_import_parses_siyuan_sy_json_best_effort() {
             .expect("search siyuan");
     assert_eq!(hits.len(), 1);
     assert!(hits[0].snippet.to_lowercase().contains("roadmap"));
+}
+
+#[test]
+fn external_import_batch_report_json_includes_terminal_metrics() {
+    let dir = tempdir().expect("tempdir");
+    let app_dir = dir.path().join("app");
+    let source = create_obsidian_source(dir.path());
+    let key = [15u8; 32];
+
+    let batch = run_external_import_with_callbacks(&app_dir, &key, &source, &mut |_| {}, &|| false)
+        .expect("import");
+
+    let report =
+        read_external_import_batch_report_json(&app_dir, &batch.batch_id).expect("read report");
+    let json: serde_json::Value = serde_json::from_str(&report).expect("report json");
+
+    assert_eq!(json["status"].as_str(), Some("completed"));
+    assert_eq!(json["success_count"].as_i64(), Some(2));
+    assert_eq!(json["copied_attachment_count"].as_i64(), Some(2));
+    assert_eq!(json["failed_count"].as_i64(), Some(0));
+    assert!(json["disk_usage_bytes"].as_i64().unwrap_or(0) > 0);
+    assert!(json["elapsed_ms"].as_i64().unwrap_or(-1) >= 0);
+}
+
+#[test]
+fn external_import_batch_report_json_includes_parse_diagnostics() {
+    let dir = tempdir().expect("tempdir");
+    let app_dir = dir.path().join("app");
+    let source = create_obsidian_source_with_missing_attachment(dir.path());
+    let key = [17u8; 32];
+
+    let batch = run_external_import_with_callbacks(&app_dir, &key, &source, &mut |_| {}, &|| false)
+        .expect("import");
+
+    let report =
+        read_external_import_batch_report_json(&app_dir, &batch.batch_id).expect("read report");
+    let json: serde_json::Value = serde_json::from_str(&report).expect("report json");
+    let diagnostics = json["diagnostics"].as_array().expect("diagnostics array");
+
+    assert!(!diagnostics.is_empty());
+    assert!(diagnostics.iter().any(|item| {
+        item["code"].as_str() == Some("missing_attachment_reference")
+            && item["message"]
+                .as_str()
+                .unwrap_or_default()
+                .contains("missing attachment reference")
+    }));
 }

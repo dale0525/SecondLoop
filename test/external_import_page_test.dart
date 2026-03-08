@@ -323,6 +323,201 @@ void main() {
         _labelFinder('最近一次导入：已完成', 'Latest import: completed'), findsOneWidget);
   });
 
+  testWidgets('completed import shows terminal report fields and report action',
+      (WidgetTester tester) async {
+    _setLargeViewport(tester);
+    _installPicker(
+      tester,
+      directoryPath: '/tmp/completed-import-report',
+    );
+
+    final completedBatch = _batchSummary(
+      batchId: 'batch-report-1',
+      sourceKind: 'obsidian',
+      sourceLabel: 'completed-import-report',
+      status: 'completed',
+      notesCount: 8,
+      attachmentsCount: 2,
+      failedCount: 1,
+      copiedBytes: 8192,
+    );
+    final backend = _CompletingExternalImportBackend(
+      scanSummary: _scanSummary(
+        detectedSourceKind: 'obsidian',
+        sourceLabel: 'completed-import-report',
+        notesCount: 8,
+        attachmentsCount: 2,
+        estimatedDiskUsageBytes: 8192,
+      ),
+      batchReportJsonById: <String, String>{
+        'batch-report-1': _batchReportJson(
+          batchId: 'batch-report-1',
+          sourceKind: 'obsidian',
+          sourceLabel: 'completed-import-report',
+          status: 'completed',
+          notesCount: 8,
+          attachmentsCount: 2,
+          failedCount: 1,
+          copiedBytes: 8192,
+          successCount: 7,
+          copiedAttachmentCount: 2,
+          diskUsageBytes: 8192,
+          elapsedMs: 10000,
+          diagnostics: const <Map<String, Object?>>[],
+        ),
+      },
+    );
+    addTearDown(backend.dispose);
+
+    await tester.pumpWidget(_buildTestApp(backend));
+    await _pumpUi(tester);
+
+    await tester
+        .tap(find.byKey(const ValueKey('external_import_choose_folder')));
+    await _pumpUi(tester);
+
+    await tester.tap(find.byKey(const ValueKey('external_import_start')));
+    await tester.pump();
+
+    backend.completeImport(completedBatch);
+    await _pumpUi(tester, times: 6);
+
+    expect(
+      find.byKey(const ValueKey('external_import_view_latest_report')),
+      findsOneWidget,
+    );
+    expect(_labelFinder('成功数', 'Success'), findsOneWidget);
+    expect(_labelFinder('已复制附件', 'Copied attachments'), findsOneWidget);
+    expect(_labelFinder('总耗时', 'Elapsed'), findsWidgets);
+  });
+
+  testWidgets('view report shows diagnostics for latest batch',
+      (WidgetTester tester) async {
+    _setLargeViewport(tester);
+    _installPicker(
+      tester,
+      directoryPath: '/tmp/completed-import-report-dialog',
+    );
+
+    final completedBatch = _batchSummary(
+      batchId: 'batch-report-dialog-1',
+      sourceKind: 'obsidian',
+      sourceLabel: 'completed-import-report-dialog',
+      status: 'completed',
+      notesCount: 4,
+      attachmentsCount: 1,
+      failedCount: 0,
+      copiedBytes: 2048,
+    );
+    final backend = _CompletingExternalImportBackend(
+      scanSummary: _scanSummary(
+        detectedSourceKind: 'obsidian',
+        sourceLabel: 'completed-import-report-dialog',
+        notesCount: 4,
+        attachmentsCount: 1,
+        estimatedDiskUsageBytes: 2048,
+      ),
+      batchReportJsonById: <String, String>{
+        'batch-report-dialog-1': _batchReportJson(
+          batchId: 'batch-report-dialog-1',
+          sourceKind: 'obsidian',
+          sourceLabel: 'completed-import-report-dialog',
+          status: 'completed',
+          notesCount: 4,
+          attachmentsCount: 1,
+          failedCount: 0,
+          copiedBytes: 2048,
+          successCount: 4,
+          copiedAttachmentCount: 1,
+          diskUsageBytes: 2048,
+          elapsedMs: 5000,
+          diagnostics: const <Map<String, Object?>>[
+            <String, Object?>{
+              'stage': 'scan',
+              'severity': 'warning',
+              'code': 'missing_attachment_reference',
+              'message': 'missing attachment reference: assets/missing.pdf',
+              'source_rel_path': 'travel/plan.md',
+            },
+          ],
+        ),
+      },
+    );
+    addTearDown(backend.dispose);
+
+    await tester.pumpWidget(_buildTestApp(backend));
+    await _pumpUi(tester);
+
+    await tester
+        .tap(find.byKey(const ValueKey('external_import_choose_folder')));
+    await _pumpUi(tester);
+
+    await tester.tap(find.byKey(const ValueKey('external_import_start')));
+    await tester.pump();
+
+    backend.completeImport(completedBatch);
+    await _pumpUi(tester, times: 6);
+
+    await tester
+        .tap(find.byKey(const ValueKey('external_import_view_latest_report')));
+    await _pumpUi(tester, times: 4);
+
+    expect(find.byType(AlertDialog), findsOneWidget);
+    expect(find.textContaining('missing attachment reference'), findsOneWidget);
+  });
+
+  testWidgets('blocking import overlay shows eta after progress advances',
+      (WidgetTester tester) async {
+    _setLargeViewport(tester);
+    _installPicker(
+      tester,
+      directoryPath: '/tmp/progress-import',
+    );
+
+    final backend = _CancelableExternalImportBackend(
+      scanSummary: _scanSummary(
+        detectedSourceKind: 'obsidian',
+        sourceLabel: 'progress-import',
+        notesCount: 6,
+        attachmentsCount: 2,
+        estimatedDiskUsageBytes: 6144,
+      ),
+    );
+    addTearDown(backend.dispose);
+
+    await tester.pumpWidget(_buildTestApp(backend));
+    await _pumpUi(tester);
+
+    await tester
+        .tap(find.byKey(const ValueKey('external_import_choose_folder')));
+    await _pumpUi(tester);
+
+    await tester.tap(find.byKey(const ValueKey('external_import_start')));
+    await tester.pump();
+
+    backend.emitProgress(
+      batchId: 'batch-eta-1',
+      stage: 'parsing',
+      done: 1,
+      total: 4,
+      failedCount: 0,
+      status: 'in_progress',
+    );
+    await tester.pump(const Duration(seconds: 1));
+
+    backend.emitProgress(
+      batchId: 'batch-eta-1',
+      stage: 'parsing',
+      done: 2,
+      total: 4,
+      failedCount: 0,
+      status: 'in_progress',
+    );
+    await tester.pump(const Duration(milliseconds: 100));
+
+    expect(_labelFinder('预计剩余', 'ETA'), findsOneWidget);
+  });
+
   testWidgets('delete batch failure shows error card and keeps batch',
       (WidgetTester tester) async {
     _setLargeViewport(tester);
@@ -725,6 +920,42 @@ ExternalImportBatchSummary _batchSummary({
   );
 }
 
+String _batchReportJson({
+  required String batchId,
+  required String sourceKind,
+  required String sourceLabel,
+  required String status,
+  required int notesCount,
+  required int attachmentsCount,
+  required int failedCount,
+  required int copiedBytes,
+  required int successCount,
+  required int copiedAttachmentCount,
+  required int diskUsageBytes,
+  required int elapsedMs,
+  required List<Map<String, Object?>> diagnostics,
+}) {
+  return jsonEncode(<String, Object?>{
+    'batch_id': batchId,
+    'source_kind': sourceKind,
+    'source_label': sourceLabel,
+    'status': status,
+    'notes_count': notesCount,
+    'attachments_count': attachmentsCount,
+    'failed_count': failedCount,
+    'copied_bytes': copiedBytes,
+    'success_count': successCount,
+    'copied_attachment_count': copiedAttachmentCount,
+    'disk_usage_bytes': diskUsageBytes,
+    'elapsed_ms': elapsedMs,
+    'created_at_ms': 1710000000000,
+    'updated_at_ms': 1710000005000,
+    'completed_at_ms': 1710000010000,
+    'last_error': null,
+    'diagnostics': diagnostics,
+  });
+}
+
 String _phaseBStateJson({
   required String batchId,
   required String phaseBStatus,
@@ -856,10 +1087,13 @@ final class _CompletingExternalImportBackend
   _CompletingExternalImportBackend({
     required super.scanSummary,
     this.deleteError,
-  });
+    Map<String, String>? batchReportJsonById,
+  }) : batchReportJsonById = batchReportJsonById ?? <String, String>{};
 
   final Object? deleteError;
+  final Map<String, String> batchReportJsonById;
   final List<String> deletedBatchIds = <String>[];
+  final List<String> reportBatchIds = <String>[];
   final StreamController<String> _importProgressController =
       StreamController<String>();
   bool _disposed = false;
@@ -911,6 +1145,17 @@ final class _CompletingExternalImportBackend
       throw deleteError!;
     }
     batches = batches.where((batch) => batch.batchId != batchId).toList();
+  }
+
+  @override
+  Future<String> readExternalImportBatchReport(
+      {required String batchId}) async {
+    reportBatchIds.add(batchId);
+    final report = batchReportJsonById[batchId];
+    if (report == null) {
+      throw StateError('missing_batch_report_$batchId');
+    }
+    return report;
   }
 }
 
