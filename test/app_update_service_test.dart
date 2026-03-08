@@ -58,7 +58,7 @@ void main() {
   });
 
   group('AppUpdateService.checkForUpdates', () {
-    test('returns external Windows setup update when matching asset exists',
+    test('returns external Windows MSI update when matching asset exists',
         () async {
       final service = AppUpdateService(
         platformOverride: AppUpdatePlatform.windows,
@@ -71,8 +71,9 @@ void main() {
               'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
           'assets': [
             {
-              'name': 'SecondLoop-win-Setup.exe',
-              'browser_download_url': 'https://cdn.example.com/setup.exe',
+              'name': 'SecondLoop-win.msi',
+              'browser_download_url':
+                  'https://cdn.example.com/SecondLoop-win.msi',
             },
           ],
         },
@@ -86,11 +87,13 @@ void main() {
       expect(update!.latestTag, 'v1.1.0');
       expect(update.installMode, AppUpdateInstallMode.externalDownload);
       expect(
-          update.downloadUri.toString(), 'https://cdn.example.com/setup.exe');
+        update.downloadUri.toString(),
+        'https://cdn.example.com/SecondLoop-win.msi',
+      );
     });
 
     test(
-        'returns staged Windows update from Velopack nupkg when runtime is available',
+        'prefers MSI manual Windows update even when Velopack runtime is available',
         () async {
       final stagedClient = _FakeWindowsStagedUpdateClient(available: true);
       final service = AppUpdateService(
@@ -105,8 +108,9 @@ void main() {
               'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
           'assets': [
             {
-              'name': 'SecondLoop-win-Setup.exe',
-              'browser_download_url': 'https://cdn.example.com/setup.exe',
+              'name': 'SecondLoop-win.msi',
+              'browser_download_url':
+                  'https://cdn.example.com/SecondLoop-win.msi',
             },
             {
               'name': 'com.secondloop.secondloop-1.1.0-full.nupkg',
@@ -121,16 +125,16 @@ void main() {
       expect(result.update, isNotNull);
       expect(
         result.update!.installMode,
-        AppUpdateInstallMode.stagedNextLaunch,
+        AppUpdateInstallMode.externalDownload,
       );
       expect(
         result.update!.downloadUri.toString(),
-        'https://cdn.example.com/win.nupkg',
+        'https://cdn.example.com/SecondLoop-win.msi',
       );
     });
 
     test(
-        'returns external Windows setup installer when staged runtime is unavailable',
+        'returns external Windows MSI installer when staged runtime is unavailable',
         () async {
       final stagedClient = _FakeWindowsStagedUpdateClient(available: false);
       final service = AppUpdateService(
@@ -145,8 +149,9 @@ void main() {
               'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
           'assets': [
             {
-              'name': 'SecondLoop-win-Setup.exe',
-              'browser_download_url': 'https://cdn.example.com/setup.exe',
+              'name': 'SecondLoop-win.msi',
+              'browser_download_url':
+                  'https://cdn.example.com/SecondLoop-win.msi',
             },
             {
               'name': 'SecondLoop-windows-x64-v1.1.0.msi',
@@ -169,11 +174,11 @@ void main() {
       );
       expect(
         result.update!.downloadUri.toString(),
-        'https://cdn.example.com/setup.exe',
+        'https://cdn.example.com/SecondLoop-win.msi',
       );
     });
 
-    test('falls back to release page when only MSI asset exists on Windows',
+    test('uses MSI asset directly when only MSI asset exists on Windows',
         () async {
       final stagedClient = _FakeWindowsStagedUpdateClient(available: false);
       final service = AppUpdateService(
@@ -204,7 +209,7 @@ void main() {
       );
       expect(
         result.update!.downloadUri.toString(),
-        'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
+        'https://cdn.example.com/legacy.msi',
       );
     });
 
@@ -302,7 +307,7 @@ void main() {
       );
     });
 
-    test('returns staged Windows update when Velopack runtime is available',
+    test('falls back to release page when MSI asset is missing on Windows',
         () async {
       final stagedClient = _FakeWindowsStagedUpdateClient(available: true);
       final service = AppUpdateService(
@@ -329,13 +334,18 @@ void main() {
       expect(result.update, isNotNull);
       expect(
         result.update!.installMode,
-        AppUpdateInstallMode.stagedNextLaunch,
+        AppUpdateInstallMode.externalDownload,
+      );
+      expect(
+        result.update!.downloadUri.toString(),
+        'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
       );
     });
   });
 
   group('AppUpdateService.applyPendingUpdateOnStartup', () {
-    test('calls Windows staged client when runtime is available', () async {
+    test('does not apply pending Windows updates when runtime is available',
+        () async {
       final stagedClient = _FakeWindowsStagedUpdateClient(available: true);
       final service = AppUpdateService(
         platformOverride: AppUpdatePlatform.windows,
@@ -344,7 +354,7 @@ void main() {
 
       await service.applyPendingUpdateOnStartup();
 
-      expect(stagedClient.applyPendingCalls, 1);
+      expect(stagedClient.applyPendingCalls, 0);
     });
 
     test('skips apply when staged runtime is unavailable', () async {
@@ -361,7 +371,7 @@ void main() {
   });
 
   group('AppUpdateService.applyStagedUpdateAndRestart', () {
-    test('calls Windows staged client applyPendingAndRestart', () async {
+    test('throws when asked to restart into staged Windows update', () async {
       final stagedClient = _FakeWindowsStagedUpdateClient(available: true);
       var exitedCode = -1;
       final service = AppUpdateService(
@@ -370,10 +380,13 @@ void main() {
         processExit: (code) => exitedCode = code,
       );
 
-      await service.applyStagedUpdateAndRestart();
+      await expectLater(
+        service.applyStagedUpdateAndRestart(),
+        throwsA(isA<StateError>()),
+      );
 
-      expect(stagedClient.applyPendingAndRestartCalls, 1);
-      expect(exitedCode, 0);
+      expect(stagedClient.applyPendingAndRestartCalls, 0);
+      expect(exitedCode, -1);
     });
   });
 }

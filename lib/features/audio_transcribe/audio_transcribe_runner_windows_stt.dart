@@ -1,6 +1,5 @@
 part of 'audio_transcribe_runner.dart';
 
-String? _cachedBundledFfmpegExecutablePathForAudioTranscribe;
 const String _kWindowsSpeechRecognizerUnavailableError =
     'speech_recognizer_unavailable';
 const String _kWindowsSpeechRecognizerLangMissingError =
@@ -419,51 +418,6 @@ final class WindowsNativeSttAudioTranscribeClient
   }
 }
 
-Future<String?> _resolveBundledFfmpegExecutablePathForAudioTranscribe() async {
-  final cachedPath = _cachedBundledFfmpegExecutablePathForAudioTranscribe;
-  if (cachedPath != null) {
-    try {
-      if (await File(cachedPath).exists()) return cachedPath;
-    } catch (_) {
-      // ignore
-    }
-    _cachedBundledFfmpegExecutablePathForAudioTranscribe = null;
-  }
-
-  if (kIsWeb) return null;
-  final assetPath =
-      _bundledFfmpegAssetPathForCurrentPlatformForAudioTranscribe();
-  if (assetPath == null) return null;
-
-  try {
-    final data = await rootBundle.load(assetPath);
-    final bytes =
-        data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes);
-    if (bytes.isEmpty) return null;
-
-    final tempDir =
-        Directory('${Directory.systemTemp.path}/secondloop_ffmpeg_bundle');
-    await tempDir.create(recursive: true);
-    final executableName = Platform.isWindows ? 'ffmpeg.exe' : 'ffmpeg';
-    final executable = File('${tempDir.path}/$executableName');
-    await executable.writeAsBytes(bytes, flush: true);
-
-    if (!Platform.isWindows) {
-      final chmodResult = await Process.run('chmod', ['755', executable.path]);
-      if (chmodResult.exitCode != 0) return null;
-    }
-
-    _cachedBundledFfmpegExecutablePathForAudioTranscribe = executable.path;
-    return executable.path;
-  } catch (_) {
-    return null;
-  }
-}
-
-String? _bundledFfmpegAssetPathForCurrentPlatformForAudioTranscribe() {
-  if (kIsWeb) return null;
-  if (Platform.isMacOS) return 'assets/bin/ffmpeg/macos/ffmpeg';
-  if (Platform.isLinux) return 'assets/bin/ffmpeg/linux/ffmpeg';
-  if (Platform.isWindows) return 'assets/bin/ffmpeg/windows/ffmpeg.exe';
-  return null;
+Future<String?> _resolveBundledFfmpegExecutablePathForAudioTranscribe() {
+  return resolveBundledFfmpegExecutablePath();
 }

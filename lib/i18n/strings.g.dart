@@ -6,7 +6,7 @@
 /// Locales: 2
 /// Strings: 2234 (1117 per locale)
 ///
-/// Built on 2026-03-07 at 11:13 UTC
+/// Built on 2026-03-08 at 01:33 UTC
 
 // coverage:ignore-file
 // ignore_for_file: type=lint
@@ -1330,7 +1330,7 @@ class _StringsSettingsUpdateNoticeEn {
   String stagedReady({required Object version}) =>
       'New version ${version} is ready and will apply on next launch.';
   String manualDownload({required Object version}) =>
-      'New version ${version} is available for manual download.';
+      'New version ${version} is available. Download the MSI or open the release page.';
 }
 
 // Path: settings.diagnostics
@@ -3128,7 +3128,7 @@ class _StringsSettingsAboutStatusEn {
 
   // Translations
   String get idle =>
-      'Check for updates. Linux can auto-update and restart; Windows uses Setup installer download/install.';
+      'Check for updates. Linux can auto-update and restart; Windows uses manual MSI or release-page install.';
   String get checking => 'Checking for updates…';
   String get upToDate => 'You\'re on the latest version.';
   String availableSeamless({required Object version}) =>
@@ -3136,7 +3136,7 @@ class _StringsSettingsAboutStatusEn {
   String availableStaged({required Object version}) =>
       'Update available (${version}). Prepare in background and apply next launch.';
   String availableExternal({required Object version}) =>
-      'Update available (${version}). Please download and install manually.';
+      'Update available (${version}). Please install the MSI or use the release page manually.';
   String failed({required Object error}) => 'Update check failed: ${error}';
 }
 
@@ -6314,7 +6314,7 @@ class _StringsSettingsUpdateNoticeZhCn extends _StringsSettingsUpdateNoticeEn {
       '新版本 ${version} 已准备好，将在下次启动自动更新。';
   @override
   String manualDownload({required Object version}) =>
-      '发现新版本 ${version}，可手动下载安装。';
+      '发现新版本 ${version}，可下载 MSI 或打开发布页安装。';
 }
 
 // Path: settings.diagnostics
@@ -9045,7 +9045,7 @@ class _StringsSettingsAboutStatusZhCn extends _StringsSettingsAboutStatusEn {
 
   // Translations
   @override
-  String get idle => '点击检查更新；Linux 可自动更新重启，Windows 请下载 Setup 安装包安装。';
+  String get idle => '点击检查更新；Linux 可自动更新并重启，Windows 请手动安装 MSI 或打开发布页安装。';
   @override
   String get checking => '正在检查更新…';
   @override
@@ -9058,7 +9058,7 @@ class _StringsSettingsAboutStatusZhCn extends _StringsSettingsAboutStatusEn {
       '发现新版本（${version}）。可后台准备更新，下次启动自动生效。';
   @override
   String availableExternal({required Object version}) =>
-      '发现新版本（${version}）。请手动下载安装。';
+      '发现新版本（${version}）。请手动安装 MSI 或前往发布页安装。';
   @override
   String failed({required Object error}) => '检查更新失败：${error}';
 }
@@ -12210,7 +12210,7 @@ extension on Translations {
       case 'settings.about.latestVersion':
         return ({required Object version}) => 'Latest version: ${version}';
       case 'settings.about.status.idle':
-        return 'Check for updates. Linux can auto-update and restart; Windows uses Setup installer download/install.';
+        return 'Check for updates. Linux can auto-update and restart; Windows uses manual MSI or release-page install.';
       case 'settings.about.status.checking':
         return 'Checking for updates…';
       case 'settings.about.status.upToDate':
@@ -12223,7 +12223,7 @@ extension on Translations {
             'Update available (${version}). Prepare in background and apply next launch.';
       case 'settings.about.status.availableExternal':
         return ({required Object version}) =>
-            'Update available (${version}). Please download and install manually.';
+            'Update available (${version}). Please install the MSI or use the release page manually.';
       case 'settings.about.status.failed':
         return ({required Object error}) => 'Update check failed: ${error}';
       case 'settings.about.actions.check':
@@ -12264,7 +12264,7 @@ extension on Translations {
             'New version ${version} is ready and will apply on next launch.';
       case 'settings.updateNotice.manualDownload':
         return ({required Object version}) =>
-            'New version ${version} is available for manual download.';
+            'New version ${version} is available. Download the MSI or open the release page.';
       case 'settings.diagnostics.title':
         return 'Diagnostics';
       case 'settings.diagnostics.subtitle':
@@ -14512,7 +14512,7 @@ extension on _StringsZhCn {
       case 'settings.about.latestVersion':
         return ({required Object version}) => '最新版本：${version}';
       case 'settings.about.status.idle':
-        return '点击检查更新；Linux 可自动更新重启，Windows 请下载 Setup 安装包安装。';
+        return '点击检查更新；Linux 可自动更新并重启，Windows 请手动安装 MSI 或打开发布页安装。';
       case 'settings.about.status.checking':
         return '正在检查更新…';
       case 'settings.about.status.upToDate':
@@ -14523,7 +14523,8 @@ extension on _StringsZhCn {
         return ({required Object version}) =>
             '发现新版本（${version}）。可后台准备更新，下次启动自动生效。';
       case 'settings.about.status.availableExternal':
-        return ({required Object version}) => '发现新版本（${version}）。请手动下载安装。';
+        return ({required Object version}) =>
+            '发现新版本（${version}）。请手动安装 MSI 或前往发布页安装。';
       case 'settings.about.status.failed':
         return ({required Object error}) => '检查更新失败：${error}';
       case 'settings.about.actions.check':
@@ -14561,7 +14562,8 @@ extension on _StringsZhCn {
       case 'settings.updateNotice.stagedReady':
         return ({required Object version}) => '新版本 ${version} 已准备好，将在下次启动自动更新。';
       case 'settings.updateNotice.manualDownload':
-        return ({required Object version}) => '发现新版本 ${version}，可手动下载安装。';
+        return ({required Object version}) =>
+            '发现新版本 ${version}，可下载 MSI 或打开发布页安装。';
       case 'settings.diagnostics.title':
         return '诊断信息';
       case 'settings.diagnostics.subtitle':

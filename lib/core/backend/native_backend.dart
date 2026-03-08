@@ -22,6 +22,7 @@ import '../../src/rust/frb_generated.dart';
 import '../../src/rust/semantic_parse.dart';
 import 'app_backend.dart';
 import 'attachments_backend.dart';
+import 'rust_external_library_resolver.dart';
 
 typedef AppDirProvider = Future<String> Function();
 
@@ -117,7 +118,9 @@ class NativeAppBackend
 
   @override
   Future<void> init() async {
-    await RustLib.init();
+    await RustLib.init(
+      externalLibrary: resolveDesktopRustExternalLibrary(),
+    );
     await _getAppDir();
   }
 

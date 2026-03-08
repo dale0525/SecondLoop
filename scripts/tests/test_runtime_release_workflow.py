@@ -38,6 +38,15 @@ class RuntimeReleaseWorkflowTests(unittest.TestCase):
 
         self.assertIsNone(re.search(r"^  ios:\s*$", workflow_text, flags=re.MULTILINE))
 
+    def test_release_workflow_windows_publish_path_is_msi_only(self) -> None:
+        workflow_text = self._release_workflow_text()
+
+        self.assertIn("name: Package MSI", workflow_text)
+        self.assertNotIn("name: Package Velopack", workflow_text)
+        self.assertIn("dist/SecondLoop-win.msi", workflow_text)
+        self.assertNotIn("dist/*Setup*.exe", workflow_text)
+        self.assertNotIn("dist/*.nupkg", workflow_text)
+
 
 if __name__ == "__main__":
     unittest.main()

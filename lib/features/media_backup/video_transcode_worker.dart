@@ -5,6 +5,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:image/image.dart' as img;
 
+import '../../core/media/ffmpeg_executable_resolver.dart';
+
 part 'video_transcode_worker_native_preview.dart';
 
 final class VideoTranscodeSegment {
@@ -136,8 +138,6 @@ final class VideoTranscodeWorker {
   static const int _defaultMaxSegmentBytes = 50 * 1024 * 1024;
   static const MethodChannel _videoTranscodeChannel =
       MethodChannel('secondloop/video_transcode');
-
-  static String? _cachedBundledFfmpegExecutablePath;
 
   @visibleForTesting
   static VideoFfmpegExecutableResolver? debugFfmpegExecutableResolver;
@@ -842,53 +842,8 @@ final class VideoTranscodeWorker {
     return null;
   }
 
-  static Future<String?> _resolveBundledFfmpegExecutablePath() async {
-    final cachedPath = _cachedBundledFfmpegExecutablePath;
-    if (cachedPath != null) {
-      try {
-        if (await File(cachedPath).exists()) return cachedPath;
-      } catch (_) {
-        // ignore
-      }
-      _cachedBundledFfmpegExecutablePath = null;
-    }
-
-    if (kIsWeb) return null;
-    final assetPath = _bundledFfmpegAssetPathForCurrentPlatform();
-    if (assetPath == null) return null;
-
-    try {
-      final data = await rootBundle.load(assetPath);
-      final bytes =
-          data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes);
-      if (bytes.isEmpty) return null;
-
-      final tempDir =
-          Directory('${Directory.systemTemp.path}/secondloop_ffmpeg_bundle');
-      await tempDir.create(recursive: true);
-      final executableName = Platform.isWindows ? 'ffmpeg.exe' : 'ffmpeg';
-      final executable = File('${tempDir.path}/$executableName');
-      await executable.writeAsBytes(bytes, flush: true);
-
-      if (!Platform.isWindows) {
-        final chmodResult =
-            await Process.run('chmod', ['755', executable.path]);
-        if (chmodResult.exitCode != 0) return null;
-      }
-
-      _cachedBundledFfmpegExecutablePath = executable.path;
-      return executable.path;
-    } catch (_) {
-      return null;
-    }
-  }
-
-  static String? _bundledFfmpegAssetPathForCurrentPlatform() {
-    if (kIsWeb) return null;
-    if (Platform.isMacOS) return 'assets/bin/ffmpeg/macos/ffmpeg';
-    if (Platform.isLinux) return 'assets/bin/ffmpeg/linux/ffmpeg';
-    if (Platform.isWindows) return 'assets/bin/ffmpeg/windows/ffmpeg.exe';
-    return null;
+  static Future<String?> _resolveBundledFfmpegExecutablePath() {
+    return resolveBundledFfmpegExecutablePath();
   }
 
   static String _extensionForMimeType(String sourceMimeType) {

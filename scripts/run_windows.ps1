@@ -180,19 +180,19 @@ if ($UseFlutterRun) {
   }
 
   Write-Host "Running: flutter pub get"
-  & dart pub global run fvm:main flutter pub get
+  & (Join-Path $PSScriptRoot 'run_fvm_tool.ps1') -Tool flutter -Command pub get
   if ($LASTEXITCODE -ne 0) {
     exit $LASTEXITCODE
   }
 
   Write-Host "Running: prepare_desktop_runtime.dart --platform windows --arch x64"
-  & dart pub global run fvm:main dart run tools/prepare_desktop_runtime.dart --platform=windows --arch=x64
+  & (Join-Path $PSScriptRoot 'run_fvm_tool.ps1') -Tool dart -Command run tools/prepare_desktop_runtime.dart --platform=windows --arch=x64
   if ($LASTEXITCODE -ne 0) {
     exit $LASTEXITCODE
   }
 
   Write-Host "Running: sync_desktop_runtime_to_appdir.dart --platform windows"
-  & dart pub global run fvm:main dart run tools/sync_desktop_runtime_to_appdir.dart --platform=windows
+  & (Join-Path $PSScriptRoot 'run_fvm_tool.ps1') -Tool dart -Command run tools/sync_desktop_runtime_to_appdir.dart --platform=windows
   if ($LASTEXITCODE -ne 0) {
     exit $LASTEXITCODE
   }
@@ -213,7 +213,7 @@ if ($UseFlutterRun) {
   if ($appId) { $defines += "--dart-define=SECONDLOOP_APP_ID=$appId" }
   if ($appName) { $defines += "--dart-define=SECONDLOOP_APP_NAME=$appName" }
 
-  & dart pub global run fvm:main flutter run -d windows @defines
+  & (Join-Path $PSScriptRoot 'run_fvm_tool.ps1') -Tool flutter -Command run -d windows @defines
   exit $LASTEXITCODE
 }
 
@@ -231,6 +231,7 @@ $msiPathOutput = & (Join-Path $PSScriptRoot 'package_windows_msi.ps1') `
   -OutputName $outputName `
   -ProductName $devProductName `
   -UpgradeCode $devUpgradeCode `
+  -DisableCloseApplication `
   -PassThru
 if ($LASTEXITCODE -ne 0) {
   exit $LASTEXITCODE
@@ -239,6 +240,11 @@ if ($LASTEXITCODE -ne 0) {
 $msiPath = $msiPathOutput | Select-Object -Last 1
 if (-not $msiPath -or -not (Test-Path $msiPath)) {
   throw "MSI package path is invalid: $msiPath"
+}
+
+& (Join-Path $PSScriptRoot 'stop_windows_installed_app.ps1') -InstallDirName $devProductName -TerminateIfNeeded
+if ($LASTEXITCODE -ne 0) {
+  exit $LASTEXITCODE
 }
 
 & (Join-Path $PSScriptRoot 'install_windows_msi.ps1') -MsiPath $msiPath -Quiet -LaunchAfterInstall -InstallDirName $devProductName

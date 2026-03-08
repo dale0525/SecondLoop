@@ -21,6 +21,7 @@ SYNC_DESKTOP_RUNTIME_TOOL = REPO_ROOT / "tools/sync_desktop_runtime_to_appdir.da
 RUN_WINDOWS_SCRIPT = REPO_ROOT / "scripts/run_windows.ps1"
 WINDOWS_CMAKE = REPO_ROOT / "windows/runner/CMakeLists.txt"
 WINDOWS_MAIN = REPO_ROOT / "windows/runner/main.cpp"
+WINDOWS_RUNNER_RC = REPO_ROOT / "windows/runner/Runner.rc"
 
 
 class LocalDevAppIdConfigTests(unittest.TestCase):
@@ -147,13 +148,29 @@ class LocalDevAppIdConfigTests(unittest.TestCase):
         main_file = WINDOWS_MAIN.read_text(encoding="utf-8")
 
         self.assertIn('$ENV{SECONDLOOP_APP_NAME}', cmake_file)
+        self.assertIn('set(SECONDLOOP_APP_NAME "SecondLoop Dev")', cmake_file)
         self.assertIn('SECONDLOOP_WINDOW_TITLE', cmake_file)
         self.assertIn('window.Create(SECONDLOOP_WINDOW_TITLE, origin, size)', main_file)
+
+    def test_windows_runner_rc_uses_build_time_metadata_macros(self) -> None:
+        runner_rc = WINDOWS_RUNNER_RC.read_text(encoding="utf-8")
+
+        self.assertIn('VALUE "CompanyName", SECONDLOOP_COMPANY_NAME "\\0"', runner_rc)
+        self.assertIn(
+            'VALUE "FileDescription", SECONDLOOP_FILE_DESCRIPTION "\\0"',
+            runner_rc,
+        )
+        self.assertIn('VALUE "ProductName", SECONDLOOP_PRODUCT_NAME "\\0"', runner_rc)
 
     def test_sync_desktop_runtime_tool_reads_secondloop_app_id_from_env(self) -> None:
         tool = SYNC_DESKTOP_RUNTIME_TOOL.read_text(encoding="utf-8")
 
         self.assertIn("Platform.environment['SECONDLOOP_APP_ID']", tool)
+
+    def test_sync_desktop_runtime_tool_reads_secondloop_app_name_from_env(self) -> None:
+        tool = SYNC_DESKTOP_RUNTIME_TOOL.read_text(encoding="utf-8")
+
+        self.assertIn("Platform.environment['SECONDLOOP_APP_NAME']", tool)
 
 
 if __name__ == "__main__":

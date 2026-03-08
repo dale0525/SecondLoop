@@ -37,10 +37,30 @@ String bundledExecutableName(DesktopPlatform platform) {
   }
 }
 
+String bundledAssetName(DesktopPlatform platform) {
+  switch (platform) {
+    case DesktopPlatform.windows:
+      return 'ffmpeg.zip';
+    case DesktopPlatform.macos:
+    case DesktopPlatform.linux:
+      return bundledExecutableName(platform);
+  }
+}
+
+Iterable<String> bundledLegacyAssetNames(DesktopPlatform platform) {
+  switch (platform) {
+    case DesktopPlatform.windows:
+      return const <String>['ffmpeg.exe'];
+    case DesktopPlatform.macos:
+    case DesktopPlatform.linux:
+      return const <String>[];
+  }
+}
+
 String bundledRelativePath(DesktopPlatform platform) {
   final folder = desktopPlatformFolderName(platform);
-  final executable = bundledExecutableName(platform);
-  return 'assets/bin/ffmpeg/$folder/$executable';
+  final assetName = bundledAssetName(platform);
+  return 'assets/bin/ffmpeg/$folder/$assetName';
 }
 
 String? resolveFfmpegFromProjectPaths({

@@ -28,7 +28,16 @@ void main() {
     );
     expect(
       bundledRelativePath(DesktopPlatform.windows),
-      'assets/bin/ffmpeg/windows/ffmpeg.exe',
+      'assets/bin/ffmpeg/windows/ffmpeg.zip',
+    );
+  });
+
+  test('bundledLegacyAssetNames exposes stale windows executable asset', () {
+    expect(bundledLegacyAssetNames(DesktopPlatform.macos), isEmpty);
+    expect(bundledLegacyAssetNames(DesktopPlatform.linux), isEmpty);
+    expect(
+      bundledLegacyAssetNames(DesktopPlatform.windows),
+      contains('ffmpeg.exe'),
     );
   });
 

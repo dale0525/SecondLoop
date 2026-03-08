@@ -1,8 +1,9 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 from __future__ import annotations
 
 import argparse
 import hashlib
+import json
 from pathlib import Path
 from textwrap import dedent
 
@@ -27,6 +28,11 @@ def parse_args() -> argparse.Namespace:
         "--installer-path",
         required=True,
         help="Path to the Windows installer asset (.exe or .msi)",
+    )
+    parser.add_argument(
+        "--installer-metadata-path",
+        default="",
+        help="Optional path to installer metadata JSON exported from the packaged installer",
     )
     parser.add_argument(
         "--output-dir",
@@ -84,6 +90,10 @@ def schema_header(manifest_type: str) -> str:
     )
 
 
+def yaml_single_quoted(value: str) -> str:
+    return "'" + value.replace("'", "''") + "'"
+
+
 def infer_installer_type(installer_path: Path) -> str:
     suffix = installer_path.suffix.lower()
     if suffix == ".exe":
@@ -96,6 +106,26 @@ def infer_installer_type(installer_path: Path) -> str:
     )
 
 
+def load_installer_metadata(metadata_path: str) -> dict[str, str]:
+    if not metadata_path:
+        return {}
+
+    resolved_path = Path(metadata_path).resolve()
+    if not resolved_path.is_file():
+        raise FileNotFoundError(f"installer metadata json not found: {resolved_path}")
+
+    payload = json.loads(resolved_path.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        raise ValueError("installer metadata json must contain an object at the root")
+
+    normalized: dict[str, str] = {}
+    for key, value in payload.items():
+        if value is None:
+            continue
+        normalized[str(key)] = str(value)
+    return normalized
+
+
 def main() -> int:
     args = parse_args()
     version = ensure_release_tag(args.release_tag)
@@ -103,6 +133,20 @@ def main() -> int:
     if not installer_path.is_file():
         raise FileNotFoundError(f"installer not found: {installer_path}")
     installer_type = infer_installer_type(installer_path)
+    installer_metadata = load_installer_metadata(args.installer_metadata_path)
+
+    metadata_installer_type = installer_metadata.get("installerType", "")
+    if metadata_installer_type and metadata_installer_type != installer_type:
+        raise ValueError(
+            "installer metadata type does not match installer extension: "
+            f"{metadata_installer_type} != {installer_type}",
+        )
+
+    package_name = installer_metadata.get("packageName", args.package_name)
+    publisher = installer_metadata.get("publisher", args.publisher)
+    product_code = installer_metadata.get("productCode", "")
+    upgrade_code = installer_metadata.get("upgradeCode", "")
+    display_version = installer_metadata.get("packageVersion", "")
 
     installer_sha = compute_sha256_upper(installer_path)
     installer_name = installer_path.name
@@ -160,6 +204,32 @@ def main() -> int:
                 "  Custom: SECONDLOOP_LAUNCH_AFTER_INSTALL=0",
             ],
         )
+        if product_code:
+            installer_manifest_parts.append(
+                f"ProductCode: {yaml_single_quoted(product_code)}"
+            )
+        if any((package_name, publisher, product_code, upgrade_code)):
+            installer_manifest_parts.extend(
+                [
+                    "AppsAndFeaturesEntries:",
+                    f"  - DisplayName: {package_name}",
+                ],
+            )
+            if display_version and display_version != version:
+                installer_manifest_parts.append(
+                    f"    DisplayVersion: {display_version}",
+                )
+            if publisher:
+                installer_manifest_parts.append(f"    Publisher: {publisher}")
+            if product_code:
+                installer_manifest_parts.append(
+                    f"    ProductCode: {yaml_single_quoted(product_code)}"
+                )
+            if upgrade_code:
+                installer_manifest_parts.append(
+                    f"    UpgradeCode: {yaml_single_quoted(upgrade_code)}"
+                )
+            installer_manifest_parts.append(f"    InstallerType: {installer_type}")
     installer_manifest_parts.extend(
         [
             "Installers:",
@@ -181,11 +251,11 @@ def main() -> int:
         PackageIdentifier: {args.package_identifier}
         PackageVersion: {version}
         PackageLocale: en-US
-        Publisher: {args.publisher}
+        Publisher: {publisher}
         PublisherUrl: {args.publisher_url}
         PublisherSupportUrl: https://github.com/{args.repo}/issues
-        Author: {args.publisher}
-        PackageName: {args.package_name}
+        Author: {publisher}
+        PackageName: {package_name}
         PackageUrl: {args.package_url}
         License: Apache-2.0
         LicenseUrl: https://github.com/{args.repo}/blob/main/LICENSE

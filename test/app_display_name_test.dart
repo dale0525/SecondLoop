@@ -52,9 +52,40 @@ void main() {
       isTrue,
     );
 
+    final windowsCmake =
+        File('windows/runner/CMakeLists.txt').readAsStringSync();
+    expect(
+      windowsCmake.contains(
+        r'if("${SECONDLOOP_APP_ID}" STREQUAL "com.secondloop.secondloopdev")',
+      ),
+      isTrue,
+    );
+    expect(
+      windowsCmake.contains('set(SECONDLOOP_APP_NAME "SecondLoop Dev")'),
+      isTrue,
+    );
+    expect(windowsCmake.contains('SECONDLOOP_FILE_DESCRIPTION'), isTrue);
+    expect(windowsCmake.contains('SECONDLOOP_PRODUCT_NAME'), isTrue);
+
     final windowsRc = File('windows/runner/Runner.rc').readAsStringSync();
-    expect(_windowsRcValue(windowsRc, 'FileDescription'), 'SecondLoop');
-    expect(_windowsRcValue(windowsRc, 'ProductName'), 'SecondLoop');
+    expect(
+      windowsRc.contains(
+        'VALUE "CompanyName", SECONDLOOP_COMPANY_NAME "\\0"',
+      ),
+      isTrue,
+    );
+    expect(
+      windowsRc.contains(
+        'VALUE "FileDescription", SECONDLOOP_FILE_DESCRIPTION "\\0"',
+      ),
+      isTrue,
+    );
+    expect(
+      windowsRc.contains(
+        'VALUE "ProductName", SECONDLOOP_PRODUCT_NAME "\\0"',
+      ),
+      isTrue,
+    );
 
     expect(
       _xcconfigValue('macos/Runner/Configs/AppInfo.xcconfig', 'PRODUCT_NAME'),
@@ -144,15 +175,6 @@ String _htmlTitle(String html) {
       RegExp('<title>([^<]*)</title>', multiLine: true).firstMatch(html);
   if (match == null) {
     fail('Could not find <title> in web/index.html');
-  }
-  return match.group(1)!;
-}
-
-String _windowsRcValue(String content, String key) {
-  final match =
-      RegExp('VALUE "$key", "([^"]+)"', multiLine: true).firstMatch(content);
-  if (match == null) {
-    fail('Could not find VALUE "$key", "..." in windows/runner/Runner.rc');
   }
   return match.group(1)!;
 }

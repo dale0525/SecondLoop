@@ -1,4 +1,4 @@
-param(
+﻿param(
   [Parameter(Mandatory = $true)]
   [string]$SourceDir,
 
@@ -6,9 +6,10 @@ param(
   [string]$OutputPath = 'dist',
   [string]$OutputName = 'secondloop-windows-x64',
   [string]$ProductName = 'SecondLoop',
-  [string]$Manufacturer = 'SecondLoop Contributors',
+  [string]$Manufacturer = 'SecondLoop',
   [string]$UpgradeCode = '8B5A0942-79D3-4B5A-A4E5-3FB906DA63A1',
   [string]$IconPath = 'windows/runner/resources/app_icon.ico',
+  [switch]$DisableCloseApplication,
   [switch]$KeepIntermediate,
   [switch]$PassThru
 )
@@ -348,18 +349,23 @@ New-Item -ItemType Directory -Force -Path $wixObjDir | Out-Null
 
 $installDirName = $ProductName
 $shortcutRegKey = 'Software\SecondLoop'
+$closeApplicationBlock = if ($DisableCloseApplication) {
+  ''
+} else {
+  '    <util:CloseApplication Id="CloseSecondLoopOnUninstall" Target="secondloop.exe" CloseMessage="yes" RebootPrompt="no" TerminateProcess="0" Timeout="5">REMOVE~="ALL"</util:CloseApplication>'
+}
 
 $mainWxsContent = @'
 <?xml version="1.0" encoding="UTF-8"?>
 <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi" xmlns:util="http://schemas.microsoft.com/wix/UtilExtension">
   <Product Id="*" Name="__PRODUCT_NAME__" Language="1033" Version="$(var.ProductVersion)" Manufacturer="__MANUFACTURER__" UpgradeCode="__UPGRADE_CODE__">
     <Package InstallerVersion="500" Compressed="yes" InstallScope="perUser" Platform="x64" />
-    <MajorUpgrade DowngradeErrorMessage="A newer version of [ProductName] is already installed." />
+    <MajorUpgrade AllowSameVersionUpgrades="yes" DowngradeErrorMessage="A newer version of [ProductName] is already installed." />
     <MediaTemplate EmbedCab="yes" />
     <Icon Id="AppIcon" SourceFile="$(var.IconPath)" />
     <Property Id="ARPPRODUCTICON" Value="AppIcon" />
     <Property Id="SECONDLOOP_LAUNCH_AFTER_INSTALL" Value="1" />
-    <util:CloseApplication Id="CloseSecondLoopOnUninstall" Target="secondloop.exe" CloseMessage="yes" RebootPrompt="no" TerminateProcess="0" Timeout="5">REMOVE~="ALL"</util:CloseApplication>
+__CLOSE_APPLICATION_BLOCK__
     <CustomAction Id="SetLaunchApplicationTarget" Property="WixShellExecTarget" Value="[INSTALLFOLDER]secondloop.exe" />
     <CustomAction Id="LaunchApplication" BinaryKey="WixCA" DllEntry="WixShellExec" Return="check" Impersonate="yes" />
     <InstallExecuteSequence>
@@ -407,6 +413,7 @@ $mainWxsContent = $mainWxsContent.Replace('__MANUFACTURER__', (Escape-Xml $Manuf
 $mainWxsContent = $mainWxsContent.Replace('__UPGRADE_CODE__', (Escape-Xml $UpgradeCode))
 $mainWxsContent = $mainWxsContent.Replace('__INSTALL_DIR_NAME__', (Escape-Xml $installDirName))
 $mainWxsContent = $mainWxsContent.Replace('__SHORTCUT_REG_KEY__', (Escape-Xml $shortcutRegKey))
+$mainWxsContent = $mainWxsContent.Replace('__CLOSE_APPLICATION_BLOCK__', $closeApplicationBlock)
 
 Set-Content -Path $mainWxsPath -Value $mainWxsContent -Encoding UTF8
 

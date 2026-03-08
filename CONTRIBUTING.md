@@ -100,9 +100,16 @@ Required env/secrets for release automation:
 
 Notes:
 - `WINGET_PKGS_FORK_REPO` must already exist as a fork of `microsoft/winget-pkgs`.
-- WinGet PRs can trigger a Microsoft CLA check. When `WINGET_AUTO_AGREE_CLA=true`, the release workflow auto-posts the CLA reply only after detecting a CLA prompt comment from `microsoft-github-policy-service[bot]`.
+- Official Windows releases are MSI-only; the workflow no longer publishes `Setup.exe`, Velopack metadata, or `.nupkg` artifacts.
+- The Windows release contract is exact: `SecondLoop-win.msi` plus `SecondLoop-win.msi.sha256`. Downstream release steps should consume those exact paths instead of scanning `dist/` heuristically.
+- If release-note generation fails in GitHub Actions, rerun the workflow manually; there is no automatic fallback notes path.
+- The WinGet publication script resolves the upstream default branch via the GitHub API first and only falls back to `master` as a compatibility fallback.
+- WinGet PRs can trigger a Microsoft CLA check. When `WINGET_AUTO_AGREE_CLA=true`, the release workflow polls briefly for a CLA prompt comment from `microsoft-github-policy-service[bot]` before auto-posting the reply.
 - If submissions are made on behalf of a company, set `WINGET_CLA_COMPANY` so automation posts `@microsoft-github-policy-service agree company="<your-company>"` instead.
 - Set `WINGET_AUTO_AGREE_CLA=false` to disable auto-commenting and handle CLA replies manually.
 - Release workflow now auto-opens a WinGet PR and updates `dale0525/SecondLoopHomebrew` on each `vX.Y.Z` tag.
+- WinGet manifest syntax is validated on `windows-latest` with `winget validate --manifest ...` before the external WinGet PR job runs.
+- If the GitHub Release already exists and only the external WinGet publication failed, rerun only the WinGet publication job/path instead of rebuilding artifacts.
+- Windows Sandbox validation is a manual or self-hosted follow-up step when installer identity or Apps & Features matching changes materially; it is not a required GitHub-hosted runner gate.
 
-See `RELEASE_CHECKLIST.md` for the full checklist, including Android signing + Play/App Store readiness notes.
+See `RELEASE_CHECKLIST.md` for the full checklist, including Windows MSI verification, release retry guidance, and Android signing + Play/App Store readiness notes.

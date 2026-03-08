@@ -2,11 +2,25 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+import shutil
 import subprocess
 import sys
 import tempfile
 import tomllib
 import unittest
+
+
+def _find_bash_executable() -> str | None:
+    git_bash_candidates = [
+        Path("C:/Program Files/Git/bin/bash.exe"),
+        Path("C:/Program Files/Git/usr/bin/bash.exe"),
+        Path("C:/Program Files (x86)/Git/bin/bash.exe"),
+    ]
+    for candidate in git_bash_candidates:
+        if candidate.exists():
+            return str(candidate)
+
+    return shutil.which("bash")
 
 
 class ReleaseWorkflowEnvTests(unittest.TestCase):
@@ -107,6 +121,10 @@ class ReleaseWorkflowEnvTests(unittest.TestCase):
         script_path = Path(__file__).resolve().parents[2] / "scripts/generate_winget_manifests.py"
         return script_path.read_text(encoding="utf-8")
 
+    def _release_notes_install_guidance_text(self) -> str:
+        template_path = Path(__file__).resolve().parents[2] / "scripts/release_notes_install_guidance.md"
+        return template_path.read_text(encoding="utf-8")
+
     def test_publish_job_forwards_extended_llm_env(self) -> None:
         env_keys = self._publish_env_keys()
         self.assertIn("RELEASE_LLM_API_KEY", env_keys)
@@ -148,21 +166,30 @@ class ReleaseWorkflowEnvTests(unittest.TestCase):
 
     def test_release_notes_include_unsigned_macos_and_build_provenance_guidance(self) -> None:
         workflow_text = self._workflow_text()
+        guidance_text = self._release_notes_install_guidance_text()
 
-        self.assertIn('## macOS Installation Note (Unsigned DMG)', workflow_text)
+        self.assertIn('## macOS Installation Note (Unsigned DMG)', guidance_text)
         self.assertIn('## Build Provenance', workflow_text)
         self.assertIn('actions/runs/${GITHUB_RUN_ID}', workflow_text)
 
-    def test_release_notes_include_windows_installer_choice_guidance(self) -> None:
+    def test_release_notes_include_windows_installer_guidance(self) -> None:
+        guidance_text = self._release_notes_install_guidance_text()
+
+        self.assertIn('## Windows Installer', guidance_text)
+        self.assertIn('SecondLoop-win.msi', guidance_text)
+        self.assertIn('## Windows 安装包选择建议', guidance_text)
+        self.assertIn('SecondLoop-win.msi.sha256', guidance_text)
+
+    def test_release_notes_append_step_uses_utf8_template_fragment(self) -> None:
         workflow_text = self._workflow_text()
 
-        self.assertIn('## Windows Installer Choice', workflow_text)
-        self.assertIn('SecondLoop-win-Setup.exe', workflow_text)
-        self.assertIn('SecondLoop-win.msi', workflow_text)
-        self.assertIn('## Windows 安装包选择建议', workflow_text)
+        self.assertIn('scripts/release_notes_install_guidance.md', workflow_text)
 
     def test_release_notes_append_step_renders_concrete_values(self) -> None:
         script_text = self._publish_step_run_script("Append install guidance and build provenance")
+        bash_executable = _find_bash_executable()
+        if bash_executable is None:
+            self.skipTest("bash is not available in this environment")
 
         with tempfile.TemporaryDirectory() as tmpdir:
             temp_path = Path(tmpdir)
@@ -177,13 +204,20 @@ class ReleaseWorkflowEnvTests(unittest.TestCase):
                 "brew": "#!/usr/bin/env bash\nexit 0\n",
                 "winget": "#!/usr/bin/env bash\nexit 0\n",
                 "shasum": "#!/usr/bin/env bash\nexit 0\n",
-                "SecondLoop-win-Setup.exe": "#!/usr/bin/env bash\nexit 0\n",
                 "SecondLoop-win.msi": "#!/usr/bin/env bash\nexit 0\n",
             }
             for command_name, command_text in stub_commands.items():
                 command_path = bin_path / command_name
                 command_path.write_text(command_text, encoding="utf-8")
                 command_path.chmod(0o755)
+
+            scripts_path = temp_path / "scripts"
+            scripts_path.mkdir()
+            template_path = scripts_path / "release_notes_install_guidance.md"
+            template_path.write_text(
+                self._release_notes_install_guidance_text(),
+                encoding="utf-8",
+            )
 
             (temp_path / "dmg-file").write_text("placeholder\n", encoding="utf-8")
 
@@ -194,12 +228,12 @@ class ReleaseWorkflowEnvTests(unittest.TestCase):
                     "GITHUB_RUN_ID": "22790340272",
                     "GITHUB_REPOSITORY": "dale0525/SecondLoop",
                     "GITHUB_RUN_ATTEMPT": "7",
-                    "PATH": f"{bin_path}:{env.get('PATH', '')}",
+                    "PATH": f"{bin_path}{os.pathsep}{env.get('PATH', '')}",
                 }
             )
 
             result = subprocess.run(
-                ["bash", "-lc", script_text],
+                [bash_executable, "-lc", script_text],
                 capture_output=True,
                 cwd=temp_path,
                 env=env,
@@ -236,11 +270,15 @@ class ReleaseWorkflowEnvTests(unittest.TestCase):
                 rendered_notes,
             )
             self.assertIn(
-                "- Recommended for most users: `SecondLoop-win-Setup.exe` (better default update experience).",
+                "- Windows direct download: `SecondLoop-win.msi`.",
                 rendered_notes,
             )
             self.assertIn(
-                "- `SecondLoop-win.msi` is mainly for WinGet or enterprise-managed deployment.",
+                "- Future Windows updates are manual or managed by your deployment tooling.",
+                rendered_notes,
+            )
+            self.assertIn(
+                "- Windows checksum file: `SecondLoop-win.msi.sha256`.",
                 rendered_notes,
             )
             self.assertNotIn("\\`", rendered_notes)
@@ -393,6 +431,8 @@ class ReleaseWorkflowEnvTests(unittest.TestCase):
         self.assertIn("name: Prune non-target FFmpeg assets (linux)", workflow_text)
 
         self.assertIn("$removeDirs = @('macos', 'linux')", workflow_text)
+        self.assertIn("$targetFfmpeg = Join-Path $ffmpegRoot 'windows/ffmpeg.zip'", workflow_text)
+        self.assertNotIn("windows/ffmpeg.exe", workflow_text)
         self.assertIn('rm -rf assets/bin/ffmpeg/windows assets/bin/ffmpeg/linux', workflow_text)
         self.assertIn('rm -rf assets/bin/ffmpeg/windows assets/bin/ffmpeg/macos', workflow_text)
 
@@ -414,32 +454,32 @@ class ReleaseWorkflowEnvTests(unittest.TestCase):
         self.assertNotEqual(-1, linux_build_idx)
         self.assertLess(linux_prune_idx, linux_build_idx)
 
-    def test_windows_release_packages_and_uploads_velopack_artifacts(self) -> None:
+    def test_windows_release_packages_and_uploads_msi_only_artifacts(self) -> None:
         workflow_text = self._workflow_text()
 
-        self.assertIn("name: Package Velopack", workflow_text)
+        self.assertNotIn("name: Package Velopack", workflow_text)
         self.assertIn("name: Package MSI", workflow_text)
-        self.assertIn("scripts/package_windows_velopack.ps1", workflow_text)
+        self.assertNotIn("scripts/package_windows_velopack.ps1", workflow_text)
         self.assertIn("scripts/create_windows_msi.ps1", workflow_text)
-        self.assertIn("SkipBuild = $true", workflow_text)
         self.assertIn("OutputName = 'SecondLoop-win'", workflow_text)
         self.assertIn("OutputPath = 'dist'", workflow_text)
-        self.assertIn("Velopack setup not found", workflow_text)
-        self.assertIn("Velopack releases metadata not found", workflow_text)
-        self.assertIn("Velopack assets metadata not found", workflow_text)
-        self.assertIn("Velopack nupkg not found", workflow_text)
-        self.assertIn("dist/*Setup*.exe", workflow_text)
-        self.assertIn("dist/*.msi", workflow_text)
-        self.assertIn("dist/releases.*.json", workflow_text)
-        self.assertIn("dist/assets.*.json", workflow_text)
-        self.assertIn("dist/*.nupkg", workflow_text)
+        self.assertNotIn("Velopack setup not found", workflow_text)
+        self.assertNotIn("Velopack releases metadata not found", workflow_text)
+        self.assertNotIn("Velopack assets metadata not found", workflow_text)
+        self.assertNotIn("Velopack nupkg not found", workflow_text)
+        self.assertNotIn("dist/*Setup*.exe", workflow_text)
+        self.assertIn("dist/SecondLoop-win.msi", workflow_text)
+        self.assertIn("dist/SecondLoop-win.msi.sha256", workflow_text)
+        self.assertNotIn("dist/releases.*.json", workflow_text)
+        self.assertNotIn("dist/assets.*.json", workflow_text)
+        self.assertNotIn("dist/*.nupkg", workflow_text)
 
-    def test_windows_release_passes_tag_version_to_velopack_packaging(self) -> None:
+    def test_windows_release_passes_tag_version_to_msi_packaging(self) -> None:
         workflow_text = self._workflow_text()
 
         self.assertIn('$Env:GITHUB_REF -like "refs/tags/v*"', workflow_text)
-        self.assertIn('$packArgs.Version = $packVersion', workflow_text)
-        self.assertIn('& scripts/package_windows_velopack.ps1 @packArgs', workflow_text)
+        self.assertIn('$msiArgs.Version = $msiVersion', workflow_text)
+        self.assertIn('& scripts/create_windows_msi.ps1 @msiArgs', workflow_text)
 
     def test_windows_velopack_script_keeps_dotnet_output_out_of_vpk_path(self) -> None:
         script_text = (Path(__file__).resolve().parents[2] / "scripts/package_windows_velopack.ps1").read_text(encoding="utf-8")
@@ -467,22 +507,32 @@ class ReleaseWorkflowEnvTests(unittest.TestCase):
         self.assertIn('"releases.$Channel.json"', script_text)
         self.assertIn('"assets.$Channel.json"', script_text)
 
-    def test_windows_release_publishes_setup_checksum_asset(self) -> None:
+    def test_windows_release_does_not_publish_setup_checksum_asset(self) -> None:
         workflow_text = self._workflow_text()
 
-        self.assertIn("SecondLoop-win-Setup.exe.sha256", workflow_text)
-        self.assertIn("dist/*Setup*.exe.sha256", workflow_text)
+        self.assertNotIn("SecondLoop-win-Setup.exe.sha256", workflow_text)
+        self.assertNotIn("dist/*Setup*.exe.sha256", workflow_text)
 
     def test_release_workflow_generates_winget_manifests(self) -> None:
         workflow_text = self._workflow_text()
 
         self.assertIn("Generate WinGet manifests", workflow_text)
         self.assertIn("scripts/generate_winget_manifests.py", workflow_text)
-        self.assertIn("find dist -maxdepth 1 -type f -iname '*.msi'", workflow_text)
+        self.assertIn('installer_path="dist/SecondLoop-win.msi"', workflow_text)
+        self.assertIn('metadata_path="dist/SecondLoop-win.metadata.json"', workflow_text)
+        self.assertIn("--installer-metadata-path", workflow_text)
+        self.assertNotIn("find dist -maxdepth 1 -type f -iname '*.msi'", workflow_text)
+        self.assertNotIn("*Setup*.exe", workflow_text)
         self.assertIn("Using installer for WinGet manifest", workflow_text)
         self.assertIn("SecondLoop.SecondLoop", workflow_text)
         self.assertIn("dist/winget-manifests", workflow_text)
         self.assertIn("SecondLoop-winget-manifests-${GITHUB_REF_NAME}.zip", workflow_text)
+
+    def test_windows_release_publishes_msi_checksum_asset(self) -> None:
+        workflow_text = self._workflow_text()
+
+        self.assertIn('SecondLoop-win.msi.sha256', workflow_text)
+        self.assertIn('dist/SecondLoop-win.msi.sha256', workflow_text)
 
     def test_release_workflow_publishes_winget_manifest_bundle(self) -> None:
         workflow_text = self._workflow_text()
@@ -521,14 +571,19 @@ class ReleaseWorkflowEnvTests(unittest.TestCase):
         self.assertIn('git add "${target_rel_dir}"', script_text)
         self.assertIn("git diff --cached --quiet", script_text)
 
-    def test_publish_winget_manifest_script_prefers_msi_then_falls_back_to_setup_exe(self) -> None:
+    def test_publish_winget_manifest_script_requires_msi_installer(self) -> None:
         script_text = self._publish_winget_script_text()
 
-        self.assertIn('--pattern "*.msi"', script_text)
-        self.assertIn('--pattern "*Setup*.exe"', script_text)
+        self.assertIn('--pattern "SecondLoop-win.msi"', script_text)
+        self.assertIn('--pattern "SecondLoop-win.metadata.json"', script_text)
         self.assertIn("Selected WinGet installer asset", script_text)
-        self.assertIn("find \"${release_dir}\" -maxdepth 1 -type f -iname '*.msi'", script_text)
-        self.assertIn("find \"${release_dir}\" -maxdepth 1 -type f -iname '*setup*.exe'", script_text)
+        self.assertIn("Selected WinGet installer metadata asset", script_text)
+        self.assertIn('installer_path="${release_dir}/SecondLoop-win.msi"', script_text)
+        self.assertIn('metadata_path="${release_dir}/SecondLoop-win.metadata.json"', script_text)
+        self.assertIn("--installer-metadata-path", script_text)
+        self.assertNotIn("*Setup*.exe", script_text)
+        self.assertIn("No MSI installer asset found in release assets", script_text)
+        self.assertIn("No installer metadata asset found in release assets", script_text)
 
     def test_publish_winget_manifest_script_can_post_cla_agreement_comment(self) -> None:
         script_text = self._publish_winget_script_text()
@@ -542,6 +597,70 @@ class ReleaseWorkflowEnvTests(unittest.TestCase):
         self.assertIn("gh pr comment", script_text)
         self.assertIn("--auto-agree-cla", script_text)
         self.assertIn("--cla-company", script_text)
+
+    def test_publish_winget_manifest_script_resolves_upstream_default_branch(self) -> None:
+        script_text = self._publish_winget_script_text()
+
+        self.assertIn("resolve_upstream_default_branch", script_text)
+        self.assertIn("defaultBranchRef", script_text)
+        self.assertIn('upstream_default_branch="$(resolve_upstream_default_branch)"', script_text)
+        self.assertIn('git fetch upstream "${upstream_default_branch}" --depth=1', script_text)
+        self.assertIn('--base "${upstream_default_branch}"', script_text)
+        self.assertNotIn("git fetch upstream master --depth=1", script_text)
+
+    def test_publish_winget_manifest_script_polls_for_cla_prompt(self) -> None:
+        script_text = self._publish_winget_script_text()
+
+        self.assertIn("wait_for_cla_prompt_comment", script_text)
+        self.assertIn("WINGET_CLA_WAIT_ATTEMPTS", script_text)
+        self.assertIn("WINGET_CLA_WAIT_SECONDS", script_text)
+        self.assertIn("sleep", script_text)
+        self.assertIn("Timed out waiting for CLA prompt", script_text)
+
+    def test_release_workflow_exports_windows_msi_metadata_for_winget(self) -> None:
+        workflow_text = self._workflow_text()
+
+        self.assertIn("scripts/export_windows_msi_metadata.ps1", workflow_text)
+        self.assertIn("--installer-metadata-path", workflow_text)
+
+    def test_publish_winget_manifest_script_passes_installer_metadata_to_generator(self) -> None:
+        script_text = self._publish_winget_script_text()
+
+        self.assertIn("SecondLoop-win.metadata.json", script_text)
+        self.assertIn("--installer-metadata-path", script_text)
+
+    def test_release_workflow_validates_winget_manifest_before_external_publish(self) -> None:
+        workflow_text = self._workflow_text()
+        validate_script_text = (
+            Path(__file__).resolve().parents[2] / "scripts/validate_winget_manifest.ps1"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("validate_winget_manifest:", workflow_text)
+        self.assertIn("scripts/validate_winget_manifest.ps1", workflow_text)
+        self.assertIn("winget validate --manifest", validate_script_text)
+        self.assertIn("$resolvedManifestDir", validate_script_text)
+        self.assertNotIn(
+            "& winget validate --manifest $installerManifest.FullName",
+            validate_script_text,
+        )
+        self.assertIn("needs: [publish, validate_winget_manifest]", workflow_text)
+
+    def test_release_workflow_writes_separate_release_and_winget_status_summaries(self) -> None:
+        workflow_text = self._workflow_text()
+
+        self.assertIn("GITHUB_STEP_SUMMARY", workflow_text)
+        self.assertIn("GitHub Release published", workflow_text)
+        self.assertIn("WinGet manifest validation", workflow_text)
+        self.assertIn("WinGet upstream PR publication", workflow_text)
+
+    def test_release_checklist_documents_manual_windows_sandbox_validation(self) -> None:
+        checklist_text = (
+            Path(__file__).resolve().parents[2] / "RELEASE_CHECKLIST.md"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("SandboxTest.ps1", checklist_text)
+        self.assertIn("self-hosted", checklist_text)
+        self.assertIn("manual", checklist_text)
 
     def test_generate_winget_manifest_script_uses_manifest_schema_1_10(self) -> None:
         script_text = self._generate_winget_script_text()
@@ -671,6 +790,17 @@ class ReleaseWorkflowEnvTests(unittest.TestCase):
             self.assertNotIn("Silent: --silent", installer_manifest)
 
 
+
+    def test_release_workflow_has_unique_top_level_jobs(self) -> None:
+        workflow_path = Path(__file__).resolve().parents[2] / ".github/workflows/release.yml"
+        lines = workflow_path.read_text(encoding="utf-8").splitlines()
+
+        job_names: list[str] = []
+        for line in lines:
+            if line.startswith("  ") and line.endswith(":") and not line.startswith("    "):
+                job_names.append(line.strip().rstrip(":"))
+
+        self.assertEqual(len(job_names), len(set(job_names)), msg=f"duplicate top-level jobs: {job_names}")
 
 if __name__ == "__main__":
     unittest.main()
