@@ -2,46 +2,11 @@ part of 'chat_page.dart';
 
 extension _ChatPageStateMethodsBAttachments on _ChatPageState {
   bool _looksLikeHttpUrlText(String raw) {
-    final trimmed = raw.trim();
-    if (trimmed.isEmpty) return false;
-    final uri = Uri.tryParse(trimmed);
-    if (uri == null) return false;
-    final scheme = uri.scheme.toLowerCase();
-    if (scheme != 'http' && scheme != 'https') return false;
-    if (uri.host.isEmpty) return false;
-    return true;
-  }
-
-  String _buildSharedUrlDraftFilename(String url) {
-    final trimmed = url.trim();
-    if (trimmed.isEmpty) return 'shared-link.url';
-    final uri = Uri.tryParse(trimmed);
-    final host = uri?.host.trim() ?? '';
-    if (host.isNotEmpty) return host;
-    if (trimmed.length <= 96) return trimmed;
-    return '${trimmed.substring(0, 93)}...';
+    return looksLikeHttpUrlText(raw);
   }
 
   String? _readUrlFromManifestDraft(AttachmentDraftPayload draft) {
-    final mimeType = draft.normalizedMimeType.trim().toLowerCase();
-    if (mimeType != kSecondLoopUrlManifestMimeType) return null;
-
-    try {
-      final decoded =
-          jsonDecode(utf8.decode(draft.bytes, allowMalformed: false));
-      if (decoded is! Map) return null;
-      final schema = decoded['schema'];
-      if (schema is! String || schema.trim() != kSecondLoopUrlManifestSchema) {
-        return null;
-      }
-      final url = decoded['url'];
-      if (url is! String) return null;
-      final normalized = url.trim();
-      if (!_looksLikeHttpUrlText(normalized)) return null;
-      return normalized;
-    } catch (_) {
-      return null;
-    }
+    return readUrlFromManifestDraft(draft);
   }
 
   Future<void> _consumePendingSharedUrlDrafts() async {
@@ -57,11 +22,9 @@ extension _ChatPageStateMethodsBAttachments on _ChatPageState {
       final normalized = url.trim();
       if (!_looksLikeHttpUrlText(normalized)) continue;
       drafts.add(
-        AttachmentDraftPayload(
+        buildUrlManifestDraftPayload(
           localId: _nextComposerAttachmentDraftLocalId(),
-          filename: _buildSharedUrlDraftFilename(normalized),
-          mimeType: kSecondLoopUrlManifestMimeType,
-          bytes: buildUrlManifestAttachmentBytes(normalized),
+          url: normalized,
         ),
       );
     }
@@ -69,110 +32,37 @@ extension _ChatPageStateMethodsBAttachments on _ChatPageState {
     _appendComposerAttachmentDrafts(drafts);
   }
 
-  String _inferMimeTypeFromFilename(String filename) {
-    final lower = filename.toLowerCase();
-
-    if (lower.endsWith('.png') ||
-        lower.endsWith('.jpg') ||
-        lower.endsWith('.jpeg') ||
-        lower.endsWith('.webp') ||
-        lower.endsWith('.heic') ||
-        lower.endsWith('.heif')) {
-      return _inferImageMimeTypeFromPath(filename);
-    }
-
-    if (lower.endsWith('.pdf')) return 'application/pdf';
-    if (lower.endsWith('.txt')) return 'text/plain';
-    if (lower.endsWith('.ini')) return 'text/plain';
-    if (lower.endsWith('.md')) return 'text/markdown';
-    if (lower.endsWith('.csv')) return 'text/csv';
-    if (lower.endsWith('.json')) return 'application/json';
-    if (lower.endsWith('.html') || lower.endsWith('.htm')) return 'text/html';
-    if (lower.endsWith('.xml')) return 'application/xml';
-    if (lower.endsWith('.yaml') || lower.endsWith('.yml')) {
-      return 'application/x-yaml';
-    }
-    if (lower.endsWith('.toml')) return 'application/toml';
-    if (lower.endsWith('.docx')) {
-      return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
-    }
-
-    if (lower.endsWith('.mp3')) return 'audio/mpeg';
-    if (lower.endsWith('.m4a')) return 'audio/mp4';
-    if (lower.endsWith('.aac')) return 'audio/aac';
-    if (lower.endsWith('.wav')) return 'audio/wav';
-    if (lower.endsWith('.flac')) return 'audio/flac';
-    if (lower.endsWith('.ogg')) return 'audio/ogg';
-    if (lower.endsWith('.opus')) return 'audio/opus';
-
-    if (lower.endsWith('.mp4')) return 'video/mp4';
-    if (lower.endsWith('.m4v')) return 'video/x-m4v';
-    if (lower.endsWith('.mov')) return 'video/quicktime';
-    if (lower.endsWith('.webm')) return 'video/webm';
-    if (lower.endsWith('.mkv')) return 'video/x-matroska';
-    if (lower.endsWith('.avi')) return 'video/x-msvideo';
-    if (lower.endsWith('.wmv')) return 'video/x-ms-wmv';
-    if (lower.endsWith('.flv')) return 'video/x-flv';
-    if (lower.endsWith('.mpeg') || lower.endsWith('.mpg')) {
-      return 'video/mpeg';
-    }
-    if (lower.endsWith('.ts') ||
-        lower.endsWith('.m2ts') ||
-        lower.endsWith('.mts')) {
-      return 'video/mp2t';
-    }
-    if (lower.endsWith('.3gp')) return 'video/3gpp';
-    if (lower.endsWith('.3g2')) return 'video/3gpp2';
-    if (lower.endsWith('.asf')) return 'video/x-ms-asf';
-    if (lower.endsWith('.ogv')) return 'video/ogg';
-
-    return 'application/octet-stream';
-  }
-
   Future<bool> _trySendTextAsUrlAttachment(String text) async {
-    final trimmed = text.trim();
-    if (!_looksLikeHttpUrlText(trimmed)) return false;
-
     final backendAny = AppBackendScope.of(context);
     if (backendAny is! NativeAppBackend) return false;
     final backend = backendAny;
     final sessionKey = SessionScope.of(context).sessionKey;
     final syncEngine = SyncEngineScope.maybeOf(context);
 
-    try {
-      final attachment = await backend.insertAttachment(
-        sessionKey,
-        bytes: buildUrlManifestAttachmentBytes(trimmed),
-        mimeType: kSecondLoopUrlManifestMimeType,
-      );
-      final message = await backend.insertMessage(
-        sessionKey,
-        widget.conversation.id,
-        role: 'user',
-        content: trimmed,
-      );
-      await backend.linkAttachmentToMessage(
-        sessionKey,
-        message.id,
-        attachmentSha256: attachment.sha256,
-      );
-
-      unawaited(
-        const RustAttachmentMetadataStore().upsert(
+    final sent = await trySendUrlManifestAttachment(
+      text: text,
+      backend: backend,
+      sessionKey: sessionKey,
+      linkCreatedAttachment: (attachmentSha256, normalizedUrl) async {
+        final message = await backend.insertMessage(
           sessionKey,
-          attachmentSha256: attachment.sha256,
-          title: trimmed,
-          sourceUrls: [trimmed],
-        ).catchError((_) {}),
-      );
+          widget.conversation.id,
+          role: 'user',
+          content: normalizedUrl,
+        );
+        await backend.linkAttachmentToMessage(
+          sessionKey,
+          message.id,
+          attachmentSha256: attachmentSha256,
+        );
+      },
+    );
+    if (!sent) return false;
 
-      syncEngine?.notifyLocalMutation();
-      if (!mounted) return true;
-      _refreshAfterAttachmentMutation();
-      return true;
-    } catch (_) {
-      return false;
-    }
+    syncEngine?.notifyLocalMutation();
+    if (!mounted) return true;
+    _refreshAfterAttachmentMutation();
+    return true;
   }
 
   String _nextComposerAttachmentDraftLocalId() {
@@ -206,21 +96,10 @@ extension _ChatPageStateMethodsBAttachments on _ChatPageState {
   Future<void> _addDesktopFilePayloadsToComposerDraft(
     List<({String filename, Uint8List bytes})> payloads,
   ) async {
-    final drafts = <AttachmentDraftPayload>[];
-    for (final payload in payloads) {
-      final safeName = payload.filename.trim().isEmpty
-          ? 'attachment.bin'
-          : payload.filename.trim();
-      final inferredMimeType = _inferMimeTypeFromFilename(safeName);
-      drafts.add(
-        AttachmentDraftPayload(
-          localId: _nextComposerAttachmentDraftLocalId(),
-          filename: safeName,
-          mimeType: inferredMimeType,
-          bytes: payload.bytes,
-        ),
-      );
-    }
+    final drafts = buildDesktopAttachmentDraftPayloads(
+      payloads,
+      nextLocalId: _nextComposerAttachmentDraftLocalId,
+    );
     _appendComposerAttachmentDrafts(drafts);
   }
 
@@ -321,61 +200,19 @@ extension _ChatPageStateMethodsBAttachments on _ChatPageState {
     String attachmentSha256,
     AttachmentDraftPayload draft,
   ) async {
-    final normalizedMimeType = draft.normalizedMimeType.trim().toLowerCase();
-    if (normalizedMimeType.isEmpty) return;
-
-    if (normalizedMimeType.startsWith('image/')) {
-      final lang = Localizations.localeOf(context).toLanguageTag();
-      try {
-        await _maybeEnqueueAttachmentAnnotationEnrichment(
-          backend,
-          sessionKey,
-          attachmentSha256,
-          lang: lang,
-        );
-      } catch (_) {}
-
-      try {
-        final exif = await backend.readAttachmentExifMetadata(
-          sessionKey,
-          sha256: attachmentSha256,
-        );
-        final lat = exif?.latitude;
-        final lon = exif?.longitude;
-        final hasValidLocation = lat != null &&
-            lon != null &&
-            !(lat == 0.0 && lon == 0.0) &&
-            !lat.isNaN &&
-            !lon.isNaN;
-        if (!hasValidLocation) return;
-
-        await _maybeEnqueueAttachmentPlaceEnrichment(
-          backend,
-          sessionKey,
-          attachmentSha256,
-          lang: lang,
-        );
-      } catch (_) {}
-      return;
-    }
-
-    if (isAudioTranscribeCandidateMimeType(normalizedMimeType)) {
-      try {
-        await maybeEnqueueAudioTranscribe(
-          backend: backend,
-          sessionKey: sessionKey,
-          attachmentSha256: attachmentSha256,
-          mimeType: normalizedMimeType,
-          lang: 'und',
-          beforeEnqueue: () => bestEffortWarmCloudCapabilityAuth(
-            CloudAuthScope.maybeOf(context)?.controller,
-          ),
-        );
-      } catch (_) {}
-      return;
-    }
-
-    return;
+    await runDraftAttachmentPostLinkEnrichment(
+      backend: backend,
+      sessionKey: sessionKey,
+      attachmentSha256: attachmentSha256,
+      draft: draft,
+      lang: Localizations.localeOf(context).toLanguageTag(),
+      beforeEnqueueImageAnnotation: () => bestEffortWarmCloudCapabilityAuth(
+        CloudAuthScope.maybeOf(context)?.controller,
+      ),
+      beforeEnqueueAudioTranscribe: () => bestEffortWarmCloudCapabilityAuth(
+        CloudAuthScope.maybeOf(context)?.controller,
+      ),
+    );
   }
 
   void _refreshAfterAttachmentMutation() {

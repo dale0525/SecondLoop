@@ -73,11 +73,15 @@ import '../actions/time/time_resolver.dart';
 import '../attachments/attachment_card.dart';
 import '../attachments/attachment_deeplink.dart';
 import '../attachments/attachment_detail_text_content.dart';
+import '../attachments/attachment_draft_builders.dart';
 import '../attachments/attachment_draft_send_contract.dart';
 import '../attachments/attachment_draft_send_coordinator.dart';
 import '../attachments/attachment_ingest_options_resolver.dart';
 import '../attachments/attachment_ingest_pipeline.dart';
+import '../attachments/attachment_post_link_enrichment.dart';
 import '../attachments/attachment_send_feedback_banner.dart';
+import '../attachments/attachment_url_manifest_draft.dart';
+import '../attachments/attachment_url_sender.dart';
 import '../attachments/attachment_viewer_page.dart';
 import '../audio_transcribe/audio_transcribe_enqueue.dart';
 import '../audio_transcribe/audio_transcribe_media_preprocess.dart'

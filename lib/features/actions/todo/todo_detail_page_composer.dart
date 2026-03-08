@@ -3,67 +3,50 @@ part of 'todo_detail_page.dart';
 enum _TodoAudioRecordingSheetAction { stop, cancel }
 
 extension _TodoDetailPageStateComposer on _TodoDetailPageState {
-  String _inferImageMimeTypeFromPath(String path) {
-    final lower = path.toLowerCase();
-    if (lower.endsWith('.png')) return 'image/png';
-    if (lower.endsWith('.webp')) return 'image/webp';
-    if (lower.endsWith('.heic') || lower.endsWith('.heif')) return 'image/heif';
-    return 'image/jpeg';
-  }
+  Future<bool> _tryAppendTextAsUrlAttachment(String text) async {
+    final backendAny = AppBackendScope.of(context);
+    if (backendAny is! NativeAppBackend) return false;
+    final backend = backendAny;
+    final sessionKey = SessionScope.of(context).sessionKey;
+    final syncEngine = SyncEngineScope.maybeOf(context);
+    final attachmentsBackend = backend as AttachmentsBackend;
 
-  String _inferMimeTypeFromFilename(String filename) {
-    final lower = filename.toLowerCase();
-    if (lower.endsWith('.png') ||
-        lower.endsWith('.jpg') ||
-        lower.endsWith('.jpeg') ||
-        lower.endsWith('.webp') ||
-        lower.endsWith('.heic') ||
-        lower.endsWith('.heif')) {
-      return _inferImageMimeTypeFromPath(filename);
+    final sent = await trySendUrlManifestAttachment(
+      text: text,
+      backend: backend,
+      sessionKey: sessionKey,
+      linkCreatedAttachment: (attachmentSha256, normalizedUrl) async {
+        final activity = await backend.appendTodoNote(
+          sessionKey,
+          todoId: _todo.id,
+          content: normalizedUrl,
+        );
+
+        final sourceMessageId = activity.sourceMessageId?.trim() ?? '';
+        if (sourceMessageId.isNotEmpty) {
+          await attachmentsBackend.linkAttachmentToMessage(
+            sessionKey,
+            sourceMessageId,
+            attachmentSha256: attachmentSha256,
+          );
+        }
+        await backend.linkAttachmentToTodoActivity(
+          sessionKey,
+          activityId: activity.id,
+          attachmentSha256: attachmentSha256,
+        );
+      },
+    );
+    if (!sent) return false;
+
+    syncEngine?.notifyLocalMutation();
+    if (!mounted) return true;
+    _noteController.clear();
+    _refreshActivities();
+    if (_isDesktopPlatform) {
+      _noteInputFocusNode.requestFocus();
     }
-    if (lower.endsWith('.pdf')) return 'application/pdf';
-    if (lower.endsWith('.txt')) return 'text/plain';
-    if (lower.endsWith('.ini')) return 'text/plain';
-    if (lower.endsWith('.md')) return 'text/markdown';
-    if (lower.endsWith('.csv')) return 'text/csv';
-    if (lower.endsWith('.json')) return 'application/json';
-    if (lower.endsWith('.html') || lower.endsWith('.htm')) return 'text/html';
-    if (lower.endsWith('.xml')) return 'application/xml';
-    if (lower.endsWith('.yaml') || lower.endsWith('.yml')) {
-      return 'application/x-yaml';
-    }
-    if (lower.endsWith('.toml')) return 'application/toml';
-    if (lower.endsWith('.docx')) {
-      return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
-    }
-    if (lower.endsWith('.mp3')) return 'audio/mpeg';
-    if (lower.endsWith('.m4a')) return 'audio/mp4';
-    if (lower.endsWith('.aac')) return 'audio/aac';
-    if (lower.endsWith('.wav')) return 'audio/wav';
-    if (lower.endsWith('.flac')) return 'audio/flac';
-    if (lower.endsWith('.ogg')) return 'audio/ogg';
-    if (lower.endsWith('.opus')) return 'audio/opus';
-    if (lower.endsWith('.mp4')) return 'video/mp4';
-    if (lower.endsWith('.m4v')) return 'video/x-m4v';
-    if (lower.endsWith('.mov')) return 'video/quicktime';
-    if (lower.endsWith('.webm')) return 'video/webm';
-    if (lower.endsWith('.mkv')) return 'video/x-matroska';
-    if (lower.endsWith('.avi')) return 'video/x-msvideo';
-    if (lower.endsWith('.wmv')) return 'video/x-ms-wmv';
-    if (lower.endsWith('.flv')) return 'video/x-flv';
-    if (lower.endsWith('.mpeg') || lower.endsWith('.mpg')) {
-      return 'video/mpeg';
-    }
-    if (lower.endsWith('.ts') ||
-        lower.endsWith('.m2ts') ||
-        lower.endsWith('.mts')) {
-      return 'video/mp2t';
-    }
-    if (lower.endsWith('.3gp')) return 'video/3gpp';
-    if (lower.endsWith('.3g2')) return 'video/3gpp2';
-    if (lower.endsWith('.asf')) return 'video/x-ms-asf';
-    if (lower.endsWith('.ogv')) return 'video/ogg';
-    return 'application/octet-stream';
+    return true;
   }
 
   void _setComposerAttaching(bool attaching) {
@@ -83,16 +66,13 @@ extension _TodoDetailPageStateComposer on _TodoDetailPageState {
     Uint8List rawBytes,
     String inferredMimeType, {
     String? filename,
-    int? fallbackCapturedAtMs,
   }) async {
-    final safeFilename = (filename ?? '').trim();
-    final resolvedFilename = safeFilename.isEmpty ? 'photo.jpg' : safeFilename;
     _appendPendingAttachment(
-      AttachmentDraftPayload(
+      buildImageAttachmentDraftPayload(
         localId: _nextPendingAttachmentDraftLocalId(),
-        filename: resolvedFilename,
-        mimeType: inferredMimeType,
-        bytes: rawBytes,
+        rawBytes: rawBytes,
+        inferredMimeType: inferredMimeType,
+        filename: filename,
       ),
     );
   }
@@ -102,15 +82,12 @@ extension _TodoDetailPageStateComposer on _TodoDetailPageState {
     String mimeType, {
     required String filename,
   }) async {
-    final safeFilename = filename.trim();
-    final resolvedFilename =
-        safeFilename.isEmpty ? 'attachment.bin' : safeFilename;
     _appendPendingAttachment(
-      AttachmentDraftPayload(
+      buildAttachmentDraftPayload(
         localId: _nextPendingAttachmentDraftLocalId(),
-        filename: resolvedFilename,
+        filename: filename,
         mimeType: mimeType,
-        bytes: rawBytes,
+        rawBytes: rawBytes,
       ),
     );
   }
@@ -118,25 +95,11 @@ extension _TodoDetailPageStateComposer on _TodoDetailPageState {
   Future<void> _attachDesktopFilePayloads(
     List<({String filename, Uint8List bytes})> payloads,
   ) async {
-    for (final payload in payloads) {
-      final safeName = payload.filename.trim().isEmpty
-          ? 'attachment.bin'
-          : payload.filename.trim();
-      final inferredMimeType = _inferMimeTypeFromFilename(safeName);
-      if (inferredMimeType.startsWith('image/')) {
-        await _attachImageBytes(
-          payload.bytes,
-          inferredMimeType,
-          filename: safeName,
-        );
-      } else {
-        await _attachFileBytes(
-          payload.bytes,
-          inferredMimeType,
-          filename: safeName,
-        );
-      }
-    }
+    final drafts = buildDesktopAttachmentDraftPayloads(
+      payloads,
+      nextLocalId: _nextPendingAttachmentDraftLocalId,
+    );
+    _appendPendingAttachments(drafts);
   }
 
   Future<String> _ingestPendingAttachmentDraft(
@@ -260,7 +223,7 @@ extension _TodoDetailPageStateComposer on _TodoDetailPageState {
       if (picked == null) return;
 
       final rawBytes = await picked.readAsBytes();
-      final inferredMimeType = _inferImageMimeTypeFromPath(picked.path);
+      final inferredMimeType = inferImageMimeTypeFromPath(picked.path);
       final pickedFilename = (() {
         final byName = picked.name.trim();
         if (byName.isNotEmpty) return byName;
@@ -268,17 +231,10 @@ extension _TodoDetailPageStateComposer on _TodoDetailPageState {
         if (normalizedPath.isEmpty) return '';
         return normalizedPath.split('/').last.trim();
       })();
-      int? fallbackCapturedAtMs;
-      try {
-        fallbackCapturedAtMs =
-            (await picked.lastModified()).toUtc().millisecondsSinceEpoch;
-      } catch (_) {}
-
       await _attachImageBytes(
         rawBytes,
         inferredMimeType,
         filename: pickedFilename,
-        fallbackCapturedAtMs: fallbackCapturedAtMs,
       );
     } catch (e) {
       if (!mounted) return;

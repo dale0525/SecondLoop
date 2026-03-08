@@ -10,6 +10,7 @@ import 'package:secondloop/core/backend/app_backend.dart';
 import 'package:secondloop/core/backend/native_backend.dart';
 import 'package:secondloop/core/session/session_scope.dart';
 import 'package:secondloop/features/actions/todo/todo_detail_page.dart';
+import 'package:secondloop/features/attachments/attachment_ingest_pipeline.dart';
 import 'package:secondloop/src/rust/db.dart';
 
 import 'test_i18n.dart';
@@ -161,6 +162,117 @@ void main() {
       debugDefaultTargetPlatformOverride = oldPlatform;
     }
   });
+
+  testWidgets('Todo detail attachment-only send keeps empty note text',
+      (tester) async {
+    final oldPlatform = debugDefaultTargetPlatformOverride;
+    debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+    try {
+      final backend = _TodoDetailTestBackend();
+      await tester.pumpWidget(
+        wrapWithI18n(
+          MaterialApp(
+            home: AppBackendScope(
+              backend: backend,
+              child: SessionScope(
+                sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+                lock: () {},
+                child: const TodoDetailPage(
+                  initialTodo: Todo(
+                    id: 't1',
+                    title: 'Task',
+                    status: 'open',
+                    createdAtMs: 0,
+                    updatedAtMs: 0,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final dropTarget = tester.widget<DropTarget>(
+        find.byKey(const ValueKey('todo_detail_desktop_drop_target')),
+      );
+      dropTarget.onDragDone?.call(
+        DropDoneDetails(
+          files: [
+            XFile.fromData(
+              Uint8List.fromList(utf8.encode('alpha')),
+              name: 'one.txt',
+            ),
+          ],
+          localPosition: Offset.zero,
+          globalPosition: Offset.zero,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const ValueKey('todo_detail_send')));
+      await tester.pump();
+      await _pumpUntil(tester, () => backend.linkTodoActivityCalls.isNotEmpty);
+
+      expect(backend.appendTodoNoteCalls, 1);
+      expect(backend.appendTodoNoteContents, const <String>['']);
+      expect(backend.linkTodoActivityCalls.length, 1);
+      expect(backend.linkMessageCalls.length, 1);
+    } finally {
+      debugDefaultTargetPlatformOverride = oldPlatform;
+    }
+  });
+
+  testWidgets('Todo detail pure URL text sends linked url attachment',
+      (tester) async {
+    final oldPlatform = debugDefaultTargetPlatformOverride;
+    debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+    try {
+      final backend = _TodoDetailTestBackend();
+      const url = 'https://example.com/docs';
+      await tester.pumpWidget(
+        wrapWithI18n(
+          MaterialApp(
+            home: AppBackendScope(
+              backend: backend,
+              child: SessionScope(
+                sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+                lock: () {},
+                child: const TodoDetailPage(
+                  initialTodo: Todo(
+                    id: 't1',
+                    title: 'Task',
+                    status: 'open',
+                    createdAtMs: 0,
+                    updatedAtMs: 0,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.enterText(
+        find.byKey(const ValueKey('todo_detail_input')),
+        url,
+      );
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('todo_detail_send')));
+      await tester.pump();
+      await _pumpUntil(tester, () => backend.linkTodoActivityCalls.isNotEmpty);
+
+      expect(backend.appendTodoNoteCalls, 1);
+      expect(backend.appendTodoNoteContents, const <String>[url]);
+      expect(backend.linkTodoActivityCalls.length, 1);
+      expect(backend.linkMessageCalls.length, 1);
+      expect(
+          backend.insertedMimeTypes, contains(kSecondLoopUrlManifestMimeType));
+    } finally {
+      debugDefaultTargetPlatformOverride = oldPlatform;
+    }
+  });
 }
 
 Future<void> _pumpUntil(
@@ -185,8 +297,10 @@ final class _TodoDetailTestBackend extends NativeAppBackend {
   final List<String> appendTodoNoteContents = <String>[];
   final List<String> linkMessageCalls = <String>[];
   final List<String> linkTodoActivityCalls = <String>[];
+  final List<String> insertedMimeTypes = <String>[];
   final Map<String, Message> _messagesById = <String, Message>{};
   final Map<String, Uint8List> _attachmentBytesBySha = <String, Uint8List>{};
+  final Map<String, String> _attachmentMimeTypeBySha = <String, String>{};
   final Map<String, List<Attachment>> _attachmentsByMessageId =
       <String, List<Attachment>>{};
 
@@ -267,6 +381,8 @@ final class _TodoDetailTestBackend extends NativeAppBackend {
     }
     final sha = 'sha${++_attachmentSeq}';
     _attachmentBytesBySha[sha] = bytes;
+    _attachmentMimeTypeBySha[sha] = mimeType;
+    insertedMimeTypes.add(mimeType);
     return Attachment(
       sha256: sha,
       mimeType: mimeType,
@@ -286,7 +402,8 @@ final class _TodoDetailTestBackend extends NativeAppBackend {
     final bytes = _attachmentBytesBySha[attachmentSha256];
     final attachment = Attachment(
       sha256: attachmentSha256,
-      mimeType: 'application/octet-stream',
+      mimeType: _attachmentMimeTypeBySha[attachmentSha256] ??
+          'application/octet-stream',
       path: 'attachments/$attachmentSha256.bin',
       byteLen: bytes?.length ?? 0,
       createdAtMs: 0,

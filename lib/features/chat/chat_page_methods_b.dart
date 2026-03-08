@@ -781,14 +781,6 @@ extension _ChatPageStateMethodsB on _ChatPageState {
     }
   }
 
-  String _inferImageMimeTypeFromPath(String path) {
-    final lower = path.toLowerCase();
-    if (lower.endsWith('.png')) return 'image/png';
-    if (lower.endsWith('.webp')) return 'image/webp';
-    if (lower.endsWith('.heic') || lower.endsWith('.heif')) return 'image/heif';
-    return 'image/jpeg';
-  }
-
   Future<void> _maybeEnqueueCloudMediaBackup(
     NativeAppBackend backend,
     Uint8List sessionKey,
@@ -887,7 +879,7 @@ extension _ChatPageStateMethodsB on _ChatPageState {
       if (rawBytes.isEmpty) {
         throw Exception('camera_photo_bytes_empty');
       }
-      final inferredMimeType = _inferImageMimeTypeFromPath(picked.path);
+      final inferredMimeType = inferImageMimeTypeFromPath(picked.path);
       final pickedFilename = (() {
         final byName = picked.name.trim();
         if (byName.isNotEmpty) return byName;
@@ -895,16 +887,13 @@ extension _ChatPageStateMethodsB on _ChatPageState {
         if (normalizedPath.isEmpty) return '';
         return normalizedPath.split('/').last.trim();
       })();
-      final resolvedFilename =
-          pickedFilename.trim().isEmpty ? 'photo.jpg' : pickedFilename.trim();
-
       _appendComposerAttachmentDrafts(
         <AttachmentDraftPayload>[
-          AttachmentDraftPayload(
+          buildImageAttachmentDraftPayload(
             localId: _nextComposerAttachmentDraftLocalId(),
-            filename: resolvedFilename,
-            mimeType: inferredMimeType,
-            bytes: rawBytes,
+            rawBytes: rawBytes,
+            inferredMimeType: inferredMimeType,
+            filename: pickedFilename,
           ),
         ],
       );
