@@ -295,47 +295,18 @@ extension _ChatPageStateMethodsBAttachments on _ChatPageState {
 
     final subscriptionStatus = SubscriptionScope.maybeOf(context)?.status ??
         SubscriptionStatus.unknown;
-    final useLocalAudioTranscode = shouldUseLocalAudioTranscode(
+    final ingestOptions = await resolveFileAttachmentIngestOptions(
+      sessionKey: sessionKey,
+      mimeType: normalizedMimeType,
       subscriptionStatus: subscriptionStatus,
     );
-
-    var videoProxyEnabled = true;
-    var configuredVideoProxyMaxDurationMs = kAttachmentVideoProxyMaxDurationMs;
-    var configuredVideoProxyMaxBytes = kAttachmentVideoProxyMaxBytes;
-    if (normalizedMimeType.toLowerCase().startsWith('video/')) {
-      ContentEnrichmentConfig? contentConfig;
-      try {
-        contentConfig = await const RustContentEnrichmentConfigStore()
-            .readContentEnrichment(sessionKey);
-      } catch (_) {
-        contentConfig = null;
-      }
-
-      videoProxyEnabled = contentConfig?.videoProxyEnabled ?? true;
-      configuredVideoProxyMaxDurationMs = sanitizeAttachmentIngestLimit(
-        (contentConfig?.videoProxyMaxDurationMs ??
-                kAttachmentVideoProxyMaxDurationMs)
-            .toInt(),
-        kAttachmentVideoProxyMaxDurationMs,
-      );
-      configuredVideoProxyMaxBytes = sanitizeAttachmentIngestLimit(
-        (contentConfig?.videoProxyMaxBytes ?? kAttachmentVideoProxyMaxBytes)
-            .toInt(),
-        kAttachmentVideoProxyMaxBytes,
-      );
-    }
 
     return ingestFileAttachmentBytes(
       backend: backend,
       sessionKey: sessionKey,
       rawBytes: draft.bytes,
       mimeType: normalizedMimeType,
-      options: FileAttachmentIngestOptions(
-        useLocalAudioTranscode: useLocalAudioTranscode,
-        videoProxyEnabled: videoProxyEnabled,
-        videoProxyMaxDurationMs: configuredVideoProxyMaxDurationMs,
-        videoProxyMaxBytes: configuredVideoProxyMaxBytes,
-      ),
+      options: ingestOptions,
       onBackupCandidate: (backupSha) async {
         try {
           await _maybeEnqueueCloudMediaBackup(backend, sessionKey, backupSha);

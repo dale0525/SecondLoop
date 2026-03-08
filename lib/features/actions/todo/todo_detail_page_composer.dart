@@ -158,7 +158,9 @@ extension _TodoDetailPageStateComposer on _TodoDetailPageState {
 
     final subscriptionStatus = SubscriptionScope.maybeOf(context)?.status ??
         SubscriptionStatus.unknown;
-    final useLocalAudioTranscode = shouldUseLocalAudioTranscode(
+    final ingestOptions = await resolveFileAttachmentIngestOptions(
+      sessionKey: sessionKey,
+      mimeType: normalizedMimeType,
       subscriptionStatus: subscriptionStatus,
     );
 
@@ -167,12 +169,7 @@ extension _TodoDetailPageStateComposer on _TodoDetailPageState {
       sessionKey: sessionKey,
       rawBytes: draft.bytes,
       mimeType: normalizedMimeType,
-      options: FileAttachmentIngestOptions(
-        useLocalAudioTranscode: useLocalAudioTranscode,
-        videoProxyEnabled: true,
-        videoProxyMaxDurationMs: kAttachmentVideoProxyMaxDurationMs,
-        videoProxyMaxBytes: kAttachmentVideoProxyMaxBytes,
-      ),
+      options: ingestOptions,
     );
   }
 
