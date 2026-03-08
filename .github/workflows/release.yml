@@ -152,6 +152,9 @@ jobs:
             echo "storeFile=app/upload-keystore.jks"
           } > android/key.properties
       - run: flutter pub get
+      - name: Refresh i18n generated files
+        shell: bash
+        run: bash scripts/run_i18n_refresh.sh
       - name: Setup Rustup for Android build
         shell: bash
         run: bash scripts/setup_rustup.sh
@@ -246,7 +249,11 @@ jobs:
           if ($Env:SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD -match "staging" -or $Env:SECONDLOOP_CLOUD_GATEWAY_BASE_URL_PROD -match "stage") { throw "Refusing to build prod release with a staging gateway URL." }
           if (-not $Env:SECONDLOOP_MANAGED_VAULT_BASE_URL_PROD.StartsWith("https://")) { throw "Prod managed vault URL must start with https://" }
           if ($Env:SECONDLOOP_MANAGED_VAULT_BASE_URL_PROD -match "staging" -or $Env:SECONDLOOP_MANAGED_VAULT_BASE_URL_PROD -match "stage") { throw "Refusing to build prod release with a staging managed vault URL." }
-      - run: flutter pub get
+      - shell: pwsh
+        run: flutter pub get
+      - name: Refresh i18n generated files
+        shell: pwsh
+        run: bash scripts/run_i18n_refresh.sh
       - name: Prepare desktop runtime assets
         shell: pwsh
         run: |
@@ -461,6 +468,9 @@ jobs:
             exit 1
           fi
       - run: flutter pub get
+      - name: Refresh i18n generated files
+        shell: bash
+        run: bash scripts/run_i18n_refresh.sh
       - name: Prepare desktop runtime assets
         shell: bash
         run: |
@@ -640,6 +650,9 @@ jobs:
             exit 1
           fi
       - run: flutter pub get
+      - name: Refresh i18n generated files
+        shell: bash
+        run: bash scripts/run_i18n_refresh.sh
       - name: Prepare desktop runtime assets
         shell: bash
         run: |
