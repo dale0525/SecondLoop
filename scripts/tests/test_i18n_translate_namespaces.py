@@ -15,6 +15,15 @@ SPEC.loader.exec_module(MODULE)
 
 
 class I18nTranslateNamespacesTests(unittest.TestCase):
+    def test_parses_snake_case_namespace_suffixes_correctly(self) -> None:
+        namespace, locale = MODULE._parse_translation_file_name(
+            Path("semantic_search_zh_CN.i18n.json"),
+            source_locale="en",
+        )
+
+        self.assertEqual(namespace, "semantic_search")
+        self.assertEqual(locale, "zh_CN")
+
     def test_discovers_namespace_pairs_for_directory_mode(self) -> None:
         with TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)

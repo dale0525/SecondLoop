@@ -534,7 +534,7 @@ run_rust_fmt=0
 run_flutter_checks=0
 run_i18n_refresh_needed=0
 for file in "${staged_files[@]}"; do
-  if [[ "${file}" == *.dart ]]; then
+  if [[ "${file}" == *.dart && -f "${file}" ]]; then
     dart_files+=("${file}")
     run_flutter_checks=1
     continue
