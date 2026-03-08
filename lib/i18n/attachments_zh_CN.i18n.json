@@ -55,6 +55,20 @@
     },
     "emptyText": "无"
   },
+  "processing": {
+    "preparingVideo": "正在准备视频…",
+    "transcodingVideo": "正在转码视频…",
+    "generatingKeyframes": "正在生成关键帧…",
+    "extractingAudio": "正在提取音轨…",
+    "transcodingAudio": "正在准备音频…",
+    "finalizingAttachment": "正在完成附件处理…",
+    "waitingForSpeechRecognition": "正在等待语音识别…",
+    "transcribingAudio": "正在进行语音识别…",
+    "understandingKeyframes": "正在理解关键帧…",
+    "recognizingText": "正在识别文本…",
+    "analyzingImage": "正在分析图片…",
+    "analyzingAttachment": "正在分析附件…"
+  },
   "workspace": {
     "tabs": {
       "content": "内容",

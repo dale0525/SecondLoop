@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../audio_transcribe/audio_transcribe_runner.dart';
+import '../attachments/attachment_processing_status.dart';
 import '../../i18n/strings.g.dart';
 import '../../src/rust/db.dart';
 
@@ -19,6 +20,7 @@ class AttachmentAnnotationJobStatusRow extends StatefulWidget {
     required this.job,
     required this.annotateEnabled,
     required this.canAnnotateNow,
+    this.mimeType = '',
     this.setupRequiredLabel,
     this.onOpenSetup,
     this.onOpenLocalCapabilityDownload,
@@ -31,6 +33,7 @@ class AttachmentAnnotationJobStatusRow extends StatefulWidget {
   final AttachmentAnnotationJob job;
   final bool annotateEnabled;
   final bool canAnnotateNow;
+  final String mimeType;
   final String? setupRequiredLabel;
   final Future<void> Function()? onOpenSetup;
   final Future<void> Function()? onOpenLocalCapabilityDownload;
@@ -372,13 +375,23 @@ class _AttachmentAnnotationJobStatusRowState
         (isWindowsNativeSttSpeechPackMissingError(job.lastError) ||
             (_isLikelyWindowsNativeSttFailure(job) &&
                 _windowsSpeechRecognizerInstalled == false));
+    final normalizedMimeType = widget.mimeType.trim();
 
     final label = showMissingLocalRuntimeHint
         ? attachmentAnnotation.missingLocalRuntime
         : isPending
             ? (isSlow
                 ? t.chat.semanticParseStatusSlow
-                : t.chat.semanticParseStatusRunning)
+                : (normalizedMimeType.isEmpty
+                    ? t.chat.semanticParseStatusRunning
+                    : attachmentProcessingStageLabel(
+                        t,
+                        resolveAttachmentProcessingStage(
+                          mimeType: normalizedMimeType,
+                          jobStatus: job.status,
+                          payload: null,
+                        ),
+                      )))
             : (showSpeechPackInstallAction
                 ? attachmentAnnotation.speechPackMissing
                 : (audioTranscribeFailureHint == null

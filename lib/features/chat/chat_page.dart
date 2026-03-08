@@ -78,6 +78,7 @@ import '../attachments/attachment_draft_send_contract.dart';
 import '../attachments/attachment_draft_send_coordinator.dart';
 import '../attachments/attachment_ingest_options_resolver.dart';
 import '../attachments/attachment_ingest_pipeline.dart';
+import '../attachments/attachment_processing_status.dart';
 import '../attachments/attachment_post_link_enrichment.dart';
 import '../attachments/attachment_send_feedback_banner.dart';
 import '../attachments/attachment_url_manifest_draft.dart';
@@ -443,6 +444,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
   bool _sending = false;
   bool _attachingMedia = false;
   bool _showAttachmentSendFeedback = false;
+  AttachmentProcessingStage? _attachmentSendFeedbackStage;
   bool _asking = false;
   bool _stopRequested = false;
   bool _desktopDropActive = false;

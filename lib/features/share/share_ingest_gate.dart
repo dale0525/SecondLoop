@@ -18,6 +18,7 @@ import '../../core/sync/sync_engine_gate.dart';
 import '../../i18n/strings.g.dart';
 import '../attachments/attachment_ingest_options_resolver.dart';
 import '../attachments/attachment_ingest_pipeline.dart';
+import '../attachments/attachment_processing_status.dart';
 import '../attachments/attachment_post_link_enrichment.dart';
 import '../attachments/attachment_url_sender.dart';
 import '../attachments/attachment_send_feedback_banner.dart';
@@ -37,6 +38,7 @@ final class _ShareIngestGateState extends State<ShareIngestGate>
     with WidgetsBindingObserver {
   bool _draining = false;
   bool _showDrainFeedback = false;
+  AttachmentProcessingStage? _feedbackStage;
   Object? _backendIdentity;
   Uint8List? _sessionKey;
   StreamSubscription<void>? _drainSubscription;
@@ -96,6 +98,12 @@ final class _ShareIngestGateState extends State<ShareIngestGate>
     setState(() => _showDrainFeedback = visible);
   }
 
+  void _setFeedbackStage(AttachmentProcessingStage? stage) {
+    if (!mounted) return;
+    if (_feedbackStage == stage) return;
+    setState(() => _feedbackStage = stage);
+  }
+
   Future<void> _maybeEnqueueCloudMediaBackup(
     AppBackend backend,
     Uint8List sessionKey,
@@ -136,6 +144,7 @@ final class _ShareIngestGateState extends State<ShareIngestGate>
     try {
       feedbackVisible = await ShareIngest.hasPendingPayloads();
       if (!feedbackVisible) return;
+      _setFeedbackStage(AttachmentProcessingStage.preparing);
       _setDrainFeedbackVisible(true);
       await Future<void>.delayed(Duration.zero);
       Future<String> Function(String path, String mimeType, String? filename)?
@@ -186,6 +195,7 @@ final class _ShareIngestGateState extends State<ShareIngestGate>
               rawBytes: bytes,
               mimeType: normalizedMimeType,
               options: ingestOptions,
+              onStage: _setFeedbackStage,
               onBackupCandidate: (attachmentSha256) =>
                   _maybeEnqueueCloudMediaBackup(
                 backend,
@@ -218,6 +228,7 @@ final class _ShareIngestGateState extends State<ShareIngestGate>
           }
 
           try {
+            _setFeedbackStage(AttachmentProcessingStage.preparing);
             final ingested = await ingestImageAttachmentBytes(
               backend: backend,
               sessionKey: sessionKey,
@@ -283,6 +294,7 @@ final class _ShareIngestGateState extends State<ShareIngestGate>
     } finally {
       _draining = false;
       if (feedbackVisible) {
+        _setFeedbackStage(null);
         _setDrainFeedbackVisible(false);
       }
     }
@@ -311,7 +323,12 @@ final class _ShareIngestGateState extends State<ShareIngestGate>
                           key: const ValueKey('share_ingest_feedback'),
                           constraints: const BoxConstraints(maxWidth: 460),
                           child: AttachmentSendFeedbackBanner(
-                            text: context.t.sync.progressDialog.uploadingMedia,
+                            text: _feedbackStage == null
+                                ? context.t.sync.progressDialog.uploadingMedia
+                                : attachmentProcessingStageLabel(
+                                    context.t,
+                                    _feedbackStage!,
+                                  ),
                           ),
                         ),
                 ),

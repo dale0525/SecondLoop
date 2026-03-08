@@ -762,6 +762,7 @@ extension _ChatPageStateMessageItemBuilder on _ChatPageState {
                       job: job,
                       annotateEnabled: jobUiState.enabled,
                       canAnnotateNow: jobUiState.canRunNow,
+                      mimeType: attachment.mimeType,
                       setupRequiredLabel: jobUiState.setupRequiredLabel,
                       onOpenSetup: () async {
                         await _pushRouteFromChat(

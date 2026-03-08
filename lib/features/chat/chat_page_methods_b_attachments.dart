@@ -148,9 +148,11 @@ extension _ChatPageStateMethodsBAttachments on _ChatPageState {
   Future<String> _ingestComposerDraftAttachment(
     NativeAppBackend backend,
     Uint8List sessionKey,
-    AttachmentDraftPayload draft,
-  ) async {
+    AttachmentDraftPayload draft, {
+    AttachmentProcessingStageCallback? onStage,
+  }) async {
     final normalizedMimeType = draft.normalizedMimeType;
+    onStage?.call(AttachmentProcessingStage.preparing);
     if (normalizedMimeType.toLowerCase().startsWith('image/')) {
       final lang = Localizations.localeOf(context).toLanguageTag();
       final ingested = await ingestImageAttachmentBytes(
@@ -186,6 +188,7 @@ extension _ChatPageStateMethodsBAttachments on _ChatPageState {
       rawBytes: draft.bytes,
       mimeType: normalizedMimeType,
       options: ingestOptions,
+      onStage: onStage,
       onBackupCandidate: (backupSha) async {
         try {
           await _maybeEnqueueCloudMediaBackup(backend, sessionKey, backupSha);

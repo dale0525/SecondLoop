@@ -8,6 +8,40 @@ import 'package:secondloop/src/rust/db.dart';
 import 'test_i18n.dart';
 
 void main() {
+  testWidgets(
+      'AttachmentAnnotationJobStatusRow shows audio-specific pending label',
+      (tester) async {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final job = AttachmentAnnotationJob(
+      attachmentSha256: 'audio-pending',
+      status: 'pending',
+      lang: 'en',
+      modelName: null,
+      attempts: 0,
+      nextRetryAtMs: null,
+      lastError: null,
+      createdAtMs: now - 2000,
+      updatedAtMs: now - 2000,
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: Scaffold(
+            body: AttachmentAnnotationJobStatusRow(
+              job: job,
+              annotateEnabled: true,
+              canAnnotateNow: true,
+              mimeType: 'audio/mp4',
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('Transcribing audio…'), findsOneWidget);
+  });
+
   testWidgets('AttachmentAnnotationJobStatusRow shows running after soft delay',
       (tester) async {
     final now = DateTime.now().millisecondsSinceEpoch;
