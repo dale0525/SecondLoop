@@ -187,7 +187,7 @@ extension _AttachmentViewerPageImage on _AttachmentViewerPageState {
                       ),
                     ),
                   ),
-                  maxWidth: 760,
+                  maxWidth: 820,
                 ),
                 if (showRecognitionStatus) ...[
                   const SizedBox(height: 14),

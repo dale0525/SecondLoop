@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:secondloop/app/theme.dart';
 import 'package:secondloop/features/attachments/audio_attachment_player.dart';
 import 'package:secondloop/src/rust/db.dart';
 
@@ -81,6 +82,75 @@ void main() {
         .tap(find.byKey(const ValueKey('attachment_text_full_regenerate')));
     await tester.pump();
     expect(retryInvoked, 1);
+  });
+
+  testWidgets(
+      'AudioAttachmentPlayerView keeps player width aligned with transcript and styles seek slider',
+      (tester) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(1600, 1200);
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final attachment = Attachment(
+      sha256: 'audio-layout-sha',
+      mimeType: 'audio/mp4',
+      path: 'attachments/audio-layout-sha.bin',
+      byteLen: _tinyM4a.length,
+      createdAtMs: 0,
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          theme: AppTheme.dark(),
+          home: Scaffold(
+            body: AudioAttachmentPlayerView(
+              attachment: attachment,
+              bytes: _tinyM4a,
+              displayTitle: 'Audio attachment',
+              initialAnnotationPayload: const <String, Object?>{
+                'transcript_full': 'A full transcript shown in the detail page',
+              },
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.pump(const Duration(milliseconds: 200));
+
+    final playerCardFinder =
+        find.byKey(const ValueKey('audio_attachment_player_card'));
+    final transcriptCardFinder =
+        find.byKey(const ValueKey('attachment_text_full_card'));
+
+    expect(playerCardFinder, findsOneWidget);
+    expect(transcriptCardFinder, findsOneWidget);
+
+    final playerSize = tester.getSize(playerCardFinder);
+    final transcriptSize = tester.getSize(transcriptCardFinder);
+    expect(
+        (playerSize.width - transcriptSize.width).abs(), lessThanOrEqualTo(1));
+
+    final sliderFinder =
+        find.byKey(const ValueKey('audio_attachment_seek_slider'));
+    expect(sliderFinder, findsOneWidget);
+
+    final sliderThemeFinder = find.ancestor(
+      of: sliderFinder,
+      matching: find.byType(SliderTheme),
+    );
+    expect(sliderThemeFinder, findsOneWidget);
+
+    final sliderTheme = tester.widget<SliderTheme>(sliderThemeFinder);
+    final sliderThemeData = sliderTheme.data;
+    expect(sliderThemeData.activeTrackColor, isNotNull);
+    expect(sliderThemeData.thumbColor, isNotNull);
+    expect(
+      sliderThemeData.activeTrackColor,
+      isNot(equals(sliderThemeData.inactiveTrackColor)),
+    );
   });
 }
 

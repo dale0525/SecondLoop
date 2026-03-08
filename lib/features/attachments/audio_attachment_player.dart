@@ -7,8 +7,12 @@ import 'package:just_audio/just_audio.dart';
 import '../../i18n/strings.g.dart';
 import '../../src/rust/db.dart';
 import '../../ui/sl_surface.dart';
+import '../../ui/sl_tokens.dart';
 import 'attachment_detail_text_content.dart';
 import 'attachment_text_editor_card.dart';
+
+const double _kAttachmentDetailPageMaxWidth = 920;
+const double _kAttachmentDetailContentMaxWidth = 820;
 
 String normalizeAudioPlaybackMimeType(String mimeType) {
   final normalized = mimeType.trim().toLowerCase();
@@ -137,6 +141,29 @@ class _AudioAttachmentPlayerViewState extends State<AudioAttachmentPlayerView> {
     return t.common.labels.playbackSpeed(value: rounded);
   }
 
+  SliderThemeData _sliderTheme(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final tokens = SlTokens.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
+    return SliderTheme.of(context).copyWith(
+      trackHeight: 5,
+      activeTrackColor: scheme.primary,
+      inactiveTrackColor: Color.alphaBlend(
+        scheme.onSurface.withOpacity(isDark ? 0.08 : 0.05),
+        tokens.surface2,
+      ),
+      secondaryActiveTrackColor: scheme.primary.withOpacity(
+        isDark ? 0.28 : 0.2,
+      ),
+      thumbColor: scheme.primary,
+      overlayColor: scheme.primary.withOpacity(isDark ? 0.18 : 0.12),
+      thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
+      overlayShape: const RoundSliderOverlayShape(overlayRadius: 14),
+    );
+  }
+
   Widget _buildPlayerCard(BuildContext context) {
     final loadError = _loadError;
     final rewindTooltip = t.common.labels.seekBackwardSeconds(seconds: 15);
@@ -165,11 +192,59 @@ class _AudioAttachmentPlayerViewState extends State<AudioAttachmentPlayerView> {
       );
     }
 
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+
     return SlSurface(
+      key: const ValueKey('audio_attachment_player_card'),
       padding: const EdgeInsets.all(12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          Row(
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: scheme.primaryContainer.withOpacity(0.72),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                alignment: Alignment.center,
+                child: Icon(
+                  Icons.graphic_eq_rounded,
+                  color: scheme.onPrimaryContainer,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      widget.displayTitle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      widget.attachment.mimeType,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: scheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
           Row(
             children: [
               IconButton(
@@ -249,15 +324,19 @@ class _AudioAttachmentPlayerViewState extends State<AudioAttachmentPlayerView> {
                       .toDouble();
                   return Column(
                     children: [
-                      Slider(
-                        value: currentMs,
-                        min: 0,
-                        max: maxMs <= 0 ? 1 : maxMs,
-                        onChanged: maxMs <= 0
-                            ? null
-                            : (nextMs) => _player.seek(
-                                  Duration(milliseconds: nextMs.round()),
-                                ),
+                      SliderTheme(
+                        data: _sliderTheme(context),
+                        child: Slider(
+                          key: const ValueKey('audio_attachment_seek_slider'),
+                          value: currentMs,
+                          min: 0,
+                          max: maxMs <= 0 ? 1 : maxMs,
+                          onChanged: maxMs <= 0
+                              ? null
+                              : (nextMs) => _player.seek(
+                                    Duration(milliseconds: nextMs.round()),
+                                  ),
+                        ),
                       ),
                       Row(
                         children: [
@@ -328,8 +407,7 @@ class _AudioAttachmentPlayerViewState extends State<AudioAttachmentPlayerView> {
         extraAction: retryAction,
         onSave: widget.onSaveFull,
       ),
-      maxWidth: 820,
-      alignment: Alignment.centerRight,
+      maxWidth: _kAttachmentDetailContentMaxWidth,
     );
   }
 
@@ -354,7 +432,8 @@ class _AudioAttachmentPlayerViewState extends State<AudioAttachmentPlayerView> {
     return Center(
       key: const ValueKey('audio_attachment_player_view'),
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 920),
+        constraints:
+            const BoxConstraints(maxWidth: _kAttachmentDetailPageMaxWidth),
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(16),
           child: Column(
@@ -362,7 +441,7 @@ class _AudioAttachmentPlayerViewState extends State<AudioAttachmentPlayerView> {
             children: [
               buildSection(
                 _buildPlayerCard(context),
-                maxWidth: 760,
+                maxWidth: _kAttachmentDetailContentMaxWidth,
                 alignment: Alignment.center,
               ),
               const SizedBox(height: 14),

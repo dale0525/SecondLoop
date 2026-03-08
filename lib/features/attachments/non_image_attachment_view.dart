@@ -847,7 +847,7 @@ class _NonImageAttachmentViewState extends State<NonImageAttachmentView> {
                       ],
                     ),
                   ),
-                  maxWidth: 860,
+                  maxWidth: 820,
                 ),
                 const SizedBox(height: 14),
               ],
