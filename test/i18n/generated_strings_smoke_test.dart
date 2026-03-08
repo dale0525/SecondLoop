@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+// Generated locally via `pixi run i18n-refresh` on fresh clones without hooks.
 import 'package:secondloop/i18n/strings.g.dart';
 
 void main() {

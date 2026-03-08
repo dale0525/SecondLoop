@@ -62,10 +62,6 @@ jobs:
           cache: true
       - name: Pub get
         run: flutter pub get
-      - name: Refresh i18n generated files
-        run: bash scripts/run_i18n_refresh.sh
-      - name: Analyze i18n keys
-        run: bash scripts/run_i18n_analyze.sh
       - name: "Guard: no python runtime process usage"
         run: bash scripts/check_no_python_runtime.sh
       - name: Pre-commit hook (format + analyze + test)

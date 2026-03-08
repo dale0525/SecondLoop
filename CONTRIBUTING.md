@@ -10,7 +10,7 @@ By contributing to this repository, you agree that your contributions are licens
   - Check (matches CI): `pixi run fmt-check`
   - Auto-fix: `pixi run fmt`
 - Run tests:
-  - Flutter: `pixi run flutter test`
+  - Flutter: `pixi run i18n-refresh` once on a fresh clone, then `pixi run flutter test`
   - Rust: `pixi run cargo test`
 - Run the full local CI suite: `pixi run ci`
 

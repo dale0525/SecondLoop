@@ -44,6 +44,11 @@ class PreCommitHookTests(unittest.TestCase):
         self.assertIn("slang.yaml", script)
         self.assertIn(".i18n.json", script)
 
+    def test_pre_commit_hook_refreshes_i18n_when_locale_sources_are_deleted(self) -> None:
+        script = PRE_COMMIT_HOOK.read_text(encoding="utf-8")
+
+        self.assertIn("--diff-filter=ACMRD", script)
+
     def test_pre_commit_hook_supports_windows_local_fvm_batch_wrappers(self) -> None:
         script = PRE_COMMIT_HOOK.read_text(encoding="utf-8")
 
