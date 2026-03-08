@@ -496,7 +496,7 @@ if (( check_mode )); then
     if ! "${cargo_bin}" fmt --manifest-path rust/Cargo.toml --all -- --check; then
       echo "" >&2
       echo "pre-commit: rustfmt failed." >&2
-      echo "Fix locally with: pixi run cargo fmt "--manifest-path rust/Cargo.toml --all"" >&2
+      echo "Fix locally with: pixi run cargo fmt \"--manifest-path rust/Cargo.toml --all\"" >&2
       exit 1
     fi
 
@@ -616,7 +616,7 @@ if [[ ${run_rust_fmt} -ne 0 ]]; then
   if ! "${cargo_bin}" fmt --manifest-path rust/Cargo.toml --all; then
     echo "" >&2
     echo "pre-commit: rustfmt failed." >&2
-    echo "Fix locally with: pixi run cargo fmt "--manifest-path rust/Cargo.toml --all"" >&2
+    echo "Fix locally with: pixi run cargo fmt \"--manifest-path rust/Cargo.toml --all\"" >&2
     exit 1
   fi
   git add -u -- rust

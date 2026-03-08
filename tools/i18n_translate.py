@@ -150,7 +150,7 @@ def discover_translation_pairs(
     source_files: dict[str, Path] = {}
     target_files: dict[str, Path] = {}
 
-    for file_path in sorted(root.rglob(f"*{SOURCE_FILE_SUFFIX}")):
+    for file_path in sorted(root.glob(f"*{SOURCE_FILE_SUFFIX}")):
         namespace, locale = _parse_translation_file_name(
             file_path,
             source_locale=normalized_source_locale,

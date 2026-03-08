@@ -18,6 +18,11 @@ $repoRoot = Resolve-Path (Join-Path $PSScriptRoot '..')
 $repoRootPath = $repoRoot.Path
 
 if ($ToolPath -ne '') {
+  if (-not (Test-Path $ToolPath)) {
+    Write-Error "SecondLoop: missing $ToolPath. Run 'pixi run setup-flutter' first."
+    exit 1
+  }
+
   $resolvedToolPath = Resolve-Path $ToolPath
   $toolPath = $resolvedToolPath.Path
 } else {

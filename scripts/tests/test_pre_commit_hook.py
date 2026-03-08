@@ -60,6 +60,14 @@ class PreCommitHookTests(unittest.TestCase):
         self.assertIn('if [[ ${run_i18n_refresh_needed} -ne 0 ]]; then', script)
         self.assertIn('run_i18n_analyze', script)
 
+    def test_pre_commit_hook_quotes_pixi_cargo_fmt_suggestion(self) -> None:
+        script = PRE_COMMIT_HOOK.read_text(encoding="utf-8")
+
+        self.assertIn(
+            r'echo "Fix locally with: pixi run cargo fmt \"--manifest-path rust/Cargo.toml --all\"" >&2',
+            script,
+        )
+
     def test_pre_commit_hook_supports_windows_local_fvm_batch_wrappers(self) -> None:
         script = PRE_COMMIT_HOOK.read_text(encoding="utf-8")
 

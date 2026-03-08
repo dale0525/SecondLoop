@@ -52,6 +52,26 @@ class I18nTranslateNamespacesTests(unittest.TestCase):
             },
         )
 
+    def test_discovers_only_top_level_namespace_pairs(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            (root / "attachments_en.i18n.json").write_text("{}\n", encoding="utf-8")
+            (root / "attachments_zh_CN.i18n.json").write_text("{}\n", encoding="utf-8")
+            nested = root / "widgets"
+            nested.mkdir()
+            (nested / "button_en.i18n.json").write_text("{}\n", encoding="utf-8")
+            (nested / "button_zh_CN.i18n.json").write_text("{}\n", encoding="utf-8")
+
+            pairs = MODULE.discover_translation_pairs(root)
+
+        relative_pairs = {(source.name, target.name) for source, target in pairs}
+        self.assertEqual(
+            relative_pairs,
+            {
+                ("attachments_en.i18n.json", "attachments_zh_CN.i18n.json"),
+            },
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
