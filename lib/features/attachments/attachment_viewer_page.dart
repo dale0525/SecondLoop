@@ -1047,56 +1047,6 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
             ),
-            actions: [
-              if (bytesFuture != null)
-                FutureBuilder<Uint8List>(
-                  future: bytesFuture,
-                  builder: (context, snapshot) {
-                    final bytes = snapshot.data;
-                    final disabled = bytes == null;
-                    return IconButton(
-                      key: const ValueKey('attachment_viewer_share'),
-                      tooltip: context.t.common.actions.share,
-                      onPressed: disabled
-                          ? null
-                          : () => unawaited(_shareAttachment(bytes)),
-                      icon: const Icon(Icons.share_rounded),
-                    );
-                  },
-                ),
-              if (bytesFuture != null)
-                FutureBuilder<Uint8List>(
-                  future: bytesFuture,
-                  builder: (context, snapshot) {
-                    final bytes = snapshot.data;
-                    final disabled = bytes == null;
-                    return IconButton(
-                      key: const ValueKey('attachment_viewer_open_with_system'),
-                      tooltip: context.t.attachments.content.openWithSystem,
-                      onPressed: disabled
-                          ? null
-                          : () => unawaited(_openAttachmentWithSystem(bytes)),
-                      icon: const Icon(Icons.open_in_new_rounded),
-                    );
-                  },
-                ),
-              if (bytesFuture != null)
-                FutureBuilder<Uint8List>(
-                  future: bytesFuture,
-                  builder: (context, snapshot) {
-                    final bytes = snapshot.data;
-                    final disabled = bytes == null;
-                    return IconButton(
-                      key: const ValueKey('attachment_viewer_download'),
-                      tooltip: context.t.common.actions.pull,
-                      onPressed: disabled
-                          ? null
-                          : () => unawaited(_downloadAttachment(bytes)),
-                      icon: const Icon(Icons.download_rounded),
-                    );
-                  },
-                ),
-            ],
           ),
           body: () {
             if (!isImage && !isAudio) {

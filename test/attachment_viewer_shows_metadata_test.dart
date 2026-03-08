@@ -16,7 +16,8 @@ import 'test_backend.dart';
 import 'test_i18n.dart';
 
 void main() {
-  testWidgets('Attachment viewer keeps core app bar actions', (tester) async {
+  testWidgets('Attachment viewer exposes core actions in workspace header',
+      (tester) async {
     final backend = _Backend(
       bytesBySha: {'abc': _tinyPngBytes()},
     );
@@ -47,15 +48,15 @@ void main() {
 
     expect(
       find.byKey(const ValueKey('attachment_viewer_share')),
-      findsOneWidget,
+      findsNothing,
     );
     expect(
       find.byKey(const ValueKey('attachment_viewer_open_with_system')),
-      findsOneWidget,
+      findsNothing,
     );
     expect(
       find.byKey(const ValueKey('attachment_viewer_download')),
-      findsOneWidget,
+      findsNothing,
     );
     expect(
       find.byKey(const ValueKey('attachment_detail_action_share')),
