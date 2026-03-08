@@ -81,6 +81,26 @@ void main() {
     expect(stage, AttachmentProcessingStage.recognizingText);
   });
 
+  test('legacy excel pending job maps to recognizing text', () {
+    final stage = resolveAttachmentProcessingStage(
+      mimeType: 'application/vnd.ms-excel',
+      jobStatus: 'pending',
+      payload: null,
+    );
+
+    expect(stage, AttachmentProcessingStage.recognizingText);
+  });
+
+  test('legacy powerpoint pending job maps to recognizing text', () {
+    final stage = resolveAttachmentProcessingStage(
+      mimeType: 'application/vnd.ms-powerpoint',
+      jobStatus: 'pending',
+      payload: null,
+    );
+
+    expect(stage, AttachmentProcessingStage.recognizingText);
+  });
+
   test('image pending job maps to analyzing image', () {
     final stage = resolveAttachmentProcessingStage(
       mimeType: 'image/jpeg',

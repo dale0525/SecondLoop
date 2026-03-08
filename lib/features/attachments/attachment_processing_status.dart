@@ -212,6 +212,8 @@ bool _isDocumentMimeType(String mimeType) {
   if (mimeType.startsWith('text/')) return true;
   if (mimeType.contains('officedocument')) return true;
   if (mimeType.contains('msword')) return true;
+  if (mimeType.contains('ms-excel')) return true;
+  if (mimeType.contains('ms-powerpoint')) return true;
   return false;
 }
 

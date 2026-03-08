@@ -669,17 +669,6 @@ extension _ChatPageStateMethodsB on _ChatPageState {
             messageId,
             attachmentSha256: attachmentSha256,
           ),
-          onProgress: (progress) {
-            if (!mounted) return;
-            if (progress.status == AttachmentDraftItemStatus.linked &&
-                _attachmentSendFeedbackStage !=
-                    AttachmentProcessingStage.finalizingAttachment) {
-              _setState(
-                () => _attachmentSendFeedbackStage =
-                    AttachmentProcessingStage.finalizingAttachment,
-              );
-            }
-          },
           onAttachmentLinked: (attachmentSha256, draft) async {
             try {
               final urlFromManifest = _readUrlFromManifestDraft(draft);
