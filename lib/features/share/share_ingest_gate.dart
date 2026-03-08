@@ -10,20 +10,18 @@ import '../../core/backend/app_backend.dart';
 import '../../core/backend/native_backend.dart';
 import '../../core/cloud/cloud_auth_scope.dart';
 import '../../core/cloud/cloud_capability_auth.dart';
-import '../../core/content_enrichment/content_enrichment_config_store.dart';
-import '../../core/media_annotation/media_annotation_config_store.dart';
 import '../../core/session/session_scope.dart';
 import '../../core/subscription/subscription_scope.dart';
 import '../../core/sync/sync_config_store.dart';
 import '../../core/sync/sync_engine.dart';
 import '../../core/sync/sync_engine_gate.dart';
 import '../../i18n/strings.g.dart';
-import '../../src/rust/db.dart';
+import '../attachments/attachment_ingest_options_resolver.dart';
 import '../attachments/attachment_ingest_pipeline.dart';
+import '../attachments/attachment_post_link_enrichment.dart';
+import '../attachments/attachment_url_sender.dart';
 import '../attachments/attachment_send_feedback_banner.dart';
 import '../attachments/platform_exif_metadata.dart';
-import '../audio_transcribe/audio_transcribe_enqueue.dart';
-import '../media_backup/audio_transcode_policy.dart';
 import 'share_ingest.dart';
 
 final class ShareIngestGate extends StatefulWidget {
@@ -123,112 +121,6 @@ final class _ShareIngestGateState extends State<ShareIngestGate>
     );
   }
 
-  Future<void> _maybeEnqueueAttachmentPlaceEnrichment(
-    NativeAppBackend backend,
-    Uint8List sessionKey,
-    String attachmentSha256, {
-    required String lang,
-  }) async {
-    try {
-      await backend.enqueueAttachmentPlace(
-        sessionKey,
-        attachmentSha256: attachmentSha256,
-        lang: lang,
-        nowMs: DateTime.now().millisecondsSinceEpoch,
-      );
-    } catch (_) {
-      return;
-    }
-  }
-
-  Future<void> _maybeEnqueueAttachmentAnnotationEnrichment(
-    NativeAppBackend backend,
-    Uint8List sessionKey,
-    String attachmentSha256, {
-    required String lang,
-  }) async {
-    final cloudAuthController = CloudAuthScope.maybeOf(context)?.controller;
-
-    MediaAnnotationConfig? config;
-    try {
-      config = await const RustMediaAnnotationConfigStore().read(sessionKey);
-    } catch (_) {
-      config = null;
-    }
-    if (config == null || !config.annotateEnabled) return;
-
-    await bestEffortWarmCloudCapabilityAuth(cloudAuthController);
-    await backend.enqueueAttachmentAnnotation(
-      sessionKey,
-      attachmentSha256: attachmentSha256,
-      lang: lang,
-      nowMs: DateTime.now().millisecondsSinceEpoch,
-    );
-  }
-
-  Future<void> _enqueueShareAttachmentPostLinkEnrichment(
-    NativeAppBackend backend,
-    Uint8List sessionKey,
-    String attachmentSha256, {
-    required String candidateMimeType,
-    required String lang,
-  }) async {
-    final normalizedMimeType = candidateMimeType.trim().toLowerCase();
-    if (normalizedMimeType.isEmpty) return;
-
-    if (normalizedMimeType.startsWith('image/')) {
-      try {
-        await _maybeEnqueueAttachmentAnnotationEnrichment(
-          backend,
-          sessionKey,
-          attachmentSha256,
-          lang: lang,
-        );
-      } catch (_) {}
-
-      try {
-        final exif = await backend.readAttachmentExifMetadata(
-          sessionKey,
-          sha256: attachmentSha256,
-        );
-        final lat = exif?.latitude;
-        final lon = exif?.longitude;
-        final hasValidLocation = lat != null &&
-            lon != null &&
-            !(lat == 0.0 && lon == 0.0) &&
-            !lat.isNaN &&
-            !lon.isNaN;
-        if (!hasValidLocation) return;
-
-        await _maybeEnqueueAttachmentPlaceEnrichment(
-          backend,
-          sessionKey,
-          attachmentSha256,
-          lang: lang,
-        );
-      } catch (_) {}
-      return;
-    }
-
-    if (isAudioTranscribeCandidateMimeType(normalizedMimeType)) {
-      try {
-        await maybeEnqueueAudioTranscribe(
-          backend: backend,
-          sessionKey: sessionKey,
-          attachmentSha256: attachmentSha256,
-          mimeType: normalizedMimeType,
-          lang: 'und',
-          beforeEnqueue: () => bestEffortWarmCloudCapabilityAuth(
-            CloudAuthScope.maybeOf(context)?.controller,
-          ),
-        );
-      } catch (_) {}
-      return;
-    }
-
-    return;
-  }
-
   Future<void> _drain() async {
     if (_draining) return;
     _draining = true;
@@ -245,31 +137,7 @@ final class _ShareIngestGateState extends State<ShareIngestGate>
       feedbackVisible = await ShareIngest.hasPendingPayloads();
       if (!feedbackVisible) return;
       _setDrainFeedbackVisible(true);
-      final useLocalAudioTranscode = shouldUseLocalAudioTranscode(
-        subscriptionStatus: subscriptionStatus,
-      );
-
-      ContentEnrichmentConfig? contentConfig;
-      try {
-        contentConfig = await const RustContentEnrichmentConfigStore()
-            .readContentEnrichment(sessionKey);
-      } catch (_) {
-        contentConfig = null;
-      }
-
-      final videoProxyEnabled = contentConfig?.videoProxyEnabled ?? true;
-      final configuredVideoProxyMaxDurationMs = sanitizeAttachmentIngestLimit(
-        (contentConfig?.videoProxyMaxDurationMs ??
-                kAttachmentVideoProxyMaxDurationMs)
-            .toInt(),
-        kAttachmentVideoProxyMaxDurationMs,
-      );
-      final configuredVideoProxyMaxBytes = sanitizeAttachmentIngestLimit(
-        (contentConfig?.videoProxyMaxBytes ?? kAttachmentVideoProxyMaxBytes)
-            .toInt(),
-        kAttachmentVideoProxyMaxBytes,
-      );
-
+      await Future<void>.delayed(Duration.zero);
       Future<String> Function(String path, String mimeType, String? filename)?
           onImage;
       Future<String> Function(String path, String mimeType, String? filename)?
@@ -297,30 +165,27 @@ final class _ShareIngestGateState extends State<ShareIngestGate>
           }
         };
 
-        onUrlManifest = (url) async {
-          final attachment = await backend.insertAttachment(
-            sessionKey,
-            bytes: buildUrlManifestAttachmentBytes(url),
-            mimeType: kSecondLoopUrlManifestMimeType,
-          );
-          return attachment.sha256;
-        };
+        onUrlManifest = (url) => insertUrlManifestAttachment(
+              backend: backend,
+              sessionKey: sessionKey,
+              url: url,
+            );
 
         onFile = (path, mimeType, _) async {
           final bytes = await compute(_readFileBytes, path);
           final normalizedMimeType = mimeType.trim();
+          final ingestOptions = await resolveFileAttachmentIngestOptions(
+            sessionKey: sessionKey,
+            mimeType: normalizedMimeType,
+            subscriptionStatus: subscriptionStatus,
+          );
           try {
             final attachmentSha256 = await ingestFileAttachmentBytes(
               backend: backend,
               sessionKey: sessionKey,
               rawBytes: bytes,
               mimeType: normalizedMimeType,
-              options: FileAttachmentIngestOptions(
-                useLocalAudioTranscode: useLocalAudioTranscode,
-                videoProxyEnabled: videoProxyEnabled,
-                videoProxyMaxDurationMs: configuredVideoProxyMaxDurationMs,
-                videoProxyMaxBytes: configuredVideoProxyMaxBytes,
-              ),
+              options: ingestOptions,
               onBackupCandidate: (attachmentSha256) =>
                   _maybeEnqueueCloudMediaBackup(
                 backend,
@@ -386,12 +251,20 @@ final class _ShareIngestGateState extends State<ShareIngestGate>
               candidateMimeTypeBySha[attachmentSha256]?.trim();
           if (candidateMimeType == null || candidateMimeType.isEmpty) return;
           unawaited(
-            _enqueueShareAttachmentPostLinkEnrichment(
-              backend,
-              sessionKey,
-              attachmentSha256,
-              candidateMimeType: candidateMimeType,
+            runAttachmentPostLinkEnrichmentForMimeType(
+              backend: backend,
+              sessionKey: sessionKey,
+              attachmentSha256: attachmentSha256,
+              mimeType: candidateMimeType,
               lang: lang,
+              beforeEnqueueImageAnnotation: () =>
+                  bestEffortWarmCloudCapabilityAuth(
+                CloudAuthScope.maybeOf(context)?.controller,
+              ),
+              beforeEnqueueAudioTranscribe: () =>
+                  bestEffortWarmCloudCapabilityAuth(
+                CloudAuthScope.maybeOf(context)?.controller,
+              ),
             ).catchError((_) {}),
           );
         };

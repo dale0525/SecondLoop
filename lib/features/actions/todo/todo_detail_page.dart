@@ -33,14 +33,18 @@ import '../../../ui/sl_icon_button.dart';
 import '../../../ui/sl_surface.dart';
 import '../../../ui/sl_tokens.dart';
 import '../../attachments/attachment_card.dart';
+import '../../attachments/attachment_draft_builders.dart';
 import '../../attachments/attachment_draft_send_contract.dart';
 import '../../attachments/attachment_draft_send_coordinator.dart';
+import '../../attachments/attachment_ingest_options_resolver.dart';
 import '../../attachments/attachment_ingest_pipeline.dart';
+import '../../attachments/attachment_post_link_enrichment.dart';
+import '../../attachments/attachment_url_manifest_draft.dart';
+import '../../attachments/attachment_url_sender.dart';
 import '../../attachments/attachment_viewer_page.dart';
 import '../../chat/chat_composer_inline_button.dart';
 import '../../chat/chat_markdown_editor_launcher.dart';
 import '../../chat/chat_markdown_preview.dart';
-import '../../media_backup/audio_transcode_policy.dart';
 import '../assistant_message_actions.dart';
 import '../time/date_time_picker_dialog.dart';
 import 'todo_linking.dart';
@@ -455,9 +459,15 @@ class _TodoDetailPageState extends State<TodoDetailPage> {
     final text = _noteController.text.trim();
     final pending = List<AttachmentDraftPayload>.from(_pendingAttachments);
     if (text.isEmpty && pending.isEmpty) return;
-    final content = text.isNotEmpty
-        ? text
-        : context.t.actions.todoDetail.attachmentNoteDefault;
+
+    if (pending.isEmpty && text.isNotEmpty) {
+      final sentAsUrlAttachment = await _tryAppendTextAsUrlAttachment(text);
+      if (sentAsUrlAttachment) {
+        return;
+      }
+      if (!mounted) return;
+    }
+
     setState(() => _sendingNote = true);
 
     try {
@@ -473,7 +483,7 @@ class _TodoDetailPageState extends State<TodoDetailPage> {
       TodoActivity? createdActivity;
 
       final result = await coordinator.send(
-        text: content,
+        text: text,
         drafts: pending,
         createUserMessage: (noteContent) async {
           final activity = await backend.appendTodoNote(
@@ -535,12 +545,36 @@ class _TodoDetailPageState extends State<TodoDetailPage> {
         },
         onAttachmentLinked: (attachmentSha256, draft) async {
           try {
+            final urlFromManifest = readUrlFromManifestDraft(draft);
             unawaited(
-              const RustAttachmentMetadataStore().upsert(
-                sessionKey,
+              runDraftAttachmentPostLinkEnrichment(
+                backend: backend,
+                sessionKey: sessionKey,
                 attachmentSha256: attachmentSha256,
-                filenames: [draft.normalizedFilename],
+                draft: draft,
+                lang: Localizations.localeOf(context).toLanguageTag(),
+                beforeEnqueueImageAnnotation: () =>
+                    bestEffortWarmCloudCapabilityAuth(
+                  CloudAuthScope.maybeOf(context)?.controller,
+                ),
+                beforeEnqueueAudioTranscribe: () =>
+                    bestEffortWarmCloudCapabilityAuth(
+                  CloudAuthScope.maybeOf(context)?.controller,
+                ),
               ).catchError((_) {}),
+            );
+            unawaited(
+              const RustAttachmentMetadataStore()
+                  .upsert(
+                    sessionKey,
+                    attachmentSha256: attachmentSha256,
+                    title: urlFromManifest,
+                    filenames: [draft.normalizedFilename],
+                    sourceUrls: urlFromManifest == null
+                        ? const <String>[]
+                        : <String>[urlFromManifest],
+                  )
+                  .catchError((_) {}),
             );
           } catch (_) {}
         },
@@ -847,9 +881,14 @@ class _TodoDetailPageState extends State<TodoDetailPage> {
   }
 
   void _appendPendingAttachment(AttachmentDraftPayload selected) {
+    _appendPendingAttachments(<AttachmentDraftPayload>[selected]);
+  }
+
+  void _appendPendingAttachments(List<AttachmentDraftPayload> selected) {
+    if (selected.isEmpty) return;
     setState(() {
       final merged = dedupeAttachmentDraftPayloads(
-        <AttachmentDraftPayload>[..._pendingAttachments, selected],
+        <AttachmentDraftPayload>[..._pendingAttachments, ...selected],
       );
       _pendingAttachments.clear();
       _pendingAttachments.addAll(merged);

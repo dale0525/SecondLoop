@@ -89,11 +89,11 @@ Future<void> _pickTodoDetailAttachment(_TodoDetailPageState state) async {
         ? 'attachment.bin'
         : normalizedPath.split('/').last.trim();
     state._appendPendingAttachment(
-      AttachmentDraftPayload(
+      buildAttachmentDraftPayload(
         localId: state._nextPendingAttachmentDraftLocalId(),
-        filename: filename.isEmpty ? 'attachment.bin' : filename,
+        filename: filename,
         mimeType: selected.mimeType,
-        bytes: bytes,
+        rawBytes: bytes,
       ),
     );
   } catch (e) {
