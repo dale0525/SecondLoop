@@ -353,6 +353,34 @@ class ReleaseWorkflowEnvTests(unittest.TestCase):
         self.assertNotEqual(-1, setup_idx)
         self.assertLess(pub_get_idx, setup_idx)
 
+    def test_release_workflow_refreshes_i18n_generated_files_after_pub_get_for_each_build_job(self) -> None:
+        workflow_text = self._workflow_text()
+
+        job_markers = [
+            ("android:", "windows:"),
+            ("windows:", "macos:"),
+            ("macos:", "linux:"),
+            ("linux:", "publish:"),
+        ]
+
+        for start_marker, end_marker in job_markers:
+            start_idx = workflow_text.find(start_marker)
+            end_idx = workflow_text.find(end_marker, start_idx)
+
+            self.assertNotEqual(-1, start_idx, f"Missing workflow section marker: {start_marker}")
+            self.assertNotEqual(-1, end_idx, f"Missing workflow section marker: {end_marker}")
+
+            section_text = workflow_text[start_idx:end_idx]
+            pub_get_idx = section_text.find("- run: flutter pub get")
+            refresh_name_idx = section_text.find("- name: Refresh i18n generated files")
+            refresh_run_idx = section_text.find("run: bash scripts/run_i18n_refresh.sh")
+
+            self.assertNotEqual(-1, pub_get_idx, f"Missing flutter pub get in {start_marker}")
+            self.assertNotEqual(-1, refresh_name_idx, f"Missing i18n refresh step in {start_marker}")
+            self.assertNotEqual(-1, refresh_run_idx, f"Missing i18n refresh command in {start_marker}")
+            self.assertLess(pub_get_idx, refresh_name_idx, f"i18n refresh must run after pub get in {start_marker}")
+            self.assertLess(refresh_name_idx, refresh_run_idx, f"i18n refresh step body missing in {start_marker}")
+
     def test_release_workflow_uses_short_subst_drive_for_windows_build(self) -> None:
         workflow_text = self._workflow_text()
 
