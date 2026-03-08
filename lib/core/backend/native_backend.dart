@@ -2325,6 +2325,41 @@ class NativeAppBackend
   }
 
   @override
+  Future<String> estimateExternalImportPhaseB({
+    required String batchId,
+  }) async {
+    final appDir = await _getAppDir();
+    return rust_external_import.externalImportPhaseBEstimateJson(
+      appDir: appDir,
+      batchId: batchId,
+    );
+  }
+
+  @override
+  Future<String> readExternalImportPhaseBState({
+    required String batchId,
+  }) async {
+    final appDir = await _getAppDir();
+    return rust_external_import.externalImportPhaseBStateJson(
+      appDir: appDir,
+      batchId: batchId,
+    );
+  }
+
+  @override
+  Stream<String> runExternalImportPhaseBProgress(
+    Uint8List key, {
+    required String batchId,
+  }) async* {
+    final appDir = await _getAppDir();
+    yield* rust_external_import.externalImportPhaseBRunProgress(
+      appDir: appDir,
+      key: key,
+      batchId: batchId,
+    );
+  }
+
+  @override
   Future<bool> syncManagedVaultUploadAttachmentBytes(
     Uint8List key,
     Uint8List syncKey, {

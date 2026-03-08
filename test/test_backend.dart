@@ -287,4 +287,21 @@ class TestAppBackend extends AppBackend {
     required String remoteRoot,
   }) async =>
       0;
+
+  @override
+  Future<String> estimateExternalImportPhaseB(
+          {required String batchId}) async =>
+      '{}';
+
+  @override
+  Future<String> readExternalImportPhaseBState(
+          {required String batchId}) async =>
+      '{}';
+
+  @override
+  Stream<String> runExternalImportPhaseBProgress(
+    Uint8List key, {
+    required String batchId,
+  }) =>
+      const Stream<String>.empty();
 }

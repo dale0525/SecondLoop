@@ -4,9 +4,9 @@
 /// To regenerate, run: `dart run slang`
 ///
 /// Locales: 2
-/// Strings: 2184 (1092 per locale)
+/// Strings: 2234 (1117 per locale)
 ///
-/// Built on 2026-03-07 at 10:48 UTC
+/// Built on 2026-03-08 at 01:33 UTC
 
 // coverage:ignore-file
 // ignore_for_file: type=lint
@@ -1554,6 +1554,35 @@ class _StringsSettingsExternalImportEn {
   String get statusFailed => 'Failed';
   String get progress => 'Progress';
   String get processed => 'Processed';
+  String get elapsed => 'Elapsed';
+  String get phaseBTitle => 'Phase B enrichment';
+  String get phaseBDescription =>
+      'Extract attachment text and append richer readonly search chunks.';
+  String get phaseBStartLatest => 'Run Phase B';
+  String get phaseBResumeLatest => 'Resume Phase B';
+  String get phaseBEstimateTitle => 'Run Phase B enrichment?';
+  String get phaseBEstimateBody =>
+      'Phase B reads imported attachments, extracts extra text, and appends readonly search chunks.';
+  String get phaseBEstimateRuntime => 'Estimated runtime';
+  String get phaseBEstimateRemaining => 'Remaining attachments';
+  String get phaseBSaveConsentHint =>
+      'Confirming also remembers your consent for future completed imports on this device.';
+  String get phaseBConfirmEstimate => 'Confirm and run';
+  String get phaseBStatus => 'Phase B status';
+  String get phaseBEligibleAttachments => 'Eligible attachments';
+  String get phaseBProcessedAttachments => 'Processed attachments';
+  String get phaseBRemainingAttachments => 'Remaining attachments';
+  String get phaseBEnrichedChunks => 'Enriched chunks';
+  String get phaseBSuccessDocs => 'Successful docs';
+  String get phaseBAttachmentRefs => 'Attachment refs';
+  String get phaseBElapsed => 'Phase B elapsed';
+  String get phaseBLastError => 'Phase B last error';
+  String get phaseBRunningTitle => 'Running Phase B enrichment';
+  String get phaseBCannotLeaveHint =>
+      'Stay on this page until Phase B enrichment finishes.';
+  String get stageIndexingPhaseB => 'Building Phase B index';
+  String get statusNotStarted => 'Not started';
+  String get statusNoWork => 'No work';
 }
 
 // Path: welcomeGuide.ai
@@ -6635,6 +6664,56 @@ class _StringsSettingsExternalImportZhCn
   String get progress => '进度';
   @override
   String get processed => '已处理';
+  @override
+  String get elapsed => '总耗时';
+  @override
+  String get phaseBTitle => 'Phase B 增强';
+  @override
+  String get phaseBDescription => '提取附件文本并补充只读检索分块，提升后续召回效果。';
+  @override
+  String get phaseBStartLatest => '运行 Phase B';
+  @override
+  String get phaseBResumeLatest => '继续 Phase B';
+  @override
+  String get phaseBEstimateTitle => '运行 Phase B 增强？';
+  @override
+  String get phaseBEstimateBody => 'Phase B 会读取已导入附件，提取额外文本，并追加只读检索分块。';
+  @override
+  String get phaseBEstimateRuntime => '预计耗时';
+  @override
+  String get phaseBEstimateRemaining => '剩余附件';
+  @override
+  String get phaseBSaveConsentHint => '确认后也会记住你的同意，后续本设备上的已完成导入可自动执行。';
+  @override
+  String get phaseBConfirmEstimate => '确认并执行';
+  @override
+  String get phaseBStatus => 'Phase B 状态';
+  @override
+  String get phaseBEligibleAttachments => '可处理附件';
+  @override
+  String get phaseBProcessedAttachments => '已处理附件';
+  @override
+  String get phaseBRemainingAttachments => '剩余附件';
+  @override
+  String get phaseBEnrichedChunks => '新增分块';
+  @override
+  String get phaseBSuccessDocs => '成功文档';
+  @override
+  String get phaseBAttachmentRefs => '附件引用';
+  @override
+  String get phaseBElapsed => 'Phase B 耗时';
+  @override
+  String get phaseBLastError => 'Phase B 最后错误';
+  @override
+  String get phaseBRunningTitle => '正在执行 Phase B 增强';
+  @override
+  String get phaseBCannotLeaveHint => 'Phase B 增强完成前，请停留在当前页面。';
+  @override
+  String get stageIndexingPhaseB => '建立 Phase B 索引中';
+  @override
+  String get statusNotStarted => '未开始';
+  @override
+  String get statusNoWork => '无可处理内容';
 }
 
 // Path: welcomeGuide.ai
@@ -12419,6 +12498,56 @@ extension on Translations {
         return 'Progress';
       case 'settings.externalImport.processed':
         return 'Processed';
+      case 'settings.externalImport.elapsed':
+        return 'Elapsed';
+      case 'settings.externalImport.phaseBTitle':
+        return 'Phase B enrichment';
+      case 'settings.externalImport.phaseBDescription':
+        return 'Extract attachment text and append richer readonly search chunks.';
+      case 'settings.externalImport.phaseBStartLatest':
+        return 'Run Phase B';
+      case 'settings.externalImport.phaseBResumeLatest':
+        return 'Resume Phase B';
+      case 'settings.externalImport.phaseBEstimateTitle':
+        return 'Run Phase B enrichment?';
+      case 'settings.externalImport.phaseBEstimateBody':
+        return 'Phase B reads imported attachments, extracts extra text, and appends readonly search chunks.';
+      case 'settings.externalImport.phaseBEstimateRuntime':
+        return 'Estimated runtime';
+      case 'settings.externalImport.phaseBEstimateRemaining':
+        return 'Remaining attachments';
+      case 'settings.externalImport.phaseBSaveConsentHint':
+        return 'Confirming also remembers your consent for future completed imports on this device.';
+      case 'settings.externalImport.phaseBConfirmEstimate':
+        return 'Confirm and run';
+      case 'settings.externalImport.phaseBStatus':
+        return 'Phase B status';
+      case 'settings.externalImport.phaseBEligibleAttachments':
+        return 'Eligible attachments';
+      case 'settings.externalImport.phaseBProcessedAttachments':
+        return 'Processed attachments';
+      case 'settings.externalImport.phaseBRemainingAttachments':
+        return 'Remaining attachments';
+      case 'settings.externalImport.phaseBEnrichedChunks':
+        return 'Enriched chunks';
+      case 'settings.externalImport.phaseBSuccessDocs':
+        return 'Successful docs';
+      case 'settings.externalImport.phaseBAttachmentRefs':
+        return 'Attachment refs';
+      case 'settings.externalImport.phaseBElapsed':
+        return 'Phase B elapsed';
+      case 'settings.externalImport.phaseBLastError':
+        return 'Phase B last error';
+      case 'settings.externalImport.phaseBRunningTitle':
+        return 'Running Phase B enrichment';
+      case 'settings.externalImport.phaseBCannotLeaveHint':
+        return 'Stay on this page until Phase B enrichment finishes.';
+      case 'settings.externalImport.stageIndexingPhaseB':
+        return 'Building Phase B index';
+      case 'settings.externalImport.statusNotStarted':
+        return 'Not started';
+      case 'settings.externalImport.statusNoWork':
+        return 'No work';
       case 'welcomeGuide.title':
         return 'Welcome to SecondLoop';
       case 'welcomeGuide.subtitle':
@@ -14664,6 +14793,56 @@ extension on _StringsZhCn {
         return '进度';
       case 'settings.externalImport.processed':
         return '已处理';
+      case 'settings.externalImport.elapsed':
+        return '总耗时';
+      case 'settings.externalImport.phaseBTitle':
+        return 'Phase B 增强';
+      case 'settings.externalImport.phaseBDescription':
+        return '提取附件文本并补充只读检索分块，提升后续召回效果。';
+      case 'settings.externalImport.phaseBStartLatest':
+        return '运行 Phase B';
+      case 'settings.externalImport.phaseBResumeLatest':
+        return '继续 Phase B';
+      case 'settings.externalImport.phaseBEstimateTitle':
+        return '运行 Phase B 增强？';
+      case 'settings.externalImport.phaseBEstimateBody':
+        return 'Phase B 会读取已导入附件，提取额外文本，并追加只读检索分块。';
+      case 'settings.externalImport.phaseBEstimateRuntime':
+        return '预计耗时';
+      case 'settings.externalImport.phaseBEstimateRemaining':
+        return '剩余附件';
+      case 'settings.externalImport.phaseBSaveConsentHint':
+        return '确认后也会记住你的同意，后续本设备上的已完成导入可自动执行。';
+      case 'settings.externalImport.phaseBConfirmEstimate':
+        return '确认并执行';
+      case 'settings.externalImport.phaseBStatus':
+        return 'Phase B 状态';
+      case 'settings.externalImport.phaseBEligibleAttachments':
+        return '可处理附件';
+      case 'settings.externalImport.phaseBProcessedAttachments':
+        return '已处理附件';
+      case 'settings.externalImport.phaseBRemainingAttachments':
+        return '剩余附件';
+      case 'settings.externalImport.phaseBEnrichedChunks':
+        return '新增分块';
+      case 'settings.externalImport.phaseBSuccessDocs':
+        return '成功文档';
+      case 'settings.externalImport.phaseBAttachmentRefs':
+        return '附件引用';
+      case 'settings.externalImport.phaseBElapsed':
+        return 'Phase B 耗时';
+      case 'settings.externalImport.phaseBLastError':
+        return 'Phase B 最后错误';
+      case 'settings.externalImport.phaseBRunningTitle':
+        return '正在执行 Phase B 增强';
+      case 'settings.externalImport.phaseBCannotLeaveHint':
+        return 'Phase B 增强完成前，请停留在当前页面。';
+      case 'settings.externalImport.stageIndexingPhaseB':
+        return '建立 Phase B 索引中';
+      case 'settings.externalImport.statusNotStarted':
+        return '未开始';
+      case 'settings.externalImport.statusNoWork':
+        return '无可处理内容';
       case 'welcomeGuide.title':
         return '欢迎使用 SecondLoop';
       case 'welcomeGuide.subtitle':

@@ -1047,6 +1047,25 @@ abstract class AppBackend {
   }) {
     throw UnimplementedError('requestExternalImportCancel');
   }
+
+  Future<String> estimateExternalImportPhaseB({
+    required String batchId,
+  }) {
+    throw UnimplementedError('estimateExternalImportPhaseB');
+  }
+
+  Future<String> readExternalImportPhaseBState({
+    required String batchId,
+  }) {
+    throw UnimplementedError('readExternalImportPhaseBState');
+  }
+
+  Stream<String> runExternalImportPhaseBProgress(
+    Uint8List key, {
+    required String batchId,
+  }) {
+    throw UnimplementedError('runExternalImportPhaseBProgress');
+  }
 }
 
 class AppBackendScope extends InheritedWidget {

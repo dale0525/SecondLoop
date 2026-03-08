@@ -29,9 +29,26 @@ Future<void> externalImportRequestCancel(
     RustLib.instance.api.crateApiExternalImportExternalImportRequestCancel(
         appDir: appDir, batchId: batchId);
 
+Future<String> externalImportPhaseBEstimateJson(
+        {required String appDir, required String batchId}) =>
+    RustLib.instance.api.crateApiExternalImportExternalImportPhaseBEstimateJson(
+        appDir: appDir, batchId: batchId);
+
+Future<String> externalImportPhaseBStateJson(
+        {required String appDir, required String batchId}) =>
+    RustLib.instance.api.crateApiExternalImportExternalImportPhaseBStateJson(
+        appDir: appDir, batchId: batchId);
+
 Stream<String> externalImportRunProgress(
         {required String appDir,
         required List<int> key,
         required String sourcePath}) =>
     RustLib.instance.api.crateApiExternalImportExternalImportRunProgress(
         appDir: appDir, key: key, sourcePath: sourcePath);
+
+Stream<String> externalImportPhaseBRunProgress(
+        {required String appDir,
+        required List<int> key,
+        required String batchId}) =>
+    RustLib.instance.api.crateApiExternalImportExternalImportPhaseBRunProgress(
+        appDir: appDir, key: key, batchId: batchId);

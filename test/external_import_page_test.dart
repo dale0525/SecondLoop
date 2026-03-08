@@ -5,6 +5,7 @@ import 'dart:typed_data';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:secondloop/core/backend/app_backend.dart';
 import 'package:secondloop/core/session/session_scope.dart';
 import 'package:secondloop/features/settings/external_import_page.dart';
@@ -450,6 +451,175 @@ void main() {
         findsNothing);
     expect(_labelFinder('还没有导入批次。', 'No import batches yet.'), findsOneWidget);
   });
+
+  testWidgets(
+      'first phase b run shows estimate dialog and starts after confirmation',
+      (WidgetTester tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final backend = _PhaseBExternalImportBackend(
+      scanSummary: _scanSummary(
+        detectedSourceKind: 'obsidian',
+        sourceLabel: 'phase-b-source',
+        notesCount: 2,
+        attachmentsCount: 2,
+        estimatedDiskUsageBytes: 4096,
+      ),
+      phaseBStateJson: _phaseBStateJson(
+        batchId: 'batch-phase-b-1',
+        phaseBStatus: 'not_started',
+        eligibleAttachmentCount: 2,
+        processedAttachmentCount: 0,
+        remainingAttachmentCount: 2,
+        enrichedChunkCount: 0,
+        successDocCount: 2,
+        elapsedMs: 10000,
+        phaseBElapsedMs: 0,
+      ),
+      phaseBEstimateJson: jsonEncode(<String, Object?>{
+        'batch_id': 'batch-phase-b-1',
+        'eligible_attachment_count': 2,
+        'remaining_attachment_count': 2,
+        'estimated_runtime_seconds': 4,
+        'estimated_cloud_tokens': 0,
+        'estimated_local_bytes': 2048,
+        'estimated_local_work_units': 2,
+        'phase_b_status': 'not_started',
+      }),
+    )..batches = <ExternalImportBatchSummary>[
+        _batchSummary(
+          batchId: 'batch-phase-b-1',
+          sourceKind: 'obsidian',
+          sourceLabel: 'phase-b-source',
+          status: 'completed',
+          notesCount: 2,
+          attachmentsCount: 2,
+          failedCount: 0,
+          copiedBytes: 2048,
+        ),
+      ];
+
+    await tester.pumpWidget(_buildTestApp(backend));
+    await _pumpUi(tester, times: 6);
+
+    await tester.tap(
+        find.byKey(const ValueKey('external_import_phase_b_start_latest')));
+    await _pumpUi(tester, times: 4);
+
+    expect(backend.phaseBEstimateBatchIds, ['batch-phase-b-1']);
+    expect(
+        find.byKey(const ValueKey('external_import_phase_b_confirm_estimate')),
+        findsOneWidget);
+
+    await tester.tap(
+        find.byKey(const ValueKey('external_import_phase_b_confirm_estimate')));
+    await _pumpUi(tester, times: 4);
+
+    expect(backend.phaseBRunBatchIds, ['batch-phase-b-1']);
+  });
+
+  testWidgets('saved phase b consent auto starts on completed batch',
+      (WidgetTester tester) async {
+    SharedPreferences.setMockInitialValues(
+      {'external_import_phase_b_consent_v1': true},
+    );
+    final backend = _PhaseBExternalImportBackend(
+      scanSummary: _scanSummary(
+        detectedSourceKind: 'obsidian',
+        sourceLabel: 'phase-b-auto',
+        notesCount: 1,
+        attachmentsCount: 1,
+        estimatedDiskUsageBytes: 1024,
+      ),
+      phaseBStateJson: _phaseBStateJson(
+        batchId: 'batch-phase-b-auto',
+        phaseBStatus: 'not_started',
+        eligibleAttachmentCount: 1,
+        processedAttachmentCount: 0,
+        remainingAttachmentCount: 1,
+        enrichedChunkCount: 0,
+        successDocCount: 1,
+        elapsedMs: 5000,
+        phaseBElapsedMs: 0,
+      ),
+      phaseBEstimateJson: jsonEncode(<String, Object?>{
+        'batch_id': 'batch-phase-b-auto',
+        'eligible_attachment_count': 1,
+        'remaining_attachment_count': 1,
+        'estimated_runtime_seconds': 2,
+        'estimated_cloud_tokens': 0,
+        'estimated_local_bytes': 1024,
+        'estimated_local_work_units': 1,
+        'phase_b_status': 'not_started',
+      }),
+    )..batches = <ExternalImportBatchSummary>[
+        _batchSummary(
+          batchId: 'batch-phase-b-auto',
+          sourceKind: 'obsidian',
+          sourceLabel: 'phase-b-auto',
+          status: 'completed',
+          notesCount: 1,
+          attachmentsCount: 1,
+          failedCount: 0,
+          copiedBytes: 1024,
+        ),
+      ];
+
+    await tester.pumpWidget(_buildTestApp(backend));
+    await _pumpUi(tester, times: 8);
+
+    expect(backend.phaseBRunBatchIds, ['batch-phase-b-auto']);
+  });
+
+  testWidgets('in-progress phase b batch auto resumes on page load',
+      (WidgetTester tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final backend = _PhaseBExternalImportBackend(
+      scanSummary: _scanSummary(
+        detectedSourceKind: 'obsidian',
+        sourceLabel: 'phase-b-resume',
+        notesCount: 1,
+        attachmentsCount: 2,
+        estimatedDiskUsageBytes: 3072,
+      ),
+      phaseBStateJson: _phaseBStateJson(
+        batchId: 'batch-phase-b-resume',
+        phaseBStatus: 'in_progress',
+        eligibleAttachmentCount: 2,
+        processedAttachmentCount: 1,
+        remainingAttachmentCount: 1,
+        enrichedChunkCount: 1,
+        successDocCount: 1,
+        elapsedMs: 7000,
+        phaseBElapsedMs: 3000,
+      ),
+      phaseBEstimateJson: jsonEncode(<String, Object?>{
+        'batch_id': 'batch-phase-b-resume',
+        'eligible_attachment_count': 2,
+        'remaining_attachment_count': 1,
+        'estimated_runtime_seconds': 2,
+        'estimated_cloud_tokens': 0,
+        'estimated_local_bytes': 1024,
+        'estimated_local_work_units': 1,
+        'phase_b_status': 'in_progress',
+      }),
+    )..batches = <ExternalImportBatchSummary>[
+        _batchSummary(
+          batchId: 'batch-phase-b-resume',
+          sourceKind: 'obsidian',
+          sourceLabel: 'phase-b-resume',
+          status: 'completed',
+          notesCount: 1,
+          attachmentsCount: 2,
+          failedCount: 0,
+          copiedBytes: 3072,
+        ),
+      ];
+
+    await tester.pumpWidget(_buildTestApp(backend));
+    await _pumpUi(tester, times: 8);
+
+    expect(backend.phaseBRunBatchIds, ['batch-phase-b-resume']);
+  });
 }
 
 Widget _buildTestApp(AppBackend backend) {
@@ -553,6 +723,45 @@ ExternalImportBatchSummary _batchSummary({
     completedAtMs: 1710000010000,
     lastError: null,
   );
+}
+
+String _phaseBStateJson({
+  required String batchId,
+  required String phaseBStatus,
+  required int eligibleAttachmentCount,
+  required int processedAttachmentCount,
+  required int remainingAttachmentCount,
+  required int enrichedChunkCount,
+  required int successDocCount,
+  required int elapsedMs,
+  required int phaseBElapsedMs,
+}) {
+  return jsonEncode(<String, Object?>{
+    'batch_id': batchId,
+    'batch_status': 'completed',
+    'phase_b_status': phaseBStatus,
+    'notes_count': successDocCount,
+    'attachments_count': eligibleAttachmentCount,
+    'failed_count': 0,
+    'copied_bytes': 2048,
+    'eligible_attachment_count': eligibleAttachmentCount,
+    'processed_attachment_count': processedAttachmentCount,
+    'remaining_attachment_count': remainingAttachmentCount,
+    'failed_attachment_count': 0,
+    'enriched_chunk_count': enrichedChunkCount,
+    'success_doc_count': successDocCount,
+    'attachment_ref_count': eligibleAttachmentCount,
+    'created_at_ms': 1710000000000,
+    'updated_at_ms': 1710000005000,
+    'completed_at_ms': 1710000010000,
+    'elapsed_ms': elapsedMs,
+    'phase_b_started_at_ms': 1710000010000,
+    'phase_b_completed_at_ms':
+        phaseBStatus == 'completed' ? 1710000010000 + phaseBElapsedMs : null,
+    'phase_b_elapsed_ms': phaseBElapsedMs,
+    'last_error': null,
+    'phase_b_last_error': null,
+  });
 }
 
 class _BaseExternalImportBackend extends TestAppBackend {
@@ -702,6 +911,56 @@ final class _CompletingExternalImportBackend
       throw deleteError!;
     }
     batches = batches.where((batch) => batch.batchId != batchId).toList();
+  }
+}
+
+final class _PhaseBExternalImportBackend extends _BaseExternalImportBackend {
+  _PhaseBExternalImportBackend({
+    required super.scanSummary,
+    required this.phaseBStateJson,
+    required this.phaseBEstimateJson,
+  });
+
+  final String phaseBStateJson;
+  final String phaseBEstimateJson;
+  final List<String> phaseBStateBatchIds = <String>[];
+  final List<String> phaseBEstimateBatchIds = <String>[];
+  final List<String> phaseBRunBatchIds = <String>[];
+
+  @override
+  Future<String> readExternalImportPhaseBState(
+      {required String batchId}) async {
+    phaseBStateBatchIds.add(batchId);
+    return phaseBStateJson;
+  }
+
+  @override
+  Future<String> estimateExternalImportPhaseB({required String batchId}) async {
+    phaseBEstimateBatchIds.add(batchId);
+    return phaseBEstimateJson;
+  }
+
+  @override
+  Stream<String> runExternalImportPhaseBProgress(
+    Uint8List key, {
+    required String batchId,
+  }) {
+    phaseBRunBatchIds.add(batchId);
+    return Stream<String>.fromIterable(<String>[
+      jsonEncode(<String, Object?>{
+        'type': 'progress',
+        'batch_id': batchId,
+        'stage': 'indexing_phase_b',
+        'done': 1,
+        'total': 1,
+        'failed_count': 0,
+        'status': 'in_progress',
+      }),
+      jsonEncode(<String, Object?>{
+        'type': 'phase_b_result',
+        'batch_id': batchId,
+      }),
+    ]);
   }
 }
 

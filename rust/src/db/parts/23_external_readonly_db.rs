@@ -102,12 +102,9 @@ pub fn open_external_readonly_db(app_dir: &Path) -> Result<Connection> {
 
 fn migrate_external_readonly_db(conn: &Connection) -> Result<()> {
     let version: i64 = conn.pragma_query_value(None, "user_version", |row| row.get(0))?;
-    if version >= 1 {
-        return Ok(());
-    }
-
-    conn.execute_batch(
-        r#"
+    if version < 1 {
+        conn.execute_batch(
+            r#"
 CREATE TABLE IF NOT EXISTS external_import_batches (
   batch_id TEXT PRIMARY KEY,
   source_kind TEXT NOT NULL,
@@ -186,7 +183,48 @@ CREATE INDEX IF NOT EXISTS idx_external_embedding_spaces_updated_at_ms
 
 PRAGMA user_version = 1;
 "#,
-    )?;
+        )?;
+    }
+
+    if version < 2 {
+        conn.execute_batch(
+            r#"
+CREATE TABLE IF NOT EXISTS external_phase_b_attachments (
+  batch_id TEXT NOT NULL,
+  doc_id TEXT NOT NULL,
+  attachment_sha256 TEXT NOT NULL,
+  attachment_name TEXT NOT NULL,
+  mime_type TEXT NOT NULL,
+  status TEXT NOT NULL,
+  generated_chunk_count INTEGER NOT NULL DEFAULT 0,
+  last_error TEXT,
+  created_at_ms INTEGER NOT NULL,
+  updated_at_ms INTEGER NOT NULL,
+  completed_at_ms INTEGER,
+  PRIMARY KEY(doc_id, attachment_sha256),
+  FOREIGN KEY(batch_id) REFERENCES external_import_batches(batch_id) ON DELETE CASCADE,
+  FOREIGN KEY(doc_id) REFERENCES external_documents(doc_id) ON DELETE CASCADE,
+  FOREIGN KEY(attachment_sha256) REFERENCES external_attachments(sha256) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_external_phase_b_attachments_batch_status
+  ON external_phase_b_attachments(batch_id, status, updated_at_ms DESC);
+
+CREATE TABLE IF NOT EXISTS external_phase_b_chunk_refs (
+  doc_id TEXT NOT NULL,
+  attachment_sha256 TEXT NOT NULL,
+  chunk_index INTEGER NOT NULL,
+  created_at_ms INTEGER NOT NULL,
+  PRIMARY KEY(doc_id, attachment_sha256, chunk_index),
+  FOREIGN KEY(doc_id) REFERENCES external_documents(doc_id) ON DELETE CASCADE,
+  FOREIGN KEY(attachment_sha256) REFERENCES external_attachments(sha256) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_external_phase_b_chunk_refs_doc_id
+  ON external_phase_b_chunk_refs(doc_id, chunk_index);
+
+PRAGMA user_version = 2;
+"#,
+        )?;
+    }
 
     Ok(())
 }

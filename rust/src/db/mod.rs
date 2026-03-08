@@ -28,6 +28,7 @@ include!("parts/22_detached_ask_completion.rs");
 include!("parts/23_external_readonly_db.rs");
 include!("parts/24_external_readonly_import.rs");
 include!("parts/25_external_readonly_search.rs");
+include!("parts/26_external_readonly_phase_b.rs");
 
 #[cfg(test)]
 mod semantic_parse_jobs_tests;
@@ -52,3 +53,6 @@ mod detached_ask_completion_tests;
 
 #[cfg(test)]
 mod external_import_tests;
+
+#[cfg(test)]
+mod external_import_phase_b_tests;

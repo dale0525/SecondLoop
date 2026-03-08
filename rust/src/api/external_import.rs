@@ -74,6 +74,16 @@ pub fn external_import_request_cancel(app_dir: String, batch_id: String) -> Resu
 }
 
 #[flutter_rust_bridge::frb]
+pub fn external_import_phase_b_estimate_json(app_dir: String, batch_id: String) -> Result<String> {
+    Ok(db::estimate_external_import_phase_b(Path::new(&app_dir), &batch_id)?.to_string())
+}
+
+#[flutter_rust_bridge::frb]
+pub fn external_import_phase_b_state_json(app_dir: String, batch_id: String) -> Result<String> {
+    Ok(db::read_external_import_phase_b_state(Path::new(&app_dir), &batch_id)?.to_string())
+}
+
+#[flutter_rust_bridge::frb]
 pub fn external_import_run_progress(
     app_dir: String,
     key: Vec<u8>,
@@ -93,5 +103,32 @@ pub fn external_import_run_progress(
         &should_cancel,
     )?;
     emit_result(&sink, summary);
+    Ok(())
+}
+
+#[flutter_rust_bridge::frb]
+pub fn external_import_phase_b_run_progress(
+    app_dir: String,
+    key: Vec<u8>,
+    batch_id: String,
+    sink: StreamSink<String>,
+) -> Result<()> {
+    let key = key_from_bytes(key)?;
+    let mut on_event = |progress: db::ExternalImportProgress| {
+        emit_progress(&sink, progress);
+    };
+    let state = db::run_external_import_phase_b_with_callbacks(
+        Path::new(&app_dir),
+        &key,
+        &batch_id,
+        &mut on_event,
+    )?;
+    let payload = serde_json::json!({
+        "type": "phase_b_result",
+        "batch_id": batch_id,
+        "state": state,
+    })
+    .to_string();
+    let _ = sink.add(payload);
     Ok(())
 }
