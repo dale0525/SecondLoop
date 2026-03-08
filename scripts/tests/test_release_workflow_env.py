@@ -410,8 +410,7 @@ class ReleaseWorkflowEnvTests(unittest.TestCase):
 
         section_text = self._workflow_job_text("android", workflow_text)
 
-        self.assertTrue(section_text.startswith("  android:\
-"))
+        self.assertTrue(section_text.startswith("  android:\n"))
         self.assertIn("    runs-on: ubuntu-latest", section_text)
         self.assertNotIn("echo android:", section_text)
 
