@@ -55,6 +55,20 @@
     },
     "emptyText": "None"
   },
+  "processing": {
+    "preparingVideo": "Preparing video…",
+    "transcodingVideo": "Transcoding video…",
+    "generatingKeyframes": "Generating keyframes…",
+    "extractingAudio": "Extracting audio track…",
+    "transcodingAudio": "Preparing audio…",
+    "finalizingAttachment": "Finalizing attachment…",
+    "waitingForSpeechRecognition": "Waiting for speech recognition…",
+    "transcribingAudio": "Transcribing audio…",
+    "understandingKeyframes": "Understanding keyframes…",
+    "recognizingText": "Recognizing text…",
+    "analyzingImage": "Analyzing image…",
+    "analyzingAttachment": "Analyzing attachment…"
+  },
   "workspace": {
     "tabs": {
       "content": "Content",

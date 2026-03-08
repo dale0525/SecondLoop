@@ -1,10 +1,15 @@
+import 'dart:convert';
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../core/backend/app_backend.dart';
+import '../../core/backend/native_backend.dart';
+import '../../core/session/session_scope.dart';
 import '../audio_transcribe/audio_transcribe_runner.dart';
+import '../attachments/attachment_processing_status.dart';
 import '../../i18n/strings.g.dart';
 import '../../src/rust/db.dart';
 
@@ -19,6 +24,7 @@ class AttachmentAnnotationJobStatusRow extends StatefulWidget {
     required this.job,
     required this.annotateEnabled,
     required this.canAnnotateNow,
+    this.mimeType = '',
     this.setupRequiredLabel,
     this.onOpenSetup,
     this.onOpenLocalCapabilityDownload,
@@ -31,6 +37,7 @@ class AttachmentAnnotationJobStatusRow extends StatefulWidget {
   final AttachmentAnnotationJob job;
   final bool annotateEnabled;
   final bool canAnnotateNow;
+  final String mimeType;
   final String? setupRequiredLabel;
   final Future<void> Function()? onOpenSetup;
   final Future<void> Function()? onOpenLocalCapabilityDownload;
@@ -54,12 +61,26 @@ class _AttachmentAnnotationJobStatusRowState
   bool _passedSlowThreshold = false;
   bool _checkingWindowsSpeechRecognizer = false;
   bool? _windowsSpeechRecognizerInstalled;
+  Map<String, Object?>? _annotationPayload;
+  int _payloadLoadVersion = 0;
+  bool _hasLoadedAnnotationPayload = false;
+  String? _lastLoadedPayloadSha256;
+  String? _lastLoadedPayloadStatus;
+  int? _lastLoadedPayloadUpdatedAtMs;
+  Object? _lastLoadedPayloadBackend;
+  String? _lastLoadedPayloadSessionFingerprint;
 
   @override
   void initState() {
     super.initState();
     _scheduleTickers();
     _refreshWindowsSpeechRecognizerState();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _refreshAnnotationPayload();
   }
 
   @override
@@ -72,10 +93,13 @@ class _AttachmentAnnotationJobStatusRowState
         oldWidget.onInstallSpeechPack != widget.onInstallSpeechPack ||
         oldWidget.onOpenLocalCapabilityDownload !=
             widget.onOpenLocalCapabilityDownload ||
+        oldWidget.mimeType != widget.mimeType ||
+        oldWidget.job.attachmentSha256 != widget.job.attachmentSha256 ||
         oldWidget.job.createdAtMs != widget.job.createdAtMs ||
         oldWidget.job.updatedAtMs != widget.job.updatedAtMs) {
       _scheduleTickers();
       _refreshWindowsSpeechRecognizerState();
+      _refreshAnnotationPayload();
     }
   }
 
@@ -84,6 +108,93 @@ class _AttachmentAnnotationJobStatusRowState
     _softTimer?.cancel();
     _slowTimer?.cancel();
     super.dispose();
+  }
+
+  Map<String, Object?>? _decodePayloadObject(String? raw) {
+    final normalized = raw?.trim() ?? '';
+    if (normalized.isEmpty) return null;
+
+    try {
+      final decoded = jsonDecode(normalized);
+      if (decoded is! Map) return null;
+      return Map<String, Object?>.from(decoded);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> _refreshAnnotationPayload() async {
+    final normalizedMimeType = widget.mimeType.trim();
+    final status = widget.job.status.trim().toLowerCase();
+    final shouldLoad = normalizedMimeType.isNotEmpty &&
+        (status == 'pending' || status == 'running');
+    if (!shouldLoad) {
+      _hasLoadedAnnotationPayload = false;
+      _lastLoadedPayloadSha256 = null;
+      _lastLoadedPayloadStatus = null;
+      _lastLoadedPayloadUpdatedAtMs = null;
+      _lastLoadedPayloadBackend = null;
+      _lastLoadedPayloadSessionFingerprint = null;
+      if (_annotationPayload == null) return;
+      if (!mounted) {
+        _annotationPayload = null;
+        return;
+      }
+      setState(() => _annotationPayload = null);
+      return;
+    }
+
+    final backendAny = AppBackendScope.maybeOf(context);
+    final sessionScope = SessionScope.maybeOf(context);
+    if (backendAny is! NativeAppBackend || sessionScope == null) {
+      _hasLoadedAnnotationPayload = false;
+      _lastLoadedPayloadSha256 = null;
+      _lastLoadedPayloadStatus = null;
+      _lastLoadedPayloadUpdatedAtMs = null;
+      _lastLoadedPayloadBackend = null;
+      _lastLoadedPayloadSessionFingerprint = null;
+      if (_annotationPayload == null) return;
+      if (!mounted) {
+        _annotationPayload = null;
+        return;
+      }
+      setState(() => _annotationPayload = null);
+      return;
+    }
+
+    final sessionFingerprint = base64Encode(sessionScope.sessionKey);
+    final attachmentSha256 = widget.job.attachmentSha256;
+    final updatedAtMs = widget.job.updatedAtMs;
+    if (_hasLoadedAnnotationPayload &&
+        _lastLoadedPayloadSha256 == attachmentSha256 &&
+        _lastLoadedPayloadStatus == status &&
+        _lastLoadedPayloadUpdatedAtMs == updatedAtMs &&
+        identical(_lastLoadedPayloadBackend, backendAny) &&
+        _lastLoadedPayloadSessionFingerprint == sessionFingerprint) {
+      return;
+    }
+
+    final loadVersion = ++_payloadLoadVersion;
+    try {
+      final payloadJson = await backendAny.readAttachmentAnnotationPayloadJson(
+        sessionScope.sessionKey,
+        sha256: attachmentSha256,
+      );
+      final nextPayload = _decodePayloadObject(payloadJson);
+      if (!mounted || loadVersion != _payloadLoadVersion) return;
+      setState(() {
+        _annotationPayload = nextPayload;
+        _hasLoadedAnnotationPayload = true;
+        _lastLoadedPayloadSha256 = attachmentSha256;
+        _lastLoadedPayloadStatus = status;
+        _lastLoadedPayloadUpdatedAtMs = updatedAtMs;
+        _lastLoadedPayloadBackend = backendAny;
+        _lastLoadedPayloadSessionFingerprint = sessionFingerprint;
+      });
+    } catch (_) {
+      if (!mounted || loadVersion != _payloadLoadVersion) return;
+      setState(() => _annotationPayload = null);
+    }
   }
 
   void _scheduleTickers() {
@@ -372,13 +483,28 @@ class _AttachmentAnnotationJobStatusRowState
         (isWindowsNativeSttSpeechPackMissingError(job.lastError) ||
             (_isLikelyWindowsNativeSttFailure(job) &&
                 _windowsSpeechRecognizerInstalled == false));
+    final normalizedMimeType = widget.mimeType.trim();
+    final resolvedProcessingStage = normalizedMimeType.isEmpty
+        ? null
+        : resolveAttachmentProcessingStage(
+            mimeType: normalizedMimeType,
+            jobStatus: job.status,
+            payload: _annotationPayload,
+          );
+    final resolvedPendingLabel = resolvedProcessingStage == null
+        ? ''
+        : attachmentProcessingStageLabel(t, resolvedProcessingStage);
 
     final label = showMissingLocalRuntimeHint
         ? attachmentAnnotation.missingLocalRuntime
         : isPending
             ? (isSlow
                 ? t.chat.semanticParseStatusSlow
-                : t.chat.semanticParseStatusRunning)
+                : (normalizedMimeType.isEmpty
+                    ? t.chat.semanticParseStatusRunning
+                    : (resolvedPendingLabel.isEmpty
+                        ? t.chat.semanticParseStatusRunning
+                        : resolvedPendingLabel)))
             : (showSpeechPackInstallAction
                 ? attachmentAnnotation.speechPackMissing
                 : (audioTranscribeFailureHint == null

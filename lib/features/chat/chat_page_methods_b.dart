@@ -619,6 +619,8 @@ extension _ChatPageStateMethodsB on _ChatPageState {
     _setState(() {
       _sending = true;
       _showAttachmentSendFeedback = draftsSnapshot.isNotEmpty;
+      _attachmentSendFeedbackStage =
+          draftsSnapshot.isEmpty ? null : AttachmentProcessingStage.preparing;
     });
     try {
       final backendAny = AppBackendScope.of(context);
@@ -652,8 +654,15 @@ extension _ChatPageStateMethodsB on _ChatPageState {
             sentMessage ??= created;
             return created;
           },
-          ingestAttachment: (draft) =>
-              _ingestComposerDraftAttachment(nativeBackend, sessionKey, draft),
+          ingestAttachment: (draft) => _ingestComposerDraftAttachment(
+            nativeBackend,
+            sessionKey,
+            draft,
+            onStage: (stage) {
+              if (!mounted) return;
+              _setState(() => _attachmentSendFeedbackStage = stage);
+            },
+          ),
           linkAttachmentToMessage: (messageId, attachmentSha256) =>
               nativeBackend.linkAttachmentToMessage(
             sessionKey,
@@ -776,6 +785,7 @@ extension _ChatPageStateMethodsB on _ChatPageState {
         _setState(() {
           _sending = false;
           _showAttachmentSendFeedback = false;
+          _attachmentSendFeedbackStage = null;
         });
       }
     }

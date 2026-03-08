@@ -8,6 +8,7 @@ import '../media_backup/audio_transcode_worker.dart';
 import '../media_backup/image_compression.dart';
 import '../media_backup/video_proxy_segment_policy.dart';
 import '../media_backup/video_transcode_worker.dart';
+import 'attachment_processing_status.dart';
 import 'image_exif_metadata.dart';
 import 'platform_exif_metadata.dart';
 
@@ -169,6 +170,7 @@ Future<String> ingestFileAttachmentBytes({
   required Uint8List rawBytes,
   required String mimeType,
   required FileAttachmentIngestOptions options,
+  AttachmentProcessingStageCallback? onStage,
   AttachmentShaCallback? onBackupCandidate,
   AttachmentShaMimeCallback? onMaybeEnqueueAudioTranscribe,
 }) async {
@@ -177,6 +179,7 @@ Future<String> ingestFileAttachmentBytes({
 
   if (normalizedLowerMimeType.startsWith('video/')) {
     if (!options.videoProxyEnabled) {
+      onStage?.call(AttachmentProcessingStage.finalizingAttachment);
       final attachment = await backend.insertAttachment(
         sessionKey,
         bytes: rawBytes,
@@ -186,6 +189,7 @@ Future<String> ingestFileAttachmentBytes({
       return attachment.sha256;
     }
 
+    onStage?.call(AttachmentProcessingStage.transcodingVideo);
     final videoProxy = await VideoTranscodeWorker.transcodeToSegmentedMp4Proxy(
       rawBytes,
       sourceMimeType: normalizedMimeType,
@@ -221,6 +225,7 @@ Future<String> ingestFileAttachmentBytes({
     String? posterMimeType;
     final keyframeRefs =
         <({int index, String sha256, String mimeType, int tMs, String kind})>[];
+    onStage?.call(AttachmentProcessingStage.generatingKeyframes);
     final preview = await VideoTranscodeWorker.extractPreviewFrames(
       primarySegment.bytes,
       sourceMimeType: primarySegment.mimeType,
@@ -262,6 +267,7 @@ Future<String> ingestFileAttachmentBytes({
         defaultTargetPlatform == TargetPlatform.android ||
         defaultTargetPlatform == TargetPlatform.iOS;
     if (shouldExtractVideoAudio) {
+      onStage?.call(AttachmentProcessingStage.extractingAudio);
       final audioProxy =
           await AudioTranscodeWorker.transcodeVideoAudioForManifest(
         rawBytes,
@@ -321,6 +327,7 @@ Future<String> ingestFileAttachmentBytes({
       ),
     });
     final manifestBytes = Uint8List.fromList(utf8.encode(manifest));
+    onStage?.call(AttachmentProcessingStage.finalizingAttachment);
     final manifestAttachment = await backend.insertAttachment(
       sessionKey,
       bytes: manifestBytes,
@@ -353,6 +360,7 @@ Future<String> ingestFileAttachmentBytes({
   }
 
   if (normalizedLowerMimeType.startsWith('audio/')) {
+    onStage?.call(AttachmentProcessingStage.transcodingAudio);
     final proxy = options.useLocalAudioTranscode
         ? await AudioTranscodeWorker.transcodeToM4aProxy(
             rawBytes,
@@ -363,6 +371,7 @@ Future<String> ingestFileAttachmentBytes({
             mimeType: normalizedMimeType,
             didTranscode: false,
           );
+    onStage?.call(AttachmentProcessingStage.finalizingAttachment);
     final attachment = await backend.insertAttachment(
       sessionKey,
       bytes: proxy.bytes,
@@ -379,6 +388,7 @@ Future<String> ingestFileAttachmentBytes({
     return attachment.sha256;
   }
 
+  onStage?.call(AttachmentProcessingStage.finalizingAttachment);
   final attachment = await backend.insertAttachment(
     sessionKey,
     bytes: rawBytes,
@@ -396,6 +406,7 @@ Future<ImageAttachmentIngestResult> ingestImageAttachmentBytes({
   required String lang,
   int? fallbackCapturedAtMs,
   PlatformExifMetadata? platformExif,
+  AttachmentProcessingStageCallback? onStage,
   AttachmentShaCallback? onBackupCandidate,
   AttachmentShaLangCallback? onMaybeEnqueuePlace,
   AttachmentShaLangCallback? onMaybeEnqueueAnnotation,
@@ -425,6 +436,7 @@ Future<ImageAttachmentIngestResult> ingestImageAttachmentBytes({
   final latitude = latLon?.$1;
   final longitude = latLon?.$2;
 
+  onStage?.call(AttachmentProcessingStage.finalizingAttachment);
   final attachment = await backend.insertAttachment(
     sessionKey,
     bytes: compressed.bytes,
