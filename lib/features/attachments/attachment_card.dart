@@ -378,10 +378,13 @@ String? extractAttachmentCardSummaryFromPayload(
   final preferredFull = _normalizedTextSnippet(preferred.full);
   if (preferredFull.isNotEmpty) return preferredFull;
 
-  final resolvedMimeType = (mimeTypeHint ?? payload['mime_type'] ?? '')
-      .toString()
-      .trim()
-      .toLowerCase();
+  final normalizedMimeHint = mimeTypeHint?.trim() ?? '';
+  final resolvedMimeType =
+      (normalizedMimeHint.isNotEmpty
+              ? normalizedMimeHint
+              : payload['mime_type']?.toString() ?? '')
+          .trim()
+          .toLowerCase();
   final audioTurnExcerpt = _normalizedTextSnippet(
     resolvedMimeType.startsWith('audio/')
         ? resolveAudioTranscriptTurnViewDisplayExcerpt(payload)
