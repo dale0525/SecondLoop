@@ -9,6 +9,7 @@ import 'package:flutter/services.dart';
 import 'audio_transcribe_chunk_progress.dart';
 import 'audio_transcribe_error_classification.dart';
 import 'audio_transcribe_media_preprocess.dart' as audio_preprocess;
+import 'audio_transcribe_turn_view.dart';
 import '../../core/ai/audio_transcribe_gateway_limit_prefs.dart';
 import '../../core/ai/audio_transcribe_whisper_model_store.dart';
 import '../../core/backend/native_app_dir.dart';
@@ -749,12 +750,23 @@ final class AudioTranscribeRunner {
           },
         )
         .toList(growable: false);
+    final turnView = buildAudioTranscriptTurnView(
+      response.segments
+          .map(
+            (s) => AudioTranscriptTurnSourceSegment(
+              tMs: s.tMs,
+              text: s.text,
+            ),
+          )
+          .toList(growable: false),
+    );
 
     return <String, Object?>{
       'schema': kAudioTranscriptSchema,
       if (response.durationMs != null) 'duration_ms': response.durationMs,
       'transcript_engine': engineName,
       'transcript_model_name': modelName,
+      'transcript_turns_v1': turnView.toJson(),
       'transcript_segments': segments,
       'transcript_full': full,
       'transcript_excerpt': _excerpt(full),

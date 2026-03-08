@@ -169,6 +169,57 @@ void main() {
     expect(find.text('Size'), findsOneWidget);
     expect(find.text('16 B'), findsOneWidget);
   });
+
+  testWidgets('AudioAttachmentPlayerView shows turn view by default', (
+    tester,
+  ) async {
+    final attachment = Attachment(
+      sha256: 'audio-turn-view-sha',
+      mimeType: 'audio/mp4',
+      path: 'attachments/audio-turn-view-sha.bin',
+      byteLen: _tinyM4a.length,
+      createdAtMs: 0,
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: Scaffold(
+            body: AudioAttachmentPlayerView(
+              attachment: attachment,
+              bytes: _tinyM4a,
+              displayTitle: 'Audio attachment',
+              initialAnnotationPayload: const <String, Object?>{
+                'duration_ms': 42000,
+                'transcript_excerpt': 'raw excerpt',
+                'transcript_full': 'raw transcript body',
+                'transcript_turns_v1': {
+                  'builder_version': 'turns_v1',
+                  'status': 'ok',
+                  'turns': [
+                    {
+                      'start_ms': 12000,
+                      'end_ms': 18000,
+                      'text': 'Hello everyone.',
+                      'segment_count': 1,
+                      'source_segment_start_index': 0,
+                      'source_segment_end_index': 0,
+                    },
+                  ],
+                },
+              },
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.pump(const Duration(milliseconds: 200));
+
+    expect(
+        find.textContaining('[00:12–00:18] Hello everyone.'), findsOneWidget);
+    expect(find.text('raw transcript body'), findsNothing);
+  });
 }
 
 final Uint8List _tinyM4a = Uint8List.fromList(const <int>[

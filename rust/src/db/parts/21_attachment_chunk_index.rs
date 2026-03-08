@@ -959,3 +959,61 @@ LIMIT ?1
 
     Ok(out)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::attachment_chunk_source_kinds;
+    use serde_json::json;
+
+    #[test]
+    fn attachment_chunk_sources_ignore_display_only_turn_view_without_canonical_transcript() {
+        let payload = json!({
+            "transcript_turns_v1": {
+                "builder_version": "turns_v1",
+                "status": "ok",
+                "turns": [
+                    {
+                        "start_ms": 12000,
+                        "end_ms": 18000,
+                        "text": "display-only turn",
+                        "segment_count": 1
+                    }
+                ]
+            }
+        });
+
+        let sources = attachment_chunk_source_kinds(&payload);
+
+        assert!(sources.is_empty());
+    }
+
+    #[test]
+    fn attachment_chunk_sources_keep_canonical_transcript_and_ignore_turn_view() {
+        let payload = json!({
+            "transcript_excerpt": "raw transcript excerpt",
+            "transcript_turns_v1": {
+                "builder_version": "turns_v1",
+                "status": "ok",
+                "turns": [
+                    {
+                        "start_ms": 12000,
+                        "end_ms": 18000,
+                        "text": "display-only turn",
+                        "segment_count": 1
+                    }
+                ]
+            }
+        });
+
+        let sources = attachment_chunk_source_kinds(&payload);
+
+        assert_eq!(
+            sources,
+            vec![(
+                "transcript_full".to_string(),
+                "raw transcript excerpt".to_string()
+            )]
+        );
+        assert!(!sources.iter().any(|(_, text)| text.contains("display-only turn")));
+    }
+}

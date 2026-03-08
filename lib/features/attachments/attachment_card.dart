@@ -12,6 +12,7 @@ import '../../src/rust/db.dart';
 import '../../ui/sl_surface.dart';
 import '../../ui/sl_tokens.dart';
 import 'attachment_processing_status.dart';
+import 'audio_transcript_turn_view_display.dart';
 import 'attachment_text_source_policy.dart';
 
 class AttachmentCard extends StatelessWidget {
@@ -366,6 +367,11 @@ String? extractAttachmentCardSummaryFromPayload(Map<String, Object?> payload) {
 
   final preferredFull = _normalizedTextSnippet(preferred.full);
   if (preferredFull.isNotEmpty) return preferredFull;
+
+  final audioTurnExcerpt = _normalizedTextSnippet(
+    resolveAudioTranscriptTurnViewDisplayExcerpt(payload),
+  );
+  if (audioTurnExcerpt.isNotEmpty) return audioTurnExcerpt;
 
   final transcriptExcerpt = _normalizedTextSnippet(
     payload['transcript_excerpt']?.toString(),

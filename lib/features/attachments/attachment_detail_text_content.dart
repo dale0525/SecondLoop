@@ -2,6 +2,7 @@ import 'package:flutter/widgets.dart';
 
 import '../../i18n/strings.g.dart';
 
+import 'audio_transcript_turn_view_display.dart';
 import 'attachment_ocr_text_normalizer.dart';
 import 'attachment_text_source_policy.dart';
 
@@ -70,6 +71,7 @@ AttachmentDetailTextContent resolveAttachmentDetailTextContent(
     mimeTypeOverride,
     read('mime_type'),
   ]).toLowerCase();
+  final isAudioPayload = normalizedMime.startsWith('audio/');
   final isImagePayload = normalizedMime.startsWith('image/');
   final isUrlPayload = normalizedMime == 'application/x.secondloop.url+json';
   final hasVideoPayloadSignal = payload != null &&
@@ -123,6 +125,42 @@ AttachmentDetailTextContent resolveAttachmentDetailTextContent(
     ocrFull,
   ]);
 
+  final audioTurnSummary = isAudioPayload
+      ? resolveAudioTranscriptTurnViewDisplayExcerpt(payload)
+      : '';
+  final audioTurnFull =
+      isAudioPayload ? resolveAudioTranscriptTurnViewDisplayFull(payload) : '';
+
+  final audioSummary = firstNonEmpty(<String?>[
+    read('manual_summary'),
+    read('llm_summary'),
+    read('summary'),
+    audioTurnSummary,
+    selected.excerpt,
+    read('transcript_excerpt'),
+    caption,
+    read('readable_text_excerpt'),
+    read('extracted_text_excerpt'),
+  ]);
+
+  final audioFull = firstNonEmpty(<String?>[
+    read('manual_full_text'),
+    read('full_text'),
+    audioTurnFull,
+    read('transcript_full'),
+    read('manual_summary'),
+    read('llm_summary'),
+    read('summary'),
+    audioTurnSummary,
+    read('transcript_excerpt'),
+    selected.full,
+    selected.excerpt,
+    read('readable_text_full'),
+    read('extracted_text_full'),
+    read('readable_text_excerpt'),
+    read('extracted_text_excerpt'),
+  ]);
+
   final videoFull = firstNonEmpty(<String?>[
     read('manual_full_text'),
     read('full_text'),
@@ -170,11 +208,15 @@ AttachmentDetailTextContent resolveAttachmentDetailTextContent(
 
   final full = hasVideoPayloadSignal
       ? videoFull
-      : (isImagePayload
-          ? imageFull
-          : (isUrlPayload ? urlFull : nonImageFallbackFull));
+      : (isAudioPayload
+          ? audioFull
+          : (isImagePayload
+              ? imageFull
+              : (isUrlPayload ? urlFull : nonImageFallbackFull)));
 
-  return AttachmentDetailTextContent(summary: summary, full: full);
+  final effectiveSummary = isAudioPayload ? audioSummary : summary;
+
+  return AttachmentDetailTextContent(summary: effectiveSummary, full: full);
 }
 
 Map<String, Object?> buildManualAttachmentTextPayload({

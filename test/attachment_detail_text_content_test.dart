@@ -148,4 +148,76 @@ void main() {
     expect(content.summary, 'Local extracted excerpt.');
     expect(content.full, 'Local extracted full text.');
   });
+
+  test('audio detail prefers turn view for display text', () {
+    final content = resolveAttachmentDetailTextContent(
+      const <String, Object?>{
+        'mime_type': 'audio/mp4',
+        'transcript_excerpt': 'raw excerpt',
+        'transcript_full': 'raw transcript body',
+        'transcript_turns_v1': {
+          'builder_version': 'turns_v1',
+          'status': 'ok',
+          'turns': [
+            {
+              'start_ms': 12000,
+              'end_ms': 18000,
+              'text': 'Hello everyone.',
+              'segment_count': 1,
+              'source_segment_start_index': 0,
+              'source_segment_end_index': 0,
+            },
+          ],
+        },
+      },
+    );
+
+    expect(content.summary, contains('[00:12–00:18] Hello everyone.'));
+    expect(content.full, '[00:12–00:18] Hello everyone.');
+  });
+
+  test('audio detail falls back to raw transcript when turn view is not ok',
+      () {
+    final content = resolveAttachmentDetailTextContent(
+      const <String, Object?>{
+        'mime_type': 'audio/mp4',
+        'transcript_excerpt': 'raw excerpt',
+        'transcript_full': 'raw transcript body',
+        'transcript_turns_v1': {
+          'builder_version': 'turns_v1',
+          'status': 'fallback_builder_error',
+          'turns': [],
+        },
+      },
+    );
+
+    expect(content.summary, 'raw excerpt');
+    expect(content.full, 'raw transcript body');
+  });
+
+  test('audio detail can build turn view from legacy transcript segments', () {
+    final content = resolveAttachmentDetailTextContent(
+      const <String, Object?>{
+        'mime_type': 'audio/mp4',
+        'transcript_excerpt': 'raw excerpt',
+        'transcript_full': 'raw transcript body',
+        'transcript_segments': [
+          {
+            't_ms': 12000,
+            'text': 'Hello everyone.',
+          },
+          {
+            't_ms': 12600,
+            'text': 'Thanks for joining.',
+          },
+        ],
+      },
+    );
+
+    expect(
+      content.full,
+      '[00:12–00:12] Hello everyone. Thanks for joining.',
+    );
+    expect(content.summary, contains('[00:12–00:12]'));
+  });
 }
