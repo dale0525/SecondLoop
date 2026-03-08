@@ -135,6 +135,6 @@ run_flutter() {
   env -u GIT_DIR -u GIT_WORK_TREE -u GIT_INDEX_FILE "${flutter_bin}" "$@"
 }
 
-run_flutter pub run slang normalize
-run_flutter pub run slang
+run_dart run slang:normalize
+run_dart run slang
 run_dart format lib/i18n/strings.g.dart

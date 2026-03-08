@@ -64,6 +64,50 @@ class ReleaseWorkflowEnvTests(unittest.TestCase):
         workflow_path = Path(__file__).resolve().parents[2] / ".github/workflows/release.yml"
         return workflow_path.read_text(encoding="utf-8")
 
+    def _workflow_job_text(self, job_name: str, workflow_text: str | None = None) -> str:
+        lines = (workflow_text or self._workflow_text()).splitlines()
+        header = f"  {job_name}:"
+
+        in_job = False
+        section_lines: list[str] = []
+
+        for line in lines:
+            if not in_job:
+                if line == header:
+                    in_job = True
+                    section_lines.append(line)
+                continue
+
+            if line.startswith("  ") and not line.startswith("    "):
+                break
+
+            section_lines.append(line)
+
+        self.assertTrue(section_lines, f"missing job section: {job_name}")
+        return "\n".join(section_lines) + "\n"
+
+    def _workflow_job_step_text(self, job_name: str, step_name: str, workflow_text: str | None = None) -> str:
+        lines = self._workflow_job_text(job_name, workflow_text).splitlines()
+        step_header = f"      - name: {step_name}"
+
+        in_step = False
+        step_lines: list[str] = []
+
+        for line in lines:
+            if not in_step:
+                if line == step_header:
+                    in_step = True
+                    step_lines.append(line)
+                continue
+
+            if line.startswith("      - "):
+                break
+
+            step_lines.append(line)
+
+        self.assertTrue(step_lines, f"missing step {step_name!r} in job {job_name!r}")
+        return "\n".join(step_lines) + "\n"
+
     def _publish_step_run_script(self, step_name: str) -> str:
         workflow_path = Path(__file__).resolve().parents[2] / ".github/workflows/release.yml"
         lines = workflow_path.read_text(encoding="utf-8").splitlines()
@@ -353,33 +397,42 @@ class ReleaseWorkflowEnvTests(unittest.TestCase):
         self.assertNotEqual(-1, setup_idx)
         self.assertLess(pub_get_idx, setup_idx)
 
+    def test_workflow_job_text_matches_exact_job_headers(self) -> None:
+        workflow_text = """jobs:
+  metadata:
+    steps:
+      - run: echo android:
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - run: flutter pub get
+"""
+
+        section_text = self._workflow_job_text("android", workflow_text)
+
+        self.assertTrue(section_text.startswith("  android:\
+"))
+        self.assertIn("    runs-on: ubuntu-latest", section_text)
+        self.assertNotIn("echo android:", section_text)
+
     def test_release_workflow_refreshes_i18n_generated_files_after_pub_get_for_each_build_job(self) -> None:
-        workflow_text = self._workflow_text()
-
-        job_markers = [
-            ("android:", "windows:"),
-            ("windows:", "macos:"),
-            ("macos:", "linux:"),
-            ("linux:", "publish:"),
-        ]
-
-        for start_marker, end_marker in job_markers:
-            start_idx = workflow_text.find(start_marker)
-            end_idx = workflow_text.find(end_marker, start_idx)
-
-            self.assertNotEqual(-1, start_idx, f"Missing workflow section marker: {start_marker}")
-            self.assertNotEqual(-1, end_idx, f"Missing workflow section marker: {end_marker}")
-
-            section_text = workflow_text[start_idx:end_idx]
-            pub_get_idx = section_text.find("- run: flutter pub get")
+        for job_name in ["android", "windows", "macos", "linux"]:
+            section_text = self._workflow_job_text(job_name)
+            pub_get_idx = section_text.find("run: flutter pub get")
             refresh_name_idx = section_text.find("- name: Refresh i18n generated files")
             refresh_run_idx = section_text.find("run: bash scripts/run_i18n_refresh.sh")
 
-            self.assertNotEqual(-1, pub_get_idx, f"Missing flutter pub get in {start_marker}")
-            self.assertNotEqual(-1, refresh_name_idx, f"Missing i18n refresh step in {start_marker}")
-            self.assertNotEqual(-1, refresh_run_idx, f"Missing i18n refresh command in {start_marker}")
-            self.assertLess(pub_get_idx, refresh_name_idx, f"i18n refresh must run after pub get in {start_marker}")
-            self.assertLess(refresh_name_idx, refresh_run_idx, f"i18n refresh step body missing in {start_marker}")
+            self.assertNotEqual(-1, pub_get_idx, f"Missing flutter pub get in {job_name}")
+            self.assertNotEqual(-1, refresh_name_idx, f"Missing i18n refresh step in {job_name}")
+            self.assertNotEqual(-1, refresh_run_idx, f"Missing i18n refresh command in {job_name}")
+            self.assertLess(pub_get_idx, refresh_name_idx, f"i18n refresh must run after pub get in {job_name}")
+            self.assertLess(refresh_name_idx, refresh_run_idx, f"i18n refresh step body missing in {job_name}")
+
+    def test_windows_release_refresh_i18n_step_runs_under_pwsh(self) -> None:
+        step_text = self._workflow_job_step_text("windows", "Refresh i18n generated files")
+
+        self.assertIn("        shell: pwsh", step_text)
+        self.assertIn("        run: bash scripts/run_i18n_refresh.sh", step_text)
 
     def test_release_workflow_uses_short_subst_drive_for_windows_build(self) -> None:
         workflow_text = self._workflow_text()

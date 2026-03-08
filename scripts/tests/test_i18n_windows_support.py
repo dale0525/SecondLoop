@@ -17,6 +17,14 @@ class I18nWindowsSupportTests(unittest.TestCase):
         self.assertIn(".fvm/flutter_sdk/bin/flutter.bat", script)
         self.assertIn("scripts/run_fvm_tool.ps1", script)
 
+    def test_refresh_script_uses_dart_run_slang_commands(self) -> None:
+        script = I18N_REFRESH_SCRIPT.read_text(encoding="utf-8")
+
+        self.assertIn("run_dart run slang:normalize", script)
+        self.assertIn("run_dart run slang", script)
+        self.assertNotIn("run_flutter pub run slang normalize", script)
+        self.assertNotIn("run_flutter pub run slang", script)
+
     def test_analyze_script_supports_windows_local_fvm_batch_wrappers(self) -> None:
         script = I18N_ANALYZE_SCRIPT.read_text(encoding="utf-8")
 
