@@ -45,6 +45,16 @@ pub struct SimilarExternalDocumentChunk {
     pub created_at_ms: i64,
 }
 
+#[derive(Clone, Debug, Serialize)]
+struct ExternalImportDiagnosticRecord {
+    stage: String,
+    severity: String,
+    code: String,
+    message: String,
+    source_rel_path: Option<String>,
+    created_at_ms: i64,
+}
+
 fn external_readonly_root_dir(app_dir: &Path) -> PathBuf {
     app_dir.join("external_readonly")
 }
@@ -226,6 +236,28 @@ PRAGMA user_version = 2;
         )?;
     }
 
+    if version < 3 {
+        conn.execute_batch(
+            r#"
+CREATE TABLE IF NOT EXISTS external_import_diagnostics (
+  diag_id INTEGER PRIMARY KEY AUTOINCREMENT,
+  batch_id TEXT NOT NULL,
+  stage TEXT NOT NULL,
+  severity TEXT NOT NULL,
+  code TEXT NOT NULL,
+  message TEXT NOT NULL,
+  source_rel_path TEXT,
+  created_at_ms INTEGER NOT NULL,
+  FOREIGN KEY(batch_id) REFERENCES external_import_batches(batch_id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_external_import_diagnostics_batch_created
+  ON external_import_diagnostics(batch_id, created_at_ms ASC, diag_id ASC);
+
+PRAGMA user_version = 3;
+"#,
+        )?;
+    }
+
     Ok(())
 }
 
@@ -387,6 +419,104 @@ fn read_external_import_batch_summary(conn: &Connection, batch_id: &str) -> Resu
         },
     )
     .map_err(Into::into)
+}
+
+fn insert_external_import_diagnostic(
+    conn: &Connection,
+    batch_id: &str,
+    stage: &str,
+    severity: &str,
+    code: &str,
+    message: &str,
+    source_rel_path: Option<&str>,
+) -> Result<()> {
+    conn.execute(
+        r#"INSERT INTO external_import_diagnostics(
+             batch_id, stage, severity, code, message, source_rel_path, created_at_ms
+           ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)"#,
+        params![
+            batch_id,
+            stage,
+            severity,
+            code,
+            message,
+            source_rel_path,
+            now_ms(),
+        ],
+    )?;
+    Ok(())
+}
+
+fn list_external_import_diagnostics(
+    conn: &Connection,
+    batch_id: &str,
+) -> Result<Vec<ExternalImportDiagnosticRecord>> {
+    let mut stmt = conn.prepare(
+        r#"SELECT stage, severity, code, message, source_rel_path, created_at_ms
+           FROM external_import_diagnostics
+           WHERE batch_id = ?1
+           ORDER BY created_at_ms ASC, diag_id ASC"#,
+    )?;
+    let mut rows = stmt.query(params![batch_id])?;
+    let mut out = Vec::<ExternalImportDiagnosticRecord>::new();
+    while let Some(row) = rows.next()? {
+        out.push(ExternalImportDiagnosticRecord {
+            stage: row.get(0)?,
+            severity: row.get(1)?,
+            code: row.get(2)?,
+            message: row.get(3)?,
+            source_rel_path: row.get(4)?,
+            created_at_ms: row.get(5)?,
+        });
+    }
+    Ok(out)
+}
+
+fn build_external_import_batch_report_value(
+    conn: &Connection,
+    batch_id: &str,
+) -> Result<serde_json::Value> {
+    let summary = read_external_import_batch_summary(conn, batch_id)?;
+    let success_count: i64 = conn.query_row(
+        r#"SELECT COUNT(*) FROM external_documents WHERE batch_id = ?1"#,
+        params![batch_id],
+        |row| row.get(0),
+    )?;
+    let copied_attachment_count: i64 = conn.query_row(
+        r#"SELECT COUNT(DISTINCT a.sha256)
+           FROM external_document_attachments a
+           JOIN external_documents d ON d.doc_id = a.doc_id
+           WHERE d.batch_id = ?1"#,
+        params![batch_id],
+        |row| row.get(0),
+    )?;
+    let elapsed_ms = (summary.completed_at_ms.unwrap_or(summary.updated_at_ms) - summary.created_at_ms)
+        .max(0);
+    let diagnostics = list_external_import_diagnostics(conn, batch_id)?;
+    Ok(serde_json::json!({
+        "batch_id": summary.batch_id,
+        "source_kind": summary.source_kind,
+        "source_label": summary.source_label,
+        "status": summary.status,
+        "notes_count": summary.notes_count,
+        "attachments_count": summary.attachments_count,
+        "failed_count": summary.failed_count,
+        "copied_bytes": summary.copied_bytes,
+        "success_count": success_count,
+        "copied_attachment_count": copied_attachment_count,
+        "disk_usage_bytes": summary.copied_bytes,
+        "elapsed_ms": elapsed_ms,
+        "created_at_ms": summary.created_at_ms,
+        "updated_at_ms": summary.updated_at_ms,
+        "completed_at_ms": summary.completed_at_ms,
+        "last_error": summary.last_error,
+        "diagnostics": diagnostics,
+    }))
+}
+
+pub fn read_external_import_batch_report_json(app_dir: &Path, batch_id: &str) -> Result<String> {
+    let conn = open_external_readonly_db(app_dir)?;
+    Ok(build_external_import_batch_report_value(&conn, batch_id)?.to_string())
 }
 
 pub fn list_external_import_batches(app_dir: &Path) -> Result<Vec<ExternalImportBatchSummary>> {

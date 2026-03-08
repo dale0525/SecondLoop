@@ -280,6 +280,10 @@ extension _TodoDetailPageStateMessageActions on _TodoDetailPageState {
     String content, {
     required bool isDesktopPlatform,
   }) {
+    if (content.trim().isEmpty) {
+      return const SizedBox.shrink();
+    }
+
     final markdown = ChatMarkdownPreviewPanel(
       padding: const EdgeInsets.fromLTRB(12, 10, 12, 14),
       child: buildChatMarkdownPreviewBody(

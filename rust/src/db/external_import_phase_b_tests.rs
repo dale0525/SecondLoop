@@ -12,6 +12,13 @@ fn write_text(path: &Path, text: &str) {
     fs::write(path, text).expect("write text");
 }
 
+fn write_bytes(path: &Path, bytes: &[u8]) {
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).expect("create parent");
+    }
+    fs::write(path, bytes).expect("write bytes");
+}
+
 fn create_obsidian_source_with_text_attachments(root: &Path) -> PathBuf {
     let source = root.join("obsidian-vault-phase-b");
     fs::create_dir_all(source.join(".obsidian")).expect("obsidian dir");
@@ -30,6 +37,29 @@ fn create_obsidian_source_with_text_attachments(root: &Path) -> PathBuf {
     source
 }
 
+fn create_obsidian_source_with_varied_phase_b_attachments(root: &Path) -> PathBuf {
+    let source = root.join("obsidian-vault-phase-b-varied");
+    fs::create_dir_all(source.join(".obsidian")).expect("obsidian dir");
+    write_text(
+        &source.join("notes/research.md"),
+        "# Research
+
+[Spec](assets/spec.txt)
+
+[Manual](assets/manual.pdf)
+
+![Preview](assets/preview.png)
+",
+    );
+    write_text(
+        &source.join("assets/spec.txt"),
+        "Short plain text attachment for baseline extraction.",
+    );
+    write_bytes(&source.join("assets/manual.pdf"), &vec![b'P'; 1_800_000]);
+    write_bytes(&source.join("assets/preview.png"), &vec![0x89; 640_000]);
+    source
+}
+
 #[test]
 fn external_import_phase_b_estimates_eligible_attachment_work() {
     let dir = tempdir().expect("tempdir");
@@ -44,6 +74,71 @@ fn external_import_phase_b_estimates_eligible_attachment_work() {
     assert_eq!(estimate["eligible_attachment_count"].as_i64(), Some(2));
     assert_eq!(estimate["remaining_attachment_count"].as_i64(), Some(2));
     assert!(estimate["estimated_runtime_seconds"].as_i64().unwrap_or(0) >= 2);
+}
+
+#[test]
+fn external_import_phase_b_estimate_uses_mime_and_size_weighted_costs() {
+    let dir = tempdir().expect("tempdir");
+    let app_dir = dir.path().join("app");
+    let source = create_obsidian_source_with_varied_phase_b_attachments(dir.path());
+    let key = [24u8; 32];
+
+    let batch = run_external_import_with_callbacks(&app_dir, &key, &source, &mut |_| {}, &|| false)
+        .expect("import");
+
+    let estimate = estimate_external_import_phase_b(&app_dir, &batch.batch_id).expect("estimate");
+    assert_eq!(estimate["eligible_attachment_count"].as_i64(), Some(3));
+    assert_eq!(estimate["remaining_attachment_count"].as_i64(), Some(3));
+    assert!(estimate["estimated_runtime_seconds"].as_i64().unwrap_or(0) > 6);
+    assert!(estimate["estimated_local_work_units"].as_i64().unwrap_or(0) > 3);
+    assert!(estimate["estimated_cloud_tokens"].as_i64().unwrap_or(0) > 0);
+}
+
+#[test]
+fn external_import_phase_b_estimate_shrinks_after_partial_completion() {
+    let dir = tempdir().expect("tempdir");
+    let app_dir = dir.path().join("app");
+    let source = create_obsidian_source_with_text_attachments(dir.path());
+    let key = [25u8; 32];
+
+    let batch = run_external_import_with_callbacks(&app_dir, &key, &source, &mut |_| {}, &|| false)
+        .expect("import");
+
+    let initial =
+        estimate_external_import_phase_b(&app_dir, &batch.batch_id).expect("initial estimate");
+
+    let external = open_external_readonly_db(&app_dir).expect("open external");
+    seed_external_import_phase_b_attachment_progress_for_test(
+        &app_dir,
+        &external,
+        &key,
+        &batch.batch_id,
+    )
+    .expect("seed persisted progress");
+
+    let after =
+        estimate_external_import_phase_b(&app_dir, &batch.batch_id).expect("updated estimate");
+    assert_eq!(after["remaining_attachment_count"].as_i64(), Some(1));
+    assert!(
+        after["estimated_runtime_seconds"]
+            .as_i64()
+            .unwrap_or(i64::MAX)
+            < initial["estimated_runtime_seconds"].as_i64().unwrap_or(0)
+    );
+    assert!(
+        after["estimated_local_bytes"].as_i64().unwrap_or(i64::MAX)
+            < initial["estimated_local_bytes"].as_i64().unwrap_or(0)
+    );
+    assert!(
+        after["estimated_local_work_units"]
+            .as_i64()
+            .unwrap_or(i64::MAX)
+            < initial["estimated_local_work_units"].as_i64().unwrap_or(0)
+    );
+    assert!(
+        after["estimated_cloud_tokens"].as_i64().unwrap_or(i64::MAX)
+            < initial["estimated_cloud_tokens"].as_i64().unwrap_or(0)
+    );
 }
 
 #[test]

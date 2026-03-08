@@ -33,6 +33,46 @@ struct ParsedExternalImportSource {
     documents: Vec<CanonicalExternalDocument>,
     estimated_disk_usage_bytes: i64,
     warnings: Vec<String>,
+    diagnostics: Vec<ExternalImportParseDiagnostic>,
+}
+
+#[derive(Clone, Debug)]
+struct ExternalImportParseDiagnostic {
+    stage: String,
+    severity: String,
+    code: String,
+    message: String,
+    source_rel_path: Option<String>,
+}
+
+fn normalize_external_import_source_rel_path(root: &Path, path: &Path) -> String {
+    path.strip_prefix(root)
+        .unwrap_or(path)
+        .to_string_lossy()
+        .replace('\\', "/")
+}
+
+fn push_parse_diagnostic(
+    diagnostics: &mut Vec<ExternalImportParseDiagnostic>,
+    stage: &str,
+    severity: &str,
+    code: &str,
+    message: impl Into<String>,
+    source_rel_path: Option<String>,
+) {
+    diagnostics.push(ExternalImportParseDiagnostic {
+        stage: stage.to_string(),
+        severity: severity.to_string(),
+        code: code.to_string(),
+        message: message.into(),
+        source_rel_path,
+    });
+}
+
+fn warning_messages_from_diagnostics(
+    diagnostics: &[ExternalImportParseDiagnostic],
+) -> Vec<String> {
+    diagnostics.iter().map(|item| item.message.clone()).collect()
 }
 
 fn emit_external_import_progress(
@@ -386,7 +426,7 @@ fn metadata_time_ms(path: &Path) -> i64 {
 fn build_canonical_markdown_document(
     root: &Path,
     path: &Path,
-    warnings: &mut Vec<String>,
+    diagnostics: &mut Vec<ExternalImportParseDiagnostic>,
 ) -> Result<CanonicalExternalDocument> {
     let raw = fs::read_to_string(path)?;
     let (tags, body_without_frontmatter) = parse_frontmatter_tags(&raw);
@@ -400,6 +440,7 @@ fn build_canonical_markdown_document(
         .filter(|value| !value.is_empty())
         .unwrap_or_else(|| "Untitled import".to_string());
 
+    let rel = normalize_external_import_source_rel_path(root, path);
     let doc_dir = path.parent().unwrap_or(root);
     let mut seen = BTreeSet::<String>::new();
     let mut attachments = Vec::<CanonicalExternalAttachmentRef>::new();
@@ -408,11 +449,14 @@ fn build_canonical_markdown_document(
     for raw_ref in refs {
         let Some(resolved) = resolve_attachment_path(root, doc_dir, &raw_ref) else {
             if is_likely_external_attachment_link(&raw_ref) {
-                warnings.push(format!(
-                    "missing attachment reference: {} ({})",
-                    raw_ref,
-                    path.display()
-                ));
+                push_parse_diagnostic(
+                    diagnostics,
+                    "scan",
+                    "warning",
+                    "missing_attachment_reference",
+                    format!("missing attachment reference: {raw_ref}"),
+                    Some(rel.clone()),
+                );
             }
             continue;
         };
@@ -436,11 +480,6 @@ fn build_canonical_markdown_document(
         });
     }
 
-    let rel = path
-        .strip_prefix(root)
-        .unwrap_or(path)
-        .to_string_lossy()
-        .replace('\\', "/");
     let ts = metadata_time_ms(path);
     Ok(CanonicalExternalDocument {
         external_origin_id: rel.clone(),
@@ -487,7 +526,7 @@ fn collect_json_strings(value: &serde_json::Value, out: &mut Vec<String>) {
 fn build_canonical_siyuan_document(
     root: &Path,
     path: &Path,
-    warnings: &mut Vec<String>,
+    diagnostics: &mut Vec<ExternalImportParseDiagnostic>,
 ) -> Result<CanonicalExternalDocument> {
     let raw = fs::read_to_string(path)?;
     let json: serde_json::Value = serde_json::from_str(&raw).unwrap_or(serde_json::json!({
@@ -512,7 +551,10 @@ fn build_canonical_siyuan_document(
         .filter(|value| !value.is_empty())
         .unwrap_or_else(|| "SiYuan Import".to_string());
 
-    let body_markdown = strings.join("\n\n");
+    let body_markdown = strings.join("
+
+");
+    let rel = normalize_external_import_source_rel_path(root, path);
     let doc_dir = path.parent().unwrap_or(root);
     let mut seen = BTreeSet::<String>::new();
     let mut attachments = Vec::<CanonicalExternalAttachmentRef>::new();
@@ -520,11 +562,14 @@ fn build_canonical_siyuan_document(
     refs.extend(collect_siyuan_asset_refs(&body_markdown));
     for raw_ref in refs {
         let Some(resolved) = resolve_attachment_path(root, doc_dir, &raw_ref) else {
-            warnings.push(format!(
-                "missing SiYuan asset reference: {} ({})",
-                raw_ref,
-                path.display()
-            ));
+            push_parse_diagnostic(
+                diagnostics,
+                "scan",
+                "warning",
+                "missing_siyuan_asset_reference",
+                format!("missing SiYuan asset reference: {raw_ref}"),
+                Some(rel.clone()),
+            );
             continue;
         };
         let key = resolved.to_string_lossy().to_string();
@@ -547,11 +592,6 @@ fn build_canonical_siyuan_document(
         });
     }
 
-    let rel = path
-        .strip_prefix(root)
-        .unwrap_or(path)
-        .to_string_lossy()
-        .replace('\\', "/");
     let ts = metadata_time_ms(path);
     Ok(CanonicalExternalDocument {
         external_origin_id: rel.clone(),
@@ -573,7 +613,7 @@ fn parse_materialized_external_source(
     let mut files = Vec::<PathBuf>::new();
     collect_files_recursively(root, &mut files)?;
 
-    let mut warnings = Vec::<String>::new();
+    let mut diagnostics = Vec::<ExternalImportParseDiagnostic>::new();
     let mut documents = Vec::<CanonicalExternalDocument>::new();
 
     match detected_source_kind.as_str() {
@@ -588,9 +628,16 @@ fn parse_materialized_external_source(
                 if !is_sy {
                     continue;
                 }
-                match build_canonical_siyuan_document(root, &path, &mut warnings) {
+                match build_canonical_siyuan_document(root, &path, &mut diagnostics) {
                     Ok(doc) => documents.push(doc),
-                    Err(e) => warnings.push(format!("failed to parse {}: {e}", path.display())),
+                    Err(e) => push_parse_diagnostic(
+                        &mut diagnostics,
+                        "scan",
+                        "error",
+                        "parse_siyuan_document_failed",
+                        format!("failed to parse {}: {e}", path.display()),
+                        Some(normalize_external_import_source_rel_path(root, &path)),
+                    ),
                 }
             }
         }
@@ -605,9 +652,16 @@ fn parse_materialized_external_source(
                 if !is_md || path.components().any(|part| part.as_os_str() == ".obsidian") {
                     continue;
                 }
-                match build_canonical_markdown_document(root, &path, &mut warnings) {
+                match build_canonical_markdown_document(root, &path, &mut diagnostics) {
                     Ok(doc) => documents.push(doc),
-                    Err(e) => warnings.push(format!("failed to parse {}: {e}", path.display())),
+                    Err(e) => push_parse_diagnostic(
+                        &mut diagnostics,
+                        "scan",
+                        "error",
+                        "parse_markdown_document_failed",
+                        format!("failed to parse {}: {e}", path.display()),
+                        Some(normalize_external_import_source_rel_path(root, &path)),
+                    ),
                 }
             }
         }
@@ -631,12 +685,14 @@ fn parse_materialized_external_source(
             .fold(0i64, |acc, value| acc.saturating_add(value.max(0))),
     );
 
+    let warnings = warning_messages_from_diagnostics(&diagnostics);
     Ok(ParsedExternalImportSource {
         detected_source_kind,
         source_label: source_label.to_string(),
         documents,
         estimated_disk_usage_bytes,
         warnings,
+        diagnostics,
     })
 }
 
@@ -960,6 +1016,17 @@ pub fn run_external_import_with_callbacks(
 
     let conn = open_external_readonly_db(app_dir)?;
     insert_external_import_batch(&conn, &batch_id, &parsed.detected_source_kind, &parsed.source_label)?;
+    for diagnostic in &parsed.diagnostics {
+        insert_external_import_diagnostic(
+            &conn,
+            &batch_id,
+            &diagnostic.stage,
+            &diagnostic.severity,
+            &diagnostic.code,
+            &diagnostic.message,
+            diagnostic.source_rel_path.as_deref(),
+        )?;
+    }
 
     emit_external_import_progress(on_event, &batch_id, "preparing", 0, 1, 0, "in_progress");
     emit_external_import_progress(
@@ -973,7 +1040,7 @@ pub fn run_external_import_with_callbacks(
     );
 
     let result = (|| -> Result<ExternalImportBatchSummary> {
-        let mut imported_docs = Vec::<(String, Vec<CanonicalExternalAttachmentRef>)>::new();
+        let mut imported_docs = Vec::<(String, String, Vec<CanonicalExternalAttachmentRef>)>::new();
         let total_docs = i64::try_from(parsed.documents.len()).unwrap_or(i64::MAX);
         for (index, doc) in parsed.documents.iter().enumerate() {
             if cancel_requested(app_dir, &batch_id, should_cancel) {
@@ -999,9 +1066,24 @@ pub fn run_external_import_with_callbacks(
             }
 
             match insert_external_document(&conn, key, &batch_id, doc) {
-                Ok(doc_id) => imported_docs.push((doc_id, doc.attachments.clone())),
-                Err(_) => {
+                Ok(doc_id) => imported_docs.push((
+                    doc_id,
+                    doc.source_rel_path.clone(),
+                    doc.attachments.clone(),
+                )),
+                Err(error) => {
                     failed_count += 1;
+                    let message =
+                        format!("failed to persist document {}: {error}", doc.source_rel_path);
+                    let _ = insert_external_import_diagnostic(
+                        &conn,
+                        &batch_id,
+                        "parsing",
+                        "error",
+                        "insert_external_document_failed",
+                        &message,
+                        Some(doc.source_rel_path.as_str()),
+                    );
                 }
             }
             emit_external_import_progress(
@@ -1017,9 +1099,9 @@ pub fn run_external_import_with_callbacks(
 
         let total_attachment_refs = imported_docs
             .iter()
-            .map(|(_, attachments)| attachments.len())
+            .map(|(_, _, attachments)| attachments.len())
             .sum::<usize>();
-        for (ordinal_base, (doc_id, attachments)) in imported_docs.iter().enumerate() {
+        for (ordinal_base, (doc_id, source_rel_path, attachments)) in imported_docs.iter().enumerate() {
             let _ = ordinal_base;
             for (attachment_index, attachment) in attachments.iter().enumerate() {
                 if cancel_requested(app_dir, &batch_id, should_cancel) {
@@ -1050,20 +1132,44 @@ pub fn run_external_import_with_callbacks(
                             copied_bytes = copied_bytes.saturating_add(size_bytes.max(0));
                         }
                         unique_attachment_shas.insert(sha256.clone());
-                        if link_external_attachment_to_document(
+                        if let Err(error) = link_external_attachment_to_document(
                             &conn,
                             doc_id,
                             &sha256,
                             &attachment.attachment_name,
                             i64::try_from(attachment_index).unwrap_or(i64::MAX),
-                        )
-                        .is_err()
-                        {
+                        ) {
                             failed_count += 1;
+                            let message = format!(
+                                "failed to link attachment {}: {error}",
+                                attachment.source_path.display()
+                            );
+                            let _ = insert_external_import_diagnostic(
+                                &conn,
+                                &batch_id,
+                                "copying_attachments",
+                                "error",
+                                "link_external_attachment_failed",
+                                &message,
+                                Some(source_rel_path.as_str()),
+                            );
                         }
                     }
-                    Err(_) => {
+                    Err(error) => {
                         failed_count += 1;
+                        let message = format!(
+                            "failed to copy attachment {}: {error}",
+                            attachment.source_path.display()
+                        );
+                        let _ = insert_external_import_diagnostic(
+                            &conn,
+                            &batch_id,
+                            "copying_attachments",
+                            "error",
+                            "copy_external_attachment_failed",
+                            &message,
+                            Some(source_rel_path.as_str()),
+                        );
                     }
                 }
                 let done = conn
@@ -1140,8 +1246,18 @@ pub fn run_external_import_with_callbacks(
     match result {
         Ok(summary) => Ok(summary),
         Err(e) => {
+            let message = e.to_string();
+            let _ = insert_external_import_diagnostic(
+                &conn,
+                &batch_id,
+                "import",
+                "error",
+                "external_import_failed",
+                &message,
+                None,
+            );
             let stats_json = build_external_stats_json(0, 0, failed_count, copied_bytes);
-            let _ = update_external_import_batch(&conn, &batch_id, "failed", &stats_json, Some(&e.to_string()), Some(now_ms()));
+            let _ = update_external_import_batch(&conn, &batch_id, "failed", &stats_json, Some(&message), Some(now_ms()));
             let _ = delete_external_import_batch_internal(app_dir, &conn, &batch_id, false, Some("failed"));
             Err(e)
         }

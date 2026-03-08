@@ -46,6 +46,8 @@ typedef DbReleaseLocalEmbeddingModelIfIdleFn = Future<bool> Function({
   required int maxIdleMs,
 });
 
+typedef RustLibInitFn = Future<void> Function();
+
 typedef DbInsertAttachmentFn = Future<Attachment> Function({
   required String appDir,
   required List<int> key,
@@ -65,6 +67,7 @@ class NativeAppBackend
     DbInsertAttachmentFn? dbInsertAttachment,
     DbProcessPendingMessageEmbeddingsFn? dbProcessPendingMessageEmbeddings,
     DbReleaseLocalEmbeddingModelIfIdleFn? dbReleaseLocalEmbeddingModelIfIdle,
+    RustLibInitFn? rustLibInit,
   })  : _secureBlobStore = SecureBlobStore(storage: secureStorage),
         _appDirProvider = appDirProvider ?? _defaultAppDirProvider,
         _dbInsertMessage = dbInsertMessage ?? rust_core.dbInsertMessage,
@@ -75,7 +78,11 @@ class NativeAppBackend
                 rust_core.dbProcessPendingMessageEmbeddings,
         _dbReleaseLocalEmbeddingModelIfIdle =
             dbReleaseLocalEmbeddingModelIfIdle ??
-                rust_embedding_lifecycle.dbReleaseLocalEmbeddingModelIfIdle;
+                rust_embedding_lifecycle.dbReleaseLocalEmbeddingModelIfIdle,
+        _rustLibInit = rustLibInit ??
+            (() => RustLib.init(
+                  externalLibrary: resolveDesktopRustExternalLibrary(),
+                ));
 
   final SecureBlobStore _secureBlobStore;
   final AppDirProvider _appDirProvider;
@@ -84,6 +91,7 @@ class NativeAppBackend
   final DbProcessPendingMessageEmbeddingsFn _dbProcessPendingMessageEmbeddings;
   final DbReleaseLocalEmbeddingModelIfIdleFn
       _dbReleaseLocalEmbeddingModelIfIdle;
+  final RustLibInitFn _rustLibInit;
 
   String? _appDir;
 
@@ -118,10 +126,26 @@ class NativeAppBackend
 
   @override
   Future<void> init() async {
-    await RustLib.init(
-      externalLibrary: resolveDesktopRustExternalLibrary(),
-    );
+    await _rustLibInit();
     await _getAppDir();
+    await _recoverInterruptedExternalImportBatches();
+  }
+
+  Future<void> _recoverInterruptedExternalImportBatches() async {
+    final batches = await listExternalImportBatches();
+    for (final batch in batches) {
+      if (!_isInterruptedExternalImportStatus(batch.status)) {
+        continue;
+      }
+      await deleteExternalImportBatch(batchId: batch.batchId);
+    }
+  }
+
+  static bool _isInterruptedExternalImportStatus(String status) {
+    return switch (status.trim()) {
+      'in_progress' || 'cancelling' || 'rollback' => true,
+      _ => false,
+    };
   }
 
   @override
@@ -2286,6 +2310,17 @@ class NativeAppBackend
     final appDir = await _getAppDir();
     return rust_external_import.externalImportListBatches(
       appDir: appDir,
+    );
+  }
+
+  @override
+  Future<String> readExternalImportBatchReport({
+    required String batchId,
+  }) async {
+    final appDir = await _getAppDir();
+    return rust_external_import.externalImportBatchReportJson(
+      appDir: appDir,
+      batchId: batchId,
     );
   }
 

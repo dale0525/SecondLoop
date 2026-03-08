@@ -183,15 +183,25 @@ extension _ExternalImportPagePhaseBExtension on _ExternalImportPageState {
           ),
     );
 
+    final initialDone = state?.processedAttachmentCount ?? 0;
+    final initialTotal = state?.eligibleAttachmentCount ?? 0;
     _mutateState(() {
       _errorMessage = null;
       _phaseBRunning = true;
       _progressBatchId = batchId;
       _progressStage = 'indexing_phase_b';
       _progressStatus = 'in_progress';
-      _progressDone = state?.processedAttachmentCount ?? 0;
-      _progressTotal = state?.eligibleAttachmentCount ?? 0;
+      _progressDone = initialDone;
+      _progressTotal = initialTotal;
       _progressFailedCount = state?.failedAttachmentCount ?? 0;
+      _etaMs = null;
+      if (initialTotal > 0 && initialDone >= 0 && initialDone < initialTotal) {
+        _progressSampleAtMs = DateTime.now().millisecondsSinceEpoch;
+        _previousProgressDone = initialDone;
+      } else {
+        _progressSampleAtMs = null;
+        _previousProgressDone = null;
+      }
     });
 
     try {

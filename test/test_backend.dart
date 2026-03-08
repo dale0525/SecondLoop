@@ -74,6 +74,12 @@ class TestAppBackend extends AppBackend {
       List<Message>.from(_messagesByConversation[conversationId] ?? const []);
 
   @override
+  Future<String> readExternalImportBatchReport(
+      {required String batchId}) async {
+    throw UnimplementedError();
+  }
+
+  @override
   Future<Message?> getMessageById(Uint8List key, String messageId) async {
     for (final list in _messagesByConversation.values) {
       for (final msg in list) {
