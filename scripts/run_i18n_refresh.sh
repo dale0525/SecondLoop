@@ -60,30 +60,6 @@ resolve_dart_bin() {
   exit 1
 }
 
-resolve_flutter_bin() {
-  if [[ -x "${repo_root}/.fvm/flutter_sdk/bin/flutter" ]]; then
-    printf '%s\n' "${repo_root}/.fvm/flutter_sdk/bin/flutter"
-    return 0
-  fi
-
-  if is_windows_env && [[ -f "${repo_root}/.fvm/flutter_sdk/bin/flutter.bat" ]]; then
-    printf '%s\n' "${repo_root}/.fvm/flutter_sdk/bin/flutter.bat"
-    return 0
-  fi
-
-  if command -v flutter >/dev/null 2>&1; then
-    command -v flutter
-    return 0
-  fi
-
-  if is_windows_env && command -v flutter.bat >/dev/null 2>&1; then
-    command -v flutter.bat
-    return 0
-  fi
-
-  echo "run_i18n_refresh: Missing 'flutter'. Install Flutter (recommended: pixi run setup-flutter) or add Flutter to PATH." >&2
-  exit 1
-}
 
 run_windows_batch_tool() {
   local tool_name="$1"
@@ -123,17 +99,6 @@ run_dart() {
   env -u GIT_DIR -u GIT_WORK_TREE -u GIT_INDEX_FILE "${dart_bin}" "$@"
 }
 
-run_flutter() {
-  local flutter_bin
-  flutter_bin="$(resolve_flutter_bin)"
-
-  if [[ "${flutter_bin}" == *.bat || "${flutter_bin}" == *.cmd ]]; then
-    run_windows_batch_tool flutter "${flutter_bin}" "$@"
-    return $?
-  fi
-
-  env -u GIT_DIR -u GIT_WORK_TREE -u GIT_INDEX_FILE "${flutter_bin}" "$@"
-}
 
 run_dart run slang:normalize
 run_dart run slang
