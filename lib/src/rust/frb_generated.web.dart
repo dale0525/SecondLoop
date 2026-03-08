@@ -16,6 +16,7 @@ import 'api/desktop_media.dart';
 import 'api/detached_ask.dart';
 import 'api/embedding_lifecycle.dart';
 import 'api/external_import.dart';
+import 'api/knowledge.dart';
 import 'api/media_annotation.dart';
 import 'api/oplog_maintenance.dart';
 import 'api/simple.dart';
@@ -27,6 +28,7 @@ import 'dart:convert';
 import 'db.dart';
 import 'desktop_media/ocr.dart';
 import 'frb_generated.dart';
+import 'knowledge/models.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated_web.dart';
 import 'semantic_parse.dart';
 
@@ -89,6 +91,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   PlatformInt64 dco_decode_box_autoadd_i_64(dynamic raw);
 
   @protected
+  KnowledgeUnitKind dco_decode_box_autoadd_knowledge_unit_kind(dynamic raw);
+
+  @protected
   MediaAnnotationConfig dco_decode_box_autoadd_media_annotation_config(
       dynamic raw);
 
@@ -106,6 +111,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   ContentEnrichmentConfig dco_decode_content_enrichment_config(dynamic raw);
+
+  @protected
+  ContentKnowledgeDocument dco_decode_content_knowledge_document(dynamic raw);
 
   @protected
   Conversation dco_decode_conversation(dynamic raw);
@@ -134,6 +142,30 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   PlatformInt64 dco_decode_i_64(dynamic raw);
 
   @protected
+  KnowledgeAnchorSet dco_decode_knowledge_anchor_set(dynamic raw);
+
+  @protected
+  KnowledgeIndexStatus dco_decode_knowledge_index_status(dynamic raw);
+
+  @protected
+  KnowledgeOriginType dco_decode_knowledge_origin_type(dynamic raw);
+
+  @protected
+  KnowledgeRole dco_decode_knowledge_role(dynamic raw);
+
+  @protected
+  KnowledgeSourceKind dco_decode_knowledge_source_kind(dynamic raw);
+
+  @protected
+  KnowledgeUnit dco_decode_knowledge_unit(dynamic raw);
+
+  @protected
+  KnowledgeUnitKind dco_decode_knowledge_unit_kind(dynamic raw);
+
+  @protected
+  KnowledgeVersionSet dco_decode_knowledge_version_set(dynamic raw);
+
+  @protected
   List<String> dco_decode_list_String(dynamic raw);
 
   @protected
@@ -150,6 +182,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<CloudMediaBackup> dco_decode_list_cloud_media_backup(dynamic raw);
 
   @protected
+  List<ContentKnowledgeDocument> dco_decode_list_content_knowledge_document(
+      dynamic raw);
+
+  @protected
   List<Conversation> dco_decode_list_conversation(dynamic raw);
 
   @protected
@@ -161,6 +197,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   List<ExternalImportBatchSummary>
       dco_decode_list_external_import_batch_summary(dynamic raw);
+
+  @protected
+  List<KnowledgeUnit> dco_decode_list_knowledge_unit(dynamic raw);
 
   @protected
   List<LlmProfile> dco_decode_list_llm_profile(dynamic raw);
@@ -241,6 +280,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   PlatformInt64? dco_decode_opt_box_autoadd_i_64(dynamic raw);
+
+  @protected
+  KnowledgeUnitKind? dco_decode_opt_box_autoadd_knowledge_unit_kind(
+      dynamic raw);
 
   @protected
   Message? dco_decode_opt_box_autoadd_message(dynamic raw);
@@ -344,6 +387,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   PlatformInt64 sse_decode_box_autoadd_i_64(SseDeserializer deserializer);
 
   @protected
+  KnowledgeUnitKind sse_decode_box_autoadd_knowledge_unit_kind(
+      SseDeserializer deserializer);
+
+  @protected
   MediaAnnotationConfig sse_decode_box_autoadd_media_annotation_config(
       SseDeserializer deserializer);
 
@@ -363,6 +410,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   ContentEnrichmentConfig sse_decode_content_enrichment_config(
+      SseDeserializer deserializer);
+
+  @protected
+  ContentKnowledgeDocument sse_decode_content_knowledge_document(
       SseDeserializer deserializer);
 
   @protected
@@ -392,6 +443,36 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   PlatformInt64 sse_decode_i_64(SseDeserializer deserializer);
 
   @protected
+  KnowledgeAnchorSet sse_decode_knowledge_anchor_set(
+      SseDeserializer deserializer);
+
+  @protected
+  KnowledgeIndexStatus sse_decode_knowledge_index_status(
+      SseDeserializer deserializer);
+
+  @protected
+  KnowledgeOriginType sse_decode_knowledge_origin_type(
+      SseDeserializer deserializer);
+
+  @protected
+  KnowledgeRole sse_decode_knowledge_role(SseDeserializer deserializer);
+
+  @protected
+  KnowledgeSourceKind sse_decode_knowledge_source_kind(
+      SseDeserializer deserializer);
+
+  @protected
+  KnowledgeUnit sse_decode_knowledge_unit(SseDeserializer deserializer);
+
+  @protected
+  KnowledgeUnitKind sse_decode_knowledge_unit_kind(
+      SseDeserializer deserializer);
+
+  @protected
+  KnowledgeVersionSet sse_decode_knowledge_version_set(
+      SseDeserializer deserializer);
+
+  @protected
   List<String> sse_decode_list_String(SseDeserializer deserializer);
 
   @protected
@@ -410,6 +491,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  List<ContentKnowledgeDocument> sse_decode_list_content_knowledge_document(
+      SseDeserializer deserializer);
+
+  @protected
   List<Conversation> sse_decode_list_conversation(SseDeserializer deserializer);
 
   @protected
@@ -423,6 +508,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<ExternalImportBatchSummary>
       sse_decode_list_external_import_batch_summary(
           SseDeserializer deserializer);
+
+  @protected
+  List<KnowledgeUnit> sse_decode_list_knowledge_unit(
+      SseDeserializer deserializer);
 
   @protected
   List<LlmProfile> sse_decode_list_llm_profile(SseDeserializer deserializer);
@@ -515,6 +604,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   PlatformInt64? sse_decode_opt_box_autoadd_i_64(SseDeserializer deserializer);
+
+  @protected
+  KnowledgeUnitKind? sse_decode_opt_box_autoadd_knowledge_unit_kind(
+      SseDeserializer deserializer);
 
   @protected
   Message? sse_decode_opt_box_autoadd_message(SseDeserializer deserializer);
@@ -625,6 +718,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       PlatformInt64 self, SseSerializer serializer);
 
   @protected
+  void sse_encode_box_autoadd_knowledge_unit_kind(
+      KnowledgeUnitKind self, SseSerializer serializer);
+
+  @protected
   void sse_encode_box_autoadd_media_annotation_config(
       MediaAnnotationConfig self, SseSerializer serializer);
 
@@ -646,6 +743,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_content_enrichment_config(
       ContentEnrichmentConfig self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_content_knowledge_document(
+      ContentKnowledgeDocument self, SseSerializer serializer);
 
   @protected
   void sse_encode_conversation(Conversation self, SseSerializer serializer);
@@ -675,6 +776,36 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_i_64(PlatformInt64 self, SseSerializer serializer);
 
   @protected
+  void sse_encode_knowledge_anchor_set(
+      KnowledgeAnchorSet self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_knowledge_index_status(
+      KnowledgeIndexStatus self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_knowledge_origin_type(
+      KnowledgeOriginType self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_knowledge_role(KnowledgeRole self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_knowledge_source_kind(
+      KnowledgeSourceKind self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_knowledge_unit(KnowledgeUnit self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_knowledge_unit_kind(
+      KnowledgeUnitKind self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_knowledge_version_set(
+      KnowledgeVersionSet self, SseSerializer serializer);
+
+  @protected
   void sse_encode_list_String(List<String> self, SseSerializer serializer);
 
   @protected
@@ -694,6 +825,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       List<CloudMediaBackup> self, SseSerializer serializer);
 
   @protected
+  void sse_encode_list_content_knowledge_document(
+      List<ContentKnowledgeDocument> self, SseSerializer serializer);
+
+  @protected
   void sse_encode_list_conversation(
       List<Conversation> self, SseSerializer serializer);
 
@@ -707,6 +842,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_list_external_import_batch_summary(
       List<ExternalImportBatchSummary> self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_knowledge_unit(
+      List<KnowledgeUnit> self, SseSerializer serializer);
 
   @protected
   void sse_encode_list_llm_profile(
@@ -802,6 +941,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_opt_box_autoadd_i_64(
       PlatformInt64? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_knowledge_unit_kind(
+      KnowledgeUnitKind? self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_box_autoadd_message(

@@ -12,6 +12,7 @@ pub mod desktop_media;
 pub mod detached_ask;
 pub mod embedding_lifecycle;
 pub mod external_import;
+pub mod knowledge;
 pub mod media_annotation;
 pub mod oplog_maintenance;
 pub mod simple;

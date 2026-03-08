@@ -4,6 +4,10 @@ use serde::{Deserialize, Serialize};
 use std::sync::OnceLock;
 
 use super::{Embedder, DEFAULT_EMBED_DIM};
+use crate::knowledge::embedding_batch::{
+    average_piece_embeddings, batch_prepared_embedding_inputs, prepare_embedding_inputs,
+    EmbeddingBatchPolicy,
+};
 
 const HEADER_EMBEDDINGS_MODEL_ID: &str = "x-secondloop-embedding-model-id";
 
@@ -116,25 +120,8 @@ impl CloudGatewayEmbedder {
             let _ = self.dim.set(dim);
         }
     }
-}
 
-impl Embedder for CloudGatewayEmbedder {
-    fn model_name(&self) -> &str {
-        self.effective_model_id
-            .get()
-            .map(|v| v.as_str())
-            .unwrap_or(&self.requested_model_name)
-    }
-
-    fn dim(&self) -> usize {
-        self.dim.get().copied().unwrap_or(DEFAULT_EMBED_DIM)
-    }
-
-    fn embed(&self, texts: &[String]) -> Result<Vec<Vec<f32>>> {
-        if texts.is_empty() {
-            return Ok(Vec::new());
-        }
-
+    fn embed_batch(&self, texts: &[String]) -> Result<Vec<Vec<f32>>> {
         let url = cloud_gateway_embeddings_url(&self.gateway_base_url);
         let req = OpenAiEmbeddingsRequest {
             model: self.requested_model_name.clone(),
@@ -193,5 +180,40 @@ impl Embedder for CloudGatewayEmbedder {
             let _ = self.dim.set(parsed.dim);
         }
         Ok(parsed.embeddings)
+    }
+}
+
+impl Embedder for CloudGatewayEmbedder {
+    fn model_name(&self) -> &str {
+        self.effective_model_id
+            .get()
+            .map(|v| v.as_str())
+            .unwrap_or(&self.requested_model_name)
+    }
+
+    fn dim(&self) -> usize {
+        self.dim.get().copied().unwrap_or(DEFAULT_EMBED_DIM)
+    }
+
+    fn embed(&self, texts: &[String]) -> Result<Vec<Vec<f32>>> {
+        if texts.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let policy = EmbeddingBatchPolicy::default();
+        let prepared = prepare_embedding_inputs(texts, policy);
+        let batches = batch_prepared_embedding_inputs(&prepared, policy);
+        let mut grouped = vec![Vec::<Vec<f32>>::new(); texts.len()];
+        for batch in batches {
+            let batch_texts = batch
+                .iter()
+                .map(|value| value.text.clone())
+                .collect::<Vec<_>>();
+            let batch_embeddings = self.embed_batch(&batch_texts)?;
+            for (item, embedding) in batch.into_iter().zip(batch_embeddings.into_iter()) {
+                grouped[item.source_index].push(embedding);
+            }
+        }
+        Ok(average_piece_embeddings(grouped, texts.len()))
     }
 }

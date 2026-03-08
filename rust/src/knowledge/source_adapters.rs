@@ -1,0 +1,345 @@
+use anyhow::{anyhow, Result};
+use rusqlite::Connection;
+
+use crate::crypto::decrypt_bytes;
+use crate::db;
+use crate::knowledge::{
+    normalize_text_for_source, ContentKnowledgeDocument, KnowledgeAnchorSet, KnowledgeOriginType,
+    KnowledgeRole, KnowledgeSourceKind, KnowledgeVersionSet,
+};
+
+fn snippet(text: &str, limit: usize) -> Option<String> {
+    let trimmed = text.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+    let mut out = String::new();
+    for ch in trimmed.chars() {
+        if out.chars().count() >= limit {
+            break;
+        }
+        out.push(ch);
+    }
+    if out.len() < trimmed.len() {
+        out.push('…');
+    }
+    Some(out)
+}
+
+struct DocumentSeed {
+    document_id: String,
+    origin_type: KnowledgeOriginType,
+    source_kind: KnowledgeSourceKind,
+    role: KnowledgeRole,
+    created_at_ms: i64,
+    updated_at_ms: i64,
+    anchors: KnowledgeAnchorSet,
+    title: Option<String>,
+    raw_text: String,
+}
+
+fn push_document_if_text(out: &mut Vec<ContentKnowledgeDocument>, seed: DocumentSeed) {
+    let trimmed = seed.raw_text.trim();
+    if trimmed.is_empty() {
+        return;
+    }
+    let normalized_text = normalize_text_for_source(seed.source_kind, trimmed);
+    if normalized_text.trim().is_empty() {
+        return;
+    }
+    out.push(ContentKnowledgeDocument {
+        document_id: seed.document_id,
+        origin_type: seed.origin_type,
+        source_kind: seed.source_kind,
+        role: seed.role,
+        language: None,
+        quality_score: 1.0,
+        created_at_ms: seed.created_at_ms,
+        updated_at_ms: seed.updated_at_ms,
+        versions: KnowledgeVersionSet::current(),
+        anchors: seed.anchors,
+        title: seed.title,
+        summary: snippet(&normalized_text, 120),
+        raw_text: trimmed.to_string(),
+        normalized_text,
+    });
+}
+
+fn collect_message_documents(
+    conn: &Connection,
+    key: &[u8; 32],
+    out: &mut Vec<ContentKnowledgeDocument>,
+) -> Result<()> {
+    let mut stmt = conn.prepare(
+        r#"SELECT id, conversation_id, role, content, created_at, updated_at
+           FROM messages
+           WHERE COALESCE(is_deleted, 0) = 0
+             AND COALESCE(is_memory, 1) = 1
+           ORDER BY created_at ASC"#,
+    )?;
+    let mut rows = stmt.query([])?;
+    while let Some(row) = rows.next()? {
+        let message_id: String = row.get(0)?;
+        let conversation_id: String = row.get(1)?;
+        let role_value: String = row.get(2)?;
+        let content_blob: Vec<u8> = row.get(3)?;
+        let created_at_ms: i64 = row.get(4)?;
+        let updated_at_ms: i64 = row.get(5)?;
+        let content_bytes = decrypt_bytes(key, &content_blob, b"message.content")?;
+        let content = String::from_utf8(content_bytes)
+            .map_err(|_| anyhow!("message content is not valid utf-8"))?;
+        let title = if role_value.trim().is_empty() {
+            None
+        } else {
+            Some(role_value)
+        };
+        push_document_if_text(
+            out,
+            DocumentSeed {
+                document_id: format!("message:{message_id}"),
+                origin_type: KnowledgeOriginType::Message,
+                source_kind: KnowledgeSourceKind::RawText,
+                role: KnowledgeRole::Body,
+                created_at_ms,
+                updated_at_ms,
+                anchors: KnowledgeAnchorSet {
+                    message_id: Some(message_id),
+                    conversation_id: Some(conversation_id),
+                    ..KnowledgeAnchorSet::default()
+                },
+                title,
+                raw_text: content,
+            },
+        );
+    }
+    Ok(())
+}
+
+fn attachment_source_candidates(
+    payload: &serde_json::Value,
+) -> Vec<(KnowledgeSourceKind, KnowledgeRole, String)> {
+    let mut out = Vec::<(KnowledgeSourceKind, KnowledgeRole, String)>::new();
+    let push_text = |out: &mut Vec<(KnowledgeSourceKind, KnowledgeRole, String)>,
+                     kind: KnowledgeSourceKind,
+                     role: KnowledgeRole,
+                     value: Option<&str>| {
+        let Some(value) = value.map(str::trim).filter(|v| !v.is_empty()) else {
+            return;
+        };
+        if out
+            .iter()
+            .any(|(existing_kind, _, existing)| *existing_kind == kind && existing == value)
+        {
+            return;
+        }
+        out.push((kind, role, value.to_string()));
+    };
+
+    push_text(
+        &mut out,
+        KnowledgeSourceKind::ExtractedText,
+        KnowledgeRole::Evidence,
+        payload
+            .get("extracted_text_full")
+            .and_then(|v| v.as_str())
+            .or_else(|| {
+                payload
+                    .get("extracted_text_excerpt")
+                    .and_then(|v| v.as_str())
+            }),
+    );
+    push_text(
+        &mut out,
+        KnowledgeSourceKind::ReadableText,
+        KnowledgeRole::Body,
+        payload
+            .get("readable_text_full")
+            .and_then(|v| v.as_str())
+            .or_else(|| {
+                payload
+                    .get("readable_text_excerpt")
+                    .and_then(|v| v.as_str())
+            }),
+    );
+    push_text(
+        &mut out,
+        KnowledgeSourceKind::OcrText,
+        KnowledgeRole::Evidence,
+        payload
+            .get("ocr_text_full")
+            .and_then(|v| v.as_str())
+            .or_else(|| payload.get("ocr_text_excerpt").and_then(|v| v.as_str()))
+            .or_else(|| payload.get("ocr_text").and_then(|v| v.as_str())),
+    );
+    push_text(
+        &mut out,
+        KnowledgeSourceKind::Transcript,
+        KnowledgeRole::Evidence,
+        payload
+            .get("transcript_full")
+            .and_then(|v| v.as_str())
+            .or_else(|| payload.get("transcript_excerpt").and_then(|v| v.as_str())),
+    );
+    push_text(
+        &mut out,
+        KnowledgeSourceKind::ImageUnderstanding,
+        KnowledgeRole::Caption,
+        payload.get("caption_long").and_then(|v| v.as_str()),
+    );
+    out
+}
+
+fn collect_attachment_documents(
+    conn: &Connection,
+    key: &[u8; 32],
+    out: &mut Vec<ContentKnowledgeDocument>,
+) -> Result<()> {
+    let mut stmt = conn.prepare(
+        r#"SELECT sha256, created_at
+           FROM attachments
+           ORDER BY created_at ASC, sha256 ASC"#,
+    )?;
+    let mut rows = stmt.query([])?;
+    while let Some(row) = rows.next()? {
+        let attachment_sha256: String = row.get(0)?;
+        let created_at_ms: i64 = row.get(1)?;
+        let updated_at_ms = created_at_ms;
+        let metadata = db::read_attachment_metadata(conn, key, &attachment_sha256)?;
+        let source_filename = metadata.as_ref().and_then(|value| {
+            value
+                .title
+                .clone()
+                .or_else(|| value.filenames.first().cloned())
+        });
+        let anchors = KnowledgeAnchorSet {
+            attachment_sha256: Some(attachment_sha256.clone()),
+            source_filename: source_filename.clone(),
+            ..KnowledgeAnchorSet::default()
+        };
+
+        if let Some(metadata) = metadata {
+            let mut metadata_lines = Vec::<String>::new();
+            if let Some(title) = metadata.title.filter(|value| !value.trim().is_empty()) {
+                metadata_lines.push(format!("title: {title}"));
+            }
+            if !metadata.filenames.is_empty() {
+                metadata_lines.push(format!("filenames: {}", metadata.filenames.join(", ")));
+            }
+            if !metadata_lines.is_empty() {
+                push_document_if_text(
+                    out,
+                    DocumentSeed {
+                        document_id: format!("attachment:{attachment_sha256}:metadata"),
+                        origin_type: KnowledgeOriginType::Attachment,
+                        source_kind: KnowledgeSourceKind::Metadata,
+                        role: KnowledgeRole::Metadata,
+                        created_at_ms,
+                        updated_at_ms,
+                        anchors: anchors.clone(),
+                        title: source_filename.clone(),
+                        raw_text: metadata_lines.join("\n"),
+                    },
+                );
+            }
+        }
+
+        let payload_json =
+            db::read_attachment_annotation_payload_json(conn, key, &attachment_sha256)?;
+        let Some(payload_json) = payload_json else {
+            continue;
+        };
+        let payload: serde_json::Value = serde_json::from_str(&payload_json)
+            .map_err(|error| anyhow!("invalid attachment annotation payload json: {error}"))?;
+        for (source_kind, role, text) in attachment_source_candidates(&payload) {
+            push_document_if_text(
+                out,
+                DocumentSeed {
+                    document_id: format!("attachment:{attachment_sha256}:{source_kind:?}")
+                        .to_ascii_lowercase(),
+                    origin_type: KnowledgeOriginType::Attachment,
+                    source_kind,
+                    role,
+                    created_at_ms,
+                    updated_at_ms,
+                    anchors: anchors.clone(),
+                    title: source_filename.clone(),
+                    raw_text: text,
+                },
+            );
+        }
+    }
+    Ok(())
+}
+
+fn decrypt_external_text(key: &[u8; 32], aad: Vec<u8>, blob: &[u8]) -> Result<String> {
+    let bytes = decrypt_bytes(key, blob, &aad)?;
+    String::from_utf8(bytes).map_err(|_| anyhow!("external document text is not valid utf-8"))
+}
+
+fn collect_external_documents(
+    conn: &Connection,
+    key: &[u8; 32],
+    out: &mut Vec<ContentKnowledgeDocument>,
+) -> Result<()> {
+    let app_dir = crate::db::app_dir_from_conn(conn)?;
+    let external_conn = db::open_external_readonly_db(&app_dir)?;
+    let mut stmt = external_conn.prepare(
+        r#"SELECT doc_id, source_rel_path, title, body_markdown, created_at_ms, updated_at_ms
+           FROM external_documents
+           WHERE COALESCE(is_deleted, 0) = 0
+           ORDER BY updated_at_ms DESC, doc_id ASC"#,
+    )?;
+    let mut rows = stmt.query([])?;
+    while let Some(row) = rows.next()? {
+        let doc_id: String = row.get(0)?;
+        let source_rel_path: Option<String> = row.get(1)?;
+        let title_blob: Vec<u8> = row.get(2)?;
+        let body_blob: Vec<u8> = row.get(3)?;
+        let created_at_ms: i64 = row.get(4)?;
+        let updated_at_ms: i64 = row.get(5)?;
+        let title = decrypt_external_text(
+            key,
+            format!("external_document.title:{doc_id}").into_bytes(),
+            &title_blob,
+        )?;
+        let body = decrypt_external_text(
+            key,
+            format!("external_document.body:{doc_id}").into_bytes(),
+            &body_blob,
+        )?;
+        push_document_if_text(
+            out,
+            DocumentSeed {
+                document_id: format!("external:{doc_id}"),
+                origin_type: KnowledgeOriginType::ImportedExternal,
+                source_kind: KnowledgeSourceKind::ReadableText,
+                role: KnowledgeRole::Body,
+                created_at_ms,
+                updated_at_ms,
+                anchors: KnowledgeAnchorSet {
+                    source_filename: source_rel_path,
+                    ..KnowledgeAnchorSet::default()
+                },
+                title: snippet(&title, 80),
+                raw_text: body,
+            },
+        );
+    }
+    Ok(())
+}
+
+pub fn collect_source_knowledge_documents(
+    conn: &Connection,
+    key: &[u8; 32],
+) -> Result<Vec<ContentKnowledgeDocument>> {
+    let mut documents = Vec::<ContentKnowledgeDocument>::new();
+    collect_message_documents(conn, key, &mut documents)?;
+    collect_attachment_documents(conn, key, &mut documents)?;
+    collect_external_documents(conn, key, &mut documents)?;
+    documents.sort_by(|left, right| {
+        left.created_at_ms
+            .cmp(&right.created_at_ms)
+            .then_with(|| left.document_id.cmp(&right.document_id))
+    });
+    Ok(documents)
+}

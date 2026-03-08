@@ -7,6 +7,7 @@ pub mod desktop_media;
 pub mod embedding;
 mod frb_generated;
 pub mod geo;
+pub mod knowledge;
 pub mod llm;
 pub mod local_model_lifecycle;
 pub mod media_annotation;

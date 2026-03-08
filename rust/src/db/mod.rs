@@ -29,6 +29,7 @@ include!("parts/23_external_readonly_db.rs");
 include!("parts/24_external_readonly_import.rs");
 include!("parts/25_external_readonly_search.rs");
 include!("parts/26_external_readonly_phase_b.rs");
+include!("parts/27_knowledge_index.rs");
 
 #[cfg(test)]
 mod semantic_parse_jobs_tests;
@@ -56,3 +57,9 @@ mod external_import_tests;
 
 #[cfg(test)]
 mod external_import_phase_b_tests;
+
+#[cfg(test)]
+mod knowledge_index_tests;
+
+#[cfg(test)]
+mod knowledge_compat_tests;
