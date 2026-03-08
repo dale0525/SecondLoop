@@ -299,13 +299,11 @@ def main() -> int:
     )
     parser.add_argument(
         "--source",
-        default="lib/i18n/common_en.i18n.json",
-        help="Source i18n json (English).",
+        help="Source i18n json (English) for single-file mode.",
     )
     parser.add_argument(
         "--target",
-        default="lib/i18n/common_zh_CN.i18n.json",
-        help="Target i18n json (zh-CN).",
+        help="Target i18n json (zh-CN) for single-file mode.",
     )
     parser.add_argument(
         "--source-locale",
@@ -329,32 +327,39 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    if args.input_directory:
-        pairs = discover_translation_pairs(
-            Path(args.input_directory),
-            source_locale=args.source_locale,
-            target_locale=args.target_locale,
+    single_file_mode = args.source is not None or args.target is not None
+    if args.input_directory and single_file_mode:
+        parser.error("--input-directory cannot be combined with --source/--target")
+
+    if single_file_mode:
+        if args.source is None or args.target is None:
+            parser.error("--source and --target must be provided together")
+        return translate_pair(
+            Path(args.source),
+            Path(args.target),
+            force=args.force,
+            dry_run=args.dry_run,
         )
-        if not pairs:
-            print(f"No translation pairs found under {args.input_directory}.")
-            return 0
 
-        exit_code = 0
-        for source, target in pairs:
-            exit_code |= translate_pair(
-                source,
-                target,
-                force=args.force,
-                dry_run=args.dry_run,
-            )
-        return exit_code
-
-    return translate_pair(
-        Path(args.source),
-        Path(args.target),
-        force=args.force,
-        dry_run=args.dry_run,
+    input_directory = args.input_directory or "lib/i18n"
+    pairs = discover_translation_pairs(
+        Path(input_directory),
+        source_locale=args.source_locale,
+        target_locale=args.target_locale,
     )
+    if not pairs:
+        print(f"No translation pairs found under {input_directory}.")
+        return 0
+
+    exit_code = 0
+    for source, target in pairs:
+        exit_code |= translate_pair(
+            source,
+            target,
+            force=args.force,
+            dry_run=args.dry_run,
+        )
+    return exit_code
 
 
 if __name__ == "__main__":

@@ -60,6 +60,12 @@ class PreCommitHookTests(unittest.TestCase):
         self.assertIn('if [[ ${run_i18n_refresh_needed} -ne 0 ]]; then', script)
         self.assertIn('run_i18n_analyze', script)
 
+    def test_pre_commit_hook_warns_when_i18n_refresh_stages_additional_locale_files(self) -> None:
+        script = PRE_COMMIT_HOOK.read_text(encoding="utf-8")
+
+        self.assertIn('git diff --name-only -- lib/i18n', script)
+        self.assertIn('pre-commit: auto-staged i18n refresh changes:', script)
+
     def test_pre_commit_hook_quotes_pixi_cargo_fmt_suggestion(self) -> None:
         script = PRE_COMMIT_HOOK.read_text(encoding="utf-8")
 

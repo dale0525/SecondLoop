@@ -256,6 +256,36 @@ is_i18n_source_file() {
   esac
 }
 
+was_originally_staged_file() {
+  local path="$1"
+  local staged_file
+  for staged_file in "${staged_files[@]}"; do
+    if [[ "${staged_file}" == "${path}" ]]; then
+      return 0
+    fi
+  done
+  return 1
+}
+
+warn_auto_staged_i18n_refresh_changes() {
+  local file
+  local auto_staged_i18n_files=()
+
+  while IFS= read -r file; do
+    [[ -n "${file}" ]] || continue
+    is_i18n_source_file "${file}" || continue
+    was_originally_staged_file "${file}" && continue
+    auto_staged_i18n_files+=("${file}")
+  done < <(git diff --name-only -- lib/i18n)
+
+  if [[ ${#auto_staged_i18n_files[@]} -eq 0 ]]; then
+    return 0
+  fi
+
+  echo "pre-commit: auto-staged i18n refresh changes:" >&2
+  printf '  %s\n' "${auto_staged_i18n_files[@]}" >&2
+}
+
 run_i18n_refresh() {
   if ! bash scripts/run_i18n_refresh.sh; then
     echo "" >&2
@@ -604,6 +634,7 @@ fi
 
 if [[ ${run_i18n_refresh_needed} -ne 0 ]]; then
   run_i18n_refresh
+  warn_auto_staged_i18n_refresh_changes
   git add -- lib/i18n
 fi
 
