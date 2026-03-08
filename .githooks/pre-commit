@@ -248,6 +248,32 @@ ensure_windows_short_build_paths() {
   done
 }
 
+is_i18n_source_file() {
+  local path="$1"
+  case "${path}" in
+    slang.yaml | lib/i18n/*.i18n.json) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+run_i18n_refresh() {
+  if ! bash scripts/run_i18n_refresh.sh; then
+    echo "" >&2
+    echo "pre-commit: i18n refresh failed." >&2
+    echo "Fix locally with: pixi run i18n-refresh" >&2
+    exit 1
+  fi
+}
+
+run_i18n_analyze() {
+  if ! bash scripts/run_i18n_analyze.sh; then
+    echo "" >&2
+    echo "pre-commit: i18n analyze failed." >&2
+    echo "Fix locally with: pixi run i18n-analyze" >&2
+    exit 1
+  fi
+}
+
 check_mode=0
 scope_flutter=0
 scope_rust=0
@@ -328,6 +354,9 @@ if (( check_mode )); then
   fi
 
   if (( scope_flutter )); then
+    run_i18n_refresh
+    run_i18n_analyze
+
     if ! bash scripts/check_no_python_runtime.sh; then
       echo "" >&2
       echo "pre-commit: python runtime guard failed." >&2
@@ -348,7 +377,7 @@ if (( check_mode )); then
     if ! env -u GIT_DIR -u GIT_WORK_TREE -u GIT_INDEX_FILE "${flutter_bin}" analyze; then
       echo "" >&2
       echo "pre-commit: flutter analyze failed." >&2
-      echo "Fix locally with: pixi run analyze" >&2
+      echo "Fix locally with: pixi run flutter analyze" >&2
       exit 1
     fi
 
@@ -356,7 +385,7 @@ if (( check_mode )); then
       if ! env -u GIT_DIR -u GIT_WORK_TREE -u GIT_INDEX_FILE "${flutter_bin}" test; then
         echo "" >&2
         echo "pre-commit: flutter test failed." >&2
-        echo "Fix locally with: pixi run test" >&2
+        echo "Fix locally with: pixi run flutter test" >&2
         exit 1
       fi
     fi
@@ -366,7 +395,7 @@ if (( check_mode )); then
     if ! "${cargo_bin}" fmt --manifest-path rust/Cargo.toml --all -- --check; then
       echo "" >&2
       echo "pre-commit: rustfmt failed." >&2
-      echo "Fix locally with: pixi run rust-fmt-fix" >&2
+      echo "Fix locally with: pixi run cargo fmt "--manifest-path rust/Cargo.toml --all"" >&2
       exit 1
     fi
 
@@ -402,6 +431,7 @@ fi
 dart_files=()
 run_rust_fmt=0
 run_flutter_checks=0
+run_i18n_refresh_needed=0
 for file in "${staged_files[@]}"; do
   if [[ "${file}" == *.dart ]]; then
     dart_files+=("${file}")
@@ -415,17 +445,22 @@ for file in "${staged_files[@]}"; do
       ;;
   esac
 
+  if is_i18n_source_file "${file}"; then
+    run_flutter_checks=1
+    run_i18n_refresh_needed=1
+  fi
+
   case "${file}" in
     rust/*) run_rust_fmt=1 ;;
   esac
 done
 
-if [[ ${#dart_files[@]} -eq 0 && ${run_flutter_checks} -eq 0 && ${run_rust_fmt} -eq 0 ]]; then
+if [[ ${#dart_files[@]} -eq 0 && ${run_flutter_checks} -eq 0 && ${run_rust_fmt} -eq 0 && ${run_i18n_refresh_needed} -eq 0 ]]; then
   exit 0
 fi
 
 dart_bin=""
-if [[ ${#dart_files[@]} -ne 0 ]]; then
+if [[ ${#dart_files[@]} -ne 0 || ${run_flutter_checks} -ne 0 || ${run_i18n_refresh_needed} -ne 0 ]]; then
   if [[ -x "${repo_root}/.fvm/flutter_sdk/bin/dart" ]]; then
     dart_bin="${repo_root}/.fvm/flutter_sdk/bin/dart"
   elif command -v dart >/dev/null 2>&1; then
@@ -480,6 +515,11 @@ if ! git diff --quiet || [[ -n "$(git ls-files --others --exclude-standard)" ]];
   stashed=1
 fi
 
+if [[ ${run_i18n_refresh_needed} -ne 0 ]]; then
+  run_i18n_refresh
+  git add -- lib/i18n
+fi
+
 if [[ ${#dart_files[@]} -ne 0 ]]; then
   "${dart_bin}" format "${dart_files[@]}"
   git add -- "${dart_files[@]}"
@@ -489,24 +529,26 @@ if [[ ${run_rust_fmt} -ne 0 ]]; then
   if ! "${cargo_bin}" fmt --manifest-path rust/Cargo.toml --all; then
     echo "" >&2
     echo "pre-commit: rustfmt failed." >&2
-    echo "Fix locally with: pixi run rust-fmt-fix" >&2
+    echo "Fix locally with: pixi run cargo fmt "--manifest-path rust/Cargo.toml --all"" >&2
     exit 1
   fi
   git add -u -- rust
 fi
 
 if [[ ${run_flutter_checks} -ne 0 ]]; then
+  run_i18n_analyze
+
   if ! env -u GIT_DIR -u GIT_WORK_TREE -u GIT_INDEX_FILE "${flutter_bin}" analyze; then
     echo "" >&2
     echo "pre-commit: flutter analyze failed." >&2
-    echo "Fix locally with: pixi run analyze" >&2
+    echo "Fix locally with: pixi run flutter analyze" >&2
     exit 1
   fi
 
   if ! env -u GIT_DIR -u GIT_WORK_TREE -u GIT_INDEX_FILE "${flutter_bin}" test; then
     echo "" >&2
     echo "pre-commit: flutter test failed." >&2
-    echo "Fix locally with: pixi run test" >&2
+    echo "Fix locally with: pixi run flutter test" >&2
     exit 1
   fi
 fi

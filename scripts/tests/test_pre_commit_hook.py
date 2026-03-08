@@ -6,6 +6,7 @@ import unittest
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 PRE_COMMIT_HOOK = REPO_ROOT / ".githooks/pre-commit"
+INSTALL_GIT_HOOKS_SCRIPT = REPO_ROOT / "scripts/install_git_hooks.sh"
 
 
 class PreCommitHookTests(unittest.TestCase):
@@ -35,6 +36,19 @@ class PreCommitHookTests(unittest.TestCase):
         self.assertIn("CARGOKIT_TOOL_TEMP_DIR", script)
         self.assertIn("CMAKE_GENERATOR", script)
         self.assertIn("Ninja", script)
+
+    def test_pre_commit_hook_refreshes_i18n_when_locale_sources_change(self) -> None:
+        script = PRE_COMMIT_HOOK.read_text(encoding="utf-8")
+
+        self.assertIn("scripts/run_i18n_refresh.sh", script)
+        self.assertIn("slang.yaml", script)
+        self.assertIn(".i18n.json", script)
+
+    def test_install_git_hooks_configures_post_checkout_and_post_merge(self) -> None:
+        script = INSTALL_GIT_HOOKS_SCRIPT.read_text(encoding="utf-8")
+
+        self.assertIn(".githooks/post-checkout", script)
+        self.assertIn(".githooks/post-merge", script)
 
 
 if __name__ == "__main__":

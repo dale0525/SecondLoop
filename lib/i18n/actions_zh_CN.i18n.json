@@ -1,0 +1,140 @@
+{
+  "capture": {
+    "title": "要把它变成提醒吗？",
+    "pickTime": "选择时间",
+    "reviewLater": "先放着，之后提醒我确认",
+    "justSave": "只保存为记录"
+  },
+  "reviewQueue": {
+    "title": "待确认",
+    "banner": "有 $count 条待确认事项",
+    "empty": "没有需要确认的事项",
+    "snoozedUntil": "已延期到 $when",
+    "inAppFallback": {
+      "message": "有 $count 条事项正在等待你确认",
+      "open": "打开待确认队列",
+      "dismiss": "稍后再说"
+    },
+    "actions": {
+      "schedule": "安排时间",
+      "snooze": "明早提醒",
+      "start": "开始",
+      "done": "完成",
+      "dismiss": "忽略"
+    }
+  },
+  "todoStatus": {
+    "inbox": "待确认",
+    "open": "未开始",
+    "inProgress": "进行中",
+    "done": "已完成",
+    "dismissed": "已删除"
+  },
+  "todoLink": {
+    "title": "要更新哪个待办？",
+    "subtitle": "默认标记为：$status",
+    "updated": "已更新「$title」为：$status"
+  },
+  "todoNoteLink": {
+    "action": "关联到待办",
+    "actionShort": "关联",
+    "title": "要关联到哪个待办？",
+    "subtitle": "将这条消息作为跟进记录添加",
+    "noMatches": "没有匹配的待办",
+    "suggest": "要把这条消息关联到待办吗？",
+    "linked": "已关联到「$title」"
+  },
+  "todoAuto": {
+    "created": "已创建「$title」"
+  },
+  "todoDetail": {
+    "title": "待办详情",
+    "emptyTimeline": "暂无跟进记录",
+    "noteHint": "补充跟进…",
+    "addNote": "添加",
+    "attach": "添加附件",
+    "pickAttachment": "选择附件",
+    "noAttachments": "暂无附件",
+    "attachmentNoteDefault": "添加了附件"
+  },
+  "todoDelete": {
+    "dialog": {
+      "title": "删除待办？",
+      "message": "这将永久删除该待办，并删除所有关联的聊天消息。",
+      "confirm": "删除"
+    }
+  },
+  "todoRecurrenceEditScope": {
+    "title": "重复任务如何应用修改",
+    "message": "这次更改要如何应用？",
+    "thisOnly": "仅本次",
+    "thisAndFuture": "本次及以后",
+    "wholeSeries": "整个系列"
+  },
+  "todoRecurrenceRule": {
+    "title": "编辑重复规则",
+    "edit": "重复",
+    "frequencyLabel": "频率",
+    "intervalLabel": "间隔",
+    "daily": "每天",
+    "weekly": "每周",
+    "monthly": "每月",
+    "yearly": "每年"
+  },
+  "history": {
+    "title": "回溯",
+    "empty": "该时间范围内没有记录",
+    "presets": {
+      "thisWeek": "本周",
+      "lastWeek": "上周",
+      "lastTwoWeeks": "上两周",
+      "custom": "自定义范围"
+    },
+    "actions": {
+      "copy": "复制",
+      "copied": "已复制"
+    },
+    "sections": {
+      "created": "新增",
+      "started": "开始",
+      "done": "完成",
+      "dismissed": "不再提醒"
+    }
+  },
+  "agenda": {
+    "title": "待办",
+    "summary": "今天 $due 条 · 逾期 $overdue 条",
+    "upcomingSummary": "接下来 $count 条",
+    "undeterminedSummary": "未排期 $count 条",
+    "viewAll": "查看全部",
+    "empty": "暂无待办"
+  },
+  "taskHub": {
+    "title": "任务中心",
+    "scheduledSection": "已排期",
+    "reviewSection": "待确认",
+    "unscheduledSection": "未排期",
+    "snackActionApplied": "$action「$title」",
+    "actions": {
+      "today": "今天",
+      "todayProcess": "今天处理",
+      "tonight": "延后到今晚",
+      "tomorrow": "明天",
+      "pauseTomorrow": "暂停到明天",
+      "thisWeek": "本周",
+      "later": "稍后",
+      "start": "开始",
+      "moveToInbox": "移回收件箱",
+      "done": "完成",
+      "reopen": "撤销完成",
+      "redo": "再做一次",
+      "more": "更多"
+    }
+  },
+  "calendar": {
+    "title": "添加到日历？",
+    "pickTime": "选择开始时间",
+    "noAutoTime": "未找到可自动解析的时间",
+    "pickCustom": "选择日期时间"
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "initFailed": "Init failed: $error",
+  "loadFailed": "Load failed: $error",
+  "saveFailed": "Save failed: $error",
+  "lockGateError": "LockGate error: $error",
+  "missingLoopHomeConversation": "Missing Loop conversation",
+  "attachmentNotFoundLocally": "Attachment is not available locally.",
+  "attachmentBytesUnavailable": "Attachment bytes are unavailable.",
+  "couldNotOpenExternally": "Could not open with the system app."
+}

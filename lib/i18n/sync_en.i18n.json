@@ -1,0 +1,139 @@
+{
+  "title": "Sync settings",
+  "progressDialog": {
+    "title": "Syncing…",
+    "preparing": "Preparing…",
+    "pulling": "Downloading changes…",
+    "pushing": "Uploading changes…",
+    "uploadingMedia": "Uploading files…",
+    "finalizing": "Finalizing…"
+  },
+  "sections": {
+    "automation": "Auto sync",
+    "backend": "Sync method",
+    "mediaPreview": "File downloads",
+    "mediaBackup": "File uploads",
+    "securityActions": "Manual sync & maintenance"
+  },
+  "autoSync": {
+    "title": "Auto sync",
+    "subtitle": "Keeps your devices in sync automatically.",
+    "wifiOnlyTitle": "Auto sync on Wi‑Fi only",
+    "wifiOnlySubtitle": "Save mobile data by syncing automatically only on Wi‑Fi"
+  },
+  "mediaPreview": {
+    "chatThumbnailsWifiOnlyTitle": "Download files on Wi‑Fi only",
+    "chatThumbnailsWifiOnlySubtitle": "If a file isn't on this device yet, download it only on Wi‑Fi"
+  },
+  "mediaBackup": {
+    "title": "File uploads",
+    "subtitle": "Uploads encrypted photos, videos, audio, and other files in the background for cross-device access",
+    "wifiOnlyTitle": "Upload on Wi‑Fi only",
+    "wifiOnlySubtitle": "Avoid using mobile data for large uploads",
+    "description": "New files are encrypted and uploaded in the background so they stay available across your devices. Missing files are downloaded on demand when you open them.",
+    "stats": "Queued $pending · Failed $failed · Uploaded $uploaded",
+    "lastUploaded": "Last upload: $at",
+    "lastError": "Last error: $error",
+    "lastErrorWithTime": "Last error ($at): $error",
+    "backfillButton": "Queue existing files",
+    "uploadNowButton": "Upload now",
+    "backfillEnqueued": "Queued $count existing files for upload",
+    "backfillFailed": "Couldn't queue existing files: $error",
+    "notEnabled": "Turn on File uploads first.",
+    "managedVaultOnly": "File uploads are available with WebDAV or SecondLoop Cloud sync.",
+    "wifiOnlyBlocked": "Wi‑Fi only is on. Connect to Wi‑Fi, or allow mobile data just this once.",
+    "uploaded": "Upload complete",
+    "nothingToUpload": "Nothing to upload",
+    "uploadFailed": "Upload failed: $error",
+    "cellularDialog": {
+      "title": "Use mobile data?",
+      "message": "Wi‑Fi only is on. Uploading over mobile data may use a lot of data.",
+      "confirm": "Use mobile data"
+    }
+  },
+  "localCache": {
+    "button": "Clear local storage",
+    "subtitle": "Deletes cached attachment files on this device (remote copies are kept and can be re-downloaded). Make sure sync/upload has completed.",
+    "cleared": "Cleared local cache",
+    "failed": "Clear failed: $error",
+    "dialog": {
+      "title": "Clear local storage?",
+      "message": "This deletes cached photos and files on this device to save space. Your remote sync storage keeps a copy; items will be re-downloaded on demand when viewed again.",
+      "confirm": "Clear"
+    }
+  },
+  "backendLabel": "Sync method",
+  "backendWebdav": "WebDAV (your server)",
+  "backendLocalDir": "Folder on this computer (desktop)",
+  "backendManagedVault": "SecondLoop Cloud",
+  "cloudManagedVault": {
+    "signInRequired": "Sign in to use SecondLoop Cloud sync.",
+    "paymentRequired": "Cloud sync is paused. Renew your subscription to continue syncing.",
+    "graceReadonlyUntil": "Cloud sync is read-only until $until.",
+    "storageQuotaExceeded": "Cloud storage is full. Uploads are paused.",
+    "storageQuotaExceededWithUsage": "Cloud storage is full ($used / $limit). Uploads are paused.",
+    "switchDialog": {
+      "title": "Switch to SecondLoop Cloud sync?",
+      "message": "Your subscription is active. Switch your sync method to SecondLoop Cloud? You can change this anytime.",
+      "cancel": "Not now",
+      "confirm": "Switch"
+    },
+    "setPassphraseDialog": {
+      "title": "Set recovery passphrase (Advanced)",
+      "confirm": "Save recovery passphrase"
+    }
+  },
+  "remoteRootRequired": "Folder name is required",
+  "baseUrlRequired": "Server address is required",
+  "localDirRequired": "Folder path is required",
+  "connectionOk": "Connection OK",
+  "connectionFailed": "Connection failed: $error",
+  "saveFailed": "Save failed: $error",
+  "missingSyncKey": "Enter your recovery passphrase and tap Save first.",
+  "recoveryHint": {
+    "title": "Recovery package detected",
+    "message": "A cloud recovery package is available. Enter your recovery passphrase and tap Recover now.",
+    "action": "Recover now",
+    "enterPassphraseFirst": "Enter your recovery passphrase first.",
+    "recoverFailed": "Recovery failed: $error",
+    "fetchFailed": "Unable to verify cloud recovery package: $error"
+  },
+  "pushedOps": "Uploaded $count changes",
+  "pulledOps": "Downloaded $count changes",
+  "noNewChanges": "No new changes",
+  "pushFailed": "Upload failed: $error",
+  "pullFailed": "Download failed: $error",
+  "fields": {
+    "baseUrl": {
+      "label": "Server address",
+      "hint": "https://example.com/dav"
+    },
+    "username": {
+      "label": "Username (optional)"
+    },
+    "password": {
+      "label": "Password (optional)"
+    },
+    "localDir": {
+      "label": "Folder path",
+      "hint": "/Users/me/SecondLoopVault",
+      "helper": "Best for desktop; mobile platforms may not support this path."
+    },
+    "managedVaultBaseUrl": {
+      "label": "Cloud server address (advanced)",
+      "hint": "https://vault.example.com"
+    },
+    "vaultId": {
+      "label": "Cloud account ID",
+      "hint": "Auto"
+    },
+    "remoteRoot": {
+      "label": "Folder name",
+      "hint": "SecondLoop"
+    },
+    "passphrase": {
+      "label": "Recovery passphrase (Advanced)",
+      "helper": "Use the same recovery passphrase on all devices. It’s never uploaded."
+    }
+  }
+}

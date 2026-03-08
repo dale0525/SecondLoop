@@ -1,0 +1,866 @@
+{
+  "title": "设置",
+  "sections": {
+    "appearance": "外观",
+    "security": "安全",
+    "cloud": "SecondLoop Cloud",
+    "aiAdvanced": "高级（自带 API Key）",
+    "storage": "同步与存储",
+    "actions": "行动",
+    "support": "帮助与支持",
+    "debug": "调试"
+  },
+  "actionsReview": {
+    "morningTime": {
+      "title": "早上提醒时间",
+      "subtitle": "未排期事项的默认提醒时间"
+    },
+    "dayEndTime": {
+      "title": "日终时间",
+      "subtitle": "到此时间仍未处理，将降低提醒频率"
+    },
+    "weeklyTime": {
+      "title": "每周提醒时间",
+      "subtitle": "每周提醒时间（周日）"
+    },
+    "inAppFallback": {
+      "title": "应用内提醒",
+      "subtitle": "在应用内显示待办事项通知"
+    }
+  },
+  "quickCaptureHotkey": {
+    "title": "快速记录快捷键",
+    "subtitle": "用于从任何地方打开快速记录",
+    "dialogTitle": "快速记录快捷键",
+    "dialogBody": "按下新的按键组合来录制快捷键。",
+    "saved": "快速记录快捷键已更新",
+    "actions": {
+      "resetDefault": "恢复默认"
+    },
+    "validation": {
+      "missingModifier": "至少包含一个修饰键（Ctrl/Alt/Shift 等）",
+      "modifierOnly": "快捷键必须包含一个非修饰键。",
+      "systemConflict": "与系统快捷键冲突：$name"
+    },
+    "conflicts": {
+      "macosSpotlight": "Spotlight",
+      "macosFinderSearch": "Finder 搜索",
+      "macosInputSourceSwitch": "切换输入法",
+      "macosEmojiPicker": "表情与符号",
+      "macosScreenshot": "截屏",
+      "macosAppSwitcher": "应用切换器",
+      "macosForceQuit": "强制退出",
+      "macosLockScreen": "锁定屏幕",
+      "windowsLock": "锁定屏幕",
+      "windowsShowDesktop": "显示桌面",
+      "windowsFileExplorer": "文件资源管理器",
+      "windowsRun": "运行",
+      "windowsSearch": "搜索",
+      "windowsSettings": "设置",
+      "windowsTaskView": "任务视图",
+      "windowsLanguageSwitch": "切换输入法",
+      "windowsAppSwitcher": "应用切换器"
+    }
+  },
+  "desktopBoot": {
+    "startWithSystem": {
+      "title": "随系统启动",
+      "subtitle": "登录系统后自动启动 SecondLoop"
+    },
+    "silentStartup": {
+      "title": "静默启动",
+      "subtitle": "自动启动时在后台运行，不弹出主窗口"
+    },
+    "keepRunningInBackground": {
+      "title": "关闭时常驻后台",
+      "subtitle": "关闭窗口时最小化到通知栏，而不是直接退出"
+    }
+  },
+  "desktopTray": {
+    "menu": {
+      "hide": "隐藏",
+      "quit": "退出"
+    },
+    "pro": {
+      "signedIn": "已登录",
+      "signedInAs": "已登录：$email",
+      "aiUsage": "AI 用量",
+      "storageUsage": "存储用量"
+    }
+  },
+  "language": {
+    "title": "语言",
+    "subtitle": "跟随系统或手动选择语言",
+    "dialogTitle": "语言",
+    "options": {
+      "system": "系统",
+      "systemWithValue": "系统（$value）",
+      "en": "English",
+      "zhCn": "简体中文"
+    }
+  },
+  "theme": {
+    "title": "主题",
+    "subtitle": "跟随系统，或选择明亮/深色",
+    "dialogTitle": "主题",
+    "styleTitle": "主题方案",
+    "styleSubtitle": "切换完整主题风格（颜色、背景、圆角）",
+    "styleDialogTitle": "主题方案",
+    "options": {
+      "system": "系统",
+      "light": "明亮",
+      "dark": "深色"
+    },
+    "styleOptions": {
+      "studio": "经典紫",
+      "forest": "森林绿",
+      "ocean": "海洋蓝",
+      "sunset": "落日橙",
+      "monochrome": "黑白调"
+    }
+  },
+  "autoLock": {
+    "title": "自动锁定",
+    "subtitle": "需要解锁才能访问应用"
+  },
+  "systemUnlock": {
+    "titleMobile": "使用生物识别",
+    "titleDesktop": "使用系统解锁",
+    "subtitleMobile": "使用生物识别解锁，而不是应用锁密码",
+    "subtitleDesktop": "使用 Touch ID / Windows Hello 解锁，而不是应用锁密码"
+  },
+  "lockNow": {
+    "title": "立即锁定",
+    "subtitle": "返回解锁页面"
+  },
+  "llmProfiles": {
+    "title": "API Key（AI 对话）",
+    "subtitle": "高级：使用你自己的服务商与 Key"
+  },
+  "embeddingProfiles": {
+    "title": "API Key（语义搜索）",
+    "subtitle": "高级：使用你自己的服务商与 Key"
+  },
+  "aiSelection": {
+    "title": "智能化",
+    "subtitle": "统一设置 AI 问答、智能检索（Embedding）、图片读字（OCR）和语音转文字。",
+    "askAi": {
+      "title": "AI 对话",
+      "description": "决定“AI 对话”使用哪种服务来源（Cloud 或 API 密钥）。",
+      "setupHint": "还没完成“AI 对话”设置，请先登录 Cloud 或添加 API 密钥。",
+      "preferenceUnavailableHint": "你选择的“AI 对话”来源暂时不可用，请先完成 Cloud 或 API 密钥设置。",
+      "status": {
+        "loading": "正在检查当前使用来源...",
+        "cloud": "当前使用：SecondLoop Cloud",
+        "byok": "当前使用：API 密钥（BYOK）",
+        "notConfigured": "当前使用：未完成设置"
+      },
+      "preference": {
+        "auto": {
+          "title": "自动",
+          "description": "自动选择可用服务：优先 Cloud，不可用时改用 API 密钥（BYOK）。"
+        },
+        "cloud": {
+          "title": "SecondLoop Cloud",
+          "description": "固定使用 Cloud。Cloud 不可用时，“AI 对话”会暂时不可用。"
+        },
+        "byok": {
+          "title": "API 密钥（BYOK）",
+          "description": "固定使用你自己的 API 密钥（BYOK）。没有可用配置时，“AI 对话”会暂时不可用。"
+        }
+      },
+      "actions": {
+        "openCloud": "打开 Cloud 账户",
+        "openByok": "打开 API 密钥"
+      }
+    },
+    "embeddings": {
+      "title": "智能检索（Embedding）",
+      "description": "给消息和待办生成检索索引，这是基础智能检索能力；开启下方“云端增强检索”后，结果通常更准确。",
+      "preferenceUnavailableHint": "你选择的智能检索来源暂时不可用，已自动切换到可用方案。",
+      "status": {
+        "loading": "正在检查当前使用来源...",
+        "cloud": "当前使用：SecondLoop Cloud",
+        "byok": "当前使用：API 密钥（Embedding/BYOK）",
+        "local": "当前使用：本机智能检索"
+      },
+      "preference": {
+        "auto": {
+          "title": "自动",
+          "description": "自动选择：优先 Cloud，其次 API 密钥（BYOK），最后本机能力。"
+        },
+        "cloud": {
+          "title": "SecondLoop Cloud",
+          "description": "优先使用 Cloud。Cloud 不可用时自动切换到 API 密钥或本机能力。"
+        },
+        "byok": {
+          "title": "API 密钥（BYOK）",
+          "description": "优先使用 API 密钥（BYOK）。失败时自动切换到本机能力。"
+        },
+        "local": {
+          "title": "本地能力",
+          "description": "尽量只在本机生成检索索引（Embedding）。"
+        }
+      },
+      "actions": {
+        "openEmbeddingProfiles": "打开向量 API 密钥",
+        "openCloudAccount": "打开 Cloud 账户"
+      }
+    },
+    "mediaUnderstanding": {
+      "title": "图片与音频理解",
+      "description": "决定图片读字（OCR）、图片说明和语音转文字由谁处理。",
+      "preferenceUnavailableHint": "你选择的图片/音频处理来源暂时不可用，已自动切换到可用方案。",
+      "status": {
+        "loading": "正在检查当前使用来源...",
+        "cloud": "当前使用：SecondLoop Cloud",
+        "byok": "当前使用：API 密钥（BYOK）",
+        "local": "当前使用：本机能力（系统自带）"
+      },
+      "preference": {
+        "auto": {
+          "title": "自动",
+          "description": "自动选择：优先 Cloud，其次 API 密钥（BYOK），最后本机能力。"
+        },
+        "cloud": {
+          "title": "SecondLoop Cloud",
+          "description": "优先使用 Cloud。Cloud 不可用时自动切换到 API 密钥或本机能力。"
+        },
+        "byok": {
+          "title": "API 密钥（BYOK）",
+          "description": "优先使用 API 密钥（BYOK）。失败时自动切换到本机能力。"
+        },
+        "local": {
+          "title": "本地能力",
+          "description": "优先使用本机能力（系统自带）。"
+        }
+      },
+      "actions": {
+        "openSettings": "打开媒体理解设置",
+        "openCloudAccount": "打开 Cloud 账户",
+        "openByok": "打开 API 密钥"
+      }
+    }
+  },
+  "semanticParseAutoActions": {
+    "title": "更智能的语义分析",
+    "subtitleEnabled": "已开启增强模式。在本地语义分析基础上，会使用 Cloud/BYOK 提升自动整理准确度。",
+    "subtitleDisabled": "已关闭增强模式。仍会使用本地语义分析。",
+    "subtitleUnset": "尚未设置，默认关闭增强模式（仍会使用本地语义分析）。",
+    "subtitleRequiresSetup": "需先登录 SecondLoop Pro 或配置 API 密钥（BYOK）后，才能开启增强模式。",
+    "dialogTitle": "开启更智能的语义分析？",
+    "dialogBody": "本地语义分析始终开启。开启增强模式后，SecondLoop 会在本地分析基础上，将消息文本发送给 AI 做更智能的语义理解（Semantic Parse）。\n\n文本会被保密处理（不写入日志/不存储）。你的 vault key 和 sync key 永远不会上传。\n\n这会消耗 Cloud 额度或你自己的服务商额度。",
+    "dialogActions": {
+      "enable": "开启"
+    }
+  },
+  "mediaAnnotation": {
+    "title": "媒体理解",
+    "subtitle": "可选：OCR、图片注释与音频转写，增强检索与存储体验",
+    "routingGuide": {
+      "title": "先选择 AI 来源",
+      "pro": "Pro 且已登录：默认使用 SecondLoop Cloud。",
+      "byok": "免费/BYOK：请先在「AI 对话」里添加 OpenAI-compatible 配置档，并设为当前使用。"
+    },
+    "documentOcr": {
+      "title": "文档 OCR",
+      "enabled": {
+        "title": "启用 OCR",
+        "subtitle": "当文档文本提取不足时，对扫描 PDF 和视频关键帧执行 OCR。"
+      },
+      "languageHints": {
+        "title": "语言提示",
+        "subtitle": "选择 OCR 识别优先语言。",
+        "labels": {
+          "devicePlusEn": "设备语言 + 英文",
+          "en": "英文",
+          "zhEn": "中文 + 英文",
+          "jaEn": "日文 + 英文",
+          "koEn": "韩文 + 英文",
+          "frEn": "法文 + 英文",
+          "deEn": "德文 + 英文",
+          "esEn": "西班牙文 + 英文"
+        }
+      },
+      "pdfAutoMaxPages": {
+        "title": "自动 OCR 页数上限",
+        "subtitle": "超过该页数的 PDF 会保持 needs_ocr，需在查看页手动执行。",
+        "manualOnly": "仅手动",
+        "pages": "$count 页"
+      },
+      "pdfDpi": {
+        "title": "OCR DPI",
+        "subtitle": "更高 DPI 可能提升识别率，但处理更慢。",
+        "value": "$dpi dpi"
+      },
+      "linuxModels": {
+        "title": "桌面 OCR 模型",
+        "subtitle": "为桌面端（Linux/macOS/Windows）下载本地 OCR 模型文件。",
+        "status": {
+          "notInstalled": "未安装",
+          "runtimeMissing": "模型已下载，但 OCR 运行环境未就绪",
+          "downloading": "下载中...",
+          "installed": "已安装：$count 个文件（$size）"
+        },
+        "actions": {
+          "download": "下载模型",
+          "redownload": "重新下载",
+          "delete": "删除模型"
+        },
+        "confirmDelete": {
+          "title": "删除已下载 OCR 模型？",
+          "body": "删除后，桌面端本地 OCR 可能不可用，直到再次下载。",
+          "confirm": "删除"
+        }
+      },
+      "engineMode": {
+        "title": "OCR 识别方案",
+        "labels": {
+          "platformNative": "本地 OCR",
+          "multimodalLlm": "BYOK 多模态"
+        },
+        "descriptions": {
+          "platformNative": "完全在设备端完成识别，不上传内容。",
+          "multimodalLlm": "使用你配置的 OpenAI-compatible API 识别文字。"
+        },
+        "subtitles": {
+          "proCloudEnabled": "Pro 订阅用户可使用 SecondLoop Cloud，云端 OCR 用量计入 Ask AI。",
+          "proCloudDisabled": "Pro 订阅用户可启用“使用 SecondLoop Cloud”来执行云端 OCR，并计入 Ask AI 用量。",
+          "free": "免费版可在本地 OCR 与 BYOK 多模态 OCR 之间选择。"
+        }
+      }
+    },
+    "audioTranscribe": {
+      "title": "音频转写",
+      "enabled": {
+        "title": "转写音频附件",
+        "subtitle": "添加音频后，SecondLoop 可自动转写并保存加密文本，用于播放与搜索。"
+      },
+      "engine": {
+        "title": "转写引擎",
+        "subtitle": "选择音频转写使用的引擎。",
+        "notAvailable": "不可用",
+        "labels": {
+          "whisper": "Whisper",
+          "multimodalLlm": "多模态 LLM",
+          "auto": "自动"
+        },
+        "descriptions": {
+          "whisper": "语音转写稳定默认方案（推荐）。",
+          "multimodalLlm": "可用时使用多模态聊天模型。",
+          "auto": "由 SecondLoop 自动选择最可用的引擎。",
+          "byokWhisper": "通过 BYOK Whisper 能力执行转写。",
+          "byokMultimodal": "通过 BYOK 多模态模型执行转写。"
+        }
+      },
+      "configureApi": {
+        "title": "配置转写 API",
+        "subtitle": "Pro 用户可用 SecondLoop Cloud；免费用户可用「AI 对话」中的 OpenAI-compatible API Key 配置档。",
+        "body": "音频转写可使用 SecondLoop Cloud（需要 Pro + 登录）或“AI 对话”里的 OpenAI-compatible API Key 配置档。",
+        "openCloud": "打开 Cloud 账号",
+        "openApiKeys": "打开 API Key"
+      },
+      "whisperModel": {
+        "downloaded": "已下载 $modelLabel 模型，可用于本地转写。",
+        "title": "Whisper 模型",
+        "subtitle": "用于 Whisper 转写路径。移动端默认 Tiny，桌面端默认 Base。",
+        "downloadingWithTotal": "正在下载 $modelLabel：$percent%（$received/$total）",
+        "downloading": "正在下载 $modelLabel：$received",
+        "labels": {
+          "tiny": "Tiny（最快）",
+          "base": "Base",
+          "small": "Small（更准）",
+          "medium": "Medium（高精度）",
+          "largeV3Turbo": "Large V3 Turbo（推荐高性能）",
+          "largeV3": "Large V3（最高精度）"
+        }
+      },
+      "apiProfile": {
+        "followActiveSubtitle": "默认跟随当前激活的 API profile，可改为已有 OpenAI-compatible API profile。"
+      },
+      "localRuntime": {
+        "title": "本地能力",
+        "descriptionMobile": "在移动端手动下载 Whisper 本地转写运行时。",
+        "descriptionDesktop": "管理本地 Whisper 转写运行时。",
+        "statusSummary": {
+          "downloading": "状态：下载中",
+          "checking": "状态：检查中",
+          "installed": "状态：已安装",
+          "missing": "状态：未安装"
+        },
+        "statusDetails": {
+          "checking": "正在检查本地 Whisper 运行时状态。",
+          "error": "运行时状态读取失败：$error",
+          "installed": "已安装本地运行时（当前模型：$modelLabel）。",
+          "missing": "未检测到本地运行时。点击下载后可使用本地转写。"
+        }
+      }
+    },
+    "connectivity": {
+      "wifiOnlyTitle": "仅Wi-Fi",
+      "wifiOnlySubtitle": "仅对 SecondLoop Cloud / BYOK 生效，本地能力不受此限制。"
+    },
+    "localCapability": {
+      "title": "本地能力引擎",
+      "descriptionMacos": "macOS 默认优先使用系统原生 STT；此处展示共享 runtime 状态（与 OCR 共用）。",
+      "descriptionWindows": "此处仅展示本地 OCR runtime 状态。Windows 音频转写走系统原生 STT，不依赖这里的 runtime。",
+      "descriptionDesktop": "本地转写与 OCR 共用同一套桌面 runtime，可在此修复或清理。",
+      "runtimeStatusTitle": "运行时状态",
+      "actions": {
+        "repairInstall": "修复安装",
+        "clearRuntime": "清除运行时",
+        "downloadLocalRuntime": "下载本地运行时"
+      },
+      "statusSummary": {
+        "repairing": "状态：修复中",
+        "unavailable": "状态：不可用",
+        "runtimeMissing": "状态：未安装",
+        "ocrRuntimeHealthy": "状态：OCR运行时健康",
+        "healthy": "状态：健康"
+      },
+      "statusDetails": {
+        "repairing": "正在修复运行时...",
+        "unavailable": "当前无法读取本地 runtime 状态。可先尝试“修复安装”。",
+        "runtimeMissing": "运行时缺失",
+        "runtimeIncomplete": "运行时文件不完整，请点击“修复安装”重新安装。",
+        "runtimeMissingReason": "运行时缺失（$reason）",
+        "ocrRuntimeHealthy": "OCR运行时健康（$count 文件, $size）",
+        "healthy": "运行时健康（$count 文件, $size）"
+      },
+      "confirmDelete": {
+        "title": "清除本地运行时",
+        "bodyWindows": "清除后会删除本地 OCR runtime 文件。Windows 音频转写仍走系统原生 STT。",
+        "bodyDesktop": "清除后会删除本地 OCR/转写共用的桌面 runtime 文件。",
+        "confirm": "确认清除"
+      }
+    },
+    "imageCaption": {
+      "title": "图片注释"
+    },
+    "providerSettings": {
+      "title": "图片注释服务来源"
+    },
+    "setupRequired": {
+      "title": "图片注释需要先配置",
+      "body": "要注释图片，SecondLoop 需要一个多模态模型。",
+      "reasons": {
+        "cloudUnavailable": "当前构建未启用 SecondLoop Cloud。",
+        "cloudRequiresPro": "SecondLoop Cloud 需要 Pro。",
+        "cloudSignIn": "请先登录 SecondLoop Cloud。",
+        "byokOpenAiCompatible": "请先添加 OpenAI-compatible 的 API Key 配置档。",
+        "followAskAi": "“AI 对话”需要使用 OpenAI-compatible 配置档，或在高级设置里选择其它多模态模型。"
+      }
+    },
+    "annotateEnabled": {
+      "title": "注释图片",
+      "subtitle": "添加图片后，SecondLoop 可能会将图片发送给 AI 生成加密注释。"
+    },
+    "searchEnabled": {
+      "title": "注释用于搜索",
+      "subtitle": "将图片注释加入搜索索引。"
+    },
+    "searchToggleConfirm": {
+      "title": "更新搜索索引？",
+      "bodyEnable": "开启后会重新生成搜索数据，让图片注释可被检索。",
+      "bodyDisable": "关闭后会重新生成搜索数据，从检索中移除图片注释。"
+    },
+    "advanced": {
+      "title": "高级设置"
+    },
+    "providerMode": {
+      "title": "多模态模型",
+      "subtitle": "为图片注释选择独立于“AI 对话”的服务商/模型。",
+      "labels": {
+        "followAskAi": "跟随 AI 对话",
+        "cloudGateway": "SecondLoop Cloud",
+        "byokProfile": "API Key（配置档）"
+      },
+      "descriptions": {
+        "followAskAi": "使用与“AI 对话”相同的设置（推荐）。",
+        "cloudGateway": "优先使用 SecondLoop Cloud（需要 Pro，且需可用）。",
+        "byokProfile": "使用指定的 API Key 配置档（仅支持 OpenAI-compatible）。"
+      }
+    },
+    "cloudModelName": {
+      "title": "Cloud 模型名",
+      "subtitle": "可选：覆盖云端多模态模型名。",
+      "hint": "例如 gpt-4o-mini",
+      "followAskAi": "跟随 AI 对话"
+    },
+    "byokProfile": {
+      "title": "API Key 配置档",
+      "subtitle": "选择图片注释使用哪个配置档。",
+      "unset": "未设置",
+      "missingBackend": "当前构建不可用。",
+      "noOpenAiCompatibleProfiles": "没有可用的 OpenAI-compatible 配置档，请先在“API Key（AI 对话）”里添加。"
+    },
+    "allowCellular": {
+      "title": "允许蜂窝网络",
+      "subtitle": "允许用蜂窝网络进行图片注释（默认仅 Wi‑Fi）。"
+    },
+    "allowCellularConfirm": {
+      "title": "允许使用蜂窝网络注释图片？",
+      "body": "图片注释可能会向你选择的 AI 服务商上传图片，并消耗一定流量。"
+    },
+    "urlFetch": {
+      "title": "链接内容理解",
+      "description": "先在本地抓取并清洗网页文本，再按你选择的来源（Cloud/BYOK/本地）做智能提炼。"
+    },
+    "legacyEntry": {
+      "title": "智能化（旧版入口）",
+      "subtitle": "旧版兼容入口：统一控制音频转写、文档 OCR 和图片注释。",
+      "useSecondLoopCloudTitle": "使用 SecondLoop Cloud",
+      "useSecondLoopCloudSubtitle": "开启后相关媒体数据会上传到 SecondLoop Cloud 处理。我们采用传输加密、严格访问控制与最小化保留策略。",
+      "wifiOnlyTitle": "仅 Wi-Fi",
+      "wifiOnlySubtitle": "仅在 Wi-Fi 下执行云端/BYOK 处理，本地能力不受影响。"
+    }
+  },
+  "cloudEmbeddings": {
+    "title": "云端增强检索（Embedding）",
+    "subtitleEnabled": "已开启。在智能检索基础上，额外使用 Cloud 生成索引，搜索和回忆通常更准确。",
+    "subtitleDisabled": "已关闭。你仍可使用智能检索，但仅使用本机索引。",
+    "subtitleUnset": "尚未设置，首次需要云端增强时会询问你是否开启。",
+    "subtitleRequiresPro": "需要 SecondLoop Pro。",
+    "dialogTitle": "开启云端增强检索？",
+    "dialogBody": "“智能检索”默认使用本机索引。开启后，SecondLoop 可以将少量文本（消息预览、待办标题、跟进）发送到 SecondLoop Cloud 生成更高质量的检索索引（Embedding），从而提高搜索和回忆准确度。\n\n文本会被保密处理（不写入日志/不存储）。你的 vault key 和 sync key 永远不会上传。\n\n这会消耗 Cloud 额度。",
+    "dialogActions": {
+      "enable": "开启"
+    }
+  },
+  "cloudAccount": {
+    "title": "Cloud 账号",
+    "subtitle": "登录 SecondLoop Cloud",
+    "signedInAs": "已登录：$email",
+    "benefits": {
+      "title": "创建 Cloud 账号以购买订阅",
+      "items": {
+        "purchase": {
+          "title": "购买 SecondLoop Pro 订阅",
+          "body": "需要 Cloud 账号才能开通订阅。"
+        }
+      }
+    },
+    "errors": {
+      "missingWebApiKey": "当前版本暂不支持 Cloud 登录。如果你是从源码运行，请先执行 `pixi run init-env`（或复制 `.env.example` → `.env.local`），填入 `SECONDLOOP_FIREBASE_WEB_API_KEY`，然后重启 App。"
+    },
+    "fields": {
+      "email": "邮箱",
+      "password": "密码"
+    },
+    "actions": {
+      "signIn": "登录",
+      "signUp": "创建账号",
+      "signOut": "退出登录"
+    },
+    "passwordReset": {
+      "forgotPassword": "忘记密码？",
+      "sent": "重置密码邮件已发送，请检查邮箱。",
+      "missingEmail": "请先输入邮箱地址。",
+      "notSupported": "当前环境暂不支持密码找回，请稍后再试。"
+    },
+    "emailVerification": {
+      "title": "邮箱验证",
+      "status": {
+        "unknown": "未知",
+        "verified": "已验证",
+        "notVerified": "未验证"
+      },
+      "labels": {
+        "status": "状态：",
+        "help": "验证邮箱后才能使用 SecondLoop Cloud 的 AI 对话。",
+        "verifiedHelp": "邮箱已验证，可继续订阅。",
+        "loadFailed": "加载失败：$error"
+      },
+      "actions": {
+        "resend": "重新发送验证邮件",
+        "resendCooldown": "${seconds} 秒后可重新发送"
+      },
+      "messages": {
+        "verificationEmailSent": "验证邮件已发送",
+        "verificationAlreadyDone": "邮箱已完成验证。",
+        "signUpVerificationPrompt": "账号已创建，请先完成邮箱验证再进行订阅。",
+        "verificationEmailSendFailed": "发送验证邮件失败：$error"
+      }
+    }
+  },
+  "cloudUsage": {
+    "title": "云端用量",
+    "subtitle": "当前账期用量",
+    "actions": {
+      "refresh": "刷新"
+    },
+    "labels": {
+      "gatewayNotConfigured": "当前版本暂不支持查看云端用量。",
+      "signInRequired": "登录后才能查看用量。",
+      "usage": "用量：",
+      "askAiUsage": "AI 对话：",
+      "embeddingsUsage": "智能搜索：",
+      "inputTokensUsed30d": "输入 Tokens（30 天）：",
+      "outputTokensUsed30d": "输出 Tokens（30 天）：",
+      "tokensUsed30d": "Tokens（30 天）：",
+      "requestsUsed30d": "请求数（30 天）：",
+      "resetAt": "重置时间：",
+      "paymentRequired": "需订阅后才能查看云端用量。",
+      "loadFailed": "加载失败：$error"
+    }
+  },
+  "vaultUsage": {
+    "title": "云端存储",
+    "subtitle": "你的同步数据占用的云端存储",
+    "actions": {
+      "refresh": "刷新"
+    },
+    "labels": {
+      "notConfigured": "当前版本暂不支持查看云端存储用量。",
+      "signInRequired": "登录后才能查看云端存储用量。",
+      "used": "已用：",
+      "limit": "上限：",
+      "attachments": "照片与文件：",
+      "ops": "同步记录：",
+      "loadFailed": "加载失败：$error"
+    }
+  },
+  "about": {
+    "title": "关于",
+    "subtitle": "项目主页、版本号与更新",
+    "productName": "SecondLoop",
+    "updatesTitle": "应用更新",
+    "openHomepage": "项目主页",
+    "unknownVersion": "未知",
+    "currentVersion": "当前版本：$version",
+    "latestVersion": "最新版本：$version",
+    "status": {
+      "idle": "点击检查更新；Linux 可自动更新并重启，Windows 请手动安装 MSI 或打开发布页安装。",
+      "checking": "正在检查更新…",
+      "upToDate": "当前已是最新版本。",
+      "availableSeamless": "发现新版本（$version）。可一键自动更新并重启。",
+      "availableStaged": "发现新版本（$version）。可后台准备更新，下次启动自动生效。",
+      "availableExternal": "发现新版本（$version）。请手动安装 MSI 或前往发布页安装。",
+      "failed": "检查更新失败：$error"
+    },
+    "actions": {
+      "check": "检查更新",
+      "checking": "检查中…",
+      "autoUpdate": "立即更新",
+      "stageUpdate": "后台准备更新",
+      "manualUpdate": "手动更新",
+      "updating": "更新中…"
+    },
+    "messages": {
+      "upToDate": "当前已是最新版本",
+      "updateAvailable": "发现新版本：$version",
+      "checkFailed": "检查更新失败：$error",
+      "installStarting": "正在准备自动更新，应用即将重启。",
+      "stageStarting": "正在后台准备更新，下次启动将自动生效。",
+      "stageReady": "更新已准备就绪，下次启动将自动更新。",
+      "installFailed": "自动更新失败：$error",
+      "stageFailed": "后台准备更新失败：$error",
+      "openHomepageFailed": "无法打开项目主页",
+      "openUpdateFailed": "无法打开更新页面"
+    }
+  },
+  "updateNotice": {
+    "stagedReady": "新版本 $version 已准备好，将在下次启动自动更新。",
+    "manualDownload": "发现新版本 $version，可下载 MSI 或打开发布页安装。"
+  },
+  "diagnostics": {
+    "title": "诊断信息",
+    "subtitle": "导出诊断信息以便支持排查",
+    "privacyNote": "该报告不会包含你的记录正文或 API Key。",
+    "loading": "正在加载诊断信息…",
+    "messages": {
+      "copied": "诊断信息已复制",
+      "copyFailed": "复制诊断信息失败：$error",
+      "shareFailed": "分享诊断信息失败：$error"
+    }
+  },
+  "byokUsage": {
+    "title": "API Key 用量",
+    "subtitle": "当前配置 • 请求数与 Token（如可获取）",
+    "loading": "加载中…",
+    "noData": "暂无数据",
+    "errors": {
+      "unavailable": "用量不可用：$error"
+    },
+    "sections": {
+      "today": "今日（$day）",
+      "last30d": "近 30 天（$start → $end）"
+    },
+    "labels": {
+      "requests": "$purpose 请求数",
+      "tokens": "$purpose tokens（输入/输出/总计）"
+    },
+    "purposes": {
+      "semanticParse": "语义解析",
+      "mediaAnnotation": "图片注释"
+    }
+  },
+  "subscription": {
+    "title": "订阅",
+    "subtitle": "管理 SecondLoop Pro",
+    "benefits": {
+      "title": "SecondLoop Pro 可解锁",
+      "items": {
+        "noSetup": {
+          "title": "免配置直接用 AI",
+          "body": "不用做任何配置，订阅后就能直接使用 AI 对话。"
+        },
+        "cloudSync": {
+          "title": "云存储 + 多设备同步",
+          "body": "手机/电脑自动同步，换设备也不丢。"
+        },
+        "mobileSearch": {
+          "title": "手机也能按意思搜索",
+          "body": "就算记不住原话，用相近的说法也能搜到。"
+        }
+      }
+    },
+    "status": {
+      "unknown": "未知",
+      "entitled": "已生效",
+      "notEntitled": "未生效"
+    },
+    "actions": {
+      "purchase": "订阅"
+    },
+    "labels": {
+      "status": "状态：",
+      "purchaseUnavailable": "订阅购买暂未开放。",
+      "loadFailed": "加载失败：$error"
+    }
+  },
+  "sync": {
+    "title": "同步",
+    "subtitle": "选择同步存储位置（SecondLoop Cloud / WebDAV 网盘 / 本地文件夹）"
+  },
+  "resetLocalDataThisDeviceOnly": {
+    "dialogTitle": "重置本地数据？",
+    "dialogBody": "这将删除本地消息，并清空「当前设备」已同步的远端数据（不影响其他设备）。不会删除你的应用锁密码或本地 AI/同步设置。你需要重新解锁。",
+    "failed": "重置失败：$error"
+  },
+  "resetLocalDataAllDevices": {
+    "dialogTitle": "重置本地数据？",
+    "dialogBody": "这将删除本地消息，并清空「所有设备」已同步的远端数据。不会删除你的应用锁密码或本地 AI/同步设置。你需要重新解锁。",
+    "failed": "重置失败：$error"
+  },
+  "debugResetLocalDataThisDeviceOnly": {
+    "title": "调试：重置本地数据（仅本设备）",
+    "subtitle": "删除本地消息 + 清空本设备远端数据（其他设备保留）"
+  },
+  "debugResetLocalDataAllDevices": {
+    "title": "调试：重置本地数据（所有设备）",
+    "subtitle": "删除本地消息 + 清空所有设备远端数据"
+  },
+  "debugSemanticSearch": {
+    "title": "调试：语义检索",
+    "subtitle": "搜索相似消息 + 重建向量索引"
+  },
+  "debugOplogMaintenance": {
+    "title": "执行 Oplog 维护",
+    "subtitle": "按当前同步配置手动触发一次本地 Oplog 裁剪",
+    "completed": "Oplog 维护完成：清理 $pruned 条（$before -> $after）",
+    "failed": "Oplog 维护失败：$error"
+  },
+  "externalImport": {
+    "chooseImportFolder": "选择导入文件夹",
+    "chooseZipExport": "选择 zip 导出包",
+    "importPreparingTryAgain": "导入尚在准备中，请稍候再取消",
+    "cancelImportTitle": "取消导入？",
+    "cancelImportBody": "当前导入会进入回滚并清理已写入的数据，完成后才会返回正常状态。",
+    "keepImporting": "继续导入",
+    "confirmCancel": "确认取消",
+    "deleteImportBatchTitle": "删除导入批次？",
+    "deleteImportBatchBody": "这会永久删除该批次的文档、索引和仅由该批次引用的附件。",
+    "importBatchDeleted": "已删除导入批次",
+    "title": "导入外部知识",
+    "introTitle": "只读导入你的 Obsidian、思源或 Markdown 导出",
+    "introBody": "导入后的内容仅参与检索，不会回写源应用。导入过程中会复制附件、构建 Phase A 索引，并支持取消后回滚清理。",
+    "sourceSectionTitle": "1. 选择导入源",
+    "chooseFolder": "选择文件夹",
+    "chooseZip": "选择 zip",
+    "rescan": "重新扫描",
+    "scanSummaryTitle": "2. 预扫描摘要",
+    "detectedType": "识别类型",
+    "sourceLabel": "来源标签",
+    "notes": "笔记数",
+    "attachments": "附件数",
+    "estimatedDiskUsage": "预计占用",
+    "compatibilityWarnings": "兼容性提示",
+    "startImport": "开始导入",
+    "latestImportCancelledAndCleaned": "最近一次导入：已取消并清理",
+    "latestImportCompleted": "最近一次导入：已完成",
+    "latestImport": "最近一次导入",
+    "status": "状态",
+    "failed": "失败数",
+    "copiedData": "复制数据",
+    "successCount": "成功数",
+    "copiedAttachments": "已复制附件",
+    "diskUsage": "磁盘占用",
+    "lastError": "最后错误",
+    "viewReport": "查看报告",
+    "deleteThisBatch": "删除这个批次",
+    "error": "错误",
+    "importedBatches": "已导入批次",
+    "noImportBatchesYet": "还没有导入批次。",
+    "batchId": "批次 ID",
+    "createdAt": "创建时间",
+    "updatedAt": "更新时间",
+    "completedAt": "完成时间",
+    "importingTitle": "正在导入外部知识",
+    "requestingCancel": "正在请求取消",
+    "cancelImport": "取消导入",
+    "cannotLeaveHint": "导入完成或回滚清理结束前，不能返回上一页。",
+    "stagePreparing": "准备中",
+    "stageScanning": "扫描中",
+    "stageParsing": "解析中",
+    "stageCopyingAttachments": "复制附件中",
+    "stageIndexingPhaseA": "建立 Phase A 索引中",
+    "stageVerifying": "校验中",
+    "stageRollback": "回滚清理中",
+    "stageCancelled": "已取消并清理",
+    "stageCompleted": "已完成",
+    "statusInProgress": "进行中",
+    "statusCancelling": "取消中",
+    "statusCancelled": "已取消",
+    "statusCompleted": "已完成",
+    "statusFailed": "失败",
+    "progress": "进度",
+    "processed": "已处理",
+    "elapsed": "总耗时",
+    "eta": "预计剩余",
+    "estimatingEta": "估算中…",
+    "phaseBTitle": "Phase B 增强",
+    "phaseBDescription": "提取附件文本并补充只读检索分块，提升后续召回效果。",
+    "phaseBStartLatest": "运行 Phase B",
+    "phaseBResumeLatest": "继续 Phase B",
+    "phaseBEstimateTitle": "运行 Phase B 增强？",
+    "phaseBEstimateBody": "Phase B 会读取已导入附件，提取额外文本，并追加只读检索分块。",
+    "phaseBEstimateRuntime": "预计耗时",
+    "phaseBEstimateRemaining": "剩余附件",
+    "phaseBSaveConsentHint": "确认后也会记住你的同意，后续本设备上的已完成导入可自动执行。",
+    "phaseBConfirmEstimate": "确认并执行",
+    "phaseBStatus": "Phase B 状态",
+    "phaseBEligibleAttachments": "可处理附件",
+    "phaseBProcessedAttachments": "已处理附件",
+    "phaseBRemainingAttachments": "剩余附件",
+    "phaseBEnrichedChunks": "新增分块",
+    "phaseBSuccessDocs": "成功文档",
+    "phaseBAttachmentRefs": "附件引用",
+    "phaseBElapsed": "Phase B 耗时",
+    "phaseBLastError": "Phase B 最后错误",
+    "reportTitle": "导入报告",
+    "reportDiagnostics": "诊断信息",
+    "reportNoDiagnostics": "暂无诊断记录。",
+    "reportCode": "代码",
+    "reportStage": "阶段",
+    "reportSeverity": "级别",
+    "reportSourcePath": "来源路径",
+    "reportCopied": "导入报告已复制",
+    "reportCopyFailed": "复制导入报告失败：$error",
+    "phaseBRunningTitle": "正在执行 Phase B 增强",
+    "phaseBCannotLeaveHint": "Phase B 增强完成前，请停留在当前页面。",
+    "stageIndexingPhaseB": "建立 Phase B 索引中",
+    "statusNotStarted": "未开始",
+    "statusNoWork": "无可处理内容"
+  }
+}

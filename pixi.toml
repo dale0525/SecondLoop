@@ -52,7 +52,7 @@ clean-unused-cache = "bash -lc 'set -euo pipefail; cleaned=0; while IFS= read -r
 # - ci: local minimal CI (fmt-check + flutter analyze/test + rust clippy/test)
 fmt = "dart pub global run fvm:main dart format lib test rust_builder integration_test test_driver && cargo fmt --manifest-path rust/Cargo.toml --all"
 fmt-check = "dart pub global run fvm:main dart format --output=none lib test rust_builder integration_test test_driver --set-exit-if-changed && cargo fmt --manifest-path rust/Cargo.toml --all -- --check"
-ci = { cmd = "dart pub global run fvm:main flutter analyze && dart pub global run fvm:main flutter test && cargo clippy --manifest-path rust/Cargo.toml --all-targets --all-features -- -D warnings && cargo test --manifest-path rust/Cargo.toml", depends-on = ["fmt-check"] }
+ci = { cmd = "bash scripts/run_i18n_refresh.sh && bash scripts/run_i18n_analyze.sh && dart pub global run fvm:main flutter analyze && dart pub global run fvm:main flutter test && cargo clippy --manifest-path rust/Cargo.toml --all-targets --all-features -- -D warnings && cargo test --manifest-path rust/Cargo.toml", depends-on = ["fmt-check"] }
 
 # Run/build workflows (auto-include setup-flutter + init-env).
 # Typical usage:
@@ -74,9 +74,12 @@ frb-generate = "env RUST_LOG=info PATH=\"$PWD/.fvm/flutter_sdk/bin:$HOME/.cargo/
 prepare-desktop-runtime-payload = "bash scripts/prepare_desktop_runtime_payload.sh --output-dir assets/ocr/desktop_runtime"
 prepare-desktop-runtime = "dart pub global run fvm:main dart run tools/prepare_desktop_runtime.dart"
 sync-desktop-runtime-to-appdir = "dart pub global run fvm:main dart run tools/sync_desktop_runtime_to_appdir.dart"
-i18n-gen = "dart pub global run fvm:main dart run slang && dart pub global run fvm:main dart format lib/i18n/strings.g.dart"
-i18n-translate = "python tools/i18n_translate.py"
-i18n-sync = { depends-on = ["i18n-translate", "i18n-gen"] }
+i18n-normalize = "dart pub global run fvm:main flutter pub run slang normalize"
+i18n-gen = "dart pub global run fvm:main flutter pub run slang && dart pub global run fvm:main dart format lib/i18n/strings.g.dart"
+i18n-analyze = "bash scripts/run_i18n_analyze.sh"
+i18n-refresh = "bash scripts/run_i18n_refresh.sh"
+i18n-translate = { cmd = "python tools/i18n_translate.py --input-directory lib/i18n {{ command_args }}", args = [{ arg = "command_args", default = "" }] }
+i18n-sync = { depends-on = ["i18n-translate", "i18n-refresh"] }
 icons-macos-round = "python tools/round_icon.py --in assets/icon/app_icon.png --out assets/icon/app_icon_macos.png"
 icons-macos-check = "python tools/check_icon_corners.py --path assets/icon/app_icon_macos.png"
 icons-update = { cmd = "dart pub global run fvm:main dart run icons_launcher:create", depends-on = ["icons-macos-round", "icons-macos-check"] }

@@ -1,0 +1,12 @@
+{
+  "masterPasswordRequired": "App lock password required",
+  "passwordsDoNotMatch": "Passwords do not match",
+  "setupTitle": "Set app lock password",
+  "unlockTitle": "Unlock",
+  "unlockReason": "Unlock SecondLoop",
+  "missingSavedSessionKey": "Missing saved session key. Unlock with app lock password once.",
+  "creating": "Creating…",
+  "unlocking": "Unlocking…",
+  "setupHint": "Create an app lock password to protect local data.",
+  "unlockWithPassword": "Unlock with app lock password"
+}

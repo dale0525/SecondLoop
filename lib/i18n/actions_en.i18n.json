@@ -1,0 +1,140 @@
+{
+  "capture": {
+    "title": "Turn this into a reminder?",
+    "pickTime": "Pick a time",
+    "reviewLater": "Remind me to confirm later",
+    "justSave": "Just save as note"
+  },
+  "reviewQueue": {
+    "title": "Needs confirmation",
+    "banner": "$count items need confirmation",
+    "empty": "No items to confirm",
+    "snoozedUntil": "Snoozed until $when",
+    "inAppFallback": {
+      "message": "$count items are waiting in your review queue",
+      "open": "Open review queue",
+      "dismiss": "Dismiss"
+    },
+    "actions": {
+      "schedule": "Schedule",
+      "snooze": "Tomorrow morning",
+      "start": "Start",
+      "done": "Done",
+      "dismiss": "Dismiss"
+    }
+  },
+  "todoStatus": {
+    "inbox": "Needs confirmation",
+    "open": "Not started",
+    "inProgress": "In progress",
+    "done": "Done",
+    "dismissed": "Deleted"
+  },
+  "todoLink": {
+    "title": "Update a task?",
+    "subtitle": "Mark as: $status",
+    "updated": "Updated \"$title\" → $status"
+  },
+  "todoNoteLink": {
+    "action": "Link to task",
+    "actionShort": "Link",
+    "title": "Link to which task?",
+    "subtitle": "Add this message as a follow-up note",
+    "noMatches": "No matching tasks",
+    "suggest": "Link this message to a task?",
+    "linked": "Linked to \"$title\""
+  },
+  "todoAuto": {
+    "created": "Created \"$title\""
+  },
+  "todoDetail": {
+    "title": "Task",
+    "emptyTimeline": "No updates yet",
+    "noteHint": "Add a note…",
+    "addNote": "Add",
+    "attach": "Attach",
+    "pickAttachment": "Choose an attachment",
+    "noAttachments": "No attachments yet",
+    "attachmentNoteDefault": "Added attachment"
+  },
+  "todoDelete": {
+    "dialog": {
+      "title": "Delete task?",
+      "message": "This will permanently delete this task and all linked chat messages.",
+      "confirm": "Delete"
+    }
+  },
+  "todoRecurrenceEditScope": {
+    "title": "Apply changes to recurring task",
+    "message": "How should this change be applied?",
+    "thisOnly": "This occurrence only",
+    "thisAndFuture": "This and future",
+    "wholeSeries": "Whole series"
+  },
+  "todoRecurrenceRule": {
+    "title": "Edit recurrence",
+    "edit": "Recurrence",
+    "frequencyLabel": "Frequency",
+    "intervalLabel": "Interval",
+    "daily": "Daily",
+    "weekly": "Weekly",
+    "monthly": "Monthly",
+    "yearly": "Yearly"
+  },
+  "history": {
+    "title": "History",
+    "empty": "No activity in this range",
+    "presets": {
+      "thisWeek": "This week",
+      "lastWeek": "Last week",
+      "lastTwoWeeks": "Last 2 weeks",
+      "custom": "Custom range"
+    },
+    "actions": {
+      "copy": "Copy",
+      "copied": "Copied"
+    },
+    "sections": {
+      "created": "Created",
+      "started": "Started",
+      "done": "Done",
+      "dismissed": "Dismissed"
+    }
+  },
+  "agenda": {
+    "title": "Tasks",
+    "summary": "Today $due • Overdue $overdue",
+    "upcomingSummary": "Upcoming $count",
+    "undeterminedSummary": "$count unscheduled",
+    "viewAll": "View all",
+    "empty": "No scheduled tasks"
+  },
+  "taskHub": {
+    "title": "Task hub",
+    "scheduledSection": "Scheduled",
+    "reviewSection": "Needs confirmation",
+    "unscheduledSection": "Unscheduled",
+    "snackActionApplied": "$action \"$title\"",
+    "actions": {
+      "today": "Today",
+      "todayProcess": "Handle today",
+      "tonight": "Tonight",
+      "tomorrow": "Tomorrow",
+      "pauseTomorrow": "Pause to tomorrow",
+      "thisWeek": "This week",
+      "later": "Later",
+      "start": "Start",
+      "moveToInbox": "Move to inbox",
+      "done": "Done",
+      "reopen": "Undo done",
+      "redo": "Do again",
+      "more": "More"
+    }
+  },
+  "calendar": {
+    "title": "Add to calendar?",
+    "pickTime": "Pick a start time",
+    "noAutoTime": "No suggested time found",
+    "pickCustom": "Pick date & time"
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "title": "语义检索（调试）",
+  "embeddingModelLoading": "向量模型：（加载中…）",
+  "embeddingModel": "向量模型：$model",
+  "switchedModelReindex": "已切换向量模型；待重新索引",
+  "modelAlreadyActive": "向量模型已处于激活状态",
+  "processedPending": "已处理 $count 条待处理向量",
+  "rebuilt": "已为 $count 条消息重建向量",
+  "runSearchToSeeResults": "运行一次搜索以查看结果",
+  "noResults": "没有结果",
+  "resultSubtitle": "distance=$distance • role=$role • convo=$conversationId"
+}

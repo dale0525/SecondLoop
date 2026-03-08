@@ -1,0 +1,12 @@
+{
+  "title": "Semantic Search (Debug)",
+  "embeddingModelLoading": "Embedding model: (loading...)",
+  "embeddingModel": "Embedding model: $model",
+  "switchedModelReindex": "Switched embedding model; re-index pending",
+  "modelAlreadyActive": "Embedding model already active",
+  "processedPending": "Processed $count pending embeddings",
+  "rebuilt": "Rebuilt embeddings for $count messages",
+  "runSearchToSeeResults": "Run a search to see results",
+  "noResults": "No results",
+  "resultSubtitle": "distance=$distance • role=$role • convo=$conversationId"
+}

@@ -1,6 +1,8 @@
 # Docs
 docs/
 
+lib/i18n/strings.g.dart
+
 # Agents
 .codex/
 

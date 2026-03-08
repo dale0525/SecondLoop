@@ -5,11 +5,18 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import sys
+from pathlib import Path
+import re
 import time
 import urllib.error
 import urllib.request
 from typing import Any
+
+
+SOURCE_FILE_SUFFIX = ".i18n.json"
+LOCALE_SEPARATOR_PATTERN = re.compile(
+    r"^(?P<namespace>.+?)(?:[_-](?P<locale>[A-Za-z]{2,3}(?:[_-][A-Za-z0-9]+)*))?$"
+)
 
 
 def _iter_string_leaves(node: Any, path: list[str] | None = None):
@@ -17,13 +24,13 @@ def _iter_string_leaves(node: Any, path: list[str] | None = None):
         path = []
 
     if isinstance(node, dict):
-        for k, v in node.items():
-            yield from _iter_string_leaves(v, [*path, str(k)])
+        for key, value in node.items():
+            yield from _iter_string_leaves(value, [*path, str(key)])
         return
 
     if isinstance(node, list):
-        for idx, v in enumerate(node):
-            yield from _iter_string_leaves(v, [*path, str(idx)])
+        for index, value in enumerate(node):
+            yield from _iter_string_leaves(value, [*path, str(index)])
         return
 
     if isinstance(node, str):
@@ -54,24 +61,79 @@ def _set_by_path(root: dict[str, Any], dotted_path: str, value: Any) -> None:
 
 
 def _load_json(path: str) -> dict[str, Any]:
-    with open(path, "r", encoding="utf-8") as f:
-        data = json.load(f)
+    with open(path, "r", encoding="utf-8") as file_handle:
+        data = json.load(file_handle)
     if not isinstance(data, dict):
         raise TypeError(f"{path} must be a JSON object at root")
     return data
 
 
 def _write_json(path: str, data: dict[str, Any]) -> None:
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
-        f.write("\n")
+    with open(path, "w", encoding="utf-8") as file_handle:
+        json.dump(data, file_handle, ensure_ascii=False, indent=2)
+        file_handle.write("\n")
+
+
+def _normalize_locale_tag(locale: str) -> str:
+    return locale.replace("-", "_")
+
+
+def _parse_translation_file_name(
+    path: Path,
+    *,
+    source_locale: str,
+) -> tuple[str, str]:
+    if not path.name.endswith(SOURCE_FILE_SUFFIX):
+        raise ValueError(f"{path} is not a supported translation file")
+
+    base_name = path.name[: -len(SOURCE_FILE_SUFFIX)]
+    match = LOCALE_SEPARATOR_PATTERN.match(base_name)
+    if not match:
+        raise ValueError(f"Unsupported translation file name: {path.name}")
+
+    namespace = match.group("namespace")
+    locale = match.group("locale") or source_locale
+    return namespace, _normalize_locale_tag(locale)
+
+
+def discover_translation_pairs(
+    root: Path,
+    *,
+    source_locale: str = "en",
+    target_locale: str = "zh_CN",
+) -> list[tuple[Path, Path]]:
+    normalized_source_locale = _normalize_locale_tag(source_locale)
+    normalized_target_locale = _normalize_locale_tag(target_locale)
+    source_files: dict[str, Path] = {}
+    target_files: dict[str, Path] = {}
+
+    for file_path in sorted(root.rglob(f"*{SOURCE_FILE_SUFFIX}")):
+        namespace, locale = _parse_translation_file_name(
+            file_path,
+            source_locale=normalized_source_locale,
+        )
+        if locale == normalized_source_locale:
+            source_files[namespace] = file_path
+        elif locale == normalized_target_locale:
+            target_files[namespace] = file_path
+
+    pairs: list[tuple[Path, Path]] = []
+    for namespace, source_path in sorted(source_files.items()):
+        target_path = target_files.get(namespace)
+        if target_path is None:
+            target_path = source_path.with_name(
+                f"{namespace}_{normalized_target_locale}{SOURCE_FILE_SUFFIX}"
+            )
+        pairs.append((source_path, target_path))
+
+    return pairs
 
 
 def _extract_json(text: str) -> dict[str, str]:
     try:
         parsed = json.loads(text)
         if isinstance(parsed, dict):
-            return {str(k): str(v) for k, v in parsed.items()}
+            return {str(key): str(value) for key, value in parsed.items()}
     except json.JSONDecodeError:
         pass
 
@@ -83,7 +145,7 @@ def _extract_json(text: str) -> dict[str, str]:
     parsed = json.loads(text[start : end + 1])
     if not isinstance(parsed, dict):
         raise ValueError("Gemini response JSON root is not object")
-    return {str(k): str(v) for k, v in parsed.items()}
+    return {str(key): str(value) for key, value in parsed.items()}
 
 
 def _gemini_translate_flat_map(flat: dict[str, str]) -> dict[str, str]:
@@ -100,7 +162,7 @@ def _gemini_translate_flat_map(flat: dict[str, str]) -> dict[str, str]:
     prompt = (
         "Translate the following UI strings from English to Simplified Chinese (zh-CN).\n"
         "- Keep JSON keys unchanged.\n"
-        "- Keep product names (e.g. \"SecondLoop\") unchanged.\n"
+        '- Keep product names (e.g. "SecondLoop") unchanged.\n'
         "- Return ONLY a valid minified JSON object mapping the same keys to translated strings.\n"
         f"JSON:\n{json.dumps(flat, ensure_ascii=False)}"
     )
@@ -112,7 +174,7 @@ def _gemini_translate_flat_map(flat: dict[str, str]) -> dict[str, str]:
         },
     }
 
-    req = urllib.request.Request(
+    request = urllib.request.Request(
         url=url,
         method="POST",
         data=json.dumps(body).encode("utf-8"),
@@ -120,31 +182,97 @@ def _gemini_translate_flat_map(flat: dict[str, str]) -> dict[str, str]:
     )
 
     try:
-        with urllib.request.urlopen(req, timeout=60) as resp:
-            payload = json.loads(resp.read().decode("utf-8"))
-    except urllib.error.HTTPError as e:
-        detail = e.read().decode("utf-8", errors="replace")
-        raise RuntimeError(f"Gemini HTTP {e.code}: {detail}") from e
+        with urllib.request.urlopen(request, timeout=60) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        detail = exc.read().decode("utf-8", errors="replace")
+        raise RuntimeError(f"Gemini HTTP {exc.code}: {detail}") from exc
 
     try:
         text = payload["candidates"][0]["content"]["parts"][0]["text"]
-    except Exception as e:  # noqa: BLE001 - best-effort parsing
-        raise RuntimeError(f"Unexpected Gemini response shape: {payload}") from e
+    except Exception as exc:  # noqa: BLE001 - best-effort parsing
+        raise RuntimeError(f"Unexpected Gemini response shape: {payload}") from exc
 
     return _extract_json(str(text))
+
+
+def translate_pair(
+    source: Path,
+    target: Path,
+    *,
+    force: bool,
+    dry_run: bool,
+) -> int:
+    source_data = _load_json(str(source))
+    target_data = _load_json(str(target)) if target.exists() else {}
+
+    if not isinstance(target_data, dict):
+        raise TypeError(f"{target} must be a JSON object at root")
+
+    missing: dict[str, str] = {}
+    for dotted_path, en_value in _iter_string_leaves(source_data):
+        existing = _get_by_path(target_data, dotted_path)
+        if force or existing is None or (isinstance(existing, str) and not existing.strip()):
+            missing[dotted_path] = en_value
+
+    if not missing:
+        print(f"No missing keys for {source.name}. Nothing to translate.")
+        return 0
+
+    api_key = os.environ.get("GEMINI_API_KEY")
+    batch_size = int(os.environ.get("GEMINI_BATCH_SIZE", "40"))
+
+    translated: dict[str, str] = {}
+    if api_key:
+        items = list(missing.items())
+        for start_index in range(0, len(items), batch_size):
+            batch = dict(items[start_index : start_index + batch_size])
+            print(f"Translating {len(batch)} strings for {source.name} via Gemini...")
+            translated.update(_gemini_translate_flat_map(batch))
+            time.sleep(0.2)
+    else:
+        print(
+            f"GEMINI_API_KEY not set; using English as fallback for missing keys in {source.name}."
+        )
+        translated = dict(missing)
+
+    for dotted_path, value in translated.items():
+        _set_by_path(target_data, dotted_path, value)
+
+    if dry_run:
+        print(f"Dry-run complete. Would write {len(translated)} strings to {target}.")
+        return 0
+
+    _write_json(str(target), target_data)
+    print(f"Wrote {len(translated)} strings to {target}.")
+    return 0
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Translate i18n json via Gemini.")
     parser.add_argument(
+        "--input-directory",
+        help="Directory mode: translate all locale namespace pairs inside this folder.",
+    )
+    parser.add_argument(
         "--source",
-        default="lib/i18n/strings_en.i18n.json",
+        default="lib/i18n/common_en.i18n.json",
         help="Source i18n json (English).",
     )
     parser.add_argument(
         "--target",
-        default="lib/i18n/strings_zh_CN.i18n.json",
+        default="lib/i18n/common_zh_CN.i18n.json",
         help="Target i18n json (zh-CN).",
+    )
+    parser.add_argument(
+        "--source-locale",
+        default="en",
+        help="Source locale used by directory mode.",
+    )
+    parser.add_argument(
+        "--target-locale",
+        default="zh_CN",
+        help="Target locale used by directory mode.",
     )
     parser.add_argument(
         "--force",
@@ -158,49 +286,33 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    src = _load_json(args.source)
-    dst = _load_json(args.target) if os.path.exists(args.target) else {}
+    if args.input_directory:
+        pairs = discover_translation_pairs(
+            Path(args.input_directory),
+            source_locale=args.source_locale,
+            target_locale=args.target_locale,
+        )
+        if not pairs:
+            print(f"No translation pairs found under {args.input_directory}.")
+            return 0
 
-    if not isinstance(dst, dict):
-        raise TypeError(f"{args.target} must be a JSON object at root")
+        exit_code = 0
+        for source, target in pairs:
+            exit_code |= translate_pair(
+                source,
+                target,
+                force=args.force,
+                dry_run=args.dry_run,
+            )
+        return exit_code
 
-    missing: dict[str, str] = {}
-    for dotted, en_value in _iter_string_leaves(src):
-        existing = _get_by_path(dst, dotted)
-        if args.force or existing is None or (isinstance(existing, str) and not existing.strip()):
-            missing[dotted] = en_value
-
-    if not missing:
-        print("No missing keys. Nothing to translate.")
-        return 0
-
-    api_key = os.environ.get("GEMINI_API_KEY")
-    batch_size = int(os.environ.get("GEMINI_BATCH_SIZE", "40"))
-
-    translated: dict[str, str] = {}
-    if api_key:
-        items = list(missing.items())
-        for i in range(0, len(items), batch_size):
-            batch = dict(items[i : i + batch_size])
-            print(f"Translating {len(batch)} strings via Gemini...")
-            translated.update(_gemini_translate_flat_map(batch))
-            time.sleep(0.2)
-    else:
-        print("GEMINI_API_KEY not set; using English as fallback for missing keys.")
-        translated = dict(missing)
-
-    for dotted, value in translated.items():
-        _set_by_path(dst, dotted, value)
-
-    if args.dry_run:
-        print(f"Dry-run complete. Would write {len(translated)} strings to {args.target}.")
-        return 0
-
-    _write_json(args.target, dst)
-    print(f"Wrote {len(translated)} strings to {args.target}.")
-    return 0
+    return translate_pair(
+        Path(args.source),
+        Path(args.target),
+        force=args.force,
+        dry_run=args.dry_run,
+    )
 
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
