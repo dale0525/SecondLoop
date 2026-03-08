@@ -107,6 +107,28 @@ void main() {
     expect(excerpt, isNotEmpty);
   });
 
+  test('formats both timestamps with hours across hour boundary', () {
+    const view = AudioTranscriptTurnView(
+      builderVersion: kAudioTranscriptTurnViewBuilderVersion,
+      status: AudioTranscriptTurnViewStatus.ok,
+      turns: <AudioTranscriptTurn>[
+        AudioTranscriptTurn(
+          startMs: 3599000,
+          endMs: 3601000,
+          text: 'crossing boundary',
+          segmentCount: 1,
+          sourceSegmentStartIndex: 0,
+          sourceSegmentEndIndex: 0,
+        ),
+      ],
+      params: <String, Object?>{},
+    );
+
+    final full = formatAudioTranscriptTurnViewFull(view);
+
+    expect(full, '[0:59:59–1:00:01] crossing boundary');
+  });
+
   test('excerpt truncates at a word boundary when possible', () {
     final view = buildAudioTranscriptTurnView(
       const <AudioTranscriptTurnSourceSegment>[

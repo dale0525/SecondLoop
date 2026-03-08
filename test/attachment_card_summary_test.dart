@@ -139,8 +139,7 @@ void main() {
     expect(summary, '[00:12–00:18] Hello everyone.');
   });
 
-  test(
-      'attachment card summary falls back to payload mime when hint is empty',
+  test('attachment card summary falls back to payload mime when hint is empty',
       () {
     final summary = extractAttachmentCardSummaryFromPayload(
       const <String, Object?>{
@@ -163,6 +162,35 @@ void main() {
         },
       },
       mimeTypeHint: '',
+    );
+
+    expect(summary, '[00:12–00:18] Hello everyone.');
+  });
+
+  test(
+      'attachment card summary keeps audio turn excerpt ahead of readable text',
+      () {
+    final summary = extractAttachmentCardSummaryFromPayload(
+      const <String, Object?>{
+        'mime_type': 'audio/mp4',
+        'readable_text_excerpt': 'readable excerpt',
+        'transcript_excerpt': 'raw transcript excerpt',
+        'transcript_turns_v1': {
+          'builder_version': 'turns_v1',
+          'status': 'ok',
+          'turns': [
+            {
+              'start_ms': 12000,
+              'end_ms': 18000,
+              'text': 'Hello everyone.',
+              'segment_count': 1,
+              'source_segment_start_index': 0,
+              'source_segment_end_index': 0,
+            },
+          ],
+        },
+      },
+      mimeTypeHint: 'audio/mp4',
     );
 
     expect(summary, '[00:12–00:18] Hello everyone.');

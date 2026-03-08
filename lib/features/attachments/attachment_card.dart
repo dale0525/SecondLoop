@@ -371,26 +371,25 @@ String? extractAttachmentCardSummaryFromPayload(
   final summary = _normalizedTextSnippet(payload['summary']?.toString());
   if (summary.isNotEmpty) return summary;
 
-  final preferred = selectAttachmentDisplayText(payload);
-  final preferredExcerpt = _normalizedTextSnippet(preferred.excerpt);
-  if (preferredExcerpt.isNotEmpty) return preferredExcerpt;
-
-  final preferredFull = _normalizedTextSnippet(preferred.full);
-  if (preferredFull.isNotEmpty) return preferredFull;
-
   final normalizedMimeHint = mimeTypeHint?.trim() ?? '';
-  final resolvedMimeType =
-      (normalizedMimeHint.isNotEmpty
-              ? normalizedMimeHint
-              : payload['mime_type']?.toString() ?? '')
-          .trim()
-          .toLowerCase();
+  final resolvedMimeType = (normalizedMimeHint.isNotEmpty
+          ? normalizedMimeHint
+          : payload['mime_type']?.toString() ?? '')
+      .trim()
+      .toLowerCase();
   final audioTurnExcerpt = _normalizedTextSnippet(
     resolvedMimeType.startsWith('audio/')
         ? resolveAudioTranscriptTurnViewDisplayExcerpt(payload)
         : null,
   );
   if (audioTurnExcerpt.isNotEmpty) return audioTurnExcerpt;
+
+  final preferred = selectAttachmentDisplayText(payload);
+  final preferredExcerpt = _normalizedTextSnippet(preferred.excerpt);
+  if (preferredExcerpt.isNotEmpty) return preferredExcerpt;
+
+  final preferredFull = _normalizedTextSnippet(preferred.full);
+  if (preferredFull.isNotEmpty) return preferredFull;
 
   final transcriptExcerpt = _normalizedTextSnippet(
     payload['transcript_excerpt']?.toString(),

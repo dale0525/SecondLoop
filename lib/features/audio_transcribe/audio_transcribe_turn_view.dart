@@ -300,8 +300,8 @@ String formatAudioTranscriptTurnViewFull(AudioTranscriptTurnView view) {
   }
   return view.turns
       .map(
-        (turn) =>
-            '[${_formatTurnTimestamp(turn.startMs)}–${_formatTurnTimestamp(turn.endMs)}] ${turn.text}',
+        (turn) => '[${_formatTurnTimestampPair(turn.startMs, turn.endMs)}] '
+            '${turn.text}',
       )
       .join('\n\n');
 }
@@ -354,12 +354,18 @@ bool _endsWithStrongPunctuation(String text) {
   return RegExp(r'[。！？!?]$').hasMatch(text.trim());
 }
 
-String _formatTurnTimestamp(int tMs) {
+String _formatTurnTimestampPair(int startMs, int endMs) {
+  final useHours = startMs >= 3600000 || endMs >= 3600000;
+  return '${_formatTurnTimestamp(startMs, forceHours: useHours)}–'
+      '${_formatTurnTimestamp(endMs, forceHours: useHours)}';
+}
+
+String _formatTurnTimestamp(int tMs, {bool forceHours = false}) {
   final totalSeconds = tMs < 0 ? 0 : tMs ~/ 1000;
   final hours = totalSeconds ~/ 3600;
   final minutes = (totalSeconds % 3600) ~/ 60;
   final seconds = totalSeconds % 60;
-  if (hours > 0) {
+  if (forceHours || hours > 0) {
     return '$hours:${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
   }
   return '${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
