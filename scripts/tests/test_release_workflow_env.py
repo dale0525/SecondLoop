@@ -78,7 +78,16 @@ class ReleaseWorkflowEnvTests(unittest.TestCase):
                     section_lines.append(line)
                 continue
 
-            if line.startswith("  ") and not line.startswith("    "):
+            normalized_line = line.rstrip()
+            if not normalized_line:
+                section_lines.append(line)
+                continue
+
+            if normalized_line.startswith("  #"):
+                section_lines.append(line)
+                continue
+
+            if normalized_line.startswith("  ") and not normalized_line.startswith("    "):
                 break
 
             section_lines.append(line)
@@ -413,6 +422,24 @@ class ReleaseWorkflowEnvTests(unittest.TestCase):
         self.assertTrue(section_text.startswith("  android:\n"))
         self.assertIn("    runs-on: ubuntu-latest", section_text)
         self.assertNotIn("echo android:", section_text)
+
+    def test_workflow_job_text_ignores_root_level_comments_and_blank_lines_within_job(self) -> None:
+        workflow_text = """jobs:
+  android:
+    runs-on: ubuntu-latest
+  # keep android job grouped
+  
+    steps:
+      - run: flutter pub get
+  windows:
+    runs-on: windows-latest
+"""
+
+        section_text = self._workflow_job_text("android", workflow_text)
+
+        self.assertIn("    steps:", section_text)
+        self.assertIn("      - run: flutter pub get", section_text)
+        self.assertNotIn("  windows:", section_text)
 
     def test_release_workflow_refreshes_i18n_generated_files_after_pub_get_for_each_build_job(self) -> None:
         for job_name in ["android", "windows", "macos", "linux"]:
