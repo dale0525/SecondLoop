@@ -44,6 +44,13 @@ class PreCommitHookTests(unittest.TestCase):
         self.assertIn("slang.yaml", script)
         self.assertIn(".i18n.json", script)
 
+    def test_pre_commit_hook_supports_windows_local_fvm_batch_wrappers(self) -> None:
+        script = PRE_COMMIT_HOOK.read_text(encoding="utf-8")
+
+        self.assertIn(".fvm/flutter_sdk/bin/dart.bat", script)
+        self.assertIn(".fvm/flutter_sdk/bin/flutter.bat", script)
+        self.assertIn("scripts/run_fvm_tool.ps1", script)
+
     def test_install_git_hooks_configures_post_checkout_and_post_merge(self) -> None:
         script = INSTALL_GIT_HOOKS_SCRIPT.read_text(encoding="utf-8")
 
