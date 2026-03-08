@@ -1,0 +1,33 @@
+{
+  "title": "AI 配置",
+  "refreshTooltip": "刷新",
+  "activeProfileHelp": "当前选择的配置会作为通用 LLM API 配置，被多项智能能力复用。",
+  "mediaByokOpenAiCompatibleHelp": "媒体 BYOK 仅支持 OpenAI-compatible，列表已隐藏不兼容配置（如 Gemini/Anthropic）。",
+  "noProfilesYet": "暂无配置。",
+  "noOpenAiCompatibleProfiles": "没有可用的 OpenAI-compatible 配置。请先新增一个 OpenAI-compatible profile。",
+  "addProfile": "添加配置",
+  "deleted": "配置已删除",
+  "validationError": "名称、API Key 和模型名称为必填项。",
+  "deleteDialog": {
+    "title": "删除配置？",
+    "message": "确定删除「$name」？该操作会从本设备移除。"
+  },
+  "fields": {
+    "name": "名称",
+    "provider": "提供商",
+    "baseUrlOptional": "接口地址（可选）",
+    "modelName": "模型名称",
+    "apiKey": "API Key"
+  },
+  "providers": {
+    "openaiCompatible": "OpenAI 兼容",
+    "geminiCompatible": "Gemini",
+    "anthropicCompatible": "Anthropic"
+  },
+  "savedActivated": "已保存并设为当前配置",
+  "actions": {
+    "saveActivate": "保存并启用",
+    "cancel": "取消",
+    "delete": "删除"
+  }
+}

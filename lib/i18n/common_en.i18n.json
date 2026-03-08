@@ -1,0 +1,50 @@
+{
+  "actions": {
+    "cancel": "Cancel",
+    "notNow": "Not now",
+    "allow": "Allow",
+    "apply": "Apply",
+    "view": "View",
+    "save": "Save",
+    "copy": "Copy",
+    "reset": "Reset",
+    "continueLabel": "Continue",
+    "send": "Send",
+    "askAi": "Ask AI",
+    "configureAi": "Configure AI",
+    "stop": "Stop",
+    "stopping": "Stopping…",
+    "edit": "Edit",
+    "delete": "Delete",
+    "undo": "Undo",
+    "open": "Open",
+    "retry": "Retry",
+    "ignore": "Ignore",
+    "refresh": "Refresh",
+    "share": "Share",
+    "search": "Search",
+    "useModel": "Use model",
+    "processPending": "Process pending",
+    "rebuildEmbeddings": "Rebuild embeddings",
+    "push": "Upload",
+    "pull": "Download",
+    "lockNow": "Lock now"
+  },
+  "fields": {
+    "masterPassword": "App lock password",
+    "confirm": "Confirm",
+    "message": "Message",
+    "quickCapture": "Quick capture",
+    "query": "Query"
+  },
+  "labels": {
+    "elapsedSeconds": "Elapsed: ${seconds}s",
+    "topK": "Top‑K:",
+    "percent": "$value%",
+    "playbackSpeed": "${value}x",
+    "playbackProgress": "$current / $total",
+    "seekBackwardSeconds": "-${seconds}s",
+    "seekForwardSeconds": "+${seconds}s",
+    "labeledValue": "$label: $value"
+  }
+}

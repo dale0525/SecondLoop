@@ -1,0 +1,139 @@
+{
+  "title": "同步设置",
+  "progressDialog": {
+    "title": "正在同步…",
+    "preparing": "正在准备…",
+    "pulling": "正在下载更改…",
+    "pushing": "正在上传更改…",
+    "uploadingMedia": "正在上传文件…",
+    "finalizing": "正在收尾…"
+  },
+  "sections": {
+    "automation": "自动同步",
+    "backend": "同步方式",
+    "mediaPreview": "文件下载",
+    "mediaBackup": "文件上传",
+    "securityActions": "手动同步与维护"
+  },
+  "autoSync": {
+    "title": "自动同步",
+    "subtitle": "自动保持你的设备间数据同步。",
+    "wifiOnlyTitle": "仅在 Wi‑Fi 下自动同步",
+    "wifiOnlySubtitle": "节省流量：自动同步只在 Wi‑Fi 下进行"
+  },
+  "mediaPreview": {
+    "chatThumbnailsWifiOnlyTitle": "仅在 Wi‑Fi 下下载文件",
+    "chatThumbnailsWifiOnlySubtitle": "当文件在本机缺失时，仅在 Wi‑Fi 下自动下载"
+  },
+  "mediaBackup": {
+    "title": "文件上传",
+    "subtitle": "后台加密上传图片、视频、音频等文件，便于跨设备查看",
+    "wifiOnlyTitle": "仅在 Wi‑Fi 下上传",
+    "wifiOnlySubtitle": "节省流量：只在 Wi‑Fi 下上传",
+    "description": "新发送的文件会在后台加密上传到同步存储，换设备后也能随时查看。若本机缺失文件，会在查看时按需下载。",
+    "stats": "待上传 $pending · 失败 $failed · 已上传 $uploaded",
+    "lastUploaded": "最近一次上传：$at",
+    "lastError": "最近一次错误：$error",
+    "lastErrorWithTime": "最近一次错误（$at）：$error",
+    "backfillButton": "补齐历史文件",
+    "uploadNowButton": "立即上传",
+    "backfillEnqueued": "已将 $count 个历史文件加入上传队列",
+    "backfillFailed": "加入失败：$error",
+    "notEnabled": "请先开启文件上传。",
+    "managedVaultOnly": "文件上传仅适用于 WebDAV 或 SecondLoop 云同步。",
+    "wifiOnlyBlocked": "已开启仅 Wi‑Fi。请连接 Wi‑Fi，或仅本次允许使用蜂窝数据。",
+    "uploaded": "上传完成",
+    "nothingToUpload": "暂无可上传内容",
+    "uploadFailed": "上传失败：$error",
+    "cellularDialog": {
+      "title": "使用蜂窝数据？",
+      "message": "已开启仅 Wi‑Fi。使用蜂窝数据上传可能消耗较多流量。",
+      "confirm": "仍然使用"
+    }
+  },
+  "localCache": {
+    "button": "清理本地存储",
+    "subtitle": "删除本机缓存的附件文件（远端保留，需要时可重新下载）。请确保已完成同步/上传。",
+    "cleared": "已清理本地缓存",
+    "failed": "清理失败：$error",
+    "dialog": {
+      "title": "清理本地存储？",
+      "message": "这将删除本机缓存的照片与文件，以节省本地空间。远端同步存储会保留副本；之后查看时会按需重新下载。",
+      "confirm": "清理"
+    }
+  },
+  "backendLabel": "同步方式",
+  "backendWebdav": "WebDAV（你自己的服务器）",
+  "backendLocalDir": "本机文件夹（桌面端）",
+  "backendManagedVault": "SecondLoop Cloud",
+  "cloudManagedVault": {
+    "signInRequired": "请先登录 SecondLoop Cloud 才能使用云同步。",
+    "paymentRequired": "云同步已暂停。请续费订阅以继续同步。",
+    "graceReadonlyUntil": "云同步处于只读状态（宽限期至 $until）。",
+    "storageQuotaExceeded": "云端存储已满，已暂停上传。",
+    "storageQuotaExceededWithUsage": "云端存储已满（$used / $limit），已暂停上传。",
+    "switchDialog": {
+      "title": "切换到 SecondLoop Cloud 同步？",
+      "message": "你的订阅已生效。是否将同步方式切换到 SecondLoop Cloud？你可以随时切换回来。",
+      "cancel": "暂不",
+      "confirm": "切换"
+    },
+    "setPassphraseDialog": {
+      "title": "设置恢复口令（高级）",
+      "confirm": "保存恢复口令"
+    }
+  },
+  "remoteRootRequired": "必须填写文件夹名称",
+  "baseUrlRequired": "必须填写服务器地址",
+  "localDirRequired": "必须填写文件夹路径",
+  "connectionOk": "连接成功",
+  "connectionFailed": "连接失败：$error",
+  "saveFailed": "保存失败：$error",
+  "missingSyncKey": "缺少恢复口令。请先输入口令并点击保存。",
+  "recoveryHint": {
+    "title": "检测到可恢复的同步密钥",
+    "message": "已检测到云端恢复包。输入恢复口令后，点击“立即恢复”即可恢复同步。",
+    "action": "立即恢复",
+    "enterPassphraseFirst": "请先输入恢复口令，再点击“立即恢复”。",
+    "recoverFailed": "恢复失败：$error",
+    "fetchFailed": "无法确认云端恢复包：$error"
+  },
+  "pushedOps": "已上传 $count 个更改",
+  "pulledOps": "已下载 $count 个更改",
+  "noNewChanges": "已是最新",
+  "pushFailed": "上传失败：$error",
+  "pullFailed": "下载失败：$error",
+  "fields": {
+    "baseUrl": {
+      "label": "服务器地址",
+      "hint": "https://example.com/dav"
+    },
+    "username": {
+      "label": "用户名（可选）"
+    },
+    "password": {
+      "label": "密码（可选）"
+    },
+    "localDir": {
+      "label": "文件夹路径",
+      "hint": "/Users/me/SecondLoopVault",
+      "helper": "更适合桌面端；移动端可能不支持该路径。"
+    },
+    "managedVaultBaseUrl": {
+      "label": "Cloud 服务器地址（高级）",
+      "hint": "https://vault.example.com"
+    },
+    "vaultId": {
+      "label": "Cloud 账号 ID",
+      "hint": "自动填写"
+    },
+    "remoteRoot": {
+      "label": "文件夹名称",
+      "hint": "SecondLoop"
+    },
+    "passphrase": {
+      "label": "恢复口令（高级）",
+      "helper": "所有设备请使用同一恢复口令。恢复口令不会被上传。"
+    }
+  }
+}

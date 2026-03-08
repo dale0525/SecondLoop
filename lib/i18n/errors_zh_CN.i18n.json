@@ -1,0 +1,10 @@
+{
+  "initFailed": "初始化失败：$error",
+  "loadFailed": "加载失败：$error",
+  "saveFailed": "保存失败：$error",
+  "lockGateError": "锁定流程错误：$error",
+  "missingLoopHomeConversation": "缺少记录会话",
+  "attachmentNotFoundLocally": "附件当前未在本地可用。",
+  "attachmentBytesUnavailable": "附件内容当前不可用。",
+  "couldNotOpenExternally": "无法使用系统应用打开。"
+}

@@ -1,0 +1,260 @@
+{
+  "loopTitle": "记录",
+  "attachTooltip": "添加附件",
+  "attachPickMedia": "选择媒体文件",
+  "attachTakePhoto": "拍照",
+  "attachRecordAudio": "录音",
+  "switchToVoiceInput": "切换到语音输入",
+  "switchToKeyboardInput": "切换到键盘输入",
+  "holdToTalk": "按住说话",
+  "releaseToConvert": "松开后转为文字",
+  "recordingInProgress": "正在录音…",
+  "recordingHint": "点击停止发送音频，或点击取消放弃。",
+  "cameraTooltip": "拍照",
+  "photoMessage": "照片",
+  "editMessageTitle": "编辑消息",
+  "messageUpdated": "消息已更新",
+  "messageDeleted": "消息已删除",
+  "deleteMessageDialog": {
+    "title": "删除信息？",
+    "message": "这将永久删除该信息及其附件。"
+  },
+  "photoFailed": "拍照失败：$error",
+  "audioRecordPermissionDenied": "需要麦克风权限才能录音。",
+  "audioRecordFailed": "录音失败：$error",
+  "recordingRecoveryDialog": {
+    "title": "检测到未完成录音",
+    "description": "检测到上次录音中断，找到 $segmentCount 段可恢复音频。你可以恢复并发送，或直接丢弃。",
+    "actions": {
+      "discard": "丢弃",
+      "recoverAndSend": "恢复并发送"
+    }
+  },
+  "recordingRecoveryRecoveredAndSent": "已恢复并发送上次中断的录音。",
+  "editFailed": "编辑失败：$error",
+  "deleteFailed": "删除失败：$error",
+  "noMessagesYet": "暂无消息",
+  "viewFull": "查看全文",
+  "messageActions": {
+    "convertToTodo": "转化为待办项",
+    "convertTodoToInfo": "转为普通信息",
+    "convertTodoToInfoConfirmTitle": "转为普通信息？",
+    "convertTodoToInfoConfirmBody": "这会移除该事项，但保留原消息内容。",
+    "openTodo": "跳转到事项",
+    "linkOtherTodo": "关联到其他事项"
+  },
+  "messageViewer": {
+    "title": "全文"
+  },
+  "markdownEditor": {
+    "openButton": "Markdown",
+    "title": "Markdown 编辑器",
+    "apply": "应用",
+    "editorLabel": "编辑区",
+    "previewLabel": "预览区",
+    "emptyPreview": "输入后会在这里实时预览。",
+    "shortcutHint": "提示：按 Cmd/Ctrl + Enter 可快速应用内容。",
+    "listContinuationHint": "在列表项中按 Enter 可自动续写列表。",
+    "quickActionsLabel": "快捷格式",
+    "themeLabel": "预览主题",
+    "themeStudio": "经典",
+    "themePaper": "纸张",
+    "themeOcean": "海洋",
+    "themeNight": "夜色",
+    "exportMenu": "导出预览",
+    "exportPng": "导出为 PNG",
+    "exportPdf": "导出为 PDF",
+    "exportCopyClipboard": "复制到剪贴板",
+    "exportCopied": "已复制到剪贴板",
+    "exportDone": "已导出为 $format",
+    "exportDoneSavedPath": "已导出为 $format\n已保存到：$path",
+    "exportSavedPath": "已保存到：$path",
+    "exportFailed": "导出失败：$error",
+    "exportReasonNoWindowsBrowser": "未找到可用的 Windows 浏览器。请安装 Microsoft Edge 或 Google Chrome 后重试。",
+    "exportReasonWindowsBrowserPrint": "Windows 浏览器打印失败，请确认浏览器可用后重试。",
+    "exportReasonTimeout": "导出超时。请减少超大图片或文档长度后重试。",
+    "exportReasonRender": "预览内容渲染失败，无法导出 PDF。",
+    "exportReasonWrite": "PDF 写入失败，请检查磁盘空间后重试。",
+    "exportReasonCancelled": "PDF 导出已取消。",
+    "exportReasonUnsupported": "当前平台暂不支持 PDF 导出。",
+    "stats": "$lines 行 · $characters 字符",
+    "simpleInput": "简易输入",
+    "actions": {
+      "heading": "标题",
+      "headingLevel": "$level 级标题",
+      "bold": "加粗",
+      "italic": "斜体",
+      "strike": "删除线",
+      "code": "行内代码",
+      "link": "插入链接",
+      "blockquote": "引用",
+      "bulletList": "无序列表",
+      "orderedList": "有序列表",
+      "taskList": "任务列表",
+      "codeBlock": "代码块"
+    }
+  },
+  "focus": {
+    "tooltip": "聚焦",
+    "allMemories": "聚焦：所有记忆",
+    "thisThread": "聚焦：当前对话"
+  },
+  "askAiSetup": {
+    "title": "AI 对话需要先配置",
+    "body": "要使用「AI 对话」，请先添加你自己的 API Key（AI 配置），或订阅 SecondLoop Cloud。",
+    "actions": {
+      "subscribe": "订阅",
+      "configureByok": "添加 API Key"
+    }
+  },
+  "cloudGateway": {
+    "emailNotVerified": "邮箱未验证。验证邮箱后才能使用 SecondLoop Cloud 的 AI 对话。",
+    "fallback": {
+      "auth": "Cloud 登录已失效。本次将使用你的 API Key。",
+      "entitlement": "需要订阅 SecondLoop Cloud。本次将使用你的 API Key。",
+      "rateLimited": "Cloud 正忙。本次将使用你的 API Key。",
+      "generic": "Cloud 请求失败。本次将使用你的 API Key。"
+    },
+    "errors": {
+      "auth": "Cloud 登录已失效，请在 Cloud 账号页重新登录。",
+      "entitlement": "需要订阅 SecondLoop Cloud。请添加 API Key 或稍后再试。",
+      "rateLimited": "Cloud 触发限速，请稍后再试。",
+      "generic": "Cloud 请求失败。"
+    }
+  },
+  "askAiFailedTemporary": "AI 对话失败了，请重试。",
+  "askAiConsent": {
+    "title": "使用 AI 前确认",
+    "body": "SecondLoop 可能会将你输入的文本及少量相关片段发送到你选择的 AI 服务商，以提供 AI 功能。\n\n不会上传你的应用锁密码或完整历史。",
+    "dontShowAgain": "不再提示"
+  },
+  "embeddingsConsent": {
+    "title": "是否使用云端向量进行语义检索？",
+    "body": "好处：\n- 跨语言/同义改写召回更好\n- 待办关联建议更准确\n\n隐私：\n- 仅上传生成向量所需的最小文本片段\n- 文本会上传到 SecondLoop Cloud，并会被保密处理（不写入日志/存储）\n- 不会上传你的 vault key 或 sync key\n\n用量：\n- 云端向量会消耗 Cloud 使用额度",
+    "dontShowAgain": "记住我的选择",
+    "actions": {
+      "useLocal": "使用本地",
+      "enableCloud": "开启云端向量"
+    }
+  },
+  "semanticParseConsent": {
+    "title": "是否开启云端智能理解？",
+    "body": "开启后，SecondLoop 会使用云端 AI 更好地理解你的消息内容，帮助你更准确地自动整理待办。\n\n文本会被保密处理（不写入日志/不存储），不会上传你的 vault key 和 sync key。\n\n这会消耗 Cloud 额度。",
+    "actions": {
+      "useLocal": "保持本地模式",
+      "enableCloud": "开启云端理解"
+    }
+  },
+  "semanticParseStatusRunning": "AI 分析中…",
+  "semanticParseStatusSlow": "AI 分析较慢，后台继续…",
+  "semanticParseMobileStayOpenHint": "AI 分析时请勿离开 App，否则分析可能会中断。",
+  "attachmentAnnotationNeedsSetup": "图片注释需要先配置",
+  "attachmentAnnotation": {
+    "errorDetailsTitle": "转写错误详情",
+    "errorDetailsCopied": "错误详情已复制",
+    "viewError": "查看错误",
+    "installSpeechPack": "安装语音包",
+    "downloadRuntime": "下载本地能力",
+    "missingLocalRuntime": "本地能力运行时缺失，需先下载后再转写。",
+    "speechPackMissing": "缺少语音识别语言包，请先安装后再重试。"
+  },
+  "semanticParseStatusFailed": "AI 分析失败",
+  "audioTranscribeFailurePayloadTooLarge": "音频文件过大。请压缩或分段后重试。",
+  "audioTranscribeFailureModelNotAllowed": "当前模型不允许用于音频转录。请在设置中更换模型或引擎。",
+  "audioTranscribeFailureInvalidMultipart": "音频请求格式无效。请重试或更新应用。",
+  "semanticParseStatusCanceled": "已取消 AI 分析",
+  "semanticParseStatusCreated": "已创建待办：$title",
+  "semanticParseStatusUpdated": "已更新待办：$title",
+  "semanticParseStatusUpdatedGeneric": "已更新待办",
+  "semanticParseStatusUndone": "已撤销自动动作",
+  "semanticParseStatusTagSuggested": "建议标签：$tags",
+  "semanticParseStatusTagApplied": "已添加标签：$tags",
+  "askAiRecoveredDetached": "已恢复已完成的云端回答。",
+  "tagFilter": {
+    "tooltip": "标签筛选",
+    "clearFilter": "清空标签筛选",
+    "excludeTagLabel": "- $tag",
+    "sheet": {
+      "title": "按标签筛选",
+      "apply": "应用",
+      "clear": "清空",
+      "includeHint": "点击：包含",
+      "excludeHint": "再次点击：排除",
+      "modeHint": "$includeHint · $excludeHint",
+      "empty": "暂无标签"
+    }
+  },
+  "tagPicker": {
+    "title": "管理标签",
+    "suggested": "建议标签",
+    "lowConfidenceHint": "AI 置信度不足，建议确认后应用。",
+    "mergeSuggestions": "合并建议",
+    "mergeAction": "合并",
+    "manualMergeAction": "手动合并",
+    "manualMergeSourceTitle": "选择来源标签",
+    "manualMergeSourceHint": "选择要被合并掉的标签",
+    "manualMergeTargetTitle": "合并到",
+    "manualMergeTargetHint": "选择要保留下来的目标标签",
+    "manualMergeSelectSourceFirst": "请先选择来源标签",
+    "manualMergeSearchHint": "搜索标签",
+    "manualMergeNoMatches": "没有匹配的标签",
+    "manualMergeSelectedSection": "当前选择",
+    "manualMergeBestMatchesSection": "最佳匹配",
+    "manualMergeOtherMatchesSection": "其他匹配",
+    "manualMergeCustomTagsSection": "自定义标签",
+    "manualMergeSystemTagsSection": "系统标签",
+    "mergeDismissAction": "忽略",
+    "mergeLaterAction": "稍后",
+    "mergeSuggestionTitle": "$source → $target",
+    "mergeSuggestionSubtitle": "$reason · $messages",
+    "mergeSuggestionMessages": "将影响 $count 条已打标签消息",
+    "mergeReasonSystemDomain": "匹配系统领域标签",
+    "mergeReasonNameCompact": "可能是重复标签",
+    "mergeReasonNameContains": "名称高度相似",
+    "mergeDialog": {
+      "title": "确认合并标签？",
+      "message": "将“$source”合并到“$target”？这会更新已有消息上的标签。",
+      "confirm": "合并"
+    },
+    "mergeApplied": "已合并 $count 条消息",
+    "mergeDismissed": "已忽略该合并建议",
+    "mergeSavedForLater": "已暂存该合并建议",
+    "hiddenMergeSuggestions": "已忽略的合并建议",
+    "hiddenMergeSuggestionsCount": "已忽略的合并建议（$count）",
+    "hiddenMergeAcceptAction": "接受",
+    "hiddenMergeRestoreAction": "恢复显示",
+    "hiddenMergeRestored": "已恢复该合并建议",
+    "deleteDialog": {
+      "title": "删除标签？",
+      "message": "删除“$name”？这会从已打标签消息中移除它，并清理消息正文里匹配的手动 #tag。",
+      "confirm": "删除"
+    },
+    "deleted": "标签已删除",
+    "all": "全部标签",
+    "inputHint": "输入标签名称",
+    "add": "添加",
+    "save": "保存",
+    "tagActionLabel": "标签"
+  },
+  "todoMessageBadge": {
+    "task": "事项",
+    "related": "关联事项",
+    "quote": "「$title」"
+  },
+  "askScopeEmpty": {
+    "title": "当前范围未找到结果",
+    "actions": {
+      "expandTimeWindow": "扩大时间窗口",
+      "removeIncludeTags": "移除包含标签",
+      "switchScopeToAll": "切换范围到全部"
+    }
+  },
+  "audioRecording": {
+    "interruptionRecoveredSnack": "检测到来电中断，已自动恢复并拼接录音。",
+    "openSettingsFailedMicrophone": "无法自动打开系统设置，请手动前往系统隐私里开启麦克风权限。",
+    "openSettingsFailedSpeechPack": "无法自动打开系统设置。请前往 设置 > 时间和语言 > 语言和区域，安装带“语音”组件的语言包。"
+  },
+  "recordingRecovery": {
+    "recoveredToDraftSnack": "检测到未完成录音，已恢复到草稿区，发送后会提交。"
+  }
+}

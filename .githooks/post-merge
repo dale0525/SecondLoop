@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo_root="$(git rev-parse --show-toplevel 2>/dev/null || true)"
+[[ -n "${repo_root}" ]] || exit 0
+cd "${repo_root}"
+
+git rev-parse --verify ORIG_HEAD >/dev/null 2>&1 || exit 0
+
+while IFS= read -r path; do
+  case "${path}" in
+    slang.yaml | lib/i18n/*.i18n.json)
+      bash scripts/run_i18n_refresh.sh
+      exit 0
+      ;;
+  esac
+done < <(git diff --name-only ORIG_HEAD HEAD --)

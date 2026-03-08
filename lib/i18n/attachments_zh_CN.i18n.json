@@ -1,0 +1,85 @@
+{
+  "metadata": {
+    "format": "格式",
+    "size": "大小",
+    "capturedAt": "拍摄时间",
+    "location": "地点"
+  },
+  "url": {
+    "originalUrl": "原始链接",
+    "canonicalUrl": "规范链接"
+  },
+  "content": {
+    "summary": "摘要",
+    "excerpt": "摘要",
+    "fullText": "全文",
+    "ocrTitle": "OCR",
+    "needsOcrTitle": "需要 OCR",
+    "needsOcrSubtitle": "此 PDF 可能不包含可复制文本。",
+    "runOcr": "运行 OCR",
+    "rerunOcr": "重新识别",
+    "ocrRunning": "OCR 处理中…",
+    "ocrReadySubtitle": "已可用文本，如有需要可重新识别。",
+    "keepForegroundHint": "OCR 进行中，请尽量保持应用在前台。",
+    "openWithSystem": "用系统应用打开",
+    "previewUnavailable": "预览不可用",
+    "ocrFinished": "OCR 已完成，正在刷新预览…",
+    "ocrFailed": "此设备上 OCR 执行失败。",
+    "speechTranscribeIssue": {
+      "title": "语音转录暂不可用",
+      "openSettings": "打开系统设置",
+      "openSettingsFailed": "无法自动打开系统设置，请手动检查系统的语音识别权限与听写开关。",
+      "permissionDenied": "语音识别权限被拒绝。请先点击“重试”再次触发系统授权弹窗；若仍被拦截，请前往系统设置开启权限。",
+      "permissionRestricted": "语音识别被系统策略限制。请检查屏幕使用时间或设备管理策略。",
+      "serviceDisabled": "系统“听写与 Siri”已关闭。请先启用后再重试。",
+      "runtimeUnavailable": "当前设备暂时无法使用语音识别运行时。请稍后重试。",
+      "permissionRequest": "本地语音转录需要语音识别权限。请点击“重试”，并在系统弹窗中允许授权。",
+      "offlineUnavailable": "当前设备或语言暂不支持离线语音识别。请先安装系统语音包，或切换到云端转录。"
+    },
+    "videoInsights": {
+      "contentKind": {
+        "knowledge": "知识类视频",
+        "nonKnowledge": "非知识类视频",
+        "unknown": "未知"
+      },
+      "detail": {
+        "knowledgeMarkdown": "知识文稿",
+        "videoDescription": "视频描述",
+        "extractedContent": "提取内容"
+      },
+      "fields": {
+        "contentType": "内容类型",
+        "segments": "分段处理",
+        "summary": "视频概要"
+      }
+    },
+    "emptyText": "无"
+  },
+  "workspace": {
+    "tabs": {
+      "content": "内容",
+      "metadata": "元数据"
+    },
+    "types": {
+      "audio": "音频",
+      "image": "图片",
+      "document": "文档",
+      "link": "链接",
+      "video": "视频",
+      "attachment": "附件"
+    },
+    "metrics": {
+      "type": "类型",
+      "duration": "时长",
+      "pages": "页数"
+    },
+    "metadata": {
+      "filename": "文件名",
+      "source": "来源",
+      "duration": "时长",
+      "pages": "页数",
+      "ocrEngine": "OCR 引擎",
+      "languageHints": "语言提示"
+    }
+  }
+}

@@ -28,8 +28,18 @@ if [[ ! -f ".githooks/pre-push" ]]; then
   die "Missing .githooks/pre-push"
 fi
 
+if [[ ! -f ".githooks/post-checkout" ]]; then
+  die "Missing .githooks/post-checkout"
+fi
+
+if [[ ! -f ".githooks/post-merge" ]]; then
+  die "Missing .githooks/post-merge"
+fi
+
 git config core.hooksPath .githooks
 chmod +x .githooks/pre-commit
 chmod +x .githooks/pre-push
+chmod +x .githooks/post-checkout
+chmod +x .githooks/post-merge
 
 echo "install-git-hooks: configured core.hooksPath=.githooks"

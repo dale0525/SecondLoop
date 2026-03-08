@@ -1,0 +1,36 @@
+{
+  "title": "Embedding profiles",
+  "refreshTooltip": "Refresh",
+  "activeProfileHelp": "Active profile is used for embeddings (semantic search / RAG).",
+  "noProfilesYet": "No profiles yet.",
+  "addProfile": "Add profile",
+  "deleted": "Embedding profile deleted",
+  "validationError": "Name, API key, and model are required.",
+  "reindexDialog": {
+    "title": "Rebuild embeddings index?",
+    "message": "Activating this profile may rebuild your local embeddings index using your API key/credits. This may take a while and can incur costs.",
+    "actions": {
+      "continueLabel": "Continue"
+    }
+  },
+  "deleteDialog": {
+    "title": "Delete profile?",
+    "message": "Delete \"$name\"? This removes it from this device."
+  },
+  "fields": {
+    "name": "Name",
+    "provider": "Provider",
+    "baseUrlOptional": "API endpoint (optional)",
+    "modelName": "Model",
+    "apiKey": "API key"
+  },
+  "providers": {
+    "openaiCompatible": "OpenAI-compatible"
+  },
+  "savedActivated": "Embedding profile saved and activated",
+  "actions": {
+    "saveActivate": "Save & Activate",
+    "cancel": "Cancel",
+    "delete": "Delete"
+  }
+}

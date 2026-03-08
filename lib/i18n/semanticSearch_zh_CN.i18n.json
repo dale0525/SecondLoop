@@ -1,0 +1,4 @@
+{
+  "preparing": "正在准备语义检索…",
+  "indexingMessages": "正在索引消息…（已索引 $count 条）"
+}

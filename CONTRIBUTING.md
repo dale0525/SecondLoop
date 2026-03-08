@@ -10,13 +10,16 @@ By contributing to this repository, you agree that your contributions are licens
   - Check (matches CI): `pixi run fmt-check`
   - Auto-fix: `pixi run fmt`
 - Run tests:
-  - Flutter: `pixi run flutter test`
+  - Flutter: `pixi run i18n-refresh` once on a fresh clone, then `pixi run flutter test`
   - Rust: `pixi run cargo test`
 - Run the full local CI suite: `pixi run ci`
 
 ## Common development commands
 
 - Generate Rust bridge code: `pixi run frb-generate`
+- Refresh generated i18n Dart output: `pixi run i18n-refresh`
+- Check missing / outdated / unused translations: `pixi run i18n-analyze`
+- Sync zh-CN translations from English source files: `pixi run i18n-translate`
 - Run app locally:
   - `pixi run run-macos` (macOS only)
   - `pixi run run-linux` (Linux only)
@@ -38,6 +41,20 @@ pixi run flutter test "--coverage --reporter expanded"
 pixi run dart format "--output=none lib test rust_builder integration_test test_driver --set-exit-if-changed"
 pixi run cargo clippy "--all-targets --all-features -- -D warnings"
 ```
+
+## I18n workflow
+
+- Source of truth lives in `lib/i18n/*.i18n.json`.
+- `lib/i18n/strings.g.dart` is a generated local artifact. Do not edit it and do not resolve merge conflicts in it by hand.
+- After changing locale source files or `slang.yaml`, run `pixi run i18n-refresh`.
+- Before opening a PR, run `pixi run i18n-analyze` to catch missing, outdated, or unused translations.
+- If English copy changes meaningfully and the secondary locale is not updated yet, mark it outdated first. Example:
+
+```bash
+pixi run flutter pub "run slang outdated settings.about.title"
+```
+
+- In namespace mode, use `<namespace>.<path>` when marking a translation as outdated.
 
 ## Platform prerequisites
 

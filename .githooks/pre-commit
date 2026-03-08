@@ -248,6 +248,62 @@ ensure_windows_short_build_paths() {
   done
 }
 
+is_i18n_source_file() {
+  local path="$1"
+  case "${path}" in
+    slang.yaml | lib/i18n/*.i18n.json) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+was_originally_staged_file() {
+  local path="$1"
+  local staged_file
+  for staged_file in "${staged_files[@]}"; do
+    if [[ "${staged_file}" == "${path}" ]]; then
+      return 0
+    fi
+  done
+  return 1
+}
+
+warn_auto_staged_i18n_refresh_changes() {
+  local file
+  local auto_staged_i18n_files=()
+
+  while IFS= read -r file; do
+    [[ -n "${file}" ]] || continue
+    is_i18n_source_file "${file}" || continue
+    was_originally_staged_file "${file}" && continue
+    auto_staged_i18n_files+=("${file}")
+  done < <(git diff --name-only -- lib/i18n)
+
+  if [[ ${#auto_staged_i18n_files[@]} -eq 0 ]]; then
+    return 0
+  fi
+
+  echo "pre-commit: auto-staged i18n refresh changes:" >&2
+  printf '  %s\n' "${auto_staged_i18n_files[@]}" >&2
+}
+
+run_i18n_refresh() {
+  if ! bash scripts/run_i18n_refresh.sh; then
+    echo "" >&2
+    echo "pre-commit: i18n refresh failed." >&2
+    echo "Fix locally with: pixi run i18n-refresh" >&2
+    exit 1
+  fi
+}
+
+run_i18n_analyze() {
+  if ! bash scripts/run_i18n_analyze.sh; then
+    echo "" >&2
+    echo "pre-commit: i18n analyze failed." >&2
+    echo "Fix locally with: pixi run i18n-analyze" >&2
+    exit 1
+  fi
+}
+
 check_mode=0
 scope_flutter=0
 scope_rust=0
@@ -284,30 +340,131 @@ fi
 
 cd "${repo_root}"
 
+resolve_powershell_bin() {
+  local candidate
+  for candidate in powershell.exe pwsh.exe powershell pwsh; do
+    if command -v "${candidate}" >/dev/null 2>&1; then
+      command -v "${candidate}"
+      return 0
+    fi
+  done
+
+  return 1
+}
+
+to_native_windows_path() {
+  local path="$1"
+  if command -v cygpath >/dev/null 2>&1; then
+    cygpath -aw "${path}" 2>/dev/null && return 0
+  fi
+
+  printf '%s\n' "${path}"
+}
+
+resolve_dart_bin() {
+  if [[ -x "${repo_root}/.fvm/flutter_sdk/bin/dart" ]]; then
+    printf '%s\n' "${repo_root}/.fvm/flutter_sdk/bin/dart"
+    return 0
+  fi
+
+  if is_windows_env && [[ -f "${repo_root}/.fvm/flutter_sdk/bin/dart.bat" ]]; then
+    printf '%s\n' "${repo_root}/.fvm/flutter_sdk/bin/dart.bat"
+    return 0
+  fi
+
+  if command -v dart >/dev/null 2>&1; then
+    command -v dart
+    return 0
+  fi
+
+  if is_windows_env && command -v dart.bat >/dev/null 2>&1; then
+    command -v dart.bat
+    return 0
+  fi
+
+  return 1
+}
+
+resolve_flutter_bin() {
+  if [[ -x "${repo_root}/.fvm/flutter_sdk/bin/flutter" ]]; then
+    printf '%s\n' "${repo_root}/.fvm/flutter_sdk/bin/flutter"
+    return 0
+  fi
+
+  if is_windows_env && [[ -f "${repo_root}/.fvm/flutter_sdk/bin/flutter.bat" ]]; then
+    printf '%s\n' "${repo_root}/.fvm/flutter_sdk/bin/flutter.bat"
+    return 0
+  fi
+
+  if command -v flutter >/dev/null 2>&1; then
+    command -v flutter
+    return 0
+  fi
+
+  if is_windows_env && command -v flutter.bat >/dev/null 2>&1; then
+    command -v flutter.bat
+    return 0
+  fi
+
+  return 1
+}
+
+run_windows_batch_tool() {
+  local tool_name="$1"
+  local tool_bin="$2"
+  shift 2
+
+  local powershell_bin
+  powershell_bin="$(resolve_powershell_bin)" || die "Missing PowerShell. Install PowerShell or add Flutter/Dart shell shims to PATH."
+
+  local script_path
+  script_path="$(to_native_windows_path "${repo_root}/scripts/run_fvm_tool.ps1")"
+  local native_tool_path
+  native_tool_path="$(to_native_windows_path "${tool_bin}")"
+
+  env -u GIT_DIR -u GIT_WORK_TREE -u GIT_INDEX_FILE \
+    "${powershell_bin}" \
+    -NoProfile \
+    -ExecutionPolicy Bypass \
+    -File "${script_path}" \
+    -Tool "${tool_name}" \
+    -ToolPath "${native_tool_path}" \
+    -Command "$@"
+}
+
+run_dart_tool() {
+  local dart_bin
+  dart_bin="$(resolve_dart_bin)" || die "Missing 'dart'. Install Flutter (recommended: \`pixi run setup-flutter\`) or add Dart to PATH."
+
+  if [[ "${dart_bin}" == *.bat || "${dart_bin}" == *.cmd ]]; then
+    run_windows_batch_tool dart "${dart_bin}" "$@"
+    return $?
+  fi
+
+  env -u GIT_DIR -u GIT_WORK_TREE -u GIT_INDEX_FILE "${dart_bin}" "$@"
+}
+
+run_flutter_tool() {
+  local flutter_bin
+  flutter_bin="$(resolve_flutter_bin)" || die "Missing 'flutter'. Install Flutter (recommended: \`pixi run setup-flutter\`) or add Flutter to PATH."
+
+  if [[ "${flutter_bin}" == *.bat || "${flutter_bin}" == *.cmd ]]; then
+    run_windows_batch_tool flutter "${flutter_bin}" "$@"
+    return $?
+  fi
+
+  env -u GIT_DIR -u GIT_WORK_TREE -u GIT_INDEX_FILE "${flutter_bin}" "$@"
+}
+
 if (( check_mode )); then
   if (( scope_flutter == 0 && scope_rust == 0 )); then
     scope_flutter=1
     scope_rust=1
   fi
 
-  dart_bin=""
-  flutter_bin=""
   if (( scope_flutter )); then
-    if [[ -x "${repo_root}/.fvm/flutter_sdk/bin/dart" ]]; then
-      dart_bin="${repo_root}/.fvm/flutter_sdk/bin/dart"
-    elif command -v dart >/dev/null 2>&1; then
-      dart_bin="$(command -v dart)"
-    else
-      die "Missing 'dart'. Install Flutter (recommended: \`pixi run setup-flutter\`) or add Dart to PATH."
-    fi
-
-    if [[ -x "${repo_root}/.fvm/flutter_sdk/bin/flutter" ]]; then
-      flutter_bin="${repo_root}/.fvm/flutter_sdk/bin/flutter"
-    elif command -v flutter >/dev/null 2>&1; then
-      flutter_bin="$(command -v flutter)"
-    else
-      die "Missing 'flutter'. Install Flutter (recommended: \`pixi run setup-flutter\`) or add Flutter to PATH."
-    fi
+    resolve_dart_bin >/dev/null || die "Missing 'dart'. Install Flutter (recommended: \`pixi run setup-flutter\`) or add Dart to PATH."
+    resolve_flutter_bin >/dev/null || die "Missing 'flutter'. Install Flutter (recommended: \`pixi run setup-flutter\`) or add Flutter to PATH."
   fi
 
   cargo_bin=""
@@ -328,6 +485,9 @@ if (( check_mode )); then
   fi
 
   if (( scope_flutter )); then
+    run_i18n_refresh
+    run_i18n_analyze
+
     if ! bash scripts/check_no_python_runtime.sh; then
       echo "" >&2
       echo "pre-commit: python runtime guard failed." >&2
@@ -335,7 +495,7 @@ if (( check_mode )); then
       exit 1
     fi
 
-    if ! "${dart_bin}" format --output=none lib test rust_builder integration_test test_driver --set-exit-if-changed; then
+    if ! run_dart_tool format --output=none lib test rust_builder integration_test test_driver --set-exit-if-changed; then
       echo "" >&2
       echo "pre-commit: Formatting required." >&2
       echo "Fix locally with:" >&2
@@ -345,18 +505,18 @@ if (( check_mode )); then
       exit 1
     fi
 
-    if ! env -u GIT_DIR -u GIT_WORK_TREE -u GIT_INDEX_FILE "${flutter_bin}" analyze; then
+    if ! run_flutter_tool analyze; then
       echo "" >&2
       echo "pre-commit: flutter analyze failed." >&2
-      echo "Fix locally with: pixi run analyze" >&2
+      echo "Fix locally with: pixi run flutter analyze" >&2
       exit 1
     fi
 
     if (( ci_mode )); then
-      if ! env -u GIT_DIR -u GIT_WORK_TREE -u GIT_INDEX_FILE "${flutter_bin}" test; then
+      if ! run_flutter_tool test; then
         echo "" >&2
         echo "pre-commit: flutter test failed." >&2
-        echo "Fix locally with: pixi run test" >&2
+        echo "Fix locally with: pixi run flutter test" >&2
         exit 1
       fi
     fi
@@ -366,7 +526,7 @@ if (( check_mode )); then
     if ! "${cargo_bin}" fmt --manifest-path rust/Cargo.toml --all -- --check; then
       echo "" >&2
       echo "pre-commit: rustfmt failed." >&2
-      echo "Fix locally with: pixi run rust-fmt-fix" >&2
+      echo "Fix locally with: pixi run cargo fmt \"--manifest-path rust/Cargo.toml --all\"" >&2
       exit 1
     fi
 
@@ -393,7 +553,7 @@ fi
 staged_files=()
 while IFS= read -r file; do
   staged_files+=("${file}")
-done < <(git diff --cached --name-only --diff-filter=ACMR)
+done < <(git diff --cached --name-only --diff-filter=ACMRD)
 
 if [[ ${#staged_files[@]} -eq 0 ]]; then
   exit 0
@@ -402,8 +562,9 @@ fi
 dart_files=()
 run_rust_fmt=0
 run_flutter_checks=0
+run_i18n_refresh_needed=0
 for file in "${staged_files[@]}"; do
-  if [[ "${file}" == *.dart ]]; then
+  if [[ "${file}" == *.dart && -f "${file}" ]]; then
     dart_files+=("${file}")
     run_flutter_checks=1
     continue
@@ -415,35 +576,26 @@ for file in "${staged_files[@]}"; do
       ;;
   esac
 
+  if is_i18n_source_file "${file}"; then
+    run_flutter_checks=1
+    run_i18n_refresh_needed=1
+  fi
+
   case "${file}" in
     rust/*) run_rust_fmt=1 ;;
   esac
 done
 
-if [[ ${#dart_files[@]} -eq 0 && ${run_flutter_checks} -eq 0 && ${run_rust_fmt} -eq 0 ]]; then
+if [[ ${#dart_files[@]} -eq 0 && ${run_flutter_checks} -eq 0 && ${run_rust_fmt} -eq 0 && ${run_i18n_refresh_needed} -eq 0 ]]; then
   exit 0
 fi
 
-dart_bin=""
-if [[ ${#dart_files[@]} -ne 0 ]]; then
-  if [[ -x "${repo_root}/.fvm/flutter_sdk/bin/dart" ]]; then
-    dart_bin="${repo_root}/.fvm/flutter_sdk/bin/dart"
-  elif command -v dart >/dev/null 2>&1; then
-    dart_bin="$(command -v dart)"
-  else
-    die "Missing 'dart'. Install Flutter (recommended: \`pixi run setup-flutter\`) or add Dart to PATH."
-  fi
+if [[ ${#dart_files[@]} -ne 0 || ${run_flutter_checks} -ne 0 || ${run_i18n_refresh_needed} -ne 0 ]]; then
+  resolve_dart_bin >/dev/null || die "Missing 'dart'. Install Flutter (recommended: \`pixi run setup-flutter\`) or add Dart to PATH."
 fi
 
-flutter_bin=""
 if [[ ${run_flutter_checks} -ne 0 ]]; then
-  if [[ -x "${repo_root}/.fvm/flutter_sdk/bin/flutter" ]]; then
-    flutter_bin="${repo_root}/.fvm/flutter_sdk/bin/flutter"
-  elif command -v flutter >/dev/null 2>&1; then
-    flutter_bin="$(command -v flutter)"
-  else
-    die "Missing 'flutter'. Install Flutter (recommended: \`pixi run setup-flutter\`) or add Flutter to PATH."
-  fi
+  resolve_flutter_bin >/dev/null || die "Missing 'flutter'. Install Flutter (recommended: \`pixi run setup-flutter\`) or add Flutter to PATH."
 fi
 
 cargo_bin=""
@@ -480,8 +632,14 @@ if ! git diff --quiet || [[ -n "$(git ls-files --others --exclude-standard)" ]];
   stashed=1
 fi
 
+if [[ ${run_i18n_refresh_needed} -ne 0 ]]; then
+  run_i18n_refresh
+  warn_auto_staged_i18n_refresh_changes
+  git add -- lib/i18n
+fi
+
 if [[ ${#dart_files[@]} -ne 0 ]]; then
-  "${dart_bin}" format "${dart_files[@]}"
+  run_dart_tool format "${dart_files[@]}"
   git add -- "${dart_files[@]}"
 fi
 
@@ -489,24 +647,28 @@ if [[ ${run_rust_fmt} -ne 0 ]]; then
   if ! "${cargo_bin}" fmt --manifest-path rust/Cargo.toml --all; then
     echo "" >&2
     echo "pre-commit: rustfmt failed." >&2
-    echo "Fix locally with: pixi run rust-fmt-fix" >&2
+    echo "Fix locally with: pixi run cargo fmt \"--manifest-path rust/Cargo.toml --all\"" >&2
     exit 1
   fi
   git add -u -- rust
 fi
 
 if [[ ${run_flutter_checks} -ne 0 ]]; then
-  if ! env -u GIT_DIR -u GIT_WORK_TREE -u GIT_INDEX_FILE "${flutter_bin}" analyze; then
+  if [[ ${run_i18n_refresh_needed} -ne 0 ]]; then
+    run_i18n_analyze
+  fi
+
+  if ! run_flutter_tool analyze; then
     echo "" >&2
     echo "pre-commit: flutter analyze failed." >&2
-    echo "Fix locally with: pixi run analyze" >&2
+    echo "Fix locally with: pixi run flutter analyze" >&2
     exit 1
   fi
 
-  if ! env -u GIT_DIR -u GIT_WORK_TREE -u GIT_INDEX_FILE "${flutter_bin}" test; then
+  if ! run_flutter_tool test; then
     echo "" >&2
     echo "pre-commit: flutter test failed." >&2
-    echo "Fix locally with: pixi run test" >&2
+    echo "Fix locally with: pixi run flutter test" >&2
     exit 1
   fi
 fi

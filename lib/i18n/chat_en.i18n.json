@@ -1,0 +1,260 @@
+{
+  "loopTitle": "Loop",
+  "attachTooltip": "Add attachment",
+  "attachPickMedia": "Choose media",
+  "attachTakePhoto": "Take photo",
+  "attachRecordAudio": "Record audio",
+  "switchToVoiceInput": "Switch to voice",
+  "switchToKeyboardInput": "Switch to keyboard",
+  "holdToTalk": "Hold to talk",
+  "releaseToConvert": "Release to convert to text",
+  "recordingInProgress": "Recording…",
+  "recordingHint": "Tap Stop to send audio, or Cancel to discard.",
+  "cameraTooltip": "Take photo",
+  "photoMessage": "Photo",
+  "editMessageTitle": "Edit message",
+  "messageUpdated": "Message updated",
+  "messageDeleted": "Message deleted",
+  "deleteMessageDialog": {
+    "title": "Delete message?",
+    "message": "This will permanently delete this message and its attachments."
+  },
+  "photoFailed": "Photo failed: $error",
+  "audioRecordPermissionDenied": "Microphone permission is required to record audio.",
+  "audioRecordFailed": "Audio record failed: $error",
+  "recordingRecoveryDialog": {
+    "title": "Interrupted recording detected",
+    "description": "An interrupted recording was found ($segmentCount segments). You can recover and send it, or discard it.",
+    "actions": {
+      "discard": "Discard",
+      "recoverAndSend": "Recover & Send"
+    }
+  },
+  "recordingRecoveryRecoveredAndSent": "Recovered and sent interrupted recording.",
+  "editFailed": "Edit failed: $error",
+  "deleteFailed": "Delete failed: $error",
+  "noMessagesYet": "No messages yet",
+  "viewFull": "View full",
+  "messageActions": {
+    "convertToTodo": "Convert to task",
+    "convertTodoToInfo": "Convert to note",
+    "convertTodoToInfoConfirmTitle": "Convert to note?",
+    "convertTodoToInfoConfirmBody": "This will remove the task, but keep the original message.",
+    "openTodo": "Jump to task",
+    "linkOtherTodo": "Link to another task"
+  },
+  "messageViewer": {
+    "title": "Message"
+  },
+  "markdownEditor": {
+    "openButton": "Markdown",
+    "title": "Markdown editor",
+    "apply": "Apply",
+    "editorLabel": "Editor",
+    "previewLabel": "Preview",
+    "emptyPreview": "Preview will appear as you type.",
+    "shortcutHint": "Tip: Cmd/Ctrl + Enter applies changes instantly.",
+    "listContinuationHint": "Press Enter in a list item to continue it automatically.",
+    "quickActionsLabel": "Quick formatting",
+    "themeLabel": "Preview theme",
+    "themeStudio": "Studio",
+    "themePaper": "Paper",
+    "themeOcean": "Ocean",
+    "themeNight": "Night",
+    "exportMenu": "Export preview",
+    "exportPng": "Export as PNG",
+    "exportPdf": "Export as PDF",
+    "exportCopyClipboard": "Copy to Clipboard",
+    "exportCopied": "Copied to clipboard",
+    "exportDone": "Exported as $format",
+    "exportDoneSavedPath": "Exported as $format\nSaved to $path",
+    "exportSavedPath": "Saved to $path",
+    "exportFailed": "Export failed: $error",
+    "exportReasonNoWindowsBrowser": "No supported browser was found on Windows. Install Microsoft Edge or Google Chrome and try again.",
+    "exportReasonWindowsBrowserPrint": "The browser failed to print the document on Windows. Check browser availability and retry.",
+    "exportReasonTimeout": "The export timed out. Try reducing very large images or document size and retry.",
+    "exportReasonRender": "The preview content could not be rendered for PDF export.",
+    "exportReasonWrite": "Failed to generate PDF bytes. Check disk space and retry.",
+    "exportReasonCancelled": "The PDF export was cancelled.",
+    "exportReasonUnsupported": "PDF export is not supported on this platform.",
+    "stats": "$lines lines · $characters chars",
+    "simpleInput": "Simple input",
+    "actions": {
+      "heading": "Heading",
+      "headingLevel": "Heading $level",
+      "bold": "Bold",
+      "italic": "Italic",
+      "strike": "Strikethrough",
+      "code": "Inline code",
+      "link": "Insert link",
+      "blockquote": "Blockquote",
+      "bulletList": "Bullet list",
+      "orderedList": "Ordered list",
+      "taskList": "Task list",
+      "codeBlock": "Code block"
+    }
+  },
+  "focus": {
+    "tooltip": "Focus",
+    "allMemories": "Focus: All memories",
+    "thisThread": "Focus: This thread"
+  },
+  "askAiSetup": {
+    "title": "Ask AI setup required",
+    "body": "To use Ask AI, add your own API key (AI profile) or subscribe to SecondLoop Cloud.",
+    "actions": {
+      "subscribe": "Subscribe",
+      "configureByok": "Add API key"
+    }
+  },
+  "cloudGateway": {
+    "emailNotVerified": "Email not verified. Verify your email to use SecondLoop Cloud Ask AI.",
+    "fallback": {
+      "auth": "Cloud sign-in required. Using your API key for this request.",
+      "entitlement": "Cloud subscription required. Using your API key for this request.",
+      "rateLimited": "Cloud is busy. Using your API key for this request.",
+      "generic": "Cloud request failed. Using your API key for this request."
+    },
+    "errors": {
+      "auth": "Cloud sign-in required. Open Cloud account and sign in again.",
+      "entitlement": "Cloud subscription required. Add an API key or try again later.",
+      "rateLimited": "Cloud is rate limited. Please try again later.",
+      "generic": "Cloud request failed."
+    }
+  },
+  "askAiFailedTemporary": "Ask AI failed. Please try again.",
+  "askAiConsent": {
+    "title": "Before we use AI",
+    "body": "SecondLoop may send the text you type and a few relevant snippets to your chosen AI provider to power AI features.\n\nIt will not upload your app lock password or your full history.",
+    "dontShowAgain": "Don't show again"
+  },
+  "embeddingsConsent": {
+    "title": "Use cloud embeddings for semantic search?",
+    "body": "Benefits:\n- Better cross-language recall\n- Better todo linking suggestions\n\nPrivacy:\n- We only upload the minimum text needed to generate embeddings\n- The snippets are sent to SecondLoop Cloud Gateway and kept confidential (not logged or stored)\n- We never upload your vault key or sync key\n\nUsage:\n- Cloud embeddings count toward your cloud usage quota",
+    "dontShowAgain": "Remember my choice",
+    "actions": {
+      "useLocal": "Use local",
+      "enableCloud": "Enable cloud embeddings"
+    }
+  },
+  "semanticParseConsent": {
+    "title": "Enable cloud smart understanding?",
+    "body": "When enabled, SecondLoop can use cloud AI to better understand your messages and improve automatic task organization.\n\nYour text is handled confidentially (not logged or stored), and your vault key and sync key are never uploaded.\n\nThis uses your Cloud quota.",
+    "actions": {
+      "useLocal": "Keep local only",
+      "enableCloud": "Enable cloud understanding"
+    }
+  },
+  "semanticParseStatusRunning": "AI analyzing…",
+  "semanticParseStatusSlow": "AI is taking longer. Continuing in background…",
+  "semanticParseMobileStayOpenHint": "Keep the app open while AI analyzes. Leaving may interrupt analysis.",
+  "attachmentAnnotationNeedsSetup": "Image annotations need setup",
+  "attachmentAnnotation": {
+    "errorDetailsTitle": "Transcribe error details",
+    "errorDetailsCopied": "Error details copied",
+    "viewError": "Details",
+    "installSpeechPack": "Install speech pack",
+    "downloadRuntime": "Download runtime",
+    "missingLocalRuntime": "Local capability runtime is missing. Download it to transcribe.",
+    "speechPackMissing": "Speech recognition language pack is missing."
+  },
+  "semanticParseStatusFailed": "AI analysis failed",
+  "audioTranscribeFailurePayloadTooLarge": "Audio file is too large. Compress or split it and try again.",
+  "audioTranscribeFailureModelNotAllowed": "This model is not allowed for audio transcription. Change model or engine in settings.",
+  "audioTranscribeFailureInvalidMultipart": "Audio request format is invalid. Retry or update the app.",
+  "semanticParseStatusCanceled": "AI analysis canceled",
+  "semanticParseStatusCreated": "Created task: $title",
+  "semanticParseStatusUpdated": "Updated task: $title",
+  "semanticParseStatusUpdatedGeneric": "Updated task",
+  "semanticParseStatusUndone": "Undid auto action",
+  "semanticParseStatusTagSuggested": "Suggested tags: $tags",
+  "semanticParseStatusTagApplied": "Added tags: $tags",
+  "askAiRecoveredDetached": "Recovered the completed cloud answer.",
+  "tagFilter": {
+    "tooltip": "Tag filter",
+    "clearFilter": "Clear tag filter",
+    "excludeTagLabel": "- $tag",
+    "sheet": {
+      "title": "Filter by tags",
+      "apply": "Apply",
+      "clear": "Clear",
+      "includeHint": "Tap: Include",
+      "excludeHint": "Tap again: Exclude",
+      "modeHint": "$includeHint · $excludeHint",
+      "empty": "No tags yet"
+    }
+  },
+  "tagPicker": {
+    "title": "Manage tags",
+    "suggested": "Suggested tags",
+    "lowConfidenceHint": "AI confidence is low. Please confirm before applying.",
+    "mergeSuggestions": "Merge suggestions",
+    "mergeAction": "Merge",
+    "manualMergeAction": "Manual merge",
+    "manualMergeSourceTitle": "Choose source tag",
+    "manualMergeSourceHint": "Pick the tag you want to merge from",
+    "manualMergeTargetTitle": "Merge into",
+    "manualMergeTargetHint": "Pick the destination tag",
+    "manualMergeSelectSourceFirst": "Select a source tag first",
+    "manualMergeSearchHint": "Search tags",
+    "manualMergeNoMatches": "No matching tags",
+    "manualMergeSelectedSection": "Selected",
+    "manualMergeBestMatchesSection": "Best matches",
+    "manualMergeOtherMatchesSection": "Other matches",
+    "manualMergeCustomTagsSection": "Custom tags",
+    "manualMergeSystemTagsSection": "System tags",
+    "mergeDismissAction": "Dismiss",
+    "mergeLaterAction": "Later",
+    "mergeSuggestionTitle": "$source → $target",
+    "mergeSuggestionSubtitle": "$reason · $messages",
+    "mergeSuggestionMessages": "Affects $count tagged messages",
+    "mergeReasonSystemDomain": "Matches system domain",
+    "mergeReasonNameCompact": "Likely duplicate name",
+    "mergeReasonNameContains": "Very similar name",
+    "mergeDialog": {
+      "title": "Merge tags?",
+      "message": "Merge \"$source\" into \"$target\"? This updates existing message tags.",
+      "confirm": "Merge"
+    },
+    "mergeApplied": "Merged $count messages",
+    "mergeDismissed": "Merge suggestion dismissed",
+    "mergeSavedForLater": "Merge suggestion saved for later",
+    "hiddenMergeSuggestions": "Ignored merge suggestions",
+    "hiddenMergeSuggestionsCount": "Ignored merge suggestions ($count)",
+    "hiddenMergeAcceptAction": "Accept",
+    "hiddenMergeRestoreAction": "Show again",
+    "hiddenMergeRestored": "Merge suggestion restored",
+    "deleteDialog": {
+      "title": "Delete tag?",
+      "message": "Delete \"$name\"? This removes it from tagged messages and strips matching manual #tags from message text.",
+      "confirm": "Delete"
+    },
+    "deleted": "Tag deleted",
+    "all": "All tags",
+    "inputHint": "Type a tag name",
+    "add": "Add",
+    "save": "Save",
+    "tagActionLabel": "Tags"
+  },
+  "todoMessageBadge": {
+    "task": "Task",
+    "related": "Related task",
+    "quote": "「$title」"
+  },
+  "askScopeEmpty": {
+    "title": "No results in current scope",
+    "actions": {
+      "expandTimeWindow": "Expand time window",
+      "removeIncludeTags": "Remove include tags",
+      "switchScopeToAll": "Switch scope to All"
+    }
+  },
+  "audioRecording": {
+    "interruptionRecoveredSnack": "Recording resumed after interruption and segments were stitched automatically.",
+    "openSettingsFailedMicrophone": "Unable to open system settings automatically. Please enable microphone permission manually.",
+    "openSettingsFailedSpeechPack": "Unable to open system settings automatically. Go to Settings > Time & language > Language & region and install a language pack with Speech."
+  },
+  "recordingRecovery": {
+    "recoveredToDraftSnack": "Recovered recording was added to draft. Tap Send to submit."
+  }
+}
