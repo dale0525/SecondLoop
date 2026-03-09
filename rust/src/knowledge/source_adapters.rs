@@ -306,7 +306,7 @@ fn collect_external_documents(
         r#"SELECT doc_id, source_rel_path, title, body_markdown, created_at_ms, updated_at_ms
            FROM external_documents
            WHERE COALESCE(is_deleted, 0) = 0
-           ORDER BY updated_at_ms DESC, doc_id ASC"#,
+           ORDER BY updated_at_ms ASC, doc_id ASC"#,
     )?;
     let mut rows = stmt.query([])?;
     while let Some(row) = rows.next()? {

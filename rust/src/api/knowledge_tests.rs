@@ -16,6 +16,36 @@ fn encode_blob_hex(bytes: &[u8]) -> String {
 }
 
 #[test]
+fn read_knowledge_index_status_returns_safe_empty_status_when_state_row_is_missing() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let app_dir = dir.path().to_path_buf();
+    let conn = db::open(&app_dir).expect("open");
+    let key = [32u8; 32];
+
+    conn.execute(
+        "DELETE FROM knowledge_rebuild_state WHERE state_key = 1",
+        [],
+    )
+    .expect("delete state row");
+
+    let status = read_knowledge_index_status(&conn, &key).expect("status");
+    assert_eq!(status.status, "empty");
+    assert!(!status.rebuild_required);
+    assert_eq!(status.stale_reason, None);
+    assert_eq!(status.last_error, None);
+    assert_eq!(status.documents_indexed, 0);
+    assert_eq!(status.units_indexed, 0);
+    assert_eq!(status.embeddings_indexed, 0);
+    assert_eq!(status.total_documents, 0);
+    assert_eq!(status.last_indexed_model_name, None);
+    assert_eq!(status.last_indexed_dim, None);
+    assert_eq!(
+        status.versions,
+        crate::knowledge::KnowledgeVersionSet::current()
+    );
+}
+
+#[test]
 fn request_knowledge_rebuild_succeeds_even_if_initial_job_batch_fails() {
     let dir = tempfile::tempdir().expect("tempdir");
     let app_dir = dir.path().to_path_buf();

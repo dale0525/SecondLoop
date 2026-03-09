@@ -256,6 +256,100 @@ fn knowledge_adapter_skips_attachments_with_invalid_metadata_ciphertext() {
 }
 
 #[test]
+fn knowledge_adapter_visits_external_documents_in_ascending_updated_order() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let app_dir = dir.path().to_path_buf();
+    let conn = db::open(&app_dir).expect("open");
+    let key = [10u8; 32];
+    let external = db::open_external_readonly_db(&app_dir).expect("open external db");
+
+    external
+        .execute(
+            r#"INSERT INTO external_import_batches(
+                   batch_id, source_kind, source_label, status, created_at_ms, updated_at_ms, completed_at_ms, stats_json, last_error
+               ) VALUES (?1, 'folder', 'Fixture', 'completed', 1, 1, 1, '{}', NULL)"#,
+            params!["batch-1"],
+        )
+        .expect("insert batch");
+
+    let older_title = encrypt_bytes(&key, b"Older Title", b"external_document.title:doc-older")
+        .expect("encrypt older title");
+    let older_body = encrypt_bytes(
+        &key,
+        b"Older external body",
+        b"external_document.body:doc-older",
+    )
+    .expect("encrypt older body");
+    let older_tags = encrypt_bytes(&key, b"[]", b"external_document.tags:doc-older")
+        .expect("encrypt older tags");
+    external
+        .execute(
+            r#"INSERT INTO external_documents(
+                   doc_id, batch_id, external_origin_id, source_rel_path, title, body_markdown, tags_json,
+                   created_at_ms, updated_at_ms, checksum_sha256, is_deleted
+               ) VALUES (?1, ?2, NULL, ?3, ?4, ?5, ?6, 1, 10, 'older', 0)"#,
+            params![
+                "doc-older",
+                "batch-1",
+                "older.md",
+                older_title,
+                older_body,
+                older_tags,
+            ],
+        )
+        .expect("insert older doc");
+
+    let newer_title = encrypt_bytes(&key, b"Newer Title", b"external_document.title:doc-newer")
+        .expect("encrypt newer title");
+    let newer_body = encrypt_bytes(
+        &key,
+        b"Newer external body",
+        b"external_document.body:doc-newer",
+    )
+    .expect("encrypt newer body");
+    let newer_tags = encrypt_bytes(&key, b"[]", b"external_document.tags:doc-newer")
+        .expect("encrypt newer tags");
+    external
+        .execute(
+            r#"INSERT INTO external_documents(
+                   doc_id, batch_id, external_origin_id, source_rel_path, title, body_markdown, tags_json,
+                   created_at_ms, updated_at_ms, checksum_sha256, is_deleted
+               ) VALUES (?1, ?2, NULL, ?3, ?4, ?5, ?6, 2, 20, 'newer', 0)"#,
+            params![
+                "doc-newer",
+                "batch-1",
+                "newer.md",
+                newer_title,
+                newer_body,
+                newer_tags,
+            ],
+        )
+        .expect("insert newer doc");
+
+    let mut external_document_ids = Vec::<String>::new();
+    crate::knowledge::source_adapters::visit_source_knowledge_documents_with_external(
+        &conn,
+        Some(&external),
+        &key,
+        |document| {
+            if document.document_id.starts_with("external:") {
+                external_document_ids.push(document.document_id);
+            }
+            Ok(())
+        },
+    )
+    .expect("visit docs");
+
+    assert_eq!(
+        external_document_ids,
+        vec![
+            "external:doc-older".to_string(),
+            "external:doc-newer".to_string(),
+        ]
+    );
+}
+
+#[test]
 fn knowledge_adapter_skips_external_documents_with_corrupt_blobs() {
     let dir = tempfile::tempdir().expect("tempdir");
     let app_dir = dir.path().to_path_buf();

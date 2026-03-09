@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use rusqlite::{params, Connection, OptionalExtension};
 
 use crate::knowledge::{
@@ -272,7 +272,23 @@ pub fn read_knowledge_index_status(
         total_documents,
     )) = row
     else {
-        return Err(anyhow!("knowledge rebuild state missing"));
+        return Ok(KnowledgeIndexStatus {
+            status: "empty".to_string(),
+            rebuild_required: false,
+            stale_reason: None,
+            last_error: None,
+            last_rebuild_started_at_ms: None,
+            last_rebuild_completed_at_ms: None,
+            current_document_id: None,
+            current_stage: None,
+            documents_indexed: 0,
+            units_indexed: 0,
+            embeddings_indexed: 0,
+            total_documents: 0,
+            last_indexed_model_name: None,
+            last_indexed_dim: None,
+            versions: KnowledgeVersionSet::current(),
+        });
     };
 
     let versions = KnowledgeVersionSet {
