@@ -925,7 +925,7 @@ pub fn process_pending_knowledge_index_jobs_active(
         if !prior_stages_complete(conn, &document_id, &stage)? {
             continue;
         }
-        match process_stage(conn, key, &document_id, &stage) {
+        match with_immediate_transaction(conn, || process_stage(conn, key, &document_id, &stage)) {
             Ok(()) => processed += 1,
             Err(error) => {
                 if let Err(mark_error) = mark_job_failed(conn, &document_id, &stage, &error) {

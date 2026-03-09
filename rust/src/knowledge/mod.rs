@@ -34,6 +34,8 @@ mod chunk_tests;
 #[cfg(test)]
 mod embedding_batch_tests;
 #[cfg(test)]
+mod index_jobs_finalize_tests;
+#[cfg(test)]
 mod index_jobs_pagination_tests;
 #[cfg(test)]
 mod index_jobs_tests;
