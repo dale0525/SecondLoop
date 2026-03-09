@@ -471,6 +471,82 @@ fn knowledge_rebuild_skips_retry_after_job_exhaustion_and_can_complete() {
     assert_eq!(processed, 0);
 }
 
+#[test]
+fn knowledge_stage_selection_waits_for_prior_stage_retry_window() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let app_dir = dir.path();
+    let conn = db::open(app_dir).expect("open");
+    let key = [14u8; 32];
+    let document_id = "message:stage-blocked";
+
+    db::ensure_knowledge_rebuild_state_defaults(&conn).expect("state defaults");
+    conn.execute(
+        "UPDATE knowledge_rebuild_state SET status = 'running' WHERE state_key = 1",
+        [],
+    )
+    .expect("set running");
+
+    seed_knowledge_document(&conn, &key, document_id, "pre-collected normalized text");
+    conn.execute(
+        r#"UPDATE knowledge_documents
+           SET raw_text = ?2,
+               normalized_text = ?3
+           WHERE document_id = ?1"#,
+        params![
+            document_id,
+            db::encode_knowledge_document_text(&key, document_id, "raw", "raw source text")
+                .expect("encode raw"),
+            db::encode_knowledge_document_text(
+                &key,
+                document_id,
+                "normalized",
+                "pre-collected normalized text",
+            )
+            .expect("encode normalized"),
+        ],
+    )
+    .expect("override doc text");
+
+    let retry_at_ms = 9_999_999_999_999_i64;
+    conn.execute(
+        r#"INSERT INTO knowledge_index_jobs(
+               document_id, stage, status, attempts, next_retry_at_ms, last_error, created_at_ms, updated_at_ms
+           ) VALUES (?1, 'normalize', 'failed', 1, ?2, 'temporary failure', 1, 1)"#,
+        params![document_id, retry_at_ms],
+    )
+    .expect("insert normalize job");
+    conn.execute(
+        r#"INSERT INTO knowledge_index_jobs(
+               document_id, stage, status, attempts, next_retry_at_ms, last_error, created_at_ms, updated_at_ms
+           ) VALUES (?1, 'segment', 'pending', 0, NULL, NULL, 1, 1)"#,
+        params![document_id],
+    )
+    .expect("insert segment job");
+
+    let processed = process_pending_knowledge_index_jobs_active(&conn, &key, Path::new(app_dir), 8)
+        .expect("blocked later stages should be skipped");
+    assert_eq!(processed, 0);
+
+    let segment_status: String = conn
+        .query_row(
+            r#"SELECT status FROM knowledge_index_jobs
+               WHERE document_id = ?1 AND stage = 'segment'"#,
+            params![document_id],
+            |row| row.get(0),
+        )
+        .expect("segment status");
+    assert_eq!(segment_status, "pending");
+
+    let unit_count: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM knowledge_units WHERE document_id = ?1",
+            params![document_id],
+            |row| row.get(0),
+        )
+        .expect("unit count");
+    assert_eq!(unit_count, 0);
+}
+
 fn seed_knowledge_document(
     conn: &rusqlite::Connection,
     key: &[u8; 32],

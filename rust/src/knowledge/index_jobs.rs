@@ -18,6 +18,37 @@ use crate::knowledge::{
 const JOB_STAGES: &[&str] = &["normalize", "segment", "chunk", "embed", "finalize"];
 const MAX_KNOWLEDGE_JOB_ATTEMPTS: i64 = 5;
 
+fn stage_rank(stage: &str) -> i64 {
+    match stage {
+        "normalize" => 0,
+        "segment" => 1,
+        "chunk" => 2,
+        "embed" => 3,
+        "finalize" => 4,
+        _ => 99,
+    }
+}
+
+fn prior_stages_complete(conn: &Connection, document_id: &str, stage: &str) -> Result<bool> {
+    let blocked: i64 = conn.query_row(
+        r#"SELECT COUNT(*)
+           FROM knowledge_index_jobs
+           WHERE document_id = ?1
+             AND status != 'done'
+             AND CASE stage
+                   WHEN 'normalize' THEN 0
+                   WHEN 'segment' THEN 1
+                   WHEN 'chunk' THEN 2
+                   WHEN 'embed' THEN 3
+                   WHEN 'finalize' THEN 4
+                   ELSE 99
+                 END < ?2"#,
+        params![document_id, stage_rank(stage)],
+        |row| row.get(0),
+    )?;
+    Ok(blocked == 0)
+}
+
 fn now_ms() -> i64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -785,6 +816,9 @@ pub fn process_pending_knowledge_index_jobs_active(
     let mut processed = 0usize;
     let mut first_error: Option<anyhow::Error> = None;
     for (document_id, stage) in jobs {
+        if !prior_stages_complete(conn, &document_id, &stage)? {
+            continue;
+        }
         match process_stage(conn, key, &document_id, &stage) {
             Ok(()) => processed += 1,
             Err(error) => {

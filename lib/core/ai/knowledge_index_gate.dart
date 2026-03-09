@@ -117,7 +117,6 @@ class _KnowledgeIndexGateState extends State<KnowledgeIndexGate>
       final shouldProcess = refreshedStatus.status == 'running' ||
           refreshedStatus.status == 'failed' ||
           refreshedStatus.status == 'requested' ||
-          refreshedStatus.status == 'stale' ||
           refreshedStatus.status == 'empty';
       if (!shouldProcess) {
         _schedule(_idleInterval);
@@ -128,7 +127,12 @@ class _KnowledgeIndexGateState extends State<KnowledgeIndexGate>
         key,
         limit: _batchLimit,
       );
-      _schedule(processed > 0 ? _drainInterval : _idleInterval);
+      final nextInterval = processed > 0
+          ? _drainInterval
+          : (refreshedStatus.status == 'failed'
+              ? _failureInterval
+              : _idleInterval);
+      _schedule(nextInterval);
     } catch (error, stackTrace) {
       debugPrint('KnowledgeIndexGate: background tick failed: $error');
       debugPrint('$stackTrace');
