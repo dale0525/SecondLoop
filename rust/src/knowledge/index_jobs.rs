@@ -5,7 +5,9 @@ use anyhow::{anyhow, Result};
 use rusqlite::{params, Connection};
 use sha2::{Digest, Sha256};
 
-use crate::knowledge::embedding_batch::{batch_embedding_inputs, EmbeddingBatchPolicy};
+use crate::knowledge::embedding_batch::{
+    average_piece_embeddings, prepare_embedding_inputs, EmbeddingBatchPolicy,
+};
 use crate::knowledge::{
     build_chunk_units, build_section_units, build_segment_units, list_knowledge_units,
     normalize_text_for_source, segment_document_text, visit_source_knowledge_documents,
@@ -13,6 +15,7 @@ use crate::knowledge::{
 };
 
 const JOB_STAGES: &[&str] = &["normalize", "segment", "chunk", "embed", "finalize"];
+const MAX_KNOWLEDGE_JOB_ATTEMPTS: i64 = 5;
 
 fn now_ms() -> i64 {
     SystemTime::now()
@@ -217,6 +220,22 @@ fn deterministic_embedding(text: &str, dim: usize) -> Vec<f32> {
     vector
 }
 
+fn merged_deterministic_embedding(
+    text: &str,
+    dim: usize,
+    policy: EmbeddingBatchPolicy,
+) -> Vec<f32> {
+    let prepared = prepare_embedding_inputs(&[text.to_string()], policy);
+    let pieces = prepared
+        .into_iter()
+        .map(|input| deterministic_embedding(&input.text, dim))
+        .collect::<Vec<_>>();
+    average_piece_embeddings(vec![pieces], 1)
+        .into_iter()
+        .next()
+        .unwrap_or_default()
+}
+
 fn store_embeddings_for_document(
     conn: &Connection,
     document: &ContentKnowledgeDocument,
@@ -227,53 +246,51 @@ fn store_embeddings_for_document(
     let policy = EmbeddingBatchPolicy::default();
     let mut total = 0usize;
 
-    let doc_inputs =
-        batch_embedding_inputs(std::slice::from_ref(&document.normalized_text), policy);
-    for batch in doc_inputs {
-        for text in batch {
-            conn.execute(
-                r#"INSERT OR REPLACE INTO knowledge_embeddings(
-                       target_kind, target_id, unit_kind, model_name, dim, embedding_json, created_at_ms, updated_at_ms
-                   ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)"#,
-                params![
-                    "document",
-                    document.document_id,
-                    Option::<String>::None,
-                    model_name,
-                    dim,
-                    serde_json::to_string(&deterministic_embedding(&text, dim as usize))?,
-                    now_ms(),
-                    now_ms(),
-                ],
-            )?;
-            total += 1;
-        }
-    }
+    conn.execute(
+        r#"INSERT OR REPLACE INTO knowledge_embeddings(
+               target_kind, target_id, unit_kind, model_name, dim, embedding_json, created_at_ms, updated_at_ms
+           ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)"#,
+        params![
+            "document",
+            document.document_id,
+            Option::<String>::None,
+            model_name,
+            dim,
+            serde_json::to_string(&merged_deterministic_embedding(
+                &document.normalized_text,
+                dim as usize,
+                policy,
+            ))?,
+            now_ms(),
+            now_ms(),
+        ],
+    )?;
+    total += 1;
 
     for unit in section_units.iter().chain(chunk_units.iter()) {
         let kind_name = serde_json::to_string(&unit.unit_kind)?
             .trim_matches('"')
             .to_string();
-        for batch in batch_embedding_inputs(std::slice::from_ref(&unit.normalized_text), policy) {
-            for text in batch {
-                conn.execute(
-                    r#"INSERT OR REPLACE INTO knowledge_embeddings(
-                           target_kind, target_id, unit_kind, model_name, dim, embedding_json, created_at_ms, updated_at_ms
-                       ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)"#,
-                    params![
-                        "unit",
-                        unit.unit_id,
-                        kind_name,
-                        model_name,
-                        dim,
-                        serde_json::to_string(&deterministic_embedding(&text, dim as usize))?,
-                        now_ms(),
-                        now_ms(),
-                    ],
-                )?;
-                total += 1;
-            }
-        }
+        conn.execute(
+            r#"INSERT OR REPLACE INTO knowledge_embeddings(
+                   target_kind, target_id, unit_kind, model_name, dim, embedding_json, created_at_ms, updated_at_ms
+               ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)"#,
+            params![
+                "unit",
+                unit.unit_id,
+                kind_name,
+                model_name,
+                dim,
+                serde_json::to_string(&merged_deterministic_embedding(
+                    &unit.normalized_text,
+                    dim as usize,
+                    policy,
+                ))?,
+                now_ms(),
+                now_ms(),
+            ],
+        )?;
+        total += 1;
     }
 
     Ok(total)
@@ -437,15 +454,37 @@ fn mark_job_failed(
     error: &anyhow::Error,
 ) -> Result<()> {
     let message = error.to_string();
+    let attempts: i64 = conn.query_row(
+        r#"SELECT attempts
+           FROM knowledge_index_jobs
+           WHERE document_id = ?1 AND stage = ?2"#,
+        params![document_id, stage],
+        |row| row.get(0),
+    )?;
+    let next_attempts = attempts + 1;
+    let exhausted = next_attempts >= MAX_KNOWLEDGE_JOB_ATTEMPTS;
+    let next_retry_at_ms = if exhausted {
+        None
+    } else {
+        Some(now_ms() + 5_000)
+    };
     conn.execute(
         r#"UPDATE knowledge_index_jobs
-           SET status = 'failed',
-               attempts = attempts + 1,
-               next_retry_at_ms = ?3,
-               last_error = ?4,
-               updated_at_ms = ?3
+           SET status = ?3,
+               attempts = ?4,
+               next_retry_at_ms = ?5,
+               last_error = ?6,
+               updated_at_ms = ?7
            WHERE document_id = ?1 AND stage = ?2"#,
-        params![document_id, stage, now_ms() + 5_000, message],
+        params![
+            document_id,
+            stage,
+            if exhausted { "exhausted" } else { "failed" },
+            next_attempts,
+            next_retry_at_ms,
+            message,
+            now_ms(),
+        ],
     )?;
     conn.execute(
         r#"UPDATE knowledge_rebuild_state
@@ -563,12 +602,12 @@ fn process_stage(conn: &Connection, key: &[u8; 32], document_id: &str, stage: &s
 }
 
 fn clear_failed_rebuild_status_if_recovered(conn: &Connection) -> Result<()> {
-    let failed_jobs: i64 = conn.query_row(
-        "SELECT COUNT(*) FROM knowledge_index_jobs WHERE status = 'failed'",
+    let unresolved_failures: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM knowledge_index_jobs WHERE status IN ('failed', 'exhausted')",
         [],
         |row| row.get(0),
     )?;
-    if failed_jobs == 0 {
+    if unresolved_failures == 0 {
         conn.execute(
             r#"UPDATE knowledge_rebuild_state
                SET status = 'running',
@@ -585,42 +624,79 @@ fn finalize_if_complete(conn: &Connection) -> Result<()> {
     let pending: i64 = conn.query_row(
         r#"SELECT COUNT(*)
            FROM knowledge_index_jobs
-           WHERE status != 'done'"#,
+           WHERE status NOT IN ('done', 'exhausted')"#,
         [],
         |row| row.get(0),
     )?;
     if pending > 0 {
         return Ok(());
     }
-    let (model_name, dim) = crate::db::read_knowledge_embedding_model_state(conn)?;
-    conn.execute(
-        r#"UPDATE knowledge_rebuild_state
-           SET status = 'complete',
-               rebuild_required = 0,
-               stale_reason = NULL,
-               last_error = NULL,
-               last_rebuild_completed_at_ms = ?1,
-               current_document_id = NULL,
-               current_stage = NULL,
-               knowledge_schema_version = ?2,
-               normalization_version = ?3,
-               segmentation_version = ?4,
-               embedding_policy_version = ?5,
-               retrieval_policy_version = ?6,
-               last_indexed_model_name = ?7,
-               last_indexed_dim = ?8
-           WHERE state_key = 1"#,
-        params![
-            now_ms(),
-            crate::knowledge::KNOWLEDGE_SCHEMA_VERSION,
-            crate::knowledge::KNOWLEDGE_NORMALIZATION_VERSION,
-            crate::knowledge::KNOWLEDGE_SEGMENTATION_VERSION,
-            crate::knowledge::KNOWLEDGE_EMBEDDING_POLICY_VERSION,
-            crate::knowledge::KNOWLEDGE_RETRIEVAL_POLICY_VERSION,
-            model_name,
-            dim,
-        ],
+    let exhausted: i64 = conn.query_row(
+        r#"SELECT COUNT(*)
+           FROM knowledge_index_jobs
+           WHERE status = 'exhausted'"#,
+        [],
+        |row| row.get(0),
     )?;
+    let (model_name, dim) = crate::db::read_knowledge_embedding_model_state(conn)?;
+    if exhausted > 0 {
+        conn.execute(
+            r#"UPDATE knowledge_rebuild_state
+               SET status = 'complete',
+                   rebuild_required = 0,
+                   stale_reason = NULL,
+                   last_rebuild_completed_at_ms = ?1,
+                   current_document_id = NULL,
+                   current_stage = NULL,
+                   knowledge_schema_version = ?2,
+                   normalization_version = ?3,
+                   segmentation_version = ?4,
+                   embedding_policy_version = ?5,
+                   retrieval_policy_version = ?6,
+                   last_indexed_model_name = ?7,
+                   last_indexed_dim = ?8
+               WHERE state_key = 1"#,
+            params![
+                now_ms(),
+                crate::knowledge::KNOWLEDGE_SCHEMA_VERSION,
+                crate::knowledge::KNOWLEDGE_NORMALIZATION_VERSION,
+                crate::knowledge::KNOWLEDGE_SEGMENTATION_VERSION,
+                crate::knowledge::KNOWLEDGE_EMBEDDING_POLICY_VERSION,
+                crate::knowledge::KNOWLEDGE_RETRIEVAL_POLICY_VERSION,
+                model_name,
+                dim,
+            ],
+        )?;
+    } else {
+        conn.execute(
+            r#"UPDATE knowledge_rebuild_state
+               SET status = 'complete',
+                   rebuild_required = 0,
+                   stale_reason = NULL,
+                   last_error = NULL,
+                   last_rebuild_completed_at_ms = ?1,
+                   current_document_id = NULL,
+                   current_stage = NULL,
+                   knowledge_schema_version = ?2,
+                   normalization_version = ?3,
+                   segmentation_version = ?4,
+                   embedding_policy_version = ?5,
+                   retrieval_policy_version = ?6,
+                   last_indexed_model_name = ?7,
+                   last_indexed_dim = ?8
+               WHERE state_key = 1"#,
+            params![
+                now_ms(),
+                crate::knowledge::KNOWLEDGE_SCHEMA_VERSION,
+                crate::knowledge::KNOWLEDGE_NORMALIZATION_VERSION,
+                crate::knowledge::KNOWLEDGE_SEGMENTATION_VERSION,
+                crate::knowledge::KNOWLEDGE_EMBEDDING_POLICY_VERSION,
+                crate::knowledge::KNOWLEDGE_RETRIEVAL_POLICY_VERSION,
+                model_name,
+                dim,
+            ],
+        )?;
+    }
     Ok(())
 }
 

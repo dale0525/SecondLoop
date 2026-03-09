@@ -1,9 +1,13 @@
 use std::path::Path;
 
 use rusqlite::params;
+use sha2::{Digest, Sha256};
 
 use crate::crypto::encrypt_bytes;
 use crate::db;
+use crate::knowledge::embedding_batch::{
+    average_piece_embeddings, prepare_embedding_inputs, EmbeddingBatchPolicy,
+};
 use crate::knowledge::{
     ensure_knowledge_rebuild_requested, list_knowledge_documents,
     process_pending_knowledge_index_jobs_active, read_knowledge_index_status,
@@ -274,4 +278,304 @@ fn knowledge_job_failure_does_not_block_other_documents_in_same_batch() {
         .expect("bad job status");
     assert_eq!(good_status, "done");
     assert_eq!(bad_status, "failed");
+}
+
+#[test]
+fn knowledge_embed_stage_averages_split_document_and_unit_embeddings() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let app_dir = dir.path();
+    let conn = db::open(app_dir).expect("open");
+    let key = [3u8; 32];
+
+    db::ensure_knowledge_rebuild_state_defaults(&conn).expect("state defaults");
+    conn.execute(
+        "UPDATE knowledge_rebuild_state SET status = 'running' WHERE state_key = 1",
+        [],
+    )
+    .expect("set running");
+
+    let document_id = "message:long-doc";
+    let unit_id = "message:long-doc:chunk:0";
+    let long_text = (0..600)
+        .map(|index| format!("token{index}"))
+        .collect::<Vec<_>>()
+        .join(" ");
+    seed_knowledge_document(&conn, &key, document_id, &long_text);
+    seed_knowledge_unit(&conn, &key, unit_id, document_id, "chunk", 0, &long_text);
+    conn.execute(
+        r#"INSERT INTO knowledge_index_jobs(
+               document_id, stage, status, attempts, next_retry_at_ms, last_error, created_at_ms, updated_at_ms
+           ) VALUES (?1, 'embed', 'pending', 0, NULL, NULL, 1, 1)"#,
+        params![document_id],
+    )
+    .expect("insert embed job");
+
+    let processed = process_pending_knowledge_index_jobs_active(&conn, &key, Path::new(app_dir), 1)
+        .expect("process embed");
+    assert_eq!(processed, 1);
+
+    let (_, dim) = db::read_knowledge_embedding_model_state(&conn).expect("embedding state");
+    let expected = merged_test_embedding(&long_text, dim as usize);
+    let document_embedding = read_embedding(&conn, "document", document_id);
+    let unit_embedding = read_embedding(&conn, "unit", unit_id);
+    assert_embeddings_close(&document_embedding, &expected);
+    assert_embeddings_close(&unit_embedding, &expected);
+
+    let row_count: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM knowledge_embeddings WHERE target_id IN (?1, ?2)",
+            params![document_id, unit_id],
+            |row| row.get(0),
+        )
+        .expect("embedding row count");
+    assert_eq!(row_count, 2);
+
+    let status = read_knowledge_index_status(&conn, &key).expect("status");
+    assert_eq!(status.embeddings_indexed, 2);
+}
+
+#[test]
+fn knowledge_rebuild_skips_retry_after_job_exhaustion_and_can_complete() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let app_dir = dir.path();
+    let conn = db::open(app_dir).expect("open");
+    let key = [2u8; 32];
+
+    db::ensure_knowledge_rebuild_state_defaults(&conn).expect("state defaults");
+    conn.execute(
+        "UPDATE knowledge_rebuild_state SET status = 'running' WHERE state_key = 1",
+        [],
+    )
+    .expect("set running");
+
+    let document_id = "message:poisoned";
+    let raw_bad = encrypt_bytes(
+        &key,
+        &[0xff, 0xfe],
+        format!("knowledge.document.raw:{document_id}").as_bytes(),
+    )
+    .expect("encrypt bad raw");
+    let normalized = db::encode_knowledge_document_text(
+        &key,
+        document_id,
+        "normalized",
+        "broken knowledge document",
+    )
+    .expect("encode normalized");
+    let anchor_json = serde_json::json!({}).to_string();
+    conn.execute(
+        r#"INSERT INTO knowledge_documents(
+               document_id,
+               origin_type,
+               source_kind,
+               role,
+               language,
+               quality_score,
+               title,
+               summary,
+               anchor_json,
+               raw_text,
+               normalized_text,
+               created_at_ms,
+               updated_at_ms,
+               schema_version,
+               normalization_version,
+               segmentation_version,
+               embedding_policy_version,
+               retrieval_policy_version,
+               last_indexed_at_ms
+           ) VALUES (?1, 'message', 'raw_text', 'body', NULL, 1.0, NULL, NULL, ?2, ?3, ?4, 1, 1, ?5, ?6, ?7, ?8, ?9, NULL)"#,
+        params![
+            document_id,
+            anchor_json,
+            raw_bad,
+            normalized,
+            crate::knowledge::KNOWLEDGE_SCHEMA_VERSION,
+            crate::knowledge::KNOWLEDGE_NORMALIZATION_VERSION,
+            crate::knowledge::KNOWLEDGE_SEGMENTATION_VERSION,
+            crate::knowledge::KNOWLEDGE_EMBEDDING_POLICY_VERSION,
+            crate::knowledge::KNOWLEDGE_RETRIEVAL_POLICY_VERSION,
+        ],
+    )
+    .expect("insert poisoned document");
+    conn.execute(
+        r#"INSERT INTO knowledge_index_jobs(
+               document_id, stage, status, attempts, next_retry_at_ms, last_error, created_at_ms, updated_at_ms
+           ) VALUES (?1, 'normalize', 'failed', 4, 0, 'previous failure', 1, 1)"#,
+        params![document_id],
+    )
+    .expect("insert failing job");
+
+    let error = process_pending_knowledge_index_jobs_active(&conn, &key, Path::new(app_dir), 1)
+        .expect_err("final failing attempt should still surface an error");
+    assert!(error.to_string().contains("utf-8"));
+
+    let (job_status, attempts, next_retry_at_ms): (String, i64, Option<i64>) = conn
+        .query_row(
+            r#"SELECT status, attempts, next_retry_at_ms
+               FROM knowledge_index_jobs
+               WHERE document_id = ?1 AND stage = 'normalize'"#,
+            params![document_id],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+        )
+        .expect("job row");
+    assert_eq!(job_status, "exhausted");
+    assert_eq!(attempts, 5);
+    assert_eq!(next_retry_at_ms, None);
+
+    let status = read_knowledge_index_status(&conn, &key).expect("status after exhaustion");
+    assert_eq!(status.status, "complete");
+    assert!(status
+        .last_error
+        .as_deref()
+        .unwrap_or_default()
+        .contains("utf-8"));
+
+    let processed = process_pending_knowledge_index_jobs_active(&conn, &key, Path::new(app_dir), 1)
+        .expect("exhausted job should not be retried");
+    assert_eq!(processed, 0);
+}
+
+fn seed_knowledge_document(
+    conn: &rusqlite::Connection,
+    key: &[u8; 32],
+    document_id: &str,
+    text: &str,
+) {
+    let anchor_json = serde_json::json!({}).to_string();
+    let raw = db::encode_knowledge_document_text(key, document_id, "raw", text)
+        .expect("encode raw document");
+    let normalized = db::encode_knowledge_document_text(key, document_id, "normalized", text)
+        .expect("encode normalized document");
+    conn.execute(
+        r#"INSERT INTO knowledge_documents(
+               document_id,
+               origin_type,
+               source_kind,
+               role,
+               language,
+               quality_score,
+               title,
+               summary,
+               anchor_json,
+               raw_text,
+               normalized_text,
+               created_at_ms,
+               updated_at_ms,
+               schema_version,
+               normalization_version,
+               segmentation_version,
+               embedding_policy_version,
+               retrieval_policy_version,
+               last_indexed_at_ms
+           ) VALUES (?1, 'message', 'raw_text', 'body', NULL, 1.0, NULL, NULL, ?2, ?3, ?4, 1, 1, ?5, ?6, ?7, ?8, ?9, NULL)"#,
+        params![
+            document_id,
+            anchor_json,
+            raw,
+            normalized,
+            crate::knowledge::KNOWLEDGE_SCHEMA_VERSION,
+            crate::knowledge::KNOWLEDGE_NORMALIZATION_VERSION,
+            crate::knowledge::KNOWLEDGE_SEGMENTATION_VERSION,
+            crate::knowledge::KNOWLEDGE_EMBEDDING_POLICY_VERSION,
+            crate::knowledge::KNOWLEDGE_RETRIEVAL_POLICY_VERSION,
+        ],
+    )
+    .expect("insert knowledge document");
+}
+
+fn seed_knowledge_unit(
+    conn: &rusqlite::Connection,
+    key: &[u8; 32],
+    unit_id: &str,
+    document_id: &str,
+    unit_kind: &str,
+    ordinal: i64,
+    text: &str,
+) {
+    let anchor_json = serde_json::json!({}).to_string();
+    let raw = db::encode_knowledge_unit_text(key, unit_id, "raw", text).expect("encode raw unit");
+    let normalized = db::encode_knowledge_unit_text(key, unit_id, "normalized", text)
+        .expect("encode normalized unit");
+    conn.execute(
+        r#"INSERT INTO knowledge_units(
+               unit_id,
+               document_id,
+               parent_unit_id,
+               unit_kind,
+               source_kind,
+               role,
+               ordinal,
+               token_count,
+               anchor_json,
+               raw_text,
+               normalized_text,
+               prev_unit_id,
+               next_unit_id,
+               created_at_ms,
+               updated_at_ms
+           ) VALUES (?1, ?2, NULL, ?3, 'raw_text', 'body', ?4, ?5, ?6, ?7, ?8, NULL, NULL, 1, 1)"#,
+        params![
+            unit_id,
+            document_id,
+            unit_kind,
+            ordinal,
+            text.split_whitespace().count() as i64,
+            anchor_json,
+            raw,
+            normalized
+        ],
+    )
+    .expect("insert knowledge unit");
+}
+
+fn read_embedding(conn: &rusqlite::Connection, target_kind: &str, target_id: &str) -> Vec<f32> {
+    let json: String = conn
+        .query_row(
+            r#"SELECT embedding_json
+               FROM knowledge_embeddings
+               WHERE target_kind = ?1 AND target_id = ?2"#,
+            params![target_kind, target_id],
+            |row| row.get(0),
+        )
+        .expect("read embedding");
+    serde_json::from_str(&json).expect("decode embedding json")
+}
+
+fn merged_test_embedding(text: &str, dim: usize) -> Vec<f32> {
+    let policy = EmbeddingBatchPolicy::default();
+    let prepared = prepare_embedding_inputs(&[text.to_string()], policy);
+    let pieces = prepared
+        .into_iter()
+        .map(|input| test_deterministic_embedding(&input.text, dim))
+        .collect::<Vec<_>>();
+    average_piece_embeddings(vec![pieces], 1)
+        .into_iter()
+        .next()
+        .unwrap_or_default()
+}
+
+fn test_deterministic_embedding(text: &str, dim: usize) -> Vec<f32> {
+    let dim = dim.max(8);
+    let mut vector = vec![0f32; dim];
+    for token in text.split_whitespace() {
+        let hash = Sha256::digest(token.as_bytes());
+        let index = usize::from(hash[0]) % dim;
+        let sign = if hash[1] % 2 == 0 { 1.0 } else { -1.0 };
+        vector[index] += sign;
+    }
+    let norm = vector.iter().map(|value| value * value).sum::<f32>().sqrt();
+    if norm > 0.0 {
+        for value in &mut vector {
+            *value /= norm;
+        }
+    }
+    vector
+}
+
+fn assert_embeddings_close(actual: &[f32], expected: &[f32]) {
+    assert_eq!(actual.len(), expected.len());
+    for (actual_value, expected_value) in actual.iter().zip(expected.iter()) {
+        assert!((actual_value - expected_value).abs() < 1e-6);
+    }
 }

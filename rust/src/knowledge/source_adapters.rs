@@ -261,8 +261,10 @@ fn collect_attachment_documents(
         let Some(payload_json) = payload_json else {
             continue;
         };
-        let payload: serde_json::Value = serde_json::from_str(&payload_json)
-            .map_err(|error| anyhow!("invalid attachment annotation payload json: {error}"))?;
+        let payload: serde_json::Value = match serde_json::from_str(&payload_json) {
+            Ok(value) => value,
+            Err(_) => continue,
+        };
         for (source_kind, role, text) in attachment_source_candidates(&payload) {
             let source_kind_name = canonical_source_kind_name(source_kind)?;
             emit_document_if_text(
