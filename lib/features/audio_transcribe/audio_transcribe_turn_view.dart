@@ -192,10 +192,10 @@ AudioTranscriptTurnView buildAudioTranscriptTurnView(
     }
 
     final turns = <AudioTranscriptTurn>[];
-    var startMs = normalized.first.tMs;
-    var endMs = normalized.first.tMs;
-    var sourceStartIndex = normalized.first.index;
-    var sourceEndIndex = normalized.first.index;
+    var startMs = 0;
+    var endMs = 0;
+    var sourceStartIndex = 0;
+    var sourceEndIndex = 0;
     var partCount = 0;
     var currentTextLength = 0;
     var currentEndsWithStrongPunctuation = false;
