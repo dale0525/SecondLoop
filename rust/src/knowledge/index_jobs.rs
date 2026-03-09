@@ -745,7 +745,7 @@ pub fn process_pending_knowledge_index_jobs_active(
         [],
         |row| row.get(0),
     )?;
-    if status == "requested" || status == "empty" || status == "stale" {
+    if status == "requested" || status == "empty" {
         initialize_rebuild(conn, key)?;
     }
 

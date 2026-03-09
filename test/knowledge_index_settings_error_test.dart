@@ -127,6 +127,45 @@ void main() {
     expect(find.textContaining('Last error:'), findsOneWidget);
   });
 
+  testWidgets(
+      'Knowledge Index card does not surface kick-start processing errors as rebuild request errors',
+      (tester) async {
+    final backend = _KickFailureKnowledgeBackend();
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: backend,
+            child: SessionScope(
+              sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+              lock: () {},
+              child: const AiSettingsPage(),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final listView = find.byType(ListView);
+    final rebuildButton =
+        find.byKey(const ValueKey('knowledge_index_rebuild_button'));
+    await tester.dragUntilVisible(
+      rebuildButton,
+      listView,
+      const Offset(0, -220),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(rebuildButton);
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+    expect(find.textContaining('kick backend unavailable'), findsNothing);
+    expect(find.textContaining('persisted job failure'), findsOneWidget);
+  });
+
   testWidgets('Knowledge Index card surfaces cancel action errors',
       (tester) async {
     final backend = _ErrorKnowledgeBackend(
@@ -259,6 +298,81 @@ final class _ErrorKnowledgeBackend extends TestAppBackend
     if (failRebuild) {
       throw StateError('rebuild backend unavailable');
     }
+    running = true;
+  }
+}
+
+final class _KickFailureKnowledgeBackend extends TestAppBackend
+    implements KnowledgeBackend {
+  String? persistedLastError;
+  bool running = false;
+
+  @override
+  Future<void> cancelKnowledgeRebuild(Uint8List key) async {
+    running = false;
+  }
+
+  @override
+  Future<KnowledgeIndexStatus> getKnowledgeIndexStatus(Uint8List key) async {
+    return KnowledgeIndexStatus(
+      status: running
+          ? 'running'
+          : (persistedLastError == null ? 'stale' : 'failed'),
+      rebuildRequired: !running && persistedLastError == null,
+      staleReason: running || persistedLastError != null
+          ? null
+          : 'embedding_model_changed',
+      lastError: persistedLastError,
+      lastRebuildStartedAtMs: 10,
+      lastRebuildCompletedAtMs: persistedLastError == null ? 5 : null,
+      currentDocumentId: persistedLastError == null ? null : 'message:m1',
+      currentStage: persistedLastError == null ? null : 'normalize',
+      documentsIndexed: 1,
+      unitsIndexed: 3,
+      embeddingsIndexed: 2,
+      totalDocuments: 4,
+      lastIndexedModelName: 'secondloop-default-embed-v0',
+      lastIndexedDim: 384,
+      versions: const KnowledgeVersionSet(
+        schemaVersion: 1,
+        normalizationVersion: 1,
+        segmentationVersion: 1,
+        embeddingPolicyVersion: 1,
+        retrievalPolicyVersion: 1,
+      ),
+    );
+  }
+
+  @override
+  Future<List<ContentKnowledgeDocument>> listKnowledgeDocuments(
+    Uint8List key, {
+    int limit = 100,
+    int offset = 0,
+  }) async =>
+      const <ContentKnowledgeDocument>[];
+
+  @override
+  Future<List<KnowledgeUnit>> listKnowledgeUnits(
+    Uint8List key, {
+    required String documentId,
+    KnowledgeUnitKind? unitKind,
+    int limit = 100,
+    int offset = 0,
+  }) async =>
+      const <KnowledgeUnit>[];
+
+  @override
+  Future<int> processPendingKnowledgeIndexJobs(
+    Uint8List key, {
+    int limit = 8,
+  }) async {
+    running = false;
+    persistedLastError = 'persisted job failure';
+    throw StateError('kick backend unavailable');
+  }
+
+  @override
+  Future<void> requestKnowledgeRebuild(Uint8List key) async {
     running = true;
   }
 }

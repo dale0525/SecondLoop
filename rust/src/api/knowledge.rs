@@ -28,12 +28,8 @@ pub fn db_request_knowledge_rebuild(app_dir: String, key: Vec<u8>) -> Result<()>
     let key = key_from_bytes(key)?;
     let conn = db::open(Path::new(&app_dir))?;
     knowledge::ensure_knowledge_rebuild_requested(&conn)?;
-    let _ = knowledge::process_pending_knowledge_index_jobs_active(
-        &conn,
-        &key,
-        Path::new(&app_dir),
-        1,
-    )?;
+    let _ =
+        knowledge::process_pending_knowledge_index_jobs_active(&conn, &key, Path::new(&app_dir), 1);
     Ok(())
 }
 

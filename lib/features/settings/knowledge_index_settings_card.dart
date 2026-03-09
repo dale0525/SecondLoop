@@ -126,7 +126,9 @@ class _KnowledgeIndexSettingsCardState
     });
     try {
       await backend.requestKnowledgeRebuild(key);
-      await backend.processPendingKnowledgeIndexJobs(key, limit: 1);
+      try {
+        await backend.processPendingKnowledgeIndexJobs(key, limit: 1);
+      } catch (_) {}
       await _reload(forceLoading: false);
     } catch (error) {
       if (mounted) {
