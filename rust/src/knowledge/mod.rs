@@ -40,4 +40,6 @@ mod models_tests;
 #[cfg(test)]
 mod normalize_tests;
 #[cfg(test)]
+mod rebuild_tests;
+#[cfg(test)]
 mod source_adapters_tests;

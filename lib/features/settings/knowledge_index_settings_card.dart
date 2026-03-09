@@ -225,7 +225,7 @@ class _KnowledgeIndexSettingsCardState
               children: [
                 ElevatedButton(
                   key: const ValueKey('knowledge_index_rebuild_button'),
-                  onPressed: _busy ? null : _requestRebuild,
+                  onPressed: (_busy || isRunning) ? null : _requestRebuild,
                   child:
                       Text(context.t.settings.knowledgeIndex.actions.rebuild),
                 ),

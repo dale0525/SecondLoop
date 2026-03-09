@@ -126,7 +126,11 @@ pub fn list_knowledge_documents(
     let mut rows = stmt.query(params![limit as i64, offset as i64])?;
     let mut out = Vec::<ContentKnowledgeDocument>::new();
     while let Some(row) = rows.next()? {
-        out.push(decode_document_row(conn, key, row)?);
+        let document = match decode_document_row(conn, key, row) {
+            Ok(document) => document,
+            Err(_) => continue,
+        };
+        out.push(document);
     }
     Ok(out)
 }
@@ -175,7 +179,11 @@ pub fn list_knowledge_units(
     ])?;
     let mut out = Vec::<KnowledgeUnit>::new();
     while let Some(row) = rows.next()? {
-        out.push(decode_unit_row(key, row)?);
+        let unit = match decode_unit_row(key, row) {
+            Ok(unit) => unit,
+            Err(_) => continue,
+        };
+        out.push(unit);
     }
     Ok(out)
 }

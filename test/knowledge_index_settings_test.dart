@@ -49,6 +49,48 @@ void main() {
 
     expect(backend.rebuildRequests, 1);
   });
+
+  testWidgets('Knowledge Index rebuild button is disabled while running',
+      (tester) async {
+    final backend = _KnowledgeBackend()..running = true;
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: backend,
+            child: SessionScope(
+              sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+              lock: () {},
+              child: const AiSettingsPage(),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final listView = find.byType(ListView);
+    final rebuildButton =
+        find.byKey(const ValueKey('knowledge_index_rebuild_button'));
+    await tester.dragUntilVisible(
+      rebuildButton,
+      listView,
+      const Offset(0, -220),
+    );
+    await tester.pumpAndSettle();
+
+    final rebuildWidget = tester.widget<ElevatedButton>(rebuildButton);
+    expect(rebuildWidget.onPressed, isNull);
+    expect(backend.rebuildRequests, 0);
+    expect(
+      find.byKey(
+        const ValueKey('knowledge_index_cancel_button'),
+        skipOffstage: false,
+      ),
+      findsOneWidget,
+    );
+  });
 }
 
 final class _KnowledgeBackend extends TestAppBackend

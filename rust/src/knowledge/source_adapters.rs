@@ -86,8 +86,8 @@ fn collect_message_documents(
         r#"SELECT id, conversation_id, content, created_at, updated_at
            FROM messages
            WHERE COALESCE(is_deleted, 0) = 0
-             -- Match legacy semantic-index semantics: NULL/1 remain indexable,
-             -- while explicit non-memory rows stay excluded.
+             -- Preserve legacy semantic-index coverage: pre-migration NULL rows default
+             -- to memory, while assistant replies and explicit non-memory rows remain excluded.
              AND COALESCE(is_memory, 1) = 1
            ORDER BY created_at ASC"#,
     )?;
