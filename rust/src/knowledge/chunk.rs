@@ -62,16 +62,8 @@ fn split_segment_to_fit(
     let count = raw_parts.len().max(normalized_parts.len());
     let mut out = Vec::<(String, String)>::with_capacity(count);
     for index in 0..count {
-        let raw_part = raw_parts
-            .get(index)
-            .cloned()
-            .or_else(|| normalized_parts.get(index).cloned())
-            .unwrap_or_default();
-        let normalized_part = normalized_parts
-            .get(index)
-            .cloned()
-            .or_else(|| raw_parts.get(index).cloned())
-            .unwrap_or_default();
+        let raw_part = raw_parts.get(index).cloned().unwrap_or_default();
+        let normalized_part = normalized_parts.get(index).cloned().unwrap_or_default();
         out.push((raw_part, normalized_part));
     }
     out

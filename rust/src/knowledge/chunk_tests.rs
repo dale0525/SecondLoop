@@ -77,3 +77,34 @@ speaker b: three four."
     assert_eq!(chunks[0].raw_text, doc.raw_text);
     assert_eq!(chunks[0].normalized_text, doc.normalized_text);
 }
+
+#[test]
+fn knowledge_chunking_does_not_cross_fill_raw_and_normalized_tail_parts() {
+    let doc = ContentKnowledgeDocument {
+        document_id: "doc-misaligned-tail".to_string(),
+        origin_type: KnowledgeOriginType::Attachment,
+        source_kind: KnowledgeSourceKind::RawText,
+        role: KnowledgeRole::Body,
+        language: Some("en".to_string()),
+        quality_score: 1.0,
+        created_at_ms: 1,
+        updated_at_ms: 1,
+        versions: KnowledgeVersionSet::current(),
+        anchors: KnowledgeAnchorSet::default(),
+        title: None,
+        summary: None,
+        raw_text: "alpha beta gamma delta epsilon".to_string(),
+        normalized_text: "alpha beta gamma delta".to_string(),
+    };
+
+    let segments = segment_document_text(&doc);
+    let chunks = build_chunk_units(&doc, &segments, 2, 2);
+
+    assert_eq!(chunks.len(), 3);
+    assert_eq!(chunks[0].raw_text, "alpha beta");
+    assert_eq!(chunks[0].normalized_text, "alpha beta");
+    assert_eq!(chunks[1].raw_text, "gamma delta");
+    assert_eq!(chunks[1].normalized_text, "gamma delta");
+    assert_eq!(chunks[2].raw_text, "epsilon");
+    assert_eq!(chunks[2].normalized_text, "");
+}
