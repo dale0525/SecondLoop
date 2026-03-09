@@ -68,6 +68,15 @@ fn emit_document_if_text(
     })
 }
 
+fn canonical_source_kind_name(source_kind: KnowledgeSourceKind) -> Result<String> {
+    let value = serde_json::to_value(source_kind)
+        .map_err(|error| anyhow!("serialize knowledge source kind: {error}"))?;
+    value
+        .as_str()
+        .map(str::to_owned)
+        .ok_or_else(|| anyhow!("knowledge source kind did not serialize to a string"))
+}
+
 fn collect_message_documents(
     conn: &Connection,
     key: &[u8; 32],
@@ -77,6 +86,8 @@ fn collect_message_documents(
         r#"SELECT id, conversation_id, content, created_at, updated_at
            FROM messages
            WHERE COALESCE(is_deleted, 0) = 0
+             -- Match legacy semantic-index semantics: NULL/1 remain indexable,
+             -- while explicit non-memory rows stay excluded.
              AND COALESCE(is_memory, 1) = 1
            ORDER BY created_at ASC"#,
     )?;
@@ -253,11 +264,11 @@ fn collect_attachment_documents(
         let payload: serde_json::Value = serde_json::from_str(&payload_json)
             .map_err(|error| anyhow!("invalid attachment annotation payload json: {error}"))?;
         for (source_kind, role, text) in attachment_source_candidates(&payload) {
+            let source_kind_name = canonical_source_kind_name(source_kind)?;
             emit_document_if_text(
                 emit,
                 DocumentSeed {
-                    document_id: format!("attachment:{attachment_sha256}:{source_kind:?}")
-                        .to_ascii_lowercase(),
+                    document_id: format!("attachment:{attachment_sha256}:{source_kind_name}"),
                     origin_type: KnowledgeOriginType::Attachment,
                     source_kind,
                     role,
@@ -299,16 +310,22 @@ fn collect_external_documents(
         let body_blob: Vec<u8> = row.get(3)?;
         let created_at_ms: i64 = row.get(4)?;
         let updated_at_ms: i64 = row.get(5)?;
-        let title = decrypt_external_text(
+        let title = match decrypt_external_text(
             key,
             format!("external_document.title:{doc_id}").into_bytes(),
             &title_blob,
-        )?;
-        let body = decrypt_external_text(
+        ) {
+            Ok(value) => value,
+            Err(_) => continue,
+        };
+        let body = match decrypt_external_text(
             key,
             format!("external_document.body:{doc_id}").into_bytes(),
             &body_blob,
-        )?;
+        ) {
+            Ok(value) => value,
+            Err(_) => continue,
+        };
         emit_document_if_text(
             emit,
             DocumentSeed {

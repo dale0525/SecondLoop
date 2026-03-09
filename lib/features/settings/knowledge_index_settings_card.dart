@@ -23,6 +23,7 @@ class _KnowledgeIndexSettingsCardState
   KnowledgeIndexStatus? _status;
   bool _loading = true;
   bool _busy = false;
+  String? _uiError;
   int _generation = 0;
 
   @override
@@ -52,6 +53,7 @@ class _KnowledgeIndexSettingsCardState
         _status = null;
         _loading = false;
         _busy = false;
+        _uiError = null;
       });
       return;
     }
@@ -67,11 +69,13 @@ class _KnowledgeIndexSettingsCardState
       setState(() {
         _status = status;
         _loading = false;
+        _uiError = null;
       });
-    } catch (_) {
+    } catch (error) {
       if (!mounted || generation != _generation) return;
       setState(() {
         _loading = false;
+        _uiError = error.toString();
       });
     }
   }
@@ -116,11 +120,18 @@ class _KnowledgeIndexSettingsCardState
     final backend = _knowledgeBackend;
     final key = _sessionKey;
     if (backend == null || key == null || _busy) return;
-    setState(() => _busy = true);
+    setState(() {
+      _busy = true;
+      _uiError = null;
+    });
     try {
       await backend.requestKnowledgeRebuild(key);
       await backend.processPendingKnowledgeIndexJobs(key, limit: 1);
       await _reload(forceLoading: false);
+    } catch (error) {
+      if (mounted) {
+        setState(() => _uiError = error.toString());
+      }
     } finally {
       if (mounted) {
         setState(() => _busy = false);
@@ -132,10 +143,17 @@ class _KnowledgeIndexSettingsCardState
     final backend = _knowledgeBackend;
     final key = _sessionKey;
     if (backend == null || key == null || _busy) return;
-    setState(() => _busy = true);
+    setState(() {
+      _busy = true;
+      _uiError = null;
+    });
     try {
       await backend.cancelKnowledgeRebuild(key);
       await _reload(forceLoading: false);
+    } catch (error) {
+      if (mounted) {
+        setState(() => _uiError = error.toString());
+      }
     } finally {
       if (mounted) {
         setState(() => _busy = false);
@@ -159,6 +177,8 @@ class _KnowledgeIndexSettingsCardState
       if (_lastBuildLine(context) case final line?) line,
       if (status?.staleReason case final stale?)
         context.t.settings.knowledgeIndex.staleReason(value: stale),
+      if (_uiError case final error? when error != status?.lastError)
+        context.t.settings.knowledgeIndex.lastError(value: error),
       if (status?.lastError case final error?)
         context.t.settings.knowledgeIndex.lastError(value: error),
       if (status != null)
