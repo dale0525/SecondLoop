@@ -7,7 +7,7 @@ use sha2::{Digest, Sha256};
 use crate::knowledge::embedding_batch::{
     average_piece_embeddings, prepare_embedding_inputs, EmbeddingBatchPolicy,
 };
-use crate::knowledge::source_adapters::visit_source_knowledge_documents_with_external;
+use crate::knowledge::source_adapters::{snippet, visit_source_knowledge_documents_with_external};
 use crate::knowledge::{
     build_chunk_units, build_section_units, build_segment_units, list_knowledge_units,
     normalize_text_for_source, segment_document_text, ContentKnowledgeDocument, KnowledgeUnit,
@@ -623,6 +623,7 @@ fn process_stage(conn: &Connection, key: &[u8; 32], document_id: &str, stage: &s
             let mut document = document_by_id(conn, key, document_id)?;
             document.normalized_text =
                 normalize_text_for_source(document.source_kind, &document.raw_text);
+            document.summary = snippet(&document.normalized_text, 120);
             document.versions = KnowledgeVersionSet::current();
             upsert_document(conn, key, &document)?;
         }

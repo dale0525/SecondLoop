@@ -350,6 +350,60 @@ fn knowledge_adapter_visits_external_documents_in_ascending_updated_order() {
 }
 
 #[test]
+fn knowledge_adapter_keeps_external_body_when_only_title_blob_is_corrupt() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let app_dir = dir.path().to_path_buf();
+    let conn = db::open(&app_dir).expect("open");
+    let key = [12u8; 32];
+    let external = db::open_external_readonly_db(&app_dir).expect("open external db");
+
+    external
+        .execute(
+            r#"INSERT INTO external_import_batches(
+                   batch_id, source_kind, source_label, status, created_at_ms, updated_at_ms, completed_at_ms, stats_json, last_error
+               ) VALUES (?1, 'folder', 'Fixture', 'completed', 1, 1, 1, '{}', NULL)"#,
+            params!["batch-1"],
+        )
+        .expect("insert batch");
+
+    let body = encrypt_bytes(
+        &key,
+        b"Healthy external body survives title corruption",
+        b"external_document.body:doc-title-bad",
+    )
+    .expect("encrypt body");
+    let tags =
+        encrypt_bytes(&key, b"[]", b"external_document.tags:doc-title-bad").expect("encrypt tags");
+    external
+        .execute(
+            r#"INSERT INTO external_documents(
+                   doc_id, batch_id, external_origin_id, source_rel_path, title, body_markdown, tags_json,
+                   created_at_ms, updated_at_ms, checksum_sha256, is_deleted
+               ) VALUES (?1, ?2, NULL, ?3, ?4, ?5, ?6, 1, 1, 'title-bad', 0)"#,
+            params![
+                "doc-title-bad",
+                "batch-1",
+                "title-bad.md",
+                vec![1u8, 2u8, 3u8],
+                body,
+                tags,
+            ],
+        )
+        .expect("insert title-bad doc");
+
+    let documents = collect_source_knowledge_documents(&conn, &key).expect("collect docs");
+    let document = documents
+        .iter()
+        .find(|doc| doc.document_id == "external:doc-title-bad")
+        .expect("external doc should still be indexed");
+
+    assert_eq!(document.title, None);
+    assert!(document
+        .normalized_text
+        .contains("Healthy external body survives title corruption"));
+}
+
+#[test]
 fn knowledge_adapter_skips_external_documents_with_corrupt_blobs() {
     let dir = tempfile::tempdir().expect("tempdir");
     let app_dir = dir.path().to_path_buf();

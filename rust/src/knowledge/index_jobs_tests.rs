@@ -7,9 +7,10 @@ use crate::knowledge::embedding_batch::{
     average_piece_embeddings, prepare_embedding_inputs, EmbeddingBatchPolicy,
 };
 use crate::knowledge::index_jobs::failed_job_update;
+use crate::knowledge::source_adapters::snippet;
 use crate::knowledge::{
     ensure_knowledge_rebuild_requested, list_knowledge_documents,
-    process_pending_knowledge_index_jobs_active, read_knowledge_index_status,
+    process_pending_knowledge_index_jobs_active, read_knowledge_index_status, KnowledgeSourceKind,
 };
 
 #[test]
@@ -133,6 +134,55 @@ fn knowledge_rebuild_initialization_skips_corrupt_messages_and_preserves_valid_d
     assert!(after_docs
         .iter()
         .all(|doc| doc.anchors.message_id.as_deref() != Some(bad.id.as_str())));
+}
+
+#[test]
+fn knowledge_normalize_stage_refreshes_summary_from_normalized_text() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let app_dir = dir.path();
+    let conn = db::open(app_dir).expect("open");
+    let key = [7u8; 32];
+    let document_id = "message:normalize-summary";
+    let raw_text = "  [00:01]  SPEAKER A :  Hello   world  ";
+
+    db::ensure_knowledge_rebuild_state_defaults(&conn).expect("state defaults");
+    conn.execute(
+        "UPDATE knowledge_rebuild_state SET status = 'running' WHERE state_key = 1",
+        [],
+    )
+    .expect("set running");
+
+    seed_knowledge_document(&conn, &key, document_id, raw_text);
+    conn.execute(
+        r#"UPDATE knowledge_documents
+           SET source_kind = 'transcript',
+               summary = 'stale summary'
+           WHERE document_id = ?1"#,
+        params![document_id],
+    )
+    .expect("override source kind and summary");
+    conn.execute(
+        r#"INSERT INTO knowledge_index_jobs(
+               document_id, stage, status, attempts, next_retry_at_ms, last_error, created_at_ms, updated_at_ms
+           ) VALUES (?1, 'normalize', 'pending', 0, NULL, NULL, 1, 1)"#,
+        params![document_id],
+    )
+    .expect("insert normalize job");
+
+    let processed = process_pending_knowledge_index_jobs_active(&conn, &key, 1)
+        .expect("normalize should succeed");
+    assert_eq!(processed, 1);
+
+    let document = list_knowledge_documents(&conn, &key, 10, 0)
+        .expect("list documents")
+        .into_iter()
+        .find(|doc| doc.document_id == document_id)
+        .expect("document");
+
+    assert_eq!(document.source_kind, KnowledgeSourceKind::Transcript);
+    assert_eq!(document.normalized_text, "[00:01] Speaker A: Hello world");
+    assert_eq!(document.summary, snippet(&document.normalized_text, 120));
+    assert_ne!(document.summary.as_deref(), Some("stale summary"));
 }
 
 #[test]

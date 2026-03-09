@@ -8,7 +8,7 @@ use crate::knowledge::{
     KnowledgeRole, KnowledgeSourceKind, KnowledgeVersionSet,
 };
 
-fn snippet(text: &str, limit: usize) -> Option<String> {
+pub(crate) fn snippet(text: &str, limit: usize) -> Option<String> {
     let trimmed = text.trim();
     if trimmed.is_empty() {
         return None;
@@ -316,14 +316,12 @@ fn collect_external_documents(
         let body_blob: Vec<u8> = row.get(3)?;
         let created_at_ms: i64 = row.get(4)?;
         let updated_at_ms: i64 = row.get(5)?;
-        let title = match decrypt_external_text(
+        let title = decrypt_external_text(
             key,
             format!("external_document.title:{doc_id}").into_bytes(),
             &title_blob,
-        ) {
-            Ok(value) => value,
-            Err(_) => continue,
-        };
+        )
+        .ok();
         let body = match decrypt_external_text(
             key,
             format!("external_document.body:{doc_id}").into_bytes(),
@@ -345,7 +343,7 @@ fn collect_external_documents(
                     source_filename: source_rel_path,
                     ..KnowledgeAnchorSet::default()
                 },
-                title: snippet(&title, 80),
+                title: title.as_deref().and_then(|value| snippet(value, 80)),
                 raw_text: body,
             },
         )?;
