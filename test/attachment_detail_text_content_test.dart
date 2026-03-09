@@ -1,3 +1,5 @@
+import 'dart:collection';
+
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:secondloop/features/attachments/attachment_detail_text_content.dart';
@@ -148,4 +150,192 @@ void main() {
     expect(content.summary, 'Local extracted excerpt.');
     expect(content.full, 'Local extracted full text.');
   });
+
+  test('audio detail prefers turn view for display text', () {
+    final content = resolveAttachmentDetailTextContent(
+      const <String, Object?>{
+        'mime_type': 'audio/mp4',
+        'transcript_excerpt': 'raw excerpt',
+        'transcript_full': 'raw transcript body',
+        'transcript_turns_v1': {
+          'builder_version': 'turns_v1',
+          'status': 'ok',
+          'turns': [
+            {
+              'start_ms': 12000,
+              'end_ms': 18000,
+              'text': 'Hello everyone.',
+              'segment_count': 1,
+              'source_segment_start_index': 0,
+              'source_segment_end_index': 0,
+            },
+          ],
+        },
+      },
+    );
+
+    expect(content.summary, contains('[00:12–00:18] Hello everyone.'));
+    expect(content.full, '[00:12–00:18] Hello everyone.');
+  });
+
+  test('audio detail resolves persisted turn view only once', () {
+    final payload = _TranscriptTurnPayloadReadTrackingMap(
+      <String, Object?>{
+        'mime_type': 'audio/mp4',
+        'transcript_excerpt': 'raw excerpt',
+        'transcript_full': 'raw transcript body',
+      },
+      transcriptTurnView: const <String, Object?>{
+        'builder_version': 'turns_v1',
+        'status': 'ok',
+        'turns': [
+          {
+            'start_ms': 12000,
+            'end_ms': 18000,
+            'text': 'Hello everyone.',
+            'segment_count': 1,
+            'source_segment_start_index': 0,
+            'source_segment_end_index': 0,
+          },
+        ],
+      },
+    );
+
+    final content = resolveAttachmentDetailTextContent(payload);
+
+    expect(content.summary, contains('[00:12–00:18] Hello everyone.'));
+    expect(content.full, '[00:12–00:18] Hello everyone.');
+    expect(payload.transcriptTurnViewReadCount, 1);
+  });
+
+  test('audio detail full prefers turn view over generic full_text', () {
+    final content = resolveAttachmentDetailTextContent(
+      const <String, Object?>{
+        'mime_type': 'audio/mp4',
+        'full_text': 'generic enrichment full text',
+        'transcript_full': 'raw transcript body',
+        'transcript_turns_v1': {
+          'builder_version': 'turns_v1',
+          'status': 'ok',
+          'turns': [
+            {
+              'start_ms': 12000,
+              'end_ms': 18000,
+              'text': 'Hello everyone.',
+              'segment_count': 1,
+              'source_segment_start_index': 0,
+              'source_segment_end_index': 0,
+            },
+          ],
+        },
+      },
+    );
+
+    expect(content.full, '[00:12–00:18] Hello everyone.');
+  });
+
+  test('audio detail full prefers transcript_full over generic full_text', () {
+    final content = resolveAttachmentDetailTextContent(
+      const <String, Object?>{
+        'mime_type': 'audio/mp4',
+        'full_text': 'generic enrichment full text',
+        'transcript_full': 'raw transcript body',
+        'transcript_turns_v1': {
+          'builder_version': 'turns_v1',
+          'status': 'fallback_builder_error',
+          'turns': [],
+        },
+      },
+    );
+
+    expect(content.full, 'raw transcript body');
+  });
+
+  test('audio detail falls back to raw transcript when turn view is not ok',
+      () {
+    final content = resolveAttachmentDetailTextContent(
+      const <String, Object?>{
+        'mime_type': 'audio/mp4',
+        'transcript_excerpt': 'raw excerpt',
+        'transcript_full': 'raw transcript body',
+        'transcript_turns_v1': {
+          'builder_version': 'turns_v1',
+          'status': 'fallback_builder_error',
+          'turns': [],
+        },
+      },
+    );
+
+    expect(content.summary, 'raw excerpt');
+    expect(content.full, 'raw transcript body');
+  });
+
+  test('audio detail can build turn view from legacy transcript segments', () {
+    final content = resolveAttachmentDetailTextContent(
+      const <String, Object?>{
+        'mime_type': 'audio/mp4',
+        'transcript_excerpt': 'raw excerpt',
+        'transcript_full': 'raw transcript body',
+        'transcript_segments': [
+          {
+            't_ms': 12000,
+            'text': 'Hello everyone.',
+          },
+          {
+            't_ms': 12600,
+            'text': 'Thanks for joining.',
+          },
+        ],
+      },
+    );
+
+    expect(
+      content.full,
+      '[00:12–00:12] Hello everyone. Thanks for joining.',
+    );
+    expect(content.summary, contains('[00:12–00:12]'));
+  });
+}
+
+final class _TranscriptTurnPayloadReadTrackingMap
+    extends MapBase<String, Object?> {
+  _TranscriptTurnPayloadReadTrackingMap(
+    this._values, {
+    required Map<String, Object?> transcriptTurnView,
+  }) : _transcriptTurnView = transcriptTurnView;
+
+  final Map<String, Object?> _values;
+  final Map<String, Object?> _transcriptTurnView;
+  int transcriptTurnViewReadCount = 0;
+
+  @override
+  Object? operator [](Object? key) {
+    if (key == 'transcript_turns_v1') {
+      transcriptTurnViewReadCount += 1;
+      return _transcriptTurnView;
+    }
+    return _values[key];
+  }
+
+  @override
+  void operator []=(String key, Object? value) {
+    _values[key] = value;
+  }
+
+  @override
+  void clear() {
+    _values.clear();
+  }
+
+  @override
+  Iterable<String> get keys =>
+      _values.keys.followedBy(const ['transcript_turns_v1']);
+
+  @override
+  Object? remove(Object? key) {
+    if (key == 'transcript_turns_v1') {
+      return null;
+    }
+    return _values.remove(key);
+  }
 }

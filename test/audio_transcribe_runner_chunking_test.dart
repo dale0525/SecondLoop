@@ -195,6 +195,16 @@ void main() {
 
     final payload = jsonDecode(store.okPayloadJson!) as Map<String, Object?>;
     expect(payload['transcript_full'], 'chunk-1\nchunk-2\nchunk-3');
+    final turnView = Map<String, Object?>.from(
+      payload['transcript_turns_v1']! as Map,
+    );
+    expect(turnView['builder_version'], 'turns_v1');
+    expect(turnView['status'], 'ok');
+    final turns = turnView['turns'] as List<Object?>;
+    expect(turns, hasLength(3));
+    final firstTurn = Map<String, Object?>.from(turns.first! as Map);
+    expect(firstTurn['start_ms'], 0);
+    expect(firstTurn['text'], 'segment:chunk-1');
 
     final segments = payload['transcript_segments'] as List<Object?>;
     expect(segments, hasLength(3));
