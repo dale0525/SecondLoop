@@ -989,7 +989,7 @@ mod tests {
 
     #[test]
     fn attachment_chunk_sources_keep_canonical_transcript_and_ignore_turn_view() {
-        let payload = json!({
+        let payload_excerpt_only = json!({
             "transcript_excerpt": "raw transcript excerpt",
             "transcript_turns_v1": {
                 "builder_version": "turns_v1",
@@ -1005,15 +1005,43 @@ mod tests {
             }
         });
 
-        let sources = attachment_chunk_source_kinds(&payload);
+        let excerpt_only_sources = attachment_chunk_source_kinds(&payload_excerpt_only);
 
         assert_eq!(
-            sources,
+            excerpt_only_sources,
             vec![(
                 "transcript_full".to_string(),
                 "raw transcript excerpt".to_string()
             )]
         );
-        assert!(!sources.iter().any(|(_, text)| text.contains("display-only turn")));
+        assert!(!excerpt_only_sources
+            .iter()
+            .any(|(_, text)| text.contains("display-only turn")));
+
+        let payload_with_full = json!({
+            "transcript_full": "raw transcript full",
+            "transcript_excerpt": "raw transcript excerpt",
+            "transcript_turns_v1": {
+                "builder_version": "turns_v1",
+                "status": "ok",
+                "turns": [
+                    {
+                        "start_ms": 12000,
+                        "end_ms": 18000,
+                        "text": "display-only turn",
+                        "segment_count": 1
+                    }
+                ]
+            }
+        });
+
+        let full_sources = attachment_chunk_source_kinds(&payload_with_full);
+
+        assert!(full_sources
+            .iter()
+            .any(|(kind, text)| kind == "transcript_full" && text == "raw transcript full"));
+        assert!(!full_sources
+            .iter()
+            .any(|(_, text)| text.contains("display-only turn")));
     }
 }

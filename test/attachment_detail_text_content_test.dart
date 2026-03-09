@@ -176,6 +176,32 @@ void main() {
     expect(content.full, '[00:12–00:18] Hello everyone.');
   });
 
+  test('audio detail full prefers turn view over generic full_text', () {
+    final content = resolveAttachmentDetailTextContent(
+      const <String, Object?>{
+        'mime_type': 'audio/mp4',
+        'full_text': 'generic enrichment full text',
+        'transcript_full': 'raw transcript body',
+        'transcript_turns_v1': {
+          'builder_version': 'turns_v1',
+          'status': 'ok',
+          'turns': [
+            {
+              'start_ms': 12000,
+              'end_ms': 18000,
+              'text': 'Hello everyone.',
+              'segment_count': 1,
+              'source_segment_start_index': 0,
+              'source_segment_end_index': 0,
+            },
+          ],
+        },
+      },
+    );
+
+    expect(content.full, '[00:12–00:18] Hello everyone.');
+  });
+
   test('audio detail falls back to raw transcript when turn view is not ok',
       () {
     final content = resolveAttachmentDetailTextContent(

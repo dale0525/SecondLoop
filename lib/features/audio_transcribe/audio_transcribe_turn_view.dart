@@ -338,11 +338,7 @@ String _normalizeSegmentText(String raw) {
 }
 
 String _joinTurnText(List<String> parts) {
-  final normalized = parts
-      .map(_normalizeSegmentText)
-      .where((item) => item.isNotEmpty)
-      .toList(growable: false);
-  return normalized.join(' ').trim();
+  return parts.where((item) => item.isNotEmpty).join(' ');
 }
 
 int _visibleCharCount(String raw) {
