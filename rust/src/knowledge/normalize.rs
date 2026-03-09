@@ -36,6 +36,7 @@ fn normalize_transcript_line(line: &str) -> String {
         }
     }
 
+    // Use the first ':' as the delimiter so transcript content may keep later colons intact.
     if let Some(colon_idx) = working.find(':') {
         let maybe_speaker = working[..colon_idx].trim();
         let content = working[colon_idx + 1..].trim();
@@ -59,6 +60,7 @@ pub fn normalize_text_for_source(source_kind: KnowledgeSourceKind, text: &str) -
         .map(|line| match source_kind {
             KnowledgeSourceKind::Transcript => normalize_transcript_line(line),
             KnowledgeSourceKind::Metadata => {
+                // Use the first ':' as the key/value delimiter so metadata values may keep later colons.
                 if let Some(colon_idx) = line.find(':') {
                     let key = title_case_ascii_words(line[..colon_idx].trim());
                     let value = collapse_spaces(line[colon_idx + 1..].trim());

@@ -19,6 +19,7 @@ const UNKNOWN_STAGE_RANK: i64 = 99;
 const MAX_KNOWLEDGE_JOB_ATTEMPTS: i64 = 5;
 const KV_REBUILD_EMBEDDING_MODEL_NAME: &str = "knowledge.rebuild.embedding_model_name";
 const KV_REBUILD_EMBEDDING_DIM: &str = "knowledge.rebuild.embedding_dim";
+const KNOWLEDGE_UNIT_PAGE_SIZE: usize = 10_000;
 
 fn stage_rank(stage: &str) -> i64 {
     JOB_STAGES
@@ -217,11 +218,10 @@ fn insert_units(conn: &Connection, key: &[u8; 32], units: &[KnowledgeUnit]) -> R
                    next_unit_id,
                    created_at_ms,
                    updated_at_ms
-               ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)"#,
+               ) VALUES (?1, ?2, NULL, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, NULL, NULL, ?11, ?12)"#,
             params![
                 unit.unit_id,
                 unit.document_id,
-                unit.parent_unit_id,
                 unit_kind_name(unit.unit_kind)?,
                 serde_json::to_string(&unit.source_kind)?
                     .trim_matches('"')
@@ -239,10 +239,23 @@ fn insert_units(conn: &Connection, key: &[u8; 32], units: &[KnowledgeUnit]) -> R
                     "normalized",
                     &unit.normalized_text,
                 )?,
-                unit.prev_unit_id,
-                unit.next_unit_id,
                 unit.created_at_ms,
                 unit.updated_at_ms,
+            ],
+        )?;
+    }
+    for unit in units {
+        conn.execute(
+            r#"UPDATE knowledge_units
+               SET parent_unit_id = ?2,
+                   prev_unit_id = ?3,
+                   next_unit_id = ?4
+               WHERE unit_id = ?1"#,
+            params![
+                unit.unit_id,
+                unit.parent_unit_id,
+                unit.prev_unit_id,
+                unit.next_unit_id,
             ],
         )?;
     }
@@ -274,6 +287,47 @@ fn replace_units_of_kind(
         params![document_id, unit_kind_name(unit_kind)?],
     )?;
     insert_units(conn, key, units)
+}
+
+fn count_document_units_of_kind(
+    conn: &Connection,
+    document_id: &str,
+    unit_kind: KnowledgeUnitKind,
+) -> Result<usize> {
+    let kind_name = unit_kind_name(unit_kind)?;
+    let count: i64 = conn.query_row(
+        r#"SELECT COUNT(*)
+           FROM knowledge_units
+           WHERE document_id = ?1
+             AND unit_kind = ?2"#,
+        params![document_id, kind_name],
+        |row| row.get(0),
+    )?;
+    Ok(count.max(0) as usize)
+}
+
+fn list_all_document_units_of_kind(
+    conn: &Connection,
+    key: &[u8; 32],
+    document_id: &str,
+    unit_kind: KnowledgeUnitKind,
+) -> Result<Vec<KnowledgeUnit>> {
+    let total_rows = count_document_units_of_kind(conn, document_id, unit_kind)?;
+    let mut units = Vec::new();
+    let mut offset = 0usize;
+    while offset < total_rows {
+        let mut page = list_knowledge_units(
+            conn,
+            key,
+            document_id,
+            Some(unit_kind),
+            KNOWLEDGE_UNIT_PAGE_SIZE,
+            offset,
+        )?;
+        units.append(&mut page);
+        offset += KNOWLEDGE_UNIT_PAGE_SIZE;
+    }
+    Ok(units)
 }
 
 // TODO(knowledge-phase2): Replace this Phase 1 placeholder with actual embedder calls
@@ -636,13 +690,11 @@ fn process_stage(conn: &Connection, key: &[u8; 32], document_id: &str, stage: &s
         }
         "chunk" => {
             let document = document_by_id(conn, key, document_id)?;
-            let segment_units = list_knowledge_units(
+            let segment_units = list_all_document_units_of_kind(
                 conn,
                 key,
                 document_id,
-                Some(KnowledgeUnitKind::Segment),
-                10_000,
-                0,
+                KnowledgeUnitKind::Segment,
             )?;
             if segment_units.is_empty() {
                 replace_units_of_kind(conn, key, document_id, KnowledgeUnitKind::Chunk, &[])?;
@@ -658,22 +710,16 @@ fn process_stage(conn: &Connection, key: &[u8; 32], document_id: &str, stage: &s
                 params![document_id],
             )?;
             let document = document_by_id(conn, key, document_id)?;
-            let sections = list_knowledge_units(
+            // Segments are intermediate build artifacts for chunk construction. Phase 1 stores
+            // embeddings only for the document plus section/chunk retrieval layers.
+            let sections = list_all_document_units_of_kind(
                 conn,
                 key,
                 document_id,
-                Some(KnowledgeUnitKind::Section),
-                10_000,
-                0,
+                KnowledgeUnitKind::Section,
             )?;
-            let chunks = list_knowledge_units(
-                conn,
-                key,
-                document_id,
-                Some(KnowledgeUnitKind::Chunk),
-                10_000,
-                0,
-            )?;
+            let chunks =
+                list_all_document_units_of_kind(conn, key, document_id, KnowledgeUnitKind::Chunk)?;
             let added = store_embeddings_for_document(conn, &document, &sections, &chunks)? as i64;
             conn.execute(
                 r#"UPDATE knowledge_rebuild_state
