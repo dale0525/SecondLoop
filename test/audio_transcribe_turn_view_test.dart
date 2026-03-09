@@ -1,3 +1,5 @@
+import 'dart:collection';
+
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:secondloop/features/audio_transcribe/audio_transcribe_turn_view.dart';
@@ -129,6 +131,22 @@ void main() {
     expect(full, '[0:59:59–1:00:01] crossing boundary');
   });
 
+  test('fromJson reads builder version only once', () {
+    final raw = _BuilderVersionReadTrackingMap(
+      <String, Object?>{
+        'status': 'ok',
+        'turns': const <Object?>[],
+        'params': const <String, Object?>{},
+      },
+    );
+
+    final view = AudioTranscriptTurnView.fromJson(raw);
+
+    expect(view, isNotNull);
+    expect(view!.builderVersion, 'custom_v2');
+    expect(raw.builderVersionReadCount, 1);
+  });
+
   test('excerpt truncates at a word boundary when possible', () {
     final view = buildAudioTranscriptTurnView(
       const <AudioTranscriptTurnSourceSegment>[
@@ -143,4 +161,42 @@ void main() {
 
     expect(excerpt, '[00:12–00:12] hello…');
   });
+}
+
+final class _BuilderVersionReadTrackingMap extends MapBase<String, Object?> {
+  _BuilderVersionReadTrackingMap(this._values);
+
+  final Map<String, Object?> _values;
+  int builderVersionReadCount = 0;
+
+  @override
+  Object? operator [](Object? key) {
+    if (key == 'builder_version') {
+      builderVersionReadCount += 1;
+      return builderVersionReadCount == 1 ? ' custom_v2 ' : '';
+    }
+    return _values[key];
+  }
+
+  @override
+  void operator []=(String key, Object? value) {
+    _values[key] = value;
+  }
+
+  @override
+  void clear() {
+    _values.clear();
+  }
+
+  @override
+  Iterable<String> get keys =>
+      _values.keys.followedBy(const ['builder_version']);
+
+  @override
+  Object? remove(Object? key) {
+    if (key == 'builder_version') {
+      return null;
+    }
+    return _values.remove(key);
+  }
 }

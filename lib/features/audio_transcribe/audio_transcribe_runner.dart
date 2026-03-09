@@ -755,7 +755,7 @@ final class AudioTranscribeRunner {
           .map(
             (s) => AudioTranscriptTurnSourceSegment(
               tMs: s.tMs,
-              text: s.text,
+              text: s.text.trim(),
             ),
           )
           .toList(growable: false),

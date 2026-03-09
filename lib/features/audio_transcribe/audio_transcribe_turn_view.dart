@@ -122,10 +122,9 @@ final class AudioTranscriptTurnView {
 
   static AudioTranscriptTurnView? fromJson(Object? raw) {
     if (raw is! Map) return null;
+    final rawBuilderVersion = (raw['builder_version'] ?? '').toString().trim();
     final builderVersion =
-        (raw['builder_version'] ?? '').toString().trim().isEmpty
-            ? 'turns_v1'
-            : (raw['builder_version'] ?? '').toString().trim();
+        rawBuilderVersion.isEmpty ? 'turns_v1' : rawBuilderVersion;
     final status = AudioTranscriptTurnViewStatusWireName.fromWireName(
       (raw['status'] ?? '').toString(),
     );
