@@ -533,6 +533,25 @@ fn mark_job_done(conn: &Connection, document_id: &str, stage: &str) -> Result<()
     Ok(())
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) struct FailedJobUpdate {
+    pub(crate) next_attempts: i64,
+    pub(crate) exhausted: bool,
+    pub(crate) next_retry_at_ms: Option<i64>,
+    pub(crate) updated_at_ms: i64,
+}
+
+pub(crate) fn failed_job_update(attempts: i64, now: i64) -> FailedJobUpdate {
+    let next_attempts = attempts + 1;
+    let exhausted = next_attempts >= MAX_KNOWLEDGE_JOB_ATTEMPTS;
+    FailedJobUpdate {
+        next_attempts,
+        exhausted,
+        next_retry_at_ms: if exhausted { None } else { Some(now + 5_000) },
+        updated_at_ms: now,
+    }
+}
+
 fn mark_job_failed(
     conn: &Connection,
     document_id: &str,
@@ -547,13 +566,7 @@ fn mark_job_failed(
         params![document_id, stage],
         |row| row.get(0),
     )?;
-    let next_attempts = attempts + 1;
-    let exhausted = next_attempts >= MAX_KNOWLEDGE_JOB_ATTEMPTS;
-    let next_retry_at_ms = if exhausted {
-        None
-    } else {
-        Some(now_ms() + 5_000)
-    };
+    let update = failed_job_update(attempts, now_ms());
     conn.execute(
         r#"UPDATE knowledge_index_jobs
            SET status = ?3,
@@ -565,11 +578,15 @@ fn mark_job_failed(
         params![
             document_id,
             stage,
-            if exhausted { "exhausted" } else { "failed" },
-            next_attempts,
-            next_retry_at_ms,
+            if update.exhausted {
+                "exhausted"
+            } else {
+                "failed"
+            },
+            update.next_attempts,
+            update.next_retry_at_ms,
             message,
-            now_ms(),
+            update.updated_at_ms,
         ],
     )?;
     conn.execute(
@@ -623,13 +640,12 @@ fn process_stage(conn: &Connection, key: &[u8; 32], document_id: &str, stage: &s
                 0,
             )?;
             if segment_units.is_empty() {
-                return Err(anyhow!(
-                    "segment units missing for chunk stage: {document_id}"
-                ));
+                replace_units_of_kind(conn, key, document_id, KnowledgeUnitKind::Chunk, &[])?;
+            } else {
+                let segments = segment_drafts_from_units(&segment_units);
+                let chunks = build_chunk_units(&document, &segments, 192, 256);
+                replace_units_of_kind(conn, key, document_id, KnowledgeUnitKind::Chunk, &chunks)?;
             }
-            let segments = segment_drafts_from_units(&segment_units);
-            let chunks = build_chunk_units(&document, &segments, 192, 256);
-            replace_units_of_kind(conn, key, document_id, KnowledgeUnitKind::Chunk, &chunks)?;
         }
         "embed" => {
             conn.execute(

@@ -6,6 +6,7 @@ use crate::db;
 use crate::knowledge::embedding_batch::{
     average_piece_embeddings, prepare_embedding_inputs, EmbeddingBatchPolicy,
 };
+use crate::knowledge::index_jobs::failed_job_update;
 use crate::knowledge::{
     ensure_knowledge_rebuild_requested, list_knowledge_documents,
     process_pending_knowledge_index_jobs_active, read_knowledge_index_status,
@@ -183,6 +184,108 @@ fn knowledge_chunk_stage_keeps_existing_segment_rows() {
         )
         .expect("updated at");
     assert_eq!(updated_at_ms, 42);
+}
+
+#[test]
+fn knowledge_chunk_stage_treats_empty_segments_as_zero_chunks() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let app_dir = dir.path();
+    let conn = db::open(app_dir).expect("open");
+    let key = [6u8; 32];
+    let document_id = "message:empty-segments";
+
+    db::ensure_knowledge_rebuild_state_defaults(&conn).expect("state defaults");
+    conn.execute(
+        "UPDATE knowledge_rebuild_state SET status = 'running' WHERE state_key = 1",
+        [],
+    )
+    .expect("set running");
+
+    seed_knowledge_document(
+        &conn,
+        &key,
+        document_id,
+        "raw source text that normalizes away",
+    );
+    conn.execute(
+        r#"UPDATE knowledge_documents
+           SET normalized_text = ?2
+           WHERE document_id = ?1"#,
+        params![
+            document_id,
+            db::encode_knowledge_document_text(&key, document_id, "normalized", "  \n\n  ")
+                .expect("encode normalized"),
+        ],
+    )
+    .expect("clear normalized text");
+
+    for stage in ["segment", "chunk", "embed", "finalize"] {
+        conn.execute(
+            r#"INSERT INTO knowledge_index_jobs(
+                   document_id, stage, status, attempts, next_retry_at_ms, last_error, created_at_ms, updated_at_ms
+               ) VALUES (?1, ?2, 'pending', 0, NULL, NULL, 1, 1)"#,
+            params![document_id, stage],
+        )
+        .expect("insert stage job");
+    }
+
+    let processed = process_pending_knowledge_index_jobs_active(&conn, &key, 8)
+        .expect("zero-chunk document should complete");
+    assert_eq!(processed, 4);
+
+    let stage_statuses = ["segment", "chunk", "embed", "finalize"]
+        .into_iter()
+        .map(|stage| {
+            conn.query_row(
+                r#"SELECT status FROM knowledge_index_jobs
+                   WHERE document_id = ?1 AND stage = ?2"#,
+                params![document_id, stage],
+                |row| row.get::<_, String>(0),
+            )
+            .expect("stage status")
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(stage_statuses, vec!["done", "done", "done", "done"]);
+
+    let unit_counts: (i64, i64) = conn
+        .query_row(
+            r#"SELECT
+                   COALESCE(SUM(CASE WHEN unit_kind = 'segment' THEN 1 ELSE 0 END), 0),
+                   COALESCE(SUM(CASE WHEN unit_kind = 'chunk' THEN 1 ELSE 0 END), 0)
+               FROM knowledge_units
+               WHERE document_id = ?1"#,
+            params![document_id],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .expect("unit counts");
+    assert_eq!(unit_counts, (0, 0));
+
+    let embedding_count: i64 = conn
+        .query_row(
+            r#"SELECT COUNT(*)
+               FROM knowledge_embeddings
+               WHERE target_id = ?1"#,
+            params![document_id],
+            |row| row.get(0),
+        )
+        .expect("document embeddings");
+    assert_eq!(embedding_count, 1);
+
+    let status = read_knowledge_index_status(&conn, &key).expect("status after zero chunks");
+    assert_eq!(status.status, "complete");
+    assert_eq!(status.documents_indexed, 1);
+    assert_eq!(status.units_indexed, 0);
+    assert_eq!(status.embeddings_indexed, 1);
+}
+
+#[test]
+fn knowledge_failed_job_update_uses_single_now_snapshot_for_retry_window() {
+    let update = failed_job_update(0, 1_234_567);
+
+    assert_eq!(update.next_attempts, 1);
+    assert!(!update.exhausted);
+    assert_eq!(update.updated_at_ms, 1_234_567);
+    assert_eq!(update.next_retry_at_ms, Some(1_239_567));
 }
 
 #[test]
