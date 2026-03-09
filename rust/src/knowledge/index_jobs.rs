@@ -8,10 +8,11 @@ use sha2::{Digest, Sha256};
 use crate::knowledge::embedding_batch::{
     average_piece_embeddings, prepare_embedding_inputs, EmbeddingBatchPolicy,
 };
+use crate::knowledge::source_adapters::visit_source_knowledge_documents_with_external;
 use crate::knowledge::{
     build_chunk_units, build_section_units, build_segment_units, list_knowledge_units,
-    normalize_text_for_source, segment_document_text, visit_source_knowledge_documents,
-    ContentKnowledgeDocument, KnowledgeUnit, KnowledgeUnitKind, KnowledgeVersionSet, SegmentDraft,
+    normalize_text_for_source, segment_document_text, ContentKnowledgeDocument, KnowledgeUnit,
+    KnowledgeUnitKind, KnowledgeVersionSet, SegmentDraft,
 };
 
 const JOB_STAGES: &[&str] = &["normalize", "segment", "chunk", "embed", "finalize"];
@@ -310,17 +311,25 @@ fn queue_jobs_for_document(conn: &Connection, document_id: &str) -> Result<()> {
 }
 
 fn initialize_rebuild(conn: &Connection, key: &[u8; 32]) -> Result<()> {
+    let app_dir = crate::db::app_dir_from_conn(conn)?;
+    let external_conn = crate::db::open_external_readonly_db(&app_dir)?;
+
     with_immediate_transaction(conn, || {
         crate::db::reset_knowledge_index(conn)?;
         let rebuild_started_at_ms = now_ms();
         let mut total_documents = 0i64;
-        visit_source_knowledge_documents(conn, key, |mut document| {
-            document.versions = KnowledgeVersionSet::current();
-            upsert_document(conn, key, &document)?;
-            queue_jobs_for_document(conn, &document.document_id)?;
-            total_documents += 1;
-            Ok(())
-        })?;
+        visit_source_knowledge_documents_with_external(
+            conn,
+            Some(&external_conn),
+            key,
+            |mut document| {
+                document.versions = KnowledgeVersionSet::current();
+                upsert_document(conn, key, &document)?;
+                queue_jobs_for_document(conn, &document.document_id)?;
+                total_documents += 1;
+                Ok(())
+            },
+        )?;
         conn.execute(
             r#"UPDATE knowledge_rebuild_state
                SET status = 'running',
@@ -347,7 +356,8 @@ fn segment_drafts_from_units(units: &[KnowledgeUnit]) -> Vec<SegmentDraft> {
         .iter()
         .map(|unit| SegmentDraft {
             ordinal: unit.ordinal,
-            text: unit.normalized_text.clone(),
+            raw_text: unit.raw_text.clone(),
+            normalized_text: unit.normalized_text.clone(),
             role: unit.role,
             anchors: unit.anchors.clone(),
         })

@@ -298,12 +298,10 @@ fn decrypt_external_text(key: &[u8; 32], aad: Vec<u8>, blob: &[u8]) -> Result<St
 }
 
 fn collect_external_documents(
-    conn: &Connection,
+    external_conn: &Connection,
     key: &[u8; 32],
     emit: &mut impl FnMut(ContentKnowledgeDocument) -> Result<()>,
 ) -> Result<()> {
-    let app_dir = crate::db::app_dir_from_conn(conn)?;
-    let external_conn = db::open_external_readonly_db(&app_dir)?;
     let mut stmt = external_conn.prepare(
         r#"SELECT doc_id, source_rel_path, title, body_markdown, created_at_ms, updated_at_ms
            FROM external_documents
@@ -355,15 +353,30 @@ fn collect_external_documents(
     Ok(())
 }
 
-pub fn visit_source_knowledge_documents(
+pub(crate) fn visit_source_knowledge_documents_with_external(
     conn: &Connection,
+    external_conn: Option<&Connection>,
     key: &[u8; 32],
     mut emit: impl FnMut(ContentKnowledgeDocument) -> Result<()>,
 ) -> Result<()> {
     collect_message_documents(conn, key, &mut emit)?;
     collect_attachment_documents(conn, key, &mut emit)?;
-    collect_external_documents(conn, key, &mut emit)?;
+    if let Some(external_conn) = external_conn {
+        collect_external_documents(external_conn, key, &mut emit)?;
+    } else {
+        let app_dir = crate::db::app_dir_from_conn(conn)?;
+        let external_conn = db::open_external_readonly_db(&app_dir)?;
+        collect_external_documents(&external_conn, key, &mut emit)?;
+    }
     Ok(())
+}
+
+pub fn visit_source_knowledge_documents(
+    conn: &Connection,
+    key: &[u8; 32],
+    emit: impl FnMut(ContentKnowledgeDocument) -> Result<()>,
+) -> Result<()> {
+    visit_source_knowledge_documents_with_external(conn, None, key, emit)
 }
 
 pub fn collect_source_knowledge_documents(

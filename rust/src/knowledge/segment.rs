@@ -5,25 +5,29 @@ use crate::knowledge::{
 #[derive(Clone, Debug, PartialEq)]
 pub struct SegmentDraft {
     pub ordinal: i64,
-    pub text: String,
+    pub raw_text: String,
+    pub normalized_text: String,
     pub role: KnowledgeRole,
     pub anchors: KnowledgeAnchorSet,
 }
 
-pub fn segment_document_text(document: &ContentKnowledgeDocument) -> Vec<SegmentDraft> {
-    let source = document.normalized_text.trim();
-    if source.is_empty() {
-        return Vec::new();
-    }
-
-    let chunks = source
+fn split_paragraphs(text: &str) -> Vec<&str> {
+    text.trim()
         .split("\n\n")
         .map(str::trim)
         .filter(|value| !value.is_empty())
-        .collect::<Vec<_>>();
+        .collect()
+}
+
+pub fn segment_document_text(document: &ContentKnowledgeDocument) -> Vec<SegmentDraft> {
+    let normalized_chunks = split_paragraphs(&document.normalized_text);
+    if normalized_chunks.is_empty() {
+        return Vec::new();
+    }
+    let raw_chunks = split_paragraphs(&document.raw_text);
 
     let mut out = Vec::<SegmentDraft>::new();
-    for (index, chunk) in chunks.iter().enumerate() {
+    for (index, chunk) in normalized_chunks.iter().enumerate() {
         let mut anchors = document.anchors.clone();
         if document.source_kind == KnowledgeSourceKind::Transcript {
             let label = chunk
@@ -40,7 +44,8 @@ pub fn segment_document_text(document: &ContentKnowledgeDocument) -> Vec<Segment
         }
         out.push(SegmentDraft {
             ordinal: index as i64,
-            text: (*chunk).to_string(),
+            raw_text: raw_chunks.get(index).copied().unwrap_or(chunk).to_string(),
+            normalized_text: (*chunk).to_string(),
             role: document.role,
             anchors,
         });
