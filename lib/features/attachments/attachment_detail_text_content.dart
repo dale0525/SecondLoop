@@ -151,7 +151,6 @@ AttachmentDetailTextContent resolveAttachmentDetailTextContent(
     read('manual_summary'),
     read('llm_summary'),
     read('summary'),
-    audioTurnSummary,
     read('transcript_excerpt'),
     selected.full,
     selected.excerpt,
