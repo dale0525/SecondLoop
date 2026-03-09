@@ -150,3 +150,126 @@ fn knowledge_chunk_stage_keeps_existing_segment_rows() {
         .expect("updated at");
     assert_eq!(updated_at_ms, 42);
 }
+
+#[test]
+fn knowledge_job_failure_does_not_block_other_documents_in_same_batch() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let app_dir = dir.path();
+    let conn = db::open(app_dir).expect("open");
+    let key = [4u8; 32];
+
+    db::ensure_knowledge_rebuild_state_defaults(&conn).expect("state defaults");
+    conn.execute(
+        "UPDATE knowledge_rebuild_state SET status = 'running' WHERE state_key = 1",
+        [],
+    )
+    .expect("set running");
+
+    let good_document_id = "message:good";
+    let bad_document_id = "message:bad";
+    let anchor_json = serde_json::json!({}).to_string();
+    let raw_good = db::encode_knowledge_document_text(
+        &key,
+        good_document_id,
+        "raw",
+        "healthy knowledge document",
+    )
+    .expect("good raw");
+    let normalized_good = db::encode_knowledge_document_text(
+        &key,
+        good_document_id,
+        "normalized",
+        "healthy knowledge document",
+    )
+    .expect("good normalized");
+    let raw_bad = encrypt_bytes(
+        &key,
+        &[0xff, 0xfe],
+        format!("knowledge.document.raw:{bad_document_id}").as_bytes(),
+    )
+    .expect("bad raw");
+    let normalized_bad = db::encode_knowledge_document_text(
+        &key,
+        bad_document_id,
+        "normalized",
+        "broken knowledge document",
+    )
+    .expect("bad normalized");
+
+    for (document_id, raw_text, normalized_text) in [
+        (good_document_id, raw_good, normalized_good),
+        (bad_document_id, raw_bad, normalized_bad),
+    ] {
+        conn.execute(
+            r#"INSERT INTO knowledge_documents(
+                   document_id,
+                   origin_type,
+                   source_kind,
+                   role,
+                   language,
+                   quality_score,
+                   title,
+                   summary,
+                   anchor_json,
+                   raw_text,
+                   normalized_text,
+                   created_at_ms,
+                   updated_at_ms,
+                   schema_version,
+                   normalization_version,
+                   segmentation_version,
+                   embedding_policy_version,
+                   retrieval_policy_version,
+                   last_indexed_at_ms
+               ) VALUES (?1, 'message', 'raw_text', 'body', NULL, 1.0, NULL, NULL, ?2, ?3, ?4, 1, 1, ?5, ?6, ?7, ?8, ?9, NULL)"#,
+            params![
+                document_id,
+                anchor_json,
+                raw_text,
+                normalized_text,
+                crate::knowledge::KNOWLEDGE_SCHEMA_VERSION,
+                crate::knowledge::KNOWLEDGE_NORMALIZATION_VERSION,
+                crate::knowledge::KNOWLEDGE_SEGMENTATION_VERSION,
+                crate::knowledge::KNOWLEDGE_EMBEDDING_POLICY_VERSION,
+                crate::knowledge::KNOWLEDGE_RETRIEVAL_POLICY_VERSION,
+            ],
+        )
+        .expect("insert seeded document");
+    }
+
+    conn.execute(
+        r#"INSERT INTO knowledge_index_jobs(
+               document_id, stage, status, attempts, next_retry_at_ms, last_error, created_at_ms, updated_at_ms
+           ) VALUES (?1, 'normalize', 'pending', 0, NULL, NULL, 1, 1)"#,
+        params![bad_document_id],
+    )
+    .expect("insert bad job");
+    conn.execute(
+        r#"INSERT INTO knowledge_index_jobs(
+               document_id, stage, status, attempts, next_retry_at_ms, last_error, created_at_ms, updated_at_ms
+           ) VALUES (?1, 'normalize', 'pending', 0, NULL, NULL, 1, 2)"#,
+        params![good_document_id],
+    )
+    .expect("insert good job");
+
+    let error = process_pending_knowledge_index_jobs_active(&conn, &key, Path::new(app_dir), 2)
+        .expect_err("bad document should still surface an error");
+    assert!(error.to_string().contains("utf-8"));
+
+    let good_status: String = conn
+        .query_row(
+            "SELECT status FROM knowledge_index_jobs WHERE document_id = ?1 AND stage = 'normalize'",
+            params![good_document_id],
+            |row| row.get(0),
+        )
+        .expect("good job status");
+    let bad_status: String = conn
+        .query_row(
+            "SELECT status FROM knowledge_index_jobs WHERE document_id = ?1 AND stage = 'normalize'",
+            params![bad_document_id],
+            |row| row.get(0),
+        )
+        .expect("bad job status");
+    assert_eq!(good_status, "done");
+    assert_eq!(bad_status, "failed");
+}

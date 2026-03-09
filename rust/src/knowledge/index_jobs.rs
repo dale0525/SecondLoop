@@ -195,6 +195,10 @@ fn replace_units_of_kind(
     insert_units(conn, key, units)
 }
 
+// TODO(knowledge-phase2): Replace this Phase 1 placeholder with actual embedder calls
+// before retrieval reads from `knowledge_embeddings`. The deterministic vector
+// keeps the staged rebuild/storage pipeline testable in Phase 1 without yet
+// coupling foundation work to provider selection, model warmup, or network I/O.
 fn deterministic_embedding(text: &str, dim: usize) -> Vec<f32> {
     let dim = dim.max(8);
     let mut vector = vec![0f32; dim];
@@ -460,7 +464,10 @@ fn process_stage(conn: &Connection, key: &[u8; 32], document_id: &str, stage: &s
         r#"UPDATE knowledge_rebuild_state
            SET current_document_id = ?1,
                current_stage = ?2,
-               status = 'running'
+               status = CASE
+                   WHEN status = 'failed' THEN status
+                   ELSE 'running'
+               END
            WHERE state_key = 1"#,
         params![document_id, stage],
     )?;
@@ -553,6 +560,25 @@ fn process_stage(conn: &Connection, key: &[u8; 32], document_id: &str, stage: &s
     }
 
     mark_job_done(conn, document_id, stage)
+}
+
+fn clear_failed_rebuild_status_if_recovered(conn: &Connection) -> Result<()> {
+    let failed_jobs: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM knowledge_index_jobs WHERE status = 'failed'",
+        [],
+        |row| row.get(0),
+    )?;
+    if failed_jobs == 0 {
+        conn.execute(
+            r#"UPDATE knowledge_rebuild_state
+               SET status = 'running',
+                   last_error = NULL
+               WHERE state_key = 1
+                 AND status = 'failed'"#,
+            [],
+        )?;
+    }
+    Ok(())
 }
 
 fn finalize_if_complete(conn: &Connection) -> Result<()> {
@@ -671,17 +697,32 @@ pub fn process_pending_knowledge_index_jobs_active(
     }
 
     let mut processed = 0usize;
+    let mut first_error: Option<anyhow::Error> = None;
     for (document_id, stage) in jobs {
-        let result = process_stage(conn, key, &document_id, &stage);
-        match result {
+        match process_stage(conn, key, &document_id, &stage) {
             Ok(()) => processed += 1,
             Err(error) => {
-                mark_job_failed(conn, &document_id, &stage, &error)?;
-                return Err(error);
+                if let Err(mark_error) = mark_job_failed(conn, &document_id, &stage, &error) {
+                    if first_error.is_none() {
+                        first_error = Some(anyhow!(
+                            "failed to record knowledge job failure for {document_id}:{stage}: {mark_error}; original stage error: {error}"
+                        ));
+                    }
+                    continue;
+                }
+                if first_error.is_none() {
+                    first_error = Some(error);
+                }
             }
         }
     }
 
+    if first_error.is_none() {
+        clear_failed_rebuild_status_if_recovered(conn)?;
+    }
     finalize_if_complete(conn)?;
+    if let Some(error) = first_error {
+        return Err(error);
+    }
     Ok(processed)
 }
