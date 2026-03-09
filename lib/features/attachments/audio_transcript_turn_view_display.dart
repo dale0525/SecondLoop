@@ -5,21 +5,44 @@ final Expando<_AudioTranscriptTurnViewCacheEntry>
   'audio_transcript_turn_view_cache',
 );
 
+final class AudioTranscriptTurnViewDisplayText {
+  const AudioTranscriptTurnViewDisplayText({
+    required this.excerpt,
+    required this.full,
+  });
+
+  final String excerpt;
+  final String full;
+}
+
+AudioTranscriptTurnViewDisplayText resolveAudioTranscriptTurnViewDisplayText(
+  Map<String, Object?>? payload, {
+  int maxChars = 280,
+}) {
+  final view = _resolveAudioTranscriptTurnView(payload);
+  if (view == null) {
+    return const AudioTranscriptTurnViewDisplayText(excerpt: '', full: '');
+  }
+  return AudioTranscriptTurnViewDisplayText(
+    excerpt: excerptAudioTranscriptTurnView(view, maxChars: maxChars).trim(),
+    full: formatAudioTranscriptTurnViewFull(view).trim(),
+  );
+}
+
 String resolveAudioTranscriptTurnViewDisplayFull(
   Map<String, Object?>? payload,
 ) {
-  final view = _resolveAudioTranscriptTurnView(payload);
-  if (view == null) return '';
-  return formatAudioTranscriptTurnViewFull(view).trim();
+  return resolveAudioTranscriptTurnViewDisplayText(payload).full;
 }
 
 String resolveAudioTranscriptTurnViewDisplayExcerpt(
   Map<String, Object?>? payload, {
   int maxChars = 280,
 }) {
-  final view = _resolveAudioTranscriptTurnView(payload);
-  if (view == null) return '';
-  return excerptAudioTranscriptTurnView(view, maxChars: maxChars).trim();
+  return resolveAudioTranscriptTurnViewDisplayText(
+    payload,
+    maxChars: maxChars,
+  ).excerpt;
 }
 
 AudioTranscriptTurnView? _resolveAudioTranscriptTurnView(

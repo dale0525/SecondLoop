@@ -1,3 +1,5 @@
+import 'dart:collection';
+
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:secondloop/features/attachments/attachment_detail_text_content.dart';
@@ -176,6 +178,36 @@ void main() {
     expect(content.full, '[00:12–00:18] Hello everyone.');
   });
 
+  test('audio detail resolves persisted turn view only once', () {
+    final payload = _TranscriptTurnPayloadReadTrackingMap(
+      <String, Object?>{
+        'mime_type': 'audio/mp4',
+        'transcript_excerpt': 'raw excerpt',
+        'transcript_full': 'raw transcript body',
+      },
+      transcriptTurnView: const <String, Object?>{
+        'builder_version': 'turns_v1',
+        'status': 'ok',
+        'turns': [
+          {
+            'start_ms': 12000,
+            'end_ms': 18000,
+            'text': 'Hello everyone.',
+            'segment_count': 1,
+            'source_segment_start_index': 0,
+            'source_segment_end_index': 0,
+          },
+        ],
+      },
+    );
+
+    final content = resolveAttachmentDetailTextContent(payload);
+
+    expect(content.summary, contains('[00:12–00:18] Hello everyone.'));
+    expect(content.full, '[00:12–00:18] Hello everyone.');
+    expect(payload.transcriptTurnViewReadCount, 1);
+  });
+
   test('audio detail full prefers turn view over generic full_text', () {
     final content = resolveAttachmentDetailTextContent(
       const <String, Object?>{
@@ -263,4 +295,47 @@ void main() {
     );
     expect(content.summary, contains('[00:12–00:12]'));
   });
+}
+
+final class _TranscriptTurnPayloadReadTrackingMap
+    extends MapBase<String, Object?> {
+  _TranscriptTurnPayloadReadTrackingMap(
+    this._values, {
+    required Map<String, Object?> transcriptTurnView,
+  }) : _transcriptTurnView = transcriptTurnView;
+
+  final Map<String, Object?> _values;
+  final Map<String, Object?> _transcriptTurnView;
+  int transcriptTurnViewReadCount = 0;
+
+  @override
+  Object? operator [](Object? key) {
+    if (key == 'transcript_turns_v1') {
+      transcriptTurnViewReadCount += 1;
+      return _transcriptTurnView;
+    }
+    return _values[key];
+  }
+
+  @override
+  void operator []=(String key, Object? value) {
+    _values[key] = value;
+  }
+
+  @override
+  void clear() {
+    _values.clear();
+  }
+
+  @override
+  Iterable<String> get keys =>
+      _values.keys.followedBy(const ['transcript_turns_v1']);
+
+  @override
+  Object? remove(Object? key) {
+    if (key == 'transcript_turns_v1') {
+      return null;
+    }
+    return _values.remove(key);
+  }
 }

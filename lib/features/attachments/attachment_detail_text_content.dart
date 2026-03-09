@@ -125,11 +125,11 @@ AttachmentDetailTextContent resolveAttachmentDetailTextContent(
     ocrFull,
   ]);
 
-  final audioTurnSummary = isAudioPayload
-      ? resolveAudioTranscriptTurnViewDisplayExcerpt(payload)
-      : '';
-  final audioTurnFull =
-      isAudioPayload ? resolveAudioTranscriptTurnViewDisplayFull(payload) : '';
+  final audioTurnText = isAudioPayload
+      ? resolveAudioTranscriptTurnViewDisplayText(payload)
+      : const AudioTranscriptTurnViewDisplayText(excerpt: '', full: '');
+  final audioTurnSummary = audioTurnText.excerpt;
+  final audioTurnFull = audioTurnText.full;
 
   final audioSummary = firstNonEmpty(<String?>[
     read('manual_summary'),
