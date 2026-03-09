@@ -5,6 +5,10 @@ use std::sync::OnceLock;
 
 use super::cloud_gateway::parse_openai_embeddings_response;
 use super::{Embedder, DEFAULT_EMBED_DIM};
+use crate::knowledge::embedding_batch::{
+    average_piece_embeddings, batch_prepared_embedding_inputs, ensure_non_empty_embedding_results,
+    prepare_embedding_inputs, EmbeddingBatchPolicy,
+};
 
 pub fn brok_embeddings_url(base_url: &str) -> String {
     format!("{}/embeddings", base_url.trim_end_matches('/'))
@@ -35,29 +39,8 @@ impl BrokEmbedder {
             dim: OnceLock::new(),
         }
     }
-}
 
-impl Embedder for BrokEmbedder {
-    fn model_name(&self) -> &str {
-        &self.model_name
-    }
-
-    fn dim(&self) -> usize {
-        self.dim.get().copied().unwrap_or(DEFAULT_EMBED_DIM)
-    }
-
-    fn embed(&self, texts: &[String]) -> Result<Vec<Vec<f32>>> {
-        if texts.is_empty() {
-            return Ok(Vec::new());
-        }
-
-        if self.base_url.trim().is_empty() {
-            return Err(anyhow!("missing base_url"));
-        }
-        if self.api_key.trim().is_empty() {
-            return Err(anyhow!("missing api_key"));
-        }
-
+    fn embed_batch(&self, texts: &[String]) -> Result<Vec<Vec<f32>>> {
         let url = brok_embeddings_url(&self.base_url);
         let req = BrokOpenAiEmbeddingsRequest {
             model: self.model_name.clone(),
@@ -85,5 +68,46 @@ impl Embedder for BrokEmbedder {
         let parsed = parse_openai_embeddings_response(&body, texts.len())?;
         let _ = self.dim.set(parsed.dim);
         Ok(parsed.embeddings)
+    }
+}
+
+impl Embedder for BrokEmbedder {
+    fn model_name(&self) -> &str {
+        &self.model_name
+    }
+
+    fn dim(&self) -> usize {
+        self.dim.get().copied().unwrap_or(DEFAULT_EMBED_DIM)
+    }
+
+    fn embed(&self, texts: &[String]) -> Result<Vec<Vec<f32>>> {
+        if texts.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        if self.base_url.trim().is_empty() {
+            return Err(anyhow!("missing base_url"));
+        }
+        if self.api_key.trim().is_empty() {
+            return Err(anyhow!("missing api_key"));
+        }
+
+        let policy = EmbeddingBatchPolicy::default();
+        let prepared = prepare_embedding_inputs(texts, policy);
+        let batches = batch_prepared_embedding_inputs(&prepared, policy);
+        let mut grouped = vec![Vec::<Vec<f32>>::new(); texts.len()];
+        for batch in batches {
+            let batch_texts = batch
+                .iter()
+                .map(|value| value.text.clone())
+                .collect::<Vec<_>>();
+            let batch_embeddings = self.embed_batch(&batch_texts)?;
+            for (item, embedding) in batch.into_iter().zip(batch_embeddings.into_iter()) {
+                grouped[item.source_index].push(embedding);
+            }
+        }
+        let embeddings = average_piece_embeddings(grouped, texts.len());
+        ensure_non_empty_embedding_results(&embeddings)?;
+        Ok(embeddings)
     }
 }

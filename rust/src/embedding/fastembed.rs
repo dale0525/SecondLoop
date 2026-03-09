@@ -10,6 +10,10 @@ use tar::Archive;
 use zip::ZipArchive;
 
 use super::{Embedder, DEFAULT_EMBED_DIM, PRODUCTION_MODEL_NAME};
+use crate::knowledge::embedding_batch::{
+    average_piece_embeddings, batch_prepared_embedding_inputs, ensure_non_empty_embedding_results,
+    prepare_embedding_inputs, EmbeddingBatchPolicy,
+};
 
 const ONNXRUNTIME_VERSION: &str = "1.23.0";
 
@@ -236,14 +240,28 @@ impl Embedder for FastEmbedder {
             Ok(g) => g,
             Err(poisoned) => poisoned.into_inner(),
         };
-        let inputs: Vec<&str> = texts.iter().map(|t| t.as_str()).collect();
-        let embeddings = model.embed(inputs, None).context("fastembed: embed")?;
 
-        if embeddings.iter().any(|v| v.len() != DEFAULT_EMBED_DIM) {
-            return Err(anyhow!("fastembed returned unexpected embedding dimension"));
+        let policy = EmbeddingBatchPolicy::default();
+        let prepared = prepare_embedding_inputs(texts, policy);
+        let batches = batch_prepared_embedding_inputs(&prepared, policy);
+        let mut grouped = vec![Vec::<Vec<f32>>::new(); texts.len()];
+        for batch in batches {
+            let inputs = batch
+                .iter()
+                .map(|value| value.text.as_str())
+                .collect::<Vec<_>>();
+            let embeddings = model.embed(inputs, None).context("fastembed: embed")?;
+            if embeddings.iter().any(|v| v.len() != DEFAULT_EMBED_DIM) {
+                return Err(anyhow!("fastembed returned unexpected embedding dimension"));
+            }
+            for (item, embedding) in batch.into_iter().zip(embeddings.into_iter()) {
+                grouped[item.source_index].push(embedding);
+            }
         }
 
         mark_fastembed_used();
+        let embeddings = average_piece_embeddings(grouped, texts.len());
+        ensure_non_empty_embedding_results(&embeddings)?;
         Ok(embeddings)
     }
 }

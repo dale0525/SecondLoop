@@ -13,6 +13,7 @@ import 'api/desktop_media.dart';
 import 'api/detached_ask.dart';
 import 'api/embedding_lifecycle.dart';
 import 'api/external_import.dart';
+import 'api/knowledge.dart';
 import 'api/media_annotation.dart';
 import 'api/oplog_maintenance.dart';
 import 'api/simple.dart';
@@ -25,6 +26,7 @@ import 'db.dart';
 import 'desktop_media/ocr.dart';
 import 'frb_generated.dart';
 import 'frb_generated.io.dart' if (dart.library.html) 'frb_generated.web.dart';
+import 'knowledge/models.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'semantic_parse.dart';
 
@@ -75,7 +77,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.0.0-dev.38';
 
   @override
-  int get rustContentHash => 890046932;
+  int get rustContentHash => -205786966;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -1113,6 +1115,33 @@ abstract class RustLibApi extends BaseApi {
   Future<ExternalImportScanSummary>
       crateApiExternalImportExternalImportScanSource(
           {required String appDir, required String sourcePath});
+
+  Future<void> crateApiKnowledgeDbCancelKnowledgeRebuild(
+      {required String appDir, required List<int> key});
+
+  Future<KnowledgeIndexStatus> crateApiKnowledgeDbGetKnowledgeIndexStatus(
+      {required String appDir, required List<int> key});
+
+  Future<List<ContentKnowledgeDocument>>
+      crateApiKnowledgeDbListKnowledgeDocuments(
+          {required String appDir,
+          required List<int> key,
+          required int limit,
+          required int offset});
+
+  Future<List<KnowledgeUnit>> crateApiKnowledgeDbListKnowledgeUnits(
+      {required String appDir,
+      required List<int> key,
+      required String documentId,
+      KnowledgeUnitKind? unitKind,
+      required int limit,
+      required int offset});
+
+  Future<int> crateApiKnowledgeDbProcessPendingKnowledgeIndexJobs(
+      {required String appDir, required List<int> key, required int limit});
+
+  Future<void> crateApiKnowledgeDbRequestKnowledgeRebuild(
+      {required String appDir, required List<int> key});
 
   Future<MediaAnnotationConfig>
       crateApiMediaAnnotationDbGetMediaAnnotationConfig(
@@ -7514,6 +7543,192 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  Future<void> crateApiKnowledgeDbCancelKnowledgeRebuild(
+      {required String appDir, required List<int> key}) {
+    return handler.executeNormal(NormalTask(
+      callFfi: (port_) {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_String(appDir, serializer);
+        sse_encode_list_prim_u_8_loose(key, serializer);
+        pdeCallFfi(generalizedFrbRustBinding, serializer,
+            funcId: 162, port: port_);
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_unit,
+        decodeErrorData: sse_decode_AnyhowException,
+      ),
+      constMeta: kCrateApiKnowledgeDbCancelKnowledgeRebuildConstMeta,
+      argValues: [appDir, key],
+      apiImpl: this,
+    ));
+  }
+
+  TaskConstMeta get kCrateApiKnowledgeDbCancelKnowledgeRebuildConstMeta =>
+      const TaskConstMeta(
+        debugName: "db_cancel_knowledge_rebuild",
+        argNames: ["appDir", "key"],
+      );
+
+  @override
+  Future<KnowledgeIndexStatus> crateApiKnowledgeDbGetKnowledgeIndexStatus(
+      {required String appDir, required List<int> key}) {
+    return handler.executeNormal(NormalTask(
+      callFfi: (port_) {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_String(appDir, serializer);
+        sse_encode_list_prim_u_8_loose(key, serializer);
+        pdeCallFfi(generalizedFrbRustBinding, serializer,
+            funcId: 163, port: port_);
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_knowledge_index_status,
+        decodeErrorData: sse_decode_AnyhowException,
+      ),
+      constMeta: kCrateApiKnowledgeDbGetKnowledgeIndexStatusConstMeta,
+      argValues: [appDir, key],
+      apiImpl: this,
+    ));
+  }
+
+  TaskConstMeta get kCrateApiKnowledgeDbGetKnowledgeIndexStatusConstMeta =>
+      const TaskConstMeta(
+        debugName: "db_get_knowledge_index_status",
+        argNames: ["appDir", "key"],
+      );
+
+  @override
+  Future<List<ContentKnowledgeDocument>>
+      crateApiKnowledgeDbListKnowledgeDocuments(
+          {required String appDir,
+          required List<int> key,
+          required int limit,
+          required int offset}) {
+    return handler.executeNormal(NormalTask(
+      callFfi: (port_) {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_String(appDir, serializer);
+        sse_encode_list_prim_u_8_loose(key, serializer);
+        sse_encode_u_32(limit, serializer);
+        sse_encode_u_32(offset, serializer);
+        pdeCallFfi(generalizedFrbRustBinding, serializer,
+            funcId: 164, port: port_);
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_list_content_knowledge_document,
+        decodeErrorData: sse_decode_AnyhowException,
+      ),
+      constMeta: kCrateApiKnowledgeDbListKnowledgeDocumentsConstMeta,
+      argValues: [appDir, key, limit, offset],
+      apiImpl: this,
+    ));
+  }
+
+  TaskConstMeta get kCrateApiKnowledgeDbListKnowledgeDocumentsConstMeta =>
+      const TaskConstMeta(
+        debugName: "db_list_knowledge_documents",
+        argNames: ["appDir", "key", "limit", "offset"],
+      );
+
+  @override
+  Future<List<KnowledgeUnit>> crateApiKnowledgeDbListKnowledgeUnits(
+      {required String appDir,
+      required List<int> key,
+      required String documentId,
+      KnowledgeUnitKind? unitKind,
+      required int limit,
+      required int offset}) {
+    return handler.executeNormal(NormalTask(
+      callFfi: (port_) {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_String(appDir, serializer);
+        sse_encode_list_prim_u_8_loose(key, serializer);
+        sse_encode_String(documentId, serializer);
+        sse_encode_opt_box_autoadd_knowledge_unit_kind(unitKind, serializer);
+        sse_encode_u_32(limit, serializer);
+        sse_encode_u_32(offset, serializer);
+        pdeCallFfi(generalizedFrbRustBinding, serializer,
+            funcId: 165, port: port_);
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_list_knowledge_unit,
+        decodeErrorData: sse_decode_AnyhowException,
+      ),
+      constMeta: kCrateApiKnowledgeDbListKnowledgeUnitsConstMeta,
+      argValues: [appDir, key, documentId, unitKind, limit, offset],
+      apiImpl: this,
+    ));
+  }
+
+  TaskConstMeta get kCrateApiKnowledgeDbListKnowledgeUnitsConstMeta =>
+      const TaskConstMeta(
+        debugName: "db_list_knowledge_units",
+        argNames: [
+          "appDir",
+          "key",
+          "documentId",
+          "unitKind",
+          "limit",
+          "offset"
+        ],
+      );
+
+  @override
+  Future<int> crateApiKnowledgeDbProcessPendingKnowledgeIndexJobs(
+      {required String appDir, required List<int> key, required int limit}) {
+    return handler.executeNormal(NormalTask(
+      callFfi: (port_) {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_String(appDir, serializer);
+        sse_encode_list_prim_u_8_loose(key, serializer);
+        sse_encode_u_32(limit, serializer);
+        pdeCallFfi(generalizedFrbRustBinding, serializer,
+            funcId: 166, port: port_);
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_u_32,
+        decodeErrorData: sse_decode_AnyhowException,
+      ),
+      constMeta: kCrateApiKnowledgeDbProcessPendingKnowledgeIndexJobsConstMeta,
+      argValues: [appDir, key, limit],
+      apiImpl: this,
+    ));
+  }
+
+  TaskConstMeta
+      get kCrateApiKnowledgeDbProcessPendingKnowledgeIndexJobsConstMeta =>
+          const TaskConstMeta(
+            debugName: "db_process_pending_knowledge_index_jobs",
+            argNames: ["appDir", "key", "limit"],
+          );
+
+  @override
+  Future<void> crateApiKnowledgeDbRequestKnowledgeRebuild(
+      {required String appDir, required List<int> key}) {
+    return handler.executeNormal(NormalTask(
+      callFfi: (port_) {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_String(appDir, serializer);
+        sse_encode_list_prim_u_8_loose(key, serializer);
+        pdeCallFfi(generalizedFrbRustBinding, serializer,
+            funcId: 167, port: port_);
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_unit,
+        decodeErrorData: sse_decode_AnyhowException,
+      ),
+      constMeta: kCrateApiKnowledgeDbRequestKnowledgeRebuildConstMeta,
+      argValues: [appDir, key],
+      apiImpl: this,
+    ));
+  }
+
+  TaskConstMeta get kCrateApiKnowledgeDbRequestKnowledgeRebuildConstMeta =>
+      const TaskConstMeta(
+        debugName: "db_request_knowledge_rebuild",
+        argNames: ["appDir", "key"],
+      );
+
+  @override
   Future<MediaAnnotationConfig>
       crateApiMediaAnnotationDbGetMediaAnnotationConfig(
           {required String appDir, required List<int> key}) {
@@ -7523,7 +7738,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(appDir, serializer);
         sse_encode_list_prim_u_8_loose(key, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 162, port: port_);
+            funcId: 168, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_media_annotation_config,
@@ -7554,7 +7769,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_list_prim_u_8_loose(key, serializer);
         sse_encode_box_autoadd_media_annotation_config(config, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 163, port: port_);
+            funcId: 169, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -7593,7 +7808,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(mimeType, serializer);
         sse_encode_list_prim_u_8_loose(imageBytes, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 164, port: port_);
+            funcId: 170, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_String,
@@ -7646,7 +7861,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(readableTextExcerpt, serializer);
         sse_encode_String(readableTextFull, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 165, port: port_);
+            funcId: 171, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_String,
@@ -7716,7 +7931,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(readableTextExcerpt, serializer);
         sse_encode_String(readableTextFull, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 166, port: port_);
+            funcId: 172, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_String,
@@ -7775,7 +7990,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_oplog_maintenance_backend(backend, serializer);
         sse_encode_String(scopeId, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 167, port: port_);
+            funcId: 173, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_oplog_maintenance_stats,
@@ -7799,7 +8014,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
         sse_encode_String(name, serializer);
-        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 168)!;
+        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 174)!;
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_String,
@@ -7822,7 +8037,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       callFfi: (port_) {
         final serializer = SseSerializer(generalizedFrbRustBinding);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 169, port: port_);
+            funcId: 175, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -7853,7 +8068,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(vaultId, serializer);
         sse_encode_opt_String(firebaseIdToken, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 170, port: port_);
+            funcId: 176, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_String,
@@ -7891,7 +8106,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(remoteRoot, serializer);
         sse_encode_StreamSink_String_Sse(sink, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 171, port: port_);
+            funcId: 177, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -7935,7 +8150,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(remoteRoot, serializer);
         sse_encode_StreamSink_String_Sse(sink, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 172, port: port_);
+            funcId: 178, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -7981,7 +8196,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(idToken, serializer);
         sse_encode_StreamSink_String_Sse(sink, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 173, port: port_);
+            funcId: 179, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -8029,7 +8244,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(idToken, serializer);
         sse_encode_StreamSink_String_Sse(sink, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 174, port: port_);
+            funcId: 180, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -8080,7 +8295,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(remoteRoot, serializer);
         sse_encode_StreamSink_String_Sse(sink, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 175, port: port_);
+            funcId: 181, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -8139,7 +8354,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(remoteRoot, serializer);
         sse_encode_StreamSink_String_Sse(sink, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 176, port: port_);
+            funcId: 182, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -8191,7 +8406,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(sourceTagId, serializer);
         sse_encode_String(targetTagId, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 177, port: port_);
+            funcId: 183, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -8219,7 +8434,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_list_prim_u_8_loose(key, serializer);
         sse_encode_String(tagId, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 178, port: port_);
+            funcId: 184, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -8246,7 +8461,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_list_prim_u_8_loose(key, serializer);
         sse_encode_u_32(limit, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 179, port: port_);
+            funcId: 185, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_list_tag_merge_suggestion,
@@ -8276,7 +8491,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_list_prim_u_8_loose(key, serializer);
         sse_encode_String(messageId, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 180, port: port_);
+            funcId: 186, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_list_String,
@@ -8308,7 +8523,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(conversationId, serializer);
         sse_encode_list_String(tagIds, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 181, port: port_);
+            funcId: 187, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_list_String,
@@ -8338,7 +8553,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_list_prim_u_8_loose(key, serializer);
         sse_encode_String(messageId, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 182, port: port_);
+            funcId: 188, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_list_String,
@@ -8368,7 +8583,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_list_prim_u_8_loose(key, serializer);
         sse_encode_String(messageId, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 183, port: port_);
+            funcId: 189, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_list_tag,
@@ -8396,7 +8611,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_list_prim_u_8_loose(key, serializer);
         sse_encode_u_32(limit, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 184, port: port_);
+            funcId: 190, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_list_tag_merge_suggestion,
@@ -8423,7 +8638,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(appDir, serializer);
         sse_encode_list_prim_u_8_loose(key, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 185, port: port_);
+            funcId: 191, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_list_tag,
@@ -8454,7 +8669,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(sourceTagId, serializer);
         sse_encode_String(targetTagId, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 186, port: port_);
+            funcId: 192, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_u_32,
@@ -8489,7 +8704,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(reason, serializer);
         sse_encode_String(action, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 187, port: port_);
+            funcId: 193, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -8528,7 +8743,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(messageId, serializer);
         sse_encode_list_String(tagIds, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 188, port: port_);
+            funcId: 194, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_list_tag,
@@ -8556,7 +8771,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_list_prim_u_8_loose(key, serializer);
         sse_encode_String(name, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 189, port: port_);
+            funcId: 195, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_tag,
@@ -8733,6 +8948,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  KnowledgeUnitKind dco_decode_box_autoadd_knowledge_unit_kind(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dco_decode_knowledge_unit_kind(raw);
+  }
+
+  @protected
   MediaAnnotationConfig dco_decode_box_autoadd_media_annotation_config(
       dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
@@ -8811,6 +9032,30 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       mobileBackgroundEnabled: dco_decode_bool(arr[15]),
       mobileBackgroundRequiresWifi: dco_decode_bool(arr[16]),
       mobileBackgroundRequiresCharging: dco_decode_bool(arr[17]),
+    );
+  }
+
+  @protected
+  ContentKnowledgeDocument dco_decode_content_knowledge_document(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 14)
+      throw Exception('unexpected arr length: expect 14 but see ${arr.length}');
+    return ContentKnowledgeDocument(
+      documentId: dco_decode_String(arr[0]),
+      originType: dco_decode_knowledge_origin_type(arr[1]),
+      sourceKind: dco_decode_knowledge_source_kind(arr[2]),
+      role: dco_decode_knowledge_role(arr[3]),
+      language: dco_decode_opt_String(arr[4]),
+      qualityScore: dco_decode_f_64(arr[5]),
+      createdAtMs: dco_decode_i_64(arr[6]),
+      updatedAtMs: dco_decode_i_64(arr[7]),
+      versions: dco_decode_knowledge_version_set(arr[8]),
+      anchors: dco_decode_knowledge_anchor_set(arr[9]),
+      title: dco_decode_opt_String(arr[10]),
+      summary: dco_decode_opt_String(arr[11]),
+      rawText: dco_decode_String(arr[12]),
+      normalizedText: dco_decode_String(arr[13]),
     );
   }
 
@@ -8923,6 +9168,115 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  KnowledgeAnchorSet dco_decode_knowledge_anchor_set(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 10)
+      throw Exception('unexpected arr length: expect 10 but see ${arr.length}');
+    return KnowledgeAnchorSet(
+      messageId: dco_decode_opt_String(arr[0]),
+      conversationId: dco_decode_opt_String(arr[1]),
+      attachmentSha256: dco_decode_opt_String(arr[2]),
+      pageIndex: dco_decode_opt_box_autoadd_i_64(arr[3]),
+      frameIndex: dco_decode_opt_box_autoadd_i_64(arr[4]),
+      startMs: dco_decode_opt_box_autoadd_i_64(arr[5]),
+      endMs: dco_decode_opt_box_autoadd_i_64(arr[6]),
+      speaker: dco_decode_opt_String(arr[7]),
+      sectionLabel: dco_decode_opt_String(arr[8]),
+      sourceFilename: dco_decode_opt_String(arr[9]),
+    );
+  }
+
+  @protected
+  KnowledgeIndexStatus dco_decode_knowledge_index_status(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 15)
+      throw Exception('unexpected arr length: expect 15 but see ${arr.length}');
+    return KnowledgeIndexStatus(
+      status: dco_decode_String(arr[0]),
+      rebuildRequired: dco_decode_bool(arr[1]),
+      staleReason: dco_decode_opt_String(arr[2]),
+      lastError: dco_decode_opt_String(arr[3]),
+      lastRebuildStartedAtMs: dco_decode_opt_box_autoadd_i_64(arr[4]),
+      lastRebuildCompletedAtMs: dco_decode_opt_box_autoadd_i_64(arr[5]),
+      currentDocumentId: dco_decode_opt_String(arr[6]),
+      currentStage: dco_decode_opt_String(arr[7]),
+      documentsIndexed: dco_decode_i_64(arr[8]),
+      unitsIndexed: dco_decode_i_64(arr[9]),
+      embeddingsIndexed: dco_decode_i_64(arr[10]),
+      totalDocuments: dco_decode_i_64(arr[11]),
+      lastIndexedModelName: dco_decode_opt_String(arr[12]),
+      lastIndexedDim: dco_decode_opt_box_autoadd_i_64(arr[13]),
+      versions: dco_decode_knowledge_version_set(arr[14]),
+    );
+  }
+
+  @protected
+  KnowledgeOriginType dco_decode_knowledge_origin_type(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return KnowledgeOriginType.values[raw as int];
+  }
+
+  @protected
+  KnowledgeRole dco_decode_knowledge_role(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return KnowledgeRole.values[raw as int];
+  }
+
+  @protected
+  KnowledgeSourceKind dco_decode_knowledge_source_kind(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return KnowledgeSourceKind.values[raw as int];
+  }
+
+  @protected
+  KnowledgeUnit dco_decode_knowledge_unit(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 15)
+      throw Exception('unexpected arr length: expect 15 but see ${arr.length}');
+    return KnowledgeUnit(
+      unitId: dco_decode_String(arr[0]),
+      documentId: dco_decode_String(arr[1]),
+      parentUnitId: dco_decode_opt_String(arr[2]),
+      unitKind: dco_decode_knowledge_unit_kind(arr[3]),
+      sourceKind: dco_decode_knowledge_source_kind(arr[4]),
+      role: dco_decode_knowledge_role(arr[5]),
+      ordinal: dco_decode_i_64(arr[6]),
+      tokenCount: dco_decode_i_64(arr[7]),
+      rawText: dco_decode_String(arr[8]),
+      normalizedText: dco_decode_String(arr[9]),
+      anchors: dco_decode_knowledge_anchor_set(arr[10]),
+      prevUnitId: dco_decode_opt_String(arr[11]),
+      nextUnitId: dco_decode_opt_String(arr[12]),
+      createdAtMs: dco_decode_i_64(arr[13]),
+      updatedAtMs: dco_decode_i_64(arr[14]),
+    );
+  }
+
+  @protected
+  KnowledgeUnitKind dco_decode_knowledge_unit_kind(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return KnowledgeUnitKind.values[raw as int];
+  }
+
+  @protected
+  KnowledgeVersionSet dco_decode_knowledge_version_set(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 5)
+      throw Exception('unexpected arr length: expect 5 but see ${arr.length}');
+    return KnowledgeVersionSet(
+      schemaVersion: dco_decode_i_64(arr[0]),
+      normalizationVersion: dco_decode_i_64(arr[1]),
+      segmentationVersion: dco_decode_i_64(arr[2]),
+      embeddingPolicyVersion: dco_decode_i_64(arr[3]),
+      retrievalPolicyVersion: dco_decode_i_64(arr[4]),
+    );
+  }
+
+  @protected
   List<String> dco_decode_list_String(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return (raw as List<dynamic>).map(dco_decode_String).toList();
@@ -8956,6 +9310,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  List<ContentKnowledgeDocument> dco_decode_list_content_knowledge_document(
+      dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>)
+        .map(dco_decode_content_knowledge_document)
+        .toList();
+  }
+
+  @protected
   List<Conversation> dco_decode_list_conversation(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return (raw as List<dynamic>).map(dco_decode_conversation).toList();
@@ -8980,6 +9343,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     return (raw as List<dynamic>)
         .map(dco_decode_external_import_batch_summary)
         .toList();
+  }
+
+  @protected
+  List<KnowledgeUnit> dco_decode_list_knowledge_unit(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>).map(dco_decode_knowledge_unit).toList();
   }
 
   @protected
@@ -9199,6 +9568,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   PlatformInt64? dco_decode_opt_box_autoadd_i_64(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw == null ? null : dco_decode_box_autoadd_i_64(raw);
+  }
+
+  @protected
+  KnowledgeUnitKind? dco_decode_opt_box_autoadd_knowledge_unit_kind(
+      dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw == null ? null : dco_decode_box_autoadd_knowledge_unit_kind(raw);
   }
 
   @protected
@@ -9569,6 +9945,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  KnowledgeUnitKind sse_decode_box_autoadd_knowledge_unit_kind(
+      SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_knowledge_unit_kind(deserializer));
+  }
+
+  @protected
   MediaAnnotationConfig sse_decode_box_autoadd_media_annotation_config(
       SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
@@ -9670,6 +10053,41 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         mobileBackgroundEnabled: var_mobileBackgroundEnabled,
         mobileBackgroundRequiresWifi: var_mobileBackgroundRequiresWifi,
         mobileBackgroundRequiresCharging: var_mobileBackgroundRequiresCharging);
+  }
+
+  @protected
+  ContentKnowledgeDocument sse_decode_content_knowledge_document(
+      SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_documentId = sse_decode_String(deserializer);
+    var var_originType = sse_decode_knowledge_origin_type(deserializer);
+    var var_sourceKind = sse_decode_knowledge_source_kind(deserializer);
+    var var_role = sse_decode_knowledge_role(deserializer);
+    var var_language = sse_decode_opt_String(deserializer);
+    var var_qualityScore = sse_decode_f_64(deserializer);
+    var var_createdAtMs = sse_decode_i_64(deserializer);
+    var var_updatedAtMs = sse_decode_i_64(deserializer);
+    var var_versions = sse_decode_knowledge_version_set(deserializer);
+    var var_anchors = sse_decode_knowledge_anchor_set(deserializer);
+    var var_title = sse_decode_opt_String(deserializer);
+    var var_summary = sse_decode_opt_String(deserializer);
+    var var_rawText = sse_decode_String(deserializer);
+    var var_normalizedText = sse_decode_String(deserializer);
+    return ContentKnowledgeDocument(
+        documentId: var_documentId,
+        originType: var_originType,
+        sourceKind: var_sourceKind,
+        role: var_role,
+        language: var_language,
+        qualityScore: var_qualityScore,
+        createdAtMs: var_createdAtMs,
+        updatedAtMs: var_updatedAtMs,
+        versions: var_versions,
+        anchors: var_anchors,
+        title: var_title,
+        summary: var_summary,
+        rawText: var_rawText,
+        normalizedText: var_normalizedText);
   }
 
   @protected
@@ -9799,6 +10217,156 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  KnowledgeAnchorSet sse_decode_knowledge_anchor_set(
+      SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_messageId = sse_decode_opt_String(deserializer);
+    var var_conversationId = sse_decode_opt_String(deserializer);
+    var var_attachmentSha256 = sse_decode_opt_String(deserializer);
+    var var_pageIndex = sse_decode_opt_box_autoadd_i_64(deserializer);
+    var var_frameIndex = sse_decode_opt_box_autoadd_i_64(deserializer);
+    var var_startMs = sse_decode_opt_box_autoadd_i_64(deserializer);
+    var var_endMs = sse_decode_opt_box_autoadd_i_64(deserializer);
+    var var_speaker = sse_decode_opt_String(deserializer);
+    var var_sectionLabel = sse_decode_opt_String(deserializer);
+    var var_sourceFilename = sse_decode_opt_String(deserializer);
+    return KnowledgeAnchorSet(
+        messageId: var_messageId,
+        conversationId: var_conversationId,
+        attachmentSha256: var_attachmentSha256,
+        pageIndex: var_pageIndex,
+        frameIndex: var_frameIndex,
+        startMs: var_startMs,
+        endMs: var_endMs,
+        speaker: var_speaker,
+        sectionLabel: var_sectionLabel,
+        sourceFilename: var_sourceFilename);
+  }
+
+  @protected
+  KnowledgeIndexStatus sse_decode_knowledge_index_status(
+      SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_status = sse_decode_String(deserializer);
+    var var_rebuildRequired = sse_decode_bool(deserializer);
+    var var_staleReason = sse_decode_opt_String(deserializer);
+    var var_lastError = sse_decode_opt_String(deserializer);
+    var var_lastRebuildStartedAtMs =
+        sse_decode_opt_box_autoadd_i_64(deserializer);
+    var var_lastRebuildCompletedAtMs =
+        sse_decode_opt_box_autoadd_i_64(deserializer);
+    var var_currentDocumentId = sse_decode_opt_String(deserializer);
+    var var_currentStage = sse_decode_opt_String(deserializer);
+    var var_documentsIndexed = sse_decode_i_64(deserializer);
+    var var_unitsIndexed = sse_decode_i_64(deserializer);
+    var var_embeddingsIndexed = sse_decode_i_64(deserializer);
+    var var_totalDocuments = sse_decode_i_64(deserializer);
+    var var_lastIndexedModelName = sse_decode_opt_String(deserializer);
+    var var_lastIndexedDim = sse_decode_opt_box_autoadd_i_64(deserializer);
+    var var_versions = sse_decode_knowledge_version_set(deserializer);
+    return KnowledgeIndexStatus(
+        status: var_status,
+        rebuildRequired: var_rebuildRequired,
+        staleReason: var_staleReason,
+        lastError: var_lastError,
+        lastRebuildStartedAtMs: var_lastRebuildStartedAtMs,
+        lastRebuildCompletedAtMs: var_lastRebuildCompletedAtMs,
+        currentDocumentId: var_currentDocumentId,
+        currentStage: var_currentStage,
+        documentsIndexed: var_documentsIndexed,
+        unitsIndexed: var_unitsIndexed,
+        embeddingsIndexed: var_embeddingsIndexed,
+        totalDocuments: var_totalDocuments,
+        lastIndexedModelName: var_lastIndexedModelName,
+        lastIndexedDim: var_lastIndexedDim,
+        versions: var_versions);
+  }
+
+  @protected
+  KnowledgeOriginType sse_decode_knowledge_origin_type(
+      SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var inner = sse_decode_i_32(deserializer);
+    return KnowledgeOriginType.values[inner];
+  }
+
+  @protected
+  KnowledgeRole sse_decode_knowledge_role(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var inner = sse_decode_i_32(deserializer);
+    return KnowledgeRole.values[inner];
+  }
+
+  @protected
+  KnowledgeSourceKind sse_decode_knowledge_source_kind(
+      SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var inner = sse_decode_i_32(deserializer);
+    return KnowledgeSourceKind.values[inner];
+  }
+
+  @protected
+  KnowledgeUnit sse_decode_knowledge_unit(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_unitId = sse_decode_String(deserializer);
+    var var_documentId = sse_decode_String(deserializer);
+    var var_parentUnitId = sse_decode_opt_String(deserializer);
+    var var_unitKind = sse_decode_knowledge_unit_kind(deserializer);
+    var var_sourceKind = sse_decode_knowledge_source_kind(deserializer);
+    var var_role = sse_decode_knowledge_role(deserializer);
+    var var_ordinal = sse_decode_i_64(deserializer);
+    var var_tokenCount = sse_decode_i_64(deserializer);
+    var var_rawText = sse_decode_String(deserializer);
+    var var_normalizedText = sse_decode_String(deserializer);
+    var var_anchors = sse_decode_knowledge_anchor_set(deserializer);
+    var var_prevUnitId = sse_decode_opt_String(deserializer);
+    var var_nextUnitId = sse_decode_opt_String(deserializer);
+    var var_createdAtMs = sse_decode_i_64(deserializer);
+    var var_updatedAtMs = sse_decode_i_64(deserializer);
+    return KnowledgeUnit(
+        unitId: var_unitId,
+        documentId: var_documentId,
+        parentUnitId: var_parentUnitId,
+        unitKind: var_unitKind,
+        sourceKind: var_sourceKind,
+        role: var_role,
+        ordinal: var_ordinal,
+        tokenCount: var_tokenCount,
+        rawText: var_rawText,
+        normalizedText: var_normalizedText,
+        anchors: var_anchors,
+        prevUnitId: var_prevUnitId,
+        nextUnitId: var_nextUnitId,
+        createdAtMs: var_createdAtMs,
+        updatedAtMs: var_updatedAtMs);
+  }
+
+  @protected
+  KnowledgeUnitKind sse_decode_knowledge_unit_kind(
+      SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var inner = sse_decode_i_32(deserializer);
+    return KnowledgeUnitKind.values[inner];
+  }
+
+  @protected
+  KnowledgeVersionSet sse_decode_knowledge_version_set(
+      SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_schemaVersion = sse_decode_i_64(deserializer);
+    var var_normalizationVersion = sse_decode_i_64(deserializer);
+    var var_segmentationVersion = sse_decode_i_64(deserializer);
+    var var_embeddingPolicyVersion = sse_decode_i_64(deserializer);
+    var var_retrievalPolicyVersion = sse_decode_i_64(deserializer);
+    return KnowledgeVersionSet(
+        schemaVersion: var_schemaVersion,
+        normalizationVersion: var_normalizationVersion,
+        segmentationVersion: var_segmentationVersion,
+        embeddingPolicyVersion: var_embeddingPolicyVersion,
+        retrievalPolicyVersion: var_retrievalPolicyVersion);
+  }
+
+  @protected
   List<String> sse_decode_list_String(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
 
@@ -9862,6 +10430,19 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  List<ContentKnowledgeDocument> sse_decode_list_content_knowledge_document(
+      SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <ContentKnowledgeDocument>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_content_knowledge_document(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
   List<Conversation> sse_decode_list_conversation(
       SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
@@ -9909,6 +10490,19 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var ans_ = <ExternalImportBatchSummary>[];
     for (var idx_ = 0; idx_ < len_; ++idx_) {
       ans_.add(sse_decode_external_import_batch_summary(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
+  List<KnowledgeUnit> sse_decode_list_knowledge_unit(
+      SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <KnowledgeUnit>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_knowledge_unit(deserializer));
     }
     return ans_;
   }
@@ -10247,6 +10841,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
     if (sse_decode_bool(deserializer)) {
       return (sse_decode_box_autoadd_i_64(deserializer));
+    } else {
+      return null;
+    }
+  }
+
+  @protected
+  KnowledgeUnitKind? sse_decode_opt_box_autoadd_knowledge_unit_kind(
+      SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    if (sse_decode_bool(deserializer)) {
+      return (sse_decode_box_autoadd_knowledge_unit_kind(deserializer));
     } else {
       return null;
     }
@@ -10615,6 +11221,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_box_autoadd_knowledge_unit_kind(
+      KnowledgeUnitKind self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_knowledge_unit_kind(self, serializer);
+  }
+
+  @protected
   void sse_encode_box_autoadd_media_annotation_config(
       MediaAnnotationConfig self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
@@ -10682,6 +11295,26 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_bool(self.mobileBackgroundEnabled, serializer);
     sse_encode_bool(self.mobileBackgroundRequiresWifi, serializer);
     sse_encode_bool(self.mobileBackgroundRequiresCharging, serializer);
+  }
+
+  @protected
+  void sse_encode_content_knowledge_document(
+      ContentKnowledgeDocument self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.documentId, serializer);
+    sse_encode_knowledge_origin_type(self.originType, serializer);
+    sse_encode_knowledge_source_kind(self.sourceKind, serializer);
+    sse_encode_knowledge_role(self.role, serializer);
+    sse_encode_opt_String(self.language, serializer);
+    sse_encode_f_64(self.qualityScore, serializer);
+    sse_encode_i_64(self.createdAtMs, serializer);
+    sse_encode_i_64(self.updatedAtMs, serializer);
+    sse_encode_knowledge_version_set(self.versions, serializer);
+    sse_encode_knowledge_anchor_set(self.anchors, serializer);
+    sse_encode_opt_String(self.title, serializer);
+    sse_encode_opt_String(self.summary, serializer);
+    sse_encode_String(self.rawText, serializer);
+    sse_encode_String(self.normalizedText, serializer);
   }
 
   @protected
@@ -10769,6 +11402,101 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_knowledge_anchor_set(
+      KnowledgeAnchorSet self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_opt_String(self.messageId, serializer);
+    sse_encode_opt_String(self.conversationId, serializer);
+    sse_encode_opt_String(self.attachmentSha256, serializer);
+    sse_encode_opt_box_autoadd_i_64(self.pageIndex, serializer);
+    sse_encode_opt_box_autoadd_i_64(self.frameIndex, serializer);
+    sse_encode_opt_box_autoadd_i_64(self.startMs, serializer);
+    sse_encode_opt_box_autoadd_i_64(self.endMs, serializer);
+    sse_encode_opt_String(self.speaker, serializer);
+    sse_encode_opt_String(self.sectionLabel, serializer);
+    sse_encode_opt_String(self.sourceFilename, serializer);
+  }
+
+  @protected
+  void sse_encode_knowledge_index_status(
+      KnowledgeIndexStatus self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.status, serializer);
+    sse_encode_bool(self.rebuildRequired, serializer);
+    sse_encode_opt_String(self.staleReason, serializer);
+    sse_encode_opt_String(self.lastError, serializer);
+    sse_encode_opt_box_autoadd_i_64(self.lastRebuildStartedAtMs, serializer);
+    sse_encode_opt_box_autoadd_i_64(self.lastRebuildCompletedAtMs, serializer);
+    sse_encode_opt_String(self.currentDocumentId, serializer);
+    sse_encode_opt_String(self.currentStage, serializer);
+    sse_encode_i_64(self.documentsIndexed, serializer);
+    sse_encode_i_64(self.unitsIndexed, serializer);
+    sse_encode_i_64(self.embeddingsIndexed, serializer);
+    sse_encode_i_64(self.totalDocuments, serializer);
+    sse_encode_opt_String(self.lastIndexedModelName, serializer);
+    sse_encode_opt_box_autoadd_i_64(self.lastIndexedDim, serializer);
+    sse_encode_knowledge_version_set(self.versions, serializer);
+  }
+
+  @protected
+  void sse_encode_knowledge_origin_type(
+      KnowledgeOriginType self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.index, serializer);
+  }
+
+  @protected
+  void sse_encode_knowledge_role(KnowledgeRole self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.index, serializer);
+  }
+
+  @protected
+  void sse_encode_knowledge_source_kind(
+      KnowledgeSourceKind self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.index, serializer);
+  }
+
+  @protected
+  void sse_encode_knowledge_unit(KnowledgeUnit self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.unitId, serializer);
+    sse_encode_String(self.documentId, serializer);
+    sse_encode_opt_String(self.parentUnitId, serializer);
+    sse_encode_knowledge_unit_kind(self.unitKind, serializer);
+    sse_encode_knowledge_source_kind(self.sourceKind, serializer);
+    sse_encode_knowledge_role(self.role, serializer);
+    sse_encode_i_64(self.ordinal, serializer);
+    sse_encode_i_64(self.tokenCount, serializer);
+    sse_encode_String(self.rawText, serializer);
+    sse_encode_String(self.normalizedText, serializer);
+    sse_encode_knowledge_anchor_set(self.anchors, serializer);
+    sse_encode_opt_String(self.prevUnitId, serializer);
+    sse_encode_opt_String(self.nextUnitId, serializer);
+    sse_encode_i_64(self.createdAtMs, serializer);
+    sse_encode_i_64(self.updatedAtMs, serializer);
+  }
+
+  @protected
+  void sse_encode_knowledge_unit_kind(
+      KnowledgeUnitKind self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.index, serializer);
+  }
+
+  @protected
+  void sse_encode_knowledge_version_set(
+      KnowledgeVersionSet self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_64(self.schemaVersion, serializer);
+    sse_encode_i_64(self.normalizationVersion, serializer);
+    sse_encode_i_64(self.segmentationVersion, serializer);
+    sse_encode_i_64(self.embeddingPolicyVersion, serializer);
+    sse_encode_i_64(self.retrievalPolicyVersion, serializer);
+  }
+
+  @protected
   void sse_encode_list_String(List<String> self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_i_32(self.length, serializer);
@@ -10818,6 +11546,16 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_list_content_knowledge_document(
+      List<ContentKnowledgeDocument> self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_content_knowledge_document(item, serializer);
+    }
+  }
+
+  @protected
   void sse_encode_list_conversation(
       List<Conversation> self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
@@ -10853,6 +11591,16 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_i_32(self.length, serializer);
     for (final item in self) {
       sse_encode_external_import_batch_summary(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_list_knowledge_unit(
+      List<KnowledgeUnit> self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_knowledge_unit(item, serializer);
     }
   }
 
@@ -11116,6 +11864,17 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_bool(self != null, serializer);
     if (self != null) {
       sse_encode_box_autoadd_i_64(self, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_opt_box_autoadd_knowledge_unit_kind(
+      KnowledgeUnitKind? self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    sse_encode_bool(self != null, serializer);
+    if (self != null) {
+      sse_encode_box_autoadd_knowledge_unit_kind(self, serializer);
     }
   }
 

@@ -14,7 +14,9 @@ import '../../src/rust/api/content_extract.dart' as rust_content_extract;
 import '../../src/rust/api/embedding_lifecycle.dart'
     as rust_embedding_lifecycle;
 import '../../src/rust/api/external_import.dart' as rust_external_import;
+import '../../src/rust/api/knowledge.dart' as rust_knowledge;
 import '../../src/rust/api/core.dart' as rust_core;
+import '../../src/rust/knowledge/models.dart' as rust_knowledge_models;
 import '../../src/rust/api/attachments.dart' as rust_attachments;
 import '../../src/rust/api/sync_progress.dart' as rust_sync_progress;
 import '../../src/rust/db.dart';
@@ -23,6 +25,8 @@ import '../../src/rust/semantic_parse.dart';
 import 'app_backend.dart';
 import 'attachments_backend.dart';
 import 'rust_external_library_resolver.dart';
+
+part 'native_backend_knowledge.dart';
 
 typedef AppDirProvider = Future<String> Function();
 

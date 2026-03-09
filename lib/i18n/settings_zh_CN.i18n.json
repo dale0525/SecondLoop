@@ -862,5 +862,28 @@
     "stageIndexingPhaseB": "建立 Phase B 索引中",
     "statusNotStarted": "未开始",
     "statusNoWork": "无可处理内容"
+  },
+  "knowledgeIndex": {
+    "title": "知识索引",
+    "subtitle": "构建并诊断本地统一知识索引。",
+    "status": {
+      "loading": "状态：加载中…",
+      "empty": "状态：尚未构建",
+      "running": "状态：正在重建",
+      "stale": "状态：建议重建",
+      "failed": "状态：重建失败",
+      "cancelled": "状态：已取消重建",
+      "complete": "状态：已是最新"
+    },
+    "actions": {
+      "rebuild": "重建索引",
+      "cancel": "取消重建"
+    },
+    "versionSummaryUnavailable": "版本摘要不可用",
+    "versionSummary": "版本 —— schema: $schema，normalization: $normalization，segmentation: $segmentation，embedding: $embedding，retrieval: $retrieval",
+    "lastBuild": "上次成功构建：$value",
+    "staleReason": "过期原因：$value",
+    "lastError": "最近错误：$value",
+    "progress": "进度 —— 文档：$documentsIndexed/$totalDocuments，单元：$unitsIndexed，向量：$embeddingsIndexed"
   }
 }

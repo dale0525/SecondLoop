@@ -862,5 +862,28 @@
     "stageIndexingPhaseB": "Building Phase B index",
     "statusNotStarted": "Not started",
     "statusNoWork": "No work"
+  },
+  "knowledgeIndex": {
+    "title": "Knowledge Index",
+    "subtitle": "Build and diagnose the local unified knowledge index.",
+    "status": {
+      "loading": "Status: loading…",
+      "empty": "Status: not built yet",
+      "running": "Status: rebuilding",
+      "stale": "Status: rebuild recommended",
+      "failed": "Status: rebuild failed",
+      "cancelled": "Status: rebuild cancelled",
+      "complete": "Status: up to date"
+    },
+    "actions": {
+      "rebuild": "Rebuild index",
+      "cancel": "Cancel rebuild"
+    },
+    "versionSummaryUnavailable": "Version summary unavailable",
+    "versionSummary": "Versions — schema: $schema, normalization: $normalization, segmentation: $segmentation, embedding: $embedding, retrieval: $retrieval",
+    "lastBuild": "Last successful build: $value",
+    "staleReason": "Stale reason: $value",
+    "lastError": "Last error: $value",
+    "progress": "Progress — documents: $documentsIndexed/$totalDocuments, units: $unitsIndexed, embeddings: $embeddingsIndexed"
   }
 }

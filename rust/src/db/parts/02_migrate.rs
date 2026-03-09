@@ -826,6 +826,142 @@ CREATE INDEX IF NOT EXISTS idx_detached_ask_completion_claims_conversation
 PRAGMA user_version = 28;
 "#,
         )?;
+        user_version = 28;
+    }
+
+    if user_version < 29 {
+        // v29: unified knowledge index foundation tables.
+        conn.execute_batch(
+            r#"
+CREATE TABLE IF NOT EXISTS knowledge_documents (
+  document_id TEXT PRIMARY KEY,
+  origin_type TEXT NOT NULL,
+  source_kind TEXT NOT NULL,
+  role TEXT NOT NULL,
+  language TEXT,
+  quality_score REAL NOT NULL DEFAULT 1.0,
+  title TEXT,
+  summary TEXT,
+  anchor_json TEXT NOT NULL DEFAULT '{}',
+  raw_text BLOB NOT NULL,
+  normalized_text BLOB NOT NULL,
+  created_at_ms INTEGER NOT NULL,
+  updated_at_ms INTEGER NOT NULL,
+  schema_version INTEGER NOT NULL,
+  normalization_version INTEGER NOT NULL,
+  segmentation_version INTEGER NOT NULL,
+  embedding_policy_version INTEGER NOT NULL,
+  retrieval_policy_version INTEGER NOT NULL,
+  last_indexed_at_ms INTEGER
+);
+CREATE INDEX IF NOT EXISTS idx_knowledge_documents_origin_updated
+  ON knowledge_documents(origin_type, updated_at_ms DESC, document_id);
+
+CREATE TABLE IF NOT EXISTS knowledge_units (
+  unit_id TEXT PRIMARY KEY,
+  document_id TEXT NOT NULL,
+  parent_unit_id TEXT,
+  unit_kind TEXT NOT NULL,
+  source_kind TEXT NOT NULL,
+  role TEXT NOT NULL,
+  ordinal INTEGER NOT NULL,
+  token_count INTEGER NOT NULL DEFAULT 0,
+  anchor_json TEXT NOT NULL DEFAULT '{}',
+  raw_text BLOB NOT NULL,
+  normalized_text BLOB NOT NULL,
+  prev_unit_id TEXT,
+  next_unit_id TEXT,
+  created_at_ms INTEGER NOT NULL,
+  updated_at_ms INTEGER NOT NULL,
+  FOREIGN KEY(document_id) REFERENCES knowledge_documents(document_id) ON DELETE CASCADE,
+  FOREIGN KEY(parent_unit_id) REFERENCES knowledge_units(unit_id) ON DELETE CASCADE,
+  FOREIGN KEY(prev_unit_id) REFERENCES knowledge_units(unit_id) ON DELETE SET NULL,
+  FOREIGN KEY(next_unit_id) REFERENCES knowledge_units(unit_id) ON DELETE SET NULL
+);
+CREATE INDEX IF NOT EXISTS idx_knowledge_units_document_parent_kind
+  ON knowledge_units(document_id, parent_unit_id, unit_kind, ordinal);
+CREATE INDEX IF NOT EXISTS idx_knowledge_units_anchor_lookup
+  ON knowledge_units(document_id, unit_kind, ordinal);
+
+CREATE TABLE IF NOT EXISTS knowledge_embeddings (
+  target_kind TEXT NOT NULL,
+  target_id TEXT NOT NULL,
+  unit_kind TEXT,
+  model_name TEXT NOT NULL,
+  dim INTEGER NOT NULL,
+  embedding_json TEXT NOT NULL,
+  created_at_ms INTEGER NOT NULL,
+  updated_at_ms INTEGER NOT NULL,
+  PRIMARY KEY(target_kind, target_id, model_name)
+);
+CREATE INDEX IF NOT EXISTS idx_knowledge_embeddings_target
+  ON knowledge_embeddings(target_kind, target_id, unit_kind);
+
+CREATE TABLE IF NOT EXISTS knowledge_index_jobs (
+  document_id TEXT NOT NULL,
+  stage TEXT NOT NULL,
+  status TEXT NOT NULL,
+  attempts INTEGER NOT NULL DEFAULT 0,
+  next_retry_at_ms INTEGER,
+  last_error TEXT,
+  created_at_ms INTEGER NOT NULL,
+  updated_at_ms INTEGER NOT NULL,
+  PRIMARY KEY(document_id, stage),
+  FOREIGN KEY(document_id) REFERENCES knowledge_documents(document_id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_knowledge_index_jobs_status_due
+  ON knowledge_index_jobs(status, next_retry_at_ms, updated_at_ms);
+
+CREATE TABLE IF NOT EXISTS knowledge_rebuild_state (
+  state_key INTEGER PRIMARY KEY CHECK(state_key = 1),
+  knowledge_schema_version INTEGER NOT NULL,
+  normalization_version INTEGER NOT NULL,
+  segmentation_version INTEGER NOT NULL,
+  embedding_policy_version INTEGER NOT NULL,
+  retrieval_policy_version INTEGER NOT NULL,
+  last_indexed_model_name TEXT,
+  last_indexed_dim INTEGER,
+  status TEXT NOT NULL DEFAULT 'empty',
+  rebuild_required INTEGER NOT NULL DEFAULT 0,
+  stale_reason TEXT,
+  last_error TEXT,
+  last_rebuild_started_at_ms INTEGER,
+  last_rebuild_completed_at_ms INTEGER,
+  current_document_id TEXT,
+  current_stage TEXT,
+  documents_indexed INTEGER NOT NULL DEFAULT 0,
+  units_indexed INTEGER NOT NULL DEFAULT 0,
+  embeddings_indexed INTEGER NOT NULL DEFAULT 0,
+  total_documents INTEGER NOT NULL DEFAULT 0,
+  cancel_requested INTEGER NOT NULL DEFAULT 0
+);
+INSERT OR IGNORE INTO knowledge_rebuild_state(
+  state_key,
+  knowledge_schema_version,
+  normalization_version,
+  segmentation_version,
+  embedding_policy_version,
+  retrieval_policy_version,
+  last_indexed_model_name,
+  last_indexed_dim,
+  status,
+  rebuild_required,
+  stale_reason,
+  last_error,
+  last_rebuild_started_at_ms,
+  last_rebuild_completed_at_ms,
+  current_document_id,
+  current_stage,
+  documents_indexed,
+  units_indexed,
+  embeddings_indexed,
+  total_documents,
+  cancel_requested
+) VALUES (1, 1, 1, 1, 1, 1, NULL, NULL, 'empty', 0, NULL, NULL, NULL, NULL, NULL, NULL, 0, 0, 0, 0, 0);
+
+PRAGMA user_version = 29;
+"#,
+        )?;
     }
 
     Ok(())
@@ -839,6 +975,7 @@ pub fn open(app_dir: &Path) -> Result<Connection> {
     conn.pragma_update(None, "journal_mode", "WAL")?;
     migrate(&conn)?;
     ensure_content_enrichment_kv_defaults(&conn)?;
+    ensure_knowledge_rebuild_state_defaults(&conn)?;
     Ok(conn)
 }
 
@@ -901,6 +1038,26 @@ DELETE FROM todo_recurrences;
 DELETE FROM todo_series;
 DELETE FROM events;
 DELETE FROM detached_ask_completion_claims;
+DELETE FROM knowledge_embeddings;
+DELETE FROM knowledge_index_jobs;
+DELETE FROM knowledge_units;
+DELETE FROM knowledge_documents;
+UPDATE knowledge_rebuild_state
+SET status = 'empty',
+    rebuild_required = 0,
+    stale_reason = NULL,
+    last_error = NULL,
+    last_rebuild_started_at_ms = NULL,
+    last_rebuild_completed_at_ms = NULL,
+    current_document_id = NULL,
+    current_stage = NULL,
+    documents_indexed = 0,
+    units_indexed = 0,
+    embeddings_indexed = 0,
+    total_documents = 0,
+    cancel_requested = 0,
+    last_indexed_model_name = NULL,
+    last_indexed_dim = NULL;
 DELETE FROM oplog;
 DELETE FROM kv WHERE key != 'embedding.active_model_name';
 "#,
