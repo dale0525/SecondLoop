@@ -143,12 +143,11 @@ pub fn list_knowledge_units(
     limit: usize,
     offset: usize,
 ) -> Result<Vec<KnowledgeUnit>> {
-    let kind_filter = unit_kind.map(|value| {
-        serde_json::to_string(&value)
-            .unwrap()
-            .trim_matches('"')
-            .to_string()
-    });
+    let kind_filter = unit_kind
+        .map(|value| -> Result<String> {
+            Ok(serde_json::to_string(&value)?.trim_matches('"').to_string())
+        })
+        .transpose()?;
     let mut stmt = conn.prepare(
         r#"SELECT unit_id,
                   document_id,

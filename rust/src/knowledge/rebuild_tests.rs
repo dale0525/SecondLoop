@@ -4,7 +4,7 @@ use crate::crypto::encrypt_bytes;
 use crate::db;
 use crate::knowledge::{
     ensure_knowledge_rebuild_requested, list_knowledge_documents, list_knowledge_units,
-    process_pending_knowledge_index_jobs_active,
+    process_pending_knowledge_index_jobs_active, KnowledgeUnitKind,
 };
 
 #[test]
@@ -47,6 +47,50 @@ fn list_knowledge_documents_skips_corrupt_rows() {
     let after_docs = list_knowledge_documents(&conn, &key, 100, 0).expect("after docs");
     assert_eq!(after_docs.len(), 1);
     assert_eq!(after_docs[0].document_id, format!("message:{}", good.id));
+}
+
+#[test]
+fn list_knowledge_units_filters_by_kind_without_panicking() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let app_dir = dir.path();
+    let conn = db::open(app_dir).expect("open");
+    let key = [23u8; 32];
+
+    let conv = db::create_conversation(&conn, &key, "Inbox").expect("conversation");
+    let msg = db::insert_message(
+        &conn,
+        &key,
+        &conv.id,
+        "user",
+        "first paragraph for sections
+
+second paragraph for chunking",
+    )
+    .expect("message");
+    conn.execute(
+        "UPDATE messages SET is_memory = 1, needs_embedding = 1 WHERE id = ?1",
+        params![msg.id],
+    )
+    .expect("mark memory");
+
+    ensure_knowledge_rebuild_requested(&conn).expect("request rebuild");
+    process_pending_knowledge_index_jobs_active(&conn, &key, 64).expect("process jobs");
+
+    let document_id = format!("message:{}", msg.id);
+    let segment_units = list_knowledge_units(
+        &conn,
+        &key,
+        &document_id,
+        Some(KnowledgeUnitKind::Segment),
+        100,
+        0,
+    )
+    .expect("segment units");
+
+    assert!(!segment_units.is_empty());
+    assert!(segment_units
+        .iter()
+        .all(|unit| unit.unit_kind == KnowledgeUnitKind::Segment));
 }
 
 #[test]

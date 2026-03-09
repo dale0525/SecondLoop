@@ -15,35 +15,39 @@ use crate::knowledge::{
 };
 
 const JOB_STAGES: &[&str] = &["normalize", "segment", "chunk", "embed", "finalize"];
+const UNKNOWN_STAGE_RANK: i64 = 99;
 const MAX_KNOWLEDGE_JOB_ATTEMPTS: i64 = 5;
 const KV_REBUILD_EMBEDDING_MODEL_NAME: &str = "knowledge.rebuild.embedding_model_name";
 const KV_REBUILD_EMBEDDING_DIM: &str = "knowledge.rebuild.embedding_dim";
 
 fn stage_rank(stage: &str) -> i64 {
-    match stage {
-        "normalize" => 0,
-        "segment" => 1,
-        "chunk" => 2,
-        "embed" => 3,
-        "finalize" => 4,
-        _ => 99,
+    JOB_STAGES
+        .iter()
+        .position(|candidate| *candidate == stage)
+        .map(|index| index as i64)
+        .unwrap_or(UNKNOWN_STAGE_RANK)
+}
+
+fn stage_rank_sql(column_name: &str) -> String {
+    let mut sql = format!("CASE {column_name}");
+    for (index, stage) in JOB_STAGES.iter().enumerate() {
+        sql.push_str(&format!(" WHEN '{stage}' THEN {index}"));
     }
+    sql.push_str(&format!(" ELSE {UNKNOWN_STAGE_RANK} END"));
+    sql
 }
 
 fn prior_stages_complete(conn: &Connection, document_id: &str, stage: &str) -> Result<bool> {
-    let blocked: i64 = conn.query_row(
+    let blocked_query = format!(
         r#"SELECT COUNT(*)
            FROM knowledge_index_jobs
            WHERE document_id = ?1
              AND status NOT IN ('done', 'exhausted')
-             AND CASE stage
-                   WHEN 'normalize' THEN 0
-                   WHEN 'segment' THEN 1
-                   WHEN 'chunk' THEN 2
-                   WHEN 'embed' THEN 3
-                   WHEN 'finalize' THEN 4
-                   ELSE 99
-                 END < ?2"#,
+             AND {} < ?2"#,
+        stage_rank_sql("stage")
+    );
+    let blocked: i64 = conn.query_row(
+        &blocked_query,
         params![document_id, stage_rank(stage)],
         |row| row.get(0),
     )?;
@@ -850,23 +854,18 @@ pub fn process_pending_knowledge_index_jobs_active(
         initialize_rebuild(conn, key)?;
     }
 
-    let mut stmt = conn.prepare(
+    let jobs_query = format!(
         r#"SELECT document_id, stage
            FROM knowledge_index_jobs
            WHERE status IN ('pending', 'failed')
              AND (next_retry_at_ms IS NULL OR next_retry_at_ms <= ?1)
-           ORDER BY CASE stage
-                      WHEN 'normalize' THEN 0
-                      WHEN 'segment' THEN 1
-                      WHEN 'chunk' THEN 2
-                      WHEN 'embed' THEN 3
-                      WHEN 'finalize' THEN 4
-                      ELSE 99
-                    END ASC,
+           ORDER BY {} ASC,
                     updated_at_ms ASC,
                     document_id ASC
            LIMIT ?2"#,
-    )?;
+        stage_rank_sql("stage")
+    );
+    let mut stmt = conn.prepare(&jobs_query)?;
     let mut rows = stmt.query(params![now_ms(), limit.max(1) as i64])?;
     let mut jobs = Vec::<(String, String)>::new();
     while let Some(row) = rows.next()? {
