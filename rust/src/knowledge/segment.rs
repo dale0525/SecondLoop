@@ -44,7 +44,11 @@ pub fn segment_document_text(document: &ContentKnowledgeDocument) -> Vec<Segment
         }
         out.push(SegmentDraft {
             ordinal: index as i64,
-            raw_text: raw_chunks.get(index).copied().unwrap_or(chunk).to_string(),
+            raw_text: raw_chunks
+                .get(index)
+                .copied()
+                .unwrap_or_default()
+                .to_string(),
             normalized_text: (*chunk).to_string(),
             role: document.role,
             anchors,

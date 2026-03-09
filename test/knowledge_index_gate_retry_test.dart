@@ -94,6 +94,38 @@ void main() {
     expect(backend.processCalls, 2);
   });
 
+  testWidgets(
+      'KnowledgeIndexGate refreshes status after processing before choosing backoff',
+      (tester) async {
+    final backend = _PostProcessStatusKnowledgeBackend();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: AppBackendScope(
+          backend: backend,
+          child: SessionScope(
+            sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+            lock: () {},
+            child: const KnowledgeIndexGate(child: SizedBox.shrink()),
+          ),
+        ),
+      ),
+    );
+
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 3));
+    await tester.pump();
+
+    expect(backend.processCalls, 1);
+    expect(backend.statusCalls, 3);
+
+    await tester.pump(const Duration(seconds: 9));
+    await tester.pump();
+
+    expect(backend.processCalls, 1);
+    expect(backend.statusCalls, 3);
+  });
+
   testWidgets('KnowledgeIndexGate does not process empty status directly',
       (tester) async {
     final backend = _AlwaysEmptyKnowledgeBackend();
@@ -446,6 +478,75 @@ final class _FailedBackoffKnowledgeBackend extends TestAppBackend
     int limit = 8,
   }) async {
     processCalls += 1;
+    return 0;
+  }
+
+  @override
+  Future<void> requestKnowledgeRebuild(Uint8List key) async {}
+}
+
+final class _PostProcessStatusKnowledgeBackend extends TestAppBackend
+    implements KnowledgeBackend {
+  int processCalls = 0;
+  int statusCalls = 0;
+  String status = 'failed';
+
+  @override
+  Future<void> cancelKnowledgeRebuild(Uint8List key) async {}
+
+  @override
+  Future<KnowledgeIndexStatus> getKnowledgeIndexStatus(Uint8List key) async {
+    statusCalls += 1;
+    return KnowledgeIndexStatus(
+      status: status,
+      rebuildRequired: false,
+      staleReason: null,
+      lastError: status == 'failed' ? 'temporary failure' : null,
+      lastRebuildStartedAtMs: 10,
+      lastRebuildCompletedAtMs: status == 'complete' ? 20 : null,
+      currentDocumentId: status == 'failed' ? 'message:m1' : null,
+      currentStage: status == 'failed' ? 'embed' : null,
+      documentsIndexed: 1,
+      unitsIndexed: 2,
+      embeddingsIndexed: 1,
+      totalDocuments: 1,
+      lastIndexedModelName: 'secondloop-default-embed-v0',
+      lastIndexedDim: 384,
+      versions: const KnowledgeVersionSet(
+        schemaVersion: 1,
+        normalizationVersion: 1,
+        segmentationVersion: 1,
+        embeddingPolicyVersion: 1,
+        retrievalPolicyVersion: 1,
+      ),
+    );
+  }
+
+  @override
+  Future<List<ContentKnowledgeDocument>> listKnowledgeDocuments(
+    Uint8List key, {
+    int limit = 100,
+    int offset = 0,
+  }) async =>
+      const <ContentKnowledgeDocument>[];
+
+  @override
+  Future<List<KnowledgeUnit>> listKnowledgeUnits(
+    Uint8List key, {
+    required String documentId,
+    KnowledgeUnitKind? unitKind,
+    int limit = 100,
+    int offset = 0,
+  }) async =>
+      const <KnowledgeUnit>[];
+
+  @override
+  Future<int> processPendingKnowledgeIndexJobs(
+    Uint8List key, {
+    int limit = 8,
+  }) async {
+    processCalls += 1;
+    status = 'complete';
     return 0;
   }
 

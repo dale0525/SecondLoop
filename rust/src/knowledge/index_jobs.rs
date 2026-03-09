@@ -16,6 +16,8 @@ use crate::knowledge::{
 
 const JOB_STAGES: &[&str] = &["normalize", "segment", "chunk", "embed", "finalize"];
 const MAX_KNOWLEDGE_JOB_ATTEMPTS: i64 = 5;
+const KV_REBUILD_EMBEDDING_MODEL_NAME: &str = "knowledge.rebuild.embedding_model_name";
+const KV_REBUILD_EMBEDDING_DIM: &str = "knowledge.rebuild.embedding_dim";
 
 fn stage_rank(stage: &str) -> i64 {
     match stage {
@@ -53,6 +55,47 @@ fn now_ms() -> i64 {
         .duration_since(UNIX_EPOCH)
         .map(|value| value.as_millis().min(i64::MAX as u128) as i64)
         .unwrap_or(0)
+}
+
+fn write_rebuild_embedding_model_state(
+    conn: &Connection,
+    model_name: &str,
+    dim: i64,
+) -> Result<()> {
+    conn.execute(
+        r#"INSERT INTO kv(key, value) VALUES (?1, ?2)
+           ON CONFLICT(key) DO UPDATE SET value = excluded.value"#,
+        params![KV_REBUILD_EMBEDDING_MODEL_NAME, model_name],
+    )?;
+    conn.execute(
+        r#"INSERT INTO kv(key, value) VALUES (?1, ?2)
+           ON CONFLICT(key) DO UPDATE SET value = excluded.value"#,
+        params![KV_REBUILD_EMBEDDING_DIM, dim.to_string()],
+    )?;
+    Ok(())
+}
+
+fn read_rebuild_embedding_model_state(conn: &Connection) -> Result<(String, i64)> {
+    let model_name = conn
+        .query_row(
+            r#"SELECT value FROM kv WHERE key = ?1"#,
+            params![KV_REBUILD_EMBEDDING_MODEL_NAME],
+            |row| row.get::<_, String>(0),
+        )
+        .ok();
+    let dim = conn
+        .query_row(
+            r#"SELECT value FROM kv WHERE key = ?1"#,
+            params![KV_REBUILD_EMBEDDING_DIM],
+            |row| row.get::<_, String>(0),
+        )
+        .ok()
+        .and_then(|value| value.trim().parse::<i64>().ok());
+
+    match (model_name, dim) {
+        (Some(model_name), Some(dim)) => Ok((model_name, dim)),
+        _ => crate::db::read_knowledge_embedding_model_state(conn),
+    }
 }
 
 fn upsert_document(
@@ -273,9 +316,10 @@ fn store_embeddings_for_document(
     section_units: &[KnowledgeUnit],
     chunk_units: &[KnowledgeUnit],
 ) -> Result<usize> {
-    let (model_name, dim) = crate::db::read_knowledge_embedding_model_state(conn)?;
+    let (model_name, dim) = read_rebuild_embedding_model_state(conn)?;
     let policy = EmbeddingBatchPolicy::default();
     let mut total = 0usize;
+    let now = now_ms();
 
     conn.execute(
         r#"INSERT OR REPLACE INTO knowledge_embeddings(
@@ -292,8 +336,8 @@ fn store_embeddings_for_document(
                 dim as usize,
                 policy,
             ))?,
-            now_ms(),
-            now_ms(),
+            now,
+            now,
         ],
     )?;
     total += 1;
@@ -317,8 +361,8 @@ fn store_embeddings_for_document(
                     dim as usize,
                     policy,
                 ))?,
-                now_ms(),
-                now_ms(),
+                now,
+                now,
             ],
         )?;
         total += 1;
@@ -347,6 +391,8 @@ fn initialize_rebuild(conn: &Connection, key: &[u8; 32]) -> Result<()> {
     with_immediate_transaction(conn, || {
         crate::db::reset_knowledge_index(conn)?;
         let rebuild_started_at_ms = now_ms();
+        let (model_name, dim) = crate::db::read_knowledge_embedding_model_state(conn)?;
+        write_rebuild_embedding_model_state(conn, &model_name, dim)?;
         let mut total_documents = 0i64;
         visit_source_knowledge_documents_with_external(
             conn,
@@ -678,7 +724,7 @@ fn finalize_if_complete(conn: &Connection) -> Result<()> {
         [],
         |row| row.get(0),
     )?;
-    let (model_name, dim) = crate::db::read_knowledge_embedding_model_state(conn)?;
+    let (model_name, dim) = read_rebuild_embedding_model_state(conn)?;
     if exhausted > 0 {
         conn.execute(
             r#"UPDATE knowledge_rebuild_state

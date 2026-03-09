@@ -126,11 +126,16 @@ class _KnowledgeIndexGateState extends State<KnowledgeIndexGate>
         key,
         limit: _batchLimit,
       );
-      final nextInterval = processed > 0
-          ? _drainInterval
-          : (refreshedStatus.status == 'failed'
-              ? _failureInterval
-              : _idleInterval);
+      if (processed > 0) {
+        _schedule(_drainInterval);
+        return;
+      }
+
+      final postProcessStatus =
+          await knowledgeBackend.getKnowledgeIndexStatus(key);
+      final nextInterval = postProcessStatus.status == 'failed'
+          ? _failureInterval
+          : _idleInterval;
       _schedule(nextInterval);
     } catch (error, stackTrace) {
       debugPrint('KnowledgeIndexGate: background tick failed: $error');

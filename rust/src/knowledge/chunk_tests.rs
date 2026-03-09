@@ -79,6 +79,37 @@ speaker b: three four."
 }
 
 #[test]
+fn knowledge_segmenting_does_not_cross_fill_missing_raw_paragraphs() {
+    let doc = ContentKnowledgeDocument {
+        document_id: "doc-misaligned-segments".to_string(),
+        origin_type: KnowledgeOriginType::Attachment,
+        source_kind: KnowledgeSourceKind::RawText,
+        role: KnowledgeRole::Body,
+        language: Some("en".to_string()),
+        quality_score: 1.0,
+        created_at_ms: 1,
+        updated_at_ms: 1,
+        versions: KnowledgeVersionSet::current(),
+        anchors: KnowledgeAnchorSet::default(),
+        title: None,
+        summary: None,
+        raw_text: "Alpha raw paragraph.".to_string(),
+        normalized_text: "alpha normalized paragraph.
+
+second normalized paragraph."
+            .to_string(),
+    };
+
+    let segments = segment_document_text(&doc);
+
+    assert_eq!(segments.len(), 2);
+    assert_eq!(segments[0].raw_text, "Alpha raw paragraph.");
+    assert_eq!(segments[0].normalized_text, "alpha normalized paragraph.");
+    assert_eq!(segments[1].raw_text, "");
+    assert_eq!(segments[1].normalized_text, "second normalized paragraph.");
+}
+
+#[test]
 fn knowledge_chunking_does_not_cross_fill_raw_and_normalized_tail_parts() {
     let doc = ContentKnowledgeDocument {
         document_id: "doc-misaligned-tail".to_string(),

@@ -363,6 +363,52 @@ fn knowledge_embed_stage_averages_split_document_and_unit_embeddings() {
 }
 
 #[test]
+fn knowledge_rebuild_keeps_embedding_model_snapshot_across_batches() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let app_dir = dir.path();
+    let conn = db::open(app_dir).expect("open");
+    let key = [14u8; 32];
+
+    let conv = db::create_conversation(&conn, &key, "Inbox").expect("conversation");
+    db::insert_message(&conn, &key, &conv.id, "user", "knowledge snapshot test").expect("message");
+
+    ensure_knowledge_rebuild_requested(&conn).expect("request rebuild");
+    let processed =
+        process_pending_knowledge_index_jobs_active(&conn, &key, 3).expect("process first batch");
+    assert_eq!(processed, 3);
+
+    db::set_active_embedding_model_name(&conn, crate::embedding::PRODUCTION_MODEL_NAME)
+        .expect("switch active embedding model");
+
+    let processed =
+        process_pending_knowledge_index_jobs_active(&conn, &key, 2).expect("process embed batch");
+    assert_eq!(processed, 2);
+
+    let mut stmt = conn
+        .prepare(
+            r#"SELECT DISTINCT model_name
+               FROM knowledge_embeddings
+               ORDER BY model_name ASC"#,
+        )
+        .expect("prepare embeddings query");
+    let stored_models = stmt
+        .query_map([], |row| row.get::<_, String>(0))
+        .expect("query models")
+        .collect::<Result<Vec<_>, _>>()
+        .expect("collect models");
+    assert_eq!(
+        stored_models,
+        vec![crate::embedding::DEFAULT_MODEL_NAME.to_string()]
+    );
+
+    let status = read_knowledge_index_status(&conn, &key).expect("status");
+    assert_eq!(
+        status.last_indexed_model_name.as_deref(),
+        Some(crate::embedding::DEFAULT_MODEL_NAME)
+    );
+}
+
+#[test]
 fn knowledge_rebuild_skips_retry_after_job_exhaustion_and_can_complete() {
     let dir = tempfile::tempdir().expect("tempdir");
     let app_dir = dir.path();
