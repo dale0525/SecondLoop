@@ -14,8 +14,8 @@ pub(crate) fn snippet(text: &str, limit: usize) -> Option<String> {
         return None;
     }
     let mut out = String::new();
-    for ch in trimmed.chars() {
-        if out.chars().count() >= limit {
+    for (count, ch) in trimmed.chars().enumerate() {
+        if count >= limit {
             break;
         }
         out.push(ch);

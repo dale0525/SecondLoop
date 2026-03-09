@@ -186,6 +186,15 @@ pub fn average_piece_embeddings(
     out
 }
 
+pub fn ensure_non_empty_embedding_results(embeddings: &[Vec<f32>]) -> anyhow::Result<()> {
+    if embeddings.iter().any(|embedding| embedding.is_empty()) {
+        return Err(anyhow::anyhow!(
+            "embedding returned empty vector for one or more inputs"
+        ));
+    }
+    Ok(())
+}
+
 pub fn batch_embedding_inputs(texts: &[String], policy: EmbeddingBatchPolicy) -> Vec<Vec<String>> {
     let normalized = normalize_inputs_for_embedding(texts, policy);
     if normalized.is_empty() {

@@ -67,6 +67,14 @@ fn write_rebuild_embedding_model_state(
     model_name: &str,
     dim: i64,
 ) -> Result<()> {
+    if conn.is_autocommit() {
+        return Err(anyhow!(
+            "write_rebuild_embedding_model_state must run inside an existing transaction"
+        ));
+    }
+    // Keep both KV writes inside the caller-owned transaction. `initialize_rebuild(...)`
+    // already wraps this helper, and failing fast here prevents future call sites from
+    // silently committing only one half of the model snapshot pair.
     conn.execute(
         r#"INSERT INTO kv(key, value) VALUES (?1, ?2)
            ON CONFLICT(key) DO UPDATE SET value = excluded.value"#,

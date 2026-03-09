@@ -5,8 +5,8 @@ use std::sync::OnceLock;
 
 use super::{Embedder, DEFAULT_EMBED_DIM};
 use crate::knowledge::embedding_batch::{
-    average_piece_embeddings, batch_prepared_embedding_inputs, prepare_embedding_inputs,
-    EmbeddingBatchPolicy,
+    average_piece_embeddings, batch_prepared_embedding_inputs, ensure_non_empty_embedding_results,
+    prepare_embedding_inputs, EmbeddingBatchPolicy,
 };
 
 const HEADER_EMBEDDINGS_MODEL_ID: &str = "x-secondloop-embedding-model-id";
@@ -214,6 +214,8 @@ impl Embedder for CloudGatewayEmbedder {
                 grouped[item.source_index].push(embedding);
             }
         }
-        Ok(average_piece_embeddings(grouped, texts.len()))
+        let embeddings = average_piece_embeddings(grouped, texts.len());
+        ensure_non_empty_embedding_results(&embeddings)?;
+        Ok(embeddings)
     }
 }

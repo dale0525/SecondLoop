@@ -153,3 +153,38 @@ fn cloud_gateway_embedder_posts_bearer_and_returns_embeddings() {
     assert!(req.contains(r#""encoding_format":"float""#));
     assert!(req.contains(r#""input":["hello","world"]"#));
 }
+
+#[test]
+fn cloud_gateway_embedder_rejects_whitespace_only_inputs() {
+    let e0: Vec<f32> = (0..384).map(|i| i as f32).collect();
+
+    let body = serde_json::json!({
+        "object": "list",
+        "data": [
+            { "object": "embedding", "index": 0, "embedding": e0 }
+        ],
+        "model": "multilingual-e5-small",
+        "usage": { "prompt_tokens": 6, "total_tokens": 6 }
+    })
+    .to_string();
+
+    let (base_url, req_rx, handle) = start_one_shot_server(body, vec![]);
+    let embedder = secondloop_rust::embedding::cloud_gateway::CloudGatewayEmbedder::new(
+        base_url,
+        "test-id-token".to_string(),
+        "multilingual-e5-small".to_string(),
+    );
+
+    let err = embedder
+        .embed(&["   ".to_string(), "hello".to_string()])
+        .expect_err("whitespace-only inputs should not silently yield empty embeddings");
+    assert!(err
+        .to_string()
+        .contains("embedding returned empty vector for one or more inputs"));
+
+    handle.join().expect("join server thread");
+    let req = req_rx
+        .recv_timeout(Duration::from_secs(1))
+        .expect("receive request");
+    assert!(req.contains(r#""input":["hello"]"#));
+}

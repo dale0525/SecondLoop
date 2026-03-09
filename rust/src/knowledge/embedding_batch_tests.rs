@@ -1,6 +1,6 @@
 use crate::knowledge::embedding_batch::{
-    average_piece_embeddings, batch_embedding_inputs, split_oversized_embedding_input,
-    EmbeddingBatchPolicy,
+    average_piece_embeddings, batch_embedding_inputs, ensure_non_empty_embedding_results,
+    split_oversized_embedding_input, EmbeddingBatchPolicy,
 };
 
 #[test]
@@ -61,4 +61,13 @@ fn knowledge_embedding_batch_renormalizes_averaged_piece_embeddings() {
         "expected unit-length embedding, got norm {norm}"
     );
     assert!((embedding[0] - embedding[1]).abs() < 1e-6);
+}
+
+#[test]
+fn knowledge_embedding_batch_rejects_empty_embeddings() {
+    let err = ensure_non_empty_embedding_results(&[vec![1.0, 0.0], Vec::new()])
+        .expect_err("empty embedding slots should be rejected");
+    assert!(err
+        .to_string()
+        .contains("embedding returned empty vector for one or more inputs"));
 }
