@@ -94,6 +94,31 @@ void main() {
     expect(backend.processCalls, 2);
   });
 
+  testWidgets('KnowledgeIndexGate does not process empty status directly',
+      (tester) async {
+    final backend = _AlwaysEmptyKnowledgeBackend();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: AppBackendScope(
+          backend: backend,
+          child: SessionScope(
+            sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+            lock: () {},
+            child: const KnowledgeIndexGate(child: SizedBox.shrink()),
+          ),
+        ),
+      ),
+    );
+
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 3));
+    await tester.pump();
+
+    expect(backend.requestCalls, 1);
+    expect(backend.processCalls, 0);
+  });
+
   testWidgets('KnowledgeIndexGate does not process stale status directly',
       (tester) async {
     final backend = _AlwaysStaleKnowledgeBackend();
@@ -426,6 +451,74 @@ final class _FailedBackoffKnowledgeBackend extends TestAppBackend
 
   @override
   Future<void> requestKnowledgeRebuild(Uint8List key) async {}
+}
+
+final class _AlwaysEmptyKnowledgeBackend extends TestAppBackend
+    implements KnowledgeBackend {
+  int requestCalls = 0;
+  int processCalls = 0;
+
+  @override
+  Future<void> cancelKnowledgeRebuild(Uint8List key) async {}
+
+  @override
+  Future<KnowledgeIndexStatus> getKnowledgeIndexStatus(Uint8List key) async {
+    return const KnowledgeIndexStatus(
+      status: 'empty',
+      rebuildRequired: true,
+      staleReason: null,
+      lastError: null,
+      lastRebuildStartedAtMs: null,
+      lastRebuildCompletedAtMs: null,
+      currentDocumentId: null,
+      currentStage: null,
+      documentsIndexed: 0,
+      unitsIndexed: 0,
+      embeddingsIndexed: 0,
+      totalDocuments: 0,
+      lastIndexedModelName: null,
+      lastIndexedDim: null,
+      versions: KnowledgeVersionSet(
+        schemaVersion: 1,
+        normalizationVersion: 1,
+        segmentationVersion: 1,
+        embeddingPolicyVersion: 1,
+        retrievalPolicyVersion: 1,
+      ),
+    );
+  }
+
+  @override
+  Future<List<ContentKnowledgeDocument>> listKnowledgeDocuments(
+    Uint8List key, {
+    int limit = 100,
+    int offset = 0,
+  }) async =>
+      const <ContentKnowledgeDocument>[];
+
+  @override
+  Future<List<KnowledgeUnit>> listKnowledgeUnits(
+    Uint8List key, {
+    required String documentId,
+    KnowledgeUnitKind? unitKind,
+    int limit = 100,
+    int offset = 0,
+  }) async =>
+      const <KnowledgeUnit>[];
+
+  @override
+  Future<int> processPendingKnowledgeIndexJobs(
+    Uint8List key, {
+    int limit = 8,
+  }) async {
+    processCalls += 1;
+    return 0;
+  }
+
+  @override
+  Future<void> requestKnowledgeRebuild(Uint8List key) async {
+    requestCalls += 1;
+  }
 }
 
 final class _AlwaysStaleKnowledgeBackend extends TestAppBackend

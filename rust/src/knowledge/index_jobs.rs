@@ -34,7 +34,7 @@ fn prior_stages_complete(conn: &Connection, document_id: &str, stage: &str) -> R
         r#"SELECT COUNT(*)
            FROM knowledge_index_jobs
            WHERE document_id = ?1
-             AND status != 'done'
+             AND status NOT IN ('done', 'exhausted')
              AND CASE stage
                    WHEN 'normalize' THEN 0
                    WHEN 'segment' THEN 1

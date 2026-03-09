@@ -472,6 +472,71 @@ fn knowledge_rebuild_skips_retry_after_job_exhaustion_and_can_complete() {
 }
 
 #[test]
+fn knowledge_stage_selection_allows_downstream_stages_after_prior_stage_exhaustion() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let app_dir = dir.path();
+    let conn = db::open(app_dir).expect("open");
+    let key = [15u8; 32];
+    let document_id = "message:exhausted-upstream";
+
+    db::ensure_knowledge_rebuild_state_defaults(&conn).expect("state defaults");
+    conn.execute(
+        "UPDATE knowledge_rebuild_state SET status = 'running' WHERE state_key = 1",
+        [],
+    )
+    .expect("set running");
+
+    seed_knowledge_document(
+        &conn,
+        &key,
+        document_id,
+        "first paragraph\n\nsecond paragraph for downstream stages",
+    );
+
+    conn.execute(
+        r#"INSERT INTO knowledge_index_jobs(
+               document_id, stage, status, attempts, next_retry_at_ms, last_error, created_at_ms, updated_at_ms
+           ) VALUES (?1, 'normalize', 'exhausted', 5, NULL, 'permanent failure', 1, 1)"#,
+        params![document_id],
+    )
+    .expect("insert exhausted normalize job");
+    for stage in ["segment", "chunk", "embed", "finalize"] {
+        conn.execute(
+            r#"INSERT INTO knowledge_index_jobs(
+                   document_id, stage, status, attempts, next_retry_at_ms, last_error, created_at_ms, updated_at_ms
+               ) VALUES (?1, ?2, 'pending', 0, NULL, NULL, 1, 1)"#,
+            params![document_id, stage],
+        )
+        .expect("insert downstream job");
+    }
+
+    let processed = process_pending_knowledge_index_jobs_active(&conn, &key, Path::new(app_dir), 8)
+        .expect("downstream stages should run after upstream exhaustion");
+    assert_eq!(processed, 4);
+
+    let downstream_statuses = ["segment", "chunk", "embed", "finalize"]
+        .into_iter()
+        .map(|stage| {
+            conn.query_row(
+                r#"SELECT status FROM knowledge_index_jobs
+                   WHERE document_id = ?1 AND stage = ?2"#,
+                params![document_id, stage],
+                |row| row.get::<_, String>(0),
+            )
+            .expect("downstream job status")
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(downstream_statuses, vec!["done", "done", "done", "done"]);
+
+    let status =
+        read_knowledge_index_status(&conn, &key).expect("status after downstream recovery");
+    assert_eq!(status.status, "complete");
+    assert_eq!(status.documents_indexed, 1);
+    assert!(status.units_indexed > 0);
+    assert!(status.embeddings_indexed > 0);
+}
+
+#[test]
 fn knowledge_stage_selection_waits_for_prior_stage_retry_window() {
     let dir = tempfile::tempdir().expect("tempdir");
     let app_dir = dir.path();
