@@ -90,6 +90,67 @@ void main() {
     expect(view.turns.single.text, 'we can do it yeah before friday');
   });
 
+  test('keeps duplicate timestamps in original input order', () {
+    const keys = <int>[
+      1,
+      1,
+      1,
+      2,
+      2,
+      0,
+      2,
+      2,
+      2,
+      2,
+      0,
+      0,
+      1,
+      2,
+      2,
+      2,
+      1,
+      1,
+      0,
+      2,
+      0,
+      0,
+      2,
+      1,
+      0,
+      0,
+      2,
+      2,
+      2,
+      1,
+      1,
+      0,
+      1,
+      0,
+    ];
+    final view = buildAudioTranscriptTurnView(
+      List<AudioTranscriptTurnSourceSegment>.generate(
+        keys.length,
+        (index) => AudioTranscriptTurnSourceSegment(
+          tMs: keys[index],
+          text: 's$index',
+        ),
+      ),
+    );
+
+    final expectedOrder = List<int>.generate(keys.length, (index) => index)
+      ..sort((a, b) {
+        final cmp = keys[a].compareTo(keys[b]);
+        return cmp != 0 ? cmp : a.compareTo(b);
+      });
+
+    expect(view.status, AudioTranscriptTurnViewStatus.ok);
+    expect(view.turns, hasLength(1));
+    expect(
+      view.turns.single.text.split(' '),
+      expectedOrder.map((index) => 's$index').toList(growable: false),
+    );
+  });
+
   test('formats turn view as timestamped display text', () {
     final view = buildAudioTranscriptTurnView(
       const <AudioTranscriptTurnSourceSegment>[

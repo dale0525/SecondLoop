@@ -181,7 +181,10 @@ AudioTranscriptTurnView buildAudioTranscriptTurnView(
       index += 1;
     }
 
-    normalized.sort((a, b) => a.tMs.compareTo(b.tMs));
+    normalized.sort((a, b) {
+      final cmp = a.tMs.compareTo(b.tMs);
+      return cmp != 0 ? cmp : a.index.compareTo(b.index);
+    });
     if (normalized.isEmpty) {
       return AudioTranscriptTurnView(
         builderVersion: kAudioTranscriptTurnViewBuilderVersion,
