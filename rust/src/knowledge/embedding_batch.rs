@@ -172,6 +172,12 @@ pub fn average_piece_embeddings(
         for value in &mut merged {
             *value /= piece_count;
         }
+        let norm = merged.iter().map(|value| value * value).sum::<f32>().sqrt();
+        if norm > 0.0 {
+            for value in &mut merged {
+                *value /= norm;
+            }
+        }
         out.push(merged);
     }
     if out.len() < expected_len {

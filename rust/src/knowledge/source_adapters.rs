@@ -74,7 +74,7 @@ fn collect_message_documents(
     emit: &mut impl FnMut(ContentKnowledgeDocument) -> Result<()>,
 ) -> Result<()> {
     let mut stmt = conn.prepare(
-        r#"SELECT id, conversation_id, role, content, created_at, updated_at
+        r#"SELECT id, conversation_id, content, created_at, updated_at
            FROM messages
            WHERE COALESCE(is_deleted, 0) = 0
              AND COALESCE(is_memory, 1) = 1
@@ -84,17 +84,16 @@ fn collect_message_documents(
     while let Some(row) = rows.next()? {
         let message_id: String = row.get(0)?;
         let conversation_id: String = row.get(1)?;
-        let role_value: String = row.get(2)?;
-        let content_blob: Vec<u8> = row.get(3)?;
-        let created_at_ms: i64 = row.get(4)?;
-        let updated_at_ms: i64 = row.get(5)?;
-        let content_bytes = decrypt_bytes(key, &content_blob, b"message.content")?;
-        let content = String::from_utf8(content_bytes)
-            .map_err(|_| anyhow!("message content is not valid utf-8"))?;
-        let title = if role_value.trim().is_empty() {
-            None
-        } else {
-            Some(role_value)
+        let content_blob: Vec<u8> = row.get(2)?;
+        let created_at_ms: i64 = row.get(3)?;
+        let updated_at_ms: i64 = row.get(4)?;
+        let content_bytes = match decrypt_bytes(key, &content_blob, b"message.content") {
+            Ok(bytes) => bytes,
+            Err(_) => continue,
+        };
+        let content = match String::from_utf8(content_bytes) {
+            Ok(value) => value,
+            Err(_) => continue,
         };
         emit_document_if_text(
             emit,
@@ -110,7 +109,7 @@ fn collect_message_documents(
                     conversation_id: Some(conversation_id),
                     ..KnowledgeAnchorSet::default()
                 },
-                title,
+                title: None,
                 raw_text: content,
             },
         )?;

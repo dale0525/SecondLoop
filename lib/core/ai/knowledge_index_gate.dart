@@ -127,7 +127,9 @@ class _KnowledgeIndexGateState extends State<KnowledgeIndexGate>
         limit: _batchLimit,
       );
       _schedule(processed > 0 ? _drainInterval : _idleInterval);
-    } catch (_) {
+    } catch (error, stackTrace) {
+      debugPrint('KnowledgeIndexGate: background tick failed: $error');
+      debugPrint('$stackTrace');
       _schedule(_failureInterval);
     } finally {
       _running = false;

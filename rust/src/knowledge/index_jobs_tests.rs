@@ -59,7 +59,7 @@ fn knowledge_rebuild_detects_version_mismatch_after_policy_change() {
 }
 
 #[test]
-fn knowledge_rebuild_initialization_is_atomic_when_source_collection_fails() {
+fn knowledge_rebuild_initialization_skips_corrupt_messages_and_preserves_valid_documents() {
     let dir = tempfile::tempdir().expect("tempdir");
     let app_dir = dir.path();
     let conn = db::open(app_dir).expect("open");
@@ -90,12 +90,14 @@ fn knowledge_rebuild_initialization_is_atomic_when_source_collection_fails() {
     .expect("poison message");
 
     ensure_knowledge_rebuild_requested(&conn).expect("request rebuild again");
-    let error = process_pending_knowledge_index_jobs_active(&conn, &key, Path::new(app_dir), 32)
-        .expect_err("rebuild should fail");
-    assert!(error.to_string().contains("utf-8"));
+    process_pending_knowledge_index_jobs_active(&conn, &key, Path::new(app_dir), 32)
+        .expect("rebuild should skip corrupt source rows");
 
     let after_docs = list_knowledge_documents(&conn, &key, 100, 0).expect("after docs");
     assert_eq!(after_docs.len(), before_docs.len());
+    assert!(after_docs
+        .iter()
+        .all(|doc| doc.anchors.message_id.as_deref() != Some(bad.id.as_str())));
 }
 
 #[test]

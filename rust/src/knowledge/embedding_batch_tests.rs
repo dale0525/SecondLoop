@@ -1,5 +1,6 @@
 use crate::knowledge::embedding_batch::{
-    batch_embedding_inputs, split_oversized_embedding_input, EmbeddingBatchPolicy,
+    average_piece_embeddings, batch_embedding_inputs, split_oversized_embedding_input,
+    EmbeddingBatchPolicy,
 };
 
 #[test]
@@ -42,4 +43,22 @@ fn knowledge_embedding_batch_groups_inputs_without_exceeding_caps() {
 
     assert!(batches.len() >= 2);
     assert!(batches.iter().all(|batch| batch.len() <= 2));
+}
+
+#[test]
+fn knowledge_embedding_batch_renormalizes_averaged_piece_embeddings() {
+    let averaged = average_piece_embeddings(vec![vec![vec![1.0, 0.0], vec![0.0, 1.0]]], 1);
+
+    assert_eq!(averaged.len(), 1);
+    let embedding = &averaged[0];
+    let norm = embedding
+        .iter()
+        .map(|value| value * value)
+        .sum::<f32>()
+        .sqrt();
+    assert!(
+        (norm - 1.0).abs() < 1e-6,
+        "expected unit-length embedding, got norm {norm}"
+    );
+    assert!((embedding[0] - embedding[1]).abs() < 1e-6);
 }
