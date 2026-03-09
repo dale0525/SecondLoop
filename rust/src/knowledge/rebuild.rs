@@ -286,7 +286,11 @@ pub fn read_knowledge_index_status(
         || last_indexed_dim
             .map(|value| value != current_dim)
             .unwrap_or(false);
-    if version_mismatch || model_mismatch {
+    let preserve_runtime_status = matches!(
+        status.as_str(),
+        "requested" | "running" | "failed" | "cancelled"
+    );
+    if (version_mismatch || model_mismatch) && !preserve_runtime_status {
         status = "stale".to_string();
         if stale_reason.is_none() {
             stale_reason = Some(if version_mismatch {

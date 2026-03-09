@@ -40,6 +40,32 @@ void main() {
     expect(backend.processCalls, 2);
   });
 
+  testWidgets(
+      'KnowledgeIndexGate does not request rebuild while active rebuild is already in progress',
+      (tester) async {
+    final backend = _ActiveRebuildKnowledgeBackend();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: AppBackendScope(
+          backend: backend,
+          child: SessionScope(
+            sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+            lock: () {},
+            child: const KnowledgeIndexGate(child: SizedBox.shrink()),
+          ),
+        ),
+      ),
+    );
+
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 3));
+    await tester.pump();
+
+    expect(backend.requestCalls, 0);
+    expect(backend.processCalls, greaterThanOrEqualTo(1));
+  });
+
   testWidgets('KnowledgeIndexGate logs backend failures in debug mode',
       (tester) async {
     final backend = _AlwaysFailingKnowledgeBackend();
@@ -152,6 +178,74 @@ final class _RetryingKnowledgeBackend extends TestAppBackend
   @override
   Future<void> requestKnowledgeRebuild(Uint8List key) async {
     status = 'requested';
+  }
+}
+
+final class _ActiveRebuildKnowledgeBackend extends TestAppBackend
+    implements KnowledgeBackend {
+  int requestCalls = 0;
+  int processCalls = 0;
+
+  @override
+  Future<void> cancelKnowledgeRebuild(Uint8List key) async {}
+
+  @override
+  Future<KnowledgeIndexStatus> getKnowledgeIndexStatus(Uint8List key) async {
+    return const KnowledgeIndexStatus(
+      status: 'running',
+      rebuildRequired: true,
+      staleReason: null,
+      lastError: null,
+      lastRebuildStartedAtMs: 10,
+      lastRebuildCompletedAtMs: null,
+      currentDocumentId: 'message:m1',
+      currentStage: 'embed',
+      documentsIndexed: 1,
+      unitsIndexed: 2,
+      embeddingsIndexed: 1,
+      totalDocuments: 3,
+      lastIndexedModelName: 'secondloop-default-embed-v0',
+      lastIndexedDim: 384,
+      versions: KnowledgeVersionSet(
+        schemaVersion: 1,
+        normalizationVersion: 1,
+        segmentationVersion: 1,
+        embeddingPolicyVersion: 1,
+        retrievalPolicyVersion: 1,
+      ),
+    );
+  }
+
+  @override
+  Future<List<ContentKnowledgeDocument>> listKnowledgeDocuments(
+    Uint8List key, {
+    int limit = 100,
+    int offset = 0,
+  }) async =>
+      const <ContentKnowledgeDocument>[];
+
+  @override
+  Future<List<KnowledgeUnit>> listKnowledgeUnits(
+    Uint8List key, {
+    required String documentId,
+    KnowledgeUnitKind? unitKind,
+    int limit = 100,
+    int offset = 0,
+  }) async =>
+      const <KnowledgeUnit>[];
+
+  @override
+  Future<int> processPendingKnowledgeIndexJobs(
+    Uint8List key, {
+    int limit = 8,
+  }) async {
+    processCalls += 1;
+    return 1;
+  }
+
+  @override
+  Future<void> requestKnowledgeRebuild(Uint8List key) async {
+    requestCalls += 1;
   }
 }
 

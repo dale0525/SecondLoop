@@ -106,7 +106,9 @@ class _KnowledgeIndexGateState extends State<KnowledgeIndexGate>
     _running = true;
     try {
       final status = await knowledgeBackend.getKnowledgeIndexStatus(key);
-      if (status.rebuildRequired || status.status == 'empty') {
+      final shouldRequestRebuild = status.status == 'empty' ||
+          (status.rebuildRequired && status.status == 'stale');
+      if (shouldRequestRebuild) {
         await knowledgeBackend.requestKnowledgeRebuild(key);
       }
 
@@ -115,7 +117,7 @@ class _KnowledgeIndexGateState extends State<KnowledgeIndexGate>
       final shouldProcess = refreshedStatus.status == 'running' ||
           refreshedStatus.status == 'failed' ||
           refreshedStatus.status == 'requested' ||
-          refreshedStatus.rebuildRequired ||
+          refreshedStatus.status == 'stale' ||
           refreshedStatus.status == 'empty';
       if (!shouldProcess) {
         _schedule(_idleInterval);

@@ -63,6 +63,41 @@ fn knowledge_rebuild_detects_version_mismatch_after_policy_change() {
 }
 
 #[test]
+fn knowledge_rebuild_status_preserves_active_and_failed_states_during_version_mismatch() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let app_dir = dir.path();
+    let conn = db::open(app_dir).expect("open");
+    let key = [13u8; 32];
+
+    db::ensure_knowledge_rebuild_state_defaults(&conn).expect("state defaults");
+
+    for raw_status in ["requested", "running", "failed", "cancelled"] {
+        let last_error = if raw_status == "failed" {
+            Some("temporary failure")
+        } else {
+            None
+        };
+        conn.execute(
+            r#"UPDATE knowledge_rebuild_state
+               SET status = ?1,
+                   rebuild_required = 0,
+                   normalization_version = 999,
+                   stale_reason = NULL,
+                   last_error = ?2
+               WHERE state_key = 1"#,
+            params![raw_status, last_error],
+        )
+        .expect("mutate active state");
+
+        let status = read_knowledge_index_status(&conn, &key).expect("status");
+        assert_eq!(status.status, raw_status);
+        assert!(status.rebuild_required);
+        assert_eq!(status.stale_reason, None);
+        assert_eq!(status.last_error.as_deref(), last_error);
+    }
+}
+
+#[test]
 fn knowledge_rebuild_initialization_skips_corrupt_messages_and_preserves_valid_documents() {
     let dir = tempfile::tempdir().expect("tempdir");
     let app_dir = dir.path();
