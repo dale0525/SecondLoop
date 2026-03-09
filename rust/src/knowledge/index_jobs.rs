@@ -182,10 +182,13 @@ fn upsert_document(
 fn with_immediate_transaction<T>(conn: &Connection, f: impl FnOnce() -> Result<T>) -> Result<T> {
     conn.execute_batch("BEGIN IMMEDIATE;")?;
     match f() {
-        Ok(value) => {
-            conn.execute_batch("COMMIT;")?;
-            Ok(value)
-        }
+        Ok(value) => match conn.execute_batch("COMMIT;") {
+            Ok(()) => Ok(value),
+            Err(error) => {
+                let _ = conn.execute_batch("ROLLBACK;");
+                Err(error.into())
+            }
+        },
         Err(error) => {
             let _ = conn.execute_batch("ROLLBACK;");
             Err(error)
