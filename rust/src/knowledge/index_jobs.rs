@@ -617,46 +617,48 @@ fn mark_job_failed(
     error: &anyhow::Error,
 ) -> Result<()> {
     let message = error.to_string();
-    let attempts: i64 = conn.query_row(
-        r#"SELECT attempts
-           FROM knowledge_index_jobs
-           WHERE document_id = ?1 AND stage = ?2"#,
-        params![document_id, stage],
-        |row| row.get(0),
-    )?;
-    let update = failed_job_update(attempts, now_ms());
-    conn.execute(
-        r#"UPDATE knowledge_index_jobs
-           SET status = ?3,
-               attempts = ?4,
-               next_retry_at_ms = ?5,
-               last_error = ?6,
-               updated_at_ms = ?7
-           WHERE document_id = ?1 AND stage = ?2"#,
-        params![
-            document_id,
-            stage,
-            if update.exhausted {
-                "exhausted"
-            } else {
-                "failed"
-            },
-            update.next_attempts,
-            update.next_retry_at_ms,
-            message,
-            update.updated_at_ms,
-        ],
-    )?;
-    conn.execute(
-        r#"UPDATE knowledge_rebuild_state
-           SET status = 'failed',
-               last_error = ?1,
-               current_document_id = ?2,
-               current_stage = ?3
-           WHERE state_key = 1"#,
-        params![message, document_id, stage],
-    )?;
-    Ok(())
+    with_immediate_transaction(conn, || {
+        let attempts: i64 = conn.query_row(
+            r#"SELECT attempts
+               FROM knowledge_index_jobs
+               WHERE document_id = ?1 AND stage = ?2"#,
+            params![document_id, stage],
+            |row| row.get(0),
+        )?;
+        let update = failed_job_update(attempts, now_ms());
+        conn.execute(
+            r#"UPDATE knowledge_index_jobs
+               SET status = ?3,
+                   attempts = ?4,
+                   next_retry_at_ms = ?5,
+                   last_error = ?6,
+                   updated_at_ms = ?7
+               WHERE document_id = ?1 AND stage = ?2"#,
+            params![
+                document_id,
+                stage,
+                if update.exhausted {
+                    "exhausted"
+                } else {
+                    "failed"
+                },
+                update.next_attempts,
+                update.next_retry_at_ms,
+                message,
+                update.updated_at_ms,
+            ],
+        )?;
+        conn.execute(
+            r#"UPDATE knowledge_rebuild_state
+               SET status = 'failed',
+                   last_error = ?1,
+                   current_document_id = ?2,
+                   current_stage = ?3
+               WHERE state_key = 1"#,
+            params![message, document_id, stage],
+        )?;
+        Ok(())
+    })
 }
 
 fn process_stage(conn: &Connection, key: &[u8; 32], document_id: &str, stage: &str) -> Result<()> {

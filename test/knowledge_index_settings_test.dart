@@ -8,6 +8,7 @@ import 'package:secondloop/core/backend/knowledge_backend.dart';
 import 'package:secondloop/core/backend/knowledge_index_models.dart';
 import 'package:secondloop/core/session/session_scope.dart';
 import 'package:secondloop/features/settings/ai_settings_page.dart';
+import 'package:secondloop/features/settings/knowledge_index_settings_card.dart';
 
 import 'test_backend.dart';
 import 'test_i18n.dart';
@@ -74,22 +75,52 @@ void main() {
     final rebuildButton =
         find.byKey(const ValueKey('knowledge_index_rebuild_button'));
     await tester.dragUntilVisible(
-      rebuildButton,
-      listView,
-      const Offset(0, -220),
+        rebuildButton, listView, const Offset(0, -220));
+    await tester.pumpAndSettle();
+
+    final elevated = tester.widget<ElevatedButton>(rebuildButton);
+    expect(elevated.onPressed, isNull);
+  });
+
+  testWidgets('Knowledge Index card polls rebuild progress while running',
+      (tester) async {
+    final backend = _PollingKnowledgeBackend();
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: backend,
+            child: SessionScope(
+              sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+              lock: () {},
+              child: const Scaffold(body: KnowledgeIndexSettingsCard()),
+            ),
+          ),
+        ),
+      ),
     );
     await tester.pumpAndSettle();
 
-    final rebuildWidget = tester.widget<ElevatedButton>(rebuildButton);
-    expect(rebuildWidget.onPressed, isNull);
-    expect(backend.rebuildRequests, 0);
-    expect(
-      find.byKey(
-        const ValueKey('knowledge_index_cancel_button'),
-        skipOffstage: false,
-      ),
-      findsOneWidget,
-    );
+    expect(find.textContaining('documents: 1/4'), findsOneWidget);
+    expect(backend.statusRequests, 1);
+
+    await tester.pump(const Duration(seconds: 5));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('documents: 2/4'), findsOneWidget);
+    expect(backend.statusRequests, 2);
+
+    await tester.pump(const Duration(seconds: 5));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('documents: 4/4'), findsOneWidget);
+    expect(backend.statusRequests, 3);
+
+    await tester.pump(const Duration(seconds: 10));
+    await tester.pumpAndSettle();
+
+    expect(backend.statusRequests, 3);
   });
 }
 
@@ -159,5 +190,83 @@ final class _KnowledgeBackend extends TestAppBackend
   Future<void> requestKnowledgeRebuild(Uint8List key) async {
     rebuildRequests += 1;
     running = true;
+  }
+}
+
+final class _PollingKnowledgeBackend extends TestAppBackend
+    implements KnowledgeBackend {
+  int statusRequests = 0;
+
+  @override
+  Future<void> cancelKnowledgeRebuild(Uint8List key) async {}
+
+  @override
+  Future<KnowledgeIndexStatus> getKnowledgeIndexStatus(Uint8List key) async {
+    statusRequests += 1;
+    return switch (statusRequests) {
+      1 => _status('running', 1, 3, 2, currentStage: 'normalize'),
+      2 => _status('running', 2, 6, 5, currentStage: 'embed'),
+      _ => _status('complete', 4, 10, 9),
+    };
+  }
+
+  @override
+  Future<List<ContentKnowledgeDocument>> listKnowledgeDocuments(
+    Uint8List key, {
+    int limit = 100,
+    int offset = 0,
+  }) async =>
+      const <ContentKnowledgeDocument>[];
+
+  @override
+  Future<List<KnowledgeUnit>> listKnowledgeUnits(
+    Uint8List key, {
+    required String documentId,
+    KnowledgeUnitKind? unitKind,
+    int limit = 100,
+    int offset = 0,
+  }) async =>
+      const <KnowledgeUnit>[];
+
+  @override
+  Future<int> processPendingKnowledgeIndexJobs(
+    Uint8List key, {
+    int limit = 8,
+  }) async =>
+      0;
+
+  @override
+  Future<void> requestKnowledgeRebuild(Uint8List key) async {}
+
+  KnowledgeIndexStatus _status(
+    String status,
+    int documentsIndexed,
+    int unitsIndexed,
+    int embeddingsIndexed, {
+    String? currentStage,
+  }) {
+    return KnowledgeIndexStatus(
+      status: status,
+      rebuildRequired: false,
+      staleReason: null,
+      lastError: null,
+      lastRebuildStartedAtMs: 10,
+      lastRebuildCompletedAtMs: status == 'complete' ? 20 : null,
+      currentDocumentId: status == 'complete' ? null : 'message:m1',
+      currentStage: currentStage,
+      documentsIndexed: documentsIndexed,
+      unitsIndexed: unitsIndexed,
+      embeddingsIndexed: embeddingsIndexed,
+      totalDocuments: 4,
+      lastIndexedModelName: 'secondloop-default-embed-v0',
+      lastIndexedDim: 384,
+      versions: const KnowledgeVersionSet(
+        schemaVersion: 1,
+        normalizationVersion: 1,
+        segmentationVersion: 1,
+        embeddingPolicyVersion: 1,
+        retrievalPolicyVersion: 1,
+      ),
+    );
   }
 }

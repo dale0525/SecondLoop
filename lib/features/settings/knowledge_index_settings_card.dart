@@ -25,6 +25,7 @@ class _KnowledgeIndexSettingsCardState
   bool _busy = false;
   String? _uiError;
   int _generation = 0;
+  Timer? _pollTimer;
 
   @override
   void didChangeDependencies() {
@@ -44,11 +45,25 @@ class _KnowledgeIndexSettingsCardState
     return Uint8List.fromList(scope.sessionKey);
   }
 
+  void _syncPolling(String? status) {
+    final normalized = status?.trim();
+    final shouldPoll = normalized == 'running' || normalized == 'requested';
+    if (shouldPoll) {
+      _pollTimer ??= Timer.periodic(const Duration(seconds: 5), (_) {
+        unawaited(_reload(forceLoading: false));
+      });
+      return;
+    }
+    _pollTimer?.cancel();
+    _pollTimer = null;
+  }
+
   Future<void> _reload({required bool forceLoading}) async {
     final backend = _knowledgeBackend;
     final key = _sessionKey;
     if (backend == null || key == null) {
       if (!mounted) return;
+      _syncPolling(null);
       setState(() {
         _status = null;
         _loading = false;
@@ -71,12 +86,14 @@ class _KnowledgeIndexSettingsCardState
         _loading = false;
         _uiError = null;
       });
+      _syncPolling(status.status);
     } catch (error) {
       if (!mounted || generation != _generation) return;
       setState(() {
         _loading = false;
         _uiError = error.toString();
       });
+      _syncPolling(_status?.status);
     }
   }
 
@@ -161,6 +178,12 @@ class _KnowledgeIndexSettingsCardState
         setState(() => _busy = false);
       }
     }
+  }
+
+  @override
+  void dispose() {
+    _pollTimer?.cancel();
+    super.dispose();
   }
 
   @override
