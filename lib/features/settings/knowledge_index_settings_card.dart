@@ -172,14 +172,13 @@ class _KnowledgeIndexSettingsCardState
     final status = _status;
     final isRunning =
         status?.status == 'running' || status?.status == 'requested';
+    final displayError = _uiError ?? status?.lastError;
     final detailLines = <String>[
       _versionSummary(context),
       if (_lastBuildLine(context) case final line?) line,
       if (status?.staleReason case final stale?)
         context.t.settings.knowledgeIndex.staleReason(value: stale),
-      if (_uiError case final error? when error != status?.lastError)
-        context.t.settings.knowledgeIndex.lastError(value: error),
-      if (status?.lastError case final error?)
+      if (displayError case final error?)
         context.t.settings.knowledgeIndex.lastError(value: error),
       if (status != null)
         context.t.settings.knowledgeIndex.progress(

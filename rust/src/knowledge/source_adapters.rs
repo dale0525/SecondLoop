@@ -217,7 +217,10 @@ fn collect_attachment_documents(
         let attachment_sha256: String = row.get(0)?;
         let created_at_ms: i64 = row.get(1)?;
         let updated_at_ms = created_at_ms;
-        let metadata = db::read_attachment_metadata(conn, key, &attachment_sha256)?;
+        let metadata = match db::read_attachment_metadata(conn, key, &attachment_sha256) {
+            Ok(value) => value,
+            Err(_) => continue,
+        };
         let source_filename = metadata.as_ref().and_then(|value| {
             value
                 .title
@@ -257,7 +260,10 @@ fn collect_attachment_documents(
         }
 
         let payload_json =
-            db::read_attachment_annotation_payload_json(conn, key, &attachment_sha256)?;
+            match db::read_attachment_annotation_payload_json(conn, key, &attachment_sha256) {
+                Ok(value) => value,
+                Err(_) => continue,
+            };
         let Some(payload_json) = payload_json else {
             continue;
         };

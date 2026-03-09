@@ -84,6 +84,49 @@ void main() {
     expect(find.textContaining('rebuild backend unavailable'), findsOneWidget);
   });
 
+  testWidgets(
+      'Knowledge Index card prefers UI action error over persisted last error',
+      (tester) async {
+    final backend = _ErrorKnowledgeBackend(
+      failRebuild: true,
+      lastError: 'persisted backend failure',
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: backend,
+            child: SessionScope(
+              sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+              lock: () {},
+              child: const AiSettingsPage(),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final listView = find.byType(ListView);
+    final rebuildButton =
+        find.byKey(const ValueKey('knowledge_index_rebuild_button'));
+    await tester.dragUntilVisible(
+      rebuildButton,
+      listView,
+      const Offset(0, -220),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(rebuildButton);
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+    expect(find.textContaining('rebuild backend unavailable'), findsOneWidget);
+    expect(find.textContaining('persisted backend failure'), findsNothing);
+    expect(find.textContaining('Last error:'), findsOneWidget);
+  });
+
   testWidgets('Knowledge Index card surfaces cancel action errors',
       (tester) async {
     final backend = _ErrorKnowledgeBackend(
@@ -134,12 +177,14 @@ final class _ErrorKnowledgeBackend extends TestAppBackend
     this.failLoad = false,
     this.failRebuild = false,
     this.failCancel = false,
+    this.lastError,
   });
 
   bool running;
   final bool failLoad;
   final bool failRebuild;
   final bool failCancel;
+  final String? lastError;
 
   @override
   Future<void> cancelKnowledgeRebuild(Uint8List key) async {
@@ -158,7 +203,7 @@ final class _ErrorKnowledgeBackend extends TestAppBackend
       status: running ? 'running' : 'stale',
       rebuildRequired: !running,
       staleReason: running ? null : 'embedding_model_changed',
-      lastError: null,
+      lastError: lastError,
       lastRebuildStartedAtMs: running ? 10 : null,
       lastRebuildCompletedAtMs: running ? null : 5,
       currentDocumentId: running ? 'message:m1' : null,

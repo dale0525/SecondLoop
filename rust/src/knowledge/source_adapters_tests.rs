@@ -178,6 +178,84 @@ fn knowledge_adapter_attachment_document_ids_use_snake_case_source_kind() {
 }
 
 #[test]
+fn knowledge_adapter_skips_attachments_with_invalid_metadata_ciphertext() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let app_dir = dir.path().to_path_buf();
+    let conn = db::open(&app_dir).expect("open");
+    let key = [10u8; 32];
+
+    let conv = db::create_conversation(&conn, &key, "Inbox").expect("conversation");
+    let msg =
+        db::insert_message(&conn, &key, &conv.id, "user", "hello from chat").expect("message");
+
+    let good_attachment =
+        db::insert_attachment(&conn, &key, &app_dir, b"good pdf", "application/pdf")
+            .expect("good attachment");
+    db::link_attachment_to_message(&conn, &key, &msg.id, &good_attachment.sha256)
+        .expect("link good");
+    db::mark_attachment_annotation_ok(
+        &conn,
+        &key,
+        &good_attachment.sha256,
+        "en",
+        "document_extract.v1",
+        &serde_json::json!({
+            "schema": "secondloop.document_extract.v1",
+            "extracted_text_full": "Healthy attachment body.",
+            "mime_type": "application/pdf"
+        }),
+        1000,
+    )
+    .expect("good annotation");
+
+    let bad_attachment =
+        db::insert_attachment(&conn, &key, &app_dir, b"bad pdf", "application/pdf")
+            .expect("bad attachment");
+    db::link_attachment_to_message(&conn, &key, &msg.id, &bad_attachment.sha256).expect("link bad");
+    db::mark_attachment_annotation_ok(
+        &conn,
+        &key,
+        &bad_attachment.sha256,
+        "en",
+        "document_extract.v1",
+        &serde_json::json!({
+            "schema": "secondloop.document_extract.v1",
+            "extracted_text_full": "This metadata row will be corrupted.",
+            "mime_type": "application/pdf"
+        }),
+        1000,
+    )
+    .expect("bad annotation");
+    db::upsert_attachment_metadata(
+        &conn,
+        &key,
+        &bad_attachment.sha256,
+        Some("Broken title"),
+        &[],
+        &[],
+    )
+    .expect("bad metadata seed");
+
+    conn.execute(
+        "UPDATE attachment_metadata SET title = ?2 WHERE attachment_sha256 = ?1",
+        params![bad_attachment.sha256, vec![1u8, 2u8, 3u8]],
+    )
+    .expect("poison metadata title");
+
+    let documents = collect_source_knowledge_documents(&conn, &key).expect("collect docs");
+
+    assert!(documents.iter().any(|doc| {
+        doc.origin_type == KnowledgeOriginType::Attachment
+            && doc.source_kind == KnowledgeSourceKind::ExtractedText
+            && doc.anchors.attachment_sha256.as_deref() == Some(good_attachment.sha256.as_str())
+    }));
+    assert!(!documents.iter().any(|doc| {
+        doc.origin_type == KnowledgeOriginType::Attachment
+            && doc.anchors.attachment_sha256.as_deref() == Some(bad_attachment.sha256.as_str())
+    }));
+}
+
+#[test]
 fn knowledge_adapter_skips_external_documents_with_corrupt_blobs() {
     let dir = tempfile::tempdir().expect("tempdir");
     let app_dir = dir.path().to_path_buf();
