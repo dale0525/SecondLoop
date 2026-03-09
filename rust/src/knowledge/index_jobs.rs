@@ -1,4 +1,3 @@
-use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use anyhow::{anyhow, Result};
@@ -644,7 +643,7 @@ fn process_stage(conn: &Connection, key: &[u8; 32], document_id: &str, stage: &s
 
 fn clear_failed_rebuild_status_if_recovered(conn: &Connection) -> Result<()> {
     let unresolved_failures: i64 = conn.query_row(
-        "SELECT COUNT(*) FROM knowledge_index_jobs WHERE status IN ('failed', 'exhausted')",
+        "SELECT COUNT(*) FROM knowledge_index_jobs WHERE status = 'failed'",
         [],
         |row| row.get(0),
     )?;
@@ -761,7 +760,6 @@ pub fn ensure_knowledge_rebuild_requested(conn: &Connection) -> Result<()> {
 pub fn process_pending_knowledge_index_jobs_active(
     conn: &Connection,
     key: &[u8; 32],
-    _app_dir: &Path,
     limit: usize,
 ) -> Result<usize> {
     let cancel_requested: i64 = conn.query_row(

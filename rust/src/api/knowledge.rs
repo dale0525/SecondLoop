@@ -28,8 +28,7 @@ pub fn db_request_knowledge_rebuild(app_dir: String, key: Vec<u8>) -> Result<()>
     let key = key_from_bytes(key)?;
     let conn = db::open(Path::new(&app_dir))?;
     knowledge::ensure_knowledge_rebuild_requested(&conn)?;
-    let _ =
-        knowledge::process_pending_knowledge_index_jobs_active(&conn, &key, Path::new(&app_dir), 1);
+    let _ = knowledge::process_pending_knowledge_index_jobs_active(&conn, &key, 1);
     Ok(())
 }
 
@@ -41,12 +40,7 @@ pub fn db_process_pending_knowledge_index_jobs(
 ) -> Result<u32> {
     let key = key_from_bytes(key)?;
     let conn = db::open(Path::new(&app_dir))?;
-    Ok(knowledge::process_pending_knowledge_index_jobs_active(
-        &conn,
-        &key,
-        Path::new(&app_dir),
-        limit as usize,
-    )? as u32)
+    Ok(knowledge::process_pending_knowledge_index_jobs_active(&conn, &key, limit as usize)? as u32)
 }
 
 #[flutter_rust_bridge::frb]

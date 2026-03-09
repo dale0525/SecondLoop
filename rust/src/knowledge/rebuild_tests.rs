@@ -1,5 +1,3 @@
-use std::path::Path;
-
 use rusqlite::params;
 
 use crate::crypto::encrypt_bytes;
@@ -28,8 +26,7 @@ fn list_knowledge_documents_skips_corrupt_rows() {
     .expect("mark messages");
 
     ensure_knowledge_rebuild_requested(&conn).expect("request rebuild");
-    process_pending_knowledge_index_jobs_active(&conn, &key, Path::new(app_dir), 64)
-        .expect("process jobs");
+    process_pending_knowledge_index_jobs_active(&conn, &key, 64).expect("process jobs");
 
     let before_docs = list_knowledge_documents(&conn, &key, 100, 0).expect("before docs");
     assert_eq!(before_docs.len(), 2);
@@ -75,8 +72,7 @@ fn list_knowledge_units_skips_corrupt_rows() {
     .expect("mark memory");
 
     ensure_knowledge_rebuild_requested(&conn).expect("request rebuild");
-    process_pending_knowledge_index_jobs_active(&conn, &key, Path::new(app_dir), 64)
-        .expect("process jobs");
+    process_pending_knowledge_index_jobs_active(&conn, &key, 64).expect("process jobs");
 
     let document_id = format!("message:{}", msg.id);
     let before_units =

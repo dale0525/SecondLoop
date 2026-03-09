@@ -1,5 +1,3 @@
-use std::path::Path;
-
 use super::*;
 
 #[test]
@@ -55,13 +53,8 @@ fn knowledge_compat_rebuild_backfills_new_substrate_from_existing_local_entities
     .expect("annotation");
 
     crate::knowledge::ensure_knowledge_rebuild_requested(&conn).expect("request rebuild");
-    let processed = crate::knowledge::process_pending_knowledge_index_jobs_active(
-        &conn,
-        &key,
-        Path::new(&app_dir),
-        64,
-    )
-    .expect("process jobs");
+    let processed = crate::knowledge::process_pending_knowledge_index_jobs_active(&conn, &key, 64)
+        .expect("process jobs");
     assert!(processed > 0);
 
     let docs = crate::knowledge::list_knowledge_documents(&conn, &key, 100, 0).expect("docs");
@@ -97,25 +90,15 @@ fn knowledge_rebuild_can_cancel_and_resume() {
 
     crate::knowledge::ensure_knowledge_rebuild_requested(&conn).expect("request rebuild");
     crate::knowledge::cancel_knowledge_rebuild(&conn, &key).expect("cancel");
-    let processed = crate::knowledge::process_pending_knowledge_index_jobs_active(
-        &conn,
-        &key,
-        Path::new(&app_dir),
-        32,
-    )
-    .expect("process after cancel");
+    let processed = crate::knowledge::process_pending_knowledge_index_jobs_active(&conn, &key, 32)
+        .expect("process after cancel");
     assert_eq!(processed, 0);
     let cancelled = crate::knowledge::read_knowledge_index_status(&conn, &key).expect("status");
     assert_eq!(cancelled.status, "cancelled");
 
     crate::knowledge::ensure_knowledge_rebuild_requested(&conn).expect("request rebuild again");
-    let resumed = crate::knowledge::process_pending_knowledge_index_jobs_active(
-        &conn,
-        &key,
-        Path::new(&app_dir),
-        32,
-    )
-    .expect("process resumed");
+    let resumed = crate::knowledge::process_pending_knowledge_index_jobs_active(&conn, &key, 32)
+        .expect("process resumed");
     assert!(resumed > 0);
     let status = crate::knowledge::read_knowledge_index_status(&conn, &key).expect("status");
     assert_eq!(status.status, "complete");

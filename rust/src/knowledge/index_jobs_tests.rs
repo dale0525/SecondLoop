@@ -1,5 +1,3 @@
-use std::path::Path;
-
 use rusqlite::params;
 use sha2::{Digest, Sha256};
 
@@ -26,8 +24,7 @@ fn knowledge_job_processes_stages_and_finishes_rebuild() {
 
     ensure_knowledge_rebuild_requested(&conn).expect("request rebuild");
     let processed =
-        process_pending_knowledge_index_jobs_active(&conn, &key, Path::new(app_dir), 32)
-            .expect("process jobs");
+        process_pending_knowledge_index_jobs_active(&conn, &key, 32).expect("process jobs");
     assert!(processed > 0);
 
     let status = read_knowledge_index_status(&conn, &key).expect("status");
@@ -48,8 +45,7 @@ fn knowledge_rebuild_detects_version_mismatch_after_policy_change() {
         .expect("message");
 
     ensure_knowledge_rebuild_requested(&conn).expect("request rebuild");
-    process_pending_knowledge_index_jobs_active(&conn, &key, Path::new(app_dir), 32)
-        .expect("process jobs");
+    process_pending_knowledge_index_jobs_active(&conn, &key, 32).expect("process jobs");
 
     conn.execute(
         "UPDATE knowledge_rebuild_state SET normalization_version = 999 WHERE state_key = 1",
@@ -114,8 +110,7 @@ fn knowledge_rebuild_initialization_skips_corrupt_messages_and_preserves_valid_d
     .expect("mark good memory");
 
     ensure_knowledge_rebuild_requested(&conn).expect("request rebuild");
-    process_pending_knowledge_index_jobs_active(&conn, &key, Path::new(app_dir), 32)
-        .expect("initial rebuild");
+    process_pending_knowledge_index_jobs_active(&conn, &key, 32).expect("initial rebuild");
     let before_docs = list_knowledge_documents(&conn, &key, 100, 0).expect("before docs");
     assert!(!before_docs.is_empty());
 
@@ -129,7 +124,7 @@ fn knowledge_rebuild_initialization_skips_corrupt_messages_and_preserves_valid_d
     .expect("poison message");
 
     ensure_knowledge_rebuild_requested(&conn).expect("request rebuild again");
-    process_pending_knowledge_index_jobs_active(&conn, &key, Path::new(app_dir), 32)
+    process_pending_knowledge_index_jobs_active(&conn, &key, 32)
         .expect("rebuild should skip corrupt source rows");
 
     let after_docs = list_knowledge_documents(&conn, &key, 100, 0).expect("after docs");
@@ -162,10 +157,8 @@ fn knowledge_chunk_stage_keeps_existing_segment_rows() {
     .expect("mark memory");
 
     ensure_knowledge_rebuild_requested(&conn).expect("request rebuild");
-    process_pending_knowledge_index_jobs_active(&conn, &key, Path::new(app_dir), 1)
-        .expect("normalize");
-    process_pending_knowledge_index_jobs_active(&conn, &key, Path::new(app_dir), 1)
-        .expect("segment");
+    process_pending_knowledge_index_jobs_active(&conn, &key, 1).expect("normalize");
+    process_pending_knowledge_index_jobs_active(&conn, &key, 1).expect("segment");
 
     let segment_unit_id: String = conn
         .query_row(
@@ -180,7 +173,7 @@ fn knowledge_chunk_stage_keeps_existing_segment_rows() {
     )
     .expect("stamp segment");
 
-    process_pending_knowledge_index_jobs_active(&conn, &key, Path::new(app_dir), 1).expect("chunk");
+    process_pending_knowledge_index_jobs_active(&conn, &key, 1).expect("chunk");
 
     let updated_at_ms: i64 = conn
         .query_row(
@@ -293,7 +286,7 @@ fn knowledge_job_failure_does_not_block_other_documents_in_same_batch() {
     )
     .expect("insert good job");
 
-    let error = process_pending_knowledge_index_jobs_active(&conn, &key, Path::new(app_dir), 2)
+    let error = process_pending_knowledge_index_jobs_active(&conn, &key, 2)
         .expect_err("bad document should still surface an error");
     assert!(error.to_string().contains("utf-8"));
 
@@ -345,8 +338,8 @@ fn knowledge_embed_stage_averages_split_document_and_unit_embeddings() {
     )
     .expect("insert embed job");
 
-    let processed = process_pending_knowledge_index_jobs_active(&conn, &key, Path::new(app_dir), 1)
-        .expect("process embed");
+    let processed =
+        process_pending_knowledge_index_jobs_active(&conn, &key, 1).expect("process embed");
     assert_eq!(processed, 1);
 
     let (_, dim) = db::read_knowledge_embedding_model_state(&conn).expect("embedding state");
@@ -441,7 +434,7 @@ fn knowledge_rebuild_skips_retry_after_job_exhaustion_and_can_complete() {
     )
     .expect("insert failing job");
 
-    let error = process_pending_knowledge_index_jobs_active(&conn, &key, Path::new(app_dir), 1)
+    let error = process_pending_knowledge_index_jobs_active(&conn, &key, 1)
         .expect_err("final failing attempt should still surface an error");
     assert!(error.to_string().contains("utf-8"));
 
@@ -466,9 +459,85 @@ fn knowledge_rebuild_skips_retry_after_job_exhaustion_and_can_complete() {
         .unwrap_or_default()
         .contains("utf-8"));
 
-    let processed = process_pending_knowledge_index_jobs_active(&conn, &key, Path::new(app_dir), 1)
+    let processed = process_pending_knowledge_index_jobs_active(&conn, &key, 1)
         .expect("exhausted job should not be retried");
     assert_eq!(processed, 0);
+}
+
+#[test]
+fn knowledge_rebuild_clears_failed_status_when_only_exhausted_jobs_remain() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let app_dir = dir.path();
+    let conn = db::open(app_dir).expect("open");
+    let key = [16u8; 32];
+
+    db::ensure_knowledge_rebuild_state_defaults(&conn).expect("state defaults");
+    conn.execute(
+        r#"UPDATE knowledge_rebuild_state
+           SET status = 'failed',
+               last_error = 'previous exhaustion'
+           WHERE state_key = 1"#,
+        [],
+    )
+    .expect("set failed state");
+
+    let exhausted_document_id = "message:exhausted-doc";
+    seed_knowledge_document(
+        &conn,
+        &key,
+        exhausted_document_id,
+        "poisoned source document",
+    );
+    conn.execute(
+        r#"INSERT INTO knowledge_index_jobs(
+               document_id, stage, status, attempts, next_retry_at_ms, last_error, created_at_ms, updated_at_ms
+           ) VALUES (?1, 'normalize', 'exhausted', 5, NULL, 'permanent failure', 1, 1)"#,
+        params![exhausted_document_id],
+    )
+    .expect("insert exhausted job");
+
+    let recovering_document_id = "message:recovering-doc";
+    seed_knowledge_document(
+        &conn,
+        &key,
+        recovering_document_id,
+        "first paragraph
+
+second paragraph for continued indexing",
+    );
+    for stage in ["segment", "chunk"] {
+        conn.execute(
+            r#"INSERT INTO knowledge_index_jobs(
+                   document_id, stage, status, attempts, next_retry_at_ms, last_error, created_at_ms, updated_at_ms
+               ) VALUES (?1, ?2, 'pending', 0, NULL, NULL, 1, 1)"#,
+            params![recovering_document_id, stage],
+        )
+        .expect("insert recovering job");
+    }
+
+    let processed =
+        process_pending_knowledge_index_jobs_active(&conn, &key, 1).expect("process segment");
+    assert_eq!(processed, 1);
+
+    let (status, last_error): (String, Option<String>) = conn
+        .query_row(
+            "SELECT status, last_error FROM knowledge_rebuild_state WHERE state_key = 1",
+            [],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .expect("read rebuild state");
+    assert_eq!(status, "running");
+    assert_eq!(last_error, None);
+
+    let chunk_status: String = conn
+        .query_row(
+            r#"SELECT status FROM knowledge_index_jobs
+               WHERE document_id = ?1 AND stage = 'chunk'"#,
+            params![recovering_document_id],
+            |row| row.get(0),
+        )
+        .expect("chunk status");
+    assert_eq!(chunk_status, "pending");
 }
 
 #[test]
@@ -510,7 +579,7 @@ fn knowledge_stage_selection_allows_downstream_stages_after_prior_stage_exhausti
         .expect("insert downstream job");
     }
 
-    let processed = process_pending_knowledge_index_jobs_active(&conn, &key, Path::new(app_dir), 8)
+    let processed = process_pending_knowledge_index_jobs_active(&conn, &key, 8)
         .expect("downstream stages should run after upstream exhaustion");
     assert_eq!(processed, 4);
 
@@ -588,7 +657,7 @@ fn knowledge_stage_selection_waits_for_prior_stage_retry_window() {
     )
     .expect("insert segment job");
 
-    let processed = process_pending_knowledge_index_jobs_active(&conn, &key, Path::new(app_dir), 8)
+    let processed = process_pending_knowledge_index_jobs_active(&conn, &key, 8)
         .expect("blocked later stages should be skipped");
     assert_eq!(processed, 0);
 
