@@ -319,6 +319,8 @@ class _VaultUsageCardState extends State<VaultUsageCard> {
       // Fall back to the message-linked attachment index below.
     }
 
+    if (!mounted) return null;
+
     final cached = _localAttachmentBySha[normalizedSha];
     if (cached != null) return cached;
     await _rebuildAttachmentReferenceIndex();
