@@ -14,7 +14,7 @@ fn enum_name<T: serde::Serialize>(value: &T) -> String {
 fn truncate_to_token_budget(text: &str, token_budget: usize) -> String {
     let words = text.split_whitespace().collect::<Vec<_>>();
     if words.len() <= token_budget.max(1) {
-        return words.join(" ");
+        return text.to_string();
     }
     let take = token_budget.saturating_sub(1).max(1);
     let words = words.into_iter().take(take).collect::<Vec<_>>();
@@ -89,4 +89,23 @@ pub(crate) fn pack_context_blocks(
     }
 
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::truncate_to_token_budget;
+
+    #[test]
+    fn truncate_to_token_budget_preserves_formatting_when_not_truncated() {
+        let text = "Speaker A:\n  hello\n\nSpeaker B:\n  world";
+        let out = truncate_to_token_budget(text, 999);
+        assert_eq!(out, text);
+    }
+
+    #[test]
+    fn truncate_to_token_budget_appends_ellipsis_when_truncated() {
+        let text = "a b c d";
+        let out = truncate_to_token_budget(text, 2);
+        assert_eq!(out, "a …");
+    }
 }

@@ -313,6 +313,58 @@ fn try_build_knowledge_contexts(
         .collect())
 }
 
+fn merge_knowledge_and_legacy_contexts(
+    knowledge_contexts: Vec<String>,
+    legacy_contexts: Vec<String>,
+    top_k: usize,
+) -> Vec<String> {
+    let max_items = top_k.max(1);
+    if max_items == 1 {
+        if let Some(ctx) = legacy_contexts
+            .into_iter()
+            .find(|ctx| !ctx.trim().is_empty())
+        {
+            return vec![ctx];
+        }
+        if let Some(ctx) = knowledge_contexts
+            .into_iter()
+            .find(|ctx| !ctx.trim().is_empty())
+        {
+            return vec![ctx];
+        }
+        return Vec::new();
+    }
+
+    let mut out: Vec<String> = Vec::new();
+    let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
+
+    for ctx in knowledge_contexts {
+        if out.len() >= max_items {
+            break;
+        }
+        if ctx.trim().is_empty() {
+            continue;
+        }
+        if seen.insert(ctx.clone()) {
+            out.push(ctx);
+        }
+    }
+
+    for ctx in legacy_contexts {
+        if out.len() >= max_items {
+            break;
+        }
+        if ctx.trim().is_empty() {
+            continue;
+        }
+        if seen.insert(ctx.clone()) {
+            out.push(ctx);
+        }
+    }
+
+    out
+}
+
 fn build_todo_thread_context(conn: &Connection, key: &[u8; 32], todo_id: &str) -> Result<String> {
     let todo = db::get_todo(conn, key, todo_id)?;
     let activities = db::list_todo_activities(conn, key, todo_id)?;
@@ -685,9 +737,10 @@ pub fn ask_ai_with_provider_using_active_embeddings(
     let mut contexts: Vec<String> = Vec::new();
     let mut resources_catalog: Option<String> = None;
     if top_k > 0 {
-        contexts =
+        let knowledge_contexts =
             try_build_knowledge_contexts(conn, key, question, top_k, focus, conversation_id, None)?;
-        if !fallback::should_use_legacy_retrieval_fallback(&contexts) {
+        if !fallback::should_use_legacy_retrieval_fallback(&knowledge_contexts) {
+            contexts = knowledge_contexts;
             resources_catalog = collect_attachment_resources_recent(conn, key)
                 .unwrap_or_default()
                 .catalog_markdown;
@@ -696,10 +749,11 @@ pub fn ask_ai_with_provider_using_active_embeddings(
             db::process_pending_todo_embeddings_active(conn, key, app_dir, 1024)?;
             db::process_pending_todo_activity_embeddings_active(conn, key, app_dir, 1024)?;
 
-            let top_k = top_k.max(1);
+            let legacy_top_k = top_k.saturating_sub(knowledge_contexts.len()).max(1);
 
-            let top_k_candidate_messages = (top_k.saturating_mul(8)).min(200).max(top_k);
-            let top_k_candidate_todos = (top_k.saturating_mul(4)).min(80).max(top_k);
+            let top_k_candidate_messages =
+                (legacy_top_k.saturating_mul(8)).min(200).max(legacy_top_k);
+            let top_k_candidate_todos = (legacy_top_k.saturating_mul(4)).min(80).max(legacy_top_k);
 
             let similar_messages = match focus {
                 Focus::AllMemories => db::search_similar_messages_active(
@@ -727,7 +781,7 @@ pub fn ask_ai_with_provider_using_active_embeddings(
                 top_k_candidate_todos,
             )?;
             let attachment_resources =
-                collect_attachment_resources_active(conn, key, app_dir, question, top_k)
+                collect_attachment_resources_active(conn, key, app_dir, question, legacy_top_k)
                     .unwrap_or_default();
             let external_chunks = db::search_similar_external_document_chunks_active(
                 app_dir,
@@ -810,7 +864,9 @@ pub fn ask_ai_with_provider_using_active_embeddings(
                 });
             }
 
-            contexts = build_contexts_v2(question, candidates, top_k);
+            let legacy_contexts = build_contexts_v2(question, candidates, legacy_top_k);
+            contexts =
+                merge_knowledge_and_legacy_contexts(knowledge_contexts, legacy_contexts, top_k);
             resources_catalog = attachment_resources.catalog_markdown;
         }
     }
@@ -851,7 +907,7 @@ pub fn ask_ai_with_provider_using_active_embeddings_time_window(
 ) -> Result<AskAiResult> {
     let mut contexts: Vec<String> = Vec::new();
     if top_k > 0 {
-        contexts = try_build_knowledge_contexts(
+        let knowledge_contexts = try_build_knowledge_contexts(
             conn,
             key,
             question,
@@ -860,12 +916,13 @@ pub fn ask_ai_with_provider_using_active_embeddings_time_window(
             conversation_id,
             Some((time_start_ms, time_end_ms)),
         )?;
-        if fallback::should_use_legacy_retrieval_fallback(&contexts) {
+        if fallback::should_use_legacy_retrieval_fallback(&knowledge_contexts) {
             let conversation_filter = match focus {
                 Focus::AllMemories => None,
                 Focus::ThisThread => Some(conversation_id),
             };
 
+            let legacy_top_k = top_k.saturating_sub(knowledge_contexts.len()).max(1);
             let mut candidates: Vec<ContextItem> = Vec::new();
 
             for m in db::list_memory_messages_in_range(
@@ -956,7 +1013,14 @@ pub fn ask_ai_with_provider_using_active_embeddings_time_window(
                 });
             }
 
-            contexts = build_contexts_v2(question, candidates, top_k.max(1));
+            let legacy_contexts = build_contexts_v2(question, candidates, legacy_top_k);
+            contexts = merge_knowledge_and_legacy_contexts(
+                knowledge_contexts,
+                legacy_contexts,
+                top_k.max(1),
+            );
+        } else {
+            contexts = knowledge_contexts;
         }
     }
 

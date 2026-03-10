@@ -67,6 +67,7 @@ class _KnowledgeDocumentViewerState extends State<KnowledgeDocumentViewer> {
   void didUpdateWidget(covariant KnowledgeDocumentViewer oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.documentId != widget.documentId) {
+      _unitKeys.clear();
       _controller.reset(
         documentId: widget.documentId,
         initialDocument: widget.initialDocument,

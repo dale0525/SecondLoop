@@ -25,6 +25,7 @@ final class KnowledgeDocumentController extends ChangeNotifier {
   bool _loadingPage = false;
   bool _loadingMore = false;
   int _loadEpoch = 0;
+  int _searchEpoch = 0;
   bool _searching = false;
   bool _anchorMode = false;
   String? _highlightedUnitId;
@@ -46,6 +47,8 @@ final class KnowledgeDocumentController extends ChangeNotifier {
     required String documentId,
     required KnowledgeViewerDocument initialDocument,
   }) {
+    _loadEpoch += 1;
+    _searchEpoch += 1;
     this.documentId = documentId;
     _viewerDocument = initialDocument;
     _total = initialDocument.totalUnits.toInt();
@@ -107,13 +110,16 @@ final class KnowledgeDocumentController extends ChangeNotifier {
   }
 
   Future<void> clearSearchAndReload() async {
+    _searchEpoch += 1;
     _searchResults = const <KnowledgeSearchResult>[];
     _highlightedUnitId = null;
+    _searching = false;
     notifyListeners();
     await loadPage(reset: true);
   }
 
   Future<void> searchDocument(String query) async {
+    final epoch = ++_searchEpoch;
     _searching = true;
     notifyListeners();
     try {
@@ -123,10 +129,13 @@ final class KnowledgeDocumentController extends ChangeNotifier {
         query: query,
         limit: 8,
       );
+      if (epoch != _searchEpoch) return;
       _searchResults = results;
     } finally {
-      _searching = false;
-      notifyListeners();
+      if (epoch == _searchEpoch) {
+        _searching = false;
+        notifyListeners();
+      }
     }
   }
 
