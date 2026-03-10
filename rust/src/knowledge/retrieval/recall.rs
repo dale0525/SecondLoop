@@ -1,7 +1,7 @@
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use anyhow::Result;
-use rusqlite::{params, Connection};
+use rusqlite::Connection;
 use sha2::{Digest, Sha256};
 
 use crate::knowledge::embedding_batch::{
@@ -96,22 +96,47 @@ fn load_embedding_map(
     target_kind: &str,
     target_ids: &BTreeSet<String>,
 ) -> Result<HashMap<String, Vec<f32>>> {
-    let mut stmt = conn.prepare(
-        r#"SELECT target_id, embedding_json
-           FROM knowledge_embeddings
-           WHERE target_kind = ?1"#,
-    )?;
-    let mut rows = stmt.query(params![target_kind])?;
     let mut out = HashMap::<String, Vec<f32>>::new();
-    while let Some(row) = rows.next()? {
-        let target_id: String = row.get(0)?;
-        if !target_ids.is_empty() && !target_ids.contains(&target_id) {
-            continue;
+
+    if target_ids.is_empty() {
+        return Ok(out);
+    }
+
+    // SQLite has a fairly small default host-parameter limit (commonly 999).
+    // Chunk the IN query to keep this helper safe for large documents.
+    const MAX_TARGET_IDS_PER_QUERY: usize = 900;
+    for chunk in target_ids
+        .iter()
+        .collect::<Vec<_>>()
+        .chunks(MAX_TARGET_IDS_PER_QUERY)
+    {
+        let placeholders = (0..chunk.len())
+            .map(|idx| format!("?{}", idx + 2))
+            .collect::<Vec<_>>()
+            .join(", ");
+
+        let sql = format!(
+            r#"SELECT target_id, embedding_json
+               FROM knowledge_embeddings
+               WHERE target_kind = ?1
+                 AND target_id IN ({placeholders})"#
+        );
+
+        let mut values = Vec::<rusqlite::types::Value>::with_capacity(chunk.len() + 1);
+        values.push(rusqlite::types::Value::Text(target_kind.to_string()));
+        for target_id in chunk {
+            values.push(rusqlite::types::Value::Text((*target_id).clone()));
         }
-        let embedding_json: String = row.get(1)?;
-        let embedding = serde_json::from_str::<Vec<f32>>(&embedding_json).unwrap_or_default();
-        if !embedding.is_empty() {
-            out.insert(target_id, embedding);
+
+        let mut stmt = conn.prepare(&sql)?;
+        let mut rows = stmt.query(rusqlite::params_from_iter(values.iter()))?;
+        while let Some(row) = rows.next()? {
+            let target_id: String = row.get(0)?;
+            let embedding_json: String = row.get(1)?;
+            let embedding = serde_json::from_str::<Vec<f32>>(&embedding_json).unwrap_or_default();
+            if !embedding.is_empty() {
+                out.insert(target_id, embedding);
+            }
         }
     }
     Ok(out)
@@ -306,4 +331,31 @@ pub(crate) fn recall_knowledge_candidates(
             .then_with(|| right.layer.cmp(&left.layer))
     });
     Ok(out)
+}
+
+#[cfg(test)]
+mod load_embedding_map_tests {
+    use super::load_embedding_map;
+
+    use rusqlite::Connection;
+    use std::collections::BTreeSet;
+
+    #[test]
+    fn load_embedding_map_returns_empty_when_no_target_ids() {
+        let conn = Connection::open_in_memory().expect("open");
+        conn.execute(
+            "CREATE TABLE knowledge_embeddings (target_kind TEXT NOT NULL, target_id TEXT NOT NULL, embedding_json TEXT NOT NULL)",
+            [],
+        )
+        .expect("create table");
+        conn.execute(
+            "INSERT INTO knowledge_embeddings(target_kind, target_id, embedding_json) VALUES (?1, ?2, ?3)",
+            rusqlite::params!["unit", "u1", "[0.1, 0.2]"],
+        )
+        .expect("insert embedding");
+
+        let out = load_embedding_map(&conn, "unit", &BTreeSet::new()).expect("load map");
+
+        assert!(out.is_empty(), "expected empty embedding map, got {out:?}");
+    }
 }

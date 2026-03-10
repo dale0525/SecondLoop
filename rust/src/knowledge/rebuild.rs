@@ -1,3 +1,5 @@
+use std::collections::VecDeque;
+
 use anyhow::Result;
 use rusqlite::{params, Connection, OptionalExtension};
 
@@ -351,35 +353,69 @@ pub fn list_knowledge_units_around_anchor(
     before: usize,
     after: usize,
 ) -> Result<Vec<KnowledgeUnit>> {
-    let units = list_knowledge_units(conn, key, document_id, None, 2048, 0)?;
-    if units.is_empty() {
-        return Ok(Vec::new());
+    const PAGE_SIZE: usize = 256;
+
+    let mut recent = VecDeque::<KnowledgeUnit>::with_capacity(before);
+    let mut best_before = Vec::<KnowledgeUnit>::new();
+    let mut best_after = Vec::<KnowledgeUnit>::new();
+    let mut best_unit = None::<KnowledgeUnit>;
+    let mut best_score = 0i64;
+    let mut best_kind_rank = 0i64;
+    let mut best_index = 0usize;
+    let mut remaining_after = 0usize;
+
+    let mut offset = 0usize;
+    let mut index = 0usize;
+    loop {
+        let page = list_knowledge_units(conn, key, document_id, None, PAGE_SIZE, offset)?;
+        if page.is_empty() {
+            break;
+        }
+        let count = page.len();
+        for unit in page {
+            let score = anchor_match_score(anchor, &unit.anchors);
+            let kind_rank = unit_kind_rank(unit.unit_kind);
+            let is_better = score > best_score
+                || (score == best_score && kind_rank > best_kind_rank)
+                || (score == best_score && kind_rank == best_kind_rank && index > best_index);
+            if is_better {
+                best_score = score;
+                best_kind_rank = kind_rank;
+                best_index = index;
+                best_unit = Some(unit.clone());
+                best_before = recent.iter().cloned().collect();
+                best_after.clear();
+                remaining_after = after;
+            } else if best_unit.is_some() && remaining_after > 0 && index > best_index {
+                best_after.push(unit.clone());
+                remaining_after = remaining_after.saturating_sub(1);
+            }
+
+            if before > 0 {
+                if recent.len() == before {
+                    recent.pop_front();
+                }
+                recent.push_back(unit);
+            }
+
+            index += 1;
+        }
+        if count < PAGE_SIZE {
+            break;
+        }
+        offset += count;
     }
-    let best = units
-        .iter()
-        .enumerate()
-        .map(|(index, unit)| {
-            (
-                index,
-                anchor_match_score(anchor, &unit.anchors),
-                unit_kind_rank(unit.unit_kind),
-            )
-        })
-        .max_by(|left, right| {
-            left.1
-                .cmp(&right.1)
-                .then_with(|| left.2.cmp(&right.2))
-                .then_with(|| right.0.cmp(&left.0))
-        });
-    let Some((index, score, _)) = best else {
+
+    let Some(best_unit) = best_unit else {
         return Ok(Vec::new());
     };
-    if score <= 0 {
+    if best_score <= 0 {
         return Ok(Vec::new());
     }
-    let start = index.saturating_sub(before);
-    let end = (index + after + 1).min(units.len());
-    Ok(units[start..end].to_vec())
+    let mut out = best_before;
+    out.push(best_unit);
+    out.extend(best_after);
+    Ok(out)
 }
 
 pub fn cancel_knowledge_rebuild(conn: &Connection, _key: &[u8; 32]) -> Result<()> {

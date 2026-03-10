@@ -161,6 +161,12 @@ pub(crate) fn rerank_knowledge_candidates(
                 );
             }
         }
+        if let Some(parent_id) = current_chunk.parent_unit_id.as_deref() {
+            if let Some(section) = sections.iter().find(|unit| unit.unit_id == parent_id) {
+                inject_candidate(&mut pool, section_candidate(&candidate.document, section));
+                continue;
+            }
+        }
         if let Some(section) = sections
             .iter()
             .min_by_key(|section| (section.ordinal - current_chunk.ordinal).abs())

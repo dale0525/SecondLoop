@@ -28,6 +28,8 @@ mod recall_tests;
 #[cfg(test)]
 mod rerank_tests;
 #[cfg(test)]
+mod snippet_tests;
+#[cfg(test)]
 pub(crate) mod test_support;
 
 const READ_PAGE_SIZE: usize = 128;
@@ -273,27 +275,98 @@ fn trim_snippet(text: &str, limit: usize) -> String {
     }
 }
 
+fn normalized_text_with_offset_map(text: &str) -> (String, Vec<usize>) {
+    let mut out = String::with_capacity(text.len());
+    let mut offsets = Vec::<usize>::with_capacity(text.len());
+
+    let mut pending_space_from: Option<usize> = None;
+    for (index, ch) in text.chars().enumerate() {
+        if ch.is_alphanumeric() {
+            if let Some(space_index) = pending_space_from.take() {
+                if !out.is_empty() {
+                    out.push(' ');
+                    offsets.push(space_index);
+                }
+            }
+            for lowered in ch.to_lowercase() {
+                out.push(lowered);
+                offsets.push(index);
+            }
+        } else if !out.is_empty() && pending_space_from.is_none() {
+            pending_space_from = Some(index);
+        }
+    }
+
+    (out, offsets)
+}
+
+fn snippet_around_match(text: &str, match_char_index: usize, limit: usize) -> String {
+    let trimmed = text.trim();
+    if trimmed.is_empty() {
+        return String::new();
+    }
+    let total = trimmed.chars().count();
+    if total <= limit {
+        return trimmed.to_string();
+    }
+
+    let before = limit / 3;
+    let start = match_char_index.saturating_sub(before);
+    let end = (start + limit).min(total);
+
+    let body = trimmed
+        .chars()
+        .skip(start)
+        .take(end.saturating_sub(start))
+        .collect::<String>();
+    let mut out = body.trim().to_string();
+    if start > 0 {
+        out = format!("…{out}");
+    }
+    if end < total {
+        out.push('…');
+    }
+    out
+}
+
 pub(crate) fn build_search_snippet(text: &str, normalized_query: &str) -> String {
     let trimmed = text.trim();
     if trimmed.is_empty() {
         return String::new();
     }
-    if normalized_query.trim().is_empty() {
+    let normalized_query = normalized_query.trim();
+    if normalized_query.is_empty() {
         return trim_snippet(trimmed, 220);
     }
-    let normalized_text = query::normalized_text_for_matching(trimmed);
-    if normalized_text.contains(normalized_query) {
-        return trim_snippet(trimmed, 220);
+
+    let (normalized_text, offsets) = normalized_text_with_offset_map(trimmed);
+    let find_char_index = |needle: &str| -> Option<usize> {
+        normalized_text.find(needle).and_then(|start_byte| {
+            let start_char = normalized_text[..start_byte].chars().count();
+            offsets.get(start_char).copied()
+        })
+    };
+
+    if let Some(match_index) = find_char_index(normalized_query) {
+        return snippet_around_match(trimmed, match_index, 220);
     }
+
+    let mut earliest_match = None::<usize>;
     for token in normalized_query.split_whitespace() {
         if token.len() < 2 {
             continue;
         }
-        if normalized_text.contains(token) {
-            return trim_snippet(trimmed, 220);
+        if let Some(match_index) = find_char_index(token) {
+            earliest_match = Some(match earliest_match {
+                Some(existing) => existing.min(match_index),
+                None => match_index,
+            });
         }
     }
-    trim_snippet(trimmed, 220)
+
+    earliest_match
+        .map(|match_index| snippet_around_match(trimmed, match_index, 220))
+        .unwrap_or_else(|| trim_snippet(trimmed, 220))
 }
 
 pub(crate) fn anchor_summary(anchors: &KnowledgeAnchorSet) -> String {

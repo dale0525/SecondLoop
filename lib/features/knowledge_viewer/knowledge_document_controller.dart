@@ -24,6 +24,7 @@ final class KnowledgeDocumentController extends ChangeNotifier {
   List<KnowledgeSearchResult> _searchResults = const <KnowledgeSearchResult>[];
   bool _loadingPage = false;
   bool _loadingMore = false;
+  int _loadEpoch = 0;
   bool _searching = false;
   bool _anchorMode = false;
   String? _highlightedUnitId;
@@ -60,8 +61,10 @@ final class KnowledgeDocumentController extends ChangeNotifier {
   }
 
   Future<void> loadPage({required bool reset}) async {
+    final epoch = ++_loadEpoch;
     if (reset) {
       _loadingPage = true;
+      _loadingMore = false;
       _loadError = null;
       notifyListeners();
     } else {
@@ -81,6 +84,7 @@ final class KnowledgeDocumentController extends ChangeNotifier {
         limit: pageSize,
         offset: reset ? 0 : _units.length,
       );
+      if (epoch != _loadEpoch) return;
       _viewerDocument = KnowledgeViewerDocument(
         document: _viewerDocument.document,
         totalUnits: page.total,
@@ -91,11 +95,14 @@ final class KnowledgeDocumentController extends ChangeNotifier {
       _anchorMode = false;
       _units = reset ? page.units : _mergeUnits(_units, page.units);
     } catch (error) {
+      if (epoch != _loadEpoch) return;
       _loadError = error;
     } finally {
-      _loadingPage = false;
-      _loadingMore = false;
-      notifyListeners();
+      if (epoch == _loadEpoch) {
+        _loadingPage = false;
+        _loadingMore = false;
+        notifyListeners();
+      }
     }
   }
 
@@ -132,7 +139,9 @@ final class KnowledgeDocumentController extends ChangeNotifier {
       return;
     }
 
+    final epoch = ++_loadEpoch;
     _loadingPage = true;
+    _loadingMore = false;
     _loadError = null;
     notifyListeners();
     try {
@@ -143,16 +152,20 @@ final class KnowledgeDocumentController extends ChangeNotifier {
         before: 2,
         after: 3,
       );
+      if (epoch != _loadEpoch) return;
       final highlighted =
           targetUnitId ?? (units.isEmpty ? null : units.first.unitId);
       _anchorMode = true;
       _units = units;
       _highlightedUnitId = highlighted;
     } catch (error) {
+      if (epoch != _loadEpoch) return;
       _loadError = error;
     } finally {
-      _loadingPage = false;
-      notifyListeners();
+      if (epoch == _loadEpoch) {
+        _loadingPage = false;
+        notifyListeners();
+      }
     }
   }
 
