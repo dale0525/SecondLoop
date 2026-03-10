@@ -1,5 +1,6 @@
 use anyhow::Result;
 use rusqlite::Connection;
+use std::collections::HashMap;
 
 use crate::knowledge::{
     list_knowledge_documents, list_knowledge_units, ContentKnowledgeDocument, KnowledgeAnchorSet,
@@ -177,6 +178,8 @@ pub(crate) fn load_scoped_documents(
 ) -> Result<Vec<ContentKnowledgeDocument>> {
     let mut offset = 0usize;
     let mut documents = Vec::<ContentKnowledgeDocument>::new();
+    let mut attachment_conversation_cache: HashMap<String, bool> = HashMap::new();
+    let expected_conversation_id = request.conversation_id.as_deref();
     loop {
         let page = list_knowledge_documents(conn, key, READ_PAGE_SIZE, offset)?;
         if page.is_empty() {
@@ -194,26 +197,34 @@ pub(crate) fn load_scoped_documents(
             }
             let in_scope = match request.scope {
                 KnowledgeQueryScope::All => true,
-                KnowledgeQueryScope::Conversation => request
-                    .conversation_id
-                    .as_deref()
-                    .map(|expected| {
-                        document.anchors.conversation_id.as_deref() == Some(expected)
-                            || document
-                                .anchors
-                                .attachment_sha256
-                                .as_deref()
-                                .and_then(|attachment_sha256| {
-                                    attachment_belongs_to_conversation(
-                                        conn,
-                                        attachment_sha256,
-                                        expected,
-                                    )
-                                    .ok()
-                                })
-                                .unwrap_or(false)
-                    })
-                    .unwrap_or(false),
+                KnowledgeQueryScope::Conversation => match expected_conversation_id {
+                    Some(expected) => {
+                        if document.anchors.conversation_id.as_deref() == Some(expected) {
+                            true
+                        } else if let Some(attachment_sha256) =
+                            document.anchors.attachment_sha256.as_deref()
+                        {
+                            if let Some(cached) =
+                                attachment_conversation_cache.get(attachment_sha256)
+                            {
+                                *cached
+                            } else {
+                                let belongs = attachment_belongs_to_conversation(
+                                    conn,
+                                    attachment_sha256,
+                                    expected,
+                                )
+                                .unwrap_or(false);
+                                attachment_conversation_cache
+                                    .insert(attachment_sha256.to_string(), belongs);
+                                belongs
+                            }
+                        } else {
+                            false
+                        }
+                    }
+                    None => false,
+                },
                 KnowledgeQueryScope::Document => request
                     .document_id
                     .as_deref()
