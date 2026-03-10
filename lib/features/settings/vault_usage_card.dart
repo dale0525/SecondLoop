@@ -308,10 +308,21 @@ class _VaultUsageCardState extends State<VaultUsageCard> {
   }
 
   Future<Attachment?> _resolveLocalAttachmentBySha(String sha256) async {
-    final cached = _localAttachmentBySha[sha256];
+    final normalizedSha = sha256.trim();
+    if (normalizedSha.isEmpty) return null;
+
+    try {
+      final backend = AppBackendScope.of(context);
+      final attachment = await backend.readAttachmentBySha256(normalizedSha);
+      if (attachment != null) return attachment;
+    } catch (_) {
+      // Fall back to the message-linked attachment index below.
+    }
+
+    final cached = _localAttachmentBySha[normalizedSha];
     if (cached != null) return cached;
     await _rebuildAttachmentReferenceIndex();
-    return _localAttachmentBySha[sha256];
+    return _localAttachmentBySha[normalizedSha];
   }
 
   Future<String?> _resolveMessageIdByAttachmentSha(String sha256) async {
