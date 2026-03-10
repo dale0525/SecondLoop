@@ -4,11 +4,15 @@ use std::path::Path;
 
 use crate::db;
 use crate::embedding::Embedder;
+use crate::knowledge;
 use crate::llm::ChatDelta;
 
 mod attachment_resources;
 mod citations_prompt;
 mod context_selection;
+mod fallback;
+#[cfg(test)]
+mod knowledge_ask_ai_tests;
 
 use attachment_resources::{
     collect_attachment_resources_active, collect_attachment_resources_by_embedding,
@@ -271,6 +275,42 @@ fn build_recent_conversation_history_in_range(
     }
 
     Ok(Some(out))
+}
+
+fn try_build_knowledge_contexts(
+    conn: &Connection,
+    key: &[u8; 32],
+    question: &str,
+    top_k: usize,
+    focus: Focus,
+    conversation_id: &str,
+    time_window: Option<(i64, i64)>,
+) -> Result<Vec<String>> {
+    if top_k == 0 {
+        return Ok(Vec::new());
+    }
+
+    let conversation_scope = match focus {
+        Focus::AllMemories => None,
+        Focus::ThisThread => Some(conversation_id.to_string()),
+    };
+    let mut request = knowledge::normalize_retrieval_request(
+        question,
+        conversation_scope,
+        None,
+        Some(top_k.max(1)),
+        Some(1200),
+        None,
+    );
+    if let Some((start_ms, end_ms)) = time_window {
+        request.time_start_ms = Some(start_ms);
+        request.time_end_ms = Some(end_ms);
+    }
+
+    Ok(knowledge::retrieve_context_blocks(conn, key, &request)?
+        .into_iter()
+        .map(|block| block.rendered_text)
+        .collect())
 }
 
 fn build_todo_thread_context(conn: &Connection, key: &[u8; 32], todo_id: &str) -> Result<String> {
@@ -645,126 +685,134 @@ pub fn ask_ai_with_provider_using_active_embeddings(
     let mut contexts: Vec<String> = Vec::new();
     let mut resources_catalog: Option<String> = None;
     if top_k > 0 {
-        db::process_pending_message_embeddings_active(conn, key, app_dir, 1024)?;
-        db::process_pending_todo_embeddings_active(conn, key, app_dir, 1024)?;
-        db::process_pending_todo_activity_embeddings_active(conn, key, app_dir, 1024)?;
+        contexts =
+            try_build_knowledge_contexts(conn, key, question, top_k, focus, conversation_id, None)?;
+        if !fallback::should_use_legacy_retrieval_fallback(&contexts) {
+            resources_catalog = collect_attachment_resources_recent(conn, key)
+                .unwrap_or_default()
+                .catalog_markdown;
+        } else {
+            db::process_pending_message_embeddings_active(conn, key, app_dir, 1024)?;
+            db::process_pending_todo_embeddings_active(conn, key, app_dir, 1024)?;
+            db::process_pending_todo_activity_embeddings_active(conn, key, app_dir, 1024)?;
 
-        let top_k = top_k.max(1);
+            let top_k = top_k.max(1);
 
-        let top_k_candidate_messages = (top_k.saturating_mul(8)).min(200).max(top_k);
-        let top_k_candidate_todos = (top_k.saturating_mul(4)).min(80).max(top_k);
+            let top_k_candidate_messages = (top_k.saturating_mul(8)).min(200).max(top_k);
+            let top_k_candidate_todos = (top_k.saturating_mul(4)).min(80).max(top_k);
 
-        let similar_messages = match focus {
-            Focus::AllMemories => db::search_similar_messages_active(
+            let similar_messages = match focus {
+                Focus::AllMemories => db::search_similar_messages_active(
+                    conn,
+                    key,
+                    app_dir,
+                    question,
+                    top_k_candidate_messages,
+                )?,
+                Focus::ThisThread => db::search_similar_messages_in_conversation_active(
+                    conn,
+                    key,
+                    app_dir,
+                    conversation_id,
+                    question,
+                    top_k_candidate_messages,
+                )?,
+            };
+
+            let similar_todos = db::search_similar_todo_threads_active(
                 conn,
                 key,
                 app_dir,
                 question,
-                top_k_candidate_messages,
-            )?,
-            Focus::ThisThread => db::search_similar_messages_in_conversation_active(
-                conn,
-                key,
+                top_k_candidate_todos,
+            )?;
+            let attachment_resources =
+                collect_attachment_resources_active(conn, key, app_dir, question, top_k)
+                    .unwrap_or_default();
+            let external_chunks = db::search_similar_external_document_chunks_active(
                 app_dir,
-                conversation_id,
+                key,
                 question,
                 top_k_candidate_messages,
-            )?,
-        };
+            )
+            .unwrap_or_default();
 
-        let similar_todos = db::search_similar_todo_threads_active(
-            conn,
-            key,
-            app_dir,
-            question,
-            top_k_candidate_todos,
-        )?;
-        let attachment_resources =
-            collect_attachment_resources_active(conn, key, app_dir, question, top_k)
-                .unwrap_or_default();
-        let external_chunks = db::search_similar_external_document_chunks_active(
-            app_dir,
-            key,
-            question,
-            top_k_candidate_messages,
-        )
-        .unwrap_or_default();
-
-        let mut candidates: Vec<ContextItem> = Vec::new();
-        for sm in similar_messages {
-            let context =
-                db::build_message_rag_context(conn, key, &sm.message.id, &sm.message.content)
-                    .unwrap_or_else(|_| sm.message.content.clone());
-            candidates.push(ContextItem {
-                source: ContextSource::Message,
-                id: sm.message.id.clone(),
-                created_at_ms: sm.message.created_at_ms,
-                distance: Some(sm.distance),
-                text: context,
-            });
-        }
-
-        let mut seen_todos = std::collections::HashSet::new();
-        for st in similar_todos {
-            if !seen_todos.insert(st.todo_id.clone()) {
-                continue;
+            let mut candidates: Vec<ContextItem> = Vec::new();
+            for sm in similar_messages {
+                let context =
+                    db::build_message_rag_context(conn, key, &sm.message.id, &sm.message.content)
+                        .unwrap_or_else(|_| sm.message.content.clone());
+                candidates.push(ContextItem {
+                    source: ContextSource::Message,
+                    id: sm.message.id.clone(),
+                    created_at_ms: sm.message.created_at_ms,
+                    distance: Some(sm.distance),
+                    text: context,
+                });
             }
-            let todo = match db::get_todo(conn, key, &st.todo_id) {
-                Ok(v) => v,
-                Err(_) => continue,
-            };
-            let ctx = match build_todo_thread_context(conn, key, &st.todo_id) {
-                Ok(v) => v,
-                Err(_) => continue,
-            };
-            candidates.push(ContextItem {
-                source: ContextSource::TodoThread,
-                id: st.todo_id,
-                created_at_ms: todo.created_at_ms,
-                distance: Some(st.distance),
-                text: ctx,
-            });
-        }
 
-        for chunk in attachment_resources.chunks {
-            let citation = format!(
-                "[Attachment](secondloop://attachment/{}?kind={}&chunk={})",
-                chunk.attachment_sha256, chunk.kind, chunk.chunk_index
-            );
-            let context = format!("{}\n{}", chunk.text, citation,);
-            candidates.push(ContextItem {
-                source: ContextSource::AttachmentChunk,
-                id: format!(
-                    "{}:{}:{}",
+            let mut seen_todos = std::collections::HashSet::new();
+            for st in similar_todos {
+                if !seen_todos.insert(st.todo_id.clone()) {
+                    continue;
+                }
+                let todo = match db::get_todo(conn, key, &st.todo_id) {
+                    Ok(v) => v,
+                    Err(_) => continue,
+                };
+                let ctx = match build_todo_thread_context(conn, key, &st.todo_id) {
+                    Ok(v) => v,
+                    Err(_) => continue,
+                };
+                candidates.push(ContextItem {
+                    source: ContextSource::TodoThread,
+                    id: st.todo_id,
+                    created_at_ms: todo.created_at_ms,
+                    distance: Some(st.distance),
+                    text: ctx,
+                });
+            }
+
+            for chunk in attachment_resources.chunks {
+                let citation = format!(
+                    "[Attachment](secondloop://attachment/{}?kind={}&chunk={})",
                     chunk.attachment_sha256, chunk.kind, chunk.chunk_index
-                ),
-                created_at_ms: chunk.created_at_ms,
-                distance: Some(chunk.distance),
-                text: context,
-            });
-        }
+                );
+                let context = format!("{}\n{}", chunk.text, citation,);
+                candidates.push(ContextItem {
+                    source: ContextSource::AttachmentChunk,
+                    id: format!(
+                        "{}:{}:{}",
+                        chunk.attachment_sha256, chunk.kind, chunk.chunk_index
+                    ),
+                    created_at_ms: chunk.created_at_ms,
+                    distance: Some(chunk.distance),
+                    text: context,
+                });
+            }
 
-        for chunk in external_chunks {
-            let context = match db::build_external_document_chunk_rag_context(
-                app_dir,
-                key,
-                &chunk.doc_id,
-                chunk.chunk_index,
-            ) {
-                Ok(v) => v,
-                Err(_) => continue,
-            };
-            candidates.push(ContextItem {
-                source: ContextSource::ExternalDocument,
-                id: format!("{}:{}", chunk.doc_id, chunk.chunk_index),
-                created_at_ms: chunk.created_at_ms,
-                distance: Some(chunk.distance),
-                text: context,
-            });
-        }
+            for chunk in external_chunks {
+                let context = match db::build_external_document_chunk_rag_context(
+                    app_dir,
+                    key,
+                    &chunk.doc_id,
+                    chunk.chunk_index,
+                ) {
+                    Ok(v) => v,
+                    Err(_) => continue,
+                };
+                candidates.push(ContextItem {
+                    source: ContextSource::ExternalDocument,
+                    id: format!("{}:{}", chunk.doc_id, chunk.chunk_index),
+                    created_at_ms: chunk.created_at_ms,
+                    distance: Some(chunk.distance),
+                    text: context,
+                });
+            }
 
-        contexts = build_contexts_v2(question, candidates, top_k);
-        resources_catalog = attachment_resources.catalog_markdown;
+            contexts = build_contexts_v2(question, candidates, top_k);
+            resources_catalog = attachment_resources.catalog_markdown;
+        }
     }
     let actions = build_actions_context(conn, key, question)?;
     let history = build_recent_conversation_history(conn, key, conversation_id)?;
@@ -803,101 +851,113 @@ pub fn ask_ai_with_provider_using_active_embeddings_time_window(
 ) -> Result<AskAiResult> {
     let mut contexts: Vec<String> = Vec::new();
     if top_k > 0 {
-        let conversation_filter = match focus {
-            Focus::AllMemories => None,
-            Focus::ThisThread => Some(conversation_id),
-        };
-
-        let mut candidates: Vec<ContextItem> = Vec::new();
-
-        for m in db::list_memory_messages_in_range(
+        contexts = try_build_knowledge_contexts(
             conn,
             key,
-            conversation_filter,
-            time_start_ms,
-            time_end_ms,
-            800,
-        )? {
-            let context =
-                db::build_message_rag_context(conn, key, &m.id, &m.content).unwrap_or(m.content);
-            candidates.push(ContextItem {
-                source: ContextSource::Message,
-                id: m.id,
-                created_at_ms: m.created_at_ms,
-                distance: None,
-                text: context,
-            });
+            question,
+            top_k.max(1),
+            focus,
+            conversation_id,
+            Some((time_start_ms, time_end_ms)),
+        )?;
+        if fallback::should_use_legacy_retrieval_fallback(&contexts) {
+            let conversation_filter = match focus {
+                Focus::AllMemories => None,
+                Focus::ThisThread => Some(conversation_id),
+            };
+
+            let mut candidates: Vec<ContextItem> = Vec::new();
+
+            for m in db::list_memory_messages_in_range(
+                conn,
+                key,
+                conversation_filter,
+                time_start_ms,
+                time_end_ms,
+                800,
+            )? {
+                let context = db::build_message_rag_context(conn, key, &m.id, &m.content)
+                    .unwrap_or(m.content);
+                candidates.push(ContextItem {
+                    source: ContextSource::Message,
+                    id: m.id,
+                    created_at_ms: m.created_at_ms,
+                    distance: None,
+                    text: context,
+                });
+            }
+
+            for a in db::list_todo_activities_in_range(conn, key, time_start_ms, time_end_ms)?
+                .into_iter()
+                .take(300)
+            {
+                let mut text = format!(
+                    "TODO_ACTIVITY todo_id={} type={} created_at_ms={}",
+                    a.todo_id, a.activity_type, a.created_at_ms
+                );
+                if let Some(from) = a.from_status.as_deref() {
+                    text.push_str(&format!(" from={from}"));
+                }
+                if let Some(to) = a.to_status.as_deref() {
+                    text.push_str(&format!(" to={to}"));
+                }
+                if let Some(content) = a.content.as_deref() {
+                    text.push_str(&format!(" content={content}"));
+                }
+                candidates.push(ContextItem {
+                    source: ContextSource::TodoActivity,
+                    id: a.id,
+                    created_at_ms: a.created_at_ms,
+                    distance: None,
+                    text,
+                });
+            }
+
+            for e in db::list_events_in_range(conn, key, time_start_ms, time_end_ms)?
+                .into_iter()
+                .take(200)
+            {
+                let text = format!(
+                    "EVENT {} (start_at_ms={}, end_at_ms={}, tz={})",
+                    e.title, e.start_at_ms, e.end_at_ms, e.tz
+                );
+                candidates.push(ContextItem {
+                    source: ContextSource::Event,
+                    id: e.id,
+                    created_at_ms: e.start_at_ms,
+                    distance: None,
+                    text,
+                });
+            }
+
+            let mut seen_todos: std::collections::HashSet<String> =
+                std::collections::HashSet::new();
+            for todo in db::list_todos(conn, key)?.into_iter() {
+                if !seen_todos.insert(todo.id.clone()) {
+                    continue;
+                }
+                let due_in_range = todo
+                    .due_at_ms
+                    .is_some_and(|ms| ms >= time_start_ms && ms < time_end_ms);
+                let review_in_range = todo
+                    .next_review_at_ms
+                    .is_some_and(|ms| ms >= time_start_ms && ms < time_end_ms);
+                if !due_in_range && !review_in_range {
+                    continue;
+                }
+
+                let ctx = build_todo_thread_context(conn, key, &todo.id)?;
+                candidates.push(ContextItem {
+                    source: ContextSource::TodoThread,
+                    id: todo.id,
+                    created_at_ms: todo.created_at_ms,
+                    distance: None,
+                    text: ctx,
+                });
+            }
+
+            contexts = build_contexts_v2(question, candidates, top_k.max(1));
         }
-
-        for a in db::list_todo_activities_in_range(conn, key, time_start_ms, time_end_ms)?
-            .into_iter()
-            .take(300)
-        {
-            let mut text = format!(
-                "TODO_ACTIVITY todo_id={} type={} created_at_ms={}",
-                a.todo_id, a.activity_type, a.created_at_ms
-            );
-            if let Some(from) = a.from_status.as_deref() {
-                text.push_str(&format!(" from={from}"));
-            }
-            if let Some(to) = a.to_status.as_deref() {
-                text.push_str(&format!(" to={to}"));
-            }
-            if let Some(content) = a.content.as_deref() {
-                text.push_str(&format!(" content={content}"));
-            }
-            candidates.push(ContextItem {
-                source: ContextSource::TodoActivity,
-                id: a.id,
-                created_at_ms: a.created_at_ms,
-                distance: None,
-                text,
-            });
-        }
-
-        for e in db::list_events_in_range(conn, key, time_start_ms, time_end_ms)?
-            .into_iter()
-            .take(200)
-        {
-            let text = format!(
-                "EVENT {} (start_at_ms={}, end_at_ms={}, tz={})",
-                e.title, e.start_at_ms, e.end_at_ms, e.tz
-            );
-            candidates.push(ContextItem {
-                source: ContextSource::Event,
-                id: e.id,
-                created_at_ms: e.start_at_ms,
-                distance: None,
-                text,
-            });
-        }
-
-        let mut seen_todos: std::collections::HashSet<String> = std::collections::HashSet::new();
-        for todo in db::list_todos(conn, key)?.into_iter() {
-            if !seen_todos.insert(todo.id.clone()) {
-                continue;
-            }
-            let due_in_range = todo
-                .due_at_ms
-                .is_some_and(|ms| ms >= time_start_ms && ms < time_end_ms);
-            let review_in_range = todo
-                .next_review_at_ms
-                .is_some_and(|ms| ms >= time_start_ms && ms < time_end_ms);
-            if !due_in_range && !review_in_range {
-                continue;
-            }
-
-            let ctx = build_todo_thread_context(conn, key, &todo.id)?;
-            candidates.push(ContextItem {
-                source: ContextSource::TodoThread,
-                id: todo.id,
-                created_at_ms: todo.created_at_ms,
-                distance: None,
-                text: ctx,
-            });
-        }
-
-        contexts = build_contexts_v2(question, candidates, top_k.max(1));
     }
 
     let attachment_resources = collect_attachment_resources_recent(conn, key).unwrap_or_default();

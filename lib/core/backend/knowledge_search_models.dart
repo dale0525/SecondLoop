@@ -1,15 +1,9 @@
 export '../../src/rust/knowledge/models.dart'
     show
-        ContentKnowledgeDocument,
         KnowledgeAnchorSet,
-        KnowledgeIndexStatus,
         KnowledgeOriginType,
         KnowledgeRetrievalLayer,
         KnowledgeRole,
         KnowledgeSearchResult,
         KnowledgeSourceKind,
-        KnowledgeUnit,
-        KnowledgeUnitKind,
-        KnowledgeVersionSet,
-        KnowledgeViewerDocument,
-        KnowledgeViewerPage;
+        KnowledgeUnitKind;

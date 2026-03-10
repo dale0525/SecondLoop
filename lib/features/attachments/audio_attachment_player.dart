@@ -4,13 +4,22 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:just_audio/just_audio.dart';
 
+import '../../core/backend/app_backend.dart';
+import '../../core/backend/knowledge_viewer_backend.dart';
+import '../../core/session/session_scope.dart';
 import '../../i18n/strings.g.dart';
 import '../../src/rust/db.dart';
+import '../../src/rust/knowledge/models.dart';
 import '../../ui/sl_surface.dart';
 import '../../ui/sl_tokens.dart';
+import '../knowledge_viewer/knowledge_document_models.dart';
+import '../knowledge_viewer/knowledge_document_viewer.dart';
 import 'attachment_detail_workspace.dart';
 import 'attachment_detail_text_content.dart';
 import 'attachment_text_editor_card.dart';
+
+const _kAudioTranscriptKnowledgeViewerCharThreshold = 3200;
+const _kAudioTranscriptKnowledgeViewerLineThreshold = 120;
 
 String normalizeAudioPlaybackMimeType(String mimeType) {
   final normalized = mimeType.trim().toLowerCase();
@@ -31,6 +40,216 @@ String normalizeAudioPlaybackMimeType(String mimeType) {
       if (normalized.startsWith('audio/')) return normalized;
       return mimeType.trim();
   }
+}
+
+bool _isLargeKnowledgeViewerText(String value) {
+  final trimmed = value.trim();
+  if (trimmed.isEmpty) return false;
+  if (trimmed.length >= _kAudioTranscriptKnowledgeViewerCharThreshold) {
+    return true;
+  }
+  final lineCount = '\n'.allMatches(trimmed).length + 1;
+  return lineCount >= _kAudioTranscriptKnowledgeViewerLineThreshold;
+}
+
+bool shouldUseAudioTranscriptKnowledgeViewer({
+  required Attachment attachment,
+  required String text,
+}) {
+  final normalizedText = text.trim();
+  if (normalizedText.isEmpty) return false;
+  if (!_isLargeKnowledgeViewerText(normalizedText)) return false;
+  return attachment.sha256.trim().isNotEmpty;
+}
+
+List<String> candidateAudioTranscriptKnowledgeDocumentIds(
+  Attachment attachment,
+) {
+  final sha = attachment.sha256.trim();
+  if (sha.isEmpty) return const <String>[];
+
+  final raw = <String?>[
+    'attachment:$sha:transcript',
+    'attachment:$sha:readable_text',
+    'attachment:$sha:extracted_text',
+    'attachment:$sha:ocr_text',
+    'attachment:$sha:metadata',
+  ];
+  final out = <String>[];
+  for (final value in raw) {
+    if (value == null || value.isEmpty || out.contains(value)) continue;
+    out.add(value);
+  }
+  return out;
+}
+
+class AudioTranscriptKnowledgeContentPane extends StatefulWidget {
+  const AudioTranscriptKnowledgeContentPane({
+    required this.attachment,
+    required this.text,
+    required this.emptyText,
+    this.onSave,
+    this.extraAction,
+    super.key,
+  });
+
+  final Attachment attachment;
+  final String text;
+  final String emptyText;
+  final Future<void> Function(String value)? onSave;
+  final AttachmentTextEditorCardAction? extraAction;
+
+  @override
+  State<AudioTranscriptKnowledgeContentPane> createState() =>
+      _AudioTranscriptKnowledgeContentPaneState();
+}
+
+class _AudioTranscriptKnowledgeContentPaneState
+    extends State<AudioTranscriptKnowledgeContentPane> {
+  Future<_ResolvedKnowledgeDocument?>? _documentFuture;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _refreshDocumentFuture();
+  }
+
+  @override
+  void didUpdateWidget(
+      covariant AudioTranscriptKnowledgeContentPane oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.attachment.sha256 != widget.attachment.sha256 ||
+        oldWidget.text != widget.text) {
+      _refreshDocumentFuture();
+    }
+  }
+
+  void _refreshDocumentFuture() {
+    final backend = AppBackendScope.maybeOf(context);
+    final viewerBackend =
+        backend == null ? null : maybeKnowledgeViewerBackendFor(backend);
+    final sessionKey = SessionScope.maybeOf(context)?.sessionKey;
+    _documentFuture = _resolveDocument(
+      viewerBackend: viewerBackend,
+      sessionKey: sessionKey,
+    );
+  }
+
+  Future<_ResolvedKnowledgeDocument?> _resolveDocument({
+    required KnowledgeViewerBackend? viewerBackend,
+    required Uint8List? sessionKey,
+  }) async {
+    if (viewerBackend == null || sessionKey == null) return null;
+    if (!shouldUseAudioTranscriptKnowledgeViewer(
+      attachment: widget.attachment,
+      text: widget.text,
+    )) {
+      return null;
+    }
+
+    for (final documentId
+        in candidateAudioTranscriptKnowledgeDocumentIds(widget.attachment)) {
+      try {
+        final document = await viewerBackend.getKnowledgeViewerDocument(
+          sessionKey,
+          documentId: documentId,
+        );
+        return _ResolvedKnowledgeDocument(
+          documentId: documentId,
+          document: document,
+        );
+      } catch (_) {
+        continue;
+      }
+    }
+    return null;
+  }
+
+  Widget _buildFallback() {
+    return AttachmentTextEditorCard(
+      fieldKeyPrefix: 'attachment_text_full',
+      label: context.t.attachments.content.fullText,
+      showLabel: false,
+      text: widget.text,
+      markdown: true,
+      emptyText: widget.emptyText,
+      extraAction: widget.extraAction,
+      onSave: widget.onSave,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!shouldUseAudioTranscriptKnowledgeViewer(
+      attachment: widget.attachment,
+      text: widget.text,
+    )) {
+      return _buildFallback();
+    }
+
+    final future = _documentFuture;
+    if (future == null) return _buildFallback();
+
+    return FutureBuilder<_ResolvedKnowledgeDocument?>(
+      future: future,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState != ConnectionState.done) {
+          return const SlSurface(
+            key: ValueKey('audio_transcript_knowledge_viewer_loading'),
+            padding: EdgeInsets.all(16),
+            child: SizedBox(
+              height: 220,
+              child: Center(child: CircularProgressIndicator()),
+            ),
+          );
+        }
+
+        final resolved = snapshot.data;
+        if (resolved == null) return _buildFallback();
+
+        final backend = AppBackendScope.maybeOf(context);
+        final viewerBackend =
+            backend == null ? null : maybeKnowledgeViewerBackendFor(backend);
+        final sessionKey = SessionScope.maybeOf(context)?.sessionKey;
+        if (viewerBackend == null || sessionKey == null) {
+          return _buildFallback();
+        }
+
+        final extraActions = widget.extraAction == null
+            ? const <KnowledgeDocumentViewerAction>[]
+            : <KnowledgeDocumentViewerAction>[
+                KnowledgeDocumentViewerAction(
+                  id: widget.extraAction!.id,
+                  icon: widget.extraAction!.icon,
+                  label: widget.extraAction!.label,
+                  tooltip: widget.extraAction!.tooltip,
+                  buttonKey: widget.extraAction!.buttonKey,
+                  onPressed: widget.extraAction!.onPressed,
+                ),
+              ];
+
+        return KnowledgeDocumentViewer(
+          backend: viewerBackend,
+          sessionKey: sessionKey,
+          documentId: resolved.documentId,
+          initialDocument: resolved.document,
+          fallbackText: widget.text,
+          onSave: widget.onSave,
+          extraActions: extraActions,
+        );
+      },
+    );
+  }
+}
+
+final class _ResolvedKnowledgeDocument {
+  const _ResolvedKnowledgeDocument({
+    required this.documentId,
+    required this.document,
+  });
+
+  final String documentId;
+  final KnowledgeViewerDocument document;
 }
 
 class AudioAttachmentPlayerView extends StatefulWidget {
@@ -368,12 +587,9 @@ class _AudioAttachmentPlayerViewState extends State<AudioAttachmentPlayerView> {
             onPressed: widget.onRetryRecognition,
           );
 
-    return AttachmentTextEditorCard(
-      fieldKeyPrefix: 'attachment_text_full',
-      label: context.t.attachments.content.fullText,
-      showLabel: false,
+    return AudioTranscriptKnowledgeContentPane(
+      attachment: widget.attachment,
       text: fullText,
-      markdown: true,
       emptyText: attachmentDetailEmptyTextLabel(context),
       extraAction: retryAction,
       onSave: widget.onSaveFull,

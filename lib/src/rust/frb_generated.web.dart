@@ -91,6 +91,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   PlatformInt64 dco_decode_box_autoadd_i_64(dynamic raw);
 
   @protected
+  KnowledgeAnchorSet dco_decode_box_autoadd_knowledge_anchor_set(dynamic raw);
+
+  @protected
   KnowledgeUnitKind dco_decode_box_autoadd_knowledge_unit_kind(dynamic raw);
 
   @protected
@@ -151,7 +154,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   KnowledgeOriginType dco_decode_knowledge_origin_type(dynamic raw);
 
   @protected
+  KnowledgeRetrievalLayer dco_decode_knowledge_retrieval_layer(dynamic raw);
+
+  @protected
   KnowledgeRole dco_decode_knowledge_role(dynamic raw);
+
+  @protected
+  KnowledgeSearchResult dco_decode_knowledge_search_result(dynamic raw);
 
   @protected
   KnowledgeSourceKind dco_decode_knowledge_source_kind(dynamic raw);
@@ -164,6 +173,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   KnowledgeVersionSet dco_decode_knowledge_version_set(dynamic raw);
+
+  @protected
+  KnowledgeViewerDocument dco_decode_knowledge_viewer_document(dynamic raw);
+
+  @protected
+  KnowledgeViewerPage dco_decode_knowledge_viewer_page(dynamic raw);
 
   @protected
   List<String> dco_decode_list_String(dynamic raw);
@@ -197,6 +212,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   List<ExternalImportBatchSummary>
       dco_decode_list_external_import_batch_summary(dynamic raw);
+
+  @protected
+  List<KnowledgeSearchResult> dco_decode_list_knowledge_search_result(
+      dynamic raw);
 
   @protected
   List<KnowledgeUnit> dco_decode_list_knowledge_unit(dynamic raw);
@@ -387,6 +406,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   PlatformInt64 sse_decode_box_autoadd_i_64(SseDeserializer deserializer);
 
   @protected
+  KnowledgeAnchorSet sse_decode_box_autoadd_knowledge_anchor_set(
+      SseDeserializer deserializer);
+
+  @protected
   KnowledgeUnitKind sse_decode_box_autoadd_knowledge_unit_kind(
       SseDeserializer deserializer);
 
@@ -455,7 +478,15 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  KnowledgeRetrievalLayer sse_decode_knowledge_retrieval_layer(
+      SseDeserializer deserializer);
+
+  @protected
   KnowledgeRole sse_decode_knowledge_role(SseDeserializer deserializer);
+
+  @protected
+  KnowledgeSearchResult sse_decode_knowledge_search_result(
+      SseDeserializer deserializer);
 
   @protected
   KnowledgeSourceKind sse_decode_knowledge_source_kind(
@@ -470,6 +501,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   KnowledgeVersionSet sse_decode_knowledge_version_set(
+      SseDeserializer deserializer);
+
+  @protected
+  KnowledgeViewerDocument sse_decode_knowledge_viewer_document(
+      SseDeserializer deserializer);
+
+  @protected
+  KnowledgeViewerPage sse_decode_knowledge_viewer_page(
       SseDeserializer deserializer);
 
   @protected
@@ -508,6 +547,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<ExternalImportBatchSummary>
       sse_decode_list_external_import_batch_summary(
           SseDeserializer deserializer);
+
+  @protected
+  List<KnowledgeSearchResult> sse_decode_list_knowledge_search_result(
+      SseDeserializer deserializer);
 
   @protected
   List<KnowledgeUnit> sse_decode_list_knowledge_unit(
@@ -718,6 +761,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       PlatformInt64 self, SseSerializer serializer);
 
   @protected
+  void sse_encode_box_autoadd_knowledge_anchor_set(
+      KnowledgeAnchorSet self, SseSerializer serializer);
+
+  @protected
   void sse_encode_box_autoadd_knowledge_unit_kind(
       KnowledgeUnitKind self, SseSerializer serializer);
 
@@ -788,7 +835,15 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       KnowledgeOriginType self, SseSerializer serializer);
 
   @protected
+  void sse_encode_knowledge_retrieval_layer(
+      KnowledgeRetrievalLayer self, SseSerializer serializer);
+
+  @protected
   void sse_encode_knowledge_role(KnowledgeRole self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_knowledge_search_result(
+      KnowledgeSearchResult self, SseSerializer serializer);
 
   @protected
   void sse_encode_knowledge_source_kind(
@@ -804,6 +859,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_knowledge_version_set(
       KnowledgeVersionSet self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_knowledge_viewer_document(
+      KnowledgeViewerDocument self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_knowledge_viewer_page(
+      KnowledgeViewerPage self, SseSerializer serializer);
 
   @protected
   void sse_encode_list_String(List<String> self, SseSerializer serializer);
@@ -842,6 +905,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_list_external_import_batch_summary(
       List<ExternalImportBatchSummary> self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_knowledge_search_result(
+      List<KnowledgeSearchResult> self, SseSerializer serializer);
 
   @protected
   void sse_encode_list_knowledge_unit(

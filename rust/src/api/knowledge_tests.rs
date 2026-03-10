@@ -99,3 +99,96 @@ END;
         .as_deref()
         .is_some_and(|value| value.contains("utf-8")));
 }
+
+#[test]
+fn knowledge_search_returns_anchor_rich_hits_for_message_and_attachment_sources() {
+    let fixture = crate::knowledge::retrieval::test_support::seeded_fixture();
+    let app_dir = fixture.app_dir.to_string_lossy().into_owned();
+
+    let orchard_hits = crate::api::knowledge::db_search_knowledge(
+        app_dir.clone(),
+        fixture.key.to_vec(),
+        "orchard planning".to_string(),
+        Some(fixture.conversation_id.clone()),
+        None,
+        8,
+    )
+    .expect("orchard hits");
+    assert!(orchard_hits
+        .iter()
+        .any(|hit| hit.anchors.message_id.is_some()));
+
+    let attachment_hits = crate::api::knowledge::db_search_knowledge(
+        app_dir,
+        fixture.key.to_vec(),
+        "roadmap-q1".to_string(),
+        None,
+        None,
+        8,
+    )
+    .expect("attachment hits");
+    assert!(attachment_hits
+        .iter()
+        .any(|hit| hit.anchors.attachment_sha256.is_some()));
+}
+
+#[test]
+fn knowledge_viewer_api_loads_document_summary_and_paged_units() {
+    let fixture = crate::knowledge::retrieval::test_support::seeded_fixture();
+    let app_dir = fixture.app_dir.to_string_lossy().into_owned();
+
+    let document = crate::api::knowledge::db_get_knowledge_document(
+        app_dir.clone(),
+        fixture.key.to_vec(),
+        fixture.transcript_document_id.clone(),
+    )
+    .expect("document view");
+    assert_eq!(
+        document.document.document_id,
+        fixture.transcript_document_id
+    );
+    assert!(document.total_units > 0);
+    assert!(document.chunk_count > 0);
+
+    let page = crate::api::knowledge::db_list_knowledge_viewer_units(
+        app_dir,
+        fixture.key.to_vec(),
+        fixture.transcript_document_id,
+        Some(crate::knowledge::KnowledgeUnitKind::Chunk),
+        1,
+        0,
+    )
+    .expect("viewer page");
+    assert_eq!(page.units.len(), 1);
+    assert!(page.total >= 1);
+}
+
+#[test]
+fn knowledge_viewer_api_reads_units_around_anchor_and_search_hits() {
+    let fixture = crate::knowledge::retrieval::test_support::seeded_fixture();
+    let app_dir = fixture.app_dir.to_string_lossy().into_owned();
+
+    let hits = crate::api::knowledge::db_search_knowledge_document_units(
+        app_dir.clone(),
+        fixture.key.to_vec(),
+        fixture.transcript_document_id.clone(),
+        "freeze-signal".to_string(),
+        3,
+    )
+    .expect("document search hits");
+    let first_hit = hits.first().expect("first hit");
+    assert!(first_hit.unit_id.is_some());
+
+    let around = crate::api::knowledge::db_list_knowledge_units_around_anchor(
+        app_dir,
+        fixture.key.to_vec(),
+        fixture.transcript_document_id,
+        first_hit.anchors.clone(),
+        1,
+        1,
+    )
+    .expect("around anchor");
+    assert!(around
+        .iter()
+        .any(|unit| Some(unit.unit_id.as_str()) == first_hit.unit_id.as_deref()));
+}

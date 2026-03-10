@@ -437,6 +437,18 @@ extension _SettingsPageBuild on _SettingsPageState {
                 );
               },
             ),
+            ListTile(
+              key: const ValueKey('settings_debug_knowledge_index'),
+              title: Text(context.t.settings.knowledgeIndex.title),
+              subtitle: Text(context.t.settings.knowledgeIndex.subtitle),
+              onTap: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => const KnowledgeIndexDebugPage(),
+                  ),
+                );
+              },
+            ),
           ]),
         ],
       ],

@@ -4,9 +4,13 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 
 import '../../core/backend/app_backend.dart';
+import '../../core/backend/knowledge_backend.dart';
+import '../../core/backend/knowledge_search_models.dart';
+import '../../core/backend/knowledge_viewer_backend.dart';
 import '../../core/session/session_scope.dart';
 import '../../i18n/strings.g.dart';
-import '../../src/rust/db.dart';
+import '../attachments/attachment_viewer_page.dart';
+import '../chat/message_viewer_page.dart';
 
 class SemanticSearchDebugPage extends StatefulWidget {
   const SemanticSearchDebugPage({super.key});
@@ -26,7 +30,7 @@ class _SemanticSearchDebugPageState extends State<SemanticSearchDebugPage> {
   List<String>? _embeddingModels;
   String? _activeEmbeddingModel;
   String? _selectedEmbeddingModel;
-  List<SimilarMessage>? _results;
+  List<KnowledgeSearchResult>? _results;
 
   @override
   void initState() {
@@ -93,6 +97,24 @@ class _SemanticSearchDebugPageState extends State<SemanticSearchDebugPage> {
     }
   }
 
+  KnowledgeBackend _requireKnowledgeBackend() {
+    final backend = AppBackendScope.of(context);
+    final knowledgeBackend = maybeKnowledgeBackendFor(backend);
+    if (knowledgeBackend == null) {
+      throw StateError('Knowledge index backend unavailable');
+    }
+    return knowledgeBackend;
+  }
+
+  KnowledgeViewerBackend _requireKnowledgeViewerBackend() {
+    final backend = AppBackendScope.of(context);
+    final viewerBackend = maybeKnowledgeViewerBackendFor(backend);
+    if (viewerBackend == null) {
+      throw StateError('Knowledge search backend unavailable');
+    }
+    return viewerBackend;
+  }
+
   Future<void> _processPending() async {
     if (_busy) return;
     setState(() {
@@ -101,10 +123,10 @@ class _SemanticSearchDebugPageState extends State<SemanticSearchDebugPage> {
     });
 
     try {
-      final backend = AppBackendScope.of(context);
       final key = SessionScope.of(context).sessionKey;
-      final processed =
-          await backend.processPendingMessageEmbeddings(key, limit: 1024);
+      final knowledgeBackend = _requireKnowledgeBackend();
+      final processed = await knowledgeBackend
+          .processPendingKnowledgeIndexJobs(key, limit: 256);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -130,14 +152,16 @@ class _SemanticSearchDebugPageState extends State<SemanticSearchDebugPage> {
     });
 
     try {
-      final backend = AppBackendScope.of(context);
       final key = SessionScope.of(context).sessionKey;
-      final rebuilt =
-          await backend.rebuildMessageEmbeddings(key, batchLimit: 1024);
+      final knowledgeBackend = _requireKnowledgeBackend();
+      await knowledgeBackend.requestKnowledgeRebuild(key);
+      final processed = await knowledgeBackend
+          .processPendingKnowledgeIndexJobs(key, limit: 256);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(context.t.semanticSearchDebug.rebuilt(count: rebuilt)),
+          content:
+              Text(context.t.semanticSearchDebug.rebuilt(count: processed)),
           duration: const Duration(seconds: 3),
         ),
       );
@@ -159,11 +183,15 @@ class _SemanticSearchDebugPageState extends State<SemanticSearchDebugPage> {
     });
 
     try {
-      final backend = AppBackendScope.of(context);
       final key = SessionScope.of(context).sessionKey;
-      await _prepareEmbeddingsForSearch(backend, key);
-      final results =
-          await backend.searchSimilarMessages(key, query, topK: _topK);
+      final knowledgeBackend = _requireKnowledgeBackend();
+      final viewerBackend = _requireKnowledgeViewerBackend();
+      await _prepareKnowledgeSearch(knowledgeBackend, key);
+      final results = await viewerBackend.searchKnowledge(
+        key,
+        query: query,
+        limit: _topK,
+      );
       if (!mounted) return;
       setState(() => _results = results);
     } catch (e) {
@@ -173,8 +201,8 @@ class _SemanticSearchDebugPageState extends State<SemanticSearchDebugPage> {
     }
   }
 
-  Future<void> _prepareEmbeddingsForSearch(
-    AppBackend backend,
+  Future<void> _prepareKnowledgeSearch(
+    KnowledgeBackend backend,
     Uint8List sessionKey,
   ) async {
     final t = context.t;
@@ -231,13 +259,12 @@ class _SemanticSearchDebugPageState extends State<SemanticSearchDebugPage> {
     try {
       var totalProcessed = 0;
       while (true) {
-        final processed = await backend.processPendingMessageEmbeddings(
-          sessionKey,
-          limit: 256,
-        );
+        final processed = await backend
+            .processPendingKnowledgeIndexJobs(sessionKey, limit: 64);
         if (processed <= 0) break;
         totalProcessed += processed;
-        status.value = t.semanticSearch.indexingMessages(count: totalProcessed);
+        status.value =
+            '${t.settings.knowledgeIndex.status.running} ($totalProcessed)';
       }
     } finally {
       showTimer.cancel();
@@ -248,6 +275,91 @@ class _SemanticSearchDebugPageState extends State<SemanticSearchDebugPage> {
       status.dispose();
       elapsedSeconds.dispose();
     }
+  }
+
+  String _primaryText(KnowledgeSearchResult result) {
+    final title = result.title?.trim();
+    if (title != null && title.isNotEmpty) return title;
+    final summary = result.summary?.trim();
+    if (summary != null && summary.isNotEmpty) return summary;
+    final snippet = result.snippet.trim();
+    if (snippet.isNotEmpty) return snippet;
+    return result.documentId;
+  }
+
+  String _anchorSummary(KnowledgeAnchorSet anchors) {
+    final parts = <String>[];
+    if ((anchors.messageId ?? '').trim().isNotEmpty) {
+      parts.add('message_id=${anchors.messageId}');
+    }
+    if ((anchors.conversationId ?? '').trim().isNotEmpty) {
+      parts.add('conversation_id=${anchors.conversationId}');
+    }
+    if ((anchors.attachmentSha256 ?? '').trim().isNotEmpty) {
+      parts.add('attachment_sha256=${anchors.attachmentSha256}');
+    }
+    if (anchors.pageIndex != null) parts.add('page_index=${anchors.pageIndex}');
+    if (anchors.frameIndex != null) {
+      parts.add('frame_index=${anchors.frameIndex}');
+    }
+    if (anchors.startMs != null) parts.add('start_ms=${anchors.startMs}');
+    if (anchors.endMs != null) parts.add('end_ms=${anchors.endMs}');
+    if ((anchors.speaker ?? '').trim().isNotEmpty) {
+      parts.add('speaker=${anchors.speaker}');
+    }
+    if ((anchors.sectionLabel ?? '').trim().isNotEmpty) {
+      parts.add('section_label=${anchors.sectionLabel}');
+    }
+    if ((anchors.sourceFilename ?? '').trim().isNotEmpty) {
+      parts.add('source_filename=${anchors.sourceFilename}');
+    }
+    return parts.join(' • ');
+  }
+
+  String _metaText(KnowledgeSearchResult result) {
+    final parts = <String>[
+      'score=${result.score.toStringAsFixed(4)}',
+      'layer=${result.layer.name}',
+      'role=${result.role.name}',
+      'source=${result.sourceKind.name}',
+    ];
+    final anchorSummary = _anchorSummary(result.anchors);
+    if (anchorSummary.isNotEmpty) parts.add(anchorSummary);
+    return parts.join(' • ');
+  }
+
+  String _resultKey(KnowledgeSearchResult result) =>
+      result.unitId ?? result.documentId;
+
+  Future<void> _openResult(KnowledgeSearchResult result) async {
+    final attachmentSha = result.anchors.attachmentSha256?.trim() ?? '';
+    if (attachmentSha.isNotEmpty) {
+      await AttachmentViewerPage.openBySha(
+        context,
+        attachmentSha256: attachmentSha,
+      );
+      return;
+    }
+
+    final backend = AppBackendScope.of(context);
+    final key = SessionScope.of(context).sessionKey;
+    final messageId = (result.anchors.messageId?.trim().isNotEmpty ?? false)
+        ? result.anchors.messageId!.trim()
+        : result.documentId.startsWith('message:')
+            ? result.documentId.substring('message:'.length)
+            : '';
+    if (messageId.isEmpty) return;
+
+    final message = await backend.getMessageById(key, messageId);
+    if (!mounted || message == null) return;
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => MessageViewerPage(
+          content: message.content,
+          messageId: message.id,
+        ),
+      ),
+    );
   }
 
   @override
@@ -367,26 +479,46 @@ class _SemanticSearchDebugPageState extends State<SemanticSearchDebugPage> {
             child: results == null
                 ? Center(
                     child: Text(
-                        context.t.semanticSearchDebug.runSearchToSeeResults),
+                      context.t.semanticSearchDebug.runSearchToSeeResults,
+                    ),
                   )
                 : results.isEmpty
                     ? Center(
-                        child: Text(context.t.semanticSearchDebug.noResults))
+                        child: Text(context.t.semanticSearchDebug.noResults),
+                      )
                     : ListView.separated(
                         padding: const EdgeInsets.symmetric(vertical: 12),
                         itemCount: results.length,
                         separatorBuilder: (_, __) => const Divider(height: 1),
                         itemBuilder: (context, index) {
                           final item = results[index];
+                          final primaryText = _primaryText(item);
+                          final snippet = item.snippet.trim();
                           return ListTile(
-                            title: Text(item.message.content),
-                            subtitle: Text(
-                              context.t.semanticSearchDebug.resultSubtitle(
-                                distance: item.distance.toStringAsFixed(4),
-                                role: item.message.role,
-                                conversationId: item.message.conversationId,
-                              ),
+                            key: ValueKey(
+                              'knowledge_search_result_${_resultKey(item)}',
                             ),
+                            title: Text(primaryText),
+                            subtitle: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                if (snippet.isNotEmpty &&
+                                    snippet != primaryText)
+                                  Text(
+                                    snippet,
+                                    maxLines: 3,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                Text(
+                                  _metaText(item),
+                                  maxLines: 3,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ],
+                            ),
+                            isThreeLine: true,
+                            onTap: () => _openResult(item),
                           );
                         },
                       ),
