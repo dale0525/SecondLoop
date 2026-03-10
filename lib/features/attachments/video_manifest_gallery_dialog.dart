@@ -292,6 +292,8 @@ class _VideoManifestGalleryDialogState
     return FutureBuilder<PreparedVideoProxyPlayback>(
       future: playbackFuture,
       builder: (context, playbackSnapshot) {
+        final playbackLoading =
+            playbackSnapshot.connectionState != ConnectionState.done;
         return FutureBuilder<Uint8List?>(
           future: posterFuture,
           builder: (context, posterSnapshot) {
@@ -305,8 +307,21 @@ class _VideoManifestGalleryDialogState
               );
             }
             return _buildGalleryFrame(
-              _buildProxyFallback(
-                posterBytes: posterSnapshot.data,
+              Stack(
+                fit: StackFit.expand,
+                children: [
+                  _buildProxyFallback(
+                    posterBytes: posterSnapshot.data,
+                  ),
+                  if (playbackLoading && !playbackSnapshot.hasError)
+                    const Center(
+                      child: SizedBox(
+                        width: 28,
+                        height: 28,
+                        child: CircularProgressIndicator(strokeWidth: 2.5),
+                      ),
+                    ),
+                ],
               ),
             );
           },

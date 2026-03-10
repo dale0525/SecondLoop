@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../core/backend/app_backend.dart';
@@ -308,10 +309,35 @@ class _VaultUsageCardState extends State<VaultUsageCard> {
   }
 
   Future<Attachment?> _resolveLocalAttachmentBySha(String sha256) async {
-    final cached = _localAttachmentBySha[sha256];
+    final normalizedSha = sha256.trim();
+    if (normalizedSha.isEmpty) return null;
+
+    try {
+      final backend = AppBackendScope.of(context);
+      final attachment = await backend.readAttachmentBySha256(normalizedSha);
+      if (attachment != null) return attachment;
+    } on UnimplementedError {
+      // Fall back to the message-linked attachment index below.
+    } catch (error, stackTrace) {
+      FlutterError.reportError(
+        FlutterErrorDetails(
+          exception: error,
+          stack: stackTrace,
+          library: 'secondloop.vault_usage',
+          context: ErrorDescription('while reading local attachment by sha256'),
+          informationCollector: () sync* {
+            yield DiagnosticsProperty<String>('sha256', normalizedSha);
+          },
+        ),
+      );
+    }
+
+    if (!mounted) return null;
+
+    final cached = _localAttachmentBySha[normalizedSha];
     if (cached != null) return cached;
     await _rebuildAttachmentReferenceIndex();
-    return _localAttachmentBySha[sha256];
+    return _localAttachmentBySha[normalizedSha];
   }
 
   Future<String?> _resolveMessageIdByAttachmentSha(String sha256) async {

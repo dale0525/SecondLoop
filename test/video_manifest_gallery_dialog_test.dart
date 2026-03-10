@@ -2,7 +2,10 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:secondloop/features/attachments/video_attachment_inline_player.dart';
+import 'package:secondloop/features/attachments/video_attachment_player_page.dart';
 import 'package:secondloop/features/attachments/video_manifest_gallery_dialog.dart';
+import 'package:secondloop/features/attachments/video_proxy_open_helper.dart';
 
 void main() {
   final onePixelPng = base64Decode(
@@ -79,5 +82,64 @@ void main() {
         .tap(find.byKey(const ValueKey('video_manifest_gallery_next_button')));
     await tester.pumpAndSettle();
     expect(currentIndexLabel(tester), '1/3');
+  });
+
+  testWidgets(
+      'VideoManifestGalleryDialog shows a spinner while proxy playback is preparing',
+      (tester) async {
+    final delayedPlayback = Future<PreparedVideoProxyPlayback>.delayed(
+      const Duration(seconds: 1),
+      () => const PreparedVideoProxyPlayback(
+        segmentFiles: <VideoAttachmentPlayerSegment>[
+          VideoAttachmentPlayerSegment(
+            filePath: '/tmp/secondloop_missing_inline_video_0.mp4',
+            sha256: 'sha-video-0',
+            mimeType: 'video/mp4',
+          ),
+        ],
+        initialSegmentIndex: 0,
+      ),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Builder(
+            builder: (context) {
+              return FilledButton(
+                key: const ValueKey('open_gallery_button'),
+                onPressed: () {
+                  showVideoManifestGalleryDialog(
+                    context,
+                    entries: <VideoManifestGalleryEntry>[
+                      VideoManifestGalleryEntry.proxy(
+                        playbackFuture: delayedPlayback,
+                        posterSha256: null,
+                      ),
+                    ],
+                    initialIndex: 0,
+                    loadBytes: (_) async => onePixelPng,
+                  );
+                },
+                child: const Text('Open'),
+              );
+            },
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.byKey(const ValueKey('open_gallery_button')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+    expect(find.byType(VideoAttachmentInlinePlayer), findsNothing);
+
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pump();
+
+    expect(find.byType(CircularProgressIndicator), findsNothing);
+    expect(find.byType(VideoAttachmentInlinePlayer), findsOneWidget);
   });
 }
