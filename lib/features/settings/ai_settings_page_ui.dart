@@ -436,7 +436,7 @@ extension _AiSettingsPageUiExtension on _AiSettingsPageState {
           if (AppBackendScope.maybeOf(context) != null &&
               SessionScope.maybeOf(context) != null) ...[
             const SizedBox(height: 12),
-            const KnowledgeIndexSettingsCard(),
+            const KnowledgeIndexStatusCard(),
           ],
           const SizedBox(height: 12),
           _buildSectionCard(

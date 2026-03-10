@@ -56,6 +56,22 @@ pub enum KnowledgeUnitKind {
     Chunk,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum KnowledgeQueryScope {
+    All,
+    Conversation,
+    Document,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum KnowledgeRetrievalLayer {
+    Document,
+    Section,
+    Chunk,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct KnowledgeVersionSet {
     pub schema_version: i64,
@@ -131,4 +147,53 @@ pub struct KnowledgeIndexStatus {
     pub last_indexed_model_name: Option<String>,
     pub last_indexed_dim: Option<i64>,
     pub versions: KnowledgeVersionSet,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct KnowledgeSearchResult {
+    pub document_id: String,
+    pub unit_id: Option<String>,
+    pub unit_kind: Option<KnowledgeUnitKind>,
+    pub layer: KnowledgeRetrievalLayer,
+    pub source_kind: KnowledgeSourceKind,
+    pub role: KnowledgeRole,
+    pub title: Option<String>,
+    pub summary: Option<String>,
+    pub snippet: String,
+    pub score: f64,
+    pub semantic_score: f64,
+    pub lexical_score: f64,
+    pub anchors: KnowledgeAnchorSet,
+    pub created_at_ms: i64,
+    pub updated_at_ms: i64,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct KnowledgeContextBlock {
+    pub document_id: String,
+    pub unit_id: Option<String>,
+    pub unit_kind: Option<KnowledgeUnitKind>,
+    pub source_kind: KnowledgeSourceKind,
+    pub role: KnowledgeRole,
+    pub anchors: KnowledgeAnchorSet,
+    pub score: f64,
+    pub rendered_text: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct KnowledgeViewerDocument {
+    pub document: ContentKnowledgeDocument,
+    pub total_units: i64,
+    pub section_count: i64,
+    pub chunk_count: i64,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct KnowledgeViewerPage {
+    pub document_id: String,
+    pub unit_kind: Option<KnowledgeUnitKind>,
+    pub offset: i64,
+    pub limit: i64,
+    pub total: i64,
+    pub units: Vec<KnowledgeUnit>,
 }

@@ -215,6 +215,13 @@ enum KnowledgeOriginType {
   ;
 }
 
+enum KnowledgeRetrievalLayer {
+  document,
+  section,
+  chunk,
+  ;
+}
+
 enum KnowledgeRole {
   title,
   summary,
@@ -223,6 +230,81 @@ enum KnowledgeRole {
   caption,
   evidence,
   ;
+}
+
+class KnowledgeSearchResult {
+  final String documentId;
+  final String? unitId;
+  final KnowledgeUnitKind? unitKind;
+  final KnowledgeRetrievalLayer layer;
+  final KnowledgeSourceKind sourceKind;
+  final KnowledgeRole role;
+  final String? title;
+  final String? summary;
+  final String snippet;
+  final double score;
+  final double semanticScore;
+  final double lexicalScore;
+  final KnowledgeAnchorSet anchors;
+  final PlatformInt64 createdAtMs;
+  final PlatformInt64 updatedAtMs;
+
+  const KnowledgeSearchResult({
+    required this.documentId,
+    this.unitId,
+    this.unitKind,
+    required this.layer,
+    required this.sourceKind,
+    required this.role,
+    this.title,
+    this.summary,
+    required this.snippet,
+    required this.score,
+    required this.semanticScore,
+    required this.lexicalScore,
+    required this.anchors,
+    required this.createdAtMs,
+    required this.updatedAtMs,
+  });
+
+  @override
+  int get hashCode =>
+      documentId.hashCode ^
+      unitId.hashCode ^
+      unitKind.hashCode ^
+      layer.hashCode ^
+      sourceKind.hashCode ^
+      role.hashCode ^
+      title.hashCode ^
+      summary.hashCode ^
+      snippet.hashCode ^
+      score.hashCode ^
+      semanticScore.hashCode ^
+      lexicalScore.hashCode ^
+      anchors.hashCode ^
+      createdAtMs.hashCode ^
+      updatedAtMs.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is KnowledgeSearchResult &&
+          runtimeType == other.runtimeType &&
+          documentId == other.documentId &&
+          unitId == other.unitId &&
+          unitKind == other.unitKind &&
+          layer == other.layer &&
+          sourceKind == other.sourceKind &&
+          role == other.role &&
+          title == other.title &&
+          summary == other.summary &&
+          snippet == other.snippet &&
+          score == other.score &&
+          semanticScore == other.semanticScore &&
+          lexicalScore == other.lexicalScore &&
+          anchors == other.anchors &&
+          createdAtMs == other.createdAtMs &&
+          updatedAtMs == other.updatedAtMs;
 }
 
 enum KnowledgeSourceKind {
@@ -353,4 +435,74 @@ class KnowledgeVersionSet {
           segmentationVersion == other.segmentationVersion &&
           embeddingPolicyVersion == other.embeddingPolicyVersion &&
           retrievalPolicyVersion == other.retrievalPolicyVersion;
+}
+
+class KnowledgeViewerDocument {
+  final ContentKnowledgeDocument document;
+  final PlatformInt64 totalUnits;
+  final PlatformInt64 sectionCount;
+  final PlatformInt64 chunkCount;
+
+  const KnowledgeViewerDocument({
+    required this.document,
+    required this.totalUnits,
+    required this.sectionCount,
+    required this.chunkCount,
+  });
+
+  @override
+  int get hashCode =>
+      document.hashCode ^
+      totalUnits.hashCode ^
+      sectionCount.hashCode ^
+      chunkCount.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is KnowledgeViewerDocument &&
+          runtimeType == other.runtimeType &&
+          document == other.document &&
+          totalUnits == other.totalUnits &&
+          sectionCount == other.sectionCount &&
+          chunkCount == other.chunkCount;
+}
+
+class KnowledgeViewerPage {
+  final String documentId;
+  final KnowledgeUnitKind? unitKind;
+  final PlatformInt64 offset;
+  final PlatformInt64 limit;
+  final PlatformInt64 total;
+  final List<KnowledgeUnit> units;
+
+  const KnowledgeViewerPage({
+    required this.documentId,
+    this.unitKind,
+    required this.offset,
+    required this.limit,
+    required this.total,
+    required this.units,
+  });
+
+  @override
+  int get hashCode =>
+      documentId.hashCode ^
+      unitKind.hashCode ^
+      offset.hashCode ^
+      limit.hashCode ^
+      total.hashCode ^
+      units.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is KnowledgeViewerPage &&
+          runtimeType == other.runtimeType &&
+          documentId == other.documentId &&
+          unitKind == other.unitKind &&
+          offset == other.offset &&
+          limit == other.limit &&
+          total == other.total &&
+          units == other.units;
 }

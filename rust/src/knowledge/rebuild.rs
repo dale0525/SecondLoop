@@ -1,9 +1,11 @@
+use std::collections::VecDeque;
+
 use anyhow::Result;
 use rusqlite::{params, Connection, OptionalExtension};
 
 use crate::knowledge::{
-    ContentKnowledgeDocument, KnowledgeIndexStatus, KnowledgeUnit, KnowledgeUnitKind,
-    KnowledgeVersionSet,
+    ContentKnowledgeDocument, KnowledgeAnchorSet, KnowledgeIndexStatus, KnowledgeUnit,
+    KnowledgeUnitKind, KnowledgeVersionSet, KnowledgeViewerDocument, KnowledgeViewerPage,
 };
 
 fn decode_document_row(
@@ -184,6 +186,235 @@ pub fn list_knowledge_units(
         };
         out.push(unit);
     }
+    Ok(out)
+}
+
+fn count_knowledge_units(
+    conn: &Connection,
+    document_id: &str,
+    unit_kind: Option<KnowledgeUnitKind>,
+) -> Result<i64> {
+    let kind_filter = unit_kind
+        .map(|value| -> Result<String> {
+            Ok(serde_json::to_string(&value)?.trim_matches('"').to_string())
+        })
+        .transpose()?;
+    Ok(conn.query_row(
+        r#"SELECT COUNT(*)
+           FROM knowledge_units
+           WHERE document_id = ?1
+             AND (?2 IS NULL OR unit_kind = ?2)"#,
+        params![document_id, kind_filter],
+        |row| row.get(0),
+    )?)
+}
+
+pub fn get_knowledge_document(
+    conn: &Connection,
+    key: &[u8; 32],
+    document_id: &str,
+) -> Result<Option<ContentKnowledgeDocument>> {
+    let mut stmt = conn.prepare(
+        r#"SELECT document_id,
+                  origin_type,
+                  source_kind,
+                  role,
+                  language,
+                  quality_score,
+                  title,
+                  summary,
+                  anchor_json,
+                  raw_text,
+                  normalized_text,
+                  created_at_ms,
+                  updated_at_ms,
+                  schema_version,
+                  normalization_version,
+                  segmentation_version,
+                  embedding_policy_version,
+                  retrieval_policy_version
+           FROM knowledge_documents
+           WHERE document_id = ?1"#,
+    )?;
+    let mut rows = stmt.query(params![document_id])?;
+    let Some(row) = rows.next()? else {
+        return Ok(None);
+    };
+    Ok(Some(decode_document_row(conn, key, row)?))
+}
+
+pub fn read_knowledge_viewer_document(
+    conn: &Connection,
+    key: &[u8; 32],
+    document_id: &str,
+) -> Result<KnowledgeViewerDocument> {
+    let document = get_knowledge_document(conn, key, document_id)?
+        .ok_or_else(|| anyhow::anyhow!("knowledge document not found"))?;
+    Ok(KnowledgeViewerDocument {
+        document,
+        total_units: count_knowledge_units(conn, document_id, None)?,
+        section_count: count_knowledge_units(conn, document_id, Some(KnowledgeUnitKind::Section))?,
+        chunk_count: count_knowledge_units(conn, document_id, Some(KnowledgeUnitKind::Chunk))?,
+    })
+}
+
+pub fn list_knowledge_viewer_units(
+    conn: &Connection,
+    key: &[u8; 32],
+    document_id: &str,
+    unit_kind: Option<KnowledgeUnitKind>,
+    limit: usize,
+    offset: usize,
+) -> Result<KnowledgeViewerPage> {
+    let total = count_knowledge_units(conn, document_id, unit_kind)?;
+    let units = list_knowledge_units(conn, key, document_id, unit_kind, limit, offset)?;
+    Ok(KnowledgeViewerPage {
+        document_id: document_id.to_string(),
+        unit_kind,
+        offset: offset as i64,
+        limit: limit as i64,
+        total,
+        units,
+    })
+}
+
+fn anchor_match_score(query: &KnowledgeAnchorSet, candidate: &KnowledgeAnchorSet) -> i64 {
+    let mut score = 0i64;
+    if let Some(message_id) = query.message_id.as_deref() {
+        if candidate.message_id.as_deref() == Some(message_id) {
+            score += 5;
+        }
+    }
+    if let Some(conversation_id) = query.conversation_id.as_deref() {
+        if candidate.conversation_id.as_deref() == Some(conversation_id) {
+            score += 3;
+        }
+    }
+    if let Some(attachment_sha256) = query.attachment_sha256.as_deref() {
+        if candidate.attachment_sha256.as_deref() == Some(attachment_sha256) {
+            score += 5;
+        }
+    }
+    if let Some(page_index) = query.page_index {
+        if candidate.page_index == Some(page_index) {
+            score += 4;
+        }
+    }
+    if let Some(frame_index) = query.frame_index {
+        if candidate.frame_index == Some(frame_index) {
+            score += 4;
+        }
+    }
+    if let Some(start_ms) = query.start_ms {
+        let candidate_start = candidate.start_ms.unwrap_or(i64::MIN);
+        let candidate_end = candidate.end_ms.unwrap_or(candidate_start);
+        if start_ms >= candidate_start && start_ms <= candidate_end {
+            score += 4;
+        }
+    }
+    if let Some(end_ms) = query.end_ms {
+        let candidate_start = candidate.start_ms.unwrap_or(i64::MIN);
+        let candidate_end = candidate.end_ms.unwrap_or(candidate_start);
+        if end_ms >= candidate_start && end_ms <= candidate_end {
+            score += 4;
+        }
+    }
+    if let Some(speaker) = query.speaker.as_deref() {
+        if candidate.speaker.as_deref() == Some(speaker) {
+            score += 4;
+        }
+    }
+    if let Some(section_label) = query.section_label.as_deref() {
+        if candidate.section_label.as_deref() == Some(section_label) {
+            score += 4;
+        }
+    }
+    if let Some(source_filename) = query.source_filename.as_deref() {
+        if candidate.source_filename.as_deref() == Some(source_filename) {
+            score += 2;
+        }
+    }
+    score
+}
+
+fn unit_kind_rank(unit_kind: KnowledgeUnitKind) -> i64 {
+    match unit_kind {
+        KnowledgeUnitKind::Chunk => 3,
+        KnowledgeUnitKind::Section => 2,
+        KnowledgeUnitKind::Segment => 1,
+    }
+}
+
+pub fn list_knowledge_units_around_anchor(
+    conn: &Connection,
+    key: &[u8; 32],
+    document_id: &str,
+    anchor: &KnowledgeAnchorSet,
+    before: usize,
+    after: usize,
+) -> Result<Vec<KnowledgeUnit>> {
+    const PAGE_SIZE: usize = 256;
+
+    let mut recent = VecDeque::<KnowledgeUnit>::with_capacity(before);
+    let mut best_before = Vec::<KnowledgeUnit>::new();
+    let mut best_after = Vec::<KnowledgeUnit>::new();
+    let mut best_unit = None::<KnowledgeUnit>;
+    let mut best_score = 0i64;
+    let mut best_kind_rank = 0i64;
+    let mut best_index = 0usize;
+    let mut remaining_after = 0usize;
+
+    let mut offset = 0usize;
+    let mut index = 0usize;
+    loop {
+        let page = list_knowledge_units(conn, key, document_id, None, PAGE_SIZE, offset)?;
+        if page.is_empty() {
+            break;
+        }
+        let count = page.len();
+        for unit in page {
+            let score = anchor_match_score(anchor, &unit.anchors);
+            let kind_rank = unit_kind_rank(unit.unit_kind);
+            let is_better = score > best_score
+                || (score == best_score && kind_rank > best_kind_rank)
+                || (score == best_score && kind_rank == best_kind_rank && index > best_index);
+            if is_better {
+                best_score = score;
+                best_kind_rank = kind_rank;
+                best_index = index;
+                best_unit = Some(unit.clone());
+                best_before = recent.iter().cloned().collect();
+                best_after.clear();
+                remaining_after = after;
+            } else if best_unit.is_some() && remaining_after > 0 && index > best_index {
+                best_after.push(unit.clone());
+                remaining_after = remaining_after.saturating_sub(1);
+            }
+
+            if before > 0 {
+                if recent.len() == before {
+                    recent.pop_front();
+                }
+                recent.push_back(unit);
+            }
+
+            index += 1;
+        }
+        if count < PAGE_SIZE {
+            break;
+        }
+        offset += count;
+    }
+
+    let Some(best_unit) = best_unit else {
+        return Ok(Vec::new());
+    };
+    if best_score <= 0 {
+        return Ok(Vec::new());
+    }
+    let mut out = best_before;
+    out.push(best_unit);
+    out.extend(best_after);
     Ok(out)
 }
 

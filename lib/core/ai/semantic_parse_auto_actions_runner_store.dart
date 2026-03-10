@@ -6,17 +6,23 @@ final class BackendSemanticParseAutoActionsStore
     required AppBackend backend,
     required Uint8List sessionKey,
     TagRepository tagRepository = const TagRepository(),
+    KnowledgeViewerBackend? knowledgeViewerBackend,
   })  : _backend = backend,
         _sessionKey = Uint8List.fromList(sessionKey),
-        _tagRepository = tagRepository;
+        _tagRepository = tagRepository,
+        _knowledgeViewerBackend =
+            knowledgeViewerBackend ?? maybeKnowledgeViewerBackendFor(backend);
 
   final AppBackend _backend;
   final Uint8List _sessionKey;
   final TagRepository _tagRepository;
+  final KnowledgeViewerBackend? _knowledgeViewerBackend;
 
   static const int _kMaxAttachmentSemanticSnippets = 10;
   static const int _kMaxAttachmentSnippetRunes = 320;
   static const int _kMaxSemanticAnalysisRunes = 2400;
+  static const int _kKnowledgeSearchHitsPerDocument = 2;
+  static const int _kKnowledgeUnitsPerDocument = 2;
   static const String _kUrlAttachmentMimeType =
       'application/x.secondloop.url+json';
   static const List<String> _kAttachmentSemanticPayloadKeys = <String>[
@@ -64,7 +70,8 @@ final class BackendSemanticParseAutoActionsStore
     final msg = await _backend.getMessageById(_sessionKey, messageId);
     final sourceText = (msg?.content ?? '').trim();
 
-    final attachmentSnippets = await _loadAttachmentSemanticSnippets(messageId);
+    final attachmentSnippets =
+        await _loadAttachmentSemanticSnippets(messageId, sourceText);
     final hasAttachmentSemanticContext = attachmentSnippets.isNotEmpty;
 
     final chunks = <String>[];
@@ -88,7 +95,10 @@ final class BackendSemanticParseAutoActionsStore
     );
   }
 
-  Future<List<String>> _loadAttachmentSemanticSnippets(String messageId) async {
+  Future<List<String>> _loadAttachmentSemanticSnippets(
+    String messageId,
+    String sourceText,
+  ) async {
     if (_backend is! AttachmentsBackend) return const <String>[];
 
     final attachmentsBackend = _backend as AttachmentsBackend;
@@ -117,6 +127,16 @@ final class BackendSemanticParseAutoActionsStore
 
     for (final attachment in attachments) {
       if (snippets.length >= _kMaxAttachmentSemanticSnippets) break;
+
+      final addedKnowledge = await _appendAttachmentKnowledgeSnippets(
+        attachment: attachment,
+        sourceText: sourceText,
+        snippets: snippets,
+        seen: seen,
+      );
+      if (addedKnowledge) {
+        continue;
+      }
 
       final attachmentMime = attachment.mimeType.trim().toLowerCase();
       final isUrlAttachment = attachmentMime == _kUrlAttachmentMimeType;
@@ -159,6 +179,203 @@ final class BackendSemanticParseAutoActionsStore
     }
 
     return snippets;
+  }
+
+  Future<bool> _appendAttachmentKnowledgeSnippets({
+    required Attachment attachment,
+    required String sourceText,
+    required List<String> snippets,
+    required Set<String> seen,
+  }) async {
+    final viewerBackend = _knowledgeViewerBackend;
+    if (viewerBackend == null) return false;
+
+    var addedAny = false;
+    for (final documentId
+        in _candidateAttachmentKnowledgeDocumentIds(attachment)) {
+      if (snippets.length >= _kMaxAttachmentSemanticSnippets) break;
+
+      KnowledgeViewerDocument document;
+      try {
+        document = await viewerBackend.getKnowledgeViewerDocument(
+          _sessionKey,
+          documentId: documentId,
+        );
+      } catch (_) {
+        continue;
+      }
+
+      final addedForDocument = await _appendKnowledgeDocumentSnippets(
+        viewerBackend: viewerBackend,
+        document: document,
+        sourceText: sourceText,
+        snippets: snippets,
+        seen: seen,
+      );
+      addedAny = addedAny || addedForDocument;
+    }
+
+    return addedAny;
+  }
+
+  Future<bool> _appendKnowledgeDocumentSnippets({
+    required KnowledgeViewerBackend viewerBackend,
+    required KnowledgeViewerDocument document,
+    required String sourceText,
+    required List<String> snippets,
+    required Set<String> seen,
+  }) async {
+    var added = false;
+
+    bool addKnowledgeSnippet(
+      String? raw, {
+      required KnowledgeSourceKind sourceKind,
+      required KnowledgeRole role,
+    }) {
+      final normalized = _normalizeSemanticSnippet(raw);
+      if (normalized == null) return false;
+      final formatted = _normalizeSemanticSnippet(
+        '${_knowledgeSnippetLabel(sourceKind, role)}: $normalized',
+      );
+      if (formatted == null || !seen.add(formatted)) return false;
+      snippets.add(formatted);
+      return true;
+    }
+
+    final documentSummary = document.document.summary?.trim();
+    if (documentSummary != null && documentSummary.isNotEmpty) {
+      added = addKnowledgeSnippet(
+            documentSummary,
+            sourceKind: document.document.sourceKind,
+            role: document.document.role,
+          ) ||
+          added;
+    }
+
+    final trimmedSource = sourceText.trim();
+    if (trimmedSource.isNotEmpty &&
+        snippets.length < _kMaxAttachmentSemanticSnippets) {
+      try {
+        final hits = await viewerBackend.searchKnowledgeDocumentUnits(
+          _sessionKey,
+          documentId: document.document.documentId,
+          query: trimmedSource,
+          limit: _kKnowledgeSearchHitsPerDocument,
+        );
+        for (final hit in hits) {
+          if (snippets.length >= _kMaxAttachmentSemanticSnippets) break;
+          added = addKnowledgeSnippet(
+                _knowledgeSearchResultText(hit),
+                sourceKind: hit.sourceKind,
+                role: hit.role,
+              ) ||
+              added;
+        }
+      } catch (_) {
+        // Ignore and fall back to ordered units.
+      }
+    }
+
+    if (snippets.length >= _kMaxAttachmentSemanticSnippets) {
+      return added;
+    }
+
+    try {
+      final page = await viewerBackend.listKnowledgeViewerUnits(
+        _sessionKey,
+        documentId: document.document.documentId,
+        unitKind: KnowledgeUnitKind.chunk,
+        limit: _kKnowledgeUnitsPerDocument,
+        offset: 0,
+      );
+      for (final unit in page.units) {
+        if (snippets.length >= _kMaxAttachmentSemanticSnippets) break;
+        added = addKnowledgeSnippet(
+              unit.rawText,
+              sourceKind: unit.sourceKind,
+              role: unit.role,
+            ) ||
+            added;
+      }
+    } catch (_) {
+      // Ignore and keep any summary / search snippets we already have.
+    }
+
+    final documentTitle = document.document.title?.trim();
+    if (!added && documentTitle != null && documentTitle.isNotEmpty) {
+      added = addKnowledgeSnippet(
+            documentTitle,
+            sourceKind: document.document.sourceKind,
+            role: KnowledgeRole.title,
+          ) ||
+          added;
+    }
+
+    return added;
+  }
+
+  List<String> _candidateAttachmentKnowledgeDocumentIds(Attachment attachment) {
+    final sha = attachment.sha256.trim();
+    if (sha.isEmpty) return const <String>[];
+
+    final mime = attachment.mimeType.trim().toLowerCase();
+    final sourceOrder = mime == _kUrlAttachmentMimeType
+        ? const <String>[
+            'readable_text',
+            'extracted_text',
+            'metadata',
+            'image_understanding',
+            'ocr_text',
+            'transcript',
+          ]
+        : const <String>[
+            'transcript',
+            'readable_text',
+            'extracted_text',
+            'ocr_text',
+            'image_understanding',
+            'metadata',
+          ];
+
+    return sourceOrder
+        .map((source) => 'attachment:$sha:$source')
+        .toList(growable: false);
+  }
+
+  static String _knowledgeSearchResultText(KnowledgeSearchResult result) {
+    final snippet = result.snippet.trim();
+    if (snippet.isNotEmpty) return snippet;
+    final summary = result.summary?.trim();
+    if (summary != null && summary.isNotEmpty) return summary;
+    final title = result.title?.trim();
+    if (title != null && title.isNotEmpty) return title;
+    return result.documentId;
+  }
+
+  static String _knowledgeSnippetLabel(
+    KnowledgeSourceKind sourceKind,
+    KnowledgeRole role,
+  ) {
+    final source = switch (sourceKind) {
+      KnowledgeSourceKind.rawText => 'Message',
+      KnowledgeSourceKind.extractedText => 'Extracted text',
+      KnowledgeSourceKind.readableText => 'Readable text',
+      KnowledgeSourceKind.ocrText => 'OCR',
+      KnowledgeSourceKind.transcript => 'Transcript',
+      KnowledgeSourceKind.imageUnderstanding => 'Caption',
+      KnowledgeSourceKind.videoKeyframeUnderstanding => 'Keyframe',
+      KnowledgeSourceKind.metadata => 'Metadata',
+      KnowledgeSourceKind.summary => 'Summary',
+    };
+    final roleLabel = switch (role) {
+      KnowledgeRole.title => 'title',
+      KnowledgeRole.summary => 'summary',
+      KnowledgeRole.body => 'body',
+      KnowledgeRole.metadata => 'metadata',
+      KnowledgeRole.caption => 'caption',
+      KnowledgeRole.evidence => 'evidence',
+    };
+    return '$source $roleLabel';
   }
 
   static _SemanticPayloadSnippetResult _extractSemanticSnippetsFromPayload(

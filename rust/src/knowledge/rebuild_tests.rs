@@ -4,7 +4,8 @@ use crate::crypto::encrypt_bytes;
 use crate::db;
 use crate::knowledge::{
     ensure_knowledge_rebuild_requested, list_knowledge_documents, list_knowledge_units,
-    process_pending_knowledge_index_jobs_active, KnowledgeUnitKind,
+    list_knowledge_units_around_anchor, process_pending_knowledge_index_jobs_active,
+    KnowledgeAnchorSet, KnowledgeUnitKind,
 };
 
 #[test]
@@ -140,4 +141,131 @@ fn list_knowledge_units_skips_corrupt_rows() {
         list_knowledge_units(&conn, &key, &document_id, None, 100, 0).expect("after units");
     assert_eq!(after_units.len(), before_units.len() - 1);
     assert!(after_units.iter().all(|unit| unit.unit_id != bad_unit_id));
+}
+
+#[test]
+fn list_knowledge_units_around_anchor_scans_beyond_first_page_limit() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let app_dir = dir.path();
+    let conn = db::open(app_dir).expect("open");
+    let key = [24u8; 32];
+
+    let document_id = "synthetic:anchor-window";
+    let anchor_json = serde_json::json!({}).to_string();
+    let raw = db::encode_knowledge_document_text(&key, document_id, "raw", "synthetic doc text")
+        .expect("encode raw");
+    let normalized =
+        db::encode_knowledge_document_text(&key, document_id, "normalized", "synthetic doc text")
+            .expect("encode normalized");
+
+    conn.execute(
+        r#"INSERT INTO knowledge_documents(
+               document_id,
+               origin_type,
+               source_kind,
+               role,
+               language,
+               quality_score,
+               title,
+               summary,
+               anchor_json,
+               raw_text,
+               normalized_text,
+               created_at_ms,
+               updated_at_ms,
+               schema_version,
+               normalization_version,
+               segmentation_version,
+               embedding_policy_version,
+               retrieval_policy_version,
+               last_indexed_at_ms
+           ) VALUES (?1, 'generated', 'raw_text', 'body', NULL, 1.0, NULL, NULL, ?2, ?3, ?4, 1, 1, ?5, ?6, ?7, ?8, ?9, NULL)"#,
+        params![
+            document_id,
+            anchor_json,
+            raw,
+            normalized,
+            crate::knowledge::KNOWLEDGE_SCHEMA_VERSION,
+            crate::knowledge::KNOWLEDGE_NORMALIZATION_VERSION,
+            crate::knowledge::KNOWLEDGE_SEGMENTATION_VERSION,
+            crate::knowledge::KNOWLEDGE_EMBEDDING_POLICY_VERSION,
+            crate::knowledge::KNOWLEDGE_RETRIEVAL_POLICY_VERSION,
+        ],
+    )
+    .expect("insert knowledge document");
+
+    let query_anchor = KnowledgeAnchorSet {
+        message_id: Some("synthetic-message".to_string()),
+        ..Default::default()
+    };
+
+    let mut insert_unit = conn
+        .prepare(
+            r#"INSERT INTO knowledge_units(
+                   unit_id,
+                   document_id,
+                   parent_unit_id,
+                   unit_kind,
+                   source_kind,
+                   role,
+                   ordinal,
+                   token_count,
+                   anchor_json,
+                   raw_text,
+                   normalized_text,
+                   prev_unit_id,
+                   next_unit_id,
+                   created_at_ms,
+                   updated_at_ms
+               ) VALUES (?1, ?2, NULL, 'chunk', 'raw_text', 'body', ?3, ?4, ?5, ?6, ?7, NULL, NULL, 1, 1)"#,
+        )
+        .expect("prepare insert unit");
+
+    for ordinal in 0..2050i64 {
+        let unit_id = format!("unit-{ordinal}");
+        let text = "filler text";
+        let raw = db::encode_knowledge_unit_text(&key, &unit_id, "raw", text).expect("raw unit");
+        let normalized =
+            db::encode_knowledge_unit_text(&key, &unit_id, "normalized", text).expect("norm unit");
+        insert_unit
+            .execute(params![
+                unit_id,
+                document_id,
+                ordinal,
+                text.split_whitespace().count() as i64,
+                serde_json::json!({}).to_string(),
+                raw,
+                normalized,
+            ])
+            .expect("insert filler unit");
+    }
+
+    let match_unit_id = "unit-match";
+    let match_text = "matching unit text";
+    let match_raw =
+        db::encode_knowledge_unit_text(&key, match_unit_id, "raw", match_text).expect("raw");
+    let match_normalized =
+        db::encode_knowledge_unit_text(&key, match_unit_id, "normalized", match_text)
+            .expect("normalized");
+    insert_unit
+        .execute(params![
+            match_unit_id,
+            document_id,
+            2500i64,
+            match_text.split_whitespace().count() as i64,
+            serde_json::to_string(&query_anchor).expect("anchor json"),
+            match_raw,
+            match_normalized,
+        ])
+        .expect("insert match unit");
+
+    let around = list_knowledge_units_around_anchor(&conn, &key, document_id, &query_anchor, 1, 1)
+        .expect("around anchor");
+
+    assert!(
+        around
+            .iter()
+            .any(|unit| unit.unit_id.as_str() == match_unit_id),
+        "expected around window to include {match_unit_id}"
+    );
 }

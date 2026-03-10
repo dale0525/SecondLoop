@@ -13,6 +13,7 @@ import '../../ui/sl_surface.dart';
 import '../media_backup/cloud_media_download.dart';
 import 'attachment_detail_workspace.dart';
 import 'attachment_detail_text_content.dart';
+import 'attachment_knowledge_viewer.dart';
 import 'attachment_text_editor_card.dart';
 import 'attachment_text_source_policy.dart';
 import 'video_manifest_gallery_dialog.dart';
@@ -927,12 +928,10 @@ class _NonImageAttachmentViewState extends State<NonImageAttachmentView> {
                   : context.t.attachments.workspace.types.attachment)),
       metrics: metrics,
       preview: preview,
-      content: AttachmentTextEditorCard(
-        fieldKeyPrefix: 'attachment_text_full',
-        label: context.t.attachments.content.fullText,
-        showLabel: false,
+      content: AttachmentKnowledgeContentPane(
+        attachment: attachment,
+        payload: payload,
         text: fullText,
-        markdown: true,
         emptyText: attachmentDetailEmptyTextLabel(context),
         extraAction: regenerateAction ?? retryRecognitionAction,
         onSave: widget.onSaveFull,

@@ -82,3 +82,91 @@ pub fn db_list_knowledge_units(
         offset as usize,
     )
 }
+
+#[flutter_rust_bridge::frb]
+pub fn db_search_knowledge(
+    app_dir: String,
+    key: Vec<u8>,
+    query: String,
+    conversation_id: Option<String>,
+    document_id: Option<String>,
+    limit: u32,
+) -> Result<Vec<knowledge::KnowledgeSearchResult>> {
+    let key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    let request = knowledge::normalize_retrieval_request(
+        &query,
+        conversation_id,
+        document_id,
+        Some(limit.max(1) as usize),
+        None,
+        None,
+    );
+    knowledge::search_knowledge(&conn, &key, &request)
+}
+
+#[flutter_rust_bridge::frb]
+pub fn db_get_knowledge_document(
+    app_dir: String,
+    key: Vec<u8>,
+    document_id: String,
+) -> Result<knowledge::KnowledgeViewerDocument> {
+    let key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    knowledge::read_knowledge_viewer_document(&conn, &key, &document_id)
+}
+
+#[flutter_rust_bridge::frb]
+pub fn db_list_knowledge_viewer_units(
+    app_dir: String,
+    key: Vec<u8>,
+    document_id: String,
+    unit_kind: Option<knowledge::KnowledgeUnitKind>,
+    limit: u32,
+    offset: u32,
+) -> Result<knowledge::KnowledgeViewerPage> {
+    let key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    knowledge::list_knowledge_viewer_units(
+        &conn,
+        &key,
+        &document_id,
+        unit_kind,
+        limit as usize,
+        offset as usize,
+    )
+}
+
+#[flutter_rust_bridge::frb]
+pub fn db_search_knowledge_document_units(
+    app_dir: String,
+    key: Vec<u8>,
+    document_id: String,
+    query: String,
+    limit: u32,
+) -> Result<Vec<knowledge::KnowledgeSearchResult>> {
+    let key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    knowledge::search_document_knowledge(&conn, &key, &document_id, &query, limit as usize)
+}
+
+#[flutter_rust_bridge::frb]
+pub fn db_list_knowledge_units_around_anchor(
+    app_dir: String,
+    key: Vec<u8>,
+    document_id: String,
+    anchor: knowledge::KnowledgeAnchorSet,
+    before: u32,
+    after: u32,
+) -> Result<Vec<knowledge::KnowledgeUnit>> {
+    let key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    knowledge::list_knowledge_units_around_anchor(
+        &conn,
+        &key,
+        &document_id,
+        &anchor,
+        before as usize,
+        after as usize,
+    )
+}

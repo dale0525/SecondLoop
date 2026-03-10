@@ -51,3 +51,68 @@ Future<List<KnowledgeUnit>> dbListKnowledgeUnits(
         unitKind: unitKind,
         limit: limit,
         offset: offset);
+
+Future<List<KnowledgeSearchResult>> dbSearchKnowledge(
+        {required String appDir,
+        required List<int> key,
+        required String query,
+        String? conversationId,
+        String? documentId,
+        required int limit}) =>
+    RustLib.instance.api.crateApiKnowledgeDbSearchKnowledge(
+        appDir: appDir,
+        key: key,
+        query: query,
+        conversationId: conversationId,
+        documentId: documentId,
+        limit: limit);
+
+Future<KnowledgeViewerDocument> dbGetKnowledgeDocument(
+        {required String appDir,
+        required List<int> key,
+        required String documentId}) =>
+    RustLib.instance.api.crateApiKnowledgeDbGetKnowledgeDocument(
+        appDir: appDir, key: key, documentId: documentId);
+
+Future<KnowledgeViewerPage> dbListKnowledgeViewerUnits(
+        {required String appDir,
+        required List<int> key,
+        required String documentId,
+        KnowledgeUnitKind? unitKind,
+        required int limit,
+        required int offset}) =>
+    RustLib.instance.api.crateApiKnowledgeDbListKnowledgeViewerUnits(
+        appDir: appDir,
+        key: key,
+        documentId: documentId,
+        unitKind: unitKind,
+        limit: limit,
+        offset: offset);
+
+Future<List<KnowledgeSearchResult>> dbSearchKnowledgeDocumentUnits(
+        {required String appDir,
+        required List<int> key,
+        required String documentId,
+        required String query,
+        required int limit}) =>
+    RustLib.instance.api.crateApiKnowledgeDbSearchKnowledgeDocumentUnits(
+        appDir: appDir,
+        key: key,
+        documentId: documentId,
+        query: query,
+        limit: limit);
+
+Future<List<KnowledgeUnit>> dbListKnowledgeUnitsAroundAnchor(
+        {required String appDir,
+        required List<int> key,
+        required String documentId,
+        required KnowledgeAnchorSet anchor,
+        required int before,
+        required int after}) =>
+    RustLib.instance.api.crateApiKnowledgeDbListKnowledgeUnitsAroundAnchor(
+        appDir: appDir,
+        key: key,
+        documentId: documentId,
+        anchor: anchor,
+        before: before,
+        after: after);
