@@ -30,7 +30,10 @@ const DEFAULT_MAX_HISTORY_MESSAGE_CHARS: usize = 1200;
 
 fn format_history_line(role: &str, message_id: &str, content: &str) -> String {
     match message_citation_link(message_id) {
-        Some(citation) => format!("{role} {citation}: {content}\n"),
+        Some(citation) => {
+            let sep = if content.ends_with('\n') { "" } else { "\n" };
+            format!("{role}: {content}{sep}{citation}\n")
+        }
         None => format!("{role}: {content}\n"),
     }
 }
@@ -978,4 +981,36 @@ pub fn ask_ai_with_provider_using_active_embeddings_time_window(
         provider,
         on_event,
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::format_history_line;
+
+    #[test]
+    fn format_history_line_moves_citation_below_content() {
+        let line = format_history_line("User", "history-1", "Project kickoff moved to Friday.");
+        assert_eq!(
+            line,
+            "User: Project kickoff moved to Friday.
+[History](secondloop://message/history-1)
+"
+        );
+    }
+
+    #[test]
+    fn format_history_line_preserves_trailing_newline_before_citation() {
+        let line = format_history_line(
+            "Assistant",
+            "history-2",
+            "Line one
+",
+        );
+        assert_eq!(
+            line,
+            "Assistant: Line one
+[History](secondloop://message/history-2)
+"
+        );
+    }
 }

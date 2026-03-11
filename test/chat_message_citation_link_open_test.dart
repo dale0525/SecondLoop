@@ -88,6 +88,21 @@ void main() {
   });
 
   test(
+      'normalizeChatMarkdownForPreview still linkifies bare deep links after bracket inside inline code span',
+      () {
+    const original = '`code [` secondloop://message/history-1';
+
+    final normalized = normalizeChatMarkdownForPreview(original);
+
+    expect(
+      normalized,
+      contains(
+        '[secondloop://message/history-1](secondloop://message/history-1)',
+      ),
+    );
+  });
+
+  test(
       'normalizeChatMarkdownForPreview does not relink deep links inside tilde fenced code blocks',
       () {
     const original = '~~~\nsecondloop://message/history-1\n~~~';

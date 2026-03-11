@@ -17,13 +17,23 @@ final RegExp _bareSecondLoopDeepLinkPattern =
     RegExp(r'secondloop://(?:attachment|message)/[^\s<>()\]]+');
 final RegExp _secondLoopTrailingPunctuationPattern = RegExp(r'[.,;:!?]+$');
 
-bool _isInsideMarkdownLabel(String input, int start) {
+bool _isInsideMarkdownLabel(
+  String input,
+  int start,
+  List<_MarkdownCodeRange> codeRanges,
+) {
   if (start <= 0) {
     return false;
   }
 
   final lastOpenBracket = input.lastIndexOf('[', start - 1);
   if (lastOpenBracket == -1) {
+    return false;
+  }
+
+  final bracketInsideCode =
+      codeRanges.any((range) => range.contains(lastOpenBracket));
+  if (bracketInsideCode) {
     return false;
   }
 
@@ -189,7 +199,8 @@ String _linkifyBareSecondLoopDeepLinks(String input) {
     final precededByOpeningBracket =
         start >= 1 && input.substring(start - 1, start) == '[';
     final insideCode = insideMarkdownCode(start);
-    final insideMarkdownLabel = _isInsideMarkdownLabel(input, start);
+    final insideMarkdownLabel =
+        _isInsideMarkdownLabel(input, start, codeRanges);
     final followedByMarkdownLabel =
         end + 2 <= input.length && input.substring(end, end + 2) == '](';
     if (precededByMarkdownDestination ||
