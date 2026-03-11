@@ -64,6 +64,337 @@ fn normalize_tag_ids(raw: &[String]) -> Vec<String> {
     set.into_iter().collect()
 }
 
+fn is_scope_separator(ch: char) -> bool {
+    ch.is_whitespace()
+        || ch.is_ascii_punctuation()
+        || matches!(
+            ch,
+            '，' | '。'
+                | '、'
+                | '；'
+                | '：'
+                | '！'
+                | '？'
+                | '（'
+                | '）'
+                | '［'
+                | '］'
+                | '【'
+                | '】'
+                | '｛'
+                | '｝'
+                | '〈'
+                | '〉'
+                | '《'
+                | '》'
+                | '「'
+                | '」'
+                | '『'
+                | '』'
+                | '〔'
+                | '〕'
+                | '〖'
+                | '〗'
+                | '〘'
+                | '〙'
+                | '〚'
+                | '〛'
+                | '—'
+                | '―'
+                | '…'
+                | '‥'
+                | '·'
+                | '・'
+                | '／'
+                | '＼'
+                | '｜'
+                | '＂'
+                | '＇'
+                | '｀'
+                | '～'
+                | '．'
+        )
+}
+
+fn normalize_scope_match_text(raw: &str) -> String {
+    let mut out = String::new();
+    let mut previous_was_space = false;
+
+    for ch in raw.trim().chars() {
+        let mapped = if ch.is_ascii_alphanumeric() {
+            ch.to_ascii_lowercase()
+        } else if is_scope_separator(ch) {
+            ' '
+        } else {
+            ch
+        };
+
+        if mapped == ' ' {
+            if !previous_was_space {
+                out.push(' ');
+            }
+            previous_was_space = true;
+            continue;
+        }
+
+        out.push(mapped);
+        previous_was_space = false;
+    }
+
+    out.trim().to_string()
+}
+
+fn contains_ascii_scope_phrase(haystack: &str, needle: &str) -> bool {
+    let needle = needle.trim();
+    if haystack.is_empty() || needle.is_empty() {
+        return false;
+    }
+
+    let padded_haystack = format!(" {haystack} ");
+    let padded_needle = format!(" {needle} ");
+    padded_haystack.contains(&padded_needle)
+}
+
+const NON_ASCII_SCOPE_PREFIX_CUES: &[&str] = &[
+    "写",
+    "寫",
+    "写下",
+    "寫下",
+    "写个",
+    "寫個",
+    "写一份",
+    "寫一份",
+    "写一下",
+    "寫一下",
+    "做",
+    "做个",
+    "做個",
+    "做一份",
+    "列",
+    "列出",
+    "整理",
+    "总结",
+    "總結",
+    "汇总",
+    "彙總",
+    "复盘",
+    "復盤",
+    "回顾",
+    "回顧",
+    "盘点",
+    "盤點",
+    "查看",
+    "看看",
+    "聊聊",
+    "说说",
+    "說說",
+    "关于",
+    "關於",
+    "有关",
+    "有關",
+    "最近",
+    "本周",
+    "这周",
+    "這週",
+    "本月",
+    "这个月",
+    "這個月",
+    "今天",
+    "今日",
+];
+
+const NON_ASCII_SCOPE_SUFFIX_CUES: &[&str] = &[
+    "周报", "週報", "日报", "日報", "月报", "月報", "总结", "總結", "汇报", "匯報", "报告", "報告",
+    "计划", "計劃", "规划", "規劃", "安排", "事项", "事項", "任务", "任務", "进展", "進展", "内容",
+    "內容", "相关", "相關", "情况", "情況", "问题", "問題", "目标", "目標", "项目", "項目", "方向",
+    "清单", "清單", "复盘", "復盤",
+];
+
+fn is_non_ascii_scope_linker(ch: char) -> bool {
+    matches!(
+        ch,
+        '的' | '地'
+            | '得'
+            | '和'
+            | '及'
+            | '与'
+            | '與'
+            | '或'
+            | '在'
+            | '上'
+            | '中'
+            | '内'
+            | '內'
+            | '里'
+            | '裡'
+    )
+}
+
+fn has_non_ascii_scope_prefix_cue(prefix: &str) -> bool {
+    NON_ASCII_SCOPE_PREFIX_CUES
+        .iter()
+        .any(|candidate| prefix.ends_with(candidate))
+}
+
+fn has_non_ascii_scope_suffix_cue(suffix: &str) -> bool {
+    NON_ASCII_SCOPE_SUFFIX_CUES
+        .iter()
+        .any(|candidate| suffix.starts_with(candidate))
+}
+
+fn two_char_non_ascii_scope_match_has_context(prefix: &str, suffix: &str) -> bool {
+    let left_ok = match prefix.chars().next_back() {
+        None => true,
+        Some(ch) => is_scope_separator(ch) || is_non_ascii_scope_linker(ch),
+    } || has_non_ascii_scope_prefix_cue(prefix);
+
+    let right_ok = match suffix.chars().next() {
+        None => true,
+        Some(ch) => is_scope_separator(ch) || is_non_ascii_scope_linker(ch),
+    } || has_non_ascii_scope_suffix_cue(suffix);
+
+    left_ok && right_ok
+}
+
+fn contains_non_ascii_scope_phrase(haystack: &str, needle: &str) -> bool {
+    let needle = needle.trim();
+    let needle_chars = needle.chars().count();
+    if haystack.is_empty() || needle_chars < 2 {
+        return false;
+    }
+
+    if needle_chars >= 3 {
+        return haystack.contains(needle);
+    }
+
+    haystack.match_indices(needle).any(|(index, _)| {
+        let prefix = &haystack[..index];
+        let suffix = &haystack[index + needle.len()..];
+        two_char_non_ascii_scope_match_has_context(prefix, suffix)
+    })
+}
+
+fn system_tag_scope_aliases(system_key: &str) -> &'static [&'static str] {
+    match system_key {
+        "work" => &["work", "工作"],
+        "personal" => &["personal", "个人", "個人"],
+        "family" => &["family", "家庭"],
+        "health" => &["health", "健康"],
+        "finance" => &["finance", "财务", "財務"],
+        "study" => &["study", "学习", "學習"],
+        "travel" => &["travel", "旅行", "旅游", "旅遊"],
+        "social" => &["social", "社交"],
+        "home" => &["home", "居家", "家务", "家務"],
+        "hobby" => &["hobby", "爱好", "愛好", "兴趣", "興趣"],
+        _ => &[],
+    }
+}
+
+fn question_mentions_tag(question_normalized: &str, tag: &db::Tag) -> bool {
+    let normalized_tag_name = normalize_scope_match_text(&tag.name);
+    if !normalized_tag_name.is_empty() {
+        if normalized_tag_name.is_ascii() {
+            if contains_ascii_scope_phrase(question_normalized, &normalized_tag_name) {
+                return true;
+            }
+        } else if contains_non_ascii_scope_phrase(question_normalized, &normalized_tag_name) {
+            return true;
+        }
+    }
+
+    let Some(system_key) = tag.system_key.as_deref() else {
+        return false;
+    };
+
+    for alias in system_tag_scope_aliases(system_key) {
+        let normalized_alias = normalize_scope_match_text(alias);
+        if normalized_alias.is_empty() {
+            continue;
+        }
+
+        if normalized_alias.is_ascii() {
+            if contains_ascii_scope_phrase(question_normalized, &normalized_alias) {
+                return true;
+            }
+            continue;
+        }
+
+        if contains_non_ascii_scope_phrase(question_normalized, &normalized_alias) {
+            return true;
+        }
+    }
+
+    false
+}
+
+fn resolve_scoped_include_tag_ids(
+    conn: &Connection,
+    key: &[u8; 32],
+    question: &str,
+    include_tag_ids: &[String],
+) -> Result<Vec<String>> {
+    let include_tag_ids = normalize_tag_ids(include_tag_ids);
+    if !include_tag_ids.is_empty() {
+        return Ok(include_tag_ids);
+    }
+
+    let question_normalized = normalize_scope_match_text(question);
+    if question_normalized.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let mut inferred = std::collections::BTreeSet::<String>::new();
+    for tag in db::list_tags(conn, key)? {
+        if question_mentions_tag(&question_normalized, &tag) {
+            inferred.insert(tag.id);
+        }
+    }
+
+    Ok(inferred.into_iter().collect())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn resolve_scoped_contexts_snapshot(
+    conn: &Connection,
+    key: &[u8; 32],
+    conversation_id: &str,
+    question: &str,
+    include_tag_ids: &[String],
+    exclude_tag_ids: &[String],
+    top_k: usize,
+    time_scope: Option<TimeScope>,
+    focus: ScopedFocus,
+) -> Result<(Vec<String>, Vec<String>)> {
+    // Keep tag inference and context collection on the same SQLite read snapshot.
+    // Commit before any later writes or streaming-side effects.
+    conn.execute_batch("BEGIN DEFERRED;")?;
+    let result = (|| -> Result<(Vec<String>, Vec<String>)> {
+        let include_tag_ids = resolve_scoped_include_tag_ids(conn, key, question, include_tag_ids)?;
+        let contexts = collect_scoped_contexts(
+            conn,
+            key,
+            conversation_id,
+            &include_tag_ids,
+            exclude_tag_ids,
+            top_k,
+            time_scope,
+            focus,
+        )?;
+        Ok((include_tag_ids, contexts))
+    })();
+
+    match result {
+        Ok(values) => {
+            conn.execute_batch("COMMIT;")?;
+            Ok(values)
+        }
+        Err(err) => {
+            let _ = conn.execute_batch("ROLLBACK;");
+            Err(err)
+        }
+    }
+}
+
 fn list_conversation_message_ids(conn: &Connection, conversation_id: &str) -> Result<Vec<String>> {
     let mut stmt = conn.prepare(
         r#"SELECT id
@@ -141,6 +472,8 @@ fn collect_scoped_contexts(
     let include_tag_ids = normalize_tag_ids(include_tag_ids);
     let exclude_tag_ids = normalize_tag_ids(exclude_tag_ids);
 
+    // Preserve the pre-existing time-only fallback: if no tag filters are present
+    // (including when tag inference finds none), still scan the full time window.
     if include_tag_ids.is_empty() && exclude_tag_ids.is_empty() && time_scope.is_none() {
         return Ok(Vec::new());
     }
@@ -404,10 +737,11 @@ pub fn rag_ask_ai_stream_scoped(
             ScopedFocus::AllMemories
         };
 
-        let contexts = collect_scoped_contexts(
+        let (_, contexts) = resolve_scoped_contexts_snapshot(
             &conn,
             &key,
             &conversation_id,
+            &question,
             &include_tag_ids,
             &exclude_tag_ids,
             top_k as usize,
@@ -494,10 +828,11 @@ pub fn rag_ask_ai_stream_cloud_gateway_scoped(
             ScopedFocus::AllMemories
         };
 
-        let contexts = collect_scoped_contexts(
+        let (_, contexts) = resolve_scoped_contexts_snapshot(
             &conn,
             &key,
             &conversation_id,
+            &question,
             &include_tag_ids,
             &exclude_tag_ids,
             top_k as usize,
@@ -539,347 +874,4 @@ pub fn rag_ask_ai_stream_cloud_gateway_scoped(
 }
 
 #[cfg(test)]
-mod tests {
-    use tempfile::tempdir;
-
-    use crate::auth;
-    use crate::crypto::KdfParams;
-
-    use super::*;
-
-    #[test]
-    fn collect_scoped_contexts_applies_time_window_with_tag_filter() {
-        use rusqlite::params;
-
-        let temp = tempdir().expect("tempdir");
-        let app_dir = temp.path().join("secondloop");
-        let key =
-            auth::init_master_password(&app_dir, "pw", KdfParams::for_test()).expect("init auth");
-        let conn = db::open(&app_dir).expect("open db");
-
-        let conversation =
-            db::create_conversation(&conn, &key, "Main").expect("create conversation");
-        let old_work = db::insert_message(&conn, &key, &conversation.id, "user", "work monday")
-            .expect("insert old_work");
-        let in_window_work =
-            db::insert_message(&conn, &key, &conversation.id, "user", "work friday")
-                .expect("insert in_window_work");
-        let in_window_other =
-            db::insert_message(&conn, &key, &conversation.id, "user", "personal friday")
-                .expect("insert in_window_other");
-
-        let base = 1_700_000_000_000i64;
-        conn.execute(
-            "UPDATE messages SET created_at = ?2 WHERE id = ?1",
-            params![old_work.id, base - 8 * 24 * 60 * 60 * 1000],
-        )
-        .expect("set old_work time");
-        conn.execute(
-            "UPDATE messages SET created_at = ?2 WHERE id = ?1",
-            params![in_window_work.id, base - 2 * 24 * 60 * 60 * 1000],
-        )
-        .expect("set in_window_work time");
-        conn.execute(
-            "UPDATE messages SET created_at = ?2 WHERE id = ?1",
-            params![in_window_other.id, base - 2 * 24 * 60 * 60 * 1000],
-        )
-        .expect("set in_window_other time");
-
-        let work = db::upsert_tag(&conn, &key, "work").expect("upsert work tag");
-        db::set_message_tags(&conn, &key, &old_work.id, std::slice::from_ref(&work.id))
-            .expect("set old_work tags");
-        db::set_message_tags(
-            &conn,
-            &key,
-            &in_window_work.id,
-            std::slice::from_ref(&work.id),
-        )
-        .expect("set in_window_work tags");
-
-        let contexts = collect_scoped_contexts(
-            &conn,
-            &key,
-            &conversation.id,
-            std::slice::from_ref(&work.id),
-            &[],
-            10,
-            Some(TimeScope {
-                start_ms_inclusive: base - 7 * 24 * 60 * 60 * 1000,
-                end_ms_exclusive: base,
-            }),
-            ScopedFocus::Conversation,
-        )
-        .expect("collect contexts");
-
-        assert_eq!(contexts.len(), 1);
-        assert!(contexts[0].contains("work friday"));
-    }
-
-    #[test]
-    fn collect_scoped_contexts_applies_time_window_without_tag_filters() {
-        use rusqlite::params;
-
-        let temp = tempdir().expect("tempdir");
-        let app_dir = temp.path().join("secondloop");
-        let key =
-            auth::init_master_password(&app_dir, "pw", KdfParams::for_test()).expect("init auth");
-        let conn = db::open(&app_dir).expect("open db");
-
-        let conversation =
-            db::create_conversation(&conn, &key, "Main").expect("create conversation");
-        let old_note = db::insert_message(&conn, &key, &conversation.id, "user", "old note")
-            .expect("insert old_note");
-        let in_window_note =
-            db::insert_message(&conn, &key, &conversation.id, "user", "in window note")
-                .expect("insert in_window_note");
-
-        let base = 1_700_000_000_000i64;
-        conn.execute(
-            "UPDATE messages SET created_at = ?2 WHERE id = ?1",
-            params![old_note.id, base - 20 * 24 * 60 * 60 * 1000],
-        )
-        .expect("set old_note time");
-        conn.execute(
-            "UPDATE messages SET created_at = ?2 WHERE id = ?1",
-            params![in_window_note.id, base - 2 * 24 * 60 * 60 * 1000],
-        )
-        .expect("set in_window_note time");
-
-        let contexts = collect_scoped_contexts(
-            &conn,
-            &key,
-            &conversation.id,
-            &[],
-            &[],
-            10,
-            Some(TimeScope {
-                start_ms_inclusive: base - 7 * 24 * 60 * 60 * 1000,
-                end_ms_exclusive: base,
-            }),
-            ScopedFocus::Conversation,
-        )
-        .expect("collect contexts");
-
-        assert_eq!(contexts.len(), 1);
-        assert!(contexts[0].contains("in window note"));
-    }
-
-    #[test]
-    fn collect_scoped_contexts_supports_all_memories_scope_for_tag_filter() {
-        let temp = tempdir().expect("tempdir");
-        let app_dir = temp.path().join("secondloop");
-        let key =
-            auth::init_master_password(&app_dir, "pw", KdfParams::for_test()).expect("init auth");
-        let conn = db::open(&app_dir).expect("open db");
-
-        let conversation_main =
-            db::create_conversation(&conn, &key, "Main").expect("create main conversation");
-        let conversation_side =
-            db::create_conversation(&conn, &key, "Side").expect("create side conversation");
-
-        let main_work =
-            db::insert_message(&conn, &key, &conversation_main.id, "user", "main work note")
-                .expect("insert main_work");
-        let side_work =
-            db::insert_message(&conn, &key, &conversation_side.id, "user", "side work note")
-                .expect("insert side_work");
-
-        let work = db::upsert_tag(&conn, &key, "work").expect("upsert work tag");
-        db::set_message_tags(&conn, &key, &main_work.id, std::slice::from_ref(&work.id))
-            .expect("set main_work tags");
-        db::set_message_tags(&conn, &key, &side_work.id, std::slice::from_ref(&work.id))
-            .expect("set side_work tags");
-
-        let contexts = collect_scoped_contexts(
-            &conn,
-            &key,
-            &conversation_main.id,
-            std::slice::from_ref(&work.id),
-            &[],
-            10,
-            None,
-            ScopedFocus::AllMemories,
-        )
-        .expect("collect contexts");
-
-        assert_eq!(contexts.len(), 2);
-        assert!(contexts
-            .iter()
-            .any(|value| value.contains("main work note")));
-        assert!(contexts
-            .iter()
-            .any(|value| value.contains("side work note")));
-    }
-
-    #[test]
-    fn collect_scoped_contexts_applies_exclude_tags_without_include_tags() {
-        let temp = tempdir().expect("tempdir");
-        let app_dir = temp.path().join("secondloop");
-        let key =
-            auth::init_master_password(&app_dir, "pw", KdfParams::for_test()).expect("init auth");
-        let conn = db::open(&app_dir).expect("open db");
-
-        let conversation =
-            db::create_conversation(&conn, &key, "Main").expect("create conversation");
-
-        let m_work = db::insert_message(&conn, &key, &conversation.id, "user", "work note")
-            .expect("insert m_work");
-        let _m_personal =
-            db::insert_message(&conn, &key, &conversation.id, "user", "personal note")
-                .expect("insert m_personal");
-
-        let work = db::upsert_tag(&conn, &key, "work").expect("upsert work tag");
-        db::set_message_tags(&conn, &key, &m_work.id, std::slice::from_ref(&work.id))
-            .expect("set m_work tags");
-
-        let contexts = collect_scoped_contexts(
-            &conn,
-            &key,
-            &conversation.id,
-            &[],
-            std::slice::from_ref(&work.id),
-            10,
-            None,
-            ScopedFocus::Conversation,
-        )
-        .expect("collect contexts");
-
-        assert_eq!(contexts.len(), 1);
-        assert!(contexts[0].contains("personal note"));
-        assert!(contexts.iter().all(|v| !v.contains("work note")));
-    }
-
-    #[test]
-    fn collect_scoped_contexts_appends_message_deeplink() {
-        use rusqlite::params;
-
-        let temp = tempdir().expect("tempdir");
-        let app_dir = temp.path().join("secondloop");
-        let key =
-            auth::init_master_password(&app_dir, "pw", KdfParams::for_test()).expect("init auth");
-        let conn = db::open(&app_dir).expect("open db");
-
-        let conversation =
-            db::create_conversation(&conn, &key, "Main").expect("create conversation");
-        let remembered =
-            db::insert_message(&conn, &key, &conversation.id, "user", "remembered note")
-                .expect("insert remembered");
-
-        conn.execute(
-            "UPDATE messages SET created_at = ?2 WHERE id = ?1",
-            params![remembered.id, 1_700_000_000_000i64],
-        )
-        .expect("set remembered time");
-
-        let contexts = collect_scoped_contexts(
-            &conn,
-            &key,
-            &conversation.id,
-            &[],
-            &[],
-            10,
-            Some(TimeScope {
-                start_ms_inclusive: 0,
-                end_ms_exclusive: 1_800_000_000_000i64,
-            }),
-            ScopedFocus::Conversation,
-        )
-        .expect("collect contexts");
-
-        assert_eq!(contexts.len(), 1);
-        assert!(contexts[0].contains("remembered note"));
-        assert!(contexts[0].contains("secondloop://message/"));
-    }
-
-    #[test]
-    fn collect_scoped_contexts_trims_message_id_in_citation() {
-        use rusqlite::params;
-
-        let temp = tempdir().expect("tempdir");
-        let app_dir = temp.path().join("secondloop");
-        let key =
-            auth::init_master_password(&app_dir, "pw", KdfParams::for_test()).expect("init auth");
-        let conn = db::open(&app_dir).expect("open db");
-
-        let conversation =
-            db::create_conversation(&conn, &key, "Main").expect("create conversation");
-        let remembered =
-            db::insert_message(&conn, &key, &conversation.id, "user", "remembered note")
-                .expect("insert remembered");
-
-        conn.execute("PRAGMA foreign_keys = OFF", [])
-            .expect("disable foreign keys for test rewrite");
-        conn.execute(
-            "UPDATE messages SET id = ?2, created_at = ?3 WHERE id = ?1",
-            params![remembered.id, "  spaced-id  ", 1_700_000_000_000i64],
-        )
-        .expect("rewrite remembered id and time");
-        conn.execute("PRAGMA foreign_keys = ON", [])
-            .expect("re-enable foreign keys after test rewrite");
-
-        let contexts = collect_scoped_contexts(
-            &conn,
-            &key,
-            &conversation.id,
-            &[],
-            &[],
-            10,
-            Some(TimeScope {
-                start_ms_inclusive: 0,
-                end_ms_exclusive: 1_800_000_000_000i64,
-            }),
-            ScopedFocus::Conversation,
-        )
-        .expect("collect contexts");
-
-        assert_eq!(contexts.len(), 1);
-        assert!(contexts[0].contains("[History](secondloop://message/spaced-id)"));
-        assert!(!contexts[0].contains("[History](secondloop://message/  spaced-id  )"));
-    }
-
-    #[test]
-    fn collect_scoped_contexts_applies_exclude_tags_after_include_tags() {
-        let temp = tempdir().expect("tempdir");
-        let app_dir = temp.path().join("secondloop");
-        let key =
-            auth::init_master_password(&app_dir, "pw", KdfParams::for_test()).expect("init auth");
-        let conn = db::open(&app_dir).expect("open db");
-
-        let conversation =
-            db::create_conversation(&conn, &key, "Main").expect("create conversation");
-
-        let m_work_only = db::insert_message(&conn, &key, &conversation.id, "user", "work only")
-            .expect("insert m_work_only");
-        let m_work_social =
-            db::insert_message(&conn, &key, &conversation.id, "user", "work and social")
-                .expect("insert m_work_social");
-
-        let work = db::upsert_tag(&conn, &key, "work").expect("upsert work tag");
-        let social = db::upsert_tag(&conn, &key, "social").expect("upsert social tag");
-
-        db::set_message_tags(&conn, &key, &m_work_only.id, std::slice::from_ref(&work.id))
-            .expect("set m_work_only tags");
-        db::set_message_tags(
-            &conn,
-            &key,
-            &m_work_social.id,
-            &[work.id.clone(), social.id.clone()],
-        )
-        .expect("set m_work_social tags");
-
-        let contexts = collect_scoped_contexts(
-            &conn,
-            &key,
-            &conversation.id,
-            std::slice::from_ref(&work.id),
-            std::slice::from_ref(&social.id),
-            10,
-            None,
-            ScopedFocus::Conversation,
-        )
-        .expect("collect contexts");
-
-        assert_eq!(contexts.len(), 1);
-        assert!(contexts[0].contains("work only"));
-    }
-}
+mod tests;

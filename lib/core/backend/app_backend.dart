@@ -397,6 +397,8 @@ abstract class AppBackend {
     throw UnimplementedError('sumLlmUsageDailyByPurpose');
   }
 
+  bool get supportsScopedAskAi => false;
+
   Stream<String> askAiStream(
     Uint8List key,
     String conversationId, {
@@ -528,6 +530,42 @@ abstract class AppBackend {
         modelName: modelName,
         embeddingsModelName: embeddingsModelName,
       );
+
+  Stream<String> askAiStreamScoped(
+    Uint8List key,
+    String conversationId, {
+    required String question,
+    required int topK,
+    required bool thisThreadOnly,
+    int? timeStartMs,
+    int? timeEndMs,
+    required List<String> includeTagIds,
+    required List<String> excludeTagIds,
+    required bool strictMode,
+    required String localeLanguage,
+    required String localDay,
+  }) {
+    throw UnimplementedError('askAiStreamScoped');
+  }
+
+  Stream<String> askAiStreamCloudGatewayScoped(
+    Uint8List key,
+    String conversationId, {
+    required String question,
+    required int topK,
+    required bool thisThreadOnly,
+    int? timeStartMs,
+    int? timeEndMs,
+    required List<String> includeTagIds,
+    required List<String> excludeTagIds,
+    required bool strictMode,
+    required String localeLanguage,
+    required String gatewayBaseUrl,
+    required String idToken,
+    required String modelName,
+  }) {
+    throw UnimplementedError('askAiStreamCloudGatewayScoped');
+  }
 
   Future<String> semanticParseMessageAction(
     Uint8List key, {

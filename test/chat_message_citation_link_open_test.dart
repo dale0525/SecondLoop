@@ -49,6 +49,17 @@ void main() {
     expect(normalized, original);
   });
 
+  test(
+      'normalizeChatMarkdownForPreview does not relink deep links inside markdown link labels',
+      () {
+    const original =
+        '[text secondloop://message/history-1 more text](https://example.com)';
+
+    final normalized = normalizeChatMarkdownForPreview(original);
+
+    expect(normalized, original);
+  });
+
   testWidgets('chat citation secondloop message link opens message viewer',
       (tester) async {
     final backend = _Backend(
