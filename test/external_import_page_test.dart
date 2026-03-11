@@ -38,9 +38,16 @@ void main() {
     await _pumpUi(tester);
 
     expect(
-        _labelFinder(
-            '只读导入通用 Markdown 数据', 'Readonly import for generic Markdown data'),
-        findsOneWidget);
+      _labelFinder('导入 Markdown 数据', 'Import Markdown Data'),
+      findsOneWidget,
+    );
+    expect(
+      _labelFinder(
+        '只读导入通用 Markdown 数据',
+        'Readonly import for generic Markdown data',
+      ),
+      findsOneWidget,
+    );
     expect(find.byKey(const ValueKey('external_import_start')), findsNothing);
 
     await tester
@@ -59,7 +66,6 @@ void main() {
       findsOneWidget,
     );
   });
-
   testWidgets('picking a zip file shows external import scan summary',
       (WidgetTester tester) async {
     _installPicker(
@@ -649,7 +655,9 @@ void main() {
     expect(backend.deletedBatchIds, ['batch-delete-1']);
     expect(find.byKey(const ValueKey('external_import_delete_latest_batch')),
         findsNothing);
-    expect(_labelFinder('还没有导入批次。', 'No import batches yet.'), findsOneWidget);
+    expect(
+        _labelFinder('还没有 Markdown 导入批次。', 'No Markdown import batches yet.'),
+        findsOneWidget);
   });
 
   testWidgets(
