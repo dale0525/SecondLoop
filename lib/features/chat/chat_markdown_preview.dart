@@ -45,6 +45,7 @@ bool _isInsideMarkdownCode(String input, int start) {
   var lineStart = true;
   int? inlineDelimiter;
   int? fencedDelimiter;
+  String? fencedMarker;
 
   while (index < start) {
     if (input[index] == '\n') {
@@ -62,20 +63,24 @@ bool _isInsideMarkdownCode(String input, int start) {
           leadingSpaces += 1;
         }
 
-        final tickStart = cursor;
-        while (cursor < start && input[cursor] == '`') {
-          cursor += 1;
-        }
+        final marker = cursor < start ? input[cursor] : null;
+        if (marker == fencedMarker) {
+          final markerStart = cursor;
+          while (cursor < start && input[cursor] == marker) {
+            cursor += 1;
+          }
 
-        final runLength = cursor - tickStart;
-        if (runLength >= fencedDelimiter) {
-          final lineEnd = input.indexOf('\n', cursor);
-          final end = lineEnd == -1 || lineEnd > start ? start : lineEnd;
-          if (input.substring(cursor, end).trim().isEmpty) {
-            fencedDelimiter = null;
-            lineStart = false;
-            index = cursor;
-            continue;
+          final runLength = cursor - markerStart;
+          if (runLength >= fencedDelimiter) {
+            final lineEnd = input.indexOf('\n', cursor);
+            final end = lineEnd == -1 || lineEnd > start ? start : lineEnd;
+            if (input.substring(cursor, end).trim().isEmpty) {
+              fencedDelimiter = null;
+              fencedMarker = null;
+              lineStart = false;
+              index = cursor;
+              continue;
+            }
           }
         }
       }
@@ -93,17 +98,21 @@ bool _isInsideMarkdownCode(String input, int start) {
         leadingSpaces += 1;
       }
 
-      final tickStart = cursor;
-      while (cursor < start && input[cursor] == '`') {
-        cursor += 1;
-      }
+      final marker = cursor < start ? input[cursor] : null;
+      if (marker == '`' || marker == '~') {
+        final markerStart = cursor;
+        while (cursor < start && input[cursor] == marker) {
+          cursor += 1;
+        }
 
-      final runLength = cursor - tickStart;
-      if (runLength >= 3) {
-        fencedDelimiter = runLength;
-        lineStart = false;
-        index = cursor;
-        continue;
+        final runLength = cursor - markerStart;
+        if (runLength >= 3) {
+          fencedDelimiter = runLength;
+          fencedMarker = marker;
+          lineStart = false;
+          index = cursor;
+          continue;
+        }
       }
     }
 

@@ -87,6 +87,16 @@ void main() {
     expect(normalized, original);
   });
 
+  test(
+      'normalizeChatMarkdownForPreview does not relink deep links inside tilde fenced code blocks',
+      () {
+    const original = '~~~\nsecondloop://message/history-1\n~~~';
+
+    final normalized = normalizeChatMarkdownForPreview(original);
+
+    expect(normalized, original);
+  });
+
   testWidgets('chat citation secondloop message link opens message viewer',
       (tester) async {
     final backend = _Backend(
