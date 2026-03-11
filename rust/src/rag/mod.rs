@@ -25,6 +25,31 @@ use knowledge_contexts::{merge_knowledge_and_legacy_contexts, try_build_knowledg
 const DEFAULT_MAX_HISTORY_MESSAGES: usize = 6;
 const DEFAULT_MAX_HISTORY_MESSAGE_CHARS: usize = 1200;
 
+fn message_citation_link(message_id: &str) -> Option<String> {
+    let trimmed = message_id.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+    Some(format!("[History](secondloop://message/{trimmed})"))
+}
+
+fn append_message_citation(context: String, message_id: &str) -> String {
+    let Some(citation) = message_citation_link(message_id) else {
+        return context;
+    };
+    if context.contains(&citation) {
+        return context;
+    }
+    format!("{context}\n{citation}")
+}
+
+fn format_history_line(role: &str, message_id: &str, content: &str) -> String {
+    match message_citation_link(message_id) {
+        Some(citation) => format!("{role} {citation}: {content}\n"),
+        None => format!("{role}: {content}\n"),
+    }
+}
+
 #[derive(Debug)]
 pub struct StreamCancelled;
 
@@ -197,7 +222,7 @@ fn build_recent_conversation_history(
             .chars()
             .take(DEFAULT_MAX_HISTORY_MESSAGE_CHARS)
             .collect();
-        kept.push((role.to_string(), truncated));
+        kept.push((role.to_string(), msg.id.clone(), truncated));
         if kept.len() >= DEFAULT_MAX_HISTORY_MESSAGES {
             break;
         }
@@ -210,11 +235,8 @@ fn build_recent_conversation_history(
     kept.reverse();
 
     let mut out = String::new();
-    for (role, content) in kept {
-        out.push_str(&role);
-        out.push_str(": ");
-        out.push_str(&content);
-        out.push('\n');
+    for (role, message_id, content) in kept {
+        out.push_str(&format_history_line(&role, &message_id, &content));
     }
 
     Ok(Some(out))
@@ -255,7 +277,7 @@ fn build_recent_conversation_history_in_range(
             .chars()
             .take(DEFAULT_MAX_HISTORY_MESSAGE_CHARS)
             .collect();
-        kept.push((role.to_string(), truncated));
+        kept.push((role.to_string(), msg.id.clone(), truncated));
         if kept.len() >= DEFAULT_MAX_HISTORY_MESSAGES {
             break;
         }
@@ -268,11 +290,8 @@ fn build_recent_conversation_history_in_range(
     kept.reverse();
 
     let mut out = String::new();
-    for (role, content) in kept {
-        out.push_str(&role);
-        out.push_str(": ");
-        out.push_str(&content);
-        out.push('\n');
+    for (role, message_id, content) in kept {
+        out.push_str(&format_history_line(&role, &message_id, &content));
     }
 
     Ok(Some(out))
@@ -410,6 +429,7 @@ pub fn ask_ai_with_provider(
     for sm in similar_messages {
         let context = db::build_message_rag_context(conn, key, &sm.message.id, &sm.message.content)
             .unwrap_or_else(|_| sm.message.content.clone());
+        let context = append_message_citation(context, &sm.message.id);
         contexts_with_distance.push((sm.distance, context));
     }
     let mut seen_todos = std::collections::HashSet::new();
@@ -566,6 +586,7 @@ pub fn ask_ai_with_provider_using_embedder<E: Embedder + ?Sized>(
             let context =
                 db::build_message_rag_context(conn, key, &sm.message.id, &sm.message.content)
                     .unwrap_or_else(|_| sm.message.content.clone());
+            let context = append_message_citation(context, &sm.message.id);
             contexts_with_distance.push((sm.distance, context));
         }
         let mut seen_todos = std::collections::HashSet::new();
@@ -715,6 +736,7 @@ pub fn ask_ai_with_provider_using_active_embeddings(
                     created_at_ms: sm.message.created_at_ms,
                     distance: Some(sm.distance),
                     text: context,
+                    citation_suffix: message_citation_link(&sm.message.id),
                 });
             }
 
@@ -737,6 +759,7 @@ pub fn ask_ai_with_provider_using_active_embeddings(
                     created_at_ms: todo.created_at_ms,
                     distance: Some(st.distance),
                     text: ctx,
+                    citation_suffix: None,
                 });
             }
 
@@ -755,6 +778,7 @@ pub fn ask_ai_with_provider_using_active_embeddings(
                     created_at_ms: chunk.created_at_ms,
                     distance: Some(chunk.distance),
                     text: context,
+                    citation_suffix: None,
                 });
             }
 
@@ -774,6 +798,7 @@ pub fn ask_ai_with_provider_using_active_embeddings(
                     created_at_ms: chunk.created_at_ms,
                     distance: Some(chunk.distance),
                     text: context,
+                    citation_suffix: None,
                 });
             }
 
@@ -848,12 +873,14 @@ pub fn ask_ai_with_provider_using_active_embeddings_time_window(
             )? {
                 let context = db::build_message_rag_context(conn, key, &m.id, &m.content)
                     .unwrap_or(m.content);
+                let citation_suffix = message_citation_link(&m.id);
                 candidates.push(ContextItem {
                     source: ContextSource::Message,
                     id: m.id,
                     created_at_ms: m.created_at_ms,
                     distance: None,
                     text: context,
+                    citation_suffix,
                 });
             }
 
@@ -880,6 +907,7 @@ pub fn ask_ai_with_provider_using_active_embeddings_time_window(
                     created_at_ms: a.created_at_ms,
                     distance: None,
                     text,
+                    citation_suffix: None,
                 });
             }
 
@@ -897,6 +925,7 @@ pub fn ask_ai_with_provider_using_active_embeddings_time_window(
                     created_at_ms: e.start_at_ms,
                     distance: None,
                     text,
+                    citation_suffix: None,
                 });
             }
 
@@ -923,6 +952,7 @@ pub fn ask_ai_with_provider_using_active_embeddings_time_window(
                     created_at_ms: todo.created_at_ms,
                     distance: None,
                     text: ctx,
+                    citation_suffix: None,
                 });
             }
 

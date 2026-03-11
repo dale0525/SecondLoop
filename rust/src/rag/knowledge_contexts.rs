@@ -37,7 +37,17 @@ pub(super) fn try_build_knowledge_contexts(
 
     Ok(knowledge::retrieve_context_blocks(conn, key, &request)?
         .into_iter()
-        .map(|block| block.rendered_text)
+        .map(|block| {
+            let mut rendered = block.rendered_text;
+            if let Some(message_id) = block.anchors.message_id.as_deref() {
+                let citation = format!("[History](secondloop://message/{message_id})");
+                if !rendered.contains(&citation) {
+                    rendered.push('\n');
+                    rendered.push_str(&citation);
+                }
+            }
+            rendered
+        })
         .collect())
 }
 

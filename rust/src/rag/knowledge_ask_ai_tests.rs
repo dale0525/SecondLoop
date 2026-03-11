@@ -93,3 +93,22 @@ fn knowledge_ask_ai_contexts_include_multiple_sources() {
         "expected at least 2 sources in contexts: {sources:?}"
     );
 }
+
+#[test]
+fn knowledge_ask_ai_contexts_include_message_deeplinks() {
+    let fixture = seeded_fixture();
+    let contexts = try_build_knowledge_contexts(
+        &fixture.conn,
+        &fixture.key,
+        "freeze-signal budget decision",
+        6,
+        Focus::ThisThread,
+        &fixture.conversation_id,
+        None,
+    )
+    .expect("contexts");
+
+    assert!(contexts
+        .iter()
+        .any(|ctx| ctx.contains("secondloop://message/")));
+}

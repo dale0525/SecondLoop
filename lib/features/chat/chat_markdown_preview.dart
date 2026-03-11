@@ -13,6 +13,37 @@ final RegExp _escapedNewlinePattern = RegExp(r'(?<!\\)\\n');
 final RegExp _escapedCarriageNewlinePattern = RegExp(r'(?<!\\)\\r\\n');
 final RegExp _escapedCarriageReturnPattern = RegExp(r'(?<!\\)\\r');
 
+final RegExp _bareSecondLoopDeepLinkPattern =
+    RegExp(r'secondloop://(?:attachment|message)/[^\s<>()\]]+');
+final RegExp _secondLoopTrailingPunctuationPattern = RegExp(r'[.,;:!?]+$');
+
+String _linkifyBareSecondLoopDeepLinks(String input) {
+  return input.replaceAllMapped(_bareSecondLoopDeepLinkPattern, (match) {
+    final raw = match.group(0) ?? '';
+    if (raw.isEmpty) {
+      return raw;
+    }
+
+    final start = match.start;
+    final end = match.end;
+    final precededByMarkdownDestination =
+        start >= 2 && input.substring(start - 2, start) == '](';
+    final followedByMarkdownLabel =
+        end + 2 <= input.length && input.substring(end, end + 2) == '](';
+    if (precededByMarkdownDestination || followedByMarkdownLabel) {
+      return raw;
+    }
+
+    final href = raw.replaceFirst(_secondLoopTrailingPunctuationPattern, '');
+    if (href.isEmpty) {
+      return raw;
+    }
+
+    final trailing = raw.substring(href.length);
+    return '[$href]($href)$trailing';
+  });
+}
+
 String normalizeChatMarkdownForPreview(
   String raw, {
   bool restoreEscapedNewlines = false,
@@ -28,7 +59,7 @@ String normalizeChatMarkdownForPreview(
         .replaceAll(_escapedCarriageReturnPattern, '\r');
   }
 
-  return sanitizeChatMarkdown(normalized);
+  return _linkifyBareSecondLoopDeepLinks(sanitizeChatMarkdown(normalized));
 }
 
 MarkdownStyleSheet chatMarkdownPreviewStyleSheet(

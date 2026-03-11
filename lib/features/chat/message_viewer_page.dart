@@ -14,6 +14,8 @@ import '../attachments/attachment_deeplink.dart';
 import '../attachments/attachment_viewer_page.dart';
 import '../knowledge_viewer/knowledge_document_viewer.dart';
 import 'chat_markdown_link_handler.dart';
+import 'chat_markdown_preview.dart';
+import 'message_deeplink.dart';
 import 'chat_markdown_rich_rendering.dart';
 import 'chat_markdown_sanitizer.dart';
 import 'chat_markdown_theme_presets.dart';
@@ -39,6 +41,31 @@ class MessageViewerPage extends StatelessWidget {
   final String content;
   final String? messageId;
 
+  static Future<void> openById(
+    BuildContext context, {
+    required String messageId,
+  }) async {
+    final session = SessionScope.maybeOf(context);
+    if (session == null) {
+      return;
+    }
+
+    final backend = AppBackendScope.of(context);
+    final message = await backend.getMessageById(session.sessionKey, messageId);
+    if (!context.mounted || message == null) {
+      return;
+    }
+
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => MessageViewerPage(
+          content: message.content,
+          messageId: message.id,
+        ),
+      ),
+    );
+  }
+
   Future<bool> _openInAppAttachment(BuildContext context, String href) async {
     final parsed = parseAttachmentDeepLink(href);
     if (parsed == null) return false;
@@ -48,6 +75,27 @@ class MessageViewerPage extends StatelessWidget {
       attachmentSha256: parsed.attachmentSha256,
     );
     return true;
+  }
+
+  Future<bool> _openInAppMessage(BuildContext context, String href) async {
+    final parsed = parseMessageDeepLink(href);
+    if (parsed == null) return false;
+
+    await MessageViewerPage.openById(
+      context,
+      messageId: parsed.messageId,
+    );
+    return true;
+  }
+
+  Future<bool> _openInAppLink(BuildContext context, String href) async {
+    if (await _openInAppAttachment(context, href)) {
+      return true;
+    }
+    if (!context.mounted) {
+      return false;
+    }
+    return _openInAppMessage(context, href);
   }
 
   Future<_ResolvedMessageKnowledgeDocument?> _resolveKnowledgeDocument(
@@ -100,7 +148,7 @@ class MessageViewerPage extends StatelessWidget {
         unawaited(
           handleChatMarkdownTapLink(
             href,
-            handleInApp: (target) => _openInAppAttachment(context, target),
+            handleInApp: (target) => _openInAppLink(context, target),
           ),
         );
       },
@@ -160,7 +208,8 @@ class MessageViewerPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final normalized = sanitizeChatMarkdown(content);
+    final normalized = normalizeChatMarkdownForPreview(content);
+    final copyText = sanitizeChatMarkdown(content);
 
     return Scaffold(
       key: const ValueKey('message_viewer_page'),
@@ -173,7 +222,7 @@ class MessageViewerPage extends StatelessWidget {
             icon: const Icon(Icons.copy_all_rounded),
             onPressed: () async {
               try {
-                await Clipboard.setData(ClipboardData(text: normalized.trim()));
+                await Clipboard.setData(ClipboardData(text: copyText.trim()));
               } catch (_) {
                 return;
               }

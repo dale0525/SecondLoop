@@ -213,7 +213,12 @@ fn collect_scoped_contexts(
             continue;
         }
 
-        contexts.push(trimmed.to_string());
+        let citation = format!("[History](secondloop://message/{})", message.id);
+        if trimmed.contains(&citation) {
+            contexts.push(trimmed.to_string());
+        } else {
+            contexts.push(format!("{trimmed}\n{citation}"));
+        }
     }
 
     contexts.reverse();
@@ -226,9 +231,16 @@ fn build_scoped_prompt(question: &str, contexts: &[String]) -> String {
     out.push_str("IMPORTANT: Reply in the same language as the user's question.\n");
     out.push_str("IMPORTANT: Use only the scoped memories below as evidence.\n");
     out.push_str("IMPORTANT: If you cite attachment evidence, use only secondloop links.\n");
+    out.push_str(
+        "IMPORTANT: If you cite scoped memories/history, use only secondloop message links.\n",
+    );
     out.push_str("- Resource citation: [label](secondloop://attachment/<sha>)\n");
     out.push_str(
         "- Chunk citation: [label](secondloop://attachment/<sha>?kind=<kind>&chunk=<i>)\n",
+    );
+    out.push_str("- History citation: [label](secondloop://message/<message_id>)\n");
+    out.push_str(
+        "Always emit citations as Markdown links, never raw message_id=... or bare secondloop:// URLs.\n",
     );
     out.push_str(
         "If the scoped memories are insufficient, explicitly say no matching records.\n\n",
@@ -736,6 +748,48 @@ mod tests {
         assert_eq!(contexts.len(), 1);
         assert!(contexts[0].contains("personal note"));
         assert!(contexts.iter().all(|v| !v.contains("work note")));
+    }
+
+    #[test]
+    fn collect_scoped_contexts_appends_message_deeplink() {
+        use rusqlite::params;
+
+        let temp = tempdir().expect("tempdir");
+        let app_dir = temp.path().join("secondloop");
+        let key =
+            auth::init_master_password(&app_dir, "pw", KdfParams::for_test()).expect("init auth");
+        let conn = db::open(&app_dir).expect("open db");
+
+        let conversation =
+            db::create_conversation(&conn, &key, "Main").expect("create conversation");
+        let remembered =
+            db::insert_message(&conn, &key, &conversation.id, "user", "remembered note")
+                .expect("insert remembered");
+
+        conn.execute(
+            "UPDATE messages SET created_at = ?2 WHERE id = ?1",
+            params![remembered.id, 1_700_000_000_000i64],
+        )
+        .expect("set remembered time");
+
+        let contexts = collect_scoped_contexts(
+            &conn,
+            &key,
+            &conversation.id,
+            &[],
+            &[],
+            10,
+            Some(TimeScope {
+                start_ms_inclusive: 0,
+                end_ms_exclusive: 1_800_000_000_000i64,
+            }),
+            ScopedFocus::Conversation,
+        )
+        .expect("collect contexts");
+
+        assert_eq!(contexts.len(), 1);
+        assert!(contexts[0].contains("remembered note"));
+        assert!(contexts[0].contains("secondloop://message/"));
     }
 
     #[test]
