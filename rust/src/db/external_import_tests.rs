@@ -97,6 +97,22 @@ fn create_generic_markdown_zip(root: &Path) -> PathBuf {
     zip_path
 }
 
+fn create_zip_with_oversized_entry(root: &Path) -> PathBuf {
+    let zip_path = root.join("oversized-markdown-library.zip");
+    let file = fs::File::create(&zip_path).expect("create oversized zip");
+    let mut writer = zip::ZipWriter::new(file);
+    let options = FileOptions::default();
+    writer
+        .start_file("notes/too-large.md", options)
+        .expect("start oversized entry");
+    let chunk = vec![b'a'; 1024 * 1024];
+    for _ in 0..65 {
+        writer.write_all(&chunk).expect("write oversized chunk");
+    }
+    writer.finish().expect("finish oversized zip");
+    zip_path
+}
+
 #[test]
 fn external_import_scan_detects_generic_markdown_notes_and_attachments() {
     let dir = tempdir().expect("tempdir");
@@ -121,6 +137,17 @@ fn external_import_scan_supports_zip_sources() {
     assert_eq!(summary.detected_source_kind, "markdown");
     assert_eq!(summary.notes_count, 4);
     assert_eq!(summary.attachments_count, 2);
+}
+
+#[test]
+fn external_import_scan_rejects_oversized_zip_entries() {
+    let dir = tempdir().expect("tempdir");
+    let source = create_zip_with_oversized_entry(dir.path());
+
+    let err =
+        scan_external_import_source(dir.path(), &source).expect_err("oversized zip should fail");
+
+    assert!(err.to_string().contains("archive entry exceeds size limit"));
 }
 
 #[test]

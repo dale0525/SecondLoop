@@ -1,4 +1,8 @@
 use std::collections::BTreeMap;
+use std::io::Read;
+
+const MAX_EXTERNAL_IMPORT_ZIP_ENTRY_BYTES: u64 = 64 * 1024 * 1024;
+const MAX_EXTERNAL_IMPORT_ZIP_TOTAL_BYTES: u64 = 512 * 1024 * 1024;
 
 #[derive(Clone, Debug)]
 struct MaterializedExternalImportSource {
@@ -47,7 +51,6 @@ struct ExternalImportParseDiagnostic {
 
 #[derive(Clone, Debug)]
 struct MarkdownNoteCandidate {
-    path: PathBuf,
     rel_path: String,
     rel_path_without_extension: String,
     basename: String,
@@ -75,7 +78,7 @@ struct ParsedWikilinkTarget {
 }
 
 enum MarkdownNoteMatch {
-    Unique(usize),
+    Unique,
     Ambiguous,
     Missing,
 }
@@ -162,23 +165,47 @@ fn materialize_external_import_source(
     let stage_dir = external_readonly_staging_dir(app_dir).join(uuid::Uuid::new_v4().to_string());
     fs::create_dir_all(&stage_dir)?;
 
-    let file = fs::File::open(source_path)?;
-    let mut archive = zip::ZipArchive::new(file)?;
-    for index in 0..archive.len() {
-        let mut entry = archive.by_index(index)?;
-        let Some(name) = entry.enclosed_name().map(|value| value.to_path_buf()) else {
-            continue;
-        };
-        let out_path = stage_dir.join(name);
-        if entry.is_dir() {
-            fs::create_dir_all(&out_path)?;
-            continue;
+    let extract_result = (|| -> Result<()> {
+        let file = fs::File::open(source_path)?;
+        let mut archive = zip::ZipArchive::new(file)?;
+        let mut total_extracted_bytes = 0u64;
+        for index in 0..archive.len() {
+            let mut entry = archive.by_index(index)?;
+            let Some(name) = entry.enclosed_name().map(|value| value.to_path_buf()) else {
+                continue;
+            };
+            let out_path = stage_dir.join(name);
+            if entry.is_dir() {
+                fs::create_dir_all(&out_path)?;
+                continue;
+            }
+            if let Some(parent) = out_path.parent() {
+                fs::create_dir_all(parent)?;
+            }
+            let mut out = fs::File::create(&out_path)?;
+            let copied_bytes = std::io::copy(
+                &mut entry.by_ref().take(MAX_EXTERNAL_IMPORT_ZIP_ENTRY_BYTES + 1),
+                &mut out,
+            )?;
+            if copied_bytes > MAX_EXTERNAL_IMPORT_ZIP_ENTRY_BYTES {
+                return Err(anyhow!(
+                    "archive entry exceeds size limit: {}",
+                    out_path.display()
+                ));
+            }
+            total_extracted_bytes = total_extracted_bytes.saturating_add(copied_bytes);
+            if total_extracted_bytes > MAX_EXTERNAL_IMPORT_ZIP_TOTAL_BYTES {
+                return Err(anyhow!(
+                    "archive exceeds size limit: {} bytes",
+                    MAX_EXTERNAL_IMPORT_ZIP_TOTAL_BYTES
+                ));
+            }
         }
-        if let Some(parent) = out_path.parent() {
-            fs::create_dir_all(parent)?;
-        }
-        let mut out = fs::File::create(&out_path)?;
-        std::io::copy(&mut entry, &mut out)?;
+        Ok(())
+    })();
+    if let Err(err) = extract_result {
+        let _ = fs::remove_dir_all(&stage_dir);
+        return Err(err);
     }
 
     Ok(MaterializedExternalImportSource {
@@ -459,7 +486,6 @@ fn build_markdown_note_index(root: &Path, markdown_paths: &[PathBuf]) -> Markdow
             .unwrap_or_default();
 
         let candidate = MarkdownNoteCandidate {
-            path: path.clone(),
             rel_path: normalize_note_lookup_key(&rel_path),
             rel_path_without_extension: normalize_note_lookup_key(&rel_path_without_extension),
             basename: normalize_note_lookup_key(&basename),
@@ -510,7 +536,7 @@ fn resolve_markdown_note_target(
         return MarkdownNoteMatch::Missing;
     };
     if candidate_indices.len() == 1 {
-        return MarkdownNoteMatch::Unique(candidate_indices[0]);
+        return MarkdownNoteMatch::Unique;
     }
 
     let doc_dir_key = normalize_note_lookup_key(&normalize_external_import_source_rel_path(root, doc_dir));
@@ -522,7 +548,7 @@ fn resolve_markdown_note_target(
         })
         .collect::<Vec<(usize, usize)>>();
     ranked.sort_by_key(|(_, distance)| *distance);
-    let Some((best_index, best_distance)) = ranked.first().copied() else {
+    let Some((_, best_distance)) = ranked.first().copied() else {
         return MarkdownNoteMatch::Missing;
     };
     let tied_best_count = ranked
@@ -532,13 +558,12 @@ fn resolve_markdown_note_target(
     if tied_best_count > 1 {
         MarkdownNoteMatch::Ambiguous
     } else {
-        MarkdownNoteMatch::Unique(best_index)
+        MarkdownNoteMatch::Unique
     }
 }
 
 fn parse_wikilink_target(raw_target: &str) -> Option<ParsedWikilinkTarget> {
-    let target_without_alias = raw_target.split('|').next().unwrap_or("").trim();
-    let target_without_heading = target_without_alias.split('#').next().unwrap_or("").trim();
+    let target_without_heading = raw_target.split('#').next().unwrap_or("").trim();
     let lookup_key = normalize_note_lookup_key(target_without_heading);
     if lookup_key.is_empty() {
         return None;
@@ -651,9 +676,7 @@ fn build_canonical_markdown_document(
 
         if is_explicit_markdown || parsed_target.explicit_extension.is_none() || wikilink.is_embed {
             match resolve_markdown_note_target(note_index, doc_dir, root, &parsed_target.lookup_key) {
-                MarkdownNoteMatch::Unique(candidate_index) => {
-                    let _ = &note_index.candidates[candidate_index].path;
-                }
+                MarkdownNoteMatch::Unique => {}
                 MarkdownNoteMatch::Ambiguous => push_parse_diagnostic(
                     diagnostics,
                     "scan",
