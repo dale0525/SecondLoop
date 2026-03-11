@@ -102,6 +102,15 @@ fn contains_ascii_scope_phrase(haystack: &str, needle: &str) -> bool {
     padded_haystack.contains(&padded_needle)
 }
 
+fn contains_non_ascii_scope_phrase(haystack: &str, needle: &str) -> bool {
+    let needle = needle.trim();
+    if haystack.is_empty() || needle.chars().count() < 2 {
+        return false;
+    }
+
+    haystack.contains(needle)
+}
+
 fn system_tag_scope_aliases(system_key: &str) -> &'static [&'static str] {
     match system_key {
         "work" => &["work", "工作"],
@@ -125,7 +134,7 @@ fn question_mentions_tag(question_normalized: &str, tag: &db::Tag) -> bool {
             if contains_ascii_scope_phrase(question_normalized, &normalized_tag_name) {
                 return true;
             }
-        } else if question_normalized.contains(&normalized_tag_name) {
+        } else if contains_non_ascii_scope_phrase(question_normalized, &normalized_tag_name) {
             return true;
         }
     }
@@ -147,7 +156,7 @@ fn question_mentions_tag(question_normalized: &str, tag: &db::Tag) -> bool {
             continue;
         }
 
-        if question_normalized.contains(&normalized_alias) {
+        if contains_non_ascii_scope_phrase(question_normalized, &normalized_alias) {
             return true;
         }
     }
@@ -258,6 +267,8 @@ fn collect_scoped_contexts(
     let include_tag_ids = normalize_tag_ids(include_tag_ids);
     let exclude_tag_ids = normalize_tag_ids(exclude_tag_ids);
 
+    // Preserve the pre-existing time-only fallback: if no tag filters are present
+    // (including when tag inference finds none), still scan the full time window.
     if include_tag_ids.is_empty() && exclude_tag_ids.is_empty() && time_scope.is_none() {
         return Ok(Vec::new());
     }
@@ -906,6 +917,24 @@ mod tests {
 
         assert_eq!(contexts.len(), 1);
         assert!(contexts[0].contains("work only"));
+    }
+
+    #[test]
+    fn resolve_scoped_include_tag_ids_ignores_single_character_non_ascii_tags() {
+        let temp = tempdir().expect("tempdir");
+        let app_dir = temp.path().join("secondloop");
+        let key =
+            auth::init_master_password(&app_dir, "pw", KdfParams::for_test()).expect("init auth");
+        let conn = db::open(&app_dir).expect("open db");
+
+        let work = db::upsert_tag(&conn, &key, "work").expect("upsert work tag");
+        let single_char = db::upsert_tag(&conn, &key, "工").expect("upsert single-char tag");
+
+        let include_tag_ids = resolve_scoped_include_tag_ids(&conn, &key, "写一份工作周报", &[])
+            .expect("resolve include tag ids");
+
+        assert!(include_tag_ids.contains(&work.id));
+        assert!(!include_tag_ids.contains(&single_char.id));
     }
 
     #[test]

@@ -76,6 +76,24 @@ typedef AskAiStreamScopedFn = Stream<String> Function({
   required String localDay,
 });
 
+typedef AskAiStreamCloudGatewayScopedFn = Stream<String> Function({
+  required String appDir,
+  required List<int> key,
+  required String conversationId,
+  required String question,
+  required int topK,
+  required bool thisThreadOnly,
+  int? timeStartMs,
+  int? timeEndMs,
+  required List<String> includeTagIds,
+  required List<String> excludeTagIds,
+  required bool strictMode,
+  required String localeLanguage,
+  required String gatewayBaseUrl,
+  required String firebaseIdToken,
+  required String modelName,
+});
+
 class NativeAppBackend
     implements
         AppBackend,
@@ -89,6 +107,7 @@ class NativeAppBackend
     DbProcessPendingMessageEmbeddingsFn? dbProcessPendingMessageEmbeddings,
     DbReleaseLocalEmbeddingModelIfIdleFn? dbReleaseLocalEmbeddingModelIfIdle,
     AskAiStreamScopedFn? askAiStreamScopedFn,
+    AskAiStreamCloudGatewayScopedFn? askAiStreamCloudGatewayScopedFn,
     RustLibInitFn? rustLibInit,
   })  : _secureBlobStore = SecureBlobStore(storage: secureStorage),
         _appDirProvider = appDirProvider ?? _defaultAppDirProvider,
@@ -103,6 +122,8 @@ class NativeAppBackend
                 rust_embedding_lifecycle.dbReleaseLocalEmbeddingModelIfIdle,
         _askAiStreamScoped =
             askAiStreamScopedFn ?? rust_ask_scope.ragAskAiStreamScoped,
+        _askAiStreamCloudGatewayScoped = askAiStreamCloudGatewayScopedFn ??
+            rust_ask_scope.ragAskAiStreamCloudGatewayScoped,
         _rustLibInit = rustLibInit ??
             (() => RustLib.init(
                   externalLibrary: resolveDesktopRustExternalLibrary(),
@@ -116,6 +137,7 @@ class NativeAppBackend
   final DbReleaseLocalEmbeddingModelIfIdleFn
       _dbReleaseLocalEmbeddingModelIfIdle;
   final AskAiStreamScopedFn _askAiStreamScoped;
+  final AskAiStreamCloudGatewayScopedFn _askAiStreamCloudGatewayScoped;
   final RustLibInitFn _rustLibInit;
 
   String? _appDir;
@@ -1681,7 +1703,7 @@ class NativeAppBackend
     required String modelName,
   }) async* {
     final appDir = await _getAppDir();
-    yield* rust_ask_scope.ragAskAiStreamCloudGatewayScoped(
+    yield* _askAiStreamCloudGatewayScoped(
       appDir: appDir,
       key: key,
       conversationId: conversationId,

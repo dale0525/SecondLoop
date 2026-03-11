@@ -88,4 +88,99 @@ void main() {
     expect(capturedLocaleLanguage, 'zh');
     expect(capturedLocalDay, '2026-03-11');
   });
+
+  test('NativeAppBackend.askAiStreamCloudGatewayScoped forwards args',
+      () async {
+    String? capturedAppDir;
+    List<int>? capturedKey;
+    String? capturedConversationId;
+    String? capturedQuestion;
+    int? capturedTopK;
+    bool? capturedThisThreadOnly;
+    int? capturedTimeStartMs;
+    int? capturedTimeEndMs;
+    List<String>? capturedIncludeTagIds;
+    List<String>? capturedExcludeTagIds;
+    bool? capturedStrictMode;
+    String? capturedLocaleLanguage;
+    String? capturedGatewayBaseUrl;
+    String? capturedIdToken;
+    String? capturedModelName;
+
+    final backend = NativeAppBackend(
+      appDirProvider: () async => '/tmp/secondloop_test',
+      rustLibInit: () async {},
+      askAiStreamCloudGatewayScopedFn: ({
+        required String appDir,
+        required List<int> key,
+        required String conversationId,
+        required String question,
+        required int topK,
+        required bool thisThreadOnly,
+        int? timeStartMs,
+        int? timeEndMs,
+        required List<String> includeTagIds,
+        required List<String> excludeTagIds,
+        required bool strictMode,
+        required String localeLanguage,
+        required String gatewayBaseUrl,
+        required String firebaseIdToken,
+        required String modelName,
+      }) {
+        capturedAppDir = appDir;
+        capturedKey = List<int>.from(key);
+        capturedConversationId = conversationId;
+        capturedQuestion = question;
+        capturedTopK = topK;
+        capturedThisThreadOnly = thisThreadOnly;
+        capturedTimeStartMs = timeStartMs;
+        capturedTimeEndMs = timeEndMs;
+        capturedIncludeTagIds = List<String>.from(includeTagIds);
+        capturedExcludeTagIds = List<String>.from(excludeTagIds);
+        capturedStrictMode = strictMode;
+        capturedLocaleLanguage = localeLanguage;
+        capturedGatewayBaseUrl = gatewayBaseUrl;
+        capturedIdToken = firebaseIdToken;
+        capturedModelName = modelName;
+        return Stream<String>.fromIterable(const <String>['ok']);
+      },
+    );
+
+    final key = Uint8List.fromList(List<int>.filled(32, 2));
+    final result = await backend
+        .askAiStreamCloudGatewayScoped(
+          key,
+          'c2',
+          question: '写一份工作周报',
+          topK: 8,
+          thisThreadOnly: true,
+          timeStartMs: 300,
+          timeEndMs: 400,
+          includeTagIds: const <String>['system.tag.work'],
+          excludeTagIds: const <String>['system.tag.personal'],
+          strictMode: false,
+          localeLanguage: 'zh-CN',
+          gatewayBaseUrl: 'https://gateway.example.com',
+          idToken: 'token-123',
+          modelName: 'gpt-5-mini',
+        )
+        .toList();
+
+    expect(result, const <String>['ok']);
+    expect(capturedAppDir, '/tmp/secondloop_test');
+    expect(capturedKey, orderedEquals(key));
+    expect(capturedConversationId, 'c2');
+    expect(capturedQuestion, '写一份工作周报');
+    expect(capturedTopK, 8);
+    expect(capturedThisThreadOnly, isTrue);
+    expect(capturedTimeStartMs, 300);
+    expect(capturedTimeEndMs, 400);
+    expect(capturedIncludeTagIds, const <String>['system.tag.work']);
+    expect(capturedExcludeTagIds, const <String>['system.tag.personal']);
+    expect(capturedStrictMode, isFalse);
+    expect(capturedLocaleLanguage, 'zh-CN');
+    expect(capturedGatewayBaseUrl, 'https://gateway.example.com');
+    expect(capturedIdToken, 'token-123');
+    expect(capturedModelName, 'gpt-5-mini');
+  });
 }
