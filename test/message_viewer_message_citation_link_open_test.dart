@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:secondloop/core/backend/app_backend.dart';
@@ -55,6 +56,36 @@ void main() {
       find.text('Budget review happened last Monday.', findRichText: true),
       findsOneWidget,
     );
+  });
+
+  testWidgets(
+      'message viewer leaves bare secondloop deeplinks for inline syntax handling',
+      (tester) async {
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: TestAppBackend(initialMessages: const <Message>[]),
+            child: SessionScope(
+              sessionKey: Uint8List.fromList(List<int>.filled(32, 9)),
+              lock: () {},
+              child: const MessageViewerPage(
+                content: 'secondloop://message/history-raw',
+                messageId: 'viewer-root',
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    final markdown = tester.widget<Markdown>(
+      find.byKey(const ValueKey('message_viewer_markdown')),
+    );
+
+    expect(markdown.data, 'secondloop://message/history-raw');
   });
 
   testWidgets('message viewer does not recursively reopen the same message',

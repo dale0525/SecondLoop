@@ -33,14 +33,18 @@ fn message_citation_link(message_id: &str) -> Option<String> {
     Some(format!("[History](secondloop://message/{trimmed})"))
 }
 
-fn append_message_citation(context: String, message_id: &str) -> String {
+fn append_message_citation(mut context: String, message_id: &str) -> String {
     let Some(citation) = message_citation_link(message_id) else {
         return context;
     };
     if context.contains(&citation) {
         return context;
     }
-    format!("{context}\n{citation}")
+    if !context.is_empty() && !context.ends_with('\n') {
+        context.push('\n');
+    }
+    context.push_str(&citation);
+    context
 }
 
 fn format_history_line(role: &str, message_id: &str, content: &str) -> String {
@@ -993,4 +997,34 @@ pub fn ask_ai_with_provider_using_active_embeddings_time_window(
         provider,
         on_event,
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::append_message_citation;
+
+    #[test]
+    fn append_message_citation_avoids_leading_or_double_newlines() {
+        let empty = append_message_citation(String::new(), "abc");
+        assert_eq!(empty, "[History](secondloop://message/abc)");
+
+        let single = append_message_citation("body".to_string(), "abc");
+        assert_eq!(
+            single,
+            "body
+[History](secondloop://message/abc)"
+        );
+
+        let trailing_newline = append_message_citation(
+            "body
+"
+            .to_string(),
+            "abc",
+        );
+        assert_eq!(
+            trailing_newline,
+            "body
+[History](secondloop://message/abc)"
+        );
+    }
 }

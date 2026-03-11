@@ -14,7 +14,6 @@ import '../attachments/attachment_deeplink.dart';
 import '../attachments/attachment_viewer_page.dart';
 import '../knowledge_viewer/knowledge_document_viewer.dart';
 import 'chat_markdown_link_handler.dart';
-import 'chat_markdown_preview.dart';
 import 'message_deeplink.dart';
 import 'chat_markdown_rich_rendering.dart';
 import 'chat_markdown_sanitizer.dart';
@@ -238,7 +237,7 @@ class MessageViewerPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final normalized = normalizeChatMarkdownForPreview(content);
+    final normalized = sanitizeChatMarkdown(content);
     final copyText = sanitizeChatMarkdown(content);
 
     return Scaffold(
