@@ -238,7 +238,7 @@ class MessageViewerPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final normalized = sanitizeChatMarkdown(content);
-    final copyText = sanitizeChatMarkdown(content);
+    final copyText = normalized;
 
     return Scaffold(
       key: const ValueKey('message_viewer_page'),
