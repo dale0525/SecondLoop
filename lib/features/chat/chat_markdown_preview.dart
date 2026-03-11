@@ -28,7 +28,12 @@ bool _isInsideMarkdownLabel(String input, int start) {
   }
 
   final lastCloseBracket = input.lastIndexOf(']', start - 1);
-  return lastOpenBracket > lastCloseBracket;
+  if (lastOpenBracket <= lastCloseBracket) {
+    return false;
+  }
+
+  final textBetween = input.substring(lastOpenBracket + 1, start);
+  return !textBetween.contains('\n');
 }
 
 String _linkifyBareSecondLoopDeepLinks(String input) {

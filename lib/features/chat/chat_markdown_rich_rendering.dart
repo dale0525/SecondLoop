@@ -14,9 +14,11 @@ List<md.BlockSyntax> buildChatMarkdownBlockSyntaxes() {
   ];
 }
 
-List<md.InlineSyntax> buildChatMarkdownInlineSyntaxes() {
+List<md.InlineSyntax> buildChatMarkdownInlineSyntaxes({
+  bool enableSecondLoopDeepLinks = false,
+}) {
   return <md.InlineSyntax>[
-    _SecondLoopDeepLinkSyntax(),
+    if (enableSecondLoopDeepLinks) _SecondLoopDeepLinkSyntax(),
     _LatexInlineSyntax(),
   ];
 }

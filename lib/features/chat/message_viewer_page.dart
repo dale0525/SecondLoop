@@ -168,7 +168,9 @@ class MessageViewerPage extends StatelessWidget {
       softLineBreak: true,
       styleSheet: slMarkdownStyleSheet(context),
       blockSyntaxes: buildChatMarkdownBlockSyntaxes(),
-      inlineSyntaxes: buildChatMarkdownInlineSyntaxes(),
+      inlineSyntaxes: buildChatMarkdownInlineSyntaxes(
+        enableSecondLoopDeepLinks: true,
+      ),
       builders: buildChatMarkdownElementBuilders(
         previewTheme: previewTheme,
         exportRenderMode: false,

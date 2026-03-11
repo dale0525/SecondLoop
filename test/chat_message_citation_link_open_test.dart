@@ -60,6 +60,22 @@ void main() {
     expect(normalized, original);
   });
 
+  test(
+      'normalizeChatMarkdownForPreview still linkifies bare deep links after orphaned opening bracket on earlier line',
+      () {
+    const original =
+        "Here's what I found: [\n- Project kickoff secondloop://message/history-1";
+
+    final normalized = normalizeChatMarkdownForPreview(original);
+
+    expect(
+      normalized,
+      contains(
+        '[secondloop://message/history-1](secondloop://message/history-1)',
+      ),
+    );
+  });
+
   testWidgets('chat citation secondloop message link opens message viewer',
       (tester) async {
     final backend = _Backend(

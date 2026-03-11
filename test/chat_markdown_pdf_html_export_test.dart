@@ -181,4 +181,19 @@ $$
 
     await tempDir.delete(recursive: true);
   });
+
+  test('PDF HTML export does not turn bare message deeplinks into anchors',
+      () async {
+    final html = await buildChatMarkdownPdfHtmlDocument(
+      markdown: 'History: secondloop://message/history-1',
+      theme: buildTheme(),
+      emptyFallback: 'Empty',
+    );
+
+    expect(html, contains('secondloop://message/history-1'));
+    expect(
+      html,
+      isNot(contains('href="secondloop://message/history-1"')),
+    );
+  });
 }
