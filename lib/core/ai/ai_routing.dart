@@ -66,6 +66,18 @@ Future<AskAiRouteKind> decideAiAutomationRoute(
   return AskAiRouteKind.needsSetup;
 }
 
+bool canRetryCloudAskWithoutEmbeddings({
+  required AskAiRouteKind route,
+  required bool allowCloudEmbeddings,
+  required bool hasTimeWindow,
+  required bool hasScopedStream,
+}) {
+  return !hasScopedStream &&
+      route == AskAiRouteKind.cloudGateway &&
+      allowCloudEmbeddings &&
+      !hasTimeWindow;
+}
+
 int? parseHttpStatusFromError(Object error) {
   final message = error.toString();
   final patterns = <RegExp>[

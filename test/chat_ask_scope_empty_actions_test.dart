@@ -98,6 +98,39 @@ void main() {
     expect(invocation.excludeTagIds, isEmpty);
     expect(invocation.thisThreadOnly, isFalse);
   });
+
+  test('scoped ask backend supports cloud gateway scoped stream', () async {
+    final backend = _ScopedAskBackend();
+
+    final result = await backend
+        .askAiStreamCloudGatewayScoped(
+          Uint8List.fromList(List<int>.filled(32, 1)),
+          'loop_home',
+          question: '写一份工作周报',
+          topK: 10,
+          thisThreadOnly: false,
+          timeStartMs: 100,
+          timeEndMs: 200,
+          includeTagIds: const <String>['system.tag.work'],
+          excludeTagIds: const <String>['system.tag.personal'],
+          strictMode: true,
+          localeLanguage: 'zh',
+          gatewayBaseUrl: 'https://gateway.test',
+          idToken: 'token',
+          modelName: 'gpt-test',
+        )
+        .toList();
+
+    expect(result, <String>[AskScopeEmptyResponse.english]);
+    expect(backend.scopedInvocations, hasLength(1));
+    final invocation = backend.scopedInvocations.single;
+    expect(invocation.question, '写一份工作周报');
+    expect(invocation.timeStartMs, 100);
+    expect(invocation.timeEndMs, 200);
+    expect(invocation.includeTagIds, const <String>['system.tag.work']);
+    expect(invocation.excludeTagIds, const <String>['system.tag.personal']);
+    expect(invocation.thisThreadOnly, isFalse);
+  });
 }
 
 Future<void> _pumpChatPage(
@@ -301,6 +334,36 @@ final class _ScopedAskBackend extends TestAppBackend {
     required bool strictMode,
     required String localeLanguage,
     required String localDay,
+  }) {
+    scopedInvocations.add(
+      _ScopedAskInvocation(
+        question: question,
+        thisThreadOnly: thisThreadOnly,
+        timeStartMs: timeStartMs,
+        timeEndMs: timeEndMs,
+        includeTagIds: List<String>.from(includeTagIds),
+        excludeTagIds: List<String>.from(excludeTagIds),
+      ),
+    );
+    return Stream<String>.fromIterable(<String>[AskScopeEmptyResponse.english]);
+  }
+
+  @override
+  Stream<String> askAiStreamCloudGatewayScoped(
+    Uint8List key,
+    String conversationId, {
+    required String question,
+    required int topK,
+    required bool thisThreadOnly,
+    int? timeStartMs,
+    int? timeEndMs,
+    required List<String> includeTagIds,
+    required List<String> excludeTagIds,
+    required bool strictMode,
+    required String localeLanguage,
+    required String gatewayBaseUrl,
+    required String idToken,
+    required String modelName,
   }) {
     scopedInvocations.add(
       _ScopedAskInvocation(

@@ -190,6 +190,48 @@ fn resolve_scoped_include_tag_ids(
     Ok(inferred.into_iter().collect())
 }
 
+#[allow(clippy::too_many_arguments)]
+fn resolve_scoped_contexts_snapshot(
+    conn: &Connection,
+    key: &[u8; 32],
+    conversation_id: &str,
+    question: &str,
+    include_tag_ids: &[String],
+    exclude_tag_ids: &[String],
+    top_k: usize,
+    time_scope: Option<TimeScope>,
+    focus: ScopedFocus,
+) -> Result<(Vec<String>, Vec<String>)> {
+    // Keep tag inference and context collection on the same SQLite read snapshot.
+    // Commit before any later writes or streaming-side effects.
+    conn.execute_batch("BEGIN DEFERRED;")?;
+    let result = (|| -> Result<(Vec<String>, Vec<String>)> {
+        let include_tag_ids = resolve_scoped_include_tag_ids(conn, key, question, include_tag_ids)?;
+        let contexts = collect_scoped_contexts(
+            conn,
+            key,
+            conversation_id,
+            &include_tag_ids,
+            exclude_tag_ids,
+            top_k,
+            time_scope,
+            focus,
+        )?;
+        Ok((include_tag_ids, contexts))
+    })();
+
+    match result {
+        Ok(values) => {
+            conn.execute_batch("COMMIT;")?;
+            Ok(values)
+        }
+        Err(err) => {
+            let _ = conn.execute_batch("ROLLBACK;");
+            Err(err)
+        }
+    }
+}
+
 fn list_conversation_message_ids(conn: &Connection, conversation_id: &str) -> Result<Vec<String>> {
     let mut stmt = conn.prepare(
         r#"SELECT id
@@ -522,13 +564,11 @@ pub fn rag_ask_ai_stream_scoped(
             ScopedFocus::AllMemories
         };
 
-        let include_tag_ids =
-            resolve_scoped_include_tag_ids(&conn, &key, &question, &include_tag_ids)?;
-
-        let contexts = collect_scoped_contexts(
+        let (_, contexts) = resolve_scoped_contexts_snapshot(
             &conn,
             &key,
             &conversation_id,
+            &question,
             &include_tag_ids,
             &exclude_tag_ids,
             top_k as usize,
@@ -615,13 +655,11 @@ pub fn rag_ask_ai_stream_cloud_gateway_scoped(
             ScopedFocus::AllMemories
         };
 
-        let include_tag_ids =
-            resolve_scoped_include_tag_ids(&conn, &key, &question, &include_tag_ids)?;
-
-        let contexts = collect_scoped_contexts(
+        let (_, contexts) = resolve_scoped_contexts_snapshot(
             &conn,
             &key,
             &conversation_id,
+            &question,
             &include_tag_ids,
             &exclude_tag_ids,
             top_k as usize,
@@ -935,6 +973,80 @@ mod tests {
 
         assert!(include_tag_ids.contains(&work.id));
         assert!(!include_tag_ids.contains(&single_char.id));
+    }
+
+    #[test]
+    fn resolve_scoped_contexts_snapshot_infers_scope_and_collects_contexts() {
+        use rusqlite::params;
+
+        let temp = tempdir().expect("tempdir");
+        let app_dir = temp.path().join("secondloop");
+        let key =
+            auth::init_master_password(&app_dir, "pw", KdfParams::for_test()).expect("init auth");
+        let conn = db::open(&app_dir).expect("open db");
+
+        let conversation =
+            db::create_conversation(&conn, &key, "Main").expect("create conversation");
+
+        let work_note = db::insert_message(
+            &conn,
+            &key,
+            &conversation.id,
+            "user",
+            "prepare client update",
+        )
+        .expect("insert work_note");
+        let personal_note = db::insert_message(
+            &conn,
+            &key,
+            &conversation.id,
+            "user",
+            "book dentist appointment",
+        )
+        .expect("insert personal_note");
+
+        let base = 1_700_000_000_000i64;
+        for message_id in [&work_note.id, &personal_note.id] {
+            conn.execute(
+                "UPDATE messages SET created_at = ?2 WHERE id = ?1",
+                params![message_id, base - 2 * 24 * 60 * 60 * 1000],
+            )
+            .expect("set message time");
+        }
+
+        let work = db::upsert_tag(&conn, &key, "work").expect("upsert work tag");
+        let personal = db::upsert_tag(&conn, &key, "personal").expect("upsert personal tag");
+
+        db::set_message_tags(&conn, &key, &work_note.id, std::slice::from_ref(&work.id))
+            .expect("tag work_note");
+        db::set_message_tags(
+            &conn,
+            &key,
+            &personal_note.id,
+            std::slice::from_ref(&personal.id),
+        )
+        .expect("tag personal_note");
+
+        let (include_tag_ids, contexts) = resolve_scoped_contexts_snapshot(
+            &conn,
+            &key,
+            &conversation.id,
+            "写一份工作周报",
+            &[],
+            &[],
+            10,
+            Some(TimeScope {
+                start_ms_inclusive: base - 7 * 24 * 60 * 60 * 1000,
+                end_ms_exclusive: base,
+            }),
+            ScopedFocus::Conversation,
+        )
+        .expect("resolve scoped contexts snapshot");
+
+        assert_eq!(include_tag_ids, vec![work.id.clone()]);
+        assert_eq!(contexts.len(), 1);
+        assert!(contexts[0].contains("prepare client update"));
+        assert!(contexts.iter().all(|value| !value.contains("dentist")));
     }
 
     #[test]

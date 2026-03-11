@@ -194,10 +194,12 @@ extension _ChatPageStateMethodsE on _ChatPageState {
       cloudGatewayConfig: cloudGatewayConfig,
       cloudIdToken: cloudIdToken,
     );
-    final canRetryCloudWithoutEmbeddings =
-        route == AskAiRouteKind.cloudGateway &&
-            allowCloudEmbeddings &&
-            !hasTimeWindow;
+    final canRetryCloudWithoutEmbeddings = canRetryCloudAskWithoutEmbeddings(
+      route: route,
+      allowCloudEmbeddings: allowCloudEmbeddings,
+      hasTimeWindow: hasTimeWindow,
+      hasScopedStream: tagScopedStream != null,
+    );
 
     Stream<String> stream;
     if (tagScopedStream != null) {
