@@ -11,6 +11,7 @@ pub mod knowledge;
 pub mod llm;
 pub mod local_model_lifecycle;
 pub mod media_annotation;
+pub(crate) mod message_citations;
 pub mod rag;
 pub mod semantic_parse;
 pub mod sync;

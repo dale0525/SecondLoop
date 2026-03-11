@@ -5,6 +5,7 @@ use rusqlite::Connection;
 
 use crate::db;
 use crate::frb_generated::StreamSink;
+use crate::message_citations::append_message_citation_if_missing;
 use crate::{llm, rag};
 
 const ASK_AI_ERROR_PREFIX: &str = "\u{001e}SL_ERROR\u{001e}";
@@ -213,12 +214,10 @@ fn collect_scoped_contexts(
             continue;
         }
 
-        let citation = format!("[History](secondloop://message/{})", message.id);
-        if trimmed.contains(&citation) {
-            contexts.push(trimmed.to_string());
-        } else {
-            contexts.push(format!("{trimmed}\n{citation}"));
-        }
+        contexts.push(append_message_citation_if_missing(
+            trimmed.to_string(),
+            &message.id,
+        ));
     }
 
     contexts.reverse();
@@ -790,6 +789,52 @@ mod tests {
         assert_eq!(contexts.len(), 1);
         assert!(contexts[0].contains("remembered note"));
         assert!(contexts[0].contains("secondloop://message/"));
+    }
+
+    #[test]
+    fn collect_scoped_contexts_trims_message_id_in_citation() {
+        use rusqlite::params;
+
+        let temp = tempdir().expect("tempdir");
+        let app_dir = temp.path().join("secondloop");
+        let key =
+            auth::init_master_password(&app_dir, "pw", KdfParams::for_test()).expect("init auth");
+        let conn = db::open(&app_dir).expect("open db");
+
+        let conversation =
+            db::create_conversation(&conn, &key, "Main").expect("create conversation");
+        let remembered =
+            db::insert_message(&conn, &key, &conversation.id, "user", "remembered note")
+                .expect("insert remembered");
+
+        conn.execute("PRAGMA foreign_keys = OFF", [])
+            .expect("disable foreign keys for test rewrite");
+        conn.execute(
+            "UPDATE messages SET id = ?2, created_at = ?3 WHERE id = ?1",
+            params![remembered.id, "  spaced-id  ", 1_700_000_000_000i64],
+        )
+        .expect("rewrite remembered id and time");
+        conn.execute("PRAGMA foreign_keys = ON", [])
+            .expect("re-enable foreign keys after test rewrite");
+
+        let contexts = collect_scoped_contexts(
+            &conn,
+            &key,
+            &conversation.id,
+            &[],
+            &[],
+            10,
+            Some(TimeScope {
+                start_ms_inclusive: 0,
+                end_ms_exclusive: 1_800_000_000_000i64,
+            }),
+            ScopedFocus::Conversation,
+        )
+        .expect("collect contexts");
+
+        assert_eq!(contexts.len(), 1);
+        assert!(contexts[0].contains("[History](secondloop://message/spaced-id)"));
+        assert!(!contexts[0].contains("[History](secondloop://message/  spaced-id  )"));
     }
 
     #[test]

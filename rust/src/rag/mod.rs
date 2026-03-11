@@ -5,6 +5,9 @@ use std::path::Path;
 use crate::db;
 use crate::embedding::Embedder;
 use crate::llm::ChatDelta;
+use crate::message_citations::{
+    append_message_citation_if_missing as append_message_citation, message_citation_link,
+};
 
 mod attachment_resources;
 mod citations_prompt;
@@ -24,28 +27,6 @@ use knowledge_contexts::{merge_knowledge_and_legacy_contexts, try_build_knowledg
 
 const DEFAULT_MAX_HISTORY_MESSAGES: usize = 6;
 const DEFAULT_MAX_HISTORY_MESSAGE_CHARS: usize = 1200;
-
-fn message_citation_link(message_id: &str) -> Option<String> {
-    let trimmed = message_id.trim();
-    if trimmed.is_empty() {
-        return None;
-    }
-    Some(format!("[History](secondloop://message/{trimmed})"))
-}
-
-fn append_message_citation(mut context: String, message_id: &str) -> String {
-    let Some(citation) = message_citation_link(message_id) else {
-        return context;
-    };
-    if context.contains(&citation) {
-        return context;
-    }
-    if !context.is_empty() && !context.ends_with('\n') {
-        context.push('\n');
-    }
-    context.push_str(&citation);
-    context
-}
 
 fn format_history_line(role: &str, message_id: &str, content: &str) -> String {
     match message_citation_link(message_id) {
@@ -997,34 +978,4 @@ pub fn ask_ai_with_provider_using_active_embeddings_time_window(
         provider,
         on_event,
     )
-}
-
-#[cfg(test)]
-mod tests {
-    use super::append_message_citation;
-
-    #[test]
-    fn append_message_citation_avoids_leading_or_double_newlines() {
-        let empty = append_message_citation(String::new(), "abc");
-        assert_eq!(empty, "[History](secondloop://message/abc)");
-
-        let single = append_message_citation("body".to_string(), "abc");
-        assert_eq!(
-            single,
-            "body
-[History](secondloop://message/abc)"
-        );
-
-        let trailing_newline = append_message_citation(
-            "body
-"
-            .to_string(),
-            "abc",
-        );
-        assert_eq!(
-            trailing_newline,
-            "body
-[History](secondloop://message/abc)"
-        );
-    }
 }
