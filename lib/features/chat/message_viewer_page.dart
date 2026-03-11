@@ -35,23 +35,51 @@ class MessageViewerPage extends StatelessWidget {
   const MessageViewerPage({
     required this.content,
     this.messageId,
+    this.navigationTrail = const <String>[],
     super.key,
   });
 
+  static const int _maxNavigationDepth = 8;
+
   final String content;
   final String? messageId;
+  final List<String> navigationTrail;
+
+  List<String> get _effectiveNavigationTrail {
+    final trail = <String>[...navigationTrail];
+    final currentMessageId = messageId?.trim() ?? '';
+    if (currentMessageId.isNotEmpty && !trail.contains(currentMessageId)) {
+      trail.add(currentMessageId);
+    }
+    return trail;
+  }
 
   static Future<void> openById(
     BuildContext context, {
     required String messageId,
+    List<String> navigationTrail = const <String>[],
   }) async {
+    final normalizedMessageId = messageId.trim();
+    if (normalizedMessageId.isEmpty) {
+      return;
+    }
+    if (navigationTrail.contains(normalizedMessageId)) {
+      return;
+    }
+    if (navigationTrail.length >= _maxNavigationDepth) {
+      return;
+    }
+
     final session = SessionScope.maybeOf(context);
     if (session == null) {
       return;
     }
 
     final backend = AppBackendScope.of(context);
-    final message = await backend.getMessageById(session.sessionKey, messageId);
+    final message = await backend.getMessageById(
+      session.sessionKey,
+      normalizedMessageId,
+    );
     if (!context.mounted || message == null) {
       return;
     }
@@ -61,6 +89,7 @@ class MessageViewerPage extends StatelessWidget {
         builder: (context) => MessageViewerPage(
           content: message.content,
           messageId: message.id,
+          navigationTrail: <String>[...navigationTrail, normalizedMessageId],
         ),
       ),
     );
@@ -84,6 +113,7 @@ class MessageViewerPage extends StatelessWidget {
     await MessageViewerPage.openById(
       context,
       messageId: parsed.messageId,
+      navigationTrail: _effectiveNavigationTrail,
     );
     return true;
   }

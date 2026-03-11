@@ -56,4 +56,46 @@ void main() {
       findsOneWidget,
     );
   });
+
+  testWidgets('message viewer does not recursively reopen the same message',
+      (tester) async {
+    final backend = TestAppBackend(
+      initialMessages: const [
+        Message(
+          id: 'history-self',
+          conversationId: 'loop_home',
+          role: 'user',
+          content: '[Open same note](secondloop://message/history-self)',
+          createdAtMs: 1,
+          isMemory: true,
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: backend,
+            child: SessionScope(
+              sessionKey: Uint8List.fromList(List<int>.filled(32, 9)),
+              lock: () {},
+              child: const MessageViewerPage(
+                content: '[Open same note](secondloop://message/history-self)',
+                messageId: 'history-self',
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Open same note', findRichText: true));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(find.byKey(const ValueKey('message_viewer_page')), findsOneWidget);
+  });
 }

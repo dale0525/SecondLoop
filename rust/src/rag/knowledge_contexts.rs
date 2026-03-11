@@ -5,6 +5,23 @@ use crate::knowledge;
 
 use super::Focus;
 
+fn append_history_citation_if_missing(mut rendered: String, message_id: &str) -> String {
+    let trimmed = message_id.trim();
+    if trimmed.is_empty() {
+        return rendered;
+    }
+
+    let citation = format!("[History](secondloop://message/{trimmed})");
+    if rendered.contains(&citation) {
+        return rendered;
+    }
+    if !rendered.is_empty() && !rendered.ends_with('\n') {
+        rendered.push('\n');
+    }
+    rendered.push_str(&citation);
+    rendered
+}
+
 pub(super) fn try_build_knowledge_contexts(
     conn: &Connection,
     key: &[u8; 32],
@@ -38,15 +55,11 @@ pub(super) fn try_build_knowledge_contexts(
     Ok(knowledge::retrieve_context_blocks(conn, key, &request)?
         .into_iter()
         .map(|block| {
-            let mut rendered = block.rendered_text;
-            if let Some(message_id) = block.anchors.message_id.as_deref() {
-                let citation = format!("[History](secondloop://message/{message_id})");
-                if !rendered.contains(&citation) {
-                    rendered.push('\n');
-                    rendered.push_str(&citation);
-                }
+            let rendered = block.rendered_text;
+            match block.anchors.message_id.as_deref() {
+                Some(message_id) => append_history_citation_if_missing(rendered, message_id),
+                None => rendered,
             }
-            rendered
         })
         .collect())
 }
@@ -105,7 +118,7 @@ pub(super) fn merge_knowledge_and_legacy_contexts(
 
 #[cfg(test)]
 mod tests {
-    use super::merge_knowledge_and_legacy_contexts;
+    use super::{append_history_citation_if_missing, merge_knowledge_and_legacy_contexts};
 
     #[test]
     fn merge_contexts_prefers_knowledge_for_top_k_one() {
@@ -131,5 +144,20 @@ mod tests {
             2,
         );
         assert_eq!(out, vec!["knowledge".to_string(), "legacy".to_string()]);
+    }
+
+    #[test]
+    fn append_history_citation_avoids_leading_or_double_newlines() {
+        let empty = append_history_citation_if_missing(String::new(), "abc");
+        assert_eq!(empty, "[History](secondloop://message/abc)");
+
+        let single = append_history_citation_if_missing("body".to_string(), "abc");
+        assert_eq!(single, "body\n[History](secondloop://message/abc)");
+
+        let trailing_newline = append_history_citation_if_missing("body\n".to_string(), "abc");
+        assert_eq!(
+            trailing_newline,
+            "body\n[History](secondloop://message/abc)"
+        );
     }
 }

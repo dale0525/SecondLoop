@@ -28,9 +28,13 @@ String _linkifyBareSecondLoopDeepLinks(String input) {
     final end = match.end;
     final precededByMarkdownDestination =
         start >= 2 && input.substring(start - 2, start) == '](';
+    final precededByOpeningBracket =
+        start >= 1 && input.substring(start - 1, start) == '[';
     final followedByMarkdownLabel =
         end + 2 <= input.length && input.substring(end, end + 2) == '](';
-    if (precededByMarkdownDestination || followedByMarkdownLabel) {
+    if (precededByMarkdownDestination ||
+        precededByOpeningBracket ||
+        followedByMarkdownLabel) {
       return raw;
     }
 

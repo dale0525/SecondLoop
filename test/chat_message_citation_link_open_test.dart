@@ -39,6 +39,16 @@ void main() {
     expect(parsed!.messageId, 'history-1');
   });
 
+  test(
+      'normalizeChatMarkdownForPreview does not relink bare secondloop links inside brackets',
+      () {
+    const original = '[secondloop://message/history-1]';
+
+    final normalized = normalizeChatMarkdownForPreview(original);
+
+    expect(normalized, original);
+  });
+
   testWidgets('chat citation secondloop message link opens message viewer',
       (tester) async {
     final backend = _Backend(
