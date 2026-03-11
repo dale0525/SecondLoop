@@ -76,6 +76,17 @@ void main() {
     );
   });
 
+  test(
+      'normalizeChatMarkdownForPreview does not relink deep links inside inline code spans',
+      () {
+    const original =
+        'Use `secondloop://message/history-1` as a literal example.';
+
+    final normalized = normalizeChatMarkdownForPreview(original);
+
+    expect(normalized, original);
+  });
+
   testWidgets('chat citation secondloop message link opens message viewer',
       (tester) async {
     final backend = _Backend(

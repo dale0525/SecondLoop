@@ -36,6 +36,102 @@ bool _isInsideMarkdownLabel(String input, int start) {
   return !textBetween.contains('\n');
 }
 
+bool _isInsideMarkdownCode(String input, int start) {
+  if (start <= 0) {
+    return false;
+  }
+
+  var index = 0;
+  var lineStart = true;
+  int? inlineDelimiter;
+  int? fencedDelimiter;
+
+  while (index < start) {
+    if (input[index] == '\n') {
+      lineStart = true;
+      index += 1;
+      continue;
+    }
+
+    if (fencedDelimiter != null) {
+      if (lineStart) {
+        var cursor = index;
+        var leadingSpaces = 0;
+        while (cursor < start && leadingSpaces < 4 && input[cursor] == ' ') {
+          cursor += 1;
+          leadingSpaces += 1;
+        }
+
+        final tickStart = cursor;
+        while (cursor < start && input[cursor] == '`') {
+          cursor += 1;
+        }
+
+        final runLength = cursor - tickStart;
+        if (runLength >= fencedDelimiter) {
+          final lineEnd = input.indexOf('\n', cursor);
+          final end = lineEnd == -1 || lineEnd > start ? start : lineEnd;
+          if (input.substring(cursor, end).trim().isEmpty) {
+            fencedDelimiter = null;
+            lineStart = false;
+            index = cursor;
+            continue;
+          }
+        }
+      }
+
+      lineStart = false;
+      index += 1;
+      continue;
+    }
+
+    if (lineStart) {
+      var cursor = index;
+      var leadingSpaces = 0;
+      while (cursor < start && leadingSpaces < 4 && input[cursor] == ' ') {
+        cursor += 1;
+        leadingSpaces += 1;
+      }
+
+      final tickStart = cursor;
+      while (cursor < start && input[cursor] == '`') {
+        cursor += 1;
+      }
+
+      final runLength = cursor - tickStart;
+      if (runLength >= 3) {
+        fencedDelimiter = runLength;
+        lineStart = false;
+        index = cursor;
+        continue;
+      }
+    }
+
+    if (input[index] == '`') {
+      var cursor = index;
+      while (cursor < start && input[cursor] == '`') {
+        cursor += 1;
+      }
+
+      final runLength = cursor - index;
+      if (inlineDelimiter == null) {
+        inlineDelimiter = runLength;
+      } else if (runLength == inlineDelimiter) {
+        inlineDelimiter = null;
+      }
+
+      lineStart = false;
+      index = cursor;
+      continue;
+    }
+
+    lineStart = false;
+    index += 1;
+  }
+
+  return fencedDelimiter != null || inlineDelimiter != null;
+}
+
 String _linkifyBareSecondLoopDeepLinks(String input) {
   return input.replaceAllMapped(_bareSecondLoopDeepLinkPattern, (match) {
     final raw = match.group(0) ?? '';
@@ -49,11 +145,13 @@ String _linkifyBareSecondLoopDeepLinks(String input) {
         start >= 2 && input.substring(start - 2, start) == '](';
     final precededByOpeningBracket =
         start >= 1 && input.substring(start - 1, start) == '[';
+    final insideMarkdownCode = _isInsideMarkdownCode(input, start);
     final insideMarkdownLabel = _isInsideMarkdownLabel(input, start);
     final followedByMarkdownLabel =
         end + 2 <= input.length && input.substring(end, end + 2) == '](';
     if (precededByMarkdownDestination ||
         precededByOpeningBracket ||
+        insideMarkdownCode ||
         insideMarkdownLabel ||
         followedByMarkdownLabel) {
       return raw;
