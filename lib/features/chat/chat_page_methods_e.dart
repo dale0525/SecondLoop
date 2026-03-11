@@ -184,106 +184,6 @@ extension _ChatPageStateMethodsE on _ChatPageState {
     }
 
     final hasTimeWindow = timeStartMs != null && timeEndMs != null;
-    final canRetryCloudWithoutEmbeddings =
-        route == AskAiRouteKind.cloudGateway &&
-            allowCloudEmbeddings &&
-            !hasTimeWindow;
-
-    Stream<String> stream;
-    switch (route) {
-      case AskAiRouteKind.cloudGateway:
-        if (allowCloudEmbeddings) {
-          stream = hasTimeWindow
-              ? backend.askAiStreamCloudGatewayWithEmbeddingsTimeWindow(
-                  sessionKey,
-                  widget.conversation.id,
-                  question: question,
-                  timeStartMs: timeStartMs,
-                  timeEndMs: timeEndMs,
-                  topK: topK,
-                  thisThreadOnly: _thisThreadOnly,
-                  gatewayBaseUrl: cloudGatewayConfig.baseUrl,
-                  idToken: cloudIdToken ?? '',
-                  modelName: cloudGatewayConfig.modelName,
-                  embeddingsModelName: _kCloudEmbeddingsModelName,
-                )
-              : backend.askAiStreamCloudGatewayWithEmbeddings(
-                  sessionKey,
-                  widget.conversation.id,
-                  question: question,
-                  topK: topK,
-                  thisThreadOnly: _thisThreadOnly,
-                  gatewayBaseUrl: cloudGatewayConfig.baseUrl,
-                  idToken: cloudIdToken ?? '',
-                  modelName: cloudGatewayConfig.modelName,
-                  embeddingsModelName: _kCloudEmbeddingsModelName,
-                );
-        } else {
-          stream = hasTimeWindow
-              ? backend.askAiStreamCloudGatewayTimeWindow(
-                  sessionKey,
-                  widget.conversation.id,
-                  question: question,
-                  timeStartMs: timeStartMs,
-                  timeEndMs: timeEndMs,
-                  topK: topK,
-                  thisThreadOnly: _thisThreadOnly,
-                  gatewayBaseUrl: cloudGatewayConfig.baseUrl,
-                  idToken: cloudIdToken ?? '',
-                  modelName: cloudGatewayConfig.modelName,
-                )
-              : backend.askAiStreamCloudGateway(
-                  sessionKey,
-                  widget.conversation.id,
-                  question: question,
-                  topK: 0,
-                  thisThreadOnly: _thisThreadOnly,
-                  gatewayBaseUrl: cloudGatewayConfig.baseUrl,
-                  idToken: cloudIdToken ?? '',
-                  modelName: cloudGatewayConfig.modelName,
-                );
-        }
-        break;
-      case AskAiRouteKind.byok:
-      case AskAiRouteKind.needsSetup:
-        stream = hasBrokEmbeddings
-            ? (hasTimeWindow
-                ? backend.askAiStreamWithBrokEmbeddingsTimeWindow(
-                    sessionKey,
-                    widget.conversation.id,
-                    question: question,
-                    timeStartMs: timeStartMs,
-                    timeEndMs: timeEndMs,
-                    topK: topK,
-                    thisThreadOnly: _thisThreadOnly,
-                  )
-                : backend.askAiStreamWithBrokEmbeddings(
-                    sessionKey,
-                    widget.conversation.id,
-                    question: question,
-                    topK: topK,
-                    thisThreadOnly: _thisThreadOnly,
-                  ))
-            : (hasTimeWindow
-                ? backend.askAiStreamTimeWindow(
-                    sessionKey,
-                    widget.conversation.id,
-                    question: question,
-                    timeStartMs: timeStartMs,
-                    timeEndMs: timeEndMs,
-                    topK: topK,
-                    thisThreadOnly: _thisThreadOnly,
-                  )
-                : backend.askAiStream(
-                    sessionKey,
-                    widget.conversation.id,
-                    question: question,
-                    topK: topK,
-                    thisThreadOnly: _thisThreadOnly,
-                  ));
-        break;
-    }
-
     final tagScopedStream = await _buildTagScopedAskStream(
       backend: backend,
       route: route,
@@ -294,8 +194,108 @@ extension _ChatPageStateMethodsE on _ChatPageState {
       cloudGatewayConfig: cloudGatewayConfig,
       cloudIdToken: cloudIdToken,
     );
+    final canRetryCloudWithoutEmbeddings =
+        route == AskAiRouteKind.cloudGateway &&
+            allowCloudEmbeddings &&
+            !hasTimeWindow;
+
+    Stream<String> stream;
     if (tagScopedStream != null) {
       stream = tagScopedStream;
+    } else {
+      switch (route) {
+        case AskAiRouteKind.cloudGateway:
+          if (allowCloudEmbeddings) {
+            stream = hasTimeWindow
+                ? backend.askAiStreamCloudGatewayWithEmbeddingsTimeWindow(
+                    sessionKey,
+                    widget.conversation.id,
+                    question: question,
+                    timeStartMs: timeStartMs,
+                    timeEndMs: timeEndMs,
+                    topK: topK,
+                    thisThreadOnly: _thisThreadOnly,
+                    gatewayBaseUrl: cloudGatewayConfig.baseUrl,
+                    idToken: cloudIdToken ?? '',
+                    modelName: cloudGatewayConfig.modelName,
+                    embeddingsModelName: _kCloudEmbeddingsModelName,
+                  )
+                : backend.askAiStreamCloudGatewayWithEmbeddings(
+                    sessionKey,
+                    widget.conversation.id,
+                    question: question,
+                    topK: topK,
+                    thisThreadOnly: _thisThreadOnly,
+                    gatewayBaseUrl: cloudGatewayConfig.baseUrl,
+                    idToken: cloudIdToken ?? '',
+                    modelName: cloudGatewayConfig.modelName,
+                    embeddingsModelName: _kCloudEmbeddingsModelName,
+                  );
+          } else {
+            stream = hasTimeWindow
+                ? backend.askAiStreamCloudGatewayTimeWindow(
+                    sessionKey,
+                    widget.conversation.id,
+                    question: question,
+                    timeStartMs: timeStartMs,
+                    timeEndMs: timeEndMs,
+                    topK: topK,
+                    thisThreadOnly: _thisThreadOnly,
+                    gatewayBaseUrl: cloudGatewayConfig.baseUrl,
+                    idToken: cloudIdToken ?? '',
+                    modelName: cloudGatewayConfig.modelName,
+                  )
+                : backend.askAiStreamCloudGateway(
+                    sessionKey,
+                    widget.conversation.id,
+                    question: question,
+                    topK: 0,
+                    thisThreadOnly: _thisThreadOnly,
+                    gatewayBaseUrl: cloudGatewayConfig.baseUrl,
+                    idToken: cloudIdToken ?? '',
+                    modelName: cloudGatewayConfig.modelName,
+                  );
+          }
+          break;
+        case AskAiRouteKind.byok:
+        case AskAiRouteKind.needsSetup:
+          stream = hasBrokEmbeddings
+              ? (hasTimeWindow
+                  ? backend.askAiStreamWithBrokEmbeddingsTimeWindow(
+                      sessionKey,
+                      widget.conversation.id,
+                      question: question,
+                      timeStartMs: timeStartMs,
+                      timeEndMs: timeEndMs,
+                      topK: topK,
+                      thisThreadOnly: _thisThreadOnly,
+                    )
+                  : backend.askAiStreamWithBrokEmbeddings(
+                      sessionKey,
+                      widget.conversation.id,
+                      question: question,
+                      topK: topK,
+                      thisThreadOnly: _thisThreadOnly,
+                    ))
+              : (hasTimeWindow
+                  ? backend.askAiStreamTimeWindow(
+                      sessionKey,
+                      widget.conversation.id,
+                      question: question,
+                      timeStartMs: timeStartMs,
+                      timeEndMs: timeEndMs,
+                      topK: topK,
+                      thisThreadOnly: _thisThreadOnly,
+                    )
+                  : backend.askAiStream(
+                      sessionKey,
+                      widget.conversation.id,
+                      question: question,
+                      topK: topK,
+                      thisThreadOnly: _thisThreadOnly,
+                    ));
+          break;
+      }
     }
 
     if (route == AskAiRouteKind.cloudGateway) {

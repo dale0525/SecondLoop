@@ -34,20 +34,16 @@ extension _ChatPageStateMethodsLAskScope on _ChatPageState {
       return null;
     }
     if (kIsWeb) return null;
-    if (backend is! NativeAppBackend) return null;
-
-    final appDir = await getNativeAppDir();
-    if (!mounted) return null;
+    if (!backend.supportsScopedAskAi) return null;
 
     final includeTagIds = _selectedTagFilterIds.toList(growable: false);
     final excludeTagIds = _selectedTagExcludeIds.toList(growable: false);
     final localeLanguage = Localizations.localeOf(context).languageCode;
 
     if (route == AskAiRouteKind.cloudGateway) {
-      return rust_ask_scope.ragAskAiStreamCloudGatewayScoped(
-        appDir: appDir,
-        key: sessionKey,
-        conversationId: widget.conversation.id,
+      return backend.askAiStreamCloudGatewayScoped(
+        sessionKey,
+        widget.conversation.id,
         question: question,
         topK: 10,
         thisThreadOnly: _thisThreadOnly,
@@ -58,15 +54,14 @@ extension _ChatPageStateMethodsLAskScope on _ChatPageState {
         strictMode: true,
         localeLanguage: localeLanguage,
         gatewayBaseUrl: cloudGatewayConfig.baseUrl,
-        firebaseIdToken: cloudIdToken ?? '',
+        idToken: cloudIdToken ?? '',
         modelName: cloudGatewayConfig.modelName,
       );
     }
 
-    return rust_ask_scope.ragAskAiStreamScoped(
-      appDir: appDir,
-      key: sessionKey,
-      conversationId: widget.conversation.id,
+    return backend.askAiStreamScoped(
+      sessionKey,
+      widget.conversation.id,
       question: question,
       topK: 10,
       thisThreadOnly: _thisThreadOnly,

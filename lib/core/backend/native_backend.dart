@@ -18,6 +18,7 @@ import '../../src/rust/api/knowledge.dart' as rust_knowledge;
 import '../../src/rust/api/core.dart' as rust_core;
 import '../../src/rust/knowledge/models.dart' as rust_knowledge_models;
 import '../../src/rust/api/attachments.dart' as rust_attachments;
+import '../../src/rust/api/ask_scope.dart' as rust_ask_scope;
 import '../../src/rust/api/sync_progress.dart' as rust_sync_progress;
 import '../../src/rust/db.dart';
 import '../../src/rust/frb_generated.dart';
@@ -1386,6 +1387,9 @@ class NativeAppBackend
   }
 
   @override
+  bool get supportsScopedAskAi => true;
+
+  @override
   Future<List<LlmUsageAggregate>> sumLlmUsageDailyByPurpose(
     Uint8List key,
     String profileId, {
@@ -1603,6 +1607,76 @@ class NativeAppBackend
       firebaseIdToken: idToken,
       modelName: modelName,
       embeddingsModelName: embeddingsModelName,
+    );
+  }
+
+  @override
+  Stream<String> askAiStreamScoped(
+    Uint8List key,
+    String conversationId, {
+    required String question,
+    required int topK,
+    required bool thisThreadOnly,
+    int? timeStartMs,
+    int? timeEndMs,
+    required List<String> includeTagIds,
+    required List<String> excludeTagIds,
+    required bool strictMode,
+    required String localeLanguage,
+    required String localDay,
+  }) async* {
+    final appDir = await _getAppDir();
+    yield* rust_ask_scope.ragAskAiStreamScoped(
+      appDir: appDir,
+      key: key,
+      conversationId: conversationId,
+      question: question,
+      topK: topK,
+      thisThreadOnly: thisThreadOnly,
+      timeStartMs: timeStartMs,
+      timeEndMs: timeEndMs,
+      includeTagIds: includeTagIds,
+      excludeTagIds: excludeTagIds,
+      strictMode: strictMode,
+      localeLanguage: localeLanguage,
+      localDay: localDay,
+    );
+  }
+
+  @override
+  Stream<String> askAiStreamCloudGatewayScoped(
+    Uint8List key,
+    String conversationId, {
+    required String question,
+    required int topK,
+    required bool thisThreadOnly,
+    int? timeStartMs,
+    int? timeEndMs,
+    required List<String> includeTagIds,
+    required List<String> excludeTagIds,
+    required bool strictMode,
+    required String localeLanguage,
+    required String gatewayBaseUrl,
+    required String idToken,
+    required String modelName,
+  }) async* {
+    final appDir = await _getAppDir();
+    yield* rust_ask_scope.ragAskAiStreamCloudGatewayScoped(
+      appDir: appDir,
+      key: key,
+      conversationId: conversationId,
+      question: question,
+      topK: topK,
+      thisThreadOnly: thisThreadOnly,
+      timeStartMs: timeStartMs,
+      timeEndMs: timeEndMs,
+      includeTagIds: includeTagIds,
+      excludeTagIds: excludeTagIds,
+      strictMode: strictMode,
+      localeLanguage: localeLanguage,
+      gatewayBaseUrl: gatewayBaseUrl,
+      firebaseIdToken: idToken,
+      modelName: modelName,
     );
   }
 
