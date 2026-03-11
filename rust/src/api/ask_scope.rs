@@ -63,6 +63,58 @@ fn normalize_tag_ids(raw: &[String]) -> Vec<String> {
     set.into_iter().collect()
 }
 
+fn is_scope_separator(ch: char) -> bool {
+    ch.is_whitespace()
+        || ch.is_ascii_punctuation()
+        || matches!(
+            ch,
+            '，' | '。'
+                | '、'
+                | '；'
+                | '：'
+                | '！'
+                | '？'
+                | '（'
+                | '）'
+                | '［'
+                | '］'
+                | '【'
+                | '】'
+                | '｛'
+                | '｝'
+                | '〈'
+                | '〉'
+                | '《'
+                | '》'
+                | '「'
+                | '」'
+                | '『'
+                | '』'
+                | '〔'
+                | '〕'
+                | '〖'
+                | '〗'
+                | '〘'
+                | '〙'
+                | '〚'
+                | '〛'
+                | '—'
+                | '―'
+                | '…'
+                | '‥'
+                | '·'
+                | '・'
+                | '／'
+                | '＼'
+                | '｜'
+                | '＂'
+                | '＇'
+                | '｀'
+                | '～'
+                | '．'
+        )
+}
+
 fn normalize_scope_match_text(raw: &str) -> String {
     let mut out = String::new();
     let mut previous_was_space = false;
@@ -70,7 +122,7 @@ fn normalize_scope_match_text(raw: &str) -> String {
     for ch in raw.trim().chars() {
         let mapped = if ch.is_ascii_alphanumeric() {
             ch.to_ascii_lowercase()
-        } else if ch.is_whitespace() || ch.is_ascii_punctuation() {
+        } else if is_scope_separator(ch) {
             ' '
         } else {
             ch
@@ -1047,6 +1099,23 @@ mod tests {
         assert_eq!(contexts.len(), 1);
         assert!(contexts[0].contains("prepare client update"));
         assert!(contexts.iter().all(|value| !value.contains("dentist")));
+    }
+
+    #[test]
+    fn resolve_scoped_include_tag_ids_infers_ascii_scope_across_full_width_punctuation() {
+        let temp = tempdir().expect("tempdir");
+        let app_dir = temp.path().join("secondloop");
+        let key =
+            auth::init_master_password(&app_dir, "pw", KdfParams::for_test()).expect("init auth");
+        let conn = db::open(&app_dir).expect("open db");
+
+        let work = db::upsert_tag(&conn, &key, "work").expect("upsert work tag");
+
+        let include_tag_ids =
+            resolve_scoped_include_tag_ids(&conn, &key, "work，weekly report", &[])
+                .expect("resolve include tag ids");
+
+        assert_eq!(include_tag_ids, vec![work.id.clone()]);
     }
 
     #[test]
