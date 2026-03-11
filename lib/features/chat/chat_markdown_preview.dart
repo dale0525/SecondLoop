@@ -26,24 +26,34 @@ bool _isInsideMarkdownLabel(
     return false;
   }
 
-  final lastOpenBracket = input.lastIndexOf('[', start - 1);
-  if (lastOpenBracket == -1) {
-    return false;
+  var cursor = start - 1;
+  while (cursor >= 0) {
+    _MarkdownCodeRange? containingRange;
+    for (final range in codeRanges) {
+      if (range.contains(cursor)) {
+        containingRange = range;
+        break;
+      }
+    }
+    if (containingRange != null) {
+      cursor = containingRange.start - 1;
+      continue;
+    }
+
+    final char = input[cursor];
+    if (char == '\n') {
+      return false;
+    }
+    if (char == ']') {
+      return false;
+    }
+    if (char == '[') {
+      return true;
+    }
+    cursor -= 1;
   }
 
-  final bracketInsideCode =
-      codeRanges.any((range) => range.contains(lastOpenBracket));
-  if (bracketInsideCode) {
-    return false;
-  }
-
-  final lastCloseBracket = input.lastIndexOf(']', start - 1);
-  if (lastOpenBracket <= lastCloseBracket) {
-    return false;
-  }
-
-  final textBetween = input.substring(lastOpenBracket + 1, start);
-  return !textBetween.contains('\n');
+  return false;
 }
 
 class _MarkdownCodeRange {

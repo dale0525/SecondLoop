@@ -61,6 +61,28 @@ void main() {
   });
 
   test(
+      'normalizeChatMarkdownForPreview does not relink deep links inside markdown link labels when inline code contains closing bracket',
+      () {
+    const original =
+        '[note `]` secondloop://message/history-1](https://example.com)';
+
+    final normalized = normalizeChatMarkdownForPreview(original);
+
+    expect(normalized, original);
+  });
+
+  test(
+      'normalizeChatMarkdownForPreview does not relink deep links in label interior when inline code contains closing bracket',
+      () {
+    const original =
+        '[note `]` secondloop://message/history-1 more](https://example.com)';
+
+    final normalized = normalizeChatMarkdownForPreview(original);
+
+    expect(normalized, original);
+  });
+
+  test(
       'normalizeChatMarkdownForPreview still linkifies bare deep links after orphaned opening bracket on earlier line',
       () {
     const original =
