@@ -26,6 +26,7 @@ include!("parts/20_message_tag_autofill.rs");
 include!("parts/21_attachment_chunk_index.rs");
 include!("parts/22_detached_ask_completion.rs");
 include!("parts/23_external_readonly_db.rs");
+include!("parts/24_external_readonly_import_parser.rs");
 include!("parts/24_external_readonly_import.rs");
 include!("parts/25_external_readonly_search.rs");
 include!("parts/26_external_readonly_phase_b.rs");
