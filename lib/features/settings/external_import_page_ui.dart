@@ -102,7 +102,7 @@ extension _ExternalImportPageUiExtension on _ExternalImportPageState {
             const SizedBox(height: 12),
             _infoRow(
               _text(_ExternalImportText.detectedType),
-              summary.detectedSourceKind,
+              _sourceKindLabel(summary.detectedSourceKind),
             ),
             _infoRow(
               _text(_ExternalImportText.sourceLabel),
@@ -668,7 +668,7 @@ extension _ExternalImportPageUiExtension on _ExternalImportPageState {
   String _warningBullet(String warning) => '• $warning';
 
   String _batchStatusSummary(ExternalImportBatchSummary batch) =>
-      '${_statusLabel(batch.status)} · ${batch.sourceKind}';
+      '${_statusLabel(batch.status)} · ${_sourceKindLabel(batch.sourceKind)}';
 
   ExternalImportBatchReport? _latestBatchReportForBatch(
     ExternalImportBatchSummary batch,
@@ -787,6 +787,18 @@ extension _ExternalImportPageUiExtension on _ExternalImportPageState {
 
   String _progressBatchIdSummary() =>
       '${_text(_ExternalImportText.batchId)}: $_progressBatchId';
+
+  String _sourceKindLabel(String sourceKind) {
+    return switch (sourceKind.trim()) {
+      'markdown' ||
+      'generic_markdown_export' ||
+      'obsidian' ||
+      'siyuan' =>
+        'Markdown',
+      '' => '-',
+      _ => sourceKind.replaceAll('_', ' '),
+    };
+  }
 
   String _formatBytes(int bytes) {
     const units = <String>['B', 'KB', 'MB', 'GB', 'TB'];
