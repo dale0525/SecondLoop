@@ -5,6 +5,7 @@ use rusqlite::Connection;
 
 use crate::db;
 use crate::frb_generated::StreamSink;
+use crate::message_citations::append_message_citation_if_missing;
 use crate::{llm, rag};
 
 const ASK_AI_ERROR_PREFIX: &str = "\u{001e}SL_ERROR\u{001e}";
@@ -546,7 +547,10 @@ fn collect_scoped_contexts(
             continue;
         }
 
-        contexts.push(trimmed.to_string());
+        contexts.push(append_message_citation_if_missing(
+            trimmed.to_string(),
+            &message.id,
+        ));
     }
 
     contexts.reverse();
@@ -559,9 +563,16 @@ fn build_scoped_prompt(question: &str, contexts: &[String]) -> String {
     out.push_str("IMPORTANT: Reply in the same language as the user's question.\n");
     out.push_str("IMPORTANT: Use only the scoped memories below as evidence.\n");
     out.push_str("IMPORTANT: If you cite attachment evidence, use only secondloop links.\n");
+    out.push_str(
+        "IMPORTANT: If you cite scoped memories/history, use only secondloop message links.\n",
+    );
     out.push_str("- Resource citation: [label](secondloop://attachment/<sha>)\n");
     out.push_str(
         "- Chunk citation: [label](secondloop://attachment/<sha>?kind=<kind>&chunk=<i>)\n",
+    );
+    out.push_str("- History citation: [label](secondloop://message/<message_id>)\n");
+    out.push_str(
+        "Always emit citations as Markdown links, never raw message_id=... or bare secondloop:// URLs.\n",
     );
     out.push_str(
         "If the scoped memories are insufficient, explicitly say no matching records.\n\n",

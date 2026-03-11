@@ -199,6 +199,88 @@ fn collect_scoped_contexts_applies_exclude_tags_without_include_tags() {
 }
 
 #[test]
+fn collect_scoped_contexts_appends_message_deeplink() {
+    use rusqlite::params;
+
+    let temp = tempdir().expect("tempdir");
+    let app_dir = temp.path().join("secondloop");
+    let key = auth::init_master_password(&app_dir, "pw", KdfParams::for_test()).expect("init auth");
+    let conn = db::open(&app_dir).expect("open db");
+
+    let conversation = db::create_conversation(&conn, &key, "Main").expect("create conversation");
+    let remembered = db::insert_message(&conn, &key, &conversation.id, "user", "remembered note")
+        .expect("insert remembered");
+
+    conn.execute(
+        "UPDATE messages SET created_at = ?2 WHERE id = ?1",
+        params![remembered.id, 1_700_000_000_000i64],
+    )
+    .expect("set remembered time");
+
+    let contexts = collect_scoped_contexts(
+        &conn,
+        &key,
+        &conversation.id,
+        &[],
+        &[],
+        10,
+        Some(TimeScope {
+            start_ms_inclusive: 0,
+            end_ms_exclusive: 1_800_000_000_000i64,
+        }),
+        ScopedFocus::Conversation,
+    )
+    .expect("collect contexts");
+
+    assert_eq!(contexts.len(), 1);
+    assert!(contexts[0].contains("remembered note"));
+    assert!(contexts[0].contains("secondloop://message/"));
+}
+
+#[test]
+fn collect_scoped_contexts_trims_message_id_in_citation() {
+    use rusqlite::params;
+
+    let temp = tempdir().expect("tempdir");
+    let app_dir = temp.path().join("secondloop");
+    let key = auth::init_master_password(&app_dir, "pw", KdfParams::for_test()).expect("init auth");
+    let conn = db::open(&app_dir).expect("open db");
+
+    let conversation = db::create_conversation(&conn, &key, "Main").expect("create conversation");
+    let remembered = db::insert_message(&conn, &key, &conversation.id, "user", "remembered note")
+        .expect("insert remembered");
+
+    conn.execute("PRAGMA foreign_keys = OFF", [])
+        .expect("disable foreign keys for test rewrite");
+    conn.execute(
+        "UPDATE messages SET id = ?2, created_at = ?3 WHERE id = ?1",
+        params![remembered.id, "  spaced-id  ", 1_700_000_000_000i64],
+    )
+    .expect("rewrite remembered id and time");
+    conn.execute("PRAGMA foreign_keys = ON", [])
+        .expect("re-enable foreign keys after test rewrite");
+
+    let contexts = collect_scoped_contexts(
+        &conn,
+        &key,
+        &conversation.id,
+        &[],
+        &[],
+        10,
+        Some(TimeScope {
+            start_ms_inclusive: 0,
+            end_ms_exclusive: 1_800_000_000_000i64,
+        }),
+        ScopedFocus::Conversation,
+    )
+    .expect("collect contexts");
+
+    assert_eq!(contexts.len(), 1);
+    assert!(contexts[0].contains("[History](secondloop://message/spaced-id)"));
+    assert!(!contexts[0].contains("[History](secondloop://message/  spaced-id  )"));
+}
+
+#[test]
 fn collect_scoped_contexts_applies_exclude_tags_after_include_tags() {
     let temp = tempdir().expect("tempdir");
     let app_dir = temp.path().join("secondloop");

@@ -2,6 +2,10 @@ pub(crate) fn strict_attachment_citation_contract() -> &'static str {
     "Attachment citation contract (strict):\n- If a paragraph states any fact from attachment evidence, include at least one citation link in that same paragraph.\n- Allowed citation formats only:\n  1) Resource citation: [label](secondloop://attachment/<sha>)\n  2) Chunk citation: [label](secondloop://attachment/<sha>?kind=<kind>&chunk=<i>)\n- Do NOT use http/https links for citations.\n- Do NOT state attachment facts without citations. If evidence is insufficient, explicitly say so."
 }
 
+pub(crate) fn strict_message_citation_contract() -> &'static str {
+    "Message citation contract (strict):\n- If a paragraph states any fact from conversation history or memory evidence, include at least one message citation link in that same paragraph.\n- Allowed message citation format only:\n  1) Message citation: [label](secondloop://message/<message_id>)\n- Always emit citations as Markdown links. Do NOT output bare secondloop:// URLs or raw message_id=... references.\n- If memory evidence is insufficient, explicitly say so."
+}
+
 pub(crate) fn build_prompt_with_actions_and_history(
     question: &str,
     contexts: &[String],
@@ -42,6 +46,8 @@ pub(crate) fn build_prompt_with_actions_and_history(
     out.push('\n');
     out.push_str(strict_attachment_citation_contract());
     out.push('\n');
+    out.push_str(strict_message_citation_contract());
+    out.push('\n');
 
     out.push_str(
         "\nAnswer the user's question. If the memories are irrelevant, answer normally.\n",
@@ -63,4 +69,16 @@ pub(crate) fn build_prompt_with_actions_and_history(
 
 pub(crate) fn build_prompt(question: &str, contexts: &[String]) -> String {
     build_prompt_with_actions_and_history(question, contexts, None, None, None)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::build_prompt;
+
+    #[test]
+    fn build_prompt_includes_message_citation_contract() {
+        let prompt = build_prompt("What changed?", &[]);
+        assert!(prompt.contains("secondloop://message/<message_id>"));
+        assert!(prompt.contains("Do NOT output bare secondloop:// URLs"));
+    }
 }

@@ -14,8 +14,11 @@ List<md.BlockSyntax> buildChatMarkdownBlockSyntaxes() {
   ];
 }
 
-List<md.InlineSyntax> buildChatMarkdownInlineSyntaxes() {
+List<md.InlineSyntax> buildChatMarkdownInlineSyntaxes({
+  bool enableSecondLoopDeepLinks = false,
+}) {
   return <md.InlineSyntax>[
+    if (enableSecondLoopDeepLinks) _SecondLoopDeepLinkSyntax(),
     _LatexInlineSyntax(),
   ];
 }
@@ -220,6 +223,39 @@ class ChatMarkdownMarkmap extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+class _SecondLoopDeepLinkSyntax extends md.InlineSyntax {
+  _SecondLoopDeepLinkSyntax()
+      : super(
+          r'secondloop://(?:attachment|message)/[^\s<>()\]]+',
+          startCharacter: 0x73,
+        );
+
+  static final RegExp _trailingPunctuation = RegExp(r'[.,;:!?]+$');
+
+  @override
+  bool onMatch(md.InlineParser parser, Match match) {
+    final rawTarget = match.group(0) ?? '';
+    if (rawTarget.isEmpty) {
+      return false;
+    }
+
+    final href = rawTarget.replaceFirst(_trailingPunctuation, '');
+    if (href.isEmpty) {
+      parser.addNode(md.Text(rawTarget));
+      return true;
+    }
+
+    final link = md.Element.text('a', href)..attributes['href'] = href;
+    parser.addNode(link);
+
+    final trailing = rawTarget.substring(href.length);
+    if (trailing.isNotEmpty) {
+      parser.addNode(md.Text(trailing));
+    }
+    return true;
   }
 }
 

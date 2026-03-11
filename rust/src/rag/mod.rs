@@ -5,6 +5,9 @@ use std::path::Path;
 use crate::db;
 use crate::embedding::Embedder;
 use crate::llm::ChatDelta;
+use crate::message_citations::{
+    append_message_citation_if_missing as append_message_citation, message_citation_link,
+};
 
 mod attachment_resources;
 mod citations_prompt;
@@ -24,6 +27,16 @@ use knowledge_contexts::{merge_knowledge_and_legacy_contexts, try_build_knowledg
 
 const DEFAULT_MAX_HISTORY_MESSAGES: usize = 6;
 const DEFAULT_MAX_HISTORY_MESSAGE_CHARS: usize = 1200;
+
+fn format_history_line(role: &str, message_id: &str, content: &str) -> String {
+    match message_citation_link(message_id) {
+        Some(citation) => {
+            let sep = if content.ends_with('\n') { "" } else { "\n" };
+            format!("{role}: {content}{sep}{citation}\n")
+        }
+        None => format!("{role}: {content}\n"),
+    }
+}
 
 #[derive(Debug)]
 pub struct StreamCancelled;
@@ -197,7 +210,7 @@ fn build_recent_conversation_history(
             .chars()
             .take(DEFAULT_MAX_HISTORY_MESSAGE_CHARS)
             .collect();
-        kept.push((role.to_string(), truncated));
+        kept.push((role.to_string(), msg.id.clone(), truncated));
         if kept.len() >= DEFAULT_MAX_HISTORY_MESSAGES {
             break;
         }
@@ -210,11 +223,8 @@ fn build_recent_conversation_history(
     kept.reverse();
 
     let mut out = String::new();
-    for (role, content) in kept {
-        out.push_str(&role);
-        out.push_str(": ");
-        out.push_str(&content);
-        out.push('\n');
+    for (role, message_id, content) in kept {
+        out.push_str(&format_history_line(&role, &message_id, &content));
     }
 
     Ok(Some(out))
@@ -255,7 +265,7 @@ fn build_recent_conversation_history_in_range(
             .chars()
             .take(DEFAULT_MAX_HISTORY_MESSAGE_CHARS)
             .collect();
-        kept.push((role.to_string(), truncated));
+        kept.push((role.to_string(), msg.id.clone(), truncated));
         if kept.len() >= DEFAULT_MAX_HISTORY_MESSAGES {
             break;
         }
@@ -268,11 +278,8 @@ fn build_recent_conversation_history_in_range(
     kept.reverse();
 
     let mut out = String::new();
-    for (role, content) in kept {
-        out.push_str(&role);
-        out.push_str(": ");
-        out.push_str(&content);
-        out.push('\n');
+    for (role, message_id, content) in kept {
+        out.push_str(&format_history_line(&role, &message_id, &content));
     }
 
     Ok(Some(out))
@@ -410,6 +417,7 @@ pub fn ask_ai_with_provider(
     for sm in similar_messages {
         let context = db::build_message_rag_context(conn, key, &sm.message.id, &sm.message.content)
             .unwrap_or_else(|_| sm.message.content.clone());
+        let context = append_message_citation(context, &sm.message.id);
         contexts_with_distance.push((sm.distance, context));
     }
     let mut seen_todos = std::collections::HashSet::new();
@@ -566,6 +574,7 @@ pub fn ask_ai_with_provider_using_embedder<E: Embedder + ?Sized>(
             let context =
                 db::build_message_rag_context(conn, key, &sm.message.id, &sm.message.content)
                     .unwrap_or_else(|_| sm.message.content.clone());
+            let context = append_message_citation(context, &sm.message.id);
             contexts_with_distance.push((sm.distance, context));
         }
         let mut seen_todos = std::collections::HashSet::new();
@@ -715,6 +724,7 @@ pub fn ask_ai_with_provider_using_active_embeddings(
                     created_at_ms: sm.message.created_at_ms,
                     distance: Some(sm.distance),
                     text: context,
+                    citation_suffix: message_citation_link(&sm.message.id),
                 });
             }
 
@@ -737,6 +747,7 @@ pub fn ask_ai_with_provider_using_active_embeddings(
                     created_at_ms: todo.created_at_ms,
                     distance: Some(st.distance),
                     text: ctx,
+                    citation_suffix: None,
                 });
             }
 
@@ -755,6 +766,7 @@ pub fn ask_ai_with_provider_using_active_embeddings(
                     created_at_ms: chunk.created_at_ms,
                     distance: Some(chunk.distance),
                     text: context,
+                    citation_suffix: None,
                 });
             }
 
@@ -774,6 +786,7 @@ pub fn ask_ai_with_provider_using_active_embeddings(
                     created_at_ms: chunk.created_at_ms,
                     distance: Some(chunk.distance),
                     text: context,
+                    citation_suffix: None,
                 });
             }
 
@@ -848,12 +861,14 @@ pub fn ask_ai_with_provider_using_active_embeddings_time_window(
             )? {
                 let context = db::build_message_rag_context(conn, key, &m.id, &m.content)
                     .unwrap_or(m.content);
+                let citation_suffix = message_citation_link(&m.id);
                 candidates.push(ContextItem {
                     source: ContextSource::Message,
                     id: m.id,
                     created_at_ms: m.created_at_ms,
                     distance: None,
                     text: context,
+                    citation_suffix,
                 });
             }
 
@@ -880,6 +895,7 @@ pub fn ask_ai_with_provider_using_active_embeddings_time_window(
                     created_at_ms: a.created_at_ms,
                     distance: None,
                     text,
+                    citation_suffix: None,
                 });
             }
 
@@ -897,6 +913,7 @@ pub fn ask_ai_with_provider_using_active_embeddings_time_window(
                     created_at_ms: e.start_at_ms,
                     distance: None,
                     text,
+                    citation_suffix: None,
                 });
             }
 
@@ -923,6 +940,7 @@ pub fn ask_ai_with_provider_using_active_embeddings_time_window(
                     created_at_ms: todo.created_at_ms,
                     distance: None,
                     text: ctx,
+                    citation_suffix: None,
                 });
             }
 
@@ -963,4 +981,36 @@ pub fn ask_ai_with_provider_using_active_embeddings_time_window(
         provider,
         on_event,
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::format_history_line;
+
+    #[test]
+    fn format_history_line_moves_citation_below_content() {
+        let line = format_history_line("User", "history-1", "Project kickoff moved to Friday.");
+        assert_eq!(
+            line,
+            "User: Project kickoff moved to Friday.
+[History](secondloop://message/history-1)
+"
+        );
+    }
+
+    #[test]
+    fn format_history_line_preserves_trailing_newline_before_citation() {
+        let line = format_history_line(
+            "Assistant",
+            "history-2",
+            "Line one
+",
+        );
+        assert_eq!(
+            line,
+            "Assistant: Line one
+[History](secondloop://message/history-2)
+"
+        );
+    }
 }

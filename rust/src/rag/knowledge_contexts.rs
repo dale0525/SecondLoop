@@ -2,6 +2,7 @@ use anyhow::Result;
 use rusqlite::Connection;
 
 use crate::knowledge;
+use crate::message_citations::append_message_citation_if_missing;
 
 use super::Focus;
 
@@ -37,7 +38,13 @@ pub(super) fn try_build_knowledge_contexts(
 
     Ok(knowledge::retrieve_context_blocks(conn, key, &request)?
         .into_iter()
-        .map(|block| block.rendered_text)
+        .map(|block| {
+            let rendered = block.rendered_text;
+            match block.anchors.message_id.as_deref() {
+                Some(message_id) => append_message_citation_if_missing(rendered, message_id),
+                None => rendered,
+            }
+        })
         .collect())
 }
 
@@ -96,6 +103,7 @@ pub(super) fn merge_knowledge_and_legacy_contexts(
 #[cfg(test)]
 mod tests {
     use super::merge_knowledge_and_legacy_contexts;
+    use crate::message_citations::append_message_citation_if_missing;
 
     #[test]
     fn merge_contexts_prefers_knowledge_for_top_k_one() {
@@ -121,5 +129,20 @@ mod tests {
             2,
         );
         assert_eq!(out, vec!["knowledge".to_string(), "legacy".to_string()]);
+    }
+
+    #[test]
+    fn append_history_citation_avoids_leading_or_double_newlines() {
+        let empty = append_message_citation_if_missing(String::new(), "abc");
+        assert_eq!(empty, "[History](secondloop://message/abc)");
+
+        let single = append_message_citation_if_missing("body".to_string(), "abc");
+        assert_eq!(single, "body\n[History](secondloop://message/abc)");
+
+        let trailing_newline = append_message_citation_if_missing("body\n".to_string(), "abc");
+        assert_eq!(
+            trailing_newline,
+            "body\n[History](secondloop://message/abc)"
+        );
     }
 }

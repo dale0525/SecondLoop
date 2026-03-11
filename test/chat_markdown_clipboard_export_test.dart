@@ -30,4 +30,25 @@ void main() {
 
     expect(text, 'Preview will appear as you type.');
   });
+
+  test(
+      'Clipboard HTML export does not turn bare message deeplinks into anchors',
+      () {
+    final theme = resolveChatMarkdownTheme(
+      ChatMarkdownThemePreset.paper,
+      ThemeData.light(),
+    );
+
+    final html = buildChatMarkdownClipboardHtml(
+      markdown: 'History: secondloop://message/history-1',
+      theme: theme,
+      emptyFallback: 'Preview will appear as you type.',
+    );
+
+    expect(html, contains('secondloop://message/history-1'));
+    expect(
+      html,
+      isNot(contains('href="secondloop://message/history-1"')),
+    );
+  });
 }

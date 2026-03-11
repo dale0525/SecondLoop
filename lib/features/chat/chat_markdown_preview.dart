@@ -13,6 +13,234 @@ final RegExp _escapedNewlinePattern = RegExp(r'(?<!\\)\\n');
 final RegExp _escapedCarriageNewlinePattern = RegExp(r'(?<!\\)\\r\\n');
 final RegExp _escapedCarriageReturnPattern = RegExp(r'(?<!\\)\\r');
 
+final RegExp _bareSecondLoopDeepLinkPattern =
+    RegExp(r'secondloop://(?:attachment|message)/[^\s<>()\]]+');
+final RegExp _secondLoopTrailingPunctuationPattern = RegExp(r'[.,;:!?]+$');
+
+bool _isInsideMarkdownLabel(
+  String input,
+  int start,
+  List<_MarkdownCodeRange> codeRanges,
+) {
+  if (start <= 0) {
+    return false;
+  }
+
+  var cursor = start - 1;
+  var bracketDepth = 0;
+  while (cursor >= 0) {
+    _MarkdownCodeRange? containingRange;
+    for (final range in codeRanges) {
+      if (range.contains(cursor)) {
+        containingRange = range;
+        break;
+      }
+    }
+    if (containingRange != null) {
+      cursor = containingRange.start - 1;
+      continue;
+    }
+
+    final char = input[cursor];
+    if (char == '\n') {
+      return false;
+    }
+    if (char == ']') {
+      bracketDepth += 1;
+      cursor -= 1;
+      continue;
+    }
+    if (char == '[') {
+      if (bracketDepth == 0) {
+        return true;
+      }
+      bracketDepth -= 1;
+      cursor -= 1;
+      continue;
+    }
+    cursor -= 1;
+  }
+
+  return false;
+}
+
+class _MarkdownCodeRange {
+  const _MarkdownCodeRange(this.start, this.end);
+
+  final int start;
+  final int end;
+
+  bool contains(int offset) => offset >= start && offset < end;
+}
+
+List<_MarkdownCodeRange> _collectMarkdownCodeRanges(String input) {
+  final ranges = <_MarkdownCodeRange>[];
+  var index = 0;
+  var lineStart = true;
+  int? inlineDelimiter;
+  int? inlineStart;
+  int? fencedDelimiter;
+  String? fencedMarker;
+  int? fencedStart;
+
+  while (index < input.length) {
+    if (lineStart) {
+      final currentLineStart = index;
+      final lineEndIndex = input.indexOf('\n', currentLineStart);
+      final lineEnd = lineEndIndex == -1 ? input.length : lineEndIndex;
+
+      var contentStart = currentLineStart;
+      var leadingSpaces = 0;
+      while (contentStart < lineEnd &&
+          leadingSpaces < 4 &&
+          input[contentStart] == ' ') {
+        contentStart += 1;
+        leadingSpaces += 1;
+      }
+
+      final lineContent = input.substring(contentStart, lineEnd);
+      final lineIsBlank = lineContent.trim().isEmpty;
+      final nextIndex = lineEndIndex == -1 ? input.length : lineEndIndex + 1;
+
+      if (fencedDelimiter != null) {
+        if (leadingSpaces <= 3 &&
+            contentStart < lineEnd &&
+            input[contentStart] == fencedMarker) {
+          var cursor = contentStart;
+          while (cursor < lineEnd && input[cursor] == fencedMarker) {
+            cursor += 1;
+          }
+
+          final runLength = cursor - contentStart;
+          if (runLength >= fencedDelimiter &&
+              input.substring(cursor, lineEnd).trim().isEmpty) {
+            ranges.add(_MarkdownCodeRange(fencedStart!, lineEnd));
+            fencedDelimiter = null;
+            fencedMarker = null;
+            fencedStart = null;
+          }
+        }
+
+        index = nextIndex;
+        lineStart = true;
+        continue;
+      }
+
+      if (leadingSpaces <= 3 && contentStart < lineEnd) {
+        final marker = input[contentStart];
+        if (marker == '`' || marker == '~') {
+          var cursor = contentStart;
+          while (cursor < lineEnd && input[cursor] == marker) {
+            cursor += 1;
+          }
+
+          final runLength = cursor - contentStart;
+          if (runLength >= 3) {
+            fencedDelimiter = runLength;
+            fencedMarker = marker;
+            fencedStart = currentLineStart;
+            index = nextIndex;
+            lineStart = true;
+            continue;
+          }
+        }
+      }
+
+      if (lineIsBlank) {
+        inlineDelimiter = null;
+        inlineStart = null;
+        index = nextIndex;
+        lineStart = true;
+        continue;
+      }
+
+      lineStart = false;
+    }
+
+    if (input[index] == '\n') {
+      lineStart = true;
+      index += 1;
+      continue;
+    }
+
+    if (input[index] == '`') {
+      var cursor = index;
+      while (cursor < input.length && input[cursor] == '`') {
+        cursor += 1;
+      }
+
+      final runLength = cursor - index;
+      if (inlineDelimiter == null) {
+        inlineDelimiter = runLength;
+        inlineStart = index;
+      } else if (runLength == inlineDelimiter) {
+        ranges.add(_MarkdownCodeRange(inlineStart!, cursor));
+        inlineDelimiter = null;
+        inlineStart = null;
+      }
+
+      index = cursor;
+      continue;
+    }
+
+    index += 1;
+  }
+
+  if (fencedStart != null) {
+    ranges.add(_MarkdownCodeRange(fencedStart, input.length));
+  }
+
+  return ranges;
+}
+
+String _linkifyBareSecondLoopDeepLinks(String input) {
+  final codeRanges = _collectMarkdownCodeRanges(input);
+  var codeRangeIndex = 0;
+
+  bool insideMarkdownCode(int offset) {
+    while (codeRangeIndex < codeRanges.length &&
+        codeRanges[codeRangeIndex].end <= offset) {
+      codeRangeIndex += 1;
+    }
+    return codeRangeIndex < codeRanges.length &&
+        codeRanges[codeRangeIndex].contains(offset);
+  }
+
+  return input.replaceAllMapped(_bareSecondLoopDeepLinkPattern, (match) {
+    final raw = match.group(0) ?? '';
+    if (raw.isEmpty) {
+      return raw;
+    }
+
+    final start = match.start;
+    final end = match.end;
+    final precededByMarkdownDestination =
+        start >= 2 && input.substring(start - 2, start) == '](';
+    final precededByOpeningBracket =
+        start >= 1 && input.substring(start - 1, start) == '[';
+    final insideCode = insideMarkdownCode(start);
+    final insideMarkdownLabel =
+        _isInsideMarkdownLabel(input, start, codeRanges);
+    final followedByMarkdownLabel =
+        end + 2 <= input.length && input.substring(end, end + 2) == '](';
+    if (precededByMarkdownDestination ||
+        precededByOpeningBracket ||
+        insideCode ||
+        insideMarkdownLabel ||
+        followedByMarkdownLabel) {
+      return raw;
+    }
+
+    final href = raw.replaceFirst(_secondLoopTrailingPunctuationPattern, '');
+    if (href.isEmpty) {
+      return raw;
+    }
+
+    final trailing = raw.substring(href.length);
+    return '[$href]($href)$trailing';
+  });
+}
+
 String normalizeChatMarkdownForPreview(
   String raw, {
   bool restoreEscapedNewlines = false,
@@ -28,7 +256,7 @@ String normalizeChatMarkdownForPreview(
         .replaceAll(_escapedCarriageReturnPattern, '\r');
   }
 
-  return sanitizeChatMarkdown(normalized);
+  return _linkifyBareSecondLoopDeepLinks(sanitizeChatMarkdown(normalized));
 }
 
 MarkdownStyleSheet chatMarkdownPreviewStyleSheet(

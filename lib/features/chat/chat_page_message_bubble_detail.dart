@@ -41,12 +41,21 @@ extension _ChatPageStateMessageBubbleDetail on _ChatPageState {
   }
 
   Future<bool> _handleMarkdownInAppLink(String href) async {
-    final parsed = parseAttachmentDeepLink(href);
-    if (parsed == null) {
+    final attachmentLink = parseAttachmentDeepLink(href);
+    if (attachmentLink != null) {
+      await _openAttachmentBySha(attachmentLink.attachmentSha256);
+      return true;
+    }
+
+    final messageLink = parseMessageDeepLink(href);
+    if (messageLink == null) {
       return false;
     }
 
-    await _openAttachmentBySha(parsed.attachmentSha256);
+    await MessageViewerPage.openById(
+      context,
+      messageId: messageLink.messageId,
+    );
     return true;
   }
 }

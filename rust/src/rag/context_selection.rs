@@ -19,6 +19,7 @@ pub(crate) struct ContextItem {
     pub(crate) created_at_ms: i64,
     pub(crate) distance: Option<f64>,
     pub(crate) text: String,
+    pub(crate) citation_suffix: Option<String>,
 }
 
 fn now_ms() -> i64 {
@@ -362,6 +363,15 @@ pub(crate) fn build_contexts_v2(
             combined.push_str(&p);
             combined.push_str(&text);
             text = combined;
+        }
+
+        if let Some(suffix) = item.citation_suffix.as_deref() {
+            if !suffix.is_empty() && !text.contains(suffix) {
+                if !text.is_empty() && !text.ends_with('\n') {
+                    text.push('\n');
+                }
+                text.push_str(suffix);
+            }
         }
 
         if !seen.insert(text.clone()) {

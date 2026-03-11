@@ -14,6 +14,7 @@ import '../attachments/attachment_deeplink.dart';
 import '../attachments/attachment_viewer_page.dart';
 import '../knowledge_viewer/knowledge_document_viewer.dart';
 import 'chat_markdown_link_handler.dart';
+import 'message_deeplink.dart';
 import 'chat_markdown_rich_rendering.dart';
 import 'chat_markdown_sanitizer.dart';
 import 'chat_markdown_theme_presets.dart';
@@ -33,11 +34,65 @@ class MessageViewerPage extends StatelessWidget {
   const MessageViewerPage({
     required this.content,
     this.messageId,
+    this.navigationTrail = const <String>[],
     super.key,
   });
 
+  static const int _maxNavigationDepth = 8;
+
   final String content;
   final String? messageId;
+  final List<String> navigationTrail;
+
+  List<String> get _effectiveNavigationTrail {
+    final trail = <String>[...navigationTrail];
+    final currentMessageId = messageId?.trim() ?? '';
+    if (currentMessageId.isNotEmpty && !trail.contains(currentMessageId)) {
+      trail.add(currentMessageId);
+    }
+    return trail;
+  }
+
+  static Future<void> openById(
+    BuildContext context, {
+    required String messageId,
+    List<String> navigationTrail = const <String>[],
+  }) async {
+    final normalizedMessageId = messageId.trim();
+    if (normalizedMessageId.isEmpty) {
+      return;
+    }
+    if (navigationTrail.contains(normalizedMessageId)) {
+      return;
+    }
+    if (navigationTrail.length >= _maxNavigationDepth) {
+      return;
+    }
+
+    final session = SessionScope.maybeOf(context);
+    if (session == null) {
+      return;
+    }
+
+    final backend = AppBackendScope.of(context);
+    final message = await backend.getMessageById(
+      session.sessionKey,
+      normalizedMessageId,
+    );
+    if (!context.mounted || message == null) {
+      return;
+    }
+
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => MessageViewerPage(
+          content: message.content,
+          messageId: message.id,
+          navigationTrail: <String>[...navigationTrail, normalizedMessageId],
+        ),
+      ),
+    );
+  }
 
   Future<bool> _openInAppAttachment(BuildContext context, String href) async {
     final parsed = parseAttachmentDeepLink(href);
@@ -48,6 +103,28 @@ class MessageViewerPage extends StatelessWidget {
       attachmentSha256: parsed.attachmentSha256,
     );
     return true;
+  }
+
+  Future<bool> _openInAppMessage(BuildContext context, String href) async {
+    final parsed = parseMessageDeepLink(href);
+    if (parsed == null) return false;
+
+    await MessageViewerPage.openById(
+      context,
+      messageId: parsed.messageId,
+      navigationTrail: _effectiveNavigationTrail,
+    );
+    return true;
+  }
+
+  Future<bool> _openInAppLink(BuildContext context, String href) async {
+    if (await _openInAppAttachment(context, href)) {
+      return true;
+    }
+    if (!context.mounted) {
+      return false;
+    }
+    return _openInAppMessage(context, href);
   }
 
   Future<_ResolvedMessageKnowledgeDocument?> _resolveKnowledgeDocument(
@@ -91,7 +168,9 @@ class MessageViewerPage extends StatelessWidget {
       softLineBreak: true,
       styleSheet: slMarkdownStyleSheet(context),
       blockSyntaxes: buildChatMarkdownBlockSyntaxes(),
-      inlineSyntaxes: buildChatMarkdownInlineSyntaxes(),
+      inlineSyntaxes: buildChatMarkdownInlineSyntaxes(
+        enableSecondLoopDeepLinks: true,
+      ),
       builders: buildChatMarkdownElementBuilders(
         previewTheme: previewTheme,
         exportRenderMode: false,
@@ -100,7 +179,7 @@ class MessageViewerPage extends StatelessWidget {
         unawaited(
           handleChatMarkdownTapLink(
             href,
-            handleInApp: (target) => _openInAppAttachment(context, target),
+            handleInApp: (target) => _openInAppLink(context, target),
           ),
         );
       },
