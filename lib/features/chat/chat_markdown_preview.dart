@@ -129,6 +129,8 @@ List<_MarkdownCodeRange> _collectMarkdownCodeRanges(String input) {
       }
 
       if (lineIsBlank) {
+        inlineDelimiter = null;
+        inlineStart = null;
         index = nextIndex;
         lineStart = true;
         continue;

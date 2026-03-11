@@ -240,7 +240,6 @@ class MessageViewerPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final normalized = sanitizeChatMarkdown(content);
-    final copyText = normalized;
 
     return Scaffold(
       key: const ValueKey('message_viewer_page'),
@@ -253,7 +252,7 @@ class MessageViewerPage extends StatelessWidget {
             icon: const Icon(Icons.copy_all_rounded),
             onPressed: () async {
               try {
-                await Clipboard.setData(ClipboardData(text: copyText.trim()));
+                await Clipboard.setData(ClipboardData(text: normalized.trim()));
               } catch (_) {
                 return;
               }
