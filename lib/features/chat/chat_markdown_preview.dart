@@ -27,6 +27,7 @@ bool _isInsideMarkdownLabel(
   }
 
   var cursor = start - 1;
+  var bracketDepth = 0;
   while (cursor >= 0) {
     _MarkdownCodeRange? containingRange;
     for (final range in codeRanges) {
@@ -45,10 +46,17 @@ bool _isInsideMarkdownLabel(
       return false;
     }
     if (char == ']') {
-      return false;
+      bracketDepth += 1;
+      cursor -= 1;
+      continue;
     }
     if (char == '[') {
-      return true;
+      if (bracketDepth == 0) {
+        return true;
+      }
+      bracketDepth -= 1;
+      cursor -= 1;
+      continue;
     }
     cursor -= 1;
   }

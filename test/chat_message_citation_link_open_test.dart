@@ -83,6 +83,17 @@ void main() {
   });
 
   test(
+      'normalizeChatMarkdownForPreview does not relink deep links in label interior after nested bracketed segment',
+      () {
+    const original =
+        '[intro [inner](dest) secondloop://message/history-1 more](https://example.com)';
+
+    final normalized = normalizeChatMarkdownForPreview(original);
+
+    expect(normalized, original);
+  });
+
+  test(
       'normalizeChatMarkdownForPreview still linkifies bare deep links after orphaned opening bracket on earlier line',
       () {
     const original =
