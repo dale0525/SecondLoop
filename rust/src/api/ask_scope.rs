@@ -63,6 +63,124 @@ fn normalize_tag_ids(raw: &[String]) -> Vec<String> {
     set.into_iter().collect()
 }
 
+fn normalize_scope_match_text(raw: &str) -> String {
+    let mut out = String::new();
+    let mut previous_was_space = false;
+
+    for ch in raw.trim().chars() {
+        let mapped = if ch.is_ascii_alphanumeric() {
+            ch.to_ascii_lowercase()
+        } else if ch.is_whitespace() || ch.is_ascii_punctuation() {
+            ' '
+        } else {
+            ch
+        };
+
+        if mapped == ' ' {
+            if !previous_was_space {
+                out.push(' ');
+            }
+            previous_was_space = true;
+            continue;
+        }
+
+        out.push(mapped);
+        previous_was_space = false;
+    }
+
+    out.trim().to_string()
+}
+
+fn contains_ascii_scope_phrase(haystack: &str, needle: &str) -> bool {
+    let needle = needle.trim();
+    if haystack.is_empty() || needle.is_empty() {
+        return false;
+    }
+
+    let padded_haystack = format!(" {haystack} ");
+    let padded_needle = format!(" {needle} ");
+    padded_haystack.contains(&padded_needle)
+}
+
+fn system_tag_scope_aliases(system_key: &str) -> &'static [&'static str] {
+    match system_key {
+        "work" => &["work", "工作"],
+        "personal" => &["personal", "个人", "個人"],
+        "family" => &["family", "家庭"],
+        "health" => &["health", "健康"],
+        "finance" => &["finance", "财务", "財務"],
+        "study" => &["study", "学习", "學習"],
+        "travel" => &["travel", "旅行", "旅游", "旅遊"],
+        "social" => &["social", "社交"],
+        "home" => &["home", "居家", "家务", "家務"],
+        "hobby" => &["hobby", "爱好", "愛好", "兴趣", "興趣"],
+        _ => &[],
+    }
+}
+
+fn question_mentions_tag(question_normalized: &str, tag: &db::Tag) -> bool {
+    let normalized_tag_name = normalize_scope_match_text(&tag.name);
+    if !normalized_tag_name.is_empty() {
+        if normalized_tag_name.is_ascii() {
+            if contains_ascii_scope_phrase(question_normalized, &normalized_tag_name) {
+                return true;
+            }
+        } else if question_normalized.contains(&normalized_tag_name) {
+            return true;
+        }
+    }
+
+    let Some(system_key) = tag.system_key.as_deref() else {
+        return false;
+    };
+
+    for alias in system_tag_scope_aliases(system_key) {
+        let normalized_alias = normalize_scope_match_text(alias);
+        if normalized_alias.is_empty() {
+            continue;
+        }
+
+        if normalized_alias.is_ascii() {
+            if contains_ascii_scope_phrase(question_normalized, &normalized_alias) {
+                return true;
+            }
+            continue;
+        }
+
+        if question_normalized.contains(&normalized_alias) {
+            return true;
+        }
+    }
+
+    false
+}
+
+fn resolve_scoped_include_tag_ids(
+    conn: &Connection,
+    key: &[u8; 32],
+    question: &str,
+    include_tag_ids: &[String],
+) -> Result<Vec<String>> {
+    let include_tag_ids = normalize_tag_ids(include_tag_ids);
+    if !include_tag_ids.is_empty() {
+        return Ok(include_tag_ids);
+    }
+
+    let question_normalized = normalize_scope_match_text(question);
+    if question_normalized.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let mut inferred = std::collections::BTreeSet::<String>::new();
+    for tag in db::list_tags(conn, key)? {
+        if question_mentions_tag(&question_normalized, &tag) {
+            inferred.insert(tag.id);
+        }
+    }
+
+    Ok(inferred.into_iter().collect())
+}
+
 fn list_conversation_message_ids(conn: &Connection, conversation_id: &str) -> Result<Vec<String>> {
     let mut stmt = conn.prepare(
         r#"SELECT id
@@ -393,6 +511,9 @@ pub fn rag_ask_ai_stream_scoped(
             ScopedFocus::AllMemories
         };
 
+        let include_tag_ids =
+            resolve_scoped_include_tag_ids(&conn, &key, &question, &include_tag_ids)?;
+
         let contexts = collect_scoped_contexts(
             &conn,
             &key,
@@ -482,6 +603,9 @@ pub fn rag_ask_ai_stream_cloud_gateway_scoped(
         } else {
             ScopedFocus::AllMemories
         };
+
+        let include_tag_ids =
+            resolve_scoped_include_tag_ids(&conn, &key, &question, &include_tag_ids)?;
 
         let contexts = collect_scoped_contexts(
             &conn,
@@ -782,5 +906,94 @@ mod tests {
 
         assert_eq!(contexts.len(), 1);
         assert!(contexts[0].contains("work only"));
+    }
+
+    #[test]
+    fn resolve_scoped_include_tag_ids_infers_work_scope_from_question() {
+        use rusqlite::params;
+
+        let temp = tempdir().expect("tempdir");
+        let app_dir = temp.path().join("secondloop");
+        let key =
+            auth::init_master_password(&app_dir, "pw", KdfParams::for_test()).expect("init auth");
+        let conn = db::open(&app_dir).expect("open db");
+
+        let conversation =
+            db::create_conversation(&conn, &key, "Main").expect("create conversation");
+
+        let work_note = db::insert_message(
+            &conn,
+            &key,
+            &conversation.id,
+            "user",
+            "prepare client update",
+        )
+        .expect("insert work_note");
+        let personal_note = db::insert_message(
+            &conn,
+            &key,
+            &conversation.id,
+            "user",
+            "book dentist appointment",
+        )
+        .expect("insert personal_note");
+        let hobby_note = db::insert_message(
+            &conn,
+            &key,
+            &conversation.id,
+            "user",
+            "practice guitar for weekend jam",
+        )
+        .expect("insert hobby_note");
+
+        let base = 1_700_000_000_000i64;
+        for message_id in [&work_note.id, &personal_note.id, &hobby_note.id] {
+            conn.execute(
+                "UPDATE messages SET created_at = ?2 WHERE id = ?1",
+                params![message_id, base - 2 * 24 * 60 * 60 * 1000],
+            )
+            .expect("set message time");
+        }
+
+        let work = db::upsert_tag(&conn, &key, "work").expect("upsert work tag");
+        let personal = db::upsert_tag(&conn, &key, "personal").expect("upsert personal tag");
+        let hobby = db::upsert_tag(&conn, &key, "hobby").expect("upsert hobby tag");
+
+        db::set_message_tags(&conn, &key, &work_note.id, std::slice::from_ref(&work.id))
+            .expect("tag work_note");
+        db::set_message_tags(
+            &conn,
+            &key,
+            &personal_note.id,
+            std::slice::from_ref(&personal.id),
+        )
+        .expect("tag personal_note");
+        db::set_message_tags(&conn, &key, &hobby_note.id, std::slice::from_ref(&hobby.id))
+            .expect("tag hobby_note");
+
+        let include_tag_ids = resolve_scoped_include_tag_ids(&conn, &key, "写一份工作周报", &[])
+            .expect("resolve include tag ids");
+
+        assert_eq!(include_tag_ids, vec![work.id.clone()]);
+
+        let contexts = collect_scoped_contexts(
+            &conn,
+            &key,
+            &conversation.id,
+            &include_tag_ids,
+            &[],
+            10,
+            Some(TimeScope {
+                start_ms_inclusive: base - 7 * 24 * 60 * 60 * 1000,
+                end_ms_exclusive: base,
+            }),
+            ScopedFocus::Conversation,
+        )
+        .expect("collect contexts");
+
+        assert_eq!(contexts.len(), 1);
+        assert!(contexts[0].contains("prepare client update"));
+        assert!(contexts.iter().all(|value| !value.contains("dentist")));
+        assert!(contexts.iter().all(|value| !value.contains("guitar")));
     }
 }
