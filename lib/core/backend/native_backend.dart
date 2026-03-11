@@ -60,6 +60,22 @@ typedef DbInsertAttachmentFn = Future<Attachment> Function({
   required String mimeType,
 });
 
+typedef AskAiStreamScopedFn = Stream<String> Function({
+  required String appDir,
+  required List<int> key,
+  required String conversationId,
+  required String question,
+  required int topK,
+  required bool thisThreadOnly,
+  int? timeStartMs,
+  int? timeEndMs,
+  required List<String> includeTagIds,
+  required List<String> excludeTagIds,
+  required bool strictMode,
+  required String localeLanguage,
+  required String localDay,
+});
+
 class NativeAppBackend
     implements
         AppBackend,
@@ -72,6 +88,7 @@ class NativeAppBackend
     DbInsertAttachmentFn? dbInsertAttachment,
     DbProcessPendingMessageEmbeddingsFn? dbProcessPendingMessageEmbeddings,
     DbReleaseLocalEmbeddingModelIfIdleFn? dbReleaseLocalEmbeddingModelIfIdle,
+    AskAiStreamScopedFn? askAiStreamScopedFn,
     RustLibInitFn? rustLibInit,
   })  : _secureBlobStore = SecureBlobStore(storage: secureStorage),
         _appDirProvider = appDirProvider ?? _defaultAppDirProvider,
@@ -84,6 +101,8 @@ class NativeAppBackend
         _dbReleaseLocalEmbeddingModelIfIdle =
             dbReleaseLocalEmbeddingModelIfIdle ??
                 rust_embedding_lifecycle.dbReleaseLocalEmbeddingModelIfIdle,
+        _askAiStreamScoped =
+            askAiStreamScopedFn ?? rust_ask_scope.ragAskAiStreamScoped,
         _rustLibInit = rustLibInit ??
             (() => RustLib.init(
                   externalLibrary: resolveDesktopRustExternalLibrary(),
@@ -96,6 +115,7 @@ class NativeAppBackend
   final DbProcessPendingMessageEmbeddingsFn _dbProcessPendingMessageEmbeddings;
   final DbReleaseLocalEmbeddingModelIfIdleFn
       _dbReleaseLocalEmbeddingModelIfIdle;
+  final AskAiStreamScopedFn _askAiStreamScoped;
   final RustLibInitFn _rustLibInit;
 
   String? _appDir;
@@ -1626,7 +1646,7 @@ class NativeAppBackend
     required String localDay,
   }) async* {
     final appDir = await _getAppDir();
-    yield* rust_ask_scope.ragAskAiStreamScoped(
+    yield* _askAiStreamScoped(
       appDir: appDir,
       key: key,
       conversationId: conversationId,
