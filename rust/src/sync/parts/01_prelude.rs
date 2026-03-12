@@ -76,6 +76,10 @@ fn normalize_file(path: &str) -> String {
     format!("/{trimmed}")
 }
 
+fn app_dir_from_conn(conn: &Connection) -> Result<PathBuf> {
+    crate::db::app_dir_from_conn(conn)
+}
+
 fn sync_scope_id(remote: &impl RemoteStore, remote_root_dir: &str) -> String {
     let scope = format!("{}|{remote_root_dir}", remote.target_id());
     B64_URL.encode(scope.as_bytes())

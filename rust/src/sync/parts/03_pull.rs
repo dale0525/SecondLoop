@@ -246,6 +246,8 @@ fn pull_internal(
         cb(done_ops, total_ops);
     }
 
+    let _ = download_missing_embedding_artifact_blobs(conn, db_key, sync_key, remote, remote_root)?;
+
     Ok(applied)
 }
 

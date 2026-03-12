@@ -962,6 +962,56 @@ INSERT OR IGNORE INTO knowledge_rebuild_state(
 PRAGMA user_version = 29;
 "#,
         )?;
+        user_version = 29;
+    }
+
+    if user_version < 30 {
+        conn.execute_batch(
+            r#"
+CREATE TABLE IF NOT EXISTS embedding_artifact_manifests (
+  artifact_id TEXT PRIMARY KEY,
+  source_kind TEXT NOT NULL,
+  source_id TEXT NOT NULL,
+  source_revision INTEGER NOT NULL,
+  chunk_hash TEXT NOT NULL,
+  chunk_ordinal INTEGER NOT NULL DEFAULT 0,
+  profile_id TEXT NOT NULL,
+  producer_device_id TEXT,
+  producer_class TEXT NOT NULL,
+  quality_tier TEXT NOT NULL DEFAULT 'full',
+  vector_format TEXT NOT NULL,
+  dimension INTEGER NOT NULL,
+  blob_ref TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'ready',
+  supersedes_artifact_id TEXT,
+  created_at_ms INTEGER NOT NULL,
+  updated_at_ms INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_embedding_artifact_identity
+  ON embedding_artifact_manifests(
+    source_kind,
+    source_id,
+    source_revision,
+    chunk_hash,
+    profile_id,
+    status
+  );
+CREATE INDEX IF NOT EXISTS idx_embedding_artifact_source_revision
+  ON embedding_artifact_manifests(
+    source_kind,
+    source_id,
+    source_revision,
+    profile_id,
+    status,
+    chunk_ordinal,
+    created_at_ms
+  );
+CREATE INDEX IF NOT EXISTS idx_embedding_artifact_chunk_profile
+  ON embedding_artifact_manifests(chunk_hash, profile_id, status, created_at_ms);
+
+PRAGMA user_version = 30;
+"#,
+        )?;
     }
 
     Ok(())
@@ -1038,6 +1088,7 @@ DELETE FROM todo_recurrences;
 DELETE FROM todo_series;
 DELETE FROM events;
 DELETE FROM detached_ask_completion_claims;
+DELETE FROM embedding_artifact_manifests;
 DELETE FROM knowledge_embeddings;
 DELETE FROM knowledge_index_jobs;
 DELETE FROM knowledge_units;

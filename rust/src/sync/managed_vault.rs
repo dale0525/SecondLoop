@@ -11,11 +11,18 @@ use serde::{Deserialize, Serialize};
 use crate::crypto::{decrypt_bytes, encrypt_bytes};
 
 mod admin;
+mod artifacts;
 mod attachments;
+mod pending_apply;
 mod progress;
 
 pub use admin::{clear_device, clear_vault};
 pub use attachments::{download_attachment_bytes, upload_attachment_bytes};
+use pending_apply::{
+    apply_pending_ops_until_stable, cursor_repair_marker_key, has_local_oplog_for_device,
+    is_foreign_key_constraint_error, load_pending_apply_op_ids, pending_apply_key,
+    rewind_since_for_unresolved_pending_devices, update_since_map,
+};
 pub use progress::{pull_with_progress, push_ops_only_with_progress};
 
 #[derive(Debug, Serialize)]
@@ -138,162 +145,6 @@ fn load_since_map(conn: &Connection, scope_id: &str) -> Result<BTreeMap<String, 
         }
     }
     Ok(out)
-}
-
-fn load_pending_apply_op_ids(conn: &Connection, scope_id: &str) -> Result<BTreeSet<String>> {
-    let prefix = format!("managed_vault.pending_apply:{scope_id}:");
-    let pattern = format!("{prefix}%");
-
-    let mut stmt = conn.prepare(r#"SELECT key FROM kv WHERE key LIKE ?1"#)?;
-    let mut rows = stmt.query(params![pattern])?;
-
-    let mut out: BTreeSet<String> = BTreeSet::new();
-    while let Some(row) = rows.next()? {
-        let key: String = row.get(0)?;
-        let Some(op_id) = key.strip_prefix(&prefix) else {
-            continue;
-        };
-        if op_id.trim().is_empty() {
-            continue;
-        }
-        out.insert(op_id.to_string());
-    }
-    Ok(out)
-}
-
-fn pending_apply_key(scope_id: &str, op_id: &str) -> String {
-    format!("managed_vault.pending_apply:{scope_id}:{op_id}")
-}
-
-fn is_foreign_key_constraint_error(err: &anyhow::Error) -> bool {
-    if let Some(e) = err.downcast_ref::<rusqlite::Error>() {
-        return matches!(
-            e,
-            rusqlite::Error::SqliteFailure(e, _) if e.extended_code == rusqlite::ffi::SQLITE_CONSTRAINT_FOREIGNKEY
-        );
-    }
-    let msg = err.to_string().to_ascii_lowercase();
-    msg.contains("foreign key constraint failed")
-}
-
-fn try_apply_pending_op(conn: &Connection, db_key: &[u8; 32], op_id: &str) -> Result<Option<bool>> {
-    let op_json_blob: Option<Vec<u8>> = conn
-        .query_row(
-            r#"SELECT op_json FROM oplog WHERE op_id = ?1"#,
-            params![op_id],
-            |row| row.get(0),
-        )
-        .optional()?;
-    let Some(op_json_blob) = op_json_blob else {
-        return Ok(None);
-    };
-
-    let plaintext = decrypt_bytes(
-        db_key,
-        &op_json_blob,
-        format!("oplog.op_json:{op_id}").as_bytes(),
-    )?;
-    let op_json: serde_json::Value = serde_json::from_slice(&plaintext)?;
-
-    match super::apply_op(conn, db_key, &op_json) {
-        Ok(_) => Ok(Some(true)),
-        Err(e) if is_foreign_key_constraint_error(&e) => Ok(Some(false)),
-        Err(e) => Err(e),
-    }
-}
-
-fn apply_pending_ops_until_stable(
-    conn: &Connection,
-    db_key: &[u8; 32],
-    scope_id: &str,
-    pending: &mut BTreeSet<String>,
-) -> Result<()> {
-    // Bound the amount of work per pull batch, while still allowing progress on most dependency chains.
-    const MAX_PASSES: usize = 10;
-    for _ in 0..MAX_PASSES {
-        let mut progressed = false;
-
-        let op_ids: Vec<String> = pending.iter().cloned().collect();
-        for op_id in op_ids {
-            match try_apply_pending_op(conn, db_key, &op_id)? {
-                None => {
-                    // Op no longer exists locally; drop the pending marker.
-                    let _ = conn.execute(
-                        r#"DELETE FROM kv WHERE key = ?1"#,
-                        params![pending_apply_key(scope_id, &op_id)],
-                    )?;
-                    pending.remove(&op_id);
-                    progressed = true;
-                }
-                Some(true) => {
-                    let _ = conn.execute(
-                        r#"DELETE FROM kv WHERE key = ?1"#,
-                        params![pending_apply_key(scope_id, &op_id)],
-                    )?;
-                    pending.remove(&op_id);
-                    progressed = true;
-                }
-                Some(false) => {
-                    // Still waiting on dependencies.
-                }
-            }
-        }
-
-        if !progressed {
-            break;
-        }
-    }
-    Ok(())
-}
-
-fn rewind_since_for_unresolved_pending_devices(
-    conn: &Connection,
-    pending: &BTreeSet<String>,
-    next_since: &mut BTreeMap<String, i64>,
-) -> Result<()> {
-    if pending.is_empty() {
-        return Ok(());
-    }
-
-    let mut pending_devices: BTreeSet<String> = BTreeSet::new();
-    let mut stmt = conn.prepare_cached(r#"SELECT device_id FROM oplog WHERE op_id = ?1"#)?;
-    for op_id in pending {
-        let device_id: Option<String> = stmt
-            .query_row(params![op_id], |row| row.get(0))
-            .optional()?;
-        if let Some(device_id) = device_id {
-            pending_devices.insert(device_id);
-        }
-    }
-
-    for device_id in pending_devices {
-        next_since.insert(device_id, 0);
-    }
-
-    Ok(())
-}
-
-fn update_since_map(conn: &Connection, scope_id: &str, next: &BTreeMap<String, i64>) -> Result<()> {
-    for (device_id, last_seq) in next {
-        let key = format!("managed_vault.last_pulled_seq:{scope_id}:{device_id}");
-        super::kv_set_i64(conn, &key, *last_seq)?;
-    }
-    Ok(())
-}
-
-fn cursor_repair_marker_key(scope_id: &str, device_id: &str) -> String {
-    format!("managed_vault.cursor_repaired:{scope_id}:{device_id}")
-}
-
-fn has_local_oplog_for_device(conn: &Connection, device_id: &str) -> Result<bool> {
-    let row: Option<i64> = conn
-        .query_row(
-            r#"SELECT 1 FROM oplog WHERE device_id = ?1 LIMIT 1"#,
-            params![device_id],
-            |row| row.get(0),
-        )
-        .optional()?;
-    Ok(row.is_some())
 }
 
 fn maybe_recover_stale_since_map(
@@ -540,6 +391,13 @@ fn push_internal(
             attachments::upload_all_local_attachment_bytes(&upload_ctx)?;
             super::kv_set_i64(conn, &attachment_backfill_key, 1)?;
         }
+
+        let artifact_backfill_key =
+            format!("managed_vault.embedding_artifacts.bytes_backfilled:{scope_id}");
+        if super::kv_get_i64(conn, &artifact_backfill_key)?.unwrap_or(0) == 0 {
+            artifacts::upload_all_local_embedding_artifact_blobs(&upload_ctx)?;
+            super::kv_set_i64(conn, &artifact_backfill_key, 1)?;
+        }
     }
 
     // Rare recovery path: if the remote has seqs this device doesn't agree with (e.g. device-id reuse),
@@ -563,6 +421,7 @@ fn push_internal(
         let mut ops: Vec<PushOp> = Vec::new();
         let mut max_seq = last_pushed_seq;
         let mut attachment_actions: BTreeMap<String, PendingAttachmentAction> = BTreeMap::new();
+        let mut artifact_blob_refs: BTreeSet<String> = BTreeSet::new();
 
         while let Some(row) = rows.next()? {
             let op_id: String = row.get(0)?;
@@ -599,6 +458,15 @@ fn push_internal(
                     if let Some(sha256) = op_json["payload"]["sha256"].as_str() {
                         attachment_actions
                             .insert(sha256.to_string(), PendingAttachmentAction::Delete);
+                    }
+                }
+
+                if op_json["type"].as_str() == Some("embedding.artifact.upsert.v1") {
+                    if let Some(blob_ref) = op_json["payload"]["blob_ref"].as_str() {
+                        let blob_ref = blob_ref.trim();
+                        if !blob_ref.is_empty() {
+                            artifact_blob_refs.insert(blob_ref.to_string());
+                        }
                     }
                 }
             }
@@ -642,6 +510,10 @@ fn push_internal(
                     attachments::delete_remote_attachment_bytes(&upload_ctx, &sha256)?;
                 }
             }
+        }
+
+        for blob_ref in artifact_blob_refs {
+            let _ = artifacts::upload_embedding_artifact_blob_if_present(&upload_ctx, &blob_ref)?;
         }
 
         let endpoint = url(base_url, &format!("/v1/vaults/{vault_id}/ops:push"))?;
@@ -1102,6 +974,19 @@ pub fn pull(
             break;
         }
     }
+
+    let app_dir = super::app_dir_from_conn(conn)?;
+    let download_ctx = attachments::AttachmentUploadContext {
+        conn,
+        db_key,
+        sync_key,
+        http: &http,
+        base_url,
+        vault_id,
+        id_token,
+        app_dir: app_dir.as_path(),
+    };
+    let _ = artifacts::download_missing_embedding_artifact_blobs(&download_ctx)?;
 
     Ok(applied)
 }

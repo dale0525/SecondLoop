@@ -154,6 +154,44 @@ pub struct EmbeddingProfileConfig {
 }
 
 #[derive(Clone, Debug)]
+pub struct EmbeddingArtifactManifest {
+    pub artifact_id: String,
+    pub source_kind: String,
+    pub source_id: String,
+    pub source_revision: i64,
+    pub chunk_hash: String,
+    pub chunk_ordinal: i64,
+    pub profile_id: String,
+    pub producer_device_id: Option<String>,
+    pub producer_class: String,
+    pub quality_tier: String,
+    pub vector_format: String,
+    pub dimension: i64,
+    pub blob_ref: String,
+    pub status: String,
+    pub supersedes_artifact_id: Option<String>,
+    pub created_at_ms: i64,
+    pub updated_at_ms: i64,
+}
+
+#[derive(Clone, Debug)]
+pub struct EmbeddingArtifactManifestInput<'a> {
+    pub source_kind: &'a str,
+    pub source_id: &'a str,
+    pub source_revision: i64,
+    pub chunk_hash: &'a str,
+    pub chunk_ordinal: i64,
+    pub profile_id: &'a str,
+    pub producer_device_id: Option<&'a str>,
+    pub producer_class: &'a str,
+    pub quality_tier: &'a str,
+    pub vector_format: &'a str,
+    pub dimension: i64,
+    pub blob_ref: &'a str,
+    pub created_at_ms: Option<i64>,
+}
+
+#[derive(Clone, Debug)]
 pub struct Attachment {
     pub sha256: String,
     pub mime_type: String,
