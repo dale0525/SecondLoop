@@ -333,10 +333,10 @@ gh pr create \
   --repo "${upstream_repo}" \
   --base "${upstream_default_branch}" \
   --head "${fork_owner}:${branch_name}" \
-  --title "Add ${package_id} version ${version}" \
+  --title "Update: ${package_id} version ${version}" \
   --body "## Summary
 
-- Add WinGet manifests for ${package_id} ${version}
+- Update WinGet manifests for ${package_id} ${version}
 - Source release: https://github.com/${source_repo}/releases/tag/${release_tag}
 
 ## Validation
