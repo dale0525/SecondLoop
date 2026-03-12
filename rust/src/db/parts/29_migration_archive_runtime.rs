@@ -404,7 +404,7 @@ fn migration_archive_build_stage(
     let attachments_vec = attachments.into_values().collect::<Vec<MigrationArchiveAttachment>>();
     fs::create_dir_all(stage_dir.join("attachments"))?;
     let manifest = MigrationArchiveManifest {
-        schema_version: 1,
+        schema_version: MIGRATION_ARCHIVE_SCHEMA_VERSION,
         archive_kind: "migration".to_string(),
         exported_at_ms: now_ms(),
         app_version: env!("CARGO_PKG_VERSION").to_string(),
@@ -457,6 +457,28 @@ fn migration_archive_materialize_encrypted_snapshot(
     let encrypted = fs::read(snapshot_path)?;
     let zip_bytes = decrypt_bytes(key, &encrypted, MIGRATION_ARCHIVE_ROLLBACK_SNAPSHOT_AAD)?;
     materialize_external_import_source_from_zip_bytes(app_dir, "rollback-snapshot", &zip_bytes)
+}
+
+fn migration_archive_restore_from_encrypted_snapshot(
+    app_dir: &Path,
+    key: &[u8; 32],
+    snapshot_path: &Path,
+) -> Result<()> {
+    let rollback_result = match migration_archive_materialize_encrypted_snapshot(
+        app_dir,
+        key,
+        snapshot_path,
+    ) {
+        Ok(source) => {
+            let result = migration_archive_replace_vault_with_source_root(app_dir, key, &source.root_dir)
+                .map(|_| ());
+            cleanup_materialized_external_import_source(&source);
+            result
+        }
+        Err(err) => Err(err),
+    };
+    migration_archive_remove_snapshot(Some(snapshot_path));
+    rollback_result
 }
 
 pub fn export_migration_archive_with_callbacks(
@@ -609,7 +631,7 @@ SELECT (
     let attachment_count: i64 = conn.query_row(r#"SELECT COUNT(*) FROM attachments"#, [], |row| row.get(0))?;
     let estimated_size_bytes = migration_archive_estimated_size_bytes(conn)?;
     Ok(MigrationArchiveExportEstimate {
-        schema_version: 1,
+        schema_version: MIGRATION_ARCHIVE_SCHEMA_VERSION,
         archive_kind: "migration".to_string(),
         item_count,
         attachment_count,
@@ -1085,12 +1107,7 @@ pub fn import_migration_archive_with_callbacks(
         Err(err) => {
             let original_error = err.to_string();
             let rollback_result = if let Some(path) = snapshot_path.as_ref() {
-                let source = migration_archive_materialize_encrypted_snapshot(app_dir, key, path)?;
-                let result =
-                    migration_archive_replace_vault_with_source_root(app_dir, key, &source.root_dir)
-                        .map(|_| ());
-                cleanup_materialized_external_import_source(&source);
-                result
+                migration_archive_restore_from_encrypted_snapshot(app_dir, key, path)
             } else {
                 Ok(())
             };

@@ -131,6 +131,19 @@ pub fn validate_migration_archive_manifest(manifest: &MigrationArchiveManifest) 
             return Err(anyhow!("markdown_path must not be empty"));
         }
     }
+    for attachment in &manifest.attachments {
+        let candidate = Path::new(&attachment.archive_path);
+        if candidate.is_absolute()
+            || candidate
+                .components()
+                .any(|component| component == std::path::Component::ParentDir)
+        {
+            return Err(anyhow!(
+                "attachment archive_path contains path traversal: {}",
+                attachment.archive_path
+            ));
+        }
+    }
     Ok(())
 }
 

@@ -129,6 +129,33 @@ fn migration_archive_manifest_validation_rejects_newer_schema_version() {
 }
 
 #[test]
+fn migration_archive_manifest_validation_rejects_attachment_path_traversal() {
+    let json = r#"{
+        "schema_version": 1,
+        "archive_kind": "migration",
+        "exported_at_ms": 1710000000000,
+        "app_version": "1.2.3",
+        "items": [],
+        "attachments": [
+          {
+            "sha256": "abc123",
+            "archive_path": "../../../secret.txt",
+            "original_filename": "secret.txt",
+            "mime_type": "text/plain",
+            "size_bytes": 42,
+            "item_ids": []
+          }
+        ],
+        "relations": []
+      }"#;
+
+    let err = parse_migration_archive_manifest_json(json)
+        .expect_err("attachment path traversal should fail");
+
+    assert!(err.to_string().contains("attachment archive_path"));
+}
+
+#[test]
 fn migration_archive_export_writes_manifest_markdown_and_deduplicated_attachments() {
     let dir = tempfile::tempdir().expect("tempdir");
     let app_dir = dir.path().join("app");
@@ -413,6 +440,24 @@ fn migration_archive_rollback_snapshot_is_encrypted_on_disk() {
         fs::read_to_string(source.root_dir.join("export-manifest.json")).expect("read manifest");
     assert!(manifest_json.contains(&conversation.id));
     cleanup_materialized_external_import_source(&source);
+}
+
+#[test]
+fn migration_archive_restore_from_encrypted_snapshot_cleans_up_on_materialize_failure() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let app_dir = dir.path().join("app");
+    let key = [42u8; 32];
+    let snapshot_path = app_dir
+        .join("migration_archive/rollback")
+        .join("corrupt-snapshot.bin");
+    fs::create_dir_all(snapshot_path.parent().expect("rollback dir")).expect("mkdir rollback");
+    fs::write(&snapshot_path, b"not a valid encrypted snapshot").expect("write corrupt snapshot");
+
+    let err = migration_archive_restore_from_encrypted_snapshot(&app_dir, &key, &snapshot_path)
+        .expect_err("corrupt snapshot should fail");
+
+    assert!(!snapshot_path.exists());
+    assert!(!err.to_string().is_empty());
 }
 
 #[test]
