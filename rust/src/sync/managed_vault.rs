@@ -19,9 +19,9 @@ mod progress;
 pub use admin::{clear_device, clear_vault};
 pub use attachments::{download_attachment_bytes, upload_attachment_bytes};
 use pending_apply::{
-    apply_pending_ops_until_stable, cursor_repair_marker_key, has_local_oplog_for_device,
-    is_foreign_key_constraint_error, load_pending_apply_op_ids, pending_apply_key,
-    rewind_since_for_unresolved_pending_devices, update_since_map,
+    apply_pending_ops_until_stable, cursor_repair_marker_attempted, has_local_oplog_for_device,
+    is_foreign_key_constraint_error, load_pending_apply_op_ids, mark_cursor_repair_attempted,
+    pending_apply_key, rewind_since_for_unresolved_pending_devices, update_since_map,
 };
 pub use progress::{pull_with_progress, push_ops_only_with_progress};
 
@@ -163,8 +163,7 @@ fn maybe_recover_stale_since_map(
             continue;
         }
 
-        let marker_key = cursor_repair_marker_key(scope_id, &device_id);
-        if super::kv_get_i64(conn, &marker_key)?.unwrap_or(0) > 0 {
+        if cursor_repair_marker_attempted(conn, scope_id, &device_id)? {
             continue;
         }
 
@@ -173,7 +172,7 @@ fn maybe_recover_stale_since_map(
         }
 
         since.insert(device_id.clone(), 0);
-        super::kv_set_i64(conn, &marker_key, 1)?;
+        mark_cursor_repair_attempted(conn, scope_id, &device_id)?;
         changed = true;
     }
 

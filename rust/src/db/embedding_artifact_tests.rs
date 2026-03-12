@@ -425,3 +425,18 @@ fn desktop_default_pipeline_does_not_clone_lower_priority_mobile_cache_hit() {
     assert_eq!(active.producer_class, "desktop");
     assert_ne!(active.blob_ref, shared_blob_ref);
 }
+
+#[test]
+fn embedding_artifact_prune_removes_unreferenced_blob_files() {
+    let dir = tempdir().expect("tempdir");
+    let conn = open(dir.path()).expect("open");
+    let key = [31u8; 32];
+
+    write_embedding_artifact_blob(dir.path(), &key, "blob/orphaned", &[1, 2, 3, 4])
+        .expect("write orphan blob");
+    assert!(has_embedding_artifact_blob(dir.path(), "blob/orphaned"));
+
+    let removed = prune_orphaned_embedding_artifact_blobs(&conn, dir.path()).expect("prune");
+    assert_eq!(removed, 1);
+    assert!(!has_embedding_artifact_blob(dir.path(), "blob/orphaned"));
+}

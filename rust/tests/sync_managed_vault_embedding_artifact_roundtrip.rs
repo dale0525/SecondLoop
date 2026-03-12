@@ -259,8 +259,11 @@ fn start_mock_server() -> (String, mpsc::Sender<()>, thread::JoinHandle<()>) {
                         let since_seq = since.get(device_id).and_then(|v| v.as_i64()).unwrap_or(0);
                         let mut max_seq = since_seq;
                         for op in ops {
-                            if op.seq <= since_seq || out_json.len() >= limit {
+                            if op.seq <= since_seq {
                                 max_seq = max_seq.max(op.seq);
+                                continue;
+                            }
+                            if out_json.len() >= limit {
                                 continue;
                             }
                             out_json.push(serde_json::json!({
@@ -431,6 +434,63 @@ fn managed_vault_roundtrip_syncs_embedding_artifact_blobs() {
     let processed_b =
         db::process_pending_message_embeddings_default(&conn_b, &key_b, 10).expect("process B");
     assert_eq!(processed_b, 1);
+
+    let _ = stop_tx.send(());
+    let _ = handle.join();
+}
+
+#[test]
+fn managed_vault_pull_paginates_without_skipping_ops_at_limit_boundary() {
+    let (base_url, stop_tx, handle) = start_mock_server();
+    let vault_id = "vault-pagination".to_string();
+    let id_token = "token-pagination".to_string();
+
+    let temp_a = tempfile::tempdir().expect("tempdir A");
+    let app_dir_a = temp_a.path().join("secondloop_a");
+    let key_a =
+        auth::init_master_password(&app_dir_a, "pw-a", KdfParams::for_test()).expect("init A");
+    let conn_a = db::open(&app_dir_a).expect("open A db");
+    let conversation =
+        db::create_conversation(&conn_a, &key_a, "Pagination").expect("conversation A");
+
+    for idx in 0..520 {
+        db::insert_message(
+            &conn_a,
+            &key_a,
+            &conversation.id,
+            "user",
+            &format!("pagination message {idx}"),
+        )
+        .expect("insert message");
+    }
+
+    let sync_key = derive_root_key(
+        "sync-passphrase",
+        b"secondloop-sync1",
+        &KdfParams::for_test(),
+    )
+    .expect("derive sync key");
+
+    let pushed =
+        sync::managed_vault::push(&conn_a, &key_a, &sync_key, &base_url, &vault_id, &id_token)
+            .expect("push");
+    assert!(pushed >= 521);
+
+    let temp_b = tempfile::tempdir().expect("tempdir B");
+    let app_dir_b = temp_b.path().join("secondloop_b");
+    let key_b =
+        auth::init_master_password(&app_dir_b, "pw-b", KdfParams::for_test()).expect("init B");
+    let conn_b = db::open(&app_dir_b).expect("open B db");
+
+    let pulled =
+        sync::managed_vault::pull(&conn_b, &key_b, &sync_key, &base_url, &vault_id, &id_token)
+            .expect("pull");
+    assert!(pulled >= 521);
+
+    let message_count: i64 = conn_b
+        .query_row("SELECT COUNT(*) FROM messages", [], |row| row.get(0))
+        .expect("message count");
+    assert_eq!(message_count, 520);
 
     let _ = stop_tx.send(());
     let _ = handle.join();

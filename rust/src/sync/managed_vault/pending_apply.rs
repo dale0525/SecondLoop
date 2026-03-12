@@ -150,7 +150,38 @@ pub(super) fn update_since_map(
 }
 
 pub(super) fn cursor_repair_marker_key(scope_id: &str, device_id: &str) -> String {
+    format!("managed_vault.cursor_repaired:{scope_id}:{device_id}")
+}
+
+fn cursor_repair_marker_key_v2(scope_id: &str, device_id: &str) -> String {
     format!("managed_vault.cursor_repair_attempted:{scope_id}:{device_id}")
+}
+
+pub(super) fn cursor_repair_marker_attempted(
+    conn: &Connection,
+    scope_id: &str,
+    device_id: &str,
+) -> Result<bool> {
+    let legacy = cursor_repair_marker_key(scope_id, device_id);
+    if super::super::kv_get_i64(conn, &legacy)?.unwrap_or(0) > 0 {
+        return Ok(true);
+    }
+
+    let v2 = cursor_repair_marker_key_v2(scope_id, device_id);
+    Ok(super::super::kv_get_i64(conn, &v2)?.unwrap_or(0) > 0)
+}
+
+pub(super) fn mark_cursor_repair_attempted(
+    conn: &Connection,
+    scope_id: &str,
+    device_id: &str,
+) -> Result<()> {
+    let legacy = cursor_repair_marker_key(scope_id, device_id);
+    super::super::kv_set_i64(conn, &legacy, 1)?;
+
+    let v2 = cursor_repair_marker_key_v2(scope_id, device_id);
+    super::super::kv_set_i64(conn, &v2, 1)?;
+    Ok(())
 }
 
 pub(super) fn has_local_oplog_for_device(conn: &Connection, device_id: &str) -> Result<bool> {
@@ -162,4 +193,45 @@ pub(super) fn has_local_oplog_for_device(conn: &Connection, device_id: &str) -> 
         )
         .optional()?;
     Ok(exists.is_some())
+}
+
+#[cfg(test)]
+mod cursor_repair_marker_tests {
+    use super::*;
+    use crate::sync::{kv_get_i64, kv_set_i64};
+
+    #[test]
+    fn cursor_repair_marker_compatibility_reads_legacy_key() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let conn = crate::db::open(dir.path()).expect("open");
+
+        kv_set_i64(&conn, "managed_vault.cursor_repaired:scope-a:device-a", 1)
+            .expect("set legacy marker");
+
+        assert!(
+            cursor_repair_marker_attempted(&conn, "scope-a", "device-a").expect("marker attempted")
+        );
+    }
+
+    #[test]
+    fn mark_cursor_repair_attempted_writes_both_marker_keys() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let conn = crate::db::open(dir.path()).expect("open");
+
+        mark_cursor_repair_attempted(&conn, "scope-b", "device-b").expect("mark attempted");
+
+        assert_eq!(
+            kv_get_i64(&conn, "managed_vault.cursor_repaired:scope-b:device-b")
+                .expect("get legacy"),
+            Some(1)
+        );
+        assert_eq!(
+            kv_get_i64(
+                &conn,
+                "managed_vault.cursor_repair_attempted:scope-b:device-b",
+            )
+            .expect("get v2"),
+            Some(1)
+        );
+    }
 }

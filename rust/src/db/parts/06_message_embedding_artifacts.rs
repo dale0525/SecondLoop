@@ -253,7 +253,7 @@ fn store_message_embedding_artifact(
     write_embedding_artifact_blob(app_dir, key, &blob_ref, &blob)?;
 
     let producer_device_id = Some(get_or_create_device_id(conn)?);
-    let _ = create_embedding_artifact_manifest(
+    let manifest_result = create_embedding_artifact_manifest(
         conn,
         key,
         EmbeddingArtifactManifestInput {
@@ -271,7 +271,11 @@ fn store_message_embedding_artifact(
             blob_ref: &blob_ref,
             created_at_ms: Some(now_ms()),
         },
-    )?;
+    );
+    if let Err(err) = manifest_result {
+        let _ = delete_embedding_artifact_blob_if_exists(app_dir, &blob_ref);
+        return Err(err);
+    }
     Ok(())
 }
 
@@ -297,6 +301,7 @@ pub fn process_pending_message_embeddings<E: Embedder + ?Sized>(
     let producer_class = detect_message_embedding_producer_class(conn, key, &model_name)?;
     let profile_id = embedding_artifact_profile_id(&model_name, expected_dim);
     let app_dir = app_dir_from_conn(conn)?;
+    let _ = prune_orphaned_embedding_artifact_blobs(conn, app_dir.as_path());
     let space_id = embedding_space_id(&model_name, expected_dim)?;
     ensure_vec_tables_for_space(conn, &space_id, expected_dim)?;
     let message_table = message_embeddings_table(&space_id)?;
@@ -380,6 +385,7 @@ pub fn process_pending_message_embeddings_default(
     let producer_class = default_local_message_artifact_producer_class();
     let profile_id = embedding_artifact_profile_id(&model_name, expected_dim);
     let app_dir = app_dir_from_conn(conn)?;
+    let _ = prune_orphaned_embedding_artifact_blobs(conn, app_dir.as_path());
     let space_id = embedding_space_id(&model_name, DEFAULT_EMBEDDING_DIM)?;
     ensure_vec_tables_for_space(conn, &space_id, DEFAULT_EMBEDDING_DIM)?;
     let message_table = message_embeddings_table(&space_id)?;

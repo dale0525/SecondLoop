@@ -82,6 +82,44 @@ pub fn read_embedding_artifact_blob(
     decrypt_bytes(key, &ciphertext, aad.as_bytes())
 }
 
+pub fn delete_embedding_artifact_blob_if_exists(app_dir: &Path, blob_ref: &str) -> Result<()> {
+    best_effort_remove_file(&app_dir.join(embedding_artifact_blob_rel_path(blob_ref)))
+}
+
+pub fn prune_orphaned_embedding_artifact_blobs(conn: &Connection, app_dir: &Path) -> Result<u64> {
+    let dir = app_dir.join("embedding_artifacts");
+    if !dir.exists() {
+        return Ok(0);
+    }
+
+    let referenced_storage_ids: std::collections::BTreeSet<String> =
+        list_all_embedding_artifact_blob_refs(conn)?
+            .into_iter()
+            .map(|blob_ref| embedding_artifact_blob_storage_id(&blob_ref))
+            .collect();
+
+    let mut removed = 0u64;
+    for entry in fs::read_dir(&dir)? {
+        let entry = entry?;
+        let path = entry.path();
+        if !path.is_file() {
+            continue;
+        }
+        let Some(file_name) = path.file_name().and_then(|value| value.to_str()) else {
+            continue;
+        };
+        let Some(storage_id) = file_name.strip_suffix(".bin") else {
+            continue;
+        };
+        if referenced_storage_ids.contains(storage_id) {
+            continue;
+        }
+        best_effort_remove_file(&path)?;
+        removed += 1;
+    }
+    Ok(removed)
+}
+
 pub fn encode_f32_embedding_artifact_blob(vector: &[f32]) -> Vec<u8> {
     vector.as_bytes().to_vec()
 }
@@ -667,6 +705,20 @@ pub fn list_active_embedding_artifacts_for_source_revision(
     let mut out = Vec::new();
     while let Some(row) = rows.next()? {
         out.push(read_embedding_artifact_manifest(row)?);
+    }
+    Ok(out)
+}
+
+pub fn list_all_embedding_artifact_blob_refs(conn: &Connection) -> Result<Vec<String>> {
+    let mut stmt = conn.prepare(
+        r#"SELECT DISTINCT blob_ref
+           FROM embedding_artifact_manifests
+           ORDER BY created_at_ms ASC, blob_ref ASC"#,
+    )?;
+    let mut rows = stmt.query([])?;
+    let mut out = Vec::new();
+    while let Some(row) = rows.next()? {
+        out.push(row.get(0)?);
     }
     Ok(out)
 }
