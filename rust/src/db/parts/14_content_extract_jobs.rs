@@ -44,11 +44,19 @@ struct VideoManifestSegmentRef {
 }
 
 #[derive(Clone, Debug)]
+struct VideoManifestPreviewRef {
+    index: i64,
+    sha256: String,
+}
+
+#[derive(Clone, Debug)]
 struct ParsedVideoManifestPayload {
     video_sha256: String,
     video_mime_type: String,
     audio_sha256: Option<String>,
     audio_mime_type: Option<String>,
+    poster_sha256: Option<String>,
+    keyframes: Vec<VideoManifestPreviewRef>,
     segments: Vec<VideoManifestSegmentRef>,
 }
 
@@ -227,11 +235,67 @@ fn parse_video_manifest_payload(bytes: &[u8]) -> Result<ParsedVideoManifestPaylo
         .filter(|item| !item.is_empty())
         .map(|item| item.to_string());
 
+    let poster_sha256 = payload
+        .get("poster_sha256")
+        .or_else(|| payload.get("posterSha256"))
+        .and_then(|item| item.as_str())
+        .map(|item| item.trim())
+        .filter(|item| !item.is_empty())
+        .map(|item| item.to_string());
+    let mut keyframes = Vec::<VideoManifestPreviewRef>::new();
+    if let Some(items) = payload.get("keyframes").and_then(|item| item.as_array()) {
+        for (fallback_index, item) in items.iter().enumerate() {
+            let Some(frame) = item.as_object() else {
+                continue;
+            };
+
+            let sha256 = frame
+                .get("sha256")
+                .and_then(|value| value.as_str())
+                .map(|value| value.trim())
+                .unwrap_or("");
+            let mime_type = frame
+                .get("mime_type")
+                .or_else(|| frame.get("mimeType"))
+                .and_then(|value| value.as_str())
+                .map(|value| value.trim())
+                .unwrap_or("");
+            if sha256.is_empty() || mime_type.is_empty() {
+                continue;
+            }
+
+            let index = match frame.get("index") {
+                Some(serde_json::Value::Number(value)) => {
+                    value.as_i64().unwrap_or(fallback_index as i64)
+                }
+                Some(serde_json::Value::String(value)) => {
+                    value.trim().parse::<i64>().unwrap_or(fallback_index as i64)
+                }
+                _ => fallback_index as i64,
+            };
+
+            keyframes.push(VideoManifestPreviewRef {
+                index,
+                sha256: sha256.to_string(),
+            });
+        }
+    }
+
+    keyframes.sort_by(|a, b| {
+        let by_index = a.index.cmp(&b.index);
+        if by_index != std::cmp::Ordering::Equal {
+            return by_index;
+        }
+        a.sha256.cmp(&b.sha256)
+    });
+
     Ok(ParsedVideoManifestPayload {
         video_sha256,
         video_mime_type,
         audio_sha256,
         audio_mime_type,
+        poster_sha256,
+        keyframes,
         segments,
     })
 }

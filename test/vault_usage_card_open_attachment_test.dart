@@ -29,10 +29,11 @@ Future<void> _pumpUi(WidgetTester tester, {int cycles = 16}) async {
 
 void main() {
   testWidgets(
-      'VaultUsageCard opens attachment details even when not linked to a message',
+      'VaultUsageCard opens grouped video attachment details by root sha',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
-    const sha = 'sha-video-proxy';
+    const rootSha = 'sha-video-root';
+    const leafSha = 'sha-video-segment';
 
     final httpClient = _MultiResponseHttpClient(
       handlers: <Pattern, _FakeHttpResponse>{
@@ -49,8 +50,11 @@ void main() {
           jsonEncode(<String, Object?>{
             'items': [
               {
-                'sha256': sha,
-                'mime_type': 'video/mp4',
+                'sha256': leafSha,
+                'root_sha256': rootSha,
+                'group_type': 'video',
+                'leaf_count': 4,
+                'mime_type': 'video',
                 'byte_len': 4096,
                 'created_at_ms': 1000,
                 'uploaded_at_ms': 2000,
@@ -65,9 +69,9 @@ void main() {
 
     final backend = _FakeBackend(
       attachment: const Attachment(
-        sha256: sha,
+        sha256: rootSha,
         mimeType: 'video/mp4',
-        path: 'attachments/sha-video-proxy.bin',
+        path: 'attachments/sha-video-root.bin',
         byteLen: 4096,
         createdAtMs: 1000,
       ),
@@ -111,36 +115,197 @@ void main() {
     await _pumpUi(tester);
     await tester.pumpAndSettle();
 
-    expect(find.byKey(const ValueKey('vault_usage_attachment_$sha')),
+    expect(find.byKey(const ValueKey('vault_usage_attachment_$rootSha')),
         findsOneWidget);
 
-    await tester.tap(find.byKey(const ValueKey('vault_usage_attachment_$sha')));
+    await tester
+        .tap(find.byKey(const ValueKey('vault_usage_attachment_$rootSha')));
     await tester.pump();
     await _pumpUi(tester);
 
     expect(find.byType(AttachmentViewerPage), findsOneWidget);
   });
+
+  testWidgets('VaultUsageCard deletes grouped video attachment by root sha',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    const rootSha = 'sha-video-root';
+    const leafSha = 'sha-video-segment';
+    const messageId = 'message_1';
+
+    final httpClient = _MultiResponseHttpClient(
+      handlers: <Pattern, _FakeHttpResponse>{
+        RegExp(r'/v1/vaults/uid_1/usage$'): _FakeHttpResponse.ok(
+          jsonEncode(<String, Object?>{
+            'total_bytes_used': 4096,
+            'attachments_bytes_used': 4096,
+            'ops_bytes_used': 0,
+            'other_bytes_used': 0,
+            'limit_bytes': null,
+          }),
+        ),
+        RegExp(r'/v1/vaults/uid_1/attachments$'): _FakeHttpResponse.ok(
+          jsonEncode(<String, Object?>{
+            'items': [
+              {
+                'sha256': leafSha,
+                'root_sha256': rootSha,
+                'group_type': 'video',
+                'leaf_count': 4,
+                'mime_type': 'video',
+                'byte_len': 4096,
+                'created_at_ms': 1000,
+                'uploaded_at_ms': 2000,
+              },
+            ],
+            'total_count': 1,
+            'total_bytes_used': 4096,
+          }),
+        ),
+        RegExp(r'/v1/vaults/uid_1/attachments/sha-video-root$'):
+            _FakeHttpResponse.ok(
+          jsonEncode(<String, Object?>{
+            'deleted': true,
+            'sha256': rootSha,
+          }),
+        ),
+      },
+    );
+
+    final backend = _FakeBackend(
+      attachment: const Attachment(
+        sha256: rootSha,
+        mimeType: 'video/mp4',
+        path: 'attachments/sha-video-root.bin',
+        byteLen: 4096,
+        createdAtMs: 1000,
+      ),
+      conversations: const <Conversation>[
+        Conversation(
+          id: 'conversation_1',
+          title: 'Loop',
+          createdAtMs: 0,
+          updatedAtMs: 0,
+        ),
+      ],
+      messagesByConversationId: const <String, List<Message>>{
+        'conversation_1': <Message>[
+          Message(
+            id: messageId,
+            conversationId: 'conversation_1',
+            role: 'user',
+            content: 'video',
+            createdAtMs: 0,
+            isMemory: false,
+          ),
+        ],
+      },
+      attachmentsByMessageId: const <String, List<Attachment>>{
+        messageId: <Attachment>[
+          Attachment(
+            sha256: rootSha,
+            mimeType: 'video/mp4',
+            path: 'attachments/sha-video-root.bin',
+            byteLen: 4096,
+            createdAtMs: 1000,
+          ),
+        ],
+      },
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        AppBackendScope(
+          backend: backend,
+          child: CloudAuthScope(
+            controller: _FakeCloudAuthController(),
+            gatewayConfig: const CloudGatewayConfig(
+              baseUrl: 'https://gateway.test',
+              modelName: 'cloud',
+            ),
+            child: SessionScope(
+              sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+              lock: () {},
+              child: MaterialApp(
+                home: Scaffold(
+                  body: VaultUsageCard(
+                    client: VaultUsageClient(httpClient: httpClient),
+                    attachmentsClient:
+                        VaultAttachmentsClient(httpClient: httpClient),
+                    configStore: SyncConfigStore(
+                      managedVaultDefaultBaseUrl: 'https://vault.test',
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await _pumpUi(tester);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('vault_usage_refresh')));
+    await _pumpUi(tester);
+    await tester.pumpAndSettle();
+
+    await tester.tap(
+      find.byKey(
+        const ValueKey('vault_usage_attachment_delete_$rootSha'),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(
+      find.byKey(
+        const ValueKey('vault_usage_attachment_delete_confirm_$rootSha'),
+      ),
+    );
+    await _pumpUi(tester);
+    await tester.pumpAndSettle();
+
+    expect(httpClient.deletePaths, ['/v1/vaults/uid_1/attachments/$rootSha']);
+    expect(backend.purgedMessageIds, [messageId]);
+  });
 }
 
 final class _FakeBackend implements AppBackend, AttachmentsBackend {
-  _FakeBackend({required this.attachment});
+  _FakeBackend({
+    required this.attachment,
+    this.conversations = const <Conversation>[],
+    this.messagesByConversationId = const <String, List<Message>>{},
+    this.attachmentsByMessageId = const <String, List<Attachment>>{},
+  });
 
   final Attachment attachment;
+  final List<Conversation> conversations;
+  final Map<String, List<Message>> messagesByConversationId;
+  final Map<String, List<Attachment>> attachmentsByMessageId;
+  final List<String> purgedMessageIds = <String>[];
 
   @override
   Future<List<Conversation>> listConversations(Uint8List key) async =>
-      const <Conversation>[];
+      conversations;
 
   @override
   Future<List<Message>> listMessages(Uint8List key, String conversationId) =>
-      Future<List<Message>>.value(const <Message>[]);
+      Future<List<Message>>.value(
+        messagesByConversationId[conversationId] ?? const <Message>[],
+      );
 
   @override
   Future<List<Attachment>> listMessageAttachments(
     Uint8List key,
     String messageId,
   ) async =>
-      const <Attachment>[];
+      attachmentsByMessageId[messageId] ?? const <Attachment>[];
+
+  @override
+  Future<void> purgeMessageAttachments(Uint8List key, String messageId) async {
+    purgedMessageIds.add(messageId);
+  }
 
   @override
   Future<Attachment?> readAttachmentBySha256(String attachmentSha256) async {
@@ -209,9 +374,23 @@ final class _MultiResponseHttpClient implements HttpClient {
   _MultiResponseHttpClient({required this.handlers});
 
   final Map<Pattern, _FakeHttpResponse> handlers;
+  final List<String> deletePaths = <String>[];
 
   @override
   Future<HttpClientRequest> getUrl(Uri url) async {
+    final response = _resolve(url) ??
+        _FakeHttpResponse(statusCode: 404, body: 'no handler for $url');
+    return _FakeHttpClientRequest(
+      response: _FakeHttpClientResponse(
+        statusCode: response.statusCode,
+        body: response.body,
+      ),
+    );
+  }
+
+  @override
+  Future<HttpClientRequest> deleteUrl(Uri url) async {
+    deletePaths.add(url.path);
     final response = _resolve(url) ??
         _FakeHttpResponse(statusCode: 404, body: 'no handler for $url');
     return _FakeHttpClientRequest(

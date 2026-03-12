@@ -70,4 +70,69 @@ void main() {
 
     expect(deleted?.sha256, 'sha_large');
   });
+
+  testWidgets(
+      'Vault attachment usage list renders grouped video entries by root sha', (
+    tester,
+  ) async {
+    VaultAttachmentUsageItem? opened;
+    VaultAttachmentUsageItem? deleted;
+
+    final items = <VaultAttachmentUsageItem>[
+      const VaultAttachmentUsageItem(
+        sha256: 'sha-video-segment',
+        rootSha256: 'sha-video-root',
+        groupType: 'video',
+        leafCount: 5,
+        mimeType: 'video',
+        byteLen: 2680,
+        createdAtMs: 150,
+        uploadedAtMs: 250,
+      ),
+    ];
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: Scaffold(
+            body: VaultAttachmentUsageListView(
+              items: items,
+              deletingSha: null,
+              onOpen: (item) => opened = item,
+              onDelete: (item) => deleted = item,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(
+      find.byKey(const ValueKey('vault_usage_attachment_sha-video-root')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(
+        const ValueKey('vault_usage_attachment_delete_sha-video-root'),
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('Video'), findsOneWidget);
+    expect(find.textContaining('2.6 KB'), findsOneWidget);
+    expect(find.textContaining('5×'), findsOneWidget);
+    expect(find.textContaining('sha-video-ro…'), findsOneWidget);
+
+    await tester.tap(
+      find.byKey(const ValueKey('vault_usage_attachment_sha-video-root')),
+    );
+    await tester.pump();
+    expect(opened?.rootSha256, 'sha-video-root');
+
+    await tester.tap(
+      find.byKey(
+        const ValueKey('vault_usage_attachment_delete_sha-video-root'),
+      ),
+    );
+    await tester.pump();
+    expect(deleted?.rootSha256, 'sha-video-root');
+  });
 }

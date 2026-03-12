@@ -7,6 +7,39 @@ use rusqlite::{params, Connection, OptionalExtension};
 
 use crate::crypto::{decrypt_bytes, encrypt_bytes};
 
+fn resolve_attachment_group_metadata(
+    conn: &Connection,
+    attachment_sha256: &str,
+) -> Result<Option<(String, String, String)>> {
+    let roots = crate::db::list_attachment_derivation_roots_by_child(conn, attachment_sha256)?;
+    let Some(root_sha256) = roots.first().cloned() else {
+        return Ok(None);
+    };
+
+    let Some(role) = crate::db::attachment_derivation_role_for_root_child(
+        conn,
+        &root_sha256,
+        attachment_sha256,
+    )?
+    else {
+        return Ok(None);
+    };
+
+    let root_mime_type: Option<String> = conn
+        .query_row(
+            r#"SELECT mime_type FROM attachments WHERE sha256 = ?1"#,
+            params![root_sha256.as_str()],
+            |row| row.get(0),
+        )
+        .optional()?;
+    let group_type = match root_mime_type.as_deref() {
+        Some("application/x.secondloop.video+json") => "video",
+        _ => return Ok(None),
+    };
+
+    Ok(Some((root_sha256, role, group_type.to_string())))
+}
+
 pub(super) struct AttachmentUploadContext<'a> {
     pub(super) conn: &'a Connection,
     pub(super) db_key: &'a [u8; 32],
@@ -69,6 +102,8 @@ pub fn upload_attachment_bytes(
         id_token,
         app_dir: app_dir.as_path(),
     };
+
+    let _ = crate::db::ensure_all_video_manifest_derivations(conn, db_key, app_dir.as_path())?;
 
     upload_attachment_bytes_if_present(&upload_ctx, sha256, &mime_type, created_at_ms)
 }
@@ -133,6 +168,8 @@ pub fn download_attachment_bytes(
 }
 
 pub(super) fn upload_all_local_attachment_bytes(ctx: &AttachmentUploadContext<'_>) -> Result<u64> {
+    let _ = crate::db::ensure_all_video_manifest_derivations(ctx.conn, ctx.db_key, ctx.app_dir)?;
+
     let mut stmt = ctx.conn.prepare(
         r#"SELECT sha256, mime_type, created_at FROM attachments ORDER BY created_at ASC, sha256 ASC"#,
     )?;
@@ -189,16 +226,25 @@ pub(super) fn upload_attachment_bytes_if_present(
         ctx.base_url,
         &format!("/v1/vaults/{}/attachments/{sha256}", ctx.vault_id),
     )?;
-    let resp = ctx
+    let mut request = ctx
         .http
         .put(endpoint)
         .bearer_auth(ctx.id_token)
         .header("content-type", "application/octet-stream")
         .header("x-media-byte-len", ciphertext.len().to_string())
         .header("x-media-mime", mime_type)
-        .header("x-media-created-at-ms", created_at_ms.to_string())
-        .body(ciphertext)
-        .send()?;
+        .header("x-media-created-at-ms", created_at_ms.to_string());
+
+    if let Some((root_sha256, role, group_type)) =
+        resolve_attachment_group_metadata(ctx.conn, sha256)?
+    {
+        request = request
+            .header("x-media-root-sha256", root_sha256)
+            .header("x-media-derivation-role", role)
+            .header("x-media-group-type", group_type);
+    }
+
+    let resp = request.body(ciphertext).send()?;
 
     let status = resp.status();
     let text = resp.text().unwrap_or_default();

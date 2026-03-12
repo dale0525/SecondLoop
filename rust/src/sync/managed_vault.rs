@@ -492,6 +492,14 @@ fn push_internal(
             return Ok(pushed_total);
         }
 
+        if attachment_actions
+            .values()
+            .any(|action| matches!(action, PendingAttachmentAction::Upload { .. }))
+        {
+            let _ =
+                crate::db::ensure_all_video_manifest_derivations(conn, db_key, upload_ctx.app_dir)?;
+        }
+
         for (sha256, action) in attachment_actions {
             match action {
                 PendingAttachmentAction::Upload {

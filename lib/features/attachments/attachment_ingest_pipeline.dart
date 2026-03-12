@@ -73,6 +73,52 @@ Uint8List buildUrlManifestAttachmentBytes(String url) {
   return Uint8List.fromList(utf8.encode(manifest));
 }
 
+Future<void> _upsertAttachmentDerivationBestEffort(
+  NativeAppBackend backend,
+  Uint8List sessionKey, {
+  required String rootSha256,
+  required String childSha256,
+  required String role,
+  required int createdAtMs,
+}) async {
+  final normalizedRootSha = rootSha256.trim();
+  final normalizedChildSha = childSha256.trim();
+  final normalizedRole = role.trim();
+  if (normalizedRootSha.isEmpty ||
+      normalizedChildSha.isEmpty ||
+      normalizedRole.isEmpty) {
+    return;
+  }
+  try {
+    await backend.upsertAttachmentDerivation(
+      sessionKey,
+      rootSha256: normalizedRootSha,
+      childSha256: normalizedChildSha,
+      role: normalizedRole,
+      createdAtMs: createdAtMs,
+    );
+  } catch (_) {}
+}
+
+@visibleForTesting
+Future<void> upsertAttachmentDerivationBestEffortForTest(
+  NativeAppBackend backend,
+  Uint8List sessionKey, {
+  required String rootSha256,
+  required String childSha256,
+  required String role,
+  required int createdAtMs,
+}) {
+  return _upsertAttachmentDerivationBestEffort(
+    backend,
+    sessionKey,
+    rootSha256: rootSha256,
+    childSha256: childSha256,
+    role: role,
+    createdAtMs: createdAtMs,
+  );
+}
+
 Map<String, Object?> buildInitialVideoExtractPayload({
   required String manifestMimeType,
   required String originalSha256,
@@ -333,6 +379,55 @@ Future<String> ingestFileAttachmentBytes({
       bytes: manifestBytes,
       mimeType: kSecondLoopVideoManifestMimeType,
     );
+    final derivationCreatedAtMs = DateTime.now().millisecondsSinceEpoch;
+    await _upsertAttachmentDerivationBestEffort(
+      backend,
+      sessionKey,
+      rootSha256: manifestAttachment.sha256,
+      childSha256: manifestAttachment.sha256,
+      role: 'root_manifest',
+      createdAtMs: derivationCreatedAtMs,
+    );
+    for (final segment in videoSegments) {
+      await _upsertAttachmentDerivationBestEffort(
+        backend,
+        sessionKey,
+        rootSha256: manifestAttachment.sha256,
+        childSha256: segment.sha256,
+        role: 'proxy_segment',
+        createdAtMs: derivationCreatedAtMs,
+      );
+    }
+    if (audioSha256.trim().isNotEmpty) {
+      await _upsertAttachmentDerivationBestEffort(
+        backend,
+        sessionKey,
+        rootSha256: manifestAttachment.sha256,
+        childSha256: audioSha256,
+        role: 'extracted_audio',
+        createdAtMs: derivationCreatedAtMs,
+      );
+    }
+    if (posterSha256 != null && posterSha256.trim().isNotEmpty) {
+      await _upsertAttachmentDerivationBestEffort(
+        backend,
+        sessionKey,
+        rootSha256: manifestAttachment.sha256,
+        childSha256: posterSha256,
+        role: 'poster',
+        createdAtMs: derivationCreatedAtMs,
+      );
+    }
+    for (final keyframe in keyframeRefs) {
+      await _upsertAttachmentDerivationBestEffort(
+        backend,
+        sessionKey,
+        rootSha256: manifestAttachment.sha256,
+        childSha256: keyframe.sha256,
+        role: 'keyframe',
+        createdAtMs: derivationCreatedAtMs,
+      );
+    }
 
     try {
       final nowMs = DateTime.now().millisecondsSinceEpoch;

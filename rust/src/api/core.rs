@@ -536,6 +536,20 @@ pub fn db_insert_attachment(
 }
 
 #[flutter_rust_bridge::frb]
+pub fn db_upsert_attachment_derivation(
+    app_dir: String,
+    key: Vec<u8>,
+    root_sha256: String,
+    child_sha256: String,
+    role: String,
+    created_at_ms: i64,
+) -> Result<()> {
+    let _key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    db::upsert_attachment_derivation(&conn, &root_sha256, &child_sha256, &role, created_at_ms)
+}
+
+#[flutter_rust_bridge::frb]
 pub fn db_link_attachment_to_message(
     app_dir: String,
     key: Vec<u8>,

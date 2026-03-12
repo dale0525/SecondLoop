@@ -326,6 +326,21 @@ Future<Attachment> dbInsertAttachment(
     RustLib.instance.api.crateApiCoreDbInsertAttachment(
         appDir: appDir, key: key, bytes: bytes, mimeType: mimeType);
 
+Future<void> dbUpsertAttachmentDerivation(
+        {required String appDir,
+        required List<int> key,
+        required String rootSha256,
+        required String childSha256,
+        required String role,
+        required PlatformInt64 createdAtMs}) =>
+    RustLib.instance.api.crateApiCoreDbUpsertAttachmentDerivation(
+        appDir: appDir,
+        key: key,
+        rootSha256: rootSha256,
+        childSha256: childSha256,
+        role: role,
+        createdAtMs: createdAtMs);
+
 Future<void> dbLinkAttachmentToMessage(
         {required String appDir,
         required List<int> key,

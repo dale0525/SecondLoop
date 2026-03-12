@@ -210,6 +210,14 @@ pub struct AttachmentVariant {
     pub created_at_ms: i64,
 }
 
+#[derive(Clone, Debug)]
+pub struct AttachmentDerivation {
+    pub root_sha256: String,
+    pub child_sha256: String,
+    pub role: String,
+    pub created_at_ms: i64,
+}
+
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct AttachmentExifMetadata {
     pub captured_at_ms: Option<i64>,
