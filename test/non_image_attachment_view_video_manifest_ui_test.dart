@@ -20,7 +20,11 @@ void main() {
     );
   }
 
-  Uint8List buildManifestBytes({required int keyframeCount}) {
+  Uint8List buildManifestBytes({
+    required int keyframeCount,
+    int segmentCount = 1,
+    bool includeAudio = false,
+  }) {
     return Uint8List.fromList(
       utf8.encode(
         jsonEncode({
@@ -28,6 +32,8 @@ void main() {
           'video_sha256': 'sha-video-proxy',
           'video_mime_type': 'video/mp4',
           'video_proxy_sha256': 'sha-video-proxy',
+          if (includeAudio) 'audio_sha256': 'sha-audio',
+          if (includeAudio) 'audio_mime_type': 'audio/mp4',
           'poster_sha256': 'sha-poster',
           'poster_mime_type': 'image/jpeg',
           'keyframes': [
@@ -41,11 +47,12 @@ void main() {
               },
           ],
           'video_segments': [
-            {
-              'index': 0,
-              'sha256': 'sha-video-proxy',
-              'mime_type': 'video/mp4',
-            },
+            for (var i = 0; i < segmentCount; i++)
+              {
+                'index': i,
+                'sha256': 'sha-video-proxy-$i',
+                'mime_type': 'video/mp4',
+              },
           ],
         }),
       ),
@@ -90,10 +97,14 @@ void main() {
   });
 
   testWidgets(
-      'video manifest detail hides legacy insight card and keeps extracted text',
+      'video manifest detail shows aggregate summary and hides legacy insight card',
       (tester) async {
     final attachment = buildVideoManifestAttachment('sha-video-no-insights');
-    final bytes = buildManifestBytes(keyframeCount: 1);
+    final bytes = buildManifestBytes(
+      keyframeCount: 2,
+      segmentCount: 3,
+      includeAudio: true,
+    );
 
     await tester.pumpWidget(
       wrapWithI18n(
@@ -106,6 +117,7 @@ void main() {
               'video_content_kind': 'knowledge',
               'knowledge_markdown_excerpt': '## Key points\n1. OCR fallback',
               'readable_text_full': '## Key points\n1. OCR fallback',
+              'video_proxy_truncated': true,
             },
           ),
         ),
@@ -116,6 +128,38 @@ void main() {
     expect(
       find.byKey(const ValueKey('video_manifest_insights_surface')),
       findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey('video_manifest_summary_surface')),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('video_manifest_summary_segments')),
+        matching: find.text('3'),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('video_manifest_summary_keyframes')),
+        matching: find.text('2'),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('video_manifest_summary_audio')),
+        matching: find.byIcon(Icons.check_circle_rounded),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('video_manifest_summary_truncated')),
+        matching: find.byIcon(Icons.check_circle_rounded),
+      ),
+      findsOneWidget,
     );
     expect(find.textContaining('Key points'), findsWidgets);
   });

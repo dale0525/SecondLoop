@@ -418,6 +418,24 @@ class NativeAppBackend
     );
   }
 
+  Future<void> upsertAttachmentDerivation(
+    Uint8List key, {
+    required String rootSha256,
+    required String childSha256,
+    required String role,
+    required int createdAtMs,
+  }) async {
+    final appDir = await _getAppDir();
+    await rust_core.dbUpsertAttachmentDerivation(
+      appDir: appDir,
+      key: key,
+      rootSha256: rootSha256,
+      childSha256: childSha256,
+      role: role,
+      createdAtMs: createdAtMs,
+    );
+  }
+
   @override
   Future<List<Attachment>> listRecentAttachments(
     Uint8List key, {

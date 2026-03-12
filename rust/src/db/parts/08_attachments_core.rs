@@ -204,6 +204,8 @@ ON CONFLICT(sha256) DO UPDATE SET
         r#"DELETE FROM cloud_media_backup WHERE attachment_sha256 = ?1"#,
         params![sha256],
     )?;
+    let _ = delete_attachment_derivations_by_root(conn, sha256)?;
+    let _ = delete_attachment_derivations_by_child(conn, sha256)?;
 
     best_effort_remove_file(&app_dir.join(format!("attachments/{sha256}.bin")))?;
     best_effort_remove_dir_all(&app_dir.join(format!("attachments/variants/{sha256}")))?;
@@ -241,8 +243,21 @@ pub fn purge_message_attachments(
         return Ok(0);
     }
 
+    let mut candidate_sha256s = attachment_sha256s.clone();
     let mut message_ids_to_delete: BTreeSet<String> = BTreeSet::new();
     for sha in &attachment_sha256s {
+        let derivations = {
+            let current = list_attachment_derivations_by_root(conn, sha)?;
+            if current.is_empty() {
+                ensure_video_manifest_derivations(conn, key, app_dir, sha)?
+            } else {
+                current
+            }
+        };
+        for derivation in derivations {
+            candidate_sha256s.insert(derivation.child_sha256);
+        }
+
         let mut stmt = conn.prepare(
             r#"SELECT message_id
                FROM message_attachments
@@ -258,13 +273,44 @@ pub fn purge_message_attachments(
     // Delete all referencing messages (including the original message).
     for id in message_ids_to_delete {
         let _ = set_message_deleted(conn, key, &id, true);
+        let _ = conn.execute(r#"DELETE FROM message_attachments WHERE message_id = ?1"#, params![id])?;
     }
 
     for sha in &attachment_sha256s {
-        purge_attachment(conn, key, app_dir, sha)?;
+        let _ = delete_attachment_derivations_by_root(conn, sha)?;
     }
 
-    Ok(attachment_sha256s.len() as u64)
+    let mut deleted = 0u64;
+    for sha in &candidate_sha256s {
+        let has_message_refs: bool = conn
+            .query_row(
+                r#"SELECT EXISTS(
+                       SELECT 1 FROM message_attachments WHERE attachment_sha256 = ?1
+                   )"#,
+                params![sha],
+                |row| row.get(0),
+            )?;
+        if has_message_refs {
+            continue;
+        }
+
+        let has_root_refs: bool = conn
+            .query_row(
+                r#"SELECT EXISTS(
+                       SELECT 1 FROM attachment_derivations WHERE child_sha256 = ?1
+                   )"#,
+                params![sha],
+                |row| row.get(0),
+            )?;
+        if has_root_refs {
+            continue;
+        }
+
+        purge_attachment(conn, key, app_dir, sha)?;
+        deleted += 1;
+    }
+
+    Ok(deleted)
 }
 
 pub fn clear_local_attachment_cache(conn: &Connection, app_dir: &Path) -> Result<()> {

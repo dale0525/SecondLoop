@@ -17,6 +17,7 @@ import 'attachment_knowledge_viewer.dart';
 import 'attachment_text_editor_card.dart';
 import 'attachment_text_source_policy.dart';
 import 'video_manifest_gallery_dialog.dart';
+import 'video_manifest_summary_card.dart';
 import 'video_keyframe_ocr_worker.dart';
 
 export 'video_manifest_insight_content.dart'
@@ -834,10 +835,20 @@ class _NonImageAttachmentViewState extends State<NonImageAttachmentView> {
             final manifest = snapshot.data;
             if (manifest == null) return const SizedBox.shrink();
 
-            return _buildVideoManifestPreviewCard(
-              context,
-              manifest,
-              payload: payload,
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _buildVideoManifestPreviewCard(
+                  context,
+                  manifest,
+                  payload: payload,
+                ),
+                const SizedBox(height: 12),
+                VideoManifestSummaryCard(
+                  manifest: manifest,
+                  payload: payload,
+                ),
+              ],
             );
           },
         ),

@@ -449,8 +449,10 @@ void main() {
     );
     await tester.pump();
 
-    await tester
-        .tap(find.byKey(const ValueKey('attachment_text_full_regenerate')));
+    final regenerateFinder =
+        find.byKey(const ValueKey('attachment_text_full_regenerate'));
+    await tester.ensureVisible(regenerateFinder);
+    await tester.tap(regenerateFinder);
     await tester.pump();
     await tester
         .tap(find.byKey(const ValueKey('attachment_ocr_regenerate_confirm')));

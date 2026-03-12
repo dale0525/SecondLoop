@@ -42,16 +42,36 @@ String _formatTimestamp(BuildContext context, int? ms) {
   return '$date $time';
 }
 
+String _attachmentUsageTitle(
+  BuildContext context,
+  VaultAttachmentUsageItem item,
+) {
+  if (item.isGroupedVideo) {
+    return context.t.attachments.workspace.types.video;
+  }
+  return item.mimeType.isEmpty ? item.primarySha256 : item.mimeType;
+}
+
 String _attachmentUsageSubtitle(
   BuildContext context,
   VaultAttachmentUsageItem item,
 ) {
   final parts = <String>[
     _formatBytes(item.byteLen),
-    _shortSha(item.sha256),
+    if (item.isGroupedVideo && (item.leafCount ?? 0) > 0) '${item.leafCount}×',
+    _shortSha(item.primarySha256),
     _formatTimestamp(context, item.uploadedAtMs ?? item.createdAtMs),
   ];
   return parts.join(' • ');
+}
+
+String _attachmentUsageTileKey(VaultAttachmentUsageItem item) {
+  return 'vault_usage_attachment_${item.primarySha256}';
+}
+
+IconData _attachmentUsageIcon(VaultAttachmentUsageItem item) {
+  if (item.isGroupedVideo) return Icons.video_file_rounded;
+  return Icons.attach_file_rounded;
 }
 
 int _compareAttachmentUsage(
@@ -146,12 +166,12 @@ class VaultAttachmentUsageListView extends StatelessWidget {
       children: [
         for (final item in sorted)
           ListTile(
-            key: ValueKey('vault_usage_attachment_${item.sha256}'),
+            key: ValueKey(_attachmentUsageTileKey(item)),
             contentPadding: EdgeInsets.zero,
             dense: true,
-            leading: const Icon(Icons.attach_file_rounded),
+            leading: Icon(_attachmentUsageIcon(item)),
             title: Text(
-              item.mimeType.isEmpty ? item.sha256 : item.mimeType,
+              _attachmentUsageTitle(context, item),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
             ),
@@ -161,7 +181,7 @@ class VaultAttachmentUsageListView extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
             ),
             onTap: () => onOpen(item),
-            trailing: deletingSha == item.sha256
+            trailing: deletingSha == item.primarySha256
                 ? const SizedBox(
                     width: 18,
                     height: 18,
@@ -169,7 +189,7 @@ class VaultAttachmentUsageListView extends StatelessWidget {
                   )
                 : IconButton(
                     key: ValueKey(
-                      'vault_usage_attachment_delete_${item.sha256}',
+                      'vault_usage_attachment_delete_${item.primarySha256}',
                     ),
                     tooltip: context.t.common.actions.delete,
                     icon: const Icon(Icons.delete_outline_rounded),
@@ -402,7 +422,7 @@ class _VaultUsageCardState extends State<VaultUsageCard> {
   }
 
   Future<void> _openAttachmentDetails(VaultAttachmentUsageItem item) async {
-    final attachment = await _resolveLocalAttachmentBySha(item.sha256);
+    final attachment = await _resolveLocalAttachmentBySha(item.primarySha256);
     if (!mounted) return;
 
     if (attachment == null) {
@@ -427,18 +447,19 @@ class _VaultUsageCardState extends State<VaultUsageCard> {
   Future<void> _deleteAttachment(VaultAttachmentUsageItem item) async {
     if (_deletingAttachmentSha != null) return;
 
-    final itemTitle = item.mimeType.isEmpty ? item.sha256 : item.mimeType;
+    final primarySha = item.primarySha256;
+    final itemTitle = _attachmentUsageTitle(context, item);
     final itemDetails = <String>[
       itemTitle,
       _formatBytes(item.byteLen),
-      item.sha256,
+      primarySha,
     ].join('\n');
     final confirmed = await showSlDeleteConfirmDialog(
       context,
       title: context.t.common.actions.delete,
       message: itemDetails,
       confirmButtonKey:
-          ValueKey('vault_usage_attachment_delete_confirm_${item.sha256}'),
+          ValueKey('vault_usage_attachment_delete_confirm_$primarySha'),
     );
     if (!confirmed) return;
 
@@ -448,9 +469,9 @@ class _VaultUsageCardState extends State<VaultUsageCard> {
     final backend = AppBackendScope.of(context);
     final sessionKey = SessionScope.of(context).sessionKey;
 
-    setState(() => _deletingAttachmentSha = item.sha256);
+    setState(() => _deletingAttachmentSha = primarySha);
     try {
-      final messageId = await _resolveMessageIdByAttachmentSha(item.sha256);
+      final messageId = await _resolveMessageIdByAttachmentSha(primarySha);
       if (messageId != null) {
         await backend.purgeMessageAttachments(sessionKey, messageId);
         if (!mounted) return;
@@ -461,11 +482,11 @@ class _VaultUsageCardState extends State<VaultUsageCard> {
         managedVaultBaseUrl: auth.baseUrl,
         vaultId: auth.vaultId,
         idToken: auth.idToken,
-        attachmentSha256: item.sha256,
+        attachmentSha256: primarySha,
       );
 
-      _localAttachmentBySha.remove(item.sha256);
-      _localMessageIdByAttachmentSha.remove(item.sha256);
+      _localAttachmentBySha.remove(primarySha);
+      _localMessageIdByAttachmentSha.remove(primarySha);
 
       await _refresh();
       if (!mounted) return;

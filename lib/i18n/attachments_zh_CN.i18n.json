@@ -45,11 +45,15 @@
       "detail": {
         "knowledgeMarkdown": "知识文稿",
         "videoDescription": "视频描述",
-        "extractedContent": "提取内容"
+        "extractedContent": "提取内容",
+        "groupedVideoHint": "$count 个分段已归并为同一个逻辑视频条目。",
+        "derivedAssetsHint": "所有派生产物会继续归并在同一个视频条目下。"
       },
       "fields": {
         "contentType": "内容类型",
         "segments": "分段处理",
+        "keyframes": "关键帧",
+        "truncated": "已截断",
         "summary": "视频概要"
       }
     },

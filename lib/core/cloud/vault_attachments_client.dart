@@ -11,6 +11,9 @@ class VaultAttachmentUsageItem {
     required this.byteLen,
     required this.createdAtMs,
     required this.uploadedAtMs,
+    this.rootSha256,
+    this.groupType,
+    this.leafCount,
   });
 
   final String sha256;
@@ -18,6 +21,17 @@ class VaultAttachmentUsageItem {
   final int byteLen;
   final int? createdAtMs;
   final int? uploadedAtMs;
+  final String? rootSha256;
+  final String? groupType;
+  final int? leafCount;
+
+  String get primarySha256 {
+    final normalizedRoot = rootSha256?.trim() ?? '';
+    if (normalizedRoot.isNotEmpty) return normalizedRoot;
+    return sha256;
+  }
+
+  bool get isGroupedVideo => groupType?.trim() == 'video';
 }
 
 @immutable
@@ -95,6 +109,9 @@ final class VaultAttachmentsClient {
       final byteLen = _parseInt(map['byte_len']);
       final createdAtMs = _parseInt(map['created_at_ms']);
       final uploadedAtMs = _parseInt(map['uploaded_at_ms']);
+      final rootSha256 = '${map['root_sha256'] ?? ''}'.trim();
+      final groupType = '${map['group_type'] ?? ''}'.trim();
+      final leafCount = _parseInt(map['leaf_count']);
 
       if (sha256.isEmpty || byteLen == null) {
         throw const FormatException('invalid_vault_attachment_item_fields');
@@ -107,6 +124,9 @@ final class VaultAttachmentsClient {
           byteLen: byteLen,
           createdAtMs: createdAtMs,
           uploadedAtMs: uploadedAtMs,
+          rootSha256: rootSha256.isEmpty ? null : rootSha256,
+          groupType: groupType.isEmpty ? null : groupType,
+          leafCount: leafCount,
         ),
       );
     }

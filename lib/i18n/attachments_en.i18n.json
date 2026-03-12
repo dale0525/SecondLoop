@@ -45,11 +45,15 @@
       "detail": {
         "knowledgeMarkdown": "Knowledge markdown",
         "videoDescription": "Video description",
-        "extractedContent": "Extracted content"
+        "extractedContent": "Extracted content",
+        "groupedVideoHint": "$count segments are grouped into one logical video entry.",
+        "derivedAssetsHint": "Derived assets stay grouped under the same video entry."
       },
       "fields": {
         "contentType": "Content type",
         "segments": "Segments",
+        "keyframes": "Keyframes",
+        "truncated": "Truncated",
         "summary": "Video summary"
       }
     },
