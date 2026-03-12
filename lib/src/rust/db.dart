@@ -807,6 +807,198 @@ class Message {
           isMemory == other.isMemory;
 }
 
+class MigrationArchiveAttachment {
+  final String sha256;
+  final String archivePath;
+  final String originalFilename;
+  final String? mimeType;
+  final PlatformInt64 sizeBytes;
+  final List<String> itemIds;
+
+  const MigrationArchiveAttachment({
+    required this.sha256,
+    required this.archivePath,
+    required this.originalFilename,
+    this.mimeType,
+    required this.sizeBytes,
+    required this.itemIds,
+  });
+
+  @override
+  int get hashCode =>
+      sha256.hashCode ^
+      archivePath.hashCode ^
+      originalFilename.hashCode ^
+      mimeType.hashCode ^
+      sizeBytes.hashCode ^
+      itemIds.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is MigrationArchiveAttachment &&
+          runtimeType == other.runtimeType &&
+          sha256 == other.sha256 &&
+          archivePath == other.archivePath &&
+          originalFilename == other.originalFilename &&
+          mimeType == other.mimeType &&
+          sizeBytes == other.sizeBytes &&
+          itemIds == other.itemIds;
+}
+
+class MigrationArchiveExportEstimate {
+  final PlatformInt64 schemaVersion;
+  final String archiveKind;
+  final PlatformInt64 itemCount;
+  final PlatformInt64 attachmentCount;
+  final PlatformInt64 estimatedSizeBytes;
+
+  const MigrationArchiveExportEstimate({
+    required this.schemaVersion,
+    required this.archiveKind,
+    required this.itemCount,
+    required this.attachmentCount,
+    required this.estimatedSizeBytes,
+  });
+
+  @override
+  int get hashCode =>
+      schemaVersion.hashCode ^
+      archiveKind.hashCode ^
+      itemCount.hashCode ^
+      attachmentCount.hashCode ^
+      estimatedSizeBytes.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is MigrationArchiveExportEstimate &&
+          runtimeType == other.runtimeType &&
+          schemaVersion == other.schemaVersion &&
+          archiveKind == other.archiveKind &&
+          itemCount == other.itemCount &&
+          attachmentCount == other.attachmentCount &&
+          estimatedSizeBytes == other.estimatedSizeBytes;
+}
+
+class MigrationArchiveItem {
+  final String id;
+  final String entityType;
+  final String markdownPath;
+  final PlatformInt64 createdAtMs;
+  final PlatformInt64 updatedAtMs;
+  final String title;
+  final List<String> tags;
+  final String? status;
+  final String? extraJson;
+
+  const MigrationArchiveItem({
+    required this.id,
+    required this.entityType,
+    required this.markdownPath,
+    required this.createdAtMs,
+    required this.updatedAtMs,
+    required this.title,
+    required this.tags,
+    this.status,
+    this.extraJson,
+  });
+
+  @override
+  int get hashCode =>
+      id.hashCode ^
+      entityType.hashCode ^
+      markdownPath.hashCode ^
+      createdAtMs.hashCode ^
+      updatedAtMs.hashCode ^
+      title.hashCode ^
+      tags.hashCode ^
+      status.hashCode ^
+      extraJson.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is MigrationArchiveItem &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          entityType == other.entityType &&
+          markdownPath == other.markdownPath &&
+          createdAtMs == other.createdAtMs &&
+          updatedAtMs == other.updatedAtMs &&
+          title == other.title &&
+          tags == other.tags &&
+          status == other.status &&
+          extraJson == other.extraJson;
+}
+
+class MigrationArchiveManifest {
+  final PlatformInt64 schemaVersion;
+  final String archiveKind;
+  final PlatformInt64 exportedAtMs;
+  final String appVersion;
+  final List<MigrationArchiveItem> items;
+  final List<MigrationArchiveAttachment> attachments;
+  final List<MigrationArchiveRelation> relations;
+
+  const MigrationArchiveManifest({
+    required this.schemaVersion,
+    required this.archiveKind,
+    required this.exportedAtMs,
+    required this.appVersion,
+    required this.items,
+    required this.attachments,
+    required this.relations,
+  });
+
+  @override
+  int get hashCode =>
+      schemaVersion.hashCode ^
+      archiveKind.hashCode ^
+      exportedAtMs.hashCode ^
+      appVersion.hashCode ^
+      items.hashCode ^
+      attachments.hashCode ^
+      relations.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is MigrationArchiveManifest &&
+          runtimeType == other.runtimeType &&
+          schemaVersion == other.schemaVersion &&
+          archiveKind == other.archiveKind &&
+          exportedAtMs == other.exportedAtMs &&
+          appVersion == other.appVersion &&
+          items == other.items &&
+          attachments == other.attachments &&
+          relations == other.relations;
+}
+
+class MigrationArchiveRelation {
+  final String fromId;
+  final String toId;
+  final String relationType;
+
+  const MigrationArchiveRelation({
+    required this.fromId,
+    required this.toId,
+    required this.relationType,
+  });
+
+  @override
+  int get hashCode => fromId.hashCode ^ toId.hashCode ^ relationType.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is MigrationArchiveRelation &&
+          runtimeType == other.runtimeType &&
+          fromId == other.fromId &&
+          toId == other.toId &&
+          relationType == other.relationType;
+}
+
 class SemanticParseJob {
   final String messageId;
   final String status;

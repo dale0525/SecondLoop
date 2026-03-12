@@ -14,6 +14,7 @@ pub mod embedding_lifecycle;
 pub mod external_import;
 pub mod knowledge;
 pub mod media_annotation;
+pub mod migration_archive;
 pub mod oplog_maintenance;
 pub mod simple;
 pub mod sync_diagnostics;

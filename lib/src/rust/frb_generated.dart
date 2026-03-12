@@ -15,6 +15,7 @@ import 'api/embedding_lifecycle.dart';
 import 'api/external_import.dart';
 import 'api/knowledge.dart';
 import 'api/media_annotation.dart';
+import 'api/migration_archive.dart';
 import 'api/oplog_maintenance.dart';
 import 'api/simple.dart';
 import 'api/sync_diagnostics.dart';
@@ -77,7 +78,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.0.0-dev.38';
 
   @override
-  int get rustContentHash => -655521901;
+  int get rustContentHash => -1894912062;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -1231,6 +1232,46 @@ abstract class RustLibApi extends BaseApi {
       String? title,
       required String readableTextExcerpt,
       required String readableTextFull});
+
+  Future<MigrationArchiveManifest>
+      crateApiMigrationArchiveMigrationArchiveExport(
+          {required String appDir,
+          required List<int> key,
+          required String outputPath});
+
+  Future<MigrationArchiveExportEstimate>
+      crateApiMigrationArchiveMigrationArchiveExportEstimate(
+          {required String appDir, required List<int> key});
+
+  Stream<String> crateApiMigrationArchiveMigrationArchiveExportProgress(
+      {required String appDir,
+      required List<int> key,
+      required String outputPath});
+
+  Future<MigrationArchiveManifest>
+      crateApiMigrationArchiveMigrationArchiveImport(
+          {required String appDir,
+          required List<int> key,
+          required String archivePath});
+
+  Stream<String> crateApiMigrationArchiveMigrationArchiveImportProgress(
+      {required String appDir,
+      required List<int> key,
+      required String archivePath});
+
+  Future<MigrationArchiveManifest>
+      crateApiMigrationArchiveMigrationArchiveInspect(
+          {required String appDir, required String archivePath});
+
+  Future<String> crateApiMigrationArchiveMigrationArchiveMarkdownPathForItemId(
+      {required String itemId});
+
+  Future<MigrationArchiveManifest>
+      crateApiMigrationArchiveMigrationArchiveParseManifestJson(
+          {required String manifestJson});
+
+  Future<String> crateApiMigrationArchiveMigrationArchiveWikilinkForItem(
+      {required String itemId, required String title});
 
   Future<OplogMaintenanceStats> crateApiOplogMaintenanceDbRunOplogMaintenance(
       {required String appDir,
@@ -8260,6 +8301,282 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
 
   @override
+  Future<MigrationArchiveManifest>
+      crateApiMigrationArchiveMigrationArchiveExport(
+          {required String appDir,
+          required List<int> key,
+          required String outputPath}) {
+    return handler.executeNormal(NormalTask(
+      callFfi: (port_) {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_String(appDir, serializer);
+        sse_encode_list_prim_u_8_loose(key, serializer);
+        sse_encode_String(outputPath, serializer);
+        pdeCallFfi(generalizedFrbRustBinding, serializer,
+            funcId: 179, port: port_);
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_migration_archive_manifest,
+        decodeErrorData: sse_decode_AnyhowException,
+      ),
+      constMeta: kCrateApiMigrationArchiveMigrationArchiveExportConstMeta,
+      argValues: [appDir, key, outputPath],
+      apiImpl: this,
+    ));
+  }
+
+  TaskConstMeta get kCrateApiMigrationArchiveMigrationArchiveExportConstMeta =>
+      const TaskConstMeta(
+        debugName: "migration_archive_export",
+        argNames: ["appDir", "key", "outputPath"],
+      );
+
+  @override
+  Future<MigrationArchiveExportEstimate>
+      crateApiMigrationArchiveMigrationArchiveExportEstimate(
+          {required String appDir, required List<int> key}) {
+    return handler.executeNormal(NormalTask(
+      callFfi: (port_) {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_String(appDir, serializer);
+        sse_encode_list_prim_u_8_loose(key, serializer);
+        pdeCallFfi(generalizedFrbRustBinding, serializer,
+            funcId: 180, port: port_);
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_migration_archive_export_estimate,
+        decodeErrorData: sse_decode_AnyhowException,
+      ),
+      constMeta:
+          kCrateApiMigrationArchiveMigrationArchiveExportEstimateConstMeta,
+      argValues: [appDir, key],
+      apiImpl: this,
+    ));
+  }
+
+  TaskConstMeta
+      get kCrateApiMigrationArchiveMigrationArchiveExportEstimateConstMeta =>
+          const TaskConstMeta(
+            debugName: "migration_archive_export_estimate",
+            argNames: ["appDir", "key"],
+          );
+
+  @override
+  Stream<String> crateApiMigrationArchiveMigrationArchiveExportProgress(
+      {required String appDir,
+      required List<int> key,
+      required String outputPath}) {
+    final sink = RustStreamSink<String>();
+    unawaited(handler.executeNormal(NormalTask(
+      callFfi: (port_) {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_String(appDir, serializer);
+        sse_encode_list_prim_u_8_loose(key, serializer);
+        sse_encode_String(outputPath, serializer);
+        sse_encode_StreamSink_String_Sse(sink, serializer);
+        pdeCallFfi(generalizedFrbRustBinding, serializer,
+            funcId: 181, port: port_);
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_unit,
+        decodeErrorData: sse_decode_AnyhowException,
+      ),
+      constMeta:
+          kCrateApiMigrationArchiveMigrationArchiveExportProgressConstMeta,
+      argValues: [appDir, key, outputPath, sink],
+      apiImpl: this,
+    )));
+    return sink.stream;
+  }
+
+  TaskConstMeta
+      get kCrateApiMigrationArchiveMigrationArchiveExportProgressConstMeta =>
+          const TaskConstMeta(
+            debugName: "migration_archive_export_progress",
+            argNames: ["appDir", "key", "outputPath", "sink"],
+          );
+
+  @override
+  Future<MigrationArchiveManifest>
+      crateApiMigrationArchiveMigrationArchiveImport(
+          {required String appDir,
+          required List<int> key,
+          required String archivePath}) {
+    return handler.executeNormal(NormalTask(
+      callFfi: (port_) {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_String(appDir, serializer);
+        sse_encode_list_prim_u_8_loose(key, serializer);
+        sse_encode_String(archivePath, serializer);
+        pdeCallFfi(generalizedFrbRustBinding, serializer,
+            funcId: 182, port: port_);
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_migration_archive_manifest,
+        decodeErrorData: sse_decode_AnyhowException,
+      ),
+      constMeta: kCrateApiMigrationArchiveMigrationArchiveImportConstMeta,
+      argValues: [appDir, key, archivePath],
+      apiImpl: this,
+    ));
+  }
+
+  TaskConstMeta get kCrateApiMigrationArchiveMigrationArchiveImportConstMeta =>
+      const TaskConstMeta(
+        debugName: "migration_archive_import",
+        argNames: ["appDir", "key", "archivePath"],
+      );
+
+  @override
+  Stream<String> crateApiMigrationArchiveMigrationArchiveImportProgress(
+      {required String appDir,
+      required List<int> key,
+      required String archivePath}) {
+    final sink = RustStreamSink<String>();
+    unawaited(handler.executeNormal(NormalTask(
+      callFfi: (port_) {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_String(appDir, serializer);
+        sse_encode_list_prim_u_8_loose(key, serializer);
+        sse_encode_String(archivePath, serializer);
+        sse_encode_StreamSink_String_Sse(sink, serializer);
+        pdeCallFfi(generalizedFrbRustBinding, serializer,
+            funcId: 183, port: port_);
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_unit,
+        decodeErrorData: sse_decode_AnyhowException,
+      ),
+      constMeta:
+          kCrateApiMigrationArchiveMigrationArchiveImportProgressConstMeta,
+      argValues: [appDir, key, archivePath, sink],
+      apiImpl: this,
+    )));
+    return sink.stream;
+  }
+
+  TaskConstMeta
+      get kCrateApiMigrationArchiveMigrationArchiveImportProgressConstMeta =>
+          const TaskConstMeta(
+            debugName: "migration_archive_import_progress",
+            argNames: ["appDir", "key", "archivePath", "sink"],
+          );
+
+  @override
+  Future<MigrationArchiveManifest>
+      crateApiMigrationArchiveMigrationArchiveInspect(
+          {required String appDir, required String archivePath}) {
+    return handler.executeNormal(NormalTask(
+      callFfi: (port_) {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_String(appDir, serializer);
+        sse_encode_String(archivePath, serializer);
+        pdeCallFfi(generalizedFrbRustBinding, serializer,
+            funcId: 184, port: port_);
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_migration_archive_manifest,
+        decodeErrorData: sse_decode_AnyhowException,
+      ),
+      constMeta: kCrateApiMigrationArchiveMigrationArchiveInspectConstMeta,
+      argValues: [appDir, archivePath],
+      apiImpl: this,
+    ));
+  }
+
+  TaskConstMeta get kCrateApiMigrationArchiveMigrationArchiveInspectConstMeta =>
+      const TaskConstMeta(
+        debugName: "migration_archive_inspect",
+        argNames: ["appDir", "archivePath"],
+      );
+
+  @override
+  Future<String> crateApiMigrationArchiveMigrationArchiveMarkdownPathForItemId(
+      {required String itemId}) {
+    return handler.executeNormal(NormalTask(
+      callFfi: (port_) {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_String(itemId, serializer);
+        pdeCallFfi(generalizedFrbRustBinding, serializer,
+            funcId: 185, port: port_);
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_String,
+        decodeErrorData: null,
+      ),
+      constMeta:
+          kCrateApiMigrationArchiveMigrationArchiveMarkdownPathForItemIdConstMeta,
+      argValues: [itemId],
+      apiImpl: this,
+    ));
+  }
+
+  TaskConstMeta
+      get kCrateApiMigrationArchiveMigrationArchiveMarkdownPathForItemIdConstMeta =>
+          const TaskConstMeta(
+            debugName: "migration_archive_markdown_path_for_item_id",
+            argNames: ["itemId"],
+          );
+
+  @override
+  Future<MigrationArchiveManifest>
+      crateApiMigrationArchiveMigrationArchiveParseManifestJson(
+          {required String manifestJson}) {
+    return handler.executeNormal(NormalTask(
+      callFfi: (port_) {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_String(manifestJson, serializer);
+        pdeCallFfi(generalizedFrbRustBinding, serializer,
+            funcId: 186, port: port_);
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_migration_archive_manifest,
+        decodeErrorData: sse_decode_AnyhowException,
+      ),
+      constMeta:
+          kCrateApiMigrationArchiveMigrationArchiveParseManifestJsonConstMeta,
+      argValues: [manifestJson],
+      apiImpl: this,
+    ));
+  }
+
+  TaskConstMeta
+      get kCrateApiMigrationArchiveMigrationArchiveParseManifestJsonConstMeta =>
+          const TaskConstMeta(
+            debugName: "migration_archive_parse_manifest_json",
+            argNames: ["manifestJson"],
+          );
+
+  @override
+  Future<String> crateApiMigrationArchiveMigrationArchiveWikilinkForItem(
+      {required String itemId, required String title}) {
+    return handler.executeNormal(NormalTask(
+      callFfi: (port_) {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_String(itemId, serializer);
+        sse_encode_String(title, serializer);
+        pdeCallFfi(generalizedFrbRustBinding, serializer,
+            funcId: 187, port: port_);
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_String,
+        decodeErrorData: null,
+      ),
+      constMeta:
+          kCrateApiMigrationArchiveMigrationArchiveWikilinkForItemConstMeta,
+      argValues: [itemId, title],
+      apiImpl: this,
+    ));
+  }
+
+  TaskConstMeta
+      get kCrateApiMigrationArchiveMigrationArchiveWikilinkForItemConstMeta =>
+          const TaskConstMeta(
+            debugName: "migration_archive_wikilink_for_item",
+            argNames: ["itemId", "title"],
+          );
+
+  @override
   Future<OplogMaintenanceStats> crateApiOplogMaintenanceDbRunOplogMaintenance(
       {required String appDir,
       required List<int> key,
@@ -8273,7 +8590,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_oplog_maintenance_backend(backend, serializer);
         sse_encode_String(scopeId, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 179, port: port_);
+            funcId: 188, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_oplog_maintenance_stats,
@@ -8297,7 +8614,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
         sse_encode_String(name, serializer);
-        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 180)!;
+        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 189)!;
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_String,
@@ -8320,7 +8637,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       callFfi: (port_) {
         final serializer = SseSerializer(generalizedFrbRustBinding);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 181, port: port_);
+            funcId: 190, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -8351,7 +8668,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(vaultId, serializer);
         sse_encode_opt_String(firebaseIdToken, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 182, port: port_);
+            funcId: 191, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_String,
@@ -8389,7 +8706,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(remoteRoot, serializer);
         sse_encode_StreamSink_String_Sse(sink, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 183, port: port_);
+            funcId: 192, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -8433,7 +8750,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(remoteRoot, serializer);
         sse_encode_StreamSink_String_Sse(sink, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 184, port: port_);
+            funcId: 193, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -8479,7 +8796,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(idToken, serializer);
         sse_encode_StreamSink_String_Sse(sink, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 185, port: port_);
+            funcId: 194, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -8527,7 +8844,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(idToken, serializer);
         sse_encode_StreamSink_String_Sse(sink, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 186, port: port_);
+            funcId: 195, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -8578,7 +8895,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(remoteRoot, serializer);
         sse_encode_StreamSink_String_Sse(sink, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 187, port: port_);
+            funcId: 196, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -8637,7 +8954,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(remoteRoot, serializer);
         sse_encode_StreamSink_String_Sse(sink, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 188, port: port_);
+            funcId: 197, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -8689,7 +9006,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(sourceTagId, serializer);
         sse_encode_String(targetTagId, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 189, port: port_);
+            funcId: 198, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -8717,7 +9034,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_list_prim_u_8_loose(key, serializer);
         sse_encode_String(tagId, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 190, port: port_);
+            funcId: 199, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -8744,7 +9061,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_list_prim_u_8_loose(key, serializer);
         sse_encode_u_32(limit, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 191, port: port_);
+            funcId: 200, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_list_tag_merge_suggestion,
@@ -8774,7 +9091,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_list_prim_u_8_loose(key, serializer);
         sse_encode_String(messageId, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 192, port: port_);
+            funcId: 201, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_list_String,
@@ -8806,7 +9123,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(conversationId, serializer);
         sse_encode_list_String(tagIds, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 193, port: port_);
+            funcId: 202, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_list_String,
@@ -8836,7 +9153,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_list_prim_u_8_loose(key, serializer);
         sse_encode_String(messageId, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 194, port: port_);
+            funcId: 203, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_list_String,
@@ -8866,7 +9183,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_list_prim_u_8_loose(key, serializer);
         sse_encode_String(messageId, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 195, port: port_);
+            funcId: 204, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_list_tag,
@@ -8894,7 +9211,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_list_prim_u_8_loose(key, serializer);
         sse_encode_u_32(limit, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 196, port: port_);
+            funcId: 205, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_list_tag_merge_suggestion,
@@ -8921,7 +9238,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(appDir, serializer);
         sse_encode_list_prim_u_8_loose(key, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 197, port: port_);
+            funcId: 206, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_list_tag,
@@ -8952,7 +9269,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(sourceTagId, serializer);
         sse_encode_String(targetTagId, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 198, port: port_);
+            funcId: 207, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_u_32,
@@ -8987,7 +9304,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(reason, serializer);
         sse_encode_String(action, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 199, port: port_);
+            funcId: 208, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -9026,7 +9343,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(messageId, serializer);
         sse_encode_list_String(tagIds, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 200, port: port_);
+            funcId: 209, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_list_tag,
@@ -9054,7 +9371,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_list_prim_u_8_loose(key, serializer);
         sse_encode_String(name, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 201, port: port_);
+            funcId: 210, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_tag,
@@ -9729,6 +10046,33 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  List<MigrationArchiveAttachment> dco_decode_list_migration_archive_attachment(
+      dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>)
+        .map(dco_decode_migration_archive_attachment)
+        .toList();
+  }
+
+  @protected
+  List<MigrationArchiveItem> dco_decode_list_migration_archive_item(
+      dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>)
+        .map(dco_decode_migration_archive_item)
+        .toList();
+  }
+
+  @protected
+  List<MigrationArchiveRelation> dco_decode_list_migration_archive_relation(
+      dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>)
+        .map(dco_decode_migration_archive_relation)
+        .toList();
+  }
+
+  @protected
   List<int> dco_decode_list_prim_u_8_loose(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw as List<int>;
@@ -9851,6 +10195,88 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       content: dco_decode_String(arr[3]),
       createdAtMs: dco_decode_i_64(arr[4]),
       isMemory: dco_decode_bool(arr[5]),
+    );
+  }
+
+  @protected
+  MigrationArchiveAttachment dco_decode_migration_archive_attachment(
+      dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 6)
+      throw Exception('unexpected arr length: expect 6 but see ${arr.length}');
+    return MigrationArchiveAttachment(
+      sha256: dco_decode_String(arr[0]),
+      archivePath: dco_decode_String(arr[1]),
+      originalFilename: dco_decode_String(arr[2]),
+      mimeType: dco_decode_opt_String(arr[3]),
+      sizeBytes: dco_decode_i_64(arr[4]),
+      itemIds: dco_decode_list_String(arr[5]),
+    );
+  }
+
+  @protected
+  MigrationArchiveExportEstimate dco_decode_migration_archive_export_estimate(
+      dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 5)
+      throw Exception('unexpected arr length: expect 5 but see ${arr.length}');
+    return MigrationArchiveExportEstimate(
+      schemaVersion: dco_decode_i_64(arr[0]),
+      archiveKind: dco_decode_String(arr[1]),
+      itemCount: dco_decode_i_64(arr[2]),
+      attachmentCount: dco_decode_i_64(arr[3]),
+      estimatedSizeBytes: dco_decode_i_64(arr[4]),
+    );
+  }
+
+  @protected
+  MigrationArchiveItem dco_decode_migration_archive_item(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 9)
+      throw Exception('unexpected arr length: expect 9 but see ${arr.length}');
+    return MigrationArchiveItem(
+      id: dco_decode_String(arr[0]),
+      entityType: dco_decode_String(arr[1]),
+      markdownPath: dco_decode_String(arr[2]),
+      createdAtMs: dco_decode_i_64(arr[3]),
+      updatedAtMs: dco_decode_i_64(arr[4]),
+      title: dco_decode_String(arr[5]),
+      tags: dco_decode_list_String(arr[6]),
+      status: dco_decode_opt_String(arr[7]),
+      extraJson: dco_decode_opt_String(arr[8]),
+    );
+  }
+
+  @protected
+  MigrationArchiveManifest dco_decode_migration_archive_manifest(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 7)
+      throw Exception('unexpected arr length: expect 7 but see ${arr.length}');
+    return MigrationArchiveManifest(
+      schemaVersion: dco_decode_i_64(arr[0]),
+      archiveKind: dco_decode_String(arr[1]),
+      exportedAtMs: dco_decode_i_64(arr[2]),
+      appVersion: dco_decode_String(arr[3]),
+      items: dco_decode_list_migration_archive_item(arr[4]),
+      attachments: dco_decode_list_migration_archive_attachment(arr[5]),
+      relations: dco_decode_list_migration_archive_relation(arr[6]),
+    );
+  }
+
+  @protected
+  MigrationArchiveRelation dco_decode_migration_archive_relation(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 3)
+      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
+    return MigrationArchiveRelation(
+      fromId: dco_decode_String(arr[0]),
+      toId: dco_decode_String(arr[1]),
+      relationType: dco_decode_String(arr[2]),
     );
   }
 
@@ -11005,6 +11431,45 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  List<MigrationArchiveAttachment> sse_decode_list_migration_archive_attachment(
+      SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <MigrationArchiveAttachment>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_migration_archive_attachment(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
+  List<MigrationArchiveItem> sse_decode_list_migration_archive_item(
+      SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <MigrationArchiveItem>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_migration_archive_item(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
+  List<MigrationArchiveRelation> sse_decode_list_migration_archive_relation(
+      SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <MigrationArchiveRelation>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_migration_archive_relation(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
   List<int> sse_decode_list_prim_u_8_loose(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var len_ = sse_decode_i_32(deserializer);
@@ -11196,6 +11661,101 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         content: var_content,
         createdAtMs: var_createdAtMs,
         isMemory: var_isMemory);
+  }
+
+  @protected
+  MigrationArchiveAttachment sse_decode_migration_archive_attachment(
+      SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_sha256 = sse_decode_String(deserializer);
+    var var_archivePath = sse_decode_String(deserializer);
+    var var_originalFilename = sse_decode_String(deserializer);
+    var var_mimeType = sse_decode_opt_String(deserializer);
+    var var_sizeBytes = sse_decode_i_64(deserializer);
+    var var_itemIds = sse_decode_list_String(deserializer);
+    return MigrationArchiveAttachment(
+        sha256: var_sha256,
+        archivePath: var_archivePath,
+        originalFilename: var_originalFilename,
+        mimeType: var_mimeType,
+        sizeBytes: var_sizeBytes,
+        itemIds: var_itemIds);
+  }
+
+  @protected
+  MigrationArchiveExportEstimate sse_decode_migration_archive_export_estimate(
+      SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_schemaVersion = sse_decode_i_64(deserializer);
+    var var_archiveKind = sse_decode_String(deserializer);
+    var var_itemCount = sse_decode_i_64(deserializer);
+    var var_attachmentCount = sse_decode_i_64(deserializer);
+    var var_estimatedSizeBytes = sse_decode_i_64(deserializer);
+    return MigrationArchiveExportEstimate(
+        schemaVersion: var_schemaVersion,
+        archiveKind: var_archiveKind,
+        itemCount: var_itemCount,
+        attachmentCount: var_attachmentCount,
+        estimatedSizeBytes: var_estimatedSizeBytes);
+  }
+
+  @protected
+  MigrationArchiveItem sse_decode_migration_archive_item(
+      SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_id = sse_decode_String(deserializer);
+    var var_entityType = sse_decode_String(deserializer);
+    var var_markdownPath = sse_decode_String(deserializer);
+    var var_createdAtMs = sse_decode_i_64(deserializer);
+    var var_updatedAtMs = sse_decode_i_64(deserializer);
+    var var_title = sse_decode_String(deserializer);
+    var var_tags = sse_decode_list_String(deserializer);
+    var var_status = sse_decode_opt_String(deserializer);
+    var var_extraJson = sse_decode_opt_String(deserializer);
+    return MigrationArchiveItem(
+        id: var_id,
+        entityType: var_entityType,
+        markdownPath: var_markdownPath,
+        createdAtMs: var_createdAtMs,
+        updatedAtMs: var_updatedAtMs,
+        title: var_title,
+        tags: var_tags,
+        status: var_status,
+        extraJson: var_extraJson);
+  }
+
+  @protected
+  MigrationArchiveManifest sse_decode_migration_archive_manifest(
+      SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_schemaVersion = sse_decode_i_64(deserializer);
+    var var_archiveKind = sse_decode_String(deserializer);
+    var var_exportedAtMs = sse_decode_i_64(deserializer);
+    var var_appVersion = sse_decode_String(deserializer);
+    var var_items = sse_decode_list_migration_archive_item(deserializer);
+    var var_attachments =
+        sse_decode_list_migration_archive_attachment(deserializer);
+    var var_relations =
+        sse_decode_list_migration_archive_relation(deserializer);
+    return MigrationArchiveManifest(
+        schemaVersion: var_schemaVersion,
+        archiveKind: var_archiveKind,
+        exportedAtMs: var_exportedAtMs,
+        appVersion: var_appVersion,
+        items: var_items,
+        attachments: var_attachments,
+        relations: var_relations);
+  }
+
+  @protected
+  MigrationArchiveRelation sse_decode_migration_archive_relation(
+      SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_fromId = sse_decode_String(deserializer);
+    var var_toId = sse_decode_String(deserializer);
+    var var_relationType = sse_decode_String(deserializer);
+    return MigrationArchiveRelation(
+        fromId: var_fromId, toId: var_toId, relationType: var_relationType);
   }
 
   @protected
@@ -12161,6 +12721,36 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_list_migration_archive_attachment(
+      List<MigrationArchiveAttachment> self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_migration_archive_attachment(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_list_migration_archive_item(
+      List<MigrationArchiveItem> self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_migration_archive_item(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_list_migration_archive_relation(
+      List<MigrationArchiveRelation> self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_migration_archive_relation(item, serializer);
+    }
+  }
+
+  @protected
   void sse_encode_list_prim_u_8_loose(
       List<int> self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
@@ -12301,6 +12891,66 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_String(self.content, serializer);
     sse_encode_i_64(self.createdAtMs, serializer);
     sse_encode_bool(self.isMemory, serializer);
+  }
+
+  @protected
+  void sse_encode_migration_archive_attachment(
+      MigrationArchiveAttachment self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.sha256, serializer);
+    sse_encode_String(self.archivePath, serializer);
+    sse_encode_String(self.originalFilename, serializer);
+    sse_encode_opt_String(self.mimeType, serializer);
+    sse_encode_i_64(self.sizeBytes, serializer);
+    sse_encode_list_String(self.itemIds, serializer);
+  }
+
+  @protected
+  void sse_encode_migration_archive_export_estimate(
+      MigrationArchiveExportEstimate self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_64(self.schemaVersion, serializer);
+    sse_encode_String(self.archiveKind, serializer);
+    sse_encode_i_64(self.itemCount, serializer);
+    sse_encode_i_64(self.attachmentCount, serializer);
+    sse_encode_i_64(self.estimatedSizeBytes, serializer);
+  }
+
+  @protected
+  void sse_encode_migration_archive_item(
+      MigrationArchiveItem self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.id, serializer);
+    sse_encode_String(self.entityType, serializer);
+    sse_encode_String(self.markdownPath, serializer);
+    sse_encode_i_64(self.createdAtMs, serializer);
+    sse_encode_i_64(self.updatedAtMs, serializer);
+    sse_encode_String(self.title, serializer);
+    sse_encode_list_String(self.tags, serializer);
+    sse_encode_opt_String(self.status, serializer);
+    sse_encode_opt_String(self.extraJson, serializer);
+  }
+
+  @protected
+  void sse_encode_migration_archive_manifest(
+      MigrationArchiveManifest self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_64(self.schemaVersion, serializer);
+    sse_encode_String(self.archiveKind, serializer);
+    sse_encode_i_64(self.exportedAtMs, serializer);
+    sse_encode_String(self.appVersion, serializer);
+    sse_encode_list_migration_archive_item(self.items, serializer);
+    sse_encode_list_migration_archive_attachment(self.attachments, serializer);
+    sse_encode_list_migration_archive_relation(self.relations, serializer);
+  }
+
+  @protected
+  void sse_encode_migration_archive_relation(
+      MigrationArchiveRelation self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.fromId, serializer);
+    sse_encode_String(self.toId, serializer);
+    sse_encode_String(self.relationType, serializer);
   }
 
   @protected

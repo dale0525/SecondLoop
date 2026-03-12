@@ -1057,6 +1057,46 @@ abstract class AppBackend {
     throw UnimplementedError('cloudMediaBackupSummary');
   }
 
+  Future<MigrationArchiveExportEstimate> estimateMigrationArchiveExport(
+    Uint8List key,
+  ) {
+    throw UnimplementedError('estimateMigrationArchiveExport');
+  }
+
+  Future<MigrationArchiveManifest> exportMigrationArchive(
+    Uint8List key, {
+    required String outputPath,
+  }) {
+    throw UnimplementedError('exportMigrationArchive');
+  }
+
+  Stream<String> runMigrationArchiveExportProgress(
+    Uint8List key, {
+    required String outputPath,
+  }) {
+    throw UnimplementedError('runMigrationArchiveExportProgress');
+  }
+
+  Future<MigrationArchiveManifest> inspectMigrationArchive({
+    required String archivePath,
+  }) {
+    throw UnimplementedError('inspectMigrationArchive');
+  }
+
+  Future<MigrationArchiveManifest> importMigrationArchive(
+    Uint8List key, {
+    required String archivePath,
+  }) {
+    throw UnimplementedError('importMigrationArchive');
+  }
+
+  Stream<String> runMigrationArchiveImportProgress(
+    Uint8List key, {
+    required String archivePath,
+  }) {
+    throw UnimplementedError('runMigrationArchiveImportProgress');
+  }
+
   Future<ExternalImportScanSummary> scanExternalImportSource({
     required String sourcePath,
   }) {

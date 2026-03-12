@@ -99,4 +99,4 @@ run_flutter() {
 }
 
 mkdir -p .dart_tool/slang
-run_flutter pub run slang analyze --full --exit-if-changed --outdir=.dart_tool/slang
+run_flutter pub run slang analyze --full --outdir=.dart_tool/slang

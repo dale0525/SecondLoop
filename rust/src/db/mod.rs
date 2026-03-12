@@ -35,6 +35,8 @@ include!("parts/24_external_readonly_import.rs");
 include!("parts/25_external_readonly_search.rs");
 include!("parts/26_external_readonly_phase_b.rs");
 include!("parts/27_knowledge_index.rs");
+include!("parts/28_migration_archive.rs");
+include!("parts/29_migration_archive_runtime.rs");
 
 #[cfg(test)]
 mod semantic_parse_jobs_tests;
@@ -71,3 +73,6 @@ mod knowledge_compat_tests;
 
 #[cfg(test)]
 mod embedding_artifact_tests;
+
+#[cfg(test)]
+mod migration_archive_tests;

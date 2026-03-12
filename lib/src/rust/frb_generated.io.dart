@@ -15,6 +15,7 @@ import 'api/embedding_lifecycle.dart';
 import 'api/external_import.dart';
 import 'api/knowledge.dart';
 import 'api/media_annotation.dart';
+import 'api/migration_archive.dart';
 import 'api/oplog_maintenance.dart';
 import 'api/simple.dart';
 import 'api/sync_diagnostics.dart';
@@ -228,6 +229,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<Message> dco_decode_list_message(dynamic raw);
 
   @protected
+  List<MigrationArchiveAttachment> dco_decode_list_migration_archive_attachment(
+      dynamic raw);
+
+  @protected
+  List<MigrationArchiveItem> dco_decode_list_migration_archive_item(
+      dynamic raw);
+
+  @protected
+  List<MigrationArchiveRelation> dco_decode_list_migration_archive_relation(
+      dynamic raw);
+
+  @protected
   List<int> dco_decode_list_prim_u_8_loose(dynamic raw);
 
   @protected
@@ -268,6 +281,23 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   Message dco_decode_message(dynamic raw);
+
+  @protected
+  MigrationArchiveAttachment dco_decode_migration_archive_attachment(
+      dynamic raw);
+
+  @protected
+  MigrationArchiveExportEstimate dco_decode_migration_archive_export_estimate(
+      dynamic raw);
+
+  @protected
+  MigrationArchiveItem dco_decode_migration_archive_item(dynamic raw);
+
+  @protected
+  MigrationArchiveManifest dco_decode_migration_archive_manifest(dynamic raw);
+
+  @protected
+  MigrationArchiveRelation dco_decode_migration_archive_relation(dynamic raw);
 
   @protected
   OcrPayload dco_decode_ocr_payload(dynamic raw);
@@ -565,6 +595,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<Message> sse_decode_list_message(SseDeserializer deserializer);
 
   @protected
+  List<MigrationArchiveAttachment> sse_decode_list_migration_archive_attachment(
+      SseDeserializer deserializer);
+
+  @protected
+  List<MigrationArchiveItem> sse_decode_list_migration_archive_item(
+      SseDeserializer deserializer);
+
+  @protected
+  List<MigrationArchiveRelation> sse_decode_list_migration_archive_relation(
+      SseDeserializer deserializer);
+
+  @protected
   List<int> sse_decode_list_prim_u_8_loose(SseDeserializer deserializer);
 
   @protected
@@ -613,6 +655,26 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   Message sse_decode_message(SseDeserializer deserializer);
+
+  @protected
+  MigrationArchiveAttachment sse_decode_migration_archive_attachment(
+      SseDeserializer deserializer);
+
+  @protected
+  MigrationArchiveExportEstimate sse_decode_migration_archive_export_estimate(
+      SseDeserializer deserializer);
+
+  @protected
+  MigrationArchiveItem sse_decode_migration_archive_item(
+      SseDeserializer deserializer);
+
+  @protected
+  MigrationArchiveManifest sse_decode_migration_archive_manifest(
+      SseDeserializer deserializer);
+
+  @protected
+  MigrationArchiveRelation sse_decode_migration_archive_relation(
+      SseDeserializer deserializer);
 
   @protected
   OcrPayload sse_decode_ocr_payload(SseDeserializer deserializer);
@@ -924,6 +986,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_list_message(List<Message> self, SseSerializer serializer);
 
   @protected
+  void sse_encode_list_migration_archive_attachment(
+      List<MigrationArchiveAttachment> self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_migration_archive_item(
+      List<MigrationArchiveItem> self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_migration_archive_relation(
+      List<MigrationArchiveRelation> self, SseSerializer serializer);
+
+  @protected
   void sse_encode_list_prim_u_8_loose(List<int> self, SseSerializer serializer);
 
   @protected
@@ -973,6 +1047,26 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_message(Message self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_migration_archive_attachment(
+      MigrationArchiveAttachment self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_migration_archive_export_estimate(
+      MigrationArchiveExportEstimate self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_migration_archive_item(
+      MigrationArchiveItem self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_migration_archive_manifest(
+      MigrationArchiveManifest self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_migration_archive_relation(
+      MigrationArchiveRelation self, SseSerializer serializer);
 
   @protected
   void sse_encode_ocr_payload(OcrPayload self, SseSerializer serializer);
