@@ -284,8 +284,14 @@ class _MigrationArchivePageState extends State<MigrationArchivePage> {
     );
   }
 
-  String _formatDate(int ms) =>
-      DateTime.fromMillisecondsSinceEpoch(ms).toLocal().toIso8601String();
+  String _formatDate(int ms) {
+    final dt = DateTime.fromMillisecondsSinceEpoch(ms).toLocal();
+    final month = dt.month.toString().padLeft(2, '0');
+    final day = dt.day.toString().padLeft(2, '0');
+    final hour = dt.hour.toString().padLeft(2, '0');
+    final minute = dt.minute.toString().padLeft(2, '0');
+    return '${dt.year}-$month-$day $hour:$minute';
+  }
 
   String _formatBytes(int bytes) {
     if (bytes < 1024) return '$bytes B';

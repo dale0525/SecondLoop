@@ -101,6 +101,39 @@ void main() {
     expect(enabledButton.onPressed, isNotNull);
   });
 
+  testWidgets('summary shows export time in readable local format',
+      (WidgetTester tester) async {
+    _setLargeViewport(tester);
+    _installPicker(tester, saveFilePath: '/tmp/secondloop-migration.zip');
+    final manifest = _manifest(items: 2, attachments: 1);
+    final backend = _MigrationBackend(
+      exportEstimate: const MigrationArchiveExportEstimate(
+        schemaVersion: 1,
+        archiveKind: 'migration',
+        itemCount: 2,
+        attachmentCount: 1,
+        estimatedSizeBytes: 2048,
+      ),
+      exportManifest: manifest,
+    );
+
+    await tester.pumpWidget(_buildTestApp(backend));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('migration_archive_export')));
+    await tester.pumpAndSettle();
+
+    final dt = DateTime.fromMillisecondsSinceEpoch(
+      manifest.exportedAtMs.toInt(),
+    ).toLocal();
+    final expected =
+        '${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')} '
+        '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+
+    expect(find.text(expected), findsOneWidget);
+    expect(find.text(dt.toIso8601String()), findsNothing);
+  });
+
   testWidgets('confirmed import calls backend and shows imported summary',
       (WidgetTester tester) async {
     _setLargeViewport(tester);

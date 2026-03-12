@@ -443,6 +443,77 @@ fn migration_archive_rollback_snapshot_is_encrypted_on_disk() {
 }
 
 #[test]
+fn migration_archive_restore_from_materialized_source_cleans_up_written_attachments_on_error() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let source_root = dir.path().join("source-root");
+    let app_dir = dir.path().join("app");
+    let key = [29u8; 32];
+    fs::create_dir_all(source_root.join("attachments")).expect("create attachments dir");
+
+    let manifest = MigrationArchiveManifest {
+        schema_version: MIGRATION_ARCHIVE_SCHEMA_VERSION,
+        archive_kind: "migration".to_string(),
+        exported_at_ms: 1_710_000_000_000,
+        app_version: "1.0.0".to_string(),
+        items: vec![],
+        attachments: vec![MigrationArchiveAttachment {
+            sha256: "deadbeef".to_string(),
+            archive_path: "attachments/deadbeef.bin".to_string(),
+            original_filename: "deadbeef.bin".to_string(),
+            mime_type: Some("application/octet-stream".to_string()),
+            size_bytes: 4,
+            item_ids: vec!["missing-item".to_string()],
+        }],
+        relations: vec![],
+    };
+    fs::write(
+        source_root.join("export-manifest.json"),
+        serde_json::to_vec(&manifest).expect("serialize manifest"),
+    )
+    .expect("write manifest");
+    fs::write(source_root.join("attachments/deadbeef.bin"), b"blob").expect("write blob");
+
+    let err = migration_archive_restore_from_materialized_source_with_callbacks(
+        &app_dir,
+        &key,
+        &source_root,
+        &mut |_| {},
+    )
+    .expect_err("restore should fail when attachment owner is missing");
+
+    assert!(err.to_string().contains("attachment owner item not found"));
+    assert!(!app_dir.join("attachments/deadbeef.bin").exists());
+}
+
+#[test]
+fn migration_archive_rebuild_derived_indexes_handles_more_than_256_batches() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let app_dir = dir.path().join("app");
+    let conn = open(&app_dir).expect("open db");
+    let key = [30u8; 32];
+
+    let conversation = create_conversation(&conn, &key, "Bulk rebuild").expect("conversation");
+    for index in 0..6554usize {
+        insert_message(
+            &conn,
+            &key,
+            &conversation.id,
+            "user",
+            &format!("bulk rebuild message {index}"),
+        )
+        .expect("insert message");
+    }
+
+    migration_archive_rebuild_derived_indexes(&conn, &key)
+        .expect("rebuild should finish without hitting an artificial batch limit");
+
+    let status = crate::knowledge::read_knowledge_index_status(&conn, &key).expect("status");
+    assert_eq!(status.status, "complete");
+    assert!(status.total_documents > 6553);
+    assert_eq!(status.documents_indexed, status.total_documents);
+}
+
+#[test]
 fn migration_archive_restore_from_encrypted_snapshot_cleans_up_on_materialize_failure() {
     let dir = tempfile::tempdir().expect("tempdir");
     let app_dir = dir.path().join("app");

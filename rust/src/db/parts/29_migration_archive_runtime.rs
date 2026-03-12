@@ -576,12 +576,19 @@ fn migration_archive_with_immediate_transaction<T>(
     }
 }
 
+const MIGRATION_ARCHIVE_REBUILD_BATCH_SIZE: usize = 512;
+const MIGRATION_ARCHIVE_REBUILD_STALL_ROUNDS: usize = 3;
+
 fn migration_archive_rebuild_derived_indexes(conn: &Connection, key: &[u8; 32]) -> Result<()> {
     crate::knowledge::ensure_knowledge_rebuild_requested(conn)?;
 
     let mut stall_rounds = 0usize;
-    for _ in 0..256 {
-        let processed = crate::knowledge::process_pending_knowledge_index_jobs_active(conn, key, 128)?;
+    loop {
+        let processed = crate::knowledge::process_pending_knowledge_index_jobs_active(
+            conn,
+            key,
+            MIGRATION_ARCHIVE_REBUILD_BATCH_SIZE,
+        )?;
         let status = crate::knowledge::read_knowledge_index_status(conn, key)?;
         match status.status.as_str() {
             "complete" | "completed" | "empty" => return Ok(()),
@@ -601,15 +608,13 @@ fn migration_archive_rebuild_derived_indexes(conn: &Connection, key: &[u8; 32]) 
 
         if processed == 0 {
             stall_rounds += 1;
-            if stall_rounds >= 2 {
+            if stall_rounds >= MIGRATION_ARCHIVE_REBUILD_STALL_ROUNDS {
                 return Err(anyhow!("knowledge rebuild stalled with status {}", status.status));
             }
         } else {
             stall_rounds = 0;
         }
     }
-
-    Err(anyhow!("knowledge rebuild did not finish within the processing limit"))
 }
 
 pub fn migration_archive_export_estimate(
@@ -855,6 +860,7 @@ fn migration_archive_restore_attachment(
     source_root: &Path,
     item_entity_type_by_id: &std::collections::BTreeMap<String, String>,
     attachment: &MigrationArchiveAttachment,
+    written_attachment_paths: &mut Vec<std::path::PathBuf>,
 ) -> Result<()> {
     let bytes = fs::read(source_root.join(&attachment.archive_path))?;
     let rel_path = format!("attachments/{}.bin", attachment.sha256);
@@ -863,6 +869,7 @@ fn migration_archive_restore_attachment(
     let aad = format!("attachment.bytes:{}", attachment.sha256);
     let blob = encrypt_bytes(key, &bytes, aad.as_bytes())?;
     fs::write(&full_path, blob)?;
+    written_attachment_paths.push(full_path.clone());
     conn.execute(
         r#"INSERT OR REPLACE INTO attachments(sha256, mime_type, path, byte_len, created_at)
            VALUES (?1, ?2, ?3, ?4, ?5)"#,
@@ -914,6 +921,7 @@ fn migration_archive_restore_from_materialized_source_with_callbacks(
         source_root.join("export-manifest.json"),
     )?)?;
     let conn = open(app_dir)?;
+    let mut written_attachment_paths = Vec::<std::path::PathBuf>::new();
     let restore_result: Result<()> = migration_archive_with_immediate_transaction(&conn, || {
         let item_entity_type_by_id = manifest
             .items
@@ -983,6 +991,7 @@ fn migration_archive_restore_from_materialized_source_with_callbacks(
                 source_root,
                 &item_entity_type_by_id,
                 attachment,
+                &mut written_attachment_paths,
             )?;
         }
         migration_archive_record_progress(app_dir, on_event, "import", "attachments_restored", 4, 6, "in_progress")?;
@@ -991,7 +1000,12 @@ fn migration_archive_restore_from_materialized_source_with_callbacks(
     });
     match restore_result {
         Ok(()) => Ok(manifest),
-        Err(err) => Err(err),
+        Err(err) => {
+            for path in written_attachment_paths {
+                let _ = fs::remove_file(path);
+            }
+            Err(err)
+        }
     }
 }
 
