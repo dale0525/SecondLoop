@@ -103,6 +103,8 @@ pub fn upload_attachment_bytes(
         app_dir: app_dir.as_path(),
     };
 
+    let _ = crate::db::ensure_all_video_manifest_derivations(conn, db_key, app_dir.as_path())?;
+
     upload_attachment_bytes_if_present(&upload_ctx, sha256, &mime_type, created_at_ms)
 }
 
@@ -193,8 +195,6 @@ pub(super) fn upload_attachment_bytes_if_present(
     mime_type: &str,
     created_at_ms: i64,
 ) -> Result<bool> {
-    let _ = crate::db::ensure_all_video_manifest_derivations(ctx.conn, ctx.db_key, ctx.app_dir)?;
-
     let exists: Option<i64> = ctx
         .conn
         .query_row(

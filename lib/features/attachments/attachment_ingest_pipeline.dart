@@ -89,11 +89,32 @@ Future<void> _upsertAttachmentDerivationBestEffort(
       normalizedRole.isEmpty) {
     return;
   }
-  await backend.upsertAttachmentDerivation(
+  try {
+    await backend.upsertAttachmentDerivation(
+      sessionKey,
+      rootSha256: normalizedRootSha,
+      childSha256: normalizedChildSha,
+      role: normalizedRole,
+      createdAtMs: createdAtMs,
+    );
+  } catch (_) {}
+}
+
+@visibleForTesting
+Future<void> upsertAttachmentDerivationBestEffortForTest(
+  NativeAppBackend backend,
+  Uint8List sessionKey, {
+  required String rootSha256,
+  required String childSha256,
+  required String role,
+  required int createdAtMs,
+}) {
+  return _upsertAttachmentDerivationBestEffort(
+    backend,
     sessionKey,
-    rootSha256: normalizedRootSha,
-    childSha256: normalizedChildSha,
-    role: normalizedRole,
+    rootSha256: rootSha256,
+    childSha256: childSha256,
+    role: role,
     createdAtMs: createdAtMs,
   );
 }

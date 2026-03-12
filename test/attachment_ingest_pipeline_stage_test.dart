@@ -26,6 +26,23 @@ void main() {
     expect(result.attachmentSha256, 'sha_image');
     expect(stages, contains(AttachmentProcessingStage.finalizingAttachment));
   });
+
+  test(
+      'upsertAttachmentDerivationBestEffortForTest suppresses backend failures',
+      () async {
+    final backend = _DerivationFailureBackend();
+
+    await upsertAttachmentDerivationBestEffortForTest(
+      backend,
+      Uint8List.fromList(List<int>.filled(32, 2)),
+      rootSha256: 'root_sha',
+      childSha256: 'child_sha',
+      role: 'proxy_segment',
+      createdAtMs: 123,
+    );
+
+    expect(backend.upsertCalls, 1);
+  });
 }
 
 final class _ImageIngestBackend extends NativeAppBackend {
@@ -61,4 +78,23 @@ Uint8List _tinyTransparentPng() {
   const b64 =
       'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMBApGq4QAAAABJRU5ErkJggg==';
   return Uint8List.fromList(base64Decode(b64));
+}
+
+final class _DerivationFailureBackend extends NativeAppBackend {
+  _DerivationFailureBackend()
+      : super(appDirProvider: () async => '/tmp/derivation_failure_test');
+
+  int upsertCalls = 0;
+
+  @override
+  Future<void> upsertAttachmentDerivation(
+    Uint8List key, {
+    required String rootSha256,
+    required String childSha256,
+    required String role,
+    required int createdAtMs,
+  }) async {
+    upsertCalls += 1;
+    throw StateError('db write failed');
+  }
 }
