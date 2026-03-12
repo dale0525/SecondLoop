@@ -32,7 +32,7 @@ void main() {
     await tester.pumpWidget(_buildTestApp(backend));
     await tester.pumpAndSettle();
 
-    expect(find.text('2048 B'), findsOneWidget);
+    expect(find.text('2.0 KB'), findsOneWidget);
 
     await tester.tap(find.byKey(const ValueKey('migration_archive_export')));
     await tester.pumpAndSettle();
@@ -74,7 +74,7 @@ void main() {
     expect(find.text('/tmp/import-migration.zip'), findsOneWidget);
     expect(find.byKey(const ValueKey('migration_archive_import_summary')),
         findsOneWidget);
-    expect(find.text('4096 B'), findsOneWidget);
+    expect(find.text('4.0 KB'), findsOneWidget);
 
     final button = tester.widget<FilledButton>(
       find.byKey(const ValueKey('migration_archive_start_import')),

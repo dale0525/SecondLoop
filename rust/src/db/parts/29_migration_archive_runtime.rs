@@ -117,7 +117,8 @@ fn migration_archive_write_zip(stage_dir: &Path, output_path: &Path) -> Result<(
     }
     let file = fs::File::create(output_path)?;
     let mut writer = zip::ZipWriter::new(file);
-    let options = zip::write::FileOptions::default();
+    let options = zip::write::FileOptions::default()
+        .compression_method(zip::CompressionMethod::Deflated);
     let mut files = Vec::<PathBuf>::new();
     collect_files_recursively(stage_dir, &mut files)?;
     files.sort();
@@ -469,6 +470,26 @@ SELECT (
     Ok(structured_bytes + attachment_bytes + metadata_overhead)
 }
 
+fn migration_archive_with_immediate_transaction<T>(
+    conn: &Connection,
+    f: impl FnOnce() -> Result<T>,
+) -> Result<T> {
+    conn.execute_batch("BEGIN IMMEDIATE;")?;
+    match f() {
+        Ok(value) => match conn.execute_batch("COMMIT;") {
+            Ok(()) => Ok(value),
+            Err(error) => {
+                let _ = conn.execute_batch("ROLLBACK;");
+                Err(error.into())
+            }
+        },
+        Err(error) => {
+            let _ = conn.execute_batch("ROLLBACK;");
+            Err(error)
+        }
+    }
+}
+
 fn migration_archive_rebuild_derived_indexes(conn: &Connection, key: &[u8; 32]) -> Result<()> {
     crate::knowledge::ensure_knowledge_rebuild_requested(conn)?;
 
@@ -759,7 +780,7 @@ fn migration_archive_restore_from_materialized_source_with_callbacks(
         source_root.join("export-manifest.json"),
     )?)?;
     let conn = open(app_dir)?;
-    let restore_result: Result<()> = (|| {
+    let restore_result: Result<()> = migration_archive_with_immediate_transaction(&conn, || {
         let item_entity_type_by_id = manifest
             .items
             .iter()
@@ -833,7 +854,7 @@ fn migration_archive_restore_from_materialized_source_with_callbacks(
         migration_archive_record_progress(app_dir, on_event, "import", "attachments_restored", 4, 6, "in_progress")?;
         migration_archive_record_progress(app_dir, on_event, "import", "relations_restored", 5, 6, "in_progress")?;
         Ok(())
-    })();
+    });
     match restore_result {
         Ok(()) => Ok(manifest),
         Err(err) => Err(err),

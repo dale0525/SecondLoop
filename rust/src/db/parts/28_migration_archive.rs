@@ -1,3 +1,5 @@
+pub const MIGRATION_ARCHIVE_SCHEMA_VERSION: i64 = 1;
+
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MigrationArchiveManifest {
     pub schema_version: i64,
@@ -107,6 +109,13 @@ pub fn parse_migration_archive_manifest_json(
 pub fn validate_migration_archive_manifest(manifest: &MigrationArchiveManifest) -> Result<()> {
     if manifest.schema_version <= 0 {
         return Err(anyhow!("schema_version must be positive"));
+    }
+    if manifest.schema_version > MIGRATION_ARCHIVE_SCHEMA_VERSION {
+        return Err(anyhow!(
+            "archive schema_version {} is newer than this build supports ({}); please update the app before importing",
+            manifest.schema_version,
+            MIGRATION_ARCHIVE_SCHEMA_VERSION
+        ));
     }
     if manifest.archive_kind.trim() != "migration" {
         return Err(anyhow!("archive_kind must be migration"));

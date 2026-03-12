@@ -287,7 +287,16 @@ class _MigrationArchivePageState extends State<MigrationArchivePage> {
   String _formatDate(int ms) =>
       DateTime.fromMillisecondsSinceEpoch(ms).toLocal().toIso8601String();
 
-  String _formatBytes(int bytes) => '$bytes B';
+  String _formatBytes(int bytes) {
+    if (bytes < 1024) return '$bytes B';
+    if (bytes < 1024 * 1024) {
+      return '${(bytes / 1024).toStringAsFixed(1)} KB';
+    }
+    if (bytes < 1024 * 1024 * 1024) {
+      return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
+    }
+    return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(2)} GB';
+  }
 
   String _operationLabel(_MigrationArchiveProgressViewData progress) {
     final t = context.t.settings.migrationArchive;
@@ -369,7 +378,7 @@ class _MigrationArchivePageState extends State<MigrationArchivePage> {
               valueKey: const ValueKey('migration_archive_progress_stage'),
             ),
             _infoRow(t.progressStatus, _statusLabel(progress)),
-            _infoRow('Step', '${progress.done}/${progress.total}'),
+            _infoRow(t.progressStep, '${progress.done}/${progress.total}'),
           ],
         ),
       ),

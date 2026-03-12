@@ -908,6 +908,7 @@
     "progressOperation": "Operation",
     "progressStage": "Stage",
     "progressStatus": "Status",
+    "progressStep": "Step",
     "operationExport": "Export",
     "operationImport": "Import",
     "statusInProgress": "In progress",

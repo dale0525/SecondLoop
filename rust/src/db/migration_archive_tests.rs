@@ -112,6 +112,23 @@ fn migration_archive_manifest_validation_rejects_missing_required_fields() {
 }
 
 #[test]
+fn migration_archive_manifest_validation_rejects_newer_schema_version() {
+    let json = r#"{
+        "schema_version": 2,
+        "archive_kind": "migration",
+        "exported_at_ms": 1710000000000,
+        "app_version": "1.2.3",
+        "items": [],
+        "attachments": [],
+        "relations": []
+      }"#;
+
+    let err = parse_migration_archive_manifest_json(json).expect_err("newer schema should fail");
+
+    assert!(err.to_string().contains("newer than this build supports"));
+}
+
+#[test]
 fn migration_archive_export_writes_manifest_markdown_and_deduplicated_attachments() {
     let dir = tempfile::tempdir().expect("tempdir");
     let app_dir = dir.path().join("app");

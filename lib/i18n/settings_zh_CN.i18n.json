@@ -908,6 +908,7 @@
     "progressOperation": "操作",
     "progressStage": "阶段",
     "progressStatus": "状态",
+    "progressStep": "步骤",
     "operationExport": "导出",
     "operationImport": "导入",
     "statusInProgress": "进行中",
