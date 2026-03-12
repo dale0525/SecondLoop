@@ -369,6 +369,12 @@ fn migration_archive_import_rolls_back_when_archive_restore_fails() {
         .expect_err("import should fail and rollback");
     assert!(err.to_string().contains("No such file") || err.to_string().contains("missing-sha"));
 
+    let rollback_dir = app_dir.join("migration_archive/rollback");
+    let rollback_entries = fs::read_dir(&rollback_dir)
+        .map(|entries| entries.count())
+        .unwrap_or(0);
+    assert_eq!(rollback_entries, 0);
+
     let conn = open(&app_dir).expect("reopen db");
     let conversations = list_conversations(&conn, &key).expect("conversations after rollback");
     assert!(conversations.iter().any(|item| item.id == conversation.id));
@@ -376,6 +382,37 @@ fn migration_archive_import_rolls_back_when_archive_restore_fails() {
     assert_eq!(messages.len(), 1);
     assert_eq!(messages[0].id, message.id);
     assert_eq!(messages[0].content, "keep me");
+}
+
+#[test]
+fn migration_archive_rollback_snapshot_is_encrypted_on_disk() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let app_dir = dir.path().join("app");
+    let conn = open(&app_dir).expect("open db");
+    let key = [41u8; 32];
+
+    let conversation = create_conversation(&conn, &key, "Inbox").expect("conversation");
+    let _message =
+        insert_message(&conn, &key, &conversation.id, "user", "secret body").expect("message");
+
+    let snapshot_path = app_dir
+        .join("migration_archive/rollback")
+        .join("snapshot.bin");
+    fs::create_dir_all(snapshot_path.parent().expect("rollback dir")).expect("mkdir rollback");
+
+    migration_archive_write_encrypted_snapshot(&conn, &key, &app_dir, &snapshot_path)
+        .expect("write encrypted snapshot");
+
+    let snapshot_bytes = fs::read(&snapshot_path).expect("read snapshot bytes");
+    assert!(snapshot_bytes.len() > 4);
+    assert_ne!(&snapshot_bytes[..2], b"PK");
+
+    let source = migration_archive_materialize_encrypted_snapshot(&app_dir, &key, &snapshot_path)
+        .expect("materialize encrypted snapshot");
+    let manifest_json =
+        fs::read_to_string(source.root_dir.join("export-manifest.json")).expect("read manifest");
+    assert!(manifest_json.contains(&conversation.id));
+    cleanup_materialized_external_import_source(&source);
 }
 
 #[test]

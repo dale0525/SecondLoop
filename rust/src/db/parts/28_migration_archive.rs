@@ -150,6 +150,7 @@ fn migration_archive_state_path(app_dir: &Path, operation: &str) -> PathBuf {
     migration_archive_state_dir(app_dir).join(format!("{operation}.json"))
 }
 
+#[allow(clippy::too_many_arguments)]
 fn migration_archive_write_state(
     app_dir: &Path,
     operation: &str,
@@ -207,6 +208,7 @@ fn migration_archive_record_progress(
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 fn migration_archive_record_terminal_state(
     app_dir: &Path,
     on_event: &mut dyn FnMut(MigrationArchiveProgress),
@@ -301,7 +303,7 @@ fn migration_archive_markdown_doc(
         for link in internal_links {
             out.push_str(&format!("- {link}\n"));
         }
-        out.push_str("\n");
+        out.push('\n');
     }
     if !attachment_paths.is_empty() {
         out.push_str("## Attachments\n\n");

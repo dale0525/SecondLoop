@@ -141,33 +141,16 @@ fn source_label_from_path(path: &Path) -> String {
         .to_string()
 }
 
-fn materialize_external_import_source(
+fn materialize_external_import_source_from_zip_reader<R: Read + std::io::Seek>(
     app_dir: &Path,
-    source_path: &Path,
+    source_label: String,
+    reader: R,
 ) -> Result<MaterializedExternalImportSource> {
-    if source_path.is_dir() {
-        return Ok(MaterializedExternalImportSource {
-            root_dir: source_path.to_path_buf(),
-            cleanup_dir: None,
-            source_label: source_label_from_path(source_path),
-        });
-    }
-
-    let extension = source_path
-        .extension()
-        .and_then(|value| value.to_str())
-        .map(|value| value.trim().to_ascii_lowercase())
-        .unwrap_or_default();
-    if extension != "zip" {
-        return Err(anyhow!("unsupported import source: expected directory or .zip"));
-    }
-
     let stage_dir = external_readonly_staging_dir(app_dir).join(uuid::Uuid::new_v4().to_string());
     fs::create_dir_all(&stage_dir)?;
 
     let extract_result = (|| -> Result<()> {
-        let file = fs::File::open(source_path)?;
-        let mut archive = zip::ZipArchive::new(file)?;
+        let mut archive = zip::ZipArchive::new(reader)?;
         let mut total_extracted_bytes = 0u64;
         for index in 0..archive.len() {
             let mut entry = archive.by_index(index)?;
@@ -211,8 +194,49 @@ fn materialize_external_import_source(
     Ok(MaterializedExternalImportSource {
         root_dir: stage_dir.clone(),
         cleanup_dir: Some(stage_dir),
-        source_label: source_label_from_path(source_path),
+        source_label,
     })
+}
+
+fn materialize_external_import_source_from_zip_bytes(
+    app_dir: &Path,
+    source_label: &str,
+    zip_bytes: &[u8],
+) -> Result<MaterializedExternalImportSource> {
+    materialize_external_import_source_from_zip_reader(
+        app_dir,
+        source_label.to_string(),
+        std::io::Cursor::new(zip_bytes),
+    )
+}
+
+fn materialize_external_import_source(
+    app_dir: &Path,
+    source_path: &Path,
+) -> Result<MaterializedExternalImportSource> {
+    if source_path.is_dir() {
+        return Ok(MaterializedExternalImportSource {
+            root_dir: source_path.to_path_buf(),
+            cleanup_dir: None,
+            source_label: source_label_from_path(source_path),
+        });
+    }
+
+    let extension = source_path
+        .extension()
+        .and_then(|value| value.to_str())
+        .map(|value| value.trim().to_ascii_lowercase())
+        .unwrap_or_default();
+    if extension != "zip" {
+        return Err(anyhow!("unsupported import source: expected directory or .zip"));
+    }
+
+    let file = fs::File::open(source_path)?;
+    materialize_external_import_source_from_zip_reader(
+        app_dir,
+        source_label_from_path(source_path),
+        file,
+    )
 }
 
 fn cleanup_materialized_external_import_source(source: &MaterializedExternalImportSource) {
