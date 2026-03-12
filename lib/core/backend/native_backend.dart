@@ -14,6 +14,7 @@ import '../../src/rust/api/content_extract.dart' as rust_content_extract;
 import '../../src/rust/api/embedding_lifecycle.dart'
     as rust_embedding_lifecycle;
 import '../../src/rust/api/external_import.dart' as rust_external_import;
+import '../../src/rust/api/migration_archive.dart' as rust_migration_archive;
 import '../../src/rust/api/knowledge.dart' as rust_knowledge;
 import '../../src/rust/api/core.dart' as rust_core;
 import '../../src/rust/knowledge/models.dart' as rust_knowledge_models;
@@ -2429,6 +2430,80 @@ class NativeAppBackend
       baseUrl: baseUrl,
       vaultId: vaultId,
       idToken: idToken,
+    );
+  }
+
+  @override
+  Future<MigrationArchiveExportEstimate> estimateMigrationArchiveExport(
+    Uint8List key,
+  ) async {
+    final appDir = await _getAppDir();
+    return rust_migration_archive.migrationArchiveExportEstimate(
+      appDir: appDir,
+      key: key,
+    );
+  }
+
+  @override
+  Future<MigrationArchiveManifest> exportMigrationArchive(
+    Uint8List key, {
+    required String outputPath,
+  }) async {
+    final appDir = await _getAppDir();
+    return rust_migration_archive.migrationArchiveExport(
+      appDir: appDir,
+      key: key,
+      outputPath: outputPath,
+    );
+  }
+
+  @override
+  Stream<String> runMigrationArchiveExportProgress(
+    Uint8List key, {
+    required String outputPath,
+  }) async* {
+    final appDir = await _getAppDir();
+    yield* rust_migration_archive.migrationArchiveExportProgress(
+      appDir: appDir,
+      key: key,
+      outputPath: outputPath,
+    );
+  }
+
+  @override
+  Future<MigrationArchiveManifest> inspectMigrationArchive({
+    required String archivePath,
+  }) async {
+    final appDir = await _getAppDir();
+    return rust_migration_archive.migrationArchiveInspect(
+      appDir: appDir,
+      archivePath: archivePath,
+    );
+  }
+
+  @override
+  Future<MigrationArchiveManifest> importMigrationArchive(
+    Uint8List key, {
+    required String archivePath,
+  }) async {
+    final appDir = await _getAppDir();
+    return rust_migration_archive.migrationArchiveImport(
+      appDir: appDir,
+      key: key,
+      archivePath: archivePath,
+    );
+  }
+
+  @override
+  Stream<String> runMigrationArchiveImportProgress(
+    Uint8List key, {
+    required String archivePath,
+  }) async* {
+    final appDir = await _getAppDir();
+    yield* rust_migration_archive.migrationArchiveImportProgress(
+      appDir: appDir,
+      key: key,
+      archivePath: archivePath,
     );
   }
 

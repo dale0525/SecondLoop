@@ -11,6 +11,7 @@ extension _SettingsPageBuild on _SettingsPageState {
         (defaultTargetPlatform == TargetPlatform.macOS ||
             defaultTargetPlatform == TargetPlatform.windows ||
             defaultTargetPlatform == TargetPlatform.linux);
+    const supportsMigrationArchive = !kIsWeb;
     final isDesktop =
         !kIsWeb && defaultTargetPlatform == TargetPlatform.windows;
     final isZh = Localizations.localeOf(context)
@@ -205,6 +206,21 @@ extension _SettingsPageBuild on _SettingsPageState {
                       Navigator.of(context).push(
                         MaterialPageRoute(
                           builder: (_) => const ExternalImportPage(),
+                        ),
+                      );
+                    },
+            ),
+          if (supportsMigrationArchive)
+            ListTile(
+              key: const ValueKey('settings_migration_archive'),
+              title: Text(context.t.settings.migrationArchive.title),
+              subtitle: Text(context.t.settings.migrationArchive.subtitle),
+              onTap: _busy
+                  ? null
+                  : () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => const MigrationArchivePage(),
                         ),
                       );
                     },

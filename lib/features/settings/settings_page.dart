@@ -36,6 +36,7 @@ import 'cloud_account_page.dart';
 import 'ai_settings_page.dart';
 import 'sync_settings_page.dart';
 import 'external_import_page.dart';
+import 'migration_archive_page.dart';
 import 'semantic_search_debug_page.dart';
 import 'knowledge_index_debug_page.dart';
 import 'diagnostics_page.dart';
