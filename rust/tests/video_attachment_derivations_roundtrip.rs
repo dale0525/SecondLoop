@@ -42,8 +42,13 @@ fn video_attachment_derivations_roundtrip() {
     assert_eq!(roots, vec![root.sha256.clone()]);
 
     db::upsert_attachment_derivation(&conn, &root.sha256, &poster.sha256, "poster", 999)
-        .expect("idempotent derivation");
+        .expect("updated derivation");
     let derivations_after = db::list_attachment_derivations_by_root(&conn, &root.sha256)
         .expect("list derivations after");
     assert_eq!(derivations_after.len(), 3);
+    let updated_poster = derivations_after
+        .iter()
+        .find(|item| item.child_sha256 == poster.sha256 && item.role == "poster")
+        .expect("poster derivation after update");
+    assert_eq!(updated_poster.created_at_ms, 999);
 }

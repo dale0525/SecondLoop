@@ -20,13 +20,15 @@ pub fn upsert_attachment_derivation(
 
     conn.execute(
         r#"
-INSERT OR IGNORE INTO attachment_derivations(
+INSERT INTO attachment_derivations(
   root_sha256,
   child_sha256,
   role,
   created_at_ms
 )
 VALUES (?1, ?2, ?3, ?4)
+ON CONFLICT(root_sha256, child_sha256, role)
+DO UPDATE SET created_at_ms = excluded.created_at_ms
 "#,
         params![root_sha256, child_sha256, role, created_at_ms],
     )?;
