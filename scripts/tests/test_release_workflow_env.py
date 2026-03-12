@@ -715,6 +715,12 @@ class ReleaseWorkflowEnvTests(unittest.TestCase):
         self.assertIn('--base "${upstream_default_branch}"', script_text)
         self.assertNotIn("git fetch upstream master --depth=1", script_text)
 
+    def test_publish_winget_manifest_script_uses_update_pr_title(self) -> None:
+        script_text = self._publish_winget_script_text()
+
+        self.assertIn('--title "Update: ${package_id} version ${version}"', script_text)
+        self.assertNotIn('--title "Add ${package_id} version ${version}"', script_text)
+
     def test_publish_winget_manifest_script_polls_for_cla_prompt(self) -> None:
         script_text = self._publish_winget_script_text()
 
