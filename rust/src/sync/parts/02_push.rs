@@ -110,7 +110,7 @@ fn push_internal(
     crate::db::backfill_attachments_oplog_if_needed(conn, db_key)?;
 
     let device_id = get_or_create_device_id(conn)?;
-    let app_dir = app_dir_from_conn(conn)?;
+    let app_dir = crate::db::app_dir_from_conn(conn)?;
     let app_dir_path = app_dir.as_path();
     let remote_root_dir = normalize_dir(remote_root);
     let scope_id = sync_scope_id(remote, &remote_root_dir);
@@ -169,6 +169,8 @@ fn push_internal(
 
     let attachments_dir = format!("{remote_root_dir}attachments/");
     remote.mkdir_all(&attachments_dir)?;
+    let embedding_artifacts_dir = format!("{remote_root_dir}embedding_artifacts/");
+    remote.mkdir_all(&embedding_artifacts_dir)?;
 
     if upload_attachment_bytes {
         let attachment_backfill_key = format!("sync.attachments.bytes_backfilled:{scope_id}");
@@ -182,6 +184,19 @@ fn push_internal(
                 app_dir_path,
             )?;
             kv_set_i64(conn, &attachment_backfill_key, 1)?;
+        }
+
+        let artifact_backfill_key = format!("sync.embedding_artifacts.bytes_backfilled:{scope_id}");
+        if kv_get_i64(conn, &artifact_backfill_key)?.unwrap_or(0) == 0 {
+            upload_all_local_embedding_artifact_blobs(
+                conn,
+                db_key,
+                sync_key,
+                remote,
+                &remote_root_dir,
+                app_dir_path,
+            )?;
+            kv_set_i64(conn, &artifact_backfill_key, 1)?;
         }
     }
 
@@ -233,6 +248,7 @@ fn push_internal(
             Delete,
         }
 
+        let mut artifact_blob_refs: BTreeSet<String> = BTreeSet::new();
         let mut pushed: u64 = 0;
         let mut max_seq = after_seq;
         let mut attachment_actions: BTreeMap<String, AttachmentAction> = BTreeMap::new();
@@ -298,6 +314,15 @@ fn push_internal(
                         attachment_actions.insert(sha256.to_string(), AttachmentAction::Delete);
                     }
                 }
+
+                if op_json["type"].as_str() == Some("embedding.artifact.upsert.v1") {
+                    if let Some(blob_ref) = op_json["payload"]["blob_ref"].as_str() {
+                        let blob_ref = blob_ref.trim();
+                        if !blob_ref.is_empty() {
+                            artifact_blob_refs.insert(blob_ref.to_string());
+                        }
+                    }
+                }
             }
 
             let file_blob = encrypt_bytes(
@@ -344,6 +369,17 @@ fn push_internal(
                     }
                 }
             }
+        }
+
+        for blob_ref in artifact_blob_refs {
+            let _ = upload_embedding_artifact_blob_if_present(
+                ctx.db_key,
+                ctx.sync_key,
+                ctx.remote,
+                &remote_root_dir,
+                ctx.app_dir,
+                &blob_ref,
+            )?;
         }
 
         for chunk_start in touched_pack_chunks {
@@ -615,177 +651,6 @@ fn upload_ops_pack_chunk(
     Ok(())
 }
 
-pub fn download_attachment_bytes(
-    conn: &Connection,
-    db_key: &[u8; 32],
-    sync_key: &[u8; 32],
-    remote: &impl RemoteStore,
-    remote_root: &str,
-    sha256: &str,
-) -> Result<()> {
-    let app_dir = app_dir_from_conn(conn)?;
-
-    let stored_path: Option<String> = conn
-        .query_row(
-            r#"SELECT path FROM attachments WHERE sha256 = ?1"#,
-            params![sha256],
-            |row| row.get(0),
-        )
-        .optional()?;
-    let stored_path = stored_path.ok_or_else(|| anyhow!("attachment not found"))?;
-
-    let remote_root_dir = normalize_dir(remote_root);
-    let remote_path = format!("{remote_root_dir}attachments/{sha256}.bin");
-    let ciphertext = remote.get(&remote_path)?;
-    let aad = format!("sync.attachment.bytes:{sha256}");
-    let plaintext = decrypt_bytes(sync_key, &ciphertext, aad.as_bytes())?;
-
-    if sha256_hex(&plaintext) != sha256 {
-        return Err(anyhow!("attachment sha256 mismatch after download"));
-    }
-
-    let local_path = app_dir.join(&stored_path);
-    if let Some(parent) = local_path.parent() {
-        fs::create_dir_all(parent)?;
-    }
-
-    let local_aad = format!("attachment.bytes:{sha256}");
-    let local_cipher = encrypt_bytes(db_key, &plaintext, local_aad.as_bytes())?;
-    fs::write(local_path, local_cipher)?;
-    Ok(())
-}
-
-pub fn upload_attachment_bytes(
-    conn: &Connection,
-    db_key: &[u8; 32],
-    sync_key: &[u8; 32],
-    remote: &impl RemoteStore,
-    remote_root: &str,
-    sha256: &str,
-) -> Result<bool> {
-    let app_dir = app_dir_from_conn(conn)?;
-    let remote_root_dir = normalize_dir(remote_root);
-    let attachments_dir = format!("{remote_root_dir}attachments/");
-    remote.mkdir_all(&attachments_dir)?;
-    upload_attachment_bytes_if_present(
-        conn,
-        db_key,
-        sync_key,
-        remote,
-        &attachments_dir,
-        app_dir.as_path(),
-        sha256,
-    )
-}
-
-fn upload_all_local_attachment_bytes(
-    conn: &Connection,
-    db_key: &[u8; 32],
-    sync_key: &[u8; 32],
-    remote: &impl RemoteStore,
-    attachments_dir: &str,
-    app_dir: &Path,
-) -> Result<u64> {
-    let existing = remote.list(attachments_dir)?;
-    let existing: BTreeSet<String> = existing.into_iter().collect();
-
-    let mut stmt =
-        conn.prepare(r#"SELECT sha256 FROM attachments ORDER BY created_at ASC, sha256 ASC"#)?;
-    let mut rows = stmt.query([])?;
-
-    let mut uploaded = 0u64;
-    while let Some(row) = rows.next()? {
-        let sha256: String = row.get(0)?;
-        let remote_path = format!("{attachments_dir}{sha256}.bin");
-        if existing.contains(&remote_path) {
-            continue;
-        }
-        match upload_attachment_bytes_if_present(
-            conn,
-            db_key,
-            sync_key,
-            remote,
-            attachments_dir,
-            app_dir,
-            &sha256,
-        ) {
-            Ok(true) => uploaded += 1,
-            Ok(false) => {}
-            Err(e) => return Err(e),
-        }
-    }
-
-    Ok(uploaded)
-}
-
-fn upload_attachment_bytes_if_present(
-    conn: &Connection,
-    db_key: &[u8; 32],
-    sync_key: &[u8; 32],
-    remote: &impl RemoteStore,
-    attachments_dir: &str,
-    app_dir: &Path,
-    sha256: &str,
-) -> Result<bool> {
-    let exists: Option<i64> = conn
-        .query_row(
-            r#"SELECT 1 FROM attachments WHERE sha256 = ?1"#,
-            params![sha256],
-            |row| row.get(0),
-        )
-        .optional()?;
-    if exists.is_none() {
-        return Ok(false);
-    }
-
-    let plaintext = match crate::db::read_attachment_bytes(conn, db_key, app_dir, sha256) {
-        Ok(bytes) => bytes,
-        Err(e)
-            if e.downcast_ref::<std::io::Error>()
-                .is_some_and(|io| io.kind() == std::io::ErrorKind::NotFound) =>
-        {
-            return Ok(false);
-        }
-        Err(e) => return Err(e),
-    };
-
-    let remote_aad = format!("sync.attachment.bytes:{sha256}");
-    let ciphertext = encrypt_bytes(sync_key, &plaintext, remote_aad.as_bytes())?;
-    let remote_path = format!("{attachments_dir}{sha256}.bin");
-    remote.put(&remote_path, ciphertext)?;
-    Ok(true)
-}
-
-fn app_dir_from_conn(conn: &Connection) -> Result<PathBuf> {
-    let mut stmt = conn.prepare("PRAGMA database_list")?;
-    let mut rows = stmt.query([])?;
-    while let Some(row) = rows.next()? {
-        let name: String = row.get(1)?;
-        if name != "main" {
-            continue;
-        }
-        let file: String = row.get(2)?;
-        if file.is_empty() {
-            break;
-        }
-        let path = PathBuf::from(file);
-        let Some(parent) = path.parent() else {
-            break;
-        };
-        return Ok(parent.to_path_buf());
-    }
-    Err(anyhow!("unable to derive app_dir from sqlite connection"))
-}
-
-fn sha256_hex(bytes: &[u8]) -> String {
-    let digest = Sha256::digest(bytes);
-    let mut out = String::with_capacity(64);
-    for b in digest {
-        use std::fmt::Write;
-        let _ = write!(&mut out, "{:02x}", b);
-    }
-    out
-}
 
 #[cfg(test)]
 mod cursor_metadata_tests {
@@ -857,7 +722,7 @@ mod push_progress_tests {
 
         assert!(!seen.is_empty());
         assert_eq!(seen[0].1, 2);
-        assert_eq!(*seen.last().unwrap(), (2, 2));
+        assert_eq!(*seen.last().expect("last progress"), (2, 2));
     }
 
     #[test]
@@ -875,8 +740,6 @@ mod push_progress_tests {
             .expect("push 1");
         assert_eq!(pushed1, 2);
 
-        // Simulate a user switching remote targets then coming back: local cursor is ahead,
-        // but the remote is missing the last pushed op and requires a re-push from 0.
         clear_remote_root(&remote, "SecondLoop").expect("clear remote root");
         let mut seen: Vec<(u64, u64)> = Vec::new();
         let mut on_progress = |done: u64, total: u64| {
@@ -896,7 +759,7 @@ mod push_progress_tests {
 
         assert!(!seen.is_empty());
         assert_eq!(seen[0].1, 2);
-        assert_eq!(*seen.last().unwrap(), (2, 2));
+        assert_eq!(*seen.last().expect("last progress"), (2, 2));
     }
 }
 
