@@ -52,14 +52,6 @@ SecondLoop 是一个（Community Edition）**开源**、隐私优先的 “Secon
 
 ## 🚀 用法
 
-## 数据迁移
-
-- 在 `Settings` → `Migration archive` 中，可以把当前 Vault 导出为可迁移的 `zip` 归档。
-- 归档格式是 `Markdown + attachments + export-manifest.json`：既便于阅读，也能无损恢复稳定 ID 与内部关联。
-- 导入是有意设计成覆盖式迁移：应用会先创建本地回滚快照，再清空当前 Vault，最后恢复所选归档。
-- 如果导入在清空后失败，应用会自动回滚到本地快照，而不是留下半迁移状态。
-- 导入前界面会展示归档摘要，要求显式确认，并显示分阶段进度。
-
 ### 获取方式
 
 - 请从 [GitHub Releases](https://github.com/dale0525/SecondLoop/releases) 下载（包含 macOS/Windows/Android/Linux 资产）。

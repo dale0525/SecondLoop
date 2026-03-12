@@ -51,14 +51,6 @@ The core mental model is **One Timeline** (a single “Main Stream”): capture 
 
 ## 🚀 Usage
 
-## Data Migration
-
-- Open `Settings` → `Migration archive` to export the current vault as a portable `zip` archive.
-- The archive format is `Markdown + attachments + export-manifest.json`, so it stays readable while restoring stable IDs and internal relations losslessly.
-- Import is destructive by design: the app creates a local rollback snapshot first, then clears the current vault, and finally restores the selected archive.
-- If import fails after clearing, the app automatically rolls back to the local snapshot instead of leaving a half-migrated vault.
-- Before import starts, the UI shows the archive summary, requires explicit confirmation, and displays step-by-step progress.
-
 ### Availability
 
 - Download from [GitHub Releases](https://github.com/dale0525/SecondLoop/releases) (macOS/Windows/Android/Linux assets).
