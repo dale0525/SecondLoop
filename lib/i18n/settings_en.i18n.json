@@ -955,5 +955,12 @@
     "archiveSize": "Archive size",
     "confirmInputLabel": "Type IMPORT to continue",
     "confirmInputHint": "Enter IMPORT"
+  },
+  "taskPriorityAiEnhancement": {
+    "title": "Smart task priorities",
+    "subtitleEnabled": "On. SecondLoop uses task context to better decide what to do first and explains why.",
+    "subtitleDisabled": "Off. Tasks still follow rule-based ordering without AI deciding what should come first.",
+    "subtitleUnset": "Not set. Enabled by default. When Cloud/BYOK is available, AI improves task ordering and suggestions.",
+    "subtitleRequiresSetup": "Sign in with SecondLoop Pro or configure an API key (BYOK) to enable smart task priorities."
   }
 }

@@ -89,6 +89,42 @@ void main() {
     expect(prefs.getBool('media_capability_image_wifi_only_v1'), isFalse);
   });
 
+  testWidgets(
+      'AI settings enables task priority enhancement by default and persists changes',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        const MaterialApp(
+          home: AiSettingsPage(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final listView = find.byType(ListView);
+    final taskPrioritySwitch =
+        find.byKey(const ValueKey('ai_settings_task_priority_ai_switch'));
+
+    await tester.dragUntilVisible(
+      taskPrioritySwitch,
+      listView,
+      const Offset(0, -160),
+    );
+    await tester.pumpAndSettle();
+
+    expect(_switchValue(tester, taskPrioritySwitch), isTrue);
+
+    await tester.tap(taskPrioritySwitch);
+    await tester.pumpAndSettle();
+
+    expect(_switchValue(tester, taskPrioritySwitch), isFalse);
+
+    final prefs = await SharedPreferences.getInstance();
+    expect(prefs.getBool('task_priority_ai_enhancement_enabled_v1'), isFalse);
+  });
+
   testWidgets('AI settings embeds smart search and semantic action toggles',
       (tester) async {
     SharedPreferences.setMockInitialValues({

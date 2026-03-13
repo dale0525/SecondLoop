@@ -26,6 +26,7 @@ import '../../core/ai/media_source_prefs.dart';
 import '../../core/ai/semantic_parse_edit_policy.dart';
 import '../../core/ai/semantic_parse.dart';
 import '../../core/ai/semantic_parse_data_consent_prefs.dart';
+import '../../core/ai/task_priority_ai_enhancement_prefs.dart';
 import '../../core/attachments/attachment_metadata_store.dart';
 import '../../core/backend/app_backend.dart';
 import '../../core/backend/attachments_backend.dart';
@@ -60,7 +61,9 @@ import '../actions/suggestions_parser.dart';
 import '../actions/task_hub/task_hub_banner.dart';
 import '../actions/task_hub/task_hub_page.dart';
 import '../actions/task_hub/task_hub_quick_actions.dart';
-import '../actions/task_hub/task_hub_summary.dart';
+import '../actions/task_hub/task_priority_ai.dart';
+import '../actions/task_hub/task_priority_feedback_store.dart';
+import '../actions/task_hub/task_priority_store.dart';
 import '../actions/todo/todo_detail_page.dart';
 import '../actions/todo/todo_linking.dart';
 import '../actions/todo/message_action_resolver.dart';
@@ -417,7 +420,9 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
   final _inputFocusNode = FocusNode();
   final _scrollController = ScrollController();
   Future<List<Message>>? _messagesFuture;
-  Future<TaskHubSummary>? _taskHubSummaryFuture;
+  TaskPriorityStore? _taskPriorityStore;
+  final TaskPriorityFeedbackStore _taskPriorityFeedbackStore =
+      const TaskPriorityFeedbackStore();
   final Map<String, Future<List<Attachment>>> _attachmentsFuturesByMessageId =
       <String, Future<List<Attachment>>>{};
   final Map<String, List<Attachment>> _attachmentsCacheByMessageId =
@@ -564,6 +569,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
     _taskHubQuickActionSnackMessenger = null;
     _taskHubQuickActionSnackToken = null;
     _taskHubUndoTicket = null;
+    _taskPriorityStore?.dispose();
     _shareDraftSubscription?.cancel();
     unawaited(_audioRecorderInstance?.dispose());
     unawaited(AudioRecordingForegroundService.stopIfSupported());
@@ -577,7 +583,15 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
   void didChangeDependencies() {
     super.didChangeDependencies();
     _messagesFuture ??= _loadMessages();
-    _taskHubSummaryFuture ??= _loadTaskHubSummary();
+    _taskPriorityStore ??= TaskPriorityStore(
+      backend: AppBackendScope.of(context),
+      sessionKey: Uint8List.fromList(SessionScope.of(context).sessionKey),
+      syncEngine: SyncEngineScope.maybeOf(context),
+      resolveAiService: _resolveTaskPriorityAiService,
+      isAiEnhancementEnabled: TaskPriorityAiEnhancementPrefs.read,
+      feedbackStore: _taskPriorityFeedbackStore,
+    );
+    unawaited(_taskPriorityStore!.refresh());
     _attachSyncEngine();
     unawaited(_refreshComposerAskAiRoute());
     unawaited(_recoverDetachedAskAiIfNeeded());

@@ -117,7 +117,7 @@ void main() {
 
     expect(find.byKey(const ValueKey('task_hub_preview_list')), findsOneWidget);
 
-    await tester.tap(find.byKey(const ValueKey('task_hub_view_all')));
+    await tester.tap(find.byKey(const ValueKey('task_hub_banner_view_all')));
     await tester.pumpAndSettle();
 
     expect(find.byType(TaskHubPage), findsOneWidget);
@@ -172,8 +172,9 @@ void main() {
 
     final bannerItem =
         find.byKey(const ValueKey('task_hub_banner_item_todo:detail'));
+    expect(bannerItem, findsOneWidget);
     await tester.ensureVisible(bannerItem);
-    await tester.tap(bannerItem);
+    await tester.tap(find.text('Open detail from banner'));
     await tester.pumpAndSettle();
 
     expect(find.byType(TodoDetailPage), findsOneWidget);
@@ -286,8 +287,8 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('task_hub_banner')));
     await tester.pumpAndSettle();
-    await tester
-        .tap(find.byKey(const ValueKey('task_hub_quick_todo:snack_today')));
+    await tester.tap(
+        find.byKey(const ValueKey('task_hub_page_quick_todo:snack_tomorrow')));
     await tester.pump();
 
     expect(find.byType(SnackBar), findsOneWidget);
@@ -366,8 +367,8 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('task_hub_banner')));
     await tester.pumpAndSettle();
-    await tester
-        .tap(find.byKey(const ValueKey('task_hub_quick_todo:snack_today')));
+    await tester.tap(
+        find.byKey(const ValueKey('task_hub_page_quick_todo:snack_tomorrow')));
     await tester.pump();
     expect(find.byType(SnackBar), findsOneWidget);
 

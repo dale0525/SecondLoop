@@ -11,6 +11,7 @@ import '../../../src/rust/db.dart';
 import '../../../ui/sl_delete_confirm_dialog.dart';
 import '../../../ui/sl_icon_button.dart';
 import '../../../ui/sl_tokens.dart';
+import '../task_hub/task_priority_engine.dart';
 import '../time/date_time_picker_dialog.dart';
 import '../todo/todo_detail_page.dart';
 import '../todo/todo_recurrence_edit_scope_dialog.dart';
@@ -113,6 +114,8 @@ class _TodoAgendaPageState extends State<TodoAgendaPage> {
       final scheduled = todos
           .where((t) => t.dueAtMs != null && t.status != 'dismissed')
           .toList(growable: false);
+      final prioritySnapshot =
+          buildTaskPrioritySnapshot(todos, nowLocal: DateTime.now());
       final recurrenceRuleByTodoId = <String, String>{};
 
       await Future.wait(
@@ -147,10 +150,34 @@ class _TodoAgendaPageState extends State<TodoAgendaPage> {
         }
       }
 
-      int compareByDueAt(Todo a, Todo b) => a.dueAtMs!.compareTo(b.dueAtMs!);
-      inProgress.sort(compareByDueAt);
-      open.sort(compareByDueAt);
-      done.sort(compareByDueAt);
+      final scheduledPriorityOrder = <String, int>{
+        for (final (index, entry) in prioritySnapshot.activeEntries
+            .where((entry) => entry.todo.dueAtMs != null)
+            .indexed)
+          entry.todo.id: index,
+      };
+      final donePriorityOrder = <String, int>{
+        for (final (index, entry) in prioritySnapshot.done.indexed)
+          entry.todo.id: index,
+      };
+
+      int compareByPriorityThenDue(Todo a, Todo b) {
+        final aPriority = scheduledPriorityOrder[a.id] ?? 1 << 20;
+        final bPriority = scheduledPriorityOrder[b.id] ?? 1 << 20;
+        if (aPriority != bPriority) return aPriority.compareTo(bPriority);
+        return a.dueAtMs!.compareTo(b.dueAtMs!);
+      }
+
+      int compareDone(Todo a, Todo b) {
+        final aPriority = donePriorityOrder[a.id] ?? 1 << 20;
+        final bPriority = donePriorityOrder[b.id] ?? 1 << 20;
+        if (aPriority != bPriority) return aPriority.compareTo(bPriority);
+        return b.updatedAtMs.compareTo(a.updatedAtMs);
+      }
+
+      inProgress.sort(compareByPriorityThenDue);
+      open.sort(compareByPriorityThenDue);
+      done.sort(compareDone);
 
       if (!mounted) return;
       setState(() {

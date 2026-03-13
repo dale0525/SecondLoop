@@ -1,15 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../../../i18n/strings.g.dart';
-import '../../../src/rust/db.dart';
 import 'task_hub_quick_actions.dart';
-
-enum TaskHubQuickActionSectionKind {
-  scheduled,
-  dueReview,
-  unscheduled,
-  done,
-}
+import 'task_priority_models.dart';
 
 enum TaskHubQuickActionTone {
   primary,
@@ -35,45 +28,53 @@ typedef TaskHubQuickActionLayout = (
   List<TaskHubQuickActionItem>
 );
 
-TaskHubQuickActionLayout buildTaskHubQuickActionLayout(
+TaskHubQuickActionItem? primaryTaskHubQuickActionItemForEntry(
   BuildContext context, {
-  required Todo todo,
-  required TaskHubQuickActionSectionKind sectionKind,
-  DateTime? dueAtLocal,
+  required TaskPriorityEntry entry,
 }) {
   final actions = context.t.actions.taskHub.actions;
-  final nowLocal = DateTime.now();
-  final resolvedDueAtLocal = dueAtLocal ??
-      (todo.dueAtMs == null
-          ? null
-          : DateTime.fromMillisecondsSinceEpoch(
-              todo.dueAtMs!,
-              isUtc: true,
-            ).toLocal());
+  final action = recommendedTaskHubQuickActionForEntry(entry);
+  if (action == null) return null;
 
-  final isDueToday = resolvedDueAtLocal != null &&
-      resolvedDueAtLocal.year == nowLocal.year &&
-      resolvedDueAtLocal.month == nowLocal.month &&
-      resolvedDueAtLocal.day == nowLocal.day;
-  final isOverdue =
-      resolvedDueAtLocal != null && resolvedDueAtLocal.isBefore(nowLocal);
-  final isFutureScheduled =
-      resolvedDueAtLocal != null && !isOverdue && !isDueToday;
+  return TaskHubQuickActionItem(
+    action: action,
+    label: switch (entry.suggestedAction) {
+      TaskPrioritySuggestionKind.doNow => actions.doNow,
+      TaskPrioritySuggestionKind.schedule => actions.schedule,
+      TaskPrioritySuggestionKind.defer => actions.defer,
+      TaskPrioritySuggestionKind.clarify => actions.clarify,
+    },
+    icon: switch (entry.suggestedAction) {
+      TaskPrioritySuggestionKind.doNow => Icons.play_circle_outline_rounded,
+      TaskPrioritySuggestionKind.schedule => Icons.event_available_rounded,
+      TaskPrioritySuggestionKind.defer => Icons.schedule_send_rounded,
+      TaskPrioritySuggestionKind.clarify => Icons.rule_folder_outlined,
+    },
+    tone: TaskHubQuickActionTone.primary,
+  );
+}
+
+TaskHubQuickActionLayout buildTaskHubQuickActionLayout(
+  BuildContext context, {
+  required TaskPriorityEntry entry,
+}) {
+  final actions = context.t.actions.taskHub.actions;
 
   TaskHubQuickActionItem chip(
     TaskHubQuickAction action, {
     required String label,
     required IconData icon,
     TaskHubQuickActionTone tone = TaskHubQuickActionTone.secondary,
-  }) =>
-      TaskHubQuickActionItem(
-        action: action,
-        label: label,
-        icon: icon,
-        tone: tone,
-      );
+  }) {
+    return TaskHubQuickActionItem(
+      action: action,
+      label: label,
+      icon: icon,
+      tone: tone,
+    );
+  }
 
-  if (sectionKind == TaskHubQuickActionSectionKind.done) {
+  if (entry.band == TaskPriorityBand.done) {
     return (
       <TaskHubQuickActionItem>[
         chip(
@@ -82,13 +83,13 @@ TaskHubQuickActionLayout buildTaskHubQuickActionLayout(
           icon: Icons.undo_rounded,
           tone: TaskHubQuickActionTone.primary,
         ),
+      ],
+      <TaskHubQuickActionItem>[
         chip(
           TaskHubQuickAction.redo,
           label: actions.redo,
           icon: Icons.replay_rounded,
         ),
-      ],
-      <TaskHubQuickActionItem>[
         chip(
           TaskHubQuickAction.dismiss,
           label: context.t.common.actions.delete,
@@ -98,201 +99,99 @@ TaskHubQuickActionLayout buildTaskHubQuickActionLayout(
     );
   }
 
-  if (todo.status == 'in_progress') {
-    return (
-      <TaskHubQuickActionItem>[
-        chip(
-          TaskHubQuickAction.done,
-          label: actions.done,
-          icon: Icons.check_rounded,
-          tone: TaskHubQuickActionTone.primary,
-        ),
-        chip(
-          TaskHubQuickAction.pauseTomorrow,
-          label: actions.pauseTomorrow,
-          icon: Icons.pause_circle_outline_rounded,
-        ),
-      ],
-      <TaskHubQuickActionItem>[
-        chip(
-          TaskHubQuickAction.thisWeek,
-          label: actions.thisWeek,
-          icon: Icons.date_range_rounded,
-        ),
-        chip(
-          TaskHubQuickAction.moveToInbox,
-          label: actions.moveToInbox,
-          icon: Icons.inbox_rounded,
-        ),
-      ],
-    );
-  }
+  final primaryAction = primaryTaskHubQuickActionItemForEntry(
+    context,
+    entry: entry,
+  );
 
-  if (sectionKind == TaskHubQuickActionSectionKind.dueReview) {
-    return (
-      <TaskHubQuickActionItem>[
-        chip(
-          TaskHubQuickAction.today,
-          label: actions.todayProcess,
-          icon: Icons.today_rounded,
-          tone: TaskHubQuickActionTone.primary,
-        ),
-        chip(
-          TaskHubQuickAction.later,
-          label: actions.later,
-          icon: Icons.schedule_send_rounded,
-        ),
-        chip(
-          TaskHubQuickAction.done,
-          label: actions.done,
-          icon: Icons.check_rounded,
-        ),
-      ],
-      <TaskHubQuickActionItem>[
-        chip(
-          TaskHubQuickAction.thisWeek,
-          label: actions.thisWeek,
-          icon: Icons.date_range_rounded,
-        ),
-      ],
-    );
-  }
+  final secondary = <TaskHubQuickActionItem>[
+    chip(
+      TaskHubQuickAction.today,
+      label: actions.today,
+      icon: Icons.today_rounded,
+    ),
+    chip(
+      TaskHubQuickAction.tomorrow,
+      label: actions.tomorrow,
+      icon: Icons.event_rounded,
+    ),
+    chip(
+      TaskHubQuickAction.thisWeek,
+      label: actions.thisWeek,
+      icon: Icons.date_range_rounded,
+    ),
+    chip(
+      TaskHubQuickAction.later,
+      label: actions.later,
+      icon: Icons.schedule_send_rounded,
+    ),
+  ];
 
-  if (sectionKind == TaskHubQuickActionSectionKind.unscheduled) {
-    return (
-      <TaskHubQuickActionItem>[
-        chip(
-          TaskHubQuickAction.today,
-          label: actions.today,
-          icon: Icons.today_rounded,
-          tone: TaskHubQuickActionTone.primary,
-        ),
-        chip(
-          TaskHubQuickAction.tomorrow,
-          label: actions.tomorrow,
-          icon: Icons.event_rounded,
-        ),
-      ],
-      <TaskHubQuickActionItem>[
-        chip(
-          TaskHubQuickAction.thisWeek,
-          label: actions.thisWeek,
-          icon: Icons.date_range_rounded,
-        ),
-        chip(
-          TaskHubQuickAction.later,
-          label: actions.later,
-          icon: Icons.schedule_send_rounded,
-        ),
-        chip(
-          TaskHubQuickAction.dismiss,
-          label: context.t.common.actions.delete,
-          icon: Icons.delete_outline_rounded,
-        ),
-      ],
-    );
-  }
-
-  if (isOverdue || isDueToday) {
-    return (
-      <TaskHubQuickActionItem>[
-        chip(
-          TaskHubQuickAction.done,
-          label: actions.done,
-          icon: Icons.check_rounded,
-          tone: TaskHubQuickActionTone.primary,
-        ),
-        chip(
-          TaskHubQuickAction.tonight,
-          label: actions.tonight,
-          icon: Icons.bedtime_rounded,
-        ),
-      ],
-      <TaskHubQuickActionItem>[
-        chip(
-          TaskHubQuickAction.tomorrow,
-          label: actions.tomorrow,
-          icon: Icons.event_rounded,
-        ),
-        chip(
-          TaskHubQuickAction.thisWeek,
-          label: actions.thisWeek,
-          icon: Icons.date_range_rounded,
-        ),
-        chip(
-          TaskHubQuickAction.later,
-          label: actions.later,
-          icon: Icons.schedule_send_rounded,
-        ),
-      ],
-    );
-  }
-
-  if (isFutureScheduled) {
-    return (
-      <TaskHubQuickActionItem>[
-        chip(
-          TaskHubQuickAction.start,
-          label: actions.start,
-          icon: Icons.play_arrow_rounded,
-          tone: TaskHubQuickActionTone.primary,
-        ),
-        chip(
-          TaskHubQuickAction.done,
-          label: actions.done,
-          icon: Icons.check_rounded,
-        ),
-      ],
-      <TaskHubQuickActionItem>[
-        chip(
-          TaskHubQuickAction.today,
-          label: actions.today,
-          icon: Icons.today_rounded,
-        ),
-        chip(
-          TaskHubQuickAction.tomorrow,
-          label: actions.tomorrow,
-          icon: Icons.event_rounded,
-        ),
-        chip(
-          TaskHubQuickAction.thisWeek,
-          label: actions.thisWeek,
-          icon: Icons.date_range_rounded,
-        ),
-      ],
-    );
-  }
-
-  return (
-    <TaskHubQuickActionItem>[
+  if (entry.isReviewDue || entry.band == TaskPriorityBand.decide) {
+    secondary.add(
       chip(
-        TaskHubQuickAction.today,
-        label: actions.today,
-        icon: Icons.today_rounded,
-        tone: TaskHubQuickActionTone.primary,
+        TaskHubQuickAction.moveToInbox,
+        label: actions.moveToInbox,
+        icon: Icons.inbox_rounded,
       ),
-      chip(
-        TaskHubQuickAction.tomorrow,
-        label: actions.tomorrow,
-        icon: Icons.event_rounded,
-      ),
-    ],
-    <TaskHubQuickActionItem>[
-      chip(
-        TaskHubQuickAction.thisWeek,
-        label: actions.thisWeek,
-        icon: Icons.date_range_rounded,
-      ),
-      chip(
-        TaskHubQuickAction.later,
-        label: actions.later,
-        icon: Icons.schedule_send_rounded,
-      ),
+    );
+  }
+  if (!entry.isInProgress) {
+    secondary.add(
       chip(
         TaskHubQuickAction.done,
         label: actions.done,
         icon: Icons.check_rounded,
       ),
+    );
+  }
+
+  if (entry.isReviewDue) {
+    return (
+      <TaskHubQuickActionItem>[
+        if (primaryAction != null) primaryAction,
+        chip(
+          TaskHubQuickAction.later,
+          label: actions.later,
+          icon: Icons.schedule_send_rounded,
+        ),
+        chip(
+          TaskHubQuickAction.done,
+          label: actions.done,
+          icon: Icons.check_rounded,
+        ),
+      ],
+      secondary
+          .where((item) =>
+              item.action != TaskHubQuickAction.later &&
+              item.action != TaskHubQuickAction.done)
+          .toList(growable: false),
+    );
+  }
+
+  return (
+    <TaskHubQuickActionItem>[
+      if (primaryAction != null) primaryAction,
     ],
+    secondary,
   );
+}
+
+TaskHubQuickAction? recommendedTaskHubQuickActionForEntry(
+    TaskPriorityEntry entry) {
+  return switch (entry.suggestedAction) {
+    TaskPrioritySuggestionKind.doNow => entry.isInProgress
+        ? TaskHubQuickAction.done
+        : entry.isFutureScheduled
+            ? TaskHubQuickAction.start
+            : TaskHubQuickAction.today,
+    TaskPrioritySuggestionKind.schedule =>
+      entry.isFutureScheduled ? null : TaskHubQuickAction.tomorrow,
+    TaskPrioritySuggestionKind.defer => entry.isInProgress
+        ? TaskHubQuickAction.pauseTomorrow
+        : TaskHubQuickAction.later,
+    TaskPrioritySuggestionKind.clarify => entry.isReviewDue
+        ? TaskHubQuickAction.moveToInbox
+        : TaskHubQuickAction.today,
+  };
 }

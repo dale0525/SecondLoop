@@ -955,5 +955,12 @@
     "archiveSize": "归档大小",
     "confirmInputLabel": "输入 IMPORT 以继续",
     "confirmInputHint": "请输入 IMPORT"
+  },
+  "taskPriorityAiEnhancement": {
+    "title": "智能任务优先级建议",
+    "subtitleEnabled": "已开启。系统会结合任务内容，更智能地判断哪些任务该先做，并给出推荐理由。",
+    "subtitleDisabled": "已关闭。任务仍会按规则排序，不会使用 AI 帮你判断先做什么。",
+    "subtitleUnset": "尚未设置，默认开启。满足 Cloud/BYOK 条件时，会使用 AI 增强任务排序与建议。",
+    "subtitleRequiresSetup": "需先登录 SecondLoop Pro 或配置 API 密钥（BYOK）后，才能开启智能任务优先级建议。"
   }
 }

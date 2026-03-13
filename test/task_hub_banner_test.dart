@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:secondloop/features/actions/task_hub/task_hub_banner.dart';
+import 'package:secondloop/features/actions/task_hub/task_priority_ai_models.dart';
+import 'package:secondloop/features/actions/task_hub/task_priority_engine.dart';
+import 'package:secondloop/features/actions/task_hub/task_priority_models.dart';
 import 'package:secondloop/features/actions/task_hub/task_hub_quick_actions.dart';
-import 'package:secondloop/features/actions/task_hub/task_hub_summary.dart';
 import 'package:secondloop/src/rust/db.dart';
 
 import 'test_i18n.dart';
@@ -32,98 +34,61 @@ void main() {
     );
   }
 
-  testWidgets('collapsed headline prioritizes overdue first', (tester) async {
-    final now = DateTime(2026, 2, 24, 12);
-    final summary = TaskHubSummary.fromTodos(
+  testWidgets('banner defaults to focus card with AI reason when available',
+      (tester) async {
+    final now = DateTime(2026, 3, 13, 10, 0);
+    final snapshot = buildTaskPrioritySnapshot(
       <Todo>[
-        todo(
-          id: 'overdue',
-          title: 'Overdue',
-          updatedAtMs: 1,
-          dueAtMs: now
-              .subtract(const Duration(days: 1))
-              .toUtc()
-              .millisecondsSinceEpoch,
-        ),
-        todo(
-          id: 'review',
-          title: 'Review',
-          updatedAtMs: 2,
-          reviewStage: 0,
-          nextReviewAtMs: now
-              .subtract(const Duration(hours: 1))
-              .toUtc()
-              .millisecondsSinceEpoch,
-        ),
+        todo(id: 't1', title: 'Clarify launch checklist', updatedAtMs: 10)
       ],
       nowLocal: now,
+      aiResult: const TaskPriorityAiBatchResult(
+        entries: <TaskPriorityAiEntry>[
+          TaskPriorityAiEntry(
+            todoId: 't1',
+            priorityBand: TaskPriorityAiBand.focus,
+            semanticAdjustment: 24,
+            reason: 'It unblocks the rest of today.',
+            suggestedAction: TaskPrioritySuggestionKind.clarify,
+            confidence: TaskPriorityAiConfidence.high,
+          ),
+        ],
+      ),
     );
 
     await tester.pumpWidget(
       wrapWithI18n(
         MaterialApp(
-          home: Scaffold(
-            body: TaskHubBanner(summary: summary),
-          ),
+          home: Scaffold(body: TaskHubBanner(snapshot: snapshot)),
         ),
       ),
     );
 
-    expect(find.text('Today 1 • Overdue 1'), findsOneWidget);
-    expect(find.byKey(const ValueKey('todo_agenda_banner')), findsNothing);
-    expect(
-        find.byKey(const ValueKey('todo_undetermined_banner')), findsNothing);
+    expect(find.text('AI recommends this now'), findsOneWidget);
+    expect(find.text('Clarify launch checklist'), findsOneWidget);
+    expect(find.text('It unblocks the rest of today.'), findsOneWidget);
   });
 
-  testWidgets('collapsed headline falls back to due-review when no overdue',
+  testWidgets('banner expands preview list with scheduled and decide items',
       (tester) async {
-    final now = DateTime(2026, 2, 24, 12);
-    final summary = TaskHubSummary.fromTodos(
+    final now = DateTime(2026, 3, 13, 10, 0);
+    final snapshot = buildTaskPrioritySnapshot(
       <Todo>[
         todo(
-          id: 'review',
-          title: 'Review',
-          updatedAtMs: 2,
-          reviewStage: 0,
-          nextReviewAtMs: now
-              .subtract(const Duration(hours: 1))
-              .toUtc()
-              .millisecondsSinceEpoch,
-        ),
-      ],
-      nowLocal: now,
-    );
-
-    await tester.pumpWidget(
-      wrapWithI18n(
-        MaterialApp(
-          home: Scaffold(
-            body: TaskHubBanner(summary: summary),
-          ),
-        ),
-      ),
-    );
-
-    expect(find.text('1 items need confirmation'), findsOneWidget);
-  });
-
-  testWidgets('collapsed headline shows today summary when due exists',
-      (tester) async {
-    final now = DateTime(2026, 2, 24, 12);
-    final summary = TaskHubSummary.fromTodos(
-      <Todo>[
-        todo(
-          id: 'today',
-          title: 'Today',
-          updatedAtMs: 1,
+          id: 'focus',
+          title: 'Fix billing bug',
+          updatedAtMs: 10,
           dueAtMs:
               now.add(const Duration(hours: 2)).toUtc().millisecondsSinceEpoch,
         ),
         todo(
-          id: 'unscheduled',
-          title: 'Unscheduled',
-          updatedAtMs: 2,
+          id: 'scheduled',
+          title: 'Prepare demo',
+          updatedAtMs: 20,
+          dueAtMs:
+              now.add(const Duration(days: 1)).toUtc().millisecondsSinceEpoch,
         ),
+        todo(id: 'decide', title: 'Triage backlog', updatedAtMs: 30),
       ],
       nowLocal: now,
     );
@@ -131,43 +96,7 @@ void main() {
     await tester.pumpWidget(
       wrapWithI18n(
         MaterialApp(
-          home: Scaffold(
-            body: TaskHubBanner(summary: summary),
-          ),
-        ),
-      ),
-    );
-
-    expect(find.text('Today 1 • Overdue 0'), findsOneWidget);
-    expect(find.text('Upcoming 0 · 1 unscheduled'), findsNothing);
-  });
-
-  testWidgets('expanded list exposes quick actions', (tester) async {
-    final now = DateTime(2026, 2, 24, 12);
-    final summary = TaskHubSummary.fromTodos(
-      <Todo>[
-        todo(
-          id: 'u1',
-          title: 'Unscheduled Item',
-          updatedAtMs: 1,
-        ),
-      ],
-      nowLocal: now,
-    );
-
-    final calls = <(String todoId, TaskHubQuickAction action)>[];
-
-    await tester.pumpWidget(
-      wrapWithI18n(
-        MaterialApp(
-          home: Scaffold(
-            body: TaskHubBanner(
-              summary: summary,
-              onQuickAction: (todo, action) async {
-                calls.add((todo.id, action));
-              },
-            ),
-          ),
+          home: Scaffold(body: TaskHubBanner(snapshot: snapshot)),
         ),
       ),
     );
@@ -176,72 +105,106 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const ValueKey('task_hub_preview_list')), findsOneWidget);
-    final todayQuickAction =
-        find.byKey(const ValueKey('task_hub_quick_u1_today'));
-    final moreQuickAction =
-        find.byKey(const ValueKey('task_hub_quick_u1_more'));
-    expect(todayQuickAction, findsOneWidget);
-    expect(moreQuickAction, findsOneWidget);
-    expect(tester.getSize(todayQuickAction).height, greaterThanOrEqualTo(40));
-    expect(tester.getSize(moreQuickAction).height, greaterThanOrEqualTo(40));
-
-    await tester.tap(todayQuickAction);
-    await tester.pumpAndSettle();
-
-    expect(calls.length, 1);
-    expect(calls.first.$1, 'u1');
-    expect(calls.first.$2, TaskHubQuickAction.today);
-
-    await tester.tap(find.byKey(const ValueKey('task_hub_quick_u1_more')));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Later'));
-    await tester.pumpAndSettle();
-
-    expect(calls.length, 2);
-    expect(calls.last.$1, 'u1');
-    expect(calls.last.$2, TaskHubQuickAction.later);
+    expect(find.byKey(const ValueKey('task_hub_banner_item_scheduled')),
+        findsOneWidget);
+    expect(find.byKey(const ValueKey('task_hub_banner_item_decide')),
+        findsOneWidget);
   });
 
-  testWidgets('expanded list opens todo detail from every section',
+  testWidgets('banner shows wrap-up state when no focus remains',
       (tester) async {
-    final now = DateTime(2026, 2, 24, 12);
-    final summary = TaskHubSummary.fromTodos(
-      <Todo>[
-        todo(
-          id: 'scheduled',
-          title: 'Scheduled item',
-          updatedAtMs: 1,
-          dueAtMs:
-              now.add(const Duration(hours: 2)).toUtc().millisecondsSinceEpoch,
-        ),
-        todo(
-          id: 'review',
-          title: 'Due review item',
-          updatedAtMs: 2,
-          reviewStage: 0,
-          nextReviewAtMs: now
-              .subtract(const Duration(hours: 1))
-              .toUtc()
-              .millisecondsSinceEpoch,
-        ),
-        todo(
-          id: 'unscheduled',
-          title: 'Unscheduled item',
-          updatedAtMs: 3,
+    final snapshot = buildTaskPrioritySnapshot(
+      const <Todo>[
+        Todo(
+          id: 'done-only',
+          title: 'Done only',
+          dueAtMs: null,
+          status: 'done',
+          sourceEntryId: null,
+          createdAtMs: 0,
+          updatedAtMs: 10,
+          reviewStage: null,
+          nextReviewAtMs: null,
+          lastReviewAtMs: null,
         ),
       ],
-      nowLocal: now,
+      nowLocal: DateTime(2026, 3, 13, 10, 0),
     );
 
-    final openedTodoIds = <String>[];
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: Scaffold(body: TaskHubBanner(snapshot: snapshot)),
+        ),
+      ),
+    );
+
+    expect(find.text('Wrap up'), findsOneWidget);
+    expect(find.text('No urgent task right now'), findsOneWidget);
+  });
+
+  testWidgets('banner shows only one open task hub button in wrap-up state',
+      (tester) async {
+    final snapshot = buildTaskPrioritySnapshot(
+      const <Todo>[
+        Todo(
+          id: 'done-only',
+          title: 'Done only',
+          dueAtMs: null,
+          status: 'done',
+          sourceEntryId: null,
+          createdAtMs: 0,
+          updatedAtMs: 10,
+          reviewStage: null,
+          nextReviewAtMs: null,
+          lastReviewAtMs: null,
+        ),
+      ],
+      nowLocal: DateTime(2026, 3, 13, 10, 0),
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: Scaffold(body: TaskHubBanner(snapshot: snapshot)),
+        ),
+      ),
+    );
+
+    expect(
+        find.byKey(const ValueKey('task_hub_banner_open_hub')), findsOneWidget);
+    expect(
+        find.byKey(const ValueKey('task_hub_banner_view_all')), findsNothing);
+  });
+
+  testWidgets('banner primary action uses shared quick action mapping',
+      (tester) async {
+    TaskHubQuickAction? tappedAction;
+    final snapshot = buildTaskPrioritySnapshot(
+      <Todo>[todo(id: 't1', title: 'Write launch plan', updatedAtMs: 10)],
+      nowLocal: DateTime(2026, 3, 13, 10, 0),
+      aiResult: const TaskPriorityAiBatchResult(
+        entries: <TaskPriorityAiEntry>[
+          TaskPriorityAiEntry(
+            todoId: 't1',
+            priorityBand: TaskPriorityAiBand.focus,
+            semanticAdjustment: 18,
+            reason: 'This can wait until later today.',
+            suggestedAction: TaskPrioritySuggestionKind.defer,
+            confidence: TaskPriorityAiConfidence.high,
+          ),
+        ],
+      ),
+    );
+
     await tester.pumpWidget(
       wrapWithI18n(
         MaterialApp(
           home: Scaffold(
             body: TaskHubBanner(
-              summary: summary,
-              onOpenTodo: (todo) async {
-                openedTodoIds.add(todo.id);
+              snapshot: snapshot,
+              onQuickAction: (entry, action) async {
+                tappedAction = action;
               },
             ),
           ),
@@ -249,180 +212,18 @@ void main() {
       ),
     );
 
-    await tester.tap(find.byKey(const ValueKey('task_hub_banner')));
-    await tester.pumpAndSettle();
+    await tester
+        .tap(find.byKey(const ValueKey('task_hub_banner_primary_action')));
+    await tester.pump();
 
-    final scheduledItem =
-        find.byKey(const ValueKey('task_hub_banner_item_scheduled'));
-    await tester.ensureVisible(scheduledItem);
-    await tester.tap(scheduledItem);
-    await tester.pumpAndSettle();
-    final reviewItem =
-        find.byKey(const ValueKey('task_hub_banner_item_review'));
-    await tester.ensureVisible(reviewItem);
-    await tester.tap(reviewItem);
-    await tester.pumpAndSettle();
-    final unscheduledItem =
-        find.byKey(const ValueKey('task_hub_banner_item_unscheduled'));
-    await tester.ensureVisible(unscheduledItem);
-    await tester.tap(unscheduledItem);
-    await tester.pumpAndSettle();
-
-    expect(openedTodoIds, <String>['scheduled', 'review', 'unscheduled']);
+    expect(tappedAction, TaskHubQuickAction.later);
   });
 
-  testWidgets('expanded merged unscheduled section keeps review done action',
+  testWidgets('banner shows AI upgrade hint when enhancement is unavailable',
       (tester) async {
-    final now = DateTime(2026, 2, 24, 12);
-    final summary = TaskHubSummary.fromTodos(
-      <Todo>[
-        todo(
-          id: 'review',
-          title: 'Needs review',
-          updatedAtMs: 1,
-          reviewStage: 0,
-          nextReviewAtMs: now
-              .subtract(const Duration(hours: 1))
-              .toUtc()
-              .millisecondsSinceEpoch,
-        ),
-        todo(
-          id: 'unscheduled',
-          title: 'Backlog',
-          updatedAtMs: 2,
-        ),
-      ],
-      nowLocal: now,
-    );
-
-    final calls = <(String todoId, TaskHubQuickAction action)>[];
-    await tester.pumpWidget(
-      wrapWithI18n(
-        MaterialApp(
-          home: Scaffold(
-            body: TaskHubBanner(
-              summary: summary,
-              onQuickAction: (todo, action) async {
-                calls.add((todo.id, action));
-              },
-            ),
-          ),
-        ),
-      ),
-    );
-
-    await tester.tap(find.byKey(const ValueKey('task_hub_banner')));
-    await tester.pumpAndSettle();
-
-    expect(
-      find.byKey(const ValueKey('task_hub_banner_section_unscheduled_review')),
-      findsOneWidget,
-    );
-    expect(
-      find.byKey(const ValueKey('task_hub_banner_section_unscheduled_plain')),
-      findsOneWidget,
-    );
-    expect(find.text('Unscheduled'), findsOneWidget);
-
-    await tester.tap(find.byKey(const ValueKey('task_hub_quick_review_done')));
-    await tester.pumpAndSettle();
-
-    expect(calls.length, 1);
-    expect(calls.first.$1, 'review');
-    expect(calls.first.$2, TaskHubQuickAction.done);
-  });
-
-  testWidgets('due-review quick buttons keep consistent height',
-      (tester) async {
-    addTearDown(() => tester.binding.setSurfaceSize(null));
-    await tester.binding.setSurfaceSize(const Size(420, 600));
-
-    final now = DateTime(2026, 2, 24, 12);
-    final summary = TaskHubSummary.fromTodos(
-      <Todo>[
-        todo(
-          id: 'review',
-          title: 'Needs review',
-          updatedAtMs: 1,
-          reviewStage: 0,
-          nextReviewAtMs: now
-              .subtract(const Duration(hours: 1))
-              .toUtc()
-              .millisecondsSinceEpoch,
-        ),
-      ],
-      nowLocal: now,
-    );
-
-    await tester.pumpWidget(
-      wrapWithI18n(
-        MaterialApp(
-          theme: ThemeData(
-            useMaterial3: true,
-            platform: TargetPlatform.macOS,
-          ),
-          home: MediaQuery(
-            data: const MediaQueryData(
-              size: Size(420, 600),
-              textScaler: TextScaler.linear(1.4),
-            ),
-            child: Scaffold(
-              body: TaskHubBanner(summary: summary),
-            ),
-          ),
-        ),
-      ),
-    );
-
-    await tester.tap(find.byKey(const ValueKey('task_hub_banner')));
-    await tester.pumpAndSettle();
-
-    final todayButton =
-        find.byKey(const ValueKey('task_hub_quick_review_today'));
-    final laterButton =
-        find.byKey(const ValueKey('task_hub_quick_review_later'));
-    final doneButton = find.byKey(const ValueKey('task_hub_quick_review_done'));
-    final moreButton = find.byKey(const ValueKey('task_hub_quick_review_more'));
-
-    final todayHeight = tester.getSize(todayButton).height;
-    final laterHeight = tester.getSize(laterButton).height;
-    final doneHeight = tester.getSize(doneButton).height;
-    final moreHeight = tester.getSize(moreButton).height;
-
-    expect(todayHeight, equals(laterHeight));
-    expect(todayHeight, equals(doneHeight));
-    expect(todayHeight, equals(moreHeight));
-  });
-
-  testWidgets('expanded list keeps view-all visible on small screens',
-      (tester) async {
-    addTearDown(() => tester.binding.setSurfaceSize(null));
-    await tester.binding.setSurfaceSize(const Size(390, 540));
-
-    final now = DateTime(2026, 2, 24, 12);
-    final summary = TaskHubSummary.fromTodos(
-      <Todo>[
-        for (var i = 0; i < 4; i++)
-          todo(
-            id: 'due_$i',
-            title: 'Due item $i',
-            updatedAtMs: i + 1,
-            dueAtMs:
-                now.add(Duration(hours: i + 1)).toUtc().millisecondsSinceEpoch,
-          ),
-        for (var i = 0; i < 4; i++)
-          todo(
-            id: 'review_$i',
-            title: 'Review item $i',
-            updatedAtMs: i + 100,
-            reviewStage: 0,
-            nextReviewAtMs: now
-                .subtract(Duration(minutes: i + 1))
-                .toUtc()
-                .millisecondsSinceEpoch,
-          ),
-      ],
-      nowLocal: now,
+    final snapshot = buildTaskPrioritySnapshot(
+      <Todo>[todo(id: 't1', title: 'Schedule next week', updatedAtMs: 10)],
+      nowLocal: DateTime(2026, 3, 13, 10, 0),
     );
 
     await tester.pumpWidget(
@@ -430,21 +231,18 @@ void main() {
         MaterialApp(
           home: Scaffold(
             body: TaskHubBanner(
-              summary: summary,
-              onViewAll: () {},
+              snapshot: snapshot,
+              showAiUpgradeHint: true,
             ),
           ),
         ),
       ),
     );
 
-    await tester.tap(find.byKey(const ValueKey('task_hub_banner')));
-    await tester.pumpAndSettle();
-
-    final viewAllButton = find.byKey(const ValueKey('task_hub_view_all'));
-    expect(viewAllButton, findsOneWidget);
-
-    final viewAllBottom = tester.getRect(viewAllButton).bottom;
-    expect(viewAllBottom <= 540, isTrue);
+    expect(
+      find.text(
+          'Connect Cloud or BYOK to unlock smarter priority suggestions.'),
+      findsOneWidget,
+    );
   });
 }

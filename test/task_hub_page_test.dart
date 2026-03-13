@@ -7,32 +7,24 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:secondloop/core/backend/app_backend.dart';
 import 'package:secondloop/core/session/session_scope.dart';
 import 'package:secondloop/features/actions/task_hub/task_hub_page.dart';
-import 'package:secondloop/features/actions/todo/todo_detail_page.dart';
 import 'package:secondloop/src/rust/db.dart';
 
 import 'test_backend.dart';
 import 'test_i18n.dart';
 
 void main() {
-  testWidgets('task hub page groups todos by urgency sections', (tester) async {
+  testWidgets('task hub shows focus scheduled decide and done sections',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
     final now = DateTime.now();
-    final dayEndCandidate = now.add(const Duration(minutes: 1));
-    final dayEndMinutes = dayEndCandidate.day == now.day
-        ? dayEndCandidate.hour * 60 + dayEndCandidate.minute
-        : (23 * 60 + 59);
-    SharedPreferences.setMockInitialValues({
-      'actions.review.day_end_minutes_v1': dayEndMinutes,
-    });
-
+    final tomorrowNoon = DateTime(now.year, now.month, now.day + 1, 12);
     final backend = _TaskHubBackend(
       todos: <Todo>[
-        Todo(
-          id: 'due',
-          title: 'Due today',
-          dueAtMs: DateTime(now.year, now.month, now.day, 14)
-              .toUtc()
-              .millisecondsSinceEpoch,
-          status: 'open',
+        const Todo(
+          id: 'focus',
+          title: 'Fix prod issue',
+          dueAtMs: null,
+          status: 'in_progress',
           sourceEntryId: null,
           createdAtMs: 0,
           updatedAtMs: 10,
@@ -41,13 +33,25 @@ void main() {
           lastReviewAtMs: null,
         ),
         Todo(
+          id: 'scheduled',
+          title: 'Draft roadmap',
+          dueAtMs: tomorrowNoon.toUtc().millisecondsSinceEpoch,
+          status: 'open',
+          sourceEntryId: null,
+          createdAtMs: 0,
+          updatedAtMs: 20,
+          reviewStage: null,
+          nextReviewAtMs: null,
+          lastReviewAtMs: null,
+        ),
+        Todo(
           id: 'review',
-          title: 'Needs review',
+          title: 'Review follow-up',
           dueAtMs: null,
           status: 'inbox',
           sourceEntryId: null,
           createdAtMs: 0,
-          updatedAtMs: 20,
+          updatedAtMs: 30,
           reviewStage: 0,
           nextReviewAtMs: now
               .subtract(const Duration(hours: 1))
@@ -56,20 +60,8 @@ void main() {
           lastReviewAtMs: null,
         ),
         const Todo(
-          id: 'unscheduled',
-          title: 'Backlog idea',
-          dueAtMs: null,
-          status: 'open',
-          sourceEntryId: null,
-          createdAtMs: 0,
-          updatedAtMs: 30,
-          reviewStage: null,
-          nextReviewAtMs: null,
-          lastReviewAtMs: null,
-        ),
-        const Todo(
           id: 'done',
-          title: 'Finished task',
+          title: 'Shipped',
           dueAtMs: null,
           status: 'done',
           sourceEntryId: null,
@@ -82,65 +74,71 @@ void main() {
       ],
     );
 
-    await tester.pumpWidget(
-      wrapWithI18n(
-        AppBackendScope(
-          backend: backend,
-          child: SessionScope(
-            sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
-            lock: () {},
-            child: const MaterialApp(home: TaskHubPage()),
-          ),
-        ),
-      ),
-    );
+    await tester.pumpWidget(_wrap(backend));
     await tester.pumpAndSettle();
 
     expect(find.byKey(const ValueKey('task_hub_page')), findsOneWidget);
+    expect(find.byKey(const ValueKey('task_hub_page_section_focus')),
+        findsOneWidget);
     expect(find.byKey(const ValueKey('task_hub_page_section_scheduled')),
         findsOneWidget);
-    expect(
-        find.byKey(const ValueKey('task_hub_page_section_unscheduled_merged')),
+    expect(find.byKey(const ValueKey('task_hub_page_section_decide')),
         findsOneWidget);
-    final reviewTodo = backend.current('review');
-    final expectDueReviewSection = reviewTodo.reviewStage != null &&
-        reviewTodo.nextReviewAtMs != null &&
-        reviewTodo.nextReviewAtMs! <= now.toUtc().millisecondsSinceEpoch;
-    final dueReviewSectionFinder =
-        find.byKey(const ValueKey('task_hub_page_section_unscheduled_review'));
     expect(
-      dueReviewSectionFinder,
-      expectDueReviewSection ? findsOneWidget : findsNothing,
-    );
-    expect(
-        find.byKey(const ValueKey('task_hub_page_section_unscheduled_plain')),
+        find.byKey(const ValueKey('task_hub_page_item_focus')), findsOneWidget);
+    expect(find.byKey(const ValueKey('task_hub_page_item_scheduled')),
         findsOneWidget);
-    expect(find.text('Unscheduled'), findsOneWidget);
-
+    expect(find.byKey(const ValueKey('task_hub_page_item_review')),
+        findsOneWidget);
     await tester.scrollUntilVisible(
       find.byKey(const ValueKey('task_hub_page_section_done')),
       300,
       scrollable: find.byType(Scrollable).first,
     );
     await tester.pumpAndSettle();
-
     expect(find.byKey(const ValueKey('task_hub_page_section_done')),
-        findsOneWidget);
-
-    expect(
-        find.byKey(const ValueKey('task_hub_page_item_due')), findsOneWidget);
-    expect(find.byKey(const ValueKey('task_hub_page_item_review')),
-        findsOneWidget);
-    expect(find.byKey(const ValueKey('task_hub_page_item_unscheduled')),
         findsOneWidget);
     expect(
         find.byKey(const ValueKey('task_hub_page_item_done')), findsOneWidget);
   });
 
-  testWidgets('task hub page loads done todos in batches on demand',
+  testWidgets('task hub quick action failure shows error snackbar',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
+    final now = DateTime.now();
+    final overdueAt = DateTime(now.year, now.month, now.day)
+        .subtract(const Duration(hours: 1));
+    final backend = _TaskHubBackend(
+      todos: <Todo>[
+        Todo(
+          id: 'focus',
+          title: 'Fix prod issue',
+          dueAtMs: overdueAt.toUtc().millisecondsSinceEpoch,
+          status: 'open',
+          sourceEntryId: null,
+          createdAtMs: 0,
+          updatedAtMs: 10,
+          reviewStage: null,
+          nextReviewAtMs: null,
+          lastReviewAtMs: null,
+        ),
+      ],
+      failUpsert: true,
+    );
 
+    await tester.pumpWidget(_wrap(backend));
+    await tester.pumpAndSettle();
+
+    await tester.tap(
+      find.byKey(const ValueKey('task_hub_page_quick_focus_today')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('Save failed'), findsOneWidget);
+  });
+
+  testWidgets('task hub loads done todos in batches on demand', (tester) async {
+    SharedPreferences.setMockInitialValues({});
     final backend = _TaskHubBackend(
       todos: <Todo>[
         for (var i = 0; i < 25; i++)
@@ -159,194 +157,54 @@ void main() {
       ],
     );
 
-    await tester.pumpWidget(
-      wrapWithI18n(
-        AppBackendScope(
-          backend: backend,
-          child: SessionScope(
-            sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
-            lock: () {},
-            child: const MaterialApp(home: TaskHubPage()),
-          ),
-        ),
-      ),
-    );
+    await tester.pumpWidget(_wrap(backend));
     await tester.pumpAndSettle();
 
+    expect(find.byKey(const ValueKey('task_hub_page_done_load_more')),
+        findsOneWidget);
     expect(
-      find.byKey(const ValueKey('task_hub_page_done_load_more')),
-      findsOneWidget,
-    );
-    expect(
-      find.byKey(const ValueKey('task_hub_page_item_done-0')),
-      findsNothing,
-    );
+        find.byKey(const ValueKey('task_hub_page_item_done-0')), findsNothing);
 
-    await tester.ensureVisible(
+    await tester.scrollUntilVisible(
       find.byKey(const ValueKey('task_hub_page_done_load_more')),
+      300,
+      scrollable: find.byType(Scrollable).first,
     );
     await tester.pumpAndSettle();
     await tester
         .tap(find.byKey(const ValueKey('task_hub_page_done_load_more')));
     await tester.pumpAndSettle();
 
-    expect(
-      find.byKey(const ValueKey('task_hub_page_item_done-0')),
-      findsOneWidget,
-    );
-    expect(
-      find.byKey(const ValueKey('task_hub_page_done_load_more')),
-      findsNothing,
-    );
-  });
-
-  testWidgets('task hub page quick action today updates backend',
-      (tester) async {
-    SharedPreferences.setMockInitialValues({});
-
-    final backend = _TaskHubBackend(
-      todos: const <Todo>[
-        Todo(
-          id: 'todo-1',
-          title: 'Task 1',
-          dueAtMs: null,
-          status: 'open',
-          sourceEntryId: null,
-          createdAtMs: 0,
-          updatedAtMs: 0,
-          reviewStage: null,
-          nextReviewAtMs: null,
-          lastReviewAtMs: null,
-        ),
-      ],
-    );
-
-    await tester.pumpWidget(
-      wrapWithI18n(
-        AppBackendScope(
-          backend: backend,
-          child: SessionScope(
-            sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
-            lock: () {},
-            child: const MaterialApp(home: TaskHubPage()),
-          ),
-        ),
-      ),
-    );
-    await tester.pumpAndSettle();
-
-    final todayQuickAction =
-        find.byKey(const ValueKey('task_hub_page_quick_todo-1_today'));
-    final moreQuickAction =
-        find.byKey(const ValueKey('task_hub_page_quick_todo-1_more'));
-    expect(todayQuickAction, findsOneWidget);
-    expect(moreQuickAction, findsOneWidget);
-    expect(tester.getSize(todayQuickAction).height, greaterThanOrEqualTo(40));
-    expect(tester.getSize(moreQuickAction).height, greaterThanOrEqualTo(40));
-
-    await tester.tap(todayQuickAction);
-    await tester.pumpAndSettle();
-
-    expect(backend.current('todo-1').status, 'open');
-    expect(backend.current('todo-1').dueAtMs, isNotNull);
-  });
-
-  testWidgets('task hub page done section exposes reopen quick action',
-      (tester) async {
-    SharedPreferences.setMockInitialValues({});
-
-    final backend = _TaskHubBackend(
-      todos: const <Todo>[
-        Todo(
-          id: 'done-1',
-          title: 'Finished task',
-          dueAtMs: null,
-          status: 'done',
-          sourceEntryId: null,
-          createdAtMs: 0,
-          updatedAtMs: 0,
-          reviewStage: null,
-          nextReviewAtMs: null,
-          lastReviewAtMs: null,
-        ),
-      ],
-    );
-
-    await tester.pumpWidget(
-      wrapWithI18n(
-        AppBackendScope(
-          backend: backend,
-          child: SessionScope(
-            sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
-            lock: () {},
-            child: const MaterialApp(home: TaskHubPage()),
-          ),
-        ),
-      ),
-    );
-    await tester.pumpAndSettle();
-
-    await tester.tap(
-      find.byKey(const ValueKey('task_hub_page_quick_done-1_reopen')),
-    );
-    await tester.pumpAndSettle();
-
-    expect(backend.current('done-1').status, 'open');
-  });
-
-  testWidgets('task hub page task row opens todo detail page', (tester) async {
-    SharedPreferences.setMockInitialValues({});
-
-    final backend = _TaskHubBackend(
-      todos: const <Todo>[
-        Todo(
-          id: 'todo-open',
-          title: 'Open detail',
-          dueAtMs: null,
-          status: 'open',
-          sourceEntryId: null,
-          createdAtMs: 0,
-          updatedAtMs: 0,
-          reviewStage: null,
-          nextReviewAtMs: null,
-          lastReviewAtMs: null,
-        ),
-      ],
-    );
-
-    await tester.pumpWidget(
-      wrapWithI18n(
-        AppBackendScope(
-          backend: backend,
-          child: SessionScope(
-            sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
-            lock: () {},
-            child: const MaterialApp(home: TaskHubPage()),
-          ),
-        ),
-      ),
-    );
-    await tester.pumpAndSettle();
-
-    await tester
-        .tap(find.byKey(const ValueKey('task_hub_page_item_todo-open')));
-    await tester.pumpAndSettle();
-
-    expect(find.byType(TodoDetailPage), findsOneWidget);
+    expect(find.byKey(const ValueKey('task_hub_page_item_done-0')),
+        findsOneWidget);
   });
 }
 
+Widget _wrap(AppBackend backend) {
+  return wrapWithI18n(
+    MaterialApp(
+      home: AppBackendScope(
+        backend: backend,
+        child: SessionScope(
+          sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+          lock: () {},
+          child: const TaskHubPage(),
+        ),
+      ),
+    ),
+  );
+}
+
 final class _TaskHubBackend extends TestAppBackend {
-  _TaskHubBackend({required List<Todo> todos})
-      : _todosById = {for (final todo in todos) todo.id: todo};
+  _TaskHubBackend({required List<Todo> todos, this.failUpsert = false})
+      : _todos = {for (final todo in todos) todo.id: todo};
 
-  final Map<String, Todo> _todosById;
-
-  Todo current(String id) => _todosById[id]!;
+  final Map<String, Todo> _todos;
+  final bool failUpsert;
 
   @override
   Future<List<Todo>> listTodos(Uint8List key) async =>
-      _todosById.values.toList(growable: false);
+      _todos.values.toList(growable: false);
 
   @override
   Future<Todo> upsertTodo(
@@ -360,20 +218,22 @@ final class _TaskHubBackend extends TestAppBackend {
     int? nextReviewAtMs,
     int? lastReviewAtMs,
   }) async {
-    final nowMs = DateTime.now().toUtc().millisecondsSinceEpoch;
+    if (failUpsert) {
+      throw StateError('apply failed');
+    }
     final updated = Todo(
       id: id,
       title: title,
       dueAtMs: dueAtMs,
       status: status,
       sourceEntryId: sourceEntryId,
-      createdAtMs: _todosById[id]?.createdAtMs ?? nowMs,
-      updatedAtMs: nowMs,
+      createdAtMs: _todos[id]?.createdAtMs ?? 0,
+      updatedAtMs: DateTime.now().toUtc().millisecondsSinceEpoch,
       reviewStage: reviewStage,
       nextReviewAtMs: nextReviewAtMs,
       lastReviewAtMs: lastReviewAtMs,
     );
-    _todosById[id] = updated;
+    _todos[id] = updated;
     return updated;
   }
 
@@ -384,7 +244,7 @@ final class _TaskHubBackend extends TestAppBackend {
     required String newStatus,
     String? sourceMessageId,
   }) async {
-    final existing = _todosById[todoId]!;
+    final existing = _todos[todoId]!;
     final updated = Todo(
       id: existing.id,
       title: existing.title,
@@ -397,7 +257,7 @@ final class _TaskHubBackend extends TestAppBackend {
       nextReviewAtMs: existing.nextReviewAtMs,
       lastReviewAtMs: existing.lastReviewAtMs,
     );
-    _todosById[todoId] = updated;
+    _todos[todoId] = updated;
     return updated;
   }
 }

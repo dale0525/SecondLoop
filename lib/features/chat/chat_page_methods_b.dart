@@ -342,84 +342,38 @@ extension _ChatPageStateMethodsB on _ChatPageState {
     });
   }
 
-  Future<TaskHubSummary> _loadTaskHubSummary() async {
-    final backend = AppBackendScope.of(context);
-    final sessionKey = SessionScope.of(context).sessionKey;
-    final syncEngine = SyncEngineScope.maybeOf(context);
-    late final ActionsSettings settings;
+  Future<TaskPriorityAiService?> _resolveTaskPriorityAiService() async {
     try {
-      settings = await ActionsSettingsStore.load();
-    } catch (_) {
-      settings = const ActionsSettings(
-        morningTime: TimeOfDay(hour: 8, minute: 0),
-        dayEndTime: TimeOfDay(hour: 21, minute: 0),
-        weeklyReviewTime: TimeOfDay(hour: 21, minute: 0),
+      final backend = AppBackendScope.of(context);
+      final sessionKey = SessionScope.of(context).sessionKey;
+      final subscriptionStatus = SubscriptionScope.maybeOf(context)?.status ??
+          SubscriptionStatus.unknown;
+      final cloudAuthScope = CloudAuthScope.maybeOf(context);
+      final gatewayConfig =
+          cloudAuthScope?.gatewayConfig ?? CloudGatewayConfig.defaultConfig;
+      final idToken = await readCloudCapabilityIdToken(
+        cloudAuthScope?.controller,
+        mode: CloudCapabilityAuthMode.background,
       );
-    }
-
-    final nowLocal = DateTime.now();
-    late final List<Todo> todos;
-    try {
-      todos = await backend.listTodos(sessionKey);
-    } catch (_) {
-      return const TaskHubSummary.empty();
-    }
-
-    final normalizedTodos = <Todo>[];
-    var didMutate = false;
-
-    for (final todo in todos) {
-      final nextMs = todo.nextReviewAtMs;
-      final stage = todo.reviewStage;
-      if (nextMs == null || stage == null) {
-        normalizedTodos.add(todo);
-        continue;
-      }
-
-      final scheduledLocal =
-          DateTime.fromMillisecondsSinceEpoch(nextMs, isUtc: true).toLocal();
-      final rolled = ReviewBackoff.rollForwardUntilDueOrFuture(
-        stage: stage,
-        scheduledAtLocal: scheduledLocal,
-        nowLocal: nowLocal,
-        settings: settings,
+      final route = await resolveTaskPriorityAiRoute(
+        backend,
+        Uint8List.fromList(sessionKey),
+        cloudIdToken: idToken,
+        cloudGatewayBaseUrl: gatewayConfig.baseUrl,
+        subscriptionStatus: subscriptionStatus,
       );
-      if (rolled.stage != stage || rolled.nextReviewAtLocal != scheduledLocal) {
-        try {
-          final updated = await backend.upsertTodo(
-            sessionKey,
-            id: todo.id,
-            title: todo.title,
-            dueAtMs: todo.dueAtMs,
-            status: todo.status,
-            sourceEntryId: todo.sourceEntryId,
-            reviewStage: rolled.stage,
-            nextReviewAtMs:
-                rolled.nextReviewAtLocal.toUtc().millisecondsSinceEpoch,
-            lastReviewAtMs: todo.lastReviewAtMs,
-          );
-          normalizedTodos.add(updated);
-          didMutate = true;
-          continue;
-        } catch (_) {
-          normalizedTodos.add(todo);
-          continue;
-        }
-      }
-
-      normalizedTodos.add(todo);
+      if (route == AskAiRouteKind.needsSetup) return null;
+      return BackendTaskPriorityAiService(
+        backend: backend,
+        sessionKey: sessionKey,
+        route: route,
+        gatewayBaseUrl: gatewayConfig.baseUrl,
+        idToken: (idToken ?? '').trim(),
+        modelName: gatewayConfig.modelName,
+      );
+    } catch (_) {
+      return null;
     }
-
-    if (didMutate) {
-      syncEngine?.notifyLocalMutation();
-    }
-
-    return TaskHubSummary.fromTodos(
-      normalizedTodos,
-      nowLocal: nowLocal,
-      scheduledPreviewLimit: 4,
-      unscheduledPreviewLimit: 4,
-    );
   }
 
   Future<List<TodoThreadMatch>> _resolveTodoSemanticMatchesForSendFlow(
@@ -600,12 +554,13 @@ extension _ChatPageStateMethodsB on _ChatPageState {
         _hasMoreMessages = true;
       }
       _messagesFuture = _loadMessages();
-      _taskHubSummaryFuture = _loadTaskHubSummary();
       _messageSupplementFuture = null;
       _messageSupplementCacheKey = '';
       _attachmentsFuturesByMessageId.clear();
       _attachmentEnrichmentFuturesBySha256.clear();
     });
+    _taskPriorityStore?.markDirty();
+    unawaited(_taskPriorityStore?.refresh(force: true) ?? Future<void>.value());
   }
 
   Future<void> _send() async {

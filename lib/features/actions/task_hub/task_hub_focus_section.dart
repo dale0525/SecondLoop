@@ -1,0 +1,75 @@
+import 'package:flutter/material.dart';
+
+import '../../../i18n/strings.g.dart';
+import '../../../ui/sl_surface.dart';
+import '../../../ui/sl_tokens.dart';
+import 'task_hub_page_sections.dart';
+import 'task_hub_quick_actions.dart';
+import 'task_priority_feedback_store.dart';
+import 'task_priority_models.dart';
+
+class TaskHubFocusSection extends StatelessWidget {
+  const TaskHubFocusSection({
+    required this.entries,
+    required this.onOpenTodo,
+    required this.onQuickAction,
+    this.onFeedback,
+    super.key,
+  });
+
+  final List<TaskPriorityEntry> entries;
+  final Future<void> Function(
+      TaskPriorityEntry entry, TaskHubQuickAction action) onQuickAction;
+  final Future<void> Function(TaskPriorityEntry entry) onOpenTodo;
+  final Future<void> Function(
+    TaskPriorityEntry entry,
+    TaskPriorityFeedbackKind feedback,
+  )? onFeedback;
+
+  @override
+  Widget build(BuildContext context) {
+    if (entries.isEmpty) return const SizedBox.shrink();
+    final theme = Theme.of(context);
+    final tokens = SlTokens.of(context);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: SlSurface(
+        key: const ValueKey('task_hub_page_section_focus'),
+        padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              context.t.actions.taskHub.focusSection,
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              context.t.actions.taskHub.focusHint,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(height: 10),
+            for (var i = 0; i < entries.length; i++) ...[
+              TaskHubEntryCard(
+                entry: entries[i],
+                emphasize: i == 0,
+                onOpenTodo: () => onOpenTodo(entries[i]),
+                onQuickAction: (action) => onQuickAction(entries[i], action),
+                onFeedback: onFeedback == null
+                    ? null
+                    : (feedback) => onFeedback!(entries[i], feedback),
+              ),
+              if (i != entries.length - 1)
+                Divider(
+                    color: tokens.borderSubtle.withOpacity(0.9), height: 20),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}

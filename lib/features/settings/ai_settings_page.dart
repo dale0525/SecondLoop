@@ -9,6 +9,7 @@ import '../../core/ai/embeddings_data_consent_prefs.dart';
 import '../../core/ai/embeddings_source_prefs.dart';
 import '../../core/ai/media_capability_wifi_prefs.dart';
 import '../../core/ai/semantic_parse_data_consent_prefs.dart';
+import '../../core/ai/task_priority_ai_enhancement_prefs.dart';
 import '../../core/ai/media_source_prefs.dart';
 import '../../core/backend/app_backend.dart';
 import '../../core/cloud/cloud_auth_scope.dart';
@@ -85,6 +86,8 @@ class _AiSettingsPageState extends State<AiSettingsPage> {
   bool _cloudEmbeddingsConfigured = false;
   bool? _semanticParseEnabled;
   bool _semanticParseConfigured = false;
+  bool? _taskPriorityAiEnabled;
+  bool _taskPriorityAiConfigured = false;
   bool _byokConfigured = false;
   int _automationLoadGeneration = 0;
 
@@ -375,6 +378,8 @@ class _AiSettingsPageState extends State<AiSettingsPage> {
         prefs.getBool(EmbeddingsDataConsentPrefs.prefsKey);
     final semanticParseEnabled =
         prefs.getBool(SemanticParseDataConsentPrefs.prefsKey);
+    final taskPriorityAiEnabled =
+        prefs.getBool(TaskPriorityAiEnhancementPrefs.prefsKey);
 
     var byokConfigured = false;
     if (backend != null && sessionKey != null) {
@@ -391,6 +396,8 @@ class _AiSettingsPageState extends State<AiSettingsPage> {
       _cloudEmbeddingsConfigured = cloudEmbeddingsEnabled != null;
       _semanticParseEnabled = semanticParseEnabled ?? false;
       _semanticParseConfigured = semanticParseEnabled != null;
+      _taskPriorityAiEnabled = taskPriorityAiEnabled ?? true;
+      _taskPriorityAiConfigured = taskPriorityAiEnabled != null;
       _byokConfigured = byokConfigured;
       _automationLoading = false;
     });
@@ -475,6 +482,23 @@ class _AiSettingsPageState extends State<AiSettingsPage> {
     try {
       final prefs = await SharedPreferences.getInstance();
       await SemanticParseDataConsentPrefs.setEnabled(prefs, enabled);
+      if (!mounted) return;
+      await _reloadAutomationState(forceLoading: false);
+    } finally {
+      if (mounted) {
+        setState(() => _automationSaving = false);
+      }
+    }
+  }
+
+  Future<void> _setTaskPriorityAiEnabled(bool enabled) async {
+    if (_automationSaving || (_taskPriorityAiEnabled ?? true) == enabled) {
+      return;
+    }
+
+    setState(() => _automationSaving = true);
+    try {
+      await TaskPriorityAiEnhancementPrefs.write(enabled);
       if (!mounted) return;
       await _reloadAutomationState(forceLoading: false);
     } finally {
