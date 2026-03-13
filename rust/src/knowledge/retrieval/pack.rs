@@ -1,4 +1,5 @@
 use crate::knowledge::embedding_batch::estimate_tokens;
+use crate::knowledge::session_digest;
 use crate::knowledge::{KnowledgeContextBlock, KnowledgeRole, KnowledgeSourceKind};
 
 use super::query::NormalizedRetrievalRequest;
@@ -26,32 +27,55 @@ fn truncate_to_token_budget(text: &str, token_budget: usize) -> String {
     }
 }
 
-fn is_planning_or_summary_query(query: &str) -> bool {
-    let normalized = query.trim().to_lowercase();
-    normalized.contains("plan")
-        || normalized.contains("agenda")
-        || normalized.contains("schedule")
-        || normalized.contains("week")
-        || normalized.contains("summary")
-        || normalized.contains("summarize")
-        || query.contains("计划")
-        || query.contains("安排")
-        || query.contains("总结")
-        || query.contains("整理")
-}
-
 fn candidate_pack_priority(
     request: &NormalizedRetrievalRequest,
     candidate: &KnowledgeCandidate,
 ) -> i32 {
-    if !is_planning_or_summary_query(&request.query_text) {
-        return 0;
+    if session_digest::is_planning_or_summary_query(&request.query_text) {
+        return match (candidate.source_kind(), candidate.role) {
+            (KnowledgeSourceKind::Summary, _) | (_, KnowledgeRole::Summary) => 2,
+            (_, KnowledgeRole::Evidence) => 1,
+            (_, KnowledgeRole::Metadata) => -1,
+            _ => 0,
+        };
     }
-    match (candidate.source_kind(), candidate.role) {
-        (KnowledgeSourceKind::Summary, _) | (_, KnowledgeRole::Summary) => 2,
-        (_, KnowledgeRole::Evidence) => -1,
-        _ => 0,
+    if session_digest::is_detail_or_factual_query(&request.query_text) {
+        return match candidate.role {
+            KnowledgeRole::Evidence => 1,
+            KnowledgeRole::Summary => -1,
+            _ => 0,
+        };
     }
+    0
+}
+
+fn maybe_push_prebuilt_block(
+    out: &mut Vec<KnowledgeContextBlock>,
+    used_tokens: &mut usize,
+    token_budget: usize,
+    block: KnowledgeContextBlock,
+) {
+    let mut rendered_text = block.rendered_text.clone();
+    let mut block_tokens = estimate_tokens(&rendered_text);
+    if block_tokens == 0 {
+        return;
+    }
+    if *used_tokens + block_tokens > token_budget {
+        if out.is_empty() {
+            rendered_text = truncate_to_token_budget(&rendered_text, token_budget);
+            block_tokens = estimate_tokens(&rendered_text);
+        } else {
+            return;
+        }
+    }
+    if *used_tokens + block_tokens > token_budget {
+        return;
+    }
+    *used_tokens += block_tokens;
+    out.push(KnowledgeContextBlock {
+        rendered_text,
+        ..block
+    });
 }
 
 pub(crate) fn pack_context_blocks(
@@ -71,6 +95,14 @@ pub(crate) fn pack_context_blocks(
                     .unwrap_or(std::cmp::Ordering::Equal)
             })
     });
+
+    if let Some(mut digest) = session_digest::build_digest_from_candidates(request, &ordered) {
+        let digest_budget = request.token_budget.min((request.token_budget / 2).max(24));
+        if estimate_tokens(&digest.rendered_text) > digest_budget {
+            digest.rendered_text = truncate_to_token_budget(&digest.rendered_text, digest_budget);
+        }
+        maybe_push_prebuilt_block(&mut out, &mut used_tokens, request.token_budget, digest);
+    }
 
     for candidate in &ordered {
         let body = if candidate.raw_text.trim().is_empty() {
@@ -108,7 +140,7 @@ pub(crate) fn pack_context_blocks(
                 };
                 block_tokens = estimate_tokens(&rendered_text);
             } else {
-                break;
+                continue;
             }
         }
         if used_tokens + block_tokens > request.token_budget {
@@ -132,7 +164,7 @@ pub(crate) fn pack_context_blocks(
 
 #[cfg(test)]
 mod tests {
-    use super::{candidate_pack_priority, is_planning_or_summary_query, truncate_to_token_budget};
+    use super::{candidate_pack_priority, truncate_to_token_budget};
     use crate::knowledge::models::GeneratedMemoryKind;
     use crate::knowledge::retrieval::{normalize_retrieval_request, KnowledgeCandidate};
     use crate::knowledge::{
@@ -156,7 +188,6 @@ mod tests {
 
     #[test]
     fn planning_queries_prioritize_summary_candidates() {
-        assert!(is_planning_or_summary_query("plan my week"));
         let request =
             normalize_retrieval_request("plan my week", None, None, Some(4), Some(64), None);
         let candidate = KnowledgeCandidate::from_document(
@@ -183,6 +214,39 @@ mod tests {
             0.1,
         );
         assert_eq!(candidate.layer, KnowledgeRetrievalLayer::Document);
+        assert!(candidate_pack_priority(&request, &candidate) > 0);
+    }
+
+    #[test]
+    fn detail_queries_prioritize_evidence_candidates() {
+        let request = normalize_retrieval_request(
+            "quote the exact decision",
+            None,
+            None,
+            Some(4),
+            Some(64),
+            None,
+        );
+        let candidate = KnowledgeCandidate::from_document(
+            &ContentKnowledgeDocument {
+                document_id: "message:decision".to_string(),
+                origin_type: KnowledgeOriginType::Message,
+                source_kind: KnowledgeSourceKind::RawText,
+                role: KnowledgeRole::Evidence,
+                language: None,
+                quality_score: 1.0,
+                created_at_ms: 0,
+                updated_at_ms: 0,
+                versions: KnowledgeVersionSet::current(),
+                anchors: KnowledgeAnchorSet::default(),
+                title: None,
+                summary: None,
+                raw_text: "Budget freeze decision".to_string(),
+                normalized_text: "Budget freeze decision".to_string(),
+            },
+            0.2,
+            0.1,
+        );
         assert!(candidate_pack_priority(&request, &candidate) > 0);
     }
 }

@@ -162,6 +162,26 @@ final class _KnowledgeBackend extends TestAppBackend
   }
 
   @override
+  Future<KnowledgeDebugStats> getKnowledgeDebugStats(Uint8List key) async {
+    return const KnowledgeDebugStats(
+      totalDocuments: 0,
+      generatedDocuments: 0,
+      sourceDocuments: 0,
+      summaryDocuments: 0,
+      preferenceDocuments: 0,
+      profileDocuments: 0,
+      eventDocuments: 0,
+      patternDocuments: 0,
+      usageStatDocuments: 0,
+      lastSynthesisAtMs: null,
+      lastRetrievedAtMs: null,
+      generatedMemoryRetrievalEnabled: true,
+      hotnessRerankEnabled: true,
+      sessionDigestEnabled: true,
+    );
+  }
+
+  @override
   Future<List<ContentKnowledgeDocument>> listKnowledgeDocuments(
     Uint8List key, {
     int limit = 100,
@@ -208,6 +228,26 @@ final class _PollingKnowledgeBackend extends TestAppBackend
       2 => _status('running', 2, 6, 5, currentStage: 'embed'),
       _ => _status('complete', 4, 10, 9),
     };
+  }
+
+  @override
+  Future<KnowledgeDebugStats> getKnowledgeDebugStats(Uint8List key) async {
+    return const KnowledgeDebugStats(
+      totalDocuments: 0,
+      generatedDocuments: 0,
+      sourceDocuments: 0,
+      summaryDocuments: 0,
+      preferenceDocuments: 0,
+      profileDocuments: 0,
+      eventDocuments: 0,
+      patternDocuments: 0,
+      usageStatDocuments: 0,
+      lastSynthesisAtMs: null,
+      lastRetrievedAtMs: null,
+      generatedMemoryRetrievalEnabled: true,
+      hotnessRerankEnabled: true,
+      sessionDigestEnabled: true,
+    );
   }
 
   @override

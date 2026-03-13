@@ -26,6 +26,9 @@ The core mental model is **One Timeline** (a single “Main Stream”): capture 
 ## ⭐ Highlights
 
 - 🧠 **Long-term memory, local-first**: your timeline stays on your device with encryption by default.
+- 🔥 **Hotness-aware recall**: recently and frequently reused memories get a small ranking boost when semantic matches are close.
+- 🧩 **Stable generated memories**: durable preferences, profile facts, events, and patterns are synthesized into local encrypted knowledge docs.
+- 📝 **Planning-friendly summaries**: planning/summary questions prefer compact session digests plus source evidence instead of many redundant snippets.
 - 🧲 **Ask AI with relevant context**: get answers grounded in your own notes, with streaming output.
 - 🗂️ **Simple filters when needed**: narrow what you are viewing without juggling chat threads.
 - 📥 **Capture from anywhere**: mobile share sheet + desktop global hotkey for quick capture.

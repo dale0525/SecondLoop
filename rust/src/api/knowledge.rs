@@ -13,6 +13,70 @@ fn key_from_bytes(bytes: Vec<u8>) -> Result<[u8; 32]> {
     Ok(key)
 }
 
+fn query_count(conn: &rusqlite::Connection, sql: &str) -> Result<i64> {
+    Ok(conn.query_row(sql, [], |row| row.get(0))?)
+}
+
+fn query_optional_i64(conn: &rusqlite::Connection, sql: &str) -> Result<Option<i64>> {
+    Ok(conn.query_row(sql, [], |row| row.get(0))?)
+}
+
+fn read_knowledge_debug_stats(
+    conn: &rusqlite::Connection,
+) -> Result<knowledge::KnowledgeDebugStats> {
+    let total_documents = query_count(conn, "SELECT COUNT(*) FROM knowledge_documents")?;
+    let generated_documents = query_count(
+        conn,
+        "SELECT COUNT(*) FROM knowledge_documents WHERE origin_type = 'generated'",
+    )?;
+    let summary_documents = query_count(
+        conn,
+        "SELECT COUNT(*) FROM knowledge_documents WHERE source_kind = 'summary'",
+    )?;
+    let preference_documents = query_count(
+        conn,
+        "SELECT COUNT(*) FROM knowledge_documents WHERE origin_type = 'generated' AND document_id LIKE 'generated:preference:%'",
+    )?;
+    let profile_documents = query_count(
+        conn,
+        "SELECT COUNT(*) FROM knowledge_documents WHERE origin_type = 'generated' AND document_id LIKE 'generated:profile:%'",
+    )?;
+    let event_documents = query_count(
+        conn,
+        "SELECT COUNT(*) FROM knowledge_documents WHERE origin_type = 'generated' AND document_id LIKE 'generated:event:%'",
+    )?;
+    let pattern_documents = query_count(
+        conn,
+        "SELECT COUNT(*) FROM knowledge_documents WHERE origin_type = 'generated' AND document_id LIKE 'generated:pattern:%'",
+    )?;
+    let usage_stat_documents = query_count(conn, "SELECT COUNT(*) FROM knowledge_document_usage")?;
+    let last_synthesis_at_ms = query_optional_i64(
+        conn,
+        "SELECT MAX(updated_at_ms) FROM knowledge_documents WHERE origin_type = 'generated'",
+    )?;
+    let last_retrieved_at_ms = query_optional_i64(
+        conn,
+        "SELECT MAX(last_retrieved_at_ms) FROM knowledge_document_usage",
+    )?;
+
+    Ok(knowledge::KnowledgeDebugStats {
+        total_documents,
+        generated_documents,
+        source_documents: total_documents.saturating_sub(generated_documents),
+        summary_documents,
+        preference_documents,
+        profile_documents,
+        event_documents,
+        pattern_documents,
+        usage_stat_documents,
+        last_synthesis_at_ms,
+        last_retrieved_at_ms,
+        generated_memory_retrieval_enabled: true,
+        hotness_rerank_enabled: true,
+        session_digest_enabled: true,
+    })
+}
+
 #[flutter_rust_bridge::frb]
 pub fn db_get_knowledge_index_status(
     app_dir: String,
@@ -48,6 +112,16 @@ pub fn db_cancel_knowledge_rebuild(app_dir: String, key: Vec<u8>) -> Result<()> 
     let key = key_from_bytes(key)?;
     let conn = db::open(Path::new(&app_dir))?;
     knowledge::cancel_knowledge_rebuild(&conn, &key)
+}
+
+#[flutter_rust_bridge::frb]
+pub fn db_get_knowledge_debug_stats(
+    app_dir: String,
+    key: Vec<u8>,
+) -> Result<knowledge::KnowledgeDebugStats> {
+    let _key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    read_knowledge_debug_stats(&conn)
 }
 
 #[flutter_rust_bridge::frb]

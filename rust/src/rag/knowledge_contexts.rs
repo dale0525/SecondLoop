@@ -6,20 +6,6 @@ use crate::message_citations::append_message_citation_if_missing;
 
 use super::Focus;
 
-fn is_planning_or_summary_query(question: &str) -> bool {
-    let normalized = question.trim().to_lowercase();
-    normalized.contains("plan")
-        || normalized.contains("agenda")
-        || normalized.contains("schedule")
-        || normalized.contains("week")
-        || normalized.contains("summary")
-        || normalized.contains("summarize")
-        || question.contains("计划")
-        || question.contains("安排")
-        || question.contains("总结")
-        || question.contains("整理")
-}
-
 fn collect_generated_preferred_contexts(
     conn: &Connection,
     key: &[u8; 32],
@@ -71,6 +57,39 @@ fn collect_generated_preferred_contexts(
     Ok(out)
 }
 
+fn rebalance_planning_contexts(
+    blocks: &mut Vec<knowledge::KnowledgeContextBlock>,
+    max_items: usize,
+) {
+    let visible_len = blocks.len().min(max_items.max(1));
+    if visible_len == 0 {
+        return;
+    }
+    if blocks
+        .iter()
+        .take(visible_len)
+        .any(|block| block.role == knowledge::KnowledgeRole::Evidence)
+    {
+        return;
+    }
+    let Some(evidence) = blocks
+        .iter()
+        .find(|block| block.role == knowledge::KnowledgeRole::Evidence)
+        .cloned()
+    else {
+        return;
+    };
+
+    let replace_index = (0..visible_len)
+        .rev()
+        .find(|index| {
+            let block = &blocks[*index];
+            !block.document_id.starts_with("generated:session-digest:")
+        })
+        .unwrap_or(visible_len - 1);
+    blocks.insert(replace_index, evidence);
+}
+
 pub(super) fn try_build_knowledge_contexts(
     conn: &Connection,
     key: &[u8; 32],
@@ -101,13 +120,30 @@ pub(super) fn try_build_knowledge_contexts(
         request.time_end_ms = Some(end_ms);
     }
 
-    let mut blocks = if is_planning_or_summary_query(question) {
+    let is_planning_query = knowledge::session_digest::is_planning_or_summary_query(question);
+    let mut blocks = if is_planning_query {
         collect_generated_preferred_contexts(conn, key, conversation_scope.as_deref(), top_k)?
     } else {
         Vec::new()
     };
     let mut retrieved = knowledge::retrieve_context_blocks(conn, key, &request)?;
     blocks.append(&mut retrieved);
+
+    let has_digest = blocks
+        .iter()
+        .any(|block| block.document_id.starts_with("generated:session-digest:"));
+    if !has_digest {
+        if let Some(digest) = knowledge::session_digest::build_digest_from_blocks(
+            question,
+            conversation_scope.as_deref(),
+            &blocks,
+        ) {
+            blocks.insert(0, digest);
+        }
+    }
+    if is_planning_query {
+        rebalance_planning_contexts(&mut blocks, top_k.max(1));
+    }
 
     let mut seen_document_ids = std::collections::HashSet::<String>::new();
     blocks.retain(|block| seen_document_ids.insert(block.document_id.clone()));

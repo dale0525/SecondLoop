@@ -132,6 +132,78 @@ class KnowledgeAnchorSet {
           sourceFilename == other.sourceFilename;
 }
 
+class KnowledgeDebugStats {
+  final PlatformInt64 totalDocuments;
+  final PlatformInt64 generatedDocuments;
+  final PlatformInt64 sourceDocuments;
+  final PlatformInt64 summaryDocuments;
+  final PlatformInt64 preferenceDocuments;
+  final PlatformInt64 profileDocuments;
+  final PlatformInt64 eventDocuments;
+  final PlatformInt64 patternDocuments;
+  final PlatformInt64 usageStatDocuments;
+  final PlatformInt64? lastSynthesisAtMs;
+  final PlatformInt64? lastRetrievedAtMs;
+  final bool generatedMemoryRetrievalEnabled;
+  final bool hotnessRerankEnabled;
+  final bool sessionDigestEnabled;
+
+  const KnowledgeDebugStats({
+    required this.totalDocuments,
+    required this.generatedDocuments,
+    required this.sourceDocuments,
+    required this.summaryDocuments,
+    required this.preferenceDocuments,
+    required this.profileDocuments,
+    required this.eventDocuments,
+    required this.patternDocuments,
+    required this.usageStatDocuments,
+    this.lastSynthesisAtMs,
+    this.lastRetrievedAtMs,
+    required this.generatedMemoryRetrievalEnabled,
+    required this.hotnessRerankEnabled,
+    required this.sessionDigestEnabled,
+  });
+
+  @override
+  int get hashCode =>
+      totalDocuments.hashCode ^
+      generatedDocuments.hashCode ^
+      sourceDocuments.hashCode ^
+      summaryDocuments.hashCode ^
+      preferenceDocuments.hashCode ^
+      profileDocuments.hashCode ^
+      eventDocuments.hashCode ^
+      patternDocuments.hashCode ^
+      usageStatDocuments.hashCode ^
+      lastSynthesisAtMs.hashCode ^
+      lastRetrievedAtMs.hashCode ^
+      generatedMemoryRetrievalEnabled.hashCode ^
+      hotnessRerankEnabled.hashCode ^
+      sessionDigestEnabled.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is KnowledgeDebugStats &&
+          runtimeType == other.runtimeType &&
+          totalDocuments == other.totalDocuments &&
+          generatedDocuments == other.generatedDocuments &&
+          sourceDocuments == other.sourceDocuments &&
+          summaryDocuments == other.summaryDocuments &&
+          preferenceDocuments == other.preferenceDocuments &&
+          profileDocuments == other.profileDocuments &&
+          eventDocuments == other.eventDocuments &&
+          patternDocuments == other.patternDocuments &&
+          usageStatDocuments == other.usageStatDocuments &&
+          lastSynthesisAtMs == other.lastSynthesisAtMs &&
+          lastRetrievedAtMs == other.lastRetrievedAtMs &&
+          generatedMemoryRetrievalEnabled ==
+              other.generatedMemoryRetrievalEnabled &&
+          hotnessRerankEnabled == other.hotnessRerankEnabled &&
+          sessionDigestEnabled == other.sessionDigestEnabled;
+}
+
 class KnowledgeIndexStatus {
   final String status;
   final bool rebuildRequired;

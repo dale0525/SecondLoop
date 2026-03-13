@@ -8,6 +8,13 @@ extension NativeAppBackendKnowledgeExtension on NativeAppBackend {
     return rust_knowledge.dbGetKnowledgeIndexStatus(appDir: appDir, key: key);
   }
 
+  Future<rust_knowledge_models.KnowledgeDebugStats> getKnowledgeDebugStats(
+    Uint8List key,
+  ) async {
+    final appDir = await _getAppDir();
+    return rust_knowledge.dbGetKnowledgeDebugStats(appDir: appDir, key: key);
+  }
+
   Future<void> requestKnowledgeRebuild(Uint8List key) async {
     final appDir = await _getAppDir();
     await rust_knowledge.dbRequestKnowledgeRebuild(appDir: appDir, key: key);

@@ -14,6 +14,7 @@ pub mod normalize;
 pub mod rebuild;
 pub mod retrieval;
 pub mod segment;
+pub mod session_digest;
 pub mod source_adapters;
 pub mod usage;
 
@@ -22,9 +23,9 @@ pub use index_jobs::{
     ensure_knowledge_rebuild_requested, process_pending_knowledge_index_jobs_active,
 };
 pub use models::{
-    ContentKnowledgeDocument, KnowledgeAnchorSet, KnowledgeContextBlock, KnowledgeIndexStatus,
-    KnowledgeOriginType, KnowledgeQueryScope, KnowledgeRetrievalLayer, KnowledgeRole,
-    KnowledgeSearchResult, KnowledgeSourceKind, KnowledgeUnit, KnowledgeUnitKind,
+    ContentKnowledgeDocument, KnowledgeAnchorSet, KnowledgeContextBlock, KnowledgeDebugStats,
+    KnowledgeIndexStatus, KnowledgeOriginType, KnowledgeQueryScope, KnowledgeRetrievalLayer,
+    KnowledgeRole, KnowledgeSearchResult, KnowledgeSourceKind, KnowledgeUnit, KnowledgeUnitKind,
     KnowledgeVersionSet, KnowledgeViewerDocument, KnowledgeViewerPage,
 };
 pub use normalize::normalize_text_for_source;

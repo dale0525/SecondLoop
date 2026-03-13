@@ -169,6 +169,24 @@ pub struct KnowledgeIndexStatus {
     pub versions: KnowledgeVersionSet,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct KnowledgeDebugStats {
+    pub total_documents: i64,
+    pub generated_documents: i64,
+    pub source_documents: i64,
+    pub summary_documents: i64,
+    pub preference_documents: i64,
+    pub profile_documents: i64,
+    pub event_documents: i64,
+    pub pattern_documents: i64,
+    pub usage_stat_documents: i64,
+    pub last_synthesis_at_ms: Option<i64>,
+    pub last_retrieved_at_ms: Option<i64>,
+    pub generated_memory_retrieval_enabled: bool,
+    pub hotness_rerank_enabled: bool,
+    pub session_digest_enabled: bool,
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct KnowledgeSearchResult {
     pub document_id: String,

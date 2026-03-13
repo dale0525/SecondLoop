@@ -7,6 +7,8 @@ import 'native_backend.dart';
 abstract interface class KnowledgeBackend {
   Future<KnowledgeIndexStatus> getKnowledgeIndexStatus(Uint8List key);
 
+  Future<KnowledgeDebugStats> getKnowledgeDebugStats(Uint8List key);
+
   Future<void> requestKnowledgeRebuild(Uint8List key);
 
   Future<int> processPendingKnowledgeIndexJobs(
@@ -45,6 +47,10 @@ final class NativeKnowledgeBackend implements KnowledgeBackend {
   @override
   Future<KnowledgeIndexStatus> getKnowledgeIndexStatus(Uint8List key) =>
       _backend.getKnowledgeIndexStatus(key);
+
+  @override
+  Future<KnowledgeDebugStats> getKnowledgeDebugStats(Uint8List key) =>
+      _backend.getKnowledgeDebugStats(key);
 
   @override
   Future<void> requestKnowledgeRebuild(Uint8List key) =>

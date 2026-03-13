@@ -192,3 +192,52 @@ fn knowledge_viewer_api_reads_units_around_anchor_and_search_hits() {
         .iter()
         .any(|unit| Some(unit.unit_id.as_str()) == first_hit.unit_id.as_deref()));
 }
+
+#[test]
+fn knowledge_debug_stats_reports_generated_memory_and_usage_counts() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let app_dir = dir.path().to_path_buf();
+    let app_dir_string = app_dir.to_string_lossy().into_owned();
+    let conn = db::open(&app_dir).expect("open");
+    let key = [29u8; 32];
+
+    let conv = db::create_conversation(&conn, &key, "Inbox").expect("conversation");
+    db::insert_message(
+        &conn,
+        &key,
+        &conv.id,
+        "user",
+        "Please answer in Chinese and keep responses short and practical.",
+    )
+    .expect("preference");
+    db::insert_message(
+        &conn,
+        &key,
+        &conv.id,
+        "user",
+        "I'm building a memory optimization prototype.",
+    )
+    .expect("profile");
+
+    crate::knowledge::ensure_knowledge_rebuild_requested(&conn).expect("request rebuild");
+    crate::knowledge::process_pending_knowledge_index_jobs_active(&conn, &key, 256)
+        .expect("process jobs");
+    crate::db::touch_knowledge_documents_usage(
+        &conn,
+        &["generated:preference:response-language".to_string()],
+        crate::knowledge::usage::now_ms(),
+    )
+    .expect("touch usage");
+
+    let stats = crate::api::knowledge::db_get_knowledge_debug_stats(app_dir_string, key.to_vec())
+        .expect("debug stats");
+
+    assert!(stats.total_documents >= 3);
+    assert!(stats.generated_documents >= 3);
+    assert!(stats.preference_documents >= 2);
+    assert!(stats.profile_documents >= 1);
+    assert!(stats.usage_stat_documents >= 1);
+    assert!(stats.generated_memory_retrieval_enabled);
+    assert!(stats.hotness_rerank_enabled);
+    assert!(stats.session_digest_enabled);
+}

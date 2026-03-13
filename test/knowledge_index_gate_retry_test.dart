@@ -254,6 +254,26 @@ final class _RetryingKnowledgeBackend extends TestAppBackend
   }
 
   @override
+  Future<KnowledgeDebugStats> getKnowledgeDebugStats(Uint8List key) async {
+    return const KnowledgeDebugStats(
+      totalDocuments: 0,
+      generatedDocuments: 0,
+      sourceDocuments: 0,
+      summaryDocuments: 0,
+      preferenceDocuments: 0,
+      profileDocuments: 0,
+      eventDocuments: 0,
+      patternDocuments: 0,
+      usageStatDocuments: 0,
+      lastSynthesisAtMs: null,
+      lastRetrievedAtMs: null,
+      generatedMemoryRetrievalEnabled: true,
+      hotnessRerankEnabled: true,
+      sessionDigestEnabled: true,
+    );
+  }
+
+  @override
   Future<List<ContentKnowledgeDocument>> listKnowledgeDocuments(
     Uint8List key, {
     int limit = 100,
@@ -327,6 +347,26 @@ final class _ActiveRebuildKnowledgeBackend extends TestAppBackend
   }
 
   @override
+  Future<KnowledgeDebugStats> getKnowledgeDebugStats(Uint8List key) async {
+    return const KnowledgeDebugStats(
+      totalDocuments: 0,
+      generatedDocuments: 0,
+      sourceDocuments: 0,
+      summaryDocuments: 0,
+      preferenceDocuments: 0,
+      profileDocuments: 0,
+      eventDocuments: 0,
+      patternDocuments: 0,
+      usageStatDocuments: 0,
+      lastSynthesisAtMs: null,
+      lastRetrievedAtMs: null,
+      generatedMemoryRetrievalEnabled: true,
+      hotnessRerankEnabled: true,
+      sessionDigestEnabled: true,
+    );
+  }
+
+  @override
   Future<List<ContentKnowledgeDocument>> listKnowledgeDocuments(
     Uint8List key, {
     int limit = 100,
@@ -392,6 +432,26 @@ final class _AlwaysFailingKnowledgeBackend extends TestAppBackend
   }
 
   @override
+  Future<KnowledgeDebugStats> getKnowledgeDebugStats(Uint8List key) async {
+    return const KnowledgeDebugStats(
+      totalDocuments: 0,
+      generatedDocuments: 0,
+      sourceDocuments: 0,
+      summaryDocuments: 0,
+      preferenceDocuments: 0,
+      profileDocuments: 0,
+      eventDocuments: 0,
+      patternDocuments: 0,
+      usageStatDocuments: 0,
+      lastSynthesisAtMs: null,
+      lastRetrievedAtMs: null,
+      generatedMemoryRetrievalEnabled: true,
+      hotnessRerankEnabled: true,
+      sessionDigestEnabled: true,
+    );
+  }
+
+  @override
   Future<List<ContentKnowledgeDocument>> listKnowledgeDocuments(
     Uint8List key, {
     int limit = 100,
@@ -451,6 +511,26 @@ final class _FailedBackoffKnowledgeBackend extends TestAppBackend
         embeddingPolicyVersion: 1,
         retrievalPolicyVersion: 1,
       ),
+    );
+  }
+
+  @override
+  Future<KnowledgeDebugStats> getKnowledgeDebugStats(Uint8List key) async {
+    return const KnowledgeDebugStats(
+      totalDocuments: 0,
+      generatedDocuments: 0,
+      sourceDocuments: 0,
+      summaryDocuments: 0,
+      preferenceDocuments: 0,
+      profileDocuments: 0,
+      eventDocuments: 0,
+      patternDocuments: 0,
+      usageStatDocuments: 0,
+      lastSynthesisAtMs: null,
+      lastRetrievedAtMs: null,
+      generatedMemoryRetrievalEnabled: true,
+      hotnessRerankEnabled: true,
+      sessionDigestEnabled: true,
     );
   }
 
@@ -523,6 +603,26 @@ final class _PostProcessStatusKnowledgeBackend extends TestAppBackend
   }
 
   @override
+  Future<KnowledgeDebugStats> getKnowledgeDebugStats(Uint8List key) async {
+    return const KnowledgeDebugStats(
+      totalDocuments: 0,
+      generatedDocuments: 0,
+      sourceDocuments: 0,
+      summaryDocuments: 0,
+      preferenceDocuments: 0,
+      profileDocuments: 0,
+      eventDocuments: 0,
+      patternDocuments: 0,
+      usageStatDocuments: 0,
+      lastSynthesisAtMs: null,
+      lastRetrievedAtMs: null,
+      generatedMemoryRetrievalEnabled: true,
+      hotnessRerankEnabled: true,
+      sessionDigestEnabled: true,
+    );
+  }
+
+  @override
   Future<List<ContentKnowledgeDocument>> listKnowledgeDocuments(
     Uint8List key, {
     int limit = 100,
@@ -586,6 +686,26 @@ final class _AlwaysEmptyKnowledgeBackend extends TestAppBackend
         embeddingPolicyVersion: 1,
         retrievalPolicyVersion: 1,
       ),
+    );
+  }
+
+  @override
+  Future<KnowledgeDebugStats> getKnowledgeDebugStats(Uint8List key) async {
+    return const KnowledgeDebugStats(
+      totalDocuments: 0,
+      generatedDocuments: 0,
+      sourceDocuments: 0,
+      summaryDocuments: 0,
+      preferenceDocuments: 0,
+      profileDocuments: 0,
+      eventDocuments: 0,
+      patternDocuments: 0,
+      usageStatDocuments: 0,
+      lastSynthesisAtMs: null,
+      lastRetrievedAtMs: null,
+      generatedMemoryRetrievalEnabled: true,
+      hotnessRerankEnabled: true,
+      sessionDigestEnabled: true,
     );
   }
 
@@ -654,6 +774,26 @@ final class _AlwaysStaleKnowledgeBackend extends TestAppBackend
         embeddingPolicyVersion: 1,
         retrievalPolicyVersion: 1,
       ),
+    );
+  }
+
+  @override
+  Future<KnowledgeDebugStats> getKnowledgeDebugStats(Uint8List key) async {
+    return const KnowledgeDebugStats(
+      totalDocuments: 0,
+      generatedDocuments: 0,
+      sourceDocuments: 0,
+      summaryDocuments: 0,
+      preferenceDocuments: 0,
+      profileDocuments: 0,
+      eventDocuments: 0,
+      patternDocuments: 0,
+      usageStatDocuments: 0,
+      lastSynthesisAtMs: null,
+      lastRetrievedAtMs: null,
+      generatedMemoryRetrievalEnabled: true,
+      hotnessRerankEnabled: true,
+      sessionDigestEnabled: true,
     );
   }
 
