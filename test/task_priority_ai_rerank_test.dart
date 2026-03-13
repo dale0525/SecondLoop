@@ -114,6 +114,44 @@ void main() {
       throwsA(isA<StateError>()),
     );
   });
+
+  test('service does not leave rerank prompts in chat history', () async {
+    final backend = _PersistingAskBackend();
+    final service = BackendTaskPriorityAiService.forTesting(
+      backend: backend,
+      sessionKey: Uint8List(32),
+      route: AskAiRouteKind.byok,
+      gatewayBaseUrl: '',
+      idToken: '',
+      modelName: 'gpt-4o-mini',
+    );
+
+    final result = await service.rerank(
+      TaskPriorityAiRequest(
+        nowLocal: DateTime(2026, 3, 13, 10, 0),
+        candidates: const <TaskPriorityAiCandidate>[
+          TaskPriorityAiCandidate(
+            todoId: 't1',
+            title: 'Fix bug',
+            status: 'open',
+            band: TaskPriorityBand.decide,
+            dueState: 'unscheduled',
+            ruleScore: 10,
+            updatedAtMs: 0,
+            recentInteractionSummary: '',
+            sourceSummary: '',
+            isRepeatedlyDeferred: false,
+            isPotentialBlocker: true,
+            isQuickWin: false,
+          ),
+        ],
+      ),
+    );
+
+    expect(result.entries.single.todoId, 't1');
+    final messages = await backend.listMessages(Uint8List(32), 'loop_home');
+    expect(messages, isEmpty);
+  });
 }
 
 final class _ThrowingAskBackend extends TestAppBackend {
@@ -126,5 +164,33 @@ final class _ThrowingAskBackend extends TestAppBackend {
     bool thisThreadOnly = false,
   }) async* {
     throw StateError('boom');
+  }
+}
+
+final class _PersistingAskBackend extends TestAppBackend {
+  static const String _response =
+      '{"entries":[{"todo_id":"t1","priority_band":"focus","semantic_adjustment":14,"reason":"It unblocks work.","suggested_action":"do_now","confidence":"high"}]}';
+
+  @override
+  Stream<String> askAiStream(
+    Uint8List key,
+    String conversationId, {
+    required String question,
+    int topK = 10,
+    bool thisThreadOnly = false,
+  }) async* {
+    await insertMessage(
+      key,
+      conversationId,
+      role: 'user',
+      content: question,
+    );
+    yield _response;
+    await insertMessage(
+      key,
+      conversationId,
+      role: 'assistant',
+      content: _response,
+    );
   }
 }

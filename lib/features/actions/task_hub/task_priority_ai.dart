@@ -28,6 +28,8 @@ Future<AskAiRouteKind> resolveTaskPriorityAiRoute(
 }
 
 class BackendTaskPriorityAiService implements TaskPriorityAiService {
+  static const String _conversationId = 'loop_home';
+
   BackendTaskPriorityAiService({
     required AppBackend backend,
     required Uint8List sessionKey,
@@ -71,27 +73,70 @@ class BackendTaskPriorityAiService implements TaskPriorityAiService {
   Future<TaskPriorityAiBatchResult> rerank(
       TaskPriorityAiRequest request) async {
     final prompt = _buildPrompt(request);
-    final response = await _collectResponse(
-      _route == AskAiRouteKind.cloudGateway
-          ? _backend.askAiStreamCloudGateway(
-              _sessionKey,
-              'loop_home',
-              question: prompt,
-              topK: 1,
-              thisThreadOnly: true,
-              gatewayBaseUrl: _gatewayBaseUrl,
-              idToken: _idToken,
-              modelName: _modelName,
-            )
-          : _backend.askAiStream(
-              _sessionKey,
-              'loop_home',
-              question: prompt,
-              topK: 1,
-              thisThreadOnly: true,
-            ),
-    );
-    return parseTaskPriorityAiBatchResult(response);
+    final existingMessageIds = await _listConversationMessageIds();
+    String? response;
+    try {
+      response = await _collectResponse(
+        _route == AskAiRouteKind.cloudGateway
+            ? _backend.askAiStreamCloudGateway(
+                _sessionKey,
+                _conversationId,
+                question: prompt,
+                topK: 1,
+                thisThreadOnly: true,
+                gatewayBaseUrl: _gatewayBaseUrl,
+                idToken: _idToken,
+                modelName: _modelName,
+              )
+            : _backend.askAiStream(
+                _sessionKey,
+                _conversationId,
+                question: prompt,
+                topK: 1,
+                thisThreadOnly: true,
+              ),
+      );
+      return parseTaskPriorityAiBatchResult(response);
+    } finally {
+      if (response != null) {
+        await _cleanupPersistedMessages(
+          prompt: prompt,
+          response: response,
+          existingMessageIds: existingMessageIds,
+        );
+      }
+    }
+  }
+
+  Future<Set<String>> _listConversationMessageIds() async {
+    final messages = await _backend.listMessages(_sessionKey, _conversationId);
+    return messages.map((message) => message.id).toSet();
+  }
+
+  Future<void> _cleanupPersistedMessages({
+    required String prompt,
+    required String response,
+    required Set<String> existingMessageIds,
+  }) async {
+    try {
+      final messages =
+          await _backend.listMessages(_sessionKey, _conversationId);
+      for (final message in messages) {
+        if (existingMessageIds.contains(message.id)) {
+          continue;
+        }
+        final matchesPrompt =
+            message.role == 'user' && message.content == prompt;
+        final matchesResponse =
+            message.role == 'assistant' && message.content == response;
+        if (!matchesPrompt && !matchesResponse) {
+          continue;
+        }
+        await _backend.setMessageDeleted(_sessionKey, message.id, true);
+      }
+    } catch (_) {
+      // Keep rerank resilient even if history cleanup is unavailable.
+    }
   }
 
   Future<String> _collectResponse(Stream<String> stream) async {
