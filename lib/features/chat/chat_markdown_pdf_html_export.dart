@@ -1,19 +1,15 @@
 import 'dart:convert';
-import 'dart:io';
-import 'dart:math' as math;
-import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:markdown/markdown.dart' as md;
 
 import 'chat_markdown_rich_rendering.dart';
 import 'chat_markdown_pdf_katex_assets.dart';
+import '../attachments/attachment_draft_send_contract.dart';
+import 'chat_markdown_export_image_sources.dart';
 import 'chat_markdown_sanitizer.dart';
 import 'chat_markdown_theme_presets.dart';
 
-final RegExp _kMarkdownImagePattern = RegExp(
-  r'!\[[^\]]*\]\((<[^>]+>|[^)\s]+)(?:\s+"[^"]*")?\)',
-);
 final RegExp _kHtmlLatexInlineTagPattern = RegExp(
   r'<latex-inline\b([^>]*)>(?:\s*</latex-inline>)?',
   caseSensitive: false,
@@ -27,17 +23,21 @@ final RegExp _kHtmlMarkmapTagPattern = RegExp(
   caseSensitive: false,
 );
 
-const int _kMaxInlinedImageBytes = 8 * 1024 * 1024;
-const Duration _kRemoteImageTimeout = Duration(seconds: 8);
-
 Future<String> buildChatMarkdownPdfHtmlDocument({
   required String markdown,
   required ChatMarkdownPreviewTheme theme,
   required String emptyFallback,
+  List<AttachmentDraftPayload> draftAttachments =
+      const <AttachmentDraftPayload>[],
+  Future<ChatMarkdownExportImageData?> Function(String attachmentSha256)?
+      readPersistedAttachment,
 }) async {
   final normalized = sanitizeChatMarkdown(markdown).trim();
-  final hydratedMarkdown = await _inlineMarkdownImageSources(
-      normalized.isEmpty ? markdown : normalized);
+  final hydratedMarkdown = await inlineMarkdownImageSourcesAsDataUrls(
+    normalized.isEmpty ? markdown : normalized,
+    draftAttachments: draftAttachments,
+    readPersistedAttachment: readPersistedAttachment,
+  );
   final plainText = normalized.isEmpty ? emptyFallback : normalized;
   final fallbackHtml =
       const HtmlEscape(HtmlEscapeMode.element).convert(plainText);
@@ -375,229 +375,6 @@ window.__SECONDLOOP_PDF_READY__ = false;
 $transformedHtml
 </body>
 </html>''';
-}
-
-Future<String> _inlineMarkdownImageSources(String markdown) async {
-  if (markdown.isEmpty) {
-    return markdown;
-  }
-
-  final matches =
-      _kMarkdownImagePattern.allMatches(markdown).toList(growable: false);
-  if (matches.isEmpty) {
-    return markdown;
-  }
-
-  final buffer = StringBuffer();
-  var cursor = 0;
-  for (final match in matches) {
-    buffer.write(markdown.substring(cursor, match.start));
-    final imageSegment = match.group(0);
-    final sourceToken = match.group(1);
-
-    if (imageSegment == null || sourceToken == null) {
-      buffer.write(markdown.substring(match.start, match.end));
-      cursor = match.end;
-      continue;
-    }
-
-    final source = _unwrapMarkdownImageSource(sourceToken);
-    final dataUrl = await _resolveImageSourceAsDataUrl(source);
-    if (dataUrl == null) {
-      buffer.write(imageSegment);
-      cursor = match.end;
-      continue;
-    }
-
-    final replacementSource =
-        sourceToken.startsWith('<') ? '<$dataUrl>' : dataUrl;
-    buffer.write(imageSegment.replaceFirst(sourceToken, replacementSource));
-    cursor = match.end;
-  }
-
-  buffer.write(markdown.substring(cursor));
-  return buffer.toString();
-}
-
-String _unwrapMarkdownImageSource(String token) {
-  if (token.startsWith('<') && token.endsWith('>') && token.length > 2) {
-    return token.substring(1, token.length - 1);
-  }
-  return token;
-}
-
-Future<String?> _resolveImageSourceAsDataUrl(String source) async {
-  final trimmed = source.trim();
-  if (trimmed.isEmpty || trimmed.startsWith('data:')) {
-    return trimmed.isEmpty ? null : trimmed;
-  }
-
-  if (_looksLikeWindowsAbsolutePath(trimmed)) {
-    return _readLocalImageAsDataUrl(trimmed);
-  }
-
-  final uri = Uri.tryParse(trimmed);
-  if (uri == null) {
-    return _readLocalImageAsDataUrl(trimmed);
-  }
-
-  if (uri.hasScheme) {
-    if (uri.scheme == 'http' || uri.scheme == 'https') {
-      return _downloadImageAsDataUrl(uri);
-    }
-    if (uri.scheme == 'file') {
-      return _readLocalImageAsDataUrl(uri.toFilePath());
-    }
-    return null;
-  }
-
-  return _readLocalImageAsDataUrl(trimmed);
-}
-
-bool _looksLikeWindowsAbsolutePath(String value) {
-  if (value.length >= 3) {
-    final first = value.codeUnitAt(0);
-    final isLetter =
-        (first >= 65 && first <= 90) || (first >= 97 && first <= 122);
-    if (isLetter && value.codeUnitAt(1) == 58) {
-      final separator = value.codeUnitAt(2);
-      if (separator == 92 || separator == 47) {
-        return true;
-      }
-    }
-  }
-  return value.startsWith(r'\\');
-}
-
-Future<String?> _downloadImageAsDataUrl(Uri uri) async {
-  HttpClient? client;
-
-  try {
-    client = HttpClient()..connectionTimeout = _kRemoteImageTimeout;
-    final request = await client.getUrl(uri).timeout(_kRemoteImageTimeout);
-    request.followRedirects = true;
-    request.maxRedirects = 4;
-    request.headers
-        .set(HttpHeaders.userAgentHeader, 'SecondLoopMarkdownPdfExporter/1.0');
-
-    final response = await request.close().timeout(_kRemoteImageTimeout);
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      return null;
-    }
-
-    final bytes = await _readHttpResponseBytes(response);
-    if (bytes == null || bytes.isEmpty) {
-      return null;
-    }
-
-    final mimeType = _resolveMimeType(
-      headerMimeType: response.headers.contentType?.mimeType,
-      sourcePath: uri.path,
-      bytes: bytes,
-    );
-    return 'data:$mimeType;base64,${base64Encode(bytes)}';
-  } catch (_) {
-    return null;
-  } finally {
-    client?.close(force: true);
-  }
-}
-
-Future<List<int>?> _readHttpResponseBytes(HttpClientResponse response) async {
-  final builder = BytesBuilder(copy: false);
-  var totalBytes = 0;
-
-  await for (final chunk in response) {
-    totalBytes += chunk.length;
-    if (totalBytes > _kMaxInlinedImageBytes) {
-      return null;
-    }
-    builder.add(chunk);
-  }
-
-  return builder.takeBytes();
-}
-
-Future<String?> _readLocalImageAsDataUrl(String path) async {
-  if (path.trim().isEmpty) {
-    return null;
-  }
-
-  try {
-    final file = File(path);
-    if (!await file.exists()) {
-      return null;
-    }
-
-    final length = await file.length();
-    if (length <= 0 || length > _kMaxInlinedImageBytes) {
-      return null;
-    }
-
-    final bytes = await file.readAsBytes();
-    if (bytes.isEmpty) {
-      return null;
-    }
-
-    final mimeType = _resolveMimeType(
-      headerMimeType: null,
-      sourcePath: file.path,
-      bytes: bytes,
-    );
-    return 'data:$mimeType;base64,${base64Encode(bytes)}';
-  } catch (_) {
-    return null;
-  }
-}
-
-String _resolveMimeType({
-  required String? headerMimeType,
-  required String sourcePath,
-  required List<int> bytes,
-}) {
-  if (headerMimeType != null && headerMimeType.startsWith('image/')) {
-    return headerMimeType;
-  }
-
-  final lowerPath = sourcePath.toLowerCase();
-  if (lowerPath.endsWith('.png')) return 'image/png';
-  if (lowerPath.endsWith('.jpg') || lowerPath.endsWith('.jpeg')) {
-    return 'image/jpeg';
-  }
-  if (lowerPath.endsWith('.gif')) return 'image/gif';
-  if (lowerPath.endsWith('.webp')) return 'image/webp';
-  if (lowerPath.endsWith('.bmp')) return 'image/bmp';
-  if (lowerPath.endsWith('.svg')) return 'image/svg+xml';
-
-  if (bytes.length >= 8 &&
-      bytes[0] == 0x89 &&
-      bytes[1] == 0x50 &&
-      bytes[2] == 0x4e &&
-      bytes[3] == 0x47) {
-    return 'image/png';
-  }
-  if (bytes.length >= 3 &&
-      bytes[0] == 0xff &&
-      bytes[1] == 0xd8 &&
-      bytes[2] == 0xff) {
-    return 'image/jpeg';
-  }
-  if (bytes.length >= 6) {
-    final header = ascii.decode(bytes.take(6).toList(), allowInvalid: true);
-    if (header == 'GIF87a' || header == 'GIF89a') {
-      return 'image/gif';
-    }
-  }
-
-  final probeLength = math.min(400, bytes.length);
-  final probeText = utf8
-      .decode(bytes.sublist(0, probeLength), allowMalformed: true)
-      .toLowerCase();
-  if (probeText.contains('<svg')) {
-    return 'image/svg+xml';
-  }
-
-  return 'application/octet-stream';
 }
 
 String _transformRichTagHtml(String html) {

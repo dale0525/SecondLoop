@@ -669,32 +669,13 @@ extension _ChatPageStateMethodsB on _ChatPageState {
             messageId,
             attachmentSha256: attachmentSha256,
           ),
-          onAttachmentLinked: (attachmentSha256, draft) async {
-            try {
-              final urlFromManifest = _readUrlFromManifestDraft(draft);
-              unawaited(
-                _enqueueDraftAttachmentPostLinkEnrichment(
-                  nativeBackend,
-                  sessionKey,
-                  attachmentSha256,
-                  draft,
-                ).catchError((_) {}),
-              );
-              unawaited(
-                const RustAttachmentMetadataStore()
-                    .upsert(
-                      sessionKey,
-                      attachmentSha256: attachmentSha256,
-                      title: urlFromManifest,
-                      filenames: [draft.normalizedFilename],
-                      sourceUrls: urlFromManifest == null
-                          ? const <String>[]
-                          : <String>[urlFromManifest],
-                    )
-                    .catchError((_) {}),
-              );
-            } catch (_) {}
-          },
+          onAttachmentLinked: (attachmentSha256, draft) =>
+              _handleLinkedDraftAttachment(
+            nativeBackend,
+            sessionKey,
+            attachmentSha256,
+            draft,
+          ),
         );
       } else if (!sentAsUrlAttachment) {
         sentMessage = await backend.insertMessage(

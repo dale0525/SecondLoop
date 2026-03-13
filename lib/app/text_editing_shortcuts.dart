@@ -129,6 +129,20 @@ bool shouldIgnoreTextEditingShortcutEvent(RawKeyEvent event) {
   return isMacOsCommandModifierKeyDown(event);
 }
 
+bool isMacOsCommandModifierKeyEvent(KeyEvent event) {
+  if (event is! KeyDownEvent) {
+    return false;
+  }
+
+  return switch (event.logicalKey) {
+    LogicalKeyboardKey.meta ||
+    LogicalKeyboardKey.metaLeft ||
+    LogicalKeyboardKey.metaRight =>
+      true,
+    _ => false,
+  };
+}
+
 bool isMacOsCommandModifierKeyDown(RawKeyEvent event) {
   if (event is! RawKeyDownEvent) {
     return false;

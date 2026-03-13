@@ -1,7 +1,9 @@
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:secondloop/features/chat/chat_markdown_export_image_sources.dart';
 import 'package:secondloop/features/chat/chat_markdown_pdf_html_export.dart';
 import 'package:secondloop/features/chat/chat_markdown_theme_presets.dart';
 
@@ -196,4 +198,96 @@ $$
       isNot(contains('href="secondloop://message/history-1"')),
     );
   });
+
+  test('PDF HTML export inlines persisted attachment image refs', () async {
+    final html = await buildChatMarkdownPdfHtmlDocument(
+      markdown: '![saved](secondloop://attachment/sha_1)',
+      theme: buildTheme(),
+      emptyFallback: 'Empty',
+      readPersistedAttachment: (attachmentSha256) async {
+        if (attachmentSha256 != 'sha_1') {
+          return null;
+        }
+        return ChatMarkdownExportImageData(
+          bytes: _pngBytes(),
+          mimeType: 'image/png',
+        );
+      },
+    );
+
+    expect(html, contains('data:image/png;base64,'));
+    expect(html, isNot(contains('secondloop://attachment/sha_1')));
+  });
 }
+
+Uint8List _pngBytes() => Uint8List.fromList(const <int>[
+      0x89,
+      0x50,
+      0x4e,
+      0x47,
+      0x0d,
+      0x0a,
+      0x1a,
+      0x0a,
+      0x00,
+      0x00,
+      0x00,
+      0x0d,
+      0x49,
+      0x48,
+      0x44,
+      0x52,
+      0x00,
+      0x00,
+      0x00,
+      0x01,
+      0x00,
+      0x00,
+      0x00,
+      0x01,
+      0x08,
+      0x06,
+      0x00,
+      0x00,
+      0x00,
+      0x1f,
+      0x15,
+      0xc4,
+      0x89,
+      0x00,
+      0x00,
+      0x00,
+      0x0a,
+      0x49,
+      0x44,
+      0x41,
+      0x54,
+      0x78,
+      0x9c,
+      0x63,
+      0xf8,
+      0xcf,
+      0xc0,
+      0x00,
+      0x00,
+      0x03,
+      0x01,
+      0x01,
+      0x00,
+      0x18,
+      0xdd,
+      0x8d,
+      0xb1,
+      0x00,
+      0x00,
+      0x00,
+      0x00,
+      0x49,
+      0x45,
+      0x4e,
+      0x44,
+      0xae,
+      0x42,
+      0x60,
+      0x82,
+    ]);

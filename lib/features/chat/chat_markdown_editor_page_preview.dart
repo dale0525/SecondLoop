@@ -2,6 +2,7 @@ part of 'chat_markdown_editor_page.dart';
 
 mixin _ChatMarkdownEditorPreviewMixin on State<ChatMarkdownEditorPage> {
   TextEditingController get _controller;
+  List<AttachmentDraftPayload> get _draftAttachments;
   ScrollController get _previewScrollController;
   GlobalKey get _previewRepaintBoundaryKey;
   ChatMarkdownThemePreset get _themePreset;
@@ -40,6 +41,7 @@ mixin _ChatMarkdownEditorPreviewMixin on State<ChatMarkdownEditorPage> {
                 final markdown = buildChatMarkdownPreviewBody(
                   context,
                   text: normalized,
+                  draftAttachments: _draftAttachments,
                   selectable: !_exportRenderMode,
                   preset: _themePreset,
                   density: _exportRenderMode

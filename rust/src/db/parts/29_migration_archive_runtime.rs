@@ -240,7 +240,11 @@ fn migration_archive_build_stage(
                 to_id: conversation.id.clone(),
                 relation_type: "belongs_to_conversation".to_string(),
             });
-            let markdown = migration_archive_markdown_doc(&item, &message.content, &attachment_paths, &[]);
+            let archive_body = migration_archive_rewrite_embedded_attachment_refs(
+                &message.content,
+                &attachments,
+            );
+            let markdown = migration_archive_markdown_doc(&item, &archive_body, &attachment_paths, &[]);
             let full_path = stage_dir.join(&item.markdown_path);
             if let Some(parent) = full_path.parent() {
                 fs::create_dir_all(parent)?;
@@ -341,9 +345,13 @@ fn migration_archive_build_stage(
                 ),
             };
             item_titles.insert(item.id.clone(), item.title.clone());
+            let archive_body = migration_archive_rewrite_embedded_attachment_refs(
+                &activity_content,
+                &attachments,
+            );
             let markdown = migration_archive_markdown_doc(
                 &item,
-                &activity_content,
+                &archive_body,
                 &attachment_paths,
                 &activity_links,
             );

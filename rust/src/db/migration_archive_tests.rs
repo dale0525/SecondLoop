@@ -244,6 +244,35 @@ fn migration_archive_export_writes_manifest_markdown_and_deduplicated_attachment
 }
 
 #[test]
+fn migration_archive_export_rewrites_embedded_attachment_image_refs() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let app_dir = dir.path().join("app");
+    let conn = open(&app_dir).expect("open db");
+    let key = [6u8; 32];
+
+    let conversation = create_conversation(&conn, &key, "Inbox").expect("conversation");
+    let attachment =
+        insert_attachment(&conn, &key, &app_dir, b"png-binary", "image/png").expect("attachment");
+    let body = format!(
+        "Inline image\n\n![saved](secondloop://attachment/{})",
+        attachment.sha256
+    );
+    let message = insert_message(&conn, &key, &conversation.id, "user", &body).expect("message");
+    link_attachment_to_message(&conn, &key, &message.id, &attachment.sha256)
+        .expect("link attachment");
+
+    let export_path = dir.path().join("migration.zip");
+    export_migration_archive(&conn, &key, &app_dir, &export_path).expect("export");
+
+    let message_md = read_zip_entry_text(&export_path, &format!("items/{}.md", message.id));
+    assert!(message_md.contains(&format!(
+        "![saved](../attachments/{}.png)",
+        attachment.sha256
+    )));
+    assert!(!message_md.contains("secondloop://attachment/"));
+}
+
+#[test]
 fn migration_archive_import_replaces_current_vault_with_archive_contents() {
     let dir = tempfile::tempdir().expect("tempdir");
     let app_dir = dir.path().join("app");
@@ -626,4 +655,41 @@ fn migration_archive_end_to_end_import_into_clean_app_rebuilds_indexes_and_persi
     let state: serde_json::Value = serde_json::from_str(&state_json).expect("parse import state");
     assert_eq!(state["stage"].as_str(), Some("reindex_completed"));
     assert_eq!(state["status"].as_str(), Some("completed"));
+}
+
+#[test]
+fn migration_archive_rewrite_embedded_attachment_refs_skips_code_spans_and_fences() {
+    let attachment = MigrationArchiveAttachment {
+        sha256: "sha_123".to_string(),
+        archive_path: "attachments/sha_123.png".to_string(),
+        original_filename: "sha_123.png".to_string(),
+        mime_type: Some("image/png".to_string()),
+        size_bytes: 1,
+        item_ids: vec!["item_1".to_string()],
+    };
+    let attachments = std::collections::BTreeMap::from([(attachment.sha256.clone(), attachment)]);
+
+    let body = [
+        "![saved](secondloop://attachment/sha_123)",
+        "",
+        "Use `![saved](secondloop://attachment/sha_123)` as an example.",
+        "",
+        "```markdown",
+        "![saved](secondloop://attachment/sha_123)",
+        "```",
+    ]
+    .join(
+        "
+",
+    );
+
+    let rewritten = migration_archive_rewrite_embedded_attachment_refs(&body, &attachments);
+
+    assert!(rewritten.contains("![saved](../attachments/sha_123.png)"));
+    assert!(rewritten.contains("Use `![saved](secondloop://attachment/sha_123)` as an example."));
+    assert!(rewritten.contains(
+        "```markdown
+![saved](secondloop://attachment/sha_123)
+```"
+    ));
 }

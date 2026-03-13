@@ -326,3 +326,197 @@ fn migration_archive_markdown_doc(
     }
     out
 }
+
+pub(crate) fn migration_archive_rewrite_embedded_attachment_refs(
+    body: &str,
+    attachments: &std::collections::BTreeMap<String, MigrationArchiveAttachment>,
+) -> String {
+    if body.trim().is_empty() || attachments.is_empty() {
+        return body.to_string();
+    }
+
+    let mut rewritten = String::with_capacity(body.len());
+    let mut cursor = 0;
+
+    while cursor < body.len() {
+        if let Some(block_end) = migration_archive_find_fenced_code_block_end(body, cursor) {
+            rewritten.push_str(&body[cursor..block_end]);
+            cursor = block_end;
+            continue;
+        }
+
+        if let Some(span_end) = migration_archive_find_inline_code_span_end(body, cursor) {
+            rewritten.push_str(&body[cursor..span_end]);
+            cursor = span_end;
+            continue;
+        }
+
+        if let Some((image_end, image_segment)) =
+            migration_archive_rewrite_markdown_image_ref(body, cursor, attachments)
+        {
+            rewritten.push_str(&image_segment);
+            cursor = image_end;
+            continue;
+        }
+
+        let ch = body[cursor..].chars().next().expect("char boundary");
+        rewritten.push(ch);
+        cursor += ch.len_utf8();
+    }
+
+    rewritten
+}
+
+fn migration_archive_find_fenced_code_block_end(body: &str, start: usize) -> Option<usize> {
+    let (fence_char, fence_len) = migration_archive_parse_fence_marker(body, start)?;
+    let content_start = migration_archive_line_end(body, start)?;
+    let mut cursor = content_start;
+    while cursor < body.len() {
+        if let Some((candidate_char, candidate_len)) =
+            migration_archive_parse_fence_marker(body, cursor)
+        {
+            if candidate_char == fence_char && candidate_len >= fence_len {
+                return migration_archive_line_end(body, cursor).or(Some(body.len()));
+            }
+        }
+        cursor = migration_archive_line_end(body, cursor).unwrap_or(body.len());
+    }
+    Some(body.len())
+}
+
+fn migration_archive_parse_fence_marker(body: &str, start: usize) -> Option<(u8, usize)> {
+    if !migration_archive_is_line_start(body, start) {
+        return None;
+    }
+
+    let bytes = body.as_bytes();
+    let mut cursor = start;
+    let mut leading_spaces = 0;
+    while cursor < bytes.len() && bytes[cursor] == b' ' && leading_spaces < 3 {
+        cursor += 1;
+        leading_spaces += 1;
+    }
+    if cursor >= bytes.len() {
+        return None;
+    }
+
+    let fence_char = bytes[cursor];
+    if fence_char != b'`' && fence_char != b'~' {
+        return None;
+    }
+
+    let mut fence_len = 0;
+    while cursor + fence_len < bytes.len() && bytes[cursor + fence_len] == fence_char {
+        fence_len += 1;
+    }
+    if fence_len < 3 {
+        return None;
+    }
+
+    Some((fence_char, fence_len))
+}
+
+fn migration_archive_find_inline_code_span_end(body: &str, start: usize) -> Option<usize> {
+    let bytes = body.as_bytes();
+    if bytes.get(start) != Some(&b'`') {
+        return None;
+    }
+
+    let mut tick_count = 0;
+    while start + tick_count < bytes.len() && bytes[start + tick_count] == b'`' {
+        tick_count += 1;
+    }
+    let marker = &body[start..start + tick_count];
+    let mut search = start + tick_count;
+    while search < body.len() {
+        if body[search..].starts_with(marker) {
+            return Some(search + tick_count);
+        }
+        let ch = body[search..].chars().next().expect("char boundary");
+        search += ch.len_utf8();
+    }
+    Some(body.len())
+}
+
+fn migration_archive_rewrite_markdown_image_ref(
+    body: &str,
+    start: usize,
+    attachments: &std::collections::BTreeMap<String, MigrationArchiveAttachment>,
+) -> Option<(usize, String)> {
+    if !body[start..].starts_with("![") {
+        return None;
+    }
+
+    let alt_end = migration_archive_find_unescaped_byte(body, start + 2, b']')?;
+    let paren_start = alt_end + 1;
+    if body.as_bytes().get(paren_start) != Some(&b'(') {
+        return None;
+    }
+
+    let source_start = paren_start + 1;
+    let bytes = body.as_bytes();
+    let (token_end, normalized_source, preserve_angle_brackets) =
+        if bytes.get(source_start) == Some(&b'<') {
+            let source_end = migration_archive_find_unescaped_byte(body, source_start + 1, b'>')?;
+            (
+                source_end + 1,
+                body[source_start + 1..source_end].trim().to_string(),
+                true,
+            )
+        } else {
+            let mut cursor = source_start;
+            while cursor < body.len() {
+                match bytes[cursor] {
+                    b')' | b' ' | b'\t' | b'\n' | b'\r' => break,
+                    _ => cursor += 1,
+                }
+            }
+            if cursor == source_start {
+                return None;
+            }
+            (cursor, body[source_start..cursor].trim().to_string(), false)
+        };
+
+    let close_paren = migration_archive_find_unescaped_byte(body, token_end, b')')?;
+    let attachment_sha = normalized_source.strip_prefix("secondloop://attachment/")?;
+    let attachment = attachments.get(attachment_sha)?;
+    let replacement_source = format!("../{}", attachment.archive_path);
+    let replacement_token = if preserve_angle_brackets {
+        format!("<{replacement_source}>")
+    } else {
+        replacement_source
+    };
+    let rewritten = format!(
+        "{}{}{}",
+        &body[start..source_start],
+        replacement_token,
+        &body[token_end..=close_paren]
+    );
+    Some((close_paren + 1, rewritten))
+}
+
+fn migration_archive_find_unescaped_byte(body: &str, start: usize, needle: u8) -> Option<usize> {
+    let bytes = body.as_bytes();
+    let mut cursor = start;
+    while cursor < bytes.len() {
+        if bytes[cursor] == needle && (cursor == 0 || bytes[cursor - 1] != b'\\') {
+            return Some(cursor);
+        }
+        cursor += 1;
+    }
+    None
+}
+
+fn migration_archive_is_line_start(body: &str, index: usize) -> bool {
+    index == 0 || body.as_bytes().get(index.wrapping_sub(1)) == Some(&b'\n')
+}
+
+fn migration_archive_line_end(body: &str, start: usize) -> Option<usize> {
+    if start >= body.len() {
+        return None;
+    }
+    match body[start..].find('\n') {
+        Some(offset) => Some(start + offset + 1),
+        None => Some(body.len()),
+    }
+}
