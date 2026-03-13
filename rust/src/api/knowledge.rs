@@ -31,7 +31,7 @@ fn read_knowledge_debug_stats(
     )?;
     let summary_documents = query_count(
         conn,
-        "SELECT COUNT(*) FROM knowledge_documents WHERE source_kind = 'summary'",
+        "SELECT COUNT(*) FROM knowledge_documents WHERE source_kind = 'summary' AND origin_type != 'generated'",
     )?;
     let preference_documents = query_count(
         conn,

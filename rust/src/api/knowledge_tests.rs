@@ -237,7 +237,39 @@ fn knowledge_debug_stats_reports_generated_memory_and_usage_counts() {
     assert!(stats.preference_documents >= 2);
     assert!(stats.profile_documents >= 1);
     assert!(stats.usage_stat_documents >= 1);
+    assert!(stats.summary_documents + stats.generated_documents <= stats.total_documents);
     assert!(stats.generated_memory_retrieval_enabled);
     assert!(stats.hotness_rerank_enabled);
     assert!(stats.session_digest_enabled);
+}
+
+#[test]
+fn touch_knowledge_documents_usage_succeeds_inside_active_transaction() {
+    let fixture = crate::knowledge::retrieval::test_support::seeded_fixture();
+    fixture
+        .conn
+        .execute("BEGIN IMMEDIATE", [])
+        .expect("begin transaction");
+
+    crate::db::touch_knowledge_documents_usage(
+        &fixture.conn,
+        std::slice::from_ref(&fixture.transcript_document_id),
+        crate::knowledge::usage::now_ms(),
+    )
+    .expect("touch usage inside transaction");
+
+    fixture
+        .conn
+        .execute("COMMIT", [])
+        .expect("commit transaction");
+
+    let usage_rows: i64 = fixture
+        .conn
+        .query_row(
+            "SELECT COUNT(*) FROM knowledge_document_usage WHERE document_id = ?1",
+            params![fixture.transcript_document_id],
+            |row| row.get(0),
+        )
+        .expect("usage row count");
+    assert_eq!(usage_rows, 1);
 }

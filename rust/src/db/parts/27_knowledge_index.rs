@@ -166,9 +166,8 @@ pub fn touch_knowledge_documents_usage(
         return Ok(0);
     }
 
-    let tx = conn.unchecked_transaction()?;
     for document_id in &existing {
-        tx.execute(
+        conn.execute(
             r#"INSERT INTO knowledge_document_usage(document_id, retrieve_count, last_retrieved_at_ms)
                VALUES (?1, 1, ?2)
                ON CONFLICT(document_id)
@@ -178,7 +177,6 @@ pub fn touch_knowledge_documents_usage(
             params![document_id, now_ms],
         )?;
     }
-    tx.commit()?;
     Ok(existing.len())
 }
 
