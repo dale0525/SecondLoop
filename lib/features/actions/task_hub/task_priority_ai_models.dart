@@ -42,11 +42,12 @@ class TaskPriorityAiEntry {
       'later' => TaskPriorityAiBand.later,
       _ => TaskPriorityAiBand.next,
     };
-    final suggestedAction = switch (
+    final suggestedActionToken =
         (json['suggested_action'] ?? json['suggestedAction'] ?? '')
             .toString()
             .trim()
-            .toLowerCase()) {
+            .toLowerCase();
+    final suggestedAction = switch (suggestedActionToken) {
       'schedule' => TaskPrioritySuggestionKind.schedule,
       'defer' => TaskPrioritySuggestionKind.defer,
       'clarify' => TaskPrioritySuggestionKind.clarify,

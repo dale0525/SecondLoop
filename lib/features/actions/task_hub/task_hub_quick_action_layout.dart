@@ -28,6 +28,32 @@ typedef TaskHubQuickActionLayout = (
   List<TaskHubQuickActionItem>
 );
 
+TaskHubQuickActionItem? primaryTaskHubQuickActionItemForEntry(
+  BuildContext context, {
+  required TaskPriorityEntry entry,
+}) {
+  final actions = context.t.actions.taskHub.actions;
+  final action = recommendedTaskHubQuickActionForEntry(entry);
+  if (action == null) return null;
+
+  return TaskHubQuickActionItem(
+    action: action,
+    label: switch (entry.suggestedAction) {
+      TaskPrioritySuggestionKind.doNow => actions.doNow,
+      TaskPrioritySuggestionKind.schedule => actions.schedule,
+      TaskPrioritySuggestionKind.defer => actions.defer,
+      TaskPrioritySuggestionKind.clarify => actions.clarify,
+    },
+    icon: switch (entry.suggestedAction) {
+      TaskPrioritySuggestionKind.doNow => Icons.play_circle_outline_rounded,
+      TaskPrioritySuggestionKind.schedule => Icons.event_available_rounded,
+      TaskPrioritySuggestionKind.defer => Icons.schedule_send_rounded,
+      TaskPrioritySuggestionKind.clarify => Icons.rule_folder_outlined,
+    },
+    tone: TaskHubQuickActionTone.primary,
+  );
+}
+
 TaskHubQuickActionLayout buildTaskHubQuickActionLayout(
   BuildContext context, {
   required TaskPriorityEntry entry,
@@ -73,19 +99,10 @@ TaskHubQuickActionLayout buildTaskHubQuickActionLayout(
     );
   }
 
-  final recommended = recommendedTaskHubQuickActionForEntry(entry);
-  final recommendedLabel = switch (entry.suggestedAction) {
-    TaskPrioritySuggestionKind.doNow => actions.doNow,
-    TaskPrioritySuggestionKind.schedule => actions.schedule,
-    TaskPrioritySuggestionKind.defer => actions.defer,
-    TaskPrioritySuggestionKind.clarify => actions.clarify,
-  };
-  final recommendedIcon = switch (entry.suggestedAction) {
-    TaskPrioritySuggestionKind.doNow => Icons.play_circle_outline_rounded,
-    TaskPrioritySuggestionKind.schedule => Icons.event_available_rounded,
-    TaskPrioritySuggestionKind.defer => Icons.schedule_send_rounded,
-    TaskPrioritySuggestionKind.clarify => Icons.rule_folder_outlined,
-  };
+  final primaryAction = primaryTaskHubQuickActionItemForEntry(
+    context,
+    entry: entry,
+  );
 
   final secondary = <TaskHubQuickActionItem>[
     chip(
@@ -132,12 +149,7 @@ TaskHubQuickActionLayout buildTaskHubQuickActionLayout(
   if (entry.isReviewDue) {
     return (
       <TaskHubQuickActionItem>[
-        chip(
-          recommended,
-          label: recommendedLabel,
-          icon: recommendedIcon,
-          tone: TaskHubQuickActionTone.primary,
-        ),
+        if (primaryAction != null) primaryAction,
         chip(
           TaskHubQuickAction.later,
           label: actions.later,
@@ -159,18 +171,13 @@ TaskHubQuickActionLayout buildTaskHubQuickActionLayout(
 
   return (
     <TaskHubQuickActionItem>[
-      chip(
-        recommended,
-        label: recommendedLabel,
-        icon: recommendedIcon,
-        tone: TaskHubQuickActionTone.primary,
-      ),
+      if (primaryAction != null) primaryAction,
     ],
     secondary,
   );
 }
 
-TaskHubQuickAction recommendedTaskHubQuickActionForEntry(
+TaskHubQuickAction? recommendedTaskHubQuickActionForEntry(
     TaskPriorityEntry entry) {
   return switch (entry.suggestedAction) {
     TaskPrioritySuggestionKind.doNow => entry.isInProgress
@@ -178,9 +185,8 @@ TaskHubQuickAction recommendedTaskHubQuickActionForEntry(
         : entry.isFutureScheduled
             ? TaskHubQuickAction.start
             : TaskHubQuickAction.today,
-    TaskPrioritySuggestionKind.schedule => entry.isFutureScheduled
-        ? TaskHubQuickAction.thisWeek
-        : TaskHubQuickAction.tomorrow,
+    TaskPrioritySuggestionKind.schedule =>
+      entry.isFutureScheduled ? null : TaskHubQuickAction.tomorrow,
     TaskPrioritySuggestionKind.defer => entry.isInProgress
         ? TaskHubQuickAction.pauseTomorrow
         : TaskHubQuickAction.later,

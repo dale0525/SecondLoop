@@ -66,6 +66,12 @@ class _TaskHubBannerState extends State<TaskHubBanner> {
     final innerPadding = widget.compact ? 10.0 : 12.0;
     final headerSpacing = widget.compact ? 4.0 : 6.0;
     final actionsSpacingTop = widget.compact ? 8.0 : 12.0;
+    final primaryAction = primary == null
+        ? null
+        : primaryTaskHubQuickActionItemForEntry(
+            context,
+            entry: primary,
+          );
     return Padding(
       padding: outerPadding,
       child: SlSurface(
@@ -130,16 +136,18 @@ class _TaskHubBannerState extends State<TaskHubBanner> {
                   spacing: 8,
                   runSpacing: 8,
                   children: [
-                    if (primary != null && widget.onQuickAction != null)
+                    if (primary != null &&
+                        primaryAction != null &&
+                        widget.onQuickAction != null)
                       SlButton(
                         key: const ValueKey('task_hub_banner_primary_action'),
                         onPressed: () => unawaited(
                           widget.onQuickAction!(
                             primary,
-                            _primaryQuickAction(primary),
+                            primaryAction.action,
                           ),
                         ),
-                        child: Text(_primaryActionLabel(context, primary)),
+                        child: Text(primaryAction.label),
                       )
                     else
                       SlButton(
@@ -154,7 +162,7 @@ class _TaskHubBannerState extends State<TaskHubBanner> {
                         onPressed: () => unawaited(widget.onOpenTodo!(primary)),
                         child: Text(context.t.actions.taskHub.openFocus),
                       ),
-                    if (primary != null)
+                    if (primary != null && primaryAction != null)
                       SlButton(
                         buttonKey: const ValueKey('task_hub_banner_view_all'),
                         variant: SlButtonVariant.outline,
@@ -189,23 +197,6 @@ class _TaskHubBannerState extends State<TaskHubBanner> {
       );
     }
     return context.t.actions.taskHub.noTasksSubtitle;
-  }
-
-  String _primaryActionLabel(BuildContext context, TaskPriorityEntry entry) {
-    return switch (entry.suggestedAction) {
-      TaskPrioritySuggestionKind.doNow =>
-        context.t.actions.taskHub.actions.doNow,
-      TaskPrioritySuggestionKind.schedule =>
-        context.t.actions.taskHub.actions.schedule,
-      TaskPrioritySuggestionKind.defer =>
-        context.t.actions.taskHub.actions.defer,
-      TaskPrioritySuggestionKind.clarify =>
-        context.t.actions.taskHub.actions.clarify,
-    };
-  }
-
-  TaskHubQuickAction _primaryQuickAction(TaskPriorityEntry entry) {
-    return recommendedTaskHubQuickActionForEntry(entry);
   }
 }
 

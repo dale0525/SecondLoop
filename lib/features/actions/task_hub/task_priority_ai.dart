@@ -112,7 +112,7 @@ class BackendTaskPriorityAiService implements TaskPriorityAiService {
       'You are reranking personal task candidates for a task manager.',
       'Return JSON only with shape {"entries":[...]} and no prose.',
       'Allowed priority_band: focus | next | later.',
-      'Allowed suggested_action: do | schedule | defer | clarify.',
+      'Allowed suggested_action: do_now | schedule | defer | clarify.',
       'Do not invent facts. Keep reasons short and verifiable.',
       'Payload:',
       payload,

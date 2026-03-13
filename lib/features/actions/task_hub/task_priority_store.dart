@@ -72,7 +72,8 @@ class TaskPriorityStore extends ChangeNotifier {
       TaskPriorityAiAvailability.unknown;
   TaskPriorityAiAvailability get aiAvailability => _aiAvailability;
   bool get isAiEnhancementEnabled =>
-      _aiAvailability != TaskPriorityAiAvailability.disabled;
+      _aiAvailability != TaskPriorityAiAvailability.disabled &&
+      _aiAvailability != TaskPriorityAiAvailability.unknown;
   bool get isAiEnhancementAvailable =>
       _aiAvailability == TaskPriorityAiAvailability.available;
 

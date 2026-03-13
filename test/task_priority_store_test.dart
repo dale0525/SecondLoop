@@ -243,6 +243,16 @@ void main() {
     expect(store.isAiEnhancementAvailable, isTrue);
     expect(store.snapshot.source, TaskPrioritySnapshotSource.hybrid);
   });
+  test('ai enhancement is not considered enabled before availability resolves',
+      () {
+    final store = TaskPriorityStore.fromLoaders(
+      nowLocal: () => DateTime(2026, 3, 13, 10, 0),
+      loadTodos: () async => const <Todo>[],
+    );
+
+    expect(store.aiAvailability, TaskPriorityAiAvailability.unknown);
+    expect(store.isAiEnhancementEnabled, isFalse);
+  });
 }
 
 final class _FakeAiService implements TaskPriorityAiService {

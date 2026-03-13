@@ -35,11 +35,20 @@ void main() {
 
   test('parser accepts structured JSON rerank output', () {
     final parsed = parseTaskPriorityAiBatchResult(
-      '{"entries":[{"todo_id":"t1","priority_band":"focus","semantic_adjustment":14,"reason":"It unblocks work.","suggested_action":"do","confidence":"high"}]}',
+      '{"entries":[{"todo_id":"t1","priority_band":"focus","semantic_adjustment":14,"reason":"It unblocks work.","suggested_action":"do_now","confidence":"high"}]}',
     );
 
     expect(parsed.entries.single.todoId, 't1');
     expect(parsed.entries.single.priorityBand, TaskPriorityAiBand.focus);
+    expect(parsed.entries.single.suggestedAction,
+        TaskPrioritySuggestionKind.doNow);
+  });
+
+  test('parser keeps backward compatibility for legacy do token', () {
+    final parsed = parseTaskPriorityAiBatchResult(
+      '{"entries":[{"todo_id":"t1","priority_band":"focus","semantic_adjustment":14,"reason":"It unblocks work.","suggested_action":"do","confidence":"high"}]}',
+    );
+
     expect(parsed.entries.single.suggestedAction,
         TaskPrioritySuggestionKind.doNow);
   });
