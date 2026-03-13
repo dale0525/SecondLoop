@@ -162,8 +162,13 @@ class _ChatMarkdownEditorPageState extends State<ChatMarkdownEditorPage>
 
   void _switchToPlainMode() {
     if (!widget.allowPlainMode) return;
+    final hasDraftImageRefs = _draftAttachments.isNotEmpty &&
+        collectDraftMarkdownImageLocalIds(_controller.text).isNotEmpty;
+    final nextText = hasDraftImageRefs
+        ? stripDraftMarkdownImageRefs(_controller.text).trim()
+        : _controller.text;
     Navigator.of(context).pop(
-      ChatMarkdownEditorResult.switchToSimpleInput(_controller.text),
+      ChatMarkdownEditorResult.switchToSimpleInput(nextText),
     );
   }
 

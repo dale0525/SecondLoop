@@ -197,6 +197,55 @@ void main() {
     }
   });
 
+  testWidgets('switching to plain mode strips draft image refs',
+      (tester) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+
+    try {
+      final harnessKey = GlobalKey<_EditorHarnessState>();
+      await tester.pumpWidget(
+        wrapWithI18n(
+          MaterialApp(
+            home: EditorHarness(
+              key: harnessKey,
+              initialText: 'hello',
+              allowPlainMode: true,
+              pastedImageReader: () async => ChatMarkdownPastedImageData(
+                bytes: _pngBytes(),
+                mimeType: 'image/png',
+                filename: 'plain-switch.png',
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.tap(find.byKey(const ValueKey('open_editor')));
+      await tester.pumpAndSettle();
+      await tester
+          .tap(find.byKey(const ValueKey('chat_markdown_editor_input')));
+      await tester.pump();
+
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.metaLeft);
+      await tester.sendKeyEvent(LogicalKeyboardKey.keyV);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.metaLeft);
+      await tester.pumpAndSettle();
+
+      await tester
+          .tap(find.byKey(const ValueKey('chat_markdown_editor_switch_plain')));
+      await tester.pumpAndSettle();
+
+      final result = harnessKey.currentState?.result;
+      expect(result, isNotNull);
+      expect(result?.shouldSwitchToSimpleInput, isTrue);
+      expect(result?.draftAttachments, isEmpty);
+      expect(result?.text, 'hello');
+      expect(result?.text, isNot(contains('secondloop-draft://image/')));
+    } finally {
+      debugDefaultTargetPlatformOverride = null;
+    }
+  });
+
   testWidgets('Windows ctrl+V pastes image into markdown editor',
       (tester) async {
     debugDefaultTargetPlatformOverride = TargetPlatform.windows;
@@ -243,9 +292,16 @@ void main() {
 }
 
 class EditorHarness extends StatefulWidget {
-  const EditorHarness({super.key, required this.pastedImageReader});
+  const EditorHarness({
+    super.key,
+    required this.pastedImageReader,
+    this.initialText = '',
+    this.allowPlainMode = false,
+  });
 
   final Future<ChatMarkdownPastedImageData?> Function() pastedImageReader;
+  final String initialText;
+  final bool allowPlainMode;
 
   @override
   State<EditorHarness> createState() => _EditorHarnessState();
@@ -265,7 +321,8 @@ class _EditorHarnessState extends State<EditorHarness> {
                 await Navigator.of(context).push<ChatMarkdownEditorResult>(
               MaterialPageRoute(
                 builder: (context) => ChatMarkdownEditorPage(
-                  initialText: '',
+                  initialText: widget.initialText,
+                  allowPlainMode: widget.allowPlainMode,
                   pastedImageReader: widget.pastedImageReader,
                 ),
               ),

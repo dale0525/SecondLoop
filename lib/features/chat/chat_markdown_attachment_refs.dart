@@ -103,6 +103,21 @@ Set<String> collectDraftMarkdownImageLocalIds(String markdown) {
   return localIds;
 }
 
+String stripDraftMarkdownImageRefs(String markdown) {
+  if (markdown.isEmpty) return markdown;
+
+  return markdown.replaceAllMapped(_kMarkdownImageRefPattern, (match) {
+    final imageSegment = match.group(0);
+    final sourceToken = match.group(1);
+    if (imageSegment == null || sourceToken == null) {
+      return match.group(0) ?? '';
+    }
+
+    final source = _unwrapMarkdownImageSource(sourceToken);
+    return parseDraftMarkdownImageRef(source) == null ? imageSegment : '';
+  });
+}
+
 String _unwrapMarkdownImageSource(String token) {
   final trimmed = token.trim();
   if (trimmed.length >= 2 && trimmed.startsWith('<') && trimmed.endsWith('>')) {
