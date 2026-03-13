@@ -128,6 +128,29 @@ fn collect_raw_user_messages(conn: &Connection, key: &[u8; 32]) -> Result<Vec<Ra
     Ok(out)
 }
 
+fn detect_response_language(message: &RawUserMessage, lower: &str) -> Option<&'static str> {
+    let mentions_chinese = lower.contains("chinese") || message.content.contains("中文");
+    let mentions_english = lower.contains("english") || message.content.contains("英文");
+    let rejects_chinese = lower.contains("not in chinese")
+        || lower.contains("don't answer in chinese")
+        || lower.contains("do not answer in chinese")
+        || message.content.contains("不要中文")
+        || message.content.contains("别用中文");
+    let rejects_english = lower.contains("not in english")
+        || lower.contains("don't answer in english")
+        || lower.contains("do not answer in english")
+        || message.content.contains("不要英文")
+        || message.content.contains("别用英文");
+
+    match (mentions_chinese, mentions_english) {
+        (true, false) => Some("Chinese"),
+        (false, true) => Some("English"),
+        (true, true) if rejects_chinese && !rejects_english => Some("English"),
+        (true, true) if rejects_english && !rejects_chinese => Some("Chinese"),
+        _ => None,
+    }
+}
+
 fn collect_preference_memories(messages: &[RawUserMessage], out: &mut Vec<GeneratedMemoryDraft>) {
     for message in messages {
         let lower = message.content.trim().to_lowercase();
@@ -142,24 +165,12 @@ fn collect_preference_memories(messages: &[RawUserMessage], out: &mut Vec<Genera
             || lower.contains("reply in")
             || message.content.contains("请用")
         {
-            if lower.contains("chinese") || message.content.contains("中文") {
+            if let Some(language) = detect_response_language(message, &lower) {
                 out.push(GeneratedMemoryDraft {
                     kind: GeneratedMemoryKind::Preference,
                     facet_key: "response_language".to_string(),
                     title: "Response language preference".to_string(),
-                    raw_text: "User prefers responses in Chinese.".to_string(),
-                    created_at_ms: message.created_at_ms,
-                    updated_at_ms: message.updated_at_ms,
-                    anchors: anchors.clone(),
-                    source_id: Some(message.message_id.clone()),
-                });
-            }
-            if lower.contains("english") || message.content.contains("英文") {
-                out.push(GeneratedMemoryDraft {
-                    kind: GeneratedMemoryKind::Preference,
-                    facet_key: "response_language".to_string(),
-                    title: "Response language preference".to_string(),
-                    raw_text: "User prefers responses in English.".to_string(),
+                    raw_text: format!("User prefers responses in {language}."),
                     created_at_ms: message.created_at_ms,
                     updated_at_ms: message.updated_at_ms,
                     anchors: anchors.clone(),
@@ -328,5 +339,30 @@ mod tests {
             doc.origin_type == KnowledgeOriginType::Generated
                 && doc.document_id == "generated:preference:response-language"
         }));
+    }
+
+    #[test]
+    fn collect_generated_memory_documents_keeps_single_language_preference_when_message_negates_other_language(
+    ) {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let conn = db::open(dir.path()).expect("open");
+        let key = [92u8; 32];
+        let conv = db::create_conversation(&conn, &key, "Inbox").expect("conversation");
+        let _ = db::insert_message(
+            &conn,
+            &key,
+            &conv.id,
+            "user",
+            "Please answer in English, not in Chinese.",
+        )
+        .expect("message");
+
+        let docs = collect_generated_memory_documents(&conn, &key).expect("collect");
+        let doc = docs
+            .iter()
+            .find(|doc| doc.document_id == "generated:preference:response-language")
+            .expect("language preference doc");
+
+        assert_eq!(doc.raw_text, "User prefers responses in English.");
     }
 }
