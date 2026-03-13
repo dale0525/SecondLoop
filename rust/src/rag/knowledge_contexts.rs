@@ -13,46 +13,55 @@ fn collect_generated_preferred_contexts(
     top_k: usize,
 ) -> Result<Vec<knowledge::KnowledgeContextBlock>> {
     let mut out = Vec::<knowledge::KnowledgeContextBlock>::new();
-    for document in knowledge::list_knowledge_documents(conn, key, 64, 0)? {
-        if document.origin_type != knowledge::KnowledgeOriginType::Generated {
-            continue;
-        }
-        if let Some(expected) = conversation_scope {
-            if let Some(actual) = document.anchors.conversation_id.as_deref() {
-                if actual != expected {
-                    continue;
-                }
-            }
-        }
-        let body = if document.raw_text.trim().is_empty() {
-            document.normalized_text.trim()
-        } else {
-            document.raw_text.trim()
-        };
-        if body.is_empty() {
-            continue;
-        }
-        out.push(knowledge::KnowledgeContextBlock {
-            document_id: document.document_id.clone(),
-            unit_id: None,
-            unit_kind: None,
-            source_kind: document.source_kind,
-            role: document.role,
-            anchors: document.anchors.clone(),
-            score: 1.0,
-            rendered_text: format!(
-                "{}\n[knowledge layer=document source=summary role=summary]\n{}",
-                if let Some(conversation_id) = document.anchors.conversation_id.as_deref() {
-                    format!("conversation_id={conversation_id}")
-                } else {
-                    "generated_memory=global".to_string()
-                },
-                body
-            ),
-        });
-        if out.len() >= top_k.max(1) {
+    let page_size = 128usize;
+    let mut offset = 0usize;
+    loop {
+        let documents = knowledge::list_knowledge_documents(conn, key, page_size, offset)?;
+        if documents.is_empty() {
             break;
         }
+        for document in documents {
+            if document.origin_type != knowledge::KnowledgeOriginType::Generated {
+                continue;
+            }
+            if let Some(expected) = conversation_scope {
+                if let Some(actual) = document.anchors.conversation_id.as_deref() {
+                    if actual != expected {
+                        continue;
+                    }
+                }
+            }
+            let body = if document.raw_text.trim().is_empty() {
+                document.normalized_text.trim()
+            } else {
+                document.raw_text.trim()
+            };
+            if body.is_empty() {
+                continue;
+            }
+            out.push(knowledge::KnowledgeContextBlock {
+                document_id: document.document_id.clone(),
+                unit_id: None,
+                unit_kind: None,
+                source_kind: document.source_kind,
+                role: document.role,
+                anchors: document.anchors.clone(),
+                score: 1.0,
+                rendered_text: format!(
+                    "{}\n[knowledge layer=document source=summary role=summary]\n{}",
+                    if let Some(conversation_id) = document.anchors.conversation_id.as_deref() {
+                        format!("conversation_id={conversation_id}")
+                    } else {
+                        "generated_memory=global".to_string()
+                    },
+                    body
+                ),
+            });
+            if out.len() >= top_k.max(1) {
+                return Ok(out);
+            }
+        }
+        offset += page_size;
     }
     Ok(out)
 }
@@ -153,6 +162,7 @@ pub(super) fn try_build_knowledge_contexts(
 
     let used_document_ids = blocks
         .iter()
+        .filter(|block| !block.document_id.starts_with("generated:session-digest:"))
         .map(|block| block.document_id.clone())
         .collect::<Vec<_>>();
     let _ = crate::db::touch_knowledge_documents_usage(
@@ -227,8 +237,71 @@ pub(super) fn merge_knowledge_and_legacy_contexts(
 
 #[cfg(test)]
 mod tests {
-    use super::merge_knowledge_and_legacy_contexts;
+    use super::{
+        collect_generated_preferred_contexts, merge_knowledge_and_legacy_contexts,
+        try_build_knowledge_contexts,
+    };
+    use crate::db;
     use crate::message_citations::append_message_citation_if_missing;
+    use crate::rag::Focus;
+    use rusqlite::params;
+
+    fn insert_document(
+        conn: &rusqlite::Connection,
+        key: &[u8; 32],
+        document_id: &str,
+        origin_type: &str,
+        updated_at_ms: i64,
+        conversation_id: Option<&str>,
+        text: &str,
+    ) {
+        let anchor_json = serde_json::to_string(&crate::knowledge::KnowledgeAnchorSet {
+            conversation_id: conversation_id.map(|value| value.to_string()),
+            ..crate::knowledge::KnowledgeAnchorSet::default()
+        })
+        .expect("anchor json");
+        let raw =
+            db::encode_knowledge_document_text(key, document_id, "raw", text).expect("encode raw");
+        let normalized = db::encode_knowledge_document_text(key, document_id, "normalized", text)
+            .expect("encode normalized");
+        conn.execute(
+            r#"INSERT INTO knowledge_documents(
+                   document_id,
+                   origin_type,
+                   source_kind,
+                   role,
+                   language,
+                   quality_score,
+                   title,
+                   summary,
+                   anchor_json,
+                   raw_text,
+                   normalized_text,
+                   created_at_ms,
+                   updated_at_ms,
+                   schema_version,
+                   normalization_version,
+                   segmentation_version,
+                   embedding_policy_version,
+                   retrieval_policy_version,
+                   last_indexed_at_ms
+               ) VALUES (?1, ?2, 'summary', 'summary', NULL, 1.0, NULL, NULL, ?3, ?4, ?5, 1, ?6, ?7, ?8, ?9, ?10, ?11, NULL)"#,
+            params![
+                document_id,
+                origin_type,
+                anchor_json,
+                raw,
+                normalized,
+                updated_at_ms,
+                crate::knowledge::KNOWLEDGE_SCHEMA_VERSION,
+                crate::knowledge::KNOWLEDGE_NORMALIZATION_VERSION,
+                crate::knowledge::KNOWLEDGE_SEGMENTATION_VERSION,
+                crate::knowledge::KNOWLEDGE_EMBEDDING_POLICY_VERSION,
+                crate::knowledge::KNOWLEDGE_RETRIEVAL_POLICY_VERSION,
+            ],
+        )
+        .expect("insert document");
+    }
 
     #[test]
     fn merge_contexts_prefers_knowledge_for_top_k_one() {
@@ -269,5 +342,79 @@ mod tests {
             trailing_newline,
             "body\n[History](secondloop://message/abc)"
         );
+    }
+
+    #[test]
+    fn collect_generated_preferred_contexts_pages_past_first_64_documents() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let conn = db::open(dir.path()).expect("open");
+        let key = [61u8; 32];
+        let conv = db::create_conversation(&conn, &key, "Inbox").expect("conversation");
+
+        for index in 0..64 {
+            insert_document(
+                &conn,
+                &key,
+                &format!("message:seed-{index:03}"),
+                "message",
+                10_000 - index,
+                Some(&conv.id),
+                "source memory",
+            );
+        }
+        insert_document(
+            &conn,
+            &key,
+            "generated:preference:response-language",
+            "generated",
+            1,
+            Some(&conv.id),
+            "User prefers responses in Chinese.",
+        );
+
+        let blocks = collect_generated_preferred_contexts(&conn, &key, Some(&conv.id), 4)
+            .expect("generated preferred contexts");
+
+        assert!(blocks
+            .iter()
+            .any(|block| { block.document_id == "generated:preference:response-language" }));
+    }
+
+    #[test]
+    fn try_build_knowledge_contexts_tracks_real_documents_without_digest_ids() {
+        let fixture = crate::knowledge::retrieval::test_support::seeded_fixture();
+
+        let contexts = try_build_knowledge_contexts(
+            &fixture.conn,
+            &fixture.key,
+            "Plan my week around the budget freeze in my usual style.",
+            6,
+            Focus::ThisThread,
+            &fixture.conversation_id,
+            None,
+        )
+        .expect("knowledge contexts");
+
+        assert!(contexts
+            .iter()
+            .any(|ctx| ctx.to_lowercase().contains("session digest")));
+
+        let usage_rows: i64 = fixture
+            .conn
+            .query_row("SELECT COUNT(*) FROM knowledge_document_usage", [], |row| {
+                row.get(0)
+            })
+            .expect("usage count");
+        assert!(usage_rows > 0);
+
+        let digest_rows: i64 = fixture
+            .conn
+            .query_row(
+                "SELECT COUNT(*) FROM knowledge_document_usage WHERE document_id LIKE 'generated:session-digest:%'",
+                [],
+                |row| row.get(0),
+            )
+            .expect("digest usage count");
+        assert_eq!(digest_rows, 0);
     }
 }

@@ -81,6 +81,34 @@ pub fn ensure_knowledge_rebuild_state_defaults(conn: &Connection) -> Result<()> 
     Ok(())
 }
 
+fn load_existing_knowledge_document_ids(
+    conn: &Connection,
+    document_ids: &std::collections::BTreeSet<String>,
+) -> Result<Vec<String>> {
+    if document_ids.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let placeholders = document_ids
+        .iter()
+        .enumerate()
+        .map(|(index, _)| format!("?{}", index + 1))
+        .collect::<Vec<_>>()
+        .join(", ");
+    let sql = format!(
+        "SELECT document_id FROM knowledge_documents WHERE document_id IN ({placeholders})"
+    );
+    let values = document_ids.iter().map(String::as_str).collect::<Vec<_>>();
+
+    let mut stmt = conn.prepare(&sql)?;
+    let mut rows = stmt.query(rusqlite::params_from_iter(values.iter().copied()))?;
+    let mut out = Vec::<String>::new();
+    while let Some(row) = rows.next()? {
+        out.push(row.get(0)?);
+    }
+    Ok(out)
+}
+
 pub fn load_knowledge_usage_map(
     conn: &Connection,
     document_ids: &std::collections::BTreeSet<String>,
@@ -90,28 +118,40 @@ pub fn load_knowledge_usage_map(
         return Ok(out);
     }
 
-    let mut stmt = conn.prepare(
-        r#"SELECT document_id, retrieve_count, last_retrieved_at_ms
-           FROM knowledge_document_usage
-           WHERE document_id = ?1"#,
-    )?;
+    let placeholders = document_ids
+        .iter()
+        .enumerate()
+        .map(|(index, _)| format!("?{}", index + 1))
+        .collect::<Vec<_>>()
+        .join(", ");
+    let sql = format!(
+        "SELECT document_id, retrieve_count, last_retrieved_at_ms \
+         FROM knowledge_document_usage \
+         WHERE document_id IN ({placeholders})"
+    );
+    let values = document_ids.iter().map(String::as_str).collect::<Vec<_>>();
 
-    for document_id in document_ids {
-        let stats = stmt.query_row(params![document_id], |row| {
-            Ok(crate::knowledge::usage::KnowledgeUsageStats {
+    let mut stmt = conn.prepare(&sql)?;
+    let mut rows = stmt.query(rusqlite::params_from_iter(values.iter().copied()))?;
+    while let Some(row) = rows.next()? {
+        let document_id: String = row.get(0)?;
+        out.insert(
+            document_id,
+            crate::knowledge::usage::KnowledgeUsageStats {
                 retrieve_count: row.get(1)?,
                 last_retrieved_at_ms: row.get(2)?,
-            })
-        });
-        if let Ok(stats) = stats {
-            out.insert(document_id.clone(), stats);
-        }
+            },
+        );
     }
 
     Ok(out)
 }
 
-pub fn touch_knowledge_documents_usage(conn: &Connection, document_ids: &[String], now_ms: i64) -> Result<usize> {
+pub fn touch_knowledge_documents_usage(
+    conn: &Connection,
+    document_ids: &[String],
+    now_ms: i64,
+) -> Result<usize> {
     let unique = document_ids
         .iter()
         .filter(|value| !value.trim().is_empty())
@@ -121,8 +161,13 @@ pub fn touch_knowledge_documents_usage(conn: &Connection, document_ids: &[String
         return Ok(0);
     }
 
+    let existing = load_existing_knowledge_document_ids(conn, &unique)?;
+    if existing.is_empty() {
+        return Ok(0);
+    }
+
     let tx = conn.unchecked_transaction()?;
-    for document_id in &unique {
+    for document_id in &existing {
         tx.execute(
             r#"INSERT INTO knowledge_document_usage(document_id, retrieve_count, last_retrieved_at_ms)
                VALUES (?1, 1, ?2)
@@ -134,7 +179,7 @@ pub fn touch_knowledge_documents_usage(conn: &Connection, document_ids: &[String
         )?;
     }
     tx.commit()?;
-    Ok(unique.len())
+    Ok(existing.len())
 }
 
 pub fn reset_knowledge_index(conn: &Connection) -> Result<()> {

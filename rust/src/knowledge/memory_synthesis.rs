@@ -21,6 +21,14 @@ struct GeneratedMemoryDraft {
     source_id: Option<String>,
 }
 
+struct RawUserMessage {
+    message_id: String,
+    conversation_id: String,
+    content: String,
+    created_at_ms: i64,
+    updated_at_ms: i64,
+}
+
 impl GeneratedMemoryDraft {
     fn into_document(self) -> ContentKnowledgeDocument {
         let document_id = memory_dedup::build_generated_document_id(
@@ -51,10 +59,11 @@ pub fn collect_generated_memory_documents(
     conn: &Connection,
     key: &[u8; 32],
 ) -> Result<Vec<ContentKnowledgeDocument>> {
+    let raw_messages = collect_raw_user_messages(conn, key)?;
     let mut drafts = Vec::<GeneratedMemoryDraft>::new();
-    collect_preference_memories(conn, key, &mut drafts)?;
-    collect_profile_memories(conn, key, &mut drafts)?;
-    collect_event_memories(conn, key, &mut drafts)?;
+    collect_preference_memories(&raw_messages, &mut drafts);
+    collect_profile_memories(&raw_messages, &mut drafts);
+    collect_event_memories(&raw_messages, &mut drafts);
     collect_pattern_memories(conn, key, &mut drafts)?;
 
     let mut merged = BTreeMap::<String, ContentKnowledgeDocument>::new();
@@ -83,11 +92,7 @@ pub fn collect_generated_memory_documents(
     Ok(merged.into_values().collect())
 }
 
-fn collect_preference_memories(
-    conn: &Connection,
-    key: &[u8; 32],
-    out: &mut Vec<GeneratedMemoryDraft>,
-) -> Result<()> {
+fn collect_raw_user_messages(conn: &Connection, key: &[u8; 32]) -> Result<Vec<RawUserMessage>> {
     let mut stmt = conn.prepare(
         r#"SELECT id, conversation_id, content, created_at, updated_at
            FROM messages
@@ -97,6 +102,7 @@ fn collect_preference_memories(
            ORDER BY created_at ASC"#,
     )?;
     let mut rows = stmt.query([])?;
+    let mut out = Vec::<RawUserMessage>::new();
     while let Some(row) = rows.next()? {
         let message_id: String = row.get(0)?;
         let conversation_id: String = row.get(1)?;
@@ -111,106 +117,95 @@ fn collect_preference_memories(
             Ok(value) => value,
             Err(_) => continue,
         };
-        let lower = content.trim().to_lowercase();
+        out.push(RawUserMessage {
+            message_id,
+            conversation_id,
+            content,
+            created_at_ms,
+            updated_at_ms,
+        });
+    }
+    Ok(out)
+}
+
+fn collect_preference_memories(messages: &[RawUserMessage], out: &mut Vec<GeneratedMemoryDraft>) {
+    for message in messages {
+        let lower = message.content.trim().to_lowercase();
         let anchors = KnowledgeAnchorSet {
-            message_id: Some(message_id.clone()),
-            conversation_id: Some(conversation_id),
+            message_id: Some(message.message_id.clone()),
+            conversation_id: Some(message.conversation_id.clone()),
             section_label: Some("generated_preference".to_string()),
             ..KnowledgeAnchorSet::default()
         };
 
         if lower.contains("please answer in")
             || lower.contains("reply in")
-            || content.contains("请用")
+            || message.content.contains("请用")
         {
-            if lower.contains("chinese") || content.contains("中文") {
+            if lower.contains("chinese") || message.content.contains("中文") {
                 out.push(GeneratedMemoryDraft {
                     kind: GeneratedMemoryKind::Preference,
                     facet_key: "response_language".to_string(),
                     title: "Response language preference".to_string(),
                     raw_text: "User prefers responses in Chinese.".to_string(),
-                    created_at_ms,
-                    updated_at_ms,
+                    created_at_ms: message.created_at_ms,
+                    updated_at_ms: message.updated_at_ms,
                     anchors: anchors.clone(),
-                    source_id: Some(message_id.clone()),
+                    source_id: Some(message.message_id.clone()),
                 });
             }
-            if lower.contains("english") || content.contains("英文") {
+            if lower.contains("english") || message.content.contains("英文") {
                 out.push(GeneratedMemoryDraft {
                     kind: GeneratedMemoryKind::Preference,
                     facet_key: "response_language".to_string(),
                     title: "Response language preference".to_string(),
                     raw_text: "User prefers responses in English.".to_string(),
-                    created_at_ms,
-                    updated_at_ms,
+                    created_at_ms: message.created_at_ms,
+                    updated_at_ms: message.updated_at_ms,
                     anchors: anchors.clone(),
-                    source_id: Some(message_id.clone()),
+                    source_id: Some(message.message_id.clone()),
                 });
             }
         }
 
         if lower.contains("keep responses short")
             || lower.contains("be concise")
-            || content.contains("简短")
-            || content.contains("精简")
+            || message.content.contains("简短")
+            || message.content.contains("精简")
         {
             out.push(GeneratedMemoryDraft {
                 kind: GeneratedMemoryKind::Preference,
                 facet_key: "response_style".to_string(),
                 title: "Response style preference".to_string(),
                 raw_text: "User prefers concise, practical responses.".to_string(),
-                created_at_ms,
-                updated_at_ms,
+                created_at_ms: message.created_at_ms,
+                updated_at_ms: message.updated_at_ms,
                 anchors: anchors.clone(),
-                source_id: Some(message_id.clone()),
+                source_id: Some(message.message_id.clone()),
             });
         }
 
-        if lower.contains("bullet") || content.contains("要点") || content.contains("列表") {
+        if lower.contains("bullet")
+            || message.content.contains("要点")
+            || message.content.contains("列表")
+        {
             out.push(GeneratedMemoryDraft {
                 kind: GeneratedMemoryKind::Preference,
                 facet_key: "response_format".to_string(),
                 title: "Response format preference".to_string(),
                 raw_text: "User prefers bullet-style structure when possible.".to_string(),
-                created_at_ms,
-                updated_at_ms,
+                created_at_ms: message.created_at_ms,
+                updated_at_ms: message.updated_at_ms,
                 anchors,
-                source_id: Some(message_id),
+                source_id: Some(message.message_id.clone()),
             });
         }
     }
-    Ok(())
 }
 
-fn collect_profile_memories(
-    conn: &Connection,
-    key: &[u8; 32],
-    out: &mut Vec<GeneratedMemoryDraft>,
-) -> Result<()> {
-    let mut stmt = conn.prepare(
-        r#"SELECT id, conversation_id, content, created_at, updated_at
-           FROM messages
-           WHERE role = 'user'
-             AND COALESCE(is_deleted, 0) = 0
-             AND COALESCE(is_memory, 1) = 1
-           ORDER BY created_at ASC"#,
-    )?;
-    let mut rows = stmt.query([])?;
-    while let Some(row) = rows.next()? {
-        let message_id: String = row.get(0)?;
-        let conversation_id: String = row.get(1)?;
-        let content_blob: Vec<u8> = row.get(2)?;
-        let created_at_ms: i64 = row.get(3)?;
-        let updated_at_ms: i64 = row.get(4)?;
-        let bytes = match decrypt_bytes(key, &content_blob, b"message.content") {
-            Ok(value) => value,
-            Err(_) => continue,
-        };
-        let content = match String::from_utf8(bytes) {
-            Ok(value) => value,
-            Err(_) => continue,
-        };
-        let trimmed = content.trim();
+fn collect_profile_memories(messages: &[RawUserMessage], out: &mut Vec<GeneratedMemoryDraft>) {
+    for message in messages {
+        let trimmed = message.content.trim();
         let lower = trimmed.to_lowercase();
         if !(lower.starts_with("i am ")
             || lower.starts_with("i'm ")
@@ -224,53 +219,26 @@ fn collect_profile_memories(
             facet_key: "self_profile".to_string(),
             title: "User profile".to_string(),
             raw_text: trimmed.to_string(),
-            created_at_ms,
-            updated_at_ms,
+            created_at_ms: message.created_at_ms,
+            updated_at_ms: message.updated_at_ms,
             anchors: KnowledgeAnchorSet {
-                message_id: Some(message_id.clone()),
-                conversation_id: Some(conversation_id),
+                message_id: Some(message.message_id.clone()),
+                conversation_id: Some(message.conversation_id.clone()),
                 section_label: Some("generated_profile".to_string()),
                 ..KnowledgeAnchorSet::default()
             },
-            source_id: Some(message_id),
+            source_id: Some(message.message_id.clone()),
         });
     }
-    Ok(())
 }
 
-fn collect_event_memories(
-    conn: &Connection,
-    key: &[u8; 32],
-    out: &mut Vec<GeneratedMemoryDraft>,
-) -> Result<()> {
-    let mut stmt = conn.prepare(
-        r#"SELECT id, conversation_id, content, created_at, updated_at
-           FROM messages
-           WHERE role = 'user'
-             AND COALESCE(is_deleted, 0) = 0
-             AND COALESCE(is_memory, 1) = 1
-           ORDER BY created_at ASC"#,
-    )?;
-    let mut rows = stmt.query([])?;
-    while let Some(row) = rows.next()? {
-        let message_id: String = row.get(0)?;
-        let conversation_id: String = row.get(1)?;
-        let content_blob: Vec<u8> = row.get(2)?;
-        let created_at_ms: i64 = row.get(3)?;
-        let updated_at_ms: i64 = row.get(4)?;
-        let bytes = match decrypt_bytes(key, &content_blob, b"message.content") {
-            Ok(value) => value,
-            Err(_) => continue,
-        };
-        let content = match String::from_utf8(bytes) {
-            Ok(value) => value,
-            Err(_) => continue,
-        };
-        let lower = content.to_lowercase();
+fn collect_event_memories(messages: &[RawUserMessage], out: &mut Vec<GeneratedMemoryDraft>) {
+    for message in messages {
+        let lower = message.content.to_lowercase();
         if !(lower.contains("we decided")
             || lower.contains("decided to")
-            || content.contains("决定")
-            || content.contains("改为"))
+            || message.content.contains("决定")
+            || message.content.contains("改为"))
         {
             continue;
         }
@@ -278,19 +246,18 @@ fn collect_event_memories(
             kind: GeneratedMemoryKind::Event,
             facet_key: "decision".to_string(),
             title: "Decision memory".to_string(),
-            raw_text: content.trim().to_string(),
-            created_at_ms,
-            updated_at_ms,
+            raw_text: message.content.trim().to_string(),
+            created_at_ms: message.created_at_ms,
+            updated_at_ms: message.updated_at_ms,
             anchors: KnowledgeAnchorSet {
-                message_id: Some(message_id.clone()),
-                conversation_id: Some(conversation_id),
+                message_id: Some(message.message_id.clone()),
+                conversation_id: Some(message.conversation_id.clone()),
                 section_label: Some("generated_event".to_string()),
                 ..KnowledgeAnchorSet::default()
             },
-            source_id: Some(message_id),
+            source_id: Some(message.message_id.clone()),
         });
     }
-    Ok(())
 }
 
 fn collect_pattern_memories(
