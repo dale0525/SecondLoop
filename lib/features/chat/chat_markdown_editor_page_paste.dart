@@ -49,20 +49,20 @@ extension _ChatMarkdownEditorPagePaste on _ChatMarkdownEditorPageState {
         return;
       }
       if (pastedImage != null && pastedImage.bytes.isNotEmpty) {
-      final localId = _nextDraftAttachmentLocalId();
-      final payload = buildImageAttachmentDraftPayload(
-        localId: localId,
-        rawBytes: pastedImage.bytes,
-        inferredMimeType: pastedImage.mimeType,
-        filename: pastedImage.filename,
-      );
-      _draftAttachments.add(payload);
-      final altText = context.t.attachments.workspace.types.image;
-      final markdownImage =
-          '![$altText](${buildDraftMarkdownImageSource(localId)})';
-      _replaceSelectionWithText(markdownImage);
-      return;
-    }
+        final localId = _nextDraftAttachmentLocalId();
+        final payload = buildImageAttachmentDraftPayload(
+          localId: localId,
+          rawBytes: pastedImage.bytes,
+          inferredMimeType: pastedImage.mimeType,
+          filename: pastedImage.filename,
+        );
+        _draftAttachments.add(payload);
+        final altText = context.t.attachments.workspace.types.image;
+        final markdownImage =
+            '![$altText](${buildDraftMarkdownImageSource(localId)})';
+        _replaceSelectionWithText(markdownImage);
+        return;
+      }
 
       final clipboardData = await Clipboard.getData(Clipboard.kTextPlain);
       final text = clipboardData?.text;

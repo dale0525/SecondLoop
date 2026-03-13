@@ -70,7 +70,6 @@ void main() {
     }
   });
 
-
   testWidgets(
     'repeated paste key events only insert one image while a paste is in flight',
     (tester) async {

@@ -64,8 +64,8 @@ void main() {
     }
   });
 
-
-  test('exports markdown bundle with a unique suffix when stem already exists', () async {
+  test('exports markdown bundle with a unique suffix when stem already exists',
+      () async {
     final dir = await Directory.systemTemp.createTemp('markdown-bundle-');
 
     try {
