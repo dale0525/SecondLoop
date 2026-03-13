@@ -113,6 +113,28 @@ void main() {
     expect(store.isRefreshing, isFalse);
   });
 
+  test('refresh does not notify after dispose while inflight completes',
+      () async {
+    SharedPreferences.setMockInitialValues({});
+    final completer = Completer<List<Todo>>();
+    var notifyCount = 0;
+    final store = TaskPriorityStore.fromLoaders(
+      nowLocal: () => DateTime(2026, 3, 13, 10, 0),
+      loadTodos: () => completer.future,
+    );
+    store.addListener(() => notifyCount += 1);
+
+    final refreshFuture = store.refresh();
+    await Future<void>.delayed(Duration.zero);
+    expect(store.isRefreshing, isTrue);
+
+    store.dispose();
+    completer.complete(<Todo>[todo(id: 't1', title: 'Task', updatedAtMs: 10)]);
+
+    await expectLater(refreshFuture, completes);
+    expect(notifyCount, 1);
+  });
+
   test('empty task list still yields an empty structured snapshot', () async {
     SharedPreferences.setMockInitialValues({});
     final store = TaskPriorityStore.fromLoaders(

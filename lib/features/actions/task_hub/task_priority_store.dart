@@ -89,10 +89,23 @@ class TaskPriorityStore extends ChangeNotifier {
   DateTime? _stickyFocusDayLocal;
 
   Future<void>? _inflightRefresh;
+  bool _disposed = false;
 
   void markDirty() {
     _dirty = true;
-    notifyListeners();
+    _safeNotify();
+  }
+
+  @override
+  void dispose() {
+    _disposed = true;
+    super.dispose();
+  }
+
+  void _safeNotify() {
+    if (!_disposed) {
+      notifyListeners();
+    }
   }
 
   Future<void> refresh({bool force = false}) {
@@ -126,7 +139,7 @@ class TaskPriorityStore extends ChangeNotifier {
         feedbackState: feedbackState,
       );
       _dirty = false;
-      notifyListeners();
+      _safeNotify();
 
       final aiEnhancementEnabled =
           await _isAiEnhancementEnabled?.call() ?? true;
@@ -171,7 +184,7 @@ class TaskPriorityStore extends ChangeNotifier {
           _stickyFocusTodoId = _snapshot.primaryFocus?.todo.id;
           _stickyFocusDayLocal =
               DateTime(nowLocal.year, nowLocal.month, nowLocal.day);
-          notifyListeners();
+          _safeNotify();
         } catch (_) {
           // Keep the already-published rules snapshot.
         }
@@ -182,7 +195,7 @@ class TaskPriorityStore extends ChangeNotifier {
       }
     } finally {
       _isRefreshing = false;
-      notifyListeners();
+      _safeNotify();
     }
   }
 
