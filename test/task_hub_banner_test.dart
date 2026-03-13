@@ -142,6 +142,40 @@ void main() {
     expect(find.text('No urgent task right now'), findsOneWidget);
   });
 
+  testWidgets('banner shows only one open task hub button in wrap-up state',
+      (tester) async {
+    final snapshot = buildTaskPrioritySnapshot(
+      const <Todo>[
+        Todo(
+          id: 'done-only',
+          title: 'Done only',
+          dueAtMs: null,
+          status: 'done',
+          sourceEntryId: null,
+          createdAtMs: 0,
+          updatedAtMs: 10,
+          reviewStage: null,
+          nextReviewAtMs: null,
+          lastReviewAtMs: null,
+        ),
+      ],
+      nowLocal: DateTime(2026, 3, 13, 10, 0),
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: Scaffold(body: TaskHubBanner(snapshot: snapshot)),
+        ),
+      ),
+    );
+
+    expect(
+        find.byKey(const ValueKey('task_hub_banner_open_hub')), findsOneWidget);
+    expect(
+        find.byKey(const ValueKey('task_hub_banner_view_all')), findsNothing);
+  });
+
   testWidgets('banner shows AI upgrade hint when enhancement is unavailable',
       (tester) async {
     final snapshot = buildTaskPrioritySnapshot(

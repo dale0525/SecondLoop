@@ -93,6 +93,7 @@ extension _ChatPageStateBuild on _ChatPageState {
                           _taskPriorityStore!.isAiEnhancementEnabled &&
                               !_taskPriorityStore!.isAiEnhancementAvailable,
                       collapseSignal: _todoAgendaBannerCollapseSignal,
+                      compact: true,
                       onOpenTodo: (entry) async {
                         await _pushRouteFromChat(
                           MaterialPageRoute(

@@ -150,6 +150,32 @@ void main() {
     expect(store.snapshot.source, TaskPrioritySnapshotSource.rules);
   });
 
+  test('force refresh waits for inflight refresh then recomputes', () async {
+    SharedPreferences.setMockInitialValues({});
+    var loadCount = 0;
+    final completer = Completer<void>();
+    final store = TaskPriorityStore.fromLoaders(
+      nowLocal: () => DateTime(2026, 3, 13, 10, 0),
+      loadTodos: () async {
+        loadCount += 1;
+        if (loadCount == 1) {
+          await completer.future;
+        }
+        return <Todo>[todo(id: 't$loadCount', title: 'Task', updatedAtMs: 10)];
+      },
+    );
+
+    final firstRefresh = store.refresh();
+    await Future<void>.delayed(Duration.zero);
+    final forcedRefresh = store.refresh(force: true);
+    completer.complete();
+
+    await Future.wait(<Future<void>>[firstRefresh, forcedRefresh]);
+
+    expect(loadCount, 2);
+    expect(store.snapshot.decide.first.todo.id, 't2');
+  });
+
   test('reuses cached AI rerank while task signature stays unchanged',
       () async {
     SharedPreferences.setMockInitialValues({});

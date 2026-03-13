@@ -93,11 +93,56 @@ class TaskPriorityFeedbackStore {
         break;
     }
 
-    final prefs = await SharedPreferences.getInstance();
-    final next = TaskPriorityFeedbackState(
-      suppressedTodoIds: suppressed,
-      deprioritizedTodoIds: deprioritized,
+    await _write(
+      TaskPriorityFeedbackState(
+        suppressedTodoIds: suppressed,
+        deprioritizedTodoIds: deprioritized,
+      ),
     );
-    await prefs.setString(_prefsKey, jsonEncode(next.toJson()));
+  }
+
+  Future<void> forget({required String todoId}) async {
+    final trimmedTodoId = todoId.trim();
+    if (trimmedTodoId.isEmpty) return;
+
+    final current = await read();
+    final suppressed = current.suppressedTodoIds.toSet()..remove(trimmedTodoId);
+    final deprioritized = current.deprioritizedTodoIds.toSet()
+      ..remove(trimmedTodoId);
+    await _write(
+      TaskPriorityFeedbackState(
+        suppressedTodoIds: suppressed,
+        deprioritizedTodoIds: deprioritized,
+      ),
+    );
+  }
+
+  Future<void> pruneToTodoIds(Iterable<String> todoIds) async {
+    final allowed = todoIds
+        .map((value) => value.trim())
+        .where((value) => value.isNotEmpty)
+        .toSet();
+    final current = await read();
+    final suppressed = current.suppressedTodoIds
+        .where((value) => allowed.contains(value))
+        .toSet();
+    final deprioritized = current.deprioritizedTodoIds
+        .where((value) => allowed.contains(value))
+        .toSet();
+    if (suppressed.length == current.suppressedTodoIds.length &&
+        deprioritized.length == current.deprioritizedTodoIds.length) {
+      return;
+    }
+    await _write(
+      TaskPriorityFeedbackState(
+        suppressedTodoIds: suppressed,
+        deprioritizedTodoIds: deprioritized,
+      ),
+    );
+  }
+
+  Future<void> _write(TaskPriorityFeedbackState state) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_prefsKey, jsonEncode(state.toJson()));
   }
 }

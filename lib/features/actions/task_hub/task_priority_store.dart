@@ -96,7 +96,10 @@ class TaskPriorityStore extends ChangeNotifier {
   }
 
   Future<void> refresh({bool force = false}) {
-    if (_inflightRefresh != null) return _inflightRefresh!;
+    if (_inflightRefresh != null) {
+      if (!force) return _inflightRefresh!;
+      return _inflightRefresh!.then((_) => refresh(force: true));
+    }
     if (!force && !_dirty && _snapshot.computedAtLocal != null) {
       return Future<void>.value();
     }
@@ -113,6 +116,7 @@ class TaskPriorityStore extends ChangeNotifier {
 
     final nowLocal = _nowLocal();
     final todos = await _loadTodos();
+    await _feedbackStore.pruneToTodoIds(todos.map((todo) => todo.id));
     final feedbackState = await _feedbackStore.read();
 
     _snapshot = buildTaskPrioritySnapshot(

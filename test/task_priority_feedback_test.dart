@@ -18,6 +18,27 @@ void main() {
     expect(state.deprioritizedTodoIds, contains('todo-1'));
   });
 
+  test('prune removes stale feedback ids', () async {
+    SharedPreferences.setMockInitialValues({});
+    const store = TaskPriorityFeedbackStore();
+
+    await store.record(
+      todoId: 'todo-keep',
+      feedback: TaskPriorityFeedbackKind.notImportant,
+    );
+    await store.record(
+      todoId: 'todo-drop',
+      feedback: TaskPriorityFeedbackKind.recommendLater,
+    );
+
+    await store.pruneToTodoIds(const <String>['todo-keep']);
+
+    final state = await store.read();
+    expect(state.suppressedTodoIds, contains('todo-keep'));
+    expect(state.suppressedTodoIds, isNot(contains('todo-drop')));
+    expect(state.deprioritizedTodoIds, contains('todo-keep'));
+  });
+
   test('later and decide-myself feedback suppress future recommendation',
       () async {
     SharedPreferences.setMockInitialValues({});

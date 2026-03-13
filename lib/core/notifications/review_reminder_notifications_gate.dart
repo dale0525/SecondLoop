@@ -641,11 +641,29 @@ final class _ReviewReminderNotificationsGateState
     final navigator = widget.navigatorKey.currentState;
     if (navigator == null || !navigator.mounted) return;
 
+    final backend = AppBackendScope.of(context);
+    final sessionKey = Uint8List.fromList(SessionScope.of(context).sessionKey);
+    final syncEngine = SyncEngineScope.maybeOf(context);
+
     _openingPageFromReminder = true;
     try {
-      const page = TaskHubPage();
       await navigator.push(
-        MaterialPageRoute(builder: (_) => page),
+        MaterialPageRoute(
+          builder: (_) {
+            Widget page = AppBackendScope(
+              backend: backend,
+              child: SessionScope(
+                sessionKey: sessionKey,
+                lock: () {},
+                child: const TaskHubPage(),
+              ),
+            );
+            if (syncEngine != null) {
+              page = SyncEngineScope(engine: syncEngine, child: page);
+            }
+            return page;
+          },
+        ),
       );
     } finally {
       _openingPageFromReminder = false;

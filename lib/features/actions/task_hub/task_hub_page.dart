@@ -149,6 +149,7 @@ class _TaskHubPageState extends State<TaskHubPage> {
     _quickActionSnackMessenger = messenger;
     final snackController = messenger?.showSnackBar(
       SnackBar(
+        duration: const Duration(seconds: 3),
         content: Text(
           context.t.actions.taskHub.snackActionApplied(
             action: _actionLabel(action),
