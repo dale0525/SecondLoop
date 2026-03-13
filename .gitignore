@@ -1,5 +1,9 @@
 # Docs
 docs/
+!docs/
+docs/*
+!docs/plans/
+!docs/plans/**
 
 lib/i18n/strings.g.dart
 
