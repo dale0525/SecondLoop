@@ -24,11 +24,14 @@ import 'embedding_profiles_page.dart';
 import 'knowledge_index_status_card.dart';
 import 'llm_profiles_page.dart';
 import 'media_annotation_settings_page.dart';
+import 'ai_ask_ai_settings_page.dart';
+import 'ai_smart_organization_settings_page.dart';
 
 part 'ai_settings_page_ui.dart';
 
 enum AiSettingsSection {
   askAi,
+  smartOrganization,
   embeddings,
   mediaUnderstanding,
 }
@@ -38,12 +41,14 @@ class AiSettingsPage extends StatefulWidget {
     this.focusSection,
     this.highlightFocus = false,
     this.focusMediaLocalCapabilityCard = false,
+    this.expandAdvancedOnOpen = false,
     super.key,
   });
 
   final AiSettingsSection? focusSection;
   final bool highlightFocus;
   final bool focusMediaLocalCapabilityCard;
+  final bool expandAdvancedOnOpen;
 
   @override
   State<AiSettingsPage> createState() => _AiSettingsPageState();
@@ -52,11 +57,14 @@ class AiSettingsPage extends StatefulWidget {
 class _AiSettingsPageState extends State<AiSettingsPage> {
   final ScrollController _scrollController = ScrollController();
   final GlobalKey _askAiSectionAnchorKey = GlobalKey();
+  final GlobalKey _advancedAskAiSectionAnchorKey = GlobalKey();
+  final GlobalKey _smartOrganizationSectionAnchorKey = GlobalKey();
   final GlobalKey _embeddingsSectionAnchorKey = GlobalKey();
   final GlobalKey _mediaSectionAnchorKey = GlobalKey();
   final GlobalKey _mediaLocalCapabilityEntryAnchorKey = GlobalKey();
 
   bool _didRunInitialFocus = false;
+  bool _advancedSettingsExpanded = false;
   AiSettingsSection? _highlightedSection;
 
   AskAiRouteKind _askAiRoute = AskAiRouteKind.needsSetup;
@@ -113,6 +121,7 @@ class _AiSettingsPageState extends State<AiSettingsPage> {
   GlobalKey _sectionAnchorKeyOf(AiSettingsSection section) {
     return switch (section) {
       AiSettingsSection.askAi => _askAiSectionAnchorKey,
+      AiSettingsSection.smartOrganization => _smartOrganizationSectionAnchorKey,
       AiSettingsSection.embeddings => _embeddingsSectionAnchorKey,
       AiSettingsSection.mediaUnderstanding => _mediaSectionAnchorKey,
     };
@@ -508,6 +517,95 @@ class _AiSettingsPageState extends State<AiSettingsPage> {
     }
   }
 
+  bool get _smartOrganizationEnabled {
+    return (_semanticParseEnabled ?? false) ||
+        (_cloudEmbeddingsEnabled ?? false);
+  }
+
+  Future<void> _setSmartOrganizationEnabled({
+    required bool enabled,
+    required bool canUseSmartOrganization,
+    required bool canUseCloudEmbeddings,
+  }) async {
+    if (_automationSaving || _smartOrganizationEnabled == enabled) {
+      return;
+    }
+
+    if (enabled && !canUseSmartOrganization) {
+      final subscriptionStatus = SubscriptionScope.maybeOf(context)?.status ??
+          SubscriptionStatus.unknown;
+      final hasCloudAccount =
+          (CloudAuthScope.maybeOf(context)?.controller.uid ?? '')
+              .trim()
+              .isNotEmpty;
+      if (subscriptionStatus == SubscriptionStatus.entitled &&
+          !hasCloudAccount) {
+        await Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => const CloudAccountPage(),
+          ),
+        );
+        if (!mounted) return;
+        await _reloadAutomationState(forceLoading: false);
+        await _reloadEmbeddingsState(forceLoading: false);
+        return;
+      }
+
+      await _openLlmProfilesForByokSetupAndRefreshRoutes();
+      return;
+    }
+
+    if (enabled) {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (context) {
+          final t = context.t;
+          return AlertDialog(
+            title: Text(t.settings.aiSelection.smartOrganization.dialogTitle),
+            content: Text(t.settings.aiSelection.smartOrganization.dialogBody),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(false),
+                child: Text(t.common.actions.cancel),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(context).pop(true),
+                child: Text(
+                  t.settings.aiSelection.smartOrganization.dialogActions.enable,
+                ),
+              ),
+            ],
+          );
+        },
+      );
+
+      if (confirmed != true || !mounted) return;
+    }
+
+    setState(() => _automationSaving = true);
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await SemanticParseDataConsentPrefs.setEnabled(prefs, enabled);
+      await EmbeddingsDataConsentPrefs.setEnabled(
+        prefs,
+        enabled && canUseCloudEmbeddings,
+      );
+      await TaskPriorityAiEnhancementPrefs.write(enabled);
+      if (!mounted) return;
+      await _reloadAutomationState(forceLoading: false);
+      await _reloadEmbeddingsState(forceLoading: false);
+    } finally {
+      if (mounted) {
+        setState(() => _automationSaving = false);
+      }
+    }
+  }
+
+  void _setAdvancedSettingsExpanded(bool expanded) {
+    if (_advancedSettingsExpanded == expanded) return;
+    setState(() => _advancedSettingsExpanded = expanded);
+  }
+
   Future<void> _setAskAiPreference(AskAiSourcePreference next) async {
     if (_askAiPreferenceSaving || _askAiPreference == next) return;
     setState(() => _askAiPreferenceSaving = true);
@@ -633,6 +731,13 @@ class _AiSettingsPageState extends State<AiSettingsPage> {
     final focusSection = widget.focusSection;
     if (focusSection == null) return;
     _didRunInitialFocus = true;
+
+    if (widget.expandAdvancedOnOpen ||
+        focusSection == AiSettingsSection.askAi ||
+        focusSection == AiSettingsSection.embeddings ||
+        focusSection == AiSettingsSection.mediaUnderstanding) {
+      _advancedSettingsExpanded = true;
+    }
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       unawaited(_scrollToAndHighlight(focusSection));

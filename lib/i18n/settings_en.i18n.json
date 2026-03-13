@@ -143,10 +143,16 @@
   },
   "aiSelection": {
     "title": "Intelligence",
-    "subtitle": "Unified settings for Ask AI, embeddings, OCR, speech recognition, and image understanding.",
+    "subtitle": "Choose the few AI controls that matter most first. Detailed provider and media options live under Advanced settings.",
+    "advancedSettings": {
+      "title": "Advanced settings",
+      "description": "Provider routing, embeddings, media understanding, and detailed controls.",
+      "collapsed": "Hidden by default to keep setup simple.",
+      "expanded": "Showing expert controls and provider details."
+    },
     "askAi": {
       "title": "Ask AI",
-      "description": "Chat assistant provider for your messages and memory.",
+      "description": "Use AI actively when you want help with messages, memory, and drafting.",
       "setupHint": "Ask AI is not configured yet. Open Cloud account or add an API key profile to continue.",
       "preferenceUnavailableHint": "The selected Ask AI source is unavailable. Open Cloud account or API keys to finish setup.",
       "status": {
@@ -171,7 +177,30 @@
       },
       "actions": {
         "openCloud": "Open Cloud account",
-        "openByok": "Open API keys"
+        "openByok": "Open API keys",
+        "openSettings": "Open Ask AI settings",
+        "reviewAdvanced": "Review advanced source settings"
+      }
+    },
+    "smartOrganization": {
+      "title": "Smart organization enhancement",
+      "description": "Improve message understanding, task linking, and automatic organization.",
+      "privacySummary": "Only the minimum necessary text is sent. Your vault key and sync key are never uploaded.",
+      "status": {
+        "loading": "Checking current setup...",
+        "enabled": "Enhanced automation is on",
+        "disabled": "Enhanced automation is off",
+        "requiresSetup": "Sign in with SecondLoop Pro or configure an API key to enable smarter organization."
+      },
+      "actions": {
+        "openSettings": "Open smart organization settings",
+        "useRecommended": "Use recommended setup",
+        "reviewAdvanced": "Review advanced components"
+      },
+      "dialogTitle": "Enable smart organization enhancement?",
+      "dialogBody": "When enabled, SecondLoop improves message understanding, task linking, and automatic organization using the best available AI route. Only the minimum necessary text is sent, and your keys are never uploaded.",
+      "dialogActions": {
+        "enable": "Enable"
       }
     },
     "embeddings": {

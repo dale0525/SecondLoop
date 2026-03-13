@@ -78,6 +78,12 @@
       "cancel": "暂不",
       "confirm": "切换"
     },
+    "aiFeatureGuideDialog": {
+      "title": "更多 AI 能力已可用",
+      "message": "你的 Pro 订阅已解锁更智能的 AI 配置方式。你可以现在查看推荐设置，也可以稍后在“设置 > 智能化”里再处理。",
+      "cancel": "稍后",
+      "confirm": "查看设置"
+    },
     "setPassphraseDialog": {
       "title": "设置恢复口令（高级）",
       "confirm": "保存恢复口令"

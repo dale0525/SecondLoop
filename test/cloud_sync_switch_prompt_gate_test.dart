@@ -14,6 +14,7 @@ import 'package:secondloop/core/sync/cloud_sync_switch_prompt_gate.dart';
 import 'package:secondloop/core/sync/sync_config_store.dart';
 import 'package:secondloop/core/sync/sync_engine.dart';
 import 'package:secondloop/core/sync/sync_engine_gate.dart';
+import 'package:secondloop/features/settings/ai_settings_page.dart';
 import 'package:secondloop/src/rust/db.dart';
 
 import 'test_i18n.dart';
@@ -177,7 +178,7 @@ void main() {
   });
 
   testWidgets(
-      'Cloud sync switch prompt continues to embeddings, semantic parse, then media understanding prompts',
+      'Cloud sync switch prompt continues to a single AI feature guide prompt and can open AI settings',
       (tester) async {
     SharedPreferences.setMockInitialValues({
       // Can be set by previous Ask AI / settings interactions.
@@ -224,28 +225,21 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    expect(find.text('More AI features are now available'), findsOneWidget);
+
+    await tester.tap(
+      find.descendant(
+        of: find.byType(AlertDialog),
+        matching: find.byType(FilledButton),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byType(AiSettingsPage), findsOneWidget);
     expect(
-        find.text('Use cloud embeddings for semantic search?'), findsOneWidget);
-
-    await tester.tap(
-      find.descendant(
-        of: find.byType(AlertDialog),
-        matching: find.byType(TextButton),
-      ),
+      find.byKey(const ValueKey('ai_settings_home_smart_organization')),
+      findsOneWidget,
     );
-    await tester.pumpAndSettle();
-
-    expect(find.text('Enable cloud smart understanding?'), findsOneWidget);
-
-    await tester.tap(
-      find.descendant(
-        of: find.byType(AlertDialog),
-        matching: find.byType(TextButton),
-      ),
-    );
-    await tester.pumpAndSettle();
-
-    expect(find.text('Use cloud for media understanding?'), findsOneWidget);
   });
 
   testWidgets('Switching to Cloud runs sync and shows progress first',
@@ -295,7 +289,7 @@ void main() {
     expect(find.text('Switch'), findsOneWidget);
     await tester.tap(find.text('Switch'));
 
-    // Sync progress dialog appears before the embeddings prompt.
+    // Sync progress dialog appears before the AI guide prompt.
     await tester.pump(const Duration(milliseconds: 100));
     expect(
       find.byKey(const ValueKey('cloud_sync_switch_progress')),
@@ -306,18 +300,17 @@ void main() {
       findsOneWidget,
     );
     expect(
-      find.text('Use cloud embeddings for semantic search?'),
+      find.text('More AI features are now available'),
       findsNothing,
     );
 
-    // After sync finishes, embeddings consent prompt appears.
+    // After sync finishes, the AI guide prompt appears.
     await tester.pump(const Duration(seconds: 2));
     await tester.pumpAndSettle();
 
     expect(backend.calls, contains('syncManagedVaultPull'));
     expect(backend.calls, contains('syncManagedVaultPushOpsOnly'));
-    expect(
-        find.text('Use cloud embeddings for semantic search?'), findsOneWidget);
+    expect(find.text('More AI features are now available'), findsOneWidget);
   });
 
   testWidgets(

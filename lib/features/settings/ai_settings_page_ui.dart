@@ -198,6 +198,367 @@ extension _AiSettingsPageUiExtension on _AiSettingsPageState {
     );
   }
 
+  Widget _buildHomeCard(
+    BuildContext context, {
+    required GlobalKey anchorKey,
+    required Key cardKey,
+    required AiSettingsSection section,
+    required String title,
+    required String description,
+    required String statusLabel,
+    required List<Widget> actions,
+    Widget? warning,
+  }) {
+    return _buildSectionCard(
+      context,
+      anchorKey: anchorKey,
+      cardKey: cardKey,
+      section: section,
+      title: title,
+      description: description,
+      statusLabel: statusLabel,
+      actions: actions,
+      warning: warning,
+    );
+  }
+
+  Widget _buildAdvancedSettingsEntry(
+    BuildContext context, {
+    required bool expanded,
+  }) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final t = context.t.settings.aiSelection.advancedSettings;
+
+    return GestureDetector(
+      key: const ValueKey('ai_settings_home_advanced_settings'),
+      behavior: HitTestBehavior.opaque,
+      onTap: () => _setAdvancedSettingsExpanded(!expanded),
+      child: SlSurface(
+        child: ListTile(
+          contentPadding:
+              const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          title: Text(
+            t.title,
+            style: Theme.of(context)
+                .textTheme
+                .titleMedium
+                ?.copyWith(fontWeight: FontWeight.w700),
+          ),
+          subtitle: Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Text(
+              '${t.description}\n${expanded ? t.expanded : t.collapsed}',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                  ),
+            ),
+          ),
+          trailing: Icon(
+            expanded ? Icons.expand_less : Icons.chevron_right,
+            color: colorScheme.onSurfaceVariant,
+          ),
+          onTap: () => _setAdvancedSettingsExpanded(!expanded),
+        ),
+      ),
+    );
+  }
+
+  String _smartOrganizationStatusLabel(
+    BuildContext context, {
+    required bool canUseSmartOrganization,
+  }) {
+    final status = context.t.settings.aiSelection.smartOrganization.status;
+    if (_automationLoading) return status.loading;
+    if (!canUseSmartOrganization) return status.requiresSetup;
+    return _smartOrganizationEnabled ? status.enabled : status.disabled;
+  }
+
+  List<Widget> _buildAdvancedSettingsChildren(
+    BuildContext context, {
+    required dynamic t,
+    required dynamic askAiPreferenceLabels,
+    required dynamic embeddingsPreferenceLabels,
+    required dynamic mediaPreferenceLabels,
+    required SubscriptionStatus subscriptionStatus,
+    required bool hasCloudAccount,
+    required bool canUseCloudEmbeddings,
+    required bool canUseSemanticParse,
+    required bool canUseTaskPriorityAi,
+    required String cloudEmbeddingsSubtitle,
+    required String semanticParseSubtitle,
+    required String taskPriorityAiSubtitle,
+    required Widget? askAiWarning,
+    required Widget? embeddingsWarning,
+    required Widget? mediaWarning,
+  }) {
+    return [
+      _buildSectionCard(
+        context,
+        anchorKey: _advancedAskAiSectionAnchorKey,
+        cardKey: const ValueKey('ai_settings_section_ask_ai'),
+        section: AiSettingsSection.askAi,
+        title: t.askAi.title,
+        description: t.askAi.description,
+        statusLabel: _askAiStatusLabel(context),
+        warning: askAiWarning,
+        actions: [
+          _buildAskAiPreferenceTile(
+            context,
+            key: const ValueKey('ai_settings_ask_ai_mode_auto'),
+            value: AskAiSourcePreference.auto,
+            title: askAiPreferenceLabels.auto.title,
+            subtitle: askAiPreferenceLabels.auto.description,
+          ),
+          _buildAskAiPreferenceTile(
+            context,
+            key: const ValueKey('ai_settings_ask_ai_mode_cloud'),
+            value: AskAiSourcePreference.cloud,
+            title: askAiPreferenceLabels.cloud.title,
+            subtitle: askAiPreferenceLabels.cloud.description,
+          ),
+          _buildAskAiPreferenceTile(
+            context,
+            key: const ValueKey('ai_settings_ask_ai_mode_byok'),
+            value: AskAiSourcePreference.byok,
+            title: askAiPreferenceLabels.byok.title,
+            subtitle: askAiPreferenceLabels.byok.description,
+          ),
+          SwitchListTile(
+            key: const ValueKey(
+                'ai_settings_semantic_parse_auto_actions_switch'),
+            title: Text(context.t.settings.semanticParseAutoActions.title),
+            subtitle: Text(semanticParseSubtitle),
+            value: _semanticParseEnabled ?? false,
+            onChanged: _automationLoading || _automationSaving
+                ? null
+                : (value) async {
+                    if (value && !canUseSemanticParse) {
+                      if (subscriptionStatus == SubscriptionStatus.entitled &&
+                          !hasCloudAccount) {
+                        await Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => const CloudAccountPage(),
+                          ),
+                        );
+                        if (!mounted) return;
+                        await _reloadAutomationState(forceLoading: false);
+                        return;
+                      }
+
+                      await _openLlmProfilesForByokSetupAndRefreshRoutes();
+                      return;
+                    }
+
+                    await _setSemanticParseEnabled(value);
+                  },
+          ),
+          SwitchListTile(
+            key: const ValueKey('ai_settings_task_priority_ai_switch'),
+            title: Text(context.t.settings.taskPriorityAiEnhancement.title),
+            subtitle: Text(taskPriorityAiSubtitle),
+            value: _taskPriorityAiEnabled ?? true,
+            onChanged: _automationLoading || _automationSaving
+                ? null
+                : (value) async {
+                    if (value && !canUseTaskPriorityAi) {
+                      if (subscriptionStatus == SubscriptionStatus.entitled &&
+                          !hasCloudAccount) {
+                        await Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => const CloudAccountPage(),
+                          ),
+                        );
+                        if (!mounted) return;
+                        await _reloadAutomationState(forceLoading: false);
+                        return;
+                      }
+
+                      await _openLlmProfilesForByokSetupAndRefreshRoutes();
+                      return;
+                    }
+
+                    await _setTaskPriorityAiEnabled(value);
+                  },
+          ),
+          ListTile(
+            key: const ValueKey('ai_settings_open_llm_profiles_advanced'),
+            title: Text(t.askAi.actions.openByok),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => const LlmProfilesPage(),
+                ),
+              );
+            },
+          ),
+        ],
+      ),
+      const SizedBox(height: 12),
+      _buildSectionCard(
+        context,
+        anchorKey: _embeddingsSectionAnchorKey,
+        cardKey: const ValueKey('ai_settings_section_embeddings'),
+        section: AiSettingsSection.embeddings,
+        title: t.embeddings.title,
+        description: t.embeddings.description,
+        statusLabel: _embeddingsStatusLabel(context),
+        warning: embeddingsWarning,
+        actions: [
+          SwitchListTile(
+            key: const ValueKey('ai_settings_cloud_embeddings_switch'),
+            title: Text(context.t.settings.cloudEmbeddings.title),
+            subtitle: Text(cloudEmbeddingsSubtitle),
+            value: _cloudEmbeddingsEnabled ?? false,
+            onChanged: _automationLoading || _automationSaving
+                ? null
+                : (value) async {
+                    if (value && !canUseCloudEmbeddings) {
+                      await Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => const CloudAccountPage(),
+                        ),
+                      );
+                      if (!mounted) return;
+                      await _reloadAutomationState(forceLoading: false);
+                      await _reloadEmbeddingsState(forceLoading: false);
+                      return;
+                    }
+
+                    await _setCloudEmbeddingsEnabled(value);
+                  },
+          ),
+          _buildEmbeddingsPreferenceTile(
+            context,
+            key: const ValueKey('ai_settings_embeddings_mode_auto'),
+            value: EmbeddingsSourcePreference.auto,
+            title: embeddingsPreferenceLabels.auto.title,
+            subtitle: embeddingsPreferenceLabels.auto.description,
+          ),
+          _buildEmbeddingsPreferenceTile(
+            context,
+            key: const ValueKey('ai_settings_embeddings_mode_cloud'),
+            value: EmbeddingsSourcePreference.cloud,
+            title: embeddingsPreferenceLabels.cloud.title,
+            subtitle: embeddingsPreferenceLabels.cloud.description,
+          ),
+          _buildEmbeddingsPreferenceTile(
+            context,
+            key: const ValueKey('ai_settings_embeddings_mode_byok'),
+            value: EmbeddingsSourcePreference.byok,
+            title: embeddingsPreferenceLabels.byok.title,
+            subtitle: embeddingsPreferenceLabels.byok.description,
+          ),
+          _buildEmbeddingsPreferenceTile(
+            context,
+            key: const ValueKey('ai_settings_embeddings_mode_local'),
+            value: EmbeddingsSourcePreference.local,
+            title: embeddingsPreferenceLabels.local.title,
+            subtitle: embeddingsPreferenceLabels.local.description,
+          ),
+          ListTile(
+            key: const ValueKey('ai_settings_open_embedding_profiles'),
+            title: Text(t.embeddings.actions.openEmbeddingProfiles),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => const EmbeddingProfilesPage(),
+                ),
+              );
+            },
+          ),
+        ],
+      ),
+      if (AppBackendScope.maybeOf(context) != null &&
+          SessionScope.maybeOf(context) != null) ...[
+        const SizedBox(height: 12),
+        const KnowledgeIndexStatusCard(),
+      ],
+      const SizedBox(height: 12),
+      _buildSectionCard(
+        context,
+        anchorKey: _mediaSectionAnchorKey,
+        cardKey: const ValueKey('ai_settings_section_media_understanding'),
+        section: AiSettingsSection.mediaUnderstanding,
+        title: context.t.settings.mediaAnnotation.imageCaption.title,
+        description:
+            context.t.settings.mediaAnnotation.annotateEnabled.subtitle,
+        statusLabel: _mediaStatusLabel(context),
+        warning: mediaWarning,
+        actions: [
+          _buildMediaPreferenceTile(
+            context,
+            key: const ValueKey('ai_settings_media_mode_auto'),
+            value: MediaSourcePreference.auto,
+            title: mediaPreferenceLabels.auto.title,
+            subtitle: mediaPreferenceLabels.auto.description,
+          ),
+          _buildMediaPreferenceTile(
+            context,
+            key: const ValueKey('ai_settings_media_mode_cloud'),
+            value: MediaSourcePreference.cloud,
+            title: mediaPreferenceLabels.cloud.title,
+            subtitle: mediaPreferenceLabels.cloud.description,
+          ),
+          _buildMediaPreferenceTile(
+            context,
+            key: const ValueKey('ai_settings_media_mode_byok'),
+            value: MediaSourcePreference.byok,
+            title: mediaPreferenceLabels.byok.title,
+            subtitle: mediaPreferenceLabels.byok.description,
+          ),
+          _buildMediaPreferenceTile(
+            context,
+            key: const ValueKey('ai_settings_media_mode_local'),
+            value: MediaSourcePreference.local,
+            title: mediaPreferenceLabels.local.title,
+            subtitle: _imageLocalSourceSubtitle(context),
+          ),
+          SwitchListTile(
+            key: const ValueKey('ai_settings_media_image_wifi_only'),
+            title: Text(
+              context.t.settings.mediaAnnotation.connectivity.wifiOnlyTitle,
+            ),
+            subtitle: Text(_wifiOnlyHint(context)),
+            value: _imageWifiOnly,
+            onChanged: _mediaLoading || _imageWifiSaving
+                ? null
+                : (value) {
+                    unawaited(_setImageWifiOnly(value));
+                  },
+          ),
+          ListTile(
+            key: const ValueKey('ai_settings_open_media_llm_profiles'),
+            title: Text(t.mediaUnderstanding.actions.openByok),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => const LlmProfilesPage(
+                    providerFilter:
+                        LlmProfilesProviderFilter.openAiCompatibleOnly,
+                  ),
+                ),
+              );
+            },
+          ),
+        ],
+      ),
+      if (AppBackendScope.maybeOf(context) != null &&
+          SessionScope.maybeOf(context) != null) ...[
+        const SizedBox(height: 12),
+        KeyedSubtree(
+          key: _mediaLocalCapabilityEntryAnchorKey,
+          child: MediaAnnotationSettingsPage(
+            embedded: true,
+            focusLocalCapabilityCard: widget.focusMediaLocalCapabilityCard,
+          ),
+        ),
+      ],
+    ];
+  }
+
   Widget _buildPage(BuildContext context) {
     final t = context.t.settings.aiSelection;
     final askAiPreferenceLabels = t.askAi.preference;
@@ -282,6 +643,8 @@ extension _AiSettingsPageUiExtension on _AiSettingsPageState {
           )
         : null;
 
+    final canUseSmartOrganization = canUseSemanticParse;
+
     return Scaffold(
       appBar: AppBar(title: Text(t.title)),
       body: ListView(
@@ -290,107 +653,24 @@ extension _AiSettingsPageUiExtension on _AiSettingsPageState {
         children: [
           Text(t.subtitle),
           const SizedBox(height: 12),
-          _buildSectionCard(
+          _buildHomeCard(
             context,
             anchorKey: _askAiSectionAnchorKey,
-            cardKey: const ValueKey('ai_settings_section_ask_ai'),
+            cardKey: const ValueKey('ai_settings_home_ask_ai'),
             section: AiSettingsSection.askAi,
             title: t.askAi.title,
             description: t.askAi.description,
             statusLabel: _askAiStatusLabel(context),
             warning: askAiWarning,
             actions: [
-              _buildAskAiPreferenceTile(
-                context,
-                key: const ValueKey('ai_settings_ask_ai_mode_auto'),
-                value: AskAiSourcePreference.auto,
-                title: askAiPreferenceLabels.auto.title,
-                subtitle: askAiPreferenceLabels.auto.description,
-              ),
-              _buildAskAiPreferenceTile(
-                context,
-                key: const ValueKey('ai_settings_ask_ai_mode_cloud'),
-                value: AskAiSourcePreference.cloud,
-                title: askAiPreferenceLabels.cloud.title,
-                subtitle: askAiPreferenceLabels.cloud.description,
-              ),
-              _buildAskAiPreferenceTile(
-                context,
-                key: const ValueKey('ai_settings_ask_ai_mode_byok'),
-                value: AskAiSourcePreference.byok,
-                title: askAiPreferenceLabels.byok.title,
-                subtitle: askAiPreferenceLabels.byok.description,
-              ),
-              SwitchListTile(
-                key: const ValueKey(
-                  'ai_settings_semantic_parse_auto_actions_switch',
-                ),
-                title: Text(context.t.settings.semanticParseAutoActions.title),
-                subtitle: Text(semanticParseSubtitle),
-                value: _semanticParseEnabled ?? false,
-                onChanged: _automationLoading || _automationSaving
-                    ? null
-                    : (value) async {
-                        if (value && !canUseSemanticParse) {
-                          if (subscriptionStatus ==
-                                  SubscriptionStatus.entitled &&
-                              !hasCloudAccount) {
-                            await Navigator.of(context).push(
-                              MaterialPageRoute(
-                                builder: (_) => const CloudAccountPage(),
-                              ),
-                            );
-                            if (!mounted) return;
-                            await _reloadAutomationState(forceLoading: false);
-                            return;
-                          }
-
-                          await _openLlmProfilesForByokSetupAndRefreshRoutes();
-                          return;
-                        }
-
-                        await _setSemanticParseEnabled(value);
-                      },
-              ),
-              SwitchListTile(
-                key: const ValueKey('ai_settings_task_priority_ai_switch'),
-                title: Text(
-                  context.t.settings.taskPriorityAiEnhancement.title,
-                ),
-                subtitle: Text(taskPriorityAiSubtitle),
-                value: _taskPriorityAiEnabled ?? true,
-                onChanged: _automationLoading || _automationSaving
-                    ? null
-                    : (value) async {
-                        if (value && !canUseTaskPriorityAi) {
-                          if (subscriptionStatus ==
-                                  SubscriptionStatus.entitled &&
-                              !hasCloudAccount) {
-                            await Navigator.of(context).push(
-                              MaterialPageRoute(
-                                builder: (_) => const CloudAccountPage(),
-                              ),
-                            );
-                            if (!mounted) return;
-                            await _reloadAutomationState(forceLoading: false);
-                            return;
-                          }
-
-                          await _openLlmProfilesForByokSetupAndRefreshRoutes();
-                          return;
-                        }
-
-                        await _setTaskPriorityAiEnabled(value);
-                      },
-              ),
               ListTile(
-                key: const ValueKey('ai_settings_open_llm_profiles'),
-                title: Text(t.askAi.actions.openByok),
+                key: const ValueKey('ai_settings_open_ask_ai_settings'),
+                title: Text(t.askAi.actions.openSettings),
                 trailing: const Icon(Icons.chevron_right),
                 onTap: () {
                   Navigator.of(context).push(
                     MaterialPageRoute(
-                      builder: (_) => const LlmProfilesPage(),
+                      builder: (_) => const AiAskAiSettingsPage(),
                     ),
                   );
                 },
@@ -398,165 +678,117 @@ extension _AiSettingsPageUiExtension on _AiSettingsPageState {
             ],
           ),
           const SizedBox(height: 12),
-          _buildSectionCard(
+          _buildHomeCard(
             context,
-            anchorKey: _embeddingsSectionAnchorKey,
-            cardKey: const ValueKey('ai_settings_section_embeddings'),
-            section: AiSettingsSection.embeddings,
-            title: t.embeddings.title,
-            description: t.embeddings.description,
-            statusLabel: _embeddingsStatusLabel(context),
-            warning: embeddingsWarning,
-            actions: [
-              SwitchListTile(
-                key: const ValueKey('ai_settings_cloud_embeddings_switch'),
-                title: Text(context.t.settings.cloudEmbeddings.title),
-                subtitle: Text(cloudEmbeddingsSubtitle),
-                value: _cloudEmbeddingsEnabled ?? false,
-                onChanged: _automationLoading || _automationSaving
-                    ? null
-                    : (value) async {
-                        if (value && !canUseCloudEmbeddings) {
-                          await Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (_) => const CloudAccountPage(),
-                            ),
-                          );
-                          if (!mounted) return;
-                          await _reloadAutomationState(forceLoading: false);
-                          await _reloadEmbeddingsState(forceLoading: false);
-                          return;
-                        }
-
-                        await _setCloudEmbeddingsEnabled(value);
-                      },
-              ),
-              _buildEmbeddingsPreferenceTile(
-                context,
-                key: const ValueKey('ai_settings_embeddings_mode_auto'),
-                value: EmbeddingsSourcePreference.auto,
-                title: embeddingsPreferenceLabels.auto.title,
-                subtitle: embeddingsPreferenceLabels.auto.description,
-              ),
-              _buildEmbeddingsPreferenceTile(
-                context,
-                key: const ValueKey('ai_settings_embeddings_mode_cloud'),
-                value: EmbeddingsSourcePreference.cloud,
-                title: embeddingsPreferenceLabels.cloud.title,
-                subtitle: embeddingsPreferenceLabels.cloud.description,
-              ),
-              _buildEmbeddingsPreferenceTile(
-                context,
-                key: const ValueKey('ai_settings_embeddings_mode_byok'),
-                value: EmbeddingsSourcePreference.byok,
-                title: embeddingsPreferenceLabels.byok.title,
-                subtitle: embeddingsPreferenceLabels.byok.description,
-              ),
-              _buildEmbeddingsPreferenceTile(
-                context,
-                key: const ValueKey('ai_settings_embeddings_mode_local'),
-                value: EmbeddingsSourcePreference.local,
-                title: embeddingsPreferenceLabels.local.title,
-                subtitle: embeddingsPreferenceLabels.local.description,
-              ),
-              ListTile(
-                key: const ValueKey('ai_settings_open_embedding_profiles'),
-                title: Text(t.embeddings.actions.openEmbeddingProfiles),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => const EmbeddingProfilesPage(),
-                    ),
-                  );
-                },
-              ),
-            ],
-          ),
-          if (AppBackendScope.maybeOf(context) != null &&
-              SessionScope.maybeOf(context) != null) ...[
-            const SizedBox(height: 12),
-            const KnowledgeIndexStatusCard(),
-          ],
-          const SizedBox(height: 12),
-          _buildSectionCard(
-            context,
-            anchorKey: _mediaSectionAnchorKey,
-            cardKey: const ValueKey('ai_settings_section_media_understanding'),
-            section: AiSettingsSection.mediaUnderstanding,
-            title: context.t.settings.mediaAnnotation.imageCaption.title,
+            anchorKey: _smartOrganizationSectionAnchorKey,
+            cardKey: const ValueKey('ai_settings_home_smart_organization'),
+            section: AiSettingsSection.smartOrganization,
+            title: context.t.settings.aiSelection.smartOrganization.title,
             description:
-                context.t.settings.mediaAnnotation.annotateEnabled.subtitle,
-            statusLabel: _mediaStatusLabel(context),
-            warning: mediaWarning,
+                context.t.settings.aiSelection.smartOrganization.description,
+            statusLabel: _smartOrganizationStatusLabel(
+              context,
+              canUseSmartOrganization: canUseSmartOrganization,
+            ),
+            warning: canUseSmartOrganization
+                ? null
+                : _buildWarningBanner(
+                    context,
+                    context.t.settings.aiSelection.smartOrganization.status
+                        .requiresSetup,
+                    key: const ValueKey(
+                      'ai_settings_smart_organization_requires_setup',
+                    ),
+                  ),
             actions: [
-              _buildMediaPreferenceTile(
-                context,
-                key: const ValueKey('ai_settings_media_mode_auto'),
-                value: MediaSourcePreference.auto,
-                title: mediaPreferenceLabels.auto.title,
-                subtitle: mediaPreferenceLabels.auto.description,
-              ),
-              _buildMediaPreferenceTile(
-                context,
-                key: const ValueKey('ai_settings_media_mode_cloud'),
-                value: MediaSourcePreference.cloud,
-                title: mediaPreferenceLabels.cloud.title,
-                subtitle: mediaPreferenceLabels.cloud.description,
-              ),
-              _buildMediaPreferenceTile(
-                context,
-                key: const ValueKey('ai_settings_media_mode_byok'),
-                value: MediaSourcePreference.byok,
-                title: mediaPreferenceLabels.byok.title,
-                subtitle: mediaPreferenceLabels.byok.description,
-              ),
-              _buildMediaPreferenceTile(
-                context,
-                key: const ValueKey('ai_settings_media_mode_local'),
-                value: MediaSourcePreference.local,
-                title: mediaPreferenceLabels.local.title,
-                subtitle: _imageLocalSourceSubtitle(context),
-              ),
-              SwitchListTile(
-                key: const ValueKey('ai_settings_media_image_wifi_only'),
-                title: Text(
-                  context.t.settings.mediaAnnotation.connectivity.wifiOnlyTitle,
-                ),
-                subtitle: Text(_wifiOnlyHint(context)),
-                value: _imageWifiOnly,
-                onChanged: _mediaLoading || _imageWifiSaving
-                    ? null
-                    : (value) {
-                        unawaited(_setImageWifiOnly(value));
-                      },
-              ),
-              ListTile(
-                key: const ValueKey('ai_settings_open_media_llm_profiles'),
-                title: Text(t.mediaUnderstanding.actions.openByok),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => const LlmProfilesPage(
-                        providerFilter:
-                            LlmProfilesProviderFilter.openAiCompatibleOnly,
+              if (!_smartOrganizationEnabled && canUseSmartOrganization)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: FilledButton(
+                      key: const ValueKey(
+                        'ai_settings_smart_organization_recommended_button',
+                      ),
+                      onPressed: _automationLoading || _automationSaving
+                          ? null
+                          : () async {
+                              await _setSmartOrganizationEnabled(
+                                enabled: true,
+                                canUseSmartOrganization:
+                                    canUseSmartOrganization,
+                                canUseCloudEmbeddings: canUseCloudEmbeddings,
+                              );
+                            },
+                      child: Text(
+                        context.t.settings.aiSelection.smartOrganization.actions
+                            .useRecommended,
                       ),
                     ),
+                  ),
+                ),
+              SwitchListTile(
+                key: const ValueKey('ai_settings_smart_organization_switch'),
+                title: Text(
+                    context.t.settings.aiSelection.smartOrganization.title),
+                subtitle: Text(
+                  context
+                      .t.settings.aiSelection.smartOrganization.privacySummary,
+                ),
+                value: _smartOrganizationEnabled,
+                onChanged: _automationLoading || _automationSaving
+                    ? null
+                    : (value) async {
+                        await _setSmartOrganizationEnabled(
+                          enabled: value,
+                          canUseSmartOrganization: canUseSmartOrganization,
+                          canUseCloudEmbeddings: canUseCloudEmbeddings,
+                        );
+                      },
+              ),
+              ListTile(
+                key: const ValueKey(
+                  'ai_settings_open_smart_organization_settings',
+                ),
+                title: Text(
+                  context.t.settings.aiSelection.smartOrganization.actions
+                      .openSettings,
+                ),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => const AiSmartOrganizationSettingsPage(),
+                    ),
                   );
                 },
               ),
             ],
           ),
-          if (AppBackendScope.maybeOf(context) != null &&
-              SessionScope.maybeOf(context) != null) ...[
+          const SizedBox(height: 12),
+          _buildAdvancedSettingsEntry(
+            context,
+            expanded: _advancedSettingsExpanded,
+          ),
+          if (_advancedSettingsExpanded) ...[
             const SizedBox(height: 12),
-            KeyedSubtree(
-              key: _mediaLocalCapabilityEntryAnchorKey,
-              child: MediaAnnotationSettingsPage(
-                embedded: true,
-                focusLocalCapabilityCard: widget.focusMediaLocalCapabilityCard,
-              ),
+            ..._buildAdvancedSettingsChildren(
+              context,
+              t: t,
+              askAiPreferenceLabels: askAiPreferenceLabels,
+              embeddingsPreferenceLabels: embeddingsPreferenceLabels,
+              mediaPreferenceLabels: mediaPreferenceLabels,
+              subscriptionStatus: subscriptionStatus,
+              hasCloudAccount: hasCloudAccount,
+              canUseCloudEmbeddings: canUseCloudEmbeddings,
+              canUseSemanticParse: canUseSemanticParse,
+              canUseTaskPriorityAi: canUseTaskPriorityAi,
+              cloudEmbeddingsSubtitle: cloudEmbeddingsSubtitle,
+              semanticParseSubtitle: semanticParseSubtitle,
+              taskPriorityAiSubtitle: taskPriorityAiSubtitle,
+              askAiWarning: askAiWarning,
+              embeddingsWarning: embeddingsWarning,
+              mediaWarning: mediaWarning,
             ),
           ],
         ],

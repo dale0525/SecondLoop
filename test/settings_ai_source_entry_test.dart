@@ -13,6 +13,19 @@ import 'package:secondloop/features/settings/settings_page.dart';
 import 'test_backend.dart';
 import 'test_i18n.dart';
 
+Future<void> _openAdvancedSettings(WidgetTester tester) async {
+  final advancedSettings =
+      find.byKey(const ValueKey('ai_settings_home_advanced_settings'));
+  await tester.dragUntilVisible(
+    advancedSettings,
+    find.byType(ListView).first,
+    const Offset(0, -220),
+  );
+  await tester.pumpAndSettle();
+  await tester.tap(advancedSettings);
+  await tester.pumpAndSettle();
+}
+
 void main() {
   testWidgets('Settings includes AI source entry and opens unified page',
       (tester) async {
@@ -48,8 +61,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(AiSettingsPage), findsOneWidget);
-    expect(find.byKey(const ValueKey('ai_settings_section_ask_ai')),
-        findsOneWidget);
+    expect(
+        find.byKey(const ValueKey('ai_settings_home_ask_ai')), findsOneWidget);
   });
 
   testWidgets(
@@ -88,6 +101,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(AiSettingsPage), findsOneWidget);
+
+    await _openAdvancedSettings(tester);
 
     final listView = find.byType(ListView).first;
     final mediaSection =

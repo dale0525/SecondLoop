@@ -9,6 +9,7 @@ import 'package:secondloop/core/session/session_scope.dart';
 import 'package:secondloop/core/subscription/subscription_scope.dart';
 import 'package:secondloop/features/chat/chat_page.dart';
 import 'package:secondloop/features/settings/ai_settings_page.dart';
+import 'package:secondloop/features/settings/ai_ask_ai_settings_page.dart';
 import 'package:secondloop/features/settings/llm_profiles_page.dart';
 import 'package:secondloop/src/rust/db.dart';
 
@@ -65,22 +66,22 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.byType(AiSettingsPage), findsOneWidget);
-      expect(find.byKey(const ValueKey('ai_settings_section_ask_ai')),
+      expect(find.byKey(const ValueKey('ai_settings_home_ask_ai')),
           findsOneWidget);
 
+      await tester
+          .tap(find.byKey(const ValueKey('ai_settings_open_ask_ai_settings')));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(AiAskAiSettingsPage), findsOneWidget);
+
       expect(
-        find.byKey(const ValueKey('ai_settings_open_cloud_account')),
-        findsNothing,
+        find.byKey(const ValueKey('ask_ai_settings_open_cloud_account')),
+        findsOneWidget,
       );
 
       final llmProfilesEntry =
-          find.byKey(const ValueKey('ai_settings_open_llm_profiles'));
-      await tester.dragUntilVisible(
-        llmProfilesEntry,
-        find.byType(ListView).first,
-        const Offset(0, -220),
-      );
-      await tester.pumpAndSettle();
+          find.byKey(const ValueKey('ask_ai_settings_open_llm_profiles'));
 
       await tester.tap(llmProfilesEntry);
       await tester.pump();
