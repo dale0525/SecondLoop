@@ -112,3 +112,38 @@ fn knowledge_ask_ai_contexts_include_message_deeplinks() {
         .iter()
         .any(|ctx| ctx.contains("secondloop://message/")));
 }
+
+#[test]
+fn knowledge_ask_ai_contexts_include_generated_preferences_for_planning_queries() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let conn = crate::db::open(dir.path()).expect("open");
+    let key = [92u8; 32];
+    let conv = crate::db::create_conversation(&conn, &key, "Inbox").expect("conversation");
+    let _ = crate::db::insert_message(
+        &conn,
+        &key,
+        &conv.id,
+        "user",
+        "Please answer in Chinese and keep responses short.",
+    )
+    .expect("message");
+
+    crate::knowledge::ensure_knowledge_rebuild_requested(&conn).expect("request rebuild");
+    crate::knowledge::process_pending_knowledge_index_jobs_active(&conn, &key, 256)
+        .expect("process jobs");
+
+    let contexts = try_build_knowledge_contexts(
+        &conn,
+        &key,
+        "plan my week",
+        6,
+        Focus::ThisThread,
+        &conv.id,
+        None,
+    )
+    .expect("contexts");
+
+    assert!(contexts.iter().any(|ctx| {
+        ctx.contains("source=summary") && ctx.to_lowercase().contains("prefers responses")
+    }));
+}

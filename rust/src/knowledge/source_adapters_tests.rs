@@ -550,3 +550,40 @@ fn knowledge_adapter_skips_attachments_with_invalid_annotation_json() {
             && doc.anchors.attachment_sha256.as_deref() == Some(bad_attachment.sha256.as_str())
     }));
 }
+
+#[test]
+fn knowledge_adapter_emits_generated_preference_documents() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let app_dir = dir.path().to_path_buf();
+    let conn = db::open(&app_dir).expect("open");
+    let key = [10u8; 32];
+
+    let conv = db::create_conversation(&conn, &key, "Inbox").expect("conversation");
+    let _ = db::insert_message(
+        &conn,
+        &key,
+        &conv.id,
+        "user",
+        "Please answer in Chinese and keep responses short.",
+    )
+    .expect("message 1");
+    let _ = db::insert_message(
+        &conn,
+        &key,
+        &conv.id,
+        "user",
+        "请用中文，尽量简短，最好用要点列表。",
+    )
+    .expect("message 2");
+
+    let documents = collect_source_knowledge_documents(&conn, &key).expect("collect docs");
+
+    assert!(documents.iter().any(|doc| {
+        doc.origin_type == KnowledgeOriginType::Generated
+            && doc.document_id == "generated:preference:response-language"
+    }));
+    assert!(documents.iter().any(|doc| {
+        doc.origin_type == KnowledgeOriginType::Generated
+            && doc.document_id == "generated:preference:response-style"
+    }));
+}

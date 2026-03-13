@@ -149,6 +149,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   KnowledgeAnchorSet dco_decode_knowledge_anchor_set(dynamic raw);
 
   @protected
+  KnowledgeDebugStats dco_decode_knowledge_debug_stats(dynamic raw);
+
+  @protected
   KnowledgeIndexStatus dco_decode_knowledge_index_status(dynamic raw);
 
   @protected
@@ -497,6 +500,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   KnowledgeAnchorSet sse_decode_knowledge_anchor_set(
+      SseDeserializer deserializer);
+
+  @protected
+  KnowledgeDebugStats sse_decode_knowledge_debug_stats(
       SseDeserializer deserializer);
 
   @protected
@@ -887,6 +894,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_knowledge_anchor_set(
       KnowledgeAnchorSet self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_knowledge_debug_stats(
+      KnowledgeDebugStats self, SseSerializer serializer);
 
   @protected
   void sse_encode_knowledge_index_status(

@@ -972,7 +972,15 @@ PRAGMA user_version = 29;
 
     if user_version < 31 {
         migrate_from_v30_to_v31(conn)?;
+        user_version = 31;
     }
+
+    if user_version < 32 {
+        migrate_from_v31_to_v32(conn)?;
+        user_version = 32;
+    }
+
+    debug_assert!(user_version >= 32);
 
     Ok(())
 }

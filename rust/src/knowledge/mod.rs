@@ -7,28 +7,32 @@ pub const KNOWLEDGE_RETRIEVAL_POLICY_VERSION: i64 = 1;
 pub mod chunk;
 pub mod embedding_batch;
 pub mod index_jobs;
+pub mod memory_dedup;
+pub mod memory_synthesis;
 pub mod models;
 pub mod normalize;
 pub mod rebuild;
 pub mod retrieval;
 pub mod segment;
+pub mod session_digest;
 pub mod source_adapters;
+pub mod usage;
 
 pub use chunk::{build_chunk_units, build_section_units, build_segment_units};
 pub use index_jobs::{
     ensure_knowledge_rebuild_requested, process_pending_knowledge_index_jobs_active,
 };
 pub use models::{
-    ContentKnowledgeDocument, KnowledgeAnchorSet, KnowledgeContextBlock, KnowledgeIndexStatus,
-    KnowledgeOriginType, KnowledgeQueryScope, KnowledgeRetrievalLayer, KnowledgeRole,
-    KnowledgeSearchResult, KnowledgeSourceKind, KnowledgeUnit, KnowledgeUnitKind,
+    ContentKnowledgeDocument, KnowledgeAnchorSet, KnowledgeContextBlock, KnowledgeDebugStats,
+    KnowledgeIndexStatus, KnowledgeOriginType, KnowledgeQueryScope, KnowledgeRetrievalLayer,
+    KnowledgeRole, KnowledgeSearchResult, KnowledgeSourceKind, KnowledgeUnit, KnowledgeUnitKind,
     KnowledgeVersionSet, KnowledgeViewerDocument, KnowledgeViewerPage,
 };
 pub use normalize::normalize_text_for_source;
 pub use rebuild::{
     cancel_knowledge_rebuild, get_knowledge_document, list_knowledge_documents,
-    list_knowledge_units, list_knowledge_units_around_anchor, list_knowledge_viewer_units,
-    read_knowledge_index_status, read_knowledge_viewer_document,
+    list_knowledge_documents_by_origin, list_knowledge_units, list_knowledge_units_around_anchor,
+    list_knowledge_viewer_units, read_knowledge_index_status, read_knowledge_viewer_document,
 };
 pub use retrieval::{
     normalize_retrieval_request, retrieve_context_blocks, search_document_knowledge,

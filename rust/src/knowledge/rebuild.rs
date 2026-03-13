@@ -4,8 +4,9 @@ use anyhow::Result;
 use rusqlite::{params, Connection, OptionalExtension};
 
 use crate::knowledge::{
-    ContentKnowledgeDocument, KnowledgeAnchorSet, KnowledgeIndexStatus, KnowledgeUnit,
-    KnowledgeUnitKind, KnowledgeVersionSet, KnowledgeViewerDocument, KnowledgeViewerPage,
+    ContentKnowledgeDocument, KnowledgeAnchorSet, KnowledgeIndexStatus, KnowledgeOriginType,
+    KnowledgeUnit, KnowledgeUnitKind, KnowledgeVersionSet, KnowledgeViewerDocument,
+    KnowledgeViewerPage,
 };
 
 fn decode_document_row(
@@ -126,6 +127,52 @@ pub fn list_knowledge_documents(
            LIMIT ?1 OFFSET ?2"#,
     )?;
     let mut rows = stmt.query(params![limit as i64, offset as i64])?;
+    let mut out = Vec::<ContentKnowledgeDocument>::new();
+    while let Some(row) = rows.next()? {
+        let document = match decode_document_row(conn, key, row) {
+            Ok(document) => document,
+            Err(_) => continue,
+        };
+        out.push(document);
+    }
+    Ok(out)
+}
+
+pub fn list_knowledge_documents_by_origin(
+    conn: &Connection,
+    key: &[u8; 32],
+    origin_type: KnowledgeOriginType,
+    limit: usize,
+    offset: usize,
+) -> Result<Vec<ContentKnowledgeDocument>> {
+    let origin_type = serde_json::to_string(&origin_type)?
+        .trim_matches('"')
+        .to_string();
+    let mut stmt = conn.prepare(
+        r#"SELECT document_id,
+                  origin_type,
+                  source_kind,
+                  role,
+                  language,
+                  quality_score,
+                  title,
+                  summary,
+                  anchor_json,
+                  raw_text,
+                  normalized_text,
+                  created_at_ms,
+                  updated_at_ms,
+                  schema_version,
+                  normalization_version,
+                  segmentation_version,
+                  embedding_policy_version,
+                  retrieval_policy_version
+           FROM knowledge_documents
+           WHERE origin_type = ?1
+           ORDER BY updated_at_ms DESC, document_id ASC
+           LIMIT ?2 OFFSET ?3"#,
+    )?;
+    let mut rows = stmt.query(params![origin_type, limit as i64, offset as i64])?;
     let mut out = Vec::<ContentKnowledgeDocument>::new();
     while let Some(row) = rows.next()? {
         let document = match decode_document_row(conn, key, row) {

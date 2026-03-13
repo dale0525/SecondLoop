@@ -23,14 +23,28 @@ class KnowledgeIndexDebugPage extends StatefulWidget {
 }
 
 class _KnowledgeIndexDebugPageState extends State<KnowledgeIndexDebugPage> {
+  static const _pageSize = 200;
+  static const _debugMaxDocuments = 2000;
+
   List<ContentKnowledgeDocument>? _documents;
+  KnowledgeDebugStats? _debugStats;
   bool _loading = true;
   String? _error;
   int _generation = 0;
+  bool _didScheduleInitialLoad = false;
 
   @override
   void initState() {
     super.initState();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_didScheduleInitialLoad) {
+      return;
+    }
+    _didScheduleInitialLoad = true;
     unawaited(_reload(forceLoading: true));
   }
 
@@ -46,6 +60,31 @@ class _KnowledgeIndexDebugPageState extends State<KnowledgeIndexDebugPage> {
     return Uint8List.fromList(scope.sessionKey);
   }
 
+  Future<List<ContentKnowledgeDocument>> _loadAllDocuments(
+    KnowledgeBackend backend,
+    Uint8List key,
+  ) async {
+    final out = <ContentKnowledgeDocument>[];
+    var offset = 0;
+    while (out.length < _debugMaxDocuments) {
+      final page = await backend.listKnowledgeDocuments(
+        key,
+        limit: _pageSize,
+        offset: offset,
+      );
+      out.addAll(page);
+      if (out.length >= _debugMaxDocuments) {
+        out.removeRange(_debugMaxDocuments, out.length);
+        break;
+      }
+      if (page.length < _pageSize) {
+        break;
+      }
+      offset += page.length;
+    }
+    return out;
+  }
+
   Future<void> _reload({required bool forceLoading}) async {
     final backend = _knowledgeBackend;
     final key = _sessionKey;
@@ -53,6 +92,7 @@ class _KnowledgeIndexDebugPageState extends State<KnowledgeIndexDebugPage> {
       if (!mounted) return;
       setState(() {
         _documents = null;
+        _debugStats = null;
         _loading = false;
         _error = null;
       });
@@ -68,10 +108,14 @@ class _KnowledgeIndexDebugPageState extends State<KnowledgeIndexDebugPage> {
     }
 
     try {
-      final docs = await backend.listKnowledgeDocuments(key, limit: 50);
+      final (documents, debugStats) = await (
+        _loadAllDocuments(backend, key),
+        backend.getKnowledgeDebugStats(key),
+      ).wait;
       if (!mounted || generation != _generation) return;
       setState(() {
-        _documents = docs;
+        _documents = documents;
+        _debugStats = debugStats;
         _loading = false;
         _error = null;
       });
@@ -131,11 +175,29 @@ class _KnowledgeIndexDebugPageState extends State<KnowledgeIndexDebugPage> {
       );
     }
 
+    final totalLabel = _debugStats?.totalDocuments ?? docs.length;
     return SlSurface(
       key: const ValueKey('knowledge_index_debug_documents'),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    context.t.settings.knowledgeIndex.debug.indexedDocuments(
+                        visible: docs.length, total: totalLabel),
+                    style: Theme.of(context)
+                        .textTheme
+                        .titleMedium
+                        ?.copyWith(fontWeight: FontWeight.w700),
+                  ),
+                ),
+              ],
+            ),
+          ),
           for (var i = 0; i < docs.length; i++) ...[
             if (i != 0) const Divider(height: 1),
             _KnowledgeDocumentTile(
@@ -168,7 +230,7 @@ class _KnowledgeIndexDebugPageState extends State<KnowledgeIndexDebugPage> {
         padding: const EdgeInsets.all(16),
         children: [
           if (_knowledgeBackend != null && _sessionKey != null)
-            const KnowledgeIndexStatusCard(),
+            KnowledgeIndexStatusCard(debugStats: _debugStats),
           const SizedBox(height: 12),
           _buildDocumentsCard(context),
         ],

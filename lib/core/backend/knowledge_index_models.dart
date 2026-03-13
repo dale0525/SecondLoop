@@ -1,6 +1,7 @@
 export '../../src/rust/knowledge/models.dart'
     show
         ContentKnowledgeDocument,
+        KnowledgeDebugStats,
         KnowledgeAnchorSet,
         KnowledgeIndexStatus,
         KnowledgeOriginType,

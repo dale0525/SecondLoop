@@ -1,9 +1,11 @@
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
 use anyhow::Result;
 use rusqlite::Connection;
 
-use crate::knowledge::{KnowledgeRetrievalLayer, KnowledgeRole, KnowledgeUnit, KnowledgeUnitKind};
+use crate::knowledge::{
+    usage, KnowledgeRetrievalLayer, KnowledgeRole, KnowledgeUnit, KnowledgeUnitKind,
+};
 
 use super::query::{normalized_text_for_matching, NormalizedRetrievalRequest};
 use super::{load_document_units, KnowledgeCandidate};
@@ -40,17 +42,18 @@ fn text_similarity(left: &str, right: &str) -> f64 {
     }
 }
 
-fn base_score(candidate: &KnowledgeCandidate, newest_ms: i64) -> f64 {
+fn base_score(candidate: &KnowledgeCandidate, newest_ms: i64, hotness: f64) -> f64 {
     let recency = if newest_ms <= 0 {
         1.0
     } else {
         (candidate.updated_at_ms() as f64 / newest_ms as f64).clamp(0.0, 1.0)
     };
-    (candidate.semantic_score * 0.45)
-        + (candidate.lexical_score * 0.25)
-        + (role_weight(candidate.role) * 0.15)
+    (candidate.semantic_score * 0.40)
+        + (candidate.lexical_score * 0.23)
+        + (role_weight(candidate.role) * 0.12)
         + (candidate.document.quality_score * 0.05)
         + (recency * 0.10)
+        + (hotness * 0.10)
         + candidate.expansion_score
 }
 
@@ -104,17 +107,30 @@ pub(crate) fn rerank_knowledge_candidates(
         .map(KnowledgeCandidate::updated_at_ms)
         .max()
         .unwrap_or(0);
+    let document_ids = candidates
+        .iter()
+        .map(|candidate| candidate.document.document_id.clone())
+        .collect::<BTreeSet<_>>();
+    let usage_map = crate::db::load_knowledge_usage_map(conn, &document_ids)?;
+    let now_ms = usage::now_ms();
+    let hotness_for = |candidate: &KnowledgeCandidate| {
+        let stats = usage_map
+            .get(&candidate.document.document_id)
+            .copied()
+            .unwrap_or_default();
+        usage::hotness_score(stats.retrieve_count, stats.last_retrieved_at_ms, now_ms)
+    };
     let mut seeds = candidates;
     seeds.sort_by(|left, right| {
-        base_score(right, newest_ms)
-            .partial_cmp(&base_score(left, newest_ms))
+        base_score(right, newest_ms, hotness_for(right))
+            .partial_cmp(&base_score(left, newest_ms, hotness_for(left)))
             .unwrap_or(std::cmp::Ordering::Equal)
     });
 
     let mut pool = BTreeMap::<String, KnowledgeCandidate>::new();
     for candidate in &seeds {
         let mut candidate = candidate.clone();
-        candidate.score = base_score(&candidate, newest_ms);
+        candidate.score = base_score(&candidate, newest_ms, hotness_for(&candidate));
         inject_candidate(&mut pool, candidate);
     }
 
@@ -185,7 +201,8 @@ pub(crate) fn rerank_knowledge_candidates(
                 .iter()
                 .map(|chosen| text_similarity(&candidate.normalized_text, &chosen.normalized_text))
                 .fold(0.0, f64::max);
-            let score = base_score(candidate, newest_ms) - (redundancy * 0.25);
+            let score =
+                base_score(candidate, newest_ms, hotness_for(candidate)) - (redundancy * 0.25);
             if score > best_score {
                 best_score = score;
                 best_index = Some(index);

@@ -35,15 +35,15 @@ SecondLoop 是一个（Community Edition）**开源**、隐私优先的 “Secon
 
 ## 🤖 AI 功能能力矩阵（本地 / BYOK / Pro）
 
-| AI 功能 | 本地（设备侧） | BYOK（自带 API Key） | Pro 订阅（SecondLoop Cloud） | 说明 |
-| --- | --- | --- | --- | --- |
-| 图片注释 | ⚠️ 基础设备侧描述 | ✅ 使用你自己的模型 API | ✅ SecondLoop Cloud 内置 | 网络 AI 不可用时，仍可基于图片可见文字给出轻量描述。 |
-| OCR（图片/PDF/文档） | ✅ 设备侧文字识别 | ✅ 使用你自己的模型 API | ✅ SecondLoop Cloud 内置 | 适用于图片与支持的文档类型。 |
-| 语音识别（音频转写） | ⚠️ 支持设备可用 | ✅ 使用你自己的模型 API | ✅ SecondLoop Cloud 内置 | 离线时会优先使用本地可用的转写能力。 |
-| Embedding 索引 | ✅ 本地记忆索引 | ✅ 使用你自己的 embedding API | ✅ SecondLoop Cloud 内置 | 新内容会在后台持续建立索引。 |
-| Ask AI | ❌ | ✅ 使用你自己的对话模型 API | ✅ SecondLoop Cloud 内置 | 路由会按你的来源偏好和当前可用性自动选择。 |
-| 语义识别（意图/时间窗） | ❌ | ✅ 使用你自己的模型 API | ✅ SecondLoop Cloud 内置 | 用于智能理解与自动动作能力。 |
-| Embedding 搜索 | ✅ 本地语义检索 | ✅ 使用你自己的 embedding API | ✅ SecondLoop Cloud 内置 | 会在可用路由间自动回退。 |
+| AI 功能                 | 本地（设备侧）   | BYOK（自带 API Key）         | Pro 订阅（SecondLoop Cloud） | 说明                                                 |
+| ----------------------- | ---------------- | ---------------------------- | ---------------------------- | ---------------------------------------------------- |
+| 图片注释                | ⚠️ 基础设备侧描述 | ✅ 使用你自己的模型 API       | ✅ SecondLoop Cloud 内置      | 网络 AI 不可用时，仍可基于图片可见文字给出轻量描述。 |
+| OCR（图片/PDF/文档）    | ✅ 设备侧文字识别 | ✅ 使用你自己的模型 API       | ✅ SecondLoop Cloud 内置      | 适用于图片与支持的文档类型。                         |
+| 语音识别（音频转写）    | ⚠️ 支持设备可用   | ✅ 使用你自己的模型 API       | ✅ SecondLoop Cloud 内置      | 离线时会优先使用本地可用的转写能力。                 |
+| Embedding 索引          | ✅ 本地记忆索引   | ✅ 使用你自己的 embedding API | ✅ SecondLoop Cloud 内置      | 新内容会在后台持续建立索引。                         |
+| Ask AI                  | ❌                | ✅ 使用你自己的对话模型 API   | ✅ SecondLoop Cloud 内置      | 路由会按你的来源偏好和当前可用性自动选择。           |
+| 语义识别（意图/时间窗） | ❌                | ✅ 使用你自己的模型 API       | ✅ SecondLoop Cloud 内置      | 用于智能理解与自动动作能力。                         |
+| Embedding 搜索          | ✅ 本地语义检索   | ✅ 使用你自己的 embedding API | ✅ SecondLoop Cloud 内置      | 会在可用路由间自动回退。                             |
 
 - `本地` 表示 iOS / Android / macOS / Windows / Linux 客户端内的设备侧处理。
 - `BYOK` 表示你在设置中连接自己的模型服务与 API Key。

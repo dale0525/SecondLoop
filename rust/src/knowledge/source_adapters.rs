@@ -4,8 +4,9 @@ use rusqlite::Connection;
 use crate::crypto::decrypt_bytes;
 use crate::db;
 use crate::knowledge::{
-    normalize_text_for_source, ContentKnowledgeDocument, KnowledgeAnchorSet, KnowledgeOriginType,
-    KnowledgeRole, KnowledgeSourceKind, KnowledgeVersionSet,
+    memory_synthesis::collect_generated_memory_documents, normalize_text_for_source,
+    ContentKnowledgeDocument, KnowledgeAnchorSet, KnowledgeOriginType, KnowledgeRole,
+    KnowledgeSourceKind, KnowledgeVersionSet,
 };
 
 pub(crate) fn snippet(text: &str, limit: usize) -> Option<String> {
@@ -365,6 +366,9 @@ pub(crate) fn visit_source_knowledge_documents_with_external(
         let app_dir = crate::db::app_dir_from_conn(conn)?;
         let external_conn = db::open_external_readonly_db(&app_dir)?;
         collect_external_documents(&external_conn, key, &mut emit)?;
+    }
+    for document in collect_generated_memory_documents(conn, key)? {
+        emit(document)?;
     }
     Ok(())
 }

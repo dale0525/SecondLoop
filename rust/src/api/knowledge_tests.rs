@@ -192,3 +192,88 @@ fn knowledge_viewer_api_reads_units_around_anchor_and_search_hits() {
         .iter()
         .any(|unit| Some(unit.unit_id.as_str()) == first_hit.unit_id.as_deref()));
 }
+
+#[test]
+fn knowledge_debug_stats_reports_generated_memory_and_usage_counts() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let app_dir = dir.path().to_path_buf();
+    let app_dir_string = app_dir.to_string_lossy().into_owned();
+    let conn = db::open(&app_dir).expect("open");
+    let key = [29u8; 32];
+
+    let conv = db::create_conversation(&conn, &key, "Inbox").expect("conversation");
+    db::insert_message(
+        &conn,
+        &key,
+        &conv.id,
+        "user",
+        "Please answer in Chinese and keep responses short and practical.",
+    )
+    .expect("preference");
+    db::insert_message(
+        &conn,
+        &key,
+        &conv.id,
+        "user",
+        "I'm a developer building a memory optimization prototype.",
+    )
+    .expect("profile");
+
+    crate::knowledge::ensure_knowledge_rebuild_requested(&conn).expect("request rebuild");
+    crate::knowledge::process_pending_knowledge_index_jobs_active(&conn, &key, 256)
+        .expect("process jobs");
+    crate::db::touch_knowledge_documents_usage(
+        &conn,
+        &["generated:preference:response-language".to_string()],
+        crate::knowledge::usage::now_ms(),
+    )
+    .expect("touch usage");
+
+    let stats = crate::api::knowledge::db_get_knowledge_debug_stats(app_dir_string, key.to_vec())
+        .expect("debug stats");
+
+    assert!(stats.total_documents >= 3);
+    assert!(stats.generated_documents >= 3);
+    assert!(stats.preference_documents >= 2);
+    assert!(stats.profile_documents >= 1);
+    assert!(stats.usage_stat_documents >= 1);
+    assert!(stats.summary_documents + stats.generated_documents <= stats.total_documents);
+    assert!(
+        stats.source_documents + stats.summary_documents + stats.generated_documents
+            <= stats.total_documents
+    );
+    assert!(stats.generated_memory_retrieval_enabled);
+    assert!(stats.hotness_rerank_enabled);
+    assert!(stats.session_digest_enabled);
+}
+
+#[test]
+fn touch_knowledge_documents_usage_succeeds_inside_active_transaction() {
+    let fixture = crate::knowledge::retrieval::test_support::seeded_fixture();
+    fixture
+        .conn
+        .execute("BEGIN IMMEDIATE", [])
+        .expect("begin transaction");
+
+    crate::db::touch_knowledge_documents_usage(
+        &fixture.conn,
+        std::slice::from_ref(&fixture.transcript_document_id),
+        crate::knowledge::usage::now_ms(),
+    )
+    .expect("touch usage inside transaction");
+
+    fixture
+        .conn
+        .execute("COMMIT", [])
+        .expect("commit transaction");
+
+    let usage_rows: i64 = fixture
+        .conn
+        .query_row(
+            "SELECT COUNT(*) FROM knowledge_document_usage WHERE document_id = ?1",
+            params![fixture.transcript_document_id],
+            |row| row.get(0),
+        )
+        .expect("usage row count");
+    assert_eq!(usage_rows, 1);
+}

@@ -13,6 +13,72 @@ fn key_from_bytes(bytes: Vec<u8>) -> Result<[u8; 32]> {
     Ok(key)
 }
 
+fn read_knowledge_debug_stats(
+    conn: &rusqlite::Connection,
+) -> Result<knowledge::KnowledgeDebugStats> {
+    let (
+        total_documents,
+        generated_documents,
+        summary_documents,
+        source_documents,
+        preference_documents,
+        profile_documents,
+        event_documents,
+        pattern_documents,
+        last_synthesis_at_ms,
+    ) = conn.query_row(
+        r#"
+        SELECT
+            COUNT(*),
+            COALESCE(SUM(CASE WHEN origin_type = 'generated' THEN 1 ELSE 0 END), 0),
+            COALESCE(SUM(CASE WHEN source_kind = 'summary' AND origin_type != 'generated' THEN 1 ELSE 0 END), 0),
+            COALESCE(SUM(CASE WHEN origin_type != 'generated' AND source_kind != 'summary' THEN 1 ELSE 0 END), 0),
+            COALESCE(SUM(CASE WHEN origin_type = 'generated' AND document_id LIKE 'generated:preference:%' THEN 1 ELSE 0 END), 0),
+            COALESCE(SUM(CASE WHEN origin_type = 'generated' AND document_id LIKE 'generated:profile:%' THEN 1 ELSE 0 END), 0),
+            COALESCE(SUM(CASE WHEN origin_type = 'generated' AND document_id LIKE 'generated:event:%' THEN 1 ELSE 0 END), 0),
+            COALESCE(SUM(CASE WHEN origin_type = 'generated' AND document_id LIKE 'generated:pattern:%' THEN 1 ELSE 0 END), 0),
+            MAX(CASE WHEN origin_type = 'generated' THEN updated_at_ms END)
+        FROM knowledge_documents
+        "#,
+        [],
+        |row| {
+            Ok((
+                row.get(0)?,
+                row.get(1)?,
+                row.get(2)?,
+                row.get(3)?,
+                row.get(4)?,
+                row.get(5)?,
+                row.get(6)?,
+                row.get(7)?,
+                row.get(8)?,
+            ))
+        },
+    )?;
+    let (usage_stat_documents, last_retrieved_at_ms) = conn.query_row(
+        "SELECT COUNT(*), MAX(last_retrieved_at_ms) FROM knowledge_document_usage",
+        [],
+        |row| Ok((row.get(0)?, row.get(1)?)),
+    )?;
+
+    Ok(knowledge::KnowledgeDebugStats {
+        total_documents,
+        generated_documents,
+        source_documents,
+        summary_documents,
+        preference_documents,
+        profile_documents,
+        event_documents,
+        pattern_documents,
+        usage_stat_documents,
+        last_synthesis_at_ms,
+        last_retrieved_at_ms,
+        generated_memory_retrieval_enabled: true,
+        hotness_rerank_enabled: true,
+        session_digest_enabled: true,
+    })
+}
+
 #[flutter_rust_bridge::frb]
 pub fn db_get_knowledge_index_status(
     app_dir: String,
@@ -48,6 +114,16 @@ pub fn db_cancel_knowledge_rebuild(app_dir: String, key: Vec<u8>) -> Result<()> 
     let key = key_from_bytes(key)?;
     let conn = db::open(Path::new(&app_dir))?;
     knowledge::cancel_knowledge_rebuild(&conn, &key)
+}
+
+#[flutter_rust_bridge::frb]
+pub fn db_get_knowledge_debug_stats(
+    app_dir: String,
+    key: Vec<u8>,
+) -> Result<knowledge::KnowledgeDebugStats> {
+    let _validated_key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    read_knowledge_debug_stats(&conn)
 }
 
 #[flutter_rust_bridge::frb]

@@ -33,7 +33,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.0.0-dev.38";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -1894912062;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -717084880;
 
 // Section: executor
 
@@ -6737,6 +6737,39 @@ fn wire__crate__api__knowledge__db_cancel_knowledge_rebuild_impl(
         },
     )
 }
+fn wire__crate__api__knowledge__db_get_knowledge_debug_stats_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "db_get_knowledge_debug_stats",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_app_dir = <String>::sse_decode(&mut deserializer);
+            let api_key = <Vec<u8>>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse((move || {
+                    crate::api::knowledge::db_get_knowledge_debug_stats(api_app_dir, api_key)
+                })())
+            }
+        },
+    )
+}
 fn wire__crate__api__knowledge__db_get_knowledge_document_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -9086,6 +9119,42 @@ impl SseDecode for crate::knowledge::models::KnowledgeAnchorSet {
     }
 }
 
+impl SseDecode for crate::knowledge::models::KnowledgeDebugStats {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_totalDocuments = <i64>::sse_decode(deserializer);
+        let mut var_generatedDocuments = <i64>::sse_decode(deserializer);
+        let mut var_sourceDocuments = <i64>::sse_decode(deserializer);
+        let mut var_summaryDocuments = <i64>::sse_decode(deserializer);
+        let mut var_preferenceDocuments = <i64>::sse_decode(deserializer);
+        let mut var_profileDocuments = <i64>::sse_decode(deserializer);
+        let mut var_eventDocuments = <i64>::sse_decode(deserializer);
+        let mut var_patternDocuments = <i64>::sse_decode(deserializer);
+        let mut var_usageStatDocuments = <i64>::sse_decode(deserializer);
+        let mut var_lastSynthesisAtMs = <Option<i64>>::sse_decode(deserializer);
+        let mut var_lastRetrievedAtMs = <Option<i64>>::sse_decode(deserializer);
+        let mut var_generatedMemoryRetrievalEnabled = <bool>::sse_decode(deserializer);
+        let mut var_hotnessRerankEnabled = <bool>::sse_decode(deserializer);
+        let mut var_sessionDigestEnabled = <bool>::sse_decode(deserializer);
+        return crate::knowledge::models::KnowledgeDebugStats {
+            total_documents: var_totalDocuments,
+            generated_documents: var_generatedDocuments,
+            source_documents: var_sourceDocuments,
+            summary_documents: var_summaryDocuments,
+            preference_documents: var_preferenceDocuments,
+            profile_documents: var_profileDocuments,
+            event_documents: var_eventDocuments,
+            pattern_documents: var_patternDocuments,
+            usage_stat_documents: var_usageStatDocuments,
+            last_synthesis_at_ms: var_lastSynthesisAtMs,
+            last_retrieved_at_ms: var_lastRetrievedAtMs,
+            generated_memory_retrieval_enabled: var_generatedMemoryRetrievalEnabled,
+            hotness_rerank_enabled: var_hotnessRerankEnabled,
+            session_digest_enabled: var_sessionDigestEnabled,
+        };
+    }
+}
+
 impl SseDecode for crate::knowledge::models::KnowledgeIndexStatus {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -11079,130 +11148,136 @@ fn pde_ffi_dispatcher_primary_impl(
             rust_vec_len,
             data_len,
         ),
-        164 => wire__crate__api__knowledge__db_get_knowledge_document_impl(
+        164 => wire__crate__api__knowledge__db_get_knowledge_debug_stats_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        165 => wire__crate__api__knowledge__db_get_knowledge_index_status_impl(
+        165 => wire__crate__api__knowledge__db_get_knowledge_document_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        166 => wire__crate__api__knowledge__db_list_knowledge_documents_impl(
+        166 => wire__crate__api__knowledge__db_get_knowledge_index_status_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        167 => wire__crate__api__knowledge__db_list_knowledge_units_impl(
+        167 => wire__crate__api__knowledge__db_list_knowledge_documents_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        168 => wire__crate__api__knowledge__db_list_knowledge_units_around_anchor_impl(
+        168 => wire__crate__api__knowledge__db_list_knowledge_units_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        169 => wire__crate__api__knowledge__db_list_knowledge_viewer_units_impl(
+        169 => wire__crate__api__knowledge__db_list_knowledge_units_around_anchor_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        170 => wire__crate__api__knowledge__db_process_pending_knowledge_index_jobs_impl(
+        170 => wire__crate__api__knowledge__db_list_knowledge_viewer_units_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        171 => wire__crate__api__knowledge__db_request_knowledge_rebuild_impl(
+        171 => wire__crate__api__knowledge__db_process_pending_knowledge_index_jobs_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        172 => {
+        172 => wire__crate__api__knowledge__db_request_knowledge_rebuild_impl(
+            port,
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        173 => {
             wire__crate__api__knowledge__db_search_knowledge_impl(port, ptr, rust_vec_len, data_len)
         }
-        173 => wire__crate__api__knowledge__db_search_knowledge_document_units_impl(
+        174 => wire__crate__api__knowledge__db_search_knowledge_document_units_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        174 => wire__crate__api__media_annotation__db_get_media_annotation_config_impl(
+        175 => wire__crate__api__media_annotation__db_get_media_annotation_config_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        175 => wire__crate__api__media_annotation__db_set_media_annotation_config_impl(
+        176 => wire__crate__api__media_annotation__db_set_media_annotation_config_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        176 => wire__crate__api__media_annotation__media_annotation_byok_profile_impl(
+        177 => wire__crate__api__media_annotation__media_annotation_byok_profile_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        177 => wire__crate__api__media_annotation__url_enrichment_byok_profile_impl(
+        178 => wire__crate__api__media_annotation__url_enrichment_byok_profile_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        178 => wire__crate__api__media_annotation__url_enrichment_cloud_gateway_impl(
+        179 => wire__crate__api__media_annotation__url_enrichment_cloud_gateway_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        179 => wire__crate__api__migration_archive__migration_archive_export_impl(
+        180 => wire__crate__api__migration_archive__migration_archive_export_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        180 => wire__crate__api__migration_archive__migration_archive_export_estimate_impl(
+        181 => wire__crate__api__migration_archive__migration_archive_export_estimate_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        181 => wire__crate__api__migration_archive__migration_archive_export_progress_impl(
+        182 => wire__crate__api__migration_archive__migration_archive_export_progress_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        182 => wire__crate__api__migration_archive__migration_archive_import_impl(
+        183 => wire__crate__api__migration_archive__migration_archive_import_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        183 => wire__crate__api__migration_archive__migration_archive_import_progress_impl(
+        184 => wire__crate__api__migration_archive__migration_archive_import_progress_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        184 => wire__crate__api__migration_archive__migration_archive_inspect_impl(
+        185 => wire__crate__api__migration_archive__migration_archive_inspect_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        185 => {
+        186 => {
             wire__crate__api__migration_archive__migration_archive_markdown_path_for_item_id_impl(
                 port,
                 ptr,
@@ -11210,115 +11285,115 @@ fn pde_ffi_dispatcher_primary_impl(
                 data_len,
             )
         }
-        186 => wire__crate__api__migration_archive__migration_archive_parse_manifest_json_impl(
+        187 => wire__crate__api__migration_archive__migration_archive_parse_manifest_json_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        187 => wire__crate__api__migration_archive__migration_archive_wikilink_for_item_impl(
+        188 => wire__crate__api__migration_archive__migration_archive_wikilink_for_item_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        188 => wire__crate__api__oplog_maintenance__db_run_oplog_maintenance_impl(
+        189 => wire__crate__api__oplog_maintenance__db_run_oplog_maintenance_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        190 => wire__crate__api__simple__init_app_impl(port, ptr, rust_vec_len, data_len),
-        191 => wire__crate__api__sync_diagnostics__sync_managed_vault_cursor_diagnostics_impl(
+        191 => wire__crate__api__simple__init_app_impl(port, ptr, rust_vec_len, data_len),
+        192 => wire__crate__api__sync_diagnostics__sync_managed_vault_cursor_diagnostics_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        192 => wire__crate__api__sync_progress__sync_localdir_pull_progress_impl(
+        193 => wire__crate__api__sync_progress__sync_localdir_pull_progress_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        193 => wire__crate__api__sync_progress__sync_localdir_push_progress_impl(
+        194 => wire__crate__api__sync_progress__sync_localdir_push_progress_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        194 => wire__crate__api__sync_progress__sync_managed_vault_pull_progress_impl(
+        195 => wire__crate__api__sync_progress__sync_managed_vault_pull_progress_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        195 => wire__crate__api__sync_progress__sync_managed_vault_push_ops_only_progress_impl(
+        196 => wire__crate__api__sync_progress__sync_managed_vault_push_ops_only_progress_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        196 => wire__crate__api__sync_progress__sync_webdav_pull_progress_impl(
+        197 => wire__crate__api__sync_progress__sync_webdav_pull_progress_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        197 => wire__crate__api__sync_progress__sync_webdav_push_ops_only_progress_impl(
+        198 => wire__crate__api__sync_progress__sync_webdav_push_ops_only_progress_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        198 => wire__crate__api__tags__db_clear_tag_merge_feedback_impl(
+        199 => wire__crate__api__tags__db_clear_tag_merge_feedback_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        199 => wire__crate__api__tags__db_delete_tag_impl(port, ptr, rust_vec_len, data_len),
-        200 => wire__crate__api__tags__db_list_hidden_tag_merge_suggestions_impl(
+        200 => wire__crate__api__tags__db_delete_tag_impl(port, ptr, rust_vec_len, data_len),
+        201 => wire__crate__api__tags__db_list_hidden_tag_merge_suggestions_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        201 => wire__crate__api__tags__db_list_manual_message_tag_names_impl(
+        202 => wire__crate__api__tags__db_list_manual_message_tag_names_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        202 => wire__crate__api__tags__db_list_message_ids_by_tag_ids_impl(
+        203 => wire__crate__api__tags__db_list_message_ids_by_tag_ids_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        203 => wire__crate__api__tags__db_list_message_suggested_tags_impl(
+        204 => wire__crate__api__tags__db_list_message_suggested_tags_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        204 => wire__crate__api__tags__db_list_message_tags_impl(port, ptr, rust_vec_len, data_len),
-        205 => wire__crate__api__tags__db_list_tag_merge_suggestions_impl(
+        205 => wire__crate__api__tags__db_list_message_tags_impl(port, ptr, rust_vec_len, data_len),
+        206 => wire__crate__api__tags__db_list_tag_merge_suggestions_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        206 => wire__crate__api__tags__db_list_tags_impl(port, ptr, rust_vec_len, data_len),
-        207 => wire__crate__api__tags__db_merge_tags_impl(port, ptr, rust_vec_len, data_len),
-        208 => wire__crate__api__tags__db_record_tag_merge_feedback_impl(
+        207 => wire__crate__api__tags__db_list_tags_impl(port, ptr, rust_vec_len, data_len),
+        208 => wire__crate__api__tags__db_merge_tags_impl(port, ptr, rust_vec_len, data_len),
+        209 => wire__crate__api__tags__db_record_tag_merge_feedback_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        209 => wire__crate__api__tags__db_set_message_tags_impl(port, ptr, rust_vec_len, data_len),
-        210 => wire__crate__api__tags__db_upsert_tag_impl(port, ptr, rust_vec_len, data_len),
+        210 => wire__crate__api__tags__db_set_message_tags_impl(port, ptr, rust_vec_len, data_len),
+        211 => wire__crate__api__tags__db_upsert_tag_impl(port, ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }
@@ -11331,7 +11406,7 @@ fn pde_ffi_dispatcher_sync_impl(
 ) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
     // Codec=Pde (Serialization + dispatch), see doc to use other codecs
     match func_id {
-        189 => wire__crate__api__simple__greet_impl(ptr, rust_vec_len, data_len),
+        190 => wire__crate__api__simple__greet_impl(ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }
@@ -11748,6 +11823,41 @@ impl flutter_rust_bridge::IntoIntoDart<crate::knowledge::models::KnowledgeAnchor
     for crate::knowledge::models::KnowledgeAnchorSet
 {
     fn into_into_dart(self) -> crate::knowledge::models::KnowledgeAnchorSet {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::knowledge::models::KnowledgeDebugStats {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.total_documents.into_into_dart().into_dart(),
+            self.generated_documents.into_into_dart().into_dart(),
+            self.source_documents.into_into_dart().into_dart(),
+            self.summary_documents.into_into_dart().into_dart(),
+            self.preference_documents.into_into_dart().into_dart(),
+            self.profile_documents.into_into_dart().into_dart(),
+            self.event_documents.into_into_dart().into_dart(),
+            self.pattern_documents.into_into_dart().into_dart(),
+            self.usage_stat_documents.into_into_dart().into_dart(),
+            self.last_synthesis_at_ms.into_into_dart().into_dart(),
+            self.last_retrieved_at_ms.into_into_dart().into_dart(),
+            self.generated_memory_retrieval_enabled
+                .into_into_dart()
+                .into_dart(),
+            self.hotness_rerank_enabled.into_into_dart().into_dart(),
+            self.session_digest_enabled.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::knowledge::models::KnowledgeDebugStats
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::knowledge::models::KnowledgeDebugStats>
+    for crate::knowledge::models::KnowledgeDebugStats
+{
+    fn into_into_dart(self) -> crate::knowledge::models::KnowledgeDebugStats {
         self
     }
 }
@@ -12810,6 +12920,26 @@ impl SseEncode for crate::knowledge::models::KnowledgeAnchorSet {
         <Option<String>>::sse_encode(self.speaker, serializer);
         <Option<String>>::sse_encode(self.section_label, serializer);
         <Option<String>>::sse_encode(self.source_filename, serializer);
+    }
+}
+
+impl SseEncode for crate::knowledge::models::KnowledgeDebugStats {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i64>::sse_encode(self.total_documents, serializer);
+        <i64>::sse_encode(self.generated_documents, serializer);
+        <i64>::sse_encode(self.source_documents, serializer);
+        <i64>::sse_encode(self.summary_documents, serializer);
+        <i64>::sse_encode(self.preference_documents, serializer);
+        <i64>::sse_encode(self.profile_documents, serializer);
+        <i64>::sse_encode(self.event_documents, serializer);
+        <i64>::sse_encode(self.pattern_documents, serializer);
+        <i64>::sse_encode(self.usage_stat_documents, serializer);
+        <Option<i64>>::sse_encode(self.last_synthesis_at_ms, serializer);
+        <Option<i64>>::sse_encode(self.last_retrieved_at_ms, serializer);
+        <bool>::sse_encode(self.generated_memory_retrieval_enabled, serializer);
+        <bool>::sse_encode(self.hotness_rerank_enabled, serializer);
+        <bool>::sse_encode(self.session_digest_enabled, serializer);
     }
 }
 

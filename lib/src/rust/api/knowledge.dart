@@ -7,7 +7,7 @@ import '../frb_generated.dart';
 import '../knowledge/models.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `key_from_bytes`
+// These functions are ignored because they are not marked as `pub`: `key_from_bytes`, `query_count`, `query_optional_i64`, `read_knowledge_debug_stats`
 
 Future<KnowledgeIndexStatus> dbGetKnowledgeIndexStatus(
         {required String appDir, required List<int> key}) =>
@@ -28,6 +28,11 @@ Future<void> dbCancelKnowledgeRebuild(
         {required String appDir, required List<int> key}) =>
     RustLib.instance.api
         .crateApiKnowledgeDbCancelKnowledgeRebuild(appDir: appDir, key: key);
+
+Future<KnowledgeDebugStats> dbGetKnowledgeDebugStats(
+        {required String appDir, required List<int> key}) =>
+    RustLib.instance.api
+        .crateApiKnowledgeDbGetKnowledgeDebugStats(appDir: appDir, key: key);
 
 Future<List<ContentKnowledgeDocument>> dbListKnowledgeDocuments(
         {required String appDir,

@@ -884,7 +884,32 @@
     "lastBuild": "Last successful build: $value",
     "staleReason": "Stale reason: $value",
     "lastError": "Last error: $value",
-    "progress": "Progress — documents: $documentsIndexed/$totalDocuments, units: $unitsIndexed, embeddings: $embeddingsIndexed"
+    "progress": "Progress — documents: $documentsIndexed/$totalDocuments, units: $unitsIndexed, embeddings: $embeddingsIndexed",
+    "debug": {
+      "indexedDocuments": "Indexed documents ($visible/$total)",
+      "memorySynthesisTitle": "Memory synthesis",
+      "memorySynthesisBody": "Generated memories stay local and encrypted inside the knowledge index.",
+      "chips": {
+        "total": "Total $count",
+        "generated": "Generated $count",
+        "source": "Source $count",
+        "summaries": "Summaries $count",
+        "preferences": "Preferences $count",
+        "profiles": "Profiles $count",
+        "events": "Events $count",
+        "patterns": "Patterns $count",
+        "usageRows": "Usage rows $count"
+      },
+      "detail": {
+        "generatedMemoryRetrieval": "Generated memory retrieval: $value",
+        "hotnessRerank": "Hotness rerank: $value",
+        "sessionDigest": "Session digest: $value",
+        "lastSynthesis": "Last synthesis: $value",
+        "lastUsageUpdate": "Last usage update: $value",
+        "on": "on",
+        "off": "off"
+      }
+    }
   },
   "migrationArchive": {
     "title": "Migration archive",
