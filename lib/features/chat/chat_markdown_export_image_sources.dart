@@ -55,7 +55,7 @@ Future<String> inlineMarkdownImageSourcesAsDataUrls(
       continue;
     }
 
-    final source = _unwrapMarkdownImageSource(sourceToken);
+    final source = unwrapMarkdownImageSourceToken(sourceToken);
     final dataUrl = await resolveMarkdownImageSourceAsDataUrl(
       source,
       draftAttachments: draftAttachments,
@@ -147,13 +147,6 @@ Future<String?> resolveMarkdownImageSourceAsDataUrl(
   }
 
   return _readLocalImageAsDataUrl(trimmed);
-}
-
-String _unwrapMarkdownImageSource(String token) {
-  if (token.startsWith('<') && token.endsWith('>') && token.length > 2) {
-    return token.substring(1, token.length - 1);
-  }
-  return token;
 }
 
 String _buildDataUrl({required List<int> bytes, required String mimeType}) {

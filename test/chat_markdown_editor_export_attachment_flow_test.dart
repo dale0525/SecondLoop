@@ -20,6 +20,26 @@ import 'test_i18n.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
+  test(
+    'inline markdown export trims angle-bracket wrapped attachment refs',
+    () async {
+      final hydratedMarkdown = await inlineMarkdownImageSourcesAsDataUrls(
+        '![saved](< secondloop://attachment/sha_trimmed >)',
+        readPersistedAttachment: (attachmentSha256) async {
+          expect(attachmentSha256, 'sha_trimmed');
+          return ChatMarkdownExportImageData(
+            bytes: Uint8List.fromList(<int>[1, 2, 3]),
+            mimeType: 'image/png',
+          );
+        },
+      );
+
+      expect(hydratedMarkdown, contains('![saved](<data:image/png;base64,'));
+      expect(hydratedMarkdown,
+          isNot(contains('secondloop://attachment/sha_trimmed')));
+    },
+  );
+
   testWidgets(
     'editor export menu exposes pdf action',
     (tester) async {

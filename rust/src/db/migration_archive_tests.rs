@@ -656,3 +656,40 @@ fn migration_archive_end_to_end_import_into_clean_app_rebuilds_indexes_and_persi
     assert_eq!(state["stage"].as_str(), Some("reindex_completed"));
     assert_eq!(state["status"].as_str(), Some("completed"));
 }
+
+#[test]
+fn migration_archive_rewrite_embedded_attachment_refs_skips_code_spans_and_fences() {
+    let attachment = MigrationArchiveAttachment {
+        sha256: "sha_123".to_string(),
+        archive_path: "attachments/sha_123.png".to_string(),
+        original_filename: "sha_123.png".to_string(),
+        mime_type: Some("image/png".to_string()),
+        size_bytes: 1,
+        item_ids: vec!["item_1".to_string()],
+    };
+    let attachments = std::collections::BTreeMap::from([(attachment.sha256.clone(), attachment)]);
+
+    let body = [
+        "![saved](secondloop://attachment/sha_123)",
+        "",
+        "Use `![saved](secondloop://attachment/sha_123)` as an example.",
+        "",
+        "```markdown",
+        "![saved](secondloop://attachment/sha_123)",
+        "```",
+    ]
+    .join(
+        "
+",
+    );
+
+    let rewritten = migration_archive_rewrite_embedded_attachment_refs(&body, &attachments);
+
+    assert!(rewritten.contains("![saved](../attachments/sha_123.png)"));
+    assert!(rewritten.contains("Use `![saved](secondloop://attachment/sha_123)` as an example."));
+    assert!(rewritten.contains(
+        "```markdown
+![saved](secondloop://attachment/sha_123)
+```"
+    ));
+}

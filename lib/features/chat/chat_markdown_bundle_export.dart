@@ -5,10 +5,6 @@ import '../attachments/attachment_deeplink.dart';
 import '../attachments/attachment_draft_send_contract.dart';
 import 'chat_markdown_attachment_refs.dart';
 
-final RegExp _kBundleMarkdownImagePattern = RegExp(
-  r'!\[[^\]]*\]\((<[^>]+>|[^)\s]+)(?:\s+"[^"]*")?\)',
-);
-
 typedef PersistedMarkdownBundleAssetReader = Future<MarkdownBundleAssetData?>
     Function(String attachmentSha256);
 
@@ -146,7 +142,7 @@ Future<String> _rewriteMarkdownImageSources(
   }
 
   final matches =
-      _kBundleMarkdownImagePattern.allMatches(markdown).toList(growable: false);
+      kMarkdownImageRefPattern.allMatches(markdown).toList(growable: false);
   if (matches.isEmpty) {
     return markdown;
   }
@@ -163,7 +159,7 @@ Future<String> _rewriteMarkdownImageSources(
       continue;
     }
 
-    final source = _unwrapMarkdownBundleImageSource(sourceToken);
+    final source = unwrapMarkdownImageSourceToken(sourceToken);
     final resolvedAssetPath = await onResolveAssetPath(source);
     if (resolvedAssetPath == null) {
       buffer.write(imageSegment);
@@ -201,14 +197,6 @@ Future<String> _writeAssetIfNeeded({
   final relativePath = '$directoryName/$assetFilename';
   writtenAssetPaths[assetKey] = relativePath;
   return relativePath;
-}
-
-String _unwrapMarkdownBundleImageSource(String token) {
-  final trimmed = token.trim();
-  if (trimmed.length >= 2 && trimmed.startsWith('<') && trimmed.endsWith('>')) {
-    return trimmed.substring(1, trimmed.length - 1).trim();
-  }
-  return trimmed;
 }
 
 String _extensionForMimeType(String mimeType) {
