@@ -5,6 +5,7 @@ import 'package:secondloop/features/actions/task_hub/task_hub_banner.dart';
 import 'package:secondloop/features/actions/task_hub/task_priority_ai_models.dart';
 import 'package:secondloop/features/actions/task_hub/task_priority_engine.dart';
 import 'package:secondloop/features/actions/task_hub/task_priority_models.dart';
+import 'package:secondloop/features/actions/task_hub/task_hub_quick_actions.dart';
 import 'package:secondloop/src/rust/db.dart';
 
 import 'test_i18n.dart';
@@ -174,6 +175,48 @@ void main() {
         find.byKey(const ValueKey('task_hub_banner_open_hub')), findsOneWidget);
     expect(
         find.byKey(const ValueKey('task_hub_banner_view_all')), findsNothing);
+  });
+
+  testWidgets('banner primary action uses shared quick action mapping',
+      (tester) async {
+    TaskHubQuickAction? tappedAction;
+    final snapshot = buildTaskPrioritySnapshot(
+      <Todo>[todo(id: 't1', title: 'Write launch plan', updatedAtMs: 10)],
+      nowLocal: DateTime(2026, 3, 13, 10, 0),
+      aiResult: const TaskPriorityAiBatchResult(
+        entries: <TaskPriorityAiEntry>[
+          TaskPriorityAiEntry(
+            todoId: 't1',
+            priorityBand: TaskPriorityAiBand.focus,
+            semanticAdjustment: 18,
+            reason: 'This can wait until later today.',
+            suggestedAction: TaskPrioritySuggestionKind.defer,
+            confidence: TaskPriorityAiConfidence.high,
+          ),
+        ],
+      ),
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: Scaffold(
+            body: TaskHubBanner(
+              snapshot: snapshot,
+              onQuickAction: (entry, action) async {
+                tappedAction = action;
+              },
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester
+        .tap(find.byKey(const ValueKey('task_hub_banner_primary_action')));
+    await tester.pump();
+
+    expect(tappedAction, TaskHubQuickAction.later);
   });
 
   testWidgets('banner shows AI upgrade hint when enhancement is unavailable',

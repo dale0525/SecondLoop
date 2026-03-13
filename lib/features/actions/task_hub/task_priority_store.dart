@@ -114,74 +114,76 @@ class TaskPriorityStore extends ChangeNotifier {
     _isRefreshing = true;
     notifyListeners();
 
-    final nowLocal = _nowLocal();
-    final todos = await _loadTodos();
-    await _feedbackStore.pruneToTodoIds(todos.map((todo) => todo.id));
-    final feedbackState = await _feedbackStore.read();
-
-    _snapshot = buildTaskPrioritySnapshot(
-      todos,
-      nowLocal: nowLocal,
-      feedbackState: feedbackState,
-    );
-    _dirty = false;
-    notifyListeners();
-
-    final aiEnhancementEnabled = await _isAiEnhancementEnabled?.call() ?? true;
-    if (!aiEnhancementEnabled) {
-      _aiAvailability = TaskPriorityAiAvailability.disabled;
-      _stickyFocusTodoId = _snapshot.primaryFocus?.todo.id;
-      _stickyFocusDayLocal =
-          DateTime(nowLocal.year, nowLocal.month, nowLocal.day);
-      _isRefreshing = false;
-      notifyListeners();
-      return;
-    }
-
-    TaskPriorityAiService? aiService;
     try {
-      aiService = await _resolveAiService?.call();
-      _aiAvailability = aiService == null
-          ? TaskPriorityAiAvailability.unavailable
-          : TaskPriorityAiAvailability.available;
-    } catch (_) {
-      _aiAvailability = TaskPriorityAiAvailability.unavailable;
-      aiService = null;
-    }
-    if (aiService != null && _snapshot.activeEntries.isNotEmpty) {
-      try {
-        final request =
-            buildTaskPriorityAiRequest(_snapshot, nowLocal: nowLocal);
-        final signature = _buildAiSignature(request);
-        final aiResult = _resolveCachedOrFreshAiResult(
-          aiService,
-          request: request,
-          signature: signature,
-          nowLocal: nowLocal,
-        );
-        var hybridSnapshot = buildTaskPrioritySnapshot(
-          todos,
-          nowLocal: nowLocal,
-          aiResult: await aiResult,
-          feedbackState: feedbackState,
-        );
-        hybridSnapshot = _applyStickyFocus(hybridSnapshot, nowLocal: nowLocal);
-        _snapshot = hybridSnapshot;
+      final nowLocal = _nowLocal();
+      final todos = await _loadTodos();
+      await _feedbackStore.pruneToTodoIds(todos.map((todo) => todo.id));
+      final feedbackState = await _feedbackStore.read();
+
+      _snapshot = buildTaskPrioritySnapshot(
+        todos,
+        nowLocal: nowLocal,
+        feedbackState: feedbackState,
+      );
+      _dirty = false;
+      notifyListeners();
+
+      final aiEnhancementEnabled =
+          await _isAiEnhancementEnabled?.call() ?? true;
+      if (!aiEnhancementEnabled) {
+        _aiAvailability = TaskPriorityAiAvailability.disabled;
         _stickyFocusTodoId = _snapshot.primaryFocus?.todo.id;
         _stickyFocusDayLocal =
             DateTime(nowLocal.year, nowLocal.month, nowLocal.day);
-        notifyListeners();
-      } catch (_) {
-        // Keep the already-published rules snapshot.
+        return;
       }
-    } else {
-      _stickyFocusTodoId = _snapshot.primaryFocus?.todo.id;
-      _stickyFocusDayLocal =
-          DateTime(nowLocal.year, nowLocal.month, nowLocal.day);
-    }
 
-    _isRefreshing = false;
-    notifyListeners();
+      TaskPriorityAiService? aiService;
+      try {
+        aiService = await _resolveAiService?.call();
+        _aiAvailability = aiService == null
+            ? TaskPriorityAiAvailability.unavailable
+            : TaskPriorityAiAvailability.available;
+      } catch (_) {
+        _aiAvailability = TaskPriorityAiAvailability.unavailable;
+        aiService = null;
+      }
+      if (aiService != null && _snapshot.activeEntries.isNotEmpty) {
+        try {
+          final request =
+              buildTaskPriorityAiRequest(_snapshot, nowLocal: nowLocal);
+          final signature = _buildAiSignature(request);
+          final aiResult = _resolveCachedOrFreshAiResult(
+            aiService,
+            request: request,
+            signature: signature,
+            nowLocal: nowLocal,
+          );
+          var hybridSnapshot = buildTaskPrioritySnapshot(
+            todos,
+            nowLocal: nowLocal,
+            aiResult: await aiResult,
+            feedbackState: feedbackState,
+          );
+          hybridSnapshot =
+              _applyStickyFocus(hybridSnapshot, nowLocal: nowLocal);
+          _snapshot = hybridSnapshot;
+          _stickyFocusTodoId = _snapshot.primaryFocus?.todo.id;
+          _stickyFocusDayLocal =
+              DateTime(nowLocal.year, nowLocal.month, nowLocal.day);
+          notifyListeners();
+        } catch (_) {
+          // Keep the already-published rules snapshot.
+        }
+      } else {
+        _stickyFocusTodoId = _snapshot.primaryFocus?.todo.id;
+        _stickyFocusDayLocal =
+            DateTime(nowLocal.year, nowLocal.month, nowLocal.day);
+      }
+    } finally {
+      _isRefreshing = false;
+      notifyListeners();
+    }
   }
 
   Future<TaskPriorityAiBatchResult> _resolveCachedOrFreshAiResult(

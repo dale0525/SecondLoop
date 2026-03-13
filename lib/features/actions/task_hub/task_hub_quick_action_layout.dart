@@ -73,7 +73,7 @@ TaskHubQuickActionLayout buildTaskHubQuickActionLayout(
     );
   }
 
-  final recommended = _recommendedActionForEntry(entry);
+  final recommended = recommendedTaskHubQuickActionForEntry(entry);
   final recommendedLabel = switch (entry.suggestedAction) {
     TaskPrioritySuggestionKind.doNow => actions.doNow,
     TaskPrioritySuggestionKind.schedule => actions.schedule,
@@ -170,7 +170,8 @@ TaskHubQuickActionLayout buildTaskHubQuickActionLayout(
   );
 }
 
-TaskHubQuickAction _recommendedActionForEntry(TaskPriorityEntry entry) {
+TaskHubQuickAction recommendedTaskHubQuickActionForEntry(
+    TaskPriorityEntry entry) {
   return switch (entry.suggestedAction) {
     TaskPrioritySuggestionKind.doNow => entry.isInProgress
         ? TaskHubQuickAction.done

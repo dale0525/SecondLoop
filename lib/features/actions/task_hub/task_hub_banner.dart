@@ -7,6 +7,7 @@ import '../../../ui/sl_button.dart';
 import '../../../ui/sl_surface.dart';
 import '../../../ui/sl_tokens.dart';
 import 'task_hub_page_sections.dart';
+import 'task_hub_quick_action_layout.dart';
 import 'task_hub_quick_actions.dart';
 import 'task_priority_feedback_store.dart';
 import 'task_priority_models.dart';
@@ -204,10 +205,7 @@ class _TaskHubBannerState extends State<TaskHubBanner> {
   }
 
   TaskHubQuickAction _primaryQuickAction(TaskPriorityEntry entry) {
-    if (entry.isInProgress) return TaskHubQuickAction.done;
-    if (entry.isFutureScheduled) return TaskHubQuickAction.start;
-    if (entry.isReviewDue) return TaskHubQuickAction.moveToInbox;
-    return TaskHubQuickAction.today;
+    return recommendedTaskHubQuickActionForEntry(entry);
   }
 }
 

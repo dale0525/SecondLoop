@@ -101,6 +101,18 @@ void main() {
     expect(loadCount, 2);
   });
 
+  test('refresh clears refreshing state when early load throws', () async {
+    SharedPreferences.setMockInitialValues({});
+    final store = TaskPriorityStore.fromLoaders(
+      nowLocal: () => DateTime(2026, 3, 13, 10, 0),
+      loadTodos: () async => throw StateError('load failed'),
+    );
+
+    await expectLater(store.refresh(), throwsStateError);
+
+    expect(store.isRefreshing, isFalse);
+  });
+
   test('empty task list still yields an empty structured snapshot', () async {
     SharedPreferences.setMockInitialValues({});
     final store = TaskPriorityStore.fromLoaders(
