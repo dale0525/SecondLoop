@@ -67,6 +67,7 @@ extension _ChatMarkdownEditorPagePaste on _ChatMarkdownEditorPageState {
       }
 
       final clipboardData = await Clipboard.getData(Clipboard.kTextPlain);
+      if (!mounted) return;
       final text = clipboardData?.text;
       if (text == null || text.isEmpty) return;
       _replaceSelectionWithText(text);

@@ -11,11 +11,18 @@ import 'test_i18n.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
+  Future<Object?> Function()? clipboardGetDataHandler;
+
   setUp(() {
+    clipboardGetDataHandler = null;
     final messenger =
         TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
     messenger.setMockMethodCallHandler(SystemChannels.platform, (call) async {
       if (call.method == 'Clipboard.getData') {
+        final handler = clipboardGetDataHandler;
+        if (handler != null) {
+          return handler();
+        }
         return <String, Object?>{'text': ''};
       }
       return null;
@@ -192,6 +199,45 @@ void main() {
       final text = textField.controller?.text ?? '';
       expect(text, contains(buildDraftMarkdownImageSource('markdown_draft_1')));
       expect(readCount, 2);
+    } finally {
+      debugDefaultTargetPlatformOverride = null;
+    }
+  });
+
+  testWidgets('text fallback ignores clipboard result after editor is disposed',
+      (tester) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+    final clipboardCompleter = Completer<Object?>();
+    clipboardGetDataHandler = () => clipboardCompleter.future;
+
+    try {
+      await tester.pumpWidget(
+        wrapWithI18n(
+          MaterialApp(
+            home: EditorHarness(
+              allowPlainMode: true,
+              pastedImageReader: () async => null,
+            ),
+          ),
+        ),
+      );
+
+      await tester.tap(find.byKey(const ValueKey('open_editor')));
+      await tester.pumpAndSettle();
+      await tester
+          .tap(find.byKey(const ValueKey('chat_markdown_editor_input')));
+      await tester.pump();
+
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.metaLeft);
+      await tester.sendKeyEvent(LogicalKeyboardKey.keyV);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.metaLeft);
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+
+      clipboardCompleter.complete(<String, Object?>{'text': 'late text'});
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
     } finally {
       debugDefaultTargetPlatformOverride = null;
     }
