@@ -154,6 +154,57 @@ void main() {
       }
     },
   );
+
+  testWidgets(
+    'editor export menu copy action shows the underlying error message',
+    (tester) async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+      final backend = _ThrowingExportAttachmentBackend();
+      final mockContext =
+          superNativeExtensionsContext as MockMessageChannelContext;
+      var nextProviderId = 1;
+      mockContext.registerMockMethodCallHandler('DataProviderManager', (call) {
+        switch (call.method) {
+          case 'registerDataProvider':
+            return nextProviderId++;
+          case 'unregisterDataProvider':
+            return null;
+          default:
+            return null;
+        }
+      });
+      mockContext.registerMockMethodCallHandler('ClipboardWriter', (call) {
+        if (call.method == 'writeToClipboard') {
+          return null;
+        }
+        return null;
+      });
+
+      try {
+        await tester.pumpWidget(_buildEditorApp(
+          backend: backend,
+          initialText: '![saved](secondloop://attachment/sha_broken)',
+        ));
+        await _pumpUntil(
+          tester,
+          () => find
+              .byKey(const ValueKey('chat_markdown_editor_export_menu'))
+              .evaluate()
+              .isNotEmpty,
+        );
+
+        await _triggerExportAction(tester, 'copyToClipboard');
+        await _pumpUntil(
+          tester,
+          () => find.textContaining('boom sha_broken').evaluate().isNotEmpty,
+        );
+
+        expect(find.textContaining('boom sha_broken'), findsOneWidget);
+      } finally {
+        debugDefaultTargetPlatformOverride = null;
+      }
+    },
+  );
 }
 
 Widget _buildEditorApp({
@@ -280,6 +331,16 @@ final class _ExportAttachmentBackend extends TestAppBackend
     String messageId,
   ) async =>
       const <Attachment>[];
+}
+
+final class _ThrowingExportAttachmentBackend extends _ExportAttachmentBackend {
+  @override
+  Future<Uint8List> readAttachmentBytes(
+    Uint8List key, {
+    required String sha256,
+  }) async {
+    throw StateError('boom $sha256');
+  }
 }
 
 Uint8List _pngBytes() => Uint8List.fromList(const <int>[

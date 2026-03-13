@@ -44,6 +44,28 @@ void main() {
         result.referencedAttachmentShas, <String>{'existing_sha', 'new_sha'});
   });
 
+  test('ingests only draft attachments still referenced in markdown', () async {
+    final ingestedLocalIds = <String>[];
+
+    final result = await finalizeMarkdownEditorAttachments(
+      markdown: '![keep](secondloop-draft://image/draft_1)',
+      draftAttachments: <AttachmentDraftPayload>[
+        _draft('draft_1'),
+        _draft('draft_2'),
+      ],
+      ingestAttachment: (draft) async {
+        ingestedLocalIds.add(draft.localId);
+        return 'sha_${draft.localId}';
+      },
+    );
+
+    expect(ingestedLocalIds, <String>['draft_1']);
+    expect(result.ingestedAttachmentShaByLocalId, const <String, String>{
+      'draft_1': 'sha_draft_1',
+    });
+    expect(result.referencedAttachmentShas, <String>{'sha_draft_1'});
+  });
+
   test('throws when markdown still contains unresolved draft refs', () async {
     expect(
       () => finalizeMarkdownEditorAttachments(

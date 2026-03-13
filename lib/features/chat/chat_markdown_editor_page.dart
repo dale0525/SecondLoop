@@ -133,7 +133,7 @@ class _ChatMarkdownEditorPageState extends State<ChatMarkdownEditorPage>
     _controller = TextEditingController(text: widget.initialText);
     _lastValidSelection =
         _controller.selection.isValid ? _controller.selection : null;
-    _editorFocusNode.onKey = _handleEditorFocusNodeOnKey;
+    _editorFocusNode.onKeyEvent = _handleEditorFocusNodeOnKey;
     _controller.addListener(_rememberValidSelection);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
@@ -180,10 +180,8 @@ class _ChatMarkdownEditorPageState extends State<ChatMarkdownEditorPage>
     setState(() => _compactPane = ChatMarkdownCompactPane.preview);
   }
 
-  // ignore: deprecated_member_use
-  KeyEventResult _handleEditorFocusNodeOnKey(
-      FocusNode node, RawKeyEvent event) {
-    if (isMacOsCommandModifierKeyDown(event)) {
+  KeyEventResult _handleEditorFocusNodeOnKey(FocusNode node, KeyEvent event) {
+    if (isMacOsCommandModifierKeyEvent(event)) {
       return KeyEventResult.handled;
     }
 
@@ -897,8 +895,7 @@ class _ChatMarkdownEditorPageState extends State<ChatMarkdownEditorPage>
       title: context.t.chat.markdownEditor.editorLabel,
       icon: Icons.edit_note_rounded,
       child: Focus(
-        // ignore: deprecated_member_use
-        onKey: _handleEditorOnKey,
+        onKeyEvent: _handleEditorOnKey,
         child: TextField(
           key: widget.inputFieldKey,
           controller: _controller,

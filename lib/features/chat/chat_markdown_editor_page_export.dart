@@ -289,7 +289,7 @@ mixin _ChatMarkdownEditorExportMixin on State<ChatMarkdownEditorPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            context.t.chat.markdownEditor.exportFailed(error: ''),
+            context.t.chat.markdownEditor.exportFailed(error: '$error'),
           ),
           duration: const Duration(seconds: 3),
         ),

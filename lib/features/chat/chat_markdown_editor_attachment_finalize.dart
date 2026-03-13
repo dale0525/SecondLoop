@@ -22,8 +22,12 @@ Future<FinalizedMarkdownEditorAttachments> finalizeMarkdownEditorAttachments({
   required List<AttachmentDraftPayload> draftAttachments,
   required MarkdownEditorAttachmentIngestor ingestAttachment,
 }) async {
+  final referencedLocalIds = collectDraftMarkdownImageLocalIds(markdown);
   final attachmentShaByLocalId = <String, String>{};
   for (final draft in draftAttachments) {
+    if (!referencedLocalIds.contains(draft.localId)) {
+      continue;
+    }
     attachmentShaByLocalId[draft.localId] = await ingestAttachment(draft);
   }
 

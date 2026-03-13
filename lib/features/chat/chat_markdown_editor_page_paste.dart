@@ -6,24 +6,19 @@ extension _ChatMarkdownEditorPagePaste on _ChatMarkdownEditorPageState {
     return 'markdown_draft_$_draftAttachmentSeq';
   }
 
-  // ignore: deprecated_member_use
-  KeyEventResult _handleEditorOnKey(FocusNode node, RawKeyEvent event) {
-    if (event is! RawKeyDownEvent) {
+  KeyEventResult _handleEditorOnKey(FocusNode node, KeyEvent event) {
+    if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
       return KeyEventResult.ignored;
     }
 
     final key = event.logicalKey;
     final hardware = HardwareKeyboard.instance;
-    final modifierData = event.data;
-    final metaPressed = hardware.isMetaPressed ||
-        modifierData.isModifierPressed(ModifierKey.metaModifier);
-    final controlPressed = hardware.isControlPressed ||
-        modifierData.isModifierPressed(ModifierKey.controlModifier);
-    final shiftPressed = hardware.isShiftPressed ||
-        modifierData.isModifierPressed(ModifierKey.shiftModifier);
+    final metaPressed = hardware.isMetaPressed;
+    final controlPressed = hardware.isControlPressed;
+    final shiftPressed = hardware.isShiftPressed;
     final shortcut = resolveTextEditingShortcut(
       key: key,
-      keyLabel: event.data.keyLabel,
+      keyLabel: key.keyLabel,
       character: event.character,
       metaPressed: metaPressed,
       controlPressed: controlPressed,
