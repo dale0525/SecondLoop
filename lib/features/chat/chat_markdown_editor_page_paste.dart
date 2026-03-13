@@ -29,7 +29,9 @@ extension _ChatMarkdownEditorPagePaste on _ChatMarkdownEditorPageState {
     );
 
     if (shortcut == TextEditingShortcut.paste) {
-      unawaited(_pasteIntoMarkdownEditor());
+      if (!_pasteInProgress) {
+        unawaited(_pasteIntoMarkdownEditor());
+      }
       return KeyEventResult.handled;
     }
 
@@ -37,11 +39,16 @@ extension _ChatMarkdownEditorPagePaste on _ChatMarkdownEditorPageState {
   }
 
   Future<void> _pasteIntoMarkdownEditor() async {
-    final pastedImage = await _readPastedImageData();
-    if (!mounted) {
+    if (_pasteInProgress) {
       return;
     }
-    if (pastedImage != null && pastedImage.bytes.isNotEmpty) {
+    _pasteInProgress = true;
+    try {
+      final pastedImage = await _readPastedImageData();
+      if (!mounted) {
+        return;
+      }
+      if (pastedImage != null && pastedImage.bytes.isNotEmpty) {
       final localId = _nextDraftAttachmentLocalId();
       final payload = buildImageAttachmentDraftPayload(
         localId: localId,
@@ -57,10 +64,13 @@ extension _ChatMarkdownEditorPagePaste on _ChatMarkdownEditorPageState {
       return;
     }
 
-    final clipboardData = await Clipboard.getData(Clipboard.kTextPlain);
-    final text = clipboardData?.text;
-    if (text == null || text.isEmpty) return;
-    _replaceSelectionWithText(text);
+      final clipboardData = await Clipboard.getData(Clipboard.kTextPlain);
+      final text = clipboardData?.text;
+      if (text == null || text.isEmpty) return;
+      _replaceSelectionWithText(text);
+    } finally {
+      _pasteInProgress = false;
+    }
   }
 
   Future<ChatMarkdownPastedImageData?> _readPastedImageData() async {

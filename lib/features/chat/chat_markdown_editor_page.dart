@@ -124,6 +124,7 @@ class _ChatMarkdownEditorPageState extends State<ChatMarkdownEditorPage>
   final List<AttachmentDraftPayload> _draftAttachments =
       <AttachmentDraftPayload>[];
   int _draftAttachmentSeq = 0;
+  bool _pasteInProgress = false;
 
   TextSelection? _lastValidSelection;
 

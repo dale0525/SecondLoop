@@ -63,6 +63,54 @@ void main() {
       await dir.delete(recursive: true);
     }
   });
+
+
+  test('exports markdown bundle with a unique suffix when stem already exists', () async {
+    final dir = await Directory.systemTemp.createTemp('markdown-bundle-');
+
+    try {
+      await File('${dir.path}/note.md').writeAsString('existing');
+      await Directory('${dir.path}/note.assets').create();
+
+      final result = await exportChatMarkdownBundle(
+        markdown: '![draft](secondloop-draft://image/draft_1)',
+        filenameStem: 'note',
+        outputDirectory: dir,
+        draftAttachments: <AttachmentDraftPayload>[
+          AttachmentDraftPayload(
+            localId: 'draft_1',
+            filename: 'draft.png',
+            mimeType: 'image/png',
+            bytes: _pngBytes(),
+          ),
+        ],
+      );
+
+      expect(result.markdownFile.path, endsWith('note-2.md'));
+      expect(result.assetDirectory.path, endsWith('note-2.assets'));
+    } finally {
+      await dir.delete(recursive: true);
+    }
+  });
+
+  test('keeps persisted refs when attachment bytes are unavailable', () async {
+    final dir = await Directory.systemTemp.createTemp('markdown-bundle-');
+
+    try {
+      final result = await exportChatMarkdownBundle(
+        markdown: '![saved](secondloop://attachment/sha_missing)',
+        filenameStem: 'note',
+        outputDirectory: dir,
+      );
+
+      expect(await result.markdownFile.exists(), isTrue);
+      final markdownText = await result.markdownFile.readAsString();
+      expect(markdownText, contains('secondloop://attachment/sha_missing'));
+      expect(await result.assetDirectory.list().isEmpty, isTrue);
+    } finally {
+      await dir.delete(recursive: true);
+    }
+  });
 }
 
 Uint8List _pngBytes() => Uint8List.fromList(const <int>[

@@ -45,66 +45,91 @@ Future<MarkdownBundleExportResult> exportChatMarkdownBundle({
   PersistedMarkdownBundleAssetReader? readPersistedAttachment,
 }) async {
   await outputDirectory.create(recursive: true);
-  final assetDirectory =
-      Directory('${outputDirectory.path}/$filenameStem.assets');
-  await assetDirectory.create(recursive: true);
-
   final draftByLocalId = {
     for (final draft in draftAttachments) draft.localId: draft,
   };
-  final writtenAssetPaths = <String, String>{};
 
-  final rewrittenMarkdown = await _rewriteMarkdownImageSources(
-    markdown,
-    onResolveAssetPath: (source) async {
-      final draftRef = parseDraftMarkdownImageRef(source);
-      if (draftRef != null) {
-        final draft = draftByLocalId[draftRef.localId];
-        if (draft == null) {
-          throw StateError('Missing draft attachment: ${draftRef.localId}');
-        }
-        return _writeAssetIfNeeded(
-          assetDirectory: assetDirectory,
-          assetKey: 'draft:${draft.localId}',
-          assetFilename:
-              '${draft.localId}.${_extensionForMimeType(draft.normalizedMimeType)}',
-          bytes: draft.bytes,
-          writtenAssetPaths: writtenAssetPaths,
-        );
+  var stem = filenameStem;
+  var duplicateIndex = 2;
+  while (true) {
+    final assetDirectory = Directory('${outputDirectory.path}/$stem.assets');
+    final markdownFile = File('${outputDirectory.path}/$stem.md');
+    final writtenAssetPaths = <String, String>{};
+    var reservedMarkdownFile = false;
+
+    try {
+      await assetDirectory.create();
+      await markdownFile.create(exclusive: true);
+      reservedMarkdownFile = true;
+
+      final rewrittenMarkdown = await _rewriteMarkdownImageSources(
+        markdown,
+        onResolveAssetPath: (source) async {
+          final draftRef = parseDraftMarkdownImageRef(source);
+          if (draftRef != null) {
+            final draft = draftByLocalId[draftRef.localId];
+            if (draft == null) {
+              throw StateError('Missing draft attachment: ${draftRef.localId}');
+            }
+            return _writeAssetIfNeeded(
+              assetDirectory: assetDirectory,
+              assetKey: 'draft:${draft.localId}',
+              assetFilename:
+                  '${draft.localId}.${_extensionForMimeType(draft.normalizedMimeType)}',
+              bytes: draft.bytes,
+              writtenAssetPaths: writtenAssetPaths,
+            );
+          }
+
+          final attachmentRef = parseAttachmentDeepLink(source);
+          if (attachmentRef != null) {
+            final asset = await readPersistedAttachment?.call(
+              attachmentRef.attachmentSha256,
+            );
+            if (asset == null) {
+              return null;
+            }
+            return _writeAssetIfNeeded(
+              assetDirectory: assetDirectory,
+              assetKey: 'attachment:${attachmentRef.attachmentSha256}',
+              assetFilename:
+                  '${attachmentRef.attachmentSha256}.${_extensionForMimeType(asset.mimeType)}',
+              bytes: asset.bytes,
+              writtenAssetPaths: writtenAssetPaths,
+            );
+          }
+
+          return null;
+        },
+      );
+
+      await markdownFile.writeAsString(rewrittenMarkdown, flush: true);
+
+      return MarkdownBundleExportResult(
+        markdownFile: markdownFile,
+        assetDirectory: assetDirectory,
+        rewrittenMarkdown: rewrittenMarkdown,
+      );
+    } on FileSystemException {
+      if (reservedMarkdownFile && await markdownFile.exists()) {
+        await markdownFile.delete();
       }
-
-      final attachmentRef = parseAttachmentDeepLink(source);
-      if (attachmentRef != null) {
-        final asset = await readPersistedAttachment?.call(
-          attachmentRef.attachmentSha256,
-        );
-        if (asset == null) {
-          throw StateError(
-            'Missing persisted attachment: ${attachmentRef.attachmentSha256}',
-          );
-        }
-        return _writeAssetIfNeeded(
-          assetDirectory: assetDirectory,
-          assetKey: 'attachment:${attachmentRef.attachmentSha256}',
-          assetFilename:
-              '${attachmentRef.attachmentSha256}.${_extensionForMimeType(asset.mimeType)}',
-          bytes: asset.bytes,
-          writtenAssetPaths: writtenAssetPaths,
-        );
+      if (await assetDirectory.exists()) {
+        await assetDirectory.delete(recursive: true);
       }
-
-      return null;
-    },
-  );
-
-  final markdownFile = File('${outputDirectory.path}/$filenameStem.md');
-  await markdownFile.writeAsString(rewrittenMarkdown, flush: true);
-
-  return MarkdownBundleExportResult(
-    markdownFile: markdownFile,
-    assetDirectory: assetDirectory,
-    rewrittenMarkdown: rewrittenMarkdown,
-  );
+      stem = '$filenameStem-$duplicateIndex';
+      duplicateIndex += 1;
+      continue;
+    } catch (_) {
+      if (reservedMarkdownFile && await markdownFile.exists()) {
+        await markdownFile.delete();
+      }
+      if (await assetDirectory.exists()) {
+        await assetDirectory.delete(recursive: true);
+      }
+      rethrow;
+    }
+  }
 }
 
 Future<String> _rewriteMarkdownImageSources(

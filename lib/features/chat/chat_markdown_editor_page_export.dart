@@ -162,18 +162,10 @@ mixin _ChatMarkdownEditorExportMixin on State<ChatMarkdownEditorPage> {
       final sessionKey = SessionScope.maybeOf(context)?.sessionKey;
       final directory = await _resolveMarkdownExportDirectory();
       final sourceMarkdown = _controller.text;
-      final baseStem = deriveMarkdownExportFilenameStem(sourceMarkdown);
-      var stem = baseStem;
-      var duplicateIndex = 2;
-      while (await File('${directory.path}/$stem.md').exists() ||
-          await Directory('${directory.path}/$stem.assets').exists()) {
-        stem = '$baseStem-$duplicateIndex';
-        duplicateIndex += 1;
-      }
 
       final result = await exportChatMarkdownBundle(
         markdown: sourceMarkdown,
-        filenameStem: stem,
+        filenameStem: deriveMarkdownExportFilenameStem(sourceMarkdown),
         outputDirectory: directory,
         draftAttachments: _draftAttachments,
         readPersistedAttachment:

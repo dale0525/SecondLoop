@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -68,6 +69,60 @@ void main() {
       debugDefaultTargetPlatformOverride = null;
     }
   });
+
+
+  testWidgets(
+    'repeated paste key events only insert one image while a paste is in flight',
+    (tester) async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+      final completer = Completer<ChatMarkdownPastedImageData?>();
+
+      try {
+        await tester.pumpWidget(
+          wrapWithI18n(
+            MaterialApp(
+              home: EditorHarness(
+                pastedImageReader: () => completer.future,
+              ),
+            ),
+          ),
+        );
+
+        await tester.tap(find.byKey(const ValueKey('open_editor')));
+        await tester.pumpAndSettle();
+        await tester.tap(
+          find.byKey(const ValueKey('chat_markdown_editor_input')),
+        );
+        await tester.pump();
+
+        await tester.sendKeyDownEvent(LogicalKeyboardKey.metaLeft);
+        await tester.sendKeyEvent(LogicalKeyboardKey.keyV);
+        await tester.sendKeyEvent(LogicalKeyboardKey.keyV);
+
+        completer.complete(
+          ChatMarkdownPastedImageData(
+            bytes: _pngBytes(),
+            mimeType: 'image/png',
+            filename: 'repeat.png',
+          ),
+        );
+
+        await tester.pumpAndSettle();
+        await tester.sendKeyUpEvent(LogicalKeyboardKey.metaLeft);
+
+        final textField = tester.widget<TextField>(
+          find.byKey(const ValueKey('chat_markdown_editor_input')),
+        );
+        final text = textField.controller?.text ?? '';
+        expect(
+          RegExp(r'secondloop-draft://image/markdown_draft_').allMatches(text),
+          hasLength(1),
+        );
+      } finally {
+        debugDefaultTargetPlatformOverride = null;
+      }
+    },
+  );
 
   testWidgets('Windows ctrl+V pastes image into markdown editor',
       (tester) async {
