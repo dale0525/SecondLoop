@@ -1,5 +1,7 @@
 part of 'chat_markdown_editor_page.dart';
 
+const Duration _markdownEditorPasteImageReadTimeout = Duration(seconds: 5);
+
 extension _ChatMarkdownEditorPagePaste on _ChatMarkdownEditorPageState {
   String _nextDraftAttachmentLocalId() {
     _draftAttachmentSeq += 1;
@@ -76,7 +78,7 @@ extension _ChatMarkdownEditorPagePaste on _ChatMarkdownEditorPageState {
   Future<ChatMarkdownPastedImageData?> _readPastedImageData() async {
     final overrideReader = widget.pastedImageReader;
     if (overrideReader != null) {
-      return overrideReader();
+      return _withPasteImageReadTimeout(overrideReader());
     }
 
     final clipboard = SystemClipboard.instance;
@@ -137,13 +139,36 @@ extension _ChatMarkdownEditorPagePaste on _ChatMarkdownEditorPageState {
         continue;
       }
 
-      final resolved = await completer.future;
+      final resolved = await _withPasteImageReadTimeout(completer.future);
       if (resolved != null && resolved.bytes.isNotEmpty) {
         return resolved;
       }
     }
 
     return null;
+  }
+
+  Future<ChatMarkdownPastedImageData?> _withPasteImageReadTimeout(
+    Future<ChatMarkdownPastedImageData?> future,
+  ) {
+    final completer = Completer<ChatMarkdownPastedImageData?>();
+    final timer = Timer(_markdownEditorPasteImageReadTimeout, () {
+      if (!completer.isCompleted) {
+        completer.complete(null);
+      }
+    });
+
+    future.then((value) {
+      if (!completer.isCompleted) {
+        completer.complete(value);
+      }
+    }, onError: (Object error, StackTrace stackTrace) {
+      if (!completer.isCompleted) {
+        completer.completeError(error, stackTrace);
+      }
+    }).whenComplete(timer.cancel);
+
+    return completer.future;
   }
 
   void _replaceSelectionWithText(String text) {

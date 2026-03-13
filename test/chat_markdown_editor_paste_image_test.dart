@@ -11,6 +11,23 @@ import 'test_i18n.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
+  setUp(() {
+    final messenger =
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+    messenger.setMockMethodCallHandler(SystemChannels.platform, (call) async {
+      if (call.method == 'Clipboard.getData') {
+        return <String, Object?>{'text': ''};
+      }
+      return null;
+    });
+  });
+
+  tearDown(() {
+    final messenger =
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+    messenger.setMockMethodCallHandler(SystemChannels.platform, null);
+  });
+
   testWidgets('macOS cmd+V pastes image into markdown editor', (tester) async {
     debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
 
@@ -63,8 +80,10 @@ void main() {
       expect(result?.draftAttachments.single.localId, 'markdown_draft_1');
       expect(result?.draftAttachments.single.normalizedFilename, 'pasted.png');
       expect(result?.draftAttachments.single.normalizedMimeType, 'image/png');
-      expect(result?.text,
-          contains(buildDraftMarkdownImageSource('markdown_draft_1')));
+      expect(
+        result?.text,
+        contains(buildDraftMarkdownImageSource('markdown_draft_1')),
+      );
     } finally {
       debugDefaultTargetPlatformOverride = null;
     }
@@ -122,6 +141,61 @@ void main() {
       }
     },
   );
+
+  testWidgets('paste recovers after pasted image read times out',
+      (tester) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+    final hangingCompleter = Completer<ChatMarkdownPastedImageData?>();
+    var readCount = 0;
+
+    try {
+      await tester.pumpWidget(
+        wrapWithI18n(
+          MaterialApp(
+            home: EditorHarness(
+              pastedImageReader: () {
+                readCount += 1;
+                if (readCount == 1) {
+                  return hangingCompleter.future;
+                }
+                return Future<ChatMarkdownPastedImageData?>.value(
+                  ChatMarkdownPastedImageData(
+                    bytes: _pngBytes(),
+                    mimeType: 'image/png',
+                    filename: 'retry.png',
+                  ),
+                );
+              },
+            ),
+          ),
+        ),
+      );
+
+      await tester.tap(find.byKey(const ValueKey('open_editor')));
+      await tester.pumpAndSettle();
+      await tester
+          .tap(find.byKey(const ValueKey('chat_markdown_editor_input')));
+      await tester.pump();
+
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.metaLeft);
+      await tester.sendKeyEvent(LogicalKeyboardKey.keyV);
+      await tester.pump(const Duration(seconds: 6));
+      await tester.pumpAndSettle();
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.keyV);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.metaLeft);
+      await tester.pumpAndSettle();
+
+      final textField = tester.widget<TextField>(
+        find.byKey(const ValueKey('chat_markdown_editor_input')),
+      );
+      final text = textField.controller?.text ?? '';
+      expect(text, contains(buildDraftMarkdownImageSource('markdown_draft_1')));
+      expect(readCount, 2);
+    } finally {
+      debugDefaultTargetPlatformOverride = null;
+    }
+  });
 
   testWidgets('Windows ctrl+V pastes image into markdown editor',
       (tester) async {

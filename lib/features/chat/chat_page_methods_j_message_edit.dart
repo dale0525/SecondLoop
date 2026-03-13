@@ -31,7 +31,18 @@ extension _ChatPageStateMessageEditMethods on _ChatPageState {
 
       if (markdownResult.draftAttachments.isNotEmpty) {
         if (backend is! NativeAppBackend) {
-          throw StateError('native_backend_required_for_markdown_image_paste');
+          if (!mounted) return;
+          messenger.showSnackBar(
+            SnackBar(
+              content: Text(
+                context.t.chat.photoFailed(
+                  error: 'native_backend_required_for_markdown_image_paste',
+                ),
+              ),
+              duration: const Duration(seconds: 3),
+            ),
+          );
+          return;
         }
 
         final nativeBackend = backend;

@@ -6,6 +6,7 @@ import 'package:secondloop/core/backend/app_backend.dart';
 import 'package:secondloop/core/backend/attachments_backend.dart';
 import 'package:secondloop/core/session/session_scope.dart';
 import 'package:secondloop/features/attachments/attachment_draft_send_contract.dart';
+import 'package:secondloop/features/chat/chat_markdown_attachment_image.dart';
 import 'package:secondloop/features/chat/chat_markdown_preview.dart';
 import 'package:secondloop/src/rust/db.dart';
 
@@ -71,6 +72,46 @@ void main() {
 
     expect(find.byType(Image), findsOneWidget);
   });
+
+  testWidgets('persisted attachment bytes are reused across widget rebuilds',
+      (tester) async {
+    final backend = _CountingAttachmentBackend();
+    final rebuildTick = ValueNotifier<int>(0);
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: backend,
+            child: SessionScope(
+              sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+              lock: () {},
+              child: Scaffold(
+                body: ValueListenableBuilder<int>(
+                  valueListenable: rebuildTick,
+                  builder: (context, _, __) => ChatMarkdownAttachmentImage(
+                    uri: Uri.parse('secondloop://attachment/sha_1'),
+                    draftAttachments: const <AttachmentDraftPayload>[],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+    expect(backend.readAttachmentBytesCallCount, 1);
+
+    rebuildTick.value += 1;
+    await tester.pump();
+    expect(backend.readAttachmentBytesCallCount, 1);
+
+    rebuildTick.value += 1;
+    await tester.pump();
+    expect(backend.readAttachmentBytesCallCount, 1);
+  });
 }
 
 class _FakeAttachmentBackend extends TestAppBackend
@@ -108,6 +149,17 @@ class _FakeAttachmentBackend extends TestAppBackend
   Future<Uint8List> readAttachmentBytes(Uint8List key,
           {required String sha256}) async =>
       _pngBytes();
+}
+
+class _CountingAttachmentBackend extends _FakeAttachmentBackend {
+  int readAttachmentBytesCallCount = 0;
+
+  @override
+  Future<Uint8List> readAttachmentBytes(Uint8List key,
+      {required String sha256}) async {
+    readAttachmentBytesCallCount += 1;
+    return _pngBytes();
+  }
 }
 
 Uint8List _pngBytes() => Uint8List.fromList(const <int>[
