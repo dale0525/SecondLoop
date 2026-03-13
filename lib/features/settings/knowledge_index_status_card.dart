@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/backend/knowledge_index_models.dart';
+import '../../i18n/strings.g.dart';
 import '../../ui/sl_surface.dart';
 import 'knowledge_index_settings_card.dart';
 
@@ -39,24 +40,53 @@ final class _KnowledgeMemoryStatsCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final chips = <String>[
-      'Total ${stats.totalDocuments}',
-      'Generated ${stats.generatedDocuments}',
-      'Source ${stats.sourceDocuments}',
-      'Summaries ${stats.summaryDocuments}',
-      'Preferences ${stats.preferenceDocuments}',
-      'Profiles ${stats.profileDocuments}',
-      'Events ${stats.eventDocuments}',
-      'Patterns ${stats.patternDocuments}',
-      'Usage rows ${stats.usageStatDocuments}',
+      context.t.settings.knowledgeIndex.debug.chips.total(
+        count: stats.totalDocuments,
+      ),
+      context.t.settings.knowledgeIndex.debug.chips.generated(
+        count: stats.generatedDocuments,
+      ),
+      context.t.settings.knowledgeIndex.debug.chips.source(
+        count: stats.sourceDocuments,
+      ),
+      context.t.settings.knowledgeIndex.debug.chips.summaries(
+        count: stats.summaryDocuments,
+      ),
+      context.t.settings.knowledgeIndex.debug.chips.preferences(
+        count: stats.preferenceDocuments,
+      ),
+      context.t.settings.knowledgeIndex.debug.chips.profiles(
+        count: stats.profileDocuments,
+      ),
+      context.t.settings.knowledgeIndex.debug.chips.events(
+        count: stats.eventDocuments,
+      ),
+      context.t.settings.knowledgeIndex.debug.chips.patterns(
+        count: stats.patternDocuments,
+      ),
+      context.t.settings.knowledgeIndex.debug.chips.usageRows(
+        count: stats.usageStatDocuments,
+      ),
     ];
+    final onLabel = context.t.settings.knowledgeIndex.debug.detail.on;
+    final offLabel = context.t.settings.knowledgeIndex.debug.detail.off;
     final detailLines = <String>[
-      'Generated memory retrieval: ${stats.generatedMemoryRetrievalEnabled ? 'on' : 'off'}',
-      'Hotness rerank: ${stats.hotnessRerankEnabled ? 'on' : 'off'}',
-      'Session digest: ${stats.sessionDigestEnabled ? 'on' : 'off'}',
+      context.t.settings.knowledgeIndex.debug.detail.generatedMemoryRetrieval(
+        value: stats.generatedMemoryRetrievalEnabled ? onLabel : offLabel,
+      ),
+      context.t.settings.knowledgeIndex.debug.detail.hotnessRerank(
+        value: stats.hotnessRerankEnabled ? onLabel : offLabel,
+      ),
+      context.t.settings.knowledgeIndex.debug.detail.sessionDigest(
+        value: stats.sessionDigestEnabled ? onLabel : offLabel,
+      ),
       if (_formatTimestamp(stats.lastSynthesisAtMs) case final value?)
-        'Last synthesis: $value',
+        context.t.settings.knowledgeIndex.debug.detail
+            .lastSynthesis(value: value),
       if (_formatTimestamp(stats.lastRetrievedAtMs) case final value?)
-        'Last usage update: $value',
+        context.t.settings.knowledgeIndex.debug.detail.lastUsageUpdate(
+          value: value,
+        ),
     ];
 
     return SlSurface(
@@ -67,7 +97,7 @@ final class _KnowledgeMemoryStatsCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Memory synthesis',
+              context.t.settings.knowledgeIndex.debug.memorySynthesisTitle,
               style: Theme.of(context)
                   .textTheme
                   .titleMedium
@@ -75,7 +105,7 @@ final class _KnowledgeMemoryStatsCard extends StatelessWidget {
             ),
             const SizedBox(height: 6),
             Text(
-              'Generated memories stay local and encrypted inside the knowledge index.',
+              context.t.settings.knowledgeIndex.debug.memorySynthesisBody,
               style: Theme.of(context).textTheme.bodyMedium,
             ),
             const SizedBox(height: 12),

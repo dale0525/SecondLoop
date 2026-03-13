@@ -172,7 +172,8 @@ class _KnowledgeIndexDebugPageState extends State<KnowledgeIndexDebugPage> {
               children: [
                 Expanded(
                   child: Text(
-                    'Indexed documents (${docs.length}/$totalLabel)',
+                    context.t.settings.knowledgeIndex.debug.indexedDocuments(
+                        visible: docs.length, total: totalLabel),
                     style: Theme.of(context)
                         .textTheme
                         .titleMedium

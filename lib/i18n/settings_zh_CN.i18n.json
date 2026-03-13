@@ -884,7 +884,32 @@
     "lastBuild": "上次成功构建：$value",
     "staleReason": "过期原因：$value",
     "lastError": "最近错误：$value",
-    "progress": "进度 —— 文档：$documentsIndexed/$totalDocuments，单元：$unitsIndexed，向量：$embeddingsIndexed"
+    "progress": "进度 —— 文档：$documentsIndexed/$totalDocuments，单元：$unitsIndexed，向量：$embeddingsIndexed",
+    "debug": {
+      "indexedDocuments": "已索引文档（$visible/$total）",
+      "memorySynthesisTitle": "记忆合成",
+      "memorySynthesisBody": "生成记忆会保持在本地知识索引中，并以加密方式存储。",
+      "chips": {
+        "total": "总计 $count",
+        "generated": "生成记忆 $count",
+        "source": "源文档 $count",
+        "summaries": "摘要 $count",
+        "preferences": "偏好 $count",
+        "profiles": "用户画像 $count",
+        "events": "事件 $count",
+        "patterns": "模式 $count",
+        "usageRows": "使用记录 $count"
+      },
+      "detail": {
+        "generatedMemoryRetrieval": "生成记忆召回：$value",
+        "hotnessRerank": "热度重排：$value",
+        "sessionDigest": "会话摘要：$value",
+        "lastSynthesis": "最近合成：$value",
+        "lastUsageUpdate": "最近使用更新：$value",
+        "on": "开启",
+        "off": "关闭"
+      }
+    }
   },
   "migrationArchive": {
     "title": "迁移归档",
