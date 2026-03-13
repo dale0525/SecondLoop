@@ -173,13 +173,15 @@ fn collect_preference_memories(messages: &[RawUserMessage], out: &mut Vec<Genera
         let lower = message.content.trim().to_lowercase();
         let anchors = KnowledgeAnchorSet {
             message_id: Some(message.message_id.clone()),
-            conversation_id: Some(message.conversation_id.clone()),
+            conversation_id: None,
             section_label: Some("generated_preference".to_string()),
             ..KnowledgeAnchorSet::default()
         };
 
         if lower.contains("please answer in")
-            || lower.contains("reply in")
+            || lower.contains("please reply in")
+            || lower.contains("respond in")
+            || lower.contains("answer me in")
             || message.content.contains("请用")
         {
             if let Some(language) = detect_response_language(message, &lower) {
@@ -213,10 +215,19 @@ fn collect_preference_memories(messages: &[RawUserMessage], out: &mut Vec<Genera
             });
         }
 
-        if lower.contains("bullet")
-            || message.content.contains("要点")
-            || message.content.contains("列表")
-        {
+        let requests_bullet_format = lower.contains("use bullet")
+            || lower.contains("using bullet")
+            || lower.contains("in bullet")
+            || lower.contains("as bullet")
+            || lower.contains("bullet list")
+            || lower.contains("bulleted")
+            || message.content.contains("用要点格式")
+            || message.content.contains("用列表格式")
+            || message.content.contains("用要点回答")
+            || message.content.contains("用列表回答")
+            || message.content.contains("按要点回答")
+            || message.content.contains("按列表回答");
+        if requests_bullet_format {
             out.push(GeneratedMemoryDraft {
                 kind: GeneratedMemoryKind::Preference,
                 facet_key: "response_format".to_string(),
@@ -231,15 +242,76 @@ fn collect_preference_memories(messages: &[RawUserMessage], out: &mut Vec<Genera
     }
 }
 
+fn looks_like_profile_statement(trimmed: &str, lower: &str) -> bool {
+    if lower.starts_with("my name is ") {
+        return true;
+    }
+    if let Some(rest) = lower
+        .strip_prefix("i am ")
+        .or_else(|| lower.strip_prefix("i'm "))
+    {
+        let identity_keywords = [
+            "developer",
+            "engineer",
+            "student",
+            "designer",
+            "teacher",
+            "manager",
+            "founder",
+            "freelancer",
+            "writer",
+            "doctor",
+            "researcher",
+            "programmer",
+            "consultant",
+            "lawyer",
+            "nurse",
+            "parent",
+        ];
+        return identity_keywords.iter().any(|keyword| {
+            if let Some(position) = rest.find(keyword) {
+                !rest[..position]
+                    .split_whitespace()
+                    .any(|word| matches!(word, "not" | "never" | "no"))
+            } else {
+                false
+            }
+        });
+    }
+    if let Some(rest) = trimmed.strip_prefix("我是") {
+        let identity_keywords = [
+            "学生",
+            "工程师",
+            "开发",
+            "程序员",
+            "设计师",
+            "老师",
+            "产品经理",
+            "研究员",
+            "医生",
+            "律师",
+            "创始人",
+            "自由职业",
+            "家长",
+        ];
+        let rest = rest.trim();
+        if rest.starts_with('不') {
+            return false;
+        }
+        return rest.starts_with("一名")
+            || rest.starts_with("叫")
+            || identity_keywords
+                .iter()
+                .any(|keyword| rest.contains(keyword));
+    }
+    false
+}
+
 fn collect_profile_memories(messages: &[RawUserMessage], out: &mut Vec<GeneratedMemoryDraft>) {
     for message in messages {
         let trimmed = message.content.trim();
         let lower = trimmed.to_lowercase();
-        if !(lower.starts_with("i am ")
-            || lower.starts_with("i'm ")
-            || lower.starts_with("my name is ")
-            || trimmed.starts_with("我是"))
-        {
+        if !looks_like_profile_statement(trimmed, &lower) {
             continue;
         }
         out.push(GeneratedMemoryDraft {
@@ -251,7 +323,7 @@ fn collect_profile_memories(messages: &[RawUserMessage], out: &mut Vec<Generated
             updated_at_ms: message.updated_at_ms,
             anchors: KnowledgeAnchorSet {
                 message_id: Some(message.message_id.clone()),
-                conversation_id: Some(message.conversation_id.clone()),
+                conversation_id: None,
                 section_label: Some("generated_profile".to_string()),
                 ..KnowledgeAnchorSet::default()
             },
@@ -260,14 +332,20 @@ fn collect_profile_memories(messages: &[RawUserMessage], out: &mut Vec<Generated
     }
 }
 
+fn looks_like_decision_statement(content: &str, lower: &str) -> bool {
+    lower.contains("we decided")
+        || lower.contains("team decided")
+        || lower.contains("it was decided")
+        || content.contains("我们决定")
+        || content.contains("团队决定")
+        || content.contains("已决定")
+        || content.contains("决定了")
+}
+
 fn collect_event_memories(messages: &[RawUserMessage], out: &mut Vec<GeneratedMemoryDraft>) {
     for message in messages {
         let lower = message.content.to_lowercase();
-        if !(lower.contains("we decided")
-            || lower.contains("decided to")
-            || message.content.contains("决定")
-            || message.content.contains("改为"))
-        {
+        if !looks_like_decision_statement(&message.content, &lower) {
             continue;
         }
         out.push(GeneratedMemoryDraft {
@@ -301,12 +379,19 @@ fn collect_pattern_memories(
     if active.len() < 2 {
         return Ok(());
     }
+    let created_at_ms = active
+        .iter()
+        .map(|todo| todo.updated_at_ms)
+        .min()
+        .unwrap_or(0);
     let updated_at_ms = active
         .iter()
         .map(|todo| todo.updated_at_ms)
         .max()
         .unwrap_or(0);
-    let lines = active
+    let mut recent_active = active;
+    recent_active.sort_by(|left, right| right.updated_at_ms.cmp(&left.updated_at_ms));
+    let lines = recent_active
         .iter()
         .take(4)
         .map(|todo| format!("- {} [{}]", todo.title, todo.status))
@@ -319,7 +404,7 @@ fn collect_pattern_memories(
             "User is actively working across these task threads:\n{}",
             lines.join("\n")
         ),
-        created_at_ms: 0,
+        created_at_ms,
         updated_at_ms,
         anchors: KnowledgeAnchorSet {
             section_label: Some("generated_pattern".to_string()),
@@ -393,6 +478,259 @@ mod tests {
             .expect("first profile");
         let _ = db::insert_message(&conn, &key, &conv.id, "user", "I am a developer.")
             .expect("second profile");
+
+        let docs = collect_generated_memory_documents(&conn, &key).expect("collect");
+        let doc = docs
+            .iter()
+            .find(|doc| doc.document_id == "generated:profile:self-profile")
+            .expect("profile doc");
+
+        assert_eq!(doc.raw_text, "I am a developer.");
+    }
+
+    #[test]
+    fn collect_generated_memory_documents_ignores_bullet_mentions_without_format_request() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let conn = db::open(dir.path()).expect("open");
+        let key = [94u8; 32];
+        let conv = db::create_conversation(&conn, &key, "Inbox").expect("conversation");
+        let _ = db::insert_message(
+            &conn,
+            &key,
+            &conv.id,
+            "user",
+            "There is no silver bullet for this problem.",
+        )
+        .expect("message");
+
+        let docs = collect_generated_memory_documents(&conn, &key).expect("collect");
+        assert!(!docs
+            .iter()
+            .any(|doc| doc.document_id == "generated:preference:response-format"));
+    }
+
+    #[test]
+    fn collect_generated_memory_documents_sets_pattern_created_at_from_active_todos() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let conn = db::open(dir.path()).expect("open");
+        let key = [95u8; 32];
+        let todo_a = db::upsert_todo(
+            &conn,
+            &key,
+            "todo-pattern-a",
+            "Draft roadmap",
+            None,
+            "open",
+            None,
+            None,
+            None,
+            None,
+        )
+        .expect("todo a");
+        let todo_b = db::upsert_todo(
+            &conn,
+            &key,
+            "todo-pattern-b",
+            "Review launch notes",
+            None,
+            "in_progress",
+            None,
+            None,
+            None,
+            None,
+        )
+        .expect("todo b");
+
+        let docs = collect_generated_memory_documents(&conn, &key).expect("collect");
+        let doc = docs
+            .iter()
+            .find(|doc| doc.document_id == "generated:pattern:active-task-focus")
+            .expect("pattern doc");
+
+        assert_eq!(
+            doc.created_at_ms,
+            todo_a.updated_at_ms.min(todo_b.updated_at_ms)
+        );
+    }
+
+    #[test]
+    fn collect_generated_memory_documents_prefers_most_recent_active_tasks_in_pattern_memory() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let conn = db::open(dir.path()).expect("open");
+        let key = [102u8; 32];
+        let todos = [
+            ("todo-pattern-1", "Oldest task", 10),
+            ("todo-pattern-2", "Second oldest task", 20),
+            ("todo-pattern-3", "Middle task", 30),
+            ("todo-pattern-4", "Second newest task", 40),
+            ("todo-pattern-5", "Newest task", 50),
+        ];
+        for (id, title, updated_at_ms) in todos {
+            let _ = db::upsert_todo(&conn, &key, id, title, None, "open", None, None, None, None)
+                .expect("todo");
+            conn.execute(
+                "UPDATE todos SET updated_at_ms = ?1 WHERE id = ?2",
+                rusqlite::params![updated_at_ms, id],
+            )
+            .expect("set updated_at_ms");
+        }
+
+        let docs = collect_generated_memory_documents(&conn, &key).expect("collect");
+        let doc = docs
+            .iter()
+            .find(|doc| doc.document_id == "generated:pattern:active-task-focus")
+            .expect("pattern doc");
+
+        assert!(doc.raw_text.contains("Newest task [open]"));
+        assert!(doc.raw_text.contains("Second newest task [open]"));
+        assert!(doc.raw_text.contains("Middle task [open]"));
+        assert!(doc.raw_text.contains("Second oldest task [open]"));
+        assert!(!doc.raw_text.contains("Oldest task [open]"));
+    }
+
+    #[test]
+    fn collect_generated_memory_documents_ignores_negated_chinese_profile_statements() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let conn = db::open(dir.path()).expect("open");
+        let key = [103u8; 32];
+        let conv = db::create_conversation(&conn, &key, "Inbox").expect("conversation");
+        let _ = db::insert_message(&conn, &key, &conv.id, "user", "我是学生。").expect("profile");
+        let _ = db::insert_message(&conn, &key, &conv.id, "user", "我是不是学生？")
+            .expect("negated question");
+
+        let docs = collect_generated_memory_documents(&conn, &key).expect("collect");
+        let doc = docs
+            .iter()
+            .find(|doc| doc.document_id == "generated:profile:self-profile")
+            .expect("profile doc");
+
+        assert_eq!(doc.raw_text, "我是学生。");
+    }
+
+    #[test]
+    fn collect_generated_memory_documents_ignores_non_profile_i_am_sentences() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let conn = db::open(dir.path()).expect("open");
+        let key = [96u8; 32];
+        let conv = db::create_conversation(&conn, &key, "Inbox").expect("conversation");
+        let _ = db::insert_message(&conn, &key, &conv.id, "user", "I am a developer.")
+            .expect("profile");
+        let _ = db::insert_message(
+            &conn,
+            &key,
+            &conv.id,
+            "user",
+            "I am worried the API will break.",
+        )
+        .expect("non-profile");
+
+        let docs = collect_generated_memory_documents(&conn, &key).expect("collect");
+        let doc = docs
+            .iter()
+            .find(|doc| doc.document_id == "generated:profile:self-profile")
+            .expect("profile doc");
+
+        assert_eq!(doc.raw_text, "I am a developer.");
+    }
+
+    #[test]
+    fn collect_generated_memory_documents_ignores_common_chinese_list_terms_without_format_request()
+    {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let conn = db::open(dir.path()).expect("open");
+        let key = [97u8; 32];
+        let conv = db::create_conversation(&conn, &key, "Inbox").expect("conversation");
+        let _ = db::insert_message(&conn, &key, &conv.id, "user", "查看任务列表")
+            .expect("list message");
+        let _ = db::insert_message(&conn, &key, &conv.id, "user", "这个项目的要点是什么？")
+            .expect("key points message");
+
+        let docs = collect_generated_memory_documents(&conn, &key).expect("collect");
+        assert!(!docs
+            .iter()
+            .any(|doc| doc.document_id == "generated:preference:response-format"));
+    }
+
+    #[test]
+    fn collect_generated_memory_documents_ignores_non_profile_i_am_a_phrases() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let conn = db::open(dir.path()).expect("open");
+        let key = [98u8; 32];
+        let conv = db::create_conversation(&conn, &key, "Inbox").expect("conversation");
+        let _ = db::insert_message(&conn, &key, &conv.id, "user", "I am a developer.")
+            .expect("profile");
+        let _ = db::insert_message(
+            &conn,
+            &key,
+            &conv.id,
+            "user",
+            "I am a bit confused about the deadline.",
+        )
+        .expect("non-profile");
+
+        let docs = collect_generated_memory_documents(&conn, &key).expect("collect");
+        let doc = docs
+            .iter()
+            .find(|doc| doc.document_id == "generated:profile:self-profile")
+            .expect("profile doc");
+
+        assert_eq!(doc.raw_text, "I am a developer.");
+    }
+
+    #[test]
+    fn collect_generated_memory_documents_ignores_common_decision_phrases() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let conn = db::open(dir.path()).expect("open");
+        let key = [99u8; 32];
+        let conv = db::create_conversation(&conn, &key, "Inbox").expect("conversation");
+        let _ = db::insert_message(
+            &conn,
+            &key,
+            &conv.id,
+            "user",
+            "I decided to refactor this module.",
+        )
+        .expect("english phrase");
+        let _ = db::insert_message(&conn, &key, &conv.id, "user", "把变量名改为camelCase")
+            .expect("chinese phrase");
+
+        let docs = collect_generated_memory_documents(&conn, &key).expect("collect");
+        assert!(!docs
+            .iter()
+            .any(|doc| doc.document_id.starts_with("generated:event:")));
+    }
+
+    #[test]
+    fn collect_generated_memory_documents_ignores_passive_reply_in_language_phrases() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let conn = db::open(dir.path()).expect("open");
+        let key = [100u8; 32];
+        let conv = db::create_conversation(&conn, &key, "Inbox").expect("conversation");
+        let _ = db::insert_message(
+            &conn,
+            &key,
+            &conv.id,
+            "user",
+            "I got a reply in Chinese from the API yesterday.",
+        )
+        .expect("message");
+
+        let docs = collect_generated_memory_documents(&conn, &key).expect("collect");
+        assert!(!docs
+            .iter()
+            .any(|doc| doc.document_id == "generated:preference:response-language"));
+    }
+
+    #[test]
+    fn collect_generated_memory_documents_ignores_negated_profile_statements() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let conn = db::open(dir.path()).expect("open");
+        let key = [101u8; 32];
+        let conv = db::create_conversation(&conn, &key, "Inbox").expect("conversation");
+        let _ = db::insert_message(&conn, &key, &conv.id, "user", "I am a developer.")
+            .expect("profile");
+        let _ = db::insert_message(&conn, &key, &conv.id, "user", "I am not a student.")
+            .expect("negated profile");
 
         let docs = collect_generated_memory_documents(&conn, &key).expect("collect");
         let doc = docs

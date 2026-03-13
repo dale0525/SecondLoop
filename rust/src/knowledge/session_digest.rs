@@ -284,13 +284,8 @@ fn is_preference_item(item: &DigestItem) -> bool {
     if item.document_id.starts_with("generated:preference:") {
         return true;
     }
-    if item.origin_type == Some(KnowledgeOriginType::Generated)
+    item.origin_type == Some(KnowledgeOriginType::Generated)
         && item.document_id.contains(":preference:")
-    {
-        return true;
-    }
-    let normalized = normalize_text(&item.body);
-    normalized.contains("user prefers") || normalized.contains("prefers responses")
 }
 
 fn body_from_text(raw_text: &str, normalized_text: &str) -> String {
@@ -424,5 +419,47 @@ mod tests {
         assert!(digest.rendered_text.contains("relevant_preferences:"));
         assert!(digest.rendered_text.contains("open_loops:"));
         assert!(digest.rendered_text.contains("decisions:"));
+    }
+
+    #[test]
+    fn session_digest_does_not_treat_plain_text_preference_phrases_as_generated_preferences() {
+        let digest = build_digest_from_blocks(
+            "plan my week around the freeze",
+            Some("conv-1"),
+            &[
+                KnowledgeContextBlock {
+                    document_id: "message:topic".to_string(),
+                    unit_id: None,
+                    unit_kind: None,
+                    source_kind: KnowledgeSourceKind::RawText,
+                    role: KnowledgeRole::Evidence,
+                    anchors: KnowledgeAnchorSet::default(),
+                    score: 0.9,
+                    rendered_text: "conversation_id=conv-1
+[knowledge layer=document source=raw_text role=evidence]
+Project launch checklist."
+                        .to_string(),
+                },
+                KnowledgeContextBlock {
+                    document_id: "message:note".to_string(),
+                    unit_id: None,
+                    unit_kind: None,
+                    source_kind: KnowledgeSourceKind::RawText,
+                    role: KnowledgeRole::Evidence,
+                    anchors: KnowledgeAnchorSet::default(),
+                    score: 0.8,
+                    rendered_text: "conversation_id=conv-1
+[knowledge layer=document source=raw_text role=evidence]
+The team prefers responses to be logged in the tracker."
+                        .to_string(),
+                },
+            ],
+        )
+        .expect("digest");
+
+        assert!(!digest.rendered_text.contains("relevant_preferences:"));
+        assert!(digest
+            .rendered_text
+            .contains("topic: Project launch checklist"));
     }
 }

@@ -215,7 +215,7 @@ fn knowledge_debug_stats_reports_generated_memory_and_usage_counts() {
         &key,
         &conv.id,
         "user",
-        "I'm building a memory optimization prototype.",
+        "I'm a developer building a memory optimization prototype.",
     )
     .expect("profile");
 
@@ -238,6 +238,10 @@ fn knowledge_debug_stats_reports_generated_memory_and_usage_counts() {
     assert!(stats.profile_documents >= 1);
     assert!(stats.usage_stat_documents >= 1);
     assert!(stats.summary_documents + stats.generated_documents <= stats.total_documents);
+    assert!(
+        stats.source_documents + stats.summary_documents + stats.generated_documents
+            <= stats.total_documents
+    );
     assert!(stats.generated_memory_retrieval_enabled);
     assert!(stats.hotness_rerank_enabled);
     assert!(stats.session_digest_enabled);

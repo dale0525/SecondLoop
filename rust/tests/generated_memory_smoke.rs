@@ -23,7 +23,7 @@ fn generated_memory_smoke_indexes_and_retrieves_stable_documents() {
         &key,
         &conversation.id,
         "user",
-        "I'm building a memory optimization prototype for my project.",
+        "I'm a developer building a memory optimization prototype for my project.",
     )
     .expect("profile");
 

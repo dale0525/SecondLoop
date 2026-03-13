@@ -96,6 +96,9 @@ pub(crate) fn pack_context_blocks(
             })
     });
 
+    // Keep the digest fallback here for direct retrieval-pack callers. The higher-level
+    // planning path in `try_build_knowledge_contexts` will rebuild the digest after merging
+    // generated memories, so this candidate-only digest is superseded there.
     if let Some(mut digest) = session_digest::build_digest_from_candidates(request, &ordered) {
         let digest_budget = request.token_budget.min((request.token_budget / 2).max(24));
         if estimate_tokens(&digest.rendered_text) > digest_budget {

@@ -80,3 +80,44 @@ CREATE INDEX IF NOT EXISTS idx_messages_conversation_created_at
         .iter()
         .any(|name| name == "idx_attachment_places_status_retry"));
 }
+
+#[test]
+fn v32_migration_updates_user_version() {
+    let temp_dir = tempfile::tempdir().expect("tempdir");
+    let app_dir = temp_dir.path().join("secondloop");
+    fs::create_dir_all(&app_dir).expect("create app dir");
+
+    {
+        let conn = secondloop_rust::db::open(&app_dir).expect("open via db::open");
+        conn.execute_batch(
+            r#"
+DROP TABLE IF EXISTS knowledge_document_usage;
+PRAGMA user_version = 31;
+"#,
+        )
+        .expect("downgrade to v31");
+    }
+
+    let conn = secondloop_rust::db::open(&app_dir).expect("reopen via db::open");
+
+    let user_version: i64 = conn
+        .query_row("PRAGMA user_version", [], |row| row.get(0))
+        .expect("user_version");
+    assert!(
+        user_version >= 32,
+        "expected schema version >= 32, got {}",
+        user_version
+    );
+
+    let mut stmt = conn
+        .prepare("PRAGMA table_info(knowledge_document_usage)")
+        .expect("table_info(knowledge_document_usage)");
+    let cols: Vec<String> = stmt
+        .query_map([], |row| row.get(1))
+        .expect("query_map")
+        .map(|r| r.expect("row"))
+        .collect();
+    assert!(cols.iter().any(|c| c == "document_id"));
+    assert!(cols.iter().any(|c| c == "retrieve_count"));
+    assert!(cols.iter().any(|c| c == "last_retrieved_at_ms"));
+}

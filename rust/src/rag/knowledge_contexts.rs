@@ -1,6 +1,8 @@
 use anyhow::Result;
 use rusqlite::Connection;
 
+const FORCED_GENERATED_CONTEXT_SCORE: f64 = 0.0;
+
 use crate::knowledge;
 use crate::message_citations::append_message_citation_if_missing;
 
@@ -16,14 +18,17 @@ fn collect_generated_preferred_contexts(
     let page_size = 128usize;
     let mut offset = 0usize;
     loop {
-        let documents = knowledge::list_knowledge_documents(conn, key, page_size, offset)?;
+        let documents = knowledge::list_knowledge_documents_by_origin(
+            conn,
+            key,
+            knowledge::KnowledgeOriginType::Generated,
+            page_size,
+            offset,
+        )?;
         if documents.is_empty() {
             break;
         }
         for document in documents {
-            if document.origin_type != knowledge::KnowledgeOriginType::Generated {
-                continue;
-            }
             if let Some(expected) = conversation_scope {
                 if let Some(actual) = document.anchors.conversation_id.as_deref() {
                     if actual != expected {
@@ -46,7 +51,7 @@ fn collect_generated_preferred_contexts(
                 source_kind: document.source_kind,
                 role: document.role,
                 anchors: document.anchors.clone(),
-                score: 1.0,
+                score: FORCED_GENERATED_CONTEXT_SCORE,
                 rendered_text: format!(
                     "{}\n[knowledge layer=document source=summary role=summary]\n{}",
                     if let Some(conversation_id) = document.anchors.conversation_id.as_deref() {
@@ -81,21 +86,21 @@ fn rebalance_planning_contexts(
     {
         return;
     }
-    let Some(evidence) = blocks
+    let Some(evidence_index) = blocks
         .iter()
-        .find(|block| block.role == knowledge::KnowledgeRole::Evidence)
-        .cloned()
+        .position(|block| block.role == knowledge::KnowledgeRole::Evidence)
     else {
         return;
     };
-
-    let replace_index = (0..visible_len)
+    let evidence = blocks.remove(evidence_index);
+    let adjusted_visible_len = blocks.len().min(max_items.max(1));
+    let replace_index = (0..adjusted_visible_len)
         .rev()
         .find(|index| {
             let block = &blocks[*index];
             !block.document_id.starts_with("generated:session-digest:")
         })
-        .unwrap_or(visible_len - 1);
+        .unwrap_or_else(|| adjusted_visible_len.saturating_sub(1));
     blocks.insert(replace_index, evidence);
 }
 
@@ -138,10 +143,8 @@ pub(super) fn try_build_knowledge_contexts(
     let mut retrieved = knowledge::retrieve_context_blocks(conn, key, &request)?;
     blocks.append(&mut retrieved);
 
-    let has_digest = blocks
-        .iter()
-        .any(|block| block.document_id.starts_with("generated:session-digest:"));
-    if !has_digest {
+    if is_planning_query {
+        blocks.retain(|block| !block.document_id.starts_with("generated:session-digest:"));
         if let Some(digest) = knowledge::session_digest::build_digest_from_blocks(
             question,
             conversation_scope.as_deref(),
@@ -239,9 +242,10 @@ pub(super) fn merge_knowledge_and_legacy_contexts(
 mod tests {
     use super::{
         collect_generated_preferred_contexts, merge_knowledge_and_legacy_contexts,
-        try_build_knowledge_contexts,
+        rebalance_planning_contexts, try_build_knowledge_contexts,
     };
     use crate::db;
+    use crate::knowledge;
     use crate::message_citations::append_message_citation_if_missing;
     use crate::rag::Focus;
     use rusqlite::params;
@@ -416,5 +420,176 @@ mod tests {
             )
             .expect("digest usage count");
         assert_eq!(digest_rows, 0);
+    }
+
+    #[test]
+    fn try_build_knowledge_contexts_rebuilds_digest_with_generated_preferences() {
+        let fixture = crate::knowledge::retrieval::test_support::seeded_fixture();
+        insert_document(
+            &fixture.conn,
+            &fixture.key,
+            "generated:preference:response-language",
+            "generated",
+            1,
+            Some(&fixture.conversation_id),
+            "User prefers responses in Chinese.",
+        );
+
+        let contexts = try_build_knowledge_contexts(
+            &fixture.conn,
+            &fixture.key,
+            "Plan my week around the budget freeze in my usual style.",
+            6,
+            Focus::ThisThread,
+            &fixture.conversation_id,
+            None,
+        )
+        .expect("knowledge contexts");
+
+        let digest = contexts
+            .iter()
+            .find(|ctx| ctx.to_lowercase().contains("session digest"))
+            .expect("session digest context");
+        assert!(digest.contains("User prefers responses in Chinese"));
+    }
+
+    #[test]
+    fn try_build_knowledge_contexts_keeps_global_preferences_visible_across_threads() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let conn = db::open(dir.path()).expect("open");
+        let key = [62u8; 32];
+        let preference_conv =
+            db::create_conversation(&conn, &key, "Preferences").expect("preference conversation");
+        let planning_conv =
+            db::create_conversation(&conn, &key, "Planning").expect("planning conversation");
+
+        db::insert_message(
+            &conn,
+            &key,
+            &preference_conv.id,
+            "user",
+            "Please answer in Chinese and keep responses short and practical.",
+        )
+        .expect("preference");
+        db::insert_message(
+            &conn,
+            &key,
+            &planning_conv.id,
+            "user",
+            "I need to plan next week's launch checklist and follow-up tasks.",
+        )
+        .expect("planning source");
+
+        crate::knowledge::ensure_knowledge_rebuild_requested(&conn).expect("request rebuild");
+        crate::knowledge::process_pending_knowledge_index_jobs_active(&conn, &key, 256)
+            .expect("process jobs");
+
+        let contexts = try_build_knowledge_contexts(
+            &conn,
+            &key,
+            "Plan my launch checklist for next week.",
+            6,
+            Focus::ThisThread,
+            &planning_conv.id,
+            None,
+        )
+        .expect("knowledge contexts");
+
+        assert!(
+            contexts
+                .iter()
+                .any(|ctx| ctx.contains("User prefers responses in Chinese.")),
+            "contexts: {contexts:?}"
+        );
+    }
+
+    #[test]
+    fn try_build_knowledge_contexts_keeps_global_profile_visible_across_threads() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let conn = db::open(dir.path()).expect("open");
+        let key = [63u8; 32];
+        let profile_conv =
+            db::create_conversation(&conn, &key, "Profile").expect("profile conversation");
+        let planning_conv =
+            db::create_conversation(&conn, &key, "Planning").expect("planning conversation");
+
+        db::insert_message(&conn, &key, &profile_conv.id, "user", "I am a developer.")
+            .expect("profile");
+        db::insert_message(
+            &conn,
+            &key,
+            &planning_conv.id,
+            "user",
+            "I need to plan next week's launch checklist and follow-up tasks.",
+        )
+        .expect("planning source");
+
+        crate::knowledge::ensure_knowledge_rebuild_requested(&conn).expect("request rebuild");
+        crate::knowledge::process_pending_knowledge_index_jobs_active(&conn, &key, 256)
+            .expect("process jobs");
+
+        let contexts = try_build_knowledge_contexts(
+            &conn,
+            &key,
+            "Plan my launch checklist for next week.",
+            6,
+            Focus::ThisThread,
+            &planning_conv.id,
+            None,
+        )
+        .expect("knowledge contexts");
+
+        assert!(
+            contexts.iter().any(|ctx| ctx.contains("I am a developer.")),
+            "contexts: {contexts:?}"
+        );
+    }
+
+    #[test]
+    fn rebalance_planning_contexts_moves_evidence_without_duplication() {
+        let mut blocks = vec![
+            knowledge::KnowledgeContextBlock {
+                document_id: "generated:session-digest:conv-1".to_string(),
+                unit_id: None,
+                unit_kind: None,
+                source_kind: knowledge::KnowledgeSourceKind::Summary,
+                role: knowledge::KnowledgeRole::Summary,
+                anchors: knowledge::KnowledgeAnchorSet::default(),
+                score: 0.9,
+                rendered_text: "digest".to_string(),
+            },
+            knowledge::KnowledgeContextBlock {
+                document_id: "generated:profile:self-profile".to_string(),
+                unit_id: None,
+                unit_kind: None,
+                source_kind: knowledge::KnowledgeSourceKind::Summary,
+                role: knowledge::KnowledgeRole::Summary,
+                anchors: knowledge::KnowledgeAnchorSet::default(),
+                score: 0.8,
+                rendered_text: "profile".to_string(),
+            },
+            knowledge::KnowledgeContextBlock {
+                document_id: "message:evidence-1".to_string(),
+                unit_id: None,
+                unit_kind: None,
+                source_kind: knowledge::KnowledgeSourceKind::RawText,
+                role: knowledge::KnowledgeRole::Evidence,
+                anchors: knowledge::KnowledgeAnchorSet::default(),
+                score: 0.7,
+                rendered_text: "evidence".to_string(),
+            },
+        ];
+
+        rebalance_planning_contexts(&mut blocks, 2);
+
+        assert_eq!(
+            blocks
+                .iter()
+                .filter(|block| block.document_id == "message:evidence-1")
+                .count(),
+            1
+        );
+        assert_eq!(blocks.len(), 3);
+        assert_eq!(blocks[1].document_id, "message:evidence-1");
     }
 }

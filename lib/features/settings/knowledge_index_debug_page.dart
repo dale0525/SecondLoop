@@ -24,16 +24,27 @@ class KnowledgeIndexDebugPage extends StatefulWidget {
 
 class _KnowledgeIndexDebugPageState extends State<KnowledgeIndexDebugPage> {
   static const _pageSize = 200;
+  static const _debugMaxDocuments = 2000;
 
   List<ContentKnowledgeDocument>? _documents;
   KnowledgeDebugStats? _debugStats;
   bool _loading = true;
   String? _error;
   int _generation = 0;
+  bool _didScheduleInitialLoad = false;
 
   @override
   void initState() {
     super.initState();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_didScheduleInitialLoad) {
+      return;
+    }
+    _didScheduleInitialLoad = true;
     unawaited(_reload(forceLoading: true));
   }
 
@@ -55,13 +66,17 @@ class _KnowledgeIndexDebugPageState extends State<KnowledgeIndexDebugPage> {
   ) async {
     final out = <ContentKnowledgeDocument>[];
     var offset = 0;
-    while (true) {
+    while (out.length < _debugMaxDocuments) {
       final page = await backend.listKnowledgeDocuments(
         key,
         limit: _pageSize,
         offset: offset,
       );
       out.addAll(page);
+      if (out.length >= _debugMaxDocuments) {
+        out.removeRange(_debugMaxDocuments, out.length);
+        break;
+      }
       if (page.length < _pageSize) {
         break;
       }
@@ -93,14 +108,14 @@ class _KnowledgeIndexDebugPageState extends State<KnowledgeIndexDebugPage> {
     }
 
     try {
-      final results = await Future.wait<Object>([
+      final (documents, debugStats) = await (
         _loadAllDocuments(backend, key),
         backend.getKnowledgeDebugStats(key),
-      ]);
+      ).wait;
       if (!mounted || generation != _generation) return;
       setState(() {
-        _documents = results[0] as List<ContentKnowledgeDocument>;
-        _debugStats = results[1] as KnowledgeDebugStats;
+        _documents = documents;
+        _debugStats = debugStats;
         _loading = false;
         _error = null;
       });

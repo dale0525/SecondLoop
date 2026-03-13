@@ -4,8 +4,8 @@ use std::collections::HashMap;
 
 use crate::knowledge::{
     list_knowledge_documents, list_knowledge_units, ContentKnowledgeDocument, KnowledgeAnchorSet,
-    KnowledgeContextBlock, KnowledgeQueryScope, KnowledgeRetrievalLayer, KnowledgeRole,
-    KnowledgeSearchResult, KnowledgeSourceKind, KnowledgeUnit, KnowledgeUnitKind,
+    KnowledgeContextBlock, KnowledgeOriginType, KnowledgeQueryScope, KnowledgeRetrievalLayer,
+    KnowledgeRole, KnowledgeSearchResult, KnowledgeSourceKind, KnowledgeUnit, KnowledgeUnitKind,
 };
 
 pub(crate) mod pack;
@@ -199,7 +199,10 @@ pub(crate) fn load_scoped_documents(
                 KnowledgeQueryScope::All => true,
                 KnowledgeQueryScope::Conversation => match expected_conversation_id {
                     Some(expected) => {
-                        if document.anchors.conversation_id.as_deref() == Some(expected) {
+                        if document.anchors.conversation_id.as_deref() == Some(expected)
+                            || (document.origin_type == KnowledgeOriginType::Generated
+                                && document.anchors.conversation_id.is_none())
+                        {
                             true
                         } else if let Some(attachment_sha256) =
                             document.anchors.attachment_sha256.as_deref()
