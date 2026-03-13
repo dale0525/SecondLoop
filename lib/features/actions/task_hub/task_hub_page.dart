@@ -134,9 +134,16 @@ class _TaskHubPageState extends State<TaskHubPage> {
       backend: backend,
       sessionKey: sessionKey,
     );
-    final ticket = await controller.apply(entry.todo, action);
+    TaskHubUndoTicket? ticket;
+    try {
+      ticket = await controller.apply(entry.todo, action);
+    } catch (error) {
+      _showQuickActionError(error);
+      return;
+    }
     if (ticket == null || !mounted) return;
-    _undoTicket = ticket;
+    final appliedTicket = ticket;
+    _undoTicket = appliedTicket;
     syncEngine?.notifyLocalMutation();
     await _refresh();
     if (!mounted) return;
@@ -153,14 +160,19 @@ class _TaskHubPageState extends State<TaskHubPage> {
         content: Text(
           context.t.actions.taskHub.snackActionApplied(
             action: _actionLabel(action),
-            title: ticket.updatedTodo.title,
+            title: appliedTicket.updatedTodo.title,
           ),
         ),
         action: SnackBarAction(
           label: context.t.common.actions.undo,
           onPressed: () async {
-            if (_undoTicket != ticket) return;
-            await controller.undo(ticket);
+            if (_undoTicket != appliedTicket) return;
+            try {
+              await controller.undo(appliedTicket);
+            } catch (error) {
+              _showQuickActionError(error);
+              return;
+            }
             syncEngine?.notifyLocalMutation();
             if (!mounted) return;
             await _refresh();
@@ -199,6 +211,17 @@ class _TaskHubPageState extends State<TaskHubPage> {
     await _feedbackStore.record(todoId: entry.todo.id, feedback: feedback);
     if (!mounted) return;
     await _refresh();
+  }
+
+  void _showQuickActionError(Object error) {
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    messenger?.hideCurrentSnackBar();
+    messenger?.showSnackBar(
+      SnackBar(
+        duration: const Duration(seconds: 3),
+        content: Text(context.t.errors.saveFailed(error: '$error')),
+      ),
+    );
   }
 
   String _actionLabel(TaskHubQuickAction action) => switch (action) {

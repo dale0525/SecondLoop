@@ -37,6 +37,26 @@ void main() {
     expect(find.byType(TaskHubPage), findsOneWidget);
   });
 
+  testWidgets('reminder route forwards session lock callback', (tester) async {
+    var lockCalls = 0;
+    final harness = await _pumpGateHarness(
+      tester,
+      onLock: () {
+        lockCalls += 1;
+      },
+    );
+
+    harness.scheduler.onTap?.call(
+      '${FlutterLocalNotificationsReviewReminderScheduler.reviewQueuePayloadPrefix}todo:1',
+    );
+    await tester.pumpAndSettle();
+
+    final taskHubContext = tester.element(find.byType(TaskHubPage));
+    SessionScope.of(taskHubContext).lock();
+
+    expect(lockCalls, 1);
+  });
+
   testWidgets('ignores unrelated notification payload', (tester) async {
     final harness = await _pumpGateHarness(tester);
 
@@ -343,6 +363,7 @@ Future<_GateHarness> _pumpGateHarness(
   List<Todo>? todos,
   SyncEngine? syncEngine,
   InAppFallbackAlertSoundCallback? inAppFallbackAlertSound,
+  VoidCallback? onLock,
 }) async {
   final scheduler = _FakeScheduler(
     supportsSystemNotifications: schedulerSupportsSystemNotifications,
@@ -372,7 +393,7 @@ Future<_GateHarness> _pumpGateHarness(
           backend: backend,
           child: SessionScope(
             sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
-            lock: () {},
+            lock: onLock ?? () {},
             child: content,
           ),
         ),

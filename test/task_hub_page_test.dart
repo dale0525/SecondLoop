@@ -17,14 +17,14 @@ void main() {
       (tester) async {
     SharedPreferences.setMockInitialValues({});
     final now = DateTime.now();
+    final tomorrowNoon = DateTime(now.year, now.month, now.day + 1, 12);
     final backend = _TaskHubBackend(
       todos: <Todo>[
-        Todo(
+        const Todo(
           id: 'focus',
           title: 'Fix prod issue',
-          dueAtMs:
-              now.add(const Duration(hours: 1)).toUtc().millisecondsSinceEpoch,
-          status: 'open',
+          dueAtMs: null,
+          status: 'in_progress',
           sourceEntryId: null,
           createdAtMs: 0,
           updatedAtMs: 10,
@@ -35,8 +35,7 @@ void main() {
         Todo(
           id: 'scheduled',
           title: 'Draft roadmap',
-          dueAtMs:
-              now.add(const Duration(days: 1)).toUtc().millisecondsSinceEpoch,
+          dueAtMs: tomorrowNoon.toUtc().millisecondsSinceEpoch,
           status: 'open',
           sourceEntryId: null,
           createdAtMs: 0,
@@ -103,6 +102,41 @@ void main() {
         find.byKey(const ValueKey('task_hub_page_item_done')), findsOneWidget);
   });
 
+  testWidgets('task hub quick action failure shows error snackbar',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final now = DateTime.now();
+    final overdueAt = DateTime(now.year, now.month, now.day)
+        .subtract(const Duration(hours: 1));
+    final backend = _TaskHubBackend(
+      todos: <Todo>[
+        Todo(
+          id: 'focus',
+          title: 'Fix prod issue',
+          dueAtMs: overdueAt.toUtc().millisecondsSinceEpoch,
+          status: 'open',
+          sourceEntryId: null,
+          createdAtMs: 0,
+          updatedAtMs: 10,
+          reviewStage: null,
+          nextReviewAtMs: null,
+          lastReviewAtMs: null,
+        ),
+      ],
+      failUpsert: true,
+    );
+
+    await tester.pumpWidget(_wrap(backend));
+    await tester.pumpAndSettle();
+
+    await tester.tap(
+      find.byKey(const ValueKey('task_hub_page_quick_focus_today')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('Save failed'), findsOneWidget);
+  });
+
   testWidgets('task hub loads done todos in batches on demand', (tester) async {
     SharedPreferences.setMockInitialValues({});
     final backend = _TaskHubBackend(
@@ -162,10 +196,11 @@ Widget _wrap(AppBackend backend) {
 }
 
 final class _TaskHubBackend extends TestAppBackend {
-  _TaskHubBackend({required List<Todo> todos})
+  _TaskHubBackend({required List<Todo> todos, this.failUpsert = false})
       : _todos = {for (final todo in todos) todo.id: todo};
 
   final Map<String, Todo> _todos;
+  final bool failUpsert;
 
   @override
   Future<List<Todo>> listTodos(Uint8List key) async =>
@@ -183,6 +218,9 @@ final class _TaskHubBackend extends TestAppBackend {
     int? nextReviewAtMs,
     int? lastReviewAtMs,
   }) async {
+    if (failUpsert) {
+      throw StateError('apply failed');
+    }
     final updated = Todo(
       id: id,
       title: title,

@@ -642,7 +642,9 @@ final class _ReviewReminderNotificationsGateState
     if (navigator == null || !navigator.mounted) return;
 
     final backend = AppBackendScope.of(context);
-    final sessionKey = Uint8List.fromList(SessionScope.of(context).sessionKey);
+    final sessionScope = SessionScope.of(context);
+    final sessionKey = Uint8List.fromList(sessionScope.sessionKey);
+    final lock = sessionScope.lock;
     final syncEngine = SyncEngineScope.maybeOf(context);
 
     _openingPageFromReminder = true;
@@ -654,7 +656,7 @@ final class _ReviewReminderNotificationsGateState
               backend: backend,
               child: SessionScope(
                 sessionKey: sessionKey,
-                lock: () {},
+                lock: lock,
                 child: const TaskHubPage(),
               ),
             );
