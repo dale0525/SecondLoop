@@ -69,6 +69,24 @@ PRAGMA user_version = 31;
     Ok(())
 }
 
+fn migrate_from_v31_to_v32(conn: &Connection) -> Result<()> {
+    conn.execute_batch(
+        r#"
+CREATE TABLE IF NOT EXISTS knowledge_document_usage (
+  document_id TEXT PRIMARY KEY,
+  retrieve_count INTEGER NOT NULL DEFAULT 0,
+  last_retrieved_at_ms INTEGER,
+  FOREIGN KEY(document_id) REFERENCES knowledge_documents(document_id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_knowledge_document_usage_recent
+  ON knowledge_document_usage(last_retrieved_at_ms DESC, retrieve_count DESC);
+
+PRAGMA user_version = 32;
+"#,
+    )?;
+    Ok(())
+}
+
 pub(crate) fn app_dir_from_conn(conn: &Connection) -> Result<PathBuf> {
     let mut stmt = conn.prepare("PRAGMA database_list")?;
     let mut rows = stmt.query([])?;
@@ -130,6 +148,7 @@ DELETE FROM todo_series;
 DELETE FROM events;
 DELETE FROM detached_ask_completion_claims;
 DELETE FROM embedding_artifact_manifests;
+DELETE FROM knowledge_document_usage;
 DELETE FROM knowledge_embeddings;
 DELETE FROM knowledge_index_jobs;
 DELETE FROM knowledge_units;

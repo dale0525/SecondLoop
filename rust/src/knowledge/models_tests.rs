@@ -1,3 +1,4 @@
+use crate::knowledge::models::GeneratedMemoryKind;
 use crate::knowledge::{
     ContentKnowledgeDocument, KnowledgeAnchorSet, KnowledgeOriginType, KnowledgeRole,
     KnowledgeSourceKind, KnowledgeUnit, KnowledgeUnitKind, KnowledgeVersionSet,
@@ -84,4 +85,12 @@ fn knowledge_model_unit_round_trips_through_json() {
     assert_eq!(round_trip.token_count, 42);
     assert_eq!(round_trip.anchors.start_ms, Some(1200));
     assert_eq!(round_trip.prev_unit_id.as_deref(), Some("unit-0"));
+}
+
+#[test]
+fn generated_memory_kind_round_trips_through_json() {
+    let json = serde_json::to_string(&GeneratedMemoryKind::Preference).expect("serialize");
+    let round_trip: GeneratedMemoryKind = serde_json::from_str(&json).expect("deserialize");
+    assert_eq!(round_trip, GeneratedMemoryKind::Preference);
+    assert_eq!(round_trip.as_str(), "preference");
 }

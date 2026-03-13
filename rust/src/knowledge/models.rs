@@ -25,6 +25,26 @@ pub enum KnowledgeOriginType {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
+pub enum GeneratedMemoryKind {
+    Profile,
+    Preference,
+    Event,
+    Pattern,
+}
+
+impl GeneratedMemoryKind {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Profile => "profile",
+            Self::Preference => "preference",
+            Self::Event => "event",
+            Self::Pattern => "pattern",
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum KnowledgeSourceKind {
     RawText,
     ExtractedText,

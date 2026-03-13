@@ -81,9 +81,66 @@ pub fn ensure_knowledge_rebuild_state_defaults(conn: &Connection) -> Result<()> 
     Ok(())
 }
 
+pub fn load_knowledge_usage_map(
+    conn: &Connection,
+    document_ids: &std::collections::BTreeSet<String>,
+) -> Result<std::collections::BTreeMap<String, crate::knowledge::usage::KnowledgeUsageStats>> {
+    let mut out = std::collections::BTreeMap::new();
+    if document_ids.is_empty() {
+        return Ok(out);
+    }
+
+    let mut stmt = conn.prepare(
+        r#"SELECT document_id, retrieve_count, last_retrieved_at_ms
+           FROM knowledge_document_usage
+           WHERE document_id = ?1"#,
+    )?;
+
+    for document_id in document_ids {
+        let stats = stmt.query_row(params![document_id], |row| {
+            Ok(crate::knowledge::usage::KnowledgeUsageStats {
+                retrieve_count: row.get(1)?,
+                last_retrieved_at_ms: row.get(2)?,
+            })
+        });
+        if let Ok(stats) = stats {
+            out.insert(document_id.clone(), stats);
+        }
+    }
+
+    Ok(out)
+}
+
+pub fn touch_knowledge_documents_usage(conn: &Connection, document_ids: &[String], now_ms: i64) -> Result<usize> {
+    let unique = document_ids
+        .iter()
+        .filter(|value| !value.trim().is_empty())
+        .cloned()
+        .collect::<std::collections::BTreeSet<_>>();
+    if unique.is_empty() {
+        return Ok(0);
+    }
+
+    let tx = conn.unchecked_transaction()?;
+    for document_id in &unique {
+        tx.execute(
+            r#"INSERT INTO knowledge_document_usage(document_id, retrieve_count, last_retrieved_at_ms)
+               VALUES (?1, 1, ?2)
+               ON CONFLICT(document_id)
+               DO UPDATE SET
+                 retrieve_count = knowledge_document_usage.retrieve_count + 1,
+                 last_retrieved_at_ms = excluded.last_retrieved_at_ms"#,
+            params![document_id, now_ms],
+        )?;
+    }
+    tx.commit()?;
+    Ok(unique.len())
+}
+
 pub fn reset_knowledge_index(conn: &Connection) -> Result<()> {
     conn.execute_batch(
         r#"
+DELETE FROM knowledge_document_usage;
 DELETE FROM knowledge_embeddings;
 DELETE FROM knowledge_index_jobs;
 DELETE FROM knowledge_units;

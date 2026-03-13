@@ -6,6 +6,71 @@ use crate::message_citations::append_message_citation_if_missing;
 
 use super::Focus;
 
+fn is_planning_or_summary_query(question: &str) -> bool {
+    let normalized = question.trim().to_lowercase();
+    normalized.contains("plan")
+        || normalized.contains("agenda")
+        || normalized.contains("schedule")
+        || normalized.contains("week")
+        || normalized.contains("summary")
+        || normalized.contains("summarize")
+        || question.contains("计划")
+        || question.contains("安排")
+        || question.contains("总结")
+        || question.contains("整理")
+}
+
+fn collect_generated_preferred_contexts(
+    conn: &Connection,
+    key: &[u8; 32],
+    conversation_scope: Option<&str>,
+    top_k: usize,
+) -> Result<Vec<knowledge::KnowledgeContextBlock>> {
+    let mut out = Vec::<knowledge::KnowledgeContextBlock>::new();
+    for document in knowledge::list_knowledge_documents(conn, key, 64, 0)? {
+        if document.origin_type != knowledge::KnowledgeOriginType::Generated {
+            continue;
+        }
+        if let Some(expected) = conversation_scope {
+            if let Some(actual) = document.anchors.conversation_id.as_deref() {
+                if actual != expected {
+                    continue;
+                }
+            }
+        }
+        let body = if document.raw_text.trim().is_empty() {
+            document.normalized_text.trim()
+        } else {
+            document.raw_text.trim()
+        };
+        if body.is_empty() {
+            continue;
+        }
+        out.push(knowledge::KnowledgeContextBlock {
+            document_id: document.document_id.clone(),
+            unit_id: None,
+            unit_kind: None,
+            source_kind: document.source_kind,
+            role: document.role,
+            anchors: document.anchors.clone(),
+            score: 1.0,
+            rendered_text: format!(
+                "{}\n[knowledge layer=document source=summary role=summary]\n{}",
+                if let Some(conversation_id) = document.anchors.conversation_id.as_deref() {
+                    format!("conversation_id={conversation_id}")
+                } else {
+                    "generated_memory=global".to_string()
+                },
+                body
+            ),
+        });
+        if out.len() >= top_k.max(1) {
+            break;
+        }
+    }
+    Ok(out)
+}
+
 pub(super) fn try_build_knowledge_contexts(
     conn: &Connection,
     key: &[u8; 32],
@@ -25,7 +90,7 @@ pub(super) fn try_build_knowledge_contexts(
     };
     let mut request = knowledge::normalize_retrieval_request(
         question,
-        conversation_scope,
+        conversation_scope.clone(),
         None,
         Some(top_k.max(1)),
         Some(1200),
@@ -36,7 +101,31 @@ pub(super) fn try_build_knowledge_contexts(
         request.time_end_ms = Some(end_ms);
     }
 
-    Ok(knowledge::retrieve_context_blocks(conn, key, &request)?
+    let mut blocks = if is_planning_or_summary_query(question) {
+        collect_generated_preferred_contexts(conn, key, conversation_scope.as_deref(), top_k)?
+    } else {
+        Vec::new()
+    };
+    let mut retrieved = knowledge::retrieve_context_blocks(conn, key, &request)?;
+    blocks.append(&mut retrieved);
+
+    let mut seen_document_ids = std::collections::HashSet::<String>::new();
+    blocks.retain(|block| seen_document_ids.insert(block.document_id.clone()));
+    if blocks.len() > top_k.max(1) {
+        blocks.truncate(top_k.max(1));
+    }
+
+    let used_document_ids = blocks
+        .iter()
+        .map(|block| block.document_id.clone())
+        .collect::<Vec<_>>();
+    let _ = crate::db::touch_knowledge_documents_usage(
+        conn,
+        &used_document_ids,
+        crate::knowledge::usage::now_ms(),
+    );
+
+    Ok(blocks
         .into_iter()
         .map(|block| {
             let rendered = block.rendered_text;

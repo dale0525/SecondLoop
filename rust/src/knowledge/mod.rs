@@ -7,12 +7,15 @@ pub const KNOWLEDGE_RETRIEVAL_POLICY_VERSION: i64 = 1;
 pub mod chunk;
 pub mod embedding_batch;
 pub mod index_jobs;
+pub mod memory_dedup;
+pub mod memory_synthesis;
 pub mod models;
 pub mod normalize;
 pub mod rebuild;
 pub mod retrieval;
 pub mod segment;
 pub mod source_adapters;
+pub mod usage;
 
 pub use chunk::{build_chunk_units, build_section_units, build_segment_units};
 pub use index_jobs::{
