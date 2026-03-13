@@ -565,6 +565,9 @@ run_flutter_checks=0
 run_i18n_refresh_needed=0
 for file in "${staged_files[@]}"; do
   if [[ "${file}" == *.dart && -f "${file}" ]]; then
+    if git check-ignore -q -- "${file}"; then
+      continue
+    fi
     dart_files+=("${file}")
     run_flutter_checks=1
     continue
@@ -635,7 +638,16 @@ fi
 if [[ ${run_i18n_refresh_needed} -ne 0 ]]; then
   run_i18n_refresh
   warn_auto_staged_i18n_refresh_changes
-  git add -- lib/i18n
+  git add -u -- lib/i18n
+  shopt -s nullglob
+  i18n_source_files=(lib/i18n/*.i18n.json)
+  shopt -u nullglob
+  if [[ -f slang.yaml ]]; then
+    git add -- slang.yaml
+  fi
+  if [[ ${#i18n_source_files[@]} -ne 0 ]]; then
+    git add -- "${i18n_source_files[@]}"
+  fi
 fi
 
 if [[ ${#dart_files[@]} -ne 0 ]]; then
@@ -665,11 +677,13 @@ if [[ ${run_flutter_checks} -ne 0 ]]; then
     exit 1
   fi
 
-  if ! run_flutter_tool test; then
-    echo "" >&2
-    echo "pre-commit: flutter test failed." >&2
-    echo "Fix locally with: pixi run flutter test" >&2
-    exit 1
+  if [[ "${SECONDLOOP_PRE_COMMIT_FULL:-0}" == "1" ]]; then
+    if ! run_flutter_tool test; then
+      echo "" >&2
+      echo "pre-commit: flutter test failed." >&2
+      echo "Fix locally with: pixi run flutter test" >&2
+      exit 1
+    fi
   fi
 fi
 

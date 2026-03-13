@@ -83,40 +83,51 @@ extension _ChatPageStateBuild on _ChatPageState {
           children: [
             _buildSelectedTagFilterBar(),
             if (!isMobileKeyboardVisible) ...[
-              FutureBuilder<TaskHubSummary>(
-                future: _taskHubSummaryFuture,
-                builder: (context, snapshot) {
-                  final summary = snapshot.data ?? const TaskHubSummary.empty();
-                  return TaskHubBanner(
-                    summary: summary,
-                    collapseSignal: _todoAgendaBannerCollapseSignal,
-                    onOpenTodo: (todo) async {
-                      await _pushRouteFromChat(
-                        MaterialPageRoute(
-                          builder: (context) =>
-                              TodoDetailPage(initialTodo: todo),
-                        ),
-                      );
-                      if (!mounted) return;
-                      _collapseTodoAgendaBanner();
-                      _refresh();
-                    },
-                    onQuickAction: (todo, action) async {
-                      await _applyTaskHubQuickAction(todo, action);
-                    },
-                    onViewAll: () async {
-                      await _pushRouteFromChat(
-                        MaterialPageRoute(
-                          builder: (context) => const TaskHubPage(),
-                        ),
-                      );
-                      if (!mounted) return;
-                      _collapseTodoAgendaBanner();
-                      _refresh();
-                    },
-                  );
-                },
-              ),
+              if (_taskPriorityStore != null)
+                ListenableBuilder(
+                  listenable: _taskPriorityStore!,
+                  builder: (context, _) {
+                    return TaskHubBanner(
+                      snapshot: _taskPriorityStore!.snapshot,
+                      showAiUpgradeHint:
+                          _taskPriorityStore!.isAiEnhancementEnabled &&
+                              !_taskPriorityStore!.isAiEnhancementAvailable,
+                      collapseSignal: _todoAgendaBannerCollapseSignal,
+                      onOpenTodo: (entry) async {
+                        await _pushRouteFromChat(
+                          MaterialPageRoute(
+                            builder: (context) =>
+                                TodoDetailPage(initialTodo: entry.todo),
+                          ),
+                        );
+                        if (!mounted) return;
+                        _collapseTodoAgendaBanner();
+                        _refresh();
+                      },
+                      onQuickAction: (entry, action) async {
+                        await _applyTaskHubQuickAction(entry.todo, action);
+                      },
+                      onFeedback: (entry, feedback) async {
+                        await _taskPriorityFeedbackStore.record(
+                          todoId: entry.todo.id,
+                          feedback: feedback,
+                        );
+                        if (!mounted) return;
+                        _refresh();
+                      },
+                      onViewAll: () async {
+                        await _pushRouteFromChat(
+                          MaterialPageRoute(
+                            builder: (context) => const TaskHubPage(),
+                          ),
+                        );
+                        if (!mounted) return;
+                        _collapseTodoAgendaBanner();
+                        _refresh();
+                      },
+                    );
+                  },
+                ),
             ],
             Expanded(
               child: Center(

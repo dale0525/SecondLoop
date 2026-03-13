@@ -3,696 +3,255 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../../i18n/strings.g.dart';
-import '../../../src/rust/db.dart';
+import '../../../ui/sl_button.dart';
 import '../../../ui/sl_surface.dart';
 import '../../../ui/sl_tokens.dart';
-import 'task_hub_quick_action_layout.dart';
+import 'task_hub_page_sections.dart';
 import 'task_hub_quick_actions.dart';
-import 'task_hub_summary.dart';
+import 'task_priority_feedback_store.dart';
+import 'task_priority_models.dart';
 
 class TaskHubBanner extends StatefulWidget {
   const TaskHubBanner({
-    required this.summary,
+    required this.snapshot,
+    this.showAiUpgradeHint = false,
     this.collapseSignal = 0,
     this.onViewAll,
     this.onOpenTodo,
     this.onQuickAction,
+    this.onFeedback,
     super.key,
   });
 
-  final TaskHubSummary summary;
+  final TaskPrioritySnapshot snapshot;
+  final bool showAiUpgradeHint;
   final int collapseSignal;
   final VoidCallback? onViewAll;
-  final Future<void> Function(Todo todo)? onOpenTodo;
-  final Future<void> Function(Todo todo, TaskHubQuickAction action)?
-      onQuickAction;
+  final Future<void> Function(TaskPriorityEntry entry)? onOpenTodo;
+  final Future<void> Function(
+      TaskPriorityEntry entry, TaskHubQuickAction action)? onQuickAction;
+  final Future<void> Function(
+    TaskPriorityEntry entry,
+    TaskPriorityFeedbackKind feedback,
+  )? onFeedback;
 
   @override
   State<TaskHubBanner> createState() => _TaskHubBannerState();
 }
 
 class _TaskHubBannerState extends State<TaskHubBanner> {
-  static const _kExpandedPreviewMaxHeightFactor = 0.5;
-
   var _expanded = false;
-
-  void _setExpanded(bool expanded) {
-    if (_expanded == expanded) return;
-    setState(() => _expanded = expanded);
-  }
 
   @override
   void didUpdateWidget(covariant TaskHubBanner oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.collapseSignal == oldWidget.collapseSignal) return;
-    if (_expanded) {
+    if (widget.collapseSignal != oldWidget.collapseSignal && _expanded) {
       setState(() => _expanded = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    if (widget.summary.isEmpty) {
-      return const SizedBox.shrink();
-    }
-
-    final summary = widget.summary;
     final tokens = SlTokens.of(context);
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-    final expandedPreviewMaxHeight =
-        MediaQuery.sizeOf(context).height * _kExpandedPreviewMaxHeightFactor;
-
-    final headline = _collapsedHeadline(context, summary);
-    final nextTitle = summary.scheduledPreviewTodos.isNotEmpty
-        ? summary.scheduledPreviewTodos.first.title
-        : summary.unscheduledPreviewTodos.isNotEmpty
-            ? summary.unscheduledPreviewTodos.first.title
-            : null;
-    final nowUtcMs = DateTime.now().toUtc().millisecondsSinceEpoch;
-    final dueReviewPreview = summary.unscheduledPreviewTodos
-        .where(
-          (todo) =>
-              todo.reviewStage != null &&
-              todo.nextReviewAtMs != null &&
-              todo.nextReviewAtMs! <= nowUtcMs,
-        )
-        .toList(growable: false);
-    final unscheduledPreview = summary.unscheduledPreviewTodos
-        .where(
-          (todo) =>
-              !dueReviewPreview.any((candidate) => candidate.id == todo.id),
-        )
-        .toList(growable: false);
-
+    final primary = widget.snapshot.primaryFocus;
+    final hasAiReason =
+        widget.snapshot.source == TaskPrioritySnapshotSource.hybrid &&
+            (primary?.reasonText ?? '').isNotEmpty;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
       child: SlSurface(
-        color: tokens.surface2,
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            InkWell(
-              key: const ValueKey('task_hub_banner'),
-              borderRadius: BorderRadius.circular(14),
-              onTap: () => _setExpanded(!_expanded),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  DecoratedBox(
-                    decoration: BoxDecoration(
-                      color: tokens.surface,
-                      border: Border.all(color: tokens.borderSubtle),
-                      borderRadius: BorderRadius.circular(tokens.radiusMd),
-                    ),
-                    child: const SizedBox(
-                      width: 32,
-                      height: 32,
-                      child: Icon(Icons.checklist_rounded, size: 18),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          headline,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        if (!_expanded && nextTitle != null) ...[
-                          const SizedBox(height: 2),
-                          Text(
-                            nextTitle,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: colorScheme.onSurfaceVariant,
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 6),
-                  Icon(
-                    _expanded
-                        ? Icons.expand_less_rounded
-                        : Icons.expand_more_rounded,
-                    size: 18,
-                    color: colorScheme.onSurfaceVariant,
-                  ),
-                ],
-              ),
-            ),
-            if (_expanded) ...[
-              const SizedBox(height: 10),
-              ConstrainedBox(
-                constraints:
-                    BoxConstraints(maxHeight: expandedPreviewMaxHeight),
-                child: SlSurface(
-                  key: const ValueKey('task_hub_preview_list'),
-                  color: tokens.surface,
-                  borderRadius: BorderRadius.circular(tokens.radiusMd),
-                  padding: const EdgeInsets.symmetric(vertical: 4),
-                  child: SingleChildScrollView(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        if (summary.scheduledPreviewTodos.isNotEmpty)
-                          _TaskHubSection(
-                            title: context.t.actions.taskHub.scheduledSection,
-                            todos: summary.scheduledPreviewTodos,
-                            sectionKind: _TaskHubBannerSectionKind.scheduled,
-                            onOpenTodo: widget.onOpenTodo,
-                            onQuickAction: widget.onQuickAction,
-                          ),
-                        if (summary.scheduledPreviewTodos.isNotEmpty &&
-                            summary.unscheduledPreviewTodos.isNotEmpty)
-                          Divider(
-                            height: 1,
-                            thickness: 1,
-                            color: tokens.borderSubtle.withOpacity(0.9),
-                          ),
-                        if (summary.unscheduledPreviewTodos.isNotEmpty)
-                          _TaskHubMergedUnscheduledSection(
-                            dueReviewTodos: dueReviewPreview,
-                            unscheduledTodos: unscheduledPreview,
-                            onOpenTodo: widget.onOpenTodo,
-                            onQuickAction: widget.onQuickAction,
-                          ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-              if (widget.onViewAll != null) ...[
-                const SizedBox(height: 8),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: TextButton(
-                    key: const ValueKey('task_hub_view_all'),
-                    onPressed: widget.onViewAll,
-                    child: Text(context.t.actions.agenda.viewAll),
-                  ),
-                ),
-              ],
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-
-  String _collapsedHeadline(BuildContext context, TaskHubSummary summary) {
-    if (summary.dueCount > 0) {
-      return context.t.actions.agenda
-          .summary(due: summary.dueCount, overdue: summary.overdueCount);
-    }
-    if (summary.dueReviewCount > 0) {
-      return context.t.actions.reviewQueue
-          .banner(count: summary.dueReviewCount);
-    }
-    final upcoming = context.t.actions.agenda.upcomingSummary(
-      count: summary.upcomingCount,
-    );
-    final unscheduled = context.t.actions.agenda
-        .undeterminedSummary(count: summary.unscheduledCount);
-    return '$upcoming · $unscheduled';
-  }
-}
-
-enum _TaskHubBannerSectionKind {
-  scheduled,
-  dueReview,
-  unscheduled,
-}
-
-class _TaskHubSection extends StatelessWidget {
-  const _TaskHubSection({
-    required this.title,
-    required this.todos,
-    required this.sectionKind,
-    required this.onOpenTodo,
-    required this.onQuickAction,
-  });
-
-  final String title;
-  final List<Todo> todos;
-  final _TaskHubBannerSectionKind sectionKind;
-  final Future<void> Function(Todo todo)? onOpenTodo;
-  final Future<void> Function(Todo todo, TaskHubQuickAction action)?
-      onQuickAction;
-
-  @override
-  Widget build(BuildContext context) {
-    if (todos.isEmpty) return const SizedBox.shrink();
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            title,
-            style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
-          ),
-          const SizedBox(height: 4),
-          for (var i = 0; i < todos.length; i++)
-            Padding(
-              padding: EdgeInsets.only(top: i == 0 ? 6 : 8),
-              child: _TaskHubTodoRow(
-                todo: todos[i],
-                sectionKind: sectionKind,
-                onOpenTodo: onOpenTodo,
-                onQuickAction: onQuickAction,
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-}
-
-class _TaskHubMergedUnscheduledSection extends StatelessWidget {
-  const _TaskHubMergedUnscheduledSection({
-    required this.dueReviewTodos,
-    required this.unscheduledTodos,
-    required this.onOpenTodo,
-    required this.onQuickAction,
-  });
-
-  final List<Todo> dueReviewTodos;
-  final List<Todo> unscheduledTodos;
-  final Future<void> Function(Todo todo)? onOpenTodo;
-  final Future<void> Function(Todo todo, TaskHubQuickAction action)?
-      onQuickAction;
-
-  @override
-  Widget build(BuildContext context) {
-    if (dueReviewTodos.isEmpty && unscheduledTodos.isEmpty) {
-      return const SizedBox.shrink();
-    }
-    final tokens = SlTokens.of(context);
-    final colorScheme = Theme.of(context).colorScheme;
-
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            context.t.actions.taskHub.unscheduledSection,
-            style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                  color: colorScheme.onSurfaceVariant,
-                ),
-          ),
-          const SizedBox(height: 4),
-          if (dueReviewTodos.isNotEmpty) ...[
-            _TaskHubSubheader(
-              key: const ValueKey('task_hub_banner_section_unscheduled_review'),
-              title: context.t.actions.taskHub.reviewSection,
-              count: dueReviewTodos.length,
-            ),
-            for (var i = 0; i < dueReviewTodos.length; i++)
-              Padding(
-                padding: EdgeInsets.only(top: i == 0 ? 6 : 8),
-                child: _TaskHubTodoRow(
-                  todo: dueReviewTodos[i],
-                  sectionKind: _TaskHubBannerSectionKind.dueReview,
-                  onOpenTodo: onOpenTodo,
-                  onQuickAction: onQuickAction,
-                ),
-              ),
-          ],
-          if (dueReviewTodos.isNotEmpty && unscheduledTodos.isNotEmpty) ...[
-            const SizedBox(height: 8),
-            Divider(
-              height: 1,
-              thickness: 1,
-              color: tokens.borderSubtle.withOpacity(0.9),
-            ),
-            const SizedBox(height: 8),
-          ],
-          if (unscheduledTodos.isNotEmpty) ...[
-            KeyedSubtree(
-              key: const ValueKey('task_hub_banner_section_unscheduled_plain'),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  for (var i = 0; i < unscheduledTodos.length; i++)
-                    Padding(
-                      padding: EdgeInsets.only(top: i == 0 ? 0 : 8),
-                      child: _TaskHubTodoRow(
-                        todo: unscheduledTodos[i],
-                        sectionKind: _TaskHubBannerSectionKind.unscheduled,
-                        onOpenTodo: onOpenTodo,
-                        onQuickAction: onQuickAction,
-                      ),
-                    ),
-                ],
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-class _TaskHubSubheader extends StatelessWidget {
-  const _TaskHubSubheader({
-    required this.title,
-    required this.count,
-    super.key,
-  });
-
-  final String title;
-  final int count;
-
-  @override
-  Widget build(BuildContext context) {
-    final tokens = SlTokens.of(context);
-    final colorScheme = Theme.of(context).colorScheme;
-
-    return Row(
-      children: [
-        Text(
-          title,
-          style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                color: colorScheme.onSurfaceVariant,
-                fontWeight: FontWeight.w700,
-              ),
-        ),
-        const SizedBox(width: 6),
-        DecoratedBox(
-          decoration: BoxDecoration(
-            color: tokens.surface2,
-            borderRadius: BorderRadius.circular(99),
-            border: Border.all(
-              color: tokens.borderSubtle.withOpacity(0.9),
-            ),
-          ),
+        key: const ValueKey('task_hub_banner'),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(tokens.radiusLg),
+          onTap: () => setState(() => _expanded = !_expanded),
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-            child: Text(
-              count.toString(),
-              style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                    color: colorScheme.onSurfaceVariant,
-                    fontWeight: FontWeight.w700,
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        primary == null
+                            ? context.t.actions.taskHub.wrapUpTitle
+                            : hasAiReason
+                                ? context.t.actions.taskHub.aiRecommendedNow
+                                : context.t.actions.taskHub.currentFocus,
+                        style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                              color: Theme.of(context).colorScheme.primary,
+                              fontWeight: FontWeight.w700,
+                            ),
+                      ),
+                    ),
+                    Icon(
+                      _expanded
+                          ? Icons.expand_less_rounded
+                          : Icons.expand_more_rounded,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  primary?.todo.title ??
+                      context.t.actions.taskHub.wrapUpHeadline,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  primary?.reasonText ?? _fallbackSubtitle(context),
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                ),
+                if (widget.showAiUpgradeHint) ...[
+                  const SizedBox(height: 6),
+                  Text(
+                    context.t.actions.taskHub.aiUpgradeHint,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                          fontStyle: FontStyle.italic,
+                        ),
                   ),
+                ],
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    if (primary != null && widget.onQuickAction != null)
+                      SlButton(
+                        key: const ValueKey('task_hub_banner_primary_action'),
+                        onPressed: () => unawaited(
+                          widget.onQuickAction!(
+                            primary,
+                            _primaryQuickAction(primary),
+                          ),
+                        ),
+                        child: Text(_primaryActionLabel(context, primary)),
+                      )
+                    else
+                      SlButton(
+                        key: const ValueKey('task_hub_banner_open_hub'),
+                        onPressed: widget.onViewAll,
+                        child: Text(context.t.actions.taskHub.openTaskHub),
+                      ),
+                    if (primary != null && widget.onOpenTodo != null)
+                      SlButton(
+                        buttonKey: const ValueKey('task_hub_banner_open_focus'),
+                        variant: SlButtonVariant.outline,
+                        onPressed: () => unawaited(widget.onOpenTodo!(primary)),
+                        child: Text(context.t.actions.taskHub.openFocus),
+                      ),
+                    SlButton(
+                      buttonKey: const ValueKey('task_hub_banner_view_all'),
+                      variant: SlButtonVariant.outline,
+                      onPressed: widget.onViewAll,
+                      child: Text(context.t.actions.taskHub.openTaskHub),
+                    ),
+                  ],
+                ),
+                if (_expanded) ...[
+                  const SizedBox(height: 12),
+                  _BannerPreviewList(
+                    snapshot: widget.snapshot,
+                    onOpenTodo: widget.onOpenTodo,
+                    onQuickAction: widget.onQuickAction,
+                    onFeedback: widget.onFeedback,
+                  ),
+                ],
+              ],
             ),
           ),
         ),
-      ],
-    );
-  }
-}
-
-class _TaskHubTodoRow extends StatelessWidget {
-  const _TaskHubTodoRow({
-    required this.todo,
-    required this.sectionKind,
-    required this.onOpenTodo,
-    required this.onQuickAction,
-  });
-
-  final Todo todo;
-  final _TaskHubBannerSectionKind sectionKind;
-  final Future<void> Function(Todo todo)? onOpenTodo;
-  final Future<void> Function(Todo todo, TaskHubQuickAction action)?
-      onQuickAction;
-
-  @override
-  Widget build(BuildContext context) {
-    final dueAtMs = todo.dueAtMs;
-    final tokens = SlTokens.of(context);
-    final colorScheme = Theme.of(context).colorScheme;
-    final dueAtLocal = dueAtMs == null
-        ? null
-        : DateTime.fromMillisecondsSinceEpoch(dueAtMs, isUtc: true).toLocal();
-    final dueAtText = dueAtLocal == null
-        ? null
-        : MaterialLocalizations.of(context).formatShortDate(dueAtLocal);
-    final overdue = dueAtLocal != null && dueAtLocal.isBefore(DateTime.now());
-    final dotColor = overdue ? colorScheme.error : colorScheme.primary;
-    final actionLayout = buildTaskHubQuickActionLayout(
-      context,
-      todo: todo,
-      sectionKind: _resolveQuickActionSectionKind(),
-      dueAtLocal: dueAtLocal,
-    );
-
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: tokens.surface2.withOpacity(0.5),
-        borderRadius: BorderRadius.circular(tokens.radiusSm),
-        border: Border.all(
-          color: tokens.borderSubtle.withOpacity(0.9),
-        ),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(8, 8, 8, 8),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Material(
-              color: Colors.transparent,
-              child: InkWell(
-                key: ValueKey('task_hub_banner_item_${todo.id}'),
-                borderRadius: BorderRadius.circular(tokens.radiusSm),
-                onTap: onOpenTodo == null
-                    ? null
-                    : () => unawaited(onOpenTodo!(todo)),
-                child: Padding(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Container(
-                        width: 8,
-                        height: 8,
-                        margin: const EdgeInsets.only(top: 6),
-                        decoration: BoxDecoration(
-                          color: dotColor,
-                          borderRadius: BorderRadius.circular(99),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              todo.title,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .bodyMedium
-                                  ?.copyWith(
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                            ),
-                            if (dueAtText != null) ...[
-                              const SizedBox(height: 2),
-                              Row(
-                                children: [
-                                  Icon(
-                                    Icons.schedule_rounded,
-                                    size: 14,
-                                    color: colorScheme.onSurfaceVariant,
-                                  ),
-                                  const SizedBox(width: 4),
-                                  Text(
-                                    dueAtText,
-                                    style:
-                                        Theme.of(context).textTheme.bodySmall,
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Icon(
-                        Icons.chevron_right_rounded,
-                        size: 18,
-                        color: colorScheme.onSurfaceVariant,
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(height: 6),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                for (final action in actionLayout.$1)
-                  _QuickActionButton(
-                    key: ValueKey(
-                        'task_hub_quick_${todo.id}_${action.action.name}'),
-                    icon: action.icon,
-                    label: action.label,
-                    tone: action.tone,
-                    onPressed: onQuickAction == null
-                        ? null
-                        : () => onQuickAction!(todo, action.action),
-                  ),
-                if (actionLayout.$2.isNotEmpty)
-                  _QuickActionMenu(
-                    key: ValueKey('task_hub_quick_${todo.id}_more'),
-                    items: actionLayout.$2,
-                    onSelected: onQuickAction == null
-                        ? null
-                        : (action) => unawaited(onQuickAction!(todo, action)),
-                  ),
-              ],
-            ),
-          ],
-        ),
       ),
     );
   }
 
-  TaskHubQuickActionSectionKind _resolveQuickActionSectionKind() {
-    return switch (sectionKind) {
-      _TaskHubBannerSectionKind.scheduled =>
-        TaskHubQuickActionSectionKind.scheduled,
-      _TaskHubBannerSectionKind.dueReview =>
-        TaskHubQuickActionSectionKind.dueReview,
-      _TaskHubBannerSectionKind.unscheduled =>
-        TaskHubQuickActionSectionKind.unscheduled,
-    };
-  }
-}
-
-class _QuickActionButton extends StatelessWidget {
-  const _QuickActionButton({
-    required this.label,
-    required this.onPressed,
-    required this.icon,
-    this.tone = TaskHubQuickActionTone.secondary,
-    super.key,
-  });
-
-  final String label;
-  final VoidCallback? onPressed;
-  final IconData icon;
-  final TaskHubQuickActionTone tone;
-
-  @override
-  Widget build(BuildContext context) {
-    final tokens = SlTokens.of(context);
-    final baseStyle = ButtonStyle(
-      minimumSize: const MaterialStatePropertyAll(Size(0, 40)),
-      padding: const MaterialStatePropertyAll(
-        EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      ),
-      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-      shape: MaterialStatePropertyAll(
-        RoundedRectangleBorder(borderRadius: BorderRadius.circular(99)),
-      ),
-      textStyle: MaterialStatePropertyAll(
-        Theme.of(context).textTheme.labelMedium?.copyWith(
-              fontWeight: FontWeight.w600,
-            ),
-      ),
-    );
-
-    if (tone == TaskHubQuickActionTone.primary) {
-      return FilledButton.icon(
-        onPressed: onPressed,
-        style: baseStyle,
-        icon: Icon(icon, size: 16),
-        label: Text(
-          label,
-          maxLines: 1,
-          softWrap: false,
-          overflow: TextOverflow.ellipsis,
-        ),
+  String _fallbackSubtitle(BuildContext context) {
+    final snapshot = widget.snapshot;
+    if (!snapshot.isEmpty) {
+      return context.t.actions.taskHub.wrapUpSubtitle(
+        decide: snapshot.decide.length,
+        done: snapshot.done.length,
       );
     }
+    return context.t.actions.taskHub.noTasksSubtitle;
+  }
 
-    return OutlinedButton.icon(
-      onPressed: onPressed,
-      style: baseStyle.copyWith(
-        side: MaterialStatePropertyAll(
-          BorderSide(color: tokens.borderSubtle.withOpacity(0.9)),
-        ),
-      ),
-      icon: Icon(icon, size: 16),
-      label: Text(
-        label,
-        maxLines: 1,
-        softWrap: false,
-        overflow: TextOverflow.ellipsis,
-      ),
-    );
+  String _primaryActionLabel(BuildContext context, TaskPriorityEntry entry) {
+    return switch (entry.suggestedAction) {
+      TaskPrioritySuggestionKind.doNow =>
+        context.t.actions.taskHub.actions.doNow,
+      TaskPrioritySuggestionKind.schedule =>
+        context.t.actions.taskHub.actions.schedule,
+      TaskPrioritySuggestionKind.defer =>
+        context.t.actions.taskHub.actions.defer,
+      TaskPrioritySuggestionKind.clarify =>
+        context.t.actions.taskHub.actions.clarify,
+    };
+  }
+
+  TaskHubQuickAction _primaryQuickAction(TaskPriorityEntry entry) {
+    if (entry.isInProgress) return TaskHubQuickAction.done;
+    if (entry.isFutureScheduled) return TaskHubQuickAction.start;
+    if (entry.isReviewDue) return TaskHubQuickAction.moveToInbox;
+    return TaskHubQuickAction.today;
   }
 }
 
-class _QuickActionMenu extends StatelessWidget {
-  const _QuickActionMenu({
-    required this.items,
-    required this.onSelected,
-    super.key,
+class _BannerPreviewList extends StatelessWidget {
+  const _BannerPreviewList({
+    required this.snapshot,
+    required this.onOpenTodo,
+    required this.onQuickAction,
+    required this.onFeedback,
   });
 
-  final List<TaskHubQuickActionItem> items;
-  final ValueChanged<TaskHubQuickAction>? onSelected;
+  final TaskPrioritySnapshot snapshot;
+  final Future<void> Function(TaskPriorityEntry entry)? onOpenTodo;
+  final Future<void> Function(
+      TaskPriorityEntry entry, TaskHubQuickAction action)? onQuickAction;
+  final Future<void> Function(
+    TaskPriorityEntry entry,
+    TaskPriorityFeedbackKind feedback,
+  )? onFeedback;
 
   @override
   Widget build(BuildContext context) {
-    final tokens = SlTokens.of(context);
-    final style = ButtonStyle(
-      minimumSize: const MaterialStatePropertyAll(Size(44, 40)),
-      padding: const MaterialStatePropertyAll(
-        EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      ),
-      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-      shape: MaterialStatePropertyAll(
-        RoundedRectangleBorder(borderRadius: BorderRadius.circular(99)),
-      ),
-      side: MaterialStatePropertyAll(
-        BorderSide(color: tokens.borderSubtle.withOpacity(0.9)),
-      ),
-    );
-    return PopupMenuButton<TaskHubQuickAction>(
-      tooltip: context.t.actions.taskHub.actions.more,
-      padding: EdgeInsets.zero,
-      onSelected: onSelected,
-      enabled: onSelected != null,
-      itemBuilder: (_) => [
-        for (final item in items)
-          PopupMenuItem<TaskHubQuickAction>(
-            value: item.action,
-            child: Row(
-              children: [
-                Icon(item.icon, size: 16),
-                const SizedBox(width: 8),
-                Text(item.label),
-              ],
+    final previewEntries = <TaskPriorityEntry>[
+      ...snapshot.focus.skip(1).take(2),
+      ...snapshot.scheduled.take(2),
+      ...snapshot.decide.take(2),
+    ];
+    if (previewEntries.isEmpty) {
+      return const SizedBox(
+        key: ValueKey('task_hub_preview_list'),
+        child: SizedBox.shrink(),
+      );
+    }
+    return Column(
+      key: const ValueKey('task_hub_preview_list'),
+      children: [
+        for (final entry in previewEntries)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: TaskHubEntryCard(
+              key: ValueKey('task_hub_banner_item_${entry.todo.id}'),
+              entry: entry,
+              onOpenTodo: () =>
+                  onOpenTodo == null ? null : unawaited(onOpenTodo!(entry)),
+              onQuickAction: onQuickAction == null
+                  ? (_) {}
+                  : (action) => unawaited(onQuickAction!(entry, action)),
+              onFeedback: onFeedback == null
+                  ? null
+                  : (feedback) => unawaited(onFeedback!(entry, feedback)),
             ),
           ),
       ],
-      child: IgnorePointer(
-        child: OutlinedButton(
-          onPressed: () {},
-          style: style,
-          child: const Icon(Icons.more_horiz_rounded, size: 18),
-        ),
-      ),
     );
   }
 }

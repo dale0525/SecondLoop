@@ -1,11 +1,16 @@
 import 'dart:typed_data';
 
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:secondloop/core/backend/app_backend.dart';
+import 'package:secondloop/features/actions/task_hub/task_hub_quick_action_layout.dart';
 import 'package:secondloop/features/actions/task_hub/task_hub_quick_actions.dart';
+import 'package:secondloop/features/actions/task_hub/task_priority_models.dart';
 import 'package:secondloop/src/rust/db.dart';
+
+import 'test_i18n.dart';
 
 void main() {
   Todo todo({
@@ -30,6 +35,67 @@ void main() {
       lastReviewAtMs: null,
     );
   }
+
+  testWidgets('unscheduled tasks recommend schedule as primary action',
+      (tester) async {
+    final entry = TaskPriorityEntry(
+      todo: todo(id: 'u1', title: 'Backlog item', updatedAtMs: 10),
+      band: TaskPriorityBand.decide,
+      ruleScore: 10,
+      semanticScore: 0,
+      reasons: const <TaskPriorityReasonKind>[
+        TaskPriorityReasonKind.unscheduled
+      ],
+      suggestedAction: TaskPrioritySuggestionKind.schedule,
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: Builder(
+            builder: (context) => Text(
+              buildTaskHubQuickActionLayout(context, entry: entry)
+                  .$1
+                  .first
+                  .label,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('Schedule'), findsOneWidget);
+  });
+
+  testWidgets('review due tasks recommend clarify as primary action',
+      (tester) async {
+    final entry = TaskPriorityEntry(
+      todo: todo(id: 'r1', title: 'Review item', updatedAtMs: 10),
+      band: TaskPriorityBand.decide,
+      ruleScore: 10,
+      semanticScore: 0,
+      reasons: const <TaskPriorityReasonKind>[TaskPriorityReasonKind.reviewDue],
+      suggestedAction: TaskPrioritySuggestionKind.clarify,
+      isReviewDue: true,
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: Builder(
+            builder: (context) => Text(
+              buildTaskHubQuickActionLayout(context, entry: entry)
+                  .$1
+                  .first
+                  .label,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('Clarify'), findsOneWidget);
+  });
 
   test('applies today and can undo to original todo', () async {
     SharedPreferences.setMockInitialValues({});

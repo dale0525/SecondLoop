@@ -30,8 +30,10 @@ extension _ChatPageStateMethodsA on _ChatPageState {
       if (!_isAtBottom) {
         _setState(() {
           _hasUnseenNewMessages = true;
-          _taskHubSummaryFuture = _loadTaskHubSummary();
+          _taskPriorityStore?.markDirty();
         });
+        unawaited(
+            _taskPriorityStore?.refresh(force: true) ?? Future<void>.value());
         return;
       }
       _refresh();

@@ -1,10 +1,10 @@
 import '../../../src/rust/db.dart';
-
-bool _isSameLocalDate(DateTime a, DateTime b) =>
-    a.year == b.year && a.month == b.month && a.day == b.day;
+import 'task_priority_engine.dart';
+import 'task_priority_models.dart';
 
 class TaskHubSummary {
   const TaskHubSummary({
+    required this.snapshot,
     required this.dueCount,
     required this.overdueCount,
     required this.upcomingCount,
@@ -21,7 +21,8 @@ class TaskHubSummary {
   });
 
   const TaskHubSummary.empty()
-      : dueCount = 0,
+      : snapshot = const TaskPrioritySnapshot.empty(),
+        dueCount = 0,
         overdueCount = 0,
         upcomingCount = 0,
         unscheduledCount = 0,
@@ -35,16 +36,15 @@ class TaskHubSummary {
         unscheduledTodos = const <Todo>[],
         doneTodos = const <Todo>[];
 
+  final TaskPrioritySnapshot snapshot;
   final int dueCount;
   final int overdueCount;
   final int upcomingCount;
   final int unscheduledCount;
   final int dueReviewCount;
   final int doneCount;
-
   final List<Todo> scheduledPreviewTodos;
   final List<Todo> unscheduledPreviewTodos;
-
   final List<Todo> dueTodos;
   final List<Todo> upcomingTodos;
   final List<Todo> dueReviewTodos;
@@ -66,92 +66,74 @@ class TaskHubSummary {
     int scheduledPreviewLimit = 4,
     int unscheduledPreviewLimit = 4,
   }) {
-    final due = <({Todo todo, DateTime dueLocal})>[];
-    final upcoming = <({Todo todo, DateTime dueLocal})>[];
-    final dueReview = <Todo>[];
-    final unscheduled = <Todo>[];
-    final done = <Todo>[];
+    final snapshot = buildTaskPrioritySnapshot(todos, nowLocal: nowLocal);
+    return fromSnapshot(
+      snapshot,
+      scheduledPreviewLimit: scheduledPreviewLimit,
+      unscheduledPreviewLimit: unscheduledPreviewLimit,
+    );
+  }
 
-    final nowUtcMs = nowLocal.toUtc().millisecondsSinceEpoch;
-
-    for (final todo in todos) {
-      if (todo.status == 'dismissed') continue;
-      if (todo.status == 'done') {
-        done.add(todo);
-        continue;
-      }
-
-      final dueMs = todo.dueAtMs;
-      if (dueMs != null) {
-        final dueLocal =
-            DateTime.fromMillisecondsSinceEpoch(dueMs, isUtc: true).toLocal();
-        final isOverdue = dueLocal.isBefore(nowLocal);
-        final isToday = _isSameLocalDate(dueLocal, nowLocal);
-        if (isOverdue || isToday) {
-          due.add((todo: todo, dueLocal: dueLocal));
-        } else {
-          upcoming.add((todo: todo, dueLocal: dueLocal));
-        }
-        continue;
-      }
-
-      final isDueReview = todo.reviewStage != null &&
-          todo.nextReviewAtMs != null &&
-          todo.nextReviewAtMs! <= nowUtcMs;
-      if (isDueReview) {
-        dueReview.add(todo);
-        continue;
-      }
-      unscheduled.add(todo);
-    }
-
-    due.sort((a, b) => a.dueLocal.compareTo(b.dueLocal));
-    upcoming.sort((a, b) => a.dueLocal.compareTo(b.dueLocal));
-    dueReview.sort((a, b) {
-      final aNext = a.nextReviewAtMs ?? 9223372036854775807;
-      final bNext = b.nextReviewAtMs ?? 9223372036854775807;
-      if (aNext != bNext) return aNext.compareTo(bNext);
-      return b.updatedAtMs.compareTo(a.updatedAtMs);
-    });
-    unscheduled.sort((a, b) => b.updatedAtMs.compareTo(a.updatedAtMs));
-    done.sort((a, b) => b.updatedAtMs.compareTo(a.updatedAtMs));
+  static TaskHubSummary fromSnapshot(
+    TaskPrioritySnapshot snapshot, {
+    int scheduledPreviewLimit = 4,
+    int unscheduledPreviewLimit = 4,
+  }) {
+    final dueEntries = snapshot.focus;
+    final upcomingEntries = snapshot.scheduled;
+    final dueReviewEntries = snapshot.decide
+        .where((entry) => entry.isReviewDue)
+        .toList(growable: false);
+    final unscheduledEntries = snapshot.decide
+        .where((entry) => !entry.isReviewDue)
+        .toList(growable: false);
+    final doneEntries = snapshot.done;
 
     final scheduledPreview = <Todo>[];
-    for (final item in due) {
+    for (final entry in dueEntries) {
       if (scheduledPreview.length >= scheduledPreviewLimit) break;
-      scheduledPreview.add(item.todo);
+      scheduledPreview.add(entry.todo);
     }
-    for (final item in upcoming) {
+    for (final entry in upcomingEntries) {
       if (scheduledPreview.length >= scheduledPreviewLimit) break;
-      scheduledPreview.add(item.todo);
+      scheduledPreview.add(entry.todo);
     }
 
     final unscheduledPreview = <Todo>[];
-    for (final item in dueReview) {
+    for (final entry in dueReviewEntries) {
       if (unscheduledPreview.length >= unscheduledPreviewLimit) break;
-      unscheduledPreview.add(item);
+      unscheduledPreview.add(entry.todo);
     }
-    for (final item in unscheduled) {
+    for (final entry in unscheduledEntries) {
       if (unscheduledPreview.length >= unscheduledPreviewLimit) break;
-      unscheduledPreview.add(item);
+      unscheduledPreview.add(entry.todo);
     }
-
-    final overdueCount = due.where((e) => e.dueLocal.isBefore(nowLocal)).length;
 
     return TaskHubSummary(
-      dueCount: due.length,
-      overdueCount: overdueCount,
-      upcomingCount: upcoming.length,
-      unscheduledCount: dueReview.length + unscheduled.length,
-      dueReviewCount: dueReview.length,
-      doneCount: done.length,
-      scheduledPreviewTodos: scheduledPreview,
-      unscheduledPreviewTodos: unscheduledPreview,
-      dueTodos: due.map((e) => e.todo).toList(growable: false),
-      upcomingTodos: upcoming.map((e) => e.todo).toList(growable: false),
-      dueReviewTodos: dueReview.toList(growable: false),
-      unscheduledTodos: unscheduled.toList(growable: false),
-      doneTodos: done.toList(growable: false),
+      snapshot: snapshot,
+      dueCount: dueEntries.length,
+      overdueCount: dueEntries.where((entry) => entry.isOverdue).length,
+      upcomingCount: upcomingEntries.length,
+      unscheduledCount: unscheduledEntries.length + dueReviewEntries.length,
+      dueReviewCount: dueReviewEntries.length,
+      doneCount: doneEntries.length,
+      scheduledPreviewTodos: List<Todo>.unmodifiable(scheduledPreview),
+      unscheduledPreviewTodos: List<Todo>.unmodifiable(unscheduledPreview),
+      dueTodos: List<Todo>.unmodifiable(
+        dueEntries.map((entry) => entry.todo),
+      ),
+      upcomingTodos: List<Todo>.unmodifiable(
+        upcomingEntries.map((entry) => entry.todo),
+      ),
+      dueReviewTodos: List<Todo>.unmodifiable(
+        dueReviewEntries.map((entry) => entry.todo),
+      ),
+      unscheduledTodos: List<Todo>.unmodifiable(
+        unscheduledEntries.map((entry) => entry.todo),
+      ),
+      doneTodos: List<Todo>.unmodifiable(
+        doneEntries.map((entry) => entry.todo),
+      ),
     );
   }
 }

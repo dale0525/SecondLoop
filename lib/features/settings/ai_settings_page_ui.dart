@@ -212,6 +212,7 @@ extension _AiSettingsPageUiExtension on _AiSettingsPageState {
     final canUseCloudEmbeddings =
         hasCloudAccount && subscriptionStatus == SubscriptionStatus.entitled;
     final canUseSemanticParse = canUseCloudEmbeddings || _byokConfigured;
+    final canUseTaskPriorityAi = canUseSemanticParse;
 
     final cloudEmbeddingsSubtitle =
         subscriptionStatus == SubscriptionStatus.notEntitled
@@ -229,6 +230,14 @@ extension _AiSettingsPageUiExtension on _AiSettingsPageState {
             : (_semanticParseEnabled ?? false)
                 ? context.t.settings.semanticParseAutoActions.subtitleEnabled
                 : context.t.settings.semanticParseAutoActions.subtitleDisabled;
+
+    final taskPriorityAiSubtitle = !canUseTaskPriorityAi
+        ? context.t.settings.taskPriorityAiEnhancement.subtitleRequiresSetup
+        : !_taskPriorityAiConfigured
+            ? context.t.settings.taskPriorityAiEnhancement.subtitleUnset
+            : (_taskPriorityAiEnabled ?? true)
+                ? context.t.settings.taskPriorityAiEnhancement.subtitleEnabled
+                : context.t.settings.taskPriorityAiEnhancement.subtitleDisabled;
 
     final askPreferredRoute = _preferredAskAiRoute(_askAiPreference);
     final askAiUnavailable = !_askAiLoading &&
@@ -341,6 +350,37 @@ extension _AiSettingsPageUiExtension on _AiSettingsPageState {
                         }
 
                         await _setSemanticParseEnabled(value);
+                      },
+              ),
+              SwitchListTile(
+                key: const ValueKey('ai_settings_task_priority_ai_switch'),
+                title: Text(
+                  context.t.settings.taskPriorityAiEnhancement.title,
+                ),
+                subtitle: Text(taskPriorityAiSubtitle),
+                value: _taskPriorityAiEnabled ?? true,
+                onChanged: _automationLoading || _automationSaving
+                    ? null
+                    : (value) async {
+                        if (value && !canUseTaskPriorityAi) {
+                          if (subscriptionStatus ==
+                                  SubscriptionStatus.entitled &&
+                              !hasCloudAccount) {
+                            await Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => const CloudAccountPage(),
+                              ),
+                            );
+                            if (!mounted) return;
+                            await _reloadAutomationState(forceLoading: false);
+                            return;
+                          }
+
+                          await _openLlmProfilesForByokSetupAndRefreshRoutes();
+                          return;
+                        }
+
+                        await _setTaskPriorityAiEnabled(value);
                       },
               ),
               ListTile(
