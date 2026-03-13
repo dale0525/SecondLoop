@@ -26,9 +26,6 @@ The core mental model is **One Timeline** (a single “Main Stream”): capture 
 ## ⭐ Highlights
 
 - 🧠 **Long-term memory, local-first**: your timeline stays on your device with encryption by default.
-- 🔥 **Hotness-aware recall**: recently and frequently reused memories get a small ranking boost when semantic matches are close.
-- 🧩 **Stable generated memories**: durable preferences, profile facts, events, and patterns are synthesized into local encrypted knowledge docs.
-- 📝 **Planning-friendly summaries**: planning/summary questions prefer compact session digests plus source evidence instead of many redundant snippets.
 - 🧲 **Ask AI with relevant context**: get answers grounded in your own notes, with streaming output.
 - 🗂️ **Simple filters when needed**: narrow what you are viewing without juggling chat threads.
 - 📥 **Capture from anywhere**: mobile share sheet + desktop global hotkey for quick capture.
@@ -37,15 +34,15 @@ The core mental model is **One Timeline** (a single “Main Stream”): capture 
 
 ## 🤖 AI Capability Matrix (Local / BYOK / Pro)
 
-| AI capability | Local (on-device) | BYOK (your API key) | Pro subscription (SecondLoop Cloud) | Notes |
-| --- | --- | --- | --- | --- |
-| Image annotation | ⚠️ Basic on-device description | ✅ Use your own model API | ✅ Included via SecondLoop Cloud | If network AI is unavailable, the app can still provide a lightweight fallback from visible text. |
-| OCR (image/PDF/doc) | ✅ On-device text recognition | ✅ Use your own model API | ✅ Included via SecondLoop Cloud | Works for images and supported documents. |
-| Speech recognition (audio transcription) | ⚠️ Available on supported devices | ✅ Use your own model API | ✅ Included via SecondLoop Cloud | When offline, the app uses local transcription when available. |
-| Embedding indexing | ✅ Local memory indexing | ✅ Use your own embedding API | ✅ Included via SecondLoop Cloud | New content is indexed in the background. |
-| Ask AI | ❌ | ✅ Use your own chat model API | ✅ Included via SecondLoop Cloud | Route follows your source preference and current availability. |
-| Semantic parsing (intent/time-window understanding) | ❌ | ✅ Use your own model API | ✅ Included via SecondLoop Cloud | Used by smart understanding and auto-actions. |
-| Embedding search | ✅ Local semantic search | ✅ Use your own embedding API | ✅ Included via SecondLoop Cloud | Search can fall back across available routes. |
+| AI capability                                       | Local (on-device)                | BYOK (your API key)           | Pro subscription (SecondLoop Cloud) | Notes                                                                                             |
+| --------------------------------------------------- | -------------------------------- | ----------------------------- | ----------------------------------- | ------------------------------------------------------------------------------------------------- |
+| Image annotation                                    | ⚠️ Basic on-device description    | ✅ Use your own model API      | ✅ Included via SecondLoop Cloud     | If network AI is unavailable, the app can still provide a lightweight fallback from visible text. |
+| OCR (image/PDF/doc)                                 | ✅ On-device text recognition     | ✅ Use your own model API      | ✅ Included via SecondLoop Cloud     | Works for images and supported documents.                                                         |
+| Speech recognition (audio transcription)            | ⚠️ Available on supported devices | ✅ Use your own model API      | ✅ Included via SecondLoop Cloud     | When offline, the app uses local transcription when available.                                    |
+| Embedding indexing                                  | ✅ Local memory indexing          | ✅ Use your own embedding API  | ✅ Included via SecondLoop Cloud     | New content is indexed in the background.                                                         |
+| Ask AI                                              | ❌                                | ✅ Use your own chat model API | ✅ Included via SecondLoop Cloud     | Route follows your source preference and current availability.                                    |
+| Semantic parsing (intent/time-window understanding) | ❌                                | ✅ Use your own model API      | ✅ Included via SecondLoop Cloud     | Used by smart understanding and auto-actions.                                                     |
+| Embedding search                                    | ✅ Local semantic search          | ✅ Use your own embedding API  | ✅ Included via SecondLoop Cloud     | Search can fall back across available routes.                                                     |
 
 - `Local` means native on-device processing in iOS / Android / macOS / Windows / Linux clients.
 - `BYOK` means you connect your own model service and API key in settings.
