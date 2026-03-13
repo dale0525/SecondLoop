@@ -119,7 +119,7 @@ pub fn db_get_knowledge_debug_stats(
     app_dir: String,
     key: Vec<u8>,
 ) -> Result<knowledge::KnowledgeDebugStats> {
-    let _key = key_from_bytes(key)?;
+    let _validated_key = key_from_bytes(key)?;
     let conn = db::open(Path::new(&app_dir))?;
     read_knowledge_debug_stats(&conn)
 }

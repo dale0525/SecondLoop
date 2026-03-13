@@ -66,30 +66,47 @@ pub fn collect_generated_memory_documents(
     collect_event_memories(&raw_messages, &mut drafts);
     collect_pattern_memories(conn, key, &mut drafts)?;
 
-    let mut merged = BTreeMap::<String, ContentKnowledgeDocument>::new();
+    let mut merged = BTreeMap::<String, GeneratedMemoryDraft>::new();
     for draft in drafts {
-        let document = draft.into_document();
+        let document_id = memory_dedup::build_generated_document_id(
+            draft.kind,
+            &draft.facet_key,
+            draft.source_id.as_deref(),
+        );
         merged
-            .entry(document.document_id.clone())
-            .and_modify(|existing| {
-                existing.raw_text =
-                    memory_dedup::merge_lines(&existing.raw_text, &document.raw_text);
-                existing.normalized_text = existing.raw_text.clone();
-                existing.summary = Some(
-                    existing
-                        .raw_text
-                        .lines()
-                        .next()
-                        .unwrap_or_default()
-                        .to_string(),
-                );
-                existing.updated_at_ms = existing.updated_at_ms.max(document.updated_at_ms);
-                existing.created_at_ms = existing.created_at_ms.min(document.created_at_ms);
-            })
-            .or_insert(document);
+            .entry(document_id)
+            .and_modify(|existing| merge_generated_memory_draft(existing, &draft))
+            .or_insert(draft);
     }
 
-    Ok(merged.into_values().collect())
+    Ok(merged
+        .into_values()
+        .map(GeneratedMemoryDraft::into_document)
+        .collect())
+}
+
+fn merge_generated_memory_draft(
+    existing: &mut GeneratedMemoryDraft,
+    incoming: &GeneratedMemoryDraft,
+) {
+    use crate::knowledge::memory_dedup::MemoryMergePolicy;
+
+    existing.created_at_ms = existing.created_at_ms.min(incoming.created_at_ms);
+    match memory_dedup::merge_policy(existing.kind) {
+        MemoryMergePolicy::ReplaceLatest => {
+            if incoming.updated_at_ms >= existing.updated_at_ms {
+                existing.title = incoming.title.clone();
+                existing.raw_text = incoming.raw_text.clone();
+                existing.updated_at_ms = incoming.updated_at_ms;
+                existing.anchors = incoming.anchors.clone();
+                existing.source_id = incoming.source_id.clone();
+            }
+        }
+        MemoryMergePolicy::AppendOnly | MemoryMergePolicy::MergeByFacet => {
+            existing.raw_text = memory_dedup::merge_lines(&existing.raw_text, &incoming.raw_text);
+            existing.updated_at_ms = existing.updated_at_ms.max(incoming.updated_at_ms);
+        }
+    }
 }
 
 fn collect_raw_user_messages(conn: &Connection, key: &[u8; 32]) -> Result<Vec<RawUserMessage>> {
@@ -364,5 +381,25 @@ mod tests {
             .expect("language preference doc");
 
         assert_eq!(doc.raw_text, "User prefers responses in English.");
+    }
+
+    #[test]
+    fn collect_generated_memory_documents_replaces_profile_with_latest_statement() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let conn = db::open(dir.path()).expect("open");
+        let key = [93u8; 32];
+        let conv = db::create_conversation(&conn, &key, "Inbox").expect("conversation");
+        let _ = db::insert_message(&conn, &key, &conv.id, "user", "I am a student.")
+            .expect("first profile");
+        let _ = db::insert_message(&conn, &key, &conv.id, "user", "I am a developer.")
+            .expect("second profile");
+
+        let docs = collect_generated_memory_documents(&conn, &key).expect("collect");
+        let doc = docs
+            .iter()
+            .find(|doc| doc.document_id == "generated:profile:self-profile")
+            .expect("profile doc");
+
+        assert_eq!(doc.raw_text, "I am a developer.");
     }
 }
