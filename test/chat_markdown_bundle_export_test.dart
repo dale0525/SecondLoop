@@ -93,6 +93,39 @@ void main() {
     }
   });
 
+  test(
+      'exports markdown bundle with a unique suffix when assets dir already exists',
+      () async {
+    final dir = await Directory.systemTemp.createTemp('markdown-bundle-');
+
+    try {
+      await Directory('${dir.path}/note.assets').create();
+      await File('${dir.path}/note.assets/stale.png').writeAsBytes(_pngBytes());
+
+      final result = await exportChatMarkdownBundle(
+        markdown: '![draft](secondloop-draft://image/draft_1)',
+        filenameStem: 'note',
+        outputDirectory: dir,
+        draftAttachments: <AttachmentDraftPayload>[
+          AttachmentDraftPayload(
+            localId: 'draft_1',
+            filename: 'draft.png',
+            mimeType: 'image/png',
+            bytes: _pngBytes(),
+          ),
+        ],
+      );
+
+      expect(result.markdownFile.path, endsWith('note-2.md'));
+      expect(result.assetDirectory.path, endsWith('note-2.assets'));
+      expect(await File('${dir.path}/note.assets/stale.png').exists(), isTrue);
+      expect(await File('${result.assetDirectory.path}/draft_1.png').exists(),
+          isTrue);
+    } finally {
+      await dir.delete(recursive: true);
+    }
+  });
+
   test('keeps persisted refs when attachment bytes are unavailable', () async {
     final dir = await Directory.systemTemp.createTemp('markdown-bundle-');
 

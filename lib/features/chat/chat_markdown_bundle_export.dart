@@ -55,10 +55,15 @@ Future<MarkdownBundleExportResult> exportChatMarkdownBundle({
     final assetDirectory = Directory('${outputDirectory.path}/$stem.assets');
     final markdownFile = File('${outputDirectory.path}/$stem.md');
     final writtenAssetPaths = <String, String>{};
+    var reservedAssetDirectory = false;
     var reservedMarkdownFile = false;
 
     try {
+      if (await assetDirectory.exists()) {
+        throw FileSystemException('Already exists', assetDirectory.path);
+      }
       await assetDirectory.create();
+      reservedAssetDirectory = true;
       await markdownFile.create(exclusive: true);
       reservedMarkdownFile = true;
 
@@ -114,7 +119,7 @@ Future<MarkdownBundleExportResult> exportChatMarkdownBundle({
       if (reservedMarkdownFile && await markdownFile.exists()) {
         await markdownFile.delete();
       }
-      if (await assetDirectory.exists()) {
+      if (reservedAssetDirectory && await assetDirectory.exists()) {
         await assetDirectory.delete(recursive: true);
       }
       stem = '$filenameStem-$duplicateIndex';
@@ -124,7 +129,7 @@ Future<MarkdownBundleExportResult> exportChatMarkdownBundle({
       if (reservedMarkdownFile && await markdownFile.exists()) {
         await markdownFile.delete();
       }
-      if (await assetDirectory.exists()) {
+      if (reservedAssetDirectory && await assetDirectory.exists()) {
         await assetDirectory.delete(recursive: true);
       }
       rethrow;
