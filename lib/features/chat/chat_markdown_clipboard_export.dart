@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:markdown/markdown.dart' as md;
 
+import '../attachments/attachment_draft_send_contract.dart';
+import 'chat_markdown_export_image_sources.dart';
 import 'chat_markdown_rich_rendering.dart';
 import 'chat_markdown_sanitizer.dart';
 import 'chat_markdown_theme_presets.dart';
@@ -18,20 +20,29 @@ String buildChatMarkdownClipboardPlainText(
   return normalized;
 }
 
-String buildChatMarkdownClipboardHtml({
+Future<String> buildChatMarkdownClipboardHtml({
   required String markdown,
   required ChatMarkdownPreviewTheme theme,
   required String emptyFallback,
-}) {
+  List<AttachmentDraftPayload> draftAttachments =
+      const <AttachmentDraftPayload>[],
+  Future<ChatMarkdownExportImageData?> Function(String attachmentSha256)?
+      readPersistedAttachment,
+}) async {
   final plainText = buildChatMarkdownClipboardPlainText(
     markdown,
     emptyFallback: emptyFallback,
   );
   final normalized = sanitizeChatMarkdown(markdown).trim();
+  final hydratedMarkdown = await inlineMarkdownImageSourcesAsDataUrls(
+    normalized.isEmpty ? markdown : normalized,
+    draftAttachments: draftAttachments,
+    readPersistedAttachment: readPersistedAttachment,
+  );
   final contentHtml = normalized.isEmpty
       ? '<p>${const HtmlEscape(HtmlEscapeMode.element).convert(plainText)}</p>'
       : md.markdownToHtml(
-          normalized,
+          hydratedMarkdown,
           extensionSet: md.ExtensionSet.gitHubWeb,
           blockSyntaxes: buildChatMarkdownBlockSyntaxes(),
           inlineSyntaxes: buildChatMarkdownInlineSyntaxes(),

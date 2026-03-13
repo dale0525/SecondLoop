@@ -326,3 +326,22 @@ fn migration_archive_markdown_doc(
     }
     out
 }
+
+pub(crate) fn migration_archive_rewrite_embedded_attachment_refs(
+    body: &str,
+    attachments: &std::collections::BTreeMap<String, MigrationArchiveAttachment>,
+) -> String {
+    if body.trim().is_empty() || attachments.is_empty() {
+        return body.to_string();
+    }
+
+    let mut rewritten = body.to_string();
+    for attachment in attachments.values() {
+        let source = format!("secondloop://attachment/{}", attachment.sha256);
+        let replacement = format!("../{}", attachment.archive_path);
+        rewritten = rewritten.replace(&format!("({source})"), &format!("({replacement})"));
+        rewritten = rewritten.replace(&format!("(<{source}>)"), &format!("(<{replacement}>)"));
+    }
+
+    rewritten
+}

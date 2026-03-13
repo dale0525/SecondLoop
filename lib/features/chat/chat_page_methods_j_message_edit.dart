@@ -23,13 +23,54 @@ extension _ChatPageStateMessageEditMethods on _ChatPageState {
       );
       if (markdownResult == null) return;
 
-      final trimmed = markdownResult.text.trim();
+      var trimmed = markdownResult.text.trim();
       final noChange = message.role == 'assistant'
           ? trimmed == initialText.trim()
           : trimmed == message.content;
       if (noChange) return;
 
-      await backend.editMessage(sessionKey, message.id, trimmed);
+      if (markdownResult.draftAttachments.isNotEmpty) {
+        if (backend is! NativeAppBackend) {
+          throw StateError('native_backend_required_for_markdown_image_paste');
+        }
+
+        final nativeBackend = backend;
+        final submission = await editMarkdownEditorMessage(
+          messageId: message.id,
+          markdown: markdownResult.text,
+          draftAttachments: markdownResult.draftAttachments,
+          ingestAttachment: (draft) => _ingestComposerDraftAttachment(
+            nativeBackend,
+            sessionKey,
+            draft,
+          ),
+          editMessage: (messageId, content) =>
+              backend.editMessage(sessionKey, messageId, content),
+          linkAttachmentToMessage: (messageId, attachmentSha256) =>
+              nativeBackend.linkAttachmentToMessage(
+            sessionKey,
+            messageId,
+            attachmentSha256: attachmentSha256,
+          ),
+        );
+        final draftsByLocalId = {
+          for (final draft in markdownResult.draftAttachments)
+            draft.localId: draft,
+        };
+        for (final entry in submission.ingestedAttachmentShaByLocalId.entries) {
+          final draft = draftsByLocalId[entry.key];
+          if (draft == null) continue;
+          await _handleLinkedDraftAttachment(
+            nativeBackend,
+            sessionKey,
+            entry.value,
+            draft,
+          );
+        }
+        trimmed = submission.markdown.trim();
+      } else {
+        await backend.editMessage(sessionKey, message.id, trimmed);
+      }
 
       var shouldRequeueSemanticParse = false;
       try {

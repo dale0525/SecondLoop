@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 
+import '../attachments/attachment_draft_send_contract.dart';
+import 'chat_markdown_attachment_image.dart';
 import 'chat_markdown_sanitizer.dart';
 import 'chat_markdown_theme_presets.dart';
 
@@ -343,6 +345,8 @@ MarkdownBody buildChatMarkdownPreviewBody(
   ChatMarkdownThemePreset preset = ChatMarkdownThemePreset.studio,
   ChatMarkdownPreviewDensity density = ChatMarkdownPreviewDensity.regular,
   TextStyle? bodyStyle,
+  List<AttachmentDraftPayload> draftAttachments =
+      const <AttachmentDraftPayload>[],
   MarkdownTapLinkCallback? onTapLink,
 }) {
   final normalized = normalizeChatMarkdownForPreview(
@@ -359,6 +363,11 @@ MarkdownBody buildChatMarkdownPreviewBody(
       preset: preset,
       density: density,
       bodyStyle: bodyStyle,
+    ),
+    imageBuilder: (uri, title, alt) => ChatMarkdownAttachmentImage(
+      uri: uri,
+      alt: alt,
+      draftAttachments: draftAttachments,
     ),
     onTapLink: onTapLink,
   );

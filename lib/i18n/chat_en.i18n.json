@@ -64,6 +64,7 @@
     "exportMenu": "Export preview",
     "exportPng": "Export as PNG",
     "exportPdf": "Export as PDF",
+    "exportMarkdownBundle": "Markdown (.md + assets)",
     "exportCopyClipboard": "Copy to Clipboard",
     "exportCopied": "Copied to clipboard",
     "exportDone": "Exported as $format",

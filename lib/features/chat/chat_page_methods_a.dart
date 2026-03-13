@@ -483,6 +483,121 @@ extension _ChatPageStateMethodsA on _ChatPageState {
       return;
     }
 
+    if (result.draftAttachments.isNotEmpty) {
+      final backendAny = AppBackendScope.of(context);
+      if (backendAny is! NativeAppBackend) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              context.t.chat.photoFailed(
+                error: 'native_backend_required_for_markdown_image_paste',
+              ),
+            ),
+            duration: const Duration(seconds: 3),
+          ),
+        );
+        return;
+      }
+
+      final backend = backendAny;
+      final sessionKey = SessionScope.of(context).sessionKey;
+      final syncEngine = SyncEngineScope.maybeOf(context);
+      Message? sentMessage;
+
+      _setState(() {
+        _sending = true;
+        _showAttachmentSendFeedback = true;
+        _attachmentSendFeedbackStage = AttachmentProcessingStage.preparing;
+      });
+
+      try {
+        final submission = await sendMarkdownEditorMessage(
+          markdown: result.text,
+          draftAttachments: result.draftAttachments,
+          ingestAttachment: (draft) => _ingestComposerDraftAttachment(
+            backend,
+            sessionKey,
+            draft,
+            onStage: (stage) {
+              if (!mounted) return;
+              _setState(() => _attachmentSendFeedbackStage = stage);
+            },
+          ),
+          createMessage: (content) async {
+            final created = await backend.insertMessage(
+              sessionKey,
+              widget.conversation.id,
+              role: 'user',
+              content: content,
+            );
+            sentMessage = created;
+            return created;
+          },
+          linkAttachmentToMessage: (messageId, attachmentSha256) =>
+              backend.linkAttachmentToMessage(
+            sessionKey,
+            messageId,
+            attachmentSha256: attachmentSha256,
+          ),
+        );
+
+        final draftsByLocalId = {
+          for (final draft in result.draftAttachments) draft.localId: draft,
+        };
+        for (final entry in submission.ingestedAttachmentShaByLocalId.entries) {
+          final draft = draftsByLocalId[entry.key];
+          if (draft == null) continue;
+          await _handleLinkedDraftAttachment(
+            backend,
+            sessionKey,
+            entry.value,
+            draft,
+          );
+        }
+
+        syncEngine?.notifyLocalMutation();
+        if (mounted) {
+          _refresh();
+          _controller.clear();
+          if (_isDesktopPlatform) {
+            _inputFocusNode.requestFocus();
+          }
+        }
+
+        if (sentMessage != null && submission.markdown.trim().isNotEmpty) {
+          final committedMessage = sentMessage!;
+          _messageAutoActionsQueue ??= MessageAutoActionsQueue(
+            backend: backend,
+            sessionKey: sessionKey,
+            handler: _handleMessageAutoActions,
+          );
+          _messageAutoActionsQueue!.enqueue(
+            message: committedMessage,
+            rawText: submission.markdown,
+            createdAtMs: committedMessage.createdAtMs,
+          );
+        }
+      } catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(context.t.chat.photoFailed(error: '$e')),
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      } finally {
+        if (mounted) {
+          _setState(() {
+            _sending = false;
+            _showAttachmentSendFeedback = false;
+            _attachmentSendFeedbackStage = null;
+          });
+        }
+      }
+      return;
+    }
+
     _controller.value = _controller.value.copyWith(
       text: updatedText,
       selection: TextSelection.collapsed(offset: updatedText.length),

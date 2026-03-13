@@ -101,6 +101,7 @@ import 'chat_attachment_send_failure_chip.dart';
 import 'chat_image_attachment_thumbnail.dart';
 import 'chat_markdown_editor_launcher.dart';
 import 'chat_markdown_preview.dart';
+import 'chat_markdown_editor_submission.dart';
 import 'chat_markdown_link_handler.dart';
 import 'message_deeplink.dart';
 import 'chat_audio_recording_recovery_dialog.dart';

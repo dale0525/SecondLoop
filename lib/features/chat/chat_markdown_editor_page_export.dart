@@ -28,6 +28,7 @@ mixin _ChatMarkdownEditorExportMixin on State<ChatMarkdownEditorPage> {
   set _exporting(bool value);
 
   TextEditingController get _controller;
+  List<AttachmentDraftPayload> get _draftAttachments;
   ChatMarkdownCompactPane get _compactPane;
   set _compactPane(ChatMarkdownCompactPane value);
 
@@ -47,10 +48,25 @@ mixin _ChatMarkdownEditorExportMixin on State<ChatMarkdownEditorPage> {
       case _MarkdownExportAction.pdf:
         await _exportFile(_MarkdownExportFormat.pdf);
         return;
+      case _MarkdownExportAction.markdownBundle:
+        await _exportMarkdownBundle();
+        return;
       case _MarkdownExportAction.copyToClipboard:
         await _copyToClipboard();
         return;
     }
+  }
+
+  Future<File> _debugExportFileForTest(_MarkdownExportFormat format) async {
+    final bytes = switch (format) {
+      _MarkdownExportFormat.png => await _capturePreviewAsPngBytes(),
+      _MarkdownExportFormat.pdf => await _buildPdfBytes(),
+    };
+    return _materializeMarkdownExportFile(
+      format: format,
+      bytes: bytes,
+      sourceMarkdown: _controller.text,
+    );
   }
 
   Future<void> _exportFile(_MarkdownExportFormat format) async {
@@ -135,6 +151,79 @@ mixin _ChatMarkdownEditorExportMixin on State<ChatMarkdownEditorPage> {
     }
   }
 
+  Future<void> _exportMarkdownBundle() async {
+    if (_exporting) return;
+    setState(() => _exporting = true);
+
+    try {
+      final backend = AppBackendScope.maybeOf(context);
+      final AttachmentsBackend? attachmentsBackend =
+          backend is AttachmentsBackend ? backend as AttachmentsBackend : null;
+      final sessionKey = SessionScope.maybeOf(context)?.sessionKey;
+      final directory = await _resolveMarkdownExportDirectory();
+      final sourceMarkdown = _controller.text;
+      final baseStem = deriveMarkdownExportFilenameStem(sourceMarkdown);
+      var stem = baseStem;
+      var duplicateIndex = 2;
+      while (await File('${directory.path}/$stem.md').exists() ||
+          await Directory('${directory.path}/$stem.assets').exists()) {
+        stem = '$baseStem-$duplicateIndex';
+        duplicateIndex += 1;
+      }
+
+      final result = await exportChatMarkdownBundle(
+        markdown: sourceMarkdown,
+        filenameStem: stem,
+        outputDirectory: directory,
+        draftAttachments: _draftAttachments,
+        readPersistedAttachment:
+            attachmentsBackend == null || sessionKey == null || backend == null
+                ? null
+                : (attachmentSha256) async {
+                    final attachment = await backend.readAttachmentBySha256(
+                      attachmentSha256,
+                    );
+                    if (attachment == null) return null;
+                    final bytes = await attachmentsBackend.readAttachmentBytes(
+                      sessionKey,
+                      sha256: attachmentSha256,
+                    );
+                    return MarkdownBundleAssetData(
+                      bytes: bytes,
+                      mimeType: attachment.mimeType,
+                      filename: attachment.path,
+                    );
+                  },
+      );
+
+      if (!mounted) return;
+      final doneMessage = context.t.chat.markdownEditor.exportDoneSavedPath(
+        format: 'Markdown',
+        path: result.markdownFile.path,
+      );
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(doneMessage),
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            context.t.chat.markdownEditor.exportFailed(error: '$error'),
+          ),
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _exporting = false);
+      }
+    }
+  }
+
   Future<void> _copyToClipboard() async {
     if (_exporting) return;
     setState(() => _exporting = true);
@@ -146,10 +235,32 @@ mixin _ChatMarkdownEditorExportMixin on State<ChatMarkdownEditorPage> {
         _controller.text,
         emptyFallback: context.t.chat.markdownEditor.emptyPreview,
       );
-      final html = buildChatMarkdownClipboardHtml(
+      final backend = AppBackendScope.maybeOf(context);
+      final AttachmentsBackend? attachmentsBackend =
+          backend is AttachmentsBackend ? backend as AttachmentsBackend : null;
+      final sessionKey = SessionScope.maybeOf(context)?.sessionKey;
+      final html = await buildChatMarkdownClipboardHtml(
         markdown: _controller.text,
         theme: previewTheme,
         emptyFallback: context.t.chat.markdownEditor.emptyPreview,
+        draftAttachments: _draftAttachments,
+        readPersistedAttachment:
+            attachmentsBackend == null || sessionKey == null || backend == null
+                ? null
+                : (attachmentSha256) async {
+                    final attachment = await backend.readAttachmentBySha256(
+                      attachmentSha256,
+                    );
+                    if (attachment == null) return null;
+                    final bytes = await attachmentsBackend.readAttachmentBytes(
+                      sessionKey,
+                      sha256: attachmentSha256,
+                    );
+                    return ChatMarkdownExportImageData(
+                      bytes: bytes,
+                      mimeType: attachment.mimeType,
+                    );
+                  },
       );
 
       try {
@@ -178,7 +289,7 @@ mixin _ChatMarkdownEditorExportMixin on State<ChatMarkdownEditorPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            context.t.chat.markdownEditor.exportFailed(error: '$error'),
+            context.t.chat.markdownEditor.exportFailed(error: ''),
           ),
           duration: const Duration(seconds: 3),
         ),
@@ -256,18 +367,56 @@ mixin _ChatMarkdownEditorExportMixin on State<ChatMarkdownEditorPage> {
 
   Future<Uint8List> _buildPdfBytes() async {
     final markdown = _controller.text;
-    if (isNativeMarkdownPdfExportSupported()) {
-      final previewTheme =
-          resolveChatMarkdownTheme(_themePreset, Theme.of(context));
-      final html = await buildChatMarkdownPdfHtmlDocument(
-        markdown: markdown,
-        theme: previewTheme,
-        emptyFallback: context.t.chat.markdownEditor.emptyPreview,
+    final previewTheme =
+        resolveChatMarkdownTheme(_themePreset, Theme.of(context));
+    final backend = AppBackendScope.maybeOf(context);
+    final AttachmentsBackend? attachmentsBackend =
+        backend is AttachmentsBackend ? backend as AttachmentsBackend : null;
+    final sessionKey = SessionScope.maybeOf(context)?.sessionKey;
+    final readPersistedAttachment =
+        attachmentsBackend == null || sessionKey == null || backend == null
+            ? null
+            : (String attachmentSha256) async {
+                final attachment = await backend.readAttachmentBySha256(
+                  attachmentSha256,
+                );
+                if (attachment == null) return null;
+                final bytes = await attachmentsBackend.readAttachmentBytes(
+                  sessionKey,
+                  sha256: attachmentSha256,
+                );
+                return ChatMarkdownExportImageData(
+                  bytes: bytes,
+                  mimeType: attachment.mimeType,
+                );
+              };
+    final htmlBuilder =
+        widget.pdfHtmlBuilder ?? buildChatMarkdownPdfHtmlDocument;
+    final html = await htmlBuilder(
+      markdown: markdown,
+      theme: previewTheme,
+      emptyFallback: context.t.chat.markdownEditor.emptyPreview,
+      draftAttachments: _draftAttachments,
+      readPersistedAttachment: readPersistedAttachment,
+    );
+    final pageBackgroundColorHex =
+        _formatPdfExportColorHex(previewTheme.panelColor);
+    await widget.beforePdfExport?.call(
+      html: html,
+      pageBackgroundColorHex: pageBackgroundColorHex,
+    );
+
+    if (widget.pdfExporter != null) {
+      return widget.pdfExporter!(
+        html: html,
+        pageBackgroundColorHex: pageBackgroundColorHex,
       );
+    }
+
+    if (isNativeMarkdownPdfExportSupported()) {
       final nativeBytes = await exportMarkdownHtmlToPdfBytes(
         html: html,
-        pageBackgroundColorHex:
-            _formatPdfExportColorHex(previewTheme.panelColor),
+        pageBackgroundColorHex: pageBackgroundColorHex,
       );
       return _composeNativePdfWithThemeBackground(
         pdfBytes: nativeBytes,

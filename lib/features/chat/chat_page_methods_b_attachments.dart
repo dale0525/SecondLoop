@@ -145,6 +145,38 @@ extension _ChatPageStateMethodsBAttachments on _ChatPageState {
     }
   }
 
+  Future<void> _handleLinkedDraftAttachment(
+    NativeAppBackend backend,
+    Uint8List sessionKey,
+    String attachmentSha256,
+    AttachmentDraftPayload draft,
+  ) async {
+    try {
+      final urlFromManifest = _readUrlFromManifestDraft(draft);
+      unawaited(
+        _enqueueDraftAttachmentPostLinkEnrichment(
+          backend,
+          sessionKey,
+          attachmentSha256,
+          draft,
+        ).catchError((_) {}),
+      );
+      unawaited(
+        const RustAttachmentMetadataStore()
+            .upsert(
+              sessionKey,
+              attachmentSha256: attachmentSha256,
+              title: urlFromManifest,
+              filenames: [draft.normalizedFilename],
+              sourceUrls: urlFromManifest == null
+                  ? const <String>[]
+                  : <String>[urlFromManifest],
+            )
+            .catchError((_) {}),
+      );
+    } catch (_) {}
+  }
+
   Future<String> _ingestComposerDraftAttachment(
     NativeAppBackend backend,
     Uint8List sessionKey,

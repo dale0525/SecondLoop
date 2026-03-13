@@ -1,10 +1,32 @@
 part of 'chat_markdown_editor_page.dart';
 
+typedef ChatMarkdownExportDirectoryResolver = Future<Directory> Function();
+typedef ChatMarkdownExportFileMaterializer = Future<File> Function({
+  required String extension,
+  required Uint8List bytes,
+  required String sourceMarkdown,
+});
+
+@visibleForTesting
+ChatMarkdownExportDirectoryResolver? debugChatMarkdownExportDirectoryResolver;
+
+@visibleForTesting
+ChatMarkdownExportFileMaterializer? debugChatMarkdownExportFileMaterializer;
+
 Future<File> _materializeMarkdownExportFile({
   required _MarkdownExportFormat format,
   required Uint8List bytes,
   required String sourceMarkdown,
 }) async {
+  final debugMaterializer = debugChatMarkdownExportFileMaterializer;
+  if (debugMaterializer != null) {
+    return debugMaterializer(
+      extension: format == _MarkdownExportFormat.png ? 'png' : 'pdf',
+      bytes: bytes,
+      sourceMarkdown: sourceMarkdown,
+    );
+  }
+
   final dir = await _resolveMarkdownExportDirectory();
   final extension = format == _MarkdownExportFormat.png ? 'png' : 'pdf';
   final stem = deriveMarkdownExportFilenameStem(sourceMarkdown);
@@ -21,6 +43,13 @@ Future<File> _materializeMarkdownExportFile({
 }
 
 Future<Directory> _resolveMarkdownExportDirectory() async {
+  final debugResolver = debugChatMarkdownExportDirectoryResolver;
+  if (debugResolver != null) {
+    final directory = await debugResolver();
+    await directory.create(recursive: true);
+    return directory;
+  }
+
   final fallbackDownloads = _markdownFallbackDownloadsDirectory();
   if (fallbackDownloads != null) {
     try {

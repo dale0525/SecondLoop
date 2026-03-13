@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:collection';
 import 'dart:io';
 import 'dart:math' as math;
@@ -13,11 +14,19 @@ import 'package:share_plus/share_plus.dart';
 import 'package:super_clipboard/super_clipboard.dart';
 import 'package:syncfusion_flutter_pdf/pdf.dart';
 
+import '../../core/backend/attachments_backend.dart';
+import '../../core/backend/app_backend.dart';
+import '../../core/session/session_scope.dart';
 import '../../i18n/strings.g.dart';
 import '../../ui/sl_surface.dart';
 import '../../ui/sl_tokens.dart';
 import '../../app/text_editing_shortcuts.dart';
+import '../attachments/attachment_draft_builders.dart';
+import '../attachments/attachment_draft_send_contract.dart';
+import 'chat_markdown_attachment_refs.dart';
+import 'chat_markdown_bundle_export.dart';
 import 'chat_markdown_clipboard_export.dart';
+import 'chat_markdown_export_image_sources.dart';
 import 'chat_markdown_editing_utils.dart';
 import 'chat_markdown_export_filename.dart';
 import 'chat_markdown_preview.dart';
@@ -34,73 +43,38 @@ part 'chat_markdown_editor_page_export_file.dart';
 part 'chat_markdown_editor_page_export_inline.dart';
 part 'chat_markdown_editor_page_export_pdf_renderer.dart';
 part 'chat_markdown_editor_page_export_pdf_models.dart';
+part 'chat_markdown_editor_page_models.dart';
+part 'chat_markdown_editor_page_paste.dart';
 part 'chat_markdown_editor_page_preview.dart';
 
-const _kDefaultMarkdownModeRuneThreshold = 240;
-const _kDefaultMarkdownModeLineThreshold = 6;
+typedef ChatMarkdownPdfExporter = Future<Uint8List> Function({
+  required String html,
+  String? pageBackgroundColorHex,
+});
 
-bool shouldUseMarkdownEditorByDefault(String text) {
-  final trimmed = text.trim();
-  if (trimmed.isEmpty) return false;
-  if (trimmed.runes.length >= _kDefaultMarkdownModeRuneThreshold) {
-    return true;
-  }
+typedef ChatMarkdownPdfExportObserver = Future<void> Function({
+  required String html,
+  String? pageBackgroundColorHex,
+});
 
-  final lineCount = '\n'.allMatches(trimmed).length + 1;
-  return lineCount >= _kDefaultMarkdownModeLineThreshold;
-}
-
-enum ChatEditorMode {
-  plain,
-  markdown,
-}
-
-enum ChatMarkdownEditorAction {
-  save,
-  switchToSimpleInput,
-}
-
-enum ChatMarkdownCompactPane {
-  editor,
-  preview,
-}
-
-enum _MarkdownExportFormat {
-  png,
-  pdf,
-}
-
-enum _MarkdownExportAction {
-  png,
-  pdf,
-  copyToClipboard,
-}
-
-class ChatMarkdownEditorResult {
-  const ChatMarkdownEditorResult._({
-    required this.text,
-    required this.action,
-  });
-
-  const ChatMarkdownEditorResult.save(String text)
-      : this._(text: text, action: ChatMarkdownEditorAction.save);
-
-  const ChatMarkdownEditorResult.switchToSimpleInput(String text)
-      : this._(
-            text: text, action: ChatMarkdownEditorAction.switchToSimpleInput);
-
-  final String text;
-  final ChatMarkdownEditorAction action;
-
-  bool get shouldSwitchToSimpleInput =>
-      action == ChatMarkdownEditorAction.switchToSimpleInput;
-}
+typedef ChatMarkdownPdfHtmlBuilder = Future<String> Function({
+  required String markdown,
+  required ChatMarkdownPreviewTheme theme,
+  required String emptyFallback,
+  List<AttachmentDraftPayload> draftAttachments,
+  Future<ChatMarkdownExportImageData?> Function(String attachmentSha256)?
+      readPersistedAttachment,
+});
 
 class ChatMarkdownEditorPage extends StatefulWidget {
   const ChatMarkdownEditorPage({
     required this.initialText,
     this.title,
     this.saveLabel,
+    this.pastedImageReader,
+    this.pdfExporter,
+    this.pdfHtmlBuilder,
+    this.beforePdfExport,
     this.inputFieldKey = const ValueKey('chat_markdown_editor_input'),
     this.saveButtonKey = const ValueKey('chat_markdown_editor_save'),
     this.allowPlainMode = false,
@@ -111,6 +85,10 @@ class ChatMarkdownEditorPage extends StatefulWidget {
   final String initialText;
   final String? title;
   final String? saveLabel;
+  final Future<ChatMarkdownPastedImageData?> Function()? pastedImageReader;
+  final ChatMarkdownPdfExporter? pdfExporter;
+  final ChatMarkdownPdfHtmlBuilder? pdfHtmlBuilder;
+  final ChatMarkdownPdfExportObserver? beforePdfExport;
   final Key inputFieldKey;
   final Key saveButtonKey;
   final bool allowPlainMode;
@@ -122,6 +100,9 @@ class ChatMarkdownEditorPage extends StatefulWidget {
 
 class _ChatMarkdownEditorPageState extends State<ChatMarkdownEditorPage>
     with _ChatMarkdownEditorExportMixin, _ChatMarkdownEditorPreviewMixin {
+  Future<Uint8List> debugBuildPdfBytesForTest() => _buildPdfBytes();
+  Future<File> debugExportPdfFileForTest() =>
+      _debugExportFileForTest(_MarkdownExportFormat.pdf);
   @override
   late final TextEditingController _controller;
   @override
@@ -139,6 +120,10 @@ class _ChatMarkdownEditorPageState extends State<ChatMarkdownEditorPage>
   bool _exporting = false;
   @override
   bool _exportRenderMode = false;
+  @override
+  final List<AttachmentDraftPayload> _draftAttachments =
+      <AttachmentDraftPayload>[];
+  int _draftAttachmentSeq = 0;
 
   TextSelection? _lastValidSelection;
 
@@ -167,8 +152,12 @@ class _ChatMarkdownEditorPageState extends State<ChatMarkdownEditorPage>
 
   void _cancel() => Navigator.of(context).pop();
 
-  void _save() => Navigator.of(context)
-      .pop(ChatMarkdownEditorResult.save(_controller.text));
+  void _save() => Navigator.of(context).pop(
+        ChatMarkdownEditorResult.saveWithAttachments(
+          _controller.text,
+          List<AttachmentDraftPayload>.unmodifiable(_draftAttachments),
+        ),
+      );
 
   void _switchToPlainMode() {
     if (!widget.allowPlainMode) return;
@@ -369,6 +358,10 @@ class _ChatMarkdownEditorPageState extends State<ChatMarkdownEditorPage>
         PopupMenuItem<_MarkdownExportAction>(
           value: _MarkdownExportAction.pdf,
           child: Text(context.t.chat.markdownEditor.exportPdf),
+        ),
+        PopupMenuItem<_MarkdownExportAction>(
+          value: _MarkdownExportAction.markdownBundle,
+          child: Text(context.t.chat.markdownEditor.exportMarkdownBundle),
         ),
         PopupMenuItem<_MarkdownExportAction>(
           value: _MarkdownExportAction.copyToClipboard,
@@ -903,33 +896,37 @@ class _ChatMarkdownEditorPageState extends State<ChatMarkdownEditorPage>
       context,
       title: context.t.chat.markdownEditor.editorLabel,
       icon: Icons.edit_note_rounded,
-      child: TextField(
-        key: widget.inputFieldKey,
-        controller: _controller,
-        focusNode: _editorFocusNode,
-        expands: true,
-        minLines: null,
-        maxLines: null,
-        keyboardType: TextInputType.multiline,
-        textInputAction: TextInputAction.newline,
-        inputFormatters: const <TextInputFormatter>[
-          MarkdownSmartContinuationFormatter(),
-        ],
-        smartDashesType: SmartDashesType.disabled,
-        smartQuotesType: SmartQuotesType.disabled,
-        decoration: InputDecoration(
-          hintText: context.t.common.fields.message,
-          border: InputBorder.none,
-          contentPadding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
-        ),
-        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-          height: 1.5,
-          fontFamilyFallback: const [
-            'Menlo',
-            'Monaco',
-            'Consolas',
-            'monospace',
+      child: Focus(
+        // ignore: deprecated_member_use
+        onKey: _handleEditorOnKey,
+        child: TextField(
+          key: widget.inputFieldKey,
+          controller: _controller,
+          focusNode: _editorFocusNode,
+          expands: true,
+          minLines: null,
+          maxLines: null,
+          keyboardType: TextInputType.multiline,
+          textInputAction: TextInputAction.newline,
+          inputFormatters: const <TextInputFormatter>[
+            MarkdownSmartContinuationFormatter(),
           ],
+          smartDashesType: SmartDashesType.disabled,
+          smartQuotesType: SmartQuotesType.disabled,
+          decoration: InputDecoration(
+            hintText: context.t.common.fields.message,
+            border: InputBorder.none,
+            contentPadding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
+          ),
+          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+            height: 1.5,
+            fontFamilyFallback: const [
+              'Menlo',
+              'Monaco',
+              'Consolas',
+              'monospace',
+            ],
+          ),
         ),
       ),
     );
