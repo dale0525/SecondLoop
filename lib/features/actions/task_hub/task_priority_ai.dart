@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
@@ -28,8 +27,6 @@ Future<AskAiRouteKind> resolveTaskPriorityAiRoute(
 }
 
 class BackendTaskPriorityAiService implements TaskPriorityAiService {
-  static const String _conversationId = 'loop_home';
-
   BackendTaskPriorityAiService({
     required AppBackend backend,
     required Uint8List sessionKey,
@@ -73,82 +70,23 @@ class BackendTaskPriorityAiService implements TaskPriorityAiService {
   Future<TaskPriorityAiBatchResult> rerank(
       TaskPriorityAiRequest request) async {
     final prompt = _buildPrompt(request);
-    final existingMessageIds = await _listConversationMessageIds();
-    String? response;
-    try {
-      response = await _collectResponse(
-        _route == AskAiRouteKind.cloudGateway
-            ? _backend.askAiStreamCloudGateway(
-                _sessionKey,
-                _conversationId,
-                question: prompt,
-                topK: 1,
-                thisThreadOnly: true,
-                gatewayBaseUrl: _gatewayBaseUrl,
-                idToken: _idToken,
-                modelName: _modelName,
-              )
-            : _backend.askAiStream(
-                _sessionKey,
-                _conversationId,
-                question: prompt,
-                topK: 1,
-                thisThreadOnly: true,
-              ),
-      );
-      return parseTaskPriorityAiBatchResult(response);
-    } finally {
-      if (response != null) {
-        await _cleanupPersistedMessages(
-          prompt: prompt,
-          response: response,
-          existingMessageIds: existingMessageIds,
-        );
-      }
-    }
-  }
-
-  Future<Set<String>> _listConversationMessageIds() async {
-    final messages = await _backend.listMessages(_sessionKey, _conversationId);
-    return messages.map((message) => message.id).toSet();
-  }
-
-  Future<void> _cleanupPersistedMessages({
-    required String prompt,
-    required String response,
-    required Set<String> existingMessageIds,
-  }) async {
-    try {
-      final messages =
-          await _backend.listMessages(_sessionKey, _conversationId);
-      for (final message in messages) {
-        if (existingMessageIds.contains(message.id)) {
-          continue;
-        }
-        final matchesPrompt =
-            message.role == 'user' && message.content == prompt;
-        final matchesResponse =
-            message.role == 'assistant' && message.content == response;
-        if (!matchesPrompt && !matchesResponse) {
-          continue;
-        }
-        await _backend.setMessageDeleted(_sessionKey, message.id, true);
-      }
-    } catch (_) {
-      // Keep rerank resilient even if history cleanup is unavailable.
-    }
-  }
-
-  Future<String> _collectResponse(Stream<String> stream) async {
-    final buffer = StringBuffer();
-    await for (final chunk in stream) {
-      buffer.write(chunk);
-    }
-    final output = buffer.toString().trim();
+    final response = _route == AskAiRouteKind.cloudGateway
+        ? await _backend.taskPriorityRerankAiCloudGateway(
+            _sessionKey,
+            prompt: prompt,
+            gatewayBaseUrl: _gatewayBaseUrl,
+            idToken: _idToken,
+            modelName: _modelName,
+          )
+        : await _backend.taskPriorityRerankAi(
+            _sessionKey,
+            prompt: prompt,
+          );
+    final output = response.trim();
     if (output.isEmpty) {
       throw const FormatException('task_priority_ai_empty_response');
     }
-    return output;
+    return parseTaskPriorityAiBatchResult(output);
   }
 
   String _buildPrompt(TaskPriorityAiRequest request) {

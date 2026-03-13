@@ -531,6 +531,23 @@ abstract class AppBackend {
         embeddingsModelName: embeddingsModelName,
       );
 
+  Future<String> taskPriorityRerankAi(
+    Uint8List key, {
+    required String prompt,
+  }) {
+    throw UnimplementedError('taskPriorityRerankAi');
+  }
+
+  Future<String> taskPriorityRerankAiCloudGateway(
+    Uint8List key, {
+    required String prompt,
+    required String gatewayBaseUrl,
+    required String idToken,
+    required String modelName,
+  }) {
+    throw UnimplementedError('taskPriorityRerankAiCloudGateway');
+  }
+
   Stream<String> askAiStreamScoped(
     Uint8List key,
     String conversationId, {

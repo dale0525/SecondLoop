@@ -79,6 +79,21 @@ fn default_embedding_model_name_for_platform() -> &'static str {
     }
 }
 
+fn collect_provider_text(provider: &dyn rag::AnswerProvider, prompt: &str) -> Result<String> {
+    let mut out = String::new();
+    provider.stream_answer(prompt, &mut |ev| {
+        out.push_str(&ev.text_delta);
+        Ok(())
+    })?;
+
+    let trimmed = out.trim();
+    if trimmed.is_empty() {
+        return Err(anyhow!("empty response from LLM"));
+    }
+
+    Ok(trimmed.to_string())
+}
+
 fn normalize_embedding_model_name(name: &str) -> &'static str {
     match name {
         embedding::DEFAULT_MODEL_NAME => embedding::DEFAULT_MODEL_NAME,
@@ -1800,6 +1815,91 @@ pub fn db_sum_llm_usage_daily_by_purpose(
     let _key = key_from_bytes(key)?;
     let conn = db::open(Path::new(&app_dir))?;
     db::sum_llm_usage_daily_by_purpose(&conn, &profile_id, start_day.trim(), end_day.trim())
+}
+
+#[flutter_rust_bridge::frb]
+pub fn ai_task_priority_rerank(
+    app_dir: String,
+    key: Vec<u8>,
+    prompt: String,
+    local_day: String,
+) -> Result<String> {
+    let result = (|| -> Result<String> {
+        let key = key_from_bytes(key)?;
+        let conn = db::open(Path::new(&app_dir))?;
+
+        let (profile_id, profile) = db::load_active_llm_profile_config(&conn, &key)?
+            .ok_or_else(|| anyhow!("no active LLM profile configured"))?;
+
+        let provider = llm::answer_provider_from_profile(&profile)?;
+        let result = collect_provider_text(provider.as_ref(), &prompt);
+
+        match result {
+            Ok(output) => {
+                let day = local_day.trim();
+                if !day.is_empty() {
+                    let _ = db::record_llm_usage_daily(
+                        &conn,
+                        day,
+                        &profile_id,
+                        "task_priority",
+                        None,
+                        None,
+                        None,
+                    );
+                }
+                Ok(output)
+            }
+            Err(e) => {
+                let day = local_day.trim();
+                if !day.is_empty() {
+                    let _ = db::record_llm_usage_daily(
+                        &conn,
+                        day,
+                        &profile_id,
+                        "task_priority",
+                        None,
+                        None,
+                        None,
+                    );
+                }
+                Err(e)
+            }
+        }
+    })();
+
+    result
+}
+
+#[flutter_rust_bridge::frb]
+#[allow(clippy::too_many_arguments)]
+pub fn ai_task_priority_rerank_cloud_gateway(
+    app_dir: String,
+    key: Vec<u8>,
+    prompt: String,
+    gateway_base_url: String,
+    firebase_id_token: String,
+    model_name: String,
+) -> Result<String> {
+    if gateway_base_url.trim().is_empty() {
+        return Err(anyhow!("missing gateway_base_url"));
+    }
+    if firebase_id_token.trim().is_empty() {
+        return Err(anyhow!("missing firebase_id_token"));
+    }
+
+    let _key = key_from_bytes(key)?;
+    let _conn = db::open(Path::new(&app_dir))?;
+
+    let provider = llm::gateway::CloudGatewayProvider::new_with_purpose(
+        gateway_base_url,
+        firebase_id_token,
+        model_name,
+        None,
+        "task_priority".to_string(),
+    );
+
+    collect_provider_text(&provider, &prompt)
 }
 
 #[flutter_rust_bridge::frb]

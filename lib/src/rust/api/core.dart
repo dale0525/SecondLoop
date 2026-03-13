@@ -8,7 +8,7 @@ import '../frb_generated.dart';
 import '../semantic_parse.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `default_embedding_model_name_for_platform`, `emit_ask_ai_meta_if_any`, `finish_ask_ai_stream`, `key_from_bytes`, `map_attachment_download_error`, `normalize_embedding_model_name`, `sync_key_from_bytes`
+// These functions are ignored because they are not marked as `pub`: `collect_provider_text`, `default_embedding_model_name_for_platform`, `emit_ask_ai_meta_if_any`, `finish_ask_ai_stream`, `key_from_bytes`, `map_attachment_download_error`, `normalize_embedding_model_name`, `sync_key_from_bytes`
 
 Future<bool> authIsInitialized({required String appDir}) =>
     RustLib.instance.api.crateApiCoreAuthIsInitialized(appDir: appDir);
@@ -980,6 +980,29 @@ Future<List<LlmUsageAggregate>> dbSumLlmUsageDailyByPurpose(
         profileId: profileId,
         startDay: startDay,
         endDay: endDay);
+
+Future<String> aiTaskPriorityRerank(
+        {required String appDir,
+        required List<int> key,
+        required String prompt,
+        required String localDay}) =>
+    RustLib.instance.api.crateApiCoreAiTaskPriorityRerank(
+        appDir: appDir, key: key, prompt: prompt, localDay: localDay);
+
+Future<String> aiTaskPriorityRerankCloudGateway(
+        {required String appDir,
+        required List<int> key,
+        required String prompt,
+        required String gatewayBaseUrl,
+        required String firebaseIdToken,
+        required String modelName}) =>
+    RustLib.instance.api.crateApiCoreAiTaskPriorityRerankCloudGateway(
+        appDir: appDir,
+        key: key,
+        prompt: prompt,
+        gatewayBaseUrl: gatewayBaseUrl,
+        firebaseIdToken: firebaseIdToken,
+        modelName: modelName);
 
 Future<String> aiSemanticParseMessageAction(
         {required String appDir,

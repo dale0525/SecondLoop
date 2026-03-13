@@ -115,8 +115,8 @@ void main() {
     );
   });
 
-  test('service does not leave rerank prompts in chat history', () async {
-    final backend = _PersistingAskBackend();
+  test('service uses non-persistent rerank API', () async {
+    final backend = _DirectTaskPriorityBackend();
     final service = BackendTaskPriorityAiService.forTesting(
       backend: backend,
       sessionKey: Uint8List(32),
@@ -156,20 +156,25 @@ void main() {
 
 final class _ThrowingAskBackend extends TestAppBackend {
   @override
-  Stream<String> askAiStream(
-    Uint8List key,
-    String conversationId, {
-    required String question,
-    int topK = 10,
-    bool thisThreadOnly = false,
-  }) async* {
+  Future<String> taskPriorityRerankAi(
+    Uint8List key, {
+    required String prompt,
+  }) async {
     throw StateError('boom');
   }
 }
 
-final class _PersistingAskBackend extends TestAppBackend {
+final class _DirectTaskPriorityBackend extends TestAppBackend {
   static const String _response =
       '{"entries":[{"todo_id":"t1","priority_band":"focus","semantic_adjustment":14,"reason":"It unblocks work.","suggested_action":"do_now","confidence":"high"}]}';
+
+  @override
+  Future<String> taskPriorityRerankAi(
+    Uint8List key, {
+    required String prompt,
+  }) async {
+    return _response;
+  }
 
   @override
   Stream<String> askAiStream(
@@ -179,18 +184,6 @@ final class _PersistingAskBackend extends TestAppBackend {
     int topK = 10,
     bool thisThreadOnly = false,
   }) async* {
-    await insertMessage(
-      key,
-      conversationId,
-      role: 'user',
-      content: question,
-    );
-    yield _response;
-    await insertMessage(
-      key,
-      conversationId,
-      role: 'assistant',
-      content: _response,
-    );
+    throw StateError('askAiStream should not be used for task priority rerank');
   }
 }
