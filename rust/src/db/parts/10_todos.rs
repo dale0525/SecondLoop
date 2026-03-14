@@ -812,7 +812,7 @@ pub fn dismiss_todo_checklist_suggestions(
     run_immediate_transaction(conn, || {
         let now = now_ms();
         for suggestion_id in suggestion_ids {
-            conn.execute(
+            let rows_changed = conn.execute(
                 r#"
 UPDATE todo_checklist_suggestions
 SET state = ?2, updated_at_ms = ?3, dismissed_at_ms = ?4
@@ -827,6 +827,9 @@ WHERE id = ?1 AND todo_id = ?5 AND state = ?6
                     TODO_CHECKLIST_SUGGESTION_STATE_PENDING,
                 ],
             )?;
+            if rows_changed == 0 {
+                continue;
+            }
 
             let device_id = get_or_create_device_id(conn)?;
             let seq = next_device_seq(conn, &device_id)?;

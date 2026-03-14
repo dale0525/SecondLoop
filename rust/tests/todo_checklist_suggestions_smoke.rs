@@ -386,3 +386,48 @@ fn checklist_dismiss_suggestions_succeeds_inside_active_transaction() {
         db::list_todo_checklist_suggestions(&conn, &key, "todo_1").expect("list suggestions");
     assert_eq!(suggestions[0].state, "dismissed");
 }
+
+#[test]
+fn dismiss_suggestions_skips_oplog_when_no_rows_change() {
+    let (_temp_dir, key, conn) = setup();
+
+    db::upsert_todo(
+        &conn,
+        &key,
+        "todo_1",
+        "Plan launch",
+        None,
+        "open",
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("upsert todo");
+
+    let generated = db::upsert_generated_todo_checklist_suggestions(
+        &conn,
+        &key,
+        "todo_1",
+        &["Share with team".to_string()],
+        "cloud",
+        Some("gen_skip_noop_dismiss"),
+    )
+    .expect("generate suggestions");
+
+    db::dismiss_todo_checklist_suggestions(&conn, &key, "todo_1", &[generated[0].id.clone()])
+        .expect("dismiss suggestion once");
+
+    let oplog_before: i64 = conn
+        .query_row("SELECT COUNT(*) FROM oplog", [], |row| row.get(0))
+        .expect("count oplog before noop dismiss");
+
+    db::dismiss_todo_checklist_suggestions(&conn, &key, "todo_1", &[generated[0].id.clone()])
+        .expect("dismiss suggestion twice");
+
+    let oplog_after: i64 = conn
+        .query_row("SELECT COUNT(*) FROM oplog", [], |row| row.get(0))
+        .expect("count oplog after noop dismiss");
+
+    assert_eq!(oplog_after, oplog_before);
+}
