@@ -160,7 +160,12 @@ Future<String?> _signManifest(
 }
 
 Future<String> _sha256FileHex(File file) async {
-  final digest = await Sha256().hash(await file.readAsBytes());
+  final sink = Sha256().newHashSink();
+  await for (final chunk in file.openRead()) {
+    sink.add(chunk);
+  }
+  sink.close();
+  final digest = await sink.hash();
   final buffer = StringBuffer();
   for (final byte in digest.bytes) {
     buffer.write(byte.toRadixString(16).padLeft(2, '0'));

@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:convert/convert.dart';
 import 'package:cryptography/cryptography.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -52,8 +53,20 @@ void main() {
       windows['releases_url'],
       'https://github.com/dale0525/SecondLoop/releases/download/v1.2.3/releases.win.json',
     );
+    expect(
+      windows['sha256'],
+      hex.encode((await Sha256().hash(utf8.encode('windows'))).bytes),
+    );
     expect(macos['install_mode'], 'app-tar-gz');
+    expect(
+      macos['sha256'],
+      hex.encode((await Sha256().hash(utf8.encode('macos'))).bytes),
+    );
     expect(linux['install_mode'], 'bundle-tar-gz');
+    expect(
+      linux['sha256'],
+      hex.encode((await Sha256().hash(utf8.encode('linux'))).bytes),
+    );
     expect(generated.signatureBase64, isNull);
   });
 

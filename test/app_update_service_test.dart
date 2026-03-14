@@ -135,7 +135,8 @@ void main() {
           'platforms': {
             'windows-x64': {
               'install_mode': 'velopack',
-              'package_url': 'https://cdn.example.com/SecondLoop-1.1.0.nupkg',
+              'package_url':
+                  'https://cdn.example.com/com.secondloop.secondloop-1.1.0-full.nupkg',
               'sha256': 'abc123',
             },
           },
@@ -150,7 +151,7 @@ void main() {
       expect(result.update!.installMode, AppUpdateInstallMode.seamlessRestart);
       expect(
         result.update!.downloadUri.toString(),
-        'https://cdn.example.com/SecondLoop-1.1.0.nupkg',
+        'https://cdn.example.com/com.secondloop.secondloop-1.1.0-full.nupkg',
       );
       expect(result.update!.asset?.sha256, 'abc123');
     });
@@ -225,6 +226,44 @@ void main() {
 
       expect(result.update, isNotNull);
       expect(result.update!.installMode, AppUpdateInstallMode.externalDownload);
+      expect(
+        result.update!.downloadUri.toString(),
+        'https://cdn.example.com/SecondLoop-win.msi',
+      );
+    });
+
+    test('ignores delta nupkg assets and falls back to MSI installers',
+        () async {
+      final stagedClient = _FakeWindowsStagedUpdateClient(available: true);
+      final service = AppUpdateService(
+        platformOverride: AppUpdatePlatform.windows,
+        releaseModeOverride: true,
+        windowsStagedUpdateClient: stagedClient,
+        currentVersionLoader: () async =>
+            const AppRuntimeVersion(version: '1.0.0', buildNumber: '88'),
+        releaseJsonFetcher: (uri) async => {
+          'tag_name': 'v1.1.0',
+          'html_url':
+              'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
+          'assets': [
+            {
+              'name': 'com.secondloop.secondloop-1.1.0-delta.nupkg',
+              'browser_download_url': 'https://cdn.example.com/win-delta.nupkg',
+            },
+            {
+              'name': 'SecondLoop-win.msi',
+              'browser_download_url':
+                  'https://cdn.example.com/SecondLoop-win.msi',
+            },
+          ],
+        },
+      );
+
+      final result = await service.checkForUpdates();
+
+      expect(result.update, isNotNull);
+      expect(result.update!.installMode, AppUpdateInstallMode.externalDownload);
+      expect(result.update!.asset?.name, 'SecondLoop-win.msi');
       expect(
         result.update!.downloadUri.toString(),
         'https://cdn.example.com/SecondLoop-win.msi',
@@ -405,7 +444,8 @@ void main() {
           'version': '1.1.0',
           'platforms': {
             'windows-x64': {
-              'package_url': 'https://cdn.example.com/SecondLoop-1.1.0.nupkg',
+              'package_url':
+                  'https://cdn.example.com/com.secondloop.secondloop-1.1.0-full.nupkg',
               'sha256': 'abc123',
             },
           },

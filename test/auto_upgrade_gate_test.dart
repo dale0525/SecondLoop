@@ -84,8 +84,10 @@ void main() {
     );
   }
 
-  testWidgets('auto installs Linux seamless update on startup', (tester) async {
+  testWidgets('linux seamless update stays passive until user confirms',
+      (tester) async {
     SharedPreferences.setMockInitialValues({});
+    UpdateBadgePrefs.resetForTests();
     final update = AppUpdateAvailability(
       currentVersion: '1.0.1+99',
       latestTag: 'v1.1.0',
@@ -106,13 +108,19 @@ void main() {
     );
 
     await pumpGate(tester, service: service);
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 120));
 
     expect(service.checkCalls, 1);
     expect(service.applyPendingCalls, 1);
-    expect(service.installCalls, 1);
-    expect(service.installed?.latestTag, 'v1.1.0');
-  });
+    expect(service.installCalls, 0);
+    expect(service.stageCalls, 0);
+    expect(UpdateBadgePrefs.value.value, 'v1.1.0');
+    expect(find.byType(SnackBar), findsOneWidget);
+  },
+      variant: const TargetPlatformVariant(<TargetPlatform>{
+        TargetPlatform.linux,
+      }));
 
   testWidgets('skips install when only external download is available',
       (tester) async {

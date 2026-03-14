@@ -54,7 +54,10 @@ class _AutoUpgradeGateState extends State<AutoUpgradeGate> {
       !kIsWeb && defaultTargetPlatform == TargetPlatform.windows;
   bool get _isMacosPlatform =>
       !kIsWeb && defaultTargetPlatform == TargetPlatform.macOS;
-  bool get _usesPassiveManagedUpdates => _isWindowsPlatform || _isMacosPlatform;
+  bool get _isLinuxPlatform =>
+      !kIsWeb && defaultTargetPlatform == TargetPlatform.linux;
+  bool get _usesPassiveManagedUpdates =>
+      _isWindowsPlatform || _isMacosPlatform || _isLinuxPlatform;
 
   @override
   void initState() {
