@@ -1,5 +1,55 @@
 part of 'todo_detail_page.dart';
 
+final class _TodoChecklistEditDialog extends StatefulWidget {
+  const _TodoChecklistEditDialog({required this.initialContent});
+
+  final String initialContent;
+
+  @override
+  State<_TodoChecklistEditDialog> createState() =>
+      _TodoChecklistEditDialogState();
+}
+
+final class _TodoChecklistEditDialogState
+    extends State<_TodoChecklistEditDialog> {
+  late final TextEditingController _controller =
+      TextEditingController(text: widget.initialContent);
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      key: const ValueKey('todo_detail_checklist_edit_dialog'),
+      title: Text(context.t.actions.todoDetail.checklistEditTitle),
+      content: TextField(
+        key: const ValueKey('todo_detail_checklist_edit_input'),
+        controller: _controller,
+        autofocus: true,
+        decoration: InputDecoration(
+          hintText: context.t.actions.todoDetail.checklistHint,
+          border: const OutlineInputBorder(),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: Text(context.t.common.actions.cancel),
+        ),
+        FilledButton(
+          key: const ValueKey('todo_detail_checklist_edit_save'),
+          onPressed: () => Navigator.of(context).pop(_controller.text.trim()),
+          child: Text(context.t.common.actions.save),
+        ),
+      ],
+    );
+  }
+}
+
 extension _TodoDetailPageStateChecklist on _TodoDetailPageState {
   Future<bool> _confirmDoneWithIncompleteChecklist() async {
     final backend = AppBackendScope.maybeOf(context);
@@ -14,7 +64,8 @@ extension _TodoDetailPageStateChecklist on _TodoDetailPageState {
       return true;
     }
     final hasIncomplete = items.any((item) => !item.isDone);
-    if (!hasIncomplete || !mounted) return true;
+    if (!hasIncomplete) return true;
+    if (!mounted) return false;
 
     final confirmed = await showDialog<bool>(
       context: context,
@@ -94,32 +145,10 @@ extension _TodoDetailPageStateChecklist on _TodoDetailPageState {
     final session = SessionScope.maybeOf(context);
     if (backend == null || session == null) return;
 
-    final controller = TextEditingController(text: item.content);
     final nextContent = await showDialog<String>(
       context: context,
-      builder: (context) => AlertDialog(
-        key: const ValueKey('todo_detail_checklist_edit_dialog'),
-        title: Text(context.t.actions.todoDetail.checklistEditTitle),
-        content: TextField(
-          key: const ValueKey('todo_detail_checklist_edit_input'),
-          controller: controller,
-          autofocus: true,
-          decoration: InputDecoration(
-            hintText: context.t.actions.todoDetail.checklistHint,
-            border: const OutlineInputBorder(),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: Text(context.t.common.actions.cancel),
-          ),
-          FilledButton(
-            key: const ValueKey('todo_detail_checklist_edit_save'),
-            onPressed: () => Navigator.of(context).pop(controller.text.trim()),
-            child: Text(context.t.common.actions.save),
-          ),
-        ],
+      builder: (context) => _TodoChecklistEditDialog(
+        initialContent: item.content,
       ),
     );
     final trimmed = nextContent?.trim() ?? '';

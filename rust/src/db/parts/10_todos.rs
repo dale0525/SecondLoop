@@ -307,52 +307,76 @@ ORDER BY sort_order ASC, created_at_ms ASC, id ASC
     Ok(result)
 }
 
+fn run_immediate_transaction<T, F>(conn: &Connection, run_body: F) -> Result<T>
+where
+    F: FnOnce() -> Result<T>,
+{
+    if !conn.is_autocommit() {
+        return run_body();
+    }
+
+    conn.execute_batch("BEGIN IMMEDIATE;")?;
+    let result = run_body();
+    match result {
+        Ok(value) => {
+            conn.execute_batch("COMMIT;")?;
+            Ok(value)
+        }
+        Err(err) => {
+            let _ = conn.execute_batch("ROLLBACK;");
+            Err(err)
+        }
+    }
+}
+
 pub fn create_todo_checklist_item(
     conn: &Connection,
     key: &[u8; 32],
     todo_id: &str,
     content: &str,
 ) -> Result<TodoChecklistItem> {
-    let id = uuid::Uuid::new_v4().to_string();
-    let now = now_ms();
-    let sort_order: i64 = conn.query_row(
-        r#"SELECT COALESCE(MAX(sort_order), -1) + 1 FROM todo_checklist_items WHERE todo_id = ?1"#,
-        params![todo_id],
-        |row| row.get(0),
-    )?;
-    let content_blob = encrypt_bytes(key, content.as_bytes(), &todo_checklist_item_content_aad(&id))?;
+    run_immediate_transaction(conn, || {
+        let id = uuid::Uuid::new_v4().to_string();
+        let now = now_ms();
+        let sort_order: i64 = conn.query_row(
+            r#"SELECT COALESCE(MAX(sort_order), -1) + 1 FROM todo_checklist_items WHERE todo_id = ?1"#,
+            params![todo_id],
+            |row| row.get(0),
+        )?;
+        let content_blob = encrypt_bytes(key, content.as_bytes(), &todo_checklist_item_content_aad(&id))?;
 
-    conn.execute(
-        r#"
+        conn.execute(
+            r#"
 INSERT INTO todo_checklist_items(id, todo_id, content, is_done, sort_order, created_at_ms, updated_at_ms)
 VALUES (?1, ?2, ?3, 0, ?4, ?5, ?6)
 "#,
-        params![id, todo_id, content_blob, sort_order, now, now],
-    )?;
+            params![id, todo_id, content_blob, sort_order, now, now],
+        )?;
 
-    let item = get_todo_checklist_item_by_id(conn, key, &id)?;
+        let item = get_todo_checklist_item_by_id(conn, key, &id)?;
 
-    let device_id = get_or_create_device_id(conn)?;
-    let seq = next_device_seq(conn, &device_id)?;
-    let op = serde_json::json!({
-        "op_id": uuid::Uuid::new_v4().to_string(),
-        "device_id": device_id,
-        "seq": seq,
-        "ts_ms": now,
-        "type": "todo.checklist_item.upsert.v1",
-        "payload": {
-            "item_id": item.id.as_str(),
-            "todo_id": item.todo_id.as_str(),
-            "content": item.content.as_str(),
-            "is_done": item.is_done,
-            "sort_order": item.sort_order,
-            "created_at_ms": item.created_at_ms,
-            "updated_at_ms": item.updated_at_ms,
-        }
-    });
-    insert_oplog(conn, key, &op)?;
+        let device_id = get_or_create_device_id(conn)?;
+        let seq = next_device_seq(conn, &device_id)?;
+        let op = serde_json::json!({
+            "op_id": uuid::Uuid::new_v4().to_string(),
+            "device_id": device_id,
+            "seq": seq,
+            "ts_ms": now,
+            "type": "todo.checklist_item.upsert.v1",
+            "payload": {
+                "item_id": item.id.as_str(),
+                "todo_id": item.todo_id.as_str(),
+                "content": item.content.as_str(),
+                "is_done": item.is_done,
+                "sort_order": item.sort_order,
+                "created_at_ms": item.created_at_ms,
+                "updated_at_ms": item.updated_at_ms,
+            }
+        });
+        insert_oplog(conn, key, &op)?;
 
-    Ok(item)
+        Ok(item)
+    })
 }
 
 pub fn update_todo_checklist_item_content(
@@ -361,40 +385,42 @@ pub fn update_todo_checklist_item_content(
     item_id: &str,
     content: &str,
 ) -> Result<TodoChecklistItem> {
-    let existing = get_todo_checklist_item_by_id(conn, key, item_id)?;
-    if existing.content == content {
-        return Ok(existing);
-    }
-
-    let now = now_ms();
-    let content_blob = encrypt_bytes(key, content.as_bytes(), &todo_checklist_item_content_aad(item_id))?;
-    conn.execute(
-        r#"UPDATE todo_checklist_items SET content = ?2, updated_at_ms = ?3 WHERE id = ?1"#,
-        params![item_id, content_blob, now],
-    )?;
-    let updated = get_todo_checklist_item_by_id(conn, key, item_id)?;
-
-    let device_id = get_or_create_device_id(conn)?;
-    let seq = next_device_seq(conn, &device_id)?;
-    let op = serde_json::json!({
-        "op_id": uuid::Uuid::new_v4().to_string(),
-        "device_id": device_id,
-        "seq": seq,
-        "ts_ms": now,
-        "type": "todo.checklist_item.upsert.v1",
-        "payload": {
-            "item_id": updated.id.as_str(),
-            "todo_id": updated.todo_id.as_str(),
-            "content": updated.content.as_str(),
-            "is_done": updated.is_done,
-            "sort_order": updated.sort_order,
-            "created_at_ms": updated.created_at_ms,
-            "updated_at_ms": updated.updated_at_ms,
+    run_immediate_transaction(conn, || {
+        let existing = get_todo_checklist_item_by_id(conn, key, item_id)?;
+        if existing.content == content {
+            return Ok(existing);
         }
-    });
-    insert_oplog(conn, key, &op)?;
 
-    Ok(updated)
+        let now = now_ms();
+        let content_blob = encrypt_bytes(key, content.as_bytes(), &todo_checklist_item_content_aad(item_id))?;
+        conn.execute(
+            r#"UPDATE todo_checklist_items SET content = ?2, updated_at_ms = ?3 WHERE id = ?1"#,
+            params![item_id, content_blob, now],
+        )?;
+        let updated = get_todo_checklist_item_by_id(conn, key, item_id)?;
+
+        let device_id = get_or_create_device_id(conn)?;
+        let seq = next_device_seq(conn, &device_id)?;
+        let op = serde_json::json!({
+            "op_id": uuid::Uuid::new_v4().to_string(),
+            "device_id": device_id,
+            "seq": seq,
+            "ts_ms": now,
+            "type": "todo.checklist_item.upsert.v1",
+            "payload": {
+                "item_id": updated.id.as_str(),
+                "todo_id": updated.todo_id.as_str(),
+                "content": updated.content.as_str(),
+                "is_done": updated.is_done,
+                "sort_order": updated.sort_order,
+                "created_at_ms": updated.created_at_ms,
+                "updated_at_ms": updated.updated_at_ms,
+            }
+        });
+        insert_oplog(conn, key, &op)?;
+
+        Ok(updated)
+    })
 }
 
 pub fn set_todo_checklist_item_done(
@@ -403,34 +429,36 @@ pub fn set_todo_checklist_item_done(
     item_id: &str,
     is_done: bool,
 ) -> Result<TodoChecklistItem> {
-    let now = now_ms();
-    conn.execute(
-        r#"UPDATE todo_checklist_items SET is_done = ?2, updated_at_ms = ?3 WHERE id = ?1"#,
-        params![item_id, if is_done { 1 } else { 0 }, now],
-    )?;
-    let updated = get_todo_checklist_item_by_id(conn, key, item_id)?;
+    run_immediate_transaction(conn, || {
+        let now = now_ms();
+        conn.execute(
+            r#"UPDATE todo_checklist_items SET is_done = ?2, updated_at_ms = ?3 WHERE id = ?1"#,
+            params![item_id, if is_done { 1 } else { 0 }, now],
+        )?;
+        let updated = get_todo_checklist_item_by_id(conn, key, item_id)?;
 
-    let device_id = get_or_create_device_id(conn)?;
-    let seq = next_device_seq(conn, &device_id)?;
-    let op = serde_json::json!({
-        "op_id": uuid::Uuid::new_v4().to_string(),
-        "device_id": device_id,
-        "seq": seq,
-        "ts_ms": now,
-        "type": "todo.checklist_item.upsert.v1",
-        "payload": {
-            "item_id": updated.id.as_str(),
-            "todo_id": updated.todo_id.as_str(),
-            "content": updated.content.as_str(),
-            "is_done": updated.is_done,
-            "sort_order": updated.sort_order,
-            "created_at_ms": updated.created_at_ms,
-            "updated_at_ms": updated.updated_at_ms,
-        }
-    });
-    insert_oplog(conn, key, &op)?;
+        let device_id = get_or_create_device_id(conn)?;
+        let seq = next_device_seq(conn, &device_id)?;
+        let op = serde_json::json!({
+            "op_id": uuid::Uuid::new_v4().to_string(),
+            "device_id": device_id,
+            "seq": seq,
+            "ts_ms": now,
+            "type": "todo.checklist_item.upsert.v1",
+            "payload": {
+                "item_id": updated.id.as_str(),
+                "todo_id": updated.todo_id.as_str(),
+                "content": updated.content.as_str(),
+                "is_done": updated.is_done,
+                "sort_order": updated.sort_order,
+                "created_at_ms": updated.created_at_ms,
+                "updated_at_ms": updated.updated_at_ms,
+            }
+        });
+        insert_oplog(conn, key, &op)?;
 
-    Ok(updated)
+        Ok(updated)
+    })
 }
 
 pub fn delete_todo_checklist_item(
@@ -438,27 +466,29 @@ pub fn delete_todo_checklist_item(
     key: &[u8; 32],
     item_id: &str,
 ) -> Result<()> {
-    let existing = get_todo_checklist_item_by_id(conn, key, item_id)?;
-    conn.execute(r#"DELETE FROM todo_checklist_items WHERE id = ?1"#, params![item_id])?;
+    run_immediate_transaction(conn, || {
+        let existing = get_todo_checklist_item_by_id(conn, key, item_id)?;
+        conn.execute(r#"DELETE FROM todo_checklist_items WHERE id = ?1"#, params![item_id])?;
 
-    let now = now_ms();
-    let device_id = get_or_create_device_id(conn)?;
-    let seq = next_device_seq(conn, &device_id)?;
-    let op = serde_json::json!({
-        "op_id": uuid::Uuid::new_v4().to_string(),
-        "device_id": device_id,
-        "seq": seq,
-        "ts_ms": now,
-        "type": "todo.checklist_item.delete.v1",
-        "payload": {
-            "item_id": existing.id.as_str(),
-            "todo_id": existing.todo_id.as_str(),
-            "deleted_at_ms": now,
-        }
-    });
-    insert_oplog(conn, key, &op)?;
+        let now = now_ms();
+        let device_id = get_or_create_device_id(conn)?;
+        let seq = next_device_seq(conn, &device_id)?;
+        let op = serde_json::json!({
+            "op_id": uuid::Uuid::new_v4().to_string(),
+            "device_id": device_id,
+            "seq": seq,
+            "ts_ms": now,
+            "type": "todo.checklist_item.delete.v1",
+            "payload": {
+                "item_id": existing.id.as_str(),
+                "todo_id": existing.todo_id.as_str(),
+                "deleted_at_ms": now,
+            }
+        });
+        insert_oplog(conn, key, &op)?;
 
-    Ok(())
+        Ok(())
+    })
 }
 
 pub fn reorder_todo_checklist_items(
@@ -515,10 +545,12 @@ pub fn list_todo_checklist_progress(
 ) -> Result<Vec<TodoChecklistProgress>> {
     let mut stmt = conn.prepare(
         r#"
-SELECT todo_id, SUM(CASE WHEN is_done != 0 THEN 1 ELSE 0 END) AS done_count, COUNT(*) AS total_count
-FROM todo_checklist_items
-GROUP BY todo_id
-ORDER BY todo_id ASC
+SELECT tci.todo_id, SUM(CASE WHEN tci.is_done != 0 THEN 1 ELSE 0 END) AS done_count, COUNT(*) AS total_count
+FROM todo_checklist_items tci
+JOIN todos t ON t.id = tci.todo_id
+WHERE t.status NOT IN ('done', 'dismissed')
+GROUP BY tci.todo_id
+ORDER BY tci.todo_id ASC
 "#,
     )?;
 

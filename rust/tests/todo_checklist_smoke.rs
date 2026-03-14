@@ -189,3 +189,218 @@ fn checklist_reorder_uses_consistent_updated_at_in_rows_and_oplog() {
 
     assert_eq!(payload_updated_at, listed[0].updated_at_ms);
 }
+
+#[test]
+fn checklist_create_rolls_back_when_oplog_insert_fails() {
+    let (_temp_dir, key, conn) = setup();
+
+    db::upsert_todo(
+        &conn,
+        &key,
+        "todo_1",
+        "Plan launch",
+        None,
+        "open",
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("upsert todo");
+
+    conn.execute_batch(
+        r#"
+CREATE TEMP TRIGGER fail_checklist_create_oplog_insert
+BEFORE INSERT ON oplog
+BEGIN
+  SELECT RAISE(ABORT, 'forced oplog failure');
+END;
+"#,
+    )
+    .expect("create trigger");
+
+    let err = db::create_todo_checklist_item(&conn, &key, "todo_1", "Draft launch post")
+        .expect_err("create should fail");
+    assert!(err.to_string().contains("forced oplog failure"));
+
+    let listed = db::list_todo_checklist_items(&conn, &key, "todo_1").expect("list items");
+    assert!(listed.is_empty());
+}
+
+#[test]
+fn checklist_update_rolls_back_when_oplog_insert_fails() {
+    let (_temp_dir, key, conn) = setup();
+
+    db::upsert_todo(
+        &conn,
+        &key,
+        "todo_1",
+        "Plan launch",
+        None,
+        "open",
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("upsert todo");
+
+    let item = db::create_todo_checklist_item(&conn, &key, "todo_1", "Draft launch post")
+        .expect("create checklist item");
+
+    conn.execute_batch(
+        r#"
+CREATE TEMP TRIGGER fail_checklist_update_oplog_insert
+BEFORE INSERT ON oplog
+BEGIN
+  SELECT RAISE(ABORT, 'forced oplog failure');
+END;
+"#,
+    )
+    .expect("create trigger");
+
+    let err = db::update_todo_checklist_item_content(&conn, &key, &item.id, "Updated content")
+        .expect_err("update should fail");
+    assert!(err.to_string().contains("forced oplog failure"));
+
+    let listed = db::list_todo_checklist_items(&conn, &key, "todo_1").expect("list items");
+    assert_eq!(listed[0].content, "Draft launch post");
+}
+
+#[test]
+fn checklist_set_done_rolls_back_when_oplog_insert_fails() {
+    let (_temp_dir, key, conn) = setup();
+
+    db::upsert_todo(
+        &conn,
+        &key,
+        "todo_1",
+        "Plan launch",
+        None,
+        "open",
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("upsert todo");
+
+    let item = db::create_todo_checklist_item(&conn, &key, "todo_1", "Draft launch post")
+        .expect("create checklist item");
+
+    conn.execute_batch(
+        r#"
+CREATE TEMP TRIGGER fail_checklist_done_oplog_insert
+BEFORE INSERT ON oplog
+BEGIN
+  SELECT RAISE(ABORT, 'forced oplog failure');
+END;
+"#,
+    )
+    .expect("create trigger");
+
+    let err = db::set_todo_checklist_item_done(&conn, &key, &item.id, true)
+        .expect_err("set done should fail");
+    assert!(err.to_string().contains("forced oplog failure"));
+
+    let listed = db::list_todo_checklist_items(&conn, &key, "todo_1").expect("list items");
+    assert!(!listed[0].is_done);
+}
+
+#[test]
+fn checklist_delete_rolls_back_when_oplog_insert_fails() {
+    let (_temp_dir, key, conn) = setup();
+
+    db::upsert_todo(
+        &conn,
+        &key,
+        "todo_1",
+        "Plan launch",
+        None,
+        "open",
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("upsert todo");
+
+    let item = db::create_todo_checklist_item(&conn, &key, "todo_1", "Draft launch post")
+        .expect("create checklist item");
+
+    conn.execute_batch(
+        r#"
+CREATE TEMP TRIGGER fail_checklist_delete_oplog_insert
+BEFORE INSERT ON oplog
+BEGIN
+  SELECT RAISE(ABORT, 'forced oplog failure');
+END;
+"#,
+    )
+    .expect("create trigger");
+
+    let err =
+        db::delete_todo_checklist_item(&conn, &key, &item.id).expect_err("delete should fail");
+    assert!(err.to_string().contains("forced oplog failure"));
+
+    let listed = db::list_todo_checklist_items(&conn, &key, "todo_1").expect("list items");
+    assert_eq!(listed.len(), 1);
+    assert_eq!(listed[0].id, item.id);
+}
+
+#[test]
+fn checklist_progress_excludes_done_and_dismissed_todos() {
+    let (_temp_dir, key, conn) = setup();
+
+    db::upsert_todo(
+        &conn,
+        &key,
+        "todo_open",
+        "Open",
+        None,
+        "open",
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("upsert open todo");
+    db::upsert_todo(
+        &conn,
+        &key,
+        "todo_done",
+        "Done",
+        None,
+        "done",
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("upsert done todo");
+    db::upsert_todo(
+        &conn,
+        &key,
+        "todo_dismissed",
+        "Dismissed",
+        None,
+        "dismissed",
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("upsert dismissed todo");
+
+    let open_item = db::create_todo_checklist_item(&conn, &key, "todo_open", "Open item")
+        .expect("create open item");
+    db::set_todo_checklist_item_done(&conn, &key, &open_item.id, true).expect("complete open item");
+    db::create_todo_checklist_item(&conn, &key, "todo_done", "Done item")
+        .expect("create done item");
+    db::create_todo_checklist_item(&conn, &key, "todo_dismissed", "Dismissed item")
+        .expect("create dismissed item");
+
+    let progress = db::list_todo_checklist_progress(&conn, &key).expect("list progress");
+    assert_eq!(progress.len(), 1);
+    assert_eq!(progress[0].todo_id, "todo_open");
+}
