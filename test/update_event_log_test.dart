@@ -23,6 +23,10 @@ void main() {
       UpdateFailureCategory.runtimeUnavailable,
     );
     expect(
+      classifyUpdateFailure('seamless_update_not_supported'),
+      UpdateFailureCategory.runtimeUnavailable,
+    );
+    expect(
       classifyUpdateFailure('macos_update_unsupported_install_location'),
       UpdateFailureCategory.unsupportedInstallLocation,
     );

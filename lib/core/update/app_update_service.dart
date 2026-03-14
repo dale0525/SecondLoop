@@ -812,6 +812,10 @@ class AppUpdateService {
       Uri manifestUri, List<int> bodyBytes) async {
     final publicKeyValue = _updatePublicKey.trim();
     if (publicKeyValue.isEmpty) {
+      debugPrint(
+        'WARNING: SECONDLOOP_UPDATE_PUBLIC_KEY is not set — '
+        'skipping signature verification for $manifestUri',
+      );
       return;
     }
 
@@ -839,8 +843,7 @@ class AppUpdateService {
   }
 
   bool _isSignedManifestUri(Uri uri) {
-    return uri.path.toLowerCase().endsWith('/latest.json') ||
-        uri.path.toLowerCase().endsWith('latest.json');
+    return uri.path.toLowerCase().endsWith('latest.json');
   }
 
   bool _assetHasIntegrityMetadata(AppUpdateAsset asset) {

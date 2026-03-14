@@ -139,6 +139,14 @@ Future<String?> _signManifest(
   }
 
   final rawKey = base64Decode(signingPrivateKeyBase64);
+  if (rawKey.length != 32 && rawKey.length != 64) {
+    throw ArgumentError.value(
+      rawKey.length,
+      'signingPrivateKeyBase64',
+      'expected 32-byte seed or 64-byte secret key',
+    );
+  }
+
   final seed = rawKey.length == 32 ? rawKey : rawKey.sublist(0, 32);
   final algorithm = Ed25519();
   final keyPair = await algorithm.newKeyPairFromSeed(seed);

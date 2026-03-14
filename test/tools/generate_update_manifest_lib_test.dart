@@ -57,6 +57,27 @@ void main() {
     expect(generated.signatureBase64, isNull);
   });
 
+  test('generateUpdateManifest rejects invalid signing key lengths', () async {
+    final tempDir =
+        await Directory.systemTemp.createTemp('update_manifest_invalid_sig_');
+    addTearDown(() => tempDir.delete(recursive: true));
+
+    await File('${tempDir.path}/SecondLoop-linux-x64-v1.2.3.tar.gz')
+        .writeAsString('linux');
+
+    await expectLater(
+      () => generateUpdateManifest(
+        inputDirPath: tempDir.path,
+        version: '1.2.3',
+        baseDownloadUrl: 'https://example.com/downloads/',
+        signingPrivateKeyBase64: base64Encode(
+          List<int>.generate(33, (index) => index + 1),
+        ),
+      ),
+      throwsArgumentError,
+    );
+  });
+
   test('generateUpdateManifest signs latest.json with ed25519 seed', () async {
     final tempDir =
         await Directory.systemTemp.createTemp('update_manifest_sig_');
