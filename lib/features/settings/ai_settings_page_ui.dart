@@ -198,30 +198,6 @@ extension _AiSettingsPageUiExtension on _AiSettingsPageState {
     );
   }
 
-  Widget _buildHomeCard(
-    BuildContext context, {
-    required GlobalKey anchorKey,
-    required Key cardKey,
-    required AiSettingsSection section,
-    required String title,
-    required String description,
-    required String statusLabel,
-    required List<Widget> actions,
-    Widget? warning,
-  }) {
-    return _buildSectionCard(
-      context,
-      anchorKey: anchorKey,
-      cardKey: cardKey,
-      section: section,
-      title: title,
-      description: description,
-      statusLabel: statusLabel,
-      actions: actions,
-      warning: warning,
-    );
-  }
-
   Widget _buildAdvancedSettingsEntry(
     BuildContext context, {
     required bool expanded,
@@ -229,48 +205,43 @@ extension _AiSettingsPageUiExtension on _AiSettingsPageState {
     final colorScheme = Theme.of(context).colorScheme;
     final t = context.t.settings.aiSelection.advancedSettings;
 
-    return GestureDetector(
-      key: const ValueKey('ai_settings_home_advanced_settings'),
-      behavior: HitTestBehavior.opaque,
-      onTap: () => _setAdvancedSettingsExpanded(!expanded),
-      child: SlSurface(
-        child: ListTile(
-          contentPadding:
-              const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          title: Text(
-            t.title,
-            style: Theme.of(context)
-                .textTheme
-                .titleMedium
-                ?.copyWith(fontWeight: FontWeight.w700),
-          ),
-          subtitle: Padding(
-            padding: const EdgeInsets.only(top: 6),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  t.description,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: colorScheme.onSurfaceVariant,
-                      ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  expanded ? t.expanded : t.collapsed,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: colorScheme.onSurfaceVariant,
-                      ),
-                ),
-              ],
-            ),
-          ),
-          trailing: Icon(
-            expanded ? Icons.expand_less : Icons.chevron_right,
-            color: colorScheme.onSurfaceVariant,
-          ),
-          onTap: () => _setAdvancedSettingsExpanded(!expanded),
+    return SlSurface(
+      child: ListTile(
+        key: const ValueKey('ai_settings_home_advanced_settings'),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        title: Text(
+          t.title,
+          style: Theme.of(context)
+              .textTheme
+              .titleMedium
+              ?.copyWith(fontWeight: FontWeight.w700),
         ),
+        subtitle: Padding(
+          padding: const EdgeInsets.only(top: 6),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                t.description,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: colorScheme.onSurfaceVariant,
+                    ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                expanded ? t.expanded : t.collapsed,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: colorScheme.onSurfaceVariant,
+                    ),
+              ),
+            ],
+          ),
+        ),
+        trailing: Icon(
+          expanded ? Icons.expand_less : Icons.expand_more,
+          color: colorScheme.onSurfaceVariant,
+        ),
+        onTap: () => _setAdvancedSettingsExpanded(!expanded),
       ),
     );
   }
@@ -287,10 +258,6 @@ extension _AiSettingsPageUiExtension on _AiSettingsPageState {
 
   List<Widget> _buildAdvancedSettingsChildren(
     BuildContext context, {
-    required dynamic t,
-    required dynamic askAiPreferenceLabels,
-    required dynamic embeddingsPreferenceLabels,
-    required dynamic mediaPreferenceLabels,
     required SubscriptionStatus subscriptionStatus,
     required bool hasCloudAccount,
     required bool canUseCloudEmbeddings,
@@ -303,6 +270,11 @@ extension _AiSettingsPageUiExtension on _AiSettingsPageState {
     required Widget? embeddingsWarning,
     required Widget? mediaWarning,
   }) {
+    final t = context.t.settings.aiSelection;
+    final askAiPreferenceLabels = t.askAi.preference;
+    final embeddingsPreferenceLabels = t.embeddings.preference;
+    final mediaPreferenceLabels = t.mediaUnderstanding.preference;
+
     return [
       _buildSectionCard(
         context,
@@ -573,9 +545,6 @@ extension _AiSettingsPageUiExtension on _AiSettingsPageState {
 
   Widget _buildPage(BuildContext context) {
     final t = context.t.settings.aiSelection;
-    final askAiPreferenceLabels = t.askAi.preference;
-    final embeddingsPreferenceLabels = t.embeddings.preference;
-    final mediaPreferenceLabels = t.mediaUnderstanding.preference;
 
     final subscriptionStatus = SubscriptionScope.maybeOf(context)?.status ??
         SubscriptionStatus.unknown;
@@ -665,7 +634,7 @@ extension _AiSettingsPageUiExtension on _AiSettingsPageState {
         children: [
           Text(t.subtitle),
           const SizedBox(height: 12),
-          _buildHomeCard(
+          _buildSectionCard(
             context,
             anchorKey: _askAiSectionAnchorKey,
             cardKey: const ValueKey('ai_settings_home_ask_ai'),
@@ -690,7 +659,7 @@ extension _AiSettingsPageUiExtension on _AiSettingsPageState {
             ],
           ),
           const SizedBox(height: 12),
-          _buildHomeCard(
+          _buildSectionCard(
             context,
             anchorKey: _smartOrganizationSectionAnchorKey,
             cardKey: const ValueKey('ai_settings_home_smart_organization'),
@@ -786,10 +755,6 @@ extension _AiSettingsPageUiExtension on _AiSettingsPageState {
             const SizedBox(height: 12),
             ..._buildAdvancedSettingsChildren(
               context,
-              t: t,
-              askAiPreferenceLabels: askAiPreferenceLabels,
-              embeddingsPreferenceLabels: embeddingsPreferenceLabels,
-              mediaPreferenceLabels: mediaPreferenceLabels,
               subscriptionStatus: subscriptionStatus,
               hasCloudAccount: hasCloudAccount,
               canUseCloudEmbeddings: canUseCloudEmbeddings,

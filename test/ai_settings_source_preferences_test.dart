@@ -5,22 +5,10 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:secondloop/features/settings/ai_settings_page.dart';
 
 import 'test_i18n.dart';
+import 'ai_settings_test_helpers.dart';
 
 bool _switchValue(WidgetTester tester, Finder finder) {
   return tester.widget<SwitchListTile>(finder).value;
-}
-
-Future<void> _openAdvancedSettings(WidgetTester tester) async {
-  final advancedSettings =
-      find.byKey(const ValueKey('ai_settings_home_advanced_settings'));
-  await tester.dragUntilVisible(
-    advancedSettings,
-    find.byType(ListView).first,
-    const Offset(0, -220),
-  );
-  await tester.pumpAndSettle();
-  await tester.tap(advancedSettings);
-  await tester.pumpAndSettle();
 }
 
 void main() {
@@ -37,7 +25,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await _openAdvancedSettings(tester);
+    await openAiAdvancedSettings(tester);
 
     final listView = find.byType(ListView);
 
@@ -82,7 +70,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await _openAdvancedSettings(tester);
+    await openAiAdvancedSettings(tester);
 
     final listView = find.byType(ListView);
     final imageWifiOnly =
@@ -120,7 +108,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await _openAdvancedSettings(tester);
+    await openAiAdvancedSettings(tester);
 
     final listView = find.byType(ListView);
     final taskPrioritySwitch =
@@ -160,7 +148,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await _openAdvancedSettings(tester);
+    await openAiAdvancedSettings(tester);
 
     final semanticSwitch = find.byKey(
       const ValueKey('ai_settings_semantic_parse_auto_actions_switch'),
@@ -215,7 +203,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      await _openAdvancedSettings(tester);
+      await openAiAdvancedSettings(tester);
 
       final semanticSwitch = find.byKey(
         const ValueKey('ai_settings_semantic_parse_auto_actions_switch'),

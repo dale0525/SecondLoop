@@ -262,6 +262,7 @@ final class _CloudSyncSwitchPromptGateState
     if (subscriptionStatus != SubscriptionStatus.entitled) return;
 
     final prefs = await SharedPreferences.getInstance();
+    if (!mounted) return;
     if ((prefs.getBool(cloudSyncSwitchInProgressPrefsKey) ?? false) == true) {
       _scheduleAiFeatureGuidePrompt();
       return;

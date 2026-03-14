@@ -18,22 +18,10 @@ import 'package:secondloop/features/settings/settings_page.dart';
 
 import 'test_backend.dart';
 import 'test_i18n.dart';
+import 'ai_settings_test_helpers.dart';
 
 bool _switchValue(WidgetTester tester, Finder finder) {
   return tester.widget<SwitchListTile>(finder).value;
-}
-
-Future<void> _openAdvancedSettings(WidgetTester tester) async {
-  final advancedSettings =
-      find.byKey(const ValueKey('ai_settings_home_advanced_settings'));
-  await tester.dragUntilVisible(
-    advancedSettings,
-    find.byType(ListView).first,
-    const Offset(0, -220),
-  );
-  await tester.pumpAndSettle();
-  await tester.tap(advancedSettings);
-  await tester.pumpAndSettle();
 }
 
 void main() {
@@ -83,7 +71,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(AiSettingsPage), findsOneWidget);
-    await _openAdvancedSettings(tester);
+    await openAiAdvancedSettings(tester);
     final cloudEmbeddingsSwitch =
         find.byKey(const ValueKey('ai_settings_cloud_embeddings_switch'));
     await tester.dragUntilVisible(
