@@ -12,12 +12,14 @@ class _FakeAutoUpdateService extends AppUpdateService {
   _FakeAutoUpdateService({
     required this.result,
     this.throwOnApplyPending = false,
+    this.applyPendingResult = false,
     this.throwOnStage = false,
     this.releaseRepoValue = 'dale0525/SecondLoop',
   });
 
   final AppUpdateCheckResult result;
   final bool throwOnApplyPending;
+  final bool applyPendingResult;
   final bool throwOnStage;
   final String releaseRepoValue;
 
@@ -54,11 +56,12 @@ class _FakeAutoUpdateService extends AppUpdateService {
   }
 
   @override
-  Future<void> applyPendingUpdateOnStartup() async {
+  Future<bool> applyPendingUpdateOnStartup() async {
     applyPendingCalls += 1;
     if (throwOnApplyPending) {
       throw StateError('apply_pending_failed');
     }
+    return applyPendingResult;
   }
 
   @override
@@ -267,6 +270,45 @@ void main() {
     expect(service.applyPendingCalls, 1);
     expect(UpdateBadgePrefs.value.value, 'v1.2.0');
     expect(find.byType(SnackBar), findsOneWidget);
+  },
+      variant: const TargetPlatformVariant(<TargetPlatform>{
+        TargetPlatform.windows,
+      }));
+
+
+  testWidgets('windows skips update check after pending apply succeeds',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    UpdateBadgePrefs.resetForTests();
+
+    final update = AppUpdateAvailability(
+      currentVersion: '1.0.1+99',
+      latestTag: 'v1.3.0',
+      releasePageUri: Uri.parse(
+        'https://github.com/dale0525/SecondLoop/releases/tag/v1.3.0',
+      ),
+      installMode: AppUpdateInstallMode.seamlessRestart,
+      asset: AppUpdateAsset(
+        name: 'com.secondloop.secondloop-1.3.0-full.nupkg',
+        downloadUri: Uri.parse('https://cdn.example.com/win.nupkg'),
+      ),
+    );
+    final service = _FakeAutoUpdateService(
+      applyPendingResult: true,
+      result: AppUpdateCheckResult(
+        currentVersion: '1.0.1+99',
+        update: update,
+      ),
+    );
+
+    await pumpGate(tester, service: service);
+    await tester.pumpAndSettle();
+
+    expect(service.applyPendingCalls, 1);
+    expect(service.checkCalls, 0);
+    expect(service.stageCalls, 0);
+    expect(find.byType(SnackBar), findsNothing);
+    expect(UpdateBadgePrefs.value.value, isNull);
   },
       variant: const TargetPlatformVariant(<TargetPlatform>{
         TargetPlatform.windows,

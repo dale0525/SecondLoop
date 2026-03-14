@@ -25,7 +25,7 @@ abstract class WindowsStagedUpdateClient {
     required int waitPid,
   });
 
-  Future<void> applyPendingOnStartup();
+  Future<bool> applyPendingOnStartup();
 
   Future<void> applyPendingAndRestart({
     required int waitPid,
@@ -105,14 +105,14 @@ class VelopackUpdateClient implements WindowsStagedUpdateClient {
   }
 
   @override
-  Future<void> applyPendingOnStartup() async {
+  Future<bool> applyPendingOnStartup() async {
     final updateExePath = _updateExePath;
     if (!File(updateExePath).existsSync()) {
       throw StateError('windows_velopack_unavailable');
     }
 
     if (!_hasPendingPackageUpdate(updateExePath)) {
-      return;
+      return false;
     }
 
     final result = await _processRunner(updateExePath, [
@@ -124,6 +124,7 @@ class VelopackUpdateClient implements WindowsStagedUpdateClient {
       _deletePendingPackageUpdates(updateExePath);
       throw StateError('windows_velopack_apply_failed_${result.stderr}');
     }
+    return true;
   }
 
   @override

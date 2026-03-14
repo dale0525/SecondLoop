@@ -512,18 +512,19 @@ class AppUpdateService {
     }
   }
 
-  Future<void> applyPendingUpdateOnStartup() async {
+  Future<bool> applyPendingUpdateOnStartup() async {
     if (_platform != AppUpdatePlatform.windows) {
-      return;
+      return false;
     }
     final stagedClient = _resolvedWindowsStagedUpdateClient;
     if (stagedClient == null || !stagedClient.isAvailable()) {
-      return;
+      return false;
     }
     await _recordEvent(UpdateEventType.pendingApplyStarted);
     try {
-      await stagedClient.applyPendingOnStartup();
+      final applied = await stagedClient.applyPendingOnStartup();
       await _recordEvent(UpdateEventType.pendingApplySucceeded);
+      return applied;
     } catch (error) {
       await _recordFailure(UpdateEventType.pendingApplyFailed, error);
       rethrow;

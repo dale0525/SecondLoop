@@ -68,8 +68,9 @@ class _FakeWindowsStagedUpdateClient implements WindowsStagedUpdateClient {
   }
 
   @override
-  Future<void> applyPendingOnStartup() async {
+  Future<bool> applyPendingOnStartup() async {
     applyPendingCalls += 1;
+    return pendingUpdateAvailable;
   }
 
   @override

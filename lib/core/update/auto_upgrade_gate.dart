@@ -95,12 +95,18 @@ class _AutoUpgradeGateState extends State<AutoUpgradeGate> {
     await _initializeNoticeSession(prefs);
 
     Object? pendingApplyError;
+    var startupApplySucceeded = false;
     try {
-      await _updateService.applyPendingUpdateOnStartup();
+      startupApplySucceeded = await _updateService.applyPendingUpdateOnStartup();
     } catch (error, stackTrace) {
       pendingApplyError = error;
       debugPrint('auto_upgrade_pending_apply_skipped: $error');
       debugPrintStack(stackTrace: stackTrace);
+    }
+
+    if (startupApplySucceeded) {
+      await UpdateBadgePrefs.clear();
+      return;
     }
 
     try {
