@@ -210,6 +210,35 @@ void main() {
     expect(store.snapshot.decide.first.todo.id, 't2');
   });
 
+  test('force refresh after dispose does not reuse disposed store', () async {
+    SharedPreferences.setMockInitialValues({});
+    var loadCount = 0;
+    final completer = Completer<void>();
+    final store = TaskPriorityStore.fromLoaders(
+      nowLocal: () => DateTime(2026, 3, 13, 10, 0),
+      loadTodos: () async {
+        loadCount += 1;
+        if (loadCount == 1) {
+          await completer.future;
+        }
+        return <Todo>[todo(id: 't$loadCount', title: 'Task', updatedAtMs: 10)];
+      },
+    );
+
+    final firstRefresh = store.refresh();
+    await Future<void>.delayed(Duration.zero);
+    final forcedRefresh = store.refresh(force: true);
+
+    store.dispose();
+    completer.complete();
+
+    await expectLater(
+      Future.wait(<Future<void>>[firstRefresh, forcedRefresh]),
+      completes,
+    );
+    expect(loadCount, 1);
+  });
+
   test('reuses cached AI rerank while task signature stays unchanged',
       () async {
     SharedPreferences.setMockInitialValues({});

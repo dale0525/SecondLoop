@@ -110,9 +110,17 @@ class TaskPriorityStore extends ChangeNotifier {
   }
 
   Future<void> refresh({bool force = false}) {
+    if (_disposed) {
+      return Future<void>.value();
+    }
     if (_inflightRefresh != null) {
       if (!force) return _inflightRefresh!;
-      return _inflightRefresh!.then((_) => refresh(force: true));
+      return _inflightRefresh!.then((_) {
+        if (_disposed) {
+          return Future<void>.value();
+        }
+        return refresh(force: true);
+      });
     }
     if (!force && !_dirty && _snapshot.computedAtLocal != null) {
       return Future<void>.value();
@@ -125,8 +133,11 @@ class TaskPriorityStore extends ChangeNotifier {
   }
 
   Future<void> _refreshImpl() async {
+    if (_disposed) {
+      return;
+    }
     _isRefreshing = true;
-    notifyListeners();
+    _safeNotify();
 
     try {
       final nowLocal = _nowLocal();
