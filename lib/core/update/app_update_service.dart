@@ -396,49 +396,58 @@ class AppUpdateService {
 
       final tempRoot =
           await Directory.systemTemp.createTemp('secondloop_update_');
-      final archiveFile = File('${tempRoot.path}/payload_${asset.name}');
-      final extractedDir = Directory('${tempRoot.path}/payload');
-      await extractedDir.create(recursive: true);
+      try {
+        final archiveFile = File('${tempRoot.path}/payload_${asset.name}');
+        final extractedDir = Directory('${tempRoot.path}/payload');
+        await extractedDir.create(recursive: true);
 
-      await _downloadToFile(asset.downloadUri, archiveFile);
-      if (asset.sha256 != null) {
-        await _verifyFileSha256(archiveFile, asset.sha256!);
+        await _downloadToFile(asset.downloadUri, archiveFile);
+        if (asset.sha256 != null) {
+          await _verifyFileSha256(archiveFile, asset.sha256!);
+        }
+        await extractFileToDisk(archiveFile.path, extractedDir.path);
+
+        final sourceDir = _resolveExtractedSourceDir(extractedDir, platform);
+        final executablePath = File(Platform.resolvedExecutable).absolute.path;
+        final appDirPath = File(executablePath).parent.path;
+
+        final script = File('${tempRoot.path}/apply_update.sh');
+        await script.writeAsString(
+          _buildLinuxUpdaterScript(
+            pid: pid,
+            appDirPath: appDirPath,
+            executablePath: executablePath,
+            sourceDirPath: sourceDir.path,
+            tempRootPath: tempRoot.path,
+          ),
+        );
+        await script.setLastModified(DateTime.now());
+        final modeResult = await Process.run('chmod', ['+x', script.path]);
+        if (modeResult.exitCode != 0) {
+          throw StateError('chmod_failed_${modeResult.stderr}');
+        }
+
+        await Process.start(
+          '/bin/sh',
+          [script.path],
+          mode: ProcessStartMode.detached,
+        );
+        await _recordEvent(
+          UpdateEventType.installDispatched,
+          currentVersion: update.currentVersion,
+          latestTag: update.latestTag,
+          installMode: update.installMode,
+          message: asset.name,
+        );
+        _exitProcess(0);
+      } catch (_) {
+        try {
+          if (tempRoot.existsSync()) {
+            await tempRoot.delete(recursive: true);
+          }
+        } catch (_) {}
+        rethrow;
       }
-      await extractFileToDisk(archiveFile.path, extractedDir.path);
-
-      final sourceDir = _resolveExtractedSourceDir(extractedDir, platform);
-      final executablePath = File(Platform.resolvedExecutable).absolute.path;
-      final appDirPath = File(executablePath).parent.path;
-
-      final script = File('${tempRoot.path}/apply_update.sh');
-      await script.writeAsString(
-        _buildLinuxUpdaterScript(
-          pid: pid,
-          appDirPath: appDirPath,
-          executablePath: executablePath,
-          sourceDirPath: sourceDir.path,
-          tempRootPath: tempRoot.path,
-        ),
-      );
-      await script.setLastModified(DateTime.now());
-      final modeResult = await Process.run('chmod', ['+x', script.path]);
-      if (modeResult.exitCode != 0) {
-        throw StateError('chmod_failed_${modeResult.stderr}');
-      }
-
-      await Process.start(
-        '/bin/sh',
-        [script.path],
-        mode: ProcessStartMode.detached,
-      );
-      await _recordEvent(
-        UpdateEventType.installDispatched,
-        currentVersion: update.currentVersion,
-        latestTag: update.latestTag,
-        installMode: update.installMode,
-        message: asset.name,
-      );
-      _exitProcess(0);
     } catch (error) {
       await _recordFailure(
         UpdateEventType.installFailed,

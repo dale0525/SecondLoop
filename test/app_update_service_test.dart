@@ -669,6 +669,63 @@ void main() {
       );
     });
 
+    test('cleans Linux tempRoot when install throws before script handoff',
+        () async {
+      const body = 'not-a-valid-tar-archive';
+      final tempHashDir = await Directory.systemTemp.createTemp('linux_hash_');
+      addTearDown(() => tempHashDir.delete(recursive: true));
+      final hashFile = File('${tempHashDir.path}/payload.tar.gz');
+      await hashFile.writeAsString(body);
+      final expectedSha = await sha256FileHexForTest(hashFile);
+      final before = Directory.systemTemp
+          .listSync()
+          .whereType<Directory>()
+          .where((dir) =>
+              dir.path.contains('${Platform.pathSeparator}secondloop_update_'))
+          .map((dir) => dir.path)
+          .toSet();
+      final service = AppUpdateService(
+        platformOverride: AppUpdatePlatform.linux,
+        httpClient: _FakeHttpClient(
+          handler: (uri) => const _FakeHttpResponse(
+            statusCode: 200,
+            body: body,
+          ),
+        ),
+        processExit: (_) {},
+      );
+
+      await expectLater(
+        () => service.installAndRestart(
+          AppUpdateAvailability(
+            currentVersion: '1.0.0',
+            latestTag: 'v1.1.0',
+            releasePageUri: Uri.parse(
+              'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
+            ),
+            installMode: AppUpdateInstallMode.seamlessRestart,
+            asset: AppUpdateAsset(
+              name: 'SecondLoop-linux-x64-v1.1.0.tar.gz',
+              downloadUri: Uri.parse(
+                'https://cdn.example.com/SecondLoop-linux-x64-v1.1.0.tar.gz',
+              ),
+              sha256: expectedSha,
+            ),
+          ),
+        ),
+        throwsA(anything),
+      );
+
+      final after = Directory.systemTemp
+          .listSync()
+          .whereType<Directory>()
+          .where((dir) =>
+              dir.path.contains('${Platform.pathSeparator}secondloop_update_'))
+          .map((dir) => dir.path)
+          .toSet();
+      expect(after, before);
+    });
+
     test('delegates macOS install to managed client and exits', () async {
       final macosClient =
           _FakeMacosManagedUpdateClient(supportedInstallLocation: true);
