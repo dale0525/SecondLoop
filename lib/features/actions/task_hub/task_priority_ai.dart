@@ -1,5 +1,5 @@
 import 'dart:convert';
-import 'dart:typed_data';
+import 'package:flutter/foundation.dart';
 
 import '../../../core/ai/ai_routing.dart';
 import '../../../core/backend/app_backend.dart';
@@ -34,6 +34,12 @@ class BackendTaskPriorityAiService implements TaskPriorityAiService {
   static final Map<String, Future<String>> _sharedInflight =
       <String, Future<String>>{};
   static const Duration _sharedCacheTtl = Duration(minutes: 15);
+
+  @visibleForTesting
+  static void clearSharedCacheForTest() {
+    _sharedCache.clear();
+    _sharedInflight.clear();
+  }
 
   BackendTaskPriorityAiService({
     required AppBackend backend,
@@ -136,7 +142,7 @@ class BackendTaskPriorityAiService implements TaskPriorityAiService {
     );
 
     final cached = _sharedCache[cacheKey];
-    if (cached != null && now.difference(cached.cachedAt) <= _sharedCacheTtl) {
+    if (cached != null) {
       return Future<String>.value(cached.response);
     }
 

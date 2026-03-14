@@ -12,6 +12,8 @@ import 'package:secondloop/src/rust/db.dart';
 import 'test_backend.dart';
 
 void main() {
+  setUp(BackendTaskPriorityAiService.clearSharedCacheForTest);
+
   Todo todo({
     required String id,
     required String title,
