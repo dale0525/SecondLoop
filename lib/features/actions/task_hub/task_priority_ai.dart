@@ -101,22 +101,24 @@ class BackendTaskPriorityAiService implements TaskPriorityAiService {
   @override
   Future<TaskPriorityAiBatchResult> rerank(
       TaskPriorityAiRequest request) async {
-    final prompt = _buildPrompt(request);
     final cacheKey = _buildCacheKey(request);
     final response = await _resolveSharedCachedOrFreshResponse(
       cacheKey,
-      () => _route == AskAiRouteKind.cloudGateway
-          ? _backend.taskPriorityRerankAiCloudGateway(
-              _sessionKey,
-              prompt: prompt,
-              gatewayBaseUrl: _gatewayBaseUrl,
-              idToken: _idToken,
-              modelName: _modelName,
-            )
-          : _backend.taskPriorityRerankAi(
-              _sessionKey,
-              prompt: prompt,
-            ),
+      () {
+        final prompt = _buildPrompt(request);
+        return _route == AskAiRouteKind.cloudGateway
+            ? _backend.taskPriorityRerankAiCloudGateway(
+                _sessionKey,
+                prompt: prompt,
+                gatewayBaseUrl: _gatewayBaseUrl,
+                idToken: _idToken,
+                modelName: _modelName,
+              )
+            : _backend.taskPriorityRerankAi(
+                _sessionKey,
+                prompt: prompt,
+              );
+      },
     );
     final output = response.trim();
     if (output.isEmpty) {
