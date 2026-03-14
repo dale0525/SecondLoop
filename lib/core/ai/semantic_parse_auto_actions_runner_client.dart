@@ -198,13 +198,13 @@ final class BackendSemanticParseAutoActionsClient
   }
 
   @override
-  Future<String> generateChecklistSuggestionsJson({
+  Future<List<String>> generateChecklistSuggestions({
     required String taskTitle,
     required String taskContext,
     required String localeTag,
     required Duration timeout,
-  }) async {
-    final suggestions = await requestTodoChecklistSuggestions(
+  }) {
+    return requestTodoChecklistSuggestions(
       backend: _backend,
       sessionKey: _sessionKey,
       route: askAiRoute,
@@ -216,6 +216,5 @@ final class BackendSemanticParseAutoActionsClient
       localeTag: localeTag,
       timeout: timeout,
     );
-    return jsonEncode(<String, Object?>{'suggestions': suggestions});
   }
 }

@@ -192,7 +192,7 @@ abstract class SemanticParseAutoActionsClient {
     required Duration timeout,
   });
 
-  Future<String> generateChecklistSuggestionsJson({
+  Future<List<String>> generateChecklistSuggestions({
     required String taskTitle,
     required String taskContext,
     required String localeTag,
@@ -456,13 +456,11 @@ final class SemanticParseAutoActionsRunner {
             );
             try {
               final generatedChecklistSuggestions =
-                  parseTodoChecklistSuggestionsJson(
-                await client.generateChecklistSuggestionsJson(
-                  taskTitle: title,
-                  taskContext: analysisText,
-                  localeTag: localeTag,
-                  timeout: settings.hardTimeout,
-                ),
+                  await client.generateChecklistSuggestions(
+                taskTitle: title,
+                taskContext: analysisText,
+                localeTag: localeTag,
+                timeout: settings.hardTimeout,
               );
               if (generatedChecklistSuggestions.isNotEmpty) {
                 await store.upsertGeneratedChecklistSuggestions(

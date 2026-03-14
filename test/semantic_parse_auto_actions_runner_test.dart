@@ -98,8 +98,10 @@ void main() {
     final client = _FakeClient(
       responseJson:
           '{"kind":"create","confidence":1.0,"title":"Plan launch","status":"open","due_local_iso":null}',
-      checklistSuggestionJson:
-          '{"suggestions":["Draft launch post","Share with team"]}',
+      checklistSuggestions: const <String>[
+        'Draft launch post',
+        'Share with team'
+      ],
     );
 
     final runner = SemanticParseAutoActionsRunner(
@@ -745,13 +747,13 @@ final class _FakeStore implements SemanticParseAutoActionsStore {
 final class _FakeClient implements SemanticParseAutoActionsClient {
   _FakeClient({
     this.responseJson,
-    this.checklistSuggestionJson,
+    this.checklistSuggestions,
     this.error,
     this.candidateTodoIds = const <String>[],
   });
 
   final String? responseJson;
-  final String? checklistSuggestionJson;
+  final List<String>? checklistSuggestions;
   final Object? error;
   final List<String> candidateTodoIds;
 
@@ -778,13 +780,13 @@ final class _FakeClient implements SemanticParseAutoActionsClient {
   }
 
   @override
-  Future<String> generateChecklistSuggestionsJson({
+  Future<List<String>> generateChecklistSuggestions({
     required String taskTitle,
     required String taskContext,
     required String localeTag,
     required Duration timeout,
   }) async {
     if (error != null) throw error!;
-    return checklistSuggestionJson ?? '{"suggestions":[]}';
+    return checklistSuggestions ?? const <String>[];
   }
 }

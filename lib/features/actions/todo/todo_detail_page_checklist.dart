@@ -91,6 +91,23 @@ extension _TodoDetailPageStateChecklist on _TodoDetailPageState {
     return confirmed ?? false;
   }
 
+  void _refreshChecklistItems() {
+    if (!mounted) return;
+    _setState(() {
+      _checklistFuture = _loadChecklistItems();
+    });
+  }
+
+  void _showChecklistMutationError(Object error) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(context.t.errors.loadFailed(error: '$error')),
+        duration: const Duration(seconds: 3),
+      ),
+    );
+  }
+
   Future<void> _addChecklistItem() async {
     final backend = AppBackendScope.maybeOf(context);
     final session = SessionScope.maybeOf(context);
@@ -110,10 +127,9 @@ extension _TodoDetailPageStateChecklist on _TodoDetailPageState {
         content: content,
       );
       _checklistController.clear();
-      if (!mounted) return;
-      _setState(() {
-        _checklistFuture = _loadChecklistItems();
-      });
+      _refreshChecklistItems();
+    } catch (error) {
+      _showChecklistMutationError(error);
     } finally {
       if (mounted) {
         _setState(() => _creatingChecklistItem = false);
@@ -129,15 +145,17 @@ extension _TodoDetailPageStateChecklist on _TodoDetailPageState {
     final session = SessionScope.maybeOf(context);
     if (backend == null || session == null) return;
 
-    await backend.setTodoChecklistItemDone(
-      session.sessionKey,
-      itemId: item.id,
-      isDone: nextValue,
-    );
-    if (!mounted) return;
-    _setState(() {
-      _checklistFuture = _loadChecklistItems();
-    });
+    try {
+      await backend.setTodoChecklistItemDone(
+        session.sessionKey,
+        itemId: item.id,
+        isDone: nextValue,
+      );
+    } catch (error) {
+      _showChecklistMutationError(error);
+      return;
+    }
+    _refreshChecklistItems();
   }
 
   Future<void> _editChecklistItem(TodoChecklistItem item) async {
@@ -153,15 +171,17 @@ extension _TodoDetailPageStateChecklist on _TodoDetailPageState {
     );
     final trimmed = nextContent?.trim() ?? '';
     if (trimmed.isEmpty || trimmed == item.content) return;
-    await backend.updateTodoChecklistItemContent(
-      session.sessionKey,
-      itemId: item.id,
-      content: trimmed,
-    );
-    if (!mounted) return;
-    _setState(() {
-      _checklistFuture = _loadChecklistItems();
-    });
+    try {
+      await backend.updateTodoChecklistItemContent(
+        session.sessionKey,
+        itemId: item.id,
+        content: trimmed,
+      );
+    } catch (error) {
+      _showChecklistMutationError(error);
+      return;
+    }
+    _refreshChecklistItems();
   }
 
   Future<void> _deleteChecklistItem(TodoChecklistItem item) async {
@@ -169,14 +189,16 @@ extension _TodoDetailPageStateChecklist on _TodoDetailPageState {
     final session = SessionScope.maybeOf(context);
     if (backend == null || session == null) return;
 
-    await backend.deleteTodoChecklistItem(
-      session.sessionKey,
-      itemId: item.id,
-    );
-    if (!mounted) return;
-    _setState(() {
-      _checklistFuture = _loadChecklistItems();
-    });
+    try {
+      await backend.deleteTodoChecklistItem(
+        session.sessionKey,
+        itemId: item.id,
+      );
+    } catch (error) {
+      _showChecklistMutationError(error);
+      return;
+    }
+    _refreshChecklistItems();
   }
 
   Future<void> _moveChecklistItem(
@@ -196,16 +218,18 @@ extension _TodoDetailPageStateChecklist on _TodoDetailPageState {
     final reordered = List<TodoChecklistItem>.from(items);
     final moving = reordered.removeAt(currentIndex);
     reordered.insert(nextIndex, moving);
-    await backend.reorderTodoChecklistItems(
-      session.sessionKey,
-      todoId: _todo.id,
-      orderedItemIds:
-          reordered.map((entry) => entry.id).toList(growable: false),
-    );
-    if (!mounted) return;
-    _setState(() {
-      _checklistFuture = _loadChecklistItems();
-    });
+    try {
+      await backend.reorderTodoChecklistItems(
+        session.sessionKey,
+        todoId: _todo.id,
+        orderedItemIds:
+            reordered.map((entry) => entry.id).toList(growable: false),
+      );
+    } catch (error) {
+      _showChecklistMutationError(error);
+      return;
+    }
+    _refreshChecklistItems();
   }
 
   Widget _buildChecklistSection(BuildContext context) {
