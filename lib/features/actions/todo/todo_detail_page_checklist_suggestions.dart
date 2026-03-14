@@ -126,6 +126,7 @@ extension _TodoDetailPageStateChecklistSuggestions on _TodoDetailPageState {
       if (route == AskAiRouteKind.cloudGateway) {
         await bestEffortWarmCloudCapabilityAuth(cloudAuthScope?.controller);
       }
+      if (!mounted) return;
 
       final activities = await backend.listTodoActivities(
         session.sessionKey,

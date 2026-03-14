@@ -734,11 +734,6 @@ pub fn upsert_generated_todo_checklist_suggestions(
         let existing = list_todo_checklist_suggestions(conn, key, todo_id)?;
         let mut blocked_norms = existing
             .iter()
-            .filter(|item| {
-                item.state == TODO_CHECKLIST_SUGGESTION_STATE_APPLIED
-                    || item.state == TODO_CHECKLIST_SUGGESTION_STATE_DISMISSED
-                    || item.state == TODO_CHECKLIST_SUGGESTION_STATE_PENDING
-            })
             .map(|item| normalize_checklist_suggestion_content(&item.content))
             .collect::<std::collections::HashSet<_>>();
 
@@ -924,11 +919,15 @@ pub fn dismiss_all_todo_checklist_suggestions(
     todo_id: &str,
 ) -> Result<()> {
     run_immediate_transaction(conn, || {
-        let pending_ids = list_todo_checklist_suggestions(conn, key, todo_id)?
-            .into_iter()
-            .filter(|item| item.state == TODO_CHECKLIST_SUGGESTION_STATE_PENDING)
-            .map(|item| item.id)
-            .collect::<Vec<_>>();
+        let mut stmt = conn.prepare(
+            r#"SELECT id FROM todo_checklist_suggestions WHERE todo_id = ?1 AND state = ?2"#,
+        )?;
+        let pending_ids = stmt
+            .query_map(
+                params![todo_id, TODO_CHECKLIST_SUGGESTION_STATE_PENDING],
+                |row| row.get::<_, String>(0),
+            )?
+            .collect::<rusqlite::Result<Vec<_>>>()?;
         dismiss_todo_checklist_suggestions(conn, key, todo_id, &pending_ids)
     })
 }
