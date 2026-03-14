@@ -656,7 +656,6 @@ void main() {
   });
 
   group('AppUpdateService.installAndRestart', () {
-
     test('applies staged Windows update without re-downloading', () async {
       final stagedClient = _FakeWindowsStagedUpdateClient(
         available: true,
