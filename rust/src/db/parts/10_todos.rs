@@ -502,6 +502,9 @@ pub fn reorder_todo_checklist_items(
     todo_id: &str,
     ordered_item_ids: &[String],
 ) -> Result<()> {
+    if ordered_item_ids.is_empty() {
+        return Ok(());
+    }
     run_immediate_transaction(conn, || {
         let now = now_ms();
         for (index, item_id) in ordered_item_ids.iter().enumerate() {

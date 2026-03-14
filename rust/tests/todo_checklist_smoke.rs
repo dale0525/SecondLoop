@@ -481,3 +481,34 @@ fn checklist_set_done_noop_keeps_timestamp_and_oplog_stable() {
     assert_eq!(repeated.updated_at_ms, completed.updated_at_ms);
     assert_eq!(oplog_after, oplog_before);
 }
+
+#[test]
+fn checklist_reorder_skips_oplog_when_no_ids_are_provided() {
+    let (_temp_dir, key, conn) = setup();
+
+    db::upsert_todo(
+        &conn,
+        &key,
+        "todo_1",
+        "Plan launch",
+        None,
+        "open",
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("upsert todo");
+
+    let oplog_before: i64 = conn
+        .query_row("SELECT COUNT(*) FROM oplog", [], |row| row.get(0))
+        .expect("count oplog before noop reorder");
+
+    db::reorder_todo_checklist_items(&conn, &key, "todo_1", &[]).expect("noop reorder succeeds");
+
+    let oplog_after: i64 = conn
+        .query_row("SELECT COUNT(*) FROM oplog", [], |row| row.get(0))
+        .expect("count oplog after noop reorder");
+
+    assert_eq!(oplog_after, oplog_before);
+}
