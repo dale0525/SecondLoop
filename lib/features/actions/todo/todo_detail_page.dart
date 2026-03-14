@@ -198,6 +198,7 @@ class _TodoDetailPageState extends State<TodoDetailPage> {
     setState(() {
       _activitiesFuture = _loadActivities();
       _checklistFuture = _loadChecklistItems();
+      _selectedChecklistSuggestionIds.clear();
       _checklistSuggestionsFuture = _loadChecklistSuggestions();
       _messageFuturesById.clear();
       _attachmentsFuturesByMessageId.clear();

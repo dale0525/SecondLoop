@@ -20,12 +20,14 @@ String buildTaskPriorityAiCacheScopeKey({
   required String localeTag,
   String? partitionKey,
 }) {
+  final trimmedPartitionKey = partitionKey?.trim();
   return jsonEncode(<String>[
     route.name,
     gatewayBaseUrl.trim(),
     modelName.trim(),
     localeTag.trim(),
-    (partitionKey ?? '').trim(),
+    if (trimmedPartitionKey != null && trimmedPartitionKey.isNotEmpty)
+      trimmedPartitionKey,
   ]);
 }
 

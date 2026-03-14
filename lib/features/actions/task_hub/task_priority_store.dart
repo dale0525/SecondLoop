@@ -281,7 +281,7 @@ class TaskPriorityStore extends ChangeNotifier {
     final isMemoryCacheFresh = _cachedAiResult != null &&
         _cachedAiSignature == signature &&
         cachedAt != null &&
-        nowLocal.difference(cachedAt) <= _aiCacheTtl;
+        nowLocal.difference(cachedAt).abs() <= _aiCacheTtl;
     if (isMemoryCacheFresh) {
       return _cachedAiResult!;
     }
@@ -333,7 +333,7 @@ class TaskPriorityStore extends ChangeNotifier {
           ? DateTime.fromMillisecondsSinceEpoch(computedAtMs.toInt())
           : null;
       if (computedAtLocal == null ||
-          nowLocal.difference(computedAtLocal) > _aiCacheTtl) {
+          nowLocal.difference(computedAtLocal).abs() > _aiCacheTtl) {
         return null;
       }
       final resultJson = data['result'];

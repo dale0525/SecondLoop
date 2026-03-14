@@ -5,10 +5,13 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:secondloop/core/backend/app_backend.dart';
 import 'package:secondloop/core/session/session_scope.dart';
+import 'package:secondloop/core/sync/sync_engine.dart';
+import 'package:secondloop/core/sync/sync_engine_gate.dart';
 import 'package:secondloop/features/actions/todo/todo_detail_page.dart';
 import 'package:secondloop/src/rust/db.dart';
 
 import 'test_i18n.dart';
+import 'noop_sync_runner.dart';
 
 void main() {
   testWidgets('TodoDetailPage renders checklist section and supports item CRUD',
@@ -316,6 +319,108 @@ void main() {
 
     expect(find.textContaining('delete failed'), findsOneWidget);
     expect(backend.items, hasLength(1));
+  });
+
+  testWidgets(
+      'TodoDetailPage clears stale checklist suggestion selection after sync refresh',
+      (tester) async {
+    tester.view.physicalSize = const Size(1600, 2400);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    final backend = _Backend(
+      initialSuggestions: const <TodoChecklistSuggestion>[
+        TodoChecklistSuggestion(
+          id: 'suggestion_1',
+          todoId: 't1',
+          content: 'Draft launch post',
+          sortOrder: 0,
+          state: 'pending',
+          source: 'cloud',
+          generationKey: 'gen_1',
+          createdAtMs: 1,
+          updatedAtMs: 1,
+        ),
+        TodoChecklistSuggestion(
+          id: 'suggestion_2',
+          todoId: 't1',
+          content: 'Share with team',
+          sortOrder: 1,
+          state: 'pending',
+          source: 'cloud',
+          generationKey: 'gen_1',
+          createdAtMs: 2,
+          updatedAtMs: 2,
+        ),
+      ],
+    );
+    final engine = SyncEngine(
+      syncRunner: NoopSyncRunner(),
+      loadConfig: () async => null,
+      pullOnStart: false,
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: SyncEngineScope(
+            engine: engine,
+            child: AppBackendScope(
+              backend: backend,
+              child: SessionScope(
+                sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+                lock: () {},
+                child: const TodoDetailPage(
+                  initialTodo: Todo(
+                    id: 't1',
+                    title: 'Task',
+                    status: 'open',
+                    createdAtMs: 0,
+                    updatedAtMs: 0,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(
+      find.byKey(
+        const ValueKey('todo_detail_checklist_suggestion_select_suggestion_1'),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    var applyButton = tester.widget<FilledButton>(
+      find.byKey(const ValueKey('todo_detail_checklist_apply_selected')),
+    );
+    expect(applyButton.onPressed, isNotNull);
+
+    backend.suggestions
+      ..clear()
+      ..add(
+        const TodoChecklistSuggestion(
+          id: 'suggestion_2',
+          todoId: 't1',
+          content: 'Share with team',
+          sortOrder: 1,
+          state: 'pending',
+          source: 'cloud',
+          generationKey: 'gen_1',
+          createdAtMs: 2,
+          updatedAtMs: 2,
+        ),
+      );
+    engine.notifyExternalChange();
+    await tester.pumpAndSettle();
+
+    applyButton = tester.widget<FilledButton>(
+      find.byKey(const ValueKey('todo_detail_checklist_apply_selected')),
+    );
+    expect(applyButton.onPressed, isNull);
   });
 
   testWidgets(
