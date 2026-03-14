@@ -8,7 +8,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
 class UpdateI18nCopyTests(unittest.TestCase):
-    def test_windows_update_copy_references_manual_msi_flow_not_velopack(self) -> None:
+    def test_update_copy_avoids_setup_installer_wording(self) -> None:
         targets = sorted((REPO_ROOT / "lib/i18n").glob("*.i18n.json"))
 
         for target in targets:
@@ -25,10 +25,25 @@ class UpdateI18nCopyTests(unittest.TestCase):
                 f"{target} still contains Setup.exe copy",
             )
 
-        matching_targets = [
-            target for target in targets if "MSI" in target.read_text(encoding="utf-8")
+    def test_update_copy_mentions_in_app_auto_update_or_manual_fallback(self) -> None:
+        targets = sorted((REPO_ROOT / "lib/i18n").glob("*.i18n.json"))
+
+        expected_phrases = [
+            "auto-update and restart",
+            "应用内更新",
+            "manual download",
+            "手动下载安装",
         ]
-        self.assertTrue(matching_targets, "expected at least one locale source file to mention MSI")
+
+        matching_targets = [
+            target
+            for target in targets
+            if any(phrase in target.read_text(encoding="utf-8") for phrase in expected_phrases)
+        ]
+        self.assertTrue(
+            matching_targets,
+            "expected locale source files to mention in-app update or manual fallback",
+        )
 
 
 if __name__ == "__main__":

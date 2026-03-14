@@ -38,14 +38,22 @@ class RuntimeReleaseWorkflowTests(unittest.TestCase):
 
         self.assertIsNone(re.search(r"^  ios:\s*$", workflow_text, flags=re.MULTILINE))
 
-    def test_release_workflow_windows_publish_path_is_msi_only(self) -> None:
+    def test_release_workflow_windows_publish_path_includes_msi_and_velopack(self) -> None:
         workflow_text = self._release_workflow_text()
 
         self.assertIn("name: Package MSI", workflow_text)
-        self.assertNotIn("name: Package Velopack", workflow_text)
+        self.assertIn("name: Package Velopack", workflow_text)
         self.assertIn("dist/SecondLoop-win.msi", workflow_text)
-        self.assertNotIn("dist/*Setup*.exe", workflow_text)
-        self.assertNotIn("dist/*.nupkg", workflow_text)
+        self.assertIn("dist/*.nupkg", workflow_text)
+        self.assertIn("scripts/package_windows_velopack.ps1", workflow_text)
+
+    def test_release_workflow_publishes_latest_manifest_assets(self) -> None:
+        workflow_text = self._release_workflow_text()
+
+        self.assertIn("tools/generate_update_manifest.dart", workflow_text)
+        self.assertIn("dist/latest.json", workflow_text)
+        self.assertIn("dist/latest.json.sig", workflow_text)
+        self.assertIn("SecondLoop-macos-${safe_ref_name}.app.tar.gz", workflow_text)
 
 
 if __name__ == "__main__":

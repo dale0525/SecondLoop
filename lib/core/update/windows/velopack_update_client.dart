@@ -48,7 +48,16 @@ class VelopackUpdateClient implements WindowsStagedUpdateClient {
 
   @override
   bool isAvailable() {
-    return File(_updateExePath).existsSync();
+    final updateExe = File(_updateExePath);
+    if (!updateExe.existsSync()) {
+      return false;
+    }
+
+    final appRoot = updateExe.absolute.parent.path;
+    final sqVersionPath = File(
+      '$appRoot${Platform.pathSeparator}current${Platform.pathSeparator}sq.version',
+    );
+    return sqVersionPath.existsSync();
   }
 
   @override
@@ -101,6 +110,7 @@ class VelopackUpdateClient implements WindowsStagedUpdateClient {
     ]);
 
     if (result.exitCode != 0) {
+      _deletePendingPackageUpdates(updateExePath);
       throw StateError('windows_velopack_apply_failed_${result.stderr}');
     }
   }
@@ -189,6 +199,32 @@ class VelopackUpdateClient implements WindowsStagedUpdateClient {
       }
     } finally {
       client.close(force: true);
+    }
+  }
+
+  static void _deletePendingPackageUpdates(String updateExecutablePath) {
+    final appRoot = File(updateExecutablePath).absolute.parent.path;
+    final currentVersion = _readCurrentInstalledVersion(appRoot);
+    final packagesDir = Directory(
+      '$appRoot${Platform.pathSeparator}packages',
+    );
+    if (!packagesDir.existsSync()) {
+      return;
+    }
+
+    for (final entity in packagesDir.listSync()) {
+      if (entity is! File) continue;
+      final fileName =
+          entity.uri.pathSegments.isEmpty ? '' : entity.uri.pathSegments.last;
+      final version = _extractVersionFromNupkgName(fileName);
+      if (version == null) continue;
+      if (currentVersion != null &&
+          _compareVersionStrings(version, currentVersion) <= 0) {
+        continue;
+      }
+      try {
+        entity.deleteSync();
+      } catch (_) {}
     }
   }
 

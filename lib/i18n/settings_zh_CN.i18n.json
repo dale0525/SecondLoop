@@ -659,12 +659,12 @@
     "currentVersion": "当前版本：$version",
     "latestVersion": "最新版本：$version",
     "status": {
-      "idle": "点击检查更新；Linux 可自动更新并重启，Windows 请手动安装 MSI 或打开发布页安装。",
+      "idle": "点击检查更新；受支持的安装位置可在应用内更新，不支持时会回退到手动下载安装。",
       "checking": "正在检查更新…",
       "upToDate": "当前已是最新版本。",
       "availableSeamless": "发现新版本（$version）。可一键自动更新并重启。",
       "availableStaged": "发现新版本（$version）。可后台准备更新，下次启动自动生效。",
-      "availableExternal": "发现新版本（$version）。请手动安装 MSI 或前往发布页安装。",
+      "availableExternal": "发现新版本（$version）。请手动下载安装包，或前往发布页安装。",
       "failed": "检查更新失败：$error"
     },
     "actions": {
@@ -690,7 +690,7 @@
   },
   "updateNotice": {
     "stagedReady": "新版本 $version 已准备好，将在下次启动自动更新。",
-    "manualDownload": "发现新版本 $version，可下载 MSI 或打开发布页安装。"
+    "manualDownload": "发现新版本 $version，可打开更新页面或手动下载安装。"
   },
   "diagnostics": {
     "title": "诊断信息",

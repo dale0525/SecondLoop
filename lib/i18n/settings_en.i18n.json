@@ -659,12 +659,12 @@
     "currentVersion": "Current version: $version",
     "latestVersion": "Latest version: $version",
     "status": {
-      "idle": "Check for updates. Linux can auto-update and restart; Windows uses manual MSI or release-page install.",
+      "idle": "Check for updates. Supported installs can update in-app; unsupported locations fall back to manual download.",
       "checking": "Checking for updates…",
       "upToDate": "You're on the latest version.",
       "availableSeamless": "Update available ($version). You can auto-update and restart.",
       "availableStaged": "Update available ($version). Prepare in background and apply next launch.",
-      "availableExternal": "Update available ($version). Please install the MSI or use the release page manually.",
+      "availableExternal": "Update available ($version). Download the installer or open the release page manually.",
       "failed": "Update check failed: $error"
     },
     "actions": {
@@ -690,7 +690,7 @@
   },
   "updateNotice": {
     "stagedReady": "New version $version is ready and will apply on next launch.",
-    "manualDownload": "New version $version is available. Download the MSI or open the release page."
+    "manualDownload": "New version $version is available. Open the update page or use manual download."
   },
   "diagnostics": {
     "title": "Diagnostics",

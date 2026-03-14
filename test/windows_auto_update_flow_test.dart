@@ -59,7 +59,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('home'), findsOneWidget);
-    expect(service.applyPendingCalls, 0);
+    expect(service.applyPendingCalls, 1);
     expect(service.checkCalls, 1);
   });
 }
