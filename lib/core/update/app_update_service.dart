@@ -400,6 +400,9 @@ class AppUpdateService {
       await extractedDir.create(recursive: true);
 
       await _downloadToFile(asset.downloadUri, archiveFile);
+      if (asset.sha256 != null) {
+        await _verifyFileSha256(archiveFile, asset.sha256!);
+      }
       await extractFileToDisk(archiveFile.path, extractedDir.path);
 
       final sourceDir = _resolveExtractedSourceDir(extractedDir, platform);
@@ -758,7 +761,9 @@ class AppUpdateService {
               macosManagedInstallSupported &&
               _assetHasIntegrityMetadata(asset) =>
         AppUpdateInstallMode.seamlessRestart,
-      AppUpdatePlatform.linux when asset.name.endsWith('.tar.gz') =>
+      AppUpdatePlatform.linux
+          when asset.name.endsWith('.tar.gz') &&
+              _assetHasIntegrityMetadata(asset) =>
         AppUpdateInstallMode.seamlessRestart,
       _ => AppUpdateInstallMode.externalDownload,
     };

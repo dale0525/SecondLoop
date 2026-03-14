@@ -73,7 +73,12 @@ void main() {
     expect(scriptText, contains('ditto "\$REPLACEMENT_APP" "\$TARGET_APP"'));
     expect(scriptText, contains('xattr -dr com.apple.quarantine'));
     expect(scriptText, contains('open -a "\$TARGET_APP"'));
-    expect(scriptText, contains('mv "\$BACKUP_APP" "\$TARGET_APP"'));
+    expect(
+      scriptText,
+      contains('mv "\$TARGET_APP" "\$TARGET_APP.failed" 2>/dev/null || true'),
+    );
+    expect(scriptText, contains('mv "\$BACKUP_APP" "\$TARGET_APP" || {'));
+    expect(scriptText, contains('rm -rf "\$TARGET_APP.failed" || true'));
   });
 }
 

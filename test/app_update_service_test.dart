@@ -302,6 +302,32 @@ void main() {
       );
     });
 
+    test('requires sha256 for seamless Linux archive installs', () async {
+      final service = AppUpdateService(
+        platformOverride: AppUpdatePlatform.linux,
+        releaseModeOverride: true,
+        currentVersionLoader: () async =>
+            const AppRuntimeVersion(version: '1.0.0', buildNumber: '7'),
+        releaseJsonFetcher: (uri) async => {
+          'version': '1.1.0',
+          'release_page_url':
+              'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
+          'platforms': {
+            'linux-x64': {
+              'install_mode': 'bundle-tar-gz',
+              'archive_url':
+                  'https://cdn.example.com/SecondLoop-linux-x64-v1.1.0.tar.gz',
+            },
+          },
+        },
+      );
+
+      final result = await service.checkForUpdates();
+
+      expect(result.update, isNotNull);
+      expect(result.update!.installMode, AppUpdateInstallMode.externalDownload);
+    });
+
     test('falls back to external release page when no platform asset exists',
         () async {
       final service = AppUpdateService(
@@ -566,6 +592,40 @@ void main() {
         logger.records
             .any((entry) => entry.type == UpdateEventType.installDispatched),
         isTrue,
+      );
+    });
+
+    test('verifies sha256 before Linux seamless install', () async {
+      final service = AppUpdateService(
+        platformOverride: AppUpdatePlatform.linux,
+        httpClient: _FakeHttpClient(
+          handler: (uri) => const _FakeHttpResponse(
+            statusCode: 200,
+            body: 'tampered-linux-archive',
+          ),
+        ),
+        processExit: (_) {},
+      );
+
+      await expectLater(
+        () => service.installAndRestart(
+          AppUpdateAvailability(
+            currentVersion: '1.0.0',
+            latestTag: 'v1.1.0',
+            releasePageUri: Uri.parse(
+              'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
+            ),
+            installMode: AppUpdateInstallMode.seamlessRestart,
+            asset: AppUpdateAsset(
+              name: 'SecondLoop-linux-x64-v1.1.0.tar.gz',
+              downloadUri: Uri.parse(
+                'https://cdn.example.com/SecondLoop-linux-x64-v1.1.0.tar.gz',
+              ),
+              sha256: 'abc123',
+            ),
+          ),
+        ),
+        throwsA(isA<StateError>()),
       );
     });
 

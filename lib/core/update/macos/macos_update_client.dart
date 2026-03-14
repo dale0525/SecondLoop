@@ -243,8 +243,11 @@ if ditto "\$REPLACEMENT_APP" "\$TARGET_APP"; then
   open -a "\$TARGET_APP" >/dev/null 2>&1 || nohup "\$TARGET_EXECUTABLE" >/dev/null 2>&1 &
   rm -rf "\$BACKUP_APP" "\$TEMP_ROOT"
 else
-  rm -rf "\$TARGET_APP"
-  mv "\$BACKUP_APP" "\$TARGET_APP"
+  mv "\$TARGET_APP" "\$TARGET_APP.failed" 2>/dev/null || true
+  mv "\$BACKUP_APP" "\$TARGET_APP" || {
+    exit 1
+  }
+  rm -rf "\$TARGET_APP.failed" || true
   open -a "\$TARGET_APP" >/dev/null 2>&1 || true
   exit 1
 fi
