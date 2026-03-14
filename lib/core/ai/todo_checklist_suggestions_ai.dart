@@ -167,7 +167,6 @@ String buildTodoChecklistSuggestionContext({
 }) {
   final parts = <String>[
     todo.title.trim(),
-    if ((todo.status).trim().isNotEmpty) 'status: ${todo.status.trim()}',
   ];
 
   for (final activity in activities) {

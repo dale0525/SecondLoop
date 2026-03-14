@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:secondloop/core/ai/todo_checklist_suggestions_ai.dart';
+import 'package:secondloop/src/rust/db.dart';
 
 void main() {
   test('checklist prompt uses parser max-item constant', () {
@@ -14,6 +15,27 @@ void main() {
       contains(
           'Suggest 0 to $kMaxGeneratedChecklistSuggestions checklist items.'),
     );
+  });
+
+  test('checklist context omits status because prompt has dedicated field', () {
+    final contextText = buildTodoChecklistSuggestionContext(
+      todo: const Todo(
+        id: 't1',
+        title: 'Plan launch',
+        dueAtMs: null,
+        status: 'open',
+        sourceEntryId: null,
+        createdAtMs: 0,
+        updatedAtMs: 0,
+        reviewStage: null,
+        nextReviewAtMs: null,
+        lastReviewAtMs: null,
+      ),
+      activities: const <TodoActivity>[],
+    );
+
+    expect(contextText, 'Plan launch');
+    expect(contextText, isNot(contains('status: open')));
   });
 
   test('checklist parser caps output at max generated suggestions', () {
