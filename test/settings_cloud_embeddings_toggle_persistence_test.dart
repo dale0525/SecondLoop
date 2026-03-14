@@ -18,6 +18,7 @@ import 'package:secondloop/features/settings/settings_page.dart';
 
 import 'test_backend.dart';
 import 'test_i18n.dart';
+import 'ai_settings_test_helpers.dart';
 
 bool _switchValue(WidgetTester tester, Finder finder) {
   return tester.widget<SwitchListTile>(finder).value;
@@ -70,6 +71,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(AiSettingsPage), findsOneWidget);
+    await openAiAdvancedSettings(tester);
     final cloudEmbeddingsSwitch =
         find.byKey(const ValueKey('ai_settings_cloud_embeddings_switch'));
     await tester.dragUntilVisible(
@@ -82,8 +84,7 @@ void main() {
     expect(_switchValue(tester, cloudEmbeddingsSwitch), isTrue);
   });
 
-  testWidgets(
-      'Settings: cloud embeddings prompt updates unified AI settings toggle',
+  testWidgets('Settings: AI feature guide opens unified AI settings home',
       (tester) async {
     SharedPreferences.setMockInitialValues({
       'embeddings_data_consent_v1': false,
@@ -129,39 +130,12 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    var guard = 0;
-    while (find.byType(AlertDialog).evaluate().isNotEmpty && guard < 4) {
-      await tester.tap(
-        find.descendant(
-          of: find.byType(AlertDialog),
-          matching: find.byType(TextButton),
-        ),
-      );
-      await tester.pumpAndSettle();
-      guard += 1;
-    }
 
-    final aiEntry = find.byKey(const ValueKey('settings_ai_source'));
-    await tester.dragUntilVisible(
-      aiEntry,
-      find.byType(ListView),
-      const Offset(0, -220),
+    expect(find.byType(AiSettingsPage), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('ai_settings_home_smart_organization')),
+      findsOneWidget,
     );
-    await tester.pumpAndSettle();
-
-    await tester.tap(aiEntry);
-    await tester.pumpAndSettle();
-
-    final cloudEmbeddingsSwitch =
-        find.byKey(const ValueKey('ai_settings_cloud_embeddings_switch'));
-    await tester.dragUntilVisible(
-      cloudEmbeddingsSwitch,
-      find.byType(ListView).first,
-      const Offset(0, -220),
-    );
-    await tester.pumpAndSettle();
-
-    expect(_switchValue(tester, cloudEmbeddingsSwitch), isTrue);
   });
 }
 

@@ -12,6 +12,7 @@ import 'package:secondloop/features/settings/llm_profiles_page.dart';
 import 'package:secondloop/src/rust/db.dart';
 
 import 'test_i18n.dart';
+import 'ai_settings_test_helpers.dart';
 
 void main() {
   testWidgets(
@@ -38,8 +39,18 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester
-        .tap(find.byKey(const ValueKey('ai_settings_ask_ai_mode_byok')));
+    await openAiAdvancedSettings(tester);
+
+    final askAiByok =
+        find.byKey(const ValueKey('ai_settings_ask_ai_mode_byok'));
+    await tester.dragUntilVisible(
+      askAiByok,
+      find.byType(ListView).first,
+      const Offset(0, -220),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(askAiByok);
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 800));
 
@@ -69,6 +80,8 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
+
+    await openAiAdvancedSettings(tester);
 
     final listView = find.byType(ListView).first;
     final byokTile = find.byKey(const ValueKey('ai_settings_media_mode_byok'));
@@ -106,6 +119,8 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
+
+    await openAiAdvancedSettings(tester);
 
     final listView = find.byType(ListView).first;
     final byokTile =

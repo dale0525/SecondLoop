@@ -11,6 +11,7 @@ import 'package:secondloop/features/settings/ai_settings_page.dart';
 
 import 'test_backend.dart';
 import 'test_i18n.dart';
+import 'ai_settings_test_helpers.dart';
 
 void main() {
   testWidgets(
@@ -33,6 +34,8 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
+
+    await openAiAdvancedSettings(tester);
 
     final listView = find.byType(ListView);
     final rebuildButton =
@@ -66,6 +69,8 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
+
+    await openAiAdvancedSettings(tester);
 
     final listView = find.byType(ListView);
     final rebuildButton =
@@ -108,6 +113,8 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    await openAiAdvancedSettings(tester);
+
     final listView = find.byType(ListView);
     final rebuildButton =
         find.byKey(const ValueKey('knowledge_index_rebuild_button'));
@@ -147,6 +154,8 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
+
+    await openAiAdvancedSettings(tester);
 
     final listView = find.byType(ListView);
     final rebuildButton =
@@ -188,6 +197,8 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
+
+    await openAiAdvancedSettings(tester);
 
     final listView = find.byType(ListView);
     final cancelButton = find.byKey(

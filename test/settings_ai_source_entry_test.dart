@@ -12,6 +12,7 @@ import 'package:secondloop/features/settings/settings_page.dart';
 
 import 'test_backend.dart';
 import 'test_i18n.dart';
+import 'ai_settings_test_helpers.dart';
 
 void main() {
   testWidgets('Settings includes AI source entry and opens unified page',
@@ -48,8 +49,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(AiSettingsPage), findsOneWidget);
-    expect(find.byKey(const ValueKey('ai_settings_section_ask_ai')),
-        findsOneWidget);
+    expect(
+        find.byKey(const ValueKey('ai_settings_home_ask_ai')), findsOneWidget);
   });
 
   testWidgets(
@@ -88,6 +89,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(AiSettingsPage), findsOneWidget);
+
+    await openAiAdvancedSettings(tester);
 
     final listView = find.byType(ListView).first;
     final mediaSection =

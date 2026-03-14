@@ -13,6 +13,7 @@ import 'package:secondloop/features/settings/knowledge_index_settings_card.dart'
 
 import 'test_backend.dart';
 import 'test_i18n.dart';
+import 'ai_settings_test_helpers.dart';
 
 void main() {
   testWidgets('Knowledge Index settings card shows status and rebuild action',
@@ -34,6 +35,8 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
+
+    await openAiAdvancedSettings(tester);
 
     final listView = find.byType(ListView);
     final rebuildButton =
@@ -71,6 +74,8 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
+
+    await openAiAdvancedSettings(tester);
 
     final listView = find.byType(ListView);
     final rebuildButton =

@@ -53,8 +53,10 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(AiSettingsPage), findsOneWidget);
-    expect(find.byKey(const ValueKey('ai_settings_section_ask_ai')),
-        findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('ai_settings_section_ask_ai')),
+      findsOneWidget,
+    );
     expect(backend.calls, isNot(contains('processPending')));
     expect(backend.calls, isNot(contains('askAiStream')));
   });

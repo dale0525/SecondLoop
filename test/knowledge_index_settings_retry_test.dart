@@ -11,6 +11,7 @@ import 'package:secondloop/features/settings/ai_settings_page.dart';
 
 import 'test_backend.dart';
 import 'test_i18n.dart';
+import 'ai_settings_test_helpers.dart';
 
 void main() {
   testWidgets('Knowledge Index card shows failed state and retry rebuild',
@@ -32,6 +33,8 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
+
+    await openAiAdvancedSettings(tester);
 
     final listView = find.byType(ListView);
     final rebuildButton =

@@ -143,10 +143,16 @@
   },
   "aiSelection": {
     "title": "智能化",
-    "subtitle": "统一设置 AI 问答、智能检索（Embedding）、图片读字（OCR）和语音转文字。",
+    "subtitle": "先配置最重要的少量 AI 能力；更细的服务来源与媒体处理选项放在“高级设置”里。",
+    "advancedSettings": {
+      "title": "高级设置",
+      "description": "服务来源路由、智能检索、媒体理解，以及更多细项控制。",
+      "collapsed": "默认收起，避免首页信息过载。",
+      "expanded": "已展开专家向设置与服务来源细节。"
+    },
     "askAi": {
       "title": "AI 对话",
-      "description": "决定“AI 对话”使用哪种服务来源（Cloud 或 API 密钥）。",
+      "description": "在你主动需要帮助时使用 AI，对消息、记忆和草稿进行辅助。",
       "setupHint": "还没完成“AI 对话”设置，请先登录 Cloud 或添加 API 密钥。",
       "preferenceUnavailableHint": "你选择的“AI 对话”来源暂时不可用，请先完成 Cloud 或 API 密钥设置。",
       "status": {
@@ -171,7 +177,30 @@
       },
       "actions": {
         "openCloud": "打开 Cloud 账户",
-        "openByok": "打开 API 密钥"
+        "openByok": "打开 API 密钥",
+        "openSettings": "打开 AI 对话设置",
+        "reviewAdvanced": "查看高级来源设置"
+      }
+    },
+    "smartOrganization": {
+      "title": "智能整理增强",
+      "description": "提升消息理解、待办关联和自动整理的准确度。",
+      "privacySummary": "仅发送完成能力所需的最小文本；不会上传你的 vault key 和 sync key。",
+      "status": {
+        "loading": "正在检查当前设置...",
+        "enabled": "已开启增强整理",
+        "disabled": "已关闭增强整理",
+        "requiresSetup": "需先登录 SecondLoop Pro 或配置 API 密钥后，才能启用更智能的整理能力。"
+      },
+      "actions": {
+        "openSettings": "打开智能整理设置",
+        "useRecommended": "使用推荐配置",
+        "reviewAdvanced": "查看高级组成项"
+      },
+      "dialogTitle": "开启智能整理增强？",
+      "dialogBody": "开启后，SecondLoop 会使用当前可用的最佳 AI 路由，提升消息理解、待办关联和自动整理能力。仅会发送最小必要文本，你的 key 不会被上传。",
+      "dialogActions": {
+        "enable": "开启"
       }
     },
     "embeddings": {

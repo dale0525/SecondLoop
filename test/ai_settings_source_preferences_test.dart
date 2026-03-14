@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:secondloop/features/settings/ai_settings_page.dart';
 
 import 'test_i18n.dart';
+import 'ai_settings_test_helpers.dart';
 
 bool _switchValue(WidgetTester tester, Finder finder) {
   return tester.widget<SwitchListTile>(finder).value;
@@ -23,6 +24,8 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
+
+    await openAiAdvancedSettings(tester);
 
     final listView = find.byType(ListView);
 
@@ -67,6 +70,8 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    await openAiAdvancedSettings(tester);
+
     final listView = find.byType(ListView);
     final imageWifiOnly =
         find.byKey(const ValueKey('ai_settings_media_image_wifi_only'));
@@ -102,6 +107,8 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
+
+    await openAiAdvancedSettings(tester);
 
     final listView = find.byType(ListView);
     final taskPrioritySwitch =
@@ -140,6 +147,8 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
+
+    await openAiAdvancedSettings(tester);
 
     final semanticSwitch = find.byKey(
       const ValueKey('ai_settings_semantic_parse_auto_actions_switch'),
@@ -193,6 +202,8 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
+
+      await openAiAdvancedSettings(tester);
 
       final semanticSwitch = find.byKey(
         const ValueKey('ai_settings_semantic_parse_auto_actions_switch'),

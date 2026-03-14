@@ -78,6 +78,12 @@
       "cancel": "Not now",
       "confirm": "Switch"
     },
+    "aiFeatureGuideDialog": {
+      "title": "More AI features are now available",
+      "message": "Your Pro subscription unlocked smarter AI setup. Review the recommended AI configuration now, or do it later from Settings > Intelligence.",
+      "cancel": "Later",
+      "confirm": "Review setup"
+    },
     "setPassphraseDialog": {
       "title": "Set recovery passphrase (Advanced)",
       "confirm": "Save recovery passphrase"
