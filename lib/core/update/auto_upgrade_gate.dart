@@ -31,8 +31,11 @@ class AutoUpgradeGate extends StatefulWidget {
   static const updateNoticeDismissedInSessionPrefsKey =
       'update_notice_dismissed_in_session_v1';
   static const updateReadyAckTagPrefsKey = 'update_ready_ack_tag_v1';
-  static final fallbackUpdateUri =
-      Uri.parse('https://github.com/dale0525/SecondLoop/releases/latest');
+  static Uri fallbackUpdateUri({required String releaseRepo}) {
+    final normalizedRepo =
+        releaseRepo.trim().isEmpty ? 'dale0525/SecondLoop' : releaseRepo.trim();
+    return Uri.parse('https://github.com/$normalizedRepo/releases/latest');
+  }
 
   @override
   State<AutoUpgradeGate> createState() => _AutoUpgradeGateState();
@@ -195,10 +198,13 @@ class _AutoUpgradeGateState extends State<AutoUpgradeGate> {
     final aboutT = context.t.settings.about;
     try {
       final launcher = widget.externalUriLauncher;
+      final fallbackUri = AutoUpgradeGate.fallbackUpdateUri(
+        releaseRepo: _updateService.releaseRepo,
+      );
       final opened = launcher != null
-          ? await launcher(AutoUpgradeGate.fallbackUpdateUri)
+          ? await launcher(fallbackUri)
           : await launchUrl(
-              AutoUpgradeGate.fallbackUpdateUri,
+              fallbackUri,
               mode: LaunchMode.externalApplication,
             );
       if (!opened && mounted) {

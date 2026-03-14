@@ -6,18 +6,18 @@ import 'package:secondloop/core/update/app_update_service.dart';
 import 'package:secondloop/core/update/auto_upgrade_gate.dart';
 import 'package:secondloop/core/update/update_badge_prefs.dart';
 import 'package:secondloop/core/update/update_restart_activity.dart';
-import 'package:secondloop/features/settings/about_page.dart';
-
 import 'test_i18n.dart';
 
 class _FakeAutoUpdateService extends AppUpdateService {
   _FakeAutoUpdateService({
     required this.result,
     this.throwOnApplyPending = false,
+    this.releaseRepoValue = 'dale0525/SecondLoop',
   });
 
   final AppUpdateCheckResult result;
   final bool throwOnApplyPending;
+  final String releaseRepoValue;
 
   int checkCalls = 0;
   int installCalls = 0;
@@ -26,6 +26,9 @@ class _FakeAutoUpdateService extends AppUpdateService {
   int applyPendingCalls = 0;
   AppUpdateAvailability? installed;
   AppUpdateAvailability? staged;
+
+  @override
+  String get releaseRepo => releaseRepoValue;
 
   @override
   Future<AppUpdateCheckResult> checkForUpdates() async {
@@ -256,6 +259,7 @@ void main() {
     SharedPreferences.setMockInitialValues({});
     final service = _FakeAutoUpdateService(
       throwOnApplyPending: true,
+      releaseRepoValue: 'acme/SecondLoopFork',
       result: const AppUpdateCheckResult(currentVersion: '1.0.1+99'),
     );
     Uri? openedUri;
@@ -276,7 +280,8 @@ void main() {
     await tester.tap(find.text('Manual update'));
     await tester.pumpAndSettle();
 
-    expect(openedUri, AboutPage.releasePageUri);
+    expect(openedUri,
+        Uri.parse('https://github.com/acme/SecondLoopFork/releases/latest'));
     expect(service.checkCalls, 1);
   });
 

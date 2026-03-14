@@ -178,6 +178,7 @@ class AppUpdateService {
   String get _releaseApiOrigin =>
       _releaseApiOriginOverride ?? _defaultReleaseApiOrigin;
   String get _releaseRepo => _releaseRepoOverride ?? _defaultReleaseRepo;
+  String get releaseRepo => _releaseRepo;
   String get _updatePublicKey =>
       _updatePublicKeyOverride ?? _defaultUpdatePublicKey;
   void _exitProcess(int code) => (_processExit ?? exit)(code);
