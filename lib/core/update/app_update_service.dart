@@ -363,9 +363,13 @@ class AppUpdateService {
         if (stagedClient == null || !stagedClient.isAvailable()) {
           throw StateError('windows_velopack_unavailable');
         }
-        await _withPreparedAsset(asset, (localUri) async {
-          await stagedClient.installAssetAndRestart(localUri, waitPid: pid);
-        });
+        if (stagedClient.hasPendingUpdate()) {
+          await stagedClient.applyPendingAndRestart(waitPid: pid);
+        } else {
+          await _withPreparedAsset(asset, (localUri) async {
+            await stagedClient.installAssetAndRestart(localUri, waitPid: pid);
+          });
+        }
         await _recordEvent(
           UpdateEventType.installDispatched,
           currentVersion: update.currentVersion,
@@ -1155,7 +1159,7 @@ waited=0
 APP_START=\$(/bin/ps -o lstart= -p "\$APP_PID" 2>/dev/null | sed 's/^ *//')
 
 cleanup() {
-  rm -rf "\$STAGED_DIR" "\$TEMP_ROOT"
+  rm -rf "\$STAGED_DIR" "\$TEMP_ROOT" || true
 }
 
 restore_backup() {

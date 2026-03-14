@@ -24,11 +24,13 @@ class _InMemoryUpdateEventLogger implements UpdateEventLogger {
 class _FakeWindowsStagedUpdateClient implements WindowsStagedUpdateClient {
   _FakeWindowsStagedUpdateClient({
     required this.available,
+    this.pendingUpdateAvailable = false,
     this.onStageAsset,
     this.onInstallAsset,
   });
 
   final bool available;
+  final bool pendingUpdateAvailable;
   final Future<void> Function(Uri assetDownloadUri)? onStageAsset;
   final Future<void> Function(Uri assetDownloadUri)? onInstallAsset;
   final List<Uri> stagedAssets = <Uri>[];
@@ -42,6 +44,11 @@ class _FakeWindowsStagedUpdateClient implements WindowsStagedUpdateClient {
   bool isAvailable() {
     isAvailableCalls += 1;
     return available;
+  }
+
+  @override
+  bool hasPendingUpdate() {
+    return pendingUpdateAvailable;
   }
 
   @override
@@ -649,6 +656,42 @@ void main() {
   });
 
   group('AppUpdateService.installAndRestart', () {
+
+    test('applies staged Windows update without re-downloading', () async {
+      final stagedClient = _FakeWindowsStagedUpdateClient(
+        available: true,
+        pendingUpdateAvailable: true,
+      );
+      var exitedCode = -1;
+      final service = AppUpdateService(
+        platformOverride: AppUpdatePlatform.windows,
+        windowsStagedUpdateClient: stagedClient,
+        httpClient: _FakeHttpClient(
+          handler: (uri) => throw StateError('should_not_download:$uri'),
+        ),
+        processExit: (code) => exitedCode = code,
+      );
+
+      final update = AppUpdateAvailability(
+        currentVersion: '1.0.0',
+        latestTag: 'v1.1.0',
+        releasePageUri: Uri.parse(
+          'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
+        ),
+        installMode: AppUpdateInstallMode.seamlessRestart,
+        asset: AppUpdateAsset(
+          name: 'com.secondloop.secondloop-1.1.0-full.nupkg',
+          downloadUri: Uri.parse('https://cdn.example.com/win.nupkg'),
+        ),
+      );
+
+      await service.installAndRestart(update);
+
+      expect(stagedClient.installCalls, 0);
+      expect(stagedClient.applyPendingAndRestartCalls, 1);
+      expect(exitedCode, 0);
+    });
+
     test('delegates Windows install to Velopack and exits', () async {
       final stagedClient = _FakeWindowsStagedUpdateClient(available: true);
       final logger = _InMemoryUpdateEventLogger();

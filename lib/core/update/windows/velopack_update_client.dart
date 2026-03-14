@@ -16,6 +16,8 @@ typedef VelopackProcessStarter = Future<Process> Function(
 abstract class WindowsStagedUpdateClient {
   bool isAvailable();
 
+  bool hasPendingUpdate();
+
   Future<void> stageAsset(Uri assetDownloadUri);
 
   Future<void> installAssetAndRestart(
@@ -58,6 +60,15 @@ class VelopackUpdateClient implements WindowsStagedUpdateClient {
       '$appRoot${Platform.pathSeparator}current${Platform.pathSeparator}sq.version',
     );
     return sqVersionPath.existsSync();
+  }
+
+  @override
+  bool hasPendingUpdate() {
+    final updateExePath = _updateExePath;
+    if (!File(updateExePath).existsSync()) {
+      return false;
+    }
+    return _hasPendingPackageUpdate(updateExePath);
   }
 
   @override
