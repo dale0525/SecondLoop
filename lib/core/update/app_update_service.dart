@@ -1190,7 +1190,7 @@ mkdir -p "\$STAGED_DIR"
 cp -a "\$SOURCE_DIR"/. "\$STAGED_DIR"/
 mv "\$APP_DIR" "\$BACKUP_DIR"
 mv "\$STAGED_DIR" "\$APP_DIR"
-rm -rf "\$BACKUP_DIR"
+rm -rf "\$BACKUP_DIR" || true
 chmod +x "\$EXE_PATH" || true
 nohup "\$EXE_PATH" >/dev/null 2>&1 &
 trap - EXIT

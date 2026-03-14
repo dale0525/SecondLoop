@@ -23,6 +23,7 @@ void main() {
     expect(script, contains('rm -rf "\$APP_DIR.failed" || true'));
     expect(script, contains('mv "\$APP_DIR" "\$BACKUP_DIR"'));
     expect(script, contains('mv "\$STAGED_DIR" "\$APP_DIR"'));
+    expect(script, contains('rm -rf "\$BACKUP_DIR" || true'));
   });
 
   test('sha256FileHexForTest hashes files correctly', () async {
