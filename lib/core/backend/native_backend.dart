@@ -1742,6 +1742,40 @@ class NativeAppBackend
   }
 
   @override
+  Future<String> taskPriorityRerankAi(
+    Uint8List key, {
+    required String prompt,
+  }) async {
+    final appDir = await _getAppDir();
+    final localDay = _formatLocalDayKey(DateTime.now());
+    return rust_core.aiTaskPriorityRerank(
+      appDir: appDir,
+      key: key,
+      prompt: prompt,
+      localDay: localDay,
+    );
+  }
+
+  @override
+  Future<String> taskPriorityRerankAiCloudGateway(
+    Uint8List key, {
+    required String prompt,
+    required String gatewayBaseUrl,
+    required String idToken,
+    required String modelName,
+  }) async {
+    final appDir = await _getAppDir();
+    return rust_core.aiTaskPriorityRerankCloudGateway(
+      appDir: appDir,
+      key: key,
+      prompt: prompt,
+      gatewayBaseUrl: gatewayBaseUrl,
+      firebaseIdToken: idToken,
+      modelName: modelName,
+    );
+  }
+
+  @override
   Future<String> semanticParseMessageAction(
     Uint8List key, {
     required String text,

@@ -1,6 +1,5 @@
-import 'dart:async';
 import 'dart:convert';
-import 'dart:typed_data';
+import 'package:flutter/foundation.dart';
 
 import '../../../core/ai/ai_routing.dart';
 import '../../../core/backend/app_backend.dart';
@@ -8,6 +7,8 @@ import 'task_priority_ai_models.dart';
 import 'task_priority_models.dart';
 
 abstract interface class TaskPriorityAiService {
+  String get cacheScopeKey;
+
   Future<TaskPriorityAiBatchResult> rerank(TaskPriorityAiRequest request);
 }
 
@@ -28,6 +29,21 @@ Future<AskAiRouteKind> resolveTaskPriorityAiRoute(
 }
 
 class BackendTaskPriorityAiService implements TaskPriorityAiService {
+  static final Map<String, _TaskPriorityAiCacheEntry> _sharedCache =
+      <String, _TaskPriorityAiCacheEntry>{};
+  static final Map<String, Future<String>> _sharedInflight =
+      <String, Future<String>>{};
+  // Keep this cache short-lived: the prompt still includes `now_local_iso`, but
+  // the shared cache key intentionally ignores it so near-duplicate reranks from
+  // multiple pages can collapse into one upstream call.
+  static const Duration _sharedCacheTtl = Duration(minutes: 1);
+
+  @visibleForTesting
+  static void clearSharedCacheForTest() {
+    _sharedCache.clear();
+    _sharedInflight.clear();
+  }
+
   BackendTaskPriorityAiService({
     required AppBackend backend,
     required Uint8List sessionKey,
@@ -35,12 +51,14 @@ class BackendTaskPriorityAiService implements TaskPriorityAiService {
     required String gatewayBaseUrl,
     required String idToken,
     required String modelName,
+    required String localeTag,
   })  : _backend = backend,
         _sessionKey = Uint8List.fromList(sessionKey),
         _route = route,
         _gatewayBaseUrl = gatewayBaseUrl,
         _idToken = idToken,
-        _modelName = modelName;
+        _modelName = modelName,
+        _localeTag = localeTag.trim();
 
   factory BackendTaskPriorityAiService.forTesting({
     required AppBackend backend,
@@ -49,6 +67,7 @@ class BackendTaskPriorityAiService implements TaskPriorityAiService {
     required String gatewayBaseUrl,
     required String idToken,
     required String modelName,
+    String localeTag = 'en-US',
   }) {
     return BackendTaskPriorityAiService(
       backend: backend,
@@ -57,6 +76,7 @@ class BackendTaskPriorityAiService implements TaskPriorityAiService {
       gatewayBaseUrl: gatewayBaseUrl,
       idToken: idToken,
       modelName: modelName,
+      localeTag: localeTag,
     );
   }
 
@@ -66,44 +86,86 @@ class BackendTaskPriorityAiService implements TaskPriorityAiService {
   final String _gatewayBaseUrl;
   final String _idToken;
   final String _modelName;
+  final String _localeTag;
+
+  List<String> get _cacheScopeParts => <String>[
+        _route.name,
+        _gatewayBaseUrl,
+        _modelName,
+        _localeTag,
+      ];
+
+  @override
+  String get cacheScopeKey => jsonEncode(_cacheScopeParts);
 
   @override
   Future<TaskPriorityAiBatchResult> rerank(
       TaskPriorityAiRequest request) async {
-    final prompt = _buildPrompt(request);
-    final response = await _collectResponse(
-      _route == AskAiRouteKind.cloudGateway
-          ? _backend.askAiStreamCloudGateway(
-              _sessionKey,
-              'loop_home',
-              question: prompt,
-              topK: 1,
-              thisThreadOnly: true,
-              gatewayBaseUrl: _gatewayBaseUrl,
-              idToken: _idToken,
-              modelName: _modelName,
-            )
-          : _backend.askAiStream(
-              _sessionKey,
-              'loop_home',
-              question: prompt,
-              topK: 1,
-              thisThreadOnly: true,
-            ),
+    final cacheKey = _buildCacheKey(request);
+    final response = await _resolveSharedCachedOrFreshResponse(
+      cacheKey,
+      () {
+        final prompt = _buildPrompt(request);
+        return _route == AskAiRouteKind.cloudGateway
+            ? _backend.taskPriorityRerankAiCloudGateway(
+                _sessionKey,
+                prompt: prompt,
+                gatewayBaseUrl: _gatewayBaseUrl,
+                idToken: _idToken,
+                modelName: _modelName,
+              )
+            : _backend.taskPriorityRerankAi(
+                _sessionKey,
+                prompt: prompt,
+              );
+      },
     );
-    return parseTaskPriorityAiBatchResult(response);
-  }
-
-  Future<String> _collectResponse(Stream<String> stream) async {
-    final buffer = StringBuffer();
-    await for (final chunk in stream) {
-      buffer.write(chunk);
-    }
-    final output = buffer.toString().trim();
+    final output = response.trim();
     if (output.isEmpty) {
       throw const FormatException('task_priority_ai_empty_response');
     }
-    return output;
+    return parseTaskPriorityAiBatchResult(output);
+  }
+
+  String _buildCacheKey(TaskPriorityAiRequest request) {
+    return jsonEncode(<String, Object?>{
+      'scope': _cacheScopeParts,
+      'candidates': request.candidates
+          .map((entry) => entry.toJson())
+          .toList(growable: false),
+    });
+  }
+
+  Future<String> _resolveSharedCachedOrFreshResponse(
+    String cacheKey,
+    Future<String> Function() loader,
+  ) {
+    final now = DateTime.now();
+    _sharedCache.removeWhere(
+      (_, entry) => now.difference(entry.cachedAt) > _sharedCacheTtl,
+    );
+
+    final cached = _sharedCache[cacheKey];
+    if (cached != null) {
+      return Future<String>.value(cached.response);
+    }
+
+    final inflight = _sharedInflight[cacheKey];
+    if (inflight != null) {
+      return inflight;
+    }
+
+    final future = loader().then((response) {
+      _sharedCache[cacheKey] = _TaskPriorityAiCacheEntry(
+        response: response,
+        cachedAt: DateTime.now(),
+      );
+      return response;
+    }).whenComplete(() {
+      _sharedInflight.remove(cacheKey);
+    });
+    _sharedInflight[cacheKey] = future;
+    return future;
   }
 
   String _buildPrompt(TaskPriorityAiRequest request) {
@@ -114,6 +176,9 @@ class BackendTaskPriorityAiService implements TaskPriorityAiService {
       'Allowed priority_band: focus | next | later.',
       'Allowed suggested_action: do_now | schedule | defer | clarify.',
       'Do not invent facts. Keep reasons short and verifiable.',
+      _localeTag.isEmpty
+          ? "Write the reason field in the user's current app language."
+          : "Write the reason field in the user's current app language ($_localeTag).",
       'Payload:',
       payload,
     ].join('\n');
@@ -178,4 +243,14 @@ String _recentInteractionSummary(TaskPriorityEntry entry, DateTime nowLocal) {
     return 'updated within the last week';
   }
   return 'stale for more than a week';
+}
+
+final class _TaskPriorityAiCacheEntry {
+  const _TaskPriorityAiCacheEntry({
+    required this.response,
+    required this.cachedAt,
+  });
+
+  final String response;
+  final DateTime cachedAt;
 }
