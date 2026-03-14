@@ -311,7 +311,7 @@ final class _CloudSyncSwitchPromptGateState
     await prefs.setString(_kCloudAiFeatureGuidePromptedUidPrefsKey, uid);
 
     if (review == true && effectiveContext.mounted) {
-      await Navigator.of(effectiveContext).push(
+      await Navigator.of(effectiveContext, rootNavigator: true).push(
         MaterialPageRoute(
           builder: (_) => const AiSettingsPage(
             focusSection: AiSettingsSection.smartOrganization,

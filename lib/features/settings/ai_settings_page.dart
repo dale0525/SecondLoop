@@ -120,7 +120,9 @@ class _AiSettingsPageState extends State<AiSettingsPage> {
 
   GlobalKey _sectionAnchorKeyOf(AiSettingsSection section) {
     return switch (section) {
-      AiSettingsSection.askAi => _askAiSectionAnchorKey,
+      AiSettingsSection.askAi => _advancedSettingsExpanded
+          ? _advancedAskAiSectionAnchorKey
+          : _askAiSectionAnchorKey,
       AiSettingsSection.smartOrganization => _smartOrganizationSectionAnchorKey,
       AiSettingsSection.embeddings => _embeddingsSectionAnchorKey,
       AiSettingsSection.mediaUnderstanding => _mediaSectionAnchorKey,

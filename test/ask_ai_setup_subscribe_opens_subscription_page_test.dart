@@ -66,8 +66,17 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.byType(AiSettingsPage), findsOneWidget);
-      expect(find.byKey(const ValueKey('ai_settings_home_ask_ai')),
-          findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('ai_settings_section_ask_ai')),
+        findsOneWidget,
+      );
+
+      await tester.dragUntilVisible(
+        find.byKey(const ValueKey('ai_settings_open_ask_ai_settings')),
+        find.byType(ListView).first,
+        const Offset(0, 220),
+      );
+      await tester.pumpAndSettle();
 
       await tester
           .tap(find.byKey(const ValueKey('ai_settings_open_ask_ai_settings')));

@@ -49,7 +49,7 @@ class _AiAskAiSettingsPageState extends State<AiAskAiSettingsPage> {
             cloudAuthScope?.gatewayConfig ?? CloudGatewayConfig.defaultConfig;
         final cloudIdToken = await readCloudCapabilityIdToken(
           cloudAuthScope?.controller,
-          mode: CloudCapabilityAuthMode.interactive,
+          mode: CloudCapabilityAuthMode.background,
         );
 
         route = await decideAskAiRoute(
