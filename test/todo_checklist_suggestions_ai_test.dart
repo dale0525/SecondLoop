@@ -11,7 +11,8 @@ void main() {
 
     expect(
       prompt,
-      contains('Suggest 0 to $kMaxGeneratedChecklistSuggestions checklist items.'),
+      contains(
+          'Suggest 0 to $kMaxGeneratedChecklistSuggestions checklist items.'),
     );
   });
 

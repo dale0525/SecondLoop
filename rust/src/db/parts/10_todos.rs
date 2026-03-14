@@ -473,9 +473,9 @@ pub fn delete_todo_checklist_item(
 ) -> Result<()> {
     run_immediate_transaction(conn, || {
         let existing = get_todo_checklist_item_by_id(conn, key, item_id)?;
+        let now = now_ms();
         conn.execute(r#"DELETE FROM todo_checklist_items WHERE id = ?1"#, params![item_id])?;
 
-        let now = now_ms();
         let device_id = get_or_create_device_id(conn)?;
         let seq = next_device_seq(conn, &device_id)?;
         let op = serde_json::json!({

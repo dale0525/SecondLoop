@@ -24,10 +24,7 @@ void main() {
     );
   });
 
-
-
-  test(
-      'runAiPrompt does not remap cloud-gateway unimplemented messages',
+  test('runAiPrompt does not remap cloud-gateway unimplemented messages',
       () async {
     final backend = _CloudGatewayMessageBackend();
 
@@ -68,7 +65,6 @@ void main() {
     );
   });
 }
-
 
 final class _CloudGatewayMessageBackend extends TestAppBackend {
   @override
