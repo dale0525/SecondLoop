@@ -126,7 +126,7 @@ extension _TodoDetailPageStateChecklist on _TodoDetailPageState {
         todoId: _todo.id,
         content: content,
       );
-      _checklistController.clear();
+      if (mounted) _checklistController.clear();
       _refreshChecklistItems();
     } catch (error) {
       _showChecklistMutationError(error);
