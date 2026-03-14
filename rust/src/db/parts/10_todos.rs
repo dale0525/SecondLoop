@@ -362,6 +362,10 @@ pub fn update_todo_checklist_item_content(
     content: &str,
 ) -> Result<TodoChecklistItem> {
     let existing = get_todo_checklist_item_by_id(conn, key, item_id)?;
+    if existing.content == content {
+        return Ok(existing);
+    }
+
     let now = now_ms();
     let content_blob = encrypt_bytes(key, content.as_bytes(), &todo_checklist_item_content_aad(item_id))?;
     conn.execute(
@@ -389,10 +393,6 @@ pub fn update_todo_checklist_item_content(
         }
     });
     insert_oplog(conn, key, &op)?;
-
-    if existing.content == updated.content {
-        return Ok(updated);
-    }
 
     Ok(updated)
 }
@@ -470,14 +470,14 @@ pub fn reorder_todo_checklist_items(
     conn.execute_batch("BEGIN IMMEDIATE;")?;
 
     let result: Result<()> = (|| {
+        let now = now_ms();
         for (index, item_id) in ordered_item_ids.iter().enumerate() {
             conn.execute(
                 r#"UPDATE todo_checklist_items SET sort_order = ?2, updated_at_ms = ?3 WHERE id = ?1 AND todo_id = ?4"#,
-                params![item_id, index as i64, now_ms(), todo_id],
+                params![item_id, index as i64, now, todo_id],
             )?;
         }
 
-        let now = now_ms();
         let device_id = get_or_create_device_id(conn)?;
         let seq = next_device_seq(conn, &device_id)?;
         let op = serde_json::json!({
@@ -660,84 +660,98 @@ pub fn upsert_generated_todo_checklist_suggestions(
     source: &str,
     generation_key: Option<&str>,
 ) -> Result<Vec<TodoChecklistSuggestion>> {
-    let existing = list_todo_checklist_suggestions(conn, key, todo_id)?;
-    let mut blocked_norms = existing
-        .iter()
-        .filter(|item| {
-            item.state == TODO_CHECKLIST_SUGGESTION_STATE_APPLIED
-                || item.state == TODO_CHECKLIST_SUGGESTION_STATE_DISMISSED
-                || item.state == TODO_CHECKLIST_SUGGESTION_STATE_PENDING
-        })
-        .map(|item| normalize_checklist_suggestion_content(&item.content))
-        .collect::<std::collections::HashSet<_>>();
+    conn.execute_batch("BEGIN IMMEDIATE;")?;
+    let result: Result<Vec<TodoChecklistSuggestion>> = (|| {
+        let existing = list_todo_checklist_suggestions(conn, key, todo_id)?;
+        let mut blocked_norms = existing
+            .iter()
+            .filter(|item| {
+                item.state == TODO_CHECKLIST_SUGGESTION_STATE_APPLIED
+                    || item.state == TODO_CHECKLIST_SUGGESTION_STATE_DISMISSED
+                    || item.state == TODO_CHECKLIST_SUGGESTION_STATE_PENDING
+            })
+            .map(|item| normalize_checklist_suggestion_content(&item.content))
+            .collect::<std::collections::HashSet<_>>();
 
-    let mut created = Vec::new();
-    let base_sort_order: i64 = conn.query_row(
-        r#"SELECT COALESCE(MAX(sort_order), -1) + 1 FROM todo_checklist_suggestions WHERE todo_id = ?1"#,
-        params![todo_id],
-        |row| row.get(0),
-    )?;
+        let mut created = Vec::new();
+        let base_sort_order: i64 = conn.query_row(
+            r#"SELECT COALESCE(MAX(sort_order), -1) + 1 FROM todo_checklist_suggestions WHERE todo_id = ?1"#,
+            params![todo_id],
+            |row| row.get(0),
+        )?;
 
-    for (offset, raw_content) in suggestions.iter().enumerate() {
-        let trimmed = raw_content.trim();
-        if trimmed.is_empty() {
-            continue;
-        }
-        let normalized = normalize_checklist_suggestion_content(trimmed);
-        if normalized.is_empty() || !blocked_norms.insert(normalized) {
-            continue;
-        }
+        for (offset, raw_content) in suggestions.iter().enumerate() {
+            let trimmed = raw_content.trim();
+            if trimmed.is_empty() {
+                continue;
+            }
+            let normalized = normalize_checklist_suggestion_content(trimmed);
+            if normalized.is_empty() || !blocked_norms.insert(normalized) {
+                continue;
+            }
 
-        let id = uuid::Uuid::new_v4().to_string();
-        let now = now_ms();
-        let content_blob = encrypt_bytes(key, trimmed.as_bytes(), &todo_checklist_suggestion_content_aad(&id))?;
-        conn.execute(
-            r#"
+            let id = uuid::Uuid::new_v4().to_string();
+            let now = now_ms();
+            let content_blob = encrypt_bytes(key, trimmed.as_bytes(), &todo_checklist_suggestion_content_aad(&id))?;
+            conn.execute(
+                r#"
 INSERT INTO todo_checklist_suggestions(
   id, todo_id, content, sort_order, state, source, generation_key, created_at_ms, updated_at_ms, dismissed_at_ms, applied_checklist_item_id
 ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, NULL, NULL)
 "#,
-            params![
-                id,
-                todo_id,
-                content_blob,
-                base_sort_order + offset as i64,
-                TODO_CHECKLIST_SUGGESTION_STATE_PENDING,
-                source,
-                generation_key,
-                now,
-                now,
-            ],
-        )?;
-        let suggestion = get_todo_checklist_suggestion_by_id(conn, key, &id)?;
+                params![
+                    id,
+                    todo_id,
+                    content_blob,
+                    base_sort_order + offset as i64,
+                    TODO_CHECKLIST_SUGGESTION_STATE_PENDING,
+                    source,
+                    generation_key,
+                    now,
+                    now,
+                ],
+            )?;
+            let suggestion = get_todo_checklist_suggestion_by_id(conn, key, &id)?;
 
-        let device_id = get_or_create_device_id(conn)?;
-        let seq = next_device_seq(conn, &device_id)?;
-        let op = serde_json::json!({
-            "op_id": uuid::Uuid::new_v4().to_string(),
-            "device_id": device_id,
-            "seq": seq,
-            "ts_ms": now,
-            "type": "todo.checklist_suggestion.upsert.v1",
-            "payload": {
-                "suggestion_id": suggestion.id.as_str(),
-                "todo_id": suggestion.todo_id.as_str(),
-                "content": suggestion.content.as_str(),
-                "sort_order": suggestion.sort_order,
-                "state": suggestion.state.as_str(),
-                "source": suggestion.source.as_str(),
-                "generation_key": suggestion.generation_key.as_deref(),
-                "created_at_ms": suggestion.created_at_ms,
-                "updated_at_ms": suggestion.updated_at_ms,
-                "dismissed_at_ms": suggestion.dismissed_at_ms,
-                "applied_checklist_item_id": suggestion.applied_checklist_item_id.as_deref(),
-            }
-        });
-        insert_oplog(conn, key, &op)?;
-        created.push(suggestion);
+            let device_id = get_or_create_device_id(conn)?;
+            let seq = next_device_seq(conn, &device_id)?;
+            let op = serde_json::json!({
+                "op_id": uuid::Uuid::new_v4().to_string(),
+                "device_id": device_id,
+                "seq": seq,
+                "ts_ms": now,
+                "type": "todo.checklist_suggestion.upsert.v1",
+                "payload": {
+                    "suggestion_id": suggestion.id.as_str(),
+                    "todo_id": suggestion.todo_id.as_str(),
+                    "content": suggestion.content.as_str(),
+                    "sort_order": suggestion.sort_order,
+                    "state": suggestion.state.as_str(),
+                    "source": suggestion.source.as_str(),
+                    "generation_key": suggestion.generation_key.as_deref(),
+                    "created_at_ms": suggestion.created_at_ms,
+                    "updated_at_ms": suggestion.updated_at_ms,
+                    "dismissed_at_ms": suggestion.dismissed_at_ms,
+                    "applied_checklist_item_id": suggestion.applied_checklist_item_id.as_deref(),
+                }
+            });
+            insert_oplog(conn, key, &op)?;
+            created.push(suggestion);
+        }
+
+        Ok(created)
+    })();
+
+    match result {
+        Ok(created) => {
+            conn.execute_batch("COMMIT;")?;
+            Ok(created)
+        }
+        Err(e) => {
+            let _ = conn.execute_batch("ROLLBACK;");
+            Err(e)
+        }
     }
-
-    Ok(created)
 }
 
 pub fn apply_todo_checklist_suggestions(
@@ -800,41 +814,55 @@ pub fn dismiss_todo_checklist_suggestions(
     todo_id: &str,
     suggestion_ids: &[String],
 ) -> Result<()> {
-    let now = now_ms();
-    for suggestion_id in suggestion_ids {
-        conn.execute(
-            r#"
+    conn.execute_batch("BEGIN IMMEDIATE;")?;
+    let result: Result<()> = (|| {
+        let now = now_ms();
+        for suggestion_id in suggestion_ids {
+            conn.execute(
+                r#"
 UPDATE todo_checklist_suggestions
 SET state = ?2, updated_at_ms = ?3, dismissed_at_ms = ?4
 WHERE id = ?1 AND todo_id = ?5 AND state = ?6
 "#,
-            params![
-                suggestion_id,
-                TODO_CHECKLIST_SUGGESTION_STATE_DISMISSED,
-                now,
-                now,
-                todo_id,
-                TODO_CHECKLIST_SUGGESTION_STATE_PENDING,
-            ],
-        )?;
+                params![
+                    suggestion_id,
+                    TODO_CHECKLIST_SUGGESTION_STATE_DISMISSED,
+                    now,
+                    now,
+                    todo_id,
+                    TODO_CHECKLIST_SUGGESTION_STATE_PENDING,
+                ],
+            )?;
 
-        let device_id = get_or_create_device_id(conn)?;
-        let seq = next_device_seq(conn, &device_id)?;
-        let op = serde_json::json!({
-            "op_id": uuid::Uuid::new_v4().to_string(),
-            "device_id": device_id,
-            "seq": seq,
-            "ts_ms": now,
-            "type": "todo.checklist_suggestion.dismiss.v1",
-            "payload": {
-                "suggestion_id": suggestion_id,
-                "todo_id": todo_id,
-                "dismissed_at_ms": now,
-            }
-        });
-        insert_oplog(conn, key, &op)?;
+            let device_id = get_or_create_device_id(conn)?;
+            let seq = next_device_seq(conn, &device_id)?;
+            let op = serde_json::json!({
+                "op_id": uuid::Uuid::new_v4().to_string(),
+                "device_id": device_id,
+                "seq": seq,
+                "ts_ms": now,
+                "type": "todo.checklist_suggestion.dismiss.v1",
+                "payload": {
+                    "suggestion_id": suggestion_id,
+                    "todo_id": todo_id,
+                    "dismissed_at_ms": now,
+                }
+            });
+            insert_oplog(conn, key, &op)?;
+        }
+        Ok(())
+    })();
+
+    match result {
+        Ok(()) => {
+            conn.execute_batch("COMMIT;")?;
+            Ok(())
+        }
+        Err(e) => {
+            let _ = conn.execute_batch("ROLLBACK;");
+            Err(e)
+        }
     }
-    Ok(())
 }
 
 pub fn dismiss_all_todo_checklist_suggestions(

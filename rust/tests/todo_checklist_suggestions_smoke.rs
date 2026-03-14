@@ -161,3 +161,110 @@ fn dismiss_all_marks_all_pending_suggestions_dismissed() {
         .iter()
         .all(|item| item.state == "dismissed" && item.dismissed_at_ms.is_some()));
 }
+
+#[test]
+fn generate_suggestions_rolls_back_when_oplog_insert_fails() {
+    let (_temp_dir, key, conn) = setup();
+
+    db::upsert_todo(
+        &conn,
+        &key,
+        "todo_1",
+        "Plan launch",
+        None,
+        "open",
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("upsert todo");
+
+    conn.execute_batch(
+        r#"
+CREATE TEMP TRIGGER fail_checklist_suggestion_oplog_insert
+BEFORE INSERT ON oplog
+BEGIN
+  SELECT RAISE(ABORT, 'forced oplog failure');
+END;
+"#,
+    )
+    .expect("create trigger");
+
+    let err = db::upsert_generated_todo_checklist_suggestions(
+        &conn,
+        &key,
+        "todo_1",
+        &[
+            "Draft launch post".to_string(),
+            "Share with team".to_string(),
+        ],
+        "cloud",
+        Some("gen_rollback"),
+    )
+    .expect_err("upsert should fail");
+    assert!(err.to_string().contains("forced oplog failure"));
+
+    let suggestions =
+        db::list_todo_checklist_suggestions(&conn, &key, "todo_1").expect("list suggestions");
+    assert!(suggestions.is_empty());
+}
+
+#[test]
+fn dismiss_suggestions_rolls_back_when_oplog_insert_fails() {
+    let (_temp_dir, key, conn) = setup();
+
+    db::upsert_todo(
+        &conn,
+        &key,
+        "todo_1",
+        "Plan launch",
+        None,
+        "open",
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("upsert todo");
+
+    let generated = db::upsert_generated_todo_checklist_suggestions(
+        &conn,
+        &key,
+        "todo_1",
+        &[
+            "Draft launch post".to_string(),
+            "Share with team".to_string(),
+        ],
+        "cloud",
+        Some("gen_1"),
+    )
+    .expect("generate suggestions");
+
+    conn.execute_batch(
+        r#"
+CREATE TEMP TRIGGER fail_checklist_dismiss_oplog_insert
+BEFORE INSERT ON oplog
+BEGIN
+  SELECT RAISE(ABORT, 'forced oplog failure');
+END;
+"#,
+    )
+    .expect("create trigger");
+
+    let err = db::dismiss_todo_checklist_suggestions(
+        &conn,
+        &key,
+        "todo_1",
+        &[generated[0].id.clone(), generated[1].id.clone()],
+    )
+    .expect_err("dismiss should fail");
+    assert!(err.to_string().contains("forced oplog failure"));
+
+    let suggestions =
+        db::list_todo_checklist_suggestions(&conn, &key, "todo_1").expect("list suggestions");
+    assert!(suggestions.iter().all(|item| item.state == "pending"));
+    assert!(suggestions
+        .iter()
+        .all(|item| item.dismissed_at_ms.is_none()));
+}
