@@ -1,3 +1,7 @@
+import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:secondloop/core/update/app_update_service.dart';
@@ -18,21 +22,32 @@ class _InMemoryUpdateEventLogger implements UpdateEventLogger {
 }
 
 class _FakeWindowsStagedUpdateClient implements WindowsStagedUpdateClient {
-  _FakeWindowsStagedUpdateClient({required this.available});
+  _FakeWindowsStagedUpdateClient({
+    required this.available,
+    this.onStageAsset,
+    this.onInstallAsset,
+  });
 
   final bool available;
+  final Future<void> Function(Uri assetDownloadUri)? onStageAsset;
+  final Future<void> Function(Uri assetDownloadUri)? onInstallAsset;
   final List<Uri> stagedAssets = <Uri>[];
   final List<Uri> installedAssets = <Uri>[];
   int applyPendingCalls = 0;
   int applyPendingAndRestartCalls = 0;
   int installCalls = 0;
+  int isAvailableCalls = 0;
 
   @override
-  bool isAvailable() => available;
+  bool isAvailable() {
+    isAvailableCalls += 1;
+    return available;
+  }
 
   @override
   Future<void> stageAsset(Uri assetDownloadUri) async {
     stagedAssets.add(assetDownloadUri);
+    await onStageAsset?.call(assetDownloadUri);
   }
 
   @override
@@ -42,6 +57,7 @@ class _FakeWindowsStagedUpdateClient implements WindowsStagedUpdateClient {
   }) async {
     installCalls += 1;
     installedAssets.add(assetDownloadUri);
+    await onInstallAsset?.call(assetDownloadUri);
   }
 
   @override
@@ -56,14 +72,22 @@ class _FakeWindowsStagedUpdateClient implements WindowsStagedUpdateClient {
 }
 
 class _FakeMacosManagedUpdateClient implements MacosManagedUpdateClient {
-  _FakeMacosManagedUpdateClient({required this.supportedInstallLocation});
+  _FakeMacosManagedUpdateClient({
+    required this.supportedInstallLocation,
+    this.onInstallArchive,
+  });
 
   final bool supportedInstallLocation;
+  final Future<void> Function(Uri archiveUri)? onInstallArchive;
   final List<Uri> installedAssets = <Uri>[];
   int installCalls = 0;
+  int isSupportedInstallLocationCalls = 0;
 
   @override
-  bool isSupportedInstallLocation() => supportedInstallLocation;
+  bool isSupportedInstallLocation() {
+    isSupportedInstallLocationCalls += 1;
+    return supportedInstallLocation;
+  }
 
   @override
   Future<void> installArchiveAndRestart(
@@ -72,6 +96,7 @@ class _FakeMacosManagedUpdateClient implements MacosManagedUpdateClient {
   }) async {
     installCalls += 1;
     installedAssets.add(archiveUri);
+    await onInstallArchive?.call(archiveUri);
   }
 }
 
@@ -128,6 +153,45 @@ void main() {
         'https://cdn.example.com/SecondLoop-1.1.0.nupkg',
       );
       expect(result.update!.asset?.sha256, 'abc123');
+    });
+
+    test('checks Windows managed runtime once when picking release asset',
+        () async {
+      final stagedClient = _FakeWindowsStagedUpdateClient(available: true);
+      final service = AppUpdateService(
+        platformOverride: AppUpdatePlatform.windows,
+        releaseModeOverride: true,
+        windowsStagedUpdateClient: stagedClient,
+        currentVersionLoader: () async =>
+            const AppRuntimeVersion(version: '1.0.0', buildNumber: '88'),
+        releaseJsonFetcher: (uri) async => {
+          'tag_name': 'v1.1.0',
+          'html_url':
+              'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
+          'assets': [
+            {
+              'name': 'SecondLoop-win.msi',
+              'browser_download_url':
+                  'https://cdn.example.com/SecondLoop-win.msi',
+            },
+            {
+              'name': 'com.secondloop.secondloop-1.1.0-full.nupkg',
+              'browser_download_url': 'https://cdn.example.com/win.nupkg',
+              'sha256': 'abc123',
+            },
+          ],
+        },
+      );
+
+      final result = await service.checkForUpdates();
+
+      expect(result.update, isNotNull);
+      expect(result.update!.installMode, AppUpdateInstallMode.seamlessRestart);
+      expect(
+        result.update!.downloadUri.toString(),
+        'https://cdn.example.com/win.nupkg',
+      );
+      expect(stagedClient.isAvailableCalls, 1);
     });
 
     test('falls back to external MSI when Windows runtime is unavailable',
@@ -339,6 +403,134 @@ void main() {
     });
   });
 
+  group('AppUpdateService.downloaded asset handoff', () {
+    test('cleans temporary downloaded asset after Windows staging', () async {
+      String? stagedPath;
+      final stagedClient = _FakeWindowsStagedUpdateClient(
+        available: true,
+        onStageAsset: (assetDownloadUri) async {
+          stagedPath = assetDownloadUri.toFilePath();
+          expect(File(stagedPath!).existsSync(), isTrue);
+        },
+      );
+      final service = AppUpdateService(
+        platformOverride: AppUpdatePlatform.windows,
+        windowsStagedUpdateClient: stagedClient,
+        httpClient: _FakeHttpClient(
+          handler: (uri) => const _FakeHttpResponse(
+            statusCode: 200,
+            body: 'windows-package',
+          ),
+        ),
+      );
+
+      await service.stageUpdateForNextLaunch(
+        AppUpdateAvailability(
+          currentVersion: '1.0.0',
+          latestTag: 'v1.1.0',
+          releasePageUri: Uri.parse(
+            'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
+          ),
+          installMode: AppUpdateInstallMode.stagedNextLaunch,
+          asset: AppUpdateAsset(
+            name: 'com.secondloop.secondloop-1.1.0-full.nupkg',
+            downloadUri: Uri.parse('https://cdn.example.com/win.nupkg'),
+          ),
+        ),
+      );
+
+      expect(stagedPath, isNotNull);
+      expect(Directory(File(stagedPath!).parent.path).existsSync(), isFalse);
+    });
+
+    test('cleans temporary downloaded asset after Windows installer handoff',
+        () async {
+      String? packagePath;
+      var exitedCode = -1;
+      final stagedClient = _FakeWindowsStagedUpdateClient(
+        available: true,
+        onInstallAsset: (assetDownloadUri) async {
+          packagePath = assetDownloadUri.toFilePath();
+          expect(File(packagePath!).existsSync(), isTrue);
+        },
+      );
+      final service = AppUpdateService(
+        platformOverride: AppUpdatePlatform.windows,
+        windowsStagedUpdateClient: stagedClient,
+        httpClient: _FakeHttpClient(
+          handler: (uri) => const _FakeHttpResponse(
+            statusCode: 200,
+            body: 'windows-package',
+          ),
+        ),
+        processExit: (code) => exitedCode = code,
+      );
+
+      await service.installAndRestart(
+        AppUpdateAvailability(
+          currentVersion: '1.0.0',
+          latestTag: 'v1.1.0',
+          releasePageUri: Uri.parse(
+            'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
+          ),
+          installMode: AppUpdateInstallMode.seamlessRestart,
+          asset: AppUpdateAsset(
+            name: 'com.secondloop.secondloop-1.1.0-full.nupkg',
+            downloadUri: Uri.parse('https://cdn.example.com/win.nupkg'),
+          ),
+        ),
+      );
+
+      expect(exitedCode, 0);
+      expect(packagePath, isNotNull);
+      expect(Directory(File(packagePath!).parent.path).existsSync(), isFalse);
+    });
+
+    test('cleans temporary downloaded asset after macOS updater handoff',
+        () async {
+      String? archivePath;
+      var exitedCode = -1;
+      final macosClient = _FakeMacosManagedUpdateClient(
+        supportedInstallLocation: true,
+        onInstallArchive: (archiveUri) async {
+          archivePath = archiveUri.toFilePath();
+          expect(File(archivePath!).existsSync(), isTrue);
+        },
+      );
+      final service = AppUpdateService(
+        platformOverride: AppUpdatePlatform.macos,
+        macosManagedUpdateClient: macosClient,
+        httpClient: _FakeHttpClient(
+          handler: (uri) => const _FakeHttpResponse(
+            statusCode: 200,
+            body: 'macos-archive',
+          ),
+        ),
+        processExit: (code) => exitedCode = code,
+      );
+
+      await service.installAndRestart(
+        AppUpdateAvailability(
+          currentVersion: '1.0.0',
+          latestTag: 'v1.1.0',
+          releasePageUri: Uri.parse(
+            'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
+          ),
+          installMode: AppUpdateInstallMode.seamlessRestart,
+          asset: AppUpdateAsset(
+            name: 'SecondLoop-macos-v1.1.0.app.tar.gz',
+            downloadUri:
+                Uri.parse('https://cdn.example.com/SecondLoop-macos.tar.gz'),
+          ),
+        ),
+      );
+
+      expect(exitedCode, 0);
+      expect(archivePath, isNotNull);
+      expect(Directory(File(archivePath!).parent.path).existsSync(), isFalse);
+    });
+  });
+
   group('AppUpdateService.installAndRestart', () {
     test('delegates Windows install to Velopack and exits', () async {
       final stagedClient = _FakeWindowsStagedUpdateClient(available: true);
@@ -453,4 +645,87 @@ void main() {
       expect(exitedCode, 0);
     });
   });
+}
+
+final class _FakeHttpResponse {
+  const _FakeHttpResponse({required this.statusCode, required this.body});
+
+  final int statusCode;
+  final String body;
+}
+
+final class _FakeHttpClient implements HttpClient {
+  _FakeHttpClient({required this.handler});
+
+  final _FakeHttpResponse Function(Uri uri) handler;
+
+  @override
+  Future<HttpClientRequest> getUrl(Uri url) async {
+    final response = handler(url);
+    return _FakeHttpClientRequest(
+      response: _FakeHttpClientResponse(
+        statusCode: response.statusCode,
+        body: response.body,
+      ),
+    );
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+final class _FakeHttpClientRequest implements HttpClientRequest {
+  _FakeHttpClientRequest({required this.response});
+
+  final HttpClientResponse response;
+
+  @override
+  final HttpHeaders headers = _FakeHttpHeaders();
+
+  @override
+  Future<HttpClientResponse> close() async => response;
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+final class _FakeHttpClientResponse extends Stream<List<int>>
+    implements HttpClientResponse {
+  _FakeHttpClientResponse({required this.statusCode, required String body})
+      : _stream = Stream<List<int>>.fromIterable([utf8.encode(body)]);
+
+  final Stream<List<int>> _stream;
+
+  @override
+  final int statusCode;
+
+  @override
+  StreamSubscription<List<int>> listen(
+    void Function(List<int> event)? onData, {
+    Function? onError,
+    void Function()? onDone,
+    bool? cancelOnError,
+  }) {
+    return _stream.listen(
+      onData,
+      onError: onError,
+      onDone: onDone,
+      cancelOnError: cancelOnError,
+    );
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+final class _FakeHttpHeaders implements HttpHeaders {
+  @override
+  void set(
+    String name,
+    Object value, {
+    bool preserveHeaderCase = false,
+  }) {}
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }

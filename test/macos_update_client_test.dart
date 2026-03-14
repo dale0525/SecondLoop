@@ -63,6 +63,12 @@ void main() {
     final scriptPath = capturedArguments!.single;
     final scriptText = await File(scriptPath).readAsString();
     expect(scriptText, contains('APP_PID=4321'));
+    expect(scriptText, contains('MAX_WAIT=60'));
+    expect(
+        scriptText, contains(r'APP_START=$(/bin/ps -o lstart= -p "$APP_PID"'));
+    expect(scriptText,
+        contains(r'CURRENT_START=$(/bin/ps -o lstart= -p "$APP_PID"'));
+    expect(scriptText, contains(r'waited=$((waited + 1))'));
     expect(scriptText, contains('mv "\$TARGET_APP" "\$BACKUP_APP"'));
     expect(scriptText, contains('ditto "\$REPLACEMENT_APP" "\$TARGET_APP"'));
     expect(scriptText, contains('xattr -dr com.apple.quarantine'));

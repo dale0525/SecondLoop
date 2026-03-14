@@ -222,9 +222,17 @@ REPLACEMENT_APP=$replacementApp
 BACKUP_APP=$backupApp
 TEMP_ROOT=$tempRoot
 TARGET_EXECUTABLE=$targetExecutable
+MAX_WAIT=60
+waited=0
+APP_START=\$(/bin/ps -o lstart= -p "\$APP_PID" 2>/dev/null | sed 's/^ *//')
 
-while kill -0 "\$APP_PID" 2>/dev/null; do
+while kill -0 "\$APP_PID" 2>/dev/null && [ "\$waited" -lt "\$MAX_WAIT" ]; do
+  CURRENT_START=\$(/bin/ps -o lstart= -p "\$APP_PID" 2>/dev/null | sed 's/^ *//')
+  if [ -n "\$APP_START" ] && [ "\$CURRENT_START" != "\$APP_START" ]; then
+    break
+  fi
   sleep 1
+  waited=\$((waited + 1))
 done
 
 rm -rf "\$BACKUP_APP"

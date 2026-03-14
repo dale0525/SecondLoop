@@ -182,7 +182,8 @@ class AppUpdateService {
       _updatePublicKeyOverride ?? _defaultUpdatePublicKey;
   void _exitProcess(int code) => (_processExit ?? exit)(code);
 
-  WindowsStagedUpdateClient? get _resolvedWindowsStagedUpdateClient {
+  late final WindowsStagedUpdateClient? _resolvedWindowsStagedUpdateClient =
+      () {
     if (_windowsStagedUpdateClient != null) {
       return _windowsStagedUpdateClient;
     }
@@ -190,9 +191,9 @@ class AppUpdateService {
       return null;
     }
     return VelopackUpdateClient();
-  }
+  }();
 
-  MacosManagedUpdateClient? get _resolvedMacosManagedUpdateClient {
+  late final MacosManagedUpdateClient? _resolvedMacosManagedUpdateClient = () {
     if (_macosManagedUpdateClient != null) {
       return _macosManagedUpdateClient;
     }
@@ -200,7 +201,7 @@ class AppUpdateService {
       return null;
     }
     return DefaultMacosManagedUpdateClient();
-  }
+  }();
 
   Future<AppUpdateCheckResult> checkForUpdates() async {
     final runtimeVersion = await _loadCurrentVersion();
@@ -275,10 +276,25 @@ class AppUpdateService {
       return AppUpdateCheckResult(currentVersion: runtimeVersion.display);
     }
 
+    final windowsStagedClient = _resolvedWindowsStagedUpdateClient;
+    final windowsManagedRuntimeAvailable =
+        windowsStagedClient != null && windowsStagedClient.isAvailable();
+    final macosManagedClient = _resolvedMacosManagedUpdateClient;
+    final macosManagedInstallSupported = macosManagedClient != null &&
+        macosManagedClient.isSupportedInstallLocation();
+
     final manifestAsset = _matchManifestAssetForCurrentPlatform(release);
     final assets = _parseAssets(release['assets']);
-    final matchedAsset = manifestAsset ?? _matchAssetForCurrentPlatform(assets);
-    final installMode = _resolveInstallMode(matchedAsset);
+    final matchedAsset = manifestAsset ??
+        _matchAssetForCurrentPlatform(
+          assets,
+          windowsManagedRuntimeAvailable: windowsManagedRuntimeAvailable,
+        );
+    final installMode = _resolveInstallMode(
+      matchedAsset,
+      windowsManagedRuntimeAvailable: windowsManagedRuntimeAvailable,
+      macosManagedInstallSupported: macosManagedInstallSupported,
+    );
 
     await _recordEvent(
       UpdateEventType.updateAvailable,
@@ -340,8 +356,9 @@ class AppUpdateService {
         if (stagedClient == null || !stagedClient.isAvailable()) {
           throw StateError('windows_velopack_unavailable');
         }
-        final localUri = await _prepareAssetForInstall(asset);
-        await stagedClient.installAssetAndRestart(localUri, waitPid: pid);
+        await _withPreparedAsset(asset, (localUri) async {
+          await stagedClient.installAssetAndRestart(localUri, waitPid: pid);
+        });
         await _recordEvent(
           UpdateEventType.installDispatched,
           currentVersion: update.currentVersion,
@@ -358,8 +375,9 @@ class AppUpdateService {
         if (macosClient == null || !macosClient.isSupportedInstallLocation()) {
           throw StateError('macos_update_unsupported_install_location');
         }
-        final localUri = await _prepareAssetForInstall(asset);
-        await macosClient.installArchiveAndRestart(localUri, waitPid: pid);
+        await _withPreparedAsset(asset, (localUri) async {
+          await macosClient.installArchiveAndRestart(localUri, waitPid: pid);
+        });
         await _recordEvent(
           UpdateEventType.installDispatched,
           currentVersion: update.currentVersion,
@@ -446,8 +464,9 @@ class AppUpdateService {
             !stagedClient.isAvailable()) {
           throw StateError('staged_update_not_supported_for_${_platform.name}');
         }
-        final localUri = await _prepareAssetForInstall(asset);
-        await stagedClient.stageAsset(localUri);
+        await _withPreparedAsset(asset, (localUri) async {
+          await stagedClient.stageAsset(localUri);
+        });
         await _recordEvent(
           UpdateEventType.stageSucceeded,
           currentVersion: update.currentVersion,
@@ -641,9 +660,15 @@ class AppUpdateService {
     return parsed;
   }
 
-  AppUpdateAsset? _matchAssetForCurrentPlatform(List<AppUpdateAsset> assets) {
+  AppUpdateAsset? _matchAssetForCurrentPlatform(
+    List<AppUpdateAsset> assets, {
+    required bool windowsManagedRuntimeAvailable,
+  }) {
     if (_platform == AppUpdatePlatform.windows) {
-      return _matchWindowsAssetForCurrentRuntime(assets);
+      return _matchWindowsAssetForCurrentRuntime(
+        assets,
+        managedRuntimeAvailable: windowsManagedRuntimeAvailable,
+      );
     }
 
     if (_platform == AppUpdatePlatform.macos) {
@@ -671,7 +696,9 @@ class AppUpdateService {
   }
 
   AppUpdateAsset? _matchWindowsAssetForCurrentRuntime(
-      List<AppUpdateAsset> assets) {
+    List<AppUpdateAsset> assets, {
+    required bool managedRuntimeAvailable,
+  }) {
     AppUpdateAsset? findFirst(bool Function(String name) matcher) {
       for (final asset in assets) {
         if (matcher(asset.name)) return asset;
@@ -679,8 +706,7 @@ class AppUpdateService {
       return null;
     }
 
-    final stagedClient = _resolvedWindowsStagedUpdateClient;
-    if (stagedClient != null && stagedClient.isAvailable()) {
+    if (managedRuntimeAvailable) {
       final stagedPackage = findFirst(_isWindowsVelopackPackageName);
       if (stagedPackage != null) {
         return stagedPackage;
@@ -712,7 +738,11 @@ class AppUpdateService {
         normalized.contains('secondloop');
   }
 
-  AppUpdateInstallMode _resolveInstallMode(AppUpdateAsset? asset) {
+  AppUpdateInstallMode _resolveInstallMode(
+    AppUpdateAsset? asset, {
+    required bool windowsManagedRuntimeAvailable,
+    required bool macosManagedInstallSupported,
+  }) {
     if (!_isReleaseMode || asset == null) {
       return AppUpdateInstallMode.externalDownload;
     }
@@ -720,13 +750,12 @@ class AppUpdateService {
     return switch (_platform) {
       AppUpdatePlatform.windows
           when _isWindowsVelopackPackageName(asset.name) &&
-              _resolvedWindowsStagedUpdateClient?.isAvailable() == true &&
+              windowsManagedRuntimeAvailable &&
               _assetHasIntegrityMetadata(asset) =>
         AppUpdateInstallMode.seamlessRestart,
       AppUpdatePlatform.macos
           when _isMacosManagedArchiveName(asset.name) &&
-              _resolvedMacosManagedUpdateClient?.isSupportedInstallLocation() ==
-                  true &&
+              macosManagedInstallSupported &&
               _assetHasIntegrityMetadata(asset) =>
         AppUpdateInstallMode.seamlessRestart,
       AppUpdatePlatform.linux when asset.name.endsWith('.tar.gz') =>
@@ -780,24 +809,41 @@ class AppUpdateService {
     return null;
   }
 
-  Future<Uri> _prepareAssetForInstall(AppUpdateAsset asset) async {
-    if (asset.downloadUri.scheme == 'file') {
-      final sourceFile = File(asset.downloadUri.toFilePath());
+  Future<T> _withPreparedAsset<T>(
+    AppUpdateAsset asset,
+    Future<T> Function(Uri localUri) action,
+  ) async {
+    Directory? tempRoot;
+    Uri localUri = asset.downloadUri;
+
+    if (localUri.scheme == 'file') {
+      final sourceFile = File(localUri.toFilePath());
       if (asset.sha256 != null) {
         await _verifyFileSha256(sourceFile, asset.sha256!);
       }
-      return asset.downloadUri;
+    } else {
+      tempRoot = await Directory.systemTemp.createTemp('secondloop_asset_');
+      final localPath =
+          '${tempRoot.path}${Platform.pathSeparator}${_sanitizeAssetFileName(asset.name)}';
+      final localFile = File(localPath);
+      await _downloadToFile(asset.downloadUri, localFile);
+      if (asset.sha256 != null) {
+        await _verifyFileSha256(localFile, asset.sha256!);
+      }
+      localUri = localFile.uri;
     }
 
-    final tempRoot = await Directory.systemTemp.createTemp('secondloop_asset_');
-    final localPath =
-        '${tempRoot.path}${Platform.pathSeparator}${_sanitizeAssetFileName(asset.name)}';
-    final localFile = File(localPath);
-    await _downloadToFile(asset.downloadUri, localFile);
-    if (asset.sha256 != null) {
-      await _verifyFileSha256(localFile, asset.sha256!);
+    try {
+      return await action(localUri);
+    } finally {
+      if (tempRoot != null) {
+        try {
+          if (tempRoot.existsSync()) {
+            await tempRoot.delete(recursive: true);
+          }
+        } catch (_) {}
+      }
     }
-    return localFile.uri;
   }
 
   Future<void> _verifyFileSha256(File file, String expectedHex) async {
@@ -924,9 +970,17 @@ APP_DIR=$appDir
 EXE_PATH=$executable
 SOURCE_DIR=$sourceDir
 TEMP_ROOT=$tempRoot
+MAX_WAIT=60
+waited=0
+APP_START=\$(/bin/ps -o lstart= -p "\$APP_PID" 2>/dev/null | sed 's/^ *//')
 
-while kill -0 "\$APP_PID" 2>/dev/null; do
+while kill -0 "\$APP_PID" 2>/dev/null && [ "\$waited" -lt "\$MAX_WAIT" ]; do
+  CURRENT_START=\$(/bin/ps -o lstart= -p "\$APP_PID" 2>/dev/null | sed 's/^ *//')
+  if [ -n "\$APP_START" ] && [ "\$CURRENT_START" != "\$APP_START" ]; then
+    break
+  fi
   sleep 1
+  waited=\$((waited + 1))
 done
 
 cp -a "\$SOURCE_DIR"/. "\$APP_DIR"/
