@@ -910,14 +910,6 @@ class AppUpdateService {
     return sanitized;
   }
 
-  static String _bytesToHex(List<int> bytes) {
-    final buffer = StringBuffer();
-    for (final byte in bytes) {
-      buffer.write(byte.toRadixString(16).padLeft(2, '0'));
-    }
-    return buffer.toString();
-  }
-
   static String? _normalizeLatestTag(String? value) {
     if (value == null) return null;
     final trimmed = value.trim();

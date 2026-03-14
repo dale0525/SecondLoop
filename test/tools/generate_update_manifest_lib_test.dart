@@ -1,7 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:convert/convert.dart';
 import 'package:cryptography/cryptography.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -55,17 +54,17 @@ void main() {
     );
     expect(
       windows['sha256'],
-      hex.encode((await Sha256().hash(utf8.encode('windows'))).bytes),
+      _hexEncode((await Sha256().hash(utf8.encode('windows'))).bytes),
     );
     expect(macos['install_mode'], 'app-tar-gz');
     expect(
       macos['sha256'],
-      hex.encode((await Sha256().hash(utf8.encode('macos'))).bytes),
+      _hexEncode((await Sha256().hash(utf8.encode('macos'))).bytes),
     );
     expect(linux['install_mode'], 'bundle-tar-gz');
     expect(
       linux['sha256'],
-      hex.encode((await Sha256().hash(utf8.encode('linux'))).bytes),
+      _hexEncode((await Sha256().hash(utf8.encode('linux'))).bytes),
     );
     expect(generated.signatureBase64, isNull);
   });
@@ -146,4 +145,12 @@ void main() {
 
     expect(verified, isTrue);
   });
+}
+
+String _hexEncode(List<int> bytes) {
+  final buffer = StringBuffer();
+  for (final byte in bytes) {
+    buffer.write(byte.toRadixString(16).padLeft(2, '0'));
+  }
+  return buffer.toString();
 }
