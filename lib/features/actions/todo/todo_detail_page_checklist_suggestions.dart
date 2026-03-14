@@ -8,11 +8,16 @@ extension _TodoDetailPageStateChecklistSuggestions on _TodoDetailPageState {
       return;
     }
 
-    await backend.applyTodoChecklistSuggestions(
-      session.sessionKey,
-      todoId: _todo.id,
-      suggestionIds: suggestionIds,
-    );
+    try {
+      await backend.applyTodoChecklistSuggestions(
+        session.sessionKey,
+        todoId: _todo.id,
+        suggestionIds: suggestionIds,
+      );
+    } catch (error) {
+      _showChecklistMutationError(error);
+      return;
+    }
     if (!mounted) return;
     _setState(() {
       _selectedChecklistSuggestionIds.removeAll(suggestionIds);
@@ -29,11 +34,16 @@ extension _TodoDetailPageStateChecklistSuggestions on _TodoDetailPageState {
       return;
     }
 
-    await backend.dismissTodoChecklistSuggestions(
-      session.sessionKey,
-      todoId: _todo.id,
-      suggestionIds: suggestionIds,
-    );
+    try {
+      await backend.dismissTodoChecklistSuggestions(
+        session.sessionKey,
+        todoId: _todo.id,
+        suggestionIds: suggestionIds,
+      );
+    } catch (error) {
+      _showChecklistMutationError(error);
+      return;
+    }
     if (!mounted) return;
     _setState(() {
       _selectedChecklistSuggestionIds.removeAll(suggestionIds);
@@ -58,10 +68,15 @@ extension _TodoDetailPageStateChecklistSuggestions on _TodoDetailPageState {
     final session = SessionScope.maybeOf(context);
     if (backend == null || session == null) return;
 
-    await backend.dismissAllTodoChecklistSuggestions(
-      session.sessionKey,
-      todoId: _todo.id,
-    );
+    try {
+      await backend.dismissAllTodoChecklistSuggestions(
+        session.sessionKey,
+        todoId: _todo.id,
+      );
+    } catch (error) {
+      _showChecklistMutationError(error);
+      return;
+    }
     if (!mounted) return;
     _setState(() {
       _selectedChecklistSuggestionIds.clear();

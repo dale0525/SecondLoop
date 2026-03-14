@@ -215,6 +215,61 @@ void main() {
 
     expect(find.byType(AiAskAiSettingsPage), findsOneWidget);
   });
+
+  testWidgets('TodoDetailPage shows snackbar when applying suggestions fails',
+      (tester) async {
+    _setLargeDisplay(tester);
+    final backend = _Backend(applyError: StateError('apply failed'));
+
+    await tester.pumpWidget(_buildSubject(backend));
+    await tester.pumpAndSettle();
+
+    await tester.tap(
+      find.byKey(const ValueKey('todo_detail_checklist_apply_all')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('apply failed'), findsOneWidget);
+  });
+
+  testWidgets('TodoDetailPage shows snackbar when dismissing suggestions fails',
+      (tester) async {
+    _setLargeDisplay(tester);
+    final backend = _Backend(dismissError: StateError('dismiss failed'));
+
+    await tester.pumpWidget(_buildSubject(backend));
+    await tester.pumpAndSettle();
+
+    await tester.tap(
+      find.byKey(const ValueKey('todo_detail_checklist_suggestion_select_s1')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey('todo_detail_checklist_dismiss_selected')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('dismiss failed'), findsOneWidget);
+  });
+
+  testWidgets(
+      'TodoDetailPage shows snackbar when dismissing all suggestions fails',
+      (tester) async {
+    _setLargeDisplay(tester);
+    final backend = _Backend(
+      dismissAllError: StateError('dismiss all failed'),
+    );
+
+    await tester.pumpWidget(_buildSubject(backend));
+    await tester.pumpAndSettle();
+
+    await tester.tap(
+      find.byKey(const ValueKey('todo_detail_checklist_dismiss_all')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('dismiss all failed'), findsOneWidget);
+  });
 }
 
 void _setLargeDisplay(WidgetTester tester) {
@@ -251,6 +306,9 @@ final class _Backend extends AppBackend {
     List<TodoChecklistSuggestion>? initialSuggestions,
     List<LlmProfile>? llmProfiles,
     this.generationResponseCompleter,
+    this.applyError,
+    this.dismissError,
+    this.dismissAllError,
   })  : _suggestions = List<TodoChecklistSuggestion>.from(
           initialSuggestions ??
               const <TodoChecklistSuggestion>[
@@ -305,6 +363,9 @@ final class _Backend extends AppBackend {
   List<String> dismissedSuggestionIds = <String>[];
   List<String> generatedSuggestionContents = <String>[];
   final Completer<String>? generationResponseCompleter;
+  final Object? applyError;
+  final Object? dismissError;
+  final Object? dismissAllError;
   final List<TodoChecklistSuggestion> _suggestions;
   final List<LlmProfile> _llmProfiles;
 
@@ -413,6 +474,7 @@ final class _Backend extends AppBackend {
     required String todoId,
     required List<String> suggestionIds,
   }) async {
+    if (applyError != null) throw applyError!;
     appliedSuggestionIds = List<String>.from(suggestionIds);
     return const <TodoChecklistItem>[];
   }
@@ -423,7 +485,19 @@ final class _Backend extends AppBackend {
     required String todoId,
     required List<String> suggestionIds,
   }) async {
+    if (dismissError != null) throw dismissError!;
     dismissedSuggestionIds = List<String>.from(suggestionIds);
     _suggestions.removeWhere((item) => suggestionIds.contains(item.id));
+  }
+
+  @override
+  Future<void> dismissAllTodoChecklistSuggestions(
+    Uint8List key, {
+    required String todoId,
+  }) async {
+    if (dismissAllError != null) throw dismissAllError!;
+    dismissedSuggestionIds =
+        _suggestions.map((item) => item.id).toList(growable: false);
+    _suggestions.clear();
   }
 }
