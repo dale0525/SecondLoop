@@ -400,7 +400,8 @@ void main() {
     expect(secondStore.snapshot.primaryFocus?.reasonText, isNull);
   });
 
-  test('separator-like fields do not collide in persisted AI request signatures',
+  test(
+      'separator-like fields do not collide in persisted AI request signatures',
       () async {
     SharedPreferences.setMockInitialValues({});
     final firstService = _CountingAiService(
@@ -456,8 +457,8 @@ void main() {
     expect(firstService.calls, 1);
     expect(secondService.calls, 1);
     expect(secondStore.snapshot.source, TaskPrioritySnapshotSource.hybrid);
-    expect(secondStore.snapshot.primaryFocus?.reasonText,
-        'Second tuple result.');
+    expect(
+        secondStore.snapshot.primaryFocus?.reasonText, 'Second tuple result.');
   });
 
   test('updatedAtMs churn alone does not trigger a second rerank', () async {
