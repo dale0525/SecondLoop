@@ -153,7 +153,7 @@ class _AiAskAiSettingsPageState extends State<AiAskAiSettingsPage> {
                   title: Text(t.actions.reviewAdvanced),
                   trailing: const Icon(Icons.chevron_right),
                   onTap: () {
-                    Navigator.of(context).push(
+                    Navigator.of(context).pushReplacement(
                       MaterialPageRoute(
                         builder: (_) => const AiSettingsPage(
                           focusSection: AiSettingsSection.askAi,

@@ -143,6 +143,12 @@ class _AiSettingsPageState extends State<AiSettingsPage> {
     return _sectionAnchorKeyOf(section);
   }
 
+  bool _focusSectionRequiresAdvancedExpansion(AiSettingsSection section) {
+    return section == AiSettingsSection.askAi ||
+        section == AiSettingsSection.embeddings ||
+        section == AiSettingsSection.mediaUnderstanding;
+  }
+
   Future<void> _nudgeTowardsMediaLocalCapabilityEntry({
     required bool disableAnimations,
   }) async {
@@ -735,9 +741,7 @@ class _AiSettingsPageState extends State<AiSettingsPage> {
     _didRunInitialFocus = true;
 
     if (widget.expandAdvancedOnOpen ||
-        focusSection == AiSettingsSection.askAi ||
-        focusSection == AiSettingsSection.embeddings ||
-        focusSection == AiSettingsSection.mediaUnderstanding) {
+        _focusSectionRequiresAdvancedExpansion(focusSection)) {
       _advancedSettingsExpanded = true;
     }
 

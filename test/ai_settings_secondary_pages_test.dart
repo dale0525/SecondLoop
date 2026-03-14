@@ -53,6 +53,90 @@ void main() {
     expect(find.byType(AiSmartOrganizationSettingsPage), findsOneWidget);
   });
 
+  testWidgets('Ask AI advanced review replaces secondary page', (tester) async {
+    await tester.pumpWidget(
+      wrapWithI18n(
+        const MaterialApp(
+          home: AiSettingsPage(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester
+        .tap(find.byKey(const ValueKey('ai_settings_open_ask_ai_settings')));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(AiAskAiSettingsPage), findsOneWidget);
+
+    await tester
+        .tap(find.byKey(const ValueKey('ask_ai_settings_open_advanced')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('ai_settings_section_ask_ai')),
+        findsOneWidget);
+    expect(find.byType(AiAskAiSettingsPage), findsNothing);
+
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+
+    expect(
+        find.byKey(const ValueKey('ai_settings_home_ask_ai')), findsOneWidget);
+    expect(find.byType(AiAskAiSettingsPage), findsNothing);
+  });
+
+  testWidgets('Smart organization advanced review replaces secondary page',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        const MaterialApp(
+          home: AiSettingsPage(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final smartSettings = find
+        .byKey(const ValueKey('ai_settings_open_smart_organization_settings'));
+    await tester.dragUntilVisible(
+      smartSettings,
+      find.byType(ListView).first,
+      const Offset(0, -220),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(smartSettings);
+    await tester.pumpAndSettle();
+
+    expect(find.byType(AiSmartOrganizationSettingsPage), findsOneWidget);
+
+    final openAdvanced =
+        find.byKey(const ValueKey('smart_organization_settings_open_advanced'));
+    await tester.dragUntilVisible(
+      openAdvanced,
+      find.byType(ListView).first,
+      const Offset(0, -220),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(openAdvanced);
+    await tester.pumpAndSettle();
+
+    expect(find.byType(AiSettingsPage), findsOneWidget);
+    expect(find.byType(AiSmartOrganizationSettingsPage), findsNothing);
+
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('ai_settings_home_smart_organization')),
+      findsOneWidget,
+    );
+    expect(find.byType(AiSmartOrganizationSettingsPage), findsNothing);
+  });
+
   testWidgets('Ask AI secondary page intro card keeps inner padding',
       (tester) async {
     await tester.pumpWidget(
