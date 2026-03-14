@@ -43,13 +43,22 @@ class TaskHubQuickActionsController {
     required this.backend,
     required this.sessionKey,
     this.confirmDoneWithIncompleteChecklist,
+    this.checklistProgressByTodoId = const <String, TodoChecklistProgress>{},
   });
 
   final AppBackend backend;
   final Uint8List sessionKey;
   final ConfirmDoneWithIncompleteChecklist? confirmDoneWithIncompleteChecklist;
+  final Map<String, TodoChecklistProgress> checklistProgressByTodoId;
 
   Future<bool> hasIncompleteChecklist(Todo todo) async {
+    final progress = checklistProgressByTodoId[todo.id];
+    if (progress == null || progress.totalCount == 0) {
+      return false;
+    }
+    if (progress.doneCount >= progress.totalCount) {
+      return false;
+    }
     try {
       final items = await backend.listTodoChecklistItems(sessionKey, todo.id);
       return items.any((item) => !item.isDone);

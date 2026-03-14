@@ -189,6 +189,8 @@ class _TaskHubPageState extends State<TaskHubPage> {
       backend: backend,
       sessionKey: sessionKey,
       confirmDoneWithIncompleteChecklist: _confirmDoneWithIncompleteChecklist,
+      checklistProgressByTodoId: _store?.checklistProgressByTodoId ??
+          const <String, TodoChecklistProgress>{},
     );
     TaskHubUndoTicket? ticket;
     try {
@@ -261,6 +263,7 @@ class _TaskHubPageState extends State<TaskHubPage> {
   }
 
   Future<bool> _confirmDoneWithIncompleteChecklist(Todo todo) async {
+    if (!mounted) return false;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -295,6 +298,7 @@ class _TaskHubPageState extends State<TaskHubPage> {
   }
 
   void _showQuickActionError(Object error) {
+    if (!mounted) return;
     final messenger = ScaffoldMessenger.maybeOf(context);
     messenger?.hideCurrentSnackBar();
     messenger?.showSnackBar(
