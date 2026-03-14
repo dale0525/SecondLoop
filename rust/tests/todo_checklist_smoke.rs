@@ -483,6 +483,67 @@ fn checklist_set_done_noop_keeps_timestamp_and_oplog_stable() {
 }
 
 #[test]
+fn checklist_reorder_rejects_ids_from_other_todos() {
+    let (_temp_dir, key, conn) = setup();
+
+    db::upsert_todo(
+        &conn,
+        &key,
+        "todo_1",
+        "Plan launch",
+        None,
+        "open",
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("upsert todo 1");
+    db::upsert_todo(
+        &conn,
+        &key,
+        "todo_2",
+        "Other task",
+        None,
+        "open",
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("upsert todo 2");
+
+    let item_1 = db::create_todo_checklist_item(&conn, &key, "todo_1", "Draft launch post")
+        .expect("create todo_1 checklist item");
+    let item_2 = db::create_todo_checklist_item(&conn, &key, "todo_2", "Wrong todo item")
+        .expect("create todo_2 checklist item");
+    let oplog_before: i64 = conn
+        .query_row("SELECT COUNT(*) FROM oplog", [], |row| row.get(0))
+        .expect("count oplog before invalid reorder");
+
+    let err = db::reorder_todo_checklist_items(
+        &conn,
+        &key,
+        "todo_1",
+        &[item_1.id.clone(), item_2.id.clone()],
+    )
+    .expect_err("reorder should reject ids from other todos");
+    assert!(err
+        .to_string()
+        .contains("reorder todo checklist item failed"));
+
+    let listed = db::list_todo_checklist_items(&conn, &key, "todo_1")
+        .expect("list todo_1 items after invalid reorder");
+    assert_eq!(listed.len(), 1);
+    assert_eq!(listed[0].id, item_1.id);
+
+    let oplog_after: i64 = conn
+        .query_row("SELECT COUNT(*) FROM oplog", [], |row| row.get(0))
+        .expect("count oplog after invalid reorder");
+    assert_eq!(oplog_after, oplog_before);
+}
+
+#[test]
 fn checklist_reorder_skips_oplog_when_no_ids_are_provided() {
     let (_temp_dir, key, conn) = setup();
 

@@ -508,10 +508,15 @@ pub fn reorder_todo_checklist_items(
     run_immediate_transaction(conn, || {
         let now = now_ms();
         for (index, item_id) in ordered_item_ids.iter().enumerate() {
-            conn.execute(
+            let rows_changed = conn.execute(
                 r#"UPDATE todo_checklist_items SET sort_order = ?2, updated_at_ms = ?3 WHERE id = ?1 AND todo_id = ?4"#,
                 params![item_id, index as i64, now, todo_id],
             )?;
+            if rows_changed == 0 {
+                return Err(anyhow!(
+                    "reorder todo checklist item failed: {item_id} does not belong to {todo_id}"
+                ));
+            }
         }
 
         let device_id = get_or_create_device_id(conn)?;
