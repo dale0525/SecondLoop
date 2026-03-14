@@ -616,6 +616,7 @@ class ReleaseWorkflowEnvTests(unittest.TestCase):
         self.assertIn("tools/generate_update_manifest.dart", workflow_text)
         self.assertIn("dist/latest.json", workflow_text)
         self.assertIn("dist/latest.json.sig", workflow_text)
+        self.assertNotIn("--signing-private-key", workflow_text)
 
     def test_release_workflow_packages_macos_managed_archive(self) -> None:
         workflow_text = self._workflow_text()

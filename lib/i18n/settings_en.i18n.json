@@ -690,7 +690,8 @@
   },
   "updateNotice": {
     "stagedReady": "New version $version is ready and will apply on next launch.",
-    "manualDownload": "New version $version is available. Open the update page or use manual download."
+    "manualDownload": "New version $version is available. Open the update page or use manual download.",
+    "seamlessAvailable": "New version $version is available. Open Settings > About to install it in-app."
   },
   "diagnostics": {
     "title": "Diagnostics",

@@ -804,8 +804,7 @@ jobs:
             --output-dir dist \
             --version "${GITHUB_REF_NAME}" \
             --repo "${GITHUB_REPOSITORY}" \
-            --base-download-url "https://github.com/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}" \
-            --signing-private-key "${SECONDLOOP_UPDATE_SIGNING_PRIVATE_KEY}"
+            --base-download-url "https://github.com/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}"
       - name: Collect release facts
         shell: bash
         run: |

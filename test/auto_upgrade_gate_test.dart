@@ -336,6 +336,8 @@ void main() {
     expect(service.applyPendingCalls, 1);
     expect(UpdateBadgePrefs.value.value, 'v1.2.0');
     expect(find.byType(SnackBar), findsOneWidget);
+    expect(find.textContaining('Settings > About'), findsOneWidget);
+    expect(find.textContaining('manual download'), findsNothing);
   },
       variant: const TargetPlatformVariant(<TargetPlatform>{
         TargetPlatform.macOS,

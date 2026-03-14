@@ -249,7 +249,9 @@ class _AutoUpgradeGateState extends State<AutoUpgradeGate> {
     final commonActionsT = context.t.common.actions;
     final message = stagedReady
         ? updateNoticeT.stagedReady(version: update.latestTag)
-        : updateNoticeT.manualDownload(version: update.latestTag);
+        : _isMacosPlatform && update.canSeamlessInstall
+            ? updateNoticeT.seamlessAvailable(version: update.latestTag)
+            : updateNoticeT.manualDownload(version: update.latestTag);
     final notNowLabel = commonActionsT.notNow;
     final nowMs = DateTime.now().millisecondsSinceEpoch;
     await prefs.setString(

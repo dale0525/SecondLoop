@@ -135,7 +135,7 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('about_manual_update')));
     await tester.pumpAndSettle();
-    expect(opened.last.toString(), update.downloadUri.toString());
+    expect(opened.last.toString(), update.releasePageUri.toString());
 
     await tester.tap(find.byKey(const ValueKey('about_open_homepage')));
     await tester.pumpAndSettle();
@@ -284,7 +284,9 @@ void main() {
     expect(service.installCalls, 0);
     expect(service.stageCalls, 0);
     expect(
-        opened.single.toString(), 'https://cdn.example.com/SecondLoop-win.msi');
+      opened.single.toString(),
+      'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
+    );
   },
       variant: const TargetPlatformVariant(<TargetPlatform>{
         TargetPlatform.windows,

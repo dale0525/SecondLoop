@@ -174,7 +174,8 @@ class _AboutPageState extends State<AboutPage> {
   }
 
   Future<void> _manualUpdate() {
-    final uri = _updateResult?.update?.downloadUri ?? AboutPage.releasePageUri;
+    final uri =
+        _updateResult?.update?.releasePageUri ?? AboutPage.releasePageUri;
     return _openExternalUri(
       uri,
       failedMessage: _text.messages.openUpdateFailed,
