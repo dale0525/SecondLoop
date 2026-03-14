@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:secondloop/features/settings/ai_ask_ai_settings_page.dart';
 import 'package:secondloop/features/settings/ai_settings_page.dart';
 import 'package:secondloop/features/settings/ai_smart_organization_settings_page.dart';
+import 'package:secondloop/ui/sl_surface.dart';
 
 import 'test_i18n.dart';
 
@@ -49,5 +51,38 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(AiSmartOrganizationSettingsPage), findsOneWidget);
+  });
+
+  testWidgets('Ask AI secondary page intro card keeps inner padding',
+      (tester) async {
+    await tester.pumpWidget(
+      wrapWithI18n(
+        const MaterialApp(
+          home: AiAskAiSettingsPage(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final introSurface = tester.widget<SlSurface>(find.byType(SlSurface).first);
+    expect(introSurface.padding, const EdgeInsets.all(16));
+  });
+
+  testWidgets(
+      'Smart organization secondary page intro card keeps inner padding',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        const MaterialApp(
+          home: AiSmartOrganizationSettingsPage(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final introSurface = tester.widget<SlSurface>(find.byType(SlSurface).first);
+    expect(introSurface.padding, const EdgeInsets.all(16));
   });
 }

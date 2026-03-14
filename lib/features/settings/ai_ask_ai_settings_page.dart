@@ -94,6 +94,7 @@ class _AiAskAiSettingsPageState extends State<AiAskAiSettingsPage> {
         padding: const EdgeInsets.all(16),
         children: [
           SlSurface(
+            padding: const EdgeInsets.all(16),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
