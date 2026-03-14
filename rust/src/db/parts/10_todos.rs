@@ -861,12 +861,14 @@ pub fn dismiss_all_todo_checklist_suggestions(
     key: &[u8; 32],
     todo_id: &str,
 ) -> Result<()> {
-    let pending_ids = list_todo_checklist_suggestions(conn, key, todo_id)?
-        .into_iter()
-        .filter(|item| item.state == TODO_CHECKLIST_SUGGESTION_STATE_PENDING)
-        .map(|item| item.id)
-        .collect::<Vec<_>>();
-    dismiss_todo_checklist_suggestions(conn, key, todo_id, &pending_ids)
+    run_immediate_transaction(conn, || {
+        let pending_ids = list_todo_checklist_suggestions(conn, key, todo_id)?
+            .into_iter()
+            .filter(|item| item.state == TODO_CHECKLIST_SUGGESTION_STATE_PENDING)
+            .map(|item| item.id)
+            .collect::<Vec<_>>();
+        dismiss_todo_checklist_suggestions(conn, key, todo_id, &pending_ids)
+    })
 }
 
 #[allow(clippy::type_complexity)]
