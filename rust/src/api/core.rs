@@ -1874,7 +1874,7 @@ pub fn ai_task_priority_rerank(
 #[flutter_rust_bridge::frb]
 #[allow(clippy::too_many_arguments)]
 pub fn ai_task_priority_rerank_cloud_gateway(
-    app_dir: String,
+    _app_dir: String,
     key: Vec<u8>,
     prompt: String,
     gateway_base_url: String,
@@ -2083,7 +2083,7 @@ pub fn ai_semantic_parse_ask_ai_time_window(
 #[flutter_rust_bridge::frb]
 #[allow(clippy::too_many_arguments)]
 pub fn ai_semantic_parse_ask_ai_time_window_cloud_gateway(
-    app_dir: String,
+    _app_dir: String,
     key: Vec<u8>,
     question: String,
     now_local_iso: String,
