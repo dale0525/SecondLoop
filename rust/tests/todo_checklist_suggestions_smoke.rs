@@ -610,4 +610,34 @@ fn apply_suggestions_uses_consistent_timestamps_per_batch() {
 
     assert_eq!(apply_ts.len(), 2);
     assert!(apply_ts.iter().all(|ts| *ts == apply_ts[0]));
+
+    let item_create_ts = applied
+        .iter()
+        .map(|item| {
+            let mut stmt = conn
+                .prepare(r#"SELECT op_id, op_json FROM oplog ORDER BY seq ASC"#)
+                .expect("prepare per-item oplog query");
+            let mut rows = stmt.query([]).expect("query per-item oplog");
+            while let Some(row) = rows.next().expect("next per-item oplog row") {
+                let op_id: String = row.get(0).expect("per-item op_id");
+                let op_json_blob: Vec<u8> = row.get(1).expect("per-item op_json");
+                let plaintext = decrypt_bytes(
+                    &key,
+                    &op_json_blob,
+                    format!("oplog.op_json:{op_id}").as_bytes(),
+                )
+                .expect("decrypt per-item oplog payload");
+                let value: serde_json::Value =
+                    serde_json::from_slice(&plaintext).expect("parse per-item oplog json");
+                if value["type"].as_str() == Some("todo.checklist_item.upsert.v1")
+                    && value["payload"]["item_id"].as_str() == Some(item.id.as_str())
+                {
+                    return value["ts_ms"].as_i64().expect("item upsert ts_ms");
+                }
+            }
+            panic!("missing checklist item upsert oplog for {}", item.id);
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(item_create_ts.len(), 2);
+    assert!(item_create_ts.iter().all(|ts| *ts <= apply_ts[0]));
 }

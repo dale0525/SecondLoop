@@ -773,14 +773,19 @@ pub fn apply_todo_checklist_suggestions(
     suggestion_ids: &[String],
 ) -> Result<Vec<TodoChecklistItem>> {
     run_immediate_transaction(conn, || {
-        let now = now_ms();
-        let mut created_items = Vec::new();
+        let mut applied = Vec::new();
         for suggestion_id in suggestion_ids {
             let suggestion = get_todo_checklist_suggestion_by_id(conn, key, suggestion_id)?;
             if suggestion.todo_id != todo_id || suggestion.state != TODO_CHECKLIST_SUGGESTION_STATE_PENDING {
                 continue;
             }
             let item = create_todo_checklist_item(conn, key, todo_id, &suggestion.content)?;
+            applied.push((suggestion_id.clone(), item));
+        }
+
+        let now = now_ms();
+        let mut created_items = Vec::new();
+        for (suggestion_id, item) in applied {
             conn.execute(
                 r#"UPDATE todo_checklist_suggestions SET state = ?2, updated_at_ms = ?3, applied_checklist_item_id = ?4 WHERE id = ?1"#,
                 params![suggestion_id, TODO_CHECKLIST_SUGGESTION_STATE_APPLIED, now, item.id],
