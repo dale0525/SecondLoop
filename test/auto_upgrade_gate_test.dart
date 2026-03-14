@@ -117,6 +117,8 @@ void main() {
     expect(service.stageCalls, 0);
     expect(UpdateBadgePrefs.value.value, 'v1.1.0');
     expect(find.byType(SnackBar), findsOneWidget);
+    expect(find.textContaining('Settings > About'), findsOneWidget);
+    expect(find.textContaining('manual download'), findsNothing);
   },
       variant: const TargetPlatformVariant(<TargetPlatform>{
         TargetPlatform.linux,

@@ -19,6 +19,7 @@ void main() {
     expect(script,
         contains('mv "\$APP_DIR" "\$APP_DIR.failed" 2>/dev/null || true'));
     expect(script, contains('mv "\$BACKUP_DIR" "\$APP_DIR" || {'));
+    expect(script, contains('rm -rf "\$TEMP_ROOT" || true'));
     expect(script, contains('rm -rf "\$APP_DIR.failed" || true'));
     expect(script, contains('mv "\$APP_DIR" "\$BACKUP_DIR"'));
     expect(script, contains('mv "\$STAGED_DIR" "\$APP_DIR"'));

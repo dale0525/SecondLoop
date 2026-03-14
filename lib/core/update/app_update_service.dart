@@ -1123,6 +1123,7 @@ restore_backup() {
   if [ -d "\$BACKUP_DIR" ]; then
     mv "\$APP_DIR" "\$APP_DIR.failed" 2>/dev/null || true
     mv "\$BACKUP_DIR" "\$APP_DIR" || {
+      rm -rf "\$TEMP_ROOT" || true
       exit 1
     }
     rm -rf "\$APP_DIR.failed" || true
