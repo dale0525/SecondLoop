@@ -570,11 +570,11 @@ fn normalize_checklist_suggestion_content(content: &str) -> String {
     content.split_whitespace().collect::<Vec<_>>().join(" ").trim().to_lowercase()
 }
 
-fn get_todo_checklist_suggestion_by_id(
+fn find_todo_checklist_suggestion_by_id(
     conn: &Connection,
     key: &[u8; 32],
     id: &str,
-) -> Result<TodoChecklistSuggestion> {
+) -> Result<Option<TodoChecklistSuggestion>> {
     type TodoChecklistSuggestionRow = (
         String,
         Vec<u8>,
@@ -588,34 +588,53 @@ fn get_todo_checklist_suggestion_by_id(
         Option<String>,
     );
 
-    let (todo_id, content_blob, sort_order, state, source, generation_key, created_at_ms, updated_at_ms, dismissed_at_ms, applied_checklist_item_id): TodoChecklistSuggestionRow = conn.query_row(
-        r#"
+    let row: Option<TodoChecklistSuggestionRow> = conn
+        .query_row(
+            r#"
 SELECT todo_id, content, sort_order, state, source, generation_key, created_at_ms, updated_at_ms, dismissed_at_ms, applied_checklist_item_id
 FROM todo_checklist_suggestions
 WHERE id = ?1
 "#,
-        params![id],
-        |row| {
-            Ok((
-                row.get(0)?,
-                row.get(1)?,
-                row.get(2)?,
-                row.get(3)?,
-                row.get(4)?,
-                row.get(5)?,
-                row.get(6)?,
-                row.get(7)?,
-                row.get(8)?,
-                row.get(9)?,
-            ))
-        },
-    ).map_err(|e| anyhow!("get todo checklist suggestion failed: {e}"))?;
+            params![id],
+            |row| {
+                Ok((
+                    row.get(0)?,
+                    row.get(1)?,
+                    row.get(2)?,
+                    row.get(3)?,
+                    row.get(4)?,
+                    row.get(5)?,
+                    row.get(6)?,
+                    row.get(7)?,
+                    row.get(8)?,
+                    row.get(9)?,
+                ))
+            },
+        )
+        .optional()
+        .map_err(|e| anyhow!("get todo checklist suggestion failed: {e}"))?;
+
+    let Some((
+        todo_id,
+        content_blob,
+        sort_order,
+        state,
+        source,
+        generation_key,
+        created_at_ms,
+        updated_at_ms,
+        dismissed_at_ms,
+        applied_checklist_item_id,
+    )) = row
+    else {
+        return Ok(None);
+    };
 
     let content_bytes = decrypt_bytes(key, &content_blob, &todo_checklist_suggestion_content_aad(id))?;
     let content = String::from_utf8(content_bytes)
         .map_err(|_| anyhow!("todo checklist suggestion content is not valid utf-8"))?;
 
-    Ok(TodoChecklistSuggestion {
+    Ok(Some(TodoChecklistSuggestion {
         id: id.to_string(),
         todo_id,
         content,
@@ -627,7 +646,16 @@ WHERE id = ?1
         updated_at_ms,
         dismissed_at_ms,
         applied_checklist_item_id,
-    })
+    }))
+}
+
+fn get_todo_checklist_suggestion_by_id(
+    conn: &Connection,
+    key: &[u8; 32],
+    id: &str,
+) -> Result<TodoChecklistSuggestion> {
+    find_todo_checklist_suggestion_by_id(conn, key, id)?
+        .ok_or_else(|| anyhow!("get todo checklist suggestion failed: Query returned no rows"))
 }
 
 pub fn list_todo_checklist_suggestions(
@@ -780,7 +808,10 @@ pub fn apply_todo_checklist_suggestions(
     run_immediate_transaction(conn, || {
         let mut applied = Vec::new();
         for suggestion_id in suggestion_ids {
-            let suggestion = get_todo_checklist_suggestion_by_id(conn, key, suggestion_id)?;
+            let Some(suggestion) = find_todo_checklist_suggestion_by_id(conn, key, suggestion_id)?
+            else {
+                continue;
+            };
             if suggestion.todo_id != todo_id || suggestion.state != TODO_CHECKLIST_SUGGESTION_STATE_PENDING {
                 continue;
             }

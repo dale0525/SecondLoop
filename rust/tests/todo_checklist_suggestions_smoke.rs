@@ -574,6 +574,46 @@ fn deleting_applied_checklist_item_reverts_suggestion_to_pending() {
 }
 
 #[test]
+fn apply_suggestions_skips_missing_ids_without_failing_batch() {
+    let (_temp_dir, key, conn) = setup();
+
+    db::upsert_todo(
+        &conn,
+        &key,
+        "todo_1",
+        "Plan launch",
+        None,
+        "open",
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("upsert todo");
+
+    let generated = db::upsert_generated_todo_checklist_suggestions(
+        &conn,
+        &key,
+        "todo_1",
+        &["Draft launch post".to_string()],
+        "cloud",
+        Some("gen_missing_apply"),
+    )
+    .expect("generate suggestions");
+
+    let applied = db::apply_todo_checklist_suggestions(
+        &conn,
+        &key,
+        "todo_1",
+        &["missing".to_string(), generated[0].id.clone()],
+    )
+    .expect("apply suggestions while skipping missing id");
+
+    assert_eq!(applied.len(), 1);
+    assert_eq!(applied[0].content, "Draft launch post");
+}
+
+#[test]
 fn apply_suggestions_uses_consistent_timestamps_per_batch() {
     let (_temp_dir, key, conn) = setup();
 
