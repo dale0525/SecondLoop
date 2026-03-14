@@ -156,8 +156,8 @@ void main() {
     expect(service.applyPendingCalls, 1);
   });
 
-
-  testWidgets('windows seamless update keeps in-app reminder when staging fails',
+  testWidgets(
+      'windows seamless update keeps in-app reminder when staging fails',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
     UpdateBadgePrefs.resetForTests();
