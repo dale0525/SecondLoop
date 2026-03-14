@@ -123,6 +123,8 @@ void main() {
     expect(result.processed, 1);
     expect(store.generatedChecklistSuggestionsByTodoId['todo:msg:checklist'],
         const <String>['Draft launch post', 'Share with team']);
+    expect(client.lastChecklistStatus, 'open');
+    expect(client.lastChecklistDueAtMs, isNull);
   });
   test('runner processes running jobs (crash recovery)', () async {
     final store = _FakeStore(
@@ -756,6 +758,8 @@ final class _FakeClient implements SemanticParseAutoActionsClient {
   final List<String>? checklistSuggestions;
   final Object? error;
   final List<String> candidateTodoIds;
+  String? lastChecklistStatus;
+  int? lastChecklistDueAtMs;
 
   @override
   Future<List<String>> retrieveTodoCandidateIds({
@@ -784,9 +788,13 @@ final class _FakeClient implements SemanticParseAutoActionsClient {
     required String taskTitle,
     required String taskContext,
     required String localeTag,
+    String? status,
+    int? dueAtMs,
     required Duration timeout,
   }) async {
     if (error != null) throw error!;
+    lastChecklistStatus = status;
+    lastChecklistDueAtMs = dueAtMs;
     return checklistSuggestions ?? const <String>[];
   }
 }

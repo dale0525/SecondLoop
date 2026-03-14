@@ -196,6 +196,8 @@ abstract class SemanticParseAutoActionsClient {
     required String taskTitle,
     required String taskContext,
     required String localeTag,
+    String? status,
+    int? dueAtMs,
     required Duration timeout,
   });
 }
@@ -460,6 +462,8 @@ final class SemanticParseAutoActionsRunner {
                 taskTitle: title,
                 taskContext: analysisText,
                 localeTag: localeTag,
+                status: status,
+                dueAtMs: dueAtLocal?.toUtc().millisecondsSinceEpoch,
                 timeout: settings.hardTimeout,
               );
               if (generatedChecklistSuggestions.isNotEmpty) {

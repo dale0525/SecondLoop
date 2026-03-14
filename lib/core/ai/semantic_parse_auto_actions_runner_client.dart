@@ -202,6 +202,8 @@ final class BackendSemanticParseAutoActionsClient
     required String taskTitle,
     required String taskContext,
     required String localeTag,
+    String? status,
+    int? dueAtMs,
     required Duration timeout,
   }) {
     return requestTodoChecklistSuggestions(
@@ -214,6 +216,8 @@ final class BackendSemanticParseAutoActionsClient
       taskTitle: taskTitle,
       taskContext: taskContext,
       localeTag: localeTag,
+      status: status,
+      dueAtMs: dueAtMs,
       timeout: timeout,
     );
   }
