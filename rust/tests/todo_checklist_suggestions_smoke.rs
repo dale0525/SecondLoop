@@ -268,3 +268,121 @@ END;
         .iter()
         .all(|item| item.dismissed_at_ms.is_none()));
 }
+
+#[test]
+fn checklist_generate_suggestions_succeeds_inside_active_transaction() {
+    let (_temp_dir, key, conn) = setup();
+
+    db::upsert_todo(
+        &conn,
+        &key,
+        "todo_1",
+        "Plan launch",
+        None,
+        "open",
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("upsert todo");
+
+    conn.execute_batch("BEGIN;")
+        .expect("begin outer transaction");
+    let generated = db::upsert_generated_todo_checklist_suggestions(
+        &conn,
+        &key,
+        "todo_1",
+        &[
+            "Draft launch post".to_string(),
+            "Share with team".to_string(),
+        ],
+        "cloud",
+        Some("gen_nested"),
+    )
+    .expect("generate suggestions inside transaction");
+    conn.execute_batch("COMMIT;")
+        .expect("commit outer transaction");
+
+    assert_eq!(generated.len(), 2);
+}
+
+#[test]
+fn checklist_apply_suggestions_succeeds_inside_active_transaction() {
+    let (_temp_dir, key, conn) = setup();
+
+    db::upsert_todo(
+        &conn,
+        &key,
+        "todo_1",
+        "Plan launch",
+        None,
+        "open",
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("upsert todo");
+
+    let generated = db::upsert_generated_todo_checklist_suggestions(
+        &conn,
+        &key,
+        "todo_1",
+        &["Draft launch post".to_string()],
+        "cloud",
+        Some("gen_apply_nested"),
+    )
+    .expect("generate suggestions");
+
+    conn.execute_batch("BEGIN;")
+        .expect("begin outer transaction");
+    let applied =
+        db::apply_todo_checklist_suggestions(&conn, &key, "todo_1", &[generated[0].id.clone()])
+            .expect("apply suggestions inside transaction");
+    conn.execute_batch("COMMIT;")
+        .expect("commit outer transaction");
+
+    assert_eq!(applied.len(), 1);
+    assert_eq!(applied[0].content, "Draft launch post");
+}
+
+#[test]
+fn checklist_dismiss_suggestions_succeeds_inside_active_transaction() {
+    let (_temp_dir, key, conn) = setup();
+
+    db::upsert_todo(
+        &conn,
+        &key,
+        "todo_1",
+        "Plan launch",
+        None,
+        "open",
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("upsert todo");
+
+    let generated = db::upsert_generated_todo_checklist_suggestions(
+        &conn,
+        &key,
+        "todo_1",
+        &["Share with team".to_string()],
+        "cloud",
+        Some("gen_dismiss_nested"),
+    )
+    .expect("generate suggestions");
+
+    conn.execute_batch("BEGIN;")
+        .expect("begin outer transaction");
+    db::dismiss_todo_checklist_suggestions(&conn, &key, "todo_1", &[generated[0].id.clone()])
+        .expect("dismiss suggestions inside transaction");
+    conn.execute_batch("COMMIT;")
+        .expect("commit outer transaction");
+
+    let suggestions =
+        db::list_todo_checklist_suggestions(&conn, &key, "todo_1").expect("list suggestions");
+    assert_eq!(suggestions[0].state, "dismissed");
+}

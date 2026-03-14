@@ -404,3 +404,43 @@ fn checklist_progress_excludes_done_and_dismissed_todos() {
     assert_eq!(progress.len(), 1);
     assert_eq!(progress[0].todo_id, "todo_open");
 }
+
+#[test]
+fn checklist_reorder_succeeds_inside_active_transaction() {
+    let (_temp_dir, key, conn) = setup();
+
+    db::upsert_todo(
+        &conn,
+        &key,
+        "todo_1",
+        "Plan launch",
+        None,
+        "open",
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("upsert todo");
+
+    let first =
+        db::create_todo_checklist_item(&conn, &key, "todo_1", "First").expect("create first");
+    let second =
+        db::create_todo_checklist_item(&conn, &key, "todo_1", "Second").expect("create second");
+
+    conn.execute_batch("BEGIN;")
+        .expect("begin outer transaction");
+    db::reorder_todo_checklist_items(
+        &conn,
+        &key,
+        "todo_1",
+        &[second.id.clone(), first.id.clone()],
+    )
+    .expect("reorder items inside transaction");
+    conn.execute_batch("COMMIT;")
+        .expect("commit outer transaction");
+
+    let listed = db::list_todo_checklist_items(&conn, &key, "todo_1").expect("list items");
+    assert_eq!(listed[0].id, second.id);
+    assert_eq!(listed[1].id, first.id);
+}

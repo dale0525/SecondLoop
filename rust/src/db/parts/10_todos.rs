@@ -497,9 +497,7 @@ pub fn reorder_todo_checklist_items(
     todo_id: &str,
     ordered_item_ids: &[String],
 ) -> Result<()> {
-    conn.execute_batch("BEGIN IMMEDIATE;")?;
-
-    let result: Result<()> = (|| {
+    run_immediate_transaction(conn, || {
         let now = now_ms();
         for (index, item_id) in ordered_item_ids.iter().enumerate() {
             conn.execute(
@@ -525,18 +523,7 @@ pub fn reorder_todo_checklist_items(
         insert_oplog(conn, key, &op)?;
 
         Ok(())
-    })();
-
-    match result {
-        Ok(()) => {
-            conn.execute_batch("COMMIT;")?;
-            Ok(())
-        }
-        Err(e) => {
-            let _ = conn.execute_batch("ROLLBACK;");
-            Err(e)
-        }
-    }
+    })
 }
 
 pub fn list_todo_checklist_progress(
@@ -692,8 +679,7 @@ pub fn upsert_generated_todo_checklist_suggestions(
     source: &str,
     generation_key: Option<&str>,
 ) -> Result<Vec<TodoChecklistSuggestion>> {
-    conn.execute_batch("BEGIN IMMEDIATE;")?;
-    let result: Result<Vec<TodoChecklistSuggestion>> = (|| {
+    run_immediate_transaction(conn, || {
         let existing = list_todo_checklist_suggestions(conn, key, todo_id)?;
         let mut blocked_norms = existing
             .iter()
@@ -772,18 +758,7 @@ INSERT INTO todo_checklist_suggestions(
         }
 
         Ok(created)
-    })();
-
-    match result {
-        Ok(created) => {
-            conn.execute_batch("COMMIT;")?;
-            Ok(created)
-        }
-        Err(e) => {
-            let _ = conn.execute_batch("ROLLBACK;");
-            Err(e)
-        }
-    }
+    })
 }
 
 pub fn apply_todo_checklist_suggestions(
@@ -792,8 +767,7 @@ pub fn apply_todo_checklist_suggestions(
     todo_id: &str,
     suggestion_ids: &[String],
 ) -> Result<Vec<TodoChecklistItem>> {
-    conn.execute_batch("BEGIN IMMEDIATE;")?;
-    let result: Result<Vec<TodoChecklistItem>> = (|| {
+    run_immediate_transaction(conn, || {
         let mut created_items = Vec::new();
         for suggestion_id in suggestion_ids {
             let suggestion = get_todo_checklist_suggestion_by_id(conn, key, suggestion_id)?;
@@ -826,18 +800,7 @@ pub fn apply_todo_checklist_suggestions(
             created_items.push(item);
         }
         Ok(created_items)
-    })();
-
-    match result {
-        Ok(items) => {
-            conn.execute_batch("COMMIT;")?;
-            Ok(items)
-        }
-        Err(e) => {
-            let _ = conn.execute_batch("ROLLBACK;");
-            Err(e)
-        }
-    }
+    })
 }
 
 pub fn dismiss_todo_checklist_suggestions(
@@ -846,8 +809,7 @@ pub fn dismiss_todo_checklist_suggestions(
     todo_id: &str,
     suggestion_ids: &[String],
 ) -> Result<()> {
-    conn.execute_batch("BEGIN IMMEDIATE;")?;
-    let result: Result<()> = (|| {
+    run_immediate_transaction(conn, || {
         let now = now_ms();
         for suggestion_id in suggestion_ids {
             conn.execute(
@@ -883,18 +845,7 @@ WHERE id = ?1 AND todo_id = ?5 AND state = ?6
             insert_oplog(conn, key, &op)?;
         }
         Ok(())
-    })();
-
-    match result {
-        Ok(()) => {
-            conn.execute_batch("COMMIT;")?;
-            Ok(())
-        }
-        Err(e) => {
-            let _ = conn.execute_batch("ROLLBACK;");
-            Err(e)
-        }
-    }
+    })
 }
 
 pub fn dismiss_all_todo_checklist_suggestions(
