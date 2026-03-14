@@ -166,7 +166,10 @@ class TaskPriorityStore extends ChangeNotifier {
         try {
           final request =
               buildTaskPriorityAiRequest(_snapshot, nowLocal: nowLocal);
-          final signature = _buildAiSignature(request);
+          final signature = _buildAiSignature(
+            request,
+            cacheScopeKey: aiService.cacheScopeKey,
+          );
           final aiResult = _resolveCachedOrFreshAiResult(
             aiService,
             request: request,
@@ -221,18 +224,23 @@ class TaskPriorityStore extends ChangeNotifier {
     return result;
   }
 
-  String _buildAiSignature(TaskPriorityAiRequest request) {
-    return request.candidates
-        .map(
-          (candidate) => [
-            candidate.todoId,
-            candidate.status,
-            candidate.band.name,
-            candidate.dueState,
-            candidate.updatedAtMs.toString(),
-          ].join(':'),
-        )
-        .join('|');
+  String _buildAiSignature(
+    TaskPriorityAiRequest request, {
+    required String cacheScopeKey,
+  }) {
+    return [
+      cacheScopeKey,
+      request.candidates
+          .map(
+            (candidate) => [
+              candidate.todoId,
+              candidate.status,
+              candidate.band.name,
+              candidate.dueState,
+            ].join(':'),
+          )
+          .join('|'),
+    ].join('||');
   }
 
   TaskPrioritySnapshot _applyStickyFocus(

@@ -349,6 +349,7 @@ extension _ChatPageStateMethodsB on _ChatPageState {
       final subscriptionStatus = SubscriptionScope.maybeOf(context)?.status ??
           SubscriptionStatus.unknown;
       final cloudAuthScope = CloudAuthScope.maybeOf(context);
+      final localeTag = Localizations.localeOf(context).toLanguageTag();
       final gatewayConfig =
           cloudAuthScope?.gatewayConfig ?? CloudGatewayConfig.defaultConfig;
       final idToken = await readCloudCapabilityIdToken(
@@ -370,6 +371,7 @@ extension _ChatPageStateMethodsB on _ChatPageState {
         gatewayBaseUrl: gatewayConfig.baseUrl,
         idToken: (idToken ?? '').trim(),
         modelName: gatewayConfig.modelName,
+        localeTag: localeTag,
       );
     } catch (_) {
       return null;

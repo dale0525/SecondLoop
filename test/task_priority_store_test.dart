@@ -243,6 +243,92 @@ void main() {
     expect(store.isAiEnhancementAvailable, isTrue);
     expect(store.snapshot.source, TaskPrioritySnapshotSource.hybrid);
   });
+
+  test('updatedAtMs churn alone does not trigger a second rerank', () async {
+    SharedPreferences.setMockInitialValues({});
+    final aiService = _CountingAiService(
+      const TaskPriorityAiBatchResult(
+        entries: <TaskPriorityAiEntry>[
+          TaskPriorityAiEntry(
+            todoId: 'focus',
+            priorityBand: TaskPriorityAiBand.focus,
+            semanticAdjustment: 20,
+            reason: 'Still the best option.',
+            suggestedAction: TaskPrioritySuggestionKind.doNow,
+            confidence: TaskPriorityAiConfidence.high,
+          ),
+        ],
+      ),
+    );
+    var updatedAtMs = 10;
+    final store = TaskPriorityStore.fromLoaders(
+      nowLocal: () => DateTime(2026, 3, 13, 10, 0),
+      loadTodos: () async => <Todo>[
+        todo(id: 'focus', title: 'Fix prod bug', updatedAtMs: updatedAtMs),
+      ],
+      resolveAiService: () async => aiService,
+    );
+
+    await store.refresh();
+    updatedAtMs = 999;
+    store.markDirty();
+    await store.refresh();
+
+    expect(aiService.calls, 1);
+  });
+
+  test('changing ai cache scope triggers a fresh rerank', () async {
+    SharedPreferences.setMockInitialValues({});
+    final englishService = _CountingAiService(
+      const TaskPriorityAiBatchResult(
+        entries: <TaskPriorityAiEntry>[
+          TaskPriorityAiEntry(
+            todoId: 'focus',
+            priorityBand: TaskPriorityAiBand.focus,
+            semanticAdjustment: 20,
+            reason: 'Handle it now.',
+            suggestedAction: TaskPrioritySuggestionKind.doNow,
+            confidence: TaskPriorityAiConfidence.high,
+          ),
+        ],
+      ),
+      cacheScopeKey: 'byok|model|en-US',
+    );
+    final chineseService = _CountingAiService(
+      const TaskPriorityAiBatchResult(
+        entries: <TaskPriorityAiEntry>[
+          TaskPriorityAiEntry(
+            todoId: 'focus',
+            priorityBand: TaskPriorityAiBand.focus,
+            semanticAdjustment: 20,
+            reason: '现在处理。',
+            suggestedAction: TaskPrioritySuggestionKind.doNow,
+            confidence: TaskPriorityAiConfidence.high,
+          ),
+        ],
+      ),
+      cacheScopeKey: 'byok|model|zh-CN',
+    );
+    var currentService = englishService;
+    final store = TaskPriorityStore.fromLoaders(
+      nowLocal: () => DateTime(2026, 3, 13, 10, 0),
+      loadTodos: () async => <Todo>[
+        todo(id: 'focus', title: 'Fix prod bug', updatedAtMs: 10),
+      ],
+      resolveAiService: () async => currentService,
+    );
+
+    await store.refresh();
+    expect(store.snapshot.primaryFocus?.reasonText, 'Handle it now.');
+
+    currentService = chineseService;
+    store.markDirty();
+    await store.refresh();
+
+    expect(englishService.calls, 1);
+    expect(chineseService.calls, 1);
+    expect(store.snapshot.primaryFocus?.reasonText, '现在处理。');
+  });
   test('ai enhancement is not considered enabled before availability resolves',
       () {
     final store = TaskPriorityStore.fromLoaders(
@@ -258,6 +344,9 @@ void main() {
 final class _FakeAiService implements TaskPriorityAiService {
   _FakeAiService(this._future);
 
+  @override
+  String get cacheScopeKey => 'fake';
+
   final Future<TaskPriorityAiBatchResult> _future;
 
   @override
@@ -267,9 +356,11 @@ final class _FakeAiService implements TaskPriorityAiService {
 }
 
 final class _CountingAiService implements TaskPriorityAiService {
-  _CountingAiService(this._result);
+  _CountingAiService(this._result, {this.cacheScopeKey = 'counting'});
 
   final TaskPriorityAiBatchResult _result;
+  @override
+  final String cacheScopeKey;
   int calls = 0;
 
   @override

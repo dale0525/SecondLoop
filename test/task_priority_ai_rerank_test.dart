@@ -152,6 +152,95 @@ void main() {
     final messages = await backend.listMessages(Uint8List(32), 'loop_home');
     expect(messages, isEmpty);
   });
+
+  test('service includes current app locale in prompt', () async {
+    final backend = _RecordingTaskPriorityBackend();
+    final service = BackendTaskPriorityAiService.forTesting(
+      backend: backend,
+      sessionKey: Uint8List(32),
+      route: AskAiRouteKind.byok,
+      gatewayBaseUrl: '',
+      idToken: '',
+      modelName: 'gpt-locale-test',
+      localeTag: 'zh-CN',
+    );
+
+    await service.rerank(
+      TaskPriorityAiRequest(
+        nowLocal: DateTime(2026, 3, 13, 10, 0),
+        candidates: const <TaskPriorityAiCandidate>[
+          TaskPriorityAiCandidate(
+            todoId: 't1',
+            title: 'Fix bug',
+            status: 'open',
+            band: TaskPriorityBand.decide,
+            dueState: 'unscheduled',
+            ruleScore: 10,
+            updatedAtMs: 0,
+            recentInteractionSummary: '',
+            sourceSummary: '',
+            isRepeatedlyDeferred: false,
+            isPotentialBlocker: true,
+            isQuickWin: false,
+          ),
+        ],
+      ),
+    );
+
+    expect(backend.prompts.single, contains('current app language (zh-CN)'));
+  });
+
+  test('service deduplicates cross-instance reranks with only clock drift',
+      () async {
+    final backend = _RecordingTaskPriorityBackend();
+    final requestA = TaskPriorityAiRequest(
+      nowLocal: DateTime(2026, 3, 13, 10, 0),
+      candidates: const <TaskPriorityAiCandidate>[
+        TaskPriorityAiCandidate(
+          todoId: 't1',
+          title: 'Fix bug',
+          status: 'open',
+          band: TaskPriorityBand.decide,
+          dueState: 'unscheduled',
+          ruleScore: 10,
+          updatedAtMs: 0,
+          recentInteractionSummary: '',
+          sourceSummary: '',
+          isRepeatedlyDeferred: false,
+          isPotentialBlocker: true,
+          isQuickWin: false,
+        ),
+      ],
+    );
+    final requestB = TaskPriorityAiRequest(
+      nowLocal: DateTime(2026, 3, 13, 10, 0, 6),
+      candidates: requestA.candidates,
+    );
+
+    final serviceA = BackendTaskPriorityAiService.forTesting(
+      backend: backend,
+      sessionKey: Uint8List(32),
+      route: AskAiRouteKind.byok,
+      gatewayBaseUrl: '',
+      idToken: '',
+      modelName: 'gpt-dedupe-test',
+      localeTag: 'zh-CN',
+    );
+    final serviceB = BackendTaskPriorityAiService.forTesting(
+      backend: backend,
+      sessionKey: Uint8List(32),
+      route: AskAiRouteKind.byok,
+      gatewayBaseUrl: '',
+      idToken: '',
+      modelName: 'gpt-dedupe-test',
+      localeTag: 'zh-CN',
+    );
+
+    await serviceA.rerank(requestA);
+    await serviceB.rerank(requestB);
+
+    expect(backend.taskPriorityCalls, 1);
+  });
 }
 
 final class _ThrowingAskBackend extends TestAppBackend {
@@ -185,5 +274,23 @@ final class _DirectTaskPriorityBackend extends TestAppBackend {
     bool thisThreadOnly = false,
   }) async* {
     throw StateError('askAiStream should not be used for task priority rerank');
+  }
+}
+
+final class _RecordingTaskPriorityBackend extends TestAppBackend {
+  static const String _response =
+      '{"entries":[{"todo_id":"t1","priority_band":"focus","semantic_adjustment":14,"reason":"今天优先处理。","suggested_action":"do_now","confidence":"high"}]}';
+
+  final List<String> prompts = <String>[];
+  int taskPriorityCalls = 0;
+
+  @override
+  Future<String> taskPriorityRerankAi(
+    Uint8List key, {
+    required String prompt,
+  }) async {
+    prompts.add(prompt);
+    taskPriorityCalls += 1;
+    return _response;
   }
 }

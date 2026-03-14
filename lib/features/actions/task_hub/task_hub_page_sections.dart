@@ -286,15 +286,17 @@ class _TaskHubQuickMenu extends StatelessWidget {
             ),
           ),
       ],
-      child: OutlinedButton(
-        onPressed: () {},
-        style: ButtonStyle(
-          minimumSize: const MaterialStatePropertyAll(Size(44, 40)),
-          side: MaterialStatePropertyAll(
-            BorderSide(color: tokens.borderSubtle.withOpacity(0.9)),
+      child: IgnorePointer(
+        child: OutlinedButton(
+          onPressed: () {},
+          style: ButtonStyle(
+            minimumSize: const MaterialStatePropertyAll(Size(44, 40)),
+            side: MaterialStatePropertyAll(
+              BorderSide(color: tokens.borderSubtle.withOpacity(0.9)),
+            ),
           ),
+          child: const Icon(Icons.more_horiz_rounded, size: 18),
         ),
-        child: const Icon(Icons.more_horiz_rounded, size: 18),
       ),
     );
   }
