@@ -121,6 +121,44 @@ fn regenerate_skips_dismissed_and_applied_duplicates() {
 }
 
 #[test]
+fn generated_suggestion_sort_order_stays_contiguous_after_skips() {
+    let (_temp_dir, key, conn) = setup();
+
+    db::upsert_todo(
+        &conn,
+        &key,
+        "todo_1",
+        "Plan launch",
+        None,
+        "open",
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("upsert todo");
+
+    let generated = db::upsert_generated_todo_checklist_suggestions(
+        &conn,
+        &key,
+        "todo_1",
+        &[
+            "".to_string(),
+            "Draft launch post".to_string(),
+            " draft launch post ".to_string(),
+            "Share with team".to_string(),
+        ],
+        "cloud",
+        Some("gen_gapped_sort"),
+    )
+    .expect("generate suggestions");
+
+    assert_eq!(generated.len(), 2);
+    assert_eq!(generated[0].sort_order, 0);
+    assert_eq!(generated[1].sort_order, 1);
+}
+
+#[test]
 fn dismiss_all_marks_all_pending_suggestions_dismissed() {
     let (_temp_dir, key, conn) = setup();
 

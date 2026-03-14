@@ -400,6 +400,66 @@ void main() {
     expect(secondStore.snapshot.primaryFocus?.reasonText, isNull);
   });
 
+  test('separator-like fields do not collide in persisted AI request signatures',
+      () async {
+    SharedPreferences.setMockInitialValues({});
+    final firstService = _CountingAiService(
+      const TaskPriorityAiBatchResult(
+        entries: <TaskPriorityAiEntry>[
+          TaskPriorityAiEntry(
+            todoId: 'a:b',
+            priorityBand: TaskPriorityAiBand.focus,
+            semanticAdjustment: 20,
+            reason: 'First tuple result.',
+            suggestedAction: TaskPrioritySuggestionKind.doNow,
+            confidence: TaskPriorityAiConfidence.high,
+          ),
+        ],
+      ),
+      cacheScopeKey: 'byok|model|en-US',
+    );
+    final firstStore = TaskPriorityStore.fromLoaders(
+      nowLocal: () => DateTime(2026, 3, 13, 10, 0),
+      loadTodos: () async => <Todo>[
+        todo(id: 'a:b', title: 'Task A', status: 'c', updatedAtMs: 10),
+      ],
+      resolveAiService: () async => firstService,
+    );
+
+    await firstStore.refresh();
+
+    final secondService = _CountingAiService(
+      const TaskPriorityAiBatchResult(
+        entries: <TaskPriorityAiEntry>[
+          TaskPriorityAiEntry(
+            todoId: 'a',
+            priorityBand: TaskPriorityAiBand.focus,
+            semanticAdjustment: 20,
+            reason: 'Second tuple result.',
+            suggestedAction: TaskPrioritySuggestionKind.doNow,
+            confidence: TaskPriorityAiConfidence.high,
+          ),
+        ],
+      ),
+      cacheScopeKey: 'byok|model|en-US',
+    );
+    final secondStore = TaskPriorityStore.fromLoaders(
+      nowLocal: () => DateTime(2026, 3, 13, 10, 5),
+      loadTodos: () async => <Todo>[
+        todo(id: 'a', title: 'Task B', status: 'b:c', updatedAtMs: 10),
+      ],
+      resolveAiService: () async => secondService,
+    );
+
+    await secondStore.refresh();
+
+    expect(firstService.calls, 1);
+    expect(secondService.calls, 1);
+    expect(secondStore.snapshot.source, TaskPrioritySnapshotSource.hybrid);
+    expect(secondStore.snapshot.primaryFocus?.reasonText,
+        'Second tuple result.');
+  });
+
   test('updatedAtMs churn alone does not trigger a second rerank', () async {
     SharedPreferences.setMockInitialValues({});
     final aiService = _CountingAiService(

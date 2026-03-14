@@ -706,8 +706,9 @@ pub fn upsert_generated_todo_checklist_suggestions(
             |row| row.get(0),
         )?;
         let now = now_ms();
+        let mut insert_index: i64 = 0;
 
-        for (offset, raw_content) in suggestions.iter().enumerate() {
+        for raw_content in suggestions {
             let trimmed = raw_content.trim();
             if trimmed.is_empty() {
                 continue;
@@ -729,7 +730,7 @@ INSERT INTO todo_checklist_suggestions(
                     id,
                     todo_id,
                     content_blob,
-                    base_sort_order + offset as i64,
+                    base_sort_order + insert_index,
                     TODO_CHECKLIST_SUGGESTION_STATE_PENDING,
                     source,
                     generation_key,
@@ -763,6 +764,7 @@ INSERT INTO todo_checklist_suggestions(
             });
             insert_oplog(conn, key, &op)?;
             created.push(suggestion);
+            insert_index += 1;
         }
 
         Ok(created)

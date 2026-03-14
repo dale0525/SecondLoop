@@ -377,32 +377,34 @@ class TaskPriorityStore extends ChangeNotifier {
     TaskPriorityAiRequest request, {
     required String cacheScopeKey,
   }) {
-    return [
+    return jsonEncode(<Object?>[
       cacheScopeKey,
       request.candidates
           .map(
-            (candidate) => [
+            (candidate) => <String>[
               candidate.todoId,
               candidate.status,
               candidate.band.name,
               candidate.dueState,
-            ].join(':'),
+            ],
           )
-          .join('|'),
-    ].join('||');
+          .toList(growable: false),
+    ]);
   }
 
   String _buildAiRequestSignature(TaskPriorityAiRequest request) {
-    return request.candidates
-        .map(
-          (candidate) => [
-            candidate.todoId,
-            candidate.status,
-            candidate.band.name,
-            candidate.dueState,
-          ].join(':'),
-        )
-        .join('|');
+    return jsonEncode(
+      request.candidates
+          .map(
+            (candidate) => <String>[
+              candidate.todoId,
+              candidate.status,
+              candidate.band.name,
+              candidate.dueState,
+            ],
+          )
+          .toList(growable: false),
+    );
   }
 
   TaskPrioritySnapshot _applyStickyFocus(
