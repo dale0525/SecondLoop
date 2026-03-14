@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -60,7 +61,32 @@ void main() {
 
     expect(capturedScriptPath, isNotNull);
     expect(
-        Directory(File(capturedScriptPath!).parent.path).existsSync(), isFalse);
+      Directory(File(capturedScriptPath!).parent.path).existsSync(),
+      isFalse,
+    );
+  });
+
+  test('cleans temp directory when remote archive fetch times out', () async {
+    final beforeDirs = _listMacosUpdateTempDirs();
+    final stalledRequest = Completer<HttpClientRequest>();
+    final client = DefaultMacosManagedUpdateClient(
+      executablePath: '/Applications/SecondLoop.app/Contents/MacOS/SecondLoop',
+      environment: const {'HOME': '/Users/tester'},
+      httpClientFactory: () => _FakeHttpClient(
+        onGetUrl: (_) => stalledRequest.future,
+      ),
+      networkTimeoutOverride: const Duration(milliseconds: 10),
+    );
+
+    await expectLater(
+      () => client.installArchiveAndRestart(
+        Uri.parse('https://cdn.example.com/SecondLoop-macos-v1.2.3.app.tar.gz'),
+        waitPid: 4321,
+      ),
+      throwsA(isA<TimeoutException>()),
+    );
+
+    expect(_listMacosUpdateTempDirs(), beforeDirs);
   });
 
   test('installArchiveAndRestart writes rollback-capable updater script',
@@ -93,9 +119,13 @@ void main() {
     expect(scriptText, contains('APP_PID=4321'));
     expect(scriptText, contains('MAX_WAIT=60'));
     expect(
-        scriptText, contains(r'APP_START=$(/bin/ps -o lstart= -p "$APP_PID"'));
-    expect(scriptText,
-        contains(r'CURRENT_START=$(/bin/ps -o lstart= -p "$APP_PID"'));
+      scriptText,
+      contains(r'APP_START=$(/bin/ps -o lstart= -p "$APP_PID"'),
+    );
+    expect(
+      scriptText,
+      contains(r'CURRENT_START=$(/bin/ps -o lstart= -p "$APP_PID"'),
+    );
     expect(scriptText, contains(r'waited=$((waited + 1))'));
     expect(scriptText, contains('mv "\$TARGET_APP" "\$BACKUP_APP"'));
     expect(scriptText, contains('ditto "\$REPLACEMENT_APP" "\$TARGET_APP"'));
@@ -108,11 +138,24 @@ void main() {
     expect(scriptText, contains('mv "\$BACKUP_APP" "\$TARGET_APP" || {'));
     expect(scriptText, contains('rm -rf "\$TARGET_APP.failed" || true'));
     expect(scriptText, contains('rm -rf "\$TEMP_ROOT" || true'));
+    expect(scriptText, contains('rm -rf "\$BACKUP_APP" "\$TEMP_ROOT" || true'));
     expect(
       File('${scriptDir.path}/SecondLoop-macos-v1.2.3.app.tar.gz').existsSync(),
       isFalse,
     );
   });
+}
+
+Set<String> _listMacosUpdateTempDirs() {
+  return Directory.systemTemp
+      .listSync()
+      .whereType<Directory>()
+      .map((dir) => dir.path)
+      .where((path) =>
+          path.split(Platform.pathSeparator).last.startsWith(
+                'secondloop_macos_update_',
+              ))
+      .toSet();
 }
 
 Future<File> _createMacosArchive(Directory tempDir) async {
@@ -140,4 +183,19 @@ Future<File> _createMacosArchive(Directory tempDir) async {
     throw StateError('tar_failed_${result.stderr}');
   }
   return archiveFile;
+}
+
+final class _FakeHttpClient implements HttpClient {
+  _FakeHttpClient({required this.onGetUrl});
+
+  final Future<HttpClientRequest> Function(Uri uri) onGetUrl;
+
+  @override
+  Future<HttpClientRequest> getUrl(Uri url) => onGetUrl(url);
+
+  @override
+  void close({bool force = false}) {}
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }

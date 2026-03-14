@@ -2,6 +2,8 @@ import 'dart:io';
 
 import 'package:archive/archive_io.dart';
 
+const _defaultMacosUpdateNetworkTimeout = Duration(seconds: 15);
+
 typedef MacosProcessStarter = Future<Process> Function(
   String executable,
   List<String> arguments, {
@@ -22,19 +24,27 @@ class DefaultMacosManagedUpdateClient implements MacosManagedUpdateClient {
     String? executablePath,
     MacosProcessStarter? processStarter,
     Map<String, String>? environment,
+    HttpClient Function()? httpClientFactory,
+    Duration? networkTimeoutOverride,
   })  : _executablePath = executablePath,
         _processStarter = processStarter ?? _defaultProcessStarter,
-        _environment = environment;
+        _environment = environment,
+        _httpClientFactory = httpClientFactory ?? HttpClient.new,
+        _networkTimeoutOverride = networkTimeoutOverride;
 
   final String? _executablePath;
   final MacosProcessStarter _processStarter;
   final Map<String, String>? _environment;
+  final HttpClient Function() _httpClientFactory;
+  final Duration? _networkTimeoutOverride;
 
   String get _resolvedExecutablePath =>
       _executablePath ?? Platform.resolvedExecutable;
 
   Map<String, String> get _resolvedEnvironment =>
       _environment ?? Platform.environment;
+  Duration get _networkTimeout =>
+      _networkTimeoutOverride ?? _defaultMacosUpdateNetworkTimeout;
 
   @override
   bool isSupportedInstallLocation() {
@@ -166,7 +176,7 @@ class DefaultMacosManagedUpdateClient implements MacosManagedUpdateClient {
     return 'SecondLoop-macos-update.app.tar.gz';
   }
 
-  static Future<void> _materializeArchive(Uri uri, File destination) async {
+  Future<void> _materializeArchive(Uri uri, File destination) async {
     if (destination.existsSync()) {
       await destination.delete();
     }
@@ -175,10 +185,10 @@ class DefaultMacosManagedUpdateClient implements MacosManagedUpdateClient {
       return;
     }
 
-    final client = HttpClient();
+    final client = _httpClientFactory();
     try {
-      final request = await client.getUrl(uri);
-      final response = await request.close();
+      final request = await client.getUrl(uri).timeout(_networkTimeout);
+      final response = await request.close().timeout(_networkTimeout);
       if (response.statusCode < 200 || response.statusCode >= 300) {
         throw StateError(
             'macos_update_download_failed_http_${response.statusCode}');
@@ -186,7 +196,7 @@ class DefaultMacosManagedUpdateClient implements MacosManagedUpdateClient {
 
       final sink = destination.openWrite();
       try {
-        await response.pipe(sink);
+        await response.timeout(_networkTimeout).pipe(sink);
       } finally {
         await sink.close();
       }
@@ -257,7 +267,7 @@ mv "\$TARGET_APP" "\$BACKUP_APP"
 if ditto "\$REPLACEMENT_APP" "\$TARGET_APP"; then
   /usr/bin/xattr -dr com.apple.quarantine "\$TARGET_APP" >/dev/null 2>&1 || true
   open -a "\$TARGET_APP" >/dev/null 2>&1 || nohup "\$TARGET_EXECUTABLE" >/dev/null 2>&1 &
-  rm -rf "\$BACKUP_APP" "\$TEMP_ROOT"
+  rm -rf "\$BACKUP_APP" "\$TEMP_ROOT" || true
 else
   mv "\$TARGET_APP" "\$TARGET_APP.failed" 2>/dev/null || true
   mv "\$BACKUP_APP" "\$TARGET_APP" || {
