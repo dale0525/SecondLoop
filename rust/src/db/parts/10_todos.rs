@@ -878,6 +878,7 @@ pub fn dismiss_todo_checklist_suggestions(
 ) -> Result<()> {
     run_immediate_transaction(conn, || {
         let now = now_ms();
+        let device_id = get_or_create_device_id(conn)?;
         for suggestion_id in suggestion_ids {
             let rows_changed = conn.execute(
                 r#"
@@ -898,7 +899,6 @@ WHERE id = ?1 AND todo_id = ?5 AND state = ?6
                 continue;
             }
 
-            let device_id = get_or_create_device_id(conn)?;
             let seq = next_device_seq(conn, &device_id)?;
             let op = serde_json::json!({
                 "op_id": uuid::Uuid::new_v4().to_string(),
