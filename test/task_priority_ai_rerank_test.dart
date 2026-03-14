@@ -230,6 +230,30 @@ void main() {
     expect(backend.prompts.single, contains('current app language (zh-CN)'));
   });
 
+  test('cacheScopeKey stays unique when config values contain pipes', () {
+    final backend = _RecordingTaskPriorityBackend();
+    final serviceA = BackendTaskPriorityAiService.forTesting(
+      backend: backend,
+      sessionKey: Uint8List(32),
+      route: AskAiRouteKind.byok,
+      gatewayBaseUrl: 'https://gateway.example/a|b',
+      idToken: '',
+      modelName: 'c',
+      localeTag: 'zh-CN',
+    );
+    final serviceB = BackendTaskPriorityAiService.forTesting(
+      backend: backend,
+      sessionKey: Uint8List(32),
+      route: AskAiRouteKind.byok,
+      gatewayBaseUrl: 'https://gateway.example/a',
+      idToken: '',
+      modelName: 'b|c',
+      localeTag: 'zh-CN',
+    );
+
+    expect(serviceA.cacheScopeKey, isNot(serviceB.cacheScopeKey));
+  });
+
   test('service deduplicates cross-instance reranks with only clock drift',
       () async {
     final backend = _RecordingTaskPriorityBackend();

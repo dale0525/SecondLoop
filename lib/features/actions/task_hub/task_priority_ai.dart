@@ -88,13 +88,15 @@ class BackendTaskPriorityAiService implements TaskPriorityAiService {
   final String _modelName;
   final String _localeTag;
 
-  @override
-  String get cacheScopeKey => [
+  List<String> get _cacheScopeParts => <String>[
         _route.name,
         _gatewayBaseUrl,
         _modelName,
         _localeTag,
-      ].join('|');
+      ];
+
+  @override
+  String get cacheScopeKey => jsonEncode(_cacheScopeParts);
 
   @override
   Future<TaskPriorityAiBatchResult> rerank(
@@ -124,15 +126,12 @@ class BackendTaskPriorityAiService implements TaskPriorityAiService {
   }
 
   String _buildCacheKey(TaskPriorityAiRequest request) {
-    final normalizedPayload = jsonEncode(<String, Object?>{
+    return jsonEncode(<String, Object?>{
+      'scope': _cacheScopeParts,
       'candidates': request.candidates
           .map((entry) => entry.toJson())
           .toList(growable: false),
     });
-    return [
-      cacheScopeKey,
-      normalizedPayload,
-    ].join('|');
   }
 
   Future<String> _resolveSharedCachedOrFreshResponse(
