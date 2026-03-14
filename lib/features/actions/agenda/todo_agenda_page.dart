@@ -112,14 +112,15 @@ class _TodoAgendaPageState extends State<TodoAgendaPage> {
       final backend = AppBackendScope.of(context);
       final sessionKey = SessionScope.of(context).sessionKey;
       final todos = await backend.listTodos(sessionKey);
-      List<TodoChecklistProgress> checklistProgress;
+      Map<String, TodoChecklistProgress>? checklistProgressByTodoId;
       try {
-        checklistProgress = await backend.listTodoChecklistProgress(
+        final checklistProgress = await backend.listTodoChecklistProgress(
           sessionKey,
         );
-      } catch (_) {
-        checklistProgress = const <TodoChecklistProgress>[];
-      }
+        checklistProgressByTodoId = {
+          for (final item in checklistProgress) item.todoId: item,
+        };
+      } catch (_) {}
 
       final scheduled = todos
           .where((t) => t.dueAtMs != null && t.status != 'dismissed')
@@ -195,9 +196,9 @@ class _TodoAgendaPageState extends State<TodoAgendaPage> {
         _inProgress = inProgress;
         _open = open;
         _done = done;
-        _checklistProgressByTodoId = {
-          for (final item in checklistProgress) item.todoId: item,
-        };
+        if (checklistProgressByTodoId != null) {
+          _checklistProgressByTodoId = checklistProgressByTodoId;
+        }
         _recurrenceRuleByTodoId = recurrenceRuleByTodoId;
         _doneVisible = math.min(_kDonePageSize, done.length);
       });
