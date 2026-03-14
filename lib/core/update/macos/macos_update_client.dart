@@ -62,16 +62,22 @@ class DefaultMacosManagedUpdateClient implements MacosManagedUpdateClient {
       'secondloop_macos_update_',
     );
     try {
-      final archiveFile = File(
-        '${tempRoot.path}${Platform.pathSeparator}${_resolveAssetFileName(archiveUri)}',
-      );
-      await _materializeArchive(archiveUri, archiveFile);
+      String archivePath;
+      if (archiveUri.scheme == 'file') {
+        archivePath = archiveUri.toFilePath();
+      } else {
+        final archiveFile = File(
+          '${tempRoot.path}${Platform.pathSeparator}${_resolveAssetFileName(archiveUri)}',
+        );
+        await _materializeArchive(archiveUri, archiveFile);
+        archivePath = archiveFile.path;
+      }
 
       final extractedDir = Directory(
         '${tempRoot.path}${Platform.pathSeparator}payload',
       );
       await extractedDir.create(recursive: true);
-      await extractFileToDisk(archiveFile.path, extractedDir.path);
+      await extractFileToDisk(archivePath, extractedDir.path);
 
       final extractedApp = _resolveExtractedAppBundle(extractedDir);
       final executableName =

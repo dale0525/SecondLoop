@@ -412,7 +412,7 @@ jobs:
       - name: Package Velopack
         shell: pwsh
         run: |
-          powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package_windows_velopack.ps1 -SkipBuild -OutputPath dist -Channel win
+          ./scripts/package_windows_velopack.ps1 -SkipBuild -OutputPath dist -Channel win
       - uses: actions/upload-artifact@v4
         with:
           name: windows

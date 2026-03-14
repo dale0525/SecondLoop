@@ -88,6 +88,7 @@ void main() {
     expect(capturedExecutable, '/bin/sh');
     expect(capturedArguments, isNotNull);
     final scriptPath = capturedArguments!.single;
+    final scriptDir = Directory(File(scriptPath).parent.path);
     final scriptText = await File(scriptPath).readAsString();
     expect(scriptText, contains('APP_PID=4321'));
     expect(scriptText, contains('MAX_WAIT=60'));
@@ -107,6 +108,10 @@ void main() {
     expect(scriptText, contains('mv "\$BACKUP_APP" "\$TARGET_APP" || {'));
     expect(scriptText, contains('rm -rf "\$TARGET_APP.failed" || true'));
     expect(scriptText, contains('rm -rf "\$TEMP_ROOT" || true'));
+    expect(
+      File('${scriptDir.path}/SecondLoop-macos-v1.2.3.app.tar.gz').existsSync(),
+      isFalse,
+    );
   });
 }
 

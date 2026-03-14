@@ -567,6 +567,7 @@ class ReleaseWorkflowEnvTests(unittest.TestCase):
         self.assertIn("name: Package Velopack", workflow_text)
         self.assertIn("name: Package MSI", workflow_text)
         self.assertIn("scripts/package_windows_velopack.ps1", workflow_text)
+        self.assertNotIn("powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package_windows_velopack.ps1", workflow_text)
         self.assertIn("scripts/create_windows_msi.ps1", workflow_text)
         self.assertIn("OutputName = 'SecondLoop-win'", workflow_text)
         self.assertIn("OutputPath = 'dist'", workflow_text)
