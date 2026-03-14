@@ -318,6 +318,85 @@ void main() {
     expect(backend.items, hasLength(1));
   });
 
+  testWidgets(
+      'TodoDetailPage re-shows reverted checklist suggestion after deleting applied item',
+      (tester) async {
+    tester.view.physicalSize = const Size(1600, 2400);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    final backend = _Backend(
+      initialItems: const <TodoChecklistItem>[
+        TodoChecklistItem(
+          id: 'item_1',
+          todoId: 't1',
+          content: 'Draft launch post',
+          isDone: false,
+          sortOrder: 0,
+          createdAtMs: 1,
+          updatedAtMs: 1,
+        ),
+      ],
+      initialSuggestions: const <TodoChecklistSuggestion>[
+        TodoChecklistSuggestion(
+          id: 'suggestion_1',
+          todoId: 't1',
+          content: 'Draft launch post',
+          sortOrder: 0,
+          state: 'applied',
+          source: 'cloud',
+          generationKey: 'gen_1',
+          createdAtMs: 1,
+          updatedAtMs: 1,
+          dismissedAtMs: null,
+          appliedChecklistItemId: 'item_1',
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: backend,
+            child: SessionScope(
+              sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+              lock: () {},
+              child: const TodoDetailPage(
+                initialTodo: Todo(
+                  id: 't1',
+                  title: 'Task',
+                  status: 'open',
+                  createdAtMs: 0,
+                  updatedAtMs: 0,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Draft launch post'), findsOneWidget);
+
+    await tester.tap(
+      find.byKey(const ValueKey('todo_detail_checklist_delete_item_1')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(backend.items, isEmpty);
+    expect(find.text('Draft launch post'), findsOneWidget);
+    expect(
+      backend.suggestions.single.state,
+      'pending',
+    );
+    expect(
+      backend.suggestions.single.appliedChecklistItemId,
+      isNull,
+    );
+  });
+
   testWidgets('TodoDetailPage shows snackbar when checklist reorder fails',
       (tester) async {
     tester.view.physicalSize = const Size(1600, 2400);
@@ -385,6 +464,7 @@ void main() {
 final class _Backend extends AppBackend {
   _Backend({
     List<TodoChecklistItem>? initialItems,
+    List<TodoChecklistSuggestion>? initialSuggestions,
     this.createError,
     this.toggleError,
     this.updateError,
@@ -394,9 +474,13 @@ final class _Backend extends AppBackend {
     if (initialItems != null) {
       items.addAll(initialItems);
     }
+    if (initialSuggestions != null) {
+      suggestions.addAll(initialSuggestions);
+    }
   }
 
   final List<TodoChecklistItem> items = <TodoChecklistItem>[];
+  final List<TodoChecklistSuggestion> suggestions = <TodoChecklistSuggestion>[];
   final Object? createError;
   final Object? toggleError;
   final Object? updateError;
@@ -450,7 +534,7 @@ final class _Backend extends AppBackend {
     Uint8List key,
     String todoId,
   ) async =>
-      const <TodoChecklistSuggestion>[];
+      List<TodoChecklistSuggestion>.from(suggestions);
 
   @override
   Future<TodoChecklistItem> createTodoChecklistItem(
@@ -528,6 +612,23 @@ final class _Backend extends AppBackend {
   }) async {
     if (deleteError != null) throw deleteError!;
     items.removeWhere((item) => item.id == itemId);
+    for (var index = 0; index < suggestions.length; index++) {
+      final suggestion = suggestions[index];
+      if (suggestion.appliedChecklistItemId != itemId) continue;
+      suggestions[index] = TodoChecklistSuggestion(
+        id: suggestion.id,
+        todoId: suggestion.todoId,
+        content: suggestion.content,
+        sortOrder: suggestion.sortOrder,
+        state: 'pending',
+        source: suggestion.source,
+        generationKey: suggestion.generationKey,
+        createdAtMs: suggestion.createdAtMs,
+        updatedAtMs: suggestion.updatedAtMs + 1,
+        dismissedAtMs: suggestion.dismissedAtMs,
+        appliedChecklistItemId: null,
+      );
+    }
   }
 
   @override

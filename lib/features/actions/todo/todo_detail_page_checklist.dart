@@ -199,6 +199,11 @@ extension _TodoDetailPageStateChecklist on _TodoDetailPageState {
       return;
     }
     _refreshChecklistItems();
+    if (mounted) {
+      _setState(() {
+        _checklistSuggestionsFuture = _loadChecklistSuggestions();
+      });
+    }
   }
 
   Future<void> _moveChecklistItem(
