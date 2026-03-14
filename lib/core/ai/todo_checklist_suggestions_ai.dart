@@ -73,7 +73,7 @@ Return strict JSON only in this shape:
 {"suggestions":["step 1","step 2"]}
 
 Rules:
-- Suggest 0 to 6 checklist items.
+- Suggest 0 to $kMaxGeneratedChecklistSuggestions checklist items.
 - Keep each item short, concrete, and actionable.
 - Do not number the items.
 - Do not repeat the task title.

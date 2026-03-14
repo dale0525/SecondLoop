@@ -12,7 +12,8 @@ extension AppBackendPromptAi on AppBackend {
       );
     } on UnimplementedError catch (error, stackTrace) {
       final message = error.toString();
-      if (message.contains('taskPriorityRerankAi')) {
+      if (message.contains('taskPriorityRerankAi') &&
+          !message.contains('taskPriorityRerankAiCloudGateway')) {
         Error.throwWithStackTrace(
           UnimplementedError('runAiPrompt / taskPriorityRerankAi'),
           stackTrace,

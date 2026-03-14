@@ -313,7 +313,7 @@ class TaskPriorityStore extends ChangeNotifier {
   }
 
   Future<_PersistedAiCache?> _readPersistedAiCache({
-    String? signature,
+    required String signature,
     required String requestSignature,
     required DateTime nowLocal,
   }) async {
@@ -325,7 +325,7 @@ class TaskPriorityStore extends ChangeNotifier {
       if (decoded is! Map) return null;
       final data = decoded.map((key, value) => MapEntry(key.toString(), value));
       final persistedSignature = (data['signature'] ?? '').toString();
-      if (signature != null && persistedSignature != signature) return null;
+      if (persistedSignature != signature) return null;
       final persistedRequestSignature =
           (data['request_signature'] ?? '').toString();
       if (persistedRequestSignature != requestSignature) return null;

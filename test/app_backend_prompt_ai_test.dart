@@ -24,6 +24,28 @@ void main() {
     );
   });
 
+
+
+  test(
+      'runAiPrompt does not remap cloud-gateway unimplemented messages',
+      () async {
+    final backend = _CloudGatewayMessageBackend();
+
+    expect(
+      () => backend.runAiPrompt(
+        Uint8List.fromList(List<int>.filled(32, 1)),
+        prompt: 'hello',
+      ),
+      throwsA(
+        isA<UnimplementedError>().having(
+          (error) => error.toString(),
+          'message',
+          contains('taskPriorityRerankAiCloudGateway'),
+        ),
+      ),
+    );
+  });
+
   test('runAiPromptCloudGateway uses a generic unimplemented error surface',
       () async {
     final backend = TestAppBackend();
@@ -45,4 +67,15 @@ void main() {
       ),
     );
   });
+}
+
+
+final class _CloudGatewayMessageBackend extends TestAppBackend {
+  @override
+  Future<String> taskPriorityRerankAi(
+    Uint8List key, {
+    required String prompt,
+  }) {
+    throw UnimplementedError('taskPriorityRerankAiCloudGateway');
+  }
 }
