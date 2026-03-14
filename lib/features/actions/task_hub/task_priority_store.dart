@@ -154,16 +154,15 @@ class TaskPriorityStore extends ChangeNotifier {
     try {
       final nowLocal = _nowLocal();
       final todos = await _loadTodos();
-      List<TodoChecklistProgress> checklistProgressRows;
       try {
-        checklistProgressRows = await _loadChecklistProgress?.call() ??
+        final checklistProgressRows = await _loadChecklistProgress?.call() ??
             const <TodoChecklistProgress>[];
+        _checklistProgressByTodoId = {
+          for (final item in checklistProgressRows) item.todoId: item,
+        };
       } catch (_) {
-        checklistProgressRows = const <TodoChecklistProgress>[];
+        // Keep the previously loaded checklist progress on transient failures.
       }
-      _checklistProgressByTodoId = {
-        for (final item in checklistProgressRows) item.todoId: item,
-      };
       await _feedbackStore.pruneToTodoIds(todos.map((todo) => todo.id));
       final feedbackState = await _feedbackStore.read();
 

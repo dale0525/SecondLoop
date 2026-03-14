@@ -80,6 +80,41 @@ void main() {
         ]));
   });
 
+  test('transient checklist progress load failure preserves prior data',
+      () async {
+    SharedPreferences.setMockInitialValues({});
+    var progressCalls = 0;
+    final store = TaskPriorityStore.fromLoaders(
+      nowLocal: () => DateTime(2026, 3, 13, 10, 0),
+      loadTodos: () async => <Todo>[
+        todo(id: 'focus', title: 'Fix prod bug', updatedAtMs: 10),
+      ],
+      loadChecklistProgress: () async {
+        progressCalls += 1;
+        if (progressCalls == 1) {
+          return const <TodoChecklistProgress>[
+            TodoChecklistProgress(todoId: 'focus', doneCount: 1, totalCount: 2),
+          ];
+        }
+        throw StateError('transient checklist progress failure');
+      },
+    );
+
+    await store.refresh();
+    expect(
+        store.checklistProgressByTodoId['focus'],
+        const TodoChecklistProgress(
+            todoId: 'focus', doneCount: 1, totalCount: 2));
+
+    store.markDirty();
+    await store.refresh();
+
+    expect(
+        store.checklistProgressByTodoId['focus'],
+        const TodoChecklistProgress(
+            todoId: 'focus', doneCount: 1, totalCount: 2));
+  });
+
   test('markDirty preserves snapshot but forces recompute', () async {
     SharedPreferences.setMockInitialValues({});
     var loadCount = 0;
