@@ -78,7 +78,12 @@ Future<Map<String, Object?>> _buildPlatforms(
     windowsEntry['name'] = windowsPackage.uri.pathSegments.last;
     windowsEntry['package_url'] =
         '$baseDownloadUrl${windowsPackage.uri.pathSegments.last}';
-    final releasesFile = _firstFile(entries, (name) => name == 'RELEASES');
+    final releasesFile = _firstFile(
+      entries,
+      (name) =>
+          name.toLowerCase().startsWith('releases.') &&
+          name.toLowerCase().endsWith('.json'),
+    );
     if (releasesFile != null) {
       windowsEntry['releases_url'] =
           '$baseDownloadUrl${releasesFile.uri.pathSegments.last}';

@@ -14,7 +14,7 @@ void main() {
 
     await File('${tempDir.path}/com.secondloop.secondloop-1.2.3-full.nupkg')
         .writeAsString('windows');
-    await File('${tempDir.path}/RELEASES').writeAsString('legacy');
+    await File('${tempDir.path}/releases.win.json').writeAsString('legacy');
     await File('${tempDir.path}/SecondLoop-macos-v1.2.3.app.tar.gz')
         .writeAsString('macos');
     await File('${tempDir.path}/SecondLoop-linux-x64-v1.2.3.tar.gz')
@@ -50,7 +50,7 @@ void main() {
     );
     expect(
       windows['releases_url'],
-      'https://github.com/dale0525/SecondLoop/releases/download/v1.2.3/RELEASES',
+      'https://github.com/dale0525/SecondLoop/releases/download/v1.2.3/releases.win.json',
     );
     expect(macos['install_mode'], 'app-tar-gz');
     expect(linux['install_mode'], 'bundle-tar-gz');
@@ -75,6 +75,32 @@ void main() {
         ),
       ),
       throwsArgumentError,
+    );
+  });
+
+  test(
+      'generateUpdateManifest picks Velopack releases metadata json when present',
+      () async {
+    final tempDir =
+        await Directory.systemTemp.createTemp('update_manifest_releases_');
+    addTearDown(() => tempDir.delete(recursive: true));
+
+    await File('${tempDir.path}/com.secondloop.secondloop-1.2.3-full.nupkg')
+        .writeAsString('windows');
+    await File('${tempDir.path}/releases.win.json').writeAsString('{}');
+
+    final generated = await generateUpdateManifest(
+      inputDirPath: tempDir.path,
+      version: 'v1.2.3',
+      baseDownloadUrl:
+          'https://github.com/dale0525/SecondLoop/releases/download/v1.2.3',
+    );
+
+    final platforms = generated.manifest['platforms'] as Map<String, Object?>;
+    final windows = platforms['windows-x64'] as Map<String, Object?>;
+    expect(
+      windows['releases_url'],
+      'https://github.com/dale0525/SecondLoop/releases/download/v1.2.3/releases.win.json',
     );
   });
 

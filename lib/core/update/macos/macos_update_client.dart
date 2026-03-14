@@ -61,42 +61,52 @@ class DefaultMacosManagedUpdateClient implements MacosManagedUpdateClient {
     final tempRoot = await Directory.systemTemp.createTemp(
       'secondloop_macos_update_',
     );
-    final archiveFile = File(
-      '${tempRoot.path}${Platform.pathSeparator}${_resolveAssetFileName(archiveUri)}',
-    );
-    await _materializeArchive(archiveUri, archiveFile);
+    try {
+      final archiveFile = File(
+        '${tempRoot.path}${Platform.pathSeparator}${_resolveAssetFileName(archiveUri)}',
+      );
+      await _materializeArchive(archiveUri, archiveFile);
 
-    final extractedDir = Directory(
-      '${tempRoot.path}${Platform.pathSeparator}payload',
-    );
-    await extractedDir.create(recursive: true);
-    await extractFileToDisk(archiveFile.path, extractedDir.path);
+      final extractedDir = Directory(
+        '${tempRoot.path}${Platform.pathSeparator}payload',
+      );
+      await extractedDir.create(recursive: true);
+      await extractFileToDisk(archiveFile.path, extractedDir.path);
 
-    final extractedApp = _resolveExtractedAppBundle(extractedDir);
-    final executableName = File(_resolvedExecutablePath).uri.pathSegments.last;
-    final script = File(
-      '${tempRoot.path}${Platform.pathSeparator}apply_update.sh',
-    );
-    await script.writeAsString(
-      _buildMacosUpdaterScript(
-        pid: waitPid,
-        appBundlePath: appBundlePath,
-        replacementAppPath: extractedApp.path,
-        executableName: executableName,
-        tempRootPath: tempRoot.path,
-      ),
-    );
+      final extractedApp = _resolveExtractedAppBundle(extractedDir);
+      final executableName =
+          File(_resolvedExecutablePath).uri.pathSegments.last;
+      final script = File(
+        '${tempRoot.path}${Platform.pathSeparator}apply_update.sh',
+      );
+      await script.writeAsString(
+        _buildMacosUpdaterScript(
+          pid: waitPid,
+          appBundlePath: appBundlePath,
+          replacementAppPath: extractedApp.path,
+          executableName: executableName,
+          tempRootPath: tempRoot.path,
+        ),
+      );
 
-    final modeResult = await Process.run('chmod', ['+x', script.path]);
-    if (modeResult.exitCode != 0) {
-      throw StateError('macos_update_chmod_failed_${modeResult.stderr}');
+      final modeResult = await Process.run('chmod', ['+x', script.path]);
+      if (modeResult.exitCode != 0) {
+        throw StateError('macos_update_chmod_failed_${modeResult.stderr}');
+      }
+
+      await _processStarter(
+        '/bin/sh',
+        [script.path],
+        mode: ProcessStartMode.detached,
+      );
+    } catch (_) {
+      try {
+        if (tempRoot.existsSync()) {
+          await tempRoot.delete(recursive: true);
+        }
+      } catch (_) {}
+      rethrow;
     }
-
-    await _processStarter(
-      '/bin/sh',
-      [script.path],
-      mode: ProcessStartMode.detached,
-    );
   }
 
   static String? resolveManagedAppBundlePath({
@@ -245,10 +255,12 @@ if ditto "\$REPLACEMENT_APP" "\$TARGET_APP"; then
 else
   mv "\$TARGET_APP" "\$TARGET_APP.failed" 2>/dev/null || true
   mv "\$BACKUP_APP" "\$TARGET_APP" || {
+    rm -rf "\$TEMP_ROOT" || true
     exit 1
   }
   rm -rf "\$TARGET_APP.failed" || true
   open -a "\$TARGET_APP" >/dev/null 2>&1 || true
+  rm -rf "\$TEMP_ROOT" || true
   exit 1
 fi
 ''';

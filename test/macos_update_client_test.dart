@@ -36,6 +36,33 @@ void main() {
     expect(resolved, isNull);
   });
 
+  test('cleans temp directory when detached launcher throws', () async {
+    final tempDir = await Directory.systemTemp.createTemp('macos_update_test_');
+    addTearDown(() => tempDir.delete(recursive: true));
+
+    final archiveFile = await _createMacosArchive(tempDir);
+    String? capturedScriptPath;
+
+    final client = DefaultMacosManagedUpdateClient(
+      executablePath: '/Applications/SecondLoop.app/Contents/MacOS/SecondLoop',
+      environment: const {'HOME': '/Users/tester'},
+      processStarter: (executable, arguments,
+          {mode = ProcessStartMode.normal}) async {
+        capturedScriptPath = arguments.single;
+        throw StateError('launcher_failed');
+      },
+    );
+
+    await expectLater(
+      () => client.installArchiveAndRestart(archiveFile.uri, waitPid: 4321),
+      throwsStateError,
+    );
+
+    expect(capturedScriptPath, isNotNull);
+    expect(
+        Directory(File(capturedScriptPath!).parent.path).existsSync(), isFalse);
+  });
+
   test('installArchiveAndRestart writes rollback-capable updater script',
       () async {
     final tempDir = await Directory.systemTemp.createTemp('macos_update_test_');
@@ -79,6 +106,7 @@ void main() {
     );
     expect(scriptText, contains('mv "\$BACKUP_APP" "\$TARGET_APP" || {'));
     expect(scriptText, contains('rm -rf "\$TARGET_APP.failed" || true'));
+    expect(scriptText, contains('rm -rf "\$TEMP_ROOT" || true'));
   });
 }
 
