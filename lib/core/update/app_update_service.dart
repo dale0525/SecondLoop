@@ -1121,8 +1121,11 @@ cleanup() {
 
 restore_backup() {
   if [ -d "\$BACKUP_DIR" ]; then
-    rm -rf "\$APP_DIR"
-    mv "\$BACKUP_DIR" "\$APP_DIR"
+    mv "\$APP_DIR" "\$APP_DIR.failed" 2>/dev/null || true
+    mv "\$BACKUP_DIR" "\$APP_DIR" || {
+      exit 1
+    }
+    rm -rf "\$APP_DIR.failed" || true
   fi
 }
 
