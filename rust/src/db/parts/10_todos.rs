@@ -749,6 +749,7 @@ pub fn upsert_generated_todo_checklist_suggestions(
             |row| row.get(0),
         )?;
         let now = now_ms();
+        let device_id = get_or_create_device_id(conn)?;
         let mut insert_index: i64 = 0;
 
         for raw_content in suggestions {
@@ -783,7 +784,6 @@ INSERT INTO todo_checklist_suggestions(
             )?;
             let suggestion = get_todo_checklist_suggestion_by_id(conn, key, &id)?;
 
-            let device_id = get_or_create_device_id(conn)?;
             let seq = next_device_seq(conn, &device_id)?;
             let op = serde_json::json!({
                 "op_id": uuid::Uuid::new_v4().to_string(),
@@ -849,7 +849,6 @@ pub fn apply_todo_checklist_suggestions(
                 params![suggestion_id, TODO_CHECKLIST_SUGGESTION_STATE_APPLIED, now, item.id],
             )?;
 
-            let device_id = get_or_create_device_id(conn)?;
             let seq = next_device_seq(conn, &device_id)?;
             let op = serde_json::json!({
                 "op_id": uuid::Uuid::new_v4().to_string(),
