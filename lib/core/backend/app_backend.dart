@@ -1261,6 +1261,34 @@ abstract class AppBackend {
   }
 }
 
+extension AppBackendPromptAi on AppBackend {
+  Future<String> runAiPrompt(
+    Uint8List key, {
+    required String prompt,
+  }) {
+    return taskPriorityRerankAi(
+      key,
+      prompt: prompt,
+    );
+  }
+
+  Future<String> runAiPromptCloudGateway(
+    Uint8List key, {
+    required String prompt,
+    required String gatewayBaseUrl,
+    required String idToken,
+    required String modelName,
+  }) {
+    return taskPriorityRerankAiCloudGateway(
+      key,
+      prompt: prompt,
+      gatewayBaseUrl: gatewayBaseUrl,
+      idToken: idToken,
+      modelName: modelName,
+    );
+  }
+}
+
 class AppBackendScope extends InheritedWidget {
   const AppBackendScope({
     required this.backend,

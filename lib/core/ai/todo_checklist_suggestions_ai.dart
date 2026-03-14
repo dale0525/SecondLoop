@@ -36,7 +36,7 @@ Future<List<String>> requestTodoChecklistSuggestions({
 
   final response = route == AskAiRouteKind.cloudGateway
       ? await backend
-          .taskPriorityRerankAiCloudGateway(
+          .runAiPromptCloudGateway(
             sessionKey,
             prompt: prompt,
             gatewayBaseUrl: gatewayBaseUrl,
@@ -45,7 +45,7 @@ Future<List<String>> requestTodoChecklistSuggestions({
           )
           .timeout(timeout)
       : await backend
-          .taskPriorityRerankAi(
+          .runAiPrompt(
             sessionKey,
             prompt: prompt,
           )
