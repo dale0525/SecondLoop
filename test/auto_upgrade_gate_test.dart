@@ -12,11 +12,13 @@ class _FakeAutoUpdateService extends AppUpdateService {
   _FakeAutoUpdateService({
     required this.result,
     this.throwOnApplyPending = false,
+    this.throwOnStage = false,
     this.releaseRepoValue = 'dale0525/SecondLoop',
   });
 
   final AppUpdateCheckResult result;
   final bool throwOnApplyPending;
+  final bool throwOnStage;
   final String releaseRepoValue;
 
   int checkCalls = 0;
@@ -45,6 +47,9 @@ class _FakeAutoUpdateService extends AppUpdateService {
   @override
   Future<void> stageUpdateForNextLaunch(AppUpdateAvailability update) async {
     stageCalls += 1;
+    if (throwOnStage) {
+      throw StateError('stage_failed');
+    }
     staged = update;
   }
 
@@ -150,6 +155,46 @@ void main() {
     expect(service.stageCalls, 0);
     expect(service.applyPendingCalls, 1);
   });
+
+
+  testWidgets('windows seamless update keeps in-app reminder when staging fails',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    UpdateBadgePrefs.resetForTests();
+    final update = AppUpdateAvailability(
+      currentVersion: '1.0.1+99',
+      latestTag: 'v1.1.0',
+      releasePageUri: Uri.parse(
+        'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
+      ),
+      installMode: AppUpdateInstallMode.seamlessRestart,
+      asset: AppUpdateAsset(
+        name: 'com.secondloop.secondloop-1.1.0-full.nupkg',
+        downloadUri: Uri.parse('https://cdn.example.com/win.nupkg'),
+      ),
+    );
+    final service = _FakeAutoUpdateService(
+      throwOnStage: true,
+      result: AppUpdateCheckResult(
+        currentVersion: '1.0.1+99',
+        update: update,
+      ),
+    );
+
+    await pumpGate(tester, service: service);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 120));
+
+    expect(service.installCalls, 0);
+    expect(service.stageCalls, 1);
+    expect(service.applyPendingCalls, 1);
+    expect(find.byType(SnackBar), findsOneWidget);
+    expect(find.textContaining('Settings > About'), findsOneWidget);
+    expect(find.textContaining('manual download'), findsNothing);
+  },
+      variant: const TargetPlatformVariant(<TargetPlatform>{
+        TargetPlatform.windows,
+      }));
 
   testWidgets('windows seamless update shows passive reminder and badge only',
       (tester) async {
