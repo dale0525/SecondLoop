@@ -97,7 +97,8 @@ class _AutoUpgradeGateState extends State<AutoUpgradeGate> {
     Object? pendingApplyError;
     var startupApplySucceeded = false;
     try {
-      startupApplySucceeded = await _updateService.applyPendingUpdateOnStartup();
+      startupApplySucceeded =
+          await _updateService.applyPendingUpdateOnStartup();
     } catch (error, stackTrace) {
       pendingApplyError = error;
       debugPrint('auto_upgrade_pending_apply_skipped: $error');

@@ -275,7 +275,6 @@ void main() {
         TargetPlatform.windows,
       }));
 
-
   testWidgets('windows skips update check after pending apply succeeds',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
