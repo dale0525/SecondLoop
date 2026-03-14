@@ -196,4 +196,26 @@ final class BackendSemanticParseAutoActionsClient
 
     return future.timeout(timeout);
   }
+
+  @override
+  Future<String> generateChecklistSuggestionsJson({
+    required String taskTitle,
+    required String taskContext,
+    required String localeTag,
+    required Duration timeout,
+  }) async {
+    final suggestions = await requestTodoChecklistSuggestions(
+      backend: _backend,
+      sessionKey: _sessionKey,
+      route: askAiRoute,
+      gatewayBaseUrl: gatewayBaseUrl,
+      idToken: idToken,
+      modelName: modelName,
+      taskTitle: taskTitle,
+      taskContext: taskContext,
+      localeTag: localeTag,
+      timeout: timeout,
+    );
+    return jsonEncode(<String, Object?>{'suggestions': suggestions});
+  }
 }

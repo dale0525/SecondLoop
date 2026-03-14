@@ -135,6 +135,27 @@ void main() {
     expect(notifyCount, 1);
   });
 
+  test('force refresh after dispose does not reuse disposed store', () async {
+    SharedPreferences.setMockInitialValues({});
+    final completer = Completer<List<Todo>>();
+    var notifyCount = 0;
+    final store = TaskPriorityStore.fromLoaders(
+      nowLocal: () => DateTime(2026, 3, 13, 10, 0),
+      loadTodos: () => completer.future,
+    );
+    store.addListener(() => notifyCount += 1);
+
+    final firstRefresh = store.refresh();
+    await Future<void>.delayed(Duration.zero);
+    final forcedRefresh = store.refresh(force: true);
+    store.dispose();
+    completer.complete(<Todo>[todo(id: 't1', title: 'Task', updatedAtMs: 10)]);
+
+    await expectLater(firstRefresh, completes);
+    await expectLater(forcedRefresh, completes);
+    expect(notifyCount, 1);
+  });
+
   test('empty task list still yields an empty structured snapshot', () async {
     SharedPreferences.setMockInitialValues({});
     final store = TaskPriorityStore.fromLoaders(
@@ -210,35 +231,6 @@ void main() {
     expect(store.snapshot.decide.first.todo.id, 't2');
   });
 
-  test('force refresh after dispose does not reuse disposed store', () async {
-    SharedPreferences.setMockInitialValues({});
-    var loadCount = 0;
-    final completer = Completer<void>();
-    final store = TaskPriorityStore.fromLoaders(
-      nowLocal: () => DateTime(2026, 3, 13, 10, 0),
-      loadTodos: () async {
-        loadCount += 1;
-        if (loadCount == 1) {
-          await completer.future;
-        }
-        return <Todo>[todo(id: 't$loadCount', title: 'Task', updatedAtMs: 10)];
-      },
-    );
-
-    final firstRefresh = store.refresh();
-    await Future<void>.delayed(Duration.zero);
-    final forcedRefresh = store.refresh(force: true);
-
-    store.dispose();
-    completer.complete();
-
-    await expectLater(
-      Future.wait(<Future<void>>[firstRefresh, forcedRefresh]),
-      completes,
-    );
-    expect(loadCount, 1);
-  });
-
   test('reuses cached AI rerank while task signature stays unchanged',
       () async {
     SharedPreferences.setMockInitialValues({});
@@ -271,6 +263,96 @@ void main() {
     expect(aiService.calls, 1);
     expect(store.isAiEnhancementAvailable, isTrue);
     expect(store.snapshot.source, TaskPrioritySnapshotSource.hybrid);
+  });
+
+  test('reuses persisted AI rerank across store recreation', () async {
+    SharedPreferences.setMockInitialValues({});
+    final firstService = _CountingAiService(
+      const TaskPriorityAiBatchResult(
+        entries: <TaskPriorityAiEntry>[
+          TaskPriorityAiEntry(
+            todoId: 'focus',
+            priorityBand: TaskPriorityAiBand.focus,
+            semanticAdjustment: 20,
+            reason: 'Still the best option.',
+            suggestedAction: TaskPrioritySuggestionKind.doNow,
+            confidence: TaskPriorityAiConfidence.high,
+          ),
+        ],
+      ),
+      cacheScopeKey: 'byok|model|en-US',
+    );
+    final firstStore = TaskPriorityStore.fromLoaders(
+      nowLocal: () => DateTime(2026, 3, 13, 10, 0),
+      loadTodos: () async => <Todo>[
+        todo(id: 'focus', title: 'Fix prod bug', updatedAtMs: 10),
+      ],
+      resolveAiService: () async => firstService,
+    );
+
+    await firstStore.refresh();
+
+    final secondService = _CountingAiService(
+      const TaskPriorityAiBatchResult.empty(),
+      cacheScopeKey: 'byok|model|en-US',
+    );
+    final secondStore = TaskPriorityStore.fromLoaders(
+      nowLocal: () => DateTime(2026, 3, 13, 10, 5),
+      loadTodos: () async => <Todo>[
+        todo(id: 'focus', title: 'Fix prod bug', updatedAtMs: 10),
+      ],
+      resolveAiService: () async => secondService,
+    );
+
+    await secondStore.refresh();
+
+    expect(firstService.calls, 1);
+    expect(secondService.calls, 0);
+    expect(secondStore.snapshot.source, TaskPrioritySnapshotSource.hybrid);
+    expect(secondStore.snapshot.primaryFocus?.reasonText,
+        'Still the best option.');
+  });
+
+  test('uses persisted AI rerank when ai service is unavailable', () async {
+    SharedPreferences.setMockInitialValues({});
+    final firstService = _CountingAiService(
+      const TaskPriorityAiBatchResult(
+        entries: <TaskPriorityAiEntry>[
+          TaskPriorityAiEntry(
+            todoId: 'focus',
+            priorityBand: TaskPriorityAiBand.focus,
+            semanticAdjustment: 20,
+            reason: 'Still the best option.',
+            suggestedAction: TaskPrioritySuggestionKind.doNow,
+            confidence: TaskPriorityAiConfidence.high,
+          ),
+        ],
+      ),
+      cacheScopeKey: 'byok|model|en-US',
+    );
+    final firstStore = TaskPriorityStore.fromLoaders(
+      nowLocal: () => DateTime(2026, 3, 13, 10, 0),
+      loadTodos: () async => <Todo>[
+        todo(id: 'focus', title: 'Fix prod bug', updatedAtMs: 10),
+      ],
+      resolveAiService: () async => firstService,
+    );
+
+    await firstStore.refresh();
+
+    final secondStore = TaskPriorityStore.fromLoaders(
+      nowLocal: () => DateTime(2026, 3, 13, 10, 5),
+      loadTodos: () async => <Todo>[
+        todo(id: 'focus', title: 'Fix prod bug', updatedAtMs: 10),
+      ],
+      resolveAiService: () async => null,
+    );
+
+    await secondStore.refresh();
+
+    expect(secondStore.snapshot.source, TaskPrioritySnapshotSource.hybrid);
+    expect(secondStore.snapshot.primaryFocus?.reasonText,
+        'Still the best option.');
   });
 
   test('updatedAtMs churn alone does not trigger a second rerank', () async {

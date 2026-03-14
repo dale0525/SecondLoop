@@ -111,6 +111,52 @@ void main() {
         findsOneWidget);
   });
 
+  testWidgets('banner preview shows checklist progress summary',
+      (tester) async {
+    final now = DateTime(2026, 3, 13, 10, 0);
+    final snapshot = buildTaskPrioritySnapshot(
+      <Todo>[
+        todo(
+          id: 'focus',
+          title: 'Fix billing bug',
+          updatedAtMs: 10,
+          dueAtMs:
+              now.add(const Duration(hours: 2)).toUtc().millisecondsSinceEpoch,
+        ),
+        todo(id: 'decide', title: 'Triage backlog', updatedAtMs: 30),
+      ],
+      nowLocal: now,
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: Scaffold(
+            body: TaskHubBanner(
+              snapshot: snapshot,
+              checklistProgressByTodoId: const <String, TodoChecklistProgress>{
+                'decide': TodoChecklistProgress(
+                  todoId: 'decide',
+                  totalCount: 3,
+                  doneCount: 1,
+                ),
+              },
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.byKey(const ValueKey('task_hub_banner')));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('task_hub_checklist_progress_decide')),
+      findsOneWidget,
+    );
+    expect(find.text('1/3'), findsOneWidget);
+  });
+
   testWidgets('banner shows wrap-up state when no focus remains',
       (tester) async {
     final snapshot = buildTaskPrioritySnapshot(
@@ -243,6 +289,49 @@ void main() {
       find.text(
           'Connect Cloud or BYOK to unlock smarter priority suggestions.'),
       findsOneWidget,
+    );
+  });
+
+  testWidgets('banner hides AI upgrade hint when AI reason is already shown',
+      (tester) async {
+    final snapshot = buildTaskPrioritySnapshot(
+      <Todo>[
+        todo(id: 't1', title: 'Clarify launch checklist', updatedAtMs: 10)
+      ],
+      nowLocal: DateTime(2026, 3, 13, 10, 0),
+      aiResult: const TaskPriorityAiBatchResult(
+        entries: <TaskPriorityAiEntry>[
+          TaskPriorityAiEntry(
+            todoId: 't1',
+            priorityBand: TaskPriorityAiBand.focus,
+            semanticAdjustment: 24,
+            reason: 'It unblocks the rest of today.',
+            suggestedAction: TaskPrioritySuggestionKind.clarify,
+            confidence: TaskPriorityAiConfidence.high,
+          ),
+        ],
+      ),
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: Scaffold(
+            body: TaskHubBanner(
+              snapshot: snapshot,
+              showAiUpgradeHint: true,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('AI recommends this now'), findsOneWidget);
+    expect(find.text('It unblocks the rest of today.'), findsOneWidget);
+    expect(
+      find.text(
+          'Connect Cloud or BYOK to unlock smarter priority suggestions.'),
+      findsNothing,
     );
   });
 

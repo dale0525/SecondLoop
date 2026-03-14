@@ -12,6 +12,7 @@ import '../../../core/session/session_scope.dart';
 import '../../../core/subscription/subscription_scope.dart';
 import '../../../core/sync/sync_engine_gate.dart';
 import '../../../i18n/strings.g.dart';
+import '../../../src/rust/db.dart';
 import '../../../ui/sl_button.dart';
 import '../../../ui/sl_surface.dart';
 import 'task_hub_focus_section.dart';
@@ -135,6 +136,7 @@ class _TaskHubPageState extends State<TaskHubPage> {
     final controller = TaskHubQuickActionsController(
       backend: backend,
       sessionKey: sessionKey,
+      confirmDoneWithIncompleteChecklist: _confirmDoneWithIncompleteChecklist,
     );
     TaskHubUndoTicket? ticket;
     try {
@@ -206,6 +208,31 @@ class _TaskHubPageState extends State<TaskHubPage> {
     );
   }
 
+  Future<bool> _confirmDoneWithIncompleteChecklist(Todo todo) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        key: const ValueKey('task_hub_incomplete_checklist_dialog'),
+        title: Text(context.t.actions.todoDetail.incompleteChecklistDoneTitle),
+        content: Text(
+          context.t.actions.todoDetail.incompleteChecklistDoneMessage,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: Text(context.t.common.actions.cancel),
+          ),
+          FilledButton(
+            key: const ValueKey('task_hub_incomplete_checklist_confirm'),
+            onPressed: () => Navigator.of(context).pop(true),
+            child: Text(context.t.common.actions.continueLabel),
+          ),
+        ],
+      ),
+    );
+    return confirmed ?? false;
+  }
+
   Future<void> _recordFeedback(
     TaskPriorityEntry entry,
     TaskPriorityFeedbackKind feedback,
@@ -273,6 +300,8 @@ class _TaskHubPageState extends State<TaskHubPage> {
                   if (snapshot.focus.isNotEmpty)
                     TaskHubFocusSection(
                       entries: snapshot.focus.take(3).toList(growable: false),
+                      checklistProgressByTodoId:
+                          store.checklistProgressByTodoId,
                       onOpenTodo: _openTodoDetail,
                       onQuickAction: _applyQuickAction,
                       onFeedback: _recordFeedback,
@@ -321,6 +350,7 @@ class _TaskHubPageState extends State<TaskHubPage> {
                     sectionKey:
                         const ValueKey('task_hub_page_section_scheduled'),
                     entries: snapshot.scheduled,
+                    checklistProgressByTodoId: store.checklistProgressByTodoId,
                     sectionKind: TaskHubPageSectionKind.scheduled,
                     onOpenTodo: _openTodoDetail,
                     onQuickAction: _applyQuickAction,
@@ -330,6 +360,7 @@ class _TaskHubPageState extends State<TaskHubPage> {
                     title: context.t.actions.taskHub.decideSection,
                     sectionKey: const ValueKey('task_hub_page_section_decide'),
                     entries: snapshot.decide,
+                    checklistProgressByTodoId: store.checklistProgressByTodoId,
                     sectionKind: TaskHubPageSectionKind.decide,
                     onOpenTodo: _openTodoDetail,
                     onQuickAction: _applyQuickAction,
@@ -339,6 +370,7 @@ class _TaskHubPageState extends State<TaskHubPage> {
                     title: context.t.actions.taskHub.doneSection,
                     sectionKey: const ValueKey('task_hub_page_section_done'),
                     entries: visibleDone,
+                    checklistProgressByTodoId: store.checklistProgressByTodoId,
                     sectionKind: TaskHubPageSectionKind.done,
                     onOpenTodo: _openTodoDetail,
                     onQuickAction: _applyQuickAction,

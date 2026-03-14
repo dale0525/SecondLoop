@@ -30,6 +30,31 @@ extension _ChatPageStateMethodsBTaskHubQuickActions on _ChatPageState {
     final controller = TaskHubQuickActionsController(
       backend: backend,
       sessionKey: sessionKey,
+      confirmDoneWithIncompleteChecklist: (_) async {
+        final confirmed = await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            key: const ValueKey('chat_incomplete_checklist_dialog'),
+            title:
+                Text(context.t.actions.todoDetail.incompleteChecklistDoneTitle),
+            content: Text(
+              context.t.actions.todoDetail.incompleteChecklistDoneMessage,
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(false),
+                child: Text(context.t.common.actions.cancel),
+              ),
+              FilledButton(
+                key: const ValueKey('chat_incomplete_checklist_confirm'),
+                onPressed: () => Navigator.of(context).pop(true),
+                child: Text(context.t.common.actions.continueLabel),
+              ),
+            ],
+          ),
+        );
+        return confirmed ?? false;
+      },
     );
 
     late final TaskHubUndoTicket ticket;

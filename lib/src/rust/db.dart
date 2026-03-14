@@ -1338,3 +1338,130 @@ class TodoActivity {
           sourceMessageId == other.sourceMessageId &&
           createdAtMs == other.createdAtMs;
 }
+
+class TodoChecklistItem {
+  final String id;
+  final String todoId;
+  final String content;
+  final bool isDone;
+  final PlatformInt64 sortOrder;
+  final PlatformInt64 createdAtMs;
+  final PlatformInt64 updatedAtMs;
+
+  const TodoChecklistItem({
+    required this.id,
+    required this.todoId,
+    required this.content,
+    required this.isDone,
+    required this.sortOrder,
+    required this.createdAtMs,
+    required this.updatedAtMs,
+  });
+
+  @override
+  int get hashCode =>
+      id.hashCode ^
+      todoId.hashCode ^
+      content.hashCode ^
+      isDone.hashCode ^
+      sortOrder.hashCode ^
+      createdAtMs.hashCode ^
+      updatedAtMs.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is TodoChecklistItem &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          todoId == other.todoId &&
+          content == other.content &&
+          isDone == other.isDone &&
+          sortOrder == other.sortOrder &&
+          createdAtMs == other.createdAtMs &&
+          updatedAtMs == other.updatedAtMs;
+}
+
+class TodoChecklistProgress {
+  final String todoId;
+  final PlatformInt64 doneCount;
+  final PlatformInt64 totalCount;
+
+  const TodoChecklistProgress({
+    required this.todoId,
+    required this.doneCount,
+    required this.totalCount,
+  });
+
+  @override
+  int get hashCode =>
+      todoId.hashCode ^ doneCount.hashCode ^ totalCount.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is TodoChecklistProgress &&
+          runtimeType == other.runtimeType &&
+          todoId == other.todoId &&
+          doneCount == other.doneCount &&
+          totalCount == other.totalCount;
+}
+
+class TodoChecklistSuggestion {
+  final String id;
+  final String todoId;
+  final String content;
+  final PlatformInt64 sortOrder;
+  final String state;
+  final String source;
+  final String? generationKey;
+  final PlatformInt64 createdAtMs;
+  final PlatformInt64 updatedAtMs;
+  final PlatformInt64? dismissedAtMs;
+  final String? appliedChecklistItemId;
+
+  const TodoChecklistSuggestion({
+    required this.id,
+    required this.todoId,
+    required this.content,
+    required this.sortOrder,
+    required this.state,
+    required this.source,
+    this.generationKey,
+    required this.createdAtMs,
+    required this.updatedAtMs,
+    this.dismissedAtMs,
+    this.appliedChecklistItemId,
+  });
+
+  @override
+  int get hashCode =>
+      id.hashCode ^
+      todoId.hashCode ^
+      content.hashCode ^
+      sortOrder.hashCode ^
+      state.hashCode ^
+      source.hashCode ^
+      generationKey.hashCode ^
+      createdAtMs.hashCode ^
+      updatedAtMs.hashCode ^
+      dismissedAtMs.hashCode ^
+      appliedChecklistItemId.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is TodoChecklistSuggestion &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          todoId == other.todoId &&
+          content == other.content &&
+          sortOrder == other.sortOrder &&
+          state == other.state &&
+          source == other.source &&
+          generationKey == other.generationKey &&
+          createdAtMs == other.createdAtMs &&
+          updatedAtMs == other.updatedAtMs &&
+          dismissedAtMs == other.dismissedAtMs &&
+          appliedChecklistItemId == other.appliedChecklistItemId;
+}

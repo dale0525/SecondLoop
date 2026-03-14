@@ -206,6 +206,98 @@ abstract class AppBackend {
     throw UnimplementedError('moveTodoActivity');
   }
 
+  Future<TodoChecklistItem> createTodoChecklistItem(
+    Uint8List key, {
+    required String todoId,
+    required String content,
+  }) {
+    throw UnimplementedError('createTodoChecklistItem');
+  }
+
+  Future<List<TodoChecklistItem>> listTodoChecklistItems(
+    Uint8List key,
+    String todoId,
+  ) {
+    throw UnimplementedError('listTodoChecklistItems');
+  }
+
+  Future<TodoChecklistItem> updateTodoChecklistItemContent(
+    Uint8List key, {
+    required String itemId,
+    required String content,
+  }) {
+    throw UnimplementedError('updateTodoChecklistItemContent');
+  }
+
+  Future<TodoChecklistItem> setTodoChecklistItemDone(
+    Uint8List key, {
+    required String itemId,
+    required bool isDone,
+  }) {
+    throw UnimplementedError('setTodoChecklistItemDone');
+  }
+
+  Future<void> deleteTodoChecklistItem(
+    Uint8List key, {
+    required String itemId,
+  }) {
+    throw UnimplementedError('deleteTodoChecklistItem');
+  }
+
+  Future<void> reorderTodoChecklistItems(
+    Uint8List key, {
+    required String todoId,
+    required List<String> orderedItemIds,
+  }) {
+    throw UnimplementedError('reorderTodoChecklistItems');
+  }
+
+  Future<List<TodoChecklistProgress>> listTodoChecklistProgress(Uint8List key) {
+    return Future<List<TodoChecklistProgress>>.value(
+      const <TodoChecklistProgress>[],
+    );
+  }
+
+  Future<List<TodoChecklistSuggestion>> listTodoChecklistSuggestions(
+    Uint8List key,
+    String todoId,
+  ) {
+    throw UnimplementedError('listTodoChecklistSuggestions');
+  }
+
+  Future<List<TodoChecklistSuggestion>> upsertGeneratedTodoChecklistSuggestions(
+    Uint8List key, {
+    required String todoId,
+    required List<String> suggestions,
+    required String source,
+    String? generationKey,
+  }) {
+    throw UnimplementedError('upsertGeneratedTodoChecklistSuggestions');
+  }
+
+  Future<List<TodoChecklistItem>> applyTodoChecklistSuggestions(
+    Uint8List key, {
+    required String todoId,
+    required List<String> suggestionIds,
+  }) {
+    throw UnimplementedError('applyTodoChecklistSuggestions');
+  }
+
+  Future<void> dismissTodoChecklistSuggestions(
+    Uint8List key, {
+    required String todoId,
+    required List<String> suggestionIds,
+  }) {
+    throw UnimplementedError('dismissTodoChecklistSuggestions');
+  }
+
+  Future<void> dismissAllTodoChecklistSuggestions(
+    Uint8List key, {
+    required String todoId,
+  }) {
+    throw UnimplementedError('dismissAllTodoChecklistSuggestions');
+  }
+
   Future<List<TodoActivity>> listTodoActivities(
     Uint8List key,
     String todoId,

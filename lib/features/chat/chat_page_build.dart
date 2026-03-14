@@ -89,6 +89,8 @@ extension _ChatPageStateBuild on _ChatPageState {
                   builder: (context, _) {
                     return TaskHubBanner(
                       snapshot: _taskPriorityStore!.snapshot,
+                      checklistProgressByTodoId:
+                          _taskPriorityStore!.checklistProgressByTodoId,
                       showAiUpgradeHint:
                           _taskPriorityStore!.isAiEnhancementEnabled &&
                               !_taskPriorityStore!.isAiEnhancementAvailable,

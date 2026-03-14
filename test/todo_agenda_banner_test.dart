@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:secondloop/core/backend/app_backend.dart';
 import 'package:secondloop/core/session/session_scope.dart';
+import 'package:secondloop/features/actions/agenda/todo_agenda_banner.dart';
 import 'package:secondloop/features/actions/task_hub/task_hub_page.dart';
 import 'package:secondloop/features/actions/todo/todo_detail_page.dart';
 import 'package:secondloop/features/chat/chat_page.dart';
@@ -15,6 +16,54 @@ import 'test_backend.dart';
 import 'test_i18n.dart';
 
 void main() {
+  testWidgets('TodoAgendaBanner shows checklist progress in preview rows',
+      (tester) async {
+    await tester.pumpWidget(
+      wrapWithI18n(
+        const MaterialApp(
+          home: Scaffold(
+            body: TodoAgendaBanner(
+              dueCount: 1,
+              overdueCount: 0,
+              upcomingCount: 0,
+              previewTodos: <Todo>[
+                Todo(
+                  id: 'todo:banner',
+                  title: 'Prepare launch notes',
+                  dueAtMs: null,
+                  status: 'open',
+                  sourceEntryId: null,
+                  createdAtMs: 0,
+                  updatedAtMs: 0,
+                  reviewStage: null,
+                  nextReviewAtMs: null,
+                  lastReviewAtMs: null,
+                ),
+              ],
+              checklistProgressByTodoId: <String, TodoChecklistProgress>{
+                'todo:banner': TodoChecklistProgress(
+                  todoId: 'todo:banner',
+                  totalCount: 3,
+                  doneCount: 1,
+                ),
+              },
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('todo_agenda_banner')));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('todo_agenda_checklist_progress_todo:banner')),
+      findsOneWidget,
+    );
+    expect(find.text('1/3'), findsOneWidget);
+  });
+
   testWidgets('Chat page shows task hub banner for unscheduled todos',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
@@ -394,6 +443,12 @@ final class _AgendaBackend extends TestAppBackend {
   @override
   Future<List<Todo>> listTodos(Uint8List key) async =>
       _todosById.values.toList(growable: false);
+
+  @override
+  Future<List<TodoChecklistProgress>> listTodoChecklistProgress(
+    Uint8List key,
+  ) async =>
+      const <TodoChecklistProgress>[];
 
   @override
   Future<Todo> upsertTodo(

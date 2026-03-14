@@ -18,6 +18,7 @@ class TaskHubSummary {
     required this.dueReviewTodos,
     required this.unscheduledTodos,
     required this.doneTodos,
+    required this.checklistProgressByTodoId,
   });
 
   const TaskHubSummary.empty()
@@ -34,7 +35,8 @@ class TaskHubSummary {
         upcomingTodos = const <Todo>[],
         dueReviewTodos = const <Todo>[],
         unscheduledTodos = const <Todo>[],
-        doneTodos = const <Todo>[];
+        doneTodos = const <Todo>[],
+        checklistProgressByTodoId = const <String, TodoChecklistProgress>{};
 
   final TaskPrioritySnapshot snapshot;
   final int dueCount;
@@ -50,6 +52,7 @@ class TaskHubSummary {
   final List<Todo> dueReviewTodos;
   final List<Todo> unscheduledTodos;
   final List<Todo> doneTodos;
+  final Map<String, TodoChecklistProgress> checklistProgressByTodoId;
 
   bool get hasOverdue => overdueCount > 0;
   bool get hasDueReview => dueReviewCount > 0;
@@ -63,12 +66,15 @@ class TaskHubSummary {
   static TaskHubSummary fromTodos(
     List<Todo> todos, {
     required DateTime nowLocal,
+    List<TodoChecklistProgress> checklistProgress =
+        const <TodoChecklistProgress>[],
     int scheduledPreviewLimit = 4,
     int unscheduledPreviewLimit = 4,
   }) {
     final snapshot = buildTaskPrioritySnapshot(todos, nowLocal: nowLocal);
     return fromSnapshot(
       snapshot,
+      checklistProgress: checklistProgress,
       scheduledPreviewLimit: scheduledPreviewLimit,
       unscheduledPreviewLimit: unscheduledPreviewLimit,
     );
@@ -76,6 +82,8 @@ class TaskHubSummary {
 
   static TaskHubSummary fromSnapshot(
     TaskPrioritySnapshot snapshot, {
+    List<TodoChecklistProgress> checklistProgress =
+        const <TodoChecklistProgress>[],
     int scheduledPreviewLimit = 4,
     int unscheduledPreviewLimit = 4,
   }) {
@@ -134,6 +142,9 @@ class TaskHubSummary {
       doneTodos: List<Todo>.unmodifiable(
         doneEntries.map((entry) => entry.todo),
       ),
+      checklistProgressByTodoId: {
+        for (final item in checklistProgress) item.todoId: item,
+      },
     );
   }
 }

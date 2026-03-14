@@ -7,7 +7,7 @@ import '../frb_generated.dart';
 import '../knowledge/models.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `key_from_bytes`, `query_count`, `query_optional_i64`, `read_knowledge_debug_stats`
+// These functions are ignored because they are not marked as `pub`: `key_from_bytes`, `read_knowledge_debug_stats`
 
 Future<KnowledgeIndexStatus> dbGetKnowledgeIndexStatus(
         {required String appDir, required List<int> key}) =>

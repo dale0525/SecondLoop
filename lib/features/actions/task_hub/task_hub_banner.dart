@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../../i18n/strings.g.dart';
+import '../../../src/rust/db.dart';
 import '../../../ui/sl_button.dart';
 import '../../../ui/sl_surface.dart';
 import '../../../ui/sl_tokens.dart';
@@ -15,6 +16,7 @@ import 'task_priority_models.dart';
 class TaskHubBanner extends StatefulWidget {
   const TaskHubBanner({
     required this.snapshot,
+    this.checklistProgressByTodoId = const <String, TodoChecklistProgress>{},
     this.showAiUpgradeHint = false,
     this.collapseSignal = 0,
     this.compact = false,
@@ -26,6 +28,7 @@ class TaskHubBanner extends StatefulWidget {
   });
 
   final TaskPrioritySnapshot snapshot;
+  final Map<String, TodoChecklistProgress> checklistProgressByTodoId;
   final bool showAiUpgradeHint;
   final int collapseSignal;
   final bool compact;
@@ -121,7 +124,7 @@ class _TaskHubBannerState extends State<TaskHubBanner> {
                         color: Theme.of(context).colorScheme.onSurfaceVariant,
                       ),
                 ),
-                if (widget.showAiUpgradeHint) ...[
+                if (widget.showAiUpgradeHint && !hasAiReason) ...[
                   SizedBox(height: headerSpacing),
                   Text(
                     context.t.actions.taskHub.aiUpgradeHint,
@@ -175,6 +178,7 @@ class _TaskHubBannerState extends State<TaskHubBanner> {
                   SizedBox(height: actionsSpacingTop),
                   _BannerPreviewList(
                     snapshot: widget.snapshot,
+                    checklistProgressByTodoId: widget.checklistProgressByTodoId,
                     onOpenTodo: widget.onOpenTodo,
                     onQuickAction: widget.onQuickAction,
                     onFeedback: widget.onFeedback,
@@ -203,12 +207,14 @@ class _TaskHubBannerState extends State<TaskHubBanner> {
 class _BannerPreviewList extends StatelessWidget {
   const _BannerPreviewList({
     required this.snapshot,
+    required this.checklistProgressByTodoId,
     required this.onOpenTodo,
     required this.onQuickAction,
     required this.onFeedback,
   });
 
   final TaskPrioritySnapshot snapshot;
+  final Map<String, TodoChecklistProgress> checklistProgressByTodoId;
   final Future<void> Function(TaskPriorityEntry entry)? onOpenTodo;
   final Future<void> Function(
       TaskPriorityEntry entry, TaskHubQuickAction action)? onQuickAction;
@@ -239,6 +245,7 @@ class _BannerPreviewList extends StatelessWidget {
             child: TaskHubEntryCard(
               key: ValueKey('task_hub_banner_item_${entry.todo.id}'),
               entry: entry,
+              checklistProgressByTodoId: checklistProgressByTodoId,
               onOpenTodo: () =>
                   onOpenTodo == null ? null : unawaited(onOpenTodo!(entry)),
               onQuickAction: onQuickAction == null

@@ -67,6 +67,9 @@ void main() {
         ),
       ],
       nowLocal: nowLocal,
+      checklistProgress: const <TodoChecklistProgress>[
+        TodoChecklistProgress(todoId: 'overdue', totalCount: 3, doneCount: 1),
+      ],
     );
 
     expect(summary.dueCount, 1);
@@ -75,6 +78,8 @@ void main() {
     expect(summary.dueReviewCount, 1);
     expect(summary.doneCount, 1);
     expect(summary.snapshot.primaryFocus?.todo.id, 'overdue');
+    expect(summary.checklistProgressByTodoId['overdue']?.doneCount, 1);
+    expect(summary.checklistProgressByTodoId['overdue']?.totalCount, 3);
   });
 
   test('done-only summary stays empty but preserves done list', () {

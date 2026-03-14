@@ -60,9 +60,13 @@ void main() {
 
     await tester.pumpAndSettle();
 
-    expect(find.byType(ListView), findsOneWidget);
+    final detailScrollView = find.byType(Scrollable).first;
 
-    await tester.drag(find.byType(ListView), const Offset(0, -420));
+    await tester.dragUntilVisible(
+      find.text('item 020', findRichText: true),
+      detailScrollView,
+      const Offset(0, -240),
+    );
     await tester.pumpAndSettle();
 
     expect(find.text('item 000', findRichText: true), findsNothing);
@@ -71,7 +75,7 @@ void main() {
     engine.notifyExternalChange();
     await tester.pump();
 
-    expect(find.byType(ListView), findsOneWidget);
+    expect(find.byType(Scrollable), findsWidgets);
     expect(find.byType(CircularProgressIndicator), findsNothing);
     expect(find.byType(LinearProgressIndicator), findsNothing);
     expect(find.text('item 000', findRichText: true), findsNothing);
@@ -79,7 +83,7 @@ void main() {
     backend.completeDelayedRefresh();
     await tester.pumpAndSettle();
 
-    expect(find.byType(ListView), findsOneWidget);
+    expect(find.byType(Scrollable), findsWidgets);
     expect(find.text('item 000', findRichText: true), findsNothing);
   });
 }

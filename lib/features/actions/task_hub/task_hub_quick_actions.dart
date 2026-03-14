@@ -22,6 +22,8 @@ enum TaskHubQuickAction {
   dismiss,
 }
 
+typedef ConfirmDoneWithIncompleteChecklist = Future<bool> Function(Todo todo);
+
 class TaskHubUndoTicket {
   const TaskHubUndoTicket({
     required this.todo,
@@ -40,10 +42,21 @@ class TaskHubQuickActionsController {
   const TaskHubQuickActionsController({
     required this.backend,
     required this.sessionKey,
+    this.confirmDoneWithIncompleteChecklist,
   });
 
   final AppBackend backend;
   final Uint8List sessionKey;
+  final ConfirmDoneWithIncompleteChecklist? confirmDoneWithIncompleteChecklist;
+
+  Future<bool> hasIncompleteChecklist(Todo todo) async {
+    try {
+      final items = await backend.listTodoChecklistItems(sessionKey, todo.id);
+      return items.any((item) => !item.isDone);
+    } catch (_) {
+      return false;
+    }
+  }
 
   Future<TaskHubUndoTicket?> apply(
     Todo todo,
@@ -194,6 +207,12 @@ class TaskHubQuickActionsController {
         }
       case TaskHubQuickAction.done:
         {
+          final hasIncomplete = await hasIncompleteChecklist(todo);
+          if (hasIncomplete && confirmDoneWithIncompleteChecklist != null) {
+            final confirmed =
+                await confirmDoneWithIncompleteChecklist!.call(todo);
+            if (!confirmed) return null;
+          }
           final updated = await backend.setTodoStatus(
             sessionKey,
             todoId: todo.id,

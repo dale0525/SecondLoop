@@ -7,6 +7,7 @@ import 'package:flutter/widgets.dart';
 import 'ai_routing.dart';
 import 'embeddings_source_prefs.dart';
 import 'semantic_parse_edit_policy.dart';
+import 'todo_checklist_suggestions_ai.dart';
 import '../../features/actions/review/review_backoff.dart';
 import '../../features/actions/settings/actions_settings_store.dart';
 import '../../features/actions/todo/message_action_resolver.dart';
@@ -161,6 +162,13 @@ abstract class SemanticParseAutoActionsStore {
     String? recurrenceRuleJson,
   });
 
+  Future<void> upsertGeneratedChecklistSuggestions({
+    required String todoId,
+    required List<String> suggestions,
+    required String source,
+    String? generationKey,
+  });
+
   /// Returns the previous status when available (for Undo).
   Future<String?> setTodoStatusFromMessage({
     required String messageId,
@@ -181,6 +189,13 @@ abstract class SemanticParseAutoActionsClient {
     required String localeTag,
     required int dayEndMinutes,
     required List<SemanticParseTodoCandidate> candidates,
+    required Duration timeout,
+  });
+
+  Future<String> generateChecklistSuggestionsJson({
+    required String taskTitle,
+    required String taskContext,
+    required String localeTag,
     required Duration timeout,
   });
 }
@@ -439,6 +454,35 @@ final class SemanticParseAutoActionsRunner {
               dueAtMs: dueAtLocal?.toUtc().millisecondsSinceEpoch,
               recurrenceRuleJson: recurrenceRule?.toJsonString(),
             );
+            try {
+              final generatedChecklistSuggestions =
+                  parseTodoChecklistSuggestionsJson(
+                await client.generateChecklistSuggestionsJson(
+                  taskTitle: title,
+                  taskContext: analysisText,
+                  localeTag: localeTag,
+                  timeout: settings.hardTimeout,
+                ),
+              );
+              if (generatedChecklistSuggestions.isNotEmpty) {
+                await store.upsertGeneratedChecklistSuggestions(
+                  todoId: appliedTodoId,
+                  suggestions: generatedChecklistSuggestions,
+                  source: switch (client) {
+                    BackendSemanticParseAutoActionsClient(
+                      :final askAiRoute,
+                    ) =>
+                      askAiRoute == AskAiRouteKind.cloudGateway
+                          ? 'cloud'
+                          : 'byok',
+                    _ => 'byok',
+                  },
+                  generationKey: 'semantic_parse_auto:${job.messageId}',
+                );
+              }
+            } catch (_) {
+              // Best effort only. Checklist suggestions must not block todo creation.
+            }
             await store.markJobSucceeded(
               SemanticParseJobSucceededArgs(
                 messageId: job.messageId,

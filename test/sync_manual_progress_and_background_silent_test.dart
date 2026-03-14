@@ -114,8 +114,12 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    final todoList = find.byType(ListView);
-    await tester.drag(todoList, const Offset(0, -420));
+    final todoScrollView = find.byType(Scrollable).first;
+    await tester.dragUntilVisible(
+      find.text('item 020', findRichText: true),
+      todoScrollView,
+      const Offset(0, -240),
+    );
     await tester.pumpAndSettle();
     expect(find.text('item 000', findRichText: true), findsNothing);
 

@@ -76,6 +76,7 @@ class TodoAgendaBanner extends StatefulWidget {
     required this.overdueCount,
     required this.upcomingCount,
     required this.previewTodos,
+    this.checklistProgressByTodoId = const <String, TodoChecklistProgress>{},
     this.collapseSignal = 0,
     this.onViewAll,
     super.key,
@@ -85,6 +86,7 @@ class TodoAgendaBanner extends StatefulWidget {
   final int overdueCount;
   final int upcomingCount;
   final List<Todo> previewTodos;
+  final Map<String, TodoChecklistProgress> checklistProgressByTodoId;
   final int collapseSignal;
   final VoidCallback? onViewAll;
 
@@ -227,6 +229,8 @@ class _TodoAgendaBannerState extends State<TodoAgendaBanner> {
                       _TodoPreviewRow(
                         key: ValueKey('todo_agenda_preview_${todos[i].id}'),
                         todo: todos[i],
+                        checklistProgress:
+                            widget.checklistProgressByTodoId[todos[i].id],
                       ),
                       if (i != todos.length - 1)
                         Divider(
@@ -258,9 +262,14 @@ class _TodoAgendaBannerState extends State<TodoAgendaBanner> {
 }
 
 final class _TodoPreviewRow extends StatelessWidget {
-  const _TodoPreviewRow({required this.todo, super.key});
+  const _TodoPreviewRow({
+    required this.todo,
+    this.checklistProgress,
+    super.key,
+  });
 
   final Todo todo;
+  final TodoChecklistProgress? checklistProgress;
 
   @override
   Widget build(BuildContext context) {
@@ -281,6 +290,10 @@ final class _TodoPreviewRow extends StatelessWidget {
         : MaterialLocalizations.of(context).formatTimeOfDay(
             TimeOfDay.fromDateTime(dueAtLocal),
           );
+    final checklistProgressText = checklistProgress == null ||
+            checklistProgress!.totalCount <= 0
+        ? null
+        : '${checklistProgress!.doneCount}/${checklistProgress!.totalCount}';
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
@@ -298,11 +311,29 @@ final class _TodoPreviewRow extends StatelessWidget {
           ),
           const SizedBox(width: 10),
           Expanded(
-            child: Text(
-              todo.title,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.bodyMedium,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  todo.title,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.bodyMedium,
+                ),
+                if (checklistProgressText != null) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    checklistProgressText,
+                    key: ValueKey(
+                      'todo_agenda_checklist_progress_${todo.id}',
+                    ),
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: colorScheme.onSurfaceVariant,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ],
             ),
           ),
           if (dueText != null) ...[

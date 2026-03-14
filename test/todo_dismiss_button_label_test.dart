@@ -336,8 +336,20 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('todo_detail_set_status_done')));
     await tester.pumpAndSettle();
 
-    expect(find.text('next-cycle-note'), findsOneWidget);
+    final detailScrollView = find.byType(Scrollable).first;
+    await tester.scrollUntilVisible(
+      find.text('previous-cycle-note'),
+      240,
+      scrollable: detailScrollView,
+    );
     expect(find.text('previous-cycle-note'), findsOneWidget);
+
+    await tester.scrollUntilVisible(
+      find.text('next-cycle-note'),
+      240,
+      scrollable: detailScrollView,
+    );
+    expect(find.text('next-cycle-note'), findsOneWidget);
   });
 
   testWidgets('Todo agenda recurring non-done status supports scope selection',

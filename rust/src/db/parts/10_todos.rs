@@ -214,6 +214,642 @@ ORDER BY COALESCE(due_at_ms, 9223372036854775807) ASC, created_at_ms ASC
     Ok(result)
 }
 
+fn todo_checklist_item_content_aad(id: &str) -> Vec<u8> {
+    format!("todo_checklist_item.content:{id}").into_bytes()
+}
+
+fn get_todo_checklist_item_by_id(
+    conn: &Connection,
+    key: &[u8; 32],
+    id: &str,
+) -> Result<TodoChecklistItem> {
+    let (todo_id, content_blob, is_done, sort_order, created_at_ms, updated_at_ms): (
+        String,
+        Vec<u8>,
+        i64,
+        i64,
+        i64,
+        i64,
+    ) = conn
+        .query_row(
+            r#"
+SELECT todo_id, content, is_done, sort_order, created_at_ms, updated_at_ms
+FROM todo_checklist_items
+WHERE id = ?1
+"#,
+            params![id],
+            |row| {
+                Ok((
+                    row.get(0)?,
+                    row.get(1)?,
+                    row.get(2)?,
+                    row.get(3)?,
+                    row.get(4)?,
+                    row.get(5)?,
+                ))
+            },
+        )
+        .map_err(|e| anyhow!("get todo checklist item failed: {e}"))?;
+
+    let content_bytes = decrypt_bytes(key, &content_blob, &todo_checklist_item_content_aad(id))?;
+    let content = String::from_utf8(content_bytes)
+        .map_err(|_| anyhow!("todo checklist item content is not valid utf-8"))?;
+
+    Ok(TodoChecklistItem {
+        id: id.to_string(),
+        todo_id,
+        content,
+        is_done: is_done != 0,
+        sort_order,
+        created_at_ms,
+        updated_at_ms,
+    })
+}
+
+pub fn list_todo_checklist_items(
+    conn: &Connection,
+    key: &[u8; 32],
+    todo_id: &str,
+) -> Result<Vec<TodoChecklistItem>> {
+    let mut stmt = conn.prepare(
+        r#"
+SELECT id, content, is_done, sort_order, created_at_ms, updated_at_ms
+FROM todo_checklist_items
+WHERE todo_id = ?1
+ORDER BY sort_order ASC, created_at_ms ASC, id ASC
+"#,
+    )?;
+
+    let mut rows = stmt.query(params![todo_id])?;
+    let mut result = Vec::new();
+    while let Some(row) = rows.next()? {
+        let id: String = row.get(0)?;
+        let content_blob: Vec<u8> = row.get(1)?;
+        let is_done: i64 = row.get(2)?;
+        let sort_order: i64 = row.get(3)?;
+        let created_at_ms: i64 = row.get(4)?;
+        let updated_at_ms: i64 = row.get(5)?;
+        let content_bytes = decrypt_bytes(key, &content_blob, &todo_checklist_item_content_aad(&id))?;
+        let content = String::from_utf8(content_bytes)
+            .map_err(|_| anyhow!("todo checklist item content is not valid utf-8"))?;
+
+        result.push(TodoChecklistItem {
+            id,
+            todo_id: todo_id.to_string(),
+            content,
+            is_done: is_done != 0,
+            sort_order,
+            created_at_ms,
+            updated_at_ms,
+        });
+    }
+
+    Ok(result)
+}
+
+pub fn create_todo_checklist_item(
+    conn: &Connection,
+    key: &[u8; 32],
+    todo_id: &str,
+    content: &str,
+) -> Result<TodoChecklistItem> {
+    let id = uuid::Uuid::new_v4().to_string();
+    let now = now_ms();
+    let sort_order: i64 = conn.query_row(
+        r#"SELECT COALESCE(MAX(sort_order), -1) + 1 FROM todo_checklist_items WHERE todo_id = ?1"#,
+        params![todo_id],
+        |row| row.get(0),
+    )?;
+    let content_blob = encrypt_bytes(key, content.as_bytes(), &todo_checklist_item_content_aad(&id))?;
+
+    conn.execute(
+        r#"
+INSERT INTO todo_checklist_items(id, todo_id, content, is_done, sort_order, created_at_ms, updated_at_ms)
+VALUES (?1, ?2, ?3, 0, ?4, ?5, ?6)
+"#,
+        params![id, todo_id, content_blob, sort_order, now, now],
+    )?;
+
+    let item = get_todo_checklist_item_by_id(conn, key, &id)?;
+
+    let device_id = get_or_create_device_id(conn)?;
+    let seq = next_device_seq(conn, &device_id)?;
+    let op = serde_json::json!({
+        "op_id": uuid::Uuid::new_v4().to_string(),
+        "device_id": device_id,
+        "seq": seq,
+        "ts_ms": now,
+        "type": "todo.checklist_item.upsert.v1",
+        "payload": {
+            "item_id": item.id.as_str(),
+            "todo_id": item.todo_id.as_str(),
+            "content": item.content.as_str(),
+            "is_done": item.is_done,
+            "sort_order": item.sort_order,
+            "created_at_ms": item.created_at_ms,
+            "updated_at_ms": item.updated_at_ms,
+        }
+    });
+    insert_oplog(conn, key, &op)?;
+
+    Ok(item)
+}
+
+pub fn update_todo_checklist_item_content(
+    conn: &Connection,
+    key: &[u8; 32],
+    item_id: &str,
+    content: &str,
+) -> Result<TodoChecklistItem> {
+    let existing = get_todo_checklist_item_by_id(conn, key, item_id)?;
+    let now = now_ms();
+    let content_blob = encrypt_bytes(key, content.as_bytes(), &todo_checklist_item_content_aad(item_id))?;
+    conn.execute(
+        r#"UPDATE todo_checklist_items SET content = ?2, updated_at_ms = ?3 WHERE id = ?1"#,
+        params![item_id, content_blob, now],
+    )?;
+    let updated = get_todo_checklist_item_by_id(conn, key, item_id)?;
+
+    let device_id = get_or_create_device_id(conn)?;
+    let seq = next_device_seq(conn, &device_id)?;
+    let op = serde_json::json!({
+        "op_id": uuid::Uuid::new_v4().to_string(),
+        "device_id": device_id,
+        "seq": seq,
+        "ts_ms": now,
+        "type": "todo.checklist_item.upsert.v1",
+        "payload": {
+            "item_id": updated.id.as_str(),
+            "todo_id": updated.todo_id.as_str(),
+            "content": updated.content.as_str(),
+            "is_done": updated.is_done,
+            "sort_order": updated.sort_order,
+            "created_at_ms": updated.created_at_ms,
+            "updated_at_ms": updated.updated_at_ms,
+        }
+    });
+    insert_oplog(conn, key, &op)?;
+
+    if existing.content == updated.content {
+        return Ok(updated);
+    }
+
+    Ok(updated)
+}
+
+pub fn set_todo_checklist_item_done(
+    conn: &Connection,
+    key: &[u8; 32],
+    item_id: &str,
+    is_done: bool,
+) -> Result<TodoChecklistItem> {
+    let now = now_ms();
+    conn.execute(
+        r#"UPDATE todo_checklist_items SET is_done = ?2, updated_at_ms = ?3 WHERE id = ?1"#,
+        params![item_id, if is_done { 1 } else { 0 }, now],
+    )?;
+    let updated = get_todo_checklist_item_by_id(conn, key, item_id)?;
+
+    let device_id = get_or_create_device_id(conn)?;
+    let seq = next_device_seq(conn, &device_id)?;
+    let op = serde_json::json!({
+        "op_id": uuid::Uuid::new_v4().to_string(),
+        "device_id": device_id,
+        "seq": seq,
+        "ts_ms": now,
+        "type": "todo.checklist_item.upsert.v1",
+        "payload": {
+            "item_id": updated.id.as_str(),
+            "todo_id": updated.todo_id.as_str(),
+            "content": updated.content.as_str(),
+            "is_done": updated.is_done,
+            "sort_order": updated.sort_order,
+            "created_at_ms": updated.created_at_ms,
+            "updated_at_ms": updated.updated_at_ms,
+        }
+    });
+    insert_oplog(conn, key, &op)?;
+
+    Ok(updated)
+}
+
+pub fn delete_todo_checklist_item(
+    conn: &Connection,
+    key: &[u8; 32],
+    item_id: &str,
+) -> Result<()> {
+    let existing = get_todo_checklist_item_by_id(conn, key, item_id)?;
+    conn.execute(r#"DELETE FROM todo_checklist_items WHERE id = ?1"#, params![item_id])?;
+
+    let now = now_ms();
+    let device_id = get_or_create_device_id(conn)?;
+    let seq = next_device_seq(conn, &device_id)?;
+    let op = serde_json::json!({
+        "op_id": uuid::Uuid::new_v4().to_string(),
+        "device_id": device_id,
+        "seq": seq,
+        "ts_ms": now,
+        "type": "todo.checklist_item.delete.v1",
+        "payload": {
+            "item_id": existing.id.as_str(),
+            "todo_id": existing.todo_id.as_str(),
+            "deleted_at_ms": now,
+        }
+    });
+    insert_oplog(conn, key, &op)?;
+
+    Ok(())
+}
+
+pub fn reorder_todo_checklist_items(
+    conn: &Connection,
+    key: &[u8; 32],
+    todo_id: &str,
+    ordered_item_ids: &[String],
+) -> Result<()> {
+    conn.execute_batch("BEGIN IMMEDIATE;")?;
+
+    let result: Result<()> = (|| {
+        for (index, item_id) in ordered_item_ids.iter().enumerate() {
+            conn.execute(
+                r#"UPDATE todo_checklist_items SET sort_order = ?2, updated_at_ms = ?3 WHERE id = ?1 AND todo_id = ?4"#,
+                params![item_id, index as i64, now_ms(), todo_id],
+            )?;
+        }
+
+        let now = now_ms();
+        let device_id = get_or_create_device_id(conn)?;
+        let seq = next_device_seq(conn, &device_id)?;
+        let op = serde_json::json!({
+            "op_id": uuid::Uuid::new_v4().to_string(),
+            "device_id": device_id,
+            "seq": seq,
+            "ts_ms": now,
+            "type": "todo.checklist_item.reorder.v1",
+            "payload": {
+                "todo_id": todo_id,
+                "ordered_item_ids": ordered_item_ids,
+                "updated_at_ms": now,
+            }
+        });
+        insert_oplog(conn, key, &op)?;
+
+        Ok(())
+    })();
+
+    match result {
+        Ok(()) => {
+            conn.execute_batch("COMMIT;")?;
+            Ok(())
+        }
+        Err(e) => {
+            let _ = conn.execute_batch("ROLLBACK;");
+            Err(e)
+        }
+    }
+}
+
+pub fn list_todo_checklist_progress(
+    conn: &Connection,
+    _key: &[u8; 32],
+) -> Result<Vec<TodoChecklistProgress>> {
+    let mut stmt = conn.prepare(
+        r#"
+SELECT todo_id, SUM(CASE WHEN is_done != 0 THEN 1 ELSE 0 END) AS done_count, COUNT(*) AS total_count
+FROM todo_checklist_items
+GROUP BY todo_id
+ORDER BY todo_id ASC
+"#,
+    )?;
+
+    let mut rows = stmt.query([])?;
+    let mut result = Vec::new();
+    while let Some(row) = rows.next()? {
+        result.push(TodoChecklistProgress {
+            todo_id: row.get(0)?,
+            done_count: row.get(1)?,
+            total_count: row.get(2)?,
+        });
+    }
+
+    Ok(result)
+}
+
+fn todo_checklist_suggestion_content_aad(id: &str) -> Vec<u8> {
+    format!("todo_checklist_suggestion.content:{id}").into_bytes()
+}
+
+fn normalize_checklist_suggestion_content(content: &str) -> String {
+    content.split_whitespace().collect::<Vec<_>>().join(" ").trim().to_lowercase()
+}
+
+fn get_todo_checklist_suggestion_by_id(
+    conn: &Connection,
+    key: &[u8; 32],
+    id: &str,
+) -> Result<TodoChecklistSuggestion> {
+    type TodoChecklistSuggestionRow = (
+        String,
+        Vec<u8>,
+        i64,
+        String,
+        String,
+        Option<String>,
+        i64,
+        i64,
+        Option<i64>,
+        Option<String>,
+    );
+
+    let (todo_id, content_blob, sort_order, state, source, generation_key, created_at_ms, updated_at_ms, dismissed_at_ms, applied_checklist_item_id): TodoChecklistSuggestionRow = conn.query_row(
+        r#"
+SELECT todo_id, content, sort_order, state, source, generation_key, created_at_ms, updated_at_ms, dismissed_at_ms, applied_checklist_item_id
+FROM todo_checklist_suggestions
+WHERE id = ?1
+"#,
+        params![id],
+        |row| {
+            Ok((
+                row.get(0)?,
+                row.get(1)?,
+                row.get(2)?,
+                row.get(3)?,
+                row.get(4)?,
+                row.get(5)?,
+                row.get(6)?,
+                row.get(7)?,
+                row.get(8)?,
+                row.get(9)?,
+            ))
+        },
+    ).map_err(|e| anyhow!("get todo checklist suggestion failed: {e}"))?;
+
+    let content_bytes = decrypt_bytes(key, &content_blob, &todo_checklist_suggestion_content_aad(id))?;
+    let content = String::from_utf8(content_bytes)
+        .map_err(|_| anyhow!("todo checklist suggestion content is not valid utf-8"))?;
+
+    Ok(TodoChecklistSuggestion {
+        id: id.to_string(),
+        todo_id,
+        content,
+        sort_order,
+        state,
+        source,
+        generation_key,
+        created_at_ms,
+        updated_at_ms,
+        dismissed_at_ms,
+        applied_checklist_item_id,
+    })
+}
+
+pub fn list_todo_checklist_suggestions(
+    conn: &Connection,
+    key: &[u8; 32],
+    todo_id: &str,
+) -> Result<Vec<TodoChecklistSuggestion>> {
+    let mut stmt = conn.prepare(
+        r#"
+SELECT id, content, sort_order, state, source, generation_key, created_at_ms, updated_at_ms, dismissed_at_ms, applied_checklist_item_id
+FROM todo_checklist_suggestions
+WHERE todo_id = ?1
+ORDER BY sort_order ASC, created_at_ms ASC, id ASC
+"#,
+    )?;
+
+    let mut rows = stmt.query(params![todo_id])?;
+    let mut result = Vec::new();
+    while let Some(row) = rows.next()? {
+        let id: String = row.get(0)?;
+        let content_blob: Vec<u8> = row.get(1)?;
+        let sort_order: i64 = row.get(2)?;
+        let state: String = row.get(3)?;
+        let source: String = row.get(4)?;
+        let generation_key: Option<String> = row.get(5)?;
+        let created_at_ms: i64 = row.get(6)?;
+        let updated_at_ms: i64 = row.get(7)?;
+        let dismissed_at_ms: Option<i64> = row.get(8)?;
+        let applied_checklist_item_id: Option<String> = row.get(9)?;
+        let content_bytes = decrypt_bytes(key, &content_blob, &todo_checklist_suggestion_content_aad(&id))?;
+        let content = String::from_utf8(content_bytes)
+            .map_err(|_| anyhow!("todo checklist suggestion content is not valid utf-8"))?;
+
+        result.push(TodoChecklistSuggestion {
+            id,
+            todo_id: todo_id.to_string(),
+            content,
+            sort_order,
+            state,
+            source,
+            generation_key,
+            created_at_ms,
+            updated_at_ms,
+            dismissed_at_ms,
+            applied_checklist_item_id,
+        });
+    }
+
+    Ok(result)
+}
+
+pub fn upsert_generated_todo_checklist_suggestions(
+    conn: &Connection,
+    key: &[u8; 32],
+    todo_id: &str,
+    suggestions: &[String],
+    source: &str,
+    generation_key: Option<&str>,
+) -> Result<Vec<TodoChecklistSuggestion>> {
+    let existing = list_todo_checklist_suggestions(conn, key, todo_id)?;
+    let mut blocked_norms = existing
+        .iter()
+        .filter(|item| {
+            item.state == TODO_CHECKLIST_SUGGESTION_STATE_APPLIED
+                || item.state == TODO_CHECKLIST_SUGGESTION_STATE_DISMISSED
+                || item.state == TODO_CHECKLIST_SUGGESTION_STATE_PENDING
+        })
+        .map(|item| normalize_checklist_suggestion_content(&item.content))
+        .collect::<std::collections::HashSet<_>>();
+
+    let mut created = Vec::new();
+    let base_sort_order: i64 = conn.query_row(
+        r#"SELECT COALESCE(MAX(sort_order), -1) + 1 FROM todo_checklist_suggestions WHERE todo_id = ?1"#,
+        params![todo_id],
+        |row| row.get(0),
+    )?;
+
+    for (offset, raw_content) in suggestions.iter().enumerate() {
+        let trimmed = raw_content.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        let normalized = normalize_checklist_suggestion_content(trimmed);
+        if normalized.is_empty() || !blocked_norms.insert(normalized) {
+            continue;
+        }
+
+        let id = uuid::Uuid::new_v4().to_string();
+        let now = now_ms();
+        let content_blob = encrypt_bytes(key, trimmed.as_bytes(), &todo_checklist_suggestion_content_aad(&id))?;
+        conn.execute(
+            r#"
+INSERT INTO todo_checklist_suggestions(
+  id, todo_id, content, sort_order, state, source, generation_key, created_at_ms, updated_at_ms, dismissed_at_ms, applied_checklist_item_id
+) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, NULL, NULL)
+"#,
+            params![
+                id,
+                todo_id,
+                content_blob,
+                base_sort_order + offset as i64,
+                TODO_CHECKLIST_SUGGESTION_STATE_PENDING,
+                source,
+                generation_key,
+                now,
+                now,
+            ],
+        )?;
+        let suggestion = get_todo_checklist_suggestion_by_id(conn, key, &id)?;
+
+        let device_id = get_or_create_device_id(conn)?;
+        let seq = next_device_seq(conn, &device_id)?;
+        let op = serde_json::json!({
+            "op_id": uuid::Uuid::new_v4().to_string(),
+            "device_id": device_id,
+            "seq": seq,
+            "ts_ms": now,
+            "type": "todo.checklist_suggestion.upsert.v1",
+            "payload": {
+                "suggestion_id": suggestion.id.as_str(),
+                "todo_id": suggestion.todo_id.as_str(),
+                "content": suggestion.content.as_str(),
+                "sort_order": suggestion.sort_order,
+                "state": suggestion.state.as_str(),
+                "source": suggestion.source.as_str(),
+                "generation_key": suggestion.generation_key.as_deref(),
+                "created_at_ms": suggestion.created_at_ms,
+                "updated_at_ms": suggestion.updated_at_ms,
+                "dismissed_at_ms": suggestion.dismissed_at_ms,
+                "applied_checklist_item_id": suggestion.applied_checklist_item_id.as_deref(),
+            }
+        });
+        insert_oplog(conn, key, &op)?;
+        created.push(suggestion);
+    }
+
+    Ok(created)
+}
+
+pub fn apply_todo_checklist_suggestions(
+    conn: &Connection,
+    key: &[u8; 32],
+    todo_id: &str,
+    suggestion_ids: &[String],
+) -> Result<Vec<TodoChecklistItem>> {
+    conn.execute_batch("BEGIN IMMEDIATE;")?;
+    let result: Result<Vec<TodoChecklistItem>> = (|| {
+        let mut created_items = Vec::new();
+        for suggestion_id in suggestion_ids {
+            let suggestion = get_todo_checklist_suggestion_by_id(conn, key, suggestion_id)?;
+            if suggestion.todo_id != todo_id || suggestion.state != TODO_CHECKLIST_SUGGESTION_STATE_PENDING {
+                continue;
+            }
+            let item = create_todo_checklist_item(conn, key, todo_id, &suggestion.content)?;
+            let now = now_ms();
+            conn.execute(
+                r#"UPDATE todo_checklist_suggestions SET state = ?2, updated_at_ms = ?3, applied_checklist_item_id = ?4 WHERE id = ?1"#,
+                params![suggestion_id, TODO_CHECKLIST_SUGGESTION_STATE_APPLIED, now, item.id],
+            )?;
+
+            let device_id = get_or_create_device_id(conn)?;
+            let seq = next_device_seq(conn, &device_id)?;
+            let op = serde_json::json!({
+                "op_id": uuid::Uuid::new_v4().to_string(),
+                "device_id": device_id,
+                "seq": seq,
+                "ts_ms": now,
+                "type": "todo.checklist_suggestion.apply.v1",
+                "payload": {
+                    "suggestion_id": suggestion_id,
+                    "todo_id": todo_id,
+                    "applied_checklist_item_id": item.id.as_str(),
+                    "updated_at_ms": now,
+                }
+            });
+            insert_oplog(conn, key, &op)?;
+            created_items.push(item);
+        }
+        Ok(created_items)
+    })();
+
+    match result {
+        Ok(items) => {
+            conn.execute_batch("COMMIT;")?;
+            Ok(items)
+        }
+        Err(e) => {
+            let _ = conn.execute_batch("ROLLBACK;");
+            Err(e)
+        }
+    }
+}
+
+pub fn dismiss_todo_checklist_suggestions(
+    conn: &Connection,
+    key: &[u8; 32],
+    todo_id: &str,
+    suggestion_ids: &[String],
+) -> Result<()> {
+    let now = now_ms();
+    for suggestion_id in suggestion_ids {
+        conn.execute(
+            r#"
+UPDATE todo_checklist_suggestions
+SET state = ?2, updated_at_ms = ?3, dismissed_at_ms = ?4
+WHERE id = ?1 AND todo_id = ?5 AND state = ?6
+"#,
+            params![
+                suggestion_id,
+                TODO_CHECKLIST_SUGGESTION_STATE_DISMISSED,
+                now,
+                now,
+                todo_id,
+                TODO_CHECKLIST_SUGGESTION_STATE_PENDING,
+            ],
+        )?;
+
+        let device_id = get_or_create_device_id(conn)?;
+        let seq = next_device_seq(conn, &device_id)?;
+        let op = serde_json::json!({
+            "op_id": uuid::Uuid::new_v4().to_string(),
+            "device_id": device_id,
+            "seq": seq,
+            "ts_ms": now,
+            "type": "todo.checklist_suggestion.dismiss.v1",
+            "payload": {
+                "suggestion_id": suggestion_id,
+                "todo_id": todo_id,
+                "dismissed_at_ms": now,
+            }
+        });
+        insert_oplog(conn, key, &op)?;
+    }
+    Ok(())
+}
+
+pub fn dismiss_all_todo_checklist_suggestions(
+    conn: &Connection,
+    key: &[u8; 32],
+    todo_id: &str,
+) -> Result<()> {
+    let pending_ids = list_todo_checklist_suggestions(conn, key, todo_id)?
+        .into_iter()
+        .filter(|item| item.state == TODO_CHECKLIST_SUGGESTION_STATE_PENDING)
+        .map(|item| item.id)
+        .collect::<Vec<_>>();
+    dismiss_todo_checklist_suggestions(conn, key, todo_id, &pending_ids)
+}
+
 #[allow(clippy::type_complexity)]
 fn get_todo_activity_by_id(conn: &Connection, key: &[u8; 32], id: &str) -> Result<TodoActivity> {
     let (

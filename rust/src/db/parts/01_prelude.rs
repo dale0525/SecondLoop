@@ -319,6 +319,43 @@ pub struct TodoActivity {
 }
 
 #[derive(Clone, Debug)]
+pub struct TodoChecklistItem {
+    pub id: String,
+    pub todo_id: String,
+    pub content: String,
+    pub is_done: bool,
+    pub sort_order: i64,
+    pub created_at_ms: i64,
+    pub updated_at_ms: i64,
+}
+
+#[derive(Clone, Debug)]
+pub struct TodoChecklistSuggestion {
+    pub id: String,
+    pub todo_id: String,
+    pub content: String,
+    pub sort_order: i64,
+    pub state: String,
+    pub source: String,
+    pub generation_key: Option<String>,
+    pub created_at_ms: i64,
+    pub updated_at_ms: i64,
+    pub dismissed_at_ms: Option<i64>,
+    pub applied_checklist_item_id: Option<String>,
+}
+
+pub const TODO_CHECKLIST_SUGGESTION_STATE_PENDING: &str = "pending";
+pub const TODO_CHECKLIST_SUGGESTION_STATE_APPLIED: &str = "applied";
+pub const TODO_CHECKLIST_SUGGESTION_STATE_DISMISSED: &str = "dismissed";
+
+#[derive(Clone, Debug)]
+pub struct TodoChecklistProgress {
+    pub todo_id: String,
+    pub done_count: i64,
+    pub total_count: i64,
+}
+
+#[derive(Clone, Debug)]
 pub struct Event {
     pub id: String,
     pub title: String,

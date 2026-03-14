@@ -419,6 +419,149 @@ pub fn db_move_todo_activity(
 }
 
 #[flutter_rust_bridge::frb]
+pub fn db_create_todo_checklist_item(
+    app_dir: String,
+    key: Vec<u8>,
+    todo_id: String,
+    content: String,
+) -> Result<db::TodoChecklistItem> {
+    let key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    db::create_todo_checklist_item(&conn, &key, &todo_id, &content)
+}
+
+#[flutter_rust_bridge::frb]
+pub fn db_list_todo_checklist_items(
+    app_dir: String,
+    key: Vec<u8>,
+    todo_id: String,
+) -> Result<Vec<db::TodoChecklistItem>> {
+    let key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    db::list_todo_checklist_items(&conn, &key, &todo_id)
+}
+
+#[flutter_rust_bridge::frb]
+pub fn db_update_todo_checklist_item_content(
+    app_dir: String,
+    key: Vec<u8>,
+    item_id: String,
+    content: String,
+) -> Result<db::TodoChecklistItem> {
+    let key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    db::update_todo_checklist_item_content(&conn, &key, &item_id, &content)
+}
+
+#[flutter_rust_bridge::frb]
+pub fn db_set_todo_checklist_item_done(
+    app_dir: String,
+    key: Vec<u8>,
+    item_id: String,
+    is_done: bool,
+) -> Result<db::TodoChecklistItem> {
+    let key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    db::set_todo_checklist_item_done(&conn, &key, &item_id, is_done)
+}
+
+#[flutter_rust_bridge::frb]
+pub fn db_delete_todo_checklist_item(app_dir: String, key: Vec<u8>, item_id: String) -> Result<()> {
+    let key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    db::delete_todo_checklist_item(&conn, &key, &item_id)
+}
+
+#[flutter_rust_bridge::frb]
+pub fn db_reorder_todo_checklist_items(
+    app_dir: String,
+    key: Vec<u8>,
+    todo_id: String,
+    ordered_item_ids: Vec<String>,
+) -> Result<()> {
+    let key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    db::reorder_todo_checklist_items(&conn, &key, &todo_id, &ordered_item_ids)
+}
+
+#[flutter_rust_bridge::frb]
+pub fn db_list_todo_checklist_progress(
+    app_dir: String,
+    key: Vec<u8>,
+) -> Result<Vec<db::TodoChecklistProgress>> {
+    let key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    db::list_todo_checklist_progress(&conn, &key)
+}
+
+#[flutter_rust_bridge::frb]
+pub fn db_list_todo_checklist_suggestions(
+    app_dir: String,
+    key: Vec<u8>,
+    todo_id: String,
+) -> Result<Vec<db::TodoChecklistSuggestion>> {
+    let key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    db::list_todo_checklist_suggestions(&conn, &key, &todo_id)
+}
+
+#[flutter_rust_bridge::frb]
+pub fn db_upsert_generated_todo_checklist_suggestions(
+    app_dir: String,
+    key: Vec<u8>,
+    todo_id: String,
+    suggestions: Vec<String>,
+    source: String,
+    generation_key: Option<String>,
+) -> Result<Vec<db::TodoChecklistSuggestion>> {
+    let key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    db::upsert_generated_todo_checklist_suggestions(
+        &conn,
+        &key,
+        &todo_id,
+        &suggestions,
+        &source,
+        generation_key.as_deref(),
+    )
+}
+
+#[flutter_rust_bridge::frb]
+pub fn db_apply_todo_checklist_suggestions(
+    app_dir: String,
+    key: Vec<u8>,
+    todo_id: String,
+    suggestion_ids: Vec<String>,
+) -> Result<Vec<db::TodoChecklistItem>> {
+    let key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    db::apply_todo_checklist_suggestions(&conn, &key, &todo_id, &suggestion_ids)
+}
+
+#[flutter_rust_bridge::frb]
+pub fn db_dismiss_todo_checklist_suggestions(
+    app_dir: String,
+    key: Vec<u8>,
+    todo_id: String,
+    suggestion_ids: Vec<String>,
+) -> Result<()> {
+    let key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    db::dismiss_todo_checklist_suggestions(&conn, &key, &todo_id, &suggestion_ids)
+}
+
+#[flutter_rust_bridge::frb]
+pub fn db_dismiss_all_todo_checklist_suggestions(
+    app_dir: String,
+    key: Vec<u8>,
+    todo_id: String,
+) -> Result<()> {
+    let key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    db::dismiss_all_todo_checklist_suggestions(&conn, &key, &todo_id)
+}
+
+#[flutter_rust_bridge::frb]
 pub fn db_list_todo_activities(
     app_dir: String,
     key: Vec<u8>,

@@ -81,6 +81,47 @@ void main() {
     expect(result.processed, 1);
     expect(store.lastRecurrenceRuleJson, '{"freq":"weekly","interval":1}');
   });
+
+  test('runner stores checklist suggestions for created todo', () async {
+    final store = _FakeStore(
+      jobs: [
+        const SemanticParseAutoActionJob(
+          messageId: 'msg:checklist',
+          status: 'pending',
+          attempts: 0,
+          nextRetryAtMs: null,
+          createdAtMs: 0,
+        ),
+      ],
+      messages: {'msg:checklist': 'Plan launch'},
+    );
+    final client = _FakeClient(
+      responseJson:
+          '{"kind":"create","confidence":1.0,"title":"Plan launch","status":"open","due_local_iso":null}',
+      checklistSuggestionJson:
+          '{"suggestions":["Draft launch post","Share with team"]}',
+    );
+
+    final runner = SemanticParseAutoActionsRunner(
+      store: store,
+      client: client,
+      settings: const SemanticParseAutoActionsRunnerSettings(
+        hardTimeout: Duration(milliseconds: 200),
+        minAutoConfidence: 0.86,
+      ),
+      nowMs: () => 1000,
+      nowLocal: () => DateTime(2026, 2, 3, 12, 0, 0),
+    );
+
+    final result = await runner.runOnce(
+      localeTag: 'zh-CN',
+      dayEndMinutes: 21 * 60,
+    );
+
+    expect(result.processed, 1);
+    expect(store.generatedChecklistSuggestionsByTodoId['todo:msg:checklist'],
+        const <String>['Draft launch post', 'Share with team']);
+  });
   test('runner processes running jobs (crash recovery)', () async {
     final store = _FakeStore(
       jobs: [
@@ -579,6 +620,8 @@ final class _FakeStore implements SemanticParseAutoActionsStore {
       <String, List<String>>{};
   SemanticParseJobSucceededArgs? lastSucceeded;
   SemanticParseJobFailedArgs? lastFailed;
+  final Map<String, List<String>> generatedChecklistSuggestionsByTodoId =
+      <String, List<String>>{};
   String? lastRecurrenceRuleJson;
 
   @override
@@ -678,6 +721,17 @@ final class _FakeStore implements SemanticParseAutoActionsStore {
   }
 
   @override
+  Future<void> upsertGeneratedChecklistSuggestions({
+    required String todoId,
+    required List<String> suggestions,
+    required String source,
+    String? generationKey,
+  }) async {
+    generatedChecklistSuggestionsByTodoId[todoId] =
+        List<String>.from(suggestions);
+  }
+
+  @override
   Future<String?> setTodoStatusFromMessage({
     required String messageId,
     required String todoId,
@@ -691,11 +745,13 @@ final class _FakeStore implements SemanticParseAutoActionsStore {
 final class _FakeClient implements SemanticParseAutoActionsClient {
   _FakeClient({
     this.responseJson,
+    this.checklistSuggestionJson,
     this.error,
     this.candidateTodoIds = const <String>[],
   });
 
   final String? responseJson;
+  final String? checklistSuggestionJson;
   final Object? error;
   final List<String> candidateTodoIds;
 
@@ -719,5 +775,16 @@ final class _FakeClient implements SemanticParseAutoActionsClient {
   }) async {
     if (error != null) throw error!;
     return responseJson ?? '{"kind":"none","confidence":0.0}';
+  }
+
+  @override
+  Future<String> generateChecklistSuggestionsJson({
+    required String taskTitle,
+    required String taskContext,
+    required String localeTag,
+    required Duration timeout,
+  }) async {
+    if (error != null) throw error!;
+    return checklistSuggestionJson ?? '{"suggestions":[]}';
   }
 }
