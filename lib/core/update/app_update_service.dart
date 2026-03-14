@@ -832,24 +832,24 @@ class AppUpdateService {
     Directory? tempRoot;
     Uri localUri = asset.downloadUri;
 
-    if (localUri.scheme == 'file') {
-      final sourceFile = File(localUri.toFilePath());
-      if (asset.sha256 != null) {
-        await _verifyFileSha256(sourceFile, asset.sha256!);
-      }
-    } else {
-      tempRoot = await Directory.systemTemp.createTemp('secondloop_asset_');
-      final localPath =
-          '${tempRoot.path}${Platform.pathSeparator}${_sanitizeAssetFileName(asset.name)}';
-      final localFile = File(localPath);
-      await _downloadToFile(asset.downloadUri, localFile);
-      if (asset.sha256 != null) {
-        await _verifyFileSha256(localFile, asset.sha256!);
-      }
-      localUri = localFile.uri;
-    }
-
     try {
+      if (localUri.scheme == 'file') {
+        final sourceFile = File(localUri.toFilePath());
+        if (asset.sha256 != null) {
+          await _verifyFileSha256(sourceFile, asset.sha256!);
+        }
+      } else {
+        tempRoot = await Directory.systemTemp.createTemp('secondloop_asset_');
+        final localPath =
+            '${tempRoot.path}${Platform.pathSeparator}${_sanitizeAssetFileName(asset.name)}';
+        final localFile = File(localPath);
+        await _downloadToFile(asset.downloadUri, localFile);
+        if (asset.sha256 != null) {
+          await _verifyFileSha256(localFile, asset.sha256!);
+        }
+        localUri = localFile.uri;
+      }
+
       return await action(localUri);
     } finally {
       if (tempRoot != null) {

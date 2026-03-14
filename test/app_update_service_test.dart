@@ -509,6 +509,57 @@ void main() {
       expect(Directory(File(stagedPath!).parent.path).existsSync(), isFalse);
     });
 
+    test('cleans temporary downloaded asset when Windows handoff sha256 fails',
+        () async {
+      final before = Directory.systemTemp
+          .listSync()
+          .whereType<Directory>()
+          .where((dir) =>
+              dir.path.contains('${Platform.pathSeparator}secondloop_asset_'))
+          .map((dir) => dir.path)
+          .toSet();
+      final stagedClient = _FakeWindowsStagedUpdateClient(available: true);
+      final service = AppUpdateService(
+        platformOverride: AppUpdatePlatform.windows,
+        windowsStagedUpdateClient: stagedClient,
+        httpClient: _FakeHttpClient(
+          handler: (uri) => const _FakeHttpResponse(
+            statusCode: 200,
+            body: 'tampered-nupkg',
+          ),
+        ),
+        processExit: (_) {},
+      );
+
+      await expectLater(
+        () => service.installAndRestart(
+          AppUpdateAvailability(
+            currentVersion: '1.0.0',
+            latestTag: 'v1.1.0',
+            releasePageUri: Uri.parse(
+              'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
+            ),
+            installMode: AppUpdateInstallMode.seamlessRestart,
+            asset: AppUpdateAsset(
+              name: 'com.secondloop.secondloop-1.1.0-full.nupkg',
+              downloadUri: Uri.parse('https://cdn.example.com/win.nupkg'),
+              sha256: 'deadbeef',
+            ),
+          ),
+        ),
+        throwsA(isA<StateError>()),
+      );
+
+      final after = Directory.systemTemp
+          .listSync()
+          .whereType<Directory>()
+          .where((dir) =>
+              dir.path.contains('${Platform.pathSeparator}secondloop_asset_'))
+          .map((dir) => dir.path)
+          .toSet();
+      expect(after, before);
+    });
+
     test('cleans temporary downloaded asset after Windows installer handoff',
         () async {
       String? packagePath;
