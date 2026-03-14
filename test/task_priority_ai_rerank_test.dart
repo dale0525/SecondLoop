@@ -155,6 +155,44 @@ void main() {
     expect(messages, isEmpty);
   });
 
+  test('service uses dedicated cloud gateway rerank API', () async {
+    final backend = _RecordingTaskPriorityBackend();
+    final service = BackendTaskPriorityAiService.forTesting(
+      backend: backend,
+      sessionKey: Uint8List(32),
+      route: AskAiRouteKind.cloudGateway,
+      gatewayBaseUrl: 'https://gateway.example',
+      idToken: 'token',
+      modelName: 'gpt-cloud-test',
+    );
+
+    final result = await service.rerank(
+      TaskPriorityAiRequest(
+        nowLocal: DateTime(2026, 3, 13, 10, 0),
+        candidates: const <TaskPriorityAiCandidate>[
+          TaskPriorityAiCandidate(
+            todoId: 't1',
+            title: 'Fix bug',
+            status: 'open',
+            band: TaskPriorityBand.decide,
+            dueState: 'unscheduled',
+            ruleScore: 10,
+            updatedAtMs: 0,
+            recentInteractionSummary: '',
+            sourceSummary: '',
+            isRepeatedlyDeferred: false,
+            isPotentialBlocker: true,
+            isQuickWin: false,
+          ),
+        ],
+      ),
+    );
+
+    expect(result.entries.single.todoId, 't1');
+    expect(backend.taskPriorityCalls, 0);
+    expect(backend.cloudTaskPriorityCalls, 1);
+  });
+
   test('service includes current app locale in prompt', () async {
     final backend = _RecordingTaskPriorityBackend();
     final service = BackendTaskPriorityAiService.forTesting(
@@ -285,6 +323,7 @@ final class _RecordingTaskPriorityBackend extends TestAppBackend {
 
   final List<String> prompts = <String>[];
   int taskPriorityCalls = 0;
+  int cloudTaskPriorityCalls = 0;
 
   @override
   Future<String> taskPriorityRerankAi(
@@ -293,6 +332,19 @@ final class _RecordingTaskPriorityBackend extends TestAppBackend {
   }) async {
     prompts.add(prompt);
     taskPriorityCalls += 1;
+    return _response;
+  }
+
+  @override
+  Future<String> taskPriorityRerankAiCloudGateway(
+    Uint8List key, {
+    required String prompt,
+    required String gatewayBaseUrl,
+    required String idToken,
+    required String modelName,
+  }) async {
+    prompts.add(prompt);
+    cloudTaskPriorityCalls += 1;
     return _response;
   }
 }

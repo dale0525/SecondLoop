@@ -1889,8 +1889,11 @@ pub fn ai_task_priority_rerank_cloud_gateway(
     }
 
     let _key = key_from_bytes(key)?;
-    let _conn = db::open(Path::new(&app_dir))?;
 
+    // Cloud gateway task-priority usage is tagged server-side via the provider
+    // purpose. We intentionally do not write a local `llm_usage_daily` row here
+    // because this route does not depend on a local active LLM profile id or local
+    // token accounting.
     let provider = llm::gateway::CloudGatewayProvider::new_with_purpose(
         gateway_base_url,
         firebase_id_token,
@@ -2098,8 +2101,11 @@ pub fn ai_semantic_parse_ask_ai_time_window_cloud_gateway(
     }
 
     let _key = key_from_bytes(key)?;
-    let _conn = db::open(Path::new(&app_dir))?;
 
+    // Cloud gateway task-priority usage is tagged server-side via the provider
+    // purpose. We intentionally do not write a local `llm_usage_daily` row here
+    // because this route does not depend on a local active LLM profile id or local
+    // token accounting.
     let provider = llm::gateway::CloudGatewayProvider::new_with_purpose(
         gateway_base_url,
         firebase_id_token,

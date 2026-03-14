@@ -33,7 +33,10 @@ class BackendTaskPriorityAiService implements TaskPriorityAiService {
       <String, _TaskPriorityAiCacheEntry>{};
   static final Map<String, Future<String>> _sharedInflight =
       <String, Future<String>>{};
-  static const Duration _sharedCacheTtl = Duration(minutes: 15);
+  // Keep this cache short-lived: the prompt still includes `now_local_iso`, but
+  // the shared cache key intentionally ignores it so near-duplicate reranks from
+  // multiple pages can collapse into one upstream call.
+  static const Duration _sharedCacheTtl = Duration(minutes: 1);
 
   @visibleForTesting
   static void clearSharedCacheForTest() {
