@@ -1,5 +1,5 @@
 use secondloop_rust::auth;
-use secondloop_rust::crypto::KdfParams;
+use secondloop_rust::crypto::{decrypt_bytes, KdfParams};
 use secondloop_rust::db;
 
 fn setup() -> (tempfile::TempDir, [u8; 32], rusqlite::Connection) {
@@ -533,4 +533,81 @@ fn deleting_applied_checklist_item_reverts_suggestion_to_pending() {
             .expect("reapply suggestion");
     assert_eq!(reapplied.len(), 1);
     assert_eq!(reapplied[0].content, "Draft launch post");
+}
+
+#[test]
+fn apply_suggestions_uses_consistent_timestamps_per_batch() {
+    let (_temp_dir, key, conn) = setup();
+
+    db::upsert_todo(
+        &conn,
+        &key,
+        "todo_1",
+        "Plan launch",
+        None,
+        "open",
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("upsert todo");
+
+    let generated = db::upsert_generated_todo_checklist_suggestions(
+        &conn,
+        &key,
+        "todo_1",
+        &[
+            "Draft launch post".to_string(),
+            "Share with team".to_string(),
+        ],
+        "cloud",
+        Some("gen_apply_batch_time"),
+    )
+    .expect("generate suggestions");
+
+    let applied = db::apply_todo_checklist_suggestions(
+        &conn,
+        &key,
+        "todo_1",
+        &[generated[0].id.clone(), generated[1].id.clone()],
+    )
+    .expect("apply suggestions");
+    assert_eq!(applied.len(), 2);
+
+    let suggestions =
+        db::list_todo_checklist_suggestions(&conn, &key, "todo_1").expect("list suggestions");
+    let applied_suggestions = suggestions
+        .iter()
+        .filter(|item| item.state == "applied")
+        .collect::<Vec<_>>();
+    assert_eq!(applied_suggestions.len(), 2);
+    let updated_at_ms = applied_suggestions[0].updated_at_ms;
+    assert!(applied_suggestions
+        .iter()
+        .all(|item| item.updated_at_ms == updated_at_ms));
+
+    let mut stmt = conn
+        .prepare(r#"SELECT op_id, op_json FROM oplog ORDER BY seq ASC"#)
+        .expect("prepare oplog query");
+    let mut rows = stmt.query([]).expect("query oplog");
+    let mut apply_ts = Vec::new();
+    while let Some(row) = rows.next().expect("next oplog row") {
+        let op_id: String = row.get(0).expect("op_id");
+        let op_json_blob: Vec<u8> = row.get(1).expect("op_json");
+        let plaintext = decrypt_bytes(
+            &key,
+            &op_json_blob,
+            format!("oplog.op_json:{op_id}").as_bytes(),
+        )
+        .expect("decrypt oplog payload");
+        let value: serde_json::Value =
+            serde_json::from_slice(&plaintext).expect("parse oplog json");
+        if value["type"].as_str() == Some("todo.checklist_suggestion.apply.v1") {
+            apply_ts.push(value["ts_ms"].as_i64().expect("apply ts_ms"));
+        }
+    }
+
+    assert_eq!(apply_ts.len(), 2);
+    assert!(apply_ts.iter().all(|ts| *ts == apply_ts[0]));
 }
