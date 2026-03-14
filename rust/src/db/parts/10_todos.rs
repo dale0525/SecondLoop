@@ -430,6 +430,11 @@ pub fn set_todo_checklist_item_done(
     is_done: bool,
 ) -> Result<TodoChecklistItem> {
     run_immediate_transaction(conn, || {
+        let existing = get_todo_checklist_item_by_id(conn, key, item_id)?;
+        if existing.is_done == is_done {
+            return Ok(existing);
+        }
+
         let now = now_ms();
         conn.execute(
             r#"UPDATE todo_checklist_items SET is_done = ?2, updated_at_ms = ?3 WHERE id = ?1"#,

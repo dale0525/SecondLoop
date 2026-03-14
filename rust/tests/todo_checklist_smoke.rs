@@ -444,3 +444,40 @@ fn checklist_reorder_succeeds_inside_active_transaction() {
     assert_eq!(listed[0].id, second.id);
     assert_eq!(listed[1].id, first.id);
 }
+
+#[test]
+fn checklist_set_done_noop_keeps_timestamp_and_oplog_stable() {
+    let (_temp_dir, key, conn) = setup();
+
+    db::upsert_todo(
+        &conn,
+        &key,
+        "todo_1",
+        "Plan launch",
+        None,
+        "open",
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("upsert todo");
+
+    let item = db::create_todo_checklist_item(&conn, &key, "todo_1", "Draft launch post")
+        .expect("create checklist item");
+
+    let completed =
+        db::set_todo_checklist_item_done(&conn, &key, &item.id, true).expect("set done first time");
+    let oplog_before: i64 = conn
+        .query_row("SELECT COUNT(*) FROM oplog", [], |row| row.get(0))
+        .expect("count oplog before noop done");
+
+    let repeated = db::set_todo_checklist_item_done(&conn, &key, &item.id, true)
+        .expect("set done second time");
+    let oplog_after: i64 = conn
+        .query_row("SELECT COUNT(*) FROM oplog", [], |row| row.get(0))
+        .expect("count oplog after noop done");
+
+    assert_eq!(repeated.updated_at_ms, completed.updated_at_ms);
+    assert_eq!(oplog_after, oplog_before);
+}
