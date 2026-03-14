@@ -431,3 +431,46 @@ fn dismiss_suggestions_skips_oplog_when_no_rows_change() {
 
     assert_eq!(oplog_after, oplog_before);
 }
+
+#[test]
+fn generate_suggestions_uses_consistent_timestamps_per_batch() {
+    let (_temp_dir, key, conn) = setup();
+
+    db::upsert_todo(
+        &conn,
+        &key,
+        "todo_1",
+        "Plan launch",
+        None,
+        "open",
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("upsert todo");
+
+    let raw_suggestions = (0..512)
+        .map(|index| format!("Suggestion {index}"))
+        .collect::<Vec<_>>();
+
+    let generated = db::upsert_generated_todo_checklist_suggestions(
+        &conn,
+        &key,
+        "todo_1",
+        &raw_suggestions,
+        "cloud",
+        Some("gen_consistent_batch_time"),
+    )
+    .expect("generate suggestions");
+
+    assert_eq!(generated.len(), raw_suggestions.len());
+    let created_at_ms = generated[0].created_at_ms;
+    let updated_at_ms = generated[0].updated_at_ms;
+    assert!(generated
+        .iter()
+        .all(|item| item.created_at_ms == created_at_ms));
+    assert!(generated
+        .iter()
+        .all(|item| item.updated_at_ms == updated_at_ms));
+}

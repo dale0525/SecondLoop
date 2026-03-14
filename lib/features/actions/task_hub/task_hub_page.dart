@@ -64,6 +64,7 @@ class _TaskHubPageState extends State<TaskHubPage> {
       sessionKey: Uint8List.fromList(SessionScope.of(context).sessionKey),
       syncEngine: SyncEngineScope.maybeOf(context),
       resolveAiService: _resolveAiService,
+      resolveAiCacheScopeKey: _resolveAiCacheScopeKey,
       isAiEnhancementEnabled: TaskPriorityAiEnhancementPrefs.read,
       feedbackStore: _feedbackStore,
     );
@@ -80,6 +81,7 @@ class _TaskHubPageState extends State<TaskHubPage> {
       final localeTag = Localizations.localeOf(context).toLanguageTag();
       final gatewayConfig =
           cloudAuthScope?.gatewayConfig ?? CloudGatewayConfig.defaultConfig;
+      final cloudUid = cloudAuthScope?.controller.uid;
       final idToken = await readCloudCapabilityIdToken(
         cloudAuthScope?.controller,
         mode: CloudCapabilityAuthMode.background,
@@ -92,6 +94,15 @@ class _TaskHubPageState extends State<TaskHubPage> {
         subscriptionStatus: subscriptionStatus,
       );
       if (route == AskAiRouteKind.needsSetup) return null;
+      final cacheScopeKey = await resolveTaskPriorityAiCacheScopeKey(
+        backend,
+        Uint8List.fromList(sessionKey),
+        route: route,
+        gatewayBaseUrl: gatewayConfig.baseUrl,
+        modelName: gatewayConfig.modelName,
+        localeTag: localeTag,
+        cloudUid: cloudUid,
+      );
       return BackendTaskPriorityAiService(
         backend: backend,
         sessionKey: sessionKey,
@@ -100,6 +111,47 @@ class _TaskHubPageState extends State<TaskHubPage> {
         idToken: (idToken ?? '').trim(),
         modelName: gatewayConfig.modelName,
         localeTag: localeTag,
+        cacheScopeKeyOverride: cacheScopeKey,
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<String?> _resolveAiCacheScopeKey() async {
+    try {
+      final backend = AppBackendScope.of(context);
+      final sessionKey =
+          Uint8List.fromList(SessionScope.of(context).sessionKey);
+      final subscriptionStatus = SubscriptionScope.maybeOf(context)?.status ??
+          SubscriptionStatus.unknown;
+      final cloudAuthScope = CloudAuthScope.maybeOf(context);
+      final localeTag = Localizations.localeOf(context).toLanguageTag();
+      final gatewayConfig =
+          cloudAuthScope?.gatewayConfig ?? CloudGatewayConfig.defaultConfig;
+      final cloudUid = cloudAuthScope?.controller.uid;
+      if (subscriptionStatus == SubscriptionStatus.entitled &&
+          gatewayConfig.baseUrl.trim().isNotEmpty &&
+          (cloudUid?.trim().isNotEmpty ?? false)) {
+        final cloudScope = await resolveTaskPriorityAiCacheScopeKey(
+          backend,
+          sessionKey,
+          route: AskAiRouteKind.cloudGateway,
+          gatewayBaseUrl: gatewayConfig.baseUrl,
+          modelName: gatewayConfig.modelName,
+          localeTag: localeTag,
+          cloudUid: cloudUid,
+        );
+        if (cloudScope != null) return cloudScope;
+      }
+      return resolveTaskPriorityAiCacheScopeKey(
+        backend,
+        sessionKey,
+        route: AskAiRouteKind.byok,
+        gatewayBaseUrl: gatewayConfig.baseUrl,
+        modelName: gatewayConfig.modelName,
+        localeTag: localeTag,
+        cloudUid: cloudUid,
       );
     } catch (_) {
       return null;

@@ -29,6 +29,7 @@ class TaskPriorityStore extends ChangeNotifier {
     Future<List<TodoChecklistProgress>> Function()? loadChecklistProgress,
     required DateTime Function() nowLocal,
     Future<TaskPriorityAiService?> Function()? resolveAiService,
+    Future<String?> Function()? resolveAiCacheScopeKey,
     Future<bool> Function()? isAiEnhancementEnabled,
     TaskPriorityFeedbackStore feedbackStore = const TaskPriorityFeedbackStore(),
     Duration aiCacheTtl = const Duration(minutes: 15),
@@ -36,6 +37,7 @@ class TaskPriorityStore extends ChangeNotifier {
         _loadChecklistProgress = loadChecklistProgress,
         _nowLocal = nowLocal,
         _resolveAiService = resolveAiService,
+        _resolveAiCacheScopeKey = resolveAiCacheScopeKey,
         _isAiEnhancementEnabled = isAiEnhancementEnabled,
         _feedbackStore = feedbackStore,
         _aiCacheTtl = aiCacheTtl;
@@ -46,6 +48,7 @@ class TaskPriorityStore extends ChangeNotifier {
     SyncEngine? syncEngine,
     DateTime Function()? nowLocal,
     Future<TaskPriorityAiService?> Function()? resolveAiService,
+    Future<String?> Function()? resolveAiCacheScopeKey,
     Future<bool> Function()? isAiEnhancementEnabled,
     TaskPriorityFeedbackStore feedbackStore = const TaskPriorityFeedbackStore(),
   }) {
@@ -60,6 +63,7 @@ class TaskPriorityStore extends ChangeNotifier {
           backend.listTodoChecklistProgress(sessionKey),
       nowLocal: nowLocal ?? DateTime.now,
       resolveAiService: resolveAiService,
+      resolveAiCacheScopeKey: resolveAiCacheScopeKey,
       isAiEnhancementEnabled: isAiEnhancementEnabled,
       feedbackStore: feedbackStore,
     );
@@ -69,6 +73,7 @@ class TaskPriorityStore extends ChangeNotifier {
   final Future<List<TodoChecklistProgress>> Function()? _loadChecklistProgress;
   final DateTime Function() _nowLocal;
   final Future<TaskPriorityAiService?> Function()? _resolveAiService;
+  final Future<String?> Function()? _resolveAiCacheScopeKey;
   final Future<bool> Function()? _isAiEnhancementEnabled;
   final TaskPriorityFeedbackStore _feedbackStore;
   final Duration _aiCacheTtl;
@@ -224,10 +229,17 @@ class TaskPriorityStore extends ChangeNotifier {
             // Keep the already-published rules snapshot.
           }
         } else {
-          final persisted = await _readPersistedAiCache(
-            requestSignature: requestSignature,
-            nowLocal: nowLocal,
-          );
+          final cacheScopeKey = await _resolveAiCacheScopeKey?.call();
+          final persisted = cacheScopeKey == null
+              ? null
+              : await _readPersistedAiCache(
+                  signature: _buildAiSignature(
+                    request,
+                    cacheScopeKey: cacheScopeKey,
+                  ),
+                  requestSignature: requestSignature,
+                  nowLocal: nowLocal,
+                );
           if (persisted != null) {
             var hybridSnapshot = buildTaskPrioritySnapshot(
               todos,

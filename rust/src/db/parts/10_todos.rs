@@ -697,6 +697,7 @@ pub fn upsert_generated_todo_checklist_suggestions(
             params![todo_id],
             |row| row.get(0),
         )?;
+        let now = now_ms();
 
         for (offset, raw_content) in suggestions.iter().enumerate() {
             let trimmed = raw_content.trim();
@@ -709,7 +710,6 @@ pub fn upsert_generated_todo_checklist_suggestions(
             }
 
             let id = uuid::Uuid::new_v4().to_string();
-            let now = now_ms();
             let content_blob = encrypt_bytes(key, trimmed.as_bytes(), &todo_checklist_suggestion_content_aad(&id))?;
             conn.execute(
                 r#"

@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 
 import '../../../core/ai/ai_routing.dart';
 import '../../../core/backend/app_backend.dart';
+import '../../../src/rust/db.dart';
 import 'task_priority_ai_models.dart';
 import 'task_priority_models.dart';
 
@@ -10,6 +11,67 @@ abstract interface class TaskPriorityAiService {
   String get cacheScopeKey;
 
   Future<TaskPriorityAiBatchResult> rerank(TaskPriorityAiRequest request);
+}
+
+String buildTaskPriorityAiCacheScopeKey({
+  required AskAiRouteKind route,
+  required String gatewayBaseUrl,
+  required String modelName,
+  required String localeTag,
+  String? partitionKey,
+}) {
+  return jsonEncode(<String>[
+    route.name,
+    gatewayBaseUrl.trim(),
+    modelName.trim(),
+    localeTag.trim(),
+    (partitionKey ?? '').trim(),
+  ]);
+}
+
+Future<String?> resolveTaskPriorityAiCacheScopeKey(
+  AppBackend backend,
+  Uint8List sessionKey, {
+  required AskAiRouteKind route,
+  required String gatewayBaseUrl,
+  required String modelName,
+  required String localeTag,
+  String? cloudUid,
+}) async {
+  switch (route) {
+    case AskAiRouteKind.cloudGateway:
+      final uid = (cloudUid ?? '').trim();
+      if (uid.isEmpty) return null;
+      return buildTaskPriorityAiCacheScopeKey(
+        route: route,
+        gatewayBaseUrl: gatewayBaseUrl,
+        modelName: modelName,
+        localeTag: localeTag,
+        partitionKey: 'cloud:$uid',
+      );
+    case AskAiRouteKind.byok:
+      final profiles = await backend.listLlmProfiles(sessionKey);
+      LlmProfile? activeProfile;
+      for (final profile in profiles) {
+        if (profile.isActive) {
+          activeProfile = profile;
+          break;
+        }
+      }
+      if (activeProfile == null) return null;
+      return buildTaskPriorityAiCacheScopeKey(
+        route: route,
+        gatewayBaseUrl: activeProfile.baseUrl ?? '',
+        modelName: activeProfile.modelName,
+        localeTag: localeTag,
+        partitionKey: jsonEncode(<String>[
+          activeProfile.id,
+          activeProfile.providerType,
+        ]),
+      );
+    case AskAiRouteKind.needsSetup:
+      return null;
+  }
 }
 
 Future<AskAiRouteKind> resolveTaskPriorityAiRoute(
@@ -52,13 +114,15 @@ class BackendTaskPriorityAiService implements TaskPriorityAiService {
     required String idToken,
     required String modelName,
     required String localeTag,
+    String? cacheScopeKeyOverride,
   })  : _backend = backend,
         _sessionKey = Uint8List.fromList(sessionKey),
         _route = route,
         _gatewayBaseUrl = gatewayBaseUrl,
         _idToken = idToken,
         _modelName = modelName,
-        _localeTag = localeTag.trim();
+        _localeTag = localeTag.trim(),
+        _cacheScopeKeyOverride = cacheScopeKeyOverride?.trim();
 
   factory BackendTaskPriorityAiService.forTesting({
     required AppBackend backend,
@@ -68,6 +132,7 @@ class BackendTaskPriorityAiService implements TaskPriorityAiService {
     required String idToken,
     required String modelName,
     String localeTag = 'en-US',
+    String? cacheScopeKeyOverride,
   }) {
     return BackendTaskPriorityAiService(
       backend: backend,
@@ -77,6 +142,7 @@ class BackendTaskPriorityAiService implements TaskPriorityAiService {
       idToken: idToken,
       modelName: modelName,
       localeTag: localeTag,
+      cacheScopeKeyOverride: cacheScopeKeyOverride,
     );
   }
 
@@ -87,16 +153,17 @@ class BackendTaskPriorityAiService implements TaskPriorityAiService {
   final String _idToken;
   final String _modelName;
   final String _localeTag;
-
-  List<String> get _cacheScopeParts => <String>[
-        _route.name,
-        _gatewayBaseUrl,
-        _modelName,
-        _localeTag,
-      ];
+  final String? _cacheScopeKeyOverride;
 
   @override
-  String get cacheScopeKey => jsonEncode(_cacheScopeParts);
+  String get cacheScopeKey =>
+      _cacheScopeKeyOverride ??
+      buildTaskPriorityAiCacheScopeKey(
+        route: _route,
+        gatewayBaseUrl: _gatewayBaseUrl,
+        modelName: _modelName,
+        localeTag: _localeTag,
+      );
 
   @override
   Future<TaskPriorityAiBatchResult> rerank(
@@ -129,7 +196,7 @@ class BackendTaskPriorityAiService implements TaskPriorityAiService {
 
   String _buildCacheKey(TaskPriorityAiRequest request) {
     return jsonEncode(<String, Object?>{
-      'scope': _cacheScopeParts,
+      'scope': cacheScopeKey,
       'candidates': request.candidates
           .map((entry) => entry.toJson())
           .toList(growable: false),

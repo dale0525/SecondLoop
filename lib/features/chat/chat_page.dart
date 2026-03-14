@@ -588,6 +588,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
       sessionKey: Uint8List.fromList(SessionScope.of(context).sessionKey),
       syncEngine: SyncEngineScope.maybeOf(context),
       resolveAiService: _resolveTaskPriorityAiService,
+      resolveAiCacheScopeKey: _resolveTaskPriorityAiCacheScopeKey,
       isAiEnhancementEnabled: TaskPriorityAiEnhancementPrefs.read,
       feedbackStore: _taskPriorityFeedbackStore,
     );

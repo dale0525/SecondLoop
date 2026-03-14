@@ -346,6 +346,7 @@ void main() {
         todo(id: 'focus', title: 'Fix prod bug', updatedAtMs: 10),
       ],
       resolveAiService: () async => null,
+      resolveAiCacheScopeKey: () async => 'byok|model|en-US',
     );
 
     await secondStore.refresh();
@@ -353,6 +354,50 @@ void main() {
     expect(secondStore.snapshot.source, TaskPrioritySnapshotSource.hybrid);
     expect(secondStore.snapshot.primaryFocus?.reasonText,
         'Still the best option.');
+  });
+
+  test(
+      'does not reuse persisted AI rerank when unavailable cache scope differs',
+      () async {
+    SharedPreferences.setMockInitialValues({});
+    final firstService = _CountingAiService(
+      const TaskPriorityAiBatchResult(
+        entries: <TaskPriorityAiEntry>[
+          TaskPriorityAiEntry(
+            todoId: 'focus',
+            priorityBand: TaskPriorityAiBand.focus,
+            semanticAdjustment: 20,
+            reason: 'Still the best option.',
+            suggestedAction: TaskPrioritySuggestionKind.doNow,
+            confidence: TaskPriorityAiConfidence.high,
+          ),
+        ],
+      ),
+      cacheScopeKey: 'byok|model|en-US',
+    );
+    final firstStore = TaskPriorityStore.fromLoaders(
+      nowLocal: () => DateTime(2026, 3, 13, 10, 0),
+      loadTodos: () async => <Todo>[
+        todo(id: 'focus', title: 'Fix prod bug', updatedAtMs: 10),
+      ],
+      resolveAiService: () async => firstService,
+    );
+
+    await firstStore.refresh();
+
+    final secondStore = TaskPriorityStore.fromLoaders(
+      nowLocal: () => DateTime(2026, 3, 13, 10, 5),
+      loadTodos: () async => <Todo>[
+        todo(id: 'focus', title: 'Fix prod bug', updatedAtMs: 10),
+      ],
+      resolveAiService: () async => null,
+      resolveAiCacheScopeKey: () async => 'byok|other-model|en-US',
+    );
+
+    await secondStore.refresh();
+
+    expect(secondStore.snapshot.source, TaskPrioritySnapshotSource.rules);
+    expect(secondStore.snapshot.primaryFocus?.reasonText, isNull);
   });
 
   test('updatedAtMs churn alone does not trigger a second rerank', () async {
