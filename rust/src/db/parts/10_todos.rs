@@ -329,6 +329,54 @@ where
     }
 }
 
+fn create_todo_checklist_item_with_device_id(
+    conn: &Connection,
+    key: &[u8; 32],
+    todo_id: &str,
+    content: &str,
+    device_id: &str,
+) -> Result<TodoChecklistItem> {
+    let id = uuid::Uuid::new_v4().to_string();
+    let now = now_ms();
+    let sort_order: i64 = conn.query_row(
+        r#"SELECT COALESCE(MAX(sort_order), -1) + 1 FROM todo_checklist_items WHERE todo_id = ?1"#,
+        params![todo_id],
+        |row| row.get(0),
+    )?;
+    let content_blob = encrypt_bytes(key, content.as_bytes(), &todo_checklist_item_content_aad(&id))?;
+
+    conn.execute(
+        r#"
+INSERT INTO todo_checklist_items(id, todo_id, content, is_done, sort_order, created_at_ms, updated_at_ms)
+VALUES (?1, ?2, ?3, 0, ?4, ?5, ?6)
+"#,
+        params![id, todo_id, content_blob, sort_order, now, now],
+    )?;
+
+    let item = get_todo_checklist_item_by_id(conn, key, &id)?;
+
+    let seq = next_device_seq(conn, device_id)?;
+    let op = serde_json::json!({
+        "op_id": uuid::Uuid::new_v4().to_string(),
+        "device_id": device_id,
+        "seq": seq,
+        "ts_ms": now,
+        "type": "todo.checklist_item.upsert.v1",
+        "payload": {
+            "item_id": item.id.as_str(),
+            "todo_id": item.todo_id.as_str(),
+            "content": item.content.as_str(),
+            "is_done": item.is_done,
+            "sort_order": item.sort_order,
+            "created_at_ms": item.created_at_ms,
+            "updated_at_ms": item.updated_at_ms,
+        }
+    });
+    insert_oplog(conn, key, &op)?;
+
+    Ok(item)
+}
+
 pub fn create_todo_checklist_item(
     conn: &Connection,
     key: &[u8; 32],
@@ -336,46 +384,8 @@ pub fn create_todo_checklist_item(
     content: &str,
 ) -> Result<TodoChecklistItem> {
     run_immediate_transaction(conn, || {
-        let id = uuid::Uuid::new_v4().to_string();
-        let now = now_ms();
-        let sort_order: i64 = conn.query_row(
-            r#"SELECT COALESCE(MAX(sort_order), -1) + 1 FROM todo_checklist_items WHERE todo_id = ?1"#,
-            params![todo_id],
-            |row| row.get(0),
-        )?;
-        let content_blob = encrypt_bytes(key, content.as_bytes(), &todo_checklist_item_content_aad(&id))?;
-
-        conn.execute(
-            r#"
-INSERT INTO todo_checklist_items(id, todo_id, content, is_done, sort_order, created_at_ms, updated_at_ms)
-VALUES (?1, ?2, ?3, 0, ?4, ?5, ?6)
-"#,
-            params![id, todo_id, content_blob, sort_order, now, now],
-        )?;
-
-        let item = get_todo_checklist_item_by_id(conn, key, &id)?;
-
         let device_id = get_or_create_device_id(conn)?;
-        let seq = next_device_seq(conn, &device_id)?;
-        let op = serde_json::json!({
-            "op_id": uuid::Uuid::new_v4().to_string(),
-            "device_id": device_id,
-            "seq": seq,
-            "ts_ms": now,
-            "type": "todo.checklist_item.upsert.v1",
-            "payload": {
-                "item_id": item.id.as_str(),
-                "todo_id": item.todo_id.as_str(),
-                "content": item.content.as_str(),
-                "is_done": item.is_done,
-                "sort_order": item.sort_order,
-                "created_at_ms": item.created_at_ms,
-                "updated_at_ms": item.updated_at_ms,
-            }
-        });
-        insert_oplog(conn, key, &op)?;
-
-        Ok(item)
+        create_todo_checklist_item_with_device_id(conn, key, todo_id, content, &device_id)
     })
 }
 
@@ -812,6 +822,7 @@ pub fn apply_todo_checklist_suggestions(
 ) -> Result<Vec<TodoChecklistItem>> {
     run_immediate_transaction(conn, || {
         let mut applied = Vec::new();
+        let device_id = get_or_create_device_id(conn)?;
         for suggestion_id in suggestion_ids {
             let Some(suggestion) = find_todo_checklist_suggestion_by_id(conn, key, suggestion_id)?
             else {
@@ -820,7 +831,13 @@ pub fn apply_todo_checklist_suggestions(
             if suggestion.todo_id != todo_id || suggestion.state != TODO_CHECKLIST_SUGGESTION_STATE_PENDING {
                 continue;
             }
-            let item = create_todo_checklist_item(conn, key, todo_id, &suggestion.content)?;
+            let item = create_todo_checklist_item_with_device_id(
+                conn,
+                key,
+                todo_id,
+                &suggestion.content,
+                &device_id,
+            )?;
             applied.push((suggestion_id.clone(), item));
         }
 
