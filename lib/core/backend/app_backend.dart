@@ -6,6 +6,8 @@ import '../../features/actions/todo/todo_thread_match.dart';
 import '../../src/rust/db.dart';
 import '../../src/rust/semantic_parse.dart';
 
+part 'app_backend_prompt_ai.dart';
+
 enum TodoRecurrenceEditScope {
   thisOnly,
   thisAndFuture,
@@ -1258,34 +1260,6 @@ abstract class AppBackend {
     required String batchId,
   }) {
     throw UnimplementedError('runExternalImportPhaseBProgress');
-  }
-}
-
-extension AppBackendPromptAi on AppBackend {
-  Future<String> runAiPrompt(
-    Uint8List key, {
-    required String prompt,
-  }) {
-    return taskPriorityRerankAi(
-      key,
-      prompt: prompt,
-    );
-  }
-
-  Future<String> runAiPromptCloudGateway(
-    Uint8List key, {
-    required String prompt,
-    required String gatewayBaseUrl,
-    required String idToken,
-    required String modelName,
-  }) {
-    return taskPriorityRerankAiCloudGateway(
-      key,
-      prompt: prompt,
-      gatewayBaseUrl: gatewayBaseUrl,
-      idToken: idToken,
-      modelName: modelName,
-    );
   }
 }
 

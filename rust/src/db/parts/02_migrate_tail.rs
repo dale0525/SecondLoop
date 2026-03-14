@@ -131,6 +131,33 @@ PRAGMA user_version = 33;
     Ok(())
 }
 
+
+fn migrate_from_v33_to_v34(conn: &Connection) -> Result<()> {
+    conn.execute_batch(
+        r#"
+UPDATE todo_checklist_suggestions
+SET state = 'pending',
+    updated_at_ms = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER)
+WHERE state = 'applied' AND applied_checklist_item_id IS NULL;
+
+CREATE TRIGGER IF NOT EXISTS trg_todo_checklist_suggestions_revert_deleted_item
+BEFORE DELETE ON todo_checklist_items
+FOR EACH ROW
+BEGIN
+  UPDATE todo_checklist_suggestions
+  SET state = 'pending',
+      updated_at_ms = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER),
+      applied_checklist_item_id = NULL
+  WHERE applied_checklist_item_id = OLD.id
+    AND state = 'applied';
+END;
+
+PRAGMA user_version = 34;
+"#,
+    )?;
+    Ok(())
+}
+
 pub(crate) fn app_dir_from_conn(conn: &Connection) -> Result<PathBuf> {
     let mut stmt = conn.prepare("PRAGMA database_list")?;
     let mut rows = stmt.query([])?;

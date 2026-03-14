@@ -474,3 +474,63 @@ fn generate_suggestions_uses_consistent_timestamps_per_batch() {
         .iter()
         .all(|item| item.updated_at_ms == updated_at_ms));
 }
+
+#[test]
+fn deleting_applied_checklist_item_reverts_suggestion_to_pending() {
+    let (_temp_dir, key, conn) = setup();
+
+    db::upsert_todo(
+        &conn,
+        &key,
+        "todo_1",
+        "Plan launch",
+        None,
+        "open",
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("upsert todo");
+
+    let generated = db::upsert_generated_todo_checklist_suggestions(
+        &conn,
+        &key,
+        "todo_1",
+        &["Draft launch post".to_string()],
+        "cloud",
+        Some("gen_revert_applied"),
+    )
+    .expect("generate suggestions");
+
+    let applied =
+        db::apply_todo_checklist_suggestions(&conn, &key, "todo_1", &[generated[0].id.clone()])
+            .expect("apply suggestion");
+    assert_eq!(applied.len(), 1);
+
+    db::delete_todo_checklist_item(&conn, &key, &applied[0].id)
+        .expect("delete applied checklist item");
+
+    let suggestions =
+        db::list_todo_checklist_suggestions(&conn, &key, "todo_1").expect("list suggestions");
+    assert_eq!(suggestions.len(), 1);
+    assert_eq!(suggestions[0].state, "pending");
+    assert_eq!(suggestions[0].applied_checklist_item_id, None);
+
+    let regenerated = db::upsert_generated_todo_checklist_suggestions(
+        &conn,
+        &key,
+        "todo_1",
+        &["draft launch post".to_string()],
+        "cloud",
+        Some("gen_revert_applied_again"),
+    )
+    .expect("regenerate suggestions after delete");
+    assert!(regenerated.is_empty());
+
+    let reapplied =
+        db::apply_todo_checklist_suggestions(&conn, &key, "todo_1", &[generated[0].id.clone()])
+            .expect("reapply suggestion");
+    assert_eq!(reapplied.len(), 1);
+    assert_eq!(reapplied[0].content, "Draft launch post");
+}

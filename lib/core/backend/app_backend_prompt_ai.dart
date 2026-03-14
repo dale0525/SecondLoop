@@ -1,0 +1,53 @@
+part of 'app_backend.dart';
+
+extension AppBackendPromptAi on AppBackend {
+  Future<String> runAiPrompt(
+    Uint8List key, {
+    required String prompt,
+  }) async {
+    try {
+      return await taskPriorityRerankAi(
+        key,
+        prompt: prompt,
+      );
+    } on UnimplementedError catch (error, stackTrace) {
+      final message = error.toString();
+      if (message.contains('taskPriorityRerankAi')) {
+        Error.throwWithStackTrace(
+          UnimplementedError('runAiPrompt / taskPriorityRerankAi'),
+          stackTrace,
+        );
+      }
+      rethrow;
+    }
+  }
+
+  Future<String> runAiPromptCloudGateway(
+    Uint8List key, {
+    required String prompt,
+    required String gatewayBaseUrl,
+    required String idToken,
+    required String modelName,
+  }) async {
+    try {
+      return await taskPriorityRerankAiCloudGateway(
+        key,
+        prompt: prompt,
+        gatewayBaseUrl: gatewayBaseUrl,
+        idToken: idToken,
+        modelName: modelName,
+      );
+    } on UnimplementedError catch (error, stackTrace) {
+      final message = error.toString();
+      if (message.contains('taskPriorityRerankAiCloudGateway')) {
+        Error.throwWithStackTrace(
+          UnimplementedError(
+            'runAiPromptCloudGateway / taskPriorityRerankAiCloudGateway',
+          ),
+          stackTrace,
+        );
+      }
+      rethrow;
+    }
+  }
+}

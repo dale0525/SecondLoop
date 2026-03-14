@@ -54,3 +54,22 @@ fn checklist_tables_reference_todos_with_cascade_delete() {
             }));
     }
 }
+
+#[test]
+fn checklist_revert_trigger_exists_after_migration() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let conn = open(dir.path()).expect("open");
+
+    let trigger_name: String = conn
+        .query_row(
+            r#"SELECT name FROM sqlite_master WHERE type = 'trigger' AND name = 'trg_todo_checklist_suggestions_revert_deleted_item'"#,
+            [],
+            |row| row.get(0),
+        )
+        .expect("query trigger");
+
+    assert_eq!(
+        trigger_name,
+        "trg_todo_checklist_suggestions_revert_deleted_item"
+    );
+}
