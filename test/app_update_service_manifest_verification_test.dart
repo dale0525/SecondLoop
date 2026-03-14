@@ -66,6 +66,64 @@ void main() {
       ),
     );
   });
+
+  test('times out when latest.json signature fetch stalls', () async {
+    final requestedUris = <Uri>[];
+    final stalledRequest = Completer<HttpClientRequest>();
+    final service = AppUpdateService(
+      httpClient: _FakeHttpClient(
+        onGetUrl: (uri) async {
+          requestedUris.add(uri);
+          if (uri.path.endsWith('latest.json')) {
+            return _FakeHttpClientRequest(
+              response: _FakeHttpClientResponse(
+                statusCode: 200,
+                body: jsonEncode({
+                  'version': '1.1.0',
+                  'release_page_url':
+                      'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
+                  'platforms': {
+                    'linux-x64': {
+                      'install_mode': 'bundle-tar-gz',
+                      'archive_url':
+                          'https://cdn.example.com/SecondLoop-linux-x64-v1.1.0.tar.gz',
+                      'sha256': 'abc123',
+                    },
+                  },
+                }),
+              ),
+            );
+          }
+          if (uri.path.endsWith('latest.json.sig') ||
+              uri.path.endsWith('/releases/latest')) {
+            return stalledRequest.future;
+          }
+          throw StateError('unexpected_uri:$uri');
+        },
+      ),
+      platformOverride: AppUpdatePlatform.linux,
+      releaseModeOverride: true,
+      releaseRepoOverride: 'dale0525/SecondLoop',
+      updatePublicKeyOverride: base64Encode(List<int>.generate(32, (i) => i)),
+      currentVersionLoader: () async =>
+          const AppRuntimeVersion(version: '1.0.0', buildNumber: '1'),
+      networkTimeoutOverride: const Duration(milliseconds: 10),
+    );
+
+    final result = await service.checkForUpdates();
+
+    expect(result.update, isNull);
+    expect(result.errorMessage, contains('TimeoutException'));
+    final requestedPaths = requestedUris.map((uri) => uri.path).toList();
+    expect(
+      requestedPaths,
+      contains('/dale0525/SecondLoop/releases/latest/download/latest.json'),
+    );
+    expect(
+      requestedPaths,
+      contains('/dale0525/SecondLoop/releases/latest/download/latest.json.sig'),
+    );
+  });
 }
 
 final class _FakeHttpResponse {
@@ -76,13 +134,22 @@ final class _FakeHttpResponse {
 }
 
 final class _FakeHttpClient implements HttpClient {
-  _FakeHttpClient({required this.handler});
+  _FakeHttpClient({this.handler, this.onGetUrl});
 
-  final _FakeHttpResponse Function(Uri uri) handler;
+  final _FakeHttpResponse Function(Uri uri)? handler;
+  final Future<HttpClientRequest> Function(Uri uri)? onGetUrl;
 
   @override
   Future<HttpClientRequest> getUrl(Uri url) async {
-    final response = handler(url);
+    final getUrl = onGetUrl;
+    if (getUrl != null) {
+      return getUrl(url);
+    }
+    final responseHandler = handler;
+    if (responseHandler == null) {
+      throw StateError('missing_handler:$url');
+    }
+    final response = responseHandler(url);
     return _FakeHttpClientRequest(
       response: _FakeHttpClientResponse(
         statusCode: response.statusCode,

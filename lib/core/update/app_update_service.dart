@@ -24,6 +24,7 @@ const _defaultUpdatePublicKey = String.fromEnvironment(
   'SECONDLOOP_UPDATE_PUBLIC_KEY',
   defaultValue: '',
 );
+const _defaultUpdateNetworkTimeout = Duration(seconds: 15);
 
 enum AppUpdatePlatform {
   windows,
@@ -145,6 +146,7 @@ class AppUpdateService {
     String? updatePublicKeyOverride,
     UpdateEventLogger? updateEventLogger,
     void Function(int code)? processExit,
+    Duration? networkTimeoutOverride,
   })  : _httpClient = httpClient ?? HttpClient(),
         _releaseJsonFetcher = releaseJsonFetcher,
         _currentVersionLoader = currentVersionLoader,
@@ -157,7 +159,8 @@ class AppUpdateService {
         _updatePublicKeyOverride = updatePublicKeyOverride,
         _updateEventLogger =
             updateEventLogger ?? SharedPrefsUpdateEventLogger(),
-        _processExit = processExit;
+        _processExit = processExit,
+        _networkTimeoutOverride = networkTimeoutOverride;
 
   final HttpClient _httpClient;
   final AppUpdateReleaseJsonFetcher? _releaseJsonFetcher;
@@ -171,6 +174,7 @@ class AppUpdateService {
   final String? _updatePublicKeyOverride;
   final UpdateEventLogger _updateEventLogger;
   final void Function(int code)? _processExit;
+  final Duration? _networkTimeoutOverride;
 
   AppUpdatePlatform get _platform => _platformOverride ?? _detectPlatform();
 
@@ -181,6 +185,8 @@ class AppUpdateService {
   String get releaseRepo => _releaseRepo;
   String get _updatePublicKey =>
       _updatePublicKeyOverride ?? _defaultUpdatePublicKey;
+  Duration get _networkTimeout =>
+      _networkTimeoutOverride ?? _defaultUpdateNetworkTimeout;
   void _exitProcess(int code) => (_processExit ?? exit)(code);
 
   late final WindowsStagedUpdateClient? _resolvedWindowsStagedUpdateClient =
@@ -569,9 +575,9 @@ class AppUpdateService {
       return fetcher(uri);
     }
 
-    final req = await _httpClient.getUrl(uri);
+    final req = await _getUrlWithTimeout(uri);
     req.headers.set(HttpHeaders.acceptHeader, 'application/vnd.github+json');
-    final resp = await req.close();
+    final resp = await _closeRequestWithTimeout(req);
 
     if (resp.statusCode < 200 || resp.statusCode >= 300) {
       throw HttpException(
@@ -580,10 +586,7 @@ class AppUpdateService {
       );
     }
 
-    final bodyBytes = await resp.fold<List<int>>(<int>[], (buffer, data) {
-      buffer.addAll(data);
-      return buffer;
-    });
+    final bodyBytes = await _readResponseBytesWithTimeout(resp);
     if (_isSignedManifestUri(uri)) {
       await _verifySignedManifest(uri, bodyBytes);
     }
@@ -601,18 +604,44 @@ class AppUpdateService {
   }
 
   Future<void> _downloadToFile(Uri uri, File output) async {
-    final req = await _httpClient.getUrl(uri);
-    final resp = await req.close();
+    final req = await _getUrlWithTimeout(uri);
+    final resp = await _closeRequestWithTimeout(req);
     if (resp.statusCode < 200 || resp.statusCode >= 300) {
       throw HttpException('download_failed_${resp.statusCode}', uri: uri);
     }
 
     final sink = output.openWrite();
     try {
-      await resp.pipe(sink);
+      await resp.timeout(_networkTimeout).pipe(sink);
     } finally {
       await sink.close();
     }
+  }
+
+  Future<HttpClientRequest> _getUrlWithTimeout(Uri uri) {
+    return _httpClient.getUrl(uri).timeout(_networkTimeout);
+  }
+
+  Future<HttpClientResponse> _closeRequestWithTimeout(
+    HttpClientRequest request,
+  ) {
+    return request.close().timeout(_networkTimeout);
+  }
+
+  Future<List<int>> _readResponseBytesWithTimeout(
+    HttpClientResponse response,
+  ) {
+    return response.timeout(_networkTimeout).fold<List<int>>(<int>[], (
+      buffer,
+      data,
+    ) {
+      buffer.addAll(data);
+      return buffer;
+    });
+  }
+
+  Future<String> _readResponseTextWithTimeout(HttpClientResponse response) {
+    return utf8.decoder.bind(response.timeout(_networkTimeout)).join();
   }
 
   List<Uri> _buildReleaseEndpoints() {
@@ -881,14 +910,15 @@ class AppUpdateService {
     }
 
     final sigUri = manifestUri.replace(path: '${manifestUri.path}.sig');
-    final request = await _httpClient.getUrl(sigUri);
-    final response = await request.close();
+    final request = await _getUrlWithTimeout(sigUri);
+    final response = await _closeRequestWithTimeout(request);
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw HttpException('signature_fetch_failed_${response.statusCode}',
           uri: sigUri);
     }
 
-    final signatureBase64 = (await utf8.decoder.bind(response).join()).trim();
+    final signatureBase64 =
+        (await _readResponseTextWithTimeout(response)).trim();
     final signatureBytes = base64Decode(signatureBase64);
     final publicKey = SimplePublicKey(
       base64Decode(publicKeyValue),
