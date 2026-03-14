@@ -151,10 +151,9 @@ Set<String> _listMacosUpdateTempDirs() {
       .listSync()
       .whereType<Directory>()
       .map((dir) => dir.path)
-      .where((path) =>
-          path.split(Platform.pathSeparator).last.startsWith(
-                'secondloop_macos_update_',
-              ))
+      .where((path) => path.split(Platform.pathSeparator).last.startsWith(
+            'secondloop_macos_update_',
+          ))
       .toSet();
 }
 
