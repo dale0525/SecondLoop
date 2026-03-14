@@ -1890,7 +1890,7 @@ pub fn ai_task_priority_rerank_cloud_gateway(
 
     let _key = key_from_bytes(key)?;
 
-    // Cloud gateway task-priority usage is tagged server-side via the provider
+    // Cloud gateway semantic-parse usage is tagged server-side via the provider
     // purpose. We intentionally do not write a local `llm_usage_daily` row here
     // because this route does not depend on a local active LLM profile id or local
     // token accounting.
