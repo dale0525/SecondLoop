@@ -132,4 +132,35 @@ void main() {
     expect(controller.canManageSubscription, true);
     expect(controller.lastRefreshError, isNull);
   });
+
+  test('CloudSubscriptionController clears state when id token is missing',
+      () async {
+    final client = MockClient((request) async {
+      return http.Response(
+        jsonEncode({
+          'active': true,
+          'can_manage_subscription': true,
+        }),
+        200,
+      );
+    });
+
+    var idToken = 'token-5';
+    final controller = CloudSubscriptionController(
+      idTokenGetter: () async => idToken,
+      cloudGatewayBaseUrl: 'https://gateway.test',
+      httpClient: client,
+    );
+
+    await controller.refresh();
+    expect(controller.status, SubscriptionStatus.entitled);
+    expect(controller.canManageSubscription, true);
+
+    idToken = '   ';
+    await controller.refresh();
+
+    expect(controller.status, SubscriptionStatus.unknown);
+    expect(controller.canManageSubscription, isNull);
+    expect(controller.lastRefreshError, isNull);
+  });
 }

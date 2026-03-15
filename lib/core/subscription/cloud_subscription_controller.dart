@@ -53,7 +53,8 @@ final class CloudSubscriptionController extends ChangeNotifier
   Future<void> refresh() async {
     final refreshEpoch = _refreshEpoch;
     final next = await _refreshFromCloudGateway();
-    if (refreshEpoch != _refreshEpoch || next == null) return;
+    if (refreshEpoch != _refreshEpoch) return;
+    if (next == null) return;
 
     _setState(
       status: next.status,
@@ -64,7 +65,10 @@ final class CloudSubscriptionController extends ChangeNotifier
   Future<_CloudSubscriptionSnapshot?> _refreshFromCloudGateway() async {
     if (_cloudGatewayBaseUrl.trim().isEmpty) {
       _lastRefreshError = null;
-      return null;
+      return const _CloudSubscriptionSnapshot(
+        status: SubscriptionStatus.unknown,
+        canManageSubscription: null,
+      );
     }
 
     String? idToken;
@@ -72,11 +76,17 @@ final class CloudSubscriptionController extends ChangeNotifier
       idToken = await _idTokenGetter();
     } catch (_) {
       _lastRefreshError = null;
-      return null;
+      return const _CloudSubscriptionSnapshot(
+        status: SubscriptionStatus.unknown,
+        canManageSubscription: null,
+      );
     }
     if (idToken == null || idToken.trim().isEmpty) {
       _lastRefreshError = null;
-      return null;
+      return const _CloudSubscriptionSnapshot(
+        status: SubscriptionStatus.unknown,
+        canManageSubscription: null,
+      );
     }
 
     Uri uri;
@@ -84,7 +94,10 @@ final class CloudSubscriptionController extends ChangeNotifier
       uri = Uri.parse(_cloudGatewayBaseUrl).resolve('/v1/subscription');
     } catch (_) {
       _lastRefreshError = null;
-      return null;
+      return const _CloudSubscriptionSnapshot(
+        status: SubscriptionStatus.unknown,
+        canManageSubscription: null,
+      );
     }
 
     try {

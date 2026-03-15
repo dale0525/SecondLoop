@@ -3,6 +3,9 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
+import 'firebase_http_client_factory_stub.dart'
+    if (dart.library.io) 'firebase_http_client_factory_io.dart';
+
 @immutable
 class FirebaseAuthTokens {
   const FirebaseAuthTokens({
@@ -73,7 +76,7 @@ final class FirebaseIdentityToolkitHttp implements FirebaseIdentityToolkit {
     required this.webApiKey,
     http.Client? httpClient,
     int Function()? nowMs,
-  })  : _httpClient = httpClient ?? http.Client(),
+  })  : _httpClient = httpClient ?? createFirebasePlatformHttpClient(),
         _nowMs = nowMs ?? (() => DateTime.now().millisecondsSinceEpoch);
 
   final String webApiKey;
