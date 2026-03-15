@@ -18,10 +18,16 @@ import '../../ui/sl_surface.dart';
 import 'cloud_usage_card.dart';
 import 'vault_usage_card.dart';
 
+typedef BillingClientFactory = BillingClient Function({
+  required Future<String?> Function() idTokenGetter,
+  required String cloudGatewayBaseUrl,
+});
+
 class CloudAccountPanel extends StatefulWidget {
   const CloudAccountPanel({
     super.key,
     this.billingClient,
+    this.billingClientFactory,
     this.cloudUsageClient,
     this.vaultUsageClient,
     this.vaultAttachmentsClient,
@@ -30,6 +36,7 @@ class CloudAccountPanel extends StatefulWidget {
   });
 
   final BillingClient? billingClient;
+  final BillingClientFactory? billingClientFactory;
   final CloudUsageClient? cloudUsageClient;
   final VaultUsageClient? vaultUsageClient;
   final VaultAttachmentsClient? vaultAttachmentsClient;
@@ -62,6 +69,10 @@ class _CloudAccountPanelState extends State<CloudAccountPanel> {
 
   bool _billingBusy = false;
   Object? _billingError;
+  BillingClient? _ownedBillingClient;
+  DisposableBillingClient? _ownedDisposableBillingClient;
+  CloudAuthController? _ownedBillingAuthController;
+  String? _ownedBillingGatewayBaseUrl;
 
   bool get _verificationCooldownActive => _verificationCooldownSeconds > 0;
 
@@ -88,15 +99,46 @@ class _CloudAccountPanelState extends State<CloudAccountPanel> {
     final controller = scope?.controller;
     if (controller == null) return null;
 
-    return CreemBillingClient(
-      idTokenGetter: controller.getIdToken,
-      cloudGatewayBaseUrl: scope?.gatewayConfig.baseUrl ?? '',
-    );
+    final gatewayBaseUrl = scope?.gatewayConfig.baseUrl ?? '';
+    if (_ownedBillingClient != null &&
+        identical(_ownedBillingAuthController, controller) &&
+        _ownedBillingGatewayBaseUrl == gatewayBaseUrl) {
+      return _ownedBillingClient;
+    }
+
+    _disposeOwnedBillingClient();
+
+    final factory = widget.billingClientFactory;
+    final client = factory == null
+        ? CreemBillingClient(
+            idTokenGetter: controller.getIdToken,
+            cloudGatewayBaseUrl: gatewayBaseUrl,
+          )
+        : factory(
+            idTokenGetter: controller.getIdToken,
+            cloudGatewayBaseUrl: gatewayBaseUrl,
+          );
+
+    _ownedBillingClient = client;
+    _ownedDisposableBillingClient =
+        client is DisposableBillingClient ? client : null;
+    _ownedBillingAuthController = controller;
+    _ownedBillingGatewayBaseUrl = gatewayBaseUrl;
+    return client;
+  }
+
+  void _disposeOwnedBillingClient() {
+    _ownedDisposableBillingClient?.dispose();
+    _ownedBillingClient = null;
+    _ownedDisposableBillingClient = null;
+    _ownedBillingAuthController = null;
+    _ownedBillingGatewayBaseUrl = null;
   }
 
   @override
   void dispose() {
     _verificationCooldownTimer?.cancel();
+    _disposeOwnedBillingClient();
     _emailController.dispose();
     _passwordController.dispose();
     super.dispose();

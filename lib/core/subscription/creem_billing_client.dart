@@ -10,7 +10,11 @@ abstract interface class BillingClient {
   Future<void> openPortal();
 }
 
-final class CreemBillingClient implements BillingClient {
+abstract interface class DisposableBillingClient implements BillingClient {
+  void dispose();
+}
+
+final class CreemBillingClient implements DisposableBillingClient {
   CreemBillingClient({
     required Future<String?> Function() idTokenGetter,
     required String cloudGatewayBaseUrl,
@@ -52,6 +56,7 @@ final class CreemBillingClient implements BillingClient {
     if (!ok) throw StateError('open_url_failed');
   }
 
+  @override
   void dispose() {
     _httpClient.close();
   }

@@ -98,6 +98,7 @@ class _WebChatPageState extends State<WebChatPage> {
       _controller.clear();
     });
 
+    Object? sendError;
     try {
       await widget.chatBackend
           .askAiStreamCloudGateway(
@@ -109,18 +110,22 @@ class _WebChatPageState extends State<WebChatPage> {
             modelName: 'cloud',
           )
           .join();
-      final messages = await widget.chatBackend.listMessages(
-        _sessionKey,
-        conversationId,
-      );
-      if (!mounted) return;
-      setState(() => _messages = messages);
     } catch (error) {
-      if (!mounted) return;
-      setState(() => _error = _formatCloudChatError(context, error));
-    } finally {
-      if (mounted) setState(() => _busy = false);
+      sendError = error;
     }
+
+    final messages = await widget.chatBackend.listMessages(
+      _sessionKey,
+      conversationId,
+    );
+    if (!mounted) return;
+
+    setState(() {
+      _messages = messages;
+      _error =
+          sendError == null ? null : _formatCloudChatError(context, sendError);
+      _busy = false;
+    });
   }
 
   @override
