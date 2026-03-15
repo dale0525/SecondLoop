@@ -643,6 +643,14 @@ class ReleaseWorkflowEnvTests(unittest.TestCase):
         publish_job = self._workflow_job_text("publish")
 
         self.assertIn("- name: Validate release publish config", publish_job)
+        self.assertIn(
+            '          : "${SECONDLOOP_UPDATE_PUBLIC_KEY:?Missing secret SECONDLOOP_UPDATE_PUBLIC_KEY}"',
+            publish_job,
+        )
+        self.assertIn(
+            '          : "${SECONDLOOP_UPDATE_SIGNING_PRIVATE_KEY:?Missing secret SECONDLOOP_UPDATE_SIGNING_PRIVATE_KEY}"',
+            publish_job,
+        )
 
     def test_release_workflow_packages_macos_managed_archive(self) -> None:
         workflow_text = self._workflow_text()
