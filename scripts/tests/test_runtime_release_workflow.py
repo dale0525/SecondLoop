@@ -21,6 +21,16 @@ class RuntimeReleaseWorkflowTests(unittest.TestCase):
     def _release_runtime_script_text(self) -> str:
         return RELEASE_RUNTIME_SCRIPT.read_text(encoding="utf-8")
 
+    def _extract_release_publish_step(self, workflow_text: str) -> str:
+        publish_step_start = "- name: Publish GitHub Release"
+        publish_step_end = "- name: Summarize GitHub Release publication"
+
+        self.assertIn(publish_step_start, workflow_text)
+        publish_step = workflow_text.split(publish_step_start, maxsplit=1)[1]
+
+        self.assertIn(publish_step_end, publish_step)
+        return publish_step.split(publish_step_end, maxsplit=1)[0]
+
     def test_runtime_release_workflow_includes_mobile_runtime_job(self) -> None:
         workflow_text = self._desktop_runtime_workflow_text()
 
@@ -54,6 +64,30 @@ class RuntimeReleaseWorkflowTests(unittest.TestCase):
         self.assertIn("dist/latest.json", workflow_text)
         self.assertIn("dist/latest.json.sig", workflow_text)
         self.assertIn("SecondLoop-macos-${safe_ref_name}.app.tar.gz", workflow_text)
+
+    def test_release_workflow_limits_linux_tarball_publish_glob(self) -> None:
+        workflow_text = self._release_workflow_text()
+        publish_step = self._extract_release_publish_step(workflow_text)
+
+        self.assertIn("dist/SecondLoop-linux-*.tar.gz", publish_step)
+        self.assertNotIn("dist/*.tar.gz", publish_step)
+
+    def test_release_workflow_publish_step_extraction_fails_with_assertion(self) -> None:
+        workflow_text = "name: Release\n  publish:\n    steps:\n      - name: Something Else\n"
+
+        with self.assertRaisesRegex(AssertionError, "Publish GitHub Release"):
+            self._extract_release_publish_step(workflow_text)
+
+    def test_release_workflow_publish_step_extraction_fails_when_end_sentinel_missing(self) -> None:
+        workflow_text = (
+            "- name: Publish GitHub Release\n"
+            "      files: |\n"
+            "        dist/SecondLoop-linux-*.tar.gz\n"
+            "- name: Some Other Step\n"
+        )
+
+        with self.assertRaisesRegex(AssertionError, "Summarize GitHub Release publication"):
+            self._extract_release_publish_step(workflow_text)
 
 
 if __name__ == "__main__":
