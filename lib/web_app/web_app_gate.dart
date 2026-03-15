@@ -587,8 +587,9 @@ class _WebFilesPageState extends State<_WebFilesPage> {
   @override
   Widget build(BuildContext context) {
     final formalItems = _formalItems;
-    final hasItemsNeedingAppProcessing =
-        formalItems.any((item) => needsAppProcessingInWeb(item.mimeType));
+    final hasItemsNeedingAppProcessing = formalItems.any(
+      (item) => item.isGroupedVideo || needsAppProcessingInWeb(item.mimeType),
+    );
 
     return Padding(
       padding: const EdgeInsets.all(16),

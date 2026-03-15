@@ -1,9 +1,9 @@
+import 'package:http/http.dart' as http;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:secondloop/core/cloud/cloud_auth_controller.dart';
 import 'package:secondloop/core/cloud/cloud_usage_client.dart';
 import 'package:secondloop/core/cloud/vault_attachments_client.dart';
 import 'package:secondloop/core/cloud/vault_usage_client.dart';
-import 'package:secondloop/core/subscription/creem_billing_client.dart';
 import 'package:secondloop/core/ai/ai_routing.dart';
 import 'package:secondloop/web_app/web_app_gate.dart';
 import 'package:secondloop/web_app/web_formal_settings_adapters.dart';
@@ -61,6 +61,7 @@ class _FakeWebAppService extends WebAppService {
   final WebUsageSummary? usage;
   final WebVaultUsageSummary? vaultUsage;
   final List<WebVaultAttachmentItem> items;
+  final List<String> openedActions = <String>[];
 
   @override
   Future<WebSubscriptionSnapshot> fetchSubscription(
@@ -73,10 +74,14 @@ class _FakeWebAppService extends WebAppService {
   }
 
   @override
-  Future<void> openCheckout({required String idToken}) async {}
+  Future<void> openCheckout({required String idToken}) async {
+    openedActions.add('checkout:$idToken');
+  }
 
   @override
-  Future<void> openPortal({required String idToken}) async {}
+  Future<void> openPortal({required String idToken}) async {
+    openedActions.add('portal:$idToken');
+  }
 
   @override
   Future<WebUsageSummary?> fetchUsage({required String idToken}) async => usage;
@@ -170,7 +175,7 @@ void main() {
     expect(attachmentUsage.items.single.sha256, 'sha-settings');
   });
 
-  test('web formal settings adapter maps subscription and billing bridge',
+  test('web formal settings adapter maps subscription and billing client',
       () async {
     final authController = _FakeCloudAuthController();
     final service = _FakeWebAppService();
@@ -178,18 +183,9 @@ void main() {
       service: service,
       authController: authController,
     );
-    final opened = <Uri>[];
-    final billing = CreemBillingClient(
-      idTokenGetter: authController.getIdToken,
-      cloudGatewayBaseUrl: kWebFormalSettingsBaseUrl,
-      httpClient: WebFormalSettingsHttpClient(
-        service: service,
-        authController: authController,
-      ),
-      urlOpener: (url) async {
-        opened.add(url);
-        return true;
-      },
+    final billing = WebAppBillingClient(
+      service: service,
+      authController: authController,
     );
 
     await subscriptionController.refresh();
@@ -198,12 +194,25 @@ void main() {
 
     expect(subscriptionController.status, SubscriptionStatus.entitled);
     expect(subscriptionController.canManageSubscription, isTrue);
-    expect(opened, hasLength(2));
-    expect(opened.first.toString(), 'https://checkout.secondloop.test/session');
-    expect(opened.last.toString(), 'https://billing.secondloop.test/portal');
+    expect(service.openedActions, <String>['checkout:token', 'portal:token']);
 
     subscriptionController.dispose();
-    billing.dispose();
+  });
+
+  test('web formal settings bridge does not synthesize billing urls', () async {
+    final client = WebFormalSettingsHttpClient(
+      service: _FakeWebAppService(),
+      authController: _FakeCloudAuthController(),
+    );
+
+    final request = http.Request(
+      'POST',
+      Uri.parse('${kWebFormalSettingsBaseUrl}v1/billing/checkout'),
+    );
+    final response = await http.Response.fromStream(await client.send(request));
+
+    expect(response.statusCode, 404);
+    expect(response.body, contains('unsupported_bridge_request'));
   });
 
   test('web formal settings adapter preserves can_manage_subscription=false',

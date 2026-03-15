@@ -73,25 +73,6 @@ final class WebFormalSettingsHttpClient extends http.BaseClient {
       );
     }
 
-    if (request.method == 'POST' &&
-        request.url.path == '/v1/billing/checkout') {
-      return _jsonResponse(
-        request,
-        body: const <String, Object?>{
-          'checkout_url': 'https://checkout.secondloop.test/session',
-        },
-      );
-    }
-
-    if (request.method == 'POST' && request.url.path == '/v1/billing/portal') {
-      return _jsonResponse(
-        request,
-        body: const <String, Object?>{
-          'portal_url': 'https://billing.secondloop.test/portal',
-        },
-      );
-    }
-
     if (request.method == 'GET' && request.url.path == '/v1/usage') {
       final summary = await service.fetchUsage(idToken: idToken);
       return _jsonResponse(

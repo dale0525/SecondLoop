@@ -7,6 +7,30 @@ import 'package:secondloop/core/ai/ai_routing.dart';
 import 'package:secondloop/web_app/web_app_gate.dart';
 
 void main() {
+  test('chat request sends messages only and does not expose model overrides',
+      () async {
+    http.BaseRequest? captured;
+    final client = MockClient((request) async {
+      captured = request;
+      return http.Response(jsonEncode({'content': 'ok'}), 200);
+    });
+
+    final service = WebAppServiceHttp(client: client);
+    await service.sendChat(
+      idToken: 'token',
+      messages: const <Map<String, String>>[
+        <String, String>{'role': 'user', 'content': 'hello'},
+      ],
+    );
+
+    expect(captured, isNotNull);
+    final request = captured! as http.Request;
+    final decoded = jsonDecode(request.body) as Map<String, dynamic>;
+    expect(decoded['model_name'], isNull);
+    expect(decoded['gateway_base_url'], isNull);
+    expect(decoded['messages'], isNotNull);
+  });
+
   test('vault requests include x-secondloop-vault-id header', () async {
     final requests = <http.BaseRequest>[];
     final client = MockClient((request) async {

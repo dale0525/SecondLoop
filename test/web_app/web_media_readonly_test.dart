@@ -142,4 +142,25 @@ void main() {
 
     expect(find.text('Continue processing in the app'), findsNothing);
   });
+
+  testWidgets('grouped video also shows readonly continue-in-app notice',
+      (tester) async {
+    await tester.pumpWidget(
+      _buildApp(const [
+        WebVaultAttachmentItem(
+          sha256: 'group-leaf-sha',
+          rootSha256: 'group-root-sha',
+          groupType: 'video',
+          mimeType: 'application/octet-stream',
+          byteLen: 2048,
+        ),
+      ]),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Files'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Continue processing in the app'), findsOneWidget);
+  });
 }

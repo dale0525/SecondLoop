@@ -116,6 +116,8 @@ final class _WebAppCloudWebChatClient implements CloudWebChatClient {
     required String modelName,
     required List<Map<String, String>> messages,
   }) {
+    // Web does not honor client-side model overrides.
+    // The site backend chooses the server-owned model for Pro users.
     return service.sendChat(
       idToken: idToken,
       messages: messages,

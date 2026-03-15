@@ -94,6 +94,8 @@ abstract class WebAppService {
 
   Future<WebUsageSummary?> fetchUsage({required String idToken}) async => null;
 
+  // Web chat only sends the normalized conversation payload.
+  // The actual model is selected by the server for entitled Pro users.
   Future<String> sendChat({
     required String idToken,
     required List<Map<String, String>> messages,
