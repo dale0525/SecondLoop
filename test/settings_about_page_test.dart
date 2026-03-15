@@ -135,7 +135,7 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('about_manual_update')));
     await tester.pumpAndSettle();
-    expect(opened.last.toString(), update.downloadUri.toString());
+    expect(opened.last.toString(), update.releasePageUri.toString());
 
     await tester.tap(find.byKey(const ValueKey('about_open_homepage')));
     await tester.pumpAndSettle();
@@ -184,7 +184,58 @@ void main() {
     expect(service.staged?.latestTag, 'v1.1.0');
   });
 
-  testWidgets('About page hides managed update action on Windows',
+  testWidgets(
+      'About page shows managed update action on Windows when available',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+
+    final update = AppUpdateAvailability(
+      currentVersion: '1.0.1+99',
+      latestTag: 'v1.1.0',
+      releasePageUri: Uri.parse(
+        'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
+      ),
+      installMode: AppUpdateInstallMode.seamlessRestart,
+      asset: AppUpdateAsset(
+        name: 'com.secondloop.secondloop-1.1.0-full.nupkg',
+        downloadUri: Uri.parse('https://cdn.example.com/SecondLoop-win.nupkg'),
+      ),
+    );
+    final service = _FakeAboutUpdateService(
+      result: AppUpdateCheckResult(currentVersion: '1.0.1+99', update: update),
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AboutPage(
+            updateService: service,
+            runtimeVersionLoader: () async =>
+                const AppRuntimeVersion(version: '1.0.1', buildNumber: '99'),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('about_check_updates')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('about_auto_update')), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('about_auto_update')));
+    await tester.pumpAndSettle();
+
+    expect(service.installCalls, 1);
+    expect(service.stageCalls, 0);
+    expect(service.installed?.latestTag, 'v1.1.0');
+  },
+      variant: const TargetPlatformVariant(<TargetPlatform>{
+        TargetPlatform.windows,
+      }));
+
+  testWidgets(
+      'About page keeps manual update only on Windows external download',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
 
@@ -233,7 +284,9 @@ void main() {
     expect(service.installCalls, 0);
     expect(service.stageCalls, 0);
     expect(
-        opened.single.toString(), 'https://cdn.example.com/SecondLoop-win.msi');
+      opened.single.toString(),
+      'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
+    );
   },
       variant: const TargetPlatformVariant(<TargetPlatform>{
         TargetPlatform.windows,

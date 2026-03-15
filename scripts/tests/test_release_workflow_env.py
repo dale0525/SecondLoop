@@ -561,25 +561,21 @@ class ReleaseWorkflowEnvTests(unittest.TestCase):
         self.assertNotEqual(-1, linux_build_idx)
         self.assertLess(linux_prune_idx, linux_build_idx)
 
-    def test_windows_release_packages_and_uploads_msi_only_artifacts(self) -> None:
+    def test_windows_release_packages_and_uploads_msi_and_velopack_artifacts(self) -> None:
         workflow_text = self._workflow_text()
 
-        self.assertNotIn("name: Package Velopack", workflow_text)
+        self.assertIn("name: Package Velopack", workflow_text)
         self.assertIn("name: Package MSI", workflow_text)
-        self.assertNotIn("scripts/package_windows_velopack.ps1", workflow_text)
+        self.assertIn("scripts/package_windows_velopack.ps1", workflow_text)
+        self.assertNotIn("powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package_windows_velopack.ps1", workflow_text)
         self.assertIn("scripts/create_windows_msi.ps1", workflow_text)
         self.assertIn("OutputName = 'SecondLoop-win'", workflow_text)
         self.assertIn("OutputPath = 'dist'", workflow_text)
-        self.assertNotIn("Velopack setup not found", workflow_text)
-        self.assertNotIn("Velopack releases metadata not found", workflow_text)
-        self.assertNotIn("Velopack assets metadata not found", workflow_text)
-        self.assertNotIn("Velopack nupkg not found", workflow_text)
-        self.assertNotIn("dist/*Setup*.exe", workflow_text)
         self.assertIn("dist/SecondLoop-win.msi", workflow_text)
         self.assertIn("dist/SecondLoop-win.msi.sha256", workflow_text)
-        self.assertNotIn("dist/releases.*.json", workflow_text)
-        self.assertNotIn("dist/assets.*.json", workflow_text)
-        self.assertNotIn("dist/*.nupkg", workflow_text)
+        self.assertIn("dist/*.nupkg", workflow_text)
+        self.assertIn("dist/releases.*.json", workflow_text)
+        self.assertIn("dist/assets.*.json", workflow_text)
 
     def test_windows_release_passes_tag_version_to_msi_packaging(self) -> None:
         workflow_text = self._workflow_text()
@@ -614,9 +610,25 @@ class ReleaseWorkflowEnvTests(unittest.TestCase):
         self.assertIn('"releases.$Channel.json"', script_text)
         self.assertIn('"assets.$Channel.json"', script_text)
 
-    def test_windows_release_does_not_publish_setup_checksum_asset(self) -> None:
+    def test_release_workflow_generates_signed_update_manifest(self) -> None:
         workflow_text = self._workflow_text()
 
+        self.assertIn("SECONDLOOP_UPDATE_SIGNING_PRIVATE_KEY", workflow_text)
+        self.assertIn("tools/generate_update_manifest.dart", workflow_text)
+        self.assertIn("dist/latest.json", workflow_text)
+        self.assertIn("dist/latest.json.sig", workflow_text)
+        self.assertNotIn("--signing-private-key", workflow_text)
+
+    def test_release_workflow_packages_macos_managed_archive(self) -> None:
+        workflow_text = self._workflow_text()
+
+        self.assertIn("SecondLoop-macos-${safe_ref_name}.app.tar.gz", workflow_text)
+        self.assertIn("dist/*.app.tar.gz.sha256", workflow_text)
+
+    def test_windows_release_publishes_bootstrap_setup_without_checksum(self) -> None:
+        workflow_text = self._workflow_text()
+
+        self.assertIn("dist/*Setup*.exe", workflow_text)
         self.assertNotIn("SecondLoop-win-Setup.exe.sha256", workflow_text)
         self.assertNotIn("dist/*Setup*.exe.sha256", workflow_text)
 
@@ -629,7 +641,8 @@ class ReleaseWorkflowEnvTests(unittest.TestCase):
         self.assertIn('metadata_path="dist/SecondLoop-win.metadata.json"', workflow_text)
         self.assertIn("--installer-metadata-path", workflow_text)
         self.assertNotIn("find dist -maxdepth 1 -type f -iname '*.msi'", workflow_text)
-        self.assertNotIn("*Setup*.exe", workflow_text)
+        self.assertIn("dist/SecondLoop-win.msi", workflow_text)
+        self.assertIn("dist/*Setup*.exe", workflow_text)
         self.assertIn("Using installer for WinGet manifest", workflow_text)
         self.assertIn("SecondLoop.SecondLoop", workflow_text)
         self.assertIn("dist/winget-manifests", workflow_text)

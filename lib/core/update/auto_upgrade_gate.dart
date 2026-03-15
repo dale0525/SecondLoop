@@ -3,10 +3,13 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../i18n/strings.g.dart';
 import 'app_update_service.dart';
 import 'update_badge_prefs.dart';
+
+typedef AutoUpgradeGateExternalUriLauncher = Future<bool> Function(Uri uri);
 
 class AutoUpgradeGate extends StatefulWidget {
   const AutoUpgradeGate({
@@ -14,11 +17,13 @@ class AutoUpgradeGate extends StatefulWidget {
     required this.child,
     this.updateService,
     this.enableInDebug = false,
+    this.externalUriLauncher,
   });
 
   final Widget child;
   final AppUpdateService? updateService;
   final bool enableInDebug;
+  final AutoUpgradeGateExternalUriLauncher? externalUriLauncher;
 
   static const updateNoticeLastTagPrefsKey = 'update_notice_last_tag_v1';
   static const updateNoticeLastShownAtMsPrefsKey =
@@ -26,6 +31,11 @@ class AutoUpgradeGate extends StatefulWidget {
   static const updateNoticeDismissedInSessionPrefsKey =
       'update_notice_dismissed_in_session_v1';
   static const updateReadyAckTagPrefsKey = 'update_ready_ack_tag_v1';
+  static Uri fallbackUpdateUri({required String releaseRepo}) {
+    final normalizedRepo =
+        releaseRepo.trim().isEmpty ? 'dale0525/SecondLoop' : releaseRepo.trim();
+    return Uri.parse('https://github.com/$normalizedRepo/releases/latest');
+  }
 
   @override
   State<AutoUpgradeGate> createState() => _AutoUpgradeGateState();
@@ -42,6 +52,12 @@ class _AutoUpgradeGateState extends State<AutoUpgradeGate> {
   AppUpdateService? _ownedUpdateService;
   bool get _isWindowsPlatform =>
       !kIsWeb && defaultTargetPlatform == TargetPlatform.windows;
+  bool get _isMacosPlatform =>
+      !kIsWeb && defaultTargetPlatform == TargetPlatform.macOS;
+  bool get _isLinuxPlatform =>
+      !kIsWeb && defaultTargetPlatform == TargetPlatform.linux;
+  bool get _usesPassiveManagedUpdates =>
+      _isWindowsPlatform || _isMacosPlatform || _isLinuxPlatform;
 
   @override
   void initState() {
@@ -78,25 +94,58 @@ class _AutoUpgradeGateState extends State<AutoUpgradeGate> {
     final prefs = await SharedPreferences.getInstance();
     await _initializeNoticeSession(prefs);
 
+    Object? pendingApplyError;
+    var startupApplySucceeded = false;
+    try {
+      startupApplySucceeded =
+          await _updateService.applyPendingUpdateOnStartup();
+    } catch (error, stackTrace) {
+      pendingApplyError = error;
+      debugPrint('auto_upgrade_pending_apply_skipped: $error');
+      debugPrintStack(stackTrace: stackTrace);
+    }
+
+    if (startupApplySucceeded) {
+      await UpdateBadgePrefs.clear();
+      return;
+    }
+
     try {
       final result = await _updateService.checkForUpdates();
       final update = result.update;
       if (update == null) {
         await UpdateBadgePrefs.clear();
-        return;
-      }
-
-      if (_isWindowsPlatform) {
-        await UpdateBadgePrefs.setAvailableVersion(update.latestTag);
-        await _maybeShowPassiveUpdateNotice(
-          prefs: prefs,
-          update: update,
-          stagedReady: false,
-        );
+        if (pendingApplyError != null) {
+          await _showPendingApplyFailureNotice(pendingApplyError);
+        }
         return;
       }
 
       await UpdateBadgePrefs.setAvailableVersion(update.latestTag);
+      if (pendingApplyError != null) {
+        await _showPendingApplyFailureNotice(pendingApplyError);
+        return;
+      }
+
+      if (_usesPassiveManagedUpdates) {
+        var stagedReady = false;
+        if (_isWindowsPlatform && update.canSeamlessInstall) {
+          try {
+            await _updateService.stageUpdateForNextLaunch(update);
+            stagedReady = true;
+          } catch (error, stackTrace) {
+            debugPrint('auto_upgrade_stage_skipped: $error');
+            debugPrintStack(stackTrace: stackTrace);
+          }
+        }
+        await _maybeShowPassiveUpdateNotice(
+          prefs: prefs,
+          update: update,
+          stagedReady: stagedReady,
+        );
+        return;
+      }
+
       if (update.canSeamlessInstall) {
         await _updateService.installAndRestart(update);
         return;
@@ -116,6 +165,9 @@ class _AutoUpgradeGateState extends State<AutoUpgradeGate> {
     } catch (error, stackTrace) {
       debugPrint('auto_upgrade_skipped: $error');
       debugPrintStack(stackTrace: stackTrace);
+      if (pendingApplyError != null) {
+        await _showPendingApplyFailureNotice(pendingApplyError);
+      }
     }
   }
 
@@ -127,6 +179,61 @@ class _AutoUpgradeGateState extends State<AutoUpgradeGate> {
       AutoUpgradeGate.updateNoticeDismissedInSessionPrefsKey,
       false,
     );
+  }
+
+  Future<void> _showPendingApplyFailureNotice(Object error) async {
+    if (!mounted || _updateNoticeDismissedInSession) {
+      return;
+    }
+
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    if (messenger == null) return;
+    final aboutT = context.t.settings.about;
+    messenger.hideCurrentSnackBar();
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(aboutT.messages.installFailed(error: '$error')),
+        duration: const Duration(seconds: 3),
+        action: SnackBarAction(
+          label: aboutT.actions.manualUpdate,
+          onPressed: () {
+            unawaited(_openFallbackUpdateUri());
+          },
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openFallbackUpdateUri() async {
+    final aboutT = context.t.settings.about;
+    try {
+      final launcher = widget.externalUriLauncher;
+      final fallbackUri = AutoUpgradeGate.fallbackUpdateUri(
+        releaseRepo: _updateService.releaseRepo,
+      );
+      final opened = launcher != null
+          ? await launcher(fallbackUri)
+          : await launchUrl(
+              fallbackUri,
+              mode: LaunchMode.externalApplication,
+            );
+      if (!opened && mounted) {
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+          SnackBar(
+            content: Text(aboutT.messages.openUpdateFailed),
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+        SnackBar(
+          content: Text(aboutT.messages.openUpdateFailed),
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    }
   }
 
   Future<void> _maybeShowPassiveUpdateNotice({
@@ -152,7 +259,10 @@ class _AutoUpgradeGateState extends State<AutoUpgradeGate> {
     final commonActionsT = context.t.common.actions;
     final message = stagedReady
         ? updateNoticeT.stagedReady(version: update.latestTag)
-        : updateNoticeT.manualDownload(version: update.latestTag);
+        : (_isWindowsPlatform || _isMacosPlatform || _isLinuxPlatform) &&
+                update.canSeamlessInstall
+            ? updateNoticeT.seamlessAvailable(version: update.latestTag)
+            : updateNoticeT.manualDownload(version: update.latestTag);
     final notNowLabel = commonActionsT.notNow;
     final nowMs = DateTime.now().millisecondsSinceEpoch;
     await prefs.setString(

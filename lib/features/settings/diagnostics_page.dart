@@ -17,6 +17,7 @@ import '../../core/subscription/subscription_scope.dart';
 import '../../core/sync/sync_config_store.dart';
 import '../../core/sync/sync_diagnostics.dart';
 import '../../core/sync/sync_engine.dart';
+import '../../core/update/update_event_log.dart';
 import '../../i18n/strings.g.dart';
 import '../../src/rust/api/sync_diagnostics.dart' as rust_sync_diagnostics;
 
@@ -241,6 +242,15 @@ class _DiagnosticsPageState extends State<DiagnosticsPage> {
       };
     }
 
+    List<Map<String, Object?>> updateLogs;
+    try {
+      final recent = await SharedPrefsUpdateEventLogger().readRecent();
+      updateLogs =
+          recent.map((entry) => entry.toJson()).toList(growable: false);
+    } catch (_) {
+      updateLogs = const <Map<String, Object?>>[];
+    }
+
     final data = <String, Object?>{
       'generated_at_local': now.toIso8601String(),
       'generated_at_utc': now.toUtc().toIso8601String(),
@@ -277,6 +287,7 @@ class _DiagnosticsPageState extends State<DiagnosticsPage> {
         'active_model': activeEmbeddingModel,
       },
       'llm_profiles': llmProfiles,
+      'update_logs': updateLogs,
     };
 
     return const JsonEncoder.withIndent('  ').convert(data);

@@ -10,6 +10,8 @@ import 'package:secondloop/core/session/session_scope.dart';
 import 'package:secondloop/core/sync/sync_config_store.dart';
 import 'package:secondloop/core/sync/sync_diagnostics.dart';
 import 'package:secondloop/core/sync/sync_engine.dart';
+import 'package:secondloop/core/update/app_update_service.dart';
+import 'package:secondloop/core/update/update_event_log.dart';
 import 'package:secondloop/features/settings/settings_page.dart';
 
 import 'test_backend.dart';
@@ -150,6 +152,63 @@ void main() {
     expect(lastSyncLog['direction'], 'pull');
     expect(lastSyncLog['status'], 'failure');
     expect(lastSyncLog['statusCode'], 429);
+  });
+
+  testWidgets('Diagnostics JSON includes recent update logs', (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final logger = SharedPrefsUpdateEventLogger();
+    await logger.record(
+      UpdateEventRecord(
+        type: UpdateEventType.updateAvailable,
+        timestampUtc: DateTime.utc(2026, 3, 14, 12),
+        platform: AppUpdatePlatform.windows,
+        currentVersion: '1.0.0+1',
+        latestTag: 'v1.1.0',
+        installMode: AppUpdateInstallMode.seamlessRestart,
+        message: 'staged_ready',
+      ),
+    );
+
+    await tester.pumpWidget(
+      AppBackendScope(
+        backend: TestAppBackend(),
+        child: SessionScope(
+          sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+          lock: () {},
+          child: wrapWithI18n(
+            const MaterialApp(home: Scaffold(body: SettingsPage())),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final diagnosticsFinder =
+        find.byKey(const ValueKey('settings_diagnostics'));
+    await tester.scrollUntilVisible(
+      diagnosticsFinder,
+      200,
+      scrollable: find.byType(Scrollable),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(diagnosticsFinder);
+    await tester.pumpAndSettle();
+
+    final diagnosticsJsonText = tester.widget<SelectableText>(
+      find.descendant(
+        of: find.byKey(const ValueKey('diagnostics_page')),
+        matching: find.byType(SelectableText),
+      ),
+    );
+    final diagnosticsJson =
+        jsonDecode(diagnosticsJsonText.data!) as Map<String, Object?>;
+    final updateLogs = diagnosticsJson['update_logs'] as List<Object?>;
+    final firstLog = updateLogs.single as Map<String, Object?>;
+
+    expect(firstLog['type'], 'updateAvailable');
+    expect(firstLog['platform'], 'windows');
+    expect(firstLog['latestTag'], 'v1.1.0');
+    expect(firstLog['installMode'], 'seamlessRestart');
   });
 
   testWidgets('Diagnostics page no longer shows update actions',

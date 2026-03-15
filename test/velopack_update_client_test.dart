@@ -30,6 +30,23 @@ void _createNupkg(Directory root, String fileName) {
 }
 
 void main() {
+  test('isAvailable requires Update.exe and current sq.version', () async {
+    final root = await Directory.systemTemp.createTemp('velopack_available_');
+    final updater = File('${root.path}${Platform.pathSeparator}Update.exe')
+      ..writeAsStringSync('stub');
+
+    final missingMarkerClient = VelopackUpdateClient(
+      updateExecutablePath: updater.path,
+    );
+
+    expect(missingMarkerClient.isAvailable(), isFalse);
+
+    _writeSqVersion(root, '1.0.0');
+    final readyClient =
+        VelopackUpdateClient(updateExecutablePath: updater.path);
+    expect(readyClient.isAvailable(), isTrue);
+  });
+
   test('resolveVelopackUpdateExePath prefers sibling Update.exe', () async {
     final root = await Directory.systemTemp.createTemp('velopack_paths_');
     final appDir = Directory('${root.path}${Platform.pathSeparator}app')
@@ -49,6 +66,7 @@ void main() {
     final root = await Directory.systemTemp.createTemp('velopack_stage_');
     final updater = File('${root.path}${Platform.pathSeparator}Update.exe')
       ..writeAsStringSync('stub');
+    _writeSqVersion(root, '1.0.0');
     final sourceDir = Directory('${root.path}${Platform.pathSeparator}source')
       ..createSync(recursive: true);
     final sourcePackage = File(
@@ -78,6 +96,7 @@ void main() {
     final root = await Directory.systemTemp.createTemp('velopack_install_');
     final updater = File('${root.path}${Platform.pathSeparator}Update.exe')
       ..writeAsStringSync('stub');
+    _writeSqVersion(root, '1.0.0');
     final sourceDir = Directory('${root.path}${Platform.pathSeparator}source')
       ..createSync(recursive: true);
     final sourcePackage = File(
@@ -120,6 +139,38 @@ void main() {
     final stagedPackage = File(packagePath);
     expect(stagedPackage.existsSync(), isTrue);
     expect(stagedPackage.readAsStringSync(), 'nupkg-content');
+  });
+
+  test(
+      'applyPendingOnStartup deletes staged package when updater exits non-zero',
+      () async {
+    final root = await Directory.systemTemp.createTemp('velopack_apply_');
+    final updater = File('${root.path}${Platform.pathSeparator}Update.exe')
+      ..writeAsStringSync('stub');
+    _writeSqVersion(root, '1.0.0');
+    _createNupkg(root, 'com.secondloop.secondloop-1.0.1-full.nupkg');
+    final stagedPackage = File(
+      '${root.path}${Platform.pathSeparator}packages${Platform.pathSeparator}com.secondloop.secondloop-1.0.1-full.nupkg',
+    );
+
+    final client = VelopackUpdateClient(
+      updateExecutablePath: updater.path,
+      processRunner: (executable, arguments) async {
+        return ProcessResult(456, 1, '', 'apply_failed');
+      },
+    );
+
+    await expectLater(
+      client.applyPendingOnStartup(),
+      throwsA(
+        isA<StateError>().having(
+          (error) => error.message,
+          'message',
+          contains('windows_velopack_apply_failed_'),
+        ),
+      ),
+    );
+    expect(stagedPackage.existsSync(), isFalse);
   });
 
   test('applyPendingOnStartup throws when updater exits non-zero', () async {

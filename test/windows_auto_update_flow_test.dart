@@ -20,11 +20,12 @@ class _StartupFlowUpdateService extends AppUpdateService {
   int checkCalls = 0;
 
   @override
-  Future<void> applyPendingUpdateOnStartup() async {
+  Future<bool> applyPendingUpdateOnStartup() async {
     applyPendingCalls += 1;
     if (throwOnApplyPending) {
       throw StateError('apply_pending_failed');
     }
+    return false;
   }
 
   @override
@@ -59,7 +60,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('home'), findsOneWidget);
-    expect(service.applyPendingCalls, 0);
+    expect(service.applyPendingCalls, 1);
     expect(service.checkCalls, 1);
   });
 }

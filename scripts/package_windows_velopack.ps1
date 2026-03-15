@@ -78,6 +78,10 @@ function Build-DartDefines {
     $defines += "--dart-define=SECONDLOOP_RELEASE_API_ORIGIN=$($env:SECONDLOOP_RELEASE_API_ORIGIN)"
   }
 
+  if (Test-Path Env:SECONDLOOP_UPDATE_PUBLIC_KEY) {
+    $defines += "--dart-define=SECONDLOOP_UPDATE_PUBLIC_KEY=$($env:SECONDLOOP_UPDATE_PUBLIC_KEY)"
+  }
+
   return $defines
 }
 

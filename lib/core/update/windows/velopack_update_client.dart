@@ -16,6 +16,8 @@ typedef VelopackProcessStarter = Future<Process> Function(
 abstract class WindowsStagedUpdateClient {
   bool isAvailable();
 
+  bool hasPendingUpdate();
+
   Future<void> stageAsset(Uri assetDownloadUri);
 
   Future<void> installAssetAndRestart(
@@ -23,7 +25,7 @@ abstract class WindowsStagedUpdateClient {
     required int waitPid,
   });
 
-  Future<void> applyPendingOnStartup();
+  Future<bool> applyPendingOnStartup();
 
   Future<void> applyPendingAndRestart({
     required int waitPid,
@@ -48,7 +50,25 @@ class VelopackUpdateClient implements WindowsStagedUpdateClient {
 
   @override
   bool isAvailable() {
-    return File(_updateExePath).existsSync();
+    final updateExe = File(_updateExePath);
+    if (!updateExe.existsSync()) {
+      return false;
+    }
+
+    final appRoot = updateExe.absolute.parent.path;
+    final sqVersionPath = File(
+      '$appRoot${Platform.pathSeparator}current${Platform.pathSeparator}sq.version',
+    );
+    return sqVersionPath.existsSync();
+  }
+
+  @override
+  bool hasPendingUpdate() {
+    final updateExePath = _updateExePath;
+    if (!File(updateExePath).existsSync()) {
+      return false;
+    }
+    return _hasPendingPackageUpdate(updateExePath);
   }
 
   @override
@@ -85,14 +105,14 @@ class VelopackUpdateClient implements WindowsStagedUpdateClient {
   }
 
   @override
-  Future<void> applyPendingOnStartup() async {
+  Future<bool> applyPendingOnStartup() async {
     final updateExePath = _updateExePath;
     if (!File(updateExePath).existsSync()) {
       throw StateError('windows_velopack_unavailable');
     }
 
     if (!_hasPendingPackageUpdate(updateExePath)) {
-      return;
+      return false;
     }
 
     final result = await _processRunner(updateExePath, [
@@ -101,8 +121,10 @@ class VelopackUpdateClient implements WindowsStagedUpdateClient {
     ]);
 
     if (result.exitCode != 0) {
+      _deletePendingPackageUpdates(updateExePath);
       throw StateError('windows_velopack_apply_failed_${result.stderr}');
     }
+    return true;
   }
 
   @override
@@ -189,6 +211,32 @@ class VelopackUpdateClient implements WindowsStagedUpdateClient {
       }
     } finally {
       client.close(force: true);
+    }
+  }
+
+  static void _deletePendingPackageUpdates(String updateExecutablePath) {
+    final appRoot = File(updateExecutablePath).absolute.parent.path;
+    final currentVersion = _readCurrentInstalledVersion(appRoot);
+    final packagesDir = Directory(
+      '$appRoot${Platform.pathSeparator}packages',
+    );
+    if (!packagesDir.existsSync()) {
+      return;
+    }
+
+    for (final entity in packagesDir.listSync()) {
+      if (entity is! File) continue;
+      final fileName =
+          entity.uri.pathSegments.isEmpty ? '' : entity.uri.pathSegments.last;
+      final version = _extractVersionFromNupkgName(fileName);
+      if (version == null) continue;
+      if (currentVersion != null &&
+          _compareVersionStrings(version, currentVersion) <= 0) {
+        continue;
+      }
+      try {
+        entity.deleteSync();
+      } catch (_) {}
     }
   }
 

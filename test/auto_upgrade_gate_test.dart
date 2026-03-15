@@ -6,17 +6,22 @@ import 'package:secondloop/core/update/app_update_service.dart';
 import 'package:secondloop/core/update/auto_upgrade_gate.dart';
 import 'package:secondloop/core/update/update_badge_prefs.dart';
 import 'package:secondloop/core/update/update_restart_activity.dart';
-
 import 'test_i18n.dart';
 
 class _FakeAutoUpdateService extends AppUpdateService {
   _FakeAutoUpdateService({
     required this.result,
     this.throwOnApplyPending = false,
+    this.applyPendingResult = false,
+    this.throwOnStage = false,
+    this.releaseRepoValue = 'dale0525/SecondLoop',
   });
 
   final AppUpdateCheckResult result;
   final bool throwOnApplyPending;
+  final bool applyPendingResult;
+  final bool throwOnStage;
+  final String releaseRepoValue;
 
   int checkCalls = 0;
   int installCalls = 0;
@@ -25,6 +30,9 @@ class _FakeAutoUpdateService extends AppUpdateService {
   int applyPendingCalls = 0;
   AppUpdateAvailability? installed;
   AppUpdateAvailability? staged;
+
+  @override
+  String get releaseRepo => releaseRepoValue;
 
   @override
   Future<AppUpdateCheckResult> checkForUpdates() async {
@@ -41,15 +49,19 @@ class _FakeAutoUpdateService extends AppUpdateService {
   @override
   Future<void> stageUpdateForNextLaunch(AppUpdateAvailability update) async {
     stageCalls += 1;
+    if (throwOnStage) {
+      throw StateError('stage_failed');
+    }
     staged = update;
   }
 
   @override
-  Future<void> applyPendingUpdateOnStartup() async {
+  Future<bool> applyPendingUpdateOnStartup() async {
     applyPendingCalls += 1;
     if (throwOnApplyPending) {
       throw StateError('apply_pending_failed');
     }
+    return applyPendingResult;
   }
 
   @override
@@ -62,6 +74,7 @@ void main() {
   Future<void> pumpGate(
     WidgetTester tester, {
     required _FakeAutoUpdateService service,
+    AutoUpgradeGateExternalUriLauncher? externalUriLauncher,
   }) {
     return tester.pumpWidget(
       wrapWithI18n(
@@ -69,6 +82,7 @@ void main() {
           home: AutoUpgradeGate(
             updateService: service,
             enableInDebug: true,
+            externalUriLauncher: externalUriLauncher,
             child: const Scaffold(
               body: Text('home'),
             ),
@@ -78,8 +92,10 @@ void main() {
     );
   }
 
-  testWidgets('auto installs seamless update on startup', (tester) async {
+  testWidgets('linux seamless update stays passive until user confirms',
+      (tester) async {
     SharedPreferences.setMockInitialValues({});
+    UpdateBadgePrefs.resetForTests();
     final update = AppUpdateAvailability(
       currentVersion: '1.0.1+99',
       latestTag: 'v1.1.0',
@@ -100,13 +116,21 @@ void main() {
     );
 
     await pumpGate(tester, service: service);
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 120));
 
     expect(service.checkCalls, 1);
-    expect(service.installCalls, 1);
-    expect(service.applyPendingCalls, 0);
-    expect(service.installed?.latestTag, 'v1.1.0');
-  });
+    expect(service.applyPendingCalls, 1);
+    expect(service.installCalls, 0);
+    expect(service.stageCalls, 0);
+    expect(UpdateBadgePrefs.value.value, 'v1.1.0');
+    expect(find.byType(SnackBar), findsOneWidget);
+    expect(find.textContaining('Settings > About'), findsOneWidget);
+    expect(find.textContaining('manual download'), findsNothing);
+  },
+      variant: const TargetPlatformVariant(<TargetPlatform>{
+        TargetPlatform.linux,
+      }));
 
   testWidgets('skips install when only external download is available',
       (tester) async {
@@ -132,18 +156,60 @@ void main() {
     expect(service.checkCalls, 1);
     expect(service.installCalls, 0);
     expect(service.stageCalls, 0);
-    expect(service.applyPendingCalls, 0);
+    expect(service.applyPendingCalls, 1);
   });
 
-  testWidgets('does not stage windows update for next launch', (tester) async {
+  testWidgets(
+      'windows seamless update keeps in-app reminder when staging fails',
+      (tester) async {
     SharedPreferences.setMockInitialValues({});
+    UpdateBadgePrefs.resetForTests();
     final update = AppUpdateAvailability(
       currentVersion: '1.0.1+99',
       latestTag: 'v1.1.0',
       releasePageUri: Uri.parse(
         'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
       ),
-      installMode: AppUpdateInstallMode.stagedNextLaunch,
+      installMode: AppUpdateInstallMode.seamlessRestart,
+      asset: AppUpdateAsset(
+        name: 'com.secondloop.secondloop-1.1.0-full.nupkg',
+        downloadUri: Uri.parse('https://cdn.example.com/win.nupkg'),
+      ),
+    );
+    final service = _FakeAutoUpdateService(
+      throwOnStage: true,
+      result: AppUpdateCheckResult(
+        currentVersion: '1.0.1+99',
+        update: update,
+      ),
+    );
+
+    await pumpGate(tester, service: service);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 120));
+
+    expect(service.installCalls, 0);
+    expect(service.stageCalls, 1);
+    expect(service.applyPendingCalls, 1);
+    expect(find.byType(SnackBar), findsOneWidget);
+    expect(find.textContaining('Settings > About'), findsOneWidget);
+    expect(find.textContaining('manual download'), findsNothing);
+  },
+      variant: const TargetPlatformVariant(<TargetPlatform>{
+        TargetPlatform.windows,
+      }));
+
+  testWidgets('windows seamless update shows passive reminder and badge only',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    UpdateBadgePrefs.resetForTests();
+    final update = AppUpdateAvailability(
+      currentVersion: '1.0.1+99',
+      latestTag: 'v1.1.0',
+      releasePageUri: Uri.parse(
+        'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
+      ),
+      installMode: AppUpdateInstallMode.seamlessRestart,
       asset: AppUpdateAsset(
         name: 'com.secondloop.secondloop-1.1.0-full.nupkg',
         downloadUri: Uri.parse('https://cdn.example.com/win.nupkg'),
@@ -161,15 +227,16 @@ void main() {
 
     expect(service.checkCalls, 1);
     expect(service.installCalls, 0);
-    expect(service.stageCalls, 0);
-    expect(service.applyPendingCalls, 0);
-    expect(service.staged, isNull);
+    expect(service.stageCalls, 1);
+    expect(service.applyPendingCalls, 1);
+    expect(UpdateBadgePrefs.value.value, 'v1.1.0');
+    expect(find.byType(SnackBar), findsOneWidget);
   },
       variant: const TargetPlatformVariant(<TargetPlatform>{
         TargetPlatform.windows,
       }));
 
-  testWidgets('windows update shows manual reminder and badge state',
+  testWidgets('windows external update shows manual reminder and badge state',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
     UpdateBadgePrefs.resetForTests();
@@ -200,8 +267,47 @@ void main() {
 
     expect(service.installCalls, 0);
     expect(service.stageCalls, 0);
+    expect(service.applyPendingCalls, 1);
     expect(UpdateBadgePrefs.value.value, 'v1.2.0');
     expect(find.byType(SnackBar), findsOneWidget);
+  },
+      variant: const TargetPlatformVariant(<TargetPlatform>{
+        TargetPlatform.windows,
+      }));
+
+  testWidgets('windows skips update check after pending apply succeeds',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    UpdateBadgePrefs.resetForTests();
+
+    final update = AppUpdateAvailability(
+      currentVersion: '1.0.1+99',
+      latestTag: 'v1.3.0',
+      releasePageUri: Uri.parse(
+        'https://github.com/dale0525/SecondLoop/releases/tag/v1.3.0',
+      ),
+      installMode: AppUpdateInstallMode.seamlessRestart,
+      asset: AppUpdateAsset(
+        name: 'com.secondloop.secondloop-1.3.0-full.nupkg',
+        downloadUri: Uri.parse('https://cdn.example.com/win.nupkg'),
+      ),
+    );
+    final service = _FakeAutoUpdateService(
+      applyPendingResult: true,
+      result: AppUpdateCheckResult(
+        currentVersion: '1.0.1+99',
+        update: update,
+      ),
+    );
+
+    await pumpGate(tester, service: service);
+    await tester.pumpAndSettle();
+
+    expect(service.applyPendingCalls, 1);
+    expect(service.checkCalls, 0);
+    expect(service.stageCalls, 0);
+    expect(find.byType(SnackBar), findsNothing);
+    expect(UpdateBadgePrefs.value.value, isNull);
   },
       variant: const TargetPlatformVariant(<TargetPlatform>{
         TargetPlatform.windows,
@@ -238,10 +344,42 @@ void main() {
 
     expect(service.stageCalls, 0);
     expect(service.applyStagedRestartCalls, 0);
+    expect(service.applyPendingCalls, 1);
   },
       variant: const TargetPlatformVariant(<TargetPlatform>{
         TargetPlatform.windows,
       }));
+
+  testWidgets('shows manual fallback notice when pending apply fails',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final service = _FakeAutoUpdateService(
+      throwOnApplyPending: true,
+      releaseRepoValue: 'acme/SecondLoopFork',
+      result: const AppUpdateCheckResult(currentVersion: '1.0.1+99'),
+    );
+    Uri? openedUri;
+
+    await pumpGate(
+      tester,
+      service: service,
+      externalUriLauncher: (uri) async {
+        openedUri = uri;
+        return true;
+      },
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('Auto update failed'), findsOneWidget);
+    expect(find.text('Manual update'), findsOneWidget);
+
+    await tester.tap(find.text('Manual update'));
+    await tester.pumpAndSettle();
+
+    expect(openedUri,
+        Uri.parse('https://github.com/acme/SecondLoopFork/releases/latest'));
+    expect(service.checkCalls, 1);
+  });
 
   testWidgets('skips pending apply and still checks for updates',
       (tester) async {
@@ -254,10 +392,52 @@ void main() {
     await pumpGate(tester, service: service);
     await tester.pumpAndSettle();
 
-    expect(service.applyPendingCalls, 0);
+    expect(service.applyPendingCalls, 1);
     expect(service.checkCalls, 1);
     expect(find.text('home'), findsOneWidget);
   });
+
+  testWidgets('macOS seamless update stays passive until user confirms',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    UpdateBadgePrefs.resetForTests();
+
+    final update = AppUpdateAvailability(
+      currentVersion: '1.0.1+99',
+      latestTag: 'v1.2.0',
+      releasePageUri: Uri.parse(
+        'https://github.com/dale0525/SecondLoop/releases/tag/v1.2.0',
+      ),
+      installMode: AppUpdateInstallMode.seamlessRestart,
+      asset: AppUpdateAsset(
+        name: 'SecondLoop-macos-v1.2.0.app.tar.gz',
+        downloadUri: Uri.parse(
+          'https://cdn.example.com/SecondLoop-macos-v1.2.0.app.tar.gz',
+        ),
+      ),
+    );
+    final service = _FakeAutoUpdateService(
+      result: AppUpdateCheckResult(
+        currentVersion: '1.0.1+99',
+        update: update,
+      ),
+    );
+
+    await pumpGate(tester, service: service);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 120));
+
+    expect(service.installCalls, 0);
+    expect(service.stageCalls, 0);
+    expect(service.applyPendingCalls, 1);
+    expect(UpdateBadgePrefs.value.value, 'v1.2.0');
+    expect(find.byType(SnackBar), findsOneWidget);
+    expect(find.textContaining('Settings > About'), findsOneWidget);
+    expect(find.textContaining('manual download'), findsNothing);
+  },
+      variant: const TargetPlatformVariant(<TargetPlatform>{
+        TargetPlatform.macOS,
+      }));
 
   testWidgets('shows passive reminder when update is available',
       (tester) async {
