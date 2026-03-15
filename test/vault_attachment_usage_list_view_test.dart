@@ -100,6 +100,7 @@ void main() {
             body: VaultAttachmentUsageListView(
               items: items,
               deletingSha: null,
+              isWebOverride: true,
               onOpen: (_) {},
               onDelete: (_) {},
             ),
@@ -109,6 +110,39 @@ void main() {
     );
 
     expect(find.text('Continue in App'), findsOneWidget);
+  });
+
+  testWidgets(
+      'Vault attachment usage list hides continue-in-app hint outside web', (
+    tester,
+  ) async {
+    final items = <VaultAttachmentUsageItem>[
+      const VaultAttachmentUsageItem(
+        sha256: 'sha_pdf',
+        mimeType: 'application/pdf',
+        byteLen: 1024,
+        createdAtMs: 100,
+        uploadedAtMs: 200,
+      ),
+    ];
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: Scaffold(
+            body: VaultAttachmentUsageListView(
+              items: items,
+              deletingSha: null,
+              isWebOverride: false,
+              onOpen: (_) {},
+              onDelete: (_) {},
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('Continue in App'), findsNothing);
   });
 
   testWidgets(

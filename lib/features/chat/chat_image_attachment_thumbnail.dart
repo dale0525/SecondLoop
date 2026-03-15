@@ -264,6 +264,7 @@ class _ChatImageAttachmentThumbnailState
                           ? context
                               .t.sync.mediaPreview.chatThumbnailsWifiOnlyTitle
                           : cloudMediaDownloadUiMessage(
+                              context,
                               CloudMediaDownloadUiError.previewUnavailable,
                               isWeb: widget.isWebOverride ?? kIsWeb,
                               isReadonlyMedia: isReadonlyWebMedia,

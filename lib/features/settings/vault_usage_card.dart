@@ -167,12 +167,14 @@ class VaultAttachmentUsageListView extends StatelessWidget {
     super.key,
     required this.items,
     required this.deletingSha,
+    this.isWebOverride,
     required this.onOpen,
     required this.onDelete,
   });
 
   final List<VaultAttachmentUsageItem> items;
   final String? deletingSha;
+  final bool? isWebOverride;
   final ValueChanged<VaultAttachmentUsageItem> onOpen;
   final ValueChanged<VaultAttachmentUsageItem> onDelete;
 
@@ -205,8 +207,10 @@ class VaultAttachmentUsageListView extends StatelessWidget {
             ),
             onTap: () => onOpen(item),
             trailing: () {
-              final needsAppProcessing =
-                  item.isGroupedVideo || needsAppProcessingInWeb(item.mimeType);
+              final showWebOnlyHint = isWebOverride ?? kIsWeb;
+              final needsAppProcessing = showWebOnlyHint &&
+                  (item.isGroupedVideo ||
+                      needsAppProcessingInWeb(item.mimeType));
               final deleteAction = deletingSha == item.primarySha256
                   ? const SizedBox(
                       width: 18,
@@ -248,11 +252,13 @@ class VaultUsageCard extends StatefulWidget {
     this.client,
     this.attachmentsClient,
     this.configStore,
+    this.isWebOverride,
   });
 
   final VaultUsageClient? client;
   final VaultAttachmentsClient? attachmentsClient;
   final SyncConfigStore? configStore;
+  final bool? isWebOverride;
 
   @override
   State<VaultUsageCard> createState() => _VaultUsageCardState();
@@ -653,6 +659,7 @@ class _VaultUsageCardState extends State<VaultUsageCard> {
               VaultAttachmentUsageListView(
                 items: _attachmentUsage!.items,
                 deletingSha: _deletingAttachmentSha,
+                isWebOverride: widget.isWebOverride,
                 onOpen: (item) => unawaited(_openAttachmentDetails(item)),
                 onDelete: (item) => unawaited(_deleteAttachment(item)),
               )

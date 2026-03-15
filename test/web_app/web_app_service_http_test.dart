@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
+import 'package:secondloop/core/ai/ai_routing.dart';
 import 'package:secondloop/web_app/web_app_gate.dart';
 
 void main() {
@@ -84,5 +85,53 @@ void main() {
     expect(items.single.groupType, 'video');
     expect(items.single.leafCount, 3);
     expect(items.single.primarySha256, 'root-sha');
+  });
+
+  test('usage errors preserve parseable http status and cloud code', () async {
+    final client = MockClient((request) async {
+      return http.Response(
+        jsonEncode({'error': 'rate_limited'}),
+        429,
+      );
+    });
+
+    final service = WebAppServiceHttp(client: client);
+
+    await expectLater(
+      () => service.fetchUsage(idToken: 'token'),
+      throwsA(
+        isA<Object>()
+            .having(parseHttpStatusFromError, 'status', 429)
+            .having(parseCloudErrorCodeFromError, 'cloudCode', 'rate_limited'),
+      ),
+    );
+  });
+
+  test('vault upload sends put request to attachment route with sha query',
+      () async {
+    http.BaseRequest? captured;
+    final client = MockClient((request) async {
+      captured = request;
+      return http.Response('{}', 200);
+    });
+
+    final service = WebAppServiceHttp(client: client);
+    await service.uploadVaultAttachment(
+      idToken: 'token',
+      vaultId: 'vault-123',
+      fileName: 'note.txt',
+      mimeType: 'text/plain',
+      bytes: 'hello'.codeUnits,
+    );
+
+    expect(captured, isNotNull);
+    expect(captured!.method, 'PUT');
+    expect(captured!.url.path, '/api/app/vault/attachment');
+    expect(
+      captured!.url.queryParameters['sha256'],
+      '2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824',
+    );
+    expect(captured!.headers['authorization'], 'Bearer token');
+    expect(captured!.headers['x-secondloop-vault-id'], 'vault-123');
   });
 }

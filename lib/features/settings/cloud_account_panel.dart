@@ -26,6 +26,7 @@ class CloudAccountPanel extends StatefulWidget {
     this.vaultUsageClient,
     this.vaultAttachmentsClient,
     this.vaultConfigStore,
+    this.isWebOverride,
   });
 
   final BillingClient? billingClient;
@@ -33,6 +34,7 @@ class CloudAccountPanel extends StatefulWidget {
   final VaultUsageClient? vaultUsageClient;
   final VaultAttachmentsClient? vaultAttachmentsClient;
   final SyncConfigStore? vaultConfigStore;
+  final bool? isWebOverride;
 
   @override
   State<CloudAccountPanel> createState() => _CloudAccountPanelState();
@@ -920,6 +922,7 @@ class _CloudAccountPanelState extends State<CloudAccountPanel> {
             client: widget.vaultUsageClient,
             attachmentsClient: widget.vaultAttachmentsClient,
             configStore: widget.vaultConfigStore,
+            isWebOverride: widget.isWebOverride,
           ),
         ],
         if (_error != null) ...[

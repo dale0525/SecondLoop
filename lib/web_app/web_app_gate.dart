@@ -151,6 +151,7 @@ class _WebAppGateState extends State<WebAppGate> {
           vaultUsageClient: _vaultUsageClient,
           vaultAttachmentsClient: _vaultAttachmentsClient,
           vaultConfigStore: _vaultConfigStore,
+          isWebOverride: true,
         ),
       );
     } else if (!_canAccessMainShell) {
@@ -161,6 +162,7 @@ class _WebAppGateState extends State<WebAppGate> {
           vaultUsageClient: _vaultUsageClient,
           vaultAttachmentsClient: _vaultAttachmentsClient,
           vaultConfigStore: _vaultConfigStore,
+          isWebOverride: true,
         ),
       );
     } else {
@@ -621,6 +623,7 @@ class _WebFilesPageState extends State<_WebFilesPage> {
                   VaultAttachmentUsageListView(
                     items: formalItems,
                     deletingSha: _deletingAttachmentSha,
+                    isWebOverride: true,
                     onOpen: (item) {
                       final webItem = _findWebItem(item.primarySha256);
                       if (webItem != null) {
@@ -758,6 +761,7 @@ class _WebSettingsPageState extends State<_WebSettingsPage> {
           vaultUsageClient: _vaultUsageClient,
           vaultAttachmentsClient: _vaultAttachmentsClient,
           vaultConfigStore: _vaultConfigStore,
+          isWebOverride: true,
         ),
         const SizedBox(height: 24),
         Row(

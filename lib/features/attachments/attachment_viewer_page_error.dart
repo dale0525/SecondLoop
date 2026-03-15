@@ -15,6 +15,7 @@ extension _AttachmentViewerPageErrorText on _AttachmentViewerPageState {
         (widget.isWebOverride ?? kIsWeb) &&
         needsAppProcessingInWeb(widget.attachment.mimeType)) {
       return cloudMediaDownloadUiMessage(
+        context,
         uiError,
         isWeb: true,
         isReadonlyMedia: true,

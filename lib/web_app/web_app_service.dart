@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:cryptography/cryptography.dart';
 import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
 
@@ -131,6 +132,27 @@ class WebAppConfig {
   final String firebaseWebApiKey;
 }
 
+class WebAppHttpException implements Exception {
+  const WebAppHttpException({
+    required this.statusCode,
+    required this.body,
+    this.code,
+  });
+
+  final int statusCode;
+  final String body;
+  final String? code;
+
+  @override
+  String toString() {
+    final normalizedBody = body.trim();
+    if (normalizedBody.isEmpty) {
+      return 'HTTP $statusCode';
+    }
+    return 'HTTP $statusCode: $normalizedBody';
+  }
+}
+
 class WebAppServiceHttp extends WebAppService {
   WebAppServiceHttp({http.Client? client}) : _client = client ?? http.Client();
 
@@ -206,7 +228,11 @@ class WebAppServiceHttp extends WebAppService {
             ? decoded.map((key, value) => MapEntry('$key', value))
             : <String, dynamic>{};
     if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw StateError('${map['error'] ?? 'http_${response.statusCode}'}');
+      throw WebAppHttpException(
+        statusCode: response.statusCode,
+        body: map.isEmpty ? response.body : jsonEncode(map),
+        code: map['error'] is String ? map['error'] as String : null,
+      );
     }
     return map;
   }
@@ -326,7 +352,11 @@ class WebAppServiceHttp extends WebAppService {
     required String mimeType,
     required List<int> bytes,
   }) async {
-    final request = http.Request('POST', Uri(path: _kApiVaultAttachmentsPath));
+    final sha256 = await _sha256Hex(bytes);
+    final request = http.Request(
+      'PUT',
+      Uri(path: _kApiVaultAttachmentPath, queryParameters: {'sha256': sha256}),
+    );
     request.headers.addAll(<String, String>{
       'authorization': 'Bearer $idToken',
       'content-type': mimeType,
@@ -382,6 +412,19 @@ class WebAppServiceHttp extends WebAppService {
     final response = await http.Response.fromStream(streamed);
     _decodeJsonResponse(response);
   }
+}
+
+Future<String> _sha256Hex(List<int> bytes) async {
+  final digest = await Sha256().hash(bytes);
+  return _hexEncodeBytes(digest.bytes);
+}
+
+String _hexEncodeBytes(List<int> bytes) {
+  final buffer = StringBuffer();
+  for (final byte in bytes) {
+    buffer.write(byte.toRadixString(16).padLeft(2, '0'));
+  }
+  return buffer.toString();
 }
 
 String guessMimeTypeFromExtension(String? extension) {

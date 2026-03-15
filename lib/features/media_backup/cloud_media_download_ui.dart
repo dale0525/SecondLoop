@@ -1,3 +1,6 @@
+import 'package:flutter/material.dart';
+
+import '../../i18n/strings.g.dart';
 import 'cloud_media_download.dart';
 
 enum CloudMediaDownloadUiError {
@@ -51,6 +54,7 @@ CloudMediaDownloadFailureReason? cloudMediaDownloadFailureReasonFromError(
 }
 
 String cloudMediaDownloadUiMessage(
+  BuildContext context,
   CloudMediaDownloadUiError error, {
   required bool isWeb,
   required bool isReadonlyMedia,
@@ -58,13 +62,15 @@ String cloudMediaDownloadUiMessage(
   if (error == CloudMediaDownloadUiError.previewUnavailable &&
       isWeb &&
       isReadonlyMedia) {
-    return 'Continue processing in the app. Existing cloud results stay available here.';
+    return context.t.app.web.mediaProcessing.title;
   }
 
   return switch (error) {
-    CloudMediaDownloadUiError.wifiOnlyBlocked => 'Wi-Fi required for preview.',
+    CloudMediaDownloadUiError.wifiOnlyBlocked =>
+      context.t.sync.mediaPreview.chatThumbnailsWifiOnlyTitle,
     CloudMediaDownloadUiError.signInRequired =>
-      'Sign in to use SecondLoop Cloud sync.',
-    CloudMediaDownloadUiError.previewUnavailable => 'Preview unavailable',
+      context.t.sync.cloudManagedVault.signInRequired,
+    CloudMediaDownloadUiError.previewUnavailable =>
+      context.t.attachments.content.previewUnavailable,
   };
 }
