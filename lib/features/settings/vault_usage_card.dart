@@ -266,7 +266,6 @@ class _VaultUsageCardState extends State<VaultUsageCard> {
   late final SyncConfigStore _store = widget.configStore ?? SyncConfigStore();
 
   bool _busy = false;
-  bool _vaultBaseUrlLoading = true;
   String? _resolvedVaultBaseUrl;
   VaultUsageSummary? _summary;
   Object? _summaryError;
@@ -280,21 +279,6 @@ class _VaultUsageCardState extends State<VaultUsageCard> {
   bool _buildingAttachmentReferenceIndex = false;
   Map<String, Attachment> _localAttachmentBySha = <String, Attachment>{};
   Map<String, String> _localMessageIdByAttachmentSha = <String, String>{};
-
-  @override
-  void initState() {
-    super.initState();
-    unawaited(_loadVaultBaseUrl());
-  }
-
-  Future<void> _loadVaultBaseUrl() async {
-    final baseUrl = await _store.resolveManagedVaultBaseUrl();
-    if (!mounted) return;
-    setState(() {
-      _resolvedVaultBaseUrl = baseUrl?.trim();
-      _vaultBaseUrlLoading = false;
-    });
-  }
 
   @override
   void dispose() {
@@ -332,6 +316,27 @@ class _VaultUsageCardState extends State<VaultUsageCard> {
       baseUrl: baseUrl,
       idToken: token,
     );
+  }
+
+  void _scheduleVaultBaseUrlSync(String baseUrl, {required String? uid}) {
+    final normalizedBaseUrl = baseUrl.trim();
+    if (_resolvedVaultBaseUrl == normalizedBaseUrl) return;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _resolvedVaultBaseUrl == normalizedBaseUrl) return;
+      setState(() {
+        _resolvedVaultBaseUrl = normalizedBaseUrl;
+        _summary = null;
+        _summaryError = null;
+        _attachmentUsage = null;
+        _attachmentError = null;
+      });
+      if (uid != null &&
+          uid.trim().isNotEmpty &&
+          normalizedBaseUrl.isNotEmpty) {
+        unawaited(_refresh());
+      }
+    });
   }
 
   Future<void> _rebuildAttachmentReferenceIndex() async {
@@ -595,61 +600,68 @@ class _VaultUsageCardState extends State<VaultUsageCard> {
       }
     }
 
-    final baseUrl = (_resolvedVaultBaseUrl ?? '').trim();
-    final body = () {
-      if (_vaultBaseUrlLoading) {
-        return const SizedBox.shrink();
-      }
-      if (baseUrl.isEmpty) {
-        return Text(context.t.settings.vaultUsage.labels.notConfigured);
-      }
-      if (uid == null) {
-        return Text(context.t.settings.vaultUsage.labels.signInRequired);
-      }
+    final body = FutureBuilder<String?>(
+      future: _store.resolveManagedVaultBaseUrl(),
+      initialData: _resolvedVaultBaseUrl,
+      builder: (context, snapshot) {
+        final baseUrl = (snapshot.data ?? _resolvedVaultBaseUrl ?? '').trim();
+        _scheduleVaultBaseUrlSync(baseUrl, uid: uid);
 
-      if (_busy &&
-          _summary == null &&
-          _attachmentUsage == null &&
-          _summaryError == null &&
-          _attachmentError == null) {
-        return const Center(child: CircularProgressIndicator());
-      }
+        if (snapshot.connectionState != ConnectionState.done &&
+            _resolvedVaultBaseUrl == null) {
+          return const SizedBox.shrink();
+        }
+        if (baseUrl.isEmpty) {
+          return Text(context.t.settings.vaultUsage.labels.notConfigured);
+        }
+        if (uid == null) {
+          return Text(context.t.settings.vaultUsage.labels.signInRequired);
+        }
 
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (_summaryError != null)
+        if (_busy &&
+            _summary == null &&
+            _attachmentUsage == null &&
+            _summaryError == null &&
+            _attachmentError == null) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (_summaryError != null)
+              Text(
+                context.t.settings.vaultUsage.labels.loadFailed(
+                  error: _formatVaultUsageError(context, _summaryError!),
+                ),
+              )
+            else if (_summary != null)
+              VaultUsageSummaryView(summary: _summary!),
+            const SizedBox(height: 16),
             Text(
-              context.t.settings.vaultUsage.labels.loadFailed(
-                error: _formatVaultUsageError(context, _summaryError!),
-              ),
-            )
-          else if (_summary != null)
-            VaultUsageSummaryView(summary: _summary!),
-          const SizedBox(height: 16),
-          Text(
-            context.t.settings.vaultUsage.labels.attachments,
-            style: Theme.of(context).textTheme.titleSmall,
-          ),
-          const SizedBox(height: 8),
-          if (_attachmentError != null)
-            Text(
-              context.t.settings.vaultUsage.labels.loadFailed(
-                error: _formatVaultUsageError(context, _attachmentError!),
-              ),
-            )
-          else if (_attachmentUsage != null)
-            VaultAttachmentUsageListView(
-              items: _attachmentUsage!.items,
-              deletingSha: _deletingAttachmentSha,
-              onOpen: (item) => unawaited(_openAttachmentDetails(item)),
-              onDelete: (item) => unawaited(_deleteAttachment(item)),
-            )
-          else
-            const Center(child: CircularProgressIndicator()),
-        ],
-      );
-    }();
+              context.t.settings.vaultUsage.labels.attachments,
+              style: Theme.of(context).textTheme.titleSmall,
+            ),
+            const SizedBox(height: 8),
+            if (_attachmentError != null)
+              Text(
+                context.t.settings.vaultUsage.labels.loadFailed(
+                  error: _formatVaultUsageError(context, _attachmentError!),
+                ),
+              )
+            else if (_attachmentUsage != null)
+              VaultAttachmentUsageListView(
+                items: _attachmentUsage!.items,
+                deletingSha: _deletingAttachmentSha,
+                onOpen: (item) => unawaited(_openAttachmentDetails(item)),
+                onDelete: (item) => unawaited(_deleteAttachment(item)),
+              )
+            else
+              const Center(child: CircularProgressIndicator()),
+          ],
+        );
+      },
+    );
 
     return SlSurface(
       padding: const EdgeInsets.all(16),
@@ -679,7 +691,17 @@ class _VaultUsageCardState extends State<VaultUsageCard> {
               ),
               IconButton(
                 key: const ValueKey('vault_usage_refresh'),
-                onPressed: _busy ? null : _refresh,
+                onPressed: _busy
+                    ? null
+                    : () async {
+                        final baseUrl =
+                            (await _store.resolveManagedVaultBaseUrl())
+                                    ?.trim() ??
+                                '';
+                        if (!mounted) return;
+                        setState(() => _resolvedVaultBaseUrl = baseUrl);
+                        await _refresh();
+                      },
                 icon: const Icon(Icons.refresh),
                 tooltip: context.t.settings.vaultUsage.actions.refresh,
               ),

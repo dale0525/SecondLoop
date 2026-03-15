@@ -74,7 +74,7 @@ class _WebAppGateState extends State<WebAppGate> {
     managedVaultDefaultBaseUrl: kWebFormalSettingsBaseUrl,
   );
 
-  WebSubscriptionState _subscriptionState = WebSubscriptionState.unknown;
+  bool _canAccessMainShell = false;
 
   @override
   void initState() {
@@ -84,7 +84,8 @@ class _WebAppGateState extends State<WebAppGate> {
     if (widget.authController is Listenable) {
       (widget.authController as Listenable).addListener(_onAuthChanged);
     }
-    unawaited(_refreshAuthState());
+    _subscriptionController.addListener(_onSubscriptionChanged);
+    unawaited(_refreshGateState());
   }
 
   @override
@@ -92,6 +93,7 @@ class _WebAppGateState extends State<WebAppGate> {
     if (widget.authController is Listenable) {
       (widget.authController as Listenable).removeListener(_onAuthChanged);
     }
+    _subscriptionController.removeListener(_onSubscriptionChanged);
     _subscriptionController.dispose();
     _cloudUsageClient.dispose();
     _vaultUsageClient.dispose();
@@ -100,29 +102,41 @@ class _WebAppGateState extends State<WebAppGate> {
   }
 
   void _onAuthChanged() {
-    unawaited(_refreshAuthState());
+    _syncMainShellAccess();
+    if (mounted) {
+      setState(() {});
+    }
+    unawaited(_refreshGateState());
   }
 
-  Future<void> _refreshAuthState() async {
-    final idToken = await widget.authController.getIdToken();
+  void _onSubscriptionChanged() {
+    _syncMainShellAccess();
     if (!mounted) return;
-    if (idToken == null || idToken.trim().isEmpty) {
-      setState(() {
-        _subscriptionState = WebSubscriptionState.unknown;
-      });
+    setState(() {});
+  }
+
+  void _syncMainShellAccess() {
+    final uid = widget.authController.uid?.trim() ?? '';
+    if (uid.isEmpty) {
+      _canAccessMainShell = false;
       return;
     }
-    try {
-      final subscription =
-          await widget.service.fetchSubscription(idToken: idToken);
-      if (!mounted) return;
-      setState(() {
-        _subscriptionState = subscription;
-      });
-    } catch (error) {
-      if (!mounted) return;
-      debugPrint('web_gate_refresh_auth_state_error: $error');
+
+    switch (_subscriptionController.status) {
+      case SubscriptionStatus.entitled:
+        _canAccessMainShell = true;
+      case SubscriptionStatus.notEntitled:
+        _canAccessMainShell = false;
+      case SubscriptionStatus.unknown:
+        break;
     }
+  }
+
+  Future<void> _refreshGateState() async {
+    await _subscriptionController.refresh();
+    _syncMainShellAccess();
+    if (!mounted) return;
+    setState(() {});
   }
 
   @override
@@ -139,7 +153,7 @@ class _WebAppGateState extends State<WebAppGate> {
           vaultConfigStore: _vaultConfigStore,
         ),
       );
-    } else if (_subscriptionState != WebSubscriptionState.entitled) {
+    } else if (!_canAccessMainShell) {
       child = _WebPublicEntryScaffold(
         child: CloudAccountPanel(
           billingClient: _billingClient,
@@ -270,9 +284,9 @@ String? _webVaultIdForController(CloudAuthController controller) {
 
 Attachment _webAttachmentFromVaultItem(WebVaultAttachmentItem item) {
   return Attachment(
-    sha256: item.sha256,
+    sha256: item.primarySha256,
     mimeType: item.mimeType,
-    path: 'vault/${item.sha256}.bin',
+    path: 'vault/${item.primarySha256}.bin',
     byteLen: PlatformInt64Util.from(item.byteLen),
     createdAtMs: PlatformInt64Util.from(item.createdAtMs ?? 0),
   );
@@ -314,7 +328,7 @@ Future<void> _openWebVaultAttachmentViewer({
   final bytes = await service.fetchVaultAttachmentBytes(
     idToken: idToken,
     vaultId: vaultId,
-    sha256: item.sha256,
+    sha256: item.primarySha256,
   );
   final attachment = _webAttachmentFromVaultItem(item);
   chatBackend.rememberAttachment(
@@ -514,6 +528,9 @@ class _WebFilesPageState extends State<_WebFilesPage> {
         .map(
           (item) => VaultAttachmentUsageItem(
             sha256: item.sha256,
+            rootSha256: item.rootSha256,
+            groupType: item.groupType,
+            leafCount: item.leafCount,
             mimeType: item.mimeType,
             byteLen: item.byteLen,
             createdAtMs: item.createdAtMs,
@@ -525,7 +542,9 @@ class _WebFilesPageState extends State<_WebFilesPage> {
 
   WebVaultAttachmentItem? _findWebItem(String sha256) {
     for (final item in _items) {
-      if (item.sha256 == sha256) return item;
+      if (item.primarySha256 == sha256 || item.sha256 == sha256) {
+        return item;
+      }
     }
     return null;
   }

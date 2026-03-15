@@ -50,4 +50,39 @@ void main() {
     expect(captured!.headers['authorization'], 'Bearer token');
     expect(captured!.headers['x-secondloop-vault-id'], 'vault-123');
   });
+
+  test('grouped vault attachments preserve root and group metadata', () async {
+    final client = MockClient((request) async {
+      return http.Response(
+        jsonEncode({
+          'items': [
+            {
+              'sha256': 'leaf-sha',
+              'root_sha256': 'root-sha',
+              'group_type': 'video',
+              'leaf_count': 3,
+              'mime_type': 'video/mp4',
+              'byte_len': 4096,
+              'created_at_ms': 1000,
+              'uploaded_at_ms': 2000,
+            },
+          ],
+        }),
+        200,
+      );
+    });
+
+    final service = WebAppServiceHttp(client: client);
+    final items = await service.listVaultAttachments(
+      idToken: 'token',
+      vaultId: 'vault-123',
+    );
+
+    expect(items, hasLength(1));
+    expect(items.single.sha256, 'leaf-sha');
+    expect(items.single.rootSha256, 'root-sha');
+    expect(items.single.groupType, 'video');
+    expect(items.single.leafCount, 3);
+    expect(items.single.primarySha256, 'root-sha');
+  });
 }

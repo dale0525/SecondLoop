@@ -126,6 +126,125 @@ void main() {
     expect(find.byType(AttachmentViewerPage), findsOneWidget);
   });
 
+  testWidgets('VaultUsageCard refreshes when managed vault base URL changes',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+
+    final store = SyncConfigStore(
+      managedVaultDefaultBaseUrl: 'https://vault-1.test',
+    );
+    final httpClient = _MultiResponseHttpClient(
+      handlers: <Pattern, _FakeHttpResponse>{
+        RegExp(r'https://vault-1\.test/v1/vaults/uid_1/usage$'):
+            _FakeHttpResponse.ok(
+          jsonEncode(<String, Object?>{
+            'total_bytes_used': 1024,
+            'attachments_bytes_used': 1024,
+            'ops_bytes_used': 0,
+            'other_bytes_used': 0,
+            'limit_bytes': null,
+          }),
+        ),
+        RegExp(r'https://vault-1\.test/v1/vaults/uid_1/attachments\?limit=200$'):
+            _FakeHttpResponse.ok(
+          jsonEncode(<String, Object?>{
+            'items': [
+              {
+                'sha256': 'sha-vault-1',
+                'mime_type': 'text/plain',
+                'byte_len': 10,
+                'created_at_ms': 1000,
+                'uploaded_at_ms': 2000,
+              },
+            ],
+            'total_count': 1,
+            'total_bytes_used': 10,
+          }),
+        ),
+        RegExp(r'https://vault-2\.test/v1/vaults/uid_1/usage$'):
+            _FakeHttpResponse.ok(
+          jsonEncode(<String, Object?>{
+            'total_bytes_used': 2048,
+            'attachments_bytes_used': 2048,
+            'ops_bytes_used': 0,
+            'other_bytes_used': 0,
+            'limit_bytes': null,
+          }),
+        ),
+        RegExp(r'https://vault-2\.test/v1/vaults/uid_1/attachments\?limit=200$'):
+            _FakeHttpResponse.ok(
+          jsonEncode(<String, Object?>{
+            'items': [
+              {
+                'sha256': 'sha-vault-2',
+                'mime_type': 'text/plain',
+                'byte_len': 20,
+                'created_at_ms': 3000,
+                'uploaded_at_ms': 4000,
+              },
+            ],
+            'total_count': 1,
+            'total_bytes_used': 20,
+          }),
+        ),
+      },
+    );
+
+    Widget buildWidget() {
+      return wrapWithI18n(
+        AppBackendScope(
+          backend: _FakeBackend(
+            attachment: const Attachment(
+              sha256: 'sha-vault-2',
+              mimeType: 'text/plain',
+              path: 'attachments/sha-vault-2.bin',
+              byteLen: 20,
+              createdAtMs: 3000,
+            ),
+          ),
+          child: CloudAuthScope(
+            controller: _FakeCloudAuthController(),
+            gatewayConfig: const CloudGatewayConfig(
+              baseUrl: 'https://gateway.test',
+              modelName: 'cloud',
+            ),
+            child: SessionScope(
+              sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+              lock: () {},
+              child: MaterialApp(
+                home: Scaffold(
+                  body: VaultUsageCard(
+                    client: VaultUsageClient(httpClient: httpClient),
+                    attachmentsClient:
+                        VaultAttachmentsClient(httpClient: httpClient),
+                    configStore: store,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    await tester.pumpWidget(buildWidget());
+    await _pumpUi(tester);
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('vault_usage_attachment_sha-vault-1')),
+        findsOneWidget);
+
+    await store.writeManagedVaultBaseUrl('https://vault-2.test');
+    await tester.pumpWidget(buildWidget());
+    await _pumpUi(tester);
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('vault_usage_attachment_sha-vault-2')),
+        findsOneWidget);
+    expect(find.byKey(const ValueKey('vault_usage_attachment_sha-vault-1')),
+        findsNothing);
+  });
+
   testWidgets('VaultUsageCard deletes grouped video attachment by root sha',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
@@ -375,9 +494,11 @@ final class _MultiResponseHttpClient implements HttpClient {
 
   final Map<Pattern, _FakeHttpResponse> handlers;
   final List<String> deletePaths = <String>[];
+  final List<String> getUrls = <String>[];
 
   @override
   Future<HttpClientRequest> getUrl(Uri url) async {
+    getUrls.add(url.toString());
     final response = _resolve(url) ??
         _FakeHttpResponse(statusCode: 404, body: 'no handler for $url');
     return _FakeHttpClientRequest(
@@ -402,12 +523,13 @@ final class _MultiResponseHttpClient implements HttpClient {
   }
 
   _FakeHttpResponse? _resolve(Uri url) {
+    final fullUrl = url.toString();
     final path = url.path;
     for (final entry in handlers.entries) {
       final pattern = entry.key;
       final matches = switch (pattern) {
-        final RegExp re => re.hasMatch(path),
-        final String s => path == s,
+        final RegExp re => re.hasMatch(fullUrl) || re.hasMatch(path),
+        final String s => fullUrl == s || path == s,
         _ => false,
       };
       if (matches) return entry.value;

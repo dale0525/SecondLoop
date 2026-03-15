@@ -91,8 +91,6 @@ class _FakeCloudAuthController extends ChangeNotifier
 class _FakeWebAppService extends WebAppService {
   _FakeWebAppService({
     required this.subscription,
-    this.subscriptionError,
-    this.subscriptionErrorOnFetchNumber,
     this.items = const <WebVaultAttachmentItem>[],
     this.bytesBySha = const <String, List<int>>{},
     this.usage,
@@ -106,10 +104,9 @@ class _FakeWebAppService extends WebAppService {
     this.deleteError,
   });
 
-  final WebSubscriptionState subscription;
-  final Object? subscriptionError;
-  final int? subscriptionErrorOnFetchNumber;
-  int _subscriptionFetchCount = 0;
+  WebSubscriptionState subscription;
+  bool failNextSubscriptionFetch = false;
+  Object? failNextSubscriptionError;
   final List<WebVaultAttachmentItem> items;
   final Map<String, List<int>> bytesBySha;
   final WebUsageSummary? usage;
@@ -125,10 +122,10 @@ class _FakeWebAppService extends WebAppService {
   @override
   Future<WebSubscriptionState> fetchSubscription(
       {required String idToken}) async {
-    _subscriptionFetchCount += 1;
-    if (subscriptionError != null &&
-        subscriptionErrorOnFetchNumber == _subscriptionFetchCount) {
-      throw subscriptionError!;
+    if (failNextSubscriptionFetch) {
+      failNextSubscriptionFetch = false;
+      throw failNextSubscriptionError ??
+          StateError('forced_subscription_error');
     }
     return subscription;
   }
@@ -278,6 +275,38 @@ void main() {
 
     expect(find.byType(CloudAccountPanel), findsOneWidget);
     expect(find.byKey(const ValueKey('cloud_subscribe')), findsOneWidget);
+  });
+
+  testWidgets(
+      'subscription refresh unlocks main shell after entitlement changes',
+      (tester) async {
+    final service = _FakeWebAppService(
+      subscription: WebSubscriptionState.notEntitled,
+    );
+
+    await tester.pumpWidget(
+      _buildApp(
+        controller: _FakeCloudAuthController(
+          initialUid: 'uid-1',
+          initialEmail: 'user@example.com',
+          initialEmailVerified: true,
+        ),
+        service: service,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byType(CloudAccountPanel), findsOneWidget);
+    expect(find.text('Chat'), findsNothing);
+
+    service.subscription = WebSubscriptionState.entitled;
+
+    await tester.tap(find.byKey(const ValueKey('cloud_subscription_refresh')));
+    await tester.pump();
+    await tester.pumpAndSettle();
+
+    expect(find.text('Chat'), findsOneWidget);
+    expect(find.byType(CloudAccountPanel), findsNothing);
   });
 
   testWidgets('upgrade gate localizes checkout payment-required error inline',
@@ -1067,6 +1096,19 @@ void main() {
 
   testWidgets('settings localizes subscription refresh failure inline',
       (tester) async {
+    final service = _FakeWebAppService(
+      subscription: WebSubscriptionState.entitled,
+      usage: const WebUsageSummary(
+        askAiUsagePercent: 27,
+        embeddingsUsagePercent: 9,
+        resetAtMs: 1735689600000,
+      ),
+      vaultUsage: const WebVaultUsageSummary(
+        totalBytesUsed: 12,
+        limitBytes: 128,
+      ),
+    );
+
     await tester.pumpWidget(
       _buildApp(
         controller: _FakeCloudAuthController(
@@ -1074,21 +1116,7 @@ void main() {
           initialEmail: 'user@example.com',
           initialEmailVerified: true,
         ),
-        service: _FakeWebAppService(
-          subscription: WebSubscriptionState.entitled,
-          subscriptionError:
-              'cloud-gateway request failed: HTTP 402 {"error":"payment_required"}',
-          subscriptionErrorOnFetchNumber: 4,
-          usage: const WebUsageSummary(
-            askAiUsagePercent: 27,
-            embeddingsUsagePercent: 9,
-            resetAtMs: 1735689600000,
-          ),
-          vaultUsage: const WebVaultUsageSummary(
-            totalBytesUsed: 12,
-            limitBytes: 128,
-          ),
-        ),
+        service: service,
       ),
     );
     await tester.pumpAndSettle();
@@ -1099,6 +1127,11 @@ void main() {
         find.byKey(const ValueKey('cloud_subscription_refresh'));
     await tester.ensureVisible(subscriptionRefresh);
     await tester.pumpAndSettle();
+
+    service.failNextSubscriptionError =
+        'cloud-gateway request failed: HTTP 402 {"error":"payment_required"}';
+    service.failNextSubscriptionFetch = true;
+
     await tester.tap(subscriptionRefresh, warnIfMissed: false);
     await tester.pumpAndSettle();
 

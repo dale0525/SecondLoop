@@ -143,6 +143,9 @@ final class WebFormalSettingsHttpClient extends http.BaseClient {
                 .map(
                   (item) => <String, Object?>{
                     'sha256': item.sha256,
+                    'root_sha256': item.rootSha256,
+                    'group_type': item.groupType,
+                    'leaf_count': item.leafCount,
                     'mime_type': item.mimeType,
                     'byte_len': item.byteLen,
                     'created_at_ms': item.createdAtMs,

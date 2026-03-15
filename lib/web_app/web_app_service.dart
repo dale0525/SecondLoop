@@ -50,6 +50,9 @@ class WebVaultAttachmentItem {
     required this.byteLen,
     this.createdAtMs,
     this.uploadedAtMs,
+    this.rootSha256,
+    this.groupType,
+    this.leafCount,
   });
 
   final String sha256;
@@ -57,6 +60,15 @@ class WebVaultAttachmentItem {
   final int byteLen;
   final int? createdAtMs;
   final int? uploadedAtMs;
+  final String? rootSha256;
+  final String? groupType;
+  final int? leafCount;
+
+  String get primarySha256 {
+    final normalizedRoot = rootSha256?.trim() ?? '';
+    if (normalizedRoot.isNotEmpty) return normalizedRoot;
+    return sha256;
+  }
 
   bool get needsAppProcessing => needsAppProcessingInWeb(mimeType);
 }
@@ -294,6 +306,13 @@ class WebAppServiceHttp extends WebAppService {
               byteLen: (raw['byte_len'] as num?)?.toInt() ?? 0,
               createdAtMs: (raw['created_at_ms'] as num?)?.toInt(),
               uploadedAtMs: (raw['uploaded_at_ms'] as num?)?.toInt(),
+              rootSha256: '${raw['root_sha256'] ?? ''}'.trim().isEmpty
+                  ? null
+                  : '${raw['root_sha256']}',
+              groupType: '${raw['group_type'] ?? ''}'.trim().isEmpty
+                  ? null
+                  : '${raw['group_type']}',
+              leafCount: (raw['leaf_count'] as num?)?.toInt(),
             ))
         .where((item) => item.sha256.trim().isNotEmpty)
         .toList(growable: false);
