@@ -49,19 +49,27 @@ class _FakeCloudAuthController implements CloudAuthController {
 
 class _FakeWebAppService extends WebAppService {
   _FakeWebAppService({
+    this.subscription = WebSubscriptionState.entitled,
+    this.canManageSubscription,
     this.usage,
     this.vaultUsage,
     this.items = const <WebVaultAttachmentItem>[],
   });
 
+  final WebSubscriptionState subscription;
+  final bool? canManageSubscription;
   final WebUsageSummary? usage;
   final WebVaultUsageSummary? vaultUsage;
   final List<WebVaultAttachmentItem> items;
 
   @override
-  Future<WebSubscriptionState> fetchSubscription(
+  Future<WebSubscriptionSnapshot> fetchSubscription(
       {required String idToken}) async {
-    return WebSubscriptionState.entitled;
+    return WebSubscriptionSnapshot(
+      state: subscription,
+      canManageSubscription: canManageSubscription ??
+          (subscription == WebSubscriptionState.entitled),
+    );
   }
 
   @override
@@ -196,5 +204,25 @@ void main() {
 
     subscriptionController.dispose();
     billing.dispose();
+  });
+
+  test('web formal settings adapter preserves can_manage_subscription=false',
+      () async {
+    final authController = _FakeCloudAuthController();
+    final service = _FakeWebAppService(
+      subscription: WebSubscriptionState.entitled,
+      canManageSubscription: false,
+    );
+    final subscriptionController = createWebFormalSubscriptionController(
+      service: service,
+      authController: authController,
+    );
+
+    await subscriptionController.refresh();
+
+    expect(subscriptionController.status, SubscriptionStatus.entitled);
+    expect(subscriptionController.canManageSubscription, isFalse);
+
+    subscriptionController.dispose();
   });
 }

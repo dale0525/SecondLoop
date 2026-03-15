@@ -62,9 +62,12 @@ final class _FakeWebAppService extends WebAppService {
   final List<WebVaultAttachmentItem> items;
 
   @override
-  Future<WebSubscriptionState> fetchSubscription(
+  Future<WebSubscriptionSnapshot> fetchSubscription(
           {required String idToken}) async =>
-      WebSubscriptionState.entitled;
+      const WebSubscriptionSnapshot(
+        state: WebSubscriptionState.entitled,
+        canManageSubscription: true,
+      );
 
   @override
   Future<WebVaultUsageSummary?> fetchVaultUsage({

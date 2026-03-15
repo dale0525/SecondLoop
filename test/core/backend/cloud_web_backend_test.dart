@@ -54,6 +54,27 @@ void main() {
       expect(String.fromCharCodes(loadedBytes), 'hello web');
     });
 
+    test('getMessageById finds inserted messages in memory', () async {
+      final backend = CloudWebBackend(
+        chatClient: _FakeCloudWebChatClient(responseText: 'ok'),
+      );
+      final key = Uint8List(0);
+
+      final conversation = await backend.createConversation(key, 'Web Chat');
+      final inserted = await backend.insertMessage(
+        key,
+        conversation.id,
+        role: 'assistant',
+        content: 'stored reply',
+      );
+
+      final loaded = await backend.getMessageById(key, inserted.id);
+
+      expect(loaded, isNotNull);
+      expect(loaded!.id, inserted.id);
+      expect(loaded.content, 'stored reply');
+    });
+
     test('runAiPromptCloudGateway delegates to chat client', () async {
       final client = _FakeCloudWebChatClient(responseText: 'cloud result');
       final backend = CloudWebBackend(chatClient: client);

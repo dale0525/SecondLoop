@@ -107,6 +107,32 @@ void main() {
     );
   });
 
+  test('checkout throws when browser cannot open the billing url', () async {
+    final client = MockClient((request) async {
+      return http.Response(
+        jsonEncode(
+            {'checkout_url': 'https://checkout.secondloop.test/session'}),
+        200,
+      );
+    });
+
+    final service = WebAppServiceHttp(
+      client: client,
+      urlOpener: (_) async => false,
+    );
+
+    await expectLater(
+      () => service.openCheckout(idToken: 'token'),
+      throwsA(
+        isA<StateError>().having(
+          (error) => error.message,
+          'message',
+          'open_url_failed',
+        ),
+      ),
+    );
+  });
+
   test('vault upload sends put request to attachment route with sha query',
       () async {
     http.BaseRequest? captured;

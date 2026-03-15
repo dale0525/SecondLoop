@@ -22,6 +22,16 @@ enum WebSubscriptionState {
   notEntitled,
 }
 
+class WebSubscriptionSnapshot {
+  const WebSubscriptionSnapshot({
+    required this.state,
+    required this.canManageSubscription,
+  });
+
+  final WebSubscriptionState state;
+  final bool? canManageSubscription;
+}
+
 class WebUsageSummary {
   const WebUsageSummary({
     required this.askAiUsagePercent,
@@ -75,7 +85,7 @@ class WebVaultAttachmentItem {
 }
 
 abstract class WebAppService {
-  Future<WebSubscriptionState> fetchSubscription({required String idToken});
+  Future<WebSubscriptionSnapshot> fetchSubscription({required String idToken});
 
   Future<void> openCheckout({required String idToken}) async {}
 
@@ -154,9 +164,18 @@ class WebAppHttpException implements Exception {
 }
 
 class WebAppServiceHttp extends WebAppService {
-  WebAppServiceHttp({http.Client? client}) : _client = client ?? http.Client();
+  WebAppServiceHttp({
+    http.Client? client,
+    Future<bool> Function(Uri url)? urlOpener,
+  })  : _client = client ?? http.Client(),
+        _urlOpener = urlOpener ?? _defaultUrlOpener;
 
   final http.Client _client;
+  final Future<bool> Function(Uri url) _urlOpener;
+
+  static Future<bool> _defaultUrlOpener(Uri url) {
+    return launchUrl(url, mode: LaunchMode.platformDefault);
+  }
 
   static Future<WebAppConfig> loadConfig({http.Client? client}) async {
     final httpClient = client ?? http.Client();
@@ -242,16 +261,24 @@ class WebAppServiceHttp extends WebAppService {
       };
 
   @override
-  Future<WebSubscriptionState> fetchSubscription(
+  Future<WebSubscriptionSnapshot> fetchSubscription(
       {required String idToken}) async {
     final json = await _getJson(_kApiSubscriptionPath, idToken);
     final active = json['active'];
     if (active is bool) {
-      return active
-          ? WebSubscriptionState.entitled
-          : WebSubscriptionState.notEntitled;
+      return WebSubscriptionSnapshot(
+        state: active
+            ? WebSubscriptionState.entitled
+            : WebSubscriptionState.notEntitled,
+        canManageSubscription: json['can_manage_subscription'] is bool
+            ? json['can_manage_subscription'] as bool
+            : null,
+      );
     }
-    return WebSubscriptionState.unknown;
+    return const WebSubscriptionSnapshot(
+      state: WebSubscriptionState.unknown,
+      canManageSubscription: null,
+    );
   }
 
   @override
@@ -259,7 +286,8 @@ class WebAppServiceHttp extends WebAppService {
     final json = await _sendJson(_kApiBillingCheckoutPath, idToken);
     final rawUrl = '${json['checkout_url'] ?? ''}'.trim();
     if (rawUrl.isEmpty) throw StateError('missing_checkout_url');
-    await launchUrl(Uri.parse(rawUrl), mode: LaunchMode.platformDefault);
+    final ok = await _urlOpener(Uri.parse(rawUrl));
+    if (!ok) throw StateError('open_url_failed');
   }
 
   @override
@@ -267,7 +295,8 @@ class WebAppServiceHttp extends WebAppService {
     final json = await _sendJson(_kApiBillingPortalPath, idToken);
     final rawUrl = '${json['portal_url'] ?? ''}'.trim();
     if (rawUrl.isEmpty) throw StateError('missing_portal_url');
-    await launchUrl(Uri.parse(rawUrl), mode: LaunchMode.platformDefault);
+    final ok = await _urlOpener(Uri.parse(rawUrl));
+    if (!ok) throw StateError('open_url_failed');
   }
 
   @override

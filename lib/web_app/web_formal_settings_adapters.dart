@@ -63,12 +63,12 @@ final class WebFormalSettingsHttpClient extends http.BaseClient {
     final segments = request.url.pathSegments;
     if (request.method == 'GET' && request.url.path == '/v1/subscription') {
       final subscription = await service.fetchSubscription(idToken: idToken);
-      final isEntitled = subscription == WebSubscriptionState.entitled;
+      final isEntitled = subscription.state == WebSubscriptionState.entitled;
       return _jsonResponse(
         request,
         body: <String, Object?>{
           'active': isEntitled,
-          'can_manage_subscription': isEntitled,
+          'can_manage_subscription': subscription.canManageSubscription,
         },
       );
     }

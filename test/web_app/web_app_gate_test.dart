@@ -120,14 +120,17 @@ class _FakeWebAppService extends WebAppService {
   final Object? deleteError;
 
   @override
-  Future<WebSubscriptionState> fetchSubscription(
+  Future<WebSubscriptionSnapshot> fetchSubscription(
       {required String idToken}) async {
     if (failNextSubscriptionFetch) {
       failNextSubscriptionFetch = false;
       throw failNextSubscriptionError ??
           StateError('forced_subscription_error');
     }
-    return subscription;
+    return WebSubscriptionSnapshot(
+      state: subscription,
+      canManageSubscription: subscription == WebSubscriptionState.entitled,
+    );
   }
 
   @override

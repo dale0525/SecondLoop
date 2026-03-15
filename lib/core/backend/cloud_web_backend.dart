@@ -180,6 +180,18 @@ final class CloudWebBackend extends AppBackend implements AttachmentsBackend {
   }
 
   @override
+  Future<Message?> getMessageById(Uint8List key, String messageId) async {
+    for (final messages in _messagesByConversation.values) {
+      for (final message in messages) {
+        if (message.id == messageId) {
+          return message;
+        }
+      }
+    }
+    return null;
+  }
+
+  @override
   Future<Message> insertMessage(
     Uint8List key,
     String conversationId, {
