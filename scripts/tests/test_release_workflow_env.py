@@ -634,6 +634,15 @@ class ReleaseWorkflowEnvTests(unittest.TestCase):
             "if: startsWith(github.ref, 'refs/tags/')\n        shell: bash\n        run: |\n          : \"${SECONDLOOP_UPDATE_PUBLIC_KEY:?Missing secret SECONDLOOP_UPDATE_PUBLIC_KEY}\"",
             preflight_job,
         )
+        self.assertIn(
+            '          : "${SECONDLOOP_UPDATE_SIGNING_PRIVATE_KEY:?Missing secret SECONDLOOP_UPDATE_SIGNING_PRIVATE_KEY}"',
+            preflight_job,
+        )
+
+    def test_publish_validation_step_name_reflects_signing_and_llm_checks(self) -> None:
+        publish_job = self._workflow_job_text("publish")
+
+        self.assertIn("- name: Validate release publish config", publish_job)
 
     def test_release_workflow_packages_macos_managed_archive(self) -> None:
         workflow_text = self._workflow_text()

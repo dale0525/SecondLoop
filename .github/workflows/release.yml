@@ -773,7 +773,7 @@ jobs:
           channel: stable
           cache: true
       - run: dart pub get
-      - name: Validate release-note LLM config
+      - name: Validate release publish config
         shell: bash
         run: |
           : "${RELEASE_LLM_API_KEY:?Missing secret RELEASE_LLM_API_KEY}"
