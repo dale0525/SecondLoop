@@ -5,6 +5,8 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:secondloop/core/backend/app_backend.dart';
@@ -242,6 +244,290 @@ void main() {
     expect(find.byKey(const ValueKey('vault_usage_attachment_sha-vault-2')),
         findsOneWidget);
     expect(find.byKey(const ValueKey('vault_usage_attachment_sha-vault-1')),
+        findsNothing);
+  });
+
+  testWidgets('VaultUsageCard uses latest injected config store on rebuild',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+
+    final store1 = SyncConfigStore(
+      managedVaultDefaultBaseUrl: 'https://vault-1.test',
+    );
+    final store2 = SyncConfigStore(
+      managedVaultDefaultBaseUrl: 'https://vault-2.test',
+    );
+    final httpClient = _MultiResponseHttpClient(
+      handlers: <Pattern, _FakeHttpResponse>{
+        RegExp(r'https://vault-1\.test/v1/vaults/uid_1/usage$'):
+            _FakeHttpResponse.ok(
+          jsonEncode(<String, Object?>{
+            'total_bytes_used': 1024,
+            'attachments_bytes_used': 1024,
+            'ops_bytes_used': 0,
+            'other_bytes_used': 0,
+            'limit_bytes': null,
+          }),
+        ),
+        RegExp(r'https://vault-1\.test/v1/vaults/uid_1/attachments\?limit=200$'):
+            _FakeHttpResponse.ok(
+          jsonEncode(<String, Object?>{
+            'items': [
+              {
+                'sha256': 'sha-store-1',
+                'mime_type': 'text/plain',
+                'byte_len': 10,
+                'created_at_ms': 1000,
+                'uploaded_at_ms': 2000,
+              },
+            ],
+            'total_count': 1,
+            'total_bytes_used': 10,
+          }),
+        ),
+        RegExp(r'https://vault-2\.test/v1/vaults/uid_1/usage$'):
+            _FakeHttpResponse.ok(
+          jsonEncode(<String, Object?>{
+            'total_bytes_used': 2048,
+            'attachments_bytes_used': 2048,
+            'ops_bytes_used': 0,
+            'other_bytes_used': 0,
+            'limit_bytes': null,
+          }),
+        ),
+        RegExp(r'https://vault-2\.test/v1/vaults/uid_1/attachments\?limit=200$'):
+            _FakeHttpResponse.ok(
+          jsonEncode(<String, Object?>{
+            'items': [
+              {
+                'sha256': 'sha-store-2',
+                'mime_type': 'text/plain',
+                'byte_len': 20,
+                'created_at_ms': 3000,
+                'uploaded_at_ms': 4000,
+              },
+            ],
+            'total_count': 1,
+            'total_bytes_used': 20,
+          }),
+        ),
+      },
+    );
+
+    Widget buildWidget(SyncConfigStore store) {
+      return wrapWithI18n(
+        AppBackendScope(
+          backend: _FakeBackend(
+            attachment: const Attachment(
+              sha256: 'sha-store-2',
+              mimeType: 'text/plain',
+              path: 'attachments/sha-store-2.bin',
+              byteLen: 20,
+              createdAtMs: 3000,
+            ),
+          ),
+          child: CloudAuthScope(
+            controller: _FakeCloudAuthController(),
+            gatewayConfig: const CloudGatewayConfig(
+              baseUrl: 'https://gateway.test',
+              modelName: 'cloud',
+            ),
+            child: SessionScope(
+              sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+              lock: () {},
+              child: MaterialApp(
+                home: Scaffold(
+                  body: VaultUsageCard(
+                    client: VaultUsageClient(httpClient: httpClient),
+                    attachmentsClient:
+                        VaultAttachmentsClient(httpClient: httpClient),
+                    configStore: store,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    await tester.pumpWidget(buildWidget(store1));
+    await _pumpUi(tester);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('vault_usage_refresh')));
+    await _pumpUi(tester);
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('vault_usage_attachment_sha-store-1')),
+        findsOneWidget);
+
+    await tester.pumpWidget(buildWidget(store2));
+    await _pumpUi(tester);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('vault_usage_refresh')));
+    await _pumpUi(tester);
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('vault_usage_attachment_sha-store-2')),
+        findsOneWidget);
+    expect(find.byKey(const ValueKey('vault_usage_attachment_sha-store-1')),
+        findsNothing);
+  });
+
+  testWidgets(
+      'VaultUsageCard ignores stale refresh results after managed vault url changes',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+
+    final store = SyncConfigStore(
+      managedVaultDefaultBaseUrl: 'https://vault-1.test',
+    );
+    final firstAttachments = Completer<http.Response>();
+    final secondUsage = Completer<http.Response>();
+    final secondAttachments = Completer<http.Response>();
+    final requestedUrls = <String>[];
+
+    final httpClient = MockClient((request) {
+      final url = request.url.toString();
+      requestedUrls.add(url);
+      if (url == 'https://vault-1.test/v1/vaults/uid_1/usage') {
+        return Future<http.Response>.value(
+          http.Response(
+            jsonEncode(<String, Object?>{
+              'total_bytes_used': 1024,
+              'attachments_bytes_used': 1024,
+              'ops_bytes_used': 0,
+              'other_bytes_used': 0,
+              'limit_bytes': null,
+            }),
+            200,
+          ),
+        );
+      }
+      if (url == 'https://vault-1.test/v1/vaults/uid_1/attachments?limit=200') {
+        return firstAttachments.future;
+      }
+      if (url == 'https://vault-2.test/v1/vaults/uid_1/usage') {
+        return secondUsage.future;
+      }
+      if (url == 'https://vault-2.test/v1/vaults/uid_1/attachments?limit=200') {
+        return secondAttachments.future;
+      }
+      throw StateError('unexpected url: $url');
+    });
+
+    Widget buildWidget() {
+      return wrapWithI18n(
+        AppBackendScope(
+          backend: _FakeBackend(
+            attachment: const Attachment(
+              sha256: 'sha-race-2',
+              mimeType: 'text/plain',
+              path: 'attachments/sha-race-2.bin',
+              byteLen: 20,
+              createdAtMs: 3000,
+            ),
+          ),
+          child: CloudAuthScope(
+            controller: _FakeCloudAuthController(),
+            gatewayConfig: const CloudGatewayConfig(
+              baseUrl: 'https://gateway.test',
+              modelName: 'cloud',
+            ),
+            child: SessionScope(
+              sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+              lock: () {},
+              child: MaterialApp(
+                home: Scaffold(
+                  body: VaultUsageCard(
+                    client: VaultUsageClient(httpClient: httpClient),
+                    attachmentsClient:
+                        VaultAttachmentsClient(httpClient: httpClient),
+                    configStore: store,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    await tester.pumpWidget(buildWidget());
+    await tester.pump();
+
+    expect(
+      requestedUrls,
+      contains('https://vault-1.test/v1/vaults/uid_1/attachments?limit=200'),
+    );
+
+    await store.writeManagedVaultBaseUrl('https://vault-2.test');
+    await tester.pumpWidget(buildWidget());
+    await _pumpUi(tester, cycles: 4);
+
+    expect(
+      requestedUrls,
+      contains('https://vault-2.test/v1/vaults/uid_1/usage'),
+    );
+
+    secondUsage.complete(
+      http.Response(
+        jsonEncode(<String, Object?>{
+          'total_bytes_used': 2048,
+          'attachments_bytes_used': 2048,
+          'ops_bytes_used': 0,
+          'other_bytes_used': 0,
+          'limit_bytes': null,
+        }),
+        200,
+      ),
+    );
+    secondAttachments.complete(
+      http.Response(
+        jsonEncode(<String, Object?>{
+          'items': [
+            {
+              'sha256': 'sha-race-2',
+              'mime_type': 'text/plain',
+              'byte_len': 20,
+              'created_at_ms': 3000,
+              'uploaded_at_ms': 4000,
+            },
+          ],
+          'total_count': 1,
+          'total_bytes_used': 20,
+        }),
+        200,
+      ),
+    );
+    await _pumpUi(tester, cycles: 6);
+
+    expect(find.byKey(const ValueKey('vault_usage_attachment_sha-race-2')),
+        findsOneWidget);
+
+    firstAttachments.complete(
+      http.Response(
+        jsonEncode(<String, Object?>{
+          'items': [
+            {
+              'sha256': 'sha-race-1',
+              'mime_type': 'text/plain',
+              'byte_len': 10,
+              'created_at_ms': 1000,
+              'uploaded_at_ms': 2000,
+            },
+          ],
+          'total_count': 1,
+          'total_bytes_used': 10,
+        }),
+        200,
+      ),
+    );
+    await _pumpUi(tester, cycles: 6);
+
+    expect(find.byKey(const ValueKey('vault_usage_attachment_sha-race-2')),
+        findsOneWidget);
+    expect(find.byKey(const ValueKey('vault_usage_attachment_sha-race-1')),
         findsNothing);
   });
 

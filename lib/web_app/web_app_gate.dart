@@ -348,6 +348,24 @@ String _formatWebCloudError(BuildContext context, Object error) {
   return '$error';
 }
 
+Future<Uint8List?> _readPlatformFileBytes(PlatformFile file) async {
+  final directBytes = file.bytes;
+  if (directBytes != null) {
+    return Uint8List.fromList(directBytes);
+  }
+
+  final readStream = file.readStream;
+  if (readStream == null) return null;
+
+  final builder = BytesBuilder(copy: false);
+  await for (final chunk in readStream) {
+    if (chunk.isNotEmpty) {
+      builder.add(chunk);
+    }
+  }
+  return builder.takeBytes();
+}
+
 Future<void> _openWebVaultAttachmentViewer({
   required BuildContext context,
   required WebAppService service,
@@ -464,7 +482,9 @@ class _WebFilesPageState extends State<_WebFilesPage> {
 
     final picked = await FilePicker.platform.pickFiles(
       allowMultiple: true,
-      withData: true,
+      withData: false,
+      withReadStream: true,
+      readSequential: true,
     );
     if (picked == null || picked.files.isEmpty) return;
 
@@ -477,7 +497,7 @@ class _WebFilesPageState extends State<_WebFilesPage> {
       var uploadCount = 0;
       var needsAppProcessing = false;
       for (final file in picked.files) {
-        final bytes = file.bytes;
+        final bytes = await _readPlatformFileBytes(file);
         if (bytes == null || bytes.isEmpty) continue;
         final resolvedMimeType = guessMimeTypeFromExtension(file.extension);
         await widget.service.uploadVaultAttachment(

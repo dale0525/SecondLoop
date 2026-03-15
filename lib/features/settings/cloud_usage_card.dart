@@ -76,7 +76,8 @@ class CloudUsageCard extends StatefulWidget {
 }
 
 class _CloudUsageCardState extends State<CloudUsageCard> {
-  late final CloudUsageClient _client = widget.client ?? CloudUsageClient();
+  late CloudUsageClient _client;
+  var _ownsClient = false;
 
   bool _busy = false;
   CloudUsageSummary? _summary;
@@ -85,10 +86,39 @@ class _CloudUsageCardState extends State<CloudUsageCard> {
   String? _uid;
 
   @override
-  void dispose() {
-    if (widget.client == null) {
+  void initState() {
+    super.initState();
+    _replaceClient(widget.client);
+  }
+
+  @override
+  void didUpdateWidget(covariant CloudUsageCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.client != widget.client) {
+      _disposeOwnedClient();
+      _replaceClient(widget.client);
+      _summary = null;
+      _error = null;
+      if (_uid != null) {
+        unawaited(_refresh());
+      }
+    }
+  }
+
+  void _replaceClient(CloudUsageClient? client) {
+    _client = client ?? CloudUsageClient();
+    _ownsClient = client == null;
+  }
+
+  void _disposeOwnedClient() {
+    if (_ownsClient) {
       _client.dispose();
     }
+  }
+
+  @override
+  void dispose() {
+    _disposeOwnedClient();
     super.dispose();
   }
 

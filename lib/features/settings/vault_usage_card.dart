@@ -265,13 +265,15 @@ class VaultUsageCard extends StatefulWidget {
 }
 
 class _VaultUsageCardState extends State<VaultUsageCard> {
-  late final VaultUsageClient _usageClient =
-      widget.client ?? VaultUsageClient();
-  late final VaultAttachmentsClient _attachmentsClient =
-      widget.attachmentsClient ?? VaultAttachmentsClient();
-  late final SyncConfigStore _store = widget.configStore ?? SyncConfigStore();
+  late VaultUsageClient _usageClient;
+  late VaultAttachmentsClient _attachmentsClient;
+  late SyncConfigStore _store;
+  var _ownsUsageClient = false;
+  var _ownsAttachmentsClient = false;
+  int _activeRefreshes = 0;
+  int _refreshEpoch = 0;
 
-  bool _busy = false;
+  bool get _busy => _activeRefreshes > 0;
   String? _resolvedVaultBaseUrl;
   VaultUsageSummary? _summary;
   Object? _summaryError;
@@ -287,9 +289,91 @@ class _VaultUsageCardState extends State<VaultUsageCard> {
   Map<String, String> _localMessageIdByAttachmentSha = <String, String>{};
 
   @override
+  void initState() {
+    super.initState();
+    _replaceDependencies(
+      client: widget.client,
+      attachmentsClient: widget.attachmentsClient,
+      configStore: widget.configStore,
+    );
+  }
+
+  @override
+  void didUpdateWidget(covariant VaultUsageCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.client != widget.client ||
+        oldWidget.attachmentsClient != widget.attachmentsClient ||
+        oldWidget.configStore != widget.configStore) {
+      _disposeOwnedClients();
+      _replaceDependencies(
+        client: widget.client,
+        attachmentsClient: widget.attachmentsClient,
+        configStore: widget.configStore,
+      );
+      _resetLoadedState(resetBaseUrl: true, invalidateRefreshes: true);
+      if (_uid != null) {
+        unawaited(_refresh());
+      }
+    }
+  }
+
+  void _replaceDependencies({
+    required VaultUsageClient? client,
+    required VaultAttachmentsClient? attachmentsClient,
+    required SyncConfigStore? configStore,
+  }) {
+    _usageClient = client ?? VaultUsageClient();
+    _attachmentsClient = attachmentsClient ?? VaultAttachmentsClient();
+    _store = configStore ?? SyncConfigStore();
+    _ownsUsageClient = client == null;
+    _ownsAttachmentsClient = attachmentsClient == null;
+  }
+
+  void _disposeOwnedClients() {
+    if (_ownsUsageClient) {
+      _usageClient.dispose();
+    }
+    if (_ownsAttachmentsClient) {
+      _attachmentsClient.dispose();
+    }
+  }
+
+  void _resetLoadedState({
+    bool resetBaseUrl = false,
+    bool invalidateRefreshes = false,
+  }) {
+    if (invalidateRefreshes) {
+      _refreshEpoch += 1;
+    }
+    _summary = null;
+    _summaryError = null;
+    _attachmentUsage = null;
+    _attachmentError = null;
+    if (resetBaseUrl) {
+      _resolvedVaultBaseUrl = null;
+    }
+  }
+
+  void _markRefreshStarted() {
+    if (!mounted) {
+      _activeRefreshes += 1;
+      return;
+    }
+    setState(() => _activeRefreshes += 1);
+  }
+
+  void _markRefreshFinished() {
+    if (_activeRefreshes <= 0) return;
+    if (!mounted) {
+      _activeRefreshes -= 1;
+      return;
+    }
+    setState(() => _activeRefreshes -= 1);
+  }
+
+  @override
   void dispose() {
-    if (widget.client == null) _usageClient.dispose();
-    if (widget.attachmentsClient == null) _attachmentsClient.dispose();
+    _disposeOwnedClients();
     super.dispose();
   }
 
@@ -332,10 +416,7 @@ class _VaultUsageCardState extends State<VaultUsageCard> {
       if (!mounted || _resolvedVaultBaseUrl == normalizedBaseUrl) return;
       setState(() {
         _resolvedVaultBaseUrl = normalizedBaseUrl;
-        _summary = null;
-        _summaryError = null;
-        _attachmentUsage = null;
-        _attachmentError = null;
+        _resetLoadedState(invalidateRefreshes: true);
       });
       if (uid != null &&
           uid.trim().isNotEmpty &&
@@ -437,12 +518,10 @@ class _VaultUsageCardState extends State<VaultUsageCard> {
   }
 
   Future<void> _refresh() async {
-    if (_busy) return;
-
     final auth = await _resolveManagedVaultAuth();
     if (auth == null) return;
-
-    setState(() => _busy = true);
+    final refreshEpoch = ++_refreshEpoch;
+    _markRefreshStarted();
 
     VaultUsageSummary? nextSummary;
     Object? nextSummaryError;
@@ -476,16 +555,21 @@ class _VaultUsageCardState extends State<VaultUsageCard> {
       nextAttachmentError = e;
     }
 
-    if (!mounted) return;
-    setState(() {
-      _summary = nextSummary;
-      _summaryError = nextSummaryError;
-      _attachmentUsage = nextAttachmentUsage;
-      _attachmentError = nextAttachmentError;
-      _busy = false;
-    });
+    final shouldApply = mounted && refreshEpoch == _refreshEpoch;
+    if (shouldApply) {
+      setState(() {
+        _summary = nextSummary;
+        _summaryError = nextSummaryError;
+        _attachmentUsage = nextAttachmentUsage;
+        _attachmentError = nextAttachmentError;
+      });
+    }
 
-    if (nextAttachmentUsage != null && nextAttachmentUsage.items.isNotEmpty) {
+    _markRefreshFinished();
+
+    if (shouldApply &&
+        nextAttachmentUsage != null &&
+        nextAttachmentUsage.items.isNotEmpty) {
       unawaited(_rebuildAttachmentReferenceIndex());
     }
   }
@@ -595,10 +679,7 @@ class _VaultUsageCardState extends State<VaultUsageCard> {
 
     if (uid != _uid) {
       _uid = uid;
-      _summary = null;
-      _summaryError = null;
-      _attachmentUsage = null;
-      _attachmentError = null;
+      _resetLoadedState(invalidateRefreshes: true);
       _localAttachmentBySha = <String, Attachment>{};
       _localMessageIdByAttachmentSha = <String, String>{};
       if (uid != null) {

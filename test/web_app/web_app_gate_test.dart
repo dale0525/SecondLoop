@@ -129,6 +129,7 @@ class _FakeWebAppService extends WebAppService {
   final Object? portalError;
   final Object? checkoutError;
   final Object? deleteError;
+  final List<_FakeUploadedFile> uploads = <_FakeUploadedFile>[];
 
   @override
   Future<WebSubscriptionSnapshot> fetchSubscription(
@@ -196,6 +197,41 @@ class _FakeWebAppService extends WebAppService {
   }) async {
     if (deleteError != null) throw deleteError!;
   }
+
+  @override
+  Future<void> uploadVaultAttachment({
+    required String idToken,
+    required String vaultId,
+    required String fileName,
+    required String mimeType,
+    required List<int> bytes,
+  }) async {
+    uploads.add(
+      _FakeUploadedFile(
+        idToken: idToken,
+        vaultId: vaultId,
+        fileName: fileName,
+        mimeType: mimeType,
+        bytes: bytes,
+      ),
+    );
+  }
+}
+
+final class _FakeUploadedFile {
+  const _FakeUploadedFile({
+    required this.idToken,
+    required this.vaultId,
+    required this.fileName,
+    required this.mimeType,
+    required this.bytes,
+  });
+
+  final String idToken;
+  final String vaultId;
+  final String fileName;
+  final String mimeType;
+  final List<int> bytes;
 }
 
 class _FakeCloudWebChatClient implements CloudWebChatClient {
@@ -604,6 +640,64 @@ void main() {
       expect(find.text('已上传 1 个文件到 Cloud。'), findsOneWidget);
     } finally {
       LocaleSettings.setLocale(AppLocale.en);
+      FilePicker.platform = oldPicker ?? _TestWebFilePicker(result: null);
+    }
+  });
+
+  testWidgets('web files uploads from read stream without eager bytes',
+      (tester) async {
+    FilePicker? oldPicker;
+    try {
+      oldPicker = FilePicker.platform;
+    } catch (_) {
+      oldPicker = null;
+    }
+
+    final service = _FakeWebAppService(
+      subscription: WebSubscriptionState.entitled,
+      vaultUsage: const WebVaultUsageSummary(
+        totalBytesUsed: 12,
+        limitBytes: 128,
+      ),
+    );
+    FilePicker.platform = _TestWebFilePicker(
+      result: FilePickerResult([
+        PlatformFile(
+          name: 'stream-note.txt',
+          size: 5,
+          readStream: Stream<List<int>>.fromIterable(
+            <List<int>>[
+              const <int>[104, 101],
+              const <int>[108, 108, 111],
+            ],
+          ),
+        ),
+      ]),
+    );
+
+    try {
+      await tester.pumpWidget(
+        _buildApp(
+          controller: _FakeCloudAuthController(
+            initialUid: 'uid-1',
+            initialEmail: 'user@example.com',
+            initialEmailVerified: true,
+          ),
+          service: service,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Files'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Upload'));
+      await tester.pump();
+      await tester.pumpAndSettle();
+
+      expect(service.uploads, hasLength(1));
+      expect(service.uploads.single.fileName, 'stream-note.txt');
+      expect(String.fromCharCodes(service.uploads.single.bytes), 'hello');
+    } finally {
       FilePicker.platform = oldPicker ?? _TestWebFilePicker(result: null);
     }
   });
