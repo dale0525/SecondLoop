@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/content_enrichment/docx_ocr_policy.dart';
+import '../../i18n/strings.g.dart';
 
 const String _kSecondLoopVideoManifestMimeType =
     'application/x.secondloop.video+json';
@@ -37,14 +38,14 @@ class WebMediaProcessingNotice extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Continue processing in the app',
+                    context.t.app.web.mediaProcessing.title,
                     style: Theme.of(context).textTheme.titleMedium?.copyWith(
                           color: colorScheme.onSecondaryContainer,
                         ),
                   ),
                   const SizedBox(height: 6),
                   Text(
-                    'Existing cloud results stay available here. If a file still needs OCR, decoding, or transcoding, open it in the app to continue processing.',
+                    context.t.app.web.mediaProcessing.description,
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                           color: colorScheme.onSecondaryContainer,
                         ),

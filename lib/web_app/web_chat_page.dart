@@ -175,9 +175,9 @@ class _WebChatPageState extends State<WebChatPage> {
                   controller: _controller,
                   minLines: 1,
                   maxLines: 4,
-                  decoration: const InputDecoration(
-                    hintText: 'Ask SecondLoop Cloud',
-                    border: OutlineInputBorder(),
+                  decoration: InputDecoration(
+                    hintText: context.t.app.web.chat.placeholder,
+                    border: const OutlineInputBorder(),
                   ),
                   onSubmitted: (_) => _send(),
                 ),
@@ -185,7 +185,7 @@ class _WebChatPageState extends State<WebChatPage> {
               const SizedBox(width: 12),
               FilledButton(
                 onPressed: _busy ? null : _send,
-                child: const Text('Send'),
+                child: Text(context.t.app.web.chat.send),
               ),
             ],
           ),

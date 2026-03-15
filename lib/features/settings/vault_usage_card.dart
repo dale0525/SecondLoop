@@ -228,7 +228,7 @@ class VaultAttachmentUsageListView extends StatelessWidget {
                   Padding(
                     padding: const EdgeInsets.only(right: 4),
                     child: Text(
-                      'Continue in App',
+                      context.t.app.web.common.actions.continueInApp,
                       style: Theme.of(context).textTheme.labelSmall,
                     ),
                   ),

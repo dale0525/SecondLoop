@@ -456,6 +456,7 @@ class _WebFilesPageState extends State<_WebFilesPage> {
                   : context.t.app.web.files.messages
                       .uploadSuccess(count: uploadCount),
             ),
+            duration: const Duration(seconds: 3),
           ),
         );
       }
@@ -777,7 +778,12 @@ class _WebSettingsPageState extends State<_WebSettingsPage> {
           (item) => ListTile(
             contentPadding: EdgeInsets.zero,
             title: Text(item.sha256),
-            subtitle: Text('${item.mimeType} • ${item.byteLen} bytes'),
+            subtitle: Text(
+              context.t.app.web.settings.recentFiles.itemSummary(
+                mimeType: item.mimeType,
+                byteCount: item.byteLen,
+              ),
+            ),
             trailing: _openingAttachmentSha == item.sha256
                 ? const SizedBox(
                     width: 20,

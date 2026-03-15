@@ -30,8 +30,22 @@
         "title": "Recent files",
         "description": "Open recent cloud files with the formal attachment viewer. Complex media still follows the readonly Continue in App policy.",
         "empty": "No cloud files yet.",
-        "refreshTooltip": "Refresh recent files"
+        "refreshTooltip": "Refresh recent files",
+        "itemSummary": "$mimeType • $byteCount bytes"
       }
+    },
+    "chat": {
+      "placeholder": "Ask SecondLoop Cloud",
+      "send": "Send"
+    },
+    "common": {
+      "actions": {
+        "continueInApp": "Continue in App"
+      }
+    },
+    "mediaProcessing": {
+      "title": "Continue processing in the app",
+      "description": "Existing cloud results stay available here. If a file still needs OCR, decoding, or transcoding, open it in the app to continue processing."
     }
   }
 }
