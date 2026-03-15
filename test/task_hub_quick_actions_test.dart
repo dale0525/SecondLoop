@@ -195,6 +195,139 @@ void main() {
     expect(backend.current('t3').status, 'done');
   });
 
+  test('done action is canceled when incomplete checklist is not confirmed',
+      () async {
+    SharedPreferences.setMockInitialValues({});
+
+    final initial = todo(id: 't3b', title: 'Task 3b', updatedAtMs: 10);
+    final backend = _QuickActionBackend(
+      initialTodos: [initial],
+      checklistItemsByTodoId: <String, List<TodoChecklistItem>>{
+        't3b': const <TodoChecklistItem>[
+          TodoChecklistItem(
+            id: 'c1',
+            todoId: 't3b',
+            content: 'Still pending',
+            sortOrder: 0,
+            isDone: false,
+            createdAtMs: 0,
+            updatedAtMs: 0,
+          ),
+        ],
+      },
+    );
+    final controller = TaskHubQuickActionsController(
+      backend: backend,
+      sessionKey: Uint8List(32),
+      confirmDoneWithIncompleteChecklist: (_) async => false,
+      checklistProgressByTodoId: const <String, TodoChecklistProgress>{
+        't3b': TodoChecklistProgress(
+          todoId: 't3b',
+          totalCount: 1,
+          doneCount: 0,
+        ),
+      },
+    );
+
+    final ticket = await controller.apply(initial, TaskHubQuickAction.done);
+    expect(ticket, isNull);
+    expect(backend.current('t3b').status, 'open');
+  });
+
+  test('done action proceeds when incomplete checklist is confirmed', () async {
+    SharedPreferences.setMockInitialValues({});
+
+    final initial = todo(id: 't3c', title: 'Task 3c', updatedAtMs: 10);
+    final backend = _QuickActionBackend(
+      initialTodos: [initial],
+      checklistItemsByTodoId: <String, List<TodoChecklistItem>>{
+        't3c': const <TodoChecklistItem>[
+          TodoChecklistItem(
+            id: 'c1',
+            todoId: 't3c',
+            content: 'Still pending',
+            sortOrder: 0,
+            isDone: false,
+            createdAtMs: 0,
+            updatedAtMs: 0,
+          ),
+        ],
+      },
+    );
+    final controller = TaskHubQuickActionsController(
+      backend: backend,
+      sessionKey: Uint8List(32),
+      confirmDoneWithIncompleteChecklist: (_) async => true,
+      checklistProgressByTodoId: const <String, TodoChecklistProgress>{
+        't3c': TodoChecklistProgress(
+          todoId: 't3c',
+          totalCount: 1,
+          doneCount: 0,
+        ),
+      },
+    );
+
+    final ticket = await controller.apply(initial, TaskHubQuickAction.done);
+    expect(ticket, isNotNull);
+    expect(backend.current('t3c').status, 'done');
+  });
+
+  test('done action skips checklist fetch when cached progress is empty',
+      () async {
+    SharedPreferences.setMockInitialValues({});
+
+    final initial = todo(id: 't3d', title: 'Task 3d', updatedAtMs: 10);
+    final backend = _QuickActionBackend(initialTodos: [initial]);
+    final controller = TaskHubQuickActionsController(
+      backend: backend,
+      sessionKey: Uint8List(32),
+      checklistProgressByTodoId: const <String, TodoChecklistProgress>{},
+    );
+
+    final ticket = await controller.apply(initial, TaskHubQuickAction.done);
+    expect(ticket, isNotNull);
+    expect(backend.checklistItemsQueryCount, 0);
+  });
+
+  test('done action fetches checklist when cached progress is incomplete',
+      () async {
+    SharedPreferences.setMockInitialValues({});
+
+    final initial = todo(id: 't3e', title: 'Task 3e', updatedAtMs: 10);
+    final backend = _QuickActionBackend(
+      initialTodos: [initial],
+      checklistItemsByTodoId: <String, List<TodoChecklistItem>>{
+        't3e': const <TodoChecklistItem>[
+          TodoChecklistItem(
+            id: 'c1',
+            todoId: 't3e',
+            content: 'Still pending',
+            sortOrder: 0,
+            isDone: false,
+            createdAtMs: 0,
+            updatedAtMs: 0,
+          ),
+        ],
+      },
+    );
+    final controller = TaskHubQuickActionsController(
+      backend: backend,
+      sessionKey: Uint8List(32),
+      confirmDoneWithIncompleteChecklist: (_) async => false,
+      checklistProgressByTodoId: const <String, TodoChecklistProgress>{
+        't3e': TodoChecklistProgress(
+          todoId: 't3e',
+          totalCount: 1,
+          doneCount: 0,
+        ),
+      },
+    );
+
+    final ticket = await controller.apply(initial, TaskHubQuickAction.done);
+    expect(ticket, isNull);
+    expect(backend.checklistItemsQueryCount, 1);
+  });
+
   test('start action moves todo to in_progress', () async {
     SharedPreferences.setMockInitialValues({});
 
@@ -261,12 +394,19 @@ void main() {
 }
 
 final class _QuickActionBackend extends AppBackend {
-  _QuickActionBackend({List<Todo>? initialTodos})
-      : _todosById = {
+  _QuickActionBackend({
+    List<Todo>? initialTodos,
+    Map<String, List<TodoChecklistItem>>? checklistItemsByTodoId,
+  })  : _checklistItemsByTodoId = Map<String, List<TodoChecklistItem>>.from(
+          checklistItemsByTodoId ?? const <String, List<TodoChecklistItem>>{},
+        ),
+        _todosById = {
           for (final todo in initialTodos ?? const <Todo>[]) todo.id: todo,
         };
 
   final Map<String, Todo> _todosById;
+  final Map<String, List<TodoChecklistItem>> _checklistItemsByTodoId;
+  var checklistItemsQueryCount = 0;
 
   Todo current(String id) => _todosById[id]!;
   List<Todo> all() => _todosById.values.toList(growable: false);
@@ -322,6 +462,17 @@ final class _QuickActionBackend extends AppBackend {
     );
     _todosById[todoId] = updated;
     return updated;
+  }
+
+  @override
+  Future<List<TodoChecklistItem>> listTodoChecklistItems(
+    Uint8List key,
+    String todoId,
+  ) async {
+    checklistItemsQueryCount += 1;
+    return List<TodoChecklistItem>.from(
+      _checklistItemsByTodoId[todoId] ?? const <TodoChecklistItem>[],
+    );
   }
 
   @override

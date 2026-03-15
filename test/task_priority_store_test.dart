@@ -80,6 +80,41 @@ void main() {
         ]));
   });
 
+  test('transient checklist progress load failure preserves prior data',
+      () async {
+    SharedPreferences.setMockInitialValues({});
+    var progressCalls = 0;
+    final store = TaskPriorityStore.fromLoaders(
+      nowLocal: () => DateTime(2026, 3, 13, 10, 0),
+      loadTodos: () async => <Todo>[
+        todo(id: 'focus', title: 'Fix prod bug', updatedAtMs: 10),
+      ],
+      loadChecklistProgress: () async {
+        progressCalls += 1;
+        if (progressCalls == 1) {
+          return const <TodoChecklistProgress>[
+            TodoChecklistProgress(todoId: 'focus', doneCount: 1, totalCount: 2),
+          ];
+        }
+        throw StateError('transient checklist progress failure');
+      },
+    );
+
+    await store.refresh();
+    expect(
+        store.checklistProgressByTodoId['focus'],
+        const TodoChecklistProgress(
+            todoId: 'focus', doneCount: 1, totalCount: 2));
+
+    store.markDirty();
+    await store.refresh();
+
+    expect(
+        store.checklistProgressByTodoId['focus'],
+        const TodoChecklistProgress(
+            todoId: 'focus', doneCount: 1, totalCount: 2));
+  });
+
   test('markDirty preserves snapshot but forces recompute', () async {
     SharedPreferences.setMockInitialValues({});
     var loadCount = 0;
@@ -132,6 +167,27 @@ void main() {
     completer.complete(<Todo>[todo(id: 't1', title: 'Task', updatedAtMs: 10)]);
 
     await expectLater(refreshFuture, completes);
+    expect(notifyCount, 1);
+  });
+
+  test('force refresh after dispose does not reuse disposed store', () async {
+    SharedPreferences.setMockInitialValues({});
+    final completer = Completer<List<Todo>>();
+    var notifyCount = 0;
+    final store = TaskPriorityStore.fromLoaders(
+      nowLocal: () => DateTime(2026, 3, 13, 10, 0),
+      loadTodos: () => completer.future,
+    );
+    store.addListener(() => notifyCount += 1);
+
+    final firstRefresh = store.refresh();
+    await Future<void>.delayed(Duration.zero);
+    final forcedRefresh = store.refresh(force: true);
+    store.dispose();
+    completer.complete(<Todo>[todo(id: 't1', title: 'Task', updatedAtMs: 10)]);
+
+    await expectLater(firstRefresh, completes);
+    await expectLater(forcedRefresh, completes);
     expect(notifyCount, 1);
   });
 
@@ -242,6 +298,293 @@ void main() {
     expect(aiService.calls, 1);
     expect(store.isAiEnhancementAvailable, isTrue);
     expect(store.snapshot.source, TaskPrioritySnapshotSource.hybrid);
+  });
+
+  test('future-dated in-memory AI cache is treated as stale', () async {
+    SharedPreferences.setMockInitialValues({});
+    var currentNow = DateTime(2026, 3, 13, 10, 20);
+    final aiService = _CountingAiService(
+      const TaskPriorityAiBatchResult(
+        entries: <TaskPriorityAiEntry>[
+          TaskPriorityAiEntry(
+            todoId: 'focus',
+            priorityBand: TaskPriorityAiBand.focus,
+            semanticAdjustment: 20,
+            reason: 'Handle it now.',
+            suggestedAction: TaskPrioritySuggestionKind.doNow,
+            confidence: TaskPriorityAiConfidence.high,
+          ),
+        ],
+      ),
+      cacheScopeKey: 'byok|model|en-US',
+    );
+    final store = TaskPriorityStore.fromLoaders(
+      nowLocal: () => currentNow,
+      loadTodos: () async => <Todo>[
+        todo(id: 'focus', title: 'Fix prod bug', updatedAtMs: 10),
+      ],
+      resolveAiService: () async => aiService,
+    );
+
+    await store.refresh();
+    currentNow = DateTime(2026, 3, 13, 10, 0);
+    store.markDirty();
+    await store.refresh();
+
+    expect(aiService.calls, 2);
+  });
+
+  test('future-dated persisted AI cache is treated as stale', () async {
+    SharedPreferences.setMockInitialValues({});
+    final firstService = _CountingAiService(
+      const TaskPriorityAiBatchResult(
+        entries: <TaskPriorityAiEntry>[
+          TaskPriorityAiEntry(
+            todoId: 'focus',
+            priorityBand: TaskPriorityAiBand.focus,
+            semanticAdjustment: 20,
+            reason: 'Future cache result.',
+            suggestedAction: TaskPrioritySuggestionKind.doNow,
+            confidence: TaskPriorityAiConfidence.high,
+          ),
+        ],
+      ),
+      cacheScopeKey: 'byok|model|en-US',
+    );
+    final firstStore = TaskPriorityStore.fromLoaders(
+      nowLocal: () => DateTime(2026, 3, 13, 10, 20),
+      loadTodos: () async => <Todo>[
+        todo(id: 'focus', title: 'Fix prod bug', updatedAtMs: 10),
+      ],
+      resolveAiService: () async => firstService,
+    );
+
+    await firstStore.refresh();
+
+    final secondService = _CountingAiService(
+      const TaskPriorityAiBatchResult(
+        entries: <TaskPriorityAiEntry>[
+          TaskPriorityAiEntry(
+            todoId: 'focus',
+            priorityBand: TaskPriorityAiBand.focus,
+            semanticAdjustment: 20,
+            reason: 'Fresh rerank result.',
+            suggestedAction: TaskPrioritySuggestionKind.doNow,
+            confidence: TaskPriorityAiConfidence.high,
+          ),
+        ],
+      ),
+      cacheScopeKey: 'byok|model|en-US',
+    );
+    final secondStore = TaskPriorityStore.fromLoaders(
+      nowLocal: () => DateTime(2026, 3, 13, 10, 0),
+      loadTodos: () async => <Todo>[
+        todo(id: 'focus', title: 'Fix prod bug', updatedAtMs: 10),
+      ],
+      resolveAiService: () async => secondService,
+    );
+
+    await secondStore.refresh();
+
+    expect(secondService.calls, 1);
+    expect(
+        secondStore.snapshot.primaryFocus?.reasonText, 'Fresh rerank result.');
+  });
+
+  test('reuses persisted AI rerank across store recreation', () async {
+    SharedPreferences.setMockInitialValues({});
+    final firstService = _CountingAiService(
+      const TaskPriorityAiBatchResult(
+        entries: <TaskPriorityAiEntry>[
+          TaskPriorityAiEntry(
+            todoId: 'focus',
+            priorityBand: TaskPriorityAiBand.focus,
+            semanticAdjustment: 20,
+            reason: 'Still the best option.',
+            suggestedAction: TaskPrioritySuggestionKind.doNow,
+            confidence: TaskPriorityAiConfidence.high,
+          ),
+        ],
+      ),
+      cacheScopeKey: 'byok|model|en-US',
+    );
+    final firstStore = TaskPriorityStore.fromLoaders(
+      nowLocal: () => DateTime(2026, 3, 13, 10, 0),
+      loadTodos: () async => <Todo>[
+        todo(id: 'focus', title: 'Fix prod bug', updatedAtMs: 10),
+      ],
+      resolveAiService: () async => firstService,
+    );
+
+    await firstStore.refresh();
+
+    final secondService = _CountingAiService(
+      const TaskPriorityAiBatchResult.empty(),
+      cacheScopeKey: 'byok|model|en-US',
+    );
+    final secondStore = TaskPriorityStore.fromLoaders(
+      nowLocal: () => DateTime(2026, 3, 13, 10, 5),
+      loadTodos: () async => <Todo>[
+        todo(id: 'focus', title: 'Fix prod bug', updatedAtMs: 10),
+      ],
+      resolveAiService: () async => secondService,
+    );
+
+    await secondStore.refresh();
+
+    expect(firstService.calls, 1);
+    expect(secondService.calls, 0);
+    expect(secondStore.snapshot.source, TaskPrioritySnapshotSource.hybrid);
+    expect(secondStore.snapshot.primaryFocus?.reasonText,
+        'Still the best option.');
+  });
+
+  test('uses persisted AI rerank when ai service is unavailable', () async {
+    SharedPreferences.setMockInitialValues({});
+    final firstService = _CountingAiService(
+      const TaskPriorityAiBatchResult(
+        entries: <TaskPriorityAiEntry>[
+          TaskPriorityAiEntry(
+            todoId: 'focus',
+            priorityBand: TaskPriorityAiBand.focus,
+            semanticAdjustment: 20,
+            reason: 'Still the best option.',
+            suggestedAction: TaskPrioritySuggestionKind.doNow,
+            confidence: TaskPriorityAiConfidence.high,
+          ),
+        ],
+      ),
+      cacheScopeKey: 'byok|model|en-US',
+    );
+    final firstStore = TaskPriorityStore.fromLoaders(
+      nowLocal: () => DateTime(2026, 3, 13, 10, 0),
+      loadTodos: () async => <Todo>[
+        todo(id: 'focus', title: 'Fix prod bug', updatedAtMs: 10),
+      ],
+      resolveAiService: () async => firstService,
+    );
+
+    await firstStore.refresh();
+
+    final secondStore = TaskPriorityStore.fromLoaders(
+      nowLocal: () => DateTime(2026, 3, 13, 10, 5),
+      loadTodos: () async => <Todo>[
+        todo(id: 'focus', title: 'Fix prod bug', updatedAtMs: 10),
+      ],
+      resolveAiService: () async => null,
+      resolveAiCacheScopeKey: () async => 'byok|model|en-US',
+    );
+
+    await secondStore.refresh();
+
+    expect(secondStore.snapshot.source, TaskPrioritySnapshotSource.hybrid);
+    expect(secondStore.snapshot.primaryFocus?.reasonText,
+        'Still the best option.');
+  });
+
+  test(
+      'does not reuse persisted AI rerank when unavailable cache scope differs',
+      () async {
+    SharedPreferences.setMockInitialValues({});
+    final firstService = _CountingAiService(
+      const TaskPriorityAiBatchResult(
+        entries: <TaskPriorityAiEntry>[
+          TaskPriorityAiEntry(
+            todoId: 'focus',
+            priorityBand: TaskPriorityAiBand.focus,
+            semanticAdjustment: 20,
+            reason: 'Still the best option.',
+            suggestedAction: TaskPrioritySuggestionKind.doNow,
+            confidence: TaskPriorityAiConfidence.high,
+          ),
+        ],
+      ),
+      cacheScopeKey: 'byok|model|en-US',
+    );
+    final firstStore = TaskPriorityStore.fromLoaders(
+      nowLocal: () => DateTime(2026, 3, 13, 10, 0),
+      loadTodos: () async => <Todo>[
+        todo(id: 'focus', title: 'Fix prod bug', updatedAtMs: 10),
+      ],
+      resolveAiService: () async => firstService,
+    );
+
+    await firstStore.refresh();
+
+    final secondStore = TaskPriorityStore.fromLoaders(
+      nowLocal: () => DateTime(2026, 3, 13, 10, 5),
+      loadTodos: () async => <Todo>[
+        todo(id: 'focus', title: 'Fix prod bug', updatedAtMs: 10),
+      ],
+      resolveAiService: () async => null,
+      resolveAiCacheScopeKey: () async => 'byok|other-model|en-US',
+    );
+
+    await secondStore.refresh();
+
+    expect(secondStore.snapshot.source, TaskPrioritySnapshotSource.rules);
+    expect(secondStore.snapshot.primaryFocus?.reasonText, isNull);
+  });
+
+  test(
+      'separator-like fields do not collide in persisted AI request signatures',
+      () async {
+    SharedPreferences.setMockInitialValues({});
+    final firstService = _CountingAiService(
+      const TaskPriorityAiBatchResult(
+        entries: <TaskPriorityAiEntry>[
+          TaskPriorityAiEntry(
+            todoId: 'a:b',
+            priorityBand: TaskPriorityAiBand.focus,
+            semanticAdjustment: 20,
+            reason: 'First tuple result.',
+            suggestedAction: TaskPrioritySuggestionKind.doNow,
+            confidence: TaskPriorityAiConfidence.high,
+          ),
+        ],
+      ),
+      cacheScopeKey: 'byok|model|en-US',
+    );
+    final firstStore = TaskPriorityStore.fromLoaders(
+      nowLocal: () => DateTime(2026, 3, 13, 10, 0),
+      loadTodos: () async => <Todo>[
+        todo(id: 'a:b', title: 'Task A', status: 'c', updatedAtMs: 10),
+      ],
+      resolveAiService: () async => firstService,
+    );
+
+    await firstStore.refresh();
+
+    final secondService = _CountingAiService(
+      const TaskPriorityAiBatchResult(
+        entries: <TaskPriorityAiEntry>[
+          TaskPriorityAiEntry(
+            todoId: 'a',
+            priorityBand: TaskPriorityAiBand.focus,
+            semanticAdjustment: 20,
+            reason: 'Second tuple result.',
+            suggestedAction: TaskPrioritySuggestionKind.doNow,
+            confidence: TaskPriorityAiConfidence.high,
+          ),
+        ],
+      ),
+      cacheScopeKey: 'byok|model|en-US',
+    );
+    final secondStore = TaskPriorityStore.fromLoaders(
+      nowLocal: () => DateTime(2026, 3, 13, 10, 5),
+      loadTodos: () async => <Todo>[
+        todo(id: 'a', title: 'Task B', status: 'b:c', updatedAtMs: 10),
+      ],
+      resolveAiService: () async => secondService,
+    );
+
+    await secondStore.refresh();
+
+    expect(firstService.calls, 1);
+    expect(secondService.calls, 1);
+    expect(secondStore.snapshot.source, TaskPrioritySnapshotSource.hybrid);
+    expect(
+        secondStore.snapshot.primaryFocus?.reasonText, 'Second tuple result.');
   });
 
   test('updatedAtMs churn alone does not trigger a second rerank', () async {

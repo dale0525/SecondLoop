@@ -31,6 +31,17 @@ class TaskPriorityAiEntry {
   final TaskPrioritySuggestionKind suggestedAction;
   final TaskPriorityAiConfidence confidence;
 
+  Map<String, Object?> toJson() {
+    return <String, Object?>{
+      'todo_id': todoId,
+      'priority_band': priorityBand.name,
+      'semantic_adjustment': semanticAdjustment,
+      'reason': reason,
+      'suggested_action': suggestedAction.name,
+      'confidence': confidence.name,
+    };
+  }
+
   factory TaskPriorityAiEntry.fromJson(Map<String, Object?> json) {
     final todoId = (json['todo_id'] ?? json['todoId'] ?? '').toString().trim();
     final priorityBand = switch (
@@ -81,6 +92,29 @@ class TaskPriorityAiBatchResult {
       : entries = const <TaskPriorityAiEntry>[];
 
   final List<TaskPriorityAiEntry> entries;
+
+  Map<String, Object?> toJson() {
+    return <String, Object?>{
+      'entries': entries.map((entry) => entry.toJson()).toList(growable: false),
+    };
+  }
+
+  factory TaskPriorityAiBatchResult.fromJson(Map<String, Object?> json) {
+    final rawEntries = json['entries'];
+    if (rawEntries is! List) {
+      return const TaskPriorityAiBatchResult.empty();
+    }
+    final entries = <TaskPriorityAiEntry>[];
+    for (final rawEntry in rawEntries) {
+      if (rawEntry is! Map) continue;
+      entries.add(
+        TaskPriorityAiEntry.fromJson(
+          rawEntry.map((key, value) => MapEntry(key.toString(), value)),
+        ),
+      );
+    }
+    return TaskPriorityAiBatchResult(entries: entries);
+  }
 }
 
 class TaskPriorityAiCandidate {

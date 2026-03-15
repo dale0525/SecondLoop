@@ -46,6 +46,13 @@ void main() {
           updatedAtMs: 0,
         ),
       ],
+      checklistProgress: const <TodoChecklistProgress>[
+        TodoChecklistProgress(
+          todoId: 't_in_progress',
+          totalCount: 3,
+          doneCount: 1,
+        ),
+      ],
     );
 
     await tester.pumpWidget(
@@ -76,6 +83,12 @@ void main() {
     expect(inProgress, findsOneWidget);
     expect(open, findsOneWidget);
     expect(done, findsOneWidget);
+    expect(
+      find.byKey(
+          const ValueKey('todo_agenda_checklist_progress_t_in_progress')),
+      findsOneWidget,
+    );
+    expect(find.text('1/3'), findsOneWidget);
 
     final inProgressY = tester.getTopLeft(inProgress).dy;
     final openY = tester.getTopLeft(open).dy;
@@ -87,10 +100,24 @@ void main() {
 }
 
 final class _Backend extends TestAppBackend {
-  _Backend({required List<Todo> todos}) : _todos = List<Todo>.from(todos);
+  _Backend({
+    required List<Todo> todos,
+    List<TodoChecklistProgress> checklistProgress =
+        const <TodoChecklistProgress>[],
+  })  : _todos = List<Todo>.from(todos),
+        _checklistProgress =
+            List<TodoChecklistProgress>.from(checklistProgress);
 
   final List<Todo> _todos;
+  final List<TodoChecklistProgress> _checklistProgress;
 
   @override
   Future<List<Todo>> listTodos(Uint8List key) async => List<Todo>.from(_todos);
+
+  @override
+  Future<List<TodoChecklistProgress>> listTodoChecklistProgress(
+    Uint8List key,
+  ) async {
+    return List<TodoChecklistProgress>.from(_checklistProgress);
+  }
 }

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../i18n/strings.g.dart';
+import '../../../src/rust/db.dart';
 import '../../../ui/sl_surface.dart';
 import '../../../ui/sl_tokens.dart';
 import 'task_hub_page_sections.dart';
@@ -11,6 +12,7 @@ import 'task_priority_models.dart';
 class TaskHubFocusSection extends StatelessWidget {
   const TaskHubFocusSection({
     required this.entries,
+    required this.checklistProgressByTodoId,
     required this.onOpenTodo,
     required this.onQuickAction,
     this.onFeedback,
@@ -18,6 +20,7 @@ class TaskHubFocusSection extends StatelessWidget {
   });
 
   final List<TaskPriorityEntry> entries;
+  final Map<String, TodoChecklistProgress> checklistProgressByTodoId;
   final Future<void> Function(
       TaskPriorityEntry entry, TaskHubQuickAction action) onQuickAction;
   final Future<void> Function(TaskPriorityEntry entry) onOpenTodo;
@@ -56,6 +59,7 @@ class TaskHubFocusSection extends StatelessWidget {
             for (var i = 0; i < entries.length; i++) ...[
               TaskHubEntryCard(
                 entry: entries[i],
+                checklistProgressByTodoId: checklistProgressByTodoId,
                 emphasize: i == 0,
                 onOpenTodo: () => onOpenTodo(entries[i]),
                 onQuickAction: (action) => onQuickAction(entries[i], action),

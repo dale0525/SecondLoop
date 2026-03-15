@@ -51,6 +51,8 @@ class _TodoAgendaPageState extends State<TodoAgendaPage> {
   List<Todo> _inProgress = const <Todo>[];
   List<Todo> _open = const <Todo>[];
   List<Todo> _done = const <Todo>[];
+  Map<String, TodoChecklistProgress> _checklistProgressByTodoId =
+      const <String, TodoChecklistProgress>{};
   Map<String, String> _recurrenceRuleByTodoId = const <String, String>{};
   var _doneVisible = 0;
   var _initialized = false;
@@ -110,6 +112,15 @@ class _TodoAgendaPageState extends State<TodoAgendaPage> {
       final backend = AppBackendScope.of(context);
       final sessionKey = SessionScope.of(context).sessionKey;
       final todos = await backend.listTodos(sessionKey);
+      Map<String, TodoChecklistProgress>? checklistProgressByTodoId;
+      try {
+        final checklistProgress = await backend.listTodoChecklistProgress(
+          sessionKey,
+        );
+        checklistProgressByTodoId = {
+          for (final item in checklistProgress) item.todoId: item,
+        };
+      } catch (_) {}
 
       final scheduled = todos
           .where((t) => t.dueAtMs != null && t.status != 'dismissed')
@@ -185,6 +196,9 @@ class _TodoAgendaPageState extends State<TodoAgendaPage> {
         _inProgress = inProgress;
         _open = open;
         _done = done;
+        if (checklistProgressByTodoId != null) {
+          _checklistProgressByTodoId = checklistProgressByTodoId;
+        }
         _recurrenceRuleByTodoId = recurrenceRuleByTodoId;
         _doneVisible = math.min(_kDonePageSize, done.length);
       });
@@ -196,6 +210,7 @@ class _TodoAgendaPageState extends State<TodoAgendaPage> {
         _inProgress = const <Todo>[];
         _open = const <Todo>[];
         _done = const <Todo>[];
+        _checklistProgressByTodoId = const <String, TodoChecklistProgress>{};
         _recurrenceRuleByTodoId = const <String, String>{};
         _doneVisible = 0;
       });
@@ -567,6 +582,11 @@ class _TodoAgendaPageState extends State<TodoAgendaPage> {
                   final recurrenceText = recurrenceRule == null
                       ? null
                       : _formatRecurrenceRule(context, recurrenceRule);
+                  final checklistProgress = _checklistProgressByTodoId[todo.id];
+                  final checklistProgressText = checklistProgress == null ||
+                          checklistProgress.totalCount <= 0
+                      ? null
+                      : '${checklistProgress.doneCount}/${checklistProgress.totalCount}';
                   final dueAtMs = todo.dueAtMs;
                   final dueAtLocal = dueAtMs == null
                       ? null
@@ -741,7 +761,8 @@ class _TodoAgendaPageState extends State<TodoAgendaPage> {
                                         ],
                                       ),
                                     if (dueText != null ||
-                                        recurrenceText != null) ...[
+                                        recurrenceText != null ||
+                                        checklistProgressText != null) ...[
                                       const SizedBox(height: 8),
                                       Padding(
                                         padding:
@@ -769,6 +790,22 @@ class _TodoAgendaPageState extends State<TodoAgendaPage> {
                                                           .neutral,
                                                   onPressed: () =>
                                                       _editDue(todo),
+                                                ),
+                                              if (checklistProgressText != null)
+                                                Text(
+                                                  checklistProgressText,
+                                                  key: ValueKey(
+                                                    'todo_agenda_checklist_progress_${todo.id}',
+                                                  ),
+                                                  style: Theme.of(context)
+                                                      .textTheme
+                                                      .bodySmall
+                                                      ?.copyWith(
+                                                        color: colorScheme
+                                                            .onSurfaceVariant,
+                                                        fontWeight:
+                                                            FontWeight.w600,
+                                                      ),
                                                 ),
                                               if (recurrenceText != null)
                                                 _TodoDueChip(

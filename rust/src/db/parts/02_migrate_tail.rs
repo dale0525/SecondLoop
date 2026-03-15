@@ -87,6 +87,77 @@ PRAGMA user_version = 32;
     Ok(())
 }
 
+fn migrate_from_v32_to_v33(conn: &Connection) -> Result<()> {
+    conn.execute_batch(
+        r#"
+CREATE TABLE IF NOT EXISTS todo_checklist_items (
+  id TEXT PRIMARY KEY,
+  todo_id TEXT NOT NULL,
+  content BLOB NOT NULL,
+  is_done INTEGER NOT NULL DEFAULT 0,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_at_ms INTEGER NOT NULL,
+  updated_at_ms INTEGER NOT NULL,
+  FOREIGN KEY(todo_id) REFERENCES todos(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_todo_checklist_items_todo_sort
+  ON todo_checklist_items(todo_id, sort_order, created_at_ms);
+CREATE INDEX IF NOT EXISTS idx_todo_checklist_items_todo_done
+  ON todo_checklist_items(todo_id, is_done);
+
+CREATE TABLE IF NOT EXISTS todo_checklist_suggestions (
+  id TEXT PRIMARY KEY,
+  todo_id TEXT NOT NULL,
+  content BLOB NOT NULL,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  state TEXT NOT NULL,
+  source TEXT NOT NULL,
+  generation_key TEXT,
+  created_at_ms INTEGER NOT NULL,
+  updated_at_ms INTEGER NOT NULL,
+  dismissed_at_ms INTEGER,
+  applied_checklist_item_id TEXT,
+  FOREIGN KEY(todo_id) REFERENCES todos(id) ON DELETE CASCADE,
+  FOREIGN KEY(applied_checklist_item_id) REFERENCES todo_checklist_items(id) ON DELETE SET NULL
+);
+CREATE INDEX IF NOT EXISTS idx_todo_checklist_suggestions_todo_state
+  ON todo_checklist_suggestions(todo_id, state, sort_order);
+CREATE INDEX IF NOT EXISTS idx_todo_checklist_suggestions_generation_key
+  ON todo_checklist_suggestions(generation_key);
+
+PRAGMA user_version = 33;
+"#,
+    )?;
+    Ok(())
+}
+
+
+fn migrate_from_v33_to_v34(conn: &Connection) -> Result<()> {
+    conn.execute_batch(
+        r#"
+UPDATE todo_checklist_suggestions
+SET state = 'pending',
+    updated_at_ms = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER)
+WHERE state = 'applied' AND applied_checklist_item_id IS NULL;
+
+CREATE TRIGGER IF NOT EXISTS trg_todo_checklist_suggestions_revert_deleted_item
+BEFORE DELETE ON todo_checklist_items
+FOR EACH ROW
+BEGIN
+  UPDATE todo_checklist_suggestions
+  SET state = 'pending',
+      updated_at_ms = CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER),
+      applied_checklist_item_id = NULL
+  WHERE applied_checklist_item_id = OLD.id
+    AND state = 'applied';
+END;
+
+PRAGMA user_version = 34;
+"#,
+    )?;
+    Ok(())
+}
+
 pub(crate) fn app_dir_from_conn(conn: &Connection) -> Result<PathBuf> {
     let mut stmt = conn.prepare("PRAGMA database_list")?;
     let mut rows = stmt.query([])?;
@@ -140,6 +211,8 @@ DELETE FROM messages;
 DELETE FROM tags;
 DELETE FROM conversations;
 DELETE FROM todo_deletions;
+DELETE FROM todo_checklist_suggestions;
+DELETE FROM todo_checklist_items;
 DELETE FROM todos;
 DELETE FROM todo_activity_attachments;
 DELETE FROM todo_activities;

@@ -231,6 +231,105 @@ Future<TodoActivity> dbMoveTodoActivity(
     RustLib.instance.api.crateApiCoreDbMoveTodoActivity(
         appDir: appDir, key: key, activityId: activityId, toTodoId: toTodoId);
 
+Future<TodoChecklistItem> dbCreateTodoChecklistItem(
+        {required String appDir,
+        required List<int> key,
+        required String todoId,
+        required String content}) =>
+    RustLib.instance.api.crateApiCoreDbCreateTodoChecklistItem(
+        appDir: appDir, key: key, todoId: todoId, content: content);
+
+Future<List<TodoChecklistItem>> dbListTodoChecklistItems(
+        {required String appDir,
+        required List<int> key,
+        required String todoId}) =>
+    RustLib.instance.api.crateApiCoreDbListTodoChecklistItems(
+        appDir: appDir, key: key, todoId: todoId);
+
+Future<TodoChecklistItem> dbUpdateTodoChecklistItemContent(
+        {required String appDir,
+        required List<int> key,
+        required String itemId,
+        required String content}) =>
+    RustLib.instance.api.crateApiCoreDbUpdateTodoChecklistItemContent(
+        appDir: appDir, key: key, itemId: itemId, content: content);
+
+Future<TodoChecklistItem> dbSetTodoChecklistItemDone(
+        {required String appDir,
+        required List<int> key,
+        required String itemId,
+        required bool isDone}) =>
+    RustLib.instance.api.crateApiCoreDbSetTodoChecklistItemDone(
+        appDir: appDir, key: key, itemId: itemId, isDone: isDone);
+
+Future<void> dbDeleteTodoChecklistItem(
+        {required String appDir,
+        required List<int> key,
+        required String itemId}) =>
+    RustLib.instance.api.crateApiCoreDbDeleteTodoChecklistItem(
+        appDir: appDir, key: key, itemId: itemId);
+
+Future<void> dbReorderTodoChecklistItems(
+        {required String appDir,
+        required List<int> key,
+        required String todoId,
+        required List<String> orderedItemIds}) =>
+    RustLib.instance.api.crateApiCoreDbReorderTodoChecklistItems(
+        appDir: appDir,
+        key: key,
+        todoId: todoId,
+        orderedItemIds: orderedItemIds);
+
+Future<List<TodoChecklistProgress>> dbListTodoChecklistProgress(
+        {required String appDir, required List<int> key}) =>
+    RustLib.instance.api
+        .crateApiCoreDbListTodoChecklistProgress(appDir: appDir, key: key);
+
+Future<List<TodoChecklistSuggestion>> dbListTodoChecklistSuggestions(
+        {required String appDir,
+        required List<int> key,
+        required String todoId}) =>
+    RustLib.instance.api.crateApiCoreDbListTodoChecklistSuggestions(
+        appDir: appDir, key: key, todoId: todoId);
+
+Future<List<TodoChecklistSuggestion>> dbUpsertGeneratedTodoChecklistSuggestions(
+        {required String appDir,
+        required List<int> key,
+        required String todoId,
+        required List<String> suggestions,
+        required String source,
+        String? generationKey}) =>
+    RustLib.instance.api.crateApiCoreDbUpsertGeneratedTodoChecklistSuggestions(
+        appDir: appDir,
+        key: key,
+        todoId: todoId,
+        suggestions: suggestions,
+        source: source,
+        generationKey: generationKey);
+
+Future<List<TodoChecklistItem>> dbApplyTodoChecklistSuggestions(
+        {required String appDir,
+        required List<int> key,
+        required String todoId,
+        required List<String> suggestionIds}) =>
+    RustLib.instance.api.crateApiCoreDbApplyTodoChecklistSuggestions(
+        appDir: appDir, key: key, todoId: todoId, suggestionIds: suggestionIds);
+
+Future<void> dbDismissTodoChecklistSuggestions(
+        {required String appDir,
+        required List<int> key,
+        required String todoId,
+        required List<String> suggestionIds}) =>
+    RustLib.instance.api.crateApiCoreDbDismissTodoChecklistSuggestions(
+        appDir: appDir, key: key, todoId: todoId, suggestionIds: suggestionIds);
+
+Future<void> dbDismissAllTodoChecklistSuggestions(
+        {required String appDir,
+        required List<int> key,
+        required String todoId}) =>
+    RustLib.instance.api.crateApiCoreDbDismissAllTodoChecklistSuggestions(
+        appDir: appDir, key: key, todoId: todoId);
+
 Future<List<TodoActivity>> dbListTodoActivities(
         {required String appDir,
         required List<int> key,

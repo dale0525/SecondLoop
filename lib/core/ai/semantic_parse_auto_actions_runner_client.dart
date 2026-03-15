@@ -196,4 +196,29 @@ final class BackendSemanticParseAutoActionsClient
 
     return future.timeout(timeout);
   }
+
+  @override
+  Future<List<String>> generateChecklistSuggestions({
+    required String taskTitle,
+    required String taskContext,
+    required String localeTag,
+    String? status,
+    int? dueAtMs,
+    required Duration timeout,
+  }) {
+    return requestTodoChecklistSuggestions(
+      backend: _backend,
+      sessionKey: _sessionKey,
+      route: askAiRoute,
+      gatewayBaseUrl: gatewayBaseUrl,
+      idToken: idToken,
+      modelName: modelName,
+      taskTitle: taskTitle,
+      taskContext: taskContext,
+      localeTag: localeTag,
+      status: status,
+      dueAtMs: dueAtMs,
+      timeout: timeout,
+    );
+  }
 }

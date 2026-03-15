@@ -77,6 +77,91 @@ typedef AskAiStreamScopedFn = Stream<String> Function({
   required String localDay,
 });
 
+typedef DbCreateTodoChecklistItemFn = Future<TodoChecklistItem> Function({
+  required String appDir,
+  required List<int> key,
+  required String todoId,
+  required String content,
+});
+
+typedef DbListTodoChecklistItemsFn = Future<List<TodoChecklistItem>> Function({
+  required String appDir,
+  required List<int> key,
+  required String todoId,
+});
+
+typedef DbUpdateTodoChecklistItemContentFn = Future<TodoChecklistItem>
+    Function({
+  required String appDir,
+  required List<int> key,
+  required String itemId,
+  required String content,
+});
+
+typedef DbSetTodoChecklistItemDoneFn = Future<TodoChecklistItem> Function({
+  required String appDir,
+  required List<int> key,
+  required String itemId,
+  required bool isDone,
+});
+
+typedef DbDeleteTodoChecklistItemFn = Future<void> Function({
+  required String appDir,
+  required List<int> key,
+  required String itemId,
+});
+
+typedef DbReorderTodoChecklistItemsFn = Future<void> Function({
+  required String appDir,
+  required List<int> key,
+  required String todoId,
+  required List<String> orderedItemIds,
+});
+
+typedef DbListTodoChecklistProgressFn = Future<List<TodoChecklistProgress>>
+    Function({
+  required String appDir,
+  required List<int> key,
+});
+
+typedef DbListTodoChecklistSuggestionsFn = Future<List<TodoChecklistSuggestion>>
+    Function({
+  required String appDir,
+  required List<int> key,
+  required String todoId,
+});
+
+typedef DbUpsertGeneratedTodoChecklistSuggestionsFn
+    = Future<List<TodoChecklistSuggestion>> Function({
+  required String appDir,
+  required List<int> key,
+  required String todoId,
+  required List<String> suggestions,
+  required String source,
+  String? generationKey,
+});
+
+typedef DbApplyTodoChecklistSuggestionsFn = Future<List<TodoChecklistItem>>
+    Function({
+  required String appDir,
+  required List<int> key,
+  required String todoId,
+  required List<String> suggestionIds,
+});
+
+typedef DbDismissTodoChecklistSuggestionsFn = Future<void> Function({
+  required String appDir,
+  required List<int> key,
+  required String todoId,
+  required List<String> suggestionIds,
+});
+
+typedef DbDismissAllTodoChecklistSuggestionsFn = Future<void> Function({
+  required String appDir,
+  required List<int> key,
+  required String todoId,
+});
+
 typedef AskAiStreamCloudGatewayScopedFn = Stream<String> Function({
   required String appDir,
   required List<int> key,
@@ -109,6 +194,20 @@ class NativeAppBackend
     DbReleaseLocalEmbeddingModelIfIdleFn? dbReleaseLocalEmbeddingModelIfIdle,
     AskAiStreamScopedFn? askAiStreamScopedFn,
     AskAiStreamCloudGatewayScopedFn? askAiStreamCloudGatewayScopedFn,
+    DbCreateTodoChecklistItemFn? dbCreateTodoChecklistItem,
+    DbListTodoChecklistItemsFn? dbListTodoChecklistItems,
+    DbUpdateTodoChecklistItemContentFn? dbUpdateTodoChecklistItemContent,
+    DbSetTodoChecklistItemDoneFn? dbSetTodoChecklistItemDone,
+    DbDeleteTodoChecklistItemFn? dbDeleteTodoChecklistItem,
+    DbReorderTodoChecklistItemsFn? dbReorderTodoChecklistItems,
+    DbListTodoChecklistProgressFn? dbListTodoChecklistProgress,
+    DbListTodoChecklistSuggestionsFn? dbListTodoChecklistSuggestions,
+    DbUpsertGeneratedTodoChecklistSuggestionsFn?
+        dbUpsertGeneratedTodoChecklistSuggestions,
+    DbApplyTodoChecklistSuggestionsFn? dbApplyTodoChecklistSuggestions,
+    DbDismissTodoChecklistSuggestionsFn? dbDismissTodoChecklistSuggestions,
+    DbDismissAllTodoChecklistSuggestionsFn?
+        dbDismissAllTodoChecklistSuggestions,
     RustLibInitFn? rustLibInit,
   })  : _secureBlobStore = SecureBlobStore(storage: secureStorage),
         _appDirProvider = appDirProvider ?? _defaultAppDirProvider,
@@ -125,6 +224,33 @@ class NativeAppBackend
             askAiStreamScopedFn ?? rust_ask_scope.ragAskAiStreamScoped,
         _askAiStreamCloudGatewayScoped = askAiStreamCloudGatewayScopedFn ??
             rust_ask_scope.ragAskAiStreamCloudGatewayScoped,
+        _dbCreateTodoChecklistItem =
+            dbCreateTodoChecklistItem ?? rust_core.dbCreateTodoChecklistItem,
+        _dbListTodoChecklistItems =
+            dbListTodoChecklistItems ?? rust_core.dbListTodoChecklistItems,
+        _dbUpdateTodoChecklistItemContent = dbUpdateTodoChecklistItemContent ??
+            rust_core.dbUpdateTodoChecklistItemContent,
+        _dbSetTodoChecklistItemDone =
+            dbSetTodoChecklistItemDone ?? rust_core.dbSetTodoChecklistItemDone,
+        _dbDeleteTodoChecklistItem =
+            dbDeleteTodoChecklistItem ?? rust_core.dbDeleteTodoChecklistItem,
+        _dbReorderTodoChecklistItems = dbReorderTodoChecklistItems ??
+            rust_core.dbReorderTodoChecklistItems,
+        _dbListTodoChecklistProgress = dbListTodoChecklistProgress ??
+            rust_core.dbListTodoChecklistProgress,
+        _dbListTodoChecklistSuggestions = dbListTodoChecklistSuggestions ??
+            rust_core.dbListTodoChecklistSuggestions,
+        _dbUpsertGeneratedTodoChecklistSuggestions =
+            dbUpsertGeneratedTodoChecklistSuggestions ??
+                rust_core.dbUpsertGeneratedTodoChecklistSuggestions,
+        _dbApplyTodoChecklistSuggestions = dbApplyTodoChecklistSuggestions ??
+            rust_core.dbApplyTodoChecklistSuggestions,
+        _dbDismissTodoChecklistSuggestions =
+            dbDismissTodoChecklistSuggestions ??
+                rust_core.dbDismissTodoChecklistSuggestions,
+        _dbDismissAllTodoChecklistSuggestions =
+            dbDismissAllTodoChecklistSuggestions ??
+                rust_core.dbDismissAllTodoChecklistSuggestions,
         _rustLibInit = rustLibInit ??
             (() => RustLib.init(
                   externalLibrary: resolveDesktopRustExternalLibrary(),
@@ -139,6 +265,20 @@ class NativeAppBackend
       _dbReleaseLocalEmbeddingModelIfIdle;
   final AskAiStreamScopedFn _askAiStreamScoped;
   final AskAiStreamCloudGatewayScopedFn _askAiStreamCloudGatewayScoped;
+  final DbCreateTodoChecklistItemFn _dbCreateTodoChecklistItem;
+  final DbListTodoChecklistItemsFn _dbListTodoChecklistItems;
+  final DbUpdateTodoChecklistItemContentFn _dbUpdateTodoChecklistItemContent;
+  final DbSetTodoChecklistItemDoneFn _dbSetTodoChecklistItemDone;
+  final DbDeleteTodoChecklistItemFn _dbDeleteTodoChecklistItem;
+  final DbReorderTodoChecklistItemsFn _dbReorderTodoChecklistItems;
+  final DbListTodoChecklistProgressFn _dbListTodoChecklistProgress;
+  final DbListTodoChecklistSuggestionsFn _dbListTodoChecklistSuggestions;
+  final DbUpsertGeneratedTodoChecklistSuggestionsFn
+      _dbUpsertGeneratedTodoChecklistSuggestions;
+  final DbApplyTodoChecklistSuggestionsFn _dbApplyTodoChecklistSuggestions;
+  final DbDismissTodoChecklistSuggestionsFn _dbDismissTodoChecklistSuggestions;
+  final DbDismissAllTodoChecklistSuggestionsFn
+      _dbDismissAllTodoChecklistSuggestions;
   final RustLibInitFn _rustLibInit;
 
   String? _appDir;
@@ -1022,6 +1162,175 @@ class NativeAppBackend
       key: key,
       activityId: activityId,
       toTodoId: toTodoId,
+    );
+  }
+
+  @override
+  Future<TodoChecklistItem> createTodoChecklistItem(
+    Uint8List key, {
+    required String todoId,
+    required String content,
+  }) async {
+    final appDir = await _getAppDir();
+    return _dbCreateTodoChecklistItem(
+      appDir: appDir,
+      key: key,
+      todoId: todoId,
+      content: content,
+    );
+  }
+
+  @override
+  Future<List<TodoChecklistItem>> listTodoChecklistItems(
+    Uint8List key,
+    String todoId,
+  ) async {
+    final appDir = await _getAppDir();
+    return _dbListTodoChecklistItems(
+      appDir: appDir,
+      key: key,
+      todoId: todoId,
+    );
+  }
+
+  @override
+  Future<TodoChecklistItem> updateTodoChecklistItemContent(
+    Uint8List key, {
+    required String itemId,
+    required String content,
+  }) async {
+    final appDir = await _getAppDir();
+    return _dbUpdateTodoChecklistItemContent(
+      appDir: appDir,
+      key: key,
+      itemId: itemId,
+      content: content,
+    );
+  }
+
+  @override
+  Future<TodoChecklistItem> setTodoChecklistItemDone(
+    Uint8List key, {
+    required String itemId,
+    required bool isDone,
+  }) async {
+    final appDir = await _getAppDir();
+    return _dbSetTodoChecklistItemDone(
+      appDir: appDir,
+      key: key,
+      itemId: itemId,
+      isDone: isDone,
+    );
+  }
+
+  @override
+  Future<void> deleteTodoChecklistItem(
+    Uint8List key, {
+    required String itemId,
+  }) async {
+    final appDir = await _getAppDir();
+    await _dbDeleteTodoChecklistItem(
+      appDir: appDir,
+      key: key,
+      itemId: itemId,
+    );
+  }
+
+  @override
+  Future<void> reorderTodoChecklistItems(
+    Uint8List key, {
+    required String todoId,
+    required List<String> orderedItemIds,
+  }) async {
+    final appDir = await _getAppDir();
+    await _dbReorderTodoChecklistItems(
+      appDir: appDir,
+      key: key,
+      todoId: todoId,
+      orderedItemIds: orderedItemIds,
+    );
+  }
+
+  @override
+  Future<List<TodoChecklistProgress>> listTodoChecklistProgress(
+    Uint8List key,
+  ) async {
+    final appDir = await _getAppDir();
+    return _dbListTodoChecklistProgress(appDir: appDir, key: key);
+  }
+
+  @override
+  Future<List<TodoChecklistSuggestion>> listTodoChecklistSuggestions(
+    Uint8List key,
+    String todoId,
+  ) async {
+    final appDir = await _getAppDir();
+    return _dbListTodoChecklistSuggestions(
+      appDir: appDir,
+      key: key,
+      todoId: todoId,
+    );
+  }
+
+  @override
+  Future<List<TodoChecklistSuggestion>> upsertGeneratedTodoChecklistSuggestions(
+    Uint8List key, {
+    required String todoId,
+    required List<String> suggestions,
+    required String source,
+    String? generationKey,
+  }) async {
+    final appDir = await _getAppDir();
+    return _dbUpsertGeneratedTodoChecklistSuggestions(
+      appDir: appDir,
+      key: key,
+      todoId: todoId,
+      suggestions: suggestions,
+      source: source,
+      generationKey: generationKey,
+    );
+  }
+
+  @override
+  Future<List<TodoChecklistItem>> applyTodoChecklistSuggestions(
+    Uint8List key, {
+    required String todoId,
+    required List<String> suggestionIds,
+  }) async {
+    final appDir = await _getAppDir();
+    return _dbApplyTodoChecklistSuggestions(
+      appDir: appDir,
+      key: key,
+      todoId: todoId,
+      suggestionIds: suggestionIds,
+    );
+  }
+
+  @override
+  Future<void> dismissTodoChecklistSuggestions(
+    Uint8List key, {
+    required String todoId,
+    required List<String> suggestionIds,
+  }) async {
+    final appDir = await _getAppDir();
+    await _dbDismissTodoChecklistSuggestions(
+      appDir: appDir,
+      key: key,
+      todoId: todoId,
+      suggestionIds: suggestionIds,
+    );
+  }
+
+  @override
+  Future<void> dismissAllTodoChecklistSuggestions(
+    Uint8List key, {
+    required String todoId,
+  }) async {
+    final appDir = await _getAppDir();
+    await _dbDismissAllTodoChecklistSuggestions(
+      appDir: appDir,
+      key: key,
+      todoId: todoId,
     );
   }
 

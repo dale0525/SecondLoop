@@ -156,9 +156,15 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.longPress(
-      find.textContaining('TODO_LONG_MARKER', findRichText: true).first,
+    final longMessageFinder =
+        find.textContaining('TODO_LONG_MARKER', findRichText: true).first;
+    await tester.scrollUntilVisible(
+      longMessageFinder,
+      240,
+      scrollable: find.byType(Scrollable).first,
     );
+    final longMessageTopLeft = tester.getTopLeft(longMessageFinder);
+    await tester.longPressAt(longMessageTopLeft + const Offset(24, 24));
     await tester.pumpAndSettle();
 
     await tester.tap(find.byKey(const ValueKey('message_action_edit')));

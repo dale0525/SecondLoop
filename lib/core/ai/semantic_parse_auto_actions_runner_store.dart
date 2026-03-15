@@ -709,6 +709,23 @@ final class BackendSemanticParseAutoActionsStore
     return todoId;
   }
 
+  @override
+  Future<void> upsertGeneratedChecklistSuggestions({
+    required String todoId,
+    required List<String> suggestions,
+    required String source,
+    String? generationKey,
+  }) async {
+    if (suggestions.isEmpty) return;
+    await _backend.upsertGeneratedTodoChecklistSuggestions(
+      _sessionKey,
+      todoId: todoId,
+      suggestions: suggestions,
+      source: source,
+      generationKey: generationKey,
+    );
+  }
+
   Future<String> _resolveCreateTodoId(String messageId) async {
     final normalizedMessageId = messageId.trim();
     if (normalizedMessageId.isEmpty) {

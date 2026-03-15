@@ -333,6 +333,10 @@ final class _TaskHubBackend implements AppBackend {
   }
 
   @override
+  Future<List<LlmProfile>> listLlmProfiles(Uint8List key) async =>
+      const <LlmProfile>[];
+
+  @override
   Future<Todo> setTodoStatus(
     Uint8List key, {
     required String todoId,

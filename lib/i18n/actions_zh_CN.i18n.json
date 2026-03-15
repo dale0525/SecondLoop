@@ -55,7 +55,25 @@
     "attach": "添加附件",
     "pickAttachment": "选择附件",
     "noAttachments": "暂无附件",
-    "attachmentNoteDefault": "添加了附件"
+    "attachmentNoteDefault": "添加了附件",
+    "checklistTitle": "执行清单",
+    "checklistHint": "添加一个步骤…",
+    "checklistAdd": "添加步骤",
+    "incompleteChecklistDoneTitle": "清单未完成，仍要完成任务吗？",
+    "incompleteChecklistDoneMessage": "还有未完成的清单项，但你仍然可以现在完成这个任务。",
+    "checklistSuggestionsTitle": "建议步骤",
+    "checklistEditTitle": "编辑步骤",
+    "checklistEdit": "编辑步骤",
+    "checklistDelete": "删除步骤",
+    "checklistMoveUp": "上移",
+    "checklistMoveDown": "下移",
+    "checklistApplyAll": "全部采用",
+    "checklistDismissAll": "全部忽略",
+    "checklistDismissSelected": "忽略所选",
+    "checklistGenerate": "生成建议",
+    "checklistRegenerate": "重新生成",
+    "checklistGenerating": "正在生成建议…",
+    "checklistSuggestionsEmpty": "暂时没有待处理的建议。"
   },
   "todoDelete": {
     "dialog": {

@@ -76,3 +76,6 @@ mod embedding_artifact_tests;
 
 #[cfg(test)]
 mod migration_archive_tests;
+
+#[cfg(test)]
+mod checklist_schema_tests;

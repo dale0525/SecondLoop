@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -228,6 +229,24 @@ void main() {
     );
 
     expect(backend.prompts.single, contains('current app language (zh-CN)'));
+  });
+
+  test('cacheScopeKey omits empty partition key entries', () {
+    final decoded = jsonDecode(
+      buildTaskPriorityAiCacheScopeKey(
+        route: AskAiRouteKind.byok,
+        gatewayBaseUrl: 'https://gateway.example',
+        modelName: 'gpt-4o-mini',
+        localeTag: 'zh-CN',
+      ),
+    ) as List<dynamic>;
+
+    expect(decoded, <String>[
+      'byok',
+      'https://gateway.example',
+      'gpt-4o-mini',
+      'zh-CN',
+    ]);
   });
 
   test('cacheScopeKey stays unique when config values contain pipes', () {

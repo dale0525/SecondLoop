@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../../i18n/strings.g.dart';
+import '../../../src/rust/db.dart';
 import '../../../ui/sl_surface.dart';
 import '../../../ui/sl_tokens.dart';
 import 'task_hub_quick_action_layout.dart';
@@ -21,6 +22,7 @@ class TaskHubPageSection extends StatelessWidget {
     required this.title,
     required this.sectionKey,
     required this.entries,
+    required this.checklistProgressByTodoId,
     required this.sectionKind,
     required this.onOpenTodo,
     required this.onQuickAction,
@@ -32,6 +34,7 @@ class TaskHubPageSection extends StatelessWidget {
   final String title;
   final Key sectionKey;
   final List<TaskPriorityEntry> entries;
+  final Map<String, TodoChecklistProgress> checklistProgressByTodoId;
   final TaskHubPageSectionKind sectionKind;
   final Future<void> Function(TaskPriorityEntry entry) onOpenTodo;
   final Future<void> Function(
@@ -65,6 +68,7 @@ class TaskHubPageSection extends StatelessWidget {
               for (var i = 0; i < entries.length; i++) ...[
                 TaskHubEntryCard(
                   entry: entries[i],
+                  checklistProgressByTodoId: checklistProgressByTodoId,
                   onOpenTodo: () => onOpenTodo(entries[i]),
                   onQuickAction: (action) => onQuickAction(entries[i], action),
                   onFeedback: onFeedback == null
@@ -88,6 +92,7 @@ class TaskHubPageSection extends StatelessWidget {
 class TaskHubEntryCard extends StatelessWidget {
   const TaskHubEntryCard({
     required this.entry,
+    required this.checklistProgressByTodoId,
     required this.onOpenTodo,
     required this.onQuickAction,
     this.onFeedback,
@@ -96,6 +101,7 @@ class TaskHubEntryCard extends StatelessWidget {
   });
 
   final TaskPriorityEntry entry;
+  final Map<String, TodoChecklistProgress> checklistProgressByTodoId;
   final VoidCallback onOpenTodo;
   final ValueChanged<TaskHubQuickAction> onQuickAction;
   final ValueChanged<TaskPriorityFeedbackKind>? onFeedback;
@@ -106,6 +112,11 @@ class TaskHubEntryCard extends StatelessWidget {
     final theme = Theme.of(context);
     final tokens = SlTokens.of(context);
     final layout = buildTaskHubQuickActionLayout(context, entry: entry);
+    final checklistProgress = checklistProgressByTodoId[entry.todo.id];
+    final checklistProgressText =
+        checklistProgress == null || checklistProgress.totalCount <= 0
+            ? null
+            : '${checklistProgress.doneCount}/${checklistProgress.totalCount}';
     return Container(
       key: ValueKey('task_hub_page_item_${entry.todo.id}'),
       decoration: BoxDecoration(
@@ -140,6 +151,19 @@ class TaskHubEntryCard extends StatelessWidget {
                             color: theme.colorScheme.onSurfaceVariant,
                           ),
                         ),
+                        if (checklistProgressText != null) ...[
+                          const SizedBox(height: 4),
+                          Text(
+                            checklistProgressText,
+                            key: ValueKey(
+                              'task_hub_checklist_progress_${entry.todo.id}',
+                            ),
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: theme.colorScheme.onSurfaceVariant,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
                         if ((entry.reasonText ?? '').isNotEmpty) ...[
                           const SizedBox(height: 4),
                           Text(

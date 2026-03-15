@@ -15,6 +15,7 @@ import '../../../core/ai/ai_routing.dart';
 import '../../../core/attachments/attachment_metadata_store.dart';
 import '../../../core/ai/semantic_parse_data_consent_prefs.dart';
 import '../../../core/ai/semantic_parse_edit_policy.dart';
+import '../../../core/ai/todo_checklist_suggestions_ai.dart';
 import '../../../core/backend/app_backend.dart';
 import '../../../core/backend/attachments_backend.dart';
 import '../../../core/backend/native_backend.dart';
@@ -45,6 +46,7 @@ import '../../attachments/attachment_viewer_page.dart';
 import '../../chat/chat_composer_inline_button.dart';
 import '../../chat/chat_markdown_editor_launcher.dart';
 import '../../chat/chat_markdown_preview.dart';
+import '../../settings/ai_ask_ai_settings_page.dart';
 import '../assistant_message_actions.dart';
 import '../time/date_time_picker_dialog.dart';
 import 'todo_linking.dart';
@@ -59,6 +61,8 @@ part 'todo_detail_page_due_chip.dart';
 part 'todo_detail_page_recurring_series.dart';
 part 'todo_detail_page_attachment_picker.dart';
 part 'todo_detail_page_composer.dart';
+part 'todo_detail_page_checklist.dart';
+part 'todo_detail_page_checklist_suggestions.dart';
 
 class TodoDetailPage extends StatefulWidget {
   const TodoDetailPage({
@@ -81,7 +85,10 @@ class _TodoDetailPageState extends State<TodoDetailPage> {
 
   late Todo _todo = widget.initialTodo;
   Future<List<TodoActivity>>? _activitiesFuture;
+  Future<List<TodoChecklistItem>>? _checklistFuture;
+  Future<List<TodoChecklistSuggestion>>? _checklistSuggestionsFuture;
   final _noteController = TextEditingController();
+  final _checklistController = TextEditingController();
   final _noteInputFocusNode = FocusNode();
   final Map<String, Future<Message?>> _messageFuturesById =
       <String, Future<Message?>>{};
@@ -101,6 +108,9 @@ class _TodoDetailPageState extends State<TodoDetailPage> {
   var _desktopDropActive = false;
   var _sendingNote = false;
   var _attachingMedia = false;
+  var _creatingChecklistItem = false;
+  var _generatingChecklistSuggestions = false;
+  final Set<String> _selectedChecklistSuggestionIds = <String>{};
 
   bool get _isDesktopPlatform =>
       !kIsWeb &&
@@ -134,6 +144,7 @@ class _TodoDetailPageState extends State<TodoDetailPage> {
     }
     unawaited(_audioRecorder?.dispose());
     _noteController.dispose();
+    _checklistController.dispose();
     _noteInputFocusNode.dispose();
     super.dispose();
   }
@@ -142,6 +153,8 @@ class _TodoDetailPageState extends State<TodoDetailPage> {
   void didChangeDependencies() {
     super.didChangeDependencies();
     _activitiesFuture ??= _loadActivities();
+    _checklistFuture ??= _loadChecklistItems();
+    _checklistSuggestionsFuture ??= _loadChecklistSuggestions();
     _attachSyncEngine();
     if (_recurrenceLoaded) return;
     _recurrenceLoaded = true;
@@ -152,9 +165,41 @@ class _TodoDetailPageState extends State<TodoDetailPage> {
     return _loadTodoDetailActivities(this);
   }
 
+  Future<List<TodoChecklistSuggestion>> _loadChecklistSuggestions() async {
+    final backend = AppBackendScope.maybeOf(context);
+    final session = SessionScope.maybeOf(context);
+    if (backend == null || session == null) {
+      return const <TodoChecklistSuggestion>[];
+    }
+    try {
+      return await backend.listTodoChecklistSuggestions(
+        session.sessionKey,
+        _todo.id,
+      );
+    } catch (_) {
+      return const <TodoChecklistSuggestion>[];
+    }
+  }
+
+  Future<List<TodoChecklistItem>> _loadChecklistItems() async {
+    final backend = AppBackendScope.maybeOf(context);
+    final session = SessionScope.maybeOf(context);
+    if (backend == null || session == null) {
+      return const <TodoChecklistItem>[];
+    }
+    try {
+      return await backend.listTodoChecklistItems(session.sessionKey, _todo.id);
+    } catch (_) {
+      return const <TodoChecklistItem>[];
+    }
+  }
+
   void _refreshActivities() {
     setState(() {
       _activitiesFuture = _loadActivities();
+      _checklistFuture = _loadChecklistItems();
+      _selectedChecklistSuggestionIds.clear();
+      _checklistSuggestionsFuture = _loadChecklistSuggestions();
       _messageFuturesById.clear();
       _attachmentsFuturesByMessageId.clear();
       _attachmentsFuturesByActivityId.clear();
@@ -366,6 +411,11 @@ class _TodoDetailPageState extends State<TodoDetailPage> {
   Future<void> _setStatus(String newStatus) async {
     final backend = AppBackendScope.of(context);
     final sessionKey = SessionScope.of(context).sessionKey;
+
+    if (newStatus == 'done') {
+      final confirmed = await _confirmDoneWithIncompleteChecklist();
+      if (!confirmed || !mounted) return;
+    }
 
     var scope = TodoRecurrenceEditScope.thisOnly;
     String? recurrenceRuleJson = _recurrenceRuleJson;
@@ -910,86 +960,6 @@ class _TodoDetailPageState extends State<TodoDetailPage> {
           constraints: const BoxConstraints(maxWidth: 880),
           child: Column(
             children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-                child: SlSurface(
-                  key: const ValueKey('todo_detail_header'),
-                  padding: const EdgeInsets.all(14),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      SelectableText(
-                        _todo.title,
-                        key: const ValueKey('todo_detail_title'),
-                        style: Theme.of(context).textTheme.titleLarge,
-                      ),
-                      const SizedBox(height: 10),
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Expanded(
-                            child: _TodoStatusSelector(
-                              statuses: _kSelectableStatuses,
-                              selectedStatus: _todo.status,
-                              statusLabelBuilder: (status) =>
-                                  _statusLabel(context, status),
-                              buttonKeyBuilder: (status) =>
-                                  ValueKey('todo_detail_set_status_$status'),
-                              onSelected: (status) =>
-                                  unawaited(_setStatus(status)),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          SlIconButton(
-                            key: const ValueKey('todo_detail_delete'),
-                            tooltip: context.t.common.actions.delete,
-                            icon: Icons.delete_outline_rounded,
-                            size: 38,
-                            iconSize: 18,
-                            color: Theme.of(context).colorScheme.error,
-                            overlayBaseColor:
-                                Theme.of(context).colorScheme.error,
-                            borderColor:
-                                Theme.of(context).colorScheme.error.withOpacity(
-                                      Theme.of(context).brightness ==
-                                              Brightness.dark
-                                          ? 0.32
-                                          : 0.22,
-                                    ),
-                            onPressed: () => unawaited(_deleteTodo()),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 10),
-                      ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 520),
-                        child: Wrap(
-                          spacing: 8,
-                          runSpacing: 8,
-                          children: [
-                            _TodoDueChip(
-                              chipKey: const ValueKey('todo_detail_due'),
-                              icon: Icons.event_rounded,
-                              label: dueText ??
-                                  context.t.actions.calendar.pickCustom,
-                              onPressed: () => unawaited(_editDue()),
-                            ),
-                            if (recurrenceText != null)
-                              _TodoDueChip(
-                                chipKey:
-                                    const ValueKey('todo_detail_recurrence'),
-                                icon: Icons.repeat_rounded,
-                                label: recurrenceText,
-                                onPressed: () =>
-                                    unawaited(_editRecurrenceRule()),
-                              ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
               Expanded(
                 child: FutureBuilder<List<TodoActivity>>(
                   future: _activitiesFuture,
@@ -998,31 +968,146 @@ class _TodoDetailPageState extends State<TodoDetailPage> {
                         snapshot.connectionState != ConnectionState.done;
                     final activities = snapshot.data ?? const <TodoActivity>[];
 
-                    if (snapshot.hasError && activities.isEmpty) {
-                      return Center(
-                        child: Text(
-                          context.t.errors
-                              .loadFailed(error: '${snapshot.error}'),
+                    return CustomScrollView(
+                      slivers: [
+                        SliverToBoxAdapter(
+                          child: Padding(
+                            padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                            child: SlSurface(
+                              key: const ValueKey('todo_detail_header'),
+                              padding: const EdgeInsets.all(14),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  SelectableText(
+                                    _todo.title,
+                                    key: const ValueKey('todo_detail_title'),
+                                    style:
+                                        Theme.of(context).textTheme.titleLarge,
+                                  ),
+                                  const SizedBox(height: 10),
+                                  Row(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Expanded(
+                                        child: _TodoStatusSelector(
+                                          statuses: _kSelectableStatuses,
+                                          selectedStatus: _todo.status,
+                                          statusLabelBuilder: (status) =>
+                                              _statusLabel(context, status),
+                                          buttonKeyBuilder: (status) =>
+                                              ValueKey(
+                                            'todo_detail_set_status_$status',
+                                          ),
+                                          onSelected: (status) =>
+                                              unawaited(_setStatus(status)),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      SlIconButton(
+                                        key: const ValueKey(
+                                            'todo_detail_delete'),
+                                        tooltip:
+                                            context.t.common.actions.delete,
+                                        icon: Icons.delete_outline_rounded,
+                                        size: 38,
+                                        iconSize: 18,
+                                        color:
+                                            Theme.of(context).colorScheme.error,
+                                        overlayBaseColor:
+                                            Theme.of(context).colorScheme.error,
+                                        borderColor: Theme.of(context)
+                                            .colorScheme
+                                            .error
+                                            .withOpacity(
+                                              Theme.of(context).brightness ==
+                                                      Brightness.dark
+                                                  ? 0.32
+                                                  : 0.22,
+                                            ),
+                                        onPressed: () =>
+                                            unawaited(_deleteTodo()),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 10),
+                                  ConstrainedBox(
+                                    constraints:
+                                        const BoxConstraints(maxWidth: 520),
+                                    child: Wrap(
+                                      spacing: 8,
+                                      runSpacing: 8,
+                                      children: [
+                                        _TodoDueChip(
+                                          chipKey:
+                                              const ValueKey('todo_detail_due'),
+                                          icon: Icons.event_rounded,
+                                          label: dueText ??
+                                              context.t.actions.calendar
+                                                  .pickCustom,
+                                          onPressed: () =>
+                                              unawaited(_editDue()),
+                                        ),
+                                        if (recurrenceText != null)
+                                          _TodoDueChip(
+                                            chipKey: const ValueKey(
+                                              'todo_detail_recurrence',
+                                            ),
+                                            icon: Icons.repeat_rounded,
+                                            label: recurrenceText,
+                                            onPressed: () => unawaited(
+                                              _editRecurrenceRule(),
+                                            ),
+                                          ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
                         ),
-                      );
-                    }
-
-                    if (loading && activities.isEmpty) {
-                      return const Center(child: CircularProgressIndicator());
-                    }
-
-                    if (activities.isEmpty) {
-                      return Center(
-                        child: Text(context.t.actions.todoDetail.emptyTimeline),
-                      );
-                    }
-
-                    return ListView.separated(
-                      padding: const EdgeInsets.all(16),
-                      itemCount: activities.length,
-                      separatorBuilder: (_, __) => const SizedBox(height: 12),
-                      itemBuilder: (context, index) =>
-                          _buildActivityTile(context, activities[index]),
+                        SliverToBoxAdapter(
+                          child: Padding(
+                            padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                            child: _buildChecklistSection(context),
+                          ),
+                        ),
+                        if (loading && activities.isEmpty)
+                          const SliverFillRemaining(
+                            hasScrollBody: false,
+                            child: Center(child: CircularProgressIndicator()),
+                          )
+                        else if (activities.isEmpty)
+                          SliverFillRemaining(
+                            hasScrollBody: false,
+                            child: Center(
+                              child: Text(
+                                context.t.actions.todoDetail.emptyTimeline,
+                              ),
+                            ),
+                          )
+                        else
+                          SliverPadding(
+                            padding: const EdgeInsets.all(16),
+                            sliver: SliverList(
+                              delegate: SliverChildBuilderDelegate(
+                                (context, index) {
+                                  if (index.isOdd) {
+                                    return const SizedBox(height: 12);
+                                  }
+                                  final activityIndex = index ~/ 2;
+                                  return _buildActivityTile(
+                                    context,
+                                    activities[activityIndex],
+                                  );
+                                },
+                                childCount: activities.length * 2 - 1,
+                              ),
+                            ),
+                          ),
+                      ],
                     );
                   },
                 ),

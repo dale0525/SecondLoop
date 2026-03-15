@@ -72,6 +72,9 @@ void main() {
           lastReviewAtMs: null,
         ),
       ],
+      checklistProgress: const <TodoChecklistProgress>[
+        TodoChecklistProgress(todoId: 'focus', totalCount: 2, doneCount: 1),
+      ],
     );
 
     await tester.pumpWidget(_wrap(backend));
@@ -86,6 +89,11 @@ void main() {
         findsOneWidget);
     expect(
         find.byKey(const ValueKey('task_hub_page_item_focus')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('task_hub_checklist_progress_focus')),
+      findsOneWidget,
+    );
+    expect(find.text('1/2'), findsOneWidget);
     expect(find.byKey(const ValueKey('task_hub_page_item_scheduled')),
         findsOneWidget);
     expect(find.byKey(const ValueKey('task_hub_page_item_review')),
@@ -196,15 +204,29 @@ Widget _wrap(AppBackend backend) {
 }
 
 final class _TaskHubBackend extends TestAppBackend {
-  _TaskHubBackend({required List<Todo> todos, this.failUpsert = false})
-      : _todos = {for (final todo in todos) todo.id: todo};
+  _TaskHubBackend({
+    required List<Todo> todos,
+    List<TodoChecklistProgress> checklistProgress =
+        const <TodoChecklistProgress>[],
+    this.failUpsert = false,
+  })  : _todos = {for (final todo in todos) todo.id: todo},
+        _checklistProgress =
+            List<TodoChecklistProgress>.from(checklistProgress);
 
   final Map<String, Todo> _todos;
+  final List<TodoChecklistProgress> _checklistProgress;
   final bool failUpsert;
 
   @override
   Future<List<Todo>> listTodos(Uint8List key) async =>
       _todos.values.toList(growable: false);
+
+  @override
+  Future<List<TodoChecklistProgress>> listTodoChecklistProgress(
+    Uint8List key,
+  ) async {
+    return List<TodoChecklistProgress>.from(_checklistProgress);
+  }
 
   @override
   Future<Todo> upsertTodo(

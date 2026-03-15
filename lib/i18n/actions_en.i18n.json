@@ -55,7 +55,25 @@
     "attach": "Attach",
     "pickAttachment": "Choose an attachment",
     "noAttachments": "No attachments yet",
-    "attachmentNoteDefault": "Added attachment"
+    "attachmentNoteDefault": "Added attachment",
+    "checklistTitle": "Checklist",
+    "checklistHint": "Add a step…",
+    "checklistAdd": "Add step",
+    "incompleteChecklistDoneTitle": "Finish task with incomplete checklist?",
+    "incompleteChecklistDoneMessage": "Some checklist items are still incomplete. You can still finish this task now.",
+    "checklistSuggestionsTitle": "Suggested steps",
+    "checklistEditTitle": "Edit step",
+    "checklistEdit": "Edit step",
+    "checklistDelete": "Delete step",
+    "checklistMoveUp": "Move up",
+    "checklistMoveDown": "Move down",
+    "checklistApplyAll": "Apply all",
+    "checklistDismissAll": "Dismiss all",
+    "checklistDismissSelected": "Dismiss selected",
+    "checklistGenerate": "Generate suggestions",
+    "checklistRegenerate": "Regenerate suggestions",
+    "checklistGenerating": "Generating suggestions…",
+    "checklistSuggestionsEmpty": "No pending suggestions yet."
   },
   "todoDelete": {
     "dialog": {

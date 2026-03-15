@@ -276,6 +276,17 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<TodoCandidate> dco_decode_list_todo_candidate(dynamic raw);
 
   @protected
+  List<TodoChecklistItem> dco_decode_list_todo_checklist_item(dynamic raw);
+
+  @protected
+  List<TodoChecklistProgress> dco_decode_list_todo_checklist_progress(
+      dynamic raw);
+
+  @protected
+  List<TodoChecklistSuggestion> dco_decode_list_todo_checklist_suggestion(
+      dynamic raw);
+
+  @protected
   LlmProfile dco_decode_llm_profile(dynamic raw);
 
   @protected
@@ -369,6 +380,15 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   TodoCandidate dco_decode_todo_candidate(dynamic raw);
+
+  @protected
+  TodoChecklistItem dco_decode_todo_checklist_item(dynamic raw);
+
+  @protected
+  TodoChecklistProgress dco_decode_todo_checklist_progress(dynamic raw);
+
+  @protected
+  TodoChecklistSuggestion dco_decode_todo_checklist_suggestion(dynamic raw);
 
   @protected
   int dco_decode_u_32(dynamic raw);
@@ -652,6 +672,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  List<TodoChecklistItem> sse_decode_list_todo_checklist_item(
+      SseDeserializer deserializer);
+
+  @protected
+  List<TodoChecklistProgress> sse_decode_list_todo_checklist_progress(
+      SseDeserializer deserializer);
+
+  @protected
+  List<TodoChecklistSuggestion> sse_decode_list_todo_checklist_suggestion(
+      SseDeserializer deserializer);
+
+  @protected
   LlmProfile sse_decode_llm_profile(SseDeserializer deserializer);
 
   @protected
@@ -756,6 +788,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   TodoCandidate sse_decode_todo_candidate(SseDeserializer deserializer);
+
+  @protected
+  TodoChecklistItem sse_decode_todo_checklist_item(
+      SseDeserializer deserializer);
+
+  @protected
+  TodoChecklistProgress sse_decode_todo_checklist_progress(
+      SseDeserializer deserializer);
+
+  @protected
+  TodoChecklistSuggestion sse_decode_todo_checklist_suggestion(
+      SseDeserializer deserializer);
 
   @protected
   int sse_decode_u_32(SseDeserializer deserializer);
@@ -1048,6 +1092,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       List<TodoCandidate> self, SseSerializer serializer);
 
   @protected
+  void sse_encode_list_todo_checklist_item(
+      List<TodoChecklistItem> self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_todo_checklist_progress(
+      List<TodoChecklistProgress> self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_todo_checklist_suggestion(
+      List<TodoChecklistSuggestion> self, SseSerializer serializer);
+
+  @protected
   void sse_encode_llm_profile(LlmProfile self, SseSerializer serializer);
 
   @protected
@@ -1156,6 +1212,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_todo_candidate(TodoCandidate self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_todo_checklist_item(
+      TodoChecklistItem self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_todo_checklist_progress(
+      TodoChecklistProgress self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_todo_checklist_suggestion(
+      TodoChecklistSuggestion self, SseSerializer serializer);
 
   @protected
   void sse_encode_u_32(int self, SseSerializer serializer);
