@@ -3,5 +3,35 @@
   "tabs": {
     "main": "Loop",
     "settings": "Settings"
+  },
+  "web": {
+    "title": "SecondLoop Web",
+    "bootstrapFailed": "Failed to start Web app: $error",
+    "navigation": {
+      "chat": "Chat",
+      "files": "Files",
+      "settings": "Settings"
+    },
+    "files": {
+      "title": "Files synced to Cloud",
+      "description": "Web supports readonly access to existing cloud files. If a file needs local processing, continue in the app.",
+      "attachmentsTitle": "Attachments",
+      "actions": {
+        "refresh": "Refresh",
+        "upload": "Upload"
+      },
+      "messages": {
+        "uploadNeedsApp": "Uploaded to Cloud. Some files need the app to continue processing.",
+        "uploadSuccess": "Uploaded $count file(s) to Cloud."
+      }
+    },
+    "settings": {
+      "recentFiles": {
+        "title": "Recent files",
+        "description": "Open recent cloud files with the formal attachment viewer. Complex media still follows the readonly Continue in App policy.",
+        "empty": "No cloud files yet.",
+        "refreshTooltip": "Refresh recent files"
+      }
+    }
   }
 }

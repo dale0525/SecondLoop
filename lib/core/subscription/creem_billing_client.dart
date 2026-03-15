@@ -1,7 +1,6 @@
-import 'dart:convert';
-import 'dart:io';
-
 import 'package:url_launcher/url_launcher.dart';
+
+import '../cloud/http_json_client.dart';
 
 typedef UrlOpener = Future<bool> Function(Uri url);
 
@@ -16,16 +15,16 @@ final class CreemBillingClient implements BillingClient {
     required Future<String?> Function() idTokenGetter,
     required String cloudGatewayBaseUrl,
     UrlOpener? urlOpener,
-    HttpClient Function()? httpClientFactory,
+    Object? httpClient,
   })  : _idTokenGetter = idTokenGetter,
         _cloudGatewayBaseUrl = cloudGatewayBaseUrl,
         _urlOpener = urlOpener ?? _defaultUrlOpener,
-        _httpClientFactory = httpClientFactory ?? HttpClient.new;
+        _httpClient = HttpJsonClient(client: httpClient);
 
   final Future<String?> Function() _idTokenGetter;
   final String _cloudGatewayBaseUrl;
   final UrlOpener _urlOpener;
-  final HttpClient Function() _httpClientFactory;
+  final HttpJsonClient _httpClient;
 
   static Future<bool> _defaultUrlOpener(Uri url) =>
       launchUrl(url, mode: LaunchMode.externalApplication);
@@ -53,6 +52,10 @@ final class CreemBillingClient implements BillingClient {
     if (!ok) throw StateError('open_url_failed');
   }
 
+  void dispose() {
+    _httpClient.close();
+  }
+
   Future<Uri> _postAndExtractUrl(
     String path, {
     required String urlField,
@@ -66,32 +69,28 @@ final class CreemBillingClient implements BillingClient {
     }
 
     final endpoint = Uri.parse(baseUrl).resolve(path);
-    final client = _httpClientFactory();
-    try {
-      final req = await client.postUrl(endpoint);
-      req.headers.set(HttpHeaders.authorizationHeader, 'Bearer $idToken');
-      req.headers.set(HttpHeaders.acceptHeader, 'application/json');
-      req.headers.set(HttpHeaders.contentTypeHeader, 'application/json');
-      req.add(utf8.encode('{}'));
+    final response = await _httpClient.postJson(
+      endpoint,
+      headers: <String, String>{
+        'authorization': 'Bearer $idToken',
+        'accept': 'application/json',
+        'content-type': 'application/json',
+      },
+      body: const <String, Object?>{},
+    );
 
-      final resp = await req.close();
-      final text = await utf8.decodeStream(resp);
-
-      if (resp.statusCode != 200) {
-        throw StateError('HTTP ${resp.statusCode} $text');
-      }
-
-      final decoded = jsonDecode(text);
-      if (decoded is! Map) throw StateError('invalid_response');
-
-      final rawUrl = decoded[urlField];
-      if (rawUrl is! String || rawUrl.trim().isEmpty) {
-        throw StateError('invalid_response');
-      }
-
-      return Uri.parse(rawUrl);
-    } finally {
-      client.close(force: true);
+    if (response.statusCode != 200) {
+      throw StateError('HTTP ${response.statusCode} ${response.body}');
     }
+
+    final decoded = response.tryDecodeObject();
+    if (decoded == null) throw StateError('invalid_response');
+
+    final rawUrl = decoded[urlField];
+    if (rawUrl is! String || rawUrl.trim().isEmpty) {
+      throw StateError('invalid_response');
+    }
+
+    return Uri.parse(rawUrl);
   }
 }

@@ -736,14 +736,16 @@ final class VideoTranscodeWorker {
   }
 
   static int _hammingDistance64(int a, int b) {
-    var xor = (a ^ b) & 0xFFFFFFFFFFFFFFFF;
+    var xor = (BigInt.from(a) ^ BigInt.from(b)) & _kUint64Mask;
     var count = 0;
-    while (xor != 0) {
-      xor &= (xor - 1);
+    while (xor != BigInt.zero) {
+      xor &= (xor - BigInt.one);
       count += 1;
     }
     return count;
   }
+
+  static final BigInt _kUint64Mask = (BigInt.one << 64) - BigInt.one;
 
   static Future<List<File>> _listPreviewFrameFiles(
     String dirPath, {

@@ -60,4 +60,24 @@ void main() {
       isNull,
     );
   });
+
+  test('UI message uses continue-in-app copy for readonly web media', () {
+    expect(
+      cloudMediaDownloadUiMessage(
+        CloudMediaDownloadUiError.previewUnavailable,
+        isWeb: true,
+        isReadonlyMedia: true,
+      ),
+      contains('Continue processing in the app'),
+    );
+
+    expect(
+      cloudMediaDownloadUiMessage(
+        CloudMediaDownloadUiError.previewUnavailable,
+        isWeb: false,
+        isReadonlyMedia: true,
+      ),
+      isNot(contains('Continue processing in the app')),
+    );
+  });
 }

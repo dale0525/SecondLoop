@@ -179,6 +179,47 @@ void main() {
     }
   });
 
+  testWidgets(
+      'Chat image thumbnail uses continue-in-app copy for readonly web video preview fallback',
+      (tester) async {
+    final backend = _BackendWithImmediateFailure();
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: SessionScope(
+            sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+            lock: () {},
+            child: AppBackendScope(
+              backend: backend,
+              child: Scaffold(
+                body: ChatImageAttachmentThumbnail(
+                  attachment: const Attachment(
+                    sha256: 'sha-video-manifest-fallback',
+                    mimeType: 'application/x.secondloop.video+json',
+                    path: 'attachments/sha-video-manifest-fallback.bin',
+                    byteLen: 128,
+                    createdAtMs: 0,
+                  ),
+                  attachmentsBackend: backend,
+                  isWebOverride: true,
+                  onTap: () {},
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+
+    expect(
+        find.textContaining('Continue processing in the app'), findsOneWidget);
+    expect(find.text('Preview unavailable'), findsNothing);
+  });
+
   testWidgets('Chat image thumbnail renders poster from video manifest payload',
       (tester) async {
     final posterBytes = _BackendWithVideoManifestPoster.posterBytes;

@@ -108,13 +108,13 @@ List<AttachmentDraftPayload> dedupeAttachmentDraftPayloads(
 }
 
 String _fnv1a64Hex(Uint8List bytes) {
-  const fnvOffset = 0xcbf29ce484222325;
-  const fnvPrime = 0x100000001b3;
-  const mask = 0xFFFFFFFFFFFFFFFF;
+  final fnvOffset = BigInt.parse('cbf29ce484222325', radix: 16);
+  final fnvPrime = BigInt.parse('100000001b3', radix: 16);
+  final mask = (BigInt.one << 64) - BigInt.one;
 
   var hash = fnvOffset;
   for (final value in bytes) {
-    hash ^= value;
+    hash ^= BigInt.from(value);
     hash = (hash * fnvPrime) & mask;
   }
 

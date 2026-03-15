@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+import '../../core/ai/ai_routing.dart';
 import '../../core/backend/app_backend.dart';
 import '../../core/backend/attachments_backend.dart';
 import '../../core/cloud/cloud_auth_access.dart';
@@ -13,6 +14,7 @@ import '../../core/session/session_scope.dart';
 import '../../core/sync/sync_config_store.dart';
 import '../../core/sync/sync_engine_gate.dart';
 import '../../features/attachments/attachment_viewer_page.dart';
+import '../../features/attachments/web_media_processing_notice.dart';
 import '../../i18n/strings.g.dart';
 import '../../src/rust/db.dart';
 import '../../ui/sl_delete_confirm_dialog.dart';
@@ -63,6 +65,27 @@ String _attachmentUsageSubtitle(
     _formatTimestamp(context, item.uploadedAtMs ?? item.createdAtMs),
   ];
   return parts.join(' • ');
+}
+
+String _formatVaultUsageError(BuildContext context, Object error) {
+  final status = parseHttpStatusFromError(error);
+  final code = parseCloudErrorCodeFromError(error);
+  if (status == 402 || code == 'payment_required') {
+    return context.t.sync.cloudManagedVault.paymentRequired;
+  }
+  if (status == 403 && code == 'email_not_verified') {
+    return context.t.chat.cloudGateway.emailNotVerified;
+  }
+  if (status == 403 && code == 'storage_quota_exceeded') {
+    return context.t.sync.cloudManagedVault.storageQuotaExceeded;
+  }
+  if (status == 429) {
+    return context.t.chat.cloudGateway.errors.rateLimited;
+  }
+  if (status != null && status >= 500) {
+    return context.t.sync.cloudManagedVault.serverUnavailable;
+  }
+  return '$error';
 }
 
 String _attachmentUsageTileKey(VaultAttachmentUsageItem item) {
@@ -181,20 +204,38 @@ class VaultAttachmentUsageListView extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
             ),
             onTap: () => onOpen(item),
-            trailing: deletingSha == item.primarySha256
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : IconButton(
-                    key: ValueKey(
-                      'vault_usage_attachment_delete_${item.primarySha256}',
+            trailing: () {
+              final needsAppProcessing =
+                  item.isGroupedVideo || needsAppProcessingInWeb(item.mimeType);
+              final deleteAction = deletingSha == item.primarySha256
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : IconButton(
+                      key: ValueKey(
+                        'vault_usage_attachment_delete_${item.primarySha256}',
+                      ),
+                      tooltip: context.t.common.actions.delete,
+                      icon: const Icon(Icons.delete_outline_rounded),
+                      onPressed: () => onDelete(item),
+                    );
+              if (!needsAppProcessing) return deleteAction;
+              return Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.only(right: 4),
+                    child: Text(
+                      'Continue in App',
+                      style: Theme.of(context).textTheme.labelSmall,
                     ),
-                    tooltip: context.t.common.actions.delete,
-                    icon: const Icon(Icons.delete_outline_rounded),
-                    onPressed: () => onDelete(item),
                   ),
+                  deleteAction,
+                ],
+              );
+            }(),
           ),
       ],
     );
@@ -225,6 +266,8 @@ class _VaultUsageCardState extends State<VaultUsageCard> {
   late final SyncConfigStore _store = widget.configStore ?? SyncConfigStore();
 
   bool _busy = false;
+  bool _vaultBaseUrlLoading = true;
+  String? _resolvedVaultBaseUrl;
   VaultUsageSummary? _summary;
   Object? _summaryError;
 
@@ -237,6 +280,21 @@ class _VaultUsageCardState extends State<VaultUsageCard> {
   bool _buildingAttachmentReferenceIndex = false;
   Map<String, Attachment> _localAttachmentBySha = <String, Attachment>{};
   Map<String, String> _localMessageIdByAttachmentSha = <String, String>{};
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_loadVaultBaseUrl());
+  }
+
+  Future<void> _loadVaultBaseUrl() async {
+    final baseUrl = await _store.resolveManagedVaultBaseUrl();
+    if (!mounted) return;
+    setState(() {
+      _resolvedVaultBaseUrl = baseUrl?.trim();
+      _vaultBaseUrlLoading = false;
+    });
+  }
 
   @override
   void dispose() {
@@ -502,7 +560,11 @@ class _VaultUsageCardState extends State<VaultUsageCard> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(context.t.chat.deleteFailed(error: '$e')),
+          content: Text(
+            context.t.chat.deleteFailed(
+              error: _formatVaultUsageError(context, e),
+            ),
+          ),
           duration: const Duration(seconds: 3),
         ),
       );
@@ -518,7 +580,6 @@ class _VaultUsageCardState extends State<VaultUsageCard> {
     final scope = CloudAuthScope.maybeOf(context);
     if (scope == null) return const SizedBox.shrink();
 
-    final vaultBaseUrl = _store.resolveManagedVaultBaseUrl;
     final uid = scope.controller.uid;
 
     if (uid != _uid) {
@@ -534,59 +595,61 @@ class _VaultUsageCardState extends State<VaultUsageCard> {
       }
     }
 
-    final body = FutureBuilder<String?>(
-      future: vaultBaseUrl(),
-      builder: (context, snapshot) {
-        final baseUrl = snapshot.data ?? '';
-        if (baseUrl.trim().isEmpty) {
-          return Text(context.t.settings.vaultUsage.labels.notConfigured);
-        }
-        if (uid == null) {
-          return Text(context.t.settings.vaultUsage.labels.signInRequired);
-        }
+    final baseUrl = (_resolvedVaultBaseUrl ?? '').trim();
+    final body = () {
+      if (_vaultBaseUrlLoading) {
+        return const SizedBox.shrink();
+      }
+      if (baseUrl.isEmpty) {
+        return Text(context.t.settings.vaultUsage.labels.notConfigured);
+      }
+      if (uid == null) {
+        return Text(context.t.settings.vaultUsage.labels.signInRequired);
+      }
 
-        if (_busy &&
-            _summary == null &&
-            _attachmentUsage == null &&
-            _summaryError == null &&
-            _attachmentError == null) {
-          return const Center(child: CircularProgressIndicator());
-        }
+      if (_busy &&
+          _summary == null &&
+          _attachmentUsage == null &&
+          _summaryError == null &&
+          _attachmentError == null) {
+        return const Center(child: CircularProgressIndicator());
+      }
 
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (_summaryError != null)
-              Text(
-                context.t.settings.vaultUsage.labels
-                    .loadFailed(error: '$_summaryError'),
-              )
-            else if (_summary != null)
-              VaultUsageSummaryView(summary: _summary!),
-            const SizedBox(height: 16),
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (_summaryError != null)
             Text(
-              context.t.settings.vaultUsage.labels.attachments,
-              style: Theme.of(context).textTheme.titleSmall,
-            ),
-            const SizedBox(height: 8),
-            if (_attachmentError != null)
-              Text(
-                context.t.settings.vaultUsage.labels
-                    .loadFailed(error: '$_attachmentError'),
-              )
-            else if (_attachmentUsage != null)
-              VaultAttachmentUsageListView(
-                items: _attachmentUsage!.items,
-                deletingSha: _deletingAttachmentSha,
-                onOpen: (item) => unawaited(_openAttachmentDetails(item)),
-                onDelete: (item) => unawaited(_deleteAttachment(item)),
-              )
-            else
-              const Center(child: CircularProgressIndicator()),
-          ],
-        );
-      },
-    );
+              context.t.settings.vaultUsage.labels.loadFailed(
+                error: _formatVaultUsageError(context, _summaryError!),
+              ),
+            )
+          else if (_summary != null)
+            VaultUsageSummaryView(summary: _summary!),
+          const SizedBox(height: 16),
+          Text(
+            context.t.settings.vaultUsage.labels.attachments,
+            style: Theme.of(context).textTheme.titleSmall,
+          ),
+          const SizedBox(height: 8),
+          if (_attachmentError != null)
+            Text(
+              context.t.settings.vaultUsage.labels.loadFailed(
+                error: _formatVaultUsageError(context, _attachmentError!),
+              ),
+            )
+          else if (_attachmentUsage != null)
+            VaultAttachmentUsageListView(
+              items: _attachmentUsage!.items,
+              deletingSha: _deletingAttachmentSha,
+              onOpen: (item) => unawaited(_openAttachmentDetails(item)),
+              onDelete: (item) => unawaited(_deleteAttachment(item)),
+            )
+          else
+            const Center(child: CircularProgressIndicator()),
+        ],
+      );
+    }();
 
     return SlSurface(
       padding: const EdgeInsets.all(16),

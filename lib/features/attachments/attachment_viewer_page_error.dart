@@ -7,13 +7,26 @@ extension _AttachmentViewerPageErrorText on _AttachmentViewerPageState {
       return context.t.errors.loadFailed(error: '$error');
     }
 
-    return switch (cloudMediaDownloadUiErrorFromFailureReason(reason)) {
+    final uiError = cloudMediaDownloadUiErrorFromFailureReason(reason);
+    if (uiError == null) {
+      return context.t.attachments.content.previewUnavailable;
+    }
+    if (uiError == CloudMediaDownloadUiError.previewUnavailable &&
+        (widget.isWebOverride ?? kIsWeb) &&
+        needsAppProcessingInWeb(widget.attachment.mimeType)) {
+      return cloudMediaDownloadUiMessage(
+        uiError,
+        isWeb: true,
+        isReadonlyMedia: true,
+      );
+    }
+
+    return switch (uiError) {
       CloudMediaDownloadUiError.wifiOnlyBlocked =>
         context.t.sync.mediaPreview.chatThumbnailsWifiOnlySubtitle,
       CloudMediaDownloadUiError.signInRequired =>
         context.t.sync.cloudManagedVault.signInRequired,
-      CloudMediaDownloadUiError.previewUnavailable ||
-      null =>
+      CloudMediaDownloadUiError.previewUnavailable =>
         context.t.attachments.content.previewUnavailable,
     };
   }

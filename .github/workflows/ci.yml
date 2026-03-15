@@ -31,8 +31,6 @@ jobs:
             flutter:
               - ".fvm/fvm_config.json"
               - ".githooks/**"
-              - ".github/workflows/ci.yml"
-              - ".github/workflows/web-build.yml"
               - "analysis_options.yaml"
               - "pubspec.yaml"
               - "pubspec.lock"
@@ -47,8 +45,6 @@ jobs:
               - "linux/**"
               - "macos/**"
               - "windows/**"
-              - "web/**"
-              - "scripts/**"
             rust:
               - ".githooks/**"
               - "rust/**"
@@ -70,6 +66,24 @@ jobs:
         run: bash scripts/check_no_python_runtime.sh
       - name: Pre-commit hook (format + analyze + test)
         run: bash .githooks/pre-commit --check --ci --flutter
+
+  flutter-web:
+    needs: changes
+    if: needs.changes.outputs.flutter == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.22.3"
+          channel: stable
+          cache: true
+      - name: Pub get
+        run: flutter pub get
+      - name: Web smoke tests
+        run: flutter test test/web_app/web_app_gate_test.dart test/web_app/web_app_service_http_test.dart
+      - name: Build web
+        run: flutter build web --base-href /app/
 
   rust:
     needs: changes
@@ -97,18 +111,3 @@ jobs:
         run: bash scripts/check_no_python_runtime.sh
       - name: Pre-commit hook (rustfmt + clippy + test)
         run: bash .githooks/pre-commit --check --ci --rust
-
-
-  web:
-    needs: changes
-    if: needs.changes.outputs.flutter == 'true'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: prefix-dev/setup-pixi@v0.9.3
-        with:
-          cache: true
-      - name: Setup Flutter
-        run: pixi run setup-flutter
-      - name: Build Flutter Web
-        run: pixi run flutter build web --base-href /app/

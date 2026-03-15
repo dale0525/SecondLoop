@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -11,6 +12,7 @@ import '../../core/session/session_scope.dart';
 import '../../core/sync/sync_config_store.dart';
 import '../../i18n/strings.g.dart';
 import '../attachments/video_keyframe_ocr_worker.dart';
+import '../attachments/web_media_processing_notice.dart';
 import '../media_backup/cloud_media_download.dart';
 import '../media_backup/cloud_media_download_ui.dart';
 import '../../src/rust/db.dart';
@@ -23,6 +25,7 @@ class ChatImageAttachmentThumbnail extends StatefulWidget {
     required this.attachmentsBackend,
     required this.onTap,
     this.cloudMediaDownload,
+    this.isWebOverride,
     super.key,
   });
 
@@ -30,6 +33,7 @@ class ChatImageAttachmentThumbnail extends StatefulWidget {
   final AttachmentsBackend attachmentsBackend;
   final VoidCallback onTap;
   final CloudMediaDownload? cloudMediaDownload;
+  final bool? isWebOverride;
 
   @override
   State<ChatImageAttachmentThumbnail> createState() =>
@@ -246,6 +250,9 @@ class _ChatImageAttachmentThumbnailState
                     );
                   }
                   if (bytes == null || bytes.isEmpty) {
+                    final isReadonlyWebMedia =
+                        (widget.isWebOverride ?? kIsWeb) &&
+                            needsAppProcessingInWeb(widget.attachment.mimeType);
                     return _placeholder(
                       context,
                       icon: _blockedByWifiOnly
@@ -256,7 +263,11 @@ class _ChatImageAttachmentThumbnailState
                       statusText: _blockedByWifiOnly
                           ? context
                               .t.sync.mediaPreview.chatThumbnailsWifiOnlyTitle
-                          : context.t.attachments.content.previewUnavailable,
+                          : cloudMediaDownloadUiMessage(
+                              CloudMediaDownloadUiError.previewUnavailable,
+                              isWeb: widget.isWebOverride ?? kIsWeb,
+                              isReadonlyMedia: isReadonlyWebMedia,
+                            ),
                       showSpinner: false,
                     );
                   }

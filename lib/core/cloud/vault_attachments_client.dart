@@ -1,7 +1,6 @@
-import 'dart:convert';
-import 'dart:io';
-
 import 'package:flutter/foundation.dart';
+
+import 'http_json_client.dart';
 
 @immutable
 class VaultAttachmentUsageItem {
@@ -48,10 +47,10 @@ class VaultAttachmentUsageList {
 }
 
 final class VaultAttachmentsClient {
-  VaultAttachmentsClient({HttpClient? httpClient})
-      : _httpClient = httpClient ?? HttpClient();
+  VaultAttachmentsClient({Object? httpClient})
+      : _httpClient = HttpJsonClient(client: httpClient);
 
-  final HttpClient _httpClient;
+  final HttpJsonClient _httpClient;
 
   Future<VaultAttachmentUsageList> fetchVaultAttachmentUsageList({
     required String managedVaultBaseUrl,
@@ -59,34 +58,24 @@ final class VaultAttachmentsClient {
     required String idToken,
     int limit = 200,
   }) async {
-    if (kIsWeb) {
-      throw UnsupportedError('Vault attachments usage is not supported on web');
+    final uri = _resolveVaultUri(
+      managedVaultBaseUrl,
+      '/v1/vaults/$vaultId/attachments?limit=$limit',
+    );
+    final response = await _httpClient.get(
+      uri,
+      headers: <String, String>{
+        'authorization': 'Bearer $idToken',
+        'accept': 'application/json',
+      },
+    );
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception('HTTP ${response.statusCode}: ${response.body}');
     }
 
-    Uri uri;
-    try {
-      uri = Uri.parse(managedVaultBaseUrl)
-          .resolve('/v1/vaults/$vaultId/attachments?limit=$limit');
-    } catch (_) {
-      throw FormatException(
-        'invalid_managed_vault_base_url',
-        managedVaultBaseUrl,
-      );
-    }
-
-    final req = await _httpClient.getUrl(uri);
-    req.headers.set(HttpHeaders.authorizationHeader, 'Bearer $idToken');
-    req.headers.set(HttpHeaders.acceptHeader, 'application/json');
-
-    final resp = await req.close();
-    final text = await utf8.decodeStream(resp);
-
-    if (resp.statusCode != 200) {
-      throw Exception('HTTP ${resp.statusCode}: $text');
-    }
-
-    final decoded = jsonDecode(text);
-    if (decoded is! Map<String, dynamic>) {
+    final decoded = response.tryDecodeObject();
+    if (decoded == null) {
       throw const FormatException('invalid_vault_attachments_response');
     }
 
@@ -144,36 +133,33 @@ final class VaultAttachmentsClient {
     required String idToken,
     required String attachmentSha256,
   }) async {
-    if (kIsWeb) {
-      throw UnsupportedError(
-          'Vault attachment deletion is not supported on web');
-    }
+    final uri = _resolveVaultUri(
+      managedVaultBaseUrl,
+      '/v1/vaults/$vaultId/attachments/$attachmentSha256',
+    );
+    final response = await _httpClient.delete(
+      uri,
+      headers: <String, String>{
+        'authorization': 'Bearer $idToken',
+        'accept': 'application/json',
+      },
+    );
 
-    Uri uri;
-    try {
-      uri = Uri.parse(managedVaultBaseUrl)
-          .resolve('/v1/vaults/$vaultId/attachments/$attachmentSha256');
-    } catch (_) {
-      throw FormatException(
-        'invalid_managed_vault_base_url',
-        managedVaultBaseUrl,
-      );
-    }
-
-    final req = await _httpClient.deleteUrl(uri);
-    req.headers.set(HttpHeaders.authorizationHeader, 'Bearer $idToken');
-    req.headers.set(HttpHeaders.acceptHeader, 'application/json');
-
-    final resp = await req.close();
-    final text = await utf8.decodeStream(resp);
-
-    if (resp.statusCode != 200) {
-      throw Exception('HTTP ${resp.statusCode}: $text');
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception('HTTP ${response.statusCode}: ${response.body}');
     }
   }
 
   void dispose() {
-    _httpClient.close(force: true);
+    _httpClient.close();
+  }
+}
+
+Uri _resolveVaultUri(String baseUrl, String path) {
+  try {
+    return Uri.parse(baseUrl).resolve(path);
+  } catch (_) {
+    throw FormatException('invalid_managed_vault_base_url', baseUrl);
   }
 }
 

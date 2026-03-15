@@ -67,14 +67,16 @@ class CloudUsageSummaryView extends StatelessWidget {
 }
 
 class CloudUsageCard extends StatefulWidget {
-  const CloudUsageCard({super.key});
+  const CloudUsageCard({super.key, this.client});
+
+  final CloudUsageClient? client;
 
   @override
   State<CloudUsageCard> createState() => _CloudUsageCardState();
 }
 
 class _CloudUsageCardState extends State<CloudUsageCard> {
-  final CloudUsageClient _client = CloudUsageClient();
+  late final CloudUsageClient _client = widget.client ?? CloudUsageClient();
 
   bool _busy = false;
   CloudUsageSummary? _summary;
@@ -84,7 +86,9 @@ class _CloudUsageCardState extends State<CloudUsageCard> {
 
   @override
   void dispose() {
-    _client.dispose();
+    if (widget.client == null) {
+      _client.dispose();
+    }
     super.dispose();
   }
 

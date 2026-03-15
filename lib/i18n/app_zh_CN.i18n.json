@@ -3,5 +3,35 @@
   "tabs": {
     "main": "记录",
     "settings": "设置"
+  },
+  "web": {
+    "title": "SecondLoop 网页版",
+    "bootstrapFailed": "Web 应用启动失败：$error",
+    "navigation": {
+      "chat": "对话",
+      "files": "文件",
+      "settings": "设置"
+    },
+    "files": {
+      "title": "已同步到 Cloud 的文件",
+      "description": "Web 可只读访问已存在的云端文件。如文件仍需本地处理，请在 App 中继续。",
+      "attachmentsTitle": "附件",
+      "actions": {
+        "refresh": "刷新",
+        "upload": "上传"
+      },
+      "messages": {
+        "uploadNeedsApp": "已上传到 Cloud。部分文件需要在 App 端继续处理。",
+        "uploadSuccess": "已上传 $count 个文件到 Cloud。"
+      }
+    },
+    "settings": {
+      "recentFiles": {
+        "title": "最近文件",
+        "description": "可使用正式附件查看页打开最近的云端文件。复杂媒体仍遵循“继续在 App 中处理”的只读策略。",
+        "empty": "暂无云端文件。",
+        "refreshTooltip": "刷新最近文件"
+      }
+    }
   }
 }

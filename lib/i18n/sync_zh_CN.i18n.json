@@ -71,6 +71,7 @@
     "paymentRequired": "云同步已暂停。请续费订阅以继续同步。",
     "graceReadonlyUntil": "云同步处于只读状态（宽限期至 $until）。",
     "storageQuotaExceeded": "云端存储已满，已暂停上传。",
+    "serverUnavailable": "云同步暂时不可用，请稍后再试。",
     "storageQuotaExceededWithUsage": "云端存储已满（$used / $limit），已暂停上传。",
     "switchDialog": {
       "title": "切换到 SecondLoop Cloud 同步？",

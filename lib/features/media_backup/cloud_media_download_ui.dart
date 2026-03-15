@@ -49,3 +49,22 @@ CloudMediaDownloadFailureReason? cloudMediaDownloadFailureReasonFromError(
 
   return null;
 }
+
+String cloudMediaDownloadUiMessage(
+  CloudMediaDownloadUiError error, {
+  required bool isWeb,
+  required bool isReadonlyMedia,
+}) {
+  if (error == CloudMediaDownloadUiError.previewUnavailable &&
+      isWeb &&
+      isReadonlyMedia) {
+    return 'Continue processing in the app. Existing cloud results stay available here.';
+  }
+
+  return switch (error) {
+    CloudMediaDownloadUiError.wifiOnlyBlocked => 'Wi-Fi required for preview.',
+    CloudMediaDownloadUiError.signInRequired =>
+      'Sign in to use SecondLoop Cloud sync.',
+    CloudMediaDownloadUiError.previewUnavailable => 'Preview unavailable',
+  };
+}
