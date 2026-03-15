@@ -881,7 +881,7 @@ jobs:
             dist/*.nupkg
             dist/releases.*.json
             dist/assets.*.json
-            dist/*.tar.gz
+            dist/SecondLoop-linux-*.tar.gz
             dist/latest.json
             dist/latest.json.sig
             dist/SecondLoop-winget-manifests-*.zip

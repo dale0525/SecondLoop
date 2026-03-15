@@ -55,6 +55,16 @@ class RuntimeReleaseWorkflowTests(unittest.TestCase):
         self.assertIn("dist/latest.json.sig", workflow_text)
         self.assertIn("SecondLoop-macos-${safe_ref_name}.app.tar.gz", workflow_text)
 
+    def test_release_workflow_limits_linux_tarball_publish_glob(self) -> None:
+        workflow_text = self._release_workflow_text()
+        publish_step = workflow_text.split("- name: Publish GitHub Release", maxsplit=1)[1]
+        publish_step = publish_step.split(
+            "- name: Summarize GitHub Release publication", maxsplit=1
+        )[0]
+
+        self.assertIn("dist/SecondLoop-linux-*.tar.gz", publish_step)
+        self.assertNotIn("dist/*.tar.gz", publish_step)
+
 
 if __name__ == "__main__":
     unittest.main()
