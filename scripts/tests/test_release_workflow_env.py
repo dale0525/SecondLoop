@@ -613,11 +613,52 @@ class ReleaseWorkflowEnvTests(unittest.TestCase):
     def test_release_workflow_generates_signed_update_manifest(self) -> None:
         workflow_text = self._workflow_text()
 
+        self.assertIn("SECONDLOOP_UPDATE_PUBLIC_KEY", workflow_text)
         self.assertIn("SECONDLOOP_UPDATE_SIGNING_PRIVATE_KEY", workflow_text)
+        self.assertIn('Missing secret SECONDLOOP_UPDATE_PUBLIC_KEY', workflow_text)
         self.assertIn("tools/generate_update_manifest.dart", workflow_text)
         self.assertIn("dist/latest.json", workflow_text)
         self.assertIn("dist/latest.json.sig", workflow_text)
         self.assertNotIn("--signing-private-key", workflow_text)
+
+    def test_publish_job_maps_update_public_key_secret(self) -> None:
+        env_keys = self._publish_env_keys()
+
+        self.assertIn("SECONDLOOP_UPDATE_PUBLIC_KEY", env_keys)
+
+    def test_preflight_signing_validation_only_runs_for_tag_releases(self) -> None:
+        preflight_job = self._workflow_job_text("preflight")
+
+        self.assertIn("- name: Validate release signing config", preflight_job)
+        self.assertIn(
+            "if: startsWith(github.ref, 'refs/tags/')\n        shell: bash\n        run: |\n          : \"${SECONDLOOP_UPDATE_PUBLIC_KEY:?Missing secret SECONDLOOP_UPDATE_PUBLIC_KEY}\"",
+            preflight_job,
+        )
+        self.assertIn(
+            '          : "${SECONDLOOP_UPDATE_SIGNING_PRIVATE_KEY:?Missing secret SECONDLOOP_UPDATE_SIGNING_PRIVATE_KEY}"',
+            preflight_job,
+        )
+
+    def test_publish_validation_step_name_reflects_signing_and_llm_checks(self) -> None:
+        publish_job = self._workflow_job_text("publish")
+
+        self.assertIn("- name: Validate release publish config", publish_job)
+        self.assertIn(
+            '          : "${RELEASE_LLM_API_KEY:?Missing secret RELEASE_LLM_API_KEY}"',
+            publish_job,
+        )
+        self.assertIn(
+            '          : "${RELEASE_LLM_MODEL:?Missing secret RELEASE_LLM_MODEL}"',
+            publish_job,
+        )
+        self.assertIn(
+            '          : "${SECONDLOOP_UPDATE_PUBLIC_KEY:?Missing secret SECONDLOOP_UPDATE_PUBLIC_KEY}"',
+            publish_job,
+        )
+        self.assertIn(
+            '          : "${SECONDLOOP_UPDATE_SIGNING_PRIVATE_KEY:?Missing secret SECONDLOOP_UPDATE_SIGNING_PRIVATE_KEY}"',
+            publish_job,
+        )
 
     def test_release_workflow_packages_macos_managed_archive(self) -> None:
         workflow_text = self._workflow_text()
