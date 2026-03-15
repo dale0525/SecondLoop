@@ -239,13 +239,26 @@ class WebAppServiceHttp extends WebAppService {
   }
 
   Map<String, dynamic> _decodeJsonResponse(http.Response response) {
-    final decoded =
-        jsonDecode(response.body.isEmpty ? '{}' : response.body) as Object?;
-    final map = decoded is Map<String, dynamic>
-        ? decoded
-        : decoded is Map
-            ? decoded.map((key, value) => MapEntry('$key', value))
-            : <String, dynamic>{};
+    Map<String, dynamic> map = <String, dynamic>{};
+    if (response.body.isNotEmpty) {
+      try {
+        final decoded = jsonDecode(response.body) as Object?;
+        map = decoded is Map<String, dynamic>
+            ? decoded
+            : decoded is Map
+                ? decoded.map((key, value) => MapEntry('$key', value))
+                : <String, dynamic>{};
+      } on FormatException {
+        if (response.statusCode < 200 || response.statusCode >= 300) {
+          throw WebAppHttpException(
+            statusCode: response.statusCode,
+            body: response.body,
+          );
+        }
+        throw const FormatException('invalid_json_response');
+      }
+    }
+
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw WebAppHttpException(
         statusCode: response.statusCode,

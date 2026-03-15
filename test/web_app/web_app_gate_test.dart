@@ -312,6 +312,54 @@ void main() {
     expect(find.byType(CloudAccountPanel), findsNothing);
   });
 
+  testWidgets(
+      'entitled users stay in main shell when subscription refresh fails',
+      (tester) async {
+    final service = _FakeWebAppService(
+      subscription: WebSubscriptionState.entitled,
+    );
+
+    await tester.pumpWidget(
+      _buildApp(
+        controller: _FakeCloudAuthController(
+          initialUid: 'uid-1',
+          initialEmail: 'user@example.com',
+          initialEmailVerified: true,
+        ),
+        service: service,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Chat'), findsOneWidget);
+    expect(find.byType(CloudAccountPanel), findsNothing);
+
+    service.failNextSubscriptionError =
+        'cloud-gateway request failed: HTTP 503';
+    service.failNextSubscriptionFetch = true;
+
+    await tester.tap(find.text('Settings'));
+    await tester.pumpAndSettle();
+    await tester.dragUntilVisible(
+      find.byKey(const ValueKey('cloud_subscription_refresh')),
+      find.byType(ListView),
+      const Offset(0, -240),
+    );
+    await tester.tap(
+      find.byKey(const ValueKey('cloud_subscription_refresh')),
+      warnIfMissed: false,
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Chat'), findsOneWidget);
+    expect(find.text('Files'), findsOneWidget);
+    expect(find.text('Settings'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('cloud_manage_subscription')),
+      findsOneWidget,
+    );
+  });
+
   testWidgets('upgrade gate localizes checkout payment-required error inline',
       (tester) async {
     await tester.pumpWidget(

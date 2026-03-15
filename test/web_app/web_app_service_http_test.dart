@@ -107,6 +107,31 @@ void main() {
     );
   });
 
+  test('non-json errors preserve parseable http status and raw body', () async {
+    final client = MockClient((request) async {
+      return http.Response(
+        '<html><body>gateway down</body></html>',
+        502,
+        headers: const <String, String>{
+          'content-type': 'text/html',
+        },
+      );
+    });
+
+    final service = WebAppServiceHttp(client: client);
+
+    await expectLater(
+      () => service.fetchUsage(idToken: 'token'),
+      throwsA(
+        isA<Object>().having(parseHttpStatusFromError, 'status', 502).having(
+              (error) => error.toString(),
+              'body',
+              contains('gateway down'),
+            ),
+      ),
+    );
+  });
+
   test('checkout throws when browser cannot open the billing url', () async {
     final client = MockClient((request) async {
       return http.Response(

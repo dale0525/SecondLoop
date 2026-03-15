@@ -125,10 +125,12 @@ class _WebAppGateState extends State<WebAppGate> {
     switch (_subscriptionController.status) {
       case SubscriptionStatus.entitled:
         _canAccessMainShell = true;
+        return;
       case SubscriptionStatus.notEntitled:
         _canAccessMainShell = false;
+        return;
       case SubscriptionStatus.unknown:
-        break;
+        return;
     }
   }
 

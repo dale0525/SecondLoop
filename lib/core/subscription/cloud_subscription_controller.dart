@@ -42,9 +42,11 @@ final class CloudSubscriptionController extends ChangeNotifier
 
   Future<void> refresh() async {
     final next = await _refreshFromCloudGateway();
+    if (next == null) return;
+
     _setState(
-      status: next?.status ?? SubscriptionStatus.unknown,
-      canManageSubscription: next?.canManageSubscription,
+      status: next.status,
+      canManageSubscription: next.canManageSubscription,
     );
   }
 

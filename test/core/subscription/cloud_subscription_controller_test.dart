@@ -57,8 +57,20 @@ void main() {
     expect(controller.status, SubscriptionStatus.notEntitled);
     expect(controller.canManageSubscription, false);
   });
-  test('CloudSubscriptionController exposes last refresh error', () async {
+  test('CloudSubscriptionController preserves prior state on refresh error',
+      () async {
+    var callCount = 0;
     final client = MockClient((request) async {
+      callCount += 1;
+      if (callCount == 1) {
+        return http.Response(
+          jsonEncode({
+            'active': true,
+            'can_manage_subscription': true,
+          }),
+          200,
+        );
+      }
       return http.Response(
         jsonEncode({'error': 'payment_required'}),
         402,
@@ -72,8 +84,13 @@ void main() {
     );
 
     await controller.refresh();
+    expect(controller.status, SubscriptionStatus.entitled);
+    expect(controller.canManageSubscription, true);
 
-    expect(controller.status, SubscriptionStatus.unknown);
+    await controller.refresh();
+
+    expect(controller.status, SubscriptionStatus.entitled);
+    expect(controller.canManageSubscription, true);
     expect(controller.lastRefreshError, isNotNull);
     expect(controller.lastRefreshError.toString(), contains('HTTP 402'));
     expect(
