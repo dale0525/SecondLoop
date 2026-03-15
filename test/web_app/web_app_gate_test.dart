@@ -38,6 +38,17 @@ class _FakeCloudAuthController extends ChangeNotifier
   String? _email;
   bool? _emailVerified;
 
+  void setSession({
+    required String? uid,
+    String? email,
+    bool? emailVerified,
+  }) {
+    _uid = uid;
+    _email = email;
+    _emailVerified = emailVerified;
+    notifyListeners();
+  }
+
   @override
   String? get uid => _uid;
 
@@ -358,6 +369,60 @@ void main() {
       find.byKey(const ValueKey('cloud_manage_subscription')),
       findsOneWidget,
     );
+  });
+
+  testWidgets(
+      'switching users clears web session state and blocks shell until new entitlement loads',
+      (tester) async {
+    final controller = _FakeCloudAuthController(
+      initialUid: 'uid-1',
+      initialEmail: 'user@example.com',
+      initialEmailVerified: true,
+    );
+    final service = _FakeWebAppService(
+      subscription: WebSubscriptionState.entitled,
+    );
+    final backend = CloudWebBackend(
+      chatClient: _FakeCloudWebChatClient(),
+    );
+
+    await tester.pumpWidget(
+      _buildApp(
+        controller: controller,
+        service: service,
+        chatBackend: backend,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.byType(TextField), 'Hello cloud');
+    await tester.tap(find.widgetWithText(FilledButton, 'Send'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Hello cloud'), findsOneWidget);
+    expect(find.text('Assistant reply'), findsOneWidget);
+
+    service.failNextSubscriptionError =
+        'cloud-gateway request failed: HTTP 503';
+    service.failNextSubscriptionFetch = true;
+    controller.setSession(
+      uid: 'uid-2',
+      email: 'other@example.com',
+      emailVerified: true,
+    );
+    await tester.pump();
+
+    expect(find.text('SecondLoop Web'), findsOneWidget);
+    expect(find.byType(NavigationBar), findsNothing);
+    expect(find.text('Hello cloud'), findsNothing);
+    expect(find.text('Assistant reply'), findsNothing);
+    expect(find.text('Chat'), findsNothing);
+    expect(find.text('Settings'), findsNothing);
+
+    await tester.pumpAndSettle();
+
+    expect(find.text('Hello cloud'), findsNothing);
+    expect(find.text('Assistant reply'), findsNothing);
   });
 
   testWidgets('upgrade gate localizes checkout payment-required error inline',

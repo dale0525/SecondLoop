@@ -44,8 +44,7 @@ class WebAppGate extends StatefulWidget {
 }
 
 class _WebAppGateState extends State<WebAppGate> {
-  late final CloudWebBackend _chatBackend = widget.chatBackend ??
-      CloudWebBackend(chatClient: const UnsupportedCloudWebChatClient());
+  late CloudWebBackend _chatBackend;
   late final CloudSubscriptionController _subscriptionController =
       createWebFormalSubscriptionController(
     service: widget.service,
@@ -75,10 +74,27 @@ class _WebAppGateState extends State<WebAppGate> {
   );
 
   bool _canAccessMainShell = false;
+  String? _activeUid;
+  String? _mainShellUid;
+
+  String? _normalizedUid() {
+    final uid = widget.authController.uid?.trim() ?? '';
+    return uid.isEmpty ? null : uid;
+  }
+
+  void _resetSessionScopedState() {
+    _chatBackend.clearWebSessionState();
+    _subscriptionController.reset();
+    _canAccessMainShell = false;
+    _mainShellUid = null;
+  }
 
   @override
   void initState() {
     super.initState();
+    _chatBackend = widget.chatBackend ??
+        CloudWebBackend(chatClient: const UnsupportedCloudWebChatClient());
+    _activeUid = _normalizedUid();
     unawaited(
         _vaultConfigStore.writeManagedVaultBaseUrl(kWebFormalSettingsBaseUrl));
     if (widget.authController is Listenable) {
@@ -102,11 +118,16 @@ class _WebAppGateState extends State<WebAppGate> {
   }
 
   void _onAuthChanged() {
+    final nextUid = _normalizedUid();
+    if (nextUid != _activeUid) {
+      _activeUid = nextUid;
+      _resetSessionScopedState();
+    }
     _syncMainShellAccess();
     if (mounted) {
       setState(() {});
     }
-    unawaited(_refreshGateState());
+    unawaited(_refreshGateState(expectedUid: nextUid));
   }
 
   void _onSubscriptionChanged() {
@@ -119,23 +140,31 @@ class _WebAppGateState extends State<WebAppGate> {
     final uid = widget.authController.uid?.trim() ?? '';
     if (uid.isEmpty) {
       _canAccessMainShell = false;
+      _mainShellUid = null;
       return;
     }
 
     switch (_subscriptionController.status) {
       case SubscriptionStatus.entitled:
         _canAccessMainShell = true;
+        _mainShellUid = uid;
         return;
       case SubscriptionStatus.notEntitled:
         _canAccessMainShell = false;
+        _mainShellUid = null;
         return;
       case SubscriptionStatus.unknown:
+        if (_mainShellUid != uid) {
+          _canAccessMainShell = false;
+        }
         return;
     }
   }
 
-  Future<void> _refreshGateState() async {
+  Future<void> _refreshGateState({String? expectedUid}) async {
+    final refreshUid = expectedUid ?? _normalizedUid();
     await _subscriptionController.refresh();
+    if (refreshUid != _normalizedUid()) return;
     _syncMainShellAccess();
     if (!mounted) return;
     setState(() {});
@@ -156,7 +185,7 @@ class _WebAppGateState extends State<WebAppGate> {
           isWebOverride: true,
         ),
       );
-    } else if (!_canAccessMainShell) {
+    } else if (!_canAccessMainShell || _mainShellUid != uid.trim()) {
       child = _WebPublicEntryScaffold(
         child: CloudAccountPanel(
           billingClient: _billingClient,
@@ -169,6 +198,7 @@ class _WebAppGateState extends State<WebAppGate> {
       );
     } else {
       child = _WebMainShell(
+        key: ValueKey<String>('web-main-shell-$uid'),
         authController: widget.authController,
         service: widget.service,
         chatBackend: _chatBackend,
@@ -223,6 +253,7 @@ class _WebMainShell extends StatefulWidget {
     required this.authController,
     required this.service,
     required this.chatBackend,
+    super.key,
   });
 
   final CloudAuthController authController;

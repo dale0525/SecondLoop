@@ -94,6 +94,15 @@ final class CloudWebBackend extends AppBackend implements AttachmentsBackend {
     }
   }
 
+  void clearWebSessionState() {
+    _conversations.clear();
+    _messagesByConversation.clear();
+    _attachmentsBySha.clear();
+    _attachmentBytesBySha.clear();
+    _attachmentShasByMessageId.clear();
+    _idCounter = 0;
+  }
+
   List<Message> _messageBucket(String conversationId) {
     return _messagesByConversation.putIfAbsent(
       conversationId,
@@ -257,11 +266,7 @@ final class CloudWebBackend extends AppBackend implements AttachmentsBackend {
 
   @override
   Future<void> resetVaultDataPreservingLlmProfiles(Uint8List key) async {
-    _conversations.clear();
-    _messagesByConversation.clear();
-    _attachmentsBySha.clear();
-    _attachmentBytesBySha.clear();
-    _attachmentShasByMessageId.clear();
+    clearWebSessionState();
   }
 
   @override

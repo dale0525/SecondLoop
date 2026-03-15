@@ -27,6 +27,7 @@ final class CloudSubscriptionController extends ChangeNotifier
   final Future<String?> Function() _idTokenGetter;
   final String _cloudGatewayBaseUrl;
   final HttpJsonClient _httpClient;
+  var _refreshEpoch = 0;
 
   SubscriptionStatus _status = SubscriptionStatus.unknown;
   @override
@@ -40,9 +41,19 @@ final class CloudSubscriptionController extends ChangeNotifier
   Object? _lastRefreshError;
   Object? get lastRefreshError => _lastRefreshError;
 
+  void reset() {
+    _refreshEpoch += 1;
+    _lastRefreshError = null;
+    _setState(
+      status: SubscriptionStatus.unknown,
+      canManageSubscription: null,
+    );
+  }
+
   Future<void> refresh() async {
+    final refreshEpoch = _refreshEpoch;
     final next = await _refreshFromCloudGateway();
-    if (next == null) return;
+    if (refreshEpoch != _refreshEpoch || next == null) return;
 
     _setState(
       status: next.status,
