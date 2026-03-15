@@ -621,6 +621,20 @@ class ReleaseWorkflowEnvTests(unittest.TestCase):
         self.assertIn("dist/latest.json.sig", workflow_text)
         self.assertNotIn("--signing-private-key", workflow_text)
 
+    def test_publish_job_maps_update_public_key_secret(self) -> None:
+        env_keys = self._publish_env_keys()
+
+        self.assertIn("SECONDLOOP_UPDATE_PUBLIC_KEY", env_keys)
+
+    def test_preflight_signing_validation_only_runs_for_tag_releases(self) -> None:
+        preflight_job = self._workflow_job_text("preflight")
+
+        self.assertIn("- name: Validate release signing config", preflight_job)
+        self.assertIn(
+            "if: startsWith(github.ref, 'refs/tags/')\n        shell: bash\n        run: |\n          : \"${SECONDLOOP_UPDATE_PUBLIC_KEY:?Missing secret SECONDLOOP_UPDATE_PUBLIC_KEY}\"",
+            preflight_job,
+        )
+
     def test_release_workflow_packages_macos_managed_archive(self) -> None:
         workflow_text = self._workflow_text()
 
