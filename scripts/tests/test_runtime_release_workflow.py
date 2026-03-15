@@ -78,6 +78,17 @@ class RuntimeReleaseWorkflowTests(unittest.TestCase):
         with self.assertRaisesRegex(AssertionError, "Publish GitHub Release"):
             self._extract_release_publish_step(workflow_text)
 
+    def test_release_workflow_publish_step_extraction_fails_when_end_sentinel_missing(self) -> None:
+        workflow_text = (
+            "- name: Publish GitHub Release\n"
+            "      files: |\n"
+            "        dist/SecondLoop-linux-*.tar.gz\n"
+            "- name: Some Other Step\n"
+        )
+
+        with self.assertRaisesRegex(AssertionError, "Summarize GitHub Release publication"):
+            self._extract_release_publish_step(workflow_text)
+
 
 if __name__ == "__main__":
     unittest.main()
