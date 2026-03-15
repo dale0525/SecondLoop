@@ -185,4 +185,15 @@ void main() {
     expect(captured!.headers['authorization'], 'Bearer token');
     expect(captured!.headers['x-secondloop-vault-id'], 'vault-123');
   });
+
+  test('guessMimeTypeFromExtension maps docx and webm to stable types', () {
+    expect(
+      guessMimeTypeFromExtension('docx'),
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    );
+    expect(
+      guessMimeTypeFromExtension('WEBM'),
+      'video/webm',
+    );
+  });
 }

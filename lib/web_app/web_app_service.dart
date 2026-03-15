@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
 
 import '../features/attachments/web_media_processing_notice.dart';
+import '../features/attachments/attachment_draft_builders.dart';
 
 const String _kApiCloudConfigPath = '/api/cloud/config';
 const String _kApiSubscriptionPath = '/api/app/subscription';
@@ -470,35 +471,11 @@ String _hexEncodeBytes(List<int> bytes) {
 }
 
 String guessMimeTypeFromExtension(String? extension) {
-  switch ((extension ?? '').toLowerCase()) {
-    case 'pdf':
-      return 'application/pdf';
-    case 'txt':
-      return 'text/plain';
-    case 'md':
-      return 'text/markdown';
-    case 'json':
-      return 'application/json';
-    case 'png':
-      return 'image/png';
-    case 'jpg':
-    case 'jpeg':
-      return 'image/jpeg';
-    case 'gif':
-      return 'image/gif';
-    case 'webp':
-      return 'image/webp';
-    case 'mp3':
-      return 'audio/mpeg';
-    case 'wav':
-      return 'audio/wav';
-    case 'm4a':
-      return 'audio/mp4';
-    case 'mp4':
-      return 'video/mp4';
-    case 'mov':
-      return 'video/quicktime';
-    default:
-      return 'application/octet-stream';
+  final normalizedExtension = (extension ?? '').trim().toLowerCase();
+  if (normalizedExtension.isEmpty) {
+    return 'application/octet-stream';
   }
+  return inferAttachmentMimeTypeFromFilename(
+    'upload.$normalizedExtension',
+  );
 }

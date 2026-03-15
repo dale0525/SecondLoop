@@ -51,8 +51,8 @@ final class CloudSubscriptionController extends ChangeNotifier
   }
 
   Future<void> refresh() async {
-    final refreshEpoch = _refreshEpoch;
-    final next = await _refreshFromCloudGateway();
+    final refreshEpoch = ++_refreshEpoch;
+    final next = await _refreshFromCloudGateway(refreshEpoch);
     if (refreshEpoch != _refreshEpoch) return;
     if (next == null) return;
 
@@ -62,9 +62,13 @@ final class CloudSubscriptionController extends ChangeNotifier
     );
   }
 
-  Future<_CloudSubscriptionSnapshot?> _refreshFromCloudGateway() async {
+  Future<_CloudSubscriptionSnapshot?> _refreshFromCloudGateway(
+    int refreshEpoch,
+  ) async {
     if (_cloudGatewayBaseUrl.trim().isEmpty) {
-      _lastRefreshError = null;
+      if (refreshEpoch == _refreshEpoch) {
+        _lastRefreshError = null;
+      }
       return const _CloudSubscriptionSnapshot(
         status: SubscriptionStatus.unknown,
         canManageSubscription: null,
@@ -75,14 +79,18 @@ final class CloudSubscriptionController extends ChangeNotifier
     try {
       idToken = await _idTokenGetter();
     } catch (_) {
-      _lastRefreshError = null;
+      if (refreshEpoch == _refreshEpoch) {
+        _lastRefreshError = null;
+      }
       return const _CloudSubscriptionSnapshot(
         status: SubscriptionStatus.unknown,
         canManageSubscription: null,
       );
     }
     if (idToken == null || idToken.trim().isEmpty) {
-      _lastRefreshError = null;
+      if (refreshEpoch == _refreshEpoch) {
+        _lastRefreshError = null;
+      }
       return const _CloudSubscriptionSnapshot(
         status: SubscriptionStatus.unknown,
         canManageSubscription: null,
@@ -93,7 +101,9 @@ final class CloudSubscriptionController extends ChangeNotifier
     try {
       uri = Uri.parse(_cloudGatewayBaseUrl).resolve('/v1/subscription');
     } catch (_) {
-      _lastRefreshError = null;
+      if (refreshEpoch == _refreshEpoch) {
+        _lastRefreshError = null;
+      }
       return const _CloudSubscriptionSnapshot(
         status: SubscriptionStatus.unknown,
         canManageSubscription: null,
@@ -128,7 +138,9 @@ final class CloudSubscriptionController extends ChangeNotifier
 
       final rawCanManage = decoded['can_manage_subscription'];
       final canManageSubscription = rawCanManage is bool ? rawCanManage : null;
-      _lastRefreshError = null;
+      if (refreshEpoch == _refreshEpoch) {
+        _lastRefreshError = null;
+      }
       return _CloudSubscriptionSnapshot(
         status: active
             ? SubscriptionStatus.entitled
@@ -136,7 +148,9 @@ final class CloudSubscriptionController extends ChangeNotifier
         canManageSubscription: canManageSubscription,
       );
     } catch (error) {
-      _lastRefreshError = error;
+      if (refreshEpoch == _refreshEpoch) {
+        _lastRefreshError = error;
+      }
       return null;
     }
   }

@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -162,5 +163,56 @@ void main() {
     expect(controller.status, SubscriptionStatus.unknown);
     expect(controller.canManageSubscription, isNull);
     expect(controller.lastRefreshError, isNull);
+  });
+
+  test('CloudSubscriptionController ignores stale concurrent refresh results',
+      () async {
+    final firstResponse = Completer<http.Response>();
+    final secondResponse = Completer<http.Response>();
+    var callCount = 0;
+    final client = MockClient((request) {
+      callCount += 1;
+      if (callCount == 1) {
+        return firstResponse.future;
+      }
+      return secondResponse.future;
+    });
+
+    final controller = CloudSubscriptionController(
+      idTokenGetter: () async => 'token-concurrent',
+      cloudGatewayBaseUrl: 'https://gateway.test',
+      httpClient: client,
+    );
+
+    final firstRefresh = controller.refresh();
+    final secondRefresh = controller.refresh();
+
+    secondResponse.complete(
+      http.Response(
+        jsonEncode({
+          'active': false,
+          'can_manage_subscription': false,
+        }),
+        200,
+      ),
+    );
+    await secondRefresh;
+
+    expect(controller.status, SubscriptionStatus.notEntitled);
+    expect(controller.canManageSubscription, false);
+
+    firstResponse.complete(
+      http.Response(
+        jsonEncode({
+          'active': true,
+          'can_manage_subscription': true,
+        }),
+        200,
+      ),
+    );
+    await firstRefresh;
+
+    expect(controller.status, SubscriptionStatus.notEntitled);
+    expect(controller.canManageSubscription, false);
   });
 }
