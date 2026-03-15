@@ -43,6 +43,8 @@ final class CloudWebBackend extends AppBackend implements AttachmentsBackend {
   final Map<String, Uint8List> _attachmentBytesBySha = <String, Uint8List>{};
   final Map<String, List<String>> _attachmentShasByMessageId =
       <String, List<String>>{};
+  final Map<String, _DeletedMessageSnapshot> _deletedMessagesById =
+      <String, _DeletedMessageSnapshot>{};
   var _idCounter = 0;
 
   Future<T> _unsupportedFuture<T>(String feature) {
@@ -100,6 +102,7 @@ final class CloudWebBackend extends AppBackend implements AttachmentsBackend {
     _attachmentsBySha.clear();
     _attachmentBytesBySha.clear();
     _attachmentShasByMessageId.clear();
+    _deletedMessagesById.clear();
     _idCounter = 0;
   }
 
@@ -259,8 +262,27 @@ final class CloudWebBackend extends AppBackend implements AttachmentsBackend {
     bool isDeleted,
   ) async {
     for (final entry in _messagesByConversation.entries) {
-      entry.value
-          .removeWhere((message) => message.id == messageId && isDeleted);
+      final index =
+          entry.value.indexWhere((message) => message.id == messageId);
+      if (index < 0) continue;
+
+      if (isDeleted) {
+        final deleted = entry.value.removeAt(index);
+        _deletedMessagesById[messageId] = _DeletedMessageSnapshot(
+          message: deleted,
+          index: index,
+        );
+      }
+      return;
+    }
+
+    if (!isDeleted) {
+      final deleted = _deletedMessagesById.remove(messageId);
+      if (deleted == null) return;
+
+      final bucket = _messageBucket(deleted.message.conversationId);
+      final restoreIndex = deleted.index.clamp(0, bucket.length);
+      bucket.insert(restoreIndex, deleted.message);
     }
   }
 
@@ -562,4 +584,14 @@ final class CloudWebBackend extends AppBackend implements AttachmentsBackend {
   }) {
     return _unsupportedFuture<int>('local dir sync');
   }
+}
+
+final class _DeletedMessageSnapshot {
+  const _DeletedMessageSnapshot({
+    required this.message,
+    required this.index,
+  });
+
+  final Message message;
+  final int index;
 }

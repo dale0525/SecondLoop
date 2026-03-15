@@ -75,6 +75,32 @@ void main() {
       expect(loaded.content, 'stored reply');
     });
 
+    test('setMessageDeleted can restore a previously deleted message',
+        () async {
+      final backend = CloudWebBackend(
+        chatClient: _FakeCloudWebChatClient(responseText: 'ok'),
+      );
+      final key = Uint8List(0);
+
+      final conversation = await backend.createConversation(key, 'Web Chat');
+      final inserted = await backend.insertMessage(
+        key,
+        conversation.id,
+        role: 'user',
+        content: 'restore me',
+      );
+
+      await backend.setMessageDeleted(key, inserted.id, true);
+      expect(await backend.listMessages(key, conversation.id), isEmpty);
+
+      await backend.setMessageDeleted(key, inserted.id, false);
+      final restored = await backend.listMessages(key, conversation.id);
+
+      expect(restored, hasLength(1));
+      expect(restored.single.id, inserted.id);
+      expect(restored.single.content, 'restore me');
+    });
+
     test('runAiPromptCloudGateway delegates to chat client', () async {
       final client = _FakeCloudWebChatClient(responseText: 'cloud result');
       final backend = CloudWebBackend(chatClient: client);

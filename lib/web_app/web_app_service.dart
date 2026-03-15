@@ -132,9 +132,6 @@ abstract class WebAppService {
     required String sha256,
   }) async =>
       const <int>[];
-
-  Future<Uri> buildAttachmentDownloadUri({required String sha256}) async =>
-      Uri(path: _kApiVaultAttachmentPath, queryParameters: {'sha256': sha256});
 }
 
 class WebAppConfig {

@@ -31,4 +31,28 @@ void main() {
     expect(summary.embeddingsUsagePercent, 7);
     expect(summary.resetAtMs, 123456);
   });
+
+  test('CloudUsageClient maps invalid json payload to domain format error',
+      () async {
+    final client = MockClient((request) async {
+      expect(request.method, 'GET');
+      return http.Response('not-json', 200);
+    });
+
+    final usageClient = CloudUsageClient(httpClient: client);
+
+    await expectLater(
+      () => usageClient.fetchUsageSummary(
+        cloudGatewayBaseUrl: 'https://gateway.test',
+        idToken: 'token-1',
+      ),
+      throwsA(
+        isA<FormatException>().having(
+          (error) => error.message,
+          'message',
+          'invalid_usage_response',
+        ),
+      ),
+    );
+  });
 }

@@ -15,10 +15,14 @@ class HttpJsonResponse {
   final String body;
 
   Map<String, dynamic>? tryDecodeObject() {
-    final decoded = jsonDecode(body.isEmpty ? '{}' : body) as Object?;
-    if (decoded is Map<String, dynamic>) return decoded;
-    if (decoded is Map) {
-      return decoded.map((key, value) => MapEntry('$key', value));
+    try {
+      final decoded = jsonDecode(body.isEmpty ? '{}' : body) as Object?;
+      if (decoded is Map<String, dynamic>) return decoded;
+      if (decoded is Map) {
+        return decoded.map((key, value) => MapEntry('$key', value));
+      }
+    } on FormatException {
+      return null;
     }
     return null;
   }
