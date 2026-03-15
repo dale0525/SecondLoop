@@ -644,6 +644,14 @@ class ReleaseWorkflowEnvTests(unittest.TestCase):
 
         self.assertIn("- name: Validate release publish config", publish_job)
         self.assertIn(
+            '          : "${RELEASE_LLM_API_KEY:?Missing secret RELEASE_LLM_API_KEY}"',
+            publish_job,
+        )
+        self.assertIn(
+            '          : "${RELEASE_LLM_MODEL:?Missing secret RELEASE_LLM_MODEL}"',
+            publish_job,
+        )
+        self.assertIn(
             '          : "${SECONDLOOP_UPDATE_PUBLIC_KEY:?Missing secret SECONDLOOP_UPDATE_PUBLIC_KEY}"',
             publish_job,
         )
