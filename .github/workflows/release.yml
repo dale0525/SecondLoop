@@ -17,6 +17,8 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
       GITHUB_TOKEN: ${{ github.token }}
+      SECONDLOOP_UPDATE_PUBLIC_KEY: ${{ secrets.SECONDLOOP_UPDATE_PUBLIC_KEY }}
+      SECONDLOOP_UPDATE_SIGNING_PRIVATE_KEY: ${{ secrets.SECONDLOOP_UPDATE_SIGNING_PRIVATE_KEY }}
     steps:
       - uses: actions/checkout@v4
       - name: Validate app release tag format
@@ -27,6 +29,11 @@ jobs:
             echo "Invalid app release tag: ${GITHUB_REF_NAME}. Expected vX.Y.Z"
             exit 1
           fi
+      - name: Validate release signing config
+        shell: bash
+        run: |
+          : "${SECONDLOOP_UPDATE_PUBLIC_KEY:?Missing secret SECONDLOOP_UPDATE_PUBLIC_KEY}"
+          : "${SECONDLOOP_UPDATE_SIGNING_PRIVATE_KEY:?Missing secret SECONDLOOP_UPDATE_SIGNING_PRIVATE_KEY}"
       - name: Release preflight
         id: runtime_preflight
         shell: bash
@@ -769,6 +776,7 @@ jobs:
         run: |
           : "${RELEASE_LLM_API_KEY:?Missing secret RELEASE_LLM_API_KEY}"
           : "${RELEASE_LLM_MODEL:?Missing secret RELEASE_LLM_MODEL}"
+          : "${SECONDLOOP_UPDATE_PUBLIC_KEY:?Missing secret SECONDLOOP_UPDATE_PUBLIC_KEY}"
           : "${SECONDLOOP_UPDATE_SIGNING_PRIVATE_KEY:?Missing secret SECONDLOOP_UPDATE_SIGNING_PRIVATE_KEY}"
           if [[ ! "${GITHUB_REF_NAME}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
             echo "Invalid app release tag: ${GITHUB_REF_NAME}. Expected vX.Y.Z"

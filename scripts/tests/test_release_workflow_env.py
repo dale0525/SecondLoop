@@ -613,7 +613,9 @@ class ReleaseWorkflowEnvTests(unittest.TestCase):
     def test_release_workflow_generates_signed_update_manifest(self) -> None:
         workflow_text = self._workflow_text()
 
+        self.assertIn("SECONDLOOP_UPDATE_PUBLIC_KEY", workflow_text)
         self.assertIn("SECONDLOOP_UPDATE_SIGNING_PRIVATE_KEY", workflow_text)
+        self.assertIn('Missing secret SECONDLOOP_UPDATE_PUBLIC_KEY', workflow_text)
         self.assertIn("tools/generate_update_manifest.dart", workflow_text)
         self.assertIn("dist/latest.json", workflow_text)
         self.assertIn("dist/latest.json.sig", workflow_text)
