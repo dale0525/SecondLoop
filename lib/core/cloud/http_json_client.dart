@@ -15,8 +15,9 @@ class HttpJsonResponse {
   final String body;
 
   Map<String, dynamic>? tryDecodeObject() {
+    if (body.trim().isEmpty) return null;
     try {
-      final decoded = jsonDecode(body.isEmpty ? '{}' : body) as Object?;
+      final decoded = jsonDecode(body) as Object?;
       if (decoded is Map<String, dynamic>) return decoded;
       if (decoded is Map) {
         return decoded.map((key, value) => MapEntry('$key', value));

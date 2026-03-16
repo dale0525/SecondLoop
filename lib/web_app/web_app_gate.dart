@@ -46,33 +46,12 @@ class WebAppGate extends StatefulWidget {
 class _WebAppGateState extends State<WebAppGate> {
   late CloudWebBackend _chatBackend;
   late Listenable _authListenable;
-  late final CloudSubscriptionController _subscriptionController =
-      createWebFormalSubscriptionController(
-    service: widget.service,
-    authController: widget.authController,
-  );
-  late final WebAppBillingClient _billingClient = WebAppBillingClient(
-    service: widget.service,
-    authController: widget.authController,
-  );
-  late final CloudUsageClient _cloudUsageClient =
-      createWebFormalCloudUsageClient(
-    service: widget.service,
-    authController: widget.authController,
-  );
-  late final VaultUsageClient _vaultUsageClient =
-      createWebFormalVaultUsageClient(
-    service: widget.service,
-    authController: widget.authController,
-  );
-  late final VaultAttachmentsClient _vaultAttachmentsClient =
-      createWebFormalVaultAttachmentsClient(
-    service: widget.service,
-    authController: widget.authController,
-  );
-  late final SyncConfigStore _vaultConfigStore = SyncConfigStore(
-    managedVaultDefaultBaseUrl: kWebFormalSettingsBaseUrl,
-  );
+  late CloudSubscriptionController _subscriptionController;
+  late WebAppBillingClient _billingClient;
+  late CloudUsageClient _cloudUsageClient;
+  late VaultUsageClient _vaultUsageClient;
+  late VaultAttachmentsClient _vaultAttachmentsClient;
+  late SyncConfigStore _vaultConfigStore;
 
   bool _canAccessMainShell = false;
   String? _activeUid;
@@ -90,28 +69,88 @@ class _WebAppGateState extends State<WebAppGate> {
     _mainShellUid = null;
   }
 
-  @override
-  void initState() {
-    super.initState();
+  void _createInjectedDependencies() {
     _authListenable = _requireObservableAuthController(widget.authController);
     _chatBackend = widget.chatBackend ??
         CloudWebBackend(chatClient: const UnsupportedCloudWebChatClient());
-    _activeUid = _normalizedUid();
-    unawaited(
-        _vaultConfigStore.writeManagedVaultBaseUrl(kWebFormalSettingsBaseUrl));
-    _authListenable.addListener(_onAuthChanged);
+    _subscriptionController = createWebFormalSubscriptionController(
+      service: widget.service,
+      authController: widget.authController,
+    );
     _subscriptionController.addListener(_onSubscriptionChanged);
-    unawaited(_refreshGateState());
+    _billingClient = WebAppBillingClient(
+      service: widget.service,
+      authController: widget.authController,
+    );
+    _cloudUsageClient = createWebFormalCloudUsageClient(
+      service: widget.service,
+      authController: widget.authController,
+    );
+    _vaultUsageClient = createWebFormalVaultUsageClient(
+      service: widget.service,
+      authController: widget.authController,
+    );
+    _vaultAttachmentsClient = createWebFormalVaultAttachmentsClient(
+      service: widget.service,
+      authController: widget.authController,
+    );
+    _vaultConfigStore = SyncConfigStore(
+      managedVaultDefaultBaseUrl: kWebFormalSettingsBaseUrl,
+    );
+    unawaited(
+      _vaultConfigStore.writeManagedVaultBaseUrl(kWebFormalSettingsBaseUrl),
+    );
   }
 
-  @override
-  void dispose() {
-    _authListenable.removeListener(_onAuthChanged);
+  void _disposeInjectedDependencies() {
     _subscriptionController.removeListener(_onSubscriptionChanged);
     _subscriptionController.dispose();
     _cloudUsageClient.dispose();
     _vaultUsageClient.dispose();
     _vaultAttachmentsClient.dispose();
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _createInjectedDependencies();
+    _activeUid = _normalizedUid();
+    _authListenable.addListener(_onAuthChanged);
+    unawaited(_refreshGateState());
+  }
+
+  @override
+  void didUpdateWidget(covariant WebAppGate oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final authChanged = oldWidget.authController != widget.authController;
+    final serviceChanged = oldWidget.service != widget.service;
+    final chatBackendChanged = oldWidget.chatBackend != widget.chatBackend;
+    if (!authChanged && !serviceChanged && !chatBackendChanged) {
+      return;
+    }
+
+    _authListenable.removeListener(_onAuthChanged);
+    _disposeInjectedDependencies();
+    _createInjectedDependencies();
+    _authListenable.addListener(_onAuthChanged);
+
+    _activeUid = _normalizedUid();
+    if (authChanged || chatBackendChanged) {
+      _resetSessionScopedState();
+    } else {
+      _syncMainShellAccess();
+    }
+
+    unawaited(_refreshGateState(expectedUid: _activeUid));
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
+  @override
+  void dispose() {
+    _authListenable.removeListener(_onAuthChanged);
+    _disposeInjectedDependencies();
     super.dispose();
   }
 

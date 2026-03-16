@@ -78,10 +78,10 @@ class CloudUsageCard extends StatefulWidget {
 class _CloudUsageCardState extends State<CloudUsageCard> {
   late CloudUsageClient _client;
   var _ownsClient = false;
-  int _activeRefreshes = 0;
+  final Set<int> _activeRefreshTokens = <int>{};
   int _refreshEpoch = 0;
 
-  bool get _busy => _activeRefreshes > 0;
+  bool get _busy => _activeRefreshTokens.isNotEmpty;
   CloudUsageSummary? _summary;
   Object? _error;
 
@@ -120,26 +120,28 @@ class _CloudUsageCardState extends State<CloudUsageCard> {
   void _resetLoadedState({bool invalidateRefreshes = false}) {
     if (invalidateRefreshes) {
       _refreshEpoch += 1;
+      _activeRefreshTokens.clear();
     }
     _summary = null;
     _error = null;
   }
 
-  void _markRefreshStarted() {
+  void _markRefreshStarted(int refreshEpoch) {
+    if (_activeRefreshTokens.contains(refreshEpoch)) return;
     if (!mounted) {
-      _activeRefreshes += 1;
+      _activeRefreshTokens.add(refreshEpoch);
       return;
     }
-    setState(() => _activeRefreshes += 1);
+    setState(() => _activeRefreshTokens.add(refreshEpoch));
   }
 
-  void _markRefreshFinished() {
-    if (_activeRefreshes <= 0) return;
+  void _markRefreshFinished(int refreshEpoch) {
+    if (!_activeRefreshTokens.contains(refreshEpoch)) return;
     if (!mounted) {
-      _activeRefreshes -= 1;
+      _activeRefreshTokens.remove(refreshEpoch);
       return;
     }
-    setState(() => _activeRefreshes -= 1);
+    setState(() => _activeRefreshTokens.remove(refreshEpoch));
   }
 
   @override
@@ -181,7 +183,7 @@ class _CloudUsageCardState extends State<CloudUsageCard> {
 
     final refreshEpoch = ++_refreshEpoch;
     final requestClient = _client;
-    _markRefreshStarted();
+    _markRefreshStarted(refreshEpoch);
     try {
       final summary = await requestClient.fetchUsageSummary(
         cloudGatewayBaseUrl: baseUrl,
@@ -204,7 +206,7 @@ class _CloudUsageCardState extends State<CloudUsageCard> {
         setState(() => _error = e);
       }
     } finally {
-      _markRefreshFinished();
+      _markRefreshFinished(refreshEpoch);
     }
   }
 

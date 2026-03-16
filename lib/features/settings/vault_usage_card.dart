@@ -270,10 +270,10 @@ class _VaultUsageCardState extends State<VaultUsageCard> {
   late SyncConfigStore _store;
   var _ownsUsageClient = false;
   var _ownsAttachmentsClient = false;
-  int _activeRefreshes = 0;
+  final Set<int> _activeRefreshTokens = <int>{};
   int _refreshEpoch = 0;
 
-  bool get _busy => _activeRefreshes > 0;
+  bool get _busy => _activeRefreshTokens.isNotEmpty;
   String? _resolvedVaultBaseUrl;
   VaultUsageSummary? _summary;
   Object? _summaryError;
@@ -344,6 +344,7 @@ class _VaultUsageCardState extends State<VaultUsageCard> {
   }) {
     if (invalidateRefreshes) {
       _refreshEpoch += 1;
+      _activeRefreshTokens.clear();
     }
     _summary = null;
     _summaryError = null;
@@ -354,21 +355,22 @@ class _VaultUsageCardState extends State<VaultUsageCard> {
     }
   }
 
-  void _markRefreshStarted() {
+  void _markRefreshStarted(int refreshEpoch) {
+    if (_activeRefreshTokens.contains(refreshEpoch)) return;
     if (!mounted) {
-      _activeRefreshes += 1;
+      _activeRefreshTokens.add(refreshEpoch);
       return;
     }
-    setState(() => _activeRefreshes += 1);
+    setState(() => _activeRefreshTokens.add(refreshEpoch));
   }
 
-  void _markRefreshFinished() {
-    if (_activeRefreshes <= 0) return;
+  void _markRefreshFinished(int refreshEpoch) {
+    if (!_activeRefreshTokens.contains(refreshEpoch)) return;
     if (!mounted) {
-      _activeRefreshes -= 1;
+      _activeRefreshTokens.remove(refreshEpoch);
       return;
     }
-    setState(() => _activeRefreshes -= 1);
+    setState(() => _activeRefreshTokens.remove(refreshEpoch));
   }
 
   @override
@@ -521,7 +523,7 @@ class _VaultUsageCardState extends State<VaultUsageCard> {
     final auth = await _resolveManagedVaultAuth();
     if (auth == null) return;
     final refreshEpoch = ++_refreshEpoch;
-    _markRefreshStarted();
+    _markRefreshStarted(refreshEpoch);
 
     VaultUsageSummary? nextSummary;
     Object? nextSummaryError;
@@ -565,7 +567,7 @@ class _VaultUsageCardState extends State<VaultUsageCard> {
       });
     }
 
-    _markRefreshFinished();
+    _markRefreshFinished(refreshEpoch);
 
     if (shouldApply &&
         nextAttachmentUsage != null &&

@@ -55,4 +55,28 @@ void main() {
       ),
     );
   });
+
+  test('CloudUsageClient maps empty successful payload to domain format error',
+      () async {
+    final client = MockClient((request) async {
+      expect(request.method, 'GET');
+      return http.Response('', 200);
+    });
+
+    final usageClient = CloudUsageClient(httpClient: client);
+
+    await expectLater(
+      () => usageClient.fetchUsageSummary(
+        cloudGatewayBaseUrl: 'https://gateway.test',
+        idToken: 'token-1',
+      ),
+      throwsA(
+        isA<FormatException>().having(
+          (error) => error.message,
+          'message',
+          'invalid_usage_response',
+        ),
+      ),
+    );
+  });
 }
