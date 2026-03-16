@@ -54,6 +54,13 @@ class PreCommitHookTests(unittest.TestCase):
 
         self.assertIn('if [[ "${file}" == *.dart && -f "${file}" ]]; then', script)
 
+    def test_pre_commit_hook_regenerates_missing_i18n_outputs_before_flutter_checks(self) -> None:
+        script = PRE_COMMIT_HOOK.read_text(encoding="utf-8")
+
+        self.assertIn('ensure_i18n_generated()', script)
+        self.assertIn('lib/i18n/strings.g.dart missing; regenerating i18n outputs.', script)
+        self.assertIn('if [[ -f "lib/i18n/strings.g.dart" ]]; then', script)
+
     def test_pre_commit_hook_only_runs_i18n_analyze_for_i18n_source_changes(self) -> None:
         script = PRE_COMMIT_HOOK.read_text(encoding="utf-8")
 

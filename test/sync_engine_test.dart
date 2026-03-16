@@ -204,6 +204,34 @@ void main() {
     });
   });
 
+  test('stop flushes queued push after blocking pull completes', () {
+    fakeAsync((async) {
+      final runner = _BlockingPullRunner();
+      final engine = SyncEngine(
+        syncRunner: runner,
+        loadConfig: () async => _webdavConfig(),
+        pushDebounce: const Duration(days: 1),
+        pullInterval: const Duration(days: 1),
+        pullJitter: Duration.zero,
+        pullOnStart: true,
+      );
+
+      engine.start();
+      async.flushMicrotasks();
+      expect(runner.pullCalls, 1);
+
+      engine.notifyLocalMutation();
+      async.flushMicrotasks();
+      expect(runner.pushCalls, 0);
+
+      engine.stop();
+      runner.completePull(applied: 0);
+      async.flushMicrotasks();
+
+      expect(runner.pushCalls, 1);
+    });
+  });
+
   test('does not notify zero-applied refresh when refresh_v2 is disabled', () {
     fakeAsync((async) {
       final runner = _HintPullRunner(
@@ -262,6 +290,7 @@ final class _FakeRunner implements SyncRunner {
 }
 
 final class _BlockingPullRunner implements SyncRunner {
+  int pushCalls = 0;
   int pullCalls = 0;
   Completer<int>? _pullCompleter;
 
@@ -270,7 +299,10 @@ final class _BlockingPullRunner implements SyncRunner {
   }
 
   @override
-  Future<int> push(SyncConfig config) async => 0;
+  Future<int> push(SyncConfig config) async {
+    pushCalls++;
+    return 0;
+  }
 
   @override
   Future<int> pull(SyncConfig config) {

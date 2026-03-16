@@ -195,9 +195,10 @@ final class SyncEngine {
     const SyncWriteGateState.open(),
   );
 
-  bool get isRunning => _running;
+  bool get isRunning => _running && !_stopAfterDrain;
 
   bool _running = false;
+  bool _stopAfterDrain = false;
   bool _busy = false;
   bool _pushQueued = false;
   bool _pullQueued = false;
@@ -213,6 +214,7 @@ final class SyncEngine {
   void start() {
     if (_running) return;
     _running = true;
+    _stopAfterDrain = false;
 
     if (pullOnStart) {
       _queuePull();
@@ -221,8 +223,9 @@ final class SyncEngine {
   }
 
   void stop() {
-    if (!_running) return;
-    _running = false;
+    if (!_running || _stopAfterDrain) return;
+
+    final hadPendingPush = _pushQueued || _pushDebounceTimer != null;
 
     _pushDebounceTimer?.cancel();
     _pushDebounceTimer = null;
@@ -230,8 +233,18 @@ final class SyncEngine {
     _pullTimer?.cancel();
     _pullTimer = null;
 
-    _pushQueued = false;
     _pullQueued = false;
+
+    if (hadPendingPush) {
+      _stopAfterDrain = true;
+      _pushQueued = true;
+      _drain();
+      return;
+    }
+
+    _pushQueued = false;
+    _running = false;
+    _stopAfterDrain = false;
   }
 
   bool _isPushBlocked(int nowMs) {
@@ -259,7 +272,7 @@ final class SyncEngine {
 
   void notifyLocalMutation() {
     _notifyChange();
-    if (!_running) return;
+    if (!_running || _stopAfterDrain) return;
     _pushDebounceTimer?.cancel();
     _pushDebounceTimer = Timer(pushDebounce, _queuePush);
   }
@@ -269,7 +282,7 @@ final class SyncEngine {
   }
 
   void triggerPushNow() {
-    if (!_running) return;
+    if (!_running || _stopAfterDrain) return;
     _queuePush();
   }
 
@@ -314,20 +327,29 @@ final class SyncEngine {
   }
 
   Future<void> _runQueue() async {
-    while (_running && (_pullQueued || _pushQueued)) {
-      final gate = autoRunGate;
-      if (gate != null) {
-        final allowed = await gate();
-        if (!allowed) return;
+    try {
+      while (_running && (_pullQueued || _pushQueued)) {
+        final gate = autoRunGate;
+        if (gate != null) {
+          final allowed = await gate();
+          if (!allowed) return;
+        }
+        if (_pullQueued) {
+          _pullQueued = false;
+          await _pullOnce();
+          continue;
+        }
+        if (_pushQueued) {
+          _pushQueued = false;
+          await _pushOnce();
+        }
       }
-      if (_pullQueued) {
-        _pullQueued = false;
-        await _pullOnce();
-        continue;
-      }
-      if (_pushQueued) {
+    } finally {
+      if (_stopAfterDrain) {
         _pushQueued = false;
-        await _pushOnce();
+        _pullQueued = false;
+        _running = false;
+        _stopAfterDrain = false;
       }
     }
   }
