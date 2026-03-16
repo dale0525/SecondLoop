@@ -29,6 +29,7 @@ struct ServerState {
     vault_devices: BTreeMap<String, Vec<String>>,
     ops: BTreeMap<(String, String), Vec<StoredOp>>,
     attachments: BTreeMap<(String, String), Vec<u8>>,
+    attachment_request_methods: Vec<String>,
 }
 
 fn read_request(stream: &mut TcpStream) -> (String, String, String, Vec<u8>) {
@@ -104,6 +105,18 @@ fn write_bytes_response(stream: &mut TcpStream, status: u16, body: &[u8]) {
     );
     stream.write_all(headers.as_bytes()).expect("write headers");
     stream.write_all(body).expect("write body");
+}
+
+fn write_empty_response(stream: &mut TcpStream, status: u16) {
+    let status_text = match status {
+        200 => "OK",
+        404 => "Not Found",
+        _ => "OK",
+    };
+    let headers = format!(
+        "HTTP/1.1 {status} {status_text}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+    );
+    stream.write_all(headers.as_bytes()).expect("write headers");
 }
 
 fn encode_pull_bin(ops: &[StoredOp]) -> Vec<u8> {
@@ -301,11 +314,27 @@ fn start_mock_server_with_state() -> (
 
                 if tail.starts_with("attachments/") {
                     let attachment_id = tail.trim_start_matches("attachments/").to_string();
+                    {
+                        let mut st = state_clone.lock().expect("lock");
+                        st.attachment_request_methods.push(method.clone());
+                    }
                     if method == "PUT" {
                         let mut st = state_clone.lock().expect("lock");
                         st.attachments
                             .insert((vault_id.clone(), attachment_id), body);
                         write_json_response(&mut stream, 200, serde_json::json!({ "ok": true }));
+                        continue;
+                    }
+                    if method == "HEAD" {
+                        let st = state_clone.lock().expect("lock");
+                        if st
+                            .attachments
+                            .contains_key(&(vault_id.clone(), attachment_id))
+                        {
+                            write_empty_response(&mut stream, 200);
+                        } else {
+                            write_empty_response(&mut stream, 404);
+                        }
                         continue;
                     }
                     if method == "GET" {
@@ -671,6 +700,102 @@ fn managed_vault_push_reuploads_bytes_after_fresh_device_remote_reset() {
     assert!(
         repaired_attachment_count > 0,
         "fresh device should re-upload bytes after managed-vault remote reset"
+    );
+
+    let _ = stop_tx.send(());
+    let _ = handle.join();
+}
+
+#[test]
+fn managed_vault_push_repairs_partially_missing_remote_bytes_for_fresh_device() {
+    let (base_url, stop_tx, handle, state) = start_mock_server_with_state();
+    let vault_id = "vault-test".to_string();
+    let id_token = "token-test".to_string();
+
+    let temp_a = tempfile::tempdir().expect("tempdir A");
+    let app_dir_a = temp_a.path().join("secondloop_a");
+    let key_a =
+        auth::init_master_password(&app_dir_a, "pw-a", KdfParams::for_test()).expect("init A");
+    let conn_a = db::open(&app_dir_a).expect("open A db");
+    let conversation = db::get_or_create_loop_home_conversation(&conn_a, &key_a).expect("conv A");
+    let _message_a = db::insert_message(
+        &conn_a,
+        &key_a,
+        &conversation.id,
+        "user",
+        "managed vault artifact repair A",
+    )
+    .expect("message A");
+    let _message_b = db::insert_message(
+        &conn_a,
+        &key_a,
+        &conversation.id,
+        "user",
+        "managed vault artifact repair B",
+    )
+    .expect("message B");
+    let processed = db::process_pending_message_embeddings_default(&conn_a, &key_a, 10)
+        .expect("process embeddings A");
+    assert_eq!(processed, 2);
+
+    let sync_key = derive_root_key(
+        "sync-passphrase",
+        b"secondloop-sync1",
+        &KdfParams::for_test(),
+    )
+    .expect("derive sync key");
+
+    let pushed_a =
+        sync::managed_vault::push(&conn_a, &key_a, &sync_key, &base_url, &vault_id, &id_token)
+            .expect("push A");
+    assert!(pushed_a > 0);
+
+    let temp_b = tempfile::tempdir().expect("tempdir B");
+    let app_dir_b = temp_b.path().join("secondloop_b");
+    let key_b =
+        auth::init_master_password(&app_dir_b, "pw-b", KdfParams::for_test()).expect("init B");
+    let conn_b = db::open(&app_dir_b).expect("open B db");
+
+    let pulled_b =
+        sync::managed_vault::pull(&conn_b, &key_b, &sync_key, &base_url, &vault_id, &id_token)
+            .expect("pull B");
+    assert!(pulled_b > 0);
+
+    let blob_refs = db::list_distinct_embedding_artifact_blob_refs(&conn_b).expect("blob refs B");
+    assert_eq!(blob_refs.len(), 2);
+    assert!(db::has_embedding_artifact_blob(&app_dir_b, &blob_refs[0]));
+    assert!(db::has_embedding_artifact_blob(&app_dir_b, &blob_refs[1]));
+    let missing_artifact_id = db::embedding_artifact_blob_storage_id(&blob_refs[1]);
+
+    {
+        let mut st = state.lock().expect("lock state");
+        st.attachments
+            .remove(&(vault_id.clone(), missing_artifact_id.clone()));
+        st.attachment_request_methods.clear();
+    }
+
+    let _pushed_b =
+        sync::managed_vault::push(&conn_b, &key_b, &sync_key, &base_url, &vault_id, &id_token)
+            .expect("push B");
+    let st = state.lock().expect("lock state");
+    assert!(
+        st.attachments
+            .contains_key(&(vault_id.clone(), missing_artifact_id.clone())),
+        "fresh device should repair partially missing remote bytes"
+    );
+    assert!(
+        st.attachment_request_methods
+            .iter()
+            .any(|method| method == "HEAD"),
+        "probe should use HEAD requests: {:?}",
+        st.attachment_request_methods
+    );
+    assert!(
+        !st.attachment_request_methods
+            .iter()
+            .any(|method| method == "GET"),
+        "probe should avoid downloading bytes during existence checks: {:?}",
+        st.attachment_request_methods
     );
 
     let _ = stop_tx.send(());

@@ -285,6 +285,80 @@ mod push_progress_tests {
     }
 
     #[test]
+    fn push_with_progress_repairs_partially_missing_remote_bytes_for_fresh_device() {
+        let dir_a = tempdir().expect("tempdir A");
+        let conn_a = crate::db::open(dir_a.path()).expect("open A");
+        let db_key = [7u8; 32];
+        let sync_key = [9u8; 32];
+
+        let conversation = crate::db::get_or_create_loop_home_conversation(&conn_a, &db_key)
+            .expect("conversation A");
+        let _message_a = crate::db::insert_message(
+            &conn_a,
+            &db_key,
+            &conversation.id,
+            "user",
+            "artifact repair A",
+        )
+        .expect("message A");
+        let _message_b = crate::db::insert_message(
+            &conn_a,
+            &db_key,
+            &conversation.id,
+            "user",
+            "artifact repair B",
+        )
+        .expect("message B");
+        let processed = crate::db::process_pending_message_embeddings_default(&conn_a, &db_key, 10)
+            .expect("process embeddings A");
+        assert_eq!(processed, 2);
+
+        let remote = CountingRemoteStore::new();
+        let pushed_a = push(&conn_a, &db_key, &sync_key, &remote, "SecondLoop").expect("push A");
+        assert!(pushed_a > 0);
+
+        let dir_b = tempdir().expect("tempdir B");
+        let conn_b = crate::db::open(dir_b.path()).expect("open B");
+        let pulled_b = pull(&conn_b, &db_key, &sync_key, &remote, "SecondLoop").expect("pull B");
+        assert!(pulled_b > 0);
+
+        let blob_refs = crate::db::list_distinct_embedding_artifact_blob_refs(&conn_b)
+            .expect("blob refs B");
+        assert_eq!(blob_refs.len(), 2);
+        assert!(crate::db::has_embedding_artifact_blob(dir_b.path(), &blob_refs[0]));
+        assert!(crate::db::has_embedding_artifact_blob(dir_b.path(), &blob_refs[1]));
+
+        let missing_path = format!(
+            "/SecondLoop/{}",
+            crate::db::embedding_artifact_blob_rel_path(&blob_refs[1])
+        );
+        remote.delete(&missing_path).expect("delete missing artifact blob");
+        remote.reset_counts();
+
+        let mut seen: Vec<(u64, u64)> = Vec::new();
+        let mut on_progress = |done: u64, total: u64| {
+            seen.push((done, total));
+        };
+
+        let _pushed_b = push_with_progress(
+            &conn_b,
+            &db_key,
+            &sync_key,
+            &remote,
+            "SecondLoop",
+            &mut on_progress,
+        )
+        .expect("push B");
+
+        assert!(
+            remote.put_calls.load(Ordering::Relaxed) > 0,
+            "fresh device should repair partially missing remote bytes"
+        );
+        assert!(remote.get(&missing_path).is_ok(), "missing artifact blob should be restored");
+        assert!(!seen.is_empty());
+    }
+
+    #[test]
     fn push_ops_only_repairs_remote_after_reset_without_new_local_ops() {
         let dir = tempdir().expect("tempdir");
         let conn = crate::db::open(dir.path()).expect("open");

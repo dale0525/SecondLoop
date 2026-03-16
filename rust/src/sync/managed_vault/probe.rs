@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 
 use anyhow::{anyhow, Result};
 use reqwest::blocking::Client;
-use rusqlite::{Connection, OptionalExtension};
+use rusqlite::Connection;
 
 use super::{PullRequest, PullResponse};
 
@@ -17,10 +17,24 @@ fn managed_remote_attachment_exists(
         base_url,
         &format!("/v1/vaults/{vault_id}/attachments/{attachment_id}"),
     )?;
-    let resp = http.get(endpoint).bearer_auth(id_token).send()?;
+    let resp = http.head(endpoint.clone()).bearer_auth(id_token).send()?;
     let status = resp.status();
     if status.as_u16() == 404 {
         return Ok(false);
+    }
+    if status.as_u16() == 405 || status.as_u16() == 501 {
+        let fallback = http.get(endpoint).bearer_auth(id_token).send()?;
+        let fallback_status = fallback.status();
+        if fallback_status.as_u16() == 404 {
+            return Ok(false);
+        }
+        if !fallback_status.is_success() {
+            let text = fallback.text().unwrap_or_default();
+            return Err(anyhow!(
+                "managed-vault probe attachment failed: HTTP {fallback_status} {text}"
+            ));
+        }
+        return Ok(true);
     }
     if !status.is_success() {
         let text = resp.text().unwrap_or_default();
@@ -60,20 +74,15 @@ pub(super) fn managed_remote_has_other_device_ops(
     Ok(!parsed.ops.is_empty() || !parsed.next.is_empty())
 }
 
-fn first_local_attachment_sha256(conn: &Connection) -> Result<Option<String>> {
-    conn.query_row(
-        r#"SELECT sha256 FROM attachments ORDER BY created_at ASC, sha256 ASC LIMIT 1"#,
-        [],
-        |row| row.get(0),
-    )
-    .optional()
-    .map_err(Into::into)
+fn local_attachment_sha256s(conn: &Connection) -> Result<Vec<String>> {
+    conn.prepare(r#"SELECT sha256 FROM attachments ORDER BY created_at ASC, sha256 ASC"#)?
+        .query_map([], |row| row.get(0))?
+        .collect::<rusqlite::Result<Vec<String>>>()
+        .map_err(Into::into)
 }
 
-fn first_local_embedding_artifact_blob_ref(conn: &Connection) -> Result<Option<String>> {
-    Ok(crate::db::list_distinct_embedding_artifact_blob_refs(conn)?
-        .into_iter()
-        .next())
+fn local_embedding_artifact_blob_refs(conn: &Connection) -> Result<Vec<String>> {
+    crate::db::list_distinct_embedding_artifact_blob_refs(conn)
 }
 
 pub(super) fn can_skip_fresh_device_full_push(
@@ -88,13 +97,13 @@ pub(super) fn can_skip_fresh_device_full_push(
         return Ok(false);
     }
 
-    if let Some(sha256) = first_local_attachment_sha256(conn)? {
+    for sha256 in local_attachment_sha256s(conn)? {
         if !managed_remote_attachment_exists(http, base_url, vault_id, id_token, &sha256)? {
             return Ok(false);
         }
     }
 
-    if let Some(blob_ref) = first_local_embedding_artifact_blob_ref(conn)? {
+    for blob_ref in local_embedding_artifact_blob_refs(conn)? {
         let artifact_id = crate::db::embedding_artifact_blob_storage_id(&blob_ref);
         if !managed_remote_attachment_exists(http, base_url, vault_id, id_token, &artifact_id)? {
             return Ok(false);

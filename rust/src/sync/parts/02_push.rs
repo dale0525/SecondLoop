@@ -106,22 +106,15 @@ fn remote_file_exists(remote: &impl RemoteStore, path: &str) -> Result<bool> {
     }
 }
 
-fn first_local_attachment_sha256(conn: &Connection) -> Result<Option<String>> {
-    conn.query_row(
-        r#"SELECT sha256 FROM attachments ORDER BY created_at ASC, sha256 ASC LIMIT 1"#,
-        [],
-        |row| row.get(0),
-    )
-    .optional()
-    .map_err(Into::into)
+fn local_attachment_sha256s(conn: &Connection) -> Result<Vec<String>> {
+    conn.prepare(r#"SELECT sha256 FROM attachments ORDER BY created_at ASC, sha256 ASC"#)?
+        .query_map([], |row| row.get(0))?
+        .collect::<rusqlite::Result<Vec<String>>>()
+        .map_err(Into::into)
 }
 
-fn first_local_embedding_artifact_blob_ref(conn: &Connection) -> Result<Option<String>> {
-    Ok(
-        crate::db::list_distinct_embedding_artifact_blob_refs(conn)?
-            .into_iter()
-            .next(),
-    )
+fn local_embedding_artifact_blob_refs(conn: &Connection) -> Result<Vec<String>> {
+    crate::db::list_distinct_embedding_artifact_blob_refs(conn)
 }
 
 fn can_skip_fresh_device_full_push(
@@ -151,14 +144,14 @@ fn can_skip_fresh_device_full_push(
         return Ok(false);
     }
 
-    if let Some(sha256) = first_local_attachment_sha256(conn)? {
+    for sha256 in local_attachment_sha256s(conn)? {
         let attachment_path = format!("{remote_root_dir}attachments/{sha256}.bin");
         if !remote_file_exists(remote, &attachment_path)? {
             return Ok(false);
         }
     }
 
-    if let Some(blob_ref) = first_local_embedding_artifact_blob_ref(conn)? {
+    for blob_ref in local_embedding_artifact_blob_refs(conn)? {
         let artifact_path = format!(
             "{remote_root_dir}{}",
             crate::db::embedding_artifact_blob_rel_path(&blob_ref)
