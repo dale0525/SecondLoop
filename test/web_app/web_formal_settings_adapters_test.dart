@@ -9,9 +9,10 @@ import 'package:secondloop/web_app/web_app_gate.dart';
 import 'package:secondloop/web_app/web_formal_settings_adapters.dart';
 
 class _FakeCloudAuthController implements CloudAuthController {
-  _FakeCloudAuthController();
+  _FakeCloudAuthController({this.idTokenValue = 'token'});
 
   final String? uidValue = 'uid-1';
+  final String? idTokenValue;
 
   @override
   String? get uid => uidValue;
@@ -23,7 +24,7 @@ class _FakeCloudAuthController implements CloudAuthController {
   bool? get emailVerified => true;
 
   @override
-  Future<String?> getIdToken() async => uidValue == null ? null : 'token';
+  Future<String?> getIdToken() async => uidValue == null ? null : idTokenValue;
 
   @override
   Future<void> refreshUserInfo() async {}
@@ -173,6 +174,34 @@ void main() {
     expect(attachmentUsage.totalCount, 1);
     expect(attachmentUsage.totalBytesUsed, 12);
     expect(attachmentUsage.items.single.sha256, 'sha-settings');
+  });
+
+  test(
+      'web formal settings adapter prefers request authorization over auth state',
+      () async {
+    final authController = _FakeCloudAuthController(idTokenValue: null);
+    final service = _FakeWebAppService(
+      usage: const WebUsageSummary(
+        askAiUsagePercent: 31,
+        embeddingsUsagePercent: 12,
+        resetAtMs: 1735689600000,
+      ),
+    );
+
+    final usageClient = CloudUsageClient(
+      httpClient: WebFormalSettingsHttpClient(
+        service: service,
+        authController: authController,
+      ),
+    );
+
+    final usage = await usageClient.fetchUsageSummary(
+      cloudGatewayBaseUrl: kWebFormalSettingsBaseUrl,
+      idToken: 'token-from-request',
+    );
+
+    expect(usage.askAiUsagePercent, 31);
+    expect(usage.embeddingsUsagePercent, 12);
   });
 
   test('web formal settings adapter maps subscription and billing client',

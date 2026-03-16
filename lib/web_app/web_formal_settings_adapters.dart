@@ -49,10 +49,26 @@ final class WebFormalSettingsHttpClient extends http.BaseClient {
   final WebAppService service;
   final CloudAuthController authController;
 
+  Future<String?> _resolveIdToken(http.BaseRequest request) async {
+    final authorization = request.headers['authorization']?.trim() ?? '';
+    if (authorization.isNotEmpty) {
+      const bearerPrefix = 'Bearer ';
+      if (authorization.startsWith(bearerPrefix)) {
+        final token = authorization.substring(bearerPrefix.length).trim();
+        if (token.isNotEmpty) return token;
+      }
+      return authorization;
+    }
+
+    final idToken = await authController.getIdToken();
+    if (idToken == null || idToken.trim().isEmpty) return null;
+    return idToken.trim();
+  }
+
   @override
   Future<http.StreamedResponse> send(http.BaseRequest request) async {
-    final idToken = await authController.getIdToken();
-    if (idToken == null || idToken.trim().isEmpty) {
+    final idToken = await _resolveIdToken(request);
+    if (idToken == null || idToken.isEmpty) {
       return _jsonResponse(
         request,
         statusCode: 401,

@@ -78,14 +78,11 @@ final class CloudSubscriptionController extends ChangeNotifier
     String? idToken;
     try {
       idToken = await _idTokenGetter();
-    } catch (_) {
+    } catch (error) {
       if (refreshEpoch == _refreshEpoch) {
-        _lastRefreshError = null;
+        _lastRefreshError = error;
       }
-      return const _CloudSubscriptionSnapshot(
-        status: SubscriptionStatus.unknown,
-        canManageSubscription: null,
-      );
+      return null;
     }
     if (idToken == null || idToken.trim().isEmpty) {
       if (refreshEpoch == _refreshEpoch) {

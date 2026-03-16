@@ -165,6 +165,43 @@ void main() {
     expect(controller.lastRefreshError, isNull);
   });
 
+  test(
+      'CloudSubscriptionController preserves prior state when id token getter throws',
+      () async {
+    final client = MockClient((request) async {
+      return http.Response(
+        jsonEncode({
+          'active': true,
+          'can_manage_subscription': true,
+        }),
+        200,
+      );
+    });
+
+    var shouldThrow = false;
+    final controller = CloudSubscriptionController(
+      idTokenGetter: () async {
+        if (shouldThrow) throw StateError('token_lookup_failed');
+        return 'token-6';
+      },
+      cloudGatewayBaseUrl: 'https://gateway.test',
+      httpClient: client,
+    );
+
+    await controller.refresh();
+    expect(controller.status, SubscriptionStatus.entitled);
+    expect(controller.canManageSubscription, true);
+
+    shouldThrow = true;
+    await controller.refresh();
+
+    expect(controller.status, SubscriptionStatus.entitled);
+    expect(controller.canManageSubscription, true);
+    expect(controller.lastRefreshError, isNotNull);
+    expect(controller.lastRefreshError.toString(),
+        contains('token_lookup_failed'));
+  });
+
   test('CloudSubscriptionController ignores stale concurrent refresh results',
       () async {
     final firstResponse = Completer<http.Response>();
