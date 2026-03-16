@@ -46,7 +46,7 @@ void main() {
 }
 
 final class _FakeCloudAuthController extends ChangeNotifier
-    implements CloudAuthController, CloudPasswordRecoveryController {
+    implements ObservableCloudAuthController, CloudPasswordRecoveryController {
   _FakeCloudAuthController({this.refreshError});
 
   final Object? refreshError;

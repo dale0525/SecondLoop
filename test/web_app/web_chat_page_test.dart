@@ -4,13 +4,14 @@ import 'package:secondloop/core/backend/cloud_web_backend.dart';
 import 'package:secondloop/core/cloud/cloud_auth_controller.dart';
 import 'package:secondloop/web_app/web_chat_page.dart';
 import 'package:secondloop/web_app/web_app_service.dart';
+import 'package:secondloop/web_app/web_formal_settings_adapters.dart';
 
 import '../test_i18n.dart';
 
 void main() {
   testWidgets('failed web chat keeps the user message visible', (tester) async {
     final backend = CloudWebBackend(
-      chatClient: const _FakeCloudWebChatClient(
+      chatClient: _FakeCloudWebChatClient(
         error:
             'cloud-gateway request failed: HTTP 429 {"error":"rate_limited"}',
       ),
@@ -39,10 +40,38 @@ void main() {
     expect(find.text('Cloud is rate limited. Please try again later.'),
         findsOneWidget);
   });
+
+  testWidgets('web chat forwards formal gateway config to cloud backend',
+      (tester) async {
+    final client = _FakeCloudWebChatClient();
+    final backend = CloudWebBackend(chatClient: client);
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: Scaffold(
+            body: WebChatPage(
+              service: _FakeWebAppService(),
+              authController: _FakeCloudAuthController(),
+              chatBackend: backend,
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.byType(TextField), 'Hello config');
+    await tester.tap(find.widgetWithText(FilledButton, 'Send'));
+    await tester.pumpAndSettle();
+
+    expect(client.lastGatewayBaseUrl, kWebFormalSettingsBaseUrl);
+    expect(client.lastModelName, 'cloud');
+  });
 }
 
 final class _FakeCloudAuthController extends ChangeNotifier
-    implements CloudAuthController, CloudPasswordRecoveryController {
+    implements ObservableCloudAuthController, CloudPasswordRecoveryController {
   @override
   String? get uid => 'uid-1';
 
@@ -77,9 +106,11 @@ final class _FakeCloudAuthController extends ChangeNotifier
 }
 
 final class _FakeCloudWebChatClient implements CloudWebChatClient {
-  const _FakeCloudWebChatClient({this.error});
+  _FakeCloudWebChatClient({this.error});
 
   final Object? error;
+  String? lastGatewayBaseUrl;
+  String? lastModelName;
 
   @override
   Future<String> sendMessages({
@@ -88,6 +119,8 @@ final class _FakeCloudWebChatClient implements CloudWebChatClient {
     required String modelName,
     required List<Map<String, String>> messages,
   }) async {
+    lastGatewayBaseUrl = gatewayBaseUrl;
+    lastModelName = modelName;
     if (error != null) throw error!;
     return 'ok';
   }

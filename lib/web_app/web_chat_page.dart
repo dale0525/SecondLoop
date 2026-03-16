@@ -11,6 +11,7 @@ import '../i18n/strings.g.dart';
 import '../src/rust/db.dart';
 
 import 'web_app_service.dart';
+import 'web_formal_settings_adapters.dart';
 
 class WebChatPage extends StatefulWidget {
   const WebChatPage({
@@ -105,7 +106,7 @@ class _WebChatPageState extends State<WebChatPage> {
             _sessionKey,
             conversationId,
             question: text,
-            gatewayBaseUrl: '',
+            gatewayBaseUrl: kWebFormalSettingsBaseUrl,
             idToken: idToken,
             modelName: 'cloud',
           )

@@ -45,6 +45,7 @@ class WebAppGate extends StatefulWidget {
 
 class _WebAppGateState extends State<WebAppGate> {
   late CloudWebBackend _chatBackend;
+  late Listenable _authListenable;
   late final CloudSubscriptionController _subscriptionController =
       createWebFormalSubscriptionController(
     service: widget.service,
@@ -92,23 +93,20 @@ class _WebAppGateState extends State<WebAppGate> {
   @override
   void initState() {
     super.initState();
+    _authListenable = _requireObservableAuthController(widget.authController);
     _chatBackend = widget.chatBackend ??
         CloudWebBackend(chatClient: const UnsupportedCloudWebChatClient());
     _activeUid = _normalizedUid();
     unawaited(
         _vaultConfigStore.writeManagedVaultBaseUrl(kWebFormalSettingsBaseUrl));
-    if (widget.authController is Listenable) {
-      (widget.authController as Listenable).addListener(_onAuthChanged);
-    }
+    _authListenable.addListener(_onAuthChanged);
     _subscriptionController.addListener(_onSubscriptionChanged);
     unawaited(_refreshGateState());
   }
 
   @override
   void dispose() {
-    if (widget.authController is Listenable) {
-      (widget.authController as Listenable).removeListener(_onAuthChanged);
-    }
+    _authListenable.removeListener(_onAuthChanged);
     _subscriptionController.removeListener(_onSubscriptionChanged);
     _subscriptionController.dispose();
     _cloudUsageClient.dispose();
@@ -224,6 +222,11 @@ class _WebAppGateState extends State<WebAppGate> {
       ),
     );
   }
+}
+
+Listenable _requireObservableAuthController(CloudAuthController controller) {
+  if (controller is Listenable) return controller as Listenable;
+  throw StateError('WebAppGate requires a Listenable CloudAuthController');
 }
 
 class _WebPublicEntryScaffold extends StatelessWidget {

@@ -19,7 +19,7 @@ class SecondLoopWebApp extends StatefulWidget {
   final Future<WebAppBootstrapData> Function()? bootstrapLoader;
   final Future<WebAppConfig> Function()? configLoader;
   final WebAppService Function()? serviceFactory;
-  final CloudAuthController Function(WebAppConfig config)?
+  final ObservableCloudAuthController Function(WebAppConfig config)?
       authControllerFactory;
 
   @override
@@ -116,7 +116,7 @@ class WebAppBootstrapData {
     required this.chatBackend,
   });
 
-  final CloudAuthController authController;
+  final ObservableCloudAuthController authController;
   final WebAppService service;
   final CloudWebBackend chatBackend;
 }
