@@ -62,14 +62,14 @@ void main() {
       find.byType(ListView),
       const Offset(0, -300),
     );
-    await tester.tap(subscribeButton, warnIfMissed: false);
+    (tester.widget<FilledButton>(subscribeButton).onPressed!() as dynamic);
     await tester.pumpAndSettle();
     await tester.dragUntilVisible(
       subscribeButton,
       find.byType(ListView),
       const Offset(0, -300),
     );
-    await tester.tap(subscribeButton, warnIfMissed: false);
+    (tester.widget<FilledButton>(subscribeButton).onPressed!() as dynamic);
     await tester.pumpAndSettle();
 
     expect(createdCount, 1);
@@ -78,6 +78,97 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(disposedCount, 1);
+  });
+
+  testWidgets(
+      'CloudAccountPanel recreates owned billing client when factory changes',
+      (tester) async {
+    var firstCreated = 0;
+    var firstDisposed = 0;
+    var secondCreated = 0;
+    var secondDisposed = 0;
+    final controller = _FakeCloudAuthController();
+    final subscriptions = _FakeSubscriptionStatusController(
+      SubscriptionStatus.notEntitled,
+    );
+
+    Widget buildWidget({required bool useFirstFactory}) {
+      return wrapWithI18n(
+        MaterialApp(
+          home: SubscriptionScope(
+            controller: subscriptions,
+            child: CloudAuthScope(
+              controller: controller,
+              gatewayConfig: const CloudGatewayConfig(
+                baseUrl: 'https://gateway.test',
+                modelName: 'cloud',
+              ),
+              child: Scaffold(
+                body: ListView(
+                  children: [
+                    CloudAccountPanel(
+                      billingClientFactory: ({
+                        required idTokenGetter,
+                        required cloudGatewayBaseUrl,
+                      }) {
+                        if (useFirstFactory) {
+                          firstCreated += 1;
+                          return _FakeDisposableBillingClient(
+                            onDispose: () => firstDisposed += 1,
+                          );
+                        }
+                        secondCreated += 1;
+                        return _FakeDisposableBillingClient(
+                          onDispose: () => secondDisposed += 1,
+                        );
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    await tester.pumpWidget(buildWidget(useFirstFactory: true));
+    await tester.pumpAndSettle();
+
+    final subscribeButton = find.byKey(const ValueKey('cloud_subscribe'));
+    await tester.dragUntilVisible(
+      subscribeButton,
+      find.byType(ListView),
+      const Offset(0, -300),
+    );
+    final firstPress =
+        (tester.widget<FilledButton>(subscribeButton).onPressed! as dynamic)();
+    if (firstPress is Future<void>) {
+      await firstPress;
+    }
+    await tester.pumpAndSettle();
+
+    expect(firstCreated, 1);
+    expect(firstDisposed, 0);
+
+    await tester.pumpWidget(buildWidget(useFirstFactory: false));
+    await tester.pumpAndSettle();
+
+    await tester.dragUntilVisible(
+      subscribeButton,
+      find.byType(ListView),
+      const Offset(0, -300),
+    );
+    final secondPress =
+        (tester.widget<FilledButton>(subscribeButton).onPressed! as dynamic)();
+    if (secondPress is Future<void>) {
+      await secondPress;
+    }
+    await tester.pumpAndSettle();
+
+    expect(firstDisposed, 1);
+    expect(secondCreated, 1);
+    expect(secondDisposed, 0);
   });
 }
 

@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -203,6 +204,71 @@ void main() {
     );
     await tester.pump();
     await tester.tap(find.byKey(const ValueKey('cloud_usage_refresh')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('22%'), findsOneWidget);
+    expect(find.text('11%'), findsNothing);
+  });
+
+  testWidgets(
+      'Cloud usage card ignores stale in-flight refresh after injected client changes',
+      (tester) async {
+    final firstResponse = Completer<http.Response>();
+    final secondResponse = Completer<http.Response>();
+
+    final firstHttpClient = MockClient((request) => firstResponse.future);
+    final secondHttpClient = MockClient((request) => secondResponse.future);
+
+    Widget buildWidget(CloudUsageClient client) {
+      return wrapWithI18n(
+        MaterialApp(
+          home: CloudAuthScope(
+            controller: _FakeCloudAuthController(idToken: 'token_1'),
+            gatewayConfig: const CloudGatewayConfig(
+              baseUrl: 'https://gateway.test',
+              modelName: 'cloud',
+            ),
+            child: Scaffold(body: CloudUsageCard(client: client)),
+          ),
+        ),
+      );
+    }
+
+    await tester.pumpWidget(
+      buildWidget(CloudUsageClient(httpClient: firstHttpClient)),
+    );
+    await tester.pump();
+
+    await tester.pumpWidget(
+      buildWidget(CloudUsageClient(httpClient: secondHttpClient)),
+    );
+    await tester.pump();
+
+    secondResponse.complete(
+      http.Response(
+        jsonEncode(<String, Object?>{
+          'ask_ai_usage_percent': 22,
+          'embeddings_usage_percent': 2,
+          'reset_at_ms': 456,
+        }),
+        200,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('22%'), findsOneWidget);
+    expect(find.text('11%'), findsNothing);
+
+    firstResponse.complete(
+      http.Response(
+        jsonEncode(<String, Object?>{
+          'ask_ai_usage_percent': 11,
+          'embeddings_usage_percent': 1,
+          'reset_at_ms': 123,
+        }),
+        200,
+      ),
+    );
     await tester.pumpAndSettle();
 
     expect(find.text('22%'), findsOneWidget);

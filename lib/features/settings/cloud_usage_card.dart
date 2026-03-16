@@ -78,8 +78,10 @@ class CloudUsageCard extends StatefulWidget {
 class _CloudUsageCardState extends State<CloudUsageCard> {
   late CloudUsageClient _client;
   var _ownsClient = false;
+  int _activeRefreshes = 0;
+  int _refreshEpoch = 0;
 
-  bool _busy = false;
+  bool get _busy => _activeRefreshes > 0;
   CloudUsageSummary? _summary;
   Object? _error;
 
@@ -97,8 +99,7 @@ class _CloudUsageCardState extends State<CloudUsageCard> {
     if (oldWidget.client != widget.client) {
       _disposeOwnedClient();
       _replaceClient(widget.client);
-      _summary = null;
-      _error = null;
+      _resetLoadedState(invalidateRefreshes: true);
       if (_uid != null) {
         unawaited(_refresh());
       }
@@ -114,6 +115,31 @@ class _CloudUsageCardState extends State<CloudUsageCard> {
     if (_ownsClient) {
       _client.dispose();
     }
+  }
+
+  void _resetLoadedState({bool invalidateRefreshes = false}) {
+    if (invalidateRefreshes) {
+      _refreshEpoch += 1;
+    }
+    _summary = null;
+    _error = null;
+  }
+
+  void _markRefreshStarted() {
+    if (!mounted) {
+      _activeRefreshes += 1;
+      return;
+    }
+    setState(() => _activeRefreshes += 1);
+  }
+
+  void _markRefreshFinished() {
+    if (_activeRefreshes <= 0) return;
+    if (!mounted) {
+      _activeRefreshes -= 1;
+      return;
+    }
+    setState(() => _activeRefreshes -= 1);
   }
 
   @override
@@ -135,7 +161,6 @@ class _CloudUsageCardState extends State<CloudUsageCard> {
   }
 
   Future<void> _refresh() async {
-    if (_busy) return;
     final scope = CloudAuthScope.maybeOf(context);
     final controller = scope?.controller;
     if (controller == null) return;
@@ -154,22 +179,32 @@ class _CloudUsageCardState extends State<CloudUsageCard> {
     }
     if (idToken == null || idToken.trim().isEmpty) return;
 
-    setState(() => _busy = true);
+    final refreshEpoch = ++_refreshEpoch;
+    final requestClient = _client;
+    _markRefreshStarted();
     try {
-      final summary = await _client.fetchUsageSummary(
+      final summary = await requestClient.fetchUsageSummary(
         cloudGatewayBaseUrl: baseUrl,
         idToken: idToken,
       );
-      if (!mounted) return;
-      setState(() {
-        _summary = summary;
-        _error = null;
-      });
+      final shouldApply = mounted &&
+          refreshEpoch == _refreshEpoch &&
+          identical(requestClient, _client);
+      if (shouldApply) {
+        setState(() {
+          _summary = summary;
+          _error = null;
+        });
+      }
     } catch (e) {
-      if (!mounted) return;
-      setState(() => _error = e);
+      final shouldApply = mounted &&
+          refreshEpoch == _refreshEpoch &&
+          identical(requestClient, _client);
+      if (shouldApply) {
+        setState(() => _error = e);
+      }
     } finally {
-      if (mounted) setState(() => _busy = false);
+      _markRefreshFinished();
     }
   }
 
@@ -183,8 +218,7 @@ class _CloudUsageCardState extends State<CloudUsageCard> {
 
     if (uid != _uid) {
       _uid = uid;
-      _summary = null;
-      _error = null;
+      _resetLoadedState(invalidateRefreshes: true);
       if (uid != null) {
         unawaited(_refresh());
       }
@@ -195,14 +229,14 @@ class _CloudUsageCardState extends State<CloudUsageCard> {
         Text(context.t.settings.cloudUsage.labels.gatewayNotConfigured),
       (false, true) =>
         Text(context.t.settings.cloudUsage.labels.signInRequired),
-      (false, false) when _busy =>
-        const Center(child: CircularProgressIndicator()),
       (false, false) when _error != null => Text(
           context.t.settings.cloudUsage.labels
               .loadFailed(error: _formatUsageError(context, _error!)),
         ),
       (false, false) when _summary != null =>
         CloudUsageSummaryView(summary: _summary!),
+      (false, false) when _busy =>
+        const Center(child: CircularProgressIndicator()),
       _ => const SizedBox.shrink(),
     };
 

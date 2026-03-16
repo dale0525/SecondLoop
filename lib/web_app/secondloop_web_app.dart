@@ -8,9 +8,19 @@ import '../i18n/strings.g.dart';
 import 'web_app_gate.dart';
 
 class SecondLoopWebApp extends StatefulWidget {
-  const SecondLoopWebApp({super.key, this.bootstrapLoader});
+  const SecondLoopWebApp({
+    super.key,
+    this.bootstrapLoader,
+    this.configLoader,
+    this.serviceFactory,
+    this.authControllerFactory,
+  });
 
   final Future<WebAppBootstrapData> Function()? bootstrapLoader;
+  final Future<WebAppConfig> Function()? configLoader;
+  final WebAppService Function()? serviceFactory;
+  final CloudAuthController Function(WebAppConfig config)?
+      authControllerFactory;
 
   @override
   State<SecondLoopWebApp> createState() => _SecondLoopWebAppState();
@@ -26,14 +36,21 @@ class _SecondLoopWebAppState extends State<SecondLoopWebApp> {
   }
 
   Future<WebAppBootstrapData> _bootstrap() async {
-    final config = await WebAppServiceHttp.loadConfig();
-    final service = WebAppServiceHttp();
-    final authController = CloudAuthControllerImpl(
-      identityToolkit: FirebaseIdentityToolkitHttp(
-        webApiKey: config.firebaseWebApiKey,
-      ),
-    );
-    await authController.refreshUserInfo();
+    final config =
+        await (widget.configLoader ?? WebAppServiceHttp.loadConfig)();
+    final service = (widget.serviceFactory ?? () => WebAppServiceHttp())();
+    final authController = (widget.authControllerFactory ??
+        (config) => CloudAuthControllerImpl(
+              identityToolkit: FirebaseIdentityToolkitHttp(
+                webApiKey: config.firebaseWebApiKey,
+              ),
+            ))(config);
+    try {
+      await authController.refreshUserInfo();
+    } catch (_) {
+      // Allow the app to continue booting so the gate can render sign-in and
+      // retry paths even if the initial profile refresh fails.
+    }
     return WebAppBootstrapData(
       authController: authController,
       service: service,

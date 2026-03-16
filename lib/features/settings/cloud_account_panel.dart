@@ -73,6 +73,7 @@ class _CloudAccountPanelState extends State<CloudAccountPanel> {
   DisposableBillingClient? _ownedDisposableBillingClient;
   CloudAuthController? _ownedBillingAuthController;
   String? _ownedBillingGatewayBaseUrl;
+  BillingClientFactory? _ownedBillingClientFactory;
 
   bool get _verificationCooldownActive => _verificationCooldownSeconds > 0;
 
@@ -102,7 +103,8 @@ class _CloudAccountPanelState extends State<CloudAccountPanel> {
     final gatewayBaseUrl = scope?.gatewayConfig.baseUrl ?? '';
     if (_ownedBillingClient != null &&
         identical(_ownedBillingAuthController, controller) &&
-        _ownedBillingGatewayBaseUrl == gatewayBaseUrl) {
+        _ownedBillingGatewayBaseUrl == gatewayBaseUrl &&
+        identical(_ownedBillingClientFactory, widget.billingClientFactory)) {
       return _ownedBillingClient;
     }
 
@@ -124,6 +126,7 @@ class _CloudAccountPanelState extends State<CloudAccountPanel> {
         client is DisposableBillingClient ? client : null;
     _ownedBillingAuthController = controller;
     _ownedBillingGatewayBaseUrl = gatewayBaseUrl;
+    _ownedBillingClientFactory = widget.billingClientFactory;
     return client;
   }
 
@@ -133,6 +136,17 @@ class _CloudAccountPanelState extends State<CloudAccountPanel> {
     _ownedDisposableBillingClient = null;
     _ownedBillingAuthController = null;
     _ownedBillingGatewayBaseUrl = null;
+    _ownedBillingClientFactory = null;
+  }
+
+  @override
+  void didUpdateWidget(covariant CloudAccountPanel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!identical(
+            oldWidget.billingClientFactory, widget.billingClientFactory) ||
+        oldWidget.billingClient != widget.billingClient) {
+      _disposeOwnedBillingClient();
+    }
   }
 
   @override

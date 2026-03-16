@@ -1,6 +1,10 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:secondloop/core/cloud/cloud_auth_controller.dart';
 import 'package:secondloop/i18n/strings.g.dart';
 import 'package:secondloop/web_app/secondloop_web_app.dart';
+import 'package:secondloop/web_app/web_app_service.dart';
+import 'package:secondloop/features/settings/cloud_account_panel.dart';
 
 void main() {
   setUp(() {
@@ -20,4 +24,78 @@ void main() {
     expect(find.textContaining('Web 应用启动失败：'), findsOneWidget);
     expect(find.textContaining('config_http_500'), findsOneWidget);
   });
+
+  testWidgets(
+      'web app keeps gate reachable when refreshUserInfo fails during bootstrap',
+      (tester) async {
+    await tester.pumpWidget(
+      SecondLoopWebApp(
+        configLoader: () async =>
+            const WebAppConfig(firebaseWebApiKey: 'firebase-key'),
+        serviceFactory: () => _FakeWebAppService(),
+        authControllerFactory: (config) => _FakeCloudAuthController(
+          refreshError: StateError('lookup_failed'),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('Failed to start Web app:'), findsNothing);
+    expect(find.byType(CloudAccountPanel), findsOneWidget);
+  });
+}
+
+final class _FakeCloudAuthController extends ChangeNotifier
+    implements CloudAuthController, CloudPasswordRecoveryController {
+  _FakeCloudAuthController({this.refreshError});
+
+  final Object? refreshError;
+
+  @override
+  String? get uid => null;
+
+  @override
+  String? get email => null;
+
+  @override
+  bool? get emailVerified => null;
+
+  @override
+  Future<String?> getIdToken() async => null;
+
+  @override
+  Future<void> refreshUserInfo() async {
+    if (refreshError != null) throw refreshError!;
+  }
+
+  @override
+  Future<void> sendEmailVerification() async {}
+
+  @override
+  Future<void> sendPasswordResetEmail({required String email}) async {}
+
+  @override
+  Future<void> signInWithEmailPassword({
+    required String email,
+    required String password,
+  }) async {}
+
+  @override
+  Future<void> signOut() async {}
+
+  @override
+  Future<void> signUpWithEmailPassword({
+    required String email,
+    required String password,
+  }) async {}
+}
+
+final class _FakeWebAppService extends WebAppService {
+  @override
+  Future<WebSubscriptionSnapshot> fetchSubscription(
+          {required String idToken}) async =>
+      const WebSubscriptionSnapshot(
+        state: WebSubscriptionState.unknown,
+        canManageSubscription: null,
+      );
 }
