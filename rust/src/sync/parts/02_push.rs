@@ -149,15 +149,15 @@ fn push_internal(
         )?
         .max(0) as u64;
 
-if !upload_attachment_bytes
-    && local_pending_ops == 0
-    && (progress.is_none() || last_pushed_seq == 0)
-{
-    if let Some(cb) = progress.as_deref_mut() {
-        cb(0, 0);
+    if !upload_attachment_bytes
+        && local_pending_ops == 0
+        && last_pushed_seq == 0
+    {
+        if let Some(cb) = progress.as_deref_mut() {
+            cb(0, 0);
+        }
+        return Ok(0);
     }
-    return Ok(0);
-}
 
     let ops_dir = format!("{remote_root_dir}{device_id}/ops/");
     remote.mkdir_all(&ops_dir)?;
@@ -905,6 +905,28 @@ mod push_progress_tests {
             0,
             "fresh device without local ops should not touch remote during push"
         );
+    }
+
+    #[test]
+    fn push_ops_only_repairs_remote_after_reset_without_new_local_ops() {
+        let dir = tempdir().expect("tempdir");
+        let conn = crate::db::open(dir.path()).expect("open");
+        let db_key = [7u8; 32];
+        let sync_key = [9u8; 32];
+
+        let _conversation =
+            crate::db::create_conversation(&conn, &db_key, "One").expect("conversation");
+
+        let remote = InMemoryRemoteStore::new();
+        let pushed1 = push_ops_only(&conn, &db_key, &sync_key, &remote, "SecondLoop")
+            .expect("initial push");
+        assert_eq!(pushed1, 1);
+
+        clear_remote_root(&remote, "SecondLoop").expect("clear remote root");
+
+        let pushed2 = push_ops_only(&conn, &db_key, &sync_key, &remote, "SecondLoop")
+            .expect("repair push");
+        assert_eq!(pushed2, 1);
     }
 }
 
