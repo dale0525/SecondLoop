@@ -68,7 +68,7 @@ pub fn pull_with_progress(
         let body = resp.bytes()?;
         let parsed: PullResponseWithMax = serde_json::from_slice(body.as_ref())?;
 
-        if total_ops.is_none() {
+        if total_ops.is_none() && !parsed.max.is_empty() {
             let mut total = 0u64;
             for (device_id, max_seq) in &parsed.max {
                 let last_pulled_seq = since.get(device_id).copied().unwrap_or(0);
@@ -146,16 +146,19 @@ pub fn pull_with_progress(
         })?;
         applied += batch_applied;
 
-        if let Some(total) = total_ops {
-            let mut delta = 0u64;
-            for (device_id, next_seq) in &next_since {
-                let prev = since.get(device_id).copied().unwrap_or(0);
-                if *next_seq > prev {
-                    delta += (*next_seq - prev) as u64;
-                }
+        let mut delta = 0u64;
+        for (device_id, next_seq) in &next_since {
+            let prev = since.get(device_id).copied().unwrap_or(0);
+            if *next_seq > prev {
+                delta += (*next_seq - prev) as u64;
             }
-            done_ops = (done_ops + delta).min(total);
-            progress(done_ops, total);
+        }
+        done_ops += delta;
+
+        if let Some(total) = total_ops {
+            progress(done_ops.min(total), total);
+        } else if delta > 0 {
+            progress(done_ops, done_ops);
         }
 
         since = next_since;
@@ -179,12 +182,12 @@ pub fn pull_with_progress(
 
     let missing_blob_refs =
         super::artifacts::list_missing_embedding_artifact_blob_refs(&download_ctx)?;
-    let mut total_units = total_ops.unwrap_or(0);
+    let mut total_units = total_ops.unwrap_or(done_ops);
     let mut done_units = done_ops;
     if !missing_blob_refs.is_empty() {
         total_units += missing_blob_refs.len() as u64;
         progress(done_units, total_units);
-    } else if total_ops.is_some() {
+    } else if total_ops.is_some() || done_ops > 0 {
         progress(done_units, total_units);
     }
 
@@ -199,6 +202,7 @@ pub fn pull_with_progress(
             Some(&mut on_downloaded),
         )?;
         total_units = total_units.saturating_sub(outcome.missing_remote);
+        done_units = done_units.min(total_units);
     }
 
     progress(done_units, total_units);

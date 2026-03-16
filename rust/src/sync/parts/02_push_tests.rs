@@ -246,6 +246,72 @@ mod push_progress_tests {
     }
 
     #[test]
+    fn push_with_progress_does_not_skip_when_remote_metadata_has_gaps() {
+        let dir_a = tempdir().expect("tempdir A");
+        let conn_a = crate::db::open(dir_a.path()).expect("open A");
+        let db_key = [7u8; 32];
+        let sync_key = [9u8; 32];
+
+        let _c1 = crate::db::create_conversation(&conn_a, &db_key, "One").expect("c1");
+        let _c2 = crate::db::create_conversation(&conn_a, &db_key, "Two").expect("c2");
+        let _attachment = crate::db::insert_attachment(
+            &conn_a,
+            &db_key,
+            dir_a.path(),
+            b"hello sync",
+            "image/png",
+        )
+        .expect("attachment A");
+
+        let device_id_a: String = conn_a
+            .query_row(
+                r#"SELECT value FROM kv WHERE key = 'device_id'"#,
+                [],
+                |row| row.get(0),
+            )
+            .expect("device id A");
+
+        let remote = CountingRemoteStore::new();
+        let pushed_a = push(&conn_a, &db_key, &sync_key, &remote, "SecondLoop").expect("push A");
+        assert!(pushed_a >= 3);
+
+        let dir_b = tempdir().expect("tempdir B");
+        let conn_b = crate::db::open(dir_b.path()).expect("open B");
+        let pulled_b = pull(&conn_b, &db_key, &sync_key, &remote, "SecondLoop").expect("pull B");
+        assert!(pulled_b >= 3);
+
+        remote
+            .delete(&format!("/SecondLoop/{device_id_a}/ops/op_1.json"))
+            .expect("delete oldest remote op");
+        remote.reset_counts();
+
+        let mut seen: Vec<(u64, u64)> = Vec::new();
+        let mut on_progress = |done: u64, total: u64| {
+            seen.push((done, total));
+        };
+
+        let pushed_b = push_with_progress(
+            &conn_b,
+            &db_key,
+            &sync_key,
+            &remote,
+            "SecondLoop",
+            &mut on_progress,
+        )
+        .expect("push B");
+
+        assert!(
+            pushed_b > 0,
+            "fresh device should avoid the noop skip when remote metadata has gaps"
+        );
+        assert_ne!(seen, vec![(0, 0)]);
+        assert!(
+            remote.put_calls.load(Ordering::Relaxed) > 0,
+            "fresh device should enter the repair path when remote metadata has gaps"
+        );
+    }
+
+    #[test]
     fn push_with_progress_repairs_remote_bytes_after_fresh_device_remote_reset() {
         let dir_a = tempdir().expect("tempdir A");
         let conn_a = crate::db::open(dir_a.path()).expect("open A");

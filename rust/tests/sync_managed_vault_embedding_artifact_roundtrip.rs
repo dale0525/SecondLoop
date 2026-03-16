@@ -30,6 +30,7 @@ struct ServerState {
     ops: BTreeMap<(String, String), Vec<StoredOp>>,
     attachments: BTreeMap<(String, String), Vec<u8>>,
     attachment_request_methods: Vec<String>,
+    omit_pull_max: bool,
 }
 
 fn read_request(stream: &mut TcpStream) -> (String, String, String, Vec<u8>) {
@@ -303,11 +304,27 @@ fn start_mock_server_with_state() -> (
                     if tail == "ops:pull_bin" {
                         write_bytes_response(&mut stream, 200, &encode_pull_bin(&out_bin));
                     } else {
-                        write_json_response(
-                            &mut stream,
-                            200,
-                            serde_json::json!({ "ops": out_json, "next": next }),
-                        );
+                        let include_max = !st.omit_pull_max;
+                        let max = if include_max {
+                            let mut out_max = serde_json::Map::new();
+                            for ((stored_vault_id, device_id), ops) in &st.ops {
+                                if stored_vault_id != &vault_id || device_id == request_device_id {
+                                    continue;
+                                }
+                                let max_seq = ops.iter().map(|op| op.seq).max().unwrap_or(0);
+                                out_max.insert(device_id.clone(), serde_json::json!(max_seq));
+                            }
+                            Some(out_max)
+                        } else {
+                            None
+                        };
+                        let mut response = serde_json::Map::new();
+                        response.insert("ops".to_string(), serde_json::Value::Array(out_json));
+                        response.insert("next".to_string(), serde_json::Value::Object(next));
+                        if let Some(max) = max {
+                            response.insert("max".to_string(), serde_json::Value::Object(max));
+                        }
+                        write_json_response(&mut stream, 200, serde_json::Value::Object(response));
                     }
                     continue;
                 }
@@ -539,15 +556,108 @@ fn managed_vault_pull_with_progress_includes_embedding_artifact_downloads() {
     assert!(pulled > 0);
 
     assert!(!seen.is_empty());
+    let initial_total = seen.first().expect("first progress").1;
     assert!(
-        seen.iter().any(|&(_, total)| total > 0),
-        "expected progress total to become positive after artifact accounting: {seen:?}"
+        initial_total > 0,
+        "expected op progress total before artifact accounting: {seen:?}"
     );
     assert!(
-        seen.contains(&(0, 1)),
-        "expected artifact total to appear in progress: {seen:?}"
+        seen.iter()
+            .any(|&(done, total)| done == initial_total && total == initial_total + 1),
+        "expected artifact total to appear in progress after op accounting: {seen:?}"
     );
-    assert_eq!(*seen.last().expect("last progress"), (1, 1));
+    assert_eq!(
+        *seen.last().expect("last progress"),
+        (initial_total + 1, initial_total + 1)
+    );
+
+    let _ = stop_tx.send(());
+    let _ = handle.join();
+}
+
+#[test]
+fn managed_vault_pull_with_progress_counts_ops_when_server_omits_max() {
+    let (base_url, stop_tx, handle, state) = start_mock_server_with_state();
+    let vault_id = "vault-test".to_string();
+    let id_token = "token-test".to_string();
+
+    let temp_a = tempfile::tempdir().expect("tempdir A");
+    let app_dir_a = temp_a.path().join("secondloop_a");
+    let key_a =
+        auth::init_master_password(&app_dir_a, "pw-a", KdfParams::for_test()).expect("init A");
+    let conn_a = db::open(&app_dir_a).expect("open A db");
+    let conversation =
+        db::get_or_create_loop_home_conversation(&conn_a, &key_a).expect("conversation A");
+    let _message = db::insert_message(
+        &conn_a,
+        &key_a,
+        &conversation.id,
+        "user",
+        "managed vault missing max progress note",
+    )
+    .expect("message A");
+    let processed =
+        db::process_pending_message_embeddings_default(&conn_a, &key_a, 10).expect("process A");
+    assert_eq!(processed, 1);
+
+    let sync_key = derive_root_key(
+        "sync-passphrase",
+        b"secondloop-sync1",
+        &KdfParams::for_test(),
+    )
+    .expect("derive sync key");
+
+    let pushed =
+        sync::managed_vault::push(&conn_a, &key_a, &sync_key, &base_url, &vault_id, &id_token)
+            .expect("push");
+    assert!(pushed > 0);
+
+    {
+        let mut st = state.lock().expect("lock state");
+        st.omit_pull_max = true;
+    }
+
+    let temp_b = tempfile::tempdir().expect("tempdir B");
+    let app_dir_b = temp_b.path().join("secondloop_b");
+    let key_b =
+        auth::init_master_password(&app_dir_b, "pw-b", KdfParams::for_test()).expect("init B");
+    let conn_b = db::open(&app_dir_b).expect("open B db");
+
+    let mut seen: Vec<(u64, u64)> = Vec::new();
+    let mut on_progress = |done: u64, total: u64| {
+        seen.push((done, total));
+    };
+
+    let pulled = sync::managed_vault::pull_with_progress(
+        &conn_b,
+        &key_b,
+        &sync_key,
+        &base_url,
+        &vault_id,
+        &id_token,
+        &mut on_progress,
+    )
+    .expect("pull with progress");
+    assert!(pulled > 0);
+
+    let first = *seen.first().expect("first progress");
+    assert!(
+        first.0 > 0,
+        "expected op progress before artifact accounting: {seen:?}"
+    );
+    assert_eq!(
+        first.0, first.1,
+        "expected unknown-total op progress to start as done==total: {seen:?}"
+    );
+    assert!(
+        seen.iter()
+            .any(|&(done, total)| done == first.0 && total == first.1 + 1),
+        "expected late-growing total after counting artifact downloads: {seen:?}"
+    );
+    assert_eq!(
+        *seen.last().expect("last progress"),
+        (first.0 + 1, first.1 + 1)
+    );
 
     let _ = stop_tx.send(());
     let _ = handle.join();

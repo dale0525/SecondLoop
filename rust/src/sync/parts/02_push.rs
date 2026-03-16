@@ -113,31 +113,43 @@ fn local_embedding_artifact_blob_refs(conn: &Connection) -> Result<Vec<String>> 
     crate::db::list_distinct_embedding_artifact_blob_refs(conn)
 }
 
+fn remote_metadata_paths_for_other_devices(
+    conn: &Connection,
+    remote_root_dir: &str,
+    device_id: &str,
+) -> Result<Vec<String>> {
+    conn.prepare(
+        r#"SELECT device_id, seq
+           FROM oplog
+           WHERE device_id != ?1
+           ORDER BY device_id ASC, seq ASC"#,
+    )?
+    .query_map(params![device_id], |row| {
+        let remote_device_id: String = row.get(0)?;
+        let seq: i64 = row.get(1)?;
+        Ok(format!(
+            "{remote_root_dir}{remote_device_id}/ops/op_{seq}.json"
+        ))
+    })?
+    .collect::<rusqlite::Result<Vec<String>>>()
+    .map_err(Into::into)
+}
+
 fn can_skip_fresh_device_full_push(
     conn: &Connection,
     remote: &impl RemoteStore,
     remote_root_dir: &str,
     device_id: &str,
 ) -> Result<bool> {
-    let remote_op: Option<(String, i64)> = conn
-        .query_row(
-            r#"SELECT device_id, max(seq)
-               FROM oplog
-               WHERE device_id != ?1
-               GROUP BY device_id
-               ORDER BY max(seq) DESC, device_id ASC
-               LIMIT 1"#,
-            params![device_id],
-            |row| Ok((row.get(0)?, row.get(1)?)),
-        )
-        .optional()?;
-    let Some((remote_device_id, remote_seq)) = remote_op else {
+    let metadata_paths = remote_metadata_paths_for_other_devices(conn, remote_root_dir, device_id)?;
+    if metadata_paths.is_empty() {
         return Ok(false);
-    };
+    }
 
-    let op_path = format!("{remote_root_dir}{remote_device_id}/ops/op_{remote_seq}.json");
-    if !remote_file_exists(remote, &op_path)? {
-        return Ok(false);
+    for metadata_path in metadata_paths {
+        if !remote_file_exists(remote, &metadata_path)? {
+            return Ok(false);
+        }
     }
 
     for sha256 in local_attachment_sha256s(conn)? {
