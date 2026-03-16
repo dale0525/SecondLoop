@@ -145,6 +145,44 @@ void main() {
     expect(find.textContaining('Save failed'), findsOneWidget);
   });
 
+  testWidgets('task hub shows all focus tasks instead of truncating at three',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final now = DateTime.now();
+    final overdueBase = DateTime(now.year, now.month, now.day)
+        .subtract(const Duration(hours: 1));
+    final backend = _TaskHubBackend(
+      todos: <Todo>[
+        for (var i = 0; i < 4; i++)
+          Todo(
+            id: 'focus-$i',
+            title: 'Focus task $i',
+            dueAtMs: overdueBase
+                .subtract(Duration(hours: i))
+                .toUtc()
+                .millisecondsSinceEpoch,
+            status: 'open',
+            sourceEntryId: null,
+            createdAtMs: i,
+            updatedAtMs: 100 - i,
+            reviewStage: null,
+            nextReviewAtMs: null,
+            lastReviewAtMs: null,
+          ),
+      ],
+    );
+
+    await tester.pumpWidget(_wrap(backend));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('task_hub_page_section_focus')),
+        findsOneWidget);
+    expect(find.text('Focus task 0'), findsOneWidget);
+    expect(find.text('Focus task 1'), findsOneWidget);
+    expect(find.text('Focus task 2'), findsOneWidget);
+    expect(find.text('Focus task 3'), findsOneWidget);
+  });
+
   testWidgets('task hub loads done todos in batches on demand', (tester) async {
     SharedPreferences.setMockInitialValues({});
     final backend = _TaskHubBackend(

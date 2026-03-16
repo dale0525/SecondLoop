@@ -355,7 +355,7 @@ class _TaskHubPageState extends State<TaskHubPage> {
                 else ...[
                   if (snapshot.focus.isNotEmpty)
                     TaskHubFocusSection(
-                      entries: snapshot.focus.take(3).toList(growable: false),
+                      entries: snapshot.focus,
                       checklistProgressByTodoId:
                           store.checklistProgressByTodoId,
                       onOpenTodo: _openTodoDetail,
