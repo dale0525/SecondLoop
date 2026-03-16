@@ -285,6 +285,17 @@ void main() {
 
       runner.completePull(applied: 0);
       async.flushMicrotasks();
+      expect(runner.pullCalls, 2);
+
+      engine.triggerPushNow();
+      async.flushMicrotasks();
+
+      expect(runner.pushCalls, 0);
+
+      runner.completePull(applied: 0);
+      async.flushMicrotasks();
+
+      expect(runner.pushCalls, 1);
 
       engine.triggerPushNow();
       async.flushMicrotasks();
@@ -359,7 +370,10 @@ final class _BlockingPullRunner implements SyncRunner {
   Completer<int>? _pullCompleter;
 
   void completePull({required int applied}) {
-    _pullCompleter?.complete(applied);
+    final completer = _pullCompleter;
+    if (completer == null || completer.isCompleted) return;
+    _pullCompleter = null;
+    completer.complete(applied);
   }
 
   @override

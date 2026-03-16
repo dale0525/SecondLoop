@@ -67,6 +67,12 @@ class PreCommitHookTests(unittest.TestCase):
         self.assertIn('i18n_generated_now=0', script)
         self.assertIn('if [[ ${i18n_generated_now} -eq 0 ]]; then', script)
 
+    def test_pre_commit_hook_stages_generated_i18n_outputs_in_normal_commit_flow(self) -> None:
+        script = PRE_COMMIT_HOOK.read_text(encoding="utf-8")
+
+        self.assertIn('if [[ ${i18n_generated_now} -ne 0 ]]; then', script)
+        self.assertIn('git add -- lib/i18n/strings.g.dart', script)
+
     def test_pre_commit_hook_only_runs_i18n_analyze_for_i18n_source_changes(self) -> None:
         script = PRE_COMMIT_HOOK.read_text(encoding="utf-8")
 

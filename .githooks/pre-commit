@@ -656,6 +656,9 @@ fi
 
 if [[ ${run_flutter_checks} -ne 0 || ${#dart_files[@]} -ne 0 || ${run_i18n_refresh_needed} -ne 0 ]]; then
   ensure_i18n_generated
+  if [[ ${i18n_generated_now} -ne 0 ]]; then
+    git add -- lib/i18n/strings.g.dart
+  fi
 fi
 
 if [[ ${#dart_files[@]} -ne 0 ]]; then
