@@ -817,6 +817,84 @@ fn managed_vault_push_reuploads_bytes_after_fresh_device_remote_reset() {
 }
 
 #[test]
+fn managed_vault_push_does_not_skip_when_remote_metadata_has_gaps() {
+    let (base_url, stop_tx, handle, state) = start_mock_server_with_state();
+    let vault_id = "vault-test".to_string();
+    let id_token = "token-test".to_string();
+
+    let temp_a = tempfile::tempdir().expect("tempdir A");
+    let app_dir_a = temp_a.path().join("secondloop_a");
+    let key_a =
+        auth::init_master_password(&app_dir_a, "pw-a", KdfParams::for_test()).expect("init A");
+    let conn_a = db::open(&app_dir_a).expect("open A db");
+    let _conversation =
+        db::create_conversation(&conn_a, &key_a, "Gap repair").expect("conversation A");
+    let _attachment = db::insert_attachment(
+        &conn_a,
+        &key_a,
+        &app_dir_a,
+        b"managed vault metadata gap",
+        "image/png",
+    )
+    .expect("attachment A");
+
+    let sync_key = derive_root_key(
+        "sync-passphrase",
+        b"secondloop-sync1",
+        &KdfParams::for_test(),
+    )
+    .expect("derive sync key");
+
+    let pushed_a =
+        sync::managed_vault::push(&conn_a, &key_a, &sync_key, &base_url, &vault_id, &id_token)
+            .expect("push A");
+    assert!(pushed_a > 0);
+
+    let device_id_a: String = conn_a
+        .query_row(
+            r#"SELECT value FROM kv WHERE key = 'device_id'"#,
+            [],
+            |row| row.get(0),
+        )
+        .expect("device id A");
+
+    let temp_b = tempfile::tempdir().expect("tempdir B");
+    let app_dir_b = temp_b.path().join("secondloop_b");
+    let key_b =
+        auth::init_master_password(&app_dir_b, "pw-b", KdfParams::for_test()).expect("init B");
+    let conn_b = db::open(&app_dir_b).expect("open B db");
+
+    let pulled_b =
+        sync::managed_vault::pull(&conn_b, &key_b, &sync_key, &base_url, &vault_id, &id_token)
+            .expect("pull B");
+    assert!(pulled_b > 0);
+
+    {
+        let mut st = state.lock().expect("lock state");
+        let ops = st
+            .ops
+            .get_mut(&(vault_id.clone(), device_id_a.clone()))
+            .expect("device A ops");
+        assert!(
+            ops.len() > 1,
+            "expected multiple ops to create a metadata gap"
+        );
+        ops.remove(0);
+    }
+
+    let pushed_b =
+        sync::managed_vault::push(&conn_b, &key_b, &sync_key, &base_url, &vault_id, &id_token)
+            .expect("push B");
+    assert!(
+        pushed_b > 0,
+        "fresh device should not noop when remote metadata has gaps"
+    );
+
+    let _ = stop_tx.send(());
+    let _ = handle.join();
+}
+
+#[test]
 fn managed_vault_push_repairs_partially_missing_remote_bytes_for_fresh_device() {
     let (base_url, stop_tx, handle, state) = start_mock_server_with_state();
     let vault_id = "vault-test".to_string();
@@ -907,6 +985,98 @@ fn managed_vault_push_repairs_partially_missing_remote_bytes_for_fresh_device() 
         "probe should avoid downloading bytes during existence checks: {:?}",
         st.attachment_request_methods
     );
+
+    let _ = stop_tx.send(());
+    let _ = handle.join();
+}
+
+#[test]
+fn managed_vault_push_ops_only_with_progress_does_not_skip_when_remote_metadata_has_gaps() {
+    let (base_url, stop_tx, handle, state) = start_mock_server_with_state();
+    let vault_id = "vault-test".to_string();
+    let id_token = "token-test".to_string();
+
+    let temp_a = tempfile::tempdir().expect("tempdir A");
+    let app_dir_a = temp_a.path().join("secondloop_a");
+    let key_a =
+        auth::init_master_password(&app_dir_a, "pw-a", KdfParams::for_test()).expect("init A");
+    let conn_a = db::open(&app_dir_a).expect("open A db");
+    let _conversation =
+        db::create_conversation(&conn_a, &key_a, "Gap repair progress").expect("conversation A");
+    let _attachment = db::insert_attachment(
+        &conn_a,
+        &key_a,
+        &app_dir_a,
+        b"managed vault metadata gap progress",
+        "image/png",
+    )
+    .expect("attachment A");
+
+    let sync_key = derive_root_key(
+        "sync-passphrase",
+        b"secondloop-sync1",
+        &KdfParams::for_test(),
+    )
+    .expect("derive sync key");
+
+    let pushed_a =
+        sync::managed_vault::push(&conn_a, &key_a, &sync_key, &base_url, &vault_id, &id_token)
+            .expect("push A");
+    assert!(pushed_a > 0);
+
+    let device_id_a: String = conn_a
+        .query_row(
+            r#"SELECT value FROM kv WHERE key = 'device_id'"#,
+            [],
+            |row| row.get(0),
+        )
+        .expect("device id A");
+
+    let temp_b = tempfile::tempdir().expect("tempdir B");
+    let app_dir_b = temp_b.path().join("secondloop_b");
+    let key_b =
+        auth::init_master_password(&app_dir_b, "pw-b", KdfParams::for_test()).expect("init B");
+    let conn_b = db::open(&app_dir_b).expect("open B db");
+
+    let pulled_b =
+        sync::managed_vault::pull(&conn_b, &key_b, &sync_key, &base_url, &vault_id, &id_token)
+            .expect("pull B");
+    assert!(pulled_b > 0);
+
+    {
+        let mut st = state.lock().expect("lock state");
+        let ops = st
+            .ops
+            .get_mut(&(vault_id.clone(), device_id_a.clone()))
+            .expect("device A ops");
+        assert!(
+            ops.len() > 1,
+            "expected multiple ops to create a metadata gap"
+        );
+        ops.remove(0);
+    }
+
+    let mut seen: Vec<(u64, u64)> = Vec::new();
+    let mut on_progress = |done: u64, total: u64| {
+        seen.push((done, total));
+    };
+
+    let pushed_b = sync::managed_vault::push_ops_only_with_progress(
+        &conn_b,
+        &key_b,
+        &sync_key,
+        &base_url,
+        &vault_id,
+        &id_token,
+        &mut on_progress,
+    )
+    .expect("push B");
+
+    assert!(
+        pushed_b > 0,
+        "progress push should not noop when remote metadata has gaps"
+    );
+    assert_ne!(seen, vec![(0, 0)]);
 
     let _ = stop_tx.send(());
     let _ = handle.join();

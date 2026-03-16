@@ -3,9 +3,17 @@ use std::collections::BTreeMap;
 use anyhow::{anyhow, Result};
 use reqwest::blocking::Client;
 use reqwest::header::RANGE;
-use rusqlite::Connection;
+use rusqlite::{params, Connection};
+use serde::Deserialize;
 
-use super::{PullRequest, PullResponse};
+use super::PullRequest;
+
+#[derive(Debug, Deserialize)]
+struct ProbePullResponse {
+    ops: Vec<super::PullOp>,
+    #[serde(default)]
+    max: BTreeMap<String, i64>,
+}
 
 fn managed_remote_attachment_exists(
     http: &Client,
@@ -50,35 +58,6 @@ fn managed_remote_attachment_exists(
     Ok(true)
 }
 
-pub(super) fn managed_remote_has_other_device_ops(
-    http: &Client,
-    base_url: &str,
-    vault_id: &str,
-    id_token: &str,
-    device_id: &str,
-) -> Result<bool> {
-    let endpoint = super::runtime::url(base_url, &format!("/v1/vaults/{vault_id}/ops:pull"))?;
-    let request = PullRequest {
-        device_id,
-        since: BTreeMap::new(),
-        limit: 1,
-    };
-    let resp = http
-        .post(endpoint)
-        .bearer_auth(id_token)
-        .json(&request)
-        .send()?;
-    let status = resp.status();
-    if !status.is_success() {
-        let text = resp.text().unwrap_or_default();
-        return Err(anyhow!(
-            "managed-vault probe ops failed: HTTP {status} {text}"
-        ));
-    }
-    let parsed: PullResponse = resp.json()?;
-    Ok(!parsed.ops.is_empty() || !parsed.next.is_empty())
-}
-
 fn local_attachment_sha256s(conn: &Connection) -> Result<Vec<String>> {
     conn.prepare(r#"SELECT sha256 FROM attachments ORDER BY created_at ASC, sha256 ASC"#)?
         .query_map([], |row| row.get(0))?
@@ -90,6 +69,88 @@ fn local_embedding_artifact_blob_refs(conn: &Connection) -> Result<Vec<String>> 
     crate::db::list_distinct_embedding_artifact_blob_refs(conn)
 }
 
+fn local_remote_op_sequences(
+    conn: &Connection,
+    device_id: &str,
+) -> Result<BTreeMap<String, Vec<i64>>> {
+    let mut out = BTreeMap::new();
+    let mut stmt = conn.prepare(
+        r#"SELECT device_id, seq
+           FROM oplog
+           WHERE device_id != ?1
+           ORDER BY device_id ASC, seq ASC"#,
+    )?;
+    let mut rows = stmt.query(params![device_id])?;
+    while let Some(row) = rows.next()? {
+        let remote_device_id: String = row.get(0)?;
+        let seq: i64 = row.get(1)?;
+        out.entry(remote_device_id)
+            .or_insert_with(Vec::new)
+            .push(seq);
+    }
+    Ok(out)
+}
+
+pub(super) fn managed_remote_metadata_matches_local_snapshot(
+    conn: &Connection,
+    http: &Client,
+    base_url: &str,
+    vault_id: &str,
+    id_token: &str,
+    device_id: &str,
+) -> Result<bool> {
+    let expected_by_device = local_remote_op_sequences(conn, device_id)?;
+    if expected_by_device.is_empty() {
+        return Ok(false);
+    }
+
+    let expected_total: usize = expected_by_device.values().map(Vec::len).sum();
+    let limit = i64::try_from(expected_total).map_err(|_| anyhow!("too_many_expected_ops"))?;
+    let endpoint = super::runtime::url(base_url, &format!("/v1/vaults/{vault_id}/ops:pull"))?;
+    let request = PullRequest {
+        device_id,
+        since: BTreeMap::new(),
+        limit,
+    };
+    let resp = http
+        .post(endpoint)
+        .bearer_auth(id_token)
+        .json(&request)
+        .send()?;
+    let status = resp.status();
+    if !status.is_success() {
+        let text = resp.text().unwrap_or_default();
+        return Err(anyhow!(
+            "managed-vault probe metadata failed: HTTP {status} {text}"
+        ));
+    }
+    let parsed: ProbePullResponse = resp.json()?;
+
+    let expected_max: BTreeMap<String, i64> = expected_by_device
+        .iter()
+        .filter_map(|(remote_device_id, seqs)| {
+            seqs.last()
+                .map(|last_seq| (remote_device_id.clone(), *last_seq))
+        })
+        .collect();
+    if parsed.max != expected_max {
+        return Ok(false);
+    }
+    if parsed.ops.len() != expected_total {
+        return Ok(false);
+    }
+
+    let mut actual_by_device: BTreeMap<String, Vec<i64>> = BTreeMap::new();
+    for op in parsed.ops {
+        actual_by_device
+            .entry(op.device_id)
+            .or_default()
+            .push(op.seq);
+    }
+
+    Ok(actual_by_device == expected_by_device)
+}
+
 pub(super) fn can_skip_fresh_device_full_push(
     conn: &Connection,
     http: &Client,
@@ -98,7 +159,9 @@ pub(super) fn can_skip_fresh_device_full_push(
     id_token: &str,
     device_id: &str,
 ) -> Result<bool> {
-    if !managed_remote_has_other_device_ops(http, base_url, vault_id, id_token, device_id)? {
+    if !managed_remote_metadata_matches_local_snapshot(
+        conn, http, base_url, vault_id, id_token, device_id,
+    )? {
         return Ok(false);
     }
 

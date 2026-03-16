@@ -253,8 +253,8 @@ pub fn push_ops_only_with_progress(
     if total_ops == 0
         && initial_last_pushed_seq == 0
         && has_remote_device_ops
-        && super::probe::managed_remote_has_other_device_ops(
-            &http, base_url, vault_id, id_token, &device_id,
+        && super::probe::managed_remote_metadata_matches_local_snapshot(
+            conn, &http, base_url, vault_id, id_token, &device_id,
         )?
     {
         progress(0, 0);
