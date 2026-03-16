@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -775,7 +774,7 @@ final class _FakeHttpResponse {
   final String body;
 }
 
-final class _MultiResponseHttpClient implements HttpClient {
+final class _MultiResponseHttpClient extends http.BaseClient {
   _MultiResponseHttpClient({required this.handlers});
 
   final Map<Pattern, _FakeHttpResponse> handlers;
@@ -783,28 +782,24 @@ final class _MultiResponseHttpClient implements HttpClient {
   final List<String> getUrls = <String>[];
 
   @override
-  Future<HttpClientRequest> getUrl(Uri url) async {
-    getUrls.add(url.toString());
-    final response = _resolve(url) ??
-        _FakeHttpResponse(statusCode: 404, body: 'no handler for $url');
-    return _FakeHttpClientRequest(
-      response: _FakeHttpClientResponse(
-        statusCode: response.statusCode,
-        body: response.body,
-      ),
-    );
-  }
+  Future<http.StreamedResponse> send(http.BaseRequest request) async {
+    final url = request.url;
+    switch (request.method) {
+      case 'GET':
+        getUrls.add(url.toString());
+      case 'DELETE':
+        deletePaths.add(url.path);
+    }
 
-  @override
-  Future<HttpClientRequest> deleteUrl(Uri url) async {
-    deletePaths.add(url.path);
     final response = _resolve(url) ??
         _FakeHttpResponse(statusCode: 404, body: 'no handler for $url');
-    return _FakeHttpClientRequest(
-      response: _FakeHttpClientResponse(
-        statusCode: response.statusCode,
-        body: response.body,
-      ),
+    return http.StreamedResponse(
+      Stream<List<int>>.fromIterable([utf8.encode(response.body)]),
+      response.statusCode,
+      request: request,
+      headers: const <String, String>{
+        'content-type': 'application/json',
+      },
     );
   }
 
@@ -822,64 +817,4 @@ final class _MultiResponseHttpClient implements HttpClient {
     }
     return null;
   }
-
-  @override
-  void close({bool force = false}) {}
-
-  @override
-  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
-}
-
-final class _FakeHttpClientRequest implements HttpClientRequest {
-  _FakeHttpClientRequest({required this.response});
-
-  final HttpClientResponse response;
-
-  @override
-  final HttpHeaders headers = _FakeHttpHeaders();
-
-  @override
-  Future<HttpClientResponse> close() async => response;
-
-  @override
-  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
-}
-
-final class _FakeHttpClientResponse extends Stream<List<int>>
-    implements HttpClientResponse {
-  _FakeHttpClientResponse({required this.statusCode, required this.body})
-      : _stream = Stream<List<int>>.fromIterable([utf8.encode(body)]);
-
-  final Stream<List<int>> _stream;
-
-  @override
-  final int statusCode;
-
-  final String body;
-
-  @override
-  StreamSubscription<List<int>> listen(
-    void Function(List<int> event)? onData, {
-    Function? onError,
-    void Function()? onDone,
-    bool? cancelOnError,
-  }) {
-    return _stream.listen(
-      onData,
-      onError: onError,
-      onDone: onDone,
-      cancelOnError: cancelOnError,
-    );
-  }
-
-  @override
-  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
-}
-
-final class _FakeHttpHeaders implements HttpHeaders {
-  @override
-  void set(String name, Object value, {bool preserveHeaderCase = false}) {}
-
-  @override
-  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }

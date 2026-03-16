@@ -22,7 +22,11 @@
       },
       "messages": {
         "uploadNeedsApp": "Uploaded to Cloud. Some files need the app to continue processing.",
-        "uploadSuccess": "Uploaded $count file(s) to Cloud."
+        "uploadSuccess": "Uploaded $count file(s) to Cloud.",
+        "uploadPartial": "Uploaded $uploaded file(s) to Cloud. $skipped file(s) could not be uploaded.",
+        "uploadReadFailed": "Couldn't read the selected file(s). Please try again.",
+        "uploadAuthFailed": "Cloud upload expired before any file could be uploaded. Please try again.",
+        "attachmentTooLarge": "This file is too large to open safely in the browser."
       }
     },
     "settings": {

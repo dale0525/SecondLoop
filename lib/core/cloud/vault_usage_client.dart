@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
 
 import 'http_json_client.dart';
 
@@ -20,7 +21,7 @@ class VaultUsageSummary {
 }
 
 final class VaultUsageClient {
-  VaultUsageClient({Object? httpClient})
+  VaultUsageClient({http.Client? httpClient})
       : _httpClient = HttpJsonClient(client: httpClient);
 
   final HttpJsonClient _httpClient;

@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
 
 import '../ai/ai_routing.dart';
 import '../cloud/http_json_client.dart';
@@ -19,7 +20,7 @@ final class CloudSubscriptionController extends ChangeNotifier
   CloudSubscriptionController({
     required Future<String?> Function() idTokenGetter,
     required String cloudGatewayBaseUrl,
-    Object? httpClient,
+    http.Client? httpClient,
   })  : _idTokenGetter = idTokenGetter,
         _cloudGatewayBaseUrl = cloudGatewayBaseUrl,
         _httpClient = HttpJsonClient(client: httpClient);

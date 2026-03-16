@@ -30,10 +30,10 @@ class HttpJsonResponse {
 }
 
 final class HttpJsonClient {
-  HttpJsonClient({Object? client})
+  HttpJsonClient({http.Client? client})
       : _client = client ?? createPlatformHttpClient();
 
-  final Object _client;
+  final http.Client _client;
 
   Future<HttpJsonResponse> get(
     Uri uri, {
@@ -75,66 +75,23 @@ final class HttpJsonClient {
   }) async {
     final payload = body;
 
-    if (_client is http.Client) {
-      final client = _client;
-      final response = switch (method) {
-        'GET' => await client.get(uri, headers: headers),
-        'DELETE' => await client.delete(uri, headers: headers),
-        'POST' => await client.post(
-            uri,
-            headers: headers,
-            body: payload == null ? null : jsonEncode(payload),
-          ),
-        _ => throw UnsupportedError('unsupported_http_method:$method'),
-      };
-      return HttpJsonResponse(
-        statusCode: response.statusCode,
-        body: response.body,
-      );
-    }
-
-    final legacyClient = _client as dynamic;
-    final request = switch (method) {
-      'GET' => await legacyClient.getUrl(uri),
-      'DELETE' => await legacyClient.deleteUrl(uri),
-      'POST' => await legacyClient.postUrl(uri),
+    final response = switch (method) {
+      'GET' => await _client.get(uri, headers: headers),
+      'DELETE' => await _client.delete(uri, headers: headers),
+      'POST' => await _client.post(
+          uri,
+          headers: headers,
+          body: payload == null ? null : jsonEncode(payload),
+        ),
       _ => throw UnsupportedError('unsupported_http_method:$method'),
     };
-
-    final mergedHeaders = <String, String>{...?headers};
-    if (method == 'POST' && payload != null) {
-      mergedHeaders.putIfAbsent('content-type', () => 'application/json');
-    }
-    for (final entry in mergedHeaders.entries) {
-      request.headers.set(entry.key, entry.value);
-    }
-    if (method == 'POST' && payload != null) {
-      request.add(utf8.encode(jsonEncode(payload)));
-    }
-
-    final dynamic response = await request.close();
-    final statusCode = response.statusCode as int;
-    final responseBody = await utf8.decodeStream(response as Stream<List<int>>);
     return HttpJsonResponse(
-      statusCode: statusCode,
-      body: responseBody,
+      statusCode: response.statusCode,
+      body: response.body,
     );
   }
 
   void close() {
-    if (_client is http.Client) {
-      _client.close();
-      return;
-    }
-
-    try {
-      (_client as dynamic).close(force: true);
-    } catch (_) {
-      try {
-        (_client as dynamic).close();
-      } catch (_) {
-        // ignore
-      }
-    }
+    _client.close();
   }
 }

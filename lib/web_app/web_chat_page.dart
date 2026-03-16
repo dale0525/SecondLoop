@@ -77,56 +77,75 @@ class _WebChatPageState extends State<WebChatPage> {
   }
 
   Future<void> _ensureConversationLoaded() async {
-    final conversationId = await _ensureConversationId();
-    final messages = await widget.chatBackend.listMessages(
-      _sessionKey,
-      conversationId,
-    );
-    if (!mounted) return;
-    setState(() => _messages = messages);
+    try {
+      final conversationId = await _ensureConversationId();
+      final messages = await widget.chatBackend.listMessages(
+        _sessionKey,
+        conversationId,
+      );
+      if (!mounted) return;
+      setState(() => _messages = messages);
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _error = _formatCloudChatError(context, error));
+    }
   }
 
   Future<void> _send() async {
     final text = _controller.text.trim();
     if (text.isEmpty || _busy) return;
-    final idToken = await widget.authController.getIdToken();
-    if (idToken == null || idToken.isEmpty) return;
-    final conversationId = await _ensureConversationId();
-
     setState(() {
       _busy = true;
       _error = null;
-      _controller.clear();
     });
 
-    Object? sendError;
     try {
-      await widget.chatBackend
-          .askAiStreamCloudGateway(
-            _sessionKey,
-            conversationId,
-            question: text,
-            gatewayBaseUrl: kWebFormalSettingsBaseUrl,
-            idToken: idToken,
-            modelName: 'cloud',
-          )
-          .join();
-    } catch (error) {
-      sendError = error;
+      final idToken = await widget.authController.getIdToken();
+      if (idToken == null || idToken.isEmpty) {
+        if (!mounted) return;
+        setState(() => _error = context.t.chat.cloudGateway.errors.auth);
+        return;
+      }
+      final conversationId = await _ensureConversationId();
+      if (!mounted) return;
+
+      setState(() => _controller.clear());
+
+      Object? sendError;
+      try {
+        await widget.chatBackend
+            .askAiStreamCloudGateway(
+              _sessionKey,
+              conversationId,
+              question: text,
+              gatewayBaseUrl: kWebFormalSettingsBaseUrl,
+              idToken: idToken,
+              modelName: 'cloud',
+            )
+            .join();
+      } catch (error) {
+        sendError = error;
+      }
+
+      final messages = await widget.chatBackend.listMessages(
+        _sessionKey,
+        conversationId,
+      );
+      if (!mounted) return;
+
+      setState(() {
+        _messages = messages;
+        _error = sendError == null
+            ? null
+            : _formatCloudChatError(context, sendError);
+      });
+    } finally {
+      if (mounted) {
+        setState(() => _busy = false);
+      } else {
+        _busy = false;
+      }
     }
-
-    final messages = await widget.chatBackend.listMessages(
-      _sessionKey,
-      conversationId,
-    );
-    if (!mounted) return;
-
-    setState(() {
-      _messages = messages;
-      _error =
-          sendError == null ? null : _formatCloudChatError(context, sendError);
-      _busy = false;
-    });
   }
 
   @override

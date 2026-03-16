@@ -22,7 +22,11 @@
       },
       "messages": {
         "uploadNeedsApp": "已上传到 Cloud。部分文件需要在 App 端继续处理。",
-        "uploadSuccess": "已上传 $count 个文件到 Cloud。"
+        "uploadSuccess": "已上传 $count 个文件到 Cloud。",
+        "uploadPartial": "已上传 $uploaded 个文件到 Cloud，另有 $skipped 个文件未能上传。",
+        "uploadReadFailed": "无法读取所选文件，请重试。",
+        "uploadAuthFailed": "Cloud 上传鉴权已失效，尚未上传任何文件，请重试。",
+        "attachmentTooLarge": "该文件过大，无法在浏览器中安全打开。"
       }
     },
     "settings": {

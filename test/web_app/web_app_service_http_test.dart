@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -71,6 +72,42 @@ void main() {
     );
 
     expect(String.fromCharCodes(bytes), 'hello world');
+    expect(captured, isNotNull);
+    expect(captured!.headers['authorization'], 'Bearer token');
+    expect(captured!.headers['x-secondloop-vault-id'], 'vault-123');
+  });
+
+  test('vault attachment bytes reject oversized browser downloads early',
+      () async {
+    http.BaseRequest? captured;
+    final client = _FakeStreamedClient((request) async {
+      captured = request;
+      return http.StreamedResponse(
+        Stream<List<int>>.value('ok'.codeUnits),
+        200,
+        contentLength: 50 * 1024 * 1024 + 1,
+        headers: const <String, String>{
+          'content-type': 'application/octet-stream',
+        },
+      );
+    });
+
+    final service = WebAppServiceHttp(client: client);
+
+    await expectLater(
+      () => service.fetchVaultAttachmentBytes(
+        idToken: 'token',
+        vaultId: 'vault-123',
+        sha256: 'sha-oversized',
+      ),
+      throwsA(
+        isA<StateError>().having(
+          (error) => error.message,
+          'message',
+          'attachment_too_large_for_web',
+        ),
+      ),
+    );
     expect(captured, isNotNull);
     expect(captured!.headers['authorization'], 'Bearer token');
     expect(captured!.headers['x-secondloop-vault-id'], 'vault-123');
@@ -182,6 +219,35 @@ void main() {
     );
   });
 
+  test('vault upload rejects oversized browser payloads before sending',
+      () async {
+    var sendCalled = false;
+    final client = _FakeStreamedClient((request) async {
+      sendCalled = true;
+      return http.StreamedResponse(const Stream<List<int>>.empty(), 200);
+    });
+
+    final service = WebAppServiceHttp(client: client);
+
+    await expectLater(
+      () => service.uploadVaultAttachment(
+        idToken: 'token',
+        vaultId: 'vault-123',
+        fileName: 'big.bin',
+        mimeType: 'application/octet-stream',
+        bytes: List<int>.filled(50 * 1024 * 1024 + 1, 7),
+      ),
+      throwsA(
+        isA<StateError>().having(
+          (error) => error.message,
+          'message',
+          'attachment_too_large_for_web',
+        ),
+      ),
+    );
+    expect(sendCalled, isFalse);
+  });
+
   test('vault upload sends put request to attachment route with sha query',
       () async {
     http.BaseRequest? captured;
@@ -194,7 +260,7 @@ void main() {
     await service.uploadVaultAttachment(
       idToken: 'token',
       vaultId: 'vault-123',
-      fileName: 'note.txt',
+      fileName: '中文🙂.txt',
       mimeType: 'text/plain',
       bytes: 'hello'.codeUnits,
     );
@@ -208,6 +274,10 @@ void main() {
     );
     expect(captured!.headers['authorization'], 'Bearer token');
     expect(captured!.headers['x-secondloop-vault-id'], 'vault-123');
+    expect(
+      captured!.headers['x-file-name'],
+      Uri.encodeComponent('中文🙂.txt'),
+    );
   });
 
   test('guessMimeTypeFromExtension maps docx and webm to stable types', () {
@@ -220,4 +290,16 @@ void main() {
       'video/webm',
     );
   });
+}
+
+final class _FakeStreamedClient extends http.BaseClient {
+  _FakeStreamedClient(this._handler);
+
+  final Future<http.StreamedResponse> Function(http.BaseRequest request)
+      _handler;
+
+  @override
+  Future<http.StreamedResponse> send(http.BaseRequest request) {
+    return _handler(request);
+  }
 }

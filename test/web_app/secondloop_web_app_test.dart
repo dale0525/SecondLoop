@@ -43,6 +43,26 @@ void main() {
     expect(find.textContaining('Failed to start Web app:'), findsNothing);
     expect(find.byType(CloudAccountPanel), findsOneWidget);
   });
+
+  testWidgets('web app disposes bootstrapped service on teardown',
+      (tester) async {
+    final service = _DisposableFakeWebAppService();
+
+    await tester.pumpWidget(
+      SecondLoopWebApp(
+        configLoader: () async =>
+            const WebAppConfig(firebaseWebApiKey: 'firebase-key'),
+        serviceFactory: () => service,
+        authControllerFactory: (config) => _FakeCloudAuthController(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pumpAndSettle();
+
+    expect(service.closeCount, 1);
+  });
 }
 
 final class _FakeCloudAuthController extends ChangeNotifier
@@ -50,6 +70,7 @@ final class _FakeCloudAuthController extends ChangeNotifier
   _FakeCloudAuthController({this.refreshError});
 
   final Object? refreshError;
+  int disposeCount = 0;
 
   @override
   String? get uid => null;
@@ -88,9 +109,15 @@ final class _FakeCloudAuthController extends ChangeNotifier
     required String email,
     required String password,
   }) async {}
+
+  @override
+  void dispose() {
+    disposeCount += 1;
+    super.dispose();
+  }
 }
 
-final class _FakeWebAppService extends WebAppService {
+class _FakeWebAppService extends WebAppService {
   @override
   Future<WebSubscriptionSnapshot> fetchSubscription(
           {required String idToken}) async =>
@@ -98,4 +125,13 @@ final class _FakeWebAppService extends WebAppService {
         state: WebSubscriptionState.unknown,
         canManageSubscription: null,
       );
+}
+
+final class _DisposableFakeWebAppService extends _FakeWebAppService {
+  int closeCount = 0;
+
+  @override
+  void close() {
+    closeCount += 1;
+  }
 }

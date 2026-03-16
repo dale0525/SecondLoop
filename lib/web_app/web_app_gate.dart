@@ -27,6 +27,23 @@ import '../core/subscription/subscription_scope.dart';
 
 export 'web_app_service.dart';
 
+String _shortWebAttachmentSha(String sha256) {
+  if (sha256.length <= 12) return sha256;
+  return '${sha256.substring(0, 12)}…';
+}
+
+String _recentWebAttachmentTitle(
+  BuildContext context,
+  WebVaultAttachmentItem item,
+) {
+  if (item.groupType == 'video') {
+    return context.t.attachments.workspace.types.video;
+  }
+  final mimeType = item.mimeType.trim();
+  if (mimeType.isNotEmpty) return mimeType;
+  return _shortWebAttachmentSha(item.primarySha256);
+}
+
 class WebAppGate extends StatefulWidget {
   const WebAppGate({
     required this.authController,
@@ -35,7 +52,7 @@ class WebAppGate extends StatefulWidget {
     super.key,
   });
 
-  final CloudAuthController authController;
+  final ObservableCloudAuthController authController;
   final WebAppService service;
   final CloudWebBackend? chatBackend;
 
@@ -45,7 +62,6 @@ class WebAppGate extends StatefulWidget {
 
 class _WebAppGateState extends State<WebAppGate> {
   late CloudWebBackend _chatBackend;
-  late Listenable _authListenable;
   late CloudSubscriptionController _subscriptionController;
   late WebAppBillingClient _billingClient;
   late CloudUsageClient _cloudUsageClient;
@@ -70,7 +86,6 @@ class _WebAppGateState extends State<WebAppGate> {
   }
 
   void _createInjectedDependencies() {
-    _authListenable = _requireObservableAuthController(widget.authController);
     _chatBackend = widget.chatBackend ??
         CloudWebBackend(chatClient: const UnsupportedCloudWebChatClient());
     _subscriptionController = createWebFormalSubscriptionController(
@@ -115,7 +130,7 @@ class _WebAppGateState extends State<WebAppGate> {
     super.initState();
     _createInjectedDependencies();
     _activeUid = _normalizedUid();
-    _authListenable.addListener(_onAuthChanged);
+    widget.authController.addListener(_onAuthChanged);
     unawaited(_refreshGateState());
   }
 
@@ -129,10 +144,10 @@ class _WebAppGateState extends State<WebAppGate> {
       return;
     }
 
-    _authListenable.removeListener(_onAuthChanged);
+    oldWidget.authController.removeListener(_onAuthChanged);
     _disposeInjectedDependencies();
     _createInjectedDependencies();
-    _authListenable.addListener(_onAuthChanged);
+    widget.authController.addListener(_onAuthChanged);
 
     _activeUid = _normalizedUid();
     if (authChanged || chatBackendChanged) {
@@ -149,7 +164,7 @@ class _WebAppGateState extends State<WebAppGate> {
 
   @override
   void dispose() {
-    _authListenable.removeListener(_onAuthChanged);
+    widget.authController.removeListener(_onAuthChanged);
     _disposeInjectedDependencies();
     super.dispose();
   }
@@ -239,6 +254,11 @@ class _WebAppGateState extends State<WebAppGate> {
         authController: widget.authController,
         service: widget.service,
         chatBackend: _chatBackend,
+        billingClient: _billingClient,
+        cloudUsageClient: _cloudUsageClient,
+        vaultUsageClient: _vaultUsageClient,
+        vaultAttachmentsClient: _vaultAttachmentsClient,
+        vaultConfigStore: _vaultConfigStore,
       );
     }
 
@@ -261,11 +281,6 @@ class _WebAppGateState extends State<WebAppGate> {
       ),
     );
   }
-}
-
-Listenable _requireObservableAuthController(CloudAuthController controller) {
-  if (controller is Listenable) return controller as Listenable;
-  throw StateError('WebAppGate requires a Listenable CloudAuthController');
 }
 
 class _WebPublicEntryScaffold extends StatelessWidget {
@@ -295,12 +310,22 @@ class _WebMainShell extends StatefulWidget {
     required this.authController,
     required this.service,
     required this.chatBackend,
+    required this.billingClient,
+    required this.cloudUsageClient,
+    required this.vaultUsageClient,
+    required this.vaultAttachmentsClient,
+    required this.vaultConfigStore,
     super.key,
   });
 
-  final CloudAuthController authController;
+  final ObservableCloudAuthController authController;
   final WebAppService service;
   final CloudWebBackend chatBackend;
+  final WebAppBillingClient billingClient;
+  final CloudUsageClient cloudUsageClient;
+  final VaultUsageClient vaultUsageClient;
+  final VaultAttachmentsClient vaultAttachmentsClient;
+  final SyncConfigStore vaultConfigStore;
 
   @override
   State<_WebMainShell> createState() => _WebMainShellState();
@@ -326,11 +351,19 @@ class _WebMainShellState extends State<_WebMainShell> {
         authController: widget.authController,
         service: widget.service,
         chatBackend: widget.chatBackend,
+        billingClient: widget.billingClient,
+        cloudUsageClient: widget.cloudUsageClient,
+        vaultUsageClient: widget.vaultUsageClient,
+        vaultAttachmentsClient: widget.vaultAttachmentsClient,
+        vaultConfigStore: widget.vaultConfigStore,
       ),
     ];
     return Scaffold(
       appBar: AppBar(title: Text(context.t.app.web.title)),
-      body: pages[_index],
+      body: IndexedStack(
+        index: _index,
+        children: pages,
+      ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _index,
         onDestinationSelected: (value) => setState(() => _index = value),
@@ -387,6 +420,9 @@ String _formatWebCloudError(BuildContext context, Object error) {
   if (status != null && status >= 500) {
     return context.t.sync.cloudManagedVault.serverUnavailable;
   }
+  if ('$error'.contains('attachment_too_large_for_web')) {
+    return context.t.app.web.files.messages.attachmentTooLarge;
+  }
   return '$error';
 }
 
@@ -419,6 +455,7 @@ Future<void> _openWebVaultAttachmentViewer({
   final idToken = await authController.getIdToken();
   final vaultId = _webVaultIdForController(authController);
   if (idToken == null || idToken.isEmpty || vaultId == null) return;
+  if (!context.mounted) return;
 
   final bytes = await service.fetchVaultAttachmentBytes(
     idToken: idToken,
@@ -426,9 +463,11 @@ Future<void> _openWebVaultAttachmentViewer({
     sha256: item.primarySha256,
   );
   final attachment = _webAttachmentFromVaultItem(item);
+  final attachmentBytes =
+      bytes is Uint8List ? bytes : Uint8List.fromList(bytes);
   chatBackend.rememberAttachment(
     attachment,
-    bytes: Uint8List.fromList(bytes),
+    bytes: attachmentBytes,
   );
   if (!context.mounted) return;
   await Navigator.of(context).push(
@@ -465,11 +504,23 @@ class _WebFilesPage extends StatefulWidget {
 
 class _WebFilesPageState extends State<_WebFilesPage> {
   String _formatWebVaultError(BuildContext context, Object error) {
+    if ('$error'.contains('upload_read_failed')) {
+      return context.t.app.web.files.messages.uploadReadFailed;
+    }
+    if ('$error'.contains('upload_auth_failed')) {
+      return context.t.app.web.files.messages.uploadAuthFailed;
+    }
+    if ('$error'.contains('attachment_too_large_for_web')) {
+      return context.t.app.web.files.messages.attachmentTooLarge;
+    }
     return _formatWebCloudError(context, error);
   }
 
   final Uint8List _sessionKey = Uint8List(0);
   bool _busy = false;
+  bool _refreshing = false;
+  bool _refreshQueued = false;
+  bool _uploading = false;
   String? _error;
   String? _deletingAttachmentSha;
   WebVaultUsageSummary? _usage;
@@ -488,18 +539,36 @@ class _WebFilesPageState extends State<_WebFilesPage> {
   }
 
   Future<void> _refresh() async {
-    final idToken = await widget.authController.getIdToken();
-    final vaultId = _vaultId;
-    if (idToken == null || idToken.isEmpty || vaultId == null) return;
-    setState(() {
+    if (_refreshing) {
+      _refreshQueued = true;
+      return;
+    }
+    _refreshing = true;
+    if (mounted) {
+      setState(() {
+        _busy = true;
+        _error = null;
+      });
+    } else {
       _busy = true;
       _error = null;
-    });
+    }
+
     try {
+      final idToken = await widget.authController.getIdToken();
+      final vaultId = _vaultId;
+      if (idToken == null || idToken.isEmpty || vaultId == null) {
+        if (!mounted) return;
+        final authError = context.t.chat.cloudGateway.errors.auth;
+        setState(() => _error = authError);
+        return;
+      }
+      if (!mounted) return;
       final usage = await widget.service.fetchVaultUsage(
         idToken: idToken,
         vaultId: vaultId,
       );
+      if (!mounted) return;
       final items = await widget.service.listVaultAttachments(
         idToken: idToken,
         vaultId: vaultId,
@@ -513,37 +582,59 @@ class _WebFilesPageState extends State<_WebFilesPage> {
       if (!mounted) return;
       setState(() => _error = _formatWebVaultError(context, error));
     } finally {
-      if (mounted) setState(() => _busy = false);
+      _refreshing = false;
+      final shouldRefreshAgain = _refreshQueued;
+      _refreshQueued = false;
+      if (mounted) {
+        setState(() => _busy = false);
+        if (shouldRefreshAgain) {
+          unawaited(_refresh());
+        }
+      } else {
+        _busy = false;
+      }
     }
   }
 
   Future<void> _pickAndUpload() async {
-    final idToken = await widget.authController.getIdToken();
-    final vaultId = _vaultId;
-    if (idToken == null || idToken.isEmpty || vaultId == null) return;
-
-    final picked = await FilePicker.platform.pickFiles(
-      allowMultiple: true,
-      withData: false,
-      withReadStream: true,
-      readSequential: true,
-    );
-    if (picked == null || picked.files.isEmpty) return;
-
+    if (_uploading) return;
     setState(() {
-      _busy = true;
+      _uploading = true;
       _error = null;
     });
-
     try {
+      final picked = await FilePicker.platform.pickFiles(
+        allowMultiple: true,
+        withData: false,
+        withReadStream: true,
+        readSequential: true,
+      );
+      if (picked == null || picked.files.isEmpty) return;
+      if (!mounted) return;
+
+      final vaultId = _vaultId;
+      if (vaultId == null) return;
+      if (!mounted) return;
+
+      setState(() => _busy = true);
+
       var uploadCount = 0;
+      var authFailed = false;
       var needsAppProcessing = false;
       for (final file in picked.files) {
         final bytes = await _readPlatformFileBytes(file);
-        if (bytes == null || bytes.isEmpty) continue;
+        if (bytes == null || bytes.isEmpty) {
+          continue;
+        }
+        final freshToken = await widget.authController.getIdToken();
+        if (freshToken == null || freshToken.isEmpty) {
+          authFailed = true;
+          break;
+        }
+        if (!mounted) return;
         final resolvedMimeType = guessMimeTypeFromExtension(file.extension);
         await widget.service.uploadVaultAttachment(
-          idToken: idToken,
+          idToken: freshToken,
           vaultId: vaultId,
           fileName: file.name,
           mimeType: resolvedMimeType,
@@ -558,15 +649,24 @@ class _WebFilesPageState extends State<_WebFilesPage> {
             ).needsAppProcessing;
       }
       if (!mounted) return;
+      final failedCount = picked.files.length - uploadCount;
+      if (uploadCount == 0 && failedCount > 0) {
+        throw StateError(
+            authFailed ? 'upload_auth_failed' : 'upload_read_failed');
+      }
       if (uploadCount > 0) {
+        final message = failedCount > 0
+            ? context.t.app.web.files.messages.uploadPartial(
+                uploaded: uploadCount,
+                skipped: failedCount,
+              )
+            : (needsAppProcessing
+                ? context.t.app.web.files.messages.uploadNeedsApp
+                : context.t.app.web.files.messages
+                    .uploadSuccess(count: uploadCount));
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(
-              needsAppProcessing
-                  ? context.t.app.web.files.messages.uploadNeedsApp
-                  : context.t.app.web.files.messages
-                      .uploadSuccess(count: uploadCount),
-            ),
+            content: Text(message),
             duration: const Duration(seconds: 3),
           ),
         );
@@ -576,11 +676,20 @@ class _WebFilesPageState extends State<_WebFilesPage> {
       if (!mounted) return;
       setState(() => _error = _formatWebVaultError(context, error));
     } finally {
-      if (mounted) setState(() => _busy = false);
+      if (mounted) {
+        setState(() {
+          _busy = false;
+          _uploading = false;
+        });
+      } else {
+        _busy = false;
+        _uploading = false;
+      }
     }
   }
 
   Future<void> _openAttachment(WebVaultAttachmentItem item) async {
+    if (_busy || _uploading) return;
     setState(() => _busy = true);
     try {
       await _openWebVaultAttachmentViewer(
@@ -595,17 +704,30 @@ class _WebFilesPageState extends State<_WebFilesPage> {
       if (!mounted) return;
       setState(() => _error = _formatWebVaultError(context, error));
     } finally {
-      if (mounted) setState(() => _busy = false);
+      if (mounted) {
+        setState(() {
+          _busy = false;
+        });
+      } else {
+        _busy = false;
+      }
     }
   }
 
   Future<void> _deleteAttachment(VaultAttachmentUsageItem item) async {
-    final idToken = await widget.authController.getIdToken();
-    final vaultId = _vaultId;
-    if (idToken == null || idToken.isEmpty || vaultId == null) return;
-
+    if (_deletingAttachmentSha != null) return;
     setState(() => _deletingAttachmentSha = item.primarySha256);
     try {
+      final idToken = await widget.authController.getIdToken();
+      final vaultId = _vaultId;
+      if (idToken == null || idToken.isEmpty || vaultId == null) {
+        if (!mounted) return;
+        final authError = context.t.chat.cloudGateway.errors.auth;
+        setState(() => _error = authError);
+        return;
+      }
+      if (!mounted) return;
+
       await widget.service.deleteVaultAttachment(
         idToken: idToken,
         vaultId: vaultId,
@@ -616,7 +738,11 @@ class _WebFilesPageState extends State<_WebFilesPage> {
       if (!mounted) return;
       setState(() => _error = _formatWebVaultError(context, error));
     } finally {
-      if (mounted) setState(() => _deletingAttachmentSha = null);
+      if (mounted) {
+        setState(() => _deletingAttachmentSha = null);
+      } else {
+        _deletingAttachmentSha = null;
+      }
     }
   }
 
@@ -653,86 +779,79 @@ class _WebFilesPageState extends State<_WebFilesPage> {
       (item) => item.isGroupedVideo || needsAppProcessingInWeb(item.mimeType),
     );
 
-    return Padding(
+    return ListView(
       padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            context.t.app.web.files.title,
-            style: Theme.of(context).textTheme.titleLarge,
-          ),
-          const SizedBox(height: 8),
-          Text(
-            context.t.app.web.files.description,
-          ),
+      children: [
+        Text(
+          context.t.app.web.files.title,
+          style: Theme.of(context).textTheme.titleLarge,
+        ),
+        const SizedBox(height: 8),
+        Text(
+          context.t.app.web.files.description,
+        ),
+        const SizedBox(height: 12),
+        if (hasItemsNeedingAppProcessing) ...[
+          const WebMediaProcessingNotice(),
           const SizedBox(height: 12),
-          if (hasItemsNeedingAppProcessing) ...[
-            const WebMediaProcessingNotice(),
-            const SizedBox(height: 12),
-          ],
-          if (_error != null)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: Text(
-                _error!,
-                style: TextStyle(color: Theme.of(context).colorScheme.error),
-              ),
-            ),
-          Row(
-            children: [
-              FilledButton(
-                onPressed: _busy ? null : _refresh,
-                child: Text(context.t.app.web.files.actions.refresh),
-              ),
-              const SizedBox(width: 12),
-              OutlinedButton(
-                onPressed: _busy ? null : _pickAndUpload,
-                child: Text(context.t.app.web.files.actions.upload),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Expanded(
-            child: ListView(
-              children: [
-                if (_usage != null) ...[
-                  VaultUsageSummaryView(
-                    summary: VaultUsageSummary(
-                      totalBytesUsed: _usage!.totalBytesUsed,
-                      attachmentsBytesUsed: _usage!.totalBytesUsed,
-                      opsBytesUsed: 0,
-                      otherBytesUsed: 0,
-                      limitBytes: _usage!.limitBytes,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                ],
-                Text(
-                  context.t.app.web.files.attachmentsTitle,
-                  style: Theme.of(context).textTheme.titleSmall,
-                ),
-                const SizedBox(height: 8),
-                if (_busy && formalItems.isEmpty)
-                  const Center(child: CircularProgressIndicator())
-                else
-                  VaultAttachmentUsageListView(
-                    items: formalItems,
-                    deletingSha: _deletingAttachmentSha,
-                    isWebOverride: true,
-                    onOpen: (item) {
-                      final webItem = _findWebItem(item.primarySha256);
-                      if (webItem != null) {
-                        unawaited(_openAttachment(webItem));
-                      }
-                    },
-                    onDelete: (item) => unawaited(_deleteAttachment(item)),
-                  ),
-              ],
-            ),
-          ),
         ],
-      ),
+        if (_error != null)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Text(
+              _error!,
+              style: TextStyle(color: Theme.of(context).colorScheme.error),
+            ),
+          ),
+        Row(
+          children: [
+            FilledButton(
+              onPressed: _busy ? null : _refresh,
+              child: Text(context.t.app.web.files.actions.refresh),
+            ),
+            const SizedBox(width: 12),
+            OutlinedButton(
+              onPressed: (_busy || _uploading) ? null : _pickAndUpload,
+              child: Text(context.t.app.web.files.actions.upload),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        if (_usage != null) ...[
+          VaultUsageSummaryView(
+            summary: VaultUsageSummary(
+              totalBytesUsed: _usage!.totalBytesUsed,
+              attachmentsBytesUsed: _usage!.totalBytesUsed,
+              opsBytesUsed: 0,
+              otherBytesUsed: 0,
+              limitBytes: _usage!.limitBytes,
+            ),
+          ),
+          const SizedBox(height: 16),
+        ],
+        Text(
+          context.t.app.web.files.attachmentsTitle,
+          style: Theme.of(context).textTheme.titleSmall,
+        ),
+        const SizedBox(height: 8),
+        if (_busy && formalItems.isEmpty)
+          const Center(child: CircularProgressIndicator())
+        else
+          VaultAttachmentUsageListView(
+            items: formalItems,
+            deletingSha: _deletingAttachmentSha,
+            isWebOverride: true,
+            onOpen: (item) {
+              final webItem = _findWebItem(item.primarySha256);
+              if (webItem != null) {
+                unawaited(_openAttachment(webItem));
+              }
+            },
+            onDelete: _deletingAttachmentSha != null
+                ? null
+                : (item) => unawaited(_deleteAttachment(item)),
+          ),
+      ],
     );
   }
 }
@@ -742,11 +861,21 @@ class _WebSettingsPage extends StatefulWidget {
     required this.authController,
     required this.service,
     required this.chatBackend,
+    required this.billingClient,
+    required this.cloudUsageClient,
+    required this.vaultUsageClient,
+    required this.vaultAttachmentsClient,
+    required this.vaultConfigStore,
   });
 
   final CloudAuthController authController;
   final WebAppService service;
   final CloudWebBackend chatBackend;
+  final WebAppBillingClient billingClient;
+  final CloudUsageClient cloudUsageClient;
+  final VaultUsageClient vaultUsageClient;
+  final VaultAttachmentsClient vaultAttachmentsClient;
+  final SyncConfigStore vaultConfigStore;
 
   @override
   State<_WebSettingsPage> createState() => _WebSettingsPageState();
@@ -754,24 +883,6 @@ class _WebSettingsPage extends StatefulWidget {
 
 class _WebSettingsPageState extends State<_WebSettingsPage> {
   final Uint8List _sessionKey = Uint8List(0);
-  late final CloudUsageClient _cloudUsageClient =
-      createWebFormalCloudUsageClient(
-    service: widget.service,
-    authController: widget.authController,
-  );
-  late final VaultUsageClient _vaultUsageClient =
-      createWebFormalVaultUsageClient(
-    service: widget.service,
-    authController: widget.authController,
-  );
-  late final VaultAttachmentsClient _vaultAttachmentsClient =
-      createWebFormalVaultAttachmentsClient(
-    service: widget.service,
-    authController: widget.authController,
-  );
-  late final SyncConfigStore _vaultConfigStore = SyncConfigStore(
-    managedVaultDefaultBaseUrl: kWebFormalSettingsBaseUrl,
-  );
   bool _loadingRecent = false;
   String? _recentError;
   String? _openingAttachmentSha;
@@ -780,29 +891,21 @@ class _WebSettingsPageState extends State<_WebSettingsPage> {
   @override
   void initState() {
     super.initState();
-    unawaited(
-        _vaultConfigStore.writeManagedVaultBaseUrl(kWebFormalSettingsBaseUrl));
     unawaited(_refreshRecentItems());
   }
 
-  @override
-  void dispose() {
-    _cloudUsageClient.dispose();
-    _vaultUsageClient.dispose();
-    _vaultAttachmentsClient.dispose();
-    super.dispose();
-  }
-
   Future<void> _refreshRecentItems() async {
-    final idToken = await widget.authController.getIdToken();
-    final vaultId = _webVaultIdForController(widget.authController);
-    if (idToken == null || idToken.isEmpty || vaultId == null) return;
-
+    if (_loadingRecent) return;
     setState(() {
       _loadingRecent = true;
       _recentError = null;
     });
     try {
+      final idToken = await widget.authController.getIdToken();
+      final vaultId = _webVaultIdForController(widget.authController);
+      if (idToken == null || idToken.isEmpty || vaultId == null) return;
+      if (!mounted) return;
+
       final items = List<WebVaultAttachmentItem>.from(
         await widget.service.listVaultAttachments(
           idToken: idToken,
@@ -825,6 +928,7 @@ class _WebSettingsPageState extends State<_WebSettingsPage> {
   }
 
   Future<void> _openAttachment(WebVaultAttachmentItem item) async {
+    if (_openingAttachmentSha != null) return;
     setState(() => _openingAttachmentSha = item.sha256);
     try {
       await _openWebVaultAttachmentViewer(
@@ -849,14 +953,11 @@ class _WebSettingsPageState extends State<_WebSettingsPage> {
       padding: const EdgeInsets.all(16),
       children: [
         CloudAccountPanel(
-          billingClient: WebAppBillingClient(
-            service: widget.service,
-            authController: widget.authController,
-          ),
-          cloudUsageClient: _cloudUsageClient,
-          vaultUsageClient: _vaultUsageClient,
-          vaultAttachmentsClient: _vaultAttachmentsClient,
-          vaultConfigStore: _vaultConfigStore,
+          billingClient: widget.billingClient,
+          cloudUsageClient: widget.cloudUsageClient,
+          vaultUsageClient: widget.vaultUsageClient,
+          vaultAttachmentsClient: widget.vaultAttachmentsClient,
+          vaultConfigStore: widget.vaultConfigStore,
           isWebOverride: true,
         ),
         const SizedBox(height: 24),
@@ -896,7 +997,7 @@ class _WebSettingsPageState extends State<_WebSettingsPage> {
         ..._recentItems.map(
           (item) => ListTile(
             contentPadding: EdgeInsets.zero,
-            title: Text(item.sha256),
+            title: Text(_recentWebAttachmentTitle(context, item)),
             subtitle: Text(
               context.t.app.web.settings.recentFiles.itemSummary(
                 mimeType: item.mimeType,
@@ -910,7 +1011,7 @@ class _WebSettingsPageState extends State<_WebSettingsPage> {
                     child: CircularProgressIndicator(strokeWidth: 2),
                   )
                 : const Icon(Icons.open_in_new),
-            onTap: _openingAttachmentSha == item.sha256
+            onTap: _openingAttachmentSha != null
                 ? null
                 : () => _openAttachment(item),
           ),

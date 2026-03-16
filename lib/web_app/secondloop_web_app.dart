@@ -28,6 +28,8 @@ class SecondLoopWebApp extends StatefulWidget {
 
 class _SecondLoopWebAppState extends State<SecondLoopWebApp> {
   Future<WebAppBootstrapData>? _bootstrapFuture;
+  WebAppService? _bootstrappedService;
+  ObservableCloudAuthController? _bootstrappedAuthController;
 
   @override
   void initState() {
@@ -51,6 +53,13 @@ class _SecondLoopWebAppState extends State<SecondLoopWebApp> {
       // Allow the app to continue booting so the gate can render sign-in and
       // retry paths even if the initial profile refresh fails.
     }
+    if (!mounted) {
+      service.close();
+      _disposeAuthController(authController);
+    } else {
+      _bootstrappedService = service;
+      _bootstrappedAuthController = authController;
+    }
     return WebAppBootstrapData(
       authController: authController,
       service: service,
@@ -58,6 +67,21 @@ class _SecondLoopWebAppState extends State<SecondLoopWebApp> {
         chatClient: _WebAppCloudWebChatClient(service: service),
       ),
     );
+  }
+
+  @override
+  void dispose() {
+    _bootstrappedService?.close();
+    _bootstrappedService = null;
+    _disposeAuthController(_bootstrappedAuthController);
+    _bootstrappedAuthController = null;
+    super.dispose();
+  }
+
+  void _disposeAuthController(ObservableCloudAuthController? controller) {
+    if (controller is ChangeNotifier) {
+      (controller as ChangeNotifier).dispose();
+    }
   }
 
   @override

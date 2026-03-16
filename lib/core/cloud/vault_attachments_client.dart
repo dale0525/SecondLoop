@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
 
 import 'http_json_client.dart';
 
@@ -47,7 +48,7 @@ class VaultAttachmentUsageList {
 }
 
 final class VaultAttachmentsClient {
-  VaultAttachmentsClient({Object? httpClient})
+  VaultAttachmentsClient({http.Client? httpClient})
       : _httpClient = HttpJsonClient(client: httpClient);
 
   final HttpJsonClient _httpClient;

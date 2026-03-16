@@ -1,3 +1,4 @@
+import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
 
 import '../cloud/http_json_client.dart';
@@ -19,7 +20,7 @@ final class CreemBillingClient implements DisposableBillingClient {
     required Future<String?> Function() idTokenGetter,
     required String cloudGatewayBaseUrl,
     UrlOpener? urlOpener,
-    Object? httpClient,
+    http.Client? httpClient,
   })  : _idTokenGetter = idTokenGetter,
         _cloudGatewayBaseUrl = cloudGatewayBaseUrl,
         _urlOpener = urlOpener ?? _defaultUrlOpener,

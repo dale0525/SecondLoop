@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:secondloop/core/backend/cloud_web_backend.dart';
@@ -68,10 +69,82 @@ void main() {
     expect(client.lastGatewayBaseUrl, kWebFormalSettingsBaseUrl);
     expect(client.lastModelName, 'cloud');
   });
+
+  testWidgets('web chat surfaces auth expiry inline when token is unavailable',
+      (tester) async {
+    final backend = CloudWebBackend(chatClient: _FakeCloudWebChatClient());
+    final authController = _FakeCloudAuthController();
+    authController.deferNextIdToken();
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: Scaffold(
+            body: WebChatPage(
+              service: _FakeWebAppService(),
+              authController: authController,
+              chatBackend: backend,
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.byType(TextField), 'Hello expired');
+    await tester.tap(find.widgetWithText(FilledButton, 'Send'));
+    await tester.pump();
+
+    authController.completeDeferredIdToken(null);
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text(
+          'Cloud sign-in required. Open Cloud account and sign in again.'),
+      findsOneWidget,
+    );
+    expect(find.text('Hello expired'), findsOneWidget);
+  });
+
+  testWidgets('web chat ignores rapid double tap before auth resolves',
+      (tester) async {
+    final client = _FakeCloudWebChatClient();
+    final backend = CloudWebBackend(chatClient: client);
+    final authController = _FakeCloudAuthController();
+    authController.deferNextIdToken();
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: Scaffold(
+            body: WebChatPage(
+              service: _FakeWebAppService(),
+              authController: authController,
+              chatBackend: backend,
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.byType(TextField), 'Hello once');
+    await tester.tap(find.widgetWithText(FilledButton, 'Send'));
+    await tester.tap(find.widgetWithText(FilledButton, 'Send'));
+    await tester.pump();
+
+    authController.completeDeferredIdToken('token-1');
+    await tester.pumpAndSettle();
+
+    expect(client.sendCallCount, 1);
+    expect(find.text('Hello once'), findsOneWidget);
+  });
 }
 
 final class _FakeCloudAuthController extends ChangeNotifier
     implements ObservableCloudAuthController, CloudPasswordRecoveryController {
+  Completer<String?>? _deferredIdToken;
+
   @override
   String? get uid => 'uid-1';
 
@@ -81,8 +154,21 @@ final class _FakeCloudAuthController extends ChangeNotifier
   @override
   bool? get emailVerified => true;
 
+  void deferNextIdToken() {
+    _deferredIdToken = Completer<String?>();
+  }
+
+  void completeDeferredIdToken(String? value) {
+    _deferredIdToken?.complete(value);
+    _deferredIdToken = null;
+  }
+
   @override
-  Future<String?> getIdToken() async => 'token-1';
+  Future<String?> getIdToken() async {
+    final deferredIdToken = _deferredIdToken;
+    if (deferredIdToken != null) return deferredIdToken.future;
+    return 'token-1';
+  }
 
   @override
   Future<void> refreshUserInfo() async {}
@@ -111,6 +197,7 @@ final class _FakeCloudWebChatClient implements CloudWebChatClient {
   final Object? error;
   String? lastGatewayBaseUrl;
   String? lastModelName;
+  int sendCallCount = 0;
 
   @override
   Future<String> sendMessages({
@@ -119,6 +206,7 @@ final class _FakeCloudWebChatClient implements CloudWebChatClient {
     required String modelName,
     required List<Map<String, String>> messages,
   }) async {
+    sendCallCount += 1;
     lastGatewayBaseUrl = gatewayBaseUrl;
     lastModelName = modelName;
     if (error != null) throw error!;

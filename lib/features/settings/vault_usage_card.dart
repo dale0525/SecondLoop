@@ -176,7 +176,7 @@ class VaultAttachmentUsageListView extends StatelessWidget {
   final String? deletingSha;
   final bool? isWebOverride;
   final ValueChanged<VaultAttachmentUsageItem> onOpen;
-  final ValueChanged<VaultAttachmentUsageItem> onDelete;
+  final ValueChanged<VaultAttachmentUsageItem>? onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -223,7 +223,9 @@ class VaultAttachmentUsageListView extends StatelessWidget {
                       ),
                       tooltip: context.t.common.actions.delete,
                       icon: const Icon(Icons.delete_outline_rounded),
-                      onPressed: () => onDelete(item),
+                      onPressed: deletingSha != null || onDelete == null
+                          ? null
+                          : () => onDelete!(item),
                     );
               if (!needsAppProcessing) return deleteAction;
               return Row(

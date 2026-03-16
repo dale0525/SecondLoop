@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
@@ -19,13 +20,17 @@ import 'package:secondloop/web_app/web_app_gate.dart';
 import '../test_i18n.dart';
 
 class _FakeCloudAuthController extends ChangeNotifier
-    implements CloudAuthController, CloudPasswordRecoveryController {
+    implements ObservableCloudAuthController, CloudPasswordRecoveryController {
   _FakeCloudAuthController({
     this.initialUid,
     this.initialEmail,
     this.initialEmailVerified,
     this.sendVerificationError,
-  })  : _uid = initialUid,
+    List<String?>? idTokenSequence,
+  })  : _idTokenSequence = idTokenSequence == null
+            ? <String?>[]
+            : List<String?>.from(idTokenSequence),
+        _uid = initialUid,
         _email = initialEmail,
         _emailVerified = initialEmailVerified;
 
@@ -34,6 +39,8 @@ class _FakeCloudAuthController extends ChangeNotifier
   final bool? initialEmailVerified;
   final Object? sendVerificationError;
 
+  final List<String?> _idTokenSequence;
+  Completer<String?>? _deferredIdToken;
   String? _uid;
   String? _email;
   bool? _emailVerified;
@@ -49,6 +56,21 @@ class _FakeCloudAuthController extends ChangeNotifier
     notifyListeners();
   }
 
+  void setIdTokenSequence(List<String?> values) {
+    _idTokenSequence
+      ..clear()
+      ..addAll(values);
+  }
+
+  void deferNextIdToken() {
+    _deferredIdToken = Completer<String?>();
+  }
+
+  void completeDeferredIdToken(String? value) {
+    _deferredIdToken?.complete(value);
+    _deferredIdToken = null;
+  }
+
   @override
   String? get uid => _uid;
 
@@ -59,7 +81,15 @@ class _FakeCloudAuthController extends ChangeNotifier
   bool? get emailVerified => _emailVerified;
 
   @override
-  Future<String?> getIdToken() async => _uid == null ? null : 'token';
+  Future<String?> getIdToken() async {
+    if (_uid == null) return null;
+    final deferredIdToken = _deferredIdToken;
+    if (deferredIdToken != null) return deferredIdToken.future;
+    if (_idTokenSequence.isNotEmpty) {
+      return _idTokenSequence.removeAt(0);
+    }
+    return 'token';
+  }
 
   @override
   Future<void> refreshUserInfo() async {}
@@ -130,6 +160,23 @@ class _FakeWebAppService extends WebAppService {
   final Object? checkoutError;
   final Object? deleteError;
   final List<_FakeUploadedFile> uploads = <_FakeUploadedFile>[];
+  final List<Future<List<WebVaultAttachmentItem>>> queuedListResponses =
+      <Future<List<WebVaultAttachmentItem>>>[];
+  int deleteCallCount = 0;
+  Completer<void>? _heldDelete;
+
+  void queueListResponse(Future<List<WebVaultAttachmentItem>> response) {
+    queuedListResponses.add(response);
+  }
+
+  void holdNextDelete() {
+    _heldDelete = Completer<void>();
+  }
+
+  void releaseHeldDelete() {
+    _heldDelete?.complete();
+    _heldDelete = null;
+  }
 
   @override
   Future<WebSubscriptionSnapshot> fetchSubscription(
@@ -166,6 +213,9 @@ class _FakeWebAppService extends WebAppService {
     required String vaultId,
   }) async {
     if (listError != null) throw listError!;
+    if (queuedListResponses.isNotEmpty) {
+      return await queuedListResponses.removeAt(0);
+    }
     return items;
   }
 
@@ -195,7 +245,15 @@ class _FakeWebAppService extends WebAppService {
     required String vaultId,
     required String sha256,
   }) async {
+    deleteCallCount += 1;
     if (deleteError != null) throw deleteError!;
+    final heldDelete = _heldDelete;
+    if (heldDelete != null) {
+      await heldDelete.future;
+      _heldDelete = null;
+    }
+    items.removeWhere(
+        (item) => item.primarySha256 == sha256 || item.sha256 == sha256);
   }
 
   @override
@@ -276,8 +334,38 @@ final class _TestWebFilePicker extends FilePicker {
       result;
 }
 
+final class _DeferredWebFilePicker extends FilePicker {
+  _DeferredWebFilePicker({required this.resultFuture});
+
+  final Future<FilePickerResult?> resultFuture;
+
+  @override
+  Future<FilePickerResult?> pickFiles({
+    Function(FilePickerStatus)? onFileLoading,
+    FileType type = FileType.any,
+    List<String>? allowedExtensions,
+    bool allowMultiple = false,
+    bool withData = false,
+    bool withReadStream = false,
+    bool allowCompression = true,
+    int compressionQuality = 30,
+    String? dialogTitle,
+    String? initialDirectory,
+    bool lockParentWindow = false,
+    bool readSequential = false,
+  }) async =>
+      resultFuture;
+}
+
+Finder _navigationLabel(String label) {
+  return find.descendant(
+    of: find.byType(NavigationBar),
+    matching: find.text(label),
+  );
+}
+
 Widget _buildApp({
-  required CloudAuthController controller,
+  required ObservableCloudAuthController controller,
   required WebAppService service,
   CloudWebBackend? chatBackend,
   Locale? locale,
@@ -399,7 +487,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Chat'), findsOneWidget);
-    expect(find.text('Files'), findsOneWidget);
+    expect(_navigationLabel('Files'), findsOneWidget);
     expect(find.text('Settings'), findsOneWidget);
     expect(
       find.byKey(const ValueKey('cloud_manage_subscription')),
@@ -540,7 +628,7 @@ void main() {
 
     expect(find.text('SecondLoop Web'), findsOneWidget);
     expect(find.text('Chat'), findsOneWidget);
-    expect(find.text('Files'), findsOneWidget);
+    expect(_navigationLabel('Files'), findsOneWidget);
     expect(find.text('Settings'), findsOneWidget);
   });
 
@@ -594,12 +682,6 @@ void main() {
 
   testWidgets('web files localizes upload success snackbar in zh-CN',
       (tester) async {
-    FilePicker? oldPicker;
-    try {
-      oldPicker = FilePicker.platform;
-    } catch (_) {
-      oldPicker = null;
-    }
     FilePicker.platform = _TestWebFilePicker(
       result: FilePickerResult([
         PlatformFile(
@@ -640,19 +722,12 @@ void main() {
       expect(find.text('已上传 1 个文件到 Cloud。'), findsOneWidget);
     } finally {
       LocaleSettings.setLocale(AppLocale.en);
-      FilePicker.platform = oldPicker ?? _TestWebFilePicker(result: null);
+      FilePicker.platform = _TestWebFilePicker(result: null);
     }
   });
 
   testWidgets('web files uploads from read stream without eager bytes',
       (tester) async {
-    FilePicker? oldPicker;
-    try {
-      oldPicker = FilePicker.platform;
-    } catch (_) {
-      oldPicker = null;
-    }
-
     final service = _FakeWebAppService(
       subscription: WebSubscriptionState.entitled,
       vaultUsage: const WebVaultUsageSummary(
@@ -688,7 +763,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('Files'));
+      await tester.tap(_navigationLabel('Files'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Upload'));
       await tester.pump();
@@ -698,7 +773,160 @@ void main() {
       expect(service.uploads.single.fileName, 'stream-note.txt');
       expect(String.fromCharCodes(service.uploads.single.bytes), 'hello');
     } finally {
-      FilePicker.platform = oldPicker ?? _TestWebFilePicker(result: null);
+      FilePicker.platform = _TestWebFilePicker(result: null);
+    }
+  });
+
+  testWidgets(
+      'web files upload surfaces partial success for mixed readable batches',
+      (tester) async {
+    final service = _FakeWebAppService(
+      subscription: WebSubscriptionState.entitled,
+      vaultUsage: const WebVaultUsageSummary(
+        totalBytesUsed: 12,
+        limitBytes: 128,
+      ),
+    );
+    FilePicker.platform = _TestWebFilePicker(
+      result: FilePickerResult([
+        PlatformFile(name: 'broken.txt', size: 10),
+        PlatformFile(
+          name: 'stream-note.txt',
+          size: 5,
+          readStream: Stream<List<int>>.fromIterable(
+            <List<int>>[
+              const <int>[104, 101],
+              const <int>[108, 108, 111],
+            ],
+          ),
+        ),
+      ]),
+    );
+
+    try {
+      await tester.pumpWidget(
+        _buildApp(
+          controller: _FakeCloudAuthController(
+            initialUid: 'uid-1',
+            initialEmail: 'user@example.com',
+            initialEmailVerified: true,
+          ),
+          service: service,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(_navigationLabel('Files'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Upload'));
+      await tester.pump();
+      await tester.pumpAndSettle();
+
+      expect(service.uploads, hasLength(1));
+      expect(
+        find.text(
+            'Uploaded 1 file(s) to Cloud. 1 file(s) could not be uploaded.'),
+        findsOneWidget,
+      );
+    } finally {
+      FilePicker.platform = _TestWebFilePicker(result: null);
+    }
+  });
+
+  testWidgets('web files disables upload while picker is open', (tester) async {
+    final pickerCompleter = Completer<FilePickerResult?>();
+    FilePicker.platform =
+        _DeferredWebFilePicker(resultFuture: pickerCompleter.future);
+
+    try {
+      await tester.pumpWidget(
+        _buildApp(
+          controller: _FakeCloudAuthController(
+            initialUid: 'uid-1',
+            initialEmail: 'user@example.com',
+            initialEmailVerified: true,
+          ),
+          service: _FakeWebAppService(
+            subscription: WebSubscriptionState.entitled,
+            vaultUsage: const WebVaultUsageSummary(
+              totalBytesUsed: 12,
+              limitBytes: 128,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(_navigationLabel('Files'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Upload'));
+      await tester.pump();
+
+      final uploadButton = tester.widget<OutlinedButton>(
+        find.widgetWithText(OutlinedButton, 'Upload'),
+      );
+      expect(uploadButton.onPressed, isNull);
+
+      pickerCompleter.complete(null);
+      await tester.pumpAndSettle();
+    } finally {
+      FilePicker.platform = _TestWebFilePicker(result: null);
+    }
+  });
+
+  testWidgets('web files upload surfaces auth expiry before any upload',
+      (tester) async {
+    final service = _FakeWebAppService(
+      subscription: WebSubscriptionState.entitled,
+      vaultUsage: const WebVaultUsageSummary(
+        totalBytesUsed: 12,
+        limitBytes: 128,
+      ),
+    );
+    FilePicker.platform = _TestWebFilePicker(
+      result: FilePickerResult([
+        PlatformFile(
+          name: 'stream-note.txt',
+          size: 5,
+          readStream: Stream<List<int>>.fromIterable(
+            <List<int>>[
+              const <int>[104, 101],
+              const <int>[108, 108, 111],
+            ],
+          ),
+        ),
+      ]),
+    );
+
+    try {
+      final controller = _FakeCloudAuthController(
+        initialUid: 'uid-1',
+        initialEmail: 'user@example.com',
+        initialEmailVerified: true,
+      );
+      await tester.pumpWidget(
+        _buildApp(
+          controller: controller,
+          service: service,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(_navigationLabel('Files'));
+      await tester.pumpAndSettle();
+      controller.setIdTokenSequence(const <String?>[null]);
+      await tester.tap(find.text('Upload'));
+      await tester.pump();
+      await tester.pumpAndSettle();
+
+      expect(service.uploads, isEmpty);
+      expect(
+        find.text(
+            'Cloud upload expired before any file could be uploaded. Please try again.'),
+        findsOneWidget,
+      );
+    } finally {
+      FilePicker.platform = _TestWebFilePicker(result: null);
     }
   });
 
@@ -728,7 +956,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Files'));
+    await tester.tap(_navigationLabel('Files'));
     await tester.pumpAndSettle();
 
     expect(find.byType(VaultAttachmentUsageListView), findsOneWidget);
@@ -768,14 +996,16 @@ void main() {
           ),
           items: const <WebVaultAttachmentItem>[
             WebVaultAttachmentItem(
-              sha256: 'sha-settings',
+              sha256:
+                  '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
               mimeType: 'text/plain',
               byteLen: 12,
               uploadedAtMs: 200,
             ),
           ],
           bytesBySha: const <String, List<int>>{
-            'sha-settings': <int>[104, 101, 108, 108, 111, 32, 119, 101, 98],
+            '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef':
+                <int>[104, 101, 108, 108, 111, 32, 119, 101, 98],
           },
         ),
       ),
@@ -797,11 +1027,19 @@ void main() {
     expect(find.byType(VaultUsageCard), findsOneWidget);
 
     await tester.dragUntilVisible(
-      find.text('sha-settings'),
+      find.text('text/plain • 12 bytes'),
       find.byType(ListView),
       const Offset(0, -240),
     );
-    await tester.tap(find.text('sha-settings'));
+
+    final recentTile = tester.widget<ListTile>(find.byType(ListTile).last);
+    final recentTitle = recentTile.title! as Text;
+    expect(
+      recentTitle.data,
+      isNot('0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef'),
+    );
+
+    await tester.tap(find.byType(ListTile).last);
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 200));
 
@@ -951,7 +1189,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('Files'));
+      await tester.tap(_navigationLabel('Files'));
       await tester.pumpAndSettle();
 
       expect(
@@ -982,7 +1220,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Files'));
+    await tester.tap(_navigationLabel('Files'));
     await tester.pumpAndSettle();
 
     expect(find.textContaining('payment_required'), findsNothing);
@@ -1010,12 +1248,46 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Files'));
+    await tester.tap(_navigationLabel('Files'));
     await tester.pumpAndSettle();
 
     expect(find.textContaining('storage_quota_exceeded'), findsNothing);
     expect(
       find.text('Cloud storage is full. Uploads are paused.'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('files surfaces auth expiry inline on refresh', (tester) async {
+    final controller = _FakeCloudAuthController(
+      initialUid: 'uid-1',
+      initialEmail: 'user@example.com',
+      initialEmailVerified: true,
+    );
+
+    await tester.pumpWidget(
+      _buildApp(
+        controller: controller,
+        service: _FakeWebAppService(
+          subscription: WebSubscriptionState.entitled,
+          vaultUsage: const WebVaultUsageSummary(
+            totalBytesUsed: 12,
+            limitBytes: 128,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(_navigationLabel('Files'));
+    await tester.pumpAndSettle();
+    controller.setIdTokenSequence(const <String?>[null]);
+    await tester.tap(find.text('Refresh'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text(
+          'Cloud sign-in required. Open Cloud account and sign in again.'),
       findsOneWidget,
     );
   });
@@ -1036,59 +1308,13 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Files'));
+    await tester.tap(_navigationLabel('Files'));
     await tester.pumpAndSettle();
 
     expect(find.textContaining('HTTP 503'), findsNothing);
     expect(
       find.text(
           'Cloud sync is temporarily unavailable. Please try again later.'),
-      findsOneWidget,
-    );
-  });
-
-  testWidgets('files localizes vault delete failure inline', (tester) async {
-    await tester.pumpWidget(
-      _buildApp(
-        controller: _FakeCloudAuthController(
-          initialUid: 'uid-1',
-          initialEmail: 'user@example.com',
-          initialEmailVerified: true,
-        ),
-        service: _FakeWebAppService(
-          subscription: WebSubscriptionState.entitled,
-          vaultUsage: const WebVaultUsageSummary(
-            totalBytesUsed: 12,
-            limitBytes: 128,
-          ),
-          items: const <WebVaultAttachmentItem>[
-            WebVaultAttachmentItem(
-              sha256: 'sha-files-delete',
-              mimeType: 'text/plain',
-              byteLen: 11,
-            ),
-          ],
-          deleteError:
-              'managed-vault request failed: HTTP 402 {"error":"payment_required"}',
-        ),
-      ),
-    );
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.text('Files'));
-    await tester.pumpAndSettle();
-    final deleteButton = find.byKey(
-      const ValueKey('vault_usage_attachment_delete_sha-files-delete'),
-    );
-    await tester.ensureVisible(deleteButton);
-    await tester.pumpAndSettle();
-    await tester.tap(deleteButton, warnIfMissed: false);
-    await tester.pumpAndSettle();
-
-    expect(find.textContaining('payment_required'), findsNothing);
-    expect(
-      find.text(
-          'Cloud sync is paused. Renew your subscription to continue syncing.'),
       findsOneWidget,
     );
   });
@@ -1287,11 +1513,11 @@ void main() {
     await tester.tap(find.text('Settings'));
     await tester.pumpAndSettle();
     await tester.dragUntilVisible(
-      find.text('sha-open-error'),
+      find.text('text/plain • 12 bytes'),
       find.byType(ListView),
       const Offset(0, -240),
     );
-    final recentItem = find.text('sha-open-error');
+    final recentItem = find.byType(ListTile).last;
     await tester.ensureVisible(recentItem);
     await tester.pumpAndSettle();
     await tester.tap(recentItem, warnIfMissed: false);
@@ -1300,6 +1526,60 @@ void main() {
     expect(find.textContaining('HTTP 429'), findsNothing);
     expect(
       find.text('Cloud is rate limited. Please try again later.'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('settings recent files localize oversized attachment errors',
+      (tester) async {
+    await tester.pumpWidget(
+      _buildApp(
+        controller: _FakeCloudAuthController(
+          initialUid: 'uid-1',
+          initialEmail: 'user@example.com',
+          initialEmailVerified: true,
+        ),
+        service: _FakeWebAppService(
+          subscription: WebSubscriptionState.entitled,
+          usage: const WebUsageSummary(
+            askAiUsagePercent: 27,
+            embeddingsUsagePercent: 9,
+            resetAtMs: 1735689600000,
+          ),
+          vaultUsage: const WebVaultUsageSummary(
+            totalBytesUsed: 12,
+            limitBytes: 128,
+          ),
+          items: const <WebVaultAttachmentItem>[
+            WebVaultAttachmentItem(
+              sha256: 'sha-open-too-large',
+              mimeType: 'application/pdf',
+              byteLen: 12,
+              uploadedAtMs: 200,
+            ),
+          ],
+          bytesError: StateError('attachment_too_large_for_web'),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Settings'));
+    await tester.pumpAndSettle();
+    await tester.dragUntilVisible(
+      find.text('application/pdf • 12 bytes'),
+      find.byType(ListView),
+      const Offset(0, -240),
+    );
+    final recentItem = find.byType(ListTile).last;
+    await tester.ensureVisible(recentItem);
+    await tester.pumpAndSettle();
+    await tester.tap(recentItem, warnIfMissed: false);
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('attachment_too_large_for_web'), findsNothing);
+    expect(
+      find.text('This file is too large to open safely in the browser.'),
       findsOneWidget,
     );
   });

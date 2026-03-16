@@ -16,6 +16,7 @@ const String _kApiChatPath = '/api/app/chat';
 const String _kApiVaultUsagePath = '/api/app/vault/usage';
 const String _kApiVaultAttachmentsPath = '/api/app/vault/attachments';
 const String _kApiVaultAttachmentPath = '/api/app/vault/attachment';
+const int _kMaxWebAttachmentBytes = 50 * 1024 * 1024;
 
 enum WebSubscriptionState {
   unknown,
@@ -134,6 +135,8 @@ abstract class WebAppService {
     required String sha256,
   }) async =>
       const <int>[];
+
+  void close() {}
 }
 
 class WebAppConfig {
@@ -168,9 +171,11 @@ class WebAppServiceHttp extends WebAppService {
     http.Client? client,
     Future<bool> Function(Uri url)? urlOpener,
   })  : _client = client ?? http.Client(),
+        _ownsClient = client == null,
         _urlOpener = urlOpener ?? _defaultUrlOpener;
 
   final http.Client _client;
+  final bool _ownsClient;
   final Future<bool> Function(Uri url) _urlOpener;
 
   static Future<bool> _defaultUrlOpener(Uri url) {
@@ -195,6 +200,13 @@ class WebAppServiceHttp extends WebAppService {
       if (client == null) {
         httpClient.close();
       }
+    }
+  }
+
+  @override
+  void close() {
+    if (_ownsClient) {
+      _client.close();
     }
   }
 
@@ -394,6 +406,9 @@ class WebAppServiceHttp extends WebAppService {
     required String mimeType,
     required List<int> bytes,
   }) async {
+    if (bytes.length > _kMaxWebAttachmentBytes) {
+      throw StateError('attachment_too_large_for_web');
+    }
     final sha256 = await _sha256Hex(bytes);
     final request = http.Request(
       'PUT',
@@ -402,7 +417,7 @@ class WebAppServiceHttp extends WebAppService {
     request.headers.addAll(<String, String>{
       'authorization': 'Bearer $idToken',
       'content-type': mimeType,
-      'x-file-name': fileName,
+      'x-file-name': Uri.encodeComponent(fileName),
       'x-file-size': '${bytes.length}',
       ..._vaultHeaders(vaultId),
     });
@@ -428,9 +443,20 @@ class WebAppServiceHttp extends WebAppService {
       ..._vaultHeaders(vaultId),
     });
     final streamed = await _client.send(request);
+    final contentLength = streamed.contentLength;
+    if (streamed.statusCode >= 200 &&
+        streamed.statusCode < 300 &&
+        contentLength != null &&
+        contentLength > _kMaxWebAttachmentBytes) {
+      await streamed.stream.drain<void>();
+      throw StateError('attachment_too_large_for_web');
+    }
     final response = await http.Response.fromStream(streamed);
     if (response.statusCode < 200 || response.statusCode >= 300) {
       _decodeJsonResponse(response);
+    }
+    if (response.bodyBytes.length > _kMaxWebAttachmentBytes) {
+      throw StateError('attachment_too_large_for_web');
     }
     return response.bodyBytes;
   }

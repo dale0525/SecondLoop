@@ -10,6 +10,9 @@ import '../core/subscription/creem_billing_client.dart';
 import '../core/cloud/cloud_auth_controller.dart';
 import 'web_app_service.dart';
 
+// Sentinel base URL for web-only settings clients. `.invalid` is reserved and
+// never resolves; every request using this base URL is intercepted inside
+// `WebFormalSettingsHttpClient.send` before any network call can happen.
 const String kWebFormalSettingsBaseUrl = 'https://web.secondloop.invalid/';
 
 final class WebAppBillingClient implements BillingClient {

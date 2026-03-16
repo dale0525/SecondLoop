@@ -6,7 +6,7 @@ import 'package:secondloop/web_app/web_app_gate.dart';
 import '../test_i18n.dart';
 
 class _FakeCloudAuthController extends ChangeNotifier
-    implements CloudAuthController, CloudPasswordRecoveryController {
+    implements ObservableCloudAuthController, CloudPasswordRecoveryController {
   _FakeCloudAuthController({
     this.initialUid,
     this.initialEmail,
