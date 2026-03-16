@@ -262,6 +262,7 @@ TaskPriorityAiRequest buildTaskPriorityAiRequest(
   final candidates = <TaskPriorityAiCandidate>[];
   for (final entry in snapshot.activeEntries) {
     if (candidates.length >= candidateLimit) break;
+    final reviewStage = entry.todo.reviewStage ?? 0;
     candidates.add(
       TaskPriorityAiCandidate(
         todoId: entry.todo.id,
@@ -285,8 +286,7 @@ TaskPriorityAiRequest buildTaskPriorityAiRequest(
         sourceSummary: entry.todo.sourceEntryId == null
             ? 'standalone task'
             : 'linked to a captured message',
-        isRepeatedlyDeferred:
-            entry.isSnoozed || ((entry.todo.reviewStage ?? 0) >= 2),
+        isRepeatedlyDeferred: reviewStage >= 2,
         isPotentialBlocker:
             entry.isInProgress || entry.isOverdue || entry.isDueToday,
         isQuickWin:

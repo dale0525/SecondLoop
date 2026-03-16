@@ -21,6 +21,8 @@ void main() {
     required int updatedAtMs,
     int? dueAtMs,
     String status = 'open',
+    int? reviewStage,
+    int? nextReviewAtMs,
   }) {
     return Todo(
       id: id,
@@ -30,11 +32,59 @@ void main() {
       sourceEntryId: null,
       createdAtMs: updatedAtMs,
       updatedAtMs: updatedAtMs,
-      reviewStage: null,
-      nextReviewAtMs: null,
+      reviewStage: reviewStage,
+      nextReviewAtMs: nextReviewAtMs,
       lastReviewAtMs: null,
     );
   }
+
+  test('initial review queue tasks are not marked repeatedly deferred', () {
+    final nowLocal = DateTime(2026, 3, 13, 10, 0);
+    final snapshot = buildTaskPrioritySnapshot(
+      <Todo>[
+        todo(
+          id: 't1',
+          title: '预约师傅修电视机',
+          updatedAtMs: 10,
+          reviewStage: 0,
+          nextReviewAtMs: nowLocal
+              .add(const Duration(days: 1))
+              .toUtc()
+              .millisecondsSinceEpoch,
+        ),
+      ],
+      nowLocal: nowLocal,
+    );
+
+    final request = buildTaskPriorityAiRequest(snapshot, nowLocal: nowLocal);
+
+    expect(request.candidates, hasLength(1));
+    expect(request.candidates.single.isRepeatedlyDeferred, isFalse);
+  });
+
+  test('high review stages still surface repeated deferral signal', () {
+    final nowLocal = DateTime(2026, 3, 13, 10, 0);
+    final snapshot = buildTaskPrioritySnapshot(
+      <Todo>[
+        todo(
+          id: 't1',
+          title: 'Eventually decide this',
+          updatedAtMs: 10,
+          reviewStage: 2,
+          nextReviewAtMs: nowLocal
+              .add(const Duration(days: 7))
+              .toUtc()
+              .millisecondsSinceEpoch,
+        ),
+      ],
+      nowLocal: nowLocal,
+    );
+
+    final request = buildTaskPriorityAiRequest(snapshot, nowLocal: nowLocal);
+
+    expect(request.candidates, hasLength(1));
+    expect(request.candidates.single.isRepeatedlyDeferred, isTrue);
+  });
 
   test('parser accepts structured JSON rerank output', () {
     final parsed = parseTaskPriorityAiBatchResult(
