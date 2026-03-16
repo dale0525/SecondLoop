@@ -307,6 +307,48 @@ void main() {
     });
   });
 
+  test('stop-after-drain preserves queued push when autoRunGate blocks', () {
+    fakeAsync((async) {
+      final runner = _BlockingPullRunner();
+      var allow = true;
+      final engine = SyncEngine(
+        syncRunner: runner,
+        loadConfig: () async => _webdavConfig(),
+        pushDebounce: const Duration(days: 1),
+        pullInterval: const Duration(days: 1),
+        pullJitter: Duration.zero,
+        pullOnStart: true,
+        autoRunGate: () async => allow,
+      );
+
+      engine.start();
+      async.flushMicrotasks();
+      expect(runner.pullCalls, 1);
+
+      engine.notifyLocalMutation();
+      engine.stop();
+
+      allow = false;
+      runner.completePull(applied: 0);
+      async.flushMicrotasks();
+
+      expect(runner.pushCalls, 0);
+      expect(engine.isRunning, isFalse);
+
+      allow = true;
+      engine.start();
+      async.flushMicrotasks();
+      expect(runner.pullCalls, 2);
+
+      runner.completePull(applied: 0);
+      async.flushMicrotasks();
+
+      expect(runner.pushCalls, 1);
+
+      engine.stop();
+    });
+  });
+
   test('does not notify zero-applied refresh when refresh_v2 is disabled', () {
     fakeAsync((async) {
       final runner = _HintPullRunner(

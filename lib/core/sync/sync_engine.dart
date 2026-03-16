@@ -254,8 +254,10 @@ final class SyncEngine {
     _drain();
   }
 
-  void _finishStop() {
-    _pushQueued = false;
+  void _finishStop({bool preserveQueuedPush = false}) {
+    if (!preserveQueuedPush) {
+      _pushQueued = false;
+    }
     _pullQueued = false;
     _running = false;
     _stopAfterDrain = false;
@@ -341,12 +343,16 @@ final class SyncEngine {
   }
 
   Future<void> _runQueue() async {
+    var preserveQueuedPushOnStop = false;
     try {
       while (_running && (_pullQueued || _pushQueued)) {
         final gate = autoRunGate;
         if (gate != null) {
           final allowed = await gate();
-          if (!allowed) return;
+          if (!allowed) {
+            preserveQueuedPushOnStop = _stopAfterDrain && _pushQueued;
+            return;
+          }
         }
         if (_pullQueued) {
           _pullQueued = false;
@@ -360,7 +366,7 @@ final class SyncEngine {
       }
     } finally {
       if (_stopAfterDrain) {
-        _finishStop();
+        _finishStop(preserveQueuedPush: preserveQueuedPushOnStop);
       }
     }
   }
