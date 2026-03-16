@@ -99,11 +99,7 @@ pub fn push_ops_only_with_progress(
 }
 
 fn remote_file_exists(remote: &impl RemoteStore, path: &str) -> Result<bool> {
-    match remote.get(path) {
-        Ok(_) => Ok(true),
-        Err(e) if e.is::<NotFound>() => Ok(false),
-        Err(e) => Err(e),
-    }
+    remote.exists(path)
 }
 
 fn local_attachment_sha256s(conn: &Connection) -> Result<Vec<String>> {

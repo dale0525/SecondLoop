@@ -42,6 +42,7 @@ mod push_progress_tests {
 
     struct CountingRemoteStore {
         inner: InMemoryRemoteStore,
+        exists_calls: AtomicUsize,
         list_calls: AtomicUsize,
         mkdir_calls: AtomicUsize,
         get_calls: AtomicUsize,
@@ -52,6 +53,7 @@ mod push_progress_tests {
         fn new() -> Self {
             Self {
                 inner: InMemoryRemoteStore::new(),
+                exists_calls: AtomicUsize::new(0),
                 list_calls: AtomicUsize::new(0),
                 mkdir_calls: AtomicUsize::new(0),
                 get_calls: AtomicUsize::new(0),
@@ -60,6 +62,7 @@ mod push_progress_tests {
         }
 
         fn reset_counts(&self) {
+            self.exists_calls.store(0, Ordering::Relaxed);
             self.list_calls.store(0, Ordering::Relaxed);
             self.mkdir_calls.store(0, Ordering::Relaxed);
             self.get_calls.store(0, Ordering::Relaxed);
@@ -67,7 +70,8 @@ mod push_progress_tests {
         }
 
         fn total_calls(&self) -> usize {
-            self.list_calls.load(Ordering::Relaxed)
+            self.exists_calls.load(Ordering::Relaxed)
+                + self.list_calls.load(Ordering::Relaxed)
                 + self.mkdir_calls.load(Ordering::Relaxed)
                 + self.get_calls.load(Ordering::Relaxed)
                 + self.put_calls.load(Ordering::Relaxed)
@@ -77,6 +81,11 @@ mod push_progress_tests {
     impl RemoteStore for CountingRemoteStore {
         fn target_id(&self) -> &str {
             self.inner.target_id()
+        }
+
+        fn exists(&self, path: &str) -> Result<bool> {
+            self.exists_calls.fetch_add(1, Ordering::Relaxed);
+            self.inner.exists(path)
         }
 
         fn mkdir_all(&self, path: &str) -> Result<()> {
@@ -221,6 +230,15 @@ mod push_progress_tests {
         assert_eq!(seen, vec![(0, 0)]);
         assert_eq!(remote.put_calls.load(Ordering::Relaxed), 0);
         assert_eq!(remote.mkdir_calls.load(Ordering::Relaxed), 0);
+        assert_eq!(
+            remote.get_calls.load(Ordering::Relaxed),
+            0,
+            "fresh device probe should not download remote bytes"
+        );
+        assert!(
+            remote.exists_calls.load(Ordering::Relaxed) > 0,
+            "fresh device probe should use lightweight existence checks"
+        );
         assert!(
             remote.total_calls() > 0,
             "fresh device skip path should only probe remote state"

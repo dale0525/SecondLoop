@@ -207,6 +207,19 @@ impl WebDavRemoteStore {
     pub fn ensure_dir_exists(&self, dir: &str) -> Result<()> {
         let dir = normalize_dir(dir);
 
+        if self.propfind_exists(&dir)? {
+            return Ok(());
+        }
+        Err(anyhow!("remote folder not found: {dir}"))
+    }
+
+    fn propfind_exists(&self, virtual_path: &str) -> Result<bool> {
+        let path = if virtual_path.ends_with('/') {
+            normalize_dir(virtual_path)
+        } else {
+            virtual_path.to_string()
+        };
+
         let mut headers = HeaderMap::new();
         headers.insert("Depth", HeaderValue::from_static("0"));
         headers.insert("Content-Type", HeaderValue::from_static("application/xml"));
@@ -221,13 +234,13 @@ impl WebDavRemoteStore {
 "#;
 
         let req = self
-            .request(Method::from_bytes(b"PROPFIND")?, &dir)?
+            .request(Method::from_bytes(b"PROPFIND")?, &path)?
             .headers(headers)
             .body(body);
         let resp = req.send()?;
 
         if resp.status().as_u16() == 404 {
-            return Err(anyhow!("remote folder not found: {dir}"));
+            return Ok(false);
         }
         if !resp.status().is_success() && resp.status().as_u16() != 207 {
             let status = resp.status();
@@ -235,7 +248,7 @@ impl WebDavRemoteStore {
             return Err(anyhow!("PROPFIND failed: HTTP {status} {body}"));
         }
 
-        Ok(())
+        Ok(true)
     }
 }
 
@@ -305,6 +318,29 @@ impl super::RemoteStore for WebDavRemoteStore {
 
         let bytes = resp.bytes()?.to_vec();
         parse_propfind_multistatus(&self.base_path, &dir, &bytes)
+    }
+
+    fn exists(&self, path: &str) -> Result<bool> {
+        let path = if path.ends_with('/') {
+            normalize_dir(path)
+        } else {
+            path.to_string()
+        };
+
+        let resp = self.request(Method::HEAD, &path)?.send()?;
+        let status = resp.status();
+        if status.as_u16() == 404 {
+            return Ok(false);
+        }
+        if status.is_success() {
+            return Ok(true);
+        }
+        if status.as_u16() == 405 || status.as_u16() == 501 {
+            return self.propfind_exists(&path);
+        }
+
+        let body = resp.text().unwrap_or_default();
+        Err(anyhow!("HEAD failed: HTTP {status} {body}"))
     }
 
     fn get(&self, path: &str) -> Result<Vec<u8>> {
