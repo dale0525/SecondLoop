@@ -195,7 +195,7 @@ final class SyncEngine {
     const SyncWriteGateState.open(),
   );
 
-  bool get isRunning => _running && !_stopAfterDrain;
+  bool get isRunning => _acceptsNewWork;
 
   bool _running = false;
   bool _stopAfterDrain = false;
@@ -228,7 +228,17 @@ final class SyncEngine {
     if (!_running || _stopAfterDrain) return;
 
     final hadPendingPush = _pushQueued || _pushDebounceTimer != null;
+    _cancelScheduledWork();
 
+    if (hadPendingPush) {
+      _queueFinalPushAndStopAfterDrain();
+      return;
+    }
+
+    _finishStop();
+  }
+
+  void _cancelScheduledWork() {
     _pushDebounceTimer?.cancel();
     _pushDebounceTimer = null;
 
@@ -236,15 +246,17 @@ final class SyncEngine {
     _pullTimer = null;
 
     _pullQueued = false;
+  }
 
-    if (hadPendingPush) {
-      _stopAfterDrain = true;
-      _pushQueued = true;
-      _drain();
-      return;
-    }
+  void _queueFinalPushAndStopAfterDrain() {
+    _stopAfterDrain = true;
+    _pushQueued = true;
+    _drain();
+  }
 
+  void _finishStop() {
     _pushQueued = false;
+    _pullQueued = false;
     _running = false;
     _stopAfterDrain = false;
   }
@@ -348,10 +360,7 @@ final class SyncEngine {
       }
     } finally {
       if (_stopAfterDrain) {
-        _pushQueued = false;
-        _pullQueued = false;
-        _running = false;
-        _stopAfterDrain = false;
+        _finishStop();
       }
     }
   }
