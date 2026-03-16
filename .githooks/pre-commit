@@ -305,15 +305,19 @@ run_i18n_analyze() {
 }
 
 ensure_i18n_generated() {
+  i18n_generated_now=0
+
   if [[ -f "lib/i18n/strings.g.dart" ]]; then
     return 0
   fi
 
   echo "pre-commit: lib/i18n/strings.g.dart missing; regenerating i18n outputs." >&2
   run_i18n_refresh
+  i18n_generated_now=1
 }
 
 check_mode=0
+i18n_generated_now=0
 scope_flutter=0
 scope_rust=0
 ci_mode=0
@@ -495,7 +499,9 @@ if (( check_mode )); then
 
   if (( scope_flutter )); then
     ensure_i18n_generated
-    run_i18n_refresh
+    if [[ ${i18n_generated_now} -eq 0 ]]; then
+      run_i18n_refresh
+    fi
     run_i18n_analyze
 
     if ! bash scripts/check_no_python_runtime.sh; then
