@@ -45,6 +45,7 @@ import 'attachment_text_source_policy.dart';
 import 'non_image_attachment_view.dart';
 import 'platform_pdf_ocr.dart';
 import 'video_keyframe_ocr_worker.dart';
+import 'web_media_processing_notice.dart';
 
 part 'attachment_viewer_page_image.dart';
 part 'attachment_viewer_page_ocr.dart';
@@ -56,11 +57,13 @@ class AttachmentViewerPage extends StatefulWidget {
   const AttachmentViewerPage({
     required this.attachment,
     this.cloudMediaDownload,
+    this.isWebOverride,
     super.key,
   });
 
   final Attachment attachment;
   final CloudMediaDownload? cloudMediaDownload;
+  final bool? isWebOverride;
 
   static Future<void> openBySha(
     BuildContext context, {
@@ -1078,6 +1081,7 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
                     onOcrLanguageHintsChanged: _updateDocumentOcrLanguageHints,
                     onSaveFull:
                         _canEditAttachmentText ? _saveAttachmentFull : null,
+                    isWebOverride: widget.isWebOverride,
                     actions: _buildWorkspaceActions(
                       bytes.isEmpty ? null : bytes,
                     ),

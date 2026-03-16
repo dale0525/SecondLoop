@@ -1,7 +1,10 @@
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
+
+import 'firebase_http_client_factory_stub.dart'
+    if (dart.library.io) 'firebase_http_client_factory_io.dart';
 
 @immutable
 class FirebaseAuthTokens {
@@ -71,13 +74,13 @@ abstract class FirebaseIdentityToolkit {
 final class FirebaseIdentityToolkitHttp implements FirebaseIdentityToolkit {
   FirebaseIdentityToolkitHttp({
     required this.webApiKey,
-    HttpClient? httpClient,
+    http.Client? httpClient,
     int Function()? nowMs,
-  })  : _httpClient = httpClient ?? HttpClient(),
+  })  : _httpClient = httpClient ?? createFirebasePlatformHttpClient(),
         _nowMs = nowMs ?? (() => DateTime.now().millisecondsSinceEpoch);
 
   final String webApiKey;
-  final HttpClient _httpClient;
+  final http.Client _httpClient;
   final int Function() _nowMs;
 
   Uri _accountsUri(String method) {
@@ -183,19 +186,14 @@ final class FirebaseIdentityToolkitHttp implements FirebaseIdentityToolkit {
     if (normalizedEmail != null && normalizedEmail.isNotEmpty) {
       payload['email'] = normalizedEmail;
     }
-    await _postJson(
-      _accountsUri('sendOobCode'),
-      payload,
-    );
+    await _postJson(_accountsUri('sendOobCode'), payload);
   }
 
   @override
   Future<FirebaseUserInfo> lookup({required String idToken}) async {
     final body = await _postJson(
       _accountsUri('lookup'),
-      {
-        'idToken': idToken,
-      },
+      {'idToken': idToken},
     );
 
     final users = body['users'];
@@ -245,22 +243,23 @@ final class FirebaseIdentityToolkitHttp implements FirebaseIdentityToolkit {
     Uri url,
     Map<String, dynamic> payload,
   ) async {
-    if (kIsWeb) throw UnsupportedError('Firebase auth is not supported on web');
     if (webApiKey.trim().isEmpty) {
       throw FirebaseAuthException('missing_web_api_key');
     }
 
-    final req = await _httpClient.postUrl(url);
-    req.headers.contentType = ContentType.json;
-    req.write(jsonEncode(payload));
+    final response = await _httpClient.post(
+      url,
+      headers: const <String, String>{
+        'content-type': 'application/json',
+        'accept': 'application/json',
+      },
+      body: jsonEncode(payload),
+    );
+    final decoded = _tryJsonDecodeObject(response.body) ?? <String, dynamic>{};
 
-    final resp = await req.close();
-    final text = await utf8.decodeStream(resp);
-    final decoded = _tryJsonDecodeObject(text) ?? <String, dynamic>{};
-
-    if (resp.statusCode < 200 || resp.statusCode >= 300) {
+    if (response.statusCode < 200 || response.statusCode >= 300) {
       throw FirebaseAuthException(
-        _extractErrorCode(decoded) ?? 'http_${resp.statusCode}',
+        _extractErrorCode(decoded) ?? 'http_${response.statusCode}',
         details: _extractErrorMessage(decoded),
       );
     }
@@ -269,27 +268,26 @@ final class FirebaseIdentityToolkitHttp implements FirebaseIdentityToolkit {
   }
 
   Future<Map<String, dynamic>> _postForm(
-      Uri url, Map<String, String> form) async {
-    if (kIsWeb) throw UnsupportedError('Firebase auth is not supported on web');
+    Uri url,
+    Map<String, String> form,
+  ) async {
     if (webApiKey.trim().isEmpty) {
       throw FirebaseAuthException('missing_web_api_key');
     }
 
-    final req = await _httpClient.postUrl(url);
-    req.headers.contentType = ContentType(
-      'application',
-      'x-www-form-urlencoded',
-      charset: 'utf-8',
+    final response = await _httpClient.post(
+      url,
+      headers: const <String, String>{
+        'content-type': 'application/x-www-form-urlencoded; charset=utf-8',
+        'accept': 'application/json',
+      },
+      body: form,
     );
-    req.write(Uri(queryParameters: form).query);
+    final decoded = _tryJsonDecodeObject(response.body) ?? <String, dynamic>{};
 
-    final resp = await req.close();
-    final text = await utf8.decodeStream(resp);
-    final decoded = _tryJsonDecodeObject(text) ?? <String, dynamic>{};
-
-    if (resp.statusCode < 200 || resp.statusCode >= 300) {
+    if (response.statusCode < 200 || response.statusCode >= 300) {
       throw FirebaseAuthException(
-        _extractErrorCode(decoded) ?? 'http_${resp.statusCode}',
+        _extractErrorCode(decoded) ?? 'http_${response.statusCode}',
         details: _extractErrorMessage(decoded),
       );
     }

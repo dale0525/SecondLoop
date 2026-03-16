@@ -206,6 +206,58 @@ void main() {
   });
 
   testWidgets(
+      'AttachmentViewerPage shows continue-in-app text for readonly web video when remote preview is unavailable',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({
+      'sync_config_plain_json_v1': jsonEncode({
+        SyncConfigStore.kBackendType: 'webdav',
+        SyncConfigStore.kRemoteRoot: 'SecondLoopTest',
+        SyncConfigStore.kWebdavBaseUrl: 'https://example.com/webdav',
+        SyncConfigStore.kSyncKeyB64: base64Encode(List<int>.filled(32, 7)),
+      }),
+    });
+
+    final backend = _FakeBackend()
+      ..syncDownloadError = StateError('managed-vault attachment not found');
+    const attachment = Attachment(
+      sha256: 'video-deadbeef',
+      mimeType: 'video/mp4',
+      path: 'attachments/video-deadbeef.bin',
+      byteLen: 4,
+      createdAtMs: 0,
+    );
+    final downloader = CloudMediaDownload(
+      networkProvider: () async => CloudMediaBackupNetwork.wifi,
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        SessionScope(
+          sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+          lock: () {},
+          child: AppBackendScope(
+            backend: backend,
+            child: MaterialApp(
+              home: AttachmentViewerPage(
+                attachment: attachment,
+                cloudMediaDownload: downloader,
+                isWebOverride: true,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 200));
+
+    expect(
+        find.textContaining('Continue processing in the app'), findsOneWidget);
+    expect(find.text('Preview unavailable'), findsNothing);
+  });
+
+  testWidgets(
       'AttachmentViewerPage shows sign-in-required text for managed vault auth failures',
       (tester) async {
     SharedPreferences.setMockInitialValues({

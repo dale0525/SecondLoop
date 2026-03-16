@@ -180,6 +180,76 @@ typedef AskAiStreamCloudGatewayScopedFn = Stream<String> Function({
   required String modelName,
 });
 
+Stream<String> _ragAskAiStreamScopedCompat({
+  required String appDir,
+  required List<int> key,
+  required String conversationId,
+  required String question,
+  required int topK,
+  required bool thisThreadOnly,
+  int? timeStartMs,
+  int? timeEndMs,
+  required List<String> includeTagIds,
+  required List<String> excludeTagIds,
+  required bool strictMode,
+  required String localeLanguage,
+  required String localDay,
+}) {
+  return rust_ask_scope.ragAskAiStreamScoped(
+    appDir: appDir,
+    key: key,
+    conversationId: conversationId,
+    question: question,
+    topK: topK,
+    thisThreadOnly: thisThreadOnly,
+    timeStartMs:
+        timeStartMs == null ? null : PlatformInt64Util.from(timeStartMs),
+    timeEndMs: timeEndMs == null ? null : PlatformInt64Util.from(timeEndMs),
+    includeTagIds: includeTagIds,
+    excludeTagIds: excludeTagIds,
+    strictMode: strictMode,
+    localeLanguage: localeLanguage,
+    localDay: localDay,
+  );
+}
+
+Stream<String> _ragAskAiStreamCloudGatewayScopedCompat({
+  required String appDir,
+  required List<int> key,
+  required String conversationId,
+  required String question,
+  required int topK,
+  required bool thisThreadOnly,
+  int? timeStartMs,
+  int? timeEndMs,
+  required List<String> includeTagIds,
+  required List<String> excludeTagIds,
+  required bool strictMode,
+  required String localeLanguage,
+  required String gatewayBaseUrl,
+  required String firebaseIdToken,
+  required String modelName,
+}) {
+  return rust_ask_scope.ragAskAiStreamCloudGatewayScoped(
+    appDir: appDir,
+    key: key,
+    conversationId: conversationId,
+    question: question,
+    topK: topK,
+    thisThreadOnly: thisThreadOnly,
+    timeStartMs:
+        timeStartMs == null ? null : PlatformInt64Util.from(timeStartMs),
+    timeEndMs: timeEndMs == null ? null : PlatformInt64Util.from(timeEndMs),
+    includeTagIds: includeTagIds,
+    excludeTagIds: excludeTagIds,
+    strictMode: strictMode,
+    localeLanguage: localeLanguage,
+    gatewayBaseUrl: gatewayBaseUrl,
+    firebaseIdToken: firebaseIdToken,
+    modelName: modelName,
+  );
+}
+
 class NativeAppBackend
     implements
         AppBackend,
@@ -220,10 +290,9 @@ class NativeAppBackend
         _dbReleaseLocalEmbeddingModelIfIdle =
             dbReleaseLocalEmbeddingModelIfIdle ??
                 rust_embedding_lifecycle.dbReleaseLocalEmbeddingModelIfIdle,
-        _askAiStreamScoped =
-            askAiStreamScopedFn ?? rust_ask_scope.ragAskAiStreamScoped,
+        _askAiStreamScoped = askAiStreamScopedFn ?? _ragAskAiStreamScopedCompat,
         _askAiStreamCloudGatewayScoped = askAiStreamCloudGatewayScopedFn ??
-            rust_ask_scope.ragAskAiStreamCloudGatewayScoped,
+            _ragAskAiStreamCloudGatewayScopedCompat,
         _dbCreateTodoChecklistItem =
             dbCreateTodoChecklistItem ?? rust_core.dbCreateTodoChecklistItem,
         _dbListTodoChecklistItems =
@@ -520,7 +589,9 @@ class NativeAppBackend
       appDir: appDir,
       key: key,
       conversationId: conversationId,
-      beforeCreatedAtMs: beforeCreatedAtMs,
+      beforeCreatedAtMs: beforeCreatedAtMs == null
+          ? null
+          : PlatformInt64Util.from(beforeCreatedAtMs),
       beforeId: beforeId,
       limit: limit,
     );
@@ -573,7 +644,7 @@ class NativeAppBackend
       rootSha256: rootSha256,
       childSha256: childSha256,
       role: role,
-      createdAtMs: createdAtMs,
+      createdAtMs: PlatformInt64Util.from(createdAtMs),
     );
   }
 
@@ -989,8 +1060,8 @@ class NativeAppBackend
     return rust_core.dbListTodosCreatedInRange(
       appDir: appDir,
       key: key,
-      startAtMsInclusive: startAtMsInclusive,
-      endAtMsExclusive: endAtMsExclusive,
+      startAtMsInclusive: PlatformInt64Util.from(startAtMsInclusive),
+      endAtMsExclusive: PlatformInt64Util.from(endAtMsExclusive),
     );
   }
 
@@ -1012,12 +1083,17 @@ class NativeAppBackend
       key: key,
       id: id,
       title: title,
-      dueAtMs: dueAtMs,
+      dueAtMs: dueAtMs == null ? null : PlatformInt64Util.from(dueAtMs),
       status: status,
       sourceEntryId: sourceEntryId,
-      reviewStage: reviewStage,
-      nextReviewAtMs: nextReviewAtMs,
-      lastReviewAtMs: lastReviewAtMs,
+      reviewStage:
+          reviewStage == null ? null : PlatformInt64Util.from(reviewStage),
+      nextReviewAtMs: nextReviewAtMs == null
+          ? null
+          : PlatformInt64Util.from(nextReviewAtMs),
+      lastReviewAtMs: lastReviewAtMs == null
+          ? null
+          : PlatformInt64Util.from(lastReviewAtMs),
     );
   }
 
@@ -1069,7 +1145,7 @@ class NativeAppBackend
       appDir: appDir,
       key: key,
       todoId: todoId,
-      dueAtMs: dueAtMs,
+      dueAtMs: PlatformInt64Util.from(dueAtMs),
       scope: scope.wireValue,
     );
   }
@@ -1354,8 +1430,8 @@ class NativeAppBackend
     return rust_core.dbListTodoActivitiesInRange(
       appDir: appDir,
       key: key,
-      startAtMsInclusive: startAtMsInclusive,
-      endAtMsExclusive: endAtMsExclusive,
+      startAtMsInclusive: PlatformInt64Util.from(startAtMsInclusive),
+      endAtMsExclusive: PlatformInt64Util.from(endAtMsExclusive),
     );
   }
 
@@ -1409,8 +1485,8 @@ class NativeAppBackend
       key: key,
       id: id,
       title: title,
-      startAtMs: startAtMs,
-      endAtMs: endAtMs,
+      startAtMs: PlatformInt64Util.from(startAtMs),
+      endAtMs: PlatformInt64Util.from(endAtMs),
       tz: tz,
       sourceEntryId: sourceEntryId,
     );
@@ -1816,8 +1892,8 @@ class NativeAppBackend
       question: question,
       topK: topK,
       thisThreadOnly: thisThreadOnly,
-      timeStartMs: timeStartMs,
-      timeEndMs: timeEndMs,
+      timeStartMs: PlatformInt64Util.from(timeStartMs),
+      timeEndMs: PlatformInt64Util.from(timeEndMs),
       localDay: localDay,
     );
   }
@@ -1862,8 +1938,8 @@ class NativeAppBackend
       question: question,
       topK: topK,
       thisThreadOnly: thisThreadOnly,
-      timeStartMs: timeStartMs,
-      timeEndMs: timeEndMs,
+      timeStartMs: PlatformInt64Util.from(timeStartMs),
+      timeEndMs: PlatformInt64Util.from(timeEndMs),
       localDay: localDay,
     );
   }
@@ -1914,8 +1990,8 @@ class NativeAppBackend
       question: question,
       topK: topK,
       thisThreadOnly: thisThreadOnly,
-      timeStartMs: timeStartMs,
-      timeEndMs: timeEndMs,
+      timeStartMs: PlatformInt64Util.from(timeStartMs),
+      timeEndMs: PlatformInt64Util.from(timeEndMs),
       gatewayBaseUrl: gatewayBaseUrl,
       firebaseIdToken: idToken,
       modelName: modelName,
@@ -1971,8 +2047,8 @@ class NativeAppBackend
       question: question,
       topK: topK,
       thisThreadOnly: thisThreadOnly,
-      timeStartMs: timeStartMs,
-      timeEndMs: timeEndMs,
+      timeStartMs: PlatformInt64Util.from(timeStartMs),
+      timeEndMs: PlatformInt64Util.from(timeEndMs),
       gatewayBaseUrl: gatewayBaseUrl,
       firebaseIdToken: idToken,
       modelName: modelName,
@@ -3052,7 +3128,7 @@ class NativeAppBackend
       key: key,
       attachmentSha256: attachmentSha256,
       desiredVariant: desiredVariant,
-      nowMs: nowMs,
+      nowMs: PlatformInt64Util.from(nowMs),
     );
   }
 
@@ -3067,7 +3143,7 @@ class NativeAppBackend
       appDir: appDir,
       key: key,
       desiredVariant: desiredVariant,
-      nowMs: nowMs,
+      nowMs: PlatformInt64Util.from(nowMs),
     );
     return affected.toInt();
   }
@@ -3082,7 +3158,7 @@ class NativeAppBackend
     return rust_core.dbListDueCloudMediaBackups(
       appDir: appDir,
       key: key,
-      nowMs: nowMs,
+      nowMs: PlatformInt64Util.from(nowMs),
       limit: limit,
     );
   }
@@ -3101,10 +3177,10 @@ class NativeAppBackend
       appDir: appDir,
       key: key,
       attachmentSha256: attachmentSha256,
-      attempts: attempts,
-      nextRetryAtMs: nextRetryAtMs,
+      attempts: PlatformInt64Util.from(attempts),
+      nextRetryAtMs: PlatformInt64Util.from(nextRetryAtMs),
       lastError: lastError,
-      nowMs: nowMs,
+      nowMs: PlatformInt64Util.from(nowMs),
     );
   }
 
@@ -3119,7 +3195,7 @@ class NativeAppBackend
       appDir: appDir,
       key: key,
       attachmentSha256: attachmentSha256,
-      nowMs: nowMs,
+      nowMs: PlatformInt64Util.from(nowMs),
     );
   }
 

@@ -1,10 +1,10 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
 
 import 'package:secondloop/core/ai/ai_routing.dart';
 import 'package:secondloop/core/cloud/cloud_auth_controller.dart';
@@ -274,85 +274,21 @@ final class _FakeBillingClient implements BillingClient {
   }
 }
 
-final class _FakeHttpClient implements HttpClient {
+final class _FakeHttpClient extends http.BaseClient {
   _FakeHttpClient({required this.statusCode, required this.body});
 
   final int statusCode;
   final String body;
 
   @override
-  Future<HttpClientRequest> getUrl(Uri url) async {
-    return _FakeHttpClientRequest(
-      response: _FakeHttpClientResponse(
-        statusCode: statusCode,
-        body: body,
-      ),
+  Future<http.StreamedResponse> send(http.BaseRequest request) async {
+    return http.StreamedResponse(
+      Stream<List<int>>.fromIterable([utf8.encode(body)]),
+      statusCode,
+      request: request,
+      headers: const <String, String>{
+        'content-type': 'application/json',
+      },
     );
   }
-
-  @override
-  void close({bool force = false}) {}
-
-  @override
-  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
-}
-
-final class _FakeHttpClientRequest implements HttpClientRequest {
-  _FakeHttpClientRequest({required this.response});
-
-  final HttpClientResponse response;
-
-  @override
-  final HttpHeaders headers = _FakeHttpHeaders();
-
-  @override
-  Future<HttpClientResponse> close() async => response;
-
-  @override
-  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
-}
-
-final class _FakeHttpClientResponse extends Stream<List<int>>
-    implements HttpClientResponse {
-  _FakeHttpClientResponse({required this.statusCode, required this.body})
-      : _stream = Stream<List<int>>.fromIterable([
-          utf8.encode(body),
-        ]);
-
-  final Stream<List<int>> _stream;
-
-  @override
-  final int statusCode;
-
-  final String body;
-
-  @override
-  StreamSubscription<List<int>> listen(
-    void Function(List<int> event)? onData, {
-    Function? onError,
-    void Function()? onDone,
-    bool? cancelOnError,
-  }) {
-    return _stream.listen(
-      onData,
-      onError: onError,
-      onDone: onDone,
-      cancelOnError: cancelOnError,
-    );
-  }
-
-  @override
-  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
-}
-
-final class _FakeHttpHeaders implements HttpHeaders {
-  @override
-  void set(
-    String name,
-    Object value, {
-    bool preserveHeaderCase = false,
-  }) {}
-
-  @override
-  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }

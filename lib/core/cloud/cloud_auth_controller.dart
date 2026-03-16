@@ -29,6 +29,9 @@ abstract class CloudAuthController {
   Future<void> signOut();
 }
 
+abstract class ObservableCloudAuthController
+    implements CloudAuthController, Listenable {}
+
 abstract class CloudPasswordRecoveryController {
   Future<void> sendPasswordResetEmail({
     required String email,
@@ -57,7 +60,7 @@ Future<String?> readCloudIdTokenForBackground(CloudAuthController? controller) {
 }
 
 final class CloudAuthControllerImpl extends ChangeNotifier
-    implements CloudAuthController, CloudPasswordRecoveryController {
+    implements ObservableCloudAuthController, CloudPasswordRecoveryController {
   CloudAuthControllerImpl({
     required FirebaseIdentityToolkit identityToolkit,
     CloudAuthStore? store,

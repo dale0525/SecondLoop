@@ -1,3 +1,6 @@
+import 'package:flutter/material.dart';
+
+import '../../i18n/strings.g.dart';
 import 'cloud_media_download.dart';
 
 enum CloudMediaDownloadUiError {
@@ -48,4 +51,26 @@ CloudMediaDownloadFailureReason? cloudMediaDownloadFailureReasonFromError(
   }
 
   return null;
+}
+
+String cloudMediaDownloadUiMessage(
+  BuildContext context,
+  CloudMediaDownloadUiError error, {
+  required bool isWeb,
+  required bool isReadonlyMedia,
+}) {
+  if (error == CloudMediaDownloadUiError.previewUnavailable &&
+      isWeb &&
+      isReadonlyMedia) {
+    return context.t.app.web.mediaProcessing.title;
+  }
+
+  return switch (error) {
+    CloudMediaDownloadUiError.wifiOnlyBlocked =>
+      context.t.sync.mediaPreview.chatThumbnailsWifiOnlyTitle,
+    CloudMediaDownloadUiError.signInRequired =>
+      context.t.sync.cloudManagedVault.signInRequired,
+    CloudMediaDownloadUiError.previewUnavailable =>
+      context.t.attachments.content.previewUnavailable,
+  };
 }

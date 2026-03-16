@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+import '../../core/ai/ai_routing.dart';
 import '../../core/backend/app_backend.dart';
 import '../../core/backend/attachments_backend.dart';
 import '../../core/cloud/cloud_auth_access.dart';
@@ -13,6 +14,7 @@ import '../../core/session/session_scope.dart';
 import '../../core/sync/sync_config_store.dart';
 import '../../core/sync/sync_engine_gate.dart';
 import '../../features/attachments/attachment_viewer_page.dart';
+import '../../features/attachments/web_media_processing_notice.dart';
 import '../../i18n/strings.g.dart';
 import '../../src/rust/db.dart';
 import '../../ui/sl_delete_confirm_dialog.dart';
@@ -63,6 +65,27 @@ String _attachmentUsageSubtitle(
     _formatTimestamp(context, item.uploadedAtMs ?? item.createdAtMs),
   ];
   return parts.join(' • ');
+}
+
+String _formatVaultUsageError(BuildContext context, Object error) {
+  final status = parseHttpStatusFromError(error);
+  final code = parseCloudErrorCodeFromError(error);
+  if (status == 402 || code == 'payment_required') {
+    return context.t.sync.cloudManagedVault.paymentRequired;
+  }
+  if (status == 403 && code == 'email_not_verified') {
+    return context.t.chat.cloudGateway.emailNotVerified;
+  }
+  if (status == 403 && code == 'storage_quota_exceeded') {
+    return context.t.sync.cloudManagedVault.storageQuotaExceeded;
+  }
+  if (status == 429) {
+    return context.t.chat.cloudGateway.errors.rateLimited;
+  }
+  if (status != null && status >= 500) {
+    return context.t.sync.cloudManagedVault.serverUnavailable;
+  }
+  return '$error';
 }
 
 String _attachmentUsageTileKey(VaultAttachmentUsageItem item) {
@@ -144,14 +167,16 @@ class VaultAttachmentUsageListView extends StatelessWidget {
     super.key,
     required this.items,
     required this.deletingSha,
+    this.isWebOverride,
     required this.onOpen,
     required this.onDelete,
   });
 
   final List<VaultAttachmentUsageItem> items;
   final String? deletingSha;
+  final bool? isWebOverride;
   final ValueChanged<VaultAttachmentUsageItem> onOpen;
-  final ValueChanged<VaultAttachmentUsageItem> onDelete;
+  final ValueChanged<VaultAttachmentUsageItem>? onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -181,20 +206,42 @@ class VaultAttachmentUsageListView extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
             ),
             onTap: () => onOpen(item),
-            trailing: deletingSha == item.primarySha256
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : IconButton(
-                    key: ValueKey(
-                      'vault_usage_attachment_delete_${item.primarySha256}',
+            trailing: () {
+              final showWebOnlyHint = isWebOverride ?? kIsWeb;
+              final needsAppProcessing = showWebOnlyHint &&
+                  (item.isGroupedVideo ||
+                      needsAppProcessingInWeb(item.mimeType));
+              final deleteAction = deletingSha == item.primarySha256
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : IconButton(
+                      key: ValueKey(
+                        'vault_usage_attachment_delete_${item.primarySha256}',
+                      ),
+                      tooltip: context.t.common.actions.delete,
+                      icon: const Icon(Icons.delete_outline_rounded),
+                      onPressed: deletingSha != null || onDelete == null
+                          ? null
+                          : () => onDelete!(item),
+                    );
+              if (!needsAppProcessing) return deleteAction;
+              return Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.only(right: 4),
+                    child: Text(
+                      context.t.app.web.common.actions.continueInApp,
+                      style: Theme.of(context).textTheme.labelSmall,
                     ),
-                    tooltip: context.t.common.actions.delete,
-                    icon: const Icon(Icons.delete_outline_rounded),
-                    onPressed: () => onDelete(item),
                   ),
+                  deleteAction,
+                ],
+              );
+            }(),
           ),
       ],
     );
@@ -207,24 +254,29 @@ class VaultUsageCard extends StatefulWidget {
     this.client,
     this.attachmentsClient,
     this.configStore,
+    this.isWebOverride,
   });
 
   final VaultUsageClient? client;
   final VaultAttachmentsClient? attachmentsClient;
   final SyncConfigStore? configStore;
+  final bool? isWebOverride;
 
   @override
   State<VaultUsageCard> createState() => _VaultUsageCardState();
 }
 
 class _VaultUsageCardState extends State<VaultUsageCard> {
-  late final VaultUsageClient _usageClient =
-      widget.client ?? VaultUsageClient();
-  late final VaultAttachmentsClient _attachmentsClient =
-      widget.attachmentsClient ?? VaultAttachmentsClient();
-  late final SyncConfigStore _store = widget.configStore ?? SyncConfigStore();
+  late VaultUsageClient _usageClient;
+  late VaultAttachmentsClient _attachmentsClient;
+  late SyncConfigStore _store;
+  var _ownsUsageClient = false;
+  var _ownsAttachmentsClient = false;
+  final Set<int> _activeRefreshTokens = <int>{};
+  int _refreshEpoch = 0;
 
-  bool _busy = false;
+  bool get _busy => _activeRefreshTokens.isNotEmpty;
+  String? _resolvedVaultBaseUrl;
   VaultUsageSummary? _summary;
   Object? _summaryError;
 
@@ -239,9 +291,93 @@ class _VaultUsageCardState extends State<VaultUsageCard> {
   Map<String, String> _localMessageIdByAttachmentSha = <String, String>{};
 
   @override
+  void initState() {
+    super.initState();
+    _replaceDependencies(
+      client: widget.client,
+      attachmentsClient: widget.attachmentsClient,
+      configStore: widget.configStore,
+    );
+  }
+
+  @override
+  void didUpdateWidget(covariant VaultUsageCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.client != widget.client ||
+        oldWidget.attachmentsClient != widget.attachmentsClient ||
+        oldWidget.configStore != widget.configStore) {
+      _disposeOwnedClients();
+      _replaceDependencies(
+        client: widget.client,
+        attachmentsClient: widget.attachmentsClient,
+        configStore: widget.configStore,
+      );
+      _resetLoadedState(resetBaseUrl: true, invalidateRefreshes: true);
+      if (_uid != null) {
+        unawaited(_refresh());
+      }
+    }
+  }
+
+  void _replaceDependencies({
+    required VaultUsageClient? client,
+    required VaultAttachmentsClient? attachmentsClient,
+    required SyncConfigStore? configStore,
+  }) {
+    _usageClient = client ?? VaultUsageClient();
+    _attachmentsClient = attachmentsClient ?? VaultAttachmentsClient();
+    _store = configStore ?? SyncConfigStore();
+    _ownsUsageClient = client == null;
+    _ownsAttachmentsClient = attachmentsClient == null;
+  }
+
+  void _disposeOwnedClients() {
+    if (_ownsUsageClient) {
+      _usageClient.dispose();
+    }
+    if (_ownsAttachmentsClient) {
+      _attachmentsClient.dispose();
+    }
+  }
+
+  void _resetLoadedState({
+    bool resetBaseUrl = false,
+    bool invalidateRefreshes = false,
+  }) {
+    if (invalidateRefreshes) {
+      _refreshEpoch += 1;
+      _activeRefreshTokens.clear();
+    }
+    _summary = null;
+    _summaryError = null;
+    _attachmentUsage = null;
+    _attachmentError = null;
+    if (resetBaseUrl) {
+      _resolvedVaultBaseUrl = null;
+    }
+  }
+
+  void _markRefreshStarted(int refreshEpoch) {
+    if (_activeRefreshTokens.contains(refreshEpoch)) return;
+    if (!mounted) {
+      _activeRefreshTokens.add(refreshEpoch);
+      return;
+    }
+    setState(() => _activeRefreshTokens.add(refreshEpoch));
+  }
+
+  void _markRefreshFinished(int refreshEpoch) {
+    if (!_activeRefreshTokens.contains(refreshEpoch)) return;
+    if (!mounted) {
+      _activeRefreshTokens.remove(refreshEpoch);
+      return;
+    }
+    setState(() => _activeRefreshTokens.remove(refreshEpoch));
+  }
+
+  @override
   void dispose() {
-    if (widget.client == null) _usageClient.dispose();
-    if (widget.attachmentsClient == null) _attachmentsClient.dispose();
+    _disposeOwnedClients();
     super.dispose();
   }
 
@@ -274,6 +410,24 @@ class _VaultUsageCardState extends State<VaultUsageCard> {
       baseUrl: baseUrl,
       idToken: token,
     );
+  }
+
+  void _scheduleVaultBaseUrlSync(String baseUrl, {required String? uid}) {
+    final normalizedBaseUrl = baseUrl.trim();
+    if (_resolvedVaultBaseUrl == normalizedBaseUrl) return;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _resolvedVaultBaseUrl == normalizedBaseUrl) return;
+      setState(() {
+        _resolvedVaultBaseUrl = normalizedBaseUrl;
+        _resetLoadedState(invalidateRefreshes: true);
+      });
+      if (uid != null &&
+          uid.trim().isNotEmpty &&
+          normalizedBaseUrl.isNotEmpty) {
+        unawaited(_refresh());
+      }
+    });
   }
 
   Future<void> _rebuildAttachmentReferenceIndex() async {
@@ -368,12 +522,10 @@ class _VaultUsageCardState extends State<VaultUsageCard> {
   }
 
   Future<void> _refresh() async {
-    if (_busy) return;
-
     final auth = await _resolveManagedVaultAuth();
     if (auth == null) return;
-
-    setState(() => _busy = true);
+    final refreshEpoch = ++_refreshEpoch;
+    _markRefreshStarted(refreshEpoch);
 
     VaultUsageSummary? nextSummary;
     Object? nextSummaryError;
@@ -407,16 +559,21 @@ class _VaultUsageCardState extends State<VaultUsageCard> {
       nextAttachmentError = e;
     }
 
-    if (!mounted) return;
-    setState(() {
-      _summary = nextSummary;
-      _summaryError = nextSummaryError;
-      _attachmentUsage = nextAttachmentUsage;
-      _attachmentError = nextAttachmentError;
-      _busy = false;
-    });
+    final shouldApply = mounted && refreshEpoch == _refreshEpoch;
+    if (shouldApply) {
+      setState(() {
+        _summary = nextSummary;
+        _summaryError = nextSummaryError;
+        _attachmentUsage = nextAttachmentUsage;
+        _attachmentError = nextAttachmentError;
+      });
+    }
 
-    if (nextAttachmentUsage != null && nextAttachmentUsage.items.isNotEmpty) {
+    _markRefreshFinished(refreshEpoch);
+
+    if (shouldApply &&
+        nextAttachmentUsage != null &&
+        nextAttachmentUsage.items.isNotEmpty) {
       unawaited(_rebuildAttachmentReferenceIndex());
     }
   }
@@ -502,7 +659,11 @@ class _VaultUsageCardState extends State<VaultUsageCard> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(context.t.chat.deleteFailed(error: '$e')),
+          content: Text(
+            context.t.chat.deleteFailed(
+              error: _formatVaultUsageError(context, e),
+            ),
+          ),
           duration: const Duration(seconds: 3),
         ),
       );
@@ -518,15 +679,11 @@ class _VaultUsageCardState extends State<VaultUsageCard> {
     final scope = CloudAuthScope.maybeOf(context);
     if (scope == null) return const SizedBox.shrink();
 
-    final vaultBaseUrl = _store.resolveManagedVaultBaseUrl;
     final uid = scope.controller.uid;
 
     if (uid != _uid) {
       _uid = uid;
-      _summary = null;
-      _summaryError = null;
-      _attachmentUsage = null;
-      _attachmentError = null;
+      _resetLoadedState(invalidateRefreshes: true);
       _localAttachmentBySha = <String, Attachment>{};
       _localMessageIdByAttachmentSha = <String, String>{};
       if (uid != null) {
@@ -535,10 +692,17 @@ class _VaultUsageCardState extends State<VaultUsageCard> {
     }
 
     final body = FutureBuilder<String?>(
-      future: vaultBaseUrl(),
+      future: _store.resolveManagedVaultBaseUrl(),
+      initialData: _resolvedVaultBaseUrl,
       builder: (context, snapshot) {
-        final baseUrl = snapshot.data ?? '';
-        if (baseUrl.trim().isEmpty) {
+        final baseUrl = (snapshot.data ?? _resolvedVaultBaseUrl ?? '').trim();
+        _scheduleVaultBaseUrlSync(baseUrl, uid: uid);
+
+        if (snapshot.connectionState != ConnectionState.done &&
+            _resolvedVaultBaseUrl == null) {
+          return const SizedBox.shrink();
+        }
+        if (baseUrl.isEmpty) {
           return Text(context.t.settings.vaultUsage.labels.notConfigured);
         }
         if (uid == null) {
@@ -558,8 +722,9 @@ class _VaultUsageCardState extends State<VaultUsageCard> {
           children: [
             if (_summaryError != null)
               Text(
-                context.t.settings.vaultUsage.labels
-                    .loadFailed(error: '$_summaryError'),
+                context.t.settings.vaultUsage.labels.loadFailed(
+                  error: _formatVaultUsageError(context, _summaryError!),
+                ),
               )
             else if (_summary != null)
               VaultUsageSummaryView(summary: _summary!),
@@ -571,13 +736,15 @@ class _VaultUsageCardState extends State<VaultUsageCard> {
             const SizedBox(height: 8),
             if (_attachmentError != null)
               Text(
-                context.t.settings.vaultUsage.labels
-                    .loadFailed(error: '$_attachmentError'),
+                context.t.settings.vaultUsage.labels.loadFailed(
+                  error: _formatVaultUsageError(context, _attachmentError!),
+                ),
               )
             else if (_attachmentUsage != null)
               VaultAttachmentUsageListView(
                 items: _attachmentUsage!.items,
                 deletingSha: _deletingAttachmentSha,
+                isWebOverride: widget.isWebOverride,
                 onOpen: (item) => unawaited(_openAttachmentDetails(item)),
                 onDelete: (item) => unawaited(_deleteAttachment(item)),
               )
@@ -616,7 +783,17 @@ class _VaultUsageCardState extends State<VaultUsageCard> {
               ),
               IconButton(
                 key: const ValueKey('vault_usage_refresh'),
-                onPressed: _busy ? null : _refresh,
+                onPressed: _busy
+                    ? null
+                    : () async {
+                        final baseUrl =
+                            (await _store.resolveManagedVaultBaseUrl())
+                                    ?.trim() ??
+                                '';
+                        if (!mounted) return;
+                        setState(() => _resolvedVaultBaseUrl = baseUrl);
+                        await _refresh();
+                      },
                 icon: const Icon(Icons.refresh),
                 tooltip: context.t.settings.vaultUsage.actions.refresh,
               ),

@@ -23,6 +23,7 @@ import 'video_keyframe_ocr_worker.dart';
 export 'video_manifest_insight_content.dart'
     show VideoManifestInsightContent, resolveVideoManifestInsightContent;
 import 'video_proxy_open_helper.dart';
+import 'web_media_processing_notice.dart';
 
 String fileExtensionForSystemOpenMimeType(String mimeType) {
   final normalized = mimeType.trim().toLowerCase();
@@ -202,6 +203,7 @@ class NonImageAttachmentView extends StatefulWidget {
     this.ocrLanguageHints = 'device_plus_en',
     this.onOcrLanguageHintsChanged,
     this.onSaveFull,
+    this.isWebOverride,
     this.actions = const <AttachmentDetailAction>[],
     super.key,
   });
@@ -221,6 +223,7 @@ class NonImageAttachmentView extends StatefulWidget {
   final String ocrLanguageHints;
   final ValueChanged<String>? onOcrLanguageHintsChanged;
   final Future<void> Function(String value)? onSaveFull;
+  final bool? isWebOverride;
   final List<AttachmentDetailAction> actions;
 
   @override
@@ -657,6 +660,8 @@ class _NonImageAttachmentViewState extends State<NonImageAttachmentView> {
     final isDocx = isDocxMimeType(mime);
     final isUrlManifest = mime == _kSecondLoopUrlManifestMimeType;
     final isVideoManifest = mime == kSecondLoopVideoManifestMimeType;
+    final showWebReadonlyNotice =
+        (widget.isWebOverride ?? kIsWeb) && needsAppProcessingInWeb(mime);
     final supportsOcr = isPdf || isDocx || isVideoManifest;
     final canRunOcr = supportsOcr && onRunOcr != null;
     final videoManifestFuture = isVideoManifest
@@ -754,6 +759,9 @@ class _NonImageAttachmentViewState extends State<NonImageAttachmentView> {
               );
 
     final previewChildren = <Widget>[];
+    if (showWebReadonlyNotice) {
+      previewChildren.add(const WebMediaProcessingNotice());
+    }
     if (hasPreviewSignal || debugMarker != null) {
       previewChildren.add(
         SlSurface(

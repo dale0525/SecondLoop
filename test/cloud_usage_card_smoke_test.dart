@@ -1,7 +1,11 @@
+import 'dart:convert';
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:secondloop/core/backend/app_backend.dart';
@@ -145,6 +149,130 @@ void main() {
     await _pumpUi(tester);
 
     expect(find.text('Vault storage'), findsOneWidget);
+  });
+
+  testWidgets('Cloud usage card refresh uses latest injected client',
+      (tester) async {
+    final firstHttpClient = MockClient((request) async {
+      expect(request.url.toString(), 'https://gateway.test/v1/usage');
+      return http.Response(
+        jsonEncode(<String, Object?>{
+          'ask_ai_usage_percent': 11,
+          'embeddings_usage_percent': 1,
+          'reset_at_ms': 123,
+        }),
+        200,
+      );
+    });
+    final secondHttpClient = MockClient((request) async {
+      expect(request.url.toString(), 'https://gateway.test/v1/usage');
+      return http.Response(
+        jsonEncode(<String, Object?>{
+          'ask_ai_usage_percent': 22,
+          'embeddings_usage_percent': 2,
+          'reset_at_ms': 456,
+        }),
+        200,
+      );
+    });
+
+    Widget buildWidget(CloudUsageClient client) {
+      return wrapWithI18n(
+        MaterialApp(
+          home: CloudAuthScope(
+            controller: _FakeCloudAuthController(idToken: 'token_1'),
+            gatewayConfig: const CloudGatewayConfig(
+              baseUrl: 'https://gateway.test',
+              modelName: 'cloud',
+            ),
+            child: Scaffold(body: CloudUsageCard(client: client)),
+          ),
+        ),
+      );
+    }
+
+    await tester.pumpWidget(
+      buildWidget(CloudUsageClient(httpClient: firstHttpClient)),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('11%'), findsOneWidget);
+    expect(find.text('22%'), findsNothing);
+
+    await tester.pumpWidget(
+      buildWidget(CloudUsageClient(httpClient: secondHttpClient)),
+    );
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('cloud_usage_refresh')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('22%'), findsOneWidget);
+    expect(find.text('11%'), findsNothing);
+  });
+
+  testWidgets(
+      'Cloud usage card ignores stale in-flight refresh after injected client changes',
+      (tester) async {
+    final firstResponse = Completer<http.Response>();
+    final secondResponse = Completer<http.Response>();
+
+    final firstHttpClient = MockClient((request) => firstResponse.future);
+    final secondHttpClient = MockClient((request) => secondResponse.future);
+
+    Widget buildWidget(CloudUsageClient client) {
+      return wrapWithI18n(
+        MaterialApp(
+          home: CloudAuthScope(
+            controller: _FakeCloudAuthController(idToken: 'token_1'),
+            gatewayConfig: const CloudGatewayConfig(
+              baseUrl: 'https://gateway.test',
+              modelName: 'cloud',
+            ),
+            child: Scaffold(body: CloudUsageCard(client: client)),
+          ),
+        ),
+      );
+    }
+
+    await tester.pumpWidget(
+      buildWidget(CloudUsageClient(httpClient: firstHttpClient)),
+    );
+    await tester.pump();
+
+    await tester.pumpWidget(
+      buildWidget(CloudUsageClient(httpClient: secondHttpClient)),
+    );
+    await tester.pump();
+
+    secondResponse.complete(
+      http.Response(
+        jsonEncode(<String, Object?>{
+          'ask_ai_usage_percent': 22,
+          'embeddings_usage_percent': 2,
+          'reset_at_ms': 456,
+        }),
+        200,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('22%'), findsOneWidget);
+    expect(find.text('11%'), findsNothing);
+
+    firstResponse.complete(
+      http.Response(
+        jsonEncode(<String, Object?>{
+          'ask_ai_usage_percent': 11,
+          'embeddings_usage_percent': 1,
+          'reset_at_ms': 123,
+        }),
+        200,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('22%'), findsOneWidget);
+    expect(find.text('11%'), findsNothing);
   });
 }
 

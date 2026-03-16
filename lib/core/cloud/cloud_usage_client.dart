@@ -1,7 +1,7 @@
-import 'dart:convert';
-import 'dart:io';
-
 import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
+
+import 'http_json_client.dart';
 
 @immutable
 class CloudUsageSummary {
@@ -17,37 +17,30 @@ class CloudUsageSummary {
 }
 
 final class CloudUsageClient {
-  CloudUsageClient({HttpClient? httpClient})
-      : _httpClient = httpClient ?? HttpClient();
+  CloudUsageClient({http.Client? httpClient})
+      : _httpClient = HttpJsonClient(client: httpClient);
 
-  final HttpClient _httpClient;
+  final HttpJsonClient _httpClient;
 
   Future<CloudUsageSummary> fetchUsageSummary({
     required String cloudGatewayBaseUrl,
     required String idToken,
   }) async {
-    if (kIsWeb) throw UnsupportedError('Cloud usage is not supported on web');
+    final uri = _resolveUri(cloudGatewayBaseUrl, '/v1/usage');
+    final response = await _httpClient.get(
+      uri,
+      headers: <String, String>{
+        'authorization': 'Bearer $idToken',
+        'accept': 'application/json',
+      },
+    );
 
-    Uri uri;
-    try {
-      uri = Uri.parse(cloudGatewayBaseUrl).resolve('/v1/usage');
-    } catch (_) {
-      throw FormatException('invalid_gateway_base_url', cloudGatewayBaseUrl);
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception('HTTP ${response.statusCode}: ${response.body}');
     }
 
-    final req = await _httpClient.getUrl(uri);
-    req.headers.set(HttpHeaders.authorizationHeader, 'Bearer $idToken');
-    req.headers.set(HttpHeaders.acceptHeader, 'application/json');
-
-    final resp = await req.close();
-    final text = await utf8.decodeStream(resp);
-
-    if (resp.statusCode != 200) {
-      throw Exception('HTTP ${resp.statusCode}: $text');
-    }
-
-    final decoded = jsonDecode(text);
-    if (decoded is! Map<String, dynamic>) {
+    final decoded = response.tryDecodeObject();
+    if (decoded == null) {
       throw const FormatException('invalid_usage_response');
     }
 
@@ -70,7 +63,15 @@ final class CloudUsageClient {
   }
 
   void dispose() {
-    _httpClient.close(force: true);
+    _httpClient.close();
+  }
+}
+
+Uri _resolveUri(String baseUrl, String path) {
+  try {
+    return Uri.parse(baseUrl).resolve(path);
+  } catch (_) {
+    throw FormatException('invalid_gateway_base_url', baseUrl);
   }
 }
 

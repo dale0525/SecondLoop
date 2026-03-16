@@ -67,24 +67,86 @@ class CloudUsageSummaryView extends StatelessWidget {
 }
 
 class CloudUsageCard extends StatefulWidget {
-  const CloudUsageCard({super.key});
+  const CloudUsageCard({super.key, this.client});
+
+  final CloudUsageClient? client;
 
   @override
   State<CloudUsageCard> createState() => _CloudUsageCardState();
 }
 
 class _CloudUsageCardState extends State<CloudUsageCard> {
-  final CloudUsageClient _client = CloudUsageClient();
+  late CloudUsageClient _client;
+  var _ownsClient = false;
+  final Set<int> _activeRefreshTokens = <int>{};
+  int _refreshEpoch = 0;
 
-  bool _busy = false;
+  bool get _busy => _activeRefreshTokens.isNotEmpty;
   CloudUsageSummary? _summary;
   Object? _error;
 
   String? _uid;
 
   @override
+  void initState() {
+    super.initState();
+    _replaceClient(widget.client);
+  }
+
+  @override
+  void didUpdateWidget(covariant CloudUsageCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.client != widget.client) {
+      _disposeOwnedClient();
+      _replaceClient(widget.client);
+      _resetLoadedState(invalidateRefreshes: true);
+      if (_uid != null) {
+        unawaited(_refresh());
+      }
+    }
+  }
+
+  void _replaceClient(CloudUsageClient? client) {
+    _client = client ?? CloudUsageClient();
+    _ownsClient = client == null;
+  }
+
+  void _disposeOwnedClient() {
+    if (_ownsClient) {
+      _client.dispose();
+    }
+  }
+
+  void _resetLoadedState({bool invalidateRefreshes = false}) {
+    if (invalidateRefreshes) {
+      _refreshEpoch += 1;
+      _activeRefreshTokens.clear();
+    }
+    _summary = null;
+    _error = null;
+  }
+
+  void _markRefreshStarted(int refreshEpoch) {
+    if (_activeRefreshTokens.contains(refreshEpoch)) return;
+    if (!mounted) {
+      _activeRefreshTokens.add(refreshEpoch);
+      return;
+    }
+    setState(() => _activeRefreshTokens.add(refreshEpoch));
+  }
+
+  void _markRefreshFinished(int refreshEpoch) {
+    if (!_activeRefreshTokens.contains(refreshEpoch)) return;
+    if (!mounted) {
+      _activeRefreshTokens.remove(refreshEpoch);
+      return;
+    }
+    setState(() => _activeRefreshTokens.remove(refreshEpoch));
+  }
+
+  @override
   void dispose() {
-    _client.dispose();
+    _disposeOwnedClient();
     super.dispose();
   }
 
@@ -101,7 +163,6 @@ class _CloudUsageCardState extends State<CloudUsageCard> {
   }
 
   Future<void> _refresh() async {
-    if (_busy) return;
     final scope = CloudAuthScope.maybeOf(context);
     final controller = scope?.controller;
     if (controller == null) return;
@@ -120,22 +181,32 @@ class _CloudUsageCardState extends State<CloudUsageCard> {
     }
     if (idToken == null || idToken.trim().isEmpty) return;
 
-    setState(() => _busy = true);
+    final refreshEpoch = ++_refreshEpoch;
+    final requestClient = _client;
+    _markRefreshStarted(refreshEpoch);
     try {
-      final summary = await _client.fetchUsageSummary(
+      final summary = await requestClient.fetchUsageSummary(
         cloudGatewayBaseUrl: baseUrl,
         idToken: idToken,
       );
-      if (!mounted) return;
-      setState(() {
-        _summary = summary;
-        _error = null;
-      });
+      final shouldApply = mounted &&
+          refreshEpoch == _refreshEpoch &&
+          identical(requestClient, _client);
+      if (shouldApply) {
+        setState(() {
+          _summary = summary;
+          _error = null;
+        });
+      }
     } catch (e) {
-      if (!mounted) return;
-      setState(() => _error = e);
+      final shouldApply = mounted &&
+          refreshEpoch == _refreshEpoch &&
+          identical(requestClient, _client);
+      if (shouldApply) {
+        setState(() => _error = e);
+      }
     } finally {
-      if (mounted) setState(() => _busy = false);
+      _markRefreshFinished(refreshEpoch);
     }
   }
 
@@ -149,8 +220,7 @@ class _CloudUsageCardState extends State<CloudUsageCard> {
 
     if (uid != _uid) {
       _uid = uid;
-      _summary = null;
-      _error = null;
+      _resetLoadedState(invalidateRefreshes: true);
       if (uid != null) {
         unawaited(_refresh());
       }
@@ -161,14 +231,14 @@ class _CloudUsageCardState extends State<CloudUsageCard> {
         Text(context.t.settings.cloudUsage.labels.gatewayNotConfigured),
       (false, true) =>
         Text(context.t.settings.cloudUsage.labels.signInRequired),
-      (false, false) when _busy =>
-        const Center(child: CircularProgressIndicator()),
       (false, false) when _error != null => Text(
           context.t.settings.cloudUsage.labels
               .loadFailed(error: _formatUsageError(context, _error!)),
         ),
       (false, false) when _summary != null =>
         CloudUsageSummaryView(summary: _summary!),
+      (false, false) when _busy =>
+        const Center(child: CircularProgressIndicator()),
       _ => const SizedBox.shrink(),
     };
 
