@@ -204,6 +204,151 @@ void main() {
     });
   });
 
+  test('stop flushes queued push after blocking pull completes', () {
+    fakeAsync((async) {
+      final runner = _BlockingPullRunner();
+      final engine = SyncEngine(
+        syncRunner: runner,
+        loadConfig: () async => _webdavConfig(),
+        pushDebounce: const Duration(days: 1),
+        pullInterval: const Duration(days: 1),
+        pullJitter: Duration.zero,
+        pullOnStart: true,
+      );
+
+      engine.start();
+      async.flushMicrotasks();
+      expect(runner.pullCalls, 1);
+
+      engine.notifyLocalMutation();
+      async.flushMicrotasks();
+      expect(runner.pushCalls, 0);
+
+      engine.stop();
+      runner.completePull(applied: 0);
+      async.flushMicrotasks();
+
+      expect(runner.pushCalls, 1);
+    });
+  });
+
+  test('stop-after-drain ignores new pull requests', () {
+    fakeAsync((async) {
+      final runner = _BlockingPullRunner();
+      final engine = SyncEngine(
+        syncRunner: runner,
+        loadConfig: () async => _webdavConfig(),
+        pushDebounce: const Duration(days: 1),
+        pullInterval: const Duration(days: 1),
+        pullJitter: Duration.zero,
+        pullOnStart: true,
+      );
+
+      engine.start();
+      async.flushMicrotasks();
+      expect(runner.pullCalls, 1);
+
+      engine.notifyLocalMutation();
+      engine.stop();
+      engine.triggerPullNow();
+
+      runner.completePull(applied: 0);
+      async.flushMicrotasks();
+
+      expect(runner.pullCalls, 1);
+      expect(runner.pushCalls, 1);
+    });
+  });
+
+  test('start cancels stop-after-drain and keeps engine running', () {
+    fakeAsync((async) {
+      final runner = _BlockingPullRunner();
+      final engine = SyncEngine(
+        syncRunner: runner,
+        loadConfig: () async => _webdavConfig(),
+        pushDebounce: const Duration(days: 1),
+        pullInterval: const Duration(days: 1),
+        pullJitter: Duration.zero,
+        pullOnStart: true,
+      );
+
+      engine.start();
+      async.flushMicrotasks();
+      expect(runner.pullCalls, 1);
+
+      engine.notifyLocalMutation();
+      engine.stop();
+      expect(engine.isRunning, isFalse);
+
+      engine.start();
+      expect(engine.isRunning, isTrue);
+
+      runner.completePull(applied: 0);
+      async.flushMicrotasks();
+      expect(runner.pullCalls, 2);
+
+      engine.triggerPushNow();
+      async.flushMicrotasks();
+
+      expect(runner.pushCalls, 0);
+
+      runner.completePull(applied: 0);
+      async.flushMicrotasks();
+
+      expect(runner.pushCalls, 1);
+
+      engine.triggerPushNow();
+      async.flushMicrotasks();
+
+      expect(runner.pushCalls, 2);
+      expect(engine.isRunning, isTrue);
+
+      engine.stop();
+    });
+  });
+
+  test('stop-after-drain preserves queued push when autoRunGate blocks', () {
+    fakeAsync((async) {
+      final runner = _BlockingPullRunner();
+      var allow = true;
+      final engine = SyncEngine(
+        syncRunner: runner,
+        loadConfig: () async => _webdavConfig(),
+        pushDebounce: const Duration(days: 1),
+        pullInterval: const Duration(days: 1),
+        pullJitter: Duration.zero,
+        pullOnStart: true,
+        autoRunGate: () async => allow,
+      );
+
+      engine.start();
+      async.flushMicrotasks();
+      expect(runner.pullCalls, 1);
+
+      engine.notifyLocalMutation();
+      engine.stop();
+
+      allow = false;
+      runner.completePull(applied: 0);
+      async.flushMicrotasks();
+
+      expect(runner.pushCalls, 0);
+      expect(engine.isRunning, isFalse);
+
+      allow = true;
+      engine.start();
+      async.flushMicrotasks();
+      expect(runner.pullCalls, 2);
+
+      runner.completePull(applied: 0);
+      async.flushMicrotasks();
+
+      expect(runner.pushCalls, 1);
+
+      engine.stop();
+    });
+  });
+
   test('does not notify zero-applied refresh when refresh_v2 is disabled', () {
     fakeAsync((async) {
       final runner = _HintPullRunner(
@@ -262,15 +407,22 @@ final class _FakeRunner implements SyncRunner {
 }
 
 final class _BlockingPullRunner implements SyncRunner {
+  int pushCalls = 0;
   int pullCalls = 0;
   Completer<int>? _pullCompleter;
 
   void completePull({required int applied}) {
-    _pullCompleter?.complete(applied);
+    final completer = _pullCompleter;
+    if (completer == null || completer.isCompleted) return;
+    _pullCompleter = null;
+    completer.complete(applied);
   }
 
   @override
-  Future<int> push(SyncConfig config) async => 0;
+  Future<int> push(SyncConfig config) async {
+    pushCalls++;
+    return 0;
+  }
 
   @override
   Future<int> pull(SyncConfig config) {

@@ -505,6 +505,106 @@ mod pull_progress_tests {
         assert_eq!(seen[0].1, 1);
         assert_eq!(*seen.last().unwrap(), (1, 1));
     }
+
+    #[test]
+    fn pull_syncs_non_recurring_todo_completion() {
+        let db_key = [11u8; 32];
+        let sync_key = [12u8; 32];
+        let remote = InMemoryRemoteStore::new();
+
+        let dir_a = tempdir().expect("tempdir A");
+        let conn_a = crate::db::open(dir_a.path()).expect("open A");
+        let todo_a = crate::db::upsert_todo(
+            &conn_a,
+            &db_key,
+            "todo:sync:plain",
+            "Plain task",
+            Some(1_710_000_000_000),
+            "open",
+            None,
+            None,
+            None,
+            Some(1_710_000_000_100),
+        )
+        .expect("create todo A");
+        crate::db::set_todo_status(&conn_a, &db_key, &todo_a.id, "done", None)
+            .expect("complete todo A");
+        let pushed_a = push_ops_only(&conn_a, &db_key, &sync_key, &remote, "SecondLoop")
+            .expect("push A");
+        assert!(pushed_a >= 2);
+
+        let dir_b = tempdir().expect("tempdir B");
+        let conn_b = crate::db::open(dir_b.path()).expect("open B");
+        let applied = pull(&conn_b, &db_key, &sync_key, &remote, "SecondLoop")
+            .expect("pull B");
+        assert!(applied >= 2);
+
+        let synced = crate::db::get_todo(&conn_b, &db_key, &todo_a.id).expect("todo B");
+        assert_eq!(synced.status, "done");
+    }
+
+    #[test]
+    fn pull_syncs_recurring_todo_completion_and_next_occurrence() {
+        let db_key = [13u8; 32];
+        let sync_key = [14u8; 32];
+        let remote = InMemoryRemoteStore::new();
+        let recurrence_rule = r#"{"freq":"daily","interval":1}"#;
+
+        let dir_a = tempdir().expect("tempdir A");
+        let conn_a = crate::db::open(dir_a.path()).expect("open A");
+        let todo_a = crate::db::upsert_todo(
+            &conn_a,
+            &db_key,
+            "todo:sync:recurring:0",
+            "Recurring task",
+            Some(1_710_000_000_000),
+            "open",
+            None,
+            None,
+            None,
+            Some(1_710_000_000_100),
+        )
+        .expect("create recurring todo A");
+        crate::db::upsert_todo_recurrence_with_sync(
+            &conn_a,
+            &db_key,
+            &todo_a.id,
+            "series:sync:recurring",
+            recurrence_rule,
+        )
+        .expect("create recurrence A");
+        crate::db::set_todo_status(&conn_a, &db_key, &todo_a.id, "done", None)
+            .expect("complete recurring todo A");
+        let pushed_a = push_ops_only(&conn_a, &db_key, &sync_key, &remote, "SecondLoop")
+            .expect("push A");
+        assert!(pushed_a >= 4);
+
+        let dir_b = tempdir().expect("tempdir B");
+        let conn_b = crate::db::open(dir_b.path()).expect("open B");
+        let applied = pull(&conn_b, &db_key, &sync_key, &remote, "SecondLoop")
+            .expect("pull B");
+        assert!(applied >= 4);
+
+        let synced_current = crate::db::get_todo(&conn_b, &db_key, &todo_a.id)
+            .expect("current recurring todo B");
+        assert_eq!(synced_current.status, "done");
+
+        let synced_next = crate::db::get_todo(
+            &conn_b,
+            &db_key,
+            "todo:series:sync:recurring:1",
+        )
+        .expect("next recurring todo B");
+        assert_eq!(synced_next.status, "open");
+        assert_eq!(synced_next.due_at_ms, Some(1_710_086_400_000));
+
+        let synced_rule = crate::db::get_todo_recurrence_rule_json(
+            &conn_b,
+            "todo:series:sync:recurring:1",
+        )
+        .expect("next recurrence rule B");
+        assert_eq!(synced_rule.as_deref(), Some(recurrence_rule));
+    }
 }
 
 fn discover_first_available_pack_chunk_start(

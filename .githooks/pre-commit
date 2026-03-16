@@ -304,7 +304,20 @@ run_i18n_analyze() {
   fi
 }
 
+ensure_i18n_generated() {
+  i18n_generated_now=0
+
+  if [[ -f "lib/i18n/strings.g.dart" ]]; then
+    return 0
+  fi
+
+  echo "pre-commit: lib/i18n/strings.g.dart missing; regenerating i18n outputs." >&2
+  run_i18n_refresh
+  i18n_generated_now=1
+}
+
 check_mode=0
+i18n_generated_now=0
 scope_flutter=0
 scope_rust=0
 ci_mode=0
@@ -485,7 +498,10 @@ if (( check_mode )); then
   fi
 
   if (( scope_flutter )); then
-    run_i18n_refresh
+    ensure_i18n_generated
+    if [[ ${i18n_generated_now} -eq 0 ]]; then
+      run_i18n_refresh
+    fi
     run_i18n_analyze
 
     if ! bash scripts/check_no_python_runtime.sh; then
@@ -636,6 +652,13 @@ if [[ ${run_i18n_refresh_needed} -ne 0 ]]; then
   run_i18n_refresh
   warn_auto_staged_i18n_refresh_changes
   git add -- lib/i18n
+fi
+
+if [[ ${run_flutter_checks} -ne 0 || ${#dart_files[@]} -ne 0 || ${run_i18n_refresh_needed} -ne 0 ]]; then
+  ensure_i18n_generated
+  if [[ ${i18n_generated_now} -ne 0 ]]; then
+    git add -- lib/i18n/strings.g.dart
+  fi
 fi
 
 if [[ ${#dart_files[@]} -ne 0 ]]; then
