@@ -211,8 +211,10 @@ final class SyncEngine {
 
   int _nowMs() => _nowMsProvider();
 
+  bool get _acceptsNewWork => _running && !_stopAfterDrain;
+
   void start() {
-    if (_running) return;
+    if (_acceptsNewWork) return;
     _running = true;
     _stopAfterDrain = false;
 
@@ -272,7 +274,7 @@ final class SyncEngine {
 
   void notifyLocalMutation() {
     _notifyChange();
-    if (!_running || _stopAfterDrain) return;
+    if (!_acceptsNewWork) return;
     _pushDebounceTimer?.cancel();
     _pushDebounceTimer = Timer(pushDebounce, _queuePush);
   }
@@ -282,12 +284,12 @@ final class SyncEngine {
   }
 
   void triggerPushNow() {
-    if (!_running || _stopAfterDrain) return;
+    if (!_acceptsNewWork) return;
     _queuePush();
   }
 
   void triggerPullNow() {
-    if (!_running) return;
+    if (!_acceptsNewWork) return;
     _queuePull();
   }
 

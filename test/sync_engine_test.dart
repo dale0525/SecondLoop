@@ -232,6 +232,70 @@ void main() {
     });
   });
 
+  test('stop-after-drain ignores new pull requests', () {
+    fakeAsync((async) {
+      final runner = _BlockingPullRunner();
+      final engine = SyncEngine(
+        syncRunner: runner,
+        loadConfig: () async => _webdavConfig(),
+        pushDebounce: const Duration(days: 1),
+        pullInterval: const Duration(days: 1),
+        pullJitter: Duration.zero,
+        pullOnStart: true,
+      );
+
+      engine.start();
+      async.flushMicrotasks();
+      expect(runner.pullCalls, 1);
+
+      engine.notifyLocalMutation();
+      engine.stop();
+      engine.triggerPullNow();
+
+      runner.completePull(applied: 0);
+      async.flushMicrotasks();
+
+      expect(runner.pullCalls, 1);
+      expect(runner.pushCalls, 1);
+    });
+  });
+
+  test('start cancels stop-after-drain and keeps engine running', () {
+    fakeAsync((async) {
+      final runner = _BlockingPullRunner();
+      final engine = SyncEngine(
+        syncRunner: runner,
+        loadConfig: () async => _webdavConfig(),
+        pushDebounce: const Duration(days: 1),
+        pullInterval: const Duration(days: 1),
+        pullJitter: Duration.zero,
+        pullOnStart: true,
+      );
+
+      engine.start();
+      async.flushMicrotasks();
+      expect(runner.pullCalls, 1);
+
+      engine.notifyLocalMutation();
+      engine.stop();
+      expect(engine.isRunning, isFalse);
+
+      engine.start();
+      expect(engine.isRunning, isTrue);
+
+      runner.completePull(applied: 0);
+      async.flushMicrotasks();
+
+      engine.triggerPushNow();
+      async.flushMicrotasks();
+
+      expect(runner.pushCalls, 2);
+      expect(engine.isRunning, isTrue);
+
+      engine.stop();
+    });
+  });
+
   test('does not notify zero-applied refresh when refresh_v2 is disabled', () {
     fakeAsync((async) {
       final runner = _HintPullRunner(
