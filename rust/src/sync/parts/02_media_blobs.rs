@@ -211,6 +211,10 @@ fn list_missing_embedding_artifact_blob_refs(
     Ok(missing)
 }
 
+struct EmbeddingArtifactBlobDownloadOutcome {
+    missing_remote: u64,
+}
+
 fn download_embedding_artifact_blobs_by_refs(
     db_key: &[u8; 32],
     sync_key: &[u8; 32],
@@ -219,9 +223,10 @@ fn download_embedding_artifact_blobs_by_refs(
     app_dir: &Path,
     blob_refs: &[String],
     mut on_downloaded: Option<&mut dyn FnMut(u64)>,
-) -> Result<u64> {
+) -> Result<EmbeddingArtifactBlobDownloadOutcome> {
     let remote_root_dir = normalize_dir(remote_root);
     let mut downloaded = 0u64;
+    let mut missing_remote = 0u64;
 
     for blob_ref in blob_refs {
         let remote_path = format!(
@@ -230,7 +235,10 @@ fn download_embedding_artifact_blobs_by_refs(
         );
         let ciphertext = match remote.get(&remote_path) {
             Ok(bytes) => bytes,
-            Err(e) if e.is::<NotFound>() => continue,
+            Err(e) if e.is::<NotFound>() => {
+                missing_remote += 1;
+                continue;
+            }
             Err(e) => return Err(e),
         };
         let aad = format!("sync.embedding_artifact.blob:{blob_ref}");
@@ -242,7 +250,8 @@ fn download_embedding_artifact_blobs_by_refs(
         }
     }
 
-    Ok(downloaded)
+    let _ = downloaded;
+    Ok(EmbeddingArtifactBlobDownloadOutcome { missing_remote })
 }
 
 fn sha256_hex(bytes: &[u8]) -> String {

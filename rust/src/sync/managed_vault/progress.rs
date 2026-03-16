@@ -27,14 +27,20 @@ pub fn pull_with_progress(
 ) -> Result<u64> {
     const PULL_LIMIT: i64 = 500;
 
-    let http = super::client()?;
+    let http = super::runtime::client()?;
     let local_device_id = super::super::get_or_create_device_id(conn)?;
-    let _ = super::ensure_device_registered(&http, base_url, vault_id, id_token, &local_device_id)?;
+    let _ = super::runtime::ensure_device_registered(
+        &http,
+        base_url,
+        vault_id,
+        id_token,
+        &local_device_id,
+    )?;
 
-    let scope_id = super::scope_id(base_url, vault_id);
+    let scope_id = super::runtime::scope_id(base_url, vault_id);
     let mut since = super::load_since_map(conn, &scope_id)?;
 
-    let endpoint_json = super::url(base_url, &format!("/v1/vaults/{vault_id}/ops:pull"))?;
+    let endpoint_json = super::runtime::url(base_url, &format!("/v1/vaults/{vault_id}/ops:pull"))?;
     let mut applied: u64 = 0;
 
     let mut total_ops: Option<u64> = None;
@@ -187,11 +193,12 @@ pub fn pull_with_progress(
             done_units = (done_units + delta).min(total_units);
             progress(done_units, total_units);
         };
-        let _ = super::artifacts::download_embedding_artifact_blobs_by_refs(
+        let outcome = super::artifacts::download_embedding_artifact_blobs_by_refs(
             &download_ctx,
             &missing_blob_refs,
             Some(&mut on_downloaded),
         )?;
+        total_units = total_units.saturating_sub(outcome.missing_remote);
     }
 
     progress(done_units, total_units);
@@ -211,11 +218,12 @@ pub fn push_ops_only_with_progress(
     const PUSH_LIMIT: i64 = 200;
     const MAX_REPAIR_ATTEMPTS: usize = 10;
 
-    let http = super::client()?;
+    let http = super::runtime::client()?;
     let device_id = super::super::get_or_create_device_id(conn)?;
-    let _ = super::ensure_device_registered(&http, base_url, vault_id, id_token, &device_id)?;
+    let _ =
+        super::runtime::ensure_device_registered(&http, base_url, vault_id, id_token, &device_id)?;
 
-    let scope_id = super::scope_id(base_url, vault_id);
+    let scope_id = super::runtime::scope_id(base_url, vault_id);
     let last_pushed_key = format!("managed_vault.last_pushed_seq:{scope_id}:{device_id}");
     let legacy_last_pushed_key = format!("managed_vault.last_pushed_seq:{scope_id}");
     if super::super::kv_get_i64(conn, &last_pushed_key)?.is_none() {
@@ -238,7 +246,13 @@ pub fn push_ops_only_with_progress(
         |row| row.get(0),
     )?;
 
-    if total_ops == 0 && initial_last_pushed_seq == 0 && has_remote_device_ops {
+    if total_ops == 0
+        && initial_last_pushed_seq == 0
+        && has_remote_device_ops
+        && super::probe::managed_remote_has_other_device_ops(
+            &http, base_url, vault_id, id_token, &device_id,
+        )?
+    {
         progress(0, 0);
         return Ok(0);
     }
@@ -260,7 +274,7 @@ pub fn push_ops_only_with_progress(
         return Ok(0);
     }
 
-    let endpoint = super::url(base_url, &format!("/v1/vaults/{vault_id}/ops:push"))?;
+    let endpoint = super::runtime::url(base_url, &format!("/v1/vaults/{vault_id}/ops:push"))?;
     let mut repair_attempt = 0usize;
     let mut pushed_total = 0u64;
 

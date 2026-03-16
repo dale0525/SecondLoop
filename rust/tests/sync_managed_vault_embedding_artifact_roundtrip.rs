@@ -130,6 +130,16 @@ fn encode_pull_bin(ops: &[StoredOp]) -> Vec<u8> {
 }
 
 fn start_mock_server() -> (String, mpsc::Sender<()>, thread::JoinHandle<()>) {
+    let (base_url, stop_tx, handle, _) = start_mock_server_with_state();
+    (base_url, stop_tx, handle)
+}
+
+fn start_mock_server_with_state() -> (
+    String,
+    mpsc::Sender<()>,
+    thread::JoinHandle<()>,
+    Arc<Mutex<ServerState>>,
+) {
     let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
     listener.set_nonblocking(true).expect("nonblocking");
     let addr = listener.local_addr().expect("local addr");
@@ -327,7 +337,7 @@ fn start_mock_server() -> (String, mpsc::Sender<()>, thread::JoinHandle<()>) {
         }
     });
 
-    (format!("http://{}", addr), stop_tx, handle)
+    (format!("http://{}", addr), stop_tx, handle, state)
 }
 
 fn message_updated_at(conn: &rusqlite::Connection, message_id: &str) -> i64 {
@@ -509,6 +519,159 @@ fn managed_vault_pull_with_progress_includes_embedding_artifact_downloads() {
         "expected artifact total to appear in progress: {seen:?}"
     );
     assert_eq!(*seen.last().expect("last progress"), (1, 1));
+
+    let _ = stop_tx.send(());
+    let _ = handle.join();
+}
+
+#[test]
+fn managed_vault_pull_with_progress_finishes_when_artifact_blob_is_missing() {
+    let (base_url, stop_tx, handle, state) = start_mock_server_with_state();
+    let vault_id = "vault-test".to_string();
+    let id_token = "token-test".to_string();
+
+    let temp_a = tempfile::tempdir().expect("tempdir A");
+    let app_dir_a = temp_a.path().join("secondloop_a");
+    let key_a =
+        auth::init_master_password(&app_dir_a, "pw-a", KdfParams::for_test()).expect("init A");
+    let conn_a = db::open(&app_dir_a).expect("open A db");
+    let conversation =
+        db::get_or_create_loop_home_conversation(&conn_a, &key_a).expect("conversation A");
+    let _message = db::insert_message(
+        &conn_a,
+        &key_a,
+        &conversation.id,
+        "user",
+        "managed vault missing artifact progress note",
+    )
+    .expect("message A");
+    let processed =
+        db::process_pending_message_embeddings_default(&conn_a, &key_a, 10).expect("process A");
+    assert_eq!(processed, 1);
+
+    let sync_key = derive_root_key(
+        "sync-passphrase",
+        b"secondloop-sync1",
+        &KdfParams::for_test(),
+    )
+    .expect("derive sync key");
+
+    let pushed =
+        sync::managed_vault::push(&conn_a, &key_a, &sync_key, &base_url, &vault_id, &id_token)
+            .expect("push");
+    assert!(pushed > 0);
+
+    {
+        let mut st = state.lock().expect("lock state");
+        st.attachments.clear();
+    }
+
+    let temp_b = tempfile::tempdir().expect("tempdir B");
+    let app_dir_b = temp_b.path().join("secondloop_b");
+    let key_b =
+        auth::init_master_password(&app_dir_b, "pw-b", KdfParams::for_test()).expect("init B");
+    let conn_b = db::open(&app_dir_b).expect("open B db");
+
+    let mut seen: Vec<(u64, u64)> = Vec::new();
+    let mut on_progress = |done: u64, total: u64| {
+        seen.push((done, total));
+    };
+
+    let pulled = sync::managed_vault::pull_with_progress(
+        &conn_b,
+        &key_b,
+        &sync_key,
+        &base_url,
+        &vault_id,
+        &id_token,
+        &mut on_progress,
+    )
+    .expect("pull with progress");
+    assert!(pulled > 0);
+
+    assert!(!seen.is_empty());
+    let last = *seen.last().expect("last progress");
+    assert_eq!(
+        last.0, last.1,
+        "progress should still complete when managed-vault artifact blob is missing: {seen:?}"
+    );
+
+    let _ = stop_tx.send(());
+    let _ = handle.join();
+}
+
+#[test]
+fn managed_vault_push_reuploads_bytes_after_fresh_device_remote_reset() {
+    let (base_url, stop_tx, handle, state) = start_mock_server_with_state();
+    let vault_id = "vault-test".to_string();
+    let id_token = "token-test".to_string();
+
+    let temp_a = tempfile::tempdir().expect("tempdir A");
+    let app_dir_a = temp_a.path().join("secondloop_a");
+    let key_a =
+        auth::init_master_password(&app_dir_a, "pw-a", KdfParams::for_test()).expect("init A");
+    let conn_a = db::open(&app_dir_a).expect("open A db");
+    let conversation =
+        db::get_or_create_loop_home_conversation(&conn_a, &key_a).expect("conversation A");
+    let _message = db::insert_message(
+        &conn_a,
+        &key_a,
+        &conversation.id,
+        "user",
+        "managed vault remote reset note",
+    )
+    .expect("message A");
+    let processed =
+        db::process_pending_message_embeddings_default(&conn_a, &key_a, 10).expect("process A");
+    assert_eq!(processed, 1);
+
+    let sync_key = derive_root_key(
+        "sync-passphrase",
+        b"secondloop-sync1",
+        &KdfParams::for_test(),
+    )
+    .expect("derive sync key");
+
+    let pushed_a =
+        sync::managed_vault::push(&conn_a, &key_a, &sync_key, &base_url, &vault_id, &id_token)
+            .expect("push A");
+    assert!(pushed_a > 0);
+
+    let initial_attachment_count = {
+        let st = state.lock().expect("lock state");
+        st.attachments.len()
+    };
+    assert!(initial_attachment_count > 0);
+
+    let temp_b = tempfile::tempdir().expect("tempdir B");
+    let app_dir_b = temp_b.path().join("secondloop_b");
+    let key_b =
+        auth::init_master_password(&app_dir_b, "pw-b", KdfParams::for_test()).expect("init B");
+    let conn_b = db::open(&app_dir_b).expect("open B db");
+
+    let pulled_b =
+        sync::managed_vault::pull(&conn_b, &key_b, &sync_key, &base_url, &vault_id, &id_token)
+            .expect("pull B");
+    assert!(pulled_b > 0);
+
+    {
+        let mut st = state.lock().expect("lock state");
+        st.attachments.clear();
+    }
+
+    let pushed_b =
+        sync::managed_vault::push(&conn_b, &key_b, &sync_key, &base_url, &vault_id, &id_token)
+            .expect("push B");
+    assert_eq!(pushed_b, 0);
+
+    let repaired_attachment_count = {
+        let st = state.lock().expect("lock state");
+        st.attachments.len()
+    };
+    assert!(
+        repaired_attachment_count > 0,
+        "fresh device should re-upload bytes after managed-vault remote reset"
+    );
 
     let _ = stop_tx.send(());
     let _ = handle.join();

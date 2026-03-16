@@ -1,12 +1,9 @@
-use std::collections::{BTreeMap, BTreeSet};
-use std::sync::OnceLock;
-
 use anyhow::{anyhow, Result};
-use base64::engine::general_purpose::{STANDARD as B64_STD, URL_SAFE_NO_PAD as B64_URL};
+use base64::engine::general_purpose::STANDARD as B64_STD;
 use base64::Engine as _;
-use reqwest::blocking::Client;
 use rusqlite::{params, Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
+use std::collections::{BTreeMap, BTreeSet};
 
 use crate::crypto::{decrypt_bytes, encrypt_bytes};
 
@@ -14,7 +11,9 @@ mod admin;
 mod artifacts;
 mod attachments;
 mod pending_apply;
+mod probe;
 mod progress;
+mod runtime;
 
 pub use admin::{clear_device, clear_vault};
 pub use attachments::{download_attachment_bytes, upload_attachment_bytes};
@@ -103,24 +102,6 @@ struct PullOpBin {
     seq: i64,
     op_id: String,
     ciphertext: Vec<u8>,
-}
-
-fn scope_id(base_url: &str, vault_id: &str) -> String {
-    let raw = format!("managed_vault|{}|{}", base_url.trim(), vault_id.trim());
-    B64_URL.encode(raw.as_bytes())
-}
-
-fn client() -> Result<Client> {
-    static CLIENT: OnceLock<Client> = OnceLock::new();
-    Ok(CLIENT.get_or_init(Client::new).clone())
-}
-
-fn url(base_url: &str, path: &str) -> Result<String> {
-    let base = base_url.trim_end_matches('/');
-    if base.is_empty() {
-        return Err(anyhow!("missing_base_url"));
-    }
-    Ok(format!("{base}{path}"))
 }
 
 fn load_since_map(conn: &Connection, scope_id: &str) -> Result<BTreeMap<String, i64>> {
@@ -281,35 +262,6 @@ fn should_fallback_to_json_pull(status: reqwest::StatusCode) -> bool {
     code == 404 || code == 408 || code == 429 || status.is_server_error()
 }
 
-fn ensure_device_registered(
-    http: &Client,
-    base_url: &str,
-    vault_id: &str,
-    id_token: &str,
-    device_id: &str,
-) -> Result<String> {
-    let endpoint = url(base_url, &format!("/v1/vaults/{vault_id}/devices"))?;
-    let resp = http
-        .post(endpoint)
-        .bearer_auth(id_token)
-        .json(&RegisterDeviceRequest {
-            platform: "unknown",
-            device_id: Some(device_id),
-        })
-        .send()?;
-
-    let status = resp.status();
-    let text = resp.text().unwrap_or_default();
-    if !status.is_success() {
-        return Err(anyhow!(
-            "managed-vault register-device failed: HTTP {status} {text}"
-        ));
-    }
-
-    let parsed: RegisterDeviceResponse = serde_json::from_str(&text)?;
-    Ok(parsed.device_id)
-}
-
 pub fn push(
     conn: &Connection,
     db_key: &[u8; 32],
@@ -345,7 +297,7 @@ fn push_internal(
     let app_dir = super::app_dir_from_conn(conn)?;
     let app_dir_path = app_dir.as_path();
 
-    let scope_id = scope_id(base_url, vault_id);
+    let scope_id = runtime::scope_id(base_url, vault_id);
     let last_pushed_key = format!("managed_vault.last_pushed_seq:{scope_id}:{device_id}");
     let legacy_last_pushed_key = format!("managed_vault.last_pushed_seq:{scope_id}");
     if super::kv_get_i64(conn, &last_pushed_key)?.is_none() {
@@ -367,8 +319,21 @@ fn push_internal(
         |row| row.get(0),
     )?;
 
-    if local_pending_ops == 0 && last_pushed_seq == 0 && has_remote_device_ops {
-        return Ok(0);
+    let mut registered_http = None;
+
+    if upload_attachment_bytes
+        && local_pending_ops == 0
+        && last_pushed_seq == 0
+        && has_remote_device_ops
+    {
+        let http = runtime::client()?;
+        let _ = runtime::ensure_device_registered(&http, base_url, vault_id, id_token, &device_id)?;
+        if probe::can_skip_fresh_device_full_push(
+            conn, &http, base_url, vault_id, id_token, &device_id,
+        )? {
+            return Ok(0);
+        }
+        registered_http = Some(http);
     }
 
     crate::db::backfill_attachments_oplog_if_needed(conn, db_key)?;
@@ -384,8 +349,15 @@ fn push_internal(
         return Ok(0);
     }
 
-    let http = client()?;
-    let _ = ensure_device_registered(&http, base_url, vault_id, id_token, &device_id)?;
+    let http = match registered_http {
+        Some(http) => http,
+        None => {
+            let http = runtime::client()?;
+            let _ =
+                runtime::ensure_device_registered(&http, base_url, vault_id, id_token, &device_id)?;
+            http
+        }
+    };
 
     let upload_ctx = attachments::AttachmentUploadContext {
         conn,
@@ -538,7 +510,7 @@ fn push_internal(
             let _ = artifacts::upload_embedding_artifact_blob_if_present(&upload_ctx, &blob_ref)?;
         }
 
-        let endpoint = url(base_url, &format!("/v1/vaults/{vault_id}/ops:push"))?;
+        let endpoint = runtime::url(base_url, &format!("/v1/vaults/{vault_id}/ops:push"))?;
         let resp = http
             .post(endpoint)
             .bearer_auth(id_token)
@@ -786,15 +758,16 @@ pub fn pull(
 ) -> Result<u64> {
     const PULL_LIMIT: i64 = 500;
 
-    let http = client()?;
+    let http = runtime::client()?;
     let local_device_id = super::get_or_create_device_id(conn)?;
-    let _ = ensure_device_registered(&http, base_url, vault_id, id_token, &local_device_id)?;
+    let _ =
+        runtime::ensure_device_registered(&http, base_url, vault_id, id_token, &local_device_id)?;
 
-    let scope_id = scope_id(base_url, vault_id);
+    let scope_id = runtime::scope_id(base_url, vault_id);
     let mut since = load_since_map(conn, &scope_id)?;
 
-    let endpoint_json = url(base_url, &format!("/v1/vaults/{vault_id}/ops:pull"))?;
-    let endpoint_bin = url(base_url, &format!("/v1/vaults/{vault_id}/ops:pull_bin"))?;
+    let endpoint_json = runtime::url(base_url, &format!("/v1/vaults/{vault_id}/ops:pull"))?;
+    let endpoint_bin = runtime::url(base_url, &format!("/v1/vaults/{vault_id}/ops:pull_bin"))?;
     let mut applied: u64 = 0;
     let mut pull_bin_supported: Option<bool> = None;
     let mut stale_cursor_recovery_attempted = false;

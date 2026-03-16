@@ -34,7 +34,7 @@ pub(super) fn upload_embedding_artifact_blob_if_present(
     let ciphertext = encrypt_bytes(ctx.sync_key, &plaintext, aad.as_bytes())?;
 
     let artifact_id = remote_artifact_id(blob_ref);
-    let endpoint = super::url(
+    let endpoint = super::runtime::url(
         ctx.base_url,
         &format!("/v1/vaults/{}/attachments/{artifact_id}", ctx.vault_id),
     )?;
@@ -64,7 +64,12 @@ pub(super) fn download_missing_embedding_artifact_blobs(
     ctx: &AttachmentUploadContext<'_>,
 ) -> Result<u64> {
     let missing_blob_refs = list_missing_embedding_artifact_blob_refs(ctx)?;
-    download_embedding_artifact_blobs_by_refs(ctx, &missing_blob_refs, None)
+    Ok(download_embedding_artifact_blobs_by_refs(ctx, &missing_blob_refs, None)?.downloaded)
+}
+
+pub(super) struct EmbeddingArtifactBlobDownloadOutcome {
+    pub(super) downloaded: u64,
+    pub(super) missing_remote: u64,
 }
 
 pub(super) fn list_missing_embedding_artifact_blob_refs(
@@ -84,17 +89,19 @@ pub(super) fn download_embedding_artifact_blobs_by_refs(
     ctx: &AttachmentUploadContext<'_>,
     blob_refs: &[String],
     mut on_downloaded: Option<&mut dyn FnMut(u64)>,
-) -> Result<u64> {
+) -> Result<EmbeddingArtifactBlobDownloadOutcome> {
     let mut downloaded = 0u64;
+    let mut missing_remote = 0u64;
     for blob_ref in blob_refs {
         let artifact_id = remote_artifact_id(blob_ref);
-        let endpoint = super::url(
+        let endpoint = super::runtime::url(
             ctx.base_url,
             &format!("/v1/vaults/{}/attachments/{artifact_id}", ctx.vault_id),
         )?;
         let resp = ctx.http.get(endpoint).bearer_auth(ctx.id_token).send()?;
         let status = resp.status();
         if status.as_u16() == 404 {
+            missing_remote += 1;
             continue;
         }
         if !status.is_success() {
@@ -113,5 +120,8 @@ pub(super) fn download_embedding_artifact_blobs_by_refs(
             cb(1);
         }
     }
-    Ok(downloaded)
+    Ok(EmbeddingArtifactBlobDownloadOutcome {
+        downloaded,
+        missing_remote,
+    })
 }
