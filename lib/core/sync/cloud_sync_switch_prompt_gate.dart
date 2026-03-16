@@ -16,6 +16,7 @@ import '../../i18n/strings.g.dart';
 import '../../features/media_backup/cloud_media_backup_runner.dart';
 import '../../features/settings/ai_settings_page.dart';
 import 'cloud_sync_switch_prefs.dart';
+import 'stage_progress_smoother.dart';
 import 'sync_config_store.dart';
 import 'sync_engine.dart';
 import 'sync_engine_gate.dart';
@@ -59,6 +60,16 @@ final class _CloudSyncSwitchPromptGateState
   late final SyncConfigStore _store = widget.configStore ?? SyncConfigStore();
   static const _kCloudAiFeatureGuidePromptedUidPrefsKey =
       'cloud_ai_feature_guide_prompted_uid_v1';
+
+  void Function(int done, int total) _makeSmoothStageProgressHandler(
+    ValueNotifier<double> progress,
+  ) {
+    final smoother = SyncStageProgressSmoother();
+    return (done, total) {
+      if (total <= 0) return;
+      progress.value = smoother.update(done: done, total: total);
+    };
+  }
 
   @override
   void dispose() {
@@ -361,10 +372,7 @@ final class _CloudSyncSwitchPromptGateState
                     vaultId: vaultId,
                     idToken: idToken,
                   ),
-                  onProgress: (done, total) {
-                    progress.value =
-                        total <= 0 ? 0.0 : (done / total).clamp(0.0, 1.0);
-                  },
+                  onProgress: _makeSmoothStageProgressHandler(progress),
                 );
 
                 // Push
@@ -378,10 +386,7 @@ final class _CloudSyncSwitchPromptGateState
                     vaultId: vaultId,
                     idToken: idToken,
                   ),
-                  onProgress: (done, total) {
-                    progress.value =
-                        total <= 0 ? 0.0 : (done / total).clamp(0.0, 1.0);
-                  },
+                  onProgress: _makeSmoothStageProgressHandler(progress),
                 );
 
                 // Media uploads (optional)

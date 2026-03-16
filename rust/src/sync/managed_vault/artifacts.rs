@@ -63,13 +63,31 @@ pub(super) fn upload_embedding_artifact_blob_if_present(
 pub(super) fn download_missing_embedding_artifact_blobs(
     ctx: &AttachmentUploadContext<'_>,
 ) -> Result<u64> {
-    let mut downloaded = 0u64;
+    let missing_blob_refs = list_missing_embedding_artifact_blob_refs(ctx)?;
+    download_embedding_artifact_blobs_by_refs(ctx, &missing_blob_refs, None)
+}
+
+pub(super) fn list_missing_embedding_artifact_blob_refs(
+    ctx: &AttachmentUploadContext<'_>,
+) -> Result<Vec<String>> {
+    let mut missing: Vec<String> = Vec::new();
     for blob_ref in crate::db::list_distinct_embedding_artifact_blob_refs(ctx.conn)? {
         if crate::db::has_embedding_artifact_blob(ctx.app_dir, &blob_ref) {
             continue;
         }
+        missing.push(blob_ref);
+    }
+    Ok(missing)
+}
 
-        let artifact_id = remote_artifact_id(&blob_ref);
+pub(super) fn download_embedding_artifact_blobs_by_refs(
+    ctx: &AttachmentUploadContext<'_>,
+    blob_refs: &[String],
+    mut on_downloaded: Option<&mut dyn FnMut(u64)>,
+) -> Result<u64> {
+    let mut downloaded = 0u64;
+    for blob_ref in blob_refs {
+        let artifact_id = remote_artifact_id(blob_ref);
         let endpoint = super::url(
             ctx.base_url,
             &format!("/v1/vaults/{}/attachments/{artifact_id}", ctx.vault_id),
@@ -89,8 +107,11 @@ pub(super) fn download_missing_embedding_artifact_blobs(
         let ciphertext = resp.bytes()?;
         let aad = format!("sync.embedding_artifact.blob:{blob_ref}");
         let plaintext = decrypt_bytes(ctx.sync_key, ciphertext.as_ref(), aad.as_bytes())?;
-        crate::db::write_embedding_artifact_blob(ctx.app_dir, ctx.db_key, &blob_ref, &plaintext)?;
+        crate::db::write_embedding_artifact_blob(ctx.app_dir, ctx.db_key, blob_ref, &plaintext)?;
         downloaded += 1;
+        if let Some(cb) = on_downloaded.as_deref_mut() {
+            cb(1);
+        }
     }
     Ok(downloaded)
 }

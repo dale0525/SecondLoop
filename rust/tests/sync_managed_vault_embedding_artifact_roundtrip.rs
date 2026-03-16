@@ -440,6 +440,81 @@ fn managed_vault_roundtrip_syncs_embedding_artifact_blobs() {
 }
 
 #[test]
+fn managed_vault_pull_with_progress_includes_embedding_artifact_downloads() {
+    let (base_url, stop_tx, handle) = start_mock_server();
+    let vault_id = "vault-test".to_string();
+    let id_token = "token-test".to_string();
+
+    let temp_a = tempfile::tempdir().expect("tempdir A");
+    let app_dir_a = temp_a.path().join("secondloop_a");
+    let key_a =
+        auth::init_master_password(&app_dir_a, "pw-a", KdfParams::for_test()).expect("init A");
+    let conn_a = db::open(&app_dir_a).expect("open A db");
+    let conversation =
+        db::get_or_create_loop_home_conversation(&conn_a, &key_a).expect("conversation A");
+    let _message = db::insert_message(
+        &conn_a,
+        &key_a,
+        &conversation.id,
+        "user",
+        "managed vault artifact progress note",
+    )
+    .expect("message A");
+    let processed =
+        db::process_pending_message_embeddings_default(&conn_a, &key_a, 10).expect("process A");
+    assert_eq!(processed, 1);
+
+    let sync_key = derive_root_key(
+        "sync-passphrase",
+        b"secondloop-sync1",
+        &KdfParams::for_test(),
+    )
+    .expect("derive sync key");
+
+    let pushed =
+        sync::managed_vault::push(&conn_a, &key_a, &sync_key, &base_url, &vault_id, &id_token)
+            .expect("push");
+    assert!(pushed > 0);
+
+    let temp_b = tempfile::tempdir().expect("tempdir B");
+    let app_dir_b = temp_b.path().join("secondloop_b");
+    let key_b =
+        auth::init_master_password(&app_dir_b, "pw-b", KdfParams::for_test()).expect("init B");
+    let conn_b = db::open(&app_dir_b).expect("open B db");
+
+    let mut seen: Vec<(u64, u64)> = Vec::new();
+    let mut on_progress = |done: u64, total: u64| {
+        seen.push((done, total));
+    };
+
+    let pulled = sync::managed_vault::pull_with_progress(
+        &conn_b,
+        &key_b,
+        &sync_key,
+        &base_url,
+        &vault_id,
+        &id_token,
+        &mut on_progress,
+    )
+    .expect("pull with progress");
+    assert!(pulled > 0);
+
+    assert!(!seen.is_empty());
+    assert!(
+        seen.iter().any(|&(_, total)| total > 0),
+        "expected progress total to become positive after artifact accounting: {seen:?}"
+    );
+    assert!(
+        seen.contains(&(0, 1)),
+        "expected artifact total to appear in progress: {seen:?}"
+    );
+    assert_eq!(*seen.last().expect("last progress"), (1, 1));
+
+    let _ = stop_tx.send(());
+    let _ = handle.join();
+}
+
+#[test]
 fn managed_vault_pull_paginates_without_skipping_ops_at_limit_boundary() {
     let (base_url, stop_tx, handle) = start_mock_server();
     let vault_id = "vault-pagination".to_string();

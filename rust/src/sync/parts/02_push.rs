@@ -107,8 +107,6 @@ fn push_internal(
     upload_attachment_bytes: bool,
     mut progress: Option<&mut dyn FnMut(u64, u64)>,
 ) -> Result<u64> {
-    crate::db::backfill_attachments_oplog_if_needed(conn, db_key)?;
-
     let device_id = get_or_create_device_id(conn)?;
     let app_dir = crate::db::app_dir_from_conn(conn)?;
     let app_dir_path = app_dir.as_path();
@@ -125,12 +123,41 @@ fn push_internal(
         )?
         .max(0) as u64;
 
-    if !upload_attachment_bytes && local_pending_ops == 0 && last_pushed_seq == 0 {
+    let has_remote_device_ops: bool = conn.query_row(
+        r#"SELECT EXISTS(SELECT 1 FROM oplog WHERE device_id != ?1 LIMIT 1)"#,
+        params![device_id.as_str()],
+        |row| row.get(0),
+    )?;
+
+    if local_pending_ops == 0 && last_pushed_seq == 0 && has_remote_device_ops {
+        // After a fresh pull, this device can have lots of synced metadata but still no local
+        // oplog rows of its own. Returning early here avoids synthesizing attachment backfill ops
+        // for remote-owned rows and prevents a long no-op upload phase on the new device.
         if let Some(cb) = progress.as_deref_mut() {
             cb(0, 0);
         }
         return Ok(0);
     }
+
+    crate::db::backfill_attachments_oplog_if_needed(conn, db_key)?;
+
+    let local_pending_ops = conn
+        .query_row(
+            r#"SELECT count(*) FROM oplog WHERE device_id = ?1 AND seq > ?2"#,
+            params![device_id, last_pushed_seq],
+            |row| row.get::<_, i64>(0),
+        )?
+        .max(0) as u64;
+
+if !upload_attachment_bytes
+    && local_pending_ops == 0
+    && (progress.is_none() || last_pushed_seq == 0)
+{
+    if let Some(cb) = progress.as_deref_mut() {
+        cb(0, 0);
+    }
+    return Ok(0);
+}
 
     let ops_dir = format!("{remote_root_dir}{device_id}/ops/");
     remote.mkdir_all(&ops_dir)?;
@@ -691,7 +718,72 @@ mod cursor_metadata_tests {
 #[cfg(test)]
 mod push_progress_tests {
     use super::*;
+    use std::sync::atomic::{AtomicUsize, Ordering};
     use tempfile::tempdir;
+
+    struct CountingRemoteStore {
+        inner: InMemoryRemoteStore,
+        list_calls: AtomicUsize,
+        mkdir_calls: AtomicUsize,
+        get_calls: AtomicUsize,
+        put_calls: AtomicUsize,
+    }
+
+    impl CountingRemoteStore {
+        fn new() -> Self {
+            Self {
+                inner: InMemoryRemoteStore::new(),
+                list_calls: AtomicUsize::new(0),
+                mkdir_calls: AtomicUsize::new(0),
+                get_calls: AtomicUsize::new(0),
+                put_calls: AtomicUsize::new(0),
+            }
+        }
+
+        fn reset_counts(&self) {
+            self.list_calls.store(0, Ordering::Relaxed);
+            self.mkdir_calls.store(0, Ordering::Relaxed);
+            self.get_calls.store(0, Ordering::Relaxed);
+            self.put_calls.store(0, Ordering::Relaxed);
+        }
+
+        fn total_calls(&self) -> usize {
+            self.list_calls.load(Ordering::Relaxed)
+                + self.mkdir_calls.load(Ordering::Relaxed)
+                + self.get_calls.load(Ordering::Relaxed)
+                + self.put_calls.load(Ordering::Relaxed)
+        }
+    }
+
+    impl RemoteStore for CountingRemoteStore {
+        fn target_id(&self) -> &str {
+            self.inner.target_id()
+        }
+
+        fn mkdir_all(&self, path: &str) -> Result<()> {
+            self.mkdir_calls.fetch_add(1, Ordering::Relaxed);
+            self.inner.mkdir_all(path)
+        }
+
+        fn list(&self, dir: &str) -> Result<Vec<String>> {
+            self.list_calls.fetch_add(1, Ordering::Relaxed);
+            self.inner.list(dir)
+        }
+
+        fn get(&self, path: &str) -> Result<Vec<u8>> {
+            self.get_calls.fetch_add(1, Ordering::Relaxed);
+            self.inner.get(path)
+        }
+
+        fn put(&self, path: &str, bytes: Vec<u8>) -> Result<()> {
+            self.put_calls.fetch_add(1, Ordering::Relaxed);
+            self.inner.put(path, bytes)
+        }
+
+        fn delete(&self, path: &str) -> Result<()> {
+            self.inner.delete(path)
+        }
+    }
 
     #[test]
     fn push_ops_only_with_progress_reports_done_and_total() {
@@ -760,6 +852,59 @@ mod push_progress_tests {
         assert!(!seen.is_empty());
         assert_eq!(seen[0].1, 2);
         assert_eq!(*seen.last().expect("last progress"), (2, 2));
+    }
+
+    #[test]
+    fn push_with_progress_skips_remote_work_for_fresh_device_without_local_ops() {
+        let dir_a = tempdir().expect("tempdir A");
+        let conn_a = crate::db::open(dir_a.path()).expect("open A");
+        let db_key = [7u8; 32];
+        let sync_key = [9u8; 32];
+
+        let _conversation =
+            crate::db::create_conversation(&conn_a, &db_key, "One").expect("conversation A");
+        let _attachment = crate::db::insert_attachment(
+            &conn_a,
+            &db_key,
+            dir_a.path(),
+            b"hello sync",
+            "image/png",
+        )
+        .expect("attachment A");
+
+        let remote = CountingRemoteStore::new();
+        let pushed_a = push(&conn_a, &db_key, &sync_key, &remote, "SecondLoop").expect("push A");
+        assert_eq!(pushed_a, 2);
+
+        let dir_b = tempdir().expect("tempdir B");
+        let conn_b = crate::db::open(dir_b.path()).expect("open B");
+        let pulled_b = pull(&conn_b, &db_key, &sync_key, &remote, "SecondLoop").expect("pull B");
+        assert_eq!(pulled_b, 2);
+
+        remote.reset_counts();
+
+        let mut seen: Vec<(u64, u64)> = Vec::new();
+        let mut on_progress = |done: u64, total: u64| {
+            seen.push((done, total));
+        };
+
+        let pushed_b = push_with_progress(
+            &conn_b,
+            &db_key,
+            &sync_key,
+            &remote,
+            "SecondLoop",
+            &mut on_progress,
+        )
+        .expect("push B");
+
+        assert_eq!(pushed_b, 0);
+        assert_eq!(seen, vec![(0, 0)]);
+        assert_eq!(
+            remote.total_calls(),
+            0,
+            "fresh device without local ops should not touch remote during push"
+        );
     }
 }
 

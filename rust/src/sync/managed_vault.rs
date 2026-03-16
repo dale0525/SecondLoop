@@ -341,8 +341,6 @@ fn push_internal(
     id_token: &str,
     upload_attachment_bytes: bool,
 ) -> Result<u64> {
-    crate::db::backfill_attachments_oplog_if_needed(conn, db_key)?;
-
     let device_id = super::get_or_create_device_id(conn)?;
     let app_dir = super::app_dir_from_conn(conn)?;
     let app_dir_path = app_dir.as_path();
@@ -355,13 +353,30 @@ fn push_internal(
         super::kv_set_i64(conn, &last_pushed_key, legacy)?;
     }
 
+    let last_pushed_seq = super::kv_get_i64(conn, &last_pushed_key)?.unwrap_or(0);
     let local_pending_ops = conn
         .query_row(
             r#"SELECT count(*) FROM oplog WHERE device_id = ?1 AND seq > ?2"#,
-            params![
-                device_id.as_str(),
-                super::kv_get_i64(conn, &last_pushed_key)?.unwrap_or(0)
-            ],
+            params![device_id.as_str(), last_pushed_seq],
+            |row| row.get::<_, i64>(0),
+        )?
+        .max(0) as u64;
+    let has_remote_device_ops: bool = conn.query_row(
+        r#"SELECT EXISTS(SELECT 1 FROM oplog WHERE device_id != ?1 LIMIT 1)"#,
+        params![device_id.as_str()],
+        |row| row.get(0),
+    )?;
+
+    if local_pending_ops == 0 && last_pushed_seq == 0 && has_remote_device_ops {
+        return Ok(0);
+    }
+
+    crate::db::backfill_attachments_oplog_if_needed(conn, db_key)?;
+
+    let local_pending_ops = conn
+        .query_row(
+            r#"SELECT count(*) FROM oplog WHERE device_id = ?1 AND seq > ?2"#,
+            params![device_id.as_str(), last_pushed_seq],
             |row| row.get::<_, i64>(0),
         )?
         .max(0) as u64;

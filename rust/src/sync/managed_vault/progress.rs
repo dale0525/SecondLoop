@@ -159,9 +159,42 @@ pub fn pull_with_progress(
         }
     }
 
-    if let Some(total) = total_ops {
-        progress(done_ops, total);
+    let app_dir = super::super::app_dir_from_conn(conn)?;
+    let download_ctx = super::attachments::AttachmentUploadContext {
+        conn,
+        db_key,
+        sync_key,
+        http: &http,
+        base_url,
+        vault_id,
+        id_token,
+        app_dir: app_dir.as_path(),
+    };
+
+    let missing_blob_refs =
+        super::artifacts::list_missing_embedding_artifact_blob_refs(&download_ctx)?;
+    let mut total_units = total_ops.unwrap_or(0);
+    let mut done_units = done_ops;
+    if !missing_blob_refs.is_empty() {
+        total_units += missing_blob_refs.len() as u64;
+        progress(done_units, total_units);
+    } else if total_ops.is_some() {
+        progress(done_units, total_units);
     }
+
+    if !missing_blob_refs.is_empty() {
+        let mut on_downloaded = |delta: u64| {
+            done_units = (done_units + delta).min(total_units);
+            progress(done_units, total_units);
+        };
+        let _ = super::artifacts::download_embedding_artifact_blobs_by_refs(
+            &download_ctx,
+            &missing_blob_refs,
+            Some(&mut on_downloaded),
+        )?;
+    }
+
+    progress(done_units, total_units);
 
     Ok(applied)
 }
@@ -178,8 +211,6 @@ pub fn push_ops_only_with_progress(
     const PUSH_LIMIT: i64 = 200;
     const MAX_REPAIR_ATTEMPTS: usize = 10;
 
-    crate::db::backfill_attachments_oplog_if_needed(conn, db_key)?;
-
     let http = super::client()?;
     let device_id = super::super::get_or_create_device_id(conn)?;
     let _ = super::ensure_device_registered(&http, base_url, vault_id, id_token, &device_id)?;
@@ -193,7 +224,28 @@ pub fn push_ops_only_with_progress(
     }
 
     let initial_last_pushed_seq = super::super::kv_get_i64(conn, &last_pushed_key)?.unwrap_or(0);
-    let total_ops = conn
+    let mut total_ops = conn
+        .query_row(
+            r#"SELECT count(*) FROM oplog WHERE device_id = ?1 AND seq > ?2"#,
+            params![device_id.as_str(), initial_last_pushed_seq],
+            |row| row.get::<_, i64>(0),
+        )?
+        .max(0) as u64;
+
+    let has_remote_device_ops: bool = conn.query_row(
+        r#"SELECT EXISTS(SELECT 1 FROM oplog WHERE device_id != ?1 LIMIT 1)"#,
+        params![device_id.as_str()],
+        |row| row.get(0),
+    )?;
+
+    if total_ops == 0 && initial_last_pushed_seq == 0 && has_remote_device_ops {
+        progress(0, 0);
+        return Ok(0);
+    }
+
+    crate::db::backfill_attachments_oplog_if_needed(conn, db_key)?;
+
+    total_ops = conn
         .query_row(
             r#"SELECT count(*) FROM oplog WHERE device_id = ?1 AND seq > ?2"#,
             params![device_id.as_str(), initial_last_pushed_seq],

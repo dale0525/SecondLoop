@@ -197,24 +197,36 @@ fn upload_embedding_artifact_blob_if_present(
     Ok(true)
 }
 
-fn download_missing_embedding_artifact_blobs(
+fn list_missing_embedding_artifact_blob_refs(
     conn: &Connection,
+    app_dir: &Path,
+) -> Result<Vec<String>> {
+    let mut missing: Vec<String> = Vec::new();
+    for blob_ref in crate::db::list_distinct_embedding_artifact_blob_refs(conn)? {
+        if crate::db::has_embedding_artifact_blob(app_dir, &blob_ref) {
+            continue;
+        }
+        missing.push(blob_ref);
+    }
+    Ok(missing)
+}
+
+fn download_embedding_artifact_blobs_by_refs(
     db_key: &[u8; 32],
     sync_key: &[u8; 32],
     remote: &impl RemoteStore,
     remote_root: &str,
+    app_dir: &Path,
+    blob_refs: &[String],
+    mut on_downloaded: Option<&mut dyn FnMut(u64)>,
 ) -> Result<u64> {
-    let app_dir = crate::db::app_dir_from_conn(conn)?;
     let remote_root_dir = normalize_dir(remote_root);
     let mut downloaded = 0u64;
 
-    for blob_ref in crate::db::list_distinct_embedding_artifact_blob_refs(conn)? {
-        if crate::db::has_embedding_artifact_blob(app_dir.as_path(), &blob_ref) {
-            continue;
-        }
+    for blob_ref in blob_refs {
         let remote_path = format!(
             "{remote_root_dir}{}",
-            crate::db::embedding_artifact_blob_rel_path(&blob_ref)
+            crate::db::embedding_artifact_blob_rel_path(blob_ref)
         );
         let ciphertext = match remote.get(&remote_path) {
             Ok(bytes) => bytes,
@@ -223,8 +235,11 @@ fn download_missing_embedding_artifact_blobs(
         };
         let aad = format!("sync.embedding_artifact.blob:{blob_ref}");
         let plaintext = decrypt_bytes(sync_key, &ciphertext, aad.as_bytes())?;
-        crate::db::write_embedding_artifact_blob(app_dir.as_path(), db_key, &blob_ref, &plaintext)?;
+        crate::db::write_embedding_artifact_blob(app_dir, db_key, blob_ref, &plaintext)?;
         downloaded += 1;
+        if let Some(cb) = on_downloaded.as_deref_mut() {
+            cb(1);
+        }
     }
 
     Ok(downloaded)

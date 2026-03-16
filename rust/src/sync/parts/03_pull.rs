@@ -242,11 +242,38 @@ fn pull_internal(
         }
     }
 
-    if let Some(cb) = progress {
-        cb(done_ops, total_ops);
+    let app_dir = crate::db::app_dir_from_conn(conn)?;
+    let missing_blob_refs = list_missing_embedding_artifact_blob_refs(conn, app_dir.as_path())?;
+    let mut total_units = total_ops;
+    let mut done_units = done_ops;
+    if !missing_blob_refs.is_empty() {
+        total_units += missing_blob_refs.len() as u64;
+        if let Some(cb) = progress.as_deref_mut() {
+            cb(done_units, total_units);
+        }
     }
 
-    let _ = download_missing_embedding_artifact_blobs(conn, db_key, sync_key, remote, remote_root)?;
+    if !missing_blob_refs.is_empty() {
+        let mut on_downloaded = |delta: u64| {
+            done_units = (done_units + delta).min(total_units);
+            if let Some(cb) = progress.as_deref_mut() {
+                cb(done_units, total_units);
+            }
+        };
+        let _ = download_embedding_artifact_blobs_by_refs(
+            db_key,
+            sync_key,
+            remote,
+            remote_root,
+            app_dir.as_path(),
+            &missing_blob_refs,
+            Some(&mut on_downloaded),
+        )?;
+    }
+
+    if let Some(cb) = progress {
+        cb(done_units, total_units);
+    }
 
     Ok(applied)
 }
@@ -504,6 +531,84 @@ mod pull_progress_tests {
         assert!(!seen.is_empty());
         assert_eq!(seen[0].1, 1);
         assert_eq!(*seen.last().unwrap(), (1, 1));
+    }
+
+    #[test]
+    fn pull_with_progress_includes_embedding_artifact_downloads() {
+        let db_key = [7u8; 32];
+        let sync_key = [9u8; 32];
+        let remote = InMemoryRemoteStore::new();
+
+        let dir_a = tempdir().expect("tempdir A");
+        let conn_a = crate::db::open(dir_a.path()).expect("open A");
+        let conversation =
+            crate::db::get_or_create_loop_home_conversation(&conn_a, &db_key).expect("conv A");
+        let message = crate::db::insert_message(
+            &conn_a,
+            &db_key,
+            &conversation.id,
+            "user",
+            "artifact progress note",
+        )
+        .expect("message A");
+        let processed =
+            crate::db::process_pending_message_embeddings_default(&conn_a, &db_key, 10)
+                .expect("process embeddings A");
+        assert_eq!(processed, 1);
+
+        let pushed = push(&conn_a, &db_key, &sync_key, &remote, "SecondLoop").expect("push A");
+        assert!(pushed > 0);
+
+        let revision: i64 = conn_a
+            .query_row(
+                r#"SELECT updated_at FROM messages WHERE id = ?1"#,
+                params![message.id.as_str()],
+                |row| row.get(0),
+            )
+            .expect("revision A");
+        let profile_id = crate::db::embedding_artifact_profile_id(
+            crate::embedding::DEFAULT_MODEL_NAME,
+            crate::embedding::DEFAULT_EMBED_DIM,
+        );
+        let manifests = crate::db::list_active_embedding_artifacts_for_source_revision(
+            &conn_a,
+            "message",
+            &message.id,
+            revision,
+            &profile_id,
+        )
+        .expect("manifests A");
+        assert_eq!(manifests.len(), 1);
+
+        let dir_b = tempdir().expect("tempdir B");
+        let conn_b = crate::db::open(dir_b.path()).expect("open B");
+        let mut seen: Vec<(u64, u64)> = Vec::new();
+        let mut on_progress = |done: u64, total: u64| {
+            seen.push((done, total));
+        };
+
+        let applied = pull_with_progress(
+            &conn_b,
+            &db_key,
+            &sync_key,
+            &remote,
+            "SecondLoop",
+            &mut on_progress,
+        )
+        .expect("pull B");
+        assert!(applied > 0);
+
+        assert!(!seen.is_empty());
+        let initial_total = seen[0].1;
+        assert!(initial_total > 0, "expected non-zero initial total: {seen:?}");
+        assert!(
+            seen.iter().any(|&(_, total)| total == initial_total + 1),
+            "expected total to grow by one artifact download: {seen:?}"
+        );
+        assert_eq!(
+            *seen.last().expect("last progress"),
+            (initial_total + 1, initial_total + 1)
+        );
     }
 }
 

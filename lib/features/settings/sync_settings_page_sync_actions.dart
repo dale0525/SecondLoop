@@ -467,10 +467,7 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
                         password: _optionalTrimmed(_passwordController),
                         remoteRoot: newRemoteRoot,
                       ),
-                      onProgress: (done, total) {
-                        progress.value =
-                            total <= 0 ? 0.0 : (done / total).clamp(0.0, 1.0);
-                      },
+                      onProgress: _makeSmoothStageProgressHandler(progress),
                     );
 
                     stage.value = t.sync.progressDialog.pushing;
@@ -484,10 +481,7 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
                         password: _optionalTrimmed(_passwordController),
                         remoteRoot: newRemoteRoot,
                       ),
-                      onProgress: (done, total) {
-                        progress.value =
-                            total <= 0 ? 0.0 : (done / total).clamp(0.0, 1.0);
-                      },
+                      onProgress: _makeSmoothStageProgressHandler(progress),
                     );
 
                     if (_cloudMediaBackupEnabled) {
@@ -546,10 +540,7 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
                         localDir: newLocalDir,
                         remoteRoot: newRemoteRoot,
                       ),
-                      onProgress: (done, total) {
-                        progress.value =
-                            total <= 0 ? 0.0 : (done / total).clamp(0.0, 1.0);
-                      },
+                      onProgress: _makeSmoothStageProgressHandler(progress),
                     );
 
                     stage.value = t.sync.progressDialog.pushing;
@@ -561,10 +552,7 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
                         localDir: newLocalDir,
                         remoteRoot: newRemoteRoot,
                       ),
-                      onProgress: (done, total) {
-                        progress.value =
-                            total <= 0 ? 0.0 : (done / total).clamp(0.0, 1.0);
-                      },
+                      onProgress: _makeSmoothStageProgressHandler(progress),
                     );
 
                     stage.value = t.sync.progressDialog.finalizing;
@@ -616,10 +604,7 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
                           vaultId: vaultId,
                           idToken: idTokenTrimmed,
                         ),
-                        onProgress: (done, total) {
-                          progress.value =
-                              total <= 0 ? 0.0 : (done / total).clamp(0.0, 1.0);
-                        },
+                        onProgress: _makeSmoothStageProgressHandler(progress),
                       );
 
                       stage.value = t.sync.progressDialog.pushing;
@@ -632,10 +617,7 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
                           vaultId: vaultId,
                           idToken: idTokenTrimmed,
                         ),
-                        onProgress: (done, total) {
-                          progress.value =
-                              total <= 0 ? 0.0 : (done / total).clamp(0.0, 1.0);
-                        },
+                        onProgress: _makeSmoothStageProgressHandler(progress),
                       );
 
                       if (_cloudMediaBackupEnabled) {
@@ -758,11 +740,10 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
                   password: _optionalTrimmed(_passwordController),
                   remoteRoot: _requiredTrimmed(_remoteRootController),
                 ),
-                onProgress: (done, total) {
-                  if (total <= 0) return;
-                  hasTotal = true;
-                  progress.value = (done / total).clamp(0.0, 1.0);
-                },
+                onProgress: _makeSmoothStageProgressHandler(
+                  progress,
+                  onHasTotal: () => hasTotal = true,
+                ),
               ),
             SyncBackendType.localDir => _consumeRustProgressStream(
                 backend.syncLocaldirPushProgress(
@@ -771,11 +752,10 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
                   localDir: _requiredTrimmed(_localDirController),
                   remoteRoot: _requiredTrimmed(_remoteRootController),
                 ),
-                onProgress: (done, total) {
-                  if (total <= 0) return;
-                  hasTotal = true;
-                  progress.value = (done / total).clamp(0.0, 1.0);
-                },
+                onProgress: _makeSmoothStageProgressHandler(
+                  progress,
+                  onHasTotal: () => hasTotal = true,
+                ),
               ),
             SyncBackendType.managedVault => () async {
                 final cloudAuth = CloudAuthScope.of(context).controller;
@@ -799,11 +779,10 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
                     vaultId: vaultId,
                     idToken: idToken,
                   ),
-                  onProgress: (done, total) {
-                    if (total <= 0) return;
-                    hasTotal = true;
-                    progress.value = (done / total).clamp(0.0, 1.0);
-                  },
+                  onProgress: _makeSmoothStageProgressHandler(
+                    progress,
+                    onHasTotal: () => hasTotal = true,
+                  ),
                 );
               }(),
           });
@@ -884,11 +863,10 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
                   password: _optionalTrimmed(_passwordController),
                   remoteRoot: _requiredTrimmed(_remoteRootController),
                 ),
-                onProgress: (done, total) {
-                  if (total <= 0) return;
-                  hasTotal = true;
-                  progress.value = (done / total).clamp(0.0, 1.0);
-                },
+                onProgress: _makeSmoothStageProgressHandler(
+                  progress,
+                  onHasTotal: () => hasTotal = true,
+                ),
               ),
             SyncBackendType.localDir => _consumeRustProgressStream(
                 backend.syncLocaldirPullProgress(
@@ -897,11 +875,10 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
                   localDir: _requiredTrimmed(_localDirController),
                   remoteRoot: _requiredTrimmed(_remoteRootController),
                 ),
-                onProgress: (done, total) {
-                  if (total <= 0) return;
-                  hasTotal = true;
-                  progress.value = (done / total).clamp(0.0, 1.0);
-                },
+                onProgress: _makeSmoothStageProgressHandler(
+                  progress,
+                  onHasTotal: () => hasTotal = true,
+                ),
               ),
             SyncBackendType.managedVault => () async {
                 final cloudAuth = CloudAuthScope.of(context).controller;
@@ -925,11 +902,10 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
                     vaultId: vaultId,
                     idToken: idToken,
                   ),
-                  onProgress: (done, total) {
-                    if (total <= 0) return;
-                    hasTotal = true;
-                    progress.value = (done / total).clamp(0.0, 1.0);
-                  },
+                  onProgress: _makeSmoothStageProgressHandler(
+                    progress,
+                    onHasTotal: () => hasTotal = true,
+                  ),
                 );
               }(),
           });
