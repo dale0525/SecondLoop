@@ -209,8 +209,6 @@ class TaskPriorityStore extends ChangeNotifier {
       }
 
       final request = buildTaskPriorityAiRequest(_snapshot, nowLocal: nowLocal);
-      final requestContextSignature =
-          _buildRequestContextSignature(request.candidates);
       if (request.candidates.isEmpty) {
         _rememberStickyFocus(nowLocal);
         return;
@@ -233,10 +231,7 @@ class TaskPriorityStore extends ChangeNotifier {
       final staleCandidates = <TaskPriorityAiCandidate>[];
 
       for (final candidate in request.candidates) {
-        final requestSignature = _buildCandidateRequestSignature(
-          candidate,
-          requestContextSignature: requestContextSignature,
-        );
+        final requestSignature = _buildCandidateRequestSignature(candidate);
         final cached = persisted[candidate.todoId];
         if (cached != null && cached.requestSignature == requestSignature) {
           freshEntries[candidate.todoId] = cached.entry;
@@ -259,10 +254,7 @@ class TaskPriorityStore extends ChangeNotifier {
               }
             }
             if (candidate == null) continue;
-            final requestSignature = _buildCandidateRequestSignature(
-              candidate,
-              requestContextSignature: requestContextSignature,
-            );
+            final requestSignature = _buildCandidateRequestSignature(candidate);
             freshEntries[entry.todoId] = entry;
             mergedPersisted[entry.todoId] = _PersistedAiAssessment(
               entry: entry,
@@ -316,7 +308,7 @@ class TaskPriorityStore extends ChangeNotifier {
     _stickyFocusTodoId = _snapshot.primaryFocus?.todo.id;
     _stickyFocusDayLocal =
         DateTime(nowLocal.year, nowLocal.month, nowLocal.day);
-    _stickyFocusDueStateByTodoId = _buildStickyDueStateSignatures(_snapshot);
+    _stickyFocusDueStateByTodoId = _buildStickyStateSignatures(_snapshot);
   }
 
   Future<Map<String, _PersistedAiAssessment>> _readPersistedAiAssessments({
@@ -407,48 +399,8 @@ class TaskPriorityStore extends ChangeNotifier {
     }
   }
 
-  String _buildRequestContextSignature(
-    List<TaskPriorityAiCandidate> candidates,
-  ) {
-    return jsonEncode(
-      candidates
-          .map(
-            (candidate) => <Object?>[
-              candidate.todoId,
-              candidate.title,
-              candidate.status,
-              candidate.band.name,
-              candidate.dueState,
-              candidate.sourceSummary,
-              candidate.isRepeatedlyDeferred,
-              candidate.isPotentialBlocker,
-              candidate.isQuickWin,
-              candidate.ruleIsImportant,
-              candidate.ruleIsUrgent,
-            ],
-          )
-          .toList(growable: false),
-    );
-  }
-
-  String _buildCandidateRequestSignature(
-    TaskPriorityAiCandidate candidate, {
-    required String requestContextSignature,
-  }) {
-    return jsonEncode(<Object?>[
-      requestContextSignature,
-      candidate.todoId,
-      candidate.title,
-      candidate.status,
-      candidate.band.name,
-      candidate.dueState,
-      candidate.sourceSummary,
-      candidate.isRepeatedlyDeferred,
-      candidate.isPotentialBlocker,
-      candidate.isQuickWin,
-      candidate.ruleIsImportant,
-      candidate.ruleIsUrgent,
-    ]);
+  String _buildCandidateRequestSignature(TaskPriorityAiCandidate candidate) {
+    return jsonEncode(candidate.toJson());
   }
 
   TaskPrioritySnapshot _applyStickyFocus(
@@ -477,7 +429,7 @@ class TaskPriorityStore extends ChangeNotifier {
     return snapshot.copyWith(selectedFocusTodoId: stickyTodoId);
   }
 
-  Map<String, String> _buildStickyDueStateSignatures(
+  Map<String, String> _buildStickyStateSignatures(
     TaskPrioritySnapshot snapshot,
   ) {
     return <String, String>{
@@ -492,6 +444,12 @@ class TaskPriorityStore extends ChangeNotifier {
           entry.isReviewDue,
           entry.isFutureScheduled,
           entry.isInProgress,
+          entry.band.name,
+          entry.confidence.name,
+          entry.isImportant,
+          entry.isUrgent,
+          entry.ruleScore,
+          entry.semanticScore,
         ]),
     };
   }
@@ -499,7 +457,7 @@ class TaskPriorityStore extends ChangeNotifier {
   bool _didStickyDueStateChange(TaskPrioritySnapshot snapshot) {
     final previous = _stickyFocusDueStateByTodoId;
     if (previous.isEmpty) return false;
-    final current = _buildStickyDueStateSignatures(snapshot);
+    final current = _buildStickyStateSignatures(snapshot);
     if (current.length != previous.length) return true;
     for (final entry in current.entries) {
       if (previous[entry.key] != entry.value) {

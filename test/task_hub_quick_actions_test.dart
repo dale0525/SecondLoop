@@ -204,6 +204,40 @@ void main() {
     expect(updated.dueAtMs, isNotNull);
   });
 
+  test('decreasing then increasing urgency preserves in-progress state',
+      () async {
+    SharedPreferences.setMockInitialValues({});
+
+    final initial = todo(
+      id: 't3b',
+      title: 'Task 3b',
+      updatedAtMs: 10,
+      status: 'in_progress',
+    );
+    final backend = _QuickActionBackend(initialTodos: [initial]);
+    final controller = TaskHubQuickActionsController(
+      backend: backend,
+      sessionKey: Uint8List(32),
+    );
+
+    final decreased =
+        await controller.apply(initial, TaskHubQuickAction.decreaseUrgency);
+    expect(decreased, isNotNull);
+    final afterDecrease = backend.current('t3b');
+    expect(afterDecrease.status, 'open');
+    expect(afterDecrease.dueAtMs, isNotNull);
+
+    final increased = await controller.apply(
+      afterDecrease,
+      TaskHubQuickAction.increaseUrgency,
+    );
+    expect(increased, isNotNull);
+
+    final restored = backend.current('t3b');
+    expect(restored.status, 'in_progress');
+    expect(restored.dueAtMs, isNull);
+  });
+
   test('decrease urgency moves scheduled task back to inbox review queue',
       () async {
     SharedPreferences.setMockInitialValues({});

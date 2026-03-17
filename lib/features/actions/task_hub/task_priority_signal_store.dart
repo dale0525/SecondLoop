@@ -6,17 +6,21 @@ class TaskPriorityManualSignal {
   const TaskPriorityManualSignal({
     this.isImportant,
     this.isUrgent,
+    this.preferredStatus,
   });
 
   final bool? isImportant;
   final bool? isUrgent;
+  final String? preferredStatus;
 
-  bool get isEmpty => isImportant == null && isUrgent == null;
+  bool get isEmpty =>
+      isImportant == null && isUrgent == null && preferredStatus == null;
 
   Map<String, Object?> toJson() {
     return <String, Object?>{
       'is_important': isImportant,
       'is_urgent': isUrgent,
+      'preferred_status': preferredStatus,
     };
   }
 
@@ -35,18 +39,27 @@ class TaskPriorityManualSignal {
     return TaskPriorityManualSignal(
       isImportant: readBool('is_important'),
       isUrgent: readBool('is_urgent'),
+      preferredStatus:
+          (json['preferred_status'] ?? '').toString().trim().isEmpty
+              ? null
+              : (json['preferred_status'] ?? '').toString().trim(),
     );
   }
 
   TaskPriorityManualSignal copyWith({
     bool? isImportant,
     bool? isUrgent,
+    String? preferredStatus,
     bool clearImportant = false,
     bool clearUrgent = false,
+    bool clearPreferredStatus = false,
   }) {
     return TaskPriorityManualSignal(
       isImportant: clearImportant ? null : (isImportant ?? this.isImportant),
       isUrgent: clearUrgent ? null : (isUrgent ?? this.isUrgent),
+      preferredStatus: clearPreferredStatus
+          ? null
+          : (preferredStatus ?? this.preferredStatus),
     );
   }
 }

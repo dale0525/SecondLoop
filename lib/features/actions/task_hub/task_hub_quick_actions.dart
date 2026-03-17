@@ -156,6 +156,7 @@ class TaskHubQuickActionsController {
     required bool increase,
   }) async {
     final previousSignal = await signalStore.readForTodo(todo.id);
+    final currentSignal = previousSignal ?? const TaskPriorityManualSignal();
     final bucket = _urgencyBucketFor(todo, nowLocal: nowLocal);
     final targetBucket = switch ((bucket, increase)) {
       (_TaskUrgencyBucket.backlog, true) => _TaskUrgencyBucket.scheduled,
@@ -167,7 +168,10 @@ class TaskHubQuickActionsController {
     };
 
     if (bucket == _TaskUrgencyBucket.backlog && !increase) {
-      await signalStore.setUrgency(todo.id, isUrgent: false);
+      await signalStore.setForTodo(
+        todo.id,
+        currentSignal.copyWith(isUrgent: false),
+      );
       return TaskHubUndoTicket(
         todo: todo,
         updatedTodo: todo,
@@ -180,7 +184,13 @@ class TaskHubQuickActionsController {
     }
 
     if (targetBucket == _TaskUrgencyBucket.urgent && bucket == targetBucket) {
-      await signalStore.setUrgency(todo.id, isUrgent: true);
+      await signalStore.setForTodo(
+        todo.id,
+        currentSignal.copyWith(
+          isUrgent: true,
+          clearPreferredStatus: todo.status == 'in_progress',
+        ),
+      );
       return TaskHubUndoTicket(
         todo: todo,
         updatedTodo: todo,
@@ -192,7 +202,16 @@ class TaskHubQuickActionsController {
       );
     }
 
+    final shouldRestoreInProgress = increase &&
+        targetBucket == _TaskUrgencyBucket.urgent &&
+        currentSignal.preferredStatus == 'in_progress';
+
     final updated = await switch (targetBucket) {
+      _TaskUrgencyBucket.urgent when shouldRestoreInProgress =>
+        _moveTodoToInProgress(
+          todo,
+          nowUtcMs: nowUtcMs,
+        ),
       _TaskUrgencyBucket.urgent => _moveTodoToToday(
           todo,
           nowLocal: nowLocal,
@@ -212,11 +231,17 @@ class TaskHubQuickActionsController {
           settings: settings,
         ),
     };
-    await signalStore.setUrgency(
+    await signalStore.setForTodo(
       todo.id,
-      isUrgent: increase
-          ? (targetBucket == _TaskUrgencyBucket.urgent ? true : null)
-          : false,
+      currentSignal.copyWith(
+        isUrgent: increase
+            ? (targetBucket == _TaskUrgencyBucket.urgent ? true : null)
+            : false,
+        clearUrgent: increase && targetBucket != _TaskUrgencyBucket.urgent,
+        preferredStatus:
+            !increase && todo.status == 'in_progress' ? 'in_progress' : null,
+        clearPreferredStatus: shouldRestoreInProgress,
+      ),
     );
     return TaskHubUndoTicket(
       todo: todo,
@@ -225,6 +250,23 @@ class TaskHubQuickActionsController {
           ? TaskHubQuickAction.increaseUrgency
           : TaskHubQuickAction.decreaseUrgency,
       previousManualSignal: previousSignal,
+    );
+  }
+
+  Future<Todo> _moveTodoToInProgress(
+    Todo todo, {
+    required int nowUtcMs,
+  }) {
+    return backend.upsertTodo(
+      sessionKey,
+      id: todo.id,
+      title: todo.title,
+      dueAtMs: null,
+      status: 'in_progress',
+      sourceEntryId: todo.sourceEntryId,
+      reviewStage: null,
+      nextReviewAtMs: null,
+      lastReviewAtMs: nowUtcMs,
     );
   }
 

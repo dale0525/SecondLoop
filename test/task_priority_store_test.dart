@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:secondloop/features/actions/task_hub/task_priority_ai.dart';
 import 'package:secondloop/features/actions/task_hub/task_priority_ai_models.dart';
 import 'package:secondloop/features/actions/task_hub/task_priority_models.dart';
+import 'package:secondloop/features/actions/task_hub/task_priority_signal_store.dart';
 import 'package:secondloop/features/actions/task_hub/task_priority_store.dart';
 import 'package:secondloop/src/rust/db.dart';
 
@@ -664,6 +665,51 @@ void main() {
     expect(store.snapshot.primaryFocus?.todo.id, 'sticky');
 
     nowLocal = DateTime(2026, 3, 13, 12, 0);
+    store.markDirty();
+    await store.refresh();
+
+    expect(store.snapshot.primaryFocus?.todo.id, 'review');
+  });
+
+  test(
+      'manual urgency change bypasses sticky focus and recomputes primary focus',
+      () async {
+    SharedPreferences.setMockInitialValues({});
+    const signalStore = TaskPrioritySignalStore();
+    final aiService = _CountingAiService(
+      const TaskPriorityAiBatchResult(
+        entries: <TaskPriorityAiEntry>[
+          TaskPriorityAiEntry(
+            todoId: 'sticky',
+            priorityBand: TaskPriorityAiBand.next,
+            semanticAdjustment: 12,
+            reason: 'Keep the roadmap item visible.',
+            suggestedAction: TaskPrioritySuggestionKind.clarify,
+            confidence: TaskPriorityAiConfidence.medium,
+            isImportant: true,
+            isUrgent: false,
+          ),
+        ],
+      ),
+    );
+
+    final store = TaskPriorityStore.fromLoaders(
+      nowLocal: () => DateTime(2026, 3, 13, 10, 0),
+      loadTodos: () async => <Todo>[
+        todo(id: 'sticky', title: 'Roadmap', updatedAtMs: 50),
+        todo(id: 'review', title: 'Reply to client', updatedAtMs: 20),
+      ],
+      resolveAiService: () async => aiService,
+      signalStore: signalStore,
+    );
+
+    await store.refresh();
+    expect(store.snapshot.primaryFocus?.todo.id, 'sticky');
+
+    await signalStore.setForTodo(
+      'review',
+      const TaskPriorityManualSignal(isUrgent: true, isImportant: true),
+    );
     store.markDirty();
     await store.refresh();
 
