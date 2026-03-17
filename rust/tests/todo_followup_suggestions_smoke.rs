@@ -212,3 +212,53 @@ fn historical_followup_suggestions_do_not_block_same_content_regeneration() {
     .expect("regenerate after apply");
     assert_eq!(third.len(), 1);
 }
+
+#[test]
+fn dismiss_all_followup_suggestions_dismisses_every_pending_item() {
+    let (_temp_dir, key, conn) = setup();
+
+    db::upsert_todo(
+        &conn,
+        &key,
+        "todo_1",
+        "Research LLM models",
+        None,
+        "open",
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("upsert todo");
+
+    let generated = db::upsert_generated_todo_followup_suggestions(
+        &conn,
+        &key,
+        "todo_1",
+        &[
+            db::TodoFollowupSuggestionDraftInput {
+                content: "Suggestion A".to_string(),
+                generation_mode: "model_knowledge".to_string(),
+                citations_json: None,
+            },
+            db::TodoFollowupSuggestionDraftInput {
+                content: "Suggestion B".to_string(),
+                generation_mode: "model_knowledge".to_string(),
+                citations_json: None,
+            },
+        ],
+        "cloud",
+        Some("gen_all"),
+    )
+    .expect("generate followup suggestions");
+
+    assert_eq!(generated.len(), 2);
+
+    db::dismiss_all_todo_followup_suggestions(&conn, &key, "todo_1")
+        .expect("dismiss all followup suggestions");
+
+    let all = db::list_todo_followup_suggestions(&conn, &key, "todo_1")
+        .expect("list followup suggestions");
+    assert_eq!(all.len(), 2);
+    assert!(all.iter().all(|item| item.state == "dismissed"));
+}

@@ -23,7 +23,7 @@ void main() {
     expect(parsed, isNotNull);
     expect(parsed!.citations, hasLength(1));
     expect(parsed.citations.single.title, 'Line 1\r\nLine\t2');
-    expect(parsed.citations.single.url, 'https://example.com/query?a=1\tb');
+    expect(parsed.citations.single.url, 'https://example.com/query?a=1%09b');
   });
 
   test('runner generates follow-up for research task', () async {
@@ -347,6 +347,7 @@ void main() {
     expect(client.lastManualFollowups, const <String>[
       '用户补充：优先关注价格和 API 稳定性',
     ]);
+    expect(client.lastTaskContext, isNot(contains('旧的自动信息收集结果')));
   });
 
   test('runner keeps existing pending suggestion when regenerate fails',
@@ -664,6 +665,7 @@ final class _FakeClient implements TodoFollowupGenerationClient {
   final List<TodoFollowupGenerationMode> requestedModes =
       <TodoFollowupGenerationMode>[];
   List<String> lastManualFollowups = <String>[];
+  String? lastTaskContext;
 
   @override
   Future<TodoFollowupSuggestionDraft?> generate({
@@ -678,6 +680,7 @@ final class _FakeClient implements TodoFollowupGenerationClient {
   }) async {
     requestedModes.add(generationMode);
     lastManualFollowups = List<String>.from(manualFollowups);
+    lastTaskContext = taskContext;
     final error = errorsByMode[generationMode];
     if (error != null) throw error;
     return responseByMode[generationMode];

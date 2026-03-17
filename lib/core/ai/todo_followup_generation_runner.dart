@@ -174,9 +174,15 @@ final class TodoFollowupGenerationRunner {
         final manualFollowups = job.includeManualFollowups
             ? _collectManualFollowups(activities)
             : const <String>[];
+        final contextActivities = job.includeManualFollowups
+            ? activities
+                .where((activity) =>
+                    activity.activityType != 'followup_information')
+                .toList(growable: false)
+            : activities;
         final taskContext = buildTodoFollowupSuggestionContext(
           todo: todo,
-          activities: activities,
+          activities: contextActivities,
         );
 
         final suggestion = await _generateSuggestion(

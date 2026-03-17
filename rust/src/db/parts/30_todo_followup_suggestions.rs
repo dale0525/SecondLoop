@@ -352,42 +352,14 @@ pub fn dismiss_todo_followup_suggestions(
     run_immediate_transaction(conn, || {
         let now = now_ms();
         let device_id = get_or_create_device_id(conn)?;
-        for suggestion_id in suggestion_ids {
-            let rows_changed = conn.execute(
-                r#"
-UPDATE todo_followup_suggestions
-SET state = ?2, updated_at_ms = ?3, dismissed_at_ms = ?4
-WHERE id = ?1 AND todo_id = ?5 AND state = ?6
-"#,
-                params![
-                    suggestion_id,
-                    TODO_FOLLOWUP_SUGGESTION_STATE_DISMISSED,
-                    now,
-                    now,
-                    todo_id,
-                    TODO_FOLLOWUP_SUGGESTION_STATE_PENDING,
-                ],
-            )?;
-            if rows_changed == 0 {
-                continue;
-            }
-
-            let seq = next_device_seq(conn, &device_id)?;
-            let op = serde_json::json!({
-                "op_id": uuid::Uuid::new_v4().to_string(),
-                "device_id": device_id,
-                "seq": seq,
-                "ts_ms": now,
-                "type": "todo.followup_suggestion.dismiss.v1",
-                "payload": {
-                    "suggestion_id": suggestion_id,
-                    "todo_id": todo_id,
-                    "dismissed_at_ms": now,
-                }
-            });
-            insert_oplog(conn, key, &op)?;
-        }
-        Ok(())
+        dismiss_todo_followup_suggestions_inner(
+            conn,
+            key,
+            todo_id,
+            suggestion_ids,
+            now,
+            &device_id,
+        )
     })
 }
 
@@ -406,6 +378,62 @@ pub fn dismiss_all_todo_followup_suggestions(
                 |row| row.get::<_, String>(0),
             )?
             .collect::<rusqlite::Result<Vec<_>>>()?;
-        dismiss_todo_followup_suggestions(conn, key, todo_id, &pending_ids)
+        let now = now_ms();
+        let device_id = get_or_create_device_id(conn)?;
+        dismiss_todo_followup_suggestions_inner(
+            conn,
+            key,
+            todo_id,
+            &pending_ids,
+            now,
+            &device_id,
+        )
     })
+}
+
+fn dismiss_todo_followup_suggestions_inner(
+    conn: &Connection,
+    key: &[u8; 32],
+    todo_id: &str,
+    suggestion_ids: &[String],
+    now: i64,
+    device_id: &str,
+) -> Result<()> {
+    for suggestion_id in suggestion_ids {
+        let rows_changed = conn.execute(
+            r#"
+UPDATE todo_followup_suggestions
+SET state = ?2, updated_at_ms = ?3, dismissed_at_ms = ?4
+WHERE id = ?1 AND todo_id = ?5 AND state = ?6
+"#,
+            params![
+                suggestion_id,
+                TODO_FOLLOWUP_SUGGESTION_STATE_DISMISSED,
+                now,
+                now,
+                todo_id,
+                TODO_FOLLOWUP_SUGGESTION_STATE_PENDING,
+            ],
+        )?;
+        if rows_changed == 0 {
+            continue;
+        }
+
+        let seq = next_device_seq(conn, device_id)?;
+        let op = serde_json::json!({
+            "op_id": uuid::Uuid::new_v4().to_string(),
+            "device_id": device_id,
+            "seq": seq,
+            "ts_ms": now,
+            "type": "todo.followup_suggestion.dismiss.v1",
+            "payload": {
+                "suggestion_id": suggestion_id,
+                "todo_id": todo_id,
+                "dismissed_at_ms": now,
+            }
+        });
+        insert_oplog(conn, key, &op)?;
+    }
+
+    Ok(())
 }

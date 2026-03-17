@@ -220,9 +220,17 @@ String buildTodoFollowupSuggestionContext({
 TodoFollowupCitationDraft? _parseCitation(Map<Object?, Object?> raw) {
   final title = (raw['title'] as String?)?.trim() ?? '';
   final url = (raw['url'] as String?)?.trim() ?? '';
-  final domain = (raw['domain'] as String?)?.trim() ?? '';
-  if (title.isEmpty || url.isEmpty || domain.isEmpty) return null;
-  return TodoFollowupCitationDraft(title: title, url: url, domain: domain);
+  if (title.isEmpty || url.isEmpty) return null;
+
+  final uri = tryParseTodoFollowupCitationUrl(url);
+  final domain = uri?.host.trim().toLowerCase() ?? '';
+  if (domain.isEmpty) return null;
+
+  return TodoFollowupCitationDraft(
+    title: title,
+    url: uri.toString(),
+    domain: domain,
+  );
 }
 
 String? _extractJsonCandidate(String raw) {

@@ -31,6 +31,18 @@ void main() {
     expect(parsed.citations.single.domain, 'openai.com');
   });
 
+  test('followup parser drops invalid citation urls and derives domain', () {
+    final parsed = parseTodoFollowupSuggestionJson(
+      '{"content":"hello","mode":"web_search","citations":[{"title":"Bad","url":"javascript:alert(1)","domain":"evil.example"},{"title":"Good","url":"https://docs.example.com/path","domain":"wrong.example"}]}',
+    );
+
+    expect(parsed, isNotNull);
+    expect(parsed!.citations, hasLength(1));
+    expect(parsed.citations.single.title, 'Good');
+    expect(parsed.citations.single.url, 'https://docs.example.com/path');
+    expect(parsed.citations.single.domain, 'docs.example.com');
+  });
+
   test('followup parser falls back to model knowledge on invalid mode', () {
     final parsed = parseTodoFollowupSuggestionJson(
       '{"content":"hello","mode":"unknown","citations":[]}',
