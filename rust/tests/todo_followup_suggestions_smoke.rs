@@ -140,3 +140,75 @@ fn todo_followup_generation_jobs_support_enqueue_claim_retry_and_succeed() {
         db::list_due_todo_followup_generation_jobs(&conn, 1000, 10).expect("list final jobs");
     assert!(final_jobs.is_empty());
 }
+
+#[test]
+fn historical_followup_suggestions_do_not_block_same_content_regeneration() {
+    let (_temp_dir, key, conn) = setup();
+
+    db::upsert_todo(
+        &conn,
+        &key,
+        "todo_1",
+        "Research LLM models",
+        None,
+        "open",
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("upsert todo");
+
+    let first = db::upsert_generated_todo_followup_suggestions(
+        &conn,
+        &key,
+        "todo_1",
+        &[db::TodoFollowupSuggestionDraftInput {
+            content: "Same content".to_string(),
+            generation_mode: "model_knowledge".to_string(),
+            citations_json: None,
+        }],
+        "cloud",
+        Some("gen_1"),
+    )
+    .expect("generate first suggestion");
+    assert_eq!(first.len(), 1);
+
+    db::dismiss_todo_followup_suggestions(&conn, &key, "todo_1", &[first[0].id.clone()])
+        .expect("dismiss first suggestion");
+
+    let second = db::upsert_generated_todo_followup_suggestions(
+        &conn,
+        &key,
+        "todo_1",
+        &[db::TodoFollowupSuggestionDraftInput {
+            content: "Same content".to_string(),
+            generation_mode: "model_knowledge".to_string(),
+            citations_json: None,
+        }],
+        "cloud",
+        Some("gen_2"),
+    )
+    .expect("regenerate after dismiss");
+    assert_eq!(second.len(), 1);
+
+    let applied =
+        db::apply_todo_followup_suggestions(&conn, &key, "todo_1", &[second[0].id.clone()])
+            .expect("apply second suggestion");
+    assert_eq!(applied.len(), 1);
+
+    let third = db::upsert_generated_todo_followup_suggestions(
+        &conn,
+        &key,
+        "todo_1",
+        &[db::TodoFollowupSuggestionDraftInput {
+            content: "Same content".to_string(),
+            generation_mode: "model_knowledge".to_string(),
+            citations_json: None,
+        }],
+        "cloud",
+        Some("gen_3"),
+    )
+    .expect("regenerate after apply");
+    assert_eq!(third.len(), 1);
+}

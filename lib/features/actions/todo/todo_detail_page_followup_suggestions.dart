@@ -51,38 +51,20 @@ extension _TodoDetailPageStateFollowupSuggestions on _TodoDetailPageState {
   Future<void> _enqueueFollowupRegenerate() async {
     final backend = AppBackendScope.maybeOf(context);
     final session = SessionScope.maybeOf(context);
+    final syncEngine = SyncEngineScope.maybeOf(context);
     if (backend == null || session == null || _generatingFollowupSuggestions) {
       return;
     }
 
     _setState(() => _generatingFollowupSuggestions = true);
     try {
-      final existingSuggestions = await backend.listTodoFollowupSuggestions(
-        session.sessionKey,
-        _todo.id,
-      );
-      final pendingSuggestionIds = existingSuggestions
-          .where((item) => item.state == 'pending')
-          .map((item) => item.id)
-          .toList(growable: false);
-      if (pendingSuggestionIds.isNotEmpty) {
-        await backend.dismissTodoFollowupSuggestions(
-          session.sessionKey,
-          todoId: _todo.id,
-          suggestionIds: pendingSuggestionIds,
-        );
-      }
-      if (!mounted) return;
-      _setState(() {
-        _followupSuggestionsFuture = _loadFollowupSuggestions();
-      });
-
       await backend.enqueueTodoFollowupGenerationJob(
         session.sessionKey,
         todoId: _todo.id,
         triggerKind: 'manual_regenerate',
         nowMs: DateTime.now().millisecondsSinceEpoch,
       );
+      syncEngine?.notifyExternalChange();
       if (!mounted) return;
       _setState(() {
         _followupSuggestionsFuture = _loadFollowupSuggestions();

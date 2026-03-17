@@ -2,6 +2,20 @@ pub const TODO_FOLLOWUP_SUGGESTION_STATE_PENDING: &str = "pending";
 pub const TODO_FOLLOWUP_SUGGESTION_STATE_APPLIED: &str = "applied";
 pub const TODO_FOLLOWUP_SUGGESTION_STATE_DISMISSED: &str = "dismissed";
 
+type TodoFollowupSuggestionRow = (
+    String,
+    Vec<u8>,
+    String,
+    String,
+    String,
+    Option<String>,
+    Option<String>,
+    i64,
+    i64,
+    Option<i64>,
+    Option<String>,
+);
+
 fn todo_followup_suggestion_content_aad(id: &str) -> Vec<u8> {
     format!("todo_followup_suggestion.content:{id}").into_bytes()
 }
@@ -11,19 +25,7 @@ fn find_todo_followup_suggestion_by_id(
     key: &[u8; 32],
     id: &str,
 ) -> Result<Option<TodoFollowupSuggestion>> {
-    let row: Option<(
-        String,
-        Vec<u8>,
-        String,
-        String,
-        String,
-        Option<String>,
-        Option<String>,
-        i64,
-        i64,
-        Option<i64>,
-        Option<String>,
-    )> = conn
+    let row: Option<TodoFollowupSuggestionRow> = conn
         .query_row(
             r#"
 SELECT todo_id, content, state, source, generation_mode, generation_key, citations_json, created_at_ms, updated_at_ms, dismissed_at_ms, applied_activity_id
@@ -209,6 +211,7 @@ pub fn upsert_generated_todo_followup_suggestions(
         let existing = list_todo_followup_suggestions(conn, key, todo_id)?;
         let mut blocked_norms = existing
             .iter()
+            .filter(|item| item.state == TODO_FOLLOWUP_SUGGESTION_STATE_PENDING)
             .map(|item| normalize_checklist_suggestion_content(&item.content))
             .collect::<std::collections::HashSet<_>>();
 

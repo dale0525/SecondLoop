@@ -321,9 +321,153 @@ void main() {
     await runner.runOnce(localeTag: 'zh-CN');
 
     expect(store.lastDismissedSuggestionIds, const <String>['s_pending']);
+    expect(store.pendingSuggestionsFor('todo_regen').single.generationKey,
+        'followup:manual_regenerate:research:1000');
     expect(client.lastManualFollowups, const <String>[
       '用户补充：优先关注价格和 API 稳定性',
     ]);
+  });
+
+  test('runner keeps existing pending suggestion when regenerate fails',
+      () async {
+    final store = _FakeStore(
+      jobs: const <TodoFollowupGenerationJob>[
+        TodoFollowupGenerationJob(
+          todoId: 'todo_regen_fail',
+          triggerKind: 'manual_regenerate',
+          status: 'pending',
+          attempts: 0,
+          nextRetryAtMs: null,
+          lastError: null,
+          includeManualFollowups: true,
+          taskTypeHint: 'research',
+          createdAtMs: 0,
+          updatedAtMs: 0,
+        ),
+      ],
+      todos: const <String, Todo>{
+        'todo_regen_fail': Todo(
+          id: 'todo_regen_fail',
+          title: '调研一下当前主流的 llm 模型',
+          status: 'open',
+          createdAtMs: 0,
+          updatedAtMs: 0,
+        ),
+      },
+      suggestionsByTodoId: const <String, List<TodoFollowupSuggestion>>{
+        'todo_regen_fail': <TodoFollowupSuggestion>[
+          TodoFollowupSuggestion(
+            id: 's_old',
+            todoId: 'todo_regen_fail',
+            content: '旧建议',
+            state: 'pending',
+            source: 'cloud',
+            generationMode: 'model_knowledge',
+            generationKey: 'old',
+            citationsJson: null,
+            createdAtMs: 0,
+            updatedAtMs: 0,
+            dismissedAtMs: null,
+            appliedActivityId: null,
+          ),
+        ],
+      },
+    );
+    final client = _FakeClient(
+      supportsWebSearch: false,
+      errorsByMode: <TodoFollowupGenerationMode, Object>{
+        TodoFollowupGenerationMode.modelKnowledge: StateError('boom'),
+      },
+    );
+
+    final runner = TodoFollowupGenerationRunner(
+      store: store,
+      client: client,
+      settings: const TodoFollowupGenerationRunnerSettings(
+        hardTimeout: Duration(milliseconds: 200),
+      ),
+      nowMs: () => 1000,
+    );
+
+    await runner.runOnce(localeTag: 'zh-CN');
+
+    expect(store.lastDismissedSuggestionIds, isEmpty);
+    expect(store.pendingSuggestionsFor('todo_regen_fail').single.id, 's_old');
+  });
+
+  test(
+      'runner preserves existing pending suggestion when regenerate is identical',
+      () async {
+    final store = _FakeStore(
+      jobs: const <TodoFollowupGenerationJob>[
+        TodoFollowupGenerationJob(
+          todoId: 'todo_regen_same',
+          triggerKind: 'manual_regenerate',
+          status: 'pending',
+          attempts: 0,
+          nextRetryAtMs: null,
+          lastError: null,
+          includeManualFollowups: true,
+          taskTypeHint: 'research',
+          createdAtMs: 0,
+          updatedAtMs: 0,
+        ),
+      ],
+      todos: const <String, Todo>{
+        'todo_regen_same': Todo(
+          id: 'todo_regen_same',
+          title: '调研一下当前主流的 llm 模型',
+          status: 'open',
+          createdAtMs: 0,
+          updatedAtMs: 0,
+        ),
+      },
+      suggestionsByTodoId: const <String, List<TodoFollowupSuggestion>>{
+        'todo_regen_same': <TodoFollowupSuggestion>[
+          TodoFollowupSuggestion(
+            id: 's_old',
+            todoId: 'todo_regen_same',
+            content: '以下内容基于模型知识整理，未联网核实。',
+            state: 'pending',
+            source: 'cloud',
+            generationMode: 'model_knowledge',
+            generationKey: 'old',
+            citationsJson: null,
+            createdAtMs: 0,
+            updatedAtMs: 0,
+            dismissedAtMs: null,
+            appliedActivityId: null,
+          ),
+        ],
+      },
+    );
+    final client = _FakeClient(
+      supportsWebSearch: false,
+      responseByMode: <TodoFollowupGenerationMode, TodoFollowupSuggestionDraft>{
+        TodoFollowupGenerationMode.modelKnowledge:
+            const TodoFollowupSuggestionDraft(
+          content: '以下内容基于模型知识整理，未联网核实。',
+          mode: TodoFollowupGenerationMode.modelKnowledge,
+          citations: <TodoFollowupCitationDraft>[],
+        ),
+      },
+    );
+
+    final runner = TodoFollowupGenerationRunner(
+      store: store,
+      client: client,
+      settings: const TodoFollowupGenerationRunnerSettings(
+        hardTimeout: Duration(milliseconds: 200),
+      ),
+      nowMs: () => 1000,
+    );
+
+    await runner.runOnce(localeTag: 'zh-CN');
+
+    expect(store.lastDismissedSuggestionIds, isEmpty);
+    expect(store.pendingSuggestionsFor('todo_regen_same'), hasLength(1));
+    expect(store.pendingSuggestionsFor('todo_regen_same').single.id, 's_old');
+    expect(store.lastSucceededTodoId, 'todo_regen_same');
   });
 }
 
@@ -358,6 +502,14 @@ final class _FakeStore implements TodoFollowupGenerationStore {
   List<String> lastDismissedSuggestionIds = <String>[];
   List<TodoFollowupSuggestionDraftInput> lastUpsertedSuggestions =
       <TodoFollowupSuggestionDraftInput>[];
+
+  List<TodoFollowupSuggestion> pendingSuggestionsFor(String todoId) {
+    final items =
+        _suggestionsByTodoId[todoId] ?? const <TodoFollowupSuggestion>[];
+    return items
+        .where((item) => item.state == 'pending')
+        .toList(growable: false);
+  }
 
   @override
   Future<Todo?> getTodo(String todoId) async => _todos[todoId];
@@ -440,6 +592,34 @@ final class _FakeStore implements TodoFollowupGenerationStore {
   }) async {
     lastUpsertedSuggestions =
         List<TodoFollowupSuggestionDraftInput>.from(suggestions);
+    final next = List<TodoFollowupSuggestion>.from(
+      _suggestionsByTodoId[todoId] ?? const <TodoFollowupSuggestion>[],
+    );
+    final blocked = next
+        .where((item) => item.state == 'pending')
+        .map((item) => item.content.trim())
+        .toSet();
+    for (final suggestion in suggestions) {
+      final content = suggestion.content.trim();
+      if (content.isEmpty || !blocked.add(content)) continue;
+      next.add(
+        TodoFollowupSuggestion(
+          id: 'generated_${next.length + 1}',
+          todoId: todoId,
+          content: content,
+          state: 'pending',
+          source: source,
+          generationMode: suggestion.generationMode,
+          generationKey: generationKey,
+          citationsJson: suggestion.citationsJson,
+          createdAtMs: 0,
+          updatedAtMs: 0,
+          dismissedAtMs: null,
+          appliedActivityId: null,
+        ),
+      );
+    }
+    _suggestionsByTodoId[todoId] = next;
   }
 }
 

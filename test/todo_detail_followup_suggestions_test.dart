@@ -6,6 +6,8 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:secondloop/core/backend/app_backend.dart';
 import 'package:secondloop/core/session/session_scope.dart';
+import 'package:secondloop/core/sync/sync_engine.dart';
+import 'package:secondloop/core/sync/sync_engine_gate.dart';
 import 'package:secondloop/features/actions/todo/todo_detail_page.dart';
 import 'package:secondloop/src/rust/db.dart';
 
@@ -99,7 +101,7 @@ void main() {
   });
 
   testWidgets(
-      'TodoDetailPage dismisses pending follow-up before regenerate enqueue',
+      'TodoDetailPage keeps pending follow-up until regenerate finishes',
       (tester) async {
     _setLargeDisplay(tester);
     final completer = Completer<void>();
@@ -113,11 +115,39 @@ void main() {
     );
     await tester.pump();
 
-    expect(backend.dismissedSuggestionIds, const <String>['f1']);
+    expect(backend.dismissedSuggestionIds, isEmpty);
     expect(backend.enqueuedRegenerate, isTrue);
 
     completer.complete();
     await tester.pumpAndSettle();
+  });
+
+  testWidgets('TodoDetailPage regenerate wakes sync listeners immediately',
+      (tester) async {
+    _setLargeDisplay(tester);
+    final backend = _Backend();
+    final engine = SyncEngine(
+      syncRunner: _NoopSyncRunner(),
+      loadConfig: () async => null,
+    );
+    var changeCount = 0;
+    void onChange() => changeCount += 1;
+    engine.changes.addListener(onChange);
+    addTearDown(() {
+      engine.changes.removeListener(onChange);
+      engine.stop();
+    });
+
+    await tester.pumpWidget(_buildSubject(backend, syncEngine: engine));
+    await tester.pumpAndSettle();
+
+    await tester.tap(
+      find.byKey(const ValueKey('todo_detail_followup_generate_suggestions')),
+    );
+    await tester.pump();
+
+    expect(backend.enqueuedRegenerate, isTrue);
+    expect(changeCount, greaterThan(0));
   });
 
   testWidgets('TodoDetailPage shows regenerate loading state', (tester) async {
@@ -159,7 +189,7 @@ void _setLargeDisplay(WidgetTester tester) {
   addTearDown(tester.view.reset);
 }
 
-Widget _buildSubject(_Backend backend) {
+Widget _buildSubject(_Backend backend, {SyncEngine? syncEngine}) {
   return wrapWithI18n(
     MaterialApp(
       home: AppBackendScope(
@@ -167,19 +197,30 @@ Widget _buildSubject(_Backend backend) {
         child: SessionScope(
           sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
           lock: () {},
-          child: const TodoDetailPage(
-            initialTodo: Todo(
-              id: 't1',
-              title: '调研一下当前主流的 llm 模型',
-              status: 'open',
-              createdAtMs: 0,
-              updatedAtMs: 0,
+          child: SyncEngineScope(
+            engine: syncEngine,
+            child: const TodoDetailPage(
+              initialTodo: Todo(
+                id: 't1',
+                title: '调研一下当前主流的 llm 模型',
+                status: 'open',
+                createdAtMs: 0,
+                updatedAtMs: 0,
+              ),
             ),
           ),
         ),
       ),
     ),
   );
+}
+
+final class _NoopSyncRunner implements SyncRunner {
+  @override
+  Future<int> pull(SyncConfig config) async => 0;
+
+  @override
+  Future<int> push(SyncConfig config) async => 0;
 }
 
 final class _Backend extends AppBackend {

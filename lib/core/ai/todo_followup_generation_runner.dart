@@ -169,14 +169,6 @@ final class TodoFollowupGenerationRunner {
           continue;
         }
 
-        if (job.includeManualFollowups && pendingSuggestionIds.isNotEmpty) {
-          await store.dismissTodoFollowupSuggestions(
-            todoId: job.todoId,
-            suggestionIds: pendingSuggestionIds,
-          );
-          didMutateAny = true;
-        }
-
         final activities = await store.listTodoActivities(job.todoId);
         final manualFollowups = job.includeManualFollowups
             ? _collectManualFollowups(activities)
@@ -196,6 +188,9 @@ final class TodoFollowupGenerationRunner {
           throw StateError('Empty follow-up suggestion');
         }
 
+        final generationKey =
+            'followup:${job.triggerKind}:${taskType.wireValue}:$nowMs';
+
         await store.upsertGeneratedTodoFollowupSuggestions(
           todoId: job.todoId,
           suggestions: <TodoFollowupSuggestionDraftInput>[
@@ -208,10 +203,35 @@ final class TodoFollowupGenerationRunner {
             ),
           ],
           source: client.source,
-          generationKey:
-              'followup:${job.triggerKind}:${taskType.wireValue}:$nowMs',
+          generationKey: generationKey,
         );
-        didMutateAny = true;
+
+        final updatedSuggestions =
+            await store.listTodoFollowupSuggestions(job.todoId);
+        final createdPendingSuggestions = updatedSuggestions
+            .where((item) =>
+                item.state == 'pending' && item.generationKey == generationKey)
+            .toList(growable: false);
+        if (createdPendingSuggestions.isNotEmpty) {
+          didMutateAny = true;
+        }
+
+        if (job.includeManualFollowups &&
+            pendingSuggestionIds.isNotEmpty &&
+            createdPendingSuggestions.isNotEmpty) {
+          final replacementIds =
+              createdPendingSuggestions.map((item) => item.id).toSet();
+          final stalePendingSuggestionIds = pendingSuggestionIds
+              .where((item) => !replacementIds.contains(item))
+              .toList(growable: false);
+          if (stalePendingSuggestionIds.isNotEmpty) {
+            await store.dismissTodoFollowupSuggestions(
+              todoId: job.todoId,
+              suggestionIds: stalePendingSuggestionIds,
+            );
+            didMutateAny = true;
+          }
+        }
 
         await store.markJobSucceeded(todoId: job.todoId, nowMs: nowMs);
         didUpdateJobs = true;
