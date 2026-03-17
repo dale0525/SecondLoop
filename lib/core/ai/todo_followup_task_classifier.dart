@@ -37,7 +37,9 @@ final List<RegExp> _referenceCollectionPatterns = <RegExp>[
 
 final List<RegExp> _liveInfoLookupPatterns = <RegExp>[
   RegExp(
-      r'([A-Z]{2}\s?\d{3,4})|(MU\s?\d{3,4})|(CA\s?\d{3,4})|(CZ\s?\d{3,4})|(G\d{1,4})|(D\d{1,4})'),
+    r'([A-Z]{2}\s?\d{3,4})|(MU\s?\d{3,4})|(CA\s?\d{3,4})|(CZ\s?\d{3,4})|(G\d{1,4})|(D\d{1,4})',
+    caseSensitive: false,
+  ),
   RegExp(r'航班|航站楼|到达时间|停车|入园时间|检票入口|接机|几点到|terminal|arrival|parking',
       caseSensitive: false),
 ];

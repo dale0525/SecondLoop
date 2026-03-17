@@ -19,6 +19,10 @@ void main() {
       TodoFollowupTaskType.liveInfoLookup,
     );
     expect(
+      classifyTodoFollowupTaskType('去浦东机场接 mu5101'),
+      TodoFollowupTaskType.liveInfoLookup,
+    );
+    expect(
       classifyTodoFollowupTaskType('查一下上海迪士尼停车和入园时间'),
       TodoFollowupTaskType.liveInfoLookup,
     );

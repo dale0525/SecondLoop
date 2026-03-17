@@ -252,6 +252,34 @@ void main() {
   });
 
   testWidgets(
+      'TodoDetailPage manual regenerate retries token read after warmup',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({
+      'semantic_parse_data_consent_v1': true,
+    });
+    _setLargeDisplay(tester);
+    final backend = _Backend(llmProfiles: const <LlmProfile>[]);
+
+    await tester.pumpWidget(
+      _buildSubject(
+        backend,
+        cloudAuthController: _WarmupRequiredCloudAuthController(),
+        subscriptionController:
+            _FakeSubscriptionStatusController(SubscriptionStatus.unknown),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(
+      find.byKey(const ValueKey('todo_detail_followup_generate_suggestions')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(backend.enqueuedRegenerate, isTrue);
+    expect(find.byType(AiAskAiSettingsPage), findsNothing);
+  });
+
+  testWidgets(
       'TodoDetailPage manual regenerate allows cloud when subscription is unknown',
       (tester) async {
     SharedPreferences.setMockInitialValues({
@@ -352,6 +380,46 @@ final class _FakeCloudAuthController implements CloudAuthController {
 
   @override
   Future<String?> getIdToken() async => 'token_1';
+
+  @override
+  Future<void> refreshUserInfo() async {}
+
+  @override
+  Future<void> sendEmailVerification() async {}
+
+  @override
+  Future<void> signInWithEmailPassword({
+    required String email,
+    required String password,
+  }) async {}
+
+  @override
+  Future<void> signOut() async {}
+
+  @override
+  Future<void> signUpWithEmailPassword({
+    required String email,
+    required String password,
+  }) async {}
+}
+
+final class _WarmupRequiredCloudAuthController implements CloudAuthController {
+  var _reads = 0;
+
+  @override
+  String? get email => 'demo@example.com';
+
+  @override
+  bool? get emailVerified => true;
+
+  @override
+  String? get uid => 'uid_1';
+
+  @override
+  Future<String?> getIdToken() async {
+    _reads += 1;
+    return _reads >= 2 ? 'token_2' : null;
+  }
 
   @override
   Future<void> refreshUserInfo() async {}

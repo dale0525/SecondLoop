@@ -41,6 +41,40 @@ Future<String?> prepareTodoFollowupGenerationIdToken(
   );
 }
 
+final class TodoFollowupGenerationPassPlan {
+  const TodoFollowupGenerationPassPlan({
+    required this.jobs,
+    required this.hasManualRegenerateDueJob,
+  });
+
+  final List<TodoFollowupGenerationJob> jobs;
+  final bool hasManualRegenerateDueJob;
+}
+
+List<TodoFollowupGenerationPassPlan> buildTodoFollowupGenerationPassPlans(
+  List<TodoFollowupGenerationJob> previewJobs,
+) {
+  final manualJobs = previewJobs
+      .where((job) => job.triggerKind == 'manual_regenerate')
+      .toList(growable: false);
+  final autoJobs = previewJobs
+      .where((job) => job.triggerKind != 'manual_regenerate')
+      .toList(growable: false);
+
+  return <TodoFollowupGenerationPassPlan>[
+    if (manualJobs.isNotEmpty)
+      TodoFollowupGenerationPassPlan(
+        jobs: manualJobs,
+        hasManualRegenerateDueJob: true,
+      ),
+    if (autoJobs.isNotEmpty)
+      TodoFollowupGenerationPassPlan(
+        jobs: autoJobs,
+        hasManualRegenerateDueJob: false,
+      ),
+  ];
+}
+
 class TodoFollowupGenerationGate extends StatefulWidget {
   const TodoFollowupGenerationGate({required this.child, super.key});
 
@@ -189,65 +223,77 @@ class _TodoFollowupGenerationGateState extends State<TodoFollowupGenerationGate>
       final cloudAuthScope = CloudAuthScope.maybeOf(context);
       final gatewayConfig =
           cloudAuthScope?.gatewayConfig ?? CloudGatewayConfig.defaultConfig;
-      final previewJobs = await backend.listDueTodoFollowupGenerationJobs(
-        Uint8List.fromList(sessionKey),
+      final backendStore = _BackendTodoFollowupGenerationStore(
+        backend: backend,
+        sessionKey: Uint8List.fromList(sessionKey),
+      );
+      final previewJobs = await backendStore.listDueJobs(
         nowMs: DateTime.now().millisecondsSinceEpoch,
         limit: _kBatchLimit,
       );
-      final hasManualRegenerateDueJob = previewJobs.any(
-        (job) => job.triggerKind == 'manual_regenerate',
-      );
-
-      final idToken = await prepareTodoFollowupGenerationIdToken(
-        cloudAuthScope?.controller,
-        subscriptionStatus: subscriptionStatus,
-        gatewayBaseUrl: gatewayConfig.baseUrl,
-        forceWarm: hasManualRegenerateDueJob,
-      );
-      final route = await decideTodoFollowupGenerationRoute(
-        backend,
-        Uint8List.fromList(sessionKey),
-        hasManualRegenerateDueJob: hasManualRegenerateDueJob,
-        cloudIdToken: idToken,
-        cloudGatewayBaseUrl: gatewayConfig.baseUrl,
-        subscriptionStatus: subscriptionStatus,
-      );
-      if (route == AskAiRouteKind.needsSetup) {
+      if (previewJobs.isEmpty) {
         _schedule(_kIdleInterval);
         return;
       }
 
-      await ActionsSettingsStore.load();
-
-      final runner = TodoFollowupGenerationRunner(
-        store: _BackendTodoFollowupGenerationStore(
-          backend: backend,
-          sessionKey: Uint8List.fromList(sessionKey),
-        ),
-        client: _BackendTodoFollowupGenerationClient(
-          backend: backend,
-          sessionKey: Uint8List.fromList(sessionKey),
-          route: route,
-          gatewayBaseUrl: gatewayConfig.baseUrl,
-          idToken: idToken ?? '',
-          modelName: gatewayConfig.modelName,
-          source: route == AskAiRouteKind.cloudGateway ? 'cloud' : 'byok',
-          supportsWebSearch: supportsTodoFollowupWebSearch(
-            route: route,
-            gatewayConfig: gatewayConfig,
-          ),
-        ),
-        settings: const TodoFollowupGenerationRunnerSettings(
-          hardTimeout: _kHardTimeout,
-          batchLimit: _kBatchLimit,
-        ),
+      final passPlans = buildTodoFollowupGenerationPassPlans(previewJobs);
+      final idToken = await prepareTodoFollowupGenerationIdToken(
+        cloudAuthScope?.controller,
+        subscriptionStatus: subscriptionStatus,
+        gatewayBaseUrl: gatewayConfig.baseUrl,
+        forceWarm: passPlans.any((plan) => plan.hasManualRegenerateDueJob),
       );
 
-      final result = await runner.runOnce(localeTag: localeTag);
-      if (result.didMutateAny) {
+      await ActionsSettingsStore.load();
+
+      var didMutateAny = false;
+      var didUpdateJobs = false;
+      for (final passPlan in passPlans) {
+        final route = await decideTodoFollowupGenerationRoute(
+          backend,
+          Uint8List.fromList(sessionKey),
+          hasManualRegenerateDueJob: passPlan.hasManualRegenerateDueJob,
+          cloudIdToken: idToken,
+          cloudGatewayBaseUrl: gatewayConfig.baseUrl,
+          subscriptionStatus: subscriptionStatus,
+        );
+        if (route == AskAiRouteKind.needsSetup) {
+          continue;
+        }
+
+        final runner = TodoFollowupGenerationRunner(
+          store: _SeededTodoFollowupGenerationStore(
+            delegate: backendStore,
+            seedJobs: passPlan.jobs,
+          ),
+          client: _BackendTodoFollowupGenerationClient(
+            backend: backend,
+            sessionKey: Uint8List.fromList(sessionKey),
+            route: route,
+            gatewayBaseUrl: gatewayConfig.baseUrl,
+            idToken: idToken ?? '',
+            modelName: gatewayConfig.modelName,
+            source: route == AskAiRouteKind.cloudGateway ? 'cloud' : 'byok',
+            supportsWebSearch: supportsTodoFollowupWebSearch(
+              route: route,
+              gatewayConfig: gatewayConfig,
+            ),
+          ),
+          settings: const TodoFollowupGenerationRunnerSettings(
+            hardTimeout: _kHardTimeout,
+            batchLimit: _kBatchLimit,
+          ),
+        );
+
+        final result = await runner.runOnce(localeTag: localeTag);
+        didMutateAny = didMutateAny || result.didMutateAny;
+        didUpdateJobs = didUpdateJobs || result.didUpdateJobs;
+      }
+
+      if (didMutateAny) {
         syncEngine?.notifyExternalChange();
       }
-      _schedule(result.didUpdateJobs ? _kDrainInterval : _kIdleInterval);
+      _schedule(didUpdateJobs ? _kDrainInterval : _kIdleInterval);
     } catch (_) {
       _schedule(_kFailureInterval);
     } finally {
@@ -259,6 +305,105 @@ class _TodoFollowupGenerationGateState extends State<TodoFollowupGenerationGate>
 
   @override
   Widget build(BuildContext context) => widget.child;
+}
+
+final class _SeededTodoFollowupGenerationStore
+    implements TodoFollowupGenerationStore {
+  const _SeededTodoFollowupGenerationStore({
+    required this.delegate,
+    required this.seedJobs,
+  });
+
+  final TodoFollowupGenerationStore delegate;
+  final List<TodoFollowupGenerationJob> seedJobs;
+
+  @override
+  Future<Todo?> getTodo(String todoId) => delegate.getTodo(todoId);
+
+  @override
+  Future<void> dismissTodoFollowupSuggestions({
+    required String todoId,
+    required List<String> suggestionIds,
+  }) =>
+      delegate.dismissTodoFollowupSuggestions(
+        todoId: todoId,
+        suggestionIds: suggestionIds,
+      );
+
+  @override
+  Future<List<TodoActivity>> listTodoActivities(String todoId) =>
+      delegate.listTodoActivities(todoId);
+
+  @override
+  Future<List<TodoFollowupGenerationJob>> listDueJobs({
+    required int nowMs,
+    int limit = 5,
+  }) async =>
+      seedJobs.take(limit).toList(growable: false);
+
+  @override
+  Future<List<TodoFollowupSuggestion>> listTodoFollowupSuggestions(
+    String todoId,
+  ) =>
+      delegate.listTodoFollowupSuggestions(todoId);
+
+  @override
+  Future<void> markJobCanceled({
+    required String todoId,
+    required int nowMs,
+  }) =>
+      delegate.markJobCanceled(todoId: todoId, nowMs: nowMs);
+
+  @override
+  Future<void> markJobFailed({
+    required String todoId,
+    required int attempts,
+    required int nextRetryAtMs,
+    required String lastError,
+    required int nowMs,
+  }) =>
+      delegate.markJobFailed(
+        todoId: todoId,
+        attempts: attempts,
+        nextRetryAtMs: nextRetryAtMs,
+        lastError: lastError,
+        nowMs: nowMs,
+      );
+
+  @override
+  Future<void> markJobRunning({
+    required String todoId,
+    required int nowMs,
+  }) =>
+      delegate.markJobRunning(todoId: todoId, nowMs: nowMs);
+
+  @override
+  Future<void> markJobSkipped({
+    required String todoId,
+    required int nowMs,
+  }) =>
+      delegate.markJobSkipped(todoId: todoId, nowMs: nowMs);
+
+  @override
+  Future<void> markJobSucceeded({
+    required String todoId,
+    required int nowMs,
+  }) =>
+      delegate.markJobSucceeded(todoId: todoId, nowMs: nowMs);
+
+  @override
+  Future<void> upsertGeneratedTodoFollowupSuggestions({
+    required String todoId,
+    required List<TodoFollowupSuggestionDraftInput> suggestions,
+    required String source,
+    String? generationKey,
+  }) =>
+      delegate.upsertGeneratedTodoFollowupSuggestions(
+        todoId: todoId,
+        suggestions: suggestions,
+        source: source,
+        generationKey: generationKey,
+      );
 }
 
 final class _BackendTodoFollowupGenerationStore

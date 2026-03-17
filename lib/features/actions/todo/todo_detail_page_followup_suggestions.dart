@@ -26,6 +26,9 @@ extension _TodoDetailPageStateFollowupSuggestions on _TodoDetailPageState {
     }
     final gatewayConfig =
         cloudAuthScope?.gatewayConfig ?? CloudGatewayConfig.defaultConfig;
+    if (gatewayConfig.baseUrl.trim().isNotEmpty) {
+      await bestEffortWarmCloudCapabilityAuth(cloudAuthScope?.controller);
+    }
     final cloudIdToken = await readCloudCapabilityIdToken(
       cloudAuthScope?.controller,
       mode: CloudCapabilityAuthMode.interactive,
@@ -48,9 +51,6 @@ extension _TodoDetailPageStateFollowupSuggestions on _TodoDetailPageState {
       return false;
     }
 
-    if (route == AskAiRouteKind.cloudGateway) {
-      await bestEffortWarmCloudCapabilityAuth(cloudAuthScope?.controller);
-    }
     return true;
   }
 
