@@ -649,18 +649,20 @@ fn managed_vault_pull_with_progress_counts_ops_when_server_omits_max() {
         "expected op progress before artifact accounting: {seen:?}"
     );
     assert_eq!(
-        first.0, first.1,
-        "expected unknown-total op progress to start as done==total: {seen:?}"
+        first.1,
+        first.0 + 1,
+        "expected unknown-total op progress to preserve headroom: {seen:?}"
     );
     assert!(
-        seen.iter()
-            .any(|&(done, total)| done == first.0 && total == first.1 + 1),
-        "expected late-growing total after counting artifact downloads: {seen:?}"
+        seen.iter().any(|&(done, total)| done > 0 && done < total),
+        "expected unknown-total progress to keep done below total before completion: {seen:?}"
     );
+    let last = *seen.last().expect("last progress");
     assert_eq!(
-        *seen.last().expect("last progress"),
-        (first.0 + 1, first.1 + 1)
+        last.0, last.1,
+        "expected final progress to complete: {seen:?}"
     );
+    assert!(last.0 >= first.0);
 
     let _ = stop_tx.send(());
     let _ = handle.join();

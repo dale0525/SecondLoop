@@ -69,6 +69,33 @@ fn local_embedding_artifact_blob_refs(conn: &Connection) -> Result<Vec<String>> 
     crate::db::list_distinct_embedding_artifact_blob_refs(conn)
 }
 
+const MAX_FRESH_DEVICE_REMOTE_BYTE_PROBES: i64 = 10;
+
+fn local_attachment_count(conn: &Connection) -> Result<i64> {
+    conn.query_row(r#"SELECT count(*) FROM attachments"#, [], |row| row.get(0))
+        .map_err(Into::into)
+}
+
+fn local_ready_embedding_artifact_blob_ref_count(conn: &Connection) -> Result<i64> {
+    conn.query_row(
+        r#"SELECT count(DISTINCT blob_ref)
+           FROM embedding_artifact_manifests
+           WHERE status = 'ready'"#,
+        [],
+        |row| row.get(0),
+    )
+    .map_err(Into::into)
+}
+
+fn exceeds_fresh_device_remote_byte_probe_budget(conn: &Connection) -> Result<bool> {
+    let attachment_count = local_attachment_count(conn)?.max(0);
+    if attachment_count > MAX_FRESH_DEVICE_REMOTE_BYTE_PROBES {
+        return Ok(true);
+    }
+    let artifact_count = local_ready_embedding_artifact_blob_ref_count(conn)?.max(0);
+    Ok(attachment_count.saturating_add(artifact_count) > MAX_FRESH_DEVICE_REMOTE_BYTE_PROBES)
+}
+
 fn local_remote_op_sequences(
     conn: &Connection,
     device_id: &str,
@@ -164,6 +191,9 @@ pub(super) fn can_skip_fresh_device_full_push(
     )? {
         return Ok(false);
     }
+    if exceeds_fresh_device_remote_byte_probe_budget(conn)? {
+        return Ok(false);
+    }
 
     for sha256 in local_attachment_sha256s(conn)? {
         if !managed_remote_attachment_exists(http, base_url, vault_id, id_token, &sha256)? {
@@ -224,6 +254,22 @@ mod tests {
         );
         stream.write_all(headers.as_bytes()).expect("write headers");
         stream.write_all(body).expect("write body");
+    }
+
+    #[test]
+    fn large_local_media_sets_exceed_fresh_device_probe_budget() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let conn = crate::db::open(dir.path()).expect("open");
+        let db_key = [7u8; 32];
+
+        for idx in 0..11 {
+            let bytes = format!("attachment-{idx}").into_bytes();
+            let _attachment =
+                crate::db::insert_attachment(&conn, &db_key, dir.path(), &bytes, "image/png")
+                    .expect("insert attachment");
+        }
+
+        assert!(exceeds_fresh_device_remote_byte_probe_budget(&conn).expect("probe budget"));
     }
 
     #[test]

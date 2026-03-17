@@ -165,6 +165,29 @@ mod push_progress_tests {
     }
 
     #[test]
+    fn large_local_media_sets_exceed_fresh_device_probe_budget() {
+        let dir = tempdir().expect("tempdir");
+        let conn = crate::db::open(dir.path()).expect("open");
+        let db_key = [7u8; 32];
+
+        for idx in 0..11 {
+            let bytes = format!("attachment-{idx}").into_bytes();
+            let _attachment = crate::db::insert_attachment(
+                &conn,
+                &db_key,
+                dir.path(),
+                &bytes,
+                "image/png",
+            )
+            .expect("insert attachment");
+        }
+
+        assert!(
+            exceeds_fresh_device_remote_byte_probe_budget(&conn).expect("probe budget")
+        );
+    }
+
+    #[test]
     fn push_ops_only_with_progress_reports_done_and_total() {
         let dir = tempdir().expect("tempdir");
         let conn = crate::db::open(dir.path()).expect("open");

@@ -270,6 +270,7 @@ fn pull_internal(
             Some(&mut on_downloaded),
         )?;
         total_units = total_units.saturating_sub(outcome.missing_remote);
+        done_units = done_units.min(total_units);
     }
 
     if let Some(cb) = progress {

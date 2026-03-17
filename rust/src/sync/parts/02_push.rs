@@ -113,6 +113,33 @@ fn local_embedding_artifact_blob_refs(conn: &Connection) -> Result<Vec<String>> 
     crate::db::list_distinct_embedding_artifact_blob_refs(conn)
 }
 
+const MAX_FRESH_DEVICE_REMOTE_BYTE_PROBES: i64 = 10;
+
+fn local_attachment_count(conn: &Connection) -> Result<i64> {
+    conn.query_row(r#"SELECT count(*) FROM attachments"#, [], |row| row.get(0))
+        .map_err(Into::into)
+}
+
+fn local_ready_embedding_artifact_blob_ref_count(conn: &Connection) -> Result<i64> {
+    conn.query_row(
+        r#"SELECT count(DISTINCT blob_ref)
+           FROM embedding_artifact_manifests
+           WHERE status = 'ready'"#,
+        [],
+        |row| row.get(0),
+    )
+    .map_err(Into::into)
+}
+
+fn exceeds_fresh_device_remote_byte_probe_budget(conn: &Connection) -> Result<bool> {
+    let attachment_count = local_attachment_count(conn)?.max(0);
+    if attachment_count > MAX_FRESH_DEVICE_REMOTE_BYTE_PROBES {
+        return Ok(true);
+    }
+    let artifact_count = local_ready_embedding_artifact_blob_ref_count(conn)?.max(0);
+    Ok(attachment_count.saturating_add(artifact_count) > MAX_FRESH_DEVICE_REMOTE_BYTE_PROBES)
+}
+
 fn remote_metadata_paths_for_other_devices(
     conn: &Connection,
     remote_root_dir: &str,
@@ -149,6 +176,9 @@ fn can_skip_fresh_device_full_push(
 ) -> Result<bool> {
     let metadata_paths = remote_metadata_paths_for_other_devices(conn, remote_root_dir, device_id)?;
     if metadata_paths.is_empty() {
+        return Ok(false);
+    }
+    if exceeds_fresh_device_remote_byte_probe_budget(conn)? {
         return Ok(false);
     }
 

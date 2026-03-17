@@ -255,6 +255,70 @@ mod pull_progress_tests {
     }
 
     #[test]
+    fn pull_with_progress_reclamps_done_when_some_embedding_artifact_blobs_are_missing() {
+        let db_key = [7u8; 32];
+        let sync_key = [9u8; 32];
+        let remote = InMemoryRemoteStore::new();
+
+        let dir_a = tempdir().expect("tempdir A");
+        let conn_a = crate::db::open(dir_a.path()).expect("open A");
+        let conversation =
+            crate::db::get_or_create_loop_home_conversation(&conn_a, &db_key).expect("conv A");
+        let _message_a = crate::db::insert_message(
+            &conn_a,
+            &db_key,
+            &conversation.id,
+            "user",
+            "artifact reclamp A",
+        )
+        .expect("message A");
+        let _message_b = crate::db::insert_message(
+            &conn_a,
+            &db_key,
+            &conversation.id,
+            "user",
+            "artifact reclamp B",
+        )
+        .expect("message B");
+        let processed = crate::db::process_pending_message_embeddings_default(&conn_a, &db_key, 10)
+            .expect("process embeddings A");
+        assert_eq!(processed, 2);
+
+        let pushed = push(&conn_a, &db_key, &sync_key, &remote, "SecondLoop").expect("push A");
+        assert!(pushed > 0);
+
+        let blob_refs = crate::db::list_distinct_embedding_artifact_blob_refs(&conn_a)
+            .expect("blob refs A");
+        assert_eq!(blob_refs.len(), 2);
+        let missing_blob_path = format!(
+            "/SecondLoop/{}",
+            crate::db::embedding_artifact_blob_rel_path(&blob_refs[1])
+        );
+        remote.delete(&missing_blob_path).expect("delete missing blob");
+
+        let dir_b = tempdir().expect("tempdir B");
+        let conn_b = crate::db::open(dir_b.path()).expect("open B");
+        let mut seen: Vec<(u64, u64)> = Vec::new();
+        let mut on_progress = |done: u64, total: u64| {
+            seen.push((done, total));
+        };
+
+        let applied = pull_with_progress(
+            &conn_b,
+            &db_key,
+            &sync_key,
+            &remote,
+            "SecondLoop",
+            &mut on_progress,
+        )
+        .expect("pull B");
+        assert!(applied > 0);
+
+        let last = *seen.last().expect("last progress");
+        assert_eq!(last.0, last.1, "expected final progress to stay clamped: {seen:?}");
+    }
+
+    #[test]
     fn pull_with_progress_finishes_when_remote_embedding_artifact_blob_is_missing() {
         let db_key = [7u8; 32];
         let sync_key = [9u8; 32];

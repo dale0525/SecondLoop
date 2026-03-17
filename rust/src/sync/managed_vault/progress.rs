@@ -158,7 +158,7 @@ pub fn pull_with_progress(
         if let Some(total) = total_ops {
             progress(done_ops.min(total), total);
         } else if delta > 0 {
-            progress(done_ops, done_ops);
+            progress(done_ops, done_ops.saturating_add(1));
         }
 
         since = next_since;
