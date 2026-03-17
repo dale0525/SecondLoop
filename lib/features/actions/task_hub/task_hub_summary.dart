@@ -101,12 +101,16 @@ class TaskHubSummary {
                 .where((entry) => entry.todo.id != primaryFocus.todo.id),
           ];
     final dueReviewEntries = snapshot.decide
-        .where((entry) => entry.todo.id != primaryFocusId)
         .where((entry) => entry.isReviewDue)
         .toList(growable: false);
     final unscheduledEntries = snapshot.decide
-        .where((entry) => entry.todo.id != primaryFocusId)
         .where((entry) => !entry.isReviewDue)
+        .toList(growable: false);
+    final previewDueReviewEntries = dueReviewEntries
+        .where((entry) => entry.todo.id != primaryFocusId)
+        .toList(growable: false);
+    final previewUnscheduledEntries = unscheduledEntries
+        .where((entry) => entry.todo.id != primaryFocusId)
         .toList(growable: false);
     final doneEntries = snapshot.done;
 
@@ -117,11 +121,11 @@ class TaskHubSummary {
     }
 
     final unscheduledPreview = <Todo>[];
-    for (final entry in dueReviewEntries) {
+    for (final entry in previewDueReviewEntries) {
       if (unscheduledPreview.length >= unscheduledPreviewLimit) break;
       unscheduledPreview.add(entry.todo);
     }
-    for (final entry in unscheduledEntries) {
+    for (final entry in previewUnscheduledEntries) {
       if (unscheduledPreview.length >= unscheduledPreviewLimit) break;
       unscheduledPreview.add(entry.todo);
     }

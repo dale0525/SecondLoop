@@ -343,6 +343,13 @@ class _TaskHubPageState extends State<TaskHubPage> {
         builder: (context, _) {
           final snapshot = store.snapshot;
           final primaryFocusId = snapshot.primaryFocus?.todo.id;
+          final visibleFocus = primaryFocusId == null
+              ? snapshot.focus
+              : <TaskPriorityEntry>[
+                  snapshot.primaryFocus!,
+                  ...snapshot.focus
+                      .where((entry) => entry.todo.id != primaryFocusId),
+                ];
           final visibleScheduled = primaryFocusId == null
               ? snapshot.scheduled
               : snapshot.scheduled
@@ -368,7 +375,7 @@ class _TaskHubPageState extends State<TaskHubPage> {
                 else ...[
                   if (snapshot.primaryFocus != null)
                     TaskHubFocusSection(
-                      entries: <TaskPriorityEntry>[snapshot.primaryFocus!],
+                      entries: visibleFocus,
                       checklistProgressByTodoId:
                           store.checklistProgressByTodoId,
                       onOpenTodo: _openTodoDetail,

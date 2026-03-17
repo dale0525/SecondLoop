@@ -223,7 +223,7 @@ void main() {
     expect(snapshot.source, TaskPrioritySnapshotSource.hybrid);
   });
 
-  test('low-confidence ai flags do not take over primary focus', () {
+  test('low-confidence ai semantic score does not take over primary focus', () {
     final nowLocal = DateTime(2026, 3, 13, 10, 0);
     final snapshot = buildTaskPrioritySnapshot(
       <Todo>[
@@ -244,7 +244,7 @@ void main() {
           TaskPriorityAiEntry(
             todoId: 'noisy',
             priorityBand: TaskPriorityAiBand.focus,
-            semanticAdjustment: 0,
+            semanticAdjustment: 999,
             reason: 'Maybe urgent, maybe important.',
             suggestedAction: TaskPrioritySuggestionKind.doNow,
             confidence: TaskPriorityAiConfidence.low,
@@ -256,6 +256,12 @@ void main() {
     );
 
     expect(snapshot.primaryFocus?.todo.id, 'steady');
+    expect(
+      snapshot.allEntries
+          .firstWhere((entry) => entry.todo.id == 'noisy')
+          .semanticScore,
+      0,
+    );
   });
 
   test('feedback suppression demotes AI-promoted tasks', () {

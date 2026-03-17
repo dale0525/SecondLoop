@@ -144,7 +144,8 @@ void main() {
     expect(find.textContaining('Save failed'), findsOneWidget);
   });
 
-  testWidgets('task hub shows only the highest-priority focus task',
+  testWidgets(
+      'task hub keeps remaining focus tasks visible below primary focus',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
     final now = DateTime.now();
@@ -177,16 +178,14 @@ void main() {
     expect(find.byKey(const ValueKey('task_hub_page_section_focus')),
         findsOneWidget);
     expect(find.text('Focus task 3'), findsOneWidget);
-    expect(
-        find.byType(Text).evaluate().where((element) {
-          final widget = element.widget;
-          return widget is Text &&
-              (widget.data?.startsWith('Focus task ') ?? false);
-        }).length,
-        1);
-    expect(find.text('Focus task 1'), findsNothing);
-    expect(find.text('Focus task 2'), findsNothing);
-    expect(find.text('Focus task 0'), findsNothing);
+    expect(find.byKey(const ValueKey('task_hub_page_item_focus-0')),
+        findsOneWidget);
+    expect(find.byKey(const ValueKey('task_hub_page_item_focus-1')),
+        findsOneWidget);
+    expect(find.byKey(const ValueKey('task_hub_page_item_focus-2')),
+        findsOneWidget);
+    expect(find.byKey(const ValueKey('task_hub_page_item_focus-3')),
+        findsOneWidget);
   });
 
   testWidgets('task hub loads done todos in batches on demand', (tester) async {

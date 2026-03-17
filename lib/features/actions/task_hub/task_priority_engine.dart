@@ -203,7 +203,9 @@ List<TaskPriorityEntry> _applyAiResult(
 
     return entry.copyWith(
       band: nextBand,
-      semanticScore: aiEntry.semanticAdjustment,
+      semanticScore: canApplyAiPrioritySignals
+          ? aiEntry.semanticAdjustment
+          : entry.semanticScore,
       reasonText: aiEntry.reason.isEmpty ? null : aiEntry.reason,
       suggestedAction: aiEntry.suggestedAction,
       confidence: confidence,

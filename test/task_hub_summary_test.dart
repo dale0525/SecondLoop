@@ -234,6 +234,16 @@ void main() {
     final summary = TaskHubSummary.fromSnapshot(snapshot);
 
     expect(summary.snapshot.primaryFocus?.todo.id, 'review-primary');
+    expect(summary.dueReviewCount, 1);
+    expect(summary.unscheduledCount, 2);
+    expect(
+      summary.dueReviewTodos.map((todo) => todo.id),
+      <String>['review-primary'],
+    );
+    expect(
+      summary.unscheduledTodos.map((todo) => todo.id),
+      <String>['backlog-secondary'],
+    );
     expect(
       summary.scheduledPreviewTodos.map((todo) => todo.id),
       <String>['review-primary'],
