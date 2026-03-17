@@ -145,6 +145,45 @@ void main() {
     expect(snapshot.primaryFocus?.todo.id, 'backlog');
   });
 
+  test(
+      'hard focus guards stay ahead even when another task becomes urgent and important',
+      () {
+    final nowLocal = DateTime(2026, 3, 13, 10, 0);
+    final snapshot = buildTaskPrioritySnapshot(
+      <Todo>[
+        todo(
+          id: 'overdue',
+          title: 'Pay rent',
+          updatedAtMs: 10,
+          dueAtMs: nowLocal
+              .subtract(const Duration(hours: 2))
+              .toUtc()
+              .millisecondsSinceEpoch,
+        ),
+        todo(
+          id: 'strategic',
+          title: 'Quarterly plan',
+          updatedAtMs: 100,
+        ),
+      ],
+      nowLocal: nowLocal,
+      signalState: const TaskPriorityManualSignalState(
+        byTodoId: <String, TaskPriorityManualSignal>{
+          'overdue': TaskPriorityManualSignal(
+            isImportant: false,
+            isUrgent: false,
+          ),
+          'strategic': TaskPriorityManualSignal(
+            isImportant: true,
+            isUrgent: true,
+          ),
+        },
+      ),
+    );
+
+    expect(snapshot.primaryFocus?.todo.id, 'overdue');
+  });
+
   test('hybrid rerank keeps hard priority guards when confidence is low', () {
     final nowLocal = DateTime(2026, 3, 13, 10, 0);
     final snapshot = buildTaskPrioritySnapshot(

@@ -716,6 +716,32 @@ void main() {
     expect(store.snapshot.primaryFocus?.todo.id, 'review');
   });
 
+  test('sticky focus survives unrelated rerank changes on other tasks',
+      () async {
+    SharedPreferences.setMockInitialValues({});
+
+    var changedTitle = 'Task B';
+    final service = _StickyAwareAiService();
+    final store = TaskPriorityStore.fromLoaders(
+      nowLocal: () => DateTime(2026, 3, 13, 10, 0),
+      loadTodos: () async => <Todo>[
+        todo(id: 'sticky', title: 'Roadmap', updatedAtMs: 100),
+        todo(id: 'other', title: changedTitle, updatedAtMs: 10),
+      ],
+      resolveAiService: () async => service,
+    );
+
+    await store.refresh();
+    expect(store.snapshot.primaryFocus?.todo.id, 'sticky');
+
+    changedTitle = 'Task B updated';
+    store.markDirty();
+    await store.refresh();
+
+    expect(service.calls, 2);
+    expect(store.snapshot.primaryFocus?.todo.id, 'sticky');
+  });
+
   test('ai rerank still runs when cache scope key is empty', () async {
     SharedPreferences.setMockInitialValues({});
     final aiService = _CountingAiService(
@@ -843,5 +869,36 @@ final class _CountingAiService implements TaskPriorityAiService {
       TaskPriorityAiRequest request) async {
     calls += 1;
     return _result;
+  }
+}
+
+final class _StickyAwareAiService implements TaskPriorityAiService {
+  @override
+  String get cacheScopeKey => 'sticky-aware';
+
+  int calls = 0;
+
+  @override
+  Future<TaskPriorityAiBatchResult> rerank(
+      TaskPriorityAiRequest request) async {
+    calls += 1;
+    return TaskPriorityAiBatchResult(
+      entries: request.candidates
+          .map(
+            (candidate) => TaskPriorityAiEntry(
+              todoId: candidate.todoId,
+              priorityBand: TaskPriorityAiBand.next,
+              semanticAdjustment: candidate.todoId == 'sticky' ? 12 : 5,
+              reason: candidate.todoId == 'sticky'
+                  ? 'Keep this visible.'
+                  : 'Refreshed candidate context.',
+              suggestedAction: TaskPrioritySuggestionKind.clarify,
+              confidence: TaskPriorityAiConfidence.medium,
+              isImportant: candidate.todoId == 'sticky',
+              isUrgent: false,
+            ),
+          )
+          .toList(growable: false),
+    );
   }
 }

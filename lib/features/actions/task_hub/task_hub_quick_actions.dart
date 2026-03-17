@@ -180,10 +180,14 @@ class TaskHubQuickActionsController {
     final previousSignal = await signalStore.readForTodo(todo.id);
     final currentSignal = previousSignal ?? const TaskPriorityManualSignal();
     final bucket = _urgencyBucketFor(todo, nowLocal: nowLocal);
+    final isReviewQueueTodo =
+        todo.reviewStage != null && todo.nextReviewAtMs != null;
     final targetBucket = switch ((bucket, increase)) {
       (_TaskUrgencyBucket.backlog, true) => _TaskUrgencyBucket.scheduled,
       (_TaskUrgencyBucket.scheduled, true) => _TaskUrgencyBucket.urgent,
       (_TaskUrgencyBucket.urgent, true) => _TaskUrgencyBucket.urgent,
+      (_TaskUrgencyBucket.urgent, false) when isReviewQueueTodo =>
+        _TaskUrgencyBucket.backlog,
       (_TaskUrgencyBucket.urgent, false) => _TaskUrgencyBucket.scheduled,
       (_TaskUrgencyBucket.scheduled, false) => _TaskUrgencyBucket.backlog,
       (_TaskUrgencyBucket.backlog, false) => _TaskUrgencyBucket.backlog,

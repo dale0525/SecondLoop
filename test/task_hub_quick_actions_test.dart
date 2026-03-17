@@ -265,6 +265,40 @@ void main() {
     expect(updated.nextReviewAtMs, isNotNull);
   });
 
+  test('decrease urgency keeps review tasks in the review queue', () async {
+    SharedPreferences.setMockInitialValues({});
+
+    final now = DateTime.now();
+    final initial = todo(
+      id: 't4b',
+      title: 'Review this later',
+      updatedAtMs: 10,
+      status: 'inbox',
+      reviewStage: 2,
+      nextReviewAtMs: now
+          .subtract(const Duration(minutes: 15))
+          .toUtc()
+          .millisecondsSinceEpoch,
+    );
+    final backend = _QuickActionBackend(initialTodos: [initial]);
+    final controller = TaskHubQuickActionsController(
+      backend: backend,
+      sessionKey: Uint8List(32),
+    );
+
+    final ticket =
+        await controller.apply(initial, TaskHubQuickAction.decreaseUrgency);
+    expect(ticket, isNotNull);
+
+    final updated = backend.current('t4b');
+    expect(updated.status, 'inbox');
+    expect(updated.dueAtMs, isNull);
+    expect(updated.reviewStage, initial.reviewStage);
+    expect(updated.nextReviewAtMs, isNotNull);
+    expect(updated.nextReviewAtMs,
+        greaterThan(now.toUtc().millisecondsSinceEpoch));
+  });
+
   test('importance actions persist manual signal and support undo', () async {
     SharedPreferences.setMockInitialValues({});
 

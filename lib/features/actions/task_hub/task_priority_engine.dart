@@ -206,8 +206,11 @@ List<TaskPriorityEntry> _applyAiResult(
       reasonText: aiEntry.reason.isEmpty ? null : aiEntry.reason,
       suggestedAction: aiEntry.suggestedAction,
       confidence: confidence,
-      isImportant: aiEntry.isImportant ?? entry.isImportant,
-      isUrgent: aiEntry.isUrgent ?? entry.isUrgent,
+      isImportant: entry.hasHardFocusGuard
+          ? true
+          : (aiEntry.isImportant ?? entry.isImportant),
+      isUrgent:
+          entry.hasHardFocusGuard ? true : (aiEntry.isUrgent ?? entry.isUrgent),
       reasons: <TaskPriorityReasonKind>[
         ...entry.reasons,
         TaskPriorityReasonKind.aiSuggested,
@@ -240,7 +243,8 @@ List<TaskPriorityEntry> _applyFeedback(
     next = next.copyWith(
       band: nextBand,
       semanticScore: semanticPenalty,
-      isImportant: deprioritized ? false : next.isImportant,
+      isImportant:
+          deprioritized && !next.hasHardFocusGuard ? false : next.isImportant,
       isUrgent: suppressed && !next.hasHardFocusGuard ? false : next.isUrgent,
       reasons: <TaskPriorityReasonKind>[
         ...next.reasons,
@@ -259,21 +263,24 @@ List<TaskPriorityEntry> _applyManualSignals(
     final signal = signalState.byTodoId[entry.todo.id];
     if (signal == null) return entry;
     return entry.copyWith(
-      isImportant: signal.isImportant ?? entry.isImportant,
-      isUrgent: signal.isUrgent ?? entry.isUrgent,
+      isImportant: entry.hasHardFocusGuard
+          ? true
+          : (signal.isImportant ?? entry.isImportant),
+      isUrgent:
+          entry.hasHardFocusGuard ? true : (signal.isUrgent ?? entry.isUrgent),
     );
   }).toList(growable: false);
 }
 
 int _compareOverallPriority(TaskPriorityEntry a, TaskPriorityEntry b) {
+  if (a.hasHardFocusGuard != b.hasHardFocusGuard) {
+    return a.hasHardFocusGuard ? -1 : 1;
+  }
+
   final quadrantCompare = _quadrantRank(a.quadrant).compareTo(
     _quadrantRank(b.quadrant),
   );
   if (quadrantCompare != 0) return quadrantCompare;
-
-  if (a.hasHardFocusGuard != b.hasHardFocusGuard) {
-    return a.hasHardFocusGuard ? -1 : 1;
-  }
 
   final scoreCompare = b.totalScore.compareTo(a.totalScore);
   if (scoreCompare != 0) return scoreCompare;
