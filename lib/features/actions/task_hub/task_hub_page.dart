@@ -318,6 +318,10 @@ class _TaskHubPageState extends State<TaskHubPage> {
   }
 
   String _actionLabel(TaskHubQuickAction action) => switch (action) {
+        TaskHubQuickAction.today => context.t.actions.taskHub.actions.today,
+        TaskHubQuickAction.tomorrow =>
+          context.t.actions.taskHub.actions.tomorrow,
+        TaskHubQuickAction.start => context.t.actions.taskHub.actions.start,
         TaskHubQuickAction.increaseUrgency =>
           context.t.actions.taskHub.actions.increaseUrgency,
         TaskHubQuickAction.decreaseUrgency =>
@@ -328,6 +332,8 @@ class _TaskHubPageState extends State<TaskHubPage> {
           context.t.actions.taskHub.actions.decreaseImportance,
         TaskHubQuickAction.done => context.t.actions.taskHub.actions.done,
         TaskHubQuickAction.reopen => context.t.actions.taskHub.actions.reopen,
+        TaskHubQuickAction.redo => context.t.actions.taskHub.actions.redo,
+        TaskHubQuickAction.dismiss => context.t.common.actions.delete,
       };
 
   @override

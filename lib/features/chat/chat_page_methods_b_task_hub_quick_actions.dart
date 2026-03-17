@@ -2,6 +2,10 @@ part of 'chat_page.dart';
 
 extension _ChatPageStateMethodsBTaskHubQuickActions on _ChatPageState {
   String _taskHubActionLabel(TaskHubQuickAction action) => switch (action) {
+        TaskHubQuickAction.today => context.t.actions.taskHub.actions.today,
+        TaskHubQuickAction.tomorrow =>
+          context.t.actions.taskHub.actions.tomorrow,
+        TaskHubQuickAction.start => context.t.actions.taskHub.actions.start,
         TaskHubQuickAction.increaseUrgency =>
           context.t.actions.taskHub.actions.increaseUrgency,
         TaskHubQuickAction.decreaseUrgency =>
@@ -12,6 +16,8 @@ extension _ChatPageStateMethodsBTaskHubQuickActions on _ChatPageState {
           context.t.actions.taskHub.actions.decreaseImportance,
         TaskHubQuickAction.done => context.t.actions.taskHub.actions.done,
         TaskHubQuickAction.reopen => context.t.actions.taskHub.actions.reopen,
+        TaskHubQuickAction.redo => context.t.actions.taskHub.actions.redo,
+        TaskHubQuickAction.dismiss => context.t.common.actions.delete,
       };
 
   Future<void> _applyTaskHubQuickAction(

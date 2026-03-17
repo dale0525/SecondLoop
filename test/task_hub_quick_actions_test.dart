@@ -57,7 +57,8 @@ void main() {
     );
   }
 
-  testWidgets('backlog tasks prioritize increasing urgency', (tester) async {
+  testWidgets('backlog tasks expose start and tomorrow actions',
+      (tester) async {
     final candidate = entry(
       todo: todo(id: 'u1', title: 'Backlog item', updatedAtMs: 10),
     );
@@ -66,49 +67,32 @@ void main() {
       wrapWithI18n(
         MaterialApp(
           home: Builder(
-            builder: (context) => Text(
-              buildTaskHubQuickActionLayout(context, entry: candidate)
-                  .$1
-                  .first
-                  .label,
-            ),
+            builder: (context) {
+              final layout = buildTaskHubQuickActionLayout(
+                context,
+                entry: candidate,
+              );
+              return Text(
+                layout.$1.map((item) => item.label).join('|'),
+              );
+            },
           ),
         ),
       ),
     );
 
-    expect(find.text('More urgent'), findsOneWidget);
+    expect(find.text('Start|Tomorrow'), findsOneWidget);
   });
 
-  testWidgets('urgent but not important tasks prioritize increasing importance',
+  testWidgets('in-progress tasks expose done and tomorrow actions',
       (tester) async {
     final candidate = entry(
-      todo: todo(id: 'u2', title: 'Review item', updatedAtMs: 10),
-      isUrgent: true,
-    );
-
-    await tester.pumpWidget(
-      wrapWithI18n(
-        MaterialApp(
-          home: Builder(
-            builder: (context) => Text(
-              buildTaskHubQuickActionLayout(context, entry: candidate)
-                  .$1
-                  .first
-                  .label,
-            ),
-          ),
-        ),
+      todo: todo(
+        id: 'u2',
+        title: 'Review item',
+        updatedAtMs: 10,
+        status: 'in_progress',
       ),
-    );
-
-    expect(find.text('More important'), findsOneWidget);
-  });
-
-  testWidgets('urgent and important tasks prioritize finishing',
-      (tester) async {
-    final candidate = entry(
-      todo: todo(id: 'u3', title: 'Ship it', updatedAtMs: 10),
       isUrgent: true,
       isImportant: true,
       band: TaskPriorityBand.focus,
@@ -118,18 +102,88 @@ void main() {
       wrapWithI18n(
         MaterialApp(
           home: Builder(
-            builder: (context) => Text(
-              buildTaskHubQuickActionLayout(context, entry: candidate)
-                  .$1
-                  .first
-                  .label,
-            ),
+            builder: (context) {
+              final layout = buildTaskHubQuickActionLayout(
+                context,
+                entry: candidate,
+              );
+              return Text(
+                layout.$1.map((item) => item.label).join('|'),
+              );
+            },
           ),
         ),
       ),
     );
 
-    expect(find.text('Done'), findsOneWidget);
+    expect(find.text('Done|Tomorrow'), findsOneWidget);
+  });
+
+  testWidgets('done tasks expose reopen and more menu redo/delete actions',
+      (tester) async {
+    final candidate = entry(
+      todo: todo(
+        id: 'u3',
+        title: 'Ship it',
+        updatedAtMs: 10,
+        status: 'done',
+      ),
+      band: TaskPriorityBand.done,
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: Builder(
+            builder: (context) {
+              final layout = buildTaskHubQuickActionLayout(
+                context,
+                entry: candidate,
+              );
+              return Text(
+                '${layout.$1.first.label}|${layout.$2.map((item) => item.label).join('|')}',
+              );
+            },
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('Undo done|Do again|Delete'), findsOneWidget);
+  });
+
+  test('stale in-progress recovery signal is cleared before urgency increases',
+      () async {
+    SharedPreferences.setMockInitialValues({});
+
+    final futureDue = DateTime.now().add(const Duration(days: 3));
+    final initial = todo(
+      id: 't-stale',
+      title: 'Task stale',
+      updatedAtMs: 10,
+      dueAtMs: futureDue.toUtc().millisecondsSinceEpoch,
+    );
+    final backend = _QuickActionBackend(initialTodos: [initial]);
+    const signalStore = TaskPrioritySignalStore();
+    await signalStore.setForTodo(
+      't-stale',
+      const TaskPriorityManualSignal(preferredStatus: 'in_progress'),
+    );
+    final controller = TaskHubQuickActionsController(
+      backend: backend,
+      sessionKey: Uint8List(32),
+      signalStore: signalStore,
+    );
+
+    await controller.apply(initial, TaskHubQuickAction.decreaseUrgency);
+    final backlog = backend.current('t-stale');
+
+    await controller.apply(backlog, TaskHubQuickAction.increaseUrgency);
+    final scheduled = backend.current('t-stale');
+    await controller.apply(scheduled, TaskHubQuickAction.increaseUrgency);
+
+    final updated = backend.current('t-stale');
+    expect(updated.status, isNot('in_progress'));
   });
 
   test('increase urgency moves backlog task to tomorrow schedule', () async {
@@ -431,7 +485,7 @@ void main() {
 
     await controller.apply(reopened, TaskHubQuickAction.increaseUrgency);
     final finalTodo = backend.current('t5c');
-    expect(finalTodo.status, 'open');
+    expect(finalTodo.status, 'in_progress');
     expect(finalTodo.dueAtMs, isNotNull);
   });
 
@@ -530,7 +584,47 @@ void main() {
 
     final ticket = await controller.apply(initial, TaskHubQuickAction.reopen);
     expect(ticket, isNotNull);
-    expect(backend.current('t7').status, 'open');
+    final reopened = backend.current('t7');
+    expect(reopened.status, 'in_progress');
+    expect(reopened.dueAtMs, isNotNull);
+  });
+
+  test('start action moves unopened todo to in progress', () async {
+    SharedPreferences.setMockInitialValues({});
+
+    final initial = todo(id: 't8', title: 'Task 8', updatedAtMs: 10);
+    final backend = _QuickActionBackend(initialTodos: [initial]);
+    final controller = TaskHubQuickActionsController(
+      backend: backend,
+      sessionKey: Uint8List(32),
+    );
+
+    final ticket = await controller.apply(initial, TaskHubQuickAction.start);
+    expect(ticket, isNotNull);
+    expect(backend.current('t8').status, 'in_progress');
+  });
+
+  test('tomorrow action keeps in-progress status while moving due date',
+      () async {
+    SharedPreferences.setMockInitialValues({});
+
+    final initial = todo(
+      id: 't9',
+      title: 'Task 9',
+      updatedAtMs: 10,
+      status: 'in_progress',
+    );
+    final backend = _QuickActionBackend(initialTodos: [initial]);
+    final controller = TaskHubQuickActionsController(
+      backend: backend,
+      sessionKey: Uint8List(32),
+    );
+
+    final ticket = await controller.apply(initial, TaskHubQuickAction.tomorrow);
+    expect(ticket, isNotNull);
+    final updated = backend.current('t9');
+    expect(updated.status, 'in_progress');
+    expect(updated.dueAtMs, isNotNull);
   });
 }
 

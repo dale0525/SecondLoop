@@ -85,8 +85,6 @@ void main() {
         findsOneWidget);
     expect(find.byKey(const ValueKey('task_hub_page_section_scheduled')),
         findsOneWidget);
-    expect(find.byKey(const ValueKey('task_hub_page_section_decide')),
-        findsOneWidget);
     expect(
         find.byKey(const ValueKey('task_hub_page_item_focus')), findsOneWidget);
     expect(
@@ -95,8 +93,6 @@ void main() {
     );
     expect(find.text('1/2'), findsOneWidget);
     expect(find.byKey(const ValueKey('task_hub_page_item_scheduled')),
-        findsOneWidget);
-    expect(find.byKey(const ValueKey('task_hub_page_item_review')),
         findsOneWidget);
     await tester.scrollUntilVisible(
       find.byKey(const ValueKey('task_hub_page_section_done')),
@@ -136,7 +132,7 @@ void main() {
 
     await tester.tap(
       find.byKey(
-        const ValueKey('task_hub_page_quick_focus_increaseUrgency'),
+        const ValueKey('task_hub_page_quick_focus_start'),
       ),
     );
     await tester.pumpAndSettle();

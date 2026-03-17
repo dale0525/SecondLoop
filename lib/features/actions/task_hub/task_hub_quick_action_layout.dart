@@ -41,28 +41,33 @@ TaskHubQuickActionItem? primaryTaskHubQuickActionItemForEntry(
       tone: TaskHubQuickActionTone.primary,
     );
   }
-
-  if (!entry.isUrgent) {
+  if (entry.todo.status == 'in_progress') {
     return TaskHubQuickActionItem(
-      action: TaskHubQuickAction.increaseUrgency,
-      label: actions.increaseUrgency,
-      icon: Icons.priority_high_rounded,
-      tone: TaskHubQuickActionTone.primary,
-    );
-  }
-  if (!entry.isImportant) {
-    return TaskHubQuickActionItem(
-      action: TaskHubQuickAction.increaseImportance,
-      label: actions.increaseImportance,
-      icon: Icons.keyboard_double_arrow_up_rounded,
+      action: TaskHubQuickAction.done,
+      label: actions.done,
+      icon: Icons.check_rounded,
       tone: TaskHubQuickActionTone.primary,
     );
   }
   return TaskHubQuickActionItem(
-    action: TaskHubQuickAction.done,
-    label: actions.done,
-    icon: Icons.check_rounded,
+    action: TaskHubQuickAction.start,
+    label: actions.start,
+    icon: Icons.play_circle_outline_rounded,
     tone: TaskHubQuickActionTone.primary,
+  );
+}
+
+TaskHubQuickActionItem? secondaryTaskHubQuickActionItemForEntry(
+  BuildContext context, {
+  required TaskPriorityEntry entry,
+}) {
+  final actions = context.t.actions.taskHub.actions;
+  if (entry.todo.status == 'done') return null;
+  return TaskHubQuickActionItem(
+    action: TaskHubQuickAction.tomorrow,
+    label: actions.tomorrow,
+    icon: Icons.event_rounded,
+    tone: TaskHubQuickActionTone.secondary,
   );
 }
 
@@ -90,45 +95,40 @@ TaskHubQuickActionLayout buildTaskHubQuickActionLayout(
     context,
     entry: entry,
   );
+  final timeAction = secondaryTaskHubQuickActionItemForEntry(
+    context,
+    entry: entry,
+  );
+
   if (entry.todo.status == 'done') {
     return (
       <TaskHubQuickActionItem>[if (primaryAction != null) primaryAction],
-      const <TaskHubQuickActionItem>[],
+      <TaskHubQuickActionItem>[
+        chip(
+          TaskHubQuickAction.redo,
+          label: actions.redo,
+          icon: Icons.replay_rounded,
+        ),
+        chip(
+          TaskHubQuickAction.dismiss,
+          label: context.t.common.actions.delete,
+          icon: Icons.delete_outline_rounded,
+        ),
+      ],
     );
   }
 
-  final secondary = <TaskHubQuickActionItem>[
-    chip(
-      TaskHubQuickAction.increaseUrgency,
-      label: actions.increaseUrgency,
-      icon: Icons.priority_high_rounded,
-    ),
-    chip(
-      TaskHubQuickAction.decreaseUrgency,
-      label: actions.decreaseUrgency,
-      icon: Icons.low_priority_rounded,
-    ),
-    chip(
-      TaskHubQuickAction.increaseImportance,
-      label: actions.increaseImportance,
-      icon: Icons.keyboard_double_arrow_up_rounded,
-    ),
-    chip(
-      TaskHubQuickAction.decreaseImportance,
-      label: actions.decreaseImportance,
-      icon: Icons.keyboard_double_arrow_down_rounded,
-    ),
-    chip(
-      TaskHubQuickAction.done,
-      label: actions.done,
-      icon: Icons.check_rounded,
-    ),
-  ]
-      .where((item) => item.action != primaryAction?.action)
-      .toList(growable: false);
-
   return (
-    <TaskHubQuickActionItem>[if (primaryAction != null) primaryAction],
-    secondary,
+    <TaskHubQuickActionItem>[
+      if (primaryAction != null) primaryAction,
+      if (timeAction != null) timeAction,
+    ],
+    <TaskHubQuickActionItem>[
+      chip(
+        TaskHubQuickAction.today,
+        label: actions.today,
+        icon: Icons.today_rounded,
+      ),
+    ],
   );
 }

@@ -194,25 +194,74 @@ class TaskHubEntryCard extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 8),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              for (final action in layout.$1)
-                _TaskHubQuickButton(
-                  key: ValueKey(
-                      'task_hub_page_quick_${entry.todo.id}_${action.action.name}'),
-                  label: action.label,
-                  icon: action.icon,
-                  tone: action.tone,
-                  onPressed: () => onQuickAction(action.action),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  for (final action in layout.$1)
+                    _TaskHubQuickButton(
+                      key: ValueKey(
+                        'task_hub_page_quick_${entry.todo.id}_${action.action.name}',
+                      ),
+                      label: action.label,
+                      icon: action.icon,
+                      tone: action.tone,
+                      onPressed: () => onQuickAction(action.action),
+                    ),
+                  if (layout.$2.isNotEmpty)
+                    _TaskHubQuickMenu(
+                      key:
+                          ValueKey('task_hub_page_quick_${entry.todo.id}_more'),
+                      items: layout.$2,
+                      onSelected: onQuickAction,
+                    ),
+                ],
+              ),
+              if (entry.todo.status != 'done') ...[
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    _TaskHubPriorityControl(
+                      key: ValueKey(
+                        'task_hub_page_priority_${entry.todo.id}_urgency',
+                      ),
+                      icon: Icons.priority_high_rounded,
+                      isActive: entry.isUrgent,
+                      semanticsLabel:
+                          context.t.actions.taskHub.actions.increaseUrgency,
+                      decreaseTooltip:
+                          context.t.actions.taskHub.actions.decreaseUrgency,
+                      increaseTooltip:
+                          context.t.actions.taskHub.actions.increaseUrgency,
+                      onDecrease: () =>
+                          onQuickAction(TaskHubQuickAction.decreaseUrgency),
+                      onIncrease: () =>
+                          onQuickAction(TaskHubQuickAction.increaseUrgency),
+                    ),
+                    const SizedBox(width: 8),
+                    _TaskHubPriorityControl(
+                      key: ValueKey(
+                        'task_hub_page_priority_${entry.todo.id}_importance',
+                      ),
+                      icon: Icons.keyboard_double_arrow_up_rounded,
+                      isActive: entry.isImportant,
+                      semanticsLabel:
+                          context.t.actions.taskHub.actions.increaseImportance,
+                      decreaseTooltip:
+                          context.t.actions.taskHub.actions.decreaseImportance,
+                      increaseTooltip:
+                          context.t.actions.taskHub.actions.increaseImportance,
+                      onDecrease: () =>
+                          onQuickAction(TaskHubQuickAction.decreaseImportance),
+                      onIncrease: () =>
+                          onQuickAction(TaskHubQuickAction.increaseImportance),
+                    ),
+                  ],
                 ),
-              if (layout.$2.isNotEmpty)
-                _TaskHubQuickMenu(
-                  key: ValueKey('task_hub_page_quick_${entry.todo.id}_more'),
-                  items: layout.$2,
-                  onSelected: onQuickAction,
-                ),
+              ],
             ],
           ),
         ],
@@ -320,6 +369,102 @@ class _TaskHubQuickMenu extends StatelessWidget {
             ),
           ),
           child: const Icon(Icons.more_horiz_rounded, size: 18),
+        ),
+      ),
+    );
+  }
+}
+
+class _TaskHubPriorityControl extends StatelessWidget {
+  const _TaskHubPriorityControl({
+    required this.icon,
+    required this.isActive,
+    required this.semanticsLabel,
+    required this.decreaseTooltip,
+    required this.increaseTooltip,
+    required this.onDecrease,
+    required this.onIncrease,
+    super.key,
+  });
+
+  final IconData icon;
+  final bool isActive;
+  final String semanticsLabel;
+  final String decreaseTooltip;
+  final String increaseTooltip;
+  final VoidCallback onDecrease;
+  final VoidCallback onIncrease;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final tokens = SlTokens.of(context);
+    final foregroundColor = isActive
+        ? theme.colorScheme.primary
+        : theme.colorScheme.onSurfaceVariant;
+    return Semantics(
+      label: semanticsLabel,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+        decoration: BoxDecoration(
+          border: Border.all(color: tokens.borderSubtle.withOpacity(0.9)),
+          borderRadius: BorderRadius.circular(tokens.radiusLg),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 18, color: foregroundColor),
+            const SizedBox(height: 6),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _TaskHubPriorityButton(
+                  icon: Icons.remove_rounded,
+                  tooltip: decreaseTooltip,
+                  onPressed: onDecrease,
+                ),
+                const SizedBox(width: 4),
+                _TaskHubPriorityButton(
+                  icon: Icons.add_rounded,
+                  tooltip: increaseTooltip,
+                  onPressed: onIncrease,
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _TaskHubPriorityButton extends StatelessWidget {
+  const _TaskHubPriorityButton({
+    required this.icon,
+    required this.tooltip,
+    required this.onPressed,
+  });
+
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = SlTokens.of(context);
+    return Tooltip(
+      message: tooltip,
+      child: InkWell(
+        onTap: onPressed,
+        borderRadius: BorderRadius.circular(99),
+        child: Container(
+          width: 24,
+          height: 24,
+          decoration: BoxDecoration(
+            border: Border.all(color: tokens.borderSubtle.withOpacity(0.9)),
+            borderRadius: BorderRadius.circular(99),
+          ),
+          child: Icon(icon, size: 14),
         ),
       ),
     );

@@ -68,7 +68,7 @@ void main() {
     expect(changes, greaterThanOrEqualTo(1));
   });
 
-  testWidgets('task hub urgency quick action notifies sync engine',
+  testWidgets('task hub tomorrow quick action notifies sync engine',
       (tester) async {
     SharedPreferences.setMockInitialValues({
       'actions.review.day_end_minutes_v1': (23 * 60) + 59,
@@ -114,8 +114,8 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find
-        .byKey(const ValueKey('task_hub_page_quick_todo:1_increaseUrgency')));
+    await tester
+        .tap(find.byKey(const ValueKey('task_hub_page_quick_todo:1_tomorrow')));
     await tester.pump();
 
     expect(find.byType(SnackBar), findsOneWidget);
@@ -177,8 +177,8 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find
-        .byKey(const ValueKey('task_hub_page_quick_todo:1_increaseUrgency')));
+    await tester
+        .tap(find.byKey(const ValueKey('task_hub_page_quick_todo:1_tomorrow')));
     await tester.pump();
     expect(find.byType(SnackBar), findsOneWidget);
 
@@ -252,8 +252,8 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('open_task_hub_page')));
     await tester.pumpAndSettle();
 
-    await tester.tap(find
-        .byKey(const ValueKey('task_hub_page_quick_todo:1_increaseUrgency')));
+    await tester
+        .tap(find.byKey(const ValueKey('task_hub_page_quick_todo:1_tomorrow')));
     await tester.pump();
     expect(find.byType(SnackBar), findsOneWidget);
 

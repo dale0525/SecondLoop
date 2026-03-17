@@ -475,7 +475,7 @@ void main() {
       find.byKey(const ValueKey('task_hub_banner_primary_action')),
       findsOneWidget,
     );
-    expect(find.text('More urgent'), findsOneWidget);
+    expect(find.text('Start'), findsOneWidget);
   });
 }
 
