@@ -213,6 +213,13 @@ class TaskPriorityAiRequest {
   }
 }
 
+String buildTaskPriorityAiTimeBucket(DateTime nowLocal) {
+  return '${nowLocal.year.toString().padLeft(4, '0')}-'
+      '${nowLocal.month.toString().padLeft(2, '0')}-'
+      '${nowLocal.day.toString().padLeft(2, '0')}T'
+      '${nowLocal.hour.toString().padLeft(2, '0')}';
+}
+
 TaskPriorityAiBatchResult parseTaskPriorityAiBatchResult(String raw) {
   final trimmed = raw.trim();
   final jsonText = _extractJsonObject(trimmed) ?? trimmed;

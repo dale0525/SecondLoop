@@ -232,7 +232,10 @@ class TaskPriorityStore extends ChangeNotifier {
       final staleCandidates = <TaskPriorityAiCandidate>[];
 
       for (final candidate in request.candidates) {
-        final requestSignature = _buildCandidateRequestSignature(candidate);
+        final requestSignature = _buildCandidateRequestSignature(
+          candidate,
+          nowLocal: nowLocal,
+        );
         final cached = persisted[candidate.todoId];
         if (cached != null && cached.requestSignature == requestSignature) {
           freshEntries[candidate.todoId] = cached.entry;
@@ -255,7 +258,10 @@ class TaskPriorityStore extends ChangeNotifier {
               }
             }
             if (candidate == null) continue;
-            final requestSignature = _buildCandidateRequestSignature(candidate);
+            final requestSignature = _buildCandidateRequestSignature(
+              candidate,
+              nowLocal: nowLocal,
+            );
             freshEntries[entry.todoId] = entry;
             mergedPersisted[entry.todoId] = _PersistedAiAssessment(
               entry: entry,
@@ -297,6 +303,7 @@ class TaskPriorityStore extends ChangeNotifier {
         feedbackState: feedbackState,
         signalState: signalState,
       );
+      _aiAvailability = TaskPriorityAiAvailability.available;
       hybridSnapshot = _applyStickyFocus(hybridSnapshot, nowLocal: nowLocal);
       _snapshot = hybridSnapshot;
       _rememberStickyFocus(nowLocal);
@@ -402,8 +409,14 @@ class TaskPriorityStore extends ChangeNotifier {
     }
   }
 
-  String _buildCandidateRequestSignature(TaskPriorityAiCandidate candidate) {
-    return jsonEncode(candidate.toJson());
+  String _buildCandidateRequestSignature(
+    TaskPriorityAiCandidate candidate, {
+    required DateTime nowLocal,
+  }) {
+    return jsonEncode(<String, Object?>{
+      'time_bucket': buildTaskPriorityAiTimeBucket(nowLocal),
+      'candidate': candidate.toJson(),
+    });
   }
 
   TaskPrioritySnapshot _applyStickyFocus(

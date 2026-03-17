@@ -76,6 +76,28 @@ void main() {
     expect(service.requestTodoIds, hasLength(2));
     expect(service.requestTodoIds.last, <String>['b']);
   });
+
+  test('time bucket changes rerank unchanged candidates', () async {
+    SharedPreferences.setMockInitialValues({});
+    var nowLocal = DateTime(2026, 3, 13, 10, 55);
+    final service = _RecordingAiService();
+    final store = TaskPriorityStore.fromLoaders(
+      nowLocal: () => nowLocal,
+      loadTodos: () async => <Todo>[
+        todo(id: 'a', title: 'Follow up tomorrow', updatedAtMs: 10),
+      ],
+      resolveAiService: () async => service,
+    );
+
+    await store.refresh();
+    expect(service.requestSizes, <int>[1]);
+
+    nowLocal = DateTime(2026, 3, 13, 11, 5);
+    store.markDirty();
+    await store.refresh();
+
+    expect(service.requestSizes, <int>[1, 1]);
+  });
 }
 
 final class _RecordingAiService implements TaskPriorityAiService {

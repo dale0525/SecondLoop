@@ -197,6 +197,7 @@ class BackendTaskPriorityAiService implements TaskPriorityAiService {
   String _buildCacheKey(TaskPriorityAiRequest request) {
     return jsonEncode(<String, Object?>{
       'scope': cacheScopeKey,
+      'time_bucket': buildTaskPriorityAiTimeBucket(request.nowLocal),
       'candidates': request.candidates
           .map((entry) => entry.toJson())
           .toList(growable: false),
