@@ -6,7 +6,11 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:secondloop/core/backend/app_backend.dart';
+import 'package:secondloop/core/cloud/cloud_auth_controller.dart';
+import 'package:secondloop/core/cloud/cloud_auth_scope.dart';
+import 'package:secondloop/core/ai/ai_routing.dart';
 import 'package:secondloop/core/session/session_scope.dart';
+import 'package:secondloop/core/subscription/subscription_scope.dart';
 import 'package:secondloop/core/sync/sync_engine.dart';
 import 'package:secondloop/core/sync/sync_engine_gate.dart';
 import 'package:secondloop/features/actions/todo/todo_detail_page.dart';
@@ -246,6 +250,34 @@ void main() {
     expect(backend.enqueuedRegenerate, isFalse);
     expect(find.byType(AiAskAiSettingsPage), findsOneWidget);
   });
+
+  testWidgets(
+      'TodoDetailPage manual regenerate allows cloud when subscription is unknown',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({
+      'semantic_parse_data_consent_v1': true,
+    });
+    _setLargeDisplay(tester);
+    final backend = _Backend(llmProfiles: const <LlmProfile>[]);
+
+    await tester.pumpWidget(
+      _buildSubject(
+        backend,
+        cloudAuthController: _FakeCloudAuthController(),
+        subscriptionController:
+            _FakeSubscriptionStatusController(SubscriptionStatus.unknown),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(
+      find.byKey(const ValueKey('todo_detail_followup_generate_suggestions')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(backend.enqueuedRegenerate, isTrue);
+    expect(find.byType(AiAskAiSettingsPage), findsNothing);
+  });
 }
 
 void _setLargeDisplay(WidgetTester tester) {
@@ -254,30 +286,50 @@ void _setLargeDisplay(WidgetTester tester) {
   addTearDown(tester.view.reset);
 }
 
-Widget _buildSubject(_Backend backend, {SyncEngine? syncEngine}) {
-  return wrapWithI18n(
-    MaterialApp(
-      home: AppBackendScope(
-        backend: backend,
-        child: SessionScope(
-          sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
-          lock: () {},
-          child: SyncEngineScope(
-            engine: syncEngine,
-            child: const TodoDetailPage(
-              initialTodo: Todo(
-                id: 't1',
-                title: '调研一下当前主流的 llm 模型',
-                status: 'open',
-                createdAtMs: 0,
-                updatedAtMs: 0,
-              ),
-            ),
+Widget _buildSubject(
+  _Backend backend, {
+  SyncEngine? syncEngine,
+  CloudAuthController? cloudAuthController,
+  SubscriptionStatusController? subscriptionController,
+}) {
+  Widget child = AppBackendScope(
+    backend: backend,
+    child: SessionScope(
+      sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+      lock: () {},
+      child: SyncEngineScope(
+        engine: syncEngine,
+        child: const TodoDetailPage(
+          initialTodo: Todo(
+            id: 't1',
+            title: '调研一下当前主流的 llm 模型',
+            status: 'open',
+            createdAtMs: 0,
+            updatedAtMs: 0,
           ),
         ),
       ),
     ),
   );
+
+  if (cloudAuthController != null) {
+    child = CloudAuthScope(
+      controller: cloudAuthController,
+      gatewayConfig: const CloudGatewayConfig(
+        baseUrl: 'https://example.com',
+        modelName: 'cloud',
+      ),
+      child: child,
+    );
+  }
+  if (subscriptionController != null) {
+    child = SubscriptionScope(
+      controller: subscriptionController,
+      child: child,
+    );
+  }
+
+  return wrapWithI18n(MaterialApp(home: child));
 }
 
 final class _NoopSyncRunner implements SyncRunner {
@@ -286,6 +338,51 @@ final class _NoopSyncRunner implements SyncRunner {
 
   @override
   Future<int> push(SyncConfig config) async => 0;
+}
+
+final class _FakeCloudAuthController implements CloudAuthController {
+  @override
+  String? get email => 'demo@example.com';
+
+  @override
+  bool? get emailVerified => true;
+
+  @override
+  String? get uid => 'uid_1';
+
+  @override
+  Future<String?> getIdToken() async => 'token_1';
+
+  @override
+  Future<void> refreshUserInfo() async {}
+
+  @override
+  Future<void> sendEmailVerification() async {}
+
+  @override
+  Future<void> signInWithEmailPassword({
+    required String email,
+    required String password,
+  }) async {}
+
+  @override
+  Future<void> signOut() async {}
+
+  @override
+  Future<void> signUpWithEmailPassword({
+    required String email,
+    required String password,
+  }) async {}
+}
+
+final class _FakeSubscriptionStatusController extends ChangeNotifier
+    implements SubscriptionStatusController {
+  _FakeSubscriptionStatusController(this._status);
+
+  final SubscriptionStatus _status;
+
+  @override
+  SubscriptionStatus get status => _status;
 }
 
 final class _Backend extends AppBackend {

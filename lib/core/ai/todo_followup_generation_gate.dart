@@ -26,10 +26,12 @@ Future<String?> prepareTodoFollowupGenerationIdToken(
   CloudAuthController? controller, {
   required SubscriptionStatus subscriptionStatus,
   required String gatewayBaseUrl,
+  bool forceWarm = false,
 }) async {
   final normalizedGatewayBaseUrl = gatewayBaseUrl.trim();
-  if (subscriptionStatus == SubscriptionStatus.entitled &&
-      normalizedGatewayBaseUrl.isNotEmpty) {
+  final shouldWarm = normalizedGatewayBaseUrl.isNotEmpty &&
+      (subscriptionStatus == SubscriptionStatus.entitled || forceWarm);
+  if (shouldWarm) {
     await bestEffortWarmCloudCapabilityAuth(controller);
   }
 
@@ -187,15 +189,25 @@ class _TodoFollowupGenerationGateState extends State<TodoFollowupGenerationGate>
       final cloudAuthScope = CloudAuthScope.maybeOf(context);
       final gatewayConfig =
           cloudAuthScope?.gatewayConfig ?? CloudGatewayConfig.defaultConfig;
+      final previewJobs = await backend.listDueTodoFollowupGenerationJobs(
+        Uint8List.fromList(sessionKey),
+        nowMs: DateTime.now().millisecondsSinceEpoch,
+        limit: _kBatchLimit,
+      );
+      final hasManualRegenerateDueJob = previewJobs.any(
+        (job) => job.triggerKind == 'manual_regenerate',
+      );
 
       final idToken = await prepareTodoFollowupGenerationIdToken(
         cloudAuthScope?.controller,
         subscriptionStatus: subscriptionStatus,
         gatewayBaseUrl: gatewayConfig.baseUrl,
+        forceWarm: hasManualRegenerateDueJob,
       );
-      final route = await decideAiAutomationRoute(
+      final route = await decideTodoFollowupGenerationRoute(
         backend,
         Uint8List.fromList(sessionKey),
+        hasManualRegenerateDueJob: hasManualRegenerateDueJob,
         cloudIdToken: idToken,
         cloudGatewayBaseUrl: gatewayConfig.baseUrl,
         subscriptionStatus: subscriptionStatus,

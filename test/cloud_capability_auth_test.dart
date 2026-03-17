@@ -99,6 +99,36 @@ void main() {
     expect(store.loadCalls, 1);
     expect(toolkit.refreshCalls, 1);
   });
+
+  test('todo followup auth can force warm for manual regenerate route',
+      () async {
+    final previous = debugDefaultTargetPlatformOverride;
+    addTearDown(() {
+      debugDefaultTargetPlatformOverride = previous;
+    });
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+
+    final toolkit = _RefreshingIdentityToolkit();
+    final store = _InMemoryCloudAuthStore(
+      const CloudAuthStoredSession(uid: 'uid_1', refreshToken: 'refresh_1'),
+    );
+    final controller = CloudAuthControllerImpl(
+      identityToolkit: toolkit,
+      store: store,
+      nowMs: () => 1000,
+    );
+
+    final token = await prepareTodoFollowupGenerationIdToken(
+      controller,
+      subscriptionStatus: SubscriptionStatus.unknown,
+      gatewayBaseUrl: 'https://example.com',
+      forceWarm: true,
+    );
+
+    expect(token, 'id_token_1');
+    expect(store.loadCalls, 1);
+    expect(toolkit.refreshCalls, 1);
+  });
 }
 
 final class _InMemoryCloudAuthStore implements CloudAuthStore {

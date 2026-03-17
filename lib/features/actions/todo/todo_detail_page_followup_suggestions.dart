@@ -31,7 +31,7 @@ extension _TodoDetailPageStateFollowupSuggestions on _TodoDetailPageState {
       mode: CloudCapabilityAuthMode.interactive,
     );
 
-    final route = await decideAiAutomationRoute(
+    final route = await decideAskAiRoute(
       backend,
       session.sessionKey,
       cloudIdToken: cloudIdToken,
