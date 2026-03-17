@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:desktop_drop/desktop_drop.dart';
 import 'package:file_picker/file_picker.dart';
@@ -10,12 +11,14 @@ import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:record/record.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/ai/ai_routing.dart';
 import '../../../core/attachments/attachment_metadata_store.dart';
 import '../../../core/ai/semantic_parse_data_consent_prefs.dart';
 import '../../../core/ai/semantic_parse_edit_policy.dart';
 import '../../../core/ai/todo_checklist_suggestions_ai.dart';
+import '../../../core/ai/todo_followup_suggestions_ai.dart';
 import '../../../core/backend/app_backend.dart';
 import '../../../core/backend/attachments_backend.dart';
 import '../../../core/backend/native_backend.dart';
@@ -63,6 +66,7 @@ part 'todo_detail_page_attachment_picker.dart';
 part 'todo_detail_page_composer.dart';
 part 'todo_detail_page_checklist.dart';
 part 'todo_detail_page_checklist_suggestions.dart';
+part 'todo_detail_page_followup_suggestions.dart';
 
 class TodoDetailPage extends StatefulWidget {
   const TodoDetailPage({
@@ -87,6 +91,7 @@ class _TodoDetailPageState extends State<TodoDetailPage> {
   Future<List<TodoActivity>>? _activitiesFuture;
   Future<List<TodoChecklistItem>>? _checklistFuture;
   Future<List<TodoChecklistSuggestion>>? _checklistSuggestionsFuture;
+  Future<List<TodoFollowupSuggestion>>? _followupSuggestionsFuture;
   final _noteController = TextEditingController();
   final _checklistController = TextEditingController();
   final _noteInputFocusNode = FocusNode();
@@ -110,6 +115,7 @@ class _TodoDetailPageState extends State<TodoDetailPage> {
   var _attachingMedia = false;
   var _creatingChecklistItem = false;
   var _generatingChecklistSuggestions = false;
+  var _generatingFollowupSuggestions = false;
   final Set<String> _selectedChecklistSuggestionIds = <String>{};
 
   bool get _isDesktopPlatform =>
@@ -155,6 +161,7 @@ class _TodoDetailPageState extends State<TodoDetailPage> {
     _activitiesFuture ??= _loadActivities();
     _checklistFuture ??= _loadChecklistItems();
     _checklistSuggestionsFuture ??= _loadChecklistSuggestions();
+    _followupSuggestionsFuture ??= _loadFollowupSuggestions();
     _attachSyncEngine();
     if (_recurrenceLoaded) return;
     _recurrenceLoaded = true;
@@ -181,6 +188,22 @@ class _TodoDetailPageState extends State<TodoDetailPage> {
     }
   }
 
+  Future<List<TodoFollowupSuggestion>> _loadFollowupSuggestions() async {
+    final backend = AppBackendScope.maybeOf(context);
+    final session = SessionScope.maybeOf(context);
+    if (backend == null || session == null) {
+      return const <TodoFollowupSuggestion>[];
+    }
+    try {
+      return await backend.listTodoFollowupSuggestions(
+        session.sessionKey,
+        _todo.id,
+      );
+    } catch (_) {
+      return const <TodoFollowupSuggestion>[];
+    }
+  }
+
   Future<List<TodoChecklistItem>> _loadChecklistItems() async {
     final backend = AppBackendScope.maybeOf(context);
     final session = SessionScope.maybeOf(context);
@@ -200,6 +223,7 @@ class _TodoDetailPageState extends State<TodoDetailPage> {
       _checklistFuture = _loadChecklistItems();
       _selectedChecklistSuggestionIds.clear();
       _checklistSuggestionsFuture = _loadChecklistSuggestions();
+      _followupSuggestionsFuture = _loadFollowupSuggestions();
       _messageFuturesById.clear();
       _attachmentsFuturesByMessageId.clear();
       _attachmentsFuturesByActivityId.clear();
@@ -756,6 +780,7 @@ class _TodoDetailPageState extends State<TodoDetailPage> {
       'status_change' => '$fromStatusLabel → $toStatusLabel',
       'note' => activity.content ?? '',
       'summary' => activity.content ?? '',
+      'followup_information' => activity.content ?? '',
       _ => activity.content ?? activity.activityType,
     };
 
@@ -765,6 +790,7 @@ class _TodoDetailPageState extends State<TodoDetailPage> {
     final icon = switch (activity.activityType) {
       'note' => Icons.notes_rounded,
       'summary' => Icons.auto_awesome_rounded,
+      'followup_information' => Icons.manage_search_rounded,
       'status_change' => Icons.sync_rounded,
       _ => Icons.bolt_rounded,
     };
@@ -772,9 +798,10 @@ class _TodoDetailPageState extends State<TodoDetailPage> {
     Widget contentForText(String text) {
       final isMarkdown = activity.activityType == 'note' ||
           activity.activityType == 'summary' ||
+          activity.activityType == 'followup_information' ||
           (activity.activityType != 'status_change' && text.contains('\n'));
       if (isMarkdown) {
-        return ChatMarkdownPreviewPanel(
+        final panel = ChatMarkdownPreviewPanel(
           padding: const EdgeInsets.fromLTRB(12, 10, 12, 14),
           child: buildChatMarkdownPreviewBody(
             context,
@@ -783,6 +810,23 @@ class _TodoDetailPageState extends State<TodoDetailPage> {
             bodyStyle: theme.textTheme.bodyLarge,
           ),
         );
+        if (activity.activityType == 'followup_information') {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                context.t.actions.todoDetail.followupActivityLabel,
+                style: theme.textTheme.labelMedium?.copyWith(
+                  color: colorScheme.onSurfaceVariant,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 6),
+              panel,
+            ],
+          );
+        }
+        return panel;
       }
       return Text(text, style: theme.textTheme.bodyLarge);
     }
@@ -1072,6 +1116,22 @@ class _TodoDetailPageState extends State<TodoDetailPage> {
                           child: Padding(
                             padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
                             child: _buildChecklistSection(context),
+                          ),
+                        ),
+                        SliverToBoxAdapter(
+                          child: Padding(
+                            padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                            child: FutureBuilder<List<TodoFollowupSuggestion>>(
+                              future: _followupSuggestionsFuture,
+                              builder: (context, snapshot) {
+                                final suggestions = snapshot.data ??
+                                    const <TodoFollowupSuggestion>[];
+                                return _buildFollowupSuggestionsSection(
+                                  context,
+                                  suggestions,
+                                );
+                              },
+                            ),
                           ),
                         ),
                         if (loading && activities.isEmpty)

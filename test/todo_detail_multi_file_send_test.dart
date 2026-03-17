@@ -15,9 +15,16 @@ import 'package:secondloop/src/rust/db.dart';
 
 import 'test_i18n.dart';
 
+void _setLargeDisplay(WidgetTester tester) {
+  tester.view.physicalSize = const Size(2400, 1600);
+  tester.view.devicePixelRatio = 1.0;
+  addTearDown(tester.view.reset);
+}
+
 void main() {
   testWidgets('Todo detail sends text and drafts in one linked message',
       (tester) async {
+    _setLargeDisplay(tester);
     final oldPlatform = debugDefaultTargetPlatformOverride;
     debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
     try {
@@ -93,6 +100,7 @@ void main() {
 
   testWidgets('Todo detail keeps failed drafts for retry after partial success',
       (tester) async {
+    _setLargeDisplay(tester);
     final oldPlatform = debugDefaultTargetPlatformOverride;
     debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
     try {
@@ -165,6 +173,7 @@ void main() {
 
   testWidgets('Todo detail attachment-only send keeps empty note text',
       (tester) async {
+    _setLargeDisplay(tester);
     final oldPlatform = debugDefaultTargetPlatformOverride;
     debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
     try {
@@ -225,6 +234,7 @@ void main() {
 
   testWidgets('Todo detail pure URL text sends linked url attachment',
       (tester) async {
+    _setLargeDisplay(tester);
     final oldPlatform = debugDefaultTargetPlatformOverride;
     debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
     try {

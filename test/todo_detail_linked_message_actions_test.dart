@@ -11,9 +11,16 @@ import 'package:secondloop/src/rust/db.dart';
 import 'test_backend.dart';
 import 'test_i18n.dart';
 
+void _setLargeDisplay(WidgetTester tester) {
+  tester.view.physicalSize = const Size(2400, 1600);
+  tester.view.devicePixelRatio = 1.0;
+  addTearDown(tester.view.reset);
+}
+
 void main() {
   testWidgets('TodoDetailPage edit same content skips backend update',
       (tester) async {
+    _setLargeDisplay(tester);
     final backend = _Backend();
 
     await tester.pumpWidget(
@@ -58,6 +65,7 @@ void main() {
 
   testWidgets('TodoDetailPage long press linked message shows actions + edit',
       (tester) async {
+    _setLargeDisplay(tester);
     final backend = _Backend();
 
     await tester.pumpWidget(
@@ -122,6 +130,7 @@ void main() {
 
   testWidgets('TodoDetailPage long message edit defaults to markdown mode',
       (tester) async {
+    _setLargeDisplay(tester);
     final longContent = List<String>.filled(
       8,
       'TODO_LONG_MARKER content that should default to markdown editor mode.',
@@ -182,6 +191,7 @@ void main() {
 
   testWidgets('TodoDetailPage can relink linked message to another todo',
       (tester) async {
+    _setLargeDisplay(tester);
     final backend = _Backend();
 
     await tester.pumpWidget(
@@ -230,6 +240,7 @@ void main() {
   testWidgets(
       'TodoDetailPage relink moves activity between todos without duplicates',
       (tester) async {
+    _setLargeDisplay(tester);
     final backend = _RelinkBackend();
     final key = Uint8List.fromList(List<int>.filled(32, 1));
 
@@ -364,6 +375,7 @@ void main() {
 
   testWidgets('TodoDetailPage right click linked message opens context menu',
       (tester) async {
+    _setLargeDisplay(tester);
     final previousOverride = debugDefaultTargetPlatformOverride;
     debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
 
@@ -421,6 +433,7 @@ void main() {
   testWidgets(
       'TodoDetailPage deleting a linked item does not delete the root todo',
       (tester) async {
+    _setLargeDisplay(tester);
     final backend = _DeleteLinkedMessageBackend();
 
     await tester.pumpWidget(

@@ -73,7 +73,17 @@
     "checklistGenerate": "Generate suggestions",
     "checklistRegenerate": "Regenerate suggestions",
     "checklistGenerating": "Generating suggestions…",
-    "checklistSuggestionsEmpty": "No pending suggestions yet."
+    "checklistSuggestionsEmpty": "No pending suggestions yet.",
+    "followupSuggestionsTitle": "Information follow-up",
+    "followupGenerate": "Generate information",
+    "followupRegenerate": "Regenerate information",
+    "followupGenerating": "Generating information…",
+    "followupSuggestionsEmpty": "No information follow-up yet.",
+    "followupPendingTitle": "Pending",
+    "followupAppliedTitle": "Applied",
+    "followupModeModelKnowledge": "Model knowledge",
+    "followupModeWebSearch": "Web search",
+    "followupActivityLabel": "AI-collected information"
   },
   "todoDelete": {
     "dialog": {

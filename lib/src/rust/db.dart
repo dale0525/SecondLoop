@@ -1465,3 +1465,146 @@ class TodoChecklistSuggestion {
           dismissedAtMs == other.dismissedAtMs &&
           appliedChecklistItemId == other.appliedChecklistItemId;
 }
+
+class TodoFollowupGenerationJob {
+  final String todoId;
+  final String triggerKind;
+  final String status;
+  final PlatformInt64 attempts;
+  final PlatformInt64? nextRetryAtMs;
+  final String? lastError;
+  final bool includeManualFollowups;
+  final String? taskTypeHint;
+  final PlatformInt64 createdAtMs;
+  final PlatformInt64 updatedAtMs;
+
+  const TodoFollowupGenerationJob({
+    required this.todoId,
+    required this.triggerKind,
+    required this.status,
+    required this.attempts,
+    this.nextRetryAtMs,
+    this.lastError,
+    required this.includeManualFollowups,
+    this.taskTypeHint,
+    required this.createdAtMs,
+    required this.updatedAtMs,
+  });
+
+  @override
+  int get hashCode =>
+      todoId.hashCode ^
+      triggerKind.hashCode ^
+      status.hashCode ^
+      attempts.hashCode ^
+      nextRetryAtMs.hashCode ^
+      lastError.hashCode ^
+      includeManualFollowups.hashCode ^
+      taskTypeHint.hashCode ^
+      createdAtMs.hashCode ^
+      updatedAtMs.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is TodoFollowupGenerationJob &&
+          runtimeType == other.runtimeType &&
+          todoId == other.todoId &&
+          triggerKind == other.triggerKind &&
+          status == other.status &&
+          attempts == other.attempts &&
+          nextRetryAtMs == other.nextRetryAtMs &&
+          lastError == other.lastError &&
+          includeManualFollowups == other.includeManualFollowups &&
+          taskTypeHint == other.taskTypeHint &&
+          createdAtMs == other.createdAtMs &&
+          updatedAtMs == other.updatedAtMs;
+}
+
+class TodoFollowupSuggestion {
+  final String id;
+  final String todoId;
+  final String content;
+  final String state;
+  final String source;
+  final String generationMode;
+  final String? generationKey;
+  final String? citationsJson;
+  final PlatformInt64 createdAtMs;
+  final PlatformInt64 updatedAtMs;
+  final PlatformInt64? dismissedAtMs;
+  final String? appliedActivityId;
+
+  const TodoFollowupSuggestion({
+    required this.id,
+    required this.todoId,
+    required this.content,
+    required this.state,
+    required this.source,
+    required this.generationMode,
+    this.generationKey,
+    this.citationsJson,
+    required this.createdAtMs,
+    required this.updatedAtMs,
+    this.dismissedAtMs,
+    this.appliedActivityId,
+  });
+
+  @override
+  int get hashCode =>
+      id.hashCode ^
+      todoId.hashCode ^
+      content.hashCode ^
+      state.hashCode ^
+      source.hashCode ^
+      generationMode.hashCode ^
+      generationKey.hashCode ^
+      citationsJson.hashCode ^
+      createdAtMs.hashCode ^
+      updatedAtMs.hashCode ^
+      dismissedAtMs.hashCode ^
+      appliedActivityId.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is TodoFollowupSuggestion &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          todoId == other.todoId &&
+          content == other.content &&
+          state == other.state &&
+          source == other.source &&
+          generationMode == other.generationMode &&
+          generationKey == other.generationKey &&
+          citationsJson == other.citationsJson &&
+          createdAtMs == other.createdAtMs &&
+          updatedAtMs == other.updatedAtMs &&
+          dismissedAtMs == other.dismissedAtMs &&
+          appliedActivityId == other.appliedActivityId;
+}
+
+class TodoFollowupSuggestionDraftInput {
+  final String content;
+  final String generationMode;
+  final String? citationsJson;
+
+  const TodoFollowupSuggestionDraftInput({
+    required this.content,
+    required this.generationMode,
+    this.citationsJson,
+  });
+
+  @override
+  int get hashCode =>
+      content.hashCode ^ generationMode.hashCode ^ citationsJson.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is TodoFollowupSuggestionDraftInput &&
+          runtimeType == other.runtimeType &&
+          content == other.content &&
+          generationMode == other.generationMode &&
+          citationsJson == other.citationsJson;
+}

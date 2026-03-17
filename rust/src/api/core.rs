@@ -562,6 +562,175 @@ pub fn db_dismiss_all_todo_checklist_suggestions(
 }
 
 #[flutter_rust_bridge::frb]
+pub fn db_list_todo_followup_suggestions(
+    app_dir: String,
+    key: Vec<u8>,
+    todo_id: String,
+) -> Result<Vec<db::TodoFollowupSuggestion>> {
+    let key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    db::list_todo_followup_suggestions(&conn, &key, &todo_id)
+}
+
+#[flutter_rust_bridge::frb]
+pub fn db_upsert_generated_todo_followup_suggestions(
+    app_dir: String,
+    key: Vec<u8>,
+    todo_id: String,
+    suggestions: Vec<db::TodoFollowupSuggestionDraftInput>,
+    source: String,
+    generation_key: Option<String>,
+) -> Result<Vec<db::TodoFollowupSuggestion>> {
+    let key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    db::upsert_generated_todo_followup_suggestions(
+        &conn,
+        &key,
+        &todo_id,
+        &suggestions,
+        &source,
+        generation_key.as_deref(),
+    )
+}
+
+#[flutter_rust_bridge::frb]
+pub fn db_apply_todo_followup_suggestions(
+    app_dir: String,
+    key: Vec<u8>,
+    todo_id: String,
+    suggestion_ids: Vec<String>,
+) -> Result<Vec<db::TodoActivity>> {
+    let key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    db::apply_todo_followup_suggestions(&conn, &key, &todo_id, &suggestion_ids)
+}
+
+#[flutter_rust_bridge::frb]
+pub fn db_dismiss_todo_followup_suggestions(
+    app_dir: String,
+    key: Vec<u8>,
+    todo_id: String,
+    suggestion_ids: Vec<String>,
+) -> Result<()> {
+    let key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    db::dismiss_todo_followup_suggestions(&conn, &key, &todo_id, &suggestion_ids)
+}
+
+#[flutter_rust_bridge::frb]
+pub fn db_dismiss_all_todo_followup_suggestions(
+    app_dir: String,
+    key: Vec<u8>,
+    todo_id: String,
+) -> Result<()> {
+    let key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    db::dismiss_all_todo_followup_suggestions(&conn, &key, &todo_id)
+}
+
+#[flutter_rust_bridge::frb]
+pub fn db_enqueue_todo_followup_generation_job(
+    app_dir: String,
+    key: Vec<u8>,
+    todo_id: String,
+    trigger_kind: String,
+    task_type_hint: Option<String>,
+    now_ms: i64,
+) -> Result<()> {
+    let _key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    db::enqueue_todo_followup_generation_job(
+        &conn,
+        &todo_id,
+        &trigger_kind,
+        task_type_hint.as_deref(),
+        now_ms,
+    )
+}
+
+#[flutter_rust_bridge::frb]
+pub fn db_list_due_todo_followup_generation_jobs(
+    app_dir: String,
+    key: Vec<u8>,
+    now_ms: i64,
+    limit: u32,
+) -> Result<Vec<db::TodoFollowupGenerationJob>> {
+    let _key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    db::list_due_todo_followup_generation_jobs(&conn, now_ms, limit as i64)
+}
+
+#[flutter_rust_bridge::frb]
+pub fn db_mark_todo_followup_generation_job_running(
+    app_dir: String,
+    key: Vec<u8>,
+    todo_id: String,
+    now_ms: i64,
+) -> Result<()> {
+    let _key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    db::mark_todo_followup_generation_job_running(&conn, &todo_id, now_ms)
+}
+
+#[flutter_rust_bridge::frb]
+pub fn db_mark_todo_followup_generation_job_failed(
+    app_dir: String,
+    key: Vec<u8>,
+    todo_id: String,
+    attempts: i64,
+    next_retry_at_ms: i64,
+    last_error: String,
+    now_ms: i64,
+) -> Result<()> {
+    let _key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    db::mark_todo_followup_generation_job_failed(
+        &conn,
+        &todo_id,
+        attempts,
+        next_retry_at_ms,
+        &last_error,
+        now_ms,
+    )
+}
+
+#[flutter_rust_bridge::frb]
+pub fn db_mark_todo_followup_generation_job_succeeded(
+    app_dir: String,
+    key: Vec<u8>,
+    todo_id: String,
+    now_ms: i64,
+) -> Result<()> {
+    let _key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    db::mark_todo_followup_generation_job_succeeded(&conn, &todo_id, now_ms)
+}
+
+#[flutter_rust_bridge::frb]
+pub fn db_mark_todo_followup_generation_job_skipped(
+    app_dir: String,
+    key: Vec<u8>,
+    todo_id: String,
+    now_ms: i64,
+) -> Result<()> {
+    let _key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    db::mark_todo_followup_generation_job_skipped(&conn, &todo_id, now_ms)
+}
+
+#[flutter_rust_bridge::frb]
+pub fn db_mark_todo_followup_generation_job_canceled(
+    app_dir: String,
+    key: Vec<u8>,
+    todo_id: String,
+    now_ms: i64,
+) -> Result<()> {
+    let _key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    db::mark_todo_followup_generation_job_canceled(&conn, &todo_id, now_ms)
+}
+
+#[flutter_rust_bridge::frb]
 pub fn db_list_todo_activities(
     app_dir: String,
     key: Vec<u8>,

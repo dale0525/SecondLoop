@@ -15,9 +15,16 @@ import 'package:secondloop/src/rust/db.dart';
 
 import 'test_i18n.dart';
 
+void _setLargeDisplay(WidgetTester tester) {
+  tester.view.physicalSize = const Size(2400, 1600);
+  tester.view.devicePixelRatio = 1.0;
+  addTearDown(tester.view.reset);
+}
+
 void main() {
   testWidgets('Offstage chat drop target ignores drag when todo detail is top',
       (tester) async {
+    _setLargeDisplay(tester);
     final oldPlatform = debugDefaultTargetPlatformOverride;
     debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
     try {

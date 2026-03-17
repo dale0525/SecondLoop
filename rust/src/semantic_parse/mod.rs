@@ -92,6 +92,7 @@ fn build_message_action_prompt(
     );
     out.push_str("  \"title\": string, // only when kind=create\n");
     out.push_str("  \"status\": \"open\" | \"inbox\", // only when kind=create\n");
+    out.push_str("  \"task_type\": \"execution\" | \"research\" | \"comparison\" | \"live_info_lookup\" | \"reference_collection\" | \"coordination\" | \"planning\" | \"unknown\", // use a fixed enum; for non-create use unknown\n");
     out.push_str("  \"due_local_iso\": string | null, // only when kind=create\n");
     out.push_str("  \"recurrence\": { // only when kind=create\n");
     out.push_str("    \"freq\": \"daily\" | \"weekly\" | \"monthly\" | \"yearly\",\n");
@@ -123,6 +124,7 @@ fn build_message_action_prompt(
     out.push_str(
         "- status/new_status MUST use canonical enum values even if user text is non-English.\n",
     );
+    out.push_str("- task_type MUST use the fixed enum values above; never invent new values.\n");
     out.push_str("- suggested_tags MUST contain at most 3 concise tags.\n");
     if available_tags.is_empty() {
         out.push_str(

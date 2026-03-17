@@ -7,6 +7,7 @@ import '../../src/rust/db.dart';
 import '../../src/rust/semantic_parse.dart';
 
 part 'app_backend_prompt_ai.dart';
+part 'app_backend_todo_followups.dart';
 
 enum TodoRecurrenceEditScope {
   thisOnly,
@@ -298,6 +299,46 @@ abstract class AppBackend {
     required String todoId,
   }) {
     throw UnimplementedError('dismissAllTodoChecklistSuggestions');
+  }
+
+  Future<List<TodoFollowupSuggestion>> listTodoFollowupSuggestions(
+    Uint8List key,
+    String todoId,
+  ) {
+    throw UnimplementedError('listTodoFollowupSuggestions');
+  }
+
+  Future<List<TodoFollowupSuggestion>> upsertGeneratedTodoFollowupSuggestions(
+    Uint8List key, {
+    required String todoId,
+    required List<TodoFollowupSuggestionDraftInput> suggestions,
+    required String source,
+    String? generationKey,
+  }) {
+    throw UnimplementedError('upsertGeneratedTodoFollowupSuggestions');
+  }
+
+  Future<List<TodoActivity>> applyTodoFollowupSuggestions(
+    Uint8List key, {
+    required String todoId,
+    required List<String> suggestionIds,
+  }) {
+    throw UnimplementedError('applyTodoFollowupSuggestions');
+  }
+
+  Future<void> dismissTodoFollowupSuggestions(
+    Uint8List key, {
+    required String todoId,
+    required List<String> suggestionIds,
+  }) {
+    throw UnimplementedError('dismissTodoFollowupSuggestions');
+  }
+
+  Future<void> dismissAllTodoFollowupSuggestions(
+    Uint8List key, {
+    required String todoId,
+  }) {
+    throw UnimplementedError('dismissAllTodoFollowupSuggestions');
   }
 
   Future<List<TodoActivity>> listTodoActivities(
@@ -724,6 +765,67 @@ abstract class AppBackend {
     required String modelName,
   }) {
     throw UnimplementedError('semanticParseAskAiTimeWindowCloudGateway');
+  }
+
+  Future<void> enqueueTodoFollowupGenerationJob(
+    Uint8List key, {
+    required String todoId,
+    required String triggerKind,
+    String? taskTypeHint,
+    required int nowMs,
+  }) {
+    throw UnimplementedError('enqueueTodoFollowupGenerationJob');
+  }
+
+  Future<List<TodoFollowupGenerationJob>> listDueTodoFollowupGenerationJobs(
+    Uint8List key, {
+    required int nowMs,
+    int limit = 5,
+  }) {
+    throw UnimplementedError('listDueTodoFollowupGenerationJobs');
+  }
+
+  Future<void> markTodoFollowupGenerationJobRunning(
+    Uint8List key, {
+    required String todoId,
+    required int nowMs,
+  }) {
+    throw UnimplementedError('markTodoFollowupGenerationJobRunning');
+  }
+
+  Future<void> markTodoFollowupGenerationJobFailed(
+    Uint8List key, {
+    required String todoId,
+    required int attempts,
+    required int nextRetryAtMs,
+    required String lastError,
+    required int nowMs,
+  }) {
+    throw UnimplementedError('markTodoFollowupGenerationJobFailed');
+  }
+
+  Future<void> markTodoFollowupGenerationJobSucceeded(
+    Uint8List key, {
+    required String todoId,
+    required int nowMs,
+  }) {
+    throw UnimplementedError('markTodoFollowupGenerationJobSucceeded');
+  }
+
+  Future<void> markTodoFollowupGenerationJobSkipped(
+    Uint8List key, {
+    required String todoId,
+    required int nowMs,
+  }) {
+    throw UnimplementedError('markTodoFollowupGenerationJobSkipped');
+  }
+
+  Future<void> markTodoFollowupGenerationJobCanceled(
+    Uint8List key, {
+    required String todoId,
+    required int nowMs,
+  }) {
+    throw UnimplementedError('markTodoFollowupGenerationJobCanceled');
   }
 
   Future<void> enqueueSemanticParseJob(

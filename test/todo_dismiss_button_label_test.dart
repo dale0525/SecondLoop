@@ -10,8 +10,15 @@ import 'package:secondloop/src/rust/db.dart';
 
 import 'test_i18n.dart';
 
+void _setLargeDisplay(WidgetTester tester) {
+  tester.view.physicalSize = const Size(2400, 1600);
+  tester.view.devicePixelRatio = 1.0;
+  addTearDown(tester.view.reset);
+}
+
 void main() {
   testWidgets('Todo agenda uses Delete (not Deleted) tooltip', (tester) async {
+    _setLargeDisplay(tester);
     final todo = Todo(
       id: 't1',
       title: 'Test todo',
@@ -52,6 +59,7 @@ void main() {
   testWidgets(
       'Todo agenda keeps title visible and chevron inside card on mobile',
       (tester) async {
+    _setLargeDisplay(tester);
     final view = tester.view;
     view.physicalSize = const Size(375, 812);
     view.devicePixelRatio = 1.0;
@@ -110,6 +118,7 @@ void main() {
   });
 
   testWidgets('Todo agenda can set status to done directly', (tester) async {
+    _setLargeDisplay(tester);
     final todo = Todo(
       id: 't1',
       title: 'Test todo',
@@ -154,6 +163,7 @@ void main() {
   });
 
   testWidgets('Todo detail can set status to done directly', (tester) async {
+    _setLargeDisplay(tester);
     final todo = Todo(
       id: 't1',
       title: 'Test todo',
@@ -199,6 +209,7 @@ void main() {
 
   testWidgets('Todo detail recurring done switches to next active occurrence',
       (tester) async {
+    _setLargeDisplay(tester);
     final currentTodo = Todo(
       id: 't1',
       title: 'Weekly report',
@@ -269,6 +280,7 @@ void main() {
   testWidgets(
       'Todo detail recurring done keeps previous cycle timeline visible',
       (tester) async {
+    _setLargeDisplay(tester);
     final currentTodo = Todo(
       id: 't1',
       title: 'Weekly report',
@@ -354,6 +366,7 @@ void main() {
 
   testWidgets('Todo agenda recurring non-done status supports scope selection',
       (tester) async {
+    _setLargeDisplay(tester);
     final todo = Todo(
       id: 't1',
       title: 'Test todo',
@@ -411,6 +424,7 @@ void main() {
 
   testWidgets('Todo detail recurring non-done status supports scope selection',
       (tester) async {
+    _setLargeDisplay(tester);
     final todo = Todo(
       id: 't1',
       title: 'Test todo',
@@ -467,6 +481,7 @@ void main() {
   });
 
   testWidgets('Todo detail uses Delete (not Deleted) tooltip', (tester) async {
+    _setLargeDisplay(tester);
     final todo = Todo(
       id: 't1',
       title: 'Test todo',

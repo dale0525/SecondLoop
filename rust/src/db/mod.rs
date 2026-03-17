@@ -37,6 +37,8 @@ include!("parts/26_external_readonly_phase_b.rs");
 include!("parts/27_knowledge_index.rs");
 include!("parts/28_migration_archive.rs");
 include!("parts/29_migration_archive_runtime.rs");
+include!("parts/30_todo_followup_suggestions.rs");
+include!("parts/31_todo_followup_generation_jobs.rs");
 
 #[cfg(test)]
 mod semantic_parse_jobs_tests;

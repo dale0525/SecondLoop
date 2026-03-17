@@ -657,6 +657,7 @@ final class BackendSemanticParseAutoActionsStore
     required String status,
     int? dueAtMs,
     String? recurrenceRuleJson,
+    String? followupTaskTypeHint,
   }) async {
     var normalizedStatus = status.trim();
     if (normalizedStatus.isEmpty) {
@@ -695,6 +696,17 @@ final class BackendSemanticParseAutoActionsStore
       nextReviewAtMs: nextReviewAtMs,
       lastReviewAtMs: DateTime.now().toUtc().millisecondsSinceEpoch,
     );
+
+    final normalizedTaskTypeHint = followupTaskTypeHint?.trim();
+    if (normalizedTaskTypeHint != null && normalizedTaskTypeHint.isNotEmpty) {
+      await _backend.enqueueTodoFollowupGenerationJob(
+        _sessionKey,
+        todoId: todoId,
+        triggerKind: 'auto_create',
+        taskTypeHint: normalizedTaskTypeHint,
+        nowMs: DateTime.now().millisecondsSinceEpoch,
+      );
+    }
 
     final normalizedRule = recurrenceRuleJson?.trim();
     if (normalizedRule != null && normalizedRule.isNotEmpty) {

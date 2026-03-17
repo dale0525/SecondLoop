@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:secondloop/core/backend/app_backend.dart';
+import 'package:secondloop/core/backend/native_backend.dart';
 import 'package:secondloop/features/actions/task_hub/task_hub_quick_action_layout.dart';
 import 'package:secondloop/features/actions/task_hub/task_hub_quick_actions.dart';
 import 'package:secondloop/features/actions/task_hub/task_priority_models.dart';
@@ -361,6 +362,76 @@ void main() {
     final ticket = await controller.apply(initial, TaskHubQuickAction.reopen);
     expect(ticket, isNotNull);
     expect(backend.current('t5').status, 'open');
+  });
+
+  test(
+      'redo action with native backend enqueues followup generation for created todo',
+      () async {
+    SharedPreferences.setMockInitialValues({});
+
+    final initial = todo(
+      id: 't6n',
+      title: 'Task 6 native',
+      updatedAtMs: 10,
+      status: 'done',
+    );
+    var todos = <Todo>[initial];
+    var enqueueCount = 0;
+    final backend = NativeAppBackend(
+      appDirProvider: () async => '/tmp/secondloop_test',
+      rustLibInit: () async {},
+      dbListTodos: ({required String appDir, required List<int> key}) async =>
+          List<Todo>.from(todos),
+      dbUpsertTodo: ({
+        required String appDir,
+        required List<int> key,
+        required String id,
+        required String title,
+        int? dueAtMs,
+        required String status,
+        String? sourceEntryId,
+        int? reviewStage,
+        int? nextReviewAtMs,
+        int? lastReviewAtMs,
+      }) async {
+        final updated = Todo(
+          id: id,
+          title: title,
+          dueAtMs: dueAtMs,
+          status: status,
+          sourceEntryId: sourceEntryId,
+          createdAtMs: 10,
+          updatedAtMs: 11,
+          reviewStage: reviewStage,
+          nextReviewAtMs: nextReviewAtMs,
+          lastReviewAtMs: lastReviewAtMs,
+        );
+        todos = [
+          ...todos.where((item) => item.id != id),
+          updated,
+        ];
+        return updated;
+      },
+      dbEnqueueTodoFollowupGenerationJob: ({
+        required String appDir,
+        required List<int> key,
+        required String todoId,
+        required String triggerKind,
+        String? taskTypeHint,
+        required int nowMs,
+      }) async {
+        enqueueCount += 1;
+      },
+    );
+    final controller = TaskHubQuickActionsController(
+      backend: backend,
+      sessionKey: Uint8List(32),
+    );
+
+    final ticket = await controller.apply(initial, TaskHubQuickAction.redo);
+    expect(ticket, isNotNull);
+    await Future<void>.delayed(Duration.zero);
+    expect(enqueueCount, 1);
   });
 
   test('redo action creates a new open todo and can undo', () async {

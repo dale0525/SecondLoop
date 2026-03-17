@@ -73,7 +73,17 @@
     "checklistGenerate": "生成建议",
     "checklistRegenerate": "重新生成",
     "checklistGenerating": "正在生成建议…",
-    "checklistSuggestionsEmpty": "暂时没有待处理的建议。"
+    "checklistSuggestionsEmpty": "暂时没有待处理的建议。",
+    "followupSuggestionsTitle": "信息跟进",
+    "followupGenerate": "生成信息",
+    "followupRegenerate": "重新生成信息",
+    "followupGenerating": "正在生成信息…",
+    "followupSuggestionsEmpty": "暂时还没有信息跟进。",
+    "followupPendingTitle": "待采纳",
+    "followupAppliedTitle": "已采纳",
+    "followupModeModelKnowledge": "模型知识",
+    "followupModeWebSearch": "联网搜索",
+    "followupActivityLabel": "AI 已收集的信息"
   },
   "todoDelete": {
     "dialog": {

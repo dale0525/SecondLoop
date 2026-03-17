@@ -29,6 +29,7 @@ import 'attachments_backend.dart';
 import 'rust_external_library_resolver.dart';
 
 part 'native_backend_knowledge.dart';
+part 'native_backend_todo_followups.dart';
 
 typedef AppDirProvider = Future<String> Function();
 
@@ -258,6 +259,8 @@ class NativeAppBackend
   NativeAppBackend({
     FlutterSecureStorage? secureStorage,
     AppDirProvider? appDirProvider,
+    DbListTodosFn? dbListTodos,
+    DbUpsertTodoFn? dbUpsertTodo,
     DbInsertMessageFn? dbInsertMessage,
     DbInsertAttachmentFn? dbInsertAttachment,
     DbProcessPendingMessageEmbeddingsFn? dbProcessPendingMessageEmbeddings,
@@ -278,9 +281,29 @@ class NativeAppBackend
     DbDismissTodoChecklistSuggestionsFn? dbDismissTodoChecklistSuggestions,
     DbDismissAllTodoChecklistSuggestionsFn?
         dbDismissAllTodoChecklistSuggestions,
+    DbListTodoFollowupSuggestionsFn? dbListTodoFollowupSuggestions,
+    DbUpsertGeneratedTodoFollowupSuggestionsFn?
+        dbUpsertGeneratedTodoFollowupSuggestions,
+    DbApplyTodoFollowupSuggestionsFn? dbApplyTodoFollowupSuggestions,
+    DbDismissTodoFollowupSuggestionsFn? dbDismissTodoFollowupSuggestions,
+    DbDismissAllTodoFollowupSuggestionsFn? dbDismissAllTodoFollowupSuggestions,
+    DbEnqueueTodoFollowupGenerationJobFn? dbEnqueueTodoFollowupGenerationJob,
+    DbListDueTodoFollowupGenerationJobsFn? dbListDueTodoFollowupGenerationJobs,
+    DbMarkTodoFollowupGenerationJobRunningFn?
+        dbMarkTodoFollowupGenerationJobRunning,
+    DbMarkTodoFollowupGenerationJobFailedFn?
+        dbMarkTodoFollowupGenerationJobFailed,
+    DbMarkTodoFollowupGenerationJobSucceededFn?
+        dbMarkTodoFollowupGenerationJobSucceeded,
+    DbMarkTodoFollowupGenerationJobSkippedFn?
+        dbMarkTodoFollowupGenerationJobSkipped,
+    DbMarkTodoFollowupGenerationJobCanceledFn?
+        dbMarkTodoFollowupGenerationJobCanceled,
     RustLibInitFn? rustLibInit,
   })  : _secureBlobStore = SecureBlobStore(storage: secureStorage),
         _appDirProvider = appDirProvider ?? _defaultAppDirProvider,
+        _dbListTodos = dbListTodos ?? rust_core.dbListTodos,
+        _dbUpsertTodo = dbUpsertTodo ?? rust_core.dbUpsertTodo,
         _dbInsertMessage = dbInsertMessage ?? rust_core.dbInsertMessage,
         _dbInsertAttachment =
             dbInsertAttachment ?? rust_core.dbInsertAttachment,
@@ -320,6 +343,39 @@ class NativeAppBackend
         _dbDismissAllTodoChecklistSuggestions =
             dbDismissAllTodoChecklistSuggestions ??
                 rust_core.dbDismissAllTodoChecklistSuggestions,
+        _dbListTodoFollowupSuggestions = dbListTodoFollowupSuggestions ??
+            rust_core.dbListTodoFollowupSuggestions,
+        _dbUpsertGeneratedTodoFollowupSuggestions =
+            dbUpsertGeneratedTodoFollowupSuggestions ??
+                rust_core.dbUpsertGeneratedTodoFollowupSuggestions,
+        _dbApplyTodoFollowupSuggestions = dbApplyTodoFollowupSuggestions ??
+            rust_core.dbApplyTodoFollowupSuggestions,
+        _dbDismissTodoFollowupSuggestions = dbDismissTodoFollowupSuggestions ??
+            rust_core.dbDismissTodoFollowupSuggestions,
+        _dbDismissAllTodoFollowupSuggestions =
+            dbDismissAllTodoFollowupSuggestions ??
+                rust_core.dbDismissAllTodoFollowupSuggestions,
+        _dbEnqueueTodoFollowupGenerationJob =
+            dbEnqueueTodoFollowupGenerationJob ??
+                rust_core.dbEnqueueTodoFollowupGenerationJob,
+        _dbListDueTodoFollowupGenerationJobs =
+            dbListDueTodoFollowupGenerationJobs ??
+                rust_core.dbListDueTodoFollowupGenerationJobs,
+        _dbMarkTodoFollowupGenerationJobRunning =
+            dbMarkTodoFollowupGenerationJobRunning ??
+                rust_core.dbMarkTodoFollowupGenerationJobRunning,
+        _dbMarkTodoFollowupGenerationJobFailed =
+            dbMarkTodoFollowupGenerationJobFailed ??
+                rust_core.dbMarkTodoFollowupGenerationJobFailed,
+        _dbMarkTodoFollowupGenerationJobSucceeded =
+            dbMarkTodoFollowupGenerationJobSucceeded ??
+                rust_core.dbMarkTodoFollowupGenerationJobSucceeded,
+        _dbMarkTodoFollowupGenerationJobSkipped =
+            dbMarkTodoFollowupGenerationJobSkipped ??
+                rust_core.dbMarkTodoFollowupGenerationJobSkipped,
+        _dbMarkTodoFollowupGenerationJobCanceled =
+            dbMarkTodoFollowupGenerationJobCanceled ??
+                rust_core.dbMarkTodoFollowupGenerationJobCanceled,
         _rustLibInit = rustLibInit ??
             (() => RustLib.init(
                   externalLibrary: resolveDesktopRustExternalLibrary(),
@@ -327,6 +383,8 @@ class NativeAppBackend
 
   final SecureBlobStore _secureBlobStore;
   final AppDirProvider _appDirProvider;
+  final DbListTodosFn _dbListTodos;
+  final DbUpsertTodoFn _dbUpsertTodo;
   final DbInsertMessageFn _dbInsertMessage;
   final DbInsertAttachmentFn _dbInsertAttachment;
   final DbProcessPendingMessageEmbeddingsFn _dbProcessPendingMessageEmbeddings;
@@ -348,6 +406,27 @@ class NativeAppBackend
   final DbDismissTodoChecklistSuggestionsFn _dbDismissTodoChecklistSuggestions;
   final DbDismissAllTodoChecklistSuggestionsFn
       _dbDismissAllTodoChecklistSuggestions;
+  final DbListTodoFollowupSuggestionsFn _dbListTodoFollowupSuggestions;
+  final DbUpsertGeneratedTodoFollowupSuggestionsFn
+      _dbUpsertGeneratedTodoFollowupSuggestions;
+  final DbApplyTodoFollowupSuggestionsFn _dbApplyTodoFollowupSuggestions;
+  final DbDismissTodoFollowupSuggestionsFn _dbDismissTodoFollowupSuggestions;
+  final DbDismissAllTodoFollowupSuggestionsFn
+      _dbDismissAllTodoFollowupSuggestions;
+  final DbEnqueueTodoFollowupGenerationJobFn
+      _dbEnqueueTodoFollowupGenerationJob;
+  final DbListDueTodoFollowupGenerationJobsFn
+      _dbListDueTodoFollowupGenerationJobs;
+  final DbMarkTodoFollowupGenerationJobRunningFn
+      _dbMarkTodoFollowupGenerationJobRunning;
+  final DbMarkTodoFollowupGenerationJobFailedFn
+      _dbMarkTodoFollowupGenerationJobFailed;
+  final DbMarkTodoFollowupGenerationJobSucceededFn
+      _dbMarkTodoFollowupGenerationJobSucceeded;
+  final DbMarkTodoFollowupGenerationJobSkippedFn
+      _dbMarkTodoFollowupGenerationJobSkipped;
+  final DbMarkTodoFollowupGenerationJobCanceledFn
+      _dbMarkTodoFollowupGenerationJobCanceled;
   final RustLibInitFn _rustLibInit;
 
   String? _appDir;
@@ -1078,7 +1157,9 @@ class NativeAppBackend
     int? lastReviewAtMs,
   }) async {
     final appDir = await _getAppDir();
-    return rust_core.dbUpsertTodo(
+    final existed = (await _dbListTodos(appDir: appDir, key: key))
+        .any((todo) => todo.id == id);
+    final todo = await _dbUpsertTodo(
       appDir: appDir,
       key: key,
       id: id,
@@ -1095,6 +1176,18 @@ class NativeAppBackend
           ? null
           : PlatformInt64Util.from(lastReviewAtMs),
     );
+    if (!existed) {
+      unawaited(
+        _enqueueTodoFollowupGenerationJobBestEffort(
+          key,
+          todoId: id,
+          triggerKind: 'auto_create',
+          taskTypeHint: null,
+          nowMs: DateTime.now().millisecondsSinceEpoch,
+        ),
+      );
+    }
+    return todo;
   }
 
   @override
@@ -1404,6 +1497,81 @@ class NativeAppBackend
   }) async {
     final appDir = await _getAppDir();
     await _dbDismissAllTodoChecklistSuggestions(
+      appDir: appDir,
+      key: key,
+      todoId: todoId,
+    );
+  }
+
+  @override
+  Future<List<TodoFollowupSuggestion>> listTodoFollowupSuggestions(
+    Uint8List key,
+    String todoId,
+  ) async {
+    final appDir = await _getAppDir();
+    return _dbListTodoFollowupSuggestions(
+      appDir: appDir,
+      key: key,
+      todoId: todoId,
+    );
+  }
+
+  @override
+  Future<List<TodoFollowupSuggestion>> upsertGeneratedTodoFollowupSuggestions(
+    Uint8List key, {
+    required String todoId,
+    required List<TodoFollowupSuggestionDraftInput> suggestions,
+    required String source,
+    String? generationKey,
+  }) async {
+    final appDir = await _getAppDir();
+    return _dbUpsertGeneratedTodoFollowupSuggestions(
+      appDir: appDir,
+      key: key,
+      todoId: todoId,
+      suggestions: suggestions,
+      source: source,
+      generationKey: generationKey,
+    );
+  }
+
+  @override
+  Future<List<TodoActivity>> applyTodoFollowupSuggestions(
+    Uint8List key, {
+    required String todoId,
+    required List<String> suggestionIds,
+  }) async {
+    final appDir = await _getAppDir();
+    return _dbApplyTodoFollowupSuggestions(
+      appDir: appDir,
+      key: key,
+      todoId: todoId,
+      suggestionIds: suggestionIds,
+    );
+  }
+
+  @override
+  Future<void> dismissTodoFollowupSuggestions(
+    Uint8List key, {
+    required String todoId,
+    required List<String> suggestionIds,
+  }) async {
+    final appDir = await _getAppDir();
+    await _dbDismissTodoFollowupSuggestions(
+      appDir: appDir,
+      key: key,
+      todoId: todoId,
+      suggestionIds: suggestionIds,
+    );
+  }
+
+  @override
+  Future<void> dismissAllTodoFollowupSuggestions(
+    Uint8List key, {
+    required String todoId,
+  }) async {
+    final appDir = await _getAppDir();
+    await _dbDismissAllTodoFollowupSuggestions(
       appDir: appDir,
       key: key,
       todoId: todoId,
@@ -2253,6 +2421,121 @@ class NativeAppBackend
       gatewayBaseUrl: gatewayBaseUrl,
       firebaseIdToken: idToken,
       modelName: modelName,
+    );
+  }
+
+  @override
+  Future<void> enqueueTodoFollowupGenerationJob(
+    Uint8List key, {
+    required String todoId,
+    required String triggerKind,
+    String? taskTypeHint,
+    required int nowMs,
+  }) async {
+    final appDir = await _getAppDir();
+    await _dbEnqueueTodoFollowupGenerationJob(
+      appDir: appDir,
+      key: key,
+      todoId: todoId,
+      triggerKind: triggerKind,
+      taskTypeHint: taskTypeHint,
+      nowMs: PlatformInt64Util.from(nowMs),
+    );
+  }
+
+  @override
+  Future<List<TodoFollowupGenerationJob>> listDueTodoFollowupGenerationJobs(
+    Uint8List key, {
+    required int nowMs,
+    int limit = 5,
+  }) async {
+    final appDir = await _getAppDir();
+    return _dbListDueTodoFollowupGenerationJobs(
+      appDir: appDir,
+      key: key,
+      nowMs: PlatformInt64Util.from(nowMs),
+      limit: limit,
+    );
+  }
+
+  @override
+  Future<void> markTodoFollowupGenerationJobRunning(
+    Uint8List key, {
+    required String todoId,
+    required int nowMs,
+  }) async {
+    final appDir = await _getAppDir();
+    await _dbMarkTodoFollowupGenerationJobRunning(
+      appDir: appDir,
+      key: key,
+      todoId: todoId,
+      nowMs: PlatformInt64Util.from(nowMs),
+    );
+  }
+
+  @override
+  Future<void> markTodoFollowupGenerationJobFailed(
+    Uint8List key, {
+    required String todoId,
+    required int attempts,
+    required int nextRetryAtMs,
+    required String lastError,
+    required int nowMs,
+  }) async {
+    final appDir = await _getAppDir();
+    await _dbMarkTodoFollowupGenerationJobFailed(
+      appDir: appDir,
+      key: key,
+      todoId: todoId,
+      attempts: PlatformInt64Util.from(attempts),
+      nextRetryAtMs: PlatformInt64Util.from(nextRetryAtMs),
+      lastError: lastError,
+      nowMs: PlatformInt64Util.from(nowMs),
+    );
+  }
+
+  @override
+  Future<void> markTodoFollowupGenerationJobSucceeded(
+    Uint8List key, {
+    required String todoId,
+    required int nowMs,
+  }) async {
+    final appDir = await _getAppDir();
+    await _dbMarkTodoFollowupGenerationJobSucceeded(
+      appDir: appDir,
+      key: key,
+      todoId: todoId,
+      nowMs: PlatformInt64Util.from(nowMs),
+    );
+  }
+
+  @override
+  Future<void> markTodoFollowupGenerationJobSkipped(
+    Uint8List key, {
+    required String todoId,
+    required int nowMs,
+  }) async {
+    final appDir = await _getAppDir();
+    await _dbMarkTodoFollowupGenerationJobSkipped(
+      appDir: appDir,
+      key: key,
+      todoId: todoId,
+      nowMs: PlatformInt64Util.from(nowMs),
+    );
+  }
+
+  @override
+  Future<void> markTodoFollowupGenerationJobCanceled(
+    Uint8List key, {
+    required String todoId,
+    required int nowMs,
+  }) async {
+    final appDir = await _getAppDir();
+    await _dbMarkTodoFollowupGenerationJobCanceled(
+      appDir: appDir,
+      key: key,
+      todoId: todoId,
+      nowMs: PlatformInt64Util.from(nowMs),
     );
   }
 
