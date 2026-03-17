@@ -124,6 +124,95 @@ void main() {
     }
   });
 
+  testWidgets(
+      'SyncEngineGate flushes pending push when app pauses during blocking pull',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final store = SyncConfigStore();
+    await store.writeBackendType(SyncBackendType.webdav);
+    await store.writeRemoteRoot('SecondLoop');
+    await store.writeWebdavBaseUrl('https://example.com/dav');
+    await store.writeWebdavUsername('u');
+    await store.writeWebdavPassword('p');
+    await store.writeSyncKey(Uint8List.fromList(List<int>.filled(32, 1)));
+    await store.writeCloudMediaBackupEnabled(false);
+
+    final oldConnectivity = ConnectivityPlatform.instance;
+    ConnectivityPlatform.instance = _FakeConnectivityPlatform.wifi();
+    try {
+      final backend = _BlockingLifecycleBackend();
+      SyncEngine? engine;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: backend,
+            child: SessionScope(
+              sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+              lock: () {},
+              child: SyncEngineGate(
+                child: Builder(
+                  builder: (context) {
+                    engine = SyncEngineScope.maybeOf(context);
+                    return const SizedBox.shrink();
+                  },
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      await tester.runAsync(() async {
+        final deadline = DateTime.now().add(const Duration(seconds: 2));
+        while ((backend.webdavPullCalls == 0 ||
+                backend.webdavPushOpsOnlyCalls == 0) &&
+            DateTime.now().isBefore(deadline)) {
+          await Future<void>.delayed(const Duration(milliseconds: 10));
+        }
+      });
+
+      expect(engine, isNotNull);
+      final baselinePushCalls = backend.webdavPushOpsOnlyCalls;
+      expect(baselinePushCalls, greaterThanOrEqualTo(1));
+
+      backend.blockNextPull();
+      engine!.triggerPullNow();
+      await tester.pump();
+
+      await tester.runAsync(() async {
+        final deadline = DateTime.now().add(const Duration(seconds: 2));
+        while (!backend.hasBlockedPull && DateTime.now().isBefore(deadline)) {
+          await Future<void>.delayed(const Duration(milliseconds: 10));
+        }
+      });
+      expect(backend.hasBlockedPull, isTrue);
+
+      engine!.notifyLocalMutation();
+      await tester.pump();
+
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+      await tester.pump();
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump();
+
+      backend.completeBlockedPull(applied: 0);
+      await tester.runAsync(() async {
+        final deadline = DateTime.now().add(const Duration(seconds: 2));
+        while (backend.webdavPushOpsOnlyCalls == baselinePushCalls &&
+            DateTime.now().isBefore(deadline)) {
+          await Future<void>.delayed(const Duration(milliseconds: 10));
+        }
+      });
+
+      expect(backend.webdavPushOpsOnlyCalls, baselinePushCalls + 1);
+    } finally {
+      ConnectivityPlatform.instance = oldConnectivity;
+    }
+  });
+
   testWidgets('Media uploads on => auto-backfills cloud media queue once',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
@@ -191,6 +280,59 @@ final class _FakeConnectivityPlatform extends ConnectivityPlatform {
 
   @override
   Future<List<ConnectivityResult>> checkConnectivity() async => _results;
+}
+
+final class _BlockingLifecycleBackend extends TestAppBackend {
+  int webdavPushOpsOnlyCalls = 0;
+  int webdavPullCalls = 0;
+
+  bool _blockNextPull = false;
+  bool hasBlockedPull = false;
+  Completer<int>? _pullCompleter;
+
+  void blockNextPull() {
+    _blockNextPull = true;
+    hasBlockedPull = false;
+  }
+
+  void completeBlockedPull({required int applied}) {
+    final completer = _pullCompleter;
+    if (completer == null || completer.isCompleted) return;
+    completer.complete(applied);
+  }
+
+  @override
+  Future<int> syncWebdavPushOpsOnly(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String baseUrl,
+    String? username,
+    String? password,
+    required String remoteRoot,
+  }) async {
+    webdavPushOpsOnlyCalls++;
+    return 0;
+  }
+
+  @override
+  Future<int> syncWebdavPull(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String baseUrl,
+    String? username,
+    String? password,
+    required String remoteRoot,
+  }) {
+    webdavPullCalls++;
+    if (!_blockNextPull) {
+      return Future<int>.value(0);
+    }
+
+    _blockNextPull = false;
+    hasBlockedPull = true;
+    _pullCompleter = Completer<int>();
+    return _pullCompleter!.future;
+  }
 }
 
 final class _RecordingBackend extends TestAppBackend {

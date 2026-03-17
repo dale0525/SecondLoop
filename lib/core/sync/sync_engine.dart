@@ -195,9 +195,10 @@ final class SyncEngine {
     const SyncWriteGateState.open(),
   );
 
-  bool get isRunning => _running;
+  bool get isRunning => _acceptsNewWork;
 
   bool _running = false;
+  bool _stopAfterDrain = false;
   bool _busy = false;
   bool _pushQueued = false;
   bool _pullQueued = false;
@@ -210,9 +211,12 @@ final class SyncEngine {
 
   int _nowMs() => _nowMsProvider();
 
+  bool get _acceptsNewWork => _running && !_stopAfterDrain;
+
   void start() {
-    if (_running) return;
+    if (_acceptsNewWork) return;
     _running = true;
+    _stopAfterDrain = false;
 
     if (pullOnStart) {
       _queuePull();
@@ -221,17 +225,42 @@ final class SyncEngine {
   }
 
   void stop() {
-    if (!_running) return;
-    _running = false;
+    if (!_running || _stopAfterDrain) return;
 
+    final hadPendingPush = _pushQueued || _pushDebounceTimer != null;
+    _cancelScheduledWork();
+
+    if (hadPendingPush) {
+      _queueFinalPushAndStopAfterDrain();
+      return;
+    }
+
+    _finishStop();
+  }
+
+  void _cancelScheduledWork() {
     _pushDebounceTimer?.cancel();
     _pushDebounceTimer = null;
 
     _pullTimer?.cancel();
     _pullTimer = null;
 
-    _pushQueued = false;
     _pullQueued = false;
+  }
+
+  void _queueFinalPushAndStopAfterDrain() {
+    _stopAfterDrain = true;
+    _pushQueued = true;
+    _drain();
+  }
+
+  void _finishStop({bool preserveQueuedPush = false}) {
+    if (!preserveQueuedPush) {
+      _pushQueued = false;
+    }
+    _pullQueued = false;
+    _running = false;
+    _stopAfterDrain = false;
   }
 
   bool _isPushBlocked(int nowMs) {
@@ -259,7 +288,7 @@ final class SyncEngine {
 
   void notifyLocalMutation() {
     _notifyChange();
-    if (!_running) return;
+    if (!_acceptsNewWork) return;
     _pushDebounceTimer?.cancel();
     _pushDebounceTimer = Timer(pushDebounce, _queuePush);
   }
@@ -269,12 +298,12 @@ final class SyncEngine {
   }
 
   void triggerPushNow() {
-    if (!_running) return;
+    if (!_acceptsNewWork) return;
     _queuePush();
   }
 
   void triggerPullNow() {
-    if (!_running) return;
+    if (!_acceptsNewWork) return;
     _queuePull();
   }
 
@@ -314,20 +343,30 @@ final class SyncEngine {
   }
 
   Future<void> _runQueue() async {
-    while (_running && (_pullQueued || _pushQueued)) {
-      final gate = autoRunGate;
-      if (gate != null) {
-        final allowed = await gate();
-        if (!allowed) return;
+    var preserveQueuedPushOnStop = false;
+    try {
+      while (_running && (_pullQueued || _pushQueued)) {
+        final gate = autoRunGate;
+        if (gate != null) {
+          final allowed = await gate();
+          if (!allowed) {
+            preserveQueuedPushOnStop = _stopAfterDrain && _pushQueued;
+            return;
+          }
+        }
+        if (_pullQueued) {
+          _pullQueued = false;
+          await _pullOnce();
+          continue;
+        }
+        if (_pushQueued) {
+          _pushQueued = false;
+          await _pushOnce();
+        }
       }
-      if (_pullQueued) {
-        _pullQueued = false;
-        await _pullOnce();
-        continue;
-      }
-      if (_pushQueued) {
-        _pushQueued = false;
-        await _pushOnce();
+    } finally {
+      if (_stopAfterDrain) {
+        _finishStop(preserveQueuedPush: preserveQueuedPushOnStop);
       }
     }
   }
