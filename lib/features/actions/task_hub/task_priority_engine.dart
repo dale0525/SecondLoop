@@ -174,10 +174,11 @@ List<TaskPriorityEntry> _applyAiResult(
   return entries.map((entry) {
     final aiEntry = byId[entry.todo.id];
     if (aiEntry == null) return entry;
+    final canApplyAiPrioritySignals = !entry.hasHardFocusGuard &&
+        aiEntry.confidence != TaskPriorityAiConfidence.low;
 
     var nextBand = entry.band;
-    if (!entry.hasHardFocusGuard &&
-        aiEntry.confidence != TaskPriorityAiConfidence.low) {
+    if (canApplyAiPrioritySignals) {
       switch (aiEntry.priorityBand) {
         case TaskPriorityAiBand.focus:
           nextBand = entry.band == TaskPriorityBand.done
@@ -208,9 +209,14 @@ List<TaskPriorityEntry> _applyAiResult(
       confidence: confidence,
       isImportant: entry.hasHardFocusGuard
           ? true
-          : (aiEntry.isImportant ?? entry.isImportant),
-      isUrgent:
-          entry.hasHardFocusGuard ? true : (aiEntry.isUrgent ?? entry.isUrgent),
+          : (canApplyAiPrioritySignals
+              ? (aiEntry.isImportant ?? entry.isImportant)
+              : entry.isImportant),
+      isUrgent: entry.hasHardFocusGuard
+          ? true
+          : (canApplyAiPrioritySignals
+              ? (aiEntry.isUrgent ?? entry.isUrgent)
+              : entry.isUrgent),
       reasons: <TaskPriorityReasonKind>[
         ...entry.reasons,
         TaskPriorityReasonKind.aiSuggested,

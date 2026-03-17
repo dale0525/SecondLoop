@@ -223,6 +223,41 @@ void main() {
     expect(snapshot.source, TaskPrioritySnapshotSource.hybrid);
   });
 
+  test('low-confidence ai flags do not take over primary focus', () {
+    final nowLocal = DateTime(2026, 3, 13, 10, 0);
+    final snapshot = buildTaskPrioritySnapshot(
+      <Todo>[
+        todo(
+          id: 'steady',
+          title: 'Steady backlog',
+          updatedAtMs: 100,
+        ),
+        todo(
+          id: 'noisy',
+          title: 'Noisy backlog',
+          updatedAtMs: 10,
+        ),
+      ],
+      nowLocal: nowLocal,
+      aiResult: const TaskPriorityAiBatchResult(
+        entries: <TaskPriorityAiEntry>[
+          TaskPriorityAiEntry(
+            todoId: 'noisy',
+            priorityBand: TaskPriorityAiBand.focus,
+            semanticAdjustment: 0,
+            reason: 'Maybe urgent, maybe important.',
+            suggestedAction: TaskPrioritySuggestionKind.doNow,
+            confidence: TaskPriorityAiConfidence.low,
+            isImportant: true,
+            isUrgent: true,
+          ),
+        ],
+      ),
+    );
+
+    expect(snapshot.primaryFocus?.todo.id, 'steady');
+  });
+
   test('feedback suppression demotes AI-promoted tasks', () {
     final nowLocal = DateTime(2026, 3, 13, 10, 0);
     final snapshot = buildTaskPrioritySnapshot(

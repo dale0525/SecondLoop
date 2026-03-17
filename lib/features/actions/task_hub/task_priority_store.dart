@@ -447,8 +447,6 @@ class TaskPriorityStore extends ChangeNotifier {
           entry.isReviewDue,
           entry.isFutureScheduled,
           entry.isInProgress,
-          entry.isImportant,
-          entry.isUrgent,
         ]),
     };
   }

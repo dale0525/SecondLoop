@@ -671,9 +671,7 @@ void main() {
     expect(store.snapshot.primaryFocus?.todo.id, 'review');
   });
 
-  test(
-      'manual urgency change bypasses sticky focus and recomputes primary focus',
-      () async {
+  test('manual urgency change on another task keeps sticky focus', () async {
     SharedPreferences.setMockInitialValues({});
     const signalStore = TaskPrioritySignalStore();
     final aiService = _CountingAiService(
@@ -713,7 +711,7 @@ void main() {
     store.markDirty();
     await store.refresh();
 
-    expect(store.snapshot.primaryFocus?.todo.id, 'review');
+    expect(store.snapshot.primaryFocus?.todo.id, 'sticky');
   });
 
   test('sticky focus survives unrelated rerank changes on other tasks',
