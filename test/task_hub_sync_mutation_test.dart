@@ -13,13 +13,6 @@ import 'package:secondloop/src/rust/db.dart';
 
 import 'test_i18n.dart';
 
-int _dueReviewAtMsForToday() {
-  final nowLocal = DateTime.now();
-  final startOfTodayLocal =
-      DateTime(nowLocal.year, nowLocal.month, nowLocal.day);
-  return startOfTodayLocal.toUtc().millisecondsSinceEpoch;
-}
-
 void main() {
   testWidgets('task hub done quick action notifies sync engine',
       (tester) async {
@@ -28,17 +21,16 @@ void main() {
     });
 
     final nowUtcMs = DateTime.now().toUtc().millisecondsSinceEpoch;
-    final dueReviewAtMs = _dueReviewAtMsForToday();
     final backend = _TaskHubBackend(
       todos: <Todo>[
         Todo(
           id: 'todo:1',
-          title: 'review this',
-          status: 'inbox',
+          title: 'ship this',
+          status: 'in_progress',
           createdAtMs: nowUtcMs - 1000,
           updatedAtMs: nowUtcMs - 1000,
-          reviewStage: 0,
-          nextReviewAtMs: dueReviewAtMs,
+          reviewStage: null,
+          nextReviewAtMs: null,
         ),
       ],
     );
@@ -76,24 +68,23 @@ void main() {
     expect(changes, greaterThanOrEqualTo(1));
   });
 
-  testWidgets('task hub later quick action notifies sync engine',
+  testWidgets('task hub urgency quick action notifies sync engine',
       (tester) async {
     SharedPreferences.setMockInitialValues({
       'actions.review.day_end_minutes_v1': (23 * 60) + 59,
     });
 
     final nowUtcMs = DateTime.now().toUtc().millisecondsSinceEpoch;
-    final dueReviewAtMs = _dueReviewAtMsForToday();
     final backend = _TaskHubBackend(
       todos: <Todo>[
         Todo(
           id: 'todo:1',
-          title: 'review this',
-          status: 'inbox',
+          title: 'prepare draft',
+          status: 'open',
           createdAtMs: nowUtcMs - 1000,
           updatedAtMs: nowUtcMs - 1000,
-          reviewStage: 0,
-          nextReviewAtMs: dueReviewAtMs,
+          reviewStage: null,
+          nextReviewAtMs: null,
         ),
       ],
     );
@@ -123,8 +114,8 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester
-        .tap(find.byKey(const ValueKey('task_hub_page_quick_todo:1_later')));
+    await tester.tap(find
+        .byKey(const ValueKey('task_hub_page_quick_todo:1_increaseUrgency')));
     await tester.pump();
 
     expect(find.byType(SnackBar), findsOneWidget);
@@ -133,7 +124,7 @@ void main() {
 
     expect(backend.upsertTodoCalls, greaterThanOrEqualTo(1));
     expect(changes, greaterThanOrEqualTo(1));
-    expect(find.text('review this'), findsWidgets);
+    expect(find.text('prepare draft'), findsWidgets);
   });
 
   testWidgets(
@@ -144,17 +135,16 @@ void main() {
     });
 
     final nowUtcMs = DateTime.now().toUtc().millisecondsSinceEpoch;
-    final dueReviewAtMs = _dueReviewAtMsForToday();
     final backend = _TaskHubBackend(
       todos: <Todo>[
         Todo(
           id: 'todo:1',
-          title: 'review this',
-          status: 'inbox',
+          title: 'prepare draft',
+          status: 'open',
           createdAtMs: nowUtcMs - 1000,
           updatedAtMs: nowUtcMs - 1000,
-          reviewStage: 0,
-          nextReviewAtMs: dueReviewAtMs,
+          reviewStage: null,
+          nextReviewAtMs: null,
         ),
       ],
     );
@@ -187,8 +177,8 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester
-        .tap(find.byKey(const ValueKey('task_hub_page_quick_todo:1_later')));
+    await tester.tap(find
+        .byKey(const ValueKey('task_hub_page_quick_todo:1_increaseUrgency')));
     await tester.pump();
     expect(find.byType(SnackBar), findsOneWidget);
 
@@ -205,17 +195,16 @@ void main() {
     });
 
     final nowUtcMs = DateTime.now().toUtc().millisecondsSinceEpoch;
-    final dueReviewAtMs = _dueReviewAtMsForToday();
     final backend = _TaskHubBackend(
       todos: <Todo>[
         Todo(
           id: 'todo:1',
-          title: 'review this',
-          status: 'inbox',
+          title: 'prepare draft',
+          status: 'open',
           createdAtMs: nowUtcMs - 1000,
           updatedAtMs: nowUtcMs - 1000,
-          reviewStage: 0,
-          nextReviewAtMs: dueReviewAtMs,
+          reviewStage: null,
+          nextReviewAtMs: null,
         ),
       ],
     );
@@ -263,8 +252,8 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('open_task_hub_page')));
     await tester.pumpAndSettle();
 
-    await tester
-        .tap(find.byKey(const ValueKey('task_hub_page_quick_todo:1_later')));
+    await tester.tap(find
+        .byKey(const ValueKey('task_hub_page_quick_todo:1_increaseUrgency')));
     await tester.pump();
     expect(find.byType(SnackBar), findsOneWidget);
 

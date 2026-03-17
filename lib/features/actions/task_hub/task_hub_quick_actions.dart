@@ -1,25 +1,18 @@
 import 'dart:typed_data';
 
-import 'package:flutter/material.dart';
-
 import '../../../core/backend/app_backend.dart';
 import '../../../src/rust/db.dart';
 import '../review/review_backoff.dart';
 import '../settings/actions_settings_store.dart';
+import 'task_priority_signal_store.dart';
 
 enum TaskHubQuickAction {
-  today,
-  tonight,
-  tomorrow,
-  pauseTomorrow,
-  thisWeek,
-  later,
-  start,
-  moveToInbox,
+  increaseUrgency,
+  decreaseUrgency,
+  increaseImportance,
+  decreaseImportance,
   done,
   reopen,
-  redo,
-  dismiss,
 }
 
 typedef ConfirmDoneWithIncompleteChecklist = Future<bool> Function(Todo todo);
@@ -29,25 +22,29 @@ class TaskHubUndoTicket {
     required this.todo,
     required this.updatedTodo,
     required this.action,
-    this.createdTodoId,
+    this.previousManualSignal,
+    this.shouldNotifySync = true,
   });
 
   final Todo todo;
   final Todo updatedTodo;
   final TaskHubQuickAction action;
-  final String? createdTodoId;
+  final TaskPriorityManualSignal? previousManualSignal;
+  final bool shouldNotifySync;
 }
 
 class TaskHubQuickActionsController {
   const TaskHubQuickActionsController({
     required this.backend,
     required this.sessionKey,
+    this.signalStore = const TaskPrioritySignalStore(),
     this.confirmDoneWithIncompleteChecklist,
     this.checklistProgressByTodoId = const <String, TodoChecklistProgress>{},
   });
 
   final AppBackend backend;
   final Uint8List sessionKey;
+  final TaskPrioritySignalStore signalStore;
   final ConfirmDoneWithIncompleteChecklist? confirmDoneWithIncompleteChecklist;
   final Map<String, TodoChecklistProgress> checklistProgressByTodoId;
 
@@ -76,142 +73,44 @@ class TaskHubQuickActionsController {
     final nowUtcMs = nowLocal.toUtc().millisecondsSinceEpoch;
 
     switch (action) {
-      case TaskHubQuickAction.today:
-      case TaskHubQuickAction.tonight:
+      case TaskHubQuickAction.increaseUrgency:
+        return _applyUrgencyChange(
+          todo,
+          nowLocal: nowLocal,
+          nowUtcMs: nowUtcMs,
+          settings: settings,
+          increase: true,
+        );
+      case TaskHubQuickAction.decreaseUrgency:
+        return _applyUrgencyChange(
+          todo,
+          nowLocal: nowLocal,
+          nowUtcMs: nowUtcMs,
+          settings: settings,
+          increase: false,
+        );
+      case TaskHubQuickAction.increaseImportance:
         {
-          final dueLocal = DateTime(
-            nowLocal.year,
-            nowLocal.month,
-            nowLocal.day,
-            settings.dayEndTime.hour,
-            settings.dayEndTime.minute,
-          );
-          final updated = await backend.upsertTodo(
-            sessionKey,
-            id: todo.id,
-            title: todo.title,
-            dueAtMs: dueLocal.toUtc().millisecondsSinceEpoch,
-            status: 'open',
-            sourceEntryId: todo.sourceEntryId,
-            reviewStage: null,
-            nextReviewAtMs: null,
-            lastReviewAtMs: nowUtcMs,
-          );
+          final previous = await signalStore.readForTodo(todo.id);
+          await signalStore.adjustImportance(todo.id, increase: true);
           return TaskHubUndoTicket(
             todo: todo,
-            updatedTodo: updated,
+            updatedTodo: todo,
             action: action,
+            previousManualSignal: previous,
+            shouldNotifySync: false,
           );
         }
-      case TaskHubQuickAction.tomorrow:
-      case TaskHubQuickAction.pauseTomorrow:
+      case TaskHubQuickAction.decreaseImportance:
         {
-          final tomorrow = DateTime(
-            nowLocal.year,
-            nowLocal.month,
-            nowLocal.day,
-          ).add(const Duration(days: 1));
-          final dueLocal = DateTime(
-            tomorrow.year,
-            tomorrow.month,
-            tomorrow.day,
-            settings.morningTime.hour,
-            settings.morningTime.minute,
-          );
-          final updated = await backend.upsertTodo(
-            sessionKey,
-            id: todo.id,
-            title: todo.title,
-            dueAtMs: dueLocal.toUtc().millisecondsSinceEpoch,
-            status: 'open',
-            sourceEntryId: todo.sourceEntryId,
-            reviewStage: null,
-            nextReviewAtMs: null,
-            lastReviewAtMs: nowUtcMs,
-          );
+          final previous = await signalStore.readForTodo(todo.id);
+          await signalStore.adjustImportance(todo.id, increase: false);
           return TaskHubUndoTicket(
             todo: todo,
-            updatedTodo: updated,
+            updatedTodo: todo,
             action: action,
-          );
-        }
-      case TaskHubQuickAction.thisWeek:
-        {
-          final dueLocal = _nextWeekdayAtDayEnd(
-            nowLocal,
-            settings.weeklyReviewWeekday,
-            settings.dayEndTime,
-          );
-          final updated = await backend.upsertTodo(
-            sessionKey,
-            id: todo.id,
-            title: todo.title,
-            dueAtMs: dueLocal.toUtc().millisecondsSinceEpoch,
-            status: 'open',
-            sourceEntryId: todo.sourceEntryId,
-            reviewStage: null,
-            nextReviewAtMs: null,
-            lastReviewAtMs: nowUtcMs,
-          );
-          return TaskHubUndoTicket(
-            todo: todo,
-            updatedTodo: updated,
-            action: action,
-          );
-        }
-      case TaskHubQuickAction.later:
-        {
-          final nextLocal =
-              ReviewBackoff.initialNextReviewAt(nowLocal, settings);
-          final updated = await backend.upsertTodo(
-            sessionKey,
-            id: todo.id,
-            title: todo.title,
-            dueAtMs: null,
-            status: 'inbox',
-            sourceEntryId: todo.sourceEntryId,
-            reviewStage: todo.reviewStage ?? 0,
-            nextReviewAtMs: nextLocal.toUtc().millisecondsSinceEpoch,
-            lastReviewAtMs: nowUtcMs,
-          );
-          return TaskHubUndoTicket(
-            todo: todo,
-            updatedTodo: updated,
-            action: action,
-          );
-        }
-      case TaskHubQuickAction.start:
-        {
-          final updated = await backend.setTodoStatus(
-            sessionKey,
-            todoId: todo.id,
-            newStatus: 'in_progress',
-          );
-          return TaskHubUndoTicket(
-            todo: todo,
-            updatedTodo: updated,
-            action: action,
-          );
-        }
-      case TaskHubQuickAction.moveToInbox:
-        {
-          final nextLocal =
-              ReviewBackoff.initialNextReviewAt(nowLocal, settings);
-          final updated = await backend.upsertTodo(
-            sessionKey,
-            id: todo.id,
-            title: todo.title,
-            dueAtMs: null,
-            status: 'inbox',
-            sourceEntryId: todo.sourceEntryId,
-            reviewStage: todo.reviewStage ?? 0,
-            nextReviewAtMs: nextLocal.toUtc().millisecondsSinceEpoch,
-            lastReviewAtMs: nowUtcMs,
-          );
-          return TaskHubUndoTicket(
-            todo: todo,
-            updatedTodo: updated,
-            action: action,
+            previousManualSignal: previous,
+            shouldNotifySync: false,
           );
         }
       case TaskHubQuickAction.done:
@@ -246,60 +145,181 @@ class TaskHubQuickActionsController {
             action: action,
           );
         }
-      case TaskHubQuickAction.redo:
-        {
-          final dueLocal = DateTime(
-            nowLocal.year,
-            nowLocal.month,
-            nowLocal.day,
-            settings.dayEndTime.hour,
-            settings.dayEndTime.minute,
-          );
-          final createdTodoId =
-              'todo:task_hub_redo:${todo.id}:${nowLocal.toUtc().microsecondsSinceEpoch}';
-          final updated = await backend.upsertTodo(
-            sessionKey,
-            id: createdTodoId,
-            title: todo.title,
-            dueAtMs: dueLocal.toUtc().millisecondsSinceEpoch,
-            status: 'open',
-            sourceEntryId: todo.sourceEntryId,
-            reviewStage: null,
-            nextReviewAtMs: null,
-            lastReviewAtMs: nowUtcMs,
-          );
-          return TaskHubUndoTicket(
-            todo: todo,
-            updatedTodo: updated,
-            action: action,
-            createdTodoId: createdTodoId,
-          );
-        }
-      case TaskHubQuickAction.dismiss:
-        {
-          final updated = await backend.setTodoStatus(
-            sessionKey,
-            todoId: todo.id,
-            newStatus: 'dismissed',
-          );
-          return TaskHubUndoTicket(
-            todo: todo,
-            updatedTodo: updated,
-            action: action,
-          );
-        }
     }
   }
 
-  Future<void> undo(TaskHubUndoTicket ticket) async {
-    if (ticket.action == TaskHubQuickAction.redo &&
-        ticket.createdTodoId != null) {
-      await backend.deleteTodo(
-        sessionKey,
-        todoId: ticket.createdTodoId!,
+  Future<TaskHubUndoTicket> _applyUrgencyChange(
+    Todo todo, {
+    required DateTime nowLocal,
+    required int nowUtcMs,
+    required ActionsSettings settings,
+    required bool increase,
+  }) async {
+    final previousSignal = await signalStore.readForTodo(todo.id);
+    final bucket = _urgencyBucketFor(todo, nowLocal: nowLocal);
+    final targetBucket = switch ((bucket, increase)) {
+      (_TaskUrgencyBucket.backlog, true) => _TaskUrgencyBucket.scheduled,
+      (_TaskUrgencyBucket.scheduled, true) => _TaskUrgencyBucket.urgent,
+      (_TaskUrgencyBucket.urgent, true) => _TaskUrgencyBucket.urgent,
+      (_TaskUrgencyBucket.urgent, false) => _TaskUrgencyBucket.scheduled,
+      (_TaskUrgencyBucket.scheduled, false) => _TaskUrgencyBucket.backlog,
+      (_TaskUrgencyBucket.backlog, false) => _TaskUrgencyBucket.backlog,
+    };
+
+    if (bucket == _TaskUrgencyBucket.backlog && !increase) {
+      await signalStore.adjustUrgency(todo.id, increase: false);
+      return TaskHubUndoTicket(
+        todo: todo,
+        updatedTodo: todo,
+        action: increase
+            ? TaskHubQuickAction.increaseUrgency
+            : TaskHubQuickAction.decreaseUrgency,
+        previousManualSignal: previousSignal,
+        shouldNotifySync: false,
       );
-      return;
     }
+
+    if (targetBucket == _TaskUrgencyBucket.urgent && bucket == targetBucket) {
+      await signalStore.adjustUrgency(todo.id, increase: true);
+      return TaskHubUndoTicket(
+        todo: todo,
+        updatedTodo: todo,
+        action: increase
+            ? TaskHubQuickAction.increaseUrgency
+            : TaskHubQuickAction.decreaseUrgency,
+        previousManualSignal: previousSignal,
+        shouldNotifySync: false,
+      );
+    }
+
+    final updated = await switch (targetBucket) {
+      _TaskUrgencyBucket.urgent => _moveTodoToToday(
+          todo,
+          nowLocal: nowLocal,
+          nowUtcMs: nowUtcMs,
+          settings: settings,
+        ),
+      _TaskUrgencyBucket.scheduled => _moveTodoToTomorrow(
+          todo,
+          nowLocal: nowLocal,
+          nowUtcMs: nowUtcMs,
+          settings: settings,
+        ),
+      _TaskUrgencyBucket.backlog => _moveTodoToBacklog(
+          todo,
+          nowLocal: nowLocal,
+          nowUtcMs: nowUtcMs,
+          settings: settings,
+        ),
+    };
+    return TaskHubUndoTicket(
+      todo: todo,
+      updatedTodo: updated,
+      action: increase
+          ? TaskHubQuickAction.increaseUrgency
+          : TaskHubQuickAction.decreaseUrgency,
+      previousManualSignal: previousSignal,
+    );
+  }
+
+  Future<Todo> _moveTodoToToday(
+    Todo todo, {
+    required DateTime nowLocal,
+    required int nowUtcMs,
+    required ActionsSettings settings,
+  }) {
+    final dueLocal = DateTime(
+      nowLocal.year,
+      nowLocal.month,
+      nowLocal.day,
+      settings.dayEndTime.hour,
+      settings.dayEndTime.minute,
+    );
+    return backend.upsertTodo(
+      sessionKey,
+      id: todo.id,
+      title: todo.title,
+      dueAtMs: dueLocal.toUtc().millisecondsSinceEpoch,
+      status: 'open',
+      sourceEntryId: todo.sourceEntryId,
+      reviewStage: null,
+      nextReviewAtMs: null,
+      lastReviewAtMs: nowUtcMs,
+    );
+  }
+
+  Future<Todo> _moveTodoToTomorrow(
+    Todo todo, {
+    required DateTime nowLocal,
+    required int nowUtcMs,
+    required ActionsSettings settings,
+  }) {
+    final tomorrow = DateTime(
+      nowLocal.year,
+      nowLocal.month,
+      nowLocal.day,
+    ).add(const Duration(days: 1));
+    final dueLocal = DateTime(
+      tomorrow.year,
+      tomorrow.month,
+      tomorrow.day,
+      settings.morningTime.hour,
+      settings.morningTime.minute,
+    );
+    return backend.upsertTodo(
+      sessionKey,
+      id: todo.id,
+      title: todo.title,
+      dueAtMs: dueLocal.toUtc().millisecondsSinceEpoch,
+      status: 'open',
+      sourceEntryId: todo.sourceEntryId,
+      reviewStage: null,
+      nextReviewAtMs: null,
+      lastReviewAtMs: nowUtcMs,
+    );
+  }
+
+  Future<Todo> _moveTodoToBacklog(
+    Todo todo, {
+    required DateTime nowLocal,
+    required int nowUtcMs,
+    required ActionsSettings settings,
+  }) {
+    final nextLocal = ReviewBackoff.initialNextReviewAt(nowLocal, settings);
+    return backend.upsertTodo(
+      sessionKey,
+      id: todo.id,
+      title: todo.title,
+      dueAtMs: null,
+      status: 'inbox',
+      sourceEntryId: todo.sourceEntryId,
+      reviewStage: todo.reviewStage ?? 0,
+      nextReviewAtMs: nextLocal.toUtc().millisecondsSinceEpoch,
+      lastReviewAtMs: nowUtcMs,
+    );
+  }
+
+  Future<void> undo(TaskHubUndoTicket ticket) async {
+    switch (ticket.action) {
+      case TaskHubQuickAction.increaseImportance:
+      case TaskHubQuickAction.decreaseImportance:
+      case TaskHubQuickAction.increaseUrgency:
+      case TaskHubQuickAction.decreaseUrgency:
+        await signalStore.restoreForTodo(
+          ticket.todo.id,
+          ticket.previousManualSignal,
+        );
+        if (!ticket.shouldNotifySync &&
+            ticket.updatedTodo.id == ticket.todo.id &&
+            ticket.updatedTodo == ticket.todo) {
+          return;
+        }
+        break;
+      case TaskHubQuickAction.done:
+      case TaskHubQuickAction.reopen:
+        break;
+    }
+
     final original = ticket.todo;
     await backend.upsertTodo(
       sessionKey,
@@ -315,24 +335,38 @@ class TaskHubQuickActionsController {
   }
 }
 
-DateTime _nextWeekdayAtDayEnd(
-  DateTime nowLocal,
-  int weekday,
-  TimeOfDay dayEndTime,
-) {
-  final base = DateTime(nowLocal.year, nowLocal.month, nowLocal.day);
-  final normalizedWeekday = weekday.clamp(DateTime.monday, DateTime.sunday);
-  final deltaDays = (normalizedWeekday - base.weekday) % 7;
-  final candidateDay = base.add(Duration(days: deltaDays));
-  final candidate = DateTime(
-    candidateDay.year,
-    candidateDay.month,
-    candidateDay.day,
-    dayEndTime.hour,
-    dayEndTime.minute,
-  );
-  if (candidate.isAfter(nowLocal)) {
-    return candidate;
+enum _TaskUrgencyBucket {
+  backlog,
+  scheduled,
+  urgent,
+}
+
+_TaskUrgencyBucket _urgencyBucketFor(
+  Todo todo, {
+  required DateTime nowLocal,
+}) {
+  if (todo.status == 'done') return _TaskUrgencyBucket.backlog;
+  if (todo.status == 'in_progress') return _TaskUrgencyBucket.urgent;
+  final dueAtMs = todo.dueAtMs;
+  if (dueAtMs != null) {
+    final dueLocal =
+        DateTime.fromMillisecondsSinceEpoch(dueAtMs, isUtc: true).toLocal();
+    if (dueLocal.isBefore(nowLocal) ||
+        (dueLocal.year == nowLocal.year &&
+            dueLocal.month == nowLocal.month &&
+            dueLocal.day == nowLocal.day)) {
+      return _TaskUrgencyBucket.urgent;
+    }
+    return _TaskUrgencyBucket.scheduled;
   }
-  return candidate.add(const Duration(days: 7));
+  if (todo.reviewStage != null && todo.nextReviewAtMs != null) {
+    final reviewLocal = DateTime.fromMillisecondsSinceEpoch(
+      todo.nextReviewAtMs!,
+      isUtc: true,
+    ).toLocal();
+    if (!reviewLocal.isAfter(nowLocal)) {
+      return _TaskUrgencyBucket.urgent;
+    }
+  }
+  return _TaskUrgencyBucket.backlog;
 }

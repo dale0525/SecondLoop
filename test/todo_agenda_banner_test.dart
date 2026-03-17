@@ -219,11 +219,10 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('task_hub_banner')));
     await tester.pumpAndSettle();
 
-    final bannerItem =
-        find.byKey(const ValueKey('task_hub_banner_item_todo:detail'));
-    expect(bannerItem, findsOneWidget);
-    await tester.ensureVisible(bannerItem);
-    await tester.tap(find.text('Open detail from banner'));
+    final openFocusButton =
+        find.byKey(const ValueKey('task_hub_banner_open_focus'));
+    expect(openFocusButton, findsOneWidget);
+    await tester.tap(openFocusButton);
     await tester.pumpAndSettle();
 
     expect(find.byType(TodoDetailPage), findsOneWidget);
@@ -334,10 +333,8 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byKey(const ValueKey('task_hub_banner')));
-    await tester.pumpAndSettle();
-    await tester.tap(
-        find.byKey(const ValueKey('task_hub_page_quick_todo:snack_tomorrow')));
+    await tester
+        .tap(find.byKey(const ValueKey('task_hub_banner_primary_action')));
     await tester.pump();
 
     expect(find.byType(SnackBar), findsOneWidget);
@@ -414,10 +411,8 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('open_chat_page')));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byKey(const ValueKey('task_hub_banner')));
-    await tester.pumpAndSettle();
-    await tester.tap(
-        find.byKey(const ValueKey('task_hub_page_quick_todo:snack_tomorrow')));
+    await tester
+        .tap(find.byKey(const ValueKey('task_hub_banner_primary_action')));
     await tester.pump();
     expect(find.byType(SnackBar), findsOneWidget);
 
@@ -429,6 +424,58 @@ void main() {
     await tester.pump(const Duration(seconds: 4));
     await tester.pump();
     expect(find.byType(SnackBar), findsNothing);
+  });
+
+  testWidgets(
+      'Task hub banner primary action shows the new urgency label in chat',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+
+    final backend = _AgendaBackend(
+      todos: const [
+        Todo(
+          id: 'todo:label',
+          title: 'Backlog follow-up',
+          dueAtMs: null,
+          status: 'open',
+          sourceEntryId: null,
+          createdAtMs: 0,
+          updatedAtMs: 0,
+          reviewStage: null,
+          nextReviewAtMs: null,
+          lastReviewAtMs: null,
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        AppBackendScope(
+          backend: backend,
+          child: SessionScope(
+            sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+            lock: () {},
+            child: const MaterialApp(
+              home: ChatPage(
+                conversation: Conversation(
+                  id: 'loop_home',
+                  title: 'Loop',
+                  createdAtMs: 0,
+                  updatedAtMs: 0,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('task_hub_banner_primary_action')),
+      findsOneWidget,
+    );
+    expect(find.text('More urgent'), findsOneWidget);
   });
 }
 

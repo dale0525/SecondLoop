@@ -113,15 +113,12 @@ void main() {
   testWidgets('task hub quick action failure shows error snackbar',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
-    final now = DateTime.now();
-    final overdueAt = DateTime(now.year, now.month, now.day)
-        .subtract(const Duration(hours: 1));
     final backend = _TaskHubBackend(
       todos: <Todo>[
-        Todo(
+        const Todo(
           id: 'focus',
           title: 'Fix prod issue',
-          dueAtMs: overdueAt.toUtc().millisecondsSinceEpoch,
+          dueAtMs: null,
           status: 'open',
           sourceEntryId: null,
           createdAtMs: 0,
@@ -138,14 +135,16 @@ void main() {
     await tester.pumpAndSettle();
 
     await tester.tap(
-      find.byKey(const ValueKey('task_hub_page_quick_focus_today')),
+      find.byKey(
+        const ValueKey('task_hub_page_quick_focus_increaseUrgency'),
+      ),
     );
     await tester.pumpAndSettle();
 
     expect(find.textContaining('Save failed'), findsOneWidget);
   });
 
-  testWidgets('task hub shows all focus tasks instead of truncating at three',
+  testWidgets('task hub shows only the highest-priority focus task',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
     final now = DateTime.now();
@@ -177,10 +176,17 @@ void main() {
 
     expect(find.byKey(const ValueKey('task_hub_page_section_focus')),
         findsOneWidget);
-    expect(find.text('Focus task 0'), findsOneWidget);
-    expect(find.text('Focus task 1'), findsOneWidget);
-    expect(find.text('Focus task 2'), findsOneWidget);
     expect(find.text('Focus task 3'), findsOneWidget);
+    expect(
+        find.byType(Text).evaluate().where((element) {
+          final widget = element.widget;
+          return widget is Text &&
+              (widget.data?.startsWith('Focus task ') ?? false);
+        }).length,
+        1);
+    expect(find.text('Focus task 1'), findsNothing);
+    expect(find.text('Focus task 2'), findsNothing);
+    expect(find.text('Focus task 0'), findsNothing);
   });
 
   testWidgets('task hub loads done todos in batches on demand', (tester) async {

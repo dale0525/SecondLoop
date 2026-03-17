@@ -4,6 +4,7 @@ import 'package:secondloop/features/actions/task_hub/task_priority_ai_models.dar
 import 'package:secondloop/features/actions/task_hub/task_priority_engine.dart';
 import 'package:secondloop/features/actions/task_hub/task_priority_feedback_store.dart';
 import 'package:secondloop/features/actions/task_hub/task_priority_models.dart';
+import 'package:secondloop/features/actions/task_hub/task_priority_signal_store.dart';
 import 'package:secondloop/src/rust/db.dart';
 
 void main() {
@@ -70,70 +71,78 @@ void main() {
     expect(snapshot.focus.first.todo.id, 'overdue-1');
     expect(snapshot.scheduled.first.todo.id, 'future-1');
     expect(snapshot.decide.first.todo.id, 'review-1');
+    expect(snapshot.primaryFocus?.todo.id, 'overdue-1');
     expect(snapshot.source, TaskPrioritySnapshotSource.rules);
   });
 
-  test('in progress and due today stay in focus', () {
+  test('primary focus is selected from all unfinished entries', () {
     final nowLocal = DateTime(2026, 3, 13, 10, 0);
     final snapshot = buildTaskPrioritySnapshot(
       <Todo>[
         todo(
-          id: 'in-progress',
-          title: 'Work in progress',
-          updatedAtMs: 50,
-          status: 'in_progress',
-        ),
-        todo(
-          id: 'today',
-          title: 'Due today',
-          updatedAtMs: 40,
-          dueAtMs: nowLocal
-              .add(const Duration(hours: 2))
-              .toUtc()
-              .millisecondsSinceEpoch,
-        ),
-      ],
-      nowLocal: nowLocal,
-    );
-
-    expect(
-        snapshot.focus.map((entry) => entry.todo.id), contains('in-progress'));
-    expect(snapshot.focus.map((entry) => entry.todo.id), contains('today'));
-    expect(snapshot.primaryFocus?.todo.id, 'in-progress');
-  });
-
-  test('future scheduled and snoozed tasks do not leak into focus', () {
-    final nowLocal = DateTime(2026, 3, 13, 10, 0);
-    final snapshot = buildTaskPrioritySnapshot(
-      <Todo>[
-        todo(
-          id: 'future',
-          title: 'Scheduled next week',
-          updatedAtMs: 10,
-          dueAtMs: nowLocal
-              .add(const Duration(days: 7))
-              .toUtc()
-              .millisecondsSinceEpoch,
-        ),
-        todo(
-          id: 'snoozed',
-          title: 'Snoozed review',
+          id: 'review',
+          title: 'Reply today',
           updatedAtMs: 20,
           status: 'inbox',
-          reviewStage: 2,
+          reviewStage: 0,
           nextReviewAtMs: nowLocal
-              .add(const Duration(days: 1))
+              .subtract(const Duration(minutes: 30))
               .toUtc()
               .millisecondsSinceEpoch,
         ),
+        todo(
+          id: 'plan',
+          title: 'Quarterly planning',
+          updatedAtMs: 30,
+        ),
       ],
       nowLocal: nowLocal,
+      aiResult: const TaskPriorityAiBatchResult(
+        entries: <TaskPriorityAiEntry>[
+          TaskPriorityAiEntry(
+            todoId: 'plan',
+            priorityBand: TaskPriorityAiBand.next,
+            semanticAdjustment: 8,
+            reason: 'Strategically important.',
+            suggestedAction: TaskPrioritySuggestionKind.clarify,
+            confidence: TaskPriorityAiConfidence.high,
+            isImportant: true,
+            isUrgent: false,
+          ),
+        ],
+      ),
     );
 
     expect(snapshot.focus, isEmpty);
-    expect(
-        snapshot.scheduled.map((entry) => entry.todo.id), <String>['future']);
-    expect(snapshot.decide.map((entry) => entry.todo.id), <String>['snoozed']);
+    expect(snapshot.primaryFocus?.todo.id, 'review');
+  });
+
+  test('manual importance override can surface a planned task as focus', () {
+    final nowLocal = DateTime(2026, 3, 13, 10, 0);
+    final tomorrow = nowLocal.add(const Duration(days: 2));
+    final snapshot = buildTaskPrioritySnapshot(
+      <Todo>[
+        todo(
+          id: 'scheduled',
+          title: 'Scheduled follow-up',
+          updatedAtMs: 10,
+          dueAtMs: tomorrow.toUtc().millisecondsSinceEpoch,
+        ),
+        todo(
+          id: 'backlog',
+          title: 'Important roadmap',
+          updatedAtMs: 50,
+        ),
+      ],
+      nowLocal: nowLocal,
+      signalState: const TaskPriorityManualSignalState(
+        byTodoId: <String, TaskPriorityManualSignal>{
+          'backlog': TaskPriorityManualSignal(isImportant: true),
+        },
+      ),
+    );
+
+    expect(snapshot.primaryFocus?.todo.id, 'backlog');
   });
 
   test('hybrid rerank keeps hard priority guards when confidence is low', () {
@@ -165,13 +174,13 @@ void main() {
             reason: 'This sounds strategically important.',
             suggestedAction: TaskPrioritySuggestionKind.clarify,
             confidence: TaskPriorityAiConfidence.low,
+            isImportant: true,
           ),
         ],
       ),
     );
 
     expect(snapshot.primaryFocus?.todo.id, 'overdue');
-    expect(snapshot.focus.first.todo.id, 'overdue');
     expect(snapshot.source, TaskPrioritySnapshotSource.hybrid);
   });
 
@@ -192,6 +201,8 @@ void main() {
             reason: 'It is blocking other planning work.',
             suggestedAction: TaskPrioritySuggestionKind.clarify,
             confidence: TaskPriorityAiConfidence.high,
+            isImportant: true,
+            isUrgent: true,
           ),
         ],
       ),
@@ -201,7 +212,6 @@ void main() {
       ),
     );
 
-    expect(snapshot.focus, isEmpty);
-    expect(snapshot.decide.first.todo.id, 'a');
+    expect(snapshot.primaryFocus?.todo.id, 'a');
   });
 }

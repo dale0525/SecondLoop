@@ -2,6 +2,7 @@ import '../../../src/rust/db.dart';
 import 'task_priority_ai_models.dart';
 import 'task_priority_feedback_store.dart';
 import 'task_priority_models.dart';
+import 'task_priority_signal_store.dart';
 
 bool _isSameLocalDate(DateTime a, DateTime b) =>
     a.year == b.year && a.month == b.month && a.day == b.day;
@@ -11,8 +12,10 @@ TaskPrioritySnapshot buildTaskPrioritySnapshot(
   required DateTime nowLocal,
   TaskPriorityAiBatchResult? aiResult,
   TaskPriorityFeedbackState? feedbackState,
+  TaskPriorityManualSignalState? signalState,
 }) {
   final feedback = feedbackState ?? const TaskPriorityFeedbackState();
+  final manualSignals = signalState ?? const TaskPriorityManualSignalState();
   final rawEntries = <TaskPriorityEntry>[];
   final nowUtcMs = nowLocal.toUtc().millisecondsSinceEpoch;
 
@@ -99,6 +102,8 @@ TaskPrioritySnapshot buildTaskPrioritySnapshot(
         isDueToday: isDueToday,
         isInProgress: isInProgress,
         isFutureScheduled: isFutureScheduled,
+        isImportant: isOverdue || isDueToday || isInProgress,
+        isUrgent: isOverdue || isDueToday || isInProgress || isReviewDue,
       ),
     );
   }
@@ -108,6 +113,7 @@ TaskPrioritySnapshot buildTaskPrioritySnapshot(
     entries = _applyAiResult(entries, aiResult);
   }
   entries = _applyFeedback(entries, feedback);
+  entries = _applyManualSignals(entries, manualSignals);
 
   final focus = <TaskPriorityEntry>[];
   final scheduled = <TaskPriorityEntry>[];
@@ -136,6 +142,12 @@ TaskPrioritySnapshot buildTaskPrioritySnapshot(
   decide.sort(_compareDecideEntries);
   done.sort((a, b) => b.todo.updatedAtMs.compareTo(a.todo.updatedAtMs));
 
+  final orderedActive = <TaskPriorityEntry>[
+    ...focus,
+    ...scheduled,
+    ...decide,
+  ]..sort(_compareOverallPriority);
+
   return TaskPrioritySnapshot(
     source: aiResult == null
         ? TaskPrioritySnapshotSource.rules
@@ -145,6 +157,9 @@ TaskPrioritySnapshot buildTaskPrioritySnapshot(
     scheduled: List<TaskPriorityEntry>.unmodifiable(scheduled),
     decide: List<TaskPriorityEntry>.unmodifiable(decide),
     done: List<TaskPriorityEntry>.unmodifiable(done),
+    orderedActive: List<TaskPriorityEntry>.unmodifiable(orderedActive),
+    selectedFocusTodoId:
+        orderedActive.isEmpty ? null : orderedActive.first.todo.id,
   );
 }
 
@@ -191,6 +206,8 @@ List<TaskPriorityEntry> _applyAiResult(
       reasonText: aiEntry.reason.isEmpty ? null : aiEntry.reason,
       suggestedAction: aiEntry.suggestedAction,
       confidence: confidence,
+      isImportant: aiEntry.isImportant ?? entry.isImportant,
+      isUrgent: aiEntry.isUrgent ?? entry.isUrgent,
       reasons: <TaskPriorityReasonKind>[
         ...entry.reasons,
         TaskPriorityReasonKind.aiSuggested,
@@ -223,6 +240,8 @@ List<TaskPriorityEntry> _applyFeedback(
     next = next.copyWith(
       band: nextBand,
       semanticScore: semanticPenalty,
+      isImportant: deprioritized ? false : next.isImportant,
+      isUrgent: suppressed && !next.hasHardFocusGuard ? false : next.isUrgent,
       reasons: <TaskPriorityReasonKind>[
         ...next.reasons,
         TaskPriorityReasonKind.feedbackSuppressed,
@@ -230,6 +249,51 @@ List<TaskPriorityEntry> _applyFeedback(
     );
     return next;
   }).toList(growable: false);
+}
+
+List<TaskPriorityEntry> _applyManualSignals(
+  List<TaskPriorityEntry> entries,
+  TaskPriorityManualSignalState signalState,
+) {
+  return entries.map((entry) {
+    final signal = signalState.byTodoId[entry.todo.id];
+    if (signal == null) return entry;
+    return entry.copyWith(
+      isImportant: signal.isImportant ?? entry.isImportant,
+      isUrgent: signal.isUrgent ?? entry.isUrgent,
+    );
+  }).toList(growable: false);
+}
+
+int _compareOverallPriority(TaskPriorityEntry a, TaskPriorityEntry b) {
+  final quadrantCompare = _quadrantRank(a.quadrant).compareTo(
+    _quadrantRank(b.quadrant),
+  );
+  if (quadrantCompare != 0) return quadrantCompare;
+
+  if (a.hasHardFocusGuard != b.hasHardFocusGuard) {
+    return a.hasHardFocusGuard ? -1 : 1;
+  }
+
+  final scoreCompare = b.totalScore.compareTo(a.totalScore);
+  if (scoreCompare != 0) return scoreCompare;
+
+  if (a.todo.dueAtMs != b.todo.dueAtMs) {
+    final aDue = a.todo.dueAtMs ?? 9223372036854775807;
+    final bDue = b.todo.dueAtMs ?? 9223372036854775807;
+    return aDue.compareTo(bDue);
+  }
+
+  return b.todo.updatedAtMs.compareTo(a.todo.updatedAtMs);
+}
+
+int _quadrantRank(TaskPriorityQuadrant quadrant) {
+  return switch (quadrant) {
+    TaskPriorityQuadrant.urgentAndImportant => 0,
+    TaskPriorityQuadrant.urgentOnly => 1,
+    TaskPriorityQuadrant.importantOnly => 2,
+    TaskPriorityQuadrant.neither => 3,
+  };
 }
 
 int _compareFocusEntries(TaskPriorityEntry a, TaskPriorityEntry b) {

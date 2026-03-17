@@ -262,7 +262,7 @@ void main() {
         .tap(find.byKey(const ValueKey('task_hub_banner_primary_action')));
     await tester.pump();
 
-    expect(tappedAction, TaskHubQuickAction.later);
+    expect(tappedAction, TaskHubQuickAction.increaseUrgency);
   });
 
   testWidgets('banner shows AI upgrade hint when enhancement is unavailable',
@@ -381,11 +381,11 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('task_hub_banner')));
     await tester.pumpAndSettle();
-    await tester
-        .tap(find.byKey(const ValueKey('task_hub_page_quick_decide_today')));
+    await tester.tap(find
+        .byKey(const ValueKey('task_hub_page_quick_decide_increaseUrgency')));
     await tester.pump();
 
-    expect(tappedAction, TaskHubQuickAction.today);
+    expect(tappedAction, TaskHubQuickAction.increaseUrgency);
   });
 
   testWidgets('banner preview more menu opens actions', (tester) async {
@@ -430,6 +430,6 @@ void main() {
         .tap(find.byKey(const ValueKey('task_hub_page_quick_decide_more')));
     await tester.pumpAndSettle();
 
-    expect(find.text('Tomorrow'), findsOneWidget);
+    expect(find.text('Less urgent'), findsOneWidget);
   });
 }

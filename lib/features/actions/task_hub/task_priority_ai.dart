@@ -97,9 +97,6 @@ class BackendTaskPriorityAiService implements TaskPriorityAiService {
       <String, _TaskPriorityAiCacheEntry>{};
   static final Map<String, Future<String>> _sharedInflight =
       <String, Future<String>>{};
-  // Keep this cache short-lived: the prompt still includes `now_local_iso`, but
-  // the shared cache key intentionally ignores it so near-duplicate reranks from
-  // multiple pages can collapse into one upstream call.
   static const Duration _sharedCacheTtl = Duration(minutes: 1);
 
   @visibleForTesting
@@ -169,7 +166,8 @@ class BackendTaskPriorityAiService implements TaskPriorityAiService {
 
   @override
   Future<TaskPriorityAiBatchResult> rerank(
-      TaskPriorityAiRequest request) async {
+    TaskPriorityAiRequest request,
+  ) async {
     final cacheKey = _buildCacheKey(request);
     final response = await _resolveSharedCachedOrFreshResponse(
       cacheKey,
@@ -240,10 +238,12 @@ class BackendTaskPriorityAiService implements TaskPriorityAiService {
   String _buildPrompt(TaskPriorityAiRequest request) {
     final payload = jsonEncode(request.toJson());
     return [
-      'You are reranking personal task candidates for a task manager.',
+      'You are evaluating personal task candidates for a task manager.',
       'Return JSON only with shape {"entries":[...]} and no prose.',
+      'For each candidate, independently decide is_important and is_urgent.',
       'Allowed priority_band: focus | next | later.',
       'Allowed suggested_action: do_now | schedule | defer | clarify.',
+      'Prefer stable judgments from the task itself, not transient phrasing.',
       'Do not invent facts. Keep reasons short and verifiable.',
       _localeTag.isEmpty
           ? "Write the reason field in the user's current app language."
@@ -257,7 +257,7 @@ class BackendTaskPriorityAiService implements TaskPriorityAiService {
 TaskPriorityAiRequest buildTaskPriorityAiRequest(
   TaskPrioritySnapshot snapshot, {
   required DateTime nowLocal,
-  int candidateLimit = 8,
+  int candidateLimit = 32,
 }) {
   final candidates = <TaskPriorityAiCandidate>[];
   for (final entry in snapshot.activeEntries) {
@@ -291,6 +291,8 @@ TaskPriorityAiRequest buildTaskPriorityAiRequest(
             entry.isInProgress || entry.isOverdue || entry.isDueToday,
         isQuickWin:
             entry.todo.title.trim().runes.length <= 24 && !entry.isInProgress,
+        ruleIsImportant: entry.isImportant,
+        ruleIsUrgent: entry.isUrgent,
       ),
     );
   }

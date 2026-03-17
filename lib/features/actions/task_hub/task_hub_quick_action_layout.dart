@@ -33,23 +33,35 @@ TaskHubQuickActionItem? primaryTaskHubQuickActionItemForEntry(
   required TaskPriorityEntry entry,
 }) {
   final actions = context.t.actions.taskHub.actions;
-  final action = recommendedTaskHubQuickActionForEntry(entry);
-  if (action == null) return null;
+  if (entry.todo.status == 'done') {
+    return TaskHubQuickActionItem(
+      action: TaskHubQuickAction.reopen,
+      label: actions.reopen,
+      icon: Icons.undo_rounded,
+      tone: TaskHubQuickActionTone.primary,
+    );
+  }
 
+  if (!entry.isUrgent) {
+    return TaskHubQuickActionItem(
+      action: TaskHubQuickAction.increaseUrgency,
+      label: actions.increaseUrgency,
+      icon: Icons.priority_high_rounded,
+      tone: TaskHubQuickActionTone.primary,
+    );
+  }
+  if (!entry.isImportant) {
+    return TaskHubQuickActionItem(
+      action: TaskHubQuickAction.increaseImportance,
+      label: actions.increaseImportance,
+      icon: Icons.keyboard_double_arrow_up_rounded,
+      tone: TaskHubQuickActionTone.primary,
+    );
+  }
   return TaskHubQuickActionItem(
-    action: action,
-    label: switch (entry.suggestedAction) {
-      TaskPrioritySuggestionKind.doNow => actions.doNow,
-      TaskPrioritySuggestionKind.schedule => actions.schedule,
-      TaskPrioritySuggestionKind.defer => actions.defer,
-      TaskPrioritySuggestionKind.clarify => actions.clarify,
-    },
-    icon: switch (entry.suggestedAction) {
-      TaskPrioritySuggestionKind.doNow => Icons.play_circle_outline_rounded,
-      TaskPrioritySuggestionKind.schedule => Icons.event_available_rounded,
-      TaskPrioritySuggestionKind.defer => Icons.schedule_send_rounded,
-      TaskPrioritySuggestionKind.clarify => Icons.rule_folder_outlined,
-    },
+    action: TaskHubQuickAction.done,
+    label: actions.done,
+    icon: Icons.check_rounded,
     tone: TaskHubQuickActionTone.primary,
   );
 }
@@ -74,124 +86,49 @@ TaskHubQuickActionLayout buildTaskHubQuickActionLayout(
     );
   }
 
-  if (entry.band == TaskPriorityBand.done) {
-    return (
-      <TaskHubQuickActionItem>[
-        chip(
-          TaskHubQuickAction.reopen,
-          label: actions.reopen,
-          icon: Icons.undo_rounded,
-          tone: TaskHubQuickActionTone.primary,
-        ),
-      ],
-      <TaskHubQuickActionItem>[
-        chip(
-          TaskHubQuickAction.redo,
-          label: actions.redo,
-          icon: Icons.replay_rounded,
-        ),
-        chip(
-          TaskHubQuickAction.dismiss,
-          label: context.t.common.actions.delete,
-          icon: Icons.delete_outline_rounded,
-        ),
-      ],
-    );
-  }
-
   final primaryAction = primaryTaskHubQuickActionItemForEntry(
     context,
     entry: entry,
   );
+  if (entry.todo.status == 'done') {
+    return (
+      <TaskHubQuickActionItem>[if (primaryAction != null) primaryAction],
+      const <TaskHubQuickActionItem>[],
+    );
+  }
 
   final secondary = <TaskHubQuickActionItem>[
     chip(
-      TaskHubQuickAction.today,
-      label: actions.today,
-      icon: Icons.today_rounded,
+      TaskHubQuickAction.increaseUrgency,
+      label: actions.increaseUrgency,
+      icon: Icons.priority_high_rounded,
     ),
     chip(
-      TaskHubQuickAction.tomorrow,
-      label: actions.tomorrow,
-      icon: Icons.event_rounded,
+      TaskHubQuickAction.decreaseUrgency,
+      label: actions.decreaseUrgency,
+      icon: Icons.low_priority_rounded,
     ),
     chip(
-      TaskHubQuickAction.thisWeek,
-      label: actions.thisWeek,
-      icon: Icons.date_range_rounded,
+      TaskHubQuickAction.increaseImportance,
+      label: actions.increaseImportance,
+      icon: Icons.keyboard_double_arrow_up_rounded,
     ),
     chip(
-      TaskHubQuickAction.later,
-      label: actions.later,
-      icon: Icons.schedule_send_rounded,
+      TaskHubQuickAction.decreaseImportance,
+      label: actions.decreaseImportance,
+      icon: Icons.keyboard_double_arrow_down_rounded,
     ),
-  ];
-
-  if (entry.isReviewDue || entry.band == TaskPriorityBand.decide) {
-    secondary.add(
-      chip(
-        TaskHubQuickAction.moveToInbox,
-        label: actions.moveToInbox,
-        icon: Icons.inbox_rounded,
-      ),
-    );
-  }
-  if (!entry.isInProgress) {
-    secondary.add(
-      chip(
-        TaskHubQuickAction.done,
-        label: actions.done,
-        icon: Icons.check_rounded,
-      ),
-    );
-  }
-
-  if (entry.isReviewDue) {
-    return (
-      <TaskHubQuickActionItem>[
-        if (primaryAction != null) primaryAction,
-        chip(
-          TaskHubQuickAction.later,
-          label: actions.later,
-          icon: Icons.schedule_send_rounded,
-        ),
-        chip(
-          TaskHubQuickAction.done,
-          label: actions.done,
-          icon: Icons.check_rounded,
-        ),
-      ],
-      secondary
-          .where((item) =>
-              item.action != TaskHubQuickAction.later &&
-              item.action != TaskHubQuickAction.done)
-          .toList(growable: false),
-    );
-  }
+    chip(
+      TaskHubQuickAction.done,
+      label: actions.done,
+      icon: Icons.check_rounded,
+    ),
+  ]
+      .where((item) => item.action != primaryAction?.action)
+      .toList(growable: false);
 
   return (
-    <TaskHubQuickActionItem>[
-      if (primaryAction != null) primaryAction,
-    ],
+    <TaskHubQuickActionItem>[if (primaryAction != null) primaryAction],
     secondary,
   );
-}
-
-TaskHubQuickAction? recommendedTaskHubQuickActionForEntry(
-    TaskPriorityEntry entry) {
-  return switch (entry.suggestedAction) {
-    TaskPrioritySuggestionKind.doNow => entry.isInProgress
-        ? TaskHubQuickAction.done
-        : entry.isFutureScheduled
-            ? TaskHubQuickAction.start
-            : TaskHubQuickAction.today,
-    TaskPrioritySuggestionKind.schedule =>
-      entry.isFutureScheduled ? null : TaskHubQuickAction.tomorrow,
-    TaskPrioritySuggestionKind.defer => entry.isInProgress
-        ? TaskHubQuickAction.pauseTomorrow
-        : TaskHubQuickAction.later,
-    TaskPrioritySuggestionKind.clarify => entry.isReviewDue
-        ? TaskHubQuickAction.moveToInbox
-        : TaskHubQuickAction.today,
-  };
 }

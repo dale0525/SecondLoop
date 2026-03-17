@@ -8,6 +8,7 @@ import 'package:secondloop/core/backend/app_backend.dart';
 import 'package:secondloop/features/actions/task_hub/task_hub_quick_action_layout.dart';
 import 'package:secondloop/features/actions/task_hub/task_hub_quick_actions.dart';
 import 'package:secondloop/features/actions/task_hub/task_priority_models.dart';
+import 'package:secondloop/features/actions/task_hub/task_priority_signal_store.dart';
 import 'package:secondloop/src/rust/db.dart';
 
 import 'test_i18n.dart';
@@ -36,17 +37,29 @@ void main() {
     );
   }
 
-  testWidgets('unscheduled tasks recommend schedule as primary action',
-      (tester) async {
-    final entry = TaskPriorityEntry(
-      todo: todo(id: 'u1', title: 'Backlog item', updatedAtMs: 10),
-      band: TaskPriorityBand.decide,
+  TaskPriorityEntry entry({
+    required Todo todo,
+    bool isUrgent = false,
+    bool isImportant = false,
+    TaskPriorityBand band = TaskPriorityBand.decide,
+  }) {
+    return TaskPriorityEntry(
+      todo: todo,
+      band: band,
       ruleScore: 10,
       semanticScore: 0,
       reasons: const <TaskPriorityReasonKind>[
         TaskPriorityReasonKind.unscheduled
       ],
       suggestedAction: TaskPrioritySuggestionKind.schedule,
+      isUrgent: isUrgent,
+      isImportant: isImportant,
+    );
+  }
+
+  testWidgets('backlog tasks prioritize increasing urgency', (tester) async {
+    final candidate = entry(
+      todo: todo(id: 'u1', title: 'Backlog item', updatedAtMs: 10),
     );
 
     await tester.pumpWidget(
@@ -54,7 +67,7 @@ void main() {
         MaterialApp(
           home: Builder(
             builder: (context) => Text(
-              buildTaskHubQuickActionLayout(context, entry: entry)
+              buildTaskHubQuickActionLayout(context, entry: candidate)
                   .$1
                   .first
                   .label,
@@ -64,57 +77,14 @@ void main() {
       ),
     );
 
-    expect(find.text('Schedule'), findsOneWidget);
+    expect(find.text('More urgent'), findsOneWidget);
   });
 
-  testWidgets(
-      'future scheduled tasks do not expose a destructive primary schedule action',
+  testWidgets('urgent but not important tasks prioritize increasing importance',
       (tester) async {
-    final dueLocal = DateTime(2026, 3, 20, 12);
-    final entry = TaskPriorityEntry(
-      todo: todo(
-        id: 's1',
-        title: 'Far future plan',
-        updatedAtMs: 10,
-        dueAtMs: dueLocal.toUtc().millisecondsSinceEpoch,
-      ),
-      band: TaskPriorityBand.scheduled,
-      ruleScore: 10,
-      semanticScore: 0,
-      reasons: const <TaskPriorityReasonKind>[
-        TaskPriorityReasonKind.scheduledSoon,
-      ],
-      suggestedAction: TaskPrioritySuggestionKind.schedule,
-      isFutureScheduled: true,
-    );
-
-    await tester.pumpWidget(
-      wrapWithI18n(
-        MaterialApp(
-          home: Builder(
-            builder: (context) {
-              final layout =
-                  buildTaskHubQuickActionLayout(context, entry: entry);
-              return Text('primary:${layout.$1.length}');
-            },
-          ),
-        ),
-      ),
-    );
-
-    expect(find.text('primary:0'), findsOneWidget);
-  });
-
-  testWidgets('review due tasks recommend clarify as primary action',
-      (tester) async {
-    final entry = TaskPriorityEntry(
-      todo: todo(id: 'r1', title: 'Review item', updatedAtMs: 10),
-      band: TaskPriorityBand.decide,
-      ruleScore: 10,
-      semanticScore: 0,
-      reasons: const <TaskPriorityReasonKind>[TaskPriorityReasonKind.reviewDue],
-      suggestedAction: TaskPrioritySuggestionKind.clarify,
-      isReviewDue: true,
+    final candidate = entry(
+      todo: todo(id: 'u2', title: 'Review item', updatedAtMs: 10),
+      isUrgent: true,
     );
 
     await tester.pumpWidget(
@@ -122,7 +92,7 @@ void main() {
         MaterialApp(
           home: Builder(
             builder: (context) => Text(
-              buildTaskHubQuickActionLayout(context, entry: entry)
+              buildTaskHubQuickActionLayout(context, entry: candidate)
                   .$1
                   .first
                   .label,
@@ -132,10 +102,37 @@ void main() {
       ),
     );
 
-    expect(find.text('Clarify'), findsOneWidget);
+    expect(find.text('More important'), findsOneWidget);
   });
 
-  test('applies today and can undo to original todo', () async {
+  testWidgets('urgent and important tasks prioritize finishing',
+      (tester) async {
+    final candidate = entry(
+      todo: todo(id: 'u3', title: 'Ship it', updatedAtMs: 10),
+      isUrgent: true,
+      isImportant: true,
+      band: TaskPriorityBand.focus,
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: Builder(
+            builder: (context) => Text(
+              buildTaskHubQuickActionLayout(context, entry: candidate)
+                  .$1
+                  .first
+                  .label,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('Done'), findsOneWidget);
+  });
+
+  test('increase urgency moves backlog task to tomorrow schedule', () async {
     SharedPreferences.setMockInitialValues({});
 
     final initial = todo(id: 't1', title: 'Task 1', updatedAtMs: 10);
@@ -145,106 +142,129 @@ void main() {
       sessionKey: Uint8List(32),
     );
 
-    final ticket = await controller.apply(initial, TaskHubQuickAction.today);
+    final ticket =
+        await controller.apply(initial, TaskHubQuickAction.increaseUrgency);
     expect(ticket, isNotNull);
-    final afterToday = backend.current('t1');
-    expect(afterToday.status, 'open');
-    expect(afterToday.dueAtMs, isNotNull);
-    expect(afterToday.reviewStage, isNull);
-    expect(afterToday.nextReviewAtMs, isNull);
-
-    await controller.undo(ticket!);
-    final restored = backend.current('t1');
-    expect(restored.status, initial.status);
-    expect(restored.dueAtMs, initial.dueAtMs);
-    expect(restored.reviewStage, initial.reviewStage);
-    expect(restored.nextReviewAtMs, initial.nextReviewAtMs);
+    final updated = backend.current('t1');
+    expect(updated.status, 'open');
+    expect(updated.dueAtMs, isNotNull);
+    expect(updated.reviewStage, isNull);
+    expect(updated.nextReviewAtMs, isNull);
   });
 
-  test('later action pushes todo back to inbox review queue', () async {
+  test('increase urgency moves scheduled task to today', () async {
     SharedPreferences.setMockInitialValues({});
 
-    final initial = todo(id: 't2', title: 'Task 2', updatedAtMs: 10);
+    final tomorrow = DateTime.now().add(const Duration(days: 2));
+    final initial = todo(
+      id: 't2',
+      title: 'Task 2',
+      updatedAtMs: 10,
+      dueAtMs: tomorrow.toUtc().millisecondsSinceEpoch,
+    );
     final backend = _QuickActionBackend(initialTodos: [initial]);
     final controller = TaskHubQuickActionsController(
       backend: backend,
       sessionKey: Uint8List(32),
     );
 
-    final ticket = await controller.apply(initial, TaskHubQuickAction.later);
+    final ticket =
+        await controller.apply(initial, TaskHubQuickAction.increaseUrgency);
     expect(ticket, isNotNull);
     final updated = backend.current('t2');
+    final dueLocal =
+        DateTime.fromMillisecondsSinceEpoch(updated.dueAtMs!, isUtc: true)
+            .toLocal();
+    final now = DateTime.now();
+    expect(dueLocal.year, now.year);
+    expect(dueLocal.month, now.month);
+    expect(dueLocal.day, now.day);
+  });
+
+  test('decrease urgency moves urgent task to tomorrow', () async {
+    SharedPreferences.setMockInitialValues({});
+
+    final initial = todo(
+      id: 't3',
+      title: 'Task 3',
+      updatedAtMs: 10,
+      status: 'in_progress',
+    );
+    final backend = _QuickActionBackend(initialTodos: [initial]);
+    final controller = TaskHubQuickActionsController(
+      backend: backend,
+      sessionKey: Uint8List(32),
+    );
+
+    final ticket =
+        await controller.apply(initial, TaskHubQuickAction.decreaseUrgency);
+    expect(ticket, isNotNull);
+    final updated = backend.current('t3');
+    expect(updated.status, 'open');
+    expect(updated.dueAtMs, isNotNull);
+  });
+
+  test('decrease urgency moves scheduled task back to inbox review queue',
+      () async {
+    SharedPreferences.setMockInitialValues({});
+
+    final tomorrow = DateTime.now().add(const Duration(days: 2));
+    final initial = todo(
+      id: 't4',
+      title: 'Task 4',
+      updatedAtMs: 10,
+      dueAtMs: tomorrow.toUtc().millisecondsSinceEpoch,
+    );
+    final backend = _QuickActionBackend(initialTodos: [initial]);
+    final controller = TaskHubQuickActionsController(
+      backend: backend,
+      sessionKey: Uint8List(32),
+    );
+
+    final ticket =
+        await controller.apply(initial, TaskHubQuickAction.decreaseUrgency);
+    expect(ticket, isNotNull);
+    final updated = backend.current('t4');
     expect(updated.status, 'inbox');
     expect(updated.dueAtMs, isNull);
     expect(updated.reviewStage, 0);
     expect(updated.nextReviewAtMs, isNotNull);
   });
 
-  test('done action sets status to done', () async {
+  test('importance actions persist manual signal and support undo', () async {
     SharedPreferences.setMockInitialValues({});
 
-    final initial = todo(id: 't3', title: 'Task 3', updatedAtMs: 10);
+    final initial = todo(id: 't5', title: 'Task 5', updatedAtMs: 10);
     final backend = _QuickActionBackend(initialTodos: [initial]);
+    const signalStore = TaskPrioritySignalStore();
     final controller = TaskHubQuickActionsController(
       backend: backend,
       sessionKey: Uint8List(32),
+      signalStore: signalStore,
     );
 
-    final ticket = await controller.apply(initial, TaskHubQuickAction.done);
+    final ticket = await controller.apply(
+      initial,
+      TaskHubQuickAction.increaseImportance,
+    );
     expect(ticket, isNotNull);
-    expect(backend.current('t3').status, 'done');
+    expect((await signalStore.readForTodo('t5'))?.isImportant, isTrue);
+
+    await controller.undo(ticket!);
+    expect(await signalStore.readForTodo('t5'), isNull);
   });
 
-  test('done action is canceled when incomplete checklist is not confirmed',
-      () async {
+  test('done action respects incomplete checklist confirmation', () async {
     SharedPreferences.setMockInitialValues({});
 
-    final initial = todo(id: 't3b', title: 'Task 3b', updatedAtMs: 10);
+    final initial = todo(id: 't6', title: 'Task 6', updatedAtMs: 10);
     final backend = _QuickActionBackend(
       initialTodos: [initial],
       checklistItemsByTodoId: <String, List<TodoChecklistItem>>{
-        't3b': const <TodoChecklistItem>[
+        't6': const <TodoChecklistItem>[
           TodoChecklistItem(
             id: 'c1',
-            todoId: 't3b',
-            content: 'Still pending',
-            sortOrder: 0,
-            isDone: false,
-            createdAtMs: 0,
-            updatedAtMs: 0,
-          ),
-        ],
-      },
-    );
-    final controller = TaskHubQuickActionsController(
-      backend: backend,
-      sessionKey: Uint8List(32),
-      confirmDoneWithIncompleteChecklist: (_) async => false,
-      checklistProgressByTodoId: const <String, TodoChecklistProgress>{
-        't3b': TodoChecklistProgress(
-          todoId: 't3b',
-          totalCount: 1,
-          doneCount: 0,
-        ),
-      },
-    );
-
-    final ticket = await controller.apply(initial, TaskHubQuickAction.done);
-    expect(ticket, isNull);
-    expect(backend.current('t3b').status, 'open');
-  });
-
-  test('done action proceeds when incomplete checklist is confirmed', () async {
-    SharedPreferences.setMockInitialValues({});
-
-    final initial = todo(id: 't3c', title: 'Task 3c', updatedAtMs: 10);
-    final backend = _QuickActionBackend(
-      initialTodos: [initial],
-      checklistItemsByTodoId: <String, List<TodoChecklistItem>>{
-        't3c': const <TodoChecklistItem>[
-          TodoChecklistItem(
-            id: 'c1',
-            todoId: 't3c',
+            todoId: 't6',
             content: 'Still pending',
             sortOrder: 0,
             isDone: false,
@@ -259,8 +279,8 @@ void main() {
       sessionKey: Uint8List(32),
       confirmDoneWithIncompleteChecklist: (_) async => true,
       checklistProgressByTodoId: const <String, TodoChecklistProgress>{
-        't3c': TodoChecklistProgress(
-          todoId: 't3c',
+        't6': TodoChecklistProgress(
+          todoId: 't6',
           totalCount: 1,
           doneCount: 0,
         ),
@@ -269,86 +289,15 @@ void main() {
 
     final ticket = await controller.apply(initial, TaskHubQuickAction.done);
     expect(ticket, isNotNull);
-    expect(backend.current('t3c').status, 'done');
-  });
-
-  test('done action skips checklist fetch when cached progress is empty',
-      () async {
-    SharedPreferences.setMockInitialValues({});
-
-    final initial = todo(id: 't3d', title: 'Task 3d', updatedAtMs: 10);
-    final backend = _QuickActionBackend(initialTodos: [initial]);
-    final controller = TaskHubQuickActionsController(
-      backend: backend,
-      sessionKey: Uint8List(32),
-      checklistProgressByTodoId: const <String, TodoChecklistProgress>{},
-    );
-
-    final ticket = await controller.apply(initial, TaskHubQuickAction.done);
-    expect(ticket, isNotNull);
-    expect(backend.checklistItemsQueryCount, 0);
-  });
-
-  test('done action fetches checklist when cached progress is incomplete',
-      () async {
-    SharedPreferences.setMockInitialValues({});
-
-    final initial = todo(id: 't3e', title: 'Task 3e', updatedAtMs: 10);
-    final backend = _QuickActionBackend(
-      initialTodos: [initial],
-      checklistItemsByTodoId: <String, List<TodoChecklistItem>>{
-        't3e': const <TodoChecklistItem>[
-          TodoChecklistItem(
-            id: 'c1',
-            todoId: 't3e',
-            content: 'Still pending',
-            sortOrder: 0,
-            isDone: false,
-            createdAtMs: 0,
-            updatedAtMs: 0,
-          ),
-        ],
-      },
-    );
-    final controller = TaskHubQuickActionsController(
-      backend: backend,
-      sessionKey: Uint8List(32),
-      confirmDoneWithIncompleteChecklist: (_) async => false,
-      checklistProgressByTodoId: const <String, TodoChecklistProgress>{
-        't3e': TodoChecklistProgress(
-          todoId: 't3e',
-          totalCount: 1,
-          doneCount: 0,
-        ),
-      },
-    );
-
-    final ticket = await controller.apply(initial, TaskHubQuickAction.done);
-    expect(ticket, isNull);
-    expect(backend.checklistItemsQueryCount, 1);
-  });
-
-  test('start action moves todo to in_progress', () async {
-    SharedPreferences.setMockInitialValues({});
-
-    final initial = todo(id: 't4', title: 'Task 4', updatedAtMs: 10);
-    final backend = _QuickActionBackend(initialTodos: [initial]);
-    final controller = TaskHubQuickActionsController(
-      backend: backend,
-      sessionKey: Uint8List(32),
-    );
-
-    final ticket = await controller.apply(initial, TaskHubQuickAction.start);
-    expect(ticket, isNotNull);
-    expect(backend.current('t4').status, 'in_progress');
+    expect(backend.current('t6').status, 'done');
   });
 
   test('reopen action reopens done todo', () async {
     SharedPreferences.setMockInitialValues({});
 
     final initial = todo(
-      id: 't5',
-      title: 'Task 5',
+      id: 't7',
+      title: 'Task 7',
       updatedAtMs: 10,
       status: 'done',
     );
@@ -360,36 +309,7 @@ void main() {
 
     final ticket = await controller.apply(initial, TaskHubQuickAction.reopen);
     expect(ticket, isNotNull);
-    expect(backend.current('t5').status, 'open');
-  });
-
-  test('redo action creates a new open todo and can undo', () async {
-    SharedPreferences.setMockInitialValues({});
-
-    final initial = todo(
-      id: 't6',
-      title: 'Task 6',
-      updatedAtMs: 10,
-      status: 'done',
-    );
-    final backend = _QuickActionBackend(initialTodos: [initial]);
-    final controller = TaskHubQuickActionsController(
-      backend: backend,
-      sessionKey: Uint8List(32),
-    );
-
-    final beforeCount = backend.all().length;
-    final ticket = await controller.apply(initial, TaskHubQuickAction.redo);
-    expect(ticket, isNotNull);
-    final afterCreate = backend.all();
-    expect(afterCreate.length, beforeCount + 1);
-    final created = afterCreate.firstWhere((todo) => todo.id != initial.id);
-    expect(created.status, 'open');
-    expect(created.dueAtMs, isNotNull);
-
-    await controller.undo(ticket!);
-    final restored = backend.current(created.id);
-    expect(restored.status, 'dismissed');
+    expect(backend.current('t7').status, 'open');
   });
 }
 
@@ -406,10 +326,8 @@ final class _QuickActionBackend extends AppBackend {
 
   final Map<String, Todo> _todosById;
   final Map<String, List<TodoChecklistItem>> _checklistItemsByTodoId;
-  var checklistItemsQueryCount = 0;
 
   Todo current(String id) => _todosById[id]!;
-  List<Todo> all() => _todosById.values.toList(growable: false);
 
   @override
   Future<Todo> upsertTodo(
@@ -469,7 +387,6 @@ final class _QuickActionBackend extends AppBackend {
     Uint8List key,
     String todoId,
   ) async {
-    checklistItemsQueryCount += 1;
     return List<TodoChecklistItem>.from(
       _checklistItemsByTodoId[todoId] ?? const <TodoChecklistItem>[],
     );

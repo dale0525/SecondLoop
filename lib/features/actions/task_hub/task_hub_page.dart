@@ -21,6 +21,7 @@ import 'task_hub_quick_actions.dart';
 import 'task_priority_ai.dart';
 import 'task_priority_feedback_store.dart';
 import 'task_priority_models.dart';
+import 'task_priority_signal_store.dart';
 import 'task_priority_store.dart';
 import '../todo/todo_detail_page.dart';
 
@@ -37,6 +38,7 @@ class _TaskHubPageState extends State<TaskHubPage> {
   TaskPriorityStore? _store;
   final TaskPriorityFeedbackStore _feedbackStore =
       const TaskPriorityFeedbackStore();
+  final TaskPrioritySignalStore _signalStore = const TaskPrioritySignalStore();
   TaskHubUndoTicket? _undoTicket;
   Timer? _quickActionSnackAutoDismissTimer;
   ScaffoldMessengerState? _quickActionSnackMessenger;
@@ -67,6 +69,7 @@ class _TaskHubPageState extends State<TaskHubPage> {
       resolveAiCacheScopeKey: _resolveAiCacheScopeKey,
       isAiEnhancementEnabled: TaskPriorityAiEnhancementPrefs.read,
       feedbackStore: _feedbackStore,
+      signalStore: _signalStore,
     );
     unawaited(_store!.refresh());
   }
@@ -188,6 +191,7 @@ class _TaskHubPageState extends State<TaskHubPage> {
     final controller = TaskHubQuickActionsController(
       backend: backend,
       sessionKey: sessionKey,
+      signalStore: _signalStore,
       confirmDoneWithIncompleteChecklist: _confirmDoneWithIncompleteChecklist,
       checklistProgressByTodoId: _store?.checklistProgressByTodoId ??
           const <String, TodoChecklistProgress>{},
@@ -202,7 +206,9 @@ class _TaskHubPageState extends State<TaskHubPage> {
     if (ticket == null || !mounted) return;
     final appliedTicket = ticket;
     _undoTicket = appliedTicket;
-    syncEngine?.notifyLocalMutation();
+    if (appliedTicket.shouldNotifySync) {
+      syncEngine?.notifyLocalMutation();
+    }
     await _refresh();
     if (!mounted) return;
     final messenger = ScaffoldMessenger.maybeOf(context);
@@ -231,7 +237,9 @@ class _TaskHubPageState extends State<TaskHubPage> {
               _showQuickActionError(error);
               return;
             }
-            syncEngine?.notifyLocalMutation();
+            if (appliedTicket.shouldNotifySync) {
+              syncEngine?.notifyLocalMutation();
+            }
             if (!mounted) return;
             await _refresh();
           },
@@ -310,22 +318,16 @@ class _TaskHubPageState extends State<TaskHubPage> {
   }
 
   String _actionLabel(TaskHubQuickAction action) => switch (action) {
-        TaskHubQuickAction.today => context.t.actions.taskHub.actions.today,
-        TaskHubQuickAction.tonight => context.t.actions.taskHub.actions.tonight,
-        TaskHubQuickAction.tomorrow =>
-          context.t.actions.taskHub.actions.tomorrow,
-        TaskHubQuickAction.pauseTomorrow =>
-          context.t.actions.taskHub.actions.pauseTomorrow,
-        TaskHubQuickAction.thisWeek =>
-          context.t.actions.taskHub.actions.thisWeek,
-        TaskHubQuickAction.later => context.t.actions.taskHub.actions.later,
-        TaskHubQuickAction.start => context.t.actions.taskHub.actions.start,
-        TaskHubQuickAction.moveToInbox =>
-          context.t.actions.taskHub.actions.moveToInbox,
+        TaskHubQuickAction.increaseUrgency =>
+          context.t.actions.taskHub.actions.increaseUrgency,
+        TaskHubQuickAction.decreaseUrgency =>
+          context.t.actions.taskHub.actions.decreaseUrgency,
+        TaskHubQuickAction.increaseImportance =>
+          context.t.actions.taskHub.actions.increaseImportance,
+        TaskHubQuickAction.decreaseImportance =>
+          context.t.actions.taskHub.actions.decreaseImportance,
         TaskHubQuickAction.done => context.t.actions.taskHub.actions.done,
         TaskHubQuickAction.reopen => context.t.actions.taskHub.actions.reopen,
-        TaskHubQuickAction.redo => context.t.actions.taskHub.actions.redo,
-        TaskHubQuickAction.dismiss => context.t.common.actions.delete,
       };
 
   @override
@@ -340,6 +342,17 @@ class _TaskHubPageState extends State<TaskHubPage> {
         listenable: store,
         builder: (context, _) {
           final snapshot = store.snapshot;
+          final primaryFocusId = snapshot.primaryFocus?.todo.id;
+          final visibleScheduled = primaryFocusId == null
+              ? snapshot.scheduled
+              : snapshot.scheduled
+                  .where((entry) => entry.todo.id != primaryFocusId)
+                  .toList(growable: false);
+          final visibleDecide = primaryFocusId == null
+              ? snapshot.decide
+              : snapshot.decide
+                  .where((entry) => entry.todo.id != primaryFocusId)
+                  .toList(growable: false);
           final visibleDone = snapshot.done.take(_doneVisibleCount).toList();
           return RefreshIndicator(
             onRefresh: _refresh,
@@ -353,9 +366,9 @@ class _TaskHubPageState extends State<TaskHubPage> {
                     child: Center(child: CircularProgressIndicator()),
                   )
                 else ...[
-                  if (snapshot.focus.isNotEmpty)
+                  if (snapshot.primaryFocus != null)
                     TaskHubFocusSection(
-                      entries: snapshot.focus,
+                      entries: <TaskPriorityEntry>[snapshot.primaryFocus!],
                       checklistProgressByTodoId:
                           store.checklistProgressByTodoId,
                       onOpenTodo: _openTodoDetail,
@@ -405,7 +418,7 @@ class _TaskHubPageState extends State<TaskHubPage> {
                     title: context.t.actions.taskHub.scheduledSection,
                     sectionKey:
                         const ValueKey('task_hub_page_section_scheduled'),
-                    entries: snapshot.scheduled,
+                    entries: visibleScheduled,
                     checklistProgressByTodoId: store.checklistProgressByTodoId,
                     sectionKind: TaskHubPageSectionKind.scheduled,
                     onOpenTodo: _openTodoDetail,
@@ -415,7 +428,7 @@ class _TaskHubPageState extends State<TaskHubPage> {
                   TaskHubPageSection(
                     title: context.t.actions.taskHub.decideSection,
                     sectionKey: const ValueKey('task_hub_page_section_decide'),
-                    entries: snapshot.decide,
+                    entries: visibleDecide,
                     checklistProgressByTodoId: store.checklistProgressByTodoId,
                     sectionKind: TaskHubPageSectionKind.decide,
                     onOpenTodo: _openTodoDetail,

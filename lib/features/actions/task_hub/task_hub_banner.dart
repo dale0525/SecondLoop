@@ -225,11 +225,11 @@ class _BannerPreviewList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final previewEntries = <TaskPriorityEntry>[
-      ...snapshot.focus.skip(1).take(2),
-      ...snapshot.scheduled.take(2),
-      ...snapshot.decide.take(2),
-    ];
+    final primaryTodoId = snapshot.primaryFocus?.todo.id;
+    final previewEntries = snapshot.activeEntries
+        .where((entry) => entry.todo.id != primaryTodoId)
+        .take(4)
+        .toList(growable: false);
     if (previewEntries.isEmpty) {
       return const SizedBox(
         key: ValueKey('task_hub_preview_list'),

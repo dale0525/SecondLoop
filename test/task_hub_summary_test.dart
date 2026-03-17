@@ -1,6 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:secondloop/features/actions/task_hub/task_hub_summary.dart';
+import 'package:secondloop/features/actions/task_hub/task_priority_engine.dart';
+import 'package:secondloop/features/actions/task_hub/task_priority_signal_store.dart';
 import 'package:secondloop/src/rust/db.dart';
 
 void main() {
@@ -80,6 +82,55 @@ void main() {
     expect(summary.snapshot.primaryFocus?.todo.id, 'overdue');
     expect(summary.checklistProgressByTodoId['overdue']?.doneCount, 1);
     expect(summary.checklistProgressByTodoId['overdue']?.totalCount, 3);
+  });
+
+  test(
+      'summary preview includes globally selected focus even outside focus band',
+      () {
+    final nowLocal = DateTime(2026, 3, 13, 10, 0);
+    final snapshot = buildTaskPrioritySnapshot(
+      <Todo>[
+        const Todo(
+          id: 'important',
+          title: 'Important roadmap',
+          dueAtMs: null,
+          status: 'open',
+          sourceEntryId: null,
+          createdAtMs: 0,
+          updatedAtMs: 50,
+          reviewStage: null,
+          nextReviewAtMs: null,
+          lastReviewAtMs: null,
+        ),
+        Todo(
+          id: 'scheduled',
+          title: 'Scheduled follow-up',
+          dueAtMs: nowLocal
+              .add(const Duration(days: 2))
+              .toUtc()
+              .millisecondsSinceEpoch,
+          status: 'open',
+          sourceEntryId: null,
+          createdAtMs: 0,
+          updatedAtMs: 10,
+          reviewStage: null,
+          nextReviewAtMs: null,
+          lastReviewAtMs: null,
+        ),
+      ],
+      nowLocal: nowLocal,
+      signalState: const TaskPriorityManualSignalState(
+        byTodoId: <String, TaskPriorityManualSignal>{
+          'important': TaskPriorityManualSignal(isImportant: true),
+        },
+      ),
+    );
+
+    final summary = TaskHubSummary.fromSnapshot(snapshot);
+
+    expect(summary.snapshot.primaryFocus?.todo.id, 'important');
+    expect(summary.scheduledPreviewTodos.first.id, 'important');
+    expect(summary.dueTodos.first.id, 'important');
   });
 
   test('done-only summary stays empty but preserves done list', () {

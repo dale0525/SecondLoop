@@ -21,6 +21,13 @@ enum TaskPriorityConfidence {
   high,
 }
 
+enum TaskPriorityQuadrant {
+  urgentAndImportant,
+  urgentOnly,
+  importantOnly,
+  neither,
+}
+
 enum TaskPriorityReasonKind {
   overdue,
   dueToday,
@@ -55,6 +62,8 @@ class TaskPriorityEntry {
     this.isDueToday = false,
     this.isInProgress = false,
     this.isFutureScheduled = false,
+    this.isImportant = false,
+    this.isUrgent = false,
   });
 
   final Todo todo;
@@ -71,10 +80,21 @@ class TaskPriorityEntry {
   final bool isDueToday;
   final bool isInProgress;
   final bool isFutureScheduled;
+  final bool isImportant;
+  final bool isUrgent;
 
   double get totalScore => ruleScore + semanticScore;
 
   bool get hasHardFocusGuard => isOverdue || isDueToday || isInProgress;
+
+  TaskPriorityQuadrant get quadrant {
+    if (isUrgent && isImportant) {
+      return TaskPriorityQuadrant.urgentAndImportant;
+    }
+    if (isUrgent) return TaskPriorityQuadrant.urgentOnly;
+    if (isImportant) return TaskPriorityQuadrant.importantOnly;
+    return TaskPriorityQuadrant.neither;
+  }
 
   TaskPriorityEntry copyWith({
     TaskPriorityBand? band,
@@ -91,6 +111,8 @@ class TaskPriorityEntry {
     bool? isDueToday,
     bool? isInProgress,
     bool? isFutureScheduled,
+    bool? isImportant,
+    bool? isUrgent,
   }) {
     return TaskPriorityEntry(
       todo: todo,
@@ -107,6 +129,8 @@ class TaskPriorityEntry {
       isDueToday: isDueToday ?? this.isDueToday,
       isInProgress: isInProgress ?? this.isInProgress,
       isFutureScheduled: isFutureScheduled ?? this.isFutureScheduled,
+      isImportant: isImportant ?? this.isImportant,
+      isUrgent: isUrgent ?? this.isUrgent,
     );
   }
 }
@@ -118,6 +142,8 @@ class TaskPrioritySnapshot {
     required this.scheduled,
     required this.decide,
     required this.done,
+    required this.orderedActive,
+    this.selectedFocusTodoId,
     this.computedAtLocal,
   });
 
@@ -127,6 +153,8 @@ class TaskPrioritySnapshot {
         scheduled = const <TaskPriorityEntry>[],
         decide = const <TaskPriorityEntry>[],
         done = const <TaskPriorityEntry>[],
+        orderedActive = const <TaskPriorityEntry>[],
+        selectedFocusTodoId = null,
         computedAtLocal = null;
 
   final TaskPrioritySnapshotSource source;
@@ -134,22 +162,51 @@ class TaskPrioritySnapshot {
   final List<TaskPriorityEntry> scheduled;
   final List<TaskPriorityEntry> decide;
   final List<TaskPriorityEntry> done;
+  final List<TaskPriorityEntry> orderedActive;
+  final String? selectedFocusTodoId;
   final DateTime? computedAtLocal;
 
   bool get isEmpty => focus.isEmpty && scheduled.isEmpty && decide.isEmpty;
 
-  TaskPriorityEntry? get primaryFocus => focus.isEmpty ? null : focus.first;
+  TaskPriorityEntry? get primaryFocus {
+    final focusTodoId = selectedFocusTodoId;
+    if (focusTodoId != null) {
+      for (final entry in orderedActive) {
+        if (entry.todo.id == focusTodoId) return entry;
+      }
+    }
+    return orderedActive.isEmpty ? null : orderedActive.first;
+  }
 
-  List<TaskPriorityEntry> get activeEntries => <TaskPriorityEntry>[
-        ...focus,
-        ...scheduled,
-        ...decide,
-      ];
+  List<TaskPriorityEntry> get activeEntries => orderedActive;
 
   List<TaskPriorityEntry> get allEntries => <TaskPriorityEntry>[
-        ...focus,
-        ...scheduled,
-        ...decide,
+        ...orderedActive,
         ...done,
       ];
+
+  TaskPrioritySnapshot copyWith({
+    TaskPrioritySnapshotSource? source,
+    List<TaskPriorityEntry>? focus,
+    List<TaskPriorityEntry>? scheduled,
+    List<TaskPriorityEntry>? decide,
+    List<TaskPriorityEntry>? done,
+    List<TaskPriorityEntry>? orderedActive,
+    String? selectedFocusTodoId,
+    bool clearSelectedFocusTodoId = false,
+    DateTime? computedAtLocal,
+  }) {
+    return TaskPrioritySnapshot(
+      source: source ?? this.source,
+      focus: focus ?? this.focus,
+      scheduled: scheduled ?? this.scheduled,
+      decide: decide ?? this.decide,
+      done: done ?? this.done,
+      orderedActive: orderedActive ?? this.orderedActive,
+      selectedFocusTodoId: clearSelectedFocusTodoId
+          ? null
+          : (selectedFocusTodoId ?? this.selectedFocusTodoId),
+      computedAtLocal: computedAtLocal ?? this.computedAtLocal,
+    );
+  }
 }

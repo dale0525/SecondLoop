@@ -87,7 +87,14 @@ class TaskHubSummary {
     int scheduledPreviewLimit = 4,
     int unscheduledPreviewLimit = 4,
   }) {
-    final dueEntries = snapshot.focus;
+    final primaryFocus = snapshot.primaryFocus;
+    final dueEntries = primaryFocus == null
+        ? snapshot.focus
+        : <TaskPriorityEntry>[
+            primaryFocus,
+            ...snapshot.focus
+                .where((entry) => entry.todo.id != primaryFocus.todo.id),
+          ];
     final upcomingEntries = snapshot.scheduled;
     final dueReviewEntries = snapshot.decide
         .where((entry) => entry.isReviewDue)

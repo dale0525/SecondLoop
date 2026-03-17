@@ -22,6 +22,8 @@ class TaskPriorityAiEntry {
     required this.reason,
     required this.suggestedAction,
     required this.confidence,
+    this.isImportant,
+    this.isUrgent,
   });
 
   final String todoId;
@@ -30,6 +32,8 @@ class TaskPriorityAiEntry {
   final String reason;
   final TaskPrioritySuggestionKind suggestedAction;
   final TaskPriorityAiConfidence confidence;
+  final bool? isImportant;
+  final bool? isUrgent;
 
   Map<String, Object?> toJson() {
     return <String, Object?>{
@@ -39,10 +43,20 @@ class TaskPriorityAiEntry {
       'reason': reason,
       'suggested_action': suggestedAction.name,
       'confidence': confidence.name,
+      'is_important': isImportant,
+      'is_urgent': isUrgent,
     };
   }
 
   factory TaskPriorityAiEntry.fromJson(Map<String, Object?> json) {
+    bool? parseBool(Object? raw) {
+      if (raw is bool) return raw;
+      final text = raw?.toString().trim().toLowerCase();
+      if (text == 'true') return true;
+      if (text == 'false') return false;
+      return null;
+    }
+
     final todoId = (json['todo_id'] ?? json['todoId'] ?? '').toString().trim();
     final priorityBand = switch (
         (json['priority_band'] ?? json['priorityBand'] ?? '')
@@ -81,6 +95,8 @@ class TaskPriorityAiEntry {
       reason: (json['reason'] ?? '').toString().trim(),
       suggestedAction: suggestedAction,
       confidence: confidence,
+      isImportant: parseBool(json['is_important'] ?? json['important']),
+      isUrgent: parseBool(json['is_urgent'] ?? json['urgent']),
     );
   }
 }
@@ -131,6 +147,8 @@ class TaskPriorityAiCandidate {
     required this.isRepeatedlyDeferred,
     required this.isPotentialBlocker,
     required this.isQuickWin,
+    required this.ruleIsImportant,
+    required this.ruleIsUrgent,
   });
 
   final String todoId;
@@ -145,6 +163,8 @@ class TaskPriorityAiCandidate {
   final bool isRepeatedlyDeferred;
   final bool isPotentialBlocker;
   final bool isQuickWin;
+  final bool ruleIsImportant;
+  final bool ruleIsUrgent;
 
   Map<String, Object?> toJson() {
     return <String, Object?>{
@@ -159,6 +179,8 @@ class TaskPriorityAiCandidate {
       'is_repeatedly_deferred': isRepeatedlyDeferred,
       'is_potential_blocker': isPotentialBlocker,
       'is_quick_win': isQuickWin,
+      'rule_is_important': ruleIsImportant,
+      'rule_is_urgent': ruleIsUrgent,
     };
   }
 }
@@ -178,6 +200,16 @@ class TaskPriorityAiRequest {
       'candidates':
           candidates.map((entry) => entry.toJson()).toList(growable: false),
     };
+  }
+
+  TaskPriorityAiRequest copyWith({
+    DateTime? nowLocal,
+    List<TaskPriorityAiCandidate>? candidates,
+  }) {
+    return TaskPriorityAiRequest(
+      nowLocal: nowLocal ?? this.nowLocal,
+      candidates: candidates ?? this.candidates,
+    );
   }
 }
 

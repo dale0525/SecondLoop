@@ -2,22 +2,16 @@ part of 'chat_page.dart';
 
 extension _ChatPageStateMethodsBTaskHubQuickActions on _ChatPageState {
   String _taskHubActionLabel(TaskHubQuickAction action) => switch (action) {
-        TaskHubQuickAction.today => context.t.actions.taskHub.actions.today,
-        TaskHubQuickAction.tonight => context.t.actions.taskHub.actions.tonight,
-        TaskHubQuickAction.tomorrow =>
-          context.t.actions.taskHub.actions.tomorrow,
-        TaskHubQuickAction.pauseTomorrow =>
-          context.t.actions.taskHub.actions.pauseTomorrow,
-        TaskHubQuickAction.thisWeek =>
-          context.t.actions.taskHub.actions.thisWeek,
-        TaskHubQuickAction.later => context.t.actions.taskHub.actions.later,
-        TaskHubQuickAction.start => context.t.actions.taskHub.actions.start,
-        TaskHubQuickAction.moveToInbox =>
-          context.t.actions.taskHub.actions.moveToInbox,
+        TaskHubQuickAction.increaseUrgency =>
+          context.t.actions.taskHub.actions.increaseUrgency,
+        TaskHubQuickAction.decreaseUrgency =>
+          context.t.actions.taskHub.actions.decreaseUrgency,
+        TaskHubQuickAction.increaseImportance =>
+          context.t.actions.taskHub.actions.increaseImportance,
+        TaskHubQuickAction.decreaseImportance =>
+          context.t.actions.taskHub.actions.decreaseImportance,
         TaskHubQuickAction.done => context.t.actions.taskHub.actions.done,
         TaskHubQuickAction.reopen => context.t.actions.taskHub.actions.reopen,
-        TaskHubQuickAction.redo => context.t.actions.taskHub.actions.redo,
-        TaskHubQuickAction.dismiss => context.t.common.actions.delete,
       };
 
   Future<void> _applyTaskHubQuickAction(
@@ -78,7 +72,9 @@ extension _ChatPageStateMethodsBTaskHubQuickActions on _ChatPageState {
     if (!mounted) return;
 
     _taskHubUndoTicket = ticket;
-    syncEngine?.notifyLocalMutation();
+    if (ticket.shouldNotifySync) {
+      syncEngine?.notifyLocalMutation();
+    }
     _refresh();
 
     final actionLabel = _taskHubActionLabel(action);
@@ -108,7 +104,9 @@ extension _ChatPageStateMethodsBTaskHubQuickActions on _ChatPageState {
               if (_taskHubUndoTicket == ticket) {
                 _taskHubUndoTicket = null;
               }
-              syncEngine?.notifyLocalMutation();
+              if (ticket.shouldNotifySync) {
+                syncEngine?.notifyLocalMutation();
+              }
               _refresh();
             } catch (e) {
               if (!mounted) return;
