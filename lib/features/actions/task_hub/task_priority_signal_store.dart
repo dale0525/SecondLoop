@@ -156,6 +156,19 @@ class TaskPrioritySignalStore {
     return updated;
   }
 
+  Future<TaskPriorityManualSignal> setUrgency(
+    String todoId, {
+    required bool? isUrgent,
+  }) async {
+    final current =
+        await readForTodo(todoId) ?? const TaskPriorityManualSignal();
+    final updated = isUrgent == null
+        ? current.copyWith(clearUrgent: true)
+        : current.copyWith(isUrgent: isUrgent);
+    await setForTodo(todoId, updated);
+    return updated;
+  }
+
   Future<void> restoreForTodo(
     String todoId,
     TaskPriorityManualSignal? previous,

@@ -254,6 +254,41 @@ void main() {
     expect(await signalStore.readForTodo('t5'), isNull);
   });
 
+  test(
+      'decrease urgency clears persisted urgency override and undo restores it',
+      () async {
+    SharedPreferences.setMockInitialValues({});
+
+    final tomorrow = DateTime.now().add(const Duration(days: 2));
+    final initial = todo(
+      id: 't5b',
+      title: 'Task 5b',
+      updatedAtMs: 10,
+      dueAtMs: tomorrow.toUtc().millisecondsSinceEpoch,
+    );
+    final backend = _QuickActionBackend(initialTodos: [initial]);
+    const signalStore = TaskPrioritySignalStore();
+    await signalStore.setForTodo(
+      't5b',
+      const TaskPriorityManualSignal(isUrgent: true),
+    );
+    final controller = TaskHubQuickActionsController(
+      backend: backend,
+      sessionKey: Uint8List(32),
+      signalStore: signalStore,
+    );
+
+    final ticket = await controller.apply(
+      initial,
+      TaskHubQuickAction.decreaseUrgency,
+    );
+    expect(ticket, isNotNull);
+    expect((await signalStore.readForTodo('t5b'))?.isUrgent, isFalse);
+
+    await controller.undo(ticket!);
+    expect((await signalStore.readForTodo('t5b'))?.isUrgent, isTrue);
+  });
+
   test('done action respects incomplete checklist confirmation', () async {
     SharedPreferences.setMockInitialValues({});
 

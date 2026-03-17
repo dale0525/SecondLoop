@@ -16,6 +16,8 @@ void main() {
     required int updatedAtMs,
     int? dueAtMs,
     String status = 'open',
+    int? reviewStage,
+    int? nextReviewAtMs,
   }) {
     return Todo(
       id: id,
@@ -25,8 +27,8 @@ void main() {
       sourceEntryId: null,
       createdAtMs: updatedAtMs,
       updatedAtMs: updatedAtMs,
-      reviewStage: null,
-      nextReviewAtMs: null,
+      reviewStage: reviewStage,
+      nextReviewAtMs: nextReviewAtMs,
       lastReviewAtMs: null,
     );
   }
@@ -618,6 +620,54 @@ void main() {
     await store.refresh();
 
     expect(aiService.calls, 1);
+  });
+
+  test('due state changes bypass sticky focus and recompute primary focus',
+      () async {
+    SharedPreferences.setMockInitialValues({});
+    final aiService = _CountingAiService(
+      const TaskPriorityAiBatchResult(
+        entries: <TaskPriorityAiEntry>[
+          TaskPriorityAiEntry(
+            todoId: 'sticky',
+            priorityBand: TaskPriorityAiBand.next,
+            semanticAdjustment: 12,
+            reason: 'Stay on the roadmap item.',
+            suggestedAction: TaskPrioritySuggestionKind.clarify,
+            confidence: TaskPriorityAiConfidence.medium,
+            isImportant: true,
+            isUrgent: false,
+          ),
+        ],
+      ),
+    );
+
+    var nowLocal = DateTime(2026, 3, 13, 10, 0);
+    final reviewAt = DateTime(2026, 3, 13, 11, 0);
+    final store = TaskPriorityStore.fromLoaders(
+      nowLocal: () => nowLocal,
+      loadTodos: () async => <Todo>[
+        todo(id: 'sticky', title: 'Roadmap', updatedAtMs: 50),
+        todo(
+          id: 'review',
+          title: 'Reply to client',
+          updatedAtMs: 20,
+          status: 'inbox',
+          reviewStage: 0,
+          nextReviewAtMs: reviewAt.toUtc().millisecondsSinceEpoch,
+        ),
+      ],
+      resolveAiService: () async => aiService,
+    );
+
+    await store.refresh();
+    expect(store.snapshot.primaryFocus?.todo.id, 'sticky');
+
+    nowLocal = DateTime(2026, 3, 13, 12, 0);
+    store.markDirty();
+    await store.refresh();
+
+    expect(store.snapshot.primaryFocus?.todo.id, 'review');
   });
 
   test('changing ai cache scope triggers a fresh rerank', () async {

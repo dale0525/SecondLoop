@@ -167,7 +167,7 @@ class TaskHubQuickActionsController {
     };
 
     if (bucket == _TaskUrgencyBucket.backlog && !increase) {
-      await signalStore.adjustUrgency(todo.id, increase: false);
+      await signalStore.setUrgency(todo.id, isUrgent: false);
       return TaskHubUndoTicket(
         todo: todo,
         updatedTodo: todo,
@@ -180,7 +180,7 @@ class TaskHubQuickActionsController {
     }
 
     if (targetBucket == _TaskUrgencyBucket.urgent && bucket == targetBucket) {
-      await signalStore.adjustUrgency(todo.id, increase: true);
+      await signalStore.setUrgency(todo.id, isUrgent: true);
       return TaskHubUndoTicket(
         todo: todo,
         updatedTodo: todo,
@@ -212,6 +212,12 @@ class TaskHubQuickActionsController {
           settings: settings,
         ),
     };
+    await signalStore.setUrgency(
+      todo.id,
+      isUrgent: increase
+          ? (targetBucket == _TaskUrgencyBucket.urgent ? true : null)
+          : false,
+    );
     return TaskHubUndoTicket(
       todo: todo,
       updatedTodo: updated,

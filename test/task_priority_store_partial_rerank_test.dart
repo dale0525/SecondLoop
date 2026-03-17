@@ -29,7 +29,7 @@ void main() {
     );
   }
 
-  test('refresh only reranks candidates whose signature changed', () async {
+  test('candidate context changes trigger a full rerank', () async {
     SharedPreferences.setMockInitialValues({});
     var changedTitle = 'Task B';
     final service = _RecordingAiService();
@@ -49,7 +49,7 @@ void main() {
     store.markDirty();
     await store.refresh();
 
-    expect(service.requestSizes, <int>[2, 1]);
+    expect(service.requestSizes, <int>[2, 2]);
   });
 }
 
