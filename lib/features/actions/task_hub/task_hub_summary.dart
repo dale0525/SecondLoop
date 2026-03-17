@@ -88,14 +88,17 @@ class TaskHubSummary {
     int unscheduledPreviewLimit = 4,
   }) {
     final primaryFocus = snapshot.primaryFocus;
-    final dueEntries = primaryFocus == null
-        ? snapshot.focus
+    final dueEntries = snapshot.focus;
+    final upcomingEntries = snapshot.scheduled;
+    final scheduledPreviewEntries = primaryFocus == null
+        ? <TaskPriorityEntry>[...dueEntries, ...upcomingEntries]
         : <TaskPriorityEntry>[
             primaryFocus,
-            ...snapshot.focus
+            ...dueEntries
+                .where((entry) => entry.todo.id != primaryFocus.todo.id),
+            ...upcomingEntries
                 .where((entry) => entry.todo.id != primaryFocus.todo.id),
           ];
-    final upcomingEntries = snapshot.scheduled;
     final dueReviewEntries = snapshot.decide
         .where((entry) => entry.isReviewDue)
         .toList(growable: false);
@@ -105,11 +108,7 @@ class TaskHubSummary {
     final doneEntries = snapshot.done;
 
     final scheduledPreview = <Todo>[];
-    for (final entry in dueEntries) {
-      if (scheduledPreview.length >= scheduledPreviewLimit) break;
-      scheduledPreview.add(entry.todo);
-    }
-    for (final entry in upcomingEntries) {
+    for (final entry in scheduledPreviewEntries) {
       if (scheduledPreview.length >= scheduledPreviewLimit) break;
       scheduledPreview.add(entry.todo);
     }

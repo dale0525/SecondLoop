@@ -85,7 +85,7 @@ void main() {
   });
 
   test(
-      'summary preview includes globally selected focus even outside focus band',
+      'summary preview includes globally selected focus without changing due list',
       () {
     final nowLocal = DateTime(2026, 3, 13, 10, 0);
     final snapshot = buildTaskPrioritySnapshot(
@@ -130,7 +130,61 @@ void main() {
 
     expect(summary.snapshot.primaryFocus?.todo.id, 'important');
     expect(summary.scheduledPreviewTodos.first.id, 'important');
-    expect(summary.dueTodos.first.id, 'important');
+    expect(summary.dueCount, 0);
+    expect(summary.dueTodos, isEmpty);
+  });
+
+  test('summary preview does not duplicate selected focus from scheduled list',
+      () {
+    final nowLocal = DateTime(2026, 3, 13, 10, 0);
+    final snapshot = buildTaskPrioritySnapshot(
+      <Todo>[
+        Todo(
+          id: 'scheduled-primary',
+          title: 'Scheduled primary',
+          dueAtMs: nowLocal
+              .add(const Duration(days: 1))
+              .toUtc()
+              .millisecondsSinceEpoch,
+          status: 'open',
+          sourceEntryId: null,
+          createdAtMs: 0,
+          updatedAtMs: 50,
+          reviewStage: null,
+          nextReviewAtMs: null,
+          lastReviewAtMs: null,
+        ),
+        Todo(
+          id: 'scheduled-secondary',
+          title: 'Scheduled secondary',
+          dueAtMs: nowLocal
+              .add(const Duration(days: 2))
+              .toUtc()
+              .millisecondsSinceEpoch,
+          status: 'open',
+          sourceEntryId: null,
+          createdAtMs: 0,
+          updatedAtMs: 10,
+          reviewStage: null,
+          nextReviewAtMs: null,
+          lastReviewAtMs: null,
+        ),
+      ],
+      nowLocal: nowLocal,
+      signalState: const TaskPriorityManualSignalState(
+        byTodoId: <String, TaskPriorityManualSignal>{
+          'scheduled-primary': TaskPriorityManualSignal(isImportant: true),
+        },
+      ),
+    );
+
+    final summary = TaskHubSummary.fromSnapshot(snapshot);
+
+    expect(summary.snapshot.primaryFocus?.todo.id, 'scheduled-primary');
+    expect(
+      summary.scheduledPreviewTodos.map((todo) => todo.id),
+      <String>['scheduled-primary', 'scheduled-secondary'],
+    );
   });
 
   test('done-only summary stays empty but preserves done list', () {
