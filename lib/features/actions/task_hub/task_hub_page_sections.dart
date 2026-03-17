@@ -97,6 +97,7 @@ class TaskHubEntryCard extends StatelessWidget {
     required this.onQuickAction,
     this.onFeedback,
     this.emphasize = false,
+    this.showPriorityControls = true,
     super.key,
   });
 
@@ -106,6 +107,7 @@ class TaskHubEntryCard extends StatelessWidget {
   final ValueChanged<TaskHubQuickAction> onQuickAction;
   final ValueChanged<TaskPriorityFeedbackKind>? onFeedback;
   final bool emphasize;
+  final bool showPriorityControls;
 
   @override
   Widget build(BuildContext context) {
@@ -220,13 +222,16 @@ class TaskHubEntryCard extends StatelessWidget {
                     ),
                 ],
               ),
-              if (entry.todo.status != 'done') ...[
+              if (showPriorityControls && entry.todo.status != 'done') ...[
                 const SizedBox(height: 10),
                 Row(
                   children: [
                     _TaskHubPriorityControl(
                       key: ValueKey(
                         'task_hub_page_priority_${entry.todo.id}_urgency',
+                      ),
+                      stateKey: ValueKey(
+                        'task_hub_page_priority_${entry.todo.id}_urgency_${entry.isUrgent ? 'active' : 'inactive'}',
                       ),
                       icon: Icons.priority_high_rounded,
                       isActive: entry.isUrgent,
@@ -245,6 +250,9 @@ class TaskHubEntryCard extends StatelessWidget {
                     _TaskHubPriorityControl(
                       key: ValueKey(
                         'task_hub_page_priority_${entry.todo.id}_importance',
+                      ),
+                      stateKey: ValueKey(
+                        'task_hub_page_priority_${entry.todo.id}_importance_${entry.isImportant ? 'active' : 'inactive'}',
                       ),
                       icon: Icons.keyboard_double_arrow_up_rounded,
                       isActive: entry.isImportant,
@@ -377,6 +385,7 @@ class _TaskHubQuickMenu extends StatelessWidget {
 
 class _TaskHubPriorityControl extends StatelessWidget {
   const _TaskHubPriorityControl({
+    required this.stateKey,
     required this.icon,
     required this.isActive,
     required this.semanticsLabel,
@@ -387,6 +396,7 @@ class _TaskHubPriorityControl extends StatelessWidget {
     super.key,
   });
 
+  final Key stateKey;
   final IconData icon;
   final bool isActive;
   final String semanticsLabel;
@@ -399,21 +409,62 @@ class _TaskHubPriorityControl extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final tokens = SlTokens.of(context);
-    final foregroundColor = isActive
+    final borderColor = isActive
+        ? theme.colorScheme.primary.withOpacity(0.7)
+        : tokens.borderSubtle.withOpacity(0.9);
+    final backgroundColor = isActive
+        ? theme.colorScheme.primaryContainer.withOpacity(0.45)
+        : theme.colorScheme.surfaceContainerHighest.withOpacity(0.28);
+    final badgeColor = isActive
         ? theme.colorScheme.primary
+        : theme.colorScheme.surfaceContainerHighest;
+    final foregroundColor = isActive
+        ? theme.colorScheme.onPrimary
         : theme.colorScheme.onSurfaceVariant;
     return Semantics(
       label: semanticsLabel,
-      child: Container(
+      child: AnimatedContainer(
+        key: stateKey,
+        duration: const Duration(milliseconds: 180),
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
         decoration: BoxDecoration(
-          border: Border.all(color: tokens.borderSubtle.withOpacity(0.9)),
+          color: backgroundColor,
+          border: Border.all(color: borderColor, width: isActive ? 1.5 : 1),
           borderRadius: BorderRadius.circular(tokens.radiusLg),
+          boxShadow: isActive
+              ? [
+                  BoxShadow(
+                    color: theme.colorScheme.primary.withOpacity(0.14),
+                    blurRadius: 12,
+                    offset: const Offset(0, 3),
+                  ),
+                ]
+              : null,
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 18, color: foregroundColor),
+            Container(
+              width: 28,
+              height: 28,
+              decoration: BoxDecoration(
+                color: badgeColor,
+                borderRadius: BorderRadius.circular(99),
+              ),
+              alignment: Alignment.center,
+              child: Icon(icon, size: 16, color: foregroundColor),
+            ),
+            const SizedBox(height: 4),
+            Container(
+              width: 6,
+              height: 6,
+              decoration: BoxDecoration(
+                color: isActive
+                    ? theme.colorScheme.primary
+                    : theme.colorScheme.outlineVariant,
+                borderRadius: BorderRadius.circular(99),
+              ),
+            ),
             const SizedBox(height: 6),
             Row(
               mainAxisSize: MainAxisSize.min,
@@ -421,12 +472,14 @@ class _TaskHubPriorityControl extends StatelessWidget {
                 _TaskHubPriorityButton(
                   icon: Icons.remove_rounded,
                   tooltip: decreaseTooltip,
+                  emphasize: false,
                   onPressed: onDecrease,
                 ),
                 const SizedBox(width: 4),
                 _TaskHubPriorityButton(
                   icon: Icons.add_rounded,
                   tooltip: increaseTooltip,
+                  emphasize: true,
                   onPressed: onIncrease,
                 ),
               ],
@@ -442,15 +495,18 @@ class _TaskHubPriorityButton extends StatelessWidget {
   const _TaskHubPriorityButton({
     required this.icon,
     required this.tooltip,
+    required this.emphasize,
     required this.onPressed,
   });
 
   final IconData icon;
   final String tooltip;
+  final bool emphasize;
   final VoidCallback onPressed;
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     final tokens = SlTokens.of(context);
     return Tooltip(
       message: tooltip,
@@ -461,10 +517,23 @@ class _TaskHubPriorityButton extends StatelessWidget {
           width: 24,
           height: 24,
           decoration: BoxDecoration(
-            border: Border.all(color: tokens.borderSubtle.withOpacity(0.9)),
+            color: emphasize
+                ? theme.colorScheme.primaryContainer.withOpacity(0.9)
+                : theme.colorScheme.surface,
+            border: Border.all(
+              color: emphasize
+                  ? theme.colorScheme.primary.withOpacity(0.45)
+                  : tokens.borderSubtle.withOpacity(0.9),
+            ),
             borderRadius: BorderRadius.circular(99),
           ),
-          child: Icon(icon, size: 14),
+          child: Icon(
+            icon,
+            size: 14,
+            color: emphasize
+                ? theme.colorScheme.primary
+                : theme.colorScheme.onSurfaceVariant,
+          ),
         ),
       ),
     );

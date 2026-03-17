@@ -140,6 +140,40 @@ void main() {
     expect(find.textContaining('Save failed'), findsOneWidget);
   });
 
+  testWidgets('unfinished tasks show active priority controls', (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final backend = _TaskHubBackend(
+      todos: const <Todo>[
+        Todo(
+          id: 'urgent-important',
+          title: 'Critical launch task',
+          dueAtMs: null,
+          status: 'in_progress',
+          sourceEntryId: null,
+          createdAtMs: 0,
+          updatedAtMs: 10,
+          reviewStage: null,
+          nextReviewAtMs: null,
+          lastReviewAtMs: null,
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(_wrap(backend));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey(
+          'task_hub_page_priority_urgent-important_urgency_active')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey(
+          'task_hub_page_priority_urgent-important_importance_active')),
+      findsOneWidget,
+    );
+  });
+
   testWidgets(
       'task hub keeps remaining focus tasks visible below primary focus',
       (tester) async {

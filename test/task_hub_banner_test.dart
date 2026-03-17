@@ -111,6 +111,46 @@ void main() {
         findsOneWidget);
   });
 
+  testWidgets('banner shows status and time quick actions for active focus',
+      (tester) async {
+    final now = DateTime(2026, 3, 13, 10, 0);
+    final snapshot = buildTaskPrioritySnapshot(
+      <Todo>[
+        todo(id: 'focus', title: 'Fix billing bug', updatedAtMs: 10),
+      ],
+      nowLocal: now,
+    );
+    TaskHubQuickAction? tappedAction;
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: Scaffold(
+            body: TaskHubBanner(
+              snapshot: snapshot,
+              onQuickAction: (entry, action) async {
+                tappedAction = action;
+              },
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.byKey(const ValueKey('task_hub_banner_primary_action')),
+        findsOneWidget);
+    expect(find.byKey(const ValueKey('task_hub_banner_secondary_action')),
+        findsOneWidget);
+    expect(find.text('Start'), findsOneWidget);
+    expect(find.text('Tomorrow'), findsOneWidget);
+
+    await tester
+        .tap(find.byKey(const ValueKey('task_hub_banner_secondary_action')));
+    await tester.pump();
+
+    expect(tappedAction, TaskHubQuickAction.tomorrow);
+  });
+
   testWidgets('banner preview shows checklist progress summary',
       (tester) async {
     final now = DateTime(2026, 3, 13, 10, 0);

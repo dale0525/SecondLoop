@@ -75,6 +75,12 @@ class _TaskHubBannerState extends State<TaskHubBanner> {
             context,
             entry: primary,
           );
+    final secondaryAction = primary == null
+        ? null
+        : secondaryTaskHubQuickActionItemForEntry(
+            context,
+            entry: primary,
+          );
     return Padding(
       padding: outerPadding,
       child: SlSurface(
@@ -157,6 +163,21 @@ class _TaskHubBannerState extends State<TaskHubBanner> {
                         key: const ValueKey('task_hub_banner_open_hub'),
                         onPressed: widget.onViewAll,
                         child: Text(context.t.actions.taskHub.openTaskHub),
+                      ),
+                    if (primary != null &&
+                        secondaryAction != null &&
+                        widget.onQuickAction != null)
+                      SlButton(
+                        buttonKey:
+                            const ValueKey('task_hub_banner_secondary_action'),
+                        variant: SlButtonVariant.outline,
+                        onPressed: () => unawaited(
+                          widget.onQuickAction!(
+                            primary,
+                            secondaryAction.action,
+                          ),
+                        ),
+                        child: Text(secondaryAction.label),
                       ),
                     if (primary != null && widget.onOpenTodo != null)
                       SlButton(
@@ -254,6 +275,7 @@ class _BannerPreviewList extends StatelessWidget {
               onFeedback: onFeedback == null
                   ? null
                   : (feedback) => unawaited(onFeedback!(entry, feedback)),
+              showPriorityControls: false,
             ),
           ),
       ],
