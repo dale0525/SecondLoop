@@ -357,6 +357,47 @@ void main() {
     expect((await signalStore.readForTodo('t5b'))?.isUrgent, isTrue);
   });
 
+  test('decrease urgency uses persisted effective urgency before todo fields',
+      () async {
+    SharedPreferences.setMockInitialValues({});
+
+    final futureDue = DateTime.now().add(const Duration(days: 3));
+    final initial = todo(
+      id: 't5bb',
+      title: 'Task 5bb',
+      updatedAtMs: 10,
+      dueAtMs: futureDue.toUtc().millisecondsSinceEpoch,
+    );
+    final backend = _QuickActionBackend(initialTodos: [initial]);
+    const signalStore = TaskPrioritySignalStore();
+    await signalStore.setForTodo(
+      't5bb',
+      const TaskPriorityManualSignal(isUrgent: true),
+    );
+    final controller = TaskHubQuickActionsController(
+      backend: backend,
+      sessionKey: Uint8List(32),
+      signalStore: signalStore,
+    );
+
+    final ticket = await controller.apply(
+      initial,
+      TaskHubQuickAction.decreaseUrgency,
+    );
+    expect(ticket, isNotNull);
+
+    final updated = backend.current('t5bb');
+    expect(updated.status, 'open');
+    expect(updated.dueAtMs, isNotNull);
+    final dueLocal =
+        DateTime.fromMillisecondsSinceEpoch(updated.dueAtMs!, isUtc: true)
+            .toLocal();
+    final tomorrow = DateTime.now().add(const Duration(days: 1));
+    expect(dueLocal.year, tomorrow.year);
+    expect(dueLocal.month, tomorrow.month);
+    expect(dueLocal.day, tomorrow.day);
+  });
+
   test('done clears stale in-progress recovery signal before reopen', () async {
     SharedPreferences.setMockInitialValues({});
 
@@ -430,6 +471,46 @@ void main() {
     final ticket = await controller.apply(initial, TaskHubQuickAction.done);
     expect(ticket, isNotNull);
     expect(backend.current('t6').status, 'done');
+  });
+
+  test('done action does not depend on scheduling settings loading', () async {
+    SharedPreferences.setMockInitialValues({
+      'actions.review.morning_minutes_v1': 'broken',
+    });
+
+    final initial = todo(id: 't6b', title: 'Task 6b', updatedAtMs: 10);
+    final backend = _QuickActionBackend(initialTodos: [initial]);
+    final controller = TaskHubQuickActionsController(
+      backend: backend,
+      sessionKey: Uint8List(32),
+    );
+
+    final ticket = await controller.apply(initial, TaskHubQuickAction.done);
+    expect(ticket, isNotNull);
+    expect(backend.current('t6b').status, 'done');
+  });
+
+  test('importance actions do not depend on scheduling settings loading',
+      () async {
+    SharedPreferences.setMockInitialValues({
+      'actions.review.day_end_minutes_v1': 'broken',
+    });
+
+    final initial = todo(id: 't6c', title: 'Task 6c', updatedAtMs: 10);
+    final backend = _QuickActionBackend(initialTodos: [initial]);
+    const signalStore = TaskPrioritySignalStore();
+    final controller = TaskHubQuickActionsController(
+      backend: backend,
+      sessionKey: Uint8List(32),
+      signalStore: signalStore,
+    );
+
+    final ticket = await controller.apply(
+      initial,
+      TaskHubQuickAction.increaseImportance,
+    );
+    expect(ticket, isNotNull);
+    expect((await signalStore.readForTodo('t6c'))?.isImportant, isTrue);
   });
 
   test('reopen action reopens done todo', () async {

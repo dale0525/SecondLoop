@@ -68,12 +68,12 @@ class TaskHubQuickActionsController {
     Todo todo,
     TaskHubQuickAction action,
   ) async {
-    final settings = await ActionsSettingsStore.load();
     final nowLocal = DateTime.now();
     final nowUtcMs = nowLocal.toUtc().millisecondsSinceEpoch;
 
     switch (action) {
       case TaskHubQuickAction.increaseUrgency:
+        final settings = await ActionsSettingsStore.load();
         return _applyUrgencyChange(
           todo,
           nowLocal: nowLocal,
@@ -82,6 +82,7 @@ class TaskHubQuickActionsController {
           increase: true,
         );
       case TaskHubQuickAction.decreaseUrgency:
+        final settings = await ActionsSettingsStore.load();
         return _applyUrgencyChange(
           todo,
           nowLocal: nowLocal,
@@ -179,7 +180,11 @@ class TaskHubQuickActionsController {
   }) async {
     final previousSignal = await signalStore.readForTodo(todo.id);
     final currentSignal = previousSignal ?? const TaskPriorityManualSignal();
-    final bucket = _urgencyBucketFor(todo, nowLocal: nowLocal);
+    final bucket = _effectiveUrgencyBucketFor(
+      todo,
+      nowLocal: nowLocal,
+      signal: currentSignal,
+    );
     final isReviewQueueTodo =
         todo.reviewStage != null && todo.nextReviewAtMs != null;
     final targetBucket = switch ((bucket, increase)) {
@@ -449,4 +454,43 @@ _TaskUrgencyBucket _urgencyBucketFor(
     }
   }
   return _TaskUrgencyBucket.backlog;
+}
+
+_TaskUrgencyBucket _effectiveUrgencyBucketFor(
+  Todo todo, {
+  required DateTime nowLocal,
+  required TaskPriorityManualSignal signal,
+}) {
+  final bucket = _urgencyBucketFor(todo, nowLocal: nowLocal);
+  if (_hasHardUrgencyGuard(todo, nowLocal: nowLocal)) {
+    return bucket;
+  }
+
+  final manualUrgency = signal.isUrgent;
+  if (manualUrgency == null) {
+    return bucket;
+  }
+  if (manualUrgency) {
+    return _TaskUrgencyBucket.urgent;
+  }
+  return switch (bucket) {
+    _TaskUrgencyBucket.scheduled => _TaskUrgencyBucket.scheduled,
+    _TaskUrgencyBucket.urgent => _TaskUrgencyBucket.backlog,
+    _TaskUrgencyBucket.backlog => _TaskUrgencyBucket.backlog,
+  };
+}
+
+bool _hasHardUrgencyGuard(
+  Todo todo, {
+  required DateTime nowLocal,
+}) {
+  if (todo.status == 'in_progress') return true;
+  final dueAtMs = todo.dueAtMs;
+  if (dueAtMs == null) return false;
+  final dueLocal =
+      DateTime.fromMillisecondsSinceEpoch(dueAtMs, isUtc: true).toLocal();
+  return dueLocal.isBefore(nowLocal) ||
+      (dueLocal.year == nowLocal.year &&
+          dueLocal.month == nowLocal.month &&
+          dueLocal.day == nowLocal.day);
 }
