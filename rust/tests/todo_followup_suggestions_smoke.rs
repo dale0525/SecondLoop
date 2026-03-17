@@ -142,6 +142,43 @@ fn todo_followup_generation_jobs_support_enqueue_claim_retry_and_succeed() {
 }
 
 #[test]
+fn reenqueue_without_new_hint_clears_previous_task_type_hint() {
+    let (_temp_dir, key, conn) = setup();
+
+    db::upsert_todo(
+        &conn,
+        &key,
+        "todo_1",
+        "调研一下当前主流的 llm 模型",
+        None,
+        "open",
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("upsert todo");
+
+    db::enqueue_todo_followup_generation_job(
+        &conn,
+        "todo_1",
+        "auto_create",
+        Some("execution"),
+        100,
+    )
+    .expect("enqueue first job");
+    db::enqueue_todo_followup_generation_job(&conn, "todo_1", "manual_regenerate", None, 200)
+        .expect("enqueue second job");
+
+    let due = db::list_due_todo_followup_generation_jobs(&conn, 200, 10).expect("list due jobs");
+    assert_eq!(due.len(), 1);
+    assert_eq!(due[0].todo_id, "todo_1");
+    assert_eq!(due[0].trigger_kind, "manual_regenerate");
+    assert!(due[0].include_manual_followups);
+    assert!(due[0].task_type_hint.is_none());
+}
+
+#[test]
 fn historical_followup_suggestions_do_not_block_same_content_regeneration() {
     let (_temp_dir, key, conn) = setup();
 

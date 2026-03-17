@@ -45,7 +45,7 @@ ON CONFLICT(todo_id) DO UPDATE SET
   next_retry_at_ms = NULL,
   last_error = NULL,
   include_manual_followups = excluded.include_manual_followups,
-  task_type_hint = COALESCE(excluded.task_type_hint, todo_followup_generation_jobs.task_type_hint),
+  task_type_hint = excluded.task_type_hint,
   updated_at_ms = excluded.updated_at_ms
 "#,
         params![todo_id, trigger_kind, include_manual_followups, task_type_hint, now_ms],

@@ -10,11 +10,13 @@ void main() {
       () async {
     var existingTodos = <Todo>[];
     var enqueueCount = 0;
+    var listTodosCalls = 0;
 
     final backend = NativeAppBackend(
       appDirProvider: () async => '/tmp/secondloop_test',
       rustLibInit: () async {},
       dbListTodos: ({required String appDir, required List<int> key}) async {
+        listTodosCalls += 1;
         return List<Todo>.from(existingTodos);
       },
       dbUpsertTodo: ({
@@ -29,6 +31,7 @@ void main() {
         int? nextReviewAtMs,
         int? lastReviewAtMs,
       }) async {
+        final existed = existingTodos.any((todo) => todo.id == id);
         final todo = Todo(
           id: id,
           title: title,
@@ -36,7 +39,7 @@ void main() {
           status: status,
           sourceEntryId: sourceEntryId,
           createdAtMs: 1,
-          updatedAtMs: 1,
+          updatedAtMs: existed ? 2 : 1,
           reviewStage: reviewStage,
           nextReviewAtMs: nextReviewAtMs,
           lastReviewAtMs: lastReviewAtMs,
@@ -67,6 +70,7 @@ void main() {
     await Future<void>.delayed(Duration.zero);
 
     expect(enqueueCount, 1);
+    expect(listTodosCalls, 0);
 
     await backend.upsertTodo(
       key,
@@ -77,5 +81,6 @@ void main() {
     await Future<void>.delayed(Duration.zero);
 
     expect(enqueueCount, 1);
+    expect(listTodosCalls, 0);
   });
 }

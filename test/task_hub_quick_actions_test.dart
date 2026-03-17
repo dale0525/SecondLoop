@@ -401,7 +401,7 @@ void main() {
           status: status,
           sourceEntryId: sourceEntryId,
           createdAtMs: 10,
-          updatedAtMs: 11,
+          updatedAtMs: 10,
           reviewStage: reviewStage,
           nextReviewAtMs: nextReviewAtMs,
           lastReviewAtMs: lastReviewAtMs,

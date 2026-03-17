@@ -157,10 +157,11 @@ final class TodoFollowupGenerationRunner {
 
         final existingSuggestions =
             await store.listTodoFollowupSuggestions(job.todoId);
-        final pendingSuggestionIds = existingSuggestions
+        final pendingSuggestions = existingSuggestions
             .where((item) => item.state == 'pending')
-            .map((item) => item.id)
             .toList(growable: false);
+        final pendingSuggestionIds =
+            pendingSuggestions.map((item) => item.id).toList(growable: false);
 
         if (job.triggerKind != 'manual_regenerate' &&
             pendingSuggestionIds.isNotEmpty) {
@@ -197,18 +198,23 @@ final class TodoFollowupGenerationRunner {
 
         final generationKey =
             'followup:${job.triggerKind}:${taskType.wireValue}:$nowMs';
+        final generatedSuggestions = <TodoFollowupSuggestionDraftInput>[
+          TodoFollowupSuggestionDraftInput(
+            content: suggestion.content,
+            generationMode: suggestion.mode.wireValue,
+            citationsJson: suggestion.citations.isEmpty
+                ? null
+                : encodeTodoFollowupCitationsJson(suggestion.citations),
+          ),
+        ];
+        final desiredPendingContents = generatedSuggestions
+            .map((item) => _normalizeFollowupContent(item.content))
+            .where((item) => item.isNotEmpty)
+            .toSet();
 
         await store.upsertGeneratedTodoFollowupSuggestions(
           todoId: job.todoId,
-          suggestions: <TodoFollowupSuggestionDraftInput>[
-            TodoFollowupSuggestionDraftInput(
-              content: suggestion.content,
-              generationMode: suggestion.mode.wireValue,
-              citationsJson: suggestion.citations.isEmpty
-                  ? null
-                  : encodeTodoFollowupCitationsJson(suggestion.citations),
-            ),
-          ],
+          suggestions: generatedSuggestions,
           source: client.source,
           generationKey: generationKey,
         );
@@ -223,13 +229,13 @@ final class TodoFollowupGenerationRunner {
           didMutateAny = true;
         }
 
-        if (job.includeManualFollowups &&
-            pendingSuggestionIds.isNotEmpty &&
-            createdPendingSuggestions.isNotEmpty) {
-          final replacementIds =
-              createdPendingSuggestions.map((item) => item.id).toSet();
-          final stalePendingSuggestionIds = pendingSuggestionIds
-              .where((item) => !replacementIds.contains(item))
+        if (job.includeManualFollowups && pendingSuggestionIds.isNotEmpty) {
+          final stalePendingSuggestionIds = pendingSuggestions
+              .where(
+                (item) => !desiredPendingContents
+                    .contains(_normalizeFollowupContent(item.content)),
+              )
+              .map((item) => item.id)
               .toList(growable: false);
           if (stalePendingSuggestionIds.isNotEmpty) {
             await store.dismissTodoFollowupSuggestions(
@@ -275,6 +281,10 @@ final class TodoFollowupGenerationRunner {
     TodoFollowupGenerationJob job,
     Todo todo,
   ) {
+    if (job.triggerKind == 'manual_regenerate') {
+      return classifyTodoFollowupTaskType(todo.title);
+    }
+
     final hinted = TodoFollowupTaskType.fromWireValue(job.taskTypeHint);
     if (hinted != TodoFollowupTaskType.unknown) {
       return hinted;
@@ -328,6 +338,15 @@ List<String> _collectManualFollowups(List<TodoActivity> activities) {
     out.add(content);
   }
   return out;
+}
+
+String _normalizeFollowupContent(String raw) {
+  return raw
+      .split(RegExp(r'\s+'))
+      .where((item) => item.isNotEmpty)
+      .join(' ')
+      .trim()
+      .toLowerCase();
 }
 
 int _retryDelayMsForAttempt(int attempts) {

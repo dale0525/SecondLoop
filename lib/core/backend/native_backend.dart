@@ -302,7 +302,6 @@ class NativeAppBackend
     RustLibInitFn? rustLibInit,
   })  : _secureBlobStore = SecureBlobStore(storage: secureStorage),
         _appDirProvider = appDirProvider ?? _defaultAppDirProvider,
-        _dbListTodos = dbListTodos ?? rust_core.dbListTodos,
         _dbUpsertTodo = dbUpsertTodo ?? rust_core.dbUpsertTodo,
         _dbInsertMessage = dbInsertMessage ?? rust_core.dbInsertMessage,
         _dbInsertAttachment =
@@ -383,7 +382,6 @@ class NativeAppBackend
 
   final SecureBlobStore _secureBlobStore;
   final AppDirProvider _appDirProvider;
-  final DbListTodosFn _dbListTodos;
   final DbUpsertTodoFn _dbUpsertTodo;
   final DbInsertMessageFn _dbInsertMessage;
   final DbInsertAttachmentFn _dbInsertAttachment;
@@ -1157,8 +1155,6 @@ class NativeAppBackend
     int? lastReviewAtMs,
   }) async {
     final appDir = await _getAppDir();
-    final existed = (await _dbListTodos(appDir: appDir, key: key))
-        .any((todo) => todo.id == id);
     final todo = await _dbUpsertTodo(
       appDir: appDir,
       key: key,
@@ -1176,7 +1172,8 @@ class NativeAppBackend
           ? null
           : PlatformInt64Util.from(lastReviewAtMs),
     );
-    if (!existed) {
+    final wasCreated = todo.createdAtMs == todo.updatedAtMs;
+    if (wasCreated) {
       unawaited(
         _enqueueTodoFollowupGenerationJobBestEffort(
           key,

@@ -122,7 +122,7 @@ ON CONFLICT(id) DO UPDATE SET
   due_at_ms = excluded.due_at_ms,
   status = excluded.status,
   source_entry_id = excluded.source_entry_id,
-  updated_at_ms = excluded.updated_at_ms,
+  updated_at_ms = MAX(excluded.updated_at_ms, todos.created_at_ms + 1),
   review_stage = excluded.review_stage,
   next_review_at_ms = excluded.next_review_at_ms,
   last_review_at_ms = excluded.last_review_at_ms,
