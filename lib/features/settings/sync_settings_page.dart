@@ -10,6 +10,7 @@ import '../../core/backend/app_backend.dart';
 import '../../core/cloud/cloud_auth_access.dart';
 import '../../core/cloud/cloud_auth_scope.dart';
 import '../../core/sync/cloud_sync_switch_prefs.dart';
+import '../../core/sync/stage_progress_smoother.dart';
 import '../../core/session/session_scope.dart';
 import '../../core/sync/background_sync.dart';
 import '../../core/sync/sync_config_store.dart';
@@ -43,6 +44,16 @@ String _formatBytes(int bytes) {
   if (mb < 1024) return '${mb.toStringAsFixed(1)} MB';
   final gb = mb / 1024;
   return '${gb.toStringAsFixed(1)} GB';
+}
+
+SyncStageProgressReporter _makeSmoothStageProgressReporter(
+  ValueNotifier<double?> progress, {
+  VoidCallback? onHasTotal,
+}) {
+  return SyncStageProgressReporter(
+    (value) => progress.value = value,
+    onHasTotal: onHasTotal,
+  );
 }
 
 class SyncSettingsPage extends StatefulWidget {

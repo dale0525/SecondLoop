@@ -168,6 +168,18 @@ impl super::RemoteStore for LocalDirRemoteStore {
         Ok(out.into_iter().collect())
     }
 
+    fn exists(&self, path: &str) -> Result<bool> {
+        if path.ends_with('/') {
+            let dir = normalize_dir(path);
+            let local = self.resolve_virtual_path(dir.trim_end_matches('/'))?;
+            return Ok(local.is_dir());
+        }
+
+        let path = normalize_file(path);
+        let local = self.resolve_virtual_path(path.trim_start_matches('/'))?;
+        Ok(local.is_file())
+    }
+
     fn get(&self, path: &str) -> Result<Vec<u8>> {
         let path = normalize_file(path);
         if path.ends_with('/') {

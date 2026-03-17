@@ -27,14 +27,20 @@ pub fn pull_with_progress(
 ) -> Result<u64> {
     const PULL_LIMIT: i64 = 500;
 
-    let http = super::client()?;
+    let http = super::runtime::client()?;
     let local_device_id = super::super::get_or_create_device_id(conn)?;
-    let _ = super::ensure_device_registered(&http, base_url, vault_id, id_token, &local_device_id)?;
+    let _ = super::runtime::ensure_device_registered(
+        &http,
+        base_url,
+        vault_id,
+        id_token,
+        &local_device_id,
+    )?;
 
-    let scope_id = super::scope_id(base_url, vault_id);
+    let scope_id = super::runtime::scope_id(base_url, vault_id);
     let mut since = super::load_since_map(conn, &scope_id)?;
 
-    let endpoint_json = super::url(base_url, &format!("/v1/vaults/{vault_id}/ops:pull"))?;
+    let endpoint_json = super::runtime::url(base_url, &format!("/v1/vaults/{vault_id}/ops:pull"))?;
     let mut applied: u64 = 0;
 
     let mut total_ops: Option<u64> = None;
@@ -62,7 +68,7 @@ pub fn pull_with_progress(
         let body = resp.bytes()?;
         let parsed: PullResponseWithMax = serde_json::from_slice(body.as_ref())?;
 
-        if total_ops.is_none() {
+        if total_ops.is_none() && !parsed.max.is_empty() {
             let mut total = 0u64;
             for (device_id, max_seq) in &parsed.max {
                 let last_pulled_seq = since.get(device_id).copied().unwrap_or(0);
@@ -140,16 +146,19 @@ pub fn pull_with_progress(
         })?;
         applied += batch_applied;
 
-        if let Some(total) = total_ops {
-            let mut delta = 0u64;
-            for (device_id, next_seq) in &next_since {
-                let prev = since.get(device_id).copied().unwrap_or(0);
-                if *next_seq > prev {
-                    delta += (*next_seq - prev) as u64;
-                }
+        let mut delta = 0u64;
+        for (device_id, next_seq) in &next_since {
+            let prev = since.get(device_id).copied().unwrap_or(0);
+            if *next_seq > prev {
+                delta += (*next_seq - prev) as u64;
             }
-            done_ops = (done_ops + delta).min(total);
-            progress(done_ops, total);
+        }
+        done_ops += delta;
+
+        if let Some(total) = total_ops {
+            progress(done_ops.min(total), total);
+        } else if delta > 0 {
+            progress(done_ops, done_ops.saturating_add(1));
         }
 
         since = next_since;
@@ -159,9 +168,44 @@ pub fn pull_with_progress(
         }
     }
 
-    if let Some(total) = total_ops {
-        progress(done_ops, total);
+    let app_dir = super::super::app_dir_from_conn(conn)?;
+    let download_ctx = super::attachments::AttachmentUploadContext {
+        conn,
+        db_key,
+        sync_key,
+        http: &http,
+        base_url,
+        vault_id,
+        id_token,
+        app_dir: app_dir.as_path(),
+    };
+
+    let missing_blob_refs =
+        super::artifacts::list_missing_embedding_artifact_blob_refs(&download_ctx)?;
+    let mut total_units = total_ops.unwrap_or(done_ops);
+    let mut done_units = done_ops;
+    if !missing_blob_refs.is_empty() {
+        total_units += missing_blob_refs.len() as u64;
+        progress(done_units, total_units);
+    } else if total_ops.is_some() || done_ops > 0 {
+        progress(done_units, total_units);
     }
+
+    if !missing_blob_refs.is_empty() {
+        let mut on_downloaded = |delta: u64| {
+            done_units = (done_units + delta).min(total_units);
+            progress(done_units, total_units);
+        };
+        let outcome = super::artifacts::download_embedding_artifact_blobs_by_refs(
+            &download_ctx,
+            &missing_blob_refs,
+            Some(&mut on_downloaded),
+        )?;
+        total_units = total_units.saturating_sub(outcome.missing_remote);
+        done_units = done_units.min(total_units);
+    }
+
+    progress(done_units, total_units);
 
     Ok(applied)
 }
@@ -178,13 +222,12 @@ pub fn push_ops_only_with_progress(
     const PUSH_LIMIT: i64 = 200;
     const MAX_REPAIR_ATTEMPTS: usize = 10;
 
-    crate::db::backfill_attachments_oplog_if_needed(conn, db_key)?;
-
-    let http = super::client()?;
+    let http = super::runtime::client()?;
     let device_id = super::super::get_or_create_device_id(conn)?;
-    let _ = super::ensure_device_registered(&http, base_url, vault_id, id_token, &device_id)?;
+    let _ =
+        super::runtime::ensure_device_registered(&http, base_url, vault_id, id_token, &device_id)?;
 
-    let scope_id = super::scope_id(base_url, vault_id);
+    let scope_id = super::runtime::scope_id(base_url, vault_id);
     let last_pushed_key = format!("managed_vault.last_pushed_seq:{scope_id}:{device_id}");
     let legacy_last_pushed_key = format!("managed_vault.last_pushed_seq:{scope_id}");
     if super::super::kv_get_i64(conn, &last_pushed_key)?.is_none() {
@@ -193,7 +236,38 @@ pub fn push_ops_only_with_progress(
     }
 
     let initial_last_pushed_seq = super::super::kv_get_i64(conn, &last_pushed_key)?.unwrap_or(0);
-    let total_ops = conn
+    let mut total_ops = conn
+        .query_row(
+            r#"SELECT count(*) FROM oplog WHERE device_id = ?1 AND seq > ?2"#,
+            params![device_id.as_str(), initial_last_pushed_seq],
+            |row| row.get::<_, i64>(0),
+        )?
+        .max(0) as u64;
+
+    let has_remote_device_ops: bool = conn.query_row(
+        r#"SELECT EXISTS(SELECT 1 FROM oplog WHERE device_id != ?1 LIMIT 1)"#,
+        params![device_id.as_str()],
+        |row| row.get(0),
+    )?;
+
+    let can_skip_fresh_device_push =
+        if total_ops == 0 && initial_last_pushed_seq == 0 && has_remote_device_ops {
+            super::probe::managed_remote_metadata_matches_local_snapshot(
+                conn, &http, base_url, vault_id, id_token, &device_id,
+            )
+            .unwrap_or(false)
+        } else {
+            false
+        };
+
+    if can_skip_fresh_device_push {
+        progress(0, 0);
+        return Ok(0);
+    }
+
+    crate::db::backfill_attachments_oplog_if_needed(conn, db_key)?;
+
+    total_ops = conn
         .query_row(
             r#"SELECT count(*) FROM oplog WHERE device_id = ?1 AND seq > ?2"#,
             params![device_id.as_str(), initial_last_pushed_seq],
@@ -208,7 +282,7 @@ pub fn push_ops_only_with_progress(
         return Ok(0);
     }
 
-    let endpoint = super::url(base_url, &format!("/v1/vaults/{vault_id}/ops:push"))?;
+    let endpoint = super::runtime::url(base_url, &format!("/v1/vaults/{vault_id}/ops:push"))?;
     let mut repair_attempt = 0usize;
     let mut pushed_total = 0u64;
 
