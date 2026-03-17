@@ -182,6 +182,20 @@ class TaskPrioritySignalStore {
     return updated;
   }
 
+  Future<TaskPriorityManualSignal?> clearPreferredStatusForTodo(
+    String todoId,
+  ) async {
+    final current = await readForTodo(todoId);
+    if (current == null || current.preferredStatus == null) {
+      return current;
+    }
+    await setForTodo(
+      todoId,
+      current.copyWith(clearPreferredStatus: true),
+    );
+    return current;
+  }
+
   Future<void> restoreForTodo(
     String todoId,
     TaskPriorityManualSignal? previous,

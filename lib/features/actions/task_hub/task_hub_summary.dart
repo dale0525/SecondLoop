@@ -88,6 +88,7 @@ class TaskHubSummary {
     int unscheduledPreviewLimit = 4,
   }) {
     final primaryFocus = snapshot.primaryFocus;
+    final primaryFocusId = primaryFocus?.todo.id;
     final dueEntries = snapshot.focus;
     final upcomingEntries = snapshot.scheduled;
     final scheduledPreviewEntries = primaryFocus == null
@@ -100,9 +101,11 @@ class TaskHubSummary {
                 .where((entry) => entry.todo.id != primaryFocus.todo.id),
           ];
     final dueReviewEntries = snapshot.decide
+        .where((entry) => entry.todo.id != primaryFocusId)
         .where((entry) => entry.isReviewDue)
         .toList(growable: false);
     final unscheduledEntries = snapshot.decide
+        .where((entry) => entry.todo.id != primaryFocusId)
         .where((entry) => !entry.isReviewDue)
         .toList(growable: false);
     final doneEntries = snapshot.done;

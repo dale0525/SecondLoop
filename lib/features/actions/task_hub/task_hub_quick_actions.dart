@@ -121,28 +121,50 @@ class TaskHubQuickActionsController {
                 await confirmDoneWithIncompleteChecklist!.call(todo);
             if (!confirmed) return null;
           }
+          final previousSignal = await signalStore.readForTodo(todo.id);
           final updated = await backend.setTodoStatus(
             sessionKey,
             todoId: todo.id,
             newStatus: 'done',
           );
+          TaskPriorityManualSignal? clearedSignal;
+          if (previousSignal?.preferredStatus != null) {
+            try {
+              await signalStore.clearPreferredStatusForTodo(todo.id);
+              clearedSignal = previousSignal;
+            } catch (_) {
+              clearedSignal = null;
+            }
+          }
           return TaskHubUndoTicket(
             todo: todo,
             updatedTodo: updated,
             action: action,
+            previousManualSignal: clearedSignal,
           );
         }
       case TaskHubQuickAction.reopen:
         {
+          final previousSignal = await signalStore.readForTodo(todo.id);
           final updated = await backend.setTodoStatus(
             sessionKey,
             todoId: todo.id,
             newStatus: 'open',
           );
+          TaskPriorityManualSignal? clearedSignal;
+          if (previousSignal?.preferredStatus != null) {
+            try {
+              await signalStore.clearPreferredStatusForTodo(todo.id);
+              clearedSignal = previousSignal;
+            } catch (_) {
+              clearedSignal = null;
+            }
+          }
           return TaskHubUndoTicket(
             todo: todo,
             updatedTodo: updated,
             action: action,
+            previousManualSignal: clearedSignal,
           );
         }
     }
@@ -365,6 +387,12 @@ class TaskHubQuickActionsController {
         break;
       case TaskHubQuickAction.done:
       case TaskHubQuickAction.reopen:
+        if (ticket.previousManualSignal != null) {
+          await signalStore.restoreForTodo(
+            ticket.todo.id,
+            ticket.previousManualSignal,
+          );
+        }
         break;
     }
 

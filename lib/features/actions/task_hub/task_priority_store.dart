@@ -215,16 +215,17 @@ class TaskPriorityStore extends ChangeNotifier {
       }
 
       final cacheScopeKey =
-          aiService?.cacheScopeKey ?? await _resolveAiCacheScopeKey?.call();
-      if (cacheScopeKey == null || cacheScopeKey.trim().isEmpty) {
-        _rememberStickyFocus(nowLocal);
-        return;
-      }
+          (aiService?.cacheScopeKey ?? await _resolveAiCacheScopeKey?.call())
+              ?.trim();
+      final canUsePersistedCache =
+          cacheScopeKey != null && cacheScopeKey.isNotEmpty;
 
-      final persisted = await _readPersistedAiAssessments(
-        cacheScopeKey: cacheScopeKey,
-        nowLocal: nowLocal,
-      );
+      final persisted = canUsePersistedCache
+          ? await _readPersistedAiAssessments(
+              cacheScopeKey: cacheScopeKey,
+              nowLocal: nowLocal,
+            )
+          : const <String, _PersistedAiAssessment>{};
       final freshEntries = <String, TaskPriorityAiEntry>{};
       final mergedPersisted =
           Map<String, _PersistedAiAssessment>.from(persisted);
@@ -262,11 +263,13 @@ class TaskPriorityStore extends ChangeNotifier {
               computedAtLocal: nowLocal,
             );
           }
-          await _writePersistedAiAssessments(
-            cacheScopeKey: cacheScopeKey,
-            entries: mergedPersisted,
-            activeTodoIds: request.candidates.map((entry) => entry.todoId),
-          );
+          if (canUsePersistedCache) {
+            await _writePersistedAiAssessments(
+              cacheScopeKey: cacheScopeKey,
+              entries: mergedPersisted,
+              activeTodoIds: request.candidates.map((entry) => entry.todoId),
+            );
+          }
         } catch (_) {
           // Keep the already-published rules snapshot.
         }

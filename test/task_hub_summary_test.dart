@@ -187,6 +187,63 @@ void main() {
     );
   });
 
+  test('summary preview does not duplicate selected focus from decide list',
+      () {
+    final nowLocal = DateTime(2026, 3, 13, 10, 0);
+    final snapshot = buildTaskPrioritySnapshot(
+      <Todo>[
+        Todo(
+          id: 'review-primary',
+          title: 'Reply now',
+          dueAtMs: null,
+          status: 'inbox',
+          sourceEntryId: null,
+          createdAtMs: 0,
+          updatedAtMs: 50,
+          reviewStage: 0,
+          nextReviewAtMs: nowLocal
+              .subtract(const Duration(minutes: 30))
+              .toUtc()
+              .millisecondsSinceEpoch,
+          lastReviewAtMs: null,
+        ),
+        const Todo(
+          id: 'backlog-secondary',
+          title: 'Plan later',
+          dueAtMs: null,
+          status: 'open',
+          sourceEntryId: null,
+          createdAtMs: 0,
+          updatedAtMs: 10,
+          reviewStage: null,
+          nextReviewAtMs: null,
+          lastReviewAtMs: null,
+        ),
+      ],
+      nowLocal: nowLocal,
+      signalState: const TaskPriorityManualSignalState(
+        byTodoId: <String, TaskPriorityManualSignal>{
+          'review-primary': TaskPriorityManualSignal(
+            isImportant: true,
+            isUrgent: true,
+          ),
+        },
+      ),
+    );
+
+    final summary = TaskHubSummary.fromSnapshot(snapshot);
+
+    expect(summary.snapshot.primaryFocus?.todo.id, 'review-primary');
+    expect(
+      summary.scheduledPreviewTodos.map((todo) => todo.id),
+      <String>['review-primary'],
+    );
+    expect(
+      summary.unscheduledPreviewTodos.map((todo) => todo.id),
+      isNot(contains('review-primary')),
+    );
+  });
+
   test('done-only summary stays empty but preserves done list', () {
     final summary = TaskHubSummary.fromTodos(
       const <Todo>[

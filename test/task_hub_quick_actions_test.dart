@@ -323,6 +323,43 @@ void main() {
     expect((await signalStore.readForTodo('t5b'))?.isUrgent, isTrue);
   });
 
+  test('done clears stale in-progress recovery signal before reopen', () async {
+    SharedPreferences.setMockInitialValues({});
+
+    final initial = todo(
+      id: 't5c',
+      title: 'Task 5c',
+      updatedAtMs: 10,
+      status: 'in_progress',
+    );
+    final backend = _QuickActionBackend(initialTodos: [initial]);
+    const signalStore = TaskPrioritySignalStore();
+    final controller = TaskHubQuickActionsController(
+      backend: backend,
+      sessionKey: Uint8List(32),
+      signalStore: signalStore,
+    );
+
+    await controller.apply(initial, TaskHubQuickAction.decreaseUrgency);
+    expect(
+      (await signalStore.readForTodo('t5c'))?.preferredStatus,
+      'in_progress',
+    );
+
+    final scheduled = backend.current('t5c');
+    await controller.apply(scheduled, TaskHubQuickAction.done);
+    expect((await signalStore.readForTodo('t5c'))?.preferredStatus, isNull);
+
+    final doneTodo = backend.current('t5c');
+    await controller.apply(doneTodo, TaskHubQuickAction.reopen);
+    final reopened = backend.current('t5c');
+
+    await controller.apply(reopened, TaskHubQuickAction.increaseUrgency);
+    final finalTodo = backend.current('t5c');
+    expect(finalTodo.status, 'open');
+    expect(finalTodo.dueAtMs, isNotNull);
+  });
+
   test('done action respects incomplete checklist confirmation', () async {
     SharedPreferences.setMockInitialValues({});
 
