@@ -3,12 +3,14 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:secondloop/core/backend/app_backend.dart';
 import 'package:secondloop/core/session/session_scope.dart';
 import 'package:secondloop/core/sync/sync_engine.dart';
 import 'package:secondloop/core/sync/sync_engine_gate.dart';
 import 'package:secondloop/features/actions/todo/todo_detail_page.dart';
+import 'package:secondloop/features/settings/ai_ask_ai_settings_page.dart';
 import 'package:secondloop/src/rust/db.dart';
 
 import 'test_i18n.dart';
@@ -16,6 +18,9 @@ import 'test_i18n.dart';
 void main() {
   testWidgets('TodoDetailPage renders pending follow-up suggestions',
       (tester) async {
+    SharedPreferences.setMockInitialValues({
+      'semantic_parse_data_consent_v1': true,
+    });
     _setLargeDisplay(tester);
     final backend = _Backend();
 
@@ -33,6 +38,9 @@ void main() {
 
   testWidgets('TodoDetailPage applies pending follow-up suggestions',
       (tester) async {
+    SharedPreferences.setMockInitialValues({
+      'semantic_parse_data_consent_v1': true,
+    });
     _setLargeDisplay(tester);
     final backend = _Backend();
 
@@ -49,6 +57,9 @@ void main() {
 
   testWidgets('TodoDetailPage renders applied follow-up suggestions',
       (tester) async {
+    SharedPreferences.setMockInitialValues({
+      'semantic_parse_data_consent_v1': true,
+    });
     _setLargeDisplay(tester);
     final backend = _Backend(
       initialSuggestions: const <TodoFollowupSuggestion>[
@@ -90,6 +101,9 @@ void main() {
   });
 
   testWidgets('TodoDetailPage shows empty follow-up state', (tester) async {
+    SharedPreferences.setMockInitialValues({
+      'semantic_parse_data_consent_v1': true,
+    });
     _setLargeDisplay(tester);
     final backend =
         _Backend(initialSuggestions: const <TodoFollowupSuggestion>[]);
@@ -103,6 +117,9 @@ void main() {
   testWidgets(
       'TodoDetailPage keeps pending follow-up until regenerate finishes',
       (tester) async {
+    SharedPreferences.setMockInitialValues({
+      'semantic_parse_data_consent_v1': true,
+    });
     _setLargeDisplay(tester);
     final completer = Completer<void>();
     final backend = _Backend(regenerateCompleter: completer);
@@ -124,6 +141,9 @@ void main() {
 
   testWidgets('TodoDetailPage regenerate wakes sync listeners immediately',
       (tester) async {
+    SharedPreferences.setMockInitialValues({
+      'semantic_parse_data_consent_v1': true,
+    });
     _setLargeDisplay(tester);
     final backend = _Backend();
     final engine = SyncEngine(
@@ -151,6 +171,9 @@ void main() {
   });
 
   testWidgets('TodoDetailPage shows regenerate loading state', (tester) async {
+    SharedPreferences.setMockInitialValues({
+      'semantic_parse_data_consent_v1': true,
+    });
     _setLargeDisplay(tester);
     final completer = Completer<void>();
     final backend = _Backend(
@@ -180,6 +203,48 @@ void main() {
       findsNothing,
     );
     expect(backend.enqueuedRegenerate, isTrue);
+  });
+
+  testWidgets(
+      'TodoDetailPage regenerate opens AI settings when smart organization consent is disabled',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({
+      'semantic_parse_data_consent_v1': false,
+    });
+    _setLargeDisplay(tester);
+    final backend = _Backend();
+
+    await tester.pumpWidget(_buildSubject(backend));
+    await tester.pumpAndSettle();
+
+    await tester.tap(
+      find.byKey(const ValueKey('todo_detail_followup_generate_suggestions')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(backend.enqueuedRegenerate, isFalse);
+    expect(find.byType(AiAskAiSettingsPage), findsOneWidget);
+  });
+
+  testWidgets(
+      'TodoDetailPage regenerate opens AI settings when no automation route is configured',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({
+      'semantic_parse_data_consent_v1': true,
+    });
+    _setLargeDisplay(tester);
+    final backend = _Backend(llmProfiles: const <LlmProfile>[]);
+
+    await tester.pumpWidget(_buildSubject(backend));
+    await tester.pumpAndSettle();
+
+    await tester.tap(
+      find.byKey(const ValueKey('todo_detail_followup_generate_suggestions')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(backend.enqueuedRegenerate, isFalse);
+    expect(find.byType(AiAskAiSettingsPage), findsOneWidget);
   });
 }
 
@@ -227,6 +292,7 @@ final class _Backend extends AppBackend {
   _Backend({
     List<TodoFollowupSuggestion>? initialSuggestions,
     List<TodoActivity>? initialActivities,
+    List<LlmProfile>? llmProfiles,
     this.regenerateCompleter,
   })  : _suggestions = List<TodoFollowupSuggestion>.from(
           initialSuggestions ??
@@ -248,13 +314,29 @@ final class _Backend extends AppBackend {
               ],
         ),
         _activities = List<TodoActivity>.from(
-            initialActivities ?? const <TodoActivity>[]);
+            initialActivities ?? const <TodoActivity>[]),
+        _llmProfiles = List<LlmProfile>.from(
+          llmProfiles ??
+              const <LlmProfile>[
+                LlmProfile(
+                  id: 'llm_1',
+                  name: 'Test profile',
+                  providerType: 'openai_compatible',
+                  baseUrl: 'https://example.com',
+                  modelName: 'gpt-test',
+                  isActive: true,
+                  createdAtMs: 1,
+                  updatedAtMs: 1,
+                ),
+              ],
+        );
 
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 
   final List<TodoFollowupSuggestion> _suggestions;
   final List<TodoActivity> _activities;
+  final List<LlmProfile> _llmProfiles;
   final Completer<void>? regenerateCompleter;
   List<String> appliedSuggestionIds = <String>[];
   List<String> dismissedSuggestionIds = <String>[];
@@ -291,6 +373,10 @@ final class _Backend extends AppBackend {
   @override
   Future<Uint8List> unlockWithPassword(String password) async =>
       Uint8List.fromList(List<int>.filled(32, 1));
+
+  @override
+  Future<List<LlmProfile>> listLlmProfiles(Uint8List key) async =>
+      List<LlmProfile>.from(_llmProfiles);
 
   @override
   Future<List<TodoActivity>> listTodoActivities(

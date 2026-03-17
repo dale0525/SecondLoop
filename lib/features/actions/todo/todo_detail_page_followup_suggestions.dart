@@ -1,6 +1,59 @@
 part of 'todo_detail_page.dart';
 
 extension _TodoDetailPageStateFollowupSuggestions on _TodoDetailPageState {
+  Future<bool> _prepareFollowupGeneration() async {
+    final backend = AppBackendScope.maybeOf(context);
+    final session = SessionScope.maybeOf(context);
+    if (backend == null || session == null) {
+      return false;
+    }
+
+    final subscriptionStatus = SubscriptionScope.maybeOf(context)?.status ??
+        SubscriptionStatus.unknown;
+    final cloudAuthScope = CloudAuthScope.maybeOf(context);
+
+    final prefs = await SharedPreferences.getInstance();
+    final consented =
+        prefs.getBool(SemanticParseDataConsentPrefs.prefsKey) ?? false;
+    if (!consented) {
+      if (!mounted) return false;
+      await Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => const AiAskAiSettingsPage(),
+        ),
+      );
+      return false;
+    }
+    final gatewayConfig =
+        cloudAuthScope?.gatewayConfig ?? CloudGatewayConfig.defaultConfig;
+    final cloudIdToken = await readCloudCapabilityIdToken(
+      cloudAuthScope?.controller,
+      mode: CloudCapabilityAuthMode.interactive,
+    );
+
+    final route = await decideAiAutomationRoute(
+      backend,
+      session.sessionKey,
+      cloudIdToken: cloudIdToken,
+      cloudGatewayBaseUrl: gatewayConfig.baseUrl,
+      subscriptionStatus: subscriptionStatus,
+    );
+    if (route == AskAiRouteKind.needsSetup) {
+      if (!mounted) return false;
+      await Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => const AiAskAiSettingsPage(),
+        ),
+      );
+      return false;
+    }
+
+    if (route == AskAiRouteKind.cloudGateway) {
+      await bestEffortWarmCloudCapabilityAuth(cloudAuthScope?.controller);
+    }
+    return true;
+  }
+
   Future<void> _applyFollowupSuggestionIds(List<String> suggestionIds) async {
     final backend = AppBackendScope.maybeOf(context);
     final session = SessionScope.maybeOf(context);
@@ -58,6 +111,9 @@ extension _TodoDetailPageStateFollowupSuggestions on _TodoDetailPageState {
 
     _setState(() => _generatingFollowupSuggestions = true);
     try {
+      final ready = await _prepareFollowupGeneration();
+      if (!ready || !mounted) return;
+
       await backend.enqueueTodoFollowupGenerationJob(
         session.sessionKey,
         todoId: _todo.id,

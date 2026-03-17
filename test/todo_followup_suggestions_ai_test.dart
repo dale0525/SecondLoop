@@ -14,7 +14,26 @@ void main() {
 
     expect(prompt, contains('information follow-up'));
     expect(prompt, contains('Do not tell the user what to research next'));
+    expect(prompt, contains("user's current app language (zh-CN)"));
     expect(prompt, contains('未联网核实'));
+  });
+
+  test('model knowledge parser requires localized not-verified disclaimer', () {
+    expect(
+      parseTodoFollowupSuggestionJson(
+        '{"content":"Summary only.","mode":"model_knowledge","citations":[]}',
+        localeTag: 'en-US',
+      ),
+      isNull,
+    );
+
+    final parsed = parseTodoFollowupSuggestionJson(
+      '{"content":"Not verified online. Summary only.","mode":"model_knowledge","citations":[]}',
+      localeTag: 'en-US',
+    );
+
+    expect(parsed, isNotNull);
+    expect(parsed!.mode, TodoFollowupGenerationMode.modelKnowledge);
   });
 
   test('followup parser reads fenced json and citations', () {
@@ -45,7 +64,7 @@ void main() {
 
   test('followup parser falls back to model knowledge on invalid mode', () {
     final parsed = parseTodoFollowupSuggestionJson(
-      '{"content":"hello","mode":"unknown","citations":[]}',
+      '{"content":"Not verified online. hello","mode":"unknown","citations":[]}',
     );
 
     expect(parsed, isNotNull);

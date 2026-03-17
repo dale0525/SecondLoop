@@ -89,7 +89,33 @@ Future<TodoFollowupSuggestionDraft?> requestTodoFollowupSuggestion({
           .timeout(timeout)
       : await backend.runAiPrompt(sessionKey, prompt: prompt).timeout(timeout);
 
-  return parseTodoFollowupSuggestionJson(response);
+  return parseTodoFollowupSuggestionJson(
+    response,
+    localeTag: localeTag,
+  );
+}
+
+bool _isZhLocaleTag(String localeTag) {
+  return localeTag.trim().toLowerCase().startsWith('zh');
+}
+
+String todoFollowupModelKnowledgeDisclosureForLocale(String localeTag) {
+  return _isZhLocaleTag(localeTag) ? '未联网核实' : 'Not verified online';
+}
+
+bool _hasTodoFollowupModelKnowledgeDisclosure(
+  String content, {
+  required String localeTag,
+}) {
+  final normalized = content.trim().toLowerCase();
+  if (normalized.isEmpty) return false;
+  if (_isZhLocaleTag(localeTag)) {
+    return content
+        .contains(todoFollowupModelKnowledgeDisclosureForLocale(localeTag));
+  }
+  return normalized.contains(
+    todoFollowupModelKnowledgeDisclosureForLocale(localeTag).toLowerCase(),
+  );
 }
 
 String buildTodoFollowupSuggestionPrompt({
@@ -106,9 +132,12 @@ String buildTodoFollowupSuggestionPrompt({
       : DateTime.fromMillisecondsSinceEpoch(dueAtMs, isUtc: true)
           .toLocal()
           .toIso8601String();
+  final disclosure = todoFollowupModelKnowledgeDisclosureForLocale(localeTag);
   final modeLabel = generationMode == TodoFollowupGenerationMode.webSearch
       ? 'Use web search and include citations.'
-      : 'No web search is available. 在正文中明确写出“未联网核实”。';
+      : _isZhLocaleTag(localeTag)
+          ? 'No web search is available. 在正文中明确写出“$disclosure”。'
+          : 'No web search is available. Explicitly include "$disclosure" in the note.';
   final manualFollowupsBlock = manualFollowups.isEmpty
       ? '(none)'
       : manualFollowups.map((item) => '- ${item.trim()}').join('\n');
@@ -122,9 +151,9 @@ Rules:
 - Write a concise information follow-up the user can directly keep as a task update.
 - Do not tell the user what to research next.
 - Do not output markdown code fences.
-- If mode is model_knowledge, the note must clearly say “未联网核实”.
+- Write the content field in the user's current app language${localeTag.trim().isEmpty ? '' : ' ($localeTag)'}. 
+- If mode is model_knowledge, the note must clearly include "$disclosure".
 - Citations are optional, but include up to $kMaxGeneratedFollowupCitations citations when web search is used.
-- Use the same language as the task content.
 
 $modeLabel
 Locale: $localeTag
@@ -139,7 +168,10 @@ $manualFollowupsBlock
 ''';
 }
 
-TodoFollowupSuggestionDraft? parseTodoFollowupSuggestionJson(String raw) {
+TodoFollowupSuggestionDraft? parseTodoFollowupSuggestionJson(
+  String raw, {
+  String localeTag = 'en-US',
+}) {
   final trimmed = raw.trim();
   if (trimmed.isEmpty) return null;
 
@@ -161,6 +193,13 @@ TodoFollowupSuggestionDraft? parseTodoFollowupSuggestionJson(String raw) {
   final mode = TodoFollowupGenerationMode.fromWireValue(
     (map['mode'] as String?)?.trim(),
   );
+  if (mode == TodoFollowupGenerationMode.modelKnowledge &&
+      !_hasTodoFollowupModelKnowledgeDisclosure(
+        content,
+        localeTag: localeTag,
+      )) {
+    return null;
+  }
 
   final citations = <TodoFollowupCitationDraft>[];
   final seen = <String>{};
