@@ -4,6 +4,7 @@ pub const TODO_FOLLOWUP_GENERATION_JOB_STATUS_FAILED: &str = "failed";
 pub const TODO_FOLLOWUP_GENERATION_JOB_STATUS_SUCCEEDED: &str = "succeeded";
 pub const TODO_FOLLOWUP_GENERATION_JOB_STATUS_SKIPPED: &str = "skipped";
 pub const TODO_FOLLOWUP_GENERATION_JOB_STATUS_CANCELED: &str = "canceled";
+pub const TODO_FOLLOWUP_GENERATION_RUNNING_LEASE_MS: i64 = 2 * 60 * 1000;
 
 pub fn enqueue_todo_followup_generation_job(
     conn: &Connection,
@@ -59,18 +60,29 @@ pub fn list_due_todo_followup_generation_jobs(
     limit: i64,
 ) -> Result<Vec<TodoFollowupGenerationJob>> {
     let limit = limit.clamp(1, 500);
+    let running_lease_cutoff_ms = now_ms - TODO_FOLLOWUP_GENERATION_RUNNING_LEASE_MS;
     let mut stmt = conn.prepare(
         r#"
 SELECT todo_id, trigger_kind, status, attempts, next_retry_at_ms, last_error, include_manual_followups, task_type_hint, created_at_ms, updated_at_ms
 FROM todo_followup_generation_jobs
-WHERE status IN ('pending', 'failed', 'running')
-  AND (next_retry_at_ms IS NULL OR next_retry_at_ms <= ?1)
-ORDER BY updated_at_ms ASC, todo_id ASC
-LIMIT ?2
+WHERE (
+        status IN ('pending', 'failed')
+        AND (next_retry_at_ms IS NULL OR next_retry_at_ms <= ?1)
+      )
+   OR (
+        status = 'running'
+        AND updated_at_ms <= ?2
+      )
+ORDER BY
+  CASE WHEN trigger_kind = 'manual_regenerate' THEN 0 ELSE 1 END ASC,
+  CASE WHEN trigger_kind = 'manual_regenerate' THEN updated_at_ms END DESC,
+  CASE WHEN trigger_kind != 'manual_regenerate' THEN updated_at_ms END ASC,
+  todo_id ASC
+LIMIT ?3
 "#,
     )?;
 
-    let mut rows = stmt.query(params![now_ms, limit])?;
+    let mut rows = stmt.query(params![now_ms, running_lease_cutoff_ms, limit])?;
     let mut result = Vec::new();
     while let Some(row) = rows.next()? {
         result.push(TodoFollowupGenerationJob {
@@ -97,7 +109,10 @@ pub fn mark_todo_followup_generation_job_running(
     conn.execute(
         r#"
 UPDATE todo_followup_generation_jobs
-SET status = 'running', updated_at_ms = ?2
+SET status = 'running',
+    next_retry_at_ms = NULL,
+    last_error = NULL,
+    updated_at_ms = ?2
 WHERE todo_id = ?1
 "#,
         params![todo_id, now_ms],

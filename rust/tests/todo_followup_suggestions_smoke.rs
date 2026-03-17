@@ -142,6 +142,72 @@ fn todo_followup_generation_jobs_support_enqueue_claim_retry_and_succeed() {
 }
 
 #[test]
+fn running_jobs_are_not_released_until_their_lease_expires() {
+    let (_temp_dir, key, conn) = setup();
+
+    db::upsert_todo(
+        &conn,
+        &key,
+        "todo_1",
+        "去浦东机场接 MU5101",
+        None,
+        "open",
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("upsert todo");
+
+    db::enqueue_todo_followup_generation_job(&conn, "todo_1", "auto_create", None, 100)
+        .expect("enqueue job");
+    db::mark_todo_followup_generation_job_running(&conn, "todo_1", 120).expect("mark running");
+
+    let before_expiry = db::list_due_todo_followup_generation_jobs(
+        &conn,
+        120 + db::TODO_FOLLOWUP_GENERATION_RUNNING_LEASE_MS - 1,
+        10,
+    )
+    .expect("list jobs before lease expiry");
+    assert!(before_expiry.is_empty());
+
+    let after_expiry = db::list_due_todo_followup_generation_jobs(
+        &conn,
+        120 + db::TODO_FOLLOWUP_GENERATION_RUNNING_LEASE_MS,
+        10,
+    )
+    .expect("list jobs after lease expiry");
+    assert_eq!(after_expiry.len(), 1);
+    assert_eq!(after_expiry[0].todo_id, "todo_1");
+    assert_eq!(after_expiry[0].status, "running");
+}
+
+#[test]
+fn manual_regenerate_jobs_are_prioritized_ahead_of_auto_jobs() {
+    let (_temp_dir, key, conn) = setup();
+
+    for (todo_id, title) in [
+        ("todo_auto", "调研一下当前主流的 llm 模型"),
+        ("todo_manual", "比较 Cursor、Windsurf 和 Copilot 的能力"),
+    ] {
+        db::upsert_todo(
+            &conn, &key, todo_id, title, None, "open", None, None, None, None,
+        )
+        .expect("upsert todo");
+    }
+
+    db::enqueue_todo_followup_generation_job(&conn, "todo_auto", "auto_create", None, 100)
+        .expect("enqueue auto job");
+    db::enqueue_todo_followup_generation_job(&conn, "todo_manual", "manual_regenerate", None, 200)
+        .expect("enqueue manual job");
+
+    let due = db::list_due_todo_followup_generation_jobs(&conn, 200, 1).expect("list due jobs");
+    assert_eq!(due.len(), 1);
+    assert_eq!(due[0].todo_id, "todo_manual");
+    assert_eq!(due[0].trigger_kind, "manual_regenerate");
+}
+
+#[test]
 fn reenqueue_without_new_hint_clears_previous_task_type_hint() {
     let (_temp_dir, key, conn) = setup();
 
