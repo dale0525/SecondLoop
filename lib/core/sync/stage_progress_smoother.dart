@@ -28,3 +28,26 @@ class SyncStageProgressSmoother {
     _lastValue = 0.0;
   }
 }
+
+final class SyncStageProgressReporter {
+  SyncStageProgressReporter(
+    this._setProgress, {
+    this.onHasTotal,
+    double completionHeadroom = 0.98,
+  }) : _smoother =
+            SyncStageProgressSmoother(completionHeadroom: completionHeadroom);
+
+  final void Function(double value) _setProgress;
+  final void Function()? onHasTotal;
+  final SyncStageProgressSmoother _smoother;
+
+  void onProgress(int done, int total) {
+    if (total <= 0) return;
+    onHasTotal?.call();
+    _setProgress(_smoother.update(done: done, total: total));
+  }
+
+  void complete() {
+    _setProgress(_smoother.complete());
+  }
+}

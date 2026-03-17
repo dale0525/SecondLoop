@@ -46,16 +46,14 @@ String _formatBytes(int bytes) {
   return '${gb.toStringAsFixed(1)} GB';
 }
 
-void Function(int done, int total) _makeSmoothStageProgressHandler(
+SyncStageProgressReporter _makeSmoothStageProgressReporter(
   ValueNotifier<double?> progress, {
   VoidCallback? onHasTotal,
 }) {
-  final smoother = SyncStageProgressSmoother();
-  return (done, total) {
-    if (total <= 0) return;
-    onHasTotal?.call();
-    progress.value = smoother.update(done: done, total: total);
-  };
+  return SyncStageProgressReporter(
+    (value) => progress.value = value,
+    onHasTotal: onHasTotal,
+  );
 }
 
 class SyncSettingsPage extends StatefulWidget {

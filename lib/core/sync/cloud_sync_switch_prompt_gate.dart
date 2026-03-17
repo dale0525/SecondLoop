@@ -61,14 +61,10 @@ final class _CloudSyncSwitchPromptGateState
   static const _kCloudAiFeatureGuidePromptedUidPrefsKey =
       'cloud_ai_feature_guide_prompted_uid_v1';
 
-  void Function(int done, int total) _makeSmoothStageProgressHandler(
+  SyncStageProgressReporter _makeSmoothStageProgressReporter(
     ValueNotifier<double> progress,
   ) {
-    final smoother = SyncStageProgressSmoother();
-    return (done, total) {
-      if (total <= 0) return;
-      progress.value = smoother.update(done: done, total: total);
-    };
+    return SyncStageProgressReporter((value) => progress.value = value);
   }
 
   @override
@@ -361,6 +357,8 @@ final class _CloudSyncSwitchPromptGateState
             started = true;
             unawaited(() async {
               try {
+                var stageProgress = _makeSmoothStageProgressReporter(progress);
+
                 // Pull
                 stage.value = t.sync.progressDialog.pulling;
                 progress.value = 0.0;
@@ -372,10 +370,11 @@ final class _CloudSyncSwitchPromptGateState
                     vaultId: vaultId,
                     idToken: idToken,
                   ),
-                  onProgress: _makeSmoothStageProgressHandler(progress),
+                  onProgress: stageProgress.onProgress,
                 );
 
                 // Push
+                stageProgress = _makeSmoothStageProgressReporter(progress);
                 stage.value = t.sync.progressDialog.pushing;
                 progress.value = 0.0;
                 await _consumeRustProgressStream(
@@ -386,7 +385,7 @@ final class _CloudSyncSwitchPromptGateState
                     vaultId: vaultId,
                     idToken: idToken,
                   ),
-                  onProgress: _makeSmoothStageProgressHandler(progress),
+                  onProgress: stageProgress.onProgress,
                 );
 
                 // Media uploads (optional)
@@ -431,7 +430,7 @@ final class _CloudSyncSwitchPromptGateState
 
                 // Finalize
                 stage.value = t.sync.progressDialog.finalizing;
-                progress.value = 1.0;
+                stageProgress.complete();
               } catch (_) {
                 // Best-effort: avoid blocking the user on transient sync errors.
                 completed = false;

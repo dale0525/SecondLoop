@@ -250,13 +250,17 @@ pub fn push_ops_only_with_progress(
         |row| row.get(0),
     )?;
 
-    if total_ops == 0
-        && initial_last_pushed_seq == 0
-        && has_remote_device_ops
-        && super::probe::managed_remote_metadata_matches_local_snapshot(
-            conn, &http, base_url, vault_id, id_token, &device_id,
-        )?
-    {
+    let can_skip_fresh_device_push =
+        if total_ops == 0 && initial_last_pushed_seq == 0 && has_remote_device_ops {
+            super::probe::managed_remote_metadata_matches_local_snapshot(
+                conn, &http, base_url, vault_id, id_token, &device_id,
+            )
+            .unwrap_or(false)
+        } else {
+            false
+        };
+
+    if can_skip_fresh_device_push {
         progress(0, 0);
         return Ok(0);
     }

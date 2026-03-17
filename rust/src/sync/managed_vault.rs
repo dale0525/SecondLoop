@@ -330,7 +330,9 @@ fn push_internal(
         let _ = runtime::ensure_device_registered(&http, base_url, vault_id, id_token, &device_id)?;
         if probe::can_skip_fresh_device_full_push(
             conn, &http, base_url, vault_id, id_token, &device_id,
-        )? {
+        )
+        .unwrap_or(false)
+        {
             return Ok(0);
         }
         registered_http = Some(http);

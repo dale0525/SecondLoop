@@ -456,6 +456,8 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
               case SyncBackendType.webdav:
                 await _runSaveSyncWithProgress(
                   run: (stage, progress) async {
+                    var stageProgress =
+                        _makeSmoothStageProgressReporter(progress);
                     stage.value = t.sync.progressDialog.pulling;
                     progress.value = 0.0;
                     await _consumeRustProgressStream(
@@ -467,9 +469,10 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
                         password: _optionalTrimmed(_passwordController),
                         remoteRoot: newRemoteRoot,
                       ),
-                      onProgress: _makeSmoothStageProgressHandler(progress),
+                      onProgress: stageProgress.onProgress,
                     );
 
+                    stageProgress = _makeSmoothStageProgressReporter(progress);
                     stage.value = t.sync.progressDialog.pushing;
                     progress.value = 0.0;
                     await _consumeRustProgressStream(
@@ -481,7 +484,7 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
                         password: _optionalTrimmed(_passwordController),
                         remoteRoot: newRemoteRoot,
                       ),
-                      onProgress: _makeSmoothStageProgressHandler(progress),
+                      onProgress: stageProgress.onProgress,
                     );
 
                     if (_cloudMediaBackupEnabled) {
@@ -523,7 +526,7 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
                     }
 
                     stage.value = t.sync.progressDialog.finalizing;
-                    progress.value = 1.0;
+                    stageProgress.complete();
                   },
                 );
                 didSync = true;
@@ -531,6 +534,8 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
               case SyncBackendType.localDir:
                 await _runSaveSyncWithProgress(
                   run: (stage, progress) async {
+                    var stageProgress =
+                        _makeSmoothStageProgressReporter(progress);
                     stage.value = t.sync.progressDialog.pulling;
                     progress.value = 0.0;
                     await _consumeRustProgressStream(
@@ -540,9 +545,10 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
                         localDir: newLocalDir,
                         remoteRoot: newRemoteRoot,
                       ),
-                      onProgress: _makeSmoothStageProgressHandler(progress),
+                      onProgress: stageProgress.onProgress,
                     );
 
+                    stageProgress = _makeSmoothStageProgressReporter(progress);
                     stage.value = t.sync.progressDialog.pushing;
                     progress.value = 0.0;
                     await _consumeRustProgressStream(
@@ -552,11 +558,11 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
                         localDir: newLocalDir,
                         remoteRoot: newRemoteRoot,
                       ),
-                      onProgress: _makeSmoothStageProgressHandler(progress),
+                      onProgress: stageProgress.onProgress,
                     );
 
                     stage.value = t.sync.progressDialog.finalizing;
-                    progress.value = 1.0;
+                    stageProgress.complete();
                   },
                 );
                 didSync = true;
@@ -594,6 +600,8 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
                 try {
                   await _runSaveSyncWithProgress(
                     run: (stage, progress) async {
+                      var stageProgress =
+                          _makeSmoothStageProgressReporter(progress);
                       stage.value = t.sync.progressDialog.pulling;
                       progress.value = 0.0;
                       await _consumeRustProgressStream(
@@ -604,9 +612,11 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
                           vaultId: vaultId,
                           idToken: idTokenTrimmed,
                         ),
-                        onProgress: _makeSmoothStageProgressHandler(progress),
+                        onProgress: stageProgress.onProgress,
                       );
 
+                      stageProgress =
+                          _makeSmoothStageProgressReporter(progress);
                       stage.value = t.sync.progressDialog.pushing;
                       progress.value = 0.0;
                       await _consumeRustProgressStream(
@@ -617,7 +627,7 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
                           vaultId: vaultId,
                           idToken: idTokenTrimmed,
                         ),
-                        onProgress: _makeSmoothStageProgressHandler(progress),
+                        onProgress: stageProgress.onProgress,
                       );
 
                       if (_cloudMediaBackupEnabled) {
@@ -659,7 +669,7 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
                       }
 
                       stage.value = t.sync.progressDialog.finalizing;
-                      progress.value = 1.0;
+                      stageProgress.complete();
                     },
                   );
                   didSync = true;
@@ -721,6 +731,10 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
             _SyncSettingsPageState._kManualSyncProgressPercentKey,
         run: (stage, progress) async {
           var hasTotal = false;
+          final progressReporter = _makeSmoothStageProgressReporter(
+            progress,
+            onHasTotal: () => hasTotal = true,
+          );
           stage.value = t.sync.progressDialog.pushing;
           progress.value = 0.0;
           unawaited(() async {
@@ -740,10 +754,7 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
                   password: _optionalTrimmed(_passwordController),
                   remoteRoot: _requiredTrimmed(_remoteRootController),
                 ),
-                onProgress: _makeSmoothStageProgressHandler(
-                  progress,
-                  onHasTotal: () => hasTotal = true,
-                ),
+                onProgress: progressReporter.onProgress,
               ),
             SyncBackendType.localDir => _consumeRustProgressStream(
                 backend.syncLocaldirPushProgress(
@@ -752,10 +763,7 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
                   localDir: _requiredTrimmed(_localDirController),
                   remoteRoot: _requiredTrimmed(_remoteRootController),
                 ),
-                onProgress: _makeSmoothStageProgressHandler(
-                  progress,
-                  onHasTotal: () => hasTotal = true,
-                ),
+                onProgress: progressReporter.onProgress,
               ),
             SyncBackendType.managedVault => () async {
                 final cloudAuth = CloudAuthScope.of(context).controller;
@@ -779,15 +787,12 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
                     vaultId: vaultId,
                     idToken: idToken,
                   ),
-                  onProgress: _makeSmoothStageProgressHandler(
-                    progress,
-                    onHasTotal: () => hasTotal = true,
-                  ),
+                  onProgress: progressReporter.onProgress,
                 );
               }(),
           });
           stage.value = t.sync.progressDialog.finalizing;
-          progress.value = 1.0;
+          progressReporter.complete();
         },
       );
       final successMessage = t.sync.pushedOps(count: pushed);
@@ -844,6 +849,10 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
             _SyncSettingsPageState._kManualSyncProgressPercentKey,
         run: (stage, progress) async {
           var hasTotal = false;
+          final progressReporter = _makeSmoothStageProgressReporter(
+            progress,
+            onHasTotal: () => hasTotal = true,
+          );
           stage.value = t.sync.progressDialog.pulling;
           progress.value = 0.0;
           unawaited(() async {
@@ -863,10 +872,7 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
                   password: _optionalTrimmed(_passwordController),
                   remoteRoot: _requiredTrimmed(_remoteRootController),
                 ),
-                onProgress: _makeSmoothStageProgressHandler(
-                  progress,
-                  onHasTotal: () => hasTotal = true,
-                ),
+                onProgress: progressReporter.onProgress,
               ),
             SyncBackendType.localDir => _consumeRustProgressStream(
                 backend.syncLocaldirPullProgress(
@@ -875,10 +881,7 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
                   localDir: _requiredTrimmed(_localDirController),
                   remoteRoot: _requiredTrimmed(_remoteRootController),
                 ),
-                onProgress: _makeSmoothStageProgressHandler(
-                  progress,
-                  onHasTotal: () => hasTotal = true,
-                ),
+                onProgress: progressReporter.onProgress,
               ),
             SyncBackendType.managedVault => () async {
                 final cloudAuth = CloudAuthScope.of(context).controller;
@@ -902,15 +905,12 @@ extension _SyncSettingsPageSyncActions on _SyncSettingsPageState {
                     vaultId: vaultId,
                     idToken: idToken,
                   ),
-                  onProgress: _makeSmoothStageProgressHandler(
-                    progress,
-                    onHasTotal: () => hasTotal = true,
-                  ),
+                  onProgress: progressReporter.onProgress,
                 );
               }(),
           });
           stage.value = t.sync.progressDialog.finalizing;
-          progress.value = 1.0;
+          progressReporter.complete();
         },
       );
       if (mounted) engine?.notifyExternalChange();

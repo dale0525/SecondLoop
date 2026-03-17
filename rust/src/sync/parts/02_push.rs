@@ -118,21 +118,27 @@ fn remote_metadata_paths_for_other_devices(
     remote_root_dir: &str,
     device_id: &str,
 ) -> Result<Vec<String>> {
-    conn.prepare(
+    let mut metadata_paths = std::collections::BTreeSet::new();
+    let mut stmt = conn.prepare(
         r#"SELECT device_id, seq
            FROM oplog
            WHERE device_id != ?1
            ORDER BY device_id ASC, seq ASC"#,
-    )?
-    .query_map(params![device_id], |row| {
+    )?;
+    let mut rows = stmt.query(params![device_id])?;
+    while let Some(row) = rows.next()? {
         let remote_device_id: String = row.get(0)?;
         let seq: i64 = row.get(1)?;
-        Ok(format!(
+        metadata_paths.insert(format!(
             "{remote_root_dir}{remote_device_id}/ops/op_{seq}.json"
-        ))
-    })?
-    .collect::<rusqlite::Result<Vec<String>>>()
-    .map_err(Into::into)
+        ));
+        metadata_paths.insert(format!(
+            "{remote_root_dir}{remote_device_id}/packs/pack_{}.bin",
+            ops_pack_chunk_start(seq)
+        ));
+        metadata_paths.insert(format!("{remote_root_dir}{remote_device_id}/cursor.json"));
+    }
+    Ok(metadata_paths.into_iter().collect())
 }
 
 fn can_skip_fresh_device_full_push(
@@ -203,12 +209,17 @@ fn push_internal(
         |row| row.get(0),
     )?;
 
-    if upload_attachment_bytes
+    let can_skip_fresh_device_push = if upload_attachment_bytes
         && local_pending_ops == 0
         && last_pushed_seq == 0
         && has_remote_device_ops
-        && can_skip_fresh_device_full_push(conn, remote, &remote_root_dir, &device_id)?
     {
+        can_skip_fresh_device_full_push(conn, remote, &remote_root_dir, &device_id).unwrap_or(false)
+    } else {
+        false
+    };
+
+    if can_skip_fresh_device_push {
         // After a fresh pull, this device can have lots of synced metadata but still no local
         // oplog rows of its own. Returning early here avoids a redundant byte backfill/upload
         // phase on the new device, but only after probing that the remote already has the synced

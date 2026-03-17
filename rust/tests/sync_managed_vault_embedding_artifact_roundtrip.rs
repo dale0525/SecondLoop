@@ -31,6 +31,7 @@ struct ServerState {
     attachments: BTreeMap<(String, String), Vec<u8>>,
     attachment_request_methods: Vec<String>,
     omit_pull_max: bool,
+    force_attachment_head_error: bool,
 }
 
 fn read_request(stream: &mut TcpStream) -> (String, String, String, Vec<u8>) {
@@ -344,7 +345,9 @@ fn start_mock_server_with_state() -> (
                     }
                     if method == "HEAD" {
                         let st = state_clone.lock().expect("lock");
-                        if st
+                        if st.force_attachment_head_error {
+                            write_empty_response(&mut stream, 500);
+                        } else if st
                             .attachments
                             .contains_key(&(vault_id.clone(), attachment_id))
                         {
@@ -810,6 +813,82 @@ fn managed_vault_push_reuploads_bytes_after_fresh_device_remote_reset() {
     assert!(
         repaired_attachment_count > 0,
         "fresh device should re-upload bytes after managed-vault remote reset"
+    );
+
+    let _ = stop_tx.send(());
+    let _ = handle.join();
+}
+
+#[test]
+fn managed_vault_push_falls_back_when_attachment_probe_head_fails() {
+    let (base_url, stop_tx, handle, state) = start_mock_server_with_state();
+    let vault_id = "vault-test".to_string();
+    let id_token = "token-test".to_string();
+
+    let temp_a = tempfile::tempdir().expect("tempdir A");
+    let app_dir_a = temp_a.path().join("secondloop_a");
+    let key_a =
+        auth::init_master_password(&app_dir_a, "pw-a", KdfParams::for_test()).expect("init A");
+    let conn_a = db::open(&app_dir_a).expect("open A db");
+    let conversation =
+        db::get_or_create_loop_home_conversation(&conn_a, &key_a).expect("conversation A");
+    let _message = db::insert_message(
+        &conn_a,
+        &key_a,
+        &conversation.id,
+        "user",
+        "managed vault probe fallback note",
+    )
+    .expect("message A");
+    let processed =
+        db::process_pending_message_embeddings_default(&conn_a, &key_a, 10).expect("process A");
+    assert_eq!(processed, 1);
+
+    let sync_key = derive_root_key(
+        "sync-passphrase",
+        b"secondloop-sync1",
+        &KdfParams::for_test(),
+    )
+    .expect("derive sync key");
+
+    let pushed_a =
+        sync::managed_vault::push(&conn_a, &key_a, &sync_key, &base_url, &vault_id, &id_token)
+            .expect("push A");
+    assert!(pushed_a > 0);
+
+    let temp_b = tempfile::tempdir().expect("tempdir B");
+    let app_dir_b = temp_b.path().join("secondloop_b");
+    let key_b =
+        auth::init_master_password(&app_dir_b, "pw-b", KdfParams::for_test()).expect("init B");
+    let conn_b = db::open(&app_dir_b).expect("open B db");
+
+    let pulled_b =
+        sync::managed_vault::pull(&conn_b, &key_b, &sync_key, &base_url, &vault_id, &id_token)
+            .expect("pull B");
+    assert!(pulled_b > 0);
+
+    {
+        let mut st = state.lock().expect("lock state");
+        st.attachments.clear();
+        st.attachment_request_methods.clear();
+        st.force_attachment_head_error = true;
+    }
+
+    let pushed_b =
+        sync::managed_vault::push(&conn_b, &key_b, &sync_key, &base_url, &vault_id, &id_token)
+            .expect("push B should fall back instead of failing");
+    assert_eq!(pushed_b, 0);
+
+    let st = state.lock().expect("lock state");
+    assert!(
+        !st.attachments.is_empty(),
+        "fallback path should repair remote bytes after probe HEAD failure"
+    );
+    assert!(
+        st.attachment_request_methods
+            .iter()
+            .any(|method| method == "HEAD"),
+        "expected probe to attempt HEAD before falling back"
     );
 
     let _ = stop_tx.send(());

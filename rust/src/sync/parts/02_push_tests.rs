@@ -37,6 +37,7 @@ mod cursor_metadata_tests {
 #[cfg(test)]
 mod push_progress_tests {
     use super::*;
+    use anyhow::anyhow;
     use std::sync::atomic::{AtomicUsize, Ordering};
     use tempfile::tempdir;
 
@@ -105,6 +106,56 @@ mod push_progress_tests {
 
         fn put(&self, path: &str, bytes: Vec<u8>) -> Result<()> {
             self.put_calls.fetch_add(1, Ordering::Relaxed);
+            self.inner.put(path, bytes)
+        }
+
+        fn delete(&self, path: &str) -> Result<()> {
+            self.inner.delete(path)
+        }
+    }
+
+    struct FailingExistsRemoteStore {
+        inner: CountingRemoteStore,
+    }
+
+    impl FailingExistsRemoteStore {
+        fn new() -> Self {
+            Self {
+                inner: CountingRemoteStore::new(),
+            }
+        }
+
+        fn reset_counts(&self) {
+            self.inner.reset_counts();
+        }
+    }
+
+    impl RemoteStore for FailingExistsRemoteStore {
+        fn target_id(&self) -> &str {
+            self.inner.target_id()
+        }
+
+        fn exists(&self, path: &str) -> Result<bool> {
+            self.inner.exists_calls.fetch_add(1, Ordering::Relaxed);
+            if path.contains("/attachments/") || path.contains("/artifacts/") {
+                return Err(anyhow!("probe_exists_failed"));
+            }
+            self.inner.inner.exists(path)
+        }
+
+        fn mkdir_all(&self, path: &str) -> Result<()> {
+            self.inner.mkdir_all(path)
+        }
+
+        fn list(&self, dir: &str) -> Result<Vec<String>> {
+            self.inner.list(dir)
+        }
+
+        fn get(&self, path: &str) -> Result<Vec<u8>> {
+            self.inner.get(path)
+        }
+
+        fn put(&self, path: &str, bytes: Vec<u8>) -> Result<()> {
             self.inner.put(path, bytes)
         }
 
@@ -308,6 +359,189 @@ mod push_progress_tests {
         assert!(
             remote.put_calls.load(Ordering::Relaxed) > 0,
             "fresh device should enter the repair path when remote metadata has gaps"
+        );
+    }
+
+    #[test]
+    fn push_with_progress_does_not_skip_when_remote_cursor_is_missing() {
+        let dir_a = tempdir().expect("tempdir A");
+        let conn_a = crate::db::open(dir_a.path()).expect("open A");
+        let db_key = [7u8; 32];
+        let sync_key = [9u8; 32];
+
+        let _c1 = crate::db::create_conversation(&conn_a, &db_key, "One").expect("c1");
+        let _attachment = crate::db::insert_attachment(
+            &conn_a,
+            &db_key,
+            dir_a.path(),
+            b"hello sync",
+            "image/png",
+        )
+        .expect("attachment A");
+
+        let device_id_a: String = conn_a
+            .query_row(
+                r#"SELECT value FROM kv WHERE key = 'device_id'"#,
+                [],
+                |row| row.get(0),
+            )
+            .expect("device id A");
+
+        let remote = CountingRemoteStore::new();
+        let pushed_a = push(&conn_a, &db_key, &sync_key, &remote, "SecondLoop").expect("push A");
+        assert!(pushed_a >= 2);
+
+        let dir_b = tempdir().expect("tempdir B");
+        let conn_b = crate::db::open(dir_b.path()).expect("open B");
+        let pulled_b = pull(&conn_b, &db_key, &sync_key, &remote, "SecondLoop").expect("pull B");
+        assert!(pulled_b >= 2);
+
+        remote
+            .delete(&format!("/SecondLoop/{device_id_a}/cursor.json"))
+            .expect("delete cursor");
+        remote.reset_counts();
+
+        let mut seen: Vec<(u64, u64)> = Vec::new();
+        let mut on_progress = |done: u64, total: u64| {
+            seen.push((done, total));
+        };
+
+        let pushed_b = push_with_progress(
+            &conn_b,
+            &db_key,
+            &sync_key,
+            &remote,
+            "SecondLoop",
+            &mut on_progress,
+        )
+        .expect("push B");
+
+        assert!(
+            pushed_b > 0,
+            "fresh device should not noop when remote cursor metadata is missing"
+        );
+        assert_ne!(seen, vec![(0, 0)]);
+        assert!(
+            remote.put_calls.load(Ordering::Relaxed) > 0,
+            "fresh device should repair cursor metadata when it is missing"
+        );
+    }
+
+    #[test]
+    fn push_with_progress_does_not_skip_when_remote_pack_is_missing() {
+        let dir_a = tempdir().expect("tempdir A");
+        let conn_a = crate::db::open(dir_a.path()).expect("open A");
+        let db_key = [7u8; 32];
+        let sync_key = [9u8; 32];
+
+        let _c1 = crate::db::create_conversation(&conn_a, &db_key, "One").expect("c1");
+        let _c2 = crate::db::create_conversation(&conn_a, &db_key, "Two").expect("c2");
+        let _attachment = crate::db::insert_attachment(
+            &conn_a,
+            &db_key,
+            dir_a.path(),
+            b"hello sync",
+            "image/png",
+        )
+        .expect("attachment A");
+
+        let device_id_a: String = conn_a
+            .query_row(
+                r#"SELECT value FROM kv WHERE key = 'device_id'"#,
+                [],
+                |row| row.get(0),
+            )
+            .expect("device id A");
+
+        let remote = CountingRemoteStore::new();
+        let pushed_a = push(&conn_a, &db_key, &sync_key, &remote, "SecondLoop").expect("push A");
+        assert!(pushed_a >= 3);
+
+        let dir_b = tempdir().expect("tempdir B");
+        let conn_b = crate::db::open(dir_b.path()).expect("open B");
+        let pulled_b = pull(&conn_b, &db_key, &sync_key, &remote, "SecondLoop").expect("pull B");
+        assert!(pulled_b >= 3);
+
+        remote
+            .delete(&format!("/SecondLoop/{device_id_a}/packs/pack_1.bin"))
+            .expect("delete pack");
+        remote.reset_counts();
+
+        let mut seen: Vec<(u64, u64)> = Vec::new();
+        let mut on_progress = |done: u64, total: u64| {
+            seen.push((done, total));
+        };
+
+        let pushed_b = push_with_progress(
+            &conn_b,
+            &db_key,
+            &sync_key,
+            &remote,
+            "SecondLoop",
+            &mut on_progress,
+        )
+        .expect("push B");
+
+        assert!(
+            pushed_b > 0,
+            "fresh device should not noop when remote pack metadata is missing"
+        );
+        assert_ne!(seen, vec![(0, 0)]);
+        assert!(
+            remote.put_calls.load(Ordering::Relaxed) > 0,
+            "fresh device should repair pack metadata when it is missing"
+        );
+    }
+
+    #[test]
+    fn push_with_progress_falls_back_when_probe_exists_errors() {
+        let dir_a = tempdir().expect("tempdir A");
+        let conn_a = crate::db::open(dir_a.path()).expect("open A");
+        let db_key = [7u8; 32];
+        let sync_key = [9u8; 32];
+
+        let _conversation =
+            crate::db::create_conversation(&conn_a, &db_key, "One").expect("conversation A");
+        let _attachment = crate::db::insert_attachment(
+            &conn_a,
+            &db_key,
+            dir_a.path(),
+            b"hello sync",
+            "image/png",
+        )
+        .expect("attachment A");
+
+        let remote = FailingExistsRemoteStore::new();
+        let pushed_a = push(&conn_a, &db_key, &sync_key, &remote, "SecondLoop").expect("push A");
+        assert_eq!(pushed_a, 2);
+
+        let dir_b = tempdir().expect("tempdir B");
+        let conn_b = crate::db::open(dir_b.path()).expect("open B");
+        let pulled_b = pull(&conn_b, &db_key, &sync_key, &remote, "SecondLoop").expect("pull B");
+        assert_eq!(pulled_b, 2);
+
+        remote.reset_counts();
+
+        let mut seen: Vec<(u64, u64)> = Vec::new();
+        let mut on_progress = |done: u64, total: u64| {
+            seen.push((done, total));
+        };
+
+        let pushed_b = push_with_progress(
+            &conn_b,
+            &db_key,
+            &sync_key,
+            &remote,
+            "SecondLoop",
+            &mut on_progress,
+        )
+        .expect("push B should fall back instead of failing");
+
+        assert!(pushed_b > 0);
+        assert!(!seen.is_empty());
+        assert!(
+            remote.inner.put_calls.load(Ordering::Relaxed) > 0,
+            "fallback path should repair remote state after probe failure"
         );
     }
 

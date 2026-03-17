@@ -18,4 +18,15 @@ void main() {
     smoother.update(done: 1, total: 1);
     expect(smoother.complete(), 1.0);
   });
+
+  test('reporter keeps headroom until explicit completion', () {
+    final seen = <double>[];
+    final reporter = SyncStageProgressReporter((value) => seen.add(value));
+
+    reporter.onProgress(1, 1);
+    expect(seen, [0.98]);
+
+    reporter.complete();
+    expect(seen, [0.98, 1.0]);
+  });
 }
