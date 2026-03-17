@@ -320,7 +320,15 @@ extension _TodoDetailPageStateFollowupSuggestions on _TodoDetailPageState {
                               .surfaceContainerHighest,
                           borderRadius: BorderRadius.circular(999),
                         ),
-                        child: Text('${citation.domain} · ${citation.title}'),
+                        child: Text.rich(
+                          TextSpan(
+                            text: citation.domain,
+                            children: <InlineSpan>[
+                              const TextSpan(text: ' · '),
+                              TextSpan(text: citation.title),
+                            ],
+                          ),
+                        ),
                       ),
                     ),
                   ),
@@ -333,7 +341,7 @@ extension _TodoDetailPageStateFollowupSuggestions on _TodoDetailPageState {
   }
 
   Future<void> _openFollowupCitation(String rawUrl) async {
-    final uri = Uri.tryParse(rawUrl.trim());
+    final uri = tryParseTodoFollowupCitationUrl(rawUrl);
     if (uri == null) return;
     await launchUrl(uri, mode: LaunchMode.externalApplication);
   }

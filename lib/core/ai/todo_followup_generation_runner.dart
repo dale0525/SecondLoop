@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import '../../src/rust/db.dart';
 import 'todo_followup_suggestions_ai.dart';
@@ -331,18 +332,15 @@ int _retryDelayMsForAttempt(int attempts) {
 
 String encodeTodoFollowupCitationsJson(
     List<TodoFollowupCitationDraft> citations) {
-  final escaped = citations
-      .map(
-        (item) =>
-            '{"title":"${_escapeJson(item.title)}","url":"${_escapeJson(item.url)}","domain":"${_escapeJson(item.domain)}"}',
-      )
-      .join(',');
-  return '[$escaped]';
-}
-
-String _escapeJson(String value) {
-  return value
-      .replaceAll(r'\', r'\\')
-      .replaceAll('"', r'\"')
-      .replaceAll('\n', r'\n');
+  return jsonEncode(
+    citations
+        .map(
+          (item) => <String, String>{
+            'title': item.title,
+            'url': item.url,
+            'domain': item.domain,
+          },
+        )
+        .toList(growable: false),
+  );
 }

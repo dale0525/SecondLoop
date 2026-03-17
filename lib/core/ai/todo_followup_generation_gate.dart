@@ -8,6 +8,7 @@ import '../../features/actions/settings/actions_settings_store.dart';
 import '../backend/app_backend.dart';
 import '../backend/native_backend.dart';
 import '../cloud/cloud_capability_auth.dart';
+import '../cloud/cloud_auth_controller.dart';
 import '../cloud/cloud_auth_scope.dart';
 import '../session/session_scope.dart';
 import '../subscription/subscription_scope.dart';
@@ -20,6 +21,23 @@ import 'semantic_parse_data_consent_prefs.dart';
 import 'todo_followup_generation_capability.dart';
 import 'todo_followup_generation_runner.dart';
 import 'todo_followup_suggestions_ai.dart';
+
+Future<String?> prepareTodoFollowupGenerationIdToken(
+  CloudAuthController? controller, {
+  required SubscriptionStatus subscriptionStatus,
+  required String gatewayBaseUrl,
+}) async {
+  final normalizedGatewayBaseUrl = gatewayBaseUrl.trim();
+  if (subscriptionStatus == SubscriptionStatus.entitled &&
+      normalizedGatewayBaseUrl.isNotEmpty) {
+    await bestEffortWarmCloudCapabilityAuth(controller);
+  }
+
+  return readCloudCapabilityIdToken(
+    controller,
+    mode: CloudCapabilityAuthMode.background,
+  );
+}
 
 class TodoFollowupGenerationGate extends StatefulWidget {
   const TodoFollowupGenerationGate({required this.child, super.key});
@@ -170,9 +188,10 @@ class _TodoFollowupGenerationGateState extends State<TodoFollowupGenerationGate>
       final gatewayConfig =
           cloudAuthScope?.gatewayConfig ?? CloudGatewayConfig.defaultConfig;
 
-      final idToken = await readCloudCapabilityIdToken(
+      final idToken = await prepareTodoFollowupGenerationIdToken(
         cloudAuthScope?.controller,
-        mode: CloudCapabilityAuthMode.background,
+        subscriptionStatus: subscriptionStatus,
+        gatewayBaseUrl: gatewayConfig.baseUrl,
       );
       final route = await decideAiAutomationRoute(
         backend,
@@ -184,10 +203,6 @@ class _TodoFollowupGenerationGateState extends State<TodoFollowupGenerationGate>
       if (route == AskAiRouteKind.needsSetup) {
         _schedule(_kIdleInterval);
         return;
-      }
-
-      if (route == AskAiRouteKind.cloudGateway) {
-        await bestEffortWarmCloudCapabilityAuth(cloudAuthScope?.controller);
       }
 
       await ActionsSettingsStore.load();

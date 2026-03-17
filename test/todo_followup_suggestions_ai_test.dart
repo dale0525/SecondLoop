@@ -82,4 +82,23 @@ void main() {
     expect(context, contains('已确认是明天下午。'));
     expect(context, isNot(contains('旧的 AI follow-up')));
   });
+
+  test('citation url parser only allows http and https', () {
+    expect(
+      tryParseTodoFollowupCitationUrl('https://openai.com/models')?.toString(),
+      'https://openai.com/models',
+    );
+    expect(
+      tryParseTodoFollowupCitationUrl('http://example.com/path')?.toString(),
+      'http://example.com/path',
+    );
+    expect(
+      tryParseTodoFollowupCitationUrl('javascript:alert(1)'),
+      isNull,
+    );
+    expect(
+      tryParseTodoFollowupCitationUrl('file:///tmp/secret'),
+      isNull,
+    );
+  });
 }

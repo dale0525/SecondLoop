@@ -5,6 +5,27 @@ import 'package:secondloop/core/ai/todo_followup_suggestions_ai.dart';
 import 'package:secondloop/src/rust/db.dart';
 
 void main() {
+  test('citation json encoding handles control characters safely', () {
+    final jsonText = encodeTodoFollowupCitationsJson(
+      const <TodoFollowupCitationDraft>[
+        TodoFollowupCitationDraft(
+          title: 'Line 1\r\nLine\t2',
+          url: 'https://example.com/query?a=1\tb',
+          domain: 'example.com',
+        ),
+      ],
+    );
+
+    final parsed = parseTodoFollowupSuggestionJson(
+      '{"content":"ok","mode":"web_search","citations":$jsonText}',
+    );
+
+    expect(parsed, isNotNull);
+    expect(parsed!.citations, hasLength(1));
+    expect(parsed.citations.single.title, 'Line 1\r\nLine\t2');
+    expect(parsed.citations.single.url, 'https://example.com/query?a=1\tb');
+  });
+
   test('runner generates follow-up for research task', () async {
     final store = _FakeStore(
       jobs: const <TodoFollowupGenerationJob>[

@@ -184,6 +184,20 @@ TodoFollowupSuggestionDraft? parseTodoFollowupSuggestionJson(String raw) {
   );
 }
 
+Uri? tryParseTodoFollowupCitationUrl(String rawUrl) {
+  final uri = Uri.tryParse(rawUrl.trim());
+  if (uri == null) return null;
+
+  final scheme = uri.scheme.toLowerCase();
+  if (scheme != 'http' && scheme != 'https') {
+    return null;
+  }
+  if (!uri.hasAuthority) {
+    return null;
+  }
+  return uri;
+}
+
 String buildTodoFollowupSuggestionContext({
   required Todo todo,
   required List<TodoActivity> activities,
