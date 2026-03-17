@@ -106,6 +106,10 @@ abstract class AppBackend {
     throw UnimplementedError('listTodos');
   }
 
+  Future<Todo?> getTodoById(Uint8List key, String todoId) {
+    throw UnimplementedError('getTodoById');
+  }
+
   Future<List<Todo>> listTodosCreatedInRange(
     Uint8List key, {
     required int startAtMsInclusive,

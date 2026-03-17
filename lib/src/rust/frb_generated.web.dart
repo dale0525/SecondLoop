@@ -108,6 +108,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   StoragePolicyConfig dco_decode_box_autoadd_storage_policy_config(dynamic raw);
 
   @protected
+  Todo dco_decode_box_autoadd_todo(dynamic raw);
+
+  @protected
   CloudMediaBackup dco_decode_cloud_media_backup(dynamic raw);
 
   @protected
@@ -364,6 +367,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   Message? dco_decode_opt_box_autoadd_message(dynamic raw);
 
   @protected
+  Todo? dco_decode_opt_box_autoadd_todo(dynamic raw);
+
+  @protected
   List<String>? dco_decode_opt_list_String(dynamic raw);
 
   @protected
@@ -499,6 +505,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   StoragePolicyConfig sse_decode_box_autoadd_storage_policy_config(
       SseDeserializer deserializer);
+
+  @protected
+  Todo sse_decode_box_autoadd_todo(SseDeserializer deserializer);
 
   @protected
   CloudMediaBackup sse_decode_cloud_media_backup(SseDeserializer deserializer);
@@ -793,6 +802,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   Message? sse_decode_opt_box_autoadd_message(SseDeserializer deserializer);
 
   @protected
+  Todo? sse_decode_opt_box_autoadd_todo(SseDeserializer deserializer);
+
+  @protected
   List<String>? sse_decode_opt_list_String(SseDeserializer deserializer);
 
   @protected
@@ -940,6 +952,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_box_autoadd_storage_policy_config(
       StoragePolicyConfig self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_todo(Todo self, SseSerializer serializer);
 
   @protected
   void sse_encode_cloud_media_backup(
@@ -1238,6 +1253,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_opt_box_autoadd_message(
       Message? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_todo(Todo? self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_list_String(List<String>? self, SseSerializer serializer);

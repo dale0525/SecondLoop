@@ -120,6 +120,13 @@ Future<List<Todo>> dbListTodos(
         {required String appDir, required List<int> key}) =>
     RustLib.instance.api.crateApiCoreDbListTodos(appDir: appDir, key: key);
 
+Future<Todo?> dbGetTodoById(
+        {required String appDir,
+        required List<int> key,
+        required String todoId}) =>
+    RustLib.instance.api
+        .crateApiCoreDbGetTodoById(appDir: appDir, key: key, todoId: todoId);
+
 Future<List<Todo>> dbListTodosCreatedInRange(
         {required String appDir,
         required List<int> key,

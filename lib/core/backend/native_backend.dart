@@ -260,6 +260,7 @@ class NativeAppBackend
     FlutterSecureStorage? secureStorage,
     AppDirProvider? appDirProvider,
     DbListTodosFn? dbListTodos,
+    DbGetTodoByIdFn? dbGetTodoById,
     DbUpsertTodoFn? dbUpsertTodo,
     DbInsertMessageFn? dbInsertMessage,
     DbInsertAttachmentFn? dbInsertAttachment,
@@ -302,6 +303,8 @@ class NativeAppBackend
     RustLibInitFn? rustLibInit,
   })  : _secureBlobStore = SecureBlobStore(storage: secureStorage),
         _appDirProvider = appDirProvider ?? _defaultAppDirProvider,
+        _dbListTodos = dbListTodos ?? rust_core.dbListTodos,
+        _dbGetTodoById = dbGetTodoById ?? rust_core.dbGetTodoById,
         _dbUpsertTodo = dbUpsertTodo ?? rust_core.dbUpsertTodo,
         _dbInsertMessage = dbInsertMessage ?? rust_core.dbInsertMessage,
         _dbInsertAttachment =
@@ -382,6 +385,8 @@ class NativeAppBackend
 
   final SecureBlobStore _secureBlobStore;
   final AppDirProvider _appDirProvider;
+  final DbListTodosFn _dbListTodos;
+  final DbGetTodoByIdFn _dbGetTodoById;
   final DbUpsertTodoFn _dbUpsertTodo;
   final DbInsertMessageFn _dbInsertMessage;
   final DbInsertAttachmentFn _dbInsertAttachment;
@@ -1124,7 +1129,13 @@ class NativeAppBackend
   @override
   Future<List<Todo>> listTodos(Uint8List key) async {
     final appDir = await _getAppDir();
-    return rust_core.dbListTodos(appDir: appDir, key: key);
+    return _dbListTodos(appDir: appDir, key: key);
+  }
+
+  @override
+  Future<Todo?> getTodoById(Uint8List key, String todoId) async {
+    final appDir = await _getAppDir();
+    return _dbGetTodoById(appDir: appDir, key: key, todoId: todoId);
   }
 
   @override

@@ -260,12 +260,8 @@ final class _BackendTodoFollowupGenerationStore
   final Uint8List sessionKey;
 
   @override
-  Future<Todo?> getTodo(String todoId) async {
-    final todos = await backend.listTodos(sessionKey);
-    for (final todo in todos) {
-      if (todo.id == todoId) return todo;
-    }
-    return null;
+  Future<Todo?> getTodo(String todoId) {
+    return backend.getTodoById(sessionKey, todoId);
   }
 
   @override

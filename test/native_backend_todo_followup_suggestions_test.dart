@@ -104,4 +104,38 @@ void main() {
     expect(capturedTodoIdForEnqueueJob, 'todo_1');
     expect(suggestions.single.generationMode, 'model_knowledge');
   });
+
+  test('NativeAppBackend getTodoById forwards args', () async {
+    String? capturedTodoId;
+
+    final backend = NativeAppBackend(
+      appDirProvider: () async => '/tmp/secondloop_test',
+      rustLibInit: () async {},
+      dbGetTodoById: ({
+        required String appDir,
+        required List<int> key,
+        required String todoId,
+      }) async {
+        capturedTodoId = todoId;
+        return const Todo(
+          id: 'todo_1',
+          title: 'Research LLM models',
+          dueAtMs: null,
+          status: 'open',
+          sourceEntryId: null,
+          createdAtMs: 1,
+          updatedAtMs: 1,
+          reviewStage: null,
+          nextReviewAtMs: null,
+          lastReviewAtMs: null,
+        );
+      },
+    );
+
+    final key = Uint8List.fromList(List<int>.filled(32, 8));
+    final todo = await backend.getTodoById(key, 'todo_1');
+
+    expect(capturedTodoId, 'todo_1');
+    expect(todo?.id, 'todo_1');
+  });
 }

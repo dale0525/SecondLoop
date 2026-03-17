@@ -173,6 +173,14 @@ VALUES (?1, ?2, 'followup_information', NULL, NULL, ?3, NULL, ?4, 1)
 "#,
         params![id, todo_id, content_blob, now],
     )?;
+    conn.execute(
+        r#"
+UPDATE todos
+SET updated_at_ms = MAX(?2, updated_at_ms + 1)
+WHERE id = ?1
+"#,
+        params![todo_id, now],
+    )?;
 
     let activity = get_todo_activity_by_id(conn, key, &id)?;
 

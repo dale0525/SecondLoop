@@ -95,6 +95,87 @@ fn information_followup_suggestions_can_be_generated_applied_and_dismissed() {
 }
 
 #[test]
+fn todo_upsert_keeps_updated_at_ms_monotonic() {
+    let (_temp_dir, key, conn) = setup();
+
+    db::upsert_todo(
+        &conn,
+        &key,
+        "todo_1",
+        "Research LLM models",
+        None,
+        "open",
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("upsert todo");
+
+    conn.execute(
+        "UPDATE todos SET updated_at_ms = 32_503_680_000_000 WHERE id = ?1",
+        ["todo_1"],
+    )
+    .expect("force newer updated_at_ms");
+
+    let todo = db::upsert_todo(
+        &conn,
+        &key,
+        "todo_1",
+        "Research LLM models (updated)",
+        None,
+        "open",
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("upsert todo again");
+
+    assert!(todo.updated_at_ms >= 32_503_680_000_000);
+}
+
+#[test]
+fn todo_is_updated_when_applying_followup_information() {
+    let (_temp_dir, key, conn) = setup();
+
+    let initial_todo = db::upsert_todo(
+        &conn,
+        &key,
+        "todo_1",
+        "Research LLM models",
+        None,
+        "open",
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("upsert todo");
+
+    let generated = db::upsert_generated_todo_followup_suggestions(
+        &conn,
+        &key,
+        "todo_1",
+        &[db::TodoFollowupSuggestionDraftInput {
+            content: "## Summary\nClaude / GPT / Gemini are still the main hosted options."
+                .to_string(),
+            generation_mode: "model_knowledge".to_string(),
+            citations_json: None,
+        }],
+        "cloud",
+        Some("gen_1"),
+    )
+    .expect("generate followup suggestions");
+
+    db::apply_todo_followup_suggestions(&conn, &key, "todo_1", &[generated[0].id.clone()])
+        .expect("apply followup suggestion");
+
+    let updated_todo = db::get_todo(&conn, &key, "todo_1").expect("get updated todo");
+    assert!(updated_todo.updated_at_ms > initial_todo.updated_at_ms);
+}
+
+#[test]
 fn todo_followup_generation_jobs_support_enqueue_claim_retry_and_succeed() {
     let (_temp_dir, key, conn) = setup();
 

@@ -273,6 +273,17 @@ pub fn db_list_todos(app_dir: String, key: Vec<u8>) -> Result<Vec<db::Todo>> {
 }
 
 #[flutter_rust_bridge::frb]
+pub fn db_get_todo_by_id(
+    app_dir: String,
+    key: Vec<u8>,
+    todo_id: String,
+) -> Result<Option<db::Todo>> {
+    let key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    db::find_todo(&conn, &key, &todo_id)
+}
+
+#[flutter_rust_bridge::frb]
 pub fn db_list_todos_created_in_range(
     app_dir: String,
     key: Vec<u8>,

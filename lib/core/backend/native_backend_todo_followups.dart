@@ -5,6 +5,12 @@ typedef DbListTodosFn = Future<List<Todo>> Function({
   required List<int> key,
 });
 
+typedef DbGetTodoByIdFn = Future<Todo?> Function({
+  required String appDir,
+  required List<int> key,
+  required String todoId,
+});
+
 typedef DbUpsertTodoFn = Future<Todo> Function({
   required String appDir,
   required List<int> key,
