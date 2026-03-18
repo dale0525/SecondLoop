@@ -1,5 +1,7 @@
 import '../../../src/rust/db.dart';
 
+import 'task_priority_guards.dart';
+
 enum TaskPriorityBand {
   focus,
   scheduled,
@@ -85,7 +87,11 @@ class TaskPriorityEntry {
 
   double get totalScore => ruleScore + semanticScore;
 
-  bool get hasHardFocusGuard => isOverdue || isDueToday || isInProgress;
+  bool get hasHardFocusGuard => hasTaskPriorityHardGuard(
+        isOverdue: isOverdue,
+        isDueToday: isDueToday,
+        isInProgress: isInProgress,
+      );
 
   TaskPriorityQuadrant get quadrant {
     if (isUrgent && isImportant) {

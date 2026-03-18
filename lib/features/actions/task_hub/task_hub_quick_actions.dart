@@ -4,6 +4,7 @@ import '../../../core/backend/app_backend.dart';
 import '../../../src/rust/db.dart';
 import '../review/review_backoff.dart';
 import '../settings/actions_settings_store.dart';
+import 'task_priority_guards.dart';
 import 'task_priority_signal_store.dart';
 
 enum TaskHubQuickAction {
@@ -120,7 +121,7 @@ class TaskHubQuickActionsController {
           increase: false,
         );
       case TaskHubQuickAction.increaseImportance:
-        if (_hasHardFocusGuard(todo, nowLocal: nowLocal)) {
+        if (hasTaskPriorityHardGuardForTodo(todo, nowLocal: nowLocal)) {
           return null;
         }
         final previous = await signalStore.readForTodo(todo.id);
@@ -376,7 +377,7 @@ class TaskHubQuickActionsController {
       nowLocal: nowLocal,
       signal: currentSignal,
     );
-    if (increase && _hasHardUrgencyGuard(todo, nowLocal: nowLocal)) {
+    if (increase && hasTaskPriorityHardGuardForTodo(todo, nowLocal: nowLocal)) {
       return null;
     }
     final isReviewQueueTodo =
@@ -663,7 +664,7 @@ _TaskUrgencyBucket _effectiveUrgencyBucketFor(
   required TaskPriorityManualSignal signal,
 }) {
   final bucket = _urgencyBucketFor(todo, nowLocal: nowLocal);
-  if (_hasHardUrgencyGuard(todo, nowLocal: nowLocal)) {
+  if (hasTaskPriorityHardGuardForTodo(todo, nowLocal: nowLocal)) {
     return bucket;
   }
 
@@ -679,26 +680,4 @@ _TaskUrgencyBucket _effectiveUrgencyBucketFor(
     _TaskUrgencyBucket.urgent => _TaskUrgencyBucket.backlog,
     _TaskUrgencyBucket.backlog => _TaskUrgencyBucket.backlog,
   };
-}
-
-bool _hasHardUrgencyGuard(
-  Todo todo, {
-  required DateTime nowLocal,
-}) {
-  if (todo.status == 'in_progress') return true;
-  final dueAtMs = todo.dueAtMs;
-  if (dueAtMs == null) return false;
-  final dueLocal =
-      DateTime.fromMillisecondsSinceEpoch(dueAtMs, isUtc: true).toLocal();
-  return dueLocal.isBefore(nowLocal) ||
-      (dueLocal.year == nowLocal.year &&
-          dueLocal.month == nowLocal.month &&
-          dueLocal.day == nowLocal.day);
-}
-
-bool _hasHardFocusGuard(
-  Todo todo, {
-  required DateTime nowLocal,
-}) {
-  return _hasHardUrgencyGuard(todo, nowLocal: nowLocal);
 }
