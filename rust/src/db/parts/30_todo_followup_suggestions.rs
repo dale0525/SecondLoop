@@ -20,6 +20,12 @@ fn todo_followup_suggestion_content_aad(id: &str) -> Vec<u8> {
     format!("todo_followup_suggestion.content:{id}").into_bytes()
 }
 
+fn normalize_todo_followup_suggestion_citations_json(citations_json: Option<&str>) -> Option<String> {
+    citations_json
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
+}
+
 fn find_todo_followup_suggestion_by_id(
     conn: &Connection,
     key: &[u8; 32],
@@ -217,11 +223,16 @@ pub fn upsert_generated_todo_followup_suggestions(
 ) -> Result<Vec<TodoFollowupSuggestion>> {
     run_immediate_transaction(conn, || {
         let existing = list_todo_followup_suggestions(conn, key, todo_id)?;
-        let mut blocked_norms = existing
+        let mut pending_by_normalized = existing
             .iter()
             .filter(|item| item.state == TODO_FOLLOWUP_SUGGESTION_STATE_PENDING)
-            .map(|item| normalize_checklist_suggestion_content(&item.content))
-            .collect::<std::collections::HashSet<_>>();
+            .map(|item| {
+                (
+                    normalize_checklist_suggestion_content(&item.content),
+                    item.clone(),
+                )
+            })
+            .collect::<std::collections::HashMap<_, _>>();
 
         let mut created = Vec::new();
         let now = now_ms();
@@ -233,13 +244,75 @@ pub fn upsert_generated_todo_followup_suggestions(
                 continue;
             }
             let normalized = normalize_checklist_suggestion_content(trimmed);
-            if normalized.is_empty() || !blocked_norms.insert(normalized) {
+            if normalized.is_empty() {
+                continue;
+            }
+
+            if let Some(existing_pending) = pending_by_normalized.get(&normalized).cloned() {
+                let content_blob = encrypt_bytes(
+                    key,
+                    trimmed.as_bytes(),
+                    &todo_followup_suggestion_content_aad(&existing_pending.id),
+                )?;
+                let normalized_citations_json =
+                    normalize_todo_followup_suggestion_citations_json(draft.citations_json.as_deref());
+                conn.execute(
+                    r#"
+UPDATE todo_followup_suggestions
+SET content = ?2,
+    source = ?3,
+    generation_mode = ?4,
+    generation_key = ?5,
+    citations_json = ?6,
+    updated_at_ms = ?7
+WHERE id = ?1
+"#,
+                    params![
+                        existing_pending.id,
+                        content_blob,
+                        source,
+                        draft.generation_mode.trim(),
+                        generation_key,
+                        normalized_citations_json,
+                        now,
+                    ],
+                )?;
+
+                let suggestion =
+                    get_todo_followup_suggestion_by_id(conn, key, &existing_pending.id)?;
+                let seq = next_device_seq(conn, &device_id)?;
+                let op = serde_json::json!({
+                    "op_id": uuid::Uuid::new_v4().to_string(),
+                    "device_id": device_id,
+                    "seq": seq,
+                    "ts_ms": now,
+                    "type": "todo.followup_suggestion.upsert.v1",
+                    "payload": {
+                        "suggestion_id": suggestion.id.as_str(),
+                        "todo_id": suggestion.todo_id.as_str(),
+                        "content": suggestion.content.as_str(),
+                        "state": suggestion.state.as_str(),
+                        "source": suggestion.source.as_str(),
+                        "generation_mode": suggestion.generation_mode.as_str(),
+                        "generation_key": suggestion.generation_key.as_deref(),
+                        "citations_json": suggestion.citations_json.as_deref(),
+                        "created_at_ms": suggestion.created_at_ms,
+                        "updated_at_ms": suggestion.updated_at_ms,
+                        "dismissed_at_ms": suggestion.dismissed_at_ms,
+                        "applied_activity_id": suggestion.applied_activity_id.as_deref(),
+                    }
+                });
+                insert_oplog(conn, key, &op)?;
+                pending_by_normalized.insert(normalized, suggestion.clone());
+                created.push(suggestion);
                 continue;
             }
 
             let id = uuid::Uuid::new_v4().to_string();
             let content_blob =
                 encrypt_bytes(key, trimmed.as_bytes(), &todo_followup_suggestion_content_aad(&id))?;
+            let normalized_citations_json =
+                normalize_todo_followup_suggestion_citations_json(draft.citations_json.as_deref());
             conn.execute(
                 r#"
 INSERT INTO todo_followup_suggestions(
@@ -254,7 +327,7 @@ INSERT INTO todo_followup_suggestions(
                     source,
                     draft.generation_mode,
                     generation_key,
-                    draft.citations_json,
+                    normalized_citations_json,
                     now,
                     now,
                 ],
@@ -284,6 +357,7 @@ INSERT INTO todo_followup_suggestions(
                 }
             });
             insert_oplog(conn, key, &op)?;
+            pending_by_normalized.insert(normalized, suggestion.clone());
             created.push(suggestion);
         }
 

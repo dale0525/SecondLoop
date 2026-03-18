@@ -476,3 +476,68 @@ fn dismiss_all_followup_suggestions_dismisses_every_pending_item() {
     assert_eq!(all.len(), 2);
     assert!(all.iter().all(|item| item.state == "dismissed"));
 }
+
+#[test]
+fn regenerate_same_content_refreshes_pending_metadata() {
+    let (_temp_dir, key, conn) = setup();
+
+    db::upsert_todo(
+        &conn,
+        &key,
+        "todo_1",
+        "Research LLM models",
+        None,
+        "open",
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("upsert todo");
+
+    let first = db::upsert_generated_todo_followup_suggestions(
+        &conn,
+        &key,
+        "todo_1",
+        &[db::TodoFollowupSuggestionDraftInput {
+            content: "Same content".to_string(),
+            generation_mode: "model_knowledge".to_string(),
+            citations_json: None,
+        }],
+        "cloud",
+        Some("gen_1"),
+    )
+    .expect("insert initial suggestion");
+    assert_eq!(first.len(), 1);
+
+    let refreshed = db::upsert_generated_todo_followup_suggestions(
+        &conn,
+        &key,
+        "todo_1",
+        &[db::TodoFollowupSuggestionDraftInput {
+            content: "Same content".to_string(),
+            generation_mode: "web_search".to_string(),
+            citations_json: Some(
+                r#"[{\"title\":\"Airport\",\"url\":\"https://airport.example\",\"domain\":\"airport.example\"}]"#
+                    .to_string(),
+            ),
+        }],
+        "cloud",
+        Some("gen_2"),
+    )
+    .expect("refresh pending suggestion metadata");
+    assert_eq!(refreshed.len(), 1);
+
+    let all = db::list_todo_followup_suggestions(&conn, &key, "todo_1")
+        .expect("list refreshed suggestions");
+    assert_eq!(all.len(), 1);
+    assert_eq!(all[0].id, first[0].id);
+    assert_eq!(all[0].generation_mode, "web_search");
+    assert_eq!(all[0].generation_key.as_deref(), Some("gen_2"));
+    assert_eq!(
+        all[0].citations_json.as_deref(),
+        Some(
+            r#"[{\"title\":\"Airport\",\"url\":\"https://airport.example\",\"domain\":\"airport.example\"}]"#
+        ),
+    );
+}

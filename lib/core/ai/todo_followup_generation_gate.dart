@@ -75,6 +75,20 @@ List<TodoFollowupGenerationPassPlan> buildTodoFollowupGenerationPassPlans(
   ];
 }
 
+Future<void> finalizeTodoFollowupGenerationJobsForNeedsSetup(
+  TodoFollowupGenerationStore store,
+  List<TodoFollowupGenerationJob> jobs, {
+  required int nowMs,
+}) async {
+  for (final job in jobs) {
+    if (job.triggerKind == 'manual_regenerate') {
+      await store.markJobCanceled(todoId: job.todoId, nowMs: nowMs);
+      continue;
+    }
+    await store.markJobSkipped(todoId: job.todoId, nowMs: nowMs);
+  }
+}
+
 class TodoFollowupGenerationGate extends StatefulWidget {
   const TodoFollowupGenerationGate({required this.child, super.key});
 
@@ -249,6 +263,7 @@ class _TodoFollowupGenerationGateState extends State<TodoFollowupGenerationGate>
       var didMutateAny = false;
       var didUpdateJobs = false;
       for (final passPlan in passPlans) {
+        final nowMs = DateTime.now().millisecondsSinceEpoch;
         final route = await decideTodoFollowupGenerationRoute(
           backend,
           Uint8List.fromList(sessionKey),
@@ -258,6 +273,12 @@ class _TodoFollowupGenerationGateState extends State<TodoFollowupGenerationGate>
           subscriptionStatus: subscriptionStatus,
         );
         if (route == AskAiRouteKind.needsSetup) {
+          await finalizeTodoFollowupGenerationJobsForNeedsSetup(
+            backendStore,
+            passPlan.jobs,
+            nowMs: nowMs,
+          );
+          didUpdateJobs = true;
           continue;
         }
 
