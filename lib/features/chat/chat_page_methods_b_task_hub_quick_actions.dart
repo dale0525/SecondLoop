@@ -64,7 +64,7 @@ extension _ChatPageStateMethodsBTaskHubQuickActions on _ChatPageState {
       ticket = maybeTicket;
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.maybeOf(context)
+      _scaffoldMessengerKey.currentState
         ?..hideCurrentSnackBar()
         ..showSnackBar(
           SnackBar(
@@ -84,7 +84,7 @@ extension _ChatPageStateMethodsBTaskHubQuickActions on _ChatPageState {
     _refresh();
 
     final actionLabel = _taskHubActionLabel(action);
-    final messenger = ScaffoldMessenger.maybeOf(context);
+    final messenger = _scaffoldMessengerKey.currentState;
     messenger?.hideCurrentSnackBar();
     _taskHubQuickActionSnackAutoDismissTimer?.cancel();
     _taskHubQuickActionSnackAutoDismissTimer = null;
@@ -116,7 +116,7 @@ extension _ChatPageStateMethodsBTaskHubQuickActions on _ChatPageState {
               _refresh();
             } catch (e) {
               if (!mounted) return;
-              ScaffoldMessenger.maybeOf(context)
+              _scaffoldMessengerKey.currentState
                 ?..hideCurrentSnackBar()
                 ..showSnackBar(
                   SnackBar(

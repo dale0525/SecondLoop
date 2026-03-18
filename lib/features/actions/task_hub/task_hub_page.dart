@@ -41,14 +41,17 @@ class _TaskHubPageState extends State<TaskHubPage> {
   final TaskPrioritySignalStore _signalStore = const TaskPrioritySignalStore();
   TaskHubUndoTicket? _undoTicket;
   Timer? _quickActionSnackAutoDismissTimer;
+  final GlobalKey<ScaffoldMessengerState> _scaffoldMessengerKey =
+      GlobalKey<ScaffoldMessengerState>();
   ScaffoldMessengerState? _quickActionSnackMessenger;
   Object? _quickActionSnackToken;
   var _doneVisibleCount = _kDonePageSize;
 
   @override
   void dispose() {
-    if (_quickActionSnackToken != null) {
-      _quickActionSnackMessenger?.hideCurrentSnackBar();
+    if (_quickActionSnackToken != null &&
+        (_quickActionSnackMessenger?.mounted ?? false)) {
+      _quickActionSnackMessenger?.removeCurrentSnackBar();
     }
     _quickActionSnackAutoDismissTimer?.cancel();
     _quickActionSnackAutoDismissTimer = null;
@@ -211,7 +214,7 @@ class _TaskHubPageState extends State<TaskHubPage> {
     }
     await _refresh();
     if (!mounted) return;
-    final messenger = ScaffoldMessenger.maybeOf(context);
+    final messenger = _scaffoldMessengerKey.currentState;
     messenger?.hideCurrentSnackBar();
     _quickActionSnackAutoDismissTimer?.cancel();
     _quickActionSnackAutoDismissTimer = null;
@@ -307,7 +310,7 @@ class _TaskHubPageState extends State<TaskHubPage> {
 
   void _showQuickActionError(Object error) {
     if (!mounted) return;
-    final messenger = ScaffoldMessenger.maybeOf(context);
+    final messenger = _scaffoldMessengerKey.currentState;
     messenger?.hideCurrentSnackBar();
     messenger?.showSnackBar(
       SnackBar(
@@ -342,130 +345,137 @@ class _TaskHubPageState extends State<TaskHubPage> {
     if (store == null) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
-    return Scaffold(
-      appBar: AppBar(title: Text(context.t.actions.taskHub.title)),
-      body: ListenableBuilder(
-        listenable: store,
-        builder: (context, _) {
-          final snapshot = store.snapshot;
-          final visibleFocus = snapshot.primaryFocus == null
-              ? const <TaskPriorityEntry>[]
-              : <TaskPriorityEntry>[snapshot.primaryFocus!];
-          final visibleNextUp = snapshot.nextUpEntries;
-          final visibleBacklog = snapshot.backlogEntries;
-          final visibleDone = snapshot.done.take(_doneVisibleCount).toList();
-          return RefreshIndicator(
-            onRefresh: _refresh,
-            child: ListView(
-              key: const ValueKey('task_hub_page'),
-              padding: const EdgeInsets.all(12),
-              children: [
-                if (store.isRefreshing && snapshot.allEntries.isEmpty)
-                  const Padding(
-                    padding: EdgeInsets.only(top: 32),
-                    child: Center(child: CircularProgressIndicator()),
-                  )
-                else ...[
-                  if (snapshot.primaryFocus != null)
-                    TaskHubFocusSection(
-                      entries: visibleFocus,
+    return ScaffoldMessenger(
+      key: _scaffoldMessengerKey,
+      child: Scaffold(
+        appBar: AppBar(title: Text(context.t.actions.taskHub.title)),
+        body: ListenableBuilder(
+          listenable: store,
+          builder: (context, _) {
+            final snapshot = store.snapshot;
+            final visibleFocus = snapshot.primaryFocus == null
+                ? const <TaskPriorityEntry>[]
+                : <TaskPriorityEntry>[snapshot.primaryFocus!];
+            final visibleNextUp = snapshot.nextUpEntries;
+            final visibleBacklog = snapshot.backlogEntries;
+            final visibleDone = snapshot.done.take(_doneVisibleCount).toList();
+            return RefreshIndicator(
+              onRefresh: _refresh,
+              child: ListView(
+                key: const ValueKey('task_hub_page'),
+                padding: const EdgeInsets.all(12),
+                children: [
+                  if (store.isRefreshing && snapshot.allEntries.isEmpty)
+                    const Padding(
+                      padding: EdgeInsets.only(top: 32),
+                      child: Center(child: CircularProgressIndicator()),
+                    )
+                  else ...[
+                    if (snapshot.primaryFocus != null)
+                      TaskHubFocusSection(
+                        entries: visibleFocus,
+                        checklistProgressByTodoId:
+                            store.checklistProgressByTodoId,
+                        onOpenTodo: _openTodoDetail,
+                        onQuickAction: _applyQuickAction,
+                        onFeedback: _recordFeedback,
+                      )
+                    else
+                      SlSurface(
+                        key: const ValueKey('task_hub_page_wrap_up'),
+                        padding: const EdgeInsets.all(12),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              context.t.actions.taskHub.wrapUpTitle,
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .titleMedium
+                                  ?.copyWith(
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              context.t.actions.taskHub.wrapUpSubtitle(
+                                upcoming: visibleNextUp.length,
+                                backlog: visibleBacklog.length,
+                                done: snapshot.done.length,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    if (store.isAiEnhancementEnabled &&
+                        !store.isAiEnhancementAvailable) ...[
+                      const SizedBox(height: 12),
+                      SlSurface(
+                        key: const ValueKey('task_hub_page_ai_upgrade_hint'),
+                        padding: const EdgeInsets.all(12),
+                        child: Text(
+                          context.t.actions.taskHub.aiUpgradeHint,
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 12),
+                    TaskHubPageSection(
+                      title: context.t.actions.taskHub.scheduledSection,
+                      sectionKey:
+                          const ValueKey('task_hub_page_section_upcoming'),
+                      entries: visibleNextUp,
                       checklistProgressByTodoId:
                           store.checklistProgressByTodoId,
+                      sectionKind: TaskHubPageSectionKind.scheduled,
                       onOpenTodo: _openTodoDetail,
                       onQuickAction: _applyQuickAction,
                       onFeedback: _recordFeedback,
-                    )
-                  else
-                    SlSurface(
-                      key: const ValueKey('task_hub_page_wrap_up'),
-                      padding: const EdgeInsets.all(12),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            context.t.actions.taskHub.wrapUpTitle,
-                            style: Theme.of(context)
-                                .textTheme
-                                .titleMedium
-                                ?.copyWith(
-                                  fontWeight: FontWeight.w800,
-                                ),
-                          ),
-                          const SizedBox(height: 6),
-                          Text(
-                            context.t.actions.taskHub.wrapUpSubtitle(
-                              upcoming: visibleNextUp.length,
-                              backlog: visibleBacklog.length,
-                              done: snapshot.done.length,
-                            ),
-                          ),
-                        ],
-                      ),
                     ),
-                  if (store.isAiEnhancementEnabled &&
-                      !store.isAiEnhancementAvailable) ...[
-                    const SizedBox(height: 12),
-                    SlSurface(
-                      key: const ValueKey('task_hub_page_ai_upgrade_hint'),
-                      padding: const EdgeInsets.all(12),
-                      child: Text(
-                        context.t.actions.taskHub.aiUpgradeHint,
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
+                    TaskHubPageSection(
+                      title: context.t.actions.taskHub.unscheduledSection,
+                      sectionKey:
+                          const ValueKey('task_hub_page_section_backlog'),
+                      entries: visibleBacklog,
+                      checklistProgressByTodoId:
+                          store.checklistProgressByTodoId,
+                      sectionKind: TaskHubPageSectionKind.decide,
+                      onOpenTodo: _openTodoDetail,
+                      onQuickAction: _applyQuickAction,
+                      onFeedback: _recordFeedback,
+                    ),
+                    TaskHubPageSection(
+                      title: context.t.actions.taskHub.doneSection,
+                      sectionKey: const ValueKey('task_hub_page_section_done'),
+                      entries: visibleDone,
+                      checklistProgressByTodoId:
+                          store.checklistProgressByTodoId,
+                      sectionKind: TaskHubPageSectionKind.done,
+                      onOpenTodo: _openTodoDetail,
+                      onQuickAction: _applyQuickAction,
+                      footer: snapshot.done.length > _doneVisibleCount
+                          ? Align(
+                              alignment: Alignment.centerLeft,
+                              child: SlButton(
+                                buttonKey: const ValueKey(
+                                    'task_hub_page_done_load_more'),
+                                variant: SlButtonVariant.outline,
+                                onPressed: () {
+                                  setState(() {
+                                    _doneVisibleCount += _kDonePageSize;
+                                  });
+                                },
+                                child: Text(context.t.common.actions.showMore),
+                              ),
+                            )
+                          : null,
                     ),
                   ],
-                  const SizedBox(height: 12),
-                  TaskHubPageSection(
-                    title: context.t.actions.taskHub.scheduledSection,
-                    sectionKey:
-                        const ValueKey('task_hub_page_section_upcoming'),
-                    entries: visibleNextUp,
-                    checklistProgressByTodoId: store.checklistProgressByTodoId,
-                    sectionKind: TaskHubPageSectionKind.scheduled,
-                    onOpenTodo: _openTodoDetail,
-                    onQuickAction: _applyQuickAction,
-                    onFeedback: _recordFeedback,
-                  ),
-                  TaskHubPageSection(
-                    title: context.t.actions.taskHub.unscheduledSection,
-                    sectionKey: const ValueKey('task_hub_page_section_backlog'),
-                    entries: visibleBacklog,
-                    checklistProgressByTodoId: store.checklistProgressByTodoId,
-                    sectionKind: TaskHubPageSectionKind.decide,
-                    onOpenTodo: _openTodoDetail,
-                    onQuickAction: _applyQuickAction,
-                    onFeedback: _recordFeedback,
-                  ),
-                  TaskHubPageSection(
-                    title: context.t.actions.taskHub.doneSection,
-                    sectionKey: const ValueKey('task_hub_page_section_done'),
-                    entries: visibleDone,
-                    checklistProgressByTodoId: store.checklistProgressByTodoId,
-                    sectionKind: TaskHubPageSectionKind.done,
-                    onOpenTodo: _openTodoDetail,
-                    onQuickAction: _applyQuickAction,
-                    footer: snapshot.done.length > _doneVisibleCount
-                        ? Align(
-                            alignment: Alignment.centerLeft,
-                            child: SlButton(
-                              buttonKey: const ValueKey(
-                                  'task_hub_page_done_load_more'),
-                              variant: SlButtonVariant.outline,
-                              onPressed: () {
-                                setState(() {
-                                  _doneVisibleCount += _kDonePageSize;
-                                });
-                              },
-                              child: Text(context.t.common.actions.showMore),
-                            ),
-                          )
-                        : null,
-                  ),
                 ],
-              ],
-            ),
-          );
-        },
+              ),
+            );
+          },
+        ),
       ),
     );
   }

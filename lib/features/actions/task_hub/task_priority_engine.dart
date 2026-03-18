@@ -211,7 +211,9 @@ List<TaskPriorityEntry> _applyAiResult(
       semanticScore: canApplyAiPrioritySignals
           ? aiEntry.semanticAdjustment
           : entry.semanticScore,
-      reasonText: aiEntry.reason.isEmpty ? null : aiEntry.reason,
+      reasonText: canApplyAiPrioritySignals && aiEntry.reason.isNotEmpty
+          ? aiEntry.reason
+          : null,
       confidence: confidence,
       importanceScore: canApplyAiPrioritySignals
           ? (aiEntry.isImportant == null
@@ -227,10 +229,12 @@ List<TaskPriorityEntry> _applyAiResult(
                   ? (entry.urgencyScore > 0 ? entry.urgencyScore : 1)
                   : (entry.urgencyScore < 0 ? entry.urgencyScore : -1))
           : entry.urgencyScore,
-      reasons: <TaskPriorityReasonKind>[
-        ...entry.reasons,
-        TaskPriorityReasonKind.aiSuggested,
-      ],
+      reasons: canApplyAiPrioritySignals
+          ? <TaskPriorityReasonKind>[
+              ...entry.reasons,
+              TaskPriorityReasonKind.aiSuggested,
+            ]
+          : entry.reasons,
     );
   }).toList(growable: false);
 }

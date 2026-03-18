@@ -2,11 +2,17 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:secondloop/features/actions/task_hub/task_priority_ai.dart';
+import 'package:secondloop/features/actions/task_hub/task_priority_signal_store.dart';
 import 'package:secondloop/features/actions/task_hub/task_priority_ai_models.dart';
 import 'package:secondloop/features/actions/task_hub/task_priority_store.dart';
 import 'package:secondloop/src/rust/db.dart';
 
 void main() {
+  setUp(() {
+    TaskPrioritySignalStore.resetMutationQueueForTest();
+    BackendTaskPriorityAiService.clearSharedCacheForTest();
+  });
+
   Todo todo({
     required String id,
     required String title,

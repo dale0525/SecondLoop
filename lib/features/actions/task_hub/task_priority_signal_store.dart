@@ -1,6 +1,7 @@
-import 'dart:convert';
 import 'dart:async';
+import 'dart:convert';
 
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:shared_preferences/shared_preferences.dart';
 
 class TaskPrioritySignalMutation {
@@ -156,8 +157,25 @@ class TaskPrioritySignalStore {
   const TaskPrioritySignalStore();
 
   static const _prefsKey = 'task_priority_manual_signals_v1';
-  static final Map<String, Future<void>> _pendingMutationsByTodoId =
-      <String, Future<void>>{};
+  static Future<void>? _pendingMutation;
+
+  @visibleForTesting
+  static void resetMutationQueueForTest() {
+    _pendingMutation = null;
+  }
+
+  Future<T> _enqueueMutation<T>(Future<T> Function() action) {
+    final result = Completer<T>();
+    final pending = _pendingMutation ?? Future<void>.value();
+    _pendingMutation = pending.catchError((_) {}).then((_) async {
+      try {
+        result.complete(await action());
+      } catch (error, stackTrace) {
+        result.completeError(error, stackTrace);
+      }
+    });
+    return result.future;
+  }
 
   Future<TaskPriorityManualSignalState> readManualState() async {
     final prefs = await SharedPreferences.getInstance();
@@ -192,14 +210,16 @@ class TaskPrioritySignalStore {
       String todoId, TaskPriorityManualSignal signal) async {
     final trimmedTodoId = todoId.trim();
     if (trimmedTodoId.isEmpty) return;
-    final state = await readManualState();
-    final next = Map<String, TaskPriorityManualSignal>.from(state.byTodoId);
-    if (signal.isEmpty) {
-      next.remove(trimmedTodoId);
-    } else {
-      next[trimmedTodoId] = signal;
-    }
-    await _write(TaskPriorityManualSignalState(byTodoId: next));
+    await _enqueueMutation<void>(() async {
+      final state = await readManualState();
+      final next = Map<String, TaskPriorityManualSignal>.from(state.byTodoId);
+      if (signal.isEmpty) {
+        next.remove(trimmedTodoId);
+      } else {
+        next[trimmedTodoId] = signal;
+      }
+      await _write(TaskPriorityManualSignalState(byTodoId: next));
+    });
   }
 
   Future<TaskPrioritySignalMutation> mutateForTodo(
@@ -216,83 +236,69 @@ class TaskPrioritySignalStore {
       );
     }
 
-    final result = Completer<TaskPrioritySignalMutation>();
-    final previousFuture =
-        _pendingMutationsByTodoId[trimmedTodoId] ?? Future<void>.value();
-    late final Future<void> pending;
-    pending = previousFuture.catchError((_) {}).then((_) async {
-      final previous = await readForTodo(trimmedTodoId);
+    return _enqueueMutation<TaskPrioritySignalMutation>(() async {
+      final state = await readManualState();
+      final previous = state.byTodoId[trimmedTodoId];
       final updated = mutate(previous ?? const TaskPriorityManualSignal());
-      await setForTodo(trimmedTodoId, updated);
-      if (!result.isCompleted) {
-        result.complete(
-          TaskPrioritySignalMutation(
-            previous: previous,
-            updated: updated,
-          ),
-        );
+      final next = Map<String, TaskPriorityManualSignal>.from(state.byTodoId);
+      if (updated.isEmpty) {
+        next.remove(trimmedTodoId);
+      } else {
+        next[trimmedTodoId] = updated;
       }
-    }).catchError((Object error, StackTrace stackTrace) {
-      if (!result.isCompleted) {
-        result.completeError(error, stackTrace);
-      }
-    }).whenComplete(() {
-      if (identical(_pendingMutationsByTodoId[trimmedTodoId], pending)) {
-        _pendingMutationsByTodoId.remove(trimmedTodoId);
-      }
+      await _write(TaskPriorityManualSignalState(byTodoId: next));
+      return TaskPrioritySignalMutation(
+        previous: previous,
+        updated: updated,
+      );
     });
-
-    _pendingMutationsByTodoId[trimmedTodoId] = pending;
-    return result.future;
   }
 
   Future<TaskPriorityManualSignal> adjustImportance(
     String todoId, {
     required bool increase,
   }) async {
-    final current =
-        await readForTodo(todoId) ?? const TaskPriorityManualSignal();
-    final updated = current.copyWith(importanceDelta: increase ? 1 : -1);
-    await setForTodo(todoId, updated);
-    return updated;
+    final mutation = await mutateForTodo(
+      todoId,
+      (current) => current.copyWith(importanceDelta: increase ? 1 : -1),
+    );
+    return mutation.updated;
   }
 
   Future<TaskPriorityManualSignal> adjustUrgency(
     String todoId, {
     required bool increase,
   }) async {
-    final current =
-        await readForTodo(todoId) ?? const TaskPriorityManualSignal();
-    final updated = current.copyWith(urgencyDelta: increase ? 1 : -1);
-    await setForTodo(todoId, updated);
-    return updated;
+    final mutation = await mutateForTodo(
+      todoId,
+      (current) => current.copyWith(urgencyDelta: increase ? 1 : -1),
+    );
+    return mutation.updated;
   }
 
   Future<TaskPriorityManualSignal> setUrgency(
     String todoId, {
     required bool? isUrgent,
   }) async {
-    final current =
-        await readForTodo(todoId) ?? const TaskPriorityManualSignal();
-    final updated = isUrgent == null
-        ? current.copyWith(resetUrgencyScore: true)
-        : current.copyWith(urgencyScore: isUrgent ? 1 : -1);
-    await setForTodo(todoId, updated);
-    return updated;
+    final mutation = await mutateForTodo(
+      todoId,
+      (current) => isUrgent == null
+          ? current.copyWith(resetUrgencyScore: true)
+          : current.copyWith(urgencyScore: isUrgent ? 1 : -1),
+    );
+    return mutation.updated;
   }
 
   Future<TaskPriorityManualSignal?> clearPreferredStatusForTodo(
     String todoId,
   ) async {
-    final current = await readForTodo(todoId);
-    if (current == null || current.preferredStatus == null) {
-      return current;
-    }
-    await setForTodo(
+    final mutation = await mutateForTodo(
       todoId,
-      current.copyWith(clearPreferredStatus: true),
+      (current) => current.preferredStatus == null
+          ? current
+          : current.copyWith(clearPreferredStatus: true),
     );
-    return current;
+    return mutation.previous;
   }
 
   Future<void> restoreForTodo(
@@ -311,15 +317,17 @@ class TaskPrioritySignalStore {
         .map((value) => value.trim())
         .where((value) => value.isNotEmpty)
         .toSet();
-    final state = await readManualState();
-    final next = <String, TaskPriorityManualSignal>{};
-    for (final entry in state.byTodoId.entries) {
-      if (allowed.contains(entry.key)) {
-        next[entry.key] = entry.value;
+    await _enqueueMutation<void>(() async {
+      final state = await readManualState();
+      final next = <String, TaskPriorityManualSignal>{};
+      for (final entry in state.byTodoId.entries) {
+        if (allowed.contains(entry.key)) {
+          next[entry.key] = entry.value;
+        }
       }
-    }
-    if (next.length == state.byTodoId.length) return;
-    await _write(TaskPriorityManualSignalState(byTodoId: next));
+      if (next.length == state.byTodoId.length) return;
+      await _write(TaskPriorityManualSignalState(byTodoId: next));
+    });
   }
 
   Future<void> _write(TaskPriorityManualSignalState state) async {

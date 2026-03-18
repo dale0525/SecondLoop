@@ -485,6 +485,8 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
   String? _activeCloudIdToken;
   TaskHubUndoTicket? _taskHubUndoTicket;
   Timer? _taskHubQuickActionSnackAutoDismissTimer;
+  final GlobalKey<ScaffoldMessengerState> _scaffoldMessengerKey =
+      GlobalKey<ScaffoldMessengerState>();
   ScaffoldMessengerState? _taskHubQuickActionSnackMessenger;
   Object? _taskHubQuickActionSnackToken;
   List<AttachmentDraftPayload> _composerDraftAttachments =
@@ -561,8 +563,9 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
     _messageAutoActionsQueue?.dispose();
     _askSub?.cancel();
     _detachedAskRecoveryTimer?.cancel();
-    if (_taskHubQuickActionSnackToken != null) {
-      _taskHubQuickActionSnackMessenger?.hideCurrentSnackBar();
+    if (_taskHubQuickActionSnackToken != null &&
+        (_taskHubQuickActionSnackMessenger?.mounted ?? false)) {
+      _taskHubQuickActionSnackMessenger?.removeCurrentSnackBar();
     }
     _taskHubQuickActionSnackAutoDismissTimer?.cancel();
     _taskHubQuickActionSnackAutoDismissTimer = null;

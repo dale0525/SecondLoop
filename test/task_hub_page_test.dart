@@ -7,12 +7,58 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:secondloop/core/backend/app_backend.dart';
 import 'package:secondloop/core/session/session_scope.dart';
 import 'package:secondloop/features/actions/task_hub/task_hub_page.dart';
+import 'package:secondloop/features/actions/task_hub/task_priority_ai.dart';
+import 'package:secondloop/features/actions/task_hub/task_priority_signal_store.dart';
 import 'package:secondloop/src/rust/db.dart';
 
 import 'test_backend.dart';
 import 'test_i18n.dart';
 
+Future<void> _pumpUntil(
+  WidgetTester tester,
+  bool Function() condition, {
+  Duration step = const Duration(milliseconds: 50),
+  int maxPumps = 120,
+}) async {
+  for (var i = 0; i < maxPumps; i += 1) {
+    await tester.pump(step);
+    if (condition()) {
+      return;
+    }
+  }
+  expect(condition(), isTrue);
+}
+
+Future<void> _pumpUntilFound(
+  WidgetTester tester,
+  Finder finder, {
+  Duration step = const Duration(milliseconds: 50),
+  int maxPumps = 120,
+}) async {
+  for (var i = 0; i < maxPumps; i += 1) {
+    await tester.pump(step);
+    if (finder.evaluate().isNotEmpty) {
+      return;
+    }
+  }
+  expect(finder, findsOneWidget);
+}
+
+Future<void> _pumpUntilTaskHubReady(WidgetTester tester) {
+  return _pumpUntil(
+    tester,
+    () =>
+        find.byKey(const ValueKey('task_hub_page')).evaluate().isNotEmpty &&
+        find.byType(CircularProgressIndicator).evaluate().isEmpty,
+  );
+}
+
 void main() {
+  setUp(() {
+    TaskPrioritySignalStore.resetMutationQueueForTest();
+    BackendTaskPriorityAiService.clearSharedCacheForTest();
+  });
+
   testWidgets('task hub shows primary focus plus remaining sections',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
@@ -78,7 +124,7 @@ void main() {
     );
 
     await tester.pumpWidget(_wrap(backend));
-    await tester.pumpAndSettle();
+    await _pumpUntilTaskHubReady(tester);
 
     expect(find.byKey(const ValueKey('task_hub_page')), findsOneWidget);
     expect(find.byKey(const ValueKey('task_hub_page_section_focus')),
@@ -96,7 +142,7 @@ void main() {
       300,
       scrollable: find.byType(Scrollable).first,
     );
-    await tester.pumpAndSettle();
+    await tester.pump();
     expect(find.byKey(const ValueKey('task_hub_page_section_done')),
         findsOneWidget);
     expect(
@@ -125,14 +171,14 @@ void main() {
     );
 
     await tester.pumpWidget(_wrap(backend));
-    await tester.pumpAndSettle();
+    await _pumpUntilTaskHubReady(tester);
 
     await tester.tap(
       find.byKey(
         const ValueKey('task_hub_page_quick_focus_start'),
       ),
     );
-    await tester.pumpAndSettle();
+    await _pumpUntilFound(tester, find.textContaining('Save failed'));
 
     expect(find.textContaining('Save failed'), findsOneWidget);
   });
@@ -158,7 +204,7 @@ void main() {
     );
 
     await tester.pumpWidget(_wrap(backend));
-    await tester.pumpAndSettle();
+    await _pumpUntilTaskHubReady(tester);
 
     expect(
       find.byKey(const ValueKey(
@@ -195,7 +241,7 @@ void main() {
     );
 
     await tester.pumpWidget(_wrap(backend));
-    await tester.pumpAndSettle();
+    await _pumpUntilTaskHubReady(tester);
 
     expect(
       find.byKey(
@@ -225,7 +271,7 @@ void main() {
     );
 
     await tester.pumpWidget(_wrap(backend));
-    await tester.pumpAndSettle();
+    await _pumpUntilTaskHubReady(tester);
 
     final urgencyIncrease = tester.widget<InkWell>(
       find.descendant(
@@ -278,7 +324,7 @@ void main() {
     );
 
     await tester.pumpWidget(_wrap(backend));
-    await tester.pumpAndSettle();
+    await _pumpUntilTaskHubReady(tester);
 
     final urgencyIncrease = tester.widget<InkWell>(
       find.descendant(
@@ -331,7 +377,7 @@ void main() {
     );
 
     await tester.pumpWidget(_wrap(backend));
-    await tester.pumpAndSettle();
+    await _pumpUntilTaskHubReady(tester);
 
     expect(find.byKey(const ValueKey('task_hub_page_section_focus')),
         findsOneWidget);
@@ -378,18 +424,18 @@ void main() {
     );
 
     await tester.pumpWidget(_wrap(backend));
-    await tester.pumpAndSettle();
+    await _pumpUntilTaskHubReady(tester);
 
     await tester.scrollUntilVisible(
       find.byKey(const ValueKey('task_hub_page_section_done')),
       300,
       scrollable: find.byType(Scrollable).first,
     );
-    await tester.pumpAndSettle();
+    await tester.pump();
 
     await tester
         .tap(find.byKey(const ValueKey('task_hub_page_quick_done_more')));
-    await tester.pumpAndSettle();
+    await _pumpUntilFound(tester, find.text('Delete'));
 
     expect(find.text('Do again'), findsOneWidget);
     expect(find.text('Delete'), findsOneWidget);
@@ -420,7 +466,7 @@ void main() {
     );
 
     await tester.pumpWidget(_wrap(backend));
-    await tester.pumpAndSettle();
+    await _pumpUntilTaskHubReady(tester);
 
     await tester
         .tap(find.byKey(const ValueKey('task_hub_page_quick_open_more')));
@@ -467,18 +513,18 @@ void main() {
     );
 
     await tester.pumpWidget(_wrap(backend));
-    await tester.pumpAndSettle();
+    await _pumpUntilTaskHubReady(tester);
 
     await tester.scrollUntilVisible(
       find.byKey(const ValueKey('task_hub_page_section_done')),
       300,
       scrollable: find.byType(Scrollable).first,
     );
-    await tester.pumpAndSettle();
+    await tester.pump();
 
     await tester
         .tap(find.byKey(const ValueKey('task_hub_page_quick_done_more')));
-    await tester.pumpAndSettle();
+    await _pumpUntilFound(tester, find.text('Do again'));
 
     final redoContext = tester.element(find.text('Do again'));
     final expectedColor = Theme.of(redoContext).colorScheme.onSurfaceVariant;
@@ -521,7 +567,7 @@ void main() {
     );
 
     await tester.pumpWidget(_wrap(backend));
-    await tester.pumpAndSettle();
+    await _pumpUntilTaskHubReady(tester);
 
     await tester.scrollUntilVisible(
       find.byKey(const ValueKey('task_hub_page_section_done')),
@@ -577,10 +623,13 @@ void main() {
       300,
       scrollable: find.byType(Scrollable).first,
     );
-    await tester.pumpAndSettle();
+    await tester.pump();
     await tester
         .tap(find.byKey(const ValueKey('task_hub_page_done_load_more')));
-    await tester.pumpAndSettle();
+    await _pumpUntilFound(
+      tester,
+      find.byKey(const ValueKey('task_hub_page_item_done-0')),
+    );
 
     expect(find.byKey(const ValueKey('task_hub_page_item_done-0')),
         findsOneWidget);

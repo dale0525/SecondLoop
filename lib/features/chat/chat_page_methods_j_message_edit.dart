@@ -5,7 +5,8 @@ extension _ChatPageStateMessageEditMethods on _ChatPageState {
     final backend = AppBackendScope.of(context);
     final sessionKey = SessionScope.of(context).sessionKey;
     final syncEngine = SyncEngineScope.maybeOf(context);
-    final messenger = ScaffoldMessenger.of(context);
+    final messenger = _scaffoldMessengerKey.currentState;
+    if (messenger == null) return;
     final initialText = message.role == 'assistant'
         ? _displayTextForMessage(message)
         : message.content;

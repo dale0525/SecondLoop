@@ -14,6 +14,8 @@ import 'package:secondloop/src/rust/db.dart';
 import 'test_i18n.dart';
 
 void main() {
+  setUp(TaskPrioritySignalStore.resetMutationQueueForTest);
+
   Todo todo({
     required String id,
     required String title,

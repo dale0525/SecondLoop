@@ -763,7 +763,7 @@ extension _ChatPageStateMethodsB on _ChatPageState {
       }
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
+      _scaffoldMessengerKey.currentState?.showSnackBar(
         SnackBar(
           content: Text(context.t.chat.photoFailed(error: '$e')),
           duration: const Duration(seconds: 3),
@@ -898,7 +898,7 @@ extension _ChatPageStateMethodsB on _ChatPageState {
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
+      _scaffoldMessengerKey.currentState?.showSnackBar(
         SnackBar(
           content: Text(context.t.chat.photoFailed(error: '$e')),
           duration: const Duration(seconds: 3),
@@ -946,7 +946,7 @@ extension _ChatPageStateMethodsB on _ChatPageState {
       await _addDesktopFilePayloadsToComposerDraft(payloads);
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
+      _scaffoldMessengerKey.currentState?.showSnackBar(
         SnackBar(
           content: Text(context.t.chat.photoFailed(error: '$e')),
           duration: const Duration(seconds: 3),

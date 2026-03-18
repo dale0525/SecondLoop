@@ -150,7 +150,7 @@ extension _ChatPageStateMethodsD on _ChatPageState {
 
     if (!mounted) return;
     _refresh();
-    ScaffoldMessenger.of(context).showSnackBar(
+    _scaffoldMessengerKey.currentState?.showSnackBar(
       SnackBar(
         content:
             Text(context.t.actions.todoNoteLink.linked(title: selected.title)),

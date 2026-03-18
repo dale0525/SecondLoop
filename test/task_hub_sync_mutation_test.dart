@@ -9,11 +9,48 @@ import 'package:secondloop/core/session/session_scope.dart';
 import 'package:secondloop/core/sync/sync_engine.dart';
 import 'package:secondloop/core/sync/sync_engine_gate.dart';
 import 'package:secondloop/features/actions/task_hub/task_hub_page.dart';
+import 'package:secondloop/features/actions/task_hub/task_priority_ai.dart';
+import 'package:secondloop/features/actions/task_hub/task_priority_signal_store.dart';
 import 'package:secondloop/src/rust/db.dart';
 
 import 'test_i18n.dart';
 
+Future<void> _pumpUntil(
+  WidgetTester tester,
+  bool Function() condition, {
+  Duration step = const Duration(milliseconds: 50),
+  int maxPumps = 120,
+}) async {
+  for (var i = 0; i < maxPumps; i += 1) {
+    await tester.pump(step);
+    if (condition()) {
+      return;
+    }
+  }
+  expect(condition(), isTrue);
+}
+
+Future<void> _pumpUntilFound(
+  WidgetTester tester,
+  Finder finder, {
+  Duration step = const Duration(milliseconds: 50),
+  int maxPumps = 120,
+}) async {
+  for (var i = 0; i < maxPumps; i += 1) {
+    await tester.pump(step);
+    if (finder.evaluate().isNotEmpty) {
+      return;
+    }
+  }
+  expect(finder, findsOneWidget);
+}
+
 void main() {
+  setUp(() {
+    TaskPrioritySignalStore.resetMutationQueueForTest();
+    BackendTaskPriorityAiService.clearSharedCacheForTest();
+  });
+
   testWidgets('task hub done quick action notifies sync engine',
       (tester) async {
     SharedPreferences.setMockInitialValues({
@@ -58,11 +95,17 @@ void main() {
         ),
       ),
     );
-    await tester.pumpAndSettle();
+    await _pumpUntilFound(
+      tester,
+      find.byKey(const ValueKey('task_hub_page_quick_todo:1_done')),
+    );
 
     await tester
         .tap(find.byKey(const ValueKey('task_hub_page_quick_todo:1_done')));
-    await tester.pumpAndSettle();
+    await _pumpUntil(
+      tester,
+      () => backend.setTodoStatusCalls >= 1 && changes >= 1,
+    );
 
     expect(backend.setTodoStatusCalls, greaterThanOrEqualTo(1));
     expect(changes, greaterThanOrEqualTo(1));
@@ -112,7 +155,10 @@ void main() {
         ),
       ),
     );
-    await tester.pumpAndSettle();
+    await _pumpUntilFound(
+      tester,
+      find.byKey(const ValueKey('task_hub_page_quick_todo:1_tomorrow')),
+    );
 
     await tester
         .tap(find.byKey(const ValueKey('task_hub_page_quick_todo:1_tomorrow')));
@@ -120,7 +166,10 @@ void main() {
 
     expect(find.byType(SnackBar), findsOneWidget);
 
-    await tester.pumpAndSettle();
+    await _pumpUntil(
+      tester,
+      () => backend.upsertTodoCalls >= 1 && changes >= 1,
+    );
 
     expect(backend.upsertTodoCalls, greaterThanOrEqualTo(1));
     expect(changes, greaterThanOrEqualTo(1));
@@ -175,7 +224,10 @@ void main() {
         ),
       ),
     );
-    await tester.pumpAndSettle();
+    await _pumpUntilFound(
+      tester,
+      find.byKey(const ValueKey('task_hub_page_quick_todo:1_tomorrow')),
+    );
 
     await tester
         .tap(find.byKey(const ValueKey('task_hub_page_quick_todo:1_tomorrow')));
@@ -247,10 +299,17 @@ void main() {
         ),
       ),
     );
-    await tester.pumpAndSettle();
+    await _pumpUntilFound(
+      tester,
+      find.byKey(const ValueKey('open_task_hub_page')),
+    );
 
     await tester.tap(find.byKey(const ValueKey('open_task_hub_page')));
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await _pumpUntilFound(
+      tester,
+      find.byKey(const ValueKey('task_hub_page_quick_todo:1_tomorrow')),
+    );
 
     await tester
         .tap(find.byKey(const ValueKey('task_hub_page_quick_todo:1_tomorrow')));
@@ -258,9 +317,16 @@ void main() {
     expect(find.byType(SnackBar), findsOneWidget);
 
     await tester.pageBack();
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await _pumpUntilFound(
+      tester,
+      find.byKey(const ValueKey('open_task_hub_page')),
+    );
 
-    expect(find.byType(SnackBar), findsNothing);
+    await _pumpUntil(
+      tester,
+      () => find.byType(SnackBar).evaluate().isEmpty,
+    );
 
     await tester.pump(const Duration(seconds: 4));
     await tester.pump();

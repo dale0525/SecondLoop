@@ -8,6 +8,8 @@ import 'package:secondloop/core/backend/app_backend.dart';
 import 'package:secondloop/core/session/session_scope.dart';
 import 'package:secondloop/features/actions/agenda/todo_agenda_banner.dart';
 import 'package:secondloop/features/actions/task_hub/task_hub_page.dart';
+import 'package:secondloop/features/actions/task_hub/task_priority_ai.dart';
+import 'package:secondloop/features/actions/task_hub/task_priority_signal_store.dart';
 import 'package:secondloop/features/actions/todo/todo_detail_page.dart';
 import 'package:secondloop/features/chat/chat_page.dart';
 import 'package:secondloop/src/rust/db.dart';
@@ -15,7 +17,27 @@ import 'package:secondloop/src/rust/db.dart';
 import 'test_backend.dart';
 import 'test_i18n.dart';
 
+Future<void> _pumpUntilFound(
+  WidgetTester tester,
+  Finder finder, {
+  Duration step = const Duration(milliseconds: 50),
+  int maxPumps = 120,
+}) async {
+  for (var i = 0; i < maxPumps; i += 1) {
+    await tester.pump(step);
+    if (finder.evaluate().isNotEmpty) {
+      return;
+    }
+  }
+  expect(finder, findsOneWidget);
+}
+
 void main() {
+  setUp(() {
+    TaskPrioritySignalStore.resetMutationQueueForTest();
+    BackendTaskPriorityAiService.clearSharedCacheForTest();
+  });
+
   testWidgets('TodoAgendaBanner shows checklist progress in preview rows',
       (tester) async {
     await tester.pumpWidget(
@@ -159,10 +181,17 @@ void main() {
         ),
       ),
     );
-    await tester.pumpAndSettle();
+    await _pumpUntilFound(
+      tester,
+      find.byKey(const ValueKey('task_hub_banner_primary_action')),
+    );
 
     await tester.tap(find.byKey(const ValueKey('task_hub_banner')));
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await _pumpUntilFound(
+      tester,
+      find.byKey(const ValueKey('task_hub_banner_view_all')),
+    );
 
     expect(find.byKey(const ValueKey('task_hub_preview_list')), findsOneWidget);
 
@@ -214,10 +243,17 @@ void main() {
         ),
       ),
     );
-    await tester.pumpAndSettle();
+    await _pumpUntilFound(
+      tester,
+      find.byKey(const ValueKey('task_hub_banner_primary_action')),
+    );
 
     await tester.tap(find.byKey(const ValueKey('task_hub_banner')));
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await _pumpUntilFound(
+      tester,
+      find.byKey(const ValueKey('task_hub_banner_open_focus')),
+    );
 
     final openFocusButton =
         find.byKey(const ValueKey('task_hub_banner_open_focus'));
@@ -331,7 +367,10 @@ void main() {
         ),
       ),
     );
-    await tester.pumpAndSettle();
+    await _pumpUntilFound(
+      tester,
+      find.byKey(const ValueKey('task_hub_banner_primary_action')),
+    );
 
     await tester
         .tap(find.byKey(const ValueKey('task_hub_banner_primary_action')));
@@ -409,7 +448,11 @@ void main() {
     await tester.pumpAndSettle();
 
     await tester.tap(find.byKey(const ValueKey('open_chat_page')));
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await _pumpUntilFound(
+      tester,
+      find.byKey(const ValueKey('task_hub_banner_primary_action')),
+    );
 
     await tester
         .tap(find.byKey(const ValueKey('task_hub_banner_primary_action')));
@@ -469,7 +512,10 @@ void main() {
         ),
       ),
     );
-    await tester.pumpAndSettle();
+    await _pumpUntilFound(
+      tester,
+      find.byKey(const ValueKey('task_hub_banner_primary_action')),
+    );
 
     expect(
       find.byKey(const ValueKey('task_hub_banner_primary_action')),

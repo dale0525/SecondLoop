@@ -8,6 +8,8 @@ import 'package:secondloop/features/actions/task_hub/task_priority_signal_store.
 import 'package:secondloop/src/rust/db.dart';
 
 void main() {
+  setUp(TaskPrioritySignalStore.resetMutationQueueForTest);
+
   Todo todo({
     required String id,
     required String title,
@@ -286,6 +288,12 @@ void main() {
           .firstWhere((entry) => entry.todo.id == 'noisy')
           .semanticScore,
       0,
+    );
+    expect(
+      snapshot.allEntries
+          .firstWhere((entry) => entry.todo.id == 'noisy')
+          .reasonText,
+      isNull,
     );
   });
 

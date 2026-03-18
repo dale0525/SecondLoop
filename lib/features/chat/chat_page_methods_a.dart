@@ -386,7 +386,7 @@ extension _ChatPageStateMethodsA on _ChatPageState {
       return;
     }
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
+    _scaffoldMessengerKey.currentState?.showSnackBar(
       SnackBar(
         content: Text(context.t.actions.history.actions.copied),
         duration: const Duration(seconds: 3),
@@ -489,7 +489,7 @@ extension _ChatPageStateMethodsA on _ChatPageState {
       final backendAny = AppBackendScope.of(context);
       if (backendAny is! NativeAppBackend) {
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
+        _scaffoldMessengerKey.currentState?.showSnackBar(
           SnackBar(
             content: Text(
               context.t.chat.photoFailed(
@@ -582,7 +582,7 @@ extension _ChatPageStateMethodsA on _ChatPageState {
         }
       } catch (e) {
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
+        _scaffoldMessengerKey.currentState?.showSnackBar(
           SnackBar(
             content: Text(context.t.chat.photoFailed(error: '$e')),
             duration: const Duration(seconds: 3),
@@ -1329,7 +1329,8 @@ extension _ChatPageStateMethodsA on _ChatPageState {
       final backend = AppBackendScope.of(context);
       final sessionKey = SessionScope.of(context).sessionKey;
       final syncEngine = SyncEngineScope.maybeOf(context);
-      final messenger = ScaffoldMessenger.of(context);
+      final messenger = _scaffoldMessengerKey.currentState;
+      if (messenger == null) return;
 
       if (message.id == _kFailedAskMessageId) {
         final confirmed = await showSlDeleteConfirmDialog(
@@ -1434,7 +1435,7 @@ extension _ChatPageStateMethodsA on _ChatPageState {
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
+      _scaffoldMessengerKey.currentState?.showSnackBar(
         SnackBar(
           content: Text(t.chat.deleteFailed(error: '$e')),
           duration: const Duration(seconds: 3),
