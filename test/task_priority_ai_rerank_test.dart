@@ -92,8 +92,9 @@ void main() {
     );
 
     expect(parsed.entries.single.todoId, 't1');
-    expect(parsed.entries.single.priorityBand, TaskPriorityAiBand.focus);
-    expect(parsed.entries.single.suggestedAction,
+    expect(parsed.entries.single.legacyRanking?.priorityBand,
+        TaskPriorityAiBand.focus);
+    expect(parsed.entries.single.legacyRanking?.suggestedAction,
         TaskPrioritySuggestionKind.doNow);
   });
 
@@ -102,7 +103,7 @@ void main() {
       '{"entries":[{"todo_id":"t1","priority_band":"focus","semantic_adjustment":14,"reason":"It unblocks work.","suggested_action":"do","confidence":"high"}]}',
     );
 
-    expect(parsed.entries.single.suggestedAction,
+    expect(parsed.entries.single.legacyRanking?.suggestedAction,
         TaskPrioritySuggestionKind.doNow);
   });
 
@@ -125,8 +126,9 @@ void main() {
       '{"entries":[{"todo_id":"t1","priority_band":"focus","semantic_adjustment":14,"reason":"It unblocks work.","suggested_action":"clarify","confidence":"high","is_important":true,"is_urgent":false}]}',
     );
 
-    expect(parsed.entries.single.priorityBand, TaskPriorityAiBand.focus);
-    expect(parsed.entries.single.suggestedAction,
+    expect(parsed.entries.single.legacyRanking?.priorityBand,
+        TaskPriorityAiBand.focus);
+    expect(parsed.entries.single.legacyRanking?.suggestedAction,
         TaskPrioritySuggestionKind.clarify);
     expect(parsed.entries.single.isImportant, isTrue);
     expect(parsed.entries.single.isUrgent, isFalse);

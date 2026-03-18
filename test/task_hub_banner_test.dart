@@ -4,7 +4,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:secondloop/features/actions/task_hub/task_hub_banner.dart';
 import 'package:secondloop/features/actions/task_hub/task_priority_ai_models.dart';
 import 'package:secondloop/features/actions/task_hub/task_priority_engine.dart';
-import 'package:secondloop/features/actions/task_hub/task_priority_models.dart';
 import 'package:secondloop/features/actions/task_hub/task_hub_quick_actions.dart';
 import 'package:secondloop/src/rust/db.dart';
 

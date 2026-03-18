@@ -14,24 +14,32 @@ enum TaskPriorityAiConfidence {
   high,
 }
 
+class TaskPriorityAiLegacyRanking {
+  const TaskPriorityAiLegacyRanking({
+    required this.priorityBand,
+    required this.suggestedAction,
+  });
+
+  final TaskPriorityAiBand priorityBand;
+  final TaskPrioritySuggestionKind suggestedAction;
+}
+
 class TaskPriorityAiEntry {
   const TaskPriorityAiEntry({
     required this.todoId,
     required this.semanticAdjustment,
     required this.reason,
     required this.confidence,
-    this.priorityBand,
-    this.suggestedAction,
+    this.legacyRanking,
     this.isImportant,
     this.isUrgent,
   });
 
   final String todoId;
-  final TaskPriorityAiBand? priorityBand;
   final double semanticAdjustment;
   final String reason;
-  final TaskPrioritySuggestionKind? suggestedAction;
   final TaskPriorityAiConfidence confidence;
+  final TaskPriorityAiLegacyRanking? legacyRanking;
   final bool? isImportant;
   final bool? isUrgent;
 
@@ -44,11 +52,9 @@ class TaskPriorityAiEntry {
       'is_important': isImportant,
       'is_urgent': isUrgent,
     };
-    if (priorityBand != null) {
-      json['priority_band'] = priorityBand!.name;
-    }
-    if (suggestedAction != null) {
-      json['suggested_action'] = suggestedAction!.name;
+    if (legacyRanking != null) {
+      json['priority_band'] = legacyRanking!.priorityBand.name;
+      json['suggested_action'] = legacyRanking!.suggestedAction.name;
     }
     return json;
   }
@@ -100,11 +106,16 @@ class TaskPriorityAiEntry {
         : double.tryParse(adjustmentRaw?.toString() ?? '') ?? 0;
     return TaskPriorityAiEntry(
       todoId: todoId,
-      priorityBand: priorityBand,
       semanticAdjustment: adjustment,
       reason: (json['reason'] ?? '').toString().trim(),
-      suggestedAction: suggestedAction,
       confidence: confidence,
+      legacyRanking: priorityBand == null && suggestedAction == null
+          ? null
+          : TaskPriorityAiLegacyRanking(
+              priorityBand: priorityBand ?? TaskPriorityAiBand.next,
+              suggestedAction:
+                  suggestedAction ?? TaskPrioritySuggestionKind.doNow,
+            ),
       isImportant: parseBool(json['is_important'] ?? json['important']),
       isUrgent: parseBool(json['is_urgent'] ?? json['urgent']),
     );
