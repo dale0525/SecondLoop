@@ -174,6 +174,104 @@ void main() {
     );
   });
 
+  testWidgets('hard-focus tasks disable positive priority buttons',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final backend = _TaskHubBackend(
+      todos: const <Todo>[
+        Todo(
+          id: 'guarded',
+          title: 'Critical launch task',
+          dueAtMs: null,
+          status: 'in_progress',
+          sourceEntryId: null,
+          createdAtMs: 0,
+          updatedAtMs: 10,
+          reviewStage: null,
+          nextReviewAtMs: null,
+          lastReviewAtMs: null,
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(_wrap(backend));
+    await tester.pumpAndSettle();
+
+    final urgencyIncrease = tester.widget<InkWell>(
+      find.descendant(
+        of: find.byKey(
+          const ValueKey('task_hub_page_priority_guarded_urgency_increase'),
+        ),
+        matching: find.byType(InkWell),
+      ),
+    );
+    final importanceIncrease = tester.widget<InkWell>(
+      find.descendant(
+        of: find.byKey(
+          const ValueKey('task_hub_page_priority_guarded_importance_increase'),
+        ),
+        matching: find.byType(InkWell),
+      ),
+    );
+    final urgencyDecrease = tester.widget<InkWell>(
+      find.descendant(
+        of: find.byKey(
+          const ValueKey('task_hub_page_priority_guarded_urgency_decrease'),
+        ),
+        matching: find.byType(InkWell),
+      ),
+    );
+
+    expect(urgencyIncrease.onTap, isNull);
+    expect(importanceIncrease.onTap, isNull);
+    expect(urgencyDecrease.onTap, isNotNull);
+  });
+
+  testWidgets('backlog tasks keep positive priority buttons enabled',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final backend = _TaskHubBackend(
+      todos: const <Todo>[
+        Todo(
+          id: 'open-task',
+          title: 'Plan next step',
+          dueAtMs: null,
+          status: 'open',
+          sourceEntryId: null,
+          createdAtMs: 0,
+          updatedAtMs: 10,
+          reviewStage: null,
+          nextReviewAtMs: null,
+          lastReviewAtMs: null,
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(_wrap(backend));
+    await tester.pumpAndSettle();
+
+    final urgencyIncrease = tester.widget<InkWell>(
+      find.descendant(
+        of: find.byKey(
+          const ValueKey('task_hub_page_priority_open-task_urgency_increase'),
+        ),
+        matching: find.byType(InkWell),
+      ),
+    );
+    final importanceIncrease = tester.widget<InkWell>(
+      find.descendant(
+        of: find.byKey(
+          const ValueKey(
+              'task_hub_page_priority_open-task_importance_increase'),
+        ),
+        matching: find.byType(InkWell),
+      ),
+    );
+
+    expect(urgencyIncrease.onTap, isNotNull);
+    expect(importanceIncrease.onTap, isNotNull);
+  });
+
   testWidgets(
       'task hub keeps remaining focus tasks visible below primary focus',
       (tester) async {

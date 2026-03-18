@@ -233,8 +233,15 @@ class TaskHubEntryCard extends StatelessWidget {
                       stateKey: ValueKey(
                         'task_hub_page_priority_${entry.todo.id}_urgency_${entry.isUrgent ? 'active' : 'inactive'}',
                       ),
+                      decreaseButtonKey: ValueKey(
+                        'task_hub_page_priority_${entry.todo.id}_urgency_decrease',
+                      ),
+                      increaseButtonKey: ValueKey(
+                        'task_hub_page_priority_${entry.todo.id}_urgency_increase',
+                      ),
                       icon: Icons.priority_high_rounded,
                       isActive: entry.isUrgent,
+                      canIncrease: !entry.hasHardFocusGuard,
                       semanticsLabel:
                           context.t.actions.taskHub.actions.increaseUrgency,
                       decreaseTooltip:
@@ -254,8 +261,15 @@ class TaskHubEntryCard extends StatelessWidget {
                       stateKey: ValueKey(
                         'task_hub_page_priority_${entry.todo.id}_importance_${entry.isImportant ? 'active' : 'inactive'}',
                       ),
+                      decreaseButtonKey: ValueKey(
+                        'task_hub_page_priority_${entry.todo.id}_importance_decrease',
+                      ),
+                      increaseButtonKey: ValueKey(
+                        'task_hub_page_priority_${entry.todo.id}_importance_increase',
+                      ),
                       icon: Icons.keyboard_double_arrow_up_rounded,
                       isActive: entry.isImportant,
+                      canIncrease: !entry.hasHardFocusGuard,
                       semanticsLabel:
                           context.t.actions.taskHub.actions.increaseImportance,
                       decreaseTooltip:
@@ -472,8 +486,11 @@ int _taskHubOverflowPriority(TaskHubQuickAction action) {
 class _TaskHubPriorityControl extends StatelessWidget {
   const _TaskHubPriorityControl({
     required this.stateKey,
+    required this.decreaseButtonKey,
+    required this.increaseButtonKey,
     required this.icon,
     required this.isActive,
+    required this.canIncrease,
     required this.semanticsLabel,
     required this.decreaseTooltip,
     required this.increaseTooltip,
@@ -483,8 +500,11 @@ class _TaskHubPriorityControl extends StatelessWidget {
   });
 
   final Key stateKey;
+  final Key decreaseButtonKey;
+  final Key increaseButtonKey;
   final IconData icon;
   final bool isActive;
+  final bool canIncrease;
   final String semanticsLabel;
   final String decreaseTooltip;
   final String increaseTooltip;
@@ -509,6 +529,7 @@ class _TaskHubPriorityControl extends StatelessWidget {
         : theme.colorScheme.onSurfaceVariant;
     return Semantics(
       label: semanticsLabel,
+      enabled: canIncrease,
       child: AnimatedContainer(
         key: stateKey,
         duration: const Duration(milliseconds: 180),
@@ -556,16 +577,20 @@ class _TaskHubPriorityControl extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 _TaskHubPriorityButton(
+                  key: decreaseButtonKey,
                   icon: Icons.remove_rounded,
                   tooltip: decreaseTooltip,
                   emphasize: false,
+                  enabled: true,
                   onPressed: onDecrease,
                 ),
                 const SizedBox(width: 4),
                 _TaskHubPriorityButton(
+                  key: increaseButtonKey,
                   icon: Icons.add_rounded,
                   tooltip: increaseTooltip,
                   emphasize: true,
+                  enabled: canIncrease,
                   onPressed: onIncrease,
                 ),
               ],
@@ -582,43 +607,50 @@ class _TaskHubPriorityButton extends StatelessWidget {
     required this.icon,
     required this.tooltip,
     required this.emphasize,
+    required this.enabled,
     required this.onPressed,
+    super.key,
   });
 
   final IconData icon;
   final String tooltip;
   final bool emphasize;
+  final bool enabled;
   final VoidCallback onPressed;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final tokens = SlTokens.of(context);
+    final enabledOpacity = enabled ? 1.0 : 0.42;
     return Tooltip(
       message: tooltip,
       child: InkWell(
-        onTap: onPressed,
+        onTap: enabled ? onPressed : null,
         borderRadius: BorderRadius.circular(99),
-        child: Container(
-          width: 24,
-          height: 24,
-          decoration: BoxDecoration(
-            color: emphasize
-                ? theme.colorScheme.primaryContainer.withOpacity(0.9)
-                : theme.colorScheme.surface,
-            border: Border.all(
+        child: Opacity(
+          opacity: enabledOpacity,
+          child: Container(
+            width: 24,
+            height: 24,
+            decoration: BoxDecoration(
               color: emphasize
-                  ? theme.colorScheme.primary.withOpacity(0.45)
-                  : tokens.borderSubtle.withOpacity(0.9),
+                  ? theme.colorScheme.primaryContainer.withOpacity(0.9)
+                  : theme.colorScheme.surface,
+              border: Border.all(
+                color: emphasize
+                    ? theme.colorScheme.primary.withOpacity(0.45)
+                    : tokens.borderSubtle.withOpacity(0.9),
+              ),
+              borderRadius: BorderRadius.circular(99),
             ),
-            borderRadius: BorderRadius.circular(99),
-          ),
-          child: Icon(
-            icon,
-            size: 14,
-            color: emphasize
-                ? theme.colorScheme.primary
-                : theme.colorScheme.onSurfaceVariant,
+            child: Icon(
+              icon,
+              size: 14,
+              color: emphasize
+                  ? theme.colorScheme.primary
+                  : theme.colorScheme.onSurfaceVariant,
+            ),
           ),
         ),
       ),
