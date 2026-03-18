@@ -24,6 +24,10 @@ Future<String?> prepareTodoFollowupGenerationIdToken(
   bool forceWarm = false,
 }) async {
   final normalizedGatewayBaseUrl = gatewayBaseUrl.trim();
+  if (normalizedGatewayBaseUrl.isEmpty) {
+    return null;
+  }
+
   final shouldWarm = normalizedGatewayBaseUrl.isNotEmpty &&
       (subscriptionStatus == SubscriptionStatus.entitled || forceWarm);
   if (shouldWarm) {
@@ -87,6 +91,29 @@ Future<ForegroundAiPreparedRoute> prepareForegroundAiRoute(
   ForegroundAiWarmupPolicy warmupPolicy = ForegroundAiWarmupPolicy.never,
   bool fallbackToNeedsSetupOnRouteError = false,
 }) async {
+  final preliminaryRoute = await _decideForegroundAiRoute(
+    backend,
+    sessionKey,
+    routePolicy: routePolicy,
+    cloudIdToken: null,
+    gatewayConfig: gatewayConfig,
+    subscriptionStatus: subscriptionStatus,
+    fallbackToNeedsSetupOnRouteError: fallbackToNeedsSetupOnRouteError,
+  );
+  final canAttemptCloud = _canAttemptForegroundAiCloudRoute(
+    routePolicy: routePolicy,
+    gatewayConfig: gatewayConfig,
+    subscriptionStatus: subscriptionStatus,
+  );
+  if (!canAttemptCloud ||
+      (routePolicy == ForegroundAiRoutePolicy.automation &&
+          preliminaryRoute == AskAiRouteKind.byok)) {
+    return ForegroundAiPreparedRoute(
+      route: preliminaryRoute,
+      idToken: null,
+    );
+  }
+
   final didWarmBeforeRead = _shouldWarmForegroundAiTokenRead(
     gatewayConfig: gatewayConfig,
     subscriptionStatus: subscriptionStatus,
@@ -139,6 +166,21 @@ bool _shouldWarmForegroundAiTokenRead({
     case ForegroundAiWarmupPolicy.cloudOnly:
       return subscriptionStatus != SubscriptionStatus.notEntitled;
   }
+}
+
+bool _canAttemptForegroundAiCloudRoute({
+  required ForegroundAiRoutePolicy routePolicy,
+  required CloudGatewayConfig gatewayConfig,
+  required SubscriptionStatus subscriptionStatus,
+}) {
+  if (gatewayConfig.baseUrl.trim().isEmpty) return false;
+
+  return switch (routePolicy) {
+    ForegroundAiRoutePolicy.askAi =>
+      subscriptionStatus != SubscriptionStatus.notEntitled,
+    ForegroundAiRoutePolicy.automation =>
+      subscriptionStatus == SubscriptionStatus.entitled,
+  };
 }
 
 Future<AskAiRouteKind> _decideForegroundAiRoute(

@@ -226,23 +226,26 @@ void main() {
     expect(prepared.idToken, 'token_after_warm');
   });
 
-  test('late warmup refreshes returned token before handing route back',
+  test('automation preflight keeps byok local without reading cloud token',
       () async {
+    final controller = _CountingCloudAuthController();
+
     final prepared = await prepareForegroundAiRoute(
       _ByokBackend(),
       _sessionKey,
-      routePolicy: ForegroundAiRoutePolicy.askAi,
-      cloudAuthController: _WarmupRequiredCloudAuthController(),
+      routePolicy: ForegroundAiRoutePolicy.automation,
+      cloudAuthController: controller,
       gatewayConfig: const CloudGatewayConfig(
-        baseUrl: '',
+        baseUrl: 'https://example.com',
         modelName: 'cloud',
       ),
-      subscriptionStatus: SubscriptionStatus.unknown,
-      warmupPolicy: ForegroundAiWarmupPolicy.always,
+      subscriptionStatus: SubscriptionStatus.entitled,
+      warmupPolicy: ForegroundAiWarmupPolicy.never,
     );
 
     expect(prepared.route, AskAiRouteKind.byok);
-    expect(prepared.idToken, 'token_after_warm');
+    expect(prepared.idToken, isNull);
+    expect(controller.readCount, 0);
   });
 }
 
@@ -371,6 +374,46 @@ final class _WarmupRequiredCloudAuthController implements CloudAuthController {
   Future<String?> getIdToken() async {
     _reads += 1;
     return _reads >= 2 ? 'token_after_warm' : null;
+  }
+
+  @override
+  Future<void> refreshUserInfo() async {}
+
+  @override
+  Future<void> sendEmailVerification() async {}
+
+  @override
+  Future<void> signInWithEmailPassword({
+    required String email,
+    required String password,
+  }) async {}
+
+  @override
+  Future<void> signOut() async {}
+
+  @override
+  Future<void> signUpWithEmailPassword({
+    required String email,
+    required String password,
+  }) async {}
+}
+
+final class _CountingCloudAuthController implements CloudAuthController {
+  int readCount = 0;
+
+  @override
+  String? get email => 'demo@example.com';
+
+  @override
+  bool? get emailVerified => true;
+
+  @override
+  String? get uid => 'uid_1';
+
+  @override
+  Future<String?> getIdToken() async {
+    readCount += 1;
+    return 'token_1';
   }
 
   @override

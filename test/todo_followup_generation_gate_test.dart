@@ -337,6 +337,111 @@ void main() {
     expect(backend.canceledTodoIds, isEmpty);
   });
 
+  testWidgets(
+      'sync listeners are still notified when an earlier pass mutates before a later pass fails',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({
+      'semantic_parse_data_consent_v1': true,
+    });
+
+    final backend = _FakeTodoFollowupGenerationGateBackend(
+      dueJobs: const <TodoFollowupGenerationJob>[
+        TodoFollowupGenerationJob(
+          todoId: 'todo_manual',
+          triggerKind: 'manual_regenerate',
+          status: 'pending',
+          attempts: 0,
+          nextRetryAtMs: null,
+          lastError: null,
+          includeManualFollowups: true,
+          taskTypeHint: 'research',
+          createdAtMs: 0,
+          updatedAtMs: 0,
+        ),
+        TodoFollowupGenerationJob(
+          todoId: 'todo_auto',
+          triggerKind: 'auto_create',
+          status: 'pending',
+          attempts: 0,
+          nextRetryAtMs: null,
+          lastError: null,
+          includeManualFollowups: false,
+          taskTypeHint: 'research',
+          createdAtMs: 0,
+          updatedAtMs: 0,
+        ),
+      ],
+      todosById: const <String, Todo>{
+        'todo_manual': Todo(
+          id: 'todo_manual',
+          title: '调研一下当前主流的 llm 模型',
+          status: 'open',
+          createdAtMs: 0,
+          updatedAtMs: 0,
+        ),
+        'todo_auto': Todo(
+          id: 'todo_auto',
+          title: '调研一下当前主流的 llm 模型',
+          status: 'open',
+          createdAtMs: 0,
+          updatedAtMs: 0,
+        ),
+      },
+      llmProfileOutcomes: const <Object>[
+        <LlmProfile>[
+          LlmProfile(
+            id: 'llm_1',
+            name: 'BYOK',
+            providerType: 'openai_compatible',
+            baseUrl: 'https://example.com',
+            modelName: 'gpt-test',
+            isActive: true,
+            createdAtMs: 0,
+            updatedAtMs: 0,
+          ),
+        ],
+        _AiPromptFailure('boom'),
+      ],
+      aiPromptResponse:
+          '{"content":"Not verified online. Summary collected from model knowledge.","mode":"model_knowledge","citations":[]}',
+    );
+    final engine = SyncEngine(
+      syncRunner: _NoopSyncRunner(),
+      loadConfig: () async => null,
+    );
+    var changeCount = 0;
+    void onChange() => changeCount += 1;
+    engine.changes.addListener(onChange);
+    addTearDown(() {
+      engine.changes.removeListener(onChange);
+      engine.stop();
+    });
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: AppBackendScope(
+          backend: backend,
+          child: SessionScope(
+            sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+            lock: () {},
+            child: SyncEngineScope(
+              engine: engine,
+              child: const TodoFollowupGenerationGate(
+                child: SizedBox.shrink(),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 3));
+
+    expect(backend.generatedSuggestionTodoIds, contains('todo_manual'));
+    expect(changeCount, greaterThan(0));
+  });
+
   testWidgets('byok pass does not require a cloud token', (tester) async {
     SharedPreferences.setMockInitialValues({
       'semantic_parse_data_consent_v1': true,
@@ -421,12 +526,18 @@ final class _FakeTodoFollowupGenerationGateBackend extends NativeAppBackend {
     this.todosById = const <String, Todo>{},
     this.llmProfiles = const <LlmProfile>[],
     this.aiPromptResponse,
-  }) : super(appDirProvider: () async => '/tmp/secondloop-test');
+    List<Object> aiPromptOutcomes = const <Object>[],
+    List<Object> llmProfileOutcomes = const <Object>[],
+  })  : _aiPromptOutcomes = List<Object>.from(aiPromptOutcomes),
+        _llmProfileOutcomes = List<Object>.from(llmProfileOutcomes),
+        super(appDirProvider: () async => '/tmp/secondloop-test');
 
   final List<TodoFollowupGenerationJob> dueJobs;
   final Map<String, Todo> todosById;
   final List<LlmProfile> llmProfiles;
   final String? aiPromptResponse;
+  final List<Object> _aiPromptOutcomes;
+  final List<Object> _llmProfileOutcomes;
   final List<String> skippedTodoIds = <String>[];
   final List<String> canceledTodoIds = <String>[];
   final List<String> failedTodoIds = <String>[];
@@ -435,6 +546,13 @@ final class _FakeTodoFollowupGenerationGateBackend extends NativeAppBackend {
 
   @override
   Future<List<LlmProfile>> listLlmProfiles(Uint8List key) async {
+    if (_llmProfileOutcomes.isNotEmpty) {
+      final outcome = _llmProfileOutcomes.removeAt(0);
+      if (outcome is Exception) throw outcome;
+      if (outcome is Error) throw outcome;
+      return List<LlmProfile>.from(outcome as List<LlmProfile>);
+    }
+
     return llmProfiles;
   }
 
@@ -490,6 +608,13 @@ final class _FakeTodoFollowupGenerationGateBackend extends NativeAppBackend {
     Uint8List key, {
     required String prompt,
   }) async {
+    if (_aiPromptOutcomes.isNotEmpty) {
+      final outcome = _aiPromptOutcomes.removeAt(0);
+      if (outcome is Exception) throw outcome;
+      if (outcome is Error) throw outcome;
+      return '$outcome';
+    }
+
     final response = aiPromptResponse;
     if (response == null) {
       throw StateError('aiPromptResponse not configured');
@@ -551,6 +676,15 @@ final class _FakeTodoFollowupGenerationGateBackend extends NativeAppBackend {
   }) async {
     succeededTodoIds.add(todoId);
   }
+}
+
+final class _AiPromptFailure implements Exception {
+  const _AiPromptFailure(this.message);
+
+  final String message;
+
+  @override
+  String toString() => message;
 }
 
 final class _FakeTodoFollowupGenerationStore

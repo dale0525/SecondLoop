@@ -227,6 +227,8 @@ class _TodoFollowupGenerationGateState extends State<TodoFollowupGenerationGate>
     final sessionKey = SessionScope.of(context).sessionKey;
     final syncEngine = SyncEngineScope.maybeOf(context);
     final localeTag = Localizations.localeOf(context).toLanguageTag();
+    var didMutateAny = false;
+    var didUpdateJobs = false;
 
     _running = true;
     _restartBlockToken = UpdateRestartActivity.blockAiAnalysis();
@@ -269,27 +271,49 @@ class _TodoFollowupGenerationGateState extends State<TodoFollowupGenerationGate>
       }
 
       final passPlans = buildTodoFollowupGenerationPassPlans(previewJobs);
-      final idToken = await prepareTodoFollowupGenerationIdToken(
-        cloudAuthScope?.controller,
-        subscriptionStatus: subscriptionStatus,
-        gatewayBaseUrl: gatewayConfig.baseUrl,
-        forceWarm: passPlans.any((plan) => plan.hasManualRegenerateDueJob),
-      );
+      String? preparedCloudIdToken;
+      var didPrepareCloudIdToken = false;
 
       await ActionsSettingsStore.load();
-
-      var didMutateAny = false;
-      var didUpdateJobs = false;
       for (final passPlan in passPlans) {
+        var passDidMutateAny = false;
+        var passDidUpdateJobs = false;
         final nowMs = DateTime.now().millisecondsSinceEpoch;
-        final route = await decideTodoFollowupGenerationRoute(
+        var route = await decideTodoFollowupGenerationRoute(
           backend,
           Uint8List.fromList(sessionKey),
           hasManualRegenerateDueJob: passPlan.hasManualRegenerateDueJob,
-          cloudIdToken: idToken,
+          cloudIdToken: null,
           cloudGatewayBaseUrl: gatewayConfig.baseUrl,
           subscriptionStatus: subscriptionStatus,
         );
+        String? idToken;
+        if (route != AskAiRouteKind.byok &&
+            _canAttemptTodoFollowupCloudRoute(
+              hasManualRegenerateDueJob: passPlan.hasManualRegenerateDueJob,
+              gatewayConfig: gatewayConfig,
+              subscriptionStatus: subscriptionStatus,
+            )) {
+          if (!didPrepareCloudIdToken) {
+            preparedCloudIdToken = await prepareTodoFollowupGenerationIdToken(
+              cloudAuthScope?.controller,
+              subscriptionStatus: subscriptionStatus,
+              gatewayBaseUrl: gatewayConfig.baseUrl,
+              forceWarm: passPlan.hasManualRegenerateDueJob,
+            );
+            didPrepareCloudIdToken = true;
+          }
+          idToken = preparedCloudIdToken;
+          route = await decideTodoFollowupGenerationRoute(
+            backend,
+            Uint8List.fromList(sessionKey),
+            hasManualRegenerateDueJob: passPlan.hasManualRegenerateDueJob,
+            cloudIdToken: idToken,
+            cloudGatewayBaseUrl: gatewayConfig.baseUrl,
+            subscriptionStatus: subscriptionStatus,
+          );
+        }
+
         if (route == AskAiRouteKind.needsSetup) {
           if (passPlan.hasManualRegenerateDueJob) {
             await deferTodoFollowupGenerationJobsForRetry(
@@ -306,6 +330,7 @@ class _TodoFollowupGenerationGateState extends State<TodoFollowupGenerationGate>
               nowMs: nowMs,
             );
           }
+          passDidUpdateJobs = true;
           didUpdateJobs = true;
           continue;
         }
@@ -327,6 +352,7 @@ class _TodoFollowupGenerationGateState extends State<TodoFollowupGenerationGate>
               nowMs: nowMs,
             );
           }
+          passDidUpdateJobs = true;
           didUpdateJobs = true;
           continue;
         }
@@ -356,8 +382,14 @@ class _TodoFollowupGenerationGateState extends State<TodoFollowupGenerationGate>
         );
 
         final result = await runner.runOnce(localeTag: localeTag);
-        didMutateAny = didMutateAny || result.didMutateAny;
-        didUpdateJobs = didUpdateJobs || result.didUpdateJobs;
+        passDidMutateAny = result.didMutateAny;
+        passDidUpdateJobs = result.didUpdateJobs;
+        didMutateAny = didMutateAny || passDidMutateAny;
+        didUpdateJobs = didUpdateJobs || passDidUpdateJobs;
+
+        if (passDidMutateAny || passDidUpdateJobs) {
+          syncEngine?.notifyExternalChange();
+        }
       }
 
       if (didMutateAny || didUpdateJobs) {
@@ -365,6 +397,9 @@ class _TodoFollowupGenerationGateState extends State<TodoFollowupGenerationGate>
       }
       _schedule(didUpdateJobs ? _kDrainInterval : _kIdleInterval);
     } catch (_) {
+      if (didMutateAny || didUpdateJobs) {
+        syncEngine?.notifyExternalChange();
+      }
       _schedule(_kFailureInterval);
     } finally {
       _restartBlockToken?.release();
@@ -375,6 +410,20 @@ class _TodoFollowupGenerationGateState extends State<TodoFollowupGenerationGate>
 
   @override
   Widget build(BuildContext context) => widget.child;
+}
+
+bool _canAttemptTodoFollowupCloudRoute({
+  required bool hasManualRegenerateDueJob,
+  required CloudGatewayConfig gatewayConfig,
+  required SubscriptionStatus subscriptionStatus,
+}) {
+  if (gatewayConfig.baseUrl.trim().isEmpty) return false;
+
+  if (hasManualRegenerateDueJob) {
+    return subscriptionStatus != SubscriptionStatus.notEntitled;
+  }
+
+  return subscriptionStatus == SubscriptionStatus.entitled;
 }
 
 final class _SeededTodoFollowupGenerationStore
