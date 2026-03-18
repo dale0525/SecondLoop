@@ -76,7 +76,7 @@ void main() {
 
     expect(summary.dueCount, 1);
     expect(summary.overdueCount, 1);
-    expect(summary.upcomingCount, 2);
+    expect(summary.upcomingCount, 3);
     expect(summary.reviewCount, 1);
     expect(summary.backlogCount, 0);
     expect(summary.doneCount, 1);
@@ -254,6 +254,135 @@ void main() {
       summary.backlogPreviewTodos.map((todo) => todo.id),
       isNot(contains('review-primary')),
     );
+  });
+
+  test('summary is not empty when only primary focus exists', () {
+    final nowLocal = DateTime(2026, 3, 13, 10, 0);
+    final snapshot = buildTaskPrioritySnapshot(
+      <Todo>[
+        const Todo(
+          id: 'important-only',
+          title: 'Important only',
+          dueAtMs: null,
+          status: 'open',
+          sourceEntryId: null,
+          createdAtMs: 0,
+          updatedAtMs: 50,
+          reviewStage: null,
+          nextReviewAtMs: null,
+          lastReviewAtMs: null,
+        ),
+      ],
+      nowLocal: nowLocal,
+      signalState: const TaskPriorityManualSignalState(
+        byTodoId: <String, TaskPriorityManualSignal>{
+          'important-only': TaskPriorityManualSignal(
+            importanceScore: 1,
+            urgencyScore: 2,
+          ),
+        },
+      ),
+    );
+
+    final summary = TaskHubSummary.fromSnapshot(snapshot);
+
+    expect(summary.snapshot.primaryFocus?.todo.id, 'important-only');
+    expect(summary.isEmpty, isFalse);
+    expect(summary.upcomingCount, 1);
+    expect(summary.upcomingTodos.map((todo) => todo.id),
+        <String>['important-only']);
+    expect(
+      summary.upcomingPreviewTodos.map((todo) => todo.id),
+      <String>['important-only'],
+    );
+  });
+
+  test('summary backlog preview stays empty for review-only tasks', () {
+    final nowLocal = DateTime(2026, 3, 13, 10, 0);
+    final snapshot = buildTaskPrioritySnapshot(
+      <Todo>[
+        Todo(
+          id: 'review-only',
+          title: 'Review only',
+          dueAtMs: null,
+          status: 'inbox',
+          sourceEntryId: null,
+          createdAtMs: 0,
+          updatedAtMs: 50,
+          reviewStage: 0,
+          nextReviewAtMs: nowLocal
+              .subtract(const Duration(minutes: 30))
+              .toUtc()
+              .millisecondsSinceEpoch,
+          lastReviewAtMs: null,
+        ),
+      ],
+      nowLocal: nowLocal,
+      signalState: const TaskPriorityManualSignalState(
+        byTodoId: <String, TaskPriorityManualSignal>{
+          'review-only': TaskPriorityManualSignal(
+            importanceScore: 1,
+            urgencyScore: 1,
+          ),
+        },
+      ),
+    );
+
+    final summary = TaskHubSummary.fromSnapshot(snapshot);
+
+    expect(summary.reviewCount, 1);
+    expect(summary.backlogCount, 0);
+    expect(summary.backlogPreviewTodos, isEmpty);
+  });
+
+  test('summary backlog preview excludes non-primary review tasks', () {
+    final nowLocal = DateTime(2026, 3, 13, 10, 0);
+    final snapshot = buildTaskPrioritySnapshot(
+      <Todo>[
+        const Todo(
+          id: 'primary-focus',
+          title: 'Primary focus',
+          dueAtMs: null,
+          status: 'open',
+          sourceEntryId: null,
+          createdAtMs: 0,
+          updatedAtMs: 100,
+          reviewStage: null,
+          nextReviewAtMs: null,
+          lastReviewAtMs: null,
+        ),
+        Todo(
+          id: 'review-secondary',
+          title: 'Review secondary',
+          dueAtMs: null,
+          status: 'inbox',
+          sourceEntryId: null,
+          createdAtMs: 0,
+          updatedAtMs: 50,
+          reviewStage: 0,
+          nextReviewAtMs: nowLocal
+              .subtract(const Duration(minutes: 30))
+              .toUtc()
+              .millisecondsSinceEpoch,
+          lastReviewAtMs: null,
+        ),
+      ],
+      nowLocal: nowLocal,
+      signalState: const TaskPriorityManualSignalState(
+        byTodoId: <String, TaskPriorityManualSignal>{
+          'primary-focus': TaskPriorityManualSignal(
+            importanceScore: 1,
+            urgencyScore: 2,
+          ),
+        },
+      ),
+    );
+
+    final summary = TaskHubSummary.fromSnapshot(snapshot);
+
+    expect(summary.reviewCount, 1);
+    expect(summary.backlogCount, 0);
+    expect(summary.backlogPreviewTodos, isEmpty);
   });
 
   test('done-only summary stays empty but preserves done list', () {

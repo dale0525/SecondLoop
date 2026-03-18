@@ -57,7 +57,8 @@ class TaskHubSummary {
   bool get hasOverdue => overdueCount > 0;
   bool get hasReview => reviewCount > 0;
 
-  bool get isEmpty => dueCount == 0 && upcomingCount == 0 && backlogCount == 0;
+  bool get isEmpty =>
+      dueTodos.isEmpty && upcomingTodos.isEmpty && backlogTodos.isEmpty;
 
   static TaskHubSummary fromTodos(
     List<Todo> todos, {
@@ -84,40 +85,28 @@ class TaskHubSummary {
     int backlogPreviewLimit = 4,
   }) {
     final primaryFocus = snapshot.primaryFocus;
-    final primaryFocusId = primaryFocus?.todo.id;
     final dueEntries = snapshot.focus;
-    final upcomingEntries = snapshot.nextUpEntries;
-    final upcomingPreviewEntries = primaryFocus == null
-        ? <TaskPriorityEntry>[...upcomingEntries]
+    final upcomingEntriesForSummary = primaryFocus == null
+        ? <TaskPriorityEntry>[...snapshot.nextUpEntries]
         : <TaskPriorityEntry>[
             primaryFocus,
-            ...upcomingEntries
+            ...snapshot.nextUpEntries
                 .where((entry) => entry.todo.id != primaryFocus.todo.id),
           ];
-    final reviewEntries = snapshot.activeEntries
+    final reviewEntriesForSummary = snapshot.activeEntries
         .where((entry) => entry.isReviewDue)
         .toList(growable: false);
-    final backlogEntries = snapshot.backlogEntries;
-    final previewReviewEntries = reviewEntries
-        .where((entry) => entry.todo.id != primaryFocusId)
-        .toList(growable: false);
-    final previewBacklogEntries = backlogEntries
-        .where((entry) => entry.todo.id != primaryFocusId)
-        .toList(growable: false);
+    final backlogEntriesForSummary = snapshot.backlogEntries;
     final doneEntries = snapshot.done;
 
     final upcomingPreview = <Todo>[];
-    for (final entry in upcomingPreviewEntries) {
+    for (final entry in upcomingEntriesForSummary) {
       if (upcomingPreview.length >= upcomingPreviewLimit) break;
       upcomingPreview.add(entry.todo);
     }
 
     final backlogPreview = <Todo>[];
-    for (final entry in previewReviewEntries) {
-      if (backlogPreview.length >= backlogPreviewLimit) break;
-      backlogPreview.add(entry.todo);
-    }
-    for (final entry in previewBacklogEntries) {
+    for (final entry in backlogEntriesForSummary) {
       if (backlogPreview.length >= backlogPreviewLimit) break;
       backlogPreview.add(entry.todo);
     }
@@ -126,9 +115,9 @@ class TaskHubSummary {
       snapshot: snapshot,
       dueCount: dueEntries.length,
       overdueCount: dueEntries.where((entry) => entry.isOverdue).length,
-      upcomingCount: upcomingEntries.length,
-      backlogCount: backlogEntries.length,
-      reviewCount: reviewEntries.length,
+      upcomingCount: upcomingEntriesForSummary.length,
+      backlogCount: backlogEntriesForSummary.length,
+      reviewCount: reviewEntriesForSummary.length,
       doneCount: doneEntries.length,
       upcomingPreviewTodos: List<Todo>.unmodifiable(upcomingPreview),
       backlogPreviewTodos: List<Todo>.unmodifiable(backlogPreview),
@@ -136,13 +125,13 @@ class TaskHubSummary {
         dueEntries.map((entry) => entry.todo),
       ),
       upcomingTodos: List<Todo>.unmodifiable(
-        upcomingEntries.map((entry) => entry.todo),
+        upcomingEntriesForSummary.map((entry) => entry.todo),
       ),
       reviewTodos: List<Todo>.unmodifiable(
-        reviewEntries.map((entry) => entry.todo),
+        reviewEntriesForSummary.map((entry) => entry.todo),
       ),
       backlogTodos: List<Todo>.unmodifiable(
-        backlogEntries.map((entry) => entry.todo),
+        backlogEntriesForSummary.map((entry) => entry.todo),
       ),
       doneTodos: List<Todo>.unmodifiable(
         doneEntries.map((entry) => entry.todo),
