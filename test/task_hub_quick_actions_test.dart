@@ -152,79 +152,77 @@ void main() {
     expect(find.text('Resume today|Do again|Delete'), findsOneWidget);
   });
 
-  test('stale in-progress recovery signal is cleared before urgency increases',
+  test('increase urgency only increments manual urgency score', () async {
+    SharedPreferences.setMockInitialValues({});
+
+    final initial =
+        todo(id: 't-urgency', title: 'Task urgency', updatedAtMs: 10);
+    final backend = _QuickActionBackend(initialTodos: [initial]);
+    const signalStore = TaskPrioritySignalStore();
+    final controller = TaskHubQuickActionsController(
+      backend: backend,
+      sessionKey: Uint8List(32),
+      signalStore: signalStore,
+    );
+
+    final ticket = await controller.apply(
+      initial,
+      TaskHubQuickAction.increaseUrgency,
+    );
+
+    expect(ticket, isNotNull);
+    if (ticket == null) fail('expected undo ticket');
+    expect((await signalStore.readForTodo('t-urgency'))?.urgencyScore, 1);
+    expect(backend.current('t-urgency').status, initial.status);
+    expect(backend.current('t-urgency').dueAtMs, initial.dueAtMs);
+
+    await controller.undo(ticket);
+    expect(await signalStore.readForTodo('t-urgency'), isNull);
+  });
+
+  test('increase importance only increments manual importance score', () async {
+    SharedPreferences.setMockInitialValues({});
+
+    final initial = todo(
+      id: 't-importance',
+      title: 'Task importance',
+      updatedAtMs: 10,
+      status: 'in_progress',
+    );
+    final backend = _QuickActionBackend(initialTodos: [initial]);
+    const signalStore = TaskPrioritySignalStore();
+    final controller = TaskHubQuickActionsController(
+      backend: backend,
+      sessionKey: Uint8List(32),
+      signalStore: signalStore,
+    );
+
+    final ticket = await controller.apply(
+      initial,
+      TaskHubQuickAction.increaseImportance,
+    );
+
+    expect(ticket, isNotNull);
+    if (ticket == null) fail('expected undo ticket');
+    expect((await signalStore.readForTodo('t-importance'))?.importanceScore, 1);
+    expect(backend.current('t-importance').status, 'in_progress');
+
+    await controller.undo(ticket);
+    expect(await signalStore.readForTodo('t-importance'), isNull);
+  });
+
+  test(
+      'decrease urgency decrements existing urgency score and undo restores it',
       () async {
     SharedPreferences.setMockInitialValues({});
 
-    final futureDue = DateTime.now().add(const Duration(days: 3));
-    final initial = todo(
-      id: 't-stale',
-      title: 'Task stale',
-      updatedAtMs: 10,
-      dueAtMs: futureDue.toUtc().millisecondsSinceEpoch,
-    );
+    final initial = todo(id: 't5b', title: 'Task 5b', updatedAtMs: 10);
     final backend = _QuickActionBackend(initialTodos: [initial]);
     const signalStore = TaskPrioritySignalStore();
     await signalStore.setForTodo(
-      't-stale',
-      const TaskPriorityManualSignal(preferredStatus: 'in_progress'),
+      't5b',
+      const TaskPriorityManualSignal(urgencyScore: 2),
     );
-    final controller = TaskHubQuickActionsController(
-      backend: backend,
-      sessionKey: Uint8List(32),
-      signalStore: signalStore,
-    );
-
-    await controller.apply(initial, TaskHubQuickAction.decreaseUrgency);
-    final backlog = backend.current('t-stale');
-
-    await controller.apply(backlog, TaskHubQuickAction.increaseUrgency);
-    final scheduled = backend.current('t-stale');
-    await controller.apply(scheduled, TaskHubQuickAction.increaseUrgency);
-
-    final updated = backend.current('t-stale');
-    expect(updated.status, isNot('in_progress'));
-  });
-
-  test('increase urgency on hard-urgent task does not persist manual signal',
-      () async {
-    SharedPreferences.setMockInitialValues({});
-
-    final initial = todo(
-      id: 't-hard-urgent',
-      title: 'Hot task',
-      updatedAtMs: 10,
-      status: 'in_progress',
-    );
-    final backend = _QuickActionBackend(initialTodos: [initial]);
-    const signalStore = TaskPrioritySignalStore();
-    final controller = TaskHubQuickActionsController(
-      backend: backend,
-      sessionKey: Uint8List(32),
-      signalStore: signalStore,
-    );
-
-    final ticket =
-        await controller.apply(initial, TaskHubQuickAction.increaseUrgency);
-
-    expect(ticket, isNull);
-    expect(await signalStore.readForTodo('t-hard-urgent'), isNull);
-    expect(backend.current('t-hard-urgent').status, 'in_progress');
-  });
-
-  test('increase importance on hard-focus task does not persist manual signal',
-      () async {
-    SharedPreferences.setMockInitialValues({});
-
-    final now = DateTime.now();
-    final initial = todo(
-      id: 't-hard-important',
-      title: 'Due today task',
-      updatedAtMs: 10,
-      dueAtMs: now.add(const Duration(hours: 1)).toUtc().millisecondsSinceEpoch,
-    );
-    final backend = _QuickActionBackend(initialTodos: [initial]);
-    const signalStore = TaskPrioritySignalStore();
     final controller = TaskHubQuickActionsController(
       backend: backend,
       sessionKey: Uint8List(32),
@@ -233,202 +231,13 @@ void main() {
 
     final ticket = await controller.apply(
       initial,
-      TaskHubQuickAction.increaseImportance,
-    );
-
-    expect(ticket, isNull);
-    expect(await signalStore.readForTodo('t-hard-important'), isNull);
-    expect(backend.current('t-hard-important').dueAtMs, initial.dueAtMs);
-  });
-
-  test('increase urgency moves backlog task to tomorrow schedule', () async {
-    SharedPreferences.setMockInitialValues({});
-
-    final initial = todo(id: 't1', title: 'Task 1', updatedAtMs: 10);
-    final backend = _QuickActionBackend(initialTodos: [initial]);
-    final controller = TaskHubQuickActionsController(
-      backend: backend,
-      sessionKey: Uint8List(32),
-    );
-
-    final ticket =
-        await controller.apply(initial, TaskHubQuickAction.increaseUrgency);
-    expect(ticket, isNotNull);
-    final updated = backend.current('t1');
-    expect(updated.status, 'open');
-    expect(updated.dueAtMs, isNotNull);
-    expect(updated.reviewStage, isNull);
-    expect(updated.nextReviewAtMs, isNull);
-  });
-
-  test('increase urgency moves scheduled task to today', () async {
-    SharedPreferences.setMockInitialValues({});
-
-    final tomorrow = DateTime.now().add(const Duration(days: 2));
-    final initial = todo(
-      id: 't2',
-      title: 'Task 2',
-      updatedAtMs: 10,
-      dueAtMs: tomorrow.toUtc().millisecondsSinceEpoch,
-    );
-    final backend = _QuickActionBackend(initialTodos: [initial]);
-    final controller = TaskHubQuickActionsController(
-      backend: backend,
-      sessionKey: Uint8List(32),
-    );
-
-    final ticket =
-        await controller.apply(initial, TaskHubQuickAction.increaseUrgency);
-    expect(ticket, isNotNull);
-    final updated = backend.current('t2');
-    final dueLocal =
-        DateTime.fromMillisecondsSinceEpoch(updated.dueAtMs!, isUtc: true)
-            .toLocal();
-    final now = DateTime.now();
-    expect(dueLocal.year, now.year);
-    expect(dueLocal.month, now.month);
-    expect(dueLocal.day, now.day);
-  });
-
-  test('decrease urgency moves urgent task to tomorrow', () async {
-    SharedPreferences.setMockInitialValues({});
-
-    final initial = todo(
-      id: 't3',
-      title: 'Task 3',
-      updatedAtMs: 10,
-      status: 'in_progress',
-    );
-    final backend = _QuickActionBackend(initialTodos: [initial]);
-    final controller = TaskHubQuickActionsController(
-      backend: backend,
-      sessionKey: Uint8List(32),
-    );
-
-    final ticket =
-        await controller.apply(initial, TaskHubQuickAction.decreaseUrgency);
-    expect(ticket, isNotNull);
-    final updated = backend.current('t3');
-    expect(updated.status, 'open');
-    expect(updated.dueAtMs, isNotNull);
-  });
-
-  test('decreasing then increasing urgency preserves in-progress state',
-      () async {
-    SharedPreferences.setMockInitialValues({});
-
-    final initial = todo(
-      id: 't3b',
-      title: 'Task 3b',
-      updatedAtMs: 10,
-      status: 'in_progress',
-    );
-    final backend = _QuickActionBackend(initialTodos: [initial]);
-    final controller = TaskHubQuickActionsController(
-      backend: backend,
-      sessionKey: Uint8List(32),
-    );
-
-    final decreased =
-        await controller.apply(initial, TaskHubQuickAction.decreaseUrgency);
-    expect(decreased, isNotNull);
-    final afterDecrease = backend.current('t3b');
-    expect(afterDecrease.status, 'open');
-    expect(afterDecrease.dueAtMs, isNotNull);
-
-    final increased = await controller.apply(
-      afterDecrease,
-      TaskHubQuickAction.increaseUrgency,
-    );
-    expect(increased, isNotNull);
-
-    final restored = backend.current('t3b');
-    expect(restored.status, 'in_progress');
-    expect(restored.dueAtMs, isNull);
-  });
-
-  test('decrease urgency moves scheduled task back to inbox review queue',
-      () async {
-    SharedPreferences.setMockInitialValues({});
-
-    final tomorrow = DateTime.now().add(const Duration(days: 2));
-    final initial = todo(
-      id: 't4',
-      title: 'Task 4',
-      updatedAtMs: 10,
-      dueAtMs: tomorrow.toUtc().millisecondsSinceEpoch,
-    );
-    final backend = _QuickActionBackend(initialTodos: [initial]);
-    final controller = TaskHubQuickActionsController(
-      backend: backend,
-      sessionKey: Uint8List(32),
-    );
-
-    final ticket =
-        await controller.apply(initial, TaskHubQuickAction.decreaseUrgency);
-    expect(ticket, isNotNull);
-    final updated = backend.current('t4');
-    expect(updated.status, 'inbox');
-    expect(updated.dueAtMs, isNull);
-    expect(updated.reviewStage, 0);
-    expect(updated.nextReviewAtMs, isNotNull);
-  });
-
-  test('decrease urgency keeps review tasks in the review queue', () async {
-    SharedPreferences.setMockInitialValues({});
-
-    final now = DateTime.now();
-    final initial = todo(
-      id: 't4b',
-      title: 'Review this later',
-      updatedAtMs: 10,
-      status: 'inbox',
-      reviewStage: 2,
-      nextReviewAtMs: now
-          .subtract(const Duration(minutes: 15))
-          .toUtc()
-          .millisecondsSinceEpoch,
-    );
-    final backend = _QuickActionBackend(initialTodos: [initial]);
-    final controller = TaskHubQuickActionsController(
-      backend: backend,
-      sessionKey: Uint8List(32),
-    );
-
-    final ticket =
-        await controller.apply(initial, TaskHubQuickAction.decreaseUrgency);
-    expect(ticket, isNotNull);
-
-    final updated = backend.current('t4b');
-    expect(updated.status, 'inbox');
-    expect(updated.dueAtMs, isNull);
-    expect(updated.reviewStage, initial.reviewStage);
-    expect(updated.nextReviewAtMs, isNotNull);
-    expect(updated.nextReviewAtMs,
-        greaterThan(now.toUtc().millisecondsSinceEpoch));
-  });
-
-  test('importance actions persist manual signal and support undo', () async {
-    SharedPreferences.setMockInitialValues({});
-
-    final initial = todo(id: 't5', title: 'Task 5', updatedAtMs: 10);
-    final backend = _QuickActionBackend(initialTodos: [initial]);
-    const signalStore = TaskPrioritySignalStore();
-    final controller = TaskHubQuickActionsController(
-      backend: backend,
-      sessionKey: Uint8List(32),
-      signalStore: signalStore,
-    );
-
-    final ticket = await controller.apply(
-      initial,
-      TaskHubQuickAction.increaseImportance,
+      TaskHubQuickAction.decreaseUrgency,
     );
     expect(ticket, isNotNull);
-    expect((await signalStore.readForTodo('t5'))?.isImportant, isTrue);
+    expect((await signalStore.readForTodo('t5b'))?.urgencyScore, 1);
 
     await controller.undo(ticket!);
-    expect(await signalStore.readForTodo('t5'), isNull);
+    expect((await signalStore.readForTodo('t5b'))?.urgencyScore, 2);
   });
 
   test('signal-only undo with previous manual signal does not upsert todo',
@@ -459,26 +268,27 @@ void main() {
     await controller.undo(ticket!);
 
     expect(backend.upsertTodoCalls, upsertsBeforeUndo);
-    expect((await signalStore.readForTodo('t5b2'))?.isImportant, isFalse);
+    expect((await signalStore.readForTodo('t5b2'))?.importanceScore, -1);
   });
 
-  test(
-      'decrease urgency clears persisted urgency override and undo restores it',
+  test('redo copies manual scores to the new todo and undo clears them',
       () async {
     SharedPreferences.setMockInitialValues({});
 
-    final tomorrow = DateTime.now().add(const Duration(days: 2));
     final initial = todo(
-      id: 't5b',
-      title: 'Task 5b',
+      id: 't-redo',
+      title: 'Task redo',
       updatedAtMs: 10,
-      dueAtMs: tomorrow.toUtc().millisecondsSinceEpoch,
+      status: 'done',
     );
     final backend = _QuickActionBackend(initialTodos: [initial]);
     const signalStore = TaskPrioritySignalStore();
     await signalStore.setForTodo(
-      't5b',
-      const TaskPriorityManualSignal(isUrgent: true),
+      't-redo',
+      const TaskPriorityManualSignal(
+        importanceScore: 3,
+        urgencyScore: -2,
+      ),
     );
     final controller = TaskHubQuickActionsController(
       backend: backend,
@@ -488,91 +298,18 @@ void main() {
 
     final ticket = await controller.apply(
       initial,
-      TaskHubQuickAction.decreaseUrgency,
+      TaskHubQuickAction.redo,
     );
     expect(ticket, isNotNull);
-    expect((await signalStore.readForTodo('t5b'))?.isUrgent, isFalse);
+    if (ticket == null) fail('expected undo ticket');
 
-    await controller.undo(ticket!);
-    expect((await signalStore.readForTodo('t5b'))?.isUrgent, isTrue);
-  });
+    final createdTodoId = ticket.createdTodoId;
+    expect(createdTodoId, isNotNull);
+    expect((await signalStore.readForTodo(createdTodoId!))?.importanceScore, 3);
+    expect((await signalStore.readForTodo(createdTodoId))?.urgencyScore, -2);
 
-  test('decrease urgency uses persisted effective urgency before todo fields',
-      () async {
-    SharedPreferences.setMockInitialValues({});
-
-    final futureDue = DateTime.now().add(const Duration(days: 3));
-    final initial = todo(
-      id: 't5bb',
-      title: 'Task 5bb',
-      updatedAtMs: 10,
-      dueAtMs: futureDue.toUtc().millisecondsSinceEpoch,
-    );
-    final backend = _QuickActionBackend(initialTodos: [initial]);
-    const signalStore = TaskPrioritySignalStore();
-    await signalStore.setForTodo(
-      't5bb',
-      const TaskPriorityManualSignal(isUrgent: true),
-    );
-    final controller = TaskHubQuickActionsController(
-      backend: backend,
-      sessionKey: Uint8List(32),
-      signalStore: signalStore,
-    );
-
-    final ticket = await controller.apply(
-      initial,
-      TaskHubQuickAction.decreaseUrgency,
-    );
-    expect(ticket, isNotNull);
-
-    final updated = backend.current('t5bb');
-    expect(updated.status, 'open');
-    expect(updated.dueAtMs, isNotNull);
-    final dueLocal =
-        DateTime.fromMillisecondsSinceEpoch(updated.dueAtMs!, isUtc: true)
-            .toLocal();
-    final tomorrow = DateTime.now().add(const Duration(days: 1));
-    expect(dueLocal.year, tomorrow.year);
-    expect(dueLocal.month, tomorrow.month);
-    expect(dueLocal.day, tomorrow.day);
-  });
-
-  test('done clears stale in-progress recovery signal before reopen', () async {
-    SharedPreferences.setMockInitialValues({});
-
-    final initial = todo(
-      id: 't5c',
-      title: 'Task 5c',
-      updatedAtMs: 10,
-      status: 'in_progress',
-    );
-    final backend = _QuickActionBackend(initialTodos: [initial]);
-    const signalStore = TaskPrioritySignalStore();
-    final controller = TaskHubQuickActionsController(
-      backend: backend,
-      sessionKey: Uint8List(32),
-      signalStore: signalStore,
-    );
-
-    await controller.apply(initial, TaskHubQuickAction.decreaseUrgency);
-    expect(
-      (await signalStore.readForTodo('t5c'))?.preferredStatus,
-      'in_progress',
-    );
-
-    final scheduled = backend.current('t5c');
-    await controller.apply(scheduled, TaskHubQuickAction.done);
-    expect((await signalStore.readForTodo('t5c'))?.preferredStatus, isNull);
-
-    final doneTodo = backend.current('t5c');
-    await controller.apply(doneTodo, TaskHubQuickAction.reopen);
-    final reopened = backend.current('t5c');
-
-    await controller.apply(reopened, TaskHubQuickAction.increaseUrgency);
-    final finalTodo = backend.current('t5c');
-    expect(finalTodo.status, 'in_progress');
-    expect(finalTodo.dueAtMs, isNotNull);
+    await controller.undo(ticket);
+    expect(await signalStore.readForTodo(createdTodoId), isNull);
   });
 
   test('done action respects incomplete checklist confirmation', () async {

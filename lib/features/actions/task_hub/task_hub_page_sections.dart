@@ -241,7 +241,7 @@ class TaskHubEntryCard extends StatelessWidget {
                       ),
                       icon: Icons.priority_high_rounded,
                       isActive: entry.isUrgent,
-                      canIncrease: !entry.hasHardFocusGuard,
+                      canIncrease: true,
                       semanticsLabel:
                           context.t.actions.taskHub.actions.increaseUrgency,
                       decreaseTooltip:
@@ -269,7 +269,7 @@ class TaskHubEntryCard extends StatelessWidget {
                       ),
                       icon: Icons.keyboard_double_arrow_up_rounded,
                       isActive: entry.isImportant,
-                      canIncrease: !entry.hasHardFocusGuard,
+                      canIncrease: true,
                       semanticsLabel:
                           context.t.actions.taskHub.actions.increaseImportance,
                       decreaseTooltip:

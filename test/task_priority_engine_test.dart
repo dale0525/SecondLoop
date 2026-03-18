@@ -117,27 +117,29 @@ void main() {
     expect(snapshot.primaryFocus?.todo.id, 'review');
   });
 
-  test('manual importance override can surface a planned task as focus', () {
+  test('manual urgency can outrank a due-today task', () {
     final nowLocal = DateTime(2026, 3, 13, 10, 0);
-    final tomorrow = nowLocal.add(const Duration(days: 2));
     final snapshot = buildTaskPrioritySnapshot(
       <Todo>[
         todo(
-          id: 'scheduled',
-          title: 'Scheduled follow-up',
+          id: 'due-today',
+          title: 'Due today',
           updatedAtMs: 10,
-          dueAtMs: tomorrow.toUtc().millisecondsSinceEpoch,
+          dueAtMs: nowLocal
+              .add(const Duration(hours: 3))
+              .toUtc()
+              .millisecondsSinceEpoch,
         ),
         todo(
           id: 'backlog',
-          title: 'Important roadmap',
+          title: 'Interrupt me first',
           updatedAtMs: 50,
         ),
       ],
       nowLocal: nowLocal,
       signalState: const TaskPriorityManualSignalState(
         byTodoId: <String, TaskPriorityManualSignal>{
-          'backlog': TaskPriorityManualSignal(isImportant: true),
+          'backlog': TaskPriorityManualSignal(urgencyScore: 4),
         },
       ),
     );
@@ -145,43 +147,48 @@ void main() {
     expect(snapshot.primaryFocus?.todo.id, 'backlog');
   });
 
-  test(
-      'hard focus guards stay ahead even when another task becomes urgent and important',
-      () {
+  test('negative urgency score sinks task below neutral peer', () {
     final nowLocal = DateTime(2026, 3, 13, 10, 0);
     final snapshot = buildTaskPrioritySnapshot(
       <Todo>[
         todo(
-          id: 'overdue',
-          title: 'Pay rent',
+          id: 'sunk',
+          title: 'Ignore this for now',
           updatedAtMs: 10,
-          dueAtMs: nowLocal
-              .subtract(const Duration(hours: 2))
-              .toUtc()
-              .millisecondsSinceEpoch,
         ),
         todo(
-          id: 'strategic',
-          title: 'Quarterly plan',
-          updatedAtMs: 100,
+          id: 'neutral',
+          title: 'Neutral task',
+          updatedAtMs: 20,
         ),
       ],
       nowLocal: nowLocal,
       signalState: const TaskPriorityManualSignalState(
         byTodoId: <String, TaskPriorityManualSignal>{
-          'overdue': TaskPriorityManualSignal(
-            isImportant: false,
-            isUrgent: false,
-          ),
-          'strategic': TaskPriorityManualSignal(
-            isImportant: true,
-            isUrgent: true,
-          ),
+          'sunk': TaskPriorityManualSignal(urgencyScore: -1),
         },
       ),
     );
 
-    expect(snapshot.primaryFocus?.todo.id, 'overdue');
+    expect(snapshot.primaryFocus?.todo.id, 'neutral');
+  });
+
+  test('manual importance breaks ties after effective urgency', () {
+    final nowLocal = DateTime(2026, 3, 13, 10, 0);
+    final snapshot = buildTaskPrioritySnapshot(
+      <Todo>[
+        todo(id: 'neutral', title: 'Neutral task', updatedAtMs: 10),
+        todo(id: 'important', title: 'Strategic task', updatedAtMs: 20),
+      ],
+      nowLocal: nowLocal,
+      signalState: const TaskPriorityManualSignalState(
+        byTodoId: <String, TaskPriorityManualSignal>{
+          'important': TaskPriorityManualSignal(importanceScore: 3),
+        },
+      ),
+    );
+
+    expect(snapshot.primaryFocus?.todo.id, 'important');
   });
 
   test('hybrid rerank keeps hard priority guards when confidence is low', () {

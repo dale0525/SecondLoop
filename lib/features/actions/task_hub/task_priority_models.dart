@@ -23,13 +23,6 @@ enum TaskPriorityConfidence {
   high,
 }
 
-enum TaskPriorityQuadrant {
-  urgentAndImportant,
-  urgentOnly,
-  importantOnly,
-  neither,
-}
-
 enum TaskPriorityReasonKind {
   overdue,
   dueToday,
@@ -64,9 +57,14 @@ class TaskPriorityEntry {
     this.isDueToday = false,
     this.isInProgress = false,
     this.isFutureScheduled = false,
-    this.isImportant = false,
-    this.isUrgent = false,
-  });
+    int importanceScore = 0,
+    int urgencyScore = 0,
+    bool isImportant = false,
+    bool isUrgent = false,
+    this.dueDerivedUrgencyScore = 0,
+  })  : importanceScore =
+            importanceScore != 0 ? importanceScore : (isImportant ? 1 : 0),
+        urgencyScore = urgencyScore != 0 ? urgencyScore : (isUrgent ? 1 : 0);
 
   final Todo todo;
   final TaskPriorityBand band;
@@ -82,25 +80,25 @@ class TaskPriorityEntry {
   final bool isDueToday;
   final bool isInProgress;
   final bool isFutureScheduled;
-  final bool isImportant;
-  final bool isUrgent;
+  final int importanceScore;
+  final int urgencyScore;
+  final int dueDerivedUrgencyScore;
 
   double get totalScore => ruleScore + semanticScore;
+
+  int get effectiveUrgency => urgencyScore + dueDerivedUrgencyScore;
+
+  int get effectiveImportance => importanceScore;
+
+  bool get isImportant => effectiveImportance > 0;
+
+  bool get isUrgent => effectiveUrgency > 0;
 
   bool get hasHardFocusGuard => hasTaskPriorityHardGuard(
         isOverdue: isOverdue,
         isDueToday: isDueToday,
         isInProgress: isInProgress,
       );
-
-  TaskPriorityQuadrant get quadrant {
-    if (isUrgent && isImportant) {
-      return TaskPriorityQuadrant.urgentAndImportant;
-    }
-    if (isUrgent) return TaskPriorityQuadrant.urgentOnly;
-    if (isImportant) return TaskPriorityQuadrant.importantOnly;
-    return TaskPriorityQuadrant.neither;
-  }
 
   TaskPriorityEntry copyWith({
     TaskPriorityBand? band,
@@ -117,8 +115,9 @@ class TaskPriorityEntry {
     bool? isDueToday,
     bool? isInProgress,
     bool? isFutureScheduled,
-    bool? isImportant,
-    bool? isUrgent,
+    int? importanceScore,
+    int? urgencyScore,
+    int? dueDerivedUrgencyScore,
   }) {
     return TaskPriorityEntry(
       todo: todo,
@@ -135,8 +134,10 @@ class TaskPriorityEntry {
       isDueToday: isDueToday ?? this.isDueToday,
       isInProgress: isInProgress ?? this.isInProgress,
       isFutureScheduled: isFutureScheduled ?? this.isFutureScheduled,
-      isImportant: isImportant ?? this.isImportant,
-      isUrgent: isUrgent ?? this.isUrgent,
+      importanceScore: importanceScore ?? this.importanceScore,
+      urgencyScore: urgencyScore ?? this.urgencyScore,
+      dueDerivedUrgencyScore:
+          dueDerivedUrgencyScore ?? this.dueDerivedUrgencyScore,
     );
   }
 }

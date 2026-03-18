@@ -13,7 +13,7 @@ import 'test_backend.dart';
 import 'test_i18n.dart';
 
 void main() {
-  testWidgets('task hub shows focus scheduled decide and done sections',
+  testWidgets('task hub shows primary focus plus remaining sections',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
     final now = DateTime.now();
@@ -83,8 +83,6 @@ void main() {
     expect(find.byKey(const ValueKey('task_hub_page')), findsOneWidget);
     expect(find.byKey(const ValueKey('task_hub_page_section_focus')),
         findsOneWidget);
-    expect(find.byKey(const ValueKey('task_hub_page_section_scheduled')),
-        findsOneWidget);
     expect(
         find.byKey(const ValueKey('task_hub_page_item_focus')), findsOneWidget);
     expect(
@@ -92,8 +90,7 @@ void main() {
       findsOneWidget,
     );
     expect(find.text('1/2'), findsOneWidget);
-    expect(find.byKey(const ValueKey('task_hub_page_item_scheduled')),
-        findsOneWidget);
+    expect(find.text('Draft roadmap'), findsOneWidget);
     await tester.scrollUntilVisible(
       find.byKey(const ValueKey('task_hub_page_section_done')),
       300,
@@ -140,7 +137,8 @@ void main() {
     expect(find.textContaining('Save failed'), findsOneWidget);
   });
 
-  testWidgets('unfinished tasks show active priority controls', (tester) async {
+  testWidgets('unfinished tasks show score-driven priority controls',
+      (tester) async {
     SharedPreferences.setMockInitialValues({});
     final backend = _TaskHubBackend(
       todos: const <Todo>[
@@ -164,17 +162,17 @@ void main() {
 
     expect(
       find.byKey(const ValueKey(
-          'task_hub_page_priority_urgent-important_urgency_active')),
+          'task_hub_page_priority_urgent-important_urgency_inactive')),
       findsOneWidget,
     );
     expect(
       find.byKey(const ValueKey(
-          'task_hub_page_priority_urgent-important_importance_active')),
+          'task_hub_page_priority_urgent-important_importance_inactive')),
       findsOneWidget,
     );
   });
 
-  testWidgets('hard-focus tasks disable positive priority buttons',
+  testWidgets('all tasks keep positive priority buttons enabled',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
     final backend = _TaskHubBackend(
@@ -222,8 +220,8 @@ void main() {
       ),
     );
 
-    expect(urgencyIncrease.onTap, isNull);
-    expect(importanceIncrease.onTap, isNull);
+    expect(urgencyIncrease.onTap, isNotNull);
+    expect(importanceIncrease.onTap, isNotNull);
     expect(urgencyDecrease.onTap, isNotNull);
   });
 

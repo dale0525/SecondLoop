@@ -349,23 +349,20 @@ class _TaskHubPageState extends State<TaskHubPage> {
         builder: (context, _) {
           final snapshot = store.snapshot;
           final primaryFocusId = snapshot.primaryFocus?.todo.id;
-          final visibleFocus = primaryFocusId == null
-              ? snapshot.focus
-              : <TaskPriorityEntry>[
-                  snapshot.primaryFocus!,
-                  ...snapshot.focus
-                      .where((entry) => entry.todo.id != primaryFocusId),
-                ];
-          final visibleScheduled = primaryFocusId == null
-              ? snapshot.scheduled
-              : snapshot.scheduled
+          final visibleFocus = snapshot.primaryFocus == null
+              ? const <TaskPriorityEntry>[]
+              : <TaskPriorityEntry>[snapshot.primaryFocus!];
+          final remainingActive = primaryFocusId == null
+              ? snapshot.activeEntries
+              : snapshot.activeEntries
                   .where((entry) => entry.todo.id != primaryFocusId)
                   .toList(growable: false);
-          final visibleDecide = primaryFocusId == null
-              ? snapshot.decide
-              : snapshot.decide
-                  .where((entry) => entry.todo.id != primaryFocusId)
-                  .toList(growable: false);
+          final visibleUpcoming = remainingActive
+              .where((entry) => entry.todo.dueAtMs != null)
+              .toList(growable: false);
+          final visibleBacklog = remainingActive
+              .where((entry) => entry.todo.dueAtMs == null)
+              .toList(growable: false);
           final visibleDone = snapshot.done.take(_doneVisibleCount).toList();
           return RefreshIndicator(
             onRefresh: _refresh,
@@ -407,7 +404,8 @@ class _TaskHubPageState extends State<TaskHubPage> {
                           const SizedBox(height: 6),
                           Text(
                             context.t.actions.taskHub.wrapUpSubtitle(
-                              decide: snapshot.decide.length,
+                              upcoming: visibleUpcoming.length,
+                              backlog: visibleBacklog.length,
                               done: snapshot.done.length,
                             ),
                           ),
@@ -430,8 +428,8 @@ class _TaskHubPageState extends State<TaskHubPage> {
                   TaskHubPageSection(
                     title: context.t.actions.taskHub.scheduledSection,
                     sectionKey:
-                        const ValueKey('task_hub_page_section_scheduled'),
-                    entries: visibleScheduled,
+                        const ValueKey('task_hub_page_section_upcoming'),
+                    entries: visibleUpcoming,
                     checklistProgressByTodoId: store.checklistProgressByTodoId,
                     sectionKind: TaskHubPageSectionKind.scheduled,
                     onOpenTodo: _openTodoDetail,
@@ -439,9 +437,9 @@ class _TaskHubPageState extends State<TaskHubPage> {
                     onFeedback: _recordFeedback,
                   ),
                   TaskHubPageSection(
-                    title: context.t.actions.taskHub.decideSection,
-                    sectionKey: const ValueKey('task_hub_page_section_decide'),
-                    entries: visibleDecide,
+                    title: context.t.actions.taskHub.unscheduledSection,
+                    sectionKey: const ValueKey('task_hub_page_section_backlog'),
+                    entries: visibleBacklog,
                     checklistProgressByTodoId: store.checklistProgressByTodoId,
                     sectionKind: TaskHubPageSectionKind.decide,
                     onOpenTodo: _openTodoDetail,

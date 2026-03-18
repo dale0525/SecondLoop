@@ -276,8 +276,14 @@ class _TaskHubBannerState extends State<TaskHubBanner> {
   String _fallbackSubtitle(BuildContext context) {
     final snapshot = widget.snapshot;
     if (!snapshot.isEmpty) {
+      final activeEntries = snapshot.activeEntries;
+      final upcomingCount =
+          activeEntries.where((entry) => entry.todo.dueAtMs != null).length;
+      final backlogCount =
+          activeEntries.where((entry) => entry.todo.dueAtMs == null).length;
       return context.t.actions.taskHub.wrapUpSubtitle(
-        decide: snapshot.decide.length,
+        upcoming: upcomingCount,
+        backlog: backlogCount,
         done: snapshot.done.length,
       );
     }

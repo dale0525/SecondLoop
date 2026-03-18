@@ -461,9 +461,11 @@ class TaskPriorityStore extends ChangeNotifier {
           entry.isReviewDue,
           entry.isFutureScheduled,
           entry.isInProgress,
-          entry.isUrgent,
-          entry.isImportant,
-          entry.quadrant.name,
+          entry.effectiveUrgency,
+          entry.effectiveImportance,
+          entry.urgencyScore,
+          entry.importanceScore,
+          entry.dueDerivedUrgencyScore,
         ]),
     };
   }

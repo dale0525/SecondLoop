@@ -627,25 +627,14 @@ void main() {
   test('due state changes bypass sticky focus and recompute primary focus',
       () async {
     SharedPreferences.setMockInitialValues({});
-    final aiService = _CountingAiService(
-      const TaskPriorityAiBatchResult(
-        entries: <TaskPriorityAiEntry>[
-          TaskPriorityAiEntry(
-            todoId: 'sticky',
-            priorityBand: TaskPriorityAiBand.next,
-            semanticAdjustment: 12,
-            reason: 'Stay on the roadmap item.',
-            suggestedAction: TaskPrioritySuggestionKind.clarify,
-            confidence: TaskPriorityAiConfidence.medium,
-            isImportant: true,
-            isUrgent: false,
-          ),
-        ],
-      ),
+    const signalStore = TaskPrioritySignalStore();
+    await signalStore.setForTodo(
+      'sticky',
+      const TaskPriorityManualSignal(urgencyScore: 3),
     );
 
     var nowLocal = DateTime(2026, 3, 13, 10, 0);
-    final reviewAt = DateTime(2026, 3, 13, 11, 0);
+    final reviewAt = DateTime(2026, 3, 14, 11, 0);
     final store = TaskPriorityStore.fromLoaders(
       nowLocal: () => nowLocal,
       loadTodos: () async => <Todo>[
@@ -654,18 +643,16 @@ void main() {
           id: 'review',
           title: 'Reply to client',
           updatedAtMs: 20,
-          status: 'inbox',
-          reviewStage: 0,
-          nextReviewAtMs: reviewAt.toUtc().millisecondsSinceEpoch,
+          dueAtMs: reviewAt.toUtc().millisecondsSinceEpoch,
         ),
       ],
-      resolveAiService: () async => aiService,
+      signalStore: signalStore,
     );
 
     await store.refresh();
     expect(store.snapshot.primaryFocus?.todo.id, 'sticky');
 
-    nowLocal = DateTime(2026, 3, 13, 12, 0);
+    nowLocal = DateTime(2026, 3, 14, 12, 0);
     store.markDirty();
     await store.refresh();
 
@@ -676,21 +663,9 @@ void main() {
       () async {
     SharedPreferences.setMockInitialValues({});
     const signalStore = TaskPrioritySignalStore();
-    final aiService = _CountingAiService(
-      const TaskPriorityAiBatchResult(
-        entries: <TaskPriorityAiEntry>[
-          TaskPriorityAiEntry(
-            todoId: 'sticky',
-            priorityBand: TaskPriorityAiBand.next,
-            semanticAdjustment: 12,
-            reason: 'Keep the roadmap item visible.',
-            suggestedAction: TaskPrioritySuggestionKind.clarify,
-            confidence: TaskPriorityAiConfidence.medium,
-            isImportant: true,
-            isUrgent: false,
-          ),
-        ],
-      ),
+    await signalStore.setForTodo(
+      'sticky',
+      const TaskPriorityManualSignal(urgencyScore: 2),
     );
 
     final store = TaskPriorityStore.fromLoaders(
@@ -699,7 +674,6 @@ void main() {
         todo(id: 'sticky', title: 'Roadmap', updatedAtMs: 50),
         todo(id: 'review', title: 'Reply to client', updatedAtMs: 20),
       ],
-      resolveAiService: () async => aiService,
       signalStore: signalStore,
     );
 
@@ -708,7 +682,10 @@ void main() {
 
     await signalStore.setForTodo(
       'review',
-      const TaskPriorityManualSignal(isUrgent: true, isImportant: true),
+      const TaskPriorityManualSignal(
+        urgencyScore: 3,
+        importanceScore: 1,
+      ),
     );
     store.markDirty();
     await store.refresh();

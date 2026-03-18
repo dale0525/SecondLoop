@@ -6,7 +6,7 @@ import 'package:secondloop/features/actions/task_hub/task_priority_signal_store.
 import 'package:secondloop/src/rust/db.dart';
 
 void main() {
-  test('summary derives focus scheduled decide and done buckets', () {
+  test('summary derives focus upcoming backlog and done buckets', () {
     final nowLocal = DateTime(2026, 3, 13, 10, 0);
     final summary = TaskHubSummary.fromTodos(
       <Todo>[
@@ -77,7 +77,8 @@ void main() {
     expect(summary.dueCount, 1);
     expect(summary.overdueCount, 1);
     expect(summary.upcomingCount, 1);
-    expect(summary.dueReviewCount, 1);
+    expect(summary.reviewCount, 1);
+    expect(summary.backlogCount, 1);
     expect(summary.doneCount, 1);
     expect(summary.snapshot.primaryFocus?.todo.id, 'overdue');
     expect(summary.checklistProgressByTodoId['overdue']?.doneCount, 1);
@@ -85,7 +86,7 @@ void main() {
   });
 
   test(
-      'summary preview includes globally selected focus without changing due list',
+      'summary upcoming preview includes globally selected focus without changing due list',
       () {
     final nowLocal = DateTime(2026, 3, 13, 10, 0);
     final snapshot = buildTaskPrioritySnapshot(
@@ -121,7 +122,10 @@ void main() {
       nowLocal: nowLocal,
       signalState: const TaskPriorityManualSignalState(
         byTodoId: <String, TaskPriorityManualSignal>{
-          'important': TaskPriorityManualSignal(isImportant: true),
+          'important': TaskPriorityManualSignal(
+            importanceScore: 1,
+            urgencyScore: 2,
+          ),
         },
       ),
     );
@@ -129,13 +133,12 @@ void main() {
     final summary = TaskHubSummary.fromSnapshot(snapshot);
 
     expect(summary.snapshot.primaryFocus?.todo.id, 'important');
-    expect(summary.scheduledPreviewTodos.first.id, 'important');
+    expect(summary.upcomingPreviewTodos.first.id, 'important');
     expect(summary.dueCount, 0);
     expect(summary.dueTodos, isEmpty);
   });
 
-  test('summary preview does not duplicate selected focus from scheduled list',
-      () {
+  test('summary upcoming preview does not duplicate selected focus', () {
     final nowLocal = DateTime(2026, 3, 13, 10, 0);
     final snapshot = buildTaskPrioritySnapshot(
       <Todo>[
@@ -173,7 +176,7 @@ void main() {
       nowLocal: nowLocal,
       signalState: const TaskPriorityManualSignalState(
         byTodoId: <String, TaskPriorityManualSignal>{
-          'scheduled-primary': TaskPriorityManualSignal(isImportant: true),
+          'scheduled-primary': TaskPriorityManualSignal(importanceScore: 1),
         },
       ),
     );
@@ -182,13 +185,12 @@ void main() {
 
     expect(summary.snapshot.primaryFocus?.todo.id, 'scheduled-primary');
     expect(
-      summary.scheduledPreviewTodos.map((todo) => todo.id),
+      summary.upcomingPreviewTodos.map((todo) => todo.id),
       <String>['scheduled-primary', 'scheduled-secondary'],
     );
   });
 
-  test('summary preview does not duplicate selected focus from decide list',
-      () {
+  test('summary backlog preview does not duplicate selected focus', () {
     final nowLocal = DateTime(2026, 3, 13, 10, 0);
     final snapshot = buildTaskPrioritySnapshot(
       <Todo>[
@@ -224,8 +226,8 @@ void main() {
       signalState: const TaskPriorityManualSignalState(
         byTodoId: <String, TaskPriorityManualSignal>{
           'review-primary': TaskPriorityManualSignal(
-            isImportant: true,
-            isUrgent: true,
+            importanceScore: 1,
+            urgencyScore: 1,
           ),
         },
       ),
@@ -234,22 +236,22 @@ void main() {
     final summary = TaskHubSummary.fromSnapshot(snapshot);
 
     expect(summary.snapshot.primaryFocus?.todo.id, 'review-primary');
-    expect(summary.dueReviewCount, 1);
-    expect(summary.unscheduledCount, 2);
+    expect(summary.reviewCount, 1);
+    expect(summary.backlogCount, 2);
     expect(
-      summary.dueReviewTodos.map((todo) => todo.id),
+      summary.reviewTodos.map((todo) => todo.id),
       <String>['review-primary'],
     );
     expect(
-      summary.unscheduledTodos.map((todo) => todo.id),
-      <String>['backlog-secondary'],
+      summary.backlogTodos.map((todo) => todo.id),
+      <String>['review-primary', 'backlog-secondary'],
     );
     expect(
-      summary.scheduledPreviewTodos.map((todo) => todo.id),
+      summary.upcomingPreviewTodos.map((todo) => todo.id),
       <String>['review-primary'],
     );
     expect(
-      summary.unscheduledPreviewTodos.map((todo) => todo.id),
+      summary.backlogPreviewTodos.map((todo) => todo.id),
       isNot(contains('review-primary')),
     );
   });

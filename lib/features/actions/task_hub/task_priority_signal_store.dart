@@ -4,27 +4,53 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 class TaskPriorityManualSignal {
   const TaskPriorityManualSignal({
-    this.isImportant,
-    this.isUrgent,
+    int importanceScore = 0,
+    int urgencyScore = 0,
+    bool? isImportant,
+    bool? isUrgent,
     this.preferredStatus,
-  });
+  })  : importanceScore = importanceScore != 0
+            ? importanceScore
+            : (isImportant == null ? 0 : (isImportant ? 1 : -1)),
+        urgencyScore = urgencyScore != 0
+            ? urgencyScore
+            : (isUrgent == null ? 0 : (isUrgent ? 1 : -1));
 
-  final bool? isImportant;
-  final bool? isUrgent;
+  final int importanceScore;
+  final int urgencyScore;
   final String? preferredStatus;
 
   bool get isEmpty =>
-      isImportant == null && isUrgent == null && preferredStatus == null;
+      importanceScore == 0 && urgencyScore == 0 && preferredStatus == null;
+
+  bool? get isImportant {
+    if (importanceScore > 0) return true;
+    if (importanceScore < 0) return false;
+    return null;
+  }
+
+  bool? get isUrgent {
+    if (urgencyScore > 0) return true;
+    if (urgencyScore < 0) return false;
+    return null;
+  }
 
   Map<String, Object?> toJson() {
     return <String, Object?>{
-      'is_important': isImportant,
-      'is_urgent': isUrgent,
+      'importance_score': importanceScore,
+      'urgency_score': urgencyScore,
       'preferred_status': preferredStatus,
     };
   }
 
   factory TaskPriorityManualSignal.fromJson(Map<String, Object?> json) {
+    int? readInt(String key) {
+      final raw = json[key];
+      if (raw is int) return raw;
+      if (raw is num) return raw.toInt();
+      return int.tryParse((raw ?? '').toString().trim());
+    }
+
     bool? readBool(String key) {
       final raw = json[key];
       if (raw is bool) return raw;
@@ -37,8 +63,18 @@ class TaskPriorityManualSignal {
     }
 
     return TaskPriorityManualSignal(
-      isImportant: readBool('is_important'),
-      isUrgent: readBool('is_urgent'),
+      importanceScore: readInt('importance_score') ??
+          switch (readBool('is_important')) {
+            true => 1,
+            false => -1,
+            null => 0,
+          },
+      urgencyScore: readInt('urgency_score') ??
+          switch (readBool('is_urgent')) {
+            true => 1,
+            false => -1,
+            null => 0,
+          },
       preferredStatus:
           (json['preferred_status'] ?? '').toString().trim().isEmpty
               ? null
@@ -47,16 +83,22 @@ class TaskPriorityManualSignal {
   }
 
   TaskPriorityManualSignal copyWith({
-    bool? isImportant,
-    bool? isUrgent,
+    int? importanceScore,
+    int? urgencyScore,
     String? preferredStatus,
-    bool clearImportant = false,
-    bool clearUrgent = false,
+    int importanceDelta = 0,
+    int urgencyDelta = 0,
+    bool resetImportanceScore = false,
+    bool resetUrgencyScore = false,
     bool clearPreferredStatus = false,
   }) {
     return TaskPriorityManualSignal(
-      isImportant: clearImportant ? null : (isImportant ?? this.isImportant),
-      isUrgent: clearUrgent ? null : (isUrgent ?? this.isUrgent),
+      importanceScore: resetImportanceScore
+          ? 0
+          : (importanceScore ?? this.importanceScore) + importanceDelta,
+      urgencyScore: resetUrgencyScore
+          ? 0
+          : (urgencyScore ?? this.urgencyScore) + urgencyDelta,
       preferredStatus: clearPreferredStatus
           ? null
           : (preferredStatus ?? this.preferredStatus),
@@ -153,7 +195,7 @@ class TaskPrioritySignalStore {
   }) async {
     final current =
         await readForTodo(todoId) ?? const TaskPriorityManualSignal();
-    final updated = current.copyWith(isImportant: increase);
+    final updated = current.copyWith(importanceDelta: increase ? 1 : -1);
     await setForTodo(todoId, updated);
     return updated;
   }
@@ -164,7 +206,7 @@ class TaskPrioritySignalStore {
   }) async {
     final current =
         await readForTodo(todoId) ?? const TaskPriorityManualSignal();
-    final updated = current.copyWith(isUrgent: increase);
+    final updated = current.copyWith(urgencyDelta: increase ? 1 : -1);
     await setForTodo(todoId, updated);
     return updated;
   }
@@ -176,8 +218,8 @@ class TaskPrioritySignalStore {
     final current =
         await readForTodo(todoId) ?? const TaskPriorityManualSignal();
     final updated = isUrgent == null
-        ? current.copyWith(clearUrgent: true)
-        : current.copyWith(isUrgent: isUrgent);
+        ? current.copyWith(resetUrgencyScore: true)
+        : current.copyWith(urgencyScore: isUrgent ? 1 : -1);
     await setForTodo(todoId, updated);
     return updated;
   }
