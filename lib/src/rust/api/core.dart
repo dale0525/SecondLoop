@@ -127,6 +127,13 @@ Future<Todo?> dbGetTodoById(
     RustLib.instance.api
         .crateApiCoreDbGetTodoById(appDir: appDir, key: key, todoId: todoId);
 
+Future<TodoFollowupGenerationJob?> dbGetTodoFollowupGenerationJob(
+        {required String appDir,
+        required List<int> key,
+        required String todoId}) =>
+    RustLib.instance.api.crateApiCoreDbGetTodoFollowupGenerationJob(
+        appDir: appDir, key: key, todoId: todoId);
+
 Future<List<Todo>> dbListTodosCreatedInRange(
         {required String appDir,
         required List<int> key,

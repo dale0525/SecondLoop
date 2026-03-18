@@ -789,6 +789,13 @@ abstract class AppBackend {
     throw UnimplementedError('listDueTodoFollowupGenerationJobs');
   }
 
+  Future<TodoFollowupGenerationJob?> getTodoFollowupGenerationJob(
+    Uint8List key,
+    String todoId,
+  ) {
+    throw UnimplementedError('getTodoFollowupGenerationJob');
+  }
+
   Future<void> markTodoFollowupGenerationJobRunning(
     Uint8List key, {
     required String todoId,

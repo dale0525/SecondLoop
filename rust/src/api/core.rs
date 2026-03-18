@@ -284,6 +284,17 @@ pub fn db_get_todo_by_id(
 }
 
 #[flutter_rust_bridge::frb]
+pub fn db_get_todo_followup_generation_job(
+    app_dir: String,
+    key: Vec<u8>,
+    todo_id: String,
+) -> Result<Option<db::TodoFollowupGenerationJob>> {
+    let _key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    db::find_todo_followup_generation_job(&conn, &todo_id)
+}
+
+#[flutter_rust_bridge::frb]
 pub fn db_list_todos_created_in_range(
     app_dir: String,
     key: Vec<u8>,

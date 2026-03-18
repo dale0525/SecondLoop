@@ -62,6 +62,23 @@ void main() {
     expect(parsed.citations.single.domain, 'docs.example.com');
   });
 
+  test('followup parser rejects web search results without valid citations',
+      () {
+    expect(
+      parseTodoFollowupSuggestionJson(
+        '{"content":"hello","mode":"web_search","citations":[]}',
+      ),
+      isNull,
+    );
+
+    expect(
+      parseTodoFollowupSuggestionJson(
+        '{"content":"hello","mode":"web_search","citations":[{"title":"Bad","url":"javascript:alert(1)","domain":"evil.example"}]}',
+      ),
+      isNull,
+    );
+  });
+
   test('followup parser falls back to model knowledge on invalid mode', () {
     final parsed = parseTodoFollowupSuggestionJson(
       '{"content":"Not verified online. hello","mode":"unknown","citations":[]}',

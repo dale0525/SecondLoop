@@ -78,6 +78,13 @@ typedef DbListDueTodoFollowupGenerationJobsFn
   required int limit,
 });
 
+typedef DbGetTodoFollowupGenerationJobFn = Future<TodoFollowupGenerationJob?>
+    Function({
+  required String appDir,
+  required List<int> key,
+  required String todoId,
+});
+
 typedef DbMarkTodoFollowupGenerationJobRunningFn = Future<void> Function({
   required String appDir,
   required List<int> key,

@@ -216,6 +216,10 @@ TodoFollowupSuggestionDraft? parseTodoFollowupSuggestionJson(
     }
   }
 
+  if (mode == TodoFollowupGenerationMode.webSearch && citations.isEmpty) {
+    return null;
+  }
+
   return TodoFollowupSuggestionDraft(
     content: content,
     mode: mode,

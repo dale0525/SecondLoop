@@ -326,6 +326,36 @@ fn reenqueue_without_new_hint_clears_previous_task_type_hint() {
 }
 
 #[test]
+fn later_auto_create_does_not_overwrite_existing_manual_regenerate_job() {
+    let (_temp_dir, key, conn) = setup();
+
+    db::upsert_todo(
+        &conn,
+        &key,
+        "todo_1",
+        "调研一下当前主流的 llm 模型",
+        None,
+        "open",
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("upsert todo");
+
+    db::enqueue_todo_followup_generation_job(&conn, "todo_1", "manual_regenerate", None, 100)
+        .expect("enqueue manual job");
+    db::enqueue_todo_followup_generation_job(&conn, "todo_1", "auto_create", None, 200)
+        .expect("enqueue later auto job");
+
+    let due = db::list_due_todo_followup_generation_jobs(&conn, 200, 10).expect("list due jobs");
+    assert_eq!(due.len(), 1);
+    assert_eq!(due[0].todo_id, "todo_1");
+    assert_eq!(due[0].trigger_kind, "manual_regenerate");
+    assert!(due[0].include_manual_followups);
+}
+
+#[test]
 fn auto_create_reenqueue_without_hint_preserves_existing_task_type_hint() {
     let (_temp_dir, key, conn) = setup();
 

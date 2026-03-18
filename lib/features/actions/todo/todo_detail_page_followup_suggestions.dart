@@ -1,6 +1,34 @@
 part of 'todo_detail_page.dart';
 
 extension _TodoDetailPageStateFollowupSuggestions on _TodoDetailPageState {
+  Future<TodoFollowupGenerationJob?> _loadFollowupGenerationJob() async {
+    final backend = AppBackendScope.maybeOf(context);
+    final session = SessionScope.maybeOf(context);
+    if (backend == null || session == null) {
+      return null;
+    }
+    try {
+      return await backend.getTodoFollowupGenerationJob(
+        session.sessionKey,
+        _todo.id,
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  bool _hasActiveAutoFollowupGenerationJob(
+    TodoFollowupGenerationJob? job,
+  ) {
+    if (job == null || job.triggerKind == 'manual_regenerate') {
+      return false;
+    }
+    return switch (job.status) {
+      'pending' || 'running' || 'failed' => true,
+      _ => false,
+    };
+  }
+
   Future<bool> _prepareFollowupGeneration() async {
     final backend = AppBackendScope.maybeOf(context);
     final session = SessionScope.maybeOf(context);
@@ -111,6 +139,11 @@ extension _TodoDetailPageStateFollowupSuggestions on _TodoDetailPageState {
 
     _setState(() => _generatingFollowupSuggestions = true);
     try {
+      final activeJob = await _loadFollowupGenerationJob();
+      if (_hasActiveAutoFollowupGenerationJob(activeJob) || !mounted) {
+        return;
+      }
+
       final ready = await _prepareFollowupGeneration();
       if (!ready || !mounted) return;
 
@@ -151,160 +184,176 @@ extension _TodoDetailPageStateFollowupSuggestions on _TodoDetailPageState {
         .where((item) => item.state == 'applied')
         .toList(growable: false);
 
-    return Container(
-      key: const ValueKey('todo_detail_followup_suggestions_section'),
-      margin: const EdgeInsets.only(top: 12),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Theme.of(context)
-            .colorScheme
-            .surfaceContainerHighest
-            .withOpacity(0.24),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: Theme.of(context).colorScheme.outlineVariant.withOpacity(0.6),
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
+    return FutureBuilder<TodoFollowupGenerationJob?>(
+      future: _loadFollowupGenerationJob(),
+      builder: (context, snapshot) {
+        final hasActiveAutoGeneration =
+            _hasActiveAutoFollowupGenerationJob(snapshot.data);
+        final showGeneratingIndicator =
+            _generatingFollowupSuggestions || hasActiveAutoGeneration;
+
+        return Container(
+          key: const ValueKey('todo_detail_followup_suggestions_section'),
+          margin: const EdgeInsets.only(top: 12),
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: Theme.of(context)
+                .colorScheme
+                .surfaceContainerHighest
+                .withOpacity(0.24),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color:
+                  Theme.of(context).colorScheme.outlineVariant.withOpacity(0.6),
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(
-                child: Text(
-                  context.t.actions.todoDetail.followupSuggestionsTitle,
-                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      context.t.actions.todoDetail.followupSuggestionsTitle,
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
+                    ),
+                  ),
+                  SlButton(
+                    buttonKey: const ValueKey(
+                      'todo_detail_followup_generate_suggestions',
+                    ),
+                    variant: SlButtonVariant.outline,
+                    onPressed: showGeneratingIndicator
+                        ? null
+                        : () => unawaited(_enqueueFollowupRegenerate()),
+                    child: Text(
+                      suggestions.isEmpty
+                          ? context.t.actions.todoDetail.followupGenerate
+                          : context.t.actions.todoDetail.followupRegenerate,
+                    ),
+                  ),
+                ],
+              ),
+              AnimatedSwitcher(
+                duration: const Duration(milliseconds: 180),
+                child: !showGeneratingIndicator
+                    ? const SizedBox.shrink()
+                    : Padding(
+                        key: const ValueKey(
+                          'todo_detail_followup_generating_indicator',
+                        ),
+                        padding: const EdgeInsets.only(top: 10),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                const SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child:
+                                      CircularProgressIndicator(strokeWidth: 2),
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    context.t.actions.todoDetail
+                                        .followupGenerating,
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .bodySmall
+                                        ?.copyWith(
+                                          color: Theme.of(context)
+                                              .colorScheme
+                                              .onSurfaceVariant,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            const LinearProgressIndicator(minHeight: 3),
+                          ],
+                        ),
+                      ),
+              ),
+              if (pendingSuggestions.isEmpty && appliedSuggestions.isEmpty) ...[
+                const SizedBox(height: 10),
+                Text(
+                  context.t.actions.todoDetail.followupSuggestionsEmpty,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                ),
+              ],
+              if (pendingSuggestions.isNotEmpty) ...[
+                const SizedBox(height: 10),
+                Text(
+                  context.t.actions.todoDetail.followupPendingTitle,
+                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
                         fontWeight: FontWeight.w700,
                       ),
                 ),
-              ),
-              SlButton(
-                buttonKey:
-                    const ValueKey('todo_detail_followup_generate_suggestions'),
-                variant: SlButtonVariant.outline,
-                onPressed: _generatingFollowupSuggestions
-                    ? null
-                    : () => unawaited(_enqueueFollowupRegenerate()),
-                child: Text(
-                  suggestions.isEmpty
-                      ? context.t.actions.todoDetail.followupGenerate
-                      : context.t.actions.todoDetail.followupRegenerate,
-                ),
-              ),
-            ],
-          ),
-          AnimatedSwitcher(
-            duration: const Duration(milliseconds: 180),
-            child: !_generatingFollowupSuggestions
-                ? const SizedBox.shrink()
-                : Padding(
-                    key: const ValueKey(
-                      'todo_detail_followup_generating_indicator',
-                    ),
-                    padding: const EdgeInsets.only(top: 10),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            const SizedBox(
-                              width: 16,
-                              height: 16,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                context.t.actions.todoDetail.followupGenerating,
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .bodySmall
-                                    ?.copyWith(
-                                      color: Theme.of(context)
-                                          .colorScheme
-                                          .onSurfaceVariant,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                              ),
-                            ),
-                          ],
+                const SizedBox(height: 8),
+                for (final suggestion in pendingSuggestions) ...[
+                  _buildFollowupSuggestionCard(context, suggestion),
+                  const SizedBox(height: 8),
+                ],
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    SlButton(
+                      buttonKey:
+                          const ValueKey('todo_detail_followup_apply_pending'),
+                      onPressed: () => unawaited(
+                        _applyFollowupSuggestionIds(
+                          pendingSuggestions
+                              .map((item) => item.id)
+                              .toList(growable: false),
                         ),
-                        const SizedBox(height: 8),
-                        const LinearProgressIndicator(minHeight: 3),
-                      ],
+                      ),
+                      child: Text(context.t.common.actions.apply),
                     ),
-                  ),
-          ),
-          if (pendingSuggestions.isEmpty && appliedSuggestions.isEmpty) ...[
-            const SizedBox(height: 10),
-            Text(
-              context.t.actions.todoDetail.followupSuggestionsEmpty,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
-            ),
-          ],
-          if (pendingSuggestions.isNotEmpty) ...[
-            const SizedBox(height: 10),
-            Text(
-              context.t.actions.todoDetail.followupPendingTitle,
-              style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
-            ),
-            const SizedBox(height: 8),
-            for (final suggestion in pendingSuggestions) ...[
-              _buildFollowupSuggestionCard(context, suggestion),
-              const SizedBox(height: 8),
-            ],
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                SlButton(
-                  buttonKey:
-                      const ValueKey('todo_detail_followup_apply_pending'),
-                  onPressed: () => unawaited(
-                    _applyFollowupSuggestionIds(
-                      pendingSuggestions
-                          .map((item) => item.id)
-                          .toList(growable: false),
+                    SlButton(
+                      buttonKey: const ValueKey(
+                        'todo_detail_followup_dismiss_pending',
+                      ),
+                      variant: SlButtonVariant.outline,
+                      onPressed: () => unawaited(
+                        _dismissFollowupSuggestionIds(
+                          pendingSuggestions
+                              .map((item) => item.id)
+                              .toList(growable: false),
+                        ),
+                      ),
+                      child: Text(
+                          context.t.actions.todoDetail.checklistDismissAll),
                     ),
-                  ),
-                  child: Text(context.t.common.actions.apply),
-                ),
-                SlButton(
-                  buttonKey:
-                      const ValueKey('todo_detail_followup_dismiss_pending'),
-                  variant: SlButtonVariant.outline,
-                  onPressed: () => unawaited(
-                    _dismissFollowupSuggestionIds(
-                      pendingSuggestions
-                          .map((item) => item.id)
-                          .toList(growable: false),
-                    ),
-                  ),
-                  child: Text(context.t.actions.todoDetail.checklistDismissAll),
+                  ],
                 ),
               ],
-            ),
-          ],
-          if (appliedSuggestions.isNotEmpty) ...[
-            const SizedBox(height: 12),
-            Text(
-              context.t.actions.todoDetail.followupAppliedTitle,
-              style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
-            ),
-            const SizedBox(height: 8),
-            for (final suggestion in appliedSuggestions) ...[
-              _buildFollowupSuggestionCard(context, suggestion),
-              const SizedBox(height: 8),
+              if (appliedSuggestions.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                Text(
+                  context.t.actions.todoDetail.followupAppliedTitle,
+                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                ),
+                const SizedBox(height: 8),
+                for (final suggestion in appliedSuggestions) ...[
+                  _buildFollowupSuggestionCard(context, suggestion),
+                  const SizedBox(height: 8),
+                ],
+              ],
             ],
-          ],
-        ],
-      ),
+          ),
+        );
+      },
     );
   }
 

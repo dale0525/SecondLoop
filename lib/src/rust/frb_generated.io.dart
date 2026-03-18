@@ -109,6 +109,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   Todo dco_decode_box_autoadd_todo(dynamic raw);
 
   @protected
+  TodoFollowupGenerationJob dco_decode_box_autoadd_todo_followup_generation_job(
+      dynamic raw);
+
+  @protected
   CloudMediaBackup dco_decode_cloud_media_backup(dynamic raw);
 
   @protected
@@ -368,6 +372,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   Todo? dco_decode_opt_box_autoadd_todo(dynamic raw);
 
   @protected
+  TodoFollowupGenerationJob?
+      dco_decode_opt_box_autoadd_todo_followup_generation_job(dynamic raw);
+
+  @protected
   List<String>? dco_decode_opt_list_String(dynamic raw);
 
   @protected
@@ -506,6 +514,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   Todo sse_decode_box_autoadd_todo(SseDeserializer deserializer);
+
+  @protected
+  TodoFollowupGenerationJob sse_decode_box_autoadd_todo_followup_generation_job(
+      SseDeserializer deserializer);
 
   @protected
   CloudMediaBackup sse_decode_cloud_media_backup(SseDeserializer deserializer);
@@ -803,6 +815,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   Todo? sse_decode_opt_box_autoadd_todo(SseDeserializer deserializer);
 
   @protected
+  TodoFollowupGenerationJob?
+      sse_decode_opt_box_autoadd_todo_followup_generation_job(
+          SseDeserializer deserializer);
+
+  @protected
   List<String>? sse_decode_opt_list_String(SseDeserializer deserializer);
 
   @protected
@@ -953,6 +970,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_box_autoadd_todo(Todo self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_todo_followup_generation_job(
+      TodoFollowupGenerationJob self, SseSerializer serializer);
 
   @protected
   void sse_encode_cloud_media_backup(
@@ -1254,6 +1275,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_opt_box_autoadd_todo(Todo? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_todo_followup_generation_job(
+      TodoFollowupGenerationJob? self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_list_String(List<String>? self, SseSerializer serializer);

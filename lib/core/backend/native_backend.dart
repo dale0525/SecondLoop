@@ -290,6 +290,7 @@ class NativeAppBackend
     DbDismissAllTodoFollowupSuggestionsFn? dbDismissAllTodoFollowupSuggestions,
     DbEnqueueTodoFollowupGenerationJobFn? dbEnqueueTodoFollowupGenerationJob,
     DbListDueTodoFollowupGenerationJobsFn? dbListDueTodoFollowupGenerationJobs,
+    DbGetTodoFollowupGenerationJobFn? dbGetTodoFollowupGenerationJob,
     DbMarkTodoFollowupGenerationJobRunningFn?
         dbMarkTodoFollowupGenerationJobRunning,
     DbMarkTodoFollowupGenerationJobFailedFn?
@@ -363,6 +364,8 @@ class NativeAppBackend
         _dbListDueTodoFollowupGenerationJobs =
             dbListDueTodoFollowupGenerationJobs ??
                 rust_core.dbListDueTodoFollowupGenerationJobs,
+        _dbGetTodoFollowupGenerationJob = dbGetTodoFollowupGenerationJob ??
+            rust_core.dbGetTodoFollowupGenerationJob,
         _dbMarkTodoFollowupGenerationJobRunning =
             dbMarkTodoFollowupGenerationJobRunning ??
                 rust_core.dbMarkTodoFollowupGenerationJobRunning,
@@ -420,6 +423,7 @@ class NativeAppBackend
       _dbEnqueueTodoFollowupGenerationJob;
   final DbListDueTodoFollowupGenerationJobsFn
       _dbListDueTodoFollowupGenerationJobs;
+  final DbGetTodoFollowupGenerationJobFn _dbGetTodoFollowupGenerationJob;
   final DbMarkTodoFollowupGenerationJobRunningFn
       _dbMarkTodoFollowupGenerationJobRunning;
   final DbMarkTodoFollowupGenerationJobFailedFn
@@ -2463,6 +2467,19 @@ class NativeAppBackend
       key: key,
       nowMs: PlatformInt64Util.from(nowMs),
       limit: limit,
+    );
+  }
+
+  @override
+  Future<TodoFollowupGenerationJob?> getTodoFollowupGenerationJob(
+    Uint8List key,
+    String todoId,
+  ) async {
+    final appDir = await _getAppDir();
+    return _dbGetTodoFollowupGenerationJob(
+      appDir: appDir,
+      key: key,
+      todoId: todoId,
     );
   }
 

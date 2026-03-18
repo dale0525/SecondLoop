@@ -40,22 +40,98 @@ INSERT INTO todo_followup_generation_jobs(
 )
 VALUES (?1, ?2, 'pending', 0, NULL, NULL, ?3, ?4, ?5, ?5)
 ON CONFLICT(todo_id) DO UPDATE SET
-  trigger_kind = excluded.trigger_kind,
-  status = 'pending',
-  attempts = 0,
-  next_retry_at_ms = NULL,
-  last_error = NULL,
-  include_manual_followups = excluded.include_manual_followups,
+  trigger_kind = CASE
+    WHEN todo_followup_generation_jobs.trigger_kind = 'manual_regenerate'
+      AND todo_followup_generation_jobs.status IN ('pending', 'running', 'failed')
+      AND excluded.trigger_kind = 'auto_create'
+      THEN todo_followup_generation_jobs.trigger_kind
+    ELSE excluded.trigger_kind
+  END,
+  status = CASE
+    WHEN todo_followup_generation_jobs.trigger_kind = 'manual_regenerate'
+      AND todo_followup_generation_jobs.status IN ('pending', 'running', 'failed')
+      AND excluded.trigger_kind = 'auto_create'
+      THEN todo_followup_generation_jobs.status
+    ELSE 'pending'
+  END,
+  attempts = CASE
+    WHEN todo_followup_generation_jobs.trigger_kind = 'manual_regenerate'
+      AND todo_followup_generation_jobs.status IN ('pending', 'running', 'failed')
+      AND excluded.trigger_kind = 'auto_create'
+      THEN todo_followup_generation_jobs.attempts
+    ELSE 0
+  END,
+  next_retry_at_ms = CASE
+    WHEN todo_followup_generation_jobs.trigger_kind = 'manual_regenerate'
+      AND todo_followup_generation_jobs.status IN ('pending', 'running', 'failed')
+      AND excluded.trigger_kind = 'auto_create'
+      THEN todo_followup_generation_jobs.next_retry_at_ms
+    ELSE NULL
+  END,
+  last_error = CASE
+    WHEN todo_followup_generation_jobs.trigger_kind = 'manual_regenerate'
+      AND todo_followup_generation_jobs.status IN ('pending', 'running', 'failed')
+      AND excluded.trigger_kind = 'auto_create'
+      THEN todo_followup_generation_jobs.last_error
+    ELSE NULL
+  END,
+  include_manual_followups = CASE
+    WHEN todo_followup_generation_jobs.trigger_kind = 'manual_regenerate'
+      AND todo_followup_generation_jobs.status IN ('pending', 'running', 'failed')
+      AND excluded.trigger_kind = 'auto_create'
+      THEN todo_followup_generation_jobs.include_manual_followups
+    ELSE excluded.include_manual_followups
+  END,
   task_type_hint = CASE
+    WHEN todo_followup_generation_jobs.trigger_kind = 'manual_regenerate'
+      AND todo_followup_generation_jobs.status IN ('pending', 'running', 'failed')
+      AND excluded.trigger_kind = 'auto_create'
+      THEN todo_followup_generation_jobs.task_type_hint
     WHEN excluded.task_type_hint IS NOT NULL THEN excluded.task_type_hint
     WHEN excluded.trigger_kind = 'auto_create' THEN todo_followup_generation_jobs.task_type_hint
     ELSE NULL
   END,
-  updated_at_ms = excluded.updated_at_ms
+  updated_at_ms = CASE
+    WHEN todo_followup_generation_jobs.trigger_kind = 'manual_regenerate'
+      AND todo_followup_generation_jobs.status IN ('pending', 'running', 'failed')
+      AND excluded.trigger_kind = 'auto_create'
+      THEN todo_followup_generation_jobs.updated_at_ms
+    ELSE excluded.updated_at_ms
+  END
 "#,
         params![todo_id, trigger_kind, include_manual_followups, task_type_hint, now_ms],
     )?;
     Ok(())
+}
+
+pub fn find_todo_followup_generation_job(
+    conn: &Connection,
+    todo_id: &str,
+) -> Result<Option<TodoFollowupGenerationJob>> {
+    conn.query_row(
+        r#"
+SELECT todo_id, trigger_kind, status, attempts, next_retry_at_ms, last_error, include_manual_followups, task_type_hint, created_at_ms, updated_at_ms
+FROM todo_followup_generation_jobs
+WHERE todo_id = ?1
+"#,
+        params![todo_id],
+        |row| {
+            Ok(TodoFollowupGenerationJob {
+                todo_id: row.get(0)?,
+                trigger_kind: row.get(1)?,
+                status: row.get(2)?,
+                attempts: row.get(3)?,
+                next_retry_at_ms: row.get(4)?,
+                last_error: row.get(5)?,
+                include_manual_followups: row.get::<_, i64>(6)? != 0,
+                task_type_hint: row.get(7)?,
+                created_at_ms: row.get(8)?,
+                updated_at_ms: row.get(9)?,
+            })
+        },
+    )
+    .optional()
+    .map_err(Into::into)
 }
 
 pub fn list_due_todo_followup_generation_jobs(

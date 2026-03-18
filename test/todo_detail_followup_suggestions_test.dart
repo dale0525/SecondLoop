@@ -174,6 +174,41 @@ void main() {
     expect(changeCount, greaterThan(0));
   });
 
+  testWidgets(
+      'TodoDetailPage disables manual regenerate while auto generation is active',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({
+      'semantic_parse_data_consent_v1': true,
+    });
+    _setLargeDisplay(tester);
+    final backend = _Backend(
+      activeGenerationJob: const TodoFollowupGenerationJob(
+        todoId: 't1',
+        triggerKind: 'auto_create',
+        status: 'running',
+        attempts: 0,
+        nextRetryAtMs: null,
+        lastError: null,
+        includeManualFollowups: false,
+        taskTypeHint: 'research',
+        createdAtMs: 0,
+        updatedAtMs: 0,
+      ),
+    );
+
+    await tester.pumpWidget(_buildSubject(backend));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 200));
+
+    await tester.tap(
+      find.byKey(const ValueKey('todo_detail_followup_generate_suggestions')),
+      warnIfMissed: false,
+    );
+    await tester.pump();
+
+    expect(backend.enqueuedRegenerate, isFalse);
+  });
+
   testWidgets('TodoDetailPage shows regenerate loading state', (tester) async {
     SharedPreferences.setMockInitialValues({
       'semantic_parse_data_consent_v1': true,
@@ -459,6 +494,7 @@ final class _Backend extends AppBackend {
     List<TodoActivity>? initialActivities,
     List<LlmProfile>? llmProfiles,
     this.regenerateCompleter,
+    this.activeGenerationJob,
   })  : _suggestions = List<TodoFollowupSuggestion>.from(
           initialSuggestions ??
               const <TodoFollowupSuggestion>[
@@ -503,6 +539,7 @@ final class _Backend extends AppBackend {
   final List<TodoActivity> _activities;
   final List<LlmProfile> _llmProfiles;
   final Completer<void>? regenerateCompleter;
+  final TodoFollowupGenerationJob? activeGenerationJob;
   List<String> appliedSuggestionIds = <String>[];
   List<String> dismissedSuggestionIds = <String>[];
   bool enqueuedRegenerate = false;
@@ -620,6 +657,13 @@ final class _Backend extends AppBackend {
     dismissedSuggestionIds = List<String>.from(suggestionIds);
     _suggestions.removeWhere((item) => suggestionIds.contains(item.id));
   }
+
+  @override
+  Future<TodoFollowupGenerationJob?> getTodoFollowupGenerationJob(
+    Uint8List key,
+    String todoId,
+  ) async =>
+      activeGenerationJob;
 
   @override
   Future<void> enqueueTodoFollowupGenerationJob(
