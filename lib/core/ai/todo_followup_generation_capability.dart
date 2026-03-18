@@ -6,6 +6,17 @@ import '../cloud/cloud_auth_controller.dart';
 import '../cloud/cloud_auth_scope.dart';
 import 'ai_routing.dart';
 
+enum ForegroundAiRoutePolicy {
+  askAi,
+  automation,
+}
+
+enum ForegroundAiWarmupPolicy {
+  never,
+  cloudOnly,
+  always,
+}
+
 Future<String?> prepareTodoFollowupGenerationIdToken(
   CloudAuthController? controller, {
   required SubscriptionStatus subscriptionStatus,
@@ -25,6 +36,16 @@ Future<String?> prepareTodoFollowupGenerationIdToken(
   );
 }
 
+final class ForegroundAiPreparedRoute {
+  const ForegroundAiPreparedRoute({
+    required this.route,
+    required this.idToken,
+  });
+
+  final AskAiRouteKind route;
+  final String? idToken;
+}
+
 final class TodoFollowupGenerationPreparedRoute {
   const TodoFollowupGenerationPreparedRoute({
     required this.route,
@@ -41,6 +62,91 @@ bool supportsTodoFollowupWebSearch({
 }) {
   if (route != AskAiRouteKind.cloudGateway) return false;
   return gatewayConfig.supportsWebSearch;
+}
+
+Future<ForegroundAiPreparedRoute> prepareForegroundAiRoute(
+  AppBackend backend,
+  Uint8List sessionKey, {
+  required ForegroundAiRoutePolicy routePolicy,
+  required CloudAuthController? cloudAuthController,
+  required CloudGatewayConfig gatewayConfig,
+  required SubscriptionStatus subscriptionStatus,
+  CloudCapabilityAuthMode authMode = CloudCapabilityAuthMode.interactive,
+  ForegroundAiWarmupPolicy warmupPolicy = ForegroundAiWarmupPolicy.never,
+  bool fallbackToNeedsSetupOnRouteError = false,
+}) async {
+  final idToken = await readCloudCapabilityIdToken(
+    cloudAuthController,
+    mode: authMode,
+  );
+  final route = await _decideForegroundAiRoute(
+    backend,
+    sessionKey,
+    routePolicy: routePolicy,
+    cloudIdToken: idToken,
+    gatewayConfig: gatewayConfig,
+    subscriptionStatus: subscriptionStatus,
+    fallbackToNeedsSetupOnRouteError: fallbackToNeedsSetupOnRouteError,
+  );
+
+  if (_shouldWarmForegroundAiRoute(route, warmupPolicy)) {
+    await bestEffortWarmCloudCapabilityAuth(cloudAuthController);
+  }
+
+  return ForegroundAiPreparedRoute(
+    route: route,
+    idToken: idToken,
+  );
+}
+
+Future<AskAiRouteKind> _decideForegroundAiRoute(
+  AppBackend backend,
+  Uint8List sessionKey, {
+  required ForegroundAiRoutePolicy routePolicy,
+  required String? cloudIdToken,
+  required CloudGatewayConfig gatewayConfig,
+  required SubscriptionStatus subscriptionStatus,
+  required bool fallbackToNeedsSetupOnRouteError,
+}) async {
+  try {
+    switch (routePolicy) {
+      case ForegroundAiRoutePolicy.askAi:
+        return await decideAskAiRoute(
+          backend,
+          sessionKey,
+          cloudIdToken: cloudIdToken,
+          cloudGatewayBaseUrl: gatewayConfig.baseUrl,
+          subscriptionStatus: subscriptionStatus,
+        );
+      case ForegroundAiRoutePolicy.automation:
+        return await decideAiAutomationRoute(
+          backend,
+          sessionKey,
+          cloudIdToken: cloudIdToken,
+          cloudGatewayBaseUrl: gatewayConfig.baseUrl,
+          subscriptionStatus: subscriptionStatus,
+        );
+    }
+  } catch (_) {
+    if (fallbackToNeedsSetupOnRouteError) {
+      return AskAiRouteKind.needsSetup;
+    }
+    rethrow;
+  }
+}
+
+bool _shouldWarmForegroundAiRoute(
+  AskAiRouteKind route,
+  ForegroundAiWarmupPolicy warmupPolicy,
+) {
+  switch (warmupPolicy) {
+    case ForegroundAiWarmupPolicy.never:
+      return false;
+    case ForegroundAiWarmupPolicy.cloudOnly:
+      return route == AskAiRouteKind.cloudGateway;
+    case ForegroundAiWarmupPolicy.always:
+      return route != AskAiRouteKind.needsSetup;
+  }
 }
 
 Future<AskAiRouteKind> decideTodoFollowupGenerationRoute(

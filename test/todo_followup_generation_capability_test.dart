@@ -68,6 +68,57 @@ void main() {
     expect(route, AskAiRouteKind.needsSetup);
   });
 
+  test('interactive ask-ai preflight warms cloud only after cloud route',
+      () async {
+    final toolkit = _RefreshingIdentityToolkit();
+    final store = _InMemoryCloudAuthStore(
+      const CloudAuthStoredSession(uid: 'uid_1', refreshToken: 'refresh_1'),
+    );
+    final controller = CloudAuthControllerImpl(
+      identityToolkit: toolkit,
+      store: store,
+      nowMs: () => 1000,
+    );
+
+    final prepared = await prepareForegroundAiRoute(
+      _FakeBackend(),
+      _sessionKey,
+      routePolicy: ForegroundAiRoutePolicy.askAi,
+      cloudAuthController: controller,
+      gatewayConfig: const CloudGatewayConfig(
+        baseUrl: 'https://example.com',
+        modelName: 'cloud',
+      ),
+      subscriptionStatus: SubscriptionStatus.unknown,
+      warmupPolicy: ForegroundAiWarmupPolicy.cloudOnly,
+    );
+
+    expect(prepared.route, AskAiRouteKind.cloudGateway);
+    expect(prepared.idToken, 'id_token_1');
+    expect(store.loadCalls, 1);
+    expect(toolkit.refreshCalls, 1);
+  });
+
+  test('interactive automation preflight falls back to needsSetup on errors',
+      () async {
+    final prepared = await prepareForegroundAiRoute(
+      _ThrowingRouteBackend(),
+      _sessionKey,
+      routePolicy: ForegroundAiRoutePolicy.automation,
+      cloudAuthController: null,
+      gatewayConfig: const CloudGatewayConfig(
+        baseUrl: 'https://example.com',
+        modelName: 'cloud',
+      ),
+      subscriptionStatus: SubscriptionStatus.entitled,
+      warmupPolicy: ForegroundAiWarmupPolicy.always,
+      fallbackToNeedsSetupOnRouteError: true,
+    );
+
+    expect(prepared.route, AskAiRouteKind.needsSetup);
+    expect(prepared.idToken, isNull);
+  });
+
   test('shared followup preflight reuses background auth + manual route',
       () async {
     final toolkit = _RefreshingIdentityToolkit();
@@ -108,6 +159,16 @@ final class _FakeBackend extends AppBackend {
   @override
   Future<List<LlmProfile>> listLlmProfiles(Uint8List key) async =>
       const <LlmProfile>[];
+}
+
+final class _ThrowingRouteBackend extends AppBackend {
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+
+  @override
+  Future<List<LlmProfile>> listLlmProfiles(Uint8List key) async {
+    throw StateError('boom');
+  }
 }
 
 final class _InMemoryCloudAuthStore implements CloudAuthStore {
