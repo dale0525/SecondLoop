@@ -149,7 +149,7 @@ void main() {
       ),
     );
 
-    expect(find.text('Undo done|Do again|Delete'), findsOneWidget);
+    expect(find.text('Resume today|Do again|Delete'), findsOneWidget);
   });
 
   test('stale in-progress recovery signal is cleared before urgency increases',

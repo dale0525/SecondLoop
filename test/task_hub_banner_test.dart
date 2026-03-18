@@ -153,6 +153,36 @@ void main() {
     expect(tappedAction, TaskHubQuickAction.tomorrow);
   });
 
+  testWidgets(
+      'banner still shows open focus action without quick actions enabled',
+      (tester) async {
+    final now = DateTime(2026, 3, 13, 10, 0);
+    final snapshot = buildTaskPrioritySnapshot(
+      <Todo>[
+        todo(id: 'focus', title: 'Fix billing bug', updatedAtMs: 10),
+      ],
+      nowLocal: now,
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: Scaffold(
+            body: TaskHubBanner(
+              snapshot: snapshot,
+              onOpenTodo: (_) async {},
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.byKey(const ValueKey('task_hub_banner_open_focus')),
+        findsOneWidget);
+    expect(
+        find.byKey(const ValueKey('task_hub_banner_open_hub')), findsNothing);
+  });
+
   testWidgets('banner preview shows checklist progress summary',
       (tester) async {
     final now = DateTime(2026, 3, 13, 10, 0);

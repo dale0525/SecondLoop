@@ -269,16 +269,17 @@ class TaskPriorityStore extends ChangeNotifier {
               computedAtLocal: nowLocal,
             );
           }
-          if (canUsePersistedCache) {
-            await _writePersistedAiAssessments(
-              cacheScopeKey: cacheScopeKey,
-              entries: mergedPersisted,
-              activeTodoIds: request.candidates.map((entry) => entry.todoId),
-            );
-          }
         } catch (_) {
           // Keep the already-published rules snapshot.
         }
+      }
+
+      if (canUsePersistedCache) {
+        await _writePersistedAiAssessments(
+          cacheScopeKey: cacheScopeKey,
+          entries: mergedPersisted,
+          activeTodoIds: request.candidates.map((entry) => entry.todoId),
+        );
       }
 
       if (freshEntries.isEmpty) {

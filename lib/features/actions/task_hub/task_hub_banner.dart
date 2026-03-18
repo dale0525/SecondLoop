@@ -81,6 +81,11 @@ class _TaskHubBannerState extends State<TaskHubBanner> {
             context,
             entry: primary,
           );
+    final showQuickPair = primary != null &&
+        primaryAction != null &&
+        widget.onQuickAction != null;
+    final showNavigationActions = primary != null &&
+        (widget.onOpenTodo != null || widget.onViewAll != null);
     return Padding(
       padding: outerPadding,
       child: SlSurface(
@@ -144,9 +149,7 @@ class _TaskHubBannerState extends State<TaskHubBanner> {
                   ),
                 ],
                 SizedBox(height: actionsSpacingTop),
-                if (primary != null &&
-                    primaryAction != null &&
-                    widget.onQuickAction != null) ...[
+                if (showQuickPair) ...[
                   DecoratedBox(
                     key: const ValueKey('task_hub_banner_quick_pair'),
                     decoration: BoxDecoration(
@@ -197,8 +200,7 @@ class _TaskHubBannerState extends State<TaskHubBanner> {
                       ),
                     ),
                   ),
-                  if (widget.onOpenTodo != null ||
-                      widget.onViewAll != null) ...[
+                  if (showNavigationActions) ...[
                     const SizedBox(height: 8),
                     Wrap(
                       spacing: 8,
@@ -224,7 +226,30 @@ class _TaskHubBannerState extends State<TaskHubBanner> {
                       ],
                     ),
                   ],
-                ] else
+                ] else if (primary != null && showNavigationActions)
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      if (widget.onOpenTodo != null)
+                        SlButton(
+                          buttonKey:
+                              const ValueKey('task_hub_banner_open_focus'),
+                          variant: SlButtonVariant.outline,
+                          onPressed: () =>
+                              unawaited(widget.onOpenTodo!(primary)),
+                          child: Text(context.t.actions.taskHub.openFocus),
+                        ),
+                      if (widget.onViewAll != null)
+                        SlButton(
+                          buttonKey: const ValueKey('task_hub_banner_view_all'),
+                          variant: SlButtonVariant.outline,
+                          onPressed: widget.onViewAll,
+                          child: Text(context.t.actions.taskHub.openTaskHub),
+                        ),
+                    ],
+                  )
+                else
                   SlButton(
                     key: const ValueKey('task_hub_banner_open_hub'),
                     onPressed: widget.onViewAll,

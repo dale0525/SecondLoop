@@ -176,7 +176,7 @@
       "increaseImportance": "更重要",
       "decreaseImportance": "没那么重要",
       "done": "完成",
-      "reopen": "撤销完成",
+      "reopen": "恢复到今天",
       "redo": "再做一次",
       "more": "更多"
     }

@@ -176,7 +176,7 @@
       "increaseImportance": "More important",
       "decreaseImportance": "Less important",
       "done": "Done",
-      "reopen": "Undo done",
+      "reopen": "Resume today",
       "redo": "Do again",
       "more": "More"
     }

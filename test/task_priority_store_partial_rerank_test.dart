@@ -98,6 +98,41 @@ void main() {
 
     expect(service.requestSizes, <int>[1, 1]);
   });
+
+  test('cache-only refresh prunes removed persisted assessments', () async {
+    SharedPreferences.setMockInitialValues({});
+    var todoIds = <String>['a', 'b'];
+    final service = _RecordingAiService();
+    final store = TaskPriorityStore.fromLoaders(
+      nowLocal: () => DateTime(2026, 3, 13, 10, 0),
+      loadTodos: () async => todoIds
+          .map(
+            (id) => todo(
+              id: id,
+              title: 'Task ${id.toUpperCase()}',
+              updatedAtMs: id == 'a' ? 10 : 20,
+            ),
+          )
+          .toList(growable: false),
+      resolveAiService: () async => service,
+    );
+
+    await store.refresh();
+    expect(service.requestSizes, <int>[2]);
+
+    todoIds = <String>['a'];
+    store.markDirty();
+    await store.refresh();
+
+    expect(service.requestSizes, <int>[2]);
+
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString('task_priority_ai_cache_v3');
+
+    expect(raw, isNotNull);
+    expect(raw, contains('"a"'));
+    expect(raw, isNot(contains('"b"')));
+  });
 }
 
 final class _RecordingAiService implements TaskPriorityAiService {
