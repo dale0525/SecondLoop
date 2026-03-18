@@ -67,6 +67,10 @@ Future<TodoFollowupSuggestionDraft?> requestTodoFollowupSuggestion({
     return null;
   }
 
+  if (route == AskAiRouteKind.cloudGateway && idToken.trim().isEmpty) {
+    throw StateError('Cloud follow-up requests require a non-empty ID token');
+  }
+
   final prompt = buildTodoFollowupSuggestionPrompt(
     taskTitle: taskTitle,
     taskContext: taskContext,

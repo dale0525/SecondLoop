@@ -1,5 +1,9 @@
+import 'dart:typed_data';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:secondloop/core/ai/todo_followup_suggestions_ai.dart';
+import 'package:secondloop/core/ai/ai_routing.dart';
+import 'package:secondloop/core/backend/app_backend.dart';
 import 'package:secondloop/src/rust/db.dart';
 
 void main() {
@@ -149,4 +153,28 @@ void main() {
       isNull,
     );
   });
+
+  test('cloud followup requests require a non-empty id token', () async {
+    await expectLater(
+      () => requestTodoFollowupSuggestion(
+        backend: _UnusedBackend(),
+        sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+        route: AskAiRouteKind.cloudGateway,
+        gatewayBaseUrl: 'https://example.com',
+        idToken: '  ',
+        modelName: 'cloud',
+        taskTitle: '调研一下当前主流的 llm 模型',
+        taskContext: '已有笔记：关注价格、上下文、多模态。',
+        localeTag: 'zh-CN',
+        generationMode: TodoFollowupGenerationMode.webSearch,
+        manualFollowups: const <String>[],
+      ),
+      throwsA(isA<StateError>()),
+    );
+  });
+}
+
+final class _UnusedBackend extends AppBackend {
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }

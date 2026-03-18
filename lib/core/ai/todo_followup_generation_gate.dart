@@ -203,10 +203,29 @@ class _TodoFollowupGenerationGateState extends State<TodoFollowupGenerationGate>
     _running = true;
     _restartBlockToken = UpdateRestartActivity.blockAiAnalysis();
     try {
+      final backendStore = _BackendTodoFollowupGenerationStore(
+        backend: backend,
+        sessionKey: Uint8List.fromList(sessionKey),
+      );
+      final previewJobs = await backendStore.listDueJobs(
+        nowMs: DateTime.now().millisecondsSinceEpoch,
+        limit: _kBatchLimit,
+      );
+
       final prefs = await SharedPreferences.getInstance();
       final enabled =
           prefs.getBool(SemanticParseDataConsentPrefs.prefsKey) ?? false;
       if (!enabled || !mounted) {
+        if (previewJobs.isNotEmpty) {
+          await finalizeTodoFollowupGenerationJobsForNeedsSetup(
+            backendStore,
+            previewJobs,
+            nowMs: DateTime.now().millisecondsSinceEpoch,
+          );
+          syncEngine?.notifyExternalChange();
+          _schedule(_kDrainInterval);
+          return;
+        }
         _schedule(_kIdleInterval);
         return;
       }
@@ -216,14 +235,6 @@ class _TodoFollowupGenerationGateState extends State<TodoFollowupGenerationGate>
       final cloudAuthScope = CloudAuthScope.maybeOf(context);
       final gatewayConfig =
           cloudAuthScope?.gatewayConfig ?? CloudGatewayConfig.defaultConfig;
-      final backendStore = _BackendTodoFollowupGenerationStore(
-        backend: backend,
-        sessionKey: Uint8List.fromList(sessionKey),
-      );
-      final previewJobs = await backendStore.listDueJobs(
-        nowMs: DateTime.now().millisecondsSinceEpoch,
-        limit: _kBatchLimit,
-      );
       if (previewJobs.isEmpty) {
         _schedule(_kIdleInterval);
         return;
@@ -261,6 +272,17 @@ class _TodoFollowupGenerationGateState extends State<TodoFollowupGenerationGate>
           continue;
         }
 
+        if (route == AskAiRouteKind.cloudGateway &&
+            (idToken?.trim().isEmpty ?? true)) {
+          await finalizeTodoFollowupGenerationJobsForNeedsSetup(
+            backendStore,
+            passPlan.jobs,
+            nowMs: nowMs,
+          );
+          didUpdateJobs = true;
+          continue;
+        }
+
         final runner = TodoFollowupGenerationRunner(
           store: _SeededTodoFollowupGenerationStore(
             delegate: backendStore,
@@ -271,7 +293,7 @@ class _TodoFollowupGenerationGateState extends State<TodoFollowupGenerationGate>
             sessionKey: Uint8List.fromList(sessionKey),
             route: route,
             gatewayBaseUrl: gatewayConfig.baseUrl,
-            idToken: idToken ?? '',
+            idToken: idToken!,
             modelName: gatewayConfig.modelName,
             source: route == AskAiRouteKind.cloudGateway ? 'cloud' : 'byok',
             supportsWebSearch: supportsTodoFollowupWebSearch(

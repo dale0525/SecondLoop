@@ -167,6 +167,25 @@ void main() {
     expect(prepared.route, AskAiRouteKind.cloudGateway);
     expect(prepared.idToken, 'token_after_warm');
   });
+
+  test('late warmup refreshes returned token before handing route back',
+      () async {
+    final prepared = await prepareForegroundAiRoute(
+      _ByokBackend(),
+      _sessionKey,
+      routePolicy: ForegroundAiRoutePolicy.askAi,
+      cloudAuthController: _WarmupRequiredCloudAuthController(),
+      gatewayConfig: const CloudGatewayConfig(
+        baseUrl: '',
+        modelName: 'cloud',
+      ),
+      subscriptionStatus: SubscriptionStatus.unknown,
+      warmupPolicy: ForegroundAiWarmupPolicy.always,
+    );
+
+    expect(prepared.route, AskAiRouteKind.byok);
+    expect(prepared.idToken, 'token_after_warm');
+  });
 }
 
 final Uint8List _sessionKey = Uint8List.fromList(List<int>.filled(32, 1));
@@ -188,6 +207,25 @@ final class _ThrowingRouteBackend extends AppBackend {
   Future<List<LlmProfile>> listLlmProfiles(Uint8List key) async {
     throw StateError('boom');
   }
+}
+
+final class _ByokBackend extends AppBackend {
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+
+  @override
+  Future<List<LlmProfile>> listLlmProfiles(Uint8List key) async =>
+      const <LlmProfile>[
+        LlmProfile(
+          id: 'p1',
+          name: 'BYOK',
+          providerType: 'openai',
+          modelName: 'gpt-4o-mini',
+          isActive: true,
+          createdAtMs: 0,
+          updatedAtMs: 0,
+        ),
+      ];
 }
 
 final class _InMemoryCloudAuthStore implements CloudAuthStore {

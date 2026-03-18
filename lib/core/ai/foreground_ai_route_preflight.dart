@@ -84,7 +84,7 @@ Future<ForegroundAiPreparedRoute> prepareForegroundAiRoute(
     await bestEffortWarmCloudCapabilityAuth(cloudAuthController);
   }
 
-  final idToken = await readCloudCapabilityIdToken(
+  var idToken = await readCloudCapabilityIdToken(
     cloudAuthController,
     mode: authMode,
   );
@@ -100,6 +100,10 @@ Future<ForegroundAiPreparedRoute> prepareForegroundAiRoute(
 
   if (!didWarmBeforeRead && _shouldWarmForegroundAiRoute(route, warmupPolicy)) {
     await bestEffortWarmCloudCapabilityAuth(cloudAuthController);
+    idToken = await readCloudCapabilityIdToken(
+      cloudAuthController,
+      mode: authMode,
+    );
   }
 
   return ForegroundAiPreparedRoute(

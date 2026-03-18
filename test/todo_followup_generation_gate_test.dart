@@ -157,6 +157,78 @@ void main() {
     expect(backend.skippedTodoIds, contains('todo_auto'));
     expect(changeCount, greaterThan(0));
   });
+
+  testWidgets('consent-disabled pass clears queued followup jobs',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({
+      'semantic_parse_data_consent_v1': false,
+    });
+
+    final backend = _FakeTodoFollowupGenerationGateBackend(
+      dueJobs: const <TodoFollowupGenerationJob>[
+        TodoFollowupGenerationJob(
+          todoId: 'todo_manual',
+          triggerKind: 'manual_regenerate',
+          status: 'pending',
+          attempts: 0,
+          nextRetryAtMs: null,
+          lastError: null,
+          includeManualFollowups: true,
+          taskTypeHint: null,
+          createdAtMs: 0,
+          updatedAtMs: 0,
+        ),
+        TodoFollowupGenerationJob(
+          todoId: 'todo_auto',
+          triggerKind: 'auto_create',
+          status: 'pending',
+          attempts: 0,
+          nextRetryAtMs: null,
+          lastError: null,
+          includeManualFollowups: false,
+          taskTypeHint: 'research',
+          createdAtMs: 0,
+          updatedAtMs: 0,
+        ),
+      ],
+    );
+    final engine = SyncEngine(
+      syncRunner: _NoopSyncRunner(),
+      loadConfig: () async => null,
+    );
+    var changeCount = 0;
+    void onChange() => changeCount += 1;
+    engine.changes.addListener(onChange);
+    addTearDown(() {
+      engine.changes.removeListener(onChange);
+      engine.stop();
+    });
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: AppBackendScope(
+          backend: backend,
+          child: SessionScope(
+            sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+            lock: () {},
+            child: SyncEngineScope(
+              engine: engine,
+              child: const TodoFollowupGenerationGate(
+                child: SizedBox.shrink(),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 3));
+
+    expect(backend.canceledTodoIds, contains('todo_manual'));
+    expect(backend.skippedTodoIds, contains('todo_auto'));
+    expect(changeCount, greaterThan(0));
+  });
 }
 
 final class _NoopSyncRunner implements SyncRunner {
