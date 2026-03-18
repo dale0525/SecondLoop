@@ -56,6 +56,18 @@ final class TodoFollowupGenerationPreparedRoute {
   final String? idToken;
 }
 
+bool canRunPreparedTodoFollowupGenerationRoute(
+  TodoFollowupGenerationPreparedRoute prepared,
+) {
+  if (prepared.route == AskAiRouteKind.needsSetup) {
+    return false;
+  }
+  if (prepared.route != AskAiRouteKind.cloudGateway) {
+    return true;
+  }
+  return prepared.idToken?.trim().isNotEmpty ?? false;
+}
+
 bool supportsTodoFollowupWebSearch({
   required AskAiRouteKind route,
   required CloudGatewayConfig gatewayConfig,

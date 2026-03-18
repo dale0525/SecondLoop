@@ -229,6 +229,75 @@ void main() {
     expect(backend.skippedTodoIds, contains('todo_auto'));
     expect(changeCount, greaterThan(0));
   });
+
+  testWidgets('byok pass does not require a cloud token', (tester) async {
+    SharedPreferences.setMockInitialValues({
+      'semantic_parse_data_consent_v1': true,
+    });
+
+    final backend = _FakeTodoFollowupGenerationGateBackend(
+      dueJobs: const <TodoFollowupGenerationJob>[
+        TodoFollowupGenerationJob(
+          todoId: 'todo_byok',
+          triggerKind: 'auto_create',
+          status: 'pending',
+          attempts: 0,
+          nextRetryAtMs: null,
+          lastError: null,
+          includeManualFollowups: false,
+          taskTypeHint: 'research',
+          createdAtMs: 0,
+          updatedAtMs: 0,
+        ),
+      ],
+      todosById: const <String, Todo>{
+        'todo_byok': Todo(
+          id: 'todo_byok',
+          title: '调研一下当前主流的 llm 模型',
+          status: 'open',
+          createdAtMs: 0,
+          updatedAtMs: 0,
+        ),
+      },
+      llmProfiles: const <LlmProfile>[
+        LlmProfile(
+          id: 'llm_1',
+          name: 'BYOK',
+          providerType: 'openai_compatible',
+          baseUrl: 'https://example.com',
+          modelName: 'gpt-test',
+          isActive: true,
+          createdAtMs: 0,
+          updatedAtMs: 0,
+        ),
+      ],
+      aiPromptResponse:
+          '{"content":"Not verified online. Summary collected from model knowledge.","mode":"model_knowledge","citations":[]}',
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: AppBackendScope(
+          backend: backend,
+          child: SessionScope(
+            sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+            lock: () {},
+            child: const TodoFollowupGenerationGate(
+              child: SizedBox.shrink(),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 3));
+
+    expect(backend.succeededTodoIds, contains('todo_byok'));
+    expect(backend.generatedSuggestionTodoIds, contains('todo_byok'));
+    expect(backend.failedTodoIds, isEmpty);
+    expect(backend.canceledTodoIds, isEmpty);
+  });
 }
 
 final class _NoopSyncRunner implements SyncRunner {
@@ -242,15 +311,83 @@ final class _NoopSyncRunner implements SyncRunner {
 final class _FakeTodoFollowupGenerationGateBackend extends NativeAppBackend {
   _FakeTodoFollowupGenerationGateBackend({
     required this.dueJobs,
+    this.todosById = const <String, Todo>{},
+    this.llmProfiles = const <LlmProfile>[],
+    this.aiPromptResponse,
   }) : super(appDirProvider: () async => '/tmp/secondloop-test');
 
   final List<TodoFollowupGenerationJob> dueJobs;
+  final Map<String, Todo> todosById;
+  final List<LlmProfile> llmProfiles;
+  final String? aiPromptResponse;
   final List<String> skippedTodoIds = <String>[];
   final List<String> canceledTodoIds = <String>[];
+  final List<String> failedTodoIds = <String>[];
+  final List<String> succeededTodoIds = <String>[];
+  final List<String> generatedSuggestionTodoIds = <String>[];
 
   @override
   Future<List<LlmProfile>> listLlmProfiles(Uint8List key) async {
-    return const <LlmProfile>[];
+    return llmProfiles;
+  }
+
+  @override
+  Future<Todo?> getTodoById(Uint8List key, String todoId) async =>
+      todosById[todoId];
+
+  @override
+  Future<List<TodoActivity>> listTodoActivities(
+    Uint8List key,
+    String todoId,
+  ) async =>
+      const <TodoActivity>[];
+
+  @override
+  Future<List<TodoFollowupSuggestion>> listTodoFollowupSuggestions(
+    Uint8List key,
+    String todoId,
+  ) async =>
+      const <TodoFollowupSuggestion>[];
+
+  @override
+  Future<List<TodoFollowupSuggestion>> upsertGeneratedTodoFollowupSuggestions(
+    Uint8List key, {
+    required String todoId,
+    required List<TodoFollowupSuggestionDraftInput> suggestions,
+    required String source,
+    String? generationKey,
+  }) async {
+    generatedSuggestionTodoIds.add(todoId);
+    return suggestions
+        .map(
+          (suggestion) => TodoFollowupSuggestion(
+            id: 'generated_${generatedSuggestionTodoIds.length}',
+            todoId: todoId,
+            content: suggestion.content,
+            state: 'pending',
+            source: source,
+            generationMode: suggestion.generationMode,
+            generationKey: generationKey,
+            citationsJson: suggestion.citationsJson,
+            createdAtMs: 0,
+            updatedAtMs: 0,
+            dismissedAtMs: null,
+            appliedActivityId: null,
+          ),
+        )
+        .toList(growable: false);
+  }
+
+  @override
+  Future<String> taskPriorityRerankAi(
+    Uint8List key, {
+    required String prompt,
+  }) async {
+    final response = aiPromptResponse;
+    if (response == null) {
+      throw StateError('aiPromptResponse not configured');
+    }
+    return response;
   }
 
   @override
@@ -272,12 +409,40 @@ final class _FakeTodoFollowupGenerationGateBackend extends NativeAppBackend {
   }
 
   @override
+  Future<void> markTodoFollowupGenerationJobFailed(
+    Uint8List key, {
+    required String todoId,
+    required int attempts,
+    required int nextRetryAtMs,
+    required String lastError,
+    required int nowMs,
+  }) async {
+    failedTodoIds.add(todoId);
+  }
+
+  @override
+  Future<void> markTodoFollowupGenerationJobRunning(
+    Uint8List key, {
+    required String todoId,
+    required int nowMs,
+  }) async {}
+
+  @override
   Future<void> markTodoFollowupGenerationJobSkipped(
     Uint8List key, {
     required String todoId,
     required int nowMs,
   }) async {
     skippedTodoIds.add(todoId);
+  }
+
+  @override
+  Future<void> markTodoFollowupGenerationJobSucceeded(
+    Uint8List key, {
+    required String todoId,
+    required int nowMs,
+  }) async {
+    succeededTodoIds.add(todoId);
   }
 }
 

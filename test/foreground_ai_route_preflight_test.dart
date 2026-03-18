@@ -12,6 +12,38 @@ import 'package:secondloop/core/cloud/firebase_identity_toolkit.dart';
 import 'package:secondloop/src/rust/db.dart';
 
 void main() {
+  test('prepared followup route requires token only for cloud', () {
+    expect(
+      canRunPreparedTodoFollowupGenerationRoute(
+        const TodoFollowupGenerationPreparedRoute(
+          route: AskAiRouteKind.byok,
+          idToken: null,
+        ),
+      ),
+      isTrue,
+    );
+
+    expect(
+      canRunPreparedTodoFollowupGenerationRoute(
+        const TodoFollowupGenerationPreparedRoute(
+          route: AskAiRouteKind.cloudGateway,
+          idToken: null,
+        ),
+      ),
+      isFalse,
+    );
+
+    expect(
+      canRunPreparedTodoFollowupGenerationRoute(
+        const TodoFollowupGenerationPreparedRoute(
+          route: AskAiRouteKind.cloudGateway,
+          idToken: 'token_1',
+        ),
+      ),
+      isTrue,
+    );
+  });
+
   test('cloud route can opt into web search explicitly', () {
     expect(
       supportsTodoFollowupWebSearch(

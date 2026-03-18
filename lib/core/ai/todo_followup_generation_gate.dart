@@ -293,7 +293,7 @@ class _TodoFollowupGenerationGateState extends State<TodoFollowupGenerationGate>
             sessionKey: Uint8List.fromList(sessionKey),
             route: route,
             gatewayBaseUrl: gatewayConfig.baseUrl,
-            idToken: idToken!,
+            idToken: idToken,
             modelName: gatewayConfig.modelName,
             source: route == AskAiRouteKind.cloudGateway ? 'cloud' : 'byok',
             supportsWebSearch: supportsTodoFollowupWebSearch(
@@ -579,7 +579,7 @@ final class _BackendTodoFollowupGenerationClient
   final Uint8List sessionKey;
   final AskAiRouteKind route;
   final String gatewayBaseUrl;
-  final String idToken;
+  final String? idToken;
   final String modelName;
 
   @override
@@ -604,7 +604,7 @@ final class _BackendTodoFollowupGenerationClient
       sessionKey: sessionKey,
       route: route,
       gatewayBaseUrl: gatewayBaseUrl,
-      idToken: idToken,
+      idToken: idToken ?? '',
       modelName: modelName,
       taskTitle: taskTitle,
       taskContext: taskContext,

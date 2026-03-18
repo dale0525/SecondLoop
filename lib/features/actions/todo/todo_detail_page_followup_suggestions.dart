@@ -62,7 +62,7 @@ extension _TodoDetailPageStateFollowupSuggestions on _TodoDetailPageState {
       gatewayConfig: gatewayConfig,
       subscriptionStatus: subscriptionStatus,
     );
-    if (prepared.route == AskAiRouteKind.needsSetup) {
+    if (!canRunPreparedTodoFollowupGenerationRoute(prepared)) {
       if (!mounted) return false;
       await Navigator.of(context).push(
         MaterialPageRoute(
