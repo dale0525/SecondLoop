@@ -15,7 +15,7 @@ import 'package:secondloop/src/rust/db.dart';
 
 void main() {
   testWidgets(
-      'Quick capture prefers semantic parse over local time suggestion when AI automation is available',
+      'Product intent: Quick capture prefers semantic parse over local time suggestion when AI automation is available',
       (tester) async {
     SharedPreferences.setMockInitialValues({
       'welcome_guide_seen_v1': true,
@@ -170,7 +170,7 @@ void main() {
   });
 
   testWidgets(
-      'Quick capture plain message never requests reopen or open-chat flags',
+      'Product intent: Quick capture plain message never requests reopen or open-chat flags',
       (tester) async {
     SharedPreferences.setMockInitialValues({
       'welcome_guide_seen_v1': true,

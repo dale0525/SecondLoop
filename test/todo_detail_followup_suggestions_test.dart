@@ -250,7 +250,7 @@ void main() {
   });
 
   testWidgets(
-      'TodoDetailPage auto failed follow-up job does not block manual regenerate',
+      'Product intent: TodoDetailPage auto failed follow-up job does not block manual regenerate',
       (tester) async {
     SharedPreferences.setMockInitialValues({
       'semantic_parse_data_consent_v1': true,
@@ -284,7 +284,8 @@ void main() {
     expect(backend.enqueuedRegenerate, isTrue);
   });
 
-  testWidgets('TodoDetailPage failed follow-up job remains manually retryable',
+  testWidgets(
+      'Product intent: TodoDetailPage failed follow-up job remains manually retryable',
       (tester) async {
     SharedPreferences.setMockInitialValues({
       'semantic_parse_data_consent_v1': true,

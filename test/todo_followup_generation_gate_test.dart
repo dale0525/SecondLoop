@@ -58,7 +58,8 @@ void main() {
     );
   });
 
-  test('needs setup finalizer skips auto jobs and cancels manual jobs',
+  test(
+      'Product intent: needs setup finalizer skips auto jobs and cancels manual jobs',
       () async {
     final store = _FakeTodoFollowupGenerationStore();
 
@@ -158,7 +159,8 @@ void main() {
     expect(changeCount, greaterThan(0));
   });
 
-  testWidgets('consent-disabled pass clears queued followup jobs',
+  testWidgets(
+      'Product intent: consent-disabled pass clears queued followup jobs',
       (tester) async {
     SharedPreferences.setMockInitialValues({
       'semantic_parse_data_consent_v1': false,
@@ -230,7 +232,8 @@ void main() {
     expect(changeCount, greaterThan(0));
   });
 
-  testWidgets('manual pass retries later when route is temporarily unavailable',
+  testWidgets(
+      'Product intent: manual pass retries later when route is temporarily unavailable',
       (tester) async {
     SharedPreferences.setMockInitialValues({
       'semantic_parse_data_consent_v1': true,
@@ -276,7 +279,7 @@ void main() {
   });
 
   testWidgets(
-      'route-unavailable gate keeps manual regenerate retryable while draining auto jobs',
+      'Product intent: route-unavailable gate keeps manual regenerate retryable while draining auto jobs',
       (tester) async {
     SharedPreferences.setMockInitialValues({
       'semantic_parse_data_consent_v1': true,

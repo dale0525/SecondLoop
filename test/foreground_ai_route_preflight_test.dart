@@ -72,7 +72,8 @@ void main() {
     );
   });
 
-  test('manual regenerate can use cloud when entitlement is still unknown',
+  test(
+      'Product intent: manual regenerate can use cloud when entitlement is still unknown',
       () async {
     final route = await decideTodoFollowupGenerationRoute(
       _FakeBackend(),
@@ -86,7 +87,8 @@ void main() {
     expect(route, AskAiRouteKind.cloudGateway);
   });
 
-  test('automatic followup still blocks cloud when entitlement is unknown',
+  test(
+      'Product intent: automatic followup still blocks cloud when entitlement is unknown',
       () async {
     final route = await decideTodoFollowupGenerationRoute(
       _FakeBackend(),
@@ -101,7 +103,7 @@ void main() {
   });
 
   test(
-      'manual regenerate intentionally stays cloud-routable before entitlement is resolved',
+      'Product intent: manual regenerate intentionally stays cloud-routable before entitlement is resolved',
       () async {
     final manualRoute = await decideTodoFollowupGenerationRoute(
       _FakeBackend(),
