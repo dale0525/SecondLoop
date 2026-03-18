@@ -231,7 +231,7 @@ class TaskHubEntryCard extends StatelessWidget {
                         'task_hub_page_priority_${entry.todo.id}_urgency',
                       ),
                       stateKey: ValueKey(
-                        'task_hub_page_priority_${entry.todo.id}_urgency_${entry.isUrgent ? 'active' : 'inactive'}',
+                        'task_hub_page_priority_${entry.todo.id}_urgency_${entry.isExplicitlyUrgent ? 'active' : 'inactive'}',
                       ),
                       decreaseButtonKey: ValueKey(
                         'task_hub_page_priority_${entry.todo.id}_urgency_decrease',
@@ -240,7 +240,7 @@ class TaskHubEntryCard extends StatelessWidget {
                         'task_hub_page_priority_${entry.todo.id}_urgency_increase',
                       ),
                       icon: Icons.priority_high_rounded,
-                      isActive: entry.isUrgent,
+                      isActive: entry.isExplicitlyUrgent,
                       canIncrease: true,
                       semanticsLabel:
                           context.t.actions.taskHub.actions.increaseUrgency,
@@ -259,7 +259,7 @@ class TaskHubEntryCard extends StatelessWidget {
                         'task_hub_page_priority_${entry.todo.id}_importance',
                       ),
                       stateKey: ValueKey(
-                        'task_hub_page_priority_${entry.todo.id}_importance_${entry.isImportant ? 'active' : 'inactive'}',
+                        'task_hub_page_priority_${entry.todo.id}_importance_${entry.isExplicitlyImportant ? 'active' : 'inactive'}',
                       ),
                       decreaseButtonKey: ValueKey(
                         'task_hub_page_priority_${entry.todo.id}_importance_decrease',
@@ -268,7 +268,7 @@ class TaskHubEntryCard extends StatelessWidget {
                         'task_hub_page_priority_${entry.todo.id}_importance_increase',
                       ),
                       icon: Icons.keyboard_double_arrow_up_rounded,
-                      isActive: entry.isImportant,
+                      isActive: entry.isExplicitlyImportant,
                       canIncrease: true,
                       semanticsLabel:
                           context.t.actions.taskHub.actions.increaseImportance,

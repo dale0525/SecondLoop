@@ -332,6 +332,24 @@ void main() {
     expect(tappedAction, TaskHubQuickAction.start);
   });
 
+  testWidgets('banner subtitle counts primary focus in next-up total',
+      (tester) async {
+    final snapshot = buildTaskPrioritySnapshot(
+      <Todo>[todo(id: 'focus', title: 'Write launch plan', updatedAtMs: 10)],
+      nowLocal: DateTime(2026, 3, 13, 10, 0),
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: Scaffold(body: TaskHubBanner(snapshot: snapshot)),
+        ),
+      ),
+    );
+
+    expect(find.text('Next up 1 • Backlog 0 • 0 done'), findsOneWidget);
+  });
+
   testWidgets('banner shows AI upgrade hint when enhancement is unavailable',
       (tester) async {
     final snapshot = buildTaskPrioritySnapshot(

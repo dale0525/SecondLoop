@@ -84,15 +84,8 @@ class TaskHubSummary {
     int upcomingPreviewLimit = 4,
     int backlogPreviewLimit = 4,
   }) {
-    final primaryFocus = snapshot.primaryFocus;
     final dueEntries = snapshot.focus;
-    final upcomingEntriesForSummary = primaryFocus == null
-        ? <TaskPriorityEntry>[...snapshot.nextUpEntries]
-        : <TaskPriorityEntry>[
-            primaryFocus,
-            ...snapshot.nextUpEntries
-                .where((entry) => entry.todo.id != primaryFocus.todo.id),
-          ];
+    final upcomingEntriesForSummary = snapshot.upcomingDisplayEntries;
     final reviewEntriesForSummary = snapshot.activeEntries
         .where((entry) => entry.isReviewDue)
         .toList(growable: false);
@@ -115,8 +108,8 @@ class TaskHubSummary {
       snapshot: snapshot,
       dueCount: dueEntries.length,
       overdueCount: dueEntries.where((entry) => entry.isOverdue).length,
-      upcomingCount: upcomingEntriesForSummary.length,
-      backlogCount: backlogEntriesForSummary.length,
+      upcomingCount: snapshot.upcomingDisplayCount,
+      backlogCount: snapshot.backlogDisplayCount,
       reviewCount: reviewEntriesForSummary.length,
       doneCount: doneEntries.length,
       upcomingPreviewTodos: List<Todo>.unmodifiable(upcomingPreview),

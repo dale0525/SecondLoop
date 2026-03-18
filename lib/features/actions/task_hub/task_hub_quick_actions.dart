@@ -153,18 +153,18 @@ class TaskHubQuickActionsController {
     int importanceDelta = 0,
     int urgencyDelta = 0,
   }) async {
-    final previous = await signalStore.readForTodo(todo.id);
-    final current = previous ?? const TaskPriorityManualSignal();
-    final updated = current.copyWith(
-      importanceDelta: importanceDelta,
-      urgencyDelta: urgencyDelta,
+    final mutation = await signalStore.mutateForTodo(
+      todo.id,
+      (current) => current.copyWith(
+        importanceDelta: importanceDelta,
+        urgencyDelta: urgencyDelta,
+      ),
     );
-    await signalStore.setForTodo(todo.id, updated);
     return TaskHubUndoTicket(
       todo: todo,
       updatedTodo: todo,
       action: action,
-      previousManualSignal: previous,
+      previousManualSignal: mutation.previous,
       shouldNotifySync: false,
     );
   }

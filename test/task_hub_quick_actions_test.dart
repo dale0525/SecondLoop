@@ -238,6 +238,26 @@ void main() {
     expect(await signalStore.readForTodo('t-importance'), isNull);
   });
 
+  test('concurrent urgency increases preserve both increments', () async {
+    SharedPreferences.setMockInitialValues({});
+
+    final initial = todo(id: 't-race', title: 'Task race', updatedAtMs: 10);
+    final backend = _QuickActionBackend(initialTodos: [initial]);
+    final signalStore = _RaceySignalStore();
+    final controller = TaskHubQuickActionsController(
+      backend: backend,
+      sessionKey: Uint8List(32),
+      signalStore: signalStore,
+    );
+
+    await Future.wait(<Future<TaskHubUndoTicket?>>[
+      controller.apply(initial, TaskHubQuickAction.increaseUrgency),
+      controller.apply(initial, TaskHubQuickAction.increaseUrgency),
+    ]);
+
+    expect((await signalStore.readForTodo('t-race'))?.urgencyScore, 2);
+  });
+
   test(
       'decrease urgency decrements existing urgency score and undo restores it',
       () async {
@@ -585,4 +605,40 @@ final class _QuickActionBackend extends AppBackend {
 
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+final class _RaceySignalStore extends TaskPrioritySignalStore {
+  _RaceySignalStore();
+
+  TaskPriorityManualSignal? _signal;
+  var _staleReadCount = 0;
+
+  @override
+  Future<TaskPriorityManualSignal?> readForTodo(String todoId) async {
+    if (_staleReadCount < 2) {
+      _staleReadCount += 1;
+      return null;
+    }
+    return _signal;
+  }
+
+  @override
+  Future<void> setForTodo(
+    String todoId,
+    TaskPriorityManualSignal signal,
+  ) async {
+    _signal = signal.isEmpty ? null : signal;
+  }
+
+  @override
+  Future<TaskPrioritySignalMutation> mutateForTodo(
+    String todoId,
+    TaskPriorityManualSignal Function(TaskPriorityManualSignal current) mutate,
+  ) async {
+    final previous = _signal;
+    final updated = mutate(previous ?? const TaskPriorityManualSignal());
+    _signal = updated.isEmpty ? null : updated;
+    _staleReadCount = 2;
+    return TaskPrioritySignalMutation(previous: previous, updated: updated);
+  }
 }

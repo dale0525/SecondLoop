@@ -172,6 +172,38 @@ void main() {
     );
   });
 
+  testWidgets('due-today urgency does not appear as an explicit urgency boost',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final now = DateTime.now();
+    final backend = _TaskHubBackend(
+      todos: <Todo>[
+        Todo(
+          id: 'due-today',
+          title: 'Due today task',
+          dueAtMs:
+              now.add(const Duration(hours: 2)).toUtc().millisecondsSinceEpoch,
+          status: 'open',
+          sourceEntryId: null,
+          createdAtMs: 0,
+          updatedAtMs: 10,
+          reviewStage: null,
+          nextReviewAtMs: null,
+          lastReviewAtMs: null,
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(_wrap(backend));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(
+          const ValueKey('task_hub_page_priority_due-today_urgency_inactive')),
+      findsOneWidget,
+    );
+  });
+
   testWidgets('all tasks keep positive priority buttons enabled',
       (tester) async {
     SharedPreferences.setMockInitialValues({});

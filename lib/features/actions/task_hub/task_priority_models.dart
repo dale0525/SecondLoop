@@ -95,6 +95,10 @@ class TaskPriorityEntry {
 
   int get effectiveImportance => importanceScore;
 
+  bool get isExplicitlyImportant => importanceScore > 0;
+
+  bool get isExplicitlyUrgent => urgencyScore > 0;
+
   bool get isImportant => effectiveImportance > 0;
 
   bool get isUrgent => effectiveUrgency > 0;
@@ -218,6 +222,19 @@ class TaskPrioritySnapshot {
       .where(
           (entry) => entry.displayBucket == TaskPriorityDisplayBucket.backlog)
       .toList(growable: false);
+
+  List<TaskPriorityEntry> get upcomingDisplayEntries {
+    final primary = primaryFocus;
+    if (primary == null) return nextUpEntries;
+    return <TaskPriorityEntry>[
+      primary,
+      ...nextUpEntries.where((entry) => entry.todo.id != primary.todo.id),
+    ];
+  }
+
+  int get upcomingDisplayCount => upcomingDisplayEntries.length;
+
+  int get backlogDisplayCount => backlogEntries.length;
 
   List<TaskPriorityEntry> get allEntries => <TaskPriorityEntry>[
         ...orderedActive,

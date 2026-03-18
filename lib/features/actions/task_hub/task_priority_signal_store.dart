@@ -1,6 +1,17 @@
 import 'dart:convert';
+import 'dart:async';
 
 import 'package:shared_preferences/shared_preferences.dart';
+
+class TaskPrioritySignalMutation {
+  const TaskPrioritySignalMutation({
+    required this.previous,
+    required this.updated,
+  });
+
+  final TaskPriorityManualSignal? previous;
+  final TaskPriorityManualSignal updated;
+}
 
 class TaskPriorityManualSignal {
   const TaskPriorityManualSignal({
@@ -145,6 +156,8 @@ class TaskPrioritySignalStore {
   const TaskPrioritySignalStore();
 
   static const _prefsKey = 'task_priority_manual_signals_v1';
+  static final Map<String, Future<void>> _pendingMutationsByTodoId =
+      <String, Future<void>>{};
 
   Future<TaskPriorityManualSignalState> readManualState() async {
     final prefs = await SharedPreferences.getInstance();
@@ -187,6 +200,50 @@ class TaskPrioritySignalStore {
       next[trimmedTodoId] = signal;
     }
     await _write(TaskPriorityManualSignalState(byTodoId: next));
+  }
+
+  Future<TaskPrioritySignalMutation> mutateForTodo(
+    String todoId,
+    TaskPriorityManualSignal Function(TaskPriorityManualSignal current) mutate,
+  ) {
+    final trimmedTodoId = todoId.trim();
+    if (trimmedTodoId.isEmpty) {
+      return Future.value(
+        const TaskPrioritySignalMutation(
+          previous: null,
+          updated: TaskPriorityManualSignal(),
+        ),
+      );
+    }
+
+    final result = Completer<TaskPrioritySignalMutation>();
+    final previousFuture =
+        _pendingMutationsByTodoId[trimmedTodoId] ?? Future<void>.value();
+    late final Future<void> pending;
+    pending = previousFuture.catchError((_) {}).then((_) async {
+      final previous = await readForTodo(trimmedTodoId);
+      final updated = mutate(previous ?? const TaskPriorityManualSignal());
+      await setForTodo(trimmedTodoId, updated);
+      if (!result.isCompleted) {
+        result.complete(
+          TaskPrioritySignalMutation(
+            previous: previous,
+            updated: updated,
+          ),
+        );
+      }
+    }).catchError((Object error, StackTrace stackTrace) {
+      if (!result.isCompleted) {
+        result.completeError(error, stackTrace);
+      }
+    }).whenComplete(() {
+      if (identical(_pendingMutationsByTodoId[trimmedTodoId], pending)) {
+        _pendingMutationsByTodoId.remove(trimmedTodoId);
+      }
+    });
+
+    _pendingMutationsByTodoId[trimmedTodoId] = pending;
+    return result.future;
   }
 
   Future<TaskPriorityManualSignal> adjustImportance(
