@@ -62,6 +62,8 @@ void main() {
     expect(backend.semanticParseEnqueueCount, 1);
     expect(backend.insertedMessages, hasLength(1));
     expect(backend.upsertTodoCount, 0);
+    expect(controller.consumeReopenMainWindowOnHideRequest(), isFalse);
+    expect(controller.consumeOpenChatRequest(), isFalse);
     expect(find.text('Remind me to confirm later'), findsNothing);
   });
 

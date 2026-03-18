@@ -265,8 +265,19 @@ final class TodoFollowupGenerationRunner {
       } catch (error) {
         final attempts = job.attempts.toInt() + 1;
         final failedAtMs = _nowMs();
-        if (job.triggerKind == 'manual_regenerate' ||
-            attempts >= settings.maxAutoAttempts) {
+        if (job.triggerKind == 'manual_regenerate') {
+          await store.markJobFailed(
+            todoId: job.todoId,
+            attempts: attempts,
+            nextRetryAtMs: failedAtMs + _retryDelayMsForAttempt(attempts),
+            lastError: '$error',
+            nowMs: failedAtMs,
+          );
+          didUpdateJobs = true;
+          continue;
+        }
+
+        if (attempts >= settings.maxAutoAttempts) {
           await store.markJobCanceled(
             todoId: job.todoId,
             nowMs: failedAtMs,

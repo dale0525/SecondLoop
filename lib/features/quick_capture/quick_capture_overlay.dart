@@ -206,7 +206,7 @@ class _QuickCaptureDialogState extends State<_QuickCaptureDialog> {
                 nowMs: DateTime.now().millisecondsSinceEpoch,
               );
               syncEngine?.notifyExternalChange();
-              _dismiss(reopenMainWindow: true, openChat: true);
+              _dismiss();
               return;
             }
           } catch (_) {
@@ -263,7 +263,7 @@ class _QuickCaptureDialogState extends State<_QuickCaptureDialog> {
         }
       }
 
-      _dismiss(reopenMainWindow: true, openChat: true);
+      _dismiss();
     } finally {
       if (mounted) setState(() => _busy = false);
     }

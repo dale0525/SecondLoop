@@ -68,6 +68,28 @@ Future<void> finalizeTodoFollowupGenerationJobsForNeedsSetup(
   }
 }
 
+Future<void> deferTodoFollowupGenerationJobsForRetry(
+  TodoFollowupGenerationStore store,
+  List<TodoFollowupGenerationJob> jobs, {
+  required int nowMs,
+  required Duration retryDelay,
+  required String lastError,
+}) async {
+  for (final job in jobs) {
+    if (job.triggerKind != 'manual_regenerate') {
+      await store.markJobSkipped(todoId: job.todoId, nowMs: nowMs);
+      continue;
+    }
+    await store.markJobFailed(
+      todoId: job.todoId,
+      attempts: job.attempts.toInt() + 1,
+      nextRetryAtMs: nowMs + retryDelay.inMilliseconds,
+      lastError: lastError,
+      nowMs: nowMs,
+    );
+  }
+}
+
 class TodoFollowupGenerationGate extends StatefulWidget {
   const TodoFollowupGenerationGate({required this.child, super.key});
 
@@ -263,22 +285,42 @@ class _TodoFollowupGenerationGateState extends State<TodoFollowupGenerationGate>
           subscriptionStatus: subscriptionStatus,
         );
         if (route == AskAiRouteKind.needsSetup) {
-          await finalizeTodoFollowupGenerationJobsForNeedsSetup(
-            backendStore,
-            passPlan.jobs,
-            nowMs: nowMs,
-          );
+          if (passPlan.hasManualRegenerateDueJob) {
+            await deferTodoFollowupGenerationJobsForRetry(
+              backendStore,
+              passPlan.jobs,
+              nowMs: nowMs,
+              retryDelay: _kFailureInterval,
+              lastError: 'manual_followup_route_unavailable',
+            );
+          } else {
+            await finalizeTodoFollowupGenerationJobsForNeedsSetup(
+              backendStore,
+              passPlan.jobs,
+              nowMs: nowMs,
+            );
+          }
           didUpdateJobs = true;
           continue;
         }
 
         if (route == AskAiRouteKind.cloudGateway &&
             (idToken?.trim().isEmpty ?? true)) {
-          await finalizeTodoFollowupGenerationJobsForNeedsSetup(
-            backendStore,
-            passPlan.jobs,
-            nowMs: nowMs,
-          );
+          if (passPlan.hasManualRegenerateDueJob) {
+            await deferTodoFollowupGenerationJobsForRetry(
+              backendStore,
+              passPlan.jobs,
+              nowMs: nowMs,
+              retryDelay: _kFailureInterval,
+              lastError: 'manual_followup_auth_unavailable',
+            );
+          } else {
+            await finalizeTodoFollowupGenerationJobsForNeedsSetup(
+              backendStore,
+              passPlan.jobs,
+              nowMs: nowMs,
+            );
+          }
           didUpdateJobs = true;
           continue;
         }
