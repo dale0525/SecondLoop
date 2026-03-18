@@ -186,6 +186,61 @@ void main() {
     expect(updated.status, isNot('in_progress'));
   });
 
+  test('increase urgency on hard-urgent task does not persist manual signal',
+      () async {
+    SharedPreferences.setMockInitialValues({});
+
+    final initial = todo(
+      id: 't-hard-urgent',
+      title: 'Hot task',
+      updatedAtMs: 10,
+      status: 'in_progress',
+    );
+    final backend = _QuickActionBackend(initialTodos: [initial]);
+    const signalStore = TaskPrioritySignalStore();
+    final controller = TaskHubQuickActionsController(
+      backend: backend,
+      sessionKey: Uint8List(32),
+      signalStore: signalStore,
+    );
+
+    final ticket =
+        await controller.apply(initial, TaskHubQuickAction.increaseUrgency);
+
+    expect(ticket, isNull);
+    expect(await signalStore.readForTodo('t-hard-urgent'), isNull);
+    expect(backend.current('t-hard-urgent').status, 'in_progress');
+  });
+
+  test('increase importance on hard-focus task does not persist manual signal',
+      () async {
+    SharedPreferences.setMockInitialValues({});
+
+    final now = DateTime.now();
+    final initial = todo(
+      id: 't-hard-important',
+      title: 'Due today task',
+      updatedAtMs: 10,
+      dueAtMs: now.add(const Duration(hours: 1)).toUtc().millisecondsSinceEpoch,
+    );
+    final backend = _QuickActionBackend(initialTodos: [initial]);
+    const signalStore = TaskPrioritySignalStore();
+    final controller = TaskHubQuickActionsController(
+      backend: backend,
+      sessionKey: Uint8List(32),
+      signalStore: signalStore,
+    );
+
+    final ticket = await controller.apply(
+      initial,
+      TaskHubQuickAction.increaseImportance,
+    );
+
+    expect(ticket, isNull);
+    expect(await signalStore.readForTodo('t-hard-important'), isNull);
+    expect(backend.current('t-hard-important').dueAtMs, initial.dueAtMs);
+  });
+
   test('increase urgency moves backlog task to tomorrow schedule', () async {
     SharedPreferences.setMockInitialValues({});
 
@@ -625,6 +680,30 @@ void main() {
     final updated = backend.current('t9');
     expect(updated.status, 'in_progress');
     expect(updated.dueAtMs, isNotNull);
+  });
+
+  test('tomorrow action uses morning time for due date', () async {
+    SharedPreferences.setMockInitialValues({
+      'actions.review.morning_minutes_v1': (8 * 60) + 15,
+      'actions.review.day_end_minutes_v1': (21 * 60) + 45,
+    });
+
+    final initial = todo(id: 't10', title: 'Task 10', updatedAtMs: 10);
+    final backend = _QuickActionBackend(initialTodos: [initial]);
+    final controller = TaskHubQuickActionsController(
+      backend: backend,
+      sessionKey: Uint8List(32),
+    );
+
+    final ticket = await controller.apply(initial, TaskHubQuickAction.tomorrow);
+
+    expect(ticket, isNotNull);
+    final updated = backend.current('t10');
+    final dueLocal =
+        DateTime.fromMillisecondsSinceEpoch(updated.dueAtMs!, isUtc: true)
+            .toLocal();
+    expect(dueLocal.hour, 8);
+    expect(dueLocal.minute, 15);
   });
 }
 

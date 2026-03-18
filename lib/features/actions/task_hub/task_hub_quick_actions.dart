@@ -120,6 +120,9 @@ class TaskHubQuickActionsController {
           increase: false,
         );
       case TaskHubQuickAction.increaseImportance:
+        if (_hasHardFocusGuard(todo, nowLocal: nowLocal)) {
+          return null;
+        }
         final previous = await signalStore.readForTodo(todo.id);
         await signalStore.adjustImportance(todo.id, increase: true);
         return TaskHubUndoTicket(
@@ -212,8 +215,10 @@ class TaskHubQuickActionsController {
       targetDay.year,
       targetDay.month,
       targetDay.day,
-      settings.dayEndTime.hour,
-      settings.dayEndTime.minute,
+      offsetDays == 0 ? settings.dayEndTime.hour : settings.morningTime.hour,
+      offsetDays == 0
+          ? settings.dayEndTime.minute
+          : settings.morningTime.minute,
     );
     final updated = await backend.upsertTodo(
       sessionKey,
@@ -357,7 +362,7 @@ class TaskHubQuickActionsController {
     }
   }
 
-  Future<TaskHubUndoTicket> _applyUrgencyChange(
+  Future<TaskHubUndoTicket?> _applyUrgencyChange(
     Todo todo, {
     required DateTime nowLocal,
     required int nowUtcMs,
@@ -371,6 +376,9 @@ class TaskHubQuickActionsController {
       nowLocal: nowLocal,
       signal: currentSignal,
     );
+    if (increase && _hasHardUrgencyGuard(todo, nowLocal: nowLocal)) {
+      return null;
+    }
     final isReviewQueueTodo =
         todo.reviewStage != null && todo.nextReviewAtMs != null;
     final targetBucket = switch ((bucket, increase)) {
@@ -532,8 +540,8 @@ class TaskHubQuickActionsController {
       tomorrow.year,
       tomorrow.month,
       tomorrow.day,
-      settings.dayEndTime.hour,
-      settings.dayEndTime.minute,
+      settings.morningTime.hour,
+      settings.morningTime.minute,
     );
     return backend.upsertTodo(
       sessionKey,
@@ -686,4 +694,11 @@ bool _hasHardUrgencyGuard(
       (dueLocal.year == nowLocal.year &&
           dueLocal.month == nowLocal.month &&
           dueLocal.day == nowLocal.day);
+}
+
+bool _hasHardFocusGuard(
+  Todo todo, {
+  required DateTime nowLocal,
+}) {
+  return _hasHardUrgencyGuard(todo, nowLocal: nowLocal);
 }
