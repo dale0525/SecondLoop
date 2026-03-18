@@ -4,7 +4,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:secondloop/core/backend/app_backend.dart';
-import 'package:secondloop/core/backend/native_backend.dart';
 
 import 'package:secondloop/core/quick_capture/quick_capture_scope.dart';
 import 'package:secondloop/core/session/session_scope.dart';
@@ -15,14 +14,14 @@ import 'package:secondloop/main.dart';
 import 'package:secondloop/src/rust/db.dart';
 
 void main() {
-  testWidgets(
-      'Quick capture review path with native backend enqueues follow-up generation',
+  testWidgets('Quick capture enqueues semantic parse for todo-relevant input',
       (tester) async {
     SharedPreferences.setMockInitialValues({
       'welcome_guide_seen_v1': true,
+      'semantic_parse_data_consent_v1': true,
     });
     final controller = QuickCaptureController();
-    final backend = _UnlockedNativeQuickCaptureBackend();
+    final backend = _SemanticParseEnabledQuickCaptureBackend();
     final navigatorKey = GlobalKey<NavigatorState>();
 
     await tester.pumpWidget(
@@ -55,19 +54,15 @@ void main() {
 
     await tester.enterText(
       find.byKey(const ValueKey('quick_capture_input')),
-      '提醒我调研一下当前主流的 llm 模型',
+      '调研一下当前主流的 llm 模型',
     );
     await tester.testTextInput.receiveAction(TextInputAction.done);
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 200));
+    await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Remind me to confirm later'));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 200));
-    await tester.pump();
-
-    expect(backend.enqueueCount, 1);
+    expect(backend.semanticParseEnqueueCount, 1);
     expect(backend.insertedMessages, hasLength(1));
+    expect(backend.upsertTodoCount, 0);
+    expect(find.text('Remind me to confirm later'), findsNothing);
   });
 
   testWidgets('Quick capture inserts into Chat and hides', (tester) async {
@@ -220,6 +215,61 @@ void main() {
     expect(find.byKey(const ValueKey('capture_todo_custom_datetime_picker')),
         findsOneWidget);
   });
+}
+
+final class _SemanticParseEnabledQuickCaptureBackend extends _UnlockedBackend {
+  var semanticParseEnqueueCount = 0;
+  var upsertTodoCount = 0;
+
+  @override
+  Future<List<LlmProfile>> listLlmProfiles(Uint8List key) async =>
+      const <LlmProfile>[
+        LlmProfile(
+          id: 'p1',
+          name: 'BYOK',
+          providerType: 'openai',
+          modelName: 'gpt-4o-mini',
+          isActive: true,
+          createdAtMs: 0,
+          updatedAtMs: 0,
+        ),
+      ];
+
+  @override
+  Future<void> enqueueSemanticParseJob(
+    Uint8List key, {
+    required String messageId,
+    required int nowMs,
+  }) async {
+    semanticParseEnqueueCount += 1;
+  }
+
+  @override
+  Future<Todo> upsertTodo(
+    Uint8List key, {
+    required String id,
+    required String title,
+    int? dueAtMs,
+    required String status,
+    String? sourceEntryId,
+    int? reviewStage,
+    int? nextReviewAtMs,
+    int? lastReviewAtMs,
+  }) async {
+    upsertTodoCount += 1;
+    return Todo(
+      id: id,
+      title: title,
+      dueAtMs: dueAtMs,
+      status: status,
+      sourceEntryId: sourceEntryId,
+      createdAtMs: 0,
+      updatedAtMs: 0,
+      reviewStage: reviewStage,
+      nextReviewAtMs: nextReviewAtMs,
+      lastReviewAtMs: lastReviewAtMs,
+    );
+  }
 }
 
 final class _UnlockedBackend extends AppBackend {
@@ -469,140 +519,4 @@ final class _UnlockedBackend extends AppBackend {
     required String remoteRoot,
   }) async =>
       0;
-}
-
-final class _UnlockedNativeQuickCaptureBackend extends NativeAppBackend {
-  factory _UnlockedNativeQuickCaptureBackend() {
-    final enqueueCounter = _TestCounter();
-    return _UnlockedNativeQuickCaptureBackend._(enqueueCounter);
-  }
-
-  _UnlockedNativeQuickCaptureBackend._(_TestCounter enqueueCounter)
-      : _enqueueCounter = enqueueCounter,
-        super(
-          appDirProvider: () async => '/tmp/secondloop_test',
-          rustLibInit: () async {},
-          dbInsertMessage: ({
-            required String appDir,
-            required List<int> key,
-            required String conversationId,
-            required String role,
-            required String content,
-          }) async =>
-              Message(
-            id: 'm1',
-            conversationId: conversationId,
-            role: role,
-            content: content,
-            createdAtMs: 0,
-            isMemory: true,
-          ),
-          dbListTodos: (
-                  {required String appDir, required List<int> key}) async =>
-              const <Todo>[],
-          dbUpsertTodo: ({
-            required String appDir,
-            required List<int> key,
-            required String id,
-            required String title,
-            int? dueAtMs,
-            required String status,
-            String? sourceEntryId,
-            int? reviewStage,
-            int? nextReviewAtMs,
-            int? lastReviewAtMs,
-          }) async =>
-              Todo(
-            id: id,
-            title: title,
-            dueAtMs: dueAtMs,
-            status: status,
-            sourceEntryId: sourceEntryId,
-            createdAtMs: 0,
-            updatedAtMs: 0,
-            reviewStage: reviewStage,
-            nextReviewAtMs: nextReviewAtMs,
-            lastReviewAtMs: lastReviewAtMs,
-          ),
-          dbEnqueueTodoFollowupGenerationJob: ({
-            required String appDir,
-            required List<int> key,
-            required String todoId,
-            required String triggerKind,
-            String? taskTypeHint,
-            required int nowMs,
-          }) async {
-            enqueueCounter.value += 1;
-          },
-        );
-
-  final _TestCounter _enqueueCounter;
-  final List<Message> insertedMessages = <Message>[];
-
-  int get enqueueCount => _enqueueCounter.value;
-
-  @override
-  Future<void> init() async {}
-
-  @override
-  Future<bool> isMasterPasswordSet() async => true;
-
-  @override
-  Future<bool> readAutoUnlockEnabled() async => true;
-
-  @override
-  Future<void> persistAutoUnlockEnabled({required bool enabled}) async {}
-
-  @override
-  Future<Uint8List?> loadSavedSessionKey() async =>
-      Uint8List.fromList(List<int>.filled(32, 1));
-
-  @override
-  Future<void> saveSessionKey(Uint8List key) async {}
-
-  @override
-  Future<void> clearSavedSessionKey() async {}
-
-  @override
-  Future<void> validateKey(Uint8List key) async {}
-
-  @override
-  Future<Uint8List> initMasterPassword(String password) async =>
-      Uint8List.fromList(List<int>.filled(32, 1));
-
-  @override
-  Future<Uint8List> unlockWithPassword(String password) async =>
-      Uint8List.fromList(List<int>.filled(32, 1));
-
-  @override
-  Future<Conversation> getOrCreateLoopHomeConversation(Uint8List key) async =>
-      const Conversation(
-        id: 'loop_home',
-        title: 'Loop',
-        createdAtMs: 0,
-        updatedAtMs: 0,
-      );
-
-  @override
-  Future<Message> insertMessage(
-    Uint8List key,
-    String conversationId, {
-    required String role,
-    required String content,
-  }) async {
-    final message = Message(
-      id: 'm${insertedMessages.length + 1}',
-      conversationId: conversationId,
-      role: role,
-      content: content,
-      createdAtMs: 0,
-      isMemory: true,
-    );
-    insertedMessages.add(message);
-    return message;
-  }
-}
-
-final class _TestCounter {
-  var value = 0;
 }

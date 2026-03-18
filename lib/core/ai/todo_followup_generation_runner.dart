@@ -298,10 +298,6 @@ final class TodoFollowupGenerationRunner {
     TodoFollowupGenerationJob job,
     Todo todo,
   ) {
-    if (job.triggerKind == 'manual_regenerate') {
-      return classifyTodoFollowupTaskType(todo.title);
-    }
-
     final hinted = TodoFollowupTaskType.fromWireValue(job.taskTypeHint);
     if (hinted != TodoFollowupTaskType.unknown) {
       return hinted;

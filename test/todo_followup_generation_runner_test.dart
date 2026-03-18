@@ -438,8 +438,7 @@ void main() {
     expect(store.pendingSuggestionsFor('todo_regen_mixed').single.id, 's_keep');
   });
 
-  test('runner manual regenerate ignores stale persisted task type hint',
-      () async {
+  test('runner manual regenerate prefers persisted task type hint', () async {
     final store = _FakeStore(
       jobs: const <TodoFollowupGenerationJob>[
         TodoFollowupGenerationJob(
@@ -489,11 +488,9 @@ void main() {
     final result = await runner.runOnce(localeTag: 'zh-CN');
 
     expect(result.processed, 1);
-    expect(store.lastSkippedTodoId, isNull);
-    expect(store.lastSucceededTodoId, 'todo_regen_reclassify');
-    expect(client.requestedModes, const <TodoFollowupGenerationMode>[
-      TodoFollowupGenerationMode.modelKnowledge,
-    ]);
+    expect(store.lastSkippedTodoId, 'todo_regen_reclassify');
+    expect(store.lastSucceededTodoId, isNull);
+    expect(client.requestedModes, isEmpty);
   });
 
   test('runner keeps existing pending suggestion when regenerate fails',

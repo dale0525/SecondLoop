@@ -37,6 +37,10 @@ void main() {
       classifyTodoFollowupTaskType('周五之前处理一下'),
       TodoFollowupTaskType.unknown,
     );
+    expect(
+      classifyTodoFollowupTaskType('AB 1234 这个编号记一下'),
+      TodoFollowupTaskType.unknown,
+    );
 
     for (final value in TodoFollowupTaskType.values) {
       expect(value.wireValue, isNotEmpty);
