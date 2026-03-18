@@ -86,22 +86,18 @@ class TaskHubSummary {
     final primaryFocus = snapshot.primaryFocus;
     final primaryFocusId = primaryFocus?.todo.id;
     final dueEntries = snapshot.focus;
-    final upcomingEntries = snapshot.scheduled;
+    final upcomingEntries = snapshot.nextUpEntries;
     final upcomingPreviewEntries = primaryFocus == null
-        ? <TaskPriorityEntry>[...dueEntries, ...upcomingEntries]
+        ? <TaskPriorityEntry>[...upcomingEntries]
         : <TaskPriorityEntry>[
             primaryFocus,
-            ...dueEntries
-                .where((entry) => entry.todo.id != primaryFocus.todo.id),
             ...upcomingEntries
                 .where((entry) => entry.todo.id != primaryFocus.todo.id),
           ];
-    final reviewEntries = snapshot.decide
+    final reviewEntries = snapshot.activeEntries
         .where((entry) => entry.isReviewDue)
         .toList(growable: false);
-    final backlogEntries = snapshot.decide
-        .where((entry) => !entry.isReviewDue)
-        .toList(growable: false);
+    final backlogEntries = snapshot.backlogEntries;
     final previewReviewEntries = reviewEntries
         .where((entry) => entry.todo.id != primaryFocusId)
         .toList(growable: false);
@@ -131,7 +127,7 @@ class TaskHubSummary {
       dueCount: dueEntries.length,
       overdueCount: dueEntries.where((entry) => entry.isOverdue).length,
       upcomingCount: upcomingEntries.length,
-      backlogCount: backlogEntries.length + reviewEntries.length,
+      backlogCount: backlogEntries.length,
       reviewCount: reviewEntries.length,
       doneCount: doneEntries.length,
       upcomingPreviewTodos: List<Todo>.unmodifiable(upcomingPreview),
@@ -146,10 +142,7 @@ class TaskHubSummary {
         reviewEntries.map((entry) => entry.todo),
       ),
       backlogTodos: List<Todo>.unmodifiable(
-        [
-          ...reviewEntries.map((entry) => entry.todo),
-          ...backlogEntries.map((entry) => entry.todo),
-        ],
+        backlogEntries.map((entry) => entry.todo),
       ),
       doneTodos: List<Todo>.unmodifiable(
         doneEntries.map((entry) => entry.todo),

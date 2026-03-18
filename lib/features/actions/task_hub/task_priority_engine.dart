@@ -201,24 +201,6 @@ List<TaskPriorityEntry> _applyAiResult(
     final canApplyAiPrioritySignals =
         aiEntry.confidence != TaskPriorityAiConfidence.low;
 
-    var nextBand = entry.band;
-    if (canApplyAiPrioritySignals) {
-      switch (aiEntry.priorityBand) {
-        case TaskPriorityAiBand.focus:
-          nextBand = entry.band == TaskPriorityBand.done
-              ? TaskPriorityBand.done
-              : TaskPriorityBand.focus;
-          break;
-        case TaskPriorityAiBand.next:
-          break;
-        case TaskPriorityAiBand.later:
-          if (entry.band == TaskPriorityBand.focus) {
-            nextBand = TaskPriorityBand.decide;
-          }
-          break;
-      }
-    }
-
     final confidence = switch (aiEntry.confidence) {
       TaskPriorityAiConfidence.low => TaskPriorityConfidence.low,
       TaskPriorityAiConfidence.medium => TaskPriorityConfidence.medium,
@@ -226,12 +208,10 @@ List<TaskPriorityEntry> _applyAiResult(
     };
 
     return entry.copyWith(
-      band: nextBand,
       semanticScore: canApplyAiPrioritySignals
           ? aiEntry.semanticAdjustment
           : entry.semanticScore,
       reasonText: aiEntry.reason.isEmpty ? null : aiEntry.reason,
-      suggestedAction: aiEntry.suggestedAction,
       confidence: confidence,
       importanceScore: canApplyAiPrioritySignals
           ? (aiEntry.isImportant == null

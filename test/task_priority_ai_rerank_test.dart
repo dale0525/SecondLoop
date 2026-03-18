@@ -106,7 +106,7 @@ void main() {
         TaskPrioritySuggestionKind.doNow);
   });
 
-  test('high confidence focus recommendation upgrades snapshot', () {
+  test('high confidence ai assessment keeps rule-derived action', () {
     final nowLocal = DateTime(2026, 3, 13, 10, 0);
     final snapshot = buildTaskPrioritySnapshot(
       <Todo>[todo(id: 't1', title: 'Clarify scope', updatedAtMs: 10)],
@@ -129,7 +129,7 @@ void main() {
     expect(snapshot.primaryFocus?.reasonText,
         'It blocks the rest of the project.');
     expect(snapshot.primaryFocus?.suggestedAction,
-        TaskPrioritySuggestionKind.clarify);
+        TaskPrioritySuggestionKind.schedule);
   });
 
   test('service falls back cleanly when AI call fails', () async {

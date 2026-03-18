@@ -129,6 +129,12 @@ TaskHubQuickActionLayout buildTaskHubQuickActionLayout(
         label: actions.today,
         icon: Icons.today_rounded,
       ),
+      if (entry.todo.status != 'in_progress')
+        chip(
+          TaskHubQuickAction.done,
+          label: actions.done,
+          icon: Icons.check_rounded,
+        ),
     ],
   );
 }

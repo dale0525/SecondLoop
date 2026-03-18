@@ -240,10 +240,9 @@ class BackendTaskPriorityAiService implements TaskPriorityAiService {
     final payload = jsonEncode(request.toJson());
     return [
       'You are evaluating personal task candidates for a task manager.',
-      'Return JSON only with shape {"entries":[...]} and no prose.',
-      'For each candidate, independently decide is_important and is_urgent.',
-      'Allowed priority_band: focus | next | later.',
-      'Allowed suggested_action: do_now | schedule | defer | clarify.',
+      'Return JSON only with shape {"entries":[{"todo_id":"...","semantic_adjustment":number,"reason":"...","confidence":"low|medium|high","is_important":true|false|null,"is_urgent":true|false|null},...]} and no prose.',
+      'Evaluate each candidate independently and do not compare candidates against each other.',
+      'Only emit per-candidate signals; do not emit list-level ranking instructions.',
       'Prefer stable judgments from the task itself, not transient phrasing.',
       'Do not invent facts. Keep reasons short and verifiable.',
       _localeTag.isEmpty

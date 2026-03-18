@@ -122,7 +122,7 @@
   "agenda": {
     "title": "Tasks",
     "summary": "Today $due • Overdue $overdue",
-    "upcomingSummary": "Upcoming $count",
+    "upcomingSummary": "Next up $count",
     "undeterminedSummary": "Backlog $count",
     "viewAll": "View all",
     "empty": "No scheduled tasks"
@@ -131,7 +131,7 @@
     "title": "Task hub",
     "focusSection": "Primary Focus",
     "focusHint": "Keep the best next task obvious.",
-    "scheduledSection": "Upcoming",
+    "scheduledSection": "Next Up",
     "reviewSection": "Needs confirmation",
     "unscheduledSection": "Backlog",
     "decideSection": "Decide",
@@ -142,7 +142,7 @@
     "openFocus": "Open focus task",
     "wrapUpTitle": "Wrap up",
     "wrapUpHeadline": "No urgent task right now",
-    "wrapUpSubtitle": "Upcoming $upcoming • Backlog $backlog • $done done",
+    "wrapUpSubtitle": "Next up $upcoming • Backlog $backlog • $done done",
     "noTasksSubtitle": "You are clear for now. Keep the hub nearby for planning.",
     "overdueLabel": "Overdue",
     "dueTodayLabel": "Due today",

@@ -348,21 +348,11 @@ class _TaskHubPageState extends State<TaskHubPage> {
         listenable: store,
         builder: (context, _) {
           final snapshot = store.snapshot;
-          final primaryFocusId = snapshot.primaryFocus?.todo.id;
           final visibleFocus = snapshot.primaryFocus == null
               ? const <TaskPriorityEntry>[]
               : <TaskPriorityEntry>[snapshot.primaryFocus!];
-          final remainingActive = primaryFocusId == null
-              ? snapshot.activeEntries
-              : snapshot.activeEntries
-                  .where((entry) => entry.todo.id != primaryFocusId)
-                  .toList(growable: false);
-          final visibleUpcoming = remainingActive
-              .where((entry) => entry.todo.dueAtMs != null)
-              .toList(growable: false);
-          final visibleBacklog = remainingActive
-              .where((entry) => entry.todo.dueAtMs == null)
-              .toList(growable: false);
+          final visibleNextUp = snapshot.nextUpEntries;
+          final visibleBacklog = snapshot.backlogEntries;
           final visibleDone = snapshot.done.take(_doneVisibleCount).toList();
           return RefreshIndicator(
             onRefresh: _refresh,
@@ -404,7 +394,7 @@ class _TaskHubPageState extends State<TaskHubPage> {
                           const SizedBox(height: 6),
                           Text(
                             context.t.actions.taskHub.wrapUpSubtitle(
-                              upcoming: visibleUpcoming.length,
+                              upcoming: visibleNextUp.length,
                               backlog: visibleBacklog.length,
                               done: snapshot.done.length,
                             ),
@@ -429,7 +419,7 @@ class _TaskHubPageState extends State<TaskHubPage> {
                     title: context.t.actions.taskHub.scheduledSection,
                     sectionKey:
                         const ValueKey('task_hub_page_section_upcoming'),
-                    entries: visibleUpcoming,
+                    entries: visibleNextUp,
                     checklistProgressByTodoId: store.checklistProgressByTodoId,
                     sectionKind: TaskHubPageSectionKind.scheduled,
                     onOpenTodo: _openTodoDetail,

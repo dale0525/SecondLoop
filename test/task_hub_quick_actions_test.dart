@@ -84,6 +84,33 @@ void main() {
     expect(find.text('Start|Tomorrow'), findsOneWidget);
   });
 
+  testWidgets('unfinished tasks keep done in secondary actions',
+      (tester) async {
+    final candidate = entry(
+      todo: todo(id: 'u1b', title: 'Backlog item', updatedAtMs: 10),
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: Builder(
+            builder: (context) {
+              final layout = buildTaskHubQuickActionLayout(
+                context,
+                entry: candidate,
+              );
+              return Text(
+                '${layout.$1.map((item) => item.label).join('|')}::${layout.$2.map((item) => item.label).join('|')}',
+              );
+            },
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('Start|Tomorrow::Today|Done'), findsOneWidget);
+  });
+
   testWidgets('in-progress tasks expose done and tomorrow actions',
       (tester) async {
     final candidate = entry(

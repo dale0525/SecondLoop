@@ -191,6 +191,30 @@ void main() {
     expect(snapshot.primaryFocus?.todo.id, 'important');
   });
 
+  test('important unscheduled tasks stay in next-up display bucket', () {
+    final nowLocal = DateTime(2026, 3, 13, 10, 0);
+    final snapshot = buildTaskPrioritySnapshot(
+      <Todo>[
+        todo(id: 'primary', title: 'Primary', updatedAtMs: 100),
+        todo(id: 'important', title: 'Strategic follow-up', updatedAtMs: 20),
+        todo(id: 'backlog', title: 'Someday maybe', updatedAtMs: 10),
+      ],
+      nowLocal: nowLocal,
+      signalState: const TaskPriorityManualSignalState(
+        byTodoId: <String, TaskPriorityManualSignal>{
+          'primary': TaskPriorityManualSignal(urgencyScore: 3),
+          'important': TaskPriorityManualSignal(importanceScore: 2),
+        },
+      ),
+    );
+
+    expect(snapshot.primaryFocus?.todo.id, 'primary');
+    expect(snapshot.nextUpEntries.map((entry) => entry.todo.id),
+        <String>['important']);
+    expect(snapshot.backlogEntries.map((entry) => entry.todo.id),
+        <String>['backlog']);
+  });
+
   test('hybrid rerank keeps hard priority guards when confidence is low', () {
     final nowLocal = DateTime(2026, 3, 13, 10, 0);
     final snapshot = buildTaskPrioritySnapshot(
@@ -269,6 +293,33 @@ void main() {
           .semanticScore,
       0,
     );
+  });
+
+  test('ai output only contributes per-item signals, not band or action', () {
+    final nowLocal = DateTime(2026, 3, 13, 10, 0);
+    final snapshot = buildTaskPrioritySnapshot(
+      <Todo>[
+        todo(id: 'a', title: 'Clarify scope', updatedAtMs: 10),
+      ],
+      nowLocal: nowLocal,
+      aiResult: const TaskPriorityAiBatchResult(
+        entries: <TaskPriorityAiEntry>[
+          TaskPriorityAiEntry(
+            todoId: 'a',
+            priorityBand: TaskPriorityAiBand.focus,
+            semanticAdjustment: 12,
+            reason: 'Could be worth doing now.',
+            suggestedAction: TaskPrioritySuggestionKind.doNow,
+            confidence: TaskPriorityAiConfidence.high,
+          ),
+        ],
+      ),
+    );
+
+    final entry = snapshot.allEntries.single;
+    expect(entry.band, TaskPriorityBand.decide);
+    expect(entry.suggestedAction, TaskPrioritySuggestionKind.schedule);
+    expect(entry.semanticScore, 12);
   });
 
   test('feedback suppression demotes AI-promoted tasks', () {

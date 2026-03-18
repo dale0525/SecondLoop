@@ -76,9 +76,9 @@ void main() {
 
     expect(summary.dueCount, 1);
     expect(summary.overdueCount, 1);
-    expect(summary.upcomingCount, 1);
+    expect(summary.upcomingCount, 2);
     expect(summary.reviewCount, 1);
-    expect(summary.backlogCount, 1);
+    expect(summary.backlogCount, 0);
     expect(summary.doneCount, 1);
     expect(summary.snapshot.primaryFocus?.todo.id, 'overdue');
     expect(summary.checklistProgressByTodoId['overdue']?.doneCount, 1);
@@ -237,14 +237,14 @@ void main() {
 
     expect(summary.snapshot.primaryFocus?.todo.id, 'review-primary');
     expect(summary.reviewCount, 1);
-    expect(summary.backlogCount, 2);
+    expect(summary.backlogCount, 1);
     expect(
       summary.reviewTodos.map((todo) => todo.id),
       <String>['review-primary'],
     );
     expect(
       summary.backlogTodos.map((todo) => todo.id),
-      <String>['review-primary', 'backlog-secondary'],
+      <String>['backlog-secondary'],
     );
     expect(
       summary.upcomingPreviewTodos.map((todo) => todo.id),

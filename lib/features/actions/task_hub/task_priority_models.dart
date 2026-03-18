@@ -41,6 +41,11 @@ enum TaskPrioritySnapshotSource {
   hybrid,
 }
 
+enum TaskPriorityDisplayBucket {
+  nextUp,
+  backlog,
+}
+
 class TaskPriorityEntry {
   const TaskPriorityEntry({
     required this.todo,
@@ -99,6 +104,16 @@ class TaskPriorityEntry {
         isDueToday: isDueToday,
         isInProgress: isInProgress,
       );
+
+  TaskPriorityDisplayBucket get displayBucket {
+    if (hasHardFocusGuard || isImportant || isUrgent || isReviewDue) {
+      return TaskPriorityDisplayBucket.nextUp;
+    }
+    if (todo.dueAtMs != null) {
+      return TaskPriorityDisplayBucket.nextUp;
+    }
+    return TaskPriorityDisplayBucket.backlog;
+  }
 
   TaskPriorityEntry copyWith({
     TaskPriorityBand? band,
@@ -186,6 +201,23 @@ class TaskPrioritySnapshot {
   }
 
   List<TaskPriorityEntry> get activeEntries => orderedActive;
+
+  List<TaskPriorityEntry> get remainingActiveEntries {
+    final primaryTodoId = primaryFocus?.todo.id;
+    if (primaryTodoId == null) return orderedActive;
+    return orderedActive
+        .where((entry) => entry.todo.id != primaryTodoId)
+        .toList(growable: false);
+  }
+
+  List<TaskPriorityEntry> get nextUpEntries => remainingActiveEntries
+      .where((entry) => entry.displayBucket == TaskPriorityDisplayBucket.nextUp)
+      .toList(growable: false);
+
+  List<TaskPriorityEntry> get backlogEntries => remainingActiveEntries
+      .where(
+          (entry) => entry.displayBucket == TaskPriorityDisplayBucket.backlog)
+      .toList(growable: false);
 
   List<TaskPriorityEntry> get allEntries => <TaskPriorityEntry>[
         ...orderedActive,
