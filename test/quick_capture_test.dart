@@ -14,6 +14,61 @@ import 'package:secondloop/main.dart';
 import 'package:secondloop/src/rust/db.dart';
 
 void main() {
+  testWidgets(
+      'Quick capture prefers semantic parse over local time suggestion when AI automation is available',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({
+      'welcome_guide_seen_v1': true,
+      'semantic_parse_data_consent_v1': true,
+    });
+    final controller = QuickCaptureController();
+    final backend = _SemanticParseEnabledQuickCaptureBackend();
+    final navigatorKey = GlobalKey<NavigatorState>();
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        AppBackendScope(
+          backend: backend,
+          child: SessionScope(
+            sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+            lock: () {},
+            child: QuickCaptureScope(
+              controller: controller,
+              child: MaterialApp(
+                navigatorKey: navigatorKey,
+                home: QuickCaptureOverlay(
+                  navigatorKey: navigatorKey,
+                  child: const Scaffold(body: SizedBox.shrink()),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 200));
+
+    controller.show();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 200));
+
+    await tester.enterText(
+      find.byKey(const ValueKey('quick_capture_input')),
+      '明天下午 5 点调研一下当前主流的 llm 模型',
+    );
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pumpAndSettle();
+
+    expect(backend.semanticParseEnqueueCount, 1);
+    expect(backend.insertedMessages, hasLength(1));
+    expect(backend.upsertTodoCount, 0);
+    expect(find.byKey(const ValueKey('capture_todo_suggestion_sheet')),
+        findsNothing);
+    expect(controller.consumeReopenMainWindowOnHideRequest(), isFalse);
+    expect(controller.consumeOpenChatRequest(), isFalse);
+  });
+
   testWidgets('Quick capture enqueues semantic parse for todo-relevant input',
       (tester) async {
     SharedPreferences.setMockInitialValues({
@@ -110,6 +165,36 @@ void main() {
     expect(backend.insertedMessages.single.role, 'user');
     expect(backend.insertedMessages.single.content, 'hello');
     expect(find.byKey(const ValueKey('quick_capture_input')), findsNothing);
+    expect(controller.consumeReopenMainWindowOnHideRequest(), isFalse);
+    expect(controller.consumeOpenChatRequest(), isFalse);
+  });
+
+  testWidgets(
+      'Quick capture plain message never requests reopen or open-chat flags',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({
+      'welcome_guide_seen_v1': true,
+    });
+    final backend = _UnlockedBackend();
+    final controller = QuickCaptureController();
+
+    await tester.pumpWidget(
+        MyApp(backend: backend, quickCaptureController: controller));
+    await tester.pumpAndSettle();
+
+    controller.show();
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.byKey(const ValueKey('quick_capture_input')),
+      'hello',
+    );
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pumpAndSettle();
+
+    expect(backend.insertedMessages, hasLength(1));
+    expect(controller.consumeReopenMainWindowOnHideRequest(), isFalse);
+    expect(controller.consumeOpenChatRequest(), isFalse);
   });
 
   testWidgets('Quick capture Esc closes without reopen behavior',

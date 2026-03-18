@@ -184,6 +184,9 @@ class _QuickCaptureDialogState extends State<_QuickCaptureDialog> {
       final looksLikeTodoRelevant = looksLikeTodoRelevantForSemanticParse(text);
 
       if (!looksLikeReview && !looksLikeLongFormNote && looksLikeTodoRelevant) {
+        // Product decision: when AI automation is available, quick capture
+        // prefers semantic parsing over the deterministic local todo flow.
+        // Local time/review parsing remains the fallback when AI cannot run.
         final prefs = await SharedPreferences.getInstance();
         final consented =
             prefs.getBool(SemanticParseDataConsentPrefs.prefsKey) ?? false;
@@ -263,6 +266,8 @@ class _QuickCaptureDialogState extends State<_QuickCaptureDialog> {
         }
       }
 
+      // Product decision: quick capture should never request reopening
+      // the main window after submission, including plain chat fallback.
       _dismiss();
     } finally {
       if (mounted) setState(() => _busy = false);
