@@ -17,35 +17,40 @@ enum TaskPriorityAiConfidence {
 class TaskPriorityAiEntry {
   const TaskPriorityAiEntry({
     required this.todoId,
-    required this.priorityBand,
     required this.semanticAdjustment,
     required this.reason,
-    required this.suggestedAction,
     required this.confidence,
+    this.priorityBand,
+    this.suggestedAction,
     this.isImportant,
     this.isUrgent,
   });
 
   final String todoId;
-  final TaskPriorityAiBand priorityBand;
+  final TaskPriorityAiBand? priorityBand;
   final double semanticAdjustment;
   final String reason;
-  final TaskPrioritySuggestionKind suggestedAction;
+  final TaskPrioritySuggestionKind? suggestedAction;
   final TaskPriorityAiConfidence confidence;
   final bool? isImportant;
   final bool? isUrgent;
 
   Map<String, Object?> toJson() {
-    return <String, Object?>{
+    final json = <String, Object?>{
       'todo_id': todoId,
-      'priority_band': priorityBand.name,
       'semantic_adjustment': semanticAdjustment,
       'reason': reason,
-      'suggested_action': suggestedAction.name,
       'confidence': confidence.name,
       'is_important': isImportant,
       'is_urgent': isUrgent,
     };
+    if (priorityBand != null) {
+      json['priority_band'] = priorityBand!.name;
+    }
+    if (suggestedAction != null) {
+      json['suggested_action'] = suggestedAction!.name;
+    }
+    return json;
   }
 
   factory TaskPriorityAiEntry.fromJson(Map<String, Object?> json) {
@@ -58,26 +63,31 @@ class TaskPriorityAiEntry {
     }
 
     final todoId = (json['todo_id'] ?? json['todoId'] ?? '').toString().trim();
-    final priorityBand = switch (
+    final priorityBandToken =
         (json['priority_band'] ?? json['priorityBand'] ?? '')
             .toString()
             .trim()
-            .toLowerCase()) {
-      'focus' => TaskPriorityAiBand.focus,
-      'later' => TaskPriorityAiBand.later,
-      _ => TaskPriorityAiBand.next,
-    };
+            .toLowerCase();
+    final priorityBand = priorityBandToken.isEmpty
+        ? null
+        : switch (priorityBandToken) {
+            'focus' => TaskPriorityAiBand.focus,
+            'later' => TaskPriorityAiBand.later,
+            _ => TaskPriorityAiBand.next,
+          };
     final suggestedActionToken =
         (json['suggested_action'] ?? json['suggestedAction'] ?? '')
             .toString()
             .trim()
             .toLowerCase();
-    final suggestedAction = switch (suggestedActionToken) {
-      'schedule' => TaskPrioritySuggestionKind.schedule,
-      'defer' => TaskPrioritySuggestionKind.defer,
-      'clarify' => TaskPrioritySuggestionKind.clarify,
-      _ => TaskPrioritySuggestionKind.doNow,
-    };
+    final suggestedAction = suggestedActionToken.isEmpty
+        ? null
+        : switch (suggestedActionToken) {
+            'schedule' => TaskPrioritySuggestionKind.schedule,
+            'defer' => TaskPrioritySuggestionKind.defer,
+            'clarify' => TaskPrioritySuggestionKind.clarify,
+            _ => TaskPrioritySuggestionKind.doNow,
+          };
     final confidence =
         switch ((json['confidence'] ?? '').toString().trim().toLowerCase()) {
       'high' => TaskPriorityAiConfidence.high,

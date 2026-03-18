@@ -101,10 +101,8 @@ void main() {
         entries: <TaskPriorityAiEntry>[
           TaskPriorityAiEntry(
             todoId: 'plan',
-            priorityBand: TaskPriorityAiBand.next,
             semanticAdjustment: 8,
             reason: 'Strategically important.',
-            suggestedAction: TaskPrioritySuggestionKind.clarify,
             confidence: TaskPriorityAiConfidence.high,
             isImportant: true,
             isUrgent: false,
@@ -239,10 +237,8 @@ void main() {
         entries: <TaskPriorityAiEntry>[
           TaskPriorityAiEntry(
             todoId: 'clarify',
-            priorityBand: TaskPriorityAiBand.focus,
             semanticAdjustment: 18,
             reason: 'This sounds strategically important.',
-            suggestedAction: TaskPrioritySuggestionKind.clarify,
             confidence: TaskPriorityAiConfidence.low,
             isImportant: true,
           ),
@@ -274,10 +270,8 @@ void main() {
         entries: <TaskPriorityAiEntry>[
           TaskPriorityAiEntry(
             todoId: 'noisy',
-            priorityBand: TaskPriorityAiBand.focus,
             semanticAdjustment: 999,
             reason: 'Maybe urgent, maybe important.',
-            suggestedAction: TaskPrioritySuggestionKind.doNow,
             confidence: TaskPriorityAiConfidence.low,
             isImportant: true,
             isUrgent: true,
@@ -306,10 +300,8 @@ void main() {
         entries: <TaskPriorityAiEntry>[
           TaskPriorityAiEntry(
             todoId: 'a',
-            priorityBand: TaskPriorityAiBand.focus,
             semanticAdjustment: 12,
             reason: 'Could be worth doing now.',
-            suggestedAction: TaskPrioritySuggestionKind.doNow,
             confidence: TaskPriorityAiConfidence.high,
           ),
         ],
@@ -334,10 +326,8 @@ void main() {
         entries: <TaskPriorityAiEntry>[
           TaskPriorityAiEntry(
             todoId: 'b',
-            priorityBand: TaskPriorityAiBand.focus,
             semanticAdjustment: 24,
             reason: 'It is blocking other planning work.',
-            suggestedAction: TaskPrioritySuggestionKind.clarify,
             confidence: TaskPriorityAiConfidence.high,
             isImportant: true,
             isUrgent: true,

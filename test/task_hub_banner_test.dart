@@ -46,10 +46,8 @@ void main() {
         entries: <TaskPriorityAiEntry>[
           TaskPriorityAiEntry(
             todoId: 't1',
-            priorityBand: TaskPriorityAiBand.focus,
             semanticAdjustment: 24,
             reason: 'It unblocks the rest of today.',
-            suggestedAction: TaskPrioritySuggestionKind.clarify,
             confidence: TaskPriorityAiConfidence.high,
           ),
         ],
@@ -305,10 +303,8 @@ void main() {
         entries: <TaskPriorityAiEntry>[
           TaskPriorityAiEntry(
             todoId: 't1',
-            priorityBand: TaskPriorityAiBand.focus,
             semanticAdjustment: 18,
             reason: 'This can wait until later today.',
-            suggestedAction: TaskPrioritySuggestionKind.defer,
             confidence: TaskPriorityAiConfidence.high,
           ),
         ],
@@ -375,10 +371,8 @@ void main() {
         entries: <TaskPriorityAiEntry>[
           TaskPriorityAiEntry(
             todoId: 't1',
-            priorityBand: TaskPriorityAiBand.focus,
             semanticAdjustment: 24,
             reason: 'It unblocks the rest of today.',
-            suggestedAction: TaskPrioritySuggestionKind.clarify,
             confidence: TaskPriorityAiConfidence.high,
           ),
         ],
@@ -426,10 +420,8 @@ void main() {
         entries: <TaskPriorityAiEntry>[
           TaskPriorityAiEntry(
             todoId: 'decide',
-            priorityBand: TaskPriorityAiBand.next,
             semanticAdjustment: 8,
             reason: 'Needs a quick decision.',
-            suggestedAction: TaskPrioritySuggestionKind.doNow,
             confidence: TaskPriorityAiConfidence.medium,
           ),
         ],
@@ -478,10 +470,8 @@ void main() {
         entries: <TaskPriorityAiEntry>[
           TaskPriorityAiEntry(
             todoId: 'decide',
-            priorityBand: TaskPriorityAiBand.next,
             semanticAdjustment: 8,
             reason: 'Needs a quick decision.',
-            suggestedAction: TaskPrioritySuggestionKind.doNow,
             confidence: TaskPriorityAiConfidence.medium,
           ),
         ],

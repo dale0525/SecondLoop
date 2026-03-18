@@ -106,6 +106,32 @@ void main() {
         TaskPrioritySuggestionKind.doNow);
   });
 
+  test('ai entry can omit legacy ranking fields in serialized output', () {
+    const entry = TaskPriorityAiEntry(
+      todoId: 't1',
+      semanticAdjustment: 14,
+      reason: 'Important and urgent.',
+      confidence: TaskPriorityAiConfidence.high,
+      isImportant: true,
+      isUrgent: true,
+    );
+
+    expect(entry.toJson().containsKey('priority_band'), isFalse);
+    expect(entry.toJson().containsKey('suggested_action'), isFalse);
+  });
+
+  test('parser keeps backward compatibility for legacy ranking fields', () {
+    final parsed = parseTaskPriorityAiBatchResult(
+      '{"entries":[{"todo_id":"t1","priority_band":"focus","semantic_adjustment":14,"reason":"It unblocks work.","suggested_action":"clarify","confidence":"high","is_important":true,"is_urgent":false}]}',
+    );
+
+    expect(parsed.entries.single.priorityBand, TaskPriorityAiBand.focus);
+    expect(parsed.entries.single.suggestedAction,
+        TaskPrioritySuggestionKind.clarify);
+    expect(parsed.entries.single.isImportant, isTrue);
+    expect(parsed.entries.single.isUrgent, isFalse);
+  });
+
   test('high confidence ai assessment keeps rule-derived action', () {
     final nowLocal = DateTime(2026, 3, 13, 10, 0);
     final snapshot = buildTaskPrioritySnapshot(
@@ -115,10 +141,8 @@ void main() {
         entries: <TaskPriorityAiEntry>[
           TaskPriorityAiEntry(
             todoId: 't1',
-            priorityBand: TaskPriorityAiBand.focus,
             semanticAdjustment: 20,
             reason: 'It blocks the rest of the project.',
-            suggestedAction: TaskPrioritySuggestionKind.clarify,
             confidence: TaskPriorityAiConfidence.high,
           ),
         ],

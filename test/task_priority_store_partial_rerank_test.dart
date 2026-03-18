@@ -156,10 +156,8 @@ final class _RecordingAiService implements TaskPriorityAiService {
           .map(
             (candidate) => TaskPriorityAiEntry(
               todoId: candidate.todoId,
-              priorityBand: TaskPriorityAiBand.next,
               semanticAdjustment: 5,
               reason: 'cached',
-              suggestedAction: TaskPrioritySuggestionKind.schedule,
               confidence: TaskPriorityAiConfidence.medium,
               isImportant: candidate.todoId == 'a',
               isUrgent: false,

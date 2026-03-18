@@ -62,10 +62,8 @@ void main() {
         entries: <TaskPriorityAiEntry>[
           TaskPriorityAiEntry(
             todoId: 'focus',
-            priorityBand: TaskPriorityAiBand.focus,
             semanticAdjustment: 20,
             reason: 'This is the obvious next step.',
-            suggestedAction: TaskPrioritySuggestionKind.doNow,
             confidence: TaskPriorityAiConfidence.high,
           ),
         ],
@@ -217,10 +215,8 @@ void main() {
         entries: <TaskPriorityAiEntry>[
           TaskPriorityAiEntry(
             todoId: 'focus',
-            priorityBand: TaskPriorityAiBand.focus,
             semanticAdjustment: 20,
             reason: 'Still the best option.',
-            suggestedAction: TaskPrioritySuggestionKind.doNow,
             confidence: TaskPriorityAiConfidence.high,
           ),
         ],
@@ -277,10 +273,8 @@ void main() {
         entries: <TaskPriorityAiEntry>[
           TaskPriorityAiEntry(
             todoId: 'focus',
-            priorityBand: TaskPriorityAiBand.focus,
             semanticAdjustment: 20,
             reason: 'Still the best option.',
-            suggestedAction: TaskPrioritySuggestionKind.doNow,
             confidence: TaskPriorityAiConfidence.high,
           ),
         ],
@@ -311,10 +305,8 @@ void main() {
         entries: <TaskPriorityAiEntry>[
           TaskPriorityAiEntry(
             todoId: 'focus',
-            priorityBand: TaskPriorityAiBand.focus,
             semanticAdjustment: 20,
             reason: 'Handle it now.',
-            suggestedAction: TaskPrioritySuggestionKind.doNow,
             confidence: TaskPriorityAiConfidence.high,
           ),
         ],
@@ -344,10 +336,8 @@ void main() {
         entries: <TaskPriorityAiEntry>[
           TaskPriorityAiEntry(
             todoId: 'focus',
-            priorityBand: TaskPriorityAiBand.focus,
             semanticAdjustment: 20,
             reason: 'Future cache result.',
-            suggestedAction: TaskPrioritySuggestionKind.doNow,
             confidence: TaskPriorityAiConfidence.high,
           ),
         ],
@@ -369,10 +359,8 @@ void main() {
         entries: <TaskPriorityAiEntry>[
           TaskPriorityAiEntry(
             todoId: 'focus',
-            priorityBand: TaskPriorityAiBand.focus,
             semanticAdjustment: 20,
             reason: 'Fresh rerank result.',
-            suggestedAction: TaskPrioritySuggestionKind.doNow,
             confidence: TaskPriorityAiConfidence.high,
           ),
         ],
@@ -401,10 +389,8 @@ void main() {
         entries: <TaskPriorityAiEntry>[
           TaskPriorityAiEntry(
             todoId: 'focus',
-            priorityBand: TaskPriorityAiBand.focus,
             semanticAdjustment: 20,
             reason: 'Still the best option.',
-            suggestedAction: TaskPrioritySuggestionKind.doNow,
             confidence: TaskPriorityAiConfidence.high,
           ),
         ],
@@ -449,10 +435,8 @@ void main() {
         entries: <TaskPriorityAiEntry>[
           TaskPriorityAiEntry(
             todoId: 'focus',
-            priorityBand: TaskPriorityAiBand.focus,
             semanticAdjustment: 20,
             reason: 'Still the best option.',
-            suggestedAction: TaskPrioritySuggestionKind.doNow,
             confidence: TaskPriorityAiConfidence.high,
           ),
         ],
@@ -495,10 +479,8 @@ void main() {
         entries: <TaskPriorityAiEntry>[
           TaskPriorityAiEntry(
             todoId: 'focus',
-            priorityBand: TaskPriorityAiBand.focus,
             semanticAdjustment: 20,
             reason: 'Still the best option.',
-            suggestedAction: TaskPrioritySuggestionKind.doNow,
             confidence: TaskPriorityAiConfidence.high,
           ),
         ],
@@ -539,10 +521,8 @@ void main() {
         entries: <TaskPriorityAiEntry>[
           TaskPriorityAiEntry(
             todoId: 'a:b',
-            priorityBand: TaskPriorityAiBand.focus,
             semanticAdjustment: 20,
             reason: 'First tuple result.',
-            suggestedAction: TaskPrioritySuggestionKind.doNow,
             confidence: TaskPriorityAiConfidence.high,
           ),
         ],
@@ -564,10 +544,8 @@ void main() {
         entries: <TaskPriorityAiEntry>[
           TaskPriorityAiEntry(
             todoId: 'a',
-            priorityBand: TaskPriorityAiBand.focus,
             semanticAdjustment: 20,
             reason: 'Second tuple result.',
-            suggestedAction: TaskPrioritySuggestionKind.doNow,
             confidence: TaskPriorityAiConfidence.high,
           ),
         ],
@@ -598,10 +576,8 @@ void main() {
         entries: <TaskPriorityAiEntry>[
           TaskPriorityAiEntry(
             todoId: 'focus',
-            priorityBand: TaskPriorityAiBand.focus,
             semanticAdjustment: 20,
             reason: 'Still the best option.',
-            suggestedAction: TaskPrioritySuggestionKind.doNow,
             confidence: TaskPriorityAiConfidence.high,
           ),
         ],
@@ -726,10 +702,8 @@ void main() {
         entries: <TaskPriorityAiEntry>[
           TaskPriorityAiEntry(
             todoId: 'focus',
-            priorityBand: TaskPriorityAiBand.focus,
             semanticAdjustment: 18,
             reason: 'Fresh AI result without persisted cache.',
-            suggestedAction: TaskPrioritySuggestionKind.doNow,
             confidence: TaskPriorityAiConfidence.high,
             isImportant: true,
             isUrgent: true,
@@ -762,10 +736,8 @@ void main() {
         entries: <TaskPriorityAiEntry>[
           TaskPriorityAiEntry(
             todoId: 'focus',
-            priorityBand: TaskPriorityAiBand.focus,
             semanticAdjustment: 20,
             reason: 'Handle it now.',
-            suggestedAction: TaskPrioritySuggestionKind.doNow,
             confidence: TaskPriorityAiConfidence.high,
           ),
         ],
@@ -777,10 +749,8 @@ void main() {
         entries: <TaskPriorityAiEntry>[
           TaskPriorityAiEntry(
             todoId: 'focus',
-            priorityBand: TaskPriorityAiBand.focus,
             semanticAdjustment: 20,
             reason: '现在处理。',
-            suggestedAction: TaskPrioritySuggestionKind.doNow,
             confidence: TaskPriorityAiConfidence.high,
           ),
         ],
@@ -864,12 +834,10 @@ final class _StickyAwareAiService implements TaskPriorityAiService {
           .map(
             (candidate) => TaskPriorityAiEntry(
               todoId: candidate.todoId,
-              priorityBand: TaskPriorityAiBand.next,
               semanticAdjustment: candidate.todoId == 'sticky' ? 12 : 5,
               reason: candidate.todoId == 'sticky'
                   ? 'Keep this visible.'
                   : 'Refreshed candidate context.',
-              suggestedAction: TaskPrioritySuggestionKind.clarify,
               confidence: TaskPriorityAiConfidence.medium,
               isImportant: candidate.todoId == 'sticky',
               isUrgent: false,
