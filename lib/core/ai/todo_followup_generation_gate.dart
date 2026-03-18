@@ -79,6 +79,9 @@ Future<void> deferTodoFollowupGenerationJobsForRetry(
   required String lastError,
 }) async {
   for (final job in jobs) {
+    // Product decision: when the route is temporarily unavailable, manual
+    // regenerate jobs stay retryable, while background auto jobs are drained so
+    // they do not keep resurfacing without explicit user intent.
     if (job.triggerKind != 'manual_regenerate') {
       await store.markJobSkipped(todoId: job.todoId, nowMs: nowMs);
       continue;

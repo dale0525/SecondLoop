@@ -275,6 +275,65 @@ void main() {
     expect(backend.canceledTodoIds, isEmpty);
   });
 
+  testWidgets(
+      'route-unavailable gate keeps manual regenerate retryable while draining auto jobs',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({
+      'semantic_parse_data_consent_v1': true,
+    });
+
+    final backend = _FakeTodoFollowupGenerationGateBackend(
+      dueJobs: const <TodoFollowupGenerationJob>[
+        TodoFollowupGenerationJob(
+          todoId: 'todo_manual',
+          triggerKind: 'manual_regenerate',
+          status: 'pending',
+          attempts: 1,
+          nextRetryAtMs: null,
+          lastError: null,
+          includeManualFollowups: true,
+          taskTypeHint: 'research',
+          createdAtMs: 0,
+          updatedAtMs: 0,
+        ),
+        TodoFollowupGenerationJob(
+          todoId: 'todo_auto',
+          triggerKind: 'auto_create',
+          status: 'pending',
+          attempts: 0,
+          nextRetryAtMs: null,
+          lastError: null,
+          includeManualFollowups: false,
+          taskTypeHint: 'research',
+          createdAtMs: 0,
+          updatedAtMs: 0,
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: AppBackendScope(
+          backend: backend,
+          child: SessionScope(
+            sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+            lock: () {},
+            child: const TodoFollowupGenerationGate(
+              child: SizedBox.shrink(),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 3));
+
+    expect(backend.failedTodoIds, contains('todo_manual'));
+    expect(backend.skippedTodoIds, contains('todo_auto'));
+    expect(backend.canceledTodoIds, isEmpty);
+  });
+
   testWidgets('byok pass does not require a cloud token', (tester) async {
     SharedPreferences.setMockInitialValues({
       'semantic_parse_data_consent_v1': true,
