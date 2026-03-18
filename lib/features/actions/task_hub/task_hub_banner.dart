@@ -87,7 +87,10 @@ class _TaskHubBannerState extends State<TaskHubBanner> {
         key: const ValueKey('task_hub_banner'),
         child: InkWell(
           borderRadius: BorderRadius.circular(tokens.radiusLg),
-          onTap: () => setState(() => _expanded = !_expanded),
+          onTap: () {
+            FocusManager.instance.primaryFocus?.unfocus();
+            setState(() => _expanded = !_expanded);
+          },
           child: Padding(
             padding: EdgeInsets.all(innerPadding),
             child: Column(
@@ -141,60 +144,92 @@ class _TaskHubBannerState extends State<TaskHubBanner> {
                   ),
                 ],
                 SizedBox(height: actionsSpacingTop),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    if (primary != null &&
-                        primaryAction != null &&
-                        widget.onQuickAction != null)
-                      SlButton(
-                        key: const ValueKey('task_hub_banner_primary_action'),
-                        onPressed: () => unawaited(
-                          widget.onQuickAction!(
-                            primary,
-                            primaryAction.action,
+                if (primary != null &&
+                    primaryAction != null &&
+                    widget.onQuickAction != null) ...[
+                  DecoratedBox(
+                    key: const ValueKey('task_hub_banner_quick_pair'),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context)
+                          .colorScheme
+                          .surfaceContainerHighest
+                          .withOpacity(widget.compact ? 0.32 : 0.4),
+                      borderRadius: BorderRadius.circular(tokens.radiusLg),
+                      border: Border.all(
+                        color: tokens.borderSubtle.withOpacity(0.8),
+                      ),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.all(4),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: SlButton(
+                              key: const ValueKey(
+                                  'task_hub_banner_primary_action'),
+                              onPressed: () => unawaited(
+                                widget.onQuickAction!(
+                                  primary,
+                                  primaryAction.action,
+                                ),
+                              ),
+                              child: Text(primaryAction.label),
+                            ),
                           ),
-                        ),
-                        child: Text(primaryAction.label),
-                      )
-                    else
-                      SlButton(
-                        key: const ValueKey('task_hub_banner_open_hub'),
-                        onPressed: widget.onViewAll,
-                        child: Text(context.t.actions.taskHub.openTaskHub),
+                          if (secondaryAction != null) ...[
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: SlButton(
+                                buttonKey: const ValueKey(
+                                    'task_hub_banner_secondary_action'),
+                                variant: SlButtonVariant.outline,
+                                onPressed: () => unawaited(
+                                  widget.onQuickAction!(
+                                    primary,
+                                    secondaryAction.action,
+                                  ),
+                                ),
+                                child: Text(secondaryAction.label),
+                              ),
+                            ),
+                          ],
+                        ],
                       ),
-                    if (primary != null &&
-                        secondaryAction != null &&
-                        widget.onQuickAction != null)
-                      SlButton(
-                        buttonKey:
-                            const ValueKey('task_hub_banner_secondary_action'),
-                        variant: SlButtonVariant.outline,
-                        onPressed: () => unawaited(
-                          widget.onQuickAction!(
-                            primary,
-                            secondaryAction.action,
+                    ),
+                  ),
+                  if (widget.onOpenTodo != null ||
+                      widget.onViewAll != null) ...[
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        if (widget.onOpenTodo != null)
+                          SlButton(
+                            buttonKey:
+                                const ValueKey('task_hub_banner_open_focus'),
+                            variant: SlButtonVariant.outline,
+                            onPressed: () =>
+                                unawaited(widget.onOpenTodo!(primary)),
+                            child: Text(context.t.actions.taskHub.openFocus),
                           ),
-                        ),
-                        child: Text(secondaryAction.label),
-                      ),
-                    if (primary != null && widget.onOpenTodo != null)
-                      SlButton(
-                        buttonKey: const ValueKey('task_hub_banner_open_focus'),
-                        variant: SlButtonVariant.outline,
-                        onPressed: () => unawaited(widget.onOpenTodo!(primary)),
-                        child: Text(context.t.actions.taskHub.openFocus),
-                      ),
-                    if (primary != null && primaryAction != null)
-                      SlButton(
-                        buttonKey: const ValueKey('task_hub_banner_view_all'),
-                        variant: SlButtonVariant.outline,
-                        onPressed: widget.onViewAll,
-                        child: Text(context.t.actions.taskHub.openTaskHub),
-                      ),
+                        if (widget.onViewAll != null)
+                          SlButton(
+                            buttonKey:
+                                const ValueKey('task_hub_banner_view_all'),
+                            variant: SlButtonVariant.outline,
+                            onPressed: widget.onViewAll,
+                            child: Text(context.t.actions.taskHub.openTaskHub),
+                          ),
+                      ],
+                    ),
                   ],
-                ),
+                ] else
+                  SlButton(
+                    key: const ValueKey('task_hub_banner_open_hub'),
+                    onPressed: widget.onViewAll,
+                    child: Text(context.t.actions.taskHub.openTaskHub),
+                  ),
                 if (_expanded) ...[
                   SizedBox(height: actionsSpacingTop),
                   _BannerPreviewList(

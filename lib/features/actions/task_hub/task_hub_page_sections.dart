@@ -351,21 +351,22 @@ class _TaskHubQuickMenu extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final tokens = SlTokens.of(context);
+    final orderedItems = [...items]..sort(_compareTaskHubOverflowItems);
+    final safeItems = orderedItems
+        .where((item) => !_isDestructiveTaskHubQuickAction(item.action))
+        .toList(growable: false);
+    final destructiveItems = orderedItems
+        .where((item) => _isDestructiveTaskHubQuickAction(item.action))
+        .toList(growable: false);
     return PopupMenuButton<TaskHubQuickAction>(
       tooltip: context.t.actions.taskHub.actions.more,
       onSelected: onSelected,
-      itemBuilder: (_) => [
-        for (final item in items)
-          PopupMenuItem<TaskHubQuickAction>(
-            value: item.action,
-            child: Row(
-              children: [
-                Icon(item.icon, size: 16),
-                const SizedBox(width: 8),
-                Text(item.label),
-              ],
-            ),
-          ),
+      itemBuilder: (_) => <PopupMenuEntry<TaskHubQuickAction>>[
+        for (final item in safeItems) _taskHubQuickMenuItem(context, item),
+        if (safeItems.isNotEmpty && destructiveItems.isNotEmpty)
+          const PopupMenuDivider(),
+        for (final item in destructiveItems)
+          _taskHubQuickMenuItem(context, item),
       ],
       child: IgnorePointer(
         child: OutlinedButton(
@@ -381,6 +382,91 @@ class _TaskHubQuickMenu extends StatelessWidget {
       ),
     );
   }
+}
+
+PopupMenuItem<TaskHubQuickAction> _taskHubQuickMenuItem(
+  BuildContext context,
+  TaskHubQuickActionItem item,
+) {
+  final emphasis = _taskHubOverflowEmphasisFor(item.action);
+  final colorScheme = Theme.of(context).colorScheme;
+  final foregroundColor = switch (emphasis) {
+    _TaskHubOverflowEmphasis.destructive => colorScheme.error,
+    _TaskHubOverflowEmphasis.secondary => colorScheme.onSurfaceVariant,
+    _TaskHubOverflowEmphasis.neutral => colorScheme.onSurfaceVariant,
+    _TaskHubOverflowEmphasis.defaultTone => null,
+  };
+  final fontWeight = switch (emphasis) {
+    _TaskHubOverflowEmphasis.destructive => FontWeight.w600,
+    _TaskHubOverflowEmphasis.secondary => FontWeight.w500,
+    _TaskHubOverflowEmphasis.neutral => FontWeight.w400,
+    _TaskHubOverflowEmphasis.defaultTone => null,
+  };
+  return PopupMenuItem<TaskHubQuickAction>(
+    value: item.action,
+    child: Row(
+      children: [
+        Icon(item.icon, size: 16, color: foregroundColor),
+        const SizedBox(width: 8),
+        Text(
+          item.label,
+          style: foregroundColor == null && fontWeight == null
+              ? null
+              : TextStyle(
+                  color: foregroundColor,
+                  fontWeight: fontWeight,
+                ),
+        ),
+      ],
+    ),
+  );
+}
+
+enum _TaskHubOverflowEmphasis {
+  defaultTone,
+  neutral,
+  secondary,
+  destructive,
+}
+
+_TaskHubOverflowEmphasis _taskHubOverflowEmphasisFor(
+  TaskHubQuickAction action,
+) {
+  return switch (action) {
+    TaskHubQuickAction.today => _TaskHubOverflowEmphasis.neutral,
+    TaskHubQuickAction.redo => _TaskHubOverflowEmphasis.secondary,
+    TaskHubQuickAction.dismiss => _TaskHubOverflowEmphasis.destructive,
+    _ => _TaskHubOverflowEmphasis.defaultTone,
+  };
+}
+
+bool _isDestructiveTaskHubQuickAction(TaskHubQuickAction action) {
+  return _taskHubOverflowEmphasisFor(action) ==
+      _TaskHubOverflowEmphasis.destructive;
+}
+
+int _compareTaskHubOverflowItems(
+  TaskHubQuickActionItem left,
+  TaskHubQuickActionItem right,
+) {
+  return _taskHubOverflowPriority(left.action)
+      .compareTo(_taskHubOverflowPriority(right.action));
+}
+
+int _taskHubOverflowPriority(TaskHubQuickAction action) {
+  return switch (action) {
+    TaskHubQuickAction.today => 0,
+    TaskHubQuickAction.reopen => 10,
+    TaskHubQuickAction.start => 20,
+    TaskHubQuickAction.tomorrow => 30,
+    TaskHubQuickAction.redo => 40,
+    TaskHubQuickAction.increaseUrgency => 50,
+    TaskHubQuickAction.decreaseUrgency => 60,
+    TaskHubQuickAction.increaseImportance => 70,
+    TaskHubQuickAction.decreaseImportance => 80,
+    TaskHubQuickAction.done => 90,
+    TaskHubQuickAction.dismiss => 999,
+  };
 }
 
 class _TaskHubPriorityControl extends StatelessWidget {

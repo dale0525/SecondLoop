@@ -137,6 +137,8 @@ void main() {
       ),
     );
 
+    expect(find.byKey(const ValueKey('task_hub_banner_quick_pair')),
+        findsOneWidget);
     expect(find.byKey(const ValueKey('task_hub_banner_primary_action')),
         findsOneWidget);
     expect(find.byKey(const ValueKey('task_hub_banner_secondary_action')),

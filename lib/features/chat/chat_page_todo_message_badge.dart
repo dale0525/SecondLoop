@@ -85,9 +85,9 @@ extension _ChatPageStateTodoMessageBadge on _ChatPageState {
     required ColorScheme colorScheme,
   }) {
     return Padding(
-      key: ValueKey('message_todo_type_badge_${message.id}'),
       padding: const EdgeInsets.only(bottom: 6),
       child: InkWell(
+        key: ValueKey('message_todo_type_badge_${message.id}'),
         onTap: () => unawaited(_openTodoFromBadge(meta)),
         borderRadius: BorderRadius.circular(999),
         child: Padding(

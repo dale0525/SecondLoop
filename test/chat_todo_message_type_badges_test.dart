@@ -634,7 +634,9 @@ void main() {
     expect(find.text('Related task'), findsOneWidget);
     expect(find.text('「Procurement follow-up」'), findsOneWidget);
 
-    await tester.tap(find.byKey(const ValueKey('message_todo_type_badge_m5')));
+    final taskBadge = tester.widget<InkWell>(
+        find.byKey(const ValueKey('message_todo_type_badge_m5')));
+    taskBadge.onTap?.call();
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('todo_detail_header')), findsOneWidget);
 

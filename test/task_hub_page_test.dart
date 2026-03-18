@@ -218,6 +218,204 @@ void main() {
         findsOneWidget);
   });
 
+  testWidgets('done more menu keeps delete separated and last', (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final backend = _TaskHubBackend(
+      todos: const <Todo>[
+        Todo(
+          id: 'focus',
+          title: 'Fix prod issue',
+          dueAtMs: null,
+          status: 'in_progress',
+          sourceEntryId: null,
+          createdAtMs: 0,
+          updatedAtMs: 10,
+          reviewStage: null,
+          nextReviewAtMs: null,
+          lastReviewAtMs: null,
+        ),
+        Todo(
+          id: 'done',
+          title: 'Shipped',
+          dueAtMs: null,
+          status: 'done',
+          sourceEntryId: null,
+          createdAtMs: 0,
+          updatedAtMs: 40,
+          reviewStage: null,
+          nextReviewAtMs: null,
+          lastReviewAtMs: null,
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(_wrap(backend));
+    await tester.pumpAndSettle();
+
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('task_hub_page_section_done')),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
+
+    await tester
+        .tap(find.byKey(const ValueKey('task_hub_page_quick_done_more')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Do again'), findsOneWidget);
+    expect(find.text('Delete'), findsOneWidget);
+    expect(find.byType(PopupMenuDivider), findsOneWidget);
+
+    final redoTopLeft = tester.getTopLeft(find.text('Do again'));
+    final deleteTopLeft = tester.getTopLeft(find.text('Delete'));
+    expect(redoTopLeft.dy, lessThan(deleteTopLeft.dy));
+  });
+
+  testWidgets('unfinished more menu marks today as neutral', (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final backend = _TaskHubBackend(
+      todos: const <Todo>[
+        Todo(
+          id: 'open',
+          title: 'Plan next step',
+          dueAtMs: null,
+          status: 'open',
+          sourceEntryId: null,
+          createdAtMs: 0,
+          updatedAtMs: 10,
+          reviewStage: null,
+          nextReviewAtMs: null,
+          lastReviewAtMs: null,
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(_wrap(backend));
+    await tester.pumpAndSettle();
+
+    await tester
+        .tap(find.byKey(const ValueKey('task_hub_page_quick_open_more')));
+    await tester.pumpAndSettle();
+
+    final todayContext = tester.element(find.text('Today'));
+    final expectedColor = Theme.of(todayContext).colorScheme.onSurfaceVariant;
+    final todayText = tester.widget<Text>(find.text('Today'));
+    final todayIcon = tester.widget<Icon>(find.byIcon(Icons.today_rounded));
+
+    expect(todayText.style?.color, expectedColor);
+    expect(todayIcon.color, expectedColor);
+  });
+
+  testWidgets('done more menu marks redo as secondary', (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final backend = _TaskHubBackend(
+      todos: const <Todo>[
+        Todo(
+          id: 'focus',
+          title: 'Fix prod issue',
+          dueAtMs: null,
+          status: 'in_progress',
+          sourceEntryId: null,
+          createdAtMs: 0,
+          updatedAtMs: 10,
+          reviewStage: null,
+          nextReviewAtMs: null,
+          lastReviewAtMs: null,
+        ),
+        Todo(
+          id: 'done',
+          title: 'Shipped',
+          dueAtMs: null,
+          status: 'done',
+          sourceEntryId: null,
+          createdAtMs: 0,
+          updatedAtMs: 40,
+          reviewStage: null,
+          nextReviewAtMs: null,
+          lastReviewAtMs: null,
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(_wrap(backend));
+    await tester.pumpAndSettle();
+
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('task_hub_page_section_done')),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
+
+    await tester
+        .tap(find.byKey(const ValueKey('task_hub_page_quick_done_more')));
+    await tester.pumpAndSettle();
+
+    final redoContext = tester.element(find.text('Do again'));
+    final expectedColor = Theme.of(redoContext).colorScheme.onSurfaceVariant;
+    final redoText = tester.widget<Text>(find.text('Do again'));
+    final redoIcon = tester.widget<Icon>(find.byIcon(Icons.replay_rounded));
+
+    expect(redoText.style?.color, expectedColor);
+    expect(redoIcon.color, expectedColor);
+  });
+
+  testWidgets('done more menu marks delete as destructive', (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final backend = _TaskHubBackend(
+      todos: const <Todo>[
+        Todo(
+          id: 'focus',
+          title: 'Fix prod issue',
+          dueAtMs: null,
+          status: 'in_progress',
+          sourceEntryId: null,
+          createdAtMs: 0,
+          updatedAtMs: 10,
+          reviewStage: null,
+          nextReviewAtMs: null,
+          lastReviewAtMs: null,
+        ),
+        Todo(
+          id: 'done',
+          title: 'Shipped',
+          dueAtMs: null,
+          status: 'done',
+          sourceEntryId: null,
+          createdAtMs: 0,
+          updatedAtMs: 40,
+          reviewStage: null,
+          nextReviewAtMs: null,
+          lastReviewAtMs: null,
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(_wrap(backend));
+    await tester.pumpAndSettle();
+
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('task_hub_page_section_done')),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
+
+    await tester
+        .tap(find.byKey(const ValueKey('task_hub_page_quick_done_more')));
+    await tester.pumpAndSettle();
+
+    final deleteContext = tester.element(find.text('Delete'));
+    final expectedColor = Theme.of(deleteContext).colorScheme.error;
+    final deleteText = tester.widget<Text>(find.text('Delete'));
+    final deleteIcon =
+        tester.widget<Icon>(find.byIcon(Icons.delete_outline_rounded));
+
+    expect(deleteText.style?.color, expectedColor);
+    expect(deleteIcon.color, expectedColor);
+  });
+
   testWidgets('task hub loads done todos in batches on demand', (tester) async {
     SharedPreferences.setMockInitialValues({});
     final backend = _TaskHubBackend(
