@@ -135,21 +135,28 @@ final class TodoFollowupGenerationRunner {
         continue;
       }
 
+      final jobStartedAtMs = _nowMs();
       final todo = await store.getTodo(job.todoId);
       if (todo == null) {
-        await store.markJobCanceled(todoId: job.todoId, nowMs: nowMs);
+        await store.markJobCanceled(
+          todoId: job.todoId,
+          nowMs: _nowMs(),
+        );
         didUpdateJobs = true;
         processed++;
         continue;
       }
 
       try {
-        await store.markJobRunning(todoId: job.todoId, nowMs: nowMs);
+        await store.markJobRunning(todoId: job.todoId, nowMs: jobStartedAtMs);
         didUpdateJobs = true;
 
         final taskType = _resolveTaskType(job, todo);
         if (!taskType.allowsAutoFollowup) {
-          await store.markJobSkipped(todoId: job.todoId, nowMs: nowMs);
+          await store.markJobSkipped(
+            todoId: job.todoId,
+            nowMs: _nowMs(),
+          );
           didUpdateJobs = true;
           processed++;
           continue;
@@ -165,7 +172,10 @@ final class TodoFollowupGenerationRunner {
 
         if (job.triggerKind != 'manual_regenerate' &&
             pendingSuggestionIds.isNotEmpty) {
-          await store.markJobSucceeded(todoId: job.todoId, nowMs: nowMs);
+          await store.markJobSucceeded(
+            todoId: job.todoId,
+            nowMs: _nowMs(),
+          );
           didUpdateJobs = true;
           processed++;
           continue;
@@ -197,7 +207,7 @@ final class TodoFollowupGenerationRunner {
         }
 
         final generationKey =
-            'followup:${job.triggerKind}:${taskType.wireValue}:$nowMs';
+            'followup:${job.triggerKind}:${taskType.wireValue}:$jobStartedAtMs';
         final generatedSuggestions = <TodoFollowupSuggestionDraftInput>[
           TodoFollowupSuggestionDraftInput(
             content: suggestion.content,
@@ -246,14 +256,21 @@ final class TodoFollowupGenerationRunner {
           }
         }
 
-        await store.markJobSucceeded(todoId: job.todoId, nowMs: nowMs);
+        await store.markJobSucceeded(
+          todoId: job.todoId,
+          nowMs: _nowMs(),
+        );
         didUpdateJobs = true;
         processed++;
       } catch (error) {
         final attempts = job.attempts.toInt() + 1;
+        final failedAtMs = _nowMs();
         if (job.triggerKind == 'manual_regenerate' ||
             attempts >= settings.maxAutoAttempts) {
-          await store.markJobCanceled(todoId: job.todoId, nowMs: nowMs);
+          await store.markJobCanceled(
+            todoId: job.todoId,
+            nowMs: failedAtMs,
+          );
           didUpdateJobs = true;
           processed++;
           continue;
@@ -262,9 +279,9 @@ final class TodoFollowupGenerationRunner {
         await store.markJobFailed(
           todoId: job.todoId,
           attempts: attempts,
-          nextRetryAtMs: nowMs + _retryDelayMsForAttempt(attempts),
+          nextRetryAtMs: failedAtMs + _retryDelayMsForAttempt(attempts),
           lastError: '$error',
-          nowMs: nowMs,
+          nowMs: failedAtMs,
         );
         didUpdateJobs = true;
       }

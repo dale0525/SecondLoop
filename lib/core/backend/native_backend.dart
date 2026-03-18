@@ -1189,13 +1189,30 @@ class NativeAppBackend
     );
     final wasCreated = todo.createdAtMs == todo.updatedAtMs;
     if (wasCreated) {
-      await enqueueTodoFollowupGenerationJob(
-        key,
-        todoId: id,
-        triggerKind: 'auto_create',
-        taskTypeHint: null,
-        nowMs: DateTime.now().millisecondsSinceEpoch,
-      );
+      try {
+        await enqueueTodoFollowupGenerationJob(
+          key,
+          todoId: id,
+          triggerKind: 'auto_create',
+          taskTypeHint: null,
+          nowMs: DateTime.now().millisecondsSinceEpoch,
+        );
+      } catch (error, stackTrace) {
+        debugPrint(
+          'NativeAppBackend.upsertTodo auto follow-up enqueue failed for '
+          '$id: $error',
+        );
+        FlutterError.reportError(
+          FlutterErrorDetails(
+            exception: error,
+            stack: stackTrace,
+            library: 'native_backend',
+            context: ErrorDescription(
+              'while enqueueing an automatic todo follow-up generation job',
+            ),
+          ),
+        );
+      }
     }
     return todo;
   }

@@ -563,6 +563,62 @@ void main() {
     expect(store.pendingSuggestionsFor('todo_regen_fail').single.id, 's_old');
   });
 
+  test('runner schedules retries from the actual failure time', () async {
+    final store = _FakeStore(
+      jobs: const <TodoFollowupGenerationJob>[
+        TodoFollowupGenerationJob(
+          todoId: 'todo_retry_clock',
+          triggerKind: 'auto_create',
+          status: 'pending',
+          attempts: 0,
+          nextRetryAtMs: null,
+          lastError: null,
+          includeManualFollowups: false,
+          taskTypeHint: 'research',
+          createdAtMs: 0,
+          updatedAtMs: 0,
+        ),
+      ],
+      todos: const <String, Todo>{
+        'todo_retry_clock': Todo(
+          id: 'todo_retry_clock',
+          title: '调研一下当前主流的 llm 模型',
+          status: 'open',
+          createdAtMs: 0,
+          updatedAtMs: 0,
+        ),
+      },
+    );
+    final client = _FakeClient(
+      supportsWebSearch: false,
+      errorsByMode: <TodoFollowupGenerationMode, Object>{
+        TodoFollowupGenerationMode.modelKnowledge: StateError('boom'),
+      },
+    );
+    final clockValues = <int>[1000, 5000, 31000];
+    var clockIndex = 0;
+
+    final runner = TodoFollowupGenerationRunner(
+      store: store,
+      client: client,
+      settings: const TodoFollowupGenerationRunnerSettings(
+        hardTimeout: Duration(milliseconds: 200),
+      ),
+      nowMs: () {
+        final index = clockIndex < clockValues.length
+            ? clockIndex++
+            : clockValues.length - 1;
+        return clockValues[index];
+      },
+    );
+
+    await runner.runOnce(localeTag: 'zh-CN');
+
+    expect(store.lastFailedTodoId, 'todo_retry_clock');
+    expect(store.lastFailedNowMs, 31000);
+    expect(store.lastFailedNextRetryAtMs, 61000);
+  });
+
   test(
       'runner preserves existing pending suggestion when regenerate is identical',
       () async {
@@ -667,6 +723,9 @@ final class _FakeStore implements TodoFollowupGenerationStore {
 
   String? lastSucceededTodoId;
   String? lastSkippedTodoId;
+  String? lastFailedTodoId;
+  int? lastFailedNowMs;
+  int? lastFailedNextRetryAtMs;
   List<String> lastDismissedSuggestionIds = <String>[];
   List<TodoFollowupSuggestionDraftInput> lastUpsertedSuggestions =
       <TodoFollowupSuggestionDraftInput>[];
@@ -727,7 +786,11 @@ final class _FakeStore implements TodoFollowupGenerationStore {
     required int nextRetryAtMs,
     required String lastError,
     required int nowMs,
-  }) async {}
+  }) async {
+    lastFailedTodoId = todoId;
+    lastFailedNowMs = nowMs;
+    lastFailedNextRetryAtMs = nextRetryAtMs;
+  }
 
   @override
   Future<void> markJobRunning({
