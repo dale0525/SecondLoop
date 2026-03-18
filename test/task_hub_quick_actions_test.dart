@@ -431,6 +431,37 @@ void main() {
     expect(await signalStore.readForTodo('t5'), isNull);
   });
 
+  test('signal-only undo with previous manual signal does not upsert todo',
+      () async {
+    SharedPreferences.setMockInitialValues({});
+
+    final initial = todo(id: 't5b2', title: 'Task 5b2', updatedAtMs: 10);
+    final backend = _QuickActionBackend(initialTodos: [initial]);
+    const signalStore = TaskPrioritySignalStore();
+    await signalStore.setForTodo(
+      't5b2',
+      const TaskPriorityManualSignal(isImportant: false),
+    );
+    final controller = TaskHubQuickActionsController(
+      backend: backend,
+      sessionKey: Uint8List(32),
+      signalStore: signalStore,
+    );
+
+    final ticket = await controller.apply(
+      initial,
+      TaskHubQuickAction.increaseImportance,
+    );
+
+    expect(ticket, isNotNull);
+    final upsertsBeforeUndo = backend.upsertTodoCalls;
+
+    await controller.undo(ticket!);
+
+    expect(backend.upsertTodoCalls, upsertsBeforeUndo);
+    expect((await signalStore.readForTodo('t5b2'))?.isImportant, isFalse);
+  });
+
   test(
       'decrease urgency clears persisted urgency override and undo restores it',
       () async {
@@ -720,6 +751,7 @@ final class _QuickActionBackend extends AppBackend {
 
   final Map<String, Todo> _todosById;
   final Map<String, List<TodoChecklistItem>> _checklistItemsByTodoId;
+  var upsertTodoCalls = 0;
 
   Todo current(String id) => _todosById[id]!;
 
@@ -735,6 +767,7 @@ final class _QuickActionBackend extends AppBackend {
     int? nextReviewAtMs,
     int? lastReviewAtMs,
   }) async {
+    upsertTodoCalls += 1;
     final nowMs = DateTime.now().toUtc().millisecondsSinceEpoch;
     final updated = Todo(
       id: id,

@@ -587,24 +587,21 @@ class TaskHubQuickActionsController {
       return;
     }
 
-    if (ticket.previousManualSignal != null) {
+    final isSignalOnlyAction =
+        ticket.action == TaskHubQuickAction.increaseImportance ||
+            ticket.action == TaskHubQuickAction.decreaseImportance ||
+            ticket.action == TaskHubQuickAction.increaseUrgency ||
+            ticket.action == TaskHubQuickAction.decreaseUrgency;
+    if (ticket.previousManualSignal != null || isSignalOnlyAction) {
       await signalStore.restoreForTodo(
         ticket.todo.id,
         ticket.previousManualSignal,
       );
-    } else if (ticket.action == TaskHubQuickAction.increaseImportance ||
-        ticket.action == TaskHubQuickAction.decreaseImportance ||
-        ticket.action == TaskHubQuickAction.increaseUrgency ||
-        ticket.action == TaskHubQuickAction.decreaseUrgency) {
-      await signalStore.restoreForTodo(
-        ticket.todo.id,
-        ticket.previousManualSignal,
-      );
-      if (!ticket.shouldNotifySync &&
-          ticket.updatedTodo.id == ticket.todo.id &&
-          ticket.updatedTodo == ticket.todo) {
-        return;
-      }
+    }
+    if (!ticket.shouldNotifySync &&
+        ticket.updatedTodo.id == ticket.todo.id &&
+        ticket.updatedTodo == ticket.todo) {
+      return;
     }
 
     final original = ticket.todo;
