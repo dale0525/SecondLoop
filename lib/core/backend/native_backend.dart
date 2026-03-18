@@ -1189,14 +1189,12 @@ class NativeAppBackend
     );
     final wasCreated = todo.createdAtMs == todo.updatedAtMs;
     if (wasCreated) {
-      unawaited(
-        _enqueueTodoFollowupGenerationJobBestEffort(
-          key,
-          todoId: id,
-          triggerKind: 'auto_create',
-          taskTypeHint: null,
-          nowMs: DateTime.now().millisecondsSinceEpoch,
-        ),
+      await enqueueTodoFollowupGenerationJob(
+        key,
+        todoId: id,
+        triggerKind: 'auto_create',
+        taskTypeHint: null,
+        nowMs: DateTime.now().millisecondsSinceEpoch,
       );
     }
     return todo;

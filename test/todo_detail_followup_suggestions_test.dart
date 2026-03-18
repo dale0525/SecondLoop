@@ -209,6 +209,46 @@ void main() {
     expect(backend.enqueuedRegenerate, isFalse);
   });
 
+  testWidgets(
+      'TodoDetailPage treats running manual regenerate as active generation',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({
+      'semantic_parse_data_consent_v1': true,
+    });
+    _setLargeDisplay(tester);
+    final backend = _Backend(
+      activeGenerationJob: const TodoFollowupGenerationJob(
+        todoId: 't1',
+        triggerKind: 'manual_regenerate',
+        status: 'running',
+        attempts: 0,
+        nextRetryAtMs: null,
+        lastError: null,
+        includeManualFollowups: true,
+        taskTypeHint: 'research',
+        createdAtMs: 0,
+        updatedAtMs: 0,
+      ),
+    );
+
+    await tester.pumpWidget(_buildSubject(backend));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 200));
+
+    expect(
+      find.byKey(const ValueKey('todo_detail_followup_generating_indicator')),
+      findsOneWidget,
+    );
+
+    await tester.tap(
+      find.byKey(const ValueKey('todo_detail_followup_generate_suggestions')),
+      warnIfMissed: false,
+    );
+    await tester.pump();
+
+    expect(backend.enqueuedRegenerate, isFalse);
+  });
+
   testWidgets('TodoDetailPage shows regenerate loading state', (tester) async {
     SharedPreferences.setMockInitialValues({
       'semantic_parse_data_consent_v1': true,

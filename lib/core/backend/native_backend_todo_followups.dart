@@ -122,27 +122,3 @@ typedef DbMarkTodoFollowupGenerationJobCanceledFn = Future<void> Function({
   required String todoId,
   required PlatformInt64 nowMs,
 });
-
-extension NativeAppBackendTodoFollowupHelpers on NativeAppBackend {
-  Future<void> _enqueueTodoFollowupGenerationJobBestEffort(
-    Uint8List key, {
-    required String todoId,
-    required String triggerKind,
-    String? taskTypeHint,
-    required int nowMs,
-  }) async {
-    try {
-      await enqueueTodoFollowupGenerationJob(
-        key,
-        todoId: todoId,
-        triggerKind: triggerKind,
-        taskTypeHint: taskTypeHint,
-        nowMs: nowMs,
-      );
-    } catch (error, stackTrace) {
-      debugPrint(
-        'Failed to enqueue todo followup generation job for $todoId: $error\n$stackTrace',
-      );
-    }
-  }
-}

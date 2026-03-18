@@ -67,7 +67,6 @@ void main() {
       title: '调研一下当前主流的 llm 模型',
       status: 'open',
     );
-    await Future<void>.delayed(Duration.zero);
 
     expect(enqueueCount, 1);
     expect(listTodosCalls, 0);
@@ -78,7 +77,6 @@ void main() {
       title: '调研一下当前主流的 llm 模型（更新）',
       status: 'open',
     );
-    await Future<void>.delayed(Duration.zero);
 
     expect(enqueueCount, 1);
     expect(listTodosCalls, 0);

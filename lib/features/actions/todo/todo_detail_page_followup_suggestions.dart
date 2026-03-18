@@ -17,10 +17,10 @@ extension _TodoDetailPageStateFollowupSuggestions on _TodoDetailPageState {
     }
   }
 
-  bool _hasActiveAutoFollowupGenerationJob(
+  bool _hasActiveFollowupGenerationJob(
     TodoFollowupGenerationJob? job,
   ) {
-    if (job == null || job.triggerKind == 'manual_regenerate') {
+    if (job == null) {
       return false;
     }
     return switch (job.status) {
@@ -140,7 +140,7 @@ extension _TodoDetailPageStateFollowupSuggestions on _TodoDetailPageState {
     _setState(() => _generatingFollowupSuggestions = true);
     try {
       final activeJob = await _loadFollowupGenerationJob();
-      if (_hasActiveAutoFollowupGenerationJob(activeJob) || !mounted) {
+      if (_hasActiveFollowupGenerationJob(activeJob) || !mounted) {
         return;
       }
 
@@ -187,10 +187,10 @@ extension _TodoDetailPageStateFollowupSuggestions on _TodoDetailPageState {
     return FutureBuilder<TodoFollowupGenerationJob?>(
       future: _loadFollowupGenerationJob(),
       builder: (context, snapshot) {
-        final hasActiveAutoGeneration =
-            _hasActiveAutoFollowupGenerationJob(snapshot.data);
+        final hasActiveGeneration =
+            _hasActiveFollowupGenerationJob(snapshot.data);
         final showGeneratingIndicator =
-            _generatingFollowupSuggestions || hasActiveAutoGeneration;
+            _generatingFollowupSuggestions || hasActiveGeneration;
 
         return Container(
           key: const ValueKey('todo_detail_followup_suggestions_section'),
