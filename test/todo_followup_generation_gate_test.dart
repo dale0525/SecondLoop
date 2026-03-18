@@ -4,11 +4,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:secondloop/core/ai/ai_routing.dart';
 import 'package:secondloop/core/ai/todo_followup_generation_gate.dart';
 import 'package:secondloop/core/ai/todo_followup_generation_runner.dart';
 import 'package:secondloop/core/backend/app_backend.dart';
 import 'package:secondloop/core/backend/native_backend.dart';
+import 'package:secondloop/core/cloud/cloud_auth_controller.dart';
+import 'package:secondloop/core/cloud/cloud_auth_scope.dart';
 import 'package:secondloop/core/session/session_scope.dart';
+import 'package:secondloop/core/subscription/subscription_scope.dart';
 import 'package:secondloop/core/sync/sync_engine.dart';
 import 'package:secondloop/core/sync/sync_engine_gate.dart';
 import 'package:secondloop/src/rust/db.dart';
@@ -510,6 +514,91 @@ void main() {
     expect(backend.failedTodoIds, isEmpty);
     expect(backend.canceledTodoIds, isEmpty);
   });
+
+  testWidgets(
+      'manual regenerate prefers cloud route even when BYOK is configured',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({
+      'semantic_parse_data_consent_v1': true,
+    });
+
+    final backend = _FakeTodoFollowupGenerationGateBackend(
+      dueJobs: const <TodoFollowupGenerationJob>[
+        TodoFollowupGenerationJob(
+          todoId: 'todo_manual_cloud',
+          triggerKind: 'manual_regenerate',
+          status: 'pending',
+          attempts: 0,
+          nextRetryAtMs: null,
+          lastError: null,
+          includeManualFollowups: true,
+          taskTypeHint: 'live_info_lookup',
+          createdAtMs: 0,
+          updatedAtMs: 0,
+        ),
+      ],
+      todosById: const <String, Todo>{
+        'todo_manual_cloud': Todo(
+          id: 'todo_manual_cloud',
+          title: '去浦东机场接 MU5101',
+          status: 'open',
+          createdAtMs: 0,
+          updatedAtMs: 0,
+        ),
+      },
+      llmProfiles: const <LlmProfile>[
+        LlmProfile(
+          id: 'llm_1',
+          name: 'BYOK',
+          providerType: 'openai_compatible',
+          baseUrl: 'https://example.com',
+          modelName: 'gpt-test',
+          isActive: true,
+          createdAtMs: 0,
+          updatedAtMs: 0,
+        ),
+      ],
+      aiPromptResponse:
+          '{"content":"Not verified online. Summary collected from model knowledge.","mode":"model_knowledge","citations":[]}',
+      aiPromptCloudResponse:
+          '{"content":"已查询到航站楼与预计到达时间。","mode":"web_search","citations":[{"title":"Airport","url":"https://airport.example/flight","domain":"airport.example"}]}',
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: AppBackendScope(
+          backend: backend,
+          child: SessionScope(
+            sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+            lock: () {},
+            child: SubscriptionScope(
+              controller: _FixedSubscriptionStatusController(
+                SubscriptionStatus.unknown,
+              ),
+              child: const CloudAuthScope(
+                controller: _FixedCloudAuthController('token_1'),
+                gatewayConfig: CloudGatewayConfig(
+                  baseUrl: 'https://example.com',
+                  modelName: 'cloud',
+                  supportsWebSearch: true,
+                ),
+                child: TodoFollowupGenerationGate(
+                  child: SizedBox.shrink(),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 3));
+
+    expect(backend.cloudPromptCalls, 1);
+    expect(backend.localPromptCalls, 0);
+    expect(backend.succeededTodoIds, contains('todo_manual_cloud'));
+  });
 }
 
 final class _NoopSyncRunner implements SyncRunner {
@@ -526,6 +615,7 @@ final class _FakeTodoFollowupGenerationGateBackend extends NativeAppBackend {
     this.todosById = const <String, Todo>{},
     this.llmProfiles = const <LlmProfile>[],
     this.aiPromptResponse,
+    this.aiPromptCloudResponse,
     List<Object> aiPromptOutcomes = const <Object>[],
     List<Object> llmProfileOutcomes = const <Object>[],
   })  : _aiPromptOutcomes = List<Object>.from(aiPromptOutcomes),
@@ -536,6 +626,7 @@ final class _FakeTodoFollowupGenerationGateBackend extends NativeAppBackend {
   final Map<String, Todo> todosById;
   final List<LlmProfile> llmProfiles;
   final String? aiPromptResponse;
+  final String? aiPromptCloudResponse;
   final List<Object> _aiPromptOutcomes;
   final List<Object> _llmProfileOutcomes;
   final List<String> skippedTodoIds = <String>[];
@@ -543,6 +634,8 @@ final class _FakeTodoFollowupGenerationGateBackend extends NativeAppBackend {
   final List<String> failedTodoIds = <String>[];
   final List<String> succeededTodoIds = <String>[];
   final List<String> generatedSuggestionTodoIds = <String>[];
+  int localPromptCalls = 0;
+  int cloudPromptCalls = 0;
 
   @override
   Future<List<LlmProfile>> listLlmProfiles(Uint8List key) async {
@@ -608,6 +701,7 @@ final class _FakeTodoFollowupGenerationGateBackend extends NativeAppBackend {
     Uint8List key, {
     required String prompt,
   }) async {
+    localPromptCalls += 1;
     if (_aiPromptOutcomes.isNotEmpty) {
       final outcome = _aiPromptOutcomes.removeAt(0);
       if (outcome is Exception) throw outcome;
@@ -618,6 +712,22 @@ final class _FakeTodoFollowupGenerationGateBackend extends NativeAppBackend {
     final response = aiPromptResponse;
     if (response == null) {
       throw StateError('aiPromptResponse not configured');
+    }
+    return response;
+  }
+
+  @override
+  Future<String> taskPriorityRerankAiCloudGateway(
+    Uint8List key, {
+    required String prompt,
+    required String gatewayBaseUrl,
+    required String idToken,
+    required String modelName,
+  }) async {
+    cloudPromptCalls += 1;
+    final response = aiPromptCloudResponse;
+    if (response == null) {
+      throw StateError('aiPromptCloudResponse not configured');
     }
     return response;
   }
@@ -676,6 +786,55 @@ final class _FakeTodoFollowupGenerationGateBackend extends NativeAppBackend {
   }) async {
     succeededTodoIds.add(todoId);
   }
+}
+
+final class _FixedCloudAuthController implements CloudAuthController {
+  const _FixedCloudAuthController(this._token);
+
+  final String _token;
+
+  @override
+  String? get email => 'demo@example.com';
+
+  @override
+  bool? get emailVerified => true;
+
+  @override
+  String? get uid => 'uid_1';
+
+  @override
+  Future<String?> getIdToken() async => _token;
+
+  @override
+  Future<void> refreshUserInfo() async {}
+
+  @override
+  Future<void> sendEmailVerification() async {}
+
+  @override
+  Future<void> signInWithEmailPassword({
+    required String email,
+    required String password,
+  }) async {}
+
+  @override
+  Future<void> signOut() async {}
+
+  @override
+  Future<void> signUpWithEmailPassword({
+    required String email,
+    required String password,
+  }) async {}
+}
+
+final class _FixedSubscriptionStatusController extends ChangeNotifier
+    implements SubscriptionStatusController {
+  _FixedSubscriptionStatusController(this._status);
+
+  final SubscriptionStatus _status;
+
+  @override
+  SubscriptionStatus get status => _status;
 }
 
 final class _AiPromptFailure implements Exception {

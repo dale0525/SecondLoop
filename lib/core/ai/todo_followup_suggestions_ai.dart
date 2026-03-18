@@ -138,7 +138,7 @@ String buildTodoFollowupSuggestionPrompt({
           .toIso8601String();
   final disclosure = todoFollowupModelKnowledgeDisclosureForLocale(localeTag);
   final modeLabel = generationMode == TodoFollowupGenerationMode.webSearch
-      ? 'Use web search and include citations.'
+      ? 'Use web search and include at least 1 citation.'
       : _isZhLocaleTag(localeTag)
           ? 'No web search is available. 在正文中明确写出“$disclosure”。'
           : 'No web search is available. Explicitly include "$disclosure" in the note.';
@@ -157,7 +157,7 @@ Rules:
 - Do not output markdown code fences.
 - Write the content field in the user's current app language${localeTag.trim().isEmpty ? '' : ' ($localeTag)'}. 
 - If mode is model_knowledge, the note must clearly include "$disclosure".
-- Citations are optional, but include up to $kMaxGeneratedFollowupCitations citations when web search is used.
+- If mode is web_search, include at least 1 citation and at most $kMaxGeneratedFollowupCitations citations.
 
 $modeLabel
 Locale: $localeTag

@@ -20,6 +20,7 @@ void main() {
     expect(prompt, contains('Do not tell the user what to research next'));
     expect(prompt, contains("user's current app language (zh-CN)"));
     expect(prompt, contains('未联网核实'));
+    expect(prompt, contains('at least 1 citation'));
   });
 
   test('model knowledge parser requires localized not-verified disclaimer', () {
