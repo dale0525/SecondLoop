@@ -200,6 +200,10 @@ Future<AskAiRouteKind> decideTodoFollowupGenerationRoute(
   required SubscriptionStatus subscriptionStatus,
 }) {
   if (hasManualRegenerateDueJob) {
+    // Product decision: a user-triggered regenerate stays on the interactive
+    // Ask AI route, so cloud follow-up generation can run as soon as auth is
+    // available even before entitlement settles. Automatic follow-up jobs keep
+    // the stricter automation gating below.
     return decideAskAiRoute(
       backend,
       sessionKey,

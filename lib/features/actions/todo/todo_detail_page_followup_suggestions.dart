@@ -24,6 +24,8 @@ extension _TodoDetailPageStateFollowupSuggestions on _TodoDetailPageState {
       return false;
     }
     return switch (job.status) {
+      // Product decision: only an in-flight job blocks another manual
+      // regenerate. Failed jobs stay immediately retryable from the detail UI.
       'pending' || 'running' => true,
       _ => false,
     };

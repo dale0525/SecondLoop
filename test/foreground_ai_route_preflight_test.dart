@@ -100,6 +100,30 @@ void main() {
     expect(route, AskAiRouteKind.needsSetup);
   });
 
+  test(
+      'manual regenerate intentionally stays cloud-routable before entitlement is resolved',
+      () async {
+    final manualRoute = await decideTodoFollowupGenerationRoute(
+      _FakeBackend(),
+      _sessionKey,
+      hasManualRegenerateDueJob: true,
+      cloudIdToken: 'token_1',
+      cloudGatewayBaseUrl: 'https://example.com',
+      subscriptionStatus: SubscriptionStatus.unknown,
+    );
+    final automaticRoute = await decideTodoFollowupGenerationRoute(
+      _FakeBackend(),
+      _sessionKey,
+      hasManualRegenerateDueJob: false,
+      cloudIdToken: 'token_1',
+      cloudGatewayBaseUrl: 'https://example.com',
+      subscriptionStatus: SubscriptionStatus.unknown,
+    );
+
+    expect(manualRoute, AskAiRouteKind.cloudGateway);
+    expect(automaticRoute, AskAiRouteKind.needsSetup);
+  });
+
   test('interactive ask-ai preflight warms cloud only after cloud route',
       () async {
     final toolkit = _RefreshingIdentityToolkit();

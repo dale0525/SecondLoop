@@ -60,6 +60,9 @@ Future<void> finalizeTodoFollowupGenerationJobsForNeedsSetup(
   required int nowMs,
 }) async {
   for (final job in jobs) {
+    // Product decision: needs-setup should clear background auto jobs, but a
+    // user-initiated regenerate must surface as canceled instead of silently
+    // disappearing.
     if (job.triggerKind == 'manual_regenerate') {
       await store.markJobCanceled(todoId: job.todoId, nowMs: nowMs);
       continue;
