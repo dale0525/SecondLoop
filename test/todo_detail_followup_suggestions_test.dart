@@ -284,6 +284,39 @@ void main() {
     expect(backend.enqueuedRegenerate, isTrue);
   });
 
+  testWidgets('TodoDetailPage caches follow-up generation job future',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({
+      'semantic_parse_data_consent_v1': true,
+    });
+    _setLargeDisplay(tester);
+    final backend = _Backend(
+      activeGenerationJob: const TodoFollowupGenerationJob(
+        todoId: 't1',
+        triggerKind: 'auto_create',
+        status: 'running',
+        attempts: 0,
+        nextRetryAtMs: null,
+        lastError: null,
+        includeManualFollowups: false,
+        taskTypeHint: 'research',
+        createdAtMs: 0,
+        updatedAtMs: 0,
+      ),
+    );
+
+    await tester.pumpWidget(_buildSubject(backend));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 200));
+
+    expect(backend.getTodoFollowupGenerationJobCalls, 1);
+
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+
+    expect(backend.getTodoFollowupGenerationJobCalls, 1);
+  });
+
   testWidgets('TodoDetailPage shows regenerate loading state', (tester) async {
     SharedPreferences.setMockInitialValues({
       'semantic_parse_data_consent_v1': true,
@@ -618,6 +651,7 @@ final class _Backend extends AppBackend {
   List<String> appliedSuggestionIds = <String>[];
   List<String> dismissedSuggestionIds = <String>[];
   bool enqueuedRegenerate = false;
+  int getTodoFollowupGenerationJobCalls = 0;
 
   @override
   Future<void> init() async {}
@@ -737,8 +771,10 @@ final class _Backend extends AppBackend {
   Future<TodoFollowupGenerationJob?> getTodoFollowupGenerationJob(
     Uint8List key,
     String todoId,
-  ) async =>
-      activeGenerationJob;
+  ) async {
+    getTodoFollowupGenerationJobCalls += 1;
+    return activeGenerationJob;
+  }
 
   @override
   Future<void> enqueueTodoFollowupGenerationJob(

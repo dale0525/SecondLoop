@@ -75,6 +75,15 @@ Future<ForegroundAiPreparedRoute> prepareForegroundAiRoute(
   ForegroundAiWarmupPolicy warmupPolicy = ForegroundAiWarmupPolicy.never,
   bool fallbackToNeedsSetupOnRouteError = false,
 }) async {
+  final didWarmBeforeRead = _shouldWarmForegroundAiTokenRead(
+    gatewayConfig: gatewayConfig,
+    subscriptionStatus: subscriptionStatus,
+    warmupPolicy: warmupPolicy,
+  );
+  if (didWarmBeforeRead) {
+    await bestEffortWarmCloudCapabilityAuth(cloudAuthController);
+  }
+
   final idToken = await readCloudCapabilityIdToken(
     cloudAuthController,
     mode: authMode,
@@ -89,7 +98,7 @@ Future<ForegroundAiPreparedRoute> prepareForegroundAiRoute(
     fallbackToNeedsSetupOnRouteError: fallbackToNeedsSetupOnRouteError,
   );
 
-  if (_shouldWarmForegroundAiRoute(route, warmupPolicy)) {
+  if (!didWarmBeforeRead && _shouldWarmForegroundAiRoute(route, warmupPolicy)) {
     await bestEffortWarmCloudCapabilityAuth(cloudAuthController);
   }
 
@@ -97,6 +106,23 @@ Future<ForegroundAiPreparedRoute> prepareForegroundAiRoute(
     route: route,
     idToken: idToken,
   );
+}
+
+bool _shouldWarmForegroundAiTokenRead({
+  required CloudGatewayConfig gatewayConfig,
+  required SubscriptionStatus subscriptionStatus,
+  required ForegroundAiWarmupPolicy warmupPolicy,
+}) {
+  if (gatewayConfig.baseUrl.trim().isEmpty) return false;
+
+  switch (warmupPolicy) {
+    case ForegroundAiWarmupPolicy.never:
+      return false;
+    case ForegroundAiWarmupPolicy.always:
+      return true;
+    case ForegroundAiWarmupPolicy.cloudOnly:
+      return subscriptionStatus != SubscriptionStatus.notEntitled;
+  }
 }
 
 Future<AskAiRouteKind> _decideForegroundAiRoute(

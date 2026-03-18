@@ -150,6 +150,7 @@ extension _TodoDetailPageStateFollowupSuggestions on _TodoDetailPageState {
       if (!mounted) return;
       _setState(() {
         _followupSuggestionsFuture = _loadFollowupSuggestions();
+        _followupGenerationJobFuture = _loadFollowupGenerationJob();
       });
     } catch (error) {
       if (!mounted) return;
@@ -178,7 +179,7 @@ extension _TodoDetailPageStateFollowupSuggestions on _TodoDetailPageState {
         .toList(growable: false);
 
     return FutureBuilder<TodoFollowupGenerationJob?>(
-      future: _loadFollowupGenerationJob(),
+      future: _followupGenerationJobFuture ??= _loadFollowupGenerationJob(),
       builder: (context, snapshot) {
         final hasActiveGeneration =
             _hasActiveFollowupGenerationJob(snapshot.data);

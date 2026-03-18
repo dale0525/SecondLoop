@@ -148,6 +148,25 @@ void main() {
     expect(store.loadCalls, 1);
     expect(toolkit.refreshCalls, 1);
   });
+
+  test('interactive preflight warms before first token read when needed',
+      () async {
+    final prepared = await prepareForegroundAiRoute(
+      _FakeBackend(),
+      _sessionKey,
+      routePolicy: ForegroundAiRoutePolicy.askAi,
+      cloudAuthController: _WarmupRequiredCloudAuthController(),
+      gatewayConfig: const CloudGatewayConfig(
+        baseUrl: 'https://example.com',
+        modelName: 'cloud',
+      ),
+      subscriptionStatus: SubscriptionStatus.unknown,
+      warmupPolicy: ForegroundAiWarmupPolicy.cloudOnly,
+    );
+
+    expect(prepared.route, AskAiRouteKind.cloudGateway);
+    expect(prepared.idToken, 'token_after_warm');
+  });
 }
 
 final Uint8List _sessionKey = Uint8List.fromList(List<int>.filled(32, 1));
@@ -238,4 +257,44 @@ final class _RefreshingIdentityToolkit implements FirebaseIdentityToolkit {
   }) {
     throw UnimplementedError();
   }
+}
+
+final class _WarmupRequiredCloudAuthController implements CloudAuthController {
+  var _reads = 0;
+
+  @override
+  String? get email => 'demo@example.com';
+
+  @override
+  bool? get emailVerified => true;
+
+  @override
+  String? get uid => 'uid_1';
+
+  @override
+  Future<String?> getIdToken() async {
+    _reads += 1;
+    return _reads >= 2 ? 'token_after_warm' : null;
+  }
+
+  @override
+  Future<void> refreshUserInfo() async {}
+
+  @override
+  Future<void> sendEmailVerification() async {}
+
+  @override
+  Future<void> signInWithEmailPassword({
+    required String email,
+    required String password,
+  }) async {}
+
+  @override
+  Future<void> signOut() async {}
+
+  @override
+  Future<void> signUpWithEmailPassword({
+    required String email,
+    required String password,
+  }) async {}
 }

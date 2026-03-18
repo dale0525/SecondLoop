@@ -93,6 +93,7 @@ class _TodoDetailPageState extends State<TodoDetailPage> {
   Future<List<TodoChecklistItem>>? _checklistFuture;
   Future<List<TodoChecklistSuggestion>>? _checklistSuggestionsFuture;
   Future<List<TodoFollowupSuggestion>>? _followupSuggestionsFuture;
+  Future<TodoFollowupGenerationJob?>? _followupGenerationJobFuture;
   final _noteController = TextEditingController();
   final _checklistController = TextEditingController();
   final _noteInputFocusNode = FocusNode();
@@ -163,6 +164,7 @@ class _TodoDetailPageState extends State<TodoDetailPage> {
     _checklistFuture ??= _loadChecklistItems();
     _checklistSuggestionsFuture ??= _loadChecklistSuggestions();
     _followupSuggestionsFuture ??= _loadFollowupSuggestions();
+    _followupGenerationJobFuture ??= _loadFollowupGenerationJob();
     _attachSyncEngine();
     if (_recurrenceLoaded) return;
     _recurrenceLoaded = true;
@@ -225,6 +227,7 @@ class _TodoDetailPageState extends State<TodoDetailPage> {
       _selectedChecklistSuggestionIds.clear();
       _checklistSuggestionsFuture = _loadChecklistSuggestions();
       _followupSuggestionsFuture = _loadFollowupSuggestions();
+      _followupGenerationJobFuture = _loadFollowupGenerationJob();
       _messageFuturesById.clear();
       _attachmentsFuturesByMessageId.clear();
       _attachmentsFuturesByActivityId.clear();
