@@ -54,22 +54,15 @@ extension _TodoDetailPageStateFollowupSuggestions on _TodoDetailPageState {
     }
     final gatewayConfig =
         cloudAuthScope?.gatewayConfig ?? CloudGatewayConfig.defaultConfig;
-    if (gatewayConfig.baseUrl.trim().isNotEmpty) {
-      await bestEffortWarmCloudCapabilityAuth(cloudAuthScope?.controller);
-    }
-    final cloudIdToken = await readCloudCapabilityIdToken(
-      cloudAuthScope?.controller,
-      mode: CloudCapabilityAuthMode.interactive,
-    );
-
-    final route = await decideAskAiRoute(
+    final prepared = await prepareTodoFollowupGenerationRoute(
       backend,
       session.sessionKey,
-      cloudIdToken: cloudIdToken,
-      cloudGatewayBaseUrl: gatewayConfig.baseUrl,
+      hasManualRegenerateDueJob: true,
+      cloudAuthController: cloudAuthScope?.controller,
+      gatewayConfig: gatewayConfig,
       subscriptionStatus: subscriptionStatus,
     );
-    if (route == AskAiRouteKind.needsSetup) {
+    if (prepared.route == AskAiRouteKind.needsSetup) {
       if (!mounted) return false;
       await Navigator.of(context).push(
         MaterialPageRoute(

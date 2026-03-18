@@ -6,6 +6,9 @@ import 'package:secondloop/core/backend/app_backend.dart';
 import 'package:secondloop/core/ai/ai_routing.dart';
 import 'package:secondloop/core/ai/todo_followup_generation_capability.dart';
 import 'package:secondloop/core/cloud/cloud_auth_scope.dart';
+import 'package:secondloop/core/cloud/cloud_auth_controller.dart';
+import 'package:secondloop/core/cloud/cloud_auth_store.dart';
+import 'package:secondloop/core/cloud/firebase_identity_toolkit.dart';
 import 'package:secondloop/src/rust/db.dart';
 
 void main() {
@@ -64,6 +67,36 @@ void main() {
 
     expect(route, AskAiRouteKind.needsSetup);
   });
+
+  test('shared followup preflight reuses background auth + manual route',
+      () async {
+    final toolkit = _RefreshingIdentityToolkit();
+    final store = _InMemoryCloudAuthStore(
+      const CloudAuthStoredSession(uid: 'uid_1', refreshToken: 'refresh_1'),
+    );
+    final controller = CloudAuthControllerImpl(
+      identityToolkit: toolkit,
+      store: store,
+      nowMs: () => 1000,
+    );
+
+    final prepared = await prepareTodoFollowupGenerationRoute(
+      _FakeBackend(),
+      _sessionKey,
+      hasManualRegenerateDueJob: true,
+      cloudAuthController: controller,
+      gatewayConfig: const CloudGatewayConfig(
+        baseUrl: 'https://example.com',
+        modelName: 'cloud',
+      ),
+      subscriptionStatus: SubscriptionStatus.unknown,
+    );
+
+    expect(prepared.route, AskAiRouteKind.cloudGateway);
+    expect(prepared.idToken, 'id_token_1');
+    expect(store.loadCalls, 1);
+    expect(toolkit.refreshCalls, 1);
+  });
 }
 
 final Uint8List _sessionKey = Uint8List.fromList(List<int>.filled(32, 1));
@@ -75,4 +108,73 @@ final class _FakeBackend extends AppBackend {
   @override
   Future<List<LlmProfile>> listLlmProfiles(Uint8List key) async =>
       const <LlmProfile>[];
+}
+
+final class _InMemoryCloudAuthStore implements CloudAuthStore {
+  _InMemoryCloudAuthStore([this._session]);
+
+  CloudAuthStoredSession? _session;
+  int loadCalls = 0;
+
+  @override
+  Future<CloudAuthStoredSession?> load() async {
+    loadCalls += 1;
+    return _session;
+  }
+
+  @override
+  Future<void> save(CloudAuthStoredSession session) async {
+    _session = session;
+  }
+
+  @override
+  Future<void> clear() async {
+    _session = null;
+  }
+}
+
+final class _RefreshingIdentityToolkit implements FirebaseIdentityToolkit {
+  int refreshCalls = 0;
+
+  @override
+  Future<FirebaseAuthTokens> refreshIdToken(
+      {required String refreshToken}) async {
+    refreshCalls += 1;
+    return const FirebaseAuthTokens(
+      idToken: 'id_token_1',
+      refreshToken: 'refresh_1',
+      uid: 'uid_1',
+      expiresAtMs: 1 << 30,
+    );
+  }
+
+  @override
+  Future<FirebaseAuthTokens> signInWithPassword({
+    required String email,
+    required String password,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<FirebaseAuthTokens> signUpWithPassword({
+    required String email,
+    required String password,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<FirebaseUserInfo> lookup({required String idToken}) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<void> sendOobCode({
+    required String requestType,
+    String? idToken,
+    String? email,
+  }) {
+    throw UnimplementedError();
+  }
 }

@@ -7,8 +7,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../features/actions/settings/actions_settings_store.dart';
 import '../backend/app_backend.dart';
 import '../backend/native_backend.dart';
-import '../cloud/cloud_capability_auth.dart';
-import '../cloud/cloud_auth_controller.dart';
 import '../cloud/cloud_auth_scope.dart';
 import '../session/session_scope.dart';
 import '../subscription/subscription_scope.dart';
@@ -21,25 +19,6 @@ import 'semantic_parse_data_consent_prefs.dart';
 import 'todo_followup_generation_capability.dart';
 import 'todo_followup_generation_runner.dart';
 import 'todo_followup_suggestions_ai.dart';
-
-Future<String?> prepareTodoFollowupGenerationIdToken(
-  CloudAuthController? controller, {
-  required SubscriptionStatus subscriptionStatus,
-  required String gatewayBaseUrl,
-  bool forceWarm = false,
-}) async {
-  final normalizedGatewayBaseUrl = gatewayBaseUrl.trim();
-  final shouldWarm = normalizedGatewayBaseUrl.isNotEmpty &&
-      (subscriptionStatus == SubscriptionStatus.entitled || forceWarm);
-  if (shouldWarm) {
-    await bestEffortWarmCloudCapabilityAuth(controller);
-  }
-
-  return readCloudCapabilityIdToken(
-    controller,
-    mode: CloudCapabilityAuthMode.background,
-  );
-}
 
 final class TodoFollowupGenerationPassPlan {
   const TodoFollowupGenerationPassPlan({
@@ -311,7 +290,7 @@ class _TodoFollowupGenerationGateState extends State<TodoFollowupGenerationGate>
         didUpdateJobs = didUpdateJobs || result.didUpdateJobs;
       }
 
-      if (didMutateAny) {
+      if (didMutateAny || didUpdateJobs) {
         syncEngine?.notifyExternalChange();
       }
       _schedule(didUpdateJobs ? _kDrainInterval : _kIdleInterval);

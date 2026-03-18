@@ -5,7 +5,7 @@ import 'package:secondloop/core/cloud/cloud_auth_controller.dart';
 import 'package:secondloop/core/cloud/cloud_auth_store.dart';
 import 'package:secondloop/core/cloud/cloud_capability_auth.dart';
 import 'package:secondloop/core/ai/ai_routing.dart';
-import 'package:secondloop/core/ai/todo_followup_generation_gate.dart';
+import 'package:secondloop/core/ai/todo_followup_generation_capability.dart';
 import 'package:secondloop/core/cloud/firebase_identity_toolkit.dart';
 
 void main() {
