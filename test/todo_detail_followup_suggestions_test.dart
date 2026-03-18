@@ -249,6 +249,41 @@ void main() {
     expect(backend.enqueuedRegenerate, isFalse);
   });
 
+  testWidgets(
+      'TodoDetailPage auto failed follow-up job does not block manual regenerate',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({
+      'semantic_parse_data_consent_v1': true,
+    });
+    _setLargeDisplay(tester);
+    final backend = _Backend(
+      activeGenerationJob: const TodoFollowupGenerationJob(
+        todoId: 't1',
+        triggerKind: 'auto_create',
+        status: 'failed',
+        attempts: 1,
+        nextRetryAtMs: 1,
+        lastError: 'temporary error',
+        includeManualFollowups: false,
+        taskTypeHint: 'research',
+        createdAtMs: 0,
+        updatedAtMs: 0,
+      ),
+    );
+
+    await tester.pumpWidget(_buildSubject(backend));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 200));
+
+    await tester.tap(
+      find.byKey(const ValueKey('todo_detail_followup_generate_suggestions')),
+      warnIfMissed: false,
+    );
+    await tester.pump();
+
+    expect(backend.enqueuedRegenerate, isTrue);
+  });
+
   testWidgets('TodoDetailPage shows regenerate loading state', (tester) async {
     SharedPreferences.setMockInitialValues({
       'semantic_parse_data_consent_v1': true,

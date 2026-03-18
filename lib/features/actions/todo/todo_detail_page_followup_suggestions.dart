@@ -24,7 +24,7 @@ extension _TodoDetailPageStateFollowupSuggestions on _TodoDetailPageState {
       return false;
     }
     return switch (job.status) {
-      'pending' || 'running' || 'failed' => true,
+      'pending' || 'running' => true,
       _ => false,
     };
   }

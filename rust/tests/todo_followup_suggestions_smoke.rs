@@ -1,4 +1,5 @@
 use secondloop_rust::auth;
+use secondloop_rust::crypto;
 use secondloop_rust::crypto::KdfParams;
 use secondloop_rust::db;
 
@@ -570,4 +571,105 @@ fn regenerate_same_content_refreshes_pending_metadata() {
             r#"[{\"title\":\"Airport\",\"url\":\"https://airport.example\",\"domain\":\"airport.example\"}]"#
         ),
     );
+}
+
+#[test]
+fn duplicate_pending_followup_is_collapsed_during_regeneration() {
+    let (_temp_dir, key, conn) = setup();
+
+    db::upsert_todo(
+        &conn,
+        &key,
+        "todo_1",
+        "Research LLM models",
+        None,
+        "open",
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("upsert todo");
+
+    let first = db::upsert_generated_todo_followup_suggestions(
+        &conn,
+        &key,
+        "todo_1",
+        &[db::TodoFollowupSuggestionDraftInput {
+            content: "Same content".to_string(),
+            generation_mode: "model_knowledge".to_string(),
+            citations_json: None,
+        }],
+        "cloud",
+        Some("gen_1"),
+    )
+    .expect("insert initial suggestion");
+
+    let duplicate_id = "dup_pending";
+    let duplicate_created_at_ms = first[0].created_at_ms + 1;
+    let duplicate_updated_at_ms = first[0].updated_at_ms + 1;
+    let duplicate_blob = crypto::encrypt_bytes(
+        &key,
+        b"Same content",
+        format!("todo_followup_suggestion.content:{duplicate_id}").as_bytes(),
+    )
+    .expect("encrypt duplicate pending suggestion");
+
+    conn.execute(
+        r#"
+INSERT INTO todo_followup_suggestions(
+  id, todo_id, content, state, source, generation_mode, generation_key, citations_json, created_at_ms, updated_at_ms, dismissed_at_ms, applied_activity_id
+)
+VALUES (?1, ?2, ?3, 'pending', 'cloud', 'model_knowledge', 'gen_dup', NULL, ?4, ?5, NULL, NULL)
+"#,
+        rusqlite::params![
+            duplicate_id,
+            "todo_1",
+            duplicate_blob,
+            duplicate_created_at_ms,
+            duplicate_updated_at_ms,
+        ],
+    )
+    .expect("seed duplicate pending suggestion");
+
+    let duplicated = db::list_todo_followup_suggestions(&conn, &key, "todo_1")
+        .expect("list duplicated suggestions");
+    assert_eq!(duplicated.len(), 2);
+    assert!(duplicated.iter().all(|item| item.state == "pending"));
+
+    let refreshed = db::upsert_generated_todo_followup_suggestions(
+        &conn,
+        &key,
+        "todo_1",
+        &[db::TodoFollowupSuggestionDraftInput {
+            content: "Same content".to_string(),
+            generation_mode: "web_search".to_string(),
+            citations_json: Some(
+                r#"[{\"title\":\"Airport\",\"url\":\"https://airport.example\",\"domain\":\"airport.example\"}]"#
+                    .to_string(),
+            ),
+        }],
+        "cloud",
+        Some("gen_2"),
+    )
+    .expect("refresh pending suggestion metadata");
+    assert_eq!(refreshed.len(), 1);
+
+    let all = db::list_todo_followup_suggestions(&conn, &key, "todo_1")
+        .expect("list refreshed suggestions");
+    assert_eq!(all.len(), 2);
+
+    let pending = all
+        .iter()
+        .filter(|item| item.state == "pending")
+        .collect::<Vec<_>>();
+    assert_eq!(pending.len(), 1);
+    assert_eq!(pending[0].id, first[0].id);
+
+    let dismissed = all
+        .iter()
+        .filter(|item| item.state == "dismissed")
+        .collect::<Vec<_>>();
+    assert_eq!(dismissed.len(), 1);
+    assert_eq!(dismissed[0].id, duplicate_id);
 }

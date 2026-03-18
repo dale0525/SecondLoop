@@ -223,20 +223,43 @@ pub fn upsert_generated_todo_followup_suggestions(
 ) -> Result<Vec<TodoFollowupSuggestion>> {
     run_immediate_transaction(conn, || {
         let existing = list_todo_followup_suggestions(conn, key, todo_id)?;
-        let mut pending_by_normalized = existing
-            .iter()
-            .filter(|item| item.state == TODO_FOLLOWUP_SUGGESTION_STATE_PENDING)
-            .map(|item| {
-                (
-                    normalize_checklist_suggestion_content(&item.content),
-                    item.clone(),
-                )
-            })
-            .collect::<std::collections::HashMap<_, _>>();
-
-        let mut created = Vec::new();
         let now = now_ms();
         let device_id = get_or_create_device_id(conn)?;
+        let mut pending_candidates_by_normalized = existing
+            .iter()
+            .filter(|item| item.state == TODO_FOLLOWUP_SUGGESTION_STATE_PENDING)
+            .fold(
+                std::collections::HashMap::<String, Vec<TodoFollowupSuggestion>>::new(),
+                |mut acc, item| {
+                    let normalized = normalize_checklist_suggestion_content(&item.content);
+                    if !normalized.is_empty() {
+                        acc.entry(normalized).or_default().push(item.clone());
+                    }
+                    acc
+                },
+            );
+        let mut pending_by_normalized = std::collections::HashMap::new();
+
+        for (normalized, mut items) in pending_candidates_by_normalized.drain() {
+            let canonical = items.remove(0);
+            let duplicate_ids = items
+                .into_iter()
+                .map(|item| item.id)
+                .collect::<Vec<_>>();
+            if !duplicate_ids.is_empty() {
+                dismiss_todo_followup_suggestions_inner(
+                    conn,
+                    key,
+                    todo_id,
+                    &duplicate_ids,
+                    now,
+                    &device_id,
+                )?;
+            }
+            pending_by_normalized.insert(normalized, canonical);
+        }
+
+        let mut created = Vec::new();
 
         for draft in suggestions {
             let trimmed = draft.content.trim();
