@@ -4,7 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:secondloop/core/backend/app_backend.dart';
 import 'package:secondloop/core/ai/ai_routing.dart';
-import 'package:secondloop/core/ai/todo_followup_generation_capability.dart';
+import 'package:secondloop/core/ai/foreground_ai_route_preflight.dart';
 import 'package:secondloop/core/cloud/cloud_auth_scope.dart';
 import 'package:secondloop/core/cloud/cloud_auth_controller.dart';
 import 'package:secondloop/core/cloud/cloud_auth_store.dart';

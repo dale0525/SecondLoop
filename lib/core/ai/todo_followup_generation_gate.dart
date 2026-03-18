@@ -16,7 +16,7 @@ import '../update/update_restart_activity.dart';
 import '../../src/rust/db.dart';
 import 'ai_routing.dart';
 import 'semantic_parse_data_consent_prefs.dart';
-import 'todo_followup_generation_capability.dart';
+import 'foreground_ai_route_preflight.dart';
 import 'todo_followup_generation_runner.dart';
 import 'todo_followup_suggestions_ai.dart';
 
