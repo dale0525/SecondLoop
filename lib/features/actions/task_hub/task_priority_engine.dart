@@ -292,6 +292,10 @@ List<TaskPriorityEntry> _applyManualSignals(
 }
 
 int _compareOverallPriority(TaskPriorityEntry a, TaskPriorityEntry b) {
+  final hardGuardCompare =
+      _compareBoolDesc(a.hasHardFocusGuard, b.hasHardFocusGuard);
+  if (hardGuardCompare != 0) return hardGuardCompare;
+
   final urgencyCompare = b.effectiveUrgency.compareTo(a.effectiveUrgency);
   if (urgencyCompare != 0) return urgencyCompare;
 
@@ -309,6 +313,11 @@ int _compareOverallPriority(TaskPriorityEntry a, TaskPriorityEntry b) {
   }
 
   return b.todo.updatedAtMs.compareTo(a.todo.updatedAtMs);
+}
+
+int _compareBoolDesc(bool left, bool right) {
+  if (left == right) return 0;
+  return left ? -1 : 1;
 }
 
 int _compareFocusEntries(TaskPriorityEntry a, TaskPriorityEntry b) {

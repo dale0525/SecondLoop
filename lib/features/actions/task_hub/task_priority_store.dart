@@ -25,6 +25,8 @@ enum TaskPriorityAiAvailability {
 
 class TaskPriorityStore extends ChangeNotifier {
   static const _kAiCachePrefsKey = 'task_priority_ai_cache_v3';
+  final Map<String, _InMemoryAiAssessment> _inMemoryAiAssessments =
+      <String, _InMemoryAiAssessment>{};
 
   TaskPriorityStore.fromLoaders({
     required Future<List<Todo>> Function() loadTodos,
@@ -221,6 +223,7 @@ class TaskPriorityStore extends ChangeNotifier {
               ?.trim();
       final canUsePersistedCache =
           cacheScopeKey != null && cacheScopeKey.isNotEmpty;
+      final canUseInMemoryCache = !canUsePersistedCache;
 
       final persisted = canUsePersistedCache
           ? await _readPersistedAiAssessments(
@@ -228,9 +231,13 @@ class TaskPriorityStore extends ChangeNotifier {
               nowLocal: nowLocal,
             )
           : const <String, _PersistedAiAssessment>{};
+      final memoryCached = canUseInMemoryCache
+          ? _readInMemoryAiAssessments(nowLocal: nowLocal)
+          : const <String, _PersistedAiAssessment>{};
       final freshEntries = <String, TaskPriorityAiEntry>{};
-      final mergedPersisted =
-          Map<String, _PersistedAiAssessment>.from(persisted);
+      final mergedPersisted = Map<String, _PersistedAiAssessment>.from(
+        canUsePersistedCache ? persisted : memoryCached,
+      );
       final staleCandidates = <TaskPriorityAiCandidate>[];
       final candidateByTodoId = <String, TaskPriorityAiCandidate>{
         for (final candidate in request.candidates) candidate.todoId: candidate,
@@ -241,7 +248,7 @@ class TaskPriorityStore extends ChangeNotifier {
           candidate,
           nowLocal: nowLocal,
         );
-        final cached = persisted[candidate.todoId];
+        final cached = mergedPersisted[candidate.todoId];
         if (cached != null && cached.requestSignature == requestSignature) {
           freshEntries[candidate.todoId] = cached.entry;
         } else {
@@ -306,6 +313,11 @@ class TaskPriorityStore extends ChangeNotifier {
       if (canUsePersistedCache) {
         await _writePersistedAiAssessments(
           cacheScopeKey: cacheScopeKey,
+          entries: mergedPersisted,
+          activeTodoIds: _snapshot.activeEntries.map((entry) => entry.todo.id),
+        );
+      } else if (canUseInMemoryCache) {
+        _writeInMemoryAiAssessments(
           entries: mergedPersisted,
           activeTodoIds: _snapshot.activeEntries.map((entry) => entry.todo.id),
         );
@@ -392,6 +404,44 @@ class TaskPriorityStore extends ChangeNotifier {
     } catch (_) {
       return const <String, _PersistedAiAssessment>{};
     }
+  }
+
+  Map<String, _PersistedAiAssessment> _readInMemoryAiAssessments({
+    required DateTime nowLocal,
+  }) {
+    final entries = <String, _PersistedAiAssessment>{};
+    for (final item in _inMemoryAiAssessments.entries) {
+      if (nowLocal.difference(item.value.computedAtLocal).abs() > _aiCacheTtl) {
+        continue;
+      }
+      entries[item.key] = _PersistedAiAssessment(
+        entry: item.value.entry,
+        requestSignature: item.value.requestSignature,
+        computedAtLocal: item.value.computedAtLocal,
+      );
+    }
+    return entries;
+  }
+
+  void _writeInMemoryAiAssessments({
+    required Map<String, _PersistedAiAssessment> entries,
+    required Iterable<String> activeTodoIds,
+  }) {
+    final activeIds = activeTodoIds.map((value) => value.trim()).toSet();
+    _inMemoryAiAssessments
+      ..clear()
+      ..addEntries(
+        entries.entries.where((entry) => activeIds.contains(entry.key)).map(
+              (entry) => MapEntry(
+                entry.key,
+                _InMemoryAiAssessment(
+                  entry: entry.value.entry,
+                  requestSignature: entry.value.requestSignature,
+                  computedAtLocal: entry.value.computedAtLocal,
+                ),
+              ),
+            ),
+      );
   }
 
   Future<void> _writePersistedAiAssessments({
@@ -633,4 +683,16 @@ final class _PersistedAiAssessment {
           DateTime.fromMillisecondsSinceEpoch(computedAtMs.toInt()),
     );
   }
+}
+
+final class _InMemoryAiAssessment {
+  const _InMemoryAiAssessment({
+    required this.entry,
+    required this.requestSignature,
+    required this.computedAtLocal,
+  });
+
+  final TaskPriorityAiEntry entry;
+  final String requestSignature;
+  final DateTime computedAtLocal;
 }

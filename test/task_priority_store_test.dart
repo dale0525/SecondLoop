@@ -764,6 +764,43 @@ void main() {
     );
   });
 
+  test('empty cache scope reuses in-memory ai assessments across refreshes',
+      () async {
+    SharedPreferences.setMockInitialValues({});
+    final aiService = _CountingAiService(
+      const TaskPriorityAiBatchResult(
+        entries: <TaskPriorityAiEntry>[
+          TaskPriorityAiEntry(
+            todoId: 'focus',
+            semanticAdjustment: 18,
+            reason: 'Fresh AI result without persisted cache.',
+            confidence: TaskPriorityAiConfidence.high,
+            isImportant: true,
+            isUrgent: true,
+          ),
+        ],
+      ),
+      cacheScopeKey: '',
+    );
+    final store = TaskPriorityStore.fromLoaders(
+      nowLocal: () => DateTime(2026, 3, 13, 10, 0),
+      loadTodos: () async => <Todo>[
+        todo(id: 'focus', title: 'Fix prod bug', updatedAtMs: 10),
+      ],
+      resolveAiService: () async => aiService,
+    );
+
+    await store.refresh();
+    store.markDirty();
+    await store.refresh();
+
+    expect(aiService.calls, 1);
+    expect(
+      store.snapshot.primaryFocus?.reasonText,
+      'Fresh AI result without persisted cache.',
+    );
+  });
+
   test('changing ai cache scope triggers a fresh rerank', () async {
     SharedPreferences.setMockInitialValues({});
     final englishService = _CountingAiService(

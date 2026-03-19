@@ -142,7 +142,7 @@ void main() {
     expect(snapshot.primaryFocus?.todo.id, 'neutral');
   });
 
-  test('manual urgency can outrank a due-today task', () {
+  test('manual urgency does not outrank a due-today hard guard', () {
     final nowLocal = DateTime(2026, 3, 13, 10, 0);
     final snapshot = buildTaskPrioritySnapshot(
       <Todo>[
@@ -169,7 +169,7 @@ void main() {
       ),
     );
 
-    expect(snapshot.primaryFocus?.todo.id, 'backlog');
+    expect(snapshot.primaryFocus?.todo.id, 'due-today');
   });
 
   test('negative urgency score sinks task below neutral peer', () {
