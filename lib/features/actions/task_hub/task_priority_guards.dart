@@ -3,16 +3,14 @@ import '../../../src/rust/db.dart';
 bool hasTaskPriorityHardGuard({
   required bool isOverdue,
   required bool isDueToday,
-  required bool isInProgress,
 }) {
-  return isOverdue || isDueToday || isInProgress;
+  return isOverdue || isDueToday;
 }
 
 bool hasTaskPriorityHardGuardForTodo(
   Todo todo, {
   required DateTime nowLocal,
 }) {
-  if (todo.status == 'in_progress') return true;
   final dueAtMs = todo.dueAtMs;
   if (dueAtMs == null) return false;
   final dueLocal =

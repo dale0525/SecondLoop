@@ -26,13 +26,14 @@ void main() {
     );
   }
 
-  test('shared helper marks in-progress todo as hard focus guarded', () {
+  test('shared helper does not hard-guard in-progress todo by status alone',
+      () {
     final guarded = hasTaskPriorityHardGuardForTodo(
       todo(id: 'a', title: 'Ship it', updatedAtMs: 10, status: 'in_progress'),
       nowLocal: DateTime(2026, 3, 13, 10, 0),
     );
 
-    expect(guarded, isTrue);
+    expect(guarded, isFalse);
   });
 
   test('entry hard focus getter delegates to shared helper semantics', () {
@@ -51,7 +52,6 @@ void main() {
       hasTaskPriorityHardGuard(
         isOverdue: entry.isOverdue,
         isDueToday: entry.isDueToday,
-        isInProgress: entry.isInProgress,
       ),
       isTrue,
     );

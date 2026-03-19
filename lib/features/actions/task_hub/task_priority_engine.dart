@@ -73,11 +73,6 @@ TaskPrioritySnapshot buildTaskPrioritySnapshot(
       ruleScore = 260;
       suggestedAction = TaskPrioritySuggestionKind.doNow;
       reasons.add(TaskPriorityReasonKind.overdue);
-    } else if (isInProgress) {
-      band = TaskPriorityBand.focus;
-      ruleScore = 240;
-      suggestedAction = TaskPrioritySuggestionKind.doNow;
-      reasons.add(TaskPriorityReasonKind.inProgress);
     } else if (isDueToday) {
       band = TaskPriorityBand.focus;
       ruleScore = 220;
@@ -105,6 +100,10 @@ TaskPrioritySnapshot buildTaskPrioritySnapshot(
             ? TaskPriorityReasonKind.snoozed
             : TaskPriorityReasonKind.unscheduled,
       );
+    }
+
+    if (isInProgress && todo.status != 'done') {
+      reasons.add(TaskPriorityReasonKind.inProgress);
     }
 
     rawEntries.add(

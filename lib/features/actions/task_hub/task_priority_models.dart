@@ -106,7 +106,6 @@ class TaskPriorityEntry {
   bool get hasHardFocusGuard => hasTaskPriorityHardGuard(
         isOverdue: isOverdue,
         isDueToday: isDueToday,
-        isInProgress: isInProgress,
       );
 
   TaskPriorityDisplayBucket get displayBucket {

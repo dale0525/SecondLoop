@@ -538,6 +538,23 @@ void main() {
     expect(backend.current('t8').status, 'in_progress');
   });
 
+  test('start action uses status transition instead of full upsert', () async {
+    SharedPreferences.setMockInitialValues({});
+
+    final initial = todo(id: 't8b', title: 'Task 8b', updatedAtMs: 10);
+    final backend = _QuickActionBackend(initialTodos: [initial]);
+    final controller = TaskHubQuickActionsController(
+      backend: backend,
+      sessionKey: Uint8List(32),
+    );
+
+    final ticket = await controller.apply(initial, TaskHubQuickAction.start);
+
+    expect(ticket, isNotNull);
+    expect(backend.setTodoStatusCalls, 1);
+    expect(backend.upsertTodoCalls, 0);
+  });
+
   test('tomorrow action keeps in-progress status while moving due date',
       () async {
     SharedPreferences.setMockInitialValues({});
@@ -630,6 +647,7 @@ final class _QuickActionBackend extends AppBackend {
   final Map<String, List<TodoChecklistItem>> _checklistItemsByTodoId;
   var upsertTodoCalls = 0;
   var deleteTodoCalls = 0;
+  var setTodoStatusCalls = 0;
 
   Todo current(String id) => _todosById[id]!;
   List<Todo> all() => _todosById.values.toList(growable: false);
@@ -671,6 +689,7 @@ final class _QuickActionBackend extends AppBackend {
     required String newStatus,
     String? sourceMessageId,
   }) async {
+    setTodoStatusCalls += 1;
     final existing = _todosById[todoId]!;
     final updated = Todo(
       id: existing.id,

@@ -108,7 +108,7 @@ class TaskHubQuickActionsController {
           offsetDays: 1,
         );
       case TaskHubQuickAction.start:
-        return _applyStart(todo, nowUtcMs: nowUtcMs);
+        return _applyStart(todo);
       case TaskHubQuickAction.increaseUrgency:
         return _applySignalChange(
           todo,
@@ -184,20 +184,11 @@ class TaskHubQuickActionsController {
     );
   }
 
-  Future<TaskHubUndoTicket> _applyStart(
-    Todo todo, {
-    required int nowUtcMs,
-  }) async {
-    final updated = await backend.upsertTodo(
+  Future<TaskHubUndoTicket> _applyStart(Todo todo) async {
+    final updated = await backend.setTodoStatus(
       sessionKey,
-      id: todo.id,
-      title: todo.title,
-      dueAtMs: todo.dueAtMs,
-      status: 'in_progress',
-      sourceEntryId: todo.sourceEntryId,
-      reviewStage: null,
-      nextReviewAtMs: null,
-      lastReviewAtMs: nowUtcMs,
+      todoId: todo.id,
+      newStatus: 'in_progress',
     );
     return TaskHubUndoTicket(
       todo: todo,

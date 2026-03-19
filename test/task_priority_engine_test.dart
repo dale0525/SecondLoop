@@ -117,6 +117,31 @@ void main() {
     expect(snapshot.primaryFocus?.todo.id, 'review');
   });
 
+  test('in-progress status alone does not hard-guard priority', () {
+    final nowLocal = DateTime(2026, 3, 13, 10, 0);
+    final snapshot = buildTaskPrioritySnapshot(
+      <Todo>[
+        todo(
+          id: 'status-only',
+          title: 'Keep moving',
+          updatedAtMs: 10,
+          status: 'in_progress',
+        ),
+        todo(
+          id: 'neutral',
+          title: 'Neutral task',
+          updatedAtMs: 20,
+        ),
+      ],
+      nowLocal: nowLocal,
+    );
+
+    final inProgressEntry = snapshot.allEntries
+        .firstWhere((entry) => entry.todo.id == 'status-only');
+    expect(inProgressEntry.hasHardFocusGuard, isFalse);
+    expect(snapshot.primaryFocus?.todo.id, 'neutral');
+  });
+
   test('manual urgency can outrank a due-today task', () {
     final nowLocal = DateTime(2026, 3, 13, 10, 0);
     final snapshot = buildTaskPrioritySnapshot(

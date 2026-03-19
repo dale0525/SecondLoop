@@ -63,14 +63,15 @@ void main() {
       (tester) async {
     SharedPreferences.setMockInitialValues({});
     final now = DateTime.now();
+    final todayLater = now.add(const Duration(hours: 2));
     final tomorrowNoon = DateTime(now.year, now.month, now.day + 1, 12);
     final backend = _TaskHubBackend(
       todos: <Todo>[
-        const Todo(
+        Todo(
           id: 'focus',
           title: 'Fix prod issue',
-          dueAtMs: null,
-          status: 'in_progress',
+          dueAtMs: todayLater.toUtc().millisecondsSinceEpoch,
+          status: 'open',
           sourceEntryId: null,
           createdAtMs: 0,
           updatedAtMs: 10,
@@ -175,7 +176,7 @@ void main() {
 
     await tester.tap(
       find.byKey(
-        const ValueKey('task_hub_page_quick_focus_start'),
+        const ValueKey('task_hub_page_quick_focus_tomorrow'),
       ),
     );
     await _pumpUntilFound(tester, find.textContaining('Save failed'));
