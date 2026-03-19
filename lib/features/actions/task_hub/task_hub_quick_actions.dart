@@ -40,14 +40,18 @@ class TaskHubUndoTicket {
 }
 
 class TaskHubQuickActionsController {
-  const TaskHubQuickActionsController({
+  TaskHubQuickActionsController({
     required this.backend,
     required this.sessionKey,
-    this.signalStore = const TaskPrioritySignalStore(),
+    TaskPrioritySignalStore? signalStore,
     this.confirmDoneWithIncompleteChecklist,
     this.checklistProgressByTodoId = const <String, TodoChecklistProgress>{},
     DateTime Function()? nowLocal,
-  }) : _nowLocalOverride = nowLocal;
+  })  : signalStore = signalStore ??
+            TaskPrioritySignalStore(
+              scopeKey: buildTaskPrioritySignalScopeKey(sessionKey),
+            ),
+        _nowLocalOverride = nowLocal;
 
   final AppBackend backend;
   final Uint8List sessionKey;

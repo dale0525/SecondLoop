@@ -203,7 +203,7 @@ void main() {
   });
 
   test(
-      'refresh keeps cached assessments for active tasks outside candidate window',
+      'refresh reranks a task re-entering the candidate window after leaving it',
       () async {
     SharedPreferences.setMockInitialValues({});
     var includeExtraTopTask = false;
@@ -251,11 +251,11 @@ void main() {
     store.markDirty();
     await store.refresh();
 
-    expect(service.requestSizes, <int>[32, 1]);
+    expect(service.requestSizes, <int>[32, 1, 1]);
+    expect(service.requestTodoIds.last, <String>['kept']);
   });
 
-  test(
-      'cached assessment outside the current candidate window still affects focus',
+  test('window-excluded cached assessment does not affect focus after reload',
       () async {
     SharedPreferences.setMockInitialValues({});
     var includeExtraTopTask = false;
@@ -303,7 +303,11 @@ void main() {
     await reloadedStore.refresh();
 
     expect(service.requestTodoIds.last, <String>['extra-top']);
-    expect(reloadedStore.snapshot.primaryFocus?.todo.id, 'kept');
+    final keptEntry = reloadedStore.snapshot.activeEntries.firstWhere(
+      (entry) => entry.todo.id == 'kept',
+    );
+    expect(keptEntry.reasonText, isNull);
+    expect(keptEntry.semanticScore, 0);
   });
 }
 

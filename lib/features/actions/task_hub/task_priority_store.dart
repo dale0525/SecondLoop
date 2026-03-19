@@ -55,7 +55,7 @@ class TaskPriorityStore extends ChangeNotifier {
     Future<String?> Function()? resolveAiCacheScopeKey,
     Future<bool> Function()? isAiEnhancementEnabled,
     TaskPriorityFeedbackStore feedbackStore = const TaskPriorityFeedbackStore(),
-    TaskPrioritySignalStore signalStore = const TaskPrioritySignalStore(),
+    TaskPrioritySignalStore? signalStore,
   }) {
     return TaskPriorityStore.fromLoaders(
       loadTodos: () => _loadAndNormalizeTodos(
@@ -71,7 +71,10 @@ class TaskPriorityStore extends ChangeNotifier {
       resolveAiCacheScopeKey: resolveAiCacheScopeKey,
       isAiEnhancementEnabled: isAiEnhancementEnabled,
       feedbackStore: feedbackStore,
-      signalStore: signalStore,
+      signalStore: signalStore ??
+          TaskPrioritySignalStore(
+            scopeKey: buildTaskPrioritySignalScopeKey(sessionKey),
+          ),
     );
   }
 
@@ -229,6 +232,9 @@ class TaskPriorityStore extends ChangeNotifier {
       final mergedPersisted =
           Map<String, _PersistedAiAssessment>.from(persisted);
       final staleCandidates = <TaskPriorityAiCandidate>[];
+      final candidateByTodoId = <String, TaskPriorityAiCandidate>{
+        for (final candidate in request.candidates) candidate.todoId: candidate,
+      };
 
       for (final candidate in request.candidates) {
         final requestSignature = _buildCandidateRequestSignature(
@@ -242,6 +248,28 @@ class TaskPriorityStore extends ChangeNotifier {
           mergedPersisted.remove(candidate.todoId);
           staleCandidates.add(candidate);
         }
+      }
+
+      final stalePersistedTodoIds = <String>{};
+      for (final activeEntry in _snapshot.activeEntries) {
+        final cached = mergedPersisted[activeEntry.todo.id];
+        if (cached == null) continue;
+        final candidate = candidateByTodoId[activeEntry.todo.id];
+        if (candidate == null) {
+          stalePersistedTodoIds.add(activeEntry.todo.id);
+          continue;
+        }
+        final requestSignature = _buildCandidateRequestSignature(
+          candidate,
+          nowLocal: nowLocal,
+        );
+        if (cached.requestSignature != requestSignature) {
+          stalePersistedTodoIds.add(activeEntry.todo.id);
+        }
+      }
+      for (final todoId in stalePersistedTodoIds) {
+        mergedPersisted.remove(todoId);
+        freshEntries.remove(todoId);
       }
 
       if (aiService != null && staleCandidates.isNotEmpty) {
@@ -483,6 +511,8 @@ class TaskPriorityStore extends ChangeNotifier {
           entry.urgencyScore,
           entry.importanceScore,
           entry.dueDerivedUrgencyScore,
+          entry.semanticScore,
+          entry.confidence.name,
         ]),
     };
   }

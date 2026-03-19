@@ -154,10 +154,19 @@ class TaskPriorityManualSignalState {
 }
 
 class TaskPrioritySignalStore {
-  const TaskPrioritySignalStore();
+  const TaskPrioritySignalStore({this.scopeKey});
 
   static const _prefsKey = 'task_priority_manual_signals_v1';
   static Future<void>? _pendingMutation;
+  final String? scopeKey;
+
+  String get _scopedPrefsKey {
+    final normalizedScopeKey = scopeKey?.trim();
+    if (normalizedScopeKey == null || normalizedScopeKey.isEmpty) {
+      return _prefsKey;
+    }
+    return '$_prefsKey:${base64UrlEncode(utf8.encode(normalizedScopeKey))}';
+  }
 
   @visibleForTesting
   static void resetMutationQueueForTest() {
@@ -179,7 +188,7 @@ class TaskPrioritySignalStore {
 
   Future<TaskPriorityManualSignalState> readManualState() async {
     final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getString(_prefsKey);
+    final raw = prefs.getString(_scopedPrefsKey);
     if (raw == null || raw.trim().isEmpty) {
       return const TaskPriorityManualSignalState();
     }
@@ -332,6 +341,10 @@ class TaskPrioritySignalStore {
 
   Future<void> _write(TaskPriorityManualSignalState state) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_prefsKey, jsonEncode(state.toJson()));
+    await prefs.setString(_scopedPrefsKey, jsonEncode(state.toJson()));
   }
+}
+
+String buildTaskPrioritySignalScopeKey(List<int> sessionKey) {
+  return base64UrlEncode(sessionKey);
 }

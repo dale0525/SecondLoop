@@ -38,7 +38,7 @@ class _TaskHubPageState extends State<TaskHubPage> {
   TaskPriorityStore? _store;
   final TaskPriorityFeedbackStore _feedbackStore =
       const TaskPriorityFeedbackStore();
-  final TaskPrioritySignalStore _signalStore = const TaskPrioritySignalStore();
+  TaskPrioritySignalStore? _signalStore;
   TaskHubUndoTicket? _undoTicket;
   Timer? _quickActionSnackAutoDismissTimer;
   final GlobalKey<ScaffoldMessengerState> _scaffoldMessengerKey =
@@ -64,6 +64,10 @@ class _TaskHubPageState extends State<TaskHubPage> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+    _signalStore ??= TaskPrioritySignalStore(
+      scopeKey:
+          buildTaskPrioritySignalScopeKey(SessionScope.of(context).sessionKey),
+    );
     _store ??= TaskPriorityStore(
       backend: AppBackendScope.of(context),
       sessionKey: Uint8List.fromList(SessionScope.of(context).sessionKey),
@@ -72,7 +76,7 @@ class _TaskHubPageState extends State<TaskHubPage> {
       resolveAiCacheScopeKey: _resolveAiCacheScopeKey,
       isAiEnhancementEnabled: TaskPriorityAiEnhancementPrefs.read,
       feedbackStore: _feedbackStore,
-      signalStore: _signalStore,
+      signalStore: _signalStore!,
     );
     unawaited(_store!.refresh());
   }
@@ -194,7 +198,7 @@ class _TaskHubPageState extends State<TaskHubPage> {
     final controller = TaskHubQuickActionsController(
       backend: backend,
       sessionKey: sessionKey,
-      signalStore: _signalStore,
+      signalStore: _signalStore!,
       confirmDoneWithIncompleteChecklist: _confirmDoneWithIncompleteChecklist,
       checklistProgressByTodoId: _store?.checklistProgressByTodoId ??
           const <String, TodoChecklistProgress>{},

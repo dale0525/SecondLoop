@@ -704,6 +704,32 @@ void main() {
     expect(store.snapshot.primaryFocus?.todo.id, 'sticky');
   });
 
+  test('sticky focus yields when semantic priority changes on another task',
+      () async {
+    SharedPreferences.setMockInitialValues({});
+
+    var changedTitle = 'Task B';
+    final service = _SemanticStickyInvalidationAiService();
+    final store = TaskPriorityStore.fromLoaders(
+      nowLocal: () => DateTime(2026, 3, 13, 10, 0),
+      loadTodos: () async => <Todo>[
+        todo(id: 'sticky', title: 'Roadmap', updatedAtMs: 100),
+        todo(id: 'other', title: changedTitle, updatedAtMs: 10),
+      ],
+      resolveAiService: () async => service,
+    );
+
+    await store.refresh();
+    expect(store.snapshot.primaryFocus?.todo.id, 'sticky');
+
+    changedTitle = 'Task B updated';
+    store.markDirty();
+    await store.refresh();
+
+    expect(service.calls, 2);
+    expect(store.snapshot.primaryFocus?.todo.id, 'other');
+  });
+
   test('ai rerank still runs when cache scope key is empty', () async {
     SharedPreferences.setMockInitialValues({});
     final aiService = _CountingAiService(
@@ -849,6 +875,36 @@ final class _StickyAwareAiService implements TaskPriorityAiService {
                   : 'Refreshed candidate context.',
               confidence: TaskPriorityAiConfidence.medium,
               isImportant: candidate.todoId == 'sticky',
+              isUrgent: false,
+            ),
+          )
+          .toList(growable: false),
+    );
+  }
+}
+
+final class _SemanticStickyInvalidationAiService
+    implements TaskPriorityAiService {
+  @override
+  String get cacheScopeKey => 'semantic-sticky';
+
+  int calls = 0;
+
+  @override
+  Future<TaskPriorityAiBatchResult> rerank(
+      TaskPriorityAiRequest request) async {
+    calls += 1;
+    return TaskPriorityAiBatchResult(
+      entries: request.candidates
+          .map(
+            (candidate) => TaskPriorityAiEntry(
+              todoId: candidate.todoId,
+              semanticAdjustment: candidate.title.contains('updated') ? 40 : 0,
+              reason: candidate.title.contains('updated')
+                  ? 'This just became more important.'
+                  : 'Keep this visible.',
+              confidence: TaskPriorityAiConfidence.medium,
+              isImportant: false,
               isUrgent: false,
             ),
           )

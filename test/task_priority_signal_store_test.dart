@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:secondloop/features/actions/task_hub/task_priority_signal_store.dart';
 
@@ -83,6 +84,26 @@ void main() {
     expect(updated?.preferredStatus, isNull);
     expect(updated?.importanceScore, 1);
     expect(updated?.urgencyScore, 1);
+  });
+
+  test('scoped stores isolate signals for identical todo ids', () async {
+    SharedPreferences.setMockInitialValues({});
+    const leftStore = TaskPrioritySignalStore(scopeKey: 'left');
+    const rightStore = TaskPrioritySignalStore(scopeKey: 'right');
+
+    await leftStore.setForTodo(
+      'todo:shared',
+      const TaskPriorityManualSignal(importanceScore: 2),
+    );
+    await rightStore.setForTodo(
+      'todo:shared',
+      const TaskPriorityManualSignal(urgencyScore: 3),
+    );
+
+    expect((await leftStore.readForTodo('todo:shared'))?.importanceScore, 2);
+    expect((await leftStore.readForTodo('todo:shared'))?.urgencyScore, 0);
+    expect((await rightStore.readForTodo('todo:shared'))?.importanceScore, 0);
+    expect((await rightStore.readForTodo('todo:shared'))?.urgencyScore, 3);
   });
 }
 
