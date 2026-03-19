@@ -5,6 +5,8 @@ pub const TODO_FOLLOWUP_GENERATION_JOB_STATUS_SUCCEEDED: &str = "succeeded";
 pub const TODO_FOLLOWUP_GENERATION_JOB_STATUS_SKIPPED: &str = "skipped";
 pub const TODO_FOLLOWUP_GENERATION_JOB_STATUS_CANCELED: &str = "canceled";
 pub const TODO_FOLLOWUP_GENERATION_RUNNING_LEASE_MS: i64 = 2 * 60 * 1000;
+const TODO_FOLLOWUP_TRIGGER_KIND_AUTO_CREATE: &str = "auto_create";
+const TODO_FOLLOWUP_TRIGGER_KIND_MANUAL_REGENERATE: &str = "manual_regenerate";
 
 pub fn enqueue_todo_followup_generation_job(
     conn: &Connection,
@@ -18,7 +20,17 @@ pub fn enqueue_todo_followup_generation_job(
         return Err(anyhow!("todo_id is required"));
     }
 
-    let include_manual_followups = if trigger_kind.trim() == "manual_regenerate" {
+    let trigger_kind = trigger_kind.trim();
+    if trigger_kind.is_empty() {
+        return Err(anyhow!("trigger_kind is required"));
+    }
+    if trigger_kind != TODO_FOLLOWUP_TRIGGER_KIND_AUTO_CREATE
+        && trigger_kind != TODO_FOLLOWUP_TRIGGER_KIND_MANUAL_REGENERATE
+    {
+        return Err(anyhow!("invalid trigger_kind: {trigger_kind}"));
+    }
+
+    let include_manual_followups = if trigger_kind == TODO_FOLLOWUP_TRIGGER_KIND_MANUAL_REGENERATE {
         1i64
     } else {
         0i64
@@ -139,7 +151,7 @@ pub fn list_due_todo_followup_generation_jobs(
     now_ms: i64,
     limit: i64,
 ) -> Result<Vec<TodoFollowupGenerationJob>> {
-    let limit = limit.clamp(1, 500);
+    let limit = limit.max(1);
     let running_lease_cutoff_ms = now_ms - TODO_FOLLOWUP_GENERATION_RUNNING_LEASE_MS;
     let mut stmt = conn.prepare(
         r#"
@@ -155,7 +167,7 @@ WHERE (
       )
 ORDER BY
   CASE WHEN trigger_kind = 'manual_regenerate' THEN 0 ELSE 1 END ASC,
-  CASE WHEN trigger_kind = 'manual_regenerate' THEN updated_at_ms END DESC,
+  CASE WHEN trigger_kind = 'manual_regenerate' THEN created_at_ms END ASC,
   CASE WHEN trigger_kind != 'manual_regenerate' THEN updated_at_ms END ASC,
   todo_id ASC
 LIMIT ?3

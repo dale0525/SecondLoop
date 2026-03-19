@@ -101,7 +101,6 @@ Future<List<TodoFollowupGenerationJob>> loadTodoFollowupGenerationPreviewJobs(
   TodoFollowupGenerationStore store, {
   required int nowMs,
   required int batchLimit,
-  int expandedLimit = 500,
 }) async {
   final initialJobs = await store.listDueJobs(nowMs: nowMs, limit: batchLimit);
   if (!shouldRefetchTodoFollowupGenerationPreviewJobs(
@@ -111,10 +110,29 @@ Future<List<TodoFollowupGenerationJob>> loadTodoFollowupGenerationPreviewJobs(
     return initialJobs;
   }
 
-  final expandedJobs = await store.listDueJobs(
-    nowMs: nowMs,
-    limit: expandedLimit,
-  );
+  var expandedJobs = initialJobs;
+  var requestedLimit = batchLimit * 2;
+  while (true) {
+    final nextJobs = await store.listDueJobs(
+      nowMs: nowMs,
+      limit: requestedLimit,
+    );
+    if (nextJobs.length <= expandedJobs.length) {
+      break;
+    }
+    expandedJobs = nextJobs;
+    if (!shouldRefetchTodoFollowupGenerationPreviewJobs(
+      expandedJobs,
+      batchLimit: batchLimit,
+    )) {
+      break;
+    }
+    if (expandedJobs.length < requestedLimit) {
+      break;
+    }
+    requestedLimit *= 2;
+  }
+
   return selectTodoFollowupGenerationPreviewJobs(
     expandedJobs,
     batchLimit: batchLimit,
@@ -180,7 +198,6 @@ class _TodoFollowupGenerationGateState extends State<TodoFollowupGenerationGate>
   static const _kFailureInterval = Duration(seconds: 10);
   static const _kHardTimeout = Duration(seconds: 45);
   static const _kBatchLimit = 5;
-  static const _kExpandedBatchLimit = 500;
 
   Timer? _timer;
   DateTime? _nextRunAt;
@@ -327,7 +344,6 @@ class _TodoFollowupGenerationGateState extends State<TodoFollowupGenerationGate>
         backendStore,
         nowMs: DateTime.now().millisecondsSinceEpoch,
         batchLimit: _kBatchLimit,
-        expandedLimit: _kExpandedBatchLimit,
       );
 
       final prefs = await SharedPreferences.getInstance();

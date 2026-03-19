@@ -291,6 +291,65 @@ fn manual_regenerate_jobs_are_prioritized_ahead_of_auto_jobs() {
 }
 
 #[test]
+fn manual_regenerate_jobs_keep_fifo_order_within_manual_queue() {
+    let (_temp_dir, key, conn) = setup();
+
+    for (todo_id, title) in [
+        ("todo_manual_old", "比较 Cursor、Windsurf 和 Copilot 的能力"),
+        ("todo_manual_new", "调研一下当前主流的 llm 模型"),
+    ] {
+        db::upsert_todo(
+            &conn, &key, todo_id, title, None, "open", None, None, None, None,
+        )
+        .expect("upsert todo");
+    }
+
+    db::enqueue_todo_followup_generation_job(
+        &conn,
+        "todo_manual_old",
+        "manual_regenerate",
+        None,
+        100,
+    )
+    .expect("enqueue older manual job");
+    db::enqueue_todo_followup_generation_job(
+        &conn,
+        "todo_manual_new",
+        "manual_regenerate",
+        None,
+        200,
+    )
+    .expect("enqueue newer manual job");
+
+    let due = db::list_due_todo_followup_generation_jobs(&conn, 200, 1).expect("list due jobs");
+    assert_eq!(due.len(), 1);
+    assert_eq!(due[0].todo_id, "todo_manual_old");
+}
+
+#[test]
+fn enqueue_followup_job_rejects_invalid_trigger_kind() {
+    let (_temp_dir, key, conn) = setup();
+
+    db::upsert_todo(
+        &conn,
+        &key,
+        "todo_1",
+        "Research LLM models",
+        None,
+        "open",
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("upsert todo");
+
+    let err = db::enqueue_todo_followup_generation_job(&conn, "todo_1", "bogus", None, 100)
+        .expect_err("invalid trigger kind should fail");
+    assert!(err.to_string().contains("invalid trigger_kind"));
+}
+
+#[test]
 fn reenqueue_without_new_hint_clears_previous_task_type_hint() {
     let (_temp_dir, key, conn) = setup();
 
