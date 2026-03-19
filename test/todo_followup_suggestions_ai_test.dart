@@ -173,9 +173,47 @@ void main() {
       throwsA(isA<StateError>()),
     );
   });
+
+  test('followup request rejects responses that change requested mode',
+      () async {
+    final draft = await requestTodoFollowupSuggestion(
+      backend: _PromptBackend(
+        response:
+            '{"content":"Found online results.","mode":"web_search","citations":[{"title":"Example","url":"https://example.com","domain":"example.com"}]}',
+      ),
+      sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+      route: AskAiRouteKind.byok,
+      gatewayBaseUrl: '',
+      idToken: '',
+      modelName: 'local',
+      taskTitle: '调研一下当前主流的 llm 模型',
+      taskContext: '已有笔记：关注价格、上下文、多模态。',
+      localeTag: 'en-US',
+      generationMode: TodoFollowupGenerationMode.modelKnowledge,
+      manualFollowups: const <String>[],
+    );
+
+    expect(draft, isNull);
+  });
 }
 
 final class _UnusedBackend extends AppBackend {
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+final class _PromptBackend extends AppBackend {
+  _PromptBackend({required this.response});
+
+  final String response;
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+
+  @override
+  Future<String> taskPriorityRerankAi(
+    Uint8List key, {
+    required String prompt,
+  }) async =>
+      response;
 }

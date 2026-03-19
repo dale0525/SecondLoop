@@ -187,6 +187,50 @@ ON CONFLICT(id) DO UPDATE SET
     Ok(todo)
 }
 
+#[allow(clippy::too_many_arguments)]
+pub fn upsert_todo_with_auto_followup_job(
+    conn: &Connection,
+    key: &[u8; 32],
+    id: &str,
+    title: &str,
+    due_at_ms: Option<i64>,
+    status: &str,
+    source_entry_id: Option<&str>,
+    review_stage: Option<i64>,
+    next_review_at_ms: Option<i64>,
+    last_review_at_ms: Option<i64>,
+    task_type_hint: Option<&str>,
+    now_ms: i64,
+) -> Result<Todo> {
+    run_immediate_transaction(conn, || {
+        let todo = upsert_todo(
+            conn,
+            key,
+            id,
+            title,
+            due_at_ms,
+            status,
+            source_entry_id,
+            review_stage,
+            next_review_at_ms,
+            last_review_at_ms,
+        )?;
+        if todo.created_at_ms == todo.updated_at_ms {
+            let normalized_task_type_hint = task_type_hint
+                .map(str::trim)
+                .filter(|value| !value.is_empty());
+            enqueue_todo_followup_generation_job(
+                conn,
+                id,
+                "auto_create",
+                normalized_task_type_hint,
+                now_ms,
+            )?;
+        }
+        Ok(todo)
+    })
+}
+
 pub fn list_todos(conn: &Connection, key: &[u8; 32]) -> Result<Vec<Todo>> {
     let mut stmt = conn.prepare(
         r#"

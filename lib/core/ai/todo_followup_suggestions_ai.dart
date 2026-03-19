@@ -93,10 +93,17 @@ Future<TodoFollowupSuggestionDraft?> requestTodoFollowupSuggestion({
           .timeout(timeout)
       : await backend.runAiPrompt(sessionKey, prompt: prompt).timeout(timeout);
 
-  return parseTodoFollowupSuggestionJson(
+  final parsed = parseTodoFollowupSuggestionJson(
     response,
     localeTag: localeTag,
   );
+  if (parsed == null) {
+    return null;
+  }
+  if (parsed.mode != generationMode) {
+    return null;
+  }
+  return parsed;
 }
 
 bool _isZhLocaleTag(String localeTag) {

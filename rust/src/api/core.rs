@@ -630,6 +630,40 @@ pub fn db_upsert_generated_todo_followup_suggestions(
 }
 
 #[flutter_rust_bridge::frb]
+#[allow(clippy::too_many_arguments)]
+pub fn db_upsert_todo_with_auto_followup_job(
+    app_dir: String,
+    key: Vec<u8>,
+    id: String,
+    title: String,
+    due_at_ms: Option<i64>,
+    status: String,
+    source_entry_id: Option<String>,
+    review_stage: Option<i64>,
+    next_review_at_ms: Option<i64>,
+    last_review_at_ms: Option<i64>,
+    task_type_hint: Option<String>,
+    now_ms: i64,
+) -> Result<db::Todo> {
+    let key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    db::upsert_todo_with_auto_followup_job(
+        &conn,
+        &key,
+        &id,
+        &title,
+        due_at_ms,
+        &status,
+        source_entry_id.as_deref(),
+        review_stage,
+        next_review_at_ms,
+        last_review_at_ms,
+        task_type_hint.as_deref(),
+        now_ms,
+    )
+}
+
+#[flutter_rust_bridge::frb]
 pub fn db_apply_todo_followup_suggestions(
     app_dir: String,
     key: Vec<u8>,

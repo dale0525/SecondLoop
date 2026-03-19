@@ -192,4 +192,66 @@ void main() {
     expect(todo.id, 'todo_semantic');
     expect(enqueueTaskTypeHints, const <String?>['research']);
   });
+
+  test('NativeAppBackend uses atomic create+enqueue path for new todos',
+      () async {
+    var atomicCallCount = 0;
+    var enqueueCallCount = 0;
+
+    final backend = NativeAppBackend(
+      appDirProvider: () async => '/tmp/secondloop_test',
+      rustLibInit: () async {},
+      dbUpsertTodoWithAutoFollowupJob: ({
+        required String appDir,
+        required List<int> key,
+        required String id,
+        required String title,
+        int? dueAtMs,
+        required String status,
+        String? sourceEntryId,
+        int? reviewStage,
+        int? nextReviewAtMs,
+        int? lastReviewAtMs,
+        String? taskTypeHint,
+        required int nowMs,
+      }) async {
+        atomicCallCount += 1;
+        return Todo(
+          id: id,
+          title: title,
+          dueAtMs: dueAtMs,
+          status: status,
+          sourceEntryId: sourceEntryId,
+          createdAtMs: 1,
+          updatedAtMs: 1,
+          reviewStage: reviewStage,
+          nextReviewAtMs: nextReviewAtMs,
+          lastReviewAtMs: lastReviewAtMs,
+        );
+      },
+      dbEnqueueTodoFollowupGenerationJob: ({
+        required String appDir,
+        required List<int> key,
+        required String todoId,
+        required String triggerKind,
+        String? taskTypeHint,
+        required int nowMs,
+      }) async {
+        enqueueCallCount += 1;
+      },
+    );
+
+    final key = Uint8List.fromList(List<int>.filled(32, 7));
+    final todo = await backend.upsertTodoFromSemanticCreate(
+      key,
+      id: 'todo_atomic',
+      title: '调研一下当前主流的 llm 模型',
+      status: 'open',
+      followupTaskTypeHint: 'research',
+    );
+
+    expect(todo.id, 'todo_atomic');
+    expect(atomicCallCount, 1);
+    expect(enqueueCallCount, 0);
+  });
 }

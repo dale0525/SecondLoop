@@ -24,6 +24,21 @@ typedef DbUpsertTodoFn = Future<Todo> Function({
   PlatformInt64? lastReviewAtMs,
 });
 
+typedef DbUpsertTodoWithAutoFollowupJobFn = Future<Todo> Function({
+  required String appDir,
+  required List<int> key,
+  required String id,
+  required String title,
+  PlatformInt64? dueAtMs,
+  required String status,
+  String? sourceEntryId,
+  PlatformInt64? reviewStage,
+  PlatformInt64? nextReviewAtMs,
+  PlatformInt64? lastReviewAtMs,
+  String? taskTypeHint,
+  required PlatformInt64 nowMs,
+});
+
 typedef DbListTodoFollowupSuggestionsFn = Future<List<TodoFollowupSuggestion>>
     Function({
   required String appDir,
@@ -122,3 +137,84 @@ typedef DbMarkTodoFollowupGenerationJobCanceledFn = Future<void> Function({
   required String todoId,
   required PlatformInt64 nowMs,
 });
+
+DbUpsertTodoWithAutoFollowupJobFn _resolveDbUpsertTodoWithAutoFollowupJob({
+  DbUpsertTodoWithAutoFollowupJobFn? dbUpsertTodoWithAutoFollowupJob,
+  DbUpsertTodoFn? dbUpsertTodo,
+  DbEnqueueTodoFollowupGenerationJobFn? dbEnqueueTodoFollowupGenerationJob,
+}) {
+  if (dbUpsertTodoWithAutoFollowupJob != null) {
+    return dbUpsertTodoWithAutoFollowupJob;
+  }
+  if (dbUpsertTodo == null && dbEnqueueTodoFollowupGenerationJob == null) {
+    return rust_core.dbUpsertTodoWithAutoFollowupJob;
+  }
+
+  final resolvedUpsertTodo = dbUpsertTodo ?? rust_core.dbUpsertTodo;
+  final resolvedEnqueueTodoFollowupGenerationJob =
+      dbEnqueueTodoFollowupGenerationJob ??
+          rust_core.dbEnqueueTodoFollowupGenerationJob;
+  return ({
+    required String appDir,
+    required List<int> key,
+    required String id,
+    required String title,
+    PlatformInt64? dueAtMs,
+    required String status,
+    String? sourceEntryId,
+    PlatformInt64? reviewStage,
+    PlatformInt64? nextReviewAtMs,
+    PlatformInt64? lastReviewAtMs,
+    String? taskTypeHint,
+    required PlatformInt64 nowMs,
+  }) async {
+    final todo = await resolvedUpsertTodo(
+      appDir: appDir,
+      key: key,
+      id: id,
+      title: title,
+      dueAtMs: dueAtMs,
+      status: status,
+      sourceEntryId: sourceEntryId,
+      reviewStage: reviewStage,
+      nextReviewAtMs: nextReviewAtMs,
+      lastReviewAtMs: lastReviewAtMs,
+    );
+    final wasCreated = todo.createdAtMs == todo.updatedAtMs;
+    if (!wasCreated) {
+      return todo;
+    }
+
+    final normalizedTaskTypeHint = taskTypeHint?.trim();
+    try {
+      await resolvedEnqueueTodoFollowupGenerationJob(
+        appDir: appDir,
+        key: key,
+        todoId: id,
+        triggerKind: 'auto_create',
+        taskTypeHint:
+            normalizedTaskTypeHint == null || normalizedTaskTypeHint.isEmpty
+                ? null
+                : normalizedTaskTypeHint,
+        nowMs: nowMs,
+      );
+    } catch (error, stackTrace) {
+      debugPrint(
+        'NativeAppBackend.upsertTodo auto follow-up '
+        'enqueue failed for $id: $error',
+      );
+      FlutterError.reportError(
+        FlutterErrorDetails(
+          exception: error,
+          stack: stackTrace,
+          library: 'native_backend',
+          context: ErrorDescription(
+            'while enqueueing an automatic todo '
+            'follow-up generation job',
+          ),
+        ),
+      );
+    }
+    return todo;
+  };
+}
