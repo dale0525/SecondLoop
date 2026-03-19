@@ -190,6 +190,58 @@ void main() {
 
     expect(service.requestSizes, <int>[32, 1]);
   });
+
+  test(
+      'cached assessment outside the current candidate window still affects focus',
+      () async {
+    SharedPreferences.setMockInitialValues({});
+    var includeExtraTopTask = false;
+    final service = _BoundaryFocusAiService();
+    TaskPriorityStore buildStore() {
+      return TaskPriorityStore.fromLoaders(
+        nowLocal: () => DateTime(2026, 3, 13, 10, 0),
+        loadTodos: () async {
+          final todos = <Todo>[
+            for (var i = 0; i < 31; i += 1)
+              todo(
+                id: 'base-$i',
+                title: 'Base $i',
+                updatedAtMs: 400 - i,
+              ),
+            todo(
+              id: 'kept',
+              title: 'Kept boundary task',
+              updatedAtMs: 100,
+            ),
+          ];
+          if (includeExtraTopTask) {
+            todos.add(
+              todo(
+                id: 'extra-top',
+                title: 'Extra top task',
+                updatedAtMs: 1000,
+              ),
+            );
+          }
+          return todos;
+        },
+        resolveAiService: () async => service,
+      );
+    }
+
+    final initialStore = buildStore();
+
+    await initialStore.refresh();
+    expect(initialStore.snapshot.primaryFocus?.todo.id, 'kept');
+
+    includeExtraTopTask = true;
+
+    final reloadedStore = buildStore();
+    await reloadedStore.refresh();
+
+    expect(service.requestTodoIds.last, <String>['extra-top']);
+    expect(reloadedStore.snapshot.primaryFocus?.todo.id, 'kept');
+  });
 }
 
 final class _RecordingAiService implements TaskPriorityAiService {
@@ -218,6 +270,37 @@ final class _RecordingAiService implements TaskPriorityAiService {
               confidence: TaskPriorityAiConfidence.medium,
               isImportant: candidate.todoId == 'a',
               isUrgent: false,
+            ),
+          )
+          .toList(growable: false),
+    );
+  }
+}
+
+final class _BoundaryFocusAiService implements TaskPriorityAiService {
+  @override
+  String get cacheScopeKey => 'boundary-focus';
+
+  final List<List<String>> requestTodoIds = <List<String>>[];
+
+  @override
+  Future<TaskPriorityAiBatchResult> rerank(
+      TaskPriorityAiRequest request) async {
+    requestTodoIds.add(
+      request.candidates
+          .map((candidate) => candidate.todoId)
+          .toList(growable: false),
+    );
+    return TaskPriorityAiBatchResult(
+      entries: request.candidates
+          .map(
+            (candidate) => TaskPriorityAiEntry(
+              todoId: candidate.todoId,
+              semanticAdjustment: candidate.todoId == 'kept' ? 25 : 0,
+              reason: candidate.todoId == 'kept' ? 'Keep this first.' : 'base',
+              confidence: TaskPriorityAiConfidence.high,
+              isImportant: candidate.todoId == 'kept',
+              isUrgent: candidate.todoId == 'kept',
             ),
           )
           .toList(growable: false),

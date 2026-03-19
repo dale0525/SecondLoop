@@ -493,6 +493,36 @@ void main() {
     expect(dueLocal.minute, 0);
   });
 
+  test('reopen action uses next morning when day end already passed', () async {
+    SharedPreferences.setMockInitialValues({
+      'actions.review.morning_minutes_v1': (8 * 60) + 15,
+      'actions.review.day_end_minutes_v1': (21 * 60) + 45,
+    });
+
+    final nowLocal = DateTime(2026, 3, 13, 22, 30);
+    final initial = todo(
+      id: 't7c',
+      title: 'Task 7c',
+      updatedAtMs: 10,
+      status: 'done',
+    );
+    final backend = _QuickActionBackend(initialTodos: [initial]);
+    final controller = TaskHubQuickActionsController(
+      backend: backend,
+      sessionKey: Uint8List(32),
+      nowLocal: () => nowLocal,
+    );
+
+    final ticket = await controller.apply(initial, TaskHubQuickAction.reopen);
+
+    expect(ticket, isNotNull);
+    final reopened = backend.current('t7c');
+    final dueLocal =
+        DateTime.fromMillisecondsSinceEpoch(reopened.dueAtMs!, isUtc: true)
+            .toLocal();
+    expect(dueLocal, DateTime(2026, 3, 14, 8, 15));
+  });
+
   test('start action moves unopened todo to in progress', () async {
     SharedPreferences.setMockInitialValues({});
 

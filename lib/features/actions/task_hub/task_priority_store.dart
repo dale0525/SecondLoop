@@ -281,17 +281,14 @@ class TaskPriorityStore extends ChangeNotifier {
         );
       }
 
-      if (freshEntries.isEmpty) {
-        _rememberStickyFocus(nowLocal);
-        return;
-      }
-
       final aiEntries = <TaskPriorityAiEntry>[];
-      for (final candidate in request.candidates) {
-        final entry = freshEntries[candidate.todoId];
+      for (final activeEntry in _snapshot.activeEntries) {
+        final todoId = activeEntry.todo.id;
+        final entry = freshEntries[todoId] ?? mergedPersisted[todoId]?.entry;
         if (entry != null) aiEntries.add(entry);
       }
       if (aiEntries.isEmpty) {
+        _aiAvailability = TaskPriorityAiAvailability.unavailable;
         _rememberStickyFocus(nowLocal);
         return;
       }

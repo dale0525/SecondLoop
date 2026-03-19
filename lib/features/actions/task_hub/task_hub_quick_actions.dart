@@ -46,13 +46,16 @@ class TaskHubQuickActionsController {
     this.signalStore = const TaskPrioritySignalStore(),
     this.confirmDoneWithIncompleteChecklist,
     this.checklistProgressByTodoId = const <String, TodoChecklistProgress>{},
-  });
+    DateTime Function()? nowLocal,
+  }) : _nowLocalOverride = nowLocal;
 
   final AppBackend backend;
   final Uint8List sessionKey;
   final TaskPrioritySignalStore signalStore;
   final ConfirmDoneWithIncompleteChecklist? confirmDoneWithIncompleteChecklist;
   final Map<String, TodoChecklistProgress> checklistProgressByTodoId;
+  DateTime Function() get _nowLocal => _nowLocalOverride ?? DateTime.now;
+  final DateTime Function()? _nowLocalOverride;
 
   Future<bool> hasIncompleteChecklist(Todo todo) async {
     final progress = checklistProgressByTodoId[todo.id];
@@ -74,7 +77,7 @@ class TaskHubQuickActionsController {
     Todo todo,
     TaskHubQuickAction action,
   ) async {
-    final nowLocal = DateTime.now();
+    final nowLocal = _nowLocal();
     final nowUtcMs = nowLocal.toUtc().millisecondsSinceEpoch;
     final settings = switch (action) {
       TaskHubQuickAction.today ||
@@ -267,13 +270,7 @@ class TaskHubQuickActionsController {
     required int nowUtcMs,
     required ActionsSettings settings,
   }) async {
-    final dueLocal = DateTime(
-      nowLocal.year,
-      nowLocal.month,
-      nowLocal.day,
-      settings.dayEndTime.hour,
-      settings.dayEndTime.minute,
-    );
+    final dueLocal = _reopenDueLocal(nowLocal, settings);
     final updated = await backend.upsertTodo(
       sessionKey,
       id: todo.id,
@@ -289,6 +286,32 @@ class TaskHubQuickActionsController {
       todo: todo,
       updatedTodo: updated,
       action: TaskHubQuickAction.reopen,
+    );
+  }
+
+  DateTime _reopenDueLocal(DateTime nowLocal, ActionsSettings settings) {
+    final todayDayEnd = DateTime(
+      nowLocal.year,
+      nowLocal.month,
+      nowLocal.day,
+      settings.dayEndTime.hour,
+      settings.dayEndTime.minute,
+    );
+    if (todayDayEnd.isAfter(nowLocal)) {
+      return todayDayEnd;
+    }
+
+    final tomorrow = DateTime(
+      nowLocal.year,
+      nowLocal.month,
+      nowLocal.day,
+    ).add(const Duration(days: 1));
+    return DateTime(
+      tomorrow.year,
+      tomorrow.month,
+      tomorrow.day,
+      settings.morningTime.hour,
+      settings.morningTime.minute,
     );
   }
 
