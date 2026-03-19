@@ -605,6 +605,7 @@ pub fn db_list_todo_followup_suggestions(
 ) -> Result<Vec<db::TodoFollowupSuggestion>> {
     let key = key_from_bytes(key)?;
     let conn = db::open(Path::new(&app_dir))?;
+    ensure_todo_access(&conn, &key, &todo_id)?;
     db::list_todo_followup_suggestions(&conn, &key, &todo_id)
 }
 
@@ -672,6 +673,7 @@ pub fn db_apply_todo_followup_suggestions(
 ) -> Result<Vec<db::TodoActivity>> {
     let key = key_from_bytes(key)?;
     let conn = db::open(Path::new(&app_dir))?;
+    ensure_todo_access(&conn, &key, &todo_id)?;
     db::apply_todo_followup_suggestions(&conn, &key, &todo_id, &suggestion_ids)
 }
 

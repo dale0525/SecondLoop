@@ -333,7 +333,10 @@ class _TodoFollowupGenerationGateState extends State<TodoFollowupGenerationGate>
       final prefs = await SharedPreferences.getInstance();
       final enabled =
           prefs.getBool(SemanticParseDataConsentPrefs.prefsKey) ?? false;
-      if (!enabled || !mounted) {
+      if (!mounted) {
+        return;
+      }
+      if (!enabled) {
         if (previewJobs.isNotEmpty) {
           await finalizeTodoFollowupGenerationJobsForNeedsSetup(
             backendStore,

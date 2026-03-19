@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -291,6 +292,75 @@ void main() {
     expect(backend.canceledTodoIds, contains('todo_manual'));
     expect(backend.skippedTodoIds, contains('todo_auto'));
     expect(changeCount, greaterThan(0));
+  });
+
+  testWidgets('disposing gate mid-run does not finalize queued jobs',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({
+      'semantic_parse_data_consent_v1': true,
+    });
+
+    final dueJobsCompleter = Completer<List<TodoFollowupGenerationJob>>();
+    final backend = _DelayedTodoFollowupGenerationGateBackend(
+      dueJobsCompleter: dueJobsCompleter,
+      fallbackDueJobs: const <TodoFollowupGenerationJob>[
+        TodoFollowupGenerationJob(
+          todoId: 'todo_manual',
+          triggerKind: 'manual_regenerate',
+          status: 'pending',
+          attempts: 0,
+          nextRetryAtMs: null,
+          lastError: null,
+          includeManualFollowups: true,
+          taskTypeHint: 'research',
+          createdAtMs: 0,
+          updatedAtMs: 0,
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: AppBackendScope(
+          backend: backend,
+          child: SessionScope(
+            sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+            lock: () {},
+            child: const TodoFollowupGenerationGate(
+              child: SizedBox.shrink(),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 3));
+    expect(backend.listDueJobsCallCount, 1);
+
+    await tester.pumpWidget(const MaterialApp(home: SizedBox.shrink()));
+    await tester.pump();
+
+    dueJobsCompleter.complete(const <TodoFollowupGenerationJob>[
+      TodoFollowupGenerationJob(
+        todoId: 'todo_manual',
+        triggerKind: 'manual_regenerate',
+        status: 'pending',
+        attempts: 0,
+        nextRetryAtMs: null,
+        lastError: null,
+        includeManualFollowups: true,
+        taskTypeHint: 'research',
+        createdAtMs: 0,
+        updatedAtMs: 0,
+      ),
+    ]);
+    await tester.pumpAndSettle();
+
+    expect(backend.canceledTodoIds, isEmpty);
+    expect(backend.skippedTodoIds, isEmpty);
+    expect(backend.failedTodoIds, isEmpty);
+    expect(backend.succeededTodoIds, isEmpty);
   });
 
   testWidgets('Product intent: manual pass is canceled when route needs setup',
@@ -1088,6 +1158,26 @@ final class _CapabilityTodoFollowupGenerationGateBackend extends AppBackend {
     required int nowMs,
   }) async {
     skippedTodoIds.add(todoId);
+  }
+}
+
+final class _DelayedTodoFollowupGenerationGateBackend
+    extends _FakeTodoFollowupGenerationGateBackend {
+  _DelayedTodoFollowupGenerationGateBackend({
+    required this.dueJobsCompleter,
+    required List<TodoFollowupGenerationJob> fallbackDueJobs,
+  }) : super(dueJobs: fallbackDueJobs);
+
+  final Completer<List<TodoFollowupGenerationJob>> dueJobsCompleter;
+
+  @override
+  Future<List<TodoFollowupGenerationJob>> listDueTodoFollowupGenerationJobs(
+    Uint8List key, {
+    required int nowMs,
+    int limit = 5,
+  }) async {
+    listDueJobsCallCount += 1;
+    return dueJobsCompleter.future;
   }
 }
 
