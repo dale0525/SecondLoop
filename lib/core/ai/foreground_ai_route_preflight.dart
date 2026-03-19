@@ -284,6 +284,30 @@ Future<TodoFollowupGenerationPreparedRoute> prepareTodoFollowupGenerationRoute(
   required CloudGatewayConfig gatewayConfig,
   required SubscriptionStatus subscriptionStatus,
 }) async {
+  final routePolicy = hasManualRegenerateDueJob
+      ? ForegroundAiRoutePolicy.askAi
+      : ForegroundAiRoutePolicy.automation;
+  final preliminaryRoute = await decideTodoFollowupGenerationRoute(
+    backend,
+    sessionKey,
+    hasManualRegenerateDueJob: hasManualRegenerateDueJob,
+    cloudIdToken: null,
+    cloudGatewayBaseUrl: gatewayConfig.baseUrl,
+    subscriptionStatus: subscriptionStatus,
+  );
+  final canAttemptCloud = _canAttemptForegroundAiCloudRoute(
+    routePolicy: routePolicy,
+    gatewayConfig: gatewayConfig,
+    subscriptionStatus: subscriptionStatus,
+  );
+  if (!canAttemptCloud ||
+      (!hasManualRegenerateDueJob && preliminaryRoute == AskAiRouteKind.byok)) {
+    return TodoFollowupGenerationPreparedRoute(
+      route: preliminaryRoute,
+      idToken: null,
+    );
+  }
+
   final idToken = await prepareTodoFollowupGenerationIdToken(
     cloudAuthController,
     subscriptionStatus: subscriptionStatus,

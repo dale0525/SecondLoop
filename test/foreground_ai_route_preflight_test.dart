@@ -258,6 +258,27 @@ void main() {
     expect(prepared.idToken, 'token_after_warm');
   });
 
+  test('followup preflight keeps auto byok local without reading cloud token',
+      () async {
+    final controller = _CountingCloudAuthController();
+
+    final prepared = await prepareTodoFollowupGenerationRoute(
+      _ByokBackend(),
+      _sessionKey,
+      hasManualRegenerateDueJob: false,
+      cloudAuthController: controller,
+      gatewayConfig: const CloudGatewayConfig(
+        baseUrl: 'https://example.com',
+        modelName: 'cloud',
+      ),
+      subscriptionStatus: SubscriptionStatus.entitled,
+    );
+
+    expect(prepared.route, AskAiRouteKind.byok);
+    expect(prepared.idToken, isNull);
+    expect(controller.readCount, 0);
+  });
+
   test('automation preflight keeps byok local without reading cloud token',
       () async {
     final controller = _CountingCloudAuthController();

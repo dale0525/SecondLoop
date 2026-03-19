@@ -92,6 +92,55 @@ void main() {
     expect(args.sourceEntryId, 'm3');
   });
 
+  test('Semantic-parse create skips follow-up enqueue on unsupported backend',
+      () async {
+    SharedPreferences.setMockInitialValues({});
+
+    final backend = _Backend();
+    final store = BackendSemanticParseAutoActionsStore(
+      backend: backend,
+      sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+    );
+
+    final todoId = await store.upsertTodoFromMessage(
+      messageId: 'm4',
+      title: '调研一下当前主流的 llm 模型',
+      status: 'open',
+      dueAtMs: null,
+      followupTaskTypeHint: 'research',
+    );
+
+    expect(todoId, 'todo:m4');
+    expect(backend.lastUpsertTodo, isNotNull);
+    expect(backend.enqueueTodoFollowupGenerationJobCalls, 0);
+  });
+
+  test('Semantic-parse create treats follow-up enqueue as best effort',
+      () async {
+    SharedPreferences.setMockInitialValues({});
+
+    final backend = _Backend(
+      supportsFollowupSuggestions: true,
+      throwOnEnqueueTodoFollowupGenerationJob: true,
+    );
+    final store = BackendSemanticParseAutoActionsStore(
+      backend: backend,
+      sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+    );
+
+    final todoId = await store.upsertTodoFromMessage(
+      messageId: 'm5',
+      title: '调研一下当前主流的 llm 模型',
+      status: 'open',
+      dueAtMs: null,
+      followupTaskTypeHint: 'research',
+    );
+
+    expect(todoId, 'todo:m5');
+    expect(backend.lastUpsertTodo, isNotNull);
+    expect(backend.enqueueTodoFollowupGenerationJobCalls, 1);
+  });
+
   test('Preferred semantic todo ids are prioritized in candidates', () async {
     SharedPreferences.setMockInitialValues({});
 
@@ -138,10 +187,20 @@ void main() {
 }
 
 final class _Backend extends TestAppBackend {
-  _Backend({List<Todo>? todos}) : _todos = List<Todo>.from(todos ?? const []);
+  _Backend({
+    List<Todo>? todos,
+    this.supportsFollowupSuggestions = false,
+    this.throwOnEnqueueTodoFollowupGenerationJob = false,
+  }) : _todos = List<Todo>.from(todos ?? const []);
 
   final List<Todo> _todos;
+  final bool supportsFollowupSuggestions;
+  final bool throwOnEnqueueTodoFollowupGenerationJob;
   _UpsertTodoArgs? lastUpsertTodo;
+  int enqueueTodoFollowupGenerationJobCalls = 0;
+
+  @override
+  bool get supportsTodoFollowupSuggestions => supportsFollowupSuggestions;
 
   @override
   Future<List<Todo>> listTodos(Uint8List key) async => List<Todo>.from(_todos);
@@ -190,6 +249,20 @@ final class _Backend extends TestAppBackend {
     _todos.removeWhere((item) => item.id == id);
     _todos.add(todo);
     return todo;
+  }
+
+  @override
+  Future<void> enqueueTodoFollowupGenerationJob(
+    Uint8List key, {
+    required String todoId,
+    required String triggerKind,
+    String? taskTypeHint,
+    required int nowMs,
+  }) async {
+    enqueueTodoFollowupGenerationJobCalls += 1;
+    if (throwOnEnqueueTodoFollowupGenerationJob) {
+      throw StateError('follow-up queue unavailable');
+    }
   }
 }
 
