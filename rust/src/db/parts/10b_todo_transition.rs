@@ -14,9 +14,12 @@ fn transition_todo_in_txn(
     clear_last_review_at_ms: bool,
     source_message_id: Option<&str>,
 ) -> Result<Todo> {
+    let existing = get_todo(conn, key, todo_id)?;
     let staged = match new_status {
-        Some(status) => set_todo_status_in_txn(conn, key, todo_id, status, source_message_id)?,
-        None => get_todo(conn, key, todo_id)?,
+        Some(status) if status != existing.status => {
+            set_todo_status_in_txn(conn, key, todo_id, status, source_message_id)?
+        }
+        _ => existing,
     };
 
     let target_due_at_ms = if clear_due_at_ms {

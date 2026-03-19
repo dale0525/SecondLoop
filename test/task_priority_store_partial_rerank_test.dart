@@ -164,6 +164,44 @@ void main() {
     expect(raw, isNot(contains('"b"')));
   });
 
+  test('cache write prunes expired inactive scopes', () async {
+    SharedPreferences.setMockInitialValues({});
+    final warmService = _ScopedAiService(
+      scopeKey: 'old-scope',
+      reason: 'Old scope result.',
+    );
+    final warmStore = TaskPriorityStore.fromLoaders(
+      nowLocal: () => DateTime(2026, 3, 13, 10, 0),
+      loadTodos: () async => <Todo>[
+        todo(id: 'focus', title: 'Focus task', updatedAtMs: 10),
+      ],
+      resolveAiService: () async => warmService,
+    );
+
+    await warmStore.refresh();
+
+    final freshService = _ScopedAiService(
+      scopeKey: 'fresh-scope',
+      reason: 'Fresh scope result.',
+    );
+    final freshStore = TaskPriorityStore.fromLoaders(
+      nowLocal: () => DateTime(2026, 3, 13, 10, 20),
+      loadTodos: () async => <Todo>[
+        todo(id: 'focus', title: 'Focus task', updatedAtMs: 10),
+      ],
+      resolveAiService: () async => freshService,
+    );
+
+    await freshStore.refresh();
+
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString('task_priority_ai_cache_v3');
+
+    expect(raw, isNotNull);
+    expect(raw, contains('"fresh-scope"'));
+    expect(raw, isNot(contains('"old-scope"')));
+  });
+
   test(
       'refresh keeps cached assessments for active tasks outside candidate window',
       () async {
@@ -366,5 +404,37 @@ final class _FailingStaleCacheAiService implements TaskPriorityAiService {
   @override
   Future<TaskPriorityAiBatchResult> rerank(TaskPriorityAiRequest request) {
     throw StateError('rerank failed');
+  }
+}
+
+final class _ScopedAiService implements TaskPriorityAiService {
+  _ScopedAiService({
+    required this.scopeKey,
+    required this.reason,
+  });
+
+  final String scopeKey;
+  final String reason;
+
+  @override
+  String get cacheScopeKey => scopeKey;
+
+  @override
+  Future<TaskPriorityAiBatchResult> rerank(
+      TaskPriorityAiRequest request) async {
+    return TaskPriorityAiBatchResult(
+      entries: request.candidates
+          .map(
+            (candidate) => TaskPriorityAiEntry(
+              todoId: candidate.todoId,
+              semanticAdjustment: 8,
+              reason: reason,
+              confidence: TaskPriorityAiConfidence.high,
+              isImportant: true,
+              isUrgent: false,
+            ),
+          )
+          .toList(growable: false),
+    );
   }
 }

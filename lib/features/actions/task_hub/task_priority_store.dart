@@ -388,6 +388,26 @@ class TaskPriorityStore extends ChangeNotifier {
           ? (root['scopes'] as Map)
               .map((key, value) => MapEntry(key.toString(), value))
           : <String, Object?>{};
+      scopes.removeWhere((_, value) {
+        if (value is! Map) return true;
+        final rawEntries = value['entries'];
+        if (rawEntries is! Map || rawEntries.isEmpty) return true;
+        var hasFreshEntry = false;
+        for (final item in rawEntries.entries) {
+          if (item.value is! Map) continue;
+          final parsed = _PersistedAiAssessment.fromJson(
+            (item.value as Map)
+                .map((key, value) => MapEntry(key.toString(), value)),
+          );
+          if (parsed == null) continue;
+          if (_nowLocal().difference(parsed.computedAtLocal).abs() <=
+              _aiCacheTtl) {
+            hasFreshEntry = true;
+            break;
+          }
+        }
+        return !hasFreshEntry;
+      });
       final activeIds = activeTodoIds.map((value) => value.trim()).toSet();
       final prunedEntries = <String, _PersistedAiAssessment>{};
       for (final entry in entries.entries) {

@@ -205,20 +205,9 @@ class TaskHubQuickActionsController {
     required ActionsSettings settings,
     required int offsetDays,
   }) async {
-    final targetDay = DateTime(
-      nowLocal.year,
-      nowLocal.month,
-      nowLocal.day,
-    ).add(Duration(days: offsetDays));
-    final dueLocal = DateTime(
-      targetDay.year,
-      targetDay.month,
-      targetDay.day,
-      offsetDays == 0 ? settings.dayEndTime.hour : settings.morningTime.hour,
-      offsetDays == 0
-          ? settings.dayEndTime.minute
-          : settings.morningTime.minute,
-    );
+    final dueLocal = offsetDays == 0
+        ? _todayDueLocal(nowLocal, settings)
+        : _scheduledMorningLocal(nowLocal, settings, offsetDays: offsetDays);
     final updated = await backend.transitionTodo(
       sessionKey,
       todoId: todo.id,
@@ -232,6 +221,54 @@ class TaskHubQuickActionsController {
       todo: todo,
       updatedTodo: updated,
       action: action,
+    );
+  }
+
+  DateTime _todayDueLocal(DateTime nowLocal, ActionsSettings settings) {
+    final todayDayEnd = DateTime(
+      nowLocal.year,
+      nowLocal.month,
+      nowLocal.day,
+      settings.dayEndTime.hour,
+      settings.dayEndTime.minute,
+    );
+    if (todayDayEnd.isAfter(nowLocal)) {
+      return todayDayEnd;
+    }
+    return _tomorrowMorningLocal(nowLocal, settings);
+  }
+
+  DateTime _scheduledMorningLocal(
+    DateTime nowLocal,
+    ActionsSettings settings, {
+    required int offsetDays,
+  }) {
+    final targetDay = DateTime(
+      nowLocal.year,
+      nowLocal.month,
+      nowLocal.day,
+    ).add(Duration(days: offsetDays));
+    return DateTime(
+      targetDay.year,
+      targetDay.month,
+      targetDay.day,
+      settings.morningTime.hour,
+      settings.morningTime.minute,
+    );
+  }
+
+  DateTime _tomorrowMorningLocal(DateTime nowLocal, ActionsSettings settings) {
+    final tomorrow = DateTime(
+      nowLocal.year,
+      nowLocal.month,
+      nowLocal.day,
+    ).add(const Duration(days: 1));
+    return DateTime(
+      tomorrow.year,
+      tomorrow.month,
+      tomorrow.day,
+      settings.morningTime.hour,
+      settings.morningTime.minute,
     );
   }
 
@@ -277,29 +314,7 @@ class TaskHubQuickActionsController {
   }
 
   DateTime _reopenDueLocal(DateTime nowLocal, ActionsSettings settings) {
-    final todayDayEnd = DateTime(
-      nowLocal.year,
-      nowLocal.month,
-      nowLocal.day,
-      settings.dayEndTime.hour,
-      settings.dayEndTime.minute,
-    );
-    if (todayDayEnd.isAfter(nowLocal)) {
-      return todayDayEnd;
-    }
-
-    final tomorrow = DateTime(
-      nowLocal.year,
-      nowLocal.month,
-      nowLocal.day,
-    ).add(const Duration(days: 1));
-    return DateTime(
-      tomorrow.year,
-      tomorrow.month,
-      tomorrow.day,
-      settings.morningTime.hour,
-      settings.morningTime.minute,
-    );
+    return _todayDueLocal(nowLocal, settings);
   }
 
   Future<TaskHubUndoTicket> _applyRedo(

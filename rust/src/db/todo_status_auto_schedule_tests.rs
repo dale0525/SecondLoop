@@ -125,3 +125,54 @@ fn transition_todo_updates_status_due_and_review_fields_atomically() {
     assert_eq!(updated.next_review_at_ms, None);
     assert!(updated.last_review_at_ms.is_some());
 }
+
+#[test]
+fn transition_todo_same_status_only_patches_fields_without_auto_scheduling() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let conn = open(dir.path()).expect("open");
+    let key = [26u8; 32];
+
+    let created = upsert_todo(
+        &conn,
+        &key,
+        "todo:transition:same-status",
+        "Task",
+        None,
+        "in_progress",
+        None,
+        None,
+        None,
+        Some(123),
+    )
+    .expect("create todo");
+
+    let updated = transition_todo(
+        &conn,
+        &key,
+        &created.id,
+        Some("in_progress"),
+        Some(456),
+        false,
+        None,
+        false,
+        None,
+        false,
+        Some(789),
+        false,
+        None,
+    )
+    .expect("transition todo");
+
+    assert_eq!(updated.status, "in_progress");
+    assert_eq!(updated.due_at_ms, Some(456));
+    assert_eq!(updated.last_review_at_ms, Some(789));
+
+    let activity_count: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM todo_activities WHERE todo_id = ?1 AND type = 'status_change'",
+            [created.id.as_str()],
+            |row| row.get(0),
+        )
+        .expect("count activities");
+    assert_eq!(activity_count, 0);
+}
