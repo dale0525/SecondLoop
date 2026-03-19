@@ -138,6 +138,58 @@ void main() {
     expect(raw, contains('"a"'));
     expect(raw, isNot(contains('"b"')));
   });
+
+  test(
+      'refresh keeps cached assessments for active tasks outside candidate window',
+      () async {
+    SharedPreferences.setMockInitialValues({});
+    var includeExtraTopTask = false;
+    final service = _RecordingAiService();
+    final store = TaskPriorityStore.fromLoaders(
+      nowLocal: () => DateTime(2026, 3, 13, 10, 0),
+      loadTodos: () async {
+        final todos = <Todo>[
+          for (var i = 0; i < 31; i += 1)
+            todo(
+              id: 'base-$i',
+              title: 'Base $i',
+              updatedAtMs: 400 - i,
+            ),
+          todo(
+            id: 'kept',
+            title: 'Kept boundary task',
+            updatedAtMs: 100,
+          ),
+        ];
+        if (includeExtraTopTask) {
+          todos.add(
+            todo(
+              id: 'extra-top',
+              title: 'Extra top task',
+              updatedAtMs: 1000,
+            ),
+          );
+        }
+        return todos;
+      },
+      resolveAiService: () async => service,
+    );
+
+    await store.refresh();
+    expect(service.requestSizes, <int>[32]);
+
+    includeExtraTopTask = true;
+    store.markDirty();
+    await store.refresh();
+    expect(service.requestSizes, <int>[32, 1]);
+    expect(service.requestTodoIds.last, <String>['extra-top']);
+
+    includeExtraTopTask = false;
+    store.markDirty();
+    await store.refresh();
+
+    expect(service.requestSizes, <int>[32, 1]);
+  });
 }
 
 final class _RecordingAiService implements TaskPriorityAiService {

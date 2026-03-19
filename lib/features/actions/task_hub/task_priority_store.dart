@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../core/backend/app_backend.dart';
@@ -278,7 +277,7 @@ class TaskPriorityStore extends ChangeNotifier {
         await _writePersistedAiAssessments(
           cacheScopeKey: cacheScopeKey,
           entries: mergedPersisted,
-          activeTodoIds: request.candidates.map((entry) => entry.todoId),
+          activeTodoIds: _snapshot.activeEntries.map((entry) => entry.todo.id),
         );
       }
 
@@ -500,11 +499,7 @@ class TaskPriorityStore extends ChangeNotifier {
     try {
       settings = await ActionsSettingsStore.load();
     } catch (_) {
-      settings = const ActionsSettings(
-        morningTime: TimeOfDay(hour: 8, minute: 0),
-        dayEndTime: TimeOfDay(hour: 21, minute: 0),
-        weeklyReviewTime: TimeOfDay(hour: 21, minute: 0),
-      );
+      settings = ActionsSettingsStore.defaultSettings;
     }
 
     final normalizedTodos = <Todo>[];

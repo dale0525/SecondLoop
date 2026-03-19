@@ -76,26 +76,32 @@ class TaskHubQuickActionsController {
   ) async {
     final nowLocal = DateTime.now();
     final nowUtcMs = nowLocal.toUtc().millisecondsSinceEpoch;
+    final settings = switch (action) {
+      TaskHubQuickAction.today ||
+      TaskHubQuickAction.tomorrow ||
+      TaskHubQuickAction.reopen ||
+      TaskHubQuickAction.redo =>
+        await _loadActionsSettingsWithFallback(),
+      _ => null,
+    };
 
     switch (action) {
       case TaskHubQuickAction.today:
-        final settings = await ActionsSettingsStore.load();
         return _applyScheduleChange(
           todo,
           action: action,
           nowLocal: nowLocal,
           nowUtcMs: nowUtcMs,
-          settings: settings,
+          settings: settings!,
           offsetDays: 0,
         );
       case TaskHubQuickAction.tomorrow:
-        final settings = await ActionsSettingsStore.load();
         return _applyScheduleChange(
           todo,
           action: action,
           nowLocal: nowLocal,
           nowUtcMs: nowUtcMs,
-          settings: settings,
+          settings: settings!,
           offsetDays: 1,
         );
       case TaskHubQuickAction.start:
@@ -127,23 +133,29 @@ class TaskHubQuickActionsController {
       case TaskHubQuickAction.done:
         return _applyDone(todo);
       case TaskHubQuickAction.reopen:
-        final settings = await ActionsSettingsStore.load();
         return _applyReopen(
           todo,
           nowLocal: nowLocal,
           nowUtcMs: nowUtcMs,
-          settings: settings,
+          settings: settings!,
         );
       case TaskHubQuickAction.redo:
-        final settings = await ActionsSettingsStore.load();
         return _applyRedo(
           todo,
           nowLocal: nowLocal,
           nowUtcMs: nowUtcMs,
-          settings: settings,
+          settings: settings!,
         );
       case TaskHubQuickAction.dismiss:
         return _applyDismiss(todo);
+    }
+  }
+
+  Future<ActionsSettings> _loadActionsSettingsWithFallback() async {
+    try {
+      return await ActionsSettingsStore.load();
+    } catch (_) {
+      return ActionsSettingsStore.defaultSettings;
     }
   }
 
@@ -306,9 +318,14 @@ class TaskHubQuickActionsController {
       nextReviewAtMs: null,
       lastReviewAtMs: nowUtcMs,
     );
-    final sourceSignal = await signalStore.readForTodo(todo.id);
-    if (sourceSignal != null && !sourceSignal.isEmpty) {
-      await signalStore.setForTodo(createdTodoId, sourceSignal);
+    try {
+      final sourceSignal = await signalStore.readForTodo(todo.id);
+      if (sourceSignal != null && !sourceSignal.isEmpty) {
+        await signalStore.setForTodo(createdTodoId, sourceSignal);
+      }
+    } catch (_) {
+      await _rollbackCreatedTodo(createdTodoId);
+      rethrow;
     }
     return TaskHubUndoTicket(
       todo: todo,
@@ -316,6 +333,17 @@ class TaskHubQuickActionsController {
       action: TaskHubQuickAction.redo,
       createdTodoId: createdTodoId,
     );
+  }
+
+  Future<void> _rollbackCreatedTodo(String todoId) async {
+    try {
+      await backend.deleteTodo(
+        sessionKey,
+        todoId: todoId,
+      );
+    } catch (_) {
+      // Ignore rollback failures and preserve the original error.
+    }
   }
 
   Future<TaskHubUndoTicket> _applyDismiss(Todo todo) async {

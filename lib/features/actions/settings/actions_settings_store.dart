@@ -29,6 +29,12 @@ class ActionsSettingsStore {
   static const _defaultMorningMinutes = 8 * 60;
   static const _defaultDayEndMinutes = 21 * 60;
 
+  static const defaultSettings = ActionsSettings(
+    morningTime: TimeOfDay(hour: 8, minute: 0),
+    dayEndTime: TimeOfDay(hour: 21, minute: 0),
+    weeklyReviewTime: TimeOfDay(hour: 21, minute: 0),
+  );
+
   static TimeOfDay _timeOfDayFromMinutes(int minutes) {
     final hour = (minutes ~/ 60) % 24;
     final minute = minutes % 60;

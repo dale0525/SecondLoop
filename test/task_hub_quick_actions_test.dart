@@ -461,6 +461,38 @@ void main() {
     expect(reopened.dueAtMs, isNotNull);
   });
 
+  test('reopen action falls back to default settings when prefs are invalid',
+      () async {
+    SharedPreferences.setMockInitialValues({
+      'actions.review.day_end_minutes_v1': 'broken',
+    });
+
+    final initial = todo(
+      id: 't7b',
+      title: 'Task 7b',
+      updatedAtMs: 10,
+      status: 'done',
+    );
+    final backend = _QuickActionBackend(initialTodos: [initial]);
+    final controller = TaskHubQuickActionsController(
+      backend: backend,
+      sessionKey: Uint8List(32),
+    );
+
+    final ticket = await controller.apply(initial, TaskHubQuickAction.reopen);
+
+    expect(ticket, isNotNull);
+    final reopened = backend.current('t7b');
+    expect(reopened.status, 'in_progress');
+    expect(reopened.dueAtMs, isNotNull);
+
+    final dueLocal =
+        DateTime.fromMillisecondsSinceEpoch(reopened.dueAtMs!, isUtc: true)
+            .toLocal();
+    expect(dueLocal.hour, 21);
+    expect(dueLocal.minute, 0);
+  });
+
   test('start action moves unopened todo to in progress', () async {
     SharedPreferences.setMockInitialValues({});
 
@@ -522,6 +554,35 @@ void main() {
     expect(dueLocal.hour, 8);
     expect(dueLocal.minute, 15);
   });
+
+  test('redo action rolls back created todo when signal copy fails', () async {
+    SharedPreferences.setMockInitialValues({});
+
+    final initial = todo(
+      id: 't11',
+      title: 'Task 11',
+      updatedAtMs: 10,
+      status: 'done',
+    );
+    final backend = _QuickActionBackend(initialTodos: [initial]);
+    final controller = TaskHubQuickActionsController(
+      backend: backend,
+      sessionKey: Uint8List(32),
+      signalStore: const _FailingSignalStore(),
+    );
+
+    await expectLater(
+      () => controller.apply(initial, TaskHubQuickAction.redo),
+      throwsA(isA<StateError>()),
+    );
+
+    final nonDismissedNewTodos = backend
+        .all()
+        .where((todo) => todo.id != initial.id && todo.status != 'dismissed')
+        .toList(growable: false);
+    expect(nonDismissedNewTodos, isEmpty);
+    expect(backend.deleteTodoCalls, 1);
+  });
 }
 
 final class _QuickActionBackend extends AppBackend {
@@ -538,8 +599,10 @@ final class _QuickActionBackend extends AppBackend {
   final Map<String, Todo> _todosById;
   final Map<String, List<TodoChecklistItem>> _checklistItemsByTodoId;
   var upsertTodoCalls = 0;
+  var deleteTodoCalls = 0;
 
   Todo current(String id) => _todosById[id]!;
+  List<Todo> all() => _todosById.values.toList(growable: false);
 
   @override
   Future<Todo> upsertTodo(
@@ -606,7 +669,46 @@ final class _QuickActionBackend extends AppBackend {
   }
 
   @override
+  Future<void> deleteTodo(
+    Uint8List key, {
+    required String todoId,
+  }) async {
+    deleteTodoCalls += 1;
+    final existing = _todosById[todoId];
+    if (existing == null) return;
+    _todosById[todoId] = Todo(
+      id: existing.id,
+      title: existing.title,
+      dueAtMs: existing.dueAtMs,
+      status: 'dismissed',
+      sourceEntryId: existing.sourceEntryId,
+      createdAtMs: existing.createdAtMs,
+      updatedAtMs: DateTime.now().toUtc().millisecondsSinceEpoch,
+      reviewStage: existing.reviewStage,
+      nextReviewAtMs: existing.nextReviewAtMs,
+      lastReviewAtMs: existing.lastReviewAtMs,
+    );
+  }
+
+  @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+final class _FailingSignalStore extends TaskPrioritySignalStore {
+  const _FailingSignalStore();
+
+  @override
+  Future<TaskPriorityManualSignal?> readForTodo(String todoId) async {
+    return const TaskPriorityManualSignal(importanceScore: 1);
+  }
+
+  @override
+  Future<void> setForTodo(
+    String todoId,
+    TaskPriorityManualSignal signal,
+  ) {
+    throw StateError('signal write failed');
+  }
 }
 
 final class _RaceySignalStore extends TaskPrioritySignalStore {
