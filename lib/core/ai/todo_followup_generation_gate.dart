@@ -53,6 +53,74 @@ List<TodoFollowupGenerationPassPlan> buildTodoFollowupGenerationPassPlans(
   ];
 }
 
+bool shouldRefetchTodoFollowupGenerationPreviewJobs(
+  List<TodoFollowupGenerationJob> previewJobs, {
+  required int batchLimit,
+}) {
+  if (previewJobs.length < batchLimit) {
+    return false;
+  }
+  return previewJobs.every((job) => job.triggerKind == 'manual_regenerate');
+}
+
+List<TodoFollowupGenerationJob> selectTodoFollowupGenerationPreviewJobs(
+  List<TodoFollowupGenerationJob> dueJobs, {
+  required int batchLimit,
+}) {
+  if (dueJobs.length <= batchLimit) {
+    return dueJobs;
+  }
+
+  final manualJobs = dueJobs
+      .where((job) => job.triggerKind == 'manual_regenerate')
+      .toList(growable: false);
+  final autoJobs = dueJobs
+      .where((job) => job.triggerKind != 'manual_regenerate')
+      .toList(growable: false);
+
+  if (manualJobs.isEmpty || autoJobs.isEmpty || batchLimit <= 1) {
+    return dueJobs.take(batchLimit).toList(growable: false);
+  }
+
+  final selected = <TodoFollowupGenerationJob>[
+    ...manualJobs.take(batchLimit - 1),
+    autoJobs.first,
+  ];
+  var remaining = batchLimit - selected.length;
+  if (remaining > 0) {
+    selected.addAll(manualJobs.skip(batchLimit - 1).take(remaining));
+    remaining = batchLimit - selected.length;
+  }
+  if (remaining > 0) {
+    selected.addAll(autoJobs.skip(1).take(remaining));
+  }
+  return selected;
+}
+
+Future<List<TodoFollowupGenerationJob>> loadTodoFollowupGenerationPreviewJobs(
+  TodoFollowupGenerationStore store, {
+  required int nowMs,
+  required int batchLimit,
+  int expandedLimit = 500,
+}) async {
+  final initialJobs = await store.listDueJobs(nowMs: nowMs, limit: batchLimit);
+  if (!shouldRefetchTodoFollowupGenerationPreviewJobs(
+    initialJobs,
+    batchLimit: batchLimit,
+  )) {
+    return initialJobs;
+  }
+
+  final expandedJobs = await store.listDueJobs(
+    nowMs: nowMs,
+    limit: expandedLimit,
+  );
+  return selectTodoFollowupGenerationPreviewJobs(
+    expandedJobs,
+    batchLimit: batchLimit,
+  );
+}
+
 Future<void> finalizeTodoFollowupGenerationJobsForNeedsSetup(
   TodoFollowupGenerationStore store,
   List<TodoFollowupGenerationJob> jobs, {
@@ -112,6 +180,7 @@ class _TodoFollowupGenerationGateState extends State<TodoFollowupGenerationGate>
   static const _kFailureInterval = Duration(seconds: 10);
   static const _kHardTimeout = Duration(seconds: 45);
   static const _kBatchLimit = 5;
+  static const _kExpandedBatchLimit = 500;
 
   Timer? _timer;
   DateTime? _nextRunAt;
@@ -254,9 +323,11 @@ class _TodoFollowupGenerationGateState extends State<TodoFollowupGenerationGate>
         backend: backend,
         sessionKey: Uint8List.fromList(sessionKey),
       );
-      final previewJobs = await backendStore.listDueJobs(
+      final previewJobs = await loadTodoFollowupGenerationPreviewJobs(
+        backendStore,
         nowMs: DateTime.now().millisecondsSinceEpoch,
-        limit: _kBatchLimit,
+        batchLimit: _kBatchLimit,
+        expandedLimit: _kExpandedBatchLimit,
       );
 
       final prefs = await SharedPreferences.getInstance();

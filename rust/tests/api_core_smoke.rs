@@ -102,3 +102,110 @@ fn api_core_llm_profiles_smoke() {
     assert!(profiles2.iter().any(|p| p.id == p1.id && !p.is_active));
     assert!(profiles2.iter().any(|p| p.id == p2.id && p.is_active));
 }
+
+#[test]
+fn api_core_dismiss_followup_suggestions_requires_todo_access() {
+    let temp_dir = tempfile::tempdir().expect("tempdir");
+    let app_dir = temp_dir.path().join("secondloop");
+    let app_dir = app_dir.to_string_lossy().to_string();
+
+    let key = core::auth_init_master_password(app_dir.clone(), "pw".to_string())
+        .expect("init master password");
+    let wrong_key = vec![9u8; 32];
+
+    let conn = db::open(std::path::Path::new(&app_dir)).expect("open db");
+    db::upsert_todo(
+        &conn,
+        &key.clone().try_into().expect("key bytes"),
+        "todo_1",
+        "Research LLM models",
+        None,
+        "open",
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("upsert todo");
+
+    let generated = db::upsert_generated_todo_followup_suggestions(
+        &conn,
+        &key.clone().try_into().expect("key bytes"),
+        "todo_1",
+        &[db::TodoFollowupSuggestionDraftInput {
+            content: "## Summary\nClaude / GPT / Gemini are still the main hosted options."
+                .to_string(),
+            generation_mode: "model_knowledge".to_string(),
+            citations_json: None,
+        }],
+        "cloud",
+        Some("gen_1"),
+    )
+    .expect("generate followup suggestion");
+
+    core::db_dismiss_todo_followup_suggestions(
+        app_dir.clone(),
+        wrong_key,
+        "todo_1".to_string(),
+        vec![generated[0].id.clone()],
+    )
+    .expect_err("wrong key should not dismiss followup suggestion");
+
+    let suggestions = core::db_list_todo_followup_suggestions(app_dir, key, "todo_1".to_string())
+        .expect("list followup suggestions");
+    assert_eq!(suggestions.len(), 1);
+    assert_eq!(suggestions[0].state, "pending");
+}
+
+#[test]
+fn api_core_dismiss_all_followup_suggestions_requires_todo_access() {
+    let temp_dir = tempfile::tempdir().expect("tempdir");
+    let app_dir = temp_dir.path().join("secondloop");
+    let app_dir = app_dir.to_string_lossy().to_string();
+
+    let key = core::auth_init_master_password(app_dir.clone(), "pw".to_string())
+        .expect("init master password");
+    let wrong_key = vec![9u8; 32];
+
+    let conn = db::open(std::path::Path::new(&app_dir)).expect("open db");
+    db::upsert_todo(
+        &conn,
+        &key.clone().try_into().expect("key bytes"),
+        "todo_1",
+        "Research LLM models",
+        None,
+        "open",
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("upsert todo");
+
+    db::upsert_generated_todo_followup_suggestions(
+        &conn,
+        &key.clone().try_into().expect("key bytes"),
+        "todo_1",
+        &[db::TodoFollowupSuggestionDraftInput {
+            content: "## Summary\nClaude / GPT / Gemini are still the main hosted options."
+                .to_string(),
+            generation_mode: "model_knowledge".to_string(),
+            citations_json: None,
+        }],
+        "cloud",
+        Some("gen_1"),
+    )
+    .expect("generate followup suggestion");
+
+    core::db_dismiss_all_todo_followup_suggestions(
+        app_dir.clone(),
+        wrong_key,
+        "todo_1".to_string(),
+    )
+    .expect_err("wrong key should not dismiss all followup suggestions");
+
+    let suggestions = core::db_list_todo_followup_suggestions(app_dir, key, "todo_1".to_string())
+        .expect("list followup suggestions");
+    assert_eq!(suggestions.len(), 1);
+    assert_eq!(suggestions[0].state, "pending");
+}

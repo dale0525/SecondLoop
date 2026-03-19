@@ -159,15 +159,17 @@ abstract class AppBackend {
     );
 
     final normalizedTaskTypeHint = followupTaskTypeHint?.trim();
-    if (supportsTodoFollowupSuggestions &&
-        normalizedTaskTypeHint != null &&
-        normalizedTaskTypeHint.isNotEmpty) {
+    final taskTypeHint =
+        normalizedTaskTypeHint == null || normalizedTaskTypeHint.isEmpty
+            ? null
+            : normalizedTaskTypeHint;
+    if (supportsTodoFollowupSuggestions) {
       try {
         await enqueueTodoFollowupGenerationJob(
           key,
           todoId: id,
           triggerKind: 'auto_create',
-          taskTypeHint: normalizedTaskTypeHint,
+          taskTypeHint: taskTypeHint,
           nowMs: DateTime.now().millisecondsSinceEpoch,
         );
       } catch (error, stackTrace) {
