@@ -195,6 +195,30 @@ void main() {
 
     expect(draft, isNull);
   });
+
+  test('followup request falls back to plain text model knowledge notes',
+      () async {
+    final draft = await requestTodoFollowupSuggestion(
+      backend: _PromptBackend(
+        response: 'Summary only without JSON.',
+      ),
+      sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+      route: AskAiRouteKind.byok,
+      gatewayBaseUrl: '',
+      idToken: '',
+      modelName: 'local',
+      taskTitle: '调研一下当前主流的 llm 模型',
+      taskContext: '已有笔记：关注价格、上下文、多模态。',
+      localeTag: 'en-US',
+      generationMode: TodoFollowupGenerationMode.modelKnowledge,
+      manualFollowups: const <String>[],
+    );
+
+    expect(draft, isNotNull);
+    expect(draft!.mode, TodoFollowupGenerationMode.modelKnowledge);
+    expect(draft.content, startsWith('Not verified online.'));
+    expect(draft.content, contains('Summary only without JSON.'));
+  });
 }
 
 final class _UnusedBackend extends AppBackend {

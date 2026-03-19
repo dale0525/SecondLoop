@@ -98,12 +98,53 @@ Future<TodoFollowupSuggestionDraft?> requestTodoFollowupSuggestion({
     localeTag: localeTag,
   );
   if (parsed == null) {
-    return null;
+    if (generationMode != TodoFollowupGenerationMode.modelKnowledge) {
+      return null;
+    }
+
+    final fallbackContent = _normalizeLooseModelKnowledgeFollowupContent(
+      response,
+      localeTag: localeTag,
+    );
+    if (fallbackContent == null) {
+      return null;
+    }
+
+    return TodoFollowupSuggestionDraft(
+      content: fallbackContent,
+      mode: TodoFollowupGenerationMode.modelKnowledge,
+      citations: const <TodoFollowupCitationDraft>[],
+    );
   }
   if (parsed.mode != generationMode) {
     return null;
   }
   return parsed;
+}
+
+String? _normalizeLooseModelKnowledgeFollowupContent(
+  String raw, {
+  required String localeTag,
+}) {
+  final trimmed = raw.trim();
+  if (trimmed.isEmpty) return null;
+  if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+    return null;
+  }
+
+  final unfenced = _extractLooseTextCandidate(trimmed);
+  if (unfenced == null || unfenced.isEmpty) return null;
+
+  final disclosure = todoFollowupModelKnowledgeDisclosureForLocale(localeTag);
+  if (_hasTodoFollowupModelKnowledgeDisclosure(
+    unfenced,
+    localeTag: localeTag,
+  )) {
+    return unfenced;
+  }
+
+  final separator = _isZhLocaleTag(localeTag) ? '。' : '. ';
+  return '$disclosure$separator${unfenced.trim()}';
 }
 
 bool _isZhLocaleTag(String localeTag) {
@@ -300,4 +341,12 @@ String? _extractJsonCandidate(String raw) {
     return raw.substring(objectStart, objectEnd + 1).trim();
   }
   return null;
+}
+
+String? _extractLooseTextCandidate(String raw) {
+  final fencedMatch =
+      RegExp(r'```(?:text|md|markdown)?\s*([\s\S]*?)\s*```').firstMatch(raw);
+  final candidate = fencedMatch?.group(1)?.trim() ?? raw.trim();
+  if (candidate.isEmpty) return null;
+  return candidate;
 }

@@ -52,4 +52,18 @@ void main() {
     expect(parsed.first, 'Step 1');
     expect(parsed.last, 'Step $kMaxGeneratedChecklistSuggestions');
   });
+
+  test('checklist parser falls back to plain text bullet lists', () {
+    final parsed = parseTodoChecklistSuggestionsJson('''
+- Check current menu and pricing
+- Confirm delivery window
+- Compare package options
+''');
+
+    expect(parsed, const <String>[
+      'Check current menu and pricing',
+      'Confirm delivery window',
+      'Compare package options',
+    ]);
+  });
 }

@@ -99,7 +99,9 @@ List<String> parseTodoChecklistSuggestionsJson(
   if (trimmed.isEmpty) return const <String>[];
 
   final jsonText = _extractJsonCandidate(trimmed);
-  if (jsonText == null) return const <String>[];
+  if (jsonText == null) {
+    return _parseChecklistSuggestionsPlainText(trimmed, maxItems: maxItems);
+  }
 
   Object? decoded;
   try {
@@ -119,6 +121,25 @@ List<String> parseTodoChecklistSuggestionsJson(
   for (final item in rawSuggestions) {
     if (item is! String) continue;
     final next = _normalizeChecklistSuggestion(item);
+    if (next == null) continue;
+    final dedupeKey = next.toLowerCase();
+    if (!seen.add(dedupeKey)) continue;
+    normalized.add(next);
+    if (normalized.length >= maxItems) break;
+  }
+
+  return List<String>.unmodifiable(normalized);
+}
+
+List<String> _parseChecklistSuggestionsPlainText(
+  String raw, {
+  required int maxItems,
+}) {
+  final normalized = <String>[];
+  final seen = <String>{};
+
+  for (final line in raw.split(RegExp(r'\r?\n'))) {
+    final next = _normalizeChecklistSuggestion(line);
     if (next == null) continue;
     final dedupeKey = next.toLowerCase();
     if (!seen.add(dedupeKey)) continue;
