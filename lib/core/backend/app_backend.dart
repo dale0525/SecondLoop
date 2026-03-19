@@ -134,6 +134,63 @@ abstract class AppBackend {
     throw UnimplementedError('upsertTodo');
   }
 
+  Future<Todo> upsertTodoFromSemanticCreate(
+    Uint8List key, {
+    required String id,
+    required String title,
+    int? dueAtMs,
+    required String status,
+    String? sourceEntryId,
+    int? reviewStage,
+    int? nextReviewAtMs,
+    int? lastReviewAtMs,
+    String? followupTaskTypeHint,
+  }) async {
+    final todo = await upsertTodo(
+      key,
+      id: id,
+      title: title,
+      dueAtMs: dueAtMs,
+      status: status,
+      sourceEntryId: sourceEntryId,
+      reviewStage: reviewStage,
+      nextReviewAtMs: nextReviewAtMs,
+      lastReviewAtMs: lastReviewAtMs,
+    );
+
+    final normalizedTaskTypeHint = followupTaskTypeHint?.trim();
+    if (supportsTodoFollowupSuggestions &&
+        normalizedTaskTypeHint != null &&
+        normalizedTaskTypeHint.isNotEmpty) {
+      try {
+        await enqueueTodoFollowupGenerationJob(
+          key,
+          todoId: id,
+          triggerKind: 'auto_create',
+          taskTypeHint: normalizedTaskTypeHint,
+          nowMs: DateTime.now().millisecondsSinceEpoch,
+        );
+      } catch (error, stackTrace) {
+        debugPrint(
+          'AppBackend.upsertTodoFromSemanticCreate follow-up enqueue failed '
+          'for $id: $error',
+        );
+        FlutterError.reportError(
+          FlutterErrorDetails(
+            exception: error,
+            stack: stackTrace,
+            library: 'app_backend',
+            context: ErrorDescription(
+              'while enqueueing an automatic todo follow-up generation job',
+            ),
+          ),
+        );
+      }
+    }
+
+    return todo;
+  }
+
   Future<Todo> setTodoStatus(
     Uint8List key, {
     required String todoId,

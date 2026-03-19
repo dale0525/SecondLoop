@@ -685,7 +685,7 @@ final class BackendSemanticParseAutoActionsStore
     }
 
     final todoId = await _resolveCreateTodoId(messageId);
-    await _backend.upsertTodo(
+    await _backend.upsertTodoFromSemanticCreate(
       _sessionKey,
       id: todoId,
       title: title,
@@ -695,37 +695,8 @@ final class BackendSemanticParseAutoActionsStore
       reviewStage: reviewStage,
       nextReviewAtMs: nextReviewAtMs,
       lastReviewAtMs: DateTime.now().toUtc().millisecondsSinceEpoch,
+      followupTaskTypeHint: followupTaskTypeHint,
     );
-
-    final normalizedTaskTypeHint = followupTaskTypeHint?.trim();
-    if (_backend.supportsTodoFollowupSuggestions &&
-        normalizedTaskTypeHint != null &&
-        normalizedTaskTypeHint.isNotEmpty) {
-      try {
-        await _backend.enqueueTodoFollowupGenerationJob(
-          _sessionKey,
-          todoId: todoId,
-          triggerKind: 'auto_create',
-          taskTypeHint: normalizedTaskTypeHint,
-          nowMs: DateTime.now().millisecondsSinceEpoch,
-        );
-      } catch (error, stackTrace) {
-        debugPrint(
-          'BackendSemanticParseAutoActionsStore follow-up enqueue failed for '
-          '$todoId: $error',
-        );
-        FlutterError.reportError(
-          FlutterErrorDetails(
-            exception: error,
-            stack: stackTrace,
-            library: 'semantic_parse_auto_actions_runner_store',
-            context: ErrorDescription(
-              'while enqueueing an automatic todo follow-up generation job',
-            ),
-          ),
-        );
-      }
-    }
 
     final normalizedRule = recurrenceRuleJson?.trim();
     if (normalizedRule != null && normalizedRule.isNotEmpty) {

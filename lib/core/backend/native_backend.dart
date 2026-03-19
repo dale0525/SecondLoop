@@ -1171,6 +1171,58 @@ class NativeAppBackend
     int? reviewStage,
     int? nextReviewAtMs,
     int? lastReviewAtMs,
+  }) {
+    return _upsertTodoInternal(
+      key,
+      id: id,
+      title: title,
+      dueAtMs: dueAtMs,
+      status: status,
+      sourceEntryId: sourceEntryId,
+      reviewStage: reviewStage,
+      nextReviewAtMs: nextReviewAtMs,
+      lastReviewAtMs: lastReviewAtMs,
+    );
+  }
+
+  @override
+  Future<Todo> upsertTodoFromSemanticCreate(
+    Uint8List key, {
+    required String id,
+    required String title,
+    int? dueAtMs,
+    required String status,
+    String? sourceEntryId,
+    int? reviewStage,
+    int? nextReviewAtMs,
+    int? lastReviewAtMs,
+    String? followupTaskTypeHint,
+  }) {
+    return _upsertTodoInternal(
+      key,
+      id: id,
+      title: title,
+      dueAtMs: dueAtMs,
+      status: status,
+      sourceEntryId: sourceEntryId,
+      reviewStage: reviewStage,
+      nextReviewAtMs: nextReviewAtMs,
+      lastReviewAtMs: lastReviewAtMs,
+      followupTaskTypeHint: followupTaskTypeHint,
+    );
+  }
+
+  Future<Todo> _upsertTodoInternal(
+    Uint8List key, {
+    required String id,
+    required String title,
+    int? dueAtMs,
+    required String status,
+    String? sourceEntryId,
+    int? reviewStage,
+    int? nextReviewAtMs,
+    int? lastReviewAtMs,
+    String? followupTaskTypeHint,
   }) async {
     final appDir = await _getAppDir();
     final todo = await _dbUpsertTodo(
@@ -1193,11 +1245,15 @@ class NativeAppBackend
     final wasCreated = todo.createdAtMs == todo.updatedAtMs;
     if (wasCreated) {
       try {
+        final normalizedTaskTypeHint = followupTaskTypeHint?.trim();
         await enqueueTodoFollowupGenerationJob(
           key,
           todoId: id,
           triggerKind: 'auto_create',
-          taskTypeHint: null,
+          taskTypeHint:
+              normalizedTaskTypeHint == null || normalizedTaskTypeHint.isEmpty
+                  ? null
+                  : normalizedTaskTypeHint,
           nowMs: DateTime.now().millisecondsSinceEpoch,
         );
       } catch (error, stackTrace) {

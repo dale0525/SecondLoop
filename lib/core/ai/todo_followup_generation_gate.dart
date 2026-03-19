@@ -367,10 +367,6 @@ class _TodoFollowupGenerationGateState extends State<TodoFollowupGenerationGate>
         passDidUpdateJobs = result.didUpdateJobs;
         didMutateAny = didMutateAny || passDidMutateAny;
         didUpdateJobs = didUpdateJobs || passDidUpdateJobs;
-
-        if (passDidMutateAny || passDidUpdateJobs) {
-          _notifyExternalChange(syncEngine);
-        }
       }
 
       if (didMutateAny || didUpdateJobs) {

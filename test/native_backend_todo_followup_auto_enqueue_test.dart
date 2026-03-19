@@ -134,4 +134,62 @@ void main() {
     expect(todo.id, 'todo_2');
     expect(todo.title, '调研一下当前主流的 llm 模型');
   });
+
+  test(
+      'NativeAppBackend semantic create forwards taskTypeHint without double enqueue',
+      () async {
+    final enqueueTaskTypeHints = <String?>[];
+
+    final backend = NativeAppBackend(
+      appDirProvider: () async => '/tmp/secondloop_test',
+      rustLibInit: () async {},
+      dbUpsertTodo: ({
+        required String appDir,
+        required List<int> key,
+        required String id,
+        required String title,
+        int? dueAtMs,
+        required String status,
+        String? sourceEntryId,
+        int? reviewStage,
+        int? nextReviewAtMs,
+        int? lastReviewAtMs,
+      }) async =>
+          Todo(
+        id: id,
+        title: title,
+        dueAtMs: dueAtMs,
+        status: status,
+        sourceEntryId: sourceEntryId,
+        createdAtMs: 1,
+        updatedAtMs: 1,
+        reviewStage: reviewStage,
+        nextReviewAtMs: nextReviewAtMs,
+        lastReviewAtMs: lastReviewAtMs,
+      ),
+      dbEnqueueTodoFollowupGenerationJob: ({
+        required String appDir,
+        required List<int> key,
+        required String todoId,
+        required String triggerKind,
+        String? taskTypeHint,
+        required int nowMs,
+      }) async {
+        enqueueTaskTypeHints.add(taskTypeHint);
+      },
+    );
+
+    final key = Uint8List.fromList(List<int>.filled(32, 7));
+    final todo = await backend.upsertTodoFromSemanticCreate(
+      key,
+      id: 'todo_semantic',
+      title: '调研一下当前主流的 llm 模型',
+      status: 'open',
+      sourceEntryId: 'm1',
+      followupTaskTypeHint: 'research',
+    );
+
+    expect(todo.id, 'todo_semantic');
+    expect(enqueueTaskTypeHints, const <String?>['research']);
+  });
 }
