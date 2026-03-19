@@ -56,6 +56,42 @@ void main() {
     expect(store.isAiEnhancementAvailable, isFalse);
     expect(store.aiAvailability, TaskPriorityAiAvailability.unavailable);
   });
+
+  test('persisted AI fallback does not mark live AI as available', () async {
+    SharedPreferences.setMockInitialValues({});
+    final store = TaskPriorityStore.fromLoaders(
+      nowLocal: () => DateTime(2026, 3, 13, 10, 0),
+      loadTodos: () async => <Todo>[
+        todo(id: 'focus', title: 'Focus task', updatedAtMs: 10),
+      ],
+      resolveAiService: () async => _CachedSuccessfulAiService(),
+    );
+
+    await store.refresh();
+    expect(store.isAiEnhancementAvailable, isTrue);
+    expect(store.snapshot.primaryFocus?.reasonText, 'Persisted AI result.');
+
+    final fallbackStore = TaskPriorityStore.fromLoaders(
+      nowLocal: () => DateTime(2026, 3, 13, 10, 5),
+      loadTodos: () async => <Todo>[
+        todo(id: 'focus', title: 'Focus task', updatedAtMs: 10),
+      ],
+      resolveAiService: () async => null,
+      resolveAiCacheScopeKey: () async => 'availability-cache',
+    );
+
+    await fallbackStore.refresh();
+
+    expect(fallbackStore.isAiEnhancementAvailable, isFalse);
+    expect(
+      fallbackStore.aiAvailability,
+      TaskPriorityAiAvailability.unavailable,
+    );
+    expect(
+      fallbackStore.snapshot.primaryFocus?.reasonText,
+      'Persisted AI result.',
+    );
+  });
 }
 
 final class _SuccessfulAiService implements TaskPriorityAiService {
@@ -72,6 +108,30 @@ final class _SuccessfulAiService implements TaskPriorityAiService {
               todoId: candidate.todoId,
               semanticAdjustment: 8,
               reason: 'Available AI result.',
+              confidence: TaskPriorityAiConfidence.high,
+              isImportant: true,
+              isUrgent: false,
+            ),
+          )
+          .toList(growable: false),
+    );
+  }
+}
+
+final class _CachedSuccessfulAiService implements TaskPriorityAiService {
+  @override
+  String get cacheScopeKey => 'availability-cache';
+
+  @override
+  Future<TaskPriorityAiBatchResult> rerank(
+      TaskPriorityAiRequest request) async {
+    return TaskPriorityAiBatchResult(
+      entries: request.candidates
+          .map(
+            (candidate) => TaskPriorityAiEntry(
+              todoId: candidate.todoId,
+              semanticAdjustment: 8,
+              reason: 'Persisted AI result.',
               confidence: TaskPriorityAiConfidence.high,
               isImportant: true,
               isUrgent: false,

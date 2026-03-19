@@ -239,6 +239,7 @@ class TaskPriorityStore extends ChangeNotifier {
         if (cached != null && cached.requestSignature == requestSignature) {
           freshEntries[candidate.todoId] = cached.entry;
         } else {
+          mergedPersisted.remove(candidate.todoId);
           staleCandidates.add(candidate);
         }
       }
@@ -269,6 +270,7 @@ class TaskPriorityStore extends ChangeNotifier {
             );
           }
         } catch (_) {
+          _aiAvailability = TaskPriorityAiAvailability.unavailable;
           // Keep the already-published rules snapshot.
         }
       }
@@ -300,7 +302,6 @@ class TaskPriorityStore extends ChangeNotifier {
         feedbackState: feedbackState,
         signalState: signalState,
       );
-      _aiAvailability = TaskPriorityAiAvailability.available;
       hybridSnapshot = _applyStickyFocus(hybridSnapshot, nowLocal: nowLocal);
       _snapshot = hybridSnapshot;
       _rememberStickyFocus(nowLocal);

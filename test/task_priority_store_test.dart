@@ -472,7 +472,11 @@ void main() {
     expect(secondStore.snapshot.source, TaskPrioritySnapshotSource.hybrid);
     expect(secondStore.snapshot.primaryFocus?.reasonText,
         'Still the best option.');
-    expect(secondStore.isAiEnhancementAvailable, isTrue);
+    expect(secondStore.isAiEnhancementAvailable, isFalse);
+    expect(
+      secondStore.aiAvailability,
+      TaskPriorityAiAvailability.unavailable,
+    );
   });
 
   test(

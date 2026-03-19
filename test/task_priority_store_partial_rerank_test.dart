@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:secondloop/features/actions/task_hub/task_priority_ai.dart';
 import 'package:secondloop/features/actions/task_hub/task_priority_signal_store.dart';
 import 'package:secondloop/features/actions/task_hub/task_priority_ai_models.dart';
+import 'package:secondloop/features/actions/task_hub/task_priority_models.dart';
 import 'package:secondloop/features/actions/task_hub/task_priority_store.dart';
 import 'package:secondloop/src/rust/db.dart';
 
@@ -102,6 +103,30 @@ void main() {
     await store.refresh();
 
     expect(service.requestSizes, <int>[1, 1]);
+  });
+
+  test('stale persisted candidate is discarded when rerank fails', () async {
+    SharedPreferences.setMockInitialValues({});
+    var title = 'Important task';
+    TaskPriorityAiService service = _StaleCacheWarmAiService();
+    final store = TaskPriorityStore.fromLoaders(
+      nowLocal: () => DateTime(2026, 3, 13, 10, 0),
+      loadTodos: () async => <Todo>[
+        todo(id: 'focus', title: title, updatedAtMs: 10),
+      ],
+      resolveAiService: () async => service,
+    );
+
+    await store.refresh();
+    expect(store.snapshot.primaryFocus?.reasonText, 'Stale cached reason.');
+
+    title = 'Important task updated';
+    service = const _FailingStaleCacheAiService();
+    store.markDirty();
+    await store.refresh();
+
+    expect(store.snapshot.primaryFocus?.reasonText, isNull);
+    expect(store.snapshot.source, TaskPrioritySnapshotSource.rules);
   });
 
   test('cache-only refresh prunes removed persisted assessments', () async {
@@ -305,5 +330,41 @@ final class _BoundaryFocusAiService implements TaskPriorityAiService {
           )
           .toList(growable: false),
     );
+  }
+}
+
+final class _StaleCacheWarmAiService implements TaskPriorityAiService {
+  @override
+  String get cacheScopeKey => 'stale-cache-scope';
+
+  @override
+  Future<TaskPriorityAiBatchResult> rerank(
+      TaskPriorityAiRequest request) async {
+    return TaskPriorityAiBatchResult(
+      entries: request.candidates
+          .map(
+            (candidate) => TaskPriorityAiEntry(
+              todoId: candidate.todoId,
+              semanticAdjustment: 10,
+              reason: 'Stale cached reason.',
+              confidence: TaskPriorityAiConfidence.high,
+              isImportant: true,
+              isUrgent: false,
+            ),
+          )
+          .toList(growable: false),
+    );
+  }
+}
+
+final class _FailingStaleCacheAiService implements TaskPriorityAiService {
+  const _FailingStaleCacheAiService();
+
+  @override
+  String get cacheScopeKey => 'stale-cache-scope';
+
+  @override
+  Future<TaskPriorityAiBatchResult> rerank(TaskPriorityAiRequest request) {
+    throw StateError('rerank failed');
   }
 }
