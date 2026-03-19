@@ -323,13 +323,7 @@ class TaskHubQuickActionsController {
     required int nowUtcMs,
     required ActionsSettings settings,
   }) async {
-    final dueLocal = DateTime(
-      nowLocal.year,
-      nowLocal.month,
-      nowLocal.day,
-      settings.dayEndTime.hour,
-      settings.dayEndTime.minute,
-    );
+    final dueLocal = _todayDueLocal(nowLocal, settings);
     final createdTodoId =
         'todo:task_hub_redo:${todo.id}:${nowLocal.toUtc().microsecondsSinceEpoch}';
     final updated = await backend.upsertTodo(

@@ -23,7 +23,7 @@ int _dueDerivedUrgencyScoreFor(
     nowLocal.day,
   ).add(const Duration(days: 1));
   if (_isSameLocalDate(dueLocal, tomorrow)) return 2;
-  return 1;
+  return 0;
 }
 
 TaskPrioritySnapshot buildTaskPrioritySnapshot(

@@ -198,6 +198,36 @@ void main() {
     expect(snapshot.primaryFocus?.todo.id, 'neutral');
   });
 
+  test('far-future scheduled task does not outrank important backlog task', () {
+    final nowLocal = DateTime(2026, 3, 13, 10, 0);
+    final snapshot = buildTaskPrioritySnapshot(
+      <Todo>[
+        todo(
+          id: 'far-future',
+          title: 'Future commitment',
+          updatedAtMs: 10,
+          dueAtMs: nowLocal
+              .add(const Duration(days: 30))
+              .toUtc()
+              .millisecondsSinceEpoch,
+        ),
+        todo(
+          id: 'important-backlog',
+          title: 'Important backlog',
+          updatedAtMs: 20,
+        ),
+      ],
+      nowLocal: nowLocal,
+      signalState: const TaskPriorityManualSignalState(
+        byTodoId: <String, TaskPriorityManualSignal>{
+          'important-backlog': TaskPriorityManualSignal(importanceScore: 2),
+        },
+      ),
+    );
+
+    expect(snapshot.primaryFocus?.todo.id, 'important-backlog');
+  });
+
   test('manual importance breaks ties after effective urgency', () {
     final nowLocal = DateTime(2026, 3, 13, 10, 0);
     final snapshot = buildTaskPrioritySnapshot(

@@ -685,6 +685,37 @@ void main() {
     expect(dueLocal, DateTime(2026, 3, 14, 8, 15));
   });
 
+  test('redo action falls back to next morning after day end', () async {
+    SharedPreferences.setMockInitialValues({
+      'actions.review.morning_minutes_v1': (8 * 60) + 15,
+      'actions.review.day_end_minutes_v1': (21 * 60) + 45,
+    });
+
+    final nowLocal = DateTime(2026, 3, 13, 22, 30);
+    final initial = todo(
+      id: 't10a-redo',
+      title: 'Task 10a redo',
+      updatedAtMs: 10,
+      status: 'done',
+    );
+    final backend = _QuickActionBackend(initialTodos: [initial]);
+    final controller = TaskHubQuickActionsController(
+      backend: backend,
+      sessionKey: Uint8List(32),
+      nowLocal: () => nowLocal,
+    );
+
+    final ticket = await controller.apply(initial, TaskHubQuickAction.redo);
+
+    expect(ticket, isNotNull);
+    final createdTodo = backend.all().firstWhere(
+        (todo) => todo.id != initial.id && todo.status != 'dismissed');
+    final dueLocal =
+        DateTime.fromMillisecondsSinceEpoch(createdTodo.dueAtMs!, isUtc: true)
+            .toLocal();
+    expect(dueLocal, DateTime(2026, 3, 14, 8, 15));
+  });
+
   test('undo after tomorrow uses transition instead of full upsert', () async {
     SharedPreferences.setMockInitialValues({});
 
