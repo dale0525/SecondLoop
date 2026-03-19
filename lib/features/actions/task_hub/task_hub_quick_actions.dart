@@ -185,10 +185,16 @@ class TaskHubQuickActionsController {
   }
 
   Future<TaskHubUndoTicket> _applyStart(Todo todo) async {
-    final updated = await backend.setTodoStatus(
+    final updated = await backend.transitionTodo(
       sessionKey,
       todoId: todo.id,
       newStatus: 'in_progress',
+      dueAtMs: todo.dueAtMs,
+      clearDueAtMs: todo.dueAtMs == null,
+      reviewStage: todo.reviewStage,
+      clearReviewStage: todo.reviewStage == null,
+      nextReviewAtMs: todo.nextReviewAtMs,
+      clearNextReviewAtMs: todo.nextReviewAtMs == null,
     );
     return TaskHubUndoTicket(
       todo: todo,

@@ -571,6 +571,36 @@ void main() {
     expect(backend.current('t8').status, 'in_progress');
   });
 
+  test('start action preserves existing due and review fields', () async {
+    SharedPreferences.setMockInitialValues({});
+
+    final initial = todo(
+      id: 't8-preserve',
+      title: 'Task 8 preserve',
+      updatedAtMs: 10,
+      status: 'inbox',
+      dueAtMs: 24680,
+      reviewStage: 2,
+      nextReviewAtMs: 13579,
+    );
+    final backend = _QuickActionBackend(initialTodos: [initial]);
+    final controller = TaskHubQuickActionsController(
+      backend: backend,
+      sessionKey: Uint8List(32),
+    );
+
+    final ticket = await controller.apply(initial, TaskHubQuickAction.start);
+
+    expect(ticket, isNotNull);
+    final updated = backend.current('t8-preserve');
+    expect(updated.status, 'in_progress');
+    expect(updated.dueAtMs, initial.dueAtMs);
+    expect(updated.reviewStage, initial.reviewStage);
+    expect(updated.nextReviewAtMs, initial.nextReviewAtMs);
+    expect(backend.transitionTodoCalls, 1);
+    expect(backend.setTodoStatusCalls, 0);
+  });
+
   test('start action uses status transition instead of full upsert', () async {
     SharedPreferences.setMockInitialValues({});
 
@@ -584,7 +614,8 @@ void main() {
     final ticket = await controller.apply(initial, TaskHubQuickAction.start);
 
     expect(ticket, isNotNull);
-    expect(backend.setTodoStatusCalls, 1);
+    expect(backend.transitionTodoCalls, 1);
+    expect(backend.setTodoStatusCalls, 0);
     expect(backend.upsertTodoCalls, 0);
   });
 

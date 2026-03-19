@@ -149,8 +149,54 @@ abstract class AppBackend {
     int? lastReviewAtMs,
     bool clearLastReviewAtMs = false,
     String? sourceMessageId,
-  }) {
-    throw UnimplementedError('transitionTodo');
+  }) async {
+    final todos = await listTodos(key);
+    Todo? existing;
+    for (final todo in todos) {
+      if (todo.id == todoId) {
+        existing = todo;
+        break;
+      }
+    }
+    if (existing == null) {
+      throw StateError('Unknown todo: $todoId');
+    }
+
+    final staged = newStatus != null && newStatus != existing.status
+        ? await setTodoStatus(
+            key,
+            todoId: todoId,
+            newStatus: newStatus,
+            sourceMessageId: sourceMessageId,
+          )
+        : existing;
+
+    final targetDueAtMs = clearDueAtMs ? null : (dueAtMs ?? staged.dueAtMs);
+    final targetReviewStage =
+        clearReviewStage ? null : (reviewStage ?? staged.reviewStage);
+    final targetNextReviewAtMs =
+        clearNextReviewAtMs ? null : (nextReviewAtMs ?? staged.nextReviewAtMs);
+    final targetLastReviewAtMs =
+        clearLastReviewAtMs ? null : (lastReviewAtMs ?? staged.lastReviewAtMs);
+
+    if (targetDueAtMs == staged.dueAtMs &&
+        targetReviewStage == staged.reviewStage &&
+        targetNextReviewAtMs == staged.nextReviewAtMs &&
+        targetLastReviewAtMs == staged.lastReviewAtMs) {
+      return staged;
+    }
+
+    return upsertTodo(
+      key,
+      id: staged.id,
+      title: staged.title,
+      dueAtMs: targetDueAtMs,
+      status: staged.status,
+      sourceEntryId: staged.sourceEntryId,
+      reviewStage: targetReviewStage,
+      nextReviewAtMs: targetNextReviewAtMs,
+      lastReviewAtMs: targetLastReviewAtMs,
+    );
   }
 
   Future<Todo> updateTodoStatusWithScope(
