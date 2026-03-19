@@ -202,7 +202,7 @@ class _QuickCaptureDialogState extends State<_QuickCaptureDialog> {
               warmupPolicy: ForegroundAiWarmupPolicy.cloudOnly,
               fallbackToNeedsSetupOnRouteError: true,
             );
-            if (preparedRoute.route != AskAiRouteKind.needsSetup) {
+            if (canRunPreparedForegroundAiRoute(preparedRoute)) {
               await backend.enqueueSemanticParseJob(
                 sessionKey,
                 messageId: message.id,

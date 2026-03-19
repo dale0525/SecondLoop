@@ -620,6 +620,7 @@ pub fn db_upsert_generated_todo_followup_suggestions(
 ) -> Result<Vec<db::TodoFollowupSuggestion>> {
     let key = key_from_bytes(key)?;
     let conn = db::open(Path::new(&app_dir))?;
+    ensure_todo_access(&conn, &key, &todo_id)?;
     db::upsert_generated_todo_followup_suggestions(
         &conn,
         &key,
