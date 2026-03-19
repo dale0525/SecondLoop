@@ -168,10 +168,10 @@ void main() {
 
     await _pumpUntil(
       tester,
-      () => backend.upsertTodoCalls >= 1 && changes >= 1,
+      () => backend.transitionTodoCalls >= 1 && changes >= 1,
     );
 
-    expect(backend.upsertTodoCalls, greaterThanOrEqualTo(1));
+    expect(backend.transitionTodoCalls, greaterThanOrEqualTo(1));
     expect(changes, greaterThanOrEqualTo(1));
     expect(find.text('prepare draft'), findsWidgets);
   });
@@ -350,6 +350,7 @@ final class _TaskHubBackend implements AppBackend {
 
   final Map<String, Todo> _todosById;
   int upsertTodoCalls = 0;
+  int transitionTodoCalls = 0;
   int setTodoStatusCalls = 0;
 
   @override
@@ -384,6 +385,46 @@ final class _TaskHubBackend implements AppBackend {
       lastReviewAtMs: lastReviewAtMs,
     );
     _todosById[id] = todo;
+    return todo;
+  }
+
+  @override
+  Future<Todo> transitionTodo(
+    Uint8List key, {
+    required String todoId,
+    String? newStatus,
+    int? dueAtMs,
+    bool clearDueAtMs = false,
+    int? reviewStage,
+    bool clearReviewStage = false,
+    int? nextReviewAtMs,
+    bool clearNextReviewAtMs = false,
+    int? lastReviewAtMs,
+    bool clearLastReviewAtMs = false,
+    String? sourceMessageId,
+  }) async {
+    transitionTodoCalls += 1;
+    final existing = _todosById[todoId];
+    if (existing == null) throw StateError('todo missing: $todoId');
+    final nowMs = DateTime.now().toUtc().millisecondsSinceEpoch;
+    final todo = Todo(
+      id: existing.id,
+      title: existing.title,
+      dueAtMs: clearDueAtMs ? null : (dueAtMs ?? existing.dueAtMs),
+      status: newStatus ?? existing.status,
+      sourceEntryId: existing.sourceEntryId,
+      createdAtMs: existing.createdAtMs,
+      updatedAtMs: nowMs,
+      reviewStage:
+          clearReviewStage ? null : (reviewStage ?? existing.reviewStage),
+      nextReviewAtMs: clearNextReviewAtMs
+          ? null
+          : (nextReviewAtMs ?? existing.nextReviewAtMs),
+      lastReviewAtMs: clearLastReviewAtMs
+          ? null
+          : (lastReviewAtMs ?? existing.lastReviewAtMs),
+    );
+    _todosById[todoId] = todo;
     return todo;
   }
 

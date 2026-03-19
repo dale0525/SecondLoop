@@ -144,6 +144,35 @@ Future<Todo> dbSetTodoStatus(
         newStatus: newStatus,
         sourceMessageId: sourceMessageId);
 
+Future<Todo> dbTransitionTodo(
+        {required String appDir,
+        required List<int> key,
+        required String todoId,
+        String? newStatus,
+        PlatformInt64? dueAtMs,
+        required bool clearDueAtMs,
+        PlatformInt64? reviewStage,
+        required bool clearReviewStage,
+        PlatformInt64? nextReviewAtMs,
+        required bool clearNextReviewAtMs,
+        PlatformInt64? lastReviewAtMs,
+        required bool clearLastReviewAtMs,
+        String? sourceMessageId}) =>
+    RustLib.instance.api.crateApiCoreDbTransitionTodo(
+        appDir: appDir,
+        key: key,
+        todoId: todoId,
+        newStatus: newStatus,
+        dueAtMs: dueAtMs,
+        clearDueAtMs: clearDueAtMs,
+        reviewStage: reviewStage,
+        clearReviewStage: clearReviewStage,
+        nextReviewAtMs: nextReviewAtMs,
+        clearNextReviewAtMs: clearNextReviewAtMs,
+        lastReviewAtMs: lastReviewAtMs,
+        clearLastReviewAtMs: clearLastReviewAtMs,
+        sourceMessageId: sourceMessageId);
+
 Future<Todo> dbUpdateTodoDueWithScope(
         {required String appDir,
         required List<int> key,

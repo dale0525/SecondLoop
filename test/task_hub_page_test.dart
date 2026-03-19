@@ -168,7 +168,7 @@ void main() {
           lastReviewAtMs: null,
         ),
       ],
-      failUpsert: true,
+      failTransition: true,
     );
 
     await tester.pumpWidget(_wrap(backend));
@@ -657,14 +657,14 @@ final class _TaskHubBackend extends TestAppBackend {
     required List<Todo> todos,
     List<TodoChecklistProgress> checklistProgress =
         const <TodoChecklistProgress>[],
-    this.failUpsert = false,
+    this.failTransition = false,
   })  : _todos = {for (final todo in todos) todo.id: todo},
         _checklistProgress =
             List<TodoChecklistProgress>.from(checklistProgress);
 
   final Map<String, Todo> _todos;
   final List<TodoChecklistProgress> _checklistProgress;
-  final bool failUpsert;
+  final bool failTransition;
 
   @override
   Future<List<Todo>> listTodos(Uint8List key) async =>
@@ -689,9 +689,6 @@ final class _TaskHubBackend extends TestAppBackend {
     int? nextReviewAtMs,
     int? lastReviewAtMs,
   }) async {
-    if (failUpsert) {
-      throw StateError('apply failed');
-    }
     final updated = Todo(
       id: id,
       title: title,
@@ -705,6 +702,46 @@ final class _TaskHubBackend extends TestAppBackend {
       lastReviewAtMs: lastReviewAtMs,
     );
     _todos[id] = updated;
+    return updated;
+  }
+
+  @override
+  Future<Todo> transitionTodo(
+    Uint8List key, {
+    required String todoId,
+    String? newStatus,
+    int? dueAtMs,
+    bool clearDueAtMs = false,
+    int? reviewStage,
+    bool clearReviewStage = false,
+    int? nextReviewAtMs,
+    bool clearNextReviewAtMs = false,
+    int? lastReviewAtMs,
+    bool clearLastReviewAtMs = false,
+    String? sourceMessageId,
+  }) async {
+    if (failTransition) {
+      throw StateError('apply failed');
+    }
+    final existing = _todos[todoId]!;
+    final updated = Todo(
+      id: existing.id,
+      title: existing.title,
+      dueAtMs: clearDueAtMs ? null : (dueAtMs ?? existing.dueAtMs),
+      status: newStatus ?? existing.status,
+      sourceEntryId: existing.sourceEntryId,
+      createdAtMs: existing.createdAtMs,
+      updatedAtMs: DateTime.now().toUtc().millisecondsSinceEpoch,
+      reviewStage:
+          clearReviewStage ? null : (reviewStage ?? existing.reviewStage),
+      nextReviewAtMs: clearNextReviewAtMs
+          ? null
+          : (nextReviewAtMs ?? existing.nextReviewAtMs),
+      lastReviewAtMs: clearLastReviewAtMs
+          ? null
+          : (lastReviewAtMs ?? existing.lastReviewAtMs),
+    );
+    _todos[todoId] = updated;
     return updated;
   }
 

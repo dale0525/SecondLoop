@@ -574,6 +574,46 @@ final class _AgendaBackend extends TestAppBackend {
   }
 
   @override
+  Future<Todo> transitionTodo(
+    Uint8List key, {
+    required String todoId,
+    String? newStatus,
+    int? dueAtMs,
+    bool clearDueAtMs = false,
+    int? reviewStage,
+    bool clearReviewStage = false,
+    int? nextReviewAtMs,
+    bool clearNextReviewAtMs = false,
+    int? lastReviewAtMs,
+    bool clearLastReviewAtMs = false,
+    String? sourceMessageId,
+  }) async {
+    final existing = _todosById[todoId];
+    if (existing == null) {
+      throw StateError('todo missing: $todoId');
+    }
+    final updated = Todo(
+      id: existing.id,
+      title: existing.title,
+      dueAtMs: clearDueAtMs ? null : (dueAtMs ?? existing.dueAtMs),
+      status: newStatus ?? existing.status,
+      sourceEntryId: existing.sourceEntryId,
+      createdAtMs: existing.createdAtMs,
+      updatedAtMs: DateTime.now().toUtc().millisecondsSinceEpoch,
+      reviewStage:
+          clearReviewStage ? null : (reviewStage ?? existing.reviewStage),
+      nextReviewAtMs: clearNextReviewAtMs
+          ? null
+          : (nextReviewAtMs ?? existing.nextReviewAtMs),
+      lastReviewAtMs: clearLastReviewAtMs
+          ? null
+          : (lastReviewAtMs ?? existing.lastReviewAtMs),
+    );
+    _todosById[todoId] = updated;
+    return updated;
+  }
+
+  @override
   Future<Todo> setTodoStatus(
     Uint8List key, {
     required String todoId,

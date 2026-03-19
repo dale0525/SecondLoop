@@ -459,6 +459,8 @@ void main() {
     final reopened = backend.current('t7');
     expect(reopened.status, 'in_progress');
     expect(reopened.dueAtMs, isNotNull);
+    expect(backend.transitionTodoCalls, 1);
+    expect(backend.upsertTodoCalls, 0);
   });
 
   test('reopen action falls back to default settings when prefs are invalid',
@@ -523,6 +525,37 @@ void main() {
     expect(dueLocal, DateTime(2026, 3, 14, 8, 15));
   });
 
+  test('undo after reopen uses transition instead of full upsert', () async {
+    SharedPreferences.setMockInitialValues({});
+
+    final initial = todo(
+      id: 't7d',
+      title: 'Task 7d',
+      updatedAtMs: 10,
+      status: 'done',
+      dueAtMs: 123456789,
+    );
+    final backend = _QuickActionBackend(initialTodos: [initial]);
+    final controller = TaskHubQuickActionsController(
+      backend: backend,
+      sessionKey: Uint8List(32),
+    );
+
+    final ticket = await controller.apply(initial, TaskHubQuickAction.reopen);
+
+    expect(ticket, isNotNull);
+    final transitionsBeforeUndo = backend.transitionTodoCalls;
+    final upsertsBeforeUndo = backend.upsertTodoCalls;
+
+    await controller.undo(ticket!);
+
+    final restored = backend.current('t7d');
+    expect(restored.status, 'done');
+    expect(restored.dueAtMs, initial.dueAtMs);
+    expect(backend.transitionTodoCalls, transitionsBeforeUndo + 1);
+    expect(backend.upsertTodoCalls, upsertsBeforeUndo);
+  });
+
   test('start action moves unopened todo to in progress', () async {
     SharedPreferences.setMockInitialValues({});
 
@@ -555,6 +588,29 @@ void main() {
     expect(backend.upsertTodoCalls, 0);
   });
 
+  test('undo after start uses transition instead of full upsert', () async {
+    SharedPreferences.setMockInitialValues({});
+
+    final initial = todo(id: 't8c', title: 'Task 8c', updatedAtMs: 10);
+    final backend = _QuickActionBackend(initialTodos: [initial]);
+    final controller = TaskHubQuickActionsController(
+      backend: backend,
+      sessionKey: Uint8List(32),
+    );
+
+    final ticket = await controller.apply(initial, TaskHubQuickAction.start);
+
+    expect(ticket, isNotNull);
+    final transitionsBeforeUndo = backend.transitionTodoCalls;
+    final upsertsBeforeUndo = backend.upsertTodoCalls;
+
+    await controller.undo(ticket!);
+
+    expect(backend.current('t8c').status, 'open');
+    expect(backend.transitionTodoCalls, transitionsBeforeUndo + 1);
+    expect(backend.upsertTodoCalls, upsertsBeforeUndo);
+  });
+
   test('tomorrow action keeps in-progress status while moving due date',
       () async {
     SharedPreferences.setMockInitialValues({});
@@ -576,6 +632,8 @@ void main() {
     final updated = backend.current('t9');
     expect(updated.status, 'in_progress');
     expect(updated.dueAtMs, isNotNull);
+    expect(backend.transitionTodoCalls, 1);
+    expect(backend.upsertTodoCalls, 0);
   });
 
   test('tomorrow action uses morning time for due date', () async {
@@ -600,6 +658,37 @@ void main() {
             .toLocal();
     expect(dueLocal.hour, 8);
     expect(dueLocal.minute, 15);
+  });
+
+  test('undo after tomorrow uses transition instead of full upsert', () async {
+    SharedPreferences.setMockInitialValues({});
+
+    final initial = todo(
+      id: 't10b',
+      title: 'Task 10b',
+      updatedAtMs: 10,
+      dueAtMs: 987654321,
+      status: 'in_progress',
+    );
+    final backend = _QuickActionBackend(initialTodos: [initial]);
+    final controller = TaskHubQuickActionsController(
+      backend: backend,
+      sessionKey: Uint8List(32),
+    );
+
+    final ticket = await controller.apply(initial, TaskHubQuickAction.tomorrow);
+
+    expect(ticket, isNotNull);
+    final transitionsBeforeUndo = backend.transitionTodoCalls;
+    final upsertsBeforeUndo = backend.upsertTodoCalls;
+
+    await controller.undo(ticket!);
+
+    final restored = backend.current('t10b');
+    expect(restored.status, 'in_progress');
+    expect(restored.dueAtMs, initial.dueAtMs);
+    expect(backend.transitionTodoCalls, transitionsBeforeUndo + 1);
+    expect(backend.upsertTodoCalls, upsertsBeforeUndo);
   });
 
   test('redo action rolls back created todo when signal copy fails', () async {
@@ -646,6 +735,7 @@ final class _QuickActionBackend extends AppBackend {
   final Map<String, Todo> _todosById;
   final Map<String, List<TodoChecklistItem>> _checklistItemsByTodoId;
   var upsertTodoCalls = 0;
+  var transitionTodoCalls = 0;
   var deleteTodoCalls = 0;
   var setTodoStatusCalls = 0;
 
@@ -679,6 +769,44 @@ final class _QuickActionBackend extends AppBackend {
       lastReviewAtMs: lastReviewAtMs,
     );
     _todosById[id] = updated;
+    return updated;
+  }
+
+  @override
+  Future<Todo> transitionTodo(
+    Uint8List key, {
+    required String todoId,
+    String? newStatus,
+    int? dueAtMs,
+    bool clearDueAtMs = false,
+    int? reviewStage,
+    bool clearReviewStage = false,
+    int? nextReviewAtMs,
+    bool clearNextReviewAtMs = false,
+    int? lastReviewAtMs,
+    bool clearLastReviewAtMs = false,
+    String? sourceMessageId,
+  }) async {
+    transitionTodoCalls += 1;
+    final existing = _todosById[todoId]!;
+    final updated = Todo(
+      id: existing.id,
+      title: existing.title,
+      dueAtMs: clearDueAtMs ? null : (dueAtMs ?? existing.dueAtMs),
+      status: newStatus ?? existing.status,
+      sourceEntryId: existing.sourceEntryId,
+      createdAtMs: existing.createdAtMs,
+      updatedAtMs: DateTime.now().toUtc().millisecondsSinceEpoch,
+      reviewStage:
+          clearReviewStage ? null : (reviewStage ?? existing.reviewStage),
+      nextReviewAtMs: clearNextReviewAtMs
+          ? null
+          : (nextReviewAtMs ?? existing.nextReviewAtMs),
+      lastReviewAtMs: clearLastReviewAtMs
+          ? null
+          : (lastReviewAtMs ?? existing.lastReviewAtMs),
+    );
+    _todosById[todoId] = updated;
     return updated;
   }
 

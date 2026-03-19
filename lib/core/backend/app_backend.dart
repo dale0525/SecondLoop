@@ -136,6 +136,23 @@ abstract class AppBackend {
     throw UnimplementedError('setTodoStatus');
   }
 
+  Future<Todo> transitionTodo(
+    Uint8List key, {
+    required String todoId,
+    String? newStatus,
+    int? dueAtMs,
+    bool clearDueAtMs = false,
+    int? reviewStage,
+    bool clearReviewStage = false,
+    int? nextReviewAtMs,
+    bool clearNextReviewAtMs = false,
+    int? lastReviewAtMs,
+    bool clearLastReviewAtMs = false,
+    String? sourceMessageId,
+  }) {
+    throw UnimplementedError('transitionTodo');
+  }
+
   Future<Todo> updateTodoStatusWithScope(
     Uint8List key, {
     required String todoId,

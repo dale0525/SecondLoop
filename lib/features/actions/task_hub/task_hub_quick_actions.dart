@@ -219,15 +219,13 @@ class TaskHubQuickActionsController {
           ? settings.dayEndTime.minute
           : settings.morningTime.minute,
     );
-    final updated = await backend.upsertTodo(
+    final updated = await backend.transitionTodo(
       sessionKey,
-      id: todo.id,
-      title: todo.title,
+      todoId: todo.id,
+      newStatus: todo.status == 'in_progress' ? 'in_progress' : 'open',
       dueAtMs: dueLocal.toUtc().millisecondsSinceEpoch,
-      status: todo.status == 'in_progress' ? 'in_progress' : 'open',
-      sourceEntryId: todo.sourceEntryId,
-      reviewStage: null,
-      nextReviewAtMs: null,
+      clearReviewStage: true,
+      clearNextReviewAtMs: true,
       lastReviewAtMs: nowUtcMs,
     );
     return TaskHubUndoTicket(
@@ -262,15 +260,13 @@ class TaskHubQuickActionsController {
     required ActionsSettings settings,
   }) async {
     final dueLocal = _reopenDueLocal(nowLocal, settings);
-    final updated = await backend.upsertTodo(
+    final updated = await backend.transitionTodo(
       sessionKey,
-      id: todo.id,
-      title: todo.title,
+      todoId: todo.id,
+      newStatus: 'in_progress',
       dueAtMs: dueLocal.toUtc().millisecondsSinceEpoch,
-      status: 'in_progress',
-      sourceEntryId: todo.sourceEntryId,
-      reviewStage: null,
-      nextReviewAtMs: null,
+      clearReviewStage: true,
+      clearNextReviewAtMs: true,
       lastReviewAtMs: nowUtcMs,
     );
     return TaskHubUndoTicket(
@@ -402,6 +398,24 @@ class TaskHubQuickActionsController {
     }
 
     final original = ticket.todo;
+    final updated = ticket.updatedTodo;
+    if (_canUndoWithTransition(original, updated)) {
+      await backend.transitionTodo(
+        sessionKey,
+        todoId: original.id,
+        newStatus: original.status != updated.status ? original.status : null,
+        dueAtMs: original.dueAtMs,
+        clearDueAtMs: original.dueAtMs == null,
+        reviewStage: original.reviewStage,
+        clearReviewStage: original.reviewStage == null,
+        nextReviewAtMs: original.nextReviewAtMs,
+        clearNextReviewAtMs: original.nextReviewAtMs == null,
+        lastReviewAtMs: original.lastReviewAtMs,
+        clearLastReviewAtMs: original.lastReviewAtMs == null,
+      );
+      return;
+    }
+
     await backend.upsertTodo(
       sessionKey,
       id: original.id,
@@ -413,5 +427,11 @@ class TaskHubQuickActionsController {
       nextReviewAtMs: original.nextReviewAtMs,
       lastReviewAtMs: original.lastReviewAtMs,
     );
+  }
+
+  bool _canUndoWithTransition(Todo original, Todo updated) {
+    return original.id == updated.id &&
+        original.title == updated.title &&
+        original.sourceEntryId == updated.sourceEntryId;
   }
 }
