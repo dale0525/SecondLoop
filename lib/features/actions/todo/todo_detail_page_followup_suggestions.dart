@@ -1,10 +1,17 @@
 part of 'todo_detail_page.dart';
 
 extension _TodoDetailPageStateFollowupSuggestions on _TodoDetailPageState {
+  bool _supportsFollowupSuggestions() {
+    final backend = AppBackendScope.maybeOf(context);
+    return backend?.supportsTodoFollowupSuggestions ?? false;
+  }
+
   Future<TodoFollowupGenerationJob?> _loadFollowupGenerationJob() async {
     final backend = AppBackendScope.maybeOf(context);
     final session = SessionScope.maybeOf(context);
-    if (backend == null || session == null) {
+    if (backend == null ||
+        session == null ||
+        !backend.supportsTodoFollowupSuggestions) {
       return null;
     }
     try {
@@ -34,7 +41,9 @@ extension _TodoDetailPageStateFollowupSuggestions on _TodoDetailPageState {
   Future<bool> _prepareFollowupGeneration() async {
     final backend = AppBackendScope.maybeOf(context);
     final session = SessionScope.maybeOf(context);
-    if (backend == null || session == null) {
+    if (backend == null ||
+        session == null ||
+        !backend.supportsTodoFollowupSuggestions) {
       return false;
     }
 
@@ -80,7 +89,10 @@ extension _TodoDetailPageStateFollowupSuggestions on _TodoDetailPageState {
   Future<void> _applyFollowupSuggestionIds(List<String> suggestionIds) async {
     final backend = AppBackendScope.maybeOf(context);
     final session = SessionScope.maybeOf(context);
-    if (backend == null || session == null || suggestionIds.isEmpty) {
+    if (backend == null ||
+        session == null ||
+        !backend.supportsTodoFollowupSuggestions ||
+        suggestionIds.isEmpty) {
       return;
     }
 
@@ -104,7 +116,10 @@ extension _TodoDetailPageStateFollowupSuggestions on _TodoDetailPageState {
   Future<void> _dismissFollowupSuggestionIds(List<String> suggestionIds) async {
     final backend = AppBackendScope.maybeOf(context);
     final session = SessionScope.maybeOf(context);
-    if (backend == null || session == null || suggestionIds.isEmpty) {
+    if (backend == null ||
+        session == null ||
+        !backend.supportsTodoFollowupSuggestions ||
+        suggestionIds.isEmpty) {
       return;
     }
 
@@ -128,7 +143,10 @@ extension _TodoDetailPageStateFollowupSuggestions on _TodoDetailPageState {
     final backend = AppBackendScope.maybeOf(context);
     final session = SessionScope.maybeOf(context);
     final syncEngine = SyncEngineScope.maybeOf(context);
-    if (backend == null || session == null || _generatingFollowupSuggestions) {
+    if (backend == null ||
+        session == null ||
+        !backend.supportsTodoFollowupSuggestions ||
+        _generatingFollowupSuggestions) {
       return;
     }
 
@@ -173,6 +191,10 @@ extension _TodoDetailPageStateFollowupSuggestions on _TodoDetailPageState {
     BuildContext context,
     List<TodoFollowupSuggestion> suggestions,
   ) {
+    if (!_supportsFollowupSuggestions()) {
+      return const SizedBox.shrink();
+    }
+
     final pendingSuggestions = suggestions
         .where((item) => item.state == 'pending')
         .toList(growable: false);
@@ -459,12 +481,13 @@ extension _TodoDetailPageStateFollowupSuggestions on _TodoDetailPageState {
         if (item is! Map) continue;
         final title = (item['title'] as String?)?.trim() ?? '';
         final url = (item['url'] as String?)?.trim() ?? '';
-        final domain = (item['domain'] as String?)?.trim() ?? '';
-        if (title.isEmpty || url.isEmpty || domain.isEmpty) continue;
+        final uri = tryParseTodoFollowupCitationUrl(url);
+        final domain = uri?.host.trim().toLowerCase() ?? '';
+        if (title.isEmpty || uri == null || domain.isEmpty) continue;
         out.add(
           TodoFollowupCitationDraft(
             title: title,
-            url: url,
+            url: uri.toString(),
             domain: domain,
           ),
         );

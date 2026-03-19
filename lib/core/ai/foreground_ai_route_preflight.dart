@@ -60,6 +60,18 @@ final class TodoFollowupGenerationPreparedRoute {
   final String? idToken;
 }
 
+bool canRunPreparedForegroundAiRoute(
+  ForegroundAiPreparedRoute prepared,
+) {
+  if (prepared.route == AskAiRouteKind.needsSetup) {
+    return false;
+  }
+  if (prepared.route != AskAiRouteKind.cloudGateway) {
+    return true;
+  }
+  return prepared.idToken?.trim().isNotEmpty ?? false;
+}
+
 bool canRunPreparedTodoFollowupGenerationRoute(
   TodoFollowupGenerationPreparedRoute prepared,
 ) {

@@ -20,6 +20,24 @@ import 'package:secondloop/src/rust/db.dart';
 import 'test_i18n.dart';
 
 void main() {
+  testWidgets(
+      'TodoDetailPage hides follow-up section when backend lacks support',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({
+      'semantic_parse_data_consent_v1': true,
+    });
+    _setLargeDisplay(tester);
+
+    await tester.pumpWidget(_buildSubject(_UnsupportedBackend()));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('todo_detail_followup_suggestions_section')),
+      findsNothing,
+    );
+    expect(find.text('Information follow-up'), findsNothing);
+  });
+
   testWidgets('TodoDetailPage renders pending follow-up suggestions',
       (tester) async {
     SharedPreferences.setMockInitialValues({
@@ -102,6 +120,39 @@ void main() {
     expect(find.text('Applied'), findsOneWidget);
     expect(find.text('Web search'), findsOneWidget);
     expect(find.text('AI-collected information'), findsOneWidget);
+  });
+
+  testWidgets('TodoDetailPage derives citation domain from validated url',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({
+      'semantic_parse_data_consent_v1': true,
+    });
+    _setLargeDisplay(tester);
+    final backend = _Backend(
+      initialSuggestions: const <TodoFollowupSuggestion>[
+        TodoFollowupSuggestion(
+          id: 'f_domain',
+          todoId: 't1',
+          content: '已查询到最新信息。',
+          state: 'pending',
+          source: 'cloud',
+          generationMode: 'web_search',
+          generationKey: 'gen_domain',
+          citationsJson:
+              '[{"title":"Airport","url":"https://airport.example/flight","domain":"trusted.example"}]',
+          createdAtMs: 1,
+          updatedAtMs: 1,
+          dismissedAtMs: null,
+          appliedActivityId: null,
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(_buildSubject(backend));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('airport.example · Airport'), findsOneWidget);
+    expect(find.textContaining('trusted.example · Airport'), findsNothing);
   });
 
   testWidgets('TodoDetailPage shows empty follow-up state', (tester) async {
@@ -493,7 +544,7 @@ void _setLargeDisplay(WidgetTester tester) {
 }
 
 Widget _buildSubject(
-  _Backend backend, {
+  AppBackend backend, {
   SyncEngine? syncEngine,
   CloudAuthController? cloudAuthController,
   SubscriptionStatusController? subscriptionController,
@@ -689,6 +740,9 @@ final class _Backend extends AppBackend {
   int getTodoFollowupGenerationJobCalls = 0;
 
   @override
+  bool get supportsTodoFollowupSuggestions => true;
+
+  @override
   Future<void> init() async {}
 
   @override
@@ -843,4 +897,66 @@ final class _Backend extends AppBackend {
       );
     }
   }
+}
+
+final class _UnsupportedBackend extends AppBackend {
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+
+  @override
+  Future<void> init() async {}
+
+  @override
+  Future<bool> isMasterPasswordSet() async => true;
+
+  @override
+  Future<bool> readAutoUnlockEnabled() async => true;
+
+  @override
+  Future<void> persistAutoUnlockEnabled({required bool enabled}) async {}
+
+  @override
+  Future<Uint8List?> loadSavedSessionKey() async => null;
+
+  @override
+  Future<void> saveSessionKey(Uint8List key) async {}
+
+  @override
+  Future<void> clearSavedSessionKey() async {}
+
+  @override
+  Future<void> validateKey(Uint8List key) async {}
+
+  @override
+  Future<Uint8List> initMasterPassword(String password) async =>
+      Uint8List.fromList(List<int>.filled(32, 1));
+
+  @override
+  Future<Uint8List> unlockWithPassword(String password) async =>
+      Uint8List.fromList(List<int>.filled(32, 1));
+
+  @override
+  Future<List<LlmProfile>> listLlmProfiles(Uint8List key) async =>
+      const <LlmProfile>[];
+
+  @override
+  Future<List<TodoActivity>> listTodoActivities(
+    Uint8List key,
+    String todoId,
+  ) async =>
+      const <TodoActivity>[];
+
+  @override
+  Future<List<TodoChecklistItem>> listTodoChecklistItems(
+    Uint8List key,
+    String todoId,
+  ) async =>
+      const <TodoChecklistItem>[];
+
+  @override
+  Future<List<TodoChecklistSuggestion>> listTodoChecklistSuggestions(
+    Uint8List key,
+    String todoId,
+  ) async =>
+      const <TodoChecklistSuggestion>[];
 }

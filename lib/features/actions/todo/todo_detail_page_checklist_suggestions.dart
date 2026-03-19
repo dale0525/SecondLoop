@@ -111,7 +111,7 @@ extension _TodoDetailPageStateChecklistSuggestions on _TodoDetailPageState {
         warmupPolicy: ForegroundAiWarmupPolicy.cloudOnly,
       );
 
-      if (prepared.route == AskAiRouteKind.needsSetup) {
+      if (!canRunPreparedForegroundAiRoute(prepared)) {
         if (!mounted) return;
         await Navigator.of(context).push(
           MaterialPageRoute(

@@ -125,6 +125,9 @@ final class _Backend implements AppBackend {
   int deleteTodoCalls = 0;
 
   @override
+  bool get supportsTodoFollowupSuggestions => false;
+
+  @override
   Future<List<TodoActivity>> listTodoActivities(
     Uint8List key,
     String todoId,

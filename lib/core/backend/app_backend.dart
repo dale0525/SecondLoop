@@ -24,6 +24,8 @@ extension TodoRecurrenceEditScopeWire on TodoRecurrenceEditScope {
 }
 
 abstract class AppBackend {
+  bool get supportsTodoFollowupSuggestions => false;
+
   Future<void> init();
 
   Future<bool> isMasterPasswordSet();

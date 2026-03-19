@@ -256,6 +256,9 @@ class NativeAppBackend
         AppBackend,
         AttachmentsBackend,
         AttachmentAnnotationMutationsBackend {
+  @override
+  bool get supportsTodoFollowupSuggestions => true;
+
   NativeAppBackend({
     FlutterSecureStorage? secureStorage,
     AppDirProvider? appDirProvider,
