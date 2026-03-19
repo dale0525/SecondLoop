@@ -164,6 +164,63 @@ void main() {
   });
 
   testWidgets(
+      'gate does not immediately reschedule itself from its own sync notification',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({
+      'semantic_parse_data_consent_v1': true,
+    });
+
+    final backend = _FakeTodoFollowupGenerationGateBackend(
+      dueJobs: const <TodoFollowupGenerationJob>[
+        TodoFollowupGenerationJob(
+          todoId: 'todo_auto',
+          triggerKind: 'auto_create',
+          status: 'pending',
+          attempts: 0,
+          nextRetryAtMs: null,
+          lastError: null,
+          includeManualFollowups: false,
+          taskTypeHint: 'research',
+          createdAtMs: 0,
+          updatedAtMs: 0,
+        ),
+      ],
+    );
+    final engine = SyncEngine(
+      syncRunner: _NoopSyncRunner(),
+      loadConfig: () async => null,
+    );
+    addTearDown(engine.stop);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: AppBackendScope(
+          backend: backend,
+          child: SessionScope(
+            sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+            lock: () {},
+            child: SyncEngineScope(
+              engine: engine,
+              child: const TodoFollowupGenerationGate(
+                child: SizedBox.shrink(),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.pump();
+    expect(backend.listDueJobsCallCount, 0);
+
+    await tester.pump(const Duration(seconds: 3));
+    expect(backend.listDueJobsCallCount, 1);
+
+    await tester.pump(const Duration(milliseconds: 900));
+    expect(backend.listDueJobsCallCount, 1);
+  });
+
+  testWidgets(
       'Product intent: consent-disabled pass clears queued followup jobs',
       (tester) async {
     SharedPreferences.setMockInitialValues({
@@ -634,6 +691,7 @@ final class _FakeTodoFollowupGenerationGateBackend extends NativeAppBackend {
   final List<String> failedTodoIds = <String>[];
   final List<String> succeededTodoIds = <String>[];
   final List<String> generatedSuggestionTodoIds = <String>[];
+  int listDueJobsCallCount = 0;
   int localPromptCalls = 0;
   int cloudPromptCalls = 0;
 
@@ -738,6 +796,7 @@ final class _FakeTodoFollowupGenerationGateBackend extends NativeAppBackend {
     required int nowMs,
     int limit = 5,
   }) async {
+    listDueJobsCallCount += 1;
     return dueJobs.take(limit).toList(growable: false);
   }
 

@@ -121,6 +121,7 @@ class _TodoFollowupGenerationGateState extends State<TodoFollowupGenerationGate>
 
   SyncEngine? _syncEngine;
   VoidCallback? _syncListener;
+  int _ignoredSyncNotifications = 0;
 
   @override
   void initState() {
@@ -184,9 +185,27 @@ class _TodoFollowupGenerationGateState extends State<TodoFollowupGenerationGate>
     _syncEngine = engine;
     if (engine == null) return;
 
-    void onChange() => _schedule(const Duration(milliseconds: 800));
+    void onChange() {
+      if (_ignoredSyncNotifications > 0) {
+        return;
+      }
+      _schedule(const Duration(milliseconds: 800));
+    }
+
     _syncListener = onChange;
     engine.changes.addListener(onChange);
+  }
+
+  void _notifyExternalChange(SyncEngine? engine) {
+    if (engine == null) {
+      return;
+    }
+    _ignoredSyncNotifications += 1;
+    try {
+      engine.notifyExternalChange();
+    } finally {
+      _ignoredSyncNotifications -= 1;
+    }
   }
 
   void _detachSyncEngine() {
@@ -252,7 +271,7 @@ class _TodoFollowupGenerationGateState extends State<TodoFollowupGenerationGate>
             previewJobs,
             nowMs: DateTime.now().millisecondsSinceEpoch,
           );
-          syncEngine?.notifyExternalChange();
+          _notifyExternalChange(syncEngine);
           _schedule(_kDrainInterval);
           return;
         }
@@ -362,17 +381,17 @@ class _TodoFollowupGenerationGateState extends State<TodoFollowupGenerationGate>
         didUpdateJobs = didUpdateJobs || passDidUpdateJobs;
 
         if (passDidMutateAny || passDidUpdateJobs) {
-          syncEngine?.notifyExternalChange();
+          _notifyExternalChange(syncEngine);
         }
       }
 
       if (didMutateAny || didUpdateJobs) {
-        syncEngine?.notifyExternalChange();
+        _notifyExternalChange(syncEngine);
       }
       _schedule(didUpdateJobs ? _kDrainInterval : _kIdleInterval);
     } catch (_) {
       if (didMutateAny || didUpdateJobs) {
-        syncEngine?.notifyExternalChange();
+        _notifyExternalChange(syncEngine);
       }
       _schedule(_kFailureInterval);
     } finally {

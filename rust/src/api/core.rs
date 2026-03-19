@@ -67,6 +67,17 @@ fn sync_key_from_bytes(bytes: Vec<u8>) -> Result<[u8; 32]> {
     key_from_bytes(bytes)
 }
 
+fn check_todo_access(conn: &rusqlite::Connection, key: &[u8; 32], todo_id: &str) -> Result<bool> {
+    Ok(db::find_todo(conn, key, todo_id)?.is_some())
+}
+
+fn ensure_todo_access(conn: &rusqlite::Connection, key: &[u8; 32], todo_id: &str) -> Result<()> {
+    if check_todo_access(conn, key, todo_id)? {
+        return Ok(());
+    }
+    Err(anyhow!("todo not found"))
+}
+
 fn default_embedding_model_name_for_platform() -> &'static str {
     if cfg!(any(
         target_os = "windows",
@@ -289,8 +300,11 @@ pub fn db_get_todo_followup_generation_job(
     key: Vec<u8>,
     todo_id: String,
 ) -> Result<Option<db::TodoFollowupGenerationJob>> {
-    let _key = key_from_bytes(key)?;
+    let key = key_from_bytes(key)?;
     let conn = db::open(Path::new(&app_dir))?;
+    if !check_todo_access(&conn, &key, &todo_id)? {
+        return Ok(None);
+    }
     db::find_todo_followup_generation_job(&conn, &todo_id)
 }
 
@@ -659,8 +673,9 @@ pub fn db_enqueue_todo_followup_generation_job(
     task_type_hint: Option<String>,
     now_ms: i64,
 ) -> Result<()> {
-    let _key = key_from_bytes(key)?;
+    let key = key_from_bytes(key)?;
     let conn = db::open(Path::new(&app_dir))?;
+    ensure_todo_access(&conn, &key, &todo_id)?;
     db::enqueue_todo_followup_generation_job(
         &conn,
         &todo_id,
@@ -677,9 +692,13 @@ pub fn db_list_due_todo_followup_generation_jobs(
     now_ms: i64,
     limit: u32,
 ) -> Result<Vec<db::TodoFollowupGenerationJob>> {
-    let _key = key_from_bytes(key)?;
+    let key = key_from_bytes(key)?;
     let conn = db::open(Path::new(&app_dir))?;
-    db::list_due_todo_followup_generation_jobs(&conn, now_ms, limit as i64)
+    let jobs = db::list_due_todo_followup_generation_jobs(&conn, now_ms, limit as i64)?;
+    for job in &jobs {
+        ensure_todo_access(&conn, &key, &job.todo_id)?;
+    }
+    Ok(jobs)
 }
 
 #[flutter_rust_bridge::frb]
@@ -689,8 +708,9 @@ pub fn db_mark_todo_followup_generation_job_running(
     todo_id: String,
     now_ms: i64,
 ) -> Result<()> {
-    let _key = key_from_bytes(key)?;
+    let key = key_from_bytes(key)?;
     let conn = db::open(Path::new(&app_dir))?;
+    ensure_todo_access(&conn, &key, &todo_id)?;
     db::mark_todo_followup_generation_job_running(&conn, &todo_id, now_ms)
 }
 
@@ -704,8 +724,9 @@ pub fn db_mark_todo_followup_generation_job_failed(
     last_error: String,
     now_ms: i64,
 ) -> Result<()> {
-    let _key = key_from_bytes(key)?;
+    let key = key_from_bytes(key)?;
     let conn = db::open(Path::new(&app_dir))?;
+    ensure_todo_access(&conn, &key, &todo_id)?;
     db::mark_todo_followup_generation_job_failed(
         &conn,
         &todo_id,
@@ -723,8 +744,9 @@ pub fn db_mark_todo_followup_generation_job_succeeded(
     todo_id: String,
     now_ms: i64,
 ) -> Result<()> {
-    let _key = key_from_bytes(key)?;
+    let key = key_from_bytes(key)?;
     let conn = db::open(Path::new(&app_dir))?;
+    ensure_todo_access(&conn, &key, &todo_id)?;
     db::mark_todo_followup_generation_job_succeeded(&conn, &todo_id, now_ms)
 }
 
@@ -735,8 +757,9 @@ pub fn db_mark_todo_followup_generation_job_skipped(
     todo_id: String,
     now_ms: i64,
 ) -> Result<()> {
-    let _key = key_from_bytes(key)?;
+    let key = key_from_bytes(key)?;
     let conn = db::open(Path::new(&app_dir))?;
+    ensure_todo_access(&conn, &key, &todo_id)?;
     db::mark_todo_followup_generation_job_skipped(&conn, &todo_id, now_ms)
 }
 
@@ -747,8 +770,9 @@ pub fn db_mark_todo_followup_generation_job_canceled(
     todo_id: String,
     now_ms: i64,
 ) -> Result<()> {
-    let _key = key_from_bytes(key)?;
+    let key = key_from_bytes(key)?;
     let conn = db::open(Path::new(&app_dir))?;
+    ensure_todo_access(&conn, &key, &todo_id)?;
     db::mark_todo_followup_generation_job_canceled(&conn, &todo_id, now_ms)
 }
 

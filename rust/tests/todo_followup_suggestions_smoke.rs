@@ -1,3 +1,4 @@
+use secondloop_rust::api::core;
 use secondloop_rust::auth;
 use secondloop_rust::crypto;
 use secondloop_rust::crypto::KdfParams;
@@ -672,4 +673,65 @@ VALUES (?1, ?2, ?3, 'pending', 'cloud', 'model_knowledge', 'gen_dup', NULL, ?4, 
         .collect::<Vec<_>>();
     assert_eq!(dismissed.len(), 1);
     assert_eq!(dismissed[0].id, duplicate_id);
+}
+
+#[test]
+fn followup_job_api_requires_a_matching_todo_key() {
+    let (temp_dir, key, conn) = setup();
+    let app_dir = temp_dir
+        .path()
+        .join("secondloop")
+        .to_string_lossy()
+        .into_owned();
+
+    db::upsert_todo(
+        &conn,
+        &key,
+        "todo_1",
+        "Research LLM models",
+        None,
+        "open",
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("upsert todo");
+    db::enqueue_todo_followup_generation_job(&conn, "todo_1", "auto_create", None, 100)
+        .expect("enqueue job");
+
+    let wrong_key = vec![9u8; 32];
+
+    assert!(core::db_get_todo_followup_generation_job(
+        app_dir.clone(),
+        wrong_key.clone(),
+        "todo_1".to_string(),
+    )
+    .is_err());
+
+    assert!(core::db_list_due_todo_followup_generation_jobs(
+        app_dir.clone(),
+        wrong_key.clone(),
+        100,
+        10,
+    )
+    .is_err());
+
+    assert!(core::db_mark_todo_followup_generation_job_running(
+        app_dir.clone(),
+        wrong_key.clone(),
+        "todo_1".to_string(),
+        120,
+    )
+    .is_err());
+
+    assert!(core::db_enqueue_todo_followup_generation_job(
+        app_dir,
+        wrong_key,
+        "todo_1".to_string(),
+        "manual_regenerate".to_string(),
+        None,
+        130,
+    )
+    .is_err());
 }
