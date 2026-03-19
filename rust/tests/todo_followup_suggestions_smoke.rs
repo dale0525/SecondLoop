@@ -735,3 +735,65 @@ fn followup_job_api_requires_a_matching_todo_key() {
     )
     .is_err());
 }
+
+#[test]
+fn followup_job_api_rejects_missing_todo_instead_of_returning_none() {
+    let (temp_dir, key, conn) = setup();
+    let app_dir = temp_dir
+        .path()
+        .join("secondloop")
+        .to_string_lossy()
+        .into_owned();
+
+    db::upsert_todo(
+        &conn,
+        &key,
+        "todo_1",
+        "Research LLM models",
+        None,
+        "open",
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("upsert todo");
+
+    let result = core::db_get_todo_followup_generation_job(
+        app_dir,
+        key.to_vec(),
+        "missing_todo".to_string(),
+    );
+
+    assert!(result.is_err());
+}
+
+#[test]
+fn followup_job_api_returns_none_when_todo_exists_but_job_is_missing() {
+    let (temp_dir, key, conn) = setup();
+    let app_dir = temp_dir
+        .path()
+        .join("secondloop")
+        .to_string_lossy()
+        .into_owned();
+
+    db::upsert_todo(
+        &conn,
+        &key,
+        "todo_1",
+        "Research LLM models",
+        None,
+        "open",
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("upsert todo");
+
+    let result =
+        core::db_get_todo_followup_generation_job(app_dir, key.to_vec(), "todo_1".to_string())
+            .expect("query followup job");
+
+    assert!(result.is_none());
+}

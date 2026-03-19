@@ -302,9 +302,7 @@ pub fn db_get_todo_followup_generation_job(
 ) -> Result<Option<db::TodoFollowupGenerationJob>> {
     let key = key_from_bytes(key)?;
     let conn = db::open(Path::new(&app_dir))?;
-    if !check_todo_access(&conn, &key, &todo_id)? {
-        return Ok(None);
-    }
+    ensure_todo_access(&conn, &key, &todo_id)?;
     db::find_todo_followup_generation_job(&conn, &todo_id)
 }
 
