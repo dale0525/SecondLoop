@@ -340,11 +340,6 @@ class _TodoFollowupGenerationGateState extends State<TodoFollowupGenerationGate>
         backend: backend,
         sessionKey: Uint8List.fromList(sessionKey),
       );
-      final previewJobs = await loadTodoFollowupGenerationPreviewJobs(
-        backendStore,
-        nowMs: DateTime.now().millisecondsSinceEpoch,
-        batchLimit: _kBatchLimit,
-      );
 
       final prefs = await SharedPreferences.getInstance();
       final enabled =
@@ -353,17 +348,31 @@ class _TodoFollowupGenerationGateState extends State<TodoFollowupGenerationGate>
         return;
       }
       if (!enabled) {
-        if (previewJobs.isNotEmpty) {
+        final nowMs = DateTime.now().millisecondsSinceEpoch;
+        final dueJobs = await backendStore.listDueJobs(
+          nowMs: nowMs,
+          limit: _kBatchLimit,
+        );
+        if (dueJobs.isNotEmpty) {
           await finalizeTodoFollowupGenerationJobsForNeedsSetup(
             backendStore,
-            previewJobs,
-            nowMs: DateTime.now().millisecondsSinceEpoch,
+            dueJobs,
+            nowMs: nowMs,
           );
           _notifyExternalChange(syncEngine);
           _schedule(_kDrainInterval);
           return;
         }
         _schedule(_kIdleInterval);
+        return;
+      }
+
+      final previewJobs = await loadTodoFollowupGenerationPreviewJobs(
+        backendStore,
+        nowMs: DateTime.now().millisecondsSinceEpoch,
+        batchLimit: _kBatchLimit,
+      );
+      if (!mounted) {
         return;
       }
 

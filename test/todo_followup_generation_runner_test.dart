@@ -347,6 +347,7 @@ void main() {
     expect(client.lastManualFollowups, const <String>[
       '用户补充：优先关注价格和 API 稳定性',
     ]);
+    expect(client.lastTaskContext, isNot(contains('用户补充：优先关注价格和 API 稳定性')));
     expect(client.lastTaskContext, isNot(contains('旧的自动信息收集结果')));
   });
 

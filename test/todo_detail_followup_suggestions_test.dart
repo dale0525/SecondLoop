@@ -77,6 +77,68 @@ void main() {
     expect(backend.appliedSuggestionIds, const <String>['f1']);
   });
 
+  testWidgets('TodoDetailPage applying follow-up wakes sync listeners',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({
+      'semantic_parse_data_consent_v1': true,
+    });
+    _setLargeDisplay(tester);
+    final backend = _Backend();
+    final engine = SyncEngine(
+      syncRunner: _NoopSyncRunner(),
+      loadConfig: () async => null,
+    );
+    var changeCount = 0;
+    void onChange() => changeCount += 1;
+    engine.changes.addListener(onChange);
+    addTearDown(() {
+      engine.changes.removeListener(onChange);
+      engine.stop();
+    });
+
+    await tester.pumpWidget(_buildSubject(backend, syncEngine: engine));
+    await tester.pumpAndSettle();
+
+    await tester.tap(
+      find.byKey(const ValueKey('todo_detail_followup_apply_pending')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(backend.appliedSuggestionIds, const <String>['f1']);
+    expect(changeCount, greaterThan(0));
+  });
+
+  testWidgets('TodoDetailPage dismissing follow-up wakes sync listeners',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({
+      'semantic_parse_data_consent_v1': true,
+    });
+    _setLargeDisplay(tester);
+    final backend = _Backend();
+    final engine = SyncEngine(
+      syncRunner: _NoopSyncRunner(),
+      loadConfig: () async => null,
+    );
+    var changeCount = 0;
+    void onChange() => changeCount += 1;
+    engine.changes.addListener(onChange);
+    addTearDown(() {
+      engine.changes.removeListener(onChange);
+      engine.stop();
+    });
+
+    await tester.pumpWidget(_buildSubject(backend, syncEngine: engine));
+    await tester.pumpAndSettle();
+
+    await tester.tap(
+      find.byKey(const ValueKey('todo_detail_followup_dismiss_pending')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(backend.dismissedSuggestionIds, const <String>['f1']);
+    expect(changeCount, greaterThan(0));
+  });
+
   testWidgets('TodoDetailPage renders applied follow-up suggestions',
       (tester) async {
     SharedPreferences.setMockInitialValues({

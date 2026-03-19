@@ -188,7 +188,8 @@ final class TodoFollowupGenerationRunner {
         final contextActivities = job.includeManualFollowups
             ? activities
                 .where((activity) =>
-                    activity.activityType != 'followup_information')
+                    activity.activityType != 'followup_information' &&
+                    activity.activityType != 'note')
                 .toList(growable: false)
             : activities;
         final taskContext = buildTodoFollowupSuggestionContext(

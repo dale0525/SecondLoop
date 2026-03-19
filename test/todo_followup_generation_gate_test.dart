@@ -294,6 +294,53 @@ void main() {
     expect(changeCount, greaterThan(0));
   });
 
+  testWidgets('consent-disabled gate skips preview refetch expansion',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({
+      'semantic_parse_data_consent_v1': false,
+    });
+
+    final backend = _FakeTodoFollowupGenerationGateBackend(
+      dueJobs: List<TodoFollowupGenerationJob>.generate(
+        6,
+        (index) => TodoFollowupGenerationJob(
+          todoId: 'todo_manual_$index',
+          triggerKind: 'manual_regenerate',
+          status: 'pending',
+          attempts: 0,
+          nextRetryAtMs: null,
+          lastError: null,
+          includeManualFollowups: true,
+          taskTypeHint: 'research',
+          createdAtMs: index,
+          updatedAtMs: index,
+        ),
+        growable: false,
+      ),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: AppBackendScope(
+          backend: backend,
+          child: SessionScope(
+            sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+            lock: () {},
+            child: const TodoFollowupGenerationGate(
+              child: SizedBox.shrink(),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 3));
+
+    expect(backend.listDueJobsCallCount, 1);
+    expect(backend.listDueJobsLimits, const <int>[5]);
+  });
+
   testWidgets('disposing gate mid-run does not finalize queued jobs',
       (tester) async {
     SharedPreferences.setMockInitialValues({
@@ -907,6 +954,7 @@ final class _FakeTodoFollowupGenerationGateBackend extends NativeAppBackend {
   final List<String> failedTodoIds = <String>[];
   final List<String> succeededTodoIds = <String>[];
   final List<String> generatedSuggestionTodoIds = <String>[];
+  final List<int> listDueJobsLimits = <int>[];
   int listDueJobsCallCount = 0;
   int localPromptCalls = 0;
   int cloudPromptCalls = 0;
@@ -1013,6 +1061,7 @@ final class _FakeTodoFollowupGenerationGateBackend extends NativeAppBackend {
     int limit = 5,
   }) async {
     listDueJobsCallCount += 1;
+    listDueJobsLimits.add(limit);
     return dueJobs.take(limit).toList(growable: false);
   }
 

@@ -89,6 +89,7 @@ extension _TodoDetailPageStateFollowupSuggestions on _TodoDetailPageState {
   Future<void> _applyFollowupSuggestionIds(List<String> suggestionIds) async {
     final backend = AppBackendScope.maybeOf(context);
     final session = SessionScope.maybeOf(context);
+    final syncEngine = SyncEngineScope.maybeOf(context);
     if (backend == null ||
         session == null ||
         !backend.supportsTodoFollowupSuggestions ||
@@ -106,6 +107,7 @@ extension _TodoDetailPageStateFollowupSuggestions on _TodoDetailPageState {
       _showChecklistMutationError(error);
       return;
     }
+    syncEngine?.notifyLocalMutation();
     if (!mounted) return;
     _setState(() {
       _activitiesFuture = _loadActivities();
@@ -116,6 +118,7 @@ extension _TodoDetailPageStateFollowupSuggestions on _TodoDetailPageState {
   Future<void> _dismissFollowupSuggestionIds(List<String> suggestionIds) async {
     final backend = AppBackendScope.maybeOf(context);
     final session = SessionScope.maybeOf(context);
+    final syncEngine = SyncEngineScope.maybeOf(context);
     if (backend == null ||
         session == null ||
         !backend.supportsTodoFollowupSuggestions ||
@@ -133,6 +136,7 @@ extension _TodoDetailPageStateFollowupSuggestions on _TodoDetailPageState {
       _showChecklistMutationError(error);
       return;
     }
+    syncEngine?.notifyLocalMutation();
     if (!mounted) return;
     _setState(() {
       _followupSuggestionsFuture = _loadFollowupSuggestions();
