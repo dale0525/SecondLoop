@@ -6,7 +6,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../features/actions/settings/actions_settings_store.dart';
 import '../backend/app_backend.dart';
-import '../backend/native_backend.dart';
 import '../cloud/cloud_auth_scope.dart';
 import '../session/session_scope.dart';
 import '../subscription/subscription_scope.dart';
@@ -166,7 +165,7 @@ class _TodoFollowupGenerationGateState extends State<TodoFollowupGenerationGate>
     super.didChangeDependencies();
 
     final backend = AppBackendScope.of(context);
-    if (backend is! NativeAppBackend) {
+    if (!backend.supportsTodoFollowupSuggestions) {
       _detachSyncEngine();
       _timer?.cancel();
       _timer = null;
@@ -240,9 +239,8 @@ class _TodoFollowupGenerationGateState extends State<TodoFollowupGenerationGate>
   Future<void> _runOnce() async {
     if (_running || !mounted) return;
 
-    final backendAny = AppBackendScope.of(context);
-    if (backendAny is! NativeAppBackend) return;
-    final backend = backendAny;
+    final backend = AppBackendScope.of(context);
+    if (!backend.supportsTodoFollowupSuggestions) return;
     final sessionKey = SessionScope.of(context).sessionKey;
     final syncEngine = SyncEngineScope.maybeOf(context);
     final localeTag = Localizations.localeOf(context).toLanguageTag();
@@ -308,21 +306,11 @@ class _TodoFollowupGenerationGateState extends State<TodoFollowupGenerationGate>
         final idToken = prepared.idToken;
 
         if (route == AskAiRouteKind.needsSetup) {
-          if (passPlan.hasManualRegenerateDueJob) {
-            await deferTodoFollowupGenerationJobsForRetry(
-              backendStore,
-              passPlan.jobs,
-              nowMs: nowMs,
-              retryDelay: _kFailureInterval,
-              lastError: 'manual_followup_route_unavailable',
-            );
-          } else {
-            await finalizeTodoFollowupGenerationJobsForNeedsSetup(
-              backendStore,
-              passPlan.jobs,
-              nowMs: nowMs,
-            );
-          }
+          await finalizeTodoFollowupGenerationJobsForNeedsSetup(
+            backendStore,
+            passPlan.jobs,
+            nowMs: nowMs,
+          );
           passDidUpdateJobs = true;
           didUpdateJobs = true;
           continue;

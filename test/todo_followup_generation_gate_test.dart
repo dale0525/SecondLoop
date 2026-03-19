@@ -293,8 +293,7 @@ void main() {
     expect(changeCount, greaterThan(0));
   });
 
-  testWidgets(
-      'Product intent: manual pass retries later when route is temporarily unavailable',
+  testWidgets('Product intent: manual pass is canceled when route needs setup',
       (tester) async {
     SharedPreferences.setMockInitialValues({
       'semantic_parse_data_consent_v1': true,
@@ -335,12 +334,12 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(seconds: 3));
 
-    expect(backend.failedTodoIds, contains('todo_manual'));
-    expect(backend.canceledTodoIds, isEmpty);
+    expect(backend.canceledTodoIds, contains('todo_manual'));
+    expect(backend.failedTodoIds, isEmpty);
   });
 
   testWidgets(
-      'Product intent: route-unavailable gate keeps manual regenerate retryable while draining auto jobs',
+      'Product intent: needs-setup gate cancels manual regenerate while draining auto jobs',
       (tester) async {
     SharedPreferences.setMockInitialValues({
       'semantic_parse_data_consent_v1': true,
@@ -393,9 +392,9 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(seconds: 3));
 
-    expect(backend.failedTodoIds, contains('todo_manual'));
+    expect(backend.canceledTodoIds, contains('todo_manual'));
     expect(backend.skippedTodoIds, contains('todo_auto'));
-    expect(backend.canceledTodoIds, isEmpty);
+    expect(backend.failedTodoIds, isEmpty);
   });
 
   testWidgets(
@@ -656,6 +655,51 @@ void main() {
     expect(backend.localPromptCalls, 0);
     expect(backend.succeededTodoIds, contains('todo_manual_cloud'));
   });
+
+  testWidgets('gate runs for supported non-native backends via capability',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({
+      'semantic_parse_data_consent_v1': true,
+    });
+
+    final backend = _CapabilityTodoFollowupGenerationGateBackend(
+      dueJobs: const <TodoFollowupGenerationJob>[
+        TodoFollowupGenerationJob(
+          todoId: 'todo_capability',
+          triggerKind: 'auto_create',
+          status: 'pending',
+          attempts: 0,
+          nextRetryAtMs: null,
+          lastError: null,
+          includeManualFollowups: false,
+          taskTypeHint: 'research',
+          createdAtMs: 0,
+          updatedAtMs: 0,
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: AppBackendScope(
+          backend: backend,
+          child: SessionScope(
+            sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+            lock: () {},
+            child: const TodoFollowupGenerationGate(
+              child: SizedBox.shrink(),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 3));
+
+    expect(backend.listDueJobsCallCount, 1);
+    expect(backend.skippedTodoIds, contains('todo_capability'));
+  });
 }
 
 final class _NoopSyncRunner implements SyncRunner {
@@ -903,6 +947,46 @@ final class _AiPromptFailure implements Exception {
 
   @override
   String toString() => message;
+}
+
+final class _CapabilityTodoFollowupGenerationGateBackend extends AppBackend {
+  _CapabilityTodoFollowupGenerationGateBackend({required this.dueJobs});
+
+  final List<TodoFollowupGenerationJob> dueJobs;
+  final List<String> skippedTodoIds = <String>[];
+  int listDueJobsCallCount = 0;
+
+  @override
+  bool get supportsTodoFollowupSuggestions => true;
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+
+  @override
+  Future<List<LlmProfile>> listLlmProfiles(Uint8List key) async =>
+      const <LlmProfile>[];
+
+  @override
+  Future<List<TodoFollowupGenerationJob>> listDueTodoFollowupGenerationJobs(
+    Uint8List key, {
+    required int nowMs,
+    int limit = 5,
+  }) async {
+    listDueJobsCallCount += 1;
+    return dueJobs.take(limit).toList(growable: false);
+  }
+
+  @override
+  Future<Todo?> getTodoById(Uint8List key, String todoId) async => null;
+
+  @override
+  Future<void> markTodoFollowupGenerationJobSkipped(
+    Uint8List key, {
+    required String todoId,
+    required int nowMs,
+  }) async {
+    skippedTodoIds.add(todoId);
+  }
 }
 
 final class _FakeTodoFollowupGenerationStore
