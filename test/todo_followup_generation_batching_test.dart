@@ -160,6 +160,41 @@ void main() {
     expect(previewJobs.any((job) => job.todoId == 'todo_auto_deep'), isTrue);
     expect(store.requestedLimits, contains(640));
   });
+
+  test('preview loader caps refetch expansion for deep manual backlog',
+      () async {
+    final store = _PreviewStore(
+      jobs: <TodoFollowupGenerationJob>[
+        for (var index = 0; index < 2000; index += 1)
+          TodoFollowupGenerationJob(
+            todoId: 'todo_manual_$index',
+            triggerKind: 'manual_regenerate',
+            status: 'pending',
+            attempts: 0,
+            nextRetryAtMs: null,
+            lastError: null,
+            includeManualFollowups: true,
+            taskTypeHint: 'research',
+            createdAtMs: index,
+            updatedAtMs: index,
+          ),
+      ],
+    );
+
+    final previewJobs = await loadTodoFollowupGenerationPreviewJobs(
+      store,
+      nowMs: 0,
+      batchLimit: 5,
+    );
+
+    expect(previewJobs, hasLength(5));
+    expect(
+      previewJobs.every((job) => job.triggerKind == 'manual_regenerate'),
+      isTrue,
+    );
+    expect(store.requestedLimits.last, 640);
+    expect(store.requestedLimits.every((limit) => limit <= 640), isTrue);
+  });
 }
 
 final class _PreviewStore implements TodoFollowupGenerationStore {

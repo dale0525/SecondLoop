@@ -4,7 +4,6 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../../features/actions/settings/actions_settings_store.dart';
 import '../backend/app_backend.dart';
 import '../cloud/cloud_auth_scope.dart';
 import '../session/session_scope.dart';
@@ -18,6 +17,8 @@ import 'semantic_parse_data_consent_prefs.dart';
 import 'foreground_ai_route_preflight.dart';
 import 'todo_followup_generation_runner.dart';
 import 'todo_followup_suggestions_ai.dart';
+
+const _kPreviewRefetchLimitMultiplier = 128;
 
 final class TodoFollowupGenerationPassPlan {
   const TodoFollowupGenerationPassPlan({
@@ -112,6 +113,7 @@ Future<List<TodoFollowupGenerationJob>> loadTodoFollowupGenerationPreviewJobs(
 
   var expandedJobs = initialJobs;
   var requestedLimit = batchLimit * 2;
+  final maxRequestedLimit = batchLimit * _kPreviewRefetchLimitMultiplier;
   while (true) {
     final nextJobs = await store.listDueJobs(
       nowMs: nowMs,
@@ -130,7 +132,13 @@ Future<List<TodoFollowupGenerationJob>> loadTodoFollowupGenerationPreviewJobs(
     if (expandedJobs.length < requestedLimit) {
       break;
     }
+    if (requestedLimit >= maxRequestedLimit) {
+      break;
+    }
     requestedLimit *= 2;
+    if (requestedLimit > maxRequestedLimit) {
+      requestedLimit = maxRequestedLimit;
+    }
   }
 
   return selectTodoFollowupGenerationPreviewJobs(
@@ -388,7 +396,6 @@ class _TodoFollowupGenerationGateState extends State<TodoFollowupGenerationGate>
 
       final passPlans = buildTodoFollowupGenerationPassPlans(previewJobs);
 
-      await ActionsSettingsStore.load();
       for (final passPlan in passPlans) {
         var passDidMutateAny = false;
         var passDidUpdateJobs = false;

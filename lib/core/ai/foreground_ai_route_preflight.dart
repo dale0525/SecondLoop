@@ -21,6 +21,7 @@ Future<String?> prepareTodoFollowupGenerationIdToken(
   CloudAuthController? controller, {
   required SubscriptionStatus subscriptionStatus,
   required String gatewayBaseUrl,
+  CloudCapabilityAuthMode authMode = CloudCapabilityAuthMode.background,
   bool forceWarm = false,
 }) async {
   final normalizedGatewayBaseUrl = gatewayBaseUrl.trim();
@@ -36,7 +37,7 @@ Future<String?> prepareTodoFollowupGenerationIdToken(
 
   return readCloudCapabilityIdToken(
     controller,
-    mode: CloudCapabilityAuthMode.background,
+    mode: authMode,
   );
 }
 
@@ -312,6 +313,9 @@ Future<TodoFollowupGenerationPreparedRoute> prepareTodoFollowupGenerationRoute(
     cloudAuthController,
     subscriptionStatus: subscriptionStatus,
     gatewayBaseUrl: gatewayConfig.baseUrl,
+    authMode: hasManualRegenerateDueJob
+        ? CloudCapabilityAuthMode.interactive
+        : CloudCapabilityAuthMode.background,
     forceWarm: hasManualRegenerateDueJob,
   );
   final route = await decideTodoFollowupGenerationRoute(
