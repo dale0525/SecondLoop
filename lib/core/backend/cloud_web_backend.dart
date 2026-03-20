@@ -44,6 +44,8 @@ final class CloudWebBackend extends AppBackend implements AttachmentsBackend {
   final Map<String, List<String>> _attachmentShasByMessageId =
       <String, List<String>>{};
   final Map<String, Todo> _todosById = <String, Todo>{};
+  final Map<String, List<TodoChecklistItem>> _checklistItemsByTodoId =
+      <String, List<TodoChecklistItem>>{};
   final Map<String, _DeletedMessageSnapshot> _deletedMessagesById =
       <String, _DeletedMessageSnapshot>{};
   var _idCounter = 0;
@@ -104,8 +106,25 @@ final class CloudWebBackend extends AppBackend implements AttachmentsBackend {
     _attachmentBytesBySha.clear();
     _attachmentShasByMessageId.clear();
     _todosById.clear();
+    _checklistItemsByTodoId.clear();
     _deletedMessagesById.clear();
     _idCounter = 0;
+  }
+
+  List<TodoChecklistItem> _checklistBucket(String todoId) {
+    return _checklistItemsByTodoId.putIfAbsent(
+        todoId, () => <TodoChecklistItem>[]);
+  }
+
+  TodoChecklistItem _findChecklistItem(String itemId) {
+    for (final items in _checklistItemsByTodoId.values) {
+      for (final item in items) {
+        if (item.id == itemId) {
+          return item;
+        }
+      }
+    }
+    throw StateError('unknown_checklist_item:$itemId');
   }
 
   List<Message> _messageBucket(String conversationId) {
@@ -453,7 +472,167 @@ final class CloudWebBackend extends AppBackend implements AttachmentsBackend {
     Uint8List key,
     String todoId,
   ) async {
-    return const <TodoChecklistItem>[];
+    final items = List<TodoChecklistItem>.of(_checklistBucket(todoId))
+      ..sort((left, right) => left.sortOrder.compareTo(right.sortOrder));
+    return items;
+  }
+
+  @override
+  Future<TodoChecklistItem> createTodoChecklistItem(
+    Uint8List key, {
+    required String todoId,
+    required String content,
+  }) async {
+    if (!_todosById.containsKey(todoId)) {
+      throw StateError('unknown_todo:$todoId');
+    }
+    final now = _touchNow();
+    final bucket = _checklistBucket(todoId);
+    final item = TodoChecklistItem(
+      id: _nextId('checklist'),
+      todoId: todoId,
+      content: content,
+      sortOrder: bucket.length,
+      isDone: false,
+      createdAtMs: _asPlatformInt64(now),
+      updatedAtMs: _asPlatformInt64(now),
+    );
+    bucket.add(item);
+    return item;
+  }
+
+  @override
+  Future<TodoChecklistItem> updateTodoChecklistItemContent(
+    Uint8List key, {
+    required String itemId,
+    required String content,
+  }) async {
+    final existing = _findChecklistItem(itemId);
+    final now = _touchNow();
+    final updated = TodoChecklistItem(
+      id: existing.id,
+      todoId: existing.todoId,
+      content: content,
+      sortOrder: existing.sortOrder,
+      isDone: existing.isDone,
+      createdAtMs: existing.createdAtMs,
+      updatedAtMs: _asPlatformInt64(now),
+    );
+    final bucket = _checklistBucket(existing.todoId);
+    final index = bucket.indexWhere((item) => item.id == itemId);
+    bucket[index] = updated;
+    return updated;
+  }
+
+  @override
+  Future<TodoChecklistItem> setTodoChecklistItemDone(
+    Uint8List key, {
+    required String itemId,
+    required bool isDone,
+  }) async {
+    final existing = _findChecklistItem(itemId);
+    final now = _touchNow();
+    final updated = TodoChecklistItem(
+      id: existing.id,
+      todoId: existing.todoId,
+      content: existing.content,
+      sortOrder: existing.sortOrder,
+      isDone: isDone,
+      createdAtMs: existing.createdAtMs,
+      updatedAtMs: _asPlatformInt64(now),
+    );
+    final bucket = _checklistBucket(existing.todoId);
+    final index = bucket.indexWhere((item) => item.id == itemId);
+    bucket[index] = updated;
+    return updated;
+  }
+
+  @override
+  Future<void> deleteTodoChecklistItem(
+    Uint8List key, {
+    required String itemId,
+  }) async {
+    for (final entry in _checklistItemsByTodoId.entries) {
+      final index = entry.value.indexWhere((item) => item.id == itemId);
+      if (index < 0) continue;
+      entry.value.removeAt(index);
+      for (var i = 0; i < entry.value.length; i += 1) {
+        final current = entry.value[i];
+        entry.value[i] = TodoChecklistItem(
+          id: current.id,
+          todoId: current.todoId,
+          content: current.content,
+          sortOrder: i,
+          isDone: current.isDone,
+          createdAtMs: current.createdAtMs,
+          updatedAtMs: current.updatedAtMs,
+        );
+      }
+      return;
+    }
+  }
+
+  @override
+  Future<void> reorderTodoChecklistItems(
+    Uint8List key, {
+    required String todoId,
+    required List<String> orderedItemIds,
+  }) async {
+    final bucket = _checklistBucket(todoId);
+    if (orderedItemIds.isEmpty) return;
+    final byId = <String, TodoChecklistItem>{
+      for (final item in bucket) item.id: item,
+    };
+    final reordered = <TodoChecklistItem>[];
+    for (var i = 0; i < orderedItemIds.length; i += 1) {
+      final item = byId[orderedItemIds[i]];
+      if (item == null) {
+        throw StateError('unknown_checklist_item:${orderedItemIds[i]}');
+      }
+      reordered.add(
+        TodoChecklistItem(
+          id: item.id,
+          todoId: item.todoId,
+          content: item.content,
+          sortOrder: i,
+          isDone: item.isDone,
+          createdAtMs: item.createdAtMs,
+          updatedAtMs: item.updatedAtMs,
+        ),
+      );
+    }
+    bucket
+      ..clear()
+      ..addAll(reordered);
+  }
+
+  @override
+  Future<List<TodoChecklistProgress>> listTodoChecklistProgress(
+    Uint8List key,
+  ) async {
+    final progress = <TodoChecklistProgress>[];
+    for (final todo in _todosById.values) {
+      if (todo.status == 'done' || todo.status == 'dismissed') {
+        continue;
+      }
+      final items =
+          _checklistItemsByTodoId[todo.id] ?? const <TodoChecklistItem>[];
+      if (items.isEmpty) continue;
+      var doneCount = 0;
+      for (final item in items) {
+        if (item.isDone) {
+          doneCount += 1;
+        }
+      }
+      progress.add(
+        TodoChecklistProgress(
+          todoId: todo.id,
+          totalCount: items.length,
+          doneCount: doneCount,
+        ),
+      );
+    }
+    return progress;
   }
 
   @override

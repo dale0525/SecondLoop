@@ -223,16 +223,65 @@ void main() {
       expect(todos, isEmpty);
     });
 
-    test('listTodoChecklistItems returns an empty list on web for now',
-        () async {
+    test('supports checklist CRUD and progress on web backend', () async {
       final backend = CloudWebBackend(
         chatClient: _FakeCloudWebChatClient(responseText: 'ok'),
       );
 
-      expect(
-        await backend.listTodoChecklistItems(Uint8List(0), 'todo:web'),
-        isEmpty,
+      final key = Uint8List(0);
+      await backend.upsertTodo(
+        key,
+        id: 'todo:web',
+        title: 'Ship web task hub',
+        status: 'open',
       );
+
+      final first = await backend.createTodoChecklistItem(
+        key,
+        todoId: 'todo:web',
+        content: 'First item',
+      );
+      final second = await backend.createTodoChecklistItem(
+        key,
+        todoId: 'todo:web',
+        content: 'Second item',
+      );
+
+      await backend.updateTodoChecklistItemContent(
+        key,
+        itemId: second.id,
+        content: 'Second item updated',
+      );
+      await backend.setTodoChecklistItemDone(
+        key,
+        itemId: first.id,
+        isDone: true,
+      );
+      await backend.reorderTodoChecklistItems(
+        key,
+        todoId: 'todo:web',
+        orderedItemIds: <String>[second.id, first.id],
+      );
+
+      final items = await backend.listTodoChecklistItems(key, 'todo:web');
+      final progress = await backend.listTodoChecklistProgress(key);
+
+      expect(items, hasLength(2));
+      expect(items.first.id, second.id);
+      expect(items.first.content, 'Second item updated');
+      expect(items.last.isDone, isTrue);
+      expect(progress, hasLength(1));
+      expect(progress.single.todoId, 'todo:web');
+      expect(progress.single.totalCount, 2);
+      expect(progress.single.doneCount, 1);
+
+      await backend.deleteTodoChecklistItem(
+        key,
+        itemId: first.id,
+      );
+
+      expect(
+          await backend.listTodoChecklistItems(key, 'todo:web'), hasLength(1));
     });
 
     test('task hub quick actions can transition todos on web backend',
