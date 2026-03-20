@@ -73,7 +73,10 @@ extension _ChatPageStateTodoMessageBadge on _ChatPageState {
     if (!mounted || todo == null) return false;
     await _pushRouteFromChat(
       MaterialPageRoute(
-        builder: (context) => TodoDetailPage(initialTodo: todo!),
+        builder: (_) => wrapPushedPageWithInheritedScopes(
+          context,
+          TodoDetailPage(initialTodo: todo!),
+        ),
       ),
     );
     return true;

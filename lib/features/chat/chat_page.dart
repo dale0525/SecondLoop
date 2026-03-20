@@ -108,6 +108,7 @@ import 'chat_markdown_editor_submission.dart';
 import 'chat_markdown_link_handler.dart';
 import 'message_deeplink.dart';
 import 'chat_audio_recording_recovery_dialog.dart';
+import 'chat_route_scope_wrapper.dart';
 import 'message_viewer_page.dart';
 import 'ask_ai_intent_resolver.dart';
 import 'ask_scope_empty.dart';

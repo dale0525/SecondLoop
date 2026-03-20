@@ -1195,7 +1195,10 @@ extension _ChatPageStateMethodsA on _ChatPageState {
     if (!mounted) return;
     await _pushRouteFromChat(
       MaterialPageRoute(
-        builder: (context) => TodoDetailPage(initialTodo: linkedTodo),
+        builder: (_) => wrapPushedPageWithInheritedScopes(
+          context,
+          TodoDetailPage(initialTodo: linkedTodo),
+        ),
       ),
     );
   }

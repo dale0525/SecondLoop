@@ -101,8 +101,10 @@ extension _ChatPageStateBuild on _ChatPageState {
                         onOpenTodo: (entry) async {
                           await _pushRouteFromChat(
                             MaterialPageRoute(
-                              builder: (context) =>
-                                  TodoDetailPage(initialTodo: entry.todo),
+                              builder: (_) => wrapPushedPageWithInheritedScopes(
+                                context,
+                                TodoDetailPage(initialTodo: entry.todo),
+                              ),
                             ),
                           );
                           if (!mounted) return;
@@ -123,7 +125,10 @@ extension _ChatPageStateBuild on _ChatPageState {
                         onViewAll: () async {
                           await _pushRouteFromChat(
                             MaterialPageRoute(
-                              builder: (context) => const TaskHubPage(),
+                              builder: (_) => wrapPushedPageWithInheritedScopes(
+                                context,
+                                const TaskHubPage(),
+                              ),
                             ),
                           );
                           if (!mounted) return;
