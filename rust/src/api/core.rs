@@ -729,13 +729,19 @@ pub fn db_list_due_todo_followup_generation_jobs(
     now_ms: i64,
     limit: u32,
 ) -> Result<Vec<db::TodoFollowupGenerationJob>> {
+    let app_dir = PathBuf::from(app_dir);
     let key = key_from_bytes(key)?;
-    let conn = db::open(Path::new(&app_dir))?;
+    auth::validate_key(&app_dir, &key)?;
+    let conn = db::open(&app_dir)?;
     let jobs = db::list_due_todo_followup_generation_jobs(&conn, now_ms, limit as i64)?;
-    for job in &jobs {
-        ensure_todo_access(&conn, &key, &job.todo_id)?;
+    let mut visible_jobs = Vec::with_capacity(jobs.len());
+    for job in jobs {
+        match check_todo_access(&conn, &key, &job.todo_id) {
+            Ok(true) => visible_jobs.push(job),
+            Ok(false) | Err(_) => {}
+        }
     }
-    Ok(jobs)
+    Ok(visible_jobs)
 }
 
 #[flutter_rust_bridge::frb]

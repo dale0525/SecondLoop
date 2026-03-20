@@ -796,6 +796,56 @@ fn followup_job_api_requires_a_matching_todo_key() {
 }
 
 #[test]
+fn followup_job_api_filters_out_jobs_for_inaccessible_todos() {
+    let (temp_dir, key, conn) = setup();
+    let app_dir = temp_dir
+        .path()
+        .join("secondloop")
+        .to_string_lossy()
+        .into_owned();
+
+    db::upsert_todo(
+        &conn,
+        &key,
+        "todo_visible",
+        "Research LLM models",
+        None,
+        "open",
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("upsert visible todo");
+
+    db::enqueue_todo_followup_generation_job(&conn, "todo_visible", "auto_create", None, 100)
+        .expect("enqueue visible job");
+
+    let inaccessible_key = [9u8; 32];
+    db::upsert_todo(
+        &conn,
+        &inaccessible_key,
+        "todo_hidden",
+        "Secret todo",
+        None,
+        "open",
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("upsert inaccessible todo");
+    db::enqueue_todo_followup_generation_job(&conn, "todo_hidden", "auto_create", None, 90)
+        .expect("enqueue inaccessible job");
+
+    let due = core::db_list_due_todo_followup_generation_jobs(app_dir, key.to_vec(), 100, 10)
+        .expect("list visible due jobs");
+
+    assert_eq!(due.len(), 1);
+    assert_eq!(due[0].todo_id, "todo_visible");
+}
+
+#[test]
 fn followup_job_api_rejects_missing_todo_instead_of_returning_none() {
     let (temp_dir, key, conn) = setup();
     let app_dir = temp_dir

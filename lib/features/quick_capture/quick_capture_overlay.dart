@@ -183,10 +183,13 @@ class _QuickCaptureDialogState extends State<_QuickCaptureDialog> {
       final looksLikeLongFormNote = isLongTextForTodoAutomation(text);
       final looksLikeTodoRelevant = looksLikeTodoRelevantForSemanticParse(text);
 
-      if (!looksLikeReview && !looksLikeLongFormNote && looksLikeTodoRelevant) {
-        // Product decision: when AI automation is available, quick capture
-        // prefers semantic parsing over the deterministic local todo flow.
-        // Local time/review parsing remains the fallback when AI cannot run.
+      if (timeResolution == null &&
+          !looksLikeReview &&
+          !looksLikeLongFormNote &&
+          looksLikeTodoRelevant) {
+        // Keep explicit time captures on the deterministic local flow.
+        // Semantic parsing stays the preferred path only for todo-relevant
+        // inputs that do not already have a clear local time match.
         final prefs = await SharedPreferences.getInstance();
         final consented =
             prefs.getBool(SemanticParseDataConsentPrefs.prefsKey) ?? false;

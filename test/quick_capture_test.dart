@@ -19,7 +19,7 @@ import 'package:secondloop/src/rust/db.dart';
 
 void main() {
   testWidgets(
-      'Product intent: Quick capture prefers semantic parse over local time suggestion when AI automation is available',
+      'Quick capture keeps explicit time phrases on local suggestion flow even when AI automation is available',
       (tester) async {
     SharedPreferences.setMockInitialValues({
       'welcome_guide_seen_v1': true,
@@ -64,11 +64,10 @@ void main() {
     await tester.testTextInput.receiveAction(TextInputAction.done);
     await tester.pumpAndSettle();
 
-    expect(backend.semanticParseEnqueueCount, 1);
+    expect(backend.semanticParseEnqueueCount, 0);
     expect(backend.insertedMessages, hasLength(1));
-    expect(backend.upsertTodoCount, 0);
     expect(find.byKey(const ValueKey('capture_todo_suggestion_sheet')),
-        findsNothing);
+        findsOneWidget);
     expect(controller.consumeReopenMainWindowOnHideRequest(), isFalse);
     expect(controller.consumeOpenChatRequest(), isFalse);
   });
