@@ -1,10 +1,22 @@
-import 'package:flutter/widgets.dart';
+import 'package:flutter/material.dart';
 
 import '../backend/app_backend.dart';
 import '../cloud/cloud_auth_scope.dart';
 import '../session/session_scope.dart';
 import '../subscription/subscription_scope.dart';
 import '../sync/sync_engine_gate.dart';
+
+Future<T?> pushPageWithInheritedScopes<T>(
+  NavigatorState navigator,
+  BuildContext context,
+  Widget child,
+) {
+  return navigator.push<T>(
+    MaterialPageRoute(
+      builder: (_) => wrapPushedPageWithInheritedScopes(context, child),
+    ),
+  );
+}
 
 Widget wrapPushedPageWithInheritedScopes(BuildContext context, Widget child) {
   Widget wrapped = child;

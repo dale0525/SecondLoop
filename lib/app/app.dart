@@ -30,6 +30,7 @@ import '../core/update/release_notes_first_launch_gate.dart';
 import '../i18n/locale_prefs.dart';
 import '../i18n/strings.g.dart';
 import '../ui/sl_background.dart';
+import '../core/navigation/inherited_scope_page_wrapper.dart';
 import 'router.dart';
 import 'theme.dart';
 import 'theme_palette_prefs.dart';
@@ -296,10 +297,10 @@ class _SecondLoopAppState extends State<SecondLoopApp> {
                                       final navigator =
                                           _navigatorKey.currentState;
                                       if (navigator == null) return;
-                                      await navigator.push(
-                                        MaterialPageRoute(
-                                          builder: (_) => const SettingsPage(),
-                                        ),
+                                      await pushPageWithInheritedScopes(
+                                        navigator,
+                                        context,
+                                        const SettingsPage(),
                                       );
                                     },
                                     child: DesktopQuickCaptureService(
