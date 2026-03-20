@@ -66,4 +66,15 @@ void main() {
       'Compare package options',
     ]);
   });
+
+  test('checklist parser salvages malformed json suggestion arrays', () {
+    final parsed = parseTodoChecklistSuggestionsJson(
+      '{"suggestions":["Check current menu and pricing","Confirm delivery window",]}',
+    );
+
+    expect(parsed, const <String>[
+      'Check current menu and pricing',
+      'Confirm delivery window',
+    ]);
+  });
 }

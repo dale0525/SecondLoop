@@ -107,7 +107,14 @@ List<String> parseTodoChecklistSuggestionsJson(
   try {
     decoded = jsonDecode(jsonText);
   } catch (_) {
-    return const <String>[];
+    final recoveredFromLooseJson = _parseChecklistSuggestionsLooseJson(
+      jsonText,
+      maxItems: maxItems,
+    );
+    if (recoveredFromLooseJson.isNotEmpty) {
+      return recoveredFromLooseJson;
+    }
+    return _parseChecklistSuggestionsPlainText(trimmed, maxItems: maxItems);
   }
 
   final rawSuggestions = switch (decoded) {
@@ -140,6 +147,38 @@ List<String> _parseChecklistSuggestionsPlainText(
 
   for (final line in raw.split(RegExp(r'\r?\n'))) {
     final next = _normalizeChecklistSuggestion(line);
+    if (next == null) continue;
+    final dedupeKey = next.toLowerCase();
+    if (!seen.add(dedupeKey)) continue;
+    normalized.add(next);
+    if (normalized.length >= maxItems) break;
+  }
+
+  return List<String>.unmodifiable(normalized);
+}
+
+List<String> _parseChecklistSuggestionsLooseJson(
+  String raw, {
+  required int maxItems,
+}) {
+  final normalized = <String>[];
+  final seen = <String>{};
+
+  for (final match in RegExp(r'"((?:[^"\\]|\\.)*)"').allMatches(raw)) {
+    final encoded = '"${match.group(1)}"';
+    String? candidate;
+    try {
+      final decoded = jsonDecode(encoded);
+      if (decoded is String) {
+        candidate = decoded;
+      }
+    } catch (_) {
+      candidate = match.group(1);
+    }
+    if (candidate == null || candidate.trim().toLowerCase() == 'suggestions') {
+      continue;
+    }
+    final next = _normalizeChecklistSuggestion(candidate);
     if (next == null) continue;
     final dedupeKey = next.toLowerCase();
     if (!seen.add(dedupeKey)) continue;

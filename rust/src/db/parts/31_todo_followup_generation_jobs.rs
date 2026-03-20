@@ -152,29 +152,110 @@ pub fn list_due_todo_followup_generation_jobs(
     limit: i64,
 ) -> Result<Vec<TodoFollowupGenerationJob>> {
     let limit = limit.max(1);
+    let manual_jobs = query_due_todo_followup_generation_jobs(
+        conn,
+        now_ms,
+        limit,
+        TODO_FOLLOWUP_TRIGGER_KIND_MANUAL_REGENERATE,
+    )?;
+    let auto_jobs = query_due_todo_followup_generation_jobs_excluding(
+        conn,
+        now_ms,
+        limit,
+        TODO_FOLLOWUP_TRIGGER_KIND_MANUAL_REGENERATE,
+    )?;
+
+    if limit == 1 {
+        return Ok(
+            manual_jobs
+                .into_iter()
+                .take(1)
+                .chain(auto_jobs.into_iter().take(1))
+                .take(1)
+                .collect(),
+        );
+    }
+
+    if manual_jobs.is_empty() {
+        return Ok(auto_jobs.into_iter().take(limit as usize).collect());
+    }
+    if auto_jobs.is_empty() {
+        return Ok(manual_jobs.into_iter().take(limit as usize).collect());
+    }
+
+    let mut result = manual_jobs
+        .iter()
+        .take((limit - 1) as usize)
+        .cloned()
+        .collect::<Vec<_>>();
+    result.push(auto_jobs[0].clone());
+
+    let mut remaining = (limit as usize).saturating_sub(result.len());
+    if remaining > 0 {
+        result.extend(auto_jobs.iter().skip(1).take(remaining).cloned());
+        remaining = (limit as usize).saturating_sub(result.len());
+    }
+    if remaining > 0 {
+        result.extend(
+            manual_jobs
+                .iter()
+                .skip((limit - 1) as usize)
+                .take(remaining)
+                .cloned(),
+        );
+    }
+
+    Ok(result)
+}
+
+fn query_due_todo_followup_generation_jobs(
+    conn: &Connection,
+    now_ms: i64,
+    limit: i64,
+    trigger_kind: &str,
+) -> Result<Vec<TodoFollowupGenerationJob>> {
+    query_due_todo_followup_generation_jobs_internal(conn, now_ms, limit, trigger_kind, true)
+}
+
+fn query_due_todo_followup_generation_jobs_excluding(
+    conn: &Connection,
+    now_ms: i64,
+    limit: i64,
+    trigger_kind: &str,
+) -> Result<Vec<TodoFollowupGenerationJob>> {
+    query_due_todo_followup_generation_jobs_internal(conn, now_ms, limit, trigger_kind, false)
+}
+
+fn query_due_todo_followup_generation_jobs_internal(
+    conn: &Connection,
+    now_ms: i64,
+    limit: i64,
+    trigger_kind: &str,
+    include_trigger_kind: bool,
+) -> Result<Vec<TodoFollowupGenerationJob>> {
     let running_lease_cutoff_ms = now_ms - TODO_FOLLOWUP_GENERATION_RUNNING_LEASE_MS;
-    let mut stmt = conn.prepare(
+    let filter_sql = if include_trigger_kind { "=" } else { "!=" };
+    let sql = format!(
         r#"
 SELECT todo_id, trigger_kind, status, attempts, next_retry_at_ms, last_error, include_manual_followups, task_type_hint, created_at_ms, updated_at_ms
 FROM todo_followup_generation_jobs
-WHERE (
+WHERE (((
         status IN ('pending', 'failed')
         AND (next_retry_at_ms IS NULL OR next_retry_at_ms <= ?1)
       )
    OR (
         status = 'running'
         AND updated_at_ms <= ?2
-      )
+      ))
+  AND trigger_kind {filter_sql} ?3)
 ORDER BY
-  CASE WHEN trigger_kind = 'manual_regenerate' THEN 0 ELSE 1 END ASC,
-  CASE WHEN trigger_kind = 'manual_regenerate' THEN created_at_ms END ASC,
-  CASE WHEN trigger_kind != 'manual_regenerate' THEN updated_at_ms END ASC,
+  CASE WHEN trigger_kind = 'manual_regenerate' THEN created_at_ms ELSE updated_at_ms END ASC,
   todo_id ASC
-LIMIT ?3
+LIMIT ?4
 "#,
-    )?;
-
-    let mut rows = stmt.query(params![now_ms, running_lease_cutoff_ms, limit])?;
+    );
+    let mut stmt = conn.prepare(&sql)?;
+    let mut rows = stmt.query(params![now_ms, running_lease_cutoff_ms, trigger_kind, limit])?;
     let mut result = Vec::new();
     while let Some(row) = rows.next()? {
         result.push(TodoFollowupGenerationJob {

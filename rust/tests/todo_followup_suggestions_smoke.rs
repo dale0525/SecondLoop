@@ -417,6 +417,63 @@ fn later_auto_create_does_not_overwrite_existing_manual_regenerate_job() {
 }
 
 #[test]
+fn due_job_listing_reserves_one_auto_slot_when_manual_backlog_is_deep() {
+    let (_temp_dir, key, conn) = setup();
+
+    for index in 0..700 {
+        let todo_id = format!("todo_manual_{index}");
+        db::upsert_todo(
+            &conn,
+            &key,
+            &todo_id,
+            &format!("Manual task {index}"),
+            None,
+            "open",
+            None,
+            None,
+            None,
+            None,
+        )
+        .expect("upsert manual todo");
+        db::enqueue_todo_followup_generation_job(
+            &conn,
+            &todo_id,
+            "manual_regenerate",
+            None,
+            100 + index,
+        )
+        .expect("enqueue manual job");
+    }
+
+    db::upsert_todo(
+        &conn,
+        &key,
+        "todo_auto_1",
+        "Automatic task",
+        None,
+        "open",
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("upsert auto todo");
+    db::enqueue_todo_followup_generation_job(&conn, "todo_auto_1", "auto_create", None, 10_000)
+        .expect("enqueue auto job");
+
+    let due = db::list_due_todo_followup_generation_jobs(&conn, 20_000, 5).expect("list due jobs");
+
+    assert_eq!(due.len(), 5);
+    assert_eq!(
+        due.iter()
+            .filter(|job| job.trigger_kind == "manual_regenerate")
+            .count(),
+        4
+    );
+    assert!(due.iter().any(|job| job.todo_id == "todo_auto_1"));
+}
+
+#[test]
 fn auto_create_reenqueue_without_hint_preserves_existing_task_type_hint() {
     let (_temp_dir, key, conn) = setup();
 

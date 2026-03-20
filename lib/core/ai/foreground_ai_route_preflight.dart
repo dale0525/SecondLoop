@@ -132,7 +132,7 @@ Future<ForegroundAiPreparedRoute> prepareForegroundAiRoute(
     cloudAuthController,
     mode: authMode,
   );
-  final route = await _decideForegroundAiRoute(
+  var route = await _decideForegroundAiRoute(
     backend,
     sessionKey,
     routePolicy: routePolicy,
@@ -147,6 +147,15 @@ Future<ForegroundAiPreparedRoute> prepareForegroundAiRoute(
     idToken = await readCloudCapabilityIdToken(
       cloudAuthController,
       mode: authMode,
+    );
+    route = await _decideForegroundAiRoute(
+      backend,
+      sessionKey,
+      routePolicy: routePolicy,
+      cloudIdToken: idToken,
+      gatewayConfig: gatewayConfig,
+      subscriptionStatus: subscriptionStatus,
+      fallbackToNeedsSetupOnRouteError: fallbackToNeedsSetupOnRouteError,
     );
   }
 
