@@ -189,6 +189,42 @@ Future<void> deferTodoFollowupGenerationJobsForRetry(
   }
 }
 
+bool shouldDeferTodoFollowupGenerationNeedsSetup({
+  required bool hasManualRegenerateDueJob,
+  required SubscriptionStatus subscriptionStatus,
+  required String gatewayBaseUrl,
+  required bool hasCloudAuthController,
+}) {
+  if (hasManualRegenerateDueJob) {
+    return false;
+  }
+  if (subscriptionStatus != SubscriptionStatus.unknown) {
+    return false;
+  }
+  if (gatewayBaseUrl.trim().isEmpty) {
+    return false;
+  }
+  return hasCloudAuthController;
+}
+
+Future<void> deferTodoFollowupGenerationJobsForPendingEntitlement(
+  TodoFollowupGenerationStore store,
+  List<TodoFollowupGenerationJob> jobs, {
+  required int nowMs,
+  required Duration retryDelay,
+  required String lastError,
+}) async {
+  for (final job in jobs) {
+    await store.markJobFailed(
+      todoId: job.todoId,
+      attempts: job.attempts.toInt() + 1,
+      nextRetryAtMs: nowMs + retryDelay.inMilliseconds,
+      lastError: lastError,
+      nowMs: nowMs,
+    );
+  }
+}
+
 class TodoFollowupGenerationGate extends StatefulWidget {
   const TodoFollowupGenerationGate({required this.child, super.key});
 
@@ -394,6 +430,7 @@ class _TodoFollowupGenerationGateState extends State<TodoFollowupGenerationGate>
       final cloudAuthScope = CloudAuthScope.maybeOf(context);
       final gatewayConfig =
           cloudAuthScope?.gatewayConfig ?? CloudGatewayConfig.defaultConfig;
+      final hasCloudAuthController = cloudAuthScope?.controller != null;
       if (previewJobs.isEmpty) {
         _schedule(_kIdleInterval);
         return;
@@ -417,11 +454,26 @@ class _TodoFollowupGenerationGateState extends State<TodoFollowupGenerationGate>
         final idToken = prepared.idToken;
 
         if (route == AskAiRouteKind.needsSetup) {
-          await finalizeTodoFollowupGenerationJobsForNeedsSetup(
-            backendStore,
-            passPlan.jobs,
-            nowMs: nowMs,
-          );
+          if (shouldDeferTodoFollowupGenerationNeedsSetup(
+            hasManualRegenerateDueJob: passPlan.hasManualRegenerateDueJob,
+            subscriptionStatus: subscriptionStatus,
+            gatewayBaseUrl: gatewayConfig.baseUrl,
+            hasCloudAuthController: hasCloudAuthController,
+          )) {
+            await deferTodoFollowupGenerationJobsForPendingEntitlement(
+              backendStore,
+              passPlan.jobs,
+              nowMs: nowMs,
+              retryDelay: _kFailureInterval,
+              lastError: 'followup_subscription_pending',
+            );
+          } else {
+            await finalizeTodoFollowupGenerationJobsForNeedsSetup(
+              backendStore,
+              passPlan.jobs,
+              nowMs: nowMs,
+            );
+          }
           passDidUpdateJobs = true;
           didUpdateJobs = true;
           continue;
