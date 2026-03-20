@@ -456,7 +456,10 @@ extension _ChatPageStateMethodsA on _ChatPageState {
   Future<void> _openMessageViewer(String content) async {
     await _pushRouteFromChat(
       MaterialPageRoute(
-        builder: (context) => MessageViewerPage(content: content),
+        builder: (_) => wrapPushedPageWithInheritedScopes(
+          context,
+          MessageViewerPage(content: content),
+        ),
       ),
     );
   }

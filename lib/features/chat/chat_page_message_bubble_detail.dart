@@ -28,7 +28,10 @@ extension _ChatPageStateMessageBubbleDetail on _ChatPageState {
   Future<void> _openAttachmentDetail(Attachment attachment) async {
     await _pushRouteFromChat(
       MaterialPageRoute(
-        builder: (context) => AttachmentViewerPage(attachment: attachment),
+        builder: (_) => wrapPushedPageWithInheritedScopes(
+          context,
+          AttachmentViewerPage(attachment: attachment),
+        ),
       ),
     );
   }
