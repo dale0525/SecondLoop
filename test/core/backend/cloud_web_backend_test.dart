@@ -167,6 +167,34 @@ void main() {
       expect(todos.single.manualUrgencyNudgeScore, -1);
     });
 
+    test('upsertTodo preserves existing manual nudge scores when omitted',
+        () async {
+      final backend = CloudWebBackend(
+        chatClient: _FakeCloudWebChatClient(responseText: 'ok'),
+      );
+      final key = Uint8List(0);
+
+      await backend.upsertTodo(
+        key,
+        id: 'todo:web-nudges',
+        title: 'Ship web task hub',
+        status: 'open',
+        manualImportanceNudgeScore: 1,
+        manualUrgencyNudgeScore: -1,
+      );
+
+      final updated = await backend.upsertTodo(
+        key,
+        id: 'todo:web-nudges',
+        title: 'Ship web task hub v2',
+        status: 'open',
+      );
+
+      expect(updated.title, 'Ship web task hub v2');
+      expect(updated.manualImportanceNudgeScore, 1);
+      expect(updated.manualUrgencyNudgeScore, -1);
+    });
+
     test('transitionTodo patches todo fields atomically on web', () async {
       final backend = CloudWebBackend(
         chatClient: _FakeCloudWebChatClient(responseText: 'ok'),
@@ -376,6 +404,59 @@ void main() {
       expect(activities.last.toStatus, 'done');
     });
 
+    test('setTodoStatus mirrors native review and schedule side effects',
+        () async {
+      var nowMs = 1000;
+      final backend = CloudWebBackend(
+        chatClient: _FakeCloudWebChatClient(responseText: 'ok'),
+        nowMs: () => nowMs,
+      );
+      final key = Uint8List(0);
+
+      await backend.upsertTodo(
+        key,
+        id: 'todo:inbox-status',
+        title: 'Inbox task',
+        status: 'inbox',
+        reviewStage: 2,
+        nextReviewAtMs: 7777,
+        lastReviewAtMs: 8888,
+        manualImportanceNudgeScore: 1,
+        manualUrgencyNudgeScore: -1,
+      );
+      nowMs = 1100;
+
+      final leftInbox = await backend.setTodoStatus(
+        key,
+        todoId: 'todo:inbox-status',
+        newStatus: 'done',
+      );
+
+      expect(leftInbox.reviewStage, isNull);
+      expect(leftInbox.nextReviewAtMs, isNull);
+      expect(leftInbox.lastReviewAtMs, 1100);
+      expect(leftInbox.manualImportanceNudgeScore, 1);
+      expect(leftInbox.manualUrgencyNudgeScore, -1);
+
+      await backend.upsertTodo(
+        key,
+        id: 'todo:auto-schedule',
+        title: 'Open task',
+        status: 'open',
+        dueAtMs: null,
+      );
+      nowMs = 1200;
+
+      final autoScheduled = await backend.setTodoStatus(
+        key,
+        todoId: 'todo:auto-schedule',
+        newStatus: 'in_progress',
+      );
+
+      expect(autoScheduled.dueAtMs, 1200);
+      expect(autoScheduled.lastReviewAtMs, 1200);
+    });
+
     test(
         'supports activity attachments and checklist suggestions on web backend',
         () async {
@@ -512,7 +593,7 @@ void main() {
         key,
         todoId: 'todo:late',
         dueAtMs: 3000,
-        scope: TodoRecurrenceEditScope.thisAndFuture,
+        scope: TodoRecurrenceEditScope.thisOnly,
       );
       expect(dueUpdated.dueAtMs, 3000);
 
@@ -536,6 +617,41 @@ void main() {
       expect(
         await backend.getTodoRecurrenceRuleJson(key, todoId: 'todo:late'),
         '{"freq":"daily"}',
+      );
+    });
+
+    test('scoped status and due updates reject non-thisOnly scopes on web',
+        () async {
+      final backend = CloudWebBackend(
+        chatClient: _FakeCloudWebChatClient(responseText: 'ok'),
+      );
+      final key = Uint8List(0);
+
+      await backend.upsertTodo(
+        key,
+        id: 'todo:scoped',
+        title: 'Scoped task',
+        status: 'open',
+      );
+
+      await expectLater(
+        () => backend.updateTodoStatusWithScope(
+          key,
+          todoId: 'todo:scoped',
+          newStatus: 'done',
+          scope: TodoRecurrenceEditScope.wholeSeries,
+        ),
+        throwsUnsupportedError,
+      );
+
+      await expectLater(
+        () => backend.updateTodoDueWithScope(
+          key,
+          todoId: 'todo:scoped',
+          dueAtMs: 3000,
+          scope: TodoRecurrenceEditScope.thisAndFuture,
+        ),
+        throwsUnsupportedError,
       );
     });
 

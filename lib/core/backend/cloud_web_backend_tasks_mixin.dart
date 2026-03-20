@@ -132,6 +132,10 @@ mixin _CloudWebBackendTasksMixin on AppBackend {
   }) async {
     final now = _touchNow();
     final existing = _todosById[id];
+    final targetManualImportanceNudgeScore = manualImportanceNudgeScore ??
+        (existing?.manualImportanceNudgeScore ?? 0);
+    final targetManualUrgencyNudgeScore =
+        manualUrgencyNudgeScore ?? (existing?.manualUrgencyNudgeScore ?? 0);
     final todo = Todo(
       id: id,
       title: title,
@@ -146,9 +150,9 @@ mixin _CloudWebBackendTasksMixin on AppBackend {
       lastReviewAtMs:
           lastReviewAtMs == null ? null : _asPlatformInt64(lastReviewAtMs),
       manualImportanceNudgeScore:
-          _asPlatformInt64((manualImportanceNudgeScore ?? 0).clamp(-1, 1)),
+          _asPlatformInt64(targetManualImportanceNudgeScore.clamp(-1, 1)),
       manualUrgencyNudgeScore:
-          _asPlatformInt64((manualUrgencyNudgeScore ?? 0).clamp(-1, 1)),
+          _asPlatformInt64(targetManualUrgencyNudgeScore.clamp(-1, 1)),
     );
     _todosById[id] = todo;
     return todo;
@@ -168,16 +172,30 @@ mixin _CloudWebBackendTasksMixin on AppBackend {
     if (newStatus == existing.status) {
       return existing;
     }
+
+    final now = _touchNow();
+    final targetReviewStage = existing.status == 'inbox' && newStatus != 'inbox'
+        ? null
+        : existing.reviewStage;
+    final targetNextReviewAtMs =
+        existing.status == 'inbox' && newStatus != 'inbox'
+            ? null
+            : existing.nextReviewAtMs;
+    final targetDueAtMs = existing.dueAtMs == null &&
+            existing.status == 'open' &&
+            (newStatus == 'in_progress' || newStatus == 'done')
+        ? now
+        : existing.dueAtMs;
     final updated = await upsertTodo(
       key,
       id: existing.id,
       title: existing.title,
-      dueAtMs: existing.dueAtMs,
+      dueAtMs: targetDueAtMs,
       status: newStatus,
       sourceEntryId: existing.sourceEntryId,
-      reviewStage: existing.reviewStage,
-      nextReviewAtMs: existing.nextReviewAtMs,
-      lastReviewAtMs: existing.lastReviewAtMs,
+      reviewStage: targetReviewStage,
+      nextReviewAtMs: targetNextReviewAtMs,
+      lastReviewAtMs: now,
       manualImportanceNudgeScore: existing.manualImportanceNudgeScore,
       manualUrgencyNudgeScore: existing.manualUrgencyNudgeScore,
     );
@@ -263,6 +281,17 @@ mixin _CloudWebBackendTasksMixin on AppBackend {
     );
   }
 
+  void _requireThisOnlyScope(
+    TodoRecurrenceEditScope scope, {
+    required String operation,
+  }) {
+    if (scope != TodoRecurrenceEditScope.thisOnly) {
+      throw UnsupportedError(
+        '$operation is not supported for scope ${scope.name} in web backend',
+      );
+    }
+  }
+
   @override
   Future<Todo> updateTodoStatusWithScope(
     Uint8List key, {
@@ -271,6 +300,7 @@ mixin _CloudWebBackendTasksMixin on AppBackend {
     String? sourceMessageId,
     required TodoRecurrenceEditScope scope,
   }) {
+    _requireThisOnlyScope(scope, operation: 'updateTodoStatusWithScope');
     return setTodoStatus(
       key,
       todoId: todoId,
@@ -286,6 +316,7 @@ mixin _CloudWebBackendTasksMixin on AppBackend {
     required int dueAtMs,
     required TodoRecurrenceEditScope scope,
   }) {
+    _requireThisOnlyScope(scope, operation: 'updateTodoDueWithScope');
     return transitionTodo(
       key,
       todoId: todoId,
