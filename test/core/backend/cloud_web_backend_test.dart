@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:secondloop/core/backend/app_backend.dart';
 import 'package:secondloop/core/backend/cloud_web_backend.dart';
+import 'package:secondloop/features/actions/task_hub/task_hub_quick_actions.dart';
 import 'package:secondloop/src/rust/db.dart';
 
 void main() {
@@ -136,26 +137,128 @@ void main() {
       );
     });
 
-    test('transitionTodo throws a controlled unsupported error on web',
+    test('stores todos in memory and lists them back', () async {
+      final backend = CloudWebBackend(
+        chatClient: _FakeCloudWebChatClient(responseText: 'ok'),
+      );
+      final key = Uint8List(0);
+
+      final created = await backend.upsertTodo(
+        key,
+        id: 'todo:web',
+        title: 'Ship web task hub',
+        dueAtMs: 123,
+        status: 'open',
+        reviewStage: 1,
+        nextReviewAtMs: 456,
+        manualImportanceNudgeScore: 1,
+        manualUrgencyNudgeScore: -1,
+      );
+
+      final todos = await backend.listTodos(key);
+
+      expect(todos, hasLength(1));
+      expect(todos.single.id, created.id);
+      expect(todos.single.title, 'Ship web task hub');
+      expect(todos.single.dueAtMs, 123);
+      expect(todos.single.reviewStage, 1);
+      expect(todos.single.nextReviewAtMs, 456);
+      expect(todos.single.manualImportanceNudgeScore, 1);
+      expect(todos.single.manualUrgencyNudgeScore, -1);
+    });
+
+    test('transitionTodo patches todo fields atomically on web', () async {
+      final backend = CloudWebBackend(
+        chatClient: _FakeCloudWebChatClient(responseText: 'ok'),
+      );
+      final key = Uint8List(0);
+
+      await backend.upsertTodo(
+        key,
+        id: 'todo:web',
+        title: 'Ship web task hub',
+        dueAtMs: 123,
+        status: 'open',
+        reviewStage: 1,
+        nextReviewAtMs: 456,
+        manualImportanceNudgeScore: 1,
+      );
+
+      final updated = await backend.transitionTodo(
+        key,
+        todoId: 'todo:web',
+        newStatus: 'in_progress',
+        dueAtMs: 789,
+        reviewStage: 2,
+        nextReviewAtMs: 999,
+        clearManualImportanceNudgeScore: true,
+        manualUrgencyNudgeScore: 1,
+      );
+
+      expect(updated.status, 'in_progress');
+      expect(updated.dueAtMs, 789);
+      expect(updated.reviewStage, 2);
+      expect(updated.nextReviewAtMs, 999);
+      expect(updated.manualImportanceNudgeScore, 0);
+      expect(updated.manualUrgencyNudgeScore, 1);
+    });
+
+    test('deleteTodo removes redo task from in-memory web store', () async {
+      final backend = CloudWebBackend(
+        chatClient: _FakeCloudWebChatClient(responseText: 'ok'),
+      );
+      final key = Uint8List(0);
+
+      await backend.upsertTodo(
+        key,
+        id: 'todo:web',
+        title: 'Ship web task hub',
+        status: 'open',
+      );
+
+      await backend.deleteTodo(key, todoId: 'todo:web');
+
+      final todos = await backend.listTodos(key);
+
+      expect(todos, isEmpty);
+    });
+
+    test('listTodoChecklistItems returns an empty list on web for now',
         () async {
       final backend = CloudWebBackend(
         chatClient: _FakeCloudWebChatClient(responseText: 'ok'),
       );
 
       expect(
-        () => backend.transitionTodo(
-          Uint8List(0),
-          todoId: 'todo:web',
-          newStatus: 'done',
-        ),
-        throwsA(
-          isA<UnsupportedError>().having(
-            (error) => error.message,
-            'message',
-            contains('not available in web'),
-          ),
-        ),
+        await backend.listTodoChecklistItems(Uint8List(0), 'todo:web'),
+        isEmpty,
       );
+    });
+
+    test('task hub quick actions can transition todos on web backend',
+        () async {
+      final backend = CloudWebBackend(
+        chatClient: _FakeCloudWebChatClient(responseText: 'ok'),
+      );
+      final key = Uint8List(0);
+      final todo = await backend.upsertTodo(
+        key,
+        id: 'todo:web',
+        title: 'Ship web task hub',
+        status: 'open',
+      );
+      final controller = TaskHubQuickActionsController(
+        backend: backend,
+        sessionKey: key,
+        nowLocal: () => DateTime(2026, 3, 13, 10, 0),
+      );
+
+      final ticket = await controller.apply(todo, TaskHubQuickAction.tomorrow);
+
+      expect(ticket, isNotNull);
+      final updated = (await backend.listTodos(key)).single;
+      expect(updated.status, 'open');
+      expect(updated.dueAtMs, isNotNull);
     });
   });
 }

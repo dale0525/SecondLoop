@@ -43,6 +43,7 @@ final class CloudWebBackend extends AppBackend implements AttachmentsBackend {
   final Map<String, Uint8List> _attachmentBytesBySha = <String, Uint8List>{};
   final Map<String, List<String>> _attachmentShasByMessageId =
       <String, List<String>>{};
+  final Map<String, Todo> _todosById = <String, Todo>{};
   final Map<String, _DeletedMessageSnapshot> _deletedMessagesById =
       <String, _DeletedMessageSnapshot>{};
   var _idCounter = 0;
@@ -102,6 +103,7 @@ final class CloudWebBackend extends AppBackend implements AttachmentsBackend {
     _attachmentsBySha.clear();
     _attachmentBytesBySha.clear();
     _attachmentShasByMessageId.clear();
+    _todosById.clear();
     _deletedMessagesById.clear();
     _idCounter = 0;
   }
@@ -292,6 +294,79 @@ final class CloudWebBackend extends AppBackend implements AttachmentsBackend {
   }
 
   @override
+  Future<List<Todo>> listTodos(Uint8List key) async {
+    final todos = _todosById.values.toList(growable: false)
+      ..sort(
+        (left, right) => left.createdAtMs.compareTo(right.createdAtMs),
+      );
+    return todos;
+  }
+
+  @override
+  Future<Todo> upsertTodo(
+    Uint8List key, {
+    required String id,
+    required String title,
+    int? dueAtMs,
+    required String status,
+    String? sourceEntryId,
+    int? reviewStage,
+    int? nextReviewAtMs,
+    int? lastReviewAtMs,
+    int? manualImportanceNudgeScore,
+    int? manualUrgencyNudgeScore,
+  }) async {
+    final now = _touchNow();
+    final existing = _todosById[id];
+    final todo = Todo(
+      id: id,
+      title: title,
+      dueAtMs: dueAtMs,
+      status: status,
+      sourceEntryId: sourceEntryId,
+      createdAtMs: existing?.createdAtMs ?? _asPlatformInt64(now),
+      updatedAtMs: _asPlatformInt64(now),
+      reviewStage: reviewStage == null ? null : _asPlatformInt64(reviewStage),
+      nextReviewAtMs:
+          nextReviewAtMs == null ? null : _asPlatformInt64(nextReviewAtMs),
+      lastReviewAtMs:
+          lastReviewAtMs == null ? null : _asPlatformInt64(lastReviewAtMs),
+      manualImportanceNudgeScore:
+          _asPlatformInt64((manualImportanceNudgeScore ?? 0).clamp(-1, 1)),
+      manualUrgencyNudgeScore:
+          _asPlatformInt64((manualUrgencyNudgeScore ?? 0).clamp(-1, 1)),
+    );
+    _todosById[id] = todo;
+    return todo;
+  }
+
+  @override
+  Future<Todo> setTodoStatus(
+    Uint8List key, {
+    required String todoId,
+    required String newStatus,
+    String? sourceMessageId,
+  }) async {
+    final existing = _todosById[todoId];
+    if (existing == null) {
+      throw StateError('unknown_todo:$todoId');
+    }
+    return upsertTodo(
+      key,
+      id: existing.id,
+      title: existing.title,
+      dueAtMs: existing.dueAtMs,
+      status: newStatus,
+      sourceEntryId: existing.sourceEntryId,
+      reviewStage: existing.reviewStage,
+      nextReviewAtMs: existing.nextReviewAtMs,
+      lastReviewAtMs: existing.lastReviewAtMs,
+      manualImportanceNudgeScore: existing.manualImportanceNudgeScore,
+      manualUrgencyNudgeScore: existing.manualUrgencyNudgeScore,
+    );
+  }
+
+  @override
   Future<Todo> transitionTodo(
     Uint8List key, {
     required String todoId,
@@ -309,8 +384,76 @@ final class CloudWebBackend extends AppBackend implements AttachmentsBackend {
     int? manualUrgencyNudgeScore,
     bool clearManualUrgencyNudgeScore = false,
     String? sourceMessageId,
-  }) {
-    return _unsupportedFuture<Todo>('todo transitions');
+  }) async {
+    final existing = _todosById[todoId];
+    if (existing == null) {
+      throw StateError('unknown_todo:$todoId');
+    }
+
+    final staged = newStatus != null && newStatus != existing.status
+        ? await setTodoStatus(
+            key,
+            todoId: todoId,
+            newStatus: newStatus,
+            sourceMessageId: sourceMessageId,
+          )
+        : existing;
+
+    final targetDueAtMs = clearDueAtMs ? null : (dueAtMs ?? staged.dueAtMs);
+    final targetReviewStage =
+        clearReviewStage ? null : (reviewStage ?? staged.reviewStage);
+    final targetNextReviewAtMs =
+        clearNextReviewAtMs ? null : (nextReviewAtMs ?? staged.nextReviewAtMs);
+    final targetLastReviewAtMs =
+        clearLastReviewAtMs ? null : (lastReviewAtMs ?? staged.lastReviewAtMs);
+    final targetManualImportanceNudgeScore = clearManualImportanceNudgeScore
+        ? 0
+        : (manualImportanceNudgeScore ??
+            (staged.manualImportanceNudgeScore ?? 0));
+    final targetManualUrgencyNudgeScore = clearManualUrgencyNudgeScore
+        ? 0
+        : (manualUrgencyNudgeScore ?? (staged.manualUrgencyNudgeScore ?? 0));
+
+    if (targetDueAtMs == staged.dueAtMs &&
+        targetReviewStage == staged.reviewStage &&
+        targetNextReviewAtMs == staged.nextReviewAtMs &&
+        targetLastReviewAtMs == staged.lastReviewAtMs &&
+        targetManualImportanceNudgeScore ==
+            (staged.manualImportanceNudgeScore ?? 0) &&
+        targetManualUrgencyNudgeScore ==
+            (staged.manualUrgencyNudgeScore ?? 0)) {
+      return staged;
+    }
+
+    return upsertTodo(
+      key,
+      id: staged.id,
+      title: staged.title,
+      dueAtMs: targetDueAtMs,
+      status: staged.status,
+      sourceEntryId: staged.sourceEntryId,
+      reviewStage: targetReviewStage,
+      nextReviewAtMs: targetNextReviewAtMs,
+      lastReviewAtMs: targetLastReviewAtMs,
+      manualImportanceNudgeScore: targetManualImportanceNudgeScore,
+      manualUrgencyNudgeScore: targetManualUrgencyNudgeScore,
+    );
+  }
+
+  @override
+  Future<void> deleteTodo(
+    Uint8List key, {
+    required String todoId,
+  }) async {
+    _todosById.remove(todoId);
+  }
+
+  @override
+  Future<List<TodoChecklistItem>> listTodoChecklistItems(
+    Uint8List key,
+    String todoId,
+  ) async {
+    return const <TodoChecklistItem>[];
   }
 
   @override
