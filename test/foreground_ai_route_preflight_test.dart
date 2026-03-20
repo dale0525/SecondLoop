@@ -76,34 +76,6 @@ void main() {
     );
   });
 
-  test('cloud route can opt into web search explicitly', () {
-    expect(
-      supportsTodoFollowupWebSearch(
-        route: AskAiRouteKind.cloudGateway,
-        gatewayConfig: const CloudGatewayConfig(
-          baseUrl: 'https://example.com',
-          modelName: 'cloud',
-          supportsWebSearch: true,
-        ),
-      ),
-      isTrue,
-    );
-  });
-
-  test('byok stays model-knowledge only by default', () {
-    expect(
-      supportsTodoFollowupWebSearch(
-        route: AskAiRouteKind.byok,
-        gatewayConfig: const CloudGatewayConfig(
-          baseUrl: 'https://example.com',
-          modelName: 'cloud',
-          supportsWebSearch: true,
-        ),
-      ),
-      isFalse,
-    );
-  });
-
   test(
       'Product intent: manual regenerate can use cloud when entitlement is still unknown',
       () async {

@@ -53,7 +53,6 @@ void main() {
       },
     );
     final client = _FakeClient(
-      supportsWebSearch: false,
       responseByMode: <TodoFollowupGenerationMode, TodoFollowupSuggestionDraft>{
         TodoFollowupGenerationMode.modelKnowledge:
             const TodoFollowupSuggestionDraft(
@@ -80,6 +79,7 @@ void main() {
     expect(
         store.lastUpsertedSuggestions.single.generationMode, 'model_knowledge');
     expect(client.requestedModes, const <TodoFollowupGenerationMode>[
+      TodoFollowupGenerationMode.webSearch,
       TodoFollowupGenerationMode.modelKnowledge,
     ]);
   });
@@ -111,7 +111,6 @@ void main() {
       },
     );
     final client = _FakeClient(
-      supportsWebSearch: true,
       responseByMode: <TodoFollowupGenerationMode, TodoFollowupSuggestionDraft>{
         TodoFollowupGenerationMode.webSearch: const TodoFollowupSuggestionDraft(
           content: '已查询到航站楼、预计到达时间和停车建议。',
@@ -171,7 +170,7 @@ void main() {
         ),
       },
     );
-    final client = _FakeClient(supportsWebSearch: false);
+    final client = _FakeClient();
 
     final runner = TodoFollowupGenerationRunner(
       store: store,
@@ -217,7 +216,6 @@ void main() {
       },
     );
     final client = _FakeClient(
-      supportsWebSearch: true,
       errorsByMode: <TodoFollowupGenerationMode, Object>{
         TodoFollowupGenerationMode.webSearch: StateError('search unavailable'),
       },
@@ -319,7 +317,6 @@ void main() {
       },
     );
     final client = _FakeClient(
-      supportsWebSearch: false,
       responseByMode: <TodoFollowupGenerationMode, TodoFollowupSuggestionDraft>{
         TodoFollowupGenerationMode.modelKnowledge:
             const TodoFollowupSuggestionDraft(
@@ -412,7 +409,6 @@ void main() {
       },
     );
     final client = _FakeClient(
-      supportsWebSearch: false,
       responseByMode: <TodoFollowupGenerationMode, TodoFollowupSuggestionDraft>{
         TodoFollowupGenerationMode.modelKnowledge:
             const TodoFollowupSuggestionDraft(
@@ -466,7 +462,6 @@ void main() {
       },
     );
     final client = _FakeClient(
-      supportsWebSearch: false,
       responseByMode: <TodoFollowupGenerationMode, TodoFollowupSuggestionDraft>{
         TodoFollowupGenerationMode.modelKnowledge:
             const TodoFollowupSuggestionDraft(
@@ -540,7 +535,6 @@ void main() {
       },
     );
     final client = _FakeClient(
-      supportsWebSearch: false,
       errorsByMode: <TodoFollowupGenerationMode, Object>{
         TodoFollowupGenerationMode.modelKnowledge: StateError('boom'),
       },
@@ -589,7 +583,6 @@ void main() {
       },
     );
     final client = _FakeClient(
-      supportsWebSearch: false,
       errorsByMode: <TodoFollowupGenerationMode, Object>{
         TodoFollowupGenerationMode.modelKnowledge: StateError('boom'),
       },
@@ -638,7 +631,6 @@ void main() {
       },
     );
     final client = _FakeClient(
-      supportsWebSearch: false,
       errorsByMode: <TodoFollowupGenerationMode, Object>{
         TodoFollowupGenerationMode.modelKnowledge: StateError('boom'),
       },
@@ -714,7 +706,6 @@ void main() {
       },
     );
     final client = _FakeClient(
-      supportsWebSearch: false,
       responseByMode: <TodoFollowupGenerationMode, TodoFollowupSuggestionDraft>{
         TodoFollowupGenerationMode.modelKnowledge:
             const TodoFollowupSuggestionDraft(
@@ -907,14 +898,10 @@ final class _FakeStore implements TodoFollowupGenerationStore {
 
 final class _FakeClient implements TodoFollowupGenerationClient {
   _FakeClient({
-    required this.supportsWebSearch,
     this.responseByMode =
         const <TodoFollowupGenerationMode, TodoFollowupSuggestionDraft>{},
     this.errorsByMode = const <TodoFollowupGenerationMode, Object>{},
   });
-
-  @override
-  final bool supportsWebSearch;
 
   @override
   final String source = 'cloud';

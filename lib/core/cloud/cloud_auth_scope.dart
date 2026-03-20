@@ -7,12 +7,10 @@ class CloudGatewayConfig {
   const CloudGatewayConfig({
     required this.baseUrl,
     required this.modelName,
-    this.supportsWebSearch = false,
   });
 
   final String baseUrl;
   final String modelName;
-  final bool supportsWebSearch;
 
   static const defaultConfig = CloudGatewayConfig(
     baseUrl: String.fromEnvironment(
@@ -20,10 +18,6 @@ class CloudGatewayConfig {
       defaultValue: '',
     ),
     modelName: 'cloud',
-    supportsWebSearch: bool.fromEnvironment(
-      'SECONDLOOP_CLOUD_GATEWAY_SUPPORTS_WEB_SEARCH',
-      defaultValue: false,
-    ),
   );
 }
 
@@ -52,7 +46,5 @@ class CloudAuthScope extends InheritedWidget {
   bool updateShouldNotify(CloudAuthScope oldWidget) =>
       controller != oldWidget.controller ||
       gatewayConfig.baseUrl != oldWidget.gatewayConfig.baseUrl ||
-      gatewayConfig.modelName != oldWidget.gatewayConfig.modelName ||
-      gatewayConfig.supportsWebSearch !=
-          oldWidget.gatewayConfig.supportsWebSearch;
+      gatewayConfig.modelName != oldWidget.gatewayConfig.modelName;
 }

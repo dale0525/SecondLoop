@@ -855,7 +855,6 @@ void main() {
                 gatewayConfig: CloudGatewayConfig(
                   baseUrl: 'https://example.com',
                   modelName: 'cloud',
-                  supportsWebSearch: true,
                 ),
                 child: TodoFollowupGenerationGate(
                   child: SizedBox.shrink(),

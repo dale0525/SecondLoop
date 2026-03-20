@@ -4,6 +4,7 @@ pub mod gemini;
 pub mod openai;
 pub(crate) mod request_limiter;
 pub mod timeouts;
+pub mod todo_followup;
 
 use anyhow::{anyhow, Result};
 

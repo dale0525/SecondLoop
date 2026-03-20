@@ -5,6 +5,7 @@ import 'package:flutter/widgets.dart';
 import '../../features/actions/todo/todo_thread_match.dart';
 import '../../src/rust/db.dart';
 import '../../src/rust/semantic_parse.dart';
+import '../ai/todo_followup_prompt_envelope.dart';
 
 part 'app_backend_prompt_ai.dart';
 part 'app_backend_todo_followups.dart';

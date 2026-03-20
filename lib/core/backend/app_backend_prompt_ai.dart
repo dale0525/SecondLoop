@@ -1,6 +1,40 @@
 part of 'app_backend.dart';
 
 extension AppBackendPromptAi on AppBackend {
+  Future<String> runTodoFollowupPrompt(
+    Uint8List key, {
+    required String prompt,
+    required String generationModeWireValue,
+  }) {
+    return runAiPrompt(
+      key,
+      prompt: encodeTodoFollowupPromptEnvelope(
+        prompt,
+        generationModeWireValue: generationModeWireValue,
+      ),
+    );
+  }
+
+  Future<String> runTodoFollowupPromptCloudGateway(
+    Uint8List key, {
+    required String prompt,
+    required String gatewayBaseUrl,
+    required String idToken,
+    required String modelName,
+    required String generationModeWireValue,
+  }) {
+    return runAiPromptCloudGateway(
+      key,
+      prompt: encodeTodoFollowupPromptEnvelope(
+        prompt,
+        generationModeWireValue: generationModeWireValue,
+      ),
+      gatewayBaseUrl: gatewayBaseUrl,
+      idToken: idToken,
+      modelName: modelName,
+    );
+  }
+
   Future<String> runAiPrompt(
     Uint8List key, {
     required String prompt,

@@ -2,11 +2,23 @@ import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:secondloop/core/ai/todo_followup_suggestions_ai.dart';
+import 'package:secondloop/core/ai/todo_followup_prompt_envelope.dart';
 import 'package:secondloop/core/ai/ai_routing.dart';
 import 'package:secondloop/core/backend/app_backend.dart';
 import 'package:secondloop/src/rust/db.dart';
 
 void main() {
+  test('followup request envelope preserves generation mode metadata', () {
+    final encoded = encodeTodoFollowupPromptEnvelope(
+      'Prompt body',
+      generationModeWireValue: TodoFollowupGenerationMode.webSearch.wireValue,
+    );
+
+    expect(encoded, startsWith('<secondloop_todo_followup>{'));
+    expect(encoded, contains('"generation_mode":"web_search"'));
+    expect(encoded, endsWith('Prompt body'));
+  });
+
   test('followup prompt asks for information follow-up note', () {
     final prompt = buildTodoFollowupSuggestionPrompt(
       taskTitle: '调研一下当前主流的 llm 模型',

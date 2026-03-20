@@ -83,15 +83,22 @@ Future<TodoFollowupSuggestionDraft?> requestTodoFollowupSuggestion({
 
   final response = route == AskAiRouteKind.cloudGateway
       ? await backend
-          .runAiPromptCloudGateway(
+          .runTodoFollowupPromptCloudGateway(
             sessionKey,
             prompt: prompt,
             gatewayBaseUrl: gatewayBaseUrl,
             idToken: idToken,
             modelName: modelName,
+            generationModeWireValue: generationMode.wireValue,
           )
           .timeout(timeout)
-      : await backend.runAiPrompt(sessionKey, prompt: prompt).timeout(timeout);
+      : await backend
+          .runTodoFollowupPrompt(
+            sessionKey,
+            prompt: prompt,
+            generationModeWireValue: generationMode.wireValue,
+          )
+          .timeout(timeout);
 
   final parsed = parseTodoFollowupSuggestionJson(
     response,

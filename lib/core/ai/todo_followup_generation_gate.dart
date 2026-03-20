@@ -457,10 +457,6 @@ class _TodoFollowupGenerationGateState extends State<TodoFollowupGenerationGate>
             idToken: idToken,
             modelName: gatewayConfig.modelName,
             source: route == AskAiRouteKind.cloudGateway ? 'cloud' : 'byok',
-            supportsWebSearch: supportsTodoFollowupWebSearch(
-              route: route,
-              gatewayConfig: gatewayConfig,
-            ),
           ),
           settings: const TodoFollowupGenerationRunnerSettings(
             hardTimeout: _kHardTimeout,
@@ -738,7 +734,6 @@ final class _BackendTodoFollowupGenerationClient
     required this.idToken,
     required this.modelName,
     required this.source,
-    required this.supportsWebSearch,
   });
 
   final AppBackend backend;
@@ -750,9 +745,6 @@ final class _BackendTodoFollowupGenerationClient
 
   @override
   final String source;
-
-  @override
-  final bool supportsWebSearch;
 
   @override
   Future<TodoFollowupSuggestionDraft?> generate({

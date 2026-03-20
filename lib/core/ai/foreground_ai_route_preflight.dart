@@ -85,14 +85,6 @@ bool canRunPreparedTodoFollowupGenerationRoute(
   return prepared.idToken?.trim().isNotEmpty ?? false;
 }
 
-bool supportsTodoFollowupWebSearch({
-  required AskAiRouteKind route,
-  required CloudGatewayConfig gatewayConfig,
-}) {
-  if (route != AskAiRouteKind.cloudGateway) return false;
-  return gatewayConfig.supportsWebSearch;
-}
-
 Future<ForegroundAiPreparedRoute> prepareForegroundAiRoute(
   AppBackend backend,
   Uint8List sessionKey, {

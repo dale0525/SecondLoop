@@ -60,8 +60,6 @@ abstract class TodoFollowupGenerationStore {
 }
 
 abstract class TodoFollowupGenerationClient {
-  bool get supportsWebSearch;
-
   String get source;
 
   Future<TodoFollowupSuggestionDraft?> generate({
@@ -323,22 +321,20 @@ final class TodoFollowupGenerationRunner {
     required String localeTag,
     required List<String> manualFollowups,
   }) async {
-    if (client.supportsWebSearch) {
-      try {
-        final webSearchDraft = await client.generate(
-          taskTitle: todo.title,
-          taskContext: taskContext,
-          localeTag: localeTag,
-          generationMode: TodoFollowupGenerationMode.webSearch,
-          manualFollowups: manualFollowups,
-          status: todo.status,
-          dueAtMs: todo.dueAtMs?.toInt(),
-          timeout: settings.hardTimeout,
-        );
-        if (webSearchDraft != null) return webSearchDraft;
-      } catch (_) {
-        // Fall back to model knowledge below.
-      }
+    try {
+      final webSearchDraft = await client.generate(
+        taskTitle: todo.title,
+        taskContext: taskContext,
+        localeTag: localeTag,
+        generationMode: TodoFollowupGenerationMode.webSearch,
+        manualFollowups: manualFollowups,
+        status: todo.status,
+        dueAtMs: todo.dueAtMs?.toInt(),
+        timeout: settings.hardTimeout,
+      );
+      if (webSearchDraft != null) return webSearchDraft;
+    } catch (_) {
+      // Fall back to model knowledge below.
     }
 
     return client.generate(

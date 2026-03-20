@@ -6,6 +6,7 @@ use reqwest::header;
 use serde::Deserialize;
 use serde::Serialize;
 
+use super::todo_followup::{parse_todo_followup_prompt, TodoFollowupGenerationMode};
 use super::ChatDelta;
 
 fn normalize_role(role: Option<&str>) -> Option<String> {
@@ -50,6 +51,8 @@ struct GeminiPart {
 #[derive(Debug, Serialize)]
 struct GeminiGenerateContentRequest {
     contents: Vec<GeminiRequestContent>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    tools: Option<Vec<GeminiTool>>,
 }
 
 #[derive(Debug, Serialize)]
@@ -62,6 +65,15 @@ struct GeminiRequestContent {
 struct GeminiRequestPart {
     text: String,
 }
+
+#[derive(Debug, Serialize)]
+struct GeminiTool {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    google_search: Option<GeminiGoogleSearchTool>,
+}
+
+#[derive(Debug, Serialize)]
+struct GeminiGoogleSearchTool {}
 
 pub fn generate_content_url(base_url: &str, model_name: &str, api_key: &str) -> String {
     format!(
@@ -81,7 +93,10 @@ pub fn stream_generate_content_url(base_url: &str, model_name: &str, api_key: &s
     )
 }
 
-fn build_generate_content_request(prompt: &str) -> GeminiGenerateContentRequest {
+fn build_generate_content_request(
+    prompt: &str,
+    todo_followup_mode: Option<TodoFollowupGenerationMode>,
+) -> GeminiGenerateContentRequest {
     GeminiGenerateContentRequest {
         contents: vec![GeminiRequestContent {
             role: "user".to_string(),
@@ -89,6 +104,12 @@ fn build_generate_content_request(prompt: &str) -> GeminiGenerateContentRequest 
                 text: prompt.to_string(),
             }],
         }],
+        tools: match todo_followup_mode {
+            Some(TodoFollowupGenerationMode::WebSearch) => Some(vec![GeminiTool {
+                google_search: Some(GeminiGoogleSearchTool {}),
+            }]),
+            _ => None,
+        },
     }
 }
 
@@ -116,8 +137,9 @@ impl crate::rag::AnswerProvider for GeminiCompatibleProvider {
         prompt: &str,
         on_event: &mut dyn FnMut(ChatDelta) -> Result<()>,
     ) -> Result<()> {
+        let (todo_followup_mode, prompt_body) = parse_todo_followup_prompt(prompt);
         let url = stream_generate_content_url(&self.base_url, &self.model_name, &self.api_key);
-        let req = build_generate_content_request(prompt);
+        let req = build_generate_content_request(&prompt_body, todo_followup_mode);
         let _request_guard = super::request_limiter::acquire_remote_llm_request_slot();
 
         let mut resp = self

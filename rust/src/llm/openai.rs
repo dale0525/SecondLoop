@@ -6,6 +6,7 @@ use reqwest::header;
 use serde::Serialize;
 use serde_json::Value;
 
+use super::todo_followup::{parse_todo_followup_prompt, TodoFollowupGenerationMode};
 use super::ChatDelta;
 
 fn extract_text_from_json_value(value: &Value) -> String {
@@ -49,7 +50,14 @@ struct OpenAiChatCompletionsRequest {
     messages: Vec<OpenAiChatMessage>,
     #[serde(skip_serializing_if = "Option::is_none")]
     temperature: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    web_search_options: Option<OpenAiWebSearchOptions>,
     stream: bool,
+}
+
+#[derive(Debug, Serialize)]
+struct OpenAiWebSearchOptions {
+    search_context_size: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -89,14 +97,21 @@ impl crate::rag::AnswerProvider for OpenAiCompatibleProvider {
         prompt: &str,
         on_event: &mut dyn FnMut(ChatDelta) -> Result<()>,
     ) -> Result<()> {
+        let (todo_followup_mode, prompt_body) = parse_todo_followup_prompt(prompt);
         let url = chat_completions_url(&self.base_url);
         let req = OpenAiChatCompletionsRequest {
             model: self.model_name.clone(),
             messages: vec![OpenAiChatMessage {
                 role: "user".to_string(),
-                content: prompt.to_string(),
+                content: prompt_body,
             }],
             temperature: self.temperature,
+            web_search_options: match todo_followup_mode {
+                Some(TodoFollowupGenerationMode::WebSearch) => Some(OpenAiWebSearchOptions {
+                    search_context_size: "medium".to_string(),
+                }),
+                _ => None,
+            },
             stream: true,
         };
 
