@@ -335,6 +335,47 @@ void main() {
       expect(ranged.single.id, activity.id);
     });
 
+    test('records status change activities on web backend', () async {
+      var nowMs = 1000;
+      final backend = CloudWebBackend(
+        chatClient: _FakeCloudWebChatClient(responseText: 'ok'),
+        nowMs: () => nowMs,
+      );
+      final key = Uint8List(0);
+      await backend.upsertTodo(
+        key,
+        id: 'todo:status',
+        title: 'Status task',
+        status: 'open',
+      );
+
+      nowMs = 1100;
+      await backend.setTodoStatus(
+        key,
+        todoId: 'todo:status',
+        newStatus: 'in_progress',
+      );
+      nowMs = 1200;
+      await backend.setTodoStatus(
+        key,
+        todoId: 'todo:status',
+        newStatus: 'done',
+      );
+
+      final activities = await backend.listTodoActivitiesInRange(
+        key,
+        startAtMsInclusive: 1000,
+        endAtMsExclusive: 1300,
+      );
+
+      expect(activities, hasLength(2));
+      expect(activities.first.activityType, 'status_change');
+      expect(activities.first.fromStatus, 'open');
+      expect(activities.first.toStatus, 'in_progress');
+      expect(activities.last.fromStatus, 'in_progress');
+      expect(activities.last.toStatus, 'done');
+    });
+
     test(
         'supports activity attachments and checklist suggestions on web backend',
         () async {

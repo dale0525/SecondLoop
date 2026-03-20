@@ -65,6 +65,24 @@ mixin _CloudWebBackendTasksMixin on AppBackend {
     return copy;
   }
 
+  TodoActivity _recordStatusChangeActivity({
+    required Todo existing,
+    required String newStatus,
+    String? sourceMessageId,
+  }) {
+    final activity = TodoActivity(
+      id: _nextId('activity'),
+      todoId: existing.id,
+      activityType: 'status_change',
+      fromStatus: existing.status,
+      toStatus: newStatus,
+      sourceMessageId: sourceMessageId,
+      createdAtMs: _asPlatformInt64(_touchNow()),
+    );
+    _todoActivitiesById[activity.id] = activity;
+    return activity;
+  }
+
   TodoChecklistItem _findChecklistItem(String itemId) {
     for (final items in _checklistItemsByTodoId.values) {
       for (final item in items) {
@@ -147,7 +165,10 @@ mixin _CloudWebBackendTasksMixin on AppBackend {
     if (existing == null) {
       throw StateError('unknown_todo:$todoId');
     }
-    return upsertTodo(
+    if (newStatus == existing.status) {
+      return existing;
+    }
+    final updated = await upsertTodo(
       key,
       id: existing.id,
       title: existing.title,
@@ -160,6 +181,12 @@ mixin _CloudWebBackendTasksMixin on AppBackend {
       manualImportanceNudgeScore: existing.manualImportanceNudgeScore,
       manualUrgencyNudgeScore: existing.manualUrgencyNudgeScore,
     );
+    _recordStatusChangeActivity(
+      existing: existing,
+      newStatus: newStatus,
+      sourceMessageId: sourceMessageId,
+    );
+    return updated;
   }
 
   @override
