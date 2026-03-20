@@ -93,30 +93,50 @@ final class QuickActionBackendTestDouble extends AppBackend {
       throw StateError('transition failed');
     }
     final existing = _todosById[todoId]!;
+    final targetDueAtMs = clearDueAtMs ? null : (dueAtMs ?? existing.dueAtMs);
+    final targetStatus = newStatus ?? existing.status;
+    final targetReviewStage =
+        clearReviewStage ? null : (reviewStage ?? existing.reviewStage);
+    final targetNextReviewAtMs = clearNextReviewAtMs
+        ? null
+        : (nextReviewAtMs ?? existing.nextReviewAtMs);
+    final targetLastReviewAtMs = clearLastReviewAtMs
+        ? null
+        : (lastReviewAtMs ?? existing.lastReviewAtMs);
+    final targetManualImportanceNudgeScore = clearManualImportanceNudgeScore
+        ? 0
+        : (manualImportanceNudgeScore ??
+            existing.manualImportanceNudgeScore ??
+            0);
+    final targetManualUrgencyNudgeScore = clearManualUrgencyNudgeScore
+        ? 0
+        : (manualUrgencyNudgeScore ?? existing.manualUrgencyNudgeScore ?? 0);
+
+    if (targetDueAtMs == existing.dueAtMs &&
+        targetStatus == existing.status &&
+        targetReviewStage == existing.reviewStage &&
+        targetNextReviewAtMs == existing.nextReviewAtMs &&
+        targetLastReviewAtMs == existing.lastReviewAtMs &&
+        targetManualImportanceNudgeScore ==
+            (existing.manualImportanceNudgeScore ?? 0) &&
+        targetManualUrgencyNudgeScore ==
+            (existing.manualUrgencyNudgeScore ?? 0)) {
+      return existing;
+    }
+
     final updated = Todo(
       id: existing.id,
       title: existing.title,
-      dueAtMs: clearDueAtMs ? null : (dueAtMs ?? existing.dueAtMs),
-      status: newStatus ?? existing.status,
+      dueAtMs: targetDueAtMs,
+      status: targetStatus,
       sourceEntryId: existing.sourceEntryId,
       createdAtMs: existing.createdAtMs,
       updatedAtMs: DateTime.now().toUtc().millisecondsSinceEpoch,
-      reviewStage:
-          clearReviewStage ? null : (reviewStage ?? existing.reviewStage),
-      nextReviewAtMs: clearNextReviewAtMs
-          ? null
-          : (nextReviewAtMs ?? existing.nextReviewAtMs),
-      lastReviewAtMs: clearLastReviewAtMs
-          ? null
-          : (lastReviewAtMs ?? existing.lastReviewAtMs),
-      manualImportanceNudgeScore: clearManualImportanceNudgeScore
-          ? 0
-          : (manualImportanceNudgeScore ??
-              existing.manualImportanceNudgeScore ??
-              0),
-      manualUrgencyNudgeScore: clearManualUrgencyNudgeScore
-          ? 0
-          : (manualUrgencyNudgeScore ?? existing.manualUrgencyNudgeScore ?? 0),
+      reviewStage: targetReviewStage,
+      nextReviewAtMs: targetNextReviewAtMs,
+      lastReviewAtMs: targetLastReviewAtMs,
+      manualImportanceNudgeScore: targetManualImportanceNudgeScore,
+      manualUrgencyNudgeScore: targetManualUrgencyNudgeScore,
     );
     _todosById[todoId] = updated;
     return updated;

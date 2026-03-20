@@ -159,7 +159,7 @@ class TaskHubQuickActionsController {
     }
   }
 
-  Future<TaskHubUndoTicket> _applySignalChange(
+  Future<TaskHubUndoTicket?> _applySignalChange(
     Todo todo, {
     required TaskHubQuickAction action,
     int importanceDelta = 0,
@@ -182,6 +182,10 @@ class TaskHubQuickActionsController {
       manualImportanceNudgeScore: nextImportance,
       manualUrgencyNudgeScore: nextUrgency,
     );
+    if (updated.manualImportanceNudgeScore == todo.manualImportanceNudgeScore &&
+        updated.manualUrgencyNudgeScore == todo.manualUrgencyNudgeScore) {
+      return null;
+    }
     return TaskHubUndoTicket(
       todo: todo,
       updatedTodo: updated,
@@ -224,7 +228,7 @@ class TaskHubQuickActionsController {
     final dueLocal = offsetDays == 0
         ? _todayDueLocal(nowLocal, settings)
         : _scheduledMorningLocal(nowLocal, settings, offsetDays: offsetDays);
-    if (_isSameScheduleBucket(todo.dueAtMs, dueLocal, nowLocal: nowLocal)) {
+    if (_isScheduleNoOp(todo.dueAtMs, dueLocal, nowLocal: nowLocal)) {
       return null;
     }
     final previousManualSignal = _manualSignalFromTodo(todo);
@@ -459,7 +463,7 @@ class TaskHubQuickActionsController {
     );
   }
 
-  bool _isSameScheduleBucket(
+  bool _isScheduleNoOp(
     int? existingDueAtMs,
     DateTime targetLocal, {
     required DateTime nowLocal,
@@ -470,9 +474,35 @@ class TaskHubQuickActionsController {
     final existingLocal =
         DateTime.fromMillisecondsSinceEpoch(existingDueAtMs, isUtc: true)
             .toLocal();
-    return existingLocal.year == targetLocal.year &&
+    final isSameLocalDate = existingLocal.year == targetLocal.year &&
         existingLocal.month == targetLocal.month &&
         existingLocal.day == targetLocal.day;
+    if (!isSameLocalDate) {
+      return false;
+    }
+
+    final targetDayStart = DateTime(
+      targetLocal.year,
+      targetLocal.month,
+      targetLocal.day,
+    );
+    final existingDayStart = DateTime(
+      existingLocal.year,
+      existingLocal.month,
+      existingLocal.day,
+    );
+    final tomorrowStart = DateTime(
+      nowLocal.year,
+      nowLocal.month,
+      nowLocal.day,
+    ).add(const Duration(days: 1));
+    final isTomorrowBucket =
+        existingDayStart == tomorrowStart && targetDayStart == tomorrowStart;
+    if (isTomorrowBucket) {
+      return true;
+    }
+
+    return existingLocal == targetLocal;
   }
 
   bool _canUndoWithTransition(Todo original, Todo updated) {

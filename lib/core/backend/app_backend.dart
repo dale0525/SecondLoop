@@ -168,7 +168,27 @@ abstract class AppBackend {
       throw StateError('Unknown todo: $todoId');
     }
 
-    final staged = newStatus != null && newStatus != existing.status
+    final patchesStatus = newStatus != null && newStatus != existing.status;
+    final patchesFields = dueAtMs != null ||
+        clearDueAtMs ||
+        reviewStage != null ||
+        clearReviewStage ||
+        nextReviewAtMs != null ||
+        clearNextReviewAtMs ||
+        lastReviewAtMs != null ||
+        clearLastReviewAtMs ||
+        manualImportanceNudgeScore != null ||
+        clearManualImportanceNudgeScore ||
+        manualUrgencyNudgeScore != null ||
+        clearManualUrgencyNudgeScore;
+
+    if (patchesStatus && patchesFields) {
+      throw UnsupportedError(
+        'AppBackend.transitionTodo fallback does not support mixed status and field patches; override transitionTodo in this backend.',
+      );
+    }
+
+    final staged = patchesStatus
         ? await setTodoStatus(
             key,
             todoId: todoId,

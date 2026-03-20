@@ -293,6 +293,30 @@ void main() {
     expect(backend.current('t-race').manualUrgencyNudgeScore, 1);
   });
 
+  test('increasing an already maxed urgency nudge is a no-op', () async {
+    SharedPreferences.setMockInitialValues({});
+
+    final initial = todo(
+      id: 't-urgency-max',
+      title: 'Task urgency max',
+      updatedAtMs: 10,
+      manualUrgencyNudgeScore: 1,
+    );
+    final backend = QuickActionBackendTestDouble(initialTodos: [initial]);
+    final controller = TaskHubQuickActionsController(
+      backend: backend,
+      sessionKey: Uint8List(32),
+    );
+
+    final ticket = await controller.apply(
+      initial,
+      TaskHubQuickAction.increaseUrgency,
+    );
+
+    expect(ticket, isNull);
+    expect(backend.current('t-urgency-max').manualUrgencyNudgeScore, 1);
+  });
+
   test('decrease urgency flips an existing up nudge and undo restores it',
       () async {
     SharedPreferences.setMockInitialValues({});
@@ -706,6 +730,36 @@ void main() {
     expect(current.nextReviewAtMs, initial.nextReviewAtMs);
     expect(current.manualImportanceNudgeScore, 1);
     expect(backend.transitionTodoCalls, 0);
+  });
+
+  test('today action reschedules overdue task later the same day', () async {
+    SharedPreferences.setMockInitialValues({
+      'actions.review.day_end_minutes_v1': 21 * 60,
+    });
+
+    final nowLocal = DateTime(2026, 3, 13, 10, 0);
+    final overdueEarlierToday = DateTime(2026, 3, 13, 8, 0);
+    final initial = todo(
+      id: 't-today-overdue',
+      title: 'Task today overdue',
+      updatedAtMs: 10,
+      dueAtMs: overdueEarlierToday.toUtc().millisecondsSinceEpoch,
+    );
+    final backend = QuickActionBackendTestDouble(initialTodos: [initial]);
+    final controller = TaskHubQuickActionsController(
+      backend: backend,
+      sessionKey: Uint8List(32),
+      nowLocal: () => nowLocal,
+    );
+
+    final ticket = await controller.apply(initial, TaskHubQuickAction.today);
+
+    expect(ticket, isNotNull);
+    final updated = backend.current('t-today-overdue');
+    final dueLocal =
+        DateTime.fromMillisecondsSinceEpoch(updated.dueAtMs!, isUtc: true)
+            .toLocal();
+    expect(dueLocal, DateTime(2026, 3, 13, 21, 0));
   });
 
   test('undo after start uses transition instead of full upsert', () async {

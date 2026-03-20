@@ -292,6 +292,28 @@ final class CloudWebBackend extends AppBackend implements AttachmentsBackend {
   }
 
   @override
+  Future<Todo> transitionTodo(
+    Uint8List key, {
+    required String todoId,
+    String? newStatus,
+    int? dueAtMs,
+    bool clearDueAtMs = false,
+    int? reviewStage,
+    bool clearReviewStage = false,
+    int? nextReviewAtMs,
+    bool clearNextReviewAtMs = false,
+    int? lastReviewAtMs,
+    bool clearLastReviewAtMs = false,
+    int? manualImportanceNudgeScore,
+    bool clearManualImportanceNudgeScore = false,
+    int? manualUrgencyNudgeScore,
+    bool clearManualUrgencyNudgeScore = false,
+    String? sourceMessageId,
+  }) {
+    return _unsupportedFuture<Todo>('todo transitions');
+  }
+
+  @override
   Future<Attachment?> readAttachmentBySha256(String attachmentSha256) async {
     final normalizedSha = attachmentSha256.trim();
     if (normalizedSha.isEmpty) return null;

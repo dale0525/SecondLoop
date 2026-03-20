@@ -34,7 +34,7 @@ void main() {
     );
   }
 
-  test('default transitionTodo falls back to status change plus field patch',
+  test('default transitionTodo rejects mixed status and field patch fallback',
       () async {
     final backend = _FallbackTransitionBackend(
       todo(
@@ -48,23 +48,76 @@ void main() {
       ),
     );
 
+    await expectLater(
+      () => backend.transitionTodo(
+        Uint8List(32),
+        todoId: 'todo:1',
+        newStatus: 'in_progress',
+        dueAtMs: 333,
+        reviewStage: 4,
+        nextReviewAtMs: 444,
+        lastReviewAtMs: 555,
+      ),
+      throwsUnsupportedError,
+    );
+
+    expect(backend.setTodoStatusCalls, 0);
+    expect(backend.upsertTodoCalls, 0);
+    expect(backend.todo.status, 'open');
+    expect(backend.todo.dueAtMs, 111);
+  });
+
+  test('default transitionTodo still supports field-only patch fallback',
+      () async {
+    final backend = _FallbackTransitionBackend(
+      todo(
+        id: 'todo:2',
+        title: 'Task',
+        updatedAtMs: 10,
+        status: 'open',
+        dueAtMs: 111,
+        reviewStage: 2,
+        nextReviewAtMs: 222,
+      ),
+    );
+
     final updated = await backend.transitionTodo(
       Uint8List(32),
-      todoId: 'todo:1',
-      newStatus: 'in_progress',
+      todoId: 'todo:2',
       dueAtMs: 333,
       reviewStage: 4,
       nextReviewAtMs: 444,
       lastReviewAtMs: 555,
     );
 
-    expect(updated.status, 'in_progress');
+    expect(updated.status, 'open');
     expect(updated.dueAtMs, 333);
     expect(updated.reviewStage, 4);
     expect(updated.nextReviewAtMs, 444);
     expect(updated.lastReviewAtMs, 555);
-    expect(backend.setTodoStatusCalls, 1);
+    expect(backend.setTodoStatusCalls, 0);
     expect(backend.upsertTodoCalls, 1);
+  });
+
+  test('default transitionTodo still supports status-only fallback', () async {
+    final backend = _FallbackTransitionBackend(
+      todo(
+        id: 'todo:3',
+        title: 'Task',
+        updatedAtMs: 10,
+        status: 'open',
+      ),
+    );
+
+    final updated = await backend.transitionTodo(
+      Uint8List(32),
+      todoId: 'todo:3',
+      newStatus: 'in_progress',
+    );
+
+    expect(updated.status, 'in_progress');
+    expect(backend.setTodoStatusCalls, 1);
+    expect(backend.upsertTodoCalls, 0);
   });
 }
 
@@ -72,6 +125,7 @@ final class _FallbackTransitionBackend extends TestAppBackend {
   _FallbackTransitionBackend(this._todo);
 
   Todo _todo;
+  Todo get todo => _todo;
   var setTodoStatusCalls = 0;
   var upsertTodoCalls = 0;
 

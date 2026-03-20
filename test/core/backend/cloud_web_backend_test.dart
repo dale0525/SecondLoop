@@ -135,6 +135,28 @@ void main() {
         ),
       );
     });
+
+    test('transitionTodo throws a controlled unsupported error on web',
+        () async {
+      final backend = CloudWebBackend(
+        chatClient: _FakeCloudWebChatClient(responseText: 'ok'),
+      );
+
+      expect(
+        () => backend.transitionTodo(
+          Uint8List(0),
+          todoId: 'todo:web',
+          newStatus: 'done',
+        ),
+        throwsA(
+          isA<UnsupportedError>().having(
+            (error) => error.message,
+            'message',
+            contains('not available in web'),
+          ),
+        ),
+      );
+    });
   });
 }
 
