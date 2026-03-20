@@ -410,6 +410,73 @@ void main() {
     expect(backend.succeededTodoIds, isEmpty);
   });
 
+  testWidgets(
+      'external sync changes received mid-run trigger an immediate rerun',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({
+      'semantic_parse_data_consent_v1': true,
+    });
+
+    final backend = _QueuedDueJobsTodoFollowupGenerationGateBackend(
+      firstCallCompleter: Completer<List<TodoFollowupGenerationJob>>(),
+      queuedResponses: <List<TodoFollowupGenerationJob>>[
+        const <TodoFollowupGenerationJob>[
+          TodoFollowupGenerationJob(
+            todoId: 'todo_auto',
+            triggerKind: 'auto_create',
+            status: 'pending',
+            attempts: 0,
+            nextRetryAtMs: null,
+            lastError: null,
+            includeManualFollowups: false,
+            taskTypeHint: 'research',
+            createdAtMs: 0,
+            updatedAtMs: 0,
+          ),
+        ],
+      ],
+    );
+    final engine = SyncEngine(
+      syncRunner: _NoopSyncRunner(),
+      loadConfig: () async => null,
+    );
+    addTearDown(engine.stop);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: AppBackendScope(
+          backend: backend,
+          child: SessionScope(
+            sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+            lock: () {},
+            child: SyncEngineScope(
+              engine: engine,
+              child: const TodoFollowupGenerationGate(
+                child: SizedBox.shrink(),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 3));
+    expect(backend.listDueJobsCallCount, 1);
+
+    engine.notifyExternalChange();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 900));
+    expect(backend.listDueJobsCallCount, 1);
+
+    backend.firstCallCompleter.complete(const <TodoFollowupGenerationJob>[]);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+
+    expect(backend.listDueJobsCallCount, 2);
+    expect(backend.skippedTodoIds, contains('todo_auto'));
+  });
+
   testWidgets('Product intent: manual pass is canceled when route needs setup',
       (tester) async {
     SharedPreferences.setMockInitialValues({
@@ -1226,6 +1293,38 @@ final class _DelayedTodoFollowupGenerationGateBackend
   }) async {
     listDueJobsCallCount += 1;
     return dueJobsCompleter.future;
+  }
+}
+
+final class _QueuedDueJobsTodoFollowupGenerationGateBackend
+    extends _FakeTodoFollowupGenerationGateBackend {
+  _QueuedDueJobsTodoFollowupGenerationGateBackend({
+    required this.firstCallCompleter,
+    required List<List<TodoFollowupGenerationJob>> queuedResponses,
+  })  : _queuedResponses = List<List<TodoFollowupGenerationJob>>.from(
+          queuedResponses,
+        ),
+        super(dueJobs: const <TodoFollowupGenerationJob>[]);
+
+  final Completer<List<TodoFollowupGenerationJob>> firstCallCompleter;
+  final List<List<TodoFollowupGenerationJob>> _queuedResponses;
+
+  @override
+  Future<List<TodoFollowupGenerationJob>> listDueTodoFollowupGenerationJobs(
+    Uint8List key, {
+    required int nowMs,
+    int limit = 5,
+  }) async {
+    listDueJobsCallCount += 1;
+    listDueJobsLimits.add(limit);
+    if (listDueJobsCallCount == 1) {
+      return firstCallCompleter.future;
+    }
+
+    if (_queuedResponses.isEmpty) {
+      return const <TodoFollowupGenerationJob>[];
+    }
+    return _queuedResponses.removeAt(0).take(limit).toList(growable: false);
   }
 }
 

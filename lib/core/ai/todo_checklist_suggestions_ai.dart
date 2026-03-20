@@ -164,20 +164,7 @@ List<String> _parseChecklistSuggestionsLooseJson(
   final normalized = <String>[];
   final seen = <String>{};
 
-  for (final match in RegExp(r'"((?:[^"\\]|\\.)*)"').allMatches(raw)) {
-    final encoded = '"${match.group(1)}"';
-    String? candidate;
-    try {
-      final decoded = jsonDecode(encoded);
-      if (decoded is String) {
-        candidate = decoded;
-      }
-    } catch (_) {
-      candidate = match.group(1);
-    }
-    if (candidate == null || candidate.trim().toLowerCase() == 'suggestions') {
-      continue;
-    }
+  for (final candidate in _extractLooseJsonSuggestionCandidates(raw)) {
     final next = _normalizeChecklistSuggestion(candidate);
     if (next == null) continue;
     final dedupeKey = next.toLowerCase();
@@ -187,6 +174,45 @@ List<String> _parseChecklistSuggestionsLooseJson(
   }
 
   return List<String>.unmodifiable(normalized);
+}
+
+Iterable<String> _extractLooseJsonSuggestionCandidates(String raw) sync* {
+  final trimmed = raw.trim();
+  final arraySegments = <String>[];
+
+  if (trimmed.startsWith('[')) {
+    final listEnd = trimmed.lastIndexOf(']');
+    if (listEnd != -1) {
+      arraySegments.add(trimmed.substring(0, listEnd + 1));
+    }
+  }
+
+  for (final key in const <String>['suggestions', 'items', 'checklist']) {
+    final match = RegExp(
+      '"$key"\\s*:\\s*(\\[[\\s\\S]*?\\])',
+    ).firstMatch(raw);
+    final segment = match?.group(1)?.trim();
+    if (segment != null && segment.isNotEmpty) {
+      arraySegments.add(segment);
+    }
+  }
+
+  for (final segment in arraySegments) {
+    for (final match in RegExp(r'"((?:[^"\\]|\\.)*)"').allMatches(segment)) {
+      final encoded = '"${match.group(1)}"';
+      try {
+        final decoded = jsonDecode(encoded);
+        if (decoded is String) {
+          yield decoded;
+        }
+      } catch (_) {
+        final fallback = match.group(1);
+        if (fallback != null) {
+          yield fallback;
+        }
+      }
+    }
+  }
 }
 
 String? _extractJsonCandidate(String raw) {

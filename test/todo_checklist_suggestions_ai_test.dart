@@ -77,4 +77,16 @@ void main() {
       'Confirm delivery window',
     ]);
   });
+
+  test('checklist parser ignores object keys when salvaging malformed json',
+      () {
+    final parsed = parseTodoChecklistSuggestionsJson(
+      '{"items":["Book flight","Pack charger",],"source":"web"}',
+    );
+
+    expect(parsed, const <String>[
+      'Book flight',
+      'Pack charger',
+    ]);
+  });
 }

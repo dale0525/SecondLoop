@@ -210,6 +210,7 @@ class _TodoFollowupGenerationGateState extends State<TodoFollowupGenerationGate>
   Timer? _timer;
   DateTime? _nextRunAt;
   bool _running = false;
+  bool _rerunRequested = false;
   UpdateRestartBlockToken? _restartBlockToken;
 
   SyncEngine? _syncEngine;
@@ -331,7 +332,11 @@ class _TodoFollowupGenerationGateState extends State<TodoFollowupGenerationGate>
   }
 
   Future<void> _runOnce() async {
-    if (_running || !mounted) return;
+    if (_running) {
+      _rerunRequested = true;
+      return;
+    }
+    if (!mounted) return;
 
     final backend = AppBackendScope.of(context);
     if (!backend.supportsTodoFollowupSuggestions) return;
@@ -484,6 +489,13 @@ class _TodoFollowupGenerationGateState extends State<TodoFollowupGenerationGate>
       _restartBlockToken?.release();
       _restartBlockToken = null;
       _running = false;
+      if (mounted && _rerunRequested) {
+        _rerunRequested = false;
+        _timer?.cancel();
+        _timer = null;
+        _nextRunAt = null;
+        _schedule(Duration.zero);
+      }
     }
   }
 
