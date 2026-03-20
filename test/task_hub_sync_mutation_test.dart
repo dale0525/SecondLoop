@@ -102,10 +102,10 @@ void main() {
         .tap(find.byKey(const ValueKey('task_hub_page_quick_todo:1_done')));
     await _pumpUntil(
       tester,
-      () => backend.setTodoStatusCalls >= 1 && changes >= 1,
+      () => backend.transitionTodoCalls >= 1 && changes >= 1,
     );
 
-    expect(backend.setTodoStatusCalls, greaterThanOrEqualTo(1));
+    expect(backend.transitionTodoCalls, greaterThanOrEqualTo(1));
     expect(changes, greaterThanOrEqualTo(1));
   });
 

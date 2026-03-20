@@ -62,7 +62,7 @@ TaskHubQuickActionItem? secondaryTaskHubQuickActionItemForEntry(
   required TaskPriorityEntry entry,
 }) {
   final actions = context.t.actions.taskHub.actions;
-  if (entry.todo.status == 'done') return null;
+  if (entry.todo.status == 'done' || entry.isFutureScheduled) return null;
   return TaskHubQuickActionItem(
     action: TaskHubQuickAction.tomorrow,
     label: actions.tomorrow,

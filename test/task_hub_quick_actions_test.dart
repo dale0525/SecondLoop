@@ -149,6 +149,42 @@ void main() {
     expect(find.text('Done|Tomorrow'), findsOneWidget);
   });
 
+  testWidgets('future scheduled tasks do not expose tomorrow again',
+      (tester) async {
+    final tomorrowNoon = DateTime(2026, 3, 14, 12, 0);
+    final candidate = entry(
+      todo: todo(
+        id: 'u2b',
+        title: 'Already scheduled',
+        updatedAtMs: 10,
+        dueAtMs: tomorrowNoon.toUtc().millisecondsSinceEpoch,
+      ),
+      band: TaskPriorityBand.scheduled,
+    ).copyWith(
+      isFutureScheduled: true,
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: Builder(
+            builder: (context) {
+              final layout = buildTaskHubQuickActionLayout(
+                context,
+                entry: candidate,
+              );
+              return Text(
+                '${layout.$1.map((item) => item.label).join('|')}::${layout.$2.map((item) => item.label).join('|')}',
+              );
+            },
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('Start::Today|Done'), findsOneWidget);
+  });
+
   testWidgets('done tasks expose reopen and more menu redo/delete actions',
       (tester) async {
     final candidate = entry(
@@ -604,6 +640,72 @@ void main() {
     expect(backend.transitionTodoCalls, 1);
     expect(backend.setTodoStatusCalls, 0);
     expect(backend.upsertTodoCalls, 0);
+  });
+
+  test('failed start transition does not clear manual nudges first', () async {
+    SharedPreferences.setMockInitialValues({});
+
+    final initial = todo(
+      id: 't8b-fail',
+      title: 'Task 8b fail',
+      updatedAtMs: 10,
+      manualImportanceNudgeScore: 1,
+      manualUrgencyNudgeScore: -1,
+    );
+    final backend = QuickActionBackendTestDouble(
+      initialTodos: [initial],
+      failOnTransitionCall: 1,
+    );
+    final controller = TaskHubQuickActionsController(
+      backend: backend,
+      sessionKey: Uint8List(32),
+    );
+
+    await expectLater(
+      () => controller.apply(initial, TaskHubQuickAction.start),
+      throwsStateError,
+    );
+
+    final current = backend.current('t8b-fail');
+    expect(current.status, initial.status);
+    expect(current.manualImportanceNudgeScore, 1);
+    expect(current.manualUrgencyNudgeScore, -1);
+  });
+
+  test('tomorrow action is a no-op when task is already due tomorrow',
+      () async {
+    SharedPreferences.setMockInitialValues({});
+
+    final nowLocal = DateTime(2026, 3, 13, 10, 0);
+    final dueTomorrow = DateTime(2026, 3, 14, 12, 0);
+    final initial = todo(
+      id: 't10c',
+      title: 'Task 10c',
+      updatedAtMs: 10,
+      dueAtMs: dueTomorrow.toUtc().millisecondsSinceEpoch,
+      manualImportanceNudgeScore: 1,
+      reviewStage: 3,
+      nextReviewAtMs: nowLocal
+          .subtract(const Duration(hours: 1))
+          .toUtc()
+          .millisecondsSinceEpoch,
+    );
+    final backend = QuickActionBackendTestDouble(initialTodos: [initial]);
+    final controller = TaskHubQuickActionsController(
+      backend: backend,
+      sessionKey: Uint8List(32),
+      nowLocal: () => nowLocal,
+    );
+
+    final ticket = await controller.apply(initial, TaskHubQuickAction.tomorrow);
+
+    expect(ticket, isNull);
+    final current = backend.current('t10c');
+    expect(current.dueAtMs, initial.dueAtMs);
+    expect(current.reviewStage, initial.reviewStage);
+    expect(current.nextReviewAtMs, initial.nextReviewAtMs);
+    expect(current.manualImportanceNudgeScore, 1);
+    expect(backend.transitionTodoCalls, 0);
   });
 
   test('undo after start uses transition instead of full upsert', () async {

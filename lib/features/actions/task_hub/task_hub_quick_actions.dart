@@ -191,7 +191,7 @@ class TaskHubQuickActionsController {
   }
 
   Future<TaskHubUndoTicket> _applyStart(Todo todo) async {
-    final previousManualSignal = await _clearNudges(todo.id);
+    final previousManualSignal = _manualSignalFromTodo(todo);
     final updated = await backend.transitionTodo(
       sessionKey,
       todoId: todo.id,
@@ -213,7 +213,7 @@ class TaskHubQuickActionsController {
     );
   }
 
-  Future<TaskHubUndoTicket> _applyScheduleChange(
+  Future<TaskHubUndoTicket?> _applyScheduleChange(
     Todo todo, {
     required TaskHubQuickAction action,
     required DateTime nowLocal,
@@ -221,10 +221,13 @@ class TaskHubQuickActionsController {
     required ActionsSettings settings,
     required int offsetDays,
   }) async {
-    final previousManualSignal = await _clearNudges(todo.id);
     final dueLocal = offsetDays == 0
         ? _todayDueLocal(nowLocal, settings)
         : _scheduledMorningLocal(nowLocal, settings, offsetDays: offsetDays);
+    if (_isSameScheduleBucket(todo.dueAtMs, dueLocal, nowLocal: nowLocal)) {
+      return null;
+    }
+    final previousManualSignal = _manualSignalFromTodo(todo);
     final updated = await backend.transitionTodo(
       sessionKey,
       todoId: todo.id,
@@ -298,11 +301,13 @@ class TaskHubQuickActionsController {
       final confirmed = await confirmDoneWithIncompleteChecklist!.call(todo);
       if (!confirmed) return null;
     }
-    final previousManualSignal = await _clearNudges(todo.id);
-    final updated = await backend.setTodoStatus(
+    final previousManualSignal = _manualSignalFromTodo(todo);
+    final updated = await backend.transitionTodo(
       sessionKey,
       todoId: todo.id,
       newStatus: 'done',
+      clearManualImportanceNudgeScore: true,
+      clearManualUrgencyNudgeScore: true,
     );
     return TaskHubUndoTicket(
       todo: todo,
@@ -318,7 +323,7 @@ class TaskHubQuickActionsController {
     required int nowUtcMs,
     required ActionsSettings settings,
   }) async {
-    final previousManualSignal = await _clearNudges(todo.id);
+    final previousManualSignal = _manualSignalFromTodo(todo);
     final dueLocal = _reopenDueLocal(nowLocal, settings);
     final updated = await backend.transitionTodo(
       sessionKey,
@@ -349,7 +354,7 @@ class TaskHubQuickActionsController {
     required int nowUtcMs,
     required ActionsSettings settings,
   }) async {
-    final previousManualSignal = await _clearNudges(todo.id);
+    final previousManualSignal = _manualSignalFromTodo(todo);
     final dueLocal = _todayDueLocal(nowLocal, settings);
     final createdTodoId =
         'todo:task_hub_redo:${todo.id}:${nowLocal.toUtc().microsecondsSinceEpoch}';
@@ -376,11 +381,13 @@ class TaskHubQuickActionsController {
   }
 
   Future<TaskHubUndoTicket> _applyDismiss(Todo todo) async {
-    final previousManualSignal = await _clearNudges(todo.id);
-    final updated = await backend.setTodoStatus(
+    final previousManualSignal = _manualSignalFromTodo(todo);
+    final updated = await backend.transitionTodo(
       sessionKey,
       todoId: todo.id,
       newStatus: 'dismissed',
+      clearManualImportanceNudgeScore: true,
+      clearManualUrgencyNudgeScore: true,
     );
     return TaskHubUndoTicket(
       todo: todo,
@@ -393,7 +400,6 @@ class TaskHubQuickActionsController {
   Future<void> undo(TaskHubUndoTicket ticket) async {
     if (ticket.action == TaskHubQuickAction.redo &&
         ticket.createdTodoId != null) {
-      await _restoreManualSignal(ticket.todo.id, ticket.previousManualSignal);
       await backend.deleteTodo(
         sessionKey,
         todoId: ticket.createdTodoId!,
@@ -453,45 +459,26 @@ class TaskHubQuickActionsController {
     );
   }
 
-  Future<void> _restoreManualSignal(
-    String todoId,
-    TaskHubUndoManualNudgeSnapshot? previous,
-  ) {
-    return backend.transitionTodo(
-      sessionKey,
-      todoId: todoId,
-      manualImportanceNudgeScore: previous?.importanceScore,
-      clearManualImportanceNudgeScore: (previous?.importanceScore ?? 0) == 0,
-      manualUrgencyNudgeScore: previous?.urgencyScore,
-      clearManualUrgencyNudgeScore: (previous?.urgencyScore ?? 0) == 0,
-    );
+  bool _isSameScheduleBucket(
+    int? existingDueAtMs,
+    DateTime targetLocal, {
+    required DateTime nowLocal,
+  }) {
+    if (existingDueAtMs == null) {
+      return false;
+    }
+    final existingLocal =
+        DateTime.fromMillisecondsSinceEpoch(existingDueAtMs, isUtc: true)
+            .toLocal();
+    return existingLocal.year == targetLocal.year &&
+        existingLocal.month == targetLocal.month &&
+        existingLocal.day == targetLocal.day;
   }
 
   bool _canUndoWithTransition(Todo original, Todo updated) {
     return original.id == updated.id &&
         original.title == updated.title &&
         original.sourceEntryId == updated.sourceEntryId;
-  }
-
-  Future<TaskHubUndoManualNudgeSnapshot?> _clearNudges(String todoId) async {
-    final current = await backend.listTodos(sessionKey);
-    Todo? existing;
-    for (final todo in current) {
-      if (todo.id == todoId) {
-        existing = todo;
-        break;
-      }
-    }
-    if (existing == null) return null;
-    final previous = _manualSignalFromTodo(existing);
-    if (previous == null) return null;
-    await backend.transitionTodo(
-      sessionKey,
-      todoId: todoId,
-      clearManualImportanceNudgeScore: true,
-      clearManualUrgencyNudgeScore: true,
-    );
-    return previous;
   }
 }
 

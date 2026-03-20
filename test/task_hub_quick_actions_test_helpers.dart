@@ -7,6 +7,7 @@ final class QuickActionBackendTestDouble extends AppBackend {
   QuickActionBackendTestDouble({
     List<Todo>? initialTodos,
     Map<String, List<TodoChecklistItem>>? checklistItemsByTodoId,
+    this.failOnTransitionCall,
   })  : _checklistItemsByTodoId = Map<String, List<TodoChecklistItem>>.from(
           checklistItemsByTodoId ?? const <String, List<TodoChecklistItem>>{},
         ),
@@ -16,6 +17,7 @@ final class QuickActionBackendTestDouble extends AppBackend {
 
   final Map<String, Todo> _todosById;
   final Map<String, List<TodoChecklistItem>> _checklistItemsByTodoId;
+  final int? failOnTransitionCall;
   var upsertTodoCalls = 0;
   var transitionTodoCalls = 0;
   var deleteTodoCalls = 0;
@@ -87,6 +89,9 @@ final class QuickActionBackendTestDouble extends AppBackend {
     String? sourceMessageId,
   }) async {
     transitionTodoCalls += 1;
+    if (failOnTransitionCall == transitionTodoCalls) {
+      throw StateError('transition failed');
+    }
     final existing = _todosById[todoId]!;
     final updated = Todo(
       id: existing.id,
