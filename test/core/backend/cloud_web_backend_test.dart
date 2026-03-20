@@ -335,6 +335,169 @@ void main() {
       expect(ranged.single.id, activity.id);
     });
 
+    test(
+        'supports activity attachments and checklist suggestions on web backend',
+        () async {
+      final backend = CloudWebBackend(
+        chatClient: _FakeCloudWebChatClient(responseText: 'ok'),
+        nowMs: () => 1000,
+      );
+      final key = Uint8List(0);
+      await backend.upsertTodo(
+        key,
+        id: 'todo:web',
+        title: 'Task with extras',
+        status: 'open',
+      );
+
+      const attachment = Attachment(
+        sha256: 'sha-activity',
+        mimeType: 'image/png',
+        path: 'vault/sha-activity.png',
+        byteLen: 12,
+        createdAtMs: 999,
+      );
+      backend.rememberAttachment(attachment);
+
+      final activity = await backend.appendTodoNote(
+        key,
+        todoId: 'todo:web',
+        content: 'Note with attachment',
+      );
+      await backend.linkAttachmentToTodoActivity(
+        key,
+        activityId: activity.id,
+        attachmentSha256: attachment.sha256,
+      );
+
+      final linkedAttachments =
+          await backend.listTodoActivityAttachments(key, activity.id);
+      expect(linkedAttachments, const <Attachment>[attachment]);
+
+      final generated = await backend.upsertGeneratedTodoChecklistSuggestions(
+        key,
+        todoId: 'todo:web',
+        suggestions: const <String>['Draft outline', 'Review draft'],
+        source: 'cloud',
+        generationKey: 'gen-1',
+      );
+      expect(generated, hasLength(2));
+      expect(generated.first.state, 'pending');
+
+      final applied = await backend.applyTodoChecklistSuggestions(
+        key,
+        todoId: 'todo:web',
+        suggestionIds: <String>[generated.first.id],
+      );
+      expect(applied, hasLength(1));
+      expect(applied.single.content, 'Draft outline');
+
+      await backend.dismissTodoChecklistSuggestions(
+        key,
+        todoId: 'todo:web',
+        suggestionIds: <String>[generated.last.id],
+      );
+
+      final suggestions =
+          await backend.listTodoChecklistSuggestions(key, 'todo:web');
+      final appliedSuggestion =
+          suggestions.firstWhere((item) => item.id == generated.first.id);
+      final dismissedSuggestion =
+          suggestions.firstWhere((item) => item.id == generated.last.id);
+      expect(appliedSuggestion.state, 'applied');
+      expect(appliedSuggestion.appliedChecklistItemId, applied.single.id);
+      expect(dismissedSuggestion.state, 'dismissed');
+      expect(dismissedSuggestion.dismissedAtMs, isNotNull);
+
+      await backend.upsertGeneratedTodoChecklistSuggestions(
+        key,
+        todoId: 'todo:web',
+        suggestions: const <String>['Ship it'],
+        source: 'cloud',
+        generationKey: 'gen-2',
+      );
+      await backend.dismissAllTodoChecklistSuggestions(
+        key,
+        todoId: 'todo:web',
+      );
+      final afterDismissAll =
+          await backend.listTodoChecklistSuggestions(key, 'todo:web');
+      expect(
+        afterDismissAll.where((item) => item.state == 'pending'),
+        isEmpty,
+      );
+    });
+
+    test(
+        'supports created-range queries, scoped updates, and recurrence on web backend',
+        () async {
+      var nowMs = 1000;
+      final backend = CloudWebBackend(
+        chatClient: _FakeCloudWebChatClient(responseText: 'ok'),
+        nowMs: () => nowMs,
+      );
+      final key = Uint8List(0);
+
+      await backend.upsertTodo(
+        key,
+        id: 'todo:early',
+        title: 'Early task',
+        status: 'open',
+      );
+      nowMs = 2000;
+      await backend.upsertTodo(
+        key,
+        id: 'todo:late',
+        title: 'Late task',
+        status: 'open',
+      );
+
+      final ranged = await backend.listTodosCreatedInRange(
+        key,
+        startAtMsInclusive: 1500,
+        endAtMsExclusive: 2500,
+      );
+      expect(ranged.map((todo) => todo.id), const <String>['todo:late']);
+
+      final statusUpdated = await backend.updateTodoStatusWithScope(
+        key,
+        todoId: 'todo:late',
+        newStatus: 'done',
+        scope: TodoRecurrenceEditScope.thisOnly,
+      );
+      expect(statusUpdated.status, 'done');
+
+      final dueUpdated = await backend.updateTodoDueWithScope(
+        key,
+        todoId: 'todo:late',
+        dueAtMs: 3000,
+        scope: TodoRecurrenceEditScope.thisAndFuture,
+      );
+      expect(dueUpdated.dueAtMs, 3000);
+
+      await backend.upsertTodoRecurrence(
+        key,
+        todoId: 'todo:late',
+        seriesId: 'series-1',
+        ruleJson: '{"freq":"weekly"}',
+      );
+      expect(
+        await backend.getTodoRecurrenceRuleJson(key, todoId: 'todo:late'),
+        '{"freq":"weekly"}',
+      );
+
+      await backend.updateTodoRecurrenceRuleWithScope(
+        key,
+        todoId: 'todo:late',
+        ruleJson: '{"freq":"daily"}',
+        scope: TodoRecurrenceEditScope.wholeSeries,
+      );
+      expect(
+        await backend.getTodoRecurrenceRuleJson(key, todoId: 'todo:late'),
+        '{"freq":"daily"}',
+      );
+    });
+
     test('task hub quick actions can transition todos on web backend',
         () async {
       final backend = CloudWebBackend(

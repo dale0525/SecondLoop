@@ -4,6 +4,8 @@ import '../../src/rust/db.dart';
 import 'attachments_backend.dart';
 import 'app_backend.dart';
 
+part 'cloud_web_backend_tasks_mixin.dart';
+
 abstract interface class CloudWebChatClient {
   Future<String> sendMessages({
     required String idToken,
@@ -27,7 +29,9 @@ final class UnsupportedCloudWebChatClient implements CloudWebChatClient {
   }
 }
 
-final class CloudWebBackend extends AppBackend implements AttachmentsBackend {
+final class CloudWebBackend extends AppBackend
+    with _CloudWebBackendTasksMixin
+    implements AttachmentsBackend {
   CloudWebBackend({
     required this.chatClient,
     int Function()? nowMs,
@@ -39,15 +43,11 @@ final class CloudWebBackend extends AppBackend implements AttachmentsBackend {
   final List<Conversation> _conversations = <Conversation>[];
   final Map<String, List<Message>> _messagesByConversation =
       <String, List<Message>>{};
+  @override
   final Map<String, Attachment> _attachmentsBySha = <String, Attachment>{};
   final Map<String, Uint8List> _attachmentBytesBySha = <String, Uint8List>{};
   final Map<String, List<String>> _attachmentShasByMessageId =
       <String, List<String>>{};
-  final Map<String, Todo> _todosById = <String, Todo>{};
-  final Map<String, TodoActivity> _todoActivitiesById =
-      <String, TodoActivity>{};
-  final Map<String, List<TodoChecklistItem>> _checklistItemsByTodoId =
-      <String, List<TodoChecklistItem>>{};
   final Map<String, _DeletedMessageSnapshot> _deletedMessagesById =
       <String, _DeletedMessageSnapshot>{};
   var _idCounter = 0;
@@ -62,13 +62,16 @@ final class CloudWebBackend extends AppBackend implements AttachmentsBackend {
         UnsupportedError('$feature is not available in web'));
   }
 
+  @override
   String _nextId(String prefix) {
     _idCounter += 1;
     return '$prefix-$_idCounter';
   }
 
+  @override
   int _touchNow() => _nowMs();
 
+  @override
   PlatformInt64 _asPlatformInt64(int value) => PlatformInt64Util.from(value);
 
   Conversation _replaceConversation(Conversation next) {
@@ -110,38 +113,12 @@ final class CloudWebBackend extends AppBackend implements AttachmentsBackend {
     _todosById.clear();
     _todoActivitiesById.clear();
     _checklistItemsByTodoId.clear();
+    _todoChecklistSuggestionsByTodoId.clear();
+    _attachmentShasByTodoActivityId.clear();
+    _todoRecurrenceRuleJsonByTodoId.clear();
+    _todoRecurrenceSeriesIdByTodoId.clear();
     _deletedMessagesById.clear();
     _idCounter = 0;
-  }
-
-  List<TodoChecklistItem> _checklistBucket(String todoId) {
-    return _checklistItemsByTodoId.putIfAbsent(
-        todoId, () => <TodoChecklistItem>[]);
-  }
-
-  List<TodoActivity> _sortedActivities(Iterable<TodoActivity> activities) {
-    final copy = activities.toList(growable: false)
-      ..sort(
-        (left, right) {
-          final byCreatedAt = left.createdAtMs.compareTo(right.createdAtMs);
-          if (byCreatedAt != 0) {
-            return byCreatedAt;
-          }
-          return left.id.compareTo(right.id);
-        },
-      );
-    return copy;
-  }
-
-  TodoChecklistItem _findChecklistItem(String itemId) {
-    for (final items in _checklistItemsByTodoId.values) {
-      for (final item in items) {
-        if (item.id == itemId) {
-          return item;
-        }
-      }
-    }
-    throw StateError('unknown_checklist_item:$itemId');
   }
 
   List<Message> _messageBucket(String conversationId) {
@@ -327,407 +304,6 @@ final class CloudWebBackend extends AppBackend implements AttachmentsBackend {
   @override
   Future<void> resetVaultDataPreservingLlmProfiles(Uint8List key) async {
     clearWebSessionState();
-  }
-
-  @override
-  Future<List<Todo>> listTodos(Uint8List key) async {
-    final todos = _todosById.values.toList(growable: false)
-      ..sort(
-        (left, right) => left.createdAtMs.compareTo(right.createdAtMs),
-      );
-    return todos;
-  }
-
-  @override
-  Future<Todo> upsertTodo(
-    Uint8List key, {
-    required String id,
-    required String title,
-    int? dueAtMs,
-    required String status,
-    String? sourceEntryId,
-    int? reviewStage,
-    int? nextReviewAtMs,
-    int? lastReviewAtMs,
-    int? manualImportanceNudgeScore,
-    int? manualUrgencyNudgeScore,
-  }) async {
-    final now = _touchNow();
-    final existing = _todosById[id];
-    final todo = Todo(
-      id: id,
-      title: title,
-      dueAtMs: dueAtMs,
-      status: status,
-      sourceEntryId: sourceEntryId,
-      createdAtMs: existing?.createdAtMs ?? _asPlatformInt64(now),
-      updatedAtMs: _asPlatformInt64(now),
-      reviewStage: reviewStage == null ? null : _asPlatformInt64(reviewStage),
-      nextReviewAtMs:
-          nextReviewAtMs == null ? null : _asPlatformInt64(nextReviewAtMs),
-      lastReviewAtMs:
-          lastReviewAtMs == null ? null : _asPlatformInt64(lastReviewAtMs),
-      manualImportanceNudgeScore:
-          _asPlatformInt64((manualImportanceNudgeScore ?? 0).clamp(-1, 1)),
-      manualUrgencyNudgeScore:
-          _asPlatformInt64((manualUrgencyNudgeScore ?? 0).clamp(-1, 1)),
-    );
-    _todosById[id] = todo;
-    return todo;
-  }
-
-  @override
-  Future<Todo> setTodoStatus(
-    Uint8List key, {
-    required String todoId,
-    required String newStatus,
-    String? sourceMessageId,
-  }) async {
-    final existing = _todosById[todoId];
-    if (existing == null) {
-      throw StateError('unknown_todo:$todoId');
-    }
-    return upsertTodo(
-      key,
-      id: existing.id,
-      title: existing.title,
-      dueAtMs: existing.dueAtMs,
-      status: newStatus,
-      sourceEntryId: existing.sourceEntryId,
-      reviewStage: existing.reviewStage,
-      nextReviewAtMs: existing.nextReviewAtMs,
-      lastReviewAtMs: existing.lastReviewAtMs,
-      manualImportanceNudgeScore: existing.manualImportanceNudgeScore,
-      manualUrgencyNudgeScore: existing.manualUrgencyNudgeScore,
-    );
-  }
-
-  @override
-  Future<Todo> transitionTodo(
-    Uint8List key, {
-    required String todoId,
-    String? newStatus,
-    int? dueAtMs,
-    bool clearDueAtMs = false,
-    int? reviewStage,
-    bool clearReviewStage = false,
-    int? nextReviewAtMs,
-    bool clearNextReviewAtMs = false,
-    int? lastReviewAtMs,
-    bool clearLastReviewAtMs = false,
-    int? manualImportanceNudgeScore,
-    bool clearManualImportanceNudgeScore = false,
-    int? manualUrgencyNudgeScore,
-    bool clearManualUrgencyNudgeScore = false,
-    String? sourceMessageId,
-  }) async {
-    final existing = _todosById[todoId];
-    if (existing == null) {
-      throw StateError('unknown_todo:$todoId');
-    }
-
-    final staged = newStatus != null && newStatus != existing.status
-        ? await setTodoStatus(
-            key,
-            todoId: todoId,
-            newStatus: newStatus,
-            sourceMessageId: sourceMessageId,
-          )
-        : existing;
-
-    final targetDueAtMs = clearDueAtMs ? null : (dueAtMs ?? staged.dueAtMs);
-    final targetReviewStage =
-        clearReviewStage ? null : (reviewStage ?? staged.reviewStage);
-    final targetNextReviewAtMs =
-        clearNextReviewAtMs ? null : (nextReviewAtMs ?? staged.nextReviewAtMs);
-    final targetLastReviewAtMs =
-        clearLastReviewAtMs ? null : (lastReviewAtMs ?? staged.lastReviewAtMs);
-    final targetManualImportanceNudgeScore = clearManualImportanceNudgeScore
-        ? 0
-        : (manualImportanceNudgeScore ??
-            (staged.manualImportanceNudgeScore ?? 0));
-    final targetManualUrgencyNudgeScore = clearManualUrgencyNudgeScore
-        ? 0
-        : (manualUrgencyNudgeScore ?? (staged.manualUrgencyNudgeScore ?? 0));
-
-    if (targetDueAtMs == staged.dueAtMs &&
-        targetReviewStage == staged.reviewStage &&
-        targetNextReviewAtMs == staged.nextReviewAtMs &&
-        targetLastReviewAtMs == staged.lastReviewAtMs &&
-        targetManualImportanceNudgeScore ==
-            (staged.manualImportanceNudgeScore ?? 0) &&
-        targetManualUrgencyNudgeScore ==
-            (staged.manualUrgencyNudgeScore ?? 0)) {
-      return staged;
-    }
-
-    return upsertTodo(
-      key,
-      id: staged.id,
-      title: staged.title,
-      dueAtMs: targetDueAtMs,
-      status: staged.status,
-      sourceEntryId: staged.sourceEntryId,
-      reviewStage: targetReviewStage,
-      nextReviewAtMs: targetNextReviewAtMs,
-      lastReviewAtMs: targetLastReviewAtMs,
-      manualImportanceNudgeScore: targetManualImportanceNudgeScore,
-      manualUrgencyNudgeScore: targetManualUrgencyNudgeScore,
-    );
-  }
-
-  @override
-  Future<void> deleteTodo(
-    Uint8List key, {
-    required String todoId,
-  }) async {
-    _todosById.remove(todoId);
-    _todoActivitiesById.removeWhere(
-      (_, activity) => activity.todoId == todoId,
-    );
-    _checklistItemsByTodoId.remove(todoId);
-  }
-
-  @override
-  Future<TodoActivity> appendTodoNote(
-    Uint8List key, {
-    required String todoId,
-    required String content,
-    String? sourceMessageId,
-  }) async {
-    if (!_todosById.containsKey(todoId)) {
-      throw StateError('unknown_todo:$todoId');
-    }
-    final activity = TodoActivity(
-      id: _nextId('activity'),
-      todoId: todoId,
-      activityType: 'note',
-      content: content,
-      sourceMessageId: sourceMessageId,
-      createdAtMs: _asPlatformInt64(_touchNow()),
-    );
-    _todoActivitiesById[activity.id] = activity;
-    return activity;
-  }
-
-  @override
-  Future<TodoActivity> moveTodoActivity(
-    Uint8List key, {
-    required String activityId,
-    required String toTodoId,
-  }) async {
-    if (!_todosById.containsKey(toTodoId)) {
-      throw StateError('unknown_todo:$toTodoId');
-    }
-    final existing = _todoActivitiesById[activityId];
-    if (existing == null) {
-      throw StateError('unknown_todo_activity:$activityId');
-    }
-    final moved = TodoActivity(
-      id: existing.id,
-      todoId: toTodoId,
-      activityType: existing.activityType,
-      fromStatus: existing.fromStatus,
-      toStatus: existing.toStatus,
-      content: existing.content,
-      sourceMessageId: existing.sourceMessageId,
-      createdAtMs: existing.createdAtMs,
-    );
-    _todoActivitiesById[activityId] = moved;
-    return moved;
-  }
-
-  @override
-  Future<List<TodoChecklistItem>> listTodoChecklistItems(
-    Uint8List key,
-    String todoId,
-  ) async {
-    final items = List<TodoChecklistItem>.of(_checklistBucket(todoId))
-      ..sort((left, right) => left.sortOrder.compareTo(right.sortOrder));
-    return items;
-  }
-
-  @override
-  Future<TodoChecklistItem> createTodoChecklistItem(
-    Uint8List key, {
-    required String todoId,
-    required String content,
-  }) async {
-    if (!_todosById.containsKey(todoId)) {
-      throw StateError('unknown_todo:$todoId');
-    }
-    final now = _touchNow();
-    final bucket = _checklistBucket(todoId);
-    final item = TodoChecklistItem(
-      id: _nextId('checklist'),
-      todoId: todoId,
-      content: content,
-      sortOrder: bucket.length,
-      isDone: false,
-      createdAtMs: _asPlatformInt64(now),
-      updatedAtMs: _asPlatformInt64(now),
-    );
-    bucket.add(item);
-    return item;
-  }
-
-  @override
-  Future<TodoChecklistItem> updateTodoChecklistItemContent(
-    Uint8List key, {
-    required String itemId,
-    required String content,
-  }) async {
-    final existing = _findChecklistItem(itemId);
-    final now = _touchNow();
-    final updated = TodoChecklistItem(
-      id: existing.id,
-      todoId: existing.todoId,
-      content: content,
-      sortOrder: existing.sortOrder,
-      isDone: existing.isDone,
-      createdAtMs: existing.createdAtMs,
-      updatedAtMs: _asPlatformInt64(now),
-    );
-    final bucket = _checklistBucket(existing.todoId);
-    final index = bucket.indexWhere((item) => item.id == itemId);
-    bucket[index] = updated;
-    return updated;
-  }
-
-  @override
-  Future<TodoChecklistItem> setTodoChecklistItemDone(
-    Uint8List key, {
-    required String itemId,
-    required bool isDone,
-  }) async {
-    final existing = _findChecklistItem(itemId);
-    final now = _touchNow();
-    final updated = TodoChecklistItem(
-      id: existing.id,
-      todoId: existing.todoId,
-      content: existing.content,
-      sortOrder: existing.sortOrder,
-      isDone: isDone,
-      createdAtMs: existing.createdAtMs,
-      updatedAtMs: _asPlatformInt64(now),
-    );
-    final bucket = _checklistBucket(existing.todoId);
-    final index = bucket.indexWhere((item) => item.id == itemId);
-    bucket[index] = updated;
-    return updated;
-  }
-
-  @override
-  Future<void> deleteTodoChecklistItem(
-    Uint8List key, {
-    required String itemId,
-  }) async {
-    for (final entry in _checklistItemsByTodoId.entries) {
-      final index = entry.value.indexWhere((item) => item.id == itemId);
-      if (index < 0) continue;
-      entry.value.removeAt(index);
-      for (var i = 0; i < entry.value.length; i += 1) {
-        final current = entry.value[i];
-        entry.value[i] = TodoChecklistItem(
-          id: current.id,
-          todoId: current.todoId,
-          content: current.content,
-          sortOrder: i,
-          isDone: current.isDone,
-          createdAtMs: current.createdAtMs,
-          updatedAtMs: current.updatedAtMs,
-        );
-      }
-      return;
-    }
-  }
-
-  @override
-  Future<void> reorderTodoChecklistItems(
-    Uint8List key, {
-    required String todoId,
-    required List<String> orderedItemIds,
-  }) async {
-    final bucket = _checklistBucket(todoId);
-    if (orderedItemIds.isEmpty) return;
-    final byId = <String, TodoChecklistItem>{
-      for (final item in bucket) item.id: item,
-    };
-    final reordered = <TodoChecklistItem>[];
-    for (var i = 0; i < orderedItemIds.length; i += 1) {
-      final item = byId[orderedItemIds[i]];
-      if (item == null) {
-        throw StateError('unknown_checklist_item:${orderedItemIds[i]}');
-      }
-      reordered.add(
-        TodoChecklistItem(
-          id: item.id,
-          todoId: item.todoId,
-          content: item.content,
-          sortOrder: i,
-          isDone: item.isDone,
-          createdAtMs: item.createdAtMs,
-          updatedAtMs: item.updatedAtMs,
-        ),
-      );
-    }
-    bucket
-      ..clear()
-      ..addAll(reordered);
-  }
-
-  @override
-  Future<List<TodoChecklistProgress>> listTodoChecklistProgress(
-    Uint8List key,
-  ) async {
-    final progress = <TodoChecklistProgress>[];
-    for (final todo in _todosById.values) {
-      if (todo.status == 'done' || todo.status == 'dismissed') {
-        continue;
-      }
-      final items =
-          _checklistItemsByTodoId[todo.id] ?? const <TodoChecklistItem>[];
-      if (items.isEmpty) continue;
-      var doneCount = 0;
-      for (final item in items) {
-        if (item.isDone) {
-          doneCount += 1;
-        }
-      }
-      progress.add(
-        TodoChecklistProgress(
-          todoId: todo.id,
-          totalCount: items.length,
-          doneCount: doneCount,
-        ),
-      );
-    }
-    return progress;
-  }
-
-  @override
-  Future<List<TodoActivity>> listTodoActivities(
-    Uint8List key,
-    String todoId,
-  ) async {
-    return _sortedActivities(
-      _todoActivitiesById.values.where((activity) => activity.todoId == todoId),
-    );
-  }
-
-  @override
-  Future<List<TodoActivity>> listTodoActivitiesInRange(
-    Uint8List key, {
-    required int startAtMsInclusive,
-    required int endAtMsExclusive,
-  }) async {
-    return _sortedActivities(
-      _todoActivitiesById.values.where(
-        (activity) =>
-            activity.createdAtMs >= startAtMsInclusive &&
-            activity.createdAtMs < endAtMsExclusive,
-      ),
-    );
   }
 
   @override
