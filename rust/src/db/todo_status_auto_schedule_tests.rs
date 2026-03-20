@@ -18,6 +18,8 @@ fn create_todo(
         None,
         None,
         Some(now_ms()),
+        None,
+        None,
     )
     .expect("create todo")
 }
@@ -96,6 +98,8 @@ fn transition_todo_updates_status_due_and_review_fields_atomically() {
         Some(2),
         Some(now_ms().saturating_add(60_000)),
         None,
+        None,
+        None,
     )
     .expect("create todo");
 
@@ -112,6 +116,10 @@ fn transition_todo_updates_status_due_and_review_fields_atomically() {
         None,
         true,
         Some(now_ms()),
+        false,
+        None,
+        false,
+        None,
         false,
         None,
     )
@@ -143,6 +151,8 @@ fn transition_todo_same_status_only_patches_fields_without_auto_scheduling() {
         None,
         None,
         Some(123),
+        None,
+        None,
     )
     .expect("create todo");
 
@@ -158,6 +168,10 @@ fn transition_todo_same_status_only_patches_fields_without_auto_scheduling() {
         None,
         false,
         Some(789),
+        false,
+        None,
+        false,
+        None,
         false,
         None,
     )

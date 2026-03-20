@@ -26,6 +26,8 @@ fn checklist_suggestions_can_be_generated_applied_and_dismissed() {
         None,
         None,
         None,
+        None,
+        None,
     )
     .expect("upsert todo");
 
@@ -76,6 +78,8 @@ fn regenerate_skips_dismissed_and_applied_duplicates() {
         "Plan launch",
         None,
         "open",
+        None,
+        None,
         None,
         None,
         None,
@@ -135,6 +139,8 @@ fn generated_suggestion_sort_order_stays_contiguous_after_skips() {
         None,
         None,
         None,
+        None,
+        None,
     )
     .expect("upsert todo");
 
@@ -169,6 +175,8 @@ fn dismiss_all_marks_all_pending_suggestions_dismissed() {
         "Plan launch",
         None,
         "open",
+        None,
+        None,
         None,
         None,
         None,
@@ -211,6 +219,8 @@ fn generate_suggestions_rolls_back_when_oplog_insert_fails() {
         "Plan launch",
         None,
         "open",
+        None,
+        None,
         None,
         None,
         None,
@@ -259,6 +269,8 @@ fn dismiss_suggestions_rolls_back_when_oplog_insert_fails() {
         "Plan launch",
         None,
         "open",
+        None,
+        None,
         None,
         None,
         None,
@@ -322,6 +334,8 @@ fn checklist_generate_suggestions_succeeds_inside_active_transaction() {
         None,
         None,
         None,
+        None,
+        None,
     )
     .expect("upsert todo");
 
@@ -356,6 +370,8 @@ fn checklist_apply_suggestions_succeeds_inside_active_transaction() {
         "Plan launch",
         None,
         "open",
+        None,
+        None,
         None,
         None,
         None,
@@ -400,6 +416,8 @@ fn checklist_dismiss_suggestions_succeeds_inside_active_transaction() {
         None,
         None,
         None,
+        None,
+        None,
     )
     .expect("upsert todo");
 
@@ -436,6 +454,8 @@ fn dismiss_suggestions_skips_oplog_when_no_rows_change() {
         "Plan launch",
         None,
         "open",
+        None,
+        None,
         None,
         None,
         None,
@@ -485,6 +505,8 @@ fn generate_suggestions_uses_consistent_timestamps_per_batch() {
         None,
         None,
         None,
+        None,
+        None,
     )
     .expect("upsert todo");
 
@@ -524,6 +546,8 @@ fn deleting_applied_checklist_item_reverts_suggestion_to_pending() {
         "Plan launch",
         None,
         "open",
+        None,
+        None,
         None,
         None,
         None,
@@ -588,6 +612,8 @@ fn apply_suggestions_skips_missing_ids_without_failing_batch() {
         None,
         None,
         None,
+        None,
+        None,
     )
     .expect("upsert todo");
 
@@ -624,6 +650,8 @@ fn apply_suggestions_uses_consistent_timestamps_per_batch() {
         "Plan launch",
         None,
         "open",
+        None,
+        None,
         None,
         None,
         None,

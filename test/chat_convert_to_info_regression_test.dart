@@ -231,6 +231,8 @@ final class _ConvertToInfoBackend extends TestAppBackend {
     int? reviewStage,
     int? nextReviewAtMs,
     int? lastReviewAtMs,
+    int? manualImportanceNudgeScore,
+    int? manualUrgencyNudgeScore,
   }) async {
     final nowMs = DateTime.now().toUtc().millisecondsSinceEpoch;
     final existingIndex = _todos.indexWhere((todo) => todo.id == id);
@@ -247,6 +249,8 @@ final class _ConvertToInfoBackend extends TestAppBackend {
       reviewStage: reviewStage,
       nextReviewAtMs: nextReviewAtMs,
       lastReviewAtMs: lastReviewAtMs,
+      manualImportanceNudgeScore: manualImportanceNudgeScore ?? 0,
+      manualUrgencyNudgeScore: manualUrgencyNudgeScore ?? 0,
     );
     if (existingIndex >= 0) {
       _todos[existingIndex] = updated;

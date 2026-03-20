@@ -6,13 +6,11 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:secondloop/features/actions/task_hub/task_priority_ai.dart';
 import 'package:secondloop/features/actions/task_hub/task_priority_ai_models.dart';
 import 'package:secondloop/features/actions/task_hub/task_priority_models.dart';
-import 'package:secondloop/features/actions/task_hub/task_priority_signal_store.dart';
 import 'package:secondloop/features/actions/task_hub/task_priority_store.dart';
 import 'package:secondloop/src/rust/db.dart';
 
 void main() {
   setUp(() {
-    TaskPrioritySignalStore.resetMutationQueueForTest();
     BackendTaskPriorityAiService.clearSharedCacheForTest();
   });
 
@@ -24,6 +22,8 @@ void main() {
     String status = 'open',
     int? reviewStage,
     int? nextReviewAtMs,
+    int? manualImportanceNudgeScore,
+    int? manualUrgencyNudgeScore,
   }) {
     return Todo(
       id: id,
@@ -36,6 +36,8 @@ void main() {
       reviewStage: reviewStage,
       nextReviewAtMs: nextReviewAtMs,
       lastReviewAtMs: null,
+      manualImportanceNudgeScore: manualImportanceNudgeScore,
+      manualUrgencyNudgeScore: manualUrgencyNudgeScore,
     );
   }
 
@@ -612,18 +614,18 @@ void main() {
   test('due state changes bypass sticky focus and recompute primary focus',
       () async {
     SharedPreferences.setMockInitialValues({});
-    const signalStore = TaskPrioritySignalStore();
-    await signalStore.setForTodo(
-      'sticky',
-      const TaskPriorityManualSignal(urgencyScore: 3),
-    );
 
     var nowLocal = DateTime(2026, 3, 13, 10, 0);
-    final reviewAt = DateTime(2026, 3, 14, 11, 0);
+    final reviewAt = DateTime(2026, 3, 15, 11, 0);
     final store = TaskPriorityStore.fromLoaders(
       nowLocal: () => nowLocal,
       loadTodos: () async => <Todo>[
-        todo(id: 'sticky', title: 'Roadmap', updatedAtMs: 50),
+        todo(
+          id: 'sticky',
+          title: 'Roadmap',
+          updatedAtMs: 50,
+          manualUrgencyNudgeScore: 1,
+        ),
         todo(
           id: 'review',
           title: 'Reply to client',
@@ -631,13 +633,12 @@ void main() {
           dueAtMs: reviewAt.toUtc().millisecondsSinceEpoch,
         ),
       ],
-      signalStore: signalStore,
     );
 
     await store.refresh();
     expect(store.snapshot.primaryFocus?.todo.id, 'sticky');
 
-    nowLocal = DateTime(2026, 3, 14, 12, 0);
+    nowLocal = DateTime(2026, 3, 15, 12, 0);
     store.markDirty();
     await store.refresh();
 
@@ -647,31 +648,33 @@ void main() {
   test('manual urgency change on another task invalidates sticky focus',
       () async {
     SharedPreferences.setMockInitialValues({});
-    const signalStore = TaskPrioritySignalStore();
-    await signalStore.setForTodo(
-      'sticky',
-      const TaskPriorityManualSignal(urgencyScore: 2),
-    );
 
+    var reviewUrgency = 0;
+    var reviewImportance = 0;
     final store = TaskPriorityStore.fromLoaders(
       nowLocal: () => DateTime(2026, 3, 13, 10, 0),
       loadTodos: () async => <Todo>[
-        todo(id: 'sticky', title: 'Roadmap', updatedAtMs: 50),
-        todo(id: 'review', title: 'Reply to client', updatedAtMs: 20),
+        todo(
+          id: 'sticky',
+          title: 'Roadmap',
+          updatedAtMs: 50,
+          manualUrgencyNudgeScore: 1,
+        ),
+        todo(
+          id: 'review',
+          title: 'Reply to client',
+          updatedAtMs: 20,
+          manualUrgencyNudgeScore: reviewUrgency,
+          manualImportanceNudgeScore: reviewImportance,
+        ),
       ],
-      signalStore: signalStore,
     );
 
     await store.refresh();
     expect(store.snapshot.primaryFocus?.todo.id, 'sticky');
 
-    await signalStore.setForTodo(
-      'review',
-      const TaskPriorityManualSignal(
-        urgencyScore: 3,
-        importanceScore: 1,
-      ),
-    );
+    reviewUrgency = 1;
+    reviewImportance = 1;
     store.markDirty();
     await store.refresh();
 
@@ -799,6 +802,36 @@ void main() {
       store.snapshot.primaryFocus?.reasonText,
       'Fresh AI result without persisted cache.',
     );
+  });
+
+  test(
+      'manual nudge fields on todos survive store reload without local signal store',
+      () async {
+    SharedPreferences.setMockInitialValues({});
+    TaskPriorityStore buildStore() {
+      return TaskPriorityStore.fromLoaders(
+        nowLocal: () => DateTime(2026, 3, 20, 10, 0),
+        loadTodos: () async => <Todo>[
+          todo(
+            id: 'focus',
+            title: 'Synced nudge task',
+            updatedAtMs: 10,
+            manualUrgencyNudgeScore: 1,
+            manualImportanceNudgeScore: -1,
+          ),
+        ],
+      );
+    }
+
+    final firstStore = buildStore();
+    await firstStore.refresh();
+    expect(firstStore.snapshot.primaryFocus?.manualUrgencyNudgeScore, 1);
+    expect(firstStore.snapshot.primaryFocus?.manualImportanceNudgeScore, -1);
+
+    final secondStore = buildStore();
+    await secondStore.refresh();
+    expect(secondStore.snapshot.primaryFocus?.manualUrgencyNudgeScore, 1);
+    expect(secondStore.snapshot.primaryFocus?.manualImportanceNudgeScore, -1);
   });
 
   test('changing ai cache scope triggers a fresh rerank', () async {

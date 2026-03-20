@@ -190,7 +190,6 @@ pub(crate) fn recall_knowledge_candidates(
 
     let top_document_ids = document_candidates
         .iter()
-        .cloned()
         .map(|candidate| {
             (
                 candidate.document.document_id.clone(),

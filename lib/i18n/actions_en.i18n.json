@@ -179,6 +179,12 @@
       "reopen": "Resume today",
       "redo": "Do again",
       "more": "More"
+    },
+    "nudges": {
+      "urgencyRaised": "Urgency raised",
+      "urgencyLowered": "Urgency lowered",
+      "importanceRaised": "Importance raised",
+      "importanceLowered": "Importance lowered"
     }
   },
   "calendar": {

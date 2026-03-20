@@ -95,6 +95,8 @@ mod pull_progress_tests {
             None,
             None,
             Some(1_710_000_000_100),
+            None,
+            None,
         )
         .expect("create todo A");
         crate::db::set_todo_status(&conn_a, &db_key, &todo_a.id, "done", None)
@@ -133,6 +135,8 @@ mod pull_progress_tests {
             None,
             None,
             Some(1_710_000_000_100),
+            None,
+            None,
         )
         .expect("create recurring todo A");
         crate::db::upsert_todo_recurrence_with_sync(

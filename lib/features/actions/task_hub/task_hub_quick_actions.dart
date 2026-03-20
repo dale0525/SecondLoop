@@ -3,7 +3,6 @@ import 'dart:typed_data';
 import '../../../core/backend/app_backend.dart';
 import '../../../src/rust/db.dart';
 import '../settings/actions_settings_store.dart';
-import 'task_priority_signal_store.dart';
 
 enum TaskHubQuickAction {
   today,
@@ -34,7 +33,7 @@ class TaskHubUndoTicket {
   final Todo todo;
   final Todo updatedTodo;
   final TaskHubQuickAction action;
-  final TaskPriorityManualSignal? previousManualSignal;
+  final TaskHubUndoManualNudgeSnapshot? previousManualSignal;
   final String? createdTodoId;
   final bool shouldNotifySync;
 }
@@ -43,19 +42,13 @@ class TaskHubQuickActionsController {
   TaskHubQuickActionsController({
     required this.backend,
     required this.sessionKey,
-    TaskPrioritySignalStore? signalStore,
     this.confirmDoneWithIncompleteChecklist,
     this.checklistProgressByTodoId = const <String, TodoChecklistProgress>{},
     DateTime Function()? nowLocal,
-  })  : signalStore = signalStore ??
-            TaskPrioritySignalStore(
-              scopeKey: buildTaskPrioritySignalScopeKey(sessionKey),
-            ),
-        _nowLocalOverride = nowLocal;
+  }) : _nowLocalOverride = nowLocal;
 
   final AppBackend backend;
   final Uint8List sessionKey;
-  final TaskPrioritySignalStore signalStore;
   final ConfirmDoneWithIncompleteChecklist? confirmDoneWithIncompleteChecklist;
   final Map<String, TodoChecklistProgress> checklistProgressByTodoId;
   DateTime Function() get _nowLocal => _nowLocalOverride ?? DateTime.now;
@@ -172,23 +165,33 @@ class TaskHubQuickActionsController {
     int importanceDelta = 0,
     int urgencyDelta = 0,
   }) async {
-    final mutation = await signalStore.mutateForTodo(
-      todo.id,
-      (current) => current.copyWith(
-        importanceDelta: importanceDelta,
-        urgencyDelta: urgencyDelta,
-      ),
+    final previousManualSignal = _manualSignalFromTodo(todo);
+    final nextImportance = switch (importanceDelta) {
+      > 0 => 1,
+      < 0 => -1,
+      _ => todo.manualImportanceNudgeScore ?? 0,
+    };
+    final nextUrgency = switch (urgencyDelta) {
+      > 0 => 1,
+      < 0 => -1,
+      _ => todo.manualUrgencyNudgeScore ?? 0,
+    };
+    final updated = await backend.transitionTodo(
+      sessionKey,
+      todoId: todo.id,
+      manualImportanceNudgeScore: nextImportance,
+      manualUrgencyNudgeScore: nextUrgency,
     );
     return TaskHubUndoTicket(
       todo: todo,
-      updatedTodo: todo,
+      updatedTodo: updated,
       action: action,
-      previousManualSignal: mutation.previous,
-      shouldNotifySync: false,
+      previousManualSignal: previousManualSignal,
     );
   }
 
   Future<TaskHubUndoTicket> _applyStart(Todo todo) async {
+    final previousManualSignal = await _clearNudges(todo.id);
     final updated = await backend.transitionTodo(
       sessionKey,
       todoId: todo.id,
@@ -199,11 +202,14 @@ class TaskHubQuickActionsController {
       clearReviewStage: todo.reviewStage == null,
       nextReviewAtMs: todo.nextReviewAtMs,
       clearNextReviewAtMs: todo.nextReviewAtMs == null,
+      clearManualImportanceNudgeScore: true,
+      clearManualUrgencyNudgeScore: true,
     );
     return TaskHubUndoTicket(
       todo: todo,
       updatedTodo: updated,
       action: TaskHubQuickAction.start,
+      previousManualSignal: previousManualSignal,
     );
   }
 
@@ -215,6 +221,7 @@ class TaskHubQuickActionsController {
     required ActionsSettings settings,
     required int offsetDays,
   }) async {
+    final previousManualSignal = await _clearNudges(todo.id);
     final dueLocal = offsetDays == 0
         ? _todayDueLocal(nowLocal, settings)
         : _scheduledMorningLocal(nowLocal, settings, offsetDays: offsetDays);
@@ -226,11 +233,14 @@ class TaskHubQuickActionsController {
       clearReviewStage: true,
       clearNextReviewAtMs: true,
       lastReviewAtMs: nowUtcMs,
+      clearManualImportanceNudgeScore: true,
+      clearManualUrgencyNudgeScore: true,
     );
     return TaskHubUndoTicket(
       todo: todo,
       updatedTodo: updated,
       action: action,
+      previousManualSignal: previousManualSignal,
     );
   }
 
@@ -288,6 +298,7 @@ class TaskHubQuickActionsController {
       final confirmed = await confirmDoneWithIncompleteChecklist!.call(todo);
       if (!confirmed) return null;
     }
+    final previousManualSignal = await _clearNudges(todo.id);
     final updated = await backend.setTodoStatus(
       sessionKey,
       todoId: todo.id,
@@ -297,6 +308,7 @@ class TaskHubQuickActionsController {
       todo: todo,
       updatedTodo: updated,
       action: TaskHubQuickAction.done,
+      previousManualSignal: previousManualSignal,
     );
   }
 
@@ -306,6 +318,7 @@ class TaskHubQuickActionsController {
     required int nowUtcMs,
     required ActionsSettings settings,
   }) async {
+    final previousManualSignal = await _clearNudges(todo.id);
     final dueLocal = _reopenDueLocal(nowLocal, settings);
     final updated = await backend.transitionTodo(
       sessionKey,
@@ -315,11 +328,14 @@ class TaskHubQuickActionsController {
       clearReviewStage: true,
       clearNextReviewAtMs: true,
       lastReviewAtMs: nowUtcMs,
+      clearManualImportanceNudgeScore: true,
+      clearManualUrgencyNudgeScore: true,
     );
     return TaskHubUndoTicket(
       todo: todo,
       updatedTodo: updated,
       action: TaskHubQuickAction.reopen,
+      previousManualSignal: previousManualSignal,
     );
   }
 
@@ -333,6 +349,7 @@ class TaskHubQuickActionsController {
     required int nowUtcMs,
     required ActionsSettings settings,
   }) async {
+    final previousManualSignal = await _clearNudges(todo.id);
     final dueLocal = _todayDueLocal(nowLocal, settings);
     final createdTodoId =
         'todo:task_hub_redo:${todo.id}:${nowLocal.toUtc().microsecondsSinceEpoch}';
@@ -346,36 +363,20 @@ class TaskHubQuickActionsController {
       reviewStage: null,
       nextReviewAtMs: null,
       lastReviewAtMs: nowUtcMs,
+      manualImportanceNudgeScore: previousManualSignal?.importanceScore,
+      manualUrgencyNudgeScore: previousManualSignal?.urgencyScore,
     );
-    try {
-      final sourceSignal = await signalStore.readForTodo(todo.id);
-      if (sourceSignal != null && !sourceSignal.isEmpty) {
-        await signalStore.setForTodo(createdTodoId, sourceSignal);
-      }
-    } catch (_) {
-      await _rollbackCreatedTodo(createdTodoId);
-      rethrow;
-    }
     return TaskHubUndoTicket(
       todo: todo,
       updatedTodo: updated,
       action: TaskHubQuickAction.redo,
+      previousManualSignal: previousManualSignal,
       createdTodoId: createdTodoId,
     );
   }
 
-  Future<void> _rollbackCreatedTodo(String todoId) async {
-    try {
-      await backend.deleteTodo(
-        sessionKey,
-        todoId: todoId,
-      );
-    } catch (_) {
-      // Ignore rollback failures and preserve the original error.
-    }
-  }
-
   Future<TaskHubUndoTicket> _applyDismiss(Todo todo) async {
+    final previousManualSignal = await _clearNudges(todo.id);
     final updated = await backend.setTodoStatus(
       sessionKey,
       todoId: todo.id,
@@ -385,34 +386,18 @@ class TaskHubQuickActionsController {
       todo: todo,
       updatedTodo: updated,
       action: TaskHubQuickAction.dismiss,
+      previousManualSignal: previousManualSignal,
     );
   }
 
   Future<void> undo(TaskHubUndoTicket ticket) async {
     if (ticket.action == TaskHubQuickAction.redo &&
         ticket.createdTodoId != null) {
+      await _restoreManualSignal(ticket.todo.id, ticket.previousManualSignal);
       await backend.deleteTodo(
         sessionKey,
         todoId: ticket.createdTodoId!,
       );
-      await signalStore.restoreForTodo(ticket.createdTodoId!, null);
-      return;
-    }
-
-    final isSignalOnlyAction =
-        ticket.action == TaskHubQuickAction.increaseImportance ||
-            ticket.action == TaskHubQuickAction.decreaseImportance ||
-            ticket.action == TaskHubQuickAction.increaseUrgency ||
-            ticket.action == TaskHubQuickAction.decreaseUrgency;
-    if (ticket.previousManualSignal != null || isSignalOnlyAction) {
-      await signalStore.restoreForTodo(
-        ticket.todo.id,
-        ticket.previousManualSignal,
-      );
-    }
-    if (!ticket.shouldNotifySync &&
-        ticket.updatedTodo.id == ticket.todo.id &&
-        ticket.updatedTodo == ticket.todo) {
       return;
     }
 
@@ -431,6 +416,12 @@ class TaskHubQuickActionsController {
         clearNextReviewAtMs: original.nextReviewAtMs == null,
         lastReviewAtMs: original.lastReviewAtMs,
         clearLastReviewAtMs: original.lastReviewAtMs == null,
+        manualImportanceNudgeScore: original.manualImportanceNudgeScore,
+        clearManualImportanceNudgeScore:
+            (original.manualImportanceNudgeScore ?? 0) == 0,
+        manualUrgencyNudgeScore: original.manualUrgencyNudgeScore,
+        clearManualUrgencyNudgeScore:
+            (original.manualUrgencyNudgeScore ?? 0) == 0,
       );
       return;
     }
@@ -445,6 +436,34 @@ class TaskHubQuickActionsController {
       reviewStage: original.reviewStage,
       nextReviewAtMs: original.nextReviewAtMs,
       lastReviewAtMs: original.lastReviewAtMs,
+      manualImportanceNudgeScore: original.manualImportanceNudgeScore,
+      manualUrgencyNudgeScore: original.manualUrgencyNudgeScore,
+    );
+  }
+
+  TaskHubUndoManualNudgeSnapshot? _manualSignalFromTodo(Todo todo) {
+    final importance = todo.manualImportanceNudgeScore ?? 0;
+    final urgency = todo.manualUrgencyNudgeScore ?? 0;
+    if (importance == 0 && urgency == 0) {
+      return null;
+    }
+    return TaskHubUndoManualNudgeSnapshot(
+      importanceScore: importance,
+      urgencyScore: urgency,
+    );
+  }
+
+  Future<void> _restoreManualSignal(
+    String todoId,
+    TaskHubUndoManualNudgeSnapshot? previous,
+  ) {
+    return backend.transitionTodo(
+      sessionKey,
+      todoId: todoId,
+      manualImportanceNudgeScore: previous?.importanceScore,
+      clearManualImportanceNudgeScore: (previous?.importanceScore ?? 0) == 0,
+      manualUrgencyNudgeScore: previous?.urgencyScore,
+      clearManualUrgencyNudgeScore: (previous?.urgencyScore ?? 0) == 0,
     );
   }
 
@@ -453,4 +472,35 @@ class TaskHubQuickActionsController {
         original.title == updated.title &&
         original.sourceEntryId == updated.sourceEntryId;
   }
+
+  Future<TaskHubUndoManualNudgeSnapshot?> _clearNudges(String todoId) async {
+    final current = await backend.listTodos(sessionKey);
+    Todo? existing;
+    for (final todo in current) {
+      if (todo.id == todoId) {
+        existing = todo;
+        break;
+      }
+    }
+    if (existing == null) return null;
+    final previous = _manualSignalFromTodo(existing);
+    if (previous == null) return null;
+    await backend.transitionTodo(
+      sessionKey,
+      todoId: todoId,
+      clearManualImportanceNudgeScore: true,
+      clearManualUrgencyNudgeScore: true,
+    );
+    return previous;
+  }
+}
+
+class TaskHubUndoManualNudgeSnapshot {
+  const TaskHubUndoManualNudgeSnapshot({
+    required this.importanceScore,
+    required this.urgencyScore,
+  });
+
+  final int importanceScore;
+  final int urgencyScore;
 }

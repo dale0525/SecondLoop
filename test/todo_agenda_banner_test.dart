@@ -9,7 +9,6 @@ import 'package:secondloop/core/session/session_scope.dart';
 import 'package:secondloop/features/actions/agenda/todo_agenda_banner.dart';
 import 'package:secondloop/features/actions/task_hub/task_hub_page.dart';
 import 'package:secondloop/features/actions/task_hub/task_priority_ai.dart';
-import 'package:secondloop/features/actions/task_hub/task_priority_signal_store.dart';
 import 'package:secondloop/features/actions/todo/todo_detail_page.dart';
 import 'package:secondloop/features/chat/chat_page.dart';
 import 'package:secondloop/src/rust/db.dart';
@@ -34,7 +33,6 @@ Future<void> _pumpUntilFound(
 
 void main() {
   setUp(() {
-    TaskPrioritySignalStore.resetMutationQueueForTest();
     BackendTaskPriorityAiService.clearSharedCacheForTest();
   });
 
@@ -554,6 +552,8 @@ final class _AgendaBackend extends TestAppBackend {
     int? reviewStage,
     int? nextReviewAtMs,
     int? lastReviewAtMs,
+    int? manualImportanceNudgeScore,
+    int? manualUrgencyNudgeScore,
   }) async {
     final existing = _todosById[id];
     final nowMs = DateTime.now().toUtc().millisecondsSinceEpoch;
@@ -568,6 +568,11 @@ final class _AgendaBackend extends TestAppBackend {
       reviewStage: reviewStage,
       nextReviewAtMs: nextReviewAtMs,
       lastReviewAtMs: lastReviewAtMs,
+      manualImportanceNudgeScore: manualImportanceNudgeScore ??
+          existing?.manualImportanceNudgeScore ??
+          0,
+      manualUrgencyNudgeScore:
+          manualUrgencyNudgeScore ?? existing?.manualUrgencyNudgeScore ?? 0,
     );
     _todosById[id] = updated;
     return updated;
@@ -586,6 +591,10 @@ final class _AgendaBackend extends TestAppBackend {
     bool clearNextReviewAtMs = false,
     int? lastReviewAtMs,
     bool clearLastReviewAtMs = false,
+    int? manualImportanceNudgeScore,
+    bool clearManualImportanceNudgeScore = false,
+    int? manualUrgencyNudgeScore,
+    bool clearManualUrgencyNudgeScore = false,
     String? sourceMessageId,
   }) async {
     final existing = _todosById[todoId];
@@ -608,6 +617,14 @@ final class _AgendaBackend extends TestAppBackend {
       lastReviewAtMs: clearLastReviewAtMs
           ? null
           : (lastReviewAtMs ?? existing.lastReviewAtMs),
+      manualImportanceNudgeScore: clearManualImportanceNudgeScore
+          ? 0
+          : (manualImportanceNudgeScore ??
+              existing.manualImportanceNudgeScore ??
+              0),
+      manualUrgencyNudgeScore: clearManualUrgencyNudgeScore
+          ? 0
+          : (manualUrgencyNudgeScore ?? existing.manualUrgencyNudgeScore ?? 0),
     );
     _todosById[todoId] = updated;
     return updated;
@@ -635,6 +652,8 @@ final class _AgendaBackend extends TestAppBackend {
       reviewStage: existing.reviewStage,
       nextReviewAtMs: existing.nextReviewAtMs,
       lastReviewAtMs: existing.lastReviewAtMs,
+      manualImportanceNudgeScore: existing.manualImportanceNudgeScore,
+      manualUrgencyNudgeScore: existing.manualUrgencyNudgeScore,
     );
     _todosById[todoId] = updated;
     return updated;

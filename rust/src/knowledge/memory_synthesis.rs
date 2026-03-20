@@ -525,6 +525,8 @@ mod tests {
             None,
             None,
             None,
+            None,
+            None,
         )
         .expect("todo a");
         let todo_b = db::upsert_todo(
@@ -534,6 +536,8 @@ mod tests {
             "Review launch notes",
             None,
             "in_progress",
+            None,
+            None,
             None,
             None,
             None,
@@ -566,8 +570,10 @@ mod tests {
             ("todo-pattern-5", "Newest task", 50),
         ];
         for (id, title, updated_at_ms) in todos {
-            let _ = db::upsert_todo(&conn, &key, id, title, None, "open", None, None, None, None)
-                .expect("todo");
+            let _ = db::upsert_todo(
+                &conn, &key, id, title, None, "open", None, None, None, None, None, None,
+            )
+            .expect("todo");
             conn.execute(
                 "UPDATE todos SET updated_at_ms = ?1 WHERE id = ?2",
                 rusqlite::params![updated_at_ms, id],

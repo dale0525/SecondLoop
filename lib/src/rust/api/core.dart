@@ -103,7 +103,9 @@ Future<Todo> dbUpsertTodo(
         String? sourceEntryId,
         PlatformInt64? reviewStage,
         PlatformInt64? nextReviewAtMs,
-        PlatformInt64? lastReviewAtMs}) =>
+        PlatformInt64? lastReviewAtMs,
+        PlatformInt64? manualImportanceNudgeScore,
+        PlatformInt64? manualUrgencyNudgeScore}) =>
     RustLib.instance.api.crateApiCoreDbUpsertTodo(
         appDir: appDir,
         key: key,
@@ -114,7 +116,9 @@ Future<Todo> dbUpsertTodo(
         sourceEntryId: sourceEntryId,
         reviewStage: reviewStage,
         nextReviewAtMs: nextReviewAtMs,
-        lastReviewAtMs: lastReviewAtMs);
+        lastReviewAtMs: lastReviewAtMs,
+        manualImportanceNudgeScore: manualImportanceNudgeScore,
+        manualUrgencyNudgeScore: manualUrgencyNudgeScore);
 
 Future<List<Todo>> dbListTodos(
         {required String appDir, required List<int> key}) =>
@@ -157,6 +161,10 @@ Future<Todo> dbTransitionTodo(
         required bool clearNextReviewAtMs,
         PlatformInt64? lastReviewAtMs,
         required bool clearLastReviewAtMs,
+        PlatformInt64? manualImportanceNudgeScore,
+        required bool clearManualImportanceNudgeScore,
+        PlatformInt64? manualUrgencyNudgeScore,
+        required bool clearManualUrgencyNudgeScore,
         String? sourceMessageId}) =>
     RustLib.instance.api.crateApiCoreDbTransitionTodo(
         appDir: appDir,
@@ -171,6 +179,10 @@ Future<Todo> dbTransitionTodo(
         clearNextReviewAtMs: clearNextReviewAtMs,
         lastReviewAtMs: lastReviewAtMs,
         clearLastReviewAtMs: clearLastReviewAtMs,
+        manualImportanceNudgeScore: manualImportanceNudgeScore,
+        clearManualImportanceNudgeScore: clearManualImportanceNudgeScore,
+        manualUrgencyNudgeScore: manualUrgencyNudgeScore,
+        clearManualUrgencyNudgeScore: clearManualUrgencyNudgeScore,
         sourceMessageId: sourceMessageId);
 
 Future<Todo> dbUpdateTodoDueWithScope(

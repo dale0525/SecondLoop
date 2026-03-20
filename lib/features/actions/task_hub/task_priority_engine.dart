@@ -2,7 +2,6 @@ import '../../../src/rust/db.dart';
 import 'task_priority_ai_models.dart';
 import 'task_priority_feedback_store.dart';
 import 'task_priority_models.dart';
-import 'task_priority_signal_store.dart';
 
 bool _isSameLocalDate(DateTime a, DateTime b) =>
     a.year == b.year && a.month == b.month && a.day == b.day;
@@ -31,10 +30,8 @@ TaskPrioritySnapshot buildTaskPrioritySnapshot(
   required DateTime nowLocal,
   TaskPriorityAiBatchResult? aiResult,
   TaskPriorityFeedbackState? feedbackState,
-  TaskPriorityManualSignalState? signalState,
 }) {
   final feedback = feedbackState ?? const TaskPriorityFeedbackState();
-  final manualSignals = signalState ?? const TaskPriorityManualSignalState();
   final rawEntries = <TaskPriorityEntry>[];
   final nowUtcMs = nowLocal.toUtc().millisecondsSinceEpoch;
 
@@ -122,6 +119,8 @@ TaskPrioritySnapshot buildTaskPrioritySnapshot(
         isFutureScheduled: isFutureScheduled,
         importanceScore: 0,
         urgencyScore: 0,
+        manualImportanceNudgeScore: todo.manualImportanceNudgeScore ?? 0,
+        manualUrgencyNudgeScore: todo.manualUrgencyNudgeScore ?? 0,
         dueDerivedUrgencyScore: _dueDerivedUrgencyScoreFor(
           todo,
           nowLocal: nowLocal,
@@ -136,7 +135,6 @@ TaskPrioritySnapshot buildTaskPrioritySnapshot(
     entries = _applyAiResult(entries, aiResult);
   }
   entries = _applyFeedback(entries, feedback);
-  entries = _applyManualSignals(entries, manualSignals);
 
   final focus = <TaskPriorityEntry>[];
   final scheduled = <TaskPriorityEntry>[];
@@ -274,20 +272,6 @@ List<TaskPriorityEntry> _applyFeedback(
       ],
     );
     return next;
-  }).toList(growable: false);
-}
-
-List<TaskPriorityEntry> _applyManualSignals(
-  List<TaskPriorityEntry> entries,
-  TaskPriorityManualSignalState signalState,
-) {
-  return entries.map((entry) {
-    final signal = signalState.byTodoId[entry.todo.id];
-    if (signal == null) return entry;
-    return entry.copyWith(
-      importanceScore: entry.importanceScore + signal.importanceScore,
-      urgencyScore: entry.urgencyScore + signal.urgencyScore,
-    );
   }).toList(growable: false);
 }
 

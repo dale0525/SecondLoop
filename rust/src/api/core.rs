@@ -248,6 +248,8 @@ pub fn db_upsert_todo(
     review_stage: Option<i64>,
     next_review_at_ms: Option<i64>,
     last_review_at_ms: Option<i64>,
+    manual_importance_nudge_score: Option<i64>,
+    manual_urgency_nudge_score: Option<i64>,
 ) -> Result<db::Todo> {
     let key = key_from_bytes(key)?;
     let conn = db::open(Path::new(&app_dir))?;
@@ -262,6 +264,8 @@ pub fn db_upsert_todo(
         review_stage,
         next_review_at_ms,
         last_review_at_ms,
+        manual_importance_nudge_score,
+        manual_urgency_nudge_score,
     )
 }
 
@@ -318,6 +322,10 @@ pub fn db_transition_todo(
     clear_next_review_at_ms: bool,
     last_review_at_ms: Option<i64>,
     clear_last_review_at_ms: bool,
+    manual_importance_nudge_score: Option<i64>,
+    clear_manual_importance_nudge_score: bool,
+    manual_urgency_nudge_score: Option<i64>,
+    clear_manual_urgency_nudge_score: bool,
     source_message_id: Option<String>,
 ) -> Result<db::Todo> {
     let key = key_from_bytes(key)?;
@@ -335,6 +343,10 @@ pub fn db_transition_todo(
         clear_next_review_at_ms,
         last_review_at_ms,
         clear_last_review_at_ms,
+        manual_importance_nudge_score,
+        clear_manual_importance_nudge_score,
+        manual_urgency_nudge_score,
+        clear_manual_urgency_nudge_score,
         source_message_id.as_deref(),
     )
 }

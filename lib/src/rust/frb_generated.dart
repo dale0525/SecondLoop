@@ -804,6 +804,10 @@ abstract class RustLibApi extends BaseApi {
       required bool clearNextReviewAtMs,
       PlatformInt64? lastReviewAtMs,
       required bool clearLastReviewAtMs,
+      PlatformInt64? manualImportanceNudgeScore,
+      required bool clearManualImportanceNudgeScore,
+      PlatformInt64? manualUrgencyNudgeScore,
+      required bool clearManualUrgencyNudgeScore,
       String? sourceMessageId});
 
   Future<TodoChecklistItem> crateApiCoreDbUpdateTodoChecklistItemContent(
@@ -887,7 +891,9 @@ abstract class RustLibApi extends BaseApi {
       String? sourceEntryId,
       PlatformInt64? reviewStage,
       PlatformInt64? nextReviewAtMs,
-      PlatformInt64? lastReviewAtMs});
+      PlatformInt64? lastReviewAtMs,
+      PlatformInt64? manualImportanceNudgeScore,
+      PlatformInt64? manualUrgencyNudgeScore});
 
   Future<void> crateApiCoreDbUpsertTodoRecurrence(
       {required String appDir,
@@ -5773,6 +5779,10 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       required bool clearNextReviewAtMs,
       PlatformInt64? lastReviewAtMs,
       required bool clearLastReviewAtMs,
+      PlatformInt64? manualImportanceNudgeScore,
+      required bool clearManualImportanceNudgeScore,
+      PlatformInt64? manualUrgencyNudgeScore,
+      required bool clearManualUrgencyNudgeScore,
       String? sourceMessageId}) {
     return handler.executeNormal(NormalTask(
       callFfi: (port_) {
@@ -5789,6 +5799,10 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_bool(clearNextReviewAtMs, serializer);
         sse_encode_opt_box_autoadd_i_64(lastReviewAtMs, serializer);
         sse_encode_bool(clearLastReviewAtMs, serializer);
+        sse_encode_opt_box_autoadd_i_64(manualImportanceNudgeScore, serializer);
+        sse_encode_bool(clearManualImportanceNudgeScore, serializer);
+        sse_encode_opt_box_autoadd_i_64(manualUrgencyNudgeScore, serializer);
+        sse_encode_bool(clearManualUrgencyNudgeScore, serializer);
         sse_encode_opt_String(sourceMessageId, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
             funcId: 119, port: port_);
@@ -5811,6 +5825,10 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         clearNextReviewAtMs,
         lastReviewAtMs,
         clearLastReviewAtMs,
+        manualImportanceNudgeScore,
+        clearManualImportanceNudgeScore,
+        manualUrgencyNudgeScore,
+        clearManualUrgencyNudgeScore,
         sourceMessageId
       ],
       apiImpl: this,
@@ -5833,6 +5851,10 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           "clearNextReviewAtMs",
           "lastReviewAtMs",
           "clearLastReviewAtMs",
+          "manualImportanceNudgeScore",
+          "clearManualImportanceNudgeScore",
+          "manualUrgencyNudgeScore",
+          "clearManualUrgencyNudgeScore",
           "sourceMessageId"
         ],
       );
@@ -6230,7 +6252,9 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       String? sourceEntryId,
       PlatformInt64? reviewStage,
       PlatformInt64? nextReviewAtMs,
-      PlatformInt64? lastReviewAtMs}) {
+      PlatformInt64? lastReviewAtMs,
+      PlatformInt64? manualImportanceNudgeScore,
+      PlatformInt64? manualUrgencyNudgeScore}) {
     return handler.executeNormal(NormalTask(
       callFfi: (port_) {
         final serializer = SseSerializer(generalizedFrbRustBinding);
@@ -6244,6 +6268,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_opt_box_autoadd_i_64(reviewStage, serializer);
         sse_encode_opt_box_autoadd_i_64(nextReviewAtMs, serializer);
         sse_encode_opt_box_autoadd_i_64(lastReviewAtMs, serializer);
+        sse_encode_opt_box_autoadd_i_64(manualImportanceNudgeScore, serializer);
+        sse_encode_opt_box_autoadd_i_64(manualUrgencyNudgeScore, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
             funcId: 129, port: port_);
       },
@@ -6262,7 +6288,9 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sourceEntryId,
         reviewStage,
         nextReviewAtMs,
-        lastReviewAtMs
+        lastReviewAtMs,
+        manualImportanceNudgeScore,
+        manualUrgencyNudgeScore
       ],
       apiImpl: this,
     ));
@@ -6280,7 +6308,9 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           "sourceEntryId",
           "reviewStage",
           "nextReviewAtMs",
-          "lastReviewAtMs"
+          "lastReviewAtMs",
+          "manualImportanceNudgeScore",
+          "manualUrgencyNudgeScore"
         ],
       );
 
@@ -11193,8 +11223,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   Todo dco_decode_todo(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 10)
-      throw Exception('unexpected arr length: expect 10 but see ${arr.length}');
+    if (arr.length != 12)
+      throw Exception('unexpected arr length: expect 12 but see ${arr.length}');
     return Todo(
       id: dco_decode_String(arr[0]),
       title: dco_decode_String(arr[1]),
@@ -11206,6 +11236,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       reviewStage: dco_decode_opt_box_autoadd_i_64(arr[7]),
       nextReviewAtMs: dco_decode_opt_box_autoadd_i_64(arr[8]),
       lastReviewAtMs: dco_decode_opt_box_autoadd_i_64(arr[9]),
+      manualImportanceNudgeScore: dco_decode_opt_box_autoadd_i_64(arr[10]),
+      manualUrgencyNudgeScore: dco_decode_opt_box_autoadd_i_64(arr[11]),
     );
   }
 
@@ -12867,6 +12899,10 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_reviewStage = sse_decode_opt_box_autoadd_i_64(deserializer);
     var var_nextReviewAtMs = sse_decode_opt_box_autoadd_i_64(deserializer);
     var var_lastReviewAtMs = sse_decode_opt_box_autoadd_i_64(deserializer);
+    var var_manualImportanceNudgeScore =
+        sse_decode_opt_box_autoadd_i_64(deserializer);
+    var var_manualUrgencyNudgeScore =
+        sse_decode_opt_box_autoadd_i_64(deserializer);
     return Todo(
         id: var_id,
         title: var_title,
@@ -12877,7 +12913,9 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         updatedAtMs: var_updatedAtMs,
         reviewStage: var_reviewStage,
         nextReviewAtMs: var_nextReviewAtMs,
-        lastReviewAtMs: var_lastReviewAtMs);
+        lastReviewAtMs: var_lastReviewAtMs,
+        manualImportanceNudgeScore: var_manualImportanceNudgeScore,
+        manualUrgencyNudgeScore: var_manualUrgencyNudgeScore);
   }
 
   @protected
@@ -14118,6 +14156,9 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_opt_box_autoadd_i_64(self.reviewStage, serializer);
     sse_encode_opt_box_autoadd_i_64(self.nextReviewAtMs, serializer);
     sse_encode_opt_box_autoadd_i_64(self.lastReviewAtMs, serializer);
+    sse_encode_opt_box_autoadd_i_64(
+        self.manualImportanceNudgeScore, serializer);
+    sse_encode_opt_box_autoadd_i_64(self.manualUrgencyNudgeScore, serializer);
   }
 
   @protected

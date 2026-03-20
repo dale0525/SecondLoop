@@ -2,6 +2,12 @@ import '../../../src/rust/db.dart';
 
 import 'task_priority_guards.dart';
 
+enum TaskPriorityNudgeDirection {
+  none,
+  up,
+  down,
+}
+
 enum TaskPriorityBand {
   focus,
   scheduled,
@@ -66,6 +72,8 @@ class TaskPriorityEntry {
     int urgencyScore = 0,
     bool isImportant = false,
     bool isUrgent = false,
+    this.manualImportanceNudgeScore = 0,
+    this.manualUrgencyNudgeScore = 0,
     this.dueDerivedUrgencyScore = 0,
   })  : importanceScore =
             importanceScore != 0 ? importanceScore : (isImportant ? 1 : 0),
@@ -87,17 +95,34 @@ class TaskPriorityEntry {
   final bool isFutureScheduled;
   final int importanceScore;
   final int urgencyScore;
+  final int manualImportanceNudgeScore;
+  final int manualUrgencyNudgeScore;
   final int dueDerivedUrgencyScore;
 
   double get totalScore => ruleScore + semanticScore;
 
-  int get effectiveUrgency => urgencyScore + dueDerivedUrgencyScore;
+  int get effectiveUrgency =>
+      urgencyScore + manualUrgencyNudgeScore + dueDerivedUrgencyScore;
 
-  int get effectiveImportance => importanceScore;
+  int get effectiveImportance => importanceScore + manualImportanceNudgeScore;
 
-  bool get isExplicitlyImportant => importanceScore > 0;
+  bool get hasManualImportanceNudge => manualImportanceNudgeScore != 0;
 
-  bool get isExplicitlyUrgent => urgencyScore > 0;
+  bool get hasManualUrgencyNudge => manualUrgencyNudgeScore != 0;
+
+  bool get hasManualNudges => hasManualImportanceNudge || hasManualUrgencyNudge;
+
+  TaskPriorityNudgeDirection get manualImportanceNudgeDirection =>
+      _directionFromScore(manualImportanceNudgeScore);
+
+  TaskPriorityNudgeDirection get manualUrgencyNudgeDirection =>
+      _directionFromScore(manualUrgencyNudgeScore);
+
+  bool get isExplicitlyImportant =>
+      manualImportanceNudgeDirection == TaskPriorityNudgeDirection.up;
+
+  bool get isExplicitlyUrgent =>
+      manualUrgencyNudgeDirection == TaskPriorityNudgeDirection.up;
 
   bool get isImportant => effectiveImportance > 0;
 
@@ -135,6 +160,8 @@ class TaskPriorityEntry {
     bool? isFutureScheduled,
     int? importanceScore,
     int? urgencyScore,
+    int? manualImportanceNudgeScore,
+    int? manualUrgencyNudgeScore,
     int? dueDerivedUrgencyScore,
   }) {
     return TaskPriorityEntry(
@@ -154,9 +181,19 @@ class TaskPriorityEntry {
       isFutureScheduled: isFutureScheduled ?? this.isFutureScheduled,
       importanceScore: importanceScore ?? this.importanceScore,
       urgencyScore: urgencyScore ?? this.urgencyScore,
+      manualImportanceNudgeScore:
+          manualImportanceNudgeScore ?? this.manualImportanceNudgeScore,
+      manualUrgencyNudgeScore:
+          manualUrgencyNudgeScore ?? this.manualUrgencyNudgeScore,
       dueDerivedUrgencyScore:
           dueDerivedUrgencyScore ?? this.dueDerivedUrgencyScore,
     );
+  }
+
+  static TaskPriorityNudgeDirection _directionFromScore(int score) {
+    if (score > 0) return TaskPriorityNudgeDirection.up;
+    if (score < 0) return TaskPriorityNudgeDirection.down;
+    return TaskPriorityNudgeDirection.none;
   }
 }
 

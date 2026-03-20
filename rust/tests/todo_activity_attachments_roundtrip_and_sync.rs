@@ -28,6 +28,8 @@ fn sync_push_then_pull_copies_todo_activity_attachments() {
         None,
         None,
         None,
+        None,
+        None,
     )
     .expect("todo A");
 

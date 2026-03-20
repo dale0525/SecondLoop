@@ -123,6 +123,8 @@ abstract class AppBackend {
     int? reviewStage,
     int? nextReviewAtMs,
     int? lastReviewAtMs,
+    int? manualImportanceNudgeScore,
+    int? manualUrgencyNudgeScore,
   }) {
     throw UnimplementedError('upsertTodo');
   }
@@ -148,6 +150,10 @@ abstract class AppBackend {
     bool clearNextReviewAtMs = false,
     int? lastReviewAtMs,
     bool clearLastReviewAtMs = false,
+    int? manualImportanceNudgeScore,
+    bool clearManualImportanceNudgeScore = false,
+    int? manualUrgencyNudgeScore,
+    bool clearManualUrgencyNudgeScore = false,
     String? sourceMessageId,
   }) async {
     final todos = await listTodos(key);
@@ -178,11 +184,22 @@ abstract class AppBackend {
         clearNextReviewAtMs ? null : (nextReviewAtMs ?? staged.nextReviewAtMs);
     final targetLastReviewAtMs =
         clearLastReviewAtMs ? null : (lastReviewAtMs ?? staged.lastReviewAtMs);
+    final targetManualImportanceNudgeScore = clearManualImportanceNudgeScore
+        ? 0
+        : (manualImportanceNudgeScore ??
+            (staged.manualImportanceNudgeScore ?? 0));
+    final targetManualUrgencyNudgeScore = clearManualUrgencyNudgeScore
+        ? 0
+        : (manualUrgencyNudgeScore ?? (staged.manualUrgencyNudgeScore ?? 0));
 
     if (targetDueAtMs == staged.dueAtMs &&
         targetReviewStage == staged.reviewStage &&
         targetNextReviewAtMs == staged.nextReviewAtMs &&
-        targetLastReviewAtMs == staged.lastReviewAtMs) {
+        targetLastReviewAtMs == staged.lastReviewAtMs &&
+        targetManualImportanceNudgeScore ==
+            (staged.manualImportanceNudgeScore ?? 0) &&
+        targetManualUrgencyNudgeScore ==
+            (staged.manualUrgencyNudgeScore ?? 0)) {
       return staged;
     }
 
@@ -196,6 +213,8 @@ abstract class AppBackend {
       reviewStage: targetReviewStage,
       nextReviewAtMs: targetNextReviewAtMs,
       lastReviewAtMs: targetLastReviewAtMs,
+      manualImportanceNudgeScore: targetManualImportanceNudgeScore,
+      manualUrgencyNudgeScore: targetManualUrgencyNudgeScore,
     );
   }
 

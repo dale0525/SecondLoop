@@ -21,7 +21,6 @@ import 'task_hub_quick_actions.dart';
 import 'task_priority_ai.dart';
 import 'task_priority_feedback_store.dart';
 import 'task_priority_models.dart';
-import 'task_priority_signal_store.dart';
 import 'task_priority_store.dart';
 import '../todo/todo_detail_page.dart';
 
@@ -38,9 +37,10 @@ class _TaskHubPageState extends State<TaskHubPage> {
   TaskPriorityStore? _store;
   final TaskPriorityFeedbackStore _feedbackStore =
       const TaskPriorityFeedbackStore();
-  TaskPrioritySignalStore? _signalStore;
   TaskHubUndoTicket? _undoTicket;
   Timer? _quickActionSnackAutoDismissTimer;
+  Timer? _restoreHighlightTimer;
+  String? _restoredTodoId;
   final GlobalKey<ScaffoldMessengerState> _scaffoldMessengerKey =
       GlobalKey<ScaffoldMessengerState>();
   ScaffoldMessengerState? _quickActionSnackMessenger;
@@ -55,6 +55,8 @@ class _TaskHubPageState extends State<TaskHubPage> {
     }
     _quickActionSnackAutoDismissTimer?.cancel();
     _quickActionSnackAutoDismissTimer = null;
+    _restoreHighlightTimer?.cancel();
+    _restoreHighlightTimer = null;
     _quickActionSnackMessenger = null;
     _quickActionSnackToken = null;
     _store?.dispose();
@@ -64,10 +66,6 @@ class _TaskHubPageState extends State<TaskHubPage> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    _signalStore ??= TaskPrioritySignalStore(
-      scopeKey:
-          buildTaskPrioritySignalScopeKey(SessionScope.of(context).sessionKey),
-    );
     _store ??= TaskPriorityStore(
       backend: AppBackendScope.of(context),
       sessionKey: Uint8List.fromList(SessionScope.of(context).sessionKey),
@@ -76,7 +74,6 @@ class _TaskHubPageState extends State<TaskHubPage> {
       resolveAiCacheScopeKey: _resolveAiCacheScopeKey,
       isAiEnhancementEnabled: TaskPriorityAiEnhancementPrefs.read,
       feedbackStore: _feedbackStore,
-      signalStore: _signalStore!,
     );
     unawaited(_store!.refresh());
   }
@@ -198,7 +195,6 @@ class _TaskHubPageState extends State<TaskHubPage> {
     final controller = TaskHubQuickActionsController(
       backend: backend,
       sessionKey: sessionKey,
-      signalStore: _signalStore!,
       confirmDoneWithIncompleteChecklist: _confirmDoneWithIncompleteChecklist,
       checklistProgressByTodoId: _store?.checklistProgressByTodoId ??
           const <String, TodoChecklistProgress>{},
@@ -222,6 +218,8 @@ class _TaskHubPageState extends State<TaskHubPage> {
     messenger?.hideCurrentSnackBar();
     _quickActionSnackAutoDismissTimer?.cancel();
     _quickActionSnackAutoDismissTimer = null;
+    _restoreHighlightTimer?.cancel();
+    _restoreHighlightTimer = null;
     final snackToken = Object();
     _quickActionSnackToken = snackToken;
     _quickActionSnackMessenger = messenger;
@@ -238,17 +236,22 @@ class _TaskHubPageState extends State<TaskHubPage> {
           label: context.t.common.actions.undo,
           onPressed: () async {
             if (_undoTicket != appliedTicket) return;
+            messenger.removeCurrentSnackBar();
+            _quickActionSnackAutoDismissTimer?.cancel();
+            _quickActionSnackAutoDismissTimer = null;
             try {
               await controller.undo(appliedTicket);
             } catch (error) {
               _showQuickActionError(error);
               return;
             }
+            _undoTicket = null;
             if (appliedTicket.shouldNotifySync) {
               syncEngine?.notifyLocalMutation();
             }
-            if (!mounted) return;
             await _refresh();
+            if (!mounted) return;
+            _showRestoreHighlight(appliedTicket.todo.id);
           },
         ),
       ),
@@ -275,6 +278,21 @@ class _TaskHubPageState extends State<TaskHubPage> {
         }
       }),
     );
+  }
+
+  void _showRestoreHighlight(String todoId) {
+    _restoreHighlightTimer?.cancel();
+    setState(() {
+      _restoredTodoId = todoId;
+    });
+    _restoreHighlightTimer = Timer(const Duration(milliseconds: 900), () {
+      if (!mounted) return;
+      setState(() {
+        if (_restoredTodoId == todoId) {
+          _restoredTodoId = null;
+        }
+      });
+    });
   }
 
   Future<bool> _confirmDoneWithIncompleteChecklist(Todo todo) async {
@@ -330,13 +348,13 @@ class _TaskHubPageState extends State<TaskHubPage> {
           context.t.actions.taskHub.actions.tomorrow,
         TaskHubQuickAction.start => context.t.actions.taskHub.actions.start,
         TaskHubQuickAction.increaseUrgency =>
-          context.t.actions.taskHub.actions.increaseUrgency,
+          context.t.actions.taskHub.nudges.urgencyRaised,
         TaskHubQuickAction.decreaseUrgency =>
-          context.t.actions.taskHub.actions.decreaseUrgency,
+          context.t.actions.taskHub.nudges.urgencyLowered,
         TaskHubQuickAction.increaseImportance =>
-          context.t.actions.taskHub.actions.increaseImportance,
+          context.t.actions.taskHub.nudges.importanceRaised,
         TaskHubQuickAction.decreaseImportance =>
-          context.t.actions.taskHub.actions.decreaseImportance,
+          context.t.actions.taskHub.nudges.importanceLowered,
         TaskHubQuickAction.done => context.t.actions.taskHub.actions.done,
         TaskHubQuickAction.reopen => context.t.actions.taskHub.actions.reopen,
         TaskHubQuickAction.redo => context.t.actions.taskHub.actions.redo,
@@ -380,6 +398,7 @@ class _TaskHubPageState extends State<TaskHubPage> {
                         entries: visibleFocus,
                         checklistProgressByTodoId:
                             store.checklistProgressByTodoId,
+                        restoredTodoId: _restoredTodoId,
                         onOpenTodo: _openTodoDetail,
                         onQuickAction: _applyQuickAction,
                         onFeedback: _recordFeedback,
@@ -431,6 +450,7 @@ class _TaskHubPageState extends State<TaskHubPage> {
                       entries: visibleNextUp,
                       checklistProgressByTodoId:
                           store.checklistProgressByTodoId,
+                      restoredTodoId: _restoredTodoId,
                       sectionKind: TaskHubPageSectionKind.scheduled,
                       onOpenTodo: _openTodoDetail,
                       onQuickAction: _applyQuickAction,
@@ -443,6 +463,7 @@ class _TaskHubPageState extends State<TaskHubPage> {
                       entries: visibleBacklog,
                       checklistProgressByTodoId:
                           store.checklistProgressByTodoId,
+                      restoredTodoId: _restoredTodoId,
                       sectionKind: TaskHubPageSectionKind.decide,
                       onOpenTodo: _openTodoDetail,
                       onQuickAction: _applyQuickAction,
@@ -454,6 +475,7 @@ class _TaskHubPageState extends State<TaskHubPage> {
                       entries: visibleDone,
                       checklistProgressByTodoId:
                           store.checklistProgressByTodoId,
+                      restoredTodoId: _restoredTodoId,
                       sectionKind: TaskHubPageSectionKind.done,
                       onOpenTodo: _openTodoDetail,
                       onQuickAction: _applyQuickAction,

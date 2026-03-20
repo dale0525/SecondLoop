@@ -26,6 +26,8 @@ fn sync_push_then_pull_copies_todos_and_events() {
         Some(0),
         Some(1_800_000),
         Some(1_700_000),
+        None,
+        None,
     )
     .expect("todo A");
 

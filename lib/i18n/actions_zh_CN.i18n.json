@@ -179,6 +179,12 @@
       "reopen": "恢复到今天",
       "redo": "再做一次",
       "more": "更多"
+    },
+    "nudges": {
+      "urgencyRaised": "已提高紧急度",
+      "urgencyLowered": "已降低紧急度",
+      "importanceRaised": "已提高重要性",
+      "importanceLowered": "已降低重要性"
     }
   },
   "calendar": {

@@ -16,6 +16,7 @@ class TaskHubFocusSection extends StatelessWidget {
     required this.onOpenTodo,
     required this.onQuickAction,
     this.onFeedback,
+    this.restoredTodoId,
     super.key,
   });
 
@@ -28,6 +29,7 @@ class TaskHubFocusSection extends StatelessWidget {
     TaskPriorityEntry entry,
     TaskPriorityFeedbackKind feedback,
   )? onFeedback;
+  final String? restoredTodoId;
 
   @override
   Widget build(BuildContext context) {
@@ -61,6 +63,7 @@ class TaskHubFocusSection extends StatelessWidget {
                 entry: entries[i],
                 checklistProgressByTodoId: checklistProgressByTodoId,
                 emphasize: i == 0,
+                recentlyRestored: entries[i].todo.id == restoredTodoId,
                 onOpenTodo: () => onOpenTodo(entries[i]),
                 onQuickAction: (action) => onQuickAction(entries[i], action),
                 onFeedback: onFeedback == null

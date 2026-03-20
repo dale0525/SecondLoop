@@ -22,6 +22,8 @@ fn marking_recurring_todo_done_spawns_next_occurrence() {
         None,
         None,
         None,
+        None,
+        None,
     )
     .expect("upsert todo");
 
@@ -71,6 +73,8 @@ fn setting_done_twice_does_not_spawn_duplicates() {
         "Daily standup",
         Some(1_730_808_000_000i64),
         "open",
+        None,
+        None,
         None,
         None,
         None,

@@ -2,7 +2,6 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:secondloop/features/actions/task_hub/task_hub_summary.dart';
 import 'package:secondloop/features/actions/task_hub/task_priority_engine.dart';
-import 'package:secondloop/features/actions/task_hub/task_priority_signal_store.dart';
 import 'package:secondloop/src/rust/db.dart';
 
 void main() {
@@ -102,6 +101,7 @@ void main() {
           reviewStage: null,
           nextReviewAtMs: null,
           lastReviewAtMs: null,
+          manualImportanceNudgeScore: 1,
         ),
         Todo(
           id: 'scheduled',
@@ -120,14 +120,6 @@ void main() {
         ),
       ],
       nowLocal: nowLocal,
-      signalState: const TaskPriorityManualSignalState(
-        byTodoId: <String, TaskPriorityManualSignal>{
-          'important': TaskPriorityManualSignal(
-            importanceScore: 1,
-            urgencyScore: 2,
-          ),
-        },
-      ),
     );
 
     final summary = TaskHubSummary.fromSnapshot(snapshot);
@@ -156,6 +148,7 @@ void main() {
           reviewStage: null,
           nextReviewAtMs: null,
           lastReviewAtMs: null,
+          manualImportanceNudgeScore: 1,
         ),
         Todo(
           id: 'scheduled-secondary',
@@ -174,11 +167,6 @@ void main() {
         ),
       ],
       nowLocal: nowLocal,
-      signalState: const TaskPriorityManualSignalState(
-        byTodoId: <String, TaskPriorityManualSignal>{
-          'scheduled-primary': TaskPriorityManualSignal(importanceScore: 1),
-        },
-      ),
     );
 
     final summary = TaskHubSummary.fromSnapshot(snapshot);
@@ -208,6 +196,8 @@ void main() {
               .toUtc()
               .millisecondsSinceEpoch,
           lastReviewAtMs: null,
+          manualImportanceNudgeScore: 1,
+          manualUrgencyNudgeScore: 1,
         ),
         const Todo(
           id: 'backlog-secondary',
@@ -223,14 +213,6 @@ void main() {
         ),
       ],
       nowLocal: nowLocal,
-      signalState: const TaskPriorityManualSignalState(
-        byTodoId: <String, TaskPriorityManualSignal>{
-          'review-primary': TaskPriorityManualSignal(
-            importanceScore: 1,
-            urgencyScore: 1,
-          ),
-        },
-      ),
     );
 
     final summary = TaskHubSummary.fromSnapshot(snapshot);
@@ -271,17 +253,11 @@ void main() {
           reviewStage: null,
           nextReviewAtMs: null,
           lastReviewAtMs: null,
+          manualImportanceNudgeScore: 1,
+          manualUrgencyNudgeScore: 1,
         ),
       ],
       nowLocal: nowLocal,
-      signalState: const TaskPriorityManualSignalState(
-        byTodoId: <String, TaskPriorityManualSignal>{
-          'important-only': TaskPriorityManualSignal(
-            importanceScore: 1,
-            urgencyScore: 2,
-          ),
-        },
-      ),
     );
 
     final summary = TaskHubSummary.fromSnapshot(snapshot);
@@ -315,17 +291,11 @@ void main() {
               .toUtc()
               .millisecondsSinceEpoch,
           lastReviewAtMs: null,
+          manualImportanceNudgeScore: 1,
+          manualUrgencyNudgeScore: 1,
         ),
       ],
       nowLocal: nowLocal,
-      signalState: const TaskPriorityManualSignalState(
-        byTodoId: <String, TaskPriorityManualSignal>{
-          'review-only': TaskPriorityManualSignal(
-            importanceScore: 1,
-            urgencyScore: 1,
-          ),
-        },
-      ),
     );
 
     final summary = TaskHubSummary.fromSnapshot(snapshot);
@@ -350,6 +320,8 @@ void main() {
           reviewStage: null,
           nextReviewAtMs: null,
           lastReviewAtMs: null,
+          manualImportanceNudgeScore: 1,
+          manualUrgencyNudgeScore: 1,
         ),
         Todo(
           id: 'review-secondary',
@@ -368,14 +340,6 @@ void main() {
         ),
       ],
       nowLocal: nowLocal,
-      signalState: const TaskPriorityManualSignalState(
-        byTodoId: <String, TaskPriorityManualSignal>{
-          'primary-focus': TaskPriorityManualSignal(
-            importanceScore: 1,
-            urgencyScore: 2,
-          ),
-        },
-      ),
     );
 
     final summary = TaskHubSummary.fromSnapshot(snapshot);

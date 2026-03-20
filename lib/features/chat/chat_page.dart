@@ -63,7 +63,6 @@ import '../actions/task_hub/task_hub_page.dart';
 import '../actions/task_hub/task_hub_quick_actions.dart';
 import '../actions/task_hub/task_priority_ai.dart';
 import '../actions/task_hub/task_priority_feedback_store.dart';
-import '../actions/task_hub/task_priority_signal_store.dart';
 import '../actions/task_hub/task_priority_store.dart';
 import '../actions/todo/todo_detail_page.dart';
 import '../actions/todo/todo_linking.dart';
@@ -424,7 +423,6 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
   TaskPriorityStore? _taskPriorityStore;
   final TaskPriorityFeedbackStore _taskPriorityFeedbackStore =
       const TaskPriorityFeedbackStore();
-  TaskPrioritySignalStore? _taskPrioritySignalStore;
   final Map<String, Future<List<Attachment>>> _attachmentsFuturesByMessageId =
       <String, Future<List<Attachment>>>{};
   final Map<String, List<Attachment>> _attachmentsCacheByMessageId =
@@ -588,10 +586,6 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
   void didChangeDependencies() {
     super.didChangeDependencies();
     _messagesFuture ??= _loadMessages();
-    _taskPrioritySignalStore ??= TaskPrioritySignalStore(
-      scopeKey:
-          buildTaskPrioritySignalScopeKey(SessionScope.of(context).sessionKey),
-    );
     _taskPriorityStore ??= TaskPriorityStore(
       backend: AppBackendScope.of(context),
       sessionKey: Uint8List.fromList(SessionScope.of(context).sessionKey),
@@ -600,7 +594,6 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
       resolveAiCacheScopeKey: _resolveTaskPriorityAiCacheScopeKey,
       isAiEnhancementEnabled: TaskPriorityAiEnhancementPrefs.read,
       feedbackStore: _taskPriorityFeedbackStore,
-      signalStore: _taskPrioritySignalStore!,
     );
     unawaited(_taskPriorityStore!.refresh());
     _attachSyncEngine();

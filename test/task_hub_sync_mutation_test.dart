@@ -10,7 +10,6 @@ import 'package:secondloop/core/sync/sync_engine.dart';
 import 'package:secondloop/core/sync/sync_engine_gate.dart';
 import 'package:secondloop/features/actions/task_hub/task_hub_page.dart';
 import 'package:secondloop/features/actions/task_hub/task_priority_ai.dart';
-import 'package:secondloop/features/actions/task_hub/task_priority_signal_store.dart';
 import 'package:secondloop/src/rust/db.dart';
 
 import 'test_i18n.dart';
@@ -47,7 +46,6 @@ Future<void> _pumpUntilFound(
 
 void main() {
   setUp(() {
-    TaskPrioritySignalStore.resetMutationQueueForTest();
     BackendTaskPriorityAiService.clearSharedCacheForTest();
   });
 
@@ -368,6 +366,8 @@ final class _TaskHubBackend implements AppBackend {
     int? reviewStage,
     int? nextReviewAtMs,
     int? lastReviewAtMs,
+    int? manualImportanceNudgeScore,
+    int? manualUrgencyNudgeScore,
   }) async {
     upsertTodoCalls += 1;
     final existing = _todosById[id];
@@ -383,6 +383,12 @@ final class _TaskHubBackend implements AppBackend {
       reviewStage: reviewStage,
       nextReviewAtMs: nextReviewAtMs,
       lastReviewAtMs: lastReviewAtMs,
+      manualImportanceNudgeScore: manualImportanceNudgeScore ??
+          _todosById[id]?.manualImportanceNudgeScore ??
+          0,
+      manualUrgencyNudgeScore: manualUrgencyNudgeScore ??
+          _todosById[id]?.manualUrgencyNudgeScore ??
+          0,
     );
     _todosById[id] = todo;
     return todo;
@@ -401,6 +407,10 @@ final class _TaskHubBackend implements AppBackend {
     bool clearNextReviewAtMs = false,
     int? lastReviewAtMs,
     bool clearLastReviewAtMs = false,
+    int? manualImportanceNudgeScore,
+    bool clearManualImportanceNudgeScore = false,
+    int? manualUrgencyNudgeScore,
+    bool clearManualUrgencyNudgeScore = false,
     String? sourceMessageId,
   }) async {
     transitionTodoCalls += 1;
@@ -423,6 +433,14 @@ final class _TaskHubBackend implements AppBackend {
       lastReviewAtMs: clearLastReviewAtMs
           ? null
           : (lastReviewAtMs ?? existing.lastReviewAtMs),
+      manualImportanceNudgeScore: clearManualImportanceNudgeScore
+          ? 0
+          : (manualImportanceNudgeScore ??
+              existing.manualImportanceNudgeScore ??
+              0),
+      manualUrgencyNudgeScore: clearManualUrgencyNudgeScore
+          ? 0
+          : (manualUrgencyNudgeScore ?? existing.manualUrgencyNudgeScore ?? 0),
     );
     _todosById[todoId] = todo;
     return todo;

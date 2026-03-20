@@ -1076,6 +1076,8 @@ class NativeAppBackend
     int? reviewStage,
     int? nextReviewAtMs,
     int? lastReviewAtMs,
+    int? manualImportanceNudgeScore,
+    int? manualUrgencyNudgeScore,
   }) async {
     final appDir = await _getAppDir();
     return rust_core.dbUpsertTodo(
@@ -1094,6 +1096,12 @@ class NativeAppBackend
       lastReviewAtMs: lastReviewAtMs == null
           ? null
           : PlatformInt64Util.from(lastReviewAtMs),
+      manualImportanceNudgeScore: manualImportanceNudgeScore == null
+          ? null
+          : PlatformInt64Util.from(manualImportanceNudgeScore),
+      manualUrgencyNudgeScore: manualUrgencyNudgeScore == null
+          ? null
+          : PlatformInt64Util.from(manualUrgencyNudgeScore),
     );
   }
 
@@ -1127,6 +1135,10 @@ class NativeAppBackend
     bool clearNextReviewAtMs = false,
     int? lastReviewAtMs,
     bool clearLastReviewAtMs = false,
+    int? manualImportanceNudgeScore,
+    bool clearManualImportanceNudgeScore = false,
+    int? manualUrgencyNudgeScore,
+    bool clearManualUrgencyNudgeScore = false,
     String? sourceMessageId,
   }) async {
     final appDir = await _getAppDir();
@@ -1148,6 +1160,14 @@ class NativeAppBackend
           ? null
           : PlatformInt64Util.from(lastReviewAtMs),
       clearLastReviewAtMs: clearLastReviewAtMs,
+      manualImportanceNudgeScore: manualImportanceNudgeScore == null
+          ? null
+          : PlatformInt64Util.from(manualImportanceNudgeScore),
+      clearManualImportanceNudgeScore: clearManualImportanceNudgeScore,
+      manualUrgencyNudgeScore: manualUrgencyNudgeScore == null
+          ? null
+          : PlatformInt64Util.from(manualUrgencyNudgeScore),
+      clearManualUrgencyNudgeScore: clearManualUrgencyNudgeScore,
       sourceMessageId: sourceMessageId,
     );
   }

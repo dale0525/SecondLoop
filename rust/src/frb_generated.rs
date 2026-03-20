@@ -4786,6 +4786,10 @@ fn wire__crate__api__core__db_transition_todo_impl(
             let api_clear_next_review_at_ms = <bool>::sse_decode(&mut deserializer);
             let api_last_review_at_ms = <Option<i64>>::sse_decode(&mut deserializer);
             let api_clear_last_review_at_ms = <bool>::sse_decode(&mut deserializer);
+            let api_manual_importance_nudge_score = <Option<i64>>::sse_decode(&mut deserializer);
+            let api_clear_manual_importance_nudge_score = <bool>::sse_decode(&mut deserializer);
+            let api_manual_urgency_nudge_score = <Option<i64>>::sse_decode(&mut deserializer);
+            let api_clear_manual_urgency_nudge_score = <bool>::sse_decode(&mut deserializer);
             let api_source_message_id = <Option<String>>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
@@ -4803,6 +4807,10 @@ fn wire__crate__api__core__db_transition_todo_impl(
                         api_clear_next_review_at_ms,
                         api_last_review_at_ms,
                         api_clear_last_review_at_ms,
+                        api_manual_importance_nudge_score,
+                        api_clear_manual_importance_nudge_score,
+                        api_manual_urgency_nudge_score,
+                        api_clear_manual_urgency_nudge_score,
                         api_source_message_id,
                     )
                 })())
@@ -5234,6 +5242,8 @@ fn wire__crate__api__core__db_upsert_todo_impl(
             let api_review_stage = <Option<i64>>::sse_decode(&mut deserializer);
             let api_next_review_at_ms = <Option<i64>>::sse_decode(&mut deserializer);
             let api_last_review_at_ms = <Option<i64>>::sse_decode(&mut deserializer);
+            let api_manual_importance_nudge_score = <Option<i64>>::sse_decode(&mut deserializer);
+            let api_manual_urgency_nudge_score = <Option<i64>>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse((move || {
@@ -5248,6 +5258,8 @@ fn wire__crate__api__core__db_upsert_todo_impl(
                         api_review_stage,
                         api_next_review_at_ms,
                         api_last_review_at_ms,
+                        api_manual_importance_nudge_score,
+                        api_manual_urgency_nudge_score,
                     )
                 })())
             }
@@ -10869,6 +10881,8 @@ impl SseDecode for crate::db::Todo {
         let mut var_reviewStage = <Option<i64>>::sse_decode(deserializer);
         let mut var_nextReviewAtMs = <Option<i64>>::sse_decode(deserializer);
         let mut var_lastReviewAtMs = <Option<i64>>::sse_decode(deserializer);
+        let mut var_manualImportanceNudgeScore = <Option<i64>>::sse_decode(deserializer);
+        let mut var_manualUrgencyNudgeScore = <Option<i64>>::sse_decode(deserializer);
         return crate::db::Todo {
             id: var_id,
             title: var_title,
@@ -10880,6 +10894,8 @@ impl SseDecode for crate::db::Todo {
             review_stage: var_reviewStage,
             next_review_at_ms: var_nextReviewAtMs,
             last_review_at_ms: var_lastReviewAtMs,
+            manual_importance_nudge_score: var_manualImportanceNudgeScore,
+            manual_urgency_nudge_score: var_manualUrgencyNudgeScore,
         };
     }
 }
@@ -13388,6 +13404,10 @@ impl flutter_rust_bridge::IntoDart for crate::db::Todo {
             self.review_stage.into_into_dart().into_dart(),
             self.next_review_at_ms.into_into_dart().into_dart(),
             self.last_review_at_ms.into_into_dart().into_dart(),
+            self.manual_importance_nudge_score
+                .into_into_dart()
+                .into_dart(),
+            self.manual_urgency_nudge_score.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -14637,6 +14657,8 @@ impl SseEncode for crate::db::Todo {
         <Option<i64>>::sse_encode(self.review_stage, serializer);
         <Option<i64>>::sse_encode(self.next_review_at_ms, serializer);
         <Option<i64>>::sse_encode(self.last_review_at_ms, serializer);
+        <Option<i64>>::sse_encode(self.manual_importance_nudge_score, serializer);
+        <Option<i64>>::sse_encode(self.manual_urgency_nudge_score, serializer);
     }
 }
 

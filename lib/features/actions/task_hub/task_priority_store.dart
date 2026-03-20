@@ -14,7 +14,6 @@ import 'task_priority_ai_models.dart';
 import 'task_priority_engine.dart';
 import 'task_priority_feedback_store.dart';
 import 'task_priority_models.dart';
-import 'task_priority_signal_store.dart';
 
 enum TaskPriorityAiAvailability {
   unknown,
@@ -36,7 +35,6 @@ class TaskPriorityStore extends ChangeNotifier {
     Future<String?> Function()? resolveAiCacheScopeKey,
     Future<bool> Function()? isAiEnhancementEnabled,
     TaskPriorityFeedbackStore feedbackStore = const TaskPriorityFeedbackStore(),
-    TaskPrioritySignalStore signalStore = const TaskPrioritySignalStore(),
     Duration aiCacheTtl = const Duration(minutes: 15),
   })  : _loadTodos = loadTodos,
         _loadChecklistProgress = loadChecklistProgress,
@@ -45,7 +43,6 @@ class TaskPriorityStore extends ChangeNotifier {
         _resolveAiCacheScopeKey = resolveAiCacheScopeKey,
         _isAiEnhancementEnabled = isAiEnhancementEnabled,
         _feedbackStore = feedbackStore,
-        _signalStore = signalStore,
         _aiCacheTtl = aiCacheTtl;
 
   factory TaskPriorityStore({
@@ -57,7 +54,6 @@ class TaskPriorityStore extends ChangeNotifier {
     Future<String?> Function()? resolveAiCacheScopeKey,
     Future<bool> Function()? isAiEnhancementEnabled,
     TaskPriorityFeedbackStore feedbackStore = const TaskPriorityFeedbackStore(),
-    TaskPrioritySignalStore? signalStore,
   }) {
     return TaskPriorityStore.fromLoaders(
       loadTodos: () => _loadAndNormalizeTodos(
@@ -73,10 +69,6 @@ class TaskPriorityStore extends ChangeNotifier {
       resolveAiCacheScopeKey: resolveAiCacheScopeKey,
       isAiEnhancementEnabled: isAiEnhancementEnabled,
       feedbackStore: feedbackStore,
-      signalStore: signalStore ??
-          TaskPrioritySignalStore(
-            scopeKey: buildTaskPrioritySignalScopeKey(sessionKey),
-          ),
     );
   }
 
@@ -87,7 +79,6 @@ class TaskPriorityStore extends ChangeNotifier {
   final Future<String?> Function()? _resolveAiCacheScopeKey;
   final Future<bool> Function()? _isAiEnhancementEnabled;
   final TaskPriorityFeedbackStore _feedbackStore;
-  final TaskPrioritySignalStore _signalStore;
   final Duration _aiCacheTtl;
 
   TaskPrioritySnapshot _snapshot = const TaskPrioritySnapshot.empty();
@@ -175,15 +166,11 @@ class TaskPriorityStore extends ChangeNotifier {
       }
 
       await _feedbackStore.pruneToTodoIds(todos.map((todo) => todo.id));
-      await _signalStore.pruneToTodoIds(todos.map((todo) => todo.id));
       final feedbackState = await _feedbackStore.read();
-      final signalState = await _signalStore.readManualState();
-
       _snapshot = buildTaskPrioritySnapshot(
         todos,
         nowLocal: nowLocal,
         feedbackState: feedbackState,
-        signalState: signalState,
       );
       _dirty = false;
       _safeNotify();
@@ -340,7 +327,6 @@ class TaskPriorityStore extends ChangeNotifier {
         nowLocal: nowLocal,
         aiResult: TaskPriorityAiBatchResult(entries: aiEntries),
         feedbackState: feedbackState,
-        signalState: signalState,
       );
       hybridSnapshot = _applyStickyFocus(hybridSnapshot, nowLocal: nowLocal);
       _snapshot = hybridSnapshot;

@@ -157,6 +157,8 @@ final class _Backend extends TestAppBackend {
     int? reviewStage,
     int? nextReviewAtMs,
     int? lastReviewAtMs,
+    int? manualImportanceNudgeScore,
+    int? manualUrgencyNudgeScore,
   }) async {
     lastUpsertTodo = _UpsertTodoArgs(
       id: id,
@@ -167,6 +169,8 @@ final class _Backend extends TestAppBackend {
       reviewStage: reviewStage,
       nextReviewAtMs: nextReviewAtMs,
       lastReviewAtMs: lastReviewAtMs,
+      manualImportanceNudgeScore: manualImportanceNudgeScore ?? 0,
+      manualUrgencyNudgeScore: manualUrgencyNudgeScore ?? 0,
     );
 
     final todo = Todo(
@@ -203,6 +207,8 @@ final class _UpsertTodoArgs {
     required this.reviewStage,
     required this.nextReviewAtMs,
     required this.lastReviewAtMs,
+    required this.manualImportanceNudgeScore,
+    required this.manualUrgencyNudgeScore,
   });
 
   final String id;
@@ -213,4 +219,6 @@ final class _UpsertTodoArgs {
   final int? reviewStage;
   final int? nextReviewAtMs;
   final int? lastReviewAtMs;
+  final int manualImportanceNudgeScore;
+  final int manualUrgencyNudgeScore;
 }

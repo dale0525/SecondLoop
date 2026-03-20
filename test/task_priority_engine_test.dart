@@ -4,12 +4,9 @@ import 'package:secondloop/features/actions/task_hub/task_priority_ai_models.dar
 import 'package:secondloop/features/actions/task_hub/task_priority_engine.dart';
 import 'package:secondloop/features/actions/task_hub/task_priority_feedback_store.dart';
 import 'package:secondloop/features/actions/task_hub/task_priority_models.dart';
-import 'package:secondloop/features/actions/task_hub/task_priority_signal_store.dart';
 import 'package:secondloop/src/rust/db.dart';
 
 void main() {
-  setUp(TaskPrioritySignalStore.resetMutationQueueForTest);
-
   Todo todo({
     required String id,
     required String title,
@@ -18,6 +15,8 @@ void main() {
     String status = 'open',
     int? reviewStage,
     int? nextReviewAtMs,
+    int? manualImportanceNudgeScore,
+    int? manualUrgencyNudgeScore,
   }) {
     return Todo(
       id: id,
@@ -30,6 +29,8 @@ void main() {
       reviewStage: reviewStage,
       nextReviewAtMs: nextReviewAtMs,
       lastReviewAtMs: null,
+      manualImportanceNudgeScore: manualImportanceNudgeScore,
+      manualUrgencyNudgeScore: manualUrgencyNudgeScore,
     );
   }
 
@@ -159,14 +160,10 @@ void main() {
           id: 'backlog',
           title: 'Interrupt me first',
           updatedAtMs: 50,
+          manualUrgencyNudgeScore: 1,
         ),
       ],
       nowLocal: nowLocal,
-      signalState: const TaskPriorityManualSignalState(
-        byTodoId: <String, TaskPriorityManualSignal>{
-          'backlog': TaskPriorityManualSignal(urgencyScore: 4),
-        },
-      ),
     );
 
     expect(snapshot.primaryFocus?.todo.id, 'due-today');
@@ -180,6 +177,7 @@ void main() {
           id: 'sunk',
           title: 'Ignore this for now',
           updatedAtMs: 10,
+          manualUrgencyNudgeScore: -1,
         ),
         todo(
           id: 'neutral',
@@ -188,11 +186,6 @@ void main() {
         ),
       ],
       nowLocal: nowLocal,
-      signalState: const TaskPriorityManualSignalState(
-        byTodoId: <String, TaskPriorityManualSignal>{
-          'sunk': TaskPriorityManualSignal(urgencyScore: -1),
-        },
-      ),
     );
 
     expect(snapshot.primaryFocus?.todo.id, 'neutral');
@@ -215,14 +208,10 @@ void main() {
           id: 'important-backlog',
           title: 'Important backlog',
           updatedAtMs: 20,
+          manualImportanceNudgeScore: 1,
         ),
       ],
       nowLocal: nowLocal,
-      signalState: const TaskPriorityManualSignalState(
-        byTodoId: <String, TaskPriorityManualSignal>{
-          'important-backlog': TaskPriorityManualSignal(importanceScore: 2),
-        },
-      ),
     );
 
     expect(snapshot.primaryFocus?.todo.id, 'important-backlog');
@@ -233,14 +222,14 @@ void main() {
     final snapshot = buildTaskPrioritySnapshot(
       <Todo>[
         todo(id: 'neutral', title: 'Neutral task', updatedAtMs: 10),
-        todo(id: 'important', title: 'Strategic task', updatedAtMs: 20),
+        todo(
+          id: 'important',
+          title: 'Strategic task',
+          updatedAtMs: 20,
+          manualImportanceNudgeScore: 1,
+        ),
       ],
       nowLocal: nowLocal,
-      signalState: const TaskPriorityManualSignalState(
-        byTodoId: <String, TaskPriorityManualSignal>{
-          'important': TaskPriorityManualSignal(importanceScore: 3),
-        },
-      ),
     );
 
     expect(snapshot.primaryFocus?.todo.id, 'important');
@@ -250,17 +239,21 @@ void main() {
     final nowLocal = DateTime(2026, 3, 13, 10, 0);
     final snapshot = buildTaskPrioritySnapshot(
       <Todo>[
-        todo(id: 'primary', title: 'Primary', updatedAtMs: 100),
-        todo(id: 'important', title: 'Strategic follow-up', updatedAtMs: 20),
+        todo(
+          id: 'primary',
+          title: 'Primary',
+          updatedAtMs: 100,
+          manualUrgencyNudgeScore: 1,
+        ),
+        todo(
+          id: 'important',
+          title: 'Strategic follow-up',
+          updatedAtMs: 20,
+          manualImportanceNudgeScore: 1,
+        ),
         todo(id: 'backlog', title: 'Someday maybe', updatedAtMs: 10),
       ],
       nowLocal: nowLocal,
-      signalState: const TaskPriorityManualSignalState(
-        byTodoId: <String, TaskPriorityManualSignal>{
-          'primary': TaskPriorityManualSignal(urgencyScore: 3),
-          'important': TaskPriorityManualSignal(importanceScore: 2),
-        },
-      ),
     );
 
     expect(snapshot.primaryFocus?.todo.id, 'primary');

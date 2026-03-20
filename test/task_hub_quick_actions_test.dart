@@ -4,18 +4,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'package:secondloop/core/backend/app_backend.dart';
 import 'package:secondloop/features/actions/task_hub/task_hub_quick_action_layout.dart';
 import 'package:secondloop/features/actions/task_hub/task_hub_quick_actions.dart';
 import 'package:secondloop/features/actions/task_hub/task_priority_models.dart';
-import 'package:secondloop/features/actions/task_hub/task_priority_signal_store.dart';
 import 'package:secondloop/src/rust/db.dart';
 
 import 'test_i18n.dart';
+import 'task_hub_quick_actions_test_helpers.dart';
 
 void main() {
-  setUp(TaskPrioritySignalStore.resetMutationQueueForTest);
-
   Todo todo({
     required String id,
     required String title,
@@ -24,6 +21,8 @@ void main() {
     String status = 'open',
     int? reviewStage,
     int? nextReviewAtMs,
+    int? manualImportanceNudgeScore,
+    int? manualUrgencyNudgeScore,
   }) {
     return Todo(
       id: id,
@@ -36,6 +35,8 @@ void main() {
       reviewStage: reviewStage,
       nextReviewAtMs: nextReviewAtMs,
       lastReviewAtMs: null,
+      manualImportanceNudgeScore: manualImportanceNudgeScore,
+      manualUrgencyNudgeScore: manualUrgencyNudgeScore,
     );
   }
 
@@ -186,12 +187,10 @@ void main() {
 
     final initial =
         todo(id: 't-urgency', title: 'Task urgency', updatedAtMs: 10);
-    final backend = _QuickActionBackend(initialTodos: [initial]);
-    const signalStore = TaskPrioritySignalStore();
+    final backend = QuickActionBackendTestDouble(initialTodos: [initial]);
     final controller = TaskHubQuickActionsController(
       backend: backend,
       sessionKey: Uint8List(32),
-      signalStore: signalStore,
     );
 
     final ticket = await controller.apply(
@@ -201,12 +200,13 @@ void main() {
 
     expect(ticket, isNotNull);
     if (ticket == null) fail('expected undo ticket');
-    expect((await signalStore.readForTodo('t-urgency'))?.urgencyScore, 1);
+    expect(backend.current('t-urgency').manualUrgencyNudgeScore, 1);
+    expect(backend.current('t-urgency').manualImportanceNudgeScore, 0);
     expect(backend.current('t-urgency').status, initial.status);
     expect(backend.current('t-urgency').dueAtMs, initial.dueAtMs);
 
     await controller.undo(ticket);
-    expect(await signalStore.readForTodo('t-urgency'), isNull);
+    expect(backend.current('t-urgency').manualUrgencyNudgeScore, 0);
   });
 
   test('increase importance only increments manual importance score', () async {
@@ -218,12 +218,10 @@ void main() {
       updatedAtMs: 10,
       status: 'in_progress',
     );
-    final backend = _QuickActionBackend(initialTodos: [initial]);
-    const signalStore = TaskPrioritySignalStore();
+    final backend = QuickActionBackendTestDouble(initialTodos: [initial]);
     final controller = TaskHubQuickActionsController(
       backend: backend,
       sessionKey: Uint8List(32),
-      signalStore: signalStore,
     );
 
     final ticket = await controller.apply(
@@ -233,23 +231,22 @@ void main() {
 
     expect(ticket, isNotNull);
     if (ticket == null) fail('expected undo ticket');
-    expect((await signalStore.readForTodo('t-importance'))?.importanceScore, 1);
+    expect(backend.current('t-importance').manualImportanceNudgeScore, 1);
+    expect(backend.current('t-importance').manualUrgencyNudgeScore, 0);
     expect(backend.current('t-importance').status, 'in_progress');
 
     await controller.undo(ticket);
-    expect(await signalStore.readForTodo('t-importance'), isNull);
+    expect(backend.current('t-importance').manualImportanceNudgeScore, 0);
   });
 
-  test('concurrent urgency increases preserve both increments', () async {
+  test('concurrent urgency increases stay at a single up nudge', () async {
     SharedPreferences.setMockInitialValues({});
 
     final initial = todo(id: 't-race', title: 'Task race', updatedAtMs: 10);
-    final backend = _QuickActionBackend(initialTodos: [initial]);
-    final signalStore = _RaceySignalStore();
+    final backend = QuickActionBackendTestDouble(initialTodos: [initial]);
     final controller = TaskHubQuickActionsController(
       backend: backend,
       sessionKey: Uint8List(32),
-      signalStore: signalStore,
     );
 
     await Future.wait(<Future<TaskHubUndoTicket?>>[
@@ -257,25 +254,23 @@ void main() {
       controller.apply(initial, TaskHubQuickAction.increaseUrgency),
     ]);
 
-    expect((await signalStore.readForTodo('t-race'))?.urgencyScore, 2);
+    expect(backend.current('t-race').manualUrgencyNudgeScore, 1);
   });
 
-  test(
-      'decrease urgency decrements existing urgency score and undo restores it',
+  test('decrease urgency flips an existing up nudge and undo restores it',
       () async {
     SharedPreferences.setMockInitialValues({});
 
-    final initial = todo(id: 't5b', title: 'Task 5b', updatedAtMs: 10);
-    final backend = _QuickActionBackend(initialTodos: [initial]);
-    const signalStore = TaskPrioritySignalStore();
-    await signalStore.setForTodo(
-      't5b',
-      const TaskPriorityManualSignal(urgencyScore: 2),
+    final initial = todo(
+      id: 't5b',
+      title: 'Task 5b',
+      updatedAtMs: 10,
+      manualUrgencyNudgeScore: 1,
     );
+    final backend = QuickActionBackendTestDouble(initialTodos: [initial]);
     final controller = TaskHubQuickActionsController(
       backend: backend,
       sessionKey: Uint8List(32),
-      signalStore: signalStore,
     );
 
     final ticket = await controller.apply(
@@ -283,27 +278,26 @@ void main() {
       TaskHubQuickAction.decreaseUrgency,
     );
     expect(ticket, isNotNull);
-    expect((await signalStore.readForTodo('t5b'))?.urgencyScore, 1);
+    expect(backend.current('t5b').manualUrgencyNudgeScore, -1);
 
     await controller.undo(ticket!);
-    expect((await signalStore.readForTodo('t5b'))?.urgencyScore, 2);
+    expect(backend.current('t5b').manualUrgencyNudgeScore, 1);
   });
 
   test('signal-only undo with previous manual signal does not upsert todo',
       () async {
     SharedPreferences.setMockInitialValues({});
 
-    final initial = todo(id: 't5b2', title: 'Task 5b2', updatedAtMs: 10);
-    final backend = _QuickActionBackend(initialTodos: [initial]);
-    const signalStore = TaskPrioritySignalStore();
-    await signalStore.setForTodo(
-      't5b2',
-      const TaskPriorityManualSignal(isImportant: false),
+    final initial = todo(
+      id: 't5b2',
+      title: 'Task 5b2',
+      updatedAtMs: 10,
+      manualImportanceNudgeScore: -1,
     );
+    final backend = QuickActionBackendTestDouble(initialTodos: [initial]);
     final controller = TaskHubQuickActionsController(
       backend: backend,
       sessionKey: Uint8List(32),
-      signalStore: signalStore,
     );
 
     final ticket = await controller.apply(
@@ -317,10 +311,10 @@ void main() {
     await controller.undo(ticket!);
 
     expect(backend.upsertTodoCalls, upsertsBeforeUndo);
-    expect((await signalStore.readForTodo('t5b2'))?.importanceScore, -1);
+    expect(backend.current('t5b2').manualImportanceNudgeScore, -1);
   });
 
-  test('redo copies manual scores to the new todo and undo clears them',
+  test('redo copies manual nudges to the new todo and undo clears them',
       () async {
     SharedPreferences.setMockInitialValues({});
 
@@ -329,20 +323,13 @@ void main() {
       title: 'Task redo',
       updatedAtMs: 10,
       status: 'done',
+      manualImportanceNudgeScore: 1,
+      manualUrgencyNudgeScore: -1,
     );
-    final backend = _QuickActionBackend(initialTodos: [initial]);
-    const signalStore = TaskPrioritySignalStore();
-    await signalStore.setForTodo(
-      't-redo',
-      const TaskPriorityManualSignal(
-        importanceScore: 3,
-        urgencyScore: -2,
-      ),
-    );
+    final backend = QuickActionBackendTestDouble(initialTodos: [initial]);
     final controller = TaskHubQuickActionsController(
       backend: backend,
       sessionKey: Uint8List(32),
-      signalStore: signalStore,
     );
 
     final ticket = await controller.apply(
@@ -354,18 +341,18 @@ void main() {
 
     final createdTodoId = ticket.createdTodoId;
     expect(createdTodoId, isNotNull);
-    expect((await signalStore.readForTodo(createdTodoId!))?.importanceScore, 3);
-    expect((await signalStore.readForTodo(createdTodoId))?.urgencyScore, -2);
+    expect(backend.current(createdTodoId!).manualImportanceNudgeScore, 1);
+    expect(backend.current(createdTodoId).manualUrgencyNudgeScore, -1);
 
     await controller.undo(ticket);
-    expect(await signalStore.readForTodo(createdTodoId), isNull);
+    expect(backend.current(createdTodoId).status, 'dismissed');
   });
 
   test('done action respects incomplete checklist confirmation', () async {
     SharedPreferences.setMockInitialValues({});
 
     final initial = todo(id: 't6', title: 'Task 6', updatedAtMs: 10);
-    final backend = _QuickActionBackend(
+    final backend = QuickActionBackendTestDouble(
       initialTodos: [initial],
       checklistItemsByTodoId: <String, List<TodoChecklistItem>>{
         't6': const <TodoChecklistItem>[
@@ -405,7 +392,7 @@ void main() {
     });
 
     final initial = todo(id: 't6b', title: 'Task 6b', updatedAtMs: 10);
-    final backend = _QuickActionBackend(initialTodos: [initial]);
+    final backend = QuickActionBackendTestDouble(initialTodos: [initial]);
     final controller = TaskHubQuickActionsController(
       backend: backend,
       sessionKey: Uint8List(32),
@@ -423,12 +410,10 @@ void main() {
     });
 
     final initial = todo(id: 't6c', title: 'Task 6c', updatedAtMs: 10);
-    final backend = _QuickActionBackend(initialTodos: [initial]);
-    const signalStore = TaskPrioritySignalStore();
+    final backend = QuickActionBackendTestDouble(initialTodos: [initial]);
     final controller = TaskHubQuickActionsController(
       backend: backend,
       sessionKey: Uint8List(32),
-      signalStore: signalStore,
     );
 
     final ticket = await controller.apply(
@@ -436,7 +421,7 @@ void main() {
       TaskHubQuickAction.increaseImportance,
     );
     expect(ticket, isNotNull);
-    expect((await signalStore.readForTodo('t6c'))?.isImportant, isTrue);
+    expect(backend.current('t6c').manualImportanceNudgeScore, 1);
   });
 
   test('reopen action reopens done todo', () async {
@@ -448,7 +433,7 @@ void main() {
       updatedAtMs: 10,
       status: 'done',
     );
-    final backend = _QuickActionBackend(initialTodos: [initial]);
+    final backend = QuickActionBackendTestDouble(initialTodos: [initial]);
     final controller = TaskHubQuickActionsController(
       backend: backend,
       sessionKey: Uint8List(32),
@@ -469,16 +454,18 @@ void main() {
       'actions.review.day_end_minutes_v1': 'broken',
     });
 
+    final nowLocal = DateTime(2026, 3, 13, 10, 0);
     final initial = todo(
       id: 't7b',
       title: 'Task 7b',
       updatedAtMs: 10,
       status: 'done',
     );
-    final backend = _QuickActionBackend(initialTodos: [initial]);
+    final backend = QuickActionBackendTestDouble(initialTodos: [initial]);
     final controller = TaskHubQuickActionsController(
       backend: backend,
       sessionKey: Uint8List(32),
+      nowLocal: () => nowLocal,
     );
 
     final ticket = await controller.apply(initial, TaskHubQuickAction.reopen);
@@ -508,7 +495,7 @@ void main() {
       updatedAtMs: 10,
       status: 'done',
     );
-    final backend = _QuickActionBackend(initialTodos: [initial]);
+    final backend = QuickActionBackendTestDouble(initialTodos: [initial]);
     final controller = TaskHubQuickActionsController(
       backend: backend,
       sessionKey: Uint8List(32),
@@ -535,7 +522,7 @@ void main() {
       status: 'done',
       dueAtMs: 123456789,
     );
-    final backend = _QuickActionBackend(initialTodos: [initial]);
+    final backend = QuickActionBackendTestDouble(initialTodos: [initial]);
     final controller = TaskHubQuickActionsController(
       backend: backend,
       sessionKey: Uint8List(32),
@@ -560,7 +547,7 @@ void main() {
     SharedPreferences.setMockInitialValues({});
 
     final initial = todo(id: 't8', title: 'Task 8', updatedAtMs: 10);
-    final backend = _QuickActionBackend(initialTodos: [initial]);
+    final backend = QuickActionBackendTestDouble(initialTodos: [initial]);
     final controller = TaskHubQuickActionsController(
       backend: backend,
       sessionKey: Uint8List(32),
@@ -583,7 +570,7 @@ void main() {
       reviewStage: 2,
       nextReviewAtMs: 13579,
     );
-    final backend = _QuickActionBackend(initialTodos: [initial]);
+    final backend = QuickActionBackendTestDouble(initialTodos: [initial]);
     final controller = TaskHubQuickActionsController(
       backend: backend,
       sessionKey: Uint8List(32),
@@ -605,7 +592,7 @@ void main() {
     SharedPreferences.setMockInitialValues({});
 
     final initial = todo(id: 't8b', title: 'Task 8b', updatedAtMs: 10);
-    final backend = _QuickActionBackend(initialTodos: [initial]);
+    final backend = QuickActionBackendTestDouble(initialTodos: [initial]);
     final controller = TaskHubQuickActionsController(
       backend: backend,
       sessionKey: Uint8List(32),
@@ -623,7 +610,7 @@ void main() {
     SharedPreferences.setMockInitialValues({});
 
     final initial = todo(id: 't8c', title: 'Task 8c', updatedAtMs: 10);
-    final backend = _QuickActionBackend(initialTodos: [initial]);
+    final backend = QuickActionBackendTestDouble(initialTodos: [initial]);
     final controller = TaskHubQuickActionsController(
       backend: backend,
       sessionKey: Uint8List(32),
@@ -652,7 +639,7 @@ void main() {
       updatedAtMs: 10,
       status: 'in_progress',
     );
-    final backend = _QuickActionBackend(initialTodos: [initial]);
+    final backend = QuickActionBackendTestDouble(initialTodos: [initial]);
     final controller = TaskHubQuickActionsController(
       backend: backend,
       sessionKey: Uint8List(32),
@@ -674,7 +661,7 @@ void main() {
     });
 
     final initial = todo(id: 't10', title: 'Task 10', updatedAtMs: 10);
-    final backend = _QuickActionBackend(initialTodos: [initial]);
+    final backend = QuickActionBackendTestDouble(initialTodos: [initial]);
     final controller = TaskHubQuickActionsController(
       backend: backend,
       sessionKey: Uint8List(32),
@@ -699,7 +686,7 @@ void main() {
 
     final nowLocal = DateTime(2026, 3, 13, 22, 30);
     final initial = todo(id: 't10a', title: 'Task 10a', updatedAtMs: 10);
-    final backend = _QuickActionBackend(initialTodos: [initial]);
+    final backend = QuickActionBackendTestDouble(initialTodos: [initial]);
     final controller = TaskHubQuickActionsController(
       backend: backend,
       sessionKey: Uint8List(32),
@@ -729,7 +716,7 @@ void main() {
       updatedAtMs: 10,
       status: 'done',
     );
-    final backend = _QuickActionBackend(initialTodos: [initial]);
+    final backend = QuickActionBackendTestDouble(initialTodos: [initial]);
     final controller = TaskHubQuickActionsController(
       backend: backend,
       sessionKey: Uint8List(32),
@@ -757,7 +744,7 @@ void main() {
       dueAtMs: 987654321,
       status: 'in_progress',
     );
-    final backend = _QuickActionBackend(initialTodos: [initial]);
+    final backend = QuickActionBackendTestDouble(initialTodos: [initial]);
     final controller = TaskHubQuickActionsController(
       backend: backend,
       sessionKey: Uint8List(32),
@@ -778,7 +765,7 @@ void main() {
     expect(backend.upsertTodoCalls, upsertsBeforeUndo);
   });
 
-  test('redo action rolls back created todo when signal copy fails', () async {
+  test('redo action ignores legacy signal store failures', () async {
     SharedPreferences.setMockInitialValues({});
 
     final initial = todo(
@@ -786,227 +773,23 @@ void main() {
       title: 'Task 11',
       updatedAtMs: 10,
       status: 'done',
+      manualImportanceNudgeScore: 1,
+      manualUrgencyNudgeScore: -1,
     );
-    final backend = _QuickActionBackend(initialTodos: [initial]);
+    final backend = QuickActionBackendTestDouble(initialTodos: [initial]);
     final controller = TaskHubQuickActionsController(
       backend: backend,
       sessionKey: Uint8List(32),
-      signalStore: const _FailingSignalStore(),
     );
 
-    await expectLater(
-      () => controller.apply(initial, TaskHubQuickAction.redo),
-      throwsA(isA<StateError>()),
-    );
+    final ticket = await controller.apply(initial, TaskHubQuickAction.redo);
 
-    final nonDismissedNewTodos = backend
-        .all()
-        .where((todo) => todo.id != initial.id && todo.status != 'dismissed')
-        .toList(growable: false);
-    expect(nonDismissedNewTodos, isEmpty);
-    expect(backend.deleteTodoCalls, 1);
+    expect(ticket, isNotNull);
+    if (ticket == null) fail('expected undo ticket');
+    final createdTodoId = ticket.createdTodoId;
+    expect(createdTodoId, isNotNull);
+    expect(backend.current(createdTodoId!).manualImportanceNudgeScore, 1);
+    expect(backend.current(createdTodoId).manualUrgencyNudgeScore, -1);
+    expect(backend.deleteTodoCalls, 0);
   });
-}
-
-final class _QuickActionBackend extends AppBackend {
-  _QuickActionBackend({
-    List<Todo>? initialTodos,
-    Map<String, List<TodoChecklistItem>>? checklistItemsByTodoId,
-  })  : _checklistItemsByTodoId = Map<String, List<TodoChecklistItem>>.from(
-          checklistItemsByTodoId ?? const <String, List<TodoChecklistItem>>{},
-        ),
-        _todosById = {
-          for (final todo in initialTodos ?? const <Todo>[]) todo.id: todo,
-        };
-
-  final Map<String, Todo> _todosById;
-  final Map<String, List<TodoChecklistItem>> _checklistItemsByTodoId;
-  var upsertTodoCalls = 0;
-  var transitionTodoCalls = 0;
-  var deleteTodoCalls = 0;
-  var setTodoStatusCalls = 0;
-
-  Todo current(String id) => _todosById[id]!;
-  List<Todo> all() => _todosById.values.toList(growable: false);
-
-  @override
-  Future<Todo> upsertTodo(
-    Uint8List key, {
-    required String id,
-    required String title,
-    int? dueAtMs,
-    required String status,
-    String? sourceEntryId,
-    int? reviewStage,
-    int? nextReviewAtMs,
-    int? lastReviewAtMs,
-  }) async {
-    upsertTodoCalls += 1;
-    final nowMs = DateTime.now().toUtc().millisecondsSinceEpoch;
-    final updated = Todo(
-      id: id,
-      title: title,
-      dueAtMs: dueAtMs,
-      status: status,
-      sourceEntryId: sourceEntryId,
-      createdAtMs: _todosById[id]?.createdAtMs ?? nowMs,
-      updatedAtMs: nowMs,
-      reviewStage: reviewStage,
-      nextReviewAtMs: nextReviewAtMs,
-      lastReviewAtMs: lastReviewAtMs,
-    );
-    _todosById[id] = updated;
-    return updated;
-  }
-
-  @override
-  Future<Todo> transitionTodo(
-    Uint8List key, {
-    required String todoId,
-    String? newStatus,
-    int? dueAtMs,
-    bool clearDueAtMs = false,
-    int? reviewStage,
-    bool clearReviewStage = false,
-    int? nextReviewAtMs,
-    bool clearNextReviewAtMs = false,
-    int? lastReviewAtMs,
-    bool clearLastReviewAtMs = false,
-    String? sourceMessageId,
-  }) async {
-    transitionTodoCalls += 1;
-    final existing = _todosById[todoId]!;
-    final updated = Todo(
-      id: existing.id,
-      title: existing.title,
-      dueAtMs: clearDueAtMs ? null : (dueAtMs ?? existing.dueAtMs),
-      status: newStatus ?? existing.status,
-      sourceEntryId: existing.sourceEntryId,
-      createdAtMs: existing.createdAtMs,
-      updatedAtMs: DateTime.now().toUtc().millisecondsSinceEpoch,
-      reviewStage:
-          clearReviewStage ? null : (reviewStage ?? existing.reviewStage),
-      nextReviewAtMs: clearNextReviewAtMs
-          ? null
-          : (nextReviewAtMs ?? existing.nextReviewAtMs),
-      lastReviewAtMs: clearLastReviewAtMs
-          ? null
-          : (lastReviewAtMs ?? existing.lastReviewAtMs),
-    );
-    _todosById[todoId] = updated;
-    return updated;
-  }
-
-  @override
-  Future<Todo> setTodoStatus(
-    Uint8List key, {
-    required String todoId,
-    required String newStatus,
-    String? sourceMessageId,
-  }) async {
-    setTodoStatusCalls += 1;
-    final existing = _todosById[todoId]!;
-    final updated = Todo(
-      id: existing.id,
-      title: existing.title,
-      dueAtMs: existing.dueAtMs,
-      status: newStatus,
-      sourceEntryId: existing.sourceEntryId,
-      createdAtMs: existing.createdAtMs,
-      updatedAtMs: DateTime.now().toUtc().millisecondsSinceEpoch,
-      reviewStage: existing.reviewStage,
-      nextReviewAtMs: existing.nextReviewAtMs,
-      lastReviewAtMs: existing.lastReviewAtMs,
-    );
-    _todosById[todoId] = updated;
-    return updated;
-  }
-
-  @override
-  Future<List<TodoChecklistItem>> listTodoChecklistItems(
-    Uint8List key,
-    String todoId,
-  ) async {
-    return List<TodoChecklistItem>.from(
-      _checklistItemsByTodoId[todoId] ?? const <TodoChecklistItem>[],
-    );
-  }
-
-  @override
-  Future<void> deleteTodo(
-    Uint8List key, {
-    required String todoId,
-  }) async {
-    deleteTodoCalls += 1;
-    final existing = _todosById[todoId];
-    if (existing == null) return;
-    _todosById[todoId] = Todo(
-      id: existing.id,
-      title: existing.title,
-      dueAtMs: existing.dueAtMs,
-      status: 'dismissed',
-      sourceEntryId: existing.sourceEntryId,
-      createdAtMs: existing.createdAtMs,
-      updatedAtMs: DateTime.now().toUtc().millisecondsSinceEpoch,
-      reviewStage: existing.reviewStage,
-      nextReviewAtMs: existing.nextReviewAtMs,
-      lastReviewAtMs: existing.lastReviewAtMs,
-    );
-  }
-
-  @override
-  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
-}
-
-final class _FailingSignalStore extends TaskPrioritySignalStore {
-  const _FailingSignalStore();
-
-  @override
-  Future<TaskPriorityManualSignal?> readForTodo(String todoId) async {
-    return const TaskPriorityManualSignal(importanceScore: 1);
-  }
-
-  @override
-  Future<void> setForTodo(
-    String todoId,
-    TaskPriorityManualSignal signal,
-  ) {
-    throw StateError('signal write failed');
-  }
-}
-
-final class _RaceySignalStore extends TaskPrioritySignalStore {
-  _RaceySignalStore();
-
-  TaskPriorityManualSignal? _signal;
-  var _staleReadCount = 0;
-
-  @override
-  Future<TaskPriorityManualSignal?> readForTodo(String todoId) async {
-    if (_staleReadCount < 2) {
-      _staleReadCount += 1;
-      return null;
-    }
-    return _signal;
-  }
-
-  @override
-  Future<void> setForTodo(
-    String todoId,
-    TaskPriorityManualSignal signal,
-  ) async {
-    _signal = signal.isEmpty ? null : signal;
-  }
-
-  @override
-  Future<TaskPrioritySignalMutation> mutateForTodo(
-    String todoId,
-    TaskPriorityManualSignal Function(TaskPriorityManualSignal current) mutate,
-  ) async {
-    final previous = _signal;
-    final updated = mutate(previous ?? const TaskPriorityManualSignal());
-    _signal = updated.isEmpty ? null : updated;
-    _staleReadCount = 2;
-    return TaskPrioritySignalMutation(previous: previous, updated: updated);
-  }
 }

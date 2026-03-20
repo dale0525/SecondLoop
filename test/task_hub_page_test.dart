@@ -8,7 +8,6 @@ import 'package:secondloop/core/backend/app_backend.dart';
 import 'package:secondloop/core/session/session_scope.dart';
 import 'package:secondloop/features/actions/task_hub/task_hub_page.dart';
 import 'package:secondloop/features/actions/task_hub/task_priority_ai.dart';
-import 'package:secondloop/features/actions/task_hub/task_priority_signal_store.dart';
 import 'package:secondloop/src/rust/db.dart';
 
 import 'test_backend.dart';
@@ -53,9 +52,13 @@ Future<void> _pumpUntilTaskHubReady(WidgetTester tester) {
   );
 }
 
+void _useLargeViewport(WidgetTester tester) {
+  tester.view.physicalSize = const Size(1200, 1000);
+  tester.view.devicePixelRatio = 1.0;
+}
+
 void main() {
   setUp(() {
-    TaskPrioritySignalStore.resetMutationQueueForTest();
     BackendTaskPriorityAiService.clearSharedCacheForTest();
   });
 
@@ -209,12 +212,12 @@ void main() {
 
     expect(
       find.byKey(const ValueKey(
-          'task_hub_page_priority_urgent-important_urgency_inactive')),
+          'task_hub_page_priority_urgent-important_urgency_neutral')),
       findsOneWidget,
     );
     expect(
       find.byKey(const ValueKey(
-          'task_hub_page_priority_urgent-important_importance_inactive')),
+          'task_hub_page_priority_urgent-important_importance_neutral')),
       findsOneWidget,
     );
   });
@@ -246,9 +249,193 @@ void main() {
 
     expect(
       find.byKey(
-          const ValueKey('task_hub_page_priority_due-today_urgency_inactive')),
+          const ValueKey('task_hub_page_priority_due-today_urgency_neutral')),
       findsOneWidget,
     );
+  });
+
+  testWidgets('manual nudge snackbar uses state wording', (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final backend = _TaskHubBackend(
+      todos: const <Todo>[
+        Todo(
+          id: 'snack-nudge',
+          title: 'Nudged from snackbar',
+          dueAtMs: null,
+          status: 'open',
+          sourceEntryId: null,
+          createdAtMs: 0,
+          updatedAtMs: 10,
+          reviewStage: null,
+          nextReviewAtMs: null,
+          lastReviewAtMs: null,
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(_wrap(backend));
+    await _pumpUntilTaskHubReady(tester);
+
+    await tester.tap(
+      find.byKey(
+        const ValueKey('task_hub_page_priority_snack-nudge_urgency_increase'),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.text('Urgency raised "Nudged from snackbar"'), findsOneWidget);
+  });
+
+  testWidgets('manual nudge pills use state wording', (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final backend = _TaskHubBackend(
+      todos: const <Todo>[
+        Todo(
+          id: 'nudged',
+          title: 'Nudged task',
+          dueAtMs: null,
+          status: 'open',
+          sourceEntryId: null,
+          createdAtMs: 0,
+          updatedAtMs: 10,
+          reviewStage: null,
+          nextReviewAtMs: null,
+          lastReviewAtMs: null,
+          manualUrgencyNudgeScore: 1,
+          manualImportanceNudgeScore: -1,
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(_wrap(backend));
+    await _pumpUntilTaskHubReady(tester);
+
+    expect(find.text('Urgency raised'), findsOneWidget);
+    expect(find.text('Importance lowered'), findsOneWidget);
+  });
+
+  testWidgets('undo highlights the restored card without extra snackbar',
+      (tester) async {
+    _useLargeViewport(tester);
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    SharedPreferences.setMockInitialValues({});
+    final now = DateTime.now();
+    final backend = _TaskHubBackend(
+      todos: <Todo>[
+        Todo(
+          id: 'focus-anchor',
+          title: 'Anchor',
+          dueAtMs: now
+              .subtract(const Duration(hours: 1))
+              .toUtc()
+              .millisecondsSinceEpoch,
+          status: 'open',
+          sourceEntryId: null,
+          createdAtMs: 0,
+          updatedAtMs: 20,
+          reviewStage: null,
+          nextReviewAtMs: null,
+          lastReviewAtMs: null,
+        ),
+        const Todo(
+          id: 'undo-highlight',
+          title: 'Target',
+          dueAtMs: null,
+          status: 'open',
+          sourceEntryId: null,
+          createdAtMs: 0,
+          updatedAtMs: 10,
+          reviewStage: null,
+          nextReviewAtMs: null,
+          lastReviewAtMs: null,
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(_wrap(backend));
+    await _pumpUntilTaskHubReady(tester);
+
+    await tester.tap(
+      find.byKey(const ValueKey('task_hub_page_quick_undo-highlight_tomorrow')),
+    );
+    await tester.pump();
+    expect(find.byType(SnackBar), findsOneWidget);
+
+    tester.widget<SnackBarAction>(find.byType(SnackBarAction)).onPressed();
+    await tester.pump();
+    await _pumpUntil(
+      tester,
+      () =>
+          find
+              .byKey(const ValueKey(
+                  'task_hub_page_item_state_undo-highlight_restored'))
+              .evaluate()
+              .isNotEmpty &&
+          find.byType(SnackBar).evaluate().isEmpty,
+    );
+
+    expect(
+      find.byKey(
+        const ValueKey('task_hub_page_item_state_undo-highlight_restored'),
+      ),
+      findsOneWidget,
+    );
+    expect(find.byType(SnackBar), findsNothing);
+  });
+
+  testWidgets('undo highlight also applies to restored primary focus',
+      (tester) async {
+    _useLargeViewport(tester);
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    SharedPreferences.setMockInitialValues({});
+    final backend = _TaskHubBackend(
+      todos: const <Todo>[
+        Todo(
+          id: 'focus-undo',
+          title: 'Focus',
+          dueAtMs: null,
+          status: 'open',
+          sourceEntryId: null,
+          createdAtMs: 0,
+          updatedAtMs: 10,
+          reviewStage: null,
+          nextReviewAtMs: null,
+          lastReviewAtMs: null,
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(_wrap(backend));
+    await _pumpUntilTaskHubReady(tester);
+
+    await tester.tap(
+      find.byKey(const ValueKey('task_hub_page_quick_focus-undo_tomorrow')),
+    );
+    await tester.pump();
+    expect(find.byType(SnackBar), findsOneWidget);
+
+    tester.widget<SnackBarAction>(find.byType(SnackBarAction)).onPressed();
+    await tester.pump();
+    await _pumpUntil(
+      tester,
+      () =>
+          find
+              .byKey(const ValueKey(
+                  'task_hub_page_item_state_focus-undo_restored'))
+              .evaluate()
+              .isNotEmpty &&
+          find.byType(SnackBar).evaluate().isEmpty,
+    );
+
+    expect(
+      find.byKey(
+        const ValueKey('task_hub_page_item_state_focus-undo_restored'),
+      ),
+      findsOneWidget,
+    );
+    expect(find.byType(SnackBar), findsNothing);
   });
 
   testWidgets('all tasks keep positive priority buttons enabled',
@@ -688,6 +875,8 @@ final class _TaskHubBackend extends TestAppBackend {
     int? reviewStage,
     int? nextReviewAtMs,
     int? lastReviewAtMs,
+    int? manualImportanceNudgeScore,
+    int? manualUrgencyNudgeScore,
   }) async {
     final updated = Todo(
       id: id,
@@ -700,6 +889,11 @@ final class _TaskHubBackend extends TestAppBackend {
       reviewStage: reviewStage,
       nextReviewAtMs: nextReviewAtMs,
       lastReviewAtMs: lastReviewAtMs,
+      manualImportanceNudgeScore: manualImportanceNudgeScore ??
+          _todos[id]?.manualImportanceNudgeScore ??
+          0,
+      manualUrgencyNudgeScore:
+          manualUrgencyNudgeScore ?? _todos[id]?.manualUrgencyNudgeScore ?? 0,
     );
     _todos[id] = updated;
     return updated;
@@ -718,6 +912,10 @@ final class _TaskHubBackend extends TestAppBackend {
     bool clearNextReviewAtMs = false,
     int? lastReviewAtMs,
     bool clearLastReviewAtMs = false,
+    int? manualImportanceNudgeScore,
+    bool clearManualImportanceNudgeScore = false,
+    int? manualUrgencyNudgeScore,
+    bool clearManualUrgencyNudgeScore = false,
     String? sourceMessageId,
   }) async {
     if (failTransition) {
@@ -740,6 +938,14 @@ final class _TaskHubBackend extends TestAppBackend {
       lastReviewAtMs: clearLastReviewAtMs
           ? null
           : (lastReviewAtMs ?? existing.lastReviewAtMs),
+      manualImportanceNudgeScore: clearManualImportanceNudgeScore
+          ? 0
+          : (manualImportanceNudgeScore ??
+              existing.manualImportanceNudgeScore ??
+              0),
+      manualUrgencyNudgeScore: clearManualUrgencyNudgeScore
+          ? 0
+          : (manualUrgencyNudgeScore ?? existing.manualUrgencyNudgeScore ?? 0),
     );
     _todos[todoId] = updated;
     return updated;
@@ -764,6 +970,8 @@ final class _TaskHubBackend extends TestAppBackend {
       reviewStage: existing.reviewStage,
       nextReviewAtMs: existing.nextReviewAtMs,
       lastReviewAtMs: existing.lastReviewAtMs,
+      manualImportanceNudgeScore: existing.manualImportanceNudgeScore,
+      manualUrgencyNudgeScore: existing.manualUrgencyNudgeScore,
     );
     _todos[todoId] = updated;
     return updated;

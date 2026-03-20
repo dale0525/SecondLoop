@@ -15,6 +15,8 @@ void main() {
     int? reviewStage,
     int? nextReviewAtMs,
     int? lastReviewAtMs,
+    int? manualImportanceNudgeScore,
+    int? manualUrgencyNudgeScore,
   }) {
     return Todo(
       id: id,
@@ -27,6 +29,8 @@ void main() {
       reviewStage: reviewStage,
       nextReviewAtMs: nextReviewAtMs,
       lastReviewAtMs: lastReviewAtMs,
+      manualImportanceNudgeScore: manualImportanceNudgeScore ?? 0,
+      manualUrgencyNudgeScore: manualUrgencyNudgeScore ?? 0,
     );
   }
 
@@ -85,6 +89,8 @@ final class _FallbackTransitionBackend extends TestAppBackend {
     int? reviewStage,
     int? nextReviewAtMs,
     int? lastReviewAtMs,
+    int? manualImportanceNudgeScore,
+    int? manualUrgencyNudgeScore,
   }) async {
     upsertTodoCalls += 1;
     _todo = Todo(

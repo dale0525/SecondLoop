@@ -30,6 +30,8 @@ fn run_sync_todo_upsert_same_updated_at_prefers_later_seq() -> Result<()> {
         None,
         None,
         None,
+        None,
+        None,
     )?;
     db::set_todo_status(&conn_a, &key_a, "todo:seed", "done", None)?;
 

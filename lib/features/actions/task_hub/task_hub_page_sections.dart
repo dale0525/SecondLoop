@@ -27,6 +27,7 @@ class TaskHubPageSection extends StatelessWidget {
     required this.onOpenTodo,
     required this.onQuickAction,
     this.onFeedback,
+    this.restoredTodoId,
     this.footer,
     super.key,
   });
@@ -38,11 +39,14 @@ class TaskHubPageSection extends StatelessWidget {
   final TaskHubPageSectionKind sectionKind;
   final Future<void> Function(TaskPriorityEntry entry) onOpenTodo;
   final Future<void> Function(
-      TaskPriorityEntry entry, TaskHubQuickAction action) onQuickAction;
+    TaskPriorityEntry entry,
+    TaskHubQuickAction action,
+  ) onQuickAction;
   final Future<void> Function(
     TaskPriorityEntry entry,
     TaskPriorityFeedbackKind feedback,
   )? onFeedback;
+  final String? restoredTodoId;
   final Widget? footer;
 
   @override
@@ -69,6 +73,7 @@ class TaskHubPageSection extends StatelessWidget {
                 TaskHubEntryCard(
                   entry: entries[i],
                   checklistProgressByTodoId: checklistProgressByTodoId,
+                  recentlyRestored: entries[i].todo.id == restoredTodoId,
                   onOpenTodo: () => onOpenTodo(entries[i]),
                   onQuickAction: (action) => onQuickAction(entries[i], action),
                   onFeedback: onFeedback == null
@@ -97,6 +102,7 @@ class TaskHubEntryCard extends StatelessWidget {
     required this.onQuickAction,
     this.onFeedback,
     this.emphasize = false,
+    this.recentlyRestored = false,
     this.showPriorityControls = true,
     super.key,
   });
@@ -107,6 +113,7 @@ class TaskHubEntryCard extends StatelessWidget {
   final ValueChanged<TaskHubQuickAction> onQuickAction;
   final ValueChanged<TaskPriorityFeedbackKind>? onFeedback;
   final bool emphasize;
+  final bool recentlyRestored;
   final bool showPriorityControls;
 
   @override
@@ -119,174 +126,201 @@ class TaskHubEntryCard extends StatelessWidget {
         checklistProgress == null || checklistProgress.totalCount <= 0
             ? null
             : '${checklistProgress.doneCount}/${checklistProgress.totalCount}';
-    return Container(
-      key: ValueKey('task_hub_page_item_${entry.todo.id}'),
+    final restoredBackground =
+        theme.colorScheme.primaryContainer.withOpacity(emphasize ? 0.64 : 0.58);
+    final restoredBorder = theme.colorScheme.primary.withOpacity(0.28);
+    final defaultBackground = emphasize ? tokens.surface2 : null;
+    return AnimatedContainer(
+      key: ValueKey(
+        'task_hub_page_item_state_${entry.todo.id}_${recentlyRestored ? 'restored' : 'default'}',
+      ),
+      duration: const Duration(milliseconds: 220),
+      curve: Curves.easeOutCubic,
       decoration: BoxDecoration(
-        color: emphasize ? tokens.surface2 : null,
+        color: recentlyRestored ? restoredBackground : defaultBackground,
         borderRadius: BorderRadius.circular(tokens.radiusLg),
+        border: recentlyRestored ? Border.all(color: restoredBorder) : null,
       ),
       padding: const EdgeInsets.all(8),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          InkWell(
-            onTap: onOpenTodo,
-            borderRadius: BorderRadius.circular(tokens.radiusLg),
-            child: Padding(
-              padding: const EdgeInsets.all(4),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          entry.todo.title,
-                          style: theme.textTheme.titleSmall?.copyWith(
-                            fontWeight: FontWeight.w700,
+      child: Container(
+        key: ValueKey('task_hub_page_item_${entry.todo.id}'),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            InkWell(
+              onTap: onOpenTodo,
+              borderRadius: BorderRadius.circular(tokens.radiusLg),
+              child: Padding(
+                padding: const EdgeInsets.all(4),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            entry.todo.title,
+                            style: theme.textTheme.titleSmall?.copyWith(
+                              fontWeight: FontWeight.w700,
+                            ),
                           ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          _subtitle(context, entry),
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: theme.colorScheme.onSurfaceVariant,
-                          ),
-                        ),
-                        if (checklistProgressText != null) ...[
                           const SizedBox(height: 4),
                           Text(
-                            checklistProgressText,
-                            key: ValueKey(
-                              'task_hub_checklist_progress_${entry.todo.id}',
-                            ),
+                            _subtitle(context, entry),
                             style: theme.textTheme.bodySmall?.copyWith(
                               color: theme.colorScheme.onSurfaceVariant,
-                              fontWeight: FontWeight.w600,
                             ),
                           ),
-                        ],
-                        if ((entry.reasonText ?? '').isNotEmpty) ...[
-                          const SizedBox(height: 4),
-                          Text(
-                            entry.reasonText!,
-                            key: ValueKey(
-                                'task_priority_reason_${entry.todo.id}'),
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: theme.colorScheme.primary,
-                              fontWeight: FontWeight.w600,
+                          if (checklistProgressText != null) ...[
+                            const SizedBox(height: 4),
+                            Text(
+                              checklistProgressText,
+                              key: ValueKey(
+                                'task_hub_checklist_progress_${entry.todo.id}',
+                              ),
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: theme.colorScheme.onSurfaceVariant,
+                                fontWeight: FontWeight.w600,
+                              ),
                             ),
-                          ),
+                          ],
+                          if ((entry.reasonText ?? '').isNotEmpty) ...[
+                            const SizedBox(height: 4),
+                            Text(
+                              entry.reasonText!,
+                              key: ValueKey(
+                                  'task_priority_reason_${entry.todo.id}'),
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: theme.colorScheme.primary,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
                         ],
-                      ],
+                      ),
                     ),
-                  ),
-                  if (onFeedback != null && (entry.reasonText ?? '').isNotEmpty)
-                    _TaskHubFeedbackMenu(
-                      todoId: entry.todo.id,
-                      onSelected: onFeedback!,
-                    ),
-                  const SizedBox(width: 4),
-                  Icon(
-                    Icons.chevron_right_rounded,
-                    color: theme.colorScheme.onSurfaceVariant,
-                  ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 8),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  for (final action in layout.$1)
-                    _TaskHubQuickButton(
-                      key: ValueKey(
-                        'task_hub_page_quick_${entry.todo.id}_${action.action.name}',
+                    if (onFeedback != null &&
+                        (entry.reasonText ?? '').isNotEmpty)
+                      _TaskHubFeedbackMenu(
+                        todoId: entry.todo.id,
+                        onSelected: onFeedback!,
                       ),
-                      label: action.label,
-                      icon: action.icon,
-                      tone: action.tone,
-                      onPressed: () => onQuickAction(action.action),
-                    ),
-                  if (layout.$2.isNotEmpty)
-                    _TaskHubQuickMenu(
-                      key:
-                          ValueKey('task_hub_page_quick_${entry.todo.id}_more'),
-                      items: layout.$2,
-                      onSelected: onQuickAction,
-                    ),
-                ],
-              ),
-              if (showPriorityControls && entry.todo.status != 'done') ...[
-                const SizedBox(height: 10),
-                Row(
-                  children: [
-                    _TaskHubPriorityControl(
-                      key: ValueKey(
-                        'task_hub_page_priority_${entry.todo.id}_urgency',
-                      ),
-                      stateKey: ValueKey(
-                        'task_hub_page_priority_${entry.todo.id}_urgency_${entry.isExplicitlyUrgent ? 'active' : 'inactive'}',
-                      ),
-                      decreaseButtonKey: ValueKey(
-                        'task_hub_page_priority_${entry.todo.id}_urgency_decrease',
-                      ),
-                      increaseButtonKey: ValueKey(
-                        'task_hub_page_priority_${entry.todo.id}_urgency_increase',
-                      ),
-                      icon: Icons.priority_high_rounded,
-                      isActive: entry.isExplicitlyUrgent,
-                      canIncrease: true,
-                      semanticsLabel:
-                          context.t.actions.taskHub.actions.increaseUrgency,
-                      decreaseTooltip:
-                          context.t.actions.taskHub.actions.decreaseUrgency,
-                      increaseTooltip:
-                          context.t.actions.taskHub.actions.increaseUrgency,
-                      onDecrease: () =>
-                          onQuickAction(TaskHubQuickAction.decreaseUrgency),
-                      onIncrease: () =>
-                          onQuickAction(TaskHubQuickAction.increaseUrgency),
-                    ),
-                    const SizedBox(width: 8),
-                    _TaskHubPriorityControl(
-                      key: ValueKey(
-                        'task_hub_page_priority_${entry.todo.id}_importance',
-                      ),
-                      stateKey: ValueKey(
-                        'task_hub_page_priority_${entry.todo.id}_importance_${entry.isExplicitlyImportant ? 'active' : 'inactive'}',
-                      ),
-                      decreaseButtonKey: ValueKey(
-                        'task_hub_page_priority_${entry.todo.id}_importance_decrease',
-                      ),
-                      increaseButtonKey: ValueKey(
-                        'task_hub_page_priority_${entry.todo.id}_importance_increase',
-                      ),
-                      icon: Icons.keyboard_double_arrow_up_rounded,
-                      isActive: entry.isExplicitlyImportant,
-                      canIncrease: true,
-                      semanticsLabel:
-                          context.t.actions.taskHub.actions.increaseImportance,
-                      decreaseTooltip:
-                          context.t.actions.taskHub.actions.decreaseImportance,
-                      increaseTooltip:
-                          context.t.actions.taskHub.actions.increaseImportance,
-                      onDecrease: () =>
-                          onQuickAction(TaskHubQuickAction.decreaseImportance),
-                      onIncrease: () =>
-                          onQuickAction(TaskHubQuickAction.increaseImportance),
+                    const SizedBox(width: 4),
+                    Icon(
+                      Icons.chevron_right_rounded,
+                      color: theme.colorScheme.onSurfaceVariant,
                     ),
                   ],
                 ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    for (final action in layout.$1)
+                      _TaskHubQuickButton(
+                        key: ValueKey(
+                          'task_hub_page_quick_${entry.todo.id}_${action.action.name}',
+                        ),
+                        label: action.label,
+                        icon: action.icon,
+                        tone: action.tone,
+                        onPressed: () => onQuickAction(action.action),
+                      ),
+                    if (layout.$2.isNotEmpty)
+                      _TaskHubQuickMenu(
+                        key: ValueKey(
+                            'task_hub_page_quick_${entry.todo.id}_more'),
+                        items: layout.$2,
+                        onSelected: onQuickAction,
+                      ),
+                  ],
+                ),
+                if (showPriorityControls && entry.todo.status != 'done') ...[
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      _TaskHubPriorityControl(
+                        key: ValueKey(
+                          'task_hub_page_priority_${entry.todo.id}_urgency',
+                        ),
+                        stateKey: ValueKey(
+                          'task_hub_page_priority_${entry.todo.id}_urgency_${_priorityStateSuffix(entry.manualUrgencyNudgeDirection)}',
+                        ),
+                        decreaseButtonKey: ValueKey(
+                          'task_hub_page_priority_${entry.todo.id}_urgency_decrease',
+                        ),
+                        increaseButtonKey: ValueKey(
+                          'task_hub_page_priority_${entry.todo.id}_urgency_increase',
+                        ),
+                        icon: Icons.priority_high_rounded,
+                        direction: entry.manualUrgencyNudgeDirection,
+                        semanticsLabel:
+                            context.t.actions.taskHub.actions.increaseUrgency,
+                        decreaseTooltip:
+                            context.t.actions.taskHub.actions.decreaseUrgency,
+                        increaseTooltip:
+                            context.t.actions.taskHub.actions.increaseUrgency,
+                        onDecrease: () =>
+                            onQuickAction(TaskHubQuickAction.decreaseUrgency),
+                        onIncrease: () =>
+                            onQuickAction(TaskHubQuickAction.increaseUrgency),
+                      ),
+                      const SizedBox(width: 8),
+                      _TaskHubPriorityControl(
+                        key: ValueKey(
+                          'task_hub_page_priority_${entry.todo.id}_importance',
+                        ),
+                        stateKey: ValueKey(
+                          'task_hub_page_priority_${entry.todo.id}_importance_${_priorityStateSuffix(entry.manualImportanceNudgeDirection)}',
+                        ),
+                        decreaseButtonKey: ValueKey(
+                          'task_hub_page_priority_${entry.todo.id}_importance_decrease',
+                        ),
+                        increaseButtonKey: ValueKey(
+                          'task_hub_page_priority_${entry.todo.id}_importance_increase',
+                        ),
+                        icon: Icons.keyboard_double_arrow_up_rounded,
+                        direction: entry.manualImportanceNudgeDirection,
+                        semanticsLabel: context
+                            .t.actions.taskHub.actions.increaseImportance,
+                        decreaseTooltip: context
+                            .t.actions.taskHub.actions.decreaseImportance,
+                        increaseTooltip: context
+                            .t.actions.taskHub.actions.increaseImportance,
+                        onDecrease: () => onQuickAction(
+                            TaskHubQuickAction.decreaseImportance),
+                        onIncrease: () => onQuickAction(
+                            TaskHubQuickAction.increaseImportance),
+                      ),
+                    ],
+                  ),
+                  if (entry.hasManualNudges) ...[
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
+                      children: [
+                        for (final item in _buildNudgePills(context, entry))
+                          _TaskHubNudgePill(
+                            key: ValueKey(
+                              'task_hub_page_nudge_${entry.todo.id}_${item.keySuffix}',
+                            ),
+                            label: item.label,
+                          ),
+                      ],
+                    ),
+                  ],
+                ],
               ],
-            ],
-          ),
-        ],
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -302,6 +336,72 @@ class TaskHubEntryCard extends StatelessWidget {
     if (entry.isSnoozed) return context.t.actions.taskHub.snoozedLabel;
     return context.t.actions.taskHub.decideLabel;
   }
+
+  String _priorityStateSuffix(TaskPriorityNudgeDirection direction) {
+    return switch (direction) {
+      TaskPriorityNudgeDirection.up => 'up',
+      TaskPriorityNudgeDirection.down => 'down',
+      TaskPriorityNudgeDirection.none => 'neutral',
+    };
+  }
+
+  List<_NudgePillData> _buildNudgePills(
+    BuildContext context,
+    TaskPriorityEntry entry,
+  ) {
+    final pills = <_NudgePillData>[];
+    switch (entry.manualUrgencyNudgeDirection) {
+      case TaskPriorityNudgeDirection.up:
+        pills.add(
+          _NudgePillData(
+            keySuffix: 'urgency_up',
+            label: context.t.actions.taskHub.nudges.urgencyRaised,
+          ),
+        );
+        break;
+      case TaskPriorityNudgeDirection.down:
+        pills.add(
+          _NudgePillData(
+            keySuffix: 'urgency_down',
+            label: context.t.actions.taskHub.nudges.urgencyLowered,
+          ),
+        );
+        break;
+      case TaskPriorityNudgeDirection.none:
+        break;
+    }
+    switch (entry.manualImportanceNudgeDirection) {
+      case TaskPriorityNudgeDirection.up:
+        pills.add(
+          _NudgePillData(
+            keySuffix: 'importance_up',
+            label: context.t.actions.taskHub.nudges.importanceRaised,
+          ),
+        );
+        break;
+      case TaskPriorityNudgeDirection.down:
+        pills.add(
+          _NudgePillData(
+            keySuffix: 'importance_down',
+            label: context.t.actions.taskHub.nudges.importanceLowered,
+          ),
+        );
+        break;
+      case TaskPriorityNudgeDirection.none:
+        break;
+    }
+    return pills;
+  }
+}
+
+class _NudgePillData {
+  const _NudgePillData({
+    required this.keySuffix,
+    required this.label,
+  });
+
+  final String keySuffix;
+  final String label;
 }
 
 class _TaskHubQuickButton extends StatelessWidget {
@@ -365,7 +465,7 @@ class _TaskHubQuickMenu extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final tokens = SlTokens.of(context);
-    final orderedItems = [...items]..sort(_compareTaskHubOverflowItems);
+    final orderedItems = [...items];
     final safeItems = orderedItems
         .where((item) => !_isDestructiveTaskHubQuickAction(item.action))
         .toList(growable: false);
@@ -424,12 +524,10 @@ PopupMenuItem<TaskHubQuickAction> _taskHubQuickMenuItem(
         const SizedBox(width: 8),
         Text(
           item.label,
-          style: foregroundColor == null && fontWeight == null
-              ? null
-              : TextStyle(
-                  color: foregroundColor,
-                  fontWeight: fontWeight,
-                ),
+          style: TextStyle(
+            color: foregroundColor,
+            fontWeight: fontWeight,
+          ),
         ),
       ],
     ),
@@ -455,32 +553,7 @@ _TaskHubOverflowEmphasis _taskHubOverflowEmphasisFor(
 }
 
 bool _isDestructiveTaskHubQuickAction(TaskHubQuickAction action) {
-  return _taskHubOverflowEmphasisFor(action) ==
-      _TaskHubOverflowEmphasis.destructive;
-}
-
-int _compareTaskHubOverflowItems(
-  TaskHubQuickActionItem left,
-  TaskHubQuickActionItem right,
-) {
-  return _taskHubOverflowPriority(left.action)
-      .compareTo(_taskHubOverflowPriority(right.action));
-}
-
-int _taskHubOverflowPriority(TaskHubQuickAction action) {
-  return switch (action) {
-    TaskHubQuickAction.today => 0,
-    TaskHubQuickAction.reopen => 10,
-    TaskHubQuickAction.start => 20,
-    TaskHubQuickAction.tomorrow => 30,
-    TaskHubQuickAction.redo => 40,
-    TaskHubQuickAction.increaseUrgency => 50,
-    TaskHubQuickAction.decreaseUrgency => 60,
-    TaskHubQuickAction.increaseImportance => 70,
-    TaskHubQuickAction.decreaseImportance => 80,
-    TaskHubQuickAction.done => 90,
-    TaskHubQuickAction.dismiss => 999,
-  };
+  return action == TaskHubQuickAction.dismiss;
 }
 
 class _TaskHubPriorityControl extends StatelessWidget {
@@ -489,8 +562,7 @@ class _TaskHubPriorityControl extends StatelessWidget {
     required this.decreaseButtonKey,
     required this.increaseButtonKey,
     required this.icon,
-    required this.isActive,
-    required this.canIncrease,
+    required this.direction,
     required this.semanticsLabel,
     required this.decreaseTooltip,
     required this.increaseTooltip,
@@ -503,45 +575,58 @@ class _TaskHubPriorityControl extends StatelessWidget {
   final Key decreaseButtonKey;
   final Key increaseButtonKey;
   final IconData icon;
-  final bool isActive;
-  final bool canIncrease;
+  final TaskPriorityNudgeDirection direction;
   final String semanticsLabel;
   final String decreaseTooltip;
   final String increaseTooltip;
   final VoidCallback onDecrease;
   final VoidCallback onIncrease;
 
+  bool get _isUp => direction == TaskPriorityNudgeDirection.up;
+  bool get _isDown => direction == TaskPriorityNudgeDirection.down;
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final tokens = SlTokens.of(context);
-    final borderColor = isActive
-        ? theme.colorScheme.primary.withOpacity(0.7)
-        : tokens.borderSubtle.withOpacity(0.9);
-    final backgroundColor = isActive
-        ? theme.colorScheme.primaryContainer.withOpacity(0.45)
-        : theme.colorScheme.surfaceContainerHighest.withOpacity(0.28);
-    final badgeColor = isActive
+    final highlightColor = _isUp
         ? theme.colorScheme.primary
+        : _isDown
+            ? theme.colorScheme.tertiary
+            : theme.colorScheme.outlineVariant;
+    final borderColor = (_isUp || _isDown)
+        ? highlightColor.withOpacity(0.7)
+        : tokens.borderSubtle.withOpacity(0.9);
+    final backgroundColor = (_isUp || _isDown)
+        ? (_isUp
+                ? theme.colorScheme.primaryContainer
+                : theme.colorScheme.tertiaryContainer)
+            .withOpacity(0.45)
+        : theme.colorScheme.surfaceContainerHighest.withOpacity(0.28);
+    final badgeColor = (_isUp || _isDown)
+        ? highlightColor
         : theme.colorScheme.surfaceContainerHighest;
-    final foregroundColor = isActive
-        ? theme.colorScheme.onPrimary
+    final foregroundColor = (_isUp || _isDown)
+        ? (_isUp ? theme.colorScheme.onPrimary : theme.colorScheme.onTertiary)
         : theme.colorScheme.onSurfaceVariant;
     return Semantics(
       label: semanticsLabel,
-      enabled: canIncrease,
+      enabled: true,
       child: AnimatedContainer(
         key: stateKey,
         duration: const Duration(milliseconds: 180),
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
         decoration: BoxDecoration(
           color: backgroundColor,
-          border: Border.all(color: borderColor, width: isActive ? 1.5 : 1),
+          border: Border.all(
+            color: borderColor,
+            width: (_isUp || _isDown) ? 1.5 : 1,
+          ),
           borderRadius: BorderRadius.circular(tokens.radiusLg),
-          boxShadow: isActive
+          boxShadow: (_isUp || _isDown)
               ? [
                   BoxShadow(
-                    color: theme.colorScheme.primary.withOpacity(0.14),
+                    color: highlightColor.withOpacity(0.14),
                     blurRadius: 12,
                     offset: const Offset(0, 3),
                   ),
@@ -566,9 +651,7 @@ class _TaskHubPriorityControl extends StatelessWidget {
               width: 6,
               height: 6,
               decoration: BoxDecoration(
-                color: isActive
-                    ? theme.colorScheme.primary
-                    : theme.colorScheme.outlineVariant,
+                color: highlightColor,
                 borderRadius: BorderRadius.circular(99),
               ),
             ),
@@ -580,7 +663,7 @@ class _TaskHubPriorityControl extends StatelessWidget {
                   key: decreaseButtonKey,
                   icon: Icons.remove_rounded,
                   tooltip: decreaseTooltip,
-                  emphasize: false,
+                  emphasize: _isDown,
                   enabled: true,
                   onPressed: onDecrease,
                 ),
@@ -589,13 +672,43 @@ class _TaskHubPriorityControl extends StatelessWidget {
                   key: increaseButtonKey,
                   icon: Icons.add_rounded,
                   tooltip: increaseTooltip,
-                  emphasize: true,
-                  enabled: canIncrease,
+                  emphasize: _isUp,
+                  enabled: true,
                   onPressed: onIncrease,
                 ),
               ],
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _TaskHubNudgePill extends StatelessWidget {
+  const _TaskHubNudgePill({
+    required this.label,
+    super.key,
+  });
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final tokens = SlTokens.of(context);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerHighest.withOpacity(0.55),
+        borderRadius: BorderRadius.circular(99),
+        border: Border.all(color: tokens.borderSubtle.withOpacity(0.85)),
+      ),
+      child: Text(
+        label,
+        style: theme.textTheme.labelSmall?.copyWith(
+          color: theme.colorScheme.onSurfaceVariant,
+          fontWeight: FontWeight.w600,
         ),
       ),
     );
