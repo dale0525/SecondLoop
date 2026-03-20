@@ -284,6 +284,57 @@ void main() {
           await backend.listTodoChecklistItems(key, 'todo:web'), hasLength(1));
     });
 
+    test('supports todo activity note, move, and range listing on web backend',
+        () async {
+      final backend = CloudWebBackend(
+        chatClient: _FakeCloudWebChatClient(responseText: 'ok'),
+        nowMs: () => 1000,
+      );
+      final key = Uint8List(0);
+      await backend.upsertTodo(
+        key,
+        id: 'todo:web-a',
+        title: 'Task A',
+        status: 'open',
+      );
+      await backend.upsertTodo(
+        key,
+        id: 'todo:web-b',
+        title: 'Task B',
+        status: 'open',
+      );
+
+      final activity = await backend.appendTodoNote(
+        key,
+        todoId: 'todo:web-a',
+        content: 'Initial note',
+        sourceMessageId: 'message-1',
+      );
+
+      final listedA = await backend.listTodoActivities(key, 'todo:web-a');
+      expect(listedA, hasLength(1));
+      expect(listedA.single.content, 'Initial note');
+      expect(listedA.single.sourceMessageId, 'message-1');
+
+      final moved = await backend.moveTodoActivity(
+        key,
+        activityId: activity.id,
+        toTodoId: 'todo:web-b',
+      );
+
+      expect(moved.todoId, 'todo:web-b');
+      expect(await backend.listTodoActivities(key, 'todo:web-a'), isEmpty);
+      expect(await backend.listTodoActivities(key, 'todo:web-b'), hasLength(1));
+
+      final ranged = await backend.listTodoActivitiesInRange(
+        key,
+        startAtMsInclusive: 900,
+        endAtMsExclusive: 1100,
+      );
+      expect(ranged, hasLength(1));
+      expect(ranged.single.id, activity.id);
+    });
+
     test('task hub quick actions can transition todos on web backend',
         () async {
       final backend = CloudWebBackend(

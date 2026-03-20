@@ -44,6 +44,8 @@ final class CloudWebBackend extends AppBackend implements AttachmentsBackend {
   final Map<String, List<String>> _attachmentShasByMessageId =
       <String, List<String>>{};
   final Map<String, Todo> _todosById = <String, Todo>{};
+  final Map<String, TodoActivity> _todoActivitiesById =
+      <String, TodoActivity>{};
   final Map<String, List<TodoChecklistItem>> _checklistItemsByTodoId =
       <String, List<TodoChecklistItem>>{};
   final Map<String, _DeletedMessageSnapshot> _deletedMessagesById =
@@ -106,6 +108,7 @@ final class CloudWebBackend extends AppBackend implements AttachmentsBackend {
     _attachmentBytesBySha.clear();
     _attachmentShasByMessageId.clear();
     _todosById.clear();
+    _todoActivitiesById.clear();
     _checklistItemsByTodoId.clear();
     _deletedMessagesById.clear();
     _idCounter = 0;
@@ -114,6 +117,20 @@ final class CloudWebBackend extends AppBackend implements AttachmentsBackend {
   List<TodoChecklistItem> _checklistBucket(String todoId) {
     return _checklistItemsByTodoId.putIfAbsent(
         todoId, () => <TodoChecklistItem>[]);
+  }
+
+  List<TodoActivity> _sortedActivities(Iterable<TodoActivity> activities) {
+    final copy = activities.toList(growable: false)
+      ..sort(
+        (left, right) {
+          final byCreatedAt = left.createdAtMs.compareTo(right.createdAtMs);
+          if (byCreatedAt != 0) {
+            return byCreatedAt;
+          }
+          return left.id.compareTo(right.id);
+        },
+      );
+    return copy;
   }
 
   TodoChecklistItem _findChecklistItem(String itemId) {
@@ -465,6 +482,59 @@ final class CloudWebBackend extends AppBackend implements AttachmentsBackend {
     required String todoId,
   }) async {
     _todosById.remove(todoId);
+    _todoActivitiesById.removeWhere(
+      (_, activity) => activity.todoId == todoId,
+    );
+    _checklistItemsByTodoId.remove(todoId);
+  }
+
+  @override
+  Future<TodoActivity> appendTodoNote(
+    Uint8List key, {
+    required String todoId,
+    required String content,
+    String? sourceMessageId,
+  }) async {
+    if (!_todosById.containsKey(todoId)) {
+      throw StateError('unknown_todo:$todoId');
+    }
+    final activity = TodoActivity(
+      id: _nextId('activity'),
+      todoId: todoId,
+      activityType: 'note',
+      content: content,
+      sourceMessageId: sourceMessageId,
+      createdAtMs: _asPlatformInt64(_touchNow()),
+    );
+    _todoActivitiesById[activity.id] = activity;
+    return activity;
+  }
+
+  @override
+  Future<TodoActivity> moveTodoActivity(
+    Uint8List key, {
+    required String activityId,
+    required String toTodoId,
+  }) async {
+    if (!_todosById.containsKey(toTodoId)) {
+      throw StateError('unknown_todo:$toTodoId');
+    }
+    final existing = _todoActivitiesById[activityId];
+    if (existing == null) {
+      throw StateError('unknown_todo_activity:$activityId');
+    }
+    final moved = TodoActivity(
+      id: existing.id,
+      todoId: toTodoId,
+      activityType: existing.activityType,
+      fromStatus: existing.fromStatus,
+      toStatus: existing.toStatus,
+      content: existing.content,
+      sourceMessageId: existing.sourceMessageId,
+      createdAtMs: existing.createdAtMs,
+    );
+    _todoActivitiesById[activityId] = moved;
+    return moved;
   }
 
   @override
@@ -633,6 +703,31 @@ final class CloudWebBackend extends AppBackend implements AttachmentsBackend {
       );
     }
     return progress;
+  }
+
+  @override
+  Future<List<TodoActivity>> listTodoActivities(
+    Uint8List key,
+    String todoId,
+  ) async {
+    return _sortedActivities(
+      _todoActivitiesById.values.where((activity) => activity.todoId == todoId),
+    );
+  }
+
+  @override
+  Future<List<TodoActivity>> listTodoActivitiesInRange(
+    Uint8List key, {
+    required int startAtMsInclusive,
+    required int endAtMsExclusive,
+  }) async {
+    return _sortedActivities(
+      _todoActivitiesById.values.where(
+        (activity) =>
+            activity.createdAtMs >= startAtMsInclusive &&
+            activity.createdAtMs < endAtMsExclusive,
+      ),
+    );
   }
 
   @override
