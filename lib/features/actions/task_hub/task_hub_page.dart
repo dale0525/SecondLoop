@@ -24,6 +24,8 @@ import 'task_priority_models.dart';
 import 'task_priority_store.dart';
 import '../todo/todo_detail_page.dart';
 
+part 'task_hub_page_navigation.dart';
+
 class TaskHubPage extends StatefulWidget {
   const TaskHubPage({super.key});
 
@@ -178,7 +180,10 @@ class _TaskHubPageState extends State<TaskHubPage> {
   Future<void> _openTodoDetail(TaskPriorityEntry entry) async {
     await Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => TodoDetailPage(initialTodo: entry.todo),
+        builder: (_) => _wrapPushedPageWithScopes(
+          context,
+          TodoDetailPage(initialTodo: entry.todo),
+        ),
       ),
     );
     if (!mounted) return;
