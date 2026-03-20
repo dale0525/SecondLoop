@@ -7,6 +7,7 @@ import '../../core/ai/task_priority_ai_enhancement_prefs.dart';
 import '../../core/ai/ai_routing.dart';
 import '../../core/backend/app_backend.dart';
 import '../../core/cloud/cloud_auth_scope.dart';
+import '../../core/navigation/inherited_scope_page_wrapper.dart';
 import '../../core/session/session_scope.dart';
 import '../../core/subscription/subscription_scope.dart';
 import '../../i18n/strings.g.dart';
@@ -89,20 +90,20 @@ class _AiSmartOrganizationSettingsPageState
     if (enabled && !canUseSmartOrganization) {
       if (subscriptionStatus == SubscriptionStatus.entitled &&
           !hasCloudAccount) {
-        await Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (_) => const CloudAccountPage(),
-          ),
+        await pushPageWithInheritedScopes(
+          Navigator.of(context),
+          context,
+          const CloudAccountPage(),
         );
         if (!mounted) return;
         await _reload(forceLoading: false);
         return;
       }
 
-      await Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (_) => const LlmProfilesPage(),
-        ),
+      await pushPageWithInheritedScopes(
+        Navigator.of(context),
+        context,
+        const LlmProfilesPage(),
       );
       if (!mounted) return;
       await _reload(forceLoading: false);
@@ -248,13 +249,13 @@ class _AiSmartOrganizationSettingsPageState
                   title: Text(t.actions.reviewAdvanced),
                   trailing: const Icon(Icons.chevron_right),
                   onTap: () {
-                    Navigator.of(context).pushReplacement(
-                      MaterialPageRoute(
-                        builder: (_) => const AiSettingsPage(
-                          focusSection: AiSettingsSection.embeddings,
-                          highlightFocus: true,
-                          expandAdvancedOnOpen: true,
-                        ),
+                    pushReplacementPageWithInheritedScopes(
+                      Navigator.of(context),
+                      context,
+                      const AiSettingsPage(
+                        focusSection: AiSettingsSection.embeddings,
+                        highlightFocus: true,
+                        expandAdvancedOnOpen: true,
                       ),
                     );
                   },

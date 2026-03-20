@@ -6,15 +6,30 @@ import '../session/session_scope.dart';
 import '../subscription/subscription_scope.dart';
 import '../sync/sync_engine_gate.dart';
 
+MaterialPageRoute<T> pageRouteWithInheritedScopes<T>(
+  BuildContext context,
+  Widget child,
+) {
+  return MaterialPageRoute<T>(
+    builder: (_) => wrapPushedPageWithInheritedScopes(context, child),
+  );
+}
+
 Future<T?> pushPageWithInheritedScopes<T>(
   NavigatorState navigator,
   BuildContext context,
   Widget child,
 ) {
-  return navigator.push<T>(
-    MaterialPageRoute(
-      builder: (_) => wrapPushedPageWithInheritedScopes(context, child),
-    ),
+  return navigator.push<T>(pageRouteWithInheritedScopes<T>(context, child));
+}
+
+Future<T?> pushReplacementPageWithInheritedScopes<T, TO>(
+  NavigatorState navigator,
+  BuildContext context,
+  Widget child,
+) {
+  return navigator.pushReplacement<T, TO>(
+    pageRouteWithInheritedScopes<T>(context, child),
   );
 }
 

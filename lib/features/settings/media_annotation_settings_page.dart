@@ -16,6 +16,7 @@ import '../../core/content_enrichment/content_enrichment_config_store.dart';
 import '../../core/content_enrichment/linux_ocr_model_store.dart';
 import '../../core/content_enrichment/multimodal_ocr.dart';
 import '../../core/media_annotation/media_annotation_config_store.dart';
+import '../../core/navigation/inherited_scope_page_wrapper.dart';
 import '../../core/session/session_scope.dart';
 import '../../core/subscription/subscription_scope.dart';
 import '../audio_transcribe/audio_transcribe_runner.dart';
@@ -218,11 +219,11 @@ class _MediaAnnotationSettingsPageState
         reason: context.t.settings.mediaAnnotation.setupRequired.reasons
             .byokOpenAiCompatible,
         onOpen: () async {
-          await Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (_) => const LlmProfilesPage(
-                providerFilter: LlmProfilesProviderFilter.openAiCompatibleOnly,
-              ),
+          await pushPageWithInheritedScopes(
+            Navigator.of(context),
+            context,
+            const LlmProfilesPage(
+              providerFilter: LlmProfilesProviderFilter.openAiCompatibleOnly,
             ),
           );
         },
@@ -337,8 +338,10 @@ class _MediaAnnotationSettingsPageState
           reason: context.t.settings.mediaAnnotation.setupRequired.reasons
               .cloudRequiresPro,
           onOpen: () async {
-            await Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const CloudAccountPage()),
+            await pushPageWithInheritedScopes(
+              Navigator.of(context),
+              context,
+              const CloudAccountPage(),
             );
           },
         );
@@ -349,8 +352,10 @@ class _MediaAnnotationSettingsPageState
           reason: context
               .t.settings.mediaAnnotation.setupRequired.reasons.cloudSignIn,
           onOpen: () async {
-            await Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const CloudAccountPage()),
+            await pushPageWithInheritedScopes(
+              Navigator.of(context),
+              context,
+              const CloudAccountPage(),
             );
           },
         );
@@ -447,11 +452,11 @@ class _MediaAnnotationSettingsPageState
       reason:
           context.t.settings.mediaAnnotation.setupRequired.reasons.followAskAi,
       onOpen: () async {
-        await Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (_) => const LlmProfilesPage(
-              providerFilter: LlmProfilesProviderFilter.openAiCompatibleOnly,
-            ),
+        await pushPageWithInheritedScopes(
+          Navigator.of(context),
+          context,
+          const LlmProfilesPage(
+            providerFilter: LlmProfilesProviderFilter.openAiCompatibleOnly,
           ),
         );
       },

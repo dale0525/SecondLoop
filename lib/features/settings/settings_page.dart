@@ -27,6 +27,7 @@ import '../../core/desktop/desktop_quick_capture_hotkey_prefs.dart';
 import '../../core/desktop/system_hotkey_conflicts.dart';
 import '../../core/desktop/system_hotkey_recorder.dart';
 import '../../core/update/update_badge_prefs.dart';
+import '../../core/navigation/inherited_scope_page_wrapper.dart';
 import '../../src/rust/api/oplog_maintenance.dart' as rust_oplog_maintenance;
 import '../../i18n/locale_prefs.dart';
 import '../../i18n/strings.g.dart';
