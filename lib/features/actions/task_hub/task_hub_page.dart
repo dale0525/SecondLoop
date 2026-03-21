@@ -75,6 +75,27 @@ class _TaskHubPageState extends State<TaskHubPage> {
       resolveAiService: _resolveAiService,
       resolveAiCacheScopeKey: _resolveAiCacheScopeKey,
       isAiEnhancementEnabled: TaskPriorityAiEnhancementPrefs.read,
+      readSharedAiAssessments: ({
+        required aiService,
+        required cacheScopeKey,
+        required nowLocal,
+      }) async =>
+          aiService is BackendTaskPriorityAiService
+              ? aiService.readSharedAssessments(nowLocal: nowLocal)
+              : const <String, TaskPriorityAiCachedAssessment>{},
+      writeSharedAiAssessments: ({
+        required aiService,
+        required cacheScopeKey,
+        required entries,
+        required activeTodoIds,
+      }) async {
+        if (aiService is BackendTaskPriorityAiService) {
+          await aiService.writeSharedAssessments(
+            entries: entries,
+            activeTodoIds: activeTodoIds,
+          );
+        }
+      },
       feedbackStore: _feedbackStore,
     );
     unawaited(_store!.refresh());

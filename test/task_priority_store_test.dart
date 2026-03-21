@@ -894,7 +894,7 @@ void main() {
   });
 }
 
-final class _FakeAiService implements TaskPriorityAiService {
+final class _FakeAiService extends TaskPriorityAiService {
   _FakeAiService(this._future);
 
   @override
@@ -908,7 +908,7 @@ final class _FakeAiService implements TaskPriorityAiService {
   }
 }
 
-final class _CountingAiService implements TaskPriorityAiService {
+final class _CountingAiService extends TaskPriorityAiService {
   _CountingAiService(this._result, {this.cacheScopeKey = 'counting'});
 
   final TaskPriorityAiBatchResult _result;
@@ -924,7 +924,7 @@ final class _CountingAiService implements TaskPriorityAiService {
   }
 }
 
-final class _StickyAwareAiService implements TaskPriorityAiService {
+final class _StickyAwareAiService extends TaskPriorityAiService {
   @override
   String get cacheScopeKey => 'sticky-aware';
 
@@ -953,8 +953,7 @@ final class _StickyAwareAiService implements TaskPriorityAiService {
   }
 }
 
-final class _SemanticStickyInvalidationAiService
-    implements TaskPriorityAiService {
+final class _SemanticStickyInvalidationAiService extends TaskPriorityAiService {
   @override
   String get cacheScopeKey => 'semantic-sticky';
 

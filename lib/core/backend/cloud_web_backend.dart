@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
 import '../../src/rust/db.dart';
@@ -34,10 +35,28 @@ final class CloudWebBackend extends AppBackend
     implements AttachmentsBackend {
   CloudWebBackend({
     required this.chatClient,
+    Future<Map<String, Object?>> Function({
+      required String idToken,
+      required String cacheScopeKey,
+    })? fetchTaskPriorityAssessments,
+    Future<void> Function({
+      required String idToken,
+      required Map<String, Object?> payload,
+    })? upsertTaskPriorityAssessments,
     int Function()? nowMs,
-  }) : _nowMs = nowMs ?? (() => DateTime.now().millisecondsSinceEpoch);
+  })  : _fetchTaskPriorityAssessments = fetchTaskPriorityAssessments,
+        _upsertTaskPriorityAssessments = upsertTaskPriorityAssessments,
+        _nowMs = nowMs ?? (() => DateTime.now().millisecondsSinceEpoch);
 
   final CloudWebChatClient chatClient;
+  final Future<Map<String, Object?>> Function({
+    required String idToken,
+    required String cacheScopeKey,
+  })? _fetchTaskPriorityAssessments;
+  final Future<void> Function({
+    required String idToken,
+    required Map<String, Object?> payload,
+  })? _upsertTaskPriorityAssessments;
   final int Function() _nowMs;
 
   final List<Conversation> _conversations = <Conversation>[];
@@ -512,6 +531,48 @@ final class CloudWebBackend extends AppBackend
       messages: <Map<String, String>>[
         <String, String>{'role': 'user', 'content': prompt},
       ],
+    );
+  }
+
+  @override
+  Future<String> fetchTaskPriorityAiAssessmentsCloudGateway(
+    Uint8List key, {
+    required String gatewayBaseUrl,
+    required String idToken,
+    required String cacheScopeKey,
+  }) async {
+    final fetcher = _fetchTaskPriorityAssessments;
+    if (fetcher == null) {
+      throw UnsupportedError(
+          'task priority shared assessments are not available in web');
+    }
+    final json = await fetcher(
+      idToken: idToken,
+      cacheScopeKey: cacheScopeKey,
+    );
+    return jsonEncode(json);
+  }
+
+  @override
+  Future<void> upsertTaskPriorityAiAssessmentsCloudGateway(
+    Uint8List key, {
+    required String gatewayBaseUrl,
+    required String idToken,
+    required String cacheScopeKey,
+    required String payloadJson,
+  }) async {
+    final upserter = _upsertTaskPriorityAssessments;
+    if (upserter == null) {
+      throw UnsupportedError(
+          'task priority shared assessments are not available in web');
+    }
+    final decoded = jsonDecode(payloadJson);
+    if (decoded is! Map) {
+      throw const FormatException('invalid_task_priority_assessment_payload');
+    }
+    await upserter(
+      idToken: idToken,
+      payload: decoded.map((key, value) => MapEntry(key.toString(), value)),
     );
   }
 

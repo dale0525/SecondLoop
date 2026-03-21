@@ -7,10 +7,57 @@ import '../../../src/rust/db.dart';
 import 'task_priority_ai_models.dart';
 import 'task_priority_models.dart';
 
-abstract interface class TaskPriorityAiService {
+abstract class TaskPriorityAiService {
+  const TaskPriorityAiService();
+
   String get cacheScopeKey;
 
   Future<TaskPriorityAiBatchResult> rerank(TaskPriorityAiRequest request);
+
+  Future<Map<String, TaskPriorityAiCachedAssessment>> readSharedAssessments({
+    required DateTime nowLocal,
+  }) async =>
+      const <String, TaskPriorityAiCachedAssessment>{};
+
+  Future<void> writeSharedAssessments({
+    required Map<String, TaskPriorityAiCachedAssessment> entries,
+    required Iterable<String> activeTodoIds,
+  }) async {}
+}
+
+class TaskPriorityAiCachedAssessment {
+  const TaskPriorityAiCachedAssessment({
+    required this.entry,
+    required this.requestSignature,
+    required this.computedAtLocal,
+  });
+
+  final TaskPriorityAiEntry entry;
+  final String requestSignature;
+  final DateTime computedAtLocal;
+
+  Map<String, Object?> toJson() {
+    return <String, Object?>{
+      'entry': entry.toJson(),
+      'request_signature': requestSignature,
+      'computed_at_ms': computedAtLocal.millisecondsSinceEpoch,
+    };
+  }
+
+  static TaskPriorityAiCachedAssessment? fromJson(Map<String, Object?> json) {
+    final entryJson = json['entry'];
+    if (entryJson is! Map) return null;
+    final computedAtMs = json['computed_at_ms'];
+    if (computedAtMs is! num) return null;
+    return TaskPriorityAiCachedAssessment(
+      entry: TaskPriorityAiEntry.fromJson(
+        entryJson.map((key, value) => MapEntry(key.toString(), value)),
+      ),
+      requestSignature: (json['request_signature'] ?? '').toString(),
+      computedAtLocal:
+          DateTime.fromMillisecondsSinceEpoch(computedAtMs.toInt()),
+    );
+  }
 }
 
 String buildTaskPriorityAiCacheScopeKey({
@@ -153,6 +200,117 @@ class BackendTaskPriorityAiService implements TaskPriorityAiService {
   final String _modelName;
   final String _localeTag;
   final String? _cacheScopeKeyOverride;
+
+  Future<String> _fetchSharedAssessmentsRaw() {
+    return _backend.fetchTaskPriorityAiAssessmentsCloudGateway(
+      _sessionKey,
+      gatewayBaseUrl: _gatewayBaseUrl,
+      idToken: _idToken,
+      cacheScopeKey: cacheScopeKey,
+    );
+  }
+
+  Future<void> _upsertSharedAssessmentsRaw(String payloadJson) {
+    return _backend.upsertTaskPriorityAiAssessmentsCloudGateway(
+      _sessionKey,
+      gatewayBaseUrl: _gatewayBaseUrl,
+      idToken: _idToken,
+      cacheScopeKey: cacheScopeKey,
+      payloadJson: payloadJson,
+    );
+  }
+
+  @override
+  Future<Map<String, TaskPriorityAiCachedAssessment>> readSharedAssessments({
+    required DateTime nowLocal,
+  }) async {
+    if (_route != AskAiRouteKind.cloudGateway) {
+      return const <String, TaskPriorityAiCachedAssessment>{};
+    }
+    final normalizedIdToken = _idToken.trim();
+    final normalizedScopeKey = cacheScopeKey.trim();
+    if (normalizedIdToken.isEmpty || normalizedScopeKey.isEmpty) {
+      return const <String, TaskPriorityAiCachedAssessment>{};
+    }
+    try {
+      final raw = await _fetchSharedAssessmentsRaw();
+      if (raw.trim().isEmpty) {
+        return const <String, TaskPriorityAiCachedAssessment>{};
+      }
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map) {
+        return const <String, TaskPriorityAiCachedAssessment>{};
+      }
+      final data = decoded.map((key, value) => MapEntry(key.toString(), value));
+      final rawEntries = data['entries'];
+      if (rawEntries is! List) {
+        return const <String, TaskPriorityAiCachedAssessment>{};
+      }
+      final entries = <String, TaskPriorityAiCachedAssessment>{};
+      for (final rawEntry in rawEntries) {
+        if (rawEntry is! Map) continue;
+        final entryJson =
+            rawEntry.map((key, value) => MapEntry(key.toString(), value));
+        final todoId = (entryJson['todo_id'] ?? '').toString().trim();
+        if (todoId.isEmpty) continue;
+        final computedAtMs = entryJson['computed_at_ms'];
+        final parsedComputedAtMs = computedAtMs is num
+            ? computedAtMs.toInt()
+            : int.tryParse('${computedAtMs ?? ''}');
+        if (parsedComputedAtMs == null) continue;
+        entries[todoId] = TaskPriorityAiCachedAssessment(
+          entry: TaskPriorityAiEntry.fromJson(entryJson),
+          requestSignature: (entryJson['request_signature'] ?? '').toString(),
+          computedAtLocal:
+              DateTime.fromMillisecondsSinceEpoch(parsedComputedAtMs),
+        );
+      }
+      return entries;
+    } catch (_) {
+      return const <String, TaskPriorityAiCachedAssessment>{};
+    }
+  }
+
+  @override
+  Future<void> writeSharedAssessments({
+    required Map<String, TaskPriorityAiCachedAssessment> entries,
+    required Iterable<String> activeTodoIds,
+  }) async {
+    if (_route != AskAiRouteKind.cloudGateway) return;
+    final normalizedIdToken = _idToken.trim();
+    final normalizedScopeKey = cacheScopeKey.trim();
+    if (normalizedIdToken.isEmpty || normalizedScopeKey.isEmpty) return;
+    final activeIds = activeTodoIds
+        .map((value) => value.trim())
+        .where((value) => value.isNotEmpty)
+        .toSet();
+    final payloadEntries = <Object?>[];
+    var updatedAtMs = 0;
+    for (final entry in entries.entries) {
+      if (!activeIds.contains(entry.key)) continue;
+      final computedAtMs = entry.value.computedAtLocal.millisecondsSinceEpoch;
+      if (computedAtMs > updatedAtMs) updatedAtMs = computedAtMs;
+      payloadEntries.add(<String, Object?>{
+        ...entry.value.entry.toJson(),
+        'request_signature': entry.value.requestSignature,
+        'computed_at_ms': computedAtMs,
+      });
+    }
+    try {
+      await _upsertSharedAssessmentsRaw(
+        jsonEncode(<String, Object?>{
+          'scope': normalizedScopeKey,
+          'route': _route.name,
+          'model_name': _modelName,
+          'locale_tag': _localeTag,
+          'updated_at_ms': updatedAtMs > 0 ? updatedAtMs : null,
+          'entries': payloadEntries,
+        }),
+      );
+    } catch (_) {
+      // Ignore shared cache write failures.
+    }
+  }
 
   @override
   String get cacheScopeKey =>

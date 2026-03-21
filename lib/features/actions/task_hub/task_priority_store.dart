@@ -34,6 +34,17 @@ class TaskPriorityStore extends ChangeNotifier {
     Future<TaskPriorityAiService?> Function()? resolveAiService,
     Future<String?> Function()? resolveAiCacheScopeKey,
     Future<bool> Function()? isAiEnhancementEnabled,
+    Future<Map<String, TaskPriorityAiCachedAssessment>> Function({
+      required TaskPriorityAiService? aiService,
+      required String cacheScopeKey,
+      required DateTime nowLocal,
+    })? readSharedAiAssessments,
+    Future<void> Function({
+      required TaskPriorityAiService? aiService,
+      required String cacheScopeKey,
+      required Map<String, TaskPriorityAiCachedAssessment> entries,
+      required Iterable<String> activeTodoIds,
+    })? writeSharedAiAssessments,
     TaskPriorityFeedbackStore feedbackStore = const TaskPriorityFeedbackStore(),
     Duration aiCacheTtl = const Duration(minutes: 15),
   })  : _loadTodos = loadTodos,
@@ -42,6 +53,8 @@ class TaskPriorityStore extends ChangeNotifier {
         _resolveAiService = resolveAiService,
         _resolveAiCacheScopeKey = resolveAiCacheScopeKey,
         _isAiEnhancementEnabled = isAiEnhancementEnabled,
+        _readSharedAiAssessments = readSharedAiAssessments,
+        _writeSharedAiAssessments = writeSharedAiAssessments,
         _feedbackStore = feedbackStore,
         _aiCacheTtl = aiCacheTtl;
 
@@ -53,6 +66,17 @@ class TaskPriorityStore extends ChangeNotifier {
     Future<TaskPriorityAiService?> Function()? resolveAiService,
     Future<String?> Function()? resolveAiCacheScopeKey,
     Future<bool> Function()? isAiEnhancementEnabled,
+    Future<Map<String, TaskPriorityAiCachedAssessment>> Function({
+      required TaskPriorityAiService? aiService,
+      required String cacheScopeKey,
+      required DateTime nowLocal,
+    })? readSharedAiAssessments,
+    Future<void> Function({
+      required TaskPriorityAiService? aiService,
+      required String cacheScopeKey,
+      required Map<String, TaskPriorityAiCachedAssessment> entries,
+      required Iterable<String> activeTodoIds,
+    })? writeSharedAiAssessments,
     TaskPriorityFeedbackStore feedbackStore = const TaskPriorityFeedbackStore(),
   }) {
     return TaskPriorityStore.fromLoaders(
@@ -68,6 +92,8 @@ class TaskPriorityStore extends ChangeNotifier {
       resolveAiService: resolveAiService,
       resolveAiCacheScopeKey: resolveAiCacheScopeKey,
       isAiEnhancementEnabled: isAiEnhancementEnabled,
+      readSharedAiAssessments: readSharedAiAssessments,
+      writeSharedAiAssessments: writeSharedAiAssessments,
       feedbackStore: feedbackStore,
     );
   }
@@ -78,6 +104,17 @@ class TaskPriorityStore extends ChangeNotifier {
   final Future<TaskPriorityAiService?> Function()? _resolveAiService;
   final Future<String?> Function()? _resolveAiCacheScopeKey;
   final Future<bool> Function()? _isAiEnhancementEnabled;
+  final Future<Map<String, TaskPriorityAiCachedAssessment>> Function({
+    required TaskPriorityAiService? aiService,
+    required String cacheScopeKey,
+    required DateTime nowLocal,
+  })? _readSharedAiAssessments;
+  final Future<void> Function({
+    required TaskPriorityAiService? aiService,
+    required String cacheScopeKey,
+    required Map<String, TaskPriorityAiCachedAssessment> entries,
+    required Iterable<String> activeTodoIds,
+  })? _writeSharedAiAssessments;
   final TaskPriorityFeedbackStore _feedbackStore;
   final Duration _aiCacheTtl;
 
@@ -218,18 +255,31 @@ class TaskPriorityStore extends ChangeNotifier {
           cacheScopeKey != null && cacheScopeKey.isNotEmpty;
       final canUseInMemoryCache = !canUsePersistedCache;
 
+      final sharedPersisted = canUsePersistedCache
+          ? await _readSharedAiAssessments?.call(
+                aiService: aiService,
+                cacheScopeKey: cacheScopeKey,
+                nowLocal: nowLocal,
+              ) ??
+              const <String, TaskPriorityAiCachedAssessment>{}
+          : const <String, TaskPriorityAiCachedAssessment>{};
       final persisted = canUsePersistedCache
           ? await _readPersistedAiAssessments(
               cacheScopeKey: cacheScopeKey,
               nowLocal: nowLocal,
             )
-          : const <String, _PersistedAiAssessment>{};
+          : const <String, TaskPriorityAiCachedAssessment>{};
       final memoryCached = canUseInMemoryCache
           ? _readInMemoryAiAssessments(nowLocal: nowLocal)
-          : const <String, _PersistedAiAssessment>{};
+          : const <String, TaskPriorityAiCachedAssessment>{};
       final freshEntries = <String, TaskPriorityAiEntry>{};
-      final mergedPersisted = Map<String, _PersistedAiAssessment>.from(
-        canUsePersistedCache ? persisted : memoryCached,
+      final mergedPersisted = Map<String, TaskPriorityAiCachedAssessment>.from(
+        canUsePersistedCache
+            ? <String, TaskPriorityAiCachedAssessment>{
+                ...persisted,
+                ...sharedPersisted
+              }
+            : memoryCached,
       );
       final staleCandidates = <TaskPriorityAiCandidate>[];
       final candidateByTodoId = <String, TaskPriorityAiCandidate>{
@@ -291,7 +341,7 @@ class TaskPriorityStore extends ChangeNotifier {
               nowLocal: nowLocal,
             );
             freshEntries[entry.todoId] = entry;
-            mergedPersisted[entry.todoId] = _PersistedAiAssessment(
+            mergedPersisted[entry.todoId] = TaskPriorityAiCachedAssessment(
               entry: entry,
               requestSignature: requestSignature,
               computedAtLocal: nowLocal,
@@ -305,6 +355,12 @@ class TaskPriorityStore extends ChangeNotifier {
 
       if (canUsePersistedCache) {
         await _writePersistedAiAssessments(
+          cacheScopeKey: cacheScopeKey,
+          entries: mergedPersisted,
+          activeTodoIds: _snapshot.activeEntries.map((entry) => entry.todo.id),
+        );
+        await _writeSharedAiAssessments?.call(
+          aiService: aiService,
           cacheScopeKey: cacheScopeKey,
           entries: mergedPersisted,
           activeTodoIds: _snapshot.activeEntries.map((entry) => entry.todo.id),
@@ -351,7 +407,8 @@ class TaskPriorityStore extends ChangeNotifier {
     _stickyFocusDueStateByTodoId = _buildStickyStateSignatures(_snapshot);
   }
 
-  Future<Map<String, _PersistedAiAssessment>> _readPersistedAiAssessments({
+  Future<Map<String, TaskPriorityAiCachedAssessment>>
+      _readPersistedAiAssessments({
     required String cacheScopeKey,
     required DateTime nowLocal,
   }) async {
@@ -359,30 +416,30 @@ class TaskPriorityStore extends ChangeNotifier {
       final prefs = await SharedPreferences.getInstance();
       final raw = prefs.getString(_kAiCachePrefsKey);
       if (raw == null || raw.trim().isEmpty) {
-        return const <String, _PersistedAiAssessment>{};
+        return const <String, TaskPriorityAiCachedAssessment>{};
       }
       final decoded = jsonDecode(raw);
       if (decoded is! Map) {
-        return const <String, _PersistedAiAssessment>{};
+        return const <String, TaskPriorityAiCachedAssessment>{};
       }
       final data = decoded.map((key, value) => MapEntry(key.toString(), value));
       final rawScopes = data['scopes'];
       if (rawScopes is! Map) {
-        return const <String, _PersistedAiAssessment>{};
+        return const <String, TaskPriorityAiCachedAssessment>{};
       }
       final rawScope = rawScopes[cacheScopeKey];
       if (rawScope is! Map) {
-        return const <String, _PersistedAiAssessment>{};
+        return const <String, TaskPriorityAiCachedAssessment>{};
       }
       final rawEntries = rawScope['entries'];
       if (rawEntries is! Map) {
-        return const <String, _PersistedAiAssessment>{};
+        return const <String, TaskPriorityAiCachedAssessment>{};
       }
-      final entries = <String, _PersistedAiAssessment>{};
+      final entries = <String, TaskPriorityAiCachedAssessment>{};
       for (final item in rawEntries.entries) {
         final todoId = item.key.toString().trim();
         if (todoId.isEmpty || item.value is! Map) continue;
-        final parsed = _PersistedAiAssessment.fromJson(
+        final parsed = TaskPriorityAiCachedAssessment.fromJson(
           (item.value as Map)
               .map((key, value) => MapEntry(key.toString(), value)),
         );
@@ -394,19 +451,19 @@ class TaskPriorityStore extends ChangeNotifier {
       }
       return entries;
     } catch (_) {
-      return const <String, _PersistedAiAssessment>{};
+      return const <String, TaskPriorityAiCachedAssessment>{};
     }
   }
 
-  Map<String, _PersistedAiAssessment> _readInMemoryAiAssessments({
+  Map<String, TaskPriorityAiCachedAssessment> _readInMemoryAiAssessments({
     required DateTime nowLocal,
   }) {
-    final entries = <String, _PersistedAiAssessment>{};
+    final entries = <String, TaskPriorityAiCachedAssessment>{};
     for (final item in _inMemoryAiAssessments.entries) {
       if (nowLocal.difference(item.value.computedAtLocal).abs() > _aiCacheTtl) {
         continue;
       }
-      entries[item.key] = _PersistedAiAssessment(
+      entries[item.key] = TaskPriorityAiCachedAssessment(
         entry: item.value.entry,
         requestSignature: item.value.requestSignature,
         computedAtLocal: item.value.computedAtLocal,
@@ -416,7 +473,7 @@ class TaskPriorityStore extends ChangeNotifier {
   }
 
   void _writeInMemoryAiAssessments({
-    required Map<String, _PersistedAiAssessment> entries,
+    required Map<String, TaskPriorityAiCachedAssessment> entries,
     required Iterable<String> activeTodoIds,
   }) {
     final activeIds = activeTodoIds.map((value) => value.trim()).toSet();
@@ -438,7 +495,7 @@ class TaskPriorityStore extends ChangeNotifier {
 
   Future<void> _writePersistedAiAssessments({
     required String cacheScopeKey,
-    required Map<String, _PersistedAiAssessment> entries,
+    required Map<String, TaskPriorityAiCachedAssessment> entries,
     required Iterable<String> activeTodoIds,
   }) async {
     try {
@@ -465,7 +522,7 @@ class TaskPriorityStore extends ChangeNotifier {
         var hasFreshEntry = false;
         for (final item in rawEntries.entries) {
           if (item.value is! Map) continue;
-          final parsed = _PersistedAiAssessment.fromJson(
+          final parsed = TaskPriorityAiCachedAssessment.fromJson(
             (item.value as Map)
                 .map((key, value) => MapEntry(key.toString(), value)),
           );
@@ -479,7 +536,7 @@ class TaskPriorityStore extends ChangeNotifier {
         return !hasFreshEntry;
       });
       final activeIds = activeTodoIds.map((value) => value.trim()).toSet();
-      final prunedEntries = <String, _PersistedAiAssessment>{};
+      final prunedEntries = <String, TaskPriorityAiCachedAssessment>{};
       for (final entry in entries.entries) {
         if (activeIds.contains(entry.key)) {
           prunedEntries[entry.key] = entry.value;
@@ -639,41 +696,6 @@ class TaskPriorityStore extends ChangeNotifier {
       syncEngine?.notifyLocalMutation();
     }
     return normalizedTodos;
-  }
-}
-
-final class _PersistedAiAssessment {
-  const _PersistedAiAssessment({
-    required this.entry,
-    required this.requestSignature,
-    required this.computedAtLocal,
-  });
-
-  final TaskPriorityAiEntry entry;
-  final String requestSignature;
-  final DateTime computedAtLocal;
-
-  Map<String, Object?> toJson() {
-    return <String, Object?>{
-      'entry': entry.toJson(),
-      'request_signature': requestSignature,
-      'computed_at_ms': computedAtLocal.millisecondsSinceEpoch,
-    };
-  }
-
-  static _PersistedAiAssessment? fromJson(Map<String, Object?> json) {
-    final entryJson = json['entry'];
-    if (entryJson is! Map) return null;
-    final computedAtMs = json['computed_at_ms'];
-    if (computedAtMs is! num) return null;
-    return _PersistedAiAssessment(
-      entry: TaskPriorityAiEntry.fromJson(
-        entryJson.map((key, value) => MapEntry(key.toString(), value)),
-      ),
-      requestSignature: (json['request_signature'] ?? '').toString(),
-      computedAtLocal:
-          DateTime.fromMillisecondsSinceEpoch(computedAtMs.toInt()),
-    );
   }
 }
 

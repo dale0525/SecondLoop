@@ -2,12 +2,14 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:secondloop/core/ai/ai_routing.dart';
 import 'package:secondloop/features/actions/task_hub/task_priority_ai.dart';
 import 'package:secondloop/features/actions/task_hub/task_priority_ai_models.dart';
 import 'package:secondloop/features/actions/task_hub/task_priority_engine.dart';
 import 'package:secondloop/features/actions/task_hub/task_priority_models.dart';
+import 'package:secondloop/features/actions/task_hub/task_priority_store.dart';
 import 'package:secondloop/src/rust/db.dart';
 
 import 'test_backend.dart';
@@ -236,6 +238,47 @@ void main() {
     expect(messages, isEmpty);
   });
 
+  test('store writes shared assessments after fresh rerank', () async {
+    SharedPreferences.setMockInitialValues({});
+    final writtenPayloads = <Map<String, TaskPriorityAiCachedAssessment>>[];
+    final writtenActiveIds = <List<String>>[];
+    final store = TaskPriorityStore.fromLoaders(
+      nowLocal: () => DateTime(2026, 3, 13, 10, 0),
+      loadTodos: () async => <Todo>[
+        const Todo(
+          id: 'focus',
+          title: 'Fresh task',
+          dueAtMs: null,
+          status: 'open',
+          sourceEntryId: null,
+          createdAtMs: 10,
+          updatedAtMs: 10,
+          reviewStage: null,
+          nextReviewAtMs: null,
+          lastReviewAtMs: null,
+        ),
+      ],
+      resolveAiService: () async => _SuccessfulRerankAiService(),
+      writeSharedAiAssessments: ({
+        required aiService,
+        required cacheScopeKey,
+        required entries,
+        required activeTodoIds,
+      }) async {
+        writtenPayloads
+            .add(Map<String, TaskPriorityAiCachedAssessment>.from(entries));
+        writtenActiveIds.add(activeTodoIds.toList(growable: false));
+      },
+    );
+
+    await store.refresh();
+
+    expect(writtenPayloads, hasLength(1));
+    expect(
+        writtenPayloads.single['focus']?.entry.reason, 'Fresh rerank result.');
+    expect(writtenActiveIds.single, <String>['focus']);
+  });
+
   test('service uses dedicated cloud gateway rerank API', () async {
     final backend = _RecordingTaskPriorityBackend();
     final service = BackendTaskPriorityAiService.forTesting(
@@ -443,6 +486,28 @@ final class _DirectTaskPriorityBackend extends TestAppBackend {
     bool thisThreadOnly = false,
   }) async* {
     throw StateError('askAiStream should not be used for task priority rerank');
+  }
+}
+
+final class _SuccessfulRerankAiService extends TaskPriorityAiService {
+  @override
+  String get cacheScopeKey => 'shared-write-cache';
+
+  @override
+  Future<TaskPriorityAiBatchResult> rerank(
+      TaskPriorityAiRequest request) async {
+    return const TaskPriorityAiBatchResult(
+      entries: <TaskPriorityAiEntry>[
+        TaskPriorityAiEntry(
+          todoId: 'focus',
+          semanticAdjustment: 22,
+          reason: 'Fresh rerank result.',
+          confidence: TaskPriorityAiConfidence.high,
+          isImportant: true,
+          isUrgent: true,
+        ),
+      ],
+    );
   }
 }
 

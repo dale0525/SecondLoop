@@ -744,6 +744,25 @@ abstract class AppBackend {
     throw UnimplementedError('taskPriorityRerankAiCloudGateway');
   }
 
+  Future<String> fetchTaskPriorityAiAssessmentsCloudGateway(
+    Uint8List key, {
+    required String gatewayBaseUrl,
+    required String idToken,
+    required String cacheScopeKey,
+  }) {
+    throw UnimplementedError('fetchTaskPriorityAiAssessmentsCloudGateway');
+  }
+
+  Future<void> upsertTaskPriorityAiAssessmentsCloudGateway(
+    Uint8List key, {
+    required String gatewayBaseUrl,
+    required String idToken,
+    required String cacheScopeKey,
+    required String payloadJson,
+  }) {
+    throw UnimplementedError('upsertTaskPriorityAiAssessmentsCloudGateway');
+  }
+
   Stream<String> askAiStreamScoped(
     Uint8List key,
     String conversationId, {

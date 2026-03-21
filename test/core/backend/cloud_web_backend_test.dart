@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -100,6 +101,61 @@ void main() {
       expect(restored, hasLength(1));
       expect(restored.single.id, inserted.id);
       expect(restored.single.content, 'restore me');
+    });
+
+    test('shared task priority assessments delegate to configured web closures',
+        () async {
+      final fetchedScopes = <String>[];
+      final upsertedPayloads = <Map<String, Object?>>[];
+      final backend = CloudWebBackend(
+        chatClient: _FakeCloudWebChatClient(responseText: 'ok'),
+        fetchTaskPriorityAssessments: ({
+          required idToken,
+          required cacheScopeKey,
+        }) async {
+          fetchedScopes.add(cacheScopeKey);
+          return <String, Object?>{
+            'scope': cacheScopeKey,
+            'entries': <Object?>[
+              <String, Object?>{
+                'todo_id': 'focus',
+                'semantic_adjustment': 12,
+                'reason': 'shared',
+                'confidence': 'high',
+                'request_signature': 'sig-1',
+                'computed_at_ms': 1710000000000,
+              },
+            ],
+          };
+        },
+        upsertTaskPriorityAssessments: ({
+          required idToken,
+          required payload,
+        }) async {
+          upsertedPayloads.add(payload);
+        },
+      );
+
+      final fetched = await backend.fetchTaskPriorityAiAssessmentsCloudGateway(
+        Uint8List(0),
+        gatewayBaseUrl: 'https://gateway.test',
+        idToken: 'token-1',
+        cacheScopeKey: 'scope-1',
+      );
+      await backend.upsertTaskPriorityAiAssessmentsCloudGateway(
+        Uint8List(0),
+        gatewayBaseUrl: 'https://gateway.test',
+        idToken: 'token-1',
+        cacheScopeKey: 'scope-1',
+        payloadJson: jsonEncode(<String, Object?>{
+          'scope': 'scope-1',
+          'entries': <Object?>[],
+        }),
+      );
+
+      expect(fetchedScopes, <String>['scope-1']);
+      expect(jsonDecode(fetched)['scope'], 'scope-1');
+      expect(upsertedPayloads.single['scope'], 'scope-1');
     });
 
     test('runAiPromptCloudGateway delegates to chat client', () async {

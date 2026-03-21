@@ -594,6 +594,27 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
       resolveAiService: _resolveTaskPriorityAiService,
       resolveAiCacheScopeKey: _resolveTaskPriorityAiCacheScopeKey,
       isAiEnhancementEnabled: TaskPriorityAiEnhancementPrefs.read,
+      readSharedAiAssessments: ({
+        required aiService,
+        required cacheScopeKey,
+        required nowLocal,
+      }) async =>
+          aiService is BackendTaskPriorityAiService
+              ? aiService.readSharedAssessments(nowLocal: nowLocal)
+              : const <String, TaskPriorityAiCachedAssessment>{},
+      writeSharedAiAssessments: ({
+        required aiService,
+        required cacheScopeKey,
+        required entries,
+        required activeTodoIds,
+      }) async {
+        if (aiService is BackendTaskPriorityAiService) {
+          await aiService.writeSharedAssessments(
+            entries: entries,
+            activeTodoIds: activeTodoIds,
+          );
+        }
+      },
       feedbackStore: _taskPriorityFeedbackStore,
     );
     unawaited(_taskPriorityStore!.refresh());

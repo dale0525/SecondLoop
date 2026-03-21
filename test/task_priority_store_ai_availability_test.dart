@@ -1,8 +1,11 @@
+import 'dart:convert';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:secondloop/features/actions/task_hub/task_priority_ai.dart';
 import 'package:secondloop/features/actions/task_hub/task_priority_ai_models.dart';
+import 'package:secondloop/features/actions/task_hub/task_priority_engine.dart';
 import 'package:secondloop/features/actions/task_hub/task_priority_models.dart';
 import 'package:secondloop/features/actions/task_hub/task_priority_store.dart';
 import 'package:secondloop/src/rust/db.dart';
@@ -137,6 +140,62 @@ void main() {
     expect(store.snapshot.hasAiEnhancement, isFalse);
   });
 
+  test(
+      'shared assessment fallback reuses remote enhancement before local rerank',
+      () async {
+    SharedPreferences.setMockInitialValues({});
+    var remoteReads = 0;
+    final nowLocal = DateTime(2026, 3, 13, 10, 0);
+    final requestSignature = jsonEncode(<String, Object?>{
+      'time_bucket': buildTaskPriorityAiTimeBucket(nowLocal),
+      'candidate': buildTaskPriorityAiRequest(
+        buildTaskPrioritySnapshot(
+          <Todo>[todo(id: 'focus', title: 'Focus task', updatedAtMs: 10)],
+          nowLocal: nowLocal,
+        ),
+        nowLocal: nowLocal,
+      ).candidates.single.toJson(),
+    });
+    final store = TaskPriorityStore.fromLoaders(
+      nowLocal: () => nowLocal,
+      loadTodos: () async => <Todo>[
+        todo(id: 'focus', title: 'Focus task', updatedAtMs: 10),
+      ],
+      resolveAiService: () async => null,
+      resolveAiCacheScopeKey: () async => 'shared-cache',
+      readSharedAiAssessments: ({
+        required aiService,
+        required cacheScopeKey,
+        required nowLocal,
+      }) async {
+        remoteReads += 1;
+        return <String, TaskPriorityAiCachedAssessment>{
+          'focus': TaskPriorityAiCachedAssessment(
+            entry: const TaskPriorityAiEntry(
+              todoId: 'focus',
+              semanticAdjustment: 18,
+              reason: 'Shared assessment result.',
+              confidence: TaskPriorityAiConfidence.high,
+              isImportant: true,
+              isUrgent: true,
+            ),
+            requestSignature: requestSignature,
+            computedAtLocal: nowLocal,
+          ),
+        };
+      },
+    );
+
+    await store.refresh();
+
+    expect(remoteReads, 1);
+    expect(store.aiAvailability, TaskPriorityAiAvailability.unavailable);
+    expect(store.snapshot.source, TaskPrioritySnapshotSource.hybrid);
+    expect(
+        store.snapshot.primaryFocus?.reasonText, 'Shared assessment result.');
+    expect(store.isAiEnhancementAvailable, isFalse);
+  });
+
   test('persisted AI fallback does not mark live AI as available', () async {
     SharedPreferences.setMockInitialValues({});
     final store = TaskPriorityStore.fromLoaders(
@@ -176,7 +235,7 @@ void main() {
   });
 }
 
-final class _SuccessfulAiService implements TaskPriorityAiService {
+final class _SuccessfulAiService extends TaskPriorityAiService {
   @override
   String get cacheScopeKey => '';
 
@@ -200,7 +259,7 @@ final class _SuccessfulAiService implements TaskPriorityAiService {
   }
 }
 
-final class _CachedSuccessfulAiService implements TaskPriorityAiService {
+final class _CachedSuccessfulAiService extends TaskPriorityAiService {
   @override
   String get cacheScopeKey => 'availability-cache';
 
@@ -224,7 +283,7 @@ final class _CachedSuccessfulAiService implements TaskPriorityAiService {
   }
 }
 
-final class _FailingAiService implements TaskPriorityAiService {
+final class _FailingAiService extends TaskPriorityAiService {
   const _FailingAiService();
 
   @override

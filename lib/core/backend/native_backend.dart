@@ -3,6 +3,10 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
+import 'package:http/http.dart' as http;
+
+import '../cloud/http_client_factory_stub.dart'
+    if (dart.library.io) '../cloud/http_client_factory_io.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -2215,6 +2219,72 @@ class NativeAppBackend
       gatewayBaseUrl: gatewayBaseUrl,
       firebaseIdToken: idToken,
       modelName: modelName,
+    );
+  }
+
+  Uri _taskPriorityAssessmentsUri(String gatewayBaseUrl, String cacheScopeKey) {
+    final base = gatewayBaseUrl.trim().replaceAll(RegExp(r'/+$'), '');
+    return Uri.parse('$base/v1/task-priority/assessments')
+        .replace(queryParameters: <String, String>{'scope': cacheScopeKey});
+  }
+
+  Future<String> _sendTaskPriorityAssessmentRequest(
+    String method, {
+    required String gatewayBaseUrl,
+    required String idToken,
+    required String cacheScopeKey,
+    String? payloadJson,
+  }) async {
+    final http.Client client = createPlatformHttpClient();
+    try {
+      final uri = _taskPriorityAssessmentsUri(gatewayBaseUrl, cacheScopeKey);
+      final headers = <String, String>{
+        'authorization': 'Bearer $idToken',
+        'accept': 'application/json',
+        if (method == 'POST') 'content-type': 'application/json',
+      };
+      final response = method == 'GET'
+          ? await client.get(uri, headers: headers)
+          : await client.post(uri, headers: headers, body: payloadJson ?? '{}');
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        throw StateError(
+            'task_priority_assessment_http_${response.statusCode}');
+      }
+      return response.body;
+    } finally {
+      client.close();
+    }
+  }
+
+  @override
+  Future<String> fetchTaskPriorityAiAssessmentsCloudGateway(
+    Uint8List key, {
+    required String gatewayBaseUrl,
+    required String idToken,
+    required String cacheScopeKey,
+  }) {
+    return _sendTaskPriorityAssessmentRequest(
+      'GET',
+      gatewayBaseUrl: gatewayBaseUrl,
+      idToken: idToken,
+      cacheScopeKey: cacheScopeKey,
+    );
+  }
+
+  @override
+  Future<void> upsertTaskPriorityAiAssessmentsCloudGateway(
+    Uint8List key, {
+    required String gatewayBaseUrl,
+    required String idToken,
+    required String cacheScopeKey,
+    required String payloadJson,
+  }) async {
+    await _sendTaskPriorityAssessmentRequest(
+      'POST',
+      gatewayBaseUrl: gatewayBaseUrl,
+      idToken: idToken,
+      cacheScopeKey: cacheScopeKey,
+      payloadJson: payloadJson,
     );
   }
 

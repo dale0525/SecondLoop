@@ -309,7 +309,7 @@ void main() {
   });
 }
 
-final class _RecordingAiService implements TaskPriorityAiService {
+final class _RecordingAiService extends TaskPriorityAiService {
   @override
   String get cacheScopeKey => 'test-scope';
 
@@ -342,7 +342,7 @@ final class _RecordingAiService implements TaskPriorityAiService {
   }
 }
 
-final class _BoundaryFocusAiService implements TaskPriorityAiService {
+final class _BoundaryFocusAiService extends TaskPriorityAiService {
   @override
   String get cacheScopeKey => 'boundary-focus';
 
@@ -373,7 +373,7 @@ final class _BoundaryFocusAiService implements TaskPriorityAiService {
   }
 }
 
-final class _StaleCacheWarmAiService implements TaskPriorityAiService {
+final class _StaleCacheWarmAiService extends TaskPriorityAiService {
   @override
   String get cacheScopeKey => 'stale-cache-scope';
 
@@ -397,7 +397,7 @@ final class _StaleCacheWarmAiService implements TaskPriorityAiService {
   }
 }
 
-final class _FailingStaleCacheAiService implements TaskPriorityAiService {
+final class _FailingStaleCacheAiService extends TaskPriorityAiService {
   const _FailingStaleCacheAiService();
 
   @override
@@ -409,7 +409,7 @@ final class _FailingStaleCacheAiService implements TaskPriorityAiService {
   }
 }
 
-final class _ScopedAiService implements TaskPriorityAiService {
+final class _ScopedAiService extends TaskPriorityAiService {
   _ScopedAiService({
     required this.scopeKey,
     required this.reason,
