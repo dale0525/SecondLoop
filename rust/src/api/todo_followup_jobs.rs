@@ -7,7 +7,7 @@ const DUE_JOB_REFETCH_LIMIT_MULTIPLIER: i64 = 128;
 
 fn is_todo_access_error(err: &anyhow::Error) -> bool {
     err.chain()
-        .any(|cause| cause.to_string() == "decrypt failed")
+        .any(|cause| cause.to_string().contains("decrypt failed"))
 }
 
 pub fn list_visible_due_todo_followup_generation_jobs(
@@ -56,5 +56,19 @@ pub fn list_visible_due_todo_followup_generation_jobs(
 
         jobs = next_jobs;
         current_limit = next_limit;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use anyhow::anyhow;
+
+    use super::is_todo_access_error;
+
+    #[test]
+    fn todo_access_error_matches_wrapped_decrypt_failures_with_extra_context() {
+        let err = anyhow!("decrypt failed while reading todo.title");
+
+        assert!(is_todo_access_error(&err));
     }
 }
