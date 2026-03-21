@@ -72,6 +72,7 @@ extension _TodoDetailPageStateFollowupSuggestions on _TodoDetailPageState {
       cloudAuthController: cloudAuthScope?.controller,
       gatewayConfig: gatewayConfig,
       subscriptionStatus: subscriptionStatus,
+      fallbackToNeedsSetupOnRouteError: true,
     );
     if (!canRunPreparedTodoFollowupGenerationRoute(prepared)) {
       if (!mounted) return false;

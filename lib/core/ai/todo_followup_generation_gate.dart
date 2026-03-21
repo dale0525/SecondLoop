@@ -200,7 +200,6 @@ bool shouldDeferTodoFollowupGenerationNeedsSetup({
   required bool hasManualRegenerateDueJob,
   required SubscriptionStatus subscriptionStatus,
   required String gatewayBaseUrl,
-  required bool hasCloudAuthController,
 }) {
   if (hasManualRegenerateDueJob) {
     return false;
@@ -211,7 +210,7 @@ bool shouldDeferTodoFollowupGenerationNeedsSetup({
   if (gatewayBaseUrl.trim().isEmpty) {
     return false;
   }
-  return hasCloudAuthController;
+  return true;
 }
 
 Future<int?> deferTodoFollowupGenerationJobsForPendingEntitlement(
@@ -479,7 +478,6 @@ class _TodoFollowupGenerationGateState extends State<TodoFollowupGenerationGate>
       final cloudAuthScope = CloudAuthScope.maybeOf(context);
       final gatewayConfig =
           cloudAuthScope?.gatewayConfig ?? CloudGatewayConfig.defaultConfig;
-      final hasCloudAuthController = cloudAuthScope?.controller != null;
       if (previewJobs.isEmpty) {
         _schedule(_kIdleInterval);
         return;
@@ -507,7 +505,6 @@ class _TodoFollowupGenerationGateState extends State<TodoFollowupGenerationGate>
             hasManualRegenerateDueJob: passPlan.hasManualRegenerateDueJob,
             subscriptionStatus: subscriptionStatus,
             gatewayBaseUrl: gatewayConfig.baseUrl,
-            hasCloudAuthController: hasCloudAuthController,
           )) {
             final retryAtMs =
                 await deferTodoFollowupGenerationJobsForPendingEntitlement(

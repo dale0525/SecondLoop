@@ -285,17 +285,19 @@ Future<TodoFollowupGenerationPreparedRoute> prepareTodoFollowupGenerationRoute(
   required CloudAuthController? cloudAuthController,
   required CloudGatewayConfig gatewayConfig,
   required SubscriptionStatus subscriptionStatus,
+  bool fallbackToNeedsSetupOnRouteError = false,
 }) async {
   final routePolicy = hasManualRegenerateDueJob
       ? ForegroundAiRoutePolicy.askAi
       : ForegroundAiRoutePolicy.automation;
-  final preliminaryRoute = await decideTodoFollowupGenerationRoute(
+  final preliminaryRoute = await _decideTodoFollowupGenerationRoute(
     backend,
     sessionKey,
     hasManualRegenerateDueJob: hasManualRegenerateDueJob,
     cloudIdToken: null,
     cloudGatewayBaseUrl: gatewayConfig.baseUrl,
     subscriptionStatus: subscriptionStatus,
+    fallbackToNeedsSetupOnRouteError: fallbackToNeedsSetupOnRouteError,
   );
   final canAttemptCloud = _canAttemptForegroundAiCloudRoute(
     routePolicy: routePolicy,
@@ -319,16 +321,43 @@ Future<TodoFollowupGenerationPreparedRoute> prepareTodoFollowupGenerationRoute(
         : CloudCapabilityAuthMode.background,
     forceWarm: hasManualRegenerateDueJob,
   );
-  final route = await decideTodoFollowupGenerationRoute(
+  final route = await _decideTodoFollowupGenerationRoute(
     backend,
     sessionKey,
     hasManualRegenerateDueJob: hasManualRegenerateDueJob,
     cloudIdToken: idToken,
     cloudGatewayBaseUrl: gatewayConfig.baseUrl,
     subscriptionStatus: subscriptionStatus,
+    fallbackToNeedsSetupOnRouteError: fallbackToNeedsSetupOnRouteError,
   );
   return TodoFollowupGenerationPreparedRoute(
     route: route,
     idToken: idToken,
   );
+}
+
+Future<AskAiRouteKind> _decideTodoFollowupGenerationRoute(
+  AppBackend backend,
+  Uint8List sessionKey, {
+  required bool hasManualRegenerateDueJob,
+  required String? cloudIdToken,
+  required String cloudGatewayBaseUrl,
+  required SubscriptionStatus subscriptionStatus,
+  required bool fallbackToNeedsSetupOnRouteError,
+}) async {
+  try {
+    return await decideTodoFollowupGenerationRoute(
+      backend,
+      sessionKey,
+      hasManualRegenerateDueJob: hasManualRegenerateDueJob,
+      cloudIdToken: cloudIdToken,
+      cloudGatewayBaseUrl: cloudGatewayBaseUrl,
+      subscriptionStatus: subscriptionStatus,
+    );
+  } catch (_) {
+    if (fallbackToNeedsSetupOnRouteError) {
+      return AskAiRouteKind.needsSetup;
+    }
+    rethrow;
+  }
 }

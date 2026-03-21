@@ -13,20 +13,19 @@ void main() {
       hasManualRegenerateDueJob: false,
       subscriptionStatus: SubscriptionStatus.unknown,
       gatewayBaseUrl: 'https://example.com',
-      hasCloudAuthController: true,
     );
 
     expect(shouldDefer, isTrue);
   });
 
-  test('needs-setup defer stays disabled for manual jobs or terminal setups',
+  test(
+      'needs-setup defer stays disabled only for manual jobs or terminal setups',
       () {
     expect(
       shouldDeferTodoFollowupGenerationNeedsSetup(
         hasManualRegenerateDueJob: true,
         subscriptionStatus: SubscriptionStatus.unknown,
         gatewayBaseUrl: 'https://example.com',
-        hasCloudAuthController: true,
       ),
       isFalse,
     );
@@ -35,7 +34,6 @@ void main() {
         hasManualRegenerateDueJob: false,
         subscriptionStatus: SubscriptionStatus.notEntitled,
         gatewayBaseUrl: 'https://example.com',
-        hasCloudAuthController: true,
       ),
       isFalse,
     );
@@ -44,7 +42,6 @@ void main() {
         hasManualRegenerateDueJob: false,
         subscriptionStatus: SubscriptionStatus.unknown,
         gatewayBaseUrl: '',
-        hasCloudAuthController: true,
       ),
       isFalse,
     );
@@ -53,9 +50,8 @@ void main() {
         hasManualRegenerateDueJob: false,
         subscriptionStatus: SubscriptionStatus.unknown,
         gatewayBaseUrl: 'https://example.com',
-        hasCloudAuthController: false,
       ),
-      isFalse,
+      isTrue,
     );
   });
 

@@ -211,6 +211,24 @@ void main() {
     expect(toolkit.refreshCalls, 1);
   });
 
+  test('followup preflight falls back to needsSetup on route errors', () async {
+    final prepared = await prepareTodoFollowupGenerationRoute(
+      _ThrowingRouteBackend(),
+      _sessionKey,
+      hasManualRegenerateDueJob: true,
+      cloudAuthController: null,
+      gatewayConfig: const CloudGatewayConfig(
+        baseUrl: 'https://example.com',
+        modelName: 'cloud',
+      ),
+      subscriptionStatus: SubscriptionStatus.entitled,
+      fallbackToNeedsSetupOnRouteError: true,
+    );
+
+    expect(prepared.route, AskAiRouteKind.needsSetup);
+    expect(prepared.idToken, isNull);
+  });
+
   test('interactive preflight warms before first token read when needed',
       () async {
     final prepared = await prepareForegroundAiRoute(
