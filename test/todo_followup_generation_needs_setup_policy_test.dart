@@ -48,6 +48,14 @@ void main() {
     expect(
       shouldDeferTodoFollowupGenerationNeedsSetup(
         hasManualRegenerateDueJob: false,
+        subscriptionStatus: SubscriptionStatus.entitled,
+        gatewayBaseUrl: 'https://example.com',
+      ),
+      isTrue,
+    );
+    expect(
+      shouldDeferTodoFollowupGenerationNeedsSetup(
+        hasManualRegenerateDueJob: false,
         subscriptionStatus: SubscriptionStatus.unknown,
         gatewayBaseUrl: 'https://example.com',
       ),
@@ -86,6 +94,64 @@ void main() {
     expect(store.failedRetryAtMs, const <int>[10500]);
     expect(store.failedErrors, const <String>['followup_subscription_pending']);
     expect(store.skippedTodoIds, isEmpty);
+    expect(store.canceledTodoIds, isEmpty);
+  });
+
+  test('pending entitlement defer backs off based on job age', () async {
+    final store = _RecordingTodoFollowupGenerationStore();
+
+    await deferTodoFollowupGenerationJobsForPendingEntitlement(
+      store,
+      const <TodoFollowupGenerationJob>[
+        TodoFollowupGenerationJob(
+          todoId: 'todo_auto_pending',
+          triggerKind: 'auto_create',
+          status: 'pending',
+          attempts: 1,
+          nextRetryAtMs: null,
+          lastError: null,
+          includeManualFollowups: false,
+          taskTypeHint: 'research',
+          createdAtMs: 0,
+          updatedAtMs: 0,
+        ),
+      ],
+      nowMs: const Duration(minutes: 2).inMilliseconds,
+      retryDelay: const Duration(seconds: 10),
+      lastError: 'followup_subscription_pending',
+    );
+
+    expect(store.failedRetryAtMs, const <int>[180000]);
+    expect(store.skippedTodoIds, isEmpty);
+  });
+
+  test('pending entitlement defer drains aged automatic jobs after timeout',
+      () async {
+    final store = _RecordingTodoFollowupGenerationStore();
+
+    await deferTodoFollowupGenerationJobsForPendingEntitlement(
+      store,
+      const <TodoFollowupGenerationJob>[
+        TodoFollowupGenerationJob(
+          todoId: 'todo_auto_pending',
+          triggerKind: 'auto_create',
+          status: 'pending',
+          attempts: 1,
+          nextRetryAtMs: null,
+          lastError: null,
+          includeManualFollowups: false,
+          taskTypeHint: 'research',
+          createdAtMs: 0,
+          updatedAtMs: 0,
+        ),
+      ],
+      nowMs: const Duration(minutes: 16).inMilliseconds,
+      retryDelay: const Duration(seconds: 10),
+      lastError: 'followup_subscription_pending',
+    );
+
+    expect(store.failedTodoIds, isEmpty);
+    expect(store.skippedTodoIds, const <String>['todo_auto_pending']);
     expect(store.canceledTodoIds, isEmpty);
   });
 

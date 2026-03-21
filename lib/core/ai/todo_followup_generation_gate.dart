@@ -19,6 +19,9 @@ import 'todo_followup_generation_runner.dart';
 import 'todo_followup_suggestions_ai.dart';
 
 const _kPreviewRefetchLimitMultiplier = 128;
+const _kPendingSetupRetryWindow = Duration(minutes: 15);
+const _kPendingSetupMediumRetryDelay = Duration(seconds: 30);
+const _kPendingSetupLongRetryDelay = Duration(minutes: 1);
 
 final class TodoFollowupGenerationPassPlan {
   const TodoFollowupGenerationPassPlan({
@@ -204,7 +207,7 @@ bool shouldDeferTodoFollowupGenerationNeedsSetup({
   if (hasManualRegenerateDueJob) {
     return false;
   }
-  if (subscriptionStatus != SubscriptionStatus.unknown) {
+  if (subscriptionStatus == SubscriptionStatus.notEntitled) {
     return false;
   }
   if (gatewayBaseUrl.trim().isEmpty) {
@@ -219,10 +222,20 @@ Future<int?> deferTodoFollowupGenerationJobsForPendingEntitlement(
   required int nowMs,
   required Duration retryDelay,
   required String lastError,
+  Duration maxRetryWindow = _kPendingSetupRetryWindow,
 }) async {
   int? earliestNextRetryAtMs;
   for (final job in jobs) {
-    final nextRetryAtMs = nowMs + retryDelay.inMilliseconds;
+    final jobAgeMs = nowMs - job.createdAtMs.toInt();
+    if (jobAgeMs >= maxRetryWindow.inMilliseconds) {
+      await store.markJobSkipped(todoId: job.todoId, nowMs: nowMs);
+      continue;
+    }
+    final nextRetryDelay = _pendingSetupRetryDelay(
+      jobAgeMs: jobAgeMs,
+      retryDelay: retryDelay,
+    );
+    final nextRetryAtMs = nowMs + nextRetryDelay.inMilliseconds;
     await store.markJobFailed(
       todoId: job.todoId,
       attempts: job.attempts.toInt(),
@@ -236,6 +249,19 @@ Future<int?> deferTodoFollowupGenerationJobsForPendingEntitlement(
     );
   }
   return earliestNextRetryAtMs;
+}
+
+Duration _pendingSetupRetryDelay({
+  required int jobAgeMs,
+  required Duration retryDelay,
+}) {
+  if (jobAgeMs >= _kPendingSetupLongRetryDelay.inMilliseconds) {
+    return _kPendingSetupLongRetryDelay;
+  }
+  if (jobAgeMs >= _kPendingSetupMediumRetryDelay.inMilliseconds) {
+    return _kPendingSetupMediumRetryDelay;
+  }
+  return retryDelay;
 }
 
 int? minTodoFollowupGenerationRetryAtMs(int? current, int? candidate) {
@@ -512,7 +538,9 @@ class _TodoFollowupGenerationGateState extends State<TodoFollowupGenerationGate>
               passPlan.jobs,
               nowMs: nowMs,
               retryDelay: _kFailureInterval,
-              lastError: 'followup_subscription_pending',
+              lastError: subscriptionStatus == SubscriptionStatus.entitled
+                  ? 'followup_cloud_auth_unavailable'
+                  : 'followup_subscription_pending',
             );
             earliestNextRetryAtMs = minTodoFollowupGenerationRetryAtMs(
               earliestNextRetryAtMs,
@@ -545,10 +573,17 @@ class _TodoFollowupGenerationGateState extends State<TodoFollowupGenerationGate>
               retryAtMs,
             );
           } else {
-            await finalizeTodoFollowupGenerationJobsForNeedsSetup(
+            final retryAtMs =
+                await deferTodoFollowupGenerationJobsForPendingEntitlement(
               backendStore,
               passPlan.jobs,
               nowMs: nowMs,
+              retryDelay: _kFailureInterval,
+              lastError: 'followup_cloud_auth_unavailable',
+            );
+            earliestNextRetryAtMs = minTodoFollowupGenerationRetryAtMs(
+              earliestNextRetryAtMs,
+              retryAtMs,
             );
           }
           passDidUpdateJobs = true;
