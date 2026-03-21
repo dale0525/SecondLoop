@@ -1,5 +1,6 @@
 use secondloop_rust::api::core;
 use secondloop_rust::auth;
+use secondloop_rust::crypto;
 use secondloop_rust::crypto::KdfParams;
 use secondloop_rust::db;
 
@@ -60,4 +61,43 @@ fn due_job_api_overfetches_until_it_finds_accessible_jobs() {
 
     assert_eq!(due.len(), 1);
     assert_eq!(due[0].todo_id, "todo_visible");
+}
+
+#[test]
+fn due_job_api_surfaces_todo_read_errors_instead_of_silently_skipping_jobs() {
+    let (temp_dir, key, conn) = setup();
+    let app_dir = temp_dir
+        .path()
+        .join("secondloop")
+        .to_string_lossy()
+        .into_owned();
+
+    db::upsert_todo(
+        &conn,
+        &key,
+        "todo_corrupt",
+        "Corrupt todo",
+        None,
+        "open",
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("upsert todo");
+    db::enqueue_todo_followup_generation_job(&conn, "todo_corrupt", "auto_create", None, 100)
+        .expect("enqueue job");
+
+    let invalid_title_blob =
+        crypto::encrypt_bytes(&key, &[0xFF], b"todo.title").expect("encrypt invalid utf8 title");
+    conn.execute(
+        "UPDATE todos SET title = ?1 WHERE id = ?2",
+        rusqlite::params![invalid_title_blob, "todo_corrupt"],
+    )
+    .expect("store invalid utf8 title blob");
+
+    let err = core::db_list_due_todo_followup_generation_jobs(app_dir, key.to_vec(), 200, 1)
+        .expect_err("corrupt todo should surface as an error");
+
+    assert!(err.to_string().contains("utf-8") || err.to_string().contains("todo"));
 }

@@ -1,9 +1,14 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 use rusqlite::Connection;
 
 use crate::db;
 
 const DUE_JOB_REFETCH_LIMIT_MULTIPLIER: i64 = 128;
+
+fn is_todo_access_error(err: &anyhow::Error) -> bool {
+    err.chain()
+        .any(|cause| cause.to_string() == "decrypt failed")
+}
 
 pub fn list_visible_due_todo_followup_generation_jobs(
     conn: &Connection,
@@ -22,7 +27,15 @@ pub fn list_visible_due_todo_followup_generation_jobs(
         for job in &jobs {
             match db::find_todo(conn, key, &job.todo_id) {
                 Ok(Some(_)) => visible_jobs.push(job.clone()),
-                Ok(None) | Err(_) => {}
+                Ok(None) => {}
+                Err(err) => {
+                    if is_todo_access_error(&err) {
+                        continue;
+                    }
+                    return Err(err).with_context(|| {
+                        format!("failed to read todo for followup job: {}", job.todo_id)
+                    });
+                }
             }
         }
 
