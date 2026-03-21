@@ -1,6 +1,8 @@
 part of 'cloud_web_backend.dart';
 
-mixin _CloudWebBackendTasksMixin on AppBackend {
+mixin _CloudWebBackendTasksMixin
+    on AppBackend, _CloudWebBackendTasksRecurrenceMixin {
+  @override
   final Map<String, Todo> _todosById = <String, Todo>{};
   final Map<String, TodoActivity> _todoActivitiesById =
       <String, TodoActivity>{};
@@ -11,15 +13,33 @@ mixin _CloudWebBackendTasksMixin on AppBackend {
       <String, List<TodoChecklistSuggestion>>{};
   final Map<String, List<String>> _attachmentShasByTodoActivityId =
       <String, List<String>>{};
-  final Map<String, String> _todoRecurrenceRuleJsonByTodoId =
-      <String, String>{};
-  final Map<String, String> _todoRecurrenceSeriesIdByTodoId =
-      <String, String>{};
-
+  @override
   String _nextId(String prefix);
   int _touchNow();
   PlatformInt64 _asPlatformInt64(int value);
   Map<String, Attachment> get _attachmentsBySha;
+
+  int _compareTodoOrder(Todo left, Todo right) {
+    final leftDueAtMs = left.dueAtMs;
+    final rightDueAtMs = right.dueAtMs;
+    if (leftDueAtMs == null && rightDueAtMs != null) {
+      return 1;
+    }
+    if (leftDueAtMs != null && rightDueAtMs == null) {
+      return -1;
+    }
+    if (leftDueAtMs != null && rightDueAtMs != null) {
+      final byDueAt = leftDueAtMs.compareTo(rightDueAtMs);
+      if (byDueAt != 0) {
+        return byDueAt;
+      }
+    }
+    final byCreatedAt = left.createdAtMs.compareTo(right.createdAtMs);
+    if (byCreatedAt != 0) {
+      return byCreatedAt;
+    }
+    return left.id.compareTo(right.id);
+  }
 
   List<TodoChecklistItem> _checklistBucket(String todoId) {
     return _checklistItemsByTodoId.putIfAbsent(
@@ -97,7 +117,7 @@ mixin _CloudWebBackendTasksMixin on AppBackend {
   @override
   Future<List<Todo>> listTodos(Uint8List key) async {
     final todos = _todosById.values.toList(growable: false)
-      ..sort((left, right) => left.createdAtMs.compareTo(right.createdAtMs));
+      ..sort(_compareTodoOrder);
     return todos;
   }
 
@@ -281,84 +301,6 @@ mixin _CloudWebBackendTasksMixin on AppBackend {
     );
   }
 
-  void _requireThisOnlyScope(
-    TodoRecurrenceEditScope scope, {
-    required String operation,
-  }) {
-    if (scope != TodoRecurrenceEditScope.thisOnly) {
-      throw UnsupportedError(
-        '$operation is not supported for scope ${scope.name} in web backend',
-      );
-    }
-  }
-
-  @override
-  Future<Todo> updateTodoStatusWithScope(
-    Uint8List key, {
-    required String todoId,
-    required String newStatus,
-    String? sourceMessageId,
-    required TodoRecurrenceEditScope scope,
-  }) {
-    _requireThisOnlyScope(scope, operation: 'updateTodoStatusWithScope');
-    return setTodoStatus(
-      key,
-      todoId: todoId,
-      newStatus: newStatus,
-      sourceMessageId: sourceMessageId,
-    );
-  }
-
-  @override
-  Future<Todo> updateTodoDueWithScope(
-    Uint8List key, {
-    required String todoId,
-    required int dueAtMs,
-    required TodoRecurrenceEditScope scope,
-  }) {
-    _requireThisOnlyScope(scope, operation: 'updateTodoDueWithScope');
-    return transitionTodo(
-      key,
-      todoId: todoId,
-      dueAtMs: dueAtMs,
-    );
-  }
-
-  @override
-  Future<void> upsertTodoRecurrence(
-    Uint8List key, {
-    required String todoId,
-    required String seriesId,
-    required String ruleJson,
-  }) async {
-    if (!_todosById.containsKey(todoId)) {
-      throw StateError('unknown_todo:$todoId');
-    }
-    _todoRecurrenceSeriesIdByTodoId[todoId] = seriesId;
-    _todoRecurrenceRuleJsonByTodoId[todoId] = ruleJson;
-  }
-
-  @override
-  Future<String?> getTodoRecurrenceRuleJson(
-    Uint8List key, {
-    required String todoId,
-  }) async {
-    return _todoRecurrenceRuleJsonByTodoId[todoId];
-  }
-
-  @override
-  Future<void> updateTodoRecurrenceRuleWithScope(
-    Uint8List key, {
-    required String todoId,
-    required String ruleJson,
-    required TodoRecurrenceEditScope scope,
-  }) async {
-    if (!_todosById.containsKey(todoId)) {
-      throw StateError('unknown_todo:$todoId');
-    }
-    _todoRecurrenceRuleJsonByTodoId[todoId] = ruleJson;
-  }
-
   @override
   Future<void> deleteTodo(
     Uint8List key, {
@@ -369,6 +311,7 @@ mixin _CloudWebBackendTasksMixin on AppBackend {
     _todoChecklistSuggestionsByTodoId.remove(todoId);
     _todoRecurrenceRuleJsonByTodoId.remove(todoId);
     _todoRecurrenceSeriesIdByTodoId.remove(todoId);
+    _todoRecurrenceOccurrenceIndexByTodoId.remove(todoId);
     final removedActivityIds = _todoActivitiesById.values
         .where((activity) => activity.todoId == todoId)
         .map((activity) => activity.id)

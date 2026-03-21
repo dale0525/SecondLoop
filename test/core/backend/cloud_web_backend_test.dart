@@ -223,6 +223,58 @@ void main() {
       expect(todos.single.manualUrgencyNudgeScore, -1);
     });
 
+    test('listTodos matches native due-date ordering', () async {
+      var nowMs = 1000;
+      final backend = CloudWebBackend(
+        chatClient: _FakeCloudWebChatClient(responseText: 'ok'),
+        nowMs: () => nowMs,
+      );
+      final key = Uint8List(0);
+
+      await backend.upsertTodo(
+        key,
+        id: 'todo:no-due',
+        title: 'No due task',
+        status: 'open',
+      );
+      nowMs = 1001;
+      await backend.upsertTodo(
+        key,
+        id: 'todo:late',
+        title: 'Later due task',
+        dueAtMs: 5000,
+        status: 'open',
+      );
+      nowMs = 1002;
+      await backend.upsertTodo(
+        key,
+        id: 'todo:early-a',
+        title: 'Early due task A',
+        dueAtMs: 2000,
+        status: 'open',
+      );
+      nowMs = 1003;
+      await backend.upsertTodo(
+        key,
+        id: 'todo:early-b',
+        title: 'Early due task B',
+        dueAtMs: 2000,
+        status: 'open',
+      );
+
+      final todos = await backend.listTodos(key);
+
+      expect(
+        todos.map((todo) => todo.id),
+        const <String>[
+          'todo:early-a',
+          'todo:early-b',
+          'todo:late',
+          'todo:no-due',
+        ],
+      );
+    });
+
     test('upsertTodo preserves existing manual nudge scores when omitted',
         () async {
       final backend = CloudWebBackend(
@@ -676,7 +728,86 @@ void main() {
       );
     });
 
-    test('scoped status and due updates reject non-thisOnly scopes on web',
+    test('scoped due and status updates mirror native recurrence semantics',
+        () async {
+      var nowMs = 1000;
+      final backend = CloudWebBackend(
+        chatClient: _FakeCloudWebChatClient(responseText: 'ok'),
+        nowMs: () => nowMs,
+      );
+      final key = Uint8List(0);
+
+      await backend.upsertTodo(
+        key,
+        id: 'todo:series-a',
+        title: 'Scoped task A',
+        dueAtMs: 1000,
+        status: 'open',
+      );
+      nowMs = 1001;
+      await backend.upsertTodo(
+        key,
+        id: 'todo:series-b',
+        title: 'Scoped task B',
+        dueAtMs: 2000,
+        status: 'open',
+      );
+      nowMs = 1002;
+      await backend.upsertTodo(
+        key,
+        id: 'todo:series-c',
+        title: 'Scoped task C',
+        dueAtMs: 3000,
+        status: 'open',
+      );
+
+      await backend.upsertTodoRecurrence(
+        key,
+        todoId: 'todo:series-a',
+        seriesId: 'series-1',
+        ruleJson: '{"freq":"weekly"}',
+      );
+      await backend.upsertTodoRecurrence(
+        key,
+        todoId: 'todo:series-b',
+        seriesId: 'series-1',
+        ruleJson: '{"freq":"weekly"}',
+      );
+      await backend.upsertTodoRecurrence(
+        key,
+        todoId: 'todo:series-c',
+        seriesId: 'series-1',
+        ruleJson: '{"freq":"weekly"}',
+      );
+
+      final dueUpdated = await backend.updateTodoDueWithScope(
+        key,
+        todoId: 'todo:series-b',
+        dueAtMs: 2500,
+        scope: TodoRecurrenceEditScope.thisAndFuture,
+      );
+      expect(dueUpdated.dueAtMs, 2500);
+
+      nowMs = 1003;
+      final statusUpdated = await backend.updateTodoStatusWithScope(
+        key,
+        todoId: 'todo:series-b',
+        newStatus: 'in_progress',
+        scope: TodoRecurrenceEditScope.wholeSeries,
+      );
+      expect(statusUpdated.status, 'in_progress');
+
+      final todos = await backend.listTodos(key);
+      final byId = <String, Todo>{for (final todo in todos) todo.id: todo};
+      expect(byId['todo:series-a']!.dueAtMs, 1000);
+      expect(byId['todo:series-a']!.status, 'open');
+      expect(byId['todo:series-b']!.dueAtMs, 2500);
+      expect(byId['todo:series-b']!.status, 'in_progress');
+      expect(byId['todo:series-c']!.dueAtMs, 3500);
+      expect(byId['todo:series-c']!.status, 'in_progress');
+    });
+
+    test('scoped recurrence rule updates honor wholeSeries and thisAndFuture',
         () async {
       final backend = CloudWebBackend(
         chatClient: _FakeCloudWebChatClient(responseText: 'ok'),
@@ -685,29 +816,71 @@ void main() {
 
       await backend.upsertTodo(
         key,
-        id: 'todo:scoped',
-        title: 'Scoped task',
+        id: 'todo:rule-a',
+        title: 'Rule task A',
+        dueAtMs: 1000,
+        status: 'open',
+      );
+      await backend.upsertTodo(
+        key,
+        id: 'todo:rule-b',
+        title: 'Rule task B',
+        dueAtMs: 2000,
+        status: 'open',
+      );
+      await backend.upsertTodo(
+        key,
+        id: 'todo:rule-c',
+        title: 'Rule task C',
+        dueAtMs: 3000,
         status: 'open',
       );
 
-      await expectLater(
-        () => backend.updateTodoStatusWithScope(
+      for (final todoId in const <String>[
+        'todo:rule-a',
+        'todo:rule-b',
+        'todo:rule-c',
+      ]) {
+        await backend.upsertTodoRecurrence(
           key,
-          todoId: 'todo:scoped',
-          newStatus: 'done',
-          scope: TodoRecurrenceEditScope.wholeSeries,
-        ),
-        throwsUnsupportedError,
+          todoId: todoId,
+          seriesId: 'series-rules',
+          ruleJson: '{"freq":"weekly"}',
+        );
+      }
+
+      await backend.updateTodoRecurrenceRuleWithScope(
+        key,
+        todoId: 'todo:rule-b',
+        ruleJson: '{"freq":"daily"}',
+        scope: TodoRecurrenceEditScope.wholeSeries,
+      );
+      expect(
+        await backend.getTodoRecurrenceRuleJson(key, todoId: 'todo:rule-a'),
+        '{"freq":"daily"}',
+      );
+      expect(
+        await backend.getTodoRecurrenceRuleJson(key, todoId: 'todo:rule-c'),
+        '{"freq":"daily"}',
       );
 
-      await expectLater(
-        () => backend.updateTodoDueWithScope(
-          key,
-          todoId: 'todo:scoped',
-          dueAtMs: 3000,
-          scope: TodoRecurrenceEditScope.thisAndFuture,
-        ),
-        throwsUnsupportedError,
+      await backend.updateTodoRecurrenceRuleWithScope(
+        key,
+        todoId: 'todo:rule-b',
+        ruleJson: '{"freq":"monthly"}',
+        scope: TodoRecurrenceEditScope.thisAndFuture,
+      );
+      expect(
+        await backend.getTodoRecurrenceRuleJson(key, todoId: 'todo:rule-a'),
+        '{"freq":"daily"}',
+      );
+      expect(
+        await backend.getTodoRecurrenceRuleJson(key, todoId: 'todo:rule-b'),
+        '{"freq":"monthly"}',
+      );
+      expect(
+        await backend.getTodoRecurrenceRuleJson(key, todoId: 'todo:rule-c'),
+        '{"freq":"monthly"}',
       );
     });
 

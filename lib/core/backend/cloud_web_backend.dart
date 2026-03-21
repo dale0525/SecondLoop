@@ -5,6 +5,7 @@ import '../../src/rust/db.dart';
 import 'attachments_backend.dart';
 import 'app_backend.dart';
 
+part 'cloud_web_backend_tasks_recurrence_mixin.dart';
 part 'cloud_web_backend_tasks_mixin.dart';
 
 abstract interface class CloudWebChatClient {
@@ -31,7 +32,7 @@ final class UnsupportedCloudWebChatClient implements CloudWebChatClient {
 }
 
 final class CloudWebBackend extends AppBackend
-    with _CloudWebBackendTasksMixin
+    with _CloudWebBackendTasksRecurrenceMixin, _CloudWebBackendTasksMixin
     implements AttachmentsBackend {
   CloudWebBackend({
     required this.chatClient,
@@ -136,6 +137,7 @@ final class CloudWebBackend extends AppBackend
     _attachmentShasByTodoActivityId.clear();
     _todoRecurrenceRuleJsonByTodoId.clear();
     _todoRecurrenceSeriesIdByTodoId.clear();
+    _todoRecurrenceOccurrenceIndexByTodoId.clear();
     _deletedMessagesById.clear();
     _idCounter = 0;
   }
