@@ -280,9 +280,18 @@ Duration computeTodoFollowupGenerationNextDelay({
   required int batchLimit,
   required bool didUpdateJobs,
   required int? earliestNextRetryAtMs,
+  bool didOnlyScheduleFutureRetries = false,
   Duration idleInterval = const Duration(seconds: 30),
   Duration drainInterval = const Duration(seconds: 2),
 }) {
+  if (didOnlyScheduleFutureRetries && earliestNextRetryAtMs != null) {
+    final retryDelayMs = earliestNextRetryAtMs - nowMs;
+    if (retryDelayMs <= 0) {
+      return Duration.zero;
+    }
+    return Duration(milliseconds: retryDelayMs);
+  }
+
   if (didUpdateJobs && previewJobCount >= batchLimit) {
     return drainInterval;
   }
@@ -455,6 +464,8 @@ class _TodoFollowupGenerationGateState extends State<TodoFollowupGenerationGate>
     var didMutateAny = false;
     var didUpdateJobs = false;
     int? earliestNextRetryAtMs;
+    var didOnlyScheduleFutureRetries = false;
+    var didProcessNonRetryWork = false;
 
     _running = true;
     _restartBlockToken = UpdateRestartActivity.blockAiAnalysis();
@@ -546,12 +557,14 @@ class _TodoFollowupGenerationGateState extends State<TodoFollowupGenerationGate>
               earliestNextRetryAtMs,
               retryAtMs,
             );
+            didOnlyScheduleFutureRetries = retryAtMs != null;
           } else {
             await finalizeTodoFollowupGenerationJobsForNeedsSetup(
               backendStore,
               passPlan.jobs,
               nowMs: nowMs,
             );
+            didProcessNonRetryWork = true;
           }
           passDidUpdateJobs = true;
           didUpdateJobs = true;
@@ -572,6 +585,7 @@ class _TodoFollowupGenerationGateState extends State<TodoFollowupGenerationGate>
               earliestNextRetryAtMs,
               retryAtMs,
             );
+            didOnlyScheduleFutureRetries = retryAtMs != null;
           } else {
             final retryAtMs =
                 await deferTodoFollowupGenerationJobsForPendingEntitlement(
@@ -585,6 +599,7 @@ class _TodoFollowupGenerationGateState extends State<TodoFollowupGenerationGate>
               earliestNextRetryAtMs,
               retryAtMs,
             );
+            didOnlyScheduleFutureRetries = retryAtMs != null;
           }
           passDidUpdateJobs = true;
           didUpdateJobs = true;
@@ -620,6 +635,14 @@ class _TodoFollowupGenerationGateState extends State<TodoFollowupGenerationGate>
           earliestNextRetryAtMs,
           result.earliestNextRetryAtMs,
         );
+        if (passDidMutateAny || result.processed > 0) {
+          didProcessNonRetryWork = true;
+        }
+        if (result.earliestNextRetryAtMs != null &&
+            !passDidMutateAny &&
+            result.processed == 0) {
+          didOnlyScheduleFutureRetries = true;
+        }
       }
 
       if (didMutateAny || didUpdateJobs) {
@@ -631,6 +654,8 @@ class _TodoFollowupGenerationGateState extends State<TodoFollowupGenerationGate>
         batchLimit: _kBatchLimit,
         didUpdateJobs: didUpdateJobs,
         earliestNextRetryAtMs: earliestNextRetryAtMs,
+        didOnlyScheduleFutureRetries:
+            didOnlyScheduleFutureRetries && !didProcessNonRetryWork,
         idleInterval: _kIdleInterval,
         drainInterval: _kDrainInterval,
       );

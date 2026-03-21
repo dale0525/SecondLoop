@@ -198,21 +198,44 @@ Iterable<String> _extractLooseJsonSuggestionCandidates(String raw) sync* {
   }
 
   for (final segment in arraySegments) {
-    for (final match in RegExp(r'"((?:[^"\\]|\\.)*)"').allMatches(segment)) {
-      final encoded = '"${match.group(1)}"';
-      try {
-        final decoded = jsonDecode(encoded);
-        if (decoded is String) {
-          yield decoded;
-        }
-      } catch (_) {
-        final fallback = match.group(1);
-        if (fallback != null) {
-          yield fallback;
+    final decoded = _decodeLooseJsonArraySegment(segment);
+    if (decoded is! List<dynamic>) continue;
+
+    for (final item in decoded) {
+      if (item is String) {
+        yield item;
+        continue;
+      }
+      if (item is Map<String, dynamic>) {
+        final fieldValue = _extractLooseJsonSuggestionField(item);
+        if (fieldValue != null) {
+          yield fieldValue;
         }
       }
     }
   }
+}
+
+Object? _decodeLooseJsonArraySegment(String segment) {
+  final sanitized = segment.replaceAllMapped(
+    RegExp(r',\s*([\]}])'),
+    (match) => match.group(1) ?? '',
+  );
+  try {
+    return jsonDecode(sanitized);
+  } catch (_) {
+    return null;
+  }
+}
+
+String? _extractLooseJsonSuggestionField(Map<String, dynamic> item) {
+  for (final key in const <String>['text', 'title', 'label', 'content']) {
+    final value = item[key];
+    if (value is String && value.trim().isNotEmpty) {
+      return value;
+    }
+  }
+  return null;
 }
 
 String? _extractJsonCandidate(String raw) {

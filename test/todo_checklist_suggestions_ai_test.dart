@@ -89,4 +89,17 @@ void main() {
       'Pack charger',
     ]);
   });
+
+  test(
+      'checklist parser salvages malformed object arrays via suggestion fields only',
+      () {
+    final parsed = parseTodoChecklistSuggestionsJson(
+      '{"suggestions":[{"text":"Book flight"},{"label":"Pack charger"},]}',
+    );
+
+    expect(parsed, const <String>[
+      'Book flight',
+      'Pack charger',
+    ]);
+  });
 }

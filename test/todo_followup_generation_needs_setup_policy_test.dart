@@ -178,6 +178,21 @@ void main() {
 
     expect(delay, const Duration(seconds: 2));
   });
+
+  test(
+      'next delay waits for retry when a saturated batch only scheduled future retries',
+      () {
+    final delay = computeTodoFollowupGenerationNextDelay(
+      nowMs: 1000,
+      previewJobCount: 5,
+      batchLimit: 5,
+      didUpdateJobs: true,
+      earliestNextRetryAtMs: 11000,
+      didOnlyScheduleFutureRetries: true,
+    );
+
+    expect(delay, const Duration(seconds: 10));
+  });
 }
 
 final class _RecordingTodoFollowupGenerationStore
