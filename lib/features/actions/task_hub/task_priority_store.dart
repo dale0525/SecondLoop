@@ -84,6 +84,11 @@ class TaskPriorityStore extends ChangeNotifier {
   TaskPrioritySnapshot _snapshot = const TaskPrioritySnapshot.empty();
   TaskPrioritySnapshot get snapshot => _snapshot;
   TaskPrioritySnapshot get baseSnapshot => _snapshot.baseSnapshot;
+  bool get isBasePriorityAvailable => _snapshot.computedAtLocal != null;
+  bool get shouldShowAiUpgradeHint =>
+      isAiEnhancementEnabled &&
+      !isAiEnhancementAvailable &&
+      !_snapshot.hasAiEnhancement;
 
   Map<String, TodoChecklistProgress> _checklistProgressByTodoId =
       const <String, TodoChecklistProgress>{};

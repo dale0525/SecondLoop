@@ -37,6 +37,46 @@ Future<void> _pumpUntilTaskHubReady(WidgetTester tester) async {
 }
 
 void main() {
+  testWidgets(
+      'TaskHubPage shows base priority content on web without AI enhancement',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final backend = CloudWebBackend(
+      chatClient: _FakeCloudWebChatClient(responseText: 'ok'),
+    );
+    final key = Uint8List.fromList(List<int>.filled(32, 1));
+    await backend.upsertTodo(
+      key,
+      id: 'todo:web-base-only',
+      title: 'Base-only web task',
+      status: 'open',
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: backend,
+            child: SessionScope(
+              sessionKey: key,
+              lock: () {},
+              child: const TaskHubPage(),
+            ),
+          ),
+        ),
+      ),
+    );
+    await _pumpUntilTaskHubReady(tester);
+
+    expect(find.byKey(const ValueKey('task_hub_page_item_todo:web-base-only')),
+        findsOneWidget);
+    expect(find.text('Base-only web task'), findsWidgets);
+    expect(
+      find.byKey(const ValueKey('task_hub_page_ai_upgrade_hint')),
+      findsOneWidget,
+    );
+  });
+
   testWidgets('TaskHubPage opens detail page with backend scopes on web',
       (tester) async {
     SharedPreferences.setMockInitialValues({});

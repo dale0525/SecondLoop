@@ -435,9 +435,7 @@ class _TaskHubPageState extends State<TaskHubPage> {
                           ],
                         ),
                       ),
-                    if (store.isAiEnhancementEnabled &&
-                        !store.isAiEnhancementAvailable &&
-                        !snapshot.hasAiEnhancement) ...[
+                    if (store.shouldShowAiUpgradeHint) ...[
                       const SizedBox(height: 12),
                       SlSurface(
                         key: const ValueKey('task_hub_page_ai_upgrade_hint'),

@@ -31,6 +31,67 @@ void main() {
     );
   }
 
+  test('free tier keeps base priority and shows upgrade hint state', () async {
+    SharedPreferences.setMockInitialValues({});
+    final store = TaskPriorityStore.fromLoaders(
+      nowLocal: () => DateTime(2026, 3, 13, 10, 0),
+      loadTodos: () async => <Todo>[
+        todo(id: 'focus', title: 'Free tier focus', updatedAtMs: 10),
+      ],
+      resolveAiService: () async => null,
+    );
+
+    await store.refresh();
+
+    expect(store.isBasePriorityAvailable, isTrue);
+    expect(store.aiAvailability, TaskPriorityAiAvailability.unavailable);
+    expect(store.isAiEnhancementAvailable, isFalse);
+    expect(store.shouldShowAiUpgradeHint, isTrue);
+    expect(store.baseSnapshot.primaryFocus?.todo.id, 'focus');
+    expect(store.snapshot.source, TaskPrioritySnapshotSource.rules);
+  });
+
+  test('disabled enhancement keeps base priority without upgrade hint',
+      () async {
+    SharedPreferences.setMockInitialValues({});
+    final store = TaskPriorityStore.fromLoaders(
+      nowLocal: () => DateTime(2026, 3, 13, 10, 0),
+      loadTodos: () async => <Todo>[
+        todo(id: 'focus', title: 'Disabled focus', updatedAtMs: 10),
+      ],
+      isAiEnhancementEnabled: () async => false,
+    );
+
+    await store.refresh();
+
+    expect(store.isBasePriorityAvailable, isTrue);
+    expect(store.aiAvailability, TaskPriorityAiAvailability.disabled);
+    expect(store.isAiEnhancementAvailable, isFalse);
+    expect(store.shouldShowAiUpgradeHint, isFalse);
+    expect(store.snapshot.source, TaskPrioritySnapshotSource.rules);
+  });
+
+  test('available enhancement keeps base snapshot alongside hybrid result',
+      () async {
+    SharedPreferences.setMockInitialValues({});
+    final store = TaskPriorityStore.fromLoaders(
+      nowLocal: () => DateTime(2026, 3, 13, 10, 0),
+      loadTodos: () async => <Todo>[
+        todo(id: 'focus', title: 'Pro focus', updatedAtMs: 10),
+      ],
+      resolveAiService: () async => _SuccessfulAiService(),
+    );
+
+    await store.refresh();
+
+    expect(store.isBasePriorityAvailable, isTrue);
+    expect(store.isAiEnhancementAvailable, isTrue);
+    expect(store.shouldShowAiUpgradeHint, isFalse);
+    expect(store.snapshot.source, TaskPrioritySnapshotSource.hybrid);
+    expect(store.baseSnapshot.source, TaskPrioritySnapshotSource.rules);
+    expect(store.snapshot.hasAiEnhancement, isTrue);
+  });
+
   test('availability falls back when refresh yields no AI assessments',
       () async {
     SharedPreferences.setMockInitialValues({});
@@ -110,6 +171,8 @@ void main() {
       fallbackStore.snapshot.primaryFocus?.reasonText,
       'Persisted AI result.',
     );
+    expect(fallbackStore.shouldShowAiUpgradeHint, isFalse);
+    expect(fallbackStore.snapshot.hasAiEnhancement, isTrue);
   });
 }
 
