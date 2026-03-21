@@ -941,6 +941,68 @@ void main() {
     expect(backend.succeededTodoIds, contains('todo_manual_cloud'));
   });
 
+  testWidgets(
+      'automatic jobs defer pending entitlement instead of draining needs-setup jobs',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({
+      'semantic_parse_data_consent_v1': true,
+    });
+
+    final backend = _FakeTodoFollowupGenerationGateBackend(
+      dueJobs: const <TodoFollowupGenerationJob>[
+        TodoFollowupGenerationJob(
+          todoId: 'todo_auto_pending',
+          triggerKind: 'auto_create',
+          status: 'pending',
+          attempts: 1,
+          nextRetryAtMs: null,
+          lastError: null,
+          includeManualFollowups: false,
+          taskTypeHint: 'research',
+          createdAtMs: 0,
+          updatedAtMs: 0,
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: AppBackendScope(
+          backend: backend,
+          child: SessionScope(
+            sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+            lock: () {},
+            child: SubscriptionScope(
+              controller: _FixedSubscriptionStatusController(
+                SubscriptionStatus.unknown,
+              ),
+              child: const CloudAuthScope(
+                controller: _FixedCloudAuthController('token_1'),
+                gatewayConfig: CloudGatewayConfig(
+                  baseUrl: 'https://example.com',
+                  modelName: 'cloud',
+                ),
+                child: TodoFollowupGenerationGate(
+                  child: SizedBox.shrink(),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 3));
+
+    expect(backend.failedTodoIds, contains('todo_auto_pending'));
+    expect(backend.failedLastErrors, contains('followup_subscription_pending'));
+    expect(backend.skippedTodoIds, isEmpty);
+    expect(backend.canceledTodoIds, isEmpty);
+    expect(backend.localPromptCalls, 0);
+    expect(backend.cloudPromptCalls, 0);
+  });
+
   testWidgets('gate runs for supported non-native backends via capability',
       (tester) async {
     SharedPreferences.setMockInitialValues({
@@ -1018,6 +1080,7 @@ final class _FakeTodoFollowupGenerationGateBackend extends NativeAppBackend {
   final List<String> skippedTodoIds = <String>[];
   final List<String> canceledTodoIds = <String>[];
   final List<String> failedTodoIds = <String>[];
+  final List<String> failedLastErrors = <String>[];
   final List<String> succeededTodoIds = <String>[];
   final List<String> generatedSuggestionTodoIds = <String>[];
   final List<int> listDueJobsLimits = <int>[];
@@ -1150,6 +1213,7 @@ final class _FakeTodoFollowupGenerationGateBackend extends NativeAppBackend {
     required int nowMs,
   }) async {
     failedTodoIds.add(todoId);
+    failedLastErrors.add(lastError);
   }
 
   @override
