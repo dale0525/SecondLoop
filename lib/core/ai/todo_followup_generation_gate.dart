@@ -164,13 +164,14 @@ Future<void> finalizeTodoFollowupGenerationJobsForNeedsSetup(
   }
 }
 
-Future<void> deferTodoFollowupGenerationJobsForRetry(
+Future<int?> deferTodoFollowupGenerationJobsForRetry(
   TodoFollowupGenerationStore store,
   List<TodoFollowupGenerationJob> jobs, {
   required int nowMs,
   required Duration retryDelay,
   required String lastError,
 }) async {
+  int? earliestNextRetryAtMs;
   for (final job in jobs) {
     // Product decision: when the route is temporarily unavailable, manual
     // regenerate jobs stay retryable, while background auto jobs are drained so
@@ -179,14 +180,20 @@ Future<void> deferTodoFollowupGenerationJobsForRetry(
       await store.markJobSkipped(todoId: job.todoId, nowMs: nowMs);
       continue;
     }
+    final nextRetryAtMs = nowMs + retryDelay.inMilliseconds;
     await store.markJobFailed(
       todoId: job.todoId,
       attempts: job.attempts.toInt() + 1,
-      nextRetryAtMs: nowMs + retryDelay.inMilliseconds,
+      nextRetryAtMs: nextRetryAtMs,
       lastError: lastError,
       nowMs: nowMs,
     );
+    earliestNextRetryAtMs = minTodoFollowupGenerationRetryAtMs(
+      earliestNextRetryAtMs,
+      nextRetryAtMs,
+    );
   }
+  return earliestNextRetryAtMs;
 }
 
 bool shouldDeferTodoFollowupGenerationNeedsSetup({
@@ -207,22 +214,63 @@ bool shouldDeferTodoFollowupGenerationNeedsSetup({
   return hasCloudAuthController;
 }
 
-Future<void> deferTodoFollowupGenerationJobsForPendingEntitlement(
+Future<int?> deferTodoFollowupGenerationJobsForPendingEntitlement(
   TodoFollowupGenerationStore store,
   List<TodoFollowupGenerationJob> jobs, {
   required int nowMs,
   required Duration retryDelay,
   required String lastError,
 }) async {
+  int? earliestNextRetryAtMs;
   for (final job in jobs) {
+    final nextRetryAtMs = nowMs + retryDelay.inMilliseconds;
     await store.markJobFailed(
       todoId: job.todoId,
       attempts: job.attempts.toInt(),
-      nextRetryAtMs: nowMs + retryDelay.inMilliseconds,
+      nextRetryAtMs: nextRetryAtMs,
       lastError: lastError,
       nowMs: nowMs,
     );
+    earliestNextRetryAtMs = minTodoFollowupGenerationRetryAtMs(
+      earliestNextRetryAtMs,
+      nextRetryAtMs,
+    );
   }
+  return earliestNextRetryAtMs;
+}
+
+int? minTodoFollowupGenerationRetryAtMs(int? current, int? candidate) {
+  if (candidate == null) {
+    return current;
+  }
+  if (current == null || candidate < current) {
+    return candidate;
+  }
+  return current;
+}
+
+Duration computeTodoFollowupGenerationNextDelay({
+  required int nowMs,
+  required int previewJobCount,
+  required int batchLimit,
+  required bool didUpdateJobs,
+  required int? earliestNextRetryAtMs,
+  Duration idleInterval = const Duration(seconds: 30),
+  Duration drainInterval = const Duration(seconds: 2),
+}) {
+  if (didUpdateJobs && previewJobCount >= batchLimit) {
+    return drainInterval;
+  }
+
+  if (earliestNextRetryAtMs != null) {
+    final retryDelayMs = earliestNextRetryAtMs - nowMs;
+    if (retryDelayMs <= 0) {
+      return Duration.zero;
+    }
+    return Duration(milliseconds: retryDelayMs);
+  }
+
+  return idleInterval;
 }
 
 class TodoFollowupGenerationGate extends StatefulWidget {
@@ -381,6 +429,7 @@ class _TodoFollowupGenerationGateState extends State<TodoFollowupGenerationGate>
     final localeTag = Localizations.localeOf(context).toLanguageTag();
     var didMutateAny = false;
     var didUpdateJobs = false;
+    int? earliestNextRetryAtMs;
 
     _running = true;
     _restartBlockToken = UpdateRestartActivity.blockAiAnalysis();
@@ -460,12 +509,17 @@ class _TodoFollowupGenerationGateState extends State<TodoFollowupGenerationGate>
             gatewayBaseUrl: gatewayConfig.baseUrl,
             hasCloudAuthController: hasCloudAuthController,
           )) {
-            await deferTodoFollowupGenerationJobsForPendingEntitlement(
+            final retryAtMs =
+                await deferTodoFollowupGenerationJobsForPendingEntitlement(
               backendStore,
               passPlan.jobs,
               nowMs: nowMs,
               retryDelay: _kFailureInterval,
               lastError: 'followup_subscription_pending',
+            );
+            earliestNextRetryAtMs = minTodoFollowupGenerationRetryAtMs(
+              earliestNextRetryAtMs,
+              retryAtMs,
             );
           } else {
             await finalizeTodoFollowupGenerationJobsForNeedsSetup(
@@ -482,12 +536,16 @@ class _TodoFollowupGenerationGateState extends State<TodoFollowupGenerationGate>
         if (route == AskAiRouteKind.cloudGateway &&
             (idToken?.trim().isEmpty ?? true)) {
           if (passPlan.hasManualRegenerateDueJob) {
-            await deferTodoFollowupGenerationJobsForRetry(
+            final retryAtMs = await deferTodoFollowupGenerationJobsForRetry(
               backendStore,
               passPlan.jobs,
               nowMs: nowMs,
               retryDelay: _kFailureInterval,
               lastError: 'manual_followup_auth_unavailable',
+            );
+            earliestNextRetryAtMs = minTodoFollowupGenerationRetryAtMs(
+              earliestNextRetryAtMs,
+              retryAtMs,
             );
           } else {
             await finalizeTodoFollowupGenerationJobsForNeedsSetup(
@@ -526,12 +584,25 @@ class _TodoFollowupGenerationGateState extends State<TodoFollowupGenerationGate>
         passDidUpdateJobs = result.didUpdateJobs;
         didMutateAny = didMutateAny || passDidMutateAny;
         didUpdateJobs = didUpdateJobs || passDidUpdateJobs;
+        earliestNextRetryAtMs = minTodoFollowupGenerationRetryAtMs(
+          earliestNextRetryAtMs,
+          result.earliestNextRetryAtMs,
+        );
       }
 
       if (didMutateAny || didUpdateJobs) {
         _notifyExternalChange(syncEngine);
       }
-      _schedule(didUpdateJobs ? _kDrainInterval : _kIdleInterval);
+      final nextDelay = computeTodoFollowupGenerationNextDelay(
+        nowMs: DateTime.now().millisecondsSinceEpoch,
+        previewJobCount: previewJobs.length,
+        batchLimit: _kBatchLimit,
+        didUpdateJobs: didUpdateJobs,
+        earliestNextRetryAtMs: earliestNextRetryAtMs,
+        idleInterval: _kIdleInterval,
+        drainInterval: _kDrainInterval,
+      );
+      _schedule(nextDelay);
     } catch (_) {
       if (didMutateAny || didUpdateJobs) {
         _notifyExternalChange(syncEngine);

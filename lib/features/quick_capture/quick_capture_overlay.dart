@@ -232,7 +232,8 @@ class _QuickCaptureDialogState extends State<_QuickCaptureDialog> {
           final todoId = 'todo:${message.id}';
           switch (decision) {
             case CaptureTodoScheduleDecision(:final dueAtLocal):
-              await backend.upsertTodo(
+              await createTodoWithFollowup(
+                backend,
                 sessionKey,
                 id: todoId,
                 title: text,
@@ -250,7 +251,8 @@ class _QuickCaptureDialogState extends State<_QuickCaptureDialog> {
                 DateTime.now(),
                 settings,
               );
-              await backend.upsertTodo(
+              await createTodoWithFollowup(
+                backend,
                 sessionKey,
                 id: todoId,
                 title: text,

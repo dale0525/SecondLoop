@@ -23,15 +23,60 @@ void main() {
     expect(backend.enqueueTaskTypeHints, const <String?>[null]);
     expect(backend.enqueueTriggerKinds, const <String>['auto_create']);
   });
+
+  test('createTodoWithFollowup auto-enqueues for capability backends',
+      () async {
+    final backend = _FollowupCapabilityBackend();
+    final key = Uint8List.fromList(List<int>.filled(32, 3));
+
+    final todo = await createTodoWithFollowup(
+      backend,
+      key,
+      id: 'todo_2',
+      title: 'Compare current coding agents',
+      status: 'open',
+    );
+
+    expect(todo.id, 'todo_2');
+    expect(backend.enqueueTodoIds, const <String>['todo_2']);
+    expect(backend.enqueueTaskTypeHints, const <String?>[null]);
+    expect(backend.enqueueTriggerKinds, const <String>['auto_create']);
+  });
+
+  test(
+      'createTodoWithFollowup avoids duplicate enqueue when backend already auto-enqueues',
+      () async {
+    final backend = _FollowupCapabilityBackend(autoEnqueuesOnCreate: true);
+    final key = Uint8List.fromList(List<int>.filled(32, 5));
+
+    final todo = await createTodoWithFollowup(
+      backend,
+      key,
+      id: 'todo_3',
+      title: 'Collect conference notes',
+      status: 'inbox',
+    );
+
+    expect(todo.id, 'todo_3');
+    expect(backend.enqueueTodoIds, const <String>['todo_3']);
+    expect(backend.enqueueTaskTypeHints, const <String?>[null]);
+    expect(backend.enqueueTriggerKinds, const <String>['auto_create']);
+  });
 }
 
 final class _FollowupCapabilityBackend extends AppBackend {
+  _FollowupCapabilityBackend({this.autoEnqueuesOnCreate = false});
+
   final List<String> enqueueTodoIds = <String>[];
   final List<String?> enqueueTaskTypeHints = <String?>[];
   final List<String> enqueueTriggerKinds = <String>[];
+  final bool autoEnqueuesOnCreate;
 
   @override
   bool get supportsTodoFollowupSuggestions => true;
+
+  @override
+  bool get autoEnqueuesTodoFollowupGenerationOnCreate => autoEnqueuesOnCreate;
 
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
@@ -47,19 +92,25 @@ final class _FollowupCapabilityBackend extends AppBackend {
     int? reviewStage,
     int? nextReviewAtMs,
     int? lastReviewAtMs,
-  }) async =>
-      Todo(
-        id: id,
-        title: title,
-        dueAtMs: dueAtMs,
-        status: status,
-        sourceEntryId: sourceEntryId,
-        createdAtMs: 1,
-        updatedAtMs: 1,
-        reviewStage: reviewStage,
-        nextReviewAtMs: nextReviewAtMs,
-        lastReviewAtMs: lastReviewAtMs,
-      );
+  }) async {
+    if (autoEnqueuesOnCreate) {
+      enqueueTodoIds.add(id);
+      enqueueTaskTypeHints.add(null);
+      enqueueTriggerKinds.add('auto_create');
+    }
+    return Todo(
+      id: id,
+      title: title,
+      dueAtMs: dueAtMs,
+      status: status,
+      sourceEntryId: sourceEntryId,
+      createdAtMs: 1,
+      updatedAtMs: 1,
+      reviewStage: reviewStage,
+      nextReviewAtMs: nextReviewAtMs,
+      lastReviewAtMs: lastReviewAtMs,
+    );
+  }
 
   @override
   Future<void> enqueueTodoFollowupGenerationJob(

@@ -284,6 +284,9 @@ class NativeAppBackend extends _NativeAppBackendAccess
   @override
   bool get supportsTodoFollowupSuggestions => true;
 
+  @override
+  bool get autoEnqueuesTodoFollowupGenerationOnCreate => true;
+
   NativeAppBackend({
     FlutterSecureStorage? secureStorage,
     AppDirProvider? appDirProvider,

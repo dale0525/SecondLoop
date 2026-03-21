@@ -24,8 +24,89 @@ extension TodoRecurrenceEditScopeWire on TodoRecurrenceEditScope {
       };
 }
 
+String? normalizeTodoFollowupTaskTypeHint(String? followupTaskTypeHint) {
+  final normalized = followupTaskTypeHint?.trim();
+  if (normalized == null || normalized.isEmpty) {
+    return null;
+  }
+  return normalized;
+}
+
+Future<void> maybeEnqueueTodoFollowupGenerationOnCreate(
+  AppBackend backend,
+  Uint8List key, {
+  required String todoId,
+  String? followupTaskTypeHint,
+}) async {
+  if (!backend.supportsTodoFollowupSuggestions ||
+      backend.autoEnqueuesTodoFollowupGenerationOnCreate) {
+    return;
+  }
+
+  final taskTypeHint = normalizeTodoFollowupTaskTypeHint(followupTaskTypeHint);
+  try {
+    await backend.enqueueTodoFollowupGenerationJob(
+      key,
+      todoId: todoId,
+      triggerKind: 'auto_create',
+      taskTypeHint: taskTypeHint,
+      nowMs: DateTime.now().millisecondsSinceEpoch,
+    );
+  } catch (error, stackTrace) {
+    debugPrint(
+      'AppBackend create follow-up enqueue failed for $todoId: $error',
+    );
+    FlutterError.reportError(
+      FlutterErrorDetails(
+        exception: error,
+        stack: stackTrace,
+        library: 'app_backend',
+        context: ErrorDescription(
+          'while enqueueing an automatic todo follow-up generation job',
+        ),
+      ),
+    );
+  }
+}
+
+Future<Todo> createTodoWithFollowup(
+  AppBackend backend,
+  Uint8List key, {
+  required String id,
+  required String title,
+  int? dueAtMs,
+  required String status,
+  String? sourceEntryId,
+  int? reviewStage,
+  int? nextReviewAtMs,
+  int? lastReviewAtMs,
+  String? followupTaskTypeHint,
+}) async {
+  final todo = await backend.upsertTodo(
+    key,
+    id: id,
+    title: title,
+    dueAtMs: dueAtMs,
+    status: status,
+    sourceEntryId: sourceEntryId,
+    reviewStage: reviewStage,
+    nextReviewAtMs: nextReviewAtMs,
+    lastReviewAtMs: lastReviewAtMs,
+  );
+
+  await maybeEnqueueTodoFollowupGenerationOnCreate(
+    backend,
+    key,
+    todoId: id,
+    followupTaskTypeHint: followupTaskTypeHint,
+  );
+  return todo;
+}
+
 abstract class AppBackend {
   bool get supportsTodoFollowupSuggestions => false;
+
+  bool get autoEnqueuesTodoFollowupGenerationOnCreate => false;
 
   Future<void> init();
 
@@ -159,11 +240,8 @@ abstract class AppBackend {
       lastReviewAtMs: lastReviewAtMs,
     );
 
-    final normalizedTaskTypeHint = followupTaskTypeHint?.trim();
     final taskTypeHint =
-        normalizedTaskTypeHint == null || normalizedTaskTypeHint.isEmpty
-            ? null
-            : normalizedTaskTypeHint;
+        normalizeTodoFollowupTaskTypeHint(followupTaskTypeHint);
     if (supportsTodoFollowupSuggestions) {
       try {
         await enqueueTodoFollowupGenerationJob(

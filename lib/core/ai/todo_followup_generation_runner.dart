@@ -91,11 +91,13 @@ final class TodoFollowupGenerationRunResult {
     required this.processed,
     required this.didMutateAny,
     required this.didUpdateJobs,
+    required this.earliestNextRetryAtMs,
   });
 
   final int processed;
   final bool didMutateAny;
   final bool didUpdateJobs;
+  final int? earliestNextRetryAtMs;
 }
 
 typedef TodoFollowupNowMs = int Function();
@@ -125,6 +127,7 @@ final class TodoFollowupGenerationRunner {
     var processed = 0;
     var didMutateAny = false;
     var didUpdateJobs = false;
+    int? earliestNextRetryAtMs;
 
     for (final job in jobs) {
       if (job.status != 'pending' &&
@@ -267,12 +270,17 @@ final class TodoFollowupGenerationRunner {
         final attempts = job.attempts.toInt() + 1;
         final failedAtMs = _nowMs();
         if (job.triggerKind == 'manual_regenerate') {
+          final nextRetryAtMs = failedAtMs + _retryDelayMsForAttempt(attempts);
           await store.markJobFailed(
             todoId: job.todoId,
             attempts: attempts,
-            nextRetryAtMs: failedAtMs + _retryDelayMsForAttempt(attempts),
+            nextRetryAtMs: nextRetryAtMs,
             lastError: '$error',
             nowMs: failedAtMs,
+          );
+          earliestNextRetryAtMs = _minRetryAtMs(
+            earliestNextRetryAtMs,
+            nextRetryAtMs,
           );
           didUpdateJobs = true;
           continue;
@@ -288,12 +296,17 @@ final class TodoFollowupGenerationRunner {
           continue;
         }
 
+        final nextRetryAtMs = failedAtMs + _retryDelayMsForAttempt(attempts);
         await store.markJobFailed(
           todoId: job.todoId,
           attempts: attempts,
-          nextRetryAtMs: failedAtMs + _retryDelayMsForAttempt(attempts),
+          nextRetryAtMs: nextRetryAtMs,
           lastError: '$error',
           nowMs: failedAtMs,
+        );
+        earliestNextRetryAtMs = _minRetryAtMs(
+          earliestNextRetryAtMs,
+          nextRetryAtMs,
         );
         didUpdateJobs = true;
       }
@@ -303,6 +316,7 @@ final class TodoFollowupGenerationRunner {
       processed: processed,
       didMutateAny: didMutateAny,
       didUpdateJobs: didUpdateJobs,
+      earliestNextRetryAtMs: earliestNextRetryAtMs,
     );
   }
 
@@ -367,6 +381,16 @@ int _retryDelayMsForAttempt(int attempts) {
   if (attempts <= 1) return 30 * 1000;
   if (attempts == 2) return 2 * 60 * 1000;
   return 10 * 60 * 1000;
+}
+
+int? _minRetryAtMs(int? current, int? candidate) {
+  if (candidate == null) {
+    return current;
+  }
+  if (current == null || candidate < current) {
+    return candidate;
+  }
+  return current;
 }
 
 String encodeTodoFollowupCitationsJson(

@@ -92,6 +92,30 @@ void main() {
     expect(store.skippedTodoIds, isEmpty);
     expect(store.canceledTodoIds, isEmpty);
   });
+
+  test('next delay honors earliest retry when batch is not saturated', () {
+    final delay = computeTodoFollowupGenerationNextDelay(
+      nowMs: 1000,
+      previewJobCount: 1,
+      batchLimit: 5,
+      didUpdateJobs: true,
+      earliestNextRetryAtMs: 11000,
+    );
+
+    expect(delay, const Duration(seconds: 10));
+  });
+
+  test('next delay keeps draining when current batch is saturated', () {
+    final delay = computeTodoFollowupGenerationNextDelay(
+      nowMs: 1000,
+      previewJobCount: 5,
+      batchLimit: 5,
+      didUpdateJobs: true,
+      earliestNextRetryAtMs: 11000,
+    );
+
+    expect(delay, const Duration(seconds: 2));
+  });
 }
 
 final class _RecordingTodoFollowupGenerationStore

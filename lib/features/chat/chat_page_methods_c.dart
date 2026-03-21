@@ -238,7 +238,8 @@ extension _ChatPageStateMethodsC on _ChatPageState {
           nextReviewAtMs = nextLocal.toUtc().millisecondsSinceEpoch;
         }
         try {
-          await backend.upsertTodo(
+          await createTodoWithFollowup(
+            backend,
             sessionKey,
             id: todoId,
             title: title,
@@ -305,7 +306,8 @@ extension _ChatPageStateMethodsC on _ChatPageState {
       switch (decision) {
         case CaptureTodoScheduleDecision(:final dueAtLocal):
           try {
-            await backend.upsertTodo(
+            await createTodoWithFollowup(
+              backend,
               sessionKey,
               id: todoId,
               title: rawText.trim(),
@@ -327,7 +329,8 @@ extension _ChatPageStateMethodsC on _ChatPageState {
             settings,
           );
           try {
-            await backend.upsertTodo(
+            await createTodoWithFollowup(
+              backend,
               sessionKey,
               id: todoId,
               title: rawText.trim(),
