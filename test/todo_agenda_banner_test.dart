@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -9,6 +10,7 @@ import 'package:secondloop/core/session/session_scope.dart';
 import 'package:secondloop/features/actions/agenda/todo_agenda_banner.dart';
 import 'package:secondloop/features/actions/task_hub/task_hub_page.dart';
 import 'package:secondloop/features/actions/task_hub/task_priority_ai.dart';
+import 'package:secondloop/features/actions/task_hub/task_priority_ai_models.dart';
 import 'package:secondloop/features/actions/todo/todo_detail_page.dart';
 import 'package:secondloop/features/chat/chat_page.dart';
 import 'package:secondloop/src/rust/db.dart';
@@ -467,6 +469,69 @@ void main() {
     expect(find.byType(SnackBar), findsNothing);
   });
 
+  testWidgets('Chat task hub banner shows live ai source label',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+
+    final backend = _AgendaBackend(
+      todos: const [
+        Todo(
+          id: 'todo:ai-label',
+          title: 'AI-ranked chat task',
+          dueAtMs: null,
+          status: 'open',
+          sourceEntryId: null,
+          createdAtMs: 0,
+          updatedAtMs: 0,
+          reviewStage: null,
+          nextReviewAtMs: null,
+          lastReviewAtMs: null,
+        ),
+      ],
+      taskPriorityAiResponseJson: jsonEncode(
+        const TaskPriorityAiBatchResult(
+          entries: <TaskPriorityAiEntry>[
+            TaskPriorityAiEntry(
+              todoId: 'todo:ai-label',
+              semanticAdjustment: 18,
+              reason: 'Live AI result.',
+              confidence: TaskPriorityAiConfidence.high,
+            ),
+          ],
+        ).toJson(),
+      ),
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        AppBackendScope(
+          backend: backend,
+          child: SessionScope(
+            sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+            lock: () {},
+            child: const MaterialApp(
+              home: ChatPage(
+                conversation: Conversation(
+                  id: 'loop_home',
+                  title: 'Loop',
+                  createdAtMs: 0,
+                  updatedAtMs: 0,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await _pumpUntilFound(
+      tester,
+      find.byKey(const ValueKey('task_hub_banner_ai_source')),
+    );
+
+    expect(find.text('Live AI insight'), findsOneWidget);
+    expect(find.text('Live AI result.'), findsOneWidget);
+  });
+
   testWidgets(
       'Task hub banner primary action shows the new urgency label in chat',
       (tester) async {
@@ -524,12 +589,15 @@ void main() {
 }
 
 final class _AgendaBackend extends TestAppBackend {
-  _AgendaBackend({required List<Todo> todos})
-      : _todosById = <String, Todo>{
+  _AgendaBackend({
+    required List<Todo> todos,
+    this.taskPriorityAiResponseJson,
+  }) : _todosById = <String, Todo>{
           for (final todo in todos) todo.id: todo,
         };
 
   final Map<String, Todo> _todosById;
+  final String? taskPriorityAiResponseJson;
 
   @override
   Future<List<Todo>> listTodos(Uint8List key) async =>
@@ -628,6 +696,17 @@ final class _AgendaBackend extends TestAppBackend {
     );
     _todosById[todoId] = updated;
     return updated;
+  }
+
+  @override
+  Future<String> taskPriorityRerankAi(
+    Uint8List key, {
+    required String prompt,
+  }) async {
+    if (taskPriorityAiResponseJson == null) {
+      throw UnimplementedError('taskPriorityRerankAi');
+    }
+    return taskPriorityAiResponseJson!;
   }
 
   @override
