@@ -86,7 +86,7 @@ void main() {
     );
 
     expect(store.failedTodoIds, const <String>['todo_auto']);
-    expect(store.failedAttempts, const <int>[2]);
+    expect(store.failedAttempts, const <int>[1]);
     expect(store.failedRetryAtMs, const <int>[10500]);
     expect(store.failedErrors, const <String>['followup_subscription_pending']);
     expect(store.skippedTodoIds, isEmpty);

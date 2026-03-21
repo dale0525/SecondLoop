@@ -20,6 +20,7 @@ pub mod simple;
 pub mod sync_diagnostics;
 pub mod sync_progress;
 pub mod tags;
+pub mod todo_followup_jobs;
 
 #[cfg(test)]
 mod knowledge_tests;

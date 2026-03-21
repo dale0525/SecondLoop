@@ -1,5 +1,6 @@
 use std::path::{Path, PathBuf};
 
+use crate::api::todo_followup_jobs::list_visible_due_todo_followup_generation_jobs;
 use crate::crypto::{derive_root_key, KdfParams};
 use crate::embedding;
 use crate::embedding::Embedder;
@@ -733,15 +734,7 @@ pub fn db_list_due_todo_followup_generation_jobs(
     let key = key_from_bytes(key)?;
     auth::validate_key(&app_dir, &key)?;
     let conn = db::open(&app_dir)?;
-    let jobs = db::list_due_todo_followup_generation_jobs(&conn, now_ms, limit as i64)?;
-    let mut visible_jobs = Vec::with_capacity(jobs.len());
-    for job in jobs {
-        match check_todo_access(&conn, &key, &job.todo_id) {
-            Ok(true) => visible_jobs.push(job),
-            Ok(false) | Err(_) => {}
-        }
-    }
-    Ok(visible_jobs)
+    list_visible_due_todo_followup_generation_jobs(&conn, &key, now_ms, limit)
 }
 
 #[flutter_rust_bridge::frb]

@@ -216,10 +216,6 @@ final class TodoFollowupGenerationRunner {
                 : encodeTodoFollowupCitationsJson(suggestion.citations),
           ),
         ];
-        final desiredPendingContents = generatedSuggestions
-            .map((item) => _normalizeFollowupContent(item.content))
-            .where((item) => item.isNotEmpty)
-            .toSet();
 
         await store.upsertGeneratedTodoFollowupSuggestions(
           todoId: job.todoId,
@@ -230,19 +226,25 @@ final class TodoFollowupGenerationRunner {
 
         final updatedSuggestions =
             await store.listTodoFollowupSuggestions(job.todoId);
-        final createdPendingSuggestions = updatedSuggestions
-            .where((item) =>
-                item.state == 'pending' && item.generationKey == generationKey)
+        final updatedPendingSuggestions = updatedSuggestions
+            .where((item) => item.state == 'pending')
+            .toList(growable: false);
+        final createdPendingSuggestions = updatedPendingSuggestions
+            .where((item) => item.generationKey == generationKey)
             .toList(growable: false);
         if (createdPendingSuggestions.isNotEmpty) {
           didMutateAny = true;
         }
 
         if (job.includeManualFollowups && pendingSuggestionIds.isNotEmpty) {
-          final stalePendingSuggestionIds = pendingSuggestions
+          final previousPendingSuggestionIds = pendingSuggestionIds.toSet();
+          final retainedPendingSuggestionIds =
+              createdPendingSuggestions.map((item) => item.id).toSet();
+          final stalePendingSuggestionIds = updatedPendingSuggestions
               .where(
-                (item) => !desiredPendingContents
-                    .contains(_normalizeFollowupContent(item.content)),
+                (item) =>
+                    previousPendingSuggestionIds.contains(item.id) &&
+                    !retainedPendingSuggestionIds.contains(item.id),
               )
               .map((item) => item.id)
               .toList(growable: false);
@@ -359,15 +361,6 @@ List<String> _collectManualFollowups(List<TodoActivity> activities) {
     out.add(content);
   }
   return out;
-}
-
-String _normalizeFollowupContent(String raw) {
-  return raw
-      .split(RegExp(r'\s+'))
-      .where((item) => item.isNotEmpty)
-      .join(' ')
-      .trim()
-      .toLowerCase();
 }
 
 int _retryDelayMsForAttempt(int attempts) {

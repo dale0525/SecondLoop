@@ -217,7 +217,7 @@ Future<void> deferTodoFollowupGenerationJobsForPendingEntitlement(
   for (final job in jobs) {
     await store.markJobFailed(
       todoId: job.todoId,
-      attempts: job.attempts.toInt() + 1,
+      attempts: job.attempts.toInt(),
       nextRetryAtMs: nowMs + retryDelay.inMilliseconds,
       lastError: lastError,
       nowMs: nowMs,
