@@ -130,12 +130,41 @@ TaskPrioritySnapshot buildTaskPrioritySnapshot(
     );
   }
 
+  final baseLists = _splitTaskPriorityEntries(rawEntries);
+
   var entries = rawEntries;
   if (aiResult != null) {
     entries = _applyAiResult(entries, aiResult);
   }
   entries = _applyFeedback(entries, feedback);
+  final finalLists = _splitTaskPriorityEntries(entries);
 
+  return TaskPrioritySnapshot(
+    source: aiResult == null
+        ? TaskPrioritySnapshotSource.rules
+        : TaskPrioritySnapshotSource.hybrid,
+    enhancementSource: aiResult == null
+        ? TaskPriorityEnhancementSource.none
+        : TaskPriorityEnhancementSource.ai,
+    computedAtLocal: nowLocal,
+    focus: finalLists.focus,
+    scheduled: finalLists.scheduled,
+    decide: finalLists.decide,
+    done: finalLists.done,
+    orderedActive: finalLists.orderedActive,
+    baseFocus: baseLists.focus,
+    baseScheduled: baseLists.scheduled,
+    baseDecide: baseLists.decide,
+    baseDone: baseLists.done,
+    baseOrderedActive: baseLists.orderedActive,
+    selectedFocusTodoId: finalLists.orderedActive.isEmpty
+        ? null
+        : finalLists.orderedActive.first.todo.id,
+  );
+}
+
+_TaskPriorityBuckets _splitTaskPriorityEntries(
+    List<TaskPriorityEntry> entries) {
   final focus = <TaskPriorityEntry>[];
   final scheduled = <TaskPriorityEntry>[];
   final decide = <TaskPriorityEntry>[];
@@ -169,19 +198,29 @@ TaskPrioritySnapshot buildTaskPrioritySnapshot(
     ...decide,
   ]..sort(_compareOverallPriority);
 
-  return TaskPrioritySnapshot(
-    source: aiResult == null
-        ? TaskPrioritySnapshotSource.rules
-        : TaskPrioritySnapshotSource.hybrid,
-    computedAtLocal: nowLocal,
+  return _TaskPriorityBuckets(
     focus: List<TaskPriorityEntry>.unmodifiable(focus),
     scheduled: List<TaskPriorityEntry>.unmodifiable(scheduled),
     decide: List<TaskPriorityEntry>.unmodifiable(decide),
     done: List<TaskPriorityEntry>.unmodifiable(done),
     orderedActive: List<TaskPriorityEntry>.unmodifiable(orderedActive),
-    selectedFocusTodoId:
-        orderedActive.isEmpty ? null : orderedActive.first.todo.id,
   );
+}
+
+final class _TaskPriorityBuckets {
+  const _TaskPriorityBuckets({
+    required this.focus,
+    required this.scheduled,
+    required this.decide,
+    required this.done,
+    required this.orderedActive,
+  });
+
+  final List<TaskPriorityEntry> focus;
+  final List<TaskPriorityEntry> scheduled;
+  final List<TaskPriorityEntry> decide;
+  final List<TaskPriorityEntry> done;
+  final List<TaskPriorityEntry> orderedActive;
 }
 
 List<TaskPriorityEntry> _applyAiResult(

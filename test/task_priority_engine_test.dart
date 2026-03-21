@@ -78,6 +78,51 @@ void main() {
     expect(snapshot.source, TaskPrioritySnapshotSource.rules);
   });
 
+  test('snapshot keeps base ordering when AI enhancement is applied', () {
+    final nowLocal = DateTime(2026, 3, 13, 10, 0);
+    final snapshot = buildTaskPrioritySnapshot(
+      <Todo>[
+        todo(
+          id: 'due-today',
+          title: 'Reply today',
+          updatedAtMs: 10,
+          dueAtMs: nowLocal
+              .add(const Duration(hours: 1))
+              .toUtc()
+              .millisecondsSinceEpoch,
+        ),
+        todo(
+          id: 'backlog',
+          title: 'Quarterly planning',
+          updatedAtMs: 20,
+        ),
+      ],
+      nowLocal: nowLocal,
+      aiResult: const TaskPriorityAiBatchResult(
+        entries: <TaskPriorityAiEntry>[
+          TaskPriorityAiEntry(
+            todoId: 'backlog',
+            semanticAdjustment: 40,
+            reason: 'Strategically important.',
+            confidence: TaskPriorityAiConfidence.high,
+            isImportant: true,
+          ),
+        ],
+      ),
+    );
+
+    final enhancedBacklog = snapshot.activeEntries
+        .firstWhere((entry) => entry.todo.id == 'backlog');
+
+    expect(snapshot.hasAiEnhancement, isTrue);
+    expect(snapshot.basePrimaryFocus?.todo.id, 'due-today');
+    expect(snapshot.baseSnapshot.primaryFocus?.todo.id, 'due-today');
+    expect(snapshot.baseSnapshot.hasAiEnhancement, isFalse);
+    expect(snapshot.baseActiveEntries.first.todo.id, 'due-today');
+    expect(snapshot.primaryFocus?.todo.id, 'due-today');
+    expect(enhancedBacklog.reasonText, 'Strategically important.');
+  });
+
   test('primary focus is selected from all unfinished entries', () {
     final nowLocal = DateTime(2026, 3, 13, 10, 0);
     final snapshot = buildTaskPrioritySnapshot(

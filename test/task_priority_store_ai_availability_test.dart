@@ -3,6 +3,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:secondloop/features/actions/task_hub/task_priority_ai.dart';
 import 'package:secondloop/features/actions/task_hub/task_priority_ai_models.dart';
+import 'package:secondloop/features/actions/task_hub/task_priority_models.dart';
 import 'package:secondloop/features/actions/task_hub/task_priority_store.dart';
 import 'package:secondloop/src/rust/db.dart';
 
@@ -53,6 +54,26 @@ void main() {
 
     expect(store.isAiEnhancementAvailable, isFalse);
     expect(store.aiAvailability, TaskPriorityAiAvailability.unavailable);
+  });
+
+  test('unavailable AI still keeps base priority snapshot usable', () async {
+    SharedPreferences.setMockInitialValues({});
+    final store = TaskPriorityStore.fromLoaders(
+      nowLocal: () => DateTime(2026, 3, 13, 10, 0),
+      loadTodos: () async => <Todo>[
+        todo(id: 'focus', title: 'Focus task', updatedAtMs: 10),
+      ],
+      resolveAiService: () async => const _FailingAiService(),
+    );
+
+    await store.refresh();
+
+    expect(store.aiAvailability, TaskPriorityAiAvailability.unavailable);
+    expect(store.snapshot.source, TaskPrioritySnapshotSource.rules);
+    expect(store.snapshot.primaryFocus?.todo.id, 'focus');
+    expect(store.snapshot.basePrimaryFocus?.todo.id, 'focus');
+    expect(store.baseSnapshot.primaryFocus?.todo.id, 'focus');
+    expect(store.snapshot.hasAiEnhancement, isFalse);
   });
 
   test('persisted AI fallback does not mark live AI as available', () async {

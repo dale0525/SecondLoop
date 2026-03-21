@@ -60,9 +60,8 @@ class _TaskHubBannerState extends State<TaskHubBanner> {
   Widget build(BuildContext context) {
     final tokens = SlTokens.of(context);
     final primary = widget.snapshot.primaryFocus;
-    final hasAiReason =
-        widget.snapshot.source == TaskPrioritySnapshotSource.hybrid &&
-            (primary?.reasonText ?? '').isNotEmpty;
+    final hasAiReason = widget.snapshot.hasAiEnhancement &&
+        (primary?.reasonText ?? '').isNotEmpty;
     final outerPadding = widget.compact
         ? const EdgeInsets.fromLTRB(12, 8, 12, 6)
         : const EdgeInsets.fromLTRB(12, 12, 12, 8);

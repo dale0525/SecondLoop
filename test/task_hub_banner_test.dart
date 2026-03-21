@@ -418,6 +418,47 @@ void main() {
     );
   });
 
+  testWidgets('banner keeps AI header for cached enhancement snapshots',
+      (tester) async {
+    final snapshot = buildTaskPrioritySnapshot(
+      <Todo>[
+        todo(id: 't1', title: 'Clarify launch checklist', updatedAtMs: 10)
+      ],
+      nowLocal: DateTime(2026, 3, 13, 10, 0),
+      aiResult: const TaskPriorityAiBatchResult(
+        entries: <TaskPriorityAiEntry>[
+          TaskPriorityAiEntry(
+            todoId: 't1',
+            semanticAdjustment: 24,
+            reason: 'Cached AI result.',
+            confidence: TaskPriorityAiConfidence.high,
+          ),
+        ],
+      ),
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: Scaffold(
+            body: TaskHubBanner(
+              snapshot: snapshot,
+              showAiUpgradeHint: true,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('AI recommends this now'), findsOneWidget);
+    expect(find.text('Cached AI result.'), findsOneWidget);
+    expect(
+      find.text(
+          'Connect Cloud or BYOK to unlock smarter priority suggestions.'),
+      findsNothing,
+    );
+  });
+
   testWidgets('banner preview quick action invokes callback', (tester) async {
     TaskHubQuickAction? tappedAction;
     final now = DateTime(2026, 3, 13, 10, 0);

@@ -95,7 +95,8 @@ extension _ChatPageStateBuild on _ChatPageState {
                             _taskPriorityStore!.checklistProgressByTodoId,
                         showAiUpgradeHint:
                             _taskPriorityStore!.isAiEnhancementEnabled &&
-                                !_taskPriorityStore!.isAiEnhancementAvailable,
+                                !_taskPriorityStore!.isAiEnhancementAvailable &&
+                                !_taskPriorityStore!.snapshot.hasAiEnhancement,
                         collapseSignal: _todoAgendaBannerCollapseSignal,
                         compact: true,
                         onOpenTodo: (entry) async {

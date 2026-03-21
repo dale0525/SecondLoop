@@ -47,6 +47,11 @@ enum TaskPrioritySnapshotSource {
   hybrid,
 }
 
+enum TaskPriorityEnhancementSource {
+  none,
+  ai,
+}
+
 enum TaskPriorityDisplayBucket {
   nextUp,
   backlog,
@@ -205,30 +210,80 @@ class TaskPrioritySnapshot {
     required this.decide,
     required this.done,
     required this.orderedActive,
+    this.enhancementSource = TaskPriorityEnhancementSource.none,
+    List<TaskPriorityEntry>? baseFocus,
+    List<TaskPriorityEntry>? baseScheduled,
+    List<TaskPriorityEntry>? baseDecide,
+    List<TaskPriorityEntry>? baseDone,
+    List<TaskPriorityEntry>? baseOrderedActive,
     this.selectedFocusTodoId,
     this.computedAtLocal,
-  });
+  })  : baseFocus = baseFocus ?? focus,
+        baseScheduled = baseScheduled ?? scheduled,
+        baseDecide = baseDecide ?? decide,
+        baseDone = baseDone ?? done,
+        baseOrderedActive = baseOrderedActive ?? orderedActive;
 
   const TaskPrioritySnapshot.empty()
       : source = TaskPrioritySnapshotSource.rules,
+        enhancementSource = TaskPriorityEnhancementSource.none,
         focus = const <TaskPriorityEntry>[],
         scheduled = const <TaskPriorityEntry>[],
         decide = const <TaskPriorityEntry>[],
         done = const <TaskPriorityEntry>[],
         orderedActive = const <TaskPriorityEntry>[],
+        baseFocus = const <TaskPriorityEntry>[],
+        baseScheduled = const <TaskPriorityEntry>[],
+        baseDecide = const <TaskPriorityEntry>[],
+        baseDone = const <TaskPriorityEntry>[],
+        baseOrderedActive = const <TaskPriorityEntry>[],
         selectedFocusTodoId = null,
         computedAtLocal = null;
 
   final TaskPrioritySnapshotSource source;
+  final TaskPriorityEnhancementSource enhancementSource;
   final List<TaskPriorityEntry> focus;
   final List<TaskPriorityEntry> scheduled;
   final List<TaskPriorityEntry> decide;
   final List<TaskPriorityEntry> done;
   final List<TaskPriorityEntry> orderedActive;
+  final List<TaskPriorityEntry> baseFocus;
+  final List<TaskPriorityEntry> baseScheduled;
+  final List<TaskPriorityEntry> baseDecide;
+  final List<TaskPriorityEntry> baseDone;
+  final List<TaskPriorityEntry> baseOrderedActive;
   final String? selectedFocusTodoId;
   final DateTime? computedAtLocal;
 
   bool get isEmpty => focus.isEmpty && scheduled.isEmpty && decide.isEmpty;
+
+  bool get hasAiEnhancement =>
+      enhancementSource == TaskPriorityEnhancementSource.ai;
+
+  TaskPriorityEntry? get basePrimaryFocus {
+    final focusTodoId = selectedFocusTodoId;
+    if (focusTodoId != null) {
+      for (final entry in baseOrderedActive) {
+        if (entry.todo.id == focusTodoId) return entry;
+      }
+    }
+    return baseOrderedActive.isEmpty ? null : baseOrderedActive.first;
+  }
+
+  List<TaskPriorityEntry> get baseActiveEntries => baseOrderedActive;
+
+  TaskPrioritySnapshot get baseSnapshot => TaskPrioritySnapshot(
+        source: TaskPrioritySnapshotSource.rules,
+        enhancementSource: TaskPriorityEnhancementSource.none,
+        focus: baseFocus,
+        scheduled: baseScheduled,
+        decide: baseDecide,
+        done: baseDone,
+        orderedActive: baseOrderedActive,
+        selectedFocusTodoId:
+            baseOrderedActive.isEmpty ? null : baseOrderedActive.first.todo.id,
+        computedAtLocal: computedAtLocal,
+      );
 
   TaskPriorityEntry? get primaryFocus {
     final focusTodoId = selectedFocusTodoId;
@@ -279,22 +334,34 @@ class TaskPrioritySnapshot {
 
   TaskPrioritySnapshot copyWith({
     TaskPrioritySnapshotSource? source,
+    TaskPriorityEnhancementSource? enhancementSource,
     List<TaskPriorityEntry>? focus,
     List<TaskPriorityEntry>? scheduled,
     List<TaskPriorityEntry>? decide,
     List<TaskPriorityEntry>? done,
     List<TaskPriorityEntry>? orderedActive,
+    List<TaskPriorityEntry>? baseFocus,
+    List<TaskPriorityEntry>? baseScheduled,
+    List<TaskPriorityEntry>? baseDecide,
+    List<TaskPriorityEntry>? baseDone,
+    List<TaskPriorityEntry>? baseOrderedActive,
     String? selectedFocusTodoId,
     bool clearSelectedFocusTodoId = false,
     DateTime? computedAtLocal,
   }) {
     return TaskPrioritySnapshot(
       source: source ?? this.source,
+      enhancementSource: enhancementSource ?? this.enhancementSource,
       focus: focus ?? this.focus,
       scheduled: scheduled ?? this.scheduled,
       decide: decide ?? this.decide,
       done: done ?? this.done,
       orderedActive: orderedActive ?? this.orderedActive,
+      baseFocus: baseFocus ?? this.baseFocus,
+      baseScheduled: baseScheduled ?? this.baseScheduled,
+      baseDecide: baseDecide ?? this.baseDecide,
+      baseDone: baseDone ?? this.baseDone,
+      baseOrderedActive: baseOrderedActive ?? this.baseOrderedActive,
       selectedFocusTodoId: clearSelectedFocusTodoId
           ? null
           : (selectedFocusTodoId ?? this.selectedFocusTodoId),

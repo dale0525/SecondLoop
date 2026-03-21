@@ -83,6 +83,7 @@ class TaskPriorityStore extends ChangeNotifier {
 
   TaskPrioritySnapshot _snapshot = const TaskPrioritySnapshot.empty();
   TaskPrioritySnapshot get snapshot => _snapshot;
+  TaskPrioritySnapshot get baseSnapshot => _snapshot.baseSnapshot;
 
   Map<String, TodoChecklistProgress> _checklistProgressByTodoId =
       const <String, TodoChecklistProgress>{};
