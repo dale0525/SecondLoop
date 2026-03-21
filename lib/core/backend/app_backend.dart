@@ -242,7 +242,10 @@ abstract class AppBackend {
 
     final taskTypeHint =
         normalizeTodoFollowupTaskTypeHint(followupTaskTypeHint);
-    if (supportsTodoFollowupSuggestions) {
+    final wasCreated = todo.createdAtMs == todo.updatedAtMs;
+    if (supportsTodoFollowupSuggestions &&
+        !autoEnqueuesTodoFollowupGenerationOnCreate &&
+        wasCreated) {
       try {
         await enqueueTodoFollowupGenerationJob(
           key,

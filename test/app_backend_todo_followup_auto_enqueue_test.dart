@@ -24,6 +24,45 @@ void main() {
     expect(backend.enqueueTriggerKinds, const <String>['auto_create']);
   });
 
+  test('AppBackend semantic create skips follow-up enqueue for existing todos',
+      () async {
+    final backend = _FollowupCapabilityBackend(wasCreated: false);
+    final key = Uint8List.fromList(List<int>.filled(32, 9));
+
+    final todo = await backend.upsertTodoFromSemanticCreate(
+      key,
+      id: 'todo_existing',
+      title: 'Refine an existing task',
+      status: 'open',
+      followupTaskTypeHint: 'research',
+    );
+
+    expect(todo.id, 'todo_existing');
+    expect(backend.enqueueTodoIds, isEmpty);
+    expect(backend.enqueueTaskTypeHints, isEmpty);
+    expect(backend.enqueueTriggerKinds, isEmpty);
+  });
+
+  test(
+      'AppBackend semantic create avoids duplicate enqueue when backend already auto-enqueues',
+      () async {
+    final backend = _FollowupCapabilityBackend(autoEnqueuesOnCreate: true);
+    final key = Uint8List.fromList(List<int>.filled(32, 11));
+
+    final todo = await backend.upsertTodoFromSemanticCreate(
+      key,
+      id: 'todo_auto',
+      title: 'Collect conference notes',
+      status: 'inbox',
+      followupTaskTypeHint: 'research',
+    );
+
+    expect(todo.id, 'todo_auto');
+    expect(backend.enqueueTodoIds, const <String>['todo_auto']);
+    expect(backend.enqueueTaskTypeHints, const <String?>[null]);
+    expect(backend.enqueueTriggerKinds, const <String>['auto_create']);
+  });
+
   test('createTodoWithFollowup auto-enqueues for capability backends',
       () async {
     final backend = _FollowupCapabilityBackend();
@@ -65,12 +104,16 @@ void main() {
 }
 
 final class _FollowupCapabilityBackend extends AppBackend {
-  _FollowupCapabilityBackend({this.autoEnqueuesOnCreate = false});
+  _FollowupCapabilityBackend({
+    this.autoEnqueuesOnCreate = false,
+    this.wasCreated = true,
+  });
 
   final List<String> enqueueTodoIds = <String>[];
   final List<String?> enqueueTaskTypeHints = <String?>[];
   final List<String> enqueueTriggerKinds = <String>[];
   final bool autoEnqueuesOnCreate;
+  final bool wasCreated;
 
   @override
   bool get supportsTodoFollowupSuggestions => true;
@@ -105,7 +148,7 @@ final class _FollowupCapabilityBackend extends AppBackend {
       status: status,
       sourceEntryId: sourceEntryId,
       createdAtMs: 1,
-      updatedAtMs: 1,
+      updatedAtMs: wasCreated ? 1 : 2,
       reviewStage: reviewStage,
       nextReviewAtMs: nextReviewAtMs,
       lastReviewAtMs: lastReviewAtMs,

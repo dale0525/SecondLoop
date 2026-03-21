@@ -948,8 +948,9 @@ void main() {
       'semantic_parse_data_consent_v1': true,
     });
 
+    final nowMs = DateTime.now().millisecondsSinceEpoch;
     final backend = _FakeTodoFollowupGenerationGateBackend(
-      dueJobs: const <TodoFollowupGenerationJob>[
+      dueJobs: <TodoFollowupGenerationJob>[
         TodoFollowupGenerationJob(
           todoId: 'todo_auto_pending',
           triggerKind: 'auto_create',
@@ -959,10 +960,19 @@ void main() {
           lastError: null,
           includeManualFollowups: false,
           taskTypeHint: 'research',
-          createdAtMs: 0,
-          updatedAtMs: 0,
+          createdAtMs: nowMs,
+          updatedAtMs: nowMs,
         ),
       ],
+      todosById: <String, Todo>{
+        'todo_auto_pending': Todo(
+          id: 'todo_auto_pending',
+          title: '调研航班到达信息',
+          status: 'open',
+          createdAtMs: nowMs,
+          updatedAtMs: nowMs,
+        ),
+      },
     );
 
     await tester.pumpWidget(
