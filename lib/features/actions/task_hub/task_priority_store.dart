@@ -273,6 +273,20 @@ class TaskPriorityStore extends ChangeNotifier {
           ? _readInMemoryAiAssessments(nowLocal: nowLocal)
           : const <String, TaskPriorityAiCachedAssessment>{};
       final freshEntries = <String, TaskPriorityAiEntry>{};
+      final cachedEnhancementSources = <String, TaskPriorityEnhancementSource>{
+        if (canUsePersistedCache) ...<String, TaskPriorityEnhancementSource>{
+          for (final entry in persisted.entries)
+            entry.key: TaskPriorityEnhancementSource.aiLocalCache,
+          for (final entry in sharedPersisted.entries)
+            entry.key: TaskPriorityEnhancementSource.aiSharedCache,
+        } else ...<String, TaskPriorityEnhancementSource>{
+          for (final entry in memoryCached.entries)
+            entry.key: TaskPriorityEnhancementSource.aiLocalCache,
+        },
+      };
+      final sharedCacheTodoIds = <String>{};
+      final localCacheTodoIds = <String>{};
+      final liveTodoIds = <String>{};
       final mergedPersisted = Map<String, TaskPriorityAiCachedAssessment>.from(
         canUsePersistedCache
             ? <String, TaskPriorityAiCachedAssessment>{
@@ -294,8 +308,23 @@ class TaskPriorityStore extends ChangeNotifier {
         final cached = mergedPersisted[candidate.todoId];
         if (cached != null && cached.requestSignature == requestSignature) {
           freshEntries[candidate.todoId] = cached.entry;
+          switch (cachedEnhancementSources[candidate.todoId]) {
+            case TaskPriorityEnhancementSource.aiSharedCache:
+              sharedCacheTodoIds.add(candidate.todoId);
+              localCacheTodoIds.remove(candidate.todoId);
+              break;
+            case TaskPriorityEnhancementSource.aiLocalCache:
+              localCacheTodoIds.add(candidate.todoId);
+              sharedCacheTodoIds.remove(candidate.todoId);
+              break;
+            default:
+              break;
+          }
         } else {
           mergedPersisted.remove(candidate.todoId);
+          cachedEnhancementSources.remove(candidate.todoId);
+          sharedCacheTodoIds.remove(candidate.todoId);
+          localCacheTodoIds.remove(candidate.todoId);
           staleCandidates.add(candidate);
         }
       }
@@ -319,7 +348,10 @@ class TaskPriorityStore extends ChangeNotifier {
       }
       for (final todoId in stalePersistedTodoIds) {
         mergedPersisted.remove(todoId);
+        cachedEnhancementSources.remove(todoId);
         freshEntries.remove(todoId);
+        sharedCacheTodoIds.remove(todoId);
+        localCacheTodoIds.remove(todoId);
       }
 
       if (aiService != null && staleCandidates.isNotEmpty) {
@@ -341,11 +373,16 @@ class TaskPriorityStore extends ChangeNotifier {
               nowLocal: nowLocal,
             );
             freshEntries[entry.todoId] = entry;
+            liveTodoIds.add(entry.todoId);
+            sharedCacheTodoIds.remove(entry.todoId);
+            localCacheTodoIds.remove(entry.todoId);
             mergedPersisted[entry.todoId] = TaskPriorityAiCachedAssessment(
               entry: entry,
               requestSignature: requestSignature,
               computedAtLocal: nowLocal,
             );
+            cachedEnhancementSources[entry.todoId] =
+                TaskPriorityEnhancementSource.aiLive;
           }
         } catch (_) {
           _aiAvailability = TaskPriorityAiAvailability.unavailable;
@@ -384,10 +421,16 @@ class TaskPriorityStore extends ChangeNotifier {
         return;
       }
 
+      final enhancementSource = liveTodoIds.isNotEmpty
+          ? TaskPriorityEnhancementSource.aiLive
+          : sharedCacheTodoIds.isNotEmpty
+              ? TaskPriorityEnhancementSource.aiSharedCache
+              : TaskPriorityEnhancementSource.aiLocalCache;
       var hybridSnapshot = buildTaskPrioritySnapshot(
         todos,
         nowLocal: nowLocal,
         aiResult: TaskPriorityAiBatchResult(entries: aiEntries),
+        enhancementSource: enhancementSource,
         feedbackState: feedbackState,
       );
       hybridSnapshot = _applyStickyFocus(hybridSnapshot, nowLocal: nowLocal);

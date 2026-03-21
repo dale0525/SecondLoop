@@ -5,6 +5,7 @@ import 'package:secondloop/features/actions/task_hub/task_hub_banner.dart';
 import 'package:secondloop/features/actions/task_hub/task_priority_ai_models.dart';
 import 'package:secondloop/features/actions/task_hub/task_priority_engine.dart';
 import 'package:secondloop/features/actions/task_hub/task_hub_quick_actions.dart';
+import 'package:secondloop/features/actions/task_hub/task_priority_models.dart';
 import 'package:secondloop/src/rust/db.dart';
 
 import 'test_i18n.dart';
@@ -418,6 +419,40 @@ void main() {
     );
   });
 
+  testWidgets('banner shows shared ai source label for shared cache',
+      (tester) async {
+    final snapshot = buildTaskPrioritySnapshot(
+      <Todo>[
+        todo(id: 't1', title: 'Clarify launch checklist', updatedAtMs: 10)
+      ],
+      nowLocal: DateTime(2026, 3, 13, 10, 0),
+      aiResult: const TaskPriorityAiBatchResult(
+        entries: <TaskPriorityAiEntry>[
+          TaskPriorityAiEntry(
+            todoId: 't1',
+            semanticAdjustment: 24,
+            reason: 'Shared AI result.',
+            confidence: TaskPriorityAiConfidence.high,
+          ),
+        ],
+      ),
+    ).copyWith(
+      enhancementSource: TaskPriorityEnhancementSource.aiSharedCache,
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: Scaffold(body: TaskHubBanner(snapshot: snapshot)),
+        ),
+      ),
+    );
+
+    expect(find.byKey(const ValueKey('task_hub_banner_ai_source')),
+        findsOneWidget);
+    expect(find.text('Shared AI insight'), findsOneWidget);
+  });
+
   testWidgets('banner keeps AI header for cached enhancement snapshots',
       (tester) async {
     final snapshot = buildTaskPrioritySnapshot(
@@ -435,6 +470,8 @@ void main() {
           ),
         ],
       ),
+    ).copyWith(
+      enhancementSource: TaskPriorityEnhancementSource.aiLocalCache,
     );
 
     await tester.pumpWidget(
@@ -452,11 +489,48 @@ void main() {
 
     expect(find.text('AI recommends this now'), findsOneWidget);
     expect(find.text('Cached AI result.'), findsOneWidget);
+    expect(find.byKey(const ValueKey('task_hub_banner_ai_source')),
+        findsOneWidget);
+    expect(find.text('Cached AI insight'), findsOneWidget);
     expect(
       find.text(
           'Connect Cloud or BYOK to unlock smarter priority suggestions.'),
       findsNothing,
     );
+  });
+
+  testWidgets('banner shows live ai source label for fresh rerank snapshots',
+      (tester) async {
+    final snapshot = buildTaskPrioritySnapshot(
+      <Todo>[
+        todo(id: 't1', title: 'Clarify launch checklist', updatedAtMs: 10)
+      ],
+      nowLocal: DateTime(2026, 3, 13, 10, 0),
+      aiResult: const TaskPriorityAiBatchResult(
+        entries: <TaskPriorityAiEntry>[
+          TaskPriorityAiEntry(
+            todoId: 't1',
+            semanticAdjustment: 24,
+            reason: 'Live AI result.',
+            confidence: TaskPriorityAiConfidence.high,
+          ),
+        ],
+      ),
+    ).copyWith(
+      enhancementSource: TaskPriorityEnhancementSource.aiLive,
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: Scaffold(body: TaskHubBanner(snapshot: snapshot)),
+        ),
+      ),
+    );
+
+    expect(find.byKey(const ValueKey('task_hub_banner_ai_source')),
+        findsOneWidget);
+    expect(find.text('Live AI insight'), findsOneWidget);
   });
 
   testWidgets('banner preview quick action invokes callback', (tester) async {

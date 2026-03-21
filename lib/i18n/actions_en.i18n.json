@@ -155,6 +155,9 @@
     "feedbackNotImportant": "This is not important",
     "feedbackLater": "Recommend this later",
     "feedbackDecideMyself": "I will decide myself",
+    "aiInsightLive": "Live AI insight",
+    "aiInsightShared": "Shared AI insight",
+    "aiInsightCached": "Cached AI insight",
     "aiUpgradeHint": "Connect Cloud or BYOK to unlock smarter priority suggestions.",
     "snackActionApplied": "$action \"$title\"",
     "actions": {

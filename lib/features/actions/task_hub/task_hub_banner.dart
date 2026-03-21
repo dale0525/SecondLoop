@@ -62,6 +62,7 @@ class _TaskHubBannerState extends State<TaskHubBanner> {
     final primary = widget.snapshot.primaryFocus;
     final hasAiReason = widget.snapshot.hasAiEnhancement &&
         (primary?.reasonText ?? '').isNotEmpty;
+    final aiSourceLabel = _aiSourceLabel(context, widget.snapshot);
     final outerPadding = widget.compact
         ? const EdgeInsets.fromLTRB(12, 8, 12, 6)
         : const EdgeInsets.fromLTRB(12, 12, 12, 8);
@@ -122,6 +123,17 @@ class _TaskHubBannerState extends State<TaskHubBanner> {
                     ),
                   ],
                 ),
+                if (aiSourceLabel != null) ...[
+                  SizedBox(height: headerSpacing),
+                  Text(
+                    aiSourceLabel,
+                    key: const ValueKey('task_hub_banner_ai_source'),
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                          color: Theme.of(context).colorScheme.primary,
+                          fontWeight: FontWeight.w700,
+                        ),
+                  ),
+                ],
                 SizedBox(height: headerSpacing),
                 Text(
                   primary?.todo.title ??
@@ -270,6 +282,21 @@ class _TaskHubBannerState extends State<TaskHubBanner> {
         ),
       ),
     );
+  }
+
+  String? _aiSourceLabel(
+    BuildContext context,
+    TaskPrioritySnapshot snapshot,
+  ) {
+    return switch (snapshot.enhancementSource) {
+      TaskPriorityEnhancementSource.none => null,
+      TaskPriorityEnhancementSource.aiLive =>
+        context.t.actions.taskHub.aiInsightLive,
+      TaskPriorityEnhancementSource.aiSharedCache =>
+        context.t.actions.taskHub.aiInsightShared,
+      TaskPriorityEnhancementSource.aiLocalCache =>
+        context.t.actions.taskHub.aiInsightCached,
+    };
   }
 
   String _fallbackSubtitle(BuildContext context) {

@@ -194,6 +194,10 @@ void main() {
     expect(
         store.snapshot.primaryFocus?.reasonText, 'Shared assessment result.');
     expect(store.isAiEnhancementAvailable, isFalse);
+    expect(
+      store.snapshot.enhancementSource,
+      TaskPriorityEnhancementSource.aiSharedCache,
+    );
   });
 
   test('persisted AI fallback does not mark live AI as available', () async {
@@ -232,6 +236,29 @@ void main() {
     );
     expect(fallbackStore.shouldShowAiUpgradeHint, isFalse);
     expect(fallbackStore.snapshot.hasAiEnhancement, isTrue);
+    expect(
+      fallbackStore.snapshot.enhancementSource,
+      TaskPriorityEnhancementSource.aiLocalCache,
+    );
+  });
+
+  test('fresh rerank marks enhancement source as live ai', () async {
+    SharedPreferences.setMockInitialValues({});
+    final store = TaskPriorityStore.fromLoaders(
+      nowLocal: () => DateTime(2026, 3, 13, 10, 0),
+      loadTodos: () async => <Todo>[
+        todo(id: 'focus', title: 'Focus task', updatedAtMs: 10),
+      ],
+      resolveAiService: () async => _SuccessfulAiService(),
+    );
+
+    await store.refresh();
+
+    expect(store.snapshot.hasAiEnhancement, isTrue);
+    expect(
+      store.snapshot.enhancementSource,
+      TaskPriorityEnhancementSource.aiLive,
+    );
   });
 }
 

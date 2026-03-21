@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -8,6 +9,7 @@ import 'package:secondloop/core/backend/app_backend.dart';
 import 'package:secondloop/core/session/session_scope.dart';
 import 'package:secondloop/features/actions/task_hub/task_hub_page.dart';
 import 'package:secondloop/features/actions/task_hub/task_priority_ai.dart';
+import 'package:secondloop/features/actions/task_hub/task_priority_ai_models.dart';
 import 'package:secondloop/src/rust/db.dart';
 
 import 'test_backend.dart';
@@ -151,6 +153,47 @@ void main() {
         findsOneWidget);
     expect(
         find.byKey(const ValueKey('task_hub_page_item_done')), findsOneWidget);
+  });
+
+  testWidgets('task hub shows live ai source label when rerank succeeds',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final backend = _TaskHubBackend(
+      todos: const <Todo>[
+        Todo(
+          id: 'focus',
+          title: 'Fix prod issue',
+          dueAtMs: null,
+          status: 'open',
+          sourceEntryId: null,
+          createdAtMs: 0,
+          updatedAtMs: 10,
+          reviewStage: null,
+          nextReviewAtMs: null,
+          lastReviewAtMs: null,
+        ),
+      ],
+      taskPriorityAiResponseJson: jsonEncode(
+        const TaskPriorityAiBatchResult(
+          entries: <TaskPriorityAiEntry>[
+            TaskPriorityAiEntry(
+              todoId: 'focus',
+              semanticAdjustment: 16,
+              reason: 'Live AI result.',
+              confidence: TaskPriorityAiConfidence.high,
+            ),
+          ],
+        ).toJson(),
+      ),
+    );
+
+    await tester.pumpWidget(_wrap(backend));
+    await _pumpUntilTaskHubReady(tester);
+
+    expect(
+        find.byKey(const ValueKey('task_hub_page_ai_source')), findsOneWidget);
+    expect(find.text('Live AI insight'), findsOneWidget);
+    expect(find.text('Live AI result.'), findsOneWidget);
   });
 
   testWidgets('task hub quick action failure shows error snackbar',
@@ -845,6 +888,7 @@ final class _TaskHubBackend extends TestAppBackend {
     List<TodoChecklistProgress> checklistProgress =
         const <TodoChecklistProgress>[],
     this.failTransition = false,
+    this.taskPriorityAiResponseJson,
   })  : _todos = {for (final todo in todos) todo.id: todo},
         _checklistProgress =
             List<TodoChecklistProgress>.from(checklistProgress);
@@ -852,6 +896,7 @@ final class _TaskHubBackend extends TestAppBackend {
   final Map<String, Todo> _todos;
   final List<TodoChecklistProgress> _checklistProgress;
   final bool failTransition;
+  final String? taskPriorityAiResponseJson;
 
   @override
   Future<List<Todo>> listTodos(Uint8List key) async =>
@@ -949,6 +994,17 @@ final class _TaskHubBackend extends TestAppBackend {
     );
     _todos[todoId] = updated;
     return updated;
+  }
+
+  @override
+  Future<String> taskPriorityRerankAi(
+    Uint8List key, {
+    required String prompt,
+  }) async {
+    if (taskPriorityAiResponseJson == null) {
+      throw UnimplementedError('taskPriorityRerankAi');
+    }
+    return taskPriorityAiResponseJson!;
   }
 
   @override

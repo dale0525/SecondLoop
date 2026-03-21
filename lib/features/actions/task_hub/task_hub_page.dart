@@ -188,6 +188,18 @@ class _TaskHubPageState extends State<TaskHubPage> {
     }
   }
 
+  String? _aiSourceLabel(TaskPrioritySnapshot snapshot) {
+    return switch (snapshot.enhancementSource) {
+      TaskPriorityEnhancementSource.none => null,
+      TaskPriorityEnhancementSource.aiLive =>
+        context.t.actions.taskHub.aiInsightLive,
+      TaskPriorityEnhancementSource.aiSharedCache =>
+        context.t.actions.taskHub.aiInsightShared,
+      TaskPriorityEnhancementSource.aiLocalCache =>
+        context.t.actions.taskHub.aiInsightCached,
+    };
+  }
+
   Future<void> _refresh() async {
     final store = _store;
     if (store == null) return;
@@ -419,6 +431,26 @@ class _TaskHubPageState extends State<TaskHubPage> {
                       child: Center(child: CircularProgressIndicator()),
                     )
                   else ...[
+                    if (_aiSourceLabel(snapshot) case final aiSourceLabel?) ...[
+                      SlSurface(
+                        key: const ValueKey('task_hub_page_ai_source'),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 8,
+                        ),
+                        child: Text(
+                          aiSourceLabel,
+                          style: Theme.of(context)
+                              .textTheme
+                              .labelMedium
+                              ?.copyWith(
+                                color: Theme.of(context).colorScheme.primary,
+                                fontWeight: FontWeight.w700,
+                              ),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                    ],
                     if (snapshot.primaryFocus != null)
                       TaskHubFocusSection(
                         entries: visibleFocus,

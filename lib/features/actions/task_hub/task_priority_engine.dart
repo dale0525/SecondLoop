@@ -29,6 +29,8 @@ TaskPrioritySnapshot buildTaskPrioritySnapshot(
   List<Todo> todos, {
   required DateTime nowLocal,
   TaskPriorityAiBatchResult? aiResult,
+  TaskPriorityEnhancementSource enhancementSource =
+      TaskPriorityEnhancementSource.aiLive,
   TaskPriorityFeedbackState? feedbackState,
 }) {
   final feedback = feedbackState ?? const TaskPriorityFeedbackState();
@@ -145,7 +147,7 @@ TaskPrioritySnapshot buildTaskPrioritySnapshot(
         : TaskPrioritySnapshotSource.hybrid,
     enhancementSource: aiResult == null
         ? TaskPriorityEnhancementSource.none
-        : TaskPriorityEnhancementSource.ai,
+        : enhancementSource,
     computedAtLocal: nowLocal,
     focus: finalLists.focus,
     scheduled: finalLists.scheduled,

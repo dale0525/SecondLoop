@@ -49,7 +49,9 @@ enum TaskPrioritySnapshotSource {
 
 enum TaskPriorityEnhancementSource {
   none,
-  ai,
+  aiLive,
+  aiSharedCache,
+  aiLocalCache,
 }
 
 enum TaskPriorityDisplayBucket {
@@ -258,7 +260,7 @@ class TaskPrioritySnapshot {
   bool get isEmpty => focus.isEmpty && scheduled.isEmpty && decide.isEmpty;
 
   bool get hasAiEnhancement =>
-      enhancementSource == TaskPriorityEnhancementSource.ai;
+      enhancementSource != TaskPriorityEnhancementSource.none;
 
   TaskPriorityEntry? get basePrimaryFocus {
     final focusTodoId = selectedFocusTodoId;
