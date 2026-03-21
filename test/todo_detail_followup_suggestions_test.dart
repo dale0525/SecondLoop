@@ -543,6 +543,28 @@ void main() {
   });
 
   testWidgets(
+      'TodoDetailPage regenerate opens AI settings when followup route decide throws',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({
+      'semantic_parse_data_consent_v1': true,
+    });
+    _setLargeDisplay(tester);
+    final backend = _ThrowingLlmProfilesBackend();
+
+    await tester.pumpWidget(_buildSubject(backend));
+    await tester.pumpAndSettle();
+
+    await tester.tap(
+      find.byKey(const ValueKey('todo_detail_followup_generate_suggestions')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(backend.enqueuedRegenerate, isFalse);
+    expect(find.byType(AiAskAiSettingsPage), findsOneWidget);
+    expect(find.byType(SnackBar), findsNothing);
+  });
+
+  testWidgets(
       'TodoDetailPage manual regenerate retries token read after warmup',
       (tester) async {
     SharedPreferences.setMockInitialValues({
@@ -958,6 +980,13 @@ final class _Backend extends AppBackend {
         ),
       );
     }
+  }
+}
+
+final class _ThrowingLlmProfilesBackend extends _Backend {
+  @override
+  Future<List<LlmProfile>> listLlmProfiles(Uint8List key) async {
+    throw StateError('boom');
   }
 }
 
