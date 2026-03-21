@@ -164,7 +164,7 @@ void main() {
   test('interactive automation preflight falls back to needsSetup on errors',
       () async {
     final prepared = await prepareForegroundAiRoute(
-      _ThrowingRouteBackend(),
+      _SetupLikeRouteBackend(),
       _sessionKey,
       routePolicy: ForegroundAiRoutePolicy.automation,
       cloudAuthController: null,
@@ -179,6 +179,27 @@ void main() {
 
     expect(prepared.route, AskAiRouteKind.needsSetup);
     expect(prepared.idToken, isNull);
+  });
+
+  test(
+      'interactive automation preflight rethrows non-setup route errors even when fallback requested',
+      () async {
+    await expectLater(
+      () => prepareForegroundAiRoute(
+        _ThrowingRouteBackend(),
+        _sessionKey,
+        routePolicy: ForegroundAiRoutePolicy.automation,
+        cloudAuthController: null,
+        gatewayConfig: const CloudGatewayConfig(
+          baseUrl: 'https://example.com',
+          modelName: 'cloud',
+        ),
+        subscriptionStatus: SubscriptionStatus.entitled,
+        warmupPolicy: ForegroundAiWarmupPolicy.always,
+        fallbackToNeedsSetupOnRouteError: true,
+      ),
+      throwsA(isA<StateError>()),
+    );
   });
 
   test('shared followup preflight reuses background auth + manual route',
@@ -213,7 +234,7 @@ void main() {
 
   test('followup preflight falls back to needsSetup on route errors', () async {
     final prepared = await prepareTodoFollowupGenerationRoute(
-      _ThrowingRouteBackend(),
+      _SetupLikeRouteBackend(),
       _sessionKey,
       hasManualRegenerateDueJob: true,
       cloudAuthController: null,
@@ -227,6 +248,26 @@ void main() {
 
     expect(prepared.route, AskAiRouteKind.needsSetup);
     expect(prepared.idToken, isNull);
+  });
+
+  test(
+      'followup preflight rethrows non-setup route errors even when fallback requested',
+      () async {
+    await expectLater(
+      () => prepareTodoFollowupGenerationRoute(
+        _ThrowingRouteBackend(),
+        _sessionKey,
+        hasManualRegenerateDueJob: true,
+        cloudAuthController: null,
+        gatewayConfig: const CloudGatewayConfig(
+          baseUrl: 'https://example.com',
+          modelName: 'cloud',
+        ),
+        subscriptionStatus: SubscriptionStatus.entitled,
+        fallbackToNeedsSetupOnRouteError: true,
+      ),
+      throwsA(isA<StateError>()),
+    );
   });
 
   test('interactive preflight warms before first token read when needed',
@@ -310,6 +351,16 @@ final class _ThrowingRouteBackend extends AppBackend {
   @override
   Future<List<LlmProfile>> listLlmProfiles(Uint8List key) async {
     throw StateError('boom');
+  }
+}
+
+final class _SetupLikeRouteBackend extends AppBackend {
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+
+  @override
+  Future<List<LlmProfile>> listLlmProfiles(Uint8List key) async {
+    throw UnsupportedError('master password setup required');
   }
 }
 

@@ -543,7 +543,7 @@ void main() {
   });
 
   testWidgets(
-      'TodoDetailPage regenerate opens AI settings when followup route decide throws',
+      'TodoDetailPage regenerate shows snackbar when followup route decide throws non-setup error',
       (tester) async {
     SharedPreferences.setMockInitialValues({
       'semantic_parse_data_consent_v1': true,
@@ -560,8 +560,9 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(backend.enqueuedRegenerate, isFalse);
-    expect(find.byType(AiAskAiSettingsPage), findsOneWidget);
-    expect(find.byType(SnackBar), findsNothing);
+    expect(find.byType(AiAskAiSettingsPage), findsNothing);
+    expect(find.byType(SnackBar), findsOneWidget);
+    expect(find.textContaining('boom'), findsOneWidget);
   });
 
   testWidgets(

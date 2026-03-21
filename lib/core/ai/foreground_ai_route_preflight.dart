@@ -4,6 +4,7 @@ import '../backend/app_backend.dart';
 import '../cloud/cloud_capability_auth.dart';
 import '../cloud/cloud_auth_controller.dart';
 import '../cloud/cloud_auth_scope.dart';
+import '../cloud/firebase_identity_toolkit.dart';
 import 'ai_routing.dart';
 
 enum ForegroundAiRoutePolicy {
@@ -225,8 +226,9 @@ Future<AskAiRouteKind> _decideForegroundAiRoute(
           subscriptionStatus: subscriptionStatus,
         );
     }
-  } catch (_) {
-    if (fallbackToNeedsSetupOnRouteError) {
+  } catch (error) {
+    if (fallbackToNeedsSetupOnRouteError &&
+        _shouldFallbackToNeedsSetupOnRouteError(error)) {
       return AskAiRouteKind.needsSetup;
     }
     rethrow;
@@ -354,10 +356,48 @@ Future<AskAiRouteKind> _decideTodoFollowupGenerationRoute(
       cloudGatewayBaseUrl: cloudGatewayBaseUrl,
       subscriptionStatus: subscriptionStatus,
     );
-  } catch (_) {
-    if (fallbackToNeedsSetupOnRouteError) {
+  } catch (error) {
+    if (fallbackToNeedsSetupOnRouteError &&
+        _shouldFallbackToNeedsSetupOnRouteError(error)) {
       return AskAiRouteKind.needsSetup;
     }
     rethrow;
   }
+}
+
+bool _shouldFallbackToNeedsSetupOnRouteError(Object error) {
+  if (error is FirebaseAuthException) {
+    switch (error.code) {
+      case 'missing_web_api_key':
+      case 'missing_wwb_api_key':
+      case 'missing_user':
+      case 'missing_id_token':
+      case 'missing_refresh_token':
+      case 'missing_local_id':
+        return true;
+    }
+  }
+
+  final status = parseHttpStatusFromError(error);
+  final code = parseCloudErrorCodeFromError(error);
+  if (status == 402 || code == 'payment_required') {
+    return true;
+  }
+  if (status == 403 && code == 'email_not_verified') {
+    return true;
+  }
+
+  final message = error.toString().toLowerCase();
+  if (message.contains('missing_web_api_key') ||
+      message.contains('missing_wwb_api_key')) {
+    return true;
+  }
+  if (message.contains('master password') && message.contains('setup')) {
+    return true;
+  }
+  if (message.contains('setup required') ||
+      message.contains('not initialized')) {
+    return true;
+  }
+  return false;
 }
