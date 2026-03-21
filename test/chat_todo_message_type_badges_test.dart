@@ -88,6 +88,64 @@ void main() {
     expect(find.byKey(const ValueKey('todo_detail_header')), findsOneWidget);
   });
 
+  testWidgets('stale semantic todo badge is hidden when todo no longer exists',
+      (tester) async {
+    final backend = _Backend(
+      initialMessages: const [
+        Message(
+          id: 'm_deleted',
+          conversationId: 'loop_home',
+          role: 'user',
+          content: '这条消息以前创建过事项',
+          createdAtMs: 9,
+          isMemory: true,
+        ),
+      ],
+      todos: const [],
+      jobsByMessageId: <String, SemanticParseJob>{
+        'm_deleted': _job(
+          messageId: 'm_deleted',
+          actionKind: 'create',
+          todoId: 't_deleted',
+          todoTitle: '已删除事项',
+        ),
+      },
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          locale: const Locale('zh', 'CN'),
+          home: AppBackendScope(
+            backend: backend,
+            child: SessionScope(
+              sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+              lock: () {},
+              child: const ChatPage(
+                conversation: Conversation(
+                  id: 'loop_home',
+                  title: 'Loop',
+                  createdAtMs: 0,
+                  updatedAtMs: 0,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('message_todo_type_badge_m_deleted')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey('message_related_todo_root_m_deleted')),
+      findsNothing,
+    );
+  });
+
   testWidgets('create todo message bubble tap opens todo detail',
       (tester) async {
     final backend = _Backend(

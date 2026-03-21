@@ -211,6 +211,9 @@ extension _ChatPageStateBuild on _ChatPageState {
                                 final linkedTodoBadgeByMessageId =
                                     snapshotJobs.data?.linkedTodoBadges ??
                                         const <String, _TodoMessageBadgeMeta>{};
+                                final existingTodoIds =
+                                    snapshotJobs.data?.existingTodoIds ??
+                                        const <String>{};
                                 final jobsByMessageId =
                                     <String, SemanticParseJob>{};
                                 for (final job in jobs) {
@@ -282,6 +285,7 @@ extension _ChatPageStateBuild on _ChatPageState {
                                     jobsByMessageId: jobsByMessageId,
                                     linkedTodoBadgeByMessageId:
                                         linkedTodoBadgeByMessageId,
+                                    existingTodoIds: existingTodoIds,
                                     annotationJobsBySha256:
                                         annotationJobsBySha256,
                                     attachmentAnnotationEnabled: snapshotJobs

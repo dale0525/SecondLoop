@@ -17,6 +17,7 @@ extension _ChatPageStateTodoMessageBadge on _ChatPageState {
     required Message message,
     required Map<String, SemanticParseJob> jobsByMessageId,
     required Map<String, _TodoMessageBadgeMeta> linkedTodoBadgeByMessageId,
+    required Set<String> existingTodoIds,
     required String displayText,
   }) {
     final linkedBadge = linkedTodoBadgeByMessageId[message.id];
@@ -27,6 +28,9 @@ extension _ChatPageStateTodoMessageBadge on _ChatPageState {
       final kind = job.appliedActionKind?.trim();
       final todoId = job.appliedTodoId?.trim();
       if (todoId != null && todoId.isNotEmpty) {
+        if (!existingTodoIds.contains(todoId)) {
+          return null;
+        }
         if (kind == 'create' || kind == 'followup') {
           final title = (job.appliedTodoTitle ?? '').trim().isNotEmpty
               ? job.appliedTodoTitle!.trim()

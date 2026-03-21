@@ -84,6 +84,7 @@ extension _ChatPageStateMethodsB on _ChatPageState {
       return (
         semanticJobs: const <SemanticParseJob>[],
         linkedTodoBadges: const <String, _TodoMessageBadgeMeta>{},
+        existingTodoIds: const <String>{},
         annotationJobs: const <AttachmentAnnotationJob>[],
         attachmentAnnotationEnabled: false,
         attachmentAnnotationCanRunNow: false,
@@ -131,7 +132,7 @@ extension _ChatPageStateMethodsB on _ChatPageState {
 
     final semanticJobs = await semanticJobsFuture;
     final annotationJobs = await annotationJobsFuture;
-    final linkedTodoBadges = await linkedTodoBadgeFuture;
+    final linkedTodoBadgeData = await linkedTodoBadgeFuture;
     final annotationUi = nativeBackend == null || annotationJobs.isEmpty
         ? (enabled: false, canRunNow: false)
         : await _loadAttachmentAnnotationUiState(
@@ -147,7 +148,8 @@ extension _ChatPageStateMethodsB on _ChatPageState {
 
     return (
       semanticJobs: semanticJobs,
-      linkedTodoBadges: linkedTodoBadges,
+      linkedTodoBadges: linkedTodoBadgeData.badges,
+      existingTodoIds: linkedTodoBadgeData.existingTodoIds,
       annotationJobs: annotationJobs,
       attachmentAnnotationEnabled: annotationUi.enabled,
       attachmentAnnotationCanRunNow: annotationUi.canRunNow,

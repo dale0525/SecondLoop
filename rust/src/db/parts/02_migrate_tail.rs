@@ -158,7 +158,7 @@ PRAGMA user_version = 34;
     Ok(())
 }
 
-fn migrate_from_v34_to_v35(conn: &Connection) -> Result<()> {
+fn ensure_todo_manual_nudge_columns(conn: &Connection) -> Result<()> {
     let has_manual_importance_nudge_score: bool = {
         let mut stmt = conn.prepare(r#"PRAGMA table_info(todos);"#)?;
         let mut rows = stmt.query([])?;
@@ -196,6 +196,12 @@ fn migrate_from_v34_to_v35(conn: &Connection) -> Result<()> {
             "ALTER TABLE todos ADD COLUMN manual_urgency_nudge_score INTEGER NOT NULL DEFAULT 0;",
         )?;
     }
+
+    Ok(())
+}
+
+fn migrate_from_v34_to_v35(conn: &Connection) -> Result<()> {
+    ensure_todo_manual_nudge_columns(conn)?;
 
     conn.execute_batch("PRAGMA user_version = 35;")?;
     Ok(())

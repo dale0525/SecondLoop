@@ -182,6 +182,7 @@ const _kTodoSemanticVeryHighConfidenceGap = 0.12;
 typedef _ChatMessageSupplementData = ({
   List<SemanticParseJob> semanticJobs,
   Map<String, _TodoMessageBadgeMeta> linkedTodoBadges,
+  Set<String> existingTodoIds,
   List<AttachmentAnnotationJob> annotationJobs,
   bool attachmentAnnotationEnabled,
   bool attachmentAnnotationCanRunNow,
