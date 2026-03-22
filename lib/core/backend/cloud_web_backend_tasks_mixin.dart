@@ -71,6 +71,15 @@ mixin _CloudWebBackendTasksMixin
     return copy;
   }
 
+  String _normalizeChecklistSuggestionContent(String content) {
+    return content
+        .trim()
+        .split(RegExp(r'\s+'))
+        .where((part) => part.isNotEmpty)
+        .join(' ')
+        .toLowerCase();
+  }
+
   List<TodoActivity> _sortedActivities(Iterable<TodoActivity> activities) {
     final copy = activities.toList(growable: false)
       ..sort(
@@ -539,6 +548,34 @@ mixin _CloudWebBackendTasksMixin
         ),
       );
     }
+    final specifiedIds = orderedItemIds.toSet();
+    final remaining = bucket
+        .where((item) => !specifiedIds.contains(item.id))
+        .toList(growable: false)
+      ..sort((left, right) {
+        final byOrder = left.sortOrder.compareTo(right.sortOrder);
+        if (byOrder != 0) {
+          return byOrder;
+        }
+        final byCreatedAt = left.createdAtMs.compareTo(right.createdAtMs);
+        if (byCreatedAt != 0) {
+          return byCreatedAt;
+        }
+        return left.id.compareTo(right.id);
+      });
+    for (final item in remaining) {
+      reordered.add(
+        TodoChecklistItem(
+          id: item.id,
+          todoId: item.todoId,
+          content: item.content,
+          sortOrder: reordered.length,
+          isDone: item.isDone,
+          createdAtMs: item.createdAtMs,
+          updatedAtMs: item.updatedAtMs,
+        ),
+      );
+    }
     bucket
       ..clear()
       ..addAll(reordered);
@@ -594,16 +631,31 @@ mixin _CloudWebBackendTasksMixin
     }
     final now = _touchNow();
     final bucket = _suggestionBucket(todoId);
-    final retained = bucket
-        .where((suggestion) => suggestion.state != 'pending')
-        .toList(growable: true);
-    final generated = List<TodoChecklistSuggestion>.generate(
-      suggestions.length,
-      (index) => TodoChecklistSuggestion(
+    final blockedNorms = bucket
+        .map((suggestion) =>
+            _normalizeChecklistSuggestionContent(suggestion.content))
+        .toSet();
+    var nextSortOrder = bucket.isEmpty
+        ? 0
+        : bucket
+                .map((suggestion) => suggestion.sortOrder)
+                .reduce((left, right) => left > right ? left : right) +
+            1;
+    final generated = <TodoChecklistSuggestion>[];
+    for (final rawSuggestion in suggestions) {
+      final trimmed = rawSuggestion.trim();
+      if (trimmed.isEmpty) {
+        continue;
+      }
+      final normalized = _normalizeChecklistSuggestionContent(trimmed);
+      if (normalized.isEmpty || !blockedNorms.add(normalized)) {
+        continue;
+      }
+      final suggestion = TodoChecklistSuggestion(
         id: _nextId('suggestion'),
         todoId: todoId,
-        content: suggestions[index],
-        sortOrder: index,
+        content: trimmed,
+        sortOrder: nextSortOrder,
         state: 'pending',
         source: source,
         generationKey: generationKey,
@@ -611,12 +663,11 @@ mixin _CloudWebBackendTasksMixin
         updatedAtMs: _asPlatformInt64(now),
         dismissedAtMs: null,
         appliedChecklistItemId: null,
-      ),
-    );
-    bucket
-      ..clear()
-      ..addAll(retained)
-      ..addAll(generated);
+      );
+      bucket.add(suggestion);
+      generated.add(suggestion);
+      nextSortOrder += 1;
+    }
     return generated;
   }
 

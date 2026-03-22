@@ -420,6 +420,51 @@ void main() {
           await backend.listTodoChecklistItems(key, 'todo:web'), hasLength(1));
     });
 
+    test('partial checklist reorder keeps unspecified items on web backend',
+        () async {
+      final backend = CloudWebBackend(
+        chatClient: _FakeCloudWebChatClient(responseText: 'ok'),
+      );
+
+      final key = Uint8List(0);
+      await backend.upsertTodo(
+        key,
+        id: 'todo:web',
+        title: 'Ship web task hub',
+        status: 'open',
+      );
+
+      final first = await backend.createTodoChecklistItem(
+        key,
+        todoId: 'todo:web',
+        content: 'First item',
+      );
+      final second = await backend.createTodoChecklistItem(
+        key,
+        todoId: 'todo:web',
+        content: 'Second item',
+      );
+      final third = await backend.createTodoChecklistItem(
+        key,
+        todoId: 'todo:web',
+        content: 'Third item',
+      );
+
+      await backend.reorderTodoChecklistItems(
+        key,
+        todoId: 'todo:web',
+        orderedItemIds: <String>[second.id, first.id],
+      );
+
+      final items = await backend.listTodoChecklistItems(key, 'todo:web');
+
+      expect(items, hasLength(3));
+      expect(
+        items.map((item) => item.id).toList(growable: false),
+        <String>[second.id, first.id, third.id],
+      );
+    });
+
     test('supports todo activity note, move, and range listing on web backend',
         () async {
       final backend = CloudWebBackend(
@@ -765,6 +810,73 @@ void main() {
       expect(
         afterDismissAll.where((item) => item.state == 'pending'),
         isEmpty,
+      );
+    });
+
+    test(
+        'web checklist suggestions skip duplicates and append sort order after existing entries',
+        () async {
+      final backend = CloudWebBackend(
+        chatClient: _FakeCloudWebChatClient(responseText: 'ok'),
+        nowMs: () => 1000,
+      );
+      final key = Uint8List(0);
+      await backend.upsertTodo(
+        key,
+        id: 'todo:web',
+        title: 'Task with suggestions',
+        status: 'open',
+      );
+
+      final initial = await backend.upsertGeneratedTodoChecklistSuggestions(
+        key,
+        todoId: 'todo:web',
+        suggestions: const <String>[' Draft outline ', 'Review draft'],
+        source: 'cloud',
+        generationKey: 'gen-1',
+      );
+      await backend.applyTodoChecklistSuggestions(
+        key,
+        todoId: 'todo:web',
+        suggestionIds: <String>[initial.first.id],
+      );
+      await backend.dismissTodoChecklistSuggestions(
+        key,
+        todoId: 'todo:web',
+        suggestionIds: <String>[initial.last.id],
+      );
+
+      final regenerated = await backend.upsertGeneratedTodoChecklistSuggestions(
+        key,
+        todoId: 'todo:web',
+        suggestions: const <String>[
+          '',
+          'draft   outline',
+          ' review draft ',
+          'Ship it',
+        ],
+        source: 'cloud',
+        generationKey: 'gen-2',
+      );
+
+      expect(regenerated, hasLength(1));
+      expect(regenerated.single.content, 'Ship it');
+      expect(regenerated.single.sortOrder, 2);
+
+      final suggestions =
+          await backend.listTodoChecklistSuggestions(key, 'todo:web');
+      expect(suggestions, hasLength(3));
+      expect(
+        suggestions.map((item) => item.content).toList(growable: false),
+        <String>['Draft outline', 'Review draft', 'Ship it'],
+      );
+      expect(
+        suggestions.map((item) => item.sortOrder).toList(growable: false),
+        <int>[0, 1, 2],
+      );
+      expect(
+        suggestions.map((item) => item.state).toList(growable: false),
+        <String>['applied', 'dismissed', 'pending'],
       );
     });
 
