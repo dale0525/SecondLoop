@@ -308,7 +308,7 @@ class _TaskHubBannerState extends State<TaskHubBanner> {
                       onPressed: widget.onViewAll,
                       child: Text(context.t.actions.taskHub.openTaskHub),
                     ),
-                  if (_expanded) ...[
+                  if (_expanded && !widget.compact) ...[
                     SizedBox(height: actionsSpacingTop),
                     ConstrainedBox(
                       constraints: BoxConstraints(

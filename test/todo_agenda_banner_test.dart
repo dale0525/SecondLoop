@@ -16,7 +16,6 @@ import 'package:secondloop/features/actions/task_hub/task_hub_page.dart';
 import 'package:secondloop/features/actions/task_hub/task_priority_ai.dart';
 import 'package:secondloop/features/actions/task_hub/task_priority_engine.dart';
 import 'package:secondloop/features/actions/task_hub/task_priority_ai_models.dart';
-import 'package:secondloop/features/actions/todo/todo_detail_page.dart';
 import 'package:secondloop/features/chat/chat_page.dart';
 import 'package:secondloop/src/rust/db.dart';
 
@@ -198,7 +197,11 @@ void main() {
       find.byKey(const ValueKey('task_hub_banner_view_all')),
     );
 
-    expect(find.byKey(const ValueKey('task_hub_preview_list')), findsOneWidget);
+    expect(find.byKey(const ValueKey('task_hub_preview_list')), findsNothing);
+    expect(find.byKey(const ValueKey('task_hub_banner_primary_action')),
+        findsOneWidget);
+    expect(
+        find.byKey(const ValueKey('task_hub_banner_view_all')), findsOneWidget);
 
     await tester.tap(find.byKey(const ValueKey('task_hub_banner_view_all')));
     await tester.pumpAndSettle();
@@ -206,7 +209,7 @@ void main() {
     expect(find.byType(TaskHubPage), findsOneWidget);
   });
 
-  testWidgets('Task hub banner task row opens todo detail page in chat',
+  testWidgets('Task hub banner expanded chat view hides other task rows',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
 
@@ -257,16 +260,12 @@ void main() {
     await tester.pump();
     await _pumpUntilFound(
       tester,
-      find.byKey(const ValueKey('task_hub_banner_item_todo:detail')),
+      find.byKey(const ValueKey('task_hub_banner_view_all')),
     );
 
-    final bannerItem =
-        find.byKey(const ValueKey('task_hub_banner_item_todo:detail'));
-    expect(bannerItem, findsOneWidget);
-    await tester.tap(bannerItem);
-    await tester.pumpAndSettle();
-
-    expect(find.byType(TodoDetailPage), findsOneWidget);
+    expect(find.byKey(const ValueKey('task_hub_preview_list')), findsNothing);
+    expect(find.byKey(const ValueKey('task_hub_banner_item_todo:detail')),
+        findsNothing);
   });
 
   testWidgets('Task hub banner stays expanded after 10 seconds',
@@ -318,11 +317,11 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('task_hub_banner')));
     await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey('task_hub_preview_list')), findsOneWidget);
+    expect(find.byKey(const ValueKey('task_hub_preview_list')), findsNothing);
 
     await tester.pump(const Duration(seconds: 10));
     await tester.pump();
-    expect(find.byKey(const ValueKey('task_hub_preview_list')), findsOneWidget);
+    expect(find.byKey(const ValueKey('task_hub_preview_list')), findsNothing);
   });
 
   testWidgets(

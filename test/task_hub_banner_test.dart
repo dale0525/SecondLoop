@@ -109,7 +109,7 @@ void main() {
         findsOneWidget);
   });
 
-  testWidgets('compact banner avoids overflow in short chat viewport',
+  testWidgets('compact banner expanded view keeps focus actions only',
       (tester) async {
     final now = DateTime(2026, 3, 13, 10, 0);
     final snapshot = buildTaskPrioritySnapshot(
@@ -177,7 +177,14 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(tester.takeException(), isNull);
-    expect(find.byKey(const ValueKey('task_hub_preview_list')), findsOneWidget);
+    expect(find.byKey(const ValueKey('task_hub_banner_quick_pair')),
+        findsOneWidget);
+    expect(
+        find.byKey(const ValueKey('task_hub_banner_view_all')), findsOneWidget);
+    expect(
+        find.byKey(const ValueKey('task_hub_banner_open_focus')), findsNothing);
+    expect(find.byKey(const ValueKey('task_hub_preview_list')), findsNothing);
+    expect(find.text('Prepare weekly review summary'), findsNothing);
   });
 
   testWidgets('banner shows status and time quick actions for active focus',
