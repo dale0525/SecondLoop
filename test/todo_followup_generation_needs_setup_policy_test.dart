@@ -279,6 +279,13 @@ final class _RecordingTodoFollowupGenerationStore
       const <TodoFollowupGenerationJob>[];
 
   @override
+  Future<List<TodoFollowupGenerationJob>> listDueAutoJobs({
+    required int nowMs,
+    int limit = 1,
+  }) async =>
+      const <TodoFollowupGenerationJob>[];
+
+  @override
   Future<List<TodoFollowupSuggestion>> listTodoFollowupSuggestions(
     String todoId,
   ) async =>

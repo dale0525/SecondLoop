@@ -64,6 +64,81 @@ void main() {
   });
 
   test(
+      'preview loader reserves an auto slot via dedicated lookup when manual backlog stays saturated',
+      () async {
+    final store = _QueuedPreviewTodoFollowupGenerationStore(
+      queuedDueResponses: <List<TodoFollowupGenerationJob>>[
+        List<TodoFollowupGenerationJob>.generate(
+          5,
+          (index) => TodoFollowupGenerationJob(
+            todoId: 'todo_manual_initial_$index',
+            triggerKind: 'manual_regenerate',
+            status: 'pending',
+            attempts: 0,
+            nextRetryAtMs: null,
+            lastError: null,
+            includeManualFollowups: true,
+            taskTypeHint: 'research',
+            createdAtMs: index,
+            updatedAtMs: index,
+          ),
+          growable: false,
+        ),
+        List<TodoFollowupGenerationJob>.generate(
+          10,
+          (index) => TodoFollowupGenerationJob(
+            todoId: 'todo_manual_expanded_$index',
+            triggerKind: 'manual_regenerate',
+            status: 'pending',
+            attempts: 0,
+            nextRetryAtMs: null,
+            lastError: null,
+            includeManualFollowups: true,
+            taskTypeHint: 'research',
+            createdAtMs: index,
+            updatedAtMs: index,
+          ),
+          growable: false,
+        ),
+      ],
+      dueAutoJobs: const <TodoFollowupGenerationJob>[
+        TodoFollowupGenerationJob(
+          todoId: 'todo_auto_1',
+          triggerKind: 'auto_create',
+          status: 'pending',
+          attempts: 0,
+          nextRetryAtMs: null,
+          lastError: null,
+          includeManualFollowups: false,
+          taskTypeHint: 'research',
+          createdAtMs: 999,
+          updatedAtMs: 999,
+        ),
+      ],
+    );
+
+    final jobs = await loadTodoFollowupGenerationPreviewJobs(
+      store,
+      nowMs: 123,
+      batchLimit: 5,
+    );
+
+    expect(store.listDueJobsLimits, const <int>[5, 10, 20]);
+    expect(store.listDueAutoJobsCallCount, 1);
+    expect(jobs, hasLength(5));
+    expect(
+      jobs
+          .where((job) => job.triggerKind == 'auto_create')
+          .map((job) => job.todoId),
+      const <String>['todo_auto_1'],
+    );
+    expect(
+      jobs.where((job) => job.triggerKind == 'manual_regenerate').length,
+      4,
+    );
+  });
+
+  test(
       'Product intent: needs setup finalizer skips auto jobs and cancels manual jobs',
       () async {
     final store = _FakeTodoFollowupGenerationStore();
@@ -1547,6 +1622,13 @@ final class _FakeTodoFollowupGenerationStore
       const <TodoFollowupGenerationJob>[];
 
   @override
+  Future<List<TodoFollowupGenerationJob>> listDueAutoJobs({
+    required int nowMs,
+    int limit = 1,
+  }) async =>
+      const <TodoFollowupGenerationJob>[];
+
+  @override
   Future<List<TodoFollowupSuggestion>> listTodoFollowupSuggestions(
     String todoId,
   ) async =>
@@ -1596,4 +1678,41 @@ final class _FakeTodoFollowupGenerationStore
     required String source,
     String? generationKey,
   }) async {}
+}
+
+final class _QueuedPreviewTodoFollowupGenerationStore
+    extends _FakeTodoFollowupGenerationStore {
+  _QueuedPreviewTodoFollowupGenerationStore({
+    required List<List<TodoFollowupGenerationJob>> queuedDueResponses,
+    required List<TodoFollowupGenerationJob> dueAutoJobs,
+  })  : _queuedDueResponses = List<List<TodoFollowupGenerationJob>>.from(
+          queuedDueResponses,
+        ),
+        _dueAutoJobs = List<TodoFollowupGenerationJob>.from(dueAutoJobs);
+
+  final List<List<TodoFollowupGenerationJob>> _queuedDueResponses;
+  final List<TodoFollowupGenerationJob> _dueAutoJobs;
+  final List<int> listDueJobsLimits = <int>[];
+  int listDueAutoJobsCallCount = 0;
+
+  @override
+  Future<List<TodoFollowupGenerationJob>> listDueJobs({
+    required int nowMs,
+    int limit = 5,
+  }) async {
+    listDueJobsLimits.add(limit);
+    if (_queuedDueResponses.isEmpty) {
+      return const <TodoFollowupGenerationJob>[];
+    }
+    return _queuedDueResponses.removeAt(0).take(limit).toList(growable: false);
+  }
+
+  @override
+  Future<List<TodoFollowupGenerationJob>> listDueAutoJobs({
+    required int nowMs,
+    int limit = 1,
+  }) async {
+    listDueAutoJobsCallCount += 1;
+    return _dueAutoJobs.take(limit).toList(growable: false);
+  }
 }

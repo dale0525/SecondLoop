@@ -68,6 +68,16 @@ final class _FakeStore implements TodoFollowupGenerationStore {
       List<TodoFollowupGenerationJob>.from(_jobs.take(limit));
 
   @override
+  Future<List<TodoFollowupGenerationJob>> listDueAutoJobs({
+    required int nowMs,
+    int limit = 1,
+  }) async =>
+      _jobs
+          .where((job) => job.triggerKind != 'manual_regenerate')
+          .take(limit)
+          .toList(growable: false);
+
+  @override
   Future<void> dismissTodoFollowupSuggestions({
     required String todoId,
     required List<String> suggestionIds,

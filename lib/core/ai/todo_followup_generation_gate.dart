@@ -144,10 +144,29 @@ Future<List<TodoFollowupGenerationJob>> loadTodoFollowupGenerationPreviewJobs(
     }
   }
 
-  return selectTodoFollowupGenerationPreviewJobs(
+  final selectedJobs = selectTodoFollowupGenerationPreviewJobs(
     expandedJobs,
     batchLimit: batchLimit,
   );
+  if (selectedJobs.length < batchLimit ||
+      selectedJobs.any((job) => job.triggerKind != 'manual_regenerate')) {
+    return selectedJobs;
+  }
+
+  final dueAutoJobs = await store.listDueAutoJobs(nowMs: nowMs, limit: 1);
+  if (dueAutoJobs.isEmpty) {
+    return selectedJobs;
+  }
+
+  final firstAutoJob = dueAutoJobs.first;
+  if (selectedJobs.any((job) => job.todoId == firstAutoJob.todoId)) {
+    return selectedJobs;
+  }
+
+  return <TodoFollowupGenerationJob>[
+    ...selectedJobs.take(batchLimit - 1),
+    firstAutoJob,
+  ];
 }
 
 Future<void> finalizeTodoFollowupGenerationJobsForNeedsSetup(
@@ -726,6 +745,16 @@ final class _SeededTodoFollowupGenerationStore
       seedJobs.take(limit).toList(growable: false);
 
   @override
+  Future<List<TodoFollowupGenerationJob>> listDueAutoJobs({
+    required int nowMs,
+    int limit = 1,
+  }) async =>
+      seedJobs
+          .where((job) => job.triggerKind != 'manual_regenerate')
+          .take(limit)
+          .toList(growable: false);
+
+  @override
   Future<List<TodoFollowupSuggestion>> listTodoFollowupSuggestions(
     String todoId,
   ) =>
@@ -832,6 +861,22 @@ final class _BackendTodoFollowupGenerationStore
       nowMs: nowMs,
       limit: limit,
     );
+  }
+
+  @override
+  Future<List<TodoFollowupGenerationJob>> listDueAutoJobs({
+    required int nowMs,
+    int limit = 1,
+  }) async {
+    final candidateJobs = await backend.listDueTodoFollowupGenerationJobs(
+      sessionKey,
+      nowMs: nowMs,
+      limit: limit <= 1 ? 2 : limit,
+    );
+    return candidateJobs
+        .where((job) => job.triggerKind != 'manual_regenerate')
+        .take(limit)
+        .toList(growable: false);
   }
 
   @override

@@ -11,6 +11,11 @@ abstract class TodoFollowupGenerationStore {
     int limit = 5,
   });
 
+  Future<List<TodoFollowupGenerationJob>> listDueAutoJobs({
+    required int nowMs,
+    int limit = 1,
+  });
+
   Future<Todo?> getTodo(String todoId);
 
   Future<List<TodoActivity>> listTodoActivities(String todoId);

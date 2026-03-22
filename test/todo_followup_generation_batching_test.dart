@@ -213,6 +213,15 @@ final class _PreviewStore implements TodoFollowupGenerationStore {
   }
 
   @override
+  Future<List<TodoFollowupGenerationJob>> listDueAutoJobs({
+    required int nowMs,
+    int limit = 1,
+  }) async =>
+      jobs
+          .where((job) => job.triggerKind != 'manual_regenerate')
+          .take(limit)
+          .toList(growable: false);
+  @override
   Future<Todo?> getTodo(String todoId) {
     throw UnimplementedError();
   }
