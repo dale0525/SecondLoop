@@ -201,6 +201,47 @@ class BackendTaskPriorityAiService implements TaskPriorityAiService {
   final String _localeTag;
   final String? _cacheScopeKeyOverride;
 
+  String get _sharedAssessmentScopeKey {
+    final override = _cacheScopeKeyOverride;
+    if (override != null) {
+      return override;
+    }
+    if (_route == AskAiRouteKind.cloudGateway) {
+      return '';
+    }
+    return buildTaskPriorityAiCacheScopeKey(
+      route: _route,
+      gatewayBaseUrl: _gatewayBaseUrl,
+      modelName: _modelName,
+      localeTag: _localeTag,
+    );
+  }
+
+  String get _rerankCacheScopeKey {
+    final override = _cacheScopeKeyOverride;
+    if (override != null && override.isNotEmpty) {
+      return override;
+    }
+    if (_route == AskAiRouteKind.cloudGateway) {
+      final normalizedIdToken = _idToken.trim();
+      if (normalizedIdToken.isNotEmpty) {
+        return jsonEncode(<String>[
+          'cloud_ephemeral',
+          _gatewayBaseUrl.trim(),
+          _modelName.trim(),
+          _localeTag,
+          normalizedIdToken,
+        ]);
+      }
+    }
+    return buildTaskPriorityAiCacheScopeKey(
+      route: _route,
+      gatewayBaseUrl: _gatewayBaseUrl,
+      modelName: _modelName,
+      localeTag: _localeTag,
+    );
+  }
+
   Future<String> _fetchSharedAssessmentsRaw() {
     return _backend.fetchTaskPriorityAiAssessmentsCloudGateway(
       _sessionKey,
@@ -313,14 +354,7 @@ class BackendTaskPriorityAiService implements TaskPriorityAiService {
   }
 
   @override
-  String get cacheScopeKey =>
-      _cacheScopeKeyOverride ??
-      buildTaskPriorityAiCacheScopeKey(
-        route: _route,
-        gatewayBaseUrl: _gatewayBaseUrl,
-        modelName: _modelName,
-        localeTag: _localeTag,
-      );
+  String get cacheScopeKey => _sharedAssessmentScopeKey;
 
   @override
   Future<TaskPriorityAiBatchResult> rerank(
@@ -354,7 +388,7 @@ class BackendTaskPriorityAiService implements TaskPriorityAiService {
 
   String _buildCacheKey(TaskPriorityAiRequest request) {
     return jsonEncode(<String, Object?>{
-      'scope': cacheScopeKey,
+      'scope': _rerankCacheScopeKey,
       'time_bucket': buildTaskPriorityAiTimeBucket(request.nowLocal),
       'candidates': request.candidates
           .map((entry) => entry.toJson())

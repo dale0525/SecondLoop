@@ -329,16 +329,53 @@ mixin _CloudWebBackendTasksMixin
     required String content,
     String? sourceMessageId,
   }) async {
-    if (!_todosById.containsKey(todoId)) {
+    final todo = _todosById[todoId];
+    if (todo == null) {
       throw StateError('unknown_todo:$todoId');
     }
+    String? resolvedSourceMessageId = sourceMessageId?.trim();
+    final nowMs = _touchNow();
+    var createdAtMs = nowMs;
+
+    if (resolvedSourceMessageId == null || resolvedSourceMessageId.isEmpty) {
+      String? conversationId;
+      final sourceEntryId = todo.sourceEntryId?.trim();
+      if (sourceEntryId != null && sourceEntryId.isNotEmpty) {
+        final sourceMessage = await getMessageById(key, sourceEntryId);
+        final sourceConversationId = sourceMessage?.conversationId.trim();
+        if (sourceConversationId != null && sourceConversationId.isNotEmpty) {
+          conversationId = sourceConversationId;
+        }
+      }
+
+      if (conversationId == null) {
+        final loopHome = await getOrCreateLoopHomeConversation(key);
+        conversationId = loopHome.id;
+      }
+
+      final createdMessage = await insertMessage(
+        key,
+        conversationId,
+        role: 'user',
+        content: content,
+      );
+      resolvedSourceMessageId = createdMessage.id;
+      createdAtMs = createdMessage.createdAtMs.toInt();
+    } else {
+      final existingMessage =
+          await getMessageById(key, resolvedSourceMessageId);
+      if (existingMessage != null) {
+        createdAtMs = existingMessage.createdAtMs.toInt();
+      }
+    }
+
     final activity = TodoActivity(
       id: _nextId('activity'),
       todoId: todoId,
       activityType: 'note',
       content: content,
-      sourceMessageId: sourceMessageId,
-      createdAtMs: _asPlatformInt64(_touchNow()),
+      sourceMessageId: resolvedSourceMessageId,
+      createdAtMs: _asPlatformInt64(createdAtMs),
     );
     _todoActivitiesById[activity.id] = activity;
     return activity;
@@ -350,9 +387,6 @@ mixin _CloudWebBackendTasksMixin
     required String activityId,
     required String toTodoId,
   }) async {
-    if (!_todosById.containsKey(toTodoId)) {
-      throw StateError('unknown_todo:$toTodoId');
-    }
     final existing = _todoActivitiesById[activityId];
     if (existing == null) {
       throw StateError('unknown_todo_activity:$activityId');

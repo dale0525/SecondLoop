@@ -471,6 +471,116 @@ void main() {
       expect(ranged.single.id, activity.id);
     });
 
+    test('appendTodoNote creates a backing message in the source conversation',
+        () async {
+      var nowMs = 1000;
+      final backend = CloudWebBackend(
+        chatClient: _FakeCloudWebChatClient(responseText: 'ok'),
+        nowMs: () => nowMs,
+      );
+      final key = Uint8List(0);
+
+      final conversation = await backend.createConversation(key, 'Web Chat');
+      nowMs = 1001;
+      final sourceMessage = await backend.insertMessage(
+        key,
+        conversation.id,
+        role: 'user',
+        content: 'Original task message',
+      );
+      nowMs = 1002;
+      await backend.upsertTodo(
+        key,
+        id: 'todo:web-linked',
+        title: 'Linked task',
+        status: 'open',
+        sourceEntryId: sourceMessage.id,
+      );
+
+      final activity = await backend.appendTodoNote(
+        key,
+        todoId: 'todo:web-linked',
+        content: 'Follow-up note',
+      );
+
+      expect(activity.sourceMessageId, isNotNull);
+      final createdMessage =
+          await backend.getMessageById(key, activity.sourceMessageId!);
+      expect(createdMessage, isNotNull);
+      expect(createdMessage!.conversationId, conversation.id);
+      expect(createdMessage.content, 'Follow-up note');
+      expect(activity.createdAtMs, createdMessage.createdAtMs);
+    });
+
+    test(
+        'appendTodoNote falls back to loop home when source conversation is missing',
+        () async {
+      final backend = CloudWebBackend(
+        chatClient: _FakeCloudWebChatClient(responseText: 'ok'),
+        nowMs: () => 2000,
+      );
+      final key = Uint8List(0);
+
+      await backend.upsertTodo(
+        key,
+        id: 'todo:web-loop-home',
+        title: 'Loop home task',
+        status: 'open',
+      );
+
+      final activity = await backend.appendTodoNote(
+        key,
+        todoId: 'todo:web-loop-home',
+        content: 'Inbox follow-up',
+      );
+
+      final createdMessage =
+          await backend.getMessageById(key, activity.sourceMessageId!);
+      expect(createdMessage, isNotNull);
+      expect(createdMessage!.conversationId, 'loop-home');
+      expect(
+        (await backend.listConversations(key)).any((c) => c.id == 'loop-home'),
+        isTrue,
+      );
+    });
+
+    test('moveTodoActivity allows orphan targets for detach parity', () async {
+      final backend = CloudWebBackend(
+        chatClient: _FakeCloudWebChatClient(responseText: 'ok'),
+        nowMs: () => 3000,
+      );
+      final key = Uint8List(0);
+      await backend.upsertTodo(
+        key,
+        id: 'todo:web-a',
+        title: 'Task A',
+        status: 'open',
+      );
+
+      final activity = await backend.appendTodoNote(
+        key,
+        todoId: 'todo:web-a',
+        content: 'Detached note',
+        sourceMessageId: 'message-1',
+      );
+
+      final moved = await backend.moveTodoActivity(
+        key,
+        activityId: activity.id,
+        toTodoId: 'todo:_detached_message_link:message-1',
+      );
+
+      expect(moved.todoId, 'todo:_detached_message_link:message-1');
+      expect(await backend.listTodoActivities(key, 'todo:web-a'), isEmpty);
+      expect(
+        await backend.listTodoActivities(
+          key,
+          'todo:_detached_message_link:message-1',
+        ),
+        hasLength(1),
+      );
+    });
+
     test('records status change activities on web backend', () async {
       var nowMs = 1000;
       final backend = CloudWebBackend(

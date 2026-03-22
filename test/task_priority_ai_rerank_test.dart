@@ -400,6 +400,72 @@ void main() {
     expect(serviceA.cacheScopeKey, isNot(serviceB.cacheScopeKey));
   });
 
+  test('cloud gateway cacheScopeKey stays empty without resolved user scope',
+      () {
+    final backend = _RecordingTaskPriorityBackend();
+    final service = BackendTaskPriorityAiService.forTesting(
+      backend: backend,
+      sessionKey: Uint8List(32),
+      route: AskAiRouteKind.cloudGateway,
+      gatewayBaseUrl: 'https://gateway.example',
+      idToken: 'token-a',
+      modelName: 'gpt-cloud',
+      localeTag: 'zh-CN',
+    );
+
+    expect(service.cacheScopeKey, isEmpty);
+  });
+
+  test('cloud gateway rerank cache does not collide across id tokens',
+      () async {
+    final backend = _RecordingTaskPriorityBackend();
+    final request = TaskPriorityAiRequest(
+      nowLocal: DateTime(2026, 3, 13, 10, 0),
+      candidates: const <TaskPriorityAiCandidate>[
+        TaskPriorityAiCandidate(
+          todoId: 't1',
+          title: 'Fix bug',
+          status: 'open',
+          band: TaskPriorityBand.decide,
+          dueState: 'unscheduled',
+          ruleScore: 10,
+          updatedAtMs: 0,
+          recentInteractionSummary: '',
+          sourceSummary: '',
+          isRepeatedlyDeferred: false,
+          isPotentialBlocker: true,
+          isQuickWin: false,
+          ruleIsImportant: false,
+          ruleIsUrgent: false,
+        ),
+      ],
+    );
+
+    final serviceA = BackendTaskPriorityAiService.forTesting(
+      backend: backend,
+      sessionKey: Uint8List(32),
+      route: AskAiRouteKind.cloudGateway,
+      gatewayBaseUrl: 'https://gateway.example',
+      idToken: 'token-a',
+      modelName: 'gpt-cloud',
+      localeTag: 'zh-CN',
+    );
+    final serviceB = BackendTaskPriorityAiService.forTesting(
+      backend: backend,
+      sessionKey: Uint8List(32),
+      route: AskAiRouteKind.cloudGateway,
+      gatewayBaseUrl: 'https://gateway.example',
+      idToken: 'token-b',
+      modelName: 'gpt-cloud',
+      localeTag: 'zh-CN',
+    );
+
+    await serviceA.rerank(request);
+    await serviceB.rerank(request);
+
+    expect(backend.cloudTaskPriorityCalls, 2);
+  });
+
   test('service deduplicates cross-instance reranks with only clock drift',
       () async {
     final backend = _RecordingTaskPriorityBackend();

@@ -98,11 +98,23 @@ void main() {
     await tester.pump();
     await _pumpUntilFound(
       tester,
-      find.byKey(const ValueKey('task_hub_banner_item_todo:chat-web')),
+      find.byKey(const ValueKey('task_hub_banner_view_all')),
     );
 
-    await tester
-        .tap(find.byKey(const ValueKey('task_hub_banner_item_todo:chat-web')));
+    await tester.tap(find.byKey(const ValueKey('task_hub_banner_view_all')));
+    await tester.pump();
+    await _pumpUntilFound(tester, find.byType(TaskHubPage));
+    await _pumpUntilFound(
+      tester,
+      find.byKey(const ValueKey('task_hub_page_item_todo:chat-web')),
+    );
+
+    await tester.tap(
+      find.descendant(
+        of: find.byKey(const ValueKey('task_hub_page_item_todo:chat-web')),
+        matching: find.text('Chat web task'),
+      ),
+    );
     await tester.pump();
     await _pumpUntilFound(
       tester,
