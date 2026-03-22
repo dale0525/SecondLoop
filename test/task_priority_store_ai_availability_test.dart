@@ -420,6 +420,60 @@ void main() {
     );
   });
 
+  test(
+      'restart fallback ignores empty last scope and reuses older fresh persisted scope',
+      () async {
+    SharedPreferences.setMockInitialValues({});
+    final nowLocal = DateTime(2026, 3, 13, 10, 0);
+
+    final warmStore = TaskPriorityStore.fromLoaders(
+      nowLocal: () => nowLocal,
+      loadTodos: () async => <Todo>[
+        todo(id: 'focus', title: 'Focus task', updatedAtMs: 10),
+      ],
+      resolveAiService: () async => _ScopedCachedSuccessfulAiService(
+        scopeKey: 'persisted-scope',
+      ),
+    );
+
+    await warmStore.refresh();
+    expect(warmStore.snapshot.primaryFocus?.reasonText, 'Persisted AI result.');
+
+    final emptyScopeStore = TaskPriorityStore.fromLoaders(
+      nowLocal: () => nowLocal.add(const Duration(minutes: 1)),
+      loadTodos: () async => <Todo>[
+        todo(id: 'focus', title: 'Focus task updated', updatedAtMs: 20),
+      ],
+      resolveAiService: () async => _EmptyScopedAiService(
+        scopeKey: 'empty-scope',
+      ),
+    );
+
+    await emptyScopeStore.refresh();
+    expect(emptyScopeStore.snapshot.primaryFocus?.reasonText, isNull);
+
+    final restartedStore = TaskPriorityStore.fromLoaders(
+      nowLocal: () => nowLocal.add(const Duration(minutes: 5)),
+      loadTodos: () async => <Todo>[
+        todo(id: 'focus', title: 'Focus task', updatedAtMs: 10),
+      ],
+      resolveAiService: () async => null,
+      resolveAiCacheScopeKey: () async => null,
+    );
+
+    await restartedStore.refresh();
+
+    expect(
+      restartedStore.snapshot.primaryFocus?.reasonText,
+      'Persisted AI result.',
+    );
+    expect(restartedStore.snapshot.hasAiEnhancement, isTrue);
+    expect(
+      restartedStore.snapshot.enhancementSource,
+      TaskPriorityEnhancementSource.aiLocalCache,
+    );
+  });
+
   test('fresh rerank marks enhancement source as live ai', () async {
     SharedPreferences.setMockInitialValues({});
     final store = TaskPriorityStore.fromLoaders(
@@ -485,6 +539,49 @@ final class _CachedSuccessfulAiService extends TaskPriorityAiService {
           )
           .toList(growable: false),
     );
+  }
+}
+
+final class _ScopedCachedSuccessfulAiService extends TaskPriorityAiService {
+  _ScopedCachedSuccessfulAiService({required this.scopeKey});
+
+  final String scopeKey;
+
+  @override
+  String get cacheScopeKey => scopeKey;
+
+  @override
+  Future<TaskPriorityAiBatchResult> rerank(
+      TaskPriorityAiRequest request) async {
+    return TaskPriorityAiBatchResult(
+      entries: request.candidates
+          .map(
+            (candidate) => TaskPriorityAiEntry(
+              todoId: candidate.todoId,
+              semanticAdjustment: 8,
+              reason: 'Persisted AI result.',
+              confidence: TaskPriorityAiConfidence.high,
+              isImportant: true,
+              isUrgent: false,
+            ),
+          )
+          .toList(growable: false),
+    );
+  }
+}
+
+final class _EmptyScopedAiService extends TaskPriorityAiService {
+  _EmptyScopedAiService({required this.scopeKey});
+
+  final String scopeKey;
+
+  @override
+  String get cacheScopeKey => scopeKey;
+
+  @override
+  Future<TaskPriorityAiBatchResult> rerank(
+      TaskPriorityAiRequest request) async {
+    return const TaskPriorityAiBatchResult.empty();
   }
 }
 

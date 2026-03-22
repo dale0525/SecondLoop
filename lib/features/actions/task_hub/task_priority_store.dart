@@ -546,23 +546,26 @@ class TaskPriorityStore extends ChangeNotifier {
       final normalizedScopes =
           rawScopes.map((key, value) => MapEntry(key.toString(), value));
       final lastScope = (data[_kAiCacheLastScopeKey] ?? '').toString().trim();
-      final candidateScopes = <Object?>[];
-      if (lastScope.isNotEmpty) {
-        candidateScopes.add(normalizedScopes[lastScope]);
-      } else if (normalizedScopes.length == 1) {
-        candidateScopes.add(normalizedScopes.values.single);
-      } else {
-        return const <String, TaskPriorityAiCachedAssessment>{};
+      final orderedScopes = <MapEntry<String, Object?>>[];
+      if (lastScope.isNotEmpty && normalizedScopes.containsKey(lastScope)) {
+        orderedScopes.add(MapEntry(lastScope, normalizedScopes[lastScope]));
+      }
+      for (final entry in normalizedScopes.entries) {
+        if (entry.key == lastScope) continue;
+        orderedScopes.add(entry);
       }
 
-      final matched = <String, TaskPriorityAiCachedAssessment>{};
-      for (final scope in candidateScopes) {
+      Map<String, TaskPriorityAiCachedAssessment> fallbackMatch =
+          const <String, TaskPriorityAiCachedAssessment>{};
+      DateTime? fallbackFreshness;
+      for (final scopeEntry in orderedScopes) {
+        final scope = scopeEntry.value;
         if (scope is! Map) continue;
-        final entries = _parsePersistedAssessmentEntries(
+        final matched = <String, TaskPriorityAiCachedAssessment>{};
+        for (final entry in _parsePersistedAssessmentEntries(
           scope,
           nowLocal: nowLocal,
-        );
-        for (final entry in entries.entries) {
+        ).entries) {
           final candidate = candidateByTodoId[entry.key];
           if (candidate == null) continue;
           final requestSignature = _buildCandidateRequestSignature(
@@ -570,14 +573,26 @@ class TaskPriorityStore extends ChangeNotifier {
             nowLocal: nowLocal,
           );
           if (entry.value.requestSignature != requestSignature) continue;
-          final existing = matched[entry.key];
-          if (existing == null ||
-              entry.value.computedAtLocal.isAfter(existing.computedAtLocal)) {
-            matched[entry.key] = entry.value;
-          }
+          matched[entry.key] = entry.value;
+        }
+        if (matched.isEmpty) continue;
+        if (scopeEntry.key == lastScope) {
+          return matched;
+        }
+        final freshness = matched.values.fold<DateTime?>(
+          null,
+          (latest, assessment) =>
+              latest == null || assessment.computedAtLocal.isAfter(latest)
+                  ? assessment.computedAtLocal
+                  : latest,
+        );
+        if (freshness == null) continue;
+        if (fallbackFreshness == null || freshness.isAfter(fallbackFreshness)) {
+          fallbackMatch = matched;
+          fallbackFreshness = freshness;
         }
       }
-      return matched;
+      return fallbackMatch;
     } catch (_) {
       return const <String, TaskPriorityAiCachedAssessment>{};
     }
@@ -710,15 +725,31 @@ class TaskPriorityStore extends ChangeNotifier {
           prunedEntries[entry.key] = entry.value;
         }
       }
-      scopes[cacheScopeKey] = <String, Object?>{
-        'entries': prunedEntries.map(
-          (key, value) => MapEntry(key, value.toJson()),
-        ),
-      };
-      root['scopes'] = scopes;
-      if (scopes.containsKey(cacheScopeKey)) {
+      if (prunedEntries.isEmpty) {
+        scopes.remove(cacheScopeKey);
+      } else {
+        scopes[cacheScopeKey] = <String, Object?>{
+          'entries': prunedEntries.map(
+            (key, value) => MapEntry(key, value.toJson()),
+          ),
+        };
+      }
+      if (scopes.isEmpty) {
+        root.remove('scopes');
+      } else {
+        root['scopes'] = scopes;
+      }
+      if (prunedEntries.isNotEmpty) {
         root[_kAiCacheLastScopeKey] = cacheScopeKey;
       } else {
+        final lastScope = (root[_kAiCacheLastScopeKey] ?? '').toString().trim();
+        if (lastScope.isNotEmpty && scopes.containsKey(lastScope)) {
+          // Keep the previous non-empty scope so startup fallback stays usable.
+        } else {
+          root.remove(_kAiCacheLastScopeKey);
+        }
+      }
+      if (scopes.isEmpty) {
         root.remove(_kAiCacheLastScopeKey);
       }
       await prefs.setString(_kAiCachePrefsKey, jsonEncode(root));
