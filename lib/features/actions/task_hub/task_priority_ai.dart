@@ -332,6 +332,8 @@ class BackendTaskPriorityAiService implements TaskPriorityAiService {
         .map((value) => value.trim())
         .where((value) => value.isNotEmpty)
         .toSet();
+    final isFullSnapshot =
+        activeIds.isNotEmpty && entries.keys.toSet().containsAll(activeIds);
     final payloadEntries = <Object?>[];
     var updatedAtMs = 0;
     for (final entry in entries.entries) {
@@ -351,7 +353,7 @@ class BackendTaskPriorityAiService implements TaskPriorityAiService {
           'route': _route.name,
           'model_name': _modelName,
           'locale_tag': _localeTag,
-          'replace_missing_entries': true,
+          'replace_missing_entries': isFullSnapshot,
           'updated_at_ms': updatedAtMs > 0 ? updatedAtMs : null,
           'entries': payloadEntries,
         }),

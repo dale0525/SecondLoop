@@ -392,6 +392,47 @@ void main() {
     expect(backend.lastSharedAssessmentsPayload!['scope'], 'cloud-scope');
   });
 
+  test(
+      'shared assessment writes avoid full replacement for partial active snapshots',
+      () async {
+    final backend = _RecordingTaskPriorityBackend();
+    final service = BackendTaskPriorityAiService.forTesting(
+      backend: backend,
+      sessionKey: Uint8List(32),
+      route: AskAiRouteKind.cloudGateway,
+      gatewayBaseUrl: 'https://gateway.example',
+      idToken: 'token',
+      modelName: 'gpt-cloud-test',
+      localeTag: 'en-US',
+      cacheScopeKeyOverride: 'cloud-scope',
+    );
+
+    await service.writeSharedAssessments(
+      entries: <String, TaskPriorityAiCachedAssessment>{
+        'focus': TaskPriorityAiCachedAssessment(
+          entry: const TaskPriorityAiEntry(
+            todoId: 'focus',
+            semanticAdjustment: 18,
+            reason: 'Fresh shared result.',
+            confidence: TaskPriorityAiConfidence.high,
+            isImportant: true,
+            isUrgent: false,
+          ),
+          requestSignature: 'sig-focus',
+          computedAtLocal: DateTime(2026, 3, 13, 10, 0),
+        ),
+      },
+      activeTodoIds: const <String>['focus', 'backlog'],
+    );
+
+    expect(backend.lastSharedAssessmentsPayload, isNotNull);
+    expect(
+      backend.lastSharedAssessmentsPayload!['replace_missing_entries'],
+      isFalse,
+    );
+    expect(backend.lastSharedAssessmentsPayload!['scope'], 'cloud-scope');
+  });
+
   test('service includes current app locale in prompt', () async {
     final backend = _RecordingTaskPriorityBackend();
     final service = BackendTaskPriorityAiService.forTesting(
