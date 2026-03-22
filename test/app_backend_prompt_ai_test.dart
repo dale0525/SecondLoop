@@ -64,6 +64,30 @@ void main() {
       ),
     );
   });
+
+  test(
+      'runTodoFollowupPromptCloudGateway uses a generic unimplemented error surface',
+      () async {
+    final backend = TestAppBackend();
+
+    expect(
+      () => backend.runTodoFollowupPromptCloudGateway(
+        Uint8List.fromList(List<int>.filled(32, 1)),
+        prompt: 'hello',
+        gatewayBaseUrl: 'https://example.com',
+        idToken: 'token',
+        modelName: 'gpt-test',
+        generationModeWireValue: 'web_search',
+      ),
+      throwsA(
+        isA<UnimplementedError>().having(
+          (error) => error.toString(),
+          'message',
+          contains('runTodoFollowupPromptCloudGateway'),
+        ),
+      ),
+    );
+  });
 }
 
 final class _CloudGatewayMessageBackend extends TestAppBackend {

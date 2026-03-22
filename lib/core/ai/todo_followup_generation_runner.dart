@@ -74,16 +74,20 @@ abstract class TodoFollowupGenerationClient {
   });
 }
 
+const kTodoFollowupGenerationMaxManualAttempts = 5;
+
 final class TodoFollowupGenerationRunnerSettings {
   const TodoFollowupGenerationRunnerSettings({
     required this.hardTimeout,
     this.batchLimit = 5,
     this.maxAutoAttempts = 3,
+    this.maxManualAttempts = kTodoFollowupGenerationMaxManualAttempts,
   });
 
   final Duration hardTimeout;
   final int batchLimit;
   final int maxAutoAttempts;
+  final int maxManualAttempts;
 }
 
 final class TodoFollowupGenerationRunResult {
@@ -270,6 +274,15 @@ final class TodoFollowupGenerationRunner {
         final attempts = job.attempts.toInt() + 1;
         final failedAtMs = _nowMs();
         if (job.triggerKind == 'manual_regenerate') {
+          if (attempts >= settings.maxManualAttempts) {
+            await store.markJobCanceled(
+              todoId: job.todoId,
+              nowMs: failedAtMs,
+            );
+            didUpdateJobs = true;
+            processed++;
+            continue;
+          }
           final nextRetryAtMs = failedAtMs + _retryDelayMsForAttempt(attempts);
           await store.markJobFailed(
             todoId: job.todoId,

@@ -813,4 +813,54 @@ void main() {
     );
     expect(store.lastSucceededTodoId, 'todo_regen_normalized');
   });
+
+  test('runner cancels manual regenerate after max manual attempts', () async {
+    final store = _FakeStore(
+      jobs: const <TodoFollowupGenerationJob>[
+        TodoFollowupGenerationJob(
+          todoId: 'todo_manual_retry_cap',
+          triggerKind: 'manual_regenerate',
+          status: 'failed',
+          attempts: 4,
+          nextRetryAtMs: null,
+          lastError: 'previous failure',
+          includeManualFollowups: true,
+          taskTypeHint: 'research',
+          createdAtMs: 0,
+          updatedAtMs: 0,
+        ),
+      ],
+      todos: const <String, Todo>{
+        'todo_manual_retry_cap': Todo(
+          id: 'todo_manual_retry_cap',
+          title: '调研一下当前主流的 llm 模型',
+          status: 'open',
+          createdAtMs: 0,
+          updatedAtMs: 0,
+        ),
+      },
+    );
+    final client = _FakeClient(
+      errorsByMode: <TodoFollowupGenerationMode, Object>{
+        TodoFollowupGenerationMode.modelKnowledge:
+            StateError('permanent followup failure'),
+      },
+    );
+
+    final runner = TodoFollowupGenerationRunner(
+      store: store,
+      client: client,
+      settings: const TodoFollowupGenerationRunnerSettings(
+        hardTimeout: Duration(milliseconds: 200),
+        maxManualAttempts: 5,
+      ),
+      nowMs: () => 1000,
+    );
+
+    final result = await runner.runOnce(localeTag: 'zh-CN');
+
+    expect(result.processed, 1);
+    expect(store.lastCanceledTodoId, 'todo_manual_retry_cap');
+    expect(store.lastFailedTodoId, isNull);
+  });
 }

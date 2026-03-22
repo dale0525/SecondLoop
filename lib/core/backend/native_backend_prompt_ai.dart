@@ -310,6 +310,25 @@ mixin _NativeAppBackendPromptAi on _NativeAppBackendAccess {
   }
 
   @override
+  Future<String> todoFollowupRerankAiCloudGateway(
+    Uint8List key, {
+    required String prompt,
+    required String gatewayBaseUrl,
+    required String idToken,
+    required String modelName,
+  }) async {
+    final appDir = await _getAppDir();
+    return rust_core.aiTodoFollowupRerankCloudGateway(
+      appDir: appDir,
+      key: key,
+      prompt: prompt,
+      gatewayBaseUrl: gatewayBaseUrl,
+      firebaseIdToken: idToken,
+      modelName: modelName,
+    );
+  }
+
+  @override
   Future<String> semanticParseMessageAction(
     Uint8List key, {
     required String text,

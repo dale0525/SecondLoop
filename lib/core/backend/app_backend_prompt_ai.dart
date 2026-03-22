@@ -23,7 +23,7 @@ extension AppBackendPromptAi on AppBackend {
     required String modelName,
     required String generationModeWireValue,
   }) {
-    return runAiPromptCloudGateway(
+    return _runTodoFollowupPromptCloudGateway(
       key,
       prompt: encodeTodoFollowupPromptEnvelope(
         prompt,
@@ -33,6 +33,35 @@ extension AppBackendPromptAi on AppBackend {
       idToken: idToken,
       modelName: modelName,
     );
+  }
+
+  Future<String> _runTodoFollowupPromptCloudGateway(
+    Uint8List key, {
+    required String prompt,
+    required String gatewayBaseUrl,
+    required String idToken,
+    required String modelName,
+  }) async {
+    try {
+      return await todoFollowupRerankAiCloudGateway(
+        key,
+        prompt: prompt,
+        gatewayBaseUrl: gatewayBaseUrl,
+        idToken: idToken,
+        modelName: modelName,
+      );
+    } on UnimplementedError catch (error, stackTrace) {
+      final message = error.toString();
+      if (message.contains('todoFollowupRerankAiCloudGateway')) {
+        Error.throwWithStackTrace(
+          UnimplementedError(
+            'runTodoFollowupPromptCloudGateway / todoFollowupRerankAiCloudGateway',
+          ),
+          stackTrace,
+        );
+      }
+      rethrow;
+    }
   }
 
   Future<String> runAiPrompt(

@@ -830,6 +830,16 @@ abstract class AppBackend {
     throw UnimplementedError('taskPriorityRerankAiCloudGateway');
   }
 
+  Future<String> todoFollowupRerankAiCloudGateway(
+    Uint8List key, {
+    required String prompt,
+    required String gatewayBaseUrl,
+    required String idToken,
+    required String modelName,
+  }) {
+    throw UnimplementedError('todoFollowupRerankAiCloudGateway');
+  }
+
   Stream<String> askAiStreamScoped(
     Uint8List key,
     String conversationId, {

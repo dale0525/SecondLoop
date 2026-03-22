@@ -103,6 +103,36 @@ void main() {
     expect(store.skippedTodoIds, const <String>['todo_auto']);
   });
 
+  test('manual retry defer cancels jobs after max attempts', () async {
+    final store = _FakeTodoFollowupGenerationStore();
+
+    final earliestRetryAtMs = await deferTodoFollowupGenerationJobsForRetry(
+      store,
+      const <TodoFollowupGenerationJob>[
+        TodoFollowupGenerationJob(
+          todoId: 'todo_manual_auth',
+          triggerKind: 'manual_regenerate',
+          status: 'failed',
+          attempts: 4,
+          nextRetryAtMs: null,
+          lastError: 'manual_followup_auth_unavailable',
+          includeManualFollowups: true,
+          taskTypeHint: 'research',
+          createdAtMs: 0,
+          updatedAtMs: 0,
+        ),
+      ],
+      nowMs: 1000,
+      retryDelay: const Duration(seconds: 10),
+      lastError: 'manual_followup_auth_unavailable',
+      maxAttempts: 5,
+    );
+
+    expect(earliestRetryAtMs, isNull);
+    expect(store.canceledTodoIds, const <String>['todo_manual_auth']);
+    expect(store.skippedTodoIds, isEmpty);
+  });
+
   testWidgets('needs-setup pass still notifies sync listeners for job updates',
       (tester) async {
     SharedPreferences.setMockInitialValues({
@@ -1013,6 +1043,79 @@ void main() {
     expect(backend.cloudPromptCalls, 0);
   });
 
+  testWidgets(
+      'automatic jobs fallback setup route errors into deferred retries',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({
+      'semantic_parse_data_consent_v1': true,
+    });
+
+    final nowMs = DateTime.now().millisecondsSinceEpoch;
+    final backend = _FakeTodoFollowupGenerationGateBackend(
+      dueJobs: <TodoFollowupGenerationJob>[
+        TodoFollowupGenerationJob(
+          todoId: 'todo_auto_setup_error',
+          triggerKind: 'auto_create',
+          status: 'pending',
+          attempts: 0,
+          nextRetryAtMs: null,
+          lastError: null,
+          includeManualFollowups: false,
+          taskTypeHint: 'research',
+          createdAtMs: nowMs,
+          updatedAtMs: nowMs,
+        ),
+      ],
+      todosById: <String, Todo>{
+        'todo_auto_setup_error': Todo(
+          id: 'todo_auto_setup_error',
+          title: '调研航班到达信息',
+          status: 'open',
+          createdAtMs: nowMs,
+          updatedAtMs: nowMs,
+        ),
+      },
+      llmProfileOutcomes: <Object>[StateError('missing_id_token')],
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: AppBackendScope(
+          backend: backend,
+          child: SessionScope(
+            sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+            lock: () {},
+            child: SubscriptionScope(
+              controller: _FixedSubscriptionStatusController(
+                SubscriptionStatus.unknown,
+              ),
+              child: const CloudAuthScope(
+                controller: _FixedCloudAuthController('token_1'),
+                gatewayConfig: CloudGatewayConfig(
+                  baseUrl: 'https://example.com',
+                  modelName: 'cloud',
+                ),
+                child: TodoFollowupGenerationGate(
+                  child: SizedBox.shrink(),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 3));
+
+    expect(backend.failedTodoIds, contains('todo_auto_setup_error'));
+    expect(backend.failedLastErrors, contains('followup_subscription_pending'));
+    expect(backend.skippedTodoIds, isEmpty);
+    expect(backend.canceledTodoIds, isEmpty);
+    expect(backend.localPromptCalls, 0);
+    expect(backend.cloudPromptCalls, 0);
+  });
+
   testWidgets('gate runs for supported non-native backends via capability',
       (tester) async {
     SharedPreferences.setMockInitialValues({
@@ -1179,6 +1282,22 @@ final class _FakeTodoFollowupGenerationGateBackend extends NativeAppBackend {
 
   @override
   Future<String> taskPriorityRerankAiCloudGateway(
+    Uint8List key, {
+    required String prompt,
+    required String gatewayBaseUrl,
+    required String idToken,
+    required String modelName,
+  }) async {
+    cloudPromptCalls += 1;
+    final response = aiPromptCloudResponse;
+    if (response == null) {
+      throw StateError('aiPromptCloudResponse not configured');
+    }
+    return response;
+  }
+
+  @override
+  Future<String> todoFollowupRerankAiCloudGateway(
     Uint8List key, {
     required String prompt,
     required String gatewayBaseUrl,

@@ -380,7 +380,11 @@ bool _shouldFallbackToNeedsSetupOnRouteError(Object error) {
 
   final message = error.toString().toLowerCase();
   if (message.contains('missing_web_api_key') ||
-      message.contains('missing_wwb_api_key')) {
+      message.contains('missing_wwb_api_key') ||
+      message.contains('missing_user') ||
+      message.contains('missing_id_token') ||
+      message.contains('missing_refresh_token') ||
+      message.contains('missing_local_id')) {
     return true;
   }
   if (message.contains('master password') && message.contains('setup')) {

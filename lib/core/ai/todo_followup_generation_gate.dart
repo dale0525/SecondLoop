@@ -173,6 +173,7 @@ Future<int?> deferTodoFollowupGenerationJobsForRetry(
   required int nowMs,
   required Duration retryDelay,
   required String lastError,
+  int maxAttempts = kTodoFollowupGenerationMaxManualAttempts,
 }) async {
   int? earliestNextRetryAtMs;
   for (final job in jobs) {
@@ -183,10 +184,15 @@ Future<int?> deferTodoFollowupGenerationJobsForRetry(
       await store.markJobSkipped(todoId: job.todoId, nowMs: nowMs);
       continue;
     }
+    final attempts = job.attempts.toInt() + 1;
+    if (attempts >= maxAttempts) {
+      await store.markJobCanceled(todoId: job.todoId, nowMs: nowMs);
+      continue;
+    }
     final nextRetryAtMs = nowMs + retryDelay.inMilliseconds;
     await store.markJobFailed(
       todoId: job.todoId,
-      attempts: job.attempts.toInt() + 1,
+      attempts: attempts,
       nextRetryAtMs: nextRetryAtMs,
       lastError: lastError,
       nowMs: nowMs,
@@ -533,6 +539,7 @@ class _TodoFollowupGenerationGateState extends State<TodoFollowupGenerationGate>
           cloudAuthController: cloudAuthScope?.controller,
           gatewayConfig: gatewayConfig,
           subscriptionStatus: subscriptionStatus,
+          fallbackToNeedsSetupOnRouteError: true,
         );
         final route = prepared.route;
         final idToken = prepared.idToken;
@@ -580,6 +587,7 @@ class _TodoFollowupGenerationGateState extends State<TodoFollowupGenerationGate>
               nowMs: nowMs,
               retryDelay: _kFailureInterval,
               lastError: 'manual_followup_auth_unavailable',
+              maxAttempts: kTodoFollowupGenerationMaxManualAttempts,
             );
             earliestNextRetryAtMs = minTodoFollowupGenerationRetryAtMs(
               earliestNextRetryAtMs,
