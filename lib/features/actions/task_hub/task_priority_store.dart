@@ -24,6 +24,7 @@ enum TaskPriorityAiAvailability {
 
 class TaskPriorityStore extends ChangeNotifier {
   static const _kAiCachePrefsKey = 'task_priority_ai_cache_v3';
+  static const _kAiCacheLastScopeKey = 'last_scope';
   final Map<String, _InMemoryAiAssessment> _inMemoryAiAssessments =
       <String, _InMemoryAiAssessment>{};
 
@@ -542,8 +543,20 @@ class TaskPriorityStore extends ChangeNotifier {
         return const <String, TaskPriorityAiCachedAssessment>{};
       }
 
+      final normalizedScopes =
+          rawScopes.map((key, value) => MapEntry(key.toString(), value));
+      final lastScope = (data[_kAiCacheLastScopeKey] ?? '').toString().trim();
+      final candidateScopes = <Object?>[];
+      if (lastScope.isNotEmpty) {
+        candidateScopes.add(normalizedScopes[lastScope]);
+      } else if (normalizedScopes.length == 1) {
+        candidateScopes.add(normalizedScopes.values.single);
+      } else {
+        return const <String, TaskPriorityAiCachedAssessment>{};
+      }
+
       final matched = <String, TaskPriorityAiCachedAssessment>{};
-      for (final scope in rawScopes.values) {
+      for (final scope in candidateScopes) {
         if (scope is! Map) continue;
         final entries = _parsePersistedAssessmentEntries(
           scope,
@@ -703,6 +716,11 @@ class TaskPriorityStore extends ChangeNotifier {
         ),
       };
       root['scopes'] = scopes;
+      if (scopes.containsKey(cacheScopeKey)) {
+        root[_kAiCacheLastScopeKey] = cacheScopeKey;
+      } else {
+        root.remove(_kAiCacheLastScopeKey);
+      }
       await prefs.setString(_kAiCachePrefsKey, jsonEncode(root));
     } catch (_) {
       // Ignore cache write failures.
