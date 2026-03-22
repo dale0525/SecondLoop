@@ -634,7 +634,7 @@ void main() {
         secondStore.snapshot.primaryFocus?.reasonText, 'Second tuple result.');
   });
 
-  test('updatedAtMs churn alone does not trigger a second rerank', () async {
+  test('updatedAtMs churn alone triggers a second rerank', () async {
     SharedPreferences.setMockInitialValues({});
     final aiService = _CountingAiService(
       const TaskPriorityAiBatchResult(
@@ -662,7 +662,7 @@ void main() {
     store.markDirty();
     await store.refresh();
 
-    expect(aiService.calls, 1);
+    expect(aiService.calls, 2);
   });
 
   test('due state changes bypass sticky focus and recompute primary focus',

@@ -306,28 +306,36 @@ class TaskPriorityStore extends ChangeNotifier {
           ? _readInMemoryAiAssessments(nowLocal: nowLocal)
           : const <String, TaskPriorityAiCachedAssessment>{};
       final freshEntries = <String, TaskPriorityAiEntry>{};
-      final cachedEnhancementSources = <String, TaskPriorityEnhancementSource>{
-        if (canUsePersistedCache) ...<String, TaskPriorityEnhancementSource>{
-          for (final entry in persisted.entries)
-            entry.key: TaskPriorityEnhancementSource.aiLocalCache,
-          for (final entry in sharedPersisted.entries)
-            entry.key: TaskPriorityEnhancementSource.aiSharedCache,
-        } else ...<String, TaskPriorityEnhancementSource>{
-          for (final entry in memoryCached.entries)
-            entry.key: TaskPriorityEnhancementSource.aiLocalCache,
-        },
-      };
+      final cachedEnhancementSources =
+          <String, TaskPriorityEnhancementSource>{};
       final sharedCacheTodoIds = <String>{};
       final localCacheTodoIds = <String>{};
       final liveTodoIds = <String>{};
-      final mergedPersisted = Map<String, TaskPriorityAiCachedAssessment>.from(
-        canUsePersistedCache
-            ? <String, TaskPriorityAiCachedAssessment>{
-                ...persisted,
-                ...sharedPersisted,
-              }
-            : _mergeCachedAssessments(memoryCached, bootstrapPersisted),
-      );
+      final mergedPersisted = <String, TaskPriorityAiCachedAssessment>{};
+      if (canUsePersistedCache) {
+        for (final entry in persisted.entries) {
+          mergedPersisted[entry.key] = entry.value;
+          cachedEnhancementSources[entry.key] =
+              TaskPriorityEnhancementSource.aiLocalCache;
+        }
+        for (final entry in sharedPersisted.entries) {
+          final existing = mergedPersisted[entry.key];
+          if (existing == null ||
+              entry.value.computedAtLocal.isAfter(existing.computedAtLocal)) {
+            mergedPersisted[entry.key] = entry.value;
+            cachedEnhancementSources[entry.key] =
+                TaskPriorityEnhancementSource.aiSharedCache;
+          }
+        }
+      } else {
+        mergedPersisted.addAll(
+          _mergeCachedAssessments(memoryCached, bootstrapPersisted),
+        );
+        for (final todoId in mergedPersisted.keys) {
+          cachedEnhancementSources[todoId] =
+              TaskPriorityEnhancementSource.aiLocalCache;
+        }
+      }
       final staleCandidates = <TaskPriorityAiCandidate>[];
 
       for (final candidate in request.candidates) {

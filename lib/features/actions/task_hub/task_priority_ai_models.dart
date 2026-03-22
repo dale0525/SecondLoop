@@ -195,6 +195,7 @@ class TaskPriorityAiCandidate {
       'band': band.name,
       'due_state': dueState,
       'rule_score': ruleScore,
+      'updated_at_ms': updatedAtMs,
       'recent_interaction_summary': recentInteractionSummary,
       'source_summary': sourceSummary,
       'is_repeatedly_deferred': isRepeatedlyDeferred,

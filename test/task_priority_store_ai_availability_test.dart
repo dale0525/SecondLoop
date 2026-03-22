@@ -242,6 +242,72 @@ void main() {
     );
   });
 
+  test('newer local cache wins over older shared assessment', () async {
+    SharedPreferences.setMockInitialValues({});
+    final warmStore = TaskPriorityStore.fromLoaders(
+      nowLocal: () => DateTime(2026, 3, 13, 10, 5),
+      loadTodos: () async => <Todo>[
+        todo(id: 'focus', title: 'Focus task', updatedAtMs: 10),
+      ],
+      resolveAiService: () async => _CachedSuccessfulAiService(),
+    );
+
+    await warmStore.refresh();
+    expect(warmStore.snapshot.primaryFocus?.reasonText, 'Persisted AI result.');
+
+    final nowLocal = DateTime(2026, 3, 13, 10, 6);
+    final requestSignature = jsonEncode(<String, Object?>{
+      'time_bucket': buildTaskPriorityAiTimeBucket(nowLocal),
+      'candidate': buildTaskPriorityAiRequest(
+        buildTaskPrioritySnapshot(
+          <Todo>[todo(id: 'focus', title: 'Focus task', updatedAtMs: 10)],
+          nowLocal: nowLocal,
+        ),
+        nowLocal: nowLocal,
+      ).candidates.single.toJson(),
+    });
+
+    final fallbackStore = TaskPriorityStore.fromLoaders(
+      nowLocal: () => nowLocal,
+      loadTodos: () async => <Todo>[
+        todo(id: 'focus', title: 'Focus task', updatedAtMs: 10),
+      ],
+      resolveAiService: () async => null,
+      resolveAiCacheScopeKey: () async => 'availability-cache',
+      readSharedAiAssessments: ({
+        required aiService,
+        required cacheScopeKey,
+        required nowLocal,
+      }) async {
+        return <String, TaskPriorityAiCachedAssessment>{
+          'focus': TaskPriorityAiCachedAssessment(
+            entry: const TaskPriorityAiEntry(
+              todoId: 'focus',
+              semanticAdjustment: 3,
+              reason: 'Older shared assessment.',
+              confidence: TaskPriorityAiConfidence.medium,
+              isImportant: true,
+              isUrgent: false,
+            ),
+            requestSignature: requestSignature,
+            computedAtLocal: nowLocal.subtract(const Duration(minutes: 6)),
+          ),
+        };
+      },
+    );
+
+    await fallbackStore.refresh();
+
+    expect(
+      fallbackStore.snapshot.primaryFocus?.reasonText,
+      'Persisted AI result.',
+    );
+    expect(
+      fallbackStore.snapshot.enhancementSource,
+      TaskPriorityEnhancementSource.aiLocalCache,
+    );
+  });
+
   test('restart fallback restores persisted AI result without resolved scope',
       () async {
     SharedPreferences.setMockInitialValues({});

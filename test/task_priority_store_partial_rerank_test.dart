@@ -81,6 +81,32 @@ void main() {
     expect(service.requestTodoIds.last, <String>['b']);
   });
 
+  test('updating only candidate timestamp reranks that stale candidate',
+      () async {
+    SharedPreferences.setMockInitialValues({});
+    var updatedAtMs = 20;
+    final service = _RecordingAiService();
+    final store = TaskPriorityStore.fromLoaders(
+      nowLocal: () => DateTime(2026, 3, 13, 10, 0),
+      loadTodos: () async => <Todo>[
+        todo(id: 'a', title: 'Task A', updatedAtMs: 10),
+        todo(id: 'b', title: 'Task B', updatedAtMs: updatedAtMs),
+      ],
+      resolveAiService: () async => service,
+    );
+
+    await store.refresh();
+    expect(service.requestTodoIds, hasLength(1));
+    expect(service.requestTodoIds.single, unorderedEquals(<String>['a', 'b']));
+
+    updatedAtMs = 21;
+    store.markDirty();
+    await store.refresh();
+
+    expect(service.requestTodoIds, hasLength(2));
+    expect(service.requestTodoIds.last, <String>['b']);
+  });
+
   test('time bucket changes rerank unchanged candidates', () async {
     SharedPreferences.setMockInitialValues({});
     var nowLocal = DateTime(2026, 3, 13, 10, 55);
