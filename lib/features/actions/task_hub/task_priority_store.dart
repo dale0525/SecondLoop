@@ -546,19 +546,21 @@ class TaskPriorityStore extends ChangeNotifier {
       final normalizedScopes =
           rawScopes.map((key, value) => MapEntry(key.toString(), value));
       final lastScope = (data[_kAiCacheLastScopeKey] ?? '').toString().trim();
-      final orderedScopes = <MapEntry<String, Object?>>[];
-      if (lastScope.isNotEmpty && normalizedScopes.containsKey(lastScope)) {
-        orderedScopes.add(MapEntry(lastScope, normalizedScopes[lastScope]));
-      }
-      for (final entry in normalizedScopes.entries) {
-        if (entry.key == lastScope) continue;
-        orderedScopes.add(entry);
+      final candidateScopes = <MapEntry<String, Object?>>[];
+      if (lastScope.isNotEmpty) {
+        final scope = normalizedScopes[lastScope];
+        if (scope != null) {
+          candidateScopes.add(MapEntry(lastScope, scope));
+        } else {
+          return const <String, TaskPriorityAiCachedAssessment>{};
+        }
+      } else if (normalizedScopes.length == 1) {
+        candidateScopes.add(normalizedScopes.entries.single);
+      } else {
+        return const <String, TaskPriorityAiCachedAssessment>{};
       }
 
-      Map<String, TaskPriorityAiCachedAssessment> fallbackMatch =
-          const <String, TaskPriorityAiCachedAssessment>{};
-      DateTime? fallbackFreshness;
-      for (final scopeEntry in orderedScopes) {
+      for (final scopeEntry in candidateScopes) {
         final scope = scopeEntry.value;
         if (scope is! Map) continue;
         final matched = <String, TaskPriorityAiCachedAssessment>{};
@@ -576,23 +578,9 @@ class TaskPriorityStore extends ChangeNotifier {
           matched[entry.key] = entry.value;
         }
         if (matched.isEmpty) continue;
-        if (scopeEntry.key == lastScope) {
-          return matched;
-        }
-        final freshness = matched.values.fold<DateTime?>(
-          null,
-          (latest, assessment) =>
-              latest == null || assessment.computedAtLocal.isAfter(latest)
-                  ? assessment.computedAtLocal
-                  : latest,
-        );
-        if (freshness == null) continue;
-        if (fallbackFreshness == null || freshness.isAfter(fallbackFreshness)) {
-          fallbackMatch = matched;
-          fallbackFreshness = freshness;
-        }
+        return matched;
       }
-      return fallbackMatch;
+      return const <String, TaskPriorityAiCachedAssessment>{};
     } catch (_) {
       return const <String, TaskPriorityAiCachedAssessment>{};
     }

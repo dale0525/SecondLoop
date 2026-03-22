@@ -421,6 +421,83 @@ void main() {
   });
 
   test(
+      'restart fallback does not cross scopes when last persisted scope is missing',
+      () async {
+    SharedPreferences.setMockInitialValues({});
+    final nowLocal = DateTime(2026, 3, 13, 10, 0);
+    final store = TaskPriorityStore.fromLoaders(
+      nowLocal: () => nowLocal,
+      loadTodos: () async => <Todo>[
+        todo(id: 'focus', title: 'Focus task', updatedAtMs: 10),
+      ],
+      resolveAiService: () async => _CachedSuccessfulAiService(),
+    );
+
+    await store.refresh();
+    expect(store.snapshot.primaryFocus?.reasonText, 'Persisted AI result.');
+
+    final requestSignature = jsonEncode(<String, Object?>{
+      'time_bucket': buildTaskPriorityAiTimeBucket(nowLocal),
+      'candidate': buildTaskPriorityAiRequest(
+        buildTaskPrioritySnapshot(
+          <Todo>[todo(id: 'focus', title: 'Focus task', updatedAtMs: 10)],
+          nowLocal: nowLocal,
+        ),
+        nowLocal: nowLocal,
+      ).candidates.single.toJson(),
+    });
+
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString('task_priority_ai_cache_v3');
+    final decoded = jsonDecode(raw!) as Map;
+    final scopes = (decoded['scopes'] as Map)
+        .map((key, value) => MapEntry(key.toString(), value));
+    scopes['other-cache'] = <String, Object?>{
+      'entries': <String, Object?>{
+        'focus': <String, Object?>{
+          'entry': const TaskPriorityAiEntry(
+            todoId: 'focus',
+            semanticAdjustment: 13,
+            reason: 'Wrong scope result.',
+            confidence: TaskPriorityAiConfidence.high,
+            isImportant: true,
+            isUrgent: true,
+          ).toJson(),
+          'request_signature': requestSignature,
+          'computed_at_ms':
+              nowLocal.add(const Duration(minutes: 1)).millisecondsSinceEpoch,
+        },
+      },
+    };
+    await prefs.setString(
+      'task_priority_ai_cache_v3',
+      jsonEncode(<String, Object?>{
+        ...decoded.map((key, value) => MapEntry(key.toString(), value)),
+        'scopes': scopes,
+        'last_scope': '',
+      }),
+    );
+
+    final restartedStore = TaskPriorityStore.fromLoaders(
+      nowLocal: () => nowLocal.add(const Duration(minutes: 5)),
+      loadTodos: () async => <Todo>[
+        todo(id: 'focus', title: 'Focus task', updatedAtMs: 10),
+      ],
+      resolveAiService: () async => null,
+      resolveAiCacheScopeKey: () async => null,
+    );
+
+    await restartedStore.refresh();
+
+    expect(restartedStore.snapshot.primaryFocus?.reasonText, isNull);
+    expect(restartedStore.snapshot.hasAiEnhancement, isFalse);
+    expect(
+      restartedStore.snapshot.enhancementSource,
+      TaskPriorityEnhancementSource.none,
+    );
+  });
+
+  test(
       'restart fallback ignores empty last scope and reuses older fresh persisted scope',
       () async {
     SharedPreferences.setMockInitialValues({});
