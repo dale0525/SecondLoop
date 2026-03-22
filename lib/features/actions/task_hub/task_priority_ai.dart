@@ -351,6 +351,7 @@ class BackendTaskPriorityAiService implements TaskPriorityAiService {
           'route': _route.name,
           'model_name': _modelName,
           'locale_tag': _localeTag,
+          'replace_missing_entries': true,
           'updated_at_ms': updatedAtMs > 0 ? updatedAtMs : null,
           'entries': payloadEntries,
         }),

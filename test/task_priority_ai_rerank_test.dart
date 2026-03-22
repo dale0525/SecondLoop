@@ -353,6 +353,45 @@ void main() {
     expect(entries, isEmpty);
   });
 
+  test('shared assessment writes declare full snapshot replacement', () async {
+    final backend = _RecordingTaskPriorityBackend();
+    final service = BackendTaskPriorityAiService.forTesting(
+      backend: backend,
+      sessionKey: Uint8List(32),
+      route: AskAiRouteKind.cloudGateway,
+      gatewayBaseUrl: 'https://gateway.example',
+      idToken: 'token',
+      modelName: 'gpt-cloud-test',
+      localeTag: 'en-US',
+      cacheScopeKeyOverride: 'cloud-scope',
+    );
+
+    await service.writeSharedAssessments(
+      entries: <String, TaskPriorityAiCachedAssessment>{
+        'focus': TaskPriorityAiCachedAssessment(
+          entry: const TaskPriorityAiEntry(
+            todoId: 'focus',
+            semanticAdjustment: 18,
+            reason: 'Fresh shared result.',
+            confidence: TaskPriorityAiConfidence.high,
+            isImportant: true,
+            isUrgent: false,
+          ),
+          requestSignature: 'sig-focus',
+          computedAtLocal: DateTime(2026, 3, 13, 10, 0),
+        ),
+      },
+      activeTodoIds: const <String>['focus'],
+    );
+
+    expect(backend.lastSharedAssessmentsPayload, isNotNull);
+    expect(
+      backend.lastSharedAssessmentsPayload!['replace_missing_entries'],
+      isTrue,
+    );
+    expect(backend.lastSharedAssessmentsPayload!['scope'], 'cloud-scope');
+  });
+
   test('service includes current app locale in prompt', () async {
     final backend = _RecordingTaskPriorityBackend();
     final service = BackendTaskPriorityAiService.forTesting(
@@ -618,6 +657,7 @@ final class _RecordingTaskPriorityBackend extends TestAppBackend {
   final List<String> prompts = <String>[];
   String sharedAssessmentsResponse =
       '{"ok":true,"scope":"cloud-scope","entries":[]}';
+  Map<String, Object?>? lastSharedAssessmentsPayload;
   int taskPriorityCalls = 0;
   int cloudTaskPriorityCalls = 0;
 
@@ -652,5 +692,18 @@ final class _RecordingTaskPriorityBackend extends TestAppBackend {
     required String cacheScopeKey,
   }) async {
     return sharedAssessmentsResponse;
+  }
+
+  @override
+  Future<void> upsertTaskPriorityAiAssessmentsCloudGateway(
+    Uint8List key, {
+    required String gatewayBaseUrl,
+    required String idToken,
+    required String cacheScopeKey,
+    required String payloadJson,
+  }) async {
+    final decoded = jsonDecode(payloadJson) as Map;
+    lastSharedAssessmentsPayload =
+        decoded.map((key, value) => MapEntry(key.toString(), value));
   }
 }

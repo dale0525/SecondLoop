@@ -120,6 +120,76 @@ void main() {
     expect(store.aiAvailability, TaskPriorityAiAvailability.unavailable);
   });
 
+  test('empty AI refresh resets snapshot back to current rules snapshot',
+      () async {
+    SharedPreferences.setMockInitialValues({});
+    var title = 'Focus task';
+    TaskPriorityAiService service = _SuccessfulAiService();
+    final store = TaskPriorityStore.fromLoaders(
+      nowLocal: () => DateTime(2026, 3, 13, 10, 0),
+      loadTodos: () async => <Todo>[
+        todo(id: 'focus', title: title, updatedAtMs: 10),
+      ],
+      resolveAiService: () async => service,
+    );
+
+    await store.refresh();
+    expect(store.snapshot.source, TaskPrioritySnapshotSource.hybrid);
+    expect(store.snapshot.primaryFocus?.reasonText, 'Available AI result.');
+
+    title = 'Focus task updated';
+    service = _EmptyScopedAiService(scopeKey: 'availability-cache');
+    store.markDirty();
+    await store.refresh();
+
+    expect(store.aiAvailability, TaskPriorityAiAvailability.unavailable);
+    expect(store.snapshot.source, TaskPrioritySnapshotSource.rules);
+    expect(store.snapshot.hasAiEnhancement, isFalse);
+    expect(
+        store.snapshot.enhancementSource, TaskPriorityEnhancementSource.none);
+    expect(store.snapshot.primaryFocus?.todo.title, 'Focus task updated');
+    expect(store.snapshot.primaryFocus?.reasonText, isNull);
+  });
+
+  test('empty AI refresh clears bootstrap persisted snapshot fallback',
+      () async {
+    SharedPreferences.setMockInitialValues({});
+
+    final warmStore = TaskPriorityStore.fromLoaders(
+      nowLocal: () => DateTime(2026, 3, 13, 10, 0),
+      loadTodos: () async => <Todo>[
+        todo(id: 'focus', title: 'Focus task', updatedAtMs: 10),
+      ],
+      resolveAiService: () async => _CachedSuccessfulAiService(),
+    );
+    await warmStore.refresh();
+    expect(warmStore.snapshot.primaryFocus?.reasonText, 'Persisted AI result.');
+
+    final restartedStore = TaskPriorityStore.fromLoaders(
+      nowLocal: () => DateTime(2026, 3, 13, 10, 5),
+      loadTodos: () async => <Todo>[
+        todo(id: 'focus', title: 'Focus task updated', updatedAtMs: 20),
+      ],
+      resolveAiService: () async => _EmptyScopedAiService(
+        scopeKey: 'availability-cache',
+      ),
+    );
+
+    await restartedStore.refresh();
+
+    expect(
+        restartedStore.aiAvailability, TaskPriorityAiAvailability.unavailable);
+    expect(restartedStore.snapshot.source, TaskPrioritySnapshotSource.rules);
+    expect(restartedStore.snapshot.hasAiEnhancement, isFalse);
+    expect(
+      restartedStore.snapshot.enhancementSource,
+      TaskPriorityEnhancementSource.none,
+    );
+    expect(
+        restartedStore.snapshot.primaryFocus?.todo.title, 'Focus task updated');
+    expect(restartedStore.snapshot.primaryFocus?.reasonText, isNull);
+  });
+
   test('unavailable AI still keeps base priority snapshot usable', () async {
     SharedPreferences.setMockInitialValues({});
     final store = TaskPriorityStore.fromLoaders(
