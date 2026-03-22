@@ -482,7 +482,56 @@ void main() {
   });
 
   test(
-      'bootstrap fallback reuses matching persisted AI rerank before unavailable scope refresh',
+      'bootstrap fallback reuses matching persisted AI rerank while scope is unresolved',
+      () async {
+    SharedPreferences.setMockInitialValues({});
+    final firstService = _CountingAiService(
+      const TaskPriorityAiBatchResult(
+        entries: <TaskPriorityAiEntry>[
+          TaskPriorityAiEntry(
+            todoId: 'focus',
+            semanticAdjustment: 20,
+            reason: 'Still the best option.',
+            confidence: TaskPriorityAiConfidence.high,
+          ),
+        ],
+      ),
+      cacheScopeKey: 'byok|model|en-US',
+    );
+    final firstStore = TaskPriorityStore.fromLoaders(
+      nowLocal: () => DateTime(2026, 3, 13, 10, 0),
+      loadTodos: () async => <Todo>[
+        todo(id: 'focus', title: 'Fix prod bug', updatedAtMs: 10),
+      ],
+      resolveAiService: () async => firstService,
+    );
+
+    await firstStore.refresh();
+
+    final secondStore = TaskPriorityStore.fromLoaders(
+      nowLocal: () => DateTime(2026, 3, 13, 10, 5),
+      loadTodos: () async => <Todo>[
+        todo(id: 'focus', title: 'Fix prod bug', updatedAtMs: 10),
+      ],
+      resolveAiService: () async => null,
+      resolveAiCacheScopeKey: () async => null,
+    );
+
+    await secondStore.refresh();
+
+    expect(secondStore.snapshot.source, TaskPrioritySnapshotSource.hybrid);
+    expect(
+      secondStore.snapshot.primaryFocus?.reasonText,
+      'Still the best option.',
+    );
+    expect(secondStore.isAiEnhancementAvailable, isFalse);
+    expect(
+      secondStore.aiAvailability,
+      TaskPriorityAiAvailability.unavailable,
+    );
+  });
+
+  test('resolved scope does not reuse bootstrap cache from another scope',
       () async {
     SharedPreferences.setMockInitialValues({});
     final firstService = _CountingAiService(
@@ -519,11 +568,8 @@ void main() {
 
     await secondStore.refresh();
 
-    expect(secondStore.snapshot.source, TaskPrioritySnapshotSource.hybrid);
-    expect(
-      secondStore.snapshot.primaryFocus?.reasonText,
-      'Still the best option.',
-    );
+    expect(secondStore.snapshot.source, TaskPrioritySnapshotSource.rules);
+    expect(secondStore.snapshot.primaryFocus?.reasonText, isNull);
     expect(secondStore.isAiEnhancementAvailable, isFalse);
     expect(
       secondStore.aiAvailability,

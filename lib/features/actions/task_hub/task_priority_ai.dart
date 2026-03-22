@@ -25,6 +25,8 @@ abstract class TaskPriorityAiService {
   }) async {}
 }
 
+const Duration defaultTaskPriorityAiCacheTtl = Duration(minutes: 15);
+
 class TaskPriorityAiCachedAssessment {
   const TaskPriorityAiCachedAssessment({
     required this.entry,
@@ -299,11 +301,16 @@ class BackendTaskPriorityAiService implements TaskPriorityAiService {
             ? computedAtMs.toInt()
             : int.tryParse('${computedAtMs ?? ''}');
         if (parsedComputedAtMs == null) continue;
+        final computedAtLocal =
+            DateTime.fromMillisecondsSinceEpoch(parsedComputedAtMs);
+        if (nowLocal.difference(computedAtLocal).abs() >
+            defaultTaskPriorityAiCacheTtl) {
+          continue;
+        }
         entries[todoId] = TaskPriorityAiCachedAssessment(
           entry: TaskPriorityAiEntry.fromJson(entryJson),
           requestSignature: (entryJson['request_signature'] ?? '').toString(),
-          computedAtLocal:
-              DateTime.fromMillisecondsSinceEpoch(parsedComputedAtMs),
+          computedAtLocal: computedAtLocal,
         );
       }
       return entries;

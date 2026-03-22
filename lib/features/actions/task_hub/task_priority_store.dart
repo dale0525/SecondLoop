@@ -46,7 +46,7 @@ class TaskPriorityStore extends ChangeNotifier {
       required Iterable<String> activeTodoIds,
     })? writeSharedAiAssessments,
     TaskPriorityFeedbackStore feedbackStore = const TaskPriorityFeedbackStore(),
-    Duration aiCacheTtl = const Duration(minutes: 15),
+    Duration aiCacheTtl = defaultTaskPriorityAiCacheTtl,
   })  : _loadTodos = loadTodos,
         _loadChecklistProgress = loadChecklistProgress,
         _nowLocal = nowLocal,
@@ -245,30 +245,6 @@ class TaskPriorityStore extends ChangeNotifier {
         return;
       }
 
-      final candidateByTodoId = <String, TaskPriorityAiCandidate>{
-        for (final candidate in request.candidates) candidate.todoId: candidate,
-      };
-      final bootstrapPersisted = await _readMatchingPersistedAiAssessments(
-        candidateByTodoId: candidateByTodoId,
-        nowLocal: nowLocal,
-      );
-      if (bootstrapPersisted.isNotEmpty) {
-        _snapshot = buildTaskPrioritySnapshot(
-          todos,
-          nowLocal: nowLocal,
-          aiResult: TaskPriorityAiBatchResult(
-            entries: bootstrapPersisted.values
-                .map((value) => value.entry)
-                .toList(growable: false),
-          ),
-          enhancementSource: TaskPriorityEnhancementSource.aiLocalCache,
-          feedbackState: feedbackState,
-        );
-      } else {
-        _snapshot = rulesSnapshot;
-      }
-      _safeNotify();
-
       TaskPriorityAiService? aiService;
       try {
         aiService = await _resolveAiService?.call();
@@ -286,6 +262,31 @@ class TaskPriorityStore extends ChangeNotifier {
       final canUsePersistedCache =
           cacheScopeKey != null && cacheScopeKey.isNotEmpty;
       final canUseInMemoryCache = !canUsePersistedCache;
+      final candidateByTodoId = <String, TaskPriorityAiCandidate>{
+        for (final candidate in request.candidates) candidate.todoId: candidate,
+      };
+      final bootstrapPersisted = canUsePersistedCache
+          ? const <String, TaskPriorityAiCachedAssessment>{}
+          : await _readMatchingPersistedAiAssessments(
+              candidateByTodoId: candidateByTodoId,
+              nowLocal: nowLocal,
+            );
+      if (bootstrapPersisted.isNotEmpty) {
+        _snapshot = buildTaskPrioritySnapshot(
+          todos,
+          nowLocal: nowLocal,
+          aiResult: TaskPriorityAiBatchResult(
+            entries: bootstrapPersisted.values
+                .map((value) => value.entry)
+                .toList(growable: false),
+          ),
+          enhancementSource: TaskPriorityEnhancementSource.aiLocalCache,
+          feedbackState: feedbackState,
+        );
+      } else {
+        _snapshot = rulesSnapshot;
+      }
+      _safeNotify();
 
       final sharedPersisted = canUsePersistedCache
           ? await _readSharedAiAssessments?.call(

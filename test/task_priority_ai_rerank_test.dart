@@ -319,6 +319,40 @@ void main() {
     expect(backend.cloudTaskPriorityCalls, 1);
   });
 
+  test('shared assessments ignore expired remote entries', () async {
+    final backend = _RecordingTaskPriorityBackend();
+    backend.sharedAssessmentsResponse = jsonEncode(<String, Object?>{
+      'ok': true,
+      'scope': 'cloud-scope',
+      'entries': <Object?>[
+        <String, Object?>{
+          'todo_id': 'focus',
+          'semantic_adjustment': 18,
+          'reason': 'Expired shared result.',
+          'confidence': 'high',
+          'request_signature': 'sig',
+          'computed_at_ms': DateTime(2026, 3, 13, 9, 0).millisecondsSinceEpoch,
+        },
+      ],
+    });
+    final service = BackendTaskPriorityAiService.forTesting(
+      backend: backend,
+      sessionKey: Uint8List(32),
+      route: AskAiRouteKind.cloudGateway,
+      gatewayBaseUrl: 'https://gateway.example',
+      idToken: 'token',
+      modelName: 'gpt-cloud-test',
+      localeTag: 'en-US',
+      cacheScopeKeyOverride: 'cloud-scope',
+    );
+
+    final entries = await service.readSharedAssessments(
+      nowLocal: DateTime(2026, 3, 13, 10, 0),
+    );
+
+    expect(entries, isEmpty);
+  });
+
   test('service includes current app locale in prompt', () async {
     final backend = _RecordingTaskPriorityBackend();
     final service = BackendTaskPriorityAiService.forTesting(
@@ -582,6 +616,8 @@ final class _RecordingTaskPriorityBackend extends TestAppBackend {
       '{"entries":[{"todo_id":"t1","priority_band":"focus","semantic_adjustment":14,"reason":"今天优先处理。","suggested_action":"do_now","confidence":"high"}]}';
 
   final List<String> prompts = <String>[];
+  String sharedAssessmentsResponse =
+      '{"ok":true,"scope":"cloud-scope","entries":[]}';
   int taskPriorityCalls = 0;
   int cloudTaskPriorityCalls = 0;
 
@@ -606,5 +642,15 @@ final class _RecordingTaskPriorityBackend extends TestAppBackend {
     prompts.add(prompt);
     cloudTaskPriorityCalls += 1;
     return _response;
+  }
+
+  @override
+  Future<String> fetchTaskPriorityAiAssessmentsCloudGateway(
+    Uint8List key, {
+    required String gatewayBaseUrl,
+    required String idToken,
+    required String cacheScopeKey,
+  }) async {
+    return sharedAssessmentsResponse;
   }
 }
