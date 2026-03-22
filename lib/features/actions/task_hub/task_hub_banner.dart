@@ -64,11 +64,17 @@ class _TaskHubBannerState extends State<TaskHubBanner> {
         (primary?.reasonText ?? '').isNotEmpty;
     final aiSourceLabel = _aiSourceLabel(context, widget.snapshot);
     final outerPadding = widget.compact
-        ? const EdgeInsets.fromLTRB(12, 8, 12, 6)
+        ? const EdgeInsets.fromLTRB(12, 6, 12, 4)
         : const EdgeInsets.fromLTRB(12, 12, 12, 8);
-    final innerPadding = widget.compact ? 10.0 : 12.0;
-    final headerSpacing = widget.compact ? 4.0 : 6.0;
-    final actionsSpacingTop = widget.compact ? 8.0 : 12.0;
+    final innerPadding = widget.compact ? 8.0 : 12.0;
+    final headerSpacing = widget.compact ? 3.0 : 6.0;
+    final actionsSpacingTop = widget.compact ? 6.0 : 12.0;
+    final compactCollapsed = widget.compact && !_expanded;
+    final showAiSourceLabel =
+        aiSourceLabel != null && (!widget.compact || _expanded);
+    final showSummaryChips = !widget.compact;
+    final showAiHint =
+        widget.showAiUpgradeHint && !hasAiReason && !widget.compact;
     final primaryAction = primary == null
         ? null
         : primaryTaskHubQuickActionItemForEntry(
@@ -81,12 +87,15 @@ class _TaskHubBannerState extends State<TaskHubBanner> {
             context,
             entry: primary,
           );
-    final showQuickPair = primary != null &&
+    final showQuickPair = !compactCollapsed &&
+        primary != null &&
         primaryAction != null &&
         widget.onQuickAction != null;
     final showOpenFocusAction = !widget.compact && widget.onOpenTodo != null;
-    final showNavigationActions =
-        primary != null && (showOpenFocusAction || widget.onViewAll != null);
+    final showNavigationActions = !compactCollapsed &&
+        primary != null &&
+        (showOpenFocusAction || widget.onViewAll != null);
+    final showOpenHubAction = !compactCollapsed && primary == null;
     return Padding(
       padding: outerPadding,
       child: SlSurface(
@@ -100,6 +109,7 @@ class _TaskHubBannerState extends State<TaskHubBanner> {
           child: Padding(
             padding: EdgeInsets.all(innerPadding),
             child: Column(
+              mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
@@ -124,7 +134,7 @@ class _TaskHubBannerState extends State<TaskHubBanner> {
                     ),
                   ],
                 ),
-                if (aiSourceLabel != null) ...[
+                if (showAiSourceLabel) ...[
                   SizedBox(height: headerSpacing),
                   Text(
                     aiSourceLabel,
@@ -148,13 +158,13 @@ class _TaskHubBannerState extends State<TaskHubBanner> {
                 SizedBox(height: headerSpacing),
                 Text(
                   primary?.reasonText ?? _fallbackSubtitle(context),
-                  maxLines: widget.compact ? 2 : 3,
+                  maxLines: compactCollapsed ? 1 : (widget.compact ? 2 : 3),
                   overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
                         color: Theme.of(context).colorScheme.onSurfaceVariant,
                       ),
                 ),
-                if (!widget.snapshot.isEmpty) ...[
+                if (showSummaryChips && !widget.snapshot.isEmpty) ...[
                   SizedBox(height: headerSpacing + 2),
                   Wrap(
                     spacing: 6,
@@ -178,7 +188,7 @@ class _TaskHubBannerState extends State<TaskHubBanner> {
                     ],
                   ),
                 ],
-                if (widget.showAiUpgradeHint && !hasAiReason) ...[
+                if (showAiHint) ...[
                   SizedBox(height: headerSpacing),
                   Text(
                     context.t.actions.taskHub.aiUpgradeHint,
@@ -188,60 +198,87 @@ class _TaskHubBannerState extends State<TaskHubBanner> {
                         ),
                   ),
                 ],
-                SizedBox(height: actionsSpacingTop),
-                if (showQuickPair) ...[
-                  DecoratedBox(
-                    key: const ValueKey('task_hub_banner_quick_pair'),
-                    decoration: BoxDecoration(
-                      color: Theme.of(context)
-                          .colorScheme
-                          .surfaceContainerHighest
-                          .withOpacity(widget.compact ? 0.32 : 0.4),
-                      borderRadius: BorderRadius.circular(tokens.radiusLg),
-                      border: Border.all(
-                        color: tokens.borderSubtle.withOpacity(0.8),
+                if (!compactCollapsed) ...[
+                  SizedBox(height: actionsSpacingTop),
+                  if (showQuickPair) ...[
+                    DecoratedBox(
+                      key: const ValueKey('task_hub_banner_quick_pair'),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context)
+                            .colorScheme
+                            .surfaceContainerHighest
+                            .withOpacity(widget.compact ? 0.28 : 0.4),
+                        borderRadius: BorderRadius.circular(tokens.radiusLg),
+                        border: Border.all(
+                          color: tokens.borderSubtle.withOpacity(0.8),
+                        ),
                       ),
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.all(4),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: SlButton(
-                              key: const ValueKey(
-                                  'task_hub_banner_primary_action'),
-                              onPressed: () => unawaited(
-                                widget.onQuickAction!(
-                                  primary,
-                                  primaryAction.action,
-                                ),
-                              ),
-                              child: Text(primaryAction.label),
-                            ),
-                          ),
-                          if (secondaryAction != null) ...[
-                            const SizedBox(width: 8),
+                      child: Padding(
+                        padding: const EdgeInsets.all(4),
+                        child: Row(
+                          children: [
                             Expanded(
                               child: SlButton(
-                                buttonKey: const ValueKey(
-                                    'task_hub_banner_secondary_action'),
-                                variant: SlButtonVariant.outline,
+                                key: const ValueKey(
+                                    'task_hub_banner_primary_action'),
                                 onPressed: () => unawaited(
                                   widget.onQuickAction!(
                                     primary,
-                                    secondaryAction.action,
+                                    primaryAction.action,
                                   ),
                                 ),
-                                child: Text(secondaryAction.label),
+                                child: Text(primaryAction.label),
                               ),
                             ),
+                            if (secondaryAction != null) ...[
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: SlButton(
+                                  buttonKey: const ValueKey(
+                                      'task_hub_banner_secondary_action'),
+                                  variant: SlButtonVariant.outline,
+                                  onPressed: () => unawaited(
+                                    widget.onQuickAction!(
+                                      primary,
+                                      secondaryAction.action,
+                                    ),
+                                  ),
+                                  child: Text(secondaryAction.label),
+                                ),
+                              ),
+                            ],
                           ],
-                        ],
+                        ),
                       ),
                     ),
-                  ),
-                  if (showNavigationActions) ...[
-                    const SizedBox(height: 8),
+                    if (showNavigationActions) ...[
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          if (showOpenFocusAction)
+                            SlButton(
+                              buttonKey:
+                                  const ValueKey('task_hub_banner_open_focus'),
+                              variant: SlButtonVariant.outline,
+                              onPressed: () =>
+                                  unawaited(widget.onOpenTodo!(primary)),
+                              child: Text(context.t.actions.taskHub.openFocus),
+                            ),
+                          if (widget.onViewAll != null)
+                            SlButton(
+                              buttonKey:
+                                  const ValueKey('task_hub_banner_view_all'),
+                              variant: SlButtonVariant.outline,
+                              onPressed: widget.onViewAll,
+                              child:
+                                  Text(context.t.actions.taskHub.openTaskHub),
+                            ),
+                        ],
+                      ),
+                    ],
+                  ] else if (primary != null && showNavigationActions)
                     Wrap(
                       spacing: 8,
                       runSpacing: 8,
@@ -264,55 +301,32 @@ class _TaskHubBannerState extends State<TaskHubBanner> {
                             child: Text(context.t.actions.taskHub.openTaskHub),
                           ),
                       ],
+                    )
+                  else if (showOpenHubAction)
+                    SlButton(
+                      key: const ValueKey('task_hub_banner_open_hub'),
+                      onPressed: widget.onViewAll,
+                      child: Text(context.t.actions.taskHub.openTaskHub),
                     ),
-                  ],
-                ] else if (primary != null && showNavigationActions)
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      if (showOpenFocusAction)
-                        SlButton(
-                          buttonKey:
-                              const ValueKey('task_hub_banner_open_focus'),
-                          variant: SlButtonVariant.outline,
-                          onPressed: () =>
-                              unawaited(widget.onOpenTodo!(primary)),
-                          child: Text(context.t.actions.taskHub.openFocus),
+                  if (_expanded) ...[
+                    SizedBox(height: actionsSpacingTop),
+                    ConstrainedBox(
+                      constraints: BoxConstraints(
+                        maxHeight: widget.compact ? 112 : 360,
+                      ),
+                      child: SingleChildScrollView(
+                        child: _BannerPreviewList(
+                          snapshot: widget.snapshot,
+                          checklistProgressByTodoId:
+                              widget.checklistProgressByTodoId,
+                          onOpenTodo: widget.onOpenTodo,
+                          onQuickAction: widget.onQuickAction,
+                          onFeedback: widget.onFeedback,
+                          compact: widget.compact,
                         ),
-                      if (widget.onViewAll != null)
-                        SlButton(
-                          buttonKey: const ValueKey('task_hub_banner_view_all'),
-                          variant: SlButtonVariant.outline,
-                          onPressed: widget.onViewAll,
-                          child: Text(context.t.actions.taskHub.openTaskHub),
-                        ),
-                    ],
-                  )
-                else
-                  SlButton(
-                    key: const ValueKey('task_hub_banner_open_hub'),
-                    onPressed: widget.onViewAll,
-                    child: Text(context.t.actions.taskHub.openTaskHub),
-                  ),
-                if (_expanded) ...[
-                  SizedBox(height: actionsSpacingTop),
-                  ConstrainedBox(
-                    constraints: BoxConstraints(
-                      maxHeight: widget.compact ? 220 : 360,
-                    ),
-                    child: SingleChildScrollView(
-                      child: _BannerPreviewList(
-                        snapshot: widget.snapshot,
-                        checklistProgressByTodoId:
-                            widget.checklistProgressByTodoId,
-                        onOpenTodo: widget.onOpenTodo,
-                        onQuickAction: widget.onQuickAction,
-                        onFeedback: widget.onFeedback,
-                        compact: widget.compact,
                       ),
                     ),
-                  ),
+                  ],
                 ],
               ],
             ),
@@ -433,7 +447,7 @@ class _BannerPreviewList extends StatelessWidget {
               primaryTodoId == null ||
               entry.todo.id != primaryTodoId,
         )
-        .take(compact ? 3 : 4)
+        .take(compact ? 2 : 4)
         .toList(growable: false);
     if (previewEntries.isEmpty) {
       return const SizedBox(

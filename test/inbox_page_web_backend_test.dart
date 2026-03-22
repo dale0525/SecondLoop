@@ -89,7 +89,7 @@ void main() {
     await _pumpUntilFound(tester, find.byType(ChatPage));
     await _pumpUntilFound(
       tester,
-      find.byKey(const ValueKey('task_hub_banner_primary_action')),
+      find.byKey(const ValueKey('task_hub_banner')),
     );
   });
 }

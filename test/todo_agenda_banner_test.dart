@@ -188,7 +188,7 @@ void main() {
     );
     await _pumpUntilFound(
       tester,
-      find.byKey(const ValueKey('task_hub_banner_primary_action')),
+      find.byKey(const ValueKey('task_hub_banner')),
     );
 
     await tester.tap(find.byKey(const ValueKey('task_hub_banner')));
@@ -250,7 +250,7 @@ void main() {
     );
     await _pumpUntilFound(
       tester,
-      find.byKey(const ValueKey('task_hub_banner_primary_action')),
+      find.byKey(const ValueKey('task_hub_banner')),
     );
 
     await tester.tap(find.byKey(const ValueKey('task_hub_banner')));
@@ -374,6 +374,13 @@ void main() {
     );
     await _pumpUntilFound(
       tester,
+      find.byKey(const ValueKey('task_hub_banner')),
+    );
+
+    await tester.tap(find.byKey(const ValueKey('task_hub_banner')));
+    await tester.pump();
+    await _pumpUntilFound(
+      tester,
       find.byKey(const ValueKey('task_hub_banner_primary_action')),
     );
 
@@ -453,6 +460,13 @@ void main() {
     await tester.pumpAndSettle();
 
     await tester.tap(find.byKey(const ValueKey('open_chat_page')));
+    await tester.pump();
+    await _pumpUntilFound(
+      tester,
+      find.byKey(const ValueKey('task_hub_banner')),
+    );
+
+    await tester.tap(find.byKey(const ValueKey('task_hub_banner')));
     await tester.pump();
     await _pumpUntilFound(
       tester,
@@ -567,11 +581,18 @@ void main() {
     );
     await _pumpUntilFound(
       tester,
+      find.byKey(const ValueKey('task_hub_banner')),
+    );
+
+    await tester.tap(find.byKey(const ValueKey('task_hub_banner')));
+    await tester.pump();
+    await _pumpUntilFound(
+      tester,
       find.byKey(const ValueKey('task_hub_banner_ai_source')),
     );
 
     expect(find.text('Shared AI insight'), findsOneWidget);
-    expect(find.text('Shared AI result.'), findsOneWidget);
+    expect(find.text('Shared AI result.'), findsWidgets);
   });
 
   testWidgets('Chat task hub banner shows cached local ai source label',
@@ -676,11 +697,18 @@ void main() {
     );
     await _pumpUntilFound(
       tester,
+      find.byKey(const ValueKey('task_hub_banner')),
+    );
+
+    await tester.tap(find.byKey(const ValueKey('task_hub_banner')));
+    await tester.pump();
+    await _pumpUntilFound(
+      tester,
       find.byKey(const ValueKey('task_hub_banner_ai_source')),
     );
 
     expect(find.text('Cached AI insight'), findsOneWidget);
-    expect(find.text('Cached AI result.'), findsOneWidget);
+    expect(find.text('Cached AI result.'), findsWidgets);
   });
 
   testWidgets('Chat task hub banner shows live ai source label',
@@ -739,11 +767,18 @@ void main() {
     );
     await _pumpUntilFound(
       tester,
+      find.byKey(const ValueKey('task_hub_banner')),
+    );
+
+    await tester.tap(find.byKey(const ValueKey('task_hub_banner')));
+    await tester.pump();
+    await _pumpUntilFound(
+      tester,
       find.byKey(const ValueKey('task_hub_banner_ai_source')),
     );
 
     expect(find.text('Live AI insight'), findsOneWidget);
-    expect(find.text('Live AI result.'), findsOneWidget);
+    expect(find.text('Live AI result.'), findsWidgets);
   });
 
   testWidgets(
@@ -791,14 +826,14 @@ void main() {
     );
     await _pumpUntilFound(
       tester,
-      find.byKey(const ValueKey('task_hub_banner_primary_action')),
+      find.byKey(const ValueKey('task_hub_banner')),
     );
 
     expect(
       find.byKey(const ValueKey('task_hub_banner_primary_action')),
-      findsOneWidget,
+      findsNothing,
     );
-    expect(find.text('Start'), findsOneWidget);
+    expect(find.text('Start'), findsNothing);
   });
 }
 

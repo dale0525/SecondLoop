@@ -91,7 +91,7 @@ void main() {
     await tester.pump();
     await _pumpUntilFound(
       tester,
-      find.byKey(const ValueKey('task_hub_banner_primary_action')),
+      find.byKey(const ValueKey('task_hub_banner')),
     );
 
     await tester.tap(find.byKey(const ValueKey('task_hub_banner')));
@@ -143,7 +143,7 @@ void main() {
     await tester.pump();
     await _pumpUntilFound(
       tester,
-      find.byKey(const ValueKey('task_hub_banner_primary_action')),
+      find.byKey(const ValueKey('task_hub_banner')),
     );
 
     await tester.tap(find.byKey(const ValueKey('task_hub_banner')));

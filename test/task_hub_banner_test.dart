@@ -148,17 +148,29 @@ void main() {
               child: SizedBox(
                 width: 670,
                 height: 518,
-                child: TaskHubBanner(
-                  snapshot: snapshot,
-                  compact: true,
-                  onViewAll: () {},
-                  onQuickAction: (_, __) async {},
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const SizedBox(height: 72),
+                    TaskHubBanner(
+                      snapshot: snapshot,
+                      compact: true,
+                      onViewAll: () {},
+                      onQuickAction: (_, __) async {},
+                    ),
+                    const Expanded(child: SizedBox.shrink()),
+                  ],
                 ),
               ),
             ),
           ),
         ),
       ),
+    );
+
+    expect(
+      find.byKey(const ValueKey('task_hub_banner_primary_action')),
+      findsNothing,
     );
 
     await tester.tap(find.byKey(const ValueKey('task_hub_banner')));
