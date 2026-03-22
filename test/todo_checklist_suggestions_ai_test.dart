@@ -102,4 +102,17 @@ void main() {
       'Pack charger',
     ]);
   });
+
+  test(
+      'checklist parser ignores prose-only fallbacks after json recovery fails',
+      () {
+    final parsed = parseTodoChecklistSuggestionsJson('''
+Here are a few ideas:
+Check current menu and pricing
+Confirm delivery window
+Compare package options
+''');
+
+    expect(parsed, isEmpty);
+  });
 }

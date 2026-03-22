@@ -202,6 +202,33 @@ void main() {
     );
   });
 
+  test(
+      'interactive automation preflight rethrows payment-required route errors',
+      () async {
+    await expectLater(
+      () => prepareForegroundAiRoute(
+        _PaymentRequiredRouteBackend(),
+        _sessionKey,
+        routePolicy: ForegroundAiRoutePolicy.automation,
+        cloudAuthController: null,
+        gatewayConfig: const CloudGatewayConfig(
+          baseUrl: 'https://example.com',
+          modelName: 'cloud',
+        ),
+        subscriptionStatus: SubscriptionStatus.entitled,
+        warmupPolicy: ForegroundAiWarmupPolicy.always,
+        fallbackToNeedsSetupOnRouteError: true,
+      ),
+      throwsA(
+        isA<StateError>().having(
+          (error) => error.message,
+          'message',
+          contains('payment_required'),
+        ),
+      ),
+    );
+  });
+
   test('shared followup preflight reuses background auth + manual route',
       () async {
     final toolkit = _RefreshingIdentityToolkit();
@@ -267,6 +294,30 @@ void main() {
         fallbackToNeedsSetupOnRouteError: true,
       ),
       throwsA(isA<StateError>()),
+    );
+  });
+
+  test('followup preflight rethrows email-verification route errors', () async {
+    await expectLater(
+      () => prepareTodoFollowupGenerationRoute(
+        _EmailNotVerifiedRouteBackend(),
+        _sessionKey,
+        hasManualRegenerateDueJob: true,
+        cloudAuthController: null,
+        gatewayConfig: const CloudGatewayConfig(
+          baseUrl: 'https://example.com',
+          modelName: 'cloud',
+        ),
+        subscriptionStatus: SubscriptionStatus.entitled,
+        fallbackToNeedsSetupOnRouteError: true,
+      ),
+      throwsA(
+        isA<StateError>().having(
+          (error) => error.message,
+          'message',
+          contains('email_not_verified'),
+        ),
+      ),
     );
   });
 
@@ -361,6 +412,30 @@ final class _SetupLikeRouteBackend extends AppBackend {
   @override
   Future<List<LlmProfile>> listLlmProfiles(Uint8List key) async {
     throw UnsupportedError('master password setup required');
+  }
+}
+
+final class _PaymentRequiredRouteBackend extends AppBackend {
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+
+  @override
+  Future<List<LlmProfile>> listLlmProfiles(Uint8List key) async {
+    throw StateError(
+      'cloud-gateway request failed: HTTP 402 {"error":"payment_required"}',
+    );
+  }
+}
+
+final class _EmailNotVerifiedRouteBackend extends AppBackend {
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+
+  @override
+  Future<List<LlmProfile>> listLlmProfiles(Uint8List key) async {
+    throw StateError(
+      'cloud-gateway request failed: HTTP 403 {"error":"email_not_verified"}',
+    );
   }
 }
 

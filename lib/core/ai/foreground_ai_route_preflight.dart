@@ -378,15 +378,6 @@ bool _shouldFallbackToNeedsSetupOnRouteError(Object error) {
     }
   }
 
-  final status = parseHttpStatusFromError(error);
-  final code = parseCloudErrorCodeFromError(error);
-  if (status == 402 || code == 'payment_required') {
-    return true;
-  }
-  if (status == 403 && code == 'email_not_verified') {
-    return true;
-  }
-
   final message = error.toString().toLowerCase();
   if (message.contains('missing_web_api_key') ||
       message.contains('missing_wwb_api_key')) {

@@ -146,7 +146,9 @@ List<String> _parseChecklistSuggestionsPlainText(
   final seen = <String>{};
 
   for (final line in raw.split(RegExp(r'\r?\n'))) {
-    final next = _normalizeChecklistSuggestion(line);
+    final candidate = _extractChecklistPlainTextCandidate(line);
+    if (candidate == null) continue;
+    final next = _normalizeChecklistSuggestion(candidate);
     if (next == null) continue;
     final dedupeKey = next.toLowerCase();
     if (!seen.add(dedupeKey)) continue;
@@ -155,6 +157,18 @@ List<String> _parseChecklistSuggestionsPlainText(
   }
 
   return List<String>.unmodifiable(normalized);
+}
+
+String? _extractChecklistPlainTextCandidate(String rawLine) {
+  final trimmed = rawLine.trim();
+  if (trimmed.isEmpty) {
+    return null;
+  }
+
+  final bulletMatch = RegExp(
+    r'^([-*•]+|\d+[\.)]|\[(?: |x|X)\])\s+(.+)$',
+  ).firstMatch(trimmed);
+  return bulletMatch?.group(2);
 }
 
 List<String> _parseChecklistSuggestionsLooseJson(

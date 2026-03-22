@@ -193,6 +193,60 @@ void main() {
 
     expect(delay, const Duration(seconds: 10));
   });
+
+  test('next delay returns zero when retry deadline is already due', () {
+    final delay = computeTodoFollowupGenerationNextDelay(
+      nowMs: 5000,
+      previewJobCount: 1,
+      batchLimit: 5,
+      didUpdateJobs: false,
+      earliestNextRetryAtMs: 5000,
+    );
+
+    expect(delay, Duration.zero);
+  });
+
+  test('pending entitlement defer reports earliest retry across mixed ages',
+      () async {
+    final store = _RecordingTodoFollowupGenerationStore();
+
+    final earliestRetryAtMs =
+        await deferTodoFollowupGenerationJobsForPendingEntitlement(
+      store,
+      const <TodoFollowupGenerationJob>[
+        TodoFollowupGenerationJob(
+          todoId: 'todo_short',
+          triggerKind: 'auto_create',
+          status: 'pending',
+          attempts: 1,
+          nextRetryAtMs: null,
+          lastError: null,
+          includeManualFollowups: false,
+          taskTypeHint: 'research',
+          createdAtMs: 0,
+          updatedAtMs: 0,
+        ),
+        TodoFollowupGenerationJob(
+          todoId: 'todo_medium',
+          triggerKind: 'auto_create',
+          status: 'pending',
+          attempts: 2,
+          nextRetryAtMs: null,
+          lastError: null,
+          includeManualFollowups: false,
+          taskTypeHint: 'research',
+          createdAtMs: 20000,
+          updatedAtMs: 0,
+        ),
+      ],
+      nowMs: const Duration(seconds: 45).inMilliseconds,
+      retryDelay: const Duration(seconds: 10),
+      lastError: 'followup_subscription_pending',
+    );
+
+    expect(earliestRetryAtMs, 55000);
+    expect(store.failedRetryAtMs, const <int>[75000, 55000]);
+  });
 }
 
 final class _RecordingTodoFollowupGenerationStore
