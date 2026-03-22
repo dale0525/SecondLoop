@@ -48,6 +48,7 @@ class _TaskHubPageState extends State<TaskHubPage> {
   ScaffoldMessengerState? _quickActionSnackMessenger;
   Object? _quickActionSnackToken;
   var _doneVisibleCount = _kDonePageSize;
+  String? _refreshDependencyKey;
 
   @override
   void dispose() {
@@ -68,6 +69,9 @@ class _TaskHubPageState extends State<TaskHubPage> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+    final refreshDependencyKey = _buildRefreshDependencyKey();
+    final shouldForceRefresh = refreshDependencyKey != _refreshDependencyKey;
+    _refreshDependencyKey = refreshDependencyKey;
     _store ??= TaskPriorityStore(
       backend: AppBackendScope.of(context),
       sessionKey: Uint8List.fromList(SessionScope.of(context).sessionKey),
@@ -98,7 +102,24 @@ class _TaskHubPageState extends State<TaskHubPage> {
       },
       feedbackStore: _feedbackStore,
     );
-    unawaited(_store!.refresh());
+    unawaited(_store!.refresh(force: shouldForceRefresh));
+  }
+
+  String _buildRefreshDependencyKey() {
+    final subscriptionStatus = SubscriptionScope.maybeOf(context)?.status ??
+        SubscriptionStatus.unknown;
+    final cloudAuthScope = CloudAuthScope.maybeOf(context);
+    final gatewayConfig =
+        cloudAuthScope?.gatewayConfig ?? CloudGatewayConfig.defaultConfig;
+    final cloudUid = (cloudAuthScope?.controller.uid ?? '').trim();
+    final localeTag = Localizations.localeOf(context).toLanguageTag();
+    return <String>[
+      subscriptionStatus.name,
+      cloudUid,
+      gatewayConfig.baseUrl.trim(),
+      gatewayConfig.modelName.trim(),
+      localeTag,
+    ].join('|');
   }
 
   Future<TaskPriorityAiService?> _resolveAiService() async {

@@ -257,13 +257,13 @@ void main() {
     await tester.pump();
     await _pumpUntilFound(
       tester,
-      find.byKey(const ValueKey('task_hub_banner_open_focus')),
+      find.byKey(const ValueKey('task_hub_banner_item_todo:detail')),
     );
 
-    final openFocusButton =
-        find.byKey(const ValueKey('task_hub_banner_open_focus'));
-    expect(openFocusButton, findsOneWidget);
-    await tester.tap(openFocusButton);
+    final bannerItem =
+        find.byKey(const ValueKey('task_hub_banner_item_todo:detail'));
+    expect(bannerItem, findsOneWidget);
+    await tester.tap(bannerItem);
     await tester.pumpAndSettle();
 
     expect(find.byType(TodoDetailPage), findsOneWidget);

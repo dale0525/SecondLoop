@@ -12,6 +12,7 @@ import 'task_priority_feedback_store.dart';
 import 'task_priority_models.dart';
 
 enum TaskHubPageSectionKind {
+  focus,
   scheduled,
   decide,
   done,
@@ -52,7 +53,7 @@ class TaskHubPageSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (entries.isEmpty && footer == null) return const SizedBox.shrink();
-    final theme = Theme.of(context);
+    final sectionCount = entries.length;
     return Padding(
       padding: const EdgeInsets.only(bottom: 16),
       child: SlSurface(
@@ -61,11 +62,10 @@ class TaskHubPageSection extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              title,
-              style: theme.textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w800,
-              ),
+            TaskHubSectionHeader(
+              title: title,
+              count: sectionCount,
+              kind: sectionKind,
             ),
             if (entries.isNotEmpty) ...[
               const SizedBox(height: 10),
@@ -92,6 +92,122 @@ class TaskHubPageSection extends StatelessWidget {
       ),
     );
   }
+}
+
+class TaskHubSectionHeader extends StatelessWidget {
+  const TaskHubSectionHeader({
+    required this.title,
+    required this.count,
+    required this.kind,
+    this.hint,
+    super.key,
+  });
+
+  final String title;
+  final int count;
+  final TaskHubPageSectionKind kind;
+  final String? hint;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final tokens = SlTokens.of(context);
+    final tone = _taskHubSectionTone(theme, kind);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Container(
+              width: 4,
+              height: 18,
+              decoration: BoxDecoration(
+                color: tone.foreground,
+                borderRadius: BorderRadius.circular(999),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                title,
+                style: theme.textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w800,
+                  color: tone.foreground,
+                ),
+              ),
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: tone.background,
+                borderRadius: BorderRadius.circular(999),
+                border: Border.all(
+                  color: tone.border ?? tokens.borderSubtle.withOpacity(0.8),
+                ),
+              ),
+              child: Text(
+                count.toString(),
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: tone.foreground,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ],
+        ),
+        if (hint != null) ...[
+          const SizedBox(height: 4),
+          Text(
+            hint!,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+final class _TaskHubSectionTone {
+  const _TaskHubSectionTone({
+    required this.foreground,
+    required this.background,
+    this.border,
+  });
+
+  final Color foreground;
+  final Color background;
+  final Color? border;
+}
+
+_TaskHubSectionTone _taskHubSectionTone(
+  ThemeData theme,
+  TaskHubPageSectionKind kind,
+) {
+  final scheme = theme.colorScheme;
+  return switch (kind) {
+    TaskHubPageSectionKind.focus => _TaskHubSectionTone(
+        foreground: scheme.primary,
+        background: scheme.primaryContainer.withOpacity(0.7),
+        border: scheme.primary.withOpacity(0.18),
+      ),
+    TaskHubPageSectionKind.scheduled => _TaskHubSectionTone(
+        foreground: scheme.secondary,
+        background: scheme.secondaryContainer.withOpacity(0.68),
+        border: scheme.secondary.withOpacity(0.18),
+      ),
+    TaskHubPageSectionKind.decide => _TaskHubSectionTone(
+        foreground: scheme.tertiary,
+        background: scheme.tertiaryContainer.withOpacity(0.68),
+        border: scheme.tertiary.withOpacity(0.18),
+      ),
+    TaskHubPageSectionKind.done => _TaskHubSectionTone(
+        foreground: scheme.onSurfaceVariant,
+        background: scheme.surfaceContainerHighest.withOpacity(0.56),
+        border: scheme.outlineVariant.withOpacity(0.4),
+      ),
+  };
 }
 
 class TaskHubEntryCard extends StatelessWidget {
@@ -130,6 +246,18 @@ class TaskHubEntryCard extends StatelessWidget {
         theme.colorScheme.primaryContainer.withOpacity(emphasize ? 0.64 : 0.58);
     final restoredBorder = theme.colorScheme.primary.withOpacity(0.28);
     final defaultBackground = emphasize ? tokens.surface2 : null;
+    final metaChips = <Widget>[
+      _TaskHubMetaChip(label: _subtitle(context, entry), emphasize: true),
+      if (checklistProgressText != null)
+        _TaskHubMetaChip(
+          child: Text(
+            checklistProgressText,
+            key: ValueKey('task_hub_checklist_progress_${entry.todo.id}'),
+          ),
+        ),
+    ];
+    final supportingText =
+        (entry.reasonText ?? '').isNotEmpty ? entry.reasonText! : null;
     return AnimatedContainer(
       key: ValueKey(
         'task_hub_page_item_state_${entry.todo.id}_${recentlyRestored ? 'restored' : 'default'}',
@@ -141,7 +269,7 @@ class TaskHubEntryCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(tokens.radiusLg),
         border: recentlyRestored ? Border.all(color: restoredBorder) : null,
       ),
-      padding: const EdgeInsets.all(8),
+      padding: const EdgeInsets.all(6),
       child: Container(
         key: ValueKey('task_hub_page_item_${entry.todo.id}'),
         child: Column(
@@ -151,49 +279,51 @@ class TaskHubEntryCard extends StatelessWidget {
               onTap: onOpenTodo,
               borderRadius: BorderRadius.circular(tokens.radiusLg),
               child: Padding(
-                padding: const EdgeInsets.all(4),
+                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 3),
                 child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
+                          Wrap(
+                            spacing: 6,
+                            runSpacing: 6,
+                            children: metaChips,
+                          ),
+                          const SizedBox(height: 6),
                           Text(
                             entry.todo.title,
                             style: theme.textTheme.titleSmall?.copyWith(
                               fontWeight: FontWeight.w700,
                             ),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
                           ),
-                          const SizedBox(height: 4),
-                          Text(
-                            _subtitle(context, entry),
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: theme.colorScheme.onSurfaceVariant,
-                            ),
-                          ),
-                          if (checklistProgressText != null) ...[
+                          if (supportingText != null) ...[
                             const SizedBox(height: 4),
                             Text(
-                              checklistProgressText,
-                              key: ValueKey(
-                                'task_hub_checklist_progress_${entry.todo.id}',
-                              ),
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                color: theme.colorScheme.onSurfaceVariant,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ],
-                          if ((entry.reasonText ?? '').isNotEmpty) ...[
-                            const SizedBox(height: 4),
-                            Text(
-                              entry.reasonText!,
+                              supportingText,
                               key: ValueKey(
                                   'task_priority_reason_${entry.todo.id}'),
                               style: theme.textTheme.bodySmall?.copyWith(
                                 color: theme.colorScheme.primary,
                                 fontWeight: FontWeight.w600,
                               ),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                          if (supportingText == null) ...[
+                            const SizedBox(height: 4),
+                            Text(
+                              _subtitle(context, entry),
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: theme.colorScheme.onSurfaceVariant,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                             ),
                           ],
                         ],
@@ -214,13 +344,13 @@ class TaskHubEntryCard extends StatelessWidget {
                 ),
               ),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 6),
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
+                  spacing: 6,
+                  runSpacing: 6,
                   children: [
                     for (final action in layout.$1)
                       _TaskHubQuickButton(
@@ -242,8 +372,10 @@ class TaskHubEntryCard extends StatelessWidget {
                   ],
                 ),
                 if (showPriorityControls && entry.todo.status != 'done') ...[
-                  const SizedBox(height: 10),
-                  Row(
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
                     children: [
                       _TaskHubPriorityControl(
                         key: ValueKey(
@@ -260,6 +392,12 @@ class TaskHubEntryCard extends StatelessWidget {
                         ),
                         icon: Icons.priority_high_rounded,
                         direction: entry.manualUrgencyNudgeDirection,
+                        neutralLabel:
+                            context.t.actions.taskHub.actions.increaseUrgency,
+                        raisedLabel:
+                            context.t.actions.taskHub.nudges.urgencyRaised,
+                        loweredLabel:
+                            context.t.actions.taskHub.nudges.urgencyLowered,
                         semanticsLabel:
                             context.t.actions.taskHub.actions.increaseUrgency,
                         decreaseTooltip:
@@ -271,7 +409,6 @@ class TaskHubEntryCard extends StatelessWidget {
                         onIncrease: () =>
                             onQuickAction(TaskHubQuickAction.increaseUrgency),
                       ),
-                      const SizedBox(width: 8),
                       _TaskHubPriorityControl(
                         key: ValueKey(
                           'task_hub_page_priority_${entry.todo.id}_importance',
@@ -287,6 +424,12 @@ class TaskHubEntryCard extends StatelessWidget {
                         ),
                         icon: Icons.keyboard_double_arrow_up_rounded,
                         direction: entry.manualImportanceNudgeDirection,
+                        neutralLabel: context
+                            .t.actions.taskHub.actions.increaseImportance,
+                        raisedLabel:
+                            context.t.actions.taskHub.nudges.importanceRaised,
+                        loweredLabel:
+                            context.t.actions.taskHub.nudges.importanceLowered,
                         semanticsLabel: context
                             .t.actions.taskHub.actions.increaseImportance,
                         decreaseTooltip: context
@@ -301,7 +444,7 @@ class TaskHubEntryCard extends StatelessWidget {
                     ],
                   ),
                   if (entry.hasManualNudges) ...[
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 6),
                     Wrap(
                       spacing: 6,
                       runSpacing: 6,
@@ -404,6 +547,45 @@ class _NudgePillData {
   final String label;
 }
 
+class _TaskHubMetaChip extends StatelessWidget {
+  const _TaskHubMetaChip({
+    this.label,
+    this.child,
+    this.emphasize = false,
+  }) : assert(label != null || child != null);
+
+  final String? label;
+  final Widget? child;
+  final bool emphasize;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final tokens = SlTokens.of(context);
+    final foregroundColor = emphasize
+        ? theme.colorScheme.primary
+        : theme.colorScheme.onSurfaceVariant;
+    final backgroundColor = emphasize
+        ? theme.colorScheme.primaryContainer.withOpacity(0.72)
+        : theme.colorScheme.surfaceContainerHighest.withOpacity(0.48);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: backgroundColor,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: tokens.borderSubtle.withOpacity(0.78)),
+      ),
+      child: DefaultTextStyle(
+        style: theme.textTheme.labelSmall!.copyWith(
+          color: foregroundColor,
+          fontWeight: FontWeight.w600,
+        ),
+        child: child ?? Text(label!),
+      ),
+    );
+  }
+}
+
 class _TaskHubQuickButton extends StatelessWidget {
   const _TaskHubQuickButton({
     required this.label,
@@ -422,9 +604,9 @@ class _TaskHubQuickButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final tokens = SlTokens.of(context);
     final style = ButtonStyle(
-      minimumSize: const MaterialStatePropertyAll(Size(0, 40)),
+      minimumSize: const MaterialStatePropertyAll(Size(0, 34)),
       padding: const MaterialStatePropertyAll(
-        EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       ),
       tapTargetSize: MaterialTapTargetSize.shrinkWrap,
       shape: MaterialStatePropertyAll(
@@ -486,7 +668,7 @@ class _TaskHubQuickMenu extends StatelessWidget {
         child: OutlinedButton(
           onPressed: () {},
           style: ButtonStyle(
-            minimumSize: const MaterialStatePropertyAll(Size(44, 40)),
+            minimumSize: const MaterialStatePropertyAll(Size(40, 34)),
             side: MaterialStatePropertyAll(
               BorderSide(color: tokens.borderSubtle.withOpacity(0.9)),
             ),
@@ -563,6 +745,9 @@ class _TaskHubPriorityControl extends StatelessWidget {
     required this.increaseButtonKey,
     required this.icon,
     required this.direction,
+    required this.neutralLabel,
+    required this.raisedLabel,
+    required this.loweredLabel,
     required this.semanticsLabel,
     required this.decreaseTooltip,
     required this.increaseTooltip,
@@ -576,6 +761,9 @@ class _TaskHubPriorityControl extends StatelessWidget {
   final Key increaseButtonKey;
   final IconData icon;
   final TaskPriorityNudgeDirection direction;
+  final String neutralLabel;
+  final String raisedLabel;
+  final String loweredLabel;
   final String semanticsLabel;
   final String decreaseTooltip;
   final String increaseTooltip;
@@ -584,6 +772,10 @@ class _TaskHubPriorityControl extends StatelessWidget {
 
   bool get _isUp => direction == TaskPriorityNudgeDirection.up;
   bool get _isDown => direction == TaskPriorityNudgeDirection.down;
+  String get _label {
+    if (_isDown) return decreaseTooltip;
+    return neutralLabel;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -633,29 +825,36 @@ class _TaskHubPriorityControl extends StatelessWidget {
                 ]
               : null,
         ),
-        child: Column(
+        child: Row(
           mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             Container(
-              width: 28,
-              height: 28,
+              width: 24,
+              height: 24,
               decoration: BoxDecoration(
                 color: badgeColor,
                 borderRadius: BorderRadius.circular(99),
               ),
               alignment: Alignment.center,
-              child: Icon(icon, size: 16, color: foregroundColor),
+              child: Icon(icon, size: 14, color: foregroundColor),
             ),
-            const SizedBox(height: 4),
-            Container(
-              width: 6,
-              height: 6,
-              decoration: BoxDecoration(
-                color: highlightColor,
-                borderRadius: BorderRadius.circular(99),
+            const SizedBox(width: 8),
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 120),
+              child: Text(
+                _label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: _isUp || _isDown
+                      ? highlightColor
+                      : theme.colorScheme.onSurfaceVariant,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
             ),
-            const SizedBox(height: 6),
+            const SizedBox(width: 8),
             Row(
               mainAxisSize: MainAxisSize.min,
               children: [

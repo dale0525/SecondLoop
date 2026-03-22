@@ -109,6 +109,65 @@ void main() {
         findsOneWidget);
   });
 
+  testWidgets('compact banner avoids overflow in short chat viewport',
+      (tester) async {
+    final now = DateTime(2026, 3, 13, 10, 0);
+    final snapshot = buildTaskPrioritySnapshot(
+      <Todo>[
+        todo(
+          id: 'focus',
+          title: 'Fix billing bug',
+          updatedAtMs: 10,
+          dueAtMs:
+              now.add(const Duration(hours: 2)).toUtc().millisecondsSinceEpoch,
+        ),
+        todo(
+          id: 'scheduled-1',
+          title: 'Prepare weekly review summary',
+          updatedAtMs: 20,
+          dueAtMs:
+              now.add(const Duration(days: 1)).toUtc().millisecondsSinceEpoch,
+        ),
+        todo(
+            id: 'backlog-1', title: 'Triage product feedback', updatedAtMs: 30),
+        todo(
+            id: 'backlog-2', title: 'Review inbox follow-ups', updatedAtMs: 40),
+        todo(
+            id: 'backlog-3',
+            title: 'Draft migration checklist',
+            updatedAtMs: 50),
+      ],
+      nowLocal: now,
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: Scaffold(
+            body: Center(
+              child: SizedBox(
+                width: 670,
+                height: 518,
+                child: TaskHubBanner(
+                  snapshot: snapshot,
+                  compact: true,
+                  onViewAll: () {},
+                  onQuickAction: (_, __) async {},
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.byKey(const ValueKey('task_hub_banner')));
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+    expect(find.byKey(const ValueKey('task_hub_preview_list')), findsOneWidget);
+  });
+
   testWidgets('banner shows status and time quick actions for active focus',
       (tester) async {
     final now = DateTime(2026, 3, 13, 10, 0);

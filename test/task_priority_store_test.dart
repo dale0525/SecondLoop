@@ -482,7 +482,7 @@ void main() {
   });
 
   test(
-      'does not reuse persisted AI rerank when unavailable cache scope differs',
+      'bootstrap fallback reuses matching persisted AI rerank before unavailable scope refresh',
       () async {
     SharedPreferences.setMockInitialValues({});
     final firstService = _CountingAiService(
@@ -519,8 +519,16 @@ void main() {
 
     await secondStore.refresh();
 
-    expect(secondStore.snapshot.source, TaskPrioritySnapshotSource.rules);
-    expect(secondStore.snapshot.primaryFocus?.reasonText, isNull);
+    expect(secondStore.snapshot.source, TaskPrioritySnapshotSource.hybrid);
+    expect(
+      secondStore.snapshot.primaryFocus?.reasonText,
+      'Still the best option.',
+    );
+    expect(secondStore.isAiEnhancementAvailable, isFalse);
+    expect(
+      secondStore.aiAvailability,
+      TaskPriorityAiAvailability.unavailable,
+    );
   });
 
   test(

@@ -680,17 +680,16 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    final messageList = find.byType(Scrollable).first;
+    await tester.dragUntilVisible(
+      find.byKey(const ValueKey('message_todo_type_badge_m5')),
+      messageList,
+      const Offset(0, 240),
+    );
+
     expect(find.byKey(const ValueKey('message_todo_type_badge_m5')),
         findsOneWidget);
-    expect(find.byKey(const ValueKey('message_todo_type_badge_m6')),
-        findsOneWidget);
-    expect(
-      find.byKey(const ValueKey('message_related_todo_root_m6')),
-      findsOneWidget,
-    );
     expect(find.text('Task'), findsOneWidget);
-    expect(find.text('Related task'), findsOneWidget);
-    expect(find.text('「Procurement follow-up」'), findsOneWidget);
 
     final taskBadge = tester.widget<InkWell>(
         find.byKey(const ValueKey('message_todo_type_badge_m5')));
@@ -700,6 +699,21 @@ void main() {
 
     await tester.pageBack();
     await tester.pumpAndSettle();
+
+    await tester.dragUntilVisible(
+      find.byKey(const ValueKey('message_todo_type_badge_m6')),
+      messageList,
+      const Offset(0, -240),
+    );
+
+    expect(find.byKey(const ValueKey('message_todo_type_badge_m6')),
+        findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('message_related_todo_root_m6')),
+      findsOneWidget,
+    );
+    expect(find.text('Related task'), findsOneWidget);
+    expect(find.text('「Procurement follow-up」'), findsOneWidget);
 
     await tester
         .tap(find.byKey(const ValueKey('message_related_todo_root_m6')));

@@ -210,21 +210,64 @@ class TaskPriorityStore extends ChangeNotifier {
 
       await _feedbackStore.pruneToTodoIds(todos.map((todo) => todo.id));
       final feedbackState = await _feedbackStore.read();
-      _snapshot = buildTaskPrioritySnapshot(
+      final rulesSnapshot = buildTaskPrioritySnapshot(
         todos,
         nowLocal: nowLocal,
         feedbackState: feedbackState,
       );
       _dirty = false;
-      _safeNotify();
 
       final aiEnhancementEnabled =
           await _isAiEnhancementEnabled?.call() ?? true;
       if (!aiEnhancementEnabled) {
+        _snapshot = rulesSnapshot;
         _aiAvailability = TaskPriorityAiAvailability.disabled;
         _rememberStickyFocus(nowLocal);
+        _safeNotify();
         return;
       }
+
+      if (rulesSnapshot.activeEntries.isEmpty) {
+        _snapshot = rulesSnapshot;
+        _rememberStickyFocus(nowLocal);
+        _safeNotify();
+        return;
+      }
+
+      final request = buildTaskPriorityAiRequest(
+        rulesSnapshot,
+        nowLocal: nowLocal,
+      );
+      if (request.candidates.isEmpty) {
+        _snapshot = rulesSnapshot;
+        _rememberStickyFocus(nowLocal);
+        _safeNotify();
+        return;
+      }
+
+      final candidateByTodoId = <String, TaskPriorityAiCandidate>{
+        for (final candidate in request.candidates) candidate.todoId: candidate,
+      };
+      final bootstrapPersisted = await _readMatchingPersistedAiAssessments(
+        candidateByTodoId: candidateByTodoId,
+        nowLocal: nowLocal,
+      );
+      if (bootstrapPersisted.isNotEmpty) {
+        _snapshot = buildTaskPrioritySnapshot(
+          todos,
+          nowLocal: nowLocal,
+          aiResult: TaskPriorityAiBatchResult(
+            entries: bootstrapPersisted.values
+                .map((value) => value.entry)
+                .toList(growable: false),
+          ),
+          enhancementSource: TaskPriorityEnhancementSource.aiLocalCache,
+          feedbackState: feedbackState,
+        );
+      } else {
+        _snapshot = rulesSnapshot;
+      }
+      _safeNotify();
 
       TaskPriorityAiService? aiService;
       try {
@@ -235,17 +278,6 @@ class TaskPriorityStore extends ChangeNotifier {
       } catch (_) {
         _aiAvailability = TaskPriorityAiAvailability.unavailable;
         aiService = null;
-      }
-
-      if (_snapshot.activeEntries.isEmpty) {
-        _rememberStickyFocus(nowLocal);
-        return;
-      }
-
-      final request = buildTaskPriorityAiRequest(_snapshot, nowLocal: nowLocal);
-      if (request.candidates.isEmpty) {
-        _rememberStickyFocus(nowLocal);
-        return;
       }
 
       final cacheScopeKey =
@@ -291,14 +323,11 @@ class TaskPriorityStore extends ChangeNotifier {
         canUsePersistedCache
             ? <String, TaskPriorityAiCachedAssessment>{
                 ...persisted,
-                ...sharedPersisted
+                ...sharedPersisted,
               }
-            : memoryCached,
+            : _mergeCachedAssessments(memoryCached, bootstrapPersisted),
       );
       final staleCandidates = <TaskPriorityAiCandidate>[];
-      final candidateByTodoId = <String, TaskPriorityAiCandidate>{
-        for (final candidate in request.candidates) candidate.todoId: candidate,
-      };
 
       for (final candidate in request.candidates) {
         final requestSignature = _buildCandidateRequestSignature(
@@ -394,23 +423,26 @@ class TaskPriorityStore extends ChangeNotifier {
         await _writePersistedAiAssessments(
           cacheScopeKey: cacheScopeKey,
           entries: mergedPersisted,
-          activeTodoIds: _snapshot.activeEntries.map((entry) => entry.todo.id),
+          activeTodoIds:
+              rulesSnapshot.activeEntries.map((entry) => entry.todo.id),
         );
         await _writeSharedAiAssessments?.call(
           aiService: aiService,
           cacheScopeKey: cacheScopeKey,
           entries: mergedPersisted,
-          activeTodoIds: _snapshot.activeEntries.map((entry) => entry.todo.id),
+          activeTodoIds:
+              rulesSnapshot.activeEntries.map((entry) => entry.todo.id),
         );
       } else if (canUseInMemoryCache) {
         _writeInMemoryAiAssessments(
           entries: mergedPersisted,
-          activeTodoIds: _snapshot.activeEntries.map((entry) => entry.todo.id),
+          activeTodoIds:
+              rulesSnapshot.activeEntries.map((entry) => entry.todo.id),
         );
       }
 
       final aiEntries = <TaskPriorityAiEntry>[];
-      for (final activeEntry in _snapshot.activeEntries) {
+      for (final activeEntry in rulesSnapshot.activeEntries) {
         final todoId = activeEntry.todo.id;
         final entry = freshEntries[todoId] ?? mergedPersisted[todoId]?.entry;
         if (entry != null) aiEntries.add(entry);
@@ -474,28 +506,99 @@ class TaskPriorityStore extends ChangeNotifier {
       if (rawScope is! Map) {
         return const <String, TaskPriorityAiCachedAssessment>{};
       }
-      final rawEntries = rawScope['entries'];
-      if (rawEntries is! Map) {
-        return const <String, TaskPriorityAiCachedAssessment>{};
-      }
-      final entries = <String, TaskPriorityAiCachedAssessment>{};
-      for (final item in rawEntries.entries) {
-        final todoId = item.key.toString().trim();
-        if (todoId.isEmpty || item.value is! Map) continue;
-        final parsed = TaskPriorityAiCachedAssessment.fromJson(
-          (item.value as Map)
-              .map((key, value) => MapEntry(key.toString(), value)),
-        );
-        if (parsed == null) continue;
-        if (nowLocal.difference(parsed.computedAtLocal).abs() > _aiCacheTtl) {
-          continue;
-        }
-        entries[todoId] = parsed;
-      }
-      return entries;
+      return _parsePersistedAssessmentEntries(rawScope, nowLocal: nowLocal);
     } catch (_) {
       return const <String, TaskPriorityAiCachedAssessment>{};
     }
+  }
+
+  Future<Map<String, TaskPriorityAiCachedAssessment>>
+      _readMatchingPersistedAiAssessments({
+    required Map<String, TaskPriorityAiCandidate> candidateByTodoId,
+    required DateTime nowLocal,
+  }) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_kAiCachePrefsKey);
+      if (raw == null || raw.trim().isEmpty) {
+        return const <String, TaskPriorityAiCachedAssessment>{};
+      }
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map) {
+        return const <String, TaskPriorityAiCachedAssessment>{};
+      }
+      final data = decoded.map((key, value) => MapEntry(key.toString(), value));
+      final rawScopes = data['scopes'];
+      if (rawScopes is! Map) {
+        return const <String, TaskPriorityAiCachedAssessment>{};
+      }
+
+      final matched = <String, TaskPriorityAiCachedAssessment>{};
+      for (final scope in rawScopes.values) {
+        if (scope is! Map) continue;
+        final entries = _parsePersistedAssessmentEntries(
+          scope,
+          nowLocal: nowLocal,
+        );
+        for (final entry in entries.entries) {
+          final candidate = candidateByTodoId[entry.key];
+          if (candidate == null) continue;
+          final requestSignature = _buildCandidateRequestSignature(
+            candidate,
+            nowLocal: nowLocal,
+          );
+          if (entry.value.requestSignature != requestSignature) continue;
+          final existing = matched[entry.key];
+          if (existing == null ||
+              entry.value.computedAtLocal.isAfter(existing.computedAtLocal)) {
+            matched[entry.key] = entry.value;
+          }
+        }
+      }
+      return matched;
+    } catch (_) {
+      return const <String, TaskPriorityAiCachedAssessment>{};
+    }
+  }
+
+  Map<String, TaskPriorityAiCachedAssessment> _parsePersistedAssessmentEntries(
+    Map rawScope, {
+    required DateTime nowLocal,
+  }) {
+    final rawEntries = rawScope['entries'];
+    if (rawEntries is! Map) {
+      return const <String, TaskPriorityAiCachedAssessment>{};
+    }
+    final entries = <String, TaskPriorityAiCachedAssessment>{};
+    for (final item in rawEntries.entries) {
+      final todoId = item.key.toString().trim();
+      if (todoId.isEmpty || item.value is! Map) continue;
+      final parsed = TaskPriorityAiCachedAssessment.fromJson(
+        (item.value as Map)
+            .map((key, value) => MapEntry(key.toString(), value)),
+      );
+      if (parsed == null) continue;
+      if (nowLocal.difference(parsed.computedAtLocal).abs() > _aiCacheTtl) {
+        continue;
+      }
+      entries[todoId] = parsed;
+    }
+    return entries;
+  }
+
+  Map<String, TaskPriorityAiCachedAssessment> _mergeCachedAssessments(
+    Map<String, TaskPriorityAiCachedAssessment> primary,
+    Map<String, TaskPriorityAiCachedAssessment> fallback,
+  ) {
+    final merged = Map<String, TaskPriorityAiCachedAssessment>.from(fallback);
+    for (final entry in primary.entries) {
+      final existing = merged[entry.key];
+      if (existing == null ||
+          entry.value.computedAtLocal.isAfter(existing.computedAtLocal)) {
+        merged[entry.key] = entry.value;
+      }
+    }
+    return merged;
   }
 
   Map<String, TaskPriorityAiCachedAssessment> _readInMemoryAiAssessments({

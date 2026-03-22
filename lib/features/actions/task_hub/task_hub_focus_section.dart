@@ -34,7 +34,6 @@ class TaskHubFocusSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (entries.isEmpty) return const SizedBox.shrink();
-    final theme = Theme.of(context);
     final tokens = SlTokens.of(context);
     return Padding(
       padding: const EdgeInsets.only(bottom: 16),
@@ -44,18 +43,11 @@ class TaskHubFocusSection extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              context.t.actions.taskHub.focusSection,
-              style: theme.textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              context.t.actions.taskHub.focusHint,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
+            TaskHubSectionHeader(
+              title: context.t.actions.taskHub.focusSection,
+              count: entries.length,
+              kind: TaskHubPageSectionKind.focus,
+              hint: context.t.actions.taskHub.focusHint,
             ),
             const SizedBox(height: 10),
             for (var i = 0; i < entries.length; i++) ...[

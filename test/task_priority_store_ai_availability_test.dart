@@ -242,6 +242,39 @@ void main() {
     );
   });
 
+  test('restart fallback restores persisted AI result without resolved scope',
+      () async {
+    SharedPreferences.setMockInitialValues({});
+    final store = TaskPriorityStore.fromLoaders(
+      nowLocal: () => DateTime(2026, 3, 13, 10, 0),
+      loadTodos: () async => <Todo>[
+        todo(id: 'focus', title: 'Focus task', updatedAtMs: 10),
+      ],
+      resolveAiService: () async => _CachedSuccessfulAiService(),
+    );
+
+    await store.refresh();
+    expect(store.snapshot.primaryFocus?.reasonText, 'Persisted AI result.');
+
+    final restartedStore = TaskPriorityStore.fromLoaders(
+      nowLocal: () => DateTime(2026, 3, 13, 10, 5),
+      loadTodos: () async => <Todo>[
+        todo(id: 'focus', title: 'Focus task', updatedAtMs: 10),
+      ],
+      resolveAiService: () async => null,
+      resolveAiCacheScopeKey: () async => null,
+    );
+
+    await restartedStore.refresh();
+
+    expect(
+      restartedStore.snapshot.primaryFocus?.reasonText,
+      'Persisted AI result.',
+    );
+    expect(restartedStore.snapshot.hasAiEnhancement, isTrue);
+    expect(restartedStore.shouldShowAiUpgradeHint, isFalse);
+  });
+
   test('fresh rerank marks enhancement source as live ai', () async {
     SharedPreferences.setMockInitialValues({});
     final store = TaskPriorityStore.fromLoaders(

@@ -98,10 +98,11 @@ void main() {
     await tester.pump();
     await _pumpUntilFound(
       tester,
-      find.byKey(const ValueKey('task_hub_banner_open_focus')),
+      find.byKey(const ValueKey('task_hub_banner_item_todo:chat-web')),
     );
 
-    await tester.tap(find.byKey(const ValueKey('task_hub_banner_open_focus')));
+    await tester
+        .tap(find.byKey(const ValueKey('task_hub_banner_item_todo:chat-web')));
     await tester.pump();
     await _pumpUntilFound(
       tester,

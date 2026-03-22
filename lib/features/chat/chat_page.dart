@@ -491,6 +491,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
       GlobalKey<ScaffoldMessengerState>();
   ScaffoldMessengerState? _taskHubQuickActionSnackMessenger;
   Object? _taskHubQuickActionSnackToken;
+  String? _taskPriorityRefreshDependencyKey;
   List<AttachmentDraftPayload> _composerDraftAttachments =
       <AttachmentDraftPayload>[];
   Set<String> _failedComposerDraftLocalIds = <String>{};
@@ -510,6 +511,23 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
     FocusScope.of(context).unfocus();
     FocusManager.instance.primaryFocus?.unfocus();
     _collapseTodoAgendaBanner();
+  }
+
+  String _buildTaskPriorityRefreshDependencyKey() {
+    final subscriptionStatus = SubscriptionScope.maybeOf(context)?.status ??
+        SubscriptionStatus.unknown;
+    final cloudAuthScope = CloudAuthScope.maybeOf(context);
+    final gatewayConfig =
+        cloudAuthScope?.gatewayConfig ?? CloudGatewayConfig.defaultConfig;
+    final cloudUid = (cloudAuthScope?.controller.uid ?? '').trim();
+    final localeTag = Localizations.localeOf(context).toLanguageTag();
+    return <String>[
+      subscriptionStatus.name,
+      cloudUid,
+      gatewayConfig.baseUrl.trim(),
+      gatewayConfig.modelName.trim(),
+      localeTag,
+    ].join('|');
   }
 
   @override
@@ -588,6 +606,10 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
   void didChangeDependencies() {
     super.didChangeDependencies();
     _messagesFuture ??= _loadMessages();
+    final refreshDependencyKey = _buildTaskPriorityRefreshDependencyKey();
+    final shouldForceTaskPriorityRefresh =
+        refreshDependencyKey != _taskPriorityRefreshDependencyKey;
+    _taskPriorityRefreshDependencyKey = refreshDependencyKey;
     _taskPriorityStore ??= TaskPriorityStore(
       backend: AppBackendScope.of(context),
       sessionKey: Uint8List.fromList(SessionScope.of(context).sessionKey),
@@ -618,7 +640,9 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
       },
       feedbackStore: _taskPriorityFeedbackStore,
     );
-    unawaited(_taskPriorityStore!.refresh());
+    unawaited(
+      _taskPriorityStore!.refresh(force: shouldForceTaskPriorityRefresh),
+    );
     _attachSyncEngine();
     unawaited(_refreshComposerAskAiRoute());
     unawaited(_recoverDetachedAskAiIfNeeded());
