@@ -5,11 +5,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:secondloop/core/ai/ai_routing.dart';
 import 'package:secondloop/core/backend/app_backend.dart';
 import 'package:secondloop/core/session/session_scope.dart';
 import 'package:secondloop/features/actions/task_hub/task_hub_page.dart';
 import 'package:secondloop/features/actions/task_hub/task_priority_ai.dart';
 import 'package:secondloop/features/actions/task_hub/task_priority_ai_models.dart';
+import 'package:secondloop/features/actions/task_hub/task_priority_engine.dart';
 import 'package:secondloop/src/rust/db.dart';
 
 import 'test_backend.dart';
@@ -194,6 +196,96 @@ void main() {
         find.byKey(const ValueKey('task_hub_page_ai_source')), findsOneWidget);
     expect(find.text('Live AI insight'), findsOneWidget);
     expect(find.text('Live AI result.'), findsOneWidget);
+  });
+
+  testWidgets(
+      'task hub ignores cached ai result from a different resolved scope',
+      (tester) async {
+    final nowLocal = DateTime.now();
+    final cacheScopeKey = buildTaskPriorityAiCacheScopeKey(
+      route: AskAiRouteKind.byok,
+      gatewayBaseUrl: 'https://api.openai.com/v1',
+      modelName: 'gpt-4o-mini',
+      localeTag: 'en',
+      partitionKey: '["p1","openai-compatible"]',
+    );
+    final requestSignature = jsonEncode(<String, Object?>{
+      'time_bucket': buildTaskPriorityAiTimeBucket(nowLocal),
+      'candidate': buildTaskPriorityAiRequest(
+        buildTaskPrioritySnapshot(
+          <Todo>[
+            const Todo(
+              id: 'focus',
+              title: 'Fix prod issue',
+              dueAtMs: null,
+              status: 'open',
+              sourceEntryId: null,
+              createdAtMs: 0,
+              updatedAtMs: 10,
+              reviewStage: null,
+              nextReviewAtMs: null,
+              lastReviewAtMs: null,
+            ),
+          ],
+          nowLocal: nowLocal,
+        ),
+        nowLocal: nowLocal,
+      ).candidates.single.toJson(),
+    });
+    SharedPreferences.setMockInitialValues({
+      'task_priority_ai_cache_v3': jsonEncode(<String, Object?>{
+        'scopes': <String, Object?>{
+          cacheScopeKey: <String, Object?>{
+            'entries': <String, Object?>{
+              'focus': TaskPriorityAiCachedAssessment(
+                entry: const TaskPriorityAiEntry(
+                  todoId: 'focus',
+                  semanticAdjustment: 16,
+                  reason: 'Cached AI result.',
+                  confidence: TaskPriorityAiConfidence.high,
+                ),
+                requestSignature: requestSignature,
+                computedAtLocal: nowLocal,
+              ).toJson(),
+            },
+          },
+        },
+      }),
+    });
+    final backend = _TaskHubBackend(
+      todos: const <Todo>[
+        Todo(
+          id: 'focus',
+          title: 'Fix prod issue',
+          dueAtMs: null,
+          status: 'open',
+          sourceEntryId: null,
+          createdAtMs: 0,
+          updatedAtMs: 10,
+          reviewStage: null,
+          nextReviewAtMs: null,
+          lastReviewAtMs: null,
+        ),
+      ],
+      llmProfiles: const <LlmProfile>[
+        LlmProfile(
+          id: 'p2',
+          name: 'OpenAI Next',
+          providerType: 'openai-compatible',
+          baseUrl: 'https://api.openai.com/v1',
+          modelName: 'gpt-4.1-mini',
+          isActive: true,
+          createdAtMs: 0,
+          updatedAtMs: 0,
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(_wrap(backend));
+    await _pumpUntilTaskHubReady(tester);
+
+    expect(find.byKey(const ValueKey('task_hub_page_ai_source')), findsNothing);
+    expect(find.text('Cached AI result.'), findsNothing);
   });
 
   testWidgets('task hub quick action failure shows error snackbar',
@@ -889,14 +981,33 @@ final class _TaskHubBackend extends TestAppBackend {
         const <TodoChecklistProgress>[],
     this.failTransition = false,
     this.taskPriorityAiResponseJson,
+    List<LlmProfile>? llmProfiles,
   })  : _todos = {for (final todo in todos) todo.id: todo},
         _checklistProgress =
-            List<TodoChecklistProgress>.from(checklistProgress);
+            List<TodoChecklistProgress>.from(checklistProgress),
+        _llmProfiles = List<LlmProfile>.from(llmProfiles ??
+            const <LlmProfile>[
+              LlmProfile(
+                id: 'p1',
+                name: 'OpenAI',
+                providerType: 'openai-compatible',
+                baseUrl: 'https://api.openai.com/v1',
+                modelName: 'gpt-4o-mini',
+                isActive: true,
+                createdAtMs: 0,
+                updatedAtMs: 0,
+              ),
+            ]);
 
   final Map<String, Todo> _todos;
   final List<TodoChecklistProgress> _checklistProgress;
+  final List<LlmProfile> _llmProfiles;
   final bool failTransition;
   final String? taskPriorityAiResponseJson;
+
+  @override
+  Future<List<LlmProfile>> listLlmProfiles(Uint8List key) async =>
+      List<LlmProfile>.from(_llmProfiles);
 
   @override
   Future<List<Todo>> listTodos(Uint8List key) async =>

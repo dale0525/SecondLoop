@@ -710,6 +710,116 @@ void main() {
     expect(find.text('Cached AI result.'), findsWidgets);
   });
 
+  testWidgets(
+      'Chat task hub banner reuses cached ai result before scope resolves',
+      (tester) async {
+    final nowLocal = DateTime.now();
+    final cacheScopeKey = buildTaskPriorityAiCacheScopeKey(
+      route: AskAiRouteKind.byok,
+      gatewayBaseUrl: 'https://api.openai.com/v1',
+      modelName: 'gpt-4o-mini',
+      localeTag: 'en',
+      partitionKey: '["p1","openai-compatible"]',
+    );
+    final requestSignature = jsonEncode(<String, Object?>{
+      'time_bucket': buildTaskPriorityAiTimeBucket(nowLocal),
+      'candidate': buildTaskPriorityAiRequest(
+        buildTaskPrioritySnapshot(
+          <Todo>[
+            const Todo(
+              id: 'todo:bootstrap-label',
+              title: 'Bootstrap cached task',
+              dueAtMs: null,
+              status: 'open',
+              sourceEntryId: null,
+              createdAtMs: 0,
+              updatedAtMs: 0,
+              reviewStage: null,
+              nextReviewAtMs: null,
+              lastReviewAtMs: null,
+            ),
+          ],
+          nowLocal: nowLocal,
+        ),
+        nowLocal: nowLocal,
+      ).candidates.single.toJson(),
+    });
+    SharedPreferences.setMockInitialValues({
+      'task_priority_ai_cache_v3': jsonEncode(<String, Object?>{
+        'scopes': <String, Object?>{
+          cacheScopeKey: <String, Object?>{
+            'entries': <String, Object?>{
+              'todo:bootstrap-label': TaskPriorityAiCachedAssessment(
+                entry: const TaskPriorityAiEntry(
+                  todoId: 'todo:bootstrap-label',
+                  semanticAdjustment: 14,
+                  reason: 'Bootstrap cached AI result.',
+                  confidence: TaskPriorityAiConfidence.high,
+                ),
+                requestSignature: requestSignature,
+                computedAtLocal: nowLocal,
+              ).toJson(),
+            },
+          },
+        },
+      }),
+    });
+
+    final backend = _AgendaBackend(
+      todos: const [
+        Todo(
+          id: 'todo:bootstrap-label',
+          title: 'Bootstrap cached task',
+          dueAtMs: null,
+          status: 'open',
+          sourceEntryId: null,
+          createdAtMs: 0,
+          updatedAtMs: 0,
+          reviewStage: null,
+          nextReviewAtMs: null,
+          lastReviewAtMs: null,
+        ),
+      ],
+      llmProfiles: const <LlmProfile>[],
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        AppBackendScope(
+          backend: backend,
+          child: SessionScope(
+            sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+            lock: () {},
+            child: const MaterialApp(
+              home: ChatPage(
+                conversation: Conversation(
+                  id: 'loop_home',
+                  title: 'Loop',
+                  createdAtMs: 0,
+                  updatedAtMs: 0,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await _pumpUntilFound(
+      tester,
+      find.byKey(const ValueKey('task_hub_banner')),
+    );
+
+    await tester.tap(find.byKey(const ValueKey('task_hub_banner')));
+    await tester.pump();
+    await _pumpUntilFound(
+      tester,
+      find.byKey(const ValueKey('task_hub_banner_ai_source')),
+    );
+
+    expect(find.text('Cached AI insight'), findsOneWidget);
+    expect(find.text('Bootstrap cached AI result.'), findsWidgets);
+  });
+
   testWidgets('Chat task hub banner shows live ai source label',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
@@ -888,13 +998,32 @@ final class _AgendaBackend extends TestAppBackend {
     required List<Todo> todos,
     this.taskPriorityAiResponseJson,
     this.sharedTaskPriorityAssessmentsJson,
-  }) : _todosById = <String, Todo>{
+    List<LlmProfile>? llmProfiles,
+  })  : _todosById = <String, Todo>{
           for (final todo in todos) todo.id: todo,
-        };
+        },
+        _llmProfiles = List<LlmProfile>.from(llmProfiles ??
+            const <LlmProfile>[
+              LlmProfile(
+                id: 'p1',
+                name: 'OpenAI',
+                providerType: 'openai-compatible',
+                baseUrl: 'https://api.openai.com/v1',
+                modelName: 'gpt-4o-mini',
+                isActive: true,
+                createdAtMs: 0,
+                updatedAtMs: 0,
+              ),
+            ]);
 
   final Map<String, Todo> _todosById;
+  final List<LlmProfile> _llmProfiles;
   final String? taskPriorityAiResponseJson;
   final String? sharedTaskPriorityAssessmentsJson;
+
+  @override
+  Future<List<LlmProfile>> listLlmProfiles(Uint8List key) async =>
+      List<LlmProfile>.from(_llmProfiles);
 
   @override
   Future<List<Todo>> listTodos(Uint8List key) async =>
