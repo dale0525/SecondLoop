@@ -28,10 +28,15 @@ enum TodoFollowupGenerationMode {
 
   final String wireValue;
 
-  static TodoFollowupGenerationMode fromWireValue(String? raw) {
-    return (raw ?? '').trim().toLowerCase() == webSearch.wireValue
-        ? webSearch
-        : modelKnowledge;
+  static TodoFollowupGenerationMode? tryParseWireValue(String? raw) {
+    final normalized = (raw ?? '').trim().toLowerCase();
+    if (normalized == webSearch.wireValue) {
+      return webSearch;
+    }
+    if (normalized == modelKnowledge.wireValue) {
+      return modelKnowledge;
+    }
+    return null;
   }
 }
 
@@ -249,9 +254,10 @@ TodoFollowupSuggestionDraft? parseTodoFollowupSuggestionJson(
   final content = (map['content'] as String?)?.trim() ?? '';
   if (content.isEmpty) return null;
 
-  final mode = TodoFollowupGenerationMode.fromWireValue(
+  final mode = TodoFollowupGenerationMode.tryParseWireValue(
     (map['mode'] as String?)?.trim(),
   );
+  if (mode == null) return null;
   if (mode == TodoFollowupGenerationMode.modelKnowledge &&
       !_hasTodoFollowupModelKnowledgeDisclosure(
         content,

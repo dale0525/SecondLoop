@@ -96,13 +96,22 @@ void main() {
     );
   });
 
-  test('followup parser falls back to model knowledge on invalid mode', () {
-    final parsed = parseTodoFollowupSuggestionJson(
-      '{"content":"Not verified online. hello","mode":"unknown","citations":[]}',
+  test('followup parser rejects invalid mode', () {
+    expect(
+      parseTodoFollowupSuggestionJson(
+        '{"content":"Not verified online. hello","mode":"unknown","citations":[]}',
+      ),
+      isNull,
     );
+  });
 
-    expect(parsed, isNotNull);
-    expect(parsed!.mode, TodoFollowupGenerationMode.modelKnowledge);
+  test('followup parser rejects missing mode', () {
+    expect(
+      parseTodoFollowupSuggestionJson(
+        '{"content":"Not verified online. hello","citations":[]}',
+      ),
+      isNull,
+    );
   });
 
   test('followup context keeps only manual followup notes', () {

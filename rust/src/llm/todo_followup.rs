@@ -10,16 +10,18 @@ pub enum TodoFollowupGenerationMode {
 
 #[derive(Debug, Deserialize)]
 struct TodoFollowupPromptEnvelope {
-    #[serde(default)]
-    generation_mode: String,
+    generation_mode: Option<String>,
 }
 
 impl TodoFollowupGenerationMode {
-    fn from_wire_value(raw: &str) -> Self {
+    fn parse_wire_value(raw: &str) -> Option<Self> {
         if raw.trim().eq_ignore_ascii_case("web_search") {
-            return Self::WebSearch;
+            return Some(Self::WebSearch);
         }
-        Self::ModelKnowledge
+        if raw.trim().eq_ignore_ascii_case("model_knowledge") {
+            return Some(Self::ModelKnowledge);
+        }
+        None
     }
 }
 
@@ -41,11 +43,58 @@ pub fn parse_todo_followup_prompt(prompt: &str) -> (Option<TodoFollowupGeneratio
         return (None, prompt.to_string());
     };
 
+    let Some(generation_mode) = metadata
+        .generation_mode
+        .as_deref()
+        .and_then(TodoFollowupGenerationMode::parse_wire_value)
+    else {
+        return (None, prompt.to_string());
+    };
+
     let prompt_body = rest[close_index + close_tag.len()..].trim_start();
-    (
-        Some(TodoFollowupGenerationMode::from_wire_value(
-            &metadata.generation_mode,
-        )),
-        prompt_body.to_string(),
-    )
+    (Some(generation_mode), prompt_body.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{parse_todo_followup_prompt, TodoFollowupGenerationMode};
+
+    #[test]
+    fn keeps_original_prompt_when_generation_mode_is_invalid() {
+        let prompt = concat!(
+            r#"<secondloop_todo_followup>{"generation_mode":"internet"}</secondloop_todo_followup>"#,
+            "\nPrompt body"
+        );
+
+        let (mode, body) = parse_todo_followup_prompt(prompt);
+
+        assert_eq!(mode, None);
+        assert_eq!(body, prompt);
+    }
+
+    #[test]
+    fn keeps_original_prompt_when_generation_mode_is_missing() {
+        let prompt = concat!(
+            r#"<secondloop_todo_followup>{"unexpected":true}</secondloop_todo_followup>"#,
+            "\nPrompt body"
+        );
+
+        let (mode, body) = parse_todo_followup_prompt(prompt);
+
+        assert_eq!(mode, None);
+        assert_eq!(body, prompt);
+    }
+
+    #[test]
+    fn strips_envelope_when_generation_mode_is_valid() {
+        let prompt = concat!(
+            r#"<secondloop_todo_followup>{"generation_mode":"web_search"}</secondloop_todo_followup>"#,
+            "\nPrompt body"
+        );
+
+        let (mode, body) = parse_todo_followup_prompt(prompt);
+
+        assert_eq!(mode, Some(TodoFollowupGenerationMode::WebSearch));
+        assert_eq!(body, "Prompt body");
+    }
 }
