@@ -103,6 +103,13 @@ ON CONFLICT(todo_id) DO UPDATE SET
     WHEN excluded.trigger_kind = 'auto_create' THEN todo_followup_generation_jobs.task_type_hint
     ELSE NULL
   END,
+  created_at_ms = CASE
+    WHEN todo_followup_generation_jobs.trigger_kind = 'manual_regenerate'
+      AND todo_followup_generation_jobs.status IN ('pending', 'running', 'failed')
+      AND excluded.trigger_kind = 'auto_create'
+      THEN todo_followup_generation_jobs.created_at_ms
+    ELSE excluded.created_at_ms
+  END,
   updated_at_ms = CASE
     WHEN todo_followup_generation_jobs.trigger_kind = 'manual_regenerate'
       AND todo_followup_generation_jobs.status IN ('pending', 'running', 'failed')

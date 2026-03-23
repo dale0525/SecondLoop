@@ -504,6 +504,39 @@ fn auto_create_reenqueue_without_hint_preserves_existing_task_type_hint() {
 }
 
 #[test]
+fn auto_create_reenqueue_resets_job_age_for_future_retry_windows() {
+    let (_temp_dir, key, conn) = setup();
+
+    db::upsert_todo(
+        &conn,
+        &key,
+        "todo_1",
+        "调研一下当前主流的 llm 模型",
+        None,
+        "open",
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("upsert todo");
+
+    db::enqueue_todo_followup_generation_job(&conn, "todo_1", "auto_create", None, 100)
+        .expect("enqueue first job");
+    db::mark_todo_followup_generation_job_skipped(&conn, "todo_1", 110).expect("skip first job");
+
+    db::enqueue_todo_followup_generation_job(&conn, "todo_1", "auto_create", None, 10_000)
+        .expect("re-enqueue job");
+
+    let job = db::find_todo_followup_generation_job(&conn, "todo_1")
+        .expect("find re-enqueued job")
+        .expect("job should exist");
+    assert_eq!(job.status, "pending");
+    assert_eq!(job.created_at_ms, 10_000);
+    assert_eq!(job.updated_at_ms, 10_000);
+}
+
+#[test]
 fn historical_followup_suggestions_do_not_block_same_content_regeneration() {
     let (_temp_dir, key, conn) = setup();
 
