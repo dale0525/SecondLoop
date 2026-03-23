@@ -334,7 +334,7 @@ class BackendTaskPriorityAiService implements TaskPriorityAiService {
         .toSet();
     final isFullSnapshot = entries.keys.toSet().containsAll(activeIds);
     final payloadEntries = <Object?>[];
-    var updatedAtMs = 0;
+    var updatedAtMs = DateTime.now().millisecondsSinceEpoch;
     for (final entry in entries.entries) {
       if (!activeIds.contains(entry.key)) continue;
       final computedAtMs = entry.value.computedAtLocal.millisecondsSinceEpoch;
@@ -353,7 +353,7 @@ class BackendTaskPriorityAiService implements TaskPriorityAiService {
           'model_name': _modelName,
           'locale_tag': _localeTag,
           'replace_missing_entries': isFullSnapshot,
-          'updated_at_ms': updatedAtMs > 0 ? updatedAtMs : null,
+          'updated_at_ms': updatedAtMs,
           'entries': payloadEntries,
         }),
       );

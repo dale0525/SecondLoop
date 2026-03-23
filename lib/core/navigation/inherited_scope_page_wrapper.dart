@@ -28,7 +28,7 @@ Future<T?> pushPageWithCapturedInheritedScopes<T>(
   BuildContext? capturedContext,
   Widget child,
 ) {
-  if (capturedContext == null) {
+  if (capturedContext == null || !capturedContext.mounted) {
     return Future<T?>.value(null);
   }
   return pushPageWithInheritedScopes<T>(navigator, capturedContext, child);

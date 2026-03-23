@@ -420,6 +420,10 @@ void main() {
       backend.lastSharedAssessmentsPayload!['entries'],
       isEmpty,
     );
+    expect(
+      backend.lastSharedAssessmentsPayload!['updated_at_ms'],
+      isA<int>(),
+    );
   });
 
   test(

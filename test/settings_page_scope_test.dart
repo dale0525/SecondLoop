@@ -156,6 +156,73 @@ void main() {
     expect(find.text('Home'), findsOneWidget);
   });
 
+  testWidgets(
+      'pushPageWithCapturedInheritedScopes no-ops with unmounted context',
+      (tester) async {
+    final navigatorKey = GlobalKey<NavigatorState>();
+    BuildContext? capturedScopedContext;
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          navigatorKey: navigatorKey,
+          home: Builder(
+            builder: (rootContext) => Scaffold(
+              body: Center(
+                child: ElevatedButton(
+                  key:
+                      const ValueKey('open_scoped_shell_for_unmounted_context'),
+                  onPressed: () {
+                    Navigator.of(rootContext).push(
+                      MaterialPageRoute(
+                        builder: (_) => Builder(
+                          builder: (scopedContext) {
+                            capturedScopedContext = scopedContext;
+                            return Scaffold(
+                              body: Center(
+                                child: ElevatedButton(
+                                  key: const ValueKey('close_scoped_shell'),
+                                  onPressed: () =>
+                                      Navigator.of(scopedContext).pop(),
+                                  child: const Text('Close shell'),
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                    );
+                  },
+                  child: const Text('Open shell'),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(
+      find.byKey(const ValueKey('open_scoped_shell_for_unmounted_context')),
+    );
+    await tester.pumpAndSettle();
+    expect(capturedScopedContext, isNotNull);
+
+    await tester.tap(find.byKey(const ValueKey('close_scoped_shell')));
+    await tester.pumpAndSettle();
+
+    await pushPageWithCapturedInheritedScopes<void>(
+      navigatorKey.currentState!,
+      capturedScopedContext,
+      const SettingsPage(),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byType(SettingsPage), findsNothing);
+    expect(find.text('Open shell'), findsOneWidget);
+  });
+
   testWidgets('SettingsPage preserves scopes when opened from root navigator',
       (tester) async {
     final backend = TestAppBackend();

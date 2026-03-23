@@ -298,9 +298,16 @@ class _SecondLoopAppState extends State<SecondLoopApp> {
                                       final navigator =
                                           _navigatorKey.currentState;
                                       if (navigator == null) return;
+                                      final capturedContext =
+                                          _sessionScopedContext;
+                                      if (capturedContext == null ||
+                                          !capturedContext.mounted) {
+                                        _sessionScopedContext = null;
+                                        return;
+                                      }
                                       await pushPageWithCapturedInheritedScopes(
                                         navigator,
-                                        _sessionScopedContext,
+                                        capturedContext,
                                         const SettingsPage(),
                                       );
                                     },
