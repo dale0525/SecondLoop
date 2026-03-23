@@ -557,17 +557,12 @@ final class _BackendTodoFollowupGenerationStore
   Future<List<TodoFollowupGenerationJob>> listDueAutoJobs({
     required int nowMs,
     int limit = 1,
-  }) async {
-    final candidateJobs = await backend.listDueTodoFollowupGenerationJobs(
-      sessionKey,
-      nowMs: nowMs,
-      limit: limit <= 1 ? 2 : limit,
-    );
-    return candidateJobs
-        .where((job) => job.triggerKind != 'manual_regenerate')
-        .take(limit)
-        .toList(growable: false);
-  }
+  }) =>
+      loadDueAutoFollowupGenerationJobs(
+        this,
+        nowMs: nowMs,
+        limit: limit,
+      );
 
   @override
   Future<List<TodoFollowupSuggestion>> listTodoFollowupSuggestions(

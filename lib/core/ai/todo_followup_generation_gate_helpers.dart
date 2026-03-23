@@ -153,6 +153,38 @@ Future<List<TodoFollowupGenerationJob>> loadTodoFollowupGenerationPreviewJobs(
   ];
 }
 
+Future<List<TodoFollowupGenerationJob>> loadDueAutoFollowupGenerationJobs(
+  TodoFollowupGenerationStore store, {
+  required int nowMs,
+  required int limit,
+}) async {
+  final requestedLimit = limit <= 0 ? 1 : limit;
+  var overfetchLimit = requestedLimit <= 1 ? 2 : requestedLimit;
+  final maxRequestedLimit = requestedLimit * _kPreviewRefetchLimitMultiplier;
+
+  while (true) {
+    final candidateJobs = await store.listDueJobs(
+      nowMs: nowMs,
+      limit: overfetchLimit,
+    );
+    final autoJobs = candidateJobs
+        .where((job) => job.triggerKind != 'manual_regenerate')
+        .take(requestedLimit)
+        .toList(growable: false);
+    if (autoJobs.length >= requestedLimit) {
+      return autoJobs;
+    }
+    if (candidateJobs.length < overfetchLimit ||
+        overfetchLimit >= maxRequestedLimit) {
+      return autoJobs;
+    }
+    overfetchLimit *= 2;
+    if (overfetchLimit > maxRequestedLimit) {
+      overfetchLimit = maxRequestedLimit;
+    }
+  }
+}
+
 Future<void> finalizeTodoFollowupGenerationJobsForNeedsSetup(
   TodoFollowupGenerationStore store,
   List<TodoFollowupGenerationJob> jobs, {
