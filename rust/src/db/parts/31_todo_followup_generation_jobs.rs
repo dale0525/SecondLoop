@@ -215,6 +215,21 @@ pub fn list_due_todo_followup_generation_jobs(
     Ok(result)
 }
 
+
+pub fn list_due_auto_todo_followup_generation_jobs(
+    conn: &Connection,
+    now_ms: i64,
+    limit: i64,
+) -> Result<Vec<TodoFollowupGenerationJob>> {
+    let limit = limit.max(1);
+    query_due_todo_followup_generation_jobs_excluding(
+        conn,
+        now_ms,
+        limit,
+        TODO_FOLLOWUP_TRIGGER_KIND_MANUAL_REGENERATE,
+    )
+}
+
 fn query_due_todo_followup_generation_jobs(
     conn: &Connection,
     now_ms: i64,

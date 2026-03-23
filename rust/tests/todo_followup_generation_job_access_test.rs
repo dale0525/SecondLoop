@@ -1,4 +1,5 @@
 use secondloop_rust::api::core;
+use secondloop_rust::api::todo_followup_generation;
 use secondloop_rust::auth;
 use secondloop_rust::crypto;
 use secondloop_rust::crypto::KdfParams;
@@ -100,4 +101,58 @@ fn due_job_api_surfaces_todo_read_errors_instead_of_silently_skipping_jobs() {
         .expect_err("corrupt todo should surface as an error");
 
     assert!(err.to_string().contains("utf-8") || err.to_string().contains("todo"));
+}
+
+#[test]
+fn auto_due_job_api_returns_visible_auto_jobs_without_scanning_manual_backlog() {
+    let (temp_dir, key, conn) = setup();
+    let app_dir = temp_dir
+        .path()
+        .join("secondloop")
+        .to_string_lossy()
+        .into_owned();
+
+    db::upsert_todo(
+        &conn,
+        &key,
+        "todo_manual",
+        "Manual todo",
+        None,
+        "open",
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("upsert manual todo");
+    db::enqueue_todo_followup_generation_job(&conn, "todo_manual", "manual_regenerate", None, 90)
+        .expect("enqueue manual job");
+
+    db::upsert_todo(
+        &conn,
+        &key,
+        "todo_auto",
+        "Auto todo",
+        None,
+        "open",
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("upsert auto todo");
+    db::enqueue_todo_followup_generation_job(&conn, "todo_auto", "auto_create", None, 100)
+        .expect("enqueue auto job");
+
+    let due = todo_followup_generation::db_list_due_auto_todo_followup_generation_jobs(
+        app_dir,
+        key.to_vec(),
+        200,
+        1,
+    )
+    .expect("list visible auto due jobs");
+
+    assert_eq!(due.len(), 1);
+    assert_eq!(due[0].todo_id, "todo_auto");
+    assert_eq!(due[0].trigger_kind, "auto_create");
 }

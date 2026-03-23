@@ -21,6 +21,7 @@ import 'api/simple.dart';
 import 'api/sync_diagnostics.dart';
 import 'api/sync_progress.dart';
 import 'api/tags.dart';
+import 'api/todo_followup_generation.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:ffi' as ffi;

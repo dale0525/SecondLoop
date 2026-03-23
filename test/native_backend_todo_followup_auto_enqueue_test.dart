@@ -193,6 +193,74 @@ void main() {
     expect(enqueueTaskTypeHints, const <String?>['research']);
   });
 
+  test('NativeAppBackend uses dedicated auto-job query path', () async {
+    var mixedQueryCalls = 0;
+    var autoQueryCalls = 0;
+
+    final backend = NativeAppBackend(
+      appDirProvider: () async => '/tmp/secondloop_test',
+      rustLibInit: () async {},
+      dbListDueTodoFollowupGenerationJobs: ({
+        required String appDir,
+        required List<int> key,
+        required int nowMs,
+        required int limit,
+      }) async {
+        mixedQueryCalls += 1;
+        return const <TodoFollowupGenerationJob>[
+          TodoFollowupGenerationJob(
+            todoId: 'todo_manual',
+            triggerKind: 'manual_regenerate',
+            status: 'pending',
+            attempts: 0,
+            nextRetryAtMs: null,
+            lastError: null,
+            includeManualFollowups: true,
+            taskTypeHint: null,
+            createdAtMs: 1,
+            updatedAtMs: 1,
+          ),
+        ];
+      },
+      dbListDueAutoTodoFollowupGenerationJobs: ({
+        required String appDir,
+        required List<int> key,
+        required int nowMs,
+        required int limit,
+      }) async {
+        autoQueryCalls += 1;
+        return const <TodoFollowupGenerationJob>[
+          TodoFollowupGenerationJob(
+            todoId: 'todo_auto',
+            triggerKind: 'auto_create',
+            status: 'pending',
+            attempts: 0,
+            nextRetryAtMs: null,
+            lastError: null,
+            includeManualFollowups: false,
+            taskTypeHint: 'research',
+            createdAtMs: 2,
+            updatedAtMs: 2,
+          ),
+        ];
+      },
+    );
+
+    final key = Uint8List.fromList(List<int>.filled(32, 7));
+    final jobs = await backend.listDueAutoTodoFollowupGenerationJobs(
+      key,
+      nowMs: 123,
+      limit: 1,
+    );
+
+    expect(
+      jobs.map((job) => job.todoId).toList(growable: false),
+      const <String>['todo_auto'],
+    );
+    expect(autoQueryCalls, 1);
+    expect(mixedQueryCalls, 0);
+  });
+
   test('NativeAppBackend uses atomic create+enqueue path for new todos',
       () async {
     var atomicCallCount = 0;

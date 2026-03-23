@@ -39,6 +39,8 @@ abstract class _NativeAppBackendAccess
   DbEnqueueTodoFollowupGenerationJobFn get _dbEnqueueTodoFollowupGenerationJob;
   DbListDueTodoFollowupGenerationJobsFn
       get _dbListDueTodoFollowupGenerationJobs;
+  DbListDueAutoTodoFollowupGenerationJobsFn
+      get _dbListDueAutoTodoFollowupGenerationJobs;
   DbGetTodoFollowupGenerationJobFn get _dbGetTodoFollowupGenerationJob;
   DbMarkTodoFollowupGenerationJobRunningFn
       get _dbMarkTodoFollowupGenerationJobRunning;

@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../backend/app_backend.dart';
+import '../backend/native_backend.dart';
 import '../cloud/cloud_auth_scope.dart';
 import '../session/session_scope.dart';
 import '../subscription/subscription_scope.dart';
@@ -557,12 +558,21 @@ final class _BackendTodoFollowupGenerationStore
   Future<List<TodoFollowupGenerationJob>> listDueAutoJobs({
     required int nowMs,
     int limit = 1,
-  }) =>
-      loadDueAutoFollowupGenerationJobs(
-        this,
+  }) {
+    final backend = this.backend;
+    if (backend is NativeAppBackend) {
+      return backend.listDueAutoTodoFollowupGenerationJobs(
+        sessionKey,
         nowMs: nowMs,
         limit: limit,
       );
+    }
+    return loadDueAutoFollowupGenerationJobs(
+      this,
+      nowMs: nowMs,
+      limit: limit,
+    );
+  }
 
   @override
   Future<List<TodoFollowupSuggestion>> listTodoFollowupSuggestions(

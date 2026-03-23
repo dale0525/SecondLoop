@@ -35,6 +35,20 @@ mixin _NativeAppBackendJobs on _NativeAppBackendAccess {
     );
   }
 
+  Future<List<TodoFollowupGenerationJob>> listDueAutoTodoFollowupGenerationJobs(
+    Uint8List key, {
+    required int nowMs,
+    int limit = 1,
+  }) async {
+    final appDir = await _getAppDir();
+    return _dbListDueAutoTodoFollowupGenerationJobs(
+      appDir: appDir,
+      key: key,
+      nowMs: PlatformInt64Util.from(nowMs),
+      limit: limit,
+    );
+  }
+
   @override
   Future<TodoFollowupGenerationJob?> getTodoFollowupGenerationJob(
     Uint8List key,

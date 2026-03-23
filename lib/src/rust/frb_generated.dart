@@ -21,6 +21,7 @@ import 'api/simple.dart';
 import 'api/sync_diagnostics.dart';
 import 'api/sync_progress.dart';
 import 'api/tags.dart';
+import 'api/todo_followup_generation.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'db.dart';
@@ -78,7 +79,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.0.0-dev.38';
 
   @override
-  int get rustContentHash => -48436722;
+  int get rustContentHash => -913966206;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -1584,6 +1585,13 @@ abstract class RustLibApi extends BaseApi {
 
   Future<Tag> crateApiTagsDbUpsertTag(
       {required String appDir, required List<int> key, required String name});
+
+  Future<List<TodoFollowupGenerationJob>>
+      crateApiTodoFollowupGenerationDbListDueAutoTodoFollowupGenerationJobs(
+          {required String appDir,
+          required List<int> key,
+          required PlatformInt64 nowMs,
+          required int limit});
 }
 
 class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
@@ -10687,6 +10695,41 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         debugName: "db_upsert_tag",
         argNames: ["appDir", "key", "name"],
       );
+
+  @override
+  Future<List<TodoFollowupGenerationJob>>
+      crateApiTodoFollowupGenerationDbListDueAutoTodoFollowupGenerationJobs(
+          {required String appDir,
+          required List<int> key,
+          required PlatformInt64 nowMs,
+          required int limit}) {
+    return handler.executeNormal(NormalTask(
+      callFfi: (port_) {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_String(appDir, serializer);
+        sse_encode_list_prim_u_8_loose(key, serializer);
+        sse_encode_i_64(nowMs, serializer);
+        sse_encode_u_32(limit, serializer);
+        pdeCallFfi(generalizedFrbRustBinding, serializer,
+            funcId: 242, port: port_);
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_list_todo_followup_generation_job,
+        decodeErrorData: sse_decode_AnyhowException,
+      ),
+      constMeta:
+          kCrateApiTodoFollowupGenerationDbListDueAutoTodoFollowupGenerationJobsConstMeta,
+      argValues: [appDir, key, nowMs, limit],
+      apiImpl: this,
+    ));
+  }
+
+  TaskConstMeta
+      get kCrateApiTodoFollowupGenerationDbListDueAutoTodoFollowupGenerationJobsConstMeta =>
+          const TaskConstMeta(
+            debugName: "db_list_due_auto_todo_followup_generation_jobs",
+            argNames: ["appDir", "key", "nowMs", "limit"],
+          );
 
   @protected
   AnyhowException dco_decode_AnyhowException(dynamic raw) {

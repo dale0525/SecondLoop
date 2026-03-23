@@ -17,6 +17,8 @@ import '../../src/rust/api/external_import.dart' as rust_external_import;
 import '../../src/rust/api/migration_archive.dart' as rust_migration_archive;
 import '../../src/rust/api/knowledge.dart' as rust_knowledge;
 import '../../src/rust/api/core.dart' as rust_core;
+import '../../src/rust/api/todo_followup_generation.dart'
+    as rust_todo_followup_generation;
 import '../../src/rust/knowledge/models.dart' as rust_knowledge_models;
 import '../../src/rust/api/attachments.dart' as rust_attachments;
 import '../../src/rust/api/ask_scope.dart' as rust_ask_scope;
@@ -322,6 +324,8 @@ class NativeAppBackend extends _NativeAppBackendAccess
     DbDismissAllTodoFollowupSuggestionsFn? dbDismissAllTodoFollowupSuggestions,
     DbEnqueueTodoFollowupGenerationJobFn? dbEnqueueTodoFollowupGenerationJob,
     DbListDueTodoFollowupGenerationJobsFn? dbListDueTodoFollowupGenerationJobs,
+    DbListDueAutoTodoFollowupGenerationJobsFn?
+        dbListDueAutoTodoFollowupGenerationJobs,
     DbGetTodoFollowupGenerationJobFn? dbGetTodoFollowupGenerationJob,
     DbMarkTodoFollowupGenerationJobRunningFn?
         dbMarkTodoFollowupGenerationJobRunning,
@@ -402,6 +406,10 @@ class NativeAppBackend extends _NativeAppBackendAccess
         _dbListDueTodoFollowupGenerationJobs =
             dbListDueTodoFollowupGenerationJobs ??
                 rust_core.dbListDueTodoFollowupGenerationJobs,
+        _dbListDueAutoTodoFollowupGenerationJobs =
+            dbListDueAutoTodoFollowupGenerationJobs ??
+                rust_todo_followup_generation
+                    .dbListDueAutoTodoFollowupGenerationJobs,
         _dbGetTodoFollowupGenerationJob = dbGetTodoFollowupGenerationJob ??
             rust_core.dbGetTodoFollowupGenerationJob,
         _dbMarkTodoFollowupGenerationJobRunning =
@@ -488,6 +496,9 @@ class NativeAppBackend extends _NativeAppBackendAccess
   @override
   final DbListDueTodoFollowupGenerationJobsFn
       _dbListDueTodoFollowupGenerationJobs;
+  @override
+  final DbListDueAutoTodoFollowupGenerationJobsFn
+      _dbListDueAutoTodoFollowupGenerationJobs;
   @override
   final DbGetTodoFollowupGenerationJobFn _dbGetTodoFollowupGenerationJob;
   @override
