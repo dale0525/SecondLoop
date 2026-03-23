@@ -42,6 +42,7 @@ import '../features/settings/settings_page.dart';
 import '../features/share/share_intent_listener.dart';
 import '../features/welcome/first_launch_welcome_gate.dart';
 import '../core/sync/cloud_sync_switch_prompt_gate.dart';
+import '../core/sync/sync_key_manager.dart';
 import '../core/sync/sync_engine_gate.dart';
 import '../core/notifications/review_reminder_notifications_gate.dart';
 import 'text_editing_shortcuts.dart';
@@ -299,11 +300,16 @@ class _SecondLoopAppState extends State<SecondLoopApp> {
                                           _navigatorKey.currentState;
                                       if (navigator == null) return;
                                       var capturedScopes =
-                                          _sessionScopedCapture;
+                                          resolveRootSettingsInheritedScopes(
+                                        _sessionScopedCapture,
+                                      );
                                       if (capturedScopes == null) {
                                         await WidgetsBinding
                                             .instance.endOfFrame;
-                                        capturedScopes = _sessionScopedCapture;
+                                        capturedScopes =
+                                            resolveRootSettingsInheritedScopes(
+                                          _sessionScopedCapture,
+                                        );
                                       }
                                       await pushPageWithCapturedInheritedScopesOrFallback(
                                         navigator,
@@ -384,4 +390,19 @@ class _SecondLoopAppState extends State<SecondLoopApp> {
       ),
     );
   }
+}
+
+InheritedScopeCapture? resolveRootSettingsInheritedScopes(
+  InheritedScopeCapture? capturedScopes,
+) {
+  if (capturedScopes == null || capturedScopes.isEmpty) {
+    return null;
+  }
+
+  final sessionKey = capturedScopes.sessionKey;
+  if (sessionKey != null && !SyncKeyManager.hasSessionKey) {
+    return null;
+  }
+
+  return capturedScopes;
 }
