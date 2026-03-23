@@ -312,6 +312,11 @@ final class _PreviewStore implements TodoFollowupGenerationStore {
   }
 
   @override
+  Future<TodoFollowupGenerationJob?> getJob(String todoId) {
+    throw UnimplementedError();
+  }
+
+  @override
   Future<List<TodoActivity>> listTodoActivities(String todoId) {
     throw UnimplementedError();
   }

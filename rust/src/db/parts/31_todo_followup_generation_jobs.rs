@@ -332,6 +332,7 @@ SET status = 'failed',
     last_error = ?4,
     updated_at_ms = ?5
 WHERE todo_id = ?1
+  AND status = 'running'
 "#,
         params![todo_id, attempts, next_retry_at_ms, last_error, now_ms],
     )?;
@@ -351,6 +352,7 @@ SET status = 'succeeded',
     last_error = NULL,
     updated_at_ms = ?2
 WHERE todo_id = ?1
+  AND status = 'running'
 "#,
         params![todo_id, now_ms],
     )?;
@@ -370,6 +372,7 @@ SET status = 'skipped',
     last_error = NULL,
     updated_at_ms = ?2
 WHERE todo_id = ?1
+  AND status = 'running'
 "#,
         params![todo_id, now_ms],
     )?;
@@ -388,6 +391,7 @@ SET status = 'canceled',
     next_retry_at_ms = NULL,
     updated_at_ms = ?2
 WHERE todo_id = ?1
+  AND status = 'running'
 "#,
         params![todo_id, now_ms],
     )?;

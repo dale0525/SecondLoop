@@ -262,6 +262,9 @@ final class _RecordingTodoFollowupGenerationStore
   Future<Todo?> getTodo(String todoId) async => null;
 
   @override
+  Future<TodoFollowupGenerationJob?> getJob(String todoId) async => null;
+
+  @override
   Future<void> dismissTodoFollowupSuggestions({
     required String todoId,
     required List<String> suggestionIds,

@@ -166,7 +166,7 @@ fn migration_archive_export_writes_manifest_markdown_and_deduplicated_attachment
     let message =
         insert_message(&conn, &key, &conversation.id, "user", "Need to buy milk").expect("message");
     let tag = upsert_tag(&conn, &key, "errand").expect("tag");
-    set_message_tags(&conn, &key, &message.id, &[tag.id.clone()]).expect("set tags");
+    set_message_tags(&conn, &key, &message.id, std::slice::from_ref(&tag.id)).expect("set tags");
 
     let attachment =
         insert_attachment(&conn, &key, &app_dir, b"png-binary", "image/png").expect("attachment");
@@ -283,7 +283,7 @@ fn migration_archive_import_replaces_current_vault_with_archive_contents() {
     let message =
         insert_message(&conn, &key, &conversation.id, "user", "Need to buy milk").expect("message");
     let tag = upsert_tag(&conn, &key, "errand").expect("tag");
-    set_message_tags(&conn, &key, &message.id, &[tag.id.clone()]).expect("set tags");
+    set_message_tags(&conn, &key, &message.id, std::slice::from_ref(&tag.id)).expect("set tags");
     let attachment =
         insert_attachment(&conn, &key, &app_dir, b"png-binary", "image/png").expect("attachment");
     link_attachment_to_message(&conn, &key, &message.id, &attachment.sha256)

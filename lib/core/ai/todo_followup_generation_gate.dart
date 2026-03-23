@@ -415,6 +415,10 @@ final class _SeededTodoFollowupGenerationStore
   Future<Todo?> getTodo(String todoId) => delegate.getTodo(todoId);
 
   @override
+  Future<TodoFollowupGenerationJob?> getJob(String todoId) =>
+      delegate.getJob(todoId);
+
+  @override
   Future<void> dismissTodoFollowupSuggestions({
     required String todoId,
     required List<String> suggestionIds,
@@ -523,6 +527,11 @@ final class _BackendTodoFollowupGenerationStore
   @override
   Future<Todo?> getTodo(String todoId) {
     return backend.getTodoById(sessionKey, todoId);
+  }
+
+  @override
+  Future<TodoFollowupGenerationJob?> getJob(String todoId) {
+    return backend.getTodoFollowupGenerationJob(sessionKey, todoId);
   }
 
   @override

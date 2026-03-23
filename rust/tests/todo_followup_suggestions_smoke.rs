@@ -537,6 +537,42 @@ fn auto_create_reenqueue_resets_job_age_for_future_retry_windows() {
 }
 
 #[test]
+fn running_job_completion_does_not_overwrite_later_reenqueue() {
+    let (_temp_dir, key, conn) = setup();
+
+    db::upsert_todo(
+        &conn,
+        &key,
+        "todo_1",
+        "调研一下当前主流的 llm 模型",
+        None,
+        "open",
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("upsert todo");
+
+    db::enqueue_todo_followup_generation_job(&conn, "todo_1", "auto_create", None, 100)
+        .expect("enqueue first job");
+    db::mark_todo_followup_generation_job_running(&conn, "todo_1", 110).expect("mark running");
+
+    db::enqueue_todo_followup_generation_job(&conn, "todo_1", "auto_create", None, 200)
+        .expect("re-enqueue replacement job");
+
+    db::mark_todo_followup_generation_job_succeeded(&conn, "todo_1", 210)
+        .expect("complete stale running job");
+
+    let job = db::find_todo_followup_generation_job(&conn, "todo_1")
+        .expect("find re-enqueued job")
+        .expect("job should exist");
+    assert_eq!(job.status, "pending");
+    assert_eq!(job.created_at_ms, 200);
+    assert_eq!(job.updated_at_ms, 200);
+}
+
+#[test]
 fn historical_followup_suggestions_do_not_block_same_content_regeneration() {
     let (_temp_dir, key, conn) = setup();
 

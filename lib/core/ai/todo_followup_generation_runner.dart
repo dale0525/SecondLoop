@@ -16,6 +16,8 @@ abstract class TodoFollowupGenerationStore {
     int limit = 1,
   });
 
+  Future<TodoFollowupGenerationJob?> getJob(String todoId);
+
   Future<Todo?> getTodo(String todoId);
 
   Future<List<TodoActivity>> listTodoActivities(String todoId);
@@ -163,11 +165,11 @@ final class TodoFollowupGenerationRunner {
 
         final taskType = _resolveTaskType(job, todo);
         if (!taskType.allowsAutoFollowup) {
-          await store.markJobSkipped(
+          await _markJobSkippedIfStillRunning(
             todoId: job.todoId,
+            jobStartedAtMs: jobStartedAtMs,
             nowMs: _nowMs(),
           );
-          didUpdateJobs = true;
           processed++;
           continue;
         }
@@ -182,11 +184,11 @@ final class TodoFollowupGenerationRunner {
 
         if (job.triggerKind != 'manual_regenerate' &&
             pendingSuggestionIds.isNotEmpty) {
-          await store.markJobSucceeded(
+          await _markJobSucceededIfStillRunning(
             todoId: job.todoId,
+            jobStartedAtMs: jobStartedAtMs,
             nowMs: _nowMs(),
           );
-          didUpdateJobs = true;
           processed++;
           continue;
         }
@@ -269,28 +271,30 @@ final class TodoFollowupGenerationRunner {
           }
         }
 
-        await store.markJobSucceeded(
+        await _markJobSucceededIfStillRunning(
           todoId: job.todoId,
+          jobStartedAtMs: jobStartedAtMs,
           nowMs: _nowMs(),
         );
-        didUpdateJobs = true;
         processed++;
       } catch (error) {
         final attempts = job.attempts.toInt() + 1;
         final failedAtMs = _nowMs();
         if (job.triggerKind == 'manual_regenerate') {
           if (attempts >= settings.maxManualAttempts) {
-            await store.markJobCanceled(
+            final didFinalize = await _markJobCanceledIfStillRunning(
               todoId: job.todoId,
+              jobStartedAtMs: jobStartedAtMs,
               nowMs: failedAtMs,
             );
-            didUpdateJobs = true;
+            didUpdateJobs = didUpdateJobs || didFinalize;
             processed++;
             continue;
           }
           final nextRetryAtMs = failedAtMs + _retryDelayMsForAttempt(attempts);
-          await store.markJobFailed(
+          final didFinalize = await _markJobFailedIfStillRunning(
             todoId: job.todoId,
+            jobStartedAtMs: jobStartedAtMs,
             attempts: attempts,
             nextRetryAtMs: nextRetryAtMs,
             lastError: '$error',
@@ -300,23 +304,25 @@ final class TodoFollowupGenerationRunner {
             earliestNextRetryAtMs,
             nextRetryAtMs,
           );
-          didUpdateJobs = true;
+          didUpdateJobs = didUpdateJobs || didFinalize;
           continue;
         }
 
         if (attempts >= settings.maxAutoAttempts) {
-          await store.markJobCanceled(
+          final didFinalize = await _markJobCanceledIfStillRunning(
             todoId: job.todoId,
+            jobStartedAtMs: jobStartedAtMs,
             nowMs: failedAtMs,
           );
-          didUpdateJobs = true;
+          didUpdateJobs = didUpdateJobs || didFinalize;
           processed++;
           continue;
         }
 
         final nextRetryAtMs = failedAtMs + _retryDelayMsForAttempt(attempts);
-        await store.markJobFailed(
+        final didFinalize = await _markJobFailedIfStillRunning(
           todoId: job.todoId,
+          jobStartedAtMs: jobStartedAtMs,
           attempts: attempts,
           nextRetryAtMs: nextRetryAtMs,
           lastError: '$error',
@@ -326,7 +332,7 @@ final class TodoFollowupGenerationRunner {
           earliestNextRetryAtMs,
           nextRetryAtMs,
         );
-        didUpdateJobs = true;
+        didUpdateJobs = didUpdateJobs || didFinalize;
       }
     }
 
@@ -336,6 +342,87 @@ final class TodoFollowupGenerationRunner {
       didUpdateJobs: didUpdateJobs,
       earliestNextRetryAtMs: earliestNextRetryAtMs,
     );
+  }
+
+  Future<bool> _isStillRunningAttempt({
+    required String todoId,
+    required int jobStartedAtMs,
+  }) async {
+    final currentJob = await store.getJob(todoId);
+    if (currentJob == null) {
+      return false;
+    }
+    return currentJob.status == 'running' &&
+        currentJob.updatedAtMs.toInt() == jobStartedAtMs;
+  }
+
+  Future<bool> _markJobSucceededIfStillRunning({
+    required String todoId,
+    required int jobStartedAtMs,
+    required int nowMs,
+  }) async {
+    if (!await _isStillRunningAttempt(
+      todoId: todoId,
+      jobStartedAtMs: jobStartedAtMs,
+    )) {
+      return false;
+    }
+    await store.markJobSucceeded(todoId: todoId, nowMs: nowMs);
+    return true;
+  }
+
+  Future<bool> _markJobSkippedIfStillRunning({
+    required String todoId,
+    required int jobStartedAtMs,
+    required int nowMs,
+  }) async {
+    if (!await _isStillRunningAttempt(
+      todoId: todoId,
+      jobStartedAtMs: jobStartedAtMs,
+    )) {
+      return false;
+    }
+    await store.markJobSkipped(todoId: todoId, nowMs: nowMs);
+    return true;
+  }
+
+  Future<bool> _markJobCanceledIfStillRunning({
+    required String todoId,
+    required int jobStartedAtMs,
+    required int nowMs,
+  }) async {
+    if (!await _isStillRunningAttempt(
+      todoId: todoId,
+      jobStartedAtMs: jobStartedAtMs,
+    )) {
+      return false;
+    }
+    await store.markJobCanceled(todoId: todoId, nowMs: nowMs);
+    return true;
+  }
+
+  Future<bool> _markJobFailedIfStillRunning({
+    required String todoId,
+    required int jobStartedAtMs,
+    required int attempts,
+    required int nextRetryAtMs,
+    required String lastError,
+    required int nowMs,
+  }) async {
+    if (!await _isStillRunningAttempt(
+      todoId: todoId,
+      jobStartedAtMs: jobStartedAtMs,
+    )) {
+      return false;
+    }
+    await store.markJobFailed(
+      todoId: todoId,
+      attempts: attempts,
+      nextRetryAtMs: nextRetryAtMs,
+      lastError: lastError,
+      nowMs: nowMs,
+    );
+    return true;
   }
 
   TodoFollowupTaskType _resolveTaskType(

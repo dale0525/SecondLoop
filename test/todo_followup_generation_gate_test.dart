@@ -1256,6 +1256,9 @@ final class _FakeTodoFollowupGenerationGateBackend extends NativeAppBackend {
     List<Object> llmProfileOutcomes = const <Object>[],
   })  : _aiPromptOutcomes = List<Object>.from(aiPromptOutcomes),
         _llmProfileOutcomes = List<Object>.from(llmProfileOutcomes),
+        _jobsByTodoId = {
+          for (final job in dueJobs) job.todoId: job,
+        },
         super(appDirProvider: () async => '/tmp/secondloop-test');
 
   final List<TodoFollowupGenerationJob> dueJobs;
@@ -1265,6 +1268,9 @@ final class _FakeTodoFollowupGenerationGateBackend extends NativeAppBackend {
   final String? aiPromptCloudResponse;
   final List<Object> _aiPromptOutcomes;
   final List<Object> _llmProfileOutcomes;
+  final Map<String, TodoFollowupGenerationJob> _jobsByTodoId;
+  final Map<String, List<TodoFollowupSuggestion>> _suggestionsByTodoId =
+      <String, List<TodoFollowupSuggestion>>{};
   final List<String> skippedTodoIds = <String>[];
   final List<String> canceledTodoIds = <String>[];
   final List<String> failedTodoIds = <String>[];
@@ -1275,6 +1281,42 @@ final class _FakeTodoFollowupGenerationGateBackend extends NativeAppBackend {
   int listDueJobsCallCount = 0;
   int localPromptCalls = 0;
   int cloudPromptCalls = 0;
+
+  TodoFollowupGenerationJob? _jobFor(String todoId) => _jobsByTodoId[todoId];
+
+  void _updateJob(
+    String todoId, {
+    String? status,
+    int? attempts,
+    int? nextRetryAtMs,
+    String? lastError,
+    required int nowMs,
+  }) {
+    final current = _jobsByTodoId[todoId];
+    if (current == null) return;
+    _jobsByTodoId[todoId] = TodoFollowupGenerationJob(
+      todoId: current.todoId,
+      triggerKind: current.triggerKind,
+      status: status ?? current.status,
+      attempts: attempts ?? current.attempts,
+      nextRetryAtMs: nextRetryAtMs,
+      lastError: lastError,
+      includeManualFollowups: current.includeManualFollowups,
+      taskTypeHint: current.taskTypeHint,
+      createdAtMs: current.createdAtMs,
+      updatedAtMs: nowMs,
+    );
+  }
+
+  bool _isDue(TodoFollowupGenerationJob job, int nowMs) {
+    if (job.status != 'pending' &&
+        job.status != 'failed' &&
+        job.status != 'running') {
+      return false;
+    }
+    final nextRetryAtMs = job.nextRetryAtMs?.toInt();
+    return nextRetryAtMs == null || nextRetryAtMs <= nowMs;
+  }
 
   @override
   Future<List<LlmProfile>> listLlmProfiles(Uint8List key) async {
@@ -1293,6 +1335,13 @@ final class _FakeTodoFollowupGenerationGateBackend extends NativeAppBackend {
       todosById[todoId];
 
   @override
+  Future<TodoFollowupGenerationJob?> getTodoFollowupGenerationJob(
+    Uint8List key,
+    String todoId,
+  ) async =>
+      _jobFor(todoId);
+
+  @override
   Future<List<TodoActivity>> listTodoActivities(
     Uint8List key,
     String todoId,
@@ -1304,7 +1353,24 @@ final class _FakeTodoFollowupGenerationGateBackend extends NativeAppBackend {
     Uint8List key,
     String todoId,
   ) async =>
-      const <TodoFollowupSuggestion>[];
+      List<TodoFollowupSuggestion>.from(
+        _suggestionsByTodoId[todoId] ?? const <TodoFollowupSuggestion>[],
+      );
+
+  @override
+  Future<void> dismissTodoFollowupSuggestions(
+    Uint8List key, {
+    required String todoId,
+    required List<String> suggestionIds,
+  }) async {
+    final suggestions = _suggestionsByTodoId[todoId];
+    if (suggestions == null) {
+      return;
+    }
+    _suggestionsByTodoId[todoId] = suggestions
+        .where((item) => !suggestionIds.contains(item.id))
+        .toList(growable: false);
+  }
 
   @override
   Future<List<TodoFollowupSuggestion>> upsertGeneratedTodoFollowupSuggestions(
@@ -1315,10 +1381,13 @@ final class _FakeTodoFollowupGenerationGateBackend extends NativeAppBackend {
     String? generationKey,
   }) async {
     generatedSuggestionTodoIds.add(todoId);
-    return suggestions
+    final next = List<TodoFollowupSuggestion>.from(
+      _suggestionsByTodoId[todoId] ?? const <TodoFollowupSuggestion>[],
+    );
+    final created = suggestions
         .map(
           (suggestion) => TodoFollowupSuggestion(
-            id: 'generated_${generatedSuggestionTodoIds.length}',
+            id: 'generated_${next.length + generatedSuggestionTodoIds.length}',
             todoId: todoId,
             content: suggestion.content,
             state: 'pending',
@@ -1333,6 +1402,9 @@ final class _FakeTodoFollowupGenerationGateBackend extends NativeAppBackend {
           ),
         )
         .toList(growable: false);
+    next.addAll(created);
+    _suggestionsByTodoId[todoId] = next;
+    return created;
   }
 
   @override
@@ -1395,7 +1467,10 @@ final class _FakeTodoFollowupGenerationGateBackend extends NativeAppBackend {
   }) async {
     listDueJobsCallCount += 1;
     listDueJobsLimits.add(limit);
-    return dueJobs.take(limit).toList(growable: false);
+    return _jobsByTodoId.values
+        .where((job) => _isDue(job, nowMs))
+        .take(limit)
+        .toList(growable: false);
   }
 
   @override
@@ -1405,6 +1480,7 @@ final class _FakeTodoFollowupGenerationGateBackend extends NativeAppBackend {
     required int nowMs,
   }) async {
     canceledTodoIds.add(todoId);
+    _updateJob(todoId, status: 'canceled', nowMs: nowMs);
   }
 
   @override
@@ -1418,6 +1494,14 @@ final class _FakeTodoFollowupGenerationGateBackend extends NativeAppBackend {
   }) async {
     failedTodoIds.add(todoId);
     failedLastErrors.add(lastError);
+    _updateJob(
+      todoId,
+      status: 'failed',
+      attempts: attempts,
+      nextRetryAtMs: nextRetryAtMs,
+      lastError: lastError,
+      nowMs: nowMs,
+    );
   }
 
   @override
@@ -1425,7 +1509,9 @@ final class _FakeTodoFollowupGenerationGateBackend extends NativeAppBackend {
     Uint8List key, {
     required String todoId,
     required int nowMs,
-  }) async {}
+  }) async {
+    _updateJob(todoId, status: 'running', nowMs: nowMs);
+  }
 
   @override
   Future<void> markTodoFollowupGenerationJobSkipped(
@@ -1434,6 +1520,7 @@ final class _FakeTodoFollowupGenerationGateBackend extends NativeAppBackend {
     required int nowMs,
   }) async {
     skippedTodoIds.add(todoId);
+    _updateJob(todoId, status: 'skipped', nowMs: nowMs);
   }
 
   @override
@@ -1443,6 +1530,7 @@ final class _FakeTodoFollowupGenerationGateBackend extends NativeAppBackend {
     required int nowMs,
   }) async {
     succeededTodoIds.add(todoId);
+    _updateJob(todoId, status: 'succeeded', nowMs: nowMs);
   }
 }
 
@@ -1603,6 +1691,9 @@ final class _FakeTodoFollowupGenerationStore
 
   @override
   Future<Todo?> getTodo(String todoId) async => null;
+
+  @override
+  Future<TodoFollowupGenerationJob?> getJob(String todoId) async => null;
 
   @override
   Future<void> dismissTodoFollowupSuggestions({

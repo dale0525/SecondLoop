@@ -6,6 +6,7 @@ final class _FakeStore implements TodoFollowupGenerationStore {
     required Map<String, Todo> todos,
     Map<String, List<TodoActivity>>? activitiesByTodoId,
     Map<String, List<TodoFollowupSuggestion>>? suggestionsByTodoId,
+    this.reenqueueOnMarkRunning = const <String, TodoFollowupGenerationJob>{},
   })  : _jobs = List<TodoFollowupGenerationJob>.from(jobs),
         _todos = Map<String, Todo>.from(todos),
         _activitiesByTodoId = <String, List<TodoActivity>>{
@@ -25,6 +26,7 @@ final class _FakeStore implements TodoFollowupGenerationStore {
   final Map<String, Todo> _todos;
   final Map<String, List<TodoActivity>> _activitiesByTodoId;
   final Map<String, List<TodoFollowupSuggestion>> _suggestionsByTodoId;
+  final Map<String, TodoFollowupGenerationJob> reenqueueOnMarkRunning;
 
   String? lastSucceededTodoId;
   String? lastSkippedTodoId;
@@ -44,8 +46,42 @@ final class _FakeStore implements TodoFollowupGenerationStore {
         .toList(growable: false);
   }
 
+  TodoFollowupGenerationJob? jobFor(String todoId) {
+    final index = _jobs.indexWhere((job) => job.todoId == todoId);
+    if (index == -1) {
+      return null;
+    }
+    return _jobs[index];
+  }
+
+  TodoFollowupGenerationJob _copyJob(
+    TodoFollowupGenerationJob job, {
+    String? status,
+    int? attempts,
+    int? nextRetryAtMs,
+    String? lastError,
+    int? updatedAtMs,
+  }) {
+    return TodoFollowupGenerationJob(
+      todoId: job.todoId,
+      triggerKind: job.triggerKind,
+      status: status ?? job.status,
+      attempts: attempts ?? job.attempts,
+      nextRetryAtMs: nextRetryAtMs ?? job.nextRetryAtMs,
+      lastError: lastError ?? job.lastError,
+      includeManualFollowups: job.includeManualFollowups,
+      taskTypeHint: job.taskTypeHint,
+      createdAtMs: job.createdAtMs,
+      updatedAtMs: updatedAtMs ?? job.updatedAtMs,
+    );
+  }
+
   @override
   Future<Todo?> getTodo(String todoId) async => _todos[todoId];
+
+  @override
+  Future<TodoFollowupGenerationJob?> getJob(String todoId) async =>
+      jobFor(todoId);
 
   @override
   Future<List<TodoActivity>> listTodoActivities(String todoId) async =>
@@ -114,7 +150,17 @@ final class _FakeStore implements TodoFollowupGenerationStore {
   Future<void> markJobRunning({
     required String todoId,
     required int nowMs,
-  }) async {}
+  }) async {
+    final index = _jobs.indexWhere((job) => job.todoId == todoId);
+    if (index == -1) return;
+    _jobs[index] =
+        _copyJob(_jobs[index], status: 'running', updatedAtMs: nowMs);
+
+    final replacement = reenqueueOnMarkRunning[todoId];
+    if (replacement != null) {
+      _jobs[index] = replacement;
+    }
+  }
 
   @override
   Future<void> markJobSkipped({
@@ -122,6 +168,11 @@ final class _FakeStore implements TodoFollowupGenerationStore {
     required int nowMs,
   }) async {
     lastSkippedTodoId = todoId;
+    final index = _jobs.indexWhere((job) => job.todoId == todoId);
+    if (index != -1) {
+      _jobs[index] =
+          _copyJob(_jobs[index], status: 'skipped', updatedAtMs: nowMs);
+    }
   }
 
   @override
@@ -130,6 +181,11 @@ final class _FakeStore implements TodoFollowupGenerationStore {
     required int nowMs,
   }) async {
     lastSucceededTodoId = todoId;
+    final index = _jobs.indexWhere((job) => job.todoId == todoId);
+    if (index != -1) {
+      _jobs[index] =
+          _copyJob(_jobs[index], status: 'succeeded', updatedAtMs: nowMs);
+    }
   }
 
   @override
