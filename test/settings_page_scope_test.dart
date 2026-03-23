@@ -132,6 +132,30 @@ Future<void> _expectAiMediaSectionAvailable(WidgetTester tester) async {
 }
 
 void main() {
+  testWidgets('pushPageWithCapturedInheritedScopes no-ops without context',
+      (tester) async {
+    final navigatorKey = GlobalKey<NavigatorState>();
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          navigatorKey: navigatorKey,
+          home: const Scaffold(body: Text('Home')),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await pushPageWithCapturedInheritedScopes<void>(
+      navigatorKey.currentState!,
+      null,
+      const SettingsPage(),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byType(SettingsPage), findsNothing);
+    expect(find.text('Home'), findsOneWidget);
+  });
+
   testWidgets('SettingsPage preserves scopes when opened from root navigator',
       (tester) async {
     final backend = TestAppBackend();

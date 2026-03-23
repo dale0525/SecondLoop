@@ -23,6 +23,17 @@ Future<T?> pushPageWithInheritedScopes<T>(
   return navigator.push<T>(pageRouteWithInheritedScopes<T>(context, child));
 }
 
+Future<T?> pushPageWithCapturedInheritedScopes<T>(
+  NavigatorState navigator,
+  BuildContext? capturedContext,
+  Widget child,
+) {
+  if (capturedContext == null) {
+    return Future<T?>.value(null);
+  }
+  return pushPageWithInheritedScopes<T>(navigator, capturedContext, child);
+}
+
 Future<T?> pushReplacementPageWithInheritedScopes<T, TO>(
   NavigatorState navigator,
   BuildContext context,
