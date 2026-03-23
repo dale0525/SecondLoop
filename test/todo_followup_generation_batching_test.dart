@@ -238,7 +238,7 @@ void main() {
     expect(store.requestedLimits, orderedEquals(<int>[2, 4, 8]));
   });
 
-  test('auto-job loader finds auto jobs beyond previous overfetch cap',
+  test('auto-job loader caps refetch expansion for deep manual backlog',
       () async {
     final store = _PreviewStore(
       jobs: <TodoFollowupGenerationJob>[
@@ -276,11 +276,9 @@ void main() {
       limit: 1,
     );
 
+    expect(jobs, isEmpty);
     expect(
-      jobs.map((job) => job.todoId).toList(growable: false),
-      const <String>['todo_auto_deep'],
-    );
-    expect(store.requestedLimits.last, greaterThanOrEqualTo(1024));
+        store.requestedLimits, orderedEquals(<int>[2, 4, 8, 16, 32, 64, 128]));
   });
 }
 

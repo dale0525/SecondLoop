@@ -3,6 +3,7 @@ import 'ai_routing.dart';
 import 'todo_followup_generation_runner.dart';
 
 const _kPreviewRefetchLimitMultiplier = 128;
+const _kAutoJobRefetchLimitMultiplier = 128;
 const _kPendingSetupRetryWindow = Duration(minutes: 15);
 const _kPendingSetupMediumRetryDelay = Duration(seconds: 30);
 const _kPendingSetupLongRetryDelay = Duration(minutes: 1);
@@ -160,6 +161,7 @@ Future<List<TodoFollowupGenerationJob>> loadDueAutoFollowupGenerationJobs(
 }) async {
   final requestedLimit = limit <= 0 ? 1 : limit;
   var overfetchLimit = requestedLimit <= 1 ? 2 : requestedLimit;
+  final maxRequestedLimit = requestedLimit * _kAutoJobRefetchLimitMultiplier;
 
   while (true) {
     final candidateJobs = await store.listDueJobs(
@@ -176,7 +178,13 @@ Future<List<TodoFollowupGenerationJob>> loadDueAutoFollowupGenerationJobs(
     if (candidateJobs.length < overfetchLimit) {
       return autoJobs;
     }
+    if (overfetchLimit >= maxRequestedLimit) {
+      return autoJobs;
+    }
     overfetchLimit *= 2;
+    if (overfetchLimit > maxRequestedLimit) {
+      overfetchLimit = maxRequestedLimit;
+    }
   }
 }
 
