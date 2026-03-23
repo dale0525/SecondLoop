@@ -303,9 +303,8 @@ class _SecondLoopAppState extends State<SecondLoopApp> {
                                       if (capturedContext == null ||
                                           !capturedContext.mounted) {
                                         _sessionScopedContext = null;
-                                        return;
                                       }
-                                      await pushPageWithCapturedInheritedScopes(
+                                      await pushPageWithCapturedInheritedScopesOrFallback(
                                         navigator,
                                         capturedContext,
                                         const SettingsPage(),

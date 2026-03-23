@@ -350,4 +350,34 @@ void main() {
     await openAiAdvancedSettings(tester);
     await _expectAiMediaSectionAvailable(tester);
   });
+
+  testWidgets(
+      'pushPageWithCapturedInheritedScopesOrFallback pushes page without captured context',
+      (tester) async {
+    final navigatorKey = GlobalKey<NavigatorState>();
+    const fallbackText = 'Fallback page';
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          navigatorKey: navigatorKey,
+          home: const Scaffold(body: Text('Home')),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    pushPageWithCapturedInheritedScopesOrFallback<void>(
+      navigatorKey.currentState!,
+      null,
+      const Scaffold(
+        body: Center(
+          child: Text(fallbackText),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text(fallbackText), findsOneWidget);
+  });
 }
