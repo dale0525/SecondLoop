@@ -433,6 +433,66 @@ void main() {
     expect(backend.lastSharedAssessmentsPayload!['scope'], 'cloud-scope');
   });
 
+  test(
+      'store keeps shared assessment writes partial when active todos exceed candidate limit',
+      () async {
+    SharedPreferences.setMockInitialValues({});
+    final backend = _RecordingTaskPriorityBackend(echoCandidates: true);
+    final service = BackendTaskPriorityAiService.forTesting(
+      backend: backend,
+      sessionKey: Uint8List(32),
+      route: AskAiRouteKind.cloudGateway,
+      gatewayBaseUrl: 'https://gateway.example',
+      idToken: 'token',
+      modelName: 'gpt-cloud-test',
+      localeTag: 'en-US',
+      cacheScopeKeyOverride: 'cloud-scope',
+    );
+    final store = TaskPriorityStore.fromLoaders(
+      nowLocal: () => DateTime(2026, 3, 13, 10, 0),
+      loadTodos: () async => <Todo>[
+        for (var i = 0; i < 33; i += 1)
+          todo(
+            id: 'todo-$i',
+            title: 'Task $i',
+            updatedAtMs: 1000 - i,
+          ),
+      ],
+      resolveAiService: () async => service,
+      readSharedAiAssessments: ({
+        required aiService,
+        required cacheScopeKey,
+        required nowLocal,
+      }) async =>
+          const <String, TaskPriorityAiCachedAssessment>{},
+      writeSharedAiAssessments: ({
+        required aiService,
+        required cacheScopeKey,
+        required entries,
+        required activeTodoIds,
+      }) async {
+        await (aiService as BackendTaskPriorityAiService)
+            .writeSharedAssessments(
+          entries: entries,
+          activeTodoIds: activeTodoIds,
+        );
+      },
+    );
+
+    await store.refresh();
+
+    expect(backend.lastSharedAssessmentsPayload, isNotNull);
+    expect(backend.cloudTaskPriorityCalls, 1);
+    expect(
+      backend.lastSharedAssessmentsPayload!['replace_missing_entries'],
+      isFalse,
+    );
+    expect(
+      (backend.lastSharedAssessmentsPayload!['entries'] as List).length,
+      32,
+    );
+  });
+
   test('service includes current app locale in prompt', () async {
     final backend = _RecordingTaskPriorityBackend();
     final service = BackendTaskPriorityAiService.forTesting(
@@ -695,6 +755,10 @@ final class _RecordingTaskPriorityBackend extends TestAppBackend {
   static const String _response =
       '{"entries":[{"todo_id":"t1","priority_band":"focus","semantic_adjustment":14,"reason":"今天优先处理。","suggested_action":"do_now","confidence":"high"}]}';
 
+  _RecordingTaskPriorityBackend({this.echoCandidates = false});
+
+  final bool echoCandidates;
+
   final List<String> prompts = <String>[];
   String sharedAssessmentsResponse =
       '{"ok":true,"scope":"cloud-scope","entries":[]}';
@@ -722,6 +786,30 @@ final class _RecordingTaskPriorityBackend extends TestAppBackend {
   }) async {
     prompts.add(prompt);
     cloudTaskPriorityCalls += 1;
+    if (echoCandidates) {
+      const marker = 'Payload:\n';
+      final markerIndex = prompt.lastIndexOf(marker);
+      if (markerIndex >= 0) {
+        final payloadJson = prompt.substring(markerIndex + marker.length);
+        final payload = jsonDecode(payloadJson) as Map;
+        final candidates =
+            (payload['candidates'] as List?) ?? const <Object?>[];
+        return jsonEncode(<String, Object?>{
+          'entries': candidates.map((candidate) {
+            final candidateJson = (candidate as Map)
+                .map((key, value) => MapEntry(key.toString(), value));
+            return <String, Object?>{
+              'todo_id': candidateJson['todo_id'],
+              'semantic_adjustment': 14,
+              'reason': 'Echoed candidate result.',
+              'confidence': 'high',
+              'is_important': false,
+              'is_urgent': false,
+            };
+          }).toList(growable: false),
+        });
+      }
+    }
     return _response;
   }
 
