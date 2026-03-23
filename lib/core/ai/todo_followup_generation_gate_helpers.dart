@@ -160,7 +160,6 @@ Future<List<TodoFollowupGenerationJob>> loadDueAutoFollowupGenerationJobs(
 }) async {
   final requestedLimit = limit <= 0 ? 1 : limit;
   var overfetchLimit = requestedLimit <= 1 ? 2 : requestedLimit;
-  final maxRequestedLimit = requestedLimit * _kPreviewRefetchLimitMultiplier;
 
   while (true) {
     final candidateJobs = await store.listDueJobs(
@@ -174,14 +173,10 @@ Future<List<TodoFollowupGenerationJob>> loadDueAutoFollowupGenerationJobs(
     if (autoJobs.length >= requestedLimit) {
       return autoJobs;
     }
-    if (candidateJobs.length < overfetchLimit ||
-        overfetchLimit >= maxRequestedLimit) {
+    if (candidateJobs.length < overfetchLimit) {
       return autoJobs;
     }
     overfetchLimit *= 2;
-    if (overfetchLimit > maxRequestedLimit) {
-      overfetchLimit = maxRequestedLimit;
-    }
   }
 }
 

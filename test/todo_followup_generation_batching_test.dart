@@ -237,6 +237,51 @@ void main() {
         const <String>['todo_auto_deep']);
     expect(store.requestedLimits, orderedEquals(<int>[2, 4, 8]));
   });
+
+  test('auto-job loader finds auto jobs beyond previous overfetch cap',
+      () async {
+    final store = _PreviewStore(
+      jobs: <TodoFollowupGenerationJob>[
+        for (var index = 0; index < 600; index += 1)
+          TodoFollowupGenerationJob(
+            todoId: 'todo_manual_$index',
+            triggerKind: 'manual_regenerate',
+            status: 'pending',
+            attempts: 0,
+            nextRetryAtMs: null,
+            lastError: null,
+            includeManualFollowups: true,
+            taskTypeHint: 'research',
+            createdAtMs: index,
+            updatedAtMs: index,
+          ),
+        const TodoFollowupGenerationJob(
+          todoId: 'todo_auto_deep',
+          triggerKind: 'auto_create',
+          status: 'pending',
+          attempts: 0,
+          nextRetryAtMs: null,
+          lastError: null,
+          includeManualFollowups: false,
+          taskTypeHint: 'research',
+          createdAtMs: 601,
+          updatedAtMs: 601,
+        ),
+      ],
+    );
+
+    final jobs = await loadDueAutoFollowupGenerationJobs(
+      store,
+      nowMs: 0,
+      limit: 1,
+    );
+
+    expect(
+      jobs.map((job) => job.todoId).toList(growable: false),
+      const <String>['todo_auto_deep'],
+    );
+    expect(store.requestedLimits.last, greaterThanOrEqualTo(1024));
+  });
 }
 
 final class _PreviewStore implements TodoFollowupGenerationStore {
