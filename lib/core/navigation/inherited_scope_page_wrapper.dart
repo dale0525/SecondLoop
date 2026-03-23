@@ -39,14 +39,11 @@ Future<T?> pushPageWithCapturedInheritedScopesOrFallback<T>(
   BuildContext? capturedContext,
   Widget child,
 ) {
-  if (capturedContext == null || !capturedContext.mounted) {
-    return navigator.push<T>(
-      MaterialPageRoute<T>(
-        builder: (_) => child,
-      ),
-    );
-  }
-  return pushPageWithInheritedScopes<T>(navigator, capturedContext, child);
+  return pushPageWithCapturedInheritedScopes<T>(
+    navigator,
+    capturedContext,
+    child,
+  );
 }
 
 Future<T?> pushReplacementPageWithInheritedScopes<T, TO>(

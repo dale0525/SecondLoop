@@ -304,7 +304,7 @@ class _SecondLoopAppState extends State<SecondLoopApp> {
                                           !capturedContext.mounted) {
                                         _sessionScopedContext = null;
                                       }
-                                      await pushPageWithCapturedInheritedScopesOrFallback(
+                                      await pushPageWithCapturedInheritedScopes(
                                         navigator,
                                         capturedContext,
                                         const SettingsPage(),

@@ -352,10 +352,9 @@ void main() {
   });
 
   testWidgets(
-      'pushPageWithCapturedInheritedScopesOrFallback pushes page without captured context',
+      'pushPageWithCapturedInheritedScopesOrFallback no-ops without captured context',
       (tester) async {
     final navigatorKey = GlobalKey<NavigatorState>();
-    const fallbackText = 'Fallback page';
 
     await tester.pumpWidget(
       wrapWithI18n(
@@ -370,14 +369,11 @@ void main() {
     pushPageWithCapturedInheritedScopesOrFallback<void>(
       navigatorKey.currentState!,
       null,
-      const Scaffold(
-        body: Center(
-          child: Text(fallbackText),
-        ),
-      ),
+      const SettingsPage(),
     );
     await tester.pumpAndSettle();
 
-    expect(find.text(fallbackText), findsOneWidget);
+    expect(find.byType(SettingsPage), findsNothing);
+    expect(find.text('Home'), findsOneWidget);
   });
 }
