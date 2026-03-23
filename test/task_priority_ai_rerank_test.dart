@@ -392,6 +392,36 @@ void main() {
     expect(backend.lastSharedAssessmentsPayload!['scope'], 'cloud-scope');
   });
 
+  test('empty shared assessment snapshot still declares full replacement',
+      () async {
+    final backend = _RecordingTaskPriorityBackend();
+    final service = BackendTaskPriorityAiService.forTesting(
+      backend: backend,
+      sessionKey: Uint8List(32),
+      route: AskAiRouteKind.cloudGateway,
+      gatewayBaseUrl: 'https://gateway.example',
+      idToken: 'token',
+      modelName: 'gpt-cloud-test',
+      localeTag: 'en-US',
+      cacheScopeKeyOverride: 'cloud-scope',
+    );
+
+    await service.writeSharedAssessments(
+      entries: const <String, TaskPriorityAiCachedAssessment>{},
+      activeTodoIds: const <String>[],
+    );
+
+    expect(backend.lastSharedAssessmentsPayload, isNotNull);
+    expect(
+      backend.lastSharedAssessmentsPayload!['replace_missing_entries'],
+      isTrue,
+    );
+    expect(
+      backend.lastSharedAssessmentsPayload!['entries'],
+      isEmpty,
+    );
+  });
+
   test(
       'shared assessment writes avoid full replacement for partial active snapshots',
       () async {

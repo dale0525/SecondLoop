@@ -185,4 +185,78 @@ void main() {
 
     await _expectAiMediaSectionAvailable(tester);
   });
+
+  testWidgets('deferred root callback can reuse captured scoped context',
+      (tester) async {
+    final backend = TestAppBackend();
+    final key = Uint8List.fromList(List<int>.filled(32, 7));
+    BuildContext? capturedScopedContext;
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: Builder(
+            builder: (rootContext) => Scaffold(
+              body: Center(
+                child: ElevatedButton(
+                  key: const ValueKey('open_deferred_shell'),
+                  onPressed: () {
+                    Navigator.of(rootContext).push(
+                      MaterialPageRoute(
+                        builder: (_) => AppBackendScope(
+                          backend: backend,
+                          child: SessionScope(
+                            sessionKey: key,
+                            lock: () {},
+                            child: Builder(
+                              builder: (scopedContext) {
+                                capturedScopedContext = scopedContext;
+                                return Scaffold(
+                                  body: Center(
+                                    child: ElevatedButton(
+                                      key: const ValueKey(
+                                          'open_settings_deferred'),
+                                      onPressed: () {
+                                        pushPageWithInheritedScopes(
+                                          Navigator.of(rootContext),
+                                          capturedScopedContext ?? rootContext,
+                                          const SettingsPage(),
+                                        );
+                                      },
+                                      child: const Text('Open settings later'),
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                  child: const Text('Open deferred shell'),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('open_deferred_shell')));
+    await tester.pump();
+    await _pumpUntilFound(
+      tester,
+      find.byKey(const ValueKey('open_settings_deferred')),
+    );
+
+    await tester.tap(find.byKey(const ValueKey('open_settings_deferred')));
+    await tester.pump();
+    await _pumpUntilFound(tester, find.byType(SettingsPage));
+
+    await _openAiSettingsFromSettings(tester);
+    await openAiAdvancedSettings(tester);
+    await _expectAiMediaSectionAvailable(tester);
+  });
 }

@@ -332,8 +332,7 @@ class BackendTaskPriorityAiService implements TaskPriorityAiService {
         .map((value) => value.trim())
         .where((value) => value.isNotEmpty)
         .toSet();
-    final isFullSnapshot =
-        activeIds.isNotEmpty && entries.keys.toSet().containsAll(activeIds);
+    final isFullSnapshot = entries.keys.toSet().containsAll(activeIds);
     final payloadEntries = <Object?>[];
     var updatedAtMs = 0;
     for (final entry in entries.entries) {

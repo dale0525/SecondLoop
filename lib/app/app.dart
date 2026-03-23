@@ -65,6 +65,7 @@ class SecondLoopApp extends StatefulWidget {
 
 class _SecondLoopAppState extends State<SecondLoopApp> {
   final _navigatorKey = GlobalKey<NavigatorState>();
+  BuildContext? _sessionScopedContext;
   late final QuickCaptureController _quickCaptureController =
       widget._quickCaptureController ?? QuickCaptureController();
   late final CloudAuthControllerImpl _cloudAuthController =
@@ -299,41 +300,48 @@ class _SecondLoopAppState extends State<SecondLoopApp> {
                                       if (navigator == null) return;
                                       await pushPageWithInheritedScopes(
                                         navigator,
-                                        context,
+                                        _sessionScopedContext ?? context,
                                         const SettingsPage(),
                                       );
                                     },
                                     child: DesktopQuickCaptureService(
                                       child: ShareIntentListener(
                                         child: LockGate(
-                                          child: SyncEngineGate(
-                                            child: DetachedAskRecoveryGate(
-                                              child:
-                                                  ReviewReminderNotificationsGate(
-                                                navigatorKey: _navigatorKey,
-                                                child: MediaEnrichmentGate(
+                                          child: Builder(
+                                            builder: (sessionScopedContext) {
+                                              _sessionScopedContext =
+                                                  sessionScopedContext;
+                                              return SyncEngineGate(
+                                                child: DetachedAskRecoveryGate(
                                                   child:
-                                                      SemanticParseAutoActionsGate(
-                                                    child: KnowledgeIndexGate(
+                                                      ReviewReminderNotificationsGate(
+                                                    navigatorKey: _navigatorKey,
+                                                    child: MediaEnrichmentGate(
                                                       child:
-                                                          MessageEmbeddingsIndexGate(
+                                                          SemanticParseAutoActionsGate(
                                                         child:
-                                                            EmbeddingsIndexGate(
+                                                            KnowledgeIndexGate(
                                                           child:
-                                                              CloudSyncSwitchPromptGate(
-                                                            navigatorKey:
-                                                                _navigatorKey,
+                                                              MessageEmbeddingsIndexGate(
                                                             child:
-                                                                ShareIngestGate(
+                                                                EmbeddingsIndexGate(
                                                               child:
-                                                                  QuickCaptureOverlay(
+                                                                  CloudSyncSwitchPromptGate(
                                                                 navigatorKey:
                                                                     _navigatorKey,
                                                                 child:
-                                                                    FirstLaunchWelcomeGate(
-                                                                  child: child ??
-                                                                      const SizedBox
-                                                                          .shrink(),
+                                                                    ShareIngestGate(
+                                                                  child:
+                                                                      QuickCaptureOverlay(
+                                                                    navigatorKey:
+                                                                        _navigatorKey,
+                                                                    child:
+                                                                        FirstLaunchWelcomeGate(
+                                                                      child: child ??
+                                                                          const SizedBox
+                                                                              .shrink(),
+                                                                    ),
+                                                                  ),
                                                                 ),
                                                               ),
                                                             ),
@@ -343,8 +351,8 @@ class _SecondLoopAppState extends State<SecondLoopApp> {
                                                     ),
                                                   ),
                                                 ),
-                                              ),
-                                            ),
+                                              );
+                                            },
                                           ),
                                         ),
                                       ),
