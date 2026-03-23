@@ -2,17 +2,12 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{anyhow, Context, Result};
 
-use crate::{auth, db};
+use crate::{api::core::is_todo_access_error, auth, db};
 
 fn key_from_bytes(bytes: Vec<u8>) -> Result<[u8; 32]> {
     bytes
         .try_into()
         .map_err(|_| anyhow!("expected 32-byte key"))
-}
-
-fn is_todo_access_error(err: &anyhow::Error) -> bool {
-    err.chain()
-        .any(|cause| cause.to_string().contains("decrypt failed"))
 }
 
 fn list_visible_due_auto_todo_followup_generation_jobs(

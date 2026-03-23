@@ -69,7 +69,7 @@ fn sync_key_from_bytes(bytes: Vec<u8>) -> Result<[u8; 32]> {
 
 const DUE_JOB_REFETCH_LIMIT_MULTIPLIER: i64 = 128;
 
-fn is_todo_access_error(err: &anyhow::Error) -> bool {
+pub(crate) fn is_todo_access_error(err: &anyhow::Error) -> bool {
     err.chain()
         .any(|cause| cause.to_string().contains("decrypt failed"))
 }
