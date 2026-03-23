@@ -65,7 +65,7 @@ class SecondLoopApp extends StatefulWidget {
 
 class _SecondLoopAppState extends State<SecondLoopApp> {
   final _navigatorKey = GlobalKey<NavigatorState>();
-  BuildContext? _sessionScopedContext;
+  InheritedScopeCapture? _sessionScopedCapture;
   late final QuickCaptureController _quickCaptureController =
       widget._quickCaptureController ?? QuickCaptureController();
   late final CloudAuthControllerImpl _cloudAuthController =
@@ -298,27 +298,31 @@ class _SecondLoopAppState extends State<SecondLoopApp> {
                                       final navigator =
                                           _navigatorKey.currentState;
                                       if (navigator == null) return;
-                                      final capturedContext =
-                                          _sessionScopedContext;
-                                      if (capturedContext == null ||
-                                          !capturedContext.mounted) {
-                                        _sessionScopedContext = null;
+                                      var capturedScopes =
+                                          _sessionScopedCapture;
+                                      if (capturedScopes == null) {
+                                        await WidgetsBinding
+                                            .instance.endOfFrame;
+                                        capturedScopes = _sessionScopedCapture;
                                       }
-                                      await pushPageWithCapturedInheritedScopes(
+                                      await pushPageWithCapturedInheritedScopesOrFallback(
                                         navigator,
-                                        capturedContext,
+                                        null,
                                         const SettingsPage(),
+                                        capturedScopes: capturedScopes,
                                       );
                                     },
                                     child: DesktopQuickCaptureService(
                                       child: ShareIntentListener(
                                         child: LockGate(
-                                          child: Builder(
-                                            builder: (sessionScopedContext) {
-                                              _sessionScopedContext =
-                                                  sessionScopedContext;
-                                              return SyncEngineGate(
-                                                child: DetachedAskRecoveryGate(
+                                          child: SyncEngineGate(
+                                            child: Builder(
+                                              builder: (sessionScopedContext) {
+                                                _sessionScopedCapture =
+                                                    captureInheritedScopes(
+                                                  sessionScopedContext,
+                                                );
+                                                return DetachedAskRecoveryGate(
                                                   child:
                                                       ReviewReminderNotificationsGate(
                                                     navigatorKey: _navigatorKey,
@@ -356,9 +360,9 @@ class _SecondLoopAppState extends State<SecondLoopApp> {
                                                       ),
                                                     ),
                                                   ),
-                                                ),
-                                              );
-                                            },
+                                                );
+                                              },
+                                            ),
                                           ),
                                         ),
                                       ),

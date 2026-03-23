@@ -5,12 +5,16 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:secondloop/core/backend/app_backend.dart';
 import 'package:secondloop/core/navigation/inherited_scope_page_wrapper.dart';
 import 'package:secondloop/core/session/session_scope.dart';
+import 'package:secondloop/core/sync/sync_engine.dart';
+import 'package:secondloop/core/sync/sync_engine_gate.dart';
 import 'package:secondloop/features/settings/ai_ask_ai_settings_page.dart';
 import 'package:secondloop/features/settings/ai_settings_page.dart';
 import 'package:secondloop/features/settings/media_annotation_settings_page.dart';
 import 'package:secondloop/features/settings/settings_page.dart';
+import 'package:secondloop/features/settings/sync_settings_page.dart';
 
 import 'ai_settings_test_helpers.dart';
+import 'noop_sync_runner.dart';
 import 'test_backend.dart';
 import 'test_i18n.dart';
 
@@ -352,7 +356,7 @@ void main() {
   });
 
   testWidgets(
-      'pushPageWithCapturedInheritedScopesOrFallback no-ops without captured context',
+      'pushPageWithCapturedInheritedScopesOrFallback falls back to root push without captured context',
       (tester) async {
     final navigatorKey = GlobalKey<NavigatorState>();
 
@@ -369,11 +373,105 @@ void main() {
     pushPageWithCapturedInheritedScopesOrFallback<void>(
       navigatorKey.currentState!,
       null,
-      const SettingsPage(),
+      const Scaffold(body: Text('Fallback page')),
     );
     await tester.pumpAndSettle();
 
-    expect(find.byType(SettingsPage), findsNothing);
-    expect(find.text('Home'), findsOneWidget);
+    expect(find.text('Fallback page'), findsOneWidget);
+    expect(find.text('Home'), findsNothing);
+  });
+
+  testWidgets(
+      'captured inherited scope snapshot preserves sync engine after source shell unmounts',
+      (tester) async {
+    final backend = TestAppBackend();
+    final key = Uint8List.fromList(List<int>.filled(32, 9));
+    final engine = SyncEngine(
+      syncRunner: NoopSyncRunner(),
+      loadConfig: () async => null,
+      pullOnStart: false,
+    );
+    InheritedScopeCapture? capturedScopes;
+    final navigatorKey = GlobalKey<NavigatorState>();
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          navigatorKey: navigatorKey,
+          home: Builder(
+            builder: (rootContext) => Scaffold(
+              body: Center(
+                child: ElevatedButton(
+                  key: const ValueKey('open_captured_scope_shell'),
+                  onPressed: () {
+                    Navigator.of(rootContext).push(
+                      MaterialPageRoute(
+                        builder: (_) => AppBackendScope(
+                          backend: backend,
+                          child: SessionScope(
+                            sessionKey: key,
+                            lock: () {},
+                            child: SyncEngineScope(
+                              engine: engine,
+                              child: Builder(
+                                builder: (scopedContext) {
+                                  capturedScopes = captureInheritedScopes(
+                                    scopedContext,
+                                  );
+                                  return Scaffold(
+                                    body: Center(
+                                      child: ElevatedButton(
+                                        key: const ValueKey(
+                                          'open_settings_from_captured_snapshot',
+                                        ),
+                                        onPressed: () {
+                                          pushPageWithCapturedInheritedScopesOrFallback<
+                                              void>(
+                                            Navigator.of(rootContext),
+                                            null,
+                                            const SyncSettingsPage(),
+                                            capturedScopes: capturedScopes,
+                                          );
+                                        },
+                                        child: const Text('Open settings'),
+                                      ),
+                                    ),
+                                  );
+                                },
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                  child: const Text('Open shell'),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('open_captured_scope_shell')));
+    await tester.pumpAndSettle();
+    expect(capturedScopes, isNotNull);
+
+    navigatorKey.currentState!.pop();
+    await tester.pumpAndSettle();
+    expect(find.text('Open shell'), findsOneWidget);
+
+    pushPageWithCapturedInheritedScopesOrFallback<void>(
+      navigatorKey.currentState!,
+      null,
+      const SyncSettingsPage(),
+      capturedScopes: capturedScopes,
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byType(SyncSettingsPage), findsOneWidget);
+    expect(find.text('Push'), findsNothing);
   });
 }
