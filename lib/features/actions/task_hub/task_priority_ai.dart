@@ -334,17 +334,21 @@ class BackendTaskPriorityAiService implements TaskPriorityAiService {
         .toSet();
     final isFullSnapshot = entries.keys.toSet().containsAll(activeIds);
     final payloadEntries = <Object?>[];
-    var updatedAtMs = DateTime.now().millisecondsSinceEpoch;
+    int? updatedAtMs;
     for (final entry in entries.entries) {
       if (!activeIds.contains(entry.key)) continue;
       final computedAtMs = entry.value.computedAtLocal.millisecondsSinceEpoch;
-      if (computedAtMs > updatedAtMs) updatedAtMs = computedAtMs;
+      if (updatedAtMs == null || computedAtMs > updatedAtMs) {
+        updatedAtMs = computedAtMs;
+      }
       payloadEntries.add(<String, Object?>{
         ...entry.value.entry.toJson(),
         'request_signature': entry.value.requestSignature,
         'computed_at_ms': computedAtMs,
       });
     }
+    final resolvedUpdatedAtMs =
+        updatedAtMs ?? DateTime.now().millisecondsSinceEpoch;
     try {
       await _upsertSharedAssessmentsRaw(
         jsonEncode(<String, Object?>{
@@ -353,7 +357,7 @@ class BackendTaskPriorityAiService implements TaskPriorityAiService {
           'model_name': _modelName,
           'locale_tag': _localeTag,
           'replace_missing_entries': isFullSnapshot,
-          'updated_at_ms': updatedAtMs,
+          'updated_at_ms': resolvedUpdatedAtMs,
           'entries': payloadEntries,
         }),
       );

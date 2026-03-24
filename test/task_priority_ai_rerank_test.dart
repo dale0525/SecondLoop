@@ -390,6 +390,62 @@ void main() {
       isTrue,
     );
     expect(backend.lastSharedAssessmentsPayload!['scope'], 'cloud-scope');
+    expect(
+      backend.lastSharedAssessmentsPayload!['updated_at_ms'],
+      DateTime(2026, 3, 13, 10, 0).millisecondsSinceEpoch,
+    );
+  });
+
+  test(
+      'shared assessment writes use freshest computed time for non-empty snapshots',
+      () async {
+    final backend = _RecordingTaskPriorityBackend();
+    final service = BackendTaskPriorityAiService.forTesting(
+      backend: backend,
+      sessionKey: Uint8List(32),
+      route: AskAiRouteKind.cloudGateway,
+      gatewayBaseUrl: 'https://gateway.example',
+      idToken: 'token',
+      modelName: 'gpt-cloud-test',
+      localeTag: 'en-US',
+      cacheScopeKeyOverride: 'cloud-scope',
+    );
+
+    await service.writeSharedAssessments(
+      entries: <String, TaskPriorityAiCachedAssessment>{
+        'focus': TaskPriorityAiCachedAssessment(
+          entry: const TaskPriorityAiEntry(
+            todoId: 'focus',
+            semanticAdjustment: 18,
+            reason: 'Earlier shared result.',
+            confidence: TaskPriorityAiConfidence.high,
+            isImportant: true,
+            isUrgent: false,
+          ),
+          requestSignature: 'sig-focus',
+          computedAtLocal: DateTime(2026, 3, 13, 10, 0),
+        ),
+        'backlog': TaskPriorityAiCachedAssessment(
+          entry: const TaskPriorityAiEntry(
+            todoId: 'backlog',
+            semanticAdjustment: 12,
+            reason: 'Latest shared result.',
+            confidence: TaskPriorityAiConfidence.medium,
+            isImportant: false,
+            isUrgent: false,
+          ),
+          requestSignature: 'sig-backlog',
+          computedAtLocal: DateTime(2026, 3, 13, 10, 5),
+        ),
+      },
+      activeTodoIds: const <String>['focus', 'backlog'],
+    );
+
+    expect(backend.lastSharedAssessmentsPayload, isNotNull);
+    expect(
+      backend.lastSharedAssessmentsPayload!['updated_at_ms'],
+      DateTime(2026, 3, 13, 10, 5).millisecondsSinceEpoch,
+    );
   });
 
   test('empty shared assessment snapshot still declares full replacement',
