@@ -446,6 +446,26 @@ void main() {
     expect(backend.current('t6').status, 'done');
   });
 
+  test(
+      'start action preserves backend auto-set due timestamp for null-due tasks',
+      () async {
+    SharedPreferences.setMockInitialValues({});
+
+    final initial =
+        todo(id: 't6b-start', title: 'Task 6b start', updatedAtMs: 10);
+    final backend = QuickActionBackendTestDouble(initialTodos: [initial]);
+    final controller = TaskHubQuickActionsController(
+      backend: backend,
+      sessionKey: Uint8List(32),
+    );
+
+    final ticket = await controller.apply(initial, TaskHubQuickAction.start);
+
+    expect(ticket, isNotNull);
+    expect(backend.current('t6b-start').status, 'in_progress');
+    expect(backend.current('t6b-start').dueAtMs, isNotNull);
+  });
+
   test('done action does not depend on scheduling settings loading', () async {
     SharedPreferences.setMockInitialValues({
       'actions.review.morning_minutes_v1': 'broken',

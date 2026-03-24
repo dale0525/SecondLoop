@@ -260,11 +260,20 @@ class TaskPriorityStore extends ChangeNotifier {
         aiService = null;
       }
 
-      final cacheScopeKey =
-          (aiService?.cacheScopeKey ?? await _resolveAiCacheScopeKey?.call())
-              ?.trim();
+      final serviceCacheScopeKey = aiService?.cacheScopeKey.trim();
+      final resolvedCacheScopeKey =
+          (await _resolveAiCacheScopeKey?.call())?.trim();
+      final sharedCacheScopeKey = (serviceCacheScopeKey?.isNotEmpty ?? false)
+          ? serviceCacheScopeKey
+          : resolvedCacheScopeKey;
+      final persistedCacheScopeKey =
+          (resolvedCacheScopeKey?.isNotEmpty ?? false)
+              ? resolvedCacheScopeKey
+              : serviceCacheScopeKey;
+      final canUseSharedCache =
+          sharedCacheScopeKey != null && sharedCacheScopeKey.isNotEmpty;
       final canUsePersistedCache =
-          cacheScopeKey != null && cacheScopeKey.isNotEmpty;
+          persistedCacheScopeKey != null && persistedCacheScopeKey.isNotEmpty;
       final canUseInMemoryCache = !canUsePersistedCache;
       final candidateByTodoId = <String, TaskPriorityAiCandidate>{
         for (final candidate in request.candidates) candidate.todoId: candidate,
@@ -292,17 +301,17 @@ class TaskPriorityStore extends ChangeNotifier {
       }
       _safeNotify();
 
-      final sharedPersisted = canUsePersistedCache
+      final sharedPersisted = canUseSharedCache
           ? await _readSharedAiAssessments?.call(
                 aiService: aiService,
-                cacheScopeKey: cacheScopeKey,
+                cacheScopeKey: sharedCacheScopeKey,
                 nowLocal: nowLocal,
               ) ??
               const <String, TaskPriorityAiCachedAssessment>{}
           : const <String, TaskPriorityAiCachedAssessment>{};
       final persisted = canUsePersistedCache
           ? await _readPersistedAiAssessments(
-              cacheScopeKey: cacheScopeKey,
+              cacheScopeKey: persistedCacheScopeKey,
               nowLocal: nowLocal,
             )
           : const <String, TaskPriorityAiCachedAssessment>{};
@@ -434,15 +443,7 @@ class TaskPriorityStore extends ChangeNotifier {
 
       if (canUsePersistedCache) {
         await _writePersistedAiAssessments(
-          cacheScopeKey: cacheScopeKey,
-          entries: mergedPersisted,
-          activeTodoIds:
-              rulesSnapshot.activeEntries.map((entry) => entry.todo.id),
-          nowLocal: nowLocal,
-        );
-        await _writeSharedAiAssessments?.call(
-          aiService: aiService,
-          cacheScopeKey: cacheScopeKey,
+          cacheScopeKey: persistedCacheScopeKey,
           entries: mergedPersisted,
           activeTodoIds:
               rulesSnapshot.activeEntries.map((entry) => entry.todo.id),
@@ -453,6 +454,16 @@ class TaskPriorityStore extends ChangeNotifier {
           entries: mergedPersisted,
           activeTodoIds:
               rulesSnapshot.activeEntries.map((entry) => entry.todo.id),
+        );
+      }
+      if (canUseSharedCache) {
+        await _writeSharedAiAssessments?.call(
+          aiService: aiService,
+          cacheScopeKey: sharedCacheScopeKey,
+          entries: mergedPersisted,
+          activeTodoIds:
+              rulesSnapshot.activeEntries.map((entry) => entry.todo.id),
+          nowLocal: nowLocal,
         );
       }
 

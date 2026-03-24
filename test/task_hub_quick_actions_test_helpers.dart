@@ -93,8 +93,13 @@ final class QuickActionBackendTestDouble extends AppBackend {
       throw StateError('transition failed');
     }
     final existing = _todosById[todoId]!;
-    final targetDueAtMs = clearDueAtMs ? null : (dueAtMs ?? existing.dueAtMs);
     final targetStatus = newStatus ?? existing.status;
+    final autoDueAtMs = existing.dueAtMs == null &&
+            existing.status == 'open' &&
+            (targetStatus == 'in_progress' || targetStatus == 'done')
+        ? DateTime.now().toUtc().millisecondsSinceEpoch
+        : existing.dueAtMs;
+    final targetDueAtMs = clearDueAtMs ? null : (dueAtMs ?? autoDueAtMs);
     final targetReviewStage =
         clearReviewStage ? null : (reviewStage ?? existing.reviewStage);
     final targetNextReviewAtMs = clearNextReviewAtMs

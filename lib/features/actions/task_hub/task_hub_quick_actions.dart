@@ -202,8 +202,6 @@ class TaskHubQuickActionsController {
       sessionKey,
       todoId: todo.id,
       newStatus: 'in_progress',
-      dueAtMs: todo.dueAtMs,
-      clearDueAtMs: todo.dueAtMs == null,
       reviewStage: todo.reviewStage,
       clearReviewStage: todo.reviewStage == null,
       nextReviewAtMs: todo.nextReviewAtMs,

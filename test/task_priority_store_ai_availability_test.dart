@@ -211,6 +211,66 @@ void main() {
   });
 
   test(
+      'cloud AI service still reads shared cache when service cacheScopeKey is empty',
+      () async {
+    SharedPreferences.setMockInitialValues({});
+    var remoteReads = 0;
+    final nowLocal = DateTime(2026, 3, 13, 10, 0);
+    final requestSignature = jsonEncode(<String, Object?>{
+      'time_bucket': buildTaskPriorityAiTimeBucket(nowLocal),
+      'candidate': buildTaskPriorityAiRequest(
+        buildTaskPrioritySnapshot(
+          <Todo>[todo(id: 'focus', title: 'Focus task', updatedAtMs: 10)],
+          nowLocal: nowLocal,
+        ),
+        nowLocal: nowLocal,
+      ).candidates.single.toJson(),
+    });
+    final store = TaskPriorityStore.fromLoaders(
+      nowLocal: () => nowLocal,
+      loadTodos: () async => <Todo>[
+        todo(id: 'focus', title: 'Focus task', updatedAtMs: 10),
+      ],
+      resolveAiService: () async => _CloudGatewayEmptyScopeAiService(),
+      resolveAiCacheScopeKey: () async => 'cloud-shared-scope',
+      readSharedAiAssessments: ({
+        required aiService,
+        required cacheScopeKey,
+        required nowLocal,
+      }) async {
+        remoteReads += 1;
+        expect(cacheScopeKey, 'cloud-shared-scope');
+        return <String, TaskPriorityAiCachedAssessment>{
+          'focus': TaskPriorityAiCachedAssessment(
+            entry: const TaskPriorityAiEntry(
+              todoId: 'focus',
+              semanticAdjustment: 18,
+              reason: 'Cloud shared assessment result.',
+              confidence: TaskPriorityAiConfidence.high,
+              isImportant: true,
+              isUrgent: true,
+            ),
+            requestSignature: requestSignature,
+            computedAtLocal: nowLocal,
+          ),
+        };
+      },
+    );
+
+    await store.refresh();
+
+    expect(remoteReads, 1);
+    expect(
+      store.snapshot.primaryFocus?.reasonText,
+      'Cloud shared assessment result.',
+    );
+    expect(
+      store.snapshot.enhancementSource,
+      TaskPriorityEnhancementSource.aiSharedCache,
+    );
+  });
+
+  test(
       'shared assessment fallback reuses remote enhancement before local rerank',
       () async {
     SharedPreferences.setMockInitialValues({});
@@ -777,6 +837,17 @@ final class _EmptyScopedAiService extends TaskPriorityAiService {
 
   @override
   String get cacheScopeKey => scopeKey;
+
+  @override
+  Future<TaskPriorityAiBatchResult> rerank(
+      TaskPriorityAiRequest request) async {
+    return const TaskPriorityAiBatchResult.empty();
+  }
+}
+
+final class _CloudGatewayEmptyScopeAiService extends TaskPriorityAiService {
+  @override
+  String get cacheScopeKey => '';
 
   @override
   Future<TaskPriorityAiBatchResult> rerank(
