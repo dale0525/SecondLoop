@@ -36,4 +36,20 @@ void main() {
       same(capturedScopes),
     );
   });
+
+  test('root settings scope drops stale captured session after re-unlock', () {
+    final capturedScopes = InheritedScopeCapture(
+      sessionKey: Uint8List.fromList(List<int>.filled(32, 7)),
+      lock: () {},
+    );
+
+    SyncKeyManager.setSessionKey(
+      Uint8List.fromList(List<int>.filled(32, 8)),
+    );
+
+    expect(
+      resolveRootSettingsInheritedScopes(capturedScopes),
+      isNull,
+    );
+  });
 }

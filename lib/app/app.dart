@@ -400,7 +400,7 @@ InheritedScopeCapture? resolveRootSettingsInheritedScopes(
   }
 
   final sessionKey = capturedScopes.sessionKey;
-  if (sessionKey != null && !SyncKeyManager.hasSessionKey) {
+  if (sessionKey != null && !SyncKeyManager.matchesSessionKey(sessionKey)) {
     return null;
   }
 
