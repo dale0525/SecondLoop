@@ -35,7 +35,7 @@ void main() {
     );
     expect(
       classifyTodoFollowupTaskType('装修风格参考资料收集'),
-      isNot(TodoFollowupTaskType.execution),
+      TodoFollowupTaskType.referenceCollection,
     );
     expect(
       classifyTodoFollowupTaskType('修一下客厅门锁'),

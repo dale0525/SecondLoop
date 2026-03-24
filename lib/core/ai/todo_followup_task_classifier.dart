@@ -31,7 +31,7 @@ final List<RegExp> _comparisonPatterns = <RegExp>[
 ];
 
 final List<RegExp> _referenceCollectionPatterns = <RegExp>[
-  RegExp(r'收集资料|搜集资料|官网链接|材料要求|资料要求|收集.*链接|collect.*links?',
+  RegExp(r'收集资料|搜集资料|参考资料|资料收集|官网链接|材料要求|资料要求|收集.*链接|collect.*links?',
       caseSensitive: false),
 ];
 

@@ -146,6 +146,61 @@ void main() {
     expect(client.requestedModes.first, TodoFollowupGenerationMode.webSearch);
   });
 
+  test('runner does not skip information task that merely contains 修',
+      () async {
+    final store = _FakeStore(
+      jobs: const <TodoFollowupGenerationJob>[
+        TodoFollowupGenerationJob(
+          todoId: 'todo_reference_with_xiu',
+          triggerKind: 'auto_create',
+          status: 'pending',
+          attempts: 0,
+          nextRetryAtMs: null,
+          lastError: null,
+          includeManualFollowups: false,
+          taskTypeHint: null,
+          createdAtMs: 0,
+          updatedAtMs: 0,
+        ),
+      ],
+      todos: const <String, Todo>{
+        'todo_reference_with_xiu': Todo(
+          id: 'todo_reference_with_xiu',
+          title: '装修风格参考资料收集',
+          status: 'open',
+          createdAtMs: 0,
+          updatedAtMs: 0,
+        ),
+      },
+    );
+    final client = _FakeClient(
+      responseByMode: <TodoFollowupGenerationMode, TodoFollowupSuggestionDraft>{
+        TodoFollowupGenerationMode.modelKnowledge:
+            const TodoFollowupSuggestionDraft(
+          content: '以下内容基于模型知识整理，未联网核实。',
+          mode: TodoFollowupGenerationMode.modelKnowledge,
+          citations: <TodoFollowupCitationDraft>[],
+        ),
+      },
+    );
+
+    final runner = TodoFollowupGenerationRunner(
+      store: store,
+      client: client,
+      settings: const TodoFollowupGenerationRunnerSettings(
+        hardTimeout: Duration(milliseconds: 200),
+      ),
+      nowMs: () => 1000,
+    );
+
+    final result = await runner.runOnce(localeTag: 'zh-CN');
+
+    expect(result.processed, 1);
+    expect(store.lastSkippedTodoId, isNull);
+    expect(store.lastSucceededTodoId, 'todo_reference_with_xiu');
+    expect(client.requestedModes, isNotEmpty);
+  });
+
   test('runner skips execution task', () async {
     final store = _FakeStore(
       jobs: const <TodoFollowupGenerationJob>[
