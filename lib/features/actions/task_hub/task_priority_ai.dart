@@ -86,6 +86,20 @@ bool _isUninitializedRustBridgeStateError(StateError error) {
       );
 }
 
+String _buildTaskPriorityAiFallbackScopeKey({
+  required AskAiRouteKind route,
+  required String gatewayBaseUrl,
+  required String modelName,
+  required String localeTag,
+}) {
+  return buildTaskPriorityAiCacheScopeKey(
+    route: route,
+    gatewayBaseUrl: gatewayBaseUrl,
+    modelName: modelName,
+    localeTag: localeTag,
+  );
+}
+
 Future<String?> resolveTaskPriorityAiCacheScopeKey(
   AppBackend backend,
   Uint8List sessionKey, {
@@ -129,7 +143,14 @@ Future<String?> resolveTaskPriorityAiCacheScopeKey(
         );
       } on StateError catch (error) {
         if (!_isUninitializedRustBridgeStateError(error)) rethrow;
-        return buildTaskPriorityAiCacheScopeKey(
+        return _buildTaskPriorityAiFallbackScopeKey(
+          route: route,
+          gatewayBaseUrl: gatewayBaseUrl,
+          modelName: modelName,
+          localeTag: localeTag,
+        );
+      } catch (_) {
+        return _buildTaskPriorityAiFallbackScopeKey(
           route: route,
           gatewayBaseUrl: gatewayBaseUrl,
           modelName: modelName,

@@ -75,6 +75,24 @@ void main() {
     expect(key, contains('fallback.example'));
     expect(key, contains('fallback-model'));
   });
+
+  test('refresh dependency key falls back when BYOK profile lookup throws',
+      () async {
+    final sessionKey = Uint8List.fromList(List<int>.filled(32, 1));
+
+    final key = await buildTaskPriorityRefreshDependencyKey(
+      _ProfileLookupFailureBackend(),
+      sessionKey,
+      subscriptionStatus: SubscriptionStatus.notEntitled,
+      gatewayBaseUrl: 'https://fallback.example',
+      modelName: 'fallback-model',
+      localeTag: 'en-US',
+      cloudUid: null,
+    );
+
+    expect(key, contains('fallback.example'));
+    expect(key, contains('fallback-model'));
+  });
 }
 
 final class _ProfileBackend extends AppBackend {
@@ -111,6 +129,16 @@ final class _RustBridgeUnavailableBackend extends AppBackend {
   @override
   Future<List<LlmProfile>> listLlmProfiles(Uint8List key) async {
     throw StateError('flutter_rust_bridge has not been initialized');
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+final class _ProfileLookupFailureBackend extends AppBackend {
+  @override
+  Future<List<LlmProfile>> listLlmProfiles(Uint8List key) async {
+    throw Exception('backend unavailable');
   }
 
   @override
