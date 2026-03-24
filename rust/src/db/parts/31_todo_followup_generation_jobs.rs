@@ -301,7 +301,8 @@ pub fn mark_todo_followup_generation_job_running(
     todo_id: &str,
     now_ms: i64,
 ) -> Result<()> {
-    conn.execute(
+    let running_lease_cutoff_ms = now_ms - TODO_FOLLOWUP_GENERATION_RUNNING_LEASE_MS;
+    let updated = conn.execute(
         r#"
 UPDATE todo_followup_generation_jobs
 SET status = 'running',
@@ -309,9 +310,16 @@ SET status = 'running',
     last_error = NULL,
     updated_at_ms = ?2
 WHERE todo_id = ?1
+  AND (
+    status IN ('pending', 'failed')
+    OR (status = 'running' AND updated_at_ms <= ?3)
+  )
 "#,
-        params![todo_id, now_ms],
+        params![todo_id, now_ms, running_lease_cutoff_ms],
     )?;
+    if updated == 0 {
+        return Err(anyhow!("todo_followup_generation_job_not_claimed"));
+    }
     Ok(())
 }
 
@@ -332,7 +340,7 @@ SET status = 'failed',
     last_error = ?4,
     updated_at_ms = ?5
 WHERE todo_id = ?1
-  AND status = 'running'
+  AND status IN ('pending', 'failed', 'running')
 "#,
         params![todo_id, attempts, next_retry_at_ms, last_error, now_ms],
     )?;
@@ -372,7 +380,7 @@ SET status = 'skipped',
     last_error = NULL,
     updated_at_ms = ?2
 WHERE todo_id = ?1
-  AND status = 'running'
+  AND status IN ('pending', 'failed', 'running')
 "#,
         params![todo_id, now_ms],
     )?;
@@ -391,7 +399,7 @@ SET status = 'canceled',
     next_retry_at_ms = NULL,
     updated_at_ms = ?2
 WHERE todo_id = ?1
-  AND status = 'running'
+  AND status IN ('pending', 'failed', 'running')
 "#,
         params![todo_id, now_ms],
     )?;

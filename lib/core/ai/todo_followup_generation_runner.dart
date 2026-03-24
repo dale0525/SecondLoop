@@ -82,6 +82,8 @@ abstract class TodoFollowupGenerationClient {
 }
 
 const kTodoFollowupGenerationMaxManualAttempts = 5;
+const _kTodoFollowupGenerationJobNotClaimedError =
+    'todo_followup_generation_job_not_claimed';
 
 final class TodoFollowupGenerationRunnerSettings {
   const TodoFollowupGenerationRunnerSettings({
@@ -286,6 +288,9 @@ final class TodoFollowupGenerationRunner {
         );
         processed++;
       } catch (error) {
+        if (_isTodoFollowupGenerationJobNotClaimedError(error)) {
+          continue;
+        }
         final attempts = job.attempts.toInt() + 1;
         final failedAtMs = _nowMs();
         if (job.triggerKind == 'manual_regenerate') {
@@ -477,6 +482,10 @@ final class TodoFollowupGenerationRunner {
       timeout: settings.hardTimeout,
     );
   }
+}
+
+bool _isTodoFollowupGenerationJobNotClaimedError(Object error) {
+  return '$error'.contains(_kTodoFollowupGenerationJobNotClaimedError);
 }
 
 List<String> _collectManualFollowups(List<TodoActivity> activities) {

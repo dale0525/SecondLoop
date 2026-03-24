@@ -7,6 +7,7 @@ final class _FakeStore implements TodoFollowupGenerationStore {
     Map<String, List<TodoActivity>>? activitiesByTodoId,
     Map<String, List<TodoFollowupSuggestion>>? suggestionsByTodoId,
     this.reenqueueOnMarkRunning = const <String, TodoFollowupGenerationJob>{},
+    this.failMarkRunningTodoIds = const <String>{},
   })  : _jobs = List<TodoFollowupGenerationJob>.from(jobs),
         _todos = Map<String, Todo>.from(todos),
         _activitiesByTodoId = <String, List<TodoActivity>>{
@@ -27,6 +28,7 @@ final class _FakeStore implements TodoFollowupGenerationStore {
   final Map<String, List<TodoActivity>> _activitiesByTodoId;
   final Map<String, List<TodoFollowupSuggestion>> _suggestionsByTodoId;
   final Map<String, TodoFollowupGenerationJob> reenqueueOnMarkRunning;
+  final Set<String> failMarkRunningTodoIds;
 
   String? lastSucceededTodoId;
   String? lastSkippedTodoId;
@@ -151,6 +153,9 @@ final class _FakeStore implements TodoFollowupGenerationStore {
     required String todoId,
     required int nowMs,
   }) async {
+    if (failMarkRunningTodoIds.contains(todoId)) {
+      throw StateError('todo_followup_generation_job_not_claimed');
+    }
     final index = _jobs.indexWhere((job) => job.todoId == todoId);
     if (index == -1) return;
     _jobs[index] =

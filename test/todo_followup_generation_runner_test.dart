@@ -322,6 +322,55 @@ void main() {
     expect(store.pendingSuggestionsFor('todo_research'), isEmpty);
   });
 
+  test('runner skips claimed-by-other jobs without marking failure', () async {
+    final store = _FakeStore(
+      jobs: const <TodoFollowupGenerationJob>[
+        TodoFollowupGenerationJob(
+          todoId: 'todo_research',
+          triggerKind: 'auto_create',
+          status: 'pending',
+          attempts: 0,
+          nextRetryAtMs: null,
+          lastError: null,
+          includeManualFollowups: false,
+          taskTypeHint: 'research',
+          createdAtMs: 0,
+          updatedAtMs: 0,
+        ),
+      ],
+      todos: const <String, Todo>{
+        'todo_research': Todo(
+          id: 'todo_research',
+          title: '调研一下当前主流的 llm 模型',
+          status: 'open',
+          createdAtMs: 0,
+          updatedAtMs: 0,
+        ),
+      },
+      failMarkRunningTodoIds: const <String>{'todo_research'},
+    );
+    final client = _FakeClient();
+
+    final runner = TodoFollowupGenerationRunner(
+      store: store,
+      client: client,
+      settings: const TodoFollowupGenerationRunnerSettings(
+        hardTimeout: Duration(milliseconds: 200),
+      ),
+      nowMs: () => 1000,
+    );
+
+    final result = await runner.runOnce(localeTag: 'zh-CN');
+
+    expect(result.processed, 0);
+    expect(result.didUpdateJobs, isFalse);
+    expect(store.lastFailedTodoId, isNull);
+    expect(store.lastSkippedTodoId, isNull);
+    expect(store.lastSucceededTodoId, isNull);
+    expect(client.requestedModes, isEmpty);
+    expect(store.jobFor('todo_research')?.status, 'pending');
+  });
+
   test('runner regenerate includes manual follow-up notes only', () async {
     final store = _FakeStore(
       jobs: const <TodoFollowupGenerationJob>[

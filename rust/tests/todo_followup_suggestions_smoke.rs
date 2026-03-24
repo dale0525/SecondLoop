@@ -266,6 +266,133 @@ fn running_jobs_are_not_released_until_their_lease_expires() {
 }
 
 #[test]
+fn pending_jobs_can_be_deferred_without_being_claimed_first() {
+    let (_temp_dir, key, conn) = setup();
+
+    db::upsert_todo(
+        &conn,
+        &key,
+        "todo_1",
+        "Research current LLM pricing",
+        None,
+        "open",
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("upsert todo");
+
+    db::enqueue_todo_followup_generation_job(&conn, "todo_1", "auto_create", None, 100)
+        .expect("enqueue job");
+
+    db::mark_todo_followup_generation_job_failed(
+        &conn,
+        "todo_1",
+        2,
+        240,
+        "pending_entitlement",
+        130,
+    )
+    .expect("defer pending job");
+
+    let job = db::find_todo_followup_generation_job(&conn, "todo_1")
+        .expect("find job")
+        .expect("job exists");
+    assert_eq!(job.status, "failed");
+    assert_eq!(job.attempts, 2);
+    assert_eq!(job.next_retry_at_ms, Some(240));
+    assert_eq!(job.last_error.as_deref(), Some("pending_entitlement"));
+}
+
+#[test]
+fn pending_jobs_can_be_finalized_without_being_claimed_first() {
+    let (_temp_dir, key, conn) = setup();
+
+    db::upsert_todo(
+        &conn,
+        &key,
+        "todo_skipped",
+        "Research current LLM pricing",
+        None,
+        "open",
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("upsert skipped todo");
+    db::upsert_todo(
+        &conn,
+        &key,
+        "todo_canceled",
+        "Research current LLM pricing",
+        None,
+        "open",
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("upsert canceled todo");
+
+    db::enqueue_todo_followup_generation_job(&conn, "todo_skipped", "auto_create", None, 100)
+        .expect("enqueue skipped job");
+    db::enqueue_todo_followup_generation_job(
+        &conn,
+        "todo_canceled",
+        "manual_regenerate",
+        None,
+        100,
+    )
+    .expect("enqueue canceled job");
+
+    db::mark_todo_followup_generation_job_skipped(&conn, "todo_skipped", 130)
+        .expect("skip pending job");
+    db::mark_todo_followup_generation_job_canceled(&conn, "todo_canceled", 130)
+        .expect("cancel pending job");
+
+    let skipped = db::find_todo_followup_generation_job(&conn, "todo_skipped")
+        .expect("find skipped job")
+        .expect("skipped job exists");
+    assert_eq!(skipped.status, "skipped");
+
+    let canceled = db::find_todo_followup_generation_job(&conn, "todo_canceled")
+        .expect("find canceled job")
+        .expect("canceled job exists");
+    assert_eq!(canceled.status, "canceled");
+}
+
+#[test]
+fn running_claim_rejects_non_expired_running_jobs() {
+    let (_temp_dir, key, conn) = setup();
+
+    db::upsert_todo(
+        &conn,
+        &key,
+        "todo_1",
+        "Research current LLM pricing",
+        None,
+        "open",
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("upsert todo");
+
+    db::enqueue_todo_followup_generation_job(&conn, "todo_1", "auto_create", None, 100)
+        .expect("enqueue job");
+    db::mark_todo_followup_generation_job_running(&conn, "todo_1", 120).expect("initial claim");
+
+    let err = db::mark_todo_followup_generation_job_running(&conn, "todo_1", 121)
+        .expect_err("second claim should fail while lease is active");
+    assert!(err
+        .to_string()
+        .contains("todo_followup_generation_job_not_claimed"));
+}
+
+#[test]
 fn manual_regenerate_jobs_are_prioritized_ahead_of_auto_jobs() {
     let (_temp_dir, key, conn) = setup();
 
