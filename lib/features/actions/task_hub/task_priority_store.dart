@@ -45,6 +45,7 @@ class TaskPriorityStore extends ChangeNotifier {
       required String cacheScopeKey,
       required Map<String, TaskPriorityAiCachedAssessment> entries,
       required Iterable<String> activeTodoIds,
+      required DateTime nowLocal,
     })? writeSharedAiAssessments,
     TaskPriorityFeedbackStore feedbackStore = const TaskPriorityFeedbackStore(),
     Duration aiCacheTtl = defaultTaskPriorityAiCacheTtl,
@@ -77,6 +78,7 @@ class TaskPriorityStore extends ChangeNotifier {
       required String cacheScopeKey,
       required Map<String, TaskPriorityAiCachedAssessment> entries,
       required Iterable<String> activeTodoIds,
+      required DateTime nowLocal,
     })? writeSharedAiAssessments,
     TaskPriorityFeedbackStore feedbackStore = const TaskPriorityFeedbackStore(),
   }) {
@@ -115,6 +117,7 @@ class TaskPriorityStore extends ChangeNotifier {
     required String cacheScopeKey,
     required Map<String, TaskPriorityAiCachedAssessment> entries,
     required Iterable<String> activeTodoIds,
+    required DateTime nowLocal,
   })? _writeSharedAiAssessments;
   final TaskPriorityFeedbackStore _feedbackStore;
   final Duration _aiCacheTtl;
@@ -435,6 +438,7 @@ class TaskPriorityStore extends ChangeNotifier {
           entries: mergedPersisted,
           activeTodoIds:
               rulesSnapshot.activeEntries.map((entry) => entry.todo.id),
+          nowLocal: nowLocal,
         );
         await _writeSharedAiAssessments?.call(
           aiService: aiService,
@@ -442,6 +446,7 @@ class TaskPriorityStore extends ChangeNotifier {
           entries: mergedPersisted,
           activeTodoIds:
               rulesSnapshot.activeEntries.map((entry) => entry.todo.id),
+          nowLocal: nowLocal,
         );
       } else if (canUseInMemoryCache) {
         _writeInMemoryAiAssessments(
@@ -668,6 +673,7 @@ class TaskPriorityStore extends ChangeNotifier {
     required String cacheScopeKey,
     required Map<String, TaskPriorityAiCachedAssessment> entries,
     required Iterable<String> activeTodoIds,
+    required DateTime nowLocal,
   }) async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -698,7 +704,7 @@ class TaskPriorityStore extends ChangeNotifier {
                 .map((key, value) => MapEntry(key.toString(), value)),
           );
           if (parsed == null) continue;
-          if (_nowLocal().difference(parsed.computedAtLocal).abs() <=
+          if (nowLocal.difference(parsed.computedAtLocal).abs() <=
               _aiCacheTtl) {
             hasFreshEntry = true;
             break;

@@ -264,6 +264,7 @@ void main() {
         required cacheScopeKey,
         required entries,
         required activeTodoIds,
+        required nowLocal,
       }) async {
         writtenPayloads
             .add(Map<String, TaskPriorityAiCachedAssessment>.from(entries));
@@ -560,6 +561,7 @@ void main() {
         required cacheScopeKey,
         required entries,
         required activeTodoIds,
+        required nowLocal,
       }) async {
         await (aiService as BackendTaskPriorityAiService)
             .writeSharedAssessments(

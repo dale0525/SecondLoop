@@ -608,6 +608,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
         required cacheScopeKey,
         required entries,
         required activeTodoIds,
+        required nowLocal,
       }) async {
         if (aiService is BackendTaskPriorityAiService) {
           await aiService.writeSharedAssessments(

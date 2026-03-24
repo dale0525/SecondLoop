@@ -621,6 +621,59 @@ void main() {
     );
   });
 
+  test(
+      'refresh keeps previously fresh persisted scope when write happens after TTL boundary',
+      () async {
+    SharedPreferences.setMockInitialValues({});
+    final startNow = DateTime(2026, 3, 13, 10, 0);
+    const ttl = Duration(minutes: 5);
+
+    var currentNow = startNow;
+    final warmStore = TaskPriorityStore.fromLoaders(
+      nowLocal: () => currentNow,
+      aiCacheTtl: ttl,
+      loadTodos: () async => <Todo>[
+        todo(id: 'focus', title: 'Focus task', updatedAtMs: 10),
+      ],
+      resolveAiService: () async => _ScopedCachedSuccessfulAiService(
+        scopeKey: 'persisted-scope',
+      ),
+      writeSharedAiAssessments: ({
+        required aiService,
+        required cacheScopeKey,
+        required entries,
+        required activeTodoIds,
+        required nowLocal,
+      }) async {
+        currentNow = startNow.add(const Duration(minutes: 6));
+      },
+    );
+
+    await warmStore.refresh();
+
+    final restartedStore = TaskPriorityStore.fromLoaders(
+      nowLocal: () => startNow.add(const Duration(minutes: 4, seconds: 30)),
+      aiCacheTtl: ttl,
+      loadTodos: () async => <Todo>[
+        todo(id: 'focus', title: 'Focus task', updatedAtMs: 10),
+      ],
+      resolveAiService: () async => null,
+      resolveAiCacheScopeKey: () async => null,
+    );
+
+    await restartedStore.refresh();
+
+    expect(
+      restartedStore.snapshot.primaryFocus?.reasonText,
+      'Persisted AI result.',
+    );
+    expect(restartedStore.snapshot.hasAiEnhancement, isTrue);
+    expect(
+      restartedStore.snapshot.enhancementSource,
+      TaskPriorityEnhancementSource.aiLocalCache,
+    );
+  });
+
   test('fresh rerank marks enhancement source as live ai', () async {
     SharedPreferences.setMockInitialValues({});
     final store = TaskPriorityStore.fromLoaders(

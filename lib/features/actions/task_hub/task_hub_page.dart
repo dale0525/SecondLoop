@@ -100,6 +100,7 @@ class _TaskHubPageState extends State<TaskHubPage> {
         required cacheScopeKey,
         required entries,
         required activeTodoIds,
+        required nowLocal,
       }) async {
         if (aiService is BackendTaskPriorityAiService) {
           await aiService.writeSharedAssessments(
