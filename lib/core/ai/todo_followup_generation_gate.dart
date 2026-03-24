@@ -512,6 +512,22 @@ final class _SeededTodoFollowupGenerationStore
         source: source,
         generationKey: generationKey,
       );
+
+  @override
+  Future<bool> upsertGeneratedTodoFollowupSuggestionsIfCurrentClaim({
+    required String todoId,
+    required int jobStartedAtMs,
+    required List<TodoFollowupSuggestionDraftInput> suggestions,
+    required String source,
+    String? generationKey,
+  }) =>
+      delegate.upsertGeneratedTodoFollowupSuggestionsIfCurrentClaim(
+        todoId: todoId,
+        jobStartedAtMs: jobStartedAtMs,
+        suggestions: suggestions,
+        source: source,
+        generationKey: generationKey,
+      );
 }
 
 final class _BackendTodoFollowupGenerationStore
@@ -670,6 +686,41 @@ final class _BackendTodoFollowupGenerationStore
       source: source,
       generationKey: generationKey,
     );
+  }
+
+  @override
+  Future<bool> upsertGeneratedTodoFollowupSuggestionsIfCurrentClaim({
+    required String todoId,
+    required int jobStartedAtMs,
+    required List<TodoFollowupSuggestionDraftInput> suggestions,
+    required String source,
+    String? generationKey,
+  }) {
+    final backend = this.backend;
+    if (backend is NativeAppBackend) {
+      return backend.upsertGeneratedTodoFollowupSuggestionsIfCurrentClaim(
+        sessionKey,
+        todoId: todoId,
+        jobStartedAtMs: jobStartedAtMs,
+        suggestions: suggestions,
+        source: source,
+        generationKey: generationKey,
+      );
+    }
+    return getJob(todoId).then((job) async {
+      if (job == null ||
+          job.status != 'running' ||
+          job.updatedAtMs.toInt() != jobStartedAtMs) {
+        return false;
+      }
+      await upsertGeneratedTodoFollowupSuggestions(
+        todoId: todoId,
+        suggestions: suggestions,
+        source: source,
+        generationKey: generationKey,
+      );
+      return true;
+    });
   }
 }
 

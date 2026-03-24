@@ -7,6 +7,8 @@ final class _FakeStore implements TodoFollowupGenerationStore {
     Map<String, List<TodoActivity>>? activitiesByTodoId,
     Map<String, List<TodoFollowupSuggestion>>? suggestionsByTodoId,
     this.reenqueueOnMarkRunning = const <String, TodoFollowupGenerationJob>{},
+    this.reenqueueOnUpsertSuggestions =
+        const <String, TodoFollowupGenerationJob>{},
     this.failMarkRunningTodoIds = const <String>{},
   })  : _jobs = List<TodoFollowupGenerationJob>.from(jobs),
         _todos = Map<String, Todo>.from(todos),
@@ -28,6 +30,7 @@ final class _FakeStore implements TodoFollowupGenerationStore {
   final Map<String, List<TodoActivity>> _activitiesByTodoId;
   final Map<String, List<TodoFollowupSuggestion>> _suggestionsByTodoId;
   final Map<String, TodoFollowupGenerationJob> reenqueueOnMarkRunning;
+  final Map<String, TodoFollowupGenerationJob> reenqueueOnUpsertSuggestions;
   final Set<String> failMarkRunningTodoIds;
 
   String? lastSucceededTodoId;
@@ -200,6 +203,13 @@ final class _FakeStore implements TodoFollowupGenerationStore {
     required String source,
     String? generationKey,
   }) async {
+    final replacement = reenqueueOnUpsertSuggestions[todoId];
+    if (replacement != null) {
+      final index = _jobs.indexWhere((job) => job.todoId == todoId);
+      if (index != -1) {
+        _jobs[index] = replacement;
+      }
+    }
     lastUpsertedSuggestions =
         List<TodoFollowupSuggestionDraftInput>.from(suggestions);
     final next = List<TodoFollowupSuggestion>.from(
@@ -251,6 +261,37 @@ final class _FakeStore implements TodoFollowupGenerationStore {
       );
     }
     _suggestionsByTodoId[todoId] = next;
+  }
+
+  @override
+  Future<bool> upsertGeneratedTodoFollowupSuggestionsIfCurrentClaim({
+    required String todoId,
+    required int jobStartedAtMs,
+    required List<TodoFollowupSuggestionDraftInput> suggestions,
+    required String source,
+    String? generationKey,
+  }) async {
+    final currentJob = jobFor(todoId);
+    if (currentJob == null ||
+        currentJob.status != 'running' ||
+        currentJob.updatedAtMs.toInt() != jobStartedAtMs) {
+      return false;
+    }
+    final replacement = reenqueueOnUpsertSuggestions[todoId];
+    if (replacement != null) {
+      final index = _jobs.indexWhere((job) => job.todoId == todoId);
+      if (index != -1) {
+        _jobs[index] = replacement;
+      }
+      return false;
+    }
+    await upsertGeneratedTodoFollowupSuggestions(
+      todoId: todoId,
+      suggestions: suggestions,
+      source: source,
+      generationKey: generationKey,
+    );
+    return true;
   }
 }
 

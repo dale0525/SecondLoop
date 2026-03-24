@@ -37,6 +37,14 @@ abstract class TodoFollowupGenerationStore {
     String? generationKey,
   });
 
+  Future<bool> upsertGeneratedTodoFollowupSuggestionsIfCurrentClaim({
+    required String todoId,
+    required int jobStartedAtMs,
+    required List<TodoFollowupSuggestionDraftInput> suggestions,
+    required String source,
+    String? generationKey,
+  });
+
   Future<void> markJobRunning({
     required String todoId,
     required int nowMs,
@@ -241,12 +249,18 @@ final class TodoFollowupGenerationRunner {
           continue;
         }
 
-        await store.upsertGeneratedTodoFollowupSuggestions(
+        final didPersistSuggestions =
+            await store.upsertGeneratedTodoFollowupSuggestionsIfCurrentClaim(
           todoId: job.todoId,
+          jobStartedAtMs: jobStartedAtMs,
           suggestions: generatedSuggestions,
           source: client.source,
           generationKey: generationKey,
         );
+        if (!didPersistSuggestions) {
+          processed++;
+          continue;
+        }
 
         final updatedSuggestions =
             await store.listTodoFollowupSuggestions(job.todoId);

@@ -687,6 +687,30 @@ pub fn db_upsert_generated_todo_followup_suggestions(
 }
 
 #[flutter_rust_bridge::frb]
+pub fn db_upsert_generated_todo_followup_suggestions_if_current_claim(
+    app_dir: String,
+    key: Vec<u8>,
+    todo_id: String,
+    job_started_at_ms: i64,
+    suggestions: Vec<db::TodoFollowupSuggestionDraftInput>,
+    source: String,
+    generation_key: Option<String>,
+) -> Result<bool> {
+    let key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    ensure_todo_access(&conn, &key, &todo_id)?;
+    db::upsert_generated_todo_followup_suggestions_if_current_claim(
+        &conn,
+        &key,
+        &todo_id,
+        job_started_at_ms,
+        &suggestions,
+        &source,
+        generation_key.as_deref(),
+    )
+}
+
+#[flutter_rust_bridge::frb]
 #[allow(clippy::too_many_arguments)]
 pub fn db_upsert_todo_with_auto_followup_job(
     app_dir: String,

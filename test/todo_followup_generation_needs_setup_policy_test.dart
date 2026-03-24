@@ -331,6 +331,16 @@ final class _RecordingTodoFollowupGenerationStore
   }
 
   @override
+  Future<bool> upsertGeneratedTodoFollowupSuggestionsIfCurrentClaim({
+    required String todoId,
+    required int jobStartedAtMs,
+    required List<TodoFollowupSuggestionDraftInput> suggestions,
+    required String source,
+    String? generationKey,
+  }) async =>
+      true;
+
+  @override
   Future<void> markJobSucceeded({
     required String todoId,
     required int nowMs,

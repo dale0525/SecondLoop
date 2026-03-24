@@ -322,6 +322,76 @@ void main() {
     expect(store.pendingSuggestionsFor('todo_research'), isEmpty);
   });
 
+  test('runner does not write suggestions after claim becomes stale', () async {
+    const replacementJob = TodoFollowupGenerationJob(
+      todoId: 'todo_research',
+      triggerKind: 'auto_create',
+      status: 'pending',
+      attempts: 0,
+      nextRetryAtMs: null,
+      lastError: null,
+      includeManualFollowups: false,
+      taskTypeHint: null,
+      createdAtMs: 2000,
+      updatedAtMs: 2000,
+    );
+    final store = _FakeStore(
+      jobs: const <TodoFollowupGenerationJob>[
+        TodoFollowupGenerationJob(
+          todoId: 'todo_research',
+          triggerKind: 'auto_create',
+          status: 'pending',
+          attempts: 0,
+          nextRetryAtMs: null,
+          lastError: null,
+          includeManualFollowups: false,
+          taskTypeHint: null,
+          createdAtMs: 1000,
+          updatedAtMs: 1000,
+        ),
+      ],
+      todos: const <String, Todo>{
+        'todo_research': Todo(
+          id: 'todo_research',
+          title: '调研一下当前主流的 llm 模型',
+          status: 'open',
+          createdAtMs: 0,
+          updatedAtMs: 0,
+        ),
+      },
+      reenqueueOnUpsertSuggestions: <String, TodoFollowupGenerationJob>{
+        'todo_research': replacementJob,
+      },
+    );
+    final client = _FakeClient(
+      responseByMode: <TodoFollowupGenerationMode, TodoFollowupSuggestionDraft>{
+        TodoFollowupGenerationMode.modelKnowledge:
+            const TodoFollowupSuggestionDraft(
+          content: '以下内容基于模型知识整理，未联网核实。',
+          mode: TodoFollowupGenerationMode.modelKnowledge,
+          citations: <TodoFollowupCitationDraft>[],
+        ),
+      },
+    );
+
+    var nowMs = 1000;
+    final runner = TodoFollowupGenerationRunner(
+      store: store,
+      client: client,
+      settings: const TodoFollowupGenerationRunnerSettings(
+        hardTimeout: Duration(milliseconds: 200),
+      ),
+      nowMs: () => nowMs++,
+    );
+
+    final result = await runner.runOnce(localeTag: 'zh-CN');
+
+    expect(result.processed, 1);
+    expect(store.lastSucceededTodoId, isNull);
+    expect(store.jobFor('todo_research')?.status, 'pending');
+    expect(store.pendingSuggestionsFor('todo_research'), isEmpty);
+  });
+
   test('runner skips claimed-by-other jobs without marking failure', () async {
     final store = _FakeStore(
       jobs: const <TodoFollowupGenerationJob>[

@@ -465,6 +465,19 @@ abstract class AppBackend {
     throw UnimplementedError('upsertGeneratedTodoFollowupSuggestions');
   }
 
+  Future<bool> upsertGeneratedTodoFollowupSuggestionsIfCurrentClaim(
+    Uint8List key, {
+    required String todoId,
+    required int jobStartedAtMs,
+    required List<TodoFollowupSuggestionDraftInput> suggestions,
+    required String source,
+    String? generationKey,
+  }) {
+    throw UnimplementedError(
+      'upsertGeneratedTodoFollowupSuggestionsIfCurrentClaim',
+    );
+  }
+
   Future<List<TodoActivity>> applyTodoFollowupSuggestions(
     Uint8List key, {
     required String todoId,

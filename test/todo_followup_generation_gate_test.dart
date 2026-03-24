@@ -1408,6 +1408,32 @@ final class _FakeTodoFollowupGenerationGateBackend extends NativeAppBackend {
   }
 
   @override
+  Future<bool> upsertGeneratedTodoFollowupSuggestionsIfCurrentClaim(
+    Uint8List key, {
+    required String todoId,
+    required int jobStartedAtMs,
+    required List<TodoFollowupSuggestionDraftInput> suggestions,
+    required String source,
+    String? generationKey,
+  }) async {
+    final job = _jobFor(todoId);
+    if (job == null ||
+        job.status != 'running' ||
+        job.updatedAtMs.toInt() != jobStartedAtMs) {
+      return false;
+    }
+
+    await upsertGeneratedTodoFollowupSuggestions(
+      key,
+      todoId: todoId,
+      suggestions: suggestions,
+      source: source,
+      generationKey: generationKey,
+    );
+    return true;
+  }
+
+  @override
   Future<String> taskPriorityRerankAi(
     Uint8List key, {
     required String prompt,
@@ -1769,6 +1795,16 @@ final class _FakeTodoFollowupGenerationStore
     required String source,
     String? generationKey,
   }) async {}
+
+  @override
+  Future<bool> upsertGeneratedTodoFollowupSuggestionsIfCurrentClaim({
+    required String todoId,
+    required int jobStartedAtMs,
+    required List<TodoFollowupSuggestionDraftInput> suggestions,
+    required String source,
+    String? generationKey,
+  }) async =>
+      true;
 }
 
 final class _QueuedPreviewTodoFollowupGenerationStore

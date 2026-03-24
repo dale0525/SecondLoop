@@ -366,6 +366,24 @@ Future<List<TodoFollowupSuggestion>> dbUpsertGeneratedTodoFollowupSuggestions(
         source: source,
         generationKey: generationKey);
 
+Future<bool> dbUpsertGeneratedTodoFollowupSuggestionsIfCurrentClaim(
+        {required String appDir,
+        required List<int> key,
+        required String todoId,
+        required PlatformInt64 jobStartedAtMs,
+        required List<TodoFollowupSuggestionDraftInput> suggestions,
+        required String source,
+        String? generationKey}) =>
+    RustLib.instance.api
+        .crateApiCoreDbUpsertGeneratedTodoFollowupSuggestionsIfCurrentClaim(
+            appDir: appDir,
+            key: key,
+            todoId: todoId,
+            jobStartedAtMs: jobStartedAtMs,
+            suggestions: suggestions,
+            source: source,
+            generationKey: generationKey);
+
 Future<Todo> dbUpsertTodoWithAutoFollowupJob(
         {required String appDir,
         required List<int> key,

@@ -56,6 +56,17 @@ typedef DbUpsertGeneratedTodoFollowupSuggestionsFn
   String? generationKey,
 });
 
+typedef DbUpsertGeneratedTodoFollowupSuggestionsIfCurrentClaimFn = Future<bool>
+    Function({
+  required String appDir,
+  required List<int> key,
+  required String todoId,
+  required int jobStartedAtMs,
+  required List<TodoFollowupSuggestionDraftInput> suggestions,
+  required String source,
+  String? generationKey,
+});
+
 typedef DbApplyTodoFollowupSuggestionsFn = Future<List<TodoActivity>> Function({
   required String appDir,
   required List<int> key,

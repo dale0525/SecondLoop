@@ -388,6 +388,37 @@ INSERT INTO todo_followup_suggestions(
     })
 }
 
+pub fn upsert_generated_todo_followup_suggestions_if_current_claim(
+    conn: &Connection,
+    key: &[u8; 32],
+    todo_id: &str,
+    job_started_at_ms: i64,
+    suggestions: &[TodoFollowupSuggestionDraftInput],
+    source: &str,
+    generation_key: Option<&str>,
+) -> Result<bool> {
+    run_immediate_transaction(conn, || {
+        let Some(job) = crate::db::find_todo_followup_generation_job(conn, todo_id)? else {
+            return Ok(false);
+        };
+        if job.status != crate::db::TODO_FOLLOWUP_GENERATION_JOB_STATUS_RUNNING
+            || job.updated_at_ms != job_started_at_ms
+        {
+            return Ok(false);
+        }
+
+        upsert_generated_todo_followup_suggestions(
+            conn,
+            key,
+            todo_id,
+            suggestions,
+            source,
+            generation_key,
+        )?;
+        Ok(true)
+    })
+}
+
 pub fn apply_todo_followup_suggestions(
     conn: &Connection,
     key: &[u8; 32],

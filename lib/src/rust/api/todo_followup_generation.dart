@@ -7,7 +7,7 @@ import '../db.dart';
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `is_todo_access_error`, `key_from_bytes`, `list_visible_due_auto_todo_followup_generation_jobs`
+// These functions are ignored because they are not marked as `pub`: `key_from_bytes`, `list_visible_due_auto_todo_followup_generation_jobs`
 
 Future<List<TodoFollowupGenerationJob>> dbListDueAutoTodoFollowupGenerationJobs(
         {required String appDir,

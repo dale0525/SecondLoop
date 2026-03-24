@@ -347,6 +347,17 @@ final class _PreviewStore implements TodoFollowupGenerationStore {
   }
 
   @override
+  Future<bool> upsertGeneratedTodoFollowupSuggestionsIfCurrentClaim({
+    required String todoId,
+    required int jobStartedAtMs,
+    required List<TodoFollowupSuggestionDraftInput> suggestions,
+    required String source,
+    String? generationKey,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
   Future<void> markJobRunning({
     required String todoId,
     required int nowMs,

@@ -32,6 +32,8 @@ abstract class _NativeAppBackendAccess
   DbListTodoFollowupSuggestionsFn get _dbListTodoFollowupSuggestions;
   DbUpsertGeneratedTodoFollowupSuggestionsFn
       get _dbUpsertGeneratedTodoFollowupSuggestions;
+  DbUpsertGeneratedTodoFollowupSuggestionsIfCurrentClaimFn
+      get _dbUpsertGeneratedTodoFollowupSuggestionsIfCurrentClaim;
   DbApplyTodoFollowupSuggestionsFn get _dbApplyTodoFollowupSuggestions;
   DbDismissTodoFollowupSuggestionsFn get _dbDismissTodoFollowupSuggestions;
   DbDismissAllTodoFollowupSuggestionsFn
@@ -507,6 +509,27 @@ mixin _NativeAppBackendTodos on _NativeAppBackendAccess {
       appDir: appDir,
       key: key,
       todoId: todoId,
+      suggestions: suggestions,
+      source: source,
+      generationKey: generationKey,
+    );
+  }
+
+  @override
+  Future<bool> upsertGeneratedTodoFollowupSuggestionsIfCurrentClaim(
+    Uint8List key, {
+    required String todoId,
+    required int jobStartedAtMs,
+    required List<TodoFollowupSuggestionDraftInput> suggestions,
+    required String source,
+    String? generationKey,
+  }) async {
+    final appDir = await _getAppDir();
+    return _dbUpsertGeneratedTodoFollowupSuggestionsIfCurrentClaim(
+      appDir: appDir,
+      key: key,
+      todoId: todoId,
+      jobStartedAtMs: jobStartedAtMs,
       suggestions: suggestions,
       source: source,
       generationKey: generationKey,

@@ -319,6 +319,8 @@ class NativeAppBackend extends _NativeAppBackendAccess
     DbListTodoFollowupSuggestionsFn? dbListTodoFollowupSuggestions,
     DbUpsertGeneratedTodoFollowupSuggestionsFn?
         dbUpsertGeneratedTodoFollowupSuggestions,
+    DbUpsertGeneratedTodoFollowupSuggestionsIfCurrentClaimFn?
+        dbUpsertGeneratedTodoFollowupSuggestionsIfCurrentClaim,
     DbApplyTodoFollowupSuggestionsFn? dbApplyTodoFollowupSuggestions,
     DbDismissTodoFollowupSuggestionsFn? dbDismissTodoFollowupSuggestions,
     DbDismissAllTodoFollowupSuggestionsFn? dbDismissAllTodoFollowupSuggestions,
@@ -393,6 +395,10 @@ class NativeAppBackend extends _NativeAppBackendAccess
         _dbUpsertGeneratedTodoFollowupSuggestions =
             dbUpsertGeneratedTodoFollowupSuggestions ??
                 rust_core.dbUpsertGeneratedTodoFollowupSuggestions,
+        _dbUpsertGeneratedTodoFollowupSuggestionsIfCurrentClaim =
+            dbUpsertGeneratedTodoFollowupSuggestionsIfCurrentClaim ??
+                rust_core
+                    .dbUpsertGeneratedTodoFollowupSuggestionsIfCurrentClaim,
         _dbApplyTodoFollowupSuggestions = dbApplyTodoFollowupSuggestions ??
             rust_core.dbApplyTodoFollowupSuggestions,
         _dbDismissTodoFollowupSuggestions = dbDismissTodoFollowupSuggestions ??
@@ -483,6 +489,9 @@ class NativeAppBackend extends _NativeAppBackendAccess
   @override
   final DbUpsertGeneratedTodoFollowupSuggestionsFn
       _dbUpsertGeneratedTodoFollowupSuggestions;
+  @override
+  final DbUpsertGeneratedTodoFollowupSuggestionsIfCurrentClaimFn
+      _dbUpsertGeneratedTodoFollowupSuggestionsIfCurrentClaim;
   @override
   final DbApplyTodoFollowupSuggestionsFn _dbApplyTodoFollowupSuggestions;
   @override
