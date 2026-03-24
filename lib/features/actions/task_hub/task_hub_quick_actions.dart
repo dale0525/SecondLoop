@@ -179,8 +179,8 @@ class TaskHubQuickActionsController {
     final updated = await backend.transitionTodo(
       sessionKey,
       todoId: todo.id,
-      manualImportanceNudgeScore: nextImportance,
-      manualUrgencyNudgeScore: nextUrgency,
+      manualImportanceNudgeScore: importanceDelta != 0 ? nextImportance : null,
+      manualUrgencyNudgeScore: urgencyDelta != 0 ? nextUrgency : null,
     );
     if ((updated.manualImportanceNudgeScore ?? 0) ==
             (todo.manualImportanceNudgeScore ?? 0) &&

@@ -22,6 +22,8 @@ final class QuickActionBackendTestDouble extends AppBackend {
   var transitionTodoCalls = 0;
   var deleteTodoCalls = 0;
   var setTodoStatusCalls = 0;
+  int? lastTransitionManualImportanceNudgeScore;
+  int? lastTransitionManualUrgencyNudgeScore;
 
   Todo current(String id) => _todosById[id]!;
   List<Todo> all() => _todosById.values.toList(growable: false);
@@ -89,6 +91,8 @@ final class QuickActionBackendTestDouble extends AppBackend {
     String? sourceMessageId,
   }) async {
     transitionTodoCalls += 1;
+    lastTransitionManualImportanceNudgeScore = manualImportanceNudgeScore;
+    lastTransitionManualUrgencyNudgeScore = manualUrgencyNudgeScore;
     if (failOnTransitionCall == transitionTodoCalls) {
       throw StateError('transition failed');
     }

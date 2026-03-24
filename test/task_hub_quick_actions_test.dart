@@ -275,6 +275,33 @@ void main() {
     expect(backend.current('t-importance').manualImportanceNudgeScore, 0);
   });
 
+  test('urgency-only change leaves unchanged importance field unpatched',
+      () async {
+    SharedPreferences.setMockInitialValues({});
+
+    final initial = todo(
+      id: 't-urgency-null',
+      title: 'Task urgency null',
+      updatedAtMs: 10,
+      manualImportanceNudgeScore: null,
+      manualUrgencyNudgeScore: null,
+    );
+    final backend = QuickActionBackendTestDouble(initialTodos: [initial]);
+    final controller = TaskHubQuickActionsController(
+      backend: backend,
+      sessionKey: Uint8List(32),
+    );
+
+    final ticket = await controller.apply(
+      initial,
+      TaskHubQuickAction.increaseUrgency,
+    );
+
+    expect(ticket, isNotNull);
+    expect(backend.lastTransitionManualImportanceNudgeScore, isNull);
+    expect(backend.lastTransitionManualUrgencyNudgeScore, 1);
+  });
+
   test('concurrent urgency increases stay at a single up nudge', () async {
     SharedPreferences.setMockInitialValues({});
 
