@@ -80,6 +80,12 @@ String buildTaskPriorityAiCacheScopeKey({
   ]);
 }
 
+bool _isUninitializedRustBridgeStateError(StateError error) {
+  return error.message.toString().contains(
+        'flutter_rust_bridge has not been initialized',
+      );
+}
+
 Future<String?> resolveTaskPriorityAiCacheScopeKey(
   AppBackend backend,
   Uint8List sessionKey, {
@@ -101,28 +107,78 @@ Future<String?> resolveTaskPriorityAiCacheScopeKey(
         partitionKey: 'cloud:$uid',
       );
     case AskAiRouteKind.byok:
-      final profiles = await backend.listLlmProfiles(sessionKey);
-      LlmProfile? activeProfile;
-      for (final profile in profiles) {
-        if (profile.isActive) {
-          activeProfile = profile;
-          break;
+      try {
+        final profiles = await backend.listLlmProfiles(sessionKey);
+        LlmProfile? activeProfile;
+        for (final profile in profiles) {
+          if (profile.isActive) {
+            activeProfile = profile;
+            break;
+          }
         }
+        if (activeProfile == null) return null;
+        return buildTaskPriorityAiCacheScopeKey(
+          route: route,
+          gatewayBaseUrl: activeProfile.baseUrl ?? '',
+          modelName: activeProfile.modelName,
+          localeTag: localeTag,
+          partitionKey: jsonEncode(<String>[
+            activeProfile.id,
+            activeProfile.providerType,
+          ]),
+        );
+      } on StateError catch (error) {
+        if (!_isUninitializedRustBridgeStateError(error)) rethrow;
+        return buildTaskPriorityAiCacheScopeKey(
+          route: route,
+          gatewayBaseUrl: gatewayBaseUrl,
+          modelName: modelName,
+          localeTag: localeTag,
+        );
       }
-      if (activeProfile == null) return null;
-      return buildTaskPriorityAiCacheScopeKey(
-        route: route,
-        gatewayBaseUrl: activeProfile.baseUrl ?? '',
-        modelName: activeProfile.modelName,
-        localeTag: localeTag,
-        partitionKey: jsonEncode(<String>[
-          activeProfile.id,
-          activeProfile.providerType,
-        ]),
-      );
     case AskAiRouteKind.needsSetup:
       return null;
   }
+}
+
+Future<String> buildTaskPriorityRefreshDependencyKey(
+  AppBackend backend,
+  Uint8List sessionKey, {
+  required SubscriptionStatus subscriptionStatus,
+  required String gatewayBaseUrl,
+  required String modelName,
+  required String localeTag,
+  String? cloudUid,
+}) async {
+  final cloudRouteScope = subscriptionStatus == SubscriptionStatus.entitled
+      ? await resolveTaskPriorityAiCacheScopeKey(
+          backend,
+          sessionKey,
+          route: AskAiRouteKind.cloudGateway,
+          gatewayBaseUrl: gatewayBaseUrl,
+          modelName: modelName,
+          localeTag: localeTag,
+          cloudUid: cloudUid,
+        )
+      : null;
+  final byokScope = await resolveTaskPriorityAiCacheScopeKey(
+    backend,
+    sessionKey,
+    route: AskAiRouteKind.byok,
+    gatewayBaseUrl: gatewayBaseUrl,
+    modelName: modelName,
+    localeTag: localeTag,
+    cloudUid: cloudUid,
+  );
+  return jsonEncode(<String, Object?>{
+    'subscription_status': subscriptionStatus.name,
+    'cloud_uid': (cloudUid ?? '').trim(),
+    'gateway_base_url': gatewayBaseUrl.trim(),
+    'model_name': modelName.trim(),
+    'locale_tag': localeTag.trim(),
+    'cloud_scope': cloudRouteScope,
+    'byok_scope': byokScope,
+  });
 }
 
 Future<AskAiRouteKind> resolveTaskPriorityAiRoute(

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/backend/app_backend.dart';
 import '../../core/session/session_scope.dart';
+import '../../core/sync/sync_engine_gate.dart';
 import '../../i18n/strings.g.dart';
 import '../../src/rust/db.dart';
 import '../../ui/sl_surface.dart';
@@ -356,7 +357,9 @@ class _LlmProfilesPageState extends State<LlmProfilesPage> {
     try {
       final backend = AppBackendScope.of(context);
       final key = SessionScope.of(context).sessionKey;
+      final syncEngine = SyncEngineScope.maybeOf(context);
       await backend.setActiveLlmProfile(key, profileId);
+      syncEngine?.notifyLocalMutation();
       await _loadProfiles();
     } catch (e) {
       if (mounted) setState(() => _error = '$e');
@@ -403,7 +406,9 @@ class _LlmProfilesPageState extends State<LlmProfilesPage> {
     try {
       final backend = AppBackendScope.of(context);
       final key = SessionScope.of(context).sessionKey;
+      final syncEngine = SyncEngineScope.maybeOf(context);
       await backend.deleteLlmProfile(key, profile.id);
+      syncEngine?.notifyLocalMutation();
       await _loadProfiles();
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -443,6 +448,7 @@ class _LlmProfilesPageState extends State<LlmProfilesPage> {
     try {
       final backend = AppBackendScope.of(context);
       final key = SessionScope.of(context).sessionKey;
+      final syncEngine = SyncEngineScope.maybeOf(context);
       await backend.createLlmProfile(
         key,
         name: name,
@@ -452,6 +458,7 @@ class _LlmProfilesPageState extends State<LlmProfilesPage> {
         modelName: modelName,
         setActive: true,
       );
+      syncEngine?.notifyLocalMutation();
       _apiKeyController.clear();
       await _loadProfiles();
       if (!mounted) return;

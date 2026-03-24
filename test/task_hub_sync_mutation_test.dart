@@ -10,6 +10,7 @@ import 'package:secondloop/core/sync/sync_engine.dart';
 import 'package:secondloop/core/sync/sync_engine_gate.dart';
 import 'package:secondloop/features/actions/task_hub/task_hub_page.dart';
 import 'package:secondloop/features/actions/task_hub/task_priority_ai.dart';
+import 'package:secondloop/features/settings/llm_profiles_page.dart';
 import 'package:secondloop/src/rust/db.dart';
 
 import 'test_i18n.dart';
@@ -172,6 +173,129 @@ void main() {
     expect(backend.transitionTodoCalls, greaterThanOrEqualTo(1));
     expect(changes, greaterThanOrEqualTo(1));
     expect(find.text('prepare draft'), findsWidgets);
+  });
+
+  testWidgets('activating an llm profile notifies sync engine', (tester) async {
+    SharedPreferences.setMockInitialValues({});
+
+    final backend = _TaskHubBackend(
+      todos: const <Todo>[],
+      llmProfiles: <LlmProfile>[
+        const LlmProfile(
+          id: 'profile-a',
+          name: 'Profile A',
+          providerType: 'openai_compatible',
+          baseUrl: 'https://a.example',
+          modelName: 'model-a',
+          isActive: true,
+          createdAtMs: 1,
+          updatedAtMs: 1,
+        ),
+        const LlmProfile(
+          id: 'profile-b',
+          name: 'Profile B',
+          providerType: 'openai_compatible',
+          baseUrl: 'https://b.example',
+          modelName: 'model-b',
+          isActive: false,
+          createdAtMs: 2,
+          updatedAtMs: 2,
+        ),
+      ],
+    );
+
+    final engine = SyncEngine(
+      syncRunner: _NoopSyncRunner(),
+      loadConfig: () async => null,
+      pullOnStart: false,
+    );
+    var changes = 0;
+    engine.changes.addListener(() => changes += 1);
+
+    await tester.pumpWidget(
+      SyncEngineScope(
+        engine: engine,
+        child: AppBackendScope(
+          backend: backend,
+          child: SessionScope(
+            sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+            lock: () {},
+            child: wrapWithI18n(
+              const MaterialApp(home: LlmProfilesPage()),
+            ),
+          ),
+        ),
+      ),
+    );
+    await _pumpUntilFound(tester, find.text('Profile B'));
+
+    await tester.tap(find.text('Profile B'));
+    await _pumpUntil(
+      tester,
+      () => backend.setActiveLlmProfileCalls >= 1 && changes >= 1,
+    );
+
+    expect(backend.setActiveLlmProfileCalls, 1);
+    expect(changes, greaterThanOrEqualTo(1));
+  });
+
+  testWidgets('task hub refreshes after sync engine reports external changes',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({
+      'actions.review.day_end_minutes_v1': (23 * 60) + 59,
+    });
+
+    final nowUtcMs = DateTime.now().toUtc().millisecondsSinceEpoch;
+    final backend = _TaskHubBackend(
+      todos: <Todo>[
+        Todo(
+          id: 'todo:1',
+          title: 'Old title',
+          status: 'open',
+          createdAtMs: nowUtcMs - 1000,
+          updatedAtMs: nowUtcMs - 1000,
+          reviewStage: null,
+          nextReviewAtMs: null,
+        ),
+      ],
+    );
+    final engine = SyncEngine(
+      syncRunner: _NoopSyncRunner(),
+      loadConfig: () async => null,
+      pullOnStart: false,
+    );
+
+    await tester.pumpWidget(
+      SyncEngineScope(
+        engine: engine,
+        child: AppBackendScope(
+          backend: backend,
+          child: SessionScope(
+            sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+            lock: () {},
+            child: wrapWithI18n(
+              const MaterialApp(home: TaskHubPage()),
+            ),
+          ),
+        ),
+      ),
+    );
+    await _pumpUntilFound(tester, find.text('Old title'));
+
+    backend.replaceTodo(
+      Todo(
+        id: 'todo:1',
+        title: 'Updated title',
+        status: 'open',
+        createdAtMs: nowUtcMs - 1000,
+        updatedAtMs: nowUtcMs,
+        reviewStage: null,
+        nextReviewAtMs: null,
+      ),
+    );
+    engine.notifyExternalChange();
+
+    await _pumpUntilFound(tester, find.text('Updated title'));
   });
 
   testWidgets(
@@ -341,15 +465,20 @@ final class _NoopSyncRunner implements SyncRunner {
 }
 
 final class _TaskHubBackend implements AppBackend {
-  _TaskHubBackend({required List<Todo> todos})
+  _TaskHubBackend({required List<Todo> todos, List<LlmProfile>? llmProfiles})
       : _todosById = <String, Todo>{
           for (final todo in todos) todo.id: todo,
-        };
+        },
+        _llmProfiles = List<LlmProfile>.from(
+          llmProfiles ?? const <LlmProfile>[],
+        );
 
   final Map<String, Todo> _todosById;
+  final List<LlmProfile> _llmProfiles;
   int upsertTodoCalls = 0;
   int transitionTodoCalls = 0;
   int setTodoStatusCalls = 0;
+  int setActiveLlmProfileCalls = 0;
 
   @override
   Future<List<Todo>> listTodos(Uint8List key) async =>
@@ -448,7 +577,29 @@ final class _TaskHubBackend implements AppBackend {
 
   @override
   Future<List<LlmProfile>> listLlmProfiles(Uint8List key) async =>
-      const <LlmProfile>[];
+      List<LlmProfile>.from(_llmProfiles);
+
+  void replaceTodo(Todo todo) {
+    _todosById[todo.id] = todo;
+  }
+
+  @override
+  Future<void> setActiveLlmProfile(Uint8List key, String profileId) async {
+    setActiveLlmProfileCalls += 1;
+    for (var i = 0; i < _llmProfiles.length; i += 1) {
+      final profile = _llmProfiles[i];
+      _llmProfiles[i] = LlmProfile(
+        id: profile.id,
+        name: profile.name,
+        providerType: profile.providerType,
+        baseUrl: profile.baseUrl,
+        modelName: profile.modelName,
+        isActive: profile.id == profileId,
+        createdAtMs: profile.createdAtMs,
+        updatedAtMs: profile.updatedAtMs,
+      );
+    }
+  }
 
   @override
   Future<Todo> setTodoStatus(

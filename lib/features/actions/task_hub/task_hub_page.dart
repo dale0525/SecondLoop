@@ -10,6 +10,7 @@ import '../../../core/cloud/cloud_auth_scope.dart';
 import '../../../core/cloud/cloud_capability_auth.dart';
 import '../../../core/session/session_scope.dart';
 import '../../../core/subscription/subscription_scope.dart';
+import '../../../core/sync/sync_engine.dart';
 import '../../../core/sync/sync_engine_gate.dart';
 import '../../../i18n/strings.g.dart';
 import '../../../src/rust/db.dart';
@@ -48,10 +49,19 @@ class _TaskHubPageState extends State<TaskHubPage> {
   ScaffoldMessengerState? _quickActionSnackMessenger;
   Object? _quickActionSnackToken;
   var _doneVisibleCount = _kDonePageSize;
-  String? _refreshDependencyKey;
+
+  SyncEngine? _syncEngine;
+  VoidCallback? _syncListener;
 
   @override
   void dispose() {
+    final oldEngine = _syncEngine;
+    final oldListener = _syncListener;
+    if (oldEngine != null && oldListener != null) {
+      oldEngine.changes.removeListener(oldListener);
+    }
+    _syncEngine = null;
+    _syncListener = null;
     if (_quickActionSnackToken != null &&
         (_quickActionSnackMessenger?.mounted ?? false)) {
       _quickActionSnackMessenger?.removeCurrentSnackBar();
@@ -69,9 +79,7 @@ class _TaskHubPageState extends State<TaskHubPage> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    final refreshDependencyKey = _buildRefreshDependencyKey();
-    final shouldForceRefresh = refreshDependencyKey != _refreshDependencyKey;
-    _refreshDependencyKey = refreshDependencyKey;
+    _attachSyncEngine();
     _store ??= TaskPriorityStore(
       backend: AppBackendScope.of(context),
       sessionKey: Uint8List.fromList(SessionScope.of(context).sessionKey),
@@ -102,24 +110,35 @@ class _TaskHubPageState extends State<TaskHubPage> {
       },
       feedbackStore: _feedbackStore,
     );
-    unawaited(_store!.refresh(force: shouldForceRefresh));
+
+    unawaited(_store?.refresh() ?? Future<void>.value());
   }
 
-  String _buildRefreshDependencyKey() {
-    final subscriptionStatus = SubscriptionScope.maybeOf(context)?.status ??
-        SubscriptionStatus.unknown;
-    final cloudAuthScope = CloudAuthScope.maybeOf(context);
-    final gatewayConfig =
-        cloudAuthScope?.gatewayConfig ?? CloudGatewayConfig.defaultConfig;
-    final cloudUid = (cloudAuthScope?.controller.uid ?? '').trim();
-    final localeTag = Localizations.localeOf(context).toLanguageTag();
-    return <String>[
-      subscriptionStatus.name,
-      cloudUid,
-      gatewayConfig.baseUrl.trim(),
-      gatewayConfig.modelName.trim(),
-      localeTag,
-    ].join('|');
+  void _attachSyncEngine() {
+    final engine = SyncEngineScope.maybeOf(context);
+    if (identical(engine, _syncEngine)) return;
+
+    final oldEngine = _syncEngine;
+    final oldListener = _syncListener;
+    if (oldEngine != null && oldListener != null) {
+      oldEngine.changes.removeListener(oldListener);
+    }
+
+    _syncEngine = engine;
+    if (engine == null) {
+      _syncListener = null;
+      return;
+    }
+
+    void onSyncChange() {
+      final store = _store;
+      if (!mounted || store == null) return;
+      store.markDirty();
+      unawaited(store.refresh(force: true));
+    }
+
+    _syncListener = onSyncChange;
+    engine.changes.addListener(onSyncChange);
   }
 
   Future<TaskPriorityAiService?> _resolveAiService() async {
