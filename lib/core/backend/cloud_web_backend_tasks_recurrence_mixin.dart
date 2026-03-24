@@ -10,6 +10,118 @@ mixin _CloudWebBackendTasksRecurrenceMixin on AppBackend {
 
   String _nextId(String prefix);
   Map<String, Todo> get _todosById;
+  int _touchNow();
+  PlatformInt64 _asPlatformInt64(int value);
+
+  ({String freq, int interval}) _parseRecurrenceRule(String ruleJson) {
+    final decoded = jsonDecode(ruleJson);
+    if (decoded is! Map) {
+      throw const FormatException('invalid_recurrence_rule');
+    }
+    final rawFreq = decoded['freq'];
+    if (rawFreq is! String) {
+      throw const FormatException('invalid_recurrence_rule');
+    }
+    final freq = rawFreq.trim().toLowerCase();
+    if (!const <String>{'daily', 'weekly', 'monthly', 'yearly'}
+        .contains(freq)) {
+      throw const FormatException('invalid_recurrence_rule');
+    }
+    final rawInterval = decoded['interval'];
+    final interval = switch (rawInterval) {
+      null => 1,
+      int value => value,
+      num value when value == value.toInt() => value.toInt(),
+      _ => 1,
+    }
+        .clamp(1, 10000);
+    return (freq: freq, interval: interval);
+  }
+
+  int _nextDueAtMs(int baseDueAtMs, String ruleJson) {
+    final rule = _parseRecurrenceRule(ruleJson);
+    switch (rule.freq) {
+      case 'daily':
+        return baseDueAtMs + rule.interval * Duration.millisecondsPerDay;
+      case 'weekly':
+        return baseDueAtMs + rule.interval * 7 * Duration.millisecondsPerDay;
+      case 'monthly':
+        final base =
+            DateTime.fromMillisecondsSinceEpoch(baseDueAtMs, isUtc: true);
+        return DateTime.utc(
+          base.year,
+          base.month + rule.interval,
+          base.day,
+          base.hour,
+          base.minute,
+          base.second,
+          base.millisecond,
+          base.microsecond,
+        ).millisecondsSinceEpoch;
+      case 'yearly':
+        final base =
+            DateTime.fromMillisecondsSinceEpoch(baseDueAtMs, isUtc: true);
+        return DateTime.utc(
+          base.year + rule.interval,
+          base.month,
+          base.day,
+          base.hour,
+          base.minute,
+          base.second,
+          base.millisecond,
+          base.microsecond,
+        ).millisecondsSinceEpoch;
+    }
+    throw StateError('unsupported recurrence freq: ${rule.freq}');
+  }
+
+  Future<void> _maybeSpawnNextRecurringTodo(
+    Uint8List key, {
+    required Todo todo,
+    required String newStatus,
+  }) async {
+    if (newStatus != 'done') return;
+    final baseDueAtMs = todo.dueAtMs;
+    if (baseDueAtMs == null) return;
+    final seriesId = _todoRecurrenceSeriesIdByTodoId[todo.id];
+    final occurrenceIndex = _todoRecurrenceOccurrenceIndexByTodoId[todo.id];
+    final ruleJson = _todoRecurrenceRuleJsonByTodoId[todo.id];
+    if (seriesId == null || occurrenceIndex == null || ruleJson == null) {
+      return;
+    }
+
+    final nextIndex = occurrenceIndex + 1;
+    final existingNext = _todoRecurrenceOccurrenceIndexByTodoId.entries.any(
+      (entry) =>
+          entry.value == nextIndex &&
+          _todoRecurrenceSeriesIdByTodoId[entry.key] == seriesId,
+    );
+    if (existingNext) return;
+
+    final nextTodoId = 'todo:$seriesId:$nextIndex';
+    final nextDueAtMs = _nextDueAtMs(baseDueAtMs, ruleJson);
+    final now = _touchNow();
+    _todosById[nextTodoId] = Todo(
+      id: nextTodoId,
+      title: todo.title,
+      dueAtMs: _asPlatformInt64(nextDueAtMs),
+      status: 'open',
+      sourceEntryId: todo.sourceEntryId,
+      createdAtMs: _asPlatformInt64(now),
+      updatedAtMs: _asPlatformInt64(now),
+      reviewStage: null,
+      nextReviewAtMs: null,
+      lastReviewAtMs: _asPlatformInt64(now),
+      manualImportanceNudgeScore: todo.manualImportanceNudgeScore,
+      manualUrgencyNudgeScore: todo.manualUrgencyNudgeScore,
+    );
+    _assignRecurrenceToTodo(
+      nextTodoId,
+      seriesId: seriesId,
+      ruleJson: ruleJson,
+      occurrenceIndex: nextIndex,
+    );
+  }
 
   void _validateRecurrenceRuleJson(String ruleJson) {
     final decoded = jsonDecode(ruleJson);
@@ -146,12 +258,18 @@ mixin _CloudWebBackendTasksRecurrenceMixin on AppBackend {
 
     switch (applyScope) {
       case TodoRecurrenceEditScope.thisOnly:
-        return setTodoStatus(
+        final updated = await setTodoStatus(
           key,
           todoId: todoId,
           newStatus: newStatus,
           sourceMessageId: sourceMessageId,
         );
+        await _maybeSpawnNextRecurringTodo(
+          key,
+          todo: updated,
+          newStatus: newStatus,
+        );
+        return updated;
       case TodoRecurrenceEditScope.thisAndFuture:
       case TodoRecurrenceEditScope.wholeSeries:
         final resolvedSeriesId = seriesId!;

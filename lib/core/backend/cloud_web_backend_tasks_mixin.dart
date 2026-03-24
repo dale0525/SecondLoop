@@ -15,7 +15,9 @@ mixin _CloudWebBackendTasksMixin
       <String, List<String>>{};
   @override
   String _nextId(String prefix);
+  @override
   int _touchNow();
+  @override
   PlatformInt64 _asPlatformInt64(int value);
   Map<String, Attachment> get _attachmentsBySha;
 

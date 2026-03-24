@@ -1029,6 +1029,57 @@ void main() {
       expect(byId['todo:series-c']!.status, 'in_progress');
     });
 
+    test('recurring done on web backend spawns next occurrence like native',
+        () async {
+      var nowMs = 10000;
+      final backend = CloudWebBackend(
+        chatClient: _FakeCloudWebChatClient(responseText: 'ok'),
+        nowMs: () => nowMs,
+      );
+      final key = Uint8List(0);
+
+      await backend.upsertTodo(
+        key,
+        id: 'todo:weekly-1',
+        title: 'Weekly report',
+        dueAtMs: 10000,
+        status: 'open',
+      );
+      await backend.upsertTodoRecurrence(
+        key,
+        todoId: 'todo:weekly-1',
+        seriesId: 'series-weekly',
+        ruleJson: '{"freq":"weekly"}',
+      );
+
+      final done = await backend.updateTodoStatusWithScope(
+        key,
+        todoId: 'todo:weekly-1',
+        newStatus: 'done',
+        scope: TodoRecurrenceEditScope.wholeSeries,
+      );
+
+      expect(done.id, 'todo:weekly-1');
+      expect(done.status, 'done');
+
+      final todos = await backend.listTodos(key);
+      expect(todos, hasLength(2));
+
+      final byId = <String, Todo>{for (final todo in todos) todo.id: todo};
+      expect(byId['todo:weekly-1']!.status, 'done');
+
+      final nextTodo = todos.firstWhere((todo) => todo.id != 'todo:weekly-1');
+      expect(nextTodo.title, 'Weekly report');
+      expect(nextTodo.status, 'open');
+      expect(nextTodo.dueAtMs, 10000 + 7 * 24 * 60 * 60 * 1000);
+
+      final nextRule = await backend.getTodoRecurrenceRuleJson(
+        key,
+        todoId: nextTodo.id,
+      );
+      expect(nextRule, '{"freq":"weekly"}');
+    });
+
     test('scoped recurrence rule updates honor wholeSeries and thisAndFuture',
         () async {
       final backend = CloudWebBackend(
