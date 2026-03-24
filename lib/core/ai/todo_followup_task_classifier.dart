@@ -51,7 +51,7 @@ final List<RegExp> _planningPatterns = <RegExp>[
 ];
 
 final List<RegExp> _executionPatterns = <RegExp>[
-  RegExp(r'修复|修|提交|发送|付款|上线|实现|fix|ship|submit|pay', caseSensitive: false),
+  RegExp(r'修复|修一下|修理|提交|发送|付款|上线|实现|fix|ship|submit|pay', caseSensitive: false),
 ];
 
 TodoFollowupTaskType classifyTodoFollowupTaskType(String raw) {

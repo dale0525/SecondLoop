@@ -34,6 +34,14 @@ void main() {
       TodoFollowupTaskType.execution,
     );
     expect(
+      classifyTodoFollowupTaskType('装修风格参考资料收集'),
+      isNot(TodoFollowupTaskType.execution),
+    );
+    expect(
+      classifyTodoFollowupTaskType('修一下客厅门锁'),
+      TodoFollowupTaskType.execution,
+    );
+    expect(
       classifyTodoFollowupTaskType('周五之前处理一下'),
       TodoFollowupTaskType.unknown,
     );
