@@ -182,8 +182,10 @@ class TaskHubQuickActionsController {
       manualImportanceNudgeScore: nextImportance,
       manualUrgencyNudgeScore: nextUrgency,
     );
-    if (updated.manualImportanceNudgeScore == todo.manualImportanceNudgeScore &&
-        updated.manualUrgencyNudgeScore == todo.manualUrgencyNudgeScore) {
+    if ((updated.manualImportanceNudgeScore ?? 0) ==
+            (todo.manualImportanceNudgeScore ?? 0) &&
+        (updated.manualUrgencyNudgeScore ?? 0) ==
+            (todo.manualUrgencyNudgeScore ?? 0)) {
       return null;
     }
     return TaskHubUndoTicket(

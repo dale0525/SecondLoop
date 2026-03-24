@@ -2,6 +2,9 @@ part of 'cloud_web_backend.dart';
 
 mixin _CloudWebBackendTasksMixin
     on AppBackend, _CloudWebBackendTasksRecurrenceMixin {
+  int _valueAsInt(PlatformInt64? value) => value?.toInt() ?? 0;
+  int? _nullableValueAsInt(PlatformInt64? value) => value?.toInt();
+  PlatformInt64 _platformInt(int value) => _asPlatformInt64(value);
   @override
   final Map<String, Todo> _todosById = <String, Todo>{};
   final Map<String, TodoActivity> _todoActivitiesById =
@@ -141,8 +144,8 @@ mixin _CloudWebBackendTasksMixin
     return (await listTodos(key))
         .where(
           (todo) =>
-              todo.createdAtMs >= startAtMsInclusive &&
-              todo.createdAtMs < endAtMsExclusive,
+              todo.createdAtMs.toInt() >= startAtMsInclusive &&
+              todo.createdAtMs.toInt() < endAtMsExclusive,
         )
         .toList(growable: false);
   }
@@ -163,14 +166,14 @@ mixin _CloudWebBackendTasksMixin
   }) async {
     final now = _touchNow();
     final existing = _todosById[id];
-    final targetManualImportanceNudgeScore = manualImportanceNudgeScore ??
-        (existing?.manualImportanceNudgeScore ?? 0);
-    final targetManualUrgencyNudgeScore =
-        manualUrgencyNudgeScore ?? (existing?.manualUrgencyNudgeScore ?? 0);
+    final int targetManualImportanceNudgeScore = manualImportanceNudgeScore ??
+        _valueAsInt(existing?.manualImportanceNudgeScore);
+    final int targetManualUrgencyNudgeScore = manualUrgencyNudgeScore ??
+        _valueAsInt(existing?.manualUrgencyNudgeScore);
     final todo = Todo(
       id: id,
       title: title,
-      dueAtMs: dueAtMs,
+      dueAtMs: dueAtMs == null ? null : _platformInt(dueAtMs),
       status: status,
       sourceEntryId: sourceEntryId,
       createdAtMs: existing?.createdAtMs ?? _asPlatformInt64(now),
@@ -181,9 +184,9 @@ mixin _CloudWebBackendTasksMixin
       lastReviewAtMs:
           lastReviewAtMs == null ? null : _asPlatformInt64(lastReviewAtMs),
       manualImportanceNudgeScore:
-          _asPlatformInt64(targetManualImportanceNudgeScore.clamp(-1, 1)),
+          _platformInt(targetManualImportanceNudgeScore.clamp(-1, 1).toInt()),
       manualUrgencyNudgeScore:
-          _asPlatformInt64(targetManualUrgencyNudgeScore.clamp(-1, 1)),
+          _platformInt(targetManualUrgencyNudgeScore.clamp(-1, 1).toInt()),
     );
     _todosById[id] = todo;
     return todo;
@@ -205,18 +208,19 @@ mixin _CloudWebBackendTasksMixin
     }
 
     final now = _touchNow();
-    final targetReviewStage = existing.status == 'inbox' && newStatus != 'inbox'
-        ? null
-        : existing.reviewStage;
-    final targetNextReviewAtMs =
+    final int? targetReviewStage =
         existing.status == 'inbox' && newStatus != 'inbox'
             ? null
-            : existing.nextReviewAtMs;
-    final targetDueAtMs = existing.dueAtMs == null &&
+            : existing.reviewStage?.toInt();
+    final int? targetNextReviewAtMs =
+        existing.status == 'inbox' && newStatus != 'inbox'
+            ? null
+            : existing.nextReviewAtMs?.toInt();
+    final int? targetDueAtMs = existing.dueAtMs == null &&
             existing.status == 'open' &&
             (newStatus == 'in_progress' || newStatus == 'done')
         ? now
-        : existing.dueAtMs;
+        : existing.dueAtMs?.toInt();
     final updated = await upsertTodo(
       key,
       id: existing.id,
@@ -224,11 +228,11 @@ mixin _CloudWebBackendTasksMixin
       dueAtMs: targetDueAtMs,
       status: newStatus,
       sourceEntryId: existing.sourceEntryId,
-      reviewStage: targetReviewStage,
-      nextReviewAtMs: targetNextReviewAtMs,
+      reviewStage: targetReviewStage?.toInt(),
+      nextReviewAtMs: targetNextReviewAtMs?.toInt(),
       lastReviewAtMs: now,
-      manualImportanceNudgeScore: existing.manualImportanceNudgeScore,
-      manualUrgencyNudgeScore: existing.manualUrgencyNudgeScore,
+      manualImportanceNudgeScore: existing.manualImportanceNudgeScore?.toInt(),
+      manualUrgencyNudgeScore: existing.manualUrgencyNudgeScore?.toInt(),
     );
     _recordStatusChangeActivity(
       existing: existing,
@@ -271,29 +275,34 @@ mixin _CloudWebBackendTasksMixin
           )
         : existing;
 
-    final targetDueAtMs = clearDueAtMs ? null : (dueAtMs ?? staged.dueAtMs);
-    final targetReviewStage =
-        clearReviewStage ? null : (reviewStage ?? staged.reviewStage);
-    final targetNextReviewAtMs =
-        clearNextReviewAtMs ? null : (nextReviewAtMs ?? staged.nextReviewAtMs);
-    final targetLastReviewAtMs =
-        clearLastReviewAtMs ? null : (lastReviewAtMs ?? staged.lastReviewAtMs);
+    final targetDueAtMs =
+        clearDueAtMs ? null : (dueAtMs ?? _nullableValueAsInt(staged.dueAtMs));
+    final targetReviewStage = clearReviewStage
+        ? null
+        : (reviewStage ?? _nullableValueAsInt(staged.reviewStage));
+    final targetNextReviewAtMs = clearNextReviewAtMs
+        ? null
+        : (nextReviewAtMs ?? _nullableValueAsInt(staged.nextReviewAtMs));
+    final targetLastReviewAtMs = clearLastReviewAtMs
+        ? null
+        : (lastReviewAtMs ?? _nullableValueAsInt(staged.lastReviewAtMs));
     final targetManualImportanceNudgeScore = clearManualImportanceNudgeScore
         ? 0
         : (manualImportanceNudgeScore ??
-            (staged.manualImportanceNudgeScore ?? 0));
+            _valueAsInt(staged.manualImportanceNudgeScore));
     final targetManualUrgencyNudgeScore = clearManualUrgencyNudgeScore
         ? 0
-        : (manualUrgencyNudgeScore ?? (staged.manualUrgencyNudgeScore ?? 0));
+        : (manualUrgencyNudgeScore ??
+            _valueAsInt(staged.manualUrgencyNudgeScore));
 
-    if (targetDueAtMs == staged.dueAtMs &&
-        targetReviewStage == staged.reviewStage &&
-        targetNextReviewAtMs == staged.nextReviewAtMs &&
-        targetLastReviewAtMs == staged.lastReviewAtMs &&
+    if (targetDueAtMs == _nullableValueAsInt(staged.dueAtMs) &&
+        targetReviewStage == _nullableValueAsInt(staged.reviewStage) &&
+        targetNextReviewAtMs == _nullableValueAsInt(staged.nextReviewAtMs) &&
+        targetLastReviewAtMs == _nullableValueAsInt(staged.lastReviewAtMs) &&
         targetManualImportanceNudgeScore ==
-            (staged.manualImportanceNudgeScore ?? 0) &&
+            _valueAsInt(staged.manualImportanceNudgeScore) &&
         targetManualUrgencyNudgeScore ==
-            (staged.manualUrgencyNudgeScore ?? 0)) {
+            _valueAsInt(staged.manualUrgencyNudgeScore)) {
       return staged;
     }
 
@@ -441,7 +450,7 @@ mixin _CloudWebBackendTasksMixin
       id: _nextId('checklist'),
       todoId: todoId,
       content: content,
-      sortOrder: bucket.length,
+      sortOrder: _platformInt(bucket.length),
       isDone: false,
       createdAtMs: _asPlatformInt64(now),
       updatedAtMs: _asPlatformInt64(now),
@@ -511,7 +520,7 @@ mixin _CloudWebBackendTasksMixin
           id: current.id,
           todoId: current.todoId,
           content: current.content,
-          sortOrder: i,
+          sortOrder: _platformInt(i),
           isDone: current.isDone,
           createdAtMs: current.createdAtMs,
           updatedAtMs: current.updatedAtMs,
@@ -543,7 +552,7 @@ mixin _CloudWebBackendTasksMixin
           id: item.id,
           todoId: item.todoId,
           content: item.content,
-          sortOrder: i,
+          sortOrder: _platformInt(i),
           isDone: item.isDone,
           createdAtMs: item.createdAtMs,
           updatedAtMs: item.updatedAtMs,
@@ -571,7 +580,7 @@ mixin _CloudWebBackendTasksMixin
           id: item.id,
           todoId: item.todoId,
           content: item.content,
-          sortOrder: reordered.length,
+          sortOrder: _platformInt(reordered.length),
           isDone: item.isDone,
           createdAtMs: item.createdAtMs,
           updatedAtMs: item.updatedAtMs,
@@ -604,8 +613,8 @@ mixin _CloudWebBackendTasksMixin
       progress.add(
         TodoChecklistProgress(
           todoId: todo.id,
-          totalCount: items.length,
-          doneCount: doneCount,
+          totalCount: _platformInt(items.length),
+          doneCount: _platformInt(doneCount),
         ),
       );
     }
@@ -640,7 +649,7 @@ mixin _CloudWebBackendTasksMixin
     var nextSortOrder = bucket.isEmpty
         ? 0
         : bucket
-                .map((suggestion) => suggestion.sortOrder)
+                .map((suggestion) => suggestion.sortOrder.toInt())
                 .reduce((left, right) => left > right ? left : right) +
             1;
     final generated = <TodoChecklistSuggestion>[];
@@ -657,7 +666,7 @@ mixin _CloudWebBackendTasksMixin
         id: _nextId('suggestion'),
         todoId: todoId,
         content: trimmed,
-        sortOrder: nextSortOrder,
+        sortOrder: _platformInt(nextSortOrder),
         state: 'pending',
         source: source,
         generationKey: generationKey,
@@ -699,7 +708,7 @@ mixin _CloudWebBackendTasksMixin
         id: _nextId('checklist'),
         todoId: todoId,
         content: suggestion.content,
-        sortOrder: checklist.length,
+        sortOrder: _platformInt(checklist.length),
         isDone: false,
         createdAtMs: _asPlatformInt64(now),
         updatedAtMs: _asPlatformInt64(now),
@@ -788,8 +797,8 @@ mixin _CloudWebBackendTasksMixin
     return _sortedActivities(
       _todoActivitiesById.values.where(
         (activity) =>
-            activity.createdAtMs >= startAtMsInclusive &&
-            activity.createdAtMs < endAtMsExclusive,
+            activity.createdAtMs.toInt() >= startAtMsInclusive &&
+            activity.createdAtMs.toInt() < endAtMsExclusive,
       ),
     );
   }

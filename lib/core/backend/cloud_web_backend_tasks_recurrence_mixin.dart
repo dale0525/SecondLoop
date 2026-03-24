@@ -99,7 +99,7 @@ mixin _CloudWebBackendTasksRecurrenceMixin on AppBackend {
     if (existingNext) return;
 
     final nextTodoId = 'todo:$seriesId:$nextIndex';
-    final nextDueAtMs = _nextDueAtMs(baseDueAtMs, ruleJson);
+    final nextDueAtMs = _nextDueAtMs(baseDueAtMs.toInt(), ruleJson);
     final now = _touchNow();
     _todosById[nextTodoId] = Todo(
       id: nextTodoId,
@@ -343,7 +343,7 @@ mixin _CloudWebBackendTasksRecurrenceMixin on AppBackend {
         if (currentDueAtMs == null) {
           throw StateError('todo has no dueAtMs, cannot apply scoped due edit');
         }
-        final delta = dueAtMs - currentDueAtMs;
+        final delta = dueAtMs - currentDueAtMs.toInt();
         final scopedTodoIds = _scopedRecurrenceTodoIds(
           resolvedSeriesId,
           resolvedOccurrenceIndex,
@@ -355,11 +355,11 @@ mixin _CloudWebBackendTasksRecurrenceMixin on AppBackend {
           if (seriesTodo == null) {
             continue;
           }
-          final targetDueAtMs = scopedTodoId == todoId
+          final int? targetDueAtMs = scopedTodoId == todoId
               ? dueAtMs
               : (seriesTodo.dueAtMs == null
                   ? null
-                  : seriesTodo.dueAtMs! + delta);
+                  : seriesTodo.dueAtMs!.toInt() + delta);
           final updated = await upsertTodo(
             key,
             id: seriesTodo.id,
@@ -367,11 +367,13 @@ mixin _CloudWebBackendTasksRecurrenceMixin on AppBackend {
             dueAtMs: targetDueAtMs,
             status: seriesTodo.status,
             sourceEntryId: seriesTodo.sourceEntryId,
-            reviewStage: seriesTodo.reviewStage,
-            nextReviewAtMs: seriesTodo.nextReviewAtMs,
-            lastReviewAtMs: seriesTodo.lastReviewAtMs,
-            manualImportanceNudgeScore: seriesTodo.manualImportanceNudgeScore,
-            manualUrgencyNudgeScore: seriesTodo.manualUrgencyNudgeScore,
+            reviewStage: seriesTodo.reviewStage?.toInt(),
+            nextReviewAtMs: seriesTodo.nextReviewAtMs?.toInt(),
+            lastReviewAtMs: seriesTodo.lastReviewAtMs?.toInt(),
+            manualImportanceNudgeScore:
+                seriesTodo.manualImportanceNudgeScore?.toInt(),
+            manualUrgencyNudgeScore:
+                seriesTodo.manualUrgencyNudgeScore?.toInt(),
           );
           if (scopedTodoId == todoId) {
             updatedCurrent = updated;

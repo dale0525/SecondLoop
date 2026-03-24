@@ -34,7 +34,7 @@ void main() {
     );
   }
 
-  test('default transitionTodo rejects mixed status and field patch fallback',
+  test('default transitionTodo supports mixed status and field patch fallback',
       () async {
     final backend = _FallbackTransitionBackend(
       todo(
@@ -48,23 +48,23 @@ void main() {
       ),
     );
 
-    await expectLater(
-      () => backend.transitionTodo(
-        Uint8List(32),
-        todoId: 'todo:1',
-        newStatus: 'in_progress',
-        dueAtMs: 333,
-        reviewStage: 4,
-        nextReviewAtMs: 444,
-        lastReviewAtMs: 555,
-      ),
-      throwsUnsupportedError,
+    final updated = await backend.transitionTodo(
+      Uint8List(32),
+      todoId: 'todo:1',
+      newStatus: 'in_progress',
+      dueAtMs: 333,
+      reviewStage: 4,
+      nextReviewAtMs: 444,
+      lastReviewAtMs: 555,
     );
 
-    expect(backend.setTodoStatusCalls, 0);
-    expect(backend.upsertTodoCalls, 0);
-    expect(backend.todo.status, 'open');
-    expect(backend.todo.dueAtMs, 111);
+    expect(updated.status, 'in_progress');
+    expect(updated.dueAtMs, 333);
+    expect(updated.reviewStage, 4);
+    expect(updated.nextReviewAtMs, 444);
+    expect(updated.lastReviewAtMs, 555);
+    expect(backend.setTodoStatusCalls, 1);
+    expect(backend.upsertTodoCalls, 1);
   });
 
   test('default transitionTodo still supports field-only patch fallback',

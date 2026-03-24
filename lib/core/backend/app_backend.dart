@@ -7,6 +7,7 @@ import '../../src/rust/db.dart';
 import '../../src/rust/semantic_parse.dart';
 
 part 'app_backend_prompt_ai.dart';
+part 'app_backend_transition_todo.dart';
 
 enum TodoRecurrenceEditScope {
   thisOnly,
@@ -155,88 +156,26 @@ abstract class AppBackend {
     int? manualUrgencyNudgeScore,
     bool clearManualUrgencyNudgeScore = false,
     String? sourceMessageId,
-  }) async {
-    final todos = await listTodos(key);
-    Todo? existing;
-    for (final todo in todos) {
-      if (todo.id == todoId) {
-        existing = todo;
-        break;
-      }
-    }
-    if (existing == null) {
-      throw StateError('Unknown todo: $todoId');
-    }
-
-    final patchesStatus = newStatus != null && newStatus != existing.status;
-    final patchesFields = dueAtMs != null ||
-        clearDueAtMs ||
-        reviewStage != null ||
-        clearReviewStage ||
-        nextReviewAtMs != null ||
-        clearNextReviewAtMs ||
-        lastReviewAtMs != null ||
-        clearLastReviewAtMs ||
-        manualImportanceNudgeScore != null ||
-        clearManualImportanceNudgeScore ||
-        manualUrgencyNudgeScore != null ||
-        clearManualUrgencyNudgeScore;
-
-    if (patchesStatus && patchesFields) {
-      throw UnsupportedError(
-        'AppBackend.transitionTodo fallback does not support mixed status and field patches; override transitionTodo in this backend.',
+  }) =>
+      _transitionTodoFallback(
+        this,
+        key,
+        todoId: todoId,
+        newStatus: newStatus,
+        dueAtMs: dueAtMs,
+        clearDueAtMs: clearDueAtMs,
+        reviewStage: reviewStage,
+        clearReviewStage: clearReviewStage,
+        nextReviewAtMs: nextReviewAtMs,
+        clearNextReviewAtMs: clearNextReviewAtMs,
+        lastReviewAtMs: lastReviewAtMs,
+        clearLastReviewAtMs: clearLastReviewAtMs,
+        manualImportanceNudgeScore: manualImportanceNudgeScore,
+        clearManualImportanceNudgeScore: clearManualImportanceNudgeScore,
+        manualUrgencyNudgeScore: manualUrgencyNudgeScore,
+        clearManualUrgencyNudgeScore: clearManualUrgencyNudgeScore,
+        sourceMessageId: sourceMessageId,
       );
-    }
-
-    final staged = patchesStatus
-        ? await setTodoStatus(
-            key,
-            todoId: todoId,
-            newStatus: newStatus,
-            sourceMessageId: sourceMessageId,
-          )
-        : existing;
-
-    final targetDueAtMs = clearDueAtMs ? null : (dueAtMs ?? staged.dueAtMs);
-    final targetReviewStage =
-        clearReviewStage ? null : (reviewStage ?? staged.reviewStage);
-    final targetNextReviewAtMs =
-        clearNextReviewAtMs ? null : (nextReviewAtMs ?? staged.nextReviewAtMs);
-    final targetLastReviewAtMs =
-        clearLastReviewAtMs ? null : (lastReviewAtMs ?? staged.lastReviewAtMs);
-    final targetManualImportanceNudgeScore = clearManualImportanceNudgeScore
-        ? 0
-        : (manualImportanceNudgeScore ??
-            (staged.manualImportanceNudgeScore ?? 0));
-    final targetManualUrgencyNudgeScore = clearManualUrgencyNudgeScore
-        ? 0
-        : (manualUrgencyNudgeScore ?? (staged.manualUrgencyNudgeScore ?? 0));
-
-    if (targetDueAtMs == staged.dueAtMs &&
-        targetReviewStage == staged.reviewStage &&
-        targetNextReviewAtMs == staged.nextReviewAtMs &&
-        targetLastReviewAtMs == staged.lastReviewAtMs &&
-        targetManualImportanceNudgeScore ==
-            (staged.manualImportanceNudgeScore ?? 0) &&
-        targetManualUrgencyNudgeScore ==
-            (staged.manualUrgencyNudgeScore ?? 0)) {
-      return staged;
-    }
-
-    return upsertTodo(
-      key,
-      id: staged.id,
-      title: staged.title,
-      dueAtMs: targetDueAtMs,
-      status: staged.status,
-      sourceEntryId: staged.sourceEntryId,
-      reviewStage: targetReviewStage,
-      nextReviewAtMs: targetNextReviewAtMs,
-      lastReviewAtMs: targetLastReviewAtMs,
-      manualImportanceNudgeScore: targetManualImportanceNudgeScore,
-      manualUrgencyNudgeScore: targetManualUrgencyNudgeScore,
-    );
-  }
 
   Future<Todo> updateTodoStatusWithScope(
     Uint8List key, {

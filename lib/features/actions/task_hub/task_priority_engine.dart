@@ -3,6 +3,8 @@ import 'task_priority_ai_models.dart';
 import 'task_priority_feedback_store.dart';
 import 'task_priority_models.dart';
 
+const int _kMaxSafeWebInt = 0x001FFFFFFFFFFFFF;
+
 bool _isSameLocalDate(DateTime a, DateTime b) =>
     a.year == b.year && a.month == b.month && a.day == b.day;
 
@@ -332,8 +334,8 @@ int _compareOverallPriority(TaskPriorityEntry a, TaskPriorityEntry b) {
   if (scoreCompare != 0) return scoreCompare;
 
   if (a.todo.dueAtMs != b.todo.dueAtMs) {
-    final aDue = a.todo.dueAtMs ?? 9223372036854775807;
-    final bDue = b.todo.dueAtMs ?? 9223372036854775807;
+    final aDue = a.todo.dueAtMs ?? _kMaxSafeWebInt;
+    final bDue = b.todo.dueAtMs ?? _kMaxSafeWebInt;
     return aDue.compareTo(bDue);
   }
 
@@ -352,8 +354,8 @@ int _compareFocusEntries(TaskPriorityEntry a, TaskPriorityEntry b) {
 }
 
 int _compareScheduledEntries(TaskPriorityEntry a, TaskPriorityEntry b) {
-  final aDue = a.todo.dueAtMs ?? 9223372036854775807;
-  final bDue = b.todo.dueAtMs ?? 9223372036854775807;
+  final aDue = a.todo.dueAtMs ?? _kMaxSafeWebInt;
+  final bDue = b.todo.dueAtMs ?? _kMaxSafeWebInt;
   if (aDue != bDue) return aDue.compareTo(bDue);
   return b.todo.updatedAtMs.compareTo(a.todo.updatedAtMs);
 }
