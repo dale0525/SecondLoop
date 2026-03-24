@@ -413,6 +413,7 @@ abstract class RustLibApi extends BaseApi {
       required List<int> key,
       required String todoId,
       required String triggerKind,
+      required bool manualOverrideFollowup,
       String? taskTypeHint,
       required PlatformInt64 nowMs});
 
@@ -3562,6 +3563,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       required List<int> key,
       required String todoId,
       required String triggerKind,
+      required bool manualOverrideFollowup,
       String? taskTypeHint,
       required PlatformInt64 nowMs}) {
     return handler.executeNormal(NormalTask(
@@ -3571,6 +3573,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_list_prim_u_8_loose(key, serializer);
         sse_encode_String(todoId, serializer);
         sse_encode_String(triggerKind, serializer);
+        sse_encode_bool(manualOverrideFollowup, serializer);
         sse_encode_opt_String(taskTypeHint, serializer);
         sse_encode_i_64(nowMs, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
@@ -3581,7 +3584,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         decodeErrorData: sse_decode_AnyhowException,
       ),
       constMeta: kCrateApiCoreDbEnqueueTodoFollowupGenerationJobConstMeta,
-      argValues: [appDir, key, todoId, triggerKind, taskTypeHint, nowMs],
+      argValues: [
+        appDir,
+        key,
+        todoId,
+        triggerKind,
+        manualOverrideFollowup,
+        taskTypeHint,
+        nowMs
+      ],
       apiImpl: this,
     ));
   }
@@ -3594,6 +3605,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           "key",
           "todoId",
           "triggerKind",
+          "manualOverrideFollowup",
           "taskTypeHint",
           "nowMs"
         ],
@@ -12095,8 +12107,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 10)
-      throw Exception('unexpected arr length: expect 10 but see ${arr.length}');
+    if (arr.length != 11)
+      throw Exception('unexpected arr length: expect 11 but see ${arr.length}');
     return TodoFollowupGenerationJob(
       todoId: dco_decode_String(arr[0]),
       triggerKind: dco_decode_String(arr[1]),
@@ -12105,9 +12117,10 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       nextRetryAtMs: dco_decode_opt_box_autoadd_i_64(arr[4]),
       lastError: dco_decode_opt_String(arr[5]),
       includeManualFollowups: dco_decode_bool(arr[6]),
-      taskTypeHint: dco_decode_opt_String(arr[7]),
-      createdAtMs: dco_decode_i_64(arr[8]),
-      updatedAtMs: dco_decode_i_64(arr[9]),
+      manualOverrideFollowup: dco_decode_bool(arr[7]),
+      taskTypeHint: dco_decode_opt_String(arr[8]),
+      createdAtMs: dco_decode_i_64(arr[9]),
+      updatedAtMs: dco_decode_i_64(arr[10]),
     );
   }
 
@@ -13923,6 +13936,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_nextRetryAtMs = sse_decode_opt_box_autoadd_i_64(deserializer);
     var var_lastError = sse_decode_opt_String(deserializer);
     var var_includeManualFollowups = sse_decode_bool(deserializer);
+    var var_manualOverrideFollowup = sse_decode_bool(deserializer);
     var var_taskTypeHint = sse_decode_opt_String(deserializer);
     var var_createdAtMs = sse_decode_i_64(deserializer);
     var var_updatedAtMs = sse_decode_i_64(deserializer);
@@ -13934,6 +13948,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         nextRetryAtMs: var_nextRetryAtMs,
         lastError: var_lastError,
         includeManualFollowups: var_includeManualFollowups,
+        manualOverrideFollowup: var_manualOverrideFollowup,
         taskTypeHint: var_taskTypeHint,
         createdAtMs: var_createdAtMs,
         updatedAtMs: var_updatedAtMs);
@@ -15261,6 +15276,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_opt_box_autoadd_i_64(self.nextRetryAtMs, serializer);
     sse_encode_opt_String(self.lastError, serializer);
     sse_encode_bool(self.includeManualFollowups, serializer);
+    sse_encode_bool(self.manualOverrideFollowup, serializer);
     sse_encode_opt_String(self.taskTypeHint, serializer);
     sse_encode_i_64(self.createdAtMs, serializer);
     sse_encode_i_64(self.updatedAtMs, serializer);

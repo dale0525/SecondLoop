@@ -12,6 +12,7 @@ pub fn enqueue_todo_followup_generation_job(
     conn: &Connection,
     todo_id: &str,
     trigger_kind: &str,
+    manual_override_followup: bool,
     task_type_hint: Option<&str>,
     now_ms: i64,
 ) -> Result<()> {
@@ -35,6 +36,7 @@ pub fn enqueue_todo_followup_generation_job(
     } else {
         0i64
     };
+    let manual_override_followup = if manual_override_followup { 1i64 } else { 0i64 };
 
     conn.execute(
         r#"
@@ -46,11 +48,12 @@ INSERT INTO todo_followup_generation_jobs(
   next_retry_at_ms,
   last_error,
   include_manual_followups,
+  manual_override_followup,
   task_type_hint,
   created_at_ms,
   updated_at_ms
 )
-VALUES (?1, ?2, 'pending', 0, NULL, NULL, ?3, ?4, ?5, ?5)
+VALUES (?1, ?2, 'pending', 0, NULL, NULL, ?3, ?4, ?5, ?6, ?6)
 ON CONFLICT(todo_id) DO UPDATE SET
   trigger_kind = CASE
     WHEN todo_followup_generation_jobs.trigger_kind = 'manual_regenerate'
@@ -94,6 +97,13 @@ ON CONFLICT(todo_id) DO UPDATE SET
       THEN todo_followup_generation_jobs.include_manual_followups
     ELSE excluded.include_manual_followups
   END,
+  manual_override_followup = CASE
+    WHEN todo_followup_generation_jobs.trigger_kind = 'manual_regenerate'
+      AND todo_followup_generation_jobs.status IN ('pending', 'running', 'failed')
+      AND excluded.trigger_kind = 'auto_create'
+      THEN todo_followup_generation_jobs.manual_override_followup
+    ELSE excluded.manual_override_followup
+  END,
   task_type_hint = CASE
     WHEN todo_followup_generation_jobs.trigger_kind = 'manual_regenerate'
       AND todo_followup_generation_jobs.status IN ('pending', 'running', 'failed')
@@ -118,7 +128,7 @@ ON CONFLICT(todo_id) DO UPDATE SET
     ELSE excluded.updated_at_ms
   END
 "#,
-        params![todo_id, trigger_kind, include_manual_followups, task_type_hint, now_ms],
+        params![todo_id, trigger_kind, include_manual_followups, manual_override_followup, task_type_hint, now_ms],
     )?;
     Ok(())
 }
@@ -129,7 +139,7 @@ pub fn find_todo_followup_generation_job(
 ) -> Result<Option<TodoFollowupGenerationJob>> {
     conn.query_row(
         r#"
-SELECT todo_id, trigger_kind, status, attempts, next_retry_at_ms, last_error, include_manual_followups, task_type_hint, created_at_ms, updated_at_ms
+SELECT todo_id, trigger_kind, status, attempts, next_retry_at_ms, last_error, include_manual_followups, manual_override_followup, task_type_hint, created_at_ms, updated_at_ms
 FROM todo_followup_generation_jobs
 WHERE todo_id = ?1
 "#,
@@ -143,9 +153,10 @@ WHERE todo_id = ?1
                 next_retry_at_ms: row.get(4)?,
                 last_error: row.get(5)?,
                 include_manual_followups: row.get::<_, i64>(6)? != 0,
-                task_type_hint: row.get(7)?,
-                created_at_ms: row.get(8)?,
-                updated_at_ms: row.get(9)?,
+                manual_override_followup: row.get::<_, i64>(7)? != 0,
+                task_type_hint: row.get(8)?,
+                created_at_ms: row.get(9)?,
+                updated_at_ms: row.get(10)?,
             })
         },
     )
@@ -259,7 +270,7 @@ fn query_due_todo_followup_generation_jobs_internal(
     let filter_sql = if include_trigger_kind { "=" } else { "!=" };
     let sql = format!(
         r#"
-SELECT todo_id, trigger_kind, status, attempts, next_retry_at_ms, last_error, include_manual_followups, task_type_hint, created_at_ms, updated_at_ms
+SELECT todo_id, trigger_kind, status, attempts, next_retry_at_ms, last_error, include_manual_followups, manual_override_followup, task_type_hint, created_at_ms, updated_at_ms
 FROM todo_followup_generation_jobs
 WHERE (((
         status IN ('pending', 'failed')
@@ -288,9 +299,10 @@ LIMIT ?4
             next_retry_at_ms: row.get(4)?,
             last_error: row.get(5)?,
             include_manual_followups: row.get::<_, i64>(6)? != 0,
-            task_type_hint: row.get(7)?,
-            created_at_ms: row.get(8)?,
-            updated_at_ms: row.get(9)?,
+            manual_override_followup: row.get::<_, i64>(7)? != 0,
+            task_type_hint: row.get(8)?,
+            created_at_ms: row.get(9)?,
+            updated_at_ms: row.get(10)?,
         });
     }
     Ok(result)

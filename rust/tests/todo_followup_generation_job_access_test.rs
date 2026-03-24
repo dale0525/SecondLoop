@@ -38,7 +38,7 @@ fn due_job_api_overfetches_until_it_finds_accessible_jobs() {
         None,
     )
     .expect("upsert hidden todo");
-    db::enqueue_todo_followup_generation_job(&conn, "todo_hidden", "auto_create", None, 90)
+    db::enqueue_todo_followup_generation_job(&conn, "todo_hidden", "auto_create", false, None, 90)
         .expect("enqueue hidden job");
 
     db::upsert_todo(
@@ -54,8 +54,15 @@ fn due_job_api_overfetches_until_it_finds_accessible_jobs() {
         None,
     )
     .expect("upsert visible todo");
-    db::enqueue_todo_followup_generation_job(&conn, "todo_visible", "auto_create", None, 100)
-        .expect("enqueue visible job");
+    db::enqueue_todo_followup_generation_job(
+        &conn,
+        "todo_visible",
+        "auto_create",
+        false,
+        None,
+        100,
+    )
+    .expect("enqueue visible job");
 
     let due = core::db_list_due_todo_followup_generation_jobs(app_dir, key.to_vec(), 200, 1)
         .expect("list visible due jobs");
@@ -86,8 +93,15 @@ fn due_job_api_surfaces_todo_read_errors_instead_of_silently_skipping_jobs() {
         None,
     )
     .expect("upsert todo");
-    db::enqueue_todo_followup_generation_job(&conn, "todo_corrupt", "auto_create", None, 100)
-        .expect("enqueue job");
+    db::enqueue_todo_followup_generation_job(
+        &conn,
+        "todo_corrupt",
+        "auto_create",
+        false,
+        None,
+        100,
+    )
+    .expect("enqueue job");
 
     let invalid_title_blob =
         crypto::encrypt_bytes(&key, &[0xFF], b"todo.title").expect("encrypt invalid utf8 title");
@@ -125,8 +139,15 @@ fn auto_due_job_api_returns_visible_auto_jobs_without_scanning_manual_backlog() 
         None,
     )
     .expect("upsert manual todo");
-    db::enqueue_todo_followup_generation_job(&conn, "todo_manual", "manual_regenerate", None, 90)
-        .expect("enqueue manual job");
+    db::enqueue_todo_followup_generation_job(
+        &conn,
+        "todo_manual",
+        "manual_regenerate",
+        false,
+        None,
+        90,
+    )
+    .expect("enqueue manual job");
 
     db::upsert_todo(
         &conn,
@@ -141,7 +162,7 @@ fn auto_due_job_api_returns_visible_auto_jobs_without_scanning_manual_backlog() 
         None,
     )
     .expect("upsert auto todo");
-    db::enqueue_todo_followup_generation_job(&conn, "todo_auto", "auto_create", None, 100)
+    db::enqueue_todo_followup_generation_job(&conn, "todo_auto", "auto_create", false, None, 100)
         .expect("enqueue auto job");
 
     let due = todo_followup_generation::db_list_due_auto_todo_followup_generation_jobs(

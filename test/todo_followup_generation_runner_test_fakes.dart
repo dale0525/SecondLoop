@@ -75,6 +75,7 @@ final class _FakeStore implements TodoFollowupGenerationStore {
       nextRetryAtMs: nextRetryAtMs ?? job.nextRetryAtMs,
       lastError: lastError ?? job.lastError,
       includeManualFollowups: job.includeManualFollowups,
+      manualOverrideFollowup: job.manualOverrideFollowup,
       taskTypeHint: job.taskTypeHint,
       createdAtMs: job.createdAtMs,
       updatedAtMs: updatedAtMs ?? job.updatedAtMs,

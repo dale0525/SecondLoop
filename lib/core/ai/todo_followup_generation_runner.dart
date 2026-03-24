@@ -174,7 +174,10 @@ final class TodoFollowupGenerationRunner {
         didUpdateJobs = true;
 
         final taskType = _resolveTaskType(job, todo);
-        if (!taskType.allowsAutoFollowup) {
+        final allowsGeneration = taskType.allowsAutoFollowup ||
+            (job.triggerKind == 'manual_regenerate' &&
+                job.manualOverrideFollowup);
+        if (!allowsGeneration) {
           await _markJobSkippedIfStillRunning(
             todoId: job.todoId,
             jobStartedAtMs: jobStartedAtMs,

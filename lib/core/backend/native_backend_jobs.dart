@@ -6,6 +6,7 @@ mixin _NativeAppBackendJobs on _NativeAppBackendAccess {
     Uint8List key, {
     required String todoId,
     required String triggerKind,
+    bool manualOverrideFollowup = false,
     String? taskTypeHint,
     required int nowMs,
   }) async {
@@ -15,6 +16,7 @@ mixin _NativeAppBackendJobs on _NativeAppBackendAccess {
       key: key,
       todoId: todoId,
       triggerKind: triggerKind,
+      manualOverrideFollowup: manualOverrideFollowup,
       taskTypeHint: taskTypeHint,
       nowMs: PlatformInt64Util.from(nowMs),
     );

@@ -941,6 +941,7 @@ abstract class AppBackend {
     Uint8List key, {
     required String todoId,
     required String triggerKind,
+    bool manualOverrideFollowup = false,
     String? taskTypeHint,
     required int nowMs,
   }) {

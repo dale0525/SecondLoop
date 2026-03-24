@@ -788,6 +788,7 @@ pub fn db_enqueue_todo_followup_generation_job(
     key: Vec<u8>,
     todo_id: String,
     trigger_kind: String,
+    manual_override_followup: bool,
     task_type_hint: Option<String>,
     now_ms: i64,
 ) -> Result<()> {
@@ -798,6 +799,7 @@ pub fn db_enqueue_todo_followup_generation_job(
         &conn,
         &todo_id,
         &trigger_kind,
+        manual_override_followup,
         task_type_hint.as_deref(),
         now_ms,
     )

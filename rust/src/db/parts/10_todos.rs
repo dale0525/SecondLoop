@@ -223,6 +223,7 @@ pub fn upsert_todo_with_auto_followup_job(
                 conn,
                 id,
                 "auto_create",
+                false,
                 normalized_task_type_hint,
                 now_ms,
             )?;

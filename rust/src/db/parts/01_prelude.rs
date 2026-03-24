@@ -387,6 +387,7 @@ pub struct TodoFollowupGenerationJob {
     pub next_retry_at_ms: Option<i64>,
     pub last_error: Option<String>,
     pub include_manual_followups: bool,
+    pub manual_override_followup: bool,
     pub task_type_hint: Option<String>,
     pub created_at_ms: i64,
     pub updated_at_ms: i64,

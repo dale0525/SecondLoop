@@ -439,6 +439,7 @@ Future<void> dbEnqueueTodoFollowupGenerationJob(
         required List<int> key,
         required String todoId,
         required String triggerKind,
+        required bool manualOverrideFollowup,
         String? taskTypeHint,
         required PlatformInt64 nowMs}) =>
     RustLib.instance.api.crateApiCoreDbEnqueueTodoFollowupGenerationJob(
@@ -446,6 +447,7 @@ Future<void> dbEnqueueTodoFollowupGenerationJob(
         key: key,
         todoId: todoId,
         triggerKind: triggerKind,
+        manualOverrideFollowup: manualOverrideFollowup,
         taskTypeHint: taskTypeHint,
         nowMs: nowMs);
 

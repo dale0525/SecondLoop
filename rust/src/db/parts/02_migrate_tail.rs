@@ -190,6 +190,7 @@ CREATE TABLE IF NOT EXISTS todo_followup_generation_jobs (
   next_retry_at_ms INTEGER,
   last_error TEXT,
   include_manual_followups INTEGER NOT NULL DEFAULT 0,
+  manual_override_followup INTEGER NOT NULL DEFAULT 0,
   task_type_hint TEXT,
   created_at_ms INTEGER NOT NULL,
   updated_at_ms INTEGER NOT NULL,

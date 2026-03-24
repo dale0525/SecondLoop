@@ -1474,6 +1474,7 @@ class TodoFollowupGenerationJob {
   final PlatformInt64? nextRetryAtMs;
   final String? lastError;
   final bool includeManualFollowups;
+  final bool manualOverrideFollowup;
   final String? taskTypeHint;
   final PlatformInt64 createdAtMs;
   final PlatformInt64 updatedAtMs;
@@ -1486,6 +1487,7 @@ class TodoFollowupGenerationJob {
     this.nextRetryAtMs,
     this.lastError,
     required this.includeManualFollowups,
+    required this.manualOverrideFollowup,
     this.taskTypeHint,
     required this.createdAtMs,
     required this.updatedAtMs,
@@ -1500,6 +1502,7 @@ class TodoFollowupGenerationJob {
       nextRetryAtMs.hashCode ^
       lastError.hashCode ^
       includeManualFollowups.hashCode ^
+      manualOverrideFollowup.hashCode ^
       taskTypeHint.hashCode ^
       createdAtMs.hashCode ^
       updatedAtMs.hashCode;
@@ -1516,6 +1519,7 @@ class TodoFollowupGenerationJob {
           nextRetryAtMs == other.nextRetryAtMs &&
           lastError == other.lastError &&
           includeManualFollowups == other.includeManualFollowups &&
+          manualOverrideFollowup == other.manualOverrideFollowup &&
           taskTypeHint == other.taskTypeHint &&
           createdAtMs == other.createdAtMs &&
           updatedAtMs == other.updatedAtMs;

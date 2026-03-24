@@ -2154,6 +2154,7 @@ fn wire__crate__api__core__db_enqueue_todo_followup_generation_job_impl(
             let api_key = <Vec<u8>>::sse_decode(&mut deserializer);
             let api_todo_id = <String>::sse_decode(&mut deserializer);
             let api_trigger_kind = <String>::sse_decode(&mut deserializer);
+            let api_manual_override_followup = <bool>::sse_decode(&mut deserializer);
             let api_task_type_hint = <Option<String>>::sse_decode(&mut deserializer);
             let api_now_ms = <i64>::sse_decode(&mut deserializer);
             deserializer.end();
@@ -2164,6 +2165,7 @@ fn wire__crate__api__core__db_enqueue_todo_followup_generation_job_impl(
                         api_key,
                         api_todo_id,
                         api_trigger_kind,
+                        api_manual_override_followup,
                         api_task_type_hint,
                         api_now_ms,
                     )
@@ -11710,6 +11712,7 @@ impl SseDecode for crate::db::TodoFollowupGenerationJob {
         let mut var_nextRetryAtMs = <Option<i64>>::sse_decode(deserializer);
         let mut var_lastError = <Option<String>>::sse_decode(deserializer);
         let mut var_includeManualFollowups = <bool>::sse_decode(deserializer);
+        let mut var_manualOverrideFollowup = <bool>::sse_decode(deserializer);
         let mut var_taskTypeHint = <Option<String>>::sse_decode(deserializer);
         let mut var_createdAtMs = <i64>::sse_decode(deserializer);
         let mut var_updatedAtMs = <i64>::sse_decode(deserializer);
@@ -11721,6 +11724,7 @@ impl SseDecode for crate::db::TodoFollowupGenerationJob {
             next_retry_at_ms: var_nextRetryAtMs,
             last_error: var_lastError,
             include_manual_followups: var_includeManualFollowups,
+            manual_override_followup: var_manualOverrideFollowup,
             task_type_hint: var_taskTypeHint,
             created_at_ms: var_createdAtMs,
             updated_at_ms: var_updatedAtMs,
@@ -13389,6 +13393,7 @@ impl flutter_rust_bridge::IntoDart for crate::db::TodoFollowupGenerationJob {
             self.next_retry_at_ms.into_into_dart().into_dart(),
             self.last_error.into_into_dart().into_dart(),
             self.include_manual_followups.into_into_dart().into_dart(),
+            self.manual_override_followup.into_into_dart().into_dart(),
             self.task_type_hint.into_into_dart().into_dart(),
             self.created_at_ms.into_into_dart().into_dart(),
             self.updated_at_ms.into_into_dart().into_dart(),
@@ -14705,6 +14710,7 @@ impl SseEncode for crate::db::TodoFollowupGenerationJob {
         <Option<i64>>::sse_encode(self.next_retry_at_ms, serializer);
         <Option<String>>::sse_encode(self.last_error, serializer);
         <bool>::sse_encode(self.include_manual_followups, serializer);
+        <bool>::sse_encode(self.manual_override_followup, serializer);
         <Option<String>>::sse_encode(self.task_type_hint, serializer);
         <i64>::sse_encode(self.created_at_ms, serializer);
         <i64>::sse_encode(self.updated_at_ms, serializer);

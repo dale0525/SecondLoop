@@ -216,6 +216,7 @@ final class TestBackend extends AppBackend {
   List<String> appliedSuggestionIds = <String>[];
   List<String> dismissedSuggestionIds = <String>[];
   bool enqueuedRegenerate = false;
+  bool lastManualOverrideFollowup = false;
   int getTodoFollowupGenerationJobCalls = 0;
 
   @override
@@ -349,10 +350,12 @@ final class TestBackend extends AppBackend {
     Uint8List key, {
     required String todoId,
     required String triggerKind,
+    bool manualOverrideFollowup = false,
     String? taskTypeHint,
     required int nowMs,
   }) async {
     enqueuedRegenerate = true;
+    lastManualOverrideFollowup = manualOverrideFollowup;
     final completer = regenerateCompleter;
     if (completer != null) {
       await completer.future;

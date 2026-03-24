@@ -417,6 +417,7 @@ void main() {
         required List<int> key,
         required String todoId,
         required String triggerKind,
+        required bool manualOverrideFollowup,
         String? taskTypeHint,
         required int nowMs,
       }) async {

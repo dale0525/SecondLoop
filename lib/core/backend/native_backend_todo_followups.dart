@@ -92,6 +92,7 @@ typedef DbEnqueueTodoFollowupGenerationJobFn = Future<void> Function({
   required List<int> key,
   required String todoId,
   required String triggerKind,
+  required bool manualOverrideFollowup,
   String? taskTypeHint,
   required PlatformInt64 nowMs,
 });
@@ -185,6 +186,7 @@ DbUpsertTodoWithAutoFollowupJobFn _resolveDbUpsertTodoWithAutoFollowupJob({
     PlatformInt64? nextReviewAtMs,
     PlatformInt64? lastReviewAtMs,
     String? taskTypeHint,
+    bool manualOverrideFollowup = false,
     required PlatformInt64 nowMs,
   }) async {
     final todo = await resolvedUpsertTodo(
@@ -211,6 +213,7 @@ DbUpsertTodoWithAutoFollowupJobFn _resolveDbUpsertTodoWithAutoFollowupJob({
         key: key,
         todoId: id,
         triggerKind: 'auto_create',
+        manualOverrideFollowup: false,
         taskTypeHint:
             normalizedTaskTypeHint == null || normalizedTaskTypeHint.isEmpty
                 ? null

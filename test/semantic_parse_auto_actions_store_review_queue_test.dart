@@ -256,6 +256,7 @@ final class _Backend extends TestAppBackend {
     Uint8List key, {
     required String todoId,
     required String triggerKind,
+    bool manualOverrideFollowup = false,
     String? taskTypeHint,
     required int nowMs,
   }) async {

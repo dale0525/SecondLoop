@@ -144,7 +144,9 @@ extension _TodoDetailPageStateFollowupSuggestions on _TodoDetailPageState {
     });
   }
 
-  Future<void> _enqueueFollowupRegenerate() async {
+  Future<void> _enqueueFollowupRegenerate({
+    bool manualOverrideFollowup = false,
+  }) async {
     final backend = AppBackendScope.maybeOf(context);
     final session = SessionScope.maybeOf(context);
     final syncEngine = SyncEngineScope.maybeOf(context);
@@ -169,6 +171,7 @@ extension _TodoDetailPageStateFollowupSuggestions on _TodoDetailPageState {
         session.sessionKey,
         todoId: _todo.id,
         triggerKind: 'manual_regenerate',
+        manualOverrideFollowup: manualOverrideFollowup,
         nowMs: DateTime.now().millisecondsSinceEpoch,
       );
       syncEngine?.notifyExternalChange();
@@ -210,10 +213,16 @@ extension _TodoDetailPageStateFollowupSuggestions on _TodoDetailPageState {
     return FutureBuilder<TodoFollowupGenerationJob?>(
       future: _followupGenerationJobFuture ??= _loadFollowupGenerationJob(),
       builder: (context, snapshot) {
+        final hintedTaskType =
+            TodoFollowupTaskType.fromWireValue(snapshot.data?.taskTypeHint);
+        final resolvedTaskType = hintedTaskType != TodoFollowupTaskType.unknown
+            ? hintedTaskType
+            : classifyTodoFollowupTaskType(_todo.title);
         final hasActiveGeneration =
             _hasActiveFollowupGenerationJob(snapshot.data);
         final showGeneratingIndicator =
             _generatingFollowupSuggestions || hasActiveGeneration;
+        final showPrimaryGenerateButton = resolvedTaskType.allowsAutoFollowup;
 
         return Container(
           key: const ValueKey('todo_detail_followup_suggestions_section'),
@@ -243,22 +252,49 @@ extension _TodoDetailPageStateFollowupSuggestions on _TodoDetailPageState {
                           ),
                     ),
                   ),
-                  SlButton(
-                    buttonKey: const ValueKey(
-                      'todo_detail_followup_generate_suggestions',
+                  if (showPrimaryGenerateButton)
+                    SlButton(
+                      buttonKey: const ValueKey(
+                        'todo_detail_followup_generate_suggestions',
+                      ),
+                      variant: SlButtonVariant.outline,
+                      onPressed: showGeneratingIndicator
+                          ? null
+                          : () => unawaited(_enqueueFollowupRegenerate()),
+                      child: Text(
+                        suggestions.isEmpty
+                            ? context.t.actions.todoDetail.followupGenerate
+                            : context.t.actions.todoDetail.followupRegenerate,
+                      ),
+                    )
+                  else
+                    SlButton(
+                      buttonKey: const ValueKey(
+                        'todo_detail_followup_force_generate_suggestions',
+                      ),
+                      variant: SlButtonVariant.secondary,
+                      onPressed: showGeneratingIndicator
+                          ? null
+                          : () => unawaited(
+                                _enqueueFollowupRegenerate(
+                                  manualOverrideFollowup: true,
+                                ),
+                              ),
+                      child: Text(
+                        context.t.actions.todoDetail.followupForceGenerate,
+                      ),
                     ),
-                    variant: SlButtonVariant.outline,
-                    onPressed: showGeneratingIndicator
-                        ? null
-                        : () => unawaited(_enqueueFollowupRegenerate()),
-                    child: Text(
-                      suggestions.isEmpty
-                          ? context.t.actions.todoDetail.followupGenerate
-                          : context.t.actions.todoDetail.followupRegenerate,
-                    ),
-                  ),
                 ],
               ),
+              if (!showPrimaryGenerateButton) ...[
+                const SizedBox(height: 8),
+                Text(
+                  context.t.actions.todoDetail.followupForceGenerateHint,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                ),
+              ],
               AnimatedSwitcher(
                 duration: const Duration(milliseconds: 180),
                 child: !showGeneratingIndicator

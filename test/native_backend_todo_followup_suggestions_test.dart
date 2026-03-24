@@ -12,6 +12,7 @@ void main() {
     List<String>? capturedSuggestionIdsForDismiss;
     String? capturedTodoIdForDismissAll;
     String? capturedTodoIdForEnqueueJob;
+    bool? capturedManualOverrideFollowup;
 
     final backend = NativeAppBackend(
       appDirProvider: () async => '/tmp/secondloop_test',
@@ -69,10 +70,12 @@ void main() {
         required List<int> key,
         required String todoId,
         required String triggerKind,
+        required bool manualOverrideFollowup,
         String? taskTypeHint,
         required int nowMs,
       }) async {
         capturedTodoIdForEnqueueJob = todoId;
+        capturedManualOverrideFollowup = manualOverrideFollowup;
       },
     );
 
@@ -94,6 +97,7 @@ void main() {
       key,
       todoId: 'todo_1',
       triggerKind: 'manual_regenerate',
+      manualOverrideFollowup: true,
       nowMs: 123,
     );
 
@@ -102,6 +106,7 @@ void main() {
     expect(capturedSuggestionIdsForDismiss, const <String>['f1']);
     expect(capturedTodoIdForDismissAll, 'todo_1');
     expect(capturedTodoIdForEnqueueJob, 'todo_1');
+    expect(capturedManualOverrideFollowup, isTrue);
     expect(suggestions.single.generationMode, 'model_knowledge');
   });
 
@@ -125,6 +130,7 @@ void main() {
           nextRetryAtMs: null,
           lastError: null,
           includeManualFollowups: false,
+          manualOverrideFollowup: false,
           taskTypeHint: 'research',
           createdAtMs: 1,
           updatedAtMs: 1,

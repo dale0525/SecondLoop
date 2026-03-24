@@ -160,6 +160,7 @@ final class _FollowupCapabilityBackend extends AppBackend {
     Uint8List key, {
     required String todoId,
     required String triggerKind,
+    bool manualOverrideFollowup = false,
     String? taskTypeHint,
     required int nowMs,
   }) async {

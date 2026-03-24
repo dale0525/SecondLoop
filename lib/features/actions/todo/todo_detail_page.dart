@@ -19,6 +19,7 @@ import '../../../core/ai/semantic_parse_data_consent_prefs.dart';
 import '../../../core/ai/semantic_parse_edit_policy.dart';
 import '../../../core/ai/todo_checklist_suggestions_ai.dart';
 import '../../../core/ai/foreground_ai_route_preflight.dart';
+import '../../../core/ai/todo_followup_task_classifier.dart';
 import '../../../core/ai/todo_followup_suggestions_ai.dart';
 import '../../../core/backend/app_backend.dart';
 import '../../../core/backend/attachments_backend.dart';

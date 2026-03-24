@@ -52,10 +52,12 @@ void main() {
         required List<int> key,
         required String todoId,
         required String triggerKind,
+        required bool manualOverrideFollowup,
         String? taskTypeHint,
         required int nowMs,
       }) async {
         enqueueCount += 1;
+        expect(manualOverrideFollowup, isFalse);
       },
     );
 
@@ -116,6 +118,7 @@ void main() {
         required List<int> key,
         required String todoId,
         required String triggerKind,
+        required bool manualOverrideFollowup,
         String? taskTypeHint,
         required int nowMs,
       }) async {
@@ -172,9 +175,11 @@ void main() {
         required List<int> key,
         required String todoId,
         required String triggerKind,
+        required bool manualOverrideFollowup,
         String? taskTypeHint,
         required int nowMs,
       }) async {
+        expect(manualOverrideFollowup, isFalse);
         enqueueTaskTypeHints.add(taskTypeHint);
       },
     );
@@ -216,6 +221,7 @@ void main() {
             nextRetryAtMs: null,
             lastError: null,
             includeManualFollowups: true,
+            manualOverrideFollowup: false,
             taskTypeHint: null,
             createdAtMs: 1,
             updatedAtMs: 1,
@@ -238,6 +244,7 @@ void main() {
             nextRetryAtMs: null,
             lastError: null,
             includeManualFollowups: false,
+            manualOverrideFollowup: false,
             taskTypeHint: 'research',
             createdAtMs: 2,
             updatedAtMs: 2,
@@ -302,6 +309,7 @@ void main() {
         required List<int> key,
         required String todoId,
         required String triggerKind,
+        required bool manualOverrideFollowup,
         String? taskTypeHint,
         required int nowMs,
       }) async {

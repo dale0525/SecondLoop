@@ -195,7 +195,7 @@ fn todo_followup_generation_jobs_support_enqueue_claim_retry_and_succeed() {
     )
     .expect("upsert todo");
 
-    db::enqueue_todo_followup_generation_job(&conn, "todo_1", "auto_create", None, 100)
+    db::enqueue_todo_followup_generation_job(&conn, "todo_1", "auto_create", false, None, 100)
         .expect("enqueue job");
 
     let due = db::list_due_todo_followup_generation_jobs(&conn, 100, 10).expect("list due jobs");
@@ -242,7 +242,7 @@ fn running_jobs_are_not_released_until_their_lease_expires() {
     )
     .expect("upsert todo");
 
-    db::enqueue_todo_followup_generation_job(&conn, "todo_1", "auto_create", None, 100)
+    db::enqueue_todo_followup_generation_job(&conn, "todo_1", "auto_create", false, None, 100)
         .expect("enqueue job");
     db::mark_todo_followup_generation_job_running(&conn, "todo_1", 120).expect("mark running");
 
@@ -283,7 +283,7 @@ fn pending_jobs_can_be_deferred_without_being_claimed_first() {
     )
     .expect("upsert todo");
 
-    db::enqueue_todo_followup_generation_job(&conn, "todo_1", "auto_create", None, 100)
+    db::enqueue_todo_followup_generation_job(&conn, "todo_1", "auto_create", false, None, 100)
         .expect("enqueue job");
 
     db::mark_todo_followup_generation_job_failed(
@@ -336,12 +336,20 @@ fn pending_jobs_can_be_finalized_without_being_claimed_first() {
     )
     .expect("upsert canceled todo");
 
-    db::enqueue_todo_followup_generation_job(&conn, "todo_skipped", "auto_create", None, 100)
-        .expect("enqueue skipped job");
+    db::enqueue_todo_followup_generation_job(
+        &conn,
+        "todo_skipped",
+        "auto_create",
+        false,
+        None,
+        100,
+    )
+    .expect("enqueue skipped job");
     db::enqueue_todo_followup_generation_job(
         &conn,
         "todo_canceled",
         "manual_regenerate",
+        false,
         None,
         100,
     )
@@ -381,7 +389,7 @@ fn running_claim_rejects_non_expired_running_jobs() {
     )
     .expect("upsert todo");
 
-    db::enqueue_todo_followup_generation_job(&conn, "todo_1", "auto_create", None, 100)
+    db::enqueue_todo_followup_generation_job(&conn, "todo_1", "auto_create", false, None, 100)
         .expect("enqueue job");
     db::mark_todo_followup_generation_job_running(&conn, "todo_1", 120).expect("initial claim");
 
@@ -406,10 +414,17 @@ fn manual_regenerate_jobs_are_prioritized_ahead_of_auto_jobs() {
         .expect("upsert todo");
     }
 
-    db::enqueue_todo_followup_generation_job(&conn, "todo_auto", "auto_create", None, 100)
+    db::enqueue_todo_followup_generation_job(&conn, "todo_auto", "auto_create", false, None, 100)
         .expect("enqueue auto job");
-    db::enqueue_todo_followup_generation_job(&conn, "todo_manual", "manual_regenerate", None, 200)
-        .expect("enqueue manual job");
+    db::enqueue_todo_followup_generation_job(
+        &conn,
+        "todo_manual",
+        "manual_regenerate",
+        false,
+        None,
+        200,
+    )
+    .expect("enqueue manual job");
 
     let due = db::list_due_todo_followup_generation_jobs(&conn, 200, 1).expect("list due jobs");
     assert_eq!(due.len(), 1);
@@ -435,6 +450,7 @@ fn manual_regenerate_jobs_keep_fifo_order_within_manual_queue() {
         &conn,
         "todo_manual_old",
         "manual_regenerate",
+        false,
         None,
         100,
     )
@@ -443,6 +459,7 @@ fn manual_regenerate_jobs_keep_fifo_order_within_manual_queue() {
         &conn,
         "todo_manual_new",
         "manual_regenerate",
+        false,
         None,
         200,
     )
@@ -471,7 +488,7 @@ fn enqueue_followup_job_rejects_invalid_trigger_kind() {
     )
     .expect("upsert todo");
 
-    let err = db::enqueue_todo_followup_generation_job(&conn, "todo_1", "bogus", None, 100)
+    let err = db::enqueue_todo_followup_generation_job(&conn, "todo_1", "bogus", false, None, 100)
         .expect_err("invalid trigger kind should fail");
     assert!(err.to_string().contains("invalid trigger_kind"));
 }
@@ -498,12 +515,20 @@ fn reenqueue_without_new_hint_clears_previous_task_type_hint() {
         &conn,
         "todo_1",
         "auto_create",
+        false,
         Some("execution"),
         100,
     )
     .expect("enqueue first job");
-    db::enqueue_todo_followup_generation_job(&conn, "todo_1", "manual_regenerate", None, 200)
-        .expect("enqueue second job");
+    db::enqueue_todo_followup_generation_job(
+        &conn,
+        "todo_1",
+        "manual_regenerate",
+        false,
+        None,
+        200,
+    )
+    .expect("enqueue second job");
 
     let due = db::list_due_todo_followup_generation_jobs(&conn, 200, 10).expect("list due jobs");
     assert_eq!(due.len(), 1);
@@ -531,9 +556,16 @@ fn later_auto_create_does_not_overwrite_existing_manual_regenerate_job() {
     )
     .expect("upsert todo");
 
-    db::enqueue_todo_followup_generation_job(&conn, "todo_1", "manual_regenerate", None, 100)
-        .expect("enqueue manual job");
-    db::enqueue_todo_followup_generation_job(&conn, "todo_1", "auto_create", None, 200)
+    db::enqueue_todo_followup_generation_job(
+        &conn,
+        "todo_1",
+        "manual_regenerate",
+        false,
+        None,
+        100,
+    )
+    .expect("enqueue manual job");
+    db::enqueue_todo_followup_generation_job(&conn, "todo_1", "auto_create", false, None, 200)
         .expect("enqueue later auto job");
 
     let due = db::list_due_todo_followup_generation_jobs(&conn, 200, 10).expect("list due jobs");
@@ -566,6 +598,7 @@ fn due_job_listing_reserves_one_auto_slot_when_manual_backlog_is_deep() {
             &conn,
             &todo_id,
             "manual_regenerate",
+            false,
             None,
             100 + index,
         )
@@ -585,8 +618,15 @@ fn due_job_listing_reserves_one_auto_slot_when_manual_backlog_is_deep() {
         None,
     )
     .expect("upsert auto todo");
-    db::enqueue_todo_followup_generation_job(&conn, "todo_auto_1", "auto_create", None, 10_000)
-        .expect("enqueue auto job");
+    db::enqueue_todo_followup_generation_job(
+        &conn,
+        "todo_auto_1",
+        "auto_create",
+        false,
+        None,
+        10_000,
+    )
+    .expect("enqueue auto job");
 
     let due = db::list_due_todo_followup_generation_jobs(&conn, 20_000, 5).expect("list due jobs");
 
@@ -618,9 +658,16 @@ fn auto_create_reenqueue_without_hint_preserves_existing_task_type_hint() {
     )
     .expect("upsert todo");
 
-    db::enqueue_todo_followup_generation_job(&conn, "todo_1", "auto_create", Some("research"), 100)
-        .expect("enqueue hinted job");
-    db::enqueue_todo_followup_generation_job(&conn, "todo_1", "auto_create", None, 200)
+    db::enqueue_todo_followup_generation_job(
+        &conn,
+        "todo_1",
+        "auto_create",
+        false,
+        Some("research"),
+        100,
+    )
+    .expect("enqueue hinted job");
+    db::enqueue_todo_followup_generation_job(&conn, "todo_1", "auto_create", false, None, 200)
         .expect("enqueue fallback job");
 
     let due = db::list_due_todo_followup_generation_jobs(&conn, 200, 10).expect("list due jobs");
@@ -648,11 +695,11 @@ fn auto_create_reenqueue_resets_job_age_for_future_retry_windows() {
     )
     .expect("upsert todo");
 
-    db::enqueue_todo_followup_generation_job(&conn, "todo_1", "auto_create", None, 100)
+    db::enqueue_todo_followup_generation_job(&conn, "todo_1", "auto_create", false, None, 100)
         .expect("enqueue first job");
     db::mark_todo_followup_generation_job_skipped(&conn, "todo_1", 110).expect("skip first job");
 
-    db::enqueue_todo_followup_generation_job(&conn, "todo_1", "auto_create", None, 10_000)
+    db::enqueue_todo_followup_generation_job(&conn, "todo_1", "auto_create", false, None, 10_000)
         .expect("re-enqueue job");
 
     let job = db::find_todo_followup_generation_job(&conn, "todo_1")
@@ -681,11 +728,11 @@ fn running_job_completion_does_not_overwrite_later_reenqueue() {
     )
     .expect("upsert todo");
 
-    db::enqueue_todo_followup_generation_job(&conn, "todo_1", "auto_create", None, 100)
+    db::enqueue_todo_followup_generation_job(&conn, "todo_1", "auto_create", false, None, 100)
         .expect("enqueue first job");
     db::mark_todo_followup_generation_job_running(&conn, "todo_1", 110).expect("mark running");
 
-    db::enqueue_todo_followup_generation_job(&conn, "todo_1", "auto_create", None, 200)
+    db::enqueue_todo_followup_generation_job(&conn, "todo_1", "auto_create", false, None, 200)
         .expect("re-enqueue replacement job");
 
     db::mark_todo_followup_generation_job_succeeded(&conn, "todo_1", 210)
@@ -1009,7 +1056,7 @@ fn followup_job_api_requires_a_matching_todo_key() {
         None,
     )
     .expect("upsert todo");
-    db::enqueue_todo_followup_generation_job(&conn, "todo_1", "auto_create", None, 100)
+    db::enqueue_todo_followup_generation_job(&conn, "todo_1", "auto_create", false, None, 100)
         .expect("enqueue job");
 
     let wrong_key = vec![9u8; 32];
@@ -1042,6 +1089,7 @@ fn followup_job_api_requires_a_matching_todo_key() {
         wrong_key,
         "todo_1".to_string(),
         "manual_regenerate".to_string(),
+        false,
         None,
         130,
     )
@@ -1071,8 +1119,15 @@ fn followup_job_api_filters_out_jobs_for_inaccessible_todos() {
     )
     .expect("upsert visible todo");
 
-    db::enqueue_todo_followup_generation_job(&conn, "todo_visible", "auto_create", None, 100)
-        .expect("enqueue visible job");
+    db::enqueue_todo_followup_generation_job(
+        &conn,
+        "todo_visible",
+        "auto_create",
+        false,
+        None,
+        100,
+    )
+    .expect("enqueue visible job");
 
     let inaccessible_key = [9u8; 32];
     db::upsert_todo(
@@ -1088,7 +1143,7 @@ fn followup_job_api_filters_out_jobs_for_inaccessible_todos() {
         None,
     )
     .expect("upsert inaccessible todo");
-    db::enqueue_todo_followup_generation_job(&conn, "todo_hidden", "auto_create", None, 90)
+    db::enqueue_todo_followup_generation_job(&conn, "todo_hidden", "auto_create", false, None, 90)
         .expect("enqueue inaccessible job");
 
     let due = core::db_list_due_todo_followup_generation_jobs(app_dir, key.to_vec(), 100, 10)
