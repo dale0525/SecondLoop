@@ -319,6 +319,7 @@ void main() {
     expect(store.lastSucceededTodoId, isNull);
     expect(store.jobFor('todo_research')?.status, 'pending');
     expect(store.jobFor('todo_research')?.createdAtMs, 2000);
+    expect(store.pendingSuggestionsFor('todo_research'), isEmpty);
   });
 
   test('runner regenerate includes manual follow-up notes only', () async {

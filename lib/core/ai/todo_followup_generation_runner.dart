@@ -231,6 +231,14 @@ final class TodoFollowupGenerationRunner {
           ),
         ];
 
+        if (!await _isStillRunningAttempt(
+          todoId: job.todoId,
+          jobStartedAtMs: jobStartedAtMs,
+        )) {
+          processed++;
+          continue;
+        }
+
         await store.upsertGeneratedTodoFollowupSuggestions(
           todoId: job.todoId,
           suggestions: generatedSuggestions,
