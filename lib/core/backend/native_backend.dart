@@ -49,6 +49,25 @@ part 'native_backend_sync_localdir.dart';
 part 'native_backend_sync_managed_vault.dart';
 part 'native_backend_sync_migration.dart';
 
+Future<bool> _dbUpsertGeneratedTodoFollowupSuggestionsIfCurrentClaimBridge({
+  required String appDir,
+  required List<int> key,
+  required String todoId,
+  required int jobStartedAtMs,
+  required List<TodoFollowupSuggestionDraftInput> suggestions,
+  required String source,
+  String? generationKey,
+}) =>
+    rust_core.dbUpsertGeneratedTodoFollowupSuggestionsIfCurrentClaim(
+      appDir: appDir,
+      key: key,
+      todoId: todoId,
+      jobStartedAtMs: PlatformInt64Util.from(jobStartedAtMs),
+      suggestions: suggestions,
+      source: source,
+      generationKey: generationKey,
+    );
+
 typedef AppDirProvider = Future<String> Function();
 
 typedef DbInsertMessageFn = Future<Message> Function({
@@ -401,8 +420,7 @@ class NativeAppBackend extends _NativeAppBackendAccess
                 rust_core.dbUpsertGeneratedTodoFollowupSuggestions,
         _dbUpsertGeneratedTodoFollowupSuggestionsIfCurrentClaim =
             dbUpsertGeneratedTodoFollowupSuggestionsIfCurrentClaim ??
-                rust_core
-                    .dbUpsertGeneratedTodoFollowupSuggestionsIfCurrentClaim,
+                _dbUpsertGeneratedTodoFollowupSuggestionsIfCurrentClaimBridge,
         _dbApplyTodoFollowupSuggestions = dbApplyTodoFollowupSuggestions ??
             rust_core.dbApplyTodoFollowupSuggestions,
         _dbDismissTodoFollowupSuggestions = dbDismissTodoFollowupSuggestions ??
