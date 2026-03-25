@@ -57,6 +57,10 @@ mixin _CloudWebBackendTasksRecurrenceMixin on AppBackend {
     if (decoded is! Map) {
       throw const FormatException('invalid_recurrence_rule');
     }
+    return _parseRecurrenceRuleMap(decoded);
+  }
+
+  ({String freq, int interval}) _parseRecurrenceRuleMap(Map decoded) {
     final rawFreq = decoded['freq'];
     if (rawFreq is! String) {
       throw const FormatException('invalid_recurrence_rule');
@@ -145,25 +149,7 @@ mixin _CloudWebBackendTasksRecurrenceMixin on AppBackend {
     if (decoded is! Map) {
       throw const FormatException('invalid_recurrence_rule');
     }
-    final rawFreq = decoded['freq'];
-    if (rawFreq is! String) {
-      throw const FormatException('invalid_recurrence_rule');
-    }
-    final frequency = rawFreq.trim().toLowerCase();
-    if (!const <String>{'daily', 'weekly', 'monthly', 'yearly'}
-        .contains(frequency)) {
-      throw const FormatException('invalid_recurrence_rule');
-    }
-    final rawInterval = decoded['interval'];
-    final interval = switch (rawInterval) {
-      null => 1,
-      int value => value,
-      num value when value == value.toInt() => value.toInt(),
-      _ => 1,
-    };
-    if (interval < 1) {
-      throw const FormatException('invalid_recurrence_rule');
-    }
+    _parseRecurrenceRuleMap(decoded);
   }
 
   List<String> _seriesTodoIds(String seriesId) {

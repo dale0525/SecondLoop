@@ -331,6 +331,8 @@ class TaskHubQuickActionsController {
   }) async {
     final previousManualSignal = _manualSignalFromTodo(todo);
     final dueLocal = _reopenDueLocal(nowLocal, settings);
+    // Reopen intentionally re-activates the task as in-progress so it surfaces
+    // in the active focus flow immediately instead of returning to backlog.
     final updated = await backend.transitionTodo(
       sessionKey,
       todoId: todo.id,
