@@ -1282,46 +1282,6 @@ class NativeAppBackend extends _NativeAppBackendAccess
   }
 
   @override
-  Future<Todo> upsertTodo(
-    Uint8List key, {
-    required String id,
-    required String title,
-    int? dueAtMs,
-    required String status,
-    String? sourceEntryId,
-    int? reviewStage,
-    int? nextReviewAtMs,
-    int? lastReviewAtMs,
-    int? manualImportanceNudgeScore,
-    int? manualUrgencyNudgeScore,
-  }) async {
-    final appDir = await _getAppDir();
-    return rust_core.dbUpsertTodo(
-      appDir: appDir,
-      key: key,
-      id: id,
-      title: title,
-      dueAtMs: dueAtMs == null ? null : PlatformInt64Util.from(dueAtMs),
-      status: status,
-      sourceEntryId: sourceEntryId,
-      reviewStage:
-          reviewStage == null ? null : PlatformInt64Util.from(reviewStage),
-      nextReviewAtMs: nextReviewAtMs == null
-          ? null
-          : PlatformInt64Util.from(nextReviewAtMs),
-      lastReviewAtMs: lastReviewAtMs == null
-          ? null
-          : PlatformInt64Util.from(lastReviewAtMs),
-      manualImportanceNudgeScore: manualImportanceNudgeScore == null
-          ? null
-          : PlatformInt64Util.from(manualImportanceNudgeScore),
-      manualUrgencyNudgeScore: manualUrgencyNudgeScore == null
-          ? null
-          : PlatformInt64Util.from(manualUrgencyNudgeScore),
-    );
-  }
-
-  @override
   Future<Todo> setTodoStatus(
     Uint8List key, {
     required String todoId,
