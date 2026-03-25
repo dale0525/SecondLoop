@@ -1228,7 +1228,6 @@ void main() {
       );
     });
 
-
     test('task hub done quick action spawns next recurring todo on web backend',
         () async {
       final backend = CloudWebBackend(
