@@ -107,14 +107,15 @@ void main() {
     expect(service.requestTodoIds.last, <String>['b']);
   });
 
-  test('time bucket changes rerank unchanged candidates', () async {
+  test('ttl expiry reranks unchanged candidates', () async {
     SharedPreferences.setMockInitialValues({});
+    var updatedAtMs = 10;
     var nowLocal = DateTime(2026, 3, 13, 10, 55);
     final service = _RecordingAiService();
     final store = TaskPriorityStore.fromLoaders(
       nowLocal: () => nowLocal,
       loadTodos: () async => <Todo>[
-        todo(id: 'a', title: 'Follow up tomorrow', updatedAtMs: 10),
+        todo(id: 'a', title: 'Follow up tomorrow', updatedAtMs: updatedAtMs),
       ],
       resolveAiService: () async => service,
     );
@@ -122,7 +123,8 @@ void main() {
     await store.refresh();
     expect(service.requestSizes, <int>[1]);
 
-    nowLocal = DateTime(2026, 3, 13, 11, 5);
+    nowLocal = DateTime(2026, 3, 13, 11, 11);
+    updatedAtMs = 11;
     store.markDirty();
     await store.refresh();
 

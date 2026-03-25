@@ -242,8 +242,6 @@ class TaskHubQuickActionsController {
       clearReviewStage: true,
       clearNextReviewAtMs: true,
       lastReviewAtMs: nowUtcMs,
-      clearManualImportanceNudgeScore: true,
-      clearManualUrgencyNudgeScore: true,
     );
     return TaskHubUndoTicket(
       todo: todo,
@@ -341,8 +339,6 @@ class TaskHubQuickActionsController {
       clearReviewStage: true,
       clearNextReviewAtMs: true,
       lastReviewAtMs: nowUtcMs,
-      clearManualImportanceNudgeScore: true,
-      clearManualUrgencyNudgeScore: true,
     );
     return TaskHubUndoTicket(
       todo: todo,

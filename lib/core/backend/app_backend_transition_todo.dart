@@ -56,19 +56,21 @@ Future<Todo> _transitionTodoFallback(
       clearNextReviewAtMs ? null : (nextReviewAtMs ?? stagedNextReviewAtMs);
   final int? targetLastReviewAtMs =
       clearLastReviewAtMs ? null : (lastReviewAtMs ?? stagedLastReviewAtMs);
-  final int targetManualImportanceNudgeScore = clearManualImportanceNudgeScore
-      ? 0
-      : (manualImportanceNudgeScore ?? stagedManualImportance);
-  final int targetManualUrgencyNudgeScore = clearManualUrgencyNudgeScore
-      ? 0
-      : (manualUrgencyNudgeScore ?? stagedManualUrgency);
+  final int? targetManualImportanceNudgeScore = clearManualImportanceNudgeScore
+      ? null
+      : (manualImportanceNudgeScore ??
+          (stagedManualImportance == 0 ? null : stagedManualImportance));
+  final int? targetManualUrgencyNudgeScore = clearManualUrgencyNudgeScore
+      ? null
+      : (manualUrgencyNudgeScore ??
+          (stagedManualUrgency == 0 ? null : stagedManualUrgency));
 
   if (targetDueAtMs == stagedDueAtMs &&
       targetReviewStage == stagedReviewStage &&
       targetNextReviewAtMs == stagedNextReviewAtMs &&
       targetLastReviewAtMs == stagedLastReviewAtMs &&
-      targetManualImportanceNudgeScore == stagedManualImportance &&
-      targetManualUrgencyNudgeScore == stagedManualUrgency) {
+      (targetManualImportanceNudgeScore ?? 0) == stagedManualImportance &&
+      (targetManualUrgencyNudgeScore ?? 0) == stagedManualUrgency) {
     return staged;
   }
 

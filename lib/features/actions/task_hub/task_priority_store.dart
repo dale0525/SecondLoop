@@ -768,7 +768,6 @@ class TaskPriorityStore extends ChangeNotifier {
     required DateTime nowLocal,
   }) {
     return jsonEncode(<String, Object?>{
-      'time_bucket': buildTaskPriorityAiTimeBucket(nowLocal),
       'candidate': candidate.toJson(),
     });
   }
