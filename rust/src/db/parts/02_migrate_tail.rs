@@ -205,6 +205,26 @@ PRAGMA user_version = 35;
     Ok(())
 }
 
+fn migrate_from_v35_to_v36(conn: &Connection) -> Result<()> {
+    let mut stmt = conn.prepare("PRAGMA table_info(todo_followup_generation_jobs)")?;
+    let columns: Vec<String> = stmt
+        .query_map([], |row| row.get(1))?
+        .collect::<std::result::Result<Vec<_>, _>>()?;
+
+    if !columns.iter().any(|column| column == "manual_override_followup") {
+        conn.execute_batch(
+            "ALTER TABLE todo_followup_generation_jobs ADD COLUMN manual_override_followup INTEGER NOT NULL DEFAULT 0;",
+        )?;
+    }
+
+    if !columns.iter().any(|column| column == "task_type_hint") {
+        conn.execute_batch("ALTER TABLE todo_followup_generation_jobs ADD COLUMN task_type_hint TEXT;")?;
+    }
+
+    conn.execute_batch("PRAGMA user_version = 36;")?;
+    Ok(())
+}
+
 pub(crate) fn app_dir_from_conn(conn: &Connection) -> Result<PathBuf> {
     let mut stmt = conn.prepare("PRAGMA database_list")?;
     let mut rows = stmt.query([])?;
