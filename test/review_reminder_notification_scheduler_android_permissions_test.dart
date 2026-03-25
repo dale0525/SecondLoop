@@ -288,20 +288,21 @@ void main() {
     );
   });
 
-  test('legacy Windows app id list excludes current app id', () {
+  test('legacy Windows app id list does not treat active channels as legacy',
+      () {
     expect(
       FlutterLocalNotificationsReviewReminderScheduler
           .legacyWindowsAppUserModelIds(
         'com.secondloop.secondloop',
       ),
-      <String>['com.secondloop.secondloopdev'],
+      isEmpty,
     );
     expect(
       FlutterLocalNotificationsReviewReminderScheduler
           .legacyWindowsAppUserModelIds(
         'com.secondloop.secondloopdev',
       ),
-      <String>['com.secondloop.secondloop'],
+      isEmpty,
     );
   });
 }

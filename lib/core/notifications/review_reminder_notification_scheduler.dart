@@ -84,8 +84,7 @@ final class FlutterLocalNotificationsReviewReminderScheduler
 
   static const String _windowsAppName = 'SecondLoop';
   static const String _windowsProdAppUserModelId = 'com.secondloop.secondloop';
-  static const String _windowsDevAppUserModelId =
-      'com.secondloop.secondloopdev';
+  static const Set<String> _windowsLegacyAppUserModelIds = <String>{};
   static const String _windowsAppUserModelId = String.fromEnvironment(
     'SECONDLOOP_APP_ID',
     defaultValue: _windowsProdAppUserModelId,
@@ -277,11 +276,7 @@ final class FlutterLocalNotificationsReviewReminderScheduler
 
   @visibleForTesting
   static List<String> legacyWindowsAppUserModelIds(String currentAumid) {
-    const knownAppIds = <String>{
-      _windowsProdAppUserModelId,
-      _windowsDevAppUserModelId,
-    };
-    return knownAppIds
+    return _windowsLegacyAppUserModelIds
         .where((aumid) => aumid.isNotEmpty && aumid != currentAumid)
         .toList(growable: false);
   }

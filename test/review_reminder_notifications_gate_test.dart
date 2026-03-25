@@ -189,6 +189,50 @@ void main() {
     expect(find.byType(TaskHubPage), findsNothing);
   });
 
+  testWidgets('done action asks for checklist confirmation before completing',
+      (tester) async {
+    final harness = await _pumpGateHarness(
+      tester,
+      checklistItemsByTodoId: <String, List<TodoChecklistItem>>{
+        'todo:review': const <TodoChecklistItem>[
+          TodoChecklistItem(
+            id: 'item:review',
+            todoId: 'todo:review',
+            content: 'Still pending',
+            sortOrder: 0,
+            isDone: false,
+            createdAtMs: 0,
+            updatedAtMs: 0,
+          ),
+        ],
+      },
+    );
+
+    harness.scheduler.dispatch(
+      payload:
+          '${FlutterLocalNotificationsReviewReminderScheduler.reviewQueuePayloadPrefix}todo:review',
+      actionId:
+          FlutterLocalNotificationsReviewReminderScheduler.androidDoneActionId,
+    );
+
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 200));
+
+    expect(
+      find.byKey(
+        const ValueKey('review_reminder_incomplete_checklist_dialog'),
+      ),
+      findsOneWidget,
+    );
+    expect(harness.backend.statusByTodoId['todo:review'], isNull);
+
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+
+    expect(harness.backend.statusByTodoId['todo:review'], isNull);
+    expect(find.byType(TaskHubPage), findsNothing);
+  });
+
   testWidgets(
       'dismiss action marks todo dismissed without opening reminder page',
       (tester) async {
@@ -532,6 +576,7 @@ Future<_GateHarness> _pumpGateHarness(
   WidgetTester tester, {
   bool schedulerSupportsSystemNotifications = true,
   List<Todo>? todos,
+  Map<String, List<TodoChecklistItem>>? checklistItemsByTodoId,
   SyncEngine? syncEngine,
   InAppFallbackAlertSoundCallback? inAppFallbackAlertSound,
   VoidCallback? onLock,
@@ -554,7 +599,10 @@ Future<_GateHarness> _pumpGateHarness(
   final content = syncEngine == null
       ? gate
       : SyncEngineScope(engine: syncEngine, child: gate);
-  final backend = _Backend(todos: effectiveTodos);
+  final backend = _Backend(
+    todos: effectiveTodos,
+    checklistItemsByTodoId: checklistItemsByTodoId,
+  );
 
   await tester.pumpWidget(
     wrapWithI18n(
@@ -681,9 +729,15 @@ final _defaultTodos = <Todo>[
 ];
 
 final class _Backend extends TestAppBackend {
-  _Backend({required this.todos});
+  _Backend({
+    required this.todos,
+    Map<String, List<TodoChecklistItem>>? checklistItemsByTodoId,
+  }) : _checklistItemsByTodoId = Map<String, List<TodoChecklistItem>>.from(
+          checklistItemsByTodoId ?? const <String, List<TodoChecklistItem>>{},
+        );
 
   final List<Todo> todos;
+  final Map<String, List<TodoChecklistItem>> _checklistItemsByTodoId;
   final Map<String, String> statusByTodoId = <String, String>{};
 
   Todo? todoById(String todoId) {
@@ -706,7 +760,9 @@ final class _Backend extends TestAppBackend {
     Uint8List key,
     String todoId,
   ) async {
-    return const <TodoChecklistItem>[];
+    return List<TodoChecklistItem>.from(
+      _checklistItemsByTodoId[todoId] ?? const <TodoChecklistItem>[],
+    );
   }
 
   @override
