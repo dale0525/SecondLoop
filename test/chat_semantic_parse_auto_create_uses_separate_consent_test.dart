@@ -128,6 +128,7 @@ final class _Backend extends TestAppBackend {
     _jobsByMessageId[messageId] = SemanticParseJob(
       messageId: messageId,
       status: 'pending',
+      attemptId: PlatformInt64Util.from(0),
       attempts: PlatformInt64Util.from(0),
       nextRetryAtMs: null,
       lastError: null,
@@ -173,6 +174,7 @@ final class _SemanticJobsBackend extends TestAppBackend {
           (id) => SemanticParseJob(
             messageId: id,
             status: 'pending',
+            attemptId: PlatformInt64Util.from(0),
             attempts: PlatformInt64Util.from(0),
             nextRetryAtMs: null,
             lastError: null,

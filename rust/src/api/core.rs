@@ -1362,6 +1362,19 @@ pub fn db_mark_semantic_parse_job_running(
 ) -> Result<()> {
     let _key = key_from_bytes(key)?;
     let conn = db::open(Path::new(&app_dir))?;
+    let _ = db::mark_semantic_parse_job_running(&conn, &message_id, now_ms)?;
+    Ok(())
+}
+
+#[flutter_rust_bridge::frb]
+pub fn db_claim_semantic_parse_job_running(
+    app_dir: String,
+    key: Vec<u8>,
+    message_id: String,
+    now_ms: i64,
+) -> Result<i64> {
+    let _key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
     db::mark_semantic_parse_job_running(&conn, &message_id, now_ms)
 }
 
@@ -1380,6 +1393,30 @@ pub fn db_mark_semantic_parse_job_failed(
     db::mark_semantic_parse_job_failed(
         &conn,
         &message_id,
+        attempts,
+        next_retry_at_ms,
+        &last_error,
+        now_ms,
+    )
+}
+
+#[flutter_rust_bridge::frb]
+pub fn db_mark_semantic_parse_job_failed_if_current_attempt(
+    app_dir: String,
+    key: Vec<u8>,
+    message_id: String,
+    expected_attempt_id: i64,
+    attempts: i64,
+    next_retry_at_ms: i64,
+    last_error: String,
+    now_ms: i64,
+) -> Result<()> {
+    let _key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    db::mark_semantic_parse_job_failed_if_current_attempt(
+        &conn,
+        &message_id,
+        expected_attempt_id,
         attempts,
         next_retry_at_ms,
         &last_error,
@@ -1434,6 +1471,42 @@ pub fn db_mark_semantic_parse_job_succeeded(
 }
 
 #[flutter_rust_bridge::frb]
+#[allow(clippy::too_many_arguments)]
+pub fn db_mark_semantic_parse_job_succeeded_if_current_attempt(
+    app_dir: String,
+    key: Vec<u8>,
+    message_id: String,
+    expected_attempt_id: i64,
+    applied_action_kind: String,
+    applied_todo_id: Option<String>,
+    applied_todo_title: Option<String>,
+    applied_prev_todo_status: Option<String>,
+    suggested_tags: Option<Vec<String>>,
+    suggested_tag_confidence: Option<f64>,
+    tag_suggestion_state: Option<String>,
+    applied_tag_ids: Option<Vec<String>>,
+    now_ms: i64,
+) -> Result<()> {
+    let key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    db::mark_semantic_parse_job_succeeded_with_tag_metadata_if_current_attempt(
+        &conn,
+        &key,
+        &message_id,
+        expected_attempt_id,
+        &applied_action_kind,
+        applied_todo_id.as_deref(),
+        applied_todo_title.as_deref(),
+        applied_prev_todo_status.as_deref(),
+        suggested_tags.as_deref(),
+        suggested_tag_confidence,
+        tag_suggestion_state.as_deref(),
+        applied_tag_ids.as_deref(),
+        now_ms,
+    )
+}
+
+#[flutter_rust_bridge::frb]
 pub fn db_mark_semantic_parse_job_canceled(
     app_dir: String,
     key: Vec<u8>,
@@ -1443,6 +1516,127 @@ pub fn db_mark_semantic_parse_job_canceled(
     let _key = key_from_bytes(key)?;
     let conn = db::open(Path::new(&app_dir))?;
     db::mark_semantic_parse_job_canceled(&conn, &message_id, now_ms)
+}
+
+#[flutter_rust_bridge::frb]
+pub fn db_mark_semantic_parse_job_canceled_if_current_attempt(
+    app_dir: String,
+    key: Vec<u8>,
+    message_id: String,
+    expected_attempt_id: i64,
+    now_ms: i64,
+) -> Result<()> {
+    let _key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    db::mark_semantic_parse_job_canceled_if_current_attempt(
+        &conn,
+        &message_id,
+        expected_attempt_id,
+        now_ms,
+    )
+}
+
+#[flutter_rust_bridge::frb]
+pub fn db_apply_semantic_parse_tags_if_current_attempt(
+    app_dir: String,
+    key: Vec<u8>,
+    message_id: String,
+    expected_attempt_id: i64,
+    suggested_tags: Vec<String>,
+) -> Result<Vec<String>> {
+    let key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    db::apply_semantic_parse_tags_if_current_attempt(
+        &conn,
+        &key,
+        &message_id,
+        expected_attempt_id,
+        &suggested_tags,
+    )
+}
+
+#[flutter_rust_bridge::frb]
+#[allow(clippy::too_many_arguments)]
+pub fn db_upsert_todo_from_semantic_parse_if_current_attempt(
+    app_dir: String,
+    key: Vec<u8>,
+    message_id: String,
+    expected_attempt_id: i64,
+    todo_id: String,
+    title: String,
+    due_at_ms: Option<i64>,
+    status: String,
+    review_stage: Option<i64>,
+    next_review_at_ms: Option<i64>,
+    last_review_at_ms: Option<i64>,
+    task_type_hint: Option<String>,
+    recurrence_rule_json: Option<String>,
+    now_ms: i64,
+) -> Result<Option<String>> {
+    let key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    db::upsert_semantic_parse_todo_create_if_current_attempt(
+        &conn,
+        &key,
+        &message_id,
+        expected_attempt_id,
+        &todo_id,
+        &title,
+        due_at_ms,
+        &status,
+        review_stage,
+        next_review_at_ms,
+        last_review_at_ms,
+        task_type_hint.as_deref(),
+        recurrence_rule_json.as_deref(),
+        now_ms,
+    )
+}
+
+#[flutter_rust_bridge::frb]
+pub fn db_upsert_generated_todo_checklist_suggestions_if_current_attempt(
+    app_dir: String,
+    key: Vec<u8>,
+    message_id: String,
+    expected_attempt_id: i64,
+    todo_id: String,
+    suggestions: Vec<String>,
+    source: String,
+    generation_key: Option<String>,
+) -> Result<bool> {
+    let key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    db::upsert_semantic_parse_checklist_suggestions_if_current_attempt(
+        &conn,
+        &key,
+        &message_id,
+        expected_attempt_id,
+        &todo_id,
+        &suggestions,
+        &source,
+        generation_key.as_deref(),
+    )
+}
+
+#[flutter_rust_bridge::frb]
+pub fn db_set_todo_status_from_semantic_parse_if_current_attempt(
+    app_dir: String,
+    key: Vec<u8>,
+    message_id: String,
+    expected_attempt_id: i64,
+    todo_id: String,
+    new_status: String,
+) -> Result<Option<String>> {
+    let key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    db::set_semantic_parse_todo_status_if_current_attempt(
+        &conn,
+        &key,
+        &message_id,
+        expected_attempt_id,
+        &todo_id,
+        &new_status,
+    )
 }
 
 #[flutter_rust_bridge::frb]

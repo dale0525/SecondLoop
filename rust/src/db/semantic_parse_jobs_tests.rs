@@ -14,14 +14,17 @@ fn semantic_parse_jobs_lifecycle_and_due_query() {
     assert_eq!(due.len(), 1);
     assert_eq!(due[0].message_id, "msg:1");
     assert_eq!(due[0].status, "pending");
+    assert_eq!(due[0].attempt_id, 0);
     assert_eq!(due[0].attempts, 0);
     assert_eq!(due[0].next_retry_at_ms, None);
 
-    mark_semantic_parse_job_running(&conn, "msg:1", now_ms + 1).expect("running");
+    let attempt_id = mark_semantic_parse_job_running(&conn, "msg:1", now_ms + 1).expect("running");
+    assert_eq!(attempt_id, 1);
     let due_after_running = list_due_semantic_parse_jobs(&conn, now_ms + 1, 10).expect("list due");
     assert_eq!(due_after_running.len(), 1);
     assert_eq!(due_after_running[0].message_id, "msg:1");
     assert_eq!(due_after_running[0].status, "running");
+    assert_eq!(due_after_running[0].attempt_id, 1);
 
     mark_semantic_parse_job_failed(&conn, "msg:1", 1, now_ms + 120, "timeout", now_ms + 1)
         .expect("failed");
@@ -43,7 +46,9 @@ fn semantic_parse_jobs_lifecycle_and_due_query() {
     assert_eq!(due_again[0].attempts, 1);
     assert_eq!(due_again[0].next_retry_at_ms, None);
 
-    mark_semantic_parse_job_running(&conn, "msg:1", now_ms + 122).expect("running after retry");
+    let second_attempt_id =
+        mark_semantic_parse_job_running(&conn, "msg:1", now_ms + 122).expect("running after retry");
+    assert_eq!(second_attempt_id, 2);
 
     let key = [7u8; 32];
     mark_semantic_parse_job_succeeded(
@@ -67,6 +72,7 @@ fn semantic_parse_jobs_lifecycle_and_due_query() {
     assert_eq!(jobs.len(), 1);
     assert_eq!(jobs[0].message_id, "msg:1");
     assert_eq!(jobs[0].status, "succeeded");
+    assert_eq!(jobs[0].attempt_id, 2);
     assert_eq!(jobs[0].applied_action_kind.as_deref(), Some("create"));
     assert_eq!(jobs[0].applied_todo_id.as_deref(), Some("todo:msg:1"));
     assert_eq!(jobs[0].applied_todo_title.as_deref(), Some("Fix TV"));
@@ -88,7 +94,7 @@ fn semantic_parse_jobs_retry_reopens_succeeded_job() {
 
     let now_ms = 2_000i64;
     enqueue_semantic_parse_job(&conn, "msg:2", now_ms).expect("enqueue");
-    mark_semantic_parse_job_running(&conn, "msg:2", now_ms + 1).expect("running");
+    let _ = mark_semantic_parse_job_running(&conn, "msg:2", now_ms + 1).expect("running");
 
     let key = [9u8; 32];
     mark_semantic_parse_job_succeeded(
@@ -125,10 +131,10 @@ fn semantic_parse_jobs_enqueue_reopens_existing_job() {
     enqueue_semantic_parse_job(&conn, "msg:3", now_ms).expect("enqueue");
 
     let key = [5u8; 32];
-    mark_semantic_parse_job_running(&conn, "msg:3", now_ms + 1).expect("running");
+    let _ = mark_semantic_parse_job_running(&conn, "msg:3", now_ms + 1).expect("running");
     mark_semantic_parse_job_failed(&conn, "msg:3", 2, now_ms + 120, "timeout", now_ms + 1)
         .expect("failed");
-    mark_semantic_parse_job_running(&conn, "msg:3", now_ms + 2).expect("running again");
+    let _ = mark_semantic_parse_job_running(&conn, "msg:3", now_ms + 2).expect("running again");
     mark_semantic_parse_job_succeeded(
         &conn,
         &key,
@@ -170,7 +176,7 @@ fn semantic_parse_jobs_canceled_job_ignores_late_success_and_failure() {
 
     let now_ms = 4_000i64;
     enqueue_semantic_parse_job(&conn, "msg:cancel", now_ms).expect("enqueue");
-    mark_semantic_parse_job_running(&conn, "msg:cancel", now_ms + 1).expect("running");
+    let _ = mark_semantic_parse_job_running(&conn, "msg:cancel", now_ms + 1).expect("running");
     mark_semantic_parse_job_canceled(&conn, "msg:cancel", now_ms + 2).expect("canceled");
 
     let key = [6u8; 32];
@@ -217,9 +223,13 @@ fn semantic_parse_jobs_old_attempt_cannot_finalize_new_running_attempt() {
     let first_attempt_ms = 6_001i64;
     let second_attempt_ms = 6_010i64;
     enqueue_semantic_parse_job(&conn, "msg:retry", 6_000).expect("enqueue");
-    mark_semantic_parse_job_running(&conn, "msg:retry", first_attempt_ms).expect("running 1");
+    let first_attempt_id =
+        mark_semantic_parse_job_running(&conn, "msg:retry", first_attempt_ms).expect("running 1");
     mark_semantic_parse_job_retry(&conn, "msg:retry", 6_005).expect("retry");
-    mark_semantic_parse_job_running(&conn, "msg:retry", second_attempt_ms).expect("running 2");
+    let second_attempt_id =
+        mark_semantic_parse_job_running(&conn, "msg:retry", second_attempt_ms).expect("running 2");
+    assert_eq!(first_attempt_id, 1);
+    assert_eq!(second_attempt_id, 2);
 
     let key = [4u8; 32];
     mark_semantic_parse_job_succeeded(
@@ -247,6 +257,7 @@ fn semantic_parse_jobs_old_attempt_cannot_finalize_new_running_attempt() {
         .expect("list jobs");
     assert_eq!(jobs.len(), 1);
     assert_eq!(jobs[0].status, "running");
+    assert_eq!(jobs[0].attempt_id, 2);
     assert_eq!(jobs[0].applied_action_kind, None);
     assert_eq!(jobs[0].applied_todo_id, None);
     assert_eq!(jobs[0].last_error, None);
@@ -267,6 +278,7 @@ fn semantic_parse_jobs_old_attempt_cannot_finalize_new_running_attempt() {
         .expect("list jobs after success");
     assert_eq!(jobs.len(), 1);
     assert_eq!(jobs[0].status, "succeeded");
+    assert_eq!(jobs[0].attempt_id, 2);
     assert_eq!(jobs[0].applied_todo_id.as_deref(), Some("todo:new"));
     assert_eq!(
         jobs[0].applied_todo_title.as_deref(),
@@ -310,6 +322,7 @@ fn attachment_annotation_requeues_semantic_parse_for_linked_user_message() {
     assert_eq!(due_after.len(), 1);
     assert_eq!(due_after[0].message_id, message.id);
     assert_eq!(due_after[0].status, "pending");
+    assert_eq!(due_after[0].attempt_id, 0);
     assert_eq!(due_after[0].attempts, 0);
 }
 
@@ -359,7 +372,7 @@ fn semantic_parse_jobs_store_and_clear_tag_suggestion_metadata() {
 
     let now_ms = 7_000i64;
     enqueue_semantic_parse_job(&conn, "msg:meta", now_ms).expect("enqueue");
-    mark_semantic_parse_job_running(&conn, "msg:meta", now_ms + 1).expect("running");
+    let _ = mark_semantic_parse_job_running(&conn, "msg:meta", now_ms + 1).expect("running");
 
     let key = [8u8; 32];
     let suggested_tags = vec!["finance".to_string(), "work".to_string()];
@@ -397,4 +410,199 @@ fn semantic_parse_jobs_store_and_clear_tag_suggestion_metadata() {
     assert_eq!(jobs[0].suggested_tag_confidence, None);
     assert_eq!(jobs[0].tag_suggestion_state.as_deref(), Some("none"));
     assert_eq!(jobs[0].applied_tag_ids, None);
+}
+
+#[test]
+fn semantic_parse_jobs_old_attempt_cannot_cancel_new_running_attempt() {
+    let dir = tempdir().expect("tempdir");
+    let conn = open(dir.path()).expect("open");
+
+    enqueue_semantic_parse_job(&conn, "msg:cancel-race", 7_000).expect("enqueue");
+    let first_attempt_id =
+        mark_semantic_parse_job_running(&conn, "msg:cancel-race", 7_001).expect("running 1");
+    mark_semantic_parse_job_retry(&conn, "msg:cancel-race", 7_005).expect("retry");
+    let second_attempt_id =
+        mark_semantic_parse_job_running(&conn, "msg:cancel-race", 7_010).expect("running 2");
+
+    mark_semantic_parse_job_canceled_if_current_attempt(
+        &conn,
+        "msg:cancel-race",
+        first_attempt_id,
+        7_020,
+    )
+    .expect("stale cancel ignored");
+
+    let key = [8u8; 32];
+    let jobs =
+        list_semantic_parse_jobs_by_message_ids(&conn, &key, &["msg:cancel-race".to_string()])
+            .expect("list jobs");
+    assert_eq!(jobs[0].status, "running");
+    assert_eq!(jobs[0].attempt_id, second_attempt_id);
+
+    mark_semantic_parse_job_canceled_if_current_attempt(
+        &conn,
+        "msg:cancel-race",
+        second_attempt_id,
+        7_021,
+    )
+    .expect("current cancel applied");
+
+    let jobs =
+        list_semantic_parse_jobs_by_message_ids(&conn, &key, &["msg:cancel-race".to_string()])
+            .expect("list jobs after cancel");
+    assert_eq!(jobs[0].status, "canceled");
+    assert_eq!(jobs[0].attempt_id, second_attempt_id);
+}
+
+#[test]
+fn semantic_parse_jobs_guarded_mutations_require_current_attempt() {
+    let dir = tempdir().expect("tempdir");
+    let app_dir = dir.path().to_path_buf();
+    let conn = open(&app_dir).expect("open");
+    let key = [5u8; 32];
+
+    let conversation = get_or_create_loop_home_conversation(&conn, &key).expect("conversation");
+    let message =
+        insert_message(&conn, &key, &conversation.id, "user", "Buy milk").expect("message");
+    enqueue_semantic_parse_job(&conn, &message.id, 8_000).expect("enqueue");
+    let first_attempt_id =
+        mark_semantic_parse_job_running(&conn, &message.id, 8_001).expect("running 1");
+    mark_semantic_parse_job_retry(&conn, &message.id, 8_005).expect("retry");
+    let second_attempt_id =
+        mark_semantic_parse_job_running(&conn, &message.id, 8_010).expect("running 2");
+
+    let stale_tag_ids = apply_semantic_parse_tags_if_current_attempt(
+        &conn,
+        &key,
+        &message.id,
+        first_attempt_id,
+        &["errand".to_string()],
+    )
+    .expect("stale tags ignored");
+    assert!(stale_tag_ids.is_empty());
+    assert!(list_message_tags(&conn, &key, &message.id)
+        .expect("message tags")
+        .is_empty());
+
+    let stale_todo_id = upsert_semantic_parse_todo_create_if_current_attempt(
+        &conn,
+        &key,
+        &message.id,
+        first_attempt_id,
+        "todo:stale",
+        "Buy milk",
+        None,
+        "inbox",
+        Some(0),
+        Some(8_100),
+        Some(8_050),
+        Some("shopping"),
+        None,
+        8_020,
+    )
+    .expect("stale create ignored");
+    assert_eq!(stale_todo_id, None);
+    assert!(get_todo(&conn, &key, "todo:stale").is_err());
+
+    let todo = upsert_todo(
+        &conn,
+        &key,
+        "todo:followup",
+        "Buy milk",
+        None,
+        "open",
+        Some(&message.id),
+        None,
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("seed todo");
+    let stale_prev = set_semantic_parse_todo_status_if_current_attempt(
+        &conn,
+        &key,
+        &message.id,
+        first_attempt_id,
+        &todo.id,
+        "done",
+    )
+    .expect("stale followup ignored");
+    assert_eq!(stale_prev, None);
+    assert_eq!(
+        get_todo(&conn, &key, &todo.id)
+            .expect("todo after stale")
+            .status,
+        "open"
+    );
+
+    let current_tag_ids = apply_semantic_parse_tags_if_current_attempt(
+        &conn,
+        &key,
+        &message.id,
+        second_attempt_id,
+        &["errand".to_string()],
+    )
+    .expect("current tags applied");
+    assert_eq!(current_tag_ids.len(), 1);
+
+    let current_todo_id = upsert_semantic_parse_todo_create_if_current_attempt(
+        &conn,
+        &key,
+        &message.id,
+        second_attempt_id,
+        "todo:current",
+        "Buy milk today",
+        None,
+        "inbox",
+        Some(0),
+        Some(8_100),
+        Some(8_050),
+        Some("shopping"),
+        Some(r#"{"freq":"weekly","interval":1}"#),
+        8_030,
+    )
+    .expect("current create applied");
+    assert_eq!(current_todo_id.as_deref(), Some("todo:current"));
+    assert!(get_todo(&conn, &key, "todo:current").is_ok());
+    assert_eq!(
+        get_todo_recurrence_rule_json(&conn, "todo:current").expect("recurrence"),
+        Some(r#"{"freq":"weekly","interval":1}"#.to_string())
+    );
+
+    let checklist_created = upsert_semantic_parse_checklist_suggestions_if_current_attempt(
+        &conn,
+        &key,
+        &message.id,
+        second_attempt_id,
+        "todo:current",
+        &["Check pantry".to_string()],
+        "byok",
+        Some("semantic_parse_auto:test"),
+    )
+    .expect("checklist created");
+    assert!(checklist_created);
+    assert_eq!(
+        list_todo_checklist_suggestions(&conn, &key, "todo:current")
+            .expect("checklist suggestions")
+            .len(),
+        1
+    );
+
+    let prev_status = set_semantic_parse_todo_status_if_current_attempt(
+        &conn,
+        &key,
+        &message.id,
+        second_attempt_id,
+        &todo.id,
+        "done",
+    )
+    .expect("current followup applied");
+    assert_eq!(prev_status.as_deref(), Some("open"));
+    assert_eq!(
+        get_todo(&conn, &key, &todo.id)
+            .expect("todo after followup")
+            .status,
+        "done"
+    );
 }

@@ -102,11 +102,13 @@ SemanticParseJob _job({
   required String messageId,
   required String status,
   required int createdAtMs,
+  int attemptId = 0,
   int updatedAtMs = 0,
 }) {
   return SemanticParseJob(
     messageId: messageId,
     status: status,
+    attemptId: PlatformInt64Util.from(attemptId),
     attempts: PlatformInt64Util.from(0),
     nextRetryAtMs: null,
     lastError: null,
@@ -268,14 +270,26 @@ final class _RaceBackend extends NativeAppBackend {
     required String messageId,
     required int nowMs,
   }) async {
+    await claimSemanticParseJobRunning(key, messageId: messageId, nowMs: nowMs);
+  }
+
+  @override
+  Future<int> claimSemanticParseJobRunning(
+    Uint8List key, {
+    required String messageId,
+    required int nowMs,
+  }) async {
     final job = _jobsByMessageId[messageId];
-    if (job == null) return;
+    if (job == null) return 0;
+    final nextAttemptId = job.attemptId.toInt() + 1;
     _jobsByMessageId[messageId] = _job(
       messageId: messageId,
       status: 'running',
       createdAtMs: job.createdAtMs.toInt(),
+      attemptId: nextAttemptId,
       updatedAtMs: nowMs,
     );
+    return nextAttemptId;
   }
 
   @override
@@ -291,8 +305,21 @@ final class _RaceBackend extends NativeAppBackend {
       messageId: messageId,
       status: 'canceled',
       createdAtMs: job.createdAtMs.toInt(),
+      attemptId: job.attemptId.toInt(),
       updatedAtMs: nowMs,
     );
+  }
+
+  @override
+  Future<void> markSemanticParseJobCanceledIfCurrentAttempt(
+    Uint8List key, {
+    required String messageId,
+    required int expectedAttemptId,
+    required int nowMs,
+  }) async {
+    final job = _jobsByMessageId[messageId];
+    if (job == null || job.attemptId.toInt() != expectedAttemptId) return;
+    await markSemanticParseJobCanceled(key, messageId: messageId, nowMs: nowMs);
   }
 
   @override
@@ -310,7 +337,30 @@ final class _RaceBackend extends NativeAppBackend {
       messageId: messageId,
       status: 'failed',
       createdAtMs: job.createdAtMs.toInt(),
+      attemptId: job.attemptId.toInt(),
       updatedAtMs: nowMs,
+    );
+  }
+
+  @override
+  Future<void> markSemanticParseJobFailedIfCurrentAttempt(
+    Uint8List key, {
+    required String messageId,
+    required int expectedAttemptId,
+    required int attempts,
+    required int nextRetryAtMs,
+    required String lastError,
+    required int nowMs,
+  }) async {
+    final job = _jobsByMessageId[messageId];
+    if (job == null || job.attemptId.toInt() != expectedAttemptId) return;
+    await markSemanticParseJobFailed(
+      key,
+      messageId: messageId,
+      attempts: attempts,
+      nextRetryAtMs: nextRetryAtMs,
+      lastError: lastError,
+      nowMs: nowMs,
     );
   }
 
@@ -334,6 +384,7 @@ final class _RaceBackend extends NativeAppBackend {
     _jobsByMessageId[messageId] = SemanticParseJob(
       messageId: messageId,
       status: 'succeeded',
+      attemptId: job.attemptId,
       attempts: PlatformInt64Util.from(0),
       nextRetryAtMs: null,
       lastError: null,
@@ -348,6 +399,38 @@ final class _RaceBackend extends NativeAppBackend {
       undoneAtMs: null,
       createdAtMs: PlatformInt64Util.from(job.createdAtMs.toInt()),
       updatedAtMs: PlatformInt64Util.from(nowMs),
+    );
+  }
+
+  @override
+  Future<void> markSemanticParseJobSucceededIfCurrentAttempt(
+    Uint8List key, {
+    required String messageId,
+    required int expectedAttemptId,
+    required String appliedActionKind,
+    String? appliedTodoId,
+    String? appliedTodoTitle,
+    String? appliedPrevTodoStatus,
+    List<String>? suggestedTags,
+    double? suggestedTagConfidence,
+    String? tagSuggestionState,
+    List<String>? appliedTagIds,
+    required int nowMs,
+  }) async {
+    final job = _jobsByMessageId[messageId];
+    if (job == null || job.attemptId.toInt() != expectedAttemptId) return;
+    await markSemanticParseJobSucceeded(
+      key,
+      messageId: messageId,
+      appliedActionKind: appliedActionKind,
+      appliedTodoId: appliedTodoId,
+      appliedTodoTitle: appliedTodoTitle,
+      appliedPrevTodoStatus: appliedPrevTodoStatus,
+      suggestedTags: suggestedTags,
+      suggestedTagConfidence: suggestedTagConfidence,
+      tagSuggestionState: tagSuggestionState,
+      appliedTagIds: appliedTagIds,
+      nowMs: nowMs,
     );
   }
 
@@ -384,6 +467,41 @@ final class _RaceBackend extends NativeAppBackend {
     createdTodos.removeWhere((existing) => existing.id == id);
     createdTodos.add(todo);
     return todo;
+  }
+
+  @override
+  Future<String?> upsertTodoFromSemanticParseIfCurrentAttempt(
+    Uint8List key, {
+    required String messageId,
+    required int expectedAttemptId,
+    required String todoId,
+    required String title,
+    int? dueAtMs,
+    required String status,
+    int? reviewStage,
+    int? nextReviewAtMs,
+    int? lastReviewAtMs,
+    String? taskTypeHint,
+    String? recurrenceRuleJson,
+    required int nowMs,
+  }) async {
+    final job = _jobsByMessageId[messageId];
+    if (job == null || job.attemptId.toInt() != expectedAttemptId) {
+      return null;
+    }
+    await upsertTodoFromSemanticCreate(
+      key,
+      id: todoId,
+      title: title,
+      dueAtMs: dueAtMs,
+      status: status,
+      sourceEntryId: messageId,
+      reviewStage: reviewStage,
+      nextReviewAtMs: nextReviewAtMs,
+      lastReviewAtMs: lastReviewAtMs,
+      followupTaskTypeHint: taskTypeHint,
+    );
+    return todoId;
   }
 
   @override

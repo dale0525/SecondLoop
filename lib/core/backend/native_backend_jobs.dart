@@ -1,6 +1,7 @@
 part of 'native_backend.dart';
 
-mixin _NativeAppBackendJobs on _NativeAppBackendAccess {
+mixin _NativeAppBackendJobs on _NativeAppBackendAccess
+    implements SemanticParseAttemptAwareBackend {
   @override
   Future<void> enqueueTodoFollowupGenerationJob(
     Uint8List key, {
@@ -204,6 +205,22 @@ mixin _NativeAppBackendJobs on _NativeAppBackendAccess {
   }
 
   @override
+  Future<int> claimSemanticParseJobRunning(
+    Uint8List key, {
+    required String messageId,
+    required int nowMs,
+  }) async {
+    final appDir = await _getAppDir();
+    final attemptId = await rust_core.dbClaimSemanticParseJobRunning(
+      appDir: appDir,
+      key: key,
+      messageId: messageId,
+      nowMs: PlatformInt64Util.from(nowMs),
+    );
+    return attemptId.toInt();
+  }
+
+  @override
   Future<void> markSemanticParseJobFailed(
     Uint8List key, {
     required String messageId,
@@ -217,6 +234,29 @@ mixin _NativeAppBackendJobs on _NativeAppBackendAccess {
       appDir: appDir,
       key: key,
       messageId: messageId,
+      attempts: PlatformInt64Util.from(attempts),
+      nextRetryAtMs: PlatformInt64Util.from(nextRetryAtMs),
+      lastError: lastError,
+      nowMs: PlatformInt64Util.from(nowMs),
+    );
+  }
+
+  @override
+  Future<void> markSemanticParseJobFailedIfCurrentAttempt(
+    Uint8List key, {
+    required String messageId,
+    required int expectedAttemptId,
+    required int attempts,
+    required int nextRetryAtMs,
+    required String lastError,
+    required int nowMs,
+  }) async {
+    final appDir = await _getAppDir();
+    await rust_core.dbMarkSemanticParseJobFailedIfCurrentAttempt(
+      appDir: appDir,
+      key: key,
+      messageId: messageId,
+      expectedAttemptId: PlatformInt64Util.from(expectedAttemptId),
       attempts: PlatformInt64Util.from(attempts),
       nextRetryAtMs: PlatformInt64Util.from(nextRetryAtMs),
       lastError: lastError,
@@ -271,6 +311,39 @@ mixin _NativeAppBackendJobs on _NativeAppBackendAccess {
   }
 
   @override
+  Future<void> markSemanticParseJobSucceededIfCurrentAttempt(
+    Uint8List key, {
+    required String messageId,
+    required int expectedAttemptId,
+    required String appliedActionKind,
+    String? appliedTodoId,
+    String? appliedTodoTitle,
+    String? appliedPrevTodoStatus,
+    List<String>? suggestedTags,
+    double? suggestedTagConfidence,
+    String? tagSuggestionState,
+    List<String>? appliedTagIds,
+    required int nowMs,
+  }) async {
+    final appDir = await _getAppDir();
+    await rust_core.dbMarkSemanticParseJobSucceededIfCurrentAttempt(
+      appDir: appDir,
+      key: key,
+      messageId: messageId,
+      expectedAttemptId: PlatformInt64Util.from(expectedAttemptId),
+      appliedActionKind: appliedActionKind,
+      appliedTodoId: appliedTodoId,
+      appliedTodoTitle: appliedTodoTitle,
+      appliedPrevTodoStatus: appliedPrevTodoStatus,
+      suggestedTags: suggestedTags,
+      suggestedTagConfidence: suggestedTagConfidence,
+      tagSuggestionState: tagSuggestionState,
+      appliedTagIds: appliedTagIds,
+      nowMs: PlatformInt64Util.from(nowMs),
+    );
+  }
+
+  @override
   Future<void> markSemanticParseJobCanceled(
     Uint8List key, {
     required String messageId,
@@ -282,6 +355,122 @@ mixin _NativeAppBackendJobs on _NativeAppBackendAccess {
       key: key,
       messageId: messageId,
       nowMs: PlatformInt64Util.from(nowMs),
+    );
+  }
+
+  @override
+  Future<void> markSemanticParseJobCanceledIfCurrentAttempt(
+    Uint8List key, {
+    required String messageId,
+    required int expectedAttemptId,
+    required int nowMs,
+  }) async {
+    final appDir = await _getAppDir();
+    await rust_core.dbMarkSemanticParseJobCanceledIfCurrentAttempt(
+      appDir: appDir,
+      key: key,
+      messageId: messageId,
+      expectedAttemptId: PlatformInt64Util.from(expectedAttemptId),
+      nowMs: PlatformInt64Util.from(nowMs),
+    );
+  }
+
+  @override
+  Future<List<String>> applySemanticParseTagsIfCurrentAttempt(
+    Uint8List key, {
+    required String messageId,
+    required int expectedAttemptId,
+    required List<String> suggestedTags,
+  }) async {
+    final appDir = await _getAppDir();
+    return rust_core.dbApplySemanticParseTagsIfCurrentAttempt(
+      appDir: appDir,
+      key: key,
+      messageId: messageId,
+      expectedAttemptId: PlatformInt64Util.from(expectedAttemptId),
+      suggestedTags: suggestedTags,
+    );
+  }
+
+  @override
+  Future<String?> upsertTodoFromSemanticParseIfCurrentAttempt(
+    Uint8List key, {
+    required String messageId,
+    required int expectedAttemptId,
+    required String todoId,
+    required String title,
+    int? dueAtMs,
+    required String status,
+    int? reviewStage,
+    int? nextReviewAtMs,
+    int? lastReviewAtMs,
+    String? taskTypeHint,
+    String? recurrenceRuleJson,
+    required int nowMs,
+  }) async {
+    final appDir = await _getAppDir();
+    return rust_core.dbUpsertTodoFromSemanticParseIfCurrentAttempt(
+      appDir: appDir,
+      key: key,
+      messageId: messageId,
+      expectedAttemptId: PlatformInt64Util.from(expectedAttemptId),
+      todoId: todoId,
+      title: title,
+      dueAtMs: dueAtMs == null ? null : PlatformInt64Util.from(dueAtMs),
+      status: status,
+      reviewStage:
+          reviewStage == null ? null : PlatformInt64Util.from(reviewStage),
+      nextReviewAtMs: nextReviewAtMs == null
+          ? null
+          : PlatformInt64Util.from(nextReviewAtMs),
+      lastReviewAtMs: lastReviewAtMs == null
+          ? null
+          : PlatformInt64Util.from(lastReviewAtMs),
+      taskTypeHint: taskTypeHint,
+      recurrenceRuleJson: recurrenceRuleJson,
+      nowMs: PlatformInt64Util.from(nowMs),
+    );
+  }
+
+  @override
+  Future<void> upsertGeneratedTodoChecklistSuggestionsIfCurrentAttempt(
+    Uint8List key, {
+    required String messageId,
+    required int expectedAttemptId,
+    required String todoId,
+    required List<String> suggestions,
+    required String source,
+    String? generationKey,
+  }) async {
+    final appDir = await _getAppDir();
+    await rust_core.dbUpsertGeneratedTodoChecklistSuggestionsIfCurrentAttempt(
+      appDir: appDir,
+      key: key,
+      messageId: messageId,
+      expectedAttemptId: PlatformInt64Util.from(expectedAttemptId),
+      todoId: todoId,
+      suggestions: suggestions,
+      source: source,
+      generationKey: generationKey,
+    );
+  }
+
+  @override
+  Future<String?> setTodoStatusFromSemanticParseIfCurrentAttempt(
+    Uint8List key, {
+    required String messageId,
+    required int expectedAttemptId,
+    required String todoId,
+    required String newStatus,
+  }) async {
+    final appDir = await _getAppDir();
+    return rust_core.dbSetTodoStatusFromSemanticParseIfCurrentAttempt(
+      appDir: appDir,
+      key: key,
+      messageId: messageId,
+      expectedAttemptId: PlatformInt64Util.from(expectedAttemptId),
+      todoId: todoId,
+      newStatus: newStatus,
     );
   }
 

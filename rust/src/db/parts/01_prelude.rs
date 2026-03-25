@@ -254,6 +254,7 @@ pub struct AttachmentAnnotationJob {
 pub struct SemanticParseJob {
     pub message_id: String,
     pub status: String,
+    pub attempt_id: i64,
     pub attempts: i64,
     pub next_retry_at_ms: Option<i64>,
     pub last_error: Option<String>,

@@ -271,6 +271,25 @@ CREATE INDEX IF NOT EXISTS idx_todo_followup_generation_jobs_status_due
     Ok(())
 }
 
+fn migrate_from_v36_to_v37(conn: &Connection) -> Result<()> {
+    let mut stmt = conn.prepare("PRAGMA table_info(semantic_parse_jobs)")?;
+    let columns: Vec<String> = stmt
+        .query_map([], |row| row.get(1))?
+        .collect::<std::result::Result<Vec<_>, _>>()?;
+
+    if !columns.iter().any(|column| column == "attempt_id") {
+        conn.execute_batch(
+            r#"
+ALTER TABLE semantic_parse_jobs
+  ADD COLUMN attempt_id INTEGER NOT NULL DEFAULT 0;
+"#,
+        )?;
+    }
+
+    conn.execute_batch("PRAGMA user_version = 37;")?;
+    Ok(())
+}
+
 pub(crate) fn app_dir_from_conn(conn: &Connection) -> Result<PathBuf> {
     let mut stmt = conn.prepare("PRAGMA database_list")?;
     let mut rows = stmt.query([])?;

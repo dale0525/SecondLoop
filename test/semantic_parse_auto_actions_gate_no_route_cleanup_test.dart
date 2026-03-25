@@ -57,6 +57,7 @@ SemanticParseJob _job({
   return SemanticParseJob(
     messageId: messageId,
     status: status,
+    attemptId: PlatformInt64Util.from(0),
     attempts: PlatformInt64Util.from(0),
     nextRetryAtMs: null,
     lastError: null,

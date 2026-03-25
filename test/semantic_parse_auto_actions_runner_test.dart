@@ -912,29 +912,45 @@ final class _FakeStore implements SemanticParseAutoActionsStore {
   }
 
   @override
-  Future<void> markJobRunning({
+  Future<int> claimJobRunning({
     required String messageId,
     required int nowMs,
   }) async {
-    markRunningAttempt(messageId, nowMs: nowMs);
+    return markRunningAttempt(messageId, nowMs: nowMs);
   }
 
   @override
-  Future<void> markJobSucceeded(SemanticParseJobSucceededArgs args) async {
+  Future<void> markJobSucceededIfCurrentAttempt(
+    SemanticParseJobSucceededArgs args, {
+    required int expectedAttemptId,
+  }) async {
+    final current = _currentJobs[args.messageId];
+    if (current == null || current.attemptId.toInt() != expectedAttemptId) {
+      return;
+    }
     lastSucceeded = args;
     _currentJobs[args.messageId] = _buildJob(
       messageId: args.messageId,
       status: 'succeeded',
+      attemptId: expectedAttemptId,
       updatedAtMs: args.nowMs,
     );
   }
 
   @override
-  Future<void> markJobFailed(SemanticParseJobFailedArgs args) async {
+  Future<void> markJobFailedIfCurrentAttempt(
+    SemanticParseJobFailedArgs args, {
+    required int expectedAttemptId,
+  }) async {
+    final current = _currentJobs[args.messageId];
+    if (current == null || current.attemptId.toInt() != expectedAttemptId) {
+      return;
+    }
     lastFailed = args;
     _currentJobs[args.messageId] = _buildJob(
       messageId: args.messageId,
       status: 'failed',
+      attemptId: expectedAttemptId,
       updatedAtMs: args.nowMs,
     );
   }
@@ -945,11 +961,26 @@ final class _FakeStore implements SemanticParseAutoActionsStore {
     required int nowMs,
   }) async {
     canceledMessageIds.add(messageId);
+    final currentAttemptId = _currentJobs[messageId]?.attemptId.toInt() ?? 0;
     _currentJobs[messageId] = _buildJob(
       messageId: messageId,
       status: 'canceled',
+      attemptId: currentAttemptId,
       updatedAtMs: nowMs,
     );
+  }
+
+  @override
+  Future<void> markJobCanceledIfCurrentAttempt({
+    required String messageId,
+    required int expectedAttemptId,
+    required int nowMs,
+  }) async {
+    final current = _currentJobs[messageId];
+    if (current == null || current.attemptId.toInt() != expectedAttemptId) {
+      return;
+    }
+    await markJobCanceled(messageId: messageId, nowMs: nowMs);
   }
 
   void deleteMessage(String messageId) {
@@ -963,19 +994,24 @@ final class _FakeStore implements SemanticParseAutoActionsStore {
   }
 
   void requeueJob(String messageId, {required int nowMs}) {
+    final currentAttemptId = _currentJobs[messageId]?.attemptId.toInt() ?? 0;
     _currentJobs[messageId] = _buildJob(
       messageId: messageId,
       status: 'pending',
+      attemptId: currentAttemptId,
       updatedAtMs: nowMs,
     );
   }
 
-  void markRunningAttempt(String messageId, {required int nowMs}) {
+  int markRunningAttempt(String messageId, {required int nowMs}) {
+    final nextAttemptId = (_currentJobs[messageId]?.attemptId.toInt() ?? 0) + 1;
     _currentJobs[messageId] = _buildJob(
       messageId: messageId,
       status: 'running',
+      attemptId: nextAttemptId,
       updatedAtMs: nowMs,
     );
+    return nextAttemptId;
   }
 
   String? currentJobStatus(String messageId) => _currentJobs[messageId]?.status;
@@ -986,11 +1022,13 @@ final class _FakeStore implements SemanticParseAutoActionsStore {
   SemanticParseJob _buildJob({
     required String messageId,
     required String status,
+    required int attemptId,
     required int updatedAtMs,
   }) {
     return SemanticParseJob(
       messageId: messageId,
       status: status,
+      attemptId: PlatformInt64Util.from(attemptId),
       attempts: PlatformInt64Util.from(0),
       nextRetryAtMs: null,
       lastError: null,
@@ -1012,7 +1050,16 @@ final class _FakeStore implements SemanticParseAutoActionsStore {
   Future<SemanticParseTagApplyResult> applySemanticTags({
     required String messageId,
     required List<String> suggestedTags,
+    int? expectedAttemptId,
   }) async {
+    final current = _currentJobs[messageId];
+    if (expectedAttemptId != null &&
+        (current == null || current.attemptId.toInt() != expectedAttemptId)) {
+      return const SemanticParseTagApplyResult(
+        appliedCount: 0,
+        appliedTagIds: <String>[],
+      );
+    }
     final deduped = <String>[];
     final seen = <String>{};
     for (final raw in suggestedTags) {
@@ -1037,14 +1084,20 @@ final class _FakeStore implements SemanticParseAutoActionsStore {
   }
 
   @override
-  Future<String> upsertTodoFromMessage({
+  Future<String?> upsertTodoFromMessage({
     required String messageId,
     required String title,
     required String status,
     int? dueAtMs,
     String? recurrenceRuleJson,
     String? followupTaskTypeHint,
+    int? expectedAttemptId,
   }) async {
+    final current = _currentJobs[messageId];
+    if (expectedAttemptId != null &&
+        (current == null || current.attemptId.toInt() != expectedAttemptId)) {
+      return null;
+    }
     final todoId = _upsertTodoResultByMessageId[messageId] ?? 'todo:$messageId';
     createdTodoIds.add(todoId);
     lastRecurrenceRuleJson = recurrenceRuleJson;
@@ -1054,11 +1107,18 @@ final class _FakeStore implements SemanticParseAutoActionsStore {
 
   @override
   Future<void> upsertGeneratedChecklistSuggestions({
+    required String messageId,
     required String todoId,
     required List<String> suggestions,
     required String source,
     String? generationKey,
+    int? expectedAttemptId,
   }) async {
+    final current = _currentJobs[messageId];
+    if (expectedAttemptId != null &&
+        (current == null || current.attemptId.toInt() != expectedAttemptId)) {
+      return;
+    }
     generatedChecklistSuggestionsByTodoId[todoId] =
         List<String>.from(suggestions);
   }
@@ -1068,7 +1128,13 @@ final class _FakeStore implements SemanticParseAutoActionsStore {
     required String messageId,
     required String todoId,
     required String newStatus,
+    int? expectedAttemptId,
   }) async {
+    final current = _currentJobs[messageId];
+    if (expectedAttemptId != null &&
+        (current == null || current.attemptId.toInt() != expectedAttemptId)) {
+      return null;
+    }
     updatedStatusByTodoId[todoId] = newStatus;
     return _previousStatusByTodoId[todoId];
   }

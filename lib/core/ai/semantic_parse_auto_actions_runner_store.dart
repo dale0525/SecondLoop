@@ -544,19 +544,52 @@ final class BackendSemanticParseAutoActionsStore
   }
 
   @override
-  Future<void> markJobRunning({
+  Future<int> claimJobRunning({
     required String messageId,
     required int nowMs,
   }) async {
+    if (_backend is SemanticParseAttemptAwareBackend) {
+      final awareBackend = _backend as SemanticParseAttemptAwareBackend;
+      return awareBackend.claimSemanticParseJobRunning(
+        _sessionKey,
+        messageId: messageId,
+        nowMs: nowMs,
+      );
+    }
+
     await _backend.markSemanticParseJobRunning(
       _sessionKey,
       messageId: messageId,
       nowMs: nowMs,
     );
+    final currentJob = await getJob(messageId);
+    return currentJob?.attemptId.toInt() ?? 0;
   }
 
   @override
-  Future<void> markJobSucceeded(SemanticParseJobSucceededArgs args) async {
+  Future<void> markJobSucceededIfCurrentAttempt(
+    SemanticParseJobSucceededArgs args, {
+    required int expectedAttemptId,
+  }) async {
+    if (_backend is SemanticParseAttemptAwareBackend) {
+      final awareBackend = _backend as SemanticParseAttemptAwareBackend;
+      await awareBackend.markSemanticParseJobSucceededIfCurrentAttempt(
+        _sessionKey,
+        messageId: args.messageId,
+        expectedAttemptId: expectedAttemptId,
+        appliedActionKind: args.appliedActionKind,
+        appliedTodoId: args.appliedTodoId,
+        appliedTodoTitle: args.appliedTodoTitle,
+        appliedPrevTodoStatus: args.appliedPrevTodoStatus,
+        suggestedTags: args.suggestedTags,
+        suggestedTagConfidence: args.suggestedTagConfidence,
+        tagSuggestionState: args.tagSuggestionState,
+        appliedTagIds: args.appliedTagIds,
+        nowMs: args.nowMs,
+      );
+      return;
+    }
+
     await _backend.markSemanticParseJobSucceeded(
       _sessionKey,
       messageId: args.messageId,
@@ -573,7 +606,24 @@ final class BackendSemanticParseAutoActionsStore
   }
 
   @override
-  Future<void> markJobFailed(SemanticParseJobFailedArgs args) async {
+  Future<void> markJobFailedIfCurrentAttempt(
+    SemanticParseJobFailedArgs args, {
+    required int expectedAttemptId,
+  }) async {
+    if (_backend is SemanticParseAttemptAwareBackend) {
+      final awareBackend = _backend as SemanticParseAttemptAwareBackend;
+      await awareBackend.markSemanticParseJobFailedIfCurrentAttempt(
+        _sessionKey,
+        messageId: args.messageId,
+        expectedAttemptId: expectedAttemptId,
+        attempts: args.attempts,
+        nextRetryAtMs: args.nextRetryAtMs,
+        lastError: args.error,
+        nowMs: args.nowMs,
+      );
+      return;
+    }
+
     await _backend.markSemanticParseJobFailed(
       _sessionKey,
       messageId: args.messageId,
@@ -597,15 +647,52 @@ final class BackendSemanticParseAutoActionsStore
   }
 
   @override
+  Future<void> markJobCanceledIfCurrentAttempt({
+    required String messageId,
+    required int expectedAttemptId,
+    required int nowMs,
+  }) async {
+    if (_backend is SemanticParseAttemptAwareBackend) {
+      final awareBackend = _backend as SemanticParseAttemptAwareBackend;
+      await awareBackend.markSemanticParseJobCanceledIfCurrentAttempt(
+        _sessionKey,
+        messageId: messageId,
+        expectedAttemptId: expectedAttemptId,
+        nowMs: nowMs,
+      );
+      return;
+    }
+
+    await markJobCanceled(messageId: messageId, nowMs: nowMs);
+  }
+
+  @override
   Future<SemanticParseTagApplyResult> applySemanticTags({
     required String messageId,
     required List<String> suggestedTags,
+    int? expectedAttemptId,
   }) async {
     final dedupedTagNames = normalizeSemanticTagNames(suggestedTags);
     if (dedupedTagNames.isEmpty) {
       return const SemanticParseTagApplyResult(
         appliedCount: 0,
         appliedTagIds: <String>[],
+      );
+    }
+
+    if (expectedAttemptId != null &&
+        _backend is SemanticParseAttemptAwareBackend) {
+      final awareBackend = _backend as SemanticParseAttemptAwareBackend;
+      final appliedTagIds =
+          await awareBackend.applySemanticParseTagsIfCurrentAttempt(
+        _sessionKey,
+        messageId: messageId,
+        expectedAttemptId: expectedAttemptId,
+        suggestedTags: dedupedTagNames,
+      );
+      return SemanticParseTagApplyResult(
+        appliedCount: appliedTagIds.length,
+        appliedTagIds: appliedTagIds,
       );
     }
 
@@ -665,13 +752,14 @@ final class BackendSemanticParseAutoActionsStore
   }
 
   @override
-  Future<String> upsertTodoFromMessage({
+  Future<String?> upsertTodoFromMessage({
     required String messageId,
     required String title,
     required String status,
     int? dueAtMs,
     String? recurrenceRuleJson,
     String? followupTaskTypeHint,
+    int? expectedAttemptId,
   }) async {
     var normalizedStatus = status.trim();
     if (normalizedStatus.isEmpty) {
@@ -699,6 +787,28 @@ final class BackendSemanticParseAutoActionsStore
     }
 
     final todoId = await _resolveCreateTodoId(messageId);
+    final lastReviewAtMs = DateTime.now().toUtc().millisecondsSinceEpoch;
+    final normalizedRule = recurrenceRuleJson?.trim();
+    if (expectedAttemptId != null &&
+        _backend is SemanticParseAttemptAwareBackend) {
+      final awareBackend = _backend as SemanticParseAttemptAwareBackend;
+      return awareBackend.upsertTodoFromSemanticParseIfCurrentAttempt(
+        _sessionKey,
+        messageId: messageId,
+        expectedAttemptId: expectedAttemptId,
+        todoId: todoId,
+        title: title,
+        dueAtMs: dueAtMs,
+        status: normalizedStatus,
+        reviewStage: reviewStage,
+        nextReviewAtMs: nextReviewAtMs,
+        lastReviewAtMs: lastReviewAtMs,
+        taskTypeHint: followupTaskTypeHint,
+        recurrenceRuleJson: normalizedRule,
+        nowMs: lastReviewAtMs,
+      );
+    }
+
     await _backend.upsertTodoFromSemanticCreate(
       _sessionKey,
       id: todoId,
@@ -708,11 +818,10 @@ final class BackendSemanticParseAutoActionsStore
       sourceEntryId: messageId,
       reviewStage: reviewStage,
       nextReviewAtMs: nextReviewAtMs,
-      lastReviewAtMs: DateTime.now().toUtc().millisecondsSinceEpoch,
+      lastReviewAtMs: lastReviewAtMs,
       followupTaskTypeHint: followupTaskTypeHint,
     );
 
-    final normalizedRule = recurrenceRuleJson?.trim();
     if (normalizedRule != null && normalizedRule.isNotEmpty) {
       await _backend.upsertTodoRecurrence(
         _sessionKey,
@@ -727,12 +836,30 @@ final class BackendSemanticParseAutoActionsStore
 
   @override
   Future<void> upsertGeneratedChecklistSuggestions({
+    required String messageId,
     required String todoId,
     required List<String> suggestions,
     required String source,
     String? generationKey,
+    int? expectedAttemptId,
   }) async {
     if (suggestions.isEmpty) return;
+    if (expectedAttemptId != null &&
+        _backend is SemanticParseAttemptAwareBackend) {
+      final awareBackend = _backend as SemanticParseAttemptAwareBackend;
+      await awareBackend
+          .upsertGeneratedTodoChecklistSuggestionsIfCurrentAttempt(
+        _sessionKey,
+        messageId: messageId,
+        expectedAttemptId: expectedAttemptId,
+        todoId: todoId,
+        suggestions: suggestions,
+        source: source,
+        generationKey: generationKey,
+      );
+      return;
+    }
+
     await _backend.upsertGeneratedTodoChecklistSuggestions(
       _sessionKey,
       todoId: todoId,
@@ -776,7 +903,20 @@ final class BackendSemanticParseAutoActionsStore
     required String messageId,
     required String todoId,
     required String newStatus,
+    int? expectedAttemptId,
   }) async {
+    if (expectedAttemptId != null &&
+        _backend is SemanticParseAttemptAwareBackend) {
+      final awareBackend = _backend as SemanticParseAttemptAwareBackend;
+      return awareBackend.setTodoStatusFromSemanticParseIfCurrentAttempt(
+        _sessionKey,
+        messageId: messageId,
+        expectedAttemptId: expectedAttemptId,
+        todoId: todoId,
+        newStatus: newStatus,
+      );
+    }
+
     final todos = await _backend.listTodos(_sessionKey);
     final existing =
         todos.where((t) => t.id == todoId).cast<Todo?>().firstWhere(

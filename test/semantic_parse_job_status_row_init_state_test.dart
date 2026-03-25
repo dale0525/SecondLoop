@@ -25,6 +25,7 @@ void main() {
       final job = SemanticParseJob(
         messageId: message.id,
         status: 'succeeded',
+        attemptId: PlatformInt64Util.from(0),
         attempts: PlatformInt64Util.from(0),
         nextRetryAtMs: null,
         lastError: null,
