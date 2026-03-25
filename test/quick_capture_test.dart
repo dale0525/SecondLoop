@@ -410,6 +410,8 @@ final class _SemanticParseEnabledQuickCaptureBackend extends _UnlockedBackend {
     int? reviewStage,
     int? nextReviewAtMs,
     int? lastReviewAtMs,
+    int? manualImportanceNudgeScore,
+    int? manualUrgencyNudgeScore,
   }) async {
     upsertTodoCount += 1;
     return Todo(

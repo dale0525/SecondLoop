@@ -26,6 +26,8 @@ fn actions_schema_smoke_roundtrip_persists_across_restart() {
         Some(0),
         Some(1_700_000_000_000),
         None,
+        None,
+        None,
     )
     .expect("upsert todo");
 
@@ -89,7 +91,7 @@ fn actions_schema_smoke_wrong_key_cannot_decrypt() {
 
     let conn = db::open(&app_dir).expect("open db");
     db::upsert_todo(
-        &conn, &key, "todo_1", "hello", None, "inbox", None, None, None, None,
+        &conn, &key, "todo_1", "hello", None, "inbox", None, None, None, None, None, None,
     )
     .expect("upsert todo");
 

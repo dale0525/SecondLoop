@@ -18,6 +18,11 @@ final class SyncKeyManager {
 
   static bool get hasSessionKey => _sessionKey != null;
 
+  static bool matchesSessionKey(Uint8List key) {
+    final current = _sessionKey;
+    return current != null && _bytesEqual(current, key);
+  }
+
   static void setSessionKey(Uint8List? key) {
     if (key == null) {
       _sessionKey = null;

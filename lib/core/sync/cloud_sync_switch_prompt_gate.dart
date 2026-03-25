@@ -16,6 +16,7 @@ import '../../i18n/strings.g.dart';
 import '../../features/media_backup/cloud_media_backup_runner.dart';
 import '../../features/settings/ai_settings_page.dart';
 import 'cloud_sync_switch_prefs.dart';
+import 'stage_progress_smoother.dart';
 import 'sync_config_store.dart';
 import 'sync_engine.dart';
 import 'sync_engine_gate.dart';
@@ -59,6 +60,12 @@ final class _CloudSyncSwitchPromptGateState
   late final SyncConfigStore _store = widget.configStore ?? SyncConfigStore();
   static const _kCloudAiFeatureGuidePromptedUidPrefsKey =
       'cloud_ai_feature_guide_prompted_uid_v1';
+
+  SyncStageProgressReporter _makeSmoothStageProgressReporter(
+    ValueNotifier<double> progress,
+  ) {
+    return SyncStageProgressReporter((value) => progress.value = value);
+  }
 
   @override
   void dispose() {
@@ -350,6 +357,8 @@ final class _CloudSyncSwitchPromptGateState
             started = true;
             unawaited(() async {
               try {
+                var stageProgress = _makeSmoothStageProgressReporter(progress);
+
                 // Pull
                 stage.value = t.sync.progressDialog.pulling;
                 progress.value = 0.0;
@@ -361,13 +370,11 @@ final class _CloudSyncSwitchPromptGateState
                     vaultId: vaultId,
                     idToken: idToken,
                   ),
-                  onProgress: (done, total) {
-                    progress.value =
-                        total <= 0 ? 0.0 : (done / total).clamp(0.0, 1.0);
-                  },
+                  onProgress: stageProgress.onProgress,
                 );
 
                 // Push
+                stageProgress = _makeSmoothStageProgressReporter(progress);
                 stage.value = t.sync.progressDialog.pushing;
                 progress.value = 0.0;
                 await _consumeRustProgressStream(
@@ -378,10 +385,7 @@ final class _CloudSyncSwitchPromptGateState
                     vaultId: vaultId,
                     idToken: idToken,
                   ),
-                  onProgress: (done, total) {
-                    progress.value =
-                        total <= 0 ? 0.0 : (done / total).clamp(0.0, 1.0);
-                  },
+                  onProgress: stageProgress.onProgress,
                 );
 
                 // Media uploads (optional)
@@ -426,7 +430,7 @@ final class _CloudSyncSwitchPromptGateState
 
                 // Finalize
                 stage.value = t.sync.progressDialog.finalizing;
-                progress.value = 1.0;
+                stageProgress.complete();
               } catch (_) {
                 // Best-effort: avoid blocking the user on transient sync errors.
                 completed = false;

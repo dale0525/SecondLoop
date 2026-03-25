@@ -25,6 +25,8 @@ fn delete_todo_and_associated_messages_deletes_source_entry_and_activity_message
         None,
         None,
         None,
+        None,
+        None,
     )
     .expect("todo");
     db::append_todo_note(&conn, &key, "todo:1", "linked note", Some(&note_msg.id))

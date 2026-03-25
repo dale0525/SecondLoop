@@ -98,6 +98,116 @@ pub fn push_ops_only_with_progress(
     )
 }
 
+fn remote_file_exists(remote: &impl RemoteStore, path: &str) -> Result<bool> {
+    remote.exists(path)
+}
+
+fn local_attachment_sha256s(conn: &Connection) -> Result<Vec<String>> {
+    conn.prepare(r#"SELECT sha256 FROM attachments ORDER BY created_at ASC, sha256 ASC"#)?
+        .query_map([], |row| row.get(0))?
+        .collect::<rusqlite::Result<Vec<String>>>()
+        .map_err(Into::into)
+}
+
+fn local_embedding_artifact_blob_refs(conn: &Connection) -> Result<Vec<String>> {
+    crate::db::list_distinct_embedding_artifact_blob_refs(conn)
+}
+
+const MAX_FRESH_DEVICE_REMOTE_BYTE_PROBES: i64 = 10;
+
+fn local_attachment_count(conn: &Connection) -> Result<i64> {
+    conn.query_row(r#"SELECT count(*) FROM attachments"#, [], |row| row.get(0))
+        .map_err(Into::into)
+}
+
+fn local_ready_embedding_artifact_blob_ref_count(conn: &Connection) -> Result<i64> {
+    conn.query_row(
+        r#"SELECT count(DISTINCT blob_ref)
+           FROM embedding_artifact_manifests
+           WHERE status = 'ready'"#,
+        [],
+        |row| row.get(0),
+    )
+    .map_err(Into::into)
+}
+
+fn exceeds_fresh_device_remote_byte_probe_budget(conn: &Connection) -> Result<bool> {
+    let attachment_count = local_attachment_count(conn)?.max(0);
+    if attachment_count > MAX_FRESH_DEVICE_REMOTE_BYTE_PROBES {
+        return Ok(true);
+    }
+    let artifact_count = local_ready_embedding_artifact_blob_ref_count(conn)?.max(0);
+    Ok(attachment_count.saturating_add(artifact_count) > MAX_FRESH_DEVICE_REMOTE_BYTE_PROBES)
+}
+
+fn remote_metadata_paths_for_other_devices(
+    conn: &Connection,
+    remote_root_dir: &str,
+    device_id: &str,
+) -> Result<Vec<String>> {
+    let mut metadata_paths = std::collections::BTreeSet::new();
+    let mut stmt = conn.prepare(
+        r#"SELECT device_id, seq
+           FROM oplog
+           WHERE device_id != ?1
+           ORDER BY device_id ASC, seq ASC"#,
+    )?;
+    let mut rows = stmt.query(params![device_id])?;
+    while let Some(row) = rows.next()? {
+        let remote_device_id: String = row.get(0)?;
+        let seq: i64 = row.get(1)?;
+        metadata_paths.insert(format!(
+            "{remote_root_dir}{remote_device_id}/ops/op_{seq}.json"
+        ));
+        metadata_paths.insert(format!(
+            "{remote_root_dir}{remote_device_id}/packs/pack_{}.bin",
+            ops_pack_chunk_start(seq)
+        ));
+        metadata_paths.insert(format!("{remote_root_dir}{remote_device_id}/cursor.json"));
+    }
+    Ok(metadata_paths.into_iter().collect())
+}
+
+fn can_skip_fresh_device_full_push(
+    conn: &Connection,
+    remote: &impl RemoteStore,
+    remote_root_dir: &str,
+    device_id: &str,
+) -> Result<bool> {
+    let metadata_paths = remote_metadata_paths_for_other_devices(conn, remote_root_dir, device_id)?;
+    if metadata_paths.is_empty() {
+        return Ok(false);
+    }
+    if exceeds_fresh_device_remote_byte_probe_budget(conn)? {
+        return Ok(false);
+    }
+
+    for metadata_path in metadata_paths {
+        if !remote_file_exists(remote, &metadata_path)? {
+            return Ok(false);
+        }
+    }
+
+    for sha256 in local_attachment_sha256s(conn)? {
+        let attachment_path = format!("{remote_root_dir}attachments/{sha256}.bin");
+        if !remote_file_exists(remote, &attachment_path)? {
+            return Ok(false);
+        }
+    }
+
+    for blob_ref in local_embedding_artifact_blob_refs(conn)? {
+        let artifact_path = format!(
+            "{remote_root_dir}{}",
+            crate::db::embedding_artifact_blob_rel_path(&blob_ref)
+        );
+        if !remote_file_exists(remote, &artifact_path)? {
+            return Ok(false);
+        }
+    }
+
+    Ok(true)
+}
+
 fn push_internal(
     conn: &Connection,
     db_key: &[u8; 32],
@@ -107,8 +217,6 @@ fn push_internal(
     upload_attachment_bytes: bool,
     mut progress: Option<&mut dyn FnMut(u64, u64)>,
 ) -> Result<u64> {
-    crate::db::backfill_attachments_oplog_if_needed(conn, db_key)?;
-
     let device_id = get_or_create_device_id(conn)?;
     let app_dir = crate::db::app_dir_from_conn(conn)?;
     let app_dir_path = app_dir.as_path();
@@ -125,7 +233,47 @@ fn push_internal(
         )?
         .max(0) as u64;
 
-    if !upload_attachment_bytes && local_pending_ops == 0 && last_pushed_seq == 0 {
+    let has_remote_device_ops: bool = conn.query_row(
+        r#"SELECT EXISTS(SELECT 1 FROM oplog WHERE device_id != ?1 LIMIT 1)"#,
+        params![device_id.as_str()],
+        |row| row.get(0),
+    )?;
+
+    let can_skip_fresh_device_push = if upload_attachment_bytes
+        && local_pending_ops == 0
+        && last_pushed_seq == 0
+        && has_remote_device_ops
+    {
+        can_skip_fresh_device_full_push(conn, remote, &remote_root_dir, &device_id).unwrap_or(false)
+    } else {
+        false
+    };
+
+    if can_skip_fresh_device_push {
+        // After a fresh pull, this device can have lots of synced metadata but still no local
+        // oplog rows of its own. Returning early here avoids a redundant byte backfill/upload
+        // phase on the new device, but only after probing that the remote already has the synced
+        // metadata and representative attachment/artifact bytes.
+        if let Some(cb) = progress.as_deref_mut() {
+            cb(0, 0);
+        }
+        return Ok(0);
+    }
+
+    crate::db::backfill_attachments_oplog_if_needed(conn, db_key)?;
+
+    let local_pending_ops = conn
+        .query_row(
+            r#"SELECT count(*) FROM oplog WHERE device_id = ?1 AND seq > ?2"#,
+            params![device_id, last_pushed_seq],
+            |row| row.get::<_, i64>(0),
+        )?
+        .max(0) as u64;
+
+    if !upload_attachment_bytes
+        && local_pending_ops == 0
+        && last_pushed_seq == 0
+    {
         if let Some(cb) = progress.as_deref_mut() {
             cb(0, 0);
         }
@@ -573,6 +721,7 @@ fn ensure_ops_packs_backfilled(
             Ok(_) => false,
             Err(e) if e.is::<NotFound>() => true,
             Err(e) => return Err(e),
+
         }
     };
 
@@ -651,220 +800,5 @@ fn upload_ops_pack_chunk(
     Ok(())
 }
 
-
 #[cfg(test)]
-mod cursor_metadata_tests {
-    use super::*;
-    use tempfile::tempdir;
-
-    #[test]
-    fn push_ops_only_writes_cursor_json_with_max_seq() {
-        let dir = tempdir().expect("tempdir");
-        let conn = crate::db::open(dir.path()).expect("open");
-        let db_key = [7u8; 32];
-        let sync_key = [9u8; 32];
-
-        let _conversation =
-            crate::db::create_conversation(&conn, &db_key, "Test").expect("create conversation");
-
-        let remote = InMemoryRemoteStore::new();
-        let pushed = push_ops_only(&conn, &db_key, &sync_key, &remote, "SecondLoop")
-            .expect("push ops only");
-        assert_eq!(pushed, 1);
-
-        let device_id: String = conn
-            .query_row(
-                r#"SELECT value FROM kv WHERE key = 'device_id'"#,
-                [],
-                |row| row.get(0),
-            )
-            .expect("device id");
-
-        let cursor_path = format!("/SecondLoop/{device_id}/cursor.json");
-        let cursor_bytes = remote.get(&cursor_path).expect("cursor.json exists");
-        let cursor: serde_json::Value =
-            serde_json::from_slice(&cursor_bytes).expect("cursor json");
-        assert_eq!(cursor["max_seq"].as_i64(), Some(1));
-    }
-}
-
-#[cfg(test)]
-mod push_progress_tests {
-    use super::*;
-    use tempfile::tempdir;
-
-    #[test]
-    fn push_ops_only_with_progress_reports_done_and_total() {
-        let dir = tempdir().expect("tempdir");
-        let conn = crate::db::open(dir.path()).expect("open");
-        let db_key = [7u8; 32];
-        let sync_key = [9u8; 32];
-
-        let _c1 = crate::db::create_conversation(&conn, &db_key, "One").expect("c1");
-        let _c2 = crate::db::create_conversation(&conn, &db_key, "Two").expect("c2");
-
-        let remote = InMemoryRemoteStore::new();
-        let mut seen: Vec<(u64, u64)> = Vec::new();
-        let mut on_progress = |done: u64, total: u64| {
-            seen.push((done, total));
-        };
-
-        let pushed = push_ops_only_with_progress(
-            &conn,
-            &db_key,
-            &sync_key,
-            &remote,
-            "SecondLoop",
-            &mut on_progress,
-        )
-        .expect("push ops only with progress");
-        assert_eq!(pushed, 2);
-
-        assert!(!seen.is_empty());
-        assert_eq!(seen[0].1, 2);
-        assert_eq!(*seen.last().expect("last progress"), (2, 2));
-    }
-
-    #[test]
-    fn push_ops_only_with_progress_reports_total_when_repush_from_zero_needed() {
-        let dir = tempdir().expect("tempdir");
-        let conn = crate::db::open(dir.path()).expect("open");
-        let db_key = [7u8; 32];
-        let sync_key = [9u8; 32];
-
-        let _c1 = crate::db::create_conversation(&conn, &db_key, "One").expect("c1");
-        let _c2 = crate::db::create_conversation(&conn, &db_key, "Two").expect("c2");
-
-        let remote = InMemoryRemoteStore::new();
-        let pushed1 = push_ops_only(&conn, &db_key, &sync_key, &remote, "SecondLoop")
-            .expect("push 1");
-        assert_eq!(pushed1, 2);
-
-        clear_remote_root(&remote, "SecondLoop").expect("clear remote root");
-        let mut seen: Vec<(u64, u64)> = Vec::new();
-        let mut on_progress = |done: u64, total: u64| {
-            seen.push((done, total));
-        };
-
-        let pushed2 = push_ops_only_with_progress(
-            &conn,
-            &db_key,
-            &sync_key,
-            &remote,
-            "SecondLoop",
-            &mut on_progress,
-        )
-        .expect("push 2");
-        assert_eq!(pushed2, 2);
-
-        assert!(!seen.is_empty());
-        assert_eq!(seen[0].1, 2);
-        assert_eq!(*seen.last().expect("last progress"), (2, 2));
-    }
-}
-
-#[cfg(test)]
-mod push_parallel_upload_tests {
-    use super::*;
-    use std::sync::atomic::{AtomicUsize, Ordering};
-    use std::time::Duration;
-    use tempfile::tempdir;
-
-    struct TrackingRemoteStore {
-        inner: InMemoryRemoteStore,
-        op_put_delay: Duration,
-        active_op_puts: AtomicUsize,
-        max_parallel_op_puts: AtomicUsize,
-    }
-
-    impl TrackingRemoteStore {
-        fn new(op_put_delay: Duration) -> Self {
-            Self {
-                inner: InMemoryRemoteStore::new(),
-                op_put_delay,
-                active_op_puts: AtomicUsize::new(0),
-                max_parallel_op_puts: AtomicUsize::new(0),
-            }
-        }
-
-        fn max_parallel_op_puts(&self) -> usize {
-            self.max_parallel_op_puts.load(Ordering::Relaxed)
-        }
-
-        fn record_parallel_put_start(&self) {
-            let active = self.active_op_puts.fetch_add(1, Ordering::Relaxed) + 1;
-            let mut seen = self.max_parallel_op_puts.load(Ordering::Relaxed);
-            while active > seen {
-                match self.max_parallel_op_puts.compare_exchange(
-                    seen,
-                    active,
-                    Ordering::Relaxed,
-                    Ordering::Relaxed,
-                ) {
-                    Ok(_) => break,
-                    Err(cur) => seen = cur,
-                }
-            }
-        }
-
-        fn record_parallel_put_end(&self) {
-            self.active_op_puts.fetch_sub(1, Ordering::Relaxed);
-        }
-    }
-
-    impl RemoteStore for TrackingRemoteStore {
-        fn target_id(&self) -> &str {
-            self.inner.target_id()
-        }
-
-        fn mkdir_all(&self, path: &str) -> Result<()> {
-            self.inner.mkdir_all(path)
-        }
-
-        fn list(&self, dir: &str) -> Result<Vec<String>> {
-            self.inner.list(dir)
-        }
-
-        fn get(&self, path: &str) -> Result<Vec<u8>> {
-            self.inner.get(path)
-        }
-
-        fn put(&self, path: &str, bytes: Vec<u8>) -> Result<()> {
-            if path.contains("/ops/op_") {
-                self.record_parallel_put_start();
-                std::thread::sleep(self.op_put_delay);
-                let result = self.inner.put(path, bytes);
-                self.record_parallel_put_end();
-                return result;
-            }
-            self.inner.put(path, bytes)
-        }
-
-        fn delete(&self, path: &str) -> Result<()> {
-            self.inner.delete(path)
-        }
-    }
-
-    #[test]
-    fn push_ops_only_uploads_op_files_with_parallelism() {
-        let dir = tempdir().expect("tempdir");
-        let conn = crate::db::open(dir.path()).expect("open");
-        let db_key = [7u8; 32];
-        let sync_key = [9u8; 32];
-
-        for idx in 0..24 {
-            let title = format!("Conversation {idx}");
-            let _ = crate::db::create_conversation(&conn, &db_key, &title).expect("create");
-        }
-
-        let remote = TrackingRemoteStore::new(Duration::from_millis(20));
-        let pushed =
-            push_ops_only(&conn, &db_key, &sync_key, &remote, "SecondLoop").expect("push");
-        assert_eq!(pushed, 24);
-
-        assert!(
-            remote.max_parallel_op_puts() > 1,
-            "expected parallel PUT uploads for op files"
-        );
-    }
-}
+include!("02_push_tests.rs");

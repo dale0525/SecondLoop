@@ -31,6 +31,7 @@ import '../core/update/release_notes_first_launch_gate.dart';
 import '../i18n/locale_prefs.dart';
 import '../i18n/strings.g.dart';
 import '../ui/sl_background.dart';
+import '../core/navigation/inherited_scope_page_wrapper.dart';
 import 'router.dart';
 import 'theme.dart';
 import 'theme_palette_prefs.dart';
@@ -42,6 +43,7 @@ import '../features/settings/settings_page.dart';
 import '../features/share/share_intent_listener.dart';
 import '../features/welcome/first_launch_welcome_gate.dart';
 import '../core/sync/cloud_sync_switch_prompt_gate.dart';
+import '../core/sync/sync_key_manager.dart';
 import '../core/sync/sync_engine_gate.dart';
 import '../core/notifications/review_reminder_notifications_gate.dart';
 import 'text_editing_shortcuts.dart';
@@ -65,6 +67,7 @@ class SecondLoopApp extends StatefulWidget {
 
 class _SecondLoopAppState extends State<SecondLoopApp> {
   final _navigatorKey = GlobalKey<NavigatorState>();
+  InheritedScopeCapture? _sessionScopedCapture;
   late final QuickCaptureController _quickCaptureController =
       widget._quickCaptureController ?? QuickCaptureController();
   late final CloudAuthControllerImpl _cloudAuthController =
@@ -297,45 +300,66 @@ class _SecondLoopAppState extends State<SecondLoopApp> {
                                       final navigator =
                                           _navigatorKey.currentState;
                                       if (navigator == null) return;
-                                      await navigator.push(
-                                        MaterialPageRoute(
-                                          builder: (_) => const SettingsPage(),
-                                        ),
+                                      var capturedScopes =
+                                          resolveRootSettingsInheritedScopes(
+                                        _sessionScopedCapture,
+                                      );
+                                      if (capturedScopes == null) {
+                                        await WidgetsBinding
+                                            .instance.endOfFrame;
+                                        capturedScopes =
+                                            resolveRootSettingsInheritedScopes(
+                                          _sessionScopedCapture,
+                                        );
+                                      }
+                                      await pushPageWithCapturedInheritedScopesOrFallback(
+                                        navigator,
+                                        null,
+                                        const SettingsPage(),
+                                        capturedScopes: capturedScopes,
                                       );
                                     },
                                     child: DesktopQuickCaptureService(
                                       child: ShareIntentListener(
                                         child: LockGate(
                                           child: SyncEngineGate(
-                                            child: DetachedAskRecoveryGate(
-                                              child:
-                                                  ReviewReminderNotificationsGate(
-                                                navigatorKey: _navigatorKey,
-                                                child: MediaEnrichmentGate(
+                                            child: Builder(
+                                              builder: (sessionScopedContext) {
+                                                _sessionScopedCapture =
+                                                    captureInheritedScopes(
+                                                  sessionScopedContext,
+                                                );
+                                                return DetachedAskRecoveryGate(
                                                   child:
-                                                      SemanticParseAutoActionsGate(
-                                                    child:
-                                                        TodoFollowupGenerationGate(
-                                                      child: KnowledgeIndexGate(
+                                                      ReviewReminderNotificationsGate(
+                                                    navigatorKey: _navigatorKey,
+                                                    child: MediaEnrichmentGate(
+                                                      child:
+                                                          SemanticParseAutoActionsGate(
                                                         child:
-                                                            MessageEmbeddingsIndexGate(
+                                                            TodoFollowupGenerationGate(
                                                           child:
-                                                              EmbeddingsIndexGate(
+                                                              KnowledgeIndexGate(
                                                             child:
-                                                                CloudSyncSwitchPromptGate(
-                                                              navigatorKey:
-                                                                  _navigatorKey,
+                                                                MessageEmbeddingsIndexGate(
                                                               child:
-                                                                  ShareIngestGate(
+                                                                  EmbeddingsIndexGate(
                                                                 child:
-                                                                    QuickCaptureOverlay(
+                                                                    CloudSyncSwitchPromptGate(
                                                                   navigatorKey:
                                                                       _navigatorKey,
                                                                   child:
-                                                                      FirstLaunchWelcomeGate(
-                                                                    child: child ??
-                                                                        const SizedBox
-                                                                            .shrink(),
+                                                                      ShareIngestGate(
+                                                                    child:
+                                                                        QuickCaptureOverlay(
+                                                                      navigatorKey:
+                                                                          _navigatorKey,
+                                                                      child:
+                                                                          FirstLaunchWelcomeGate(
+                                                                        child: child ??
+                                                                            const SizedBox.shrink(),
+                                                                      ),
+                                                                    ),
                                                                   ),
                                                                 ),
                                                               ),
@@ -345,8 +369,8 @@ class _SecondLoopAppState extends State<SecondLoopApp> {
                                                       ),
                                                     ),
                                                   ),
-                                                ),
-                                              ),
+                                                );
+                                              },
                                             ),
                                           ),
                                         ),
@@ -369,4 +393,19 @@ class _SecondLoopAppState extends State<SecondLoopApp> {
       ),
     );
   }
+}
+
+InheritedScopeCapture? resolveRootSettingsInheritedScopes(
+  InheritedScopeCapture? capturedScopes,
+) {
+  if (capturedScopes == null || capturedScopes.isEmpty) {
+    return null;
+  }
+
+  final sessionKey = capturedScopes.sessionKey;
+  if (sessionKey != null && !SyncKeyManager.matchesSessionKey(sessionKey)) {
+    return null;
+  }
+
+  return capturedScopes;
 }

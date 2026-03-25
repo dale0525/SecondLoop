@@ -30,6 +30,7 @@ import '../../core/subscription/subscription_scope.dart';
 import '../../core/sync/sync_engine.dart';
 import '../../core/sync/sync_engine_gate.dart';
 import '../audio_transcribe/audio_transcribe_chunk_progress.dart';
+import '../../core/navigation/inherited_scope_page_wrapper.dart';
 import '../audio_transcribe/audio_transcribe_enqueue.dart';
 import '../media_backup/cloud_media_download.dart';
 import '../media_backup/cloud_media_download_ui.dart';
@@ -77,7 +78,10 @@ class AttachmentViewerPage extends StatefulWidget {
 
     await Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (context) => AttachmentViewerPage(attachment: attachment),
+        builder: (_) => wrapPushedPageWithInheritedScopes(
+          context,
+          AttachmentViewerPage(attachment: attachment),
+        ),
       ),
     );
   }

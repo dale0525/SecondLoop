@@ -63,6 +63,8 @@ PRAGMA user_version = 35;
         None,
         None,
         None,
+        None,
+        None,
     )
     .expect("upsert todo");
 

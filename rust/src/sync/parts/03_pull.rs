@@ -242,11 +242,40 @@ fn pull_internal(
         }
     }
 
-    if let Some(cb) = progress {
-        cb(done_ops, total_ops);
+    let app_dir = crate::db::app_dir_from_conn(conn)?;
+    let missing_blob_refs = list_missing_embedding_artifact_blob_refs(conn, app_dir.as_path())?;
+    let mut total_units = total_ops;
+    let mut done_units = done_ops;
+    if !missing_blob_refs.is_empty() {
+        total_units += missing_blob_refs.len() as u64;
+        if let Some(cb) = progress.as_deref_mut() {
+            cb(done_units, total_units);
+        }
     }
 
-    let _ = download_missing_embedding_artifact_blobs(conn, db_key, sync_key, remote, remote_root)?;
+    if !missing_blob_refs.is_empty() {
+        let mut on_downloaded = |delta: u64| {
+            done_units = (done_units + delta).min(total_units);
+            if let Some(cb) = progress.as_deref_mut() {
+                cb(done_units, total_units);
+            }
+        };
+        let outcome = download_embedding_artifact_blobs_by_refs(
+            db_key,
+            sync_key,
+            remote,
+            remote_root,
+            app_dir.as_path(),
+            &missing_blob_refs,
+            Some(&mut on_downloaded),
+        )?;
+        total_units = total_units.saturating_sub(outcome.missing_remote);
+        done_units = done_units.min(total_units);
+    }
+
+    if let Some(cb) = progress {
+        cb(done_units, total_units);
+    }
 
     Ok(applied)
 }
@@ -429,183 +458,7 @@ fn infer_remote_max_seq_from_packs(
 }
 
 #[cfg(test)]
-mod read_cursor_tests {
-    use super::*;
-    use tempfile::tempdir;
-
-    #[test]
-    fn read_remote_cursor_max_seq_reads_max_seq() {
-        let dir = tempdir().expect("tempdir");
-        let conn = crate::db::open(dir.path()).expect("open");
-        let db_key = [7u8; 32];
-        let sync_key = [9u8; 32];
-
-        let _conversation =
-            crate::db::create_conversation(&conn, &db_key, "Test").expect("create conversation");
-
-        let remote = InMemoryRemoteStore::new();
-        let _ = push_ops_only(&conn, &db_key, &sync_key, &remote, "SecondLoop")
-            .expect("push ops only");
-
-        let device_id: String = conn
-            .query_row(
-                r#"SELECT value FROM kv WHERE key = 'device_id'"#,
-                [],
-                |row| row.get(0),
-            )
-            .expect("device id");
-
-        let remote_root_dir = normalize_dir("SecondLoop");
-        let max_seq =
-            read_remote_cursor_max_seq(&remote, &remote_root_dir, &device_id).expect("read");
-        assert_eq!(max_seq, Some(1));
-    }
-}
-
-#[cfg(test)]
-mod pull_progress_tests {
-    use super::*;
-    use tempfile::tempdir;
-
-    #[test]
-    fn pull_with_progress_reports_total_ops_from_cursor_json() {
-        let db_key = [7u8; 32];
-        let sync_key = [9u8; 32];
-        let remote = InMemoryRemoteStore::new();
-
-        // Device A pushes 1 op + cursor.json to the remote.
-        let dir_a = tempdir().expect("tempdir A");
-        let conn_a = crate::db::open(dir_a.path()).expect("open A");
-        let _conversation =
-            crate::db::create_conversation(&conn_a, &db_key, "Test").expect("create A");
-        let pushed = push_ops_only(&conn_a, &db_key, &sync_key, &remote, "SecondLoop")
-            .expect("push A");
-        assert_eq!(pushed, 1);
-
-        // Device B pulls with progress.
-        let dir_b = tempdir().expect("tempdir B");
-        let conn_b = crate::db::open(dir_b.path()).expect("open B");
-        let mut seen: Vec<(u64, u64)> = Vec::new();
-        let mut on_progress = |done: u64, total: u64| {
-            seen.push((done, total));
-        };
-
-        let applied = pull_with_progress(
-            &conn_b,
-            &db_key,
-            &sync_key,
-            &remote,
-            "SecondLoop",
-            &mut on_progress,
-        )
-        .expect("pull B");
-        assert_eq!(applied, 1);
-
-        assert!(!seen.is_empty());
-        assert_eq!(seen[0].1, 1);
-        assert_eq!(*seen.last().unwrap(), (1, 1));
-    }
-
-    #[test]
-    fn pull_syncs_non_recurring_todo_completion() {
-        let db_key = [11u8; 32];
-        let sync_key = [12u8; 32];
-        let remote = InMemoryRemoteStore::new();
-
-        let dir_a = tempdir().expect("tempdir A");
-        let conn_a = crate::db::open(dir_a.path()).expect("open A");
-        let todo_a = crate::db::upsert_todo(
-            &conn_a,
-            &db_key,
-            "todo:sync:plain",
-            "Plain task",
-            Some(1_710_000_000_000),
-            "open",
-            None,
-            None,
-            None,
-            Some(1_710_000_000_100),
-        )
-        .expect("create todo A");
-        crate::db::set_todo_status(&conn_a, &db_key, &todo_a.id, "done", None)
-            .expect("complete todo A");
-        let pushed_a = push_ops_only(&conn_a, &db_key, &sync_key, &remote, "SecondLoop")
-            .expect("push A");
-        assert!(pushed_a >= 2);
-
-        let dir_b = tempdir().expect("tempdir B");
-        let conn_b = crate::db::open(dir_b.path()).expect("open B");
-        let applied = pull(&conn_b, &db_key, &sync_key, &remote, "SecondLoop")
-            .expect("pull B");
-        assert!(applied >= 2);
-
-        let synced = crate::db::get_todo(&conn_b, &db_key, &todo_a.id).expect("todo B");
-        assert_eq!(synced.status, "done");
-    }
-
-    #[test]
-    fn pull_syncs_recurring_todo_completion_and_next_occurrence() {
-        let db_key = [13u8; 32];
-        let sync_key = [14u8; 32];
-        let remote = InMemoryRemoteStore::new();
-        let recurrence_rule = r#"{"freq":"daily","interval":1}"#;
-
-        let dir_a = tempdir().expect("tempdir A");
-        let conn_a = crate::db::open(dir_a.path()).expect("open A");
-        let todo_a = crate::db::upsert_todo(
-            &conn_a,
-            &db_key,
-            "todo:sync:recurring:0",
-            "Recurring task",
-            Some(1_710_000_000_000),
-            "open",
-            None,
-            None,
-            None,
-            Some(1_710_000_000_100),
-        )
-        .expect("create recurring todo A");
-        crate::db::upsert_todo_recurrence_with_sync(
-            &conn_a,
-            &db_key,
-            &todo_a.id,
-            "series:sync:recurring",
-            recurrence_rule,
-        )
-        .expect("create recurrence A");
-        crate::db::set_todo_status(&conn_a, &db_key, &todo_a.id, "done", None)
-            .expect("complete recurring todo A");
-        let pushed_a = push_ops_only(&conn_a, &db_key, &sync_key, &remote, "SecondLoop")
-            .expect("push A");
-        assert!(pushed_a >= 4);
-
-        let dir_b = tempdir().expect("tempdir B");
-        let conn_b = crate::db::open(dir_b.path()).expect("open B");
-        let applied = pull(&conn_b, &db_key, &sync_key, &remote, "SecondLoop")
-            .expect("pull B");
-        assert!(applied >= 4);
-
-        let synced_current = crate::db::get_todo(&conn_b, &db_key, &todo_a.id)
-            .expect("current recurring todo B");
-        assert_eq!(synced_current.status, "done");
-
-        let synced_next = crate::db::get_todo(
-            &conn_b,
-            &db_key,
-            "todo:series:sync:recurring:1",
-        )
-        .expect("next recurring todo B");
-        assert_eq!(synced_next.status, "open");
-        assert_eq!(synced_next.due_at_ms, Some(1_710_086_400_000));
-
-        let synced_rule = crate::db::get_todo_recurrence_rule_json(
-            &conn_b,
-            "todo:series:sync:recurring:1",
-        )
-        .expect("next recurrence rule B");
-        assert_eq!(synced_rule.as_deref(), Some(recurrence_rule));
-    }
-}
+include!("03_pull_tests.rs");
 
 fn discover_first_available_pack_chunk_start(
     remote: &impl RemoteStore,

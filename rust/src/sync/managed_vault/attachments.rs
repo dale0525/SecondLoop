@@ -55,7 +55,7 @@ pub(super) fn delete_remote_attachment_bytes(
     ctx: &AttachmentUploadContext<'_>,
     sha256: &str,
 ) -> Result<()> {
-    let endpoint = super::url(
+    let endpoint = super::runtime::url(
         ctx.base_url,
         &format!("/v1/vaults/{}/attachments/{sha256}", ctx.vault_id),
     )?;
@@ -83,7 +83,7 @@ pub fn upload_attachment_bytes(
     id_token: &str,
     sha256: &str,
 ) -> Result<bool> {
-    let http = super::client()?;
+    let http = super::runtime::client()?;
     let app_dir = super::super::app_dir_from_conn(conn)?;
 
     let (mime_type, created_at_ms): (String, i64) = conn.query_row(
@@ -117,7 +117,7 @@ pub fn download_attachment_bytes(
     id_token: &str,
     sha256: &str,
 ) -> Result<()> {
-    let http = super::client()?;
+    let http = super::runtime::client()?;
     let app_dir = super::super::app_dir_from_conn(conn)?;
 
     let stored_path: Option<String> = conn
@@ -129,7 +129,7 @@ pub fn download_attachment_bytes(
         .optional()?;
     let stored_path = stored_path.ok_or_else(|| anyhow!("attachment not found"))?;
 
-    let endpoint = super::url(
+    let endpoint = super::runtime::url(
         base_url,
         &format!("/v1/vaults/{vault_id}/attachments/{sha256}"),
     )?;
@@ -222,7 +222,7 @@ pub(super) fn upload_attachment_bytes_if_present(
     let aad = format!("sync.attachment.bytes:{sha256}");
     let ciphertext = encrypt_bytes(ctx.sync_key, &plaintext, aad.as_bytes())?;
 
-    let endpoint = super::url(
+    let endpoint = super::runtime::url(
         ctx.base_url,
         &format!("/v1/vaults/{}/attachments/{sha256}", ctx.vault_id),
     )?;

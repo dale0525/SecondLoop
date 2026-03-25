@@ -939,6 +939,67 @@ void main() {
     expect(find.byKey(const ValueKey('sync_manual_progress_percent')),
         findsNothing);
   });
+
+  testWidgets(
+      'manual download progress does not move backwards when total grows',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final store = SyncConfigStore();
+    await store.writeBackendType(SyncBackendType.webdav);
+    await store.writeRemoteRoot('SecondLoop');
+    await store.writeWebdavBaseUrl('https://example.com/dav');
+    await store.writeSyncKey(Uint8List.fromList(List<int>.filled(32, 7)));
+
+    final progressController = StreamController<String>();
+    final backend = _DelayedSyncBackend(
+      pushCompleter: Completer<int>(),
+      pullCompleter: Completer<int>(),
+      webdavPullProgressStream: progressController.stream,
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: backend,
+            child: SessionScope(
+              sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+              lock: () {},
+              child: Scaffold(
+                body: SyncSettingsPage(configStore: store),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final scrollable = find.byType(ListView);
+    final downloadButton = find.widgetWithText(OutlinedButton, 'Download');
+    await tester.dragUntilVisible(
+      downloadButton,
+      scrollable,
+      const Offset(0, -200),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(downloadButton);
+    await tester.pump();
+
+    progressController.add('{"type":"progress","done":1,"total":1}');
+    await tester.pump();
+    expect(find.text('98%'), findsOneWidget);
+
+    progressController.add('{"type":"progress","done":1,"total":2}');
+    await tester.pump();
+    expect(find.text('98%'), findsOneWidget);
+    expect(find.text('50%'), findsNothing);
+
+    progressController.add('{"type":"result","count":1}');
+    await progressController.close();
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('sync_manual_progress')), findsNothing);
+  });
 }
 
 Future<void> _ensureListItemVisible(WidgetTester tester, Finder target) async {
@@ -1331,10 +1392,12 @@ final class _DelayedSyncBackend extends _SyncSettingsBackend {
   _DelayedSyncBackend({
     required this.pushCompleter,
     required this.pullCompleter,
+    this.webdavPullProgressStream,
   }) : super(webdavPullResult: 0);
 
   final Completer<int> pushCompleter;
   final Completer<int> pullCompleter;
+  final Stream<String>? webdavPullProgressStream;
 
   @override
   Future<int> syncWebdavPushOpsOnly(
@@ -1357,6 +1420,27 @@ final class _DelayedSyncBackend extends _SyncSettingsBackend {
     required String remoteRoot,
   }) async =>
       pullCompleter.future;
+
+  @override
+  Stream<String> syncWebdavPullProgress(
+    Uint8List key,
+    Uint8List syncKey, {
+    required String baseUrl,
+    String? username,
+    String? password,
+    required String remoteRoot,
+  }) {
+    final stream = webdavPullProgressStream;
+    if (stream != null) return stream;
+    return super.syncWebdavPullProgress(
+      key,
+      syncKey,
+      baseUrl: baseUrl,
+      username: username,
+      password: password,
+      remoteRoot: remoteRoot,
+    );
+  }
 }
 
 final class _DelayedLocalDirSyncBackend extends _SyncSettingsBackend {

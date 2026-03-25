@@ -30,6 +30,16 @@ pub trait RemoteStore: Send + Sync {
     fn target_id(&self) -> &str;
     fn mkdir_all(&self, path: &str) -> Result<()>;
     fn list(&self, dir: &str) -> Result<Vec<String>>;
+    fn exists(&self, path: &str) -> Result<bool> {
+        if path.ends_with('/') {
+            return Err(anyhow!("exists expects file path, got dir: {path}"));
+        }
+        match self.get(path) {
+            Ok(_) => Ok(true),
+            Err(e) if e.is::<NotFound>() => Ok(false),
+            Err(e) => Err(e),
+        }
+    }
     fn get(&self, path: &str) -> Result<Vec<u8>>;
     fn put(&self, path: &str, bytes: Vec<u8>) -> Result<()>;
     fn delete(&self, path: &str) -> Result<()>;
@@ -152,6 +162,18 @@ impl RemoteStore for InMemoryRemoteStore {
         Ok(out.into_iter().collect())
     }
 
+    fn exists(&self, path: &str) -> Result<bool> {
+        if path.ends_with('/') {
+            let dir = normalize_dir(path);
+            let dirs = self.dirs.lock().map_err(|_| anyhow!("poisoned lock"))?;
+            return Ok(dirs.contains(&dir));
+        }
+
+        let path = normalize_file(path);
+        let files = self.files.lock().map_err(|_| anyhow!("poisoned lock"))?;
+        Ok(files.contains_key(&path))
+    }
+
     fn get(&self, path: &str) -> Result<Vec<u8>> {
         let path = normalize_file(path);
         let files = self.files.lock().map_err(|_| anyhow!("poisoned lock"))?;
@@ -211,4 +233,3 @@ impl RemoteStore for InMemoryRemoteStore {
         }
     }
 }
-

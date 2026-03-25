@@ -84,6 +84,7 @@ extension _ChatPageStateMethodsB on _ChatPageState {
       return (
         semanticJobs: const <SemanticParseJob>[],
         linkedTodoBadges: const <String, _TodoMessageBadgeMeta>{},
+        existingTodoIds: const <String>{},
         annotationJobs: const <AttachmentAnnotationJob>[],
         attachmentAnnotationEnabled: false,
         attachmentAnnotationCanRunNow: false,
@@ -131,7 +132,7 @@ extension _ChatPageStateMethodsB on _ChatPageState {
 
     final semanticJobs = await semanticJobsFuture;
     final annotationJobs = await annotationJobsFuture;
-    final linkedTodoBadges = await linkedTodoBadgeFuture;
+    final linkedTodoBadgeData = await linkedTodoBadgeFuture;
     final annotationUi = nativeBackend == null || annotationJobs.isEmpty
         ? (enabled: false, canRunNow: false)
         : await _loadAttachmentAnnotationUiState(
@@ -147,7 +148,8 @@ extension _ChatPageStateMethodsB on _ChatPageState {
 
     return (
       semanticJobs: semanticJobs,
-      linkedTodoBadges: linkedTodoBadges,
+      linkedTodoBadges: linkedTodoBadgeData.badges,
+      existingTodoIds: linkedTodoBadgeData.existingTodoIds,
       annotationJobs: annotationJobs,
       attachmentAnnotationEnabled: annotationUi.enabled,
       attachmentAnnotationCanRunNow: annotationUi.canRunNow,
@@ -763,7 +765,7 @@ extension _ChatPageStateMethodsB on _ChatPageState {
       }
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
+      _scaffoldMessengerKey.currentState?.showSnackBar(
         SnackBar(
           content: Text(context.t.chat.photoFailed(error: '$e')),
           duration: const Duration(seconds: 3),
@@ -898,7 +900,7 @@ extension _ChatPageStateMethodsB on _ChatPageState {
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
+      _scaffoldMessengerKey.currentState?.showSnackBar(
         SnackBar(
           content: Text(context.t.chat.photoFailed(error: '$e')),
           duration: const Duration(seconds: 3),
@@ -946,7 +948,7 @@ extension _ChatPageStateMethodsB on _ChatPageState {
       await _addDesktopFilePayloadsToComposerDraft(payloads);
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
+      _scaffoldMessengerKey.currentState?.showSnackBar(
         SnackBar(
           content: Text(context.t.chat.photoFailed(error: '$e')),
           duration: const Duration(seconds: 3),

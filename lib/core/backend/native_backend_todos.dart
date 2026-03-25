@@ -95,6 +95,8 @@ mixin _NativeAppBackendTodos on _NativeAppBackendAccess {
     int? reviewStage,
     int? nextReviewAtMs,
     int? lastReviewAtMs,
+    int? manualImportanceNudgeScore,
+    int? manualUrgencyNudgeScore,
   }) {
     return _upsertTodoInternal(
       key,
@@ -106,6 +108,8 @@ mixin _NativeAppBackendTodos on _NativeAppBackendAccess {
       reviewStage: reviewStage,
       nextReviewAtMs: nextReviewAtMs,
       lastReviewAtMs: lastReviewAtMs,
+      manualImportanceNudgeScore: manualImportanceNudgeScore,
+      manualUrgencyNudgeScore: manualUrgencyNudgeScore,
     );
   }
 
@@ -146,6 +150,8 @@ mixin _NativeAppBackendTodos on _NativeAppBackendAccess {
     int? reviewStage,
     int? nextReviewAtMs,
     int? lastReviewAtMs,
+    int? manualImportanceNudgeScore,
+    int? manualUrgencyNudgeScore,
     String? followupTaskTypeHint,
   }) async {
     final appDir = await _getAppDir();

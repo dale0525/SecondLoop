@@ -158,7 +158,56 @@ PRAGMA user_version = 34;
     Ok(())
 }
 
+fn ensure_todo_manual_nudge_columns(conn: &Connection) -> Result<()> {
+    let has_manual_importance_nudge_score: bool = {
+        let mut stmt = conn.prepare(r#"PRAGMA table_info(todos);"#)?;
+        let mut rows = stmt.query([])?;
+        let mut found = false;
+        while let Some(row) = rows.next()? {
+            let name: String = row.get(1)?;
+            if name == "manual_importance_nudge_score" {
+                found = true;
+                break;
+            }
+        }
+        found
+    };
+    if !has_manual_importance_nudge_score {
+        conn.execute_batch(
+            "ALTER TABLE todos ADD COLUMN manual_importance_nudge_score INTEGER NOT NULL DEFAULT 0;",
+        )?;
+    }
+
+    let has_manual_urgency_nudge_score: bool = {
+        let mut stmt = conn.prepare(r#"PRAGMA table_info(todos);"#)?;
+        let mut rows = stmt.query([])?;
+        let mut found = false;
+        while let Some(row) = rows.next()? {
+            let name: String = row.get(1)?;
+            if name == "manual_urgency_nudge_score" {
+                found = true;
+                break;
+            }
+        }
+        found
+    };
+    if !has_manual_urgency_nudge_score {
+        conn.execute_batch(
+            "ALTER TABLE todos ADD COLUMN manual_urgency_nudge_score INTEGER NOT NULL DEFAULT 0;",
+        )?;
+    }
+
+    Ok(())
+}
+
 fn migrate_from_v34_to_v35(conn: &Connection) -> Result<()> {
+    ensure_todo_manual_nudge_columns(conn)?;
+
+    conn.execute_batch("PRAGMA user_version = 35;")?;
+    Ok(())
+}
+
+fn migrate_from_v35_to_v36(conn: &Connection) -> Result<()> {
     conn.execute_batch(
         r#"
 CREATE TABLE IF NOT EXISTS todo_followup_suggestions (
@@ -198,14 +247,9 @@ CREATE TABLE IF NOT EXISTS todo_followup_generation_jobs (
 );
 CREATE INDEX IF NOT EXISTS idx_todo_followup_generation_jobs_status_due
   ON todo_followup_generation_jobs(status, next_retry_at_ms, updated_at_ms);
-
-PRAGMA user_version = 35;
 "#,
     )?;
-    Ok(())
-}
 
-fn migrate_from_v35_to_v36(conn: &Connection) -> Result<()> {
     let mut stmt = conn.prepare("PRAGMA table_info(todo_followup_generation_jobs)")?;
     let columns: Vec<String> = stmt
         .query_map([], |row| row.get(1))?
@@ -218,7 +262,9 @@ fn migrate_from_v35_to_v36(conn: &Connection) -> Result<()> {
     }
 
     if !columns.iter().any(|column| column == "task_type_hint") {
-        conn.execute_batch("ALTER TABLE todo_followup_generation_jobs ADD COLUMN task_type_hint TEXT;")?;
+        conn.execute_batch(
+            "ALTER TABLE todo_followup_generation_jobs ADD COLUMN task_type_hint TEXT;",
+        )?;
     }
 
     conn.execute_batch("PRAGMA user_version = 36;")?;

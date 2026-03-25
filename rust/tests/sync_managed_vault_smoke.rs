@@ -649,6 +649,8 @@ fn managed_vault_pull_paginates_until_caught_up() {
         None,
         None,
         None,
+        None,
+        None,
     )
     .expect("upsert todo A");
     for i in 0..520 {

@@ -22,6 +22,8 @@ fn api_todo_activities_roundtrip_smoke() {
         None,
         None,
         None,
+        None,
+        None,
     )
     .expect("upsert todo");
 

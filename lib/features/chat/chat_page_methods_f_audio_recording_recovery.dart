@@ -112,7 +112,7 @@ extension _ChatPageStateMethodsFAudioRecordingRecovery on _ChatPageState {
     );
 
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      _scaffoldMessengerKey.currentState?.showSnackBar(
         SnackBar(
           content: Text(
             context.t.chat.recordingRecovery.recoveredToDraftSnack,

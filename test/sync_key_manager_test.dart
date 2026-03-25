@@ -56,6 +56,16 @@ void main() {
     expect(second, isNull);
   });
 
+  test('matchesSessionKey only returns true for the active session key', () {
+    final sessionKey = Uint8List.fromList(List<int>.filled(32, 4));
+    final staleKey = Uint8List.fromList(List<int>.filled(32, 5));
+
+    SyncKeyManager.setSessionKey(sessionKey);
+
+    expect(SyncKeyManager.matchesSessionKey(sessionKey), isTrue);
+    expect(SyncKeyManager.matchesSessionKey(staleKey), isFalse);
+  });
+
   test('clears cached sync key when session is cleared', () async {
     final sessionKey = Uint8List.fromList(List<int>.filled(32, 2));
     final syncKey = Uint8List.fromList(List<int>.filled(32, 3));

@@ -16,6 +16,7 @@ class TaskHubFocusSection extends StatelessWidget {
     required this.onOpenTodo,
     required this.onQuickAction,
     this.onFeedback,
+    this.restoredTodoId,
     super.key,
   });
 
@@ -28,11 +29,11 @@ class TaskHubFocusSection extends StatelessWidget {
     TaskPriorityEntry entry,
     TaskPriorityFeedbackKind feedback,
   )? onFeedback;
+  final String? restoredTodoId;
 
   @override
   Widget build(BuildContext context) {
     if (entries.isEmpty) return const SizedBox.shrink();
-    final theme = Theme.of(context);
     final tokens = SlTokens.of(context);
     return Padding(
       padding: const EdgeInsets.only(bottom: 16),
@@ -42,18 +43,11 @@ class TaskHubFocusSection extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              context.t.actions.taskHub.focusSection,
-              style: theme.textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              context.t.actions.taskHub.focusHint,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
+            TaskHubSectionHeader(
+              title: context.t.actions.taskHub.focusSection,
+              count: entries.length,
+              kind: TaskHubPageSectionKind.focus,
+              hint: context.t.actions.taskHub.focusHint,
             ),
             const SizedBox(height: 10),
             for (var i = 0; i < entries.length; i++) ...[
@@ -61,6 +55,7 @@ class TaskHubFocusSection extends StatelessWidget {
                 entry: entries[i],
                 checklistProgressByTodoId: checklistProgressByTodoId,
                 emphasize: i == 0,
+                recentlyRestored: entries[i].todo.id == restoredTodoId,
                 onOpenTodo: () => onOpenTodo(entries[i]),
                 onQuickAction: (action) => onQuickAction(entries[i], action),
                 onFeedback: onFeedback == null

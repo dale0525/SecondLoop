@@ -10,6 +10,7 @@ import '../../../core/cloud/cloud_auth_scope.dart';
 import '../../../core/cloud/cloud_capability_auth.dart';
 import '../../../core/session/session_scope.dart';
 import '../../../core/subscription/subscription_scope.dart';
+import '../../../core/sync/sync_engine.dart';
 import '../../../core/sync/sync_engine_gate.dart';
 import '../../../i18n/strings.g.dart';
 import '../../../src/rust/db.dart';
@@ -23,6 +24,8 @@ import 'task_priority_feedback_store.dart';
 import 'task_priority_models.dart';
 import 'task_priority_store.dart';
 import '../todo/todo_detail_page.dart';
+
+part 'task_hub_page_navigation.dart';
 
 class TaskHubPage extends StatefulWidget {
   const TaskHubPage({super.key});
@@ -39,17 +42,34 @@ class _TaskHubPageState extends State<TaskHubPage> {
       const TaskPriorityFeedbackStore();
   TaskHubUndoTicket? _undoTicket;
   Timer? _quickActionSnackAutoDismissTimer;
+  Timer? _restoreHighlightTimer;
+  String? _restoredTodoId;
+  final GlobalKey<ScaffoldMessengerState> _scaffoldMessengerKey =
+      GlobalKey<ScaffoldMessengerState>();
   ScaffoldMessengerState? _quickActionSnackMessenger;
   Object? _quickActionSnackToken;
   var _doneVisibleCount = _kDonePageSize;
 
+  SyncEngine? _syncEngine;
+  VoidCallback? _syncListener;
+
   @override
   void dispose() {
-    if (_quickActionSnackToken != null) {
-      _quickActionSnackMessenger?.hideCurrentSnackBar();
+    final oldEngine = _syncEngine;
+    final oldListener = _syncListener;
+    if (oldEngine != null && oldListener != null) {
+      oldEngine.changes.removeListener(oldListener);
+    }
+    _syncEngine = null;
+    _syncListener = null;
+    if (_quickActionSnackToken != null &&
+        (_quickActionSnackMessenger?.mounted ?? false)) {
+      _quickActionSnackMessenger?.removeCurrentSnackBar();
     }
     _quickActionSnackAutoDismissTimer?.cancel();
     _quickActionSnackAutoDismissTimer = null;
+    _restoreHighlightTimer?.cancel();
+    _restoreHighlightTimer = null;
     _quickActionSnackMessenger = null;
     _quickActionSnackToken = null;
     _store?.dispose();
@@ -59,6 +79,7 @@ class _TaskHubPageState extends State<TaskHubPage> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+    _attachSyncEngine();
     _store ??= TaskPriorityStore(
       backend: AppBackendScope.of(context),
       sessionKey: Uint8List.fromList(SessionScope.of(context).sessionKey),
@@ -66,9 +87,59 @@ class _TaskHubPageState extends State<TaskHubPage> {
       resolveAiService: _resolveAiService,
       resolveAiCacheScopeKey: _resolveAiCacheScopeKey,
       isAiEnhancementEnabled: TaskPriorityAiEnhancementPrefs.read,
+      readSharedAiAssessments: ({
+        required aiService,
+        required cacheScopeKey,
+        required nowLocal,
+      }) async =>
+          aiService is BackendTaskPriorityAiService
+              ? aiService.readSharedAssessments(nowLocal: nowLocal)
+              : const <String, TaskPriorityAiCachedAssessment>{},
+      writeSharedAiAssessments: ({
+        required aiService,
+        required cacheScopeKey,
+        required entries,
+        required activeTodoIds,
+        required nowLocal,
+      }) async {
+        if (aiService is BackendTaskPriorityAiService) {
+          await aiService.writeSharedAssessments(
+            entries: entries,
+            activeTodoIds: activeTodoIds,
+          );
+        }
+      },
       feedbackStore: _feedbackStore,
     );
-    unawaited(_store!.refresh());
+
+    unawaited(_store?.refresh() ?? Future<void>.value());
+  }
+
+  void _attachSyncEngine() {
+    final engine = SyncEngineScope.maybeOf(context);
+    if (identical(engine, _syncEngine)) return;
+
+    final oldEngine = _syncEngine;
+    final oldListener = _syncListener;
+    if (oldEngine != null && oldListener != null) {
+      oldEngine.changes.removeListener(oldListener);
+    }
+
+    _syncEngine = engine;
+    if (engine == null) {
+      _syncListener = null;
+      return;
+    }
+
+    void onSyncChange() {
+      final store = _store;
+      if (!mounted || store == null) return;
+      store.markDirty();
+      unawaited(store.refresh(force: true));
+    }
+
+    _syncListener = onSyncChange;
+    engine.changes.addListener(onSyncChange);
   }
 
   Future<TaskPriorityAiService?> _resolveAiService() async {
@@ -158,6 +229,18 @@ class _TaskHubPageState extends State<TaskHubPage> {
     }
   }
 
+  String? _aiSourceLabel(TaskPrioritySnapshot snapshot) {
+    return switch (snapshot.enhancementSource) {
+      TaskPriorityEnhancementSource.none => null,
+      TaskPriorityEnhancementSource.aiLive =>
+        context.t.actions.taskHub.aiInsightLive,
+      TaskPriorityEnhancementSource.aiSharedCache =>
+        context.t.actions.taskHub.aiInsightShared,
+      TaskPriorityEnhancementSource.aiLocalCache =>
+        context.t.actions.taskHub.aiInsightCached,
+    };
+  }
+
   Future<void> _refresh() async {
     final store = _store;
     if (store == null) return;
@@ -171,7 +254,10 @@ class _TaskHubPageState extends State<TaskHubPage> {
   Future<void> _openTodoDetail(TaskPriorityEntry entry) async {
     await Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => TodoDetailPage(initialTodo: entry.todo),
+        builder: (_) => _wrapPushedPageWithScopes(
+          context,
+          TodoDetailPage(initialTodo: entry.todo),
+        ),
       ),
     );
     if (!mounted) return;
@@ -202,13 +288,17 @@ class _TaskHubPageState extends State<TaskHubPage> {
     if (ticket == null || !mounted) return;
     final appliedTicket = ticket;
     _undoTicket = appliedTicket;
-    syncEngine?.notifyLocalMutation();
+    if (appliedTicket.shouldNotifySync) {
+      syncEngine?.notifyLocalMutation();
+    }
     await _refresh();
     if (!mounted) return;
-    final messenger = ScaffoldMessenger.maybeOf(context);
+    final messenger = _scaffoldMessengerKey.currentState;
     messenger?.hideCurrentSnackBar();
     _quickActionSnackAutoDismissTimer?.cancel();
     _quickActionSnackAutoDismissTimer = null;
+    _restoreHighlightTimer?.cancel();
+    _restoreHighlightTimer = null;
     final snackToken = Object();
     _quickActionSnackToken = snackToken;
     _quickActionSnackMessenger = messenger;
@@ -225,15 +315,22 @@ class _TaskHubPageState extends State<TaskHubPage> {
           label: context.t.common.actions.undo,
           onPressed: () async {
             if (_undoTicket != appliedTicket) return;
+            messenger.removeCurrentSnackBar();
+            _quickActionSnackAutoDismissTimer?.cancel();
+            _quickActionSnackAutoDismissTimer = null;
             try {
               await controller.undo(appliedTicket);
             } catch (error) {
               _showQuickActionError(error);
               return;
             }
-            syncEngine?.notifyLocalMutation();
-            if (!mounted) return;
+            _undoTicket = null;
+            if (appliedTicket.shouldNotifySync) {
+              syncEngine?.notifyLocalMutation();
+            }
             await _refresh();
+            if (!mounted) return;
+            _showRestoreHighlight(appliedTicket.todo.id);
           },
         ),
       ),
@@ -260,6 +357,21 @@ class _TaskHubPageState extends State<TaskHubPage> {
         }
       }),
     );
+  }
+
+  void _showRestoreHighlight(String todoId) {
+    _restoreHighlightTimer?.cancel();
+    setState(() {
+      _restoredTodoId = todoId;
+    });
+    _restoreHighlightTimer = Timer(const Duration(milliseconds: 900), () {
+      if (!mounted) return;
+      setState(() {
+        if (_restoredTodoId == todoId) {
+          _restoredTodoId = null;
+        }
+      });
+    });
   }
 
   Future<bool> _confirmDoneWithIncompleteChecklist(Todo todo) async {
@@ -299,7 +411,7 @@ class _TaskHubPageState extends State<TaskHubPage> {
 
   void _showQuickActionError(Object error) {
     if (!mounted) return;
-    final messenger = ScaffoldMessenger.maybeOf(context);
+    final messenger = _scaffoldMessengerKey.currentState;
     messenger?.hideCurrentSnackBar();
     messenger?.showSnackBar(
       SnackBar(
@@ -311,17 +423,17 @@ class _TaskHubPageState extends State<TaskHubPage> {
 
   String _actionLabel(TaskHubQuickAction action) => switch (action) {
         TaskHubQuickAction.today => context.t.actions.taskHub.actions.today,
-        TaskHubQuickAction.tonight => context.t.actions.taskHub.actions.tonight,
         TaskHubQuickAction.tomorrow =>
           context.t.actions.taskHub.actions.tomorrow,
-        TaskHubQuickAction.pauseTomorrow =>
-          context.t.actions.taskHub.actions.pauseTomorrow,
-        TaskHubQuickAction.thisWeek =>
-          context.t.actions.taskHub.actions.thisWeek,
-        TaskHubQuickAction.later => context.t.actions.taskHub.actions.later,
         TaskHubQuickAction.start => context.t.actions.taskHub.actions.start,
-        TaskHubQuickAction.moveToInbox =>
-          context.t.actions.taskHub.actions.moveToInbox,
+        TaskHubQuickAction.increaseUrgency =>
+          context.t.actions.taskHub.nudges.urgencyRaised,
+        TaskHubQuickAction.decreaseUrgency =>
+          context.t.actions.taskHub.nudges.urgencyLowered,
+        TaskHubQuickAction.increaseImportance =>
+          context.t.actions.taskHub.nudges.importanceRaised,
+        TaskHubQuickAction.decreaseImportance =>
+          context.t.actions.taskHub.nudges.importanceLowered,
         TaskHubQuickAction.done => context.t.actions.taskHub.actions.done,
         TaskHubQuickAction.reopen => context.t.actions.taskHub.actions.reopen,
         TaskHubQuickAction.redo => context.t.actions.taskHub.actions.redo,
@@ -334,124 +446,160 @@ class _TaskHubPageState extends State<TaskHubPage> {
     if (store == null) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
-    return Scaffold(
-      appBar: AppBar(title: Text(context.t.actions.taskHub.title)),
-      body: ListenableBuilder(
-        listenable: store,
-        builder: (context, _) {
-          final snapshot = store.snapshot;
-          final visibleDone = snapshot.done.take(_doneVisibleCount).toList();
-          return RefreshIndicator(
-            onRefresh: _refresh,
-            child: ListView(
-              key: const ValueKey('task_hub_page'),
-              padding: const EdgeInsets.all(12),
-              children: [
-                if (store.isRefreshing && snapshot.allEntries.isEmpty)
-                  const Padding(
-                    padding: EdgeInsets.only(top: 32),
-                    child: Center(child: CircularProgressIndicator()),
-                  )
-                else ...[
-                  if (snapshot.focus.isNotEmpty)
-                    TaskHubFocusSection(
-                      entries: snapshot.focus.take(3).toList(growable: false),
+    return ScaffoldMessenger(
+      key: _scaffoldMessengerKey,
+      child: Scaffold(
+        appBar: AppBar(title: Text(context.t.actions.taskHub.title)),
+        body: ListenableBuilder(
+          listenable: store,
+          builder: (context, _) {
+            final snapshot = store.snapshot;
+            final visibleFocus = snapshot.primaryFocus == null
+                ? const <TaskPriorityEntry>[]
+                : <TaskPriorityEntry>[snapshot.primaryFocus!];
+            final visibleNextUp = snapshot.nextUpEntries;
+            final visibleBacklog = snapshot.backlogEntries;
+            final visibleDone = snapshot.done.take(_doneVisibleCount).toList();
+            return RefreshIndicator(
+              onRefresh: _refresh,
+              child: ListView(
+                key: const ValueKey('task_hub_page'),
+                padding: const EdgeInsets.all(12),
+                children: [
+                  if (store.isRefreshing && snapshot.allEntries.isEmpty)
+                    const Padding(
+                      padding: EdgeInsets.only(top: 32),
+                      child: Center(child: CircularProgressIndicator()),
+                    )
+                  else ...[
+                    if (_aiSourceLabel(snapshot) case final aiSourceLabel?) ...[
+                      SlSurface(
+                        key: const ValueKey('task_hub_page_ai_source'),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 8,
+                        ),
+                        child: Text(
+                          aiSourceLabel,
+                          style: Theme.of(context)
+                              .textTheme
+                              .labelMedium
+                              ?.copyWith(
+                                color: Theme.of(context).colorScheme.primary,
+                                fontWeight: FontWeight.w700,
+                              ),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                    ],
+                    if (snapshot.primaryFocus != null)
+                      TaskHubFocusSection(
+                        entries: visibleFocus,
+                        checklistProgressByTodoId:
+                            store.checklistProgressByTodoId,
+                        restoredTodoId: _restoredTodoId,
+                        onOpenTodo: _openTodoDetail,
+                        onQuickAction: _applyQuickAction,
+                        onFeedback: _recordFeedback,
+                      )
+                    else
+                      SlSurface(
+                        key: const ValueKey('task_hub_page_wrap_up'),
+                        padding: const EdgeInsets.all(12),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              context.t.actions.taskHub.wrapUpTitle,
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .titleMedium
+                                  ?.copyWith(
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              context.t.actions.taskHub.wrapUpSubtitle(
+                                upcoming: visibleNextUp.length,
+                                backlog: visibleBacklog.length,
+                                done: snapshot.done.length,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    if (store.shouldShowAiUpgradeHint) ...[
+                      const SizedBox(height: 12),
+                      SlSurface(
+                        key: const ValueKey('task_hub_page_ai_upgrade_hint'),
+                        padding: const EdgeInsets.all(12),
+                        child: Text(
+                          context.t.actions.taskHub.aiUpgradeHint,
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 12),
+                    TaskHubPageSection(
+                      title: context.t.actions.taskHub.scheduledSection,
+                      sectionKey:
+                          const ValueKey('task_hub_page_section_upcoming'),
+                      entries: visibleNextUp,
                       checklistProgressByTodoId:
                           store.checklistProgressByTodoId,
+                      restoredTodoId: _restoredTodoId,
+                      sectionKind: TaskHubPageSectionKind.scheduled,
                       onOpenTodo: _openTodoDetail,
                       onQuickAction: _applyQuickAction,
                       onFeedback: _recordFeedback,
-                    )
-                  else
-                    SlSurface(
-                      key: const ValueKey('task_hub_page_wrap_up'),
-                      padding: const EdgeInsets.all(12),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            context.t.actions.taskHub.wrapUpTitle,
-                            style: Theme.of(context)
-                                .textTheme
-                                .titleMedium
-                                ?.copyWith(
-                                  fontWeight: FontWeight.w800,
-                                ),
-                          ),
-                          const SizedBox(height: 6),
-                          Text(
-                            context.t.actions.taskHub.wrapUpSubtitle(
-                              decide: snapshot.decide.length,
-                              done: snapshot.done.length,
-                            ),
-                          ),
-                        ],
-                      ),
                     ),
-                  if (store.isAiEnhancementEnabled &&
-                      !store.isAiEnhancementAvailable) ...[
-                    const SizedBox(height: 12),
-                    SlSurface(
-                      key: const ValueKey('task_hub_page_ai_upgrade_hint'),
-                      padding: const EdgeInsets.all(12),
-                      child: Text(
-                        context.t.actions.taskHub.aiUpgradeHint,
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
+                    TaskHubPageSection(
+                      title: context.t.actions.taskHub.unscheduledSection,
+                      sectionKey:
+                          const ValueKey('task_hub_page_section_backlog'),
+                      entries: visibleBacklog,
+                      checklistProgressByTodoId:
+                          store.checklistProgressByTodoId,
+                      restoredTodoId: _restoredTodoId,
+                      sectionKind: TaskHubPageSectionKind.decide,
+                      onOpenTodo: _openTodoDetail,
+                      onQuickAction: _applyQuickAction,
+                      onFeedback: _recordFeedback,
+                    ),
+                    TaskHubPageSection(
+                      title: context.t.actions.taskHub.doneSection,
+                      sectionKey: const ValueKey('task_hub_page_section_done'),
+                      entries: visibleDone,
+                      checklistProgressByTodoId:
+                          store.checklistProgressByTodoId,
+                      restoredTodoId: _restoredTodoId,
+                      sectionKind: TaskHubPageSectionKind.done,
+                      onOpenTodo: _openTodoDetail,
+                      onQuickAction: _applyQuickAction,
+                      footer: snapshot.done.length > _doneVisibleCount
+                          ? Align(
+                              alignment: Alignment.centerLeft,
+                              child: SlButton(
+                                buttonKey: const ValueKey(
+                                    'task_hub_page_done_load_more'),
+                                variant: SlButtonVariant.outline,
+                                onPressed: () {
+                                  setState(() {
+                                    _doneVisibleCount += _kDonePageSize;
+                                  });
+                                },
+                                child: Text(context.t.common.actions.showMore),
+                              ),
+                            )
+                          : null,
                     ),
                   ],
-                  const SizedBox(height: 12),
-                  TaskHubPageSection(
-                    title: context.t.actions.taskHub.scheduledSection,
-                    sectionKey:
-                        const ValueKey('task_hub_page_section_scheduled'),
-                    entries: snapshot.scheduled,
-                    checklistProgressByTodoId: store.checklistProgressByTodoId,
-                    sectionKind: TaskHubPageSectionKind.scheduled,
-                    onOpenTodo: _openTodoDetail,
-                    onQuickAction: _applyQuickAction,
-                    onFeedback: _recordFeedback,
-                  ),
-                  TaskHubPageSection(
-                    title: context.t.actions.taskHub.decideSection,
-                    sectionKey: const ValueKey('task_hub_page_section_decide'),
-                    entries: snapshot.decide,
-                    checklistProgressByTodoId: store.checklistProgressByTodoId,
-                    sectionKind: TaskHubPageSectionKind.decide,
-                    onOpenTodo: _openTodoDetail,
-                    onQuickAction: _applyQuickAction,
-                    onFeedback: _recordFeedback,
-                  ),
-                  TaskHubPageSection(
-                    title: context.t.actions.taskHub.doneSection,
-                    sectionKey: const ValueKey('task_hub_page_section_done'),
-                    entries: visibleDone,
-                    checklistProgressByTodoId: store.checklistProgressByTodoId,
-                    sectionKind: TaskHubPageSectionKind.done,
-                    onOpenTodo: _openTodoDetail,
-                    onQuickAction: _applyQuickAction,
-                    footer: snapshot.done.length > _doneVisibleCount
-                        ? Align(
-                            alignment: Alignment.centerLeft,
-                            child: SlButton(
-                              buttonKey: const ValueKey(
-                                  'task_hub_page_done_load_more'),
-                              variant: SlButtonVariant.outline,
-                              onPressed: () {
-                                setState(() {
-                                  _doneVisibleCount += _kDonePageSize;
-                                });
-                              },
-                              child: Text(context.t.common.actions.showMore),
-                            ),
-                          )
-                        : null,
-                  ),
                 ],
-              ],
-            ),
-          );
-        },
+              ),
+            );
+          },
+        ),
       ),
     );
   }

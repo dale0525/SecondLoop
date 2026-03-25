@@ -283,6 +283,8 @@ fn migration_archive_build_stage(
                     "review_stage": todo.review_stage,
                     "next_review_at_ms": todo.next_review_at_ms,
                     "last_review_at_ms": todo.last_review_at_ms,
+                    "manual_importance_nudge_score": todo.manual_importance_nudge_score.unwrap_or(0),
+                    "manual_urgency_nudge_score": todo.manual_urgency_nudge_score.unwrap_or(0),
                 })
                 .to_string(),
             ),
@@ -781,8 +783,8 @@ fn migration_archive_restore_todo(
     conn.execute(
         r#"INSERT OR REPLACE INTO todos(
              id, title, due_at_ms, status, source_entry_id,
-             created_at_ms, updated_at_ms, review_stage, next_review_at_ms, last_review_at_ms, needs_embedding
-           ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, 1)"#,
+             created_at_ms, updated_at_ms, review_stage, next_review_at_ms, last_review_at_ms, manual_importance_nudge_score, manual_urgency_nudge_score, needs_embedding
+           ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, 1)"#,
         params![
             item.id,
             title_blob,
@@ -794,6 +796,8 @@ fn migration_archive_restore_todo(
             extra["review_stage"].as_i64(),
             extra["next_review_at_ms"].as_i64(),
             extra["last_review_at_ms"].as_i64(),
+            extra["manual_importance_nudge_score"].as_i64().unwrap_or(0),
+            extra["manual_urgency_nudge_score"].as_i64().unwrap_or(0),
         ],
     )?;
     Ok(())

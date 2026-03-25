@@ -12,7 +12,7 @@ fn todo_thread_indexing_api_processes_pending_embeddings() {
     db::set_active_embedding_model_name(&conn, embedding::DEFAULT_MODEL_NAME).expect("model");
 
     db::upsert_todo(
-        &conn, &key, "todo_1", "Buy milk", None, "open", None, None, None, None,
+        &conn, &key, "todo_1", "Buy milk", None, "open", None, None, None, None, None, None,
     )
     .expect("upsert todo");
     db::append_todo_note(&conn, &key, "todo_1", "Remember oat milk", None).expect("note");

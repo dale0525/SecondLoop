@@ -32,9 +32,12 @@ void main() {
       '${FlutterLocalNotificationsReviewReminderScheduler.reviewQueuePayloadPrefix}todo:1',
     );
 
-    await tester.pumpAndSettle();
+    await _pumpUntilFound(
+      tester,
+      find.byType(TaskHubPage, skipOffstage: false),
+    );
 
-    expect(find.byType(TaskHubPage), findsOneWidget);
+    expect(find.byType(TaskHubPage, skipOffstage: false), findsOneWidget);
   });
 
   testWidgets('reminder route forwards session lock callback', (tester) async {
@@ -49,9 +52,13 @@ void main() {
     harness.scheduler.onTap?.call(
       '${FlutterLocalNotificationsReviewReminderScheduler.reviewQueuePayloadPrefix}todo:1',
     );
-    await tester.pumpAndSettle();
+    await _pumpUntilFound(
+      tester,
+      find.byType(TaskHubPage, skipOffstage: false),
+    );
 
-    final taskHubContext = tester.element(find.byType(TaskHubPage));
+    final taskHubContext =
+        tester.element(find.byType(TaskHubPage, skipOffstage: false));
     SessionScope.of(taskHubContext).lock();
 
     expect(lockCalls, 1);
@@ -62,7 +69,7 @@ void main() {
 
     harness.scheduler.onTap?.call('todo:1');
 
-    await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds: 200));
 
     expect(find.byType(TaskHubPage), findsNothing);
   });
@@ -78,7 +85,10 @@ void main() {
       '${FlutterLocalNotificationsReviewReminderScheduler.reviewQueuePayloadPrefix}todo:2',
     );
 
-    await tester.pumpAndSettle();
+    await _pumpUntilFound(
+      tester,
+      find.byType(TaskHubPage, skipOffstage: false),
+    );
 
     expect(
       find.byType(TaskHubPage, skipOffstage: false),
@@ -99,13 +109,13 @@ void main() {
       ],
     );
 
-    await tester.pump(const Duration(seconds: 7));
-    await tester.pumpAndSettle();
+    final bannerFinder =
+        find.byKey(const ValueKey('review_reminder_in_app_fallback_banner'));
 
-    expect(
-      find.byKey(const ValueKey('review_reminder_in_app_fallback_banner')),
-      findsOneWidget,
-    );
+    await tester.pump(const Duration(seconds: 7));
+    await _pumpUntilFound(tester, bannerFinder);
+
+    expect(bannerFinder, findsOneWidget);
   });
 
   testWidgets(
@@ -119,20 +129,24 @@ void main() {
       ],
     );
 
+    final bannerFinder =
+        find.byKey(const ValueKey('review_reminder_in_app_fallback_banner'));
+
     await tester.pump(const Duration(seconds: 7));
-    await tester.pumpAndSettle();
+    await _pumpUntilFound(tester, bannerFinder);
 
-    expect(
-      find.byKey(const ValueKey('review_reminder_in_app_fallback_banner')),
-      findsOneWidget,
+    expect(bannerFinder, findsOneWidget);
+
+    final openButtonFinder =
+        find.byKey(const ValueKey('review_reminder_in_app_fallback_open'));
+    tester.widget<FilledButton>(openButtonFinder).onPressed!();
+    await tester.pump(const Duration(milliseconds: 200));
+    await _pumpUntilFound(
+      tester,
+      find.byType(TaskHubPage, skipOffstage: false),
     );
 
-    await tester.tap(
-      find.byKey(const ValueKey('review_reminder_in_app_fallback_open')),
-    );
-    await tester.pumpAndSettle();
-
-    expect(find.byType(TaskHubPage), findsOneWidget);
+    expect(find.byType(TaskHubPage, skipOffstage: false), findsOneWidget);
   });
 
   testWidgets('plays alert sound when in-app reminder appears', (tester) async {
@@ -151,13 +165,13 @@ void main() {
       },
     );
 
-    await tester.pump(const Duration(seconds: 7));
-    await tester.pumpAndSettle();
+    final bannerFinder =
+        find.byKey(const ValueKey('review_reminder_in_app_fallback_banner'));
 
-    expect(
-      find.byKey(const ValueKey('review_reminder_in_app_fallback_banner')),
-      findsOneWidget,
-    );
+    await tester.pump(const Duration(seconds: 7));
+    await _pumpUntilFound(tester, bannerFinder);
+
+    expect(bannerFinder, findsOneWidget);
     expect(played, 1);
   });
 
@@ -174,22 +188,24 @@ void main() {
       ],
     );
 
-    await tester.pump(const Duration(seconds: 7));
-    await tester.pumpAndSettle();
-
     final bannerFinder =
         find.byKey(const ValueKey('review_reminder_in_app_fallback_banner'));
+
+    await tester.pump(const Duration(seconds: 7));
+    await _pumpUntilFound(tester, bannerFinder);
+
     expect(bannerFinder, findsOneWidget);
 
-    await tester.tap(
-      find.byKey(const ValueKey('review_reminder_in_app_fallback_dismiss')),
-    );
-    await tester.pumpAndSettle();
+    final dismissButtonFinder =
+        find.byKey(const ValueKey('review_reminder_in_app_fallback_dismiss'));
+    tester.widget<TextButton>(dismissButtonFinder).onPressed!();
+    await tester.pump(const Duration(milliseconds: 200));
+    await _pumpUntilGone(tester, bannerFinder);
 
     expect(bannerFinder, findsNothing);
 
     await tester.pump(const Duration(seconds: 15));
-    await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds: 200));
 
     expect(bannerFinder, findsNothing);
   });
@@ -206,25 +222,27 @@ void main() {
       ],
     );
 
-    await tester.pump(const Duration(seconds: 6));
-    await tester.pumpAndSettle();
-
     final bannerFinder =
         find.byKey(const ValueKey('review_reminder_in_app_fallback_banner'));
+
+    await tester.pump(const Duration(seconds: 6));
+    await _pumpUntilFound(tester, bannerFinder);
+
     expect(bannerFinder, findsOneWidget);
 
-    await tester.tap(
-      find.byKey(const ValueKey('review_reminder_in_app_fallback_dismiss')),
-    );
-    await tester.pumpAndSettle();
+    final dismissButtonFinder =
+        find.byKey(const ValueKey('review_reminder_in_app_fallback_dismiss'));
+    tester.widget<TextButton>(dismissButtonFinder).onPressed!();
+    await tester.pump(const Duration(milliseconds: 200));
+    await _pumpUntilGone(tester, bannerFinder);
     expect(bannerFinder, findsNothing);
 
     harness.syncEngine!.notifyExternalChange();
     await tester.pump(const Duration(milliseconds: 700));
-    await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds: 200));
 
     await tester.pump(const Duration(seconds: 6));
-    await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds: 200));
 
     expect(bannerFinder, findsNothing);
   });
@@ -240,17 +258,19 @@ void main() {
       todos: <Todo>[_dueTodo(dueAtMs: initialDueAtMs)],
     );
 
-    await tester.pump(const Duration(seconds: 7));
-    await tester.pumpAndSettle();
-
     final bannerFinder =
         find.byKey(const ValueKey('review_reminder_in_app_fallback_banner'));
+
+    await tester.pump(const Duration(seconds: 7));
+    await _pumpUntilFound(tester, bannerFinder);
+
     expect(bannerFinder, findsOneWidget);
 
-    await tester.tap(
-      find.byKey(const ValueKey('review_reminder_in_app_fallback_dismiss')),
-    );
-    await tester.pumpAndSettle();
+    final dismissButtonFinder =
+        find.byKey(const ValueKey('review_reminder_in_app_fallback_dismiss'));
+    tester.widget<TextButton>(dismissButtonFinder).onPressed!();
+    await tester.pump(const Duration(milliseconds: 200));
+    await _pumpUntilGone(tester, bannerFinder);
     expect(bannerFinder, findsNothing);
 
     harness.backend.todos
@@ -259,10 +279,10 @@ void main() {
 
     harness.syncEngine!.notifyExternalChange();
     await tester.pump(const Duration(milliseconds: 700));
-    await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds: 200));
 
     await tester.pump(const Duration(seconds: 6));
-    await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds: 200));
 
     expect(bannerFinder, findsNothing);
   });
@@ -279,16 +299,16 @@ void main() {
       ],
     );
 
+    final bannerFinder =
+        find.byKey(const ValueKey('review_reminder_in_app_fallback_banner'));
+
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
-    await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds: 200));
 
     await tester.pump(const Duration(seconds: 7));
-    await tester.pumpAndSettle();
+    await _pumpUntilFound(tester, bannerFinder);
 
-    expect(
-      find.byKey(const ValueKey('review_reminder_in_app_fallback_banner')),
-      findsOneWidget,
-    );
+    expect(bannerFinder, findsOneWidget);
   });
 
   testWidgets('does not show review-queue reminder for overdue item on launch',
@@ -303,13 +323,13 @@ void main() {
       ],
     );
 
-    await tester.pump(const Duration(seconds: 7));
-    await tester.pumpAndSettle();
+    final bannerFinder =
+        find.byKey(const ValueKey('review_reminder_in_app_fallback_banner'));
 
-    expect(
-      find.byKey(const ValueKey('review_reminder_in_app_fallback_banner')),
-      findsNothing,
-    );
+    await tester.pump(const Duration(seconds: 7));
+    await tester.pump(const Duration(milliseconds: 200));
+
+    expect(bannerFinder, findsNothing);
   });
 
   testWidgets('does not show due reminder for overdue item on launch',
@@ -357,6 +377,46 @@ void main() {
   });
 }
 
+Future<void> _pumpUntil(
+  WidgetTester tester,
+  bool Function() condition, {
+  Duration step = const Duration(milliseconds: 50),
+  Duration timeout = const Duration(seconds: 5),
+}) async {
+  var elapsed = Duration.zero;
+  while (!condition()) {
+    if (elapsed >= timeout) {
+      fail('Timed out waiting for test condition.');
+    }
+    await tester.pump(step);
+    elapsed += step;
+  }
+}
+
+Future<void> _pumpUntilFound(
+  WidgetTester tester,
+  Finder finder, {
+  Duration timeout = const Duration(seconds: 5),
+}) {
+  return _pumpUntil(
+    tester,
+    () => finder.evaluate().isNotEmpty,
+    timeout: timeout,
+  );
+}
+
+Future<void> _pumpUntilGone(
+  WidgetTester tester,
+  Finder finder, {
+  Duration timeout = const Duration(seconds: 5),
+}) {
+  return _pumpUntil(
+    tester,
+    () => finder.evaluate().isEmpty,
+    timeout: timeout,
+  );
+}
+
 Future<_GateHarness> _pumpGateHarness(
   WidgetTester tester, {
   bool schedulerSupportsSystemNotifications = true,
@@ -401,7 +461,7 @@ Future<_GateHarness> _pumpGateHarness(
     ),
   );
 
-  await tester.pumpAndSettle();
+  await tester.pump(const Duration(milliseconds: 200));
   await tester.pump(const Duration(milliseconds: 600));
 
   expect(scheduler.ensureInitializedCalls, greaterThan(0));

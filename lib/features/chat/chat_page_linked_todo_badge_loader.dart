@@ -1,13 +1,20 @@
 part of 'chat_page.dart';
 
 extension _ChatPageStateLinkedTodoBadgeLoader on _ChatPageState {
-  Future<Map<String, _TodoMessageBadgeMeta>> _loadLinkedTodoBadgesForMessages({
+  Future<
+      ({
+        Map<String, _TodoMessageBadgeMeta> badges,
+        Set<String> existingTodoIds,
+      })> _loadLinkedTodoBadgesForMessages({
     required AppBackend backend,
     required Uint8List sessionKey,
     required List<Message> messages,
   }) async {
     if (messages.isEmpty) {
-      return const <String, _TodoMessageBadgeMeta>{};
+      return (
+        badges: const <String, _TodoMessageBadgeMeta>{},
+        existingTodoIds: const <String>{},
+      );
     }
 
     final messagesById = <String, Message>{
@@ -18,6 +25,7 @@ extension _ChatPageStateLinkedTodoBadgeLoader on _ChatPageState {
       final todos = await backend.listTodos(sessionKey);
       final byMessageId = <String, _TodoMessageBadgeMeta>{};
       final todosById = <String, Todo>{for (final todo in todos) todo.id: todo};
+      final existingTodoIds = todosById.keys.toSet();
       final messageIds = messagesById.keys.toList(growable: false);
       var semanticParseConsented = false;
       try {
@@ -87,9 +95,12 @@ extension _ChatPageStateLinkedTodoBadgeLoader on _ChatPageState {
         );
       }
 
-      return byMessageId;
+      return (badges: byMessageId, existingTodoIds: existingTodoIds);
     } catch (_) {
-      return const <String, _TodoMessageBadgeMeta>{};
+      return (
+        badges: const <String, _TodoMessageBadgeMeta>{},
+        existingTodoIds: const <String>{},
+      );
     }
   }
 }

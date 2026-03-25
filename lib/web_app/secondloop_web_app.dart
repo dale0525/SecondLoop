@@ -65,6 +65,22 @@ class _SecondLoopWebAppState extends State<SecondLoopWebApp> {
       service: service,
       chatBackend: CloudWebBackend(
         chatClient: _WebAppCloudWebChatClient(service: service),
+        fetchTaskPriorityAssessments: ({
+          required idToken,
+          required cacheScopeKey,
+        }) =>
+            service.fetchTaskPriorityAssessments(
+          idToken: idToken,
+          scope: cacheScopeKey,
+        ),
+        upsertTaskPriorityAssessments: ({
+          required idToken,
+          required payload,
+        }) =>
+            service.upsertTaskPriorityAssessments(
+          idToken: idToken,
+          payload: payload,
+        ),
       ),
     );
   }

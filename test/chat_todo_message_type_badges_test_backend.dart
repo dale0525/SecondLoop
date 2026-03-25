@@ -46,6 +46,8 @@ final class ChatTodoMessageTypeBadgesTestBackend extends TestAppBackend {
     int? reviewStage,
     int? nextReviewAtMs,
     int? lastReviewAtMs,
+    int? manualImportanceNudgeScore,
+    int? manualUrgencyNudgeScore,
   }) async {
     final nowMs = DateTime.now().toUtc().millisecondsSinceEpoch;
     Todo? existing;
@@ -66,6 +68,8 @@ final class ChatTodoMessageTypeBadgesTestBackend extends TestAppBackend {
       reviewStage: reviewStage,
       nextReviewAtMs: nextReviewAtMs,
       lastReviewAtMs: lastReviewAtMs,
+      manualImportanceNudgeScore: manualImportanceNudgeScore ?? 0,
+      manualUrgencyNudgeScore: manualUrgencyNudgeScore ?? 0,
     );
     _todos.removeWhere((item) => item.id == id);
     _todos.add(todo);

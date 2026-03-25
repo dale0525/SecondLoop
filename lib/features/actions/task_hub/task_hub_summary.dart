@@ -8,15 +8,15 @@ class TaskHubSummary {
     required this.dueCount,
     required this.overdueCount,
     required this.upcomingCount,
-    required this.unscheduledCount,
-    required this.dueReviewCount,
+    required this.backlogCount,
+    required this.reviewCount,
     required this.doneCount,
-    required this.scheduledPreviewTodos,
-    required this.unscheduledPreviewTodos,
+    required this.upcomingPreviewTodos,
+    required this.backlogPreviewTodos,
     required this.dueTodos,
     required this.upcomingTodos,
-    required this.dueReviewTodos,
-    required this.unscheduledTodos,
+    required this.reviewTodos,
+    required this.backlogTodos,
     required this.doneTodos,
     required this.checklistProgressByTodoId,
   });
@@ -26,15 +26,15 @@ class TaskHubSummary {
         dueCount = 0,
         overdueCount = 0,
         upcomingCount = 0,
-        unscheduledCount = 0,
-        dueReviewCount = 0,
+        backlogCount = 0,
+        reviewCount = 0,
         doneCount = 0,
-        scheduledPreviewTodos = const <Todo>[],
-        unscheduledPreviewTodos = const <Todo>[],
+        upcomingPreviewTodos = const <Todo>[],
+        backlogPreviewTodos = const <Todo>[],
         dueTodos = const <Todo>[],
         upcomingTodos = const <Todo>[],
-        dueReviewTodos = const <Todo>[],
-        unscheduledTodos = const <Todo>[],
+        reviewTodos = const <Todo>[],
+        backlogTodos = const <Todo>[],
         doneTodos = const <Todo>[],
         checklistProgressByTodoId = const <String, TodoChecklistProgress>{};
 
@@ -42,41 +42,38 @@ class TaskHubSummary {
   final int dueCount;
   final int overdueCount;
   final int upcomingCount;
-  final int unscheduledCount;
-  final int dueReviewCount;
+  final int backlogCount;
+  final int reviewCount;
   final int doneCount;
-  final List<Todo> scheduledPreviewTodos;
-  final List<Todo> unscheduledPreviewTodos;
+  final List<Todo> upcomingPreviewTodos;
+  final List<Todo> backlogPreviewTodos;
   final List<Todo> dueTodos;
   final List<Todo> upcomingTodos;
-  final List<Todo> dueReviewTodos;
-  final List<Todo> unscheduledTodos;
+  final List<Todo> reviewTodos;
+  final List<Todo> backlogTodos;
   final List<Todo> doneTodos;
   final Map<String, TodoChecklistProgress> checklistProgressByTodoId;
 
   bool get hasOverdue => overdueCount > 0;
-  bool get hasDueReview => dueReviewCount > 0;
+  bool get hasReview => reviewCount > 0;
 
   bool get isEmpty =>
-      dueCount == 0 &&
-      upcomingCount == 0 &&
-      unscheduledCount == 0 &&
-      dueReviewCount == 0;
+      dueTodos.isEmpty && upcomingTodos.isEmpty && backlogTodos.isEmpty;
 
   static TaskHubSummary fromTodos(
     List<Todo> todos, {
     required DateTime nowLocal,
     List<TodoChecklistProgress> checklistProgress =
         const <TodoChecklistProgress>[],
-    int scheduledPreviewLimit = 4,
-    int unscheduledPreviewLimit = 4,
+    int upcomingPreviewLimit = 4,
+    int backlogPreviewLimit = 4,
   }) {
     final snapshot = buildTaskPrioritySnapshot(todos, nowLocal: nowLocal);
     return fromSnapshot(
       snapshot,
       checklistProgress: checklistProgress,
-      scheduledPreviewLimit: scheduledPreviewLimit,
-      unscheduledPreviewLimit: unscheduledPreviewLimit,
+      upcomingPreviewLimit: upcomingPreviewLimit,
+      backlogPreviewLimit: backlogPreviewLimit,
     );
   }
 
@@ -84,60 +81,50 @@ class TaskHubSummary {
     TaskPrioritySnapshot snapshot, {
     List<TodoChecklistProgress> checklistProgress =
         const <TodoChecklistProgress>[],
-    int scheduledPreviewLimit = 4,
-    int unscheduledPreviewLimit = 4,
+    int upcomingPreviewLimit = 4,
+    int backlogPreviewLimit = 4,
   }) {
     final dueEntries = snapshot.focus;
-    final upcomingEntries = snapshot.scheduled;
-    final dueReviewEntries = snapshot.decide
+    final upcomingEntriesForSummary = snapshot.upcomingDisplayEntries;
+    final reviewEntriesForSummary = snapshot.activeEntries
         .where((entry) => entry.isReviewDue)
         .toList(growable: false);
-    final unscheduledEntries = snapshot.decide
-        .where((entry) => !entry.isReviewDue)
-        .toList(growable: false);
+    final backlogEntriesForSummary = snapshot.backlogEntries;
     final doneEntries = snapshot.done;
 
-    final scheduledPreview = <Todo>[];
-    for (final entry in dueEntries) {
-      if (scheduledPreview.length >= scheduledPreviewLimit) break;
-      scheduledPreview.add(entry.todo);
-    }
-    for (final entry in upcomingEntries) {
-      if (scheduledPreview.length >= scheduledPreviewLimit) break;
-      scheduledPreview.add(entry.todo);
+    final upcomingPreview = <Todo>[];
+    for (final entry in upcomingEntriesForSummary) {
+      if (upcomingPreview.length >= upcomingPreviewLimit) break;
+      upcomingPreview.add(entry.todo);
     }
 
-    final unscheduledPreview = <Todo>[];
-    for (final entry in dueReviewEntries) {
-      if (unscheduledPreview.length >= unscheduledPreviewLimit) break;
-      unscheduledPreview.add(entry.todo);
-    }
-    for (final entry in unscheduledEntries) {
-      if (unscheduledPreview.length >= unscheduledPreviewLimit) break;
-      unscheduledPreview.add(entry.todo);
+    final backlogPreview = <Todo>[];
+    for (final entry in backlogEntriesForSummary) {
+      if (backlogPreview.length >= backlogPreviewLimit) break;
+      backlogPreview.add(entry.todo);
     }
 
     return TaskHubSummary(
       snapshot: snapshot,
       dueCount: dueEntries.length,
       overdueCount: dueEntries.where((entry) => entry.isOverdue).length,
-      upcomingCount: upcomingEntries.length,
-      unscheduledCount: unscheduledEntries.length + dueReviewEntries.length,
-      dueReviewCount: dueReviewEntries.length,
+      upcomingCount: snapshot.upcomingDisplayCount,
+      backlogCount: snapshot.backlogDisplayCount,
+      reviewCount: reviewEntriesForSummary.length,
       doneCount: doneEntries.length,
-      scheduledPreviewTodos: List<Todo>.unmodifiable(scheduledPreview),
-      unscheduledPreviewTodos: List<Todo>.unmodifiable(unscheduledPreview),
+      upcomingPreviewTodos: List<Todo>.unmodifiable(upcomingPreview),
+      backlogPreviewTodos: List<Todo>.unmodifiable(backlogPreview),
       dueTodos: List<Todo>.unmodifiable(
         dueEntries.map((entry) => entry.todo),
       ),
       upcomingTodos: List<Todo>.unmodifiable(
-        upcomingEntries.map((entry) => entry.todo),
+        upcomingEntriesForSummary.map((entry) => entry.todo),
       ),
-      dueReviewTodos: List<Todo>.unmodifiable(
-        dueReviewEntries.map((entry) => entry.todo),
+      reviewTodos: List<Todo>.unmodifiable(
+        reviewEntriesForSummary.map((entry) => entry.todo),
       ),
-      unscheduledTodos: List<Todo>.unmodifiable(
-        unscheduledEntries.map((entry) => entry.todo),
+      backlogTodos: List<Todo>.unmodifiable(
+        backlogEntriesForSummary.map((entry) => entry.todo),
       ),
       doneTodos: List<Todo>.unmodifiable(
         doneEntries.map((entry) => entry.todo),

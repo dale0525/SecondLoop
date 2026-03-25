@@ -39,6 +39,8 @@ fn non_recurring_todo_without_due_can_set_due_with_scope() {
         None,
         None,
         None,
+        None,
+        None,
     )
     .expect("upsert todo");
 
@@ -71,6 +73,8 @@ fn this_and_future_shifts_current_and_following_occurrences_only() {
         "Daily standup",
         Some(due_ms(0)),
         "open",
+        None,
+        None,
         None,
         None,
         None,
@@ -148,6 +152,8 @@ fn whole_series_shifts_all_existing_occurrences() {
         None,
         None,
         None,
+        None,
+        None,
     )
     .expect("upsert seed");
 
@@ -207,6 +213,8 @@ fn this_and_future_updates_status_and_splits_series() {
         "Daily standup",
         Some(due_ms(0)),
         "open",
+        None,
+        None,
         None,
         None,
         None,
@@ -275,6 +283,8 @@ fn whole_series_updates_status_without_splitting_series() {
         None,
         None,
         None,
+        None,
+        None,
     )
     .expect("upsert seed");
 
@@ -335,6 +345,8 @@ fn this_and_future_updates_recurrence_rule_and_splits_series() {
         "Daily standup",
         Some(due_ms(0)),
         "open",
+        None,
+        None,
         None,
         None,
         None,
@@ -406,6 +418,8 @@ fn whole_series_updates_recurrence_rule_without_splitting_series() {
         "Daily standup",
         Some(due_ms(0)),
         "open",
+        None,
+        None,
         None,
         None,
         None,

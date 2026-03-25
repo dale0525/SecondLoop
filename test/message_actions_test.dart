@@ -1127,6 +1127,8 @@ class MessageActionsBackend extends AppBackend {
     int? reviewStage,
     int? nextReviewAtMs,
     int? lastReviewAtMs,
+    int? manualImportanceNudgeScore,
+    int? manualUrgencyNudgeScore,
   }) async {
     final todo = Todo(
       id: id,
@@ -1139,6 +1141,8 @@ class MessageActionsBackend extends AppBackend {
       reviewStage: reviewStage,
       nextReviewAtMs: nextReviewAtMs,
       lastReviewAtMs: lastReviewAtMs,
+      manualImportanceNudgeScore: manualImportanceNudgeScore ?? 0,
+      manualUrgencyNudgeScore: manualUrgencyNudgeScore ?? 0,
     );
     _todos.removeWhere((t) => t.id == id);
     _todos.add(todo);

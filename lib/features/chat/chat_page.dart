@@ -108,6 +108,7 @@ import 'chat_markdown_editor_submission.dart';
 import 'chat_markdown_link_handler.dart';
 import 'message_deeplink.dart';
 import 'chat_audio_recording_recovery_dialog.dart';
+import 'chat_route_scope_wrapper.dart';
 import 'message_viewer_page.dart';
 import 'ask_ai_intent_resolver.dart';
 import 'ask_scope_empty.dart';
@@ -181,6 +182,7 @@ const _kTodoSemanticVeryHighConfidenceGap = 0.12;
 typedef _ChatMessageSupplementData = ({
   List<SemanticParseJob> semanticJobs,
   Map<String, _TodoMessageBadgeMeta> linkedTodoBadges,
+  Set<String> existingTodoIds,
   List<AttachmentAnnotationJob> annotationJobs,
   bool attachmentAnnotationEnabled,
   bool attachmentAnnotationCanRunNow,
@@ -485,6 +487,8 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
   String? _activeCloudIdToken;
   TaskHubUndoTicket? _taskHubUndoTicket;
   Timer? _taskHubQuickActionSnackAutoDismissTimer;
+  final GlobalKey<ScaffoldMessengerState> _scaffoldMessengerKey =
+      GlobalKey<ScaffoldMessengerState>();
   ScaffoldMessengerState? _taskHubQuickActionSnackMessenger;
   Object? _taskHubQuickActionSnackToken;
   List<AttachmentDraftPayload> _composerDraftAttachments =
@@ -561,8 +565,9 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
     _messageAutoActionsQueue?.dispose();
     _askSub?.cancel();
     _detachedAskRecoveryTimer?.cancel();
-    if (_taskHubQuickActionSnackToken != null) {
-      _taskHubQuickActionSnackMessenger?.hideCurrentSnackBar();
+    if (_taskHubQuickActionSnackToken != null &&
+        (_taskHubQuickActionSnackMessenger?.mounted ?? false)) {
+      _taskHubQuickActionSnackMessenger?.removeCurrentSnackBar();
     }
     _taskHubQuickActionSnackAutoDismissTimer?.cancel();
     _taskHubQuickActionSnackAutoDismissTimer = null;
@@ -590,9 +595,33 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
       resolveAiService: _resolveTaskPriorityAiService,
       resolveAiCacheScopeKey: _resolveTaskPriorityAiCacheScopeKey,
       isAiEnhancementEnabled: TaskPriorityAiEnhancementPrefs.read,
+      readSharedAiAssessments: ({
+        required aiService,
+        required cacheScopeKey,
+        required nowLocal,
+      }) async =>
+          aiService is BackendTaskPriorityAiService
+              ? aiService.readSharedAssessments(nowLocal: nowLocal)
+              : const <String, TaskPriorityAiCachedAssessment>{},
+      writeSharedAiAssessments: ({
+        required aiService,
+        required cacheScopeKey,
+        required entries,
+        required activeTodoIds,
+        required nowLocal,
+      }) async {
+        if (aiService is BackendTaskPriorityAiService) {
+          await aiService.writeSharedAssessments(
+            entries: entries,
+            activeTodoIds: activeTodoIds,
+          );
+        }
+      },
       feedbackStore: _taskPriorityFeedbackStore,
     );
-    unawaited(_taskPriorityStore!.refresh());
+
+    unawaited(_taskPriorityStore?.refresh() ?? Future<void>.value());
+
     _attachSyncEngine();
     unawaited(_refreshComposerAskAiRoute());
     unawaited(_recoverDetachedAskAiIfNeeded());

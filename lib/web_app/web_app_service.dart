@@ -13,6 +13,8 @@ const String _kApiBillingCheckoutPath = '/api/app/billing/checkout';
 const String _kApiBillingPortalPath = '/api/app/billing/portal';
 const String _kApiUsagePath = '/api/app/usage';
 const String _kApiChatPath = '/api/app/chat';
+const String _kApiTaskPriorityAssessmentsPath =
+    '/api/app/task-priority/assessments';
 const String _kApiVaultUsagePath = '/api/app/vault/usage';
 const String _kApiVaultAttachmentsPath = '/api/app/vault/attachments';
 const String _kApiVaultAttachmentPath = '/api/app/vault/attachment';
@@ -102,6 +104,17 @@ abstract class WebAppService {
     required List<Map<String, String>> messages,
   }) async =>
       '';
+
+  Future<Map<String, Object?>> fetchTaskPriorityAssessments({
+    required String idToken,
+    required String scope,
+  }) async =>
+      const <String, Object?>{};
+
+  Future<void> upsertTaskPriorityAssessments({
+    required String idToken,
+    required Map<String, Object?> payload,
+  }) async {}
 
   Future<WebVaultUsageSummary?> fetchVaultUsage({
     required String idToken,
@@ -332,6 +345,35 @@ class WebAppServiceHttp extends WebAppService {
       embeddingsUsagePercent:
           (json['embeddings_usage_percent'] as num?)?.toInt() ?? 0,
       resetAtMs: (json['reset_at_ms'] as num?)?.toInt(),
+    );
+  }
+
+  @override
+  Future<Map<String, Object?>> fetchTaskPriorityAssessments({
+    required String idToken,
+    required String scope,
+  }) async {
+    final response = await _client.get(
+      Uri(
+          path: _kApiTaskPriorityAssessmentsPath,
+          queryParameters: <String, String>{'scope': scope}),
+      headers: <String, String>{
+        'authorization': 'Bearer $idToken',
+        'accept': 'application/json',
+      },
+    );
+    return _decodeJsonResponse(response);
+  }
+
+  @override
+  Future<void> upsertTaskPriorityAssessments({
+    required String idToken,
+    required Map<String, Object?> payload,
+  }) async {
+    await _sendJson(
+      _kApiTaskPriorityAssessmentsPath,
+      idToken,
+      body: payload,
     );
   }
 

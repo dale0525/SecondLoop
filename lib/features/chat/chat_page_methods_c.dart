@@ -196,7 +196,7 @@ extension _ChatPageStateMethodsC on _ChatPageState {
           title: selected.title,
           status: _todoStatusLabel(context, newStatus),
         );
-        ScaffoldMessenger.of(context).showSnackBar(
+        _scaffoldMessengerKey.currentState?.showSnackBar(
           SnackBar(
             content: Text(snackText),
             duration: const Duration(seconds: 3),
@@ -268,7 +268,7 @@ extension _ChatPageStateMethodsC on _ChatPageState {
         _refresh();
 
         final snackText = context.t.actions.todoAuto.created(title: title);
-        ScaffoldMessenger.of(context).showSnackBar(
+        _scaffoldMessengerKey.currentState?.showSnackBar(
           SnackBar(
             content: Text(snackText),
             duration: const Duration(seconds: 3),
@@ -376,7 +376,7 @@ extension _ChatPageStateMethodsC on _ChatPageState {
       final looksLikeLongFormNote =
           rawText.contains('\n') || rawText.trim().runes.length >= 160;
       if (looksLikeLongFormNote && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        _scaffoldMessengerKey.currentState?.showSnackBar(
           SnackBar(
             content: Text(context.t.actions.todoNoteLink.suggest),
             duration: const Duration(seconds: 3),
@@ -452,7 +452,7 @@ extension _ChatPageStateMethodsC on _ChatPageState {
       title: selected.title,
       status: _todoStatusLabel(context, intent.newStatus),
     );
-    ScaffoldMessenger.of(context).showSnackBar(
+    _scaffoldMessengerKey.currentState?.showSnackBar(
       SnackBar(
         content: Text(snackText),
         duration: const Duration(seconds: 3),

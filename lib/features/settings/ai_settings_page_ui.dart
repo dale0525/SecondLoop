@@ -319,10 +319,10 @@ extension _AiSettingsPageUiExtension on _AiSettingsPageState {
                     if (value && !canUseSemanticParse) {
                       if (subscriptionStatus == SubscriptionStatus.entitled &&
                           !hasCloudAccount) {
-                        await Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) => const CloudAccountPage(),
-                          ),
+                        await pushPageWithInheritedScopes(
+                          Navigator.of(context),
+                          context,
+                          const CloudAccountPage(),
                         );
                         if (!mounted) return;
                         await _reloadAutomationState(forceLoading: false);
@@ -347,10 +347,10 @@ extension _AiSettingsPageUiExtension on _AiSettingsPageState {
                     if (value && !canUseTaskPriorityAi) {
                       if (subscriptionStatus == SubscriptionStatus.entitled &&
                           !hasCloudAccount) {
-                        await Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) => const CloudAccountPage(),
-                          ),
+                        await pushPageWithInheritedScopes(
+                          Navigator.of(context),
+                          context,
+                          const CloudAccountPage(),
                         );
                         if (!mounted) return;
                         await _reloadAutomationState(forceLoading: false);
@@ -369,10 +369,10 @@ extension _AiSettingsPageUiExtension on _AiSettingsPageState {
             title: Text(t.askAi.actions.openByok),
             trailing: const Icon(Icons.chevron_right),
             onTap: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) => const LlmProfilesPage(),
-                ),
+              pushPageWithInheritedScopes(
+                Navigator.of(context),
+                context,
+                const LlmProfilesPage(),
               );
             },
           ),
@@ -398,10 +398,10 @@ extension _AiSettingsPageUiExtension on _AiSettingsPageState {
                 ? null
                 : (value) async {
                     if (value && !canUseCloudEmbeddings) {
-                      await Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) => const CloudAccountPage(),
-                        ),
+                      await pushPageWithInheritedScopes(
+                        Navigator.of(context),
+                        context,
+                        const CloudAccountPage(),
                       );
                       if (!mounted) return;
                       await _reloadAutomationState(forceLoading: false);
@@ -445,10 +445,10 @@ extension _AiSettingsPageUiExtension on _AiSettingsPageState {
             title: Text(t.embeddings.actions.openEmbeddingProfiles),
             trailing: const Icon(Icons.chevron_right),
             onTap: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) => const EmbeddingProfilesPage(),
-                ),
+              pushPageWithInheritedScopes(
+                Navigator.of(context),
+                context,
+                const EmbeddingProfilesPage(),
               );
             },
           ),
@@ -517,12 +517,12 @@ extension _AiSettingsPageUiExtension on _AiSettingsPageState {
             title: Text(t.mediaUnderstanding.actions.openByok),
             trailing: const Icon(Icons.chevron_right),
             onTap: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) => const LlmProfilesPage(
-                    providerFilter:
-                        LlmProfilesProviderFilter.openAiCompatibleOnly,
-                  ),
+              pushPageWithInheritedScopes(
+                Navigator.of(context),
+                context,
+                const LlmProfilesPage(
+                  providerFilter:
+                      LlmProfilesProviderFilter.openAiCompatibleOnly,
                 ),
               );
             },
@@ -649,10 +649,10 @@ extension _AiSettingsPageUiExtension on _AiSettingsPageState {
                 title: Text(t.askAi.actions.openSettings),
                 trailing: const Icon(Icons.chevron_right),
                 onTap: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => const AiAskAiSettingsPage(),
-                    ),
+                  pushPageWithInheritedScopes(
+                    Navigator.of(context),
+                    context,
+                    const AiAskAiSettingsPage(),
                   );
                 },
               ),
@@ -737,10 +737,10 @@ extension _AiSettingsPageUiExtension on _AiSettingsPageState {
                 ),
                 trailing: const Icon(Icons.chevron_right),
                 onTap: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => const AiSmartOrganizationSettingsPage(),
-                    ),
+                  pushPageWithInheritedScopes(
+                    Navigator.of(context),
+                    context,
+                    const AiSmartOrganizationSettingsPage(),
                   );
                 },
               ),

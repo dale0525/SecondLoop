@@ -13,6 +13,7 @@ import '../../src/rust/db.dart';
 import '../actions/todo/todo_detail_page.dart';
 import '../tags/tag_picker.dart';
 import '../tags/tag_repository.dart';
+import 'chat_route_scope_wrapper.dart';
 
 class SemanticParseJobStatusRow extends StatefulWidget {
   const SemanticParseJobStatusRow({
@@ -500,7 +501,10 @@ class _SemanticParseJobStatusRowState extends State<SemanticParseJobStatusRow> {
     FocusManager.instance.primaryFocus?.unfocus();
     await Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (context) => TodoDetailPage(initialTodo: todo!),
+        builder: (_) => wrapPushedPageWithInheritedScopes(
+          context,
+          TodoDetailPage(initialTodo: todo!),
+        ),
       ),
     );
   }

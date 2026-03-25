@@ -184,6 +184,8 @@ fn migration_archive_export_writes_manifest_markdown_and_deduplicated_attachment
         None,
         None,
         None,
+        None,
+        None,
     )
     .expect("todo");
 
@@ -296,6 +298,8 @@ fn migration_archive_import_replaces_current_vault_with_archive_contents() {
         None,
         "open",
         Some(&message.id),
+        None,
+        None,
         None,
         None,
         None,
@@ -619,6 +623,8 @@ fn migration_archive_end_to_end_import_into_clean_app_rebuilds_indexes_and_persi
         Some(0),
         Some(1_700_000_000_000),
         Some(1_699_000_000_000),
+        None,
+        None,
     )
     .expect("todo");
     let _activity = append_todo_note(

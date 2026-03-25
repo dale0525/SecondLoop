@@ -50,6 +50,8 @@ fn ask_ai_rag_includes_todo_thread_when_activity_matches() {
         None,
         None,
         None,
+        None,
+        None,
     )
     .expect("todo");
 
@@ -97,6 +99,8 @@ fn ask_ai_rag_dedups_todo_thread_when_todo_and_activity_both_match() {
         "Client follow-up",
         None,
         "inbox",
+        None,
+        None,
         None,
         None,
         None,

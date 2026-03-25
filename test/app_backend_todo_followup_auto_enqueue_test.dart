@@ -135,6 +135,8 @@ final class _FollowupCapabilityBackend extends AppBackend {
     int? reviewStage,
     int? nextReviewAtMs,
     int? lastReviewAtMs,
+    int? manualImportanceNudgeScore,
+    int? manualUrgencyNudgeScore,
   }) async {
     if (autoEnqueuesOnCreate) {
       enqueueTodoIds.add(id);
