@@ -125,6 +125,8 @@ fn api_core_dismiss_followup_suggestions_requires_todo_access() {
         None,
         None,
         None,
+        None,
+        None,
     )
     .expect("upsert todo");
 
@@ -175,6 +177,8 @@ fn api_core_dismiss_all_followup_suggestions_requires_todo_access() {
         "Research LLM models",
         None,
         "open",
+        None,
+        None,
         None,
         None,
         None,
@@ -232,6 +236,8 @@ fn api_core_list_followup_suggestions_requires_todo_access() {
         None,
         None,
         None,
+        None,
+        None,
     )
     .expect("upsert todo");
 
@@ -257,6 +263,8 @@ fn api_core_upsert_generated_followup_suggestions_requires_todo_access() {
         "Research LLM models",
         None,
         "open",
+        None,
+        None,
         None,
         None,
         None,
@@ -302,6 +310,8 @@ fn api_core_apply_followup_suggestions_requires_todo_access() {
         "Research LLM models",
         None,
         "open",
+        None,
+        None,
         None,
         None,
         None,
