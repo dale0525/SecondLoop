@@ -10,7 +10,9 @@ void main() {
   test('ensureInitialized requests exact alarm permission when unavailable',
       () async {
     debugDefaultTargetPlatformOverride = TargetPlatform.android;
-    addTearDown(() => debugDefaultTargetPlatformOverride = null);
+    addTearDown(() {
+      debugDefaultTargetPlatformOverride = null;
+    });
 
     final androidPlugin = _FakeAndroidNotificationsPlugin(
       canScheduleExactNotificationsResult: false,
@@ -33,7 +35,9 @@ void main() {
   test('ensureInitialized skips exact alarm request when already granted',
       () async {
     debugDefaultTargetPlatformOverride = TargetPlatform.android;
-    addTearDown(() => debugDefaultTargetPlatformOverride = null);
+    addTearDown(() {
+      debugDefaultTargetPlatformOverride = null;
+    });
 
     final androidPlugin = _FakeAndroidNotificationsPlugin(
       canScheduleExactNotificationsResult: true,
@@ -96,7 +100,9 @@ void main() {
 
   test('schedule adds android quick actions and todo payload', () async {
     debugDefaultTargetPlatformOverride = TargetPlatform.android;
-    addTearDown(() => debugDefaultTargetPlatformOverride = null);
+    addTearDown(() {
+      debugDefaultTargetPlatformOverride = null;
+    });
 
     final androidPlugin = _FakeAndroidNotificationsPlugin(
       canScheduleExactNotificationsResult: true,
@@ -116,7 +122,9 @@ void main() {
 
     await scheduler.schedule(
       const ReviewReminderPlan(
-          pendingCount: 1, items: <ReviewReminderItem>[item]),
+        pendingCount: 1,
+        items: <ReviewReminderItem>[item],
+      ),
     );
 
     expect(androidPlugin.zonedScheduleCalls, 1);
@@ -125,9 +133,11 @@ void main() {
       '${FlutterLocalNotificationsReviewReminderScheduler.reviewQueuePayloadPrefix}todo:review',
     );
     expect(
-        androidPlugin.lastId,
-        FlutterLocalNotificationsReviewReminderScheduler.notificationIdForItem(
-            item));
+      androidPlugin.lastId,
+      FlutterLocalNotificationsReviewReminderScheduler.notificationIdForItem(
+        item,
+      ),
+    );
 
     final actions = androidPlugin.lastNotificationDetails?.actions;
     expect(actions, isNotNull);
@@ -135,6 +145,82 @@ void main() {
       FlutterLocalNotificationsReviewReminderScheduler.androidDoneActionId,
       FlutterLocalNotificationsReviewReminderScheduler.androidDismissActionId,
     ]);
+  });
+
+  test('notification details add Windows quick actions and keep payload', () {
+    const item = ReviewReminderItem(
+      todoId: 'todo:review',
+      todoTitle: 'review this',
+      sourceAtUtcMs: 10000,
+      scheduleAtUtcMs: 20000,
+      kind: ReviewReminderItemKind.reviewQueue,
+    );
+    final payload =
+        FlutterLocalNotificationsReviewReminderScheduler.encodePayload(
+      item,
+    );
+
+    final details = FlutterLocalNotificationsReviewReminderScheduler
+            .notificationDetailsForItem(item)
+        .windows;
+
+    expect(details, isNotNull);
+    expect(details!.actions.length, 2);
+    expect(details.actions.map((action) => action.arguments), <String>[
+      FlutterLocalNotificationsReviewReminderScheduler
+          .encodeWindowsQuickActionArguments(
+        FlutterLocalNotificationsReviewReminderScheduler.androidDoneActionId,
+        payload,
+      ),
+      FlutterLocalNotificationsReviewReminderScheduler
+          .encodeWindowsQuickActionArguments(
+        FlutterLocalNotificationsReviewReminderScheduler.androidDismissActionId,
+        payload,
+      ),
+    ]);
+  });
+
+  test('eventFromResponse decodes Windows quick action arguments', () {
+    const payload =
+        '${FlutterLocalNotificationsReviewReminderScheduler.reviewQueuePayloadPrefix}todo:review';
+    final encoded = FlutterLocalNotificationsReviewReminderScheduler
+        .encodeWindowsQuickActionArguments(
+      FlutterLocalNotificationsReviewReminderScheduler.androidDoneActionId,
+      payload,
+    );
+
+    final event =
+        FlutterLocalNotificationsReviewReminderScheduler.eventFromResponse(
+      NotificationResponse(
+        notificationResponseType:
+            NotificationResponseType.selectedNotificationAction,
+        payload: encoded,
+        actionId: encoded,
+      ),
+    );
+
+    expect(event.payload, payload);
+    expect(
+      event.actionId,
+      FlutterLocalNotificationsReviewReminderScheduler.androidDoneActionId,
+    );
+  });
+
+  test('legacy Windows app id list excludes current app id', () {
+    expect(
+      FlutterLocalNotificationsReviewReminderScheduler
+          .legacyWindowsAppUserModelIds(
+        'com.secondloop.secondloop',
+      ),
+      <String>['com.secondloop.secondloopdev'],
+    );
+    expect(
+      FlutterLocalNotificationsReviewReminderScheduler
+          .legacyWindowsAppUserModelIds(
+        'com.secondloop.secondloopdev',
+      ),
+      <String>['com.secondloop.secondloop'],
+    );
   });
 }
 

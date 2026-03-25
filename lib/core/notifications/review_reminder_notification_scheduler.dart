@@ -30,6 +30,16 @@ final class ReviewReminderNotificationPayload {
   final String todoId;
 }
 
+final class _WindowsQuickActionLaunch {
+  const _WindowsQuickActionLaunch({
+    required this.actionId,
+    required this.payload,
+  });
+
+  final String actionId;
+  final String payload;
+}
+
 abstract interface class ReviewReminderNotificationScheduler {
   bool get supportsSystemNotifications;
 
@@ -63,11 +73,15 @@ final class FlutterLocalNotificationsReviewReminderScheduler
       'Reminders for pending todo reviews';
 
   static const String _windowsAppName = 'SecondLoop';
+  static const String _windowsProdAppUserModelId = 'com.secondloop.secondloop';
+  static const String _windowsDevAppUserModelId =
+      'com.secondloop.secondloopdev';
   static const String _windowsAppUserModelId = String.fromEnvironment(
     'SECONDLOOP_APP_ID',
-    defaultValue: 'com.secondloop.secondloop',
+    defaultValue: _windowsProdAppUserModelId,
   );
   static const String _windowsGuid = 'd49b5b4a-0ea5-4e31-b5c9-945cc5405f59';
+  static const String _windowsQuickActionPrefix = 'quick_action|';
 
   final FlutterLocalNotificationsPlugin _plugin;
   final NotificationTapHandler? _onTap;
@@ -99,24 +113,17 @@ final class FlutterLocalNotificationsReviewReminderScheduler
       await _plugin.initialize(
         initializationSettings,
         onDidReceiveNotificationResponse: (response) {
-          _onTap?.call(
-            ReviewReminderNotificationEvent(
-              payload: response.payload,
-              actionId: response.actionId,
-            ),
-          );
+          _onTap?.call(eventFromResponse(response));
         },
       );
 
+      await _cleanupLegacyWindowsArtifactsBestEffort();
+
       final launchDetails = await _plugin.getNotificationAppLaunchDetails();
       final launchResponse = launchDetails?.notificationResponse;
-      if (launchDetails?.didNotificationLaunchApp == true) {
-        _onTap?.call(
-          ReviewReminderNotificationEvent(
-            payload: launchResponse?.payload,
-            actionId: launchResponse?.actionId,
-          ),
-        );
+      if (launchDetails?.didNotificationLaunchApp == true &&
+          launchResponse != null) {
+        _onTap?.call(eventFromResponse(launchResponse));
       }
     } on MissingPluginException {
       _available = false;
@@ -160,6 +167,26 @@ final class FlutterLocalNotificationsReviewReminderScheduler
         badge: true,
         sound: true,
       );
+    } catch (_) {
+      // ignore
+    }
+  }
+
+  Future<void> _cleanupLegacyWindowsArtifactsBestEffort() async {
+    if (defaultTargetPlatform != TargetPlatform.windows) {
+      return;
+    }
+
+    try {
+      final windowsImpl = _plugin.resolvePlatformSpecificImplementation<
+          FlutterLocalNotificationsWindows>();
+      if (windowsImpl == null) {
+        return;
+      }
+      for (final legacyAumid
+          in legacyWindowsAppUserModelIds(_windowsAppUserModelId)) {
+        await windowsImpl.cleanupAumidArtifacts(legacyAumid);
+      }
     } catch (_) {
       // ignore
     }
@@ -225,6 +252,42 @@ final class FlutterLocalNotificationsReviewReminderScheduler
     return '$prefix${item.todoId}';
   }
 
+  @visibleForTesting
+  static String encodeWindowsQuickActionArguments(
+    String actionId,
+    String payload,
+  ) {
+    return '$_windowsQuickActionPrefix$actionId|$payload';
+  }
+
+  @visibleForTesting
+  static List<String> legacyWindowsAppUserModelIds(String currentAumid) {
+    const knownAppIds = <String>{
+      _windowsProdAppUserModelId,
+      _windowsDevAppUserModelId,
+    };
+    return knownAppIds
+        .where((aumid) => aumid.isNotEmpty && aumid != currentAumid)
+        .toList(growable: false);
+  }
+
+  @visibleForTesting
+  static ReviewReminderNotificationEvent eventFromResponse(
+    NotificationResponse response,
+  ) {
+    final quickAction = _decodeWindowsQuickActionArguments(response.payload);
+    if (quickAction != null) {
+      return ReviewReminderNotificationEvent(
+        payload: quickAction.payload,
+        actionId: quickAction.actionId,
+      );
+    }
+    return ReviewReminderNotificationEvent(
+      payload: response.payload,
+      actionId: response.actionId,
+    );
+  }
+
   static ReviewReminderNotificationPayload? decodePayload(String? payload) {
     if (payload == null || payload.isEmpty) return null;
     if (payload.startsWith(reviewQueuePayloadPrefix)) {
@@ -250,6 +313,7 @@ final class FlutterLocalNotificationsReviewReminderScheduler
   static NotificationDetails notificationDetailsForItem(
     ReviewReminderItem item,
   ) {
+    final payload = encodePayload(item);
     return NotificationDetails(
       android: AndroidNotificationDetails(
         _androidChannelId,
@@ -281,7 +345,24 @@ final class FlutterLocalNotificationsReviewReminderScheduler
         presentBadge: true,
         presentSound: true,
       ),
-      windows: const WindowsNotificationDetails(),
+      windows: WindowsNotificationDetails(
+        actions: <WindowsAction>[
+          WindowsAction(
+            content: t.actions.reviewQueue.actions.done,
+            arguments: encodeWindowsQuickActionArguments(
+              androidDoneActionId,
+              payload,
+            ),
+          ),
+          WindowsAction(
+            content: t.actions.reviewQueue.actions.dismiss,
+            arguments: encodeWindowsQuickActionArguments(
+              androidDismissActionId,
+              payload,
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -383,6 +464,33 @@ final class FlutterLocalNotificationsReviewReminderScheduler
     } catch (_) {
       // ignore
     }
+  }
+
+  static _WindowsQuickActionLaunch? _decodeWindowsQuickActionArguments(
+    String? rawPayload,
+  ) {
+    if (rawPayload == null ||
+        rawPayload.isEmpty ||
+        !rawPayload.startsWith(_windowsQuickActionPrefix)) {
+      return null;
+    }
+
+    final remainder = rawPayload.substring(_windowsQuickActionPrefix.length);
+    final separatorIndex = remainder.indexOf('|');
+    if (separatorIndex <= 0 || separatorIndex >= remainder.length - 1) {
+      return null;
+    }
+
+    final actionId = remainder.substring(0, separatorIndex);
+    final payload = remainder.substring(separatorIndex + 1);
+    if (payload.isEmpty) {
+      return null;
+    }
+
+    return _WindowsQuickActionLaunch(
+      actionId: actionId,
+      payload: payload,
+    );
   }
 
   static int _stableHash(String input) {

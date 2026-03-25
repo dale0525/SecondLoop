@@ -15,6 +15,16 @@ bool hasPackageIdentity() {
   return error != APPMODEL_ERROR_NO_PACKAGE;
 }
 
+namespace {
+void deleteRegistryTreeIfExists(HKEY rootKey, const string& subKeyPath) {
+  const auto result = RegDeleteTreeA(rootKey, subKeyPath.c_str());
+  if (result == ERROR_FILE_NOT_FOUND || result == ERROR_PATH_NOT_FOUND) {
+    return;
+  }
+  winrt::check_win32(result);
+}
+}
+
 NativePlugin* createPlugin() { return new NativePlugin(); }
 
 void disposePlugin(NativePlugin* plugin) { delete plugin; }
@@ -110,6 +120,44 @@ void cancelNotification(NativePlugin* plugin, int id) {
       plugin->notifier.value().RemoveFromSchedule(notification);
       return;
     }
+  }
+}
+
+void cleanupAumidArtifacts(char* aumid) {
+  if (aumid == nullptr || aumid[0] == '\0') {
+    return;
+  }
+
+  const auto targetAumid = winrt::to_hstring(aumid);
+  try {
+    auto history = ToastNotificationManager::History();
+    history.Clear(targetAumid);
+
+    auto notifier = ToastNotificationManager::CreateToastNotifier(targetAumid);
+    for (const auto notification : notifier.GetScheduledToastNotifications()) {
+      notifier.RemoveFromSchedule(notification);
+    }
+  } catch (...) {
+    // ignore cleanup failures for legacy artifacts
+  }
+
+  try {
+    deleteRegistryTreeIfExists(
+      HKEY_CURRENT_USER,
+      string("Software\\Microsoft\\Windows\\CurrentVersion\\PushNotifications\\Backup\\") +
+        aumid
+    );
+  } catch (...) {
+    // ignore cleanup failures for legacy artifacts
+  }
+
+  try {
+    deleteRegistryTreeIfExists(
+      HKEY_CURRENT_USER,
+      string("Software\\Classes\\AppUserModelId\\") + aumid
+    );
+  } catch (...) {
+    // ignore cleanup failures for legacy artifacts
   }
 }
 

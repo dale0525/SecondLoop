@@ -123,6 +123,19 @@ class FlutterLocalNotificationsWindows extends WindowsNotificationsBase {
     userCallback?.call(response);
   }
 
+  late final void Function(Pointer<Utf8>) _cleanupAumidArtifacts =
+      _library.lookupFunction<Void Function(Pointer<Utf8>),
+          void Function(Pointer<Utf8>)>('cleanupAumidArtifacts');
+
+  Future<void> cleanupAumidArtifacts(String aumid) async =>
+      using((Arena arena) {
+        if (aumid.isEmpty) {
+          return;
+        }
+        final Pointer<Utf8> nativeAumid = aumid.toNativeUtf8(allocator: arena);
+        _cleanupAumidArtifacts(nativeAumid);
+      });
+
   @override
   Future<void> cancel(int id) async {
     if (!_isReady) {

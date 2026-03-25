@@ -117,6 +117,9 @@ FFI_PLUGIN_EXPORT void cancelAll(NativePlugin* plugin);
 /// Only applications with "package identity" (ie, installed with an MSIX installer), can use this.
 FFI_PLUGIN_EXPORT void cancelNotification(NativePlugin* plugin, int id);
 
+/// Best-effort cleanup of legacy notification artifacts associated with the given app user model ID.
+FFI_PLUGIN_EXPORT void cleanupAumidArtifacts(char* aumid);
+
 /// Gets all notifications that have already been shown but are still in the Action center.
 ///
 /// Only applications with "package identity" (ie, installed with an MSIX installer), can use this.
