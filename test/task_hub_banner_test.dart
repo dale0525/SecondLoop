@@ -4,8 +4,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:secondloop/features/actions/task_hub/task_hub_banner.dart';
 import 'package:secondloop/features/actions/task_hub/task_priority_ai_models.dart';
 import 'package:secondloop/features/actions/task_hub/task_priority_engine.dart';
-import 'package:secondloop/features/actions/task_hub/task_priority_models.dart';
 import 'package:secondloop/features/actions/task_hub/task_hub_quick_actions.dart';
+import 'package:secondloop/features/actions/task_hub/task_priority_models.dart';
 import 'package:secondloop/src/rust/db.dart';
 
 import 'test_i18n.dart';
@@ -46,10 +46,8 @@ void main() {
         entries: <TaskPriorityAiEntry>[
           TaskPriorityAiEntry(
             todoId: 't1',
-            priorityBand: TaskPriorityAiBand.focus,
             semanticAdjustment: 24,
             reason: 'It unblocks the rest of today.',
-            suggestedAction: TaskPrioritySuggestionKind.clarify,
             confidence: TaskPriorityAiConfidence.high,
           ),
         ],
@@ -109,6 +107,156 @@ void main() {
         findsOneWidget);
     expect(find.byKey(const ValueKey('task_hub_banner_item_decide')),
         findsOneWidget);
+  });
+
+  testWidgets('compact banner expanded view keeps focus actions only',
+      (tester) async {
+    final now = DateTime(2026, 3, 13, 10, 0);
+    final snapshot = buildTaskPrioritySnapshot(
+      <Todo>[
+        todo(
+          id: 'focus',
+          title: 'Fix billing bug',
+          updatedAtMs: 10,
+          dueAtMs:
+              now.add(const Duration(hours: 2)).toUtc().millisecondsSinceEpoch,
+        ),
+        todo(
+          id: 'scheduled-1',
+          title: 'Prepare weekly review summary',
+          updatedAtMs: 20,
+          dueAtMs:
+              now.add(const Duration(days: 1)).toUtc().millisecondsSinceEpoch,
+        ),
+        todo(
+            id: 'backlog-1', title: 'Triage product feedback', updatedAtMs: 30),
+        todo(
+            id: 'backlog-2', title: 'Review inbox follow-ups', updatedAtMs: 40),
+        todo(
+            id: 'backlog-3',
+            title: 'Draft migration checklist',
+            updatedAtMs: 50),
+      ],
+      nowLocal: now,
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: Scaffold(
+            body: Center(
+              child: SizedBox(
+                width: 670,
+                height: 518,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const SizedBox(height: 72),
+                    TaskHubBanner(
+                      snapshot: snapshot,
+                      compact: true,
+                      onViewAll: () {},
+                      onQuickAction: (_, __) async {},
+                    ),
+                    const Expanded(child: SizedBox.shrink()),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(
+      find.byKey(const ValueKey('task_hub_banner_primary_action')),
+      findsNothing,
+    );
+
+    await tester.tap(find.byKey(const ValueKey('task_hub_banner')));
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+    expect(find.byKey(const ValueKey('task_hub_banner_quick_pair')),
+        findsOneWidget);
+    expect(
+        find.byKey(const ValueKey('task_hub_banner_view_all')), findsOneWidget);
+    expect(
+        find.byKey(const ValueKey('task_hub_banner_open_focus')), findsNothing);
+    expect(find.byKey(const ValueKey('task_hub_preview_list')), findsNothing);
+    expect(find.text('Prepare weekly review summary'), findsNothing);
+  });
+
+  testWidgets('banner shows status and time quick actions for active focus',
+      (tester) async {
+    final now = DateTime(2026, 3, 13, 10, 0);
+    final snapshot = buildTaskPrioritySnapshot(
+      <Todo>[
+        todo(id: 'focus', title: 'Fix billing bug', updatedAtMs: 10),
+      ],
+      nowLocal: now,
+    );
+    TaskHubQuickAction? tappedAction;
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: Scaffold(
+            body: TaskHubBanner(
+              snapshot: snapshot,
+              onQuickAction: (entry, action) async {
+                tappedAction = action;
+              },
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.byKey(const ValueKey('task_hub_banner_quick_pair')),
+        findsOneWidget);
+    expect(find.byKey(const ValueKey('task_hub_banner_primary_action')),
+        findsOneWidget);
+    expect(find.byKey(const ValueKey('task_hub_banner_secondary_action')),
+        findsOneWidget);
+    expect(find.text('Start'), findsOneWidget);
+    expect(find.text('Tomorrow'), findsOneWidget);
+
+    await tester
+        .tap(find.byKey(const ValueKey('task_hub_banner_secondary_action')));
+    await tester.pump();
+
+    expect(tappedAction, TaskHubQuickAction.tomorrow);
+  });
+
+  testWidgets(
+      'banner still shows open focus action without quick actions enabled',
+      (tester) async {
+    final now = DateTime(2026, 3, 13, 10, 0);
+    final snapshot = buildTaskPrioritySnapshot(
+      <Todo>[
+        todo(id: 'focus', title: 'Fix billing bug', updatedAtMs: 10),
+      ],
+      nowLocal: now,
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: Scaffold(
+            body: TaskHubBanner(
+              snapshot: snapshot,
+              onOpenTodo: (_) async {},
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.byKey(const ValueKey('task_hub_banner_open_focus')),
+        findsOneWidget);
+    expect(
+        find.byKey(const ValueKey('task_hub_banner_open_hub')), findsNothing);
   });
 
   testWidgets('banner preview shows checklist progress summary',
@@ -233,10 +381,8 @@ void main() {
         entries: <TaskPriorityAiEntry>[
           TaskPriorityAiEntry(
             todoId: 't1',
-            priorityBand: TaskPriorityAiBand.focus,
             semanticAdjustment: 18,
             reason: 'This can wait until later today.',
-            suggestedAction: TaskPrioritySuggestionKind.defer,
             confidence: TaskPriorityAiConfidence.high,
           ),
         ],
@@ -262,7 +408,25 @@ void main() {
         .tap(find.byKey(const ValueKey('task_hub_banner_primary_action')));
     await tester.pump();
 
-    expect(tappedAction, TaskHubQuickAction.later);
+    expect(tappedAction, TaskHubQuickAction.start);
+  });
+
+  testWidgets('banner subtitle counts primary focus in next-up total',
+      (tester) async {
+    final snapshot = buildTaskPrioritySnapshot(
+      <Todo>[todo(id: 'focus', title: 'Write launch plan', updatedAtMs: 10)],
+      nowLocal: DateTime(2026, 3, 13, 10, 0),
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: Scaffold(body: TaskHubBanner(snapshot: snapshot)),
+        ),
+      ),
+    );
+
+    expect(find.text('Next up 1 • Backlog 0 • 0 done'), findsOneWidget);
   });
 
   testWidgets('banner shows AI upgrade hint when enhancement is unavailable',
@@ -303,10 +467,8 @@ void main() {
         entries: <TaskPriorityAiEntry>[
           TaskPriorityAiEntry(
             todoId: 't1',
-            priorityBand: TaskPriorityAiBand.focus,
             semanticAdjustment: 24,
             reason: 'It unblocks the rest of today.',
-            suggestedAction: TaskPrioritySuggestionKind.clarify,
             confidence: TaskPriorityAiConfidence.high,
           ),
         ],
@@ -335,6 +497,120 @@ void main() {
     );
   });
 
+  testWidgets('banner shows shared ai source label for shared cache',
+      (tester) async {
+    final snapshot = buildTaskPrioritySnapshot(
+      <Todo>[
+        todo(id: 't1', title: 'Clarify launch checklist', updatedAtMs: 10)
+      ],
+      nowLocal: DateTime(2026, 3, 13, 10, 0),
+      aiResult: const TaskPriorityAiBatchResult(
+        entries: <TaskPriorityAiEntry>[
+          TaskPriorityAiEntry(
+            todoId: 't1',
+            semanticAdjustment: 24,
+            reason: 'Shared AI result.',
+            confidence: TaskPriorityAiConfidence.high,
+          ),
+        ],
+      ),
+    ).copyWith(
+      enhancementSource: TaskPriorityEnhancementSource.aiSharedCache,
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: Scaffold(body: TaskHubBanner(snapshot: snapshot)),
+        ),
+      ),
+    );
+
+    expect(find.byKey(const ValueKey('task_hub_banner_ai_source')),
+        findsOneWidget);
+    expect(find.text('Shared AI insight'), findsOneWidget);
+  });
+
+  testWidgets('banner keeps AI header for cached enhancement snapshots',
+      (tester) async {
+    final snapshot = buildTaskPrioritySnapshot(
+      <Todo>[
+        todo(id: 't1', title: 'Clarify launch checklist', updatedAtMs: 10)
+      ],
+      nowLocal: DateTime(2026, 3, 13, 10, 0),
+      aiResult: const TaskPriorityAiBatchResult(
+        entries: <TaskPriorityAiEntry>[
+          TaskPriorityAiEntry(
+            todoId: 't1',
+            semanticAdjustment: 24,
+            reason: 'Cached AI result.',
+            confidence: TaskPriorityAiConfidence.high,
+          ),
+        ],
+      ),
+    ).copyWith(
+      enhancementSource: TaskPriorityEnhancementSource.aiLocalCache,
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: Scaffold(
+            body: TaskHubBanner(
+              snapshot: snapshot,
+              showAiUpgradeHint: true,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('AI recommends this now'), findsOneWidget);
+    expect(find.text('Cached AI result.'), findsOneWidget);
+    expect(find.byKey(const ValueKey('task_hub_banner_ai_source')),
+        findsOneWidget);
+    expect(find.text('Cached AI insight'), findsOneWidget);
+    expect(
+      find.text(
+          'Connect Cloud or BYOK to unlock smarter priority suggestions.'),
+      findsNothing,
+    );
+  });
+
+  testWidgets('banner shows live ai source label for fresh rerank snapshots',
+      (tester) async {
+    final snapshot = buildTaskPrioritySnapshot(
+      <Todo>[
+        todo(id: 't1', title: 'Clarify launch checklist', updatedAtMs: 10)
+      ],
+      nowLocal: DateTime(2026, 3, 13, 10, 0),
+      aiResult: const TaskPriorityAiBatchResult(
+        entries: <TaskPriorityAiEntry>[
+          TaskPriorityAiEntry(
+            todoId: 't1',
+            semanticAdjustment: 24,
+            reason: 'Live AI result.',
+            confidence: TaskPriorityAiConfidence.high,
+          ),
+        ],
+      ),
+    ).copyWith(
+      enhancementSource: TaskPriorityEnhancementSource.aiLive,
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: Scaffold(body: TaskHubBanner(snapshot: snapshot)),
+        ),
+      ),
+    );
+
+    expect(find.byKey(const ValueKey('task_hub_banner_ai_source')),
+        findsOneWidget);
+    expect(find.text('Live AI insight'), findsOneWidget);
+  });
+
   testWidgets('banner preview quick action invokes callback', (tester) async {
     TaskHubQuickAction? tappedAction;
     final now = DateTime(2026, 3, 13, 10, 0);
@@ -354,10 +630,8 @@ void main() {
         entries: <TaskPriorityAiEntry>[
           TaskPriorityAiEntry(
             todoId: 'decide',
-            priorityBand: TaskPriorityAiBand.next,
             semanticAdjustment: 8,
             reason: 'Needs a quick decision.',
-            suggestedAction: TaskPrioritySuggestionKind.doNow,
             confidence: TaskPriorityAiConfidence.medium,
           ),
         ],
@@ -382,10 +656,10 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('task_hub_banner')));
     await tester.pumpAndSettle();
     await tester
-        .tap(find.byKey(const ValueKey('task_hub_page_quick_decide_today')));
+        .tap(find.byKey(const ValueKey('task_hub_page_quick_decide_start')));
     await tester.pump();
 
-    expect(tappedAction, TaskHubQuickAction.today);
+    expect(tappedAction, TaskHubQuickAction.start);
   });
 
   testWidgets('banner preview more menu opens actions', (tester) async {
@@ -406,10 +680,8 @@ void main() {
         entries: <TaskPriorityAiEntry>[
           TaskPriorityAiEntry(
             todoId: 'decide',
-            priorityBand: TaskPriorityAiBand.next,
             semanticAdjustment: 8,
             reason: 'Needs a quick decision.',
-            suggestedAction: TaskPrioritySuggestionKind.doNow,
             confidence: TaskPriorityAiConfidence.medium,
           ),
         ],
@@ -430,6 +702,6 @@ void main() {
         .tap(find.byKey(const ValueKey('task_hub_page_quick_decide_more')));
     await tester.pumpAndSettle();
 
-    expect(find.text('Tomorrow'), findsOneWidget);
+    expect(find.text('Today'), findsOneWidget);
   });
 }

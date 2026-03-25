@@ -103,7 +103,9 @@ Future<Todo> dbUpsertTodo(
         String? sourceEntryId,
         PlatformInt64? reviewStage,
         PlatformInt64? nextReviewAtMs,
-        PlatformInt64? lastReviewAtMs}) =>
+        PlatformInt64? lastReviewAtMs,
+        PlatformInt64? manualImportanceNudgeScore,
+        PlatformInt64? manualUrgencyNudgeScore}) =>
     RustLib.instance.api.crateApiCoreDbUpsertTodo(
         appDir: appDir,
         key: key,
@@ -114,7 +116,9 @@ Future<Todo> dbUpsertTodo(
         sourceEntryId: sourceEntryId,
         reviewStage: reviewStage,
         nextReviewAtMs: nextReviewAtMs,
-        lastReviewAtMs: lastReviewAtMs);
+        lastReviewAtMs: lastReviewAtMs,
+        manualImportanceNudgeScore: manualImportanceNudgeScore,
+        manualUrgencyNudgeScore: manualUrgencyNudgeScore);
 
 Future<List<Todo>> dbListTodos(
         {required String appDir, required List<int> key}) =>
@@ -142,6 +146,43 @@ Future<Todo> dbSetTodoStatus(
         key: key,
         todoId: todoId,
         newStatus: newStatus,
+        sourceMessageId: sourceMessageId);
+
+Future<Todo> dbTransitionTodo(
+        {required String appDir,
+        required List<int> key,
+        required String todoId,
+        String? newStatus,
+        PlatformInt64? dueAtMs,
+        required bool clearDueAtMs,
+        PlatformInt64? reviewStage,
+        required bool clearReviewStage,
+        PlatformInt64? nextReviewAtMs,
+        required bool clearNextReviewAtMs,
+        PlatformInt64? lastReviewAtMs,
+        required bool clearLastReviewAtMs,
+        PlatformInt64? manualImportanceNudgeScore,
+        required bool clearManualImportanceNudgeScore,
+        PlatformInt64? manualUrgencyNudgeScore,
+        required bool clearManualUrgencyNudgeScore,
+        String? sourceMessageId}) =>
+    RustLib.instance.api.crateApiCoreDbTransitionTodo(
+        appDir: appDir,
+        key: key,
+        todoId: todoId,
+        newStatus: newStatus,
+        dueAtMs: dueAtMs,
+        clearDueAtMs: clearDueAtMs,
+        reviewStage: reviewStage,
+        clearReviewStage: clearReviewStage,
+        nextReviewAtMs: nextReviewAtMs,
+        clearNextReviewAtMs: clearNextReviewAtMs,
+        lastReviewAtMs: lastReviewAtMs,
+        clearLastReviewAtMs: clearLastReviewAtMs,
+        manualImportanceNudgeScore: manualImportanceNudgeScore,
+        clearManualImportanceNudgeScore: clearManualImportanceNudgeScore,
+        manualUrgencyNudgeScore: manualUrgencyNudgeScore,
+        clearManualUrgencyNudgeScore: clearManualUrgencyNudgeScore,
         sourceMessageId: sourceMessageId);
 
 Future<Todo> dbUpdateTodoDueWithScope(

@@ -26,6 +26,8 @@ fn checklist_item_crud_and_progress_roundtrip() {
         None,
         None,
         None,
+        None,
+        None,
     )
     .expect("upsert todo");
 
@@ -75,6 +77,8 @@ fn checklist_items_can_be_reordered() {
         None,
         None,
         None,
+        None,
+        None,
     )
     .expect("upsert todo");
 
@@ -113,6 +117,8 @@ fn checklist_no_op_content_update_keeps_timestamp_and_oplog_stable() {
         None,
         None,
         None,
+        None,
+        None,
     )
     .expect("upsert todo");
 
@@ -145,6 +151,8 @@ fn checklist_reorder_uses_consistent_updated_at_in_rows_and_oplog() {
         "Plan launch",
         None,
         "open",
+        None,
+        None,
         None,
         None,
         None,
@@ -205,6 +213,8 @@ fn checklist_create_rolls_back_when_oplog_insert_fails() {
         None,
         None,
         None,
+        None,
+        None,
     )
     .expect("upsert todo");
 
@@ -238,6 +248,8 @@ fn checklist_update_rolls_back_when_oplog_insert_fails() {
         "Plan launch",
         None,
         "open",
+        None,
+        None,
         None,
         None,
         None,
@@ -282,6 +294,8 @@ fn checklist_set_done_rolls_back_when_oplog_insert_fails() {
         None,
         None,
         None,
+        None,
+        None,
     )
     .expect("upsert todo");
 
@@ -318,6 +332,8 @@ fn checklist_delete_rolls_back_when_oplog_insert_fails() {
         "Plan launch",
         None,
         "open",
+        None,
+        None,
         None,
         None,
         None,
@@ -363,6 +379,8 @@ fn checklist_progress_excludes_done_and_dismissed_todos() {
         None,
         None,
         None,
+        None,
+        None,
     )
     .expect("upsert open todo");
     db::upsert_todo(
@@ -376,6 +394,8 @@ fn checklist_progress_excludes_done_and_dismissed_todos() {
         None,
         None,
         None,
+        None,
+        None,
     )
     .expect("upsert done todo");
     db::upsert_todo(
@@ -385,6 +405,8 @@ fn checklist_progress_excludes_done_and_dismissed_todos() {
         "Dismissed",
         None,
         "dismissed",
+        None,
+        None,
         None,
         None,
         None,
@@ -416,6 +438,8 @@ fn checklist_reorder_succeeds_inside_active_transaction() {
         "Plan launch",
         None,
         "open",
+        None,
+        None,
         None,
         None,
         None,
@@ -460,6 +484,8 @@ fn checklist_set_done_noop_keeps_timestamp_and_oplog_stable() {
         None,
         None,
         None,
+        None,
+        None,
     )
     .expect("upsert todo");
 
@@ -497,6 +523,8 @@ fn checklist_reorder_rejects_ids_from_other_todos() {
         None,
         None,
         None,
+        None,
+        None,
     )
     .expect("upsert todo 1");
     db::upsert_todo(
@@ -506,6 +534,8 @@ fn checklist_reorder_rejects_ids_from_other_todos() {
         "Other task",
         None,
         "open",
+        None,
+        None,
         None,
         None,
         None,
@@ -554,6 +584,8 @@ fn checklist_reorder_skips_oplog_when_no_ids_are_provided() {
         "Plan launch",
         None,
         "open",
+        None,
+        None,
         None,
         None,
         None,

@@ -7,6 +7,7 @@ import '../../core/backend/app_backend.dart';
 import '../../core/backend/knowledge_backend.dart';
 import '../../core/backend/knowledge_index_models.dart';
 import '../../core/backend/knowledge_viewer_backend.dart';
+import '../../core/navigation/inherited_scope_page_wrapper.dart';
 import '../../core/session/session_scope.dart';
 import '../../i18n/strings.g.dart';
 import '../../ui/sl_surface.dart';
@@ -135,11 +136,10 @@ class _KnowledgeIndexDebugPageState extends State<KnowledgeIndexDebugPage> {
   }
 
   void _openDocument(String documentId) {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) =>
-            KnowledgeIndexDocumentViewerPage(documentId: documentId),
-      ),
+    pushPageWithInheritedScopes(
+      Navigator.of(context),
+      context,
+      KnowledgeIndexDocumentViewerPage(documentId: documentId),
     );
   }
 

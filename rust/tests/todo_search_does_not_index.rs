@@ -12,7 +12,7 @@ fn todo_search_does_not_process_pending_embeddings() {
     db::set_active_embedding_model_name(&conn, embedding::DEFAULT_MODEL_NAME).expect("model");
 
     db::upsert_todo(
-        &conn, &key, "todo_1", "Buy milk", None, "open", None, None, None, None,
+        &conn, &key, "todo_1", "Buy milk", None, "open", None, None, None, None, None, None,
     )
     .expect("upsert todo");
 

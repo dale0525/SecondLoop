@@ -18,6 +18,8 @@ fn create_todo(
         None,
         None,
         Some(now_ms()),
+        None,
+        None,
     )
     .expect("create todo")
 }
@@ -77,4 +79,114 @@ fn set_todo_status_does_not_auto_schedule_inbox_to_done() {
     let updated = set_todo_status(&conn, &key, &created.id, "done", None).expect("update");
     assert_eq!(updated.status, "done");
     assert_eq!(updated.due_at_ms, None);
+}
+
+#[test]
+fn transition_todo_updates_status_due_and_review_fields_atomically() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let conn = open(dir.path()).expect("open");
+    let key = [25u8; 32];
+
+    let created = upsert_todo(
+        &conn,
+        &key,
+        "todo:transition",
+        "Task",
+        None,
+        "done",
+        None,
+        Some(2),
+        Some(now_ms().saturating_add(60_000)),
+        None,
+        None,
+        None,
+    )
+    .expect("create todo");
+
+    let target_due_at_ms = now_ms().saturating_add(24 * 60 * 60 * 1000);
+    let updated = transition_todo(
+        &conn,
+        &key,
+        &created.id,
+        Some("in_progress"),
+        Some(target_due_at_ms),
+        false,
+        None,
+        true,
+        None,
+        true,
+        Some(now_ms()),
+        false,
+        None,
+        false,
+        None,
+        false,
+        None,
+    )
+    .expect("transition todo");
+
+    assert_eq!(updated.id, created.id);
+    assert_eq!(updated.title, created.title);
+    assert_eq!(updated.status, "in_progress");
+    assert_eq!(updated.due_at_ms, Some(target_due_at_ms));
+    assert_eq!(updated.review_stage, None);
+    assert_eq!(updated.next_review_at_ms, None);
+    assert!(updated.last_review_at_ms.is_some());
+}
+
+#[test]
+fn transition_todo_same_status_only_patches_fields_without_auto_scheduling() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let conn = open(dir.path()).expect("open");
+    let key = [26u8; 32];
+
+    let created = upsert_todo(
+        &conn,
+        &key,
+        "todo:transition:same-status",
+        "Task",
+        None,
+        "in_progress",
+        None,
+        None,
+        None,
+        Some(123),
+        None,
+        None,
+    )
+    .expect("create todo");
+
+    let updated = transition_todo(
+        &conn,
+        &key,
+        &created.id,
+        Some("in_progress"),
+        Some(456),
+        false,
+        None,
+        false,
+        None,
+        false,
+        Some(789),
+        false,
+        None,
+        false,
+        None,
+        false,
+        None,
+    )
+    .expect("transition todo");
+
+    assert_eq!(updated.status, "in_progress");
+    assert_eq!(updated.due_at_ms, Some(456));
+    assert_eq!(updated.last_review_at_ms, Some(789));
+
+    let activity_count: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM todo_activities WHERE todo_id = ?1 AND type = 'status_change'",
+            [created.id.as_str()],
+            |row| row.get(0),
+        )
+        .expect("count activities");
+    assert_eq!(activity_count, 0);
 }

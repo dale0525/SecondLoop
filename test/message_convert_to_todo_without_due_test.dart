@@ -80,6 +80,8 @@ final class _Backend extends TestAppBackend {
     int? reviewStage,
     int? nextReviewAtMs,
     int? lastReviewAtMs,
+    int? manualImportanceNudgeScore,
+    int? manualUrgencyNudgeScore,
   }) async {
     final nowMs = DateTime.now().toUtc().millisecondsSinceEpoch;
     final existing = _todos.where((t) => t.id == id).cast<Todo?>().firstOrNull;
@@ -94,6 +96,8 @@ final class _Backend extends TestAppBackend {
       reviewStage: reviewStage,
       nextReviewAtMs: nextReviewAtMs,
       lastReviewAtMs: lastReviewAtMs,
+      manualImportanceNudgeScore: manualImportanceNudgeScore ?? 0,
+      manualUrgencyNudgeScore: manualUrgencyNudgeScore ?? 0,
     );
     _todos.removeWhere((t) => t.id == id);
     _todos.add(todo);

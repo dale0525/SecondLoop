@@ -7,10 +7,59 @@ import '../../../src/rust/db.dart';
 import 'task_priority_ai_models.dart';
 import 'task_priority_models.dart';
 
-abstract interface class TaskPriorityAiService {
+abstract class TaskPriorityAiService {
+  const TaskPriorityAiService();
+
   String get cacheScopeKey;
 
   Future<TaskPriorityAiBatchResult> rerank(TaskPriorityAiRequest request);
+
+  Future<Map<String, TaskPriorityAiCachedAssessment>> readSharedAssessments({
+    required DateTime nowLocal,
+  }) async =>
+      const <String, TaskPriorityAiCachedAssessment>{};
+
+  Future<void> writeSharedAssessments({
+    required Map<String, TaskPriorityAiCachedAssessment> entries,
+    required Iterable<String> activeTodoIds,
+  }) async {}
+}
+
+const Duration defaultTaskPriorityAiCacheTtl = Duration(minutes: 15);
+
+class TaskPriorityAiCachedAssessment {
+  const TaskPriorityAiCachedAssessment({
+    required this.entry,
+    required this.requestSignature,
+    required this.computedAtLocal,
+  });
+
+  final TaskPriorityAiEntry entry;
+  final String requestSignature;
+  final DateTime computedAtLocal;
+
+  Map<String, Object?> toJson() {
+    return <String, Object?>{
+      'entry': entry.toJson(),
+      'request_signature': requestSignature,
+      'computed_at_ms': computedAtLocal.millisecondsSinceEpoch,
+    };
+  }
+
+  static TaskPriorityAiCachedAssessment? fromJson(Map<String, Object?> json) {
+    final entryJson = json['entry'];
+    if (entryJson is! Map) return null;
+    final computedAtMs = json['computed_at_ms'];
+    if (computedAtMs is! num) return null;
+    return TaskPriorityAiCachedAssessment(
+      entry: TaskPriorityAiEntry.fromJson(
+        entryJson.map((key, value) => MapEntry(key.toString(), value)),
+      ),
+      requestSignature: (json['request_signature'] ?? '').toString(),
+      computedAtLocal:
+          DateTime.fromMillisecondsSinceEpoch(computedAtMs.toInt()),
+    );
+  }
 }
 
 String buildTaskPriorityAiCacheScopeKey({
@@ -29,6 +78,26 @@ String buildTaskPriorityAiCacheScopeKey({
     if (trimmedPartitionKey != null && trimmedPartitionKey.isNotEmpty)
       trimmedPartitionKey,
   ]);
+}
+
+bool _isUninitializedRustBridgeStateError(StateError error) {
+  return error.message.toString().contains(
+        'flutter_rust_bridge has not been initialized',
+      );
+}
+
+String _buildTaskPriorityAiFallbackScopeKey({
+  required AskAiRouteKind route,
+  required String gatewayBaseUrl,
+  required String modelName,
+  required String localeTag,
+}) {
+  return buildTaskPriorityAiCacheScopeKey(
+    route: route,
+    gatewayBaseUrl: gatewayBaseUrl,
+    modelName: modelName,
+    localeTag: localeTag,
+  );
 }
 
 Future<String?> resolveTaskPriorityAiCacheScopeKey(
@@ -52,28 +121,85 @@ Future<String?> resolveTaskPriorityAiCacheScopeKey(
         partitionKey: 'cloud:$uid',
       );
     case AskAiRouteKind.byok:
-      final profiles = await backend.listLlmProfiles(sessionKey);
-      LlmProfile? activeProfile;
-      for (final profile in profiles) {
-        if (profile.isActive) {
-          activeProfile = profile;
-          break;
+      try {
+        final profiles = await backend.listLlmProfiles(sessionKey);
+        LlmProfile? activeProfile;
+        for (final profile in profiles) {
+          if (profile.isActive) {
+            activeProfile = profile;
+            break;
+          }
         }
+        if (activeProfile == null) return null;
+        return buildTaskPriorityAiCacheScopeKey(
+          route: route,
+          gatewayBaseUrl: activeProfile.baseUrl ?? '',
+          modelName: activeProfile.modelName,
+          localeTag: localeTag,
+          partitionKey: jsonEncode(<String>[
+            activeProfile.id,
+            activeProfile.providerType,
+          ]),
+        );
+      } on StateError catch (error) {
+        if (!_isUninitializedRustBridgeStateError(error)) rethrow;
+        return _buildTaskPriorityAiFallbackScopeKey(
+          route: route,
+          gatewayBaseUrl: gatewayBaseUrl,
+          modelName: modelName,
+          localeTag: localeTag,
+        );
+      } catch (_) {
+        return _buildTaskPriorityAiFallbackScopeKey(
+          route: route,
+          gatewayBaseUrl: gatewayBaseUrl,
+          modelName: modelName,
+          localeTag: localeTag,
+        );
       }
-      if (activeProfile == null) return null;
-      return buildTaskPriorityAiCacheScopeKey(
-        route: route,
-        gatewayBaseUrl: activeProfile.baseUrl ?? '',
-        modelName: activeProfile.modelName,
-        localeTag: localeTag,
-        partitionKey: jsonEncode(<String>[
-          activeProfile.id,
-          activeProfile.providerType,
-        ]),
-      );
     case AskAiRouteKind.needsSetup:
       return null;
   }
+}
+
+Future<String> buildTaskPriorityRefreshDependencyKey(
+  AppBackend backend,
+  Uint8List sessionKey, {
+  required SubscriptionStatus subscriptionStatus,
+  required String gatewayBaseUrl,
+  required String modelName,
+  required String localeTag,
+  String? cloudUid,
+}) async {
+  final cloudRouteScope = subscriptionStatus == SubscriptionStatus.entitled
+      ? await resolveTaskPriorityAiCacheScopeKey(
+          backend,
+          sessionKey,
+          route: AskAiRouteKind.cloudGateway,
+          gatewayBaseUrl: gatewayBaseUrl,
+          modelName: modelName,
+          localeTag: localeTag,
+          cloudUid: cloudUid,
+        )
+      : null;
+  final byokScope = await resolveTaskPriorityAiCacheScopeKey(
+    backend,
+    sessionKey,
+    route: AskAiRouteKind.byok,
+    gatewayBaseUrl: gatewayBaseUrl,
+    modelName: modelName,
+    localeTag: localeTag,
+    cloudUid: cloudUid,
+  );
+  return jsonEncode(<String, Object?>{
+    'subscription_status': subscriptionStatus.name,
+    'cloud_uid': (cloudUid ?? '').trim(),
+    'gateway_base_url': gatewayBaseUrl.trim(),
+    'model_name': modelName.trim(),
+    'locale_tag': localeTag.trim(),
+    'cloud_scope': cloudRouteScope,
+    'byok_scope': byokScope,
+  });
 }
 
 Future<AskAiRouteKind> resolveTaskPriorityAiRoute(
@@ -97,9 +223,6 @@ class BackendTaskPriorityAiService implements TaskPriorityAiService {
       <String, _TaskPriorityAiCacheEntry>{};
   static final Map<String, Future<String>> _sharedInflight =
       <String, Future<String>>{};
-  // Keep this cache short-lived: the prompt still includes `now_local_iso`, but
-  // the shared cache key intentionally ignores it so near-duplicate reranks from
-  // multiple pages can collapse into one upstream call.
   static const Duration _sharedCacheTtl = Duration(minutes: 1);
 
   @visibleForTesting
@@ -157,19 +280,176 @@ class BackendTaskPriorityAiService implements TaskPriorityAiService {
   final String _localeTag;
   final String? _cacheScopeKeyOverride;
 
+  String get _sharedAssessmentScopeKey {
+    final override = _cacheScopeKeyOverride;
+    if (override != null) {
+      return override;
+    }
+    if (_route == AskAiRouteKind.cloudGateway) {
+      return '';
+    }
+    return buildTaskPriorityAiCacheScopeKey(
+      route: _route,
+      gatewayBaseUrl: _gatewayBaseUrl,
+      modelName: _modelName,
+      localeTag: _localeTag,
+    );
+  }
+
+  String get _rerankCacheScopeKey {
+    final override = _cacheScopeKeyOverride;
+    if (override != null && override.isNotEmpty) {
+      return override;
+    }
+    if (_route == AskAiRouteKind.cloudGateway) {
+      final normalizedIdToken = _idToken.trim();
+      if (normalizedIdToken.isNotEmpty) {
+        return jsonEncode(<String>[
+          'cloud_ephemeral',
+          _gatewayBaseUrl.trim(),
+          _modelName.trim(),
+          _localeTag,
+          normalizedIdToken,
+        ]);
+      }
+    }
+    return buildTaskPriorityAiCacheScopeKey(
+      route: _route,
+      gatewayBaseUrl: _gatewayBaseUrl,
+      modelName: _modelName,
+      localeTag: _localeTag,
+    );
+  }
+
+  Future<String> _fetchSharedAssessmentsRaw() {
+    return _backend.fetchTaskPriorityAiAssessmentsCloudGateway(
+      _sessionKey,
+      gatewayBaseUrl: _gatewayBaseUrl,
+      idToken: _idToken,
+      cacheScopeKey: cacheScopeKey,
+    );
+  }
+
+  Future<void> _upsertSharedAssessmentsRaw(String payloadJson) {
+    return _backend.upsertTaskPriorityAiAssessmentsCloudGateway(
+      _sessionKey,
+      gatewayBaseUrl: _gatewayBaseUrl,
+      idToken: _idToken,
+      cacheScopeKey: cacheScopeKey,
+      payloadJson: payloadJson,
+    );
+  }
+
   @override
-  String get cacheScopeKey =>
-      _cacheScopeKeyOverride ??
-      buildTaskPriorityAiCacheScopeKey(
-        route: _route,
-        gatewayBaseUrl: _gatewayBaseUrl,
-        modelName: _modelName,
-        localeTag: _localeTag,
+  Future<Map<String, TaskPriorityAiCachedAssessment>> readSharedAssessments({
+    required DateTime nowLocal,
+  }) async {
+    if (_route != AskAiRouteKind.cloudGateway) {
+      return const <String, TaskPriorityAiCachedAssessment>{};
+    }
+    final normalizedIdToken = _idToken.trim();
+    final normalizedScopeKey = cacheScopeKey.trim();
+    if (normalizedIdToken.isEmpty || normalizedScopeKey.isEmpty) {
+      return const <String, TaskPriorityAiCachedAssessment>{};
+    }
+    try {
+      final raw = await _fetchSharedAssessmentsRaw();
+      if (raw.trim().isEmpty) {
+        return const <String, TaskPriorityAiCachedAssessment>{};
+      }
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map) {
+        return const <String, TaskPriorityAiCachedAssessment>{};
+      }
+      final data = decoded.map((key, value) => MapEntry(key.toString(), value));
+      final rawEntries = data['entries'];
+      if (rawEntries is! List) {
+        return const <String, TaskPriorityAiCachedAssessment>{};
+      }
+      final entries = <String, TaskPriorityAiCachedAssessment>{};
+      for (final rawEntry in rawEntries) {
+        if (rawEntry is! Map) continue;
+        final entryJson =
+            rawEntry.map((key, value) => MapEntry(key.toString(), value));
+        final todoId = (entryJson['todo_id'] ?? '').toString().trim();
+        if (todoId.isEmpty) continue;
+        final computedAtMs = entryJson['computed_at_ms'];
+        final parsedComputedAtMs = computedAtMs is num
+            ? computedAtMs.toInt()
+            : int.tryParse('${computedAtMs ?? ''}');
+        if (parsedComputedAtMs == null) continue;
+        final computedAtLocal =
+            DateTime.fromMillisecondsSinceEpoch(parsedComputedAtMs);
+        if (nowLocal.difference(computedAtLocal).abs() >
+            defaultTaskPriorityAiCacheTtl) {
+          continue;
+        }
+        entries[todoId] = TaskPriorityAiCachedAssessment(
+          entry: TaskPriorityAiEntry.fromJson(entryJson),
+          requestSignature: (entryJson['request_signature'] ?? '').toString(),
+          computedAtLocal: computedAtLocal,
+        );
+      }
+      return entries;
+    } catch (_) {
+      return const <String, TaskPriorityAiCachedAssessment>{};
+    }
+  }
+
+  @override
+  Future<void> writeSharedAssessments({
+    required Map<String, TaskPriorityAiCachedAssessment> entries,
+    required Iterable<String> activeTodoIds,
+  }) async {
+    if (_route != AskAiRouteKind.cloudGateway) return;
+    final normalizedIdToken = _idToken.trim();
+    final normalizedScopeKey = cacheScopeKey.trim();
+    if (normalizedIdToken.isEmpty || normalizedScopeKey.isEmpty) return;
+    final activeIds = activeTodoIds
+        .map((value) => value.trim())
+        .where((value) => value.isNotEmpty)
+        .toSet();
+    final isFullSnapshot = entries.keys.toSet().containsAll(activeIds);
+    final payloadEntries = <Object?>[];
+    int? updatedAtMs;
+    for (final entry in entries.entries) {
+      if (!activeIds.contains(entry.key)) continue;
+      final computedAtMs = entry.value.computedAtLocal.millisecondsSinceEpoch;
+      if (updatedAtMs == null || computedAtMs > updatedAtMs) {
+        updatedAtMs = computedAtMs;
+      }
+      payloadEntries.add(<String, Object?>{
+        ...entry.value.entry.toJson(),
+        'request_signature': entry.value.requestSignature,
+        'computed_at_ms': computedAtMs,
+      });
+    }
+    final resolvedUpdatedAtMs =
+        updatedAtMs ?? DateTime.now().millisecondsSinceEpoch;
+    try {
+      await _upsertSharedAssessmentsRaw(
+        jsonEncode(<String, Object?>{
+          'scope': normalizedScopeKey,
+          'route': _route.name,
+          'model_name': _modelName,
+          'locale_tag': _localeTag,
+          'replace_missing_entries': isFullSnapshot,
+          'updated_at_ms': resolvedUpdatedAtMs,
+          'entries': payloadEntries,
+        }),
       );
+    } catch (_) {
+      // Ignore shared cache write failures.
+    }
+  }
+
+  @override
+  String get cacheScopeKey => _sharedAssessmentScopeKey;
 
   @override
   Future<TaskPriorityAiBatchResult> rerank(
-      TaskPriorityAiRequest request) async {
+    TaskPriorityAiRequest request,
+  ) async {
     final cacheKey = _buildCacheKey(request);
     final response = await _resolveSharedCachedOrFreshResponse(
       cacheKey,
@@ -198,7 +478,8 @@ class BackendTaskPriorityAiService implements TaskPriorityAiService {
 
   String _buildCacheKey(TaskPriorityAiRequest request) {
     return jsonEncode(<String, Object?>{
-      'scope': cacheScopeKey,
+      'scope': _rerankCacheScopeKey,
+      'time_bucket': buildTaskPriorityAiTimeBucket(request.nowLocal),
       'candidates': request.candidates
           .map((entry) => entry.toJson())
           .toList(growable: false),
@@ -240,10 +521,11 @@ class BackendTaskPriorityAiService implements TaskPriorityAiService {
   String _buildPrompt(TaskPriorityAiRequest request) {
     final payload = jsonEncode(request.toJson());
     return [
-      'You are reranking personal task candidates for a task manager.',
-      'Return JSON only with shape {"entries":[...]} and no prose.',
-      'Allowed priority_band: focus | next | later.',
-      'Allowed suggested_action: do_now | schedule | defer | clarify.',
+      'You are evaluating personal task candidates for a task manager.',
+      'Return JSON only with shape {"entries":[{"todo_id":"...","semantic_adjustment":number,"reason":"...","confidence":"low|medium|high","is_important":true|false|null,"is_urgent":true|false|null},...]} and no prose.',
+      'Evaluate each candidate independently and do not compare candidates against each other.',
+      'Only emit per-candidate signals; do not emit list-level ranking instructions.',
+      'Prefer stable judgments from the task itself, not transient phrasing.',
       'Do not invent facts. Keep reasons short and verifiable.',
       _localeTag.isEmpty
           ? "Write the reason field in the user's current app language."
@@ -257,7 +539,7 @@ class BackendTaskPriorityAiService implements TaskPriorityAiService {
 TaskPriorityAiRequest buildTaskPriorityAiRequest(
   TaskPrioritySnapshot snapshot, {
   required DateTime nowLocal,
-  int candidateLimit = 8,
+  int candidateLimit = 32,
 }) {
   final candidates = <TaskPriorityAiCandidate>[];
   for (final entry in snapshot.activeEntries) {
@@ -291,6 +573,8 @@ TaskPriorityAiRequest buildTaskPriorityAiRequest(
             entry.isInProgress || entry.isOverdue || entry.isDueToday,
         isQuickWin:
             entry.todo.title.trim().runes.length <= 24 && !entry.isInProgress,
+        ruleIsImportant: entry.isImportant,
+        ruleIsUrgent: entry.isUrgent,
       ),
     );
   }

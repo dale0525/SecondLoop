@@ -424,15 +424,17 @@ fn apply_todo_upsert(
     let review_stage = payload["review_stage"].as_i64();
     let next_review_at_ms = payload["next_review_at_ms"].as_i64();
     let last_review_at_ms = payload["last_review_at_ms"].as_i64();
+    let manual_importance_nudge_score = payload["manual_importance_nudge_score"].as_i64().unwrap_or(0);
+    let manual_urgency_nudge_score = payload["manual_urgency_nudge_score"].as_i64().unwrap_or(0);
 
     let title_blob = encrypt_bytes(db_key, title.as_bytes(), b"todo.title")?;
     conn.execute(
         r#"
 INSERT INTO todos(
   id, title, due_at_ms, status, source_entry_id, created_at_ms, updated_at_ms,
-  review_stage, next_review_at_ms, last_review_at_ms, needs_embedding
+  review_stage, next_review_at_ms, last_review_at_ms, manual_importance_nudge_score, manual_urgency_nudge_score, needs_embedding
 )
-VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, 1)
+VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, 1)
 ON CONFLICT(id) DO UPDATE SET
   title = excluded.title,
   due_at_ms = excluded.due_at_ms,
@@ -442,6 +444,8 @@ ON CONFLICT(id) DO UPDATE SET
   review_stage = excluded.review_stage,
   next_review_at_ms = excluded.next_review_at_ms,
   last_review_at_ms = excluded.last_review_at_ms,
+  manual_importance_nudge_score = excluded.manual_importance_nudge_score,
+  manual_urgency_nudge_score = excluded.manual_urgency_nudge_score,
   needs_embedding = 1
 WHERE excluded.updated_at_ms >= todos.updated_at_ms
 "#,
@@ -456,6 +460,8 @@ WHERE excluded.updated_at_ms >= todos.updated_at_ms
             review_stage,
             next_review_at_ms,
             last_review_at_ms,
+            manual_importance_nudge_score,
+            manual_urgency_nudge_score,
         ],
     )?;
 

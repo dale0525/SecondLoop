@@ -70,12 +70,12 @@ extension _MediaAnnotationSettingsPageEmbeddedExtension
       onTap: _busy
           ? null
           : () {
-              Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) => const LlmProfilesPage(
-                    providerFilter:
-                        LlmProfilesProviderFilter.openAiCompatibleOnly,
-                  ),
+              pushPageWithInheritedScopes(
+                Navigator.of(context),
+                context,
+                const LlmProfilesPage(
+                  providerFilter:
+                      LlmProfilesProviderFilter.openAiCompatibleOnly,
                 ),
               );
             },

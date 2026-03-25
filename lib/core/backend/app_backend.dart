@@ -7,6 +7,7 @@ import '../../src/rust/db.dart';
 import '../../src/rust/semantic_parse.dart';
 
 part 'app_backend_prompt_ai.dart';
+part 'app_backend_transition_todo.dart';
 
 enum TodoRecurrenceEditScope {
   thisOnly,
@@ -123,6 +124,8 @@ abstract class AppBackend {
     int? reviewStage,
     int? nextReviewAtMs,
     int? lastReviewAtMs,
+    int? manualImportanceNudgeScore,
+    int? manualUrgencyNudgeScore,
   }) {
     throw UnimplementedError('upsertTodo');
   }
@@ -135,6 +138,44 @@ abstract class AppBackend {
   }) {
     throw UnimplementedError('setTodoStatus');
   }
+
+  Future<Todo> transitionTodo(
+    Uint8List key, {
+    required String todoId,
+    String? newStatus,
+    int? dueAtMs,
+    bool clearDueAtMs = false,
+    int? reviewStage,
+    bool clearReviewStage = false,
+    int? nextReviewAtMs,
+    bool clearNextReviewAtMs = false,
+    int? lastReviewAtMs,
+    bool clearLastReviewAtMs = false,
+    int? manualImportanceNudgeScore,
+    bool clearManualImportanceNudgeScore = false,
+    int? manualUrgencyNudgeScore,
+    bool clearManualUrgencyNudgeScore = false,
+    String? sourceMessageId,
+  }) =>
+      _transitionTodoFallback(
+        this,
+        key,
+        todoId: todoId,
+        newStatus: newStatus,
+        dueAtMs: dueAtMs,
+        clearDueAtMs: clearDueAtMs,
+        reviewStage: reviewStage,
+        clearReviewStage: clearReviewStage,
+        nextReviewAtMs: nextReviewAtMs,
+        clearNextReviewAtMs: clearNextReviewAtMs,
+        lastReviewAtMs: lastReviewAtMs,
+        clearLastReviewAtMs: clearLastReviewAtMs,
+        manualImportanceNudgeScore: manualImportanceNudgeScore,
+        clearManualImportanceNudgeScore: clearManualImportanceNudgeScore,
+        manualUrgencyNudgeScore: manualUrgencyNudgeScore,
+        clearManualUrgencyNudgeScore: clearManualUrgencyNudgeScore,
+        sourceMessageId: sourceMessageId,
+      );
 
   Future<Todo> updateTodoStatusWithScope(
     Uint8List key, {
@@ -640,6 +681,25 @@ abstract class AppBackend {
     required String modelName,
   }) {
     throw UnimplementedError('taskPriorityRerankAiCloudGateway');
+  }
+
+  Future<String> fetchTaskPriorityAiAssessmentsCloudGateway(
+    Uint8List key, {
+    required String gatewayBaseUrl,
+    required String idToken,
+    required String cacheScopeKey,
+  }) {
+    throw UnimplementedError('fetchTaskPriorityAiAssessmentsCloudGateway');
+  }
+
+  Future<void> upsertTaskPriorityAiAssessmentsCloudGateway(
+    Uint8List key, {
+    required String gatewayBaseUrl,
+    required String idToken,
+    required String cacheScopeKey,
+    required String payloadJson,
+  }) {
+    throw UnimplementedError('upsertTaskPriorityAiAssessmentsCloudGateway');
   }
 
   Stream<String> askAiStreamScoped(

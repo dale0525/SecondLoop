@@ -3,13 +3,36 @@ import 'task_priority_ai_models.dart';
 import 'task_priority_feedback_store.dart';
 import 'task_priority_models.dart';
 
+const int _kMaxSafeWebInt = 0x001FFFFFFFFFFFFF;
+
 bool _isSameLocalDate(DateTime a, DateTime b) =>
     a.year == b.year && a.month == b.month && a.day == b.day;
+
+int _dueDerivedUrgencyScoreFor(
+  Todo todo, {
+  required DateTime nowLocal,
+  DateTime? dueLocal,
+}) {
+  if (todo.status == 'done') return 0;
+  if (dueLocal == null) return 0;
+  if (dueLocal.isBefore(nowLocal)) return 4;
+  if (_isSameLocalDate(dueLocal, nowLocal)) return 3;
+
+  final tomorrow = DateTime(
+    nowLocal.year,
+    nowLocal.month,
+    nowLocal.day,
+  ).add(const Duration(days: 1));
+  if (_isSameLocalDate(dueLocal, tomorrow)) return 2;
+  return 0;
+}
 
 TaskPrioritySnapshot buildTaskPrioritySnapshot(
   List<Todo> todos, {
   required DateTime nowLocal,
   TaskPriorityAiBatchResult? aiResult,
+  TaskPriorityEnhancementSource enhancementSource =
+      TaskPriorityEnhancementSource.aiLive,
   TaskPriorityFeedbackState? feedbackState,
 }) {
   final feedback = feedbackState ?? const TaskPriorityFeedbackState();
@@ -51,11 +74,6 @@ TaskPrioritySnapshot buildTaskPrioritySnapshot(
       ruleScore = 260;
       suggestedAction = TaskPrioritySuggestionKind.doNow;
       reasons.add(TaskPriorityReasonKind.overdue);
-    } else if (isInProgress) {
-      band = TaskPriorityBand.focus;
-      ruleScore = 240;
-      suggestedAction = TaskPrioritySuggestionKind.doNow;
-      reasons.add(TaskPriorityReasonKind.inProgress);
     } else if (isDueToday) {
       band = TaskPriorityBand.focus;
       ruleScore = 220;
@@ -85,6 +103,10 @@ TaskPrioritySnapshot buildTaskPrioritySnapshot(
       );
     }
 
+    if (isInProgress && todo.status != 'done') {
+      reasons.add(TaskPriorityReasonKind.inProgress);
+    }
+
     rawEntries.add(
       TaskPriorityEntry(
         todo: todo,
@@ -99,16 +121,54 @@ TaskPrioritySnapshot buildTaskPrioritySnapshot(
         isDueToday: isDueToday,
         isInProgress: isInProgress,
         isFutureScheduled: isFutureScheduled,
+        importanceScore: 0,
+        urgencyScore: 0,
+        manualImportanceNudgeScore: todo.manualImportanceNudgeScore ?? 0,
+        manualUrgencyNudgeScore: todo.manualUrgencyNudgeScore ?? 0,
+        dueDerivedUrgencyScore: _dueDerivedUrgencyScoreFor(
+          todo,
+          nowLocal: nowLocal,
+          dueLocal: dueLocal,
+        ),
       ),
     );
   }
+
+  final baseLists = _splitTaskPriorityEntries(rawEntries);
 
   var entries = rawEntries;
   if (aiResult != null) {
     entries = _applyAiResult(entries, aiResult);
   }
   entries = _applyFeedback(entries, feedback);
+  final finalLists = _splitTaskPriorityEntries(entries);
 
+  return TaskPrioritySnapshot(
+    source: aiResult == null
+        ? TaskPrioritySnapshotSource.rules
+        : TaskPrioritySnapshotSource.hybrid,
+    enhancementSource: aiResult == null
+        ? TaskPriorityEnhancementSource.none
+        : enhancementSource,
+    computedAtLocal: nowLocal,
+    focus: finalLists.focus,
+    scheduled: finalLists.scheduled,
+    decide: finalLists.decide,
+    done: finalLists.done,
+    orderedActive: finalLists.orderedActive,
+    baseFocus: baseLists.focus,
+    baseScheduled: baseLists.scheduled,
+    baseDecide: baseLists.decide,
+    baseDone: baseLists.done,
+    baseOrderedActive: baseLists.orderedActive,
+    selectedFocusTodoId: finalLists.orderedActive.isEmpty
+        ? null
+        : finalLists.orderedActive.first.todo.id,
+  );
+}
+
+_TaskPriorityBuckets _splitTaskPriorityEntries(
+    List<TaskPriorityEntry> entries) {
   final focus = <TaskPriorityEntry>[];
   final scheduled = <TaskPriorityEntry>[];
   final decide = <TaskPriorityEntry>[];
@@ -136,16 +196,35 @@ TaskPrioritySnapshot buildTaskPrioritySnapshot(
   decide.sort(_compareDecideEntries);
   done.sort((a, b) => b.todo.updatedAtMs.compareTo(a.todo.updatedAtMs));
 
-  return TaskPrioritySnapshot(
-    source: aiResult == null
-        ? TaskPrioritySnapshotSource.rules
-        : TaskPrioritySnapshotSource.hybrid,
-    computedAtLocal: nowLocal,
+  final orderedActive = <TaskPriorityEntry>[
+    ...focus,
+    ...scheduled,
+    ...decide,
+  ]..sort(_compareOverallPriority);
+
+  return _TaskPriorityBuckets(
     focus: List<TaskPriorityEntry>.unmodifiable(focus),
     scheduled: List<TaskPriorityEntry>.unmodifiable(scheduled),
     decide: List<TaskPriorityEntry>.unmodifiable(decide),
     done: List<TaskPriorityEntry>.unmodifiable(done),
+    orderedActive: List<TaskPriorityEntry>.unmodifiable(orderedActive),
   );
+}
+
+final class _TaskPriorityBuckets {
+  const _TaskPriorityBuckets({
+    required this.focus,
+    required this.scheduled,
+    required this.decide,
+    required this.done,
+    required this.orderedActive,
+  });
+
+  final List<TaskPriorityEntry> focus;
+  final List<TaskPriorityEntry> scheduled;
+  final List<TaskPriorityEntry> decide;
+  final List<TaskPriorityEntry> done;
+  final List<TaskPriorityEntry> orderedActive;
 }
 
 List<TaskPriorityEntry> _applyAiResult(
@@ -159,25 +238,8 @@ List<TaskPriorityEntry> _applyAiResult(
   return entries.map((entry) {
     final aiEntry = byId[entry.todo.id];
     if (aiEntry == null) return entry;
-
-    var nextBand = entry.band;
-    if (!entry.hasHardFocusGuard &&
-        aiEntry.confidence != TaskPriorityAiConfidence.low) {
-      switch (aiEntry.priorityBand) {
-        case TaskPriorityAiBand.focus:
-          nextBand = entry.band == TaskPriorityBand.done
-              ? TaskPriorityBand.done
-              : TaskPriorityBand.focus;
-          break;
-        case TaskPriorityAiBand.next:
-          break;
-        case TaskPriorityAiBand.later:
-          if (entry.band == TaskPriorityBand.focus) {
-            nextBand = TaskPriorityBand.decide;
-          }
-          break;
-      }
-    }
+    final canApplyAiPrioritySignals =
+        aiEntry.confidence != TaskPriorityAiConfidence.low;
 
     final confidence = switch (aiEntry.confidence) {
       TaskPriorityAiConfidence.low => TaskPriorityConfidence.low,
@@ -186,15 +248,33 @@ List<TaskPriorityEntry> _applyAiResult(
     };
 
     return entry.copyWith(
-      band: nextBand,
-      semanticScore: aiEntry.semanticAdjustment,
-      reasonText: aiEntry.reason.isEmpty ? null : aiEntry.reason,
-      suggestedAction: aiEntry.suggestedAction,
+      semanticScore: canApplyAiPrioritySignals
+          ? aiEntry.semanticAdjustment
+          : entry.semanticScore,
+      reasonText: canApplyAiPrioritySignals && aiEntry.reason.isNotEmpty
+          ? aiEntry.reason
+          : null,
       confidence: confidence,
-      reasons: <TaskPriorityReasonKind>[
-        ...entry.reasons,
-        TaskPriorityReasonKind.aiSuggested,
-      ],
+      importanceScore: canApplyAiPrioritySignals
+          ? (aiEntry.isImportant == null
+              ? entry.importanceScore
+              : aiEntry.isImportant!
+                  ? (entry.importanceScore > 0 ? entry.importanceScore : 1)
+                  : (entry.importanceScore < 0 ? entry.importanceScore : -1))
+          : entry.importanceScore,
+      urgencyScore: canApplyAiPrioritySignals
+          ? (aiEntry.isUrgent == null
+              ? entry.urgencyScore
+              : aiEntry.isUrgent!
+                  ? (entry.urgencyScore > 0 ? entry.urgencyScore : 1)
+                  : (entry.urgencyScore < 0 ? entry.urgencyScore : -1))
+          : entry.urgencyScore,
+      reasons: canApplyAiPrioritySignals
+          ? <TaskPriorityReasonKind>[
+              ...entry.reasons,
+              TaskPriorityReasonKind.aiSuggested,
+            ]
+          : entry.reasons,
     );
   }).toList(growable: false);
 }
@@ -223,6 +303,12 @@ List<TaskPriorityEntry> _applyFeedback(
     next = next.copyWith(
       band: nextBand,
       semanticScore: semanticPenalty,
+      importanceScore: deprioritized
+          ? (next.importanceScore <= -1 ? next.importanceScore : -1)
+          : next.importanceScore,
+      urgencyScore: suppressed
+          ? (next.urgencyScore <= -1 ? next.urgencyScore : -1)
+          : next.urgencyScore,
       reasons: <TaskPriorityReasonKind>[
         ...next.reasons,
         TaskPriorityReasonKind.feedbackSuppressed,
@@ -232,6 +318,35 @@ List<TaskPriorityEntry> _applyFeedback(
   }).toList(growable: false);
 }
 
+int _compareOverallPriority(TaskPriorityEntry a, TaskPriorityEntry b) {
+  final hardGuardCompare =
+      _compareBoolDesc(a.hasHardFocusGuard, b.hasHardFocusGuard);
+  if (hardGuardCompare != 0) return hardGuardCompare;
+
+  final urgencyCompare = b.effectiveUrgency.compareTo(a.effectiveUrgency);
+  if (urgencyCompare != 0) return urgencyCompare;
+
+  final importanceCompare =
+      b.effectiveImportance.compareTo(a.effectiveImportance);
+  if (importanceCompare != 0) return importanceCompare;
+
+  final scoreCompare = b.totalScore.compareTo(a.totalScore);
+  if (scoreCompare != 0) return scoreCompare;
+
+  if (a.todo.dueAtMs != b.todo.dueAtMs) {
+    final aDue = a.todo.dueAtMs ?? _kMaxSafeWebInt;
+    final bDue = b.todo.dueAtMs ?? _kMaxSafeWebInt;
+    return aDue.compareTo(bDue);
+  }
+
+  return b.todo.updatedAtMs.compareTo(a.todo.updatedAtMs);
+}
+
+int _compareBoolDesc(bool left, bool right) {
+  if (left == right) return 0;
+  return left ? -1 : 1;
+}
+
 int _compareFocusEntries(TaskPriorityEntry a, TaskPriorityEntry b) {
   final scoreCompare = b.totalScore.compareTo(a.totalScore);
   if (scoreCompare != 0) return scoreCompare;
@@ -239,8 +354,8 @@ int _compareFocusEntries(TaskPriorityEntry a, TaskPriorityEntry b) {
 }
 
 int _compareScheduledEntries(TaskPriorityEntry a, TaskPriorityEntry b) {
-  final aDue = a.todo.dueAtMs ?? 9223372036854775807;
-  final bDue = b.todo.dueAtMs ?? 9223372036854775807;
+  final aDue = a.todo.dueAtMs ?? _kMaxSafeWebInt;
+  final bDue = b.todo.dueAtMs ?? _kMaxSafeWebInt;
   if (aDue != bDue) return aDue.compareTo(bDue);
   return b.todo.updatedAtMs.compareTo(a.todo.updatedAtMs);
 }

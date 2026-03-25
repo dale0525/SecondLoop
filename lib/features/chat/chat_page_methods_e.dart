@@ -367,7 +367,7 @@ extension _ChatPageStateMethodsE on _ChatPageState {
           }
 
           if (fromCloud && isCloudEmailNotVerifiedError(e)) {
-            ScaffoldMessenger.of(context).showSnackBar(
+            _scaffoldMessengerKey.currentState?.showSnackBar(
               SnackBar(
                 key: _kAskAiEmailNotVerifiedSnackKey,
                 content: Text(context.t.chat.cloudGateway.emailNotVerified),
@@ -440,7 +440,7 @@ extension _ChatPageStateMethodsE on _ChatPageState {
               _ => context.t.chat.cloudGateway.fallback.generic,
             };
 
-            ScaffoldMessenger.of(context).showSnackBar(
+            _scaffoldMessengerKey.currentState?.showSnackBar(
               SnackBar(
                 key: _kAskAiCloudFallbackSnackKey,
                 content: Text(message),
@@ -512,7 +512,7 @@ extension _ChatPageStateMethodsE on _ChatPageState {
               final recoveringText = languageCode.startsWith('zh')
                   ? '云端结果恢复中…'
                   : 'Recovering cloud answer…';
-              ScaffoldMessenger.of(context).showSnackBar(
+              _scaffoldMessengerKey.currentState?.showSnackBar(
                 SnackBar(
                   content: Text(recoveringText),
                   duration: const Duration(seconds: 2),
@@ -932,7 +932,7 @@ extension _ChatPageStateMethodsE on _ChatPageState {
       _refresh();
       SyncEngineScope.maybeOf(context)?.notifyLocalMutation();
       if (applied) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        _scaffoldMessengerKey.currentState?.showSnackBar(
           SnackBar(
             key: _kAskAiDetachedRecoveredSnackKey,
             content: Text(context.t.chat.askAiRecoveredDetached),

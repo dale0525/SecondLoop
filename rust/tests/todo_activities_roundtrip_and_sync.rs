@@ -26,6 +26,8 @@ fn sync_push_then_pull_copies_todo_activities() {
         None,
         None,
         None,
+        None,
+        None,
     )
     .expect("todo A");
 

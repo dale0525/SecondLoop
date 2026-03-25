@@ -3,8 +3,9 @@ import 'package:flutter/material.dart';
 import '../../core/backend/app_backend.dart';
 import '../../core/session/session_scope.dart';
 import '../../i18n/strings.g.dart';
-import '../chat/chat_page.dart';
 import '../../src/rust/db.dart';
+import '../chat/chat_page.dart';
+import '../chat/chat_route_scope_wrapper.dart';
 
 class InboxPage extends StatefulWidget {
   const InboxPage({super.key});
@@ -67,7 +68,10 @@ class _InboxPageState extends State<InboxPage> {
               onTap: () {
                 Navigator.of(context).push(
                   MaterialPageRoute(
-                    builder: (_) => ChatPage(conversation: conversation),
+                    builder: (_) => wrapPushedPageWithInheritedScopes(
+                      context,
+                      ChatPage(conversation: conversation),
+                    ),
                   ),
                 );
               },

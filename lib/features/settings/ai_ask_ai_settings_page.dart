@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../core/ai/ai_routing.dart';
 import '../../core/backend/app_backend.dart';
 import '../../core/cloud/cloud_auth_scope.dart';
+import '../../core/navigation/inherited_scope_page_wrapper.dart';
 import '../../core/cloud/cloud_capability_auth.dart';
 import '../../core/session/session_scope.dart';
 import '../../core/subscription/subscription_scope.dart';
@@ -127,10 +128,10 @@ class _AiAskAiSettingsPageState extends State<AiAskAiSettingsPage> {
                   title: Text(t.actions.openCloud),
                   trailing: const Icon(Icons.chevron_right),
                   onTap: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => const CloudAccountPage(),
-                      ),
+                    pushPageWithInheritedScopes(
+                      Navigator.of(context),
+                      context,
+                      const CloudAccountPage(),
                     );
                   },
                 ),
@@ -140,10 +141,10 @@ class _AiAskAiSettingsPageState extends State<AiAskAiSettingsPage> {
                   title: Text(t.actions.openByok),
                   trailing: const Icon(Icons.chevron_right),
                   onTap: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => const LlmProfilesPage(),
-                      ),
+                    pushPageWithInheritedScopes(
+                      Navigator.of(context),
+                      context,
+                      const LlmProfilesPage(),
                     );
                   },
                 ),
@@ -153,13 +154,13 @@ class _AiAskAiSettingsPageState extends State<AiAskAiSettingsPage> {
                   title: Text(t.actions.reviewAdvanced),
                   trailing: const Icon(Icons.chevron_right),
                   onTap: () {
-                    Navigator.of(context).pushReplacement(
-                      MaterialPageRoute(
-                        builder: (_) => const AiSettingsPage(
-                          focusSection: AiSettingsSection.askAi,
-                          highlightFocus: true,
-                          expandAdvancedOnOpen: true,
-                        ),
+                    pushReplacementPageWithInheritedScopes(
+                      Navigator.of(context),
+                      context,
+                      const AiSettingsPage(
+                        focusSection: AiSettingsSection.askAi,
+                        highlightFocus: true,
+                        expandAdvancedOnOpen: true,
                       ),
                     );
                   },

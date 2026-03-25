@@ -169,7 +169,7 @@ fn cloud_gateway_todo_thread_indexing_skips_probe_when_cached() {
     let conn = db::open(&app_dir).expect("open db");
 
     db::upsert_todo(
-        &conn, &key, "todo_1", "Buy milk", None, "open", None, None, None, None,
+        &conn, &key, "todo_1", "Buy milk", None, "open", None, None, None, None, None, None,
     )
     .expect("upsert todo");
     db::append_todo_note(&conn, &key, "todo_1", "Remember oat milk", None).expect("note");
@@ -233,7 +233,7 @@ fn brok_todo_thread_indexing_skips_probe_when_dim_cached() {
     .expect("create profile");
 
     db::upsert_todo(
-        &conn, &key, "todo_1", "Buy milk", None, "open", None, None, None, None,
+        &conn, &key, "todo_1", "Buy milk", None, "open", None, None, None, None, None, None,
     )
     .expect("upsert todo");
     db::append_todo_note(&conn, &key, "todo_1", "Remember oat milk", None).expect("note");

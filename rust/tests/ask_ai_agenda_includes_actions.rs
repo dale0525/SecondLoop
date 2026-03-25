@@ -50,6 +50,8 @@ fn ask_ai_agenda_includes_actions_context() {
         None,
         None,
         None,
+        None,
+        None,
     )
     .expect("todo");
 

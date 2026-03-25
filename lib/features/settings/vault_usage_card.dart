@@ -10,6 +10,7 @@ import '../../core/cloud/cloud_auth_access.dart';
 import '../../core/cloud/cloud_auth_scope.dart';
 import '../../core/cloud/vault_attachments_client.dart';
 import '../../core/cloud/vault_usage_client.dart';
+import '../../core/navigation/inherited_scope_page_wrapper.dart';
 import '../../core/session/session_scope.dart';
 import '../../core/sync/sync_config_store.dart';
 import '../../core/sync/sync_engine_gate.dart';
@@ -594,10 +595,10 @@ class _VaultUsageCardState extends State<VaultUsageCard> {
       return;
     }
 
-    await Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (context) => AttachmentViewerPage(attachment: attachment),
-      ),
+    await pushPageWithInheritedScopes(
+      Navigator.of(context),
+      context,
+      AttachmentViewerPage(attachment: attachment),
     );
   }
 

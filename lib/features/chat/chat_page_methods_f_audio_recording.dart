@@ -336,7 +336,7 @@ extension _ChatPageStateMethodsFAudioRecording on _ChatPageState {
       );
 
       if (stitchedAfterInterruption && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        _scaffoldMessengerKey.currentState?.showSnackBar(
           SnackBar(
             content: Text(
               context.t.chat.audioRecording.interruptionRecoveredSnack,
@@ -755,7 +755,7 @@ extension _ChatPageStateMethodsFAudioRecording on _ChatPageState {
 
     final kind = classifyAudioRecordingFailure(error);
 
-    ScaffoldMessenger.of(context).showSnackBar(
+    _scaffoldMessengerKey.currentState?.showSnackBar(
       SnackBar(
         content: Text(_describeAudioError(error)),
         duration: const Duration(seconds: 3),
@@ -800,7 +800,7 @@ extension _ChatPageStateMethodsFAudioRecording on _ChatPageState {
     }
 
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
+    _scaffoldMessengerKey.currentState?.showSnackBar(
       SnackBar(
         content: Text(
           context.t.chat.audioRecording.openSettingsFailedMicrophone,
@@ -824,7 +824,7 @@ extension _ChatPageStateMethodsFAudioRecording on _ChatPageState {
     }
 
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
+    _scaffoldMessengerKey.currentState?.showSnackBar(
       SnackBar(
         content: Text(
           context.t.chat.audioRecording.openSettingsFailedSpeechPack,

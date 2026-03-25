@@ -46,6 +46,8 @@ fn sync_pull_preserves_recurrence_and_spawned_occurrence() {
         None,
         None,
         None,
+        None,
+        None,
     )
     .expect("todo A");
 
@@ -140,6 +142,8 @@ fn sync_pull_preserves_this_and_future_split_series() {
         "Daily sync check",
         Some(due_at_ms),
         "open",
+        None,
+        None,
         None,
         None,
         None,
@@ -274,6 +278,8 @@ fn sync_pull_preserves_this_and_future_status_scope_updates() {
         None,
         None,
         None,
+        None,
+        None,
     )
     .expect("todo A");
 
@@ -382,6 +388,8 @@ fn sync_pull_preserves_this_and_future_recurrence_rule_scope_updates() {
         "Daily sync check",
         Some(due_at_ms),
         "open",
+        None,
+        None,
         None,
         None,
         None,
@@ -521,6 +529,8 @@ fn sync_pull_preserves_combined_due_status_rule_updates_across_devices() {
         "Daily sync combo check",
         Some(due_at_ms),
         "open",
+        None,
+        None,
         None,
         None,
         None,

@@ -434,6 +434,8 @@ final class _Backend extends AppBackend {
     int? reviewStage,
     int? nextReviewAtMs,
     int? lastReviewAtMs,
+    int? manualImportanceNudgeScore,
+    int? manualUrgencyNudgeScore,
   }) {
     final existing = _todosById[id];
     final updated = Todo(
@@ -447,6 +449,8 @@ final class _Backend extends AppBackend {
       reviewStage: reviewStage,
       nextReviewAtMs: nextReviewAtMs,
       lastReviewAtMs: lastReviewAtMs,
+      manualImportanceNudgeScore: manualImportanceNudgeScore ?? 0,
+      manualUrgencyNudgeScore: manualUrgencyNudgeScore ?? 0,
     );
     _todosById[id] = updated;
     return updated;
@@ -536,6 +540,8 @@ final class _Backend extends AppBackend {
     int? reviewStage,
     int? nextReviewAtMs,
     int? lastReviewAtMs,
+    int? manualImportanceNudgeScore,
+    int? manualUrgencyNudgeScore,
   }) async {
     lastUpsertDueAtMs = dueAtMs;
     return _mergeTodo(
@@ -547,6 +553,8 @@ final class _Backend extends AppBackend {
       reviewStage: reviewStage,
       nextReviewAtMs: nextReviewAtMs,
       lastReviewAtMs: lastReviewAtMs,
+      manualImportanceNudgeScore: manualImportanceNudgeScore,
+      manualUrgencyNudgeScore: manualUrgencyNudgeScore,
     );
   }
 

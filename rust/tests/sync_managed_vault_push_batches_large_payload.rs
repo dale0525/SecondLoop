@@ -240,7 +240,7 @@ fn managed_vault_push_ops_only_splits_large_payload_into_batches() {
     assert_eq!(pushed, total_ops as u64);
 
     let st = state.lock().expect("lock");
-    let expected_push_calls = (total_ops + 199) / 200;
+    let expected_push_calls = total_ops.div_ceil(200);
     assert_eq!(
         st.push_calls, expected_push_calls,
         "expected push calls to follow batch size cap"

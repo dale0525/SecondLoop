@@ -47,7 +47,8 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('task_hub_banner')));
     await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey('task_hub_preview_list')), findsOneWidget);
+    expect(
+        find.byKey(const ValueKey('task_hub_banner_view_all')), findsOneWidget);
 
     final inputFinder = find.byKey(const ValueKey('chat_input'));
     TextField input() => tester.widget<TextField>(inputFinder);
@@ -59,7 +60,8 @@ void main() {
     await tester.tapAt(const Offset(860, 260));
     await tester.pumpAndSettle();
 
-    expect(find.byKey(const ValueKey('task_hub_preview_list')), findsNothing);
+    expect(
+        find.byKey(const ValueKey('task_hub_banner_view_all')), findsNothing);
     expect(input().focusNode?.hasFocus, isFalse);
   });
 }

@@ -33,6 +33,8 @@ fn sync_pull_todo_delete_removes_todo_and_deletes_linked_messages() {
         None,
         None,
         None,
+        None,
+        None,
     )
     .expect("todo B");
     db::append_todo_note(&conn_b, &key_b, "todo:1", "linked note", Some(&note_msg.id))

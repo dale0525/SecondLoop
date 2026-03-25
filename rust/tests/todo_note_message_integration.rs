@@ -33,6 +33,8 @@ fn append_todo_note_uses_source_message_timestamp_for_created_at_ms() {
         None,
         None,
         None,
+        None,
+        None,
     )
     .expect("todo");
 
@@ -61,6 +63,8 @@ fn append_todo_note_without_source_message_creates_chat_message_in_todo_thread()
         None,
         "open",
         Some(source_msg.id.as_str()),
+        None,
+        None,
         None,
         None,
         None,

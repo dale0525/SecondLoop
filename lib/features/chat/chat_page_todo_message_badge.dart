@@ -17,6 +17,7 @@ extension _ChatPageStateTodoMessageBadge on _ChatPageState {
     required Message message,
     required Map<String, SemanticParseJob> jobsByMessageId,
     required Map<String, _TodoMessageBadgeMeta> linkedTodoBadgeByMessageId,
+    required Set<String> existingTodoIds,
     required String displayText,
   }) {
     final linkedBadge = linkedTodoBadgeByMessageId[message.id];
@@ -27,6 +28,9 @@ extension _ChatPageStateTodoMessageBadge on _ChatPageState {
       final kind = job.appliedActionKind?.trim();
       final todoId = job.appliedTodoId?.trim();
       if (todoId != null && todoId.isNotEmpty) {
+        if (!existingTodoIds.contains(todoId)) {
+          return null;
+        }
         if (kind == 'create' || kind == 'followup') {
           final title = (job.appliedTodoTitle ?? '').trim().isNotEmpty
               ? job.appliedTodoTitle!.trim()
@@ -73,7 +77,10 @@ extension _ChatPageStateTodoMessageBadge on _ChatPageState {
     if (!mounted || todo == null) return false;
     await _pushRouteFromChat(
       MaterialPageRoute(
-        builder: (context) => TodoDetailPage(initialTodo: todo!),
+        builder: (_) => wrapPushedPageWithInheritedScopes(
+          context,
+          TodoDetailPage(initialTodo: todo!),
+        ),
       ),
     );
     return true;
@@ -85,9 +92,9 @@ extension _ChatPageStateTodoMessageBadge on _ChatPageState {
     required ColorScheme colorScheme,
   }) {
     return Padding(
-      key: ValueKey('message_todo_type_badge_${message.id}'),
       padding: const EdgeInsets.only(bottom: 6),
       child: InkWell(
+        key: ValueKey('message_todo_type_badge_${message.id}'),
         onTap: () => unawaited(_openTodoFromBadge(meta)),
         borderRadius: BorderRadius.circular(999),
         child: Padding(

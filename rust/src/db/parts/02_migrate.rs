@@ -990,7 +990,12 @@ PRAGMA user_version = 29;
         user_version = 34;
     }
 
-    debug_assert!(user_version >= 34);
+    if user_version < 35 {
+        migrate_from_v34_to_v35(conn)?;
+        user_version = 35;
+    }
+
+    debug_assert!(user_version >= 35);
 
     Ok(())
 }
@@ -1002,6 +1007,7 @@ pub fn open(app_dir: &Path) -> Result<Connection> {
     conn.busy_timeout(Duration::from_millis(5_000))?;
     conn.pragma_update(None, "journal_mode", "WAL")?;
     migrate(&conn)?;
+    ensure_todo_manual_nudge_columns(&conn)?;
     ensure_content_enrichment_kv_defaults(&conn)?;
     ensure_knowledge_rebuild_state_defaults(&conn)?;
     Ok(conn)

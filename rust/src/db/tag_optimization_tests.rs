@@ -112,7 +112,13 @@ fn delete_tag_removes_bindings_and_manual_tokens_from_messages() {
         &[alpha.id.clone(), beta.id.clone()],
     )
     .expect("seed manual message tags");
-    set_message_tags(&conn, &key, &message_plain.id, &[alpha.id.clone()]).expect("seed plain tags");
+    set_message_tags(
+        &conn,
+        &key,
+        &message_plain.id,
+        std::slice::from_ref(&alpha.id),
+    )
+    .expect("seed plain tags");
 
     delete_tag(&conn, &key, &alpha.id).expect("delete tag");
 

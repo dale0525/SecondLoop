@@ -1248,6 +1248,8 @@ class Todo {
   final PlatformInt64? reviewStage;
   final PlatformInt64? nextReviewAtMs;
   final PlatformInt64? lastReviewAtMs;
+  final PlatformInt64? manualImportanceNudgeScore;
+  final PlatformInt64? manualUrgencyNudgeScore;
 
   const Todo({
     required this.id,
@@ -1260,6 +1262,8 @@ class Todo {
     this.reviewStage,
     this.nextReviewAtMs,
     this.lastReviewAtMs,
+    this.manualImportanceNudgeScore,
+    this.manualUrgencyNudgeScore,
   });
 
   @override
@@ -1273,7 +1277,9 @@ class Todo {
       updatedAtMs.hashCode ^
       reviewStage.hashCode ^
       nextReviewAtMs.hashCode ^
-      lastReviewAtMs.hashCode;
+      lastReviewAtMs.hashCode ^
+      manualImportanceNudgeScore.hashCode ^
+      manualUrgencyNudgeScore.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -1289,7 +1295,9 @@ class Todo {
           updatedAtMs == other.updatedAtMs &&
           reviewStage == other.reviewStage &&
           nextReviewAtMs == other.nextReviewAtMs &&
-          lastReviewAtMs == other.lastReviewAtMs;
+          lastReviewAtMs == other.lastReviewAtMs &&
+          manualImportanceNudgeScore == other.manualImportanceNudgeScore &&
+          manualUrgencyNudgeScore == other.manualUrgencyNudgeScore;
 }
 
 class TodoActivity {

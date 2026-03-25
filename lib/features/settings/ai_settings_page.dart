@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/ai/ai_routing.dart';
+import '../../core/navigation/inherited_scope_page_wrapper.dart';
 import '../../core/ai/ask_ai_source_prefs.dart';
 import '../../core/ai/embeddings_data_consent_prefs.dart';
 import '../../core/ai/embeddings_source_prefs.dart';
@@ -548,10 +549,10 @@ class _AiSettingsPageState extends State<AiSettingsPage> {
               .isNotEmpty;
       if (subscriptionStatus == SubscriptionStatus.entitled &&
           !hasCloudAccount) {
-        await Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (_) => const CloudAccountPage(),
-          ),
+        await pushPageWithInheritedScopes(
+          Navigator.of(context),
+          context,
+          const CloudAccountPage(),
         );
         if (!mounted) return;
         await _reloadAutomationState(forceLoading: false);
@@ -698,12 +699,12 @@ class _AiSettingsPageState extends State<AiSettingsPage> {
     if (!mounted) return;
     if (AppBackendScope.maybeOf(context) == null) return;
 
-    await Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => const EmbeddingProfilesPage(
-          focusTarget: EmbeddingProfilesFocusTarget.addProfileForm,
-          highlightFocus: true,
-        ),
+    await pushPageWithInheritedScopes(
+      Navigator.of(context),
+      context,
+      const EmbeddingProfilesPage(
+        focusTarget: EmbeddingProfilesFocusTarget.addProfileForm,
+        highlightFocus: true,
       ),
     );
 
@@ -717,13 +718,13 @@ class _AiSettingsPageState extends State<AiSettingsPage> {
     if (!mounted) return;
     if (AppBackendScope.maybeOf(context) == null) return;
 
-    await Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => LlmProfilesPage(
-          focusTarget: LlmProfilesFocusTarget.addProfileForm,
-          highlightFocus: true,
-          providerFilter: providerFilter,
-        ),
+    await pushPageWithInheritedScopes(
+      Navigator.of(context),
+      context,
+      LlmProfilesPage(
+        focusTarget: LlmProfilesFocusTarget.addProfileForm,
+        highlightFocus: true,
+        providerFilter: providerFilter,
       ),
     );
 

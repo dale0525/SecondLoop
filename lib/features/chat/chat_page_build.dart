@@ -16,375 +16,441 @@ extension _ChatPageStateBuild on _ChatPageState {
     final locale = Localizations.localeOf(context);
     final activeTagFilterCount =
         _selectedTagFilterIds.length + _selectedTagExcludeIds.length;
-    return Scaffold(
-      resizeToAvoidBottomInset: useCompactComposer,
-      appBar: AppBar(
-        title: Text(title),
-        actions: [
-          IconButton(
-            key: const ValueKey('chat_tag_filter_button'),
-            tooltip: _tagFilterTooltip(locale),
-            onPressed: () => unawaited(_openTagFilterSheet()),
-            icon: Stack(
-              clipBehavior: Clip.none,
-              children: [
-                const Icon(Icons.sell_outlined),
-                if (activeTagFilterCount > 0)
-                  Positioned(
-                    right: -6,
-                    top: -6,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 4,
-                        vertical: 1,
-                      ),
-                      decoration: BoxDecoration(
-                        color: colorScheme.primary,
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Text(
-                        activeTagFilterCount.toString(),
-                        style: TextStyle(
-                          color: colorScheme.onPrimary,
-                          fontSize: 10,
-                          fontWeight: FontWeight.w700,
+    return ScaffoldMessenger(
+      key: _scaffoldMessengerKey,
+      child: Scaffold(
+        resizeToAvoidBottomInset: useCompactComposer,
+        appBar: AppBar(
+          title: Text(title),
+          actions: [
+            IconButton(
+              key: const ValueKey('chat_tag_filter_button'),
+              tooltip: _tagFilterTooltip(locale),
+              onPressed: () => unawaited(_openTagFilterSheet()),
+              icon: Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  const Icon(Icons.sell_outlined),
+                  if (activeTagFilterCount > 0)
+                    Positioned(
+                      right: -6,
+                      top: -6,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 4,
+                          vertical: 1,
+                        ),
+                        decoration: BoxDecoration(
+                          color: colorScheme.primary,
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Text(
+                          activeTagFilterCount.toString(),
+                          style: TextStyle(
+                            color: colorScheme.onPrimary,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w700,
+                          ),
                         ),
                       ),
                     ),
+                ],
+              ),
+            ),
+            if (!isDesktopPlatform)
+              IconButton(
+                key: const ValueKey('chat_open_settings'),
+                tooltip: context.t.app.tabs.settings,
+                onPressed: () {
+                  unawaited(
+                    _pushRouteFromChat(
+                      MaterialPageRoute(
+                        builder: (context) => Scaffold(
+                          appBar: AppBar(title: Text(context.t.settings.title)),
+                          body: const SettingsPage(),
+                        ),
+                      ),
+                    ),
+                  );
+                },
+                icon: const Icon(Icons.settings_outlined),
+              ),
+          ],
+        ),
+        body: GestureDetector(
+          key: const ValueKey('chat_blank_dismiss_region'),
+          behavior: HitTestBehavior.translucent,
+          onTap: _dismissTransientChatUiByBlankTap,
+          child: Column(
+            children: [
+              _buildSelectedTagFilterBar(),
+              if (!isMobileKeyboardVisible) ...[
+                if (_taskPriorityStore != null)
+                  ListenableBuilder(
+                    listenable: _taskPriorityStore!,
+                    builder: (context, _) {
+                      return TaskHubBanner(
+                        snapshot: _taskPriorityStore!.snapshot,
+                        checklistProgressByTodoId:
+                            _taskPriorityStore!.checklistProgressByTodoId,
+                        showAiUpgradeHint:
+                            _taskPriorityStore!.shouldShowAiUpgradeHint,
+                        collapseSignal: _todoAgendaBannerCollapseSignal,
+                        compact: true,
+                        onOpenTodo: (entry) async {
+                          await _pushRouteFromChat(
+                            MaterialPageRoute(
+                              builder: (_) => wrapPushedPageWithInheritedScopes(
+                                context,
+                                TodoDetailPage(initialTodo: entry.todo),
+                              ),
+                            ),
+                          );
+                          if (!mounted) return;
+                          _collapseTodoAgendaBanner();
+                          _refresh();
+                        },
+                        onQuickAction: (entry, action) async {
+                          await _applyTaskHubQuickAction(entry.todo, action);
+                        },
+                        onFeedback: (entry, feedback) async {
+                          await _taskPriorityFeedbackStore.record(
+                            todoId: entry.todo.id,
+                            feedback: feedback,
+                          );
+                          if (!mounted) return;
+                          _refresh();
+                        },
+                        onViewAll: () async {
+                          await _pushRouteFromChat(
+                            MaterialPageRoute(
+                              builder: (_) => wrapPushedPageWithInheritedScopes(
+                                context,
+                                const TaskHubPage(),
+                              ),
+                            ),
+                          );
+                          if (!mounted) return;
+                          _collapseTodoAgendaBanner();
+                          _refresh();
+                        },
+                      );
+                    },
                   ),
               ],
-            ),
-          ),
-          if (!isDesktopPlatform)
-            IconButton(
-              key: const ValueKey('chat_open_settings'),
-              tooltip: context.t.app.tabs.settings,
-              onPressed: () {
-                unawaited(
-                  _pushRouteFromChat(
-                    MaterialPageRoute(
-                      builder: (context) => Scaffold(
-                        appBar: AppBar(title: Text(context.t.settings.title)),
-                        body: const SettingsPage(),
-                      ),
-                    ),
-                  ),
-                );
-              },
-              icon: const Icon(Icons.settings_outlined),
-            ),
-        ],
-      ),
-      body: GestureDetector(
-        key: const ValueKey('chat_blank_dismiss_region'),
-        behavior: HitTestBehavior.translucent,
-        onTap: _dismissTransientChatUiByBlankTap,
-        child: Column(
-          children: [
-            _buildSelectedTagFilterBar(),
-            if (!isMobileKeyboardVisible) ...[
-              if (_taskPriorityStore != null)
-                ListenableBuilder(
-                  listenable: _taskPriorityStore!,
-                  builder: (context, _) {
-                    return TaskHubBanner(
-                      snapshot: _taskPriorityStore!.snapshot,
-                      checklistProgressByTodoId:
-                          _taskPriorityStore!.checklistProgressByTodoId,
-                      showAiUpgradeHint:
-                          _taskPriorityStore!.isAiEnhancementEnabled &&
-                              !_taskPriorityStore!.isAiEnhancementAvailable,
-                      collapseSignal: _todoAgendaBannerCollapseSignal,
-                      compact: true,
-                      onOpenTodo: (entry) async {
-                        await _pushRouteFromChat(
-                          MaterialPageRoute(
-                            builder: (context) =>
-                                TodoDetailPage(initialTodo: entry.todo),
-                          ),
-                        );
-                        if (!mounted) return;
-                        _collapseTodoAgendaBanner();
-                        _refresh();
-                      },
-                      onQuickAction: (entry, action) async {
-                        await _applyTaskHubQuickAction(entry.todo, action);
-                      },
-                      onFeedback: (entry, feedback) async {
-                        await _taskPriorityFeedbackStore.record(
-                          todoId: entry.todo.id,
-                          feedback: feedback,
-                        );
-                        if (!mounted) return;
-                        _refresh();
-                      },
-                      onViewAll: () async {
-                        await _pushRouteFromChat(
-                          MaterialPageRoute(
-                            builder: (context) => const TaskHubPage(),
-                          ),
-                        );
-                        if (!mounted) return;
-                        _collapseTodoAgendaBanner();
-                        _refresh();
-                      },
-                    );
-                  },
-                ),
-            ],
-            Expanded(
-              child: Center(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 880),
-                  child: Stack(
-                    fit: StackFit.expand,
-                    children: [
-                      FutureBuilder(
-                        future: _messagesFuture,
-                        builder: (context, snapshot) {
-                          final isLoading =
-                              snapshot.connectionState != ConnectionState.done;
-                          final loadedMessages = _usePagination
-                              ? _paginatedMessages
-                              : snapshot.data ?? const <Message>[];
-                          final messages =
-                              _messagesWithFailedAskQuestion(loadedMessages);
-                          final pendingQuestion = _pendingQuestion;
-                          final pendingFailureMessage = _askFailureMessage;
-                          final hasPendingAssistant =
-                              _asking && !_stopRequested;
-                          final pendingAssistantText =
-                              _streamingAnswer.isEmpty ? '…' : _streamingAnswer;
-                          final extraCount = (hasPendingAssistant ? 1 : 0) +
-                              (pendingQuestion == null ? 0 : 1);
-                          if (messages.isEmpty && extraCount == 0) {
-                            if (isLoading) {
-                              return const Center(
-                                child: CircularProgressIndicator(),
-                              );
-                            }
-                            if (snapshot.hasError) {
-                              return Center(
-                                child: Text(
-                                  context.t.errors
-                                      .loadFailed(error: '${snapshot.error}'),
-                                ),
-                              );
-                            }
-                            return Center(
-                              child: Text(context.t.chat.noMessagesYet),
-                            );
-                          }
-
-                          final messageIndexById = <String, int>{};
-                          for (var i = 0; i < messages.length; i++) {
-                            messageIndexById[messages[i].id] = i;
-                          }
-
-                          final backend = AppBackendScope.of(context);
-                          final sessionKey =
-                              SessionScope.of(context).sessionKey;
-                          final attachmentsBackend =
-                              backend is AttachmentsBackend
-                                  ? backend as AttachmentsBackend
-                                  : null;
-                          final combinedJobsFuture =
-                              _cachedChatMessageSupplementDataFuture(
-                            backend: backend,
-                            sessionKey: sessionKey,
-                            messages: messages,
-                          );
-
-                          return FutureBuilder<_ChatMessageSupplementData>(
-                            future: combinedJobsFuture,
-                            builder: (context, snapshotJobs) {
-                              final jobs = snapshotJobs.data?.semanticJobs ??
-                                  const <SemanticParseJob>[];
-                              final linkedTodoBadgeByMessageId =
-                                  snapshotJobs.data?.linkedTodoBadges ??
-                                      const <String, _TodoMessageBadgeMeta>{};
-                              final jobsByMessageId =
-                                  <String, SemanticParseJob>{};
-                              for (final job in jobs) {
-                                jobsByMessageId[job.messageId] = job;
-                              }
-
-                              final annotationJobs =
-                                  snapshotJobs.data?.annotationJobs ??
-                                      const <AttachmentAnnotationJob>[];
-                              final annotationJobsBySha256 =
-                                  <String, AttachmentAnnotationJob>{};
-                              for (final job in annotationJobs) {
-                                annotationJobsBySha256[job.attachmentSha256] =
-                                    job;
-                              }
-
-                              return ListView.builder(
-                                key: _usePagination
-                                    ? const ValueKey('chat_message_list')
-                                    : null,
-                                controller:
-                                    _usePagination ? _scrollController : null,
-                                reverse: _usePagination,
-                                padding:
-                                    const EdgeInsets.symmetric(vertical: 16),
-                                findChildIndexCallback: (key) {
-                                  if (key is! ValueKey) return null;
-                                  final v = key.value;
-                                  if (v is! String) return null;
-                                  if (!v.startsWith('chat_message_row_')) {
-                                    return null;
-                                  }
-                                  final messageId =
-                                      v.substring('chat_message_row_'.length);
-
-                                  if (messageId == 'pending_assistant') {
-                                    if (!hasPendingAssistant) return null;
-                                    if (_usePagination) return 0;
-                                    return messages.length +
-                                        (pendingQuestion == null ? 0 : 1);
-                                  }
-
-                                  if (messageId == 'pending_user') {
-                                    if (pendingQuestion == null) return null;
-                                    if (_usePagination) {
-                                      return hasPendingAssistant ? 1 : 0;
-                                    }
-                                    return messages.length;
-                                  }
-
-                                  final messageIndex =
-                                      messageIndexById[messageId];
-                                  if (messageIndex == null) return null;
-                                  return _usePagination
-                                      ? messageIndex + extraCount
-                                      : messageIndex;
-                                },
-                                itemCount: messages.length + extraCount,
-                                itemBuilder: _buildMessageListItemBuilder(
-                                  messages: messages,
-                                  extraCount: extraCount,
-                                  hasPendingAssistant: hasPendingAssistant,
-                                  pendingAssistantText: pendingAssistantText,
-                                  pendingFailureMessage: pendingFailureMessage,
-                                  pendingQuestion: pendingQuestion,
-                                  attachmentsBackend: attachmentsBackend,
-                                  sessionKey: sessionKey,
-                                  jobsByMessageId: jobsByMessageId,
-                                  linkedTodoBadgeByMessageId:
-                                      linkedTodoBadgeByMessageId,
-                                  annotationJobsBySha256:
-                                      annotationJobsBySha256,
-                                  attachmentAnnotationEnabled: snapshotJobs
-                                          .data?.attachmentAnnotationEnabled ??
-                                      false,
-                                  attachmentAnnotationCanRunNow: snapshotJobs
-                                          .data
-                                          ?.attachmentAnnotationCanRunNow ??
-                                      false,
-                                  audioTranscribeEnabled: snapshotJobs
-                                          .data?.audioTranscribeEnabled ??
-                                      false,
-                                  audioTranscribeCanRunNow: snapshotJobs
-                                          .data?.audioTranscribeCanRunNow ??
-                                      false,
-                                  colorScheme: colorScheme,
-                                  tokens: tokens,
-                                  isDesktopPlatform: isDesktopPlatform,
-                                ),
-                              );
-                            },
-                          );
-                        },
-                      ),
-                      if (_usePagination && !_isAtBottom)
-                        Positioned(
-                          right: 16,
-                          bottom: 16,
-                          child: FloatingActionButton.small(
-                            key: const ValueKey('chat_jump_to_latest'),
-                            onPressed: _jumpToLatest,
-                            backgroundColor: colorScheme.secondaryContainer,
-                            foregroundColor: colorScheme.onSecondaryContainer,
-                            child: const Icon(Icons.arrow_downward_rounded),
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-            if (_askError != null)
-              Center(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 880),
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-                    child: Text(
-                      _askError!,
-                      style: TextStyle(color: colorScheme.error),
-                    ),
-                  ),
-                ),
-              ),
-            _buildAskScopeEmptyCard(),
-            if (_showAttachmentSendFeedback)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+              Expanded(
                 child: Center(
                   child: ConstrainedBox(
                     constraints: const BoxConstraints(maxWidth: 880),
-                    child: _buildAttachmentSendFeedbackBanner(context),
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        FutureBuilder(
+                          future: _messagesFuture,
+                          builder: (context, snapshot) {
+                            final isLoading = snapshot.connectionState !=
+                                ConnectionState.done;
+                            final loadedMessages = _usePagination
+                                ? _paginatedMessages
+                                : snapshot.data ?? const <Message>[];
+                            final messages =
+                                _messagesWithFailedAskQuestion(loadedMessages);
+                            final pendingQuestion = _pendingQuestion;
+                            final pendingFailureMessage = _askFailureMessage;
+                            final hasPendingAssistant =
+                                _asking && !_stopRequested;
+                            final pendingAssistantText =
+                                _streamingAnswer.isEmpty
+                                    ? '…'
+                                    : _streamingAnswer;
+                            final extraCount = (hasPendingAssistant ? 1 : 0) +
+                                (pendingQuestion == null ? 0 : 1);
+                            if (messages.isEmpty && extraCount == 0) {
+                              if (isLoading) {
+                                return const Center(
+                                  child: CircularProgressIndicator(),
+                                );
+                              }
+                              if (snapshot.hasError) {
+                                return Center(
+                                  child: Text(
+                                    context.t.errors
+                                        .loadFailed(error: '${snapshot.error}'),
+                                  ),
+                                );
+                              }
+                              return Center(
+                                child: Text(context.t.chat.noMessagesYet),
+                              );
+                            }
+
+                            final messageIndexById = <String, int>{};
+                            for (var i = 0; i < messages.length; i++) {
+                              messageIndexById[messages[i].id] = i;
+                            }
+
+                            final backend = AppBackendScope.of(context);
+                            final sessionKey =
+                                SessionScope.of(context).sessionKey;
+                            final attachmentsBackend =
+                                backend is AttachmentsBackend
+                                    ? backend as AttachmentsBackend
+                                    : null;
+                            final combinedJobsFuture =
+                                _cachedChatMessageSupplementDataFuture(
+                              backend: backend,
+                              sessionKey: sessionKey,
+                              messages: messages,
+                            );
+
+                            return FutureBuilder<_ChatMessageSupplementData>(
+                              future: combinedJobsFuture,
+                              builder: (context, snapshotJobs) {
+                                final jobs = snapshotJobs.data?.semanticJobs ??
+                                    const <SemanticParseJob>[];
+                                final linkedTodoBadgeByMessageId =
+                                    snapshotJobs.data?.linkedTodoBadges ??
+                                        const <String, _TodoMessageBadgeMeta>{};
+                                final existingTodoIds =
+                                    snapshotJobs.data?.existingTodoIds ??
+                                        const <String>{};
+                                final jobsByMessageId =
+                                    <String, SemanticParseJob>{};
+                                for (final job in jobs) {
+                                  jobsByMessageId[job.messageId] = job;
+                                }
+
+                                final annotationJobs =
+                                    snapshotJobs.data?.annotationJobs ??
+                                        const <AttachmentAnnotationJob>[];
+                                final annotationJobsBySha256 =
+                                    <String, AttachmentAnnotationJob>{};
+                                for (final job in annotationJobs) {
+                                  annotationJobsBySha256[job.attachmentSha256] =
+                                      job;
+                                }
+
+                                return ListView.builder(
+                                  key: _usePagination
+                                      ? const ValueKey('chat_message_list')
+                                      : null,
+                                  controller:
+                                      _usePagination ? _scrollController : null,
+                                  reverse: _usePagination,
+                                  padding:
+                                      const EdgeInsets.symmetric(vertical: 16),
+                                  findChildIndexCallback: (key) {
+                                    if (key is! ValueKey) return null;
+                                    final v = key.value;
+                                    if (v is! String) return null;
+                                    if (!v.startsWith('chat_message_row_')) {
+                                      return null;
+                                    }
+                                    final messageId =
+                                        v.substring('chat_message_row_'.length);
+
+                                    if (messageId == 'pending_assistant') {
+                                      if (!hasPendingAssistant) return null;
+                                      if (_usePagination) return 0;
+                                      return messages.length +
+                                          (pendingQuestion == null ? 0 : 1);
+                                    }
+
+                                    if (messageId == 'pending_user') {
+                                      if (pendingQuestion == null) return null;
+                                      if (_usePagination) {
+                                        return hasPendingAssistant ? 1 : 0;
+                                      }
+                                      return messages.length;
+                                    }
+
+                                    final messageIndex =
+                                        messageIndexById[messageId];
+                                    if (messageIndex == null) return null;
+                                    return _usePagination
+                                        ? messageIndex + extraCount
+                                        : messageIndex;
+                                  },
+                                  itemCount: messages.length + extraCount,
+                                  itemBuilder: _buildMessageListItemBuilder(
+                                    messages: messages,
+                                    extraCount: extraCount,
+                                    hasPendingAssistant: hasPendingAssistant,
+                                    pendingAssistantText: pendingAssistantText,
+                                    pendingFailureMessage:
+                                        pendingFailureMessage,
+                                    pendingQuestion: pendingQuestion,
+                                    attachmentsBackend: attachmentsBackend,
+                                    sessionKey: sessionKey,
+                                    jobsByMessageId: jobsByMessageId,
+                                    linkedTodoBadgeByMessageId:
+                                        linkedTodoBadgeByMessageId,
+                                    existingTodoIds: existingTodoIds,
+                                    annotationJobsBySha256:
+                                        annotationJobsBySha256,
+                                    attachmentAnnotationEnabled: snapshotJobs
+                                            .data
+                                            ?.attachmentAnnotationEnabled ??
+                                        false,
+                                    attachmentAnnotationCanRunNow: snapshotJobs
+                                            .data
+                                            ?.attachmentAnnotationCanRunNow ??
+                                        false,
+                                    audioTranscribeEnabled: snapshotJobs
+                                            .data?.audioTranscribeEnabled ??
+                                        false,
+                                    audioTranscribeCanRunNow: snapshotJobs
+                                            .data?.audioTranscribeCanRunNow ??
+                                        false,
+                                    colorScheme: colorScheme,
+                                    tokens: tokens,
+                                    isDesktopPlatform: isDesktopPlatform,
+                                  ),
+                                );
+                              },
+                            );
+                          },
+                        ),
+                        if (_usePagination && !_isAtBottom)
+                          Positioned(
+                            right: 16,
+                            bottom: 16,
+                            child: FloatingActionButton.small(
+                              key: const ValueKey('chat_jump_to_latest'),
+                              onPressed: _jumpToLatest,
+                              backgroundColor: colorScheme.secondaryContainer,
+                              foregroundColor: colorScheme.onSecondaryContainer,
+                              child: const Icon(Icons.arrow_downward_rounded),
+                            ),
+                          ),
+                      ],
+                    ),
                   ),
                 ),
               ),
-            AnimatedPadding(
-              duration: const Duration(milliseconds: 200),
-              curve: Curves.easeOutCubic,
-              padding: EdgeInsets.zero,
-              child: SafeArea(
-                top: false,
-                child: Center(
+              if (_askError != null)
+                Center(
                   child: ConstrainedBox(
                     constraints: const BoxConstraints(maxWidth: 880),
                     child: Padding(
-                      padding: EdgeInsets.fromLTRB(
-                        16,
-                        8,
-                        16,
-                        isMobileKeyboardVisible ? 8 : 16,
+                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                      child: Text(
+                        _askError!,
+                        style: TextStyle(color: colorScheme.error),
                       ),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          _buildComposerDraftAttachmentStrip(
-                            context,
-                            tokens: tokens,
-                          ),
-                          if (useCompactComposer)
-                            _buildCompactComposerQuickActions(
+                    ),
+                  ),
+                ),
+              _buildAskScopeEmptyCard(),
+              if (_showAttachmentSendFeedback)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                  child: Center(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 880),
+                      child: _buildAttachmentSendFeedbackBanner(context),
+                    ),
+                  ),
+                ),
+              AnimatedPadding(
+                duration: const Duration(milliseconds: 200),
+                curve: Curves.easeOutCubic,
+                padding: EdgeInsets.zero,
+                child: SafeArea(
+                  top: false,
+                  child: Center(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 880),
+                      child: Padding(
+                        padding: EdgeInsets.fromLTRB(
+                          16,
+                          8,
+                          16,
+                          isMobileKeyboardVisible ? 8 : 16,
+                        ),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            _buildComposerDraftAttachmentStrip(
                               context,
                               tokens: tokens,
-                              colorScheme: colorScheme,
                             ),
-                          useCompactComposer
-                              ? SlFocusRing(
-                                  key: const ValueKey('chat_input_ring'),
-                                  borderRadius:
-                                      BorderRadius.circular(tokens.radiusLg),
-                                  child: SlSurface(
-                                    color: tokens.surface2,
-                                    borderColor: tokens.borderSubtle,
+                            if (useCompactComposer)
+                              _buildCompactComposerQuickActions(
+                                context,
+                                tokens: tokens,
+                                colorScheme: colorScheme,
+                              ),
+                            useCompactComposer
+                                ? SlFocusRing(
+                                    key: const ValueKey('chat_input_ring'),
                                     borderRadius:
                                         BorderRadius.circular(tokens.radiusLg),
-                                    padding:
-                                        const EdgeInsets.fromLTRB(8, 6, 8, 6),
-                                    child: LayoutBuilder(
-                                      builder: (context, _) {
-                                        return Row(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.end,
+                                    child: SlSurface(
+                                      color: tokens.surface2,
+                                      borderColor: tokens.borderSubtle,
+                                      borderRadius: BorderRadius.circular(
+                                          tokens.radiusLg),
+                                      padding:
+                                          const EdgeInsets.fromLTRB(8, 6, 8, 6),
+                                      child: LayoutBuilder(
+                                        builder: (context, _) {
+                                          return Row(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.end,
+                                            children: [
+                                              Expanded(
+                                                child: Focus(
+                                                  // ignore: deprecated_member_use
+                                                  onKey: _handleComposerOnKey,
+                                                  child: TextField(
+                                                    key: const ValueKey(
+                                                        'chat_input'),
+                                                    focusNode: _inputFocusNode,
+                                                    controller: _controller,
+                                                    decoration: InputDecoration(
+                                                      hintText: context.t.common
+                                                          .fields.message,
+                                                      border: InputBorder.none,
+                                                      filled: false,
+                                                      isDense: true,
+                                                    ),
+                                                    keyboardType:
+                                                        TextInputType.multiline,
+                                                    textInputAction:
+                                                        TextInputAction.newline,
+                                                    minLines: 1,
+                                                    maxLines: 6,
+                                                  ),
+                                                ),
+                                              ),
+                                              _buildCompactComposerActions(
+                                                context,
+                                                tokens: tokens,
+                                                colorScheme: colorScheme,
+                                              ),
+                                            ],
+                                          );
+                                        },
+                                      ),
+                                    ),
+                                  )
+                                : _buildDesktopDropTargetComposer(
+                                    context,
+                                    tokens: tokens,
+                                    colorScheme: colorScheme,
+                                    child: SlFocusRing(
+                                      key: const ValueKey('chat_input_ring'),
+                                      borderRadius: BorderRadius.circular(
+                                          tokens.radiusLg),
+                                      child: SlSurface(
+                                        color: tokens.surface2,
+                                        borderColor: tokens.borderSubtle,
+                                        borderRadius: BorderRadius.circular(
+                                            tokens.radiusLg),
+                                        padding: const EdgeInsets.all(12),
+                                        child: Row(
                                           children: [
                                             Expanded(
                                               child: Focus(
@@ -400,7 +466,6 @@ extension _ChatPageStateBuild on _ChatPageState {
                                                         .fields.message,
                                                     border: InputBorder.none,
                                                     filled: false,
-                                                    isDense: true,
                                                   ),
                                                   keyboardType:
                                                       TextInputType.multiline,
@@ -411,243 +476,205 @@ extension _ChatPageStateBuild on _ChatPageState {
                                                 ),
                                               ),
                                             ),
-                                            _buildCompactComposerActions(
-                                              context,
-                                              tokens: tokens,
-                                              colorScheme: colorScheme,
-                                            ),
-                                          ],
-                                        );
-                                      },
-                                    ),
-                                  ),
-                                )
-                              : _buildDesktopDropTargetComposer(
-                                  context,
-                                  tokens: tokens,
-                                  colorScheme: colorScheme,
-                                  child: SlFocusRing(
-                                    key: const ValueKey('chat_input_ring'),
-                                    borderRadius:
-                                        BorderRadius.circular(tokens.radiusLg),
-                                    child: SlSurface(
-                                      color: tokens.surface2,
-                                      borderColor: tokens.borderSubtle,
-                                      borderRadius: BorderRadius.circular(
-                                          tokens.radiusLg),
-                                      padding: const EdgeInsets.all(12),
-                                      child: Row(
-                                        children: [
-                                          Expanded(
-                                            child: Focus(
-                                              // ignore: deprecated_member_use
-                                              onKey: _handleComposerOnKey,
-                                              child: TextField(
-                                                key: const ValueKey(
-                                                    'chat_input'),
-                                                focusNode: _inputFocusNode,
-                                                controller: _controller,
-                                                decoration: InputDecoration(
-                                                  hintText: context
-                                                      .t.common.fields.message,
-                                                  border: InputBorder.none,
-                                                  filled: false,
-                                                ),
-                                                keyboardType:
-                                                    TextInputType.multiline,
-                                                textInputAction:
-                                                    TextInputAction.newline,
-                                                minLines: 1,
-                                                maxLines: 6,
-                                              ),
-                                            ),
-                                          ),
-                                          const SizedBox(width: 8),
-                                          ListenableBuilder(
-                                            listenable: _inputFocusNode,
-                                            builder: (context, child) {
-                                              if (!_inputFocusNode.hasFocus &&
-                                                  !_desktopComposerHovered) {
-                                                return const SizedBox.shrink();
-                                              }
-                                              return Row(
-                                                mainAxisSize: MainAxisSize.min,
-                                                children: [
-                                                  _buildDesktopMarkdownEditorButton(
-                                                    context,
-                                                  ),
-                                                  if (_supportsImageUpload ||
-                                                      _supportsDesktopRecordAudioAction)
-                                                    const SizedBox(width: 8),
-                                                ],
-                                              );
-                                            },
-                                          ),
-                                          if (_supportsImageUpload ||
-                                              _supportsDesktopRecordAudioAction) ...[
-                                            if (_supportsDesktopRecordAudioAction) ...[
-                                              Semantics(
-                                                label: context
-                                                    .t.chat.attachRecordAudio,
-                                                button: true,
-                                                child: SlIconButton(
-                                                  key: const ValueKey(
-                                                      'chat_record_audio'),
-                                                  icon: Icons.mic_rounded,
-                                                  size: 44,
-                                                  iconSize: 22,
-                                                  tooltip: context
-                                                      .t.chat.attachRecordAudio,
-                                                  onPressed: _isComposerBusy
-                                                      ? null
-                                                      : () => unawaited(
-                                                            _recordAndAttachAudioFromSheet(),
-                                                          ),
-                                                ),
-                                              ),
-                                              const SizedBox(width: 8),
-                                            ],
-                                            if (_supportsImageUpload) ...[
-                                              Semantics(
-                                                label: context
-                                                    .t.chat.attachTooltip,
-                                                button: true,
-                                                child: SlIconButton(
-                                                  key: const ValueKey(
-                                                      'chat_attach'),
-                                                  icon: Icons.add_rounded,
-                                                  size: 44,
-                                                  iconSize: 22,
-                                                  tooltip: context
-                                                      .t.chat.attachTooltip,
-                                                  onPressed: _isComposerBusy
-                                                      ? null
-                                                      : _openAttachmentSheet,
-                                                ),
-                                              ),
-                                              const SizedBox(width: 8),
-                                            ],
-                                          ],
-                                          ValueListenableBuilder<
-                                              TextEditingValue>(
-                                            valueListenable: _controller,
-                                            builder: (context, value, child) {
-                                              final hasText =
-                                                  value.text.trim().isNotEmpty;
-                                              final hasDraftAttachments =
-                                                  _composerDraftAttachments
-                                                      .isNotEmpty;
-
-                                              if (_asking) {
-                                                return SlButton(
-                                                  buttonKey: const ValueKey(
-                                                      'chat_stop'),
-                                                  icon: const Icon(
-                                                    Icons.stop_circle_outlined,
-                                                    size: 18,
-                                                  ),
-                                                  variant:
-                                                      SlButtonVariant.outline,
-                                                  onPressed: _stopRequested
-                                                      ? null
-                                                      : _stopAsk,
-                                                  child: Text(
-                                                    _stopRequested
-                                                        ? context.t.common
-                                                            .actions.stopping
-                                                        : context.t.common
-                                                            .actions.stop,
-                                                  ),
-                                                );
-                                              }
-
-                                              if (!hasText &&
-                                                  !hasDraftAttachments) {
-                                                return const SizedBox.shrink();
-                                              }
-
-                                              return Row(
-                                                mainAxisSize: MainAxisSize.min,
-                                                children: [
-                                                  if (hasText &&
-                                                      _showConfigureAiEntry) ...[
-                                                    SlButton(
-                                                      buttonKey: const ValueKey(
-                                                        'chat_configure_ai',
-                                                      ),
-                                                      icon: const Icon(
-                                                        Icons
-                                                            .settings_suggest_rounded,
-                                                        size: 18,
-                                                      ),
-                                                      variant: SlButtonVariant
-                                                          .secondary,
-                                                      onPressed: _isComposerBusy
-                                                          ? null
-                                                          : _openAskAiSettingsFromComposer,
-                                                      child: Text(
-                                                        context.t.common.actions
-                                                            .configureAi,
-                                                      ),
+                                            const SizedBox(width: 8),
+                                            ListenableBuilder(
+                                              listenable: _inputFocusNode,
+                                              builder: (context, child) {
+                                                if (!_inputFocusNode.hasFocus &&
+                                                    !_desktopComposerHovered) {
+                                                  return const SizedBox
+                                                      .shrink();
+                                                }
+                                                return Row(
+                                                  mainAxisSize:
+                                                      MainAxisSize.min,
+                                                  children: [
+                                                    _buildDesktopMarkdownEditorButton(
+                                                      context,
                                                     ),
-                                                    const SizedBox(width: 8),
-                                                  ] else if (hasText &&
-                                                      _canAskAiNow) ...[
-                                                    SlButton(
-                                                      buttonKey: const ValueKey(
-                                                        'chat_ask_ai',
-                                                      ),
-                                                      icon: const Icon(
-                                                        Icons
-                                                            .auto_awesome_rounded,
-                                                        size: 18,
-                                                      ),
-                                                      variant: SlButtonVariant
-                                                          .secondary,
-                                                      onPressed: _isComposerBusy
-                                                          ? null
-                                                          : _askAi,
-                                                      child: Text(
-                                                        context.t.common.actions
-                                                            .askAi,
-                                                      ),
-                                                    ),
-                                                    const SizedBox(width: 8),
+                                                    if (_supportsImageUpload ||
+                                                        _supportsDesktopRecordAudioAction)
+                                                      const SizedBox(width: 8),
                                                   ],
-                                                  SlButton(
+                                                );
+                                              },
+                                            ),
+                                            if (_supportsImageUpload ||
+                                                _supportsDesktopRecordAudioAction) ...[
+                                              if (_supportsDesktopRecordAudioAction) ...[
+                                                Semantics(
+                                                  label: context
+                                                      .t.chat.attachRecordAudio,
+                                                  button: true,
+                                                  child: SlIconButton(
+                                                    key: const ValueKey(
+                                                        'chat_record_audio'),
+                                                    icon: Icons.mic_rounded,
+                                                    size: 44,
+                                                    iconSize: 22,
+                                                    tooltip: context.t.chat
+                                                        .attachRecordAudio,
+                                                    onPressed: _isComposerBusy
+                                                        ? null
+                                                        : () => unawaited(
+                                                              _recordAndAttachAudioFromSheet(),
+                                                            ),
+                                                  ),
+                                                ),
+                                                const SizedBox(width: 8),
+                                              ],
+                                              if (_supportsImageUpload) ...[
+                                                Semantics(
+                                                  label: context
+                                                      .t.chat.attachTooltip,
+                                                  button: true,
+                                                  child: SlIconButton(
+                                                    key: const ValueKey(
+                                                        'chat_attach'),
+                                                    icon: Icons.add_rounded,
+                                                    size: 44,
+                                                    iconSize: 22,
+                                                    tooltip: context
+                                                        .t.chat.attachTooltip,
+                                                    onPressed: _isComposerBusy
+                                                        ? null
+                                                        : _openAttachmentSheet,
+                                                  ),
+                                                ),
+                                                const SizedBox(width: 8),
+                                              ],
+                                            ],
+                                            ValueListenableBuilder<
+                                                TextEditingValue>(
+                                              valueListenable: _controller,
+                                              builder: (context, value, child) {
+                                                final hasText = value.text
+                                                    .trim()
+                                                    .isNotEmpty;
+                                                final hasDraftAttachments =
+                                                    _composerDraftAttachments
+                                                        .isNotEmpty;
+
+                                                if (_asking) {
+                                                  return SlButton(
                                                     buttonKey: const ValueKey(
-                                                        'chat_send'),
+                                                        'chat_stop'),
                                                     icon: const Icon(
-                                                      Icons.send_rounded,
+                                                      Icons
+                                                          .stop_circle_outlined,
                                                       size: 18,
                                                     ),
                                                     variant:
-                                                        SlButtonVariant.primary,
-                                                    onPressed: _isComposerBusy
+                                                        SlButtonVariant.outline,
+                                                    onPressed: _stopRequested
                                                         ? null
-                                                        : _send,
+                                                        : _stopAsk,
                                                     child: Text(
-                                                      context.t.common.actions
-                                                          .send,
+                                                      _stopRequested
+                                                          ? context.t.common
+                                                              .actions.stopping
+                                                          : context.t.common
+                                                              .actions.stop,
                                                     ),
-                                                  ),
-                                                ],
-                                              );
-                                            },
-                                          ),
-                                        ],
+                                                  );
+                                                }
+
+                                                if (!hasText &&
+                                                    !hasDraftAttachments) {
+                                                  return const SizedBox
+                                                      .shrink();
+                                                }
+
+                                                return Row(
+                                                  mainAxisSize:
+                                                      MainAxisSize.min,
+                                                  children: [
+                                                    if (hasText &&
+                                                        _showConfigureAiEntry) ...[
+                                                      SlButton(
+                                                        buttonKey:
+                                                            const ValueKey(
+                                                          'chat_configure_ai',
+                                                        ),
+                                                        icon: const Icon(
+                                                          Icons
+                                                              .settings_suggest_rounded,
+                                                          size: 18,
+                                                        ),
+                                                        variant: SlButtonVariant
+                                                            .secondary,
+                                                        onPressed: _isComposerBusy
+                                                            ? null
+                                                            : _openAskAiSettingsFromComposer,
+                                                        child: Text(
+                                                          context
+                                                              .t
+                                                              .common
+                                                              .actions
+                                                              .configureAi,
+                                                        ),
+                                                      ),
+                                                      const SizedBox(width: 8),
+                                                    ] else if (hasText &&
+                                                        _canAskAiNow) ...[
+                                                      SlButton(
+                                                        buttonKey:
+                                                            const ValueKey(
+                                                          'chat_ask_ai',
+                                                        ),
+                                                        icon: const Icon(
+                                                          Icons
+                                                              .auto_awesome_rounded,
+                                                          size: 18,
+                                                        ),
+                                                        variant: SlButtonVariant
+                                                            .secondary,
+                                                        onPressed:
+                                                            _isComposerBusy
+                                                                ? null
+                                                                : _askAi,
+                                                        child: Text(
+                                                          context.t.common
+                                                              .actions.askAi,
+                                                        ),
+                                                      ),
+                                                      const SizedBox(width: 8),
+                                                    ],
+                                                    SlButton(
+                                                      buttonKey: const ValueKey(
+                                                          'chat_send'),
+                                                      icon: const Icon(
+                                                        Icons.send_rounded,
+                                                        size: 18,
+                                                      ),
+                                                      variant: SlButtonVariant
+                                                          .primary,
+                                                      onPressed: _isComposerBusy
+                                                          ? null
+                                                          : _send,
+                                                      child: Text(
+                                                        context.t.common.actions
+                                                            .send,
+                                                      ),
+                                                    ),
+                                                  ],
+                                                );
+                                              },
+                                            ),
+                                          ],
+                                        ),
                                       ),
                                     ),
                                   ),
-                                ),
-                        ],
+                          ],
+                        ),
                       ),
                     ),
                   ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

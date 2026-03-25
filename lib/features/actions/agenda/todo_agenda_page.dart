@@ -4,7 +4,9 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../../../core/backend/app_backend.dart';
+import '../../../core/cloud/cloud_auth_scope.dart';
 import '../../../core/session/session_scope.dart';
+import '../../../core/subscription/subscription_scope.dart';
 import '../../../core/sync/sync_engine_gate.dart';
 import '../../../i18n/strings.g.dart';
 import '../../../src/rust/db.dart';
@@ -18,6 +20,8 @@ import '../todo/todo_recurrence_edit_scope_dialog.dart';
 import '../todo/todo_recurrence_rule.dart';
 import '../todo/todo_recurrence_rule_dialog.dart';
 import '../todo/todo_history_page.dart';
+
+part 'todo_agenda_page_actions.dart';
 
 class TodoAgendaPage extends StatefulWidget {
   const TodoAgendaPage({super.key});
@@ -217,211 +221,6 @@ class _TodoAgendaPageState extends State<TodoAgendaPage> {
     }
   }
 
-  void _refresh() {
-    unawaited(_loadTodos());
-  }
-
-  String _statusLabel(BuildContext context, String status) => switch (status) {
-        'inbox' => context.t.actions.todoStatus.inbox,
-        'open' => context.t.actions.todoStatus.open,
-        'in_progress' => context.t.actions.todoStatus.inProgress,
-        'done' => context.t.actions.todoStatus.done,
-        'dismissed' => context.t.actions.todoStatus.dismissed,
-        _ => status,
-      };
-
-  Future<void> _setStatus(Todo todo, String newStatus) async {
-    final backend = AppBackendScope.of(context);
-    final sessionKey = SessionScope.of(context).sessionKey;
-
-    var scope = TodoRecurrenceEditScope.thisOnly;
-    if (newStatus != 'done') {
-      final ruleJson = _recurrenceRuleByTodoId[todo.id];
-      if (ruleJson != null && ruleJson.trim().isNotEmpty) {
-        if (!mounted) return;
-        final selectedScope = await showTodoRecurrenceEditScopeDialog(context);
-        if (selectedScope == null || !mounted) return;
-        scope = selectedScope;
-      }
-    }
-
-    try {
-      await backend.updateTodoStatusWithScope(
-        sessionKey,
-        todoId: todo.id,
-        newStatus: newStatus,
-        scope: scope,
-      );
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(context.t.errors.loadFailed(error: '$e')),
-          duration: const Duration(seconds: 3),
-        ),
-      );
-      return;
-    }
-    if (!mounted) return;
-    SyncEngineScope.maybeOf(context)?.notifyLocalMutation();
-    _refresh();
-  }
-
-  Future<void> _deleteTodo(Todo todo) async {
-    final t = context.t;
-    final confirmed = await showSlDeleteConfirmDialog(
-      context,
-      title: t.actions.todoDelete.dialog.title,
-      message: t.actions.todoDelete.dialog.message,
-      confirmLabel: t.actions.todoDelete.dialog.confirm,
-      confirmButtonKey: ValueKey('todo_agenda_delete_confirm_${todo.id}'),
-    );
-    if (!mounted) return;
-    if (!confirmed) return;
-
-    try {
-      final backend = AppBackendScope.of(context);
-      final sessionKey = SessionScope.of(context).sessionKey;
-      await backend.deleteTodo(sessionKey, todoId: todo.id);
-      if (!mounted) return;
-      SyncEngineScope.maybeOf(context)?.notifyLocalMutation();
-      _refresh();
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(t.errors.loadFailed(error: '$e')),
-          duration: const Duration(seconds: 3),
-        ),
-      );
-    }
-  }
-
-  Future<void> _editDue(Todo todo) async {
-    final dueAtMs = todo.dueAtMs;
-    if (dueAtMs == null) return;
-
-    final dueAtLocal =
-        DateTime.fromMillisecondsSinceEpoch(dueAtMs, isUtc: true).toLocal();
-    final nowLocal = DateTime.now();
-    final picked = await showSlDateTimePickerDialog(
-      context,
-      initialLocal: dueAtLocal,
-      firstDate: DateTime(nowLocal.year - 1),
-      lastDate: DateTime(nowLocal.year + 3),
-      title: context.t.actions.calendar.pickCustom,
-      surfaceKey: ValueKey('todo_agenda_due_picker_${todo.id}'),
-    );
-    if (picked == null || !mounted) return;
-
-    final backend = AppBackendScope.of(context);
-    final sessionKey = SessionScope.of(context).sessionKey;
-    var scope = TodoRecurrenceEditScope.thisOnly;
-    final ruleJson = _recurrenceRuleByTodoId[todo.id];
-    if (ruleJson != null && ruleJson.trim().isNotEmpty) {
-      if (!mounted) return;
-      final selectedScope = await showTodoRecurrenceEditScopeDialog(context);
-      if (selectedScope == null || !mounted) return;
-      scope = selectedScope;
-    }
-
-    try {
-      await backend.updateTodoDueWithScope(
-        sessionKey,
-        todoId: todo.id,
-        dueAtMs: picked.toUtc().millisecondsSinceEpoch,
-        scope: scope,
-      );
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(context.t.errors.loadFailed(error: '$e')),
-          duration: const Duration(seconds: 3),
-        ),
-      );
-      return;
-    }
-    if (!mounted) return;
-    SyncEngineScope.maybeOf(context)?.notifyLocalMutation();
-    _refresh();
-  }
-
-  String? _formatDue(BuildContext context, Todo todo) {
-    final dueAtMs = todo.dueAtMs;
-    if (dueAtMs == null) return null;
-    final dueAtLocal =
-        DateTime.fromMillisecondsSinceEpoch(dueAtMs, isUtc: true).toLocal();
-    final localizations = MaterialLocalizations.of(context);
-    final date = localizations.formatShortDate(dueAtLocal);
-    final time =
-        localizations.formatTimeOfDay(TimeOfDay.fromDateTime(dueAtLocal));
-    return '$date $time';
-  }
-
-  String _recurrenceFrequencyLabel(
-    BuildContext context,
-    TodoRecurrenceFrequency frequency,
-  ) =>
-      switch (frequency) {
-        TodoRecurrenceFrequency.daily =>
-          context.t.actions.todoRecurrenceRule.daily,
-        TodoRecurrenceFrequency.weekly =>
-          context.t.actions.todoRecurrenceRule.weekly,
-        TodoRecurrenceFrequency.monthly =>
-          context.t.actions.todoRecurrenceRule.monthly,
-        TodoRecurrenceFrequency.yearly =>
-          context.t.actions.todoRecurrenceRule.yearly,
-      };
-
-  String _formatRecurrenceRule(
-    BuildContext context,
-    TodoRecurrenceRule rule,
-  ) {
-    final frequencyLabel = _recurrenceFrequencyLabel(context, rule.frequency);
-    if (rule.interval <= 1) {
-      return frequencyLabel;
-    }
-    return '$frequencyLabel x${rule.interval}';
-  }
-
-  Future<void> _editRecurrenceRule(Todo todo) async {
-    final existingRuleJson = _recurrenceRuleByTodoId[todo.id];
-    final existingRule = TodoRecurrenceRule.tryParseJson(existingRuleJson);
-    if (existingRule == null) return;
-
-    final nextRule = await showTodoRecurrenceRuleDialog(
-      context,
-      initialRule: existingRule,
-    );
-    if (nextRule == null || !mounted) return;
-
-    final scope = await showTodoRecurrenceEditScopeDialog(context);
-    if (scope == null || !mounted) return;
-
-    final backend = AppBackendScope.of(context);
-    final sessionKey = SessionScope.of(context).sessionKey;
-    try {
-      await backend.updateTodoRecurrenceRuleWithScope(
-        sessionKey,
-        todoId: todo.id,
-        ruleJson: nextRule.toJsonString(),
-        scope: scope,
-      );
-      if (!mounted) return;
-      SyncEngineScope.maybeOf(context)?.notifyLocalMutation();
-      _refresh();
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(context.t.errors.loadFailed(error: '$e')),
-          duration: const Duration(seconds: 3),
-        ),
-      );
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final tokens = SlTokens.of(context);
@@ -435,7 +234,12 @@ class _TodoAgendaPageState extends State<TodoAgendaPage> {
             icon: const Icon(Icons.history_rounded),
             onPressed: () async {
               await Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const TodoHistoryPage()),
+                MaterialPageRoute(
+                  builder: (_) => _wrapPushedPageWithScopes(
+                    context,
+                    const TodoHistoryPage(),
+                  ),
+                ),
               );
             },
           ),
@@ -627,7 +431,10 @@ class _TodoAgendaPageState extends State<TodoAgendaPage> {
                         onTap: () {
                           Navigator.of(context).push(
                             MaterialPageRoute(
-                              builder: (_) => TodoDetailPage(initialTodo: todo),
+                              builder: (_) => _wrapPushedPageWithScopes(
+                                context,
+                                TodoDetailPage(initialTodo: todo),
+                              ),
                             ),
                           );
                         },

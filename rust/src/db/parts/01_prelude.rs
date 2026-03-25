@@ -304,6 +304,8 @@ pub struct Todo {
     pub review_stage: Option<i64>,
     pub next_review_at_ms: Option<i64>,
     pub last_review_at_ms: Option<i64>,
+    pub manual_importance_nudge_score: Option<i64>,
+    pub manual_urgency_nudge_score: Option<i64>,
 }
 
 #[derive(Clone, Debug)]

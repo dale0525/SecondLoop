@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import '../../core/backend/app_backend.dart';
 import '../../core/backend/knowledge_viewer_backend.dart';
 import '../../core/session/session_scope.dart';
+import '../../core/navigation/inherited_scope_page_wrapper.dart';
 import '../../i18n/strings.g.dart';
 import '../../src/rust/knowledge/models.dart';
 import '../../ui/sl_markdown_style.dart';
@@ -85,10 +86,13 @@ class MessageViewerPage extends StatelessWidget {
 
     await Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (context) => MessageViewerPage(
-          content: message.content,
-          messageId: message.id,
-          navigationTrail: <String>[...navigationTrail, normalizedMessageId],
+        builder: (_) => wrapPushedPageWithInheritedScopes(
+          context,
+          MessageViewerPage(
+            content: message.content,
+            messageId: message.id,
+            navigationTrail: <String>[...navigationTrail, normalizedMessageId],
+          ),
         ),
       ),
     );

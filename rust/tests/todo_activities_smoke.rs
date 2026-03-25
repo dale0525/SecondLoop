@@ -26,6 +26,8 @@ fn todo_status_change_appends_activity_and_clears_review_fields() {
         Some(0),
         Some(1_700_000_000_000),
         None,
+        None,
+        None,
     )
     .expect("upsert todo");
 
@@ -71,6 +73,8 @@ fn todo_note_activity_roundtrips_and_is_encrypted() {
         "周末给狗狗做口粮",
         None,
         "open",
+        None,
+        None,
         None,
         None,
         None,

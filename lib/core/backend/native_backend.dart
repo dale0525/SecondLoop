@@ -3,6 +3,10 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
+import 'package:http/http.dart' as http;
+
+import '../cloud/http_client_factory_stub.dart'
+    if (dart.library.io) '../cloud/http_client_factory_io.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -1076,6 +1080,8 @@ class NativeAppBackend
     int? reviewStage,
     int? nextReviewAtMs,
     int? lastReviewAtMs,
+    int? manualImportanceNudgeScore,
+    int? manualUrgencyNudgeScore,
   }) async {
     final appDir = await _getAppDir();
     return rust_core.dbUpsertTodo(
@@ -1094,6 +1100,12 @@ class NativeAppBackend
       lastReviewAtMs: lastReviewAtMs == null
           ? null
           : PlatformInt64Util.from(lastReviewAtMs),
+      manualImportanceNudgeScore: manualImportanceNudgeScore == null
+          ? null
+          : PlatformInt64Util.from(manualImportanceNudgeScore),
+      manualUrgencyNudgeScore: manualUrgencyNudgeScore == null
+          ? null
+          : PlatformInt64Util.from(manualUrgencyNudgeScore),
     );
   }
 
@@ -1110,6 +1122,56 @@ class NativeAppBackend
       key: key,
       todoId: todoId,
       newStatus: newStatus,
+      sourceMessageId: sourceMessageId,
+    );
+  }
+
+  @override
+  Future<Todo> transitionTodo(
+    Uint8List key, {
+    required String todoId,
+    String? newStatus,
+    int? dueAtMs,
+    bool clearDueAtMs = false,
+    int? reviewStage,
+    bool clearReviewStage = false,
+    int? nextReviewAtMs,
+    bool clearNextReviewAtMs = false,
+    int? lastReviewAtMs,
+    bool clearLastReviewAtMs = false,
+    int? manualImportanceNudgeScore,
+    bool clearManualImportanceNudgeScore = false,
+    int? manualUrgencyNudgeScore,
+    bool clearManualUrgencyNudgeScore = false,
+    String? sourceMessageId,
+  }) async {
+    final appDir = await _getAppDir();
+    return rust_core.dbTransitionTodo(
+      appDir: appDir,
+      key: key,
+      todoId: todoId,
+      newStatus: newStatus,
+      dueAtMs: dueAtMs == null ? null : PlatformInt64Util.from(dueAtMs),
+      clearDueAtMs: clearDueAtMs,
+      reviewStage:
+          reviewStage == null ? null : PlatformInt64Util.from(reviewStage),
+      clearReviewStage: clearReviewStage,
+      nextReviewAtMs: nextReviewAtMs == null
+          ? null
+          : PlatformInt64Util.from(nextReviewAtMs),
+      clearNextReviewAtMs: clearNextReviewAtMs,
+      lastReviewAtMs: lastReviewAtMs == null
+          ? null
+          : PlatformInt64Util.from(lastReviewAtMs),
+      clearLastReviewAtMs: clearLastReviewAtMs,
+      manualImportanceNudgeScore: manualImportanceNudgeScore == null
+          ? null
+          : PlatformInt64Util.from(manualImportanceNudgeScore),
+      clearManualImportanceNudgeScore: clearManualImportanceNudgeScore,
+      manualUrgencyNudgeScore: manualUrgencyNudgeScore == null
+          ? null
+          : PlatformInt64Util.from(manualUrgencyNudgeScore),
+      clearManualUrgencyNudgeScore: clearManualUrgencyNudgeScore,
       sourceMessageId: sourceMessageId,
     );
   }
@@ -2157,6 +2219,72 @@ class NativeAppBackend
       gatewayBaseUrl: gatewayBaseUrl,
       firebaseIdToken: idToken,
       modelName: modelName,
+    );
+  }
+
+  Uri _taskPriorityAssessmentsUri(String gatewayBaseUrl, String cacheScopeKey) {
+    final base = gatewayBaseUrl.trim().replaceAll(RegExp(r'/+$'), '');
+    return Uri.parse('$base/v1/task-priority/assessments')
+        .replace(queryParameters: <String, String>{'scope': cacheScopeKey});
+  }
+
+  Future<String> _sendTaskPriorityAssessmentRequest(
+    String method, {
+    required String gatewayBaseUrl,
+    required String idToken,
+    required String cacheScopeKey,
+    String? payloadJson,
+  }) async {
+    final http.Client client = createPlatformHttpClient();
+    try {
+      final uri = _taskPriorityAssessmentsUri(gatewayBaseUrl, cacheScopeKey);
+      final headers = <String, String>{
+        'authorization': 'Bearer $idToken',
+        'accept': 'application/json',
+        if (method == 'POST') 'content-type': 'application/json',
+      };
+      final response = method == 'GET'
+          ? await client.get(uri, headers: headers)
+          : await client.post(uri, headers: headers, body: payloadJson ?? '{}');
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        throw StateError(
+            'task_priority_assessment_http_${response.statusCode}');
+      }
+      return response.body;
+    } finally {
+      client.close();
+    }
+  }
+
+  @override
+  Future<String> fetchTaskPriorityAiAssessmentsCloudGateway(
+    Uint8List key, {
+    required String gatewayBaseUrl,
+    required String idToken,
+    required String cacheScopeKey,
+  }) {
+    return _sendTaskPriorityAssessmentRequest(
+      'GET',
+      gatewayBaseUrl: gatewayBaseUrl,
+      idToken: idToken,
+      cacheScopeKey: cacheScopeKey,
+    );
+  }
+
+  @override
+  Future<void> upsertTaskPriorityAiAssessmentsCloudGateway(
+    Uint8List key, {
+    required String gatewayBaseUrl,
+    required String idToken,
+    required String cacheScopeKey,
+    required String payloadJson,
+  }) async {
+    await _sendTaskPriorityAssessmentRequest(
+      'POST',
+      gatewayBaseUrl: gatewayBaseUrl,
+      idToken: idToken,
+      cacheScopeKey: cacheScopeKey,
+      payloadJson: payloadJson,
     );
   }
 

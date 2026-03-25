@@ -14,56 +14,86 @@ enum TaskPriorityAiConfidence {
   high,
 }
 
+class TaskPriorityAiLegacyRanking {
+  const TaskPriorityAiLegacyRanking({
+    required this.priorityBand,
+    required this.suggestedAction,
+  });
+
+  final TaskPriorityAiBand priorityBand;
+  final TaskPrioritySuggestionKind suggestedAction;
+}
+
 class TaskPriorityAiEntry {
   const TaskPriorityAiEntry({
     required this.todoId,
-    required this.priorityBand,
     required this.semanticAdjustment,
     required this.reason,
-    required this.suggestedAction,
     required this.confidence,
+    this.legacyRanking,
+    this.isImportant,
+    this.isUrgent,
   });
 
   final String todoId;
-  final TaskPriorityAiBand priorityBand;
   final double semanticAdjustment;
   final String reason;
-  final TaskPrioritySuggestionKind suggestedAction;
   final TaskPriorityAiConfidence confidence;
+  final TaskPriorityAiLegacyRanking? legacyRanking;
+  final bool? isImportant;
+  final bool? isUrgent;
 
   Map<String, Object?> toJson() {
-    return <String, Object?>{
+    final json = <String, Object?>{
       'todo_id': todoId,
-      'priority_band': priorityBand.name,
       'semantic_adjustment': semanticAdjustment,
       'reason': reason,
-      'suggested_action': suggestedAction.name,
       'confidence': confidence.name,
+      'is_important': isImportant,
+      'is_urgent': isUrgent,
     };
+    if (legacyRanking != null) {
+      json['priority_band'] = legacyRanking!.priorityBand.name;
+      json['suggested_action'] = legacyRanking!.suggestedAction.name;
+    }
+    return json;
   }
 
   factory TaskPriorityAiEntry.fromJson(Map<String, Object?> json) {
+    bool? parseBool(Object? raw) {
+      if (raw is bool) return raw;
+      final text = raw?.toString().trim().toLowerCase();
+      if (text == 'true') return true;
+      if (text == 'false') return false;
+      return null;
+    }
+
     final todoId = (json['todo_id'] ?? json['todoId'] ?? '').toString().trim();
-    final priorityBand = switch (
+    final priorityBandToken =
         (json['priority_band'] ?? json['priorityBand'] ?? '')
             .toString()
             .trim()
-            .toLowerCase()) {
-      'focus' => TaskPriorityAiBand.focus,
-      'later' => TaskPriorityAiBand.later,
-      _ => TaskPriorityAiBand.next,
-    };
+            .toLowerCase();
+    final priorityBand = priorityBandToken.isEmpty
+        ? null
+        : switch (priorityBandToken) {
+            'focus' => TaskPriorityAiBand.focus,
+            'later' => TaskPriorityAiBand.later,
+            _ => TaskPriorityAiBand.next,
+          };
     final suggestedActionToken =
         (json['suggested_action'] ?? json['suggestedAction'] ?? '')
             .toString()
             .trim()
             .toLowerCase();
-    final suggestedAction = switch (suggestedActionToken) {
-      'schedule' => TaskPrioritySuggestionKind.schedule,
-      'defer' => TaskPrioritySuggestionKind.defer,
-      'clarify' => TaskPrioritySuggestionKind.clarify,
-      _ => TaskPrioritySuggestionKind.doNow,
-    };
+    final suggestedAction = suggestedActionToken.isEmpty
+        ? null
+        : switch (suggestedActionToken) {
+            'schedule' => TaskPrioritySuggestionKind.schedule,
+            'defer' => TaskPrioritySuggestionKind.defer,
+            'clarify' => TaskPrioritySuggestionKind.clarify,
+            _ => TaskPrioritySuggestionKind.doNow,
+          };
     final confidence =
         switch ((json['confidence'] ?? '').toString().trim().toLowerCase()) {
       'high' => TaskPriorityAiConfidence.high,
@@ -76,11 +106,18 @@ class TaskPriorityAiEntry {
         : double.tryParse(adjustmentRaw?.toString() ?? '') ?? 0;
     return TaskPriorityAiEntry(
       todoId: todoId,
-      priorityBand: priorityBand,
       semanticAdjustment: adjustment,
       reason: (json['reason'] ?? '').toString().trim(),
-      suggestedAction: suggestedAction,
       confidence: confidence,
+      legacyRanking: priorityBand == null && suggestedAction == null
+          ? null
+          : TaskPriorityAiLegacyRanking(
+              priorityBand: priorityBand ?? TaskPriorityAiBand.next,
+              suggestedAction:
+                  suggestedAction ?? TaskPrioritySuggestionKind.doNow,
+            ),
+      isImportant: parseBool(json['is_important'] ?? json['important']),
+      isUrgent: parseBool(json['is_urgent'] ?? json['urgent']),
     );
   }
 }
@@ -131,6 +168,8 @@ class TaskPriorityAiCandidate {
     required this.isRepeatedlyDeferred,
     required this.isPotentialBlocker,
     required this.isQuickWin,
+    required this.ruleIsImportant,
+    required this.ruleIsUrgent,
   });
 
   final String todoId;
@@ -145,6 +184,8 @@ class TaskPriorityAiCandidate {
   final bool isRepeatedlyDeferred;
   final bool isPotentialBlocker;
   final bool isQuickWin;
+  final bool ruleIsImportant;
+  final bool ruleIsUrgent;
 
   Map<String, Object?> toJson() {
     return <String, Object?>{
@@ -154,11 +195,14 @@ class TaskPriorityAiCandidate {
       'band': band.name,
       'due_state': dueState,
       'rule_score': ruleScore,
+      'updated_at_ms': updatedAtMs,
       'recent_interaction_summary': recentInteractionSummary,
       'source_summary': sourceSummary,
       'is_repeatedly_deferred': isRepeatedlyDeferred,
       'is_potential_blocker': isPotentialBlocker,
       'is_quick_win': isQuickWin,
+      'rule_is_important': ruleIsImportant,
+      'rule_is_urgent': ruleIsUrgent,
     };
   }
 }
@@ -179,6 +223,23 @@ class TaskPriorityAiRequest {
           candidates.map((entry) => entry.toJson()).toList(growable: false),
     };
   }
+
+  TaskPriorityAiRequest copyWith({
+    DateTime? nowLocal,
+    List<TaskPriorityAiCandidate>? candidates,
+  }) {
+    return TaskPriorityAiRequest(
+      nowLocal: nowLocal ?? this.nowLocal,
+      candidates: candidates ?? this.candidates,
+    );
+  }
+}
+
+String buildTaskPriorityAiTimeBucket(DateTime nowLocal) {
+  return '${nowLocal.year.toString().padLeft(4, '0')}-'
+      '${nowLocal.month.toString().padLeft(2, '0')}-'
+      '${nowLocal.day.toString().padLeft(2, '0')}T'
+      '${nowLocal.hour.toString().padLeft(2, '0')}';
 }
 
 TaskPriorityAiBatchResult parseTaskPriorityAiBatchResult(String raw) {

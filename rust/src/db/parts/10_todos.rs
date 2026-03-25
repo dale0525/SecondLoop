@@ -10,10 +10,12 @@ fn get_todo_by_id(conn: &Connection, key: &[u8; 32], id: &str) -> Result<Todo> {
         review_stage,
         next_review_at_ms,
         last_review_at_ms,
-    ): (Vec<u8>, Option<i64>, String, Option<String>, i64, i64, Option<i64>, Option<i64>, Option<i64>) = conn
+        manual_importance_nudge_score,
+        manual_urgency_nudge_score,
+    ): (Vec<u8>, Option<i64>, String, Option<String>, i64, i64, Option<i64>, Option<i64>, Option<i64>, i64, i64) = conn
         .query_row(
             r#"
-SELECT title, due_at_ms, status, source_entry_id, created_at_ms, updated_at_ms, review_stage, next_review_at_ms, last_review_at_ms
+SELECT title, due_at_ms, status, source_entry_id, created_at_ms, updated_at_ms, review_stage, next_review_at_ms, last_review_at_ms, manual_importance_nudge_score, manual_urgency_nudge_score
 FROM todos
 WHERE id = ?1
 "#,
@@ -29,6 +31,8 @@ WHERE id = ?1
                     row.get(6)?,
                     row.get(7)?,
                     row.get(8)?,
+                    row.get(9)?,
+                    row.get(10)?,
                 ))
             },
         )
@@ -49,6 +53,8 @@ WHERE id = ?1
         review_stage,
         next_review_at_ms,
         last_review_at_ms,
+        manual_importance_nudge_score: Some(manual_importance_nudge_score),
+        manual_urgency_nudge_score: Some(manual_urgency_nudge_score),
     })
 }
 
@@ -68,25 +74,29 @@ pub fn upsert_todo(
     review_stage: Option<i64>,
     next_review_at_ms: Option<i64>,
     last_review_at_ms: Option<i64>,
+    manual_importance_nudge_score: Option<i64>,
+    manual_urgency_nudge_score: Option<i64>,
 ) -> Result<Todo> {
     let now = now_ms();
 
-    let (existing_title, existing_status, existing_due_at_ms, existing_needs_embedding): (
-        Option<String>,
-        Option<String>,
-        Option<i64>,
-        i64,
-    ) = {
-        type ExistingTodoRow = (Vec<u8>, String, Option<i64>, Option<i64>);
+    let (
+        existing_title,
+        existing_status,
+        existing_due_at_ms,
+        existing_manual_importance_nudge_score,
+        existing_manual_urgency_nudge_score,
+        existing_needs_embedding,
+    ): (Option<String>, Option<String>, Option<i64>, i64, i64, i64) = {
+        type ExistingTodoRow = (Vec<u8>, String, Option<i64>, i64, i64, Option<i64>);
 
         let row: Option<ExistingTodoRow> = conn
             .query_row(
-                r#"SELECT title, status, due_at_ms, needs_embedding FROM todos WHERE id = ?1"#,
+                r#"SELECT title, status, due_at_ms, manual_importance_nudge_score, manual_urgency_nudge_score, needs_embedding FROM todos WHERE id = ?1"#,
                 params![id],
-                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?, row.get(4)?, row.get(5)?)),
             )
             .optional()?;
-        if let Some((title_blob, status, due_at_ms, needs_embedding)) = row {
+        if let Some((title_blob, status, due_at_ms, manual_importance_nudge_score, manual_urgency_nudge_score, needs_embedding)) = row {
             let title_bytes = decrypt_bytes(key, &title_blob, b"todo.title")?;
             let title = String::from_utf8(title_bytes)
                 .map_err(|_| anyhow!("todo title is not valid utf-8"))?;
@@ -94,16 +104,27 @@ pub fn upsert_todo(
                 Some(title),
                 Some(status),
                 due_at_ms,
+                manual_importance_nudge_score,
+                manual_urgency_nudge_score,
                 needs_embedding.unwrap_or(0),
             )
         } else {
-            (None, None, None, 0)
+            (None, None, None, 0, 0, 0)
         }
     };
+
+    let normalized_manual_importance_nudge_score = manual_importance_nudge_score
+        .unwrap_or(existing_manual_importance_nudge_score)
+        .clamp(-1, 1);
+    let normalized_manual_urgency_nudge_score = manual_urgency_nudge_score
+        .unwrap_or(existing_manual_urgency_nudge_score)
+        .clamp(-1, 1);
 
     let needs_embedding = if existing_title.as_deref() != Some(title)
         || existing_status.as_deref() != Some(status)
         || existing_due_at_ms != due_at_ms
+        || existing_manual_importance_nudge_score != normalized_manual_importance_nudge_score
+        || existing_manual_urgency_nudge_score != normalized_manual_urgency_nudge_score
     {
         1i64
     } else {
@@ -114,9 +135,9 @@ pub fn upsert_todo(
     conn.execute(
         r#"
 INSERT INTO todos (
-  id, title, due_at_ms, status, source_entry_id, created_at_ms, updated_at_ms, review_stage, next_review_at_ms, last_review_at_ms, needs_embedding
+  id, title, due_at_ms, status, source_entry_id, created_at_ms, updated_at_ms, review_stage, next_review_at_ms, last_review_at_ms, manual_importance_nudge_score, manual_urgency_nudge_score, needs_embedding
 )
-VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
+VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)
 ON CONFLICT(id) DO UPDATE SET
   title = excluded.title,
   due_at_ms = excluded.due_at_ms,
@@ -126,6 +147,8 @@ ON CONFLICT(id) DO UPDATE SET
   review_stage = excluded.review_stage,
   next_review_at_ms = excluded.next_review_at_ms,
   last_review_at_ms = excluded.last_review_at_ms,
+  manual_importance_nudge_score = excluded.manual_importance_nudge_score,
+  manual_urgency_nudge_score = excluded.manual_urgency_nudge_score,
   needs_embedding = excluded.needs_embedding
 "#,
         params![
@@ -139,6 +162,8 @@ ON CONFLICT(id) DO UPDATE SET
             review_stage,
             next_review_at_ms,
             last_review_at_ms,
+            normalized_manual_importance_nudge_score,
+            normalized_manual_urgency_nudge_score,
             needs_embedding,
         ],
     )?;
@@ -164,6 +189,8 @@ ON CONFLICT(id) DO UPDATE SET
             "review_stage": todo.review_stage,
             "next_review_at_ms": todo.next_review_at_ms,
             "last_review_at_ms": todo.last_review_at_ms,
+            "manual_importance_nudge_score": todo.manual_importance_nudge_score.unwrap_or(0),
+            "manual_urgency_nudge_score": todo.manual_urgency_nudge_score.unwrap_or(0),
         }
     });
     insert_oplog(conn, key, &op)?;
@@ -174,7 +201,7 @@ ON CONFLICT(id) DO UPDATE SET
 pub fn list_todos(conn: &Connection, key: &[u8; 32]) -> Result<Vec<Todo>> {
     let mut stmt = conn.prepare(
         r#"
-SELECT id, title, due_at_ms, status, source_entry_id, created_at_ms, updated_at_ms, review_stage, next_review_at_ms, last_review_at_ms
+SELECT id, title, due_at_ms, status, source_entry_id, created_at_ms, updated_at_ms, review_stage, next_review_at_ms, last_review_at_ms, manual_importance_nudge_score, manual_urgency_nudge_score
 FROM todos
 ORDER BY COALESCE(due_at_ms, 9223372036854775807) ASC, created_at_ms ASC
 "#,
@@ -193,6 +220,8 @@ ORDER BY COALESCE(due_at_ms, 9223372036854775807) ASC, created_at_ms ASC
         let review_stage: Option<i64> = row.get(7)?;
         let next_review_at_ms: Option<i64> = row.get(8)?;
         let last_review_at_ms: Option<i64> = row.get(9)?;
+        let manual_importance_nudge_score: i64 = row.get(10)?;
+        let manual_urgency_nudge_score: i64 = row.get(11)?;
 
         let title_bytes = decrypt_bytes(key, &title_blob, b"todo.title")?;
         let title =
@@ -209,6 +238,8 @@ ORDER BY COALESCE(due_at_ms, 9223372036854775807) ASC, created_at_ms ASC
             review_stage,
             next_review_at_ms,
             last_review_at_ms,
+            manual_importance_nudge_score: Some(manual_importance_nudge_score),
+            manual_urgency_nudge_score: Some(manual_urgency_nudge_score),
         });
     }
     Ok(result)
@@ -1365,7 +1396,7 @@ pub fn list_todos_created_in_range(
 ) -> Result<Vec<Todo>> {
     let mut stmt = conn.prepare(
         r#"
-SELECT id, title, due_at_ms, status, source_entry_id, created_at_ms, updated_at_ms, review_stage, next_review_at_ms, last_review_at_ms
+SELECT id, title, due_at_ms, status, source_entry_id, created_at_ms, updated_at_ms, review_stage, next_review_at_ms, last_review_at_ms, manual_importance_nudge_score, manual_urgency_nudge_score
 FROM todos
 WHERE created_at_ms >= ?1 AND created_at_ms < ?2
 ORDER BY created_at_ms ASC, id ASC
@@ -1385,6 +1416,8 @@ ORDER BY created_at_ms ASC, id ASC
         let review_stage: Option<i64> = row.get(7)?;
         let next_review_at_ms: Option<i64> = row.get(8)?;
         let last_review_at_ms: Option<i64> = row.get(9)?;
+        let manual_importance_nudge_score: i64 = row.get(10)?;
+        let manual_urgency_nudge_score: i64 = row.get(11)?;
 
         let title_bytes = decrypt_bytes(key, &title_blob, b"todo.title")?;
         let title =
@@ -1401,6 +1434,8 @@ ORDER BY created_at_ms ASC, id ASC
             review_stage,
             next_review_at_ms,
             last_review_at_ms,
+            manual_importance_nudge_score: Some(manual_importance_nudge_score),
+            manual_urgency_nudge_score: Some(manual_urgency_nudge_score),
         });
     }
     Ok(result)
@@ -1483,6 +1518,8 @@ VALUES (?1, ?2, 'status_change', ?3, ?4, NULL, ?5, ?6, 1)
         review_stage,
         next_review_at_ms,
         Some(now),
+        existing.manual_importance_nudge_score,
+        existing.manual_urgency_nudge_score,
     )?;
 
     maybe_spawn_next_recurring_todo(conn, key, &updated, new_status)?;

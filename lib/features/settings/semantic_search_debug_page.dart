@@ -7,6 +7,7 @@ import '../../core/backend/app_backend.dart';
 import '../../core/backend/knowledge_backend.dart';
 import '../../core/backend/knowledge_search_models.dart';
 import '../../core/backend/knowledge_viewer_backend.dart';
+import '../../core/navigation/inherited_scope_page_wrapper.dart';
 import '../../core/session/session_scope.dart';
 import '../../i18n/strings.g.dart';
 import '../attachments/attachment_viewer_page.dart';
@@ -352,12 +353,12 @@ class _SemanticSearchDebugPageState extends State<SemanticSearchDebugPage> {
 
     final message = await backend.getMessageById(key, messageId);
     if (!mounted || message == null) return;
-    await Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (context) => MessageViewerPage(
-          content: message.content,
-          messageId: message.id,
-        ),
+    await pushPageWithInheritedScopes(
+      Navigator.of(context),
+      context,
+      MessageViewerPage(
+        content: message.content,
+        messageId: message.id,
       ),
     );
   }

@@ -161,10 +161,10 @@ extension _SettingsPageBuild on _SettingsPageState {
             onTap: _busy
                 ? null
                 : () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => const CloudAccountPage(),
-                      ),
+                    pushPageWithInheritedScopes(
+                      Navigator.of(context),
+                      context,
+                      const CloudAccountPage(),
                     );
                   },
           ),
@@ -175,10 +175,10 @@ extension _SettingsPageBuild on _SettingsPageState {
             onTap: _busy
                 ? null
                 : () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => const AiSettingsPage(),
-                      ),
+                    pushPageWithInheritedScopes(
+                      Navigator.of(context),
+                      context,
+                      const AiSettingsPage(),
                     );
                   },
           ),
@@ -188,10 +188,10 @@ extension _SettingsPageBuild on _SettingsPageState {
             onTap: _busy
                 ? null
                 : () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => const SyncSettingsPage(),
-                      ),
+                    pushPageWithInheritedScopes(
+                      Navigator.of(context),
+                      context,
+                      const SyncSettingsPage(),
                     );
                   },
           ),
@@ -203,10 +203,10 @@ extension _SettingsPageBuild on _SettingsPageState {
               onTap: _busy
                   ? null
                   : () {
-                      Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) => const ExternalImportPage(),
-                        ),
+                      pushPageWithInheritedScopes(
+                        Navigator.of(context),
+                        context,
+                        const ExternalImportPage(),
                       );
                     },
             ),
@@ -218,10 +218,10 @@ extension _SettingsPageBuild on _SettingsPageState {
               onTap: _busy
                   ? null
                   : () {
-                      Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) => const MigrationArchivePage(),
-                        ),
+                      pushPageWithInheritedScopes(
+                        Navigator.of(context),
+                        context,
+                        const MigrationArchivePage(),
                       );
                     },
             ),
@@ -290,10 +290,10 @@ extension _SettingsPageBuild on _SettingsPageState {
             onTap: _busy
                 ? null
                 : () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => const AboutPage(),
-                      ),
+                    pushPageWithInheritedScopes(
+                      Navigator.of(context),
+                      context,
+                      const AboutPage(),
                     );
                   },
           ),
@@ -304,12 +304,12 @@ extension _SettingsPageBuild on _SettingsPageState {
             onTap: _busy
                 ? null
                 : () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => WelcomePage(
-                          onSkipForNow: () => Navigator.of(context).pop(),
-                          onFinishSetup: () => Navigator.of(context).pop(),
-                        ),
+                    pushPageWithInheritedScopes(
+                      Navigator.of(context),
+                      context,
+                      WelcomePage(
+                        onSkipForNow: () => Navigator.of(context).pop(),
+                        onFinishSetup: () => Navigator.of(context).pop(),
                       ),
                     );
                   },
@@ -321,10 +321,10 @@ extension _SettingsPageBuild on _SettingsPageState {
             onTap: _busy
                 ? null
                 : () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => const DiagnosticsPage(),
-                      ),
+                    pushPageWithInheritedScopes(
+                      Navigator.of(context),
+                      context,
+                      const DiagnosticsPage(),
                     );
                   },
           ),
@@ -446,10 +446,10 @@ extension _SettingsPageBuild on _SettingsPageState {
               title: Text(context.t.settings.debugSemanticSearch.title),
               subtitle: Text(context.t.settings.debugSemanticSearch.subtitle),
               onTap: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => const SemanticSearchDebugPage(),
-                  ),
+                pushPageWithInheritedScopes(
+                  Navigator.of(context),
+                  context,
+                  const SemanticSearchDebugPage(),
                 );
               },
             ),
@@ -458,10 +458,10 @@ extension _SettingsPageBuild on _SettingsPageState {
               title: Text(context.t.settings.knowledgeIndex.title),
               subtitle: Text(context.t.settings.knowledgeIndex.subtitle),
               onTap: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => const KnowledgeIndexDebugPage(),
-                  ),
+                pushPageWithInheritedScopes(
+                  Navigator.of(context),
+                  context,
+                  const KnowledgeIndexDebugPage(),
                 );
               },
             ),

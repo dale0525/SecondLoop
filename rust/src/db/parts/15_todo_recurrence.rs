@@ -423,6 +423,8 @@ pub fn update_todo_due_with_scope(
                 current.review_stage,
                 current.next_review_at_ms,
                 current.last_review_at_ms,
+                current.manual_importance_nudge_score,
+                current.manual_urgency_nudge_score,
             )?,
             TodoRecurrenceEditScope::ThisAndFuture | TodoRecurrenceEditScope::WholeSeries => {
                 let current_due_at_ms = current
@@ -467,6 +469,8 @@ pub fn update_todo_due_with_scope(
                         series_todo.review_stage,
                         series_todo.next_review_at_ms,
                         series_todo.last_review_at_ms,
+                        series_todo.manual_importance_nudge_score,
+                        series_todo.manual_urgency_nudge_score,
                     )?;
                     if *series_todo_id == current.id {
                         updated_current = Some(updated);
@@ -689,6 +693,8 @@ fn maybe_spawn_next_recurring_todo(
         None,
         None,
         Some(now_ms()),
+        todo.manual_importance_nudge_score,
+        todo.manual_urgency_nudge_score,
     )?;
 
     let _ = upsert_todo_recurrence_with_sync_in_txn(

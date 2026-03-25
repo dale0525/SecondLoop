@@ -22,6 +22,8 @@ fn todo_history_range_lists_created_todos_and_activities() {
         None,
         None,
         None,
+        None,
+        None,
     )
     .expect("todo 1");
 
@@ -42,6 +44,8 @@ fn todo_history_range_lists_created_todos_and_activities() {
         "下午 2 点接待客户",
         None,
         "open",
+        None,
+        None,
         None,
         None,
         None,

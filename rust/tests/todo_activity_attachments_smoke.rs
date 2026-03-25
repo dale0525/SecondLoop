@@ -22,6 +22,8 @@ fn todo_activity_can_link_and_list_attachments() {
         None,
         None,
         None,
+        None,
+        None,
     )
     .expect("upsert todo");
 
