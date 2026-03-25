@@ -17,6 +17,15 @@ void main() {
     );
   });
 
+  test('web build workflow quotes step names containing colons', () {
+    final workflow = File('.github/workflows/web-build.yml').readAsStringSync();
+
+    expect(
+      workflow,
+      contains('- name: "Guard: no python runtime process usage"'),
+    );
+  });
+
   test('CI workflow generates i18n before web smoke tests', () {
     final workflow = File('.github/workflows/ci.yml').readAsStringSync();
 
