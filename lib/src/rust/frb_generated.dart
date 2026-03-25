@@ -648,7 +648,7 @@ abstract class RustLibApi extends BaseApi {
       required String messageId,
       required PlatformInt64 nowMs});
 
-  Future<void> crateApiCoreDbMarkSemanticParseJobCanceledIfCurrentAttempt(
+  Future<bool> crateApiCoreDbMarkSemanticParseJobCanceledIfCurrentAttempt(
       {required String appDir,
       required List<int> key,
       required String messageId,
@@ -664,7 +664,7 @@ abstract class RustLibApi extends BaseApi {
       required String lastError,
       required PlatformInt64 nowMs});
 
-  Future<void> crateApiCoreDbMarkSemanticParseJobFailedIfCurrentAttempt(
+  Future<bool> crateApiCoreDbMarkSemanticParseJobFailedIfCurrentAttempt(
       {required String appDir,
       required List<int> key,
       required String messageId,
@@ -700,7 +700,7 @@ abstract class RustLibApi extends BaseApi {
       List<String>? appliedTagIds,
       required PlatformInt64 nowMs});
 
-  Future<void> crateApiCoreDbMarkSemanticParseJobSucceededIfCurrentAttempt(
+  Future<bool> crateApiCoreDbMarkSemanticParseJobSucceededIfCurrentAttempt(
       {required String appDir,
       required List<int> key,
       required String messageId,
@@ -5168,7 +5168,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
-  Future<void> crateApiCoreDbMarkSemanticParseJobCanceledIfCurrentAttempt(
+  Future<bool> crateApiCoreDbMarkSemanticParseJobCanceledIfCurrentAttempt(
       {required String appDir,
       required List<int> key,
       required String messageId,
@@ -5186,7 +5186,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             funcId: 97, port: port_);
       },
       codec: SseCodec(
-        decodeSuccessData: sse_decode_unit,
+        decodeSuccessData: sse_decode_bool,
         decodeErrorData: sse_decode_AnyhowException,
       ),
       constMeta:
@@ -5264,7 +5264,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
-  Future<void> crateApiCoreDbMarkSemanticParseJobFailedIfCurrentAttempt(
+  Future<bool> crateApiCoreDbMarkSemanticParseJobFailedIfCurrentAttempt(
       {required String appDir,
       required List<int> key,
       required String messageId,
@@ -5288,7 +5288,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             funcId: 99, port: port_);
       },
       codec: SseCodec(
-        decodeSuccessData: sse_decode_unit,
+        decodeSuccessData: sse_decode_bool,
         decodeErrorData: sse_decode_AnyhowException,
       ),
       constMeta:
@@ -5462,7 +5462,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
-  Future<void> crateApiCoreDbMarkSemanticParseJobSucceededIfCurrentAttempt(
+  Future<bool> crateApiCoreDbMarkSemanticParseJobSucceededIfCurrentAttempt(
       {required String appDir,
       required List<int> key,
       required String messageId,
@@ -5496,7 +5496,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             funcId: 103, port: port_);
       },
       codec: SseCodec(
-        decodeSuccessData: sse_decode_unit,
+        decodeSuccessData: sse_decode_bool,
         decodeErrorData: sse_decode_AnyhowException,
       ),
       constMeta:

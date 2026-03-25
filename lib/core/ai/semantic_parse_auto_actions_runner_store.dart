@@ -567,13 +567,13 @@ final class BackendSemanticParseAutoActionsStore
   }
 
   @override
-  Future<void> markJobSucceededIfCurrentAttempt(
+  Future<bool> markJobSucceededIfCurrentAttempt(
     SemanticParseJobSucceededArgs args, {
     required int expectedAttemptId,
   }) async {
     if (_backend is SemanticParseAttemptAwareBackend) {
       final awareBackend = _backend as SemanticParseAttemptAwareBackend;
-      await awareBackend.markSemanticParseJobSucceededIfCurrentAttempt(
+      return awareBackend.markSemanticParseJobSucceededIfCurrentAttempt(
         _sessionKey,
         messageId: args.messageId,
         expectedAttemptId: expectedAttemptId,
@@ -587,7 +587,6 @@ final class BackendSemanticParseAutoActionsStore
         appliedTagIds: args.appliedTagIds,
         nowMs: args.nowMs,
       );
-      return;
     }
 
     await _backend.markSemanticParseJobSucceeded(
@@ -603,16 +602,17 @@ final class BackendSemanticParseAutoActionsStore
       appliedTagIds: args.appliedTagIds,
       nowMs: args.nowMs,
     );
+    return true;
   }
 
   @override
-  Future<void> markJobFailedIfCurrentAttempt(
+  Future<bool> markJobFailedIfCurrentAttempt(
     SemanticParseJobFailedArgs args, {
     required int expectedAttemptId,
   }) async {
     if (_backend is SemanticParseAttemptAwareBackend) {
       final awareBackend = _backend as SemanticParseAttemptAwareBackend;
-      await awareBackend.markSemanticParseJobFailedIfCurrentAttempt(
+      return awareBackend.markSemanticParseJobFailedIfCurrentAttempt(
         _sessionKey,
         messageId: args.messageId,
         expectedAttemptId: expectedAttemptId,
@@ -621,7 +621,6 @@ final class BackendSemanticParseAutoActionsStore
         lastError: args.error,
         nowMs: args.nowMs,
       );
-      return;
     }
 
     await _backend.markSemanticParseJobFailed(
@@ -632,6 +631,7 @@ final class BackendSemanticParseAutoActionsStore
       lastError: args.error,
       nowMs: args.nowMs,
     );
+    return true;
   }
 
   @override
@@ -647,23 +647,23 @@ final class BackendSemanticParseAutoActionsStore
   }
 
   @override
-  Future<void> markJobCanceledIfCurrentAttempt({
+  Future<bool> markJobCanceledIfCurrentAttempt({
     required String messageId,
     required int expectedAttemptId,
     required int nowMs,
   }) async {
     if (_backend is SemanticParseAttemptAwareBackend) {
       final awareBackend = _backend as SemanticParseAttemptAwareBackend;
-      await awareBackend.markSemanticParseJobCanceledIfCurrentAttempt(
+      return awareBackend.markSemanticParseJobCanceledIfCurrentAttempt(
         _sessionKey,
         messageId: messageId,
         expectedAttemptId: expectedAttemptId,
         nowMs: nowMs,
       );
-      return;
     }
 
     await markJobCanceled(messageId: messageId, nowMs: nowMs);
+    return true;
   }
 
   @override

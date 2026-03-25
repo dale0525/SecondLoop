@@ -311,15 +311,18 @@ final class _RaceBackend extends NativeAppBackend {
   }
 
   @override
-  Future<void> markSemanticParseJobCanceledIfCurrentAttempt(
+  Future<bool> markSemanticParseJobCanceledIfCurrentAttempt(
     Uint8List key, {
     required String messageId,
     required int expectedAttemptId,
     required int nowMs,
   }) async {
     final job = _jobsByMessageId[messageId];
-    if (job == null || job.attemptId.toInt() != expectedAttemptId) return;
+    if (job == null || job.attemptId.toInt() != expectedAttemptId) {
+      return false;
+    }
     await markSemanticParseJobCanceled(key, messageId: messageId, nowMs: nowMs);
+    return true;
   }
 
   @override
@@ -343,7 +346,7 @@ final class _RaceBackend extends NativeAppBackend {
   }
 
   @override
-  Future<void> markSemanticParseJobFailedIfCurrentAttempt(
+  Future<bool> markSemanticParseJobFailedIfCurrentAttempt(
     Uint8List key, {
     required String messageId,
     required int expectedAttemptId,
@@ -353,7 +356,9 @@ final class _RaceBackend extends NativeAppBackend {
     required int nowMs,
   }) async {
     final job = _jobsByMessageId[messageId];
-    if (job == null || job.attemptId.toInt() != expectedAttemptId) return;
+    if (job == null || job.attemptId.toInt() != expectedAttemptId) {
+      return false;
+    }
     await markSemanticParseJobFailed(
       key,
       messageId: messageId,
@@ -362,6 +367,7 @@ final class _RaceBackend extends NativeAppBackend {
       lastError: lastError,
       nowMs: nowMs,
     );
+    return true;
   }
 
   @override
@@ -403,7 +409,7 @@ final class _RaceBackend extends NativeAppBackend {
   }
 
   @override
-  Future<void> markSemanticParseJobSucceededIfCurrentAttempt(
+  Future<bool> markSemanticParseJobSucceededIfCurrentAttempt(
     Uint8List key, {
     required String messageId,
     required int expectedAttemptId,
@@ -418,7 +424,9 @@ final class _RaceBackend extends NativeAppBackend {
     required int nowMs,
   }) async {
     final job = _jobsByMessageId[messageId];
-    if (job == null || job.attemptId.toInt() != expectedAttemptId) return;
+    if (job == null || job.attemptId.toInt() != expectedAttemptId) {
+      return false;
+    }
     await markSemanticParseJobSucceeded(
       key,
       messageId: messageId,
@@ -432,6 +440,7 @@ final class _RaceBackend extends NativeAppBackend {
       appliedTagIds: appliedTagIds,
       nowMs: nowMs,
     );
+    return true;
   }
 
   @override

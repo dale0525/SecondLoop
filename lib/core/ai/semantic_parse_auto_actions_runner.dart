@@ -143,12 +143,12 @@ abstract class SemanticParseAutoActionsStore {
     required int nowMs,
   });
 
-  Future<void> markJobSucceededIfCurrentAttempt(
+  Future<bool> markJobSucceededIfCurrentAttempt(
     SemanticParseJobSucceededArgs args, {
     required int expectedAttemptId,
   });
 
-  Future<void> markJobFailedIfCurrentAttempt(
+  Future<bool> markJobFailedIfCurrentAttempt(
     SemanticParseJobFailedArgs args, {
     required int expectedAttemptId,
   });
@@ -158,7 +158,7 @@ abstract class SemanticParseAutoActionsStore {
     required int nowMs,
   });
 
-  Future<void> markJobCanceledIfCurrentAttempt({
+  Future<bool> markJobCanceledIfCurrentAttempt({
     required String messageId,
     required int expectedAttemptId,
     required int nowMs,
@@ -791,34 +791,20 @@ final class SemanticParseAutoActionsRunner {
     SemanticParseJobSucceededArgs args, {
     required int attemptId,
   }) async {
-    if (!await _isStillRunningAttempt(
-      messageId: args.messageId,
-      attemptId: attemptId,
-    )) {
-      return false;
-    }
-    await store.markJobSucceededIfCurrentAttempt(
+    return store.markJobSucceededIfCurrentAttempt(
       args,
       expectedAttemptId: attemptId,
     );
-    return true;
   }
 
   Future<bool> _markJobFailedIfStillRunning(
     SemanticParseJobFailedArgs args, {
     required int attemptId,
   }) async {
-    if (!await _isStillRunningAttempt(
-      messageId: args.messageId,
-      attemptId: attemptId,
-    )) {
-      return false;
-    }
-    await store.markJobFailedIfCurrentAttempt(
+    return store.markJobFailedIfCurrentAttempt(
       args,
       expectedAttemptId: attemptId,
     );
-    return true;
   }
 
   Future<bool> _markJobCanceledIfStillRunning({
@@ -826,17 +812,10 @@ final class SemanticParseAutoActionsRunner {
     required int attemptId,
     required int nowMs,
   }) async {
-    if (!await _isStillRunningAttempt(
-      messageId: messageId,
-      attemptId: attemptId,
-    )) {
-      return false;
-    }
-    await store.markJobCanceledIfCurrentAttempt(
+    return store.markJobCanceledIfCurrentAttempt(
       messageId: messageId,
       expectedAttemptId: attemptId,
       nowMs: nowMs,
     );
-    return true;
   }
 }

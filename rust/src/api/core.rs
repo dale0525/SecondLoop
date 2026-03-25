@@ -1410,7 +1410,7 @@ pub fn db_mark_semantic_parse_job_failed_if_current_attempt(
     next_retry_at_ms: i64,
     last_error: String,
     now_ms: i64,
-) -> Result<()> {
+) -> Result<bool> {
     let _key = key_from_bytes(key)?;
     let conn = db::open(Path::new(&app_dir))?;
     db::mark_semantic_parse_job_failed_if_current_attempt(
@@ -1486,7 +1486,7 @@ pub fn db_mark_semantic_parse_job_succeeded_if_current_attempt(
     tag_suggestion_state: Option<String>,
     applied_tag_ids: Option<Vec<String>>,
     now_ms: i64,
-) -> Result<()> {
+) -> Result<bool> {
     let key = key_from_bytes(key)?;
     let conn = db::open(Path::new(&app_dir))?;
     db::mark_semantic_parse_job_succeeded_with_tag_metadata_if_current_attempt(
@@ -1525,7 +1525,7 @@ pub fn db_mark_semantic_parse_job_canceled_if_current_attempt(
     message_id: String,
     expected_attempt_id: i64,
     now_ms: i64,
-) -> Result<()> {
+) -> Result<bool> {
     let _key = key_from_bytes(key)?;
     let conn = db::open(Path::new(&app_dir))?;
     db::mark_semantic_parse_job_canceled_if_current_attempt(

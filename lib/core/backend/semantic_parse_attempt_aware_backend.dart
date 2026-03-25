@@ -7,7 +7,7 @@ abstract interface class SemanticParseAttemptAwareBackend {
     required int nowMs,
   });
 
-  Future<void> markSemanticParseJobFailedIfCurrentAttempt(
+  Future<bool> markSemanticParseJobFailedIfCurrentAttempt(
     Uint8List key, {
     required String messageId,
     required int expectedAttemptId,
@@ -17,7 +17,7 @@ abstract interface class SemanticParseAttemptAwareBackend {
     required int nowMs,
   });
 
-  Future<void> markSemanticParseJobSucceededIfCurrentAttempt(
+  Future<bool> markSemanticParseJobSucceededIfCurrentAttempt(
     Uint8List key, {
     required String messageId,
     required int expectedAttemptId,
@@ -32,7 +32,7 @@ abstract interface class SemanticParseAttemptAwareBackend {
     required int nowMs,
   });
 
-  Future<void> markSemanticParseJobCanceledIfCurrentAttempt(
+  Future<bool> markSemanticParseJobCanceledIfCurrentAttempt(
     Uint8List key, {
     required String messageId,
     required int expectedAttemptId,

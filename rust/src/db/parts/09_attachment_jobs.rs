@@ -452,8 +452,8 @@ pub fn mark_semantic_parse_job_failed_if_current_attempt(
     next_retry_at_ms: i64,
     last_error: &str,
     now_ms: i64,
-) -> Result<()> {
-    conn.execute(
+) -> Result<bool> {
+    let updated = conn.execute(
         r#"
 UPDATE semantic_parse_jobs
 SET status = 'failed',
@@ -474,7 +474,7 @@ WHERE message_id = ?1
             now_ms
         ],
     )?;
-    Ok(())
+    Ok(updated > 0)
 }
 
 pub fn mark_semantic_parse_job_retry(
@@ -542,7 +542,7 @@ pub fn mark_semantic_parse_job_succeeded_if_current_attempt(
     applied_todo_title: Option<&str>,
     applied_prev_todo_status: Option<&str>,
     now_ms: i64,
-) -> Result<()> {
+) -> Result<bool> {
     mark_semantic_parse_job_succeeded_with_tag_metadata_if_current_attempt(
         conn,
         key,
@@ -659,7 +659,7 @@ pub fn mark_semantic_parse_job_succeeded_with_tag_metadata_if_current_attempt(
     tag_suggestion_state: Option<&str>,
     applied_tag_ids: Option<&[String]>,
     now_ms: i64,
-) -> Result<()> {
+) -> Result<bool> {
     let message_id = message_id.trim();
     if message_id.is_empty() {
         return Err(anyhow!("message_id is required"));
@@ -694,7 +694,7 @@ pub fn mark_semantic_parse_job_succeeded_with_tag_metadata_if_current_attempt(
         .filter(|value| value.is_finite())
         .map(|value| value.clamp(0.0, 1.0));
 
-    conn.execute(
+    let updated = conn.execute(
         r#"
 UPDATE semantic_parse_jobs
 SET status = 'succeeded',
@@ -727,7 +727,7 @@ WHERE message_id = ?1
             now_ms
         ],
     )?;
-    Ok(())
+    Ok(updated > 0)
 }
 
 pub fn mark_semantic_parse_job_canceled(
@@ -755,8 +755,8 @@ pub fn mark_semantic_parse_job_canceled_if_current_attempt(
     message_id: &str,
     expected_attempt_id: i64,
     now_ms: i64,
-) -> Result<()> {
-    conn.execute(
+) -> Result<bool> {
+    let updated = conn.execute(
         r#"
 UPDATE semantic_parse_jobs
 SET status = 'canceled',
@@ -769,7 +769,7 @@ WHERE message_id = ?1
 "#,
         params![message_id, expected_attempt_id, now_ms],
     )?;
-    Ok(())
+    Ok(updated > 0)
 }
 
 pub fn apply_semantic_parse_tags_if_current_attempt(

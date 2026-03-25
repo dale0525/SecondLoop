@@ -242,7 +242,7 @@ mixin _NativeAppBackendJobs on _NativeAppBackendAccess
   }
 
   @override
-  Future<void> markSemanticParseJobFailedIfCurrentAttempt(
+  Future<bool> markSemanticParseJobFailedIfCurrentAttempt(
     Uint8List key, {
     required String messageId,
     required int expectedAttemptId,
@@ -252,7 +252,7 @@ mixin _NativeAppBackendJobs on _NativeAppBackendAccess
     required int nowMs,
   }) async {
     final appDir = await _getAppDir();
-    await rust_core.dbMarkSemanticParseJobFailedIfCurrentAttempt(
+    return rust_core.dbMarkSemanticParseJobFailedIfCurrentAttempt(
       appDir: appDir,
       key: key,
       messageId: messageId,
@@ -311,7 +311,7 @@ mixin _NativeAppBackendJobs on _NativeAppBackendAccess
   }
 
   @override
-  Future<void> markSemanticParseJobSucceededIfCurrentAttempt(
+  Future<bool> markSemanticParseJobSucceededIfCurrentAttempt(
     Uint8List key, {
     required String messageId,
     required int expectedAttemptId,
@@ -326,7 +326,7 @@ mixin _NativeAppBackendJobs on _NativeAppBackendAccess
     required int nowMs,
   }) async {
     final appDir = await _getAppDir();
-    await rust_core.dbMarkSemanticParseJobSucceededIfCurrentAttempt(
+    return rust_core.dbMarkSemanticParseJobSucceededIfCurrentAttempt(
       appDir: appDir,
       key: key,
       messageId: messageId,
@@ -359,14 +359,14 @@ mixin _NativeAppBackendJobs on _NativeAppBackendAccess
   }
 
   @override
-  Future<void> markSemanticParseJobCanceledIfCurrentAttempt(
+  Future<bool> markSemanticParseJobCanceledIfCurrentAttempt(
     Uint8List key, {
     required String messageId,
     required int expectedAttemptId,
     required int nowMs,
   }) async {
     final appDir = await _getAppDir();
-    await rust_core.dbMarkSemanticParseJobCanceledIfCurrentAttempt(
+    return rust_core.dbMarkSemanticParseJobCanceledIfCurrentAttempt(
       appDir: appDir,
       key: key,
       messageId: messageId,

@@ -282,6 +282,57 @@ void main() {
     expect(store.currentJobUpdatedAtMs('msg:retried_mid_run'), 2001);
   });
 
+  test('runner does not count processed when finalize loses attempt race',
+      () async {
+    late _FakeStore store;
+    store = _FakeStore(
+      jobs: [
+        const SemanticParseAutoActionJob(
+          messageId: 'msg:finalize_race',
+          status: 'pending',
+          attempts: 0,
+          nextRetryAtMs: null,
+          createdAtMs: 0,
+        ),
+      ],
+      messages: {'msg:finalize_race': '买牛奶'},
+      beforeMarkSucceededIfCurrentAttempt: (
+        String messageId,
+        int expectedAttemptId,
+        int nowMs,
+      ) {
+        store.requeueJob(messageId, nowMs: nowMs + 1);
+        store.markRunningAttempt(messageId, nowMs: nowMs + 2);
+      },
+    );
+    final client = _FakeClient(
+      responseJson:
+          '{"kind":"create","confidence":1.0,"title":"买牛奶","status":"inbox"}',
+    );
+
+    final runner = SemanticParseAutoActionsRunner(
+      store: store,
+      client: client,
+      settings: const SemanticParseAutoActionsRunnerSettings(
+        hardTimeout: Duration(milliseconds: 200),
+        minAutoConfidence: 0.86,
+      ),
+      nowMs: () => 1000,
+      nowLocal: () => DateTime(2026, 2, 3, 12, 0, 0),
+    );
+
+    final result = await runner.runOnce(
+      localeTag: 'zh-CN',
+      dayEndMinutes: 21 * 60,
+    );
+
+    expect(result.processed, 0);
+    expect(store.createdTodoIds, contains('todo:msg:finalize_race'));
+    expect(store.lastSucceeded, isNull);
+    expect(store.currentJobStatus('msg:finalize_race'), 'running');
+    expect(store.currentJobUpdatedAtMs('msg:finalize_race'), 1002);
+  });
+
   test('runner ignores late failure after job is retried mid-run', () async {
     final store = _FakeStore(
       jobs: [
@@ -842,6 +893,7 @@ final class _FakeStore implements SemanticParseAutoActionsStore {
         const <SemanticParseTodoCandidate>[],
     Map<String, String> previousStatusByTodoId = const <String, String>{},
     Map<String, String>? upsertTodoResultByMessageId,
+    this.beforeMarkSucceededIfCurrentAttempt,
   })  : _jobs = List<SemanticParseAutoActionJob>.from(jobs),
         _messages = Map<String, String>.from(messages),
         _messageInputs = Map<String, SemanticParseMessageInput>.from(
@@ -859,6 +911,8 @@ final class _FakeStore implements SemanticParseAutoActionsStore {
   final List<SemanticParseTodoCandidate> _openCandidates;
   final Map<String, String> _previousStatusByTodoId;
   final Map<String, String> _upsertTodoResultByMessageId;
+  void Function(String messageId, int expectedAttemptId, int nowMs)?
+      beforeMarkSucceededIfCurrentAttempt;
 
   final List<String> createdTodoIds = <String>[];
   final List<String> canceledMessageIds = <String>[];
@@ -920,13 +974,18 @@ final class _FakeStore implements SemanticParseAutoActionsStore {
   }
 
   @override
-  Future<void> markJobSucceededIfCurrentAttempt(
+  Future<bool> markJobSucceededIfCurrentAttempt(
     SemanticParseJobSucceededArgs args, {
     required int expectedAttemptId,
   }) async {
+    beforeMarkSucceededIfCurrentAttempt?.call(
+      args.messageId,
+      expectedAttemptId,
+      args.nowMs,
+    );
     final current = _currentJobs[args.messageId];
     if (current == null || current.attemptId.toInt() != expectedAttemptId) {
-      return;
+      return false;
     }
     lastSucceeded = args;
     _currentJobs[args.messageId] = _buildJob(
@@ -935,16 +994,17 @@ final class _FakeStore implements SemanticParseAutoActionsStore {
       attemptId: expectedAttemptId,
       updatedAtMs: args.nowMs,
     );
+    return true;
   }
 
   @override
-  Future<void> markJobFailedIfCurrentAttempt(
+  Future<bool> markJobFailedIfCurrentAttempt(
     SemanticParseJobFailedArgs args, {
     required int expectedAttemptId,
   }) async {
     final current = _currentJobs[args.messageId];
     if (current == null || current.attemptId.toInt() != expectedAttemptId) {
-      return;
+      return false;
     }
     lastFailed = args;
     _currentJobs[args.messageId] = _buildJob(
@@ -953,6 +1013,7 @@ final class _FakeStore implements SemanticParseAutoActionsStore {
       attemptId: expectedAttemptId,
       updatedAtMs: args.nowMs,
     );
+    return true;
   }
 
   @override
@@ -971,16 +1032,17 @@ final class _FakeStore implements SemanticParseAutoActionsStore {
   }
 
   @override
-  Future<void> markJobCanceledIfCurrentAttempt({
+  Future<bool> markJobCanceledIfCurrentAttempt({
     required String messageId,
     required int expectedAttemptId,
     required int nowMs,
   }) async {
     final current = _currentJobs[messageId];
     if (current == null || current.attemptId.toInt() != expectedAttemptId) {
-      return;
+      return false;
     }
     await markJobCanceled(messageId: messageId, nowMs: nowMs);
+    return true;
   }
 
   void deleteMessage(String messageId) {

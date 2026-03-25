@@ -889,7 +889,7 @@ Future<void> dbMarkSemanticParseJobFailed(
         lastError: lastError,
         nowMs: nowMs);
 
-Future<void> dbMarkSemanticParseJobFailedIfCurrentAttempt(
+Future<bool> dbMarkSemanticParseJobFailedIfCurrentAttempt(
         {required String appDir,
         required List<int> key,
         required String messageId,
@@ -944,7 +944,7 @@ Future<void> dbMarkSemanticParseJobSucceeded(
         appliedTagIds: appliedTagIds,
         nowMs: nowMs);
 
-Future<void> dbMarkSemanticParseJobSucceededIfCurrentAttempt(
+Future<bool> dbMarkSemanticParseJobSucceededIfCurrentAttempt(
         {required String appDir,
         required List<int> key,
         required String messageId,
@@ -982,7 +982,7 @@ Future<void> dbMarkSemanticParseJobCanceled(
     RustLib.instance.api.crateApiCoreDbMarkSemanticParseJobCanceled(
         appDir: appDir, key: key, messageId: messageId, nowMs: nowMs);
 
-Future<void> dbMarkSemanticParseJobCanceledIfCurrentAttempt(
+Future<bool> dbMarkSemanticParseJobCanceledIfCurrentAttempt(
         {required String appDir,
         required List<int> key,
         required String messageId,
