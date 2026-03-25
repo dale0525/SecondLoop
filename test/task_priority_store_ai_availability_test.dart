@@ -217,7 +217,6 @@ void main() {
     var remoteReads = 0;
     final nowLocal = DateTime(2026, 3, 13, 10, 0);
     final requestSignature = jsonEncode(<String, Object?>{
-      'time_bucket': buildTaskPriorityAiTimeBucket(nowLocal),
       'candidate': buildTaskPriorityAiRequest(
         buildTaskPrioritySnapshot(
           <Todo>[todo(id: 'focus', title: 'Focus task', updatedAtMs: 10)],
@@ -277,7 +276,6 @@ void main() {
     var remoteReads = 0;
     final nowLocal = DateTime(2026, 3, 13, 10, 0);
     final requestSignature = jsonEncode(<String, Object?>{
-      'time_bucket': buildTaskPriorityAiTimeBucket(nowLocal),
       'candidate': buildTaskPriorityAiRequest(
         buildTaskPrioritySnapshot(
           <Todo>[todo(id: 'focus', title: 'Focus task', updatedAtMs: 10)],
@@ -387,7 +385,6 @@ void main() {
 
     final nowLocal = DateTime(2026, 3, 13, 10, 6);
     final requestSignature = jsonEncode(<String, Object?>{
-      'time_bucket': buildTaskPriorityAiTimeBucket(nowLocal),
       'candidate': buildTaskPriorityAiRequest(
         buildTaskPrioritySnapshot(
           <Todo>[todo(id: 'focus', title: 'Focus task', updatedAtMs: 10)],
@@ -488,7 +485,6 @@ void main() {
     expect(store.snapshot.primaryFocus?.reasonText, 'Persisted AI result.');
 
     final requestSignature = jsonEncode(<String, Object?>{
-      'time_bucket': buildTaskPriorityAiTimeBucket(nowLocal),
       'candidate': buildTaskPriorityAiRequest(
         buildTaskPrioritySnapshot(
           <Todo>[todo(id: 'focus', title: 'Focus task', updatedAtMs: 10)],
@@ -567,7 +563,6 @@ void main() {
     expect(store.snapshot.primaryFocus?.reasonText, 'Persisted AI result.');
 
     final requestSignature = jsonEncode(<String, Object?>{
-      'time_bucket': buildTaskPriorityAiTimeBucket(nowLocal),
       'candidate': buildTaskPriorityAiRequest(
         buildTaskPrioritySnapshot(
           <Todo>[todo(id: 'focus', title: 'Focus task', updatedAtMs: 10)],

@@ -491,7 +491,6 @@ void main() {
       (tester) async {
     final nowLocal = DateTime.now();
     final requestSignature = jsonEncode(<String, Object?>{
-      'time_bucket': buildTaskPriorityAiTimeBucket(nowLocal),
       'candidate': buildTaskPriorityAiRequest(
         buildTaskPrioritySnapshot(
           <Todo>[
@@ -612,7 +611,6 @@ void main() {
       partitionKey: '["p1","openai-compatible"]',
     );
     final requestSignature = jsonEncode(<String, Object?>{
-      'time_bucket': buildTaskPriorityAiTimeBucket(nowLocal),
       'candidate': buildTaskPriorityAiRequest(
         buildTaskPrioritySnapshot(
           <Todo>[
@@ -722,7 +720,6 @@ void main() {
       partitionKey: '["p1","openai-compatible"]',
     );
     final requestSignature = jsonEncode(<String, Object?>{
-      'time_bucket': buildTaskPriorityAiTimeBucket(nowLocal),
       'candidate': buildTaskPriorityAiRequest(
         buildTaskPrioritySnapshot(
           <Todo>[
