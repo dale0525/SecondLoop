@@ -713,13 +713,36 @@ final class _BackendTodoFollowupGenerationStore
           job.updatedAtMs.toInt() != jobStartedAtMs) {
         return false;
       }
+      final beforeSuggestionIds = (await listTodoFollowupSuggestions(todoId))
+          .map((item) => item.id)
+          .toSet();
       await upsertGeneratedTodoFollowupSuggestions(
         todoId: todoId,
         suggestions: suggestions,
         source: source,
         generationKey: generationKey,
       );
-      return true;
+      final refreshedJob = await getJob(todoId);
+      if (refreshedJob != null &&
+          refreshedJob.status == 'running' &&
+          refreshedJob.updatedAtMs.toInt() == jobStartedAtMs) {
+        return true;
+      }
+      final staleSuggestionIds = (await listTodoFollowupSuggestions(todoId))
+          .where(
+            (item) =>
+                !beforeSuggestionIds.contains(item.id) &&
+                (generationKey == null || item.generationKey == generationKey),
+          )
+          .map((item) => item.id)
+          .toList(growable: false);
+      if (staleSuggestionIds.isNotEmpty) {
+        await dismissTodoFollowupSuggestions(
+          todoId: todoId,
+          suggestionIds: staleSuggestionIds,
+        );
+      }
+      return false;
     });
   }
 }

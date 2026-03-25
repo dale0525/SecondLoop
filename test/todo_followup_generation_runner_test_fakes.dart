@@ -10,6 +10,7 @@ final class _FakeStore implements TodoFollowupGenerationStore {
     this.reenqueueOnUpsertSuggestions =
         const <String, TodoFollowupGenerationJob>{},
     this.failMarkRunningTodoIds = const <String>{},
+    this.preserveExistingGenerationKeyOnDedup = false,
   })  : _jobs = List<TodoFollowupGenerationJob>.from(jobs),
         _todos = Map<String, Todo>.from(todos),
         _activitiesByTodoId = <String, List<TodoActivity>>{
@@ -32,6 +33,7 @@ final class _FakeStore implements TodoFollowupGenerationStore {
   final Map<String, TodoFollowupGenerationJob> reenqueueOnMarkRunning;
   final Map<String, TodoFollowupGenerationJob> reenqueueOnUpsertSuggestions;
   final Set<String> failMarkRunningTodoIds;
+  final bool preserveExistingGenerationKeyOnDedup;
 
   String? lastSucceededTodoId;
   String? lastSkippedTodoId;
@@ -235,7 +237,9 @@ final class _FakeStore implements TodoFollowupGenerationStore {
           state: existing.state,
           source: source,
           generationMode: suggestion.generationMode,
-          generationKey: generationKey,
+          generationKey: preserveExistingGenerationKeyOnDedup
+              ? existing.generationKey
+              : generationKey,
           citationsJson: suggestion.citationsJson,
           createdAtMs: existing.createdAtMs,
           updatedAtMs: existing.updatedAtMs,

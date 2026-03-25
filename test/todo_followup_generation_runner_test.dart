@@ -1057,6 +1057,95 @@ void main() {
   });
 
   test(
+      'runner does not dismiss stale pending suggestions when regenerate creates no replacement rows',
+      () async {
+    final store = _FakeStore(
+      jobs: const <TodoFollowupGenerationJob>[
+        TodoFollowupGenerationJob(
+          todoId: 'todo_regen_guard',
+          triggerKind: 'manual_regenerate',
+          status: 'pending',
+          attempts: 0,
+          nextRetryAtMs: null,
+          lastError: null,
+          includeManualFollowups: true,
+          manualOverrideFollowup: false,
+          taskTypeHint: 'research',
+          createdAtMs: 0,
+          updatedAtMs: 0,
+        ),
+      ],
+      todos: const <String, Todo>{
+        'todo_regen_guard': Todo(
+          id: 'todo_regen_guard',
+          title: '调研一下当前主流的 llm 模型',
+          status: 'open',
+          createdAtMs: 0,
+          updatedAtMs: 0,
+        ),
+      },
+      suggestionsByTodoId: const <String, List<TodoFollowupSuggestion>>{
+        'todo_regen_guard': <TodoFollowupSuggestion>[
+          TodoFollowupSuggestion(
+            id: 's_keep',
+            todoId: 'todo_regen_guard',
+            content: '以下内容基于模型知识整理，未联网核实。',
+            state: 'pending',
+            source: 'cloud',
+            generationMode: 'model_knowledge',
+            generationKey: 'old_keep',
+            citationsJson: null,
+            createdAtMs: 0,
+            updatedAtMs: 0,
+            dismissedAtMs: null,
+            appliedActivityId: null,
+          ),
+          TodoFollowupSuggestion(
+            id: 's_stale',
+            todoId: 'todo_regen_guard',
+            content: '旧的待处理建议',
+            state: 'pending',
+            source: 'cloud',
+            generationMode: 'model_knowledge',
+            generationKey: 'old_stale',
+            citationsJson: null,
+            createdAtMs: 0,
+            updatedAtMs: 0,
+            dismissedAtMs: null,
+            appliedActivityId: null,
+          ),
+        ],
+      },
+      preserveExistingGenerationKeyOnDedup: true,
+    );
+    final client = _FakeClient(
+      responseByMode: <TodoFollowupGenerationMode, TodoFollowupSuggestionDraft>{
+        TodoFollowupGenerationMode.modelKnowledge:
+            const TodoFollowupSuggestionDraft(
+          content: '以下内容基于模型知识整理，未联网核实。',
+          mode: TodoFollowupGenerationMode.modelKnowledge,
+          citations: <TodoFollowupCitationDraft>[],
+        ),
+      },
+    );
+
+    final runner = TodoFollowupGenerationRunner(
+      store: store,
+      client: client,
+      settings: const TodoFollowupGenerationRunnerSettings(
+        hardTimeout: Duration(milliseconds: 200),
+      ),
+      nowMs: () => 1000,
+    );
+
+    await runner.runOnce(localeTag: 'zh-CN');
+
+    expect(store.lastDismissedSuggestionIds, isEmpty);
+    expect(store.pendingSuggestionsFor('todo_regen_guard'), hasLength(2));
+    expect(store.lastSucceededTodoId, 'todo_regen_guard');
+  });
+
+  test(
       'runner preserves normalized-equivalent pending suggestions after regenerate',
       () async {
     final store = _FakeStore(

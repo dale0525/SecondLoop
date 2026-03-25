@@ -279,7 +279,9 @@ final class TodoFollowupGenerationRunner {
           didMutateAny = true;
         }
 
-        if (job.includeManualFollowups && pendingSuggestionIds.isNotEmpty) {
+        if (job.includeManualFollowups &&
+            pendingSuggestionIds.isNotEmpty &&
+            createdPendingSuggestions.isNotEmpty) {
           final previousPendingSuggestionIds = pendingSuggestionIds.toSet();
           final retainedPendingSuggestionIds =
               createdPendingSuggestions.map((item) => item.id).toSet();

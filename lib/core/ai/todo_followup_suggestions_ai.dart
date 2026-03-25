@@ -311,6 +311,34 @@ Uri? tryParseTodoFollowupCitationUrl(String rawUrl) {
   return uri;
 }
 
+List<TodoFollowupCitationDraft> parseTodoFollowupCitationsJson(String? raw) {
+  final text = raw?.trim() ?? '';
+  if (text.isEmpty) {
+    return const <TodoFollowupCitationDraft>[];
+  }
+
+  try {
+    final decoded = jsonDecode(text);
+    if (decoded is! List) {
+      return const <TodoFollowupCitationDraft>[];
+    }
+
+    final citations = <TodoFollowupCitationDraft>[];
+    final seen = <String>{};
+    for (final item in decoded) {
+      if (item is! Map) continue;
+      final next = _parseCitation(item);
+      if (next == null) continue;
+      final dedupeKey = '${next.domain}|${next.url}'.toLowerCase();
+      if (!seen.add(dedupeKey)) continue;
+      citations.add(next);
+    }
+    return List<TodoFollowupCitationDraft>.unmodifiable(citations);
+  } catch (_) {
+    return const <TodoFollowupCitationDraft>[];
+  }
+}
+
 String buildTodoFollowupSuggestionContext({
   required Todo todo,
   required List<TodoActivity> activities,

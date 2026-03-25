@@ -428,7 +428,7 @@ extension _TodoDetailPageStateFollowupSuggestions on _TodoDetailPageState {
     BuildContext context,
     TodoFollowupSuggestion suggestion,
   ) {
-    final citations = _parseTodoFollowupCitations(suggestion.citationsJson);
+    final citations = parseTodoFollowupCitationsJson(suggestion.citationsJson);
     final modeLabel = suggestion.generationMode ==
             TodoFollowupGenerationMode.webSearch.wireValue
         ? context.t.actions.todoDetail.followupModeWebSearch
@@ -516,34 +516,5 @@ extension _TodoDetailPageStateFollowupSuggestions on _TodoDetailPageState {
     final uri = tryParseTodoFollowupCitationUrl(rawUrl);
     if (uri == null) return;
     await launchUrl(uri, mode: LaunchMode.externalApplication);
-  }
-
-  List<TodoFollowupCitationDraft> _parseTodoFollowupCitations(String? raw) {
-    final text = raw?.trim() ?? '';
-    if (text.isEmpty) return const <TodoFollowupCitationDraft>[];
-
-    try {
-      final decoded = jsonDecode(text);
-      if (decoded is! List) return const <TodoFollowupCitationDraft>[];
-      final out = <TodoFollowupCitationDraft>[];
-      for (final item in decoded) {
-        if (item is! Map) continue;
-        final title = (item['title'] as String?)?.trim() ?? '';
-        final url = (item['url'] as String?)?.trim() ?? '';
-        final uri = tryParseTodoFollowupCitationUrl(url);
-        final domain = uri?.host.trim().toLowerCase() ?? '';
-        if (title.isEmpty || uri == null || domain.isEmpty) continue;
-        out.add(
-          TodoFollowupCitationDraft(
-            title: title,
-            url: uri.toString(),
-            domain: domain,
-          ),
-        );
-      }
-      return out;
-    } catch (_) {
-      return const <TodoFollowupCitationDraft>[];
-    }
   }
 }
