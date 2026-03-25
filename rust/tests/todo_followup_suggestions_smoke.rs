@@ -28,6 +28,8 @@ fn information_followup_suggestions_can_be_generated_applied_and_dismissed() {
         None,
         None,
         None,
+        None,
+        None,
     )
     .expect("upsert todo");
 
@@ -111,6 +113,8 @@ fn todo_upsert_keeps_updated_at_ms_monotonic() {
         None,
         None,
         None,
+        None,
+        None,
     )
     .expect("upsert todo");
 
@@ -127,6 +131,8 @@ fn todo_upsert_keeps_updated_at_ms_monotonic() {
         "Research LLM models (updated)",
         None,
         "open",
+        None,
+        None,
         None,
         None,
         None,
@@ -148,6 +154,8 @@ fn todo_is_updated_when_applying_followup_information() {
         "Research LLM models",
         None,
         "open",
+        None,
+        None,
         None,
         None,
         None,
@@ -188,6 +196,8 @@ fn todo_followup_generation_jobs_support_enqueue_claim_retry_and_succeed() {
         "去浦东机场接 MU5101",
         None,
         "open",
+        None,
+        None,
         None,
         None,
         None,
@@ -239,6 +249,8 @@ fn running_jobs_are_not_released_until_their_lease_expires() {
         None,
         None,
         None,
+        None,
+        None,
     )
     .expect("upsert todo");
 
@@ -276,6 +288,8 @@ fn pending_jobs_can_be_deferred_without_being_claimed_first() {
         "Research current LLM pricing",
         None,
         "open",
+        None,
+        None,
         None,
         None,
         None,
@@ -320,6 +334,8 @@ fn pending_jobs_can_be_finalized_without_being_claimed_first() {
         None,
         None,
         None,
+        None,
+        None,
     )
     .expect("upsert skipped todo");
     db::upsert_todo(
@@ -329,6 +345,8 @@ fn pending_jobs_can_be_finalized_without_being_claimed_first() {
         "Research current LLM pricing",
         None,
         "open",
+        None,
+        None,
         None,
         None,
         None,
@@ -386,6 +404,8 @@ fn running_claim_rejects_non_expired_running_jobs() {
         None,
         None,
         None,
+        None,
+        None,
     )
     .expect("upsert todo");
 
@@ -409,7 +429,7 @@ fn manual_regenerate_jobs_are_prioritized_ahead_of_auto_jobs() {
         ("todo_manual", "比较 Cursor、Windsurf 和 Copilot 的能力"),
     ] {
         db::upsert_todo(
-            &conn, &key, todo_id, title, None, "open", None, None, None, None,
+            &conn, &key, todo_id, title, None, "open", None, None, None, None, None, None,
         )
         .expect("upsert todo");
     }
@@ -441,7 +461,7 @@ fn manual_regenerate_jobs_keep_fifo_order_within_manual_queue() {
         ("todo_manual_new", "调研一下当前主流的 llm 模型"),
     ] {
         db::upsert_todo(
-            &conn, &key, todo_id, title, None, "open", None, None, None, None,
+            &conn, &key, todo_id, title, None, "open", None, None, None, None, None, None,
         )
         .expect("upsert todo");
     }
@@ -485,6 +505,8 @@ fn enqueue_followup_job_rejects_invalid_trigger_kind() {
         None,
         None,
         None,
+        None,
+        None,
     )
     .expect("upsert todo");
 
@@ -504,6 +526,8 @@ fn reenqueue_without_new_hint_clears_previous_task_type_hint() {
         "调研一下当前主流的 llm 模型",
         None,
         "open",
+        None,
+        None,
         None,
         None,
         None,
@@ -553,6 +577,8 @@ fn later_auto_create_does_not_overwrite_existing_manual_regenerate_job() {
         None,
         None,
         None,
+        None,
+        None,
     )
     .expect("upsert todo");
 
@@ -592,6 +618,8 @@ fn due_job_listing_reserves_one_auto_slot_when_manual_backlog_is_deep() {
             None,
             None,
             None,
+            None,
+            None,
         )
         .expect("upsert manual todo");
         db::enqueue_todo_followup_generation_job(
@@ -612,6 +640,8 @@ fn due_job_listing_reserves_one_auto_slot_when_manual_backlog_is_deep() {
         "Automatic task",
         None,
         "open",
+        None,
+        None,
         None,
         None,
         None,
@@ -655,6 +685,8 @@ fn auto_create_reenqueue_without_hint_preserves_existing_task_type_hint() {
         None,
         None,
         None,
+        None,
+        None,
     )
     .expect("upsert todo");
 
@@ -688,6 +720,8 @@ fn manual_regenerate_reenqueue_without_hint_preserves_existing_task_type_hint() 
         "修复登录页闪退",
         None,
         "open",
+        None,
+        None,
         None,
         None,
         None,
@@ -730,6 +764,8 @@ fn auto_create_reenqueue_resets_job_age_for_future_retry_windows() {
         None,
         None,
         None,
+        None,
+        None,
     )
     .expect("upsert todo");
 
@@ -759,6 +795,8 @@ fn running_job_completion_does_not_overwrite_later_reenqueue() {
         "调研一下当前主流的 llm 模型",
         None,
         "open",
+        None,
+        None,
         None,
         None,
         None,
@@ -795,6 +833,8 @@ fn historical_followup_suggestions_do_not_block_same_content_regeneration() {
         "Research LLM models",
         None,
         "open",
+        None,
+        None,
         None,
         None,
         None,
@@ -871,6 +911,8 @@ fn dismiss_all_followup_suggestions_dismisses_every_pending_item() {
         None,
         None,
         None,
+        None,
+        None,
     )
     .expect("upsert todo");
 
@@ -917,6 +959,8 @@ fn regenerate_same_content_refreshes_pending_metadata() {
         "Research LLM models",
         None,
         "open",
+        None,
+        None,
         None,
         None,
         None,
@@ -982,6 +1026,8 @@ fn duplicate_pending_followup_is_collapsed_during_regeneration() {
         "Research LLM models",
         None,
         "open",
+        None,
+        None,
         None,
         None,
         None,
@@ -1092,6 +1138,8 @@ fn followup_job_api_requires_a_matching_todo_key() {
         None,
         None,
         None,
+        None,
+        None,
     )
     .expect("upsert todo");
     db::enqueue_todo_followup_generation_job(&conn, "todo_1", "auto_create", false, None, 100)
@@ -1154,6 +1202,8 @@ fn followup_job_api_filters_out_jobs_for_inaccessible_todos() {
         None,
         None,
         None,
+        None,
+        None,
     )
     .expect("upsert visible todo");
 
@@ -1175,6 +1225,8 @@ fn followup_job_api_filters_out_jobs_for_inaccessible_todos() {
         "Secret todo",
         None,
         "open",
+        None,
+        None,
         None,
         None,
         None,
@@ -1211,6 +1263,8 @@ fn followup_job_api_rejects_missing_todo_instead_of_returning_none() {
         None,
         None,
         None,
+        None,
+        None,
     )
     .expect("upsert todo");
 
@@ -1239,6 +1293,8 @@ fn followup_job_api_returns_none_when_todo_exists_but_job_is_missing() {
         "Research LLM models",
         None,
         "open",
+        None,
+        None,
         None,
         None,
         None,
