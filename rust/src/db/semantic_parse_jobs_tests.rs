@@ -159,6 +159,52 @@ fn semantic_parse_jobs_enqueue_reopens_existing_job() {
 }
 
 #[test]
+fn semantic_parse_jobs_canceled_job_ignores_late_success_and_failure() {
+    let dir = tempdir().expect("tempdir");
+    let conn = open(dir.path()).expect("open");
+
+    let now_ms = 4_000i64;
+    enqueue_semantic_parse_job(&conn, "msg:cancel", now_ms).expect("enqueue");
+    mark_semantic_parse_job_running(&conn, "msg:cancel", now_ms + 1).expect("running");
+    mark_semantic_parse_job_canceled(&conn, "msg:cancel", now_ms + 2).expect("canceled");
+
+    let key = [6u8; 32];
+    mark_semantic_parse_job_succeeded(
+        &conn,
+        &key,
+        "msg:cancel",
+        "create",
+        Some("todo:cancel"),
+        Some("Should not exist"),
+        None,
+        now_ms + 3,
+    )
+    .expect("late success ignored");
+    mark_semantic_parse_job_failed(
+        &conn,
+        "msg:cancel",
+        2,
+        now_ms + 120,
+        "late failure",
+        now_ms + 4,
+    )
+    .expect("late failure ignored");
+
+    let due = list_due_semantic_parse_jobs(&conn, now_ms + 200, 10).expect("list due");
+    assert!(due.is_empty());
+
+    let jobs = list_semantic_parse_jobs_by_message_ids(&conn, &key, &["msg:cancel".to_string()])
+        .expect("list jobs");
+    assert_eq!(jobs.len(), 1);
+    assert_eq!(jobs[0].status, "canceled");
+    assert_eq!(jobs[0].attempts, 0);
+    assert_eq!(jobs[0].last_error, None);
+    assert_eq!(jobs[0].applied_action_kind, None);
+    assert_eq!(jobs[0].applied_todo_id, None);
+    assert_eq!(jobs[0].applied_todo_title, None);
+}
+
+#[test]
 fn attachment_annotation_requeues_semantic_parse_for_linked_user_message() {
     let dir = tempdir().expect("tempdir");
     let app_dir = dir.path().to_path_buf();

@@ -376,6 +376,17 @@ final class SemanticParseAutoActionsRunner {
           parsed = AiSemanticDecision(decision: localDecision, confidence: 1.0);
         }
 
+        final refreshedMessageInput =
+            await store.getMessageInput(job.messageId);
+        final refreshedAnalysisText =
+            refreshedMessageInput?.analysisText.trim() ?? '';
+        final allowCreate = refreshedMessageInput?.allowCreate ?? false;
+        if (refreshedAnalysisText.isEmpty) {
+          await store.markJobCanceled(messageId: job.messageId, nowMs: nowMs);
+          didUpdateJobs = true;
+          continue;
+        }
+
         final normalizedSuggestedTags = normalizeSemanticTagNames(
           parsed.suggestedTags,
         );
@@ -432,7 +443,7 @@ final class SemanticParseAutoActionsRunner {
               :final dueAtLocal,
               :final recurrenceRule,
             ):
-            if (!(messageInput?.allowCreate ?? false)) {
+            if (!allowCreate) {
               await store.markJobSucceeded(
                 SemanticParseJobSucceededArgs(
                   messageId: job.messageId,

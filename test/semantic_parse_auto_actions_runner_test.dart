@@ -126,6 +126,54 @@ void main() {
     expect(client.lastChecklistStatus, 'open');
     expect(client.lastChecklistDueAtMs, isNull);
   });
+
+  test('runner cancels when message is deleted during remote parse', () async {
+    final store = _FakeStore(
+      jobs: [
+        const SemanticParseAutoActionJob(
+          messageId: 'msg:deleted_mid_run',
+          status: 'pending',
+          attempts: 0,
+          nextRetryAtMs: null,
+          createdAtMs: 0,
+        ),
+      ],
+      messages: {'msg:deleted_mid_run': '买牛奶'},
+    );
+    final client = _FakeClient(
+      responseJson:
+          '{"kind":"create","confidence":1.0,"title":"买牛奶","status":"inbox","suggested_tags":["Errand"],"tag_confidence":0.95}',
+      onParseMessageAction: () async {
+        store.deleteMessage('msg:deleted_mid_run');
+      },
+    );
+
+    final runner = SemanticParseAutoActionsRunner(
+      store: store,
+      client: client,
+      settings: const SemanticParseAutoActionsRunnerSettings(
+        hardTimeout: Duration(milliseconds: 200),
+        minAutoConfidence: 0.86,
+      ),
+      nowMs: () => 1000,
+      nowLocal: () => DateTime(2026, 2, 3, 12, 0, 0),
+    );
+
+    final result = await runner.runOnce(
+      localeTag: 'zh-CN',
+      dayEndMinutes: 21 * 60,
+    );
+
+    expect(result.processed, 0);
+    expect(result.didMutateAny, isFalse);
+    expect(result.didUpdateJobs, isTrue);
+    expect(store.createdTodoIds, isEmpty);
+    expect(store.updatedStatusByTodoId, isEmpty);
+    expect(store.appliedSemanticTagsByMessage, isEmpty);
+    expect(store.lastSucceeded, isNull);
+    expect(store.canceledMessageIds, contains('msg:deleted_mid_run'));
+  });
+
   test('runner processes running jobs (crash recovery)', () async {
     final store = _FakeStore(
       jobs: [
@@ -657,6 +705,7 @@ final class _FakeStore implements SemanticParseAutoActionsStore {
   final Map<String, String> _upsertTodoResultByMessageId;
 
   final List<String> createdTodoIds = <String>[];
+  final List<String> canceledMessageIds = <String>[];
   final Map<String, String> updatedStatusByTodoId = <String, String>{};
   final Map<String, List<String>> appliedSemanticTagsByMessage =
       <String, List<String>>{};
@@ -719,7 +768,14 @@ final class _FakeStore implements SemanticParseAutoActionsStore {
   Future<void> markJobCanceled({
     required String messageId,
     required int nowMs,
-  }) async {}
+  }) async {
+    canceledMessageIds.add(messageId);
+  }
+
+  void deleteMessage(String messageId) {
+    _messages.remove(messageId);
+    _messageInputs.remove(messageId);
+  }
 
   @override
   Future<SemanticParseTagApplyResult> applySemanticTags({
@@ -793,12 +849,14 @@ final class _FakeClient implements SemanticParseAutoActionsClient {
     this.checklistSuggestions,
     this.error,
     this.candidateTodoIds = const <String>[],
+    this.onParseMessageAction,
   });
 
   final String? responseJson;
   final List<String>? checklistSuggestions;
   final Object? error;
   final List<String> candidateTodoIds;
+  final Future<void> Function()? onParseMessageAction;
   String? lastChecklistStatus;
   int? lastChecklistDueAtMs;
 
@@ -820,6 +878,9 @@ final class _FakeClient implements SemanticParseAutoActionsClient {
     required List<SemanticParseTodoCandidate> candidates,
     required Duration timeout,
   }) async {
+    if (onParseMessageAction != null) {
+      await onParseMessageAction!();
+    }
     if (error != null) throw error!;
     return responseJson ?? '{"kind":"none","confidence":0.0}';
   }
