@@ -232,37 +232,48 @@ void main() {
   });
 
   testWidgets(
-      'TodoDetailPage regenerate toggles generating indicator without duplicate AnimatedSwitcher keys',
+      'TodoDetailPage regenerate remains stable during rapid loading indicator transitions',
       (tester) async {
     SharedPreferences.setMockInitialValues({
       'semantic_parse_data_consent_v1': true,
     });
     setLargeDisplay(tester);
-    final completer = Completer<void>();
+    final firstCompleter = Completer<void>();
+    final secondCompleter = Completer<void>();
     final backend = TestBackend(
       initialSuggestions: const <TodoFollowupSuggestion>[],
-      regenerateCompleter: completer,
+      regenerateCompleters: <Completer<void>>[
+        firstCompleter,
+        secondCompleter,
+      ],
     );
 
     await tester.pumpWidget(buildTodoDetailSubject(backend));
     await tester.pumpAndSettle();
 
-    await tester.tap(
-      find.byKey(const ValueKey('todo_detail_followup_generate_suggestions')),
+    final regenerateButton =
+        find.byKey(const ValueKey('todo_detail_followup_generate_suggestions'));
+
+    await tester.tap(regenerateButton);
+    await tester.pump();
+    expect(
+      find.byKey(const ValueKey('todo_detail_followup_generating_indicator')),
+      findsOneWidget,
     );
+
+    firstCompleter.complete();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 10));
+
+    await tester.tap(regenerateButton);
     await tester.pump();
 
-    completer.complete();
+    secondCompleter.complete();
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 10));
 
     expect(tester.takeException(), isNull);
-    expect(
-      find.byKey(
-        const ValueKey('todo_detail_followup_generating_indicator_hidden'),
-      ),
-      findsOneWidget,
-    );
+    expect(backend.enqueueTodoFollowupGenerationJobCalls, 2);
   });
 
   testWidgets('TodoDetailPage shows regenerate loading state', (tester) async {
@@ -294,8 +305,10 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(
-      find.byKey(const ValueKey('todo_detail_followup_generating_indicator')),
-      findsNothing,
+      tester
+          .widget<AnimatedCrossFade>(find.byType(AnimatedCrossFade))
+          .crossFadeState,
+      CrossFadeState.showFirst,
     );
     expect(backend.enqueuedRegenerate, isTrue);
   });

@@ -167,6 +167,7 @@ final class TestBackend extends AppBackend {
     List<TodoActivity>? initialActivities,
     List<LlmProfile>? llmProfiles,
     this.regenerateCompleter,
+    this.regenerateCompleters,
     this.activeGenerationJob,
   })  : _suggestions = List<TodoFollowupSuggestion>.from(
           initialSuggestions ??
@@ -212,6 +213,7 @@ final class TestBackend extends AppBackend {
   final List<TodoActivity> _activities;
   final List<LlmProfile> _llmProfiles;
   final Completer<void>? regenerateCompleter;
+  final List<Completer<void>>? regenerateCompleters;
   final TodoFollowupGenerationJob? activeGenerationJob;
   List<String> appliedSuggestionIds = <String>[];
   List<String> dismissedSuggestionIds = <String>[];
@@ -219,6 +221,7 @@ final class TestBackend extends AppBackend {
   bool lastManualOverrideFollowup = false;
   String? lastTaskTypeHint;
   int getTodoFollowupGenerationJobCalls = 0;
+  int enqueueTodoFollowupGenerationJobCalls = 0;
 
   @override
   bool get supportsTodoFollowupSuggestions => true;
@@ -356,9 +359,14 @@ final class TestBackend extends AppBackend {
     required int nowMs,
   }) async {
     enqueuedRegenerate = true;
+    enqueueTodoFollowupGenerationJobCalls += 1;
     lastManualOverrideFollowup = manualOverrideFollowup;
     lastTaskTypeHint = taskTypeHint;
-    final completer = regenerateCompleter;
+    final completer = regenerateCompleters != null &&
+            enqueueTodoFollowupGenerationJobCalls <=
+                regenerateCompleters!.length
+        ? regenerateCompleters![enqueueTodoFollowupGenerationJobCalls - 1]
+        : regenerateCompleter;
     if (completer != null) {
       await completer.future;
     }

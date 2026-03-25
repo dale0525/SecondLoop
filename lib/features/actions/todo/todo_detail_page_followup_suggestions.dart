@@ -302,53 +302,50 @@ extension _TodoDetailPageStateFollowupSuggestions on _TodoDetailPageState {
                       ),
                 ),
               ],
-              AnimatedSwitcher(
+              AnimatedCrossFade(
                 duration: const Duration(milliseconds: 180),
-                child: !showGeneratingIndicator
-                    ? const SizedBox(
-                        key: ValueKey(
-                          'todo_detail_followup_generating_indicator_hidden',
-                        ),
-                      )
-                    : Padding(
-                        key: const ValueKey(
-                          'todo_detail_followup_generating_indicator',
-                        ),
-                        padding: const EdgeInsets.only(top: 10),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                const SizedBox(
-                                  width: 16,
-                                  height: 16,
-                                  child:
-                                      CircularProgressIndicator(strokeWidth: 2),
-                                ),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: Text(
-                                    context.t.actions.todoDetail
-                                        .followupGenerating,
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .bodySmall
-                                        ?.copyWith(
-                                          color: Theme.of(context)
-                                              .colorScheme
-                                              .onSurfaceVariant,
-                                          fontWeight: FontWeight.w600,
-                                        ),
+                alignment: Alignment.topCenter,
+                crossFadeState: showGeneratingIndicator
+                    ? CrossFadeState.showSecond
+                    : CrossFadeState.showFirst,
+                firstChild: const SizedBox.shrink(),
+                secondChild: Padding(
+                  key: const ValueKey(
+                    'todo_detail_followup_generating_indicator',
+                  ),
+                  padding: const EdgeInsets.only(top: 10),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              context.t.actions.todoDetail.followupGenerating,
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .bodySmall
+                                  ?.copyWith(
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .onSurfaceVariant,
+                                    fontWeight: FontWeight.w600,
                                   ),
-                                ),
-                              ],
                             ),
-                            const SizedBox(height: 8),
-                            const LinearProgressIndicator(minHeight: 3),
-                          ],
-                        ),
+                          ),
+                        ],
                       ),
+                      const SizedBox(height: 8),
+                      const LinearProgressIndicator(minHeight: 3),
+                    ],
+                  ),
+                ),
               ),
               if (pendingSuggestions.isEmpty && appliedSuggestions.isEmpty) ...[
                 const SizedBox(height: 10),
