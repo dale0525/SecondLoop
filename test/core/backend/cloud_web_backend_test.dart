@@ -1228,6 +1228,45 @@ void main() {
       );
     });
 
+
+    test('task hub done quick action spawns next recurring todo on web backend',
+        () async {
+      final backend = CloudWebBackend(
+        chatClient: _FakeCloudWebChatClient(responseText: 'ok'),
+      );
+      final key = Uint8List(0);
+      final todo = await backend.upsertTodo(
+        key,
+        id: 'todo:web-recurring',
+        title: 'Weekly recurring task',
+        status: 'open',
+        dueAtMs: DateTime.utc(2026, 3, 13, 10, 0).millisecondsSinceEpoch,
+      );
+      await backend.upsertTodoRecurrence(
+        key,
+        todoId: todo.id,
+        seriesId: 'series-web-quick-action',
+        ruleJson: '{"freq":"weekly"}',
+      );
+      final controller = TaskHubQuickActionsController(
+        backend: backend,
+        sessionKey: key,
+        nowLocal: () => DateTime(2026, 3, 13, 10, 0),
+      );
+
+      final ticket = await controller.apply(todo, TaskHubQuickAction.done);
+
+      expect(ticket, isNotNull);
+      final todos = await backend.listTodos(key);
+      expect(todos, hasLength(2));
+      final spawned = todos.firstWhere((item) => item.id != todo.id);
+      expect(spawned.status, 'open');
+      expect(
+        spawned.dueAtMs,
+        DateTime.utc(2026, 3, 20, 10, 0).millisecondsSinceEpoch,
+      );
+    });
+
     test('task hub quick actions can transition todos on web backend',
         () async {
       final backend = CloudWebBackend(

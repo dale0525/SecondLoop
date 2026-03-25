@@ -235,6 +235,11 @@ mixin _CloudWebBackendTasksMixin
       manualImportanceNudgeScore: existing.manualImportanceNudgeScore?.toInt(),
       manualUrgencyNudgeScore: existing.manualUrgencyNudgeScore?.toInt(),
     );
+    await _maybeSpawnNextRecurringTodo(
+      key,
+      todo: updated,
+      newStatus: newStatus,
+    );
     _recordStatusChangeActivity(
       existing: existing,
       newStatus: newStatus,
