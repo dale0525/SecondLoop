@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/data/latest.dart' as tz;
@@ -6,7 +7,28 @@ import 'package:timezone/timezone.dart' as tz;
 import '../../i18n/strings.g.dart';
 import 'review_notification_plan.dart';
 
-typedef NotificationTapHandler = void Function(String? payload);
+typedef NotificationTapHandler = void Function(
+    ReviewReminderNotificationEvent event);
+
+final class ReviewReminderNotificationEvent {
+  const ReviewReminderNotificationEvent({
+    required this.payload,
+    this.actionId,
+  });
+
+  final String? payload;
+  final String? actionId;
+}
+
+final class ReviewReminderNotificationPayload {
+  const ReviewReminderNotificationPayload({
+    required this.kind,
+    required this.todoId,
+  });
+
+  final ReviewReminderItemKind kind;
+  final String todoId;
+}
 
 abstract interface class ReviewReminderNotificationScheduler {
   bool get supportsSystemNotifications;
@@ -28,6 +50,10 @@ final class FlutterLocalNotificationsReviewReminderScheduler
 
   static const int notificationIdBase = 2026021100;
   static const String reviewQueuePayloadPrefix = 'review_queue:';
+  static const String dueTodoPayloadPrefix = 'due_todo:';
+
+  static const String androidDoneActionId = 'done';
+  static const String androidDismissActionId = 'dismiss';
 
   static const String androidNotificationIcon = 'ic_stat_notify';
 
@@ -73,14 +99,24 @@ final class FlutterLocalNotificationsReviewReminderScheduler
       await _plugin.initialize(
         initializationSettings,
         onDidReceiveNotificationResponse: (response) {
-          _onTap?.call(response.payload);
+          _onTap?.call(
+            ReviewReminderNotificationEvent(
+              payload: response.payload,
+              actionId: response.actionId,
+            ),
+          );
         },
       );
 
       final launchDetails = await _plugin.getNotificationAppLaunchDetails();
       final launchResponse = launchDetails?.notificationResponse;
       if (launchDetails?.didNotificationLaunchApp == true) {
-        _onTap?.call(launchResponse?.payload);
+        _onTap?.call(
+          ReviewReminderNotificationEvent(
+            payload: launchResponse?.payload,
+            actionId: launchResponse?.actionId,
+          ),
+        );
       }
     } on MissingPluginException {
       _available = false;
@@ -150,42 +186,19 @@ final class FlutterLocalNotificationsReviewReminderScheduler
 
     await _cancelManagedNotifications();
 
-    const details = NotificationDetails(
-      android: AndroidNotificationDetails(
-        _androidChannelId,
-        _androidChannelName,
-        channelDescription: _androidChannelDescription,
-        importance: Importance.max,
-        priority: Priority.high,
-        icon: androidNotificationIcon,
-      ),
-      iOS: DarwinNotificationDetails(
-        presentAlert: true,
-        presentBadge: true,
-        presentSound: true,
-      ),
-      macOS: DarwinNotificationDetails(
-        presentAlert: true,
-        presentBadge: true,
-        presentSound: true,
-      ),
-      windows: WindowsNotificationDetails(),
-    );
-
     for (var i = 0; i < plan.items.length; i++) {
       final item = plan.items[i];
-      final notificationId = notificationIdBase + i;
+      final notificationId = notificationIdForItem(item);
       final scheduledAtUtc = DateTime.fromMillisecondsSinceEpoch(
         item.scheduleAtUtcMs,
         isUtc: true,
       );
       final scheduleAt = tz.TZDateTime.from(scheduledAtUtc, tz.local);
-      final payload = item.kind == ReviewReminderItemKind.reviewQueue
-          ? '$reviewQueuePayloadPrefix${item.todoId}'
-          : null;
+      final payload = encodePayload(item);
       final title = item.kind == ReviewReminderItemKind.reviewQueue
           ? t.actions.reviewQueue.title
           : t.actions.agenda.title;
+      final details = notificationDetailsForItem(item);
 
       await _scheduleSingleNotification(
         notificationId: notificationId,
@@ -196,6 +209,80 @@ final class FlutterLocalNotificationsReviewReminderScheduler
         payload: payload,
       );
     }
+  }
+
+  @visibleForTesting
+  static int notificationIdForItem(ReviewReminderItem item) {
+    final key = '${item.kind.name}:${item.todoId}';
+    return notificationIdBase + (_stableHash(key) % 1000000);
+  }
+
+  @visibleForTesting
+  static String encodePayload(ReviewReminderItem item) {
+    final prefix = item.kind == ReviewReminderItemKind.reviewQueue
+        ? reviewQueuePayloadPrefix
+        : dueTodoPayloadPrefix;
+    return '$prefix${item.todoId}';
+  }
+
+  static ReviewReminderNotificationPayload? decodePayload(String? payload) {
+    if (payload == null || payload.isEmpty) return null;
+    if (payload.startsWith(reviewQueuePayloadPrefix)) {
+      final todoId = payload.substring(reviewQueuePayloadPrefix.length);
+      if (todoId.isEmpty) return null;
+      return ReviewReminderNotificationPayload(
+        kind: ReviewReminderItemKind.reviewQueue,
+        todoId: todoId,
+      );
+    }
+    if (payload.startsWith(dueTodoPayloadPrefix)) {
+      final todoId = payload.substring(dueTodoPayloadPrefix.length);
+      if (todoId.isEmpty) return null;
+      return ReviewReminderNotificationPayload(
+        kind: ReviewReminderItemKind.dueTodo,
+        todoId: todoId,
+      );
+    }
+    return null;
+  }
+
+  @visibleForTesting
+  static NotificationDetails notificationDetailsForItem(
+    ReviewReminderItem item,
+  ) {
+    return NotificationDetails(
+      android: AndroidNotificationDetails(
+        _androidChannelId,
+        _androidChannelName,
+        channelDescription: _androidChannelDescription,
+        importance: Importance.max,
+        priority: Priority.high,
+        icon: androidNotificationIcon,
+        actions: <AndroidNotificationAction>[
+          AndroidNotificationAction(
+            androidDoneActionId,
+            t.actions.reviewQueue.actions.done,
+            showsUserInterface: true,
+          ),
+          AndroidNotificationAction(
+            androidDismissActionId,
+            t.actions.reviewQueue.actions.dismiss,
+            showsUserInterface: true,
+          ),
+        ],
+      ),
+      iOS: const DarwinNotificationDetails(
+        presentAlert: true,
+        presentBadge: true,
+        presentSound: true,
+      ),
+      macOS: const DarwinNotificationDetails(
+        presentAlert: true,
+        presentBadge: true,
+        presentSound: true,
+      ),
+      windows: const WindowsNotificationDetails(),
+    );
   }
 
   Future<void> _scheduleSingleNotification({
@@ -252,17 +339,38 @@ final class FlutterLocalNotificationsReviewReminderScheduler
   }
 
   Future<void> _cancelManagedNotifications() async {
-    if (_managedNotificationIds.isEmpty) {
+    final notificationIds = _managedNotificationIds.isEmpty
+        ? await _discoverManagedNotificationIds()
+        : _managedNotificationIds.toSet();
+
+    if (notificationIds.isEmpty) {
       for (var i = 0; i < kReviewReminderMaxItems; i++) {
         await _cancelNotification(notificationIdBase + i);
       }
       return;
     }
 
-    for (final notificationId in _managedNotificationIds) {
+    for (final notificationId in notificationIds) {
       await _cancelNotification(notificationId);
     }
     _managedNotificationIds.clear();
+  }
+
+  Future<Set<int>> _discoverManagedNotificationIds() async {
+    try {
+      final pending = await _plugin.pendingNotificationRequests();
+      return pending
+          .where((request) => decodePayload(request.payload) != null)
+          .map((request) => request.id)
+          .toSet();
+    } on MissingPluginException {
+      _available = false;
+    } on PlatformException {
+      // ignore
+    } catch (_) {
+      // ignore
+    }
+    return <int>{};
   }
 
   Future<void> _cancelNotification(int notificationId) async {
@@ -275,5 +383,14 @@ final class FlutterLocalNotificationsReviewReminderScheduler
     } catch (_) {
       // ignore
     }
+  }
+
+  static int _stableHash(String input) {
+    var value = 0x811c9dc5;
+    for (final codeUnit in input.codeUnits) {
+      value ^= codeUnit;
+      value = (value * 0x01000193) & 0x7fffffff;
+    }
+    return value;
   }
 }

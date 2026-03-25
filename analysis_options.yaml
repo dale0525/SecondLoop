@@ -15,6 +15,7 @@ analyzer:
     - "**/build/**"
     - rust_builder/**
     - lib/i18n/strings.g.dart
+    - third_party/flutter_local_notifications_windows_patched/test/**
   errors:
     deprecated_member_use: ignore
 

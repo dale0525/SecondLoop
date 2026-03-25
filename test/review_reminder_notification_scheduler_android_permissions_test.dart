@@ -1,7 +1,9 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:timezone/timezone.dart' as tz;
 
+import 'package:secondloop/core/notifications/review_notification_plan.dart';
 import 'package:secondloop/core/notifications/review_reminder_notification_scheduler.dart';
 
 void main() {
@@ -48,6 +50,92 @@ void main() {
     expect(androidPlugin.canScheduleExactNotificationsCalls, 1);
     expect(androidPlugin.requestExactAlarmsPermissionCalls, 0);
   });
+
+  test('same todo keeps stable notification id across reminder updates', () {
+    const first = ReviewReminderItem(
+      todoId: 'todo:1',
+      todoTitle: 'one',
+      sourceAtUtcMs: 1000,
+      scheduleAtUtcMs: 2000,
+      kind: ReviewReminderItemKind.reviewQueue,
+    );
+    const second = ReviewReminderItem(
+      todoId: 'todo:1',
+      todoTitle: 'one',
+      sourceAtUtcMs: 3000,
+      scheduleAtUtcMs: 4000,
+      kind: ReviewReminderItemKind.reviewQueue,
+    );
+    const other = ReviewReminderItem(
+      todoId: 'todo:2',
+      todoTitle: 'two',
+      sourceAtUtcMs: 3000,
+      scheduleAtUtcMs: 4000,
+      kind: ReviewReminderItemKind.reviewQueue,
+    );
+
+    expect(
+      FlutterLocalNotificationsReviewReminderScheduler.notificationIdForItem(
+        first,
+      ),
+      FlutterLocalNotificationsReviewReminderScheduler.notificationIdForItem(
+        second,
+      ),
+    );
+    expect(
+      FlutterLocalNotificationsReviewReminderScheduler.notificationIdForItem(
+        first,
+      ),
+      isNot(
+        FlutterLocalNotificationsReviewReminderScheduler.notificationIdForItem(
+          other,
+        ),
+      ),
+    );
+  });
+
+  test('schedule adds android quick actions and todo payload', () async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+    addTearDown(() => debugDefaultTargetPlatformOverride = null);
+
+    final androidPlugin = _FakeAndroidNotificationsPlugin(
+      canScheduleExactNotificationsResult: true,
+    );
+    FlutterLocalNotificationsPlatform.instance = androidPlugin;
+
+    final scheduler = FlutterLocalNotificationsReviewReminderScheduler(
+      plugin: FlutterLocalNotificationsPlugin(),
+    );
+    const item = ReviewReminderItem(
+      todoId: 'todo:review',
+      todoTitle: 'review this',
+      sourceAtUtcMs: 10000,
+      scheduleAtUtcMs: 20000,
+      kind: ReviewReminderItemKind.reviewQueue,
+    );
+
+    await scheduler.schedule(
+      const ReviewReminderPlan(
+          pendingCount: 1, items: <ReviewReminderItem>[item]),
+    );
+
+    expect(androidPlugin.zonedScheduleCalls, 1);
+    expect(
+      androidPlugin.lastPayload,
+      '${FlutterLocalNotificationsReviewReminderScheduler.reviewQueuePayloadPrefix}todo:review',
+    );
+    expect(
+        androidPlugin.lastId,
+        FlutterLocalNotificationsReviewReminderScheduler.notificationIdForItem(
+            item));
+
+    final actions = androidPlugin.lastNotificationDetails?.actions;
+    expect(actions, isNotNull);
+    expect(actions!.map((action) => action.id), <String>[
+      FlutterLocalNotificationsReviewReminderScheduler.androidDoneActionId,
+      FlutterLocalNotificationsReviewReminderScheduler.androidDismissActionId,
+    ]);
+  });
 }
 
 final class _FakeAndroidNotificationsPlugin
@@ -63,6 +151,10 @@ final class _FakeAndroidNotificationsPlugin
   int requestNotificationsPermissionCalls = 0;
   int canScheduleExactNotificationsCalls = 0;
   int requestExactAlarmsPermissionCalls = 0;
+  int zonedScheduleCalls = 0;
+  int? lastId;
+  String? lastPayload;
+  AndroidNotificationDetails? lastNotificationDetails;
 
   @override
   Future<bool> initialize(
@@ -98,5 +190,27 @@ final class _FakeAndroidNotificationsPlugin
   Future<bool?> requestExactAlarmsPermission() async {
     requestExactAlarmsPermissionCalls += 1;
     return true;
+  }
+
+  @override
+  Future<List<PendingNotificationRequest>> pendingNotificationRequests() async {
+    return const <PendingNotificationRequest>[];
+  }
+
+  @override
+  Future<void> zonedSchedule(
+    int id,
+    String? title,
+    String? body,
+    tz.TZDateTime scheduledDate,
+    AndroidNotificationDetails? notificationDetails, {
+    required AndroidScheduleMode scheduleMode,
+    String? payload,
+    DateTimeComponents? matchDateTimeComponents,
+  }) async {
+    zonedScheduleCalls += 1;
+    lastId = id;
+    lastPayload = payload;
+    lastNotificationDetails = notificationDetails;
   }
 }

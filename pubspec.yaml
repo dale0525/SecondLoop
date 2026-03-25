@@ -82,6 +82,8 @@ dependencies:
 dependency_overrides:
   just_audio_windows:
     path: third_party/just_audio_windows_patched
+  flutter_local_notifications_windows:
+    path: third_party/flutter_local_notifications_windows_patched
 
 dev_dependencies:
   flutter_test:
