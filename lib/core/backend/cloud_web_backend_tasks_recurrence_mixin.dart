@@ -13,6 +13,45 @@ mixin _CloudWebBackendTasksRecurrenceMixin on AppBackend {
   int _touchNow();
   PlatformInt64 _asPlatformInt64(int value);
 
+  int _lastDayOfUtcMonth(int year, int month) {
+    return DateTime.utc(year, month + 1, 0).day;
+  }
+
+  int _clampedMonthlyDueAtMs(int baseDueAtMs, int interval) {
+    final base = DateTime.fromMillisecondsSinceEpoch(baseDueAtMs, isUtc: true);
+    final targetMonth = base.month + interval;
+    final targetYear = base.year + ((targetMonth - 1) ~/ 12);
+    final normalizedMonth = ((targetMonth - 1) % 12) + 1;
+    final day =
+        base.day.clamp(1, _lastDayOfUtcMonth(targetYear, normalizedMonth));
+    return DateTime.utc(
+      targetYear,
+      normalizedMonth,
+      day,
+      base.hour,
+      base.minute,
+      base.second,
+      base.millisecond,
+      base.microsecond,
+    ).millisecondsSinceEpoch;
+  }
+
+  int _clampedYearlyDueAtMs(int baseDueAtMs, int interval) {
+    final base = DateTime.fromMillisecondsSinceEpoch(baseDueAtMs, isUtc: true);
+    final targetYear = base.year + interval;
+    final day = base.day.clamp(1, _lastDayOfUtcMonth(targetYear, base.month));
+    return DateTime.utc(
+      targetYear,
+      base.month,
+      day,
+      base.hour,
+      base.minute,
+      base.second,
+      base.millisecond,
+      base.microsecond,
+    ).millisecondsSinceEpoch;
+  }
+
   ({String freq, int interval}) _parseRecurrenceRule(String ruleJson) {
     final decoded = jsonDecode(ruleJson);
     if (decoded is! Map) {
@@ -46,31 +85,9 @@ mixin _CloudWebBackendTasksRecurrenceMixin on AppBackend {
       case 'weekly':
         return baseDueAtMs + rule.interval * 7 * Duration.millisecondsPerDay;
       case 'monthly':
-        final base =
-            DateTime.fromMillisecondsSinceEpoch(baseDueAtMs, isUtc: true);
-        return DateTime.utc(
-          base.year,
-          base.month + rule.interval,
-          base.day,
-          base.hour,
-          base.minute,
-          base.second,
-          base.millisecond,
-          base.microsecond,
-        ).millisecondsSinceEpoch;
+        return _clampedMonthlyDueAtMs(baseDueAtMs, rule.interval);
       case 'yearly':
-        final base =
-            DateTime.fromMillisecondsSinceEpoch(baseDueAtMs, isUtc: true);
-        return DateTime.utc(
-          base.year + rule.interval,
-          base.month,
-          base.day,
-          base.hour,
-          base.minute,
-          base.second,
-          base.millisecond,
-          base.microsecond,
-        ).millisecondsSinceEpoch;
+        return _clampedYearlyDueAtMs(baseDueAtMs, rule.interval);
     }
     throw StateError('unsupported recurrence freq: ${rule.freq}');
   }

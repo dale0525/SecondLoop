@@ -813,6 +813,77 @@ void main() {
       );
     });
 
+    test('monthly recurrence clamps end-of-month dates on web backend',
+        () async {
+      final backend = CloudWebBackend(
+        chatClient: _FakeCloudWebChatClient(responseText: 'ok'),
+        nowMs: () => 1000,
+      );
+      final key = Uint8List(0);
+      await backend.upsertTodo(
+        key,
+        id: 'todo:monthly',
+        title: 'Month end task',
+        status: 'open',
+        dueAtMs: DateTime.utc(2024, 1, 31, 9, 30).millisecondsSinceEpoch,
+      );
+      await backend.upsertTodoRecurrence(
+        key,
+        todoId: 'todo:monthly',
+        seriesId: 'series:monthly',
+        ruleJson: '{"freq":"monthly","interval":1}',
+      );
+
+      await backend.updateTodoStatusWithScope(
+        key,
+        todoId: 'todo:monthly',
+        newStatus: 'done',
+        scope: TodoRecurrenceEditScope.wholeSeries,
+      );
+
+      final todos = await backend.listTodos(key);
+      final spawned = todos.firstWhere((todo) => todo.id != 'todo:monthly');
+      expect(
+        DateTime.fromMillisecondsSinceEpoch(spawned.dueAtMs!, isUtc: true),
+        DateTime.utc(2024, 2, 29, 9, 30),
+      );
+    });
+
+    test('yearly recurrence clamps leap-day dates on web backend', () async {
+      final backend = CloudWebBackend(
+        chatClient: _FakeCloudWebChatClient(responseText: 'ok'),
+        nowMs: () => 1000,
+      );
+      final key = Uint8List(0);
+      await backend.upsertTodo(
+        key,
+        id: 'todo:yearly',
+        title: 'Leap task',
+        status: 'open',
+        dueAtMs: DateTime.utc(2024, 2, 29, 8, 15).millisecondsSinceEpoch,
+      );
+      await backend.upsertTodoRecurrence(
+        key,
+        todoId: 'todo:yearly',
+        seriesId: 'series:yearly',
+        ruleJson: '{"freq":"yearly","interval":1}',
+      );
+
+      await backend.updateTodoStatusWithScope(
+        key,
+        todoId: 'todo:yearly',
+        newStatus: 'done',
+        scope: TodoRecurrenceEditScope.wholeSeries,
+      );
+
+      final todos = await backend.listTodos(key);
+      final spawned = todos.firstWhere((todo) => todo.id != 'todo:yearly');
+      expect(
+        DateTime.fromMillisecondsSinceEpoch(spawned.dueAtMs!, isUtc: true),
+        DateTime.utc(2025, 2, 28, 8, 15),
+      );
+    });
+
     test(
         'web checklist suggestions skip duplicates and append sort order after existing entries',
         () async {

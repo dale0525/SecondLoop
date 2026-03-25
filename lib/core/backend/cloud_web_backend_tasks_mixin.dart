@@ -2,6 +2,7 @@ part of 'cloud_web_backend.dart';
 
 mixin _CloudWebBackendTasksMixin
     on AppBackend, _CloudWebBackendTasksRecurrenceMixin {
+  static final RegExp _kChecklistSuggestionWhitespaceRegExp = RegExp(r'\s+');
   int _valueAsInt(PlatformInt64? value) => value?.toInt() ?? 0;
   int? _nullableValueAsInt(PlatformInt64? value) => value?.toInt();
   PlatformInt64 _platformInt(int value) => _asPlatformInt64(value);
@@ -79,7 +80,7 @@ mixin _CloudWebBackendTasksMixin
   String _normalizeChecklistSuggestionContent(String content) {
     return content
         .trim()
-        .split(RegExp(r'\s+'))
+        .split(_kChecklistSuggestionWhitespaceRegExp)
         .where((part) => part.isNotEmpty)
         .join(' ')
         .toLowerCase();
