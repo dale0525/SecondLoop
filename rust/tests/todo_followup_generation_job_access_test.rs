@@ -36,6 +36,8 @@ fn due_job_api_overfetches_until_it_finds_accessible_jobs() {
         None,
         None,
         None,
+        None,
+        None,
     )
     .expect("upsert hidden todo");
     db::enqueue_todo_followup_generation_job(&conn, "todo_hidden", "auto_create", false, None, 90)
@@ -48,6 +50,8 @@ fn due_job_api_overfetches_until_it_finds_accessible_jobs() {
         "Visible todo",
         None,
         "open",
+        None,
+        None,
         None,
         None,
         None,
@@ -87,6 +91,8 @@ fn due_job_api_surfaces_todo_read_errors_instead_of_silently_skipping_jobs() {
         "Corrupt todo",
         None,
         "open",
+        None,
+        None,
         None,
         None,
         None,
@@ -137,6 +143,8 @@ fn auto_due_job_api_returns_visible_auto_jobs_without_scanning_manual_backlog() 
         None,
         None,
         None,
+        None,
+        None,
     )
     .expect("upsert manual todo");
     db::enqueue_todo_followup_generation_job(
@@ -156,6 +164,8 @@ fn auto_due_job_api_returns_visible_auto_jobs_without_scanning_manual_backlog() 
         "Auto todo",
         None,
         "open",
+        None,
+        None,
         None,
         None,
         None,
