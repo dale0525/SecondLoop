@@ -819,10 +819,17 @@ class TaskPriorityStore extends ChangeNotifier {
           entry.urgencyScore,
           entry.importanceScore,
           entry.dueDerivedUrgencyScore,
-          entry.semanticScore,
-          entry.confidence.name,
+          _stickySemanticDirection(entry.semanticScore),
+          entry.isUrgent,
+          entry.isImportant,
         ]),
     };
+  }
+
+  int _stickySemanticDirection(double semanticScore) {
+    if (semanticScore > 0) return 1;
+    if (semanticScore < 0) return -1;
+    return 0;
   }
 
   bool _didStickyDueStateChange(TaskPrioritySnapshot snapshot) {

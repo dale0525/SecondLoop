@@ -672,7 +672,7 @@ void main() {
       id: 't8-preserve',
       title: 'Task 8 preserve',
       updatedAtMs: 10,
-      status: 'inbox',
+      status: 'open',
       dueAtMs: 24680,
       reviewStage: 2,
       nextReviewAtMs: 13579,
@@ -693,6 +693,34 @@ void main() {
     expect(updated.nextReviewAtMs, initial.nextReviewAtMs);
     expect(backend.transitionTodoCalls, 1);
     expect(backend.setTodoStatusCalls, 0);
+  });
+
+  test('start action clears inbox review scheduling fields', () async {
+    SharedPreferences.setMockInitialValues({});
+
+    final initial = todo(
+      id: 't8-inbox',
+      title: 'Task 8 inbox',
+      updatedAtMs: 10,
+      status: 'inbox',
+      dueAtMs: 24680,
+      reviewStage: 2,
+      nextReviewAtMs: 13579,
+    );
+    final backend = QuickActionBackendTestDouble(initialTodos: [initial]);
+    final controller = TaskHubQuickActionsController(
+      backend: backend,
+      sessionKey: Uint8List(32),
+    );
+
+    final ticket = await controller.apply(initial, TaskHubQuickAction.start);
+
+    expect(ticket, isNotNull);
+    final updated = backend.current('t8-inbox');
+    expect(updated.status, 'in_progress');
+    expect(updated.dueAtMs, initial.dueAtMs);
+    expect(updated.reviewStage, isNull);
+    expect(updated.nextReviewAtMs, isNull);
   });
 
   test('start action uses status transition instead of full upsert', () async {

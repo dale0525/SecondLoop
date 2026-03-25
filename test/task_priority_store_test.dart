@@ -787,6 +787,34 @@ void main() {
     expect(store.snapshot.primaryFocus?.todo.id, 'other');
   });
 
+  test('sticky focus survives pure semantic score drift on another task',
+      () async {
+    SharedPreferences.setMockInitialValues({});
+
+    var secondPass = false;
+    var changedTitle = 'Task B';
+    final service = _SemanticScoreDriftAiService(() => secondPass);
+    final store = TaskPriorityStore.fromLoaders(
+      nowLocal: () => DateTime(2026, 3, 13, 10, 0),
+      loadTodos: () async => <Todo>[
+        todo(id: 'sticky', title: 'Roadmap', updatedAtMs: 100),
+        todo(id: 'other', title: changedTitle, updatedAtMs: 10),
+      ],
+      resolveAiService: () async => service,
+    );
+
+    await store.refresh();
+    expect(store.snapshot.primaryFocus?.todo.id, 'sticky');
+
+    secondPass = true;
+    changedTitle = 'Task B refreshed';
+    store.markDirty();
+    await store.refresh();
+
+    expect(service.calls, 2);
+    expect(store.snapshot.primaryFocus?.todo.id, 'sticky');
+  });
+
   test('ai rerank still runs when cache scope key is empty', () async {
     SharedPreferences.setMockInitialValues({});
     final aiService = _CountingAiService(
@@ -1026,6 +1054,41 @@ final class _SemanticStickyInvalidationAiService extends TaskPriorityAiService {
               reason: candidate.title.contains('updated')
                   ? 'This just became more important.'
                   : 'Keep this visible.',
+              confidence: TaskPriorityAiConfidence.medium,
+              isImportant: false,
+              isUrgent: false,
+            ),
+          )
+          .toList(growable: false),
+    );
+  }
+}
+
+final class _SemanticScoreDriftAiService extends TaskPriorityAiService {
+  _SemanticScoreDriftAiService(this._secondPass);
+
+  final bool Function() _secondPass;
+
+  @override
+  String get cacheScopeKey => 'semantic-score-drift';
+
+  int calls = 0;
+
+  @override
+  Future<TaskPriorityAiBatchResult> rerank(
+      TaskPriorityAiRequest request) async {
+    calls += 1;
+    final otherScore = _secondPass() ? 18.0 : 8.0;
+    return TaskPriorityAiBatchResult(
+      entries: request.candidates
+          .map(
+            (candidate) => TaskPriorityAiEntry(
+              todoId: candidate.todoId,
+              semanticAdjustment:
+                  candidate.todoId == 'sticky' ? 12.0 : otherScore,
+              reason: candidate.todoId == 'sticky'
+                  ? 'Keep this visible.'
+                  : 'Same task, slightly different score.',
               confidence: TaskPriorityAiConfidence.medium,
               isImportant: false,
               isUrgent: false,

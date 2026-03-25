@@ -198,14 +198,16 @@ class TaskHubQuickActionsController {
 
   Future<TaskHubUndoTicket> _applyStart(Todo todo) async {
     final previousManualSignal = _manualSignalFromTodo(todo);
+    final shouldClearReviewScheduling = todo.status == 'inbox';
     final updated = await backend.transitionTodo(
       sessionKey,
       todoId: todo.id,
       newStatus: 'in_progress',
-      reviewStage: todo.reviewStage,
-      clearReviewStage: todo.reviewStage == null,
-      nextReviewAtMs: todo.nextReviewAtMs,
-      clearNextReviewAtMs: todo.nextReviewAtMs == null,
+      reviewStage: shouldClearReviewScheduling ? null : todo.reviewStage,
+      clearReviewStage: shouldClearReviewScheduling || todo.reviewStage == null,
+      nextReviewAtMs: shouldClearReviewScheduling ? null : todo.nextReviewAtMs,
+      clearNextReviewAtMs:
+          shouldClearReviewScheduling || todo.nextReviewAtMs == null,
       clearManualImportanceNudgeScore: true,
       clearManualUrgencyNudgeScore: true,
     );
