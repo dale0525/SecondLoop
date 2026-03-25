@@ -305,7 +305,11 @@ extension _TodoDetailPageStateFollowupSuggestions on _TodoDetailPageState {
               AnimatedSwitcher(
                 duration: const Duration(milliseconds: 180),
                 child: !showGeneratingIndicator
-                    ? const SizedBox.shrink()
+                    ? const SizedBox(
+                        key: ValueKey(
+                          'todo_detail_followup_generating_indicator_hidden',
+                        ),
+                      )
                     : Padding(
                         key: const ValueKey(
                           'todo_detail_followup_generating_indicator',

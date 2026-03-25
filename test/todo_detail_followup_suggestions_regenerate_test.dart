@@ -231,6 +231,40 @@ void main() {
     expect(backend.getTodoFollowupGenerationJobCalls, 1);
   });
 
+  testWidgets(
+      'TodoDetailPage regenerate toggles generating indicator without duplicate AnimatedSwitcher keys',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({
+      'semantic_parse_data_consent_v1': true,
+    });
+    setLargeDisplay(tester);
+    final completer = Completer<void>();
+    final backend = TestBackend(
+      initialSuggestions: const <TodoFollowupSuggestion>[],
+      regenerateCompleter: completer,
+    );
+
+    await tester.pumpWidget(buildTodoDetailSubject(backend));
+    await tester.pumpAndSettle();
+
+    await tester.tap(
+      find.byKey(const ValueKey('todo_detail_followup_generate_suggestions')),
+    );
+    await tester.pump();
+
+    completer.complete();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 10));
+
+    expect(tester.takeException(), isNull);
+    expect(
+      find.byKey(
+        const ValueKey('todo_detail_followup_generating_indicator_hidden'),
+      ),
+      findsOneWidget,
+    );
+  });
+
   testWidgets('TodoDetailPage shows regenerate loading state', (tester) async {
     SharedPreferences.setMockInitialValues({
       'semantic_parse_data_consent_v1': true,
