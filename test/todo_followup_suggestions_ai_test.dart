@@ -35,6 +35,18 @@ void main() {
     expect(prompt, contains('at least 1 citation'));
   });
 
+  test('followup prompt uses explicit sentinel when due date is missing', () {
+    final prompt = buildTodoFollowupSuggestionPrompt(
+      taskTitle: '调研一下当前主流的 llm 模型',
+      taskContext: '已有笔记：关注价格、上下文、多模态。',
+      localeTag: 'zh-CN',
+      generationMode: TodoFollowupGenerationMode.modelKnowledge,
+      manualFollowups: const <String>[],
+    );
+
+    expect(prompt, contains('Task due local ISO: (none)'));
+  });
+
   test('model knowledge parser requires localized not-verified disclaimer', () {
     expect(
       parseTodoFollowupSuggestionJson(

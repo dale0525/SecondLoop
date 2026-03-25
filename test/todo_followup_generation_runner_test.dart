@@ -310,6 +310,64 @@ void main() {
         store.lastUpsertedSuggestions.single.generationMode, 'model_knowledge');
   });
 
+  test('runner skips web search for clients without web search support',
+      () async {
+    final store = _FakeStore(
+      jobs: const <TodoFollowupGenerationJob>[
+        TodoFollowupGenerationJob(
+          todoId: 'todo_compare',
+          triggerKind: 'auto_create',
+          status: 'pending',
+          attempts: 0,
+          nextRetryAtMs: null,
+          lastError: null,
+          includeManualFollowups: false,
+          manualOverrideFollowup: false,
+          taskTypeHint: 'comparison',
+          createdAtMs: 0,
+          updatedAtMs: 0,
+        ),
+      ],
+      todos: const <String, Todo>{
+        'todo_compare': Todo(
+          id: 'todo_compare',
+          title: '对比一下 Claude 和 GPT',
+          status: 'open',
+          createdAtMs: 0,
+          updatedAtMs: 0,
+        ),
+      },
+    );
+    final client = _FakeClient(
+      supportsWebSearch: false,
+      responseByMode: <TodoFollowupGenerationMode, TodoFollowupSuggestionDraft>{
+        TodoFollowupGenerationMode.modelKnowledge:
+            const TodoFollowupSuggestionDraft(
+          content: '以下内容基于模型知识整理，未联网核实。',
+          mode: TodoFollowupGenerationMode.modelKnowledge,
+          citations: <TodoFollowupCitationDraft>[],
+        ),
+      },
+    );
+
+    final runner = TodoFollowupGenerationRunner(
+      store: store,
+      client: client,
+      settings: const TodoFollowupGenerationRunnerSettings(
+        hardTimeout: Duration(milliseconds: 200),
+      ),
+      nowMs: () => 1000,
+    );
+
+    await runner.runOnce(localeTag: 'zh-CN');
+
+    expect(client.requestedModes, const <TodoFollowupGenerationMode>[
+      TodoFollowupGenerationMode.modelKnowledge,
+    ]);
+    expect(
+        store.lastUpsertedSuggestions.single.generationMode, 'model_knowledge');
+  });
+
   test('runner does not finalize a stale running job after re-enqueue',
       () async {
     const replacementJob = TodoFollowupGenerationJob(

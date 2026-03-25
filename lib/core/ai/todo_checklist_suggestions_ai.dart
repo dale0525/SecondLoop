@@ -61,11 +61,7 @@ String buildTodoChecklistSuggestionsPrompt({
   String? status,
   int? dueAtMs,
 }) {
-  final dueLocalIso = dueAtMs == null
-      ? ''
-      : DateTime.fromMillisecondsSinceEpoch(dueAtMs, isUtc: true)
-          .toLocal()
-          .toIso8601String();
+  final dueLocalIso = _formatTodoDueLocalIso(dueAtMs);
 
   return '''You are helping turn a task into a practical checklist.
 
@@ -202,10 +198,7 @@ Iterable<String> _extractLooseJsonSuggestionCandidates(String raw) sync* {
   }
 
   for (final key in const <String>['suggestions', 'items', 'checklist']) {
-    final match = RegExp(
-      '"$key"\\s*:\\s*(\\[[\\s\\S]*?\\])',
-    ).firstMatch(raw);
-    final segment = match?.group(1)?.trim();
+    final segment = _extractLooseJsonArrayProperty(raw, key)?.trim();
     if (segment != null && segment.isNotEmpty) {
       arraySegments.add(segment);
     }
@@ -228,6 +221,74 @@ Iterable<String> _extractLooseJsonSuggestionCandidates(String raw) sync* {
       }
     }
   }
+}
+
+String? _extractLooseJsonArrayProperty(String raw, String key) {
+  final match = RegExp('"$key"\\s*:\\s*\\[').firstMatch(raw);
+  if (match == null) {
+    return null;
+  }
+
+  final startIndex = raw.indexOf('[', match.start);
+  if (startIndex == -1) {
+    return null;
+  }
+
+  return _extractBalancedJsonArray(raw, startIndex: startIndex);
+}
+
+String? _extractBalancedJsonArray(String raw, {required int startIndex}) {
+  if (startIndex < 0 || startIndex >= raw.length || raw[startIndex] != '[') {
+    return null;
+  }
+
+  var depth = 0;
+  var inString = false;
+  var isEscaping = false;
+
+  for (var index = startIndex; index < raw.length; index++) {
+    final char = raw[index];
+
+    if (isEscaping) {
+      isEscaping = false;
+      continue;
+    }
+
+    if (inString) {
+      if (char == r'\') {
+        isEscaping = true;
+      } else if (char == '"') {
+        inString = false;
+      }
+      continue;
+    }
+
+    if (char == '"') {
+      inString = true;
+      continue;
+    }
+    if (char == '[') {
+      depth++;
+      continue;
+    }
+    if (char == ']') {
+      depth--;
+      if (depth == 0) {
+        return raw.substring(startIndex, index + 1);
+      }
+    }
+  }
+
+  return null;
+}
+
+String _formatTodoDueLocalIso(int? dueAtMs) {
+  if (dueAtMs == null) {
+    return '(none)';
+  }
+  return DateTime.fromMillisecondsSinceEpoch(dueAtMs, isUtc: true)
+      .toLocal()
+      .toIso8601String();
 }
 
 Object? _decodeLooseJsonArraySegment(String segment) {

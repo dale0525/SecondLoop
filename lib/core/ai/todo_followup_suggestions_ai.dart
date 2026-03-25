@@ -191,11 +191,7 @@ String buildTodoFollowupSuggestionPrompt({
   String? status,
   int? dueAtMs,
 }) {
-  final dueLocalIso = dueAtMs == null
-      ? ''
-      : DateTime.fromMillisecondsSinceEpoch(dueAtMs, isUtc: true)
-          .toLocal()
-          .toIso8601String();
+  final dueLocalIso = _formatTodoDueLocalIso(dueAtMs);
   final disclosure = todoFollowupModelKnowledgeDisclosureForLocale(localeTag);
   final modeLabel = generationMode == TodoFollowupGenerationMode.webSearch
       ? 'Use web search and include at least 1 citation.'
@@ -230,6 +226,15 @@ ${taskContext.trim()}
 Manual follow-up notes:
 $manualFollowupsBlock
 ''';
+}
+
+String _formatTodoDueLocalIso(int? dueAtMs) {
+  if (dueAtMs == null) {
+    return '(none)';
+  }
+  return DateTime.fromMillisecondsSinceEpoch(dueAtMs, isUtc: true)
+      .toLocal()
+      .toIso8601String();
 }
 
 TodoFollowupSuggestionDraft? parseTodoFollowupSuggestionJson(

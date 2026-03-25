@@ -307,6 +307,7 @@ String _normalizePendingSuggestionContent(String raw) {
 
 final class _FakeClient implements TodoFollowupGenerationClient {
   _FakeClient({
+    this.supportsWebSearch = true,
     this.responseByMode =
         const <TodoFollowupGenerationMode, TodoFollowupSuggestionDraft>{},
     this.errorsByMode = const <TodoFollowupGenerationMode, Object>{},
@@ -314,6 +315,9 @@ final class _FakeClient implements TodoFollowupGenerationClient {
 
   @override
   final String source = 'cloud';
+
+  @override
+  final bool supportsWebSearch;
 
   final Map<TodoFollowupGenerationMode, TodoFollowupSuggestionDraft>
       responseByMode;

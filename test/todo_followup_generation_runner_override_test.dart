@@ -112,6 +112,9 @@ class _Client implements TodoFollowupGenerationClient {
   @override
   String get source => 'test';
 
+  @override
+  bool get supportsWebSearch => true;
+
   final List<TodoFollowupGenerationMode> requestedModes =
       <TodoFollowupGenerationMode>[];
 

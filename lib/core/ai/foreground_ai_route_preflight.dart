@@ -30,8 +30,8 @@ Future<String?> prepareTodoFollowupGenerationIdToken(
     return null;
   }
 
-  final shouldWarm = normalizedGatewayBaseUrl.isNotEmpty &&
-      (subscriptionStatus == SubscriptionStatus.entitled || forceWarm);
+  final shouldWarm =
+      subscriptionStatus == SubscriptionStatus.entitled || forceWarm;
   if (shouldWarm) {
     await bestEffortWarmCloudCapabilityAuth(controller);
   }
@@ -52,30 +52,20 @@ final class ForegroundAiPreparedRoute {
   final String? idToken;
 }
 
-final class TodoFollowupGenerationPreparedRoute {
-  const TodoFollowupGenerationPreparedRoute({
-    required this.route,
-    required this.idToken,
-  });
-
-  final AskAiRouteKind route;
-  final String? idToken;
-}
+typedef TodoFollowupGenerationPreparedRoute = ForegroundAiPreparedRoute;
 
 bool canRunPreparedForegroundAiRoute(
   ForegroundAiPreparedRoute prepared,
-) {
-  if (prepared.route == AskAiRouteKind.needsSetup) {
-    return false;
-  }
-  if (prepared.route != AskAiRouteKind.cloudGateway) {
-    return true;
-  }
-  return prepared.idToken?.trim().isNotEmpty ?? false;
-}
+) =>
+    _canRunPreparedAiRoute(prepared);
 
 bool canRunPreparedTodoFollowupGenerationRoute(
   TodoFollowupGenerationPreparedRoute prepared,
+) =>
+    _canRunPreparedAiRoute(prepared);
+
+bool _canRunPreparedAiRoute(
+  ForegroundAiPreparedRoute prepared,
 ) {
   if (prepared.route == AskAiRouteKind.needsSetup) {
     return false;

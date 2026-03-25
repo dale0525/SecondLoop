@@ -5,6 +5,8 @@ import 'todo_followup_generation_runner.dart';
 const _kPreviewRefetchLimitMultiplier = 128;
 const _kAutoJobRefetchLimitMultiplier = 128;
 const _kPendingSetupRetryWindow = Duration(minutes: 15);
+const _kPendingSetupMediumRetryAgeThreshold = Duration(seconds: 30);
+const _kPendingSetupLongRetryAgeThreshold = Duration(minutes: 1);
 const _kPendingSetupMediumRetryDelay = Duration(seconds: 30);
 const _kPendingSetupLongRetryDelay = Duration(minutes: 1);
 
@@ -299,10 +301,10 @@ Duration _pendingSetupRetryDelay({
   required int jobAgeMs,
   required Duration retryDelay,
 }) {
-  if (jobAgeMs >= _kPendingSetupLongRetryDelay.inMilliseconds) {
+  if (jobAgeMs >= _kPendingSetupLongRetryAgeThreshold.inMilliseconds) {
     return _kPendingSetupLongRetryDelay;
   }
-  if (jobAgeMs >= _kPendingSetupMediumRetryDelay.inMilliseconds) {
+  if (jobAgeMs >= _kPendingSetupMediumRetryAgeThreshold.inMilliseconds) {
     return _kPendingSetupMediumRetryDelay;
   }
   return retryDelay;

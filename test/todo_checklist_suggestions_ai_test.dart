@@ -15,6 +15,7 @@ void main() {
       contains(
           'Suggest 0 to $kMaxGeneratedChecklistSuggestions checklist items.'),
     );
+    expect(prompt, contains('Task due local ISO: (none)'));
   });
 
   test('checklist context omits status because prompt has dedicated field', () {
@@ -95,6 +96,17 @@ void main() {
       () {
     final parsed = parseTodoChecklistSuggestionsJson(
       '{"suggestions":[{"text":"Book flight"},{"label":"Pack charger"},]}',
+    );
+
+    expect(parsed, const <String>[
+      'Book flight',
+      'Pack charger',
+    ]);
+  });
+
+  test('checklist parser salvages malformed nested arrays from loose json', () {
+    final parsed = parseTodoChecklistSuggestionsJson(
+      '{"suggestions":[{"text":"Book flight","subtasks":["passport"]},{"label":"Pack charger"},],"source":"web"}',
     );
 
     expect(parsed, const <String>[

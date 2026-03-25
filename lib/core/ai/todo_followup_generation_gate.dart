@@ -747,6 +747,9 @@ final class _BackendTodoFollowupGenerationClient
   final String source;
 
   @override
+  bool get supportsWebSearch => route == AskAiRouteKind.cloudGateway;
+
+  @override
   Future<TodoFollowupSuggestionDraft?> generate({
     required String taskTitle,
     required String taskContext,
