@@ -535,7 +535,7 @@ fn reenqueue_without_new_hint_clears_previous_task_type_hint() {
     assert_eq!(due[0].todo_id, "todo_1");
     assert_eq!(due[0].trigger_kind, "manual_regenerate");
     assert!(due[0].include_manual_followups);
-    assert!(due[0].task_type_hint.is_none());
+    assert_eq!(due[0].task_type_hint.as_deref(), Some("execution"));
 }
 
 #[test]
@@ -675,6 +675,44 @@ fn auto_create_reenqueue_without_hint_preserves_existing_task_type_hint() {
     assert_eq!(due[0].todo_id, "todo_1");
     assert_eq!(due[0].trigger_kind, "auto_create");
     assert_eq!(due[0].task_type_hint.as_deref(), Some("research"));
+}
+
+#[test]
+fn manual_regenerate_reenqueue_without_hint_preserves_existing_task_type_hint() {
+    let (_temp_dir, key, conn) = setup();
+
+    db::upsert_todo(
+        &conn,
+        &key,
+        "todo_1",
+        "修复登录页闪退",
+        None,
+        "open",
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("upsert todo");
+
+    db::enqueue_todo_followup_generation_job(
+        &conn,
+        "todo_1",
+        "manual_regenerate",
+        true,
+        Some("execution"),
+        100,
+    )
+    .expect("enqueue hinted manual job");
+    db::enqueue_todo_followup_generation_job(&conn, "todo_1", "manual_regenerate", true, None, 200)
+        .expect("re-enqueue manual job without hint");
+
+    let job = db::find_todo_followup_generation_job(&conn, "todo_1")
+        .expect("find manual job")
+        .expect("job should exist");
+    assert_eq!(job.trigger_kind, "manual_regenerate");
+    assert!(job.manual_override_followup);
+    assert_eq!(job.task_type_hint.as_deref(), Some("execution"));
 }
 
 #[test]

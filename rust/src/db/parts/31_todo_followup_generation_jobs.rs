@@ -110,6 +110,8 @@ ON CONFLICT(todo_id) DO UPDATE SET
       AND excluded.trigger_kind = 'auto_create'
       THEN todo_followup_generation_jobs.task_type_hint
     WHEN excluded.task_type_hint IS NOT NULL THEN excluded.task_type_hint
+    WHEN excluded.trigger_kind = 'manual_regenerate'
+      THEN todo_followup_generation_jobs.task_type_hint
     WHEN excluded.trigger_kind = 'auto_create' THEN todo_followup_generation_jobs.task_type_hint
     ELSE NULL
   END,

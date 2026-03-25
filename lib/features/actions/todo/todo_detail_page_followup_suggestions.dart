@@ -146,6 +146,7 @@ extension _TodoDetailPageStateFollowupSuggestions on _TodoDetailPageState {
 
   Future<void> _enqueueFollowupRegenerate({
     bool manualOverrideFollowup = false,
+    String? taskTypeHint,
   }) async {
     final backend = AppBackendScope.maybeOf(context);
     final session = SessionScope.maybeOf(context);
@@ -172,6 +173,7 @@ extension _TodoDetailPageStateFollowupSuggestions on _TodoDetailPageState {
         todoId: _todo.id,
         triggerKind: 'manual_regenerate',
         manualOverrideFollowup: manualOverrideFollowup,
+        taskTypeHint: taskTypeHint,
         nowMs: DateTime.now().millisecondsSinceEpoch,
       );
       syncEngine?.notifyExternalChange();
@@ -260,7 +262,11 @@ extension _TodoDetailPageStateFollowupSuggestions on _TodoDetailPageState {
                       variant: SlButtonVariant.outline,
                       onPressed: showGeneratingIndicator
                           ? null
-                          : () => unawaited(_enqueueFollowupRegenerate()),
+                          : () => unawaited(
+                                _enqueueFollowupRegenerate(
+                                  taskTypeHint: resolvedTaskType.wireValue,
+                                ),
+                              ),
                       child: Text(
                         suggestions.isEmpty
                             ? context.t.actions.todoDetail.followupGenerate
@@ -278,6 +284,7 @@ extension _TodoDetailPageStateFollowupSuggestions on _TodoDetailPageState {
                           : () => unawaited(
                                 _enqueueFollowupRegenerate(
                                   manualOverrideFollowup: true,
+                                  taskTypeHint: resolvedTaskType.wireValue,
                                 ),
                               ),
                       child: Text(

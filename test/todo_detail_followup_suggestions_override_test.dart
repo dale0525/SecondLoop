@@ -61,5 +61,6 @@ void main() {
 
     expect(backend.enqueuedRegenerate, isTrue);
     expect(backend.lastManualOverrideFollowup, isTrue);
+    expect(backend.lastTaskTypeHint, 'execution');
   });
 }
