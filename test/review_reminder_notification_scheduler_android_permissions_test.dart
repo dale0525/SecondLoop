@@ -5,6 +5,7 @@ import 'package:timezone/timezone.dart' as tz;
 
 import 'package:secondloop/core/notifications/review_notification_plan.dart';
 import 'package:secondloop/core/notifications/review_reminder_notification_scheduler.dart';
+import 'package:secondloop/features/actions/task_hub/task_hub_quick_actions.dart';
 
 void main() {
   test('ensureInitialized requests exact alarm permission when unavailable',
@@ -62,6 +63,7 @@ void main() {
       sourceAtUtcMs: 1000,
       scheduleAtUtcMs: 2000,
       kind: ReviewReminderItemKind.reviewQueue,
+      todoStatus: 'open',
     );
     const second = ReviewReminderItem(
       todoId: 'todo:1',
@@ -69,6 +71,7 @@ void main() {
       sourceAtUtcMs: 3000,
       scheduleAtUtcMs: 4000,
       kind: ReviewReminderItemKind.reviewQueue,
+      todoStatus: 'in_progress',
     );
     const other = ReviewReminderItem(
       todoId: 'todo:2',
@@ -76,6 +79,7 @@ void main() {
       sourceAtUtcMs: 3000,
       scheduleAtUtcMs: 4000,
       kind: ReviewReminderItemKind.reviewQueue,
+      todoStatus: 'open',
     );
 
     expect(
@@ -98,7 +102,51 @@ void main() {
     );
   });
 
-  test('schedule adds android quick actions and todo payload', () async {
+  test('open reminders expose the same quick actions as task hub', () {
+    const item = ReviewReminderItem(
+      todoId: 'todo:review',
+      todoTitle: 'review this',
+      sourceAtUtcMs: 10000,
+      scheduleAtUtcMs: 20000,
+      kind: ReviewReminderItemKind.reviewQueue,
+      todoStatus: 'open',
+    );
+
+    expect(
+      FlutterLocalNotificationsReviewReminderScheduler
+          .notificationQuickActionsForItem(item),
+      <TaskHubQuickAction>[
+        TaskHubQuickAction.start,
+        TaskHubQuickAction.tomorrow,
+        TaskHubQuickAction.today,
+        TaskHubQuickAction.done,
+      ],
+    );
+  });
+
+  test('in-progress reminders expose the same quick actions as task hub', () {
+    const item = ReviewReminderItem(
+      todoId: 'todo:review',
+      todoTitle: 'review this',
+      sourceAtUtcMs: 10000,
+      scheduleAtUtcMs: 20000,
+      kind: ReviewReminderItemKind.reviewQueue,
+      todoStatus: 'in_progress',
+    );
+
+    expect(
+      FlutterLocalNotificationsReviewReminderScheduler
+          .notificationQuickActionsForItem(item),
+      <TaskHubQuickAction>[
+        TaskHubQuickAction.done,
+        TaskHubQuickAction.tomorrow,
+        TaskHubQuickAction.today,
+      ],
+    );
+  });
+
+  test('schedule adds Android quick actions matching task hub layout',
+      () async {
     debugDefaultTargetPlatformOverride = TargetPlatform.android;
     addTearDown(() {
       debugDefaultTargetPlatformOverride = null;
@@ -118,6 +166,7 @@ void main() {
       sourceAtUtcMs: 10000,
       scheduleAtUtcMs: 20000,
       kind: ReviewReminderItemKind.reviewQueue,
+      todoStatus: 'open',
     );
 
     await scheduler.schedule(
@@ -142,18 +191,29 @@ void main() {
     final actions = androidPlugin.lastNotificationDetails?.actions;
     expect(actions, isNotNull);
     expect(actions!.map((action) => action.id), <String>[
-      FlutterLocalNotificationsReviewReminderScheduler.androidDoneActionId,
-      FlutterLocalNotificationsReviewReminderScheduler.androidDismissActionId,
+      FlutterLocalNotificationsReviewReminderScheduler.notificationActionId(
+        TaskHubQuickAction.start,
+      ),
+      FlutterLocalNotificationsReviewReminderScheduler.notificationActionId(
+        TaskHubQuickAction.tomorrow,
+      ),
+      FlutterLocalNotificationsReviewReminderScheduler.notificationActionId(
+        TaskHubQuickAction.today,
+      ),
+      FlutterLocalNotificationsReviewReminderScheduler.notificationActionId(
+        TaskHubQuickAction.done,
+      ),
     ]);
   });
 
-  test('notification details add Windows quick actions and keep payload', () {
+  test('notification details add Windows quick actions matching task hub', () {
     const item = ReviewReminderItem(
       todoId: 'todo:review',
       todoTitle: 'review this',
       sourceAtUtcMs: 10000,
       scheduleAtUtcMs: 20000,
       kind: ReviewReminderItemKind.reviewQueue,
+      todoStatus: 'open',
     );
     final payload =
         FlutterLocalNotificationsReviewReminderScheduler.encodePayload(
@@ -165,16 +225,34 @@ void main() {
         .windows;
 
     expect(details, isNotNull);
-    expect(details!.actions.length, 2);
+    expect(details!.actions.length, 4);
     expect(details.actions.map((action) => action.arguments), <String>[
       FlutterLocalNotificationsReviewReminderScheduler
           .encodeWindowsQuickActionArguments(
-        FlutterLocalNotificationsReviewReminderScheduler.androidDoneActionId,
+        FlutterLocalNotificationsReviewReminderScheduler.notificationActionId(
+          TaskHubQuickAction.start,
+        ),
         payload,
       ),
       FlutterLocalNotificationsReviewReminderScheduler
           .encodeWindowsQuickActionArguments(
-        FlutterLocalNotificationsReviewReminderScheduler.androidDismissActionId,
+        FlutterLocalNotificationsReviewReminderScheduler.notificationActionId(
+          TaskHubQuickAction.tomorrow,
+        ),
+        payload,
+      ),
+      FlutterLocalNotificationsReviewReminderScheduler
+          .encodeWindowsQuickActionArguments(
+        FlutterLocalNotificationsReviewReminderScheduler.notificationActionId(
+          TaskHubQuickAction.today,
+        ),
+        payload,
+      ),
+      FlutterLocalNotificationsReviewReminderScheduler
+          .encodeWindowsQuickActionArguments(
+        FlutterLocalNotificationsReviewReminderScheduler.notificationActionId(
+          TaskHubQuickAction.done,
+        ),
         payload,
       ),
     ]);
@@ -185,7 +263,9 @@ void main() {
         '${FlutterLocalNotificationsReviewReminderScheduler.reviewQueuePayloadPrefix}todo:review';
     final encoded = FlutterLocalNotificationsReviewReminderScheduler
         .encodeWindowsQuickActionArguments(
-      FlutterLocalNotificationsReviewReminderScheduler.androidDoneActionId,
+      FlutterLocalNotificationsReviewReminderScheduler.notificationActionId(
+        TaskHubQuickAction.done,
+      ),
       payload,
     );
 
@@ -202,7 +282,9 @@ void main() {
     expect(event.payload, payload);
     expect(
       event.actionId,
-      FlutterLocalNotificationsReviewReminderScheduler.androidDoneActionId,
+      FlutterLocalNotificationsReviewReminderScheduler.notificationActionId(
+        TaskHubQuickAction.done,
+      ),
     );
   });
 

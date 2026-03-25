@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 
 import '../../features/actions/agenda/todo_agenda_page.dart';
 import '../../features/actions/task_hub/task_hub_page.dart';
+import '../../features/actions/task_hub/task_hub_quick_actions.dart';
 import '../../i18n/strings.g.dart';
 import '../backend/app_backend.dart';
 import '../session/session_scope.dart';
@@ -272,20 +273,16 @@ final class _ReviewReminderNotificationsGateState
       return;
     }
 
-    switch (event.actionId) {
-      case FlutterLocalNotificationsReviewReminderScheduler.androidDoneActionId:
-        unawaited(_applyNotificationQuickAction(
-          todoId: payload.todoId,
-          newStatus: 'done',
-        ));
-        return;
-      case FlutterLocalNotificationsReviewReminderScheduler
-            .androidDismissActionId:
-        unawaited(_applyNotificationQuickAction(
-          todoId: payload.todoId,
-          newStatus: 'dismissed',
-        ));
-        return;
+    final quickAction =
+        FlutterLocalNotificationsReviewReminderScheduler.quickActionFromId(
+      event.actionId,
+    );
+    if (quickAction != null) {
+      unawaited(_applyNotificationQuickAction(
+        todoId: payload.todoId,
+        action: quickAction,
+      ));
+      return;
     }
 
     unawaited(_openReminderTarget(payload.kind));
@@ -293,21 +290,28 @@ final class _ReviewReminderNotificationsGateState
 
   Future<void> _applyNotificationQuickAction({
     required String todoId,
-    required String newStatus,
+    required TaskHubQuickAction action,
   }) async {
     if (!mounted) return;
 
     final backend = AppBackendScope.of(context);
     final sessionKey = Uint8List.fromList(SessionScope.of(context).sessionKey);
     final syncEngine = SyncEngineScope.maybeOf(context);
+    final controller = TaskHubQuickActionsController(
+      backend: backend,
+      sessionKey: sessionKey,
+    );
 
     try {
-      await backend.setTodoStatus(
-        sessionKey,
-        todoId: todoId,
-        newStatus: newStatus,
-      );
-      if (!mounted) return;
+      final todo = await backend.getTodoById(sessionKey, todoId);
+      if (todo == null) {
+        return;
+      }
+
+      final ticket = await controller.apply(todo, action);
+      if (ticket == null || !mounted) {
+        return;
+      }
       syncEngine?.notifyLocalMutation();
       _hideInAppFallbackBanner();
       _clearDismissedInAppFallback();

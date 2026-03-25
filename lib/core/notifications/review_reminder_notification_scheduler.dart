@@ -4,11 +4,13 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/data/latest.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
 
+import '../../features/actions/task_hub/task_hub_quick_actions.dart';
 import '../../i18n/strings.g.dart';
 import 'review_notification_plan.dart';
 
 typedef NotificationTapHandler = void Function(
-    ReviewReminderNotificationEvent event);
+  ReviewReminderNotificationEvent event,
+);
 
 final class ReviewReminderNotificationEvent {
   const ReviewReminderNotificationEvent({
@@ -62,8 +64,16 @@ final class FlutterLocalNotificationsReviewReminderScheduler
   static const String reviewQueuePayloadPrefix = 'review_queue:';
   static const String dueTodoPayloadPrefix = 'due_todo:';
 
-  static const String androidDoneActionId = 'done';
-  static const String androidDismissActionId = 'dismiss';
+  static const String quickActionTodayId = 'today';
+  static const String quickActionTomorrowId = 'tomorrow';
+  static const String quickActionStartId = 'start';
+  static const String quickActionDoneId = 'done';
+  static const String quickActionReopenId = 'reopen';
+  static const String quickActionRedoId = 'redo';
+  static const String quickActionDismissId = 'dismiss';
+
+  static const String androidDoneActionId = quickActionDoneId;
+  static const String androidDismissActionId = quickActionDismissId;
 
   static const String androidNotificationIcon = 'ic_stat_notify';
 
@@ -253,6 +263,11 @@ final class FlutterLocalNotificationsReviewReminderScheduler
   }
 
   @visibleForTesting
+  static String notificationActionId(TaskHubQuickAction action) {
+    return action.name;
+  }
+
+  @visibleForTesting
   static String encodeWindowsQuickActionArguments(
     String actionId,
     String payload,
@@ -288,6 +303,46 @@ final class FlutterLocalNotificationsReviewReminderScheduler
     );
   }
 
+  @visibleForTesting
+  static List<TaskHubQuickAction> notificationQuickActionsForItem(
+    ReviewReminderItem item,
+  ) {
+    if (item.todoStatus == 'done') {
+      return const <TaskHubQuickAction>[
+        TaskHubQuickAction.reopen,
+        TaskHubQuickAction.redo,
+        TaskHubQuickAction.dismiss,
+      ];
+    }
+
+    return <TaskHubQuickAction>[
+      if (item.todoStatus == 'in_progress')
+        TaskHubQuickAction.done
+      else
+        TaskHubQuickAction.start,
+      TaskHubQuickAction.tomorrow,
+      TaskHubQuickAction.today,
+      if (item.todoStatus != 'in_progress') TaskHubQuickAction.done,
+    ];
+  }
+
+  static TaskHubQuickAction? quickActionFromId(String? actionId) {
+    if (actionId == null || actionId.isEmpty) {
+      return null;
+    }
+
+    return switch (actionId) {
+      quickActionTodayId => TaskHubQuickAction.today,
+      quickActionTomorrowId => TaskHubQuickAction.tomorrow,
+      quickActionStartId => TaskHubQuickAction.start,
+      quickActionDoneId => TaskHubQuickAction.done,
+      quickActionReopenId => TaskHubQuickAction.reopen,
+      quickActionRedoId => TaskHubQuickAction.redo,
+      quickActionDismissId => TaskHubQuickAction.dismiss,
+      _ => null,
+    };
+  }
+
   static ReviewReminderNotificationPayload? decodePayload(String? payload) {
     if (payload == null || payload.isEmpty) return null;
     if (payload.startsWith(reviewQueuePayloadPrefix)) {
@@ -314,6 +369,7 @@ final class FlutterLocalNotificationsReviewReminderScheduler
     ReviewReminderItem item,
   ) {
     final payload = encodePayload(item);
+    final quickActions = notificationQuickActionsForItem(item);
     return NotificationDetails(
       android: AndroidNotificationDetails(
         _androidChannelId,
@@ -323,16 +379,12 @@ final class FlutterLocalNotificationsReviewReminderScheduler
         priority: Priority.high,
         icon: androidNotificationIcon,
         actions: <AndroidNotificationAction>[
-          AndroidNotificationAction(
-            androidDoneActionId,
-            t.actions.reviewQueue.actions.done,
-            showsUserInterface: true,
-          ),
-          AndroidNotificationAction(
-            androidDismissActionId,
-            t.actions.reviewQueue.actions.dismiss,
-            showsUserInterface: true,
-          ),
+          for (final action in quickActions)
+            AndroidNotificationAction(
+              notificationActionId(action),
+              _labelForQuickAction(action),
+              showsUserInterface: true,
+            ),
         ],
       ),
       iOS: const DarwinNotificationDetails(
@@ -347,20 +399,14 @@ final class FlutterLocalNotificationsReviewReminderScheduler
       ),
       windows: WindowsNotificationDetails(
         actions: <WindowsAction>[
-          WindowsAction(
-            content: t.actions.reviewQueue.actions.done,
-            arguments: encodeWindowsQuickActionArguments(
-              androidDoneActionId,
-              payload,
+          for (final action in quickActions)
+            WindowsAction(
+              content: _labelForQuickAction(action),
+              arguments: encodeWindowsQuickActionArguments(
+                notificationActionId(action),
+                payload,
+              ),
             ),
-          ),
-          WindowsAction(
-            content: t.actions.reviewQueue.actions.dismiss,
-            arguments: encodeWindowsQuickActionArguments(
-              androidDismissActionId,
-              payload,
-            ),
-          ),
         ],
       ),
     );
@@ -491,6 +537,25 @@ final class FlutterLocalNotificationsReviewReminderScheduler
       actionId: actionId,
       payload: payload,
     );
+  }
+
+  static String _labelForQuickAction(TaskHubQuickAction action) {
+    final taskHubActions = t.actions.taskHub.actions;
+    return switch (action) {
+      TaskHubQuickAction.today => taskHubActions.today,
+      TaskHubQuickAction.tomorrow => taskHubActions.tomorrow,
+      TaskHubQuickAction.start => taskHubActions.start,
+      TaskHubQuickAction.done => taskHubActions.done,
+      TaskHubQuickAction.reopen => taskHubActions.reopen,
+      TaskHubQuickAction.redo => taskHubActions.redo,
+      TaskHubQuickAction.dismiss => t.common.actions.delete,
+      TaskHubQuickAction.increaseUrgency => taskHubActions.increaseUrgency,
+      TaskHubQuickAction.decreaseUrgency => taskHubActions.decreaseUrgency,
+      TaskHubQuickAction.increaseImportance =>
+        taskHubActions.increaseImportance,
+      TaskHubQuickAction.decreaseImportance =>
+        taskHubActions.decreaseImportance,
+    };
   }
 
   static int _stableHash(String input) {

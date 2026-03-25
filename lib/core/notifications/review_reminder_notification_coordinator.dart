@@ -86,6 +86,7 @@ final class ReviewReminderNotificationCoordinator {
                   sourceAtUtcMs: item.sourceAtUtcMs,
                   scheduleAtUtcMs: scheduledAtUtcMs,
                   kind: item.kind,
+                  todoStatus: item.todoStatus,
                 ),
         );
       }
