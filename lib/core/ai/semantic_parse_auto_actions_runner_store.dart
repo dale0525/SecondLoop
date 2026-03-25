@@ -66,6 +66,20 @@ final class BackendSemanticParseAutoActionsStore
   }
 
   @override
+  Future<SemanticParseJob?> getJob(String messageId) async {
+    final rows = await _backend.listSemanticParseJobsByMessageIds(
+      _sessionKey,
+      messageIds: <String>[messageId],
+    );
+    for (final row in rows) {
+      if (row.messageId == messageId) {
+        return row;
+      }
+    }
+    return null;
+  }
+
+  @override
   Future<SemanticParseMessageInput?> getMessageInput(String messageId) async {
     final msg = await _backend.getMessageById(_sessionKey, messageId);
     final sourceText = (msg?.content ?? '').trim();

@@ -1,6 +1,10 @@
+import 'dart:async';
+
+import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:secondloop/core/ai/semantic_parse_auto_actions_runner.dart';
+import 'package:secondloop/src/rust/db.dart';
 
 void main() {
   test('runner auto-creates todo for create decision', () async {
@@ -172,6 +176,158 @@ void main() {
     expect(store.appliedSemanticTagsByMessage, isEmpty);
     expect(store.lastSucceeded, isNull);
     expect(store.canceledMessageIds, contains('msg:deleted_mid_run'));
+  });
+
+  test('runner cancels when message analysis changes during remote parse',
+      () async {
+    final store = _FakeStore(
+      jobs: [
+        const SemanticParseAutoActionJob(
+          messageId: 'msg:edited_mid_run',
+          status: 'pending',
+          attempts: 0,
+          nextRetryAtMs: null,
+          createdAtMs: 0,
+        ),
+      ],
+      messages: {'msg:edited_mid_run': '买牛奶'},
+    );
+    final client = _FakeClient(
+      responseJson:
+          '{"kind":"create","confidence":1.0,"title":"买牛奶","status":"inbox","suggested_tags":["Errand"],"tag_confidence":0.95}',
+      onParseMessageAction: () async {
+        store.updateMessage(
+          'msg:edited_mid_run',
+          const SemanticParseMessageInput(
+            sourceText: '明天下午开会',
+            analysisText: '明天下午开会',
+            allowCreate: true,
+          ),
+        );
+      },
+    );
+
+    final runner = SemanticParseAutoActionsRunner(
+      store: store,
+      client: client,
+      settings: const SemanticParseAutoActionsRunnerSettings(
+        hardTimeout: Duration(milliseconds: 200),
+        minAutoConfidence: 0.86,
+      ),
+      nowMs: () => 1000,
+      nowLocal: () => DateTime(2026, 2, 3, 12, 0, 0),
+    );
+
+    final result = await runner.runOnce(
+      localeTag: 'zh-CN',
+      dayEndMinutes: 21 * 60,
+    );
+
+    expect(result.processed, 0);
+    expect(result.didMutateAny, isFalse);
+    expect(result.didUpdateJobs, isTrue);
+    expect(store.createdTodoIds, isEmpty);
+    expect(store.updatedStatusByTodoId, isEmpty);
+    expect(store.appliedSemanticTagsByMessage, isEmpty);
+    expect(store.lastSucceeded, isNull);
+    expect(store.canceledMessageIds, contains('msg:edited_mid_run'));
+  });
+
+  test('runner ignores late success after job is retried mid-run', () async {
+    final store = _FakeStore(
+      jobs: [
+        const SemanticParseAutoActionJob(
+          messageId: 'msg:retried_mid_run',
+          status: 'pending',
+          attempts: 0,
+          nextRetryAtMs: null,
+          createdAtMs: 0,
+        ),
+      ],
+      messages: {'msg:retried_mid_run': '买牛奶'},
+    );
+    final client = _FakeClient(
+      responseJson:
+          '{"kind":"create","confidence":1.0,"title":"买牛奶","status":"inbox","suggested_tags":["Errand"],"tag_confidence":0.95}',
+      onParseMessageAction: () async {
+        store.requeueJob('msg:retried_mid_run', nowMs: 2000);
+        store.markRunningAttempt('msg:retried_mid_run', nowMs: 2001);
+      },
+    );
+
+    final runner = SemanticParseAutoActionsRunner(
+      store: store,
+      client: client,
+      settings: const SemanticParseAutoActionsRunnerSettings(
+        hardTimeout: Duration(milliseconds: 200),
+        minAutoConfidence: 0.86,
+      ),
+      nowMs: () => 1000,
+      nowLocal: () => DateTime(2026, 2, 3, 12, 0, 0),
+    );
+
+    final result = await runner.runOnce(
+      localeTag: 'zh-CN',
+      dayEndMinutes: 21 * 60,
+    );
+
+    expect(result.processed, 0);
+    expect(result.didMutateAny, isFalse);
+    expect(result.didUpdateJobs, isTrue);
+    expect(store.createdTodoIds, isEmpty);
+    expect(store.appliedSemanticTagsByMessage, isEmpty);
+    expect(store.lastSucceeded, isNull);
+    expect(store.lastFailed, isNull);
+    expect(store.currentJobStatus('msg:retried_mid_run'), 'running');
+    expect(store.currentJobUpdatedAtMs('msg:retried_mid_run'), 2001);
+  });
+
+  test('runner ignores late failure after job is retried mid-run', () async {
+    final store = _FakeStore(
+      jobs: [
+        const SemanticParseAutoActionJob(
+          messageId: 'msg:retried_fail_mid_run',
+          status: 'pending',
+          attempts: 0,
+          nextRetryAtMs: null,
+          createdAtMs: 0,
+        ),
+      ],
+      messages: {'msg:retried_fail_mid_run': '买牛奶'},
+    );
+    final client = _FakeClient(
+      error: TimeoutException('timed out'),
+      onParseMessageAction: () async {
+        store.requeueJob('msg:retried_fail_mid_run', nowMs: 2000);
+        store.markRunningAttempt('msg:retried_fail_mid_run', nowMs: 2001);
+      },
+    );
+
+    final runner = SemanticParseAutoActionsRunner(
+      store: store,
+      client: client,
+      settings: const SemanticParseAutoActionsRunnerSettings(
+        hardTimeout: Duration(milliseconds: 200),
+        minAutoConfidence: 0.86,
+      ),
+      nowMs: () => 1000,
+      nowLocal: () => DateTime(2026, 2, 3, 12, 0, 0),
+    );
+
+    final result = await runner.runOnce(
+      localeTag: 'zh-CN',
+      dayEndMinutes: 21 * 60,
+    );
+
+    expect(result.processed, 0);
+    expect(result.didMutateAny, isFalse);
+    expect(result.didUpdateJobs, isTrue);
+    expect(store.createdTodoIds, isEmpty);
+    expect(store.appliedSemanticTagsByMessage, isEmpty);
+    expect(store.lastSucceeded, isNull);
+    expect(store.lastFailed, isNull);
+    expect(store.currentJobStatus('msg:retried_fail_mid_run'), 'running');
+    expect(store.currentJobUpdatedAtMs('msg:retried_fail_mid_run'), 2001);
   });
 
   test('runner processes running jobs (crash recovery)', () async {
@@ -715,6 +871,8 @@ final class _FakeStore implements SemanticParseAutoActionsStore {
       <String, List<String>>{};
   String? lastRecurrenceRuleJson;
   String? lastFollowupTaskTypeHint;
+  final Map<String, SemanticParseJob> _currentJobs =
+      <String, SemanticParseJob>{};
 
   @override
   Future<List<SemanticParseAutoActionJob>> listDueJobs({
@@ -722,6 +880,11 @@ final class _FakeStore implements SemanticParseAutoActionsStore {
     int limit = 5,
   }) async {
     return _jobs.take(limit).toList(growable: false);
+  }
+
+  @override
+  Future<SemanticParseJob?> getJob(String messageId) async {
+    return _currentJobs[messageId];
   }
 
   @override
@@ -752,16 +915,28 @@ final class _FakeStore implements SemanticParseAutoActionsStore {
   Future<void> markJobRunning({
     required String messageId,
     required int nowMs,
-  }) async {}
+  }) async {
+    markRunningAttempt(messageId, nowMs: nowMs);
+  }
 
   @override
   Future<void> markJobSucceeded(SemanticParseJobSucceededArgs args) async {
     lastSucceeded = args;
+    _currentJobs[args.messageId] = _buildJob(
+      messageId: args.messageId,
+      status: 'succeeded',
+      updatedAtMs: args.nowMs,
+    );
   }
 
   @override
   Future<void> markJobFailed(SemanticParseJobFailedArgs args) async {
     lastFailed = args;
+    _currentJobs[args.messageId] = _buildJob(
+      messageId: args.messageId,
+      status: 'failed',
+      updatedAtMs: args.nowMs,
+    );
   }
 
   @override
@@ -770,11 +945,67 @@ final class _FakeStore implements SemanticParseAutoActionsStore {
     required int nowMs,
   }) async {
     canceledMessageIds.add(messageId);
+    _currentJobs[messageId] = _buildJob(
+      messageId: messageId,
+      status: 'canceled',
+      updatedAtMs: nowMs,
+    );
   }
 
   void deleteMessage(String messageId) {
     _messages.remove(messageId);
     _messageInputs.remove(messageId);
+  }
+
+  void updateMessage(String messageId, SemanticParseMessageInput input) {
+    _messages[messageId] = input.sourceText;
+    _messageInputs[messageId] = input;
+  }
+
+  void requeueJob(String messageId, {required int nowMs}) {
+    _currentJobs[messageId] = _buildJob(
+      messageId: messageId,
+      status: 'pending',
+      updatedAtMs: nowMs,
+    );
+  }
+
+  void markRunningAttempt(String messageId, {required int nowMs}) {
+    _currentJobs[messageId] = _buildJob(
+      messageId: messageId,
+      status: 'running',
+      updatedAtMs: nowMs,
+    );
+  }
+
+  String? currentJobStatus(String messageId) => _currentJobs[messageId]?.status;
+
+  int? currentJobUpdatedAtMs(String messageId) =>
+      _currentJobs[messageId]?.updatedAtMs.toInt();
+
+  SemanticParseJob _buildJob({
+    required String messageId,
+    required String status,
+    required int updatedAtMs,
+  }) {
+    return SemanticParseJob(
+      messageId: messageId,
+      status: status,
+      attempts: PlatformInt64Util.from(0),
+      nextRetryAtMs: null,
+      lastError: null,
+      appliedActionKind: null,
+      appliedTodoId: null,
+      appliedTodoTitle: null,
+      appliedPrevTodoStatus: null,
+      suggestedTags: null,
+      suggestedTagConfidence: null,
+      tagSuggestionState: null,
+      appliedTagIds: null,
+      undoneAtMs: null,
+      createdAtMs: PlatformInt64Util.from(0),
+      updatedAtMs: PlatformInt64Util.from(updatedAtMs),
+    );
   }
 
   @override

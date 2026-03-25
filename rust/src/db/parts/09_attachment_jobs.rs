@@ -310,7 +310,8 @@ SET status = 'failed',
     last_error = ?4,
     updated_at_ms = ?5
 WHERE message_id = ?1
-  AND status IN ('pending', 'failed', 'running')
+  AND status = 'running'
+  AND updated_at_ms = ?5
 "#,
         params![message_id, attempts, next_retry_at_ms, last_error, now_ms],
     )?;
@@ -436,7 +437,8 @@ SET status = 'succeeded',
     applied_tag_ids_json = ?9,
     updated_at_ms = ?10
 WHERE message_id = ?1
-  AND status IN ('pending', 'failed', 'running')
+  AND status = 'running'
+  AND updated_at_ms = ?10
 "#,
         params![
             message_id,

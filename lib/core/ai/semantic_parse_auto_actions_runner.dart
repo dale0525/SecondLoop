@@ -126,6 +126,8 @@ abstract class SemanticParseAutoActionsStore {
     int limit = 5,
   });
 
+  Future<SemanticParseJob?> getJob(String messageId);
+
   Future<SemanticParseMessageInput?> getMessageInput(String messageId);
 
   Future<List<SemanticParseTodoCandidate>> listOpenTodoCandidates({
@@ -313,6 +315,7 @@ final class SemanticParseAutoActionsRunner {
       try {
         await store.markJobRunning(messageId: job.messageId, nowMs: nowMs);
         didUpdateJobs = true;
+        final jobStartedAtMs = nowMs;
 
         List<String> preferredTodoIds = const <String>[];
         try {
@@ -381,9 +384,20 @@ final class SemanticParseAutoActionsRunner {
         final refreshedAnalysisText =
             refreshedMessageInput?.analysisText.trim() ?? '';
         final allowCreate = refreshedMessageInput?.allowCreate ?? false;
-        if (refreshedAnalysisText.isEmpty) {
-          await store.markJobCanceled(messageId: job.messageId, nowMs: nowMs);
-          didUpdateJobs = true;
+        if (!await _isStillRunningAttempt(
+          messageId: job.messageId,
+          jobStartedAtMs: jobStartedAtMs,
+        )) {
+          continue;
+        }
+        if (refreshedAnalysisText.isEmpty ||
+            refreshedAnalysisText != analysisText) {
+          await _markJobCanceledIfStillRunning(
+            messageId: job.messageId,
+            jobStartedAtMs: jobStartedAtMs,
+            nowMs: nowMs,
+          );
+
           continue;
         }
 
@@ -396,6 +410,12 @@ final class SemanticParseAutoActionsRunner {
         List<String>? appliedTagIds;
 
         if (normalizedSuggestedTags.isNotEmpty) {
+          if (!await _isStillRunningAttempt(
+            messageId: job.messageId,
+            jobStartedAtMs: jobStartedAtMs,
+          )) {
+            continue;
+          }
           if (parsed.tagConfidence >= settings.minAutoTagConfidence) {
             final result = await store.applySemanticTags(
               messageId: job.messageId,
@@ -418,7 +438,7 @@ final class SemanticParseAutoActionsRunner {
         }
 
         if (parsed.confidence < settings.minAutoConfidence) {
-          await store.markJobSucceeded(
+          await _markJobSucceededIfStillRunning(
             SemanticParseJobSucceededArgs(
               messageId: job.messageId,
               appliedActionKind: 'none',
@@ -431,8 +451,9 @@ final class SemanticParseAutoActionsRunner {
               appliedTagIds: appliedTagIds,
               nowMs: nowMs,
             ),
+            jobStartedAtMs: jobStartedAtMs,
           );
-          didUpdateJobs = true;
+
           continue;
         }
 
@@ -444,7 +465,7 @@ final class SemanticParseAutoActionsRunner {
               :final recurrenceRule,
             ):
             if (!allowCreate) {
-              await store.markJobSucceeded(
+              await _markJobSucceededIfStillRunning(
                 SemanticParseJobSucceededArgs(
                   messageId: job.messageId,
                   appliedActionKind: 'none',
@@ -457,9 +478,16 @@ final class SemanticParseAutoActionsRunner {
                   appliedTagIds: appliedTagIds,
                   nowMs: nowMs,
                 ),
+                jobStartedAtMs: jobStartedAtMs,
               );
-              didUpdateJobs = true;
+
               break;
+            }
+            if (!await _isStillRunningAttempt(
+              messageId: job.messageId,
+              jobStartedAtMs: jobStartedAtMs,
+            )) {
+              continue;
             }
             final appliedTodoId = await store.upsertTodoFromMessage(
               messageId: job.messageId,
@@ -469,6 +497,13 @@ final class SemanticParseAutoActionsRunner {
               recurrenceRuleJson: recurrenceRule?.toJsonString(),
               followupTaskTypeHint: parsed.taskType,
             );
+            didMutateAny = true;
+            if (!await _isStillRunningAttempt(
+              messageId: job.messageId,
+              jobStartedAtMs: jobStartedAtMs,
+            )) {
+              continue;
+            }
             try {
               final generatedChecklistSuggestions =
                   await client.generateChecklistSuggestions(
@@ -498,7 +533,7 @@ final class SemanticParseAutoActionsRunner {
             } catch (_) {
               // Best effort only. Checklist suggestions must not block todo creation.
             }
-            await store.markJobSucceeded(
+            final didFinalize = await _markJobSucceededIfStillRunning(
               SemanticParseJobSucceededArgs(
                 messageId: job.messageId,
                 appliedActionKind: 'create',
@@ -511,20 +546,29 @@ final class SemanticParseAutoActionsRunner {
                 appliedTagIds: appliedTagIds,
                 nowMs: nowMs,
               ),
+              jobStartedAtMs: jobStartedAtMs,
             );
-            didUpdateJobs = true;
-            processed += 1;
-            didMutateAny = true;
+
+            if (didFinalize) {
+              processed += 1;
+            }
             break;
           case MessageActionFollowUpDecision(
               :final todoId,
               :final newStatus,
             ):
+            if (!await _isStillRunningAttempt(
+              messageId: job.messageId,
+              jobStartedAtMs: jobStartedAtMs,
+            )) {
+              continue;
+            }
             final previousStatus = await store.setTodoStatusFromMessage(
               messageId: job.messageId,
               todoId: todoId,
               newStatus: newStatus,
             );
+            didMutateAny = true;
 
             final candidateTitle = candidates
                 .where((c) => c.id == todoId)
@@ -532,7 +576,7 @@ final class SemanticParseAutoActionsRunner {
                 .cast<String?>()
                 .firstWhere((_) => true, orElse: () => null);
 
-            await store.markJobSucceeded(
+            final didFinalize = await _markJobSucceededIfStillRunning(
               SemanticParseJobSucceededArgs(
                 messageId: job.messageId,
                 appliedActionKind: 'followup',
@@ -545,13 +589,15 @@ final class SemanticParseAutoActionsRunner {
                 appliedTagIds: appliedTagIds,
                 nowMs: nowMs,
               ),
+              jobStartedAtMs: jobStartedAtMs,
             );
-            didUpdateJobs = true;
-            processed += 1;
-            didMutateAny = true;
+
+            if (didFinalize) {
+              processed += 1;
+            }
             break;
           case MessageActionNoneDecision():
-            await store.markJobSucceeded(
+            await _markJobSucceededIfStillRunning(
               SemanticParseJobSucceededArgs(
                 messageId: job.messageId,
                 appliedActionKind: 'none',
@@ -564,14 +610,15 @@ final class SemanticParseAutoActionsRunner {
                 appliedTagIds: appliedTagIds,
                 nowMs: nowMs,
               ),
+              jobStartedAtMs: jobStartedAtMs,
             );
-            didUpdateJobs = true;
+
             break;
         }
       } catch (e) {
         final attempts = job.attempts + 1;
         final nextRetryAtMs = nowMs + _retryBackoffMs(attempts);
-        await store.markJobFailed(
+        await _markJobFailedIfStillRunning(
           SemanticParseJobFailedArgs(
             messageId: job.messageId,
             attempts: attempts,
@@ -579,8 +626,8 @@ final class SemanticParseAutoActionsRunner {
             error: e.toString(),
             nowMs: nowMs,
           ),
+          jobStartedAtMs: nowMs,
         );
-        didUpdateJobs = true;
       }
     }
 
@@ -682,5 +729,60 @@ final class SemanticParseAutoActionsRunner {
       default:
         return const Duration(hours: 8).inMilliseconds;
     }
+  }
+
+  Future<bool> _isStillRunningAttempt({
+    required String messageId,
+    required int jobStartedAtMs,
+  }) async {
+    final currentJob = await store.getJob(messageId);
+    if (currentJob == null) {
+      return false;
+    }
+    return currentJob.status == 'running' &&
+        currentJob.updatedAtMs.toInt() == jobStartedAtMs;
+  }
+
+  Future<bool> _markJobSucceededIfStillRunning(
+    SemanticParseJobSucceededArgs args, {
+    required int jobStartedAtMs,
+  }) async {
+    if (!await _isStillRunningAttempt(
+      messageId: args.messageId,
+      jobStartedAtMs: jobStartedAtMs,
+    )) {
+      return false;
+    }
+    await store.markJobSucceeded(args);
+    return true;
+  }
+
+  Future<bool> _markJobFailedIfStillRunning(
+    SemanticParseJobFailedArgs args, {
+    required int jobStartedAtMs,
+  }) async {
+    if (!await _isStillRunningAttempt(
+      messageId: args.messageId,
+      jobStartedAtMs: jobStartedAtMs,
+    )) {
+      return false;
+    }
+    await store.markJobFailed(args);
+    return true;
+  }
+
+  Future<bool> _markJobCanceledIfStillRunning({
+    required String messageId,
+    required int jobStartedAtMs,
+    required int nowMs,
+  }) async {
+    if (!await _isStillRunningAttempt(
+      messageId: messageId,
+      jobStartedAtMs: jobStartedAtMs,
+    )) {
+      return false;
+    }
+    await store.markJobCanceled(messageId: messageId, nowMs: nowMs);
+    return true;
   }
 }

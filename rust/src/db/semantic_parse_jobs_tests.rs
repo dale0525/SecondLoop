@@ -23,7 +23,7 @@ fn semantic_parse_jobs_lifecycle_and_due_query() {
     assert_eq!(due_after_running[0].message_id, "msg:1");
     assert_eq!(due_after_running[0].status, "running");
 
-    mark_semantic_parse_job_failed(&conn, "msg:1", 1, now_ms + 120, "timeout", now_ms + 2)
+    mark_semantic_parse_job_failed(&conn, "msg:1", 1, now_ms + 120, "timeout", now_ms + 1)
         .expect("failed");
 
     let due_before_retry = list_due_semantic_parse_jobs(&conn, now_ms + 100, 10).expect("list due");
@@ -42,6 +42,8 @@ fn semantic_parse_jobs_lifecycle_and_due_query() {
     assert_eq!(due_again[0].status, "pending");
     assert_eq!(due_again[0].attempts, 1);
     assert_eq!(due_again[0].next_retry_at_ms, None);
+
+    mark_semantic_parse_job_running(&conn, "msg:1", now_ms + 122).expect("running after retry");
 
     let key = [7u8; 32];
     mark_semantic_parse_job_succeeded(
@@ -86,6 +88,7 @@ fn semantic_parse_jobs_retry_reopens_succeeded_job() {
 
     let now_ms = 2_000i64;
     enqueue_semantic_parse_job(&conn, "msg:2", now_ms).expect("enqueue");
+    mark_semantic_parse_job_running(&conn, "msg:2", now_ms + 1).expect("running");
 
     let key = [9u8; 32];
     mark_semantic_parse_job_succeeded(
@@ -122,8 +125,10 @@ fn semantic_parse_jobs_enqueue_reopens_existing_job() {
     enqueue_semantic_parse_job(&conn, "msg:3", now_ms).expect("enqueue");
 
     let key = [5u8; 32];
+    mark_semantic_parse_job_running(&conn, "msg:3", now_ms + 1).expect("running");
     mark_semantic_parse_job_failed(&conn, "msg:3", 2, now_ms + 120, "timeout", now_ms + 1)
         .expect("failed");
+    mark_semantic_parse_job_running(&conn, "msg:3", now_ms + 2).expect("running again");
     mark_semantic_parse_job_succeeded(
         &conn,
         &key,
@@ -202,6 +207,71 @@ fn semantic_parse_jobs_canceled_job_ignores_late_success_and_failure() {
     assert_eq!(jobs[0].applied_action_kind, None);
     assert_eq!(jobs[0].applied_todo_id, None);
     assert_eq!(jobs[0].applied_todo_title, None);
+}
+
+#[test]
+fn semantic_parse_jobs_old_attempt_cannot_finalize_new_running_attempt() {
+    let dir = tempdir().expect("tempdir");
+    let conn = open(dir.path()).expect("open");
+
+    let first_attempt_ms = 6_001i64;
+    let second_attempt_ms = 6_010i64;
+    enqueue_semantic_parse_job(&conn, "msg:retry", 6_000).expect("enqueue");
+    mark_semantic_parse_job_running(&conn, "msg:retry", first_attempt_ms).expect("running 1");
+    mark_semantic_parse_job_retry(&conn, "msg:retry", 6_005).expect("retry");
+    mark_semantic_parse_job_running(&conn, "msg:retry", second_attempt_ms).expect("running 2");
+
+    let key = [4u8; 32];
+    mark_semantic_parse_job_succeeded(
+        &conn,
+        &key,
+        "msg:retry",
+        "create",
+        Some("todo:old"),
+        Some("Old attempt"),
+        None,
+        first_attempt_ms,
+    )
+    .expect("late old success ignored");
+    mark_semantic_parse_job_failed(
+        &conn,
+        "msg:retry",
+        1,
+        6_120,
+        "late old failure",
+        first_attempt_ms,
+    )
+    .expect("late old failure ignored");
+
+    let jobs = list_semantic_parse_jobs_by_message_ids(&conn, &key, &["msg:retry".to_string()])
+        .expect("list jobs");
+    assert_eq!(jobs.len(), 1);
+    assert_eq!(jobs[0].status, "running");
+    assert_eq!(jobs[0].applied_action_kind, None);
+    assert_eq!(jobs[0].applied_todo_id, None);
+    assert_eq!(jobs[0].last_error, None);
+
+    mark_semantic_parse_job_succeeded(
+        &conn,
+        &key,
+        "msg:retry",
+        "create",
+        Some("todo:new"),
+        Some("Current attempt"),
+        None,
+        second_attempt_ms,
+    )
+    .expect("current success applied");
+
+    let jobs = list_semantic_parse_jobs_by_message_ids(&conn, &key, &["msg:retry".to_string()])
+        .expect("list jobs after success");
+    assert_eq!(jobs.len(), 1);
+    assert_eq!(jobs[0].status, "succeeded");
+    assert_eq!(jobs[0].applied_todo_id.as_deref(), Some("todo:new"));
+    assert_eq!(
+        jobs[0].applied_todo_title.as_deref(),
+        Some("Current attempt")
+    );
 }
 
 #[test]
@@ -289,6 +359,7 @@ fn semantic_parse_jobs_store_and_clear_tag_suggestion_metadata() {
 
     let now_ms = 7_000i64;
     enqueue_semantic_parse_job(&conn, "msg:meta", now_ms).expect("enqueue");
+    mark_semantic_parse_job_running(&conn, "msg:meta", now_ms + 1).expect("running");
 
     let key = [8u8; 32];
     let suggested_tags = vec!["finance".to_string(), "work".to_string()];
