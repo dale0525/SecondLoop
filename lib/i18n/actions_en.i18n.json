@@ -73,7 +73,19 @@
     "checklistGenerate": "Generate suggestions",
     "checklistRegenerate": "Regenerate suggestions",
     "checklistGenerating": "Generating suggestions…",
-    "checklistSuggestionsEmpty": "No pending suggestions yet."
+    "checklistSuggestionsEmpty": "No pending suggestions yet.",
+    "followupSuggestionsTitle": "Information follow-up",
+    "followupGenerate": "Generate information",
+    "followupRegenerate": "Regenerate information",
+    "followupForceGenerate": "Generate anyway",
+    "followupGenerating": "Generating information…",
+    "followupSuggestionsEmpty": "No information follow-up yet.",
+    "followupForceGenerateHint": "This task looks more execution-focused, so it usually does not need extra information. If you still want AI to gather context, you can continue.",
+    "followupPendingTitle": "Pending",
+    "followupAppliedTitle": "Applied",
+    "followupModeModelKnowledge": "Model knowledge",
+    "followupModeWebSearch": "Web search",
+    "followupActivityLabel": "AI-collected information"
   },
   "todoDelete": {
     "dialog": {

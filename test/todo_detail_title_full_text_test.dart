@@ -11,8 +11,15 @@ import 'package:secondloop/src/rust/db.dart';
 import 'test_backend.dart';
 import 'test_i18n.dart';
 
+void _setLargeDisplay(WidgetTester tester) {
+  tester.view.physicalSize = const Size(2400, 1600);
+  tester.view.devicePixelRatio = 1.0;
+  addTearDown(tester.view.reset);
+}
+
 void main() {
   testWidgets('TodoDetailPage shows full title text', (tester) async {
+    _setLargeDisplay(tester);
     const longTitle =
         'This is a very long todo title that should be fully visible in the detail header without ellipsis';
 

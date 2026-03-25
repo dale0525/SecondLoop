@@ -11,9 +11,16 @@ import 'package:secondloop/src/rust/db.dart';
 
 import 'test_i18n.dart';
 
+void _setLargeDisplay(WidgetTester tester) {
+  tester.view.physicalSize = const Size(2400, 1600);
+  tester.view.devicePixelRatio = 1.0;
+  addTearDown(tester.view.reset);
+}
+
 void main() {
   testWidgets('TodoDetailPage composer uses chat-style input without Ask AI',
       (tester) async {
+    _setLargeDisplay(tester);
     final backend = _Backend(activities: const []);
 
     await tester.pumpWidget(
@@ -82,6 +89,7 @@ void main() {
   });
 
   testWidgets('TodoDetailPage renders note as Markdown', (tester) async {
+    _setLargeDisplay(tester);
     final backend = _Backend(
       activities: const [
         TodoActivity(
@@ -123,6 +131,7 @@ void main() {
 
   testWidgets('TodoDetailPage renders status change as visual transition',
       (tester) async {
+    _setLargeDisplay(tester);
     final backend = _Backend(
       activities: const [
         TodoActivity(

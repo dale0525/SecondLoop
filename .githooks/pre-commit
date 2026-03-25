@@ -529,7 +529,7 @@ if (( check_mode )); then
     fi
 
     if (( ci_mode )); then
-      if ! run_flutter_tool test; then
+      if ! run_flutter_tool test --concurrency=1; then
         echo "" >&2
         echo "pre-commit: flutter test failed." >&2
         echo "Fix locally with: pixi run flutter test" >&2
@@ -688,7 +688,7 @@ if [[ ${run_flutter_checks} -ne 0 ]]; then
     exit 1
   fi
 
-  if ! run_flutter_tool test; then
+  if ! run_flutter_tool test --concurrency=1; then
     echo "" >&2
     echo "pre-commit: flutter test failed." >&2
     echo "Fix locally with: pixi run flutter test" >&2

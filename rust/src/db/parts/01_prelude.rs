@@ -358,6 +358,44 @@ pub struct TodoChecklistProgress {
 }
 
 #[derive(Clone, Debug)]
+pub struct TodoFollowupSuggestionDraftInput {
+    pub content: String,
+    pub generation_mode: String,
+    pub citations_json: Option<String>,
+}
+
+#[derive(Clone, Debug)]
+pub struct TodoFollowupSuggestion {
+    pub id: String,
+    pub todo_id: String,
+    pub content: String,
+    pub state: String,
+    pub source: String,
+    pub generation_mode: String,
+    pub generation_key: Option<String>,
+    pub citations_json: Option<String>,
+    pub created_at_ms: i64,
+    pub updated_at_ms: i64,
+    pub dismissed_at_ms: Option<i64>,
+    pub applied_activity_id: Option<String>,
+}
+
+#[derive(Clone, Debug)]
+pub struct TodoFollowupGenerationJob {
+    pub todo_id: String,
+    pub trigger_kind: String,
+    pub status: String,
+    pub attempts: i64,
+    pub next_retry_at_ms: Option<i64>,
+    pub last_error: Option<String>,
+    pub include_manual_followups: bool,
+    pub manual_override_followup: bool,
+    pub task_type_hint: Option<String>,
+    pub created_at_ms: i64,
+    pub updated_at_ms: i64,
+}
+
+#[derive(Clone, Debug)]
 pub struct Event {
     pub id: String,
     pub title: String,

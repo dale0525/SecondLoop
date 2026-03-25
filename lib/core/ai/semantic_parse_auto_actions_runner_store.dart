@@ -657,6 +657,7 @@ final class BackendSemanticParseAutoActionsStore
     required String status,
     int? dueAtMs,
     String? recurrenceRuleJson,
+    String? followupTaskTypeHint,
   }) async {
     var normalizedStatus = status.trim();
     if (normalizedStatus.isEmpty) {
@@ -684,7 +685,7 @@ final class BackendSemanticParseAutoActionsStore
     }
 
     final todoId = await _resolveCreateTodoId(messageId);
-    await _backend.upsertTodo(
+    await _backend.upsertTodoFromSemanticCreate(
       _sessionKey,
       id: todoId,
       title: title,
@@ -694,6 +695,7 @@ final class BackendSemanticParseAutoActionsStore
       reviewStage: reviewStage,
       nextReviewAtMs: nextReviewAtMs,
       lastReviewAtMs: DateTime.now().toUtc().millisecondsSinceEpoch,
+      followupTaskTypeHint: followupTaskTypeHint,
     );
 
     final normalizedRule = recurrenceRuleJson?.trim();

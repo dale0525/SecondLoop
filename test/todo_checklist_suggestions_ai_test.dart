@@ -15,6 +15,7 @@ void main() {
       contains(
           'Suggest 0 to $kMaxGeneratedChecklistSuggestions checklist items.'),
     );
+    expect(prompt, contains('Task due local ISO: (none)'));
   });
 
   test('checklist context omits status because prompt has dedicated field', () {
@@ -51,5 +52,79 @@ void main() {
     expect(parsed.length, kMaxGeneratedChecklistSuggestions);
     expect(parsed.first, 'Step 1');
     expect(parsed.last, 'Step $kMaxGeneratedChecklistSuggestions');
+  });
+
+  test('checklist parser falls back to plain text bullet lists', () {
+    final parsed = parseTodoChecklistSuggestionsJson('''
+- Check current menu and pricing
+- Confirm delivery window
+- Compare package options
+''');
+
+    expect(parsed, const <String>[
+      'Check current menu and pricing',
+      'Confirm delivery window',
+      'Compare package options',
+    ]);
+  });
+
+  test('checklist parser salvages malformed json suggestion arrays', () {
+    final parsed = parseTodoChecklistSuggestionsJson(
+      '{"suggestions":["Check current menu and pricing","Confirm delivery window",]}',
+    );
+
+    expect(parsed, const <String>[
+      'Check current menu and pricing',
+      'Confirm delivery window',
+    ]);
+  });
+
+  test('checklist parser ignores object keys when salvaging malformed json',
+      () {
+    final parsed = parseTodoChecklistSuggestionsJson(
+      '{"items":["Book flight","Pack charger",],"source":"web"}',
+    );
+
+    expect(parsed, const <String>[
+      'Book flight',
+      'Pack charger',
+    ]);
+  });
+
+  test(
+      'checklist parser salvages malformed object arrays via suggestion fields only',
+      () {
+    final parsed = parseTodoChecklistSuggestionsJson(
+      '{"suggestions":[{"text":"Book flight"},{"label":"Pack charger"},]}',
+    );
+
+    expect(parsed, const <String>[
+      'Book flight',
+      'Pack charger',
+    ]);
+  });
+
+  test('checklist parser salvages malformed nested arrays from loose json', () {
+    final parsed = parseTodoChecklistSuggestionsJson(
+      '{"suggestions":[{"text":"Book flight","subtasks":["passport"]},{"label":"Pack charger"},],"source":"web"}',
+    );
+
+    expect(parsed, const <String>[
+      'Book flight',
+      'Pack charger',
+    ]);
+  });
+
+  test(
+      'checklist parser ignores prose-only fallbacks after json recovery fails',
+      () {
+    final parsed = parseTodoChecklistSuggestionsJson('''
+Here are a few ideas:
+Check current menu and pricing
+Confirm delivery window
+Compare package options
+''');
+
+    expect(parsed, isEmpty);
   });
 }

@@ -8,7 +8,7 @@ import '../frb_generated.dart';
 import '../semantic_parse.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `collect_provider_text`, `default_embedding_model_name_for_platform`, `emit_ask_ai_meta_if_any`, `finish_ask_ai_stream`, `key_from_bytes`, `map_attachment_download_error`, `normalize_embedding_model_name`, `sync_key_from_bytes`
+// These functions are ignored because they are not marked as `pub`: `check_todo_access`, `collect_provider_text`, `default_embedding_model_name_for_platform`, `emit_ask_ai_meta_if_any`, `ensure_todo_access`, `finish_ask_ai_stream`, `is_todo_access_error`, `key_from_bytes`, `list_visible_due_todo_followup_generation_jobs`, `map_attachment_download_error`, `normalize_embedding_model_name`, `sync_key_from_bytes`
 
 Future<bool> authIsInitialized({required String appDir}) =>
     RustLib.instance.api.crateApiCoreAuthIsInitialized(appDir: appDir);
@@ -123,6 +123,20 @@ Future<Todo> dbUpsertTodo(
 Future<List<Todo>> dbListTodos(
         {required String appDir, required List<int> key}) =>
     RustLib.instance.api.crateApiCoreDbListTodos(appDir: appDir, key: key);
+
+Future<Todo?> dbGetTodoById(
+        {required String appDir,
+        required List<int> key,
+        required String todoId}) =>
+    RustLib.instance.api
+        .crateApiCoreDbGetTodoById(appDir: appDir, key: key, todoId: todoId);
+
+Future<TodoFollowupGenerationJob?> dbGetTodoFollowupGenerationJob(
+        {required String appDir,
+        required List<int> key,
+        required String todoId}) =>
+    RustLib.instance.api.crateApiCoreDbGetTodoFollowupGenerationJob(
+        appDir: appDir, key: key, todoId: todoId);
 
 Future<List<Todo>> dbListTodosCreatedInRange(
         {required String appDir,
@@ -370,6 +384,170 @@ Future<void> dbDismissAllTodoChecklistSuggestions(
         required String todoId}) =>
     RustLib.instance.api.crateApiCoreDbDismissAllTodoChecklistSuggestions(
         appDir: appDir, key: key, todoId: todoId);
+
+Future<List<TodoFollowupSuggestion>> dbListTodoFollowupSuggestions(
+        {required String appDir,
+        required List<int> key,
+        required String todoId}) =>
+    RustLib.instance.api.crateApiCoreDbListTodoFollowupSuggestions(
+        appDir: appDir, key: key, todoId: todoId);
+
+Future<List<TodoFollowupSuggestion>> dbUpsertGeneratedTodoFollowupSuggestions(
+        {required String appDir,
+        required List<int> key,
+        required String todoId,
+        required List<TodoFollowupSuggestionDraftInput> suggestions,
+        required String source,
+        String? generationKey}) =>
+    RustLib.instance.api.crateApiCoreDbUpsertGeneratedTodoFollowupSuggestions(
+        appDir: appDir,
+        key: key,
+        todoId: todoId,
+        suggestions: suggestions,
+        source: source,
+        generationKey: generationKey);
+
+Future<bool> dbUpsertGeneratedTodoFollowupSuggestionsIfCurrentClaim(
+        {required String appDir,
+        required List<int> key,
+        required String todoId,
+        required PlatformInt64 jobStartedAtMs,
+        required List<TodoFollowupSuggestionDraftInput> suggestions,
+        required String source,
+        String? generationKey}) =>
+    RustLib.instance.api
+        .crateApiCoreDbUpsertGeneratedTodoFollowupSuggestionsIfCurrentClaim(
+            appDir: appDir,
+            key: key,
+            todoId: todoId,
+            jobStartedAtMs: jobStartedAtMs,
+            suggestions: suggestions,
+            source: source,
+            generationKey: generationKey);
+
+Future<Todo> dbUpsertTodoWithAutoFollowupJob(
+        {required String appDir,
+        required List<int> key,
+        required String id,
+        required String title,
+        PlatformInt64? dueAtMs,
+        required String status,
+        String? sourceEntryId,
+        PlatformInt64? reviewStage,
+        PlatformInt64? nextReviewAtMs,
+        PlatformInt64? lastReviewAtMs,
+        String? taskTypeHint,
+        required PlatformInt64 nowMs}) =>
+    RustLib.instance.api.crateApiCoreDbUpsertTodoWithAutoFollowupJob(
+        appDir: appDir,
+        key: key,
+        id: id,
+        title: title,
+        dueAtMs: dueAtMs,
+        status: status,
+        sourceEntryId: sourceEntryId,
+        reviewStage: reviewStage,
+        nextReviewAtMs: nextReviewAtMs,
+        lastReviewAtMs: lastReviewAtMs,
+        taskTypeHint: taskTypeHint,
+        nowMs: nowMs);
+
+Future<List<TodoActivity>> dbApplyTodoFollowupSuggestions(
+        {required String appDir,
+        required List<int> key,
+        required String todoId,
+        required List<String> suggestionIds}) =>
+    RustLib.instance.api.crateApiCoreDbApplyTodoFollowupSuggestions(
+        appDir: appDir, key: key, todoId: todoId, suggestionIds: suggestionIds);
+
+Future<void> dbDismissTodoFollowupSuggestions(
+        {required String appDir,
+        required List<int> key,
+        required String todoId,
+        required List<String> suggestionIds}) =>
+    RustLib.instance.api.crateApiCoreDbDismissTodoFollowupSuggestions(
+        appDir: appDir, key: key, todoId: todoId, suggestionIds: suggestionIds);
+
+Future<void> dbDismissAllTodoFollowupSuggestions(
+        {required String appDir,
+        required List<int> key,
+        required String todoId}) =>
+    RustLib.instance.api.crateApiCoreDbDismissAllTodoFollowupSuggestions(
+        appDir: appDir, key: key, todoId: todoId);
+
+Future<void> dbEnqueueTodoFollowupGenerationJob(
+        {required String appDir,
+        required List<int> key,
+        required String todoId,
+        required String triggerKind,
+        required bool manualOverrideFollowup,
+        String? taskTypeHint,
+        required PlatformInt64 nowMs}) =>
+    RustLib.instance.api.crateApiCoreDbEnqueueTodoFollowupGenerationJob(
+        appDir: appDir,
+        key: key,
+        todoId: todoId,
+        triggerKind: triggerKind,
+        manualOverrideFollowup: manualOverrideFollowup,
+        taskTypeHint: taskTypeHint,
+        nowMs: nowMs);
+
+Future<List<TodoFollowupGenerationJob>> dbListDueTodoFollowupGenerationJobs(
+        {required String appDir,
+        required List<int> key,
+        required PlatformInt64 nowMs,
+        required int limit}) =>
+    RustLib.instance.api.crateApiCoreDbListDueTodoFollowupGenerationJobs(
+        appDir: appDir, key: key, nowMs: nowMs, limit: limit);
+
+Future<void> dbMarkTodoFollowupGenerationJobRunning(
+        {required String appDir,
+        required List<int> key,
+        required String todoId,
+        required PlatformInt64 nowMs}) =>
+    RustLib.instance.api.crateApiCoreDbMarkTodoFollowupGenerationJobRunning(
+        appDir: appDir, key: key, todoId: todoId, nowMs: nowMs);
+
+Future<void> dbMarkTodoFollowupGenerationJobFailed(
+        {required String appDir,
+        required List<int> key,
+        required String todoId,
+        required PlatformInt64 attempts,
+        required PlatformInt64 nextRetryAtMs,
+        required String lastError,
+        required PlatformInt64 nowMs}) =>
+    RustLib.instance.api.crateApiCoreDbMarkTodoFollowupGenerationJobFailed(
+        appDir: appDir,
+        key: key,
+        todoId: todoId,
+        attempts: attempts,
+        nextRetryAtMs: nextRetryAtMs,
+        lastError: lastError,
+        nowMs: nowMs);
+
+Future<void> dbMarkTodoFollowupGenerationJobSucceeded(
+        {required String appDir,
+        required List<int> key,
+        required String todoId,
+        required PlatformInt64 nowMs}) =>
+    RustLib.instance.api.crateApiCoreDbMarkTodoFollowupGenerationJobSucceeded(
+        appDir: appDir, key: key, todoId: todoId, nowMs: nowMs);
+
+Future<void> dbMarkTodoFollowupGenerationJobSkipped(
+        {required String appDir,
+        required List<int> key,
+        required String todoId,
+        required PlatformInt64 nowMs}) =>
+    RustLib.instance.api.crateApiCoreDbMarkTodoFollowupGenerationJobSkipped(
+        appDir: appDir, key: key, todoId: todoId, nowMs: nowMs);
+
+Future<void> dbMarkTodoFollowupGenerationJobCanceled(
+        {required String appDir,
+        required List<int> key,
+        required String todoId,
+        required PlatformInt64 nowMs}) =>
+    RustLib.instance.api.crateApiCoreDbMarkTodoFollowupGenerationJobCanceled(
+        appDir: appDir, key: key, todoId: todoId, nowMs: nowMs);
 
 Future<List<TodoActivity>> dbListTodoActivities(
         {required String appDir,
@@ -1137,6 +1315,21 @@ Future<String> aiTaskPriorityRerankCloudGateway(
         required String firebaseIdToken,
         required String modelName}) =>
     RustLib.instance.api.crateApiCoreAiTaskPriorityRerankCloudGateway(
+        appDir: appDir,
+        key: key,
+        prompt: prompt,
+        gatewayBaseUrl: gatewayBaseUrl,
+        firebaseIdToken: firebaseIdToken,
+        modelName: modelName);
+
+Future<String> aiTodoFollowupRerankCloudGateway(
+        {required String appDir,
+        required List<int> key,
+        required String prompt,
+        required String gatewayBaseUrl,
+        required String firebaseIdToken,
+        required String modelName}) =>
+    RustLib.instance.api.crateApiCoreAiTodoFollowupRerankCloudGateway(
         appDir: appDir,
         key: key,
         prompt: prompt,

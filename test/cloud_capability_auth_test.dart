@@ -4,6 +4,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:secondloop/core/cloud/cloud_auth_controller.dart';
 import 'package:secondloop/core/cloud/cloud_auth_store.dart';
 import 'package:secondloop/core/cloud/cloud_capability_auth.dart';
+import 'package:secondloop/core/ai/ai_routing.dart';
+import 'package:secondloop/core/ai/foreground_ai_route_preflight.dart';
 import 'package:secondloop/core/cloud/firebase_identity_toolkit.dart';
 
 void main() {
@@ -68,6 +70,93 @@ void main() {
     await bestEffortWarmCloudCapabilityAuth(controller);
 
     expect(controller.getIdTokenCalls, 1);
+  });
+
+  test('todo followup auth warms before background token read', () async {
+    final previous = debugDefaultTargetPlatformOverride;
+    addTearDown(() {
+      debugDefaultTargetPlatformOverride = previous;
+    });
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+
+    final toolkit = _RefreshingIdentityToolkit();
+    final store = _InMemoryCloudAuthStore(
+      const CloudAuthStoredSession(uid: 'uid_1', refreshToken: 'refresh_1'),
+    );
+    final controller = CloudAuthControllerImpl(
+      identityToolkit: toolkit,
+      store: store,
+      nowMs: () => 1000,
+    );
+
+    final token = await prepareTodoFollowupGenerationIdToken(
+      controller,
+      subscriptionStatus: SubscriptionStatus.entitled,
+      gatewayBaseUrl: 'https://example.com',
+    );
+
+    expect(token, 'id_token_1');
+    expect(store.loadCalls, 1);
+    expect(toolkit.refreshCalls, 1);
+  });
+
+  test('todo followup auth can force warm for manual regenerate route',
+      () async {
+    final previous = debugDefaultTargetPlatformOverride;
+    addTearDown(() {
+      debugDefaultTargetPlatformOverride = previous;
+    });
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+
+    final toolkit = _RefreshingIdentityToolkit();
+    final store = _InMemoryCloudAuthStore(
+      const CloudAuthStoredSession(uid: 'uid_1', refreshToken: 'refresh_1'),
+    );
+    final controller = CloudAuthControllerImpl(
+      identityToolkit: toolkit,
+      store: store,
+      nowMs: () => 1000,
+    );
+
+    final token = await prepareTodoFollowupGenerationIdToken(
+      controller,
+      subscriptionStatus: SubscriptionStatus.unknown,
+      gatewayBaseUrl: 'https://example.com',
+      forceWarm: true,
+    );
+
+    expect(token, 'id_token_1');
+    expect(store.loadCalls, 1);
+    expect(toolkit.refreshCalls, 1);
+  });
+
+  test('todo followup auth can read interactive token without warm', () async {
+    final previous = debugDefaultTargetPlatformOverride;
+    addTearDown(() {
+      debugDefaultTargetPlatformOverride = previous;
+    });
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+
+    final toolkit = _RefreshingIdentityToolkit();
+    final store = _InMemoryCloudAuthStore(
+      const CloudAuthStoredSession(uid: 'uid_1', refreshToken: 'refresh_1'),
+    );
+    final controller = CloudAuthControllerImpl(
+      identityToolkit: toolkit,
+      store: store,
+      nowMs: () => 1000,
+    );
+
+    final token = await prepareTodoFollowupGenerationIdToken(
+      controller,
+      subscriptionStatus: SubscriptionStatus.unknown,
+      gatewayBaseUrl: 'https://example.com',
+      authMode: CloudCapabilityAuthMode.interactive,
+    );
+
+    expect(token, 'id_token_1');
+    expect(store.loadCalls, 1);
+    expect(toolkit.refreshCalls, 1);
   });
 }
 

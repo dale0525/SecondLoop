@@ -8,6 +8,7 @@ final class QuickActionBackendTestDouble extends AppBackend {
     List<Todo>? initialTodos,
     Map<String, List<TodoChecklistItem>>? checklistItemsByTodoId,
     this.failOnTransitionCall,
+    this.enableFollowupSuggestions = false,
   })  : _checklistItemsByTodoId = Map<String, List<TodoChecklistItem>>.from(
           checklistItemsByTodoId ?? const <String, List<TodoChecklistItem>>{},
         ),
@@ -18,15 +19,20 @@ final class QuickActionBackendTestDouble extends AppBackend {
   final Map<String, Todo> _todosById;
   final Map<String, List<TodoChecklistItem>> _checklistItemsByTodoId;
   final int? failOnTransitionCall;
+  final bool enableFollowupSuggestions;
   var upsertTodoCalls = 0;
   var transitionTodoCalls = 0;
   var deleteTodoCalls = 0;
   var setTodoStatusCalls = 0;
+  var enqueueTodoFollowupGenerationJobCalls = 0;
   int? lastTransitionManualImportanceNudgeScore;
   int? lastTransitionManualUrgencyNudgeScore;
 
   Todo current(String id) => _todosById[id]!;
   List<Todo> all() => _todosById.values.toList(growable: false);
+
+  @override
+  bool get supportsTodoFollowupSuggestions => enableFollowupSuggestions;
 
   @override
   Future<List<Todo>> listTodos(Uint8List key) async {
@@ -210,6 +216,18 @@ final class QuickActionBackendTestDouble extends AppBackend {
       manualImportanceNudgeScore: existing.manualImportanceNudgeScore,
       manualUrgencyNudgeScore: existing.manualUrgencyNudgeScore,
     );
+  }
+
+  @override
+  Future<void> enqueueTodoFollowupGenerationJob(
+    Uint8List key, {
+    required String todoId,
+    required String triggerKind,
+    bool manualOverrideFollowup = false,
+    String? taskTypeHint,
+    required int nowMs,
+  }) async {
+    enqueueTodoFollowupGenerationJobCalls += 1;
   }
 
   @override

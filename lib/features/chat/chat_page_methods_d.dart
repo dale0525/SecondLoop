@@ -512,7 +512,8 @@ extension _ChatPageStateMethodsD on _ChatPageState {
     switch (decision) {
       case CaptureTodoScheduleDecision(:final dueAtLocal):
         try {
-          await backend.upsertTodo(
+          await createTodoWithFollowup(
+            backend,
             sessionKey,
             id: todoId,
             title: suggestion.title.trim(),
@@ -533,7 +534,8 @@ extension _ChatPageStateMethodsD on _ChatPageState {
           settings,
         );
         try {
-          await backend.upsertTodo(
+          await createTodoWithFollowup(
+            backend,
             sessionKey,
             id: todoId,
             title: suggestion.title.trim(),

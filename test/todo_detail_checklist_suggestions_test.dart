@@ -4,8 +4,12 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:secondloop/core/cloud/cloud_auth_controller.dart';
+import 'package:secondloop/core/cloud/cloud_auth_scope.dart';
 import 'package:secondloop/core/backend/app_backend.dart';
 import 'package:secondloop/core/session/session_scope.dart';
+import 'package:secondloop/core/subscription/subscription_scope.dart';
+import 'package:secondloop/core/ai/ai_routing.dart';
 import 'package:secondloop/features/actions/todo/todo_detail_page.dart';
 import 'package:secondloop/features/settings/ai_ask_ai_settings_page.dart';
 import 'package:secondloop/src/rust/db.dart';
@@ -196,6 +200,39 @@ void main() {
     expect(find.text('Share with team'), findsOneWidget);
   });
 
+  testWidgets('TodoDetailPage generates checklist suggestions via cloud route',
+      (tester) async {
+    _setLargeDisplay(tester);
+    final backend = _Backend(
+      initialSuggestions: const <TodoChecklistSuggestion>[],
+      llmProfiles: const <LlmProfile>[],
+    );
+
+    await tester.pumpWidget(
+      _buildSubject(
+        backend,
+        cloudAuthController: const _FakeCloudAuthController('token_1'),
+        subscriptionController:
+            _FakeSubscriptionStatusController(SubscriptionStatus.unknown),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(
+      find.byKey(const ValueKey('todo_detail_checklist_generate_suggestions')),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+    await tester.pumpAndSettle();
+
+    expect(backend.generatedSuggestionContents, const <String>[
+      'Cloud launch checklist',
+      'Share with team',
+    ]);
+    expect(backend.lastGeneratedSource, 'cloud');
+    expect(find.text('Cloud launch checklist'), findsOneWidget);
+  });
+
   testWidgets(
       'TodoDetailPage opens Ask AI settings when generation needs setup',
       (tester) async {
@@ -278,27 +315,46 @@ void _setLargeDisplay(WidgetTester tester) {
   addTearDown(tester.view.reset);
 }
 
-Widget _buildSubject(_Backend backend) {
-  return wrapWithI18n(
-    MaterialApp(
-      home: AppBackendScope(
-        backend: backend,
-        child: SessionScope(
-          sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
-          lock: () {},
-          child: const TodoDetailPage(
-            initialTodo: Todo(
-              id: 't1',
-              title: 'Task',
-              status: 'open',
-              createdAtMs: 0,
-              updatedAtMs: 0,
-            ),
-          ),
+Widget _buildSubject(
+  _Backend backend, {
+  CloudAuthController? cloudAuthController,
+  SubscriptionStatusController? subscriptionController,
+}) {
+  Widget child = AppBackendScope(
+    backend: backend,
+    child: SessionScope(
+      sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+      lock: () {},
+      child: const TodoDetailPage(
+        initialTodo: Todo(
+          id: 't1',
+          title: 'Task',
+          status: 'open',
+          createdAtMs: 0,
+          updatedAtMs: 0,
         ),
       ),
     ),
   );
+
+  if (cloudAuthController != null) {
+    child = CloudAuthScope(
+      controller: cloudAuthController,
+      gatewayConfig: const CloudGatewayConfig(
+        baseUrl: 'https://example.com',
+        modelName: 'cloud',
+      ),
+      child: child,
+    );
+  }
+  if (subscriptionController != null) {
+    child = SubscriptionScope(
+      controller: subscriptionController,
+      child: child,
+    );
+  }
+
+  return wrapWithI18n(MaterialApp(home: child));
 }
 
 final class _Backend extends AppBackend {
@@ -362,6 +418,7 @@ final class _Backend extends AppBackend {
   List<String> appliedSuggestionIds = <String>[];
   List<String> dismissedSuggestionIds = <String>[];
   List<String> generatedSuggestionContents = <String>[];
+  String? lastGeneratedSource;
   final Completer<String>? generationResponseCompleter;
   final Object? applyError;
   final Object? dismissError;
@@ -437,6 +494,17 @@ final class _Backend extends AppBackend {
   }
 
   @override
+  Future<String> taskPriorityRerankAiCloudGateway(
+    Uint8List key, {
+    required String prompt,
+    required String gatewayBaseUrl,
+    required String idToken,
+    required String modelName,
+  }) async {
+    return '{"suggestions":["Cloud launch checklist","Share with team"]}';
+  }
+
+  @override
   Future<List<TodoChecklistSuggestion>> upsertGeneratedTodoChecklistSuggestions(
     Uint8List key, {
     required String todoId,
@@ -445,6 +513,7 @@ final class _Backend extends AppBackend {
     String? generationKey,
   }) async {
     generatedSuggestionContents = List<String>.from(suggestions);
+    lastGeneratedSource = source;
     _suggestions
       ..clear()
       ..addAll(
@@ -500,4 +569,53 @@ final class _Backend extends AppBackend {
         _suggestions.map((item) => item.id).toList(growable: false);
     _suggestions.clear();
   }
+}
+
+final class _FakeCloudAuthController implements CloudAuthController {
+  const _FakeCloudAuthController(this._token);
+
+  final String _token;
+
+  @override
+  String? get email => 'demo@example.com';
+
+  @override
+  bool? get emailVerified => true;
+
+  @override
+  String? get uid => 'uid_1';
+
+  @override
+  Future<String?> getIdToken() async => _token;
+
+  @override
+  Future<void> refreshUserInfo() async {}
+
+  @override
+  Future<void> sendEmailVerification() async {}
+
+  @override
+  Future<void> signInWithEmailPassword({
+    required String email,
+    required String password,
+  }) async {}
+
+  @override
+  Future<void> signOut() async {}
+
+  @override
+  Future<void> signUpWithEmailPassword({
+    required String email,
+    required String password,
+  }) async {}
+}
+
+final class _FakeSubscriptionStatusController extends ChangeNotifier
+    implements SubscriptionStatusController {
+  _FakeSubscriptionStatusController(this._status);
+
+  final SubscriptionStatus _status;
+
+  @override
+  SubscriptionStatus get status => _status;
 }

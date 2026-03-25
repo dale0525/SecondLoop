@@ -3,17 +3,20 @@ import 'dart:convert';
 import 'package:flutter/widgets.dart';
 
 import '../../features/actions/todo/message_action_resolver.dart';
+import 'todo_followup_task_classifier.dart';
 
 class AiSemanticDecision {
   const AiSemanticDecision({
     required this.decision,
     required this.confidence,
+    this.taskType,
     this.suggestedTags = const <String>[],
     double? tagConfidence,
   }) : tagConfidence = tagConfidence ?? confidence;
 
   final MessageActionDecision decision;
   final double confidence;
+  final String? taskType;
   final List<String> suggestedTags;
   final double tagConfidence;
 }
@@ -157,6 +160,11 @@ class AiSemanticParse {
       }
     }
     return buffer.toString();
+  }
+
+  static String? _normalizedTaskType(String? raw) {
+    final value = TodoFollowupTaskType.fromWireValue(raw);
+    return value == TodoFollowupTaskType.unknown ? null : value.wireValue;
   }
 
   static int? _intField(Map<String, Object?> json, String key) {
@@ -564,6 +572,7 @@ class AiSemanticParse {
         ? tagConfidenceRaw.clamp(0.0, 1.0).toDouble()
         : confidence;
     final resolvedMorningMinutes = morningMinutes ?? dayEndMinutes;
+    final taskType = _normalizedTaskType(_stringField(map, 'task_type'));
 
     switch (kind) {
       case 'followup':
@@ -578,6 +587,7 @@ class AiSemanticParse {
           decision: MessageActionFollowUpDecision(
               todoId: todoId, newStatus: newStatus),
           confidence: confidence,
+          taskType: taskType,
           suggestedTags: suggestedTags,
           tagConfidence: tagConfidence,
         );
@@ -619,6 +629,7 @@ class AiSemanticParse {
             recurrenceRule: recurrenceRule,
           ),
           confidence: confidence,
+          taskType: taskType,
           suggestedTags: suggestedTags,
           tagConfidence: tagConfidence,
         );
@@ -626,6 +637,7 @@ class AiSemanticParse {
         return AiSemanticDecision(
           decision: const MessageActionNoneDecision(),
           confidence: confidence,
+          taskType: taskType,
           suggestedTags: suggestedTags,
           tagConfidence: tagConfidence,
         );

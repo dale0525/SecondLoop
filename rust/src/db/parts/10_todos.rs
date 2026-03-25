@@ -1,18 +1,18 @@
 #[allow(clippy::type_complexity)]
-fn get_todo_by_id(conn: &Connection, key: &[u8; 32], id: &str) -> Result<Todo> {
-    let (
-        title_blob,
-        due_at_ms,
-        status,
-        source_entry_id,
-        created_at_ms,
-        updated_at_ms,
-        review_stage,
-        next_review_at_ms,
-        last_review_at_ms,
-        manual_importance_nudge_score,
-        manual_urgency_nudge_score,
-    ): (Vec<u8>, Option<i64>, String, Option<String>, i64, i64, Option<i64>, Option<i64>, Option<i64>, i64, i64) = conn
+pub fn find_todo(conn: &Connection, key: &[u8; 32], id: &str) -> Result<Option<Todo>> {
+    let row: Option<(
+        Vec<u8>,
+        Option<i64>,
+        String,
+        Option<String>,
+        i64,
+        i64,
+        Option<i64>,
+        Option<i64>,
+        Option<i64>,
+        i64,
+        i64,
+    )> = conn
         .query_row(
             r#"
 SELECT title, due_at_ms, status, source_entry_id, created_at_ms, updated_at_ms, review_stage, next_review_at_ms, last_review_at_ms, manual_importance_nudge_score, manual_urgency_nudge_score
@@ -36,13 +36,31 @@ WHERE id = ?1
                 ))
             },
         )
+        .optional()
         .map_err(|e| anyhow!("get todo failed: {e}"))?;
+
+    let Some((
+        title_blob,
+        due_at_ms,
+        status,
+        source_entry_id,
+        created_at_ms,
+        updated_at_ms,
+        review_stage,
+        next_review_at_ms,
+        last_review_at_ms,
+        manual_importance_nudge_score,
+        manual_urgency_nudge_score,
+    )) = row
+    else {
+        return Ok(None);
+    };
 
     let title_bytes = decrypt_bytes(key, &title_blob, b"todo.title")?;
     let title =
         String::from_utf8(title_bytes).map_err(|_| anyhow!("todo title is not valid utf-8"))?;
 
-    Ok(Todo {
+    Ok(Some(Todo {
         id: id.to_string(),
         title,
         due_at_ms,
@@ -55,11 +73,11 @@ WHERE id = ?1
         last_review_at_ms,
         manual_importance_nudge_score: Some(manual_importance_nudge_score),
         manual_urgency_nudge_score: Some(manual_urgency_nudge_score),
-    })
+    }))
 }
 
 pub fn get_todo(conn: &Connection, key: &[u8; 32], id: &str) -> Result<Todo> {
-    get_todo_by_id(conn, key, id)
+    find_todo(conn, key, id)?.ok_or_else(|| anyhow!("get todo failed: Query returned no rows"))
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -143,7 +161,7 @@ ON CONFLICT(id) DO UPDATE SET
   due_at_ms = excluded.due_at_ms,
   status = excluded.status,
   source_entry_id = excluded.source_entry_id,
-  updated_at_ms = excluded.updated_at_ms,
+  updated_at_ms = MAX(excluded.updated_at_ms, todos.updated_at_ms, todos.created_at_ms + 1),
   review_stage = excluded.review_stage,
   next_review_at_ms = excluded.next_review_at_ms,
   last_review_at_ms = excluded.last_review_at_ms,
@@ -168,7 +186,7 @@ ON CONFLICT(id) DO UPDATE SET
         ],
     )?;
 
-    let todo = get_todo_by_id(conn, key, id)?;
+    let todo = get_todo(conn, key, id)?;
 
     let device_id = get_or_create_device_id(conn)?;
     let seq = next_device_seq(conn, &device_id)?;
@@ -196,6 +214,53 @@ ON CONFLICT(id) DO UPDATE SET
     insert_oplog(conn, key, &op)?;
 
     Ok(todo)
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn upsert_todo_with_auto_followup_job(
+    conn: &Connection,
+    key: &[u8; 32],
+    id: &str,
+    title: &str,
+    due_at_ms: Option<i64>,
+    status: &str,
+    source_entry_id: Option<&str>,
+    review_stage: Option<i64>,
+    next_review_at_ms: Option<i64>,
+    last_review_at_ms: Option<i64>,
+    task_type_hint: Option<&str>,
+    now_ms: i64,
+) -> Result<Todo> {
+    run_immediate_transaction(conn, || {
+        let todo = upsert_todo(
+            conn,
+            key,
+            id,
+            title,
+            due_at_ms,
+            status,
+            source_entry_id,
+            review_stage,
+            next_review_at_ms,
+            last_review_at_ms,
+            None,
+            None,
+        )?;
+        if todo.created_at_ms == todo.updated_at_ms {
+            let normalized_task_type_hint = task_type_hint
+                .map(str::trim)
+                .filter(|value| !value.is_empty());
+            enqueue_todo_followup_generation_job(
+                conn,
+                id,
+                "auto_create",
+                false,
+                normalized_task_type_hint,
+                now_ms,
+            )?;
+        }
+        Ok(todo)
+    })
 }
 
 pub fn list_todos(conn: &Connection, key: &[u8; 32]) -> Result<Vec<Todo>> {
@@ -1448,7 +1513,7 @@ fn set_todo_status_in_txn(
     new_status: &str,
     source_message_id: Option<&str>,
 ) -> Result<Todo> {
-    let existing = get_todo_by_id(conn, key, todo_id)?;
+    let existing = get_todo(conn, key, todo_id)?;
     if existing.status == new_status {
         return Ok(existing);
     }

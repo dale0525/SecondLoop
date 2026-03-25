@@ -160,6 +160,7 @@ abstract class SemanticParseAutoActionsStore {
     required String status,
     int? dueAtMs,
     String? recurrenceRuleJson,
+    String? followupTaskTypeHint,
   });
 
   Future<void> upsertGeneratedChecklistSuggestions({
@@ -455,6 +456,7 @@ final class SemanticParseAutoActionsRunner {
               status: status,
               dueAtMs: dueAtLocal?.toUtc().millisecondsSinceEpoch,
               recurrenceRuleJson: recurrenceRule?.toJsonString(),
+              followupTaskTypeHint: parsed.taskType,
             );
             try {
               final generatedChecklistSuggestions =

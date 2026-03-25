@@ -21,6 +21,8 @@ import '../../src/rust/api/external_import.dart' as rust_external_import;
 import '../../src/rust/api/migration_archive.dart' as rust_migration_archive;
 import '../../src/rust/api/knowledge.dart' as rust_knowledge;
 import '../../src/rust/api/core.dart' as rust_core;
+import '../../src/rust/api/todo_followup_generation.dart'
+    as rust_todo_followup_generation;
 import '../../src/rust/knowledge/models.dart' as rust_knowledge_models;
 import '../../src/rust/api/attachments.dart' as rust_attachments;
 import '../../src/rust/api/ask_scope.dart' as rust_ask_scope;
@@ -33,6 +35,38 @@ import 'attachments_backend.dart';
 import 'rust_external_library_resolver.dart';
 
 part 'native_backend_knowledge.dart';
+part 'native_backend_todo_followups.dart';
+part 'native_backend_todos.dart';
+part 'native_backend_attachment_io.dart';
+part 'native_backend_attachment_annotation_jobs.dart';
+part 'native_backend_cloud_media_backup.dart';
+part 'native_backend_embeddings.dart';
+part 'native_backend_prompt_ai.dart';
+part 'native_backend_jobs.dart';
+part 'native_backend_sync_core.dart';
+part 'native_backend_sync_webdav.dart';
+part 'native_backend_sync_localdir.dart';
+part 'native_backend_sync_managed_vault.dart';
+part 'native_backend_sync_migration.dart';
+
+Future<bool> _dbUpsertGeneratedTodoFollowupSuggestionsIfCurrentClaimBridge({
+  required String appDir,
+  required List<int> key,
+  required String todoId,
+  required int jobStartedAtMs,
+  required List<TodoFollowupSuggestionDraftInput> suggestions,
+  required String source,
+  String? generationKey,
+}) =>
+    rust_core.dbUpsertGeneratedTodoFollowupSuggestionsIfCurrentClaim(
+      appDir: appDir,
+      key: key,
+      todoId: todoId,
+      jobStartedAtMs: PlatformInt64Util.from(jobStartedAtMs),
+      suggestions: suggestions,
+      source: source,
+      generationKey: generationKey,
+    );
 
 typedef AppDirProvider = Future<String> Function();
 
@@ -254,14 +288,37 @@ Stream<String> _ragAskAiStreamCloudGatewayScopedCompat({
   );
 }
 
-class NativeAppBackend
+class NativeAppBackend extends _NativeAppBackendAccess
+    with
+        _NativeAppBackendTodos,
+        _NativeAppBackendAttachmentIo,
+        _NativeAppBackendAttachmentAnnotationJobs,
+        _NativeAppBackendCloudMediaBackup,
+        _NativeAppBackendEmbeddings,
+        _NativeAppBackendPromptAi,
+        _NativeAppBackendJobs,
+        _NativeAppBackendSyncCore,
+        _NativeAppBackendSyncWebdav,
+        _NativeAppBackendSyncLocaldir,
+        _NativeAppBackendSyncManagedVault,
+        _NativeAppBackendSyncMigration
     implements
         AppBackend,
         AttachmentsBackend,
         AttachmentAnnotationMutationsBackend {
+  @override
+  bool get supportsTodoFollowupSuggestions => true;
+
+  @override
+  bool get autoEnqueuesTodoFollowupGenerationOnCreate => true;
+
   NativeAppBackend({
     FlutterSecureStorage? secureStorage,
     AppDirProvider? appDirProvider,
+    DbListTodosFn? dbListTodos,
+    DbGetTodoByIdFn? dbGetTodoById,
+    DbUpsertTodoFn? dbUpsertTodo,
+    DbUpsertTodoWithAutoFollowupJobFn? dbUpsertTodoWithAutoFollowupJob,
     DbInsertMessageFn? dbInsertMessage,
     DbInsertAttachmentFn? dbInsertAttachment,
     DbProcessPendingMessageEmbeddingsFn? dbProcessPendingMessageEmbeddings,
@@ -282,9 +339,41 @@ class NativeAppBackend
     DbDismissTodoChecklistSuggestionsFn? dbDismissTodoChecklistSuggestions,
     DbDismissAllTodoChecklistSuggestionsFn?
         dbDismissAllTodoChecklistSuggestions,
+    DbListTodoFollowupSuggestionsFn? dbListTodoFollowupSuggestions,
+    DbUpsertGeneratedTodoFollowupSuggestionsFn?
+        dbUpsertGeneratedTodoFollowupSuggestions,
+    DbUpsertGeneratedTodoFollowupSuggestionsIfCurrentClaimFn?
+        dbUpsertGeneratedTodoFollowupSuggestionsIfCurrentClaim,
+    DbApplyTodoFollowupSuggestionsFn? dbApplyTodoFollowupSuggestions,
+    DbDismissTodoFollowupSuggestionsFn? dbDismissTodoFollowupSuggestions,
+    DbDismissAllTodoFollowupSuggestionsFn? dbDismissAllTodoFollowupSuggestions,
+    DbEnqueueTodoFollowupGenerationJobFn? dbEnqueueTodoFollowupGenerationJob,
+    DbListDueTodoFollowupGenerationJobsFn? dbListDueTodoFollowupGenerationJobs,
+    DbListDueAutoTodoFollowupGenerationJobsFn?
+        dbListDueAutoTodoFollowupGenerationJobs,
+    DbGetTodoFollowupGenerationJobFn? dbGetTodoFollowupGenerationJob,
+    DbMarkTodoFollowupGenerationJobRunningFn?
+        dbMarkTodoFollowupGenerationJobRunning,
+    DbMarkTodoFollowupGenerationJobFailedFn?
+        dbMarkTodoFollowupGenerationJobFailed,
+    DbMarkTodoFollowupGenerationJobSucceededFn?
+        dbMarkTodoFollowupGenerationJobSucceeded,
+    DbMarkTodoFollowupGenerationJobSkippedFn?
+        dbMarkTodoFollowupGenerationJobSkipped,
+    DbMarkTodoFollowupGenerationJobCanceledFn?
+        dbMarkTodoFollowupGenerationJobCanceled,
     RustLibInitFn? rustLibInit,
   })  : _secureBlobStore = SecureBlobStore(storage: secureStorage),
         _appDirProvider = appDirProvider ?? _defaultAppDirProvider,
+        _dbListTodos = dbListTodos ?? rust_core.dbListTodos,
+        _dbGetTodoById = dbGetTodoById ?? rust_core.dbGetTodoById,
+        _dbUpsertTodoWithAutoFollowupJob =
+            _resolveDbUpsertTodoWithAutoFollowupJob(
+          dbUpsertTodoWithAutoFollowupJob: dbUpsertTodoWithAutoFollowupJob,
+          dbUpsertTodo: dbUpsertTodo,
+          dbEnqueueTodoFollowupGenerationJob:
+              dbEnqueueTodoFollowupGenerationJob,
+        ),
         _dbInsertMessage = dbInsertMessage ?? rust_core.dbInsertMessage,
         _dbInsertAttachment =
             dbInsertAttachment ?? rust_core.dbInsertAttachment,
@@ -324,6 +413,48 @@ class NativeAppBackend
         _dbDismissAllTodoChecklistSuggestions =
             dbDismissAllTodoChecklistSuggestions ??
                 rust_core.dbDismissAllTodoChecklistSuggestions,
+        _dbListTodoFollowupSuggestions = dbListTodoFollowupSuggestions ??
+            rust_core.dbListTodoFollowupSuggestions,
+        _dbUpsertGeneratedTodoFollowupSuggestions =
+            dbUpsertGeneratedTodoFollowupSuggestions ??
+                rust_core.dbUpsertGeneratedTodoFollowupSuggestions,
+        _dbUpsertGeneratedTodoFollowupSuggestionsIfCurrentClaim =
+            dbUpsertGeneratedTodoFollowupSuggestionsIfCurrentClaim ??
+                _dbUpsertGeneratedTodoFollowupSuggestionsIfCurrentClaimBridge,
+        _dbApplyTodoFollowupSuggestions = dbApplyTodoFollowupSuggestions ??
+            rust_core.dbApplyTodoFollowupSuggestions,
+        _dbDismissTodoFollowupSuggestions = dbDismissTodoFollowupSuggestions ??
+            rust_core.dbDismissTodoFollowupSuggestions,
+        _dbDismissAllTodoFollowupSuggestions =
+            dbDismissAllTodoFollowupSuggestions ??
+                rust_core.dbDismissAllTodoFollowupSuggestions,
+        _dbEnqueueTodoFollowupGenerationJob =
+            dbEnqueueTodoFollowupGenerationJob ??
+                rust_core.dbEnqueueTodoFollowupGenerationJob,
+        _dbListDueTodoFollowupGenerationJobs =
+            dbListDueTodoFollowupGenerationJobs ??
+                rust_core.dbListDueTodoFollowupGenerationJobs,
+        _dbListDueAutoTodoFollowupGenerationJobs =
+            dbListDueAutoTodoFollowupGenerationJobs ??
+                rust_todo_followup_generation
+                    .dbListDueAutoTodoFollowupGenerationJobs,
+        _dbGetTodoFollowupGenerationJob = dbGetTodoFollowupGenerationJob ??
+            rust_core.dbGetTodoFollowupGenerationJob,
+        _dbMarkTodoFollowupGenerationJobRunning =
+            dbMarkTodoFollowupGenerationJobRunning ??
+                rust_core.dbMarkTodoFollowupGenerationJobRunning,
+        _dbMarkTodoFollowupGenerationJobFailed =
+            dbMarkTodoFollowupGenerationJobFailed ??
+                rust_core.dbMarkTodoFollowupGenerationJobFailed,
+        _dbMarkTodoFollowupGenerationJobSucceeded =
+            dbMarkTodoFollowupGenerationJobSucceeded ??
+                rust_core.dbMarkTodoFollowupGenerationJobSucceeded,
+        _dbMarkTodoFollowupGenerationJobSkipped =
+            dbMarkTodoFollowupGenerationJobSkipped ??
+                rust_core.dbMarkTodoFollowupGenerationJobSkipped,
+        _dbMarkTodoFollowupGenerationJobCanceled =
+            dbMarkTodoFollowupGenerationJobCanceled ??
+                rust_core.dbMarkTodoFollowupGenerationJobCanceled,
         _rustLibInit = rustLibInit ??
             (() => RustLib.init(
                   externalLibrary: resolveDesktopRustExternalLibrary(),
@@ -331,27 +462,91 @@ class NativeAppBackend
 
   final SecureBlobStore _secureBlobStore;
   final AppDirProvider _appDirProvider;
+  @override
+  final DbListTodosFn _dbListTodos;
+  @override
+  final DbGetTodoByIdFn _dbGetTodoById;
+  @override
+  final DbUpsertTodoWithAutoFollowupJobFn _dbUpsertTodoWithAutoFollowupJob;
   final DbInsertMessageFn _dbInsertMessage;
+  @override
   final DbInsertAttachmentFn _dbInsertAttachment;
+  @override
   final DbProcessPendingMessageEmbeddingsFn _dbProcessPendingMessageEmbeddings;
+  @override
   final DbReleaseLocalEmbeddingModelIfIdleFn
       _dbReleaseLocalEmbeddingModelIfIdle;
+  @override
   final AskAiStreamScopedFn _askAiStreamScoped;
+  @override
   final AskAiStreamCloudGatewayScopedFn _askAiStreamCloudGatewayScoped;
+  @override
   final DbCreateTodoChecklistItemFn _dbCreateTodoChecklistItem;
+  @override
   final DbListTodoChecklistItemsFn _dbListTodoChecklistItems;
+  @override
   final DbUpdateTodoChecklistItemContentFn _dbUpdateTodoChecklistItemContent;
+  @override
   final DbSetTodoChecklistItemDoneFn _dbSetTodoChecklistItemDone;
+  @override
   final DbDeleteTodoChecklistItemFn _dbDeleteTodoChecklistItem;
+  @override
   final DbReorderTodoChecklistItemsFn _dbReorderTodoChecklistItems;
+  @override
   final DbListTodoChecklistProgressFn _dbListTodoChecklistProgress;
+  @override
   final DbListTodoChecklistSuggestionsFn _dbListTodoChecklistSuggestions;
+  @override
   final DbUpsertGeneratedTodoChecklistSuggestionsFn
       _dbUpsertGeneratedTodoChecklistSuggestions;
+  @override
   final DbApplyTodoChecklistSuggestionsFn _dbApplyTodoChecklistSuggestions;
+  @override
   final DbDismissTodoChecklistSuggestionsFn _dbDismissTodoChecklistSuggestions;
+  @override
   final DbDismissAllTodoChecklistSuggestionsFn
       _dbDismissAllTodoChecklistSuggestions;
+  @override
+  final DbListTodoFollowupSuggestionsFn _dbListTodoFollowupSuggestions;
+  @override
+  final DbUpsertGeneratedTodoFollowupSuggestionsFn
+      _dbUpsertGeneratedTodoFollowupSuggestions;
+  @override
+  final DbUpsertGeneratedTodoFollowupSuggestionsIfCurrentClaimFn
+      _dbUpsertGeneratedTodoFollowupSuggestionsIfCurrentClaim;
+  @override
+  final DbApplyTodoFollowupSuggestionsFn _dbApplyTodoFollowupSuggestions;
+  @override
+  final DbDismissTodoFollowupSuggestionsFn _dbDismissTodoFollowupSuggestions;
+  @override
+  final DbDismissAllTodoFollowupSuggestionsFn
+      _dbDismissAllTodoFollowupSuggestions;
+  @override
+  final DbEnqueueTodoFollowupGenerationJobFn
+      _dbEnqueueTodoFollowupGenerationJob;
+  @override
+  final DbListDueTodoFollowupGenerationJobsFn
+      _dbListDueTodoFollowupGenerationJobs;
+  @override
+  final DbListDueAutoTodoFollowupGenerationJobsFn
+      _dbListDueAutoTodoFollowupGenerationJobs;
+  @override
+  final DbGetTodoFollowupGenerationJobFn _dbGetTodoFollowupGenerationJob;
+  @override
+  final DbMarkTodoFollowupGenerationJobRunningFn
+      _dbMarkTodoFollowupGenerationJobRunning;
+  @override
+  final DbMarkTodoFollowupGenerationJobFailedFn
+      _dbMarkTodoFollowupGenerationJobFailed;
+  @override
+  final DbMarkTodoFollowupGenerationJobSucceededFn
+      _dbMarkTodoFollowupGenerationJobSucceeded;
+  @override
+  final DbMarkTodoFollowupGenerationJobSkippedFn
+      _dbMarkTodoFollowupGenerationJobSkipped;
+  @override
+  final DbMarkTodoFollowupGenerationJobCanceledFn
+      _dbMarkTodoFollowupGenerationJobCanceled;
   final RustLibInitFn _rustLibInit;
 
   String? _appDir;
@@ -377,6 +572,7 @@ class NativeAppBackend
     return dir.path;
   }
 
+  @override
   Future<String> _getAppDir() async {
     final cached = _appDir;
     if (cached != null) return cached;
@@ -620,6 +816,7 @@ class NativeAppBackend
     return message;
   }
 
+  @override
   Future<Attachment> insertAttachment(
     Uint8List key, {
     required Uint8List bytes,
@@ -634,6 +831,7 @@ class NativeAppBackend
     );
   }
 
+  @override
   Future<void> upsertAttachmentDerivation(
     Uint8List key, {
     required String rootSha256,
@@ -704,6 +902,7 @@ class NativeAppBackend
     );
   }
 
+  @override
   Future<void> upsertAttachmentExifMetadata(
     Uint8List key, {
     required String sha256,
@@ -762,6 +961,7 @@ class NativeAppBackend
     );
   }
 
+  @override
   Future<String?> readAttachmentAnnotationPayloadJson(
     Uint8List key, {
     required String sha256,
@@ -774,6 +974,7 @@ class NativeAppBackend
     );
   }
 
+  @override
   Future<void> enqueueAttachmentPlace(
     Uint8List key, {
     required String attachmentSha256,
@@ -790,6 +991,7 @@ class NativeAppBackend
     );
   }
 
+  @override
   Future<void> enqueueAttachmentAnnotation(
     Uint8List key, {
     required String attachmentSha256,
@@ -806,6 +1008,7 @@ class NativeAppBackend
     );
   }
 
+  @override
   Future<List<AttachmentPlaceJob>> listDueAttachmentPlaces(
     Uint8List key, {
     required int nowMs,
@@ -820,6 +1023,7 @@ class NativeAppBackend
     );
   }
 
+  @override
   Future<List<AttachmentAnnotationJob>> listDueAttachmentAnnotations(
     Uint8List key, {
     required int nowMs,
@@ -834,6 +1038,7 @@ class NativeAppBackend
     );
   }
 
+  @override
   Future<List<AttachmentAnnotationJob>> listDueImageAttachmentAnnotations(
     Uint8List key, {
     required int nowMs,
@@ -848,6 +1053,7 @@ class NativeAppBackend
     );
   }
 
+  @override
   Future<List<AttachmentAnnotationJob>> listDueUrlManifestAttachmentAnnotations(
     Uint8List key, {
     required int nowMs,
@@ -862,6 +1068,7 @@ class NativeAppBackend
     );
   }
 
+  @override
   Future<int> processPendingDocumentExtractions(
     Uint8List key, {
     int limit = 5,
@@ -874,6 +1081,7 @@ class NativeAppBackend
     );
   }
 
+  @override
   Future<void> markAttachmentPlaceFailed(
     Uint8List key, {
     required String attachmentSha256,
@@ -894,6 +1102,7 @@ class NativeAppBackend
     );
   }
 
+  @override
   Future<void> markAttachmentAnnotationFailed(
     Uint8List key, {
     required String attachmentSha256,
@@ -914,6 +1123,7 @@ class NativeAppBackend
     );
   }
 
+  @override
   Future<void> markAttachmentPlaceOkJson(
     Uint8List key, {
     required String attachmentSha256,
@@ -953,6 +1163,7 @@ class NativeAppBackend
     );
   }
 
+  @override
   Future<String> geoReverseCloudGateway({
     required String gatewayBaseUrl,
     required String idToken,
@@ -969,6 +1180,7 @@ class NativeAppBackend
     );
   }
 
+  @override
   Future<String> mediaAnnotationCloudGateway({
     required String gatewayBaseUrl,
     required String idToken,
@@ -1066,46 +1278,6 @@ class NativeAppBackend
       key: key,
       startAtMsInclusive: PlatformInt64Util.from(startAtMsInclusive),
       endAtMsExclusive: PlatformInt64Util.from(endAtMsExclusive),
-    );
-  }
-
-  @override
-  Future<Todo> upsertTodo(
-    Uint8List key, {
-    required String id,
-    required String title,
-    int? dueAtMs,
-    required String status,
-    String? sourceEntryId,
-    int? reviewStage,
-    int? nextReviewAtMs,
-    int? lastReviewAtMs,
-    int? manualImportanceNudgeScore,
-    int? manualUrgencyNudgeScore,
-  }) async {
-    final appDir = await _getAppDir();
-    return rust_core.dbUpsertTodo(
-      appDir: appDir,
-      key: key,
-      id: id,
-      title: title,
-      dueAtMs: dueAtMs == null ? null : PlatformInt64Util.from(dueAtMs),
-      status: status,
-      sourceEntryId: sourceEntryId,
-      reviewStage:
-          reviewStage == null ? null : PlatformInt64Util.from(reviewStage),
-      nextReviewAtMs: nextReviewAtMs == null
-          ? null
-          : PlatformInt64Util.from(nextReviewAtMs),
-      lastReviewAtMs: lastReviewAtMs == null
-          ? null
-          : PlatformInt64Util.from(lastReviewAtMs),
-      manualImportanceNudgeScore: manualImportanceNudgeScore == null
-          ? null
-          : PlatformInt64Util.from(manualImportanceNudgeScore),
-      manualUrgencyNudgeScore: manualUrgencyNudgeScore == null
-          ? null
-          : PlatformInt64Util.from(manualUrgencyNudgeScore),
     );
   }
 

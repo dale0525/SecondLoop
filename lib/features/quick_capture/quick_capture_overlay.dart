@@ -1,11 +1,19 @@
 import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../core/ai/ai_routing.dart';
+import '../../core/ai/foreground_ai_route_preflight.dart';
+import '../../core/ai/semantic_parse_data_consent_prefs.dart';
+import '../../core/ai/semantic_parse_edit_policy.dart';
 import '../../core/backend/app_backend.dart';
+import '../../core/cloud/cloud_auth_scope.dart';
 import '../../core/quick_capture/quick_capture_controller.dart';
 import '../../core/quick_capture/quick_capture_scope.dart';
 import '../../core/session/session_scope.dart';
+import '../../core/subscription/subscription_scope.dart';
 import '../../core/sync/sync_engine_gate.dart';
 import '../../i18n/strings.g.dart';
 import '../../ui/sl_focus_ring.dart';
@@ -159,6 +167,11 @@ class _QuickCaptureDialogState extends State<_QuickCaptureDialog> {
       syncEngine?.notifyLocalMutation();
 
       final locale = Localizations.localeOf(context);
+      final subscriptionStatus = SubscriptionScope.maybeOf(context)?.status ??
+          SubscriptionStatus.unknown;
+      final cloudAuthScope = CloudAuthScope.maybeOf(context);
+      final cloudGatewayConfig =
+          cloudAuthScope?.gatewayConfig ?? CloudGatewayConfig.defaultConfig;
       final settings = await ActionsSettingsStore.load();
       final timeResolution = LocalTimeResolver.resolve(
         text,
@@ -167,6 +180,46 @@ class _QuickCaptureDialogState extends State<_QuickCaptureDialog> {
         dayEndMinutes: settings.dayEndMinutes,
       );
       final looksLikeReview = LocalTimeResolver.looksLikeReviewIntent(text);
+      final looksLikeLongFormNote = isLongTextForTodoAutomation(text);
+      final looksLikeTodoRelevant = looksLikeTodoRelevantForSemanticParse(text);
+
+      if (timeResolution == null &&
+          !looksLikeReview &&
+          !looksLikeLongFormNote &&
+          looksLikeTodoRelevant) {
+        // Keep explicit time captures on the deterministic local flow.
+        // Semantic parsing stays the preferred path only for todo-relevant
+        // inputs that do not already have a clear local time match.
+        final prefs = await SharedPreferences.getInstance();
+        final consented =
+            prefs.getBool(SemanticParseDataConsentPrefs.prefsKey) ?? false;
+        if (consented && mounted) {
+          try {
+            final preparedRoute = await prepareForegroundAiRoute(
+              backend,
+              sessionKey,
+              routePolicy: ForegroundAiRoutePolicy.automation,
+              cloudAuthController: cloudAuthScope?.controller,
+              gatewayConfig: cloudGatewayConfig,
+              subscriptionStatus: subscriptionStatus,
+              warmupPolicy: ForegroundAiWarmupPolicy.cloudOnly,
+              fallbackToNeedsSetupOnRouteError: true,
+            );
+            if (canRunPreparedForegroundAiRoute(preparedRoute)) {
+              await backend.enqueueSemanticParseJob(
+                sessionKey,
+                messageId: message.id,
+                nowMs: DateTime.now().millisecondsSinceEpoch,
+              );
+              syncEngine?.notifyExternalChange();
+              _dismiss();
+              return;
+            }
+          } catch (_) {
+            // Fall through to local capture fallback.
+          }
+        }
+      }
 
       if (timeResolution != null || looksLikeReview) {
         if (!mounted) return;
@@ -179,7 +232,8 @@ class _QuickCaptureDialogState extends State<_QuickCaptureDialog> {
           final todoId = 'todo:${message.id}';
           switch (decision) {
             case CaptureTodoScheduleDecision(:final dueAtLocal):
-              await backend.upsertTodo(
+              await createTodoWithFollowup(
+                backend,
                 sessionKey,
                 id: todoId,
                 title: text,
@@ -197,7 +251,8 @@ class _QuickCaptureDialogState extends State<_QuickCaptureDialog> {
                 DateTime.now(),
                 settings,
               );
-              await backend.upsertTodo(
+              await createTodoWithFollowup(
+                backend,
                 sessionKey,
                 id: todoId,
                 title: text,
@@ -216,7 +271,9 @@ class _QuickCaptureDialogState extends State<_QuickCaptureDialog> {
         }
       }
 
-      _dismiss(reopenMainWindow: true, openChat: true);
+      // Product decision: quick capture should never request reopening
+      // the main window after submission, including plain chat fallback.
+      _dismiss();
     } finally {
       if (mounted) setState(() => _busy = false);
     }

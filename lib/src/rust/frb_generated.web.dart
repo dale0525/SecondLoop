@@ -24,6 +24,7 @@ import 'api/simple.dart';
 import 'api/sync_diagnostics.dart';
 import 'api/sync_progress.dart';
 import 'api/tags.dart';
+import 'api/todo_followup_generation.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'db.dart';
@@ -106,6 +107,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   StoragePolicyConfig dco_decode_box_autoadd_storage_policy_config(dynamic raw);
+
+  @protected
+  Todo dco_decode_box_autoadd_todo(dynamic raw);
+
+  @protected
+  TodoFollowupGenerationJob dco_decode_box_autoadd_todo_followup_generation_job(
+      dynamic raw);
 
   @protected
   CloudMediaBackup dco_decode_cloud_media_backup(dynamic raw);
@@ -287,6 +295,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       dynamic raw);
 
   @protected
+  List<TodoFollowupGenerationJob> dco_decode_list_todo_followup_generation_job(
+      dynamic raw);
+
+  @protected
+  List<TodoFollowupSuggestion> dco_decode_list_todo_followup_suggestion(
+      dynamic raw);
+
+  @protected
+  List<TodoFollowupSuggestionDraftInput>
+      dco_decode_list_todo_followup_suggestion_draft_input(dynamic raw);
+
+  @protected
   LlmProfile dco_decode_llm_profile(dynamic raw);
 
   @protected
@@ -352,6 +372,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   Message? dco_decode_opt_box_autoadd_message(dynamic raw);
 
   @protected
+  Todo? dco_decode_opt_box_autoadd_todo(dynamic raw);
+
+  @protected
+  TodoFollowupGenerationJob?
+      dco_decode_opt_box_autoadd_todo_followup_generation_job(dynamic raw);
+
+  @protected
   List<String>? dco_decode_opt_list_String(dynamic raw);
 
   @protected
@@ -389,6 +416,17 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   TodoChecklistSuggestion dco_decode_todo_checklist_suggestion(dynamic raw);
+
+  @protected
+  TodoFollowupGenerationJob dco_decode_todo_followup_generation_job(
+      dynamic raw);
+
+  @protected
+  TodoFollowupSuggestion dco_decode_todo_followup_suggestion(dynamic raw);
+
+  @protected
+  TodoFollowupSuggestionDraftInput
+      dco_decode_todo_followup_suggestion_draft_input(dynamic raw);
 
   @protected
   int dco_decode_u_32(dynamic raw);
@@ -475,6 +513,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   StoragePolicyConfig sse_decode_box_autoadd_storage_policy_config(
+      SseDeserializer deserializer);
+
+  @protected
+  Todo sse_decode_box_autoadd_todo(SseDeserializer deserializer);
+
+  @protected
+  TodoFollowupGenerationJob sse_decode_box_autoadd_todo_followup_generation_job(
       SseDeserializer deserializer);
 
   @protected
@@ -684,6 +729,19 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  List<TodoFollowupGenerationJob> sse_decode_list_todo_followup_generation_job(
+      SseDeserializer deserializer);
+
+  @protected
+  List<TodoFollowupSuggestion> sse_decode_list_todo_followup_suggestion(
+      SseDeserializer deserializer);
+
+  @protected
+  List<TodoFollowupSuggestionDraftInput>
+      sse_decode_list_todo_followup_suggestion_draft_input(
+          SseDeserializer deserializer);
+
+  @protected
   LlmProfile sse_decode_llm_profile(SseDeserializer deserializer);
 
   @protected
@@ -757,6 +815,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   Message? sse_decode_opt_box_autoadd_message(SseDeserializer deserializer);
 
   @protected
+  Todo? sse_decode_opt_box_autoadd_todo(SseDeserializer deserializer);
+
+  @protected
+  TodoFollowupGenerationJob?
+      sse_decode_opt_box_autoadd_todo_followup_generation_job(
+          SseDeserializer deserializer);
+
+  @protected
   List<String>? sse_decode_opt_list_String(SseDeserializer deserializer);
 
   @protected
@@ -800,6 +866,19 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   TodoChecklistSuggestion sse_decode_todo_checklist_suggestion(
       SseDeserializer deserializer);
+
+  @protected
+  TodoFollowupGenerationJob sse_decode_todo_followup_generation_job(
+      SseDeserializer deserializer);
+
+  @protected
+  TodoFollowupSuggestion sse_decode_todo_followup_suggestion(
+      SseDeserializer deserializer);
+
+  @protected
+  TodoFollowupSuggestionDraftInput
+      sse_decode_todo_followup_suggestion_draft_input(
+          SseDeserializer deserializer);
 
   @protected
   int sse_decode_u_32(SseDeserializer deserializer);
@@ -891,6 +970,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_box_autoadd_storage_policy_config(
       StoragePolicyConfig self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_todo(Todo self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_todo_followup_generation_job(
+      TodoFollowupGenerationJob self, SseSerializer serializer);
 
   @protected
   void sse_encode_cloud_media_backup(
@@ -1104,6 +1190,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       List<TodoChecklistSuggestion> self, SseSerializer serializer);
 
   @protected
+  void sse_encode_list_todo_followup_generation_job(
+      List<TodoFollowupGenerationJob> self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_todo_followup_suggestion(
+      List<TodoFollowupSuggestion> self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_todo_followup_suggestion_draft_input(
+      List<TodoFollowupSuggestionDraftInput> self, SseSerializer serializer);
+
+  @protected
   void sse_encode_llm_profile(LlmProfile self, SseSerializer serializer);
 
   @protected
@@ -1179,6 +1277,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       Message? self, SseSerializer serializer);
 
   @protected
+  void sse_encode_opt_box_autoadd_todo(Todo? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_todo_followup_generation_job(
+      TodoFollowupGenerationJob? self, SseSerializer serializer);
+
+  @protected
   void sse_encode_opt_list_String(List<String>? self, SseSerializer serializer);
 
   @protected
@@ -1224,6 +1329,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_todo_checklist_suggestion(
       TodoChecklistSuggestion self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_todo_followup_generation_job(
+      TodoFollowupGenerationJob self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_todo_followup_suggestion(
+      TodoFollowupSuggestion self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_todo_followup_suggestion_draft_input(
+      TodoFollowupSuggestionDraftInput self, SseSerializer serializer);
 
   @protected
   void sse_encode_u_32(int self, SseSerializer serializer);

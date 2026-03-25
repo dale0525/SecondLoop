@@ -17,6 +17,7 @@ void main() {
   testWidgets(
     'Todo detail hides linked message bubble when source message has only attachments',
     (tester) async {
+      _setLargeDisplay(tester);
       final backend = _Backend();
 
       await tester.pumpWidget(
@@ -52,6 +53,12 @@ void main() {
       expect(find.byType(ChatMarkdownPreviewPanel), findsNothing);
     },
   );
+}
+
+void _setLargeDisplay(WidgetTester tester) {
+  tester.view.physicalSize = const Size(1600, 2400);
+  tester.view.devicePixelRatio = 1.0;
+  addTearDown(tester.view.reset);
 }
 
 Future<void> _pumpUntil(

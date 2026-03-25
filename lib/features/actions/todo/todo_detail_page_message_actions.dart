@@ -85,29 +85,19 @@ extension _TodoDetailPageStateMessageActions on _TodoDetailPageState {
             prefs.getBool(SemanticParseDataConsentPrefs.prefsKey) ?? false;
 
         if (consented) {
-          final cloudIdToken = await readCloudCapabilityIdToken(
-            cloudAuthScope?.controller,
-            mode: CloudCapabilityAuthMode.interactive,
+          final prepared = await prepareForegroundAiRoute(
+            backend,
+            sessionKey,
+            routePolicy: ForegroundAiRoutePolicy.automation,
+            cloudAuthController: cloudAuthScope?.controller,
+            gatewayConfig: cloudGatewayConfig,
+            subscriptionStatus: subscriptionStatus,
+            warmupPolicy: ForegroundAiWarmupPolicy.always,
+            fallbackToNeedsSetupOnRouteError: true,
           );
 
-          AskAiRouteKind route;
-          try {
-            route = await decideAiAutomationRoute(
-              backend,
-              sessionKey,
-              cloudIdToken: cloudIdToken,
-              cloudGatewayBaseUrl: cloudGatewayConfig.baseUrl,
-              subscriptionStatus: subscriptionStatus,
-            );
-          } catch (_) {
-            route = AskAiRouteKind.needsSetup;
-          }
-
-          if (route != AskAiRouteKind.needsSetup) {
+          if (prepared.route != AskAiRouteKind.needsSetup) {
             try {
-              await bestEffortWarmCloudCapabilityAuth(
-                cloudAuthScope?.controller,
-              );
               await backend.enqueueSemanticParseJob(
                 sessionKey,
                 messageId: message.id,

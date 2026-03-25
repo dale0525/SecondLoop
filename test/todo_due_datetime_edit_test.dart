@@ -13,8 +13,15 @@ import 'package:secondloop/ui/sl_button.dart';
 
 import 'test_i18n.dart';
 
+void _setLargeDisplay(WidgetTester tester) {
+  tester.view.physicalSize = const Size(2400, 1600);
+  tester.view.devicePixelRatio = 1.0;
+  addTearDown(tester.view.reset);
+}
+
 void main() {
   testWidgets('Todo agenda can edit due date/time', (tester) async {
+    _setLargeDisplay(tester);
     final todo = _todo('t1');
     final backend = _Backend(todos: [todo]);
 
@@ -49,6 +56,7 @@ void main() {
   });
 
   testWidgets('Todo detail can edit due date/time', (tester) async {
+    _setLargeDisplay(tester);
     final todo = _todo('t1');
     final backend = _Backend(todos: [todo]);
 
@@ -87,6 +95,7 @@ void main() {
   testWidgets(
       'Todo agenda recurring due edit supports this-only and this-and-future scopes',
       (tester) async {
+    _setLargeDisplay(tester);
     for (final testCase in <({
       String buttonKey,
       TodoRecurrenceEditScope expectedScope,
@@ -147,6 +156,7 @@ void main() {
 
   testWidgets('Todo detail recurring due edit supports whole-series scope',
       (tester) async {
+    _setLargeDisplay(tester);
     final todo = _todo('t1');
     final backend = _Backend(
       todos: [todo],
@@ -196,6 +206,7 @@ void main() {
 
   testWidgets('Todo agenda recurring rule edit supports all scopes',
       (tester) async {
+    _setLargeDisplay(tester);
     for (final testCase in <({
       String buttonKey,
       TodoRecurrenceEditScope expectedScope,
@@ -277,6 +288,7 @@ void main() {
 
   testWidgets('Todo detail recurring rule edit supports all scopes',
       (tester) async {
+    _setLargeDisplay(tester);
     for (final testCase in <({
       String buttonKey,
       TodoRecurrenceEditScope expectedScope,

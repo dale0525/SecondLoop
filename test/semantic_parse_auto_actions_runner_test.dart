@@ -165,6 +165,44 @@ void main() {
     expect(store.lastSucceeded?.appliedActionKind, 'create');
   });
 
+  test('runner passes task_type hint to store for create decision', () async {
+    final store = _FakeStore(
+      jobs: [
+        const SemanticParseAutoActionJob(
+          messageId: 'msg:task_type',
+          status: 'pending',
+          attempts: 0,
+          nextRetryAtMs: null,
+          createdAtMs: 0,
+        ),
+      ],
+      messages: {'msg:task_type': '调研一下当前主流的 llm 模型'},
+    );
+    final client = _FakeClient(
+      responseJson:
+          '{"kind":"create","confidence":1.0,"title":"调研一下当前主流的 llm 模型","status":"inbox","task_type":"research","due_local_iso":null}',
+    );
+
+    final runner = SemanticParseAutoActionsRunner(
+      store: store,
+      client: client,
+      settings: const SemanticParseAutoActionsRunnerSettings(
+        hardTimeout: Duration(milliseconds: 200),
+        minAutoConfidence: 0.86,
+      ),
+      nowMs: () => 1000,
+      nowLocal: () => DateTime(2026, 2, 3, 12, 0, 0),
+    );
+
+    final result = await runner.runOnce(
+      localeTag: 'zh-CN',
+      dayEndMinutes: 21 * 60,
+    );
+
+    expect(result.processed, 1);
+    expect(store.lastFollowupTaskTypeHint, 'research');
+  });
+
   test('runner records the actual applied todo id from store', () async {
     final store = _FakeStore(
       jobs: [
@@ -627,6 +665,7 @@ final class _FakeStore implements SemanticParseAutoActionsStore {
   final Map<String, List<String>> generatedChecklistSuggestionsByTodoId =
       <String, List<String>>{};
   String? lastRecurrenceRuleJson;
+  String? lastFollowupTaskTypeHint;
 
   @override
   Future<List<SemanticParseAutoActionJob>> listDueJobs({
@@ -717,10 +756,12 @@ final class _FakeStore implements SemanticParseAutoActionsStore {
     required String status,
     int? dueAtMs,
     String? recurrenceRuleJson,
+    String? followupTaskTypeHint,
   }) async {
     final todoId = _upsertTodoResultByMessageId[messageId] ?? 'todo:$messageId';
     createdTodoIds.add(todoId);
     lastRecurrenceRuleJson = recurrenceRuleJson;
+    lastFollowupTaskTypeHint = followupTaskTypeHint;
     return todoId;
   }
 

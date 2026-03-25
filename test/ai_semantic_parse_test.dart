@@ -22,6 +22,19 @@ void main() {
     expect(follow.newStatus, 'done');
   });
 
+  test('parses create task_type enum', () {
+    final now = DateTime(2026, 2, 3, 12, 0);
+    final parsed = AiSemanticParse.tryParseMessageAction(
+      '{"kind":"create","confidence":0.88,"title":"去浦东机场接 MU5101","status":"open","task_type":"live_info_lookup","due_local_iso":null}',
+      nowLocal: now,
+      locale: const Locale('zh', 'CN'),
+      dayEndMinutes: 21 * 60,
+    );
+
+    expect(parsed, isNotNull);
+    expect(parsed!.taskType, 'live_info_lookup');
+  });
+
   test('parses create decision JSON (with due)', () {
     final now = DateTime(2026, 2, 3, 12, 0);
     final parsed = AiSemanticParse.tryParseMessageAction(

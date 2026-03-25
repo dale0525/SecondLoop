@@ -9,7 +9,7 @@ use crate::sync::RemoteStore;
 use crate::{auth, db};
 use crate::{geo, media_annotation};
 use crate::{llm, rag, semantic_parse};
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context, Result};
 
 const ASK_AI_ERROR_PREFIX: &str = "\u{001e}SL_ERROR\u{001e}";
 const ASK_AI_META_PREFIX: &str = "\u{001e}SL_META\u{001e}";
@@ -65,6 +65,74 @@ fn key_from_bytes(bytes: Vec<u8>) -> Result<[u8; 32]> {
 
 fn sync_key_from_bytes(bytes: Vec<u8>) -> Result<[u8; 32]> {
     key_from_bytes(bytes)
+}
+
+const DUE_JOB_REFETCH_LIMIT_MULTIPLIER: i64 = 128;
+
+pub(crate) fn is_todo_access_error(err: &anyhow::Error) -> bool {
+    err.chain()
+        .any(|cause| cause.to_string().contains("decrypt failed"))
+}
+
+fn list_visible_due_todo_followup_generation_jobs(
+    conn: &rusqlite::Connection,
+    key: &[u8; 32],
+    now_ms: i64,
+    limit: u32,
+) -> Result<Vec<db::TodoFollowupGenerationJob>> {
+    let requested_limit = i64::from(limit.max(1));
+    let max_requested_limit = requested_limit.saturating_mul(DUE_JOB_REFETCH_LIMIT_MULTIPLIER);
+
+    let mut current_limit = requested_limit;
+    let mut jobs = db::list_due_todo_followup_generation_jobs(conn, now_ms, current_limit)?;
+
+    loop {
+        let mut visible_jobs = Vec::with_capacity(jobs.len());
+        for job in &jobs {
+            match db::find_todo(conn, key, &job.todo_id) {
+                Ok(Some(_)) => visible_jobs.push(job.clone()),
+                Ok(None) => {}
+                Err(err) => {
+                    if is_todo_access_error(&err) {
+                        continue;
+                    }
+                    return Err(err).context(format!(
+                        "failed to read todo for followup job: {}",
+                        job.todo_id
+                    ));
+                }
+            }
+        }
+
+        if visible_jobs.len() >= requested_limit as usize {
+            visible_jobs.truncate(requested_limit as usize);
+            return Ok(visible_jobs);
+        }
+
+        if jobs.len() < current_limit as usize || current_limit >= max_requested_limit {
+            return Ok(visible_jobs);
+        }
+
+        let next_limit = (current_limit.saturating_mul(2)).min(max_requested_limit);
+        let next_jobs = db::list_due_todo_followup_generation_jobs(conn, now_ms, next_limit)?;
+        if next_jobs.len() <= jobs.len() {
+            return Ok(visible_jobs);
+        }
+
+        jobs = next_jobs;
+        current_limit = next_limit;
+    }
+}
+
+fn check_todo_access(conn: &rusqlite::Connection, key: &[u8; 32], todo_id: &str) -> Result<bool> {
+    Ok(db::find_todo(conn, key, todo_id)?.is_some())
+}
+
+fn ensure_todo_access(conn: &rusqlite::Connection, key: &[u8; 32], todo_id: &str) -> Result<()> {
+    if check_todo_access(conn, key, todo_id)? {
+        return Ok(());
+    }
+    Err(anyhow!("todo not found"))
 }
 
 fn default_embedding_model_name_for_platform() -> &'static str {
@@ -274,6 +342,29 @@ pub fn db_list_todos(app_dir: String, key: Vec<u8>) -> Result<Vec<db::Todo>> {
     let key = key_from_bytes(key)?;
     let conn = db::open(Path::new(&app_dir))?;
     db::list_todos(&conn, &key)
+}
+
+#[flutter_rust_bridge::frb]
+pub fn db_get_todo_by_id(
+    app_dir: String,
+    key: Vec<u8>,
+    todo_id: String,
+) -> Result<Option<db::Todo>> {
+    let key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    db::find_todo(&conn, &key, &todo_id)
+}
+
+#[flutter_rust_bridge::frb]
+pub fn db_get_todo_followup_generation_job(
+    app_dir: String,
+    key: Vec<u8>,
+    todo_id: String,
+) -> Result<Option<db::TodoFollowupGenerationJob>> {
+    let key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    ensure_todo_access(&conn, &key, &todo_id)?;
+    db::find_todo_followup_generation_job(&conn, &todo_id)
 }
 
 #[flutter_rust_bridge::frb]
@@ -607,6 +698,248 @@ pub fn db_dismiss_all_todo_checklist_suggestions(
     let key = key_from_bytes(key)?;
     let conn = db::open(Path::new(&app_dir))?;
     db::dismiss_all_todo_checklist_suggestions(&conn, &key, &todo_id)
+}
+
+#[flutter_rust_bridge::frb]
+pub fn db_list_todo_followup_suggestions(
+    app_dir: String,
+    key: Vec<u8>,
+    todo_id: String,
+) -> Result<Vec<db::TodoFollowupSuggestion>> {
+    let key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    ensure_todo_access(&conn, &key, &todo_id)?;
+    db::list_todo_followup_suggestions(&conn, &key, &todo_id)
+}
+
+#[flutter_rust_bridge::frb]
+pub fn db_upsert_generated_todo_followup_suggestions(
+    app_dir: String,
+    key: Vec<u8>,
+    todo_id: String,
+    suggestions: Vec<db::TodoFollowupSuggestionDraftInput>,
+    source: String,
+    generation_key: Option<String>,
+) -> Result<Vec<db::TodoFollowupSuggestion>> {
+    let key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    ensure_todo_access(&conn, &key, &todo_id)?;
+    db::upsert_generated_todo_followup_suggestions(
+        &conn,
+        &key,
+        &todo_id,
+        &suggestions,
+        &source,
+        generation_key.as_deref(),
+    )
+}
+
+#[flutter_rust_bridge::frb]
+pub fn db_upsert_generated_todo_followup_suggestions_if_current_claim(
+    app_dir: String,
+    key: Vec<u8>,
+    todo_id: String,
+    job_started_at_ms: i64,
+    suggestions: Vec<db::TodoFollowupSuggestionDraftInput>,
+    source: String,
+    generation_key: Option<String>,
+) -> Result<bool> {
+    let key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    ensure_todo_access(&conn, &key, &todo_id)?;
+    db::upsert_generated_todo_followup_suggestions_if_current_claim(
+        &conn,
+        &key,
+        &todo_id,
+        job_started_at_ms,
+        &suggestions,
+        &source,
+        generation_key.as_deref(),
+    )
+}
+
+#[flutter_rust_bridge::frb]
+#[allow(clippy::too_many_arguments)]
+pub fn db_upsert_todo_with_auto_followup_job(
+    app_dir: String,
+    key: Vec<u8>,
+    id: String,
+    title: String,
+    due_at_ms: Option<i64>,
+    status: String,
+    source_entry_id: Option<String>,
+    review_stage: Option<i64>,
+    next_review_at_ms: Option<i64>,
+    last_review_at_ms: Option<i64>,
+    task_type_hint: Option<String>,
+    now_ms: i64,
+) -> Result<db::Todo> {
+    let key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    db::upsert_todo_with_auto_followup_job(
+        &conn,
+        &key,
+        &id,
+        &title,
+        due_at_ms,
+        &status,
+        source_entry_id.as_deref(),
+        review_stage,
+        next_review_at_ms,
+        last_review_at_ms,
+        task_type_hint.as_deref(),
+        now_ms,
+    )
+}
+
+#[flutter_rust_bridge::frb]
+pub fn db_apply_todo_followup_suggestions(
+    app_dir: String,
+    key: Vec<u8>,
+    todo_id: String,
+    suggestion_ids: Vec<String>,
+) -> Result<Vec<db::TodoActivity>> {
+    let key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    ensure_todo_access(&conn, &key, &todo_id)?;
+    db::apply_todo_followup_suggestions(&conn, &key, &todo_id, &suggestion_ids)
+}
+
+#[flutter_rust_bridge::frb]
+pub fn db_dismiss_todo_followup_suggestions(
+    app_dir: String,
+    key: Vec<u8>,
+    todo_id: String,
+    suggestion_ids: Vec<String>,
+) -> Result<()> {
+    let key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    ensure_todo_access(&conn, &key, &todo_id)?;
+    db::dismiss_todo_followup_suggestions(&conn, &key, &todo_id, &suggestion_ids)
+}
+
+#[flutter_rust_bridge::frb]
+pub fn db_dismiss_all_todo_followup_suggestions(
+    app_dir: String,
+    key: Vec<u8>,
+    todo_id: String,
+) -> Result<()> {
+    let key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    ensure_todo_access(&conn, &key, &todo_id)?;
+    db::dismiss_all_todo_followup_suggestions(&conn, &key, &todo_id)
+}
+
+#[flutter_rust_bridge::frb]
+pub fn db_enqueue_todo_followup_generation_job(
+    app_dir: String,
+    key: Vec<u8>,
+    todo_id: String,
+    trigger_kind: String,
+    manual_override_followup: bool,
+    task_type_hint: Option<String>,
+    now_ms: i64,
+) -> Result<()> {
+    let key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    ensure_todo_access(&conn, &key, &todo_id)?;
+    db::enqueue_todo_followup_generation_job(
+        &conn,
+        &todo_id,
+        &trigger_kind,
+        manual_override_followup,
+        task_type_hint.as_deref(),
+        now_ms,
+    )
+}
+
+#[flutter_rust_bridge::frb]
+pub fn db_list_due_todo_followup_generation_jobs(
+    app_dir: String,
+    key: Vec<u8>,
+    now_ms: i64,
+    limit: u32,
+) -> Result<Vec<db::TodoFollowupGenerationJob>> {
+    let app_dir = PathBuf::from(app_dir);
+    let key = key_from_bytes(key)?;
+    auth::validate_key(&app_dir, &key)?;
+    let conn = db::open(&app_dir)?;
+    list_visible_due_todo_followup_generation_jobs(&conn, &key, now_ms, limit)
+}
+
+#[flutter_rust_bridge::frb]
+pub fn db_mark_todo_followup_generation_job_running(
+    app_dir: String,
+    key: Vec<u8>,
+    todo_id: String,
+    now_ms: i64,
+) -> Result<()> {
+    let key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    ensure_todo_access(&conn, &key, &todo_id)?;
+    db::mark_todo_followup_generation_job_running(&conn, &todo_id, now_ms)
+}
+
+#[flutter_rust_bridge::frb]
+pub fn db_mark_todo_followup_generation_job_failed(
+    app_dir: String,
+    key: Vec<u8>,
+    todo_id: String,
+    attempts: i64,
+    next_retry_at_ms: i64,
+    last_error: String,
+    now_ms: i64,
+) -> Result<()> {
+    let key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    ensure_todo_access(&conn, &key, &todo_id)?;
+    db::mark_todo_followup_generation_job_failed(
+        &conn,
+        &todo_id,
+        attempts,
+        next_retry_at_ms,
+        &last_error,
+        now_ms,
+    )
+}
+
+#[flutter_rust_bridge::frb]
+pub fn db_mark_todo_followup_generation_job_succeeded(
+    app_dir: String,
+    key: Vec<u8>,
+    todo_id: String,
+    now_ms: i64,
+) -> Result<()> {
+    let key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    ensure_todo_access(&conn, &key, &todo_id)?;
+    db::mark_todo_followup_generation_job_succeeded(&conn, &todo_id, now_ms)
+}
+
+#[flutter_rust_bridge::frb]
+pub fn db_mark_todo_followup_generation_job_skipped(
+    app_dir: String,
+    key: Vec<u8>,
+    todo_id: String,
+    now_ms: i64,
+) -> Result<()> {
+    let key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    ensure_todo_access(&conn, &key, &todo_id)?;
+    db::mark_todo_followup_generation_job_skipped(&conn, &todo_id, now_ms)
+}
+
+#[flutter_rust_bridge::frb]
+pub fn db_mark_todo_followup_generation_job_canceled(
+    app_dir: String,
+    key: Vec<u8>,
+    todo_id: String,
+    now_ms: i64,
+) -> Result<()> {
+    let key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    ensure_todo_access(&conn, &key, &todo_id)?;
+    db::mark_todo_followup_generation_job_canceled(&conn, &todo_id, now_ms)
 }
 
 #[flutter_rust_bridge::frb]
@@ -2091,6 +2424,36 @@ pub fn ai_task_priority_rerank_cloud_gateway(
         model_name,
         None,
         "task_priority".to_string(),
+    );
+
+    collect_provider_text(&provider, &prompt)
+}
+
+#[flutter_rust_bridge::frb]
+#[allow(clippy::too_many_arguments)]
+pub fn ai_todo_followup_rerank_cloud_gateway(
+    _app_dir: String,
+    key: Vec<u8>,
+    prompt: String,
+    gateway_base_url: String,
+    firebase_id_token: String,
+    model_name: String,
+) -> Result<String> {
+    if gateway_base_url.trim().is_empty() {
+        return Err(anyhow!("missing gateway_base_url"));
+    }
+    if firebase_id_token.trim().is_empty() {
+        return Err(anyhow!("missing firebase_id_token"));
+    }
+
+    let _key = key_from_bytes(key)?;
+
+    let provider = llm::gateway::CloudGatewayProvider::new_with_purpose(
+        gateway_base_url,
+        firebase_id_token,
+        model_name,
+        None,
+        "todo_followup".to_string(),
     );
 
     collect_provider_text(&provider, &prompt)

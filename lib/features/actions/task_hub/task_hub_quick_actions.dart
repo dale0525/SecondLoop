@@ -1,5 +1,6 @@
 import 'dart:typed_data';
 
+import '../../../core/ai/todo_followup_task_classifier.dart';
 import '../../../core/backend/app_backend.dart';
 import '../../../src/rust/db.dart';
 import '../settings/actions_settings_store.dart';
@@ -375,6 +376,18 @@ class TaskHubQuickActionsController {
       manualImportanceNudgeScore: previousManualSignal?.importanceScore,
       manualUrgencyNudgeScore: previousManualSignal?.urgencyScore,
     );
+    if (backend.supportsTodoFollowupSuggestions) {
+      final taskType = classifyTodoFollowupTaskType(todo.title);
+      final taskTypeHint =
+          taskType == TodoFollowupTaskType.unknown ? null : taskType.wireValue;
+      await backend.enqueueTodoFollowupGenerationJob(
+        sessionKey,
+        todoId: createdTodoId,
+        triggerKind: 'auto_create',
+        taskTypeHint: taskTypeHint,
+        nowMs: nowUtcMs,
+      );
+    }
     return TaskHubUndoTicket(
       todo: todo,
       updatedTodo: updated,

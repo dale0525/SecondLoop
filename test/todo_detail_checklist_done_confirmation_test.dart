@@ -10,9 +10,16 @@ import 'package:secondloop/src/rust/db.dart';
 
 import 'test_i18n.dart';
 
+void _setLargeDisplay(WidgetTester tester) {
+  tester.view.physicalSize = const Size(2400, 1600);
+  tester.view.devicePixelRatio = 1.0;
+  addTearDown(tester.view.reset);
+}
+
 void main() {
   testWidgets('TodoDetailPage warns before marking incomplete checklist done',
       (tester) async {
+    _setLargeDisplay(tester);
     final backend = _Backend();
 
     await tester.pumpWidget(

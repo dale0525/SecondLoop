@@ -207,7 +207,7 @@ void main() {
                 entry: candidate,
               );
               return Text(
-                '${layout.$1.first.label}|${layout.$2.map((item) => item.label).join('|')}',
+                '${layout.$1.map((item) => item.action.name).join('|')}|${layout.$2.map((item) => item.action.name).join('|')}',
               );
             },
           ),
@@ -215,7 +215,7 @@ void main() {
       ),
     );
 
-    expect(find.text('Resume today|Do again|Delete'), findsOneWidget);
+    expect(find.text('reopen|redo|dismiss'), findsOneWidget);
   });
 
   test('increase urgency only increments manual urgency score', () async {
@@ -555,6 +555,29 @@ void main() {
     expect(backend.upsertTodoCalls, 0);
   });
 
+  test('redo action enqueues followup generation for created todo', () async {
+    SharedPreferences.setMockInitialValues({});
+
+    final initial = todo(
+      id: 't6n',
+      title: 'Task 6 native',
+      updatedAtMs: 10,
+      status: 'done',
+    );
+    final backend = QuickActionBackendTestDouble(
+      initialTodos: [initial],
+      enableFollowupSuggestions: true,
+    );
+    final controller = TaskHubQuickActionsController(
+      backend: backend,
+      sessionKey: Uint8List(32),
+    );
+
+    final ticket = await controller.apply(initial, TaskHubQuickAction.redo);
+    expect(ticket, isNotNull);
+    expect(backend.enqueueTodoFollowupGenerationJobCalls, 1);
+  });
+
   test('reopen action falls back to default settings when prefs are invalid',
       () async {
     SharedPreferences.setMockInitialValues({
@@ -587,6 +610,35 @@ void main() {
             .toLocal();
     expect(dueLocal.hour, 21);
     expect(dueLocal.minute, 0);
+  });
+
+  test('redo action creates a new open todo and can undo', () async {
+    SharedPreferences.setMockInitialValues({});
+
+    final initial = todo(
+      id: 't6',
+      title: 'Task 6',
+      updatedAtMs: 10,
+      status: 'done',
+    );
+    final backend = QuickActionBackendTestDouble(initialTodos: [initial]);
+    final controller = TaskHubQuickActionsController(
+      backend: backend,
+      sessionKey: Uint8List(32),
+    );
+
+    final beforeCount = backend.all().length;
+    final ticket = await controller.apply(initial, TaskHubQuickAction.redo);
+    expect(ticket, isNotNull);
+    final afterCreate = backend.all();
+    expect(afterCreate.length, beforeCount + 1);
+    final created = afterCreate.firstWhere((todo) => todo.id != initial.id);
+    expect(created.status, 'open');
+    expect(created.dueAtMs, isNotNull);
+
+    await controller.undo(ticket!);
+    final restored = backend.current(created.id);
+    expect(restored.status, 'dismissed');
   });
 
   test('reopen action uses next morning when day end already passed', () async {

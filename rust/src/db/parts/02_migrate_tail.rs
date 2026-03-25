@@ -207,6 +207,70 @@ fn migrate_from_v34_to_v35(conn: &Connection) -> Result<()> {
     Ok(())
 }
 
+fn migrate_from_v35_to_v36(conn: &Connection) -> Result<()> {
+    conn.execute_batch(
+        r#"
+CREATE TABLE IF NOT EXISTS todo_followup_suggestions (
+  id TEXT PRIMARY KEY,
+  todo_id TEXT NOT NULL,
+  content BLOB NOT NULL,
+  state TEXT NOT NULL,
+  source TEXT NOT NULL,
+  generation_mode TEXT NOT NULL,
+  generation_key TEXT,
+  citations_json TEXT,
+  created_at_ms INTEGER NOT NULL,
+  updated_at_ms INTEGER NOT NULL,
+  dismissed_at_ms INTEGER,
+  applied_activity_id TEXT,
+  FOREIGN KEY(todo_id) REFERENCES todos(id) ON DELETE CASCADE,
+  FOREIGN KEY(applied_activity_id) REFERENCES todo_activities(id) ON DELETE SET NULL
+);
+CREATE INDEX IF NOT EXISTS idx_todo_followup_suggestions_todo_state
+  ON todo_followup_suggestions(todo_id, state, created_at_ms);
+CREATE INDEX IF NOT EXISTS idx_todo_followup_suggestions_generation_key
+  ON todo_followup_suggestions(generation_key);
+
+CREATE TABLE IF NOT EXISTS todo_followup_generation_jobs (
+  todo_id TEXT PRIMARY KEY,
+  trigger_kind TEXT NOT NULL,
+  status TEXT NOT NULL,
+  attempts INTEGER NOT NULL DEFAULT 0,
+  next_retry_at_ms INTEGER,
+  last_error TEXT,
+  include_manual_followups INTEGER NOT NULL DEFAULT 0,
+  manual_override_followup INTEGER NOT NULL DEFAULT 0,
+  task_type_hint TEXT,
+  created_at_ms INTEGER NOT NULL,
+  updated_at_ms INTEGER NOT NULL,
+  FOREIGN KEY(todo_id) REFERENCES todos(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_todo_followup_generation_jobs_status_due
+  ON todo_followup_generation_jobs(status, next_retry_at_ms, updated_at_ms);
+"#,
+    )?;
+
+    let mut stmt = conn.prepare("PRAGMA table_info(todo_followup_generation_jobs)")?;
+    let columns: Vec<String> = stmt
+        .query_map([], |row| row.get(1))?
+        .collect::<std::result::Result<Vec<_>, _>>()?;
+
+    if !columns.iter().any(|column| column == "manual_override_followup") {
+        conn.execute_batch(
+            "ALTER TABLE todo_followup_generation_jobs ADD COLUMN manual_override_followup INTEGER NOT NULL DEFAULT 0;",
+        )?;
+    }
+
+    if !columns.iter().any(|column| column == "task_type_hint") {
+        conn.execute_batch(
+            "ALTER TABLE todo_followup_generation_jobs ADD COLUMN task_type_hint TEXT;",
+        )?;
+    }
+
+    conn.execute_batch("PRAGMA user_version = 36;")?;
+    Ok(())
+}
+
 pub(crate) fn app_dir_from_conn(conn: &Connection) -> Result<PathBuf> {
     let mut stmt = conn.prepare("PRAGMA database_list")?;
     let mut rows = stmt.query([])?;
@@ -240,6 +304,7 @@ DELETE FROM message_embeddings;
 DELETE FROM todo_embeddings;
 DELETE FROM todo_activity_embeddings;
 DELETE FROM semantic_parse_jobs;
+DELETE FROM todo_followup_generation_jobs;
 DELETE FROM tag_merge_feedback;
 DELETE FROM message_tag_autofill_events;
 DELETE FROM message_tag_autofill_jobs;
@@ -261,6 +326,7 @@ DELETE FROM tags;
 DELETE FROM conversations;
 DELETE FROM todo_deletions;
 DELETE FROM todo_checklist_suggestions;
+DELETE FROM todo_followup_suggestions;
 DELETE FROM todo_checklist_items;
 DELETE FROM todos;
 DELETE FROM todo_activity_attachments;

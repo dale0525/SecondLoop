@@ -6,6 +6,7 @@ use reqwest::header;
 use serde::Deserialize;
 use serde::Serialize;
 
+use super::todo_followup::{parse_todo_followup_prompt, TodoFollowupGenerationMode};
 use super::ChatDelta;
 
 #[derive(Debug, Serialize)]
@@ -13,6 +14,8 @@ struct AnthropicMessagesRequest {
     model: String,
     max_tokens: u32,
     messages: Vec<AnthropicMessage>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    tools: Option<Vec<AnthropicTool>>,
     stream: bool,
 }
 
@@ -20,6 +23,13 @@ struct AnthropicMessagesRequest {
 struct AnthropicMessage {
     role: String,
     content: String,
+}
+
+#[derive(Debug, Serialize)]
+struct AnthropicTool {
+    name: String,
+    #[serde(rename = "type")]
+    tool_type: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -46,6 +56,7 @@ fn build_messages_request(
     prompt: &str,
     model_name: &str,
     max_tokens: u32,
+    todo_followup_mode: Option<TodoFollowupGenerationMode>,
 ) -> AnthropicMessagesRequest {
     AnthropicMessagesRequest {
         model: model_name.to_string(),
@@ -54,6 +65,13 @@ fn build_messages_request(
             role: "user".to_string(),
             content: prompt.to_string(),
         }],
+        tools: match todo_followup_mode {
+            Some(TodoFollowupGenerationMode::WebSearch) => Some(vec![AnthropicTool {
+                name: "web_search".to_string(),
+                tool_type: "web_search_20250305".to_string(),
+            }]),
+            _ => None,
+        },
         stream: true,
     }
 }
@@ -85,7 +103,13 @@ impl crate::rag::AnswerProvider for AnthropicCompatibleProvider {
         on_event: &mut dyn FnMut(ChatDelta) -> Result<()>,
     ) -> Result<()> {
         let url = messages_url(&self.base_url);
-        let req = build_messages_request(prompt, &self.model_name, self.max_tokens);
+        let (todo_followup_mode, prompt_body) = parse_todo_followup_prompt(prompt);
+        let req = build_messages_request(
+            &prompt_body,
+            &self.model_name,
+            self.max_tokens,
+            todo_followup_mode,
+        );
         let _request_guard = super::request_limiter::acquire_remote_llm_request_slot();
 
         let mut resp = self

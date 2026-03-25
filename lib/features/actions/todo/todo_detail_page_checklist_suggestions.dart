@@ -101,19 +101,17 @@ extension _TodoDetailPageStateChecklistSuggestions on _TodoDetailPageState {
     _setState(() => _generatingChecklistSuggestions = true);
 
     try {
-      final cloudIdToken = await readCloudCapabilityIdToken(
-        cloudAuthScope?.controller,
-        mode: CloudCapabilityAuthMode.interactive,
-      );
-      final route = await decideAskAiRoute(
+      final prepared = await prepareForegroundAiRoute(
         backend,
         session.sessionKey,
-        cloudIdToken: cloudIdToken,
-        cloudGatewayBaseUrl: gatewayConfig.baseUrl,
+        routePolicy: ForegroundAiRoutePolicy.askAi,
+        cloudAuthController: cloudAuthScope?.controller,
+        gatewayConfig: gatewayConfig,
         subscriptionStatus: subscriptionStatus,
+        warmupPolicy: ForegroundAiWarmupPolicy.cloudOnly,
       );
 
-      if (route == AskAiRouteKind.needsSetup) {
+      if (!canRunPreparedForegroundAiRoute(prepared)) {
         if (!mounted) return;
         await Navigator.of(context).push(
           MaterialPageRoute(
@@ -123,9 +121,6 @@ extension _TodoDetailPageStateChecklistSuggestions on _TodoDetailPageState {
         return;
       }
 
-      if (route == AskAiRouteKind.cloudGateway) {
-        await bestEffortWarmCloudCapabilityAuth(cloudAuthScope?.controller);
-      }
       if (!mounted) return;
 
       final activities = await backend.listTodoActivities(
@@ -139,9 +134,9 @@ extension _TodoDetailPageStateChecklistSuggestions on _TodoDetailPageState {
       final suggestions = await requestTodoChecklistSuggestions(
         backend: backend,
         sessionKey: session.sessionKey,
-        route: route,
+        route: prepared.route,
         gatewayBaseUrl: gatewayConfig.baseUrl,
-        idToken: cloudIdToken ?? '',
+        idToken: prepared.idToken ?? '',
         modelName: gatewayConfig.modelName,
         taskTitle: _todo.title,
         taskContext: contextText,
@@ -154,7 +149,8 @@ extension _TodoDetailPageStateChecklistSuggestions on _TodoDetailPageState {
           session.sessionKey,
           todoId: _todo.id,
           suggestions: suggestions,
-          source: route == AskAiRouteKind.cloudGateway ? 'cloud' : 'byok',
+          source:
+              prepared.route == AskAiRouteKind.cloudGateway ? 'cloud' : 'byok',
           generationKey: 'manual:${DateTime.now().millisecondsSinceEpoch}',
         );
       }

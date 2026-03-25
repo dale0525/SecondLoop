@@ -5,8 +5,10 @@ import 'package:flutter/widgets.dart';
 import '../../features/actions/todo/todo_thread_match.dart';
 import '../../src/rust/db.dart';
 import '../../src/rust/semantic_parse.dart';
+import '../ai/todo_followup_prompt_envelope.dart';
 
 part 'app_backend_prompt_ai.dart';
+part 'app_backend_todo_followups.dart';
 part 'app_backend_transition_todo.dart';
 
 enum TodoRecurrenceEditScope {
@@ -23,7 +25,90 @@ extension TodoRecurrenceEditScopeWire on TodoRecurrenceEditScope {
       };
 }
 
+String? normalizeTodoFollowupTaskTypeHint(String? followupTaskTypeHint) {
+  final normalized = followupTaskTypeHint?.trim();
+  if (normalized == null || normalized.isEmpty) {
+    return null;
+  }
+  return normalized;
+}
+
+Future<void> maybeEnqueueTodoFollowupGenerationOnCreate(
+  AppBackend backend,
+  Uint8List key, {
+  required String todoId,
+  String? followupTaskTypeHint,
+}) async {
+  if (!backend.supportsTodoFollowupSuggestions ||
+      backend.autoEnqueuesTodoFollowupGenerationOnCreate) {
+    return;
+  }
+
+  final taskTypeHint = normalizeTodoFollowupTaskTypeHint(followupTaskTypeHint);
+  try {
+    await backend.enqueueTodoFollowupGenerationJob(
+      key,
+      todoId: todoId,
+      triggerKind: 'auto_create',
+      taskTypeHint: taskTypeHint,
+      nowMs: DateTime.now().millisecondsSinceEpoch,
+    );
+  } catch (error, stackTrace) {
+    debugPrint(
+      'AppBackend create follow-up enqueue failed for $todoId: $error',
+    );
+    FlutterError.reportError(
+      FlutterErrorDetails(
+        exception: error,
+        stack: stackTrace,
+        library: 'app_backend',
+        context: ErrorDescription(
+          'while enqueueing an automatic todo follow-up generation job',
+        ),
+      ),
+    );
+  }
+}
+
+Future<Todo> createTodoWithFollowup(
+  AppBackend backend,
+  Uint8List key, {
+  required String id,
+  required String title,
+  int? dueAtMs,
+  required String status,
+  String? sourceEntryId,
+  int? reviewStage,
+  int? nextReviewAtMs,
+  int? lastReviewAtMs,
+  String? followupTaskTypeHint,
+}) async {
+  final todo = await backend.upsertTodo(
+    key,
+    id: id,
+    title: title,
+    dueAtMs: dueAtMs,
+    status: status,
+    sourceEntryId: sourceEntryId,
+    reviewStage: reviewStage,
+    nextReviewAtMs: nextReviewAtMs,
+    lastReviewAtMs: lastReviewAtMs,
+  );
+
+  await maybeEnqueueTodoFollowupGenerationOnCreate(
+    backend,
+    key,
+    todoId: id,
+    followupTaskTypeHint: followupTaskTypeHint,
+  );
+  return todo;
+}
+
 abstract class AppBackend {
+  bool get supportsTodoFollowupSuggestions => false;
+
+  bool get autoEnqueuesTodoFollowupGenerationOnCreate => false;
+
   Future<void> init();
 
   Future<bool> isMasterPasswordSet();
@@ -106,6 +191,10 @@ abstract class AppBackend {
     throw UnimplementedError('listTodos');
   }
 
+  Future<Todo?> getTodoById(Uint8List key, String todoId) {
+    throw UnimplementedError('getTodoById');
+  }
+
   Future<List<Todo>> listTodosCreatedInRange(
     Uint8List key, {
     required int startAtMsInclusive,
@@ -128,6 +217,65 @@ abstract class AppBackend {
     int? manualUrgencyNudgeScore,
   }) {
     throw UnimplementedError('upsertTodo');
+  }
+
+  Future<Todo> upsertTodoFromSemanticCreate(
+    Uint8List key, {
+    required String id,
+    required String title,
+    int? dueAtMs,
+    required String status,
+    String? sourceEntryId,
+    int? reviewStage,
+    int? nextReviewAtMs,
+    int? lastReviewAtMs,
+    String? followupTaskTypeHint,
+  }) async {
+    final todo = await upsertTodo(
+      key,
+      id: id,
+      title: title,
+      dueAtMs: dueAtMs,
+      status: status,
+      sourceEntryId: sourceEntryId,
+      reviewStage: reviewStage,
+      nextReviewAtMs: nextReviewAtMs,
+      lastReviewAtMs: lastReviewAtMs,
+    );
+
+    final taskTypeHint =
+        normalizeTodoFollowupTaskTypeHint(followupTaskTypeHint);
+    final wasCreated = todo.createdAtMs == todo.updatedAtMs;
+    if (supportsTodoFollowupSuggestions &&
+        !autoEnqueuesTodoFollowupGenerationOnCreate &&
+        wasCreated) {
+      try {
+        await enqueueTodoFollowupGenerationJob(
+          key,
+          todoId: id,
+          triggerKind: 'auto_create',
+          taskTypeHint: taskTypeHint,
+          nowMs: DateTime.now().millisecondsSinceEpoch,
+        );
+      } catch (error, stackTrace) {
+        debugPrint(
+          'AppBackend.upsertTodoFromSemanticCreate follow-up enqueue failed '
+          'for $id: $error',
+        );
+        FlutterError.reportError(
+          FlutterErrorDetails(
+            exception: error,
+            stack: stackTrace,
+            library: 'app_backend',
+            context: ErrorDescription(
+              'while enqueueing an automatic todo follow-up generation job',
+            ),
+          ),
+        );
+      }
+    }
+
+    return todo;
   }
 
   Future<Todo> setTodoStatus(
@@ -339,6 +487,59 @@ abstract class AppBackend {
     required String todoId,
   }) {
     throw UnimplementedError('dismissAllTodoChecklistSuggestions');
+  }
+
+  Future<List<TodoFollowupSuggestion>> listTodoFollowupSuggestions(
+    Uint8List key,
+    String todoId,
+  ) {
+    throw UnimplementedError('listTodoFollowupSuggestions');
+  }
+
+  Future<List<TodoFollowupSuggestion>> upsertGeneratedTodoFollowupSuggestions(
+    Uint8List key, {
+    required String todoId,
+    required List<TodoFollowupSuggestionDraftInput> suggestions,
+    required String source,
+    String? generationKey,
+  }) {
+    throw UnimplementedError('upsertGeneratedTodoFollowupSuggestions');
+  }
+
+  Future<bool> upsertGeneratedTodoFollowupSuggestionsIfCurrentClaim(
+    Uint8List key, {
+    required String todoId,
+    required int jobStartedAtMs,
+    required List<TodoFollowupSuggestionDraftInput> suggestions,
+    required String source,
+    String? generationKey,
+  }) {
+    throw UnimplementedError(
+      'upsertGeneratedTodoFollowupSuggestionsIfCurrentClaim',
+    );
+  }
+
+  Future<List<TodoActivity>> applyTodoFollowupSuggestions(
+    Uint8List key, {
+    required String todoId,
+    required List<String> suggestionIds,
+  }) {
+    throw UnimplementedError('applyTodoFollowupSuggestions');
+  }
+
+  Future<void> dismissTodoFollowupSuggestions(
+    Uint8List key, {
+    required String todoId,
+    required List<String> suggestionIds,
+  }) {
+    throw UnimplementedError('dismissTodoFollowupSuggestions');
+  }
+
+  Future<void> dismissAllTodoFollowupSuggestions(
+    Uint8List key, {
+    required String todoId,
+  }) {
+    throw UnimplementedError('dismissAllTodoFollowupSuggestions');
   }
 
   Future<List<TodoActivity>> listTodoActivities(
@@ -683,6 +884,16 @@ abstract class AppBackend {
     throw UnimplementedError('taskPriorityRerankAiCloudGateway');
   }
 
+  Future<String> todoFollowupRerankAiCloudGateway(
+    Uint8List key, {
+    required String prompt,
+    required String gatewayBaseUrl,
+    required String idToken,
+    required String modelName,
+  }) {
+    throw UnimplementedError('todoFollowupRerankAiCloudGateway');
+  }
+
   Future<String> fetchTaskPriorityAiAssessmentsCloudGateway(
     Uint8List key, {
     required String gatewayBaseUrl,
@@ -784,6 +995,75 @@ abstract class AppBackend {
     required String modelName,
   }) {
     throw UnimplementedError('semanticParseAskAiTimeWindowCloudGateway');
+  }
+
+  Future<void> enqueueTodoFollowupGenerationJob(
+    Uint8List key, {
+    required String todoId,
+    required String triggerKind,
+    bool manualOverrideFollowup = false,
+    String? taskTypeHint,
+    required int nowMs,
+  }) {
+    throw UnimplementedError('enqueueTodoFollowupGenerationJob');
+  }
+
+  Future<List<TodoFollowupGenerationJob>> listDueTodoFollowupGenerationJobs(
+    Uint8List key, {
+    required int nowMs,
+    int limit = 5,
+  }) {
+    throw UnimplementedError('listDueTodoFollowupGenerationJobs');
+  }
+
+  Future<TodoFollowupGenerationJob?> getTodoFollowupGenerationJob(
+    Uint8List key,
+    String todoId,
+  ) {
+    throw UnimplementedError('getTodoFollowupGenerationJob');
+  }
+
+  Future<void> markTodoFollowupGenerationJobRunning(
+    Uint8List key, {
+    required String todoId,
+    required int nowMs,
+  }) {
+    throw UnimplementedError('markTodoFollowupGenerationJobRunning');
+  }
+
+  Future<void> markTodoFollowupGenerationJobFailed(
+    Uint8List key, {
+    required String todoId,
+    required int attempts,
+    required int nextRetryAtMs,
+    required String lastError,
+    required int nowMs,
+  }) {
+    throw UnimplementedError('markTodoFollowupGenerationJobFailed');
+  }
+
+  Future<void> markTodoFollowupGenerationJobSucceeded(
+    Uint8List key, {
+    required String todoId,
+    required int nowMs,
+  }) {
+    throw UnimplementedError('markTodoFollowupGenerationJobSucceeded');
+  }
+
+  Future<void> markTodoFollowupGenerationJobSkipped(
+    Uint8List key, {
+    required String todoId,
+    required int nowMs,
+  }) {
+    throw UnimplementedError('markTodoFollowupGenerationJobSkipped');
+  }
+
+  Future<void> markTodoFollowupGenerationJobCanceled(
+    Uint8List key, {
+    required String todoId,
+    required int nowMs,
+  }) {
+    throw UnimplementedError('markTodoFollowupGenerationJobCanceled');
   }
 
   Future<void> enqueueSemanticParseJob(

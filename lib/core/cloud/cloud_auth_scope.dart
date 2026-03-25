@@ -4,7 +4,10 @@ import 'cloud_auth_controller.dart';
 
 @immutable
 class CloudGatewayConfig {
-  const CloudGatewayConfig({required this.baseUrl, required this.modelName});
+  const CloudGatewayConfig({
+    required this.baseUrl,
+    required this.modelName,
+  });
 
   final String baseUrl;
   final String modelName;

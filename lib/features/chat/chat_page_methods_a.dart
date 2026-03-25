@@ -902,7 +902,8 @@ extension _ChatPageStateMethodsA on _ChatPageState {
     }
 
     try {
-      await backend.upsertTodo(
+      await createTodoWithFollowup(
+        backend,
         sessionKey,
         id: todoId,
         title: trimmed,
