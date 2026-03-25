@@ -117,7 +117,9 @@ void main() {
 
     expect(backend.lastTagSuggestionState, 'dismissed');
     expect(
-        backend.lastSuggestedTags, equals(const <String>['work', 'finance']));
+      backend.lastSuggestedTags,
+      equals(const <String>['work', 'finance']),
+    );
   });
 
   testWidgets('shows mobile stay-open reminder while AI is analyzing',
@@ -159,6 +161,50 @@ void main() {
     } finally {
       debugDefaultTargetPlatformOverride = previous;
     }
+  });
+
+  testWidgets('slow pending row shows cancel action and marks job canceled',
+      (WidgetTester tester) async {
+    final backend = _RecordingBackend();
+    final nowMs = DateTime.now().millisecondsSinceEpoch;
+    final job = SemanticParseJob(
+      messageId: message.id,
+      status: 'pending',
+      attempts: PlatformInt64Util.from(0),
+      nextRetryAtMs: null,
+      lastError: null,
+      appliedActionKind: null,
+      appliedTodoId: null,
+      appliedTodoTitle: null,
+      appliedPrevTodoStatus: null,
+      suggestedTags: null,
+      suggestedTagConfidence: null,
+      tagSuggestionState: null,
+      appliedTagIds: null,
+      undoneAtMs: null,
+      createdAtMs: PlatformInt64Util.from(nowMs - 5000),
+      updatedAtMs: PlatformInt64Util.from(nowMs - 5000),
+    );
+
+    await tester.pumpWidget(
+      _buildHost(
+        message: message,
+        job: job,
+        backend: backend,
+      ),
+    );
+    await tester.pump();
+
+    expect(
+      find.text('AI is taking longer. Continuing in background…'),
+      findsOneWidget,
+    );
+    expect(find.text('Cancel'), findsOneWidget);
+
+    await tester.tap(find.text('Cancel'));
+    await tester.pump();
+
+    expect(backend.lastCanceledMessageId, 'm1');
   });
 
   testWidgets('canceled status row stays hidden', (WidgetTester tester) async {
@@ -219,6 +265,16 @@ Widget _buildHost({
 final class _RecordingBackend extends TestAppBackend {
   String? lastTagSuggestionState;
   List<String>? lastSuggestedTags;
+  String? lastCanceledMessageId;
+
+  @override
+  Future<void> markSemanticParseJobCanceled(
+    Uint8List key, {
+    required String messageId,
+    required int nowMs,
+  }) async {
+    lastCanceledMessageId = messageId;
+  }
 
   @override
   Future<void> markSemanticParseJobSucceeded(
