@@ -274,7 +274,7 @@ final class _RaceBackend extends NativeAppBackend {
   }
 
   @override
-  Future<int> claimSemanticParseJobRunning(
+  Future<int?> claimSemanticParseJobRunning(
     Uint8List key, {
     required String messageId,
     required int nowMs,

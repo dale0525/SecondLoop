@@ -205,19 +205,27 @@ mixin _NativeAppBackendJobs on _NativeAppBackendAccess
   }
 
   @override
-  Future<int> claimSemanticParseJobRunning(
+  Future<int?> claimSemanticParseJobRunning(
     Uint8List key, {
     required String messageId,
     required int nowMs,
   }) async {
     final appDir = await _getAppDir();
-    final attemptId = await rust_core.dbClaimSemanticParseJobRunning(
-      appDir: appDir,
-      key: key,
-      messageId: messageId,
-      nowMs: PlatformInt64Util.from(nowMs),
-    );
-    return attemptId.toInt();
+    try {
+      final attemptId = await rust_core.dbClaimSemanticParseJobRunning(
+        appDir: appDir,
+        key: key,
+        messageId: messageId,
+        nowMs: PlatformInt64Util.from(nowMs),
+      );
+      return attemptId.toInt();
+    } on AnyhowException catch (error) {
+      final message = error.toString().toLowerCase();
+      if (message.contains('not claimable')) {
+        return null;
+      }
+      rethrow;
+    }
   }
 
   @override

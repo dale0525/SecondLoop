@@ -1,7 +1,7 @@
 import 'dart:typed_data';
 
 abstract interface class SemanticParseAttemptAwareBackend {
-  Future<int> claimSemanticParseJobRunning(
+  Future<int?> claimSemanticParseJobRunning(
     Uint8List key, {
     required String messageId,
     required int nowMs,

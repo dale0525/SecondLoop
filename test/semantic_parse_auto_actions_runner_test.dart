@@ -1022,12 +1022,12 @@ final class _FakeStore implements SemanticParseAutoActionsStore {
   }
 
   @override
-  Future<int> claimJobRunning({
+  Future<int?> claimJobRunning({
     required String messageId,
     required int nowMs,
   }) async {
     if (_claimConflictMessageIds.contains(messageId)) {
-      throw StateError('semantic parse job is not claimable: $messageId');
+      return null;
     }
     return markRunningAttempt(messageId, nowMs: nowMs);
   }

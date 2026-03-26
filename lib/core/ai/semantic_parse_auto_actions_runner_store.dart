@@ -544,7 +544,7 @@ final class BackendSemanticParseAutoActionsStore
   }
 
   @override
-  Future<int> claimJobRunning({
+  Future<int?> claimJobRunning({
     required String messageId,
     required int nowMs,
   }) async {
@@ -563,7 +563,7 @@ final class BackendSemanticParseAutoActionsStore
       nowMs: nowMs,
     );
     final currentJob = await getJob(messageId);
-    return currentJob?.attemptId.toInt() ?? 0;
+    return currentJob?.attemptId.toInt();
   }
 
   @override
