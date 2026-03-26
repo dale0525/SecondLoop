@@ -73,7 +73,7 @@ pub(crate) fn activate_remote_embedder_if_learned<E, F>(
 ) -> Result<()>
 where
     E: Embedder + ?Sized,
-    F: Fn(&E) -> Option<usize>,
+    F: Fn(&E) -> Option<usize> + Copy,
 {
     let Some(dim) = learned_dim(embedder) else {
         return Ok(());
@@ -83,6 +83,19 @@ where
     }
     db::set_active_embedding_model(conn, embedder.model_name(), dim)?;
     Ok(())
+}
+
+fn learn_remote_embedding_dim_from_probe<E, F>(embedder: &E, learned_dim: F) -> Result<usize>
+where
+    E: Embedder + ?Sized,
+    F: Fn(&E) -> Option<usize> + Copy,
+{
+    let probe = embedder.embed(&["probe".to_string()])?;
+    let dim = learned_dim(embedder).unwrap_or_else(|| probe.first().map(|v| v.len()).unwrap_or(0));
+    if dim == 0 || dim > 8192 {
+        return Err(anyhow!("remote embedder returned empty probe embeddings"));
+    }
+    Ok(dim)
 }
 
 fn process_pending_remote_todo_thread_embeddings_once<E: Embedder + ?Sized>(
@@ -109,8 +122,16 @@ pub(crate) fn process_pending_remote_todo_thread_embeddings<E, F>(
 ) -> Result<u32>
 where
     E: Embedder + ?Sized,
-    F: Fn(&E) -> Option<usize>,
+    F: Fn(&E) -> Option<usize> + Copy,
 {
+    let initial_dim = match initial_dim {
+        Some(dim) => Some(dim),
+        None => Some(learn_remote_embedding_dim_from_probe(
+            embedder,
+            learned_dim,
+        )?),
+    };
+
     if let Some(dim) = initial_dim {
         db::set_active_embedding_model(conn, embedder.model_name(), dim)?;
     }

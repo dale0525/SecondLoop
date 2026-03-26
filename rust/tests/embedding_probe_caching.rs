@@ -267,3 +267,75 @@ fn brok_todo_thread_indexing_skips_probe_when_dim_cached() {
     assert_eq!(probe_count, 1, "requests={requests:?}");
     assert_eq!(requests.len(), 3, "requests={requests:?}");
 }
+
+#[test]
+fn cloud_gateway_bootstraps_cache_even_without_pending_items() {
+    let server = EmbeddingsServer::start("/v1/embeddings", "test-embed@v1", 3);
+
+    let temp_dir = tempfile::tempdir().expect("tempdir");
+    let app_dir = temp_dir.path().join("secondloop");
+
+    let key = auth::init_master_password(&app_dir, "pw", KdfParams::for_test()).expect("init");
+    let conn = db::open(&app_dir).expect("open db");
+
+    let processed = api::core::db_process_pending_todo_thread_embeddings_cloud_gateway(
+        app_dir.to_string_lossy().to_string(),
+        key.to_vec(),
+        32,
+        64,
+        server.base_url.clone(),
+        "test-id-token".to_string(),
+        "test-embed".to_string(),
+    )
+    .expect("process");
+    assert_eq!(processed, 0);
+
+    let active_model = db::get_active_embedding_model_name(&conn).expect("active model");
+    assert_eq!(active_model.as_deref(), Some("test-embed@v1"));
+
+    let cache = db::load_cloud_gateway_embeddings_cache(&conn).expect("load cache");
+    assert_eq!(cache.as_ref().map(|entry| entry.dim), Some(3));
+
+    let requests = server.finish();
+    assert_eq!(requests.len(), 1, "requests={requests:?}");
+    assert_eq!(requests[0].inputs, vec!["probe".to_string()]);
+}
+
+#[test]
+fn brok_bootstraps_active_model_even_without_pending_items() {
+    let server = EmbeddingsServer::start("/embeddings", "test-embed@v1", 3);
+
+    let temp_dir = tempfile::tempdir().expect("tempdir");
+    let app_dir = temp_dir.path().join("secondloop");
+
+    let key = auth::init_master_password(&app_dir, "pw", KdfParams::for_test()).expect("init");
+    let conn = db::open(&app_dir).expect("open db");
+
+    db::create_embedding_profile(
+        &conn,
+        &key,
+        "test",
+        "openai-compatible",
+        Some(&server.base_url),
+        Some("test-api-key"),
+        "test-embed",
+        true,
+    )
+    .expect("create profile");
+
+    let processed = api::core::db_process_pending_todo_thread_embeddings_brok(
+        app_dir.to_string_lossy().to_string(),
+        key.to_vec(),
+        32,
+        64,
+    )
+    .expect("process");
+    assert_eq!(processed, 0);
+
+    let active_model = db::get_active_embedding_model_name(&conn).expect("active model");
+    assert_eq!(active_model.as_deref(), Some("test-embed"));
+
+    let requests = server.finish();
+    assert_eq!(requests.len(), 1, "requests={requests:?}");
+    assert_eq!(requests[0].inputs, vec!["probe".to_string()]);
+}
