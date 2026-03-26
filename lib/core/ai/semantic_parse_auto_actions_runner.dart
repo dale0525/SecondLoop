@@ -376,7 +376,9 @@ final class SemanticParseAutoActionsRunner {
         );
         if (attemptId == null) {
           // The due-jobs snapshot is stale; another actor already claimed,
-          // canceled, or removed this job. Skip it and keep draining the batch.
+          // canceled, or removed this job. Treat that as external progress so
+          // the gate keeps draining instead of idling.
+          didUpdateJobs = true;
           continue;
         }
         didUpdateJobs = true;

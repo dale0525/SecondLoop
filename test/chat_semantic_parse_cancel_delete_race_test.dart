@@ -293,6 +293,13 @@ final class _RaceBackend extends NativeAppBackend {
   }
 
   @override
+  Future<int> requeueRunningSemanticParseJobs(
+    Uint8List key, {
+    required int nowMs,
+  }) async =>
+      0;
+
+  @override
   Future<void> markSemanticParseJobCanceled(
     Uint8List key, {
     required String messageId,

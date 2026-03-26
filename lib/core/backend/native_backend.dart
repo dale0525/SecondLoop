@@ -2699,6 +2699,20 @@ class NativeAppBackend extends _NativeAppBackendAccess
   }
 
   @override
+  Future<int> requeueRunningSemanticParseJobs(
+    Uint8List key, {
+    required int nowMs,
+  }) async {
+    final appDir = await _getAppDir();
+    final count = await rust_core.dbRequeueRunningSemanticParseJobs(
+      appDir: appDir,
+      key: key,
+      nowMs: PlatformInt64Util.from(nowMs),
+    );
+    return count.toInt();
+  }
+
+  @override
   Future<void> markSemanticParseJobUndone(
     Uint8List key, {
     required String messageId,

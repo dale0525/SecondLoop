@@ -1140,6 +1140,13 @@ abstract class AppBackend {
     throw UnimplementedError('markSemanticParseJobCanceled');
   }
 
+  Future<int> requeueRunningSemanticParseJobs(
+    Uint8List key, {
+    required int nowMs,
+  }) {
+    throw UnimplementedError('requeueRunningSemanticParseJobs');
+  }
+
   Future<void> markSemanticParseJobUndone(
     Uint8List key, {
     required String messageId,

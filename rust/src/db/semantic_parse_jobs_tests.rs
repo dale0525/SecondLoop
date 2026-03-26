@@ -23,13 +23,9 @@ fn semantic_parse_jobs_lifecycle_and_due_query() {
     let due_after_running = list_due_semantic_parse_jobs(&conn, now_ms + 1, 10).expect("list due");
     assert!(due_after_running.is_empty());
 
-    let stale_running_due =
-        list_due_semantic_parse_jobs(&conn, now_ms + 1 + SEMANTIC_PARSE_RUNNING_LEASE_MS + 1, 10)
-            .expect("list stale running due");
-    assert_eq!(stale_running_due.len(), 1);
-    assert_eq!(stale_running_due[0].message_id, "msg:1");
-    assert_eq!(stale_running_due[0].status, "running");
-    assert_eq!(stale_running_due[0].attempt_id, 1);
+    let running_due_later = list_due_semantic_parse_jobs(&conn, now_ms + 60_000, 10)
+        .expect("running jobs stay hidden from due query");
+    assert!(running_due_later.is_empty());
 
     mark_semantic_parse_job_failed(&conn, "msg:1", 1, now_ms + 120, "timeout", now_ms + 1)
         .expect("failed");
@@ -93,7 +89,7 @@ fn semantic_parse_jobs_lifecycle_and_due_query() {
 }
 
 #[test]
-fn semantic_parse_jobs_running_claim_uses_lease_and_clears_retry_state() {
+fn semantic_parse_jobs_running_recovery_requires_explicit_requeue_and_clears_retry_state() {
     let dir = tempdir().expect("tempdir");
     let conn = open(dir.path()).expect("open");
 
@@ -122,14 +118,23 @@ fn semantic_parse_jobs_running_claim_uses_lease_and_clears_retry_state() {
     assert!(due_fresh.is_empty());
     assert!(mark_semantic_parse_job_running(&conn, "msg:lease", now_ms + 121).is_err());
 
-    let stale_now = now_ms + 120 + SEMANTIC_PARSE_RUNNING_LEASE_MS + 1;
+    let stale_now = now_ms + 120 + 60_000;
     let due_stale = list_due_semantic_parse_jobs(&conn, stale_now, 10).expect("stale due");
-    assert_eq!(due_stale.len(), 1);
-    assert_eq!(due_stale[0].message_id, "msg:lease");
-    assert_eq!(due_stale[0].status, "running");
+    assert!(due_stale.is_empty());
+    assert!(mark_semantic_parse_job_running(&conn, "msg:lease", stale_now).is_err());
 
-    let third_attempt_id = mark_semantic_parse_job_running(&conn, "msg:lease", stale_now)
-        .expect("reclaim stale running");
+    let recovered = requeue_running_semantic_parse_jobs(&conn, stale_now).expect("recover running");
+    assert_eq!(recovered, 1);
+
+    let due_after_recovery =
+        list_due_semantic_parse_jobs(&conn, stale_now, 10).expect("due after recovery");
+    assert_eq!(due_after_recovery.len(), 1);
+    assert_eq!(due_after_recovery[0].message_id, "msg:lease");
+    assert_eq!(due_after_recovery[0].status, "pending");
+    assert_eq!(due_after_recovery[0].attempt_id, 2);
+
+    let third_attempt_id = mark_semantic_parse_job_running(&conn, "msg:lease", stale_now + 1)
+        .expect("reclaim recovered running");
     assert_eq!(third_attempt_id, 3);
 }
 

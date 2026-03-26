@@ -982,6 +982,13 @@ Future<void> dbMarkSemanticParseJobCanceled(
     RustLib.instance.api.crateApiCoreDbMarkSemanticParseJobCanceled(
         appDir: appDir, key: key, messageId: messageId, nowMs: nowMs);
 
+Future<PlatformInt64> dbRequeueRunningSemanticParseJobs(
+        {required String appDir,
+        required List<int> key,
+        required PlatformInt64 nowMs}) =>
+    RustLib.instance.api.crateApiCoreDbRequeueRunningSemanticParseJobs(
+        appDir: appDir, key: key, nowMs: nowMs);
+
 Future<bool> dbMarkSemanticParseJobCanceledIfCurrentAttempt(
         {required String appDir,
         required List<int> key,

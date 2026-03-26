@@ -10,7 +10,8 @@ import 'package:secondloop/core/session/session_scope.dart';
 import 'package:secondloop/src/rust/db.dart';
 
 void main() {
-  testWidgets('no-route gate cancels due pending/running semantic jobs',
+  testWidgets(
+      'no-route gate recovers running jobs before canceling due semantic jobs',
       (tester) async {
     SharedPreferences.setMockInitialValues({
       'semantic_parse_data_consent_v1': true,
@@ -19,8 +20,10 @@ void main() {
     final backend = _FakeSemanticParseGateBackend(
       dueJobs: <SemanticParseJob>[
         _job(messageId: 'm1', status: 'pending'),
-        _job(messageId: 'm2', status: 'running'),
         _job(messageId: 'm3', status: 'succeeded'),
+      ],
+      recoveredRunningJobs: <SemanticParseJob>[
+        _job(messageId: 'm2', status: 'pending'),
       ],
     );
 
@@ -41,9 +44,11 @@ void main() {
 
     await tester.pump();
     expect(backend.canceledMessageIds, isEmpty);
+    expect(backend.requeueCalls, 0);
 
     await tester.pump(const Duration(seconds: 3));
 
+    expect(backend.requeueCalls, 1);
     expect(backend.canceledMessageIds, containsAll(<String>['m1', 'm2']));
     expect(backend.canceledMessageIds, isNot(contains('m3')));
     expect(backend.releaseCalls, greaterThanOrEqualTo(1));
@@ -77,11 +82,17 @@ SemanticParseJob _job({
 
 final class _FakeSemanticParseGateBackend extends NativeAppBackend {
   _FakeSemanticParseGateBackend({
-    required this.dueJobs,
-  }) : super(appDirProvider: () async => '/tmp/secondloop-test');
+    required List<SemanticParseJob> dueJobs,
+    required List<SemanticParseJob> recoveredRunningJobs,
+  })  : _dueJobs = List<SemanticParseJob>.from(dueJobs),
+        _recoveredRunningJobs =
+            List<SemanticParseJob>.from(recoveredRunningJobs),
+        super(appDirProvider: () async => '/tmp/secondloop-test');
 
-  final List<SemanticParseJob> dueJobs;
+  final List<SemanticParseJob> _dueJobs;
+  final List<SemanticParseJob> _recoveredRunningJobs;
   final List<String> canceledMessageIds = <String>[];
+  int requeueCalls = 0;
   int releaseCalls = 0;
 
   @override
@@ -90,12 +101,24 @@ final class _FakeSemanticParseGateBackend extends NativeAppBackend {
   }
 
   @override
+  Future<int> requeueRunningSemanticParseJobs(
+    Uint8List key, {
+    required int nowMs,
+  }) async {
+    requeueCalls += 1;
+    _dueJobs.insertAll(0, _recoveredRunningJobs);
+    final count = _recoveredRunningJobs.length;
+    _recoveredRunningJobs.clear();
+    return count;
+  }
+
+  @override
   Future<List<SemanticParseJob>> listDueSemanticParseJobs(
     Uint8List key, {
     required int nowMs,
     int limit = 5,
   }) async {
-    return dueJobs.take(limit).toList(growable: false);
+    return _dueJobs.take(limit).toList(growable: false);
   }
 
   @override

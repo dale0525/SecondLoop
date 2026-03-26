@@ -1519,6 +1519,17 @@ pub fn db_mark_semantic_parse_job_canceled(
 }
 
 #[flutter_rust_bridge::frb]
+pub fn db_requeue_running_semantic_parse_jobs(
+    app_dir: String,
+    key: Vec<u8>,
+    now_ms: i64,
+) -> Result<i64> {
+    let _key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    db::requeue_running_semantic_parse_jobs(&conn, now_ms)
+}
+
+#[flutter_rust_bridge::frb]
 pub fn db_mark_semantic_parse_job_canceled_if_current_attempt(
     app_dir: String,
     key: Vec<u8>,
