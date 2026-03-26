@@ -53,6 +53,70 @@ void main() {
     expect(backend.canceledMessageIds, isNot(contains('m3')));
     expect(backend.releaseCalls, greaterThanOrEqualTo(1));
   });
+
+  testWidgets('gate re-runs running-job recovery after session changes', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({
+      'semantic_parse_data_consent_v1': true,
+    });
+
+    final backend = _FakeSemanticParseGateBackend(
+      dueJobs: <SemanticParseJob>[],
+      recoveredRunningJobs: <SemanticParseJob>[],
+    );
+    final hostKey = GlobalKey<_GateSessionHostState>();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: AppBackendScope(
+          backend: backend,
+          child: _GateSessionHost(key: hostKey, backend: backend),
+        ),
+      ),
+    );
+
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 3));
+
+    expect(backend.requeueCalls, 1);
+    expect(backend.requeueSessionKeys, <int>[1]);
+
+    hostKey.currentState!.updateSessionKey(2);
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 3));
+
+    expect(backend.requeueCalls, 2);
+    expect(backend.requeueSessionKeys, <int>[1, 2]);
+  });
+}
+
+final class _GateSessionHost extends StatefulWidget {
+  const _GateSessionHost({required this.backend, super.key});
+
+  final _FakeSemanticParseGateBackend backend;
+
+  @override
+  State<_GateSessionHost> createState() => _GateSessionHostState();
+}
+
+final class _GateSessionHostState extends State<_GateSessionHost> {
+  int _sessionSeed = 1;
+
+  void updateSessionKey(int nextSeed) {
+    setState(() {
+      _sessionSeed = nextSeed;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SessionScope(
+      sessionKey: Uint8List.fromList(List<int>.filled(32, _sessionSeed)),
+      lock: () {},
+      child: const SemanticParseAutoActionsGate(child: SizedBox.shrink()),
+    );
+  }
 }
 
 SemanticParseJob _job({
@@ -92,6 +156,7 @@ final class _FakeSemanticParseGateBackend extends NativeAppBackend {
   final List<SemanticParseJob> _dueJobs;
   final List<SemanticParseJob> _recoveredRunningJobs;
   final List<String> canceledMessageIds = <String>[];
+  final List<int> requeueSessionKeys = <int>[];
   int requeueCalls = 0;
   int releaseCalls = 0;
 
@@ -106,6 +171,7 @@ final class _FakeSemanticParseGateBackend extends NativeAppBackend {
     required int nowMs,
   }) async {
     requeueCalls += 1;
+    requeueSessionKeys.add(key.isEmpty ? -1 : key.first);
     _dueJobs.insertAll(0, _recoveredRunningJobs);
     final count = _recoveredRunningJobs.length;
     _recoveredRunningJobs.clear();

@@ -48,6 +48,8 @@ class _SemanticParseAutoActionsGateState
   bool _running = false;
   UpdateRestartBlockToken? _restartBlockToken;
   bool _didRecoverRunningJobs = false;
+  NativeAppBackend? _recoveryBackend;
+  Uint8List? _recoverySessionKey;
 
   SyncEngine? _syncEngine;
   VoidCallback? _syncListener;
@@ -98,11 +100,23 @@ class _SemanticParseAutoActionsGateState
 
     final backend = AppBackendScope.of(context);
     if (backend is! NativeAppBackend) {
+      _recoveryBackend = null;
+      _recoverySessionKey = null;
+      _didRecoverRunningJobs = false;
       _detachSyncEngine();
       _timer?.cancel();
       _timer = null;
       _nextRunAt = null;
       return;
+    }
+
+    final sessionKey = SessionScope.of(context).sessionKey;
+    final didRecoveryContextChange = !identical(backend, _recoveryBackend) ||
+        !_sameSessionKey(sessionKey, _recoverySessionKey);
+    if (didRecoveryContextChange) {
+      _recoveryBackend = backend;
+      _recoverySessionKey = Uint8List.fromList(sessionKey);
+      _didRecoverRunningJobs = false;
     }
 
     _attachSyncEngine(SyncEngineScope.maybeOf(context));
@@ -317,6 +331,14 @@ class _SemanticParseAutoActionsGateState
       _restartBlockToken = null;
       _running = false;
     }
+  }
+
+  static bool _sameSessionKey(Uint8List current, Uint8List? previous) {
+    if (previous == null || current.length != previous.length) return false;
+    for (var i = 0; i < current.length; i += 1) {
+      if (current[i] != previous[i]) return false;
+    }
+    return true;
   }
 
   Future<bool> _recoverRunningSemanticParseJobs(

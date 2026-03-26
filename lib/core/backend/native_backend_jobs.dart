@@ -1,10 +1,5 @@
 part of 'native_backend.dart';
 
-bool _isSemanticParseJobClaimConflict(Object error) {
-  final message = error.toString().toLowerCase();
-  return message.contains('not claimable');
-}
-
 mixin _NativeAppBackendJobs on _NativeAppBackendAccess
     implements SemanticParseAttemptAwareBackend {
   @override
@@ -216,20 +211,13 @@ mixin _NativeAppBackendJobs on _NativeAppBackendAccess
     required int nowMs,
   }) async {
     final appDir = await _getAppDir();
-    try {
-      final attemptId = await rust_core.dbClaimSemanticParseJobRunning(
-        appDir: appDir,
-        key: key,
-        messageId: messageId,
-        nowMs: PlatformInt64Util.from(nowMs),
-      );
-      return attemptId.toInt();
-    } on AnyhowException catch (error) {
-      if (_isSemanticParseJobClaimConflict(error)) {
-        return null;
-      }
-      rethrow;
-    }
+    final attemptId = await rust_core.dbClaimSemanticParseJobRunning(
+      appDir: appDir,
+      key: key,
+      messageId: messageId,
+      nowMs: PlatformInt64Util.from(nowMs),
+    );
+    return attemptId.toInt();
   }
 
   @override

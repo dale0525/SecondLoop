@@ -550,11 +550,23 @@ final class BackendSemanticParseAutoActionsStore
   }) async {
     if (_backend is SemanticParseAttemptAwareBackend) {
       final awareBackend = _backend as SemanticParseAttemptAwareBackend;
-      return awareBackend.claimSemanticParseJobRunning(
-        _sessionKey,
-        messageId: messageId,
-        nowMs: nowMs,
-      );
+      try {
+        return await awareBackend.claimSemanticParseJobRunning(
+          _sessionKey,
+          messageId: messageId,
+          nowMs: nowMs,
+        );
+      } catch (error) {
+        final currentJob = await getJob(messageId);
+        final currentStatus = currentJob?.status.trim().toLowerCase();
+        if (currentJob == null ||
+            currentStatus == 'running' ||
+            currentStatus == 'canceled' ||
+            currentStatus == 'succeeded') {
+          return null;
+        }
+        rethrow;
+      }
     }
 
     await _backend.markSemanticParseJobRunning(
