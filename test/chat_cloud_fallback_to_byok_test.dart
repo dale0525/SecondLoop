@@ -72,9 +72,68 @@ void main() {
         findsOneWidget);
     expect(find.textContaining('HTTP 402'), findsNothing);
   });
+
+  testWidgets(
+      'Ask AI enters detached recovery instead of BYOK fallback after cloud request id is attached',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({
+      'ask_ai_data_consent_v1': true,
+      'embeddings_data_consent_v1': false,
+    });
+
+    final backend = _CloudFallbackBackend(emitRequestIdBeforeFailure: true);
+    final cloudAuth = _FakeCloudAuthController(idToken: 'test-id-token');
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: backend,
+            child: CloudAuthScope(
+              controller: cloudAuth,
+              gatewayConfig: const CloudGatewayConfig(
+                baseUrl: 'https://gateway.test',
+                modelName: 'gpt-test',
+              ),
+              child: SessionScope(
+                sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+                lock: () {},
+                child: const ChatPage(
+                  conversation: Conversation(
+                    id: 'loop_home',
+                    title: 'Loop',
+                    createdAtMs: 0,
+                    updatedAtMs: 0,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.byKey(const ValueKey('chat_input')), 'hello?');
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('chat_ask_ai')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 20));
+    await tester.pump();
+
+    expect(
+        backend.calls.where((call) => call == 'askAiStreamCloudGateway').length,
+        1);
+    expect(backend.calls, isNot(contains('askAiStream')));
+    expect(find.byKey(const ValueKey('ask_ai_cloud_fallback_snack')),
+        findsNothing);
+  });
 }
 
 final class _CloudFallbackBackend extends AppBackend {
+  _CloudFallbackBackend({this.emitRequestIdBeforeFailure = false});
+
+  final bool emitRequestIdBeforeFailure;
   final List<String> calls = <String>[];
 
   @override
@@ -244,13 +303,19 @@ final class _CloudFallbackBackend extends AppBackend {
     required String modelName,
   }) {
     calls.add('askAiStreamCloudGateway');
-    return Stream<String>.fromFuture(
-      Future<String>.delayed(
-        const Duration(milliseconds: 10),
-        () =>
-            '${_kAskAiErrorPrefix}cloud-gateway request failed: HTTP 402 {"error":"entitlement_required"}',
-      ),
-    );
+    if (!emitRequestIdBeforeFailure) {
+      return Stream<String>.fromFuture(
+        Future<String>.delayed(
+          const Duration(milliseconds: 10),
+          () =>
+              '${_kAskAiErrorPrefix}cloud-gateway request failed: HTTP 402 {"error":"entitlement_required"}',
+        ),
+      );
+    }
+    return Stream<String>.fromIterable(const <String>[
+      'SL_META{"type":"cloud_request_id","request_id":"req_123456"}',
+      '${_kAskAiErrorPrefix}cloud-gateway request failed: HTTP 402 {"error":"entitlement_required"}',
+    ]);
   }
 
   @override

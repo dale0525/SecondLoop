@@ -16,6 +16,7 @@ pub mod knowledge;
 pub mod media_annotation;
 pub mod migration_archive;
 pub mod oplog_maintenance;
+pub mod remote_embedding_bootstrap;
 pub mod simple;
 pub mod sync_diagnostics;
 pub mod sync_progress;

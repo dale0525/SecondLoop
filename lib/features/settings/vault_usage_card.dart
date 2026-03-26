@@ -278,6 +278,7 @@ class _VaultUsageCardState extends State<VaultUsageCard> {
 
   bool get _busy => _activeRefreshTokens.isNotEmpty;
   String? _resolvedVaultBaseUrl;
+  String? _pendingResolvedVaultBaseUrl;
   VaultUsageSummary? _summary;
   Object? _summaryError;
 
@@ -415,9 +416,16 @@ class _VaultUsageCardState extends State<VaultUsageCard> {
 
   void _scheduleVaultBaseUrlSync(String baseUrl, {required String? uid}) {
     final normalizedBaseUrl = baseUrl.trim();
-    if (_resolvedVaultBaseUrl == normalizedBaseUrl) return;
+    if (_resolvedVaultBaseUrl == normalizedBaseUrl ||
+        _pendingResolvedVaultBaseUrl == normalizedBaseUrl) {
+      return;
+    }
+    _pendingResolvedVaultBaseUrl = normalizedBaseUrl;
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_pendingResolvedVaultBaseUrl == normalizedBaseUrl) {
+        _pendingResolvedVaultBaseUrl = null;
+      }
       if (!mounted || _resolvedVaultBaseUrl == normalizedBaseUrl) return;
       setState(() {
         _resolvedVaultBaseUrl = normalizedBaseUrl;
@@ -687,7 +695,7 @@ class _VaultUsageCardState extends State<VaultUsageCard> {
       _resetLoadedState(invalidateRefreshes: true);
       _localAttachmentBySha = <String, Attachment>{};
       _localMessageIdByAttachmentSha = <String, String>{};
-      if (uid != null) {
+      if (uid != null && (_resolvedVaultBaseUrl?.trim().isNotEmpty ?? false)) {
         unawaited(_refresh());
       }
     }

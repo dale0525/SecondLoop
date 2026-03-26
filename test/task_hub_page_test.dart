@@ -8,6 +8,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:secondloop/core/ai/ai_routing.dart';
 import 'package:secondloop/core/backend/app_backend.dart';
 import 'package:secondloop/core/session/session_scope.dart';
+import 'package:secondloop/core/sync/sync_engine.dart';
+import 'package:secondloop/core/sync/sync_engine_gate.dart';
 import 'package:secondloop/features/actions/task_hub/task_hub_page.dart';
 import 'package:secondloop/features/actions/task_hub/task_priority_ai.dart';
 import 'package:secondloop/features/actions/task_hub/task_priority_ai_models.dart';
@@ -913,6 +915,52 @@ void main() {
     expect(deleteIcon.color, expectedColor);
   });
 
+  testWidgets('task hub debounces sync-driven refresh bursts', (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final backend = _TaskHubBackend(
+      todos: const <Todo>[
+        Todo(
+          id: 'focus',
+          title: 'Fix prod issue',
+          dueAtMs: null,
+          status: 'open',
+          sourceEntryId: null,
+          createdAtMs: 0,
+          updatedAtMs: 10,
+          reviewStage: null,
+          nextReviewAtMs: null,
+          lastReviewAtMs: null,
+        ),
+      ],
+      llmProfiles: const <LlmProfile>[],
+    );
+    final engine = SyncEngine(
+      syncRunner: _NoopSyncRunner(),
+      loadConfig: () async => null,
+      pullOnStart: false,
+    );
+
+    await tester.pumpWidget(_wrap(backend, syncEngine: engine));
+    await _pumpUntilTaskHubReady(tester);
+
+    final initialListTodosCalls = backend.listTodosCallCount;
+
+    engine.notifyLocalMutation();
+    engine.notifyLocalMutation();
+    engine.notifyLocalMutation();
+    await tester.pump(const Duration(milliseconds: 100));
+
+    expect(backend.listTodosCallCount, initialListTodosCalls);
+
+    await tester.pump(const Duration(milliseconds: 300));
+    await _pumpUntil(
+      tester,
+      () => backend.listTodosCallCount > initialListTodosCalls,
+    );
+
+    expect(backend.listTodosCallCount, initialListTodosCalls + 1);
+  });
+
   testWidgets('task hub loads done todos in batches on demand', (tester) async {
     SharedPreferences.setMockInitialValues({});
     final backend = _TaskHubBackend(
@@ -959,7 +1007,7 @@ void main() {
   });
 }
 
-Widget _wrap(AppBackend backend) {
+Widget _wrap(AppBackend backend, {SyncEngine? syncEngine}) {
   return wrapWithI18n(
     MaterialApp(
       home: AppBackendScope(
@@ -967,7 +1015,10 @@ Widget _wrap(AppBackend backend) {
         child: SessionScope(
           sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
           lock: () {},
-          child: const TaskHubPage(),
+          child: SyncEngineScope(
+            engine: syncEngine,
+            child: const TaskHubPage(),
+          ),
         ),
       ),
     ),
@@ -1000,6 +1051,7 @@ final class _TaskHubBackend extends TestAppBackend {
             ]);
 
   final Map<String, Todo> _todos;
+  int listTodosCallCount = 0;
   final List<TodoChecklistProgress> _checklistProgress;
   final List<LlmProfile> _llmProfiles;
   final bool failTransition;
@@ -1010,8 +1062,10 @@ final class _TaskHubBackend extends TestAppBackend {
       List<LlmProfile>.from(_llmProfiles);
 
   @override
-  Future<List<Todo>> listTodos(Uint8List key) async =>
-      _todos.values.toList(growable: false);
+  Future<List<Todo>> listTodos(Uint8List key) async {
+    listTodosCallCount += 1;
+    return _todos.values.toList(growable: false);
+  }
 
   @override
   Future<List<TodoChecklistProgress>> listTodoChecklistProgress(
@@ -1143,4 +1197,12 @@ final class _TaskHubBackend extends TestAppBackend {
     _todos[todoId] = updated;
     return updated;
   }
+}
+
+final class _NoopSyncRunner implements SyncRunner {
+  @override
+  Future<int> pull(SyncConfig config) async => 0;
+
+  @override
+  Future<int> push(SyncConfig config) async => 0;
 }

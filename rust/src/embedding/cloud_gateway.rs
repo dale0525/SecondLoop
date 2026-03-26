@@ -100,6 +100,14 @@ pub struct CloudGatewayEmbedder {
 }
 
 impl CloudGatewayEmbedder {
+    pub fn learned_model_name(&self) -> Option<&str> {
+        self.effective_model_id.get().map(|value| value.as_str())
+    }
+
+    pub fn learned_dim(&self) -> Option<usize> {
+        self.dim.get().copied()
+    }
+
     pub fn new(gateway_base_url: String, id_token: String, model_name: String) -> Self {
         Self {
             client: Client::new(),

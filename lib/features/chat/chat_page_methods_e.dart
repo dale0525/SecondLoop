@@ -432,7 +432,12 @@ extension _ChatPageStateMethodsE on _ChatPageState {
             return;
           }
 
-          if (fromCloud && hasByok && isCloudFallbackableError(e)) {
+          final activeCloudRequestId = _activeCloudRequestId?.trim() ?? '';
+
+          if (fromCloud &&
+              hasByok &&
+              activeCloudRequestId.isEmpty &&
+              isCloudFallbackableError(e)) {
             final message = switch (cloudStatus) {
               401 => context.t.chat.cloudGateway.fallback.auth,
               402 => context.t.chat.cloudGateway.fallback.entitlement,

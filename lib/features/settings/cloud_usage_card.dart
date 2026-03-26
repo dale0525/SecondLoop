@@ -80,6 +80,8 @@ class _CloudUsageCardState extends State<CloudUsageCard> {
   var _ownsClient = false;
   final Set<int> _activeRefreshTokens = <int>{};
   int _refreshEpoch = 0;
+  Future<void>? _inflightRefresh;
+  String? _activeRefreshKey;
 
   bool get _busy => _activeRefreshTokens.isNotEmpty;
   CloudUsageSummary? _summary;
@@ -180,34 +182,53 @@ class _CloudUsageCardState extends State<CloudUsageCard> {
       idToken = null;
     }
     if (idToken == null || idToken.trim().isEmpty) return;
+    final resolvedIdToken = idToken.trim();
+
+    final refreshKey =
+        '${controller.uid ?? ''}|${baseUrl.trim()}|$resolvedIdToken|${identityHashCode(_client)}';
+    if (_inflightRefresh != null && _activeRefreshKey == refreshKey) {
+      return _inflightRefresh!;
+    }
 
     final refreshEpoch = ++_refreshEpoch;
     final requestClient = _client;
+    _activeRefreshKey = refreshKey;
     _markRefreshStarted(refreshEpoch);
-    try {
-      final summary = await requestClient.fetchUsageSummary(
-        cloudGatewayBaseUrl: baseUrl,
-        idToken: idToken,
-      );
-      final shouldApply = mounted &&
-          refreshEpoch == _refreshEpoch &&
-          identical(requestClient, _client);
-      if (shouldApply) {
-        setState(() {
-          _summary = summary;
-          _error = null;
-        });
+    final refreshFuture = () async {
+      try {
+        final summary = await requestClient.fetchUsageSummary(
+          cloudGatewayBaseUrl: baseUrl,
+          idToken: resolvedIdToken,
+        );
+        final shouldApply = mounted &&
+            refreshEpoch == _refreshEpoch &&
+            identical(requestClient, _client);
+        if (shouldApply) {
+          setState(() {
+            _summary = summary;
+            _error = null;
+          });
+        }
+      } catch (e) {
+        final shouldApply = mounted &&
+            refreshEpoch == _refreshEpoch &&
+            identical(requestClient, _client);
+        if (shouldApply) {
+          setState(() => _error = e);
+        }
       }
-    } catch (e) {
-      final shouldApply = mounted &&
-          refreshEpoch == _refreshEpoch &&
-          identical(requestClient, _client);
-      if (shouldApply) {
-        setState(() => _error = e);
-      }
-    } finally {
+    }();
+
+    late final Future<void> inflightRefresh;
+    inflightRefresh = refreshFuture.whenComplete(() {
       _markRefreshFinished(refreshEpoch);
-    }
+      if (identical(_inflightRefresh, inflightRefresh)) {
+        _inflightRefresh = null;
+        _activeRefreshKey = null;
+      }
+    });
+    _inflightRefresh = inflightRefresh;
+    return inflightRefresh;
   }
 
   @override

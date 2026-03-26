@@ -1,5 +1,6 @@
 use std::path::{Path, PathBuf};
 
+use crate::api::remote_embedding_bootstrap;
 use crate::crypto::{derive_root_key, KdfParams};
 use crate::embedding;
 use crate::embedding::Embedder;
@@ -2135,101 +2136,15 @@ pub fn db_process_pending_todo_thread_embeddings_cloud_gateway(
 
     let key = key_from_bytes(key)?;
     let conn = db::open(Path::new(&app_dir))?;
-    let embedder = embedding::CloudGatewayEmbedder::new(
-        gateway_base_url.clone(),
-        firebase_id_token.clone(),
-        requested_model_name.clone(),
-    );
-
-    let mut dim: Option<usize> = None;
-    let mut used_cache = false;
-
-    if let Some(cache) = db::load_cloud_gateway_embeddings_cache(&conn)? {
-        if cache.base_url == gateway_base_url && cache.requested_model_name == requested_model_name
-        {
-            embedder.seed_effective_model_id_and_dim(&cache.effective_model_id, cache.dim);
-            dim = Some(cache.dim);
-            used_cache = true;
-        }
-    }
-
-    let dim = match dim {
-        Some(dim) => dim,
-        None => {
-            // Avoid wiping the current index if the embedder is misconfigured/unreachable.
-            let probe = embedder.embed(&["probe".to_string()])?;
-            let dim = probe.first().map(|v| v.len()).unwrap_or(0);
-            if dim == 0 {
-                return Err(anyhow!("cloud-gateway embedder returned empty embeddings"));
-            }
-            db::store_cloud_gateway_embeddings_cache(
-                &conn,
-                &gateway_base_url,
-                &requested_model_name,
-                embedder.model_name(),
-                dim,
-            )?;
-            dim
-        }
-    };
-
-    db::set_active_embedding_model(&conn, embedder.model_name(), dim)?;
-
-    let result = (|| -> Result<u32> {
-        let todos =
-            db::process_pending_todo_embeddings(&conn, &key, &embedder, todo_limit as usize)?;
-        let activities = db::process_pending_todo_activity_embeddings(
-            &conn,
-            &key,
-            &embedder,
-            activity_limit as usize,
-        )?;
-        Ok(todos.saturating_add(activities) as u32)
-    })();
-
-    match result {
-        Ok(v) => Ok(v),
-        Err(e) => {
-            let msg = e.to_string();
-            if used_cache
-                && (msg.contains("cloud-gateway embedding model_id mismatch")
-                    || msg.contains("cloud-gateway embedding dim mismatch"))
-            {
-                // Model/dim changed upstream; re-probe and retry once.
-                let fresh = embedding::CloudGatewayEmbedder::new(
-                    gateway_base_url.clone(),
-                    firebase_id_token.clone(),
-                    requested_model_name.clone(),
-                );
-
-                let probe = fresh.embed(&["probe".to_string()])?;
-                let dim = probe.first().map(|v| v.len()).unwrap_or(0);
-                if dim == 0 {
-                    return Err(anyhow!("cloud-gateway embedder returned empty embeddings"));
-                }
-
-                db::store_cloud_gateway_embeddings_cache(
-                    &conn,
-                    &gateway_base_url,
-                    &requested_model_name,
-                    fresh.model_name(),
-                    dim,
-                )?;
-                db::set_active_embedding_model(&conn, fresh.model_name(), dim)?;
-
-                let todos =
-                    db::process_pending_todo_embeddings(&conn, &key, &fresh, todo_limit as usize)?;
-                let activities = db::process_pending_todo_activity_embeddings(
-                    &conn,
-                    &key,
-                    &fresh,
-                    activity_limit as usize,
-                )?;
-                return Ok(todos.saturating_add(activities) as u32);
-            }
-            Err(e)
-        }
-    }
+    remote_embedding_bootstrap::process_cloud_gateway_pending_todo_thread_embeddings(
+        &conn,
+        &key,
+        todo_limit as usize,
+        activity_limit as usize,
+        &gateway_base_url,
+        &firebase_id_token,
+        &requested_model_name,
+    )
 }
 
 #[flutter_rust_bridge::frb]
@@ -2262,64 +2177,15 @@ pub fn db_process_pending_todo_thread_embeddings_brok(
         .ok_or_else(|| anyhow!("missing embedding api_key"))?;
     let model_name = profile.model_name;
 
-    let embedder = embedding::BrokEmbedder::new(base_url, api_key, model_name);
-    let cached_dim = db::lookup_embedding_space_dim(&conn, embedder.model_name())?;
-    let used_cache = cached_dim.is_some();
-
-    let dim = match cached_dim {
-        Some(dim) => dim,
-        None => {
-            // Avoid wiping the current index if the embedder is misconfigured/unreachable.
-            let probe = embedder.embed(&["probe".to_string()])?;
-            let dim = probe.first().map(|v| v.len()).unwrap_or(0);
-            if dim == 0 {
-                return Err(anyhow!("brok embedder returned empty embeddings"));
-            }
-            dim
-        }
-    };
-
-    db::set_active_embedding_model(&conn, embedder.model_name(), dim)?;
-
-    let result = (|| -> Result<u32> {
-        let todos =
-            db::process_pending_todo_embeddings(&conn, &key, &embedder, todo_limit as usize)?;
-        let activities = db::process_pending_todo_activity_embeddings(
-            &conn,
-            &key,
-            &embedder,
-            activity_limit as usize,
-        )?;
-        Ok(todos.saturating_add(activities) as u32)
-    })();
-
-    match result {
-        Ok(v) => Ok(v),
-        Err(e) => {
-            let msg = e.to_string();
-            if used_cache && msg.contains("embedder dim mismatch") {
-                // Dim likely changed for the same model_name; retry once with the actual dim.
-                let actual_dim = embedder.dim();
-                if actual_dim > 0 && actual_dim <= 8192 && actual_dim != dim {
-                    db::set_active_embedding_model(&conn, embedder.model_name(), actual_dim)?;
-                    let todos = db::process_pending_todo_embeddings(
-                        &conn,
-                        &key,
-                        &embedder,
-                        todo_limit as usize,
-                    )?;
-                    let activities = db::process_pending_todo_activity_embeddings(
-                        &conn,
-                        &key,
-                        &embedder,
-                        activity_limit as usize,
-                    )?;
-                    return Ok(todos.saturating_add(activities) as u32);
-                }
-            }
-            Err(e)
-        }
-    }
+    remote_embedding_bootstrap::process_brok_pending_todo_thread_embeddings(
+        &conn,
+        &key,
+        todo_limit as usize,
+        activity_limit as usize,
+        &base_url,
+        &api_key,
+        &model_name,
+    )
 }
 
 #[flutter_rust_bridge::frb]
