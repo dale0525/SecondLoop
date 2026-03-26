@@ -370,10 +370,17 @@ final class SemanticParseAutoActionsRunner {
 
       int? attemptId;
       try {
-        attemptId = await store.claimJobRunning(
-          messageId: job.messageId,
-          nowMs: nowMs,
-        );
+        try {
+          attemptId = await store.claimJobRunning(
+            messageId: job.messageId,
+            nowMs: nowMs,
+          );
+        } catch (error) {
+          if (_isStaleClaimConflict(error)) {
+            continue;
+          }
+          rethrow;
+        }
         didUpdateJobs = true;
 
         List<String> preferredTodoIds = const <String>[];
@@ -748,6 +755,11 @@ final class SemanticParseAutoActionsRunner {
       default:
         return const Duration(hours: 8).inMilliseconds;
     }
+  }
+
+  static bool _isStaleClaimConflict(Object error) {
+    final message = error.toString().toLowerCase();
+    return message.contains('not claimable');
   }
 
   Future<bool> _isStillRunningAttempt({

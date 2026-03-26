@@ -333,6 +333,59 @@ void main() {
     expect(store.currentJobUpdatedAtMs('msg:finalize_race'), 1002);
   });
 
+  test('runner skips stale claim conflict and continues later jobs', () async {
+    final store = _FakeStore(
+      jobs: const [
+        SemanticParseAutoActionJob(
+          messageId: 'msg:claim_conflict',
+          status: 'pending',
+          attempts: 0,
+          nextRetryAtMs: null,
+          createdAtMs: 0,
+        ),
+        SemanticParseAutoActionJob(
+          messageId: 'msg:after_conflict',
+          status: 'pending',
+          attempts: 0,
+          nextRetryAtMs: null,
+          createdAtMs: 1,
+        ),
+      ],
+      messages: const {
+        'msg:claim_conflict': 'ignored',
+        'msg:after_conflict': '买牛奶',
+      },
+      claimConflictMessageIds: const {'msg:claim_conflict'},
+    );
+    final client = _FakeClient(
+      responseJson:
+          '{"kind":"create","confidence":1.0,"title":"买牛奶","status":"inbox","due_local_iso":null}',
+    );
+
+    final runner = SemanticParseAutoActionsRunner(
+      store: store,
+      client: client,
+      settings: const SemanticParseAutoActionsRunnerSettings(
+        hardTimeout: Duration(milliseconds: 200),
+        minAutoConfidence: 0.86,
+      ),
+      nowMs: () => 1000,
+      nowLocal: () => DateTime(2026, 2, 3, 12, 0, 0),
+    );
+
+    final result = await runner.runOnce(
+      localeTag: 'zh-CN',
+      dayEndMinutes: 21 * 60,
+    );
+
+    expect(result.processed, 1);
+    expect(result.didMutateAny, isTrue);
+    expect(result.didUpdateJobs, isTrue);
+    expect(store.createdTodoIds, contains('todo:msg:after_conflict'));
+    expect(store.lastFailed, isNull);
+    expect(store.lastSucceeded?.messageId, 'msg:after_conflict');
+  });
+
   test('runner ignores late failure after job is retried mid-run', () async {
     final store = _FakeStore(
       jobs: [
@@ -893,6 +946,7 @@ final class _FakeStore implements SemanticParseAutoActionsStore {
         const <SemanticParseTodoCandidate>[],
     Map<String, String> previousStatusByTodoId = const <String, String>{},
     Map<String, String>? upsertTodoResultByMessageId,
+    Set<String> claimConflictMessageIds = const <String>{},
     this.beforeMarkSucceededIfCurrentAttempt,
   })  : _jobs = List<SemanticParseAutoActionJob>.from(jobs),
         _messages = Map<String, String>.from(messages),
@@ -903,7 +957,8 @@ final class _FakeStore implements SemanticParseAutoActionsStore {
         _previousStatusByTodoId =
             Map<String, String>.from(previousStatusByTodoId),
         _upsertTodoResultByMessageId =
-            Map<String, String>.from(upsertTodoResultByMessageId ?? const {});
+            Map<String, String>.from(upsertTodoResultByMessageId ?? const {}),
+        _claimConflictMessageIds = Set<String>.from(claimConflictMessageIds);
 
   final List<SemanticParseAutoActionJob> _jobs;
   final Map<String, String> _messages;
@@ -911,6 +966,7 @@ final class _FakeStore implements SemanticParseAutoActionsStore {
   final List<SemanticParseTodoCandidate> _openCandidates;
   final Map<String, String> _previousStatusByTodoId;
   final Map<String, String> _upsertTodoResultByMessageId;
+  final Set<String> _claimConflictMessageIds;
   void Function(String messageId, int expectedAttemptId, int nowMs)?
       beforeMarkSucceededIfCurrentAttempt;
 
@@ -970,6 +1026,9 @@ final class _FakeStore implements SemanticParseAutoActionsStore {
     required String messageId,
     required int nowMs,
   }) async {
+    if (_claimConflictMessageIds.contains(messageId)) {
+      throw StateError('semantic parse job is not claimable: $messageId');
+    }
     return markRunningAttempt(messageId, nowMs: nowMs);
   }
 
