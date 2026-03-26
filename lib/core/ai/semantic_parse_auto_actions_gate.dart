@@ -47,6 +47,9 @@ class _SemanticParseAutoActionsGateState
   DateTime? _nextRunAt;
   bool _running = false;
   UpdateRestartBlockToken? _restartBlockToken;
+  bool _didRecoverRunningJobs = false;
+  NativeAppBackend? _recoveryBackend;
+  Uint8List? _recoverySessionKey;
 
   SyncEngine? _syncEngine;
   VoidCallback? _syncListener;
@@ -97,11 +100,23 @@ class _SemanticParseAutoActionsGateState
 
     final backend = AppBackendScope.of(context);
     if (backend is! NativeAppBackend) {
+      _recoveryBackend = null;
+      _recoverySessionKey = null;
+      _didRecoverRunningJobs = false;
       _detachSyncEngine();
       _timer?.cancel();
       _timer = null;
       _nextRunAt = null;
       return;
+    }
+
+    final sessionKey = SessionScope.of(context).sessionKey;
+    final didRecoveryContextChange = !identical(backend, _recoveryBackend) ||
+        !_sameSessionKey(sessionKey, _recoverySessionKey);
+    if (didRecoveryContextChange) {
+      _recoveryBackend = backend;
+      _recoverySessionKey = Uint8List.fromList(sessionKey);
+      _didRecoverRunningJobs = false;
     }
 
     _attachSyncEngine(SyncEngineScope.maybeOf(context));
@@ -163,6 +178,10 @@ class _SemanticParseAutoActionsGateState
     _restartBlockToken = UpdateRestartActivity.blockAiAnalysis();
     try {
       final prefs = await SharedPreferences.getInstance();
+      final didRecoverRunningJobs = await _recoverRunningSemanticParseJobs(
+        backend,
+        sessionKey: sessionKey,
+      );
       final enabled =
           prefs.getBool(SemanticParseDataConsentPrefs.prefsKey) ?? false;
       if (!enabled || !mounted) {
@@ -170,10 +189,11 @@ class _SemanticParseAutoActionsGateState
           backend,
           sessionKey: sessionKey,
         );
-        if (canceled) {
+        final didUpdateJobs = didRecoverRunningJobs || canceled;
+        if (didUpdateJobs) {
           syncEngine?.notifyExternalChange();
         }
-        _schedule(_kIdleInterval);
+        _schedule(didUpdateJobs ? _kDrainInterval : _kIdleInterval);
         return;
       }
 
@@ -207,10 +227,11 @@ class _SemanticParseAutoActionsGateState
           backend,
           sessionKey: sessionKey,
         );
-        if (canceled) {
+        final didUpdateJobs = didRecoverRunningJobs || canceled;
+        if (didUpdateJobs) {
           syncEngine?.notifyExternalChange();
         }
-        _schedule(_kIdleInterval);
+        _schedule(didUpdateJobs ? _kDrainInterval : _kIdleInterval);
         return;
       }
 
@@ -282,13 +303,14 @@ class _SemanticParseAutoActionsGateState
       );
       if (!mounted) return;
 
+      final didUpdateJobs = didRecoverRunningJobs || result.didUpdateJobs;
       if (result.didMutateAny) {
         syncEngine?.notifyLocalMutation();
-      } else if (result.didUpdateJobs) {
+      } else if (didUpdateJobs) {
         syncEngine?.notifyExternalChange();
       }
 
-      if (!result.didUpdateJobs) {
+      if (!didUpdateJobs) {
         _schedule(_kIdleInterval);
         return;
       }
@@ -308,6 +330,34 @@ class _SemanticParseAutoActionsGateState
       _restartBlockToken?.release();
       _restartBlockToken = null;
       _running = false;
+    }
+  }
+
+  static bool _sameSessionKey(Uint8List current, Uint8List? previous) {
+    if (previous == null || current.length != previous.length) return false;
+    for (var i = 0; i < current.length; i += 1) {
+      if (current[i] != previous[i]) return false;
+    }
+    return true;
+  }
+
+  Future<bool> _recoverRunningSemanticParseJobs(
+    NativeAppBackend backend, {
+    required Uint8List sessionKey,
+  }) async {
+    if (_didRecoverRunningJobs) return false;
+    try {
+      final recovered = await backend.requeueRunningSemanticParseJobs(
+        Uint8List.fromList(sessionKey),
+        nowMs: DateTime.now().millisecondsSinceEpoch,
+      );
+      _didRecoverRunningJobs = true;
+      return recovered > 0;
+    } catch (error, stackTrace) {
+      debugPrint(
+        'requeueRunningSemanticParseJobs failed: $error\n$stackTrace',
+      );
+      return false;
     }
   }
 

@@ -864,6 +864,14 @@ Future<void> dbMarkSemanticParseJobRunning(
     RustLib.instance.api.crateApiCoreDbMarkSemanticParseJobRunning(
         appDir: appDir, key: key, messageId: messageId, nowMs: nowMs);
 
+Future<PlatformInt64> dbClaimSemanticParseJobRunning(
+        {required String appDir,
+        required List<int> key,
+        required String messageId,
+        required PlatformInt64 nowMs}) =>
+    RustLib.instance.api.crateApiCoreDbClaimSemanticParseJobRunning(
+        appDir: appDir, key: key, messageId: messageId, nowMs: nowMs);
+
 Future<void> dbMarkSemanticParseJobFailed(
         {required String appDir,
         required List<int> key,
@@ -880,6 +888,26 @@ Future<void> dbMarkSemanticParseJobFailed(
         nextRetryAtMs: nextRetryAtMs,
         lastError: lastError,
         nowMs: nowMs);
+
+Future<bool> dbMarkSemanticParseJobFailedIfCurrentAttempt(
+        {required String appDir,
+        required List<int> key,
+        required String messageId,
+        required PlatformInt64 expectedAttemptId,
+        required PlatformInt64 attempts,
+        required PlatformInt64 nextRetryAtMs,
+        required String lastError,
+        required PlatformInt64 nowMs}) =>
+    RustLib.instance.api
+        .crateApiCoreDbMarkSemanticParseJobFailedIfCurrentAttempt(
+            appDir: appDir,
+            key: key,
+            messageId: messageId,
+            expectedAttemptId: expectedAttemptId,
+            attempts: attempts,
+            nextRetryAtMs: nextRetryAtMs,
+            lastError: lastError,
+            nowMs: nowMs);
 
 Future<void> dbMarkSemanticParseJobRetry(
         {required String appDir,
@@ -916,6 +944,36 @@ Future<void> dbMarkSemanticParseJobSucceeded(
         appliedTagIds: appliedTagIds,
         nowMs: nowMs);
 
+Future<bool> dbMarkSemanticParseJobSucceededIfCurrentAttempt(
+        {required String appDir,
+        required List<int> key,
+        required String messageId,
+        required PlatformInt64 expectedAttemptId,
+        required String appliedActionKind,
+        String? appliedTodoId,
+        String? appliedTodoTitle,
+        String? appliedPrevTodoStatus,
+        List<String>? suggestedTags,
+        double? suggestedTagConfidence,
+        String? tagSuggestionState,
+        List<String>? appliedTagIds,
+        required PlatformInt64 nowMs}) =>
+    RustLib.instance.api
+        .crateApiCoreDbMarkSemanticParseJobSucceededIfCurrentAttempt(
+            appDir: appDir,
+            key: key,
+            messageId: messageId,
+            expectedAttemptId: expectedAttemptId,
+            appliedActionKind: appliedActionKind,
+            appliedTodoId: appliedTodoId,
+            appliedTodoTitle: appliedTodoTitle,
+            appliedPrevTodoStatus: appliedPrevTodoStatus,
+            suggestedTags: suggestedTags,
+            suggestedTagConfidence: suggestedTagConfidence,
+            tagSuggestionState: tagSuggestionState,
+            appliedTagIds: appliedTagIds,
+            nowMs: nowMs);
+
 Future<void> dbMarkSemanticParseJobCanceled(
         {required String appDir,
         required List<int> key,
@@ -923,6 +981,198 @@ Future<void> dbMarkSemanticParseJobCanceled(
         required PlatformInt64 nowMs}) =>
     RustLib.instance.api.crateApiCoreDbMarkSemanticParseJobCanceled(
         appDir: appDir, key: key, messageId: messageId, nowMs: nowMs);
+
+Future<PlatformInt64> dbRequeueRunningSemanticParseJobs(
+        {required String appDir,
+        required List<int> key,
+        required PlatformInt64 nowMs}) =>
+    RustLib.instance.api.crateApiCoreDbRequeueRunningSemanticParseJobs(
+        appDir: appDir, key: key, nowMs: nowMs);
+
+Future<bool> dbMarkSemanticParseJobCanceledIfCurrentAttempt(
+        {required String appDir,
+        required List<int> key,
+        required String messageId,
+        required PlatformInt64 expectedAttemptId,
+        required PlatformInt64 nowMs}) =>
+    RustLib.instance.api
+        .crateApiCoreDbMarkSemanticParseJobCanceledIfCurrentAttempt(
+            appDir: appDir,
+            key: key,
+            messageId: messageId,
+            expectedAttemptId: expectedAttemptId,
+            nowMs: nowMs);
+
+Future<List<String>?> dbCompleteSemanticParseNoActionIfCurrentAttempt(
+        {required String appDir,
+        required List<int> key,
+        required String messageId,
+        required PlatformInt64 expectedAttemptId,
+        List<String>? pendingSuggestedTags,
+        List<String>? autoApplySuggestedTags,
+        double? suggestedTagConfidence,
+        required PlatformInt64 nowMs}) =>
+    RustLib.instance.api
+        .crateApiCoreDbCompleteSemanticParseNoActionIfCurrentAttempt(
+            appDir: appDir,
+            key: key,
+            messageId: messageId,
+            expectedAttemptId: expectedAttemptId,
+            pendingSuggestedTags: pendingSuggestedTags,
+            autoApplySuggestedTags: autoApplySuggestedTags,
+            suggestedTagConfidence: suggestedTagConfidence,
+            nowMs: nowMs);
+
+Future<bool> dbCompleteSemanticParseCreateIfCurrentAttempt(
+        {required String appDir,
+        required List<int> key,
+        required String messageId,
+        required PlatformInt64 expectedAttemptId,
+        required String todoId,
+        required String title,
+        PlatformInt64? dueAtMs,
+        required String status,
+        PlatformInt64? reviewStage,
+        PlatformInt64? nextReviewAtMs,
+        PlatformInt64? lastReviewAtMs,
+        String? taskTypeHint,
+        String? recurrenceRuleJson,
+        required List<String> checklistSuggestions,
+        required String checklistSource,
+        String? checklistGenerationKey,
+        List<String>? pendingSuggestedTags,
+        List<String>? autoApplySuggestedTags,
+        double? suggestedTagConfidence,
+        required PlatformInt64 nowMs}) =>
+    RustLib.instance.api
+        .crateApiCoreDbCompleteSemanticParseCreateIfCurrentAttempt(
+            appDir: appDir,
+            key: key,
+            messageId: messageId,
+            expectedAttemptId: expectedAttemptId,
+            todoId: todoId,
+            title: title,
+            dueAtMs: dueAtMs,
+            status: status,
+            reviewStage: reviewStage,
+            nextReviewAtMs: nextReviewAtMs,
+            lastReviewAtMs: lastReviewAtMs,
+            taskTypeHint: taskTypeHint,
+            recurrenceRuleJson: recurrenceRuleJson,
+            checklistSuggestions: checklistSuggestions,
+            checklistSource: checklistSource,
+            checklistGenerationKey: checklistGenerationKey,
+            pendingSuggestedTags: pendingSuggestedTags,
+            autoApplySuggestedTags: autoApplySuggestedTags,
+            suggestedTagConfidence: suggestedTagConfidence,
+            nowMs: nowMs);
+
+Future<bool> dbCompleteSemanticParseFollowupIfCurrentAttempt(
+        {required String appDir,
+        required List<int> key,
+        required String messageId,
+        required PlatformInt64 expectedAttemptId,
+        required String todoId,
+        String? todoTitle,
+        required String newStatus,
+        List<String>? pendingSuggestedTags,
+        List<String>? autoApplySuggestedTags,
+        double? suggestedTagConfidence,
+        required PlatformInt64 nowMs}) =>
+    RustLib.instance.api
+        .crateApiCoreDbCompleteSemanticParseFollowupIfCurrentAttempt(
+            appDir: appDir,
+            key: key,
+            messageId: messageId,
+            expectedAttemptId: expectedAttemptId,
+            todoId: todoId,
+            todoTitle: todoTitle,
+            newStatus: newStatus,
+            pendingSuggestedTags: pendingSuggestedTags,
+            autoApplySuggestedTags: autoApplySuggestedTags,
+            suggestedTagConfidence: suggestedTagConfidence,
+            nowMs: nowMs);
+
+Future<List<String>> dbApplySemanticParseTagsIfCurrentAttempt(
+        {required String appDir,
+        required List<int> key,
+        required String messageId,
+        required PlatformInt64 expectedAttemptId,
+        required List<String> suggestedTags}) =>
+    RustLib.instance.api.crateApiCoreDbApplySemanticParseTagsIfCurrentAttempt(
+        appDir: appDir,
+        key: key,
+        messageId: messageId,
+        expectedAttemptId: expectedAttemptId,
+        suggestedTags: suggestedTags);
+
+Future<String?> dbUpsertTodoFromSemanticParseIfCurrentAttempt(
+        {required String appDir,
+        required List<int> key,
+        required String messageId,
+        required PlatformInt64 expectedAttemptId,
+        required String todoId,
+        required String title,
+        PlatformInt64? dueAtMs,
+        required String status,
+        PlatformInt64? reviewStage,
+        PlatformInt64? nextReviewAtMs,
+        PlatformInt64? lastReviewAtMs,
+        String? taskTypeHint,
+        String? recurrenceRuleJson,
+        required PlatformInt64 nowMs}) =>
+    RustLib.instance.api
+        .crateApiCoreDbUpsertTodoFromSemanticParseIfCurrentAttempt(
+            appDir: appDir,
+            key: key,
+            messageId: messageId,
+            expectedAttemptId: expectedAttemptId,
+            todoId: todoId,
+            title: title,
+            dueAtMs: dueAtMs,
+            status: status,
+            reviewStage: reviewStage,
+            nextReviewAtMs: nextReviewAtMs,
+            lastReviewAtMs: lastReviewAtMs,
+            taskTypeHint: taskTypeHint,
+            recurrenceRuleJson: recurrenceRuleJson,
+            nowMs: nowMs);
+
+Future<bool> dbUpsertGeneratedTodoChecklistSuggestionsIfCurrentAttempt(
+        {required String appDir,
+        required List<int> key,
+        required String messageId,
+        required PlatformInt64 expectedAttemptId,
+        required String todoId,
+        required List<String> suggestions,
+        required String source,
+        String? generationKey}) =>
+    RustLib.instance.api
+        .crateApiCoreDbUpsertGeneratedTodoChecklistSuggestionsIfCurrentAttempt(
+            appDir: appDir,
+            key: key,
+            messageId: messageId,
+            expectedAttemptId: expectedAttemptId,
+            todoId: todoId,
+            suggestions: suggestions,
+            source: source,
+            generationKey: generationKey);
+
+Future<String?> dbSetTodoStatusFromSemanticParseIfCurrentAttempt(
+        {required String appDir,
+        required List<int> key,
+        required String messageId,
+        required PlatformInt64 expectedAttemptId,
+        required String todoId,
+        required String newStatus}) =>
+    RustLib.instance.api
+        .crateApiCoreDbSetTodoStatusFromSemanticParseIfCurrentAttempt(
+            appDir: appDir,
+            key: key,
+            messageId: messageId,
+            expectedAttemptId: expectedAttemptId,
+            todoId: todoId,
+            newStatus: newStatus);
 
 Future<void> dbMarkSemanticParseJobUndone(
         {required String appDir,

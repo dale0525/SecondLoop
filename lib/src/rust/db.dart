@@ -1002,6 +1002,7 @@ class MigrationArchiveRelation {
 class SemanticParseJob {
   final String messageId;
   final String status;
+  final PlatformInt64 attemptId;
   final PlatformInt64 attempts;
   final PlatformInt64? nextRetryAtMs;
   final String? lastError;
@@ -1020,6 +1021,7 @@ class SemanticParseJob {
   const SemanticParseJob({
     required this.messageId,
     required this.status,
+    required this.attemptId,
     required this.attempts,
     this.nextRetryAtMs,
     this.lastError,
@@ -1040,6 +1042,7 @@ class SemanticParseJob {
   int get hashCode =>
       messageId.hashCode ^
       status.hashCode ^
+      attemptId.hashCode ^
       attempts.hashCode ^
       nextRetryAtMs.hashCode ^
       lastError.hashCode ^
@@ -1062,6 +1065,7 @@ class SemanticParseJob {
           runtimeType == other.runtimeType &&
           messageId == other.messageId &&
           status == other.status &&
+          attemptId == other.attemptId &&
           attempts == other.attempts &&
           nextRetryAtMs == other.nextRetryAtMs &&
           lastError == other.lastError &&

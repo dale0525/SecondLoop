@@ -16,6 +16,8 @@ include!("parts/07_messages_and_similarity.rs");
 include!("parts/08_attachments_core.rs");
 include!("parts/08_attachment_derivations.rs");
 include!("parts/08_attachment_metadata.rs");
+include!("parts/09a_semantic_parse_jobs.rs");
+include!("parts/09b_semantic_parse_job_mutations.rs");
 include!("parts/09_attachment_jobs.rs");
 include!("parts/14_content_extract_jobs.rs");
 include!("parts/10_todos.rs");

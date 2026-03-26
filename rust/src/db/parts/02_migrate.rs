@@ -579,6 +579,7 @@ PRAGMA user_version = 19;
 CREATE TABLE IF NOT EXISTS semantic_parse_jobs (
   message_id TEXT PRIMARY KEY,
   status TEXT NOT NULL,
+  attempt_id INTEGER NOT NULL DEFAULT 0,
   attempts INTEGER NOT NULL DEFAULT 0,
   next_retry_at_ms INTEGER,
   last_error TEXT,
@@ -1000,7 +1001,12 @@ PRAGMA user_version = 29;
         user_version = 36;
     }
 
-    debug_assert!(user_version >= 36);
+    if user_version < 37 {
+        migrate_from_v36_to_v37(conn)?;
+        user_version = 37;
+    }
+
+    debug_assert!(user_version >= 37);
 
     Ok(())
 }

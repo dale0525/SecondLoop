@@ -32,6 +32,7 @@ import '../../src/rust/frb_generated.dart';
 import '../../src/rust/semantic_parse.dart';
 import 'app_backend.dart';
 import 'attachments_backend.dart';
+import 'semantic_parse_attempt_aware_backend.dart';
 import 'rust_external_library_resolver.dart';
 
 part 'native_backend_knowledge.dart';
@@ -305,7 +306,8 @@ class NativeAppBackend extends _NativeAppBackendAccess
     implements
         AppBackend,
         AttachmentsBackend,
-        AttachmentAnnotationMutationsBackend {
+        AttachmentAnnotationMutationsBackend,
+        SemanticParseAttemptAwareBackend {
   @override
   bool get supportsTodoFollowupSuggestions => true;
 
@@ -2694,6 +2696,20 @@ class NativeAppBackend extends _NativeAppBackendAccess
       messageId: messageId,
       nowMs: PlatformInt64Util.from(nowMs),
     );
+  }
+
+  @override
+  Future<int> requeueRunningSemanticParseJobs(
+    Uint8List key, {
+    required int nowMs,
+  }) async {
+    final appDir = await _getAppDir();
+    final count = await rust_core.dbRequeueRunningSemanticParseJobs(
+      appDir: appDir,
+      key: key,
+      nowMs: PlatformInt64Util.from(nowMs),
+    );
+    return count.toInt();
   }
 
   @override

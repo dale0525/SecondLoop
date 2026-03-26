@@ -87,6 +87,7 @@ final class ChatTodoMessageTypeBadgesTestBackend extends TestAppBackend {
     _jobsByMessageId[messageId] = SemanticParseJob(
       messageId: existing.messageId,
       status: existing.status,
+      attemptId: PlatformInt64Util.from(0),
       attempts: existing.attempts,
       nextRetryAtMs: existing.nextRetryAtMs,
       lastError: existing.lastError,
