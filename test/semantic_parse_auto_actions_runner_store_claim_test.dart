@@ -52,6 +52,91 @@ void main() {
       throwsA(same(error)),
     );
   });
+
+  test(
+      'store rejects non-atomic no-action completion without attempt-aware backend',
+      () async {
+    final store = BackendSemanticParseAutoActionsStore(
+      backend: _NonAttemptAwareBackend(
+        jobsByMessageId: <String, SemanticParseJob>{
+          'msg:running': _job(
+            messageId: 'msg:running',
+            status: 'running',
+            attemptId: 4,
+          ),
+        },
+      ),
+      sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+    );
+
+    expect(
+      () => store.completeNoActionIfCurrentAttempt(
+        messageId: 'msg:running',
+        expectedAttemptId: 4,
+        nowMs: 1000,
+      ),
+      throwsA(isA<StateError>()),
+    );
+  });
+
+  test(
+      'store rejects non-atomic create completion without attempt-aware backend',
+      () async {
+    final store = BackendSemanticParseAutoActionsStore(
+      backend: _NonAttemptAwareBackend(
+        jobsByMessageId: <String, SemanticParseJob>{
+          'msg:running': _job(
+            messageId: 'msg:running',
+            status: 'running',
+            attemptId: 7,
+          ),
+        },
+      ),
+      sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+    );
+
+    expect(
+      () => store.completeCreateTodoIfCurrentAttempt(
+        messageId: 'msg:running',
+        expectedAttemptId: 7,
+        title: 'Test',
+        status: 'inbox',
+        checklistSuggestions: const <String>[],
+        checklistSource: 'test',
+        nowMs: 1000,
+      ),
+      throwsA(isA<StateError>()),
+    );
+  });
+
+  test(
+      'store rejects non-atomic followup completion without attempt-aware backend',
+      () async {
+    final store = BackendSemanticParseAutoActionsStore(
+      backend: _NonAttemptAwareBackend(
+        jobsByMessageId: <String, SemanticParseJob>{
+          'msg:running': _job(
+            messageId: 'msg:running',
+            status: 'running',
+            attemptId: 9,
+          ),
+        },
+      ),
+      sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+    );
+
+    expect(
+      () => store.completeFollowupIfCurrentAttempt(
+        messageId: 'msg:running',
+        expectedAttemptId: 9,
+        todoId: 'todo-1',
+        todoTitle: 'Todo',
+        newStatus: 'done',
+        nowMs: 1000,
+      ),
+      throwsA(isA<StateError>()),
+    );
+  });
 }
 
 SemanticParseJob _job({
@@ -246,6 +331,26 @@ final class _ThrowingClaimBackend extends AppBackend
     required String newStatus,
   }) async =>
       null;
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+final class _NonAttemptAwareBackend extends AppBackend {
+  _NonAttemptAwareBackend({required this.jobsByMessageId});
+
+  final Map<String, SemanticParseJob> jobsByMessageId;
+
+  @override
+  Future<List<SemanticParseJob>> listSemanticParseJobsByMessageIds(
+    Uint8List key, {
+    required List<String> messageIds,
+  }) async {
+    return messageIds
+        .map((id) => jobsByMessageId[id])
+        .whereType<SemanticParseJob>()
+        .toList(growable: false);
+  }
 
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
