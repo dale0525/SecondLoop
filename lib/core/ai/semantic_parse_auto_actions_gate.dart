@@ -353,7 +353,10 @@ class _SemanticParseAutoActionsGateState
       );
       _didRecoverRunningJobs = true;
       return recovered > 0;
-    } catch (_) {
+    } catch (error, stackTrace) {
+      debugPrint(
+        'requeueRunningSemanticParseJobs failed: $error\n$stackTrace',
+      );
       return false;
     }
   }
