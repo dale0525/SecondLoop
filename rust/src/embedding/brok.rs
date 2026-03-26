@@ -30,6 +30,10 @@ pub struct BrokEmbedder {
 }
 
 impl BrokEmbedder {
+    pub fn learned_dim(&self) -> Option<usize> {
+        self.dim.get().copied()
+    }
+
     pub fn new(base_url: String, api_key: String, model_name: String) -> Self {
         Self {
             client: Client::new(),

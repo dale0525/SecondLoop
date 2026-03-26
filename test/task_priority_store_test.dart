@@ -272,6 +272,41 @@ void main() {
     expect(store.snapshot.decide.first.todo.id, 't2');
   });
 
+  test(
+      'multiple forced refreshes while inflight coalesce into one follow-up run',
+      () async {
+    SharedPreferences.setMockInitialValues({});
+    var loadCount = 0;
+    final completer = Completer<void>();
+    final store = TaskPriorityStore.fromLoaders(
+      nowLocal: () => DateTime(2026, 3, 13, 10, 0),
+      loadTodos: () async {
+        loadCount += 1;
+        if (loadCount == 1) {
+          await completer.future;
+        }
+        return <Todo>[todo(id: 't$loadCount', title: 'Task', updatedAtMs: 10)];
+      },
+    );
+
+    final firstRefresh = store.refresh();
+    await Future<void>.delayed(Duration.zero);
+    final forcedRefresh1 = store.refresh(force: true);
+    final forcedRefresh2 = store.refresh(force: true);
+    final forcedRefresh3 = store.refresh(force: true);
+    completer.complete();
+
+    await Future.wait(<Future<void>>[
+      firstRefresh,
+      forcedRefresh1,
+      forcedRefresh2,
+      forcedRefresh3,
+    ]);
+
+    expect(loadCount, 2);
+    expect(store.snapshot.decide.first.todo.id, 't2');
+  });
+
   test('reuses cached AI rerank while task signature stays unchanged',
       () async {
     SharedPreferences.setMockInitialValues({});

@@ -156,6 +156,7 @@ class TaskPriorityStore extends ChangeNotifier {
   Map<String, String> _stickyFocusDueStateByTodoId = const <String, String>{};
 
   Future<void>? _inflightRefresh;
+  bool _refreshQueuedAfterInflight = false;
   bool _disposed = false;
 
   void markDirty() {
@@ -178,20 +179,27 @@ class TaskPriorityStore extends ChangeNotifier {
   Future<void> refresh({bool force = false}) {
     if (_disposed) return Future<void>.value();
     if (_inflightRefresh != null) {
-      if (!force) return _inflightRefresh!;
-      return _inflightRefresh!.then((_) {
-        if (_disposed) return Future<void>.value();
-        return refresh(force: true);
-      });
+      if (force) {
+        _refreshQueuedAfterInflight = true;
+      }
+      return _inflightRefresh!;
     }
     if (!force && !_dirty && _snapshot.computedAtLocal != null) {
       return Future<void>.value();
     }
-    final future = _refreshImpl();
+    final future = _runRefreshCycle();
     _inflightRefresh = future.whenComplete(() {
       _inflightRefresh = null;
     });
     return _inflightRefresh!;
+  }
+
+  Future<void> _runRefreshCycle() async {
+    await _refreshImpl();
+    while (!_disposed && _refreshQueuedAfterInflight) {
+      _refreshQueuedAfterInflight = false;
+      await _refreshImpl();
+    }
   }
 
   Future<void> _refreshImpl() async {

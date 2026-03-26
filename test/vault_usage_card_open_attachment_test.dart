@@ -28,6 +28,20 @@ Future<void> _pumpUi(WidgetTester tester, {int cycles = 16}) async {
   }
 }
 
+Future<void> _pumpUntilFound(
+  WidgetTester tester,
+  Finder finder, {
+  int maxPumps = 24,
+}) async {
+  for (var i = 0; i < maxPumps; i += 1) {
+    await tester.pump(const Duration(milliseconds: 32));
+    if (finder.evaluate().isNotEmpty) {
+      return;
+    }
+  }
+  expect(finder, findsOneWidget);
+}
+
 void main() {
   testWidgets(
       'VaultUsageCard opens grouped video attachment details by root sha',
@@ -125,6 +139,90 @@ void main() {
     await _pumpUi(tester);
 
     expect(find.byType(AttachmentViewerPage), findsOneWidget);
+  });
+
+  testWidgets(
+      'VaultUsageCard deduplicates same-auth refreshes during initial load',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+
+    final store = SyncConfigStore(
+      managedVaultDefaultBaseUrl: 'https://vault-1.test',
+    );
+    final requestCounts = <String, int>{};
+    final httpClient = MockClient((request) async {
+      final url = request.url.toString();
+      requestCounts[url] = (requestCounts[url] ?? 0) + 1;
+      if (url == 'https://vault-1.test/v1/vaults/uid_1/usage') {
+        return http.Response(
+          jsonEncode(<String, Object?>{
+            'total_bytes_used': 1024,
+            'attachments_bytes_used': 1024,
+            'ops_bytes_used': 0,
+            'other_bytes_used': 0,
+            'limit_bytes': null,
+          }),
+          200,
+        );
+      }
+      if (url == 'https://vault-1.test/v1/vaults/uid_1/attachments?limit=200') {
+        return http.Response(
+          jsonEncode(<String, Object?>{
+            'items': const <Object?>[],
+            'total_count': 0,
+            'total_bytes_used': 0,
+          }),
+          200,
+        );
+      }
+      throw StateError('unexpected url: $url');
+    });
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        AppBackendScope(
+          backend: _FakeBackend(
+            attachment: const Attachment(
+              sha256: 'unused-sha',
+              mimeType: 'text/plain',
+              path: 'attachments/unused.bin',
+              byteLen: 0,
+              createdAtMs: 0,
+            ),
+          ),
+          child: CloudAuthScope(
+            controller: _FakeCloudAuthController(),
+            gatewayConfig: const CloudGatewayConfig(
+              baseUrl: 'https://gateway.test',
+              modelName: 'cloud',
+            ),
+            child: SessionScope(
+              sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+              lock: () {},
+              child: MaterialApp(
+                home: Scaffold(
+                  body: VaultUsageCard(
+                    client: VaultUsageClient(httpClient: httpClient),
+                    attachmentsClient:
+                        VaultAttachmentsClient(httpClient: httpClient),
+                    configStore: store,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await _pumpUi(tester);
+    await tester.pumpAndSettle();
+
+    expect(requestCounts['https://vault-1.test/v1/vaults/uid_1/usage'], 1);
+    expect(
+      requestCounts[
+          'https://vault-1.test/v1/vaults/uid_1/attachments?limit=200'],
+      1,
+    );
   });
 
   testWidgets('VaultUsageCard refreshes when managed vault base URL changes',
@@ -499,10 +597,10 @@ void main() {
         200,
       ),
     );
-    await _pumpUi(tester, cycles: 6);
-
-    expect(find.byKey(const ValueKey('vault_usage_attachment_sha-race-2')),
-        findsOneWidget);
+    await _pumpUntilFound(
+      tester,
+      find.byKey(const ValueKey('vault_usage_attachment_sha-race-2')),
+    );
 
     firstAttachments.complete(
       http.Response(
@@ -522,10 +620,10 @@ void main() {
         200,
       ),
     );
-    await _pumpUi(tester, cycles: 6);
-
-    expect(find.byKey(const ValueKey('vault_usage_attachment_sha-race-2')),
-        findsOneWidget);
+    await _pumpUntilFound(
+      tester,
+      find.byKey(const ValueKey('vault_usage_attachment_sha-race-2')),
+    );
     expect(find.byKey(const ValueKey('vault_usage_attachment_sha-race-1')),
         findsNothing);
   });

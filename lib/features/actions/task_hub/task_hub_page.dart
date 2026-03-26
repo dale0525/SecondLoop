@@ -36,6 +36,7 @@ class TaskHubPage extends StatefulWidget {
 
 class _TaskHubPageState extends State<TaskHubPage> {
   static const _kDonePageSize = 20;
+  static const _kSyncRefreshDebounce = Duration(milliseconds: 250);
 
   TaskPriorityStore? _store;
   final TaskPriorityFeedbackStore _feedbackStore =
@@ -43,6 +44,7 @@ class _TaskHubPageState extends State<TaskHubPage> {
   TaskHubUndoTicket? _undoTicket;
   Timer? _quickActionSnackAutoDismissTimer;
   Timer? _restoreHighlightTimer;
+  Timer? _syncRefreshDebounceTimer;
   String? _restoredTodoId;
   final GlobalKey<ScaffoldMessengerState> _scaffoldMessengerKey =
       GlobalKey<ScaffoldMessengerState>();
@@ -70,6 +72,8 @@ class _TaskHubPageState extends State<TaskHubPage> {
     _quickActionSnackAutoDismissTimer = null;
     _restoreHighlightTimer?.cancel();
     _restoreHighlightTimer = null;
+    _syncRefreshDebounceTimer?.cancel();
+    _syncRefreshDebounceTimer = null;
     _quickActionSnackMessenger = null;
     _quickActionSnackToken = null;
     _store?.dispose();
@@ -135,7 +139,11 @@ class _TaskHubPageState extends State<TaskHubPage> {
       final store = _store;
       if (!mounted || store == null) return;
       store.markDirty();
-      unawaited(store.refresh(force: true));
+      _syncRefreshDebounceTimer?.cancel();
+      _syncRefreshDebounceTimer = Timer(_kSyncRefreshDebounce, () {
+        if (!mounted || !identical(store, _store)) return;
+        unawaited(store.refresh(force: true));
+      });
     }
 
     _syncListener = onSyncChange;
@@ -299,6 +307,8 @@ class _TaskHubPageState extends State<TaskHubPage> {
     _quickActionSnackAutoDismissTimer = null;
     _restoreHighlightTimer?.cancel();
     _restoreHighlightTimer = null;
+    _syncRefreshDebounceTimer?.cancel();
+    _syncRefreshDebounceTimer = null;
     final snackToken = Object();
     _quickActionSnackToken = snackToken;
     _quickActionSnackMessenger = messenger;
