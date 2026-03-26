@@ -12,7 +12,9 @@ import 'package:secondloop/core/notifications/review_reminder_notifications_gate
 import 'package:secondloop/core/session/session_scope.dart';
 import 'package:secondloop/core/sync/sync_engine.dart';
 import 'package:secondloop/core/sync/sync_engine_gate.dart';
+import 'package:secondloop/features/actions/agenda/todo_agenda_page.dart';
 import 'package:secondloop/features/actions/task_hub/task_hub_page.dart';
+import 'package:secondloop/features/actions/task_hub/task_hub_quick_actions.dart';
 import 'package:secondloop/src/rust/db.dart';
 
 import 'test_backend.dart';
@@ -28,8 +30,9 @@ void main() {
   testWidgets('tap notification payload opens task hub page', (tester) async {
     final harness = await _pumpGateHarness(tester);
 
-    harness.scheduler.onTap?.call(
-      '${FlutterLocalNotificationsReviewReminderScheduler.reviewQueuePayloadPrefix}todo:1',
+    harness.scheduler.dispatch(
+      payload:
+          '${FlutterLocalNotificationsReviewReminderScheduler.reviewQueuePayloadPrefix}todo:1',
     );
 
     await _pumpUntilFound(
@@ -49,8 +52,9 @@ void main() {
       },
     );
 
-    harness.scheduler.onTap?.call(
-      '${FlutterLocalNotificationsReviewReminderScheduler.reviewQueuePayloadPrefix}todo:1',
+    harness.scheduler.dispatch(
+      payload:
+          '${FlutterLocalNotificationsReviewReminderScheduler.reviewQueuePayloadPrefix}todo:1',
     );
     await _pumpUntilFound(
       tester,
@@ -67,7 +71,7 @@ void main() {
   testWidgets('ignores unrelated notification payload', (tester) async {
     final harness = await _pumpGateHarness(tester);
 
-    harness.scheduler.onTap?.call('todo:1');
+    harness.scheduler.dispatch(payload: 'todo:1');
 
     await tester.pump(const Duration(milliseconds: 200));
 
@@ -78,11 +82,13 @@ void main() {
       (tester) async {
     final harness = await _pumpGateHarness(tester);
 
-    harness.scheduler.onTap?.call(
-      '${FlutterLocalNotificationsReviewReminderScheduler.reviewQueuePayloadPrefix}todo:1',
+    harness.scheduler.dispatch(
+      payload:
+          '${FlutterLocalNotificationsReviewReminderScheduler.reviewQueuePayloadPrefix}todo:1',
     );
-    harness.scheduler.onTap?.call(
-      '${FlutterLocalNotificationsReviewReminderScheduler.reviewQueuePayloadPrefix}todo:2',
+    harness.scheduler.dispatch(
+      payload:
+          '${FlutterLocalNotificationsReviewReminderScheduler.reviewQueuePayloadPrefix}todo:2',
     );
 
     await _pumpUntilFound(
@@ -94,6 +100,155 @@ void main() {
       find.byType(TaskHubPage, skipOffstage: false),
       findsOneWidget,
     );
+  });
+
+  testWidgets('tap due reminder payload opens agenda page', (tester) async {
+    final harness = await _pumpGateHarness(
+      tester,
+      todos: <Todo>[
+        _dueTodo(dueAtMs: DateTime.now().toUtc().millisecondsSinceEpoch + 60000)
+      ],
+    );
+
+    harness.scheduler.dispatch(
+      payload:
+          '${FlutterLocalNotificationsReviewReminderScheduler.dueTodoPayloadPrefix}todo:due',
+    );
+
+    await _pumpUntilFound(
+      tester,
+      find.byType(TodoAgendaPage, skipOffstage: false),
+    );
+
+    expect(find.byType(TodoAgendaPage, skipOffstage: false), findsOneWidget);
+  });
+
+  testWidgets(
+      'start action marks todo in progress without opening reminder page',
+      (tester) async {
+    final harness = await _pumpGateHarness(tester);
+
+    harness.scheduler.dispatch(
+      payload:
+          '${FlutterLocalNotificationsReviewReminderScheduler.reviewQueuePayloadPrefix}todo:review',
+      actionId:
+          FlutterLocalNotificationsReviewReminderScheduler.notificationActionId(
+              TaskHubQuickAction.start),
+    );
+
+    await tester.pump(const Duration(milliseconds: 200));
+
+    expect(harness.backend.statusByTodoId['todo:review'], 'in_progress');
+    expect(find.byType(TaskHubPage), findsNothing);
+  });
+
+  testWidgets('tomorrow action reschedules todo without opening reminder page',
+      (tester) async {
+    final nowUtcMs = DateTime.now().toUtc().millisecondsSinceEpoch;
+    final harness = await _pumpGateHarness(
+      tester,
+      todos: <Todo>[
+        _reviewTodo(
+          id: 'todo:review',
+          nextReviewAtMs: nowUtcMs + const Duration(minutes: 10).inMilliseconds,
+        ),
+      ],
+    );
+
+    harness.scheduler.dispatch(
+      payload:
+          '${FlutterLocalNotificationsReviewReminderScheduler.reviewQueuePayloadPrefix}todo:review',
+      actionId:
+          FlutterLocalNotificationsReviewReminderScheduler.notificationActionId(
+              TaskHubQuickAction.tomorrow),
+    );
+
+    await tester.pump(const Duration(milliseconds: 200));
+
+    final updated = harness.backend.todoById('todo:review');
+    expect(updated, isNotNull);
+    expect(updated!.dueAtMs, isNotNull);
+    expect(updated.status, 'open');
+    expect(find.byType(TaskHubPage), findsNothing);
+  });
+
+  testWidgets('done action marks todo done without opening reminder page',
+      (tester) async {
+    final harness = await _pumpGateHarness(tester);
+
+    harness.scheduler.dispatch(
+      payload:
+          '${FlutterLocalNotificationsReviewReminderScheduler.reviewQueuePayloadPrefix}todo:review',
+      actionId:
+          FlutterLocalNotificationsReviewReminderScheduler.androidDoneActionId,
+    );
+
+    await tester.pump(const Duration(milliseconds: 200));
+
+    expect(harness.backend.statusByTodoId['todo:review'], 'done');
+    expect(find.byType(TaskHubPage), findsNothing);
+  });
+
+  testWidgets('done action asks for checklist confirmation before completing',
+      (tester) async {
+    final harness = await _pumpGateHarness(
+      tester,
+      checklistItemsByTodoId: <String, List<TodoChecklistItem>>{
+        'todo:review': const <TodoChecklistItem>[
+          TodoChecklistItem(
+            id: 'item:review',
+            todoId: 'todo:review',
+            content: 'Still pending',
+            sortOrder: 0,
+            isDone: false,
+            createdAtMs: 0,
+            updatedAtMs: 0,
+          ),
+        ],
+      },
+    );
+
+    harness.scheduler.dispatch(
+      payload:
+          '${FlutterLocalNotificationsReviewReminderScheduler.reviewQueuePayloadPrefix}todo:review',
+      actionId:
+          FlutterLocalNotificationsReviewReminderScheduler.androidDoneActionId,
+    );
+
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 200));
+
+    expect(
+      find.byKey(
+        const ValueKey('review_reminder_incomplete_checklist_dialog'),
+      ),
+      findsOneWidget,
+    );
+    expect(harness.backend.statusByTodoId['todo:review'], isNull);
+
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+
+    expect(harness.backend.statusByTodoId['todo:review'], isNull);
+    expect(find.byType(TaskHubPage), findsNothing);
+  });
+
+  testWidgets(
+      'dismiss action marks todo dismissed without opening reminder page',
+      (tester) async {
+    final harness = await _pumpGateHarness(tester);
+
+    harness.scheduler.dispatch(
+      payload:
+          '${FlutterLocalNotificationsReviewReminderScheduler.reviewQueuePayloadPrefix}todo:review',
+      actionId: FlutterLocalNotificationsReviewReminderScheduler
+          .androidDismissActionId,
+    );
+
+    await tester.pump(const Duration(milliseconds: 200));
+
+    expect(harness.backend.statusByTodoId['todo:review'], 'dismissed');
+    expect(find.byType(TaskHubPage), findsNothing);
   });
 
   testWidgets(
@@ -143,10 +298,10 @@ void main() {
     await tester.pump(const Duration(milliseconds: 200));
     await _pumpUntilFound(
       tester,
-      find.byType(TaskHubPage, skipOffstage: false),
+      find.byType(TodoAgendaPage, skipOffstage: false),
     );
 
-    expect(find.byType(TaskHubPage, skipOffstage: false), findsOneWidget);
+    expect(find.byType(TodoAgendaPage, skipOffstage: false), findsOneWidget);
   });
 
   testWidgets('plays alert sound when in-app reminder appears', (tester) async {
@@ -421,6 +576,7 @@ Future<_GateHarness> _pumpGateHarness(
   WidgetTester tester, {
   bool schedulerSupportsSystemNotifications = true,
   List<Todo>? todos,
+  Map<String, List<TodoChecklistItem>>? checklistItemsByTodoId,
   SyncEngine? syncEngine,
   InAppFallbackAlertSoundCallback? inAppFallbackAlertSound,
   VoidCallback? onLock,
@@ -443,7 +599,10 @@ Future<_GateHarness> _pumpGateHarness(
   final content = syncEngine == null
       ? gate
       : SyncEngineScope(engine: syncEngine, child: gate);
-  final backend = _Backend(todos: effectiveTodos);
+  final backend = _Backend(
+    todos: effectiveTodos,
+    checklistItemsByTodoId: checklistItemsByTodoId,
+  );
 
   await tester.pumpWidget(
     wrapWithI18n(
@@ -473,9 +632,9 @@ Future<_GateHarness> _pumpGateHarness(
   );
 }
 
-Todo _reviewTodo({required int nextReviewAtMs}) {
+Todo _reviewTodo({String id = 'todo:review', required int nextReviewAtMs}) {
   return Todo(
-    id: 'todo:review',
+    id: id,
     title: 'review this',
     status: 'inbox',
     createdAtMs: 1,
@@ -528,6 +687,15 @@ final class _FakeScheduler implements ReviewReminderNotificationScheduler {
   int cancelCalls = 0;
   NotificationTapHandler? onTap;
 
+  void dispatch({String? payload, String? actionId}) {
+    onTap?.call(
+      ReviewReminderNotificationEvent(
+        payload: payload,
+        actionId: actionId,
+      ),
+    );
+  }
+
   @override
   Future<void> cancel() async {
     cancelCalls += 1;
@@ -561,12 +729,116 @@ final _defaultTodos = <Todo>[
 ];
 
 final class _Backend extends TestAppBackend {
-  _Backend({required this.todos});
+  _Backend({
+    required this.todos,
+    Map<String, List<TodoChecklistItem>>? checklistItemsByTodoId,
+  }) : _checklistItemsByTodoId = Map<String, List<TodoChecklistItem>>.from(
+          checklistItemsByTodoId ?? const <String, List<TodoChecklistItem>>{},
+        );
 
   final List<Todo> todos;
+  final Map<String, List<TodoChecklistItem>> _checklistItemsByTodoId;
+  final Map<String, String> statusByTodoId = <String, String>{};
+
+  Todo? todoById(String todoId) {
+    final index = todos.indexWhere((todo) => todo.id == todoId);
+    return index >= 0 ? todos[index] : null;
+  }
 
   @override
   Future<List<Todo>> listTodos(Uint8List key) async {
     return todos;
+  }
+
+  @override
+  Future<Todo?> getTodoById(Uint8List key, String todoId) async {
+    return todoById(todoId);
+  }
+
+  @override
+  Future<List<TodoChecklistItem>> listTodoChecklistItems(
+    Uint8List key,
+    String todoId,
+  ) async {
+    return List<TodoChecklistItem>.from(
+      _checklistItemsByTodoId[todoId] ?? const <TodoChecklistItem>[],
+    );
+  }
+
+  @override
+  Future<Todo> transitionTodo(
+    Uint8List key, {
+    required String todoId,
+    String? newStatus,
+    int? dueAtMs,
+    bool clearDueAtMs = false,
+    int? reviewStage,
+    bool clearReviewStage = false,
+    int? nextReviewAtMs,
+    bool clearNextReviewAtMs = false,
+    int? lastReviewAtMs,
+    bool clearLastReviewAtMs = false,
+    int? manualImportanceNudgeScore,
+    bool clearManualImportanceNudgeScore = false,
+    int? manualUrgencyNudgeScore,
+    bool clearManualUrgencyNudgeScore = false,
+    String? sourceMessageId,
+  }) async {
+    final existing = todoById(todoId) ??
+        Todo(
+          id: todoId,
+          title: todoId,
+          status: 'open',
+          createdAtMs: 0,
+          updatedAtMs: 0,
+          reviewStage: null,
+          nextReviewAtMs: null,
+        );
+    final updated = Todo(
+      id: existing.id,
+      title: existing.title,
+      status: newStatus ?? existing.status,
+      dueAtMs: clearDueAtMs ? null : (dueAtMs ?? existing.dueAtMs),
+      createdAtMs: existing.createdAtMs,
+      updatedAtMs: existing.updatedAtMs,
+      sourceEntryId: existing.sourceEntryId,
+      reviewStage:
+          clearReviewStage ? null : (reviewStage ?? existing.reviewStage),
+      nextReviewAtMs: clearNextReviewAtMs
+          ? null
+          : (nextReviewAtMs ?? existing.nextReviewAtMs),
+      lastReviewAtMs: clearLastReviewAtMs
+          ? null
+          : (lastReviewAtMs ?? existing.lastReviewAtMs),
+      manualImportanceNudgeScore: clearManualImportanceNudgeScore
+          ? null
+          : (manualImportanceNudgeScore ?? existing.manualImportanceNudgeScore),
+      manualUrgencyNudgeScore: clearManualUrgencyNudgeScore
+          ? null
+          : (manualUrgencyNudgeScore ?? existing.manualUrgencyNudgeScore),
+    );
+    statusByTodoId[todoId] = updated.status;
+    final index = todos.indexWhere((todo) => todo.id == todoId);
+    if (index >= 0) {
+      todos[index] = updated;
+    } else {
+      todos.add(updated);
+    }
+    return updated;
+  }
+
+  @override
+  Future<Todo> setTodoStatus(
+    Uint8List key, {
+    required String todoId,
+    required String newStatus,
+    String? sourceMessageId,
+  }) async {
+    return transitionTodo(
+      key,
+      todoId: todoId,
+      newStatus: newStatus,
+      sourceMessageId: sourceMessageId,
+    );
   }
 }

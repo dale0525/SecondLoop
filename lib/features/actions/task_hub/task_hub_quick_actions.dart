@@ -57,10 +57,10 @@ class TaskHubQuickActionsController {
 
   Future<bool> hasIncompleteChecklist(Todo todo) async {
     final progress = checklistProgressByTodoId[todo.id];
-    if (progress == null || progress.totalCount == 0) {
-      return false;
-    }
-    if (progress.doneCount >= progress.totalCount) {
+    if (progress != null && progress.totalCount > 0) {
+      if (progress.doneCount < progress.totalCount) {
+        return true;
+      }
       return false;
     }
     try {

@@ -4,8 +4,11 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../features/actions/agenda/todo_agenda_page.dart';
 import '../../features/actions/task_hub/task_hub_page.dart';
+import '../../features/actions/task_hub/task_hub_quick_actions.dart';
 import '../../i18n/strings.g.dart';
+import '../../src/rust/db.dart';
 import '../backend/app_backend.dart';
 import '../session/session_scope.dart';
 import '../sync/sync_engine.dart';
@@ -262,15 +265,90 @@ final class _ReviewReminderNotificationsGateState
     }
   }
 
-  void _handleNotificationTap(String? payload) {
-    if (payload == null || payload.isEmpty) return;
-    if (!payload.startsWith(
-      FlutterLocalNotificationsReviewReminderScheduler.reviewQueuePayloadPrefix,
-    )) {
+  void _handleNotificationTap(ReviewReminderNotificationEvent event) {
+    final payload =
+        FlutterLocalNotificationsReviewReminderScheduler.decodePayload(
+      event.payload,
+    );
+    if (payload == null) {
       return;
     }
 
-    unawaited(_openReminderTarget());
+    final quickAction =
+        FlutterLocalNotificationsReviewReminderScheduler.quickActionFromId(
+      event.actionId,
+    );
+    if (quickAction != null) {
+      unawaited(_applyNotificationQuickAction(
+        todoId: payload.todoId,
+        action: quickAction,
+      ));
+      return;
+    }
+
+    unawaited(_openReminderTarget(payload.kind));
+  }
+
+  Future<void> _applyNotificationQuickAction({
+    required String todoId,
+    required TaskHubQuickAction action,
+  }) async {
+    if (!mounted) return;
+
+    final backend = AppBackendScope.of(context);
+    final sessionKey = Uint8List.fromList(SessionScope.of(context).sessionKey);
+    final syncEngine = SyncEngineScope.maybeOf(context);
+    final controller = TaskHubQuickActionsController(
+      backend: backend,
+      sessionKey: sessionKey,
+      confirmDoneWithIncompleteChecklist: _confirmDoneWithIncompleteChecklist,
+    );
+
+    try {
+      final todo = await backend.getTodoById(sessionKey, todoId);
+      if (todo == null) {
+        return;
+      }
+
+      final ticket = await controller.apply(todo, action);
+      if (ticket == null || !mounted) {
+        return;
+      }
+      syncEngine?.notifyLocalMutation();
+      _hideInAppFallbackBanner();
+      _clearDismissedInAppFallback();
+      _scheduleRefresh();
+    } catch (_) {
+      // Best-effort notifications should never break app flow.
+    }
+  }
+
+  Future<bool> _confirmDoneWithIncompleteChecklist(Todo todo) async {
+    if (!mounted) return false;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        key: const ValueKey('review_reminder_incomplete_checklist_dialog'),
+        title: Text(context.t.actions.todoDetail.incompleteChecklistDoneTitle),
+        content: Text(
+          context.t.actions.todoDetail.incompleteChecklistDoneMessage,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: Text(context.t.common.actions.cancel),
+          ),
+          FilledButton(
+            key: const ValueKey('review_reminder_incomplete_checklist_confirm'),
+            onPressed: () => Navigator.of(context).pop(true),
+            child: Text(context.t.common.actions.continueLabel),
+          ),
+        ],
+      ),
+    );
+
+    return confirmed ?? false;
   }
 
   void _handleInAppFallbackPrefChanged() {
@@ -447,7 +525,7 @@ final class _ReviewReminderNotificationsGateState
           dismissLabel: inAppFallbackT.dismiss,
           onOpen: () {
             _hideInAppFallbackBanner();
-            unawaited(_openReminderTarget());
+            unawaited(_openReminderTarget(item.kind));
           },
           onDismiss: () {
             _markInAppFallbackDismissed(item);
@@ -635,7 +713,7 @@ final class _ReviewReminderNotificationsGateState
     _activeInAppFallbackSourceKey = null;
   }
 
-  Future<void> _openReminderTarget() async {
+  Future<void> _openReminderTarget(ReviewReminderItemKind kind) async {
     if (!mounted || _openingPageFromReminder) return;
 
     final navigator = widget.navigatorKey.currentState;
@@ -657,7 +735,9 @@ final class _ReviewReminderNotificationsGateState
               child: SessionScope(
                 sessionKey: sessionKey,
                 lock: lock,
-                child: const TaskHubPage(),
+                child: kind == ReviewReminderItemKind.dueTodo
+                    ? const TodoAgendaPage()
+                    : const TaskHubPage(),
               ),
             );
             if (syncEngine != null) {

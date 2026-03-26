@@ -15,6 +15,7 @@ final class ReviewReminderItem {
     required this.sourceAtUtcMs,
     required this.scheduleAtUtcMs,
     required this.kind,
+    this.todoStatus = 'open',
   });
 
   final String todoId;
@@ -22,6 +23,7 @@ final class ReviewReminderItem {
   final int sourceAtUtcMs;
   final int scheduleAtUtcMs;
   final ReviewReminderItemKind kind;
+  final String todoStatus;
 
   @override
   int get hashCode =>
@@ -29,7 +31,8 @@ final class ReviewReminderItem {
       todoTitle.hashCode ^
       sourceAtUtcMs.hashCode ^
       scheduleAtUtcMs.hashCode ^
-      kind.hashCode;
+      kind.hashCode ^
+      todoStatus.hashCode;
 
   @override
   bool operator ==(Object other) {
@@ -39,7 +42,8 @@ final class ReviewReminderItem {
             todoTitle == other.todoTitle &&
             sourceAtUtcMs == other.sourceAtUtcMs &&
             scheduleAtUtcMs == other.scheduleAtUtcMs &&
-            kind == other.kind;
+            kind == other.kind &&
+            todoStatus == other.todoStatus;
   }
 }
 
@@ -103,6 +107,7 @@ ReviewReminderPlan? buildReviewReminderPlan(
           sourceAtUtcMs: dueAtMs,
           scheduleAtUtcMs: scheduleAtUtcMs,
           kind: ReviewReminderItemKind.dueTodo,
+          todoStatus: todo.status,
         ),
       );
       continue;
@@ -123,6 +128,7 @@ ReviewReminderPlan? buildReviewReminderPlan(
         sourceAtUtcMs: nextReviewAtMs,
         scheduleAtUtcMs: scheduleAtUtcMs,
         kind: ReviewReminderItemKind.reviewQueue,
+        todoStatus: todo.status,
       ),
     );
   }
