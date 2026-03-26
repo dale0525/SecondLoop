@@ -1,5 +1,10 @@
 part of 'native_backend.dart';
 
+bool _isSemanticParseClaimConflict(Object error) {
+  final message = error.toString().toLowerCase();
+  return message.contains('not claimable');
+}
+
 mixin _NativeAppBackendJobs on _NativeAppBackendAccess
     implements SemanticParseAttemptAwareBackend {
   @override
@@ -220,8 +225,7 @@ mixin _NativeAppBackendJobs on _NativeAppBackendAccess
       );
       return attemptId.toInt();
     } on AnyhowException catch (error) {
-      final message = error.toString().toLowerCase();
-      if (message.contains('not claimable')) {
+      if (_isSemanticParseClaimConflict(error)) {
         return null;
       }
       rethrow;
