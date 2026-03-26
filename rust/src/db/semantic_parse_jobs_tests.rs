@@ -424,13 +424,14 @@ fn semantic_parse_jobs_old_attempt_cannot_cancel_new_running_attempt() {
     let second_attempt_id =
         mark_semantic_parse_job_running(&conn, "msg:cancel-race", 7_010).expect("running 2");
 
-    mark_semantic_parse_job_canceled_if_current_attempt(
+    let stale_canceled = mark_semantic_parse_job_canceled_if_current_attempt(
         &conn,
         "msg:cancel-race",
         first_attempt_id,
         7_020,
     )
     .expect("stale cancel ignored");
+    assert!(!stale_canceled);
 
     let key = [8u8; 32];
     let jobs =
@@ -439,13 +440,14 @@ fn semantic_parse_jobs_old_attempt_cannot_cancel_new_running_attempt() {
     assert_eq!(jobs[0].status, "running");
     assert_eq!(jobs[0].attempt_id, second_attempt_id);
 
-    mark_semantic_parse_job_canceled_if_current_attempt(
+    let current_canceled = mark_semantic_parse_job_canceled_if_current_attempt(
         &conn,
         "msg:cancel-race",
         second_attempt_id,
         7_021,
     )
     .expect("current cancel applied");
+    assert!(current_canceled);
 
     let jobs =
         list_semantic_parse_jobs_by_message_ids(&conn, &key, &["msg:cancel-race".to_string()])
@@ -605,4 +607,58 @@ fn semantic_parse_jobs_guarded_mutations_require_current_attempt() {
             .status,
         "done"
     );
+}
+
+#[test]
+fn semantic_parse_jobs_guarded_finalize_returns_applied_flag() {
+    let dir = tempdir().expect("tempdir");
+    let conn = open(dir.path()).expect("open");
+    let key = [4u8; 32];
+
+    enqueue_semantic_parse_job(&conn, "msg:finalize-flag", 9_000).expect("enqueue");
+    let first_attempt_id =
+        mark_semantic_parse_job_running(&conn, "msg:finalize-flag", 9_001).expect("running 1");
+    mark_semantic_parse_job_retry(&conn, "msg:finalize-flag", 9_005).expect("retry");
+    let second_attempt_id =
+        mark_semantic_parse_job_running(&conn, "msg:finalize-flag", 9_010).expect("running 2");
+
+    let stale_succeeded = mark_semantic_parse_job_succeeded_if_current_attempt(
+        &conn,
+        &key,
+        "msg:finalize-flag",
+        first_attempt_id,
+        "none",
+        None,
+        None,
+        None,
+        9_020,
+    )
+    .expect("stale finalize ignored");
+    assert!(!stale_succeeded);
+
+    let stale_failed = mark_semantic_parse_job_failed_if_current_attempt(
+        &conn,
+        "msg:finalize-flag",
+        first_attempt_id,
+        1,
+        9_120,
+        "timeout",
+        9_021,
+    )
+    .expect("stale failure ignored");
+    assert!(!stale_failed);
+
+    let current_succeeded = mark_semantic_parse_job_succeeded_if_current_attempt(
+        &conn,
+        &key,
+        "msg:finalize-flag",
+        second_attempt_id,
+        "none",
+        None,
+        None,
+        None,
+        9_022,
+    )
+    .expect("current finalize applied");
+    assert!(current_succeeded);
 }
