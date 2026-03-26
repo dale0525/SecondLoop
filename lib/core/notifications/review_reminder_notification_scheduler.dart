@@ -81,9 +81,12 @@ final class FlutterLocalNotificationsReviewReminderScheduler
   static const String _androidChannelName = 'Review reminders';
   static const String _androidChannelDescription =
       'Reminders for pending todo reviews';
+  static const int _androidMaxQuickActions = 3;
 
   static const String _windowsAppName = 'SecondLoop';
   static const String _windowsProdAppUserModelId = 'com.secondloop.secondloop';
+  // Intentionally empty for the initial release.
+  // Add superseded AUMIDs here if the Windows app identity changes later.
   static const Set<String> _windowsLegacyAppUserModelIds = <String>{};
   static const String _windowsAppUserModelId = String.fromEnvironment(
     'SECONDLOOP_APP_ID',
@@ -321,6 +324,21 @@ final class FlutterLocalNotificationsReviewReminderScheduler
     ];
   }
 
+  @visibleForTesting
+  static List<TaskHubQuickAction> androidNotificationQuickActionsForItem(
+    ReviewReminderItem item,
+  ) {
+    if (item.todoStatus == 'done' || item.todoStatus == 'in_progress') {
+      return notificationQuickActionsForItem(item);
+    }
+
+    return const <TaskHubQuickAction>[
+      TaskHubQuickAction.start,
+      TaskHubQuickAction.done,
+      TaskHubQuickAction.tomorrow,
+    ];
+  }
+
   static TaskHubQuickAction? quickActionFromId(String? actionId) {
     if (actionId == null || actionId.isEmpty) {
       return null;
@@ -365,6 +383,9 @@ final class FlutterLocalNotificationsReviewReminderScheduler
   ) {
     final payload = encodePayload(item);
     final quickActions = notificationQuickActionsForItem(item);
+    final androidQuickActions = androidNotificationQuickActionsForItem(item)
+        .take(_androidMaxQuickActions)
+        .toList(growable: false);
     return NotificationDetails(
       android: AndroidNotificationDetails(
         _androidChannelId,
@@ -374,7 +395,7 @@ final class FlutterLocalNotificationsReviewReminderScheduler
         priority: Priority.high,
         icon: androidNotificationIcon,
         actions: <AndroidNotificationAction>[
-          for (final action in quickActions)
+          for (final action in androidQuickActions)
             AndroidNotificationAction(
               notificationActionId(action),
               _labelForQuickAction(action),

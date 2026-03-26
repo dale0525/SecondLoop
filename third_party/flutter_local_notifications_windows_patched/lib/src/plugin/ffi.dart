@@ -117,10 +117,18 @@ class FlutterLocalNotificationsWindows extends WindowsNotificationsBase {
     final NotificationResponse response = NotificationResponse(
       notificationResponseType: getResponseType(details.launchType),
       payload: details.payload.toDartString(),
-      actionId: details.payload.toDartString(),
+      actionId: _actionIdForLaunchDetails(details),
       data: data,
     );
     userCallback?.call(response);
+  }
+
+  String? _actionIdForLaunchDetails(NativeLaunchDetails details) {
+    final launchType = NativeLaunchType.fromValue(details.launchType);
+    if (launchType != NativeLaunchType.action) {
+      return null;
+    }
+    return details.payload.toDartString();
   }
 
   late final void Function(Pointer<Utf8>) _cleanupAumidArtifacts =
@@ -208,7 +216,7 @@ class FlutterLocalNotificationsWindows extends WindowsNotificationsBase {
       notificationResponse: NotificationResponse(
         notificationResponseType: getResponseType(details.launchType),
         payload: details.payload.toDartString(),
-        actionId: details.payload.toDartString(),
+        actionId: _actionIdForLaunchDetails(details),
         data: data,
       ),
     );

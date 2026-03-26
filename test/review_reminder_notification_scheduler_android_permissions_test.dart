@@ -124,6 +124,27 @@ void main() {
     );
   });
 
+  test('open reminders trim Android quick actions to the visible limit', () {
+    const item = ReviewReminderItem(
+      todoId: 'todo:review',
+      todoTitle: 'review this',
+      sourceAtUtcMs: 10000,
+      scheduleAtUtcMs: 20000,
+      kind: ReviewReminderItemKind.reviewQueue,
+      todoStatus: 'open',
+    );
+
+    expect(
+      FlutterLocalNotificationsReviewReminderScheduler
+          .androidNotificationQuickActionsForItem(item),
+      <TaskHubQuickAction>[
+        TaskHubQuickAction.start,
+        TaskHubQuickAction.done,
+        TaskHubQuickAction.tomorrow,
+      ],
+    );
+  });
+
   test('in-progress reminders expose the same quick actions as task hub', () {
     const item = ReviewReminderItem(
       todoId: 'todo:review',
@@ -195,13 +216,10 @@ void main() {
         TaskHubQuickAction.start,
       ),
       FlutterLocalNotificationsReviewReminderScheduler.notificationActionId(
-        TaskHubQuickAction.tomorrow,
-      ),
-      FlutterLocalNotificationsReviewReminderScheduler.notificationActionId(
-        TaskHubQuickAction.today,
-      ),
-      FlutterLocalNotificationsReviewReminderScheduler.notificationActionId(
         TaskHubQuickAction.done,
+      ),
+      FlutterLocalNotificationsReviewReminderScheduler.notificationActionId(
+        TaskHubQuickAction.tomorrow,
       ),
     ]);
   });
