@@ -164,6 +164,44 @@ abstract class SemanticParseAutoActionsStore {
     required int nowMs,
   });
 
+  Future<List<String>?> completeNoActionIfCurrentAttempt({
+    required String messageId,
+    required int expectedAttemptId,
+    List<String>? pendingSuggestedTags,
+    List<String>? autoApplySuggestedTags,
+    double? suggestedTagConfidence,
+    required int nowMs,
+  });
+
+  Future<bool> completeCreateTodoIfCurrentAttempt({
+    required String messageId,
+    required int expectedAttemptId,
+    required String title,
+    required String status,
+    int? dueAtMs,
+    String? recurrenceRuleJson,
+    String? followupTaskTypeHint,
+    required List<String> checklistSuggestions,
+    required String checklistSource,
+    String? checklistGenerationKey,
+    List<String>? pendingSuggestedTags,
+    List<String>? autoApplySuggestedTags,
+    double? suggestedTagConfidence,
+    required int nowMs,
+  });
+
+  Future<bool> completeFollowupIfCurrentAttempt({
+    required String messageId,
+    required int expectedAttemptId,
+    required String todoId,
+    String? todoTitle,
+    required String newStatus,
+    List<String>? pendingSuggestedTags,
+    List<String>? autoApplySuggestedTags,
+    double? suggestedTagConfidence,
+    required int nowMs,
+  });
+
   Future<SemanticParseTagApplyResult> applySemanticTags({
     required String messageId,
     required List<String> suggestedTags,
@@ -425,10 +463,9 @@ final class SemanticParseAutoActionsRunner {
         final normalizedSuggestedTags = normalizeSemanticTagNames(
           parsed.suggestedTags,
         );
-        List<String>? suggestedTags;
+        List<String>? pendingSuggestedTags;
+        List<String>? autoApplySuggestedTags;
         double? suggestedTagConfidence;
-        String tagSuggestionState = 'none';
-        List<String>? appliedTagIds;
 
         if (normalizedSuggestedTags.isNotEmpty) {
           if (!await _isStillRunningAttempt(
@@ -438,49 +475,29 @@ final class SemanticParseAutoActionsRunner {
             continue;
           }
           if (parsed.tagConfidence >= settings.minAutoTagConfidence) {
-            final result = await store.applySemanticTags(
-              messageId: job.messageId,
-              suggestedTags: normalizedSuggestedTags,
-              expectedAttemptId: attemptId,
-            );
-            if (!await _isStillRunningAttempt(
-              messageId: job.messageId,
-              attemptId: attemptId,
-            )) {
-              continue;
-            }
-            if (result.appliedCount > 0) {
-              didMutateAny = true;
-              suggestedTags = normalizedSuggestedTags;
-              suggestedTagConfidence = parsed.tagConfidence;
-              tagSuggestionState = 'applied';
-              if (result.appliedTagIds.isNotEmpty) {
-                appliedTagIds = result.appliedTagIds;
-              }
-            }
-          } else if (parsed.tagConfidence >= settings.minPendingTagConfidence) {
-            suggestedTags = normalizedSuggestedTags;
+            autoApplySuggestedTags = normalizedSuggestedTags;
             suggestedTagConfidence = parsed.tagConfidence;
-            tagSuggestionState = 'pending';
+          } else if (parsed.tagConfidence >= settings.minPendingTagConfidence) {
+            pendingSuggestedTags = normalizedSuggestedTags;
+            suggestedTagConfidence = parsed.tagConfidence;
           }
         }
 
         if (parsed.confidence < settings.minAutoConfidence) {
-          await _markJobSucceededIfStillRunning(
-            SemanticParseJobSucceededArgs(
-              messageId: job.messageId,
-              appliedActionKind: 'none',
-              appliedTodoId: null,
-              appliedTodoTitle: null,
-              appliedPrevTodoStatus: null,
-              suggestedTags: suggestedTags,
-              suggestedTagConfidence: suggestedTagConfidence,
-              tagSuggestionState: tagSuggestionState,
-              appliedTagIds: appliedTagIds,
-              nowMs: nowMs,
-            ),
-            attemptId: attemptId,
+          final appliedTagIds = await store.completeNoActionIfCurrentAttempt(
+            messageId: job.messageId,
+            expectedAttemptId: attemptId,
+            pendingSuggestedTags: pendingSuggestedTags,
+            autoApplySuggestedTags: autoApplySuggestedTags,
+            suggestedTagConfidence: suggestedTagConfidence,
+            nowMs: nowMs,
           );
+          if (appliedTagIds == null) {
+            continue;
+          }
+          if (appliedTagIds.isNotEmpty) {
+            didMutateAny = true;
+          }
 
           continue;
         }
@@ -493,21 +510,21 @@ final class SemanticParseAutoActionsRunner {
               :final recurrenceRule,
             ):
             if (!allowCreate) {
-              await _markJobSucceededIfStillRunning(
-                SemanticParseJobSucceededArgs(
-                  messageId: job.messageId,
-                  appliedActionKind: 'none',
-                  appliedTodoId: null,
-                  appliedTodoTitle: null,
-                  appliedPrevTodoStatus: null,
-                  suggestedTags: suggestedTags,
-                  suggestedTagConfidence: suggestedTagConfidence,
-                  tagSuggestionState: tagSuggestionState,
-                  appliedTagIds: appliedTagIds,
-                  nowMs: nowMs,
-                ),
-                attemptId: attemptId,
+              final appliedTagIds =
+                  await store.completeNoActionIfCurrentAttempt(
+                messageId: job.messageId,
+                expectedAttemptId: attemptId,
+                pendingSuggestedTags: pendingSuggestedTags,
+                autoApplySuggestedTags: autoApplySuggestedTags,
+                suggestedTagConfidence: suggestedTagConfidence,
+                nowMs: nowMs,
               );
+              if (appliedTagIds == null) {
+                continue;
+              }
+              if (appliedTagIds.isNotEmpty) {
+                didMutateAny = true;
+              }
 
               break;
             }
@@ -517,27 +534,9 @@ final class SemanticParseAutoActionsRunner {
             )) {
               continue;
             }
-            final appliedTodoId = await store.upsertTodoFromMessage(
-              messageId: job.messageId,
-              title: title,
-              status: status,
-              dueAtMs: dueAtLocal?.toUtc().millisecondsSinceEpoch,
-              recurrenceRuleJson: recurrenceRule?.toJsonString(),
-              followupTaskTypeHint: parsed.taskType,
-              expectedAttemptId: attemptId,
-            );
-            if (appliedTodoId == null) {
-              continue;
-            }
-            didMutateAny = true;
-            if (!await _isStillRunningAttempt(
-              messageId: job.messageId,
-              attemptId: attemptId,
-            )) {
-              continue;
-            }
+            List<String> generatedChecklistSuggestions = const <String>[];
             try {
-              final generatedChecklistSuggestions =
+              generatedChecklistSuggestions =
                   await client.generateChecklistSuggestions(
                 taskTitle: title,
                 taskContext: analysisText,
@@ -546,44 +545,38 @@ final class SemanticParseAutoActionsRunner {
                 dueAtMs: dueAtLocal?.toUtc().millisecondsSinceEpoch,
                 timeout: settings.hardTimeout,
               );
-              if (generatedChecklistSuggestions.isNotEmpty) {
-                await store.upsertGeneratedChecklistSuggestions(
-                  messageId: job.messageId,
-                  todoId: appliedTodoId,
-                  suggestions: generatedChecklistSuggestions,
-                  source: switch (client) {
-                    BackendSemanticParseAutoActionsClient(
-                      :final askAiRoute,
-                    ) =>
-                      askAiRoute == AskAiRouteKind.cloudGateway
-                          ? 'cloud'
-                          : 'byok',
-                    _ => 'byok',
-                  },
-                  generationKey: 'semantic_parse_auto:${job.messageId}',
-                  expectedAttemptId: attemptId,
-                );
-              }
             } catch (_) {
               // Best effort only. Checklist suggestions must not block todo creation.
             }
-            final didFinalize = await _markJobSucceededIfStillRunning(
-              SemanticParseJobSucceededArgs(
-                messageId: job.messageId,
-                appliedActionKind: 'create',
-                appliedTodoId: appliedTodoId,
-                appliedTodoTitle: title,
-                appliedPrevTodoStatus: null,
-                suggestedTags: suggestedTags,
-                suggestedTagConfidence: suggestedTagConfidence,
-                tagSuggestionState: tagSuggestionState,
-                appliedTagIds: appliedTagIds,
-                nowMs: nowMs,
-              ),
+            if (!await _isStillRunningAttempt(
+              messageId: job.messageId,
               attemptId: attemptId,
+            )) {
+              continue;
+            }
+            final didFinalize = await store.completeCreateTodoIfCurrentAttempt(
+              messageId: job.messageId,
+              expectedAttemptId: attemptId,
+              title: title,
+              status: status,
+              dueAtMs: dueAtLocal?.toUtc().millisecondsSinceEpoch,
+              recurrenceRuleJson: recurrenceRule?.toJsonString(),
+              followupTaskTypeHint: parsed.taskType,
+              checklistSuggestions: generatedChecklistSuggestions,
+              checklistSource: switch (client) {
+                BackendSemanticParseAutoActionsClient(:final askAiRoute) =>
+                  askAiRoute == AskAiRouteKind.cloudGateway ? 'cloud' : 'byok',
+                _ => 'byok',
+              },
+              checklistGenerationKey: 'semantic_parse_auto:${job.messageId}',
+              pendingSuggestedTags: pendingSuggestedTags,
+              autoApplySuggestedTags: autoApplySuggestedTags,
+              suggestedTagConfidence: suggestedTagConfidence,
+              nowMs: nowMs,
             );
 
             if (didFinalize) {
+              didMutateAny = true;
               processed += 1;
             }
             break;
@@ -597,62 +590,44 @@ final class SemanticParseAutoActionsRunner {
             )) {
               continue;
             }
-            final previousStatus = await store.setTodoStatusFromMessage(
-              messageId: job.messageId,
-              todoId: todoId,
-              newStatus: newStatus,
-              expectedAttemptId: attemptId,
-            );
-            if (!await _isStillRunningAttempt(
-              messageId: job.messageId,
-              attemptId: attemptId,
-            )) {
-              continue;
-            }
-            didMutateAny = true;
-
             final candidateTitle = candidates
                 .where((c) => c.id == todoId)
                 .map((c) => c.title)
                 .cast<String?>()
                 .firstWhere((_) => true, orElse: () => null);
 
-            final didFinalize = await _markJobSucceededIfStillRunning(
-              SemanticParseJobSucceededArgs(
-                messageId: job.messageId,
-                appliedActionKind: 'followup',
-                appliedTodoId: todoId,
-                appliedTodoTitle: candidateTitle,
-                appliedPrevTodoStatus: previousStatus,
-                suggestedTags: suggestedTags,
-                suggestedTagConfidence: suggestedTagConfidence,
-                tagSuggestionState: tagSuggestionState,
-                appliedTagIds: appliedTagIds,
-                nowMs: nowMs,
-              ),
-              attemptId: attemptId,
+            final didFinalize = await store.completeFollowupIfCurrentAttempt(
+              messageId: job.messageId,
+              expectedAttemptId: attemptId,
+              todoId: todoId,
+              todoTitle: candidateTitle,
+              newStatus: newStatus,
+              pendingSuggestedTags: pendingSuggestedTags,
+              autoApplySuggestedTags: autoApplySuggestedTags,
+              suggestedTagConfidence: suggestedTagConfidence,
+              nowMs: nowMs,
             );
 
             if (didFinalize) {
+              didMutateAny = true;
               processed += 1;
             }
             break;
           case MessageActionNoneDecision():
-            await _markJobSucceededIfStillRunning(
-              SemanticParseJobSucceededArgs(
-                messageId: job.messageId,
-                appliedActionKind: 'none',
-                appliedTodoId: null,
-                appliedTodoTitle: null,
-                appliedPrevTodoStatus: null,
-                suggestedTags: suggestedTags,
-                suggestedTagConfidence: suggestedTagConfidence,
-                tagSuggestionState: tagSuggestionState,
-                appliedTagIds: appliedTagIds,
-                nowMs: nowMs,
-              ),
-              attemptId: attemptId,
+            final appliedTagIds = await store.completeNoActionIfCurrentAttempt(
+              messageId: job.messageId,
+              expectedAttemptId: attemptId,
+              pendingSuggestedTags: pendingSuggestedTags,
+              autoApplySuggestedTags: autoApplySuggestedTags,
+              suggestedTagConfidence: suggestedTagConfidence,
+              nowMs: nowMs,
             );
+            if (appliedTagIds == null) {
+              continue;
+            }
+            if (appliedTagIds.isNotEmpty) {
+              didMutateAny = true;
+            }
 
             break;
         }
@@ -785,16 +760,6 @@ final class SemanticParseAutoActionsRunner {
     }
     return currentJob.status == 'running' &&
         currentJob.attemptId.toInt() == attemptId;
-  }
-
-  Future<bool> _markJobSucceededIfStillRunning(
-    SemanticParseJobSucceededArgs args, {
-    required int attemptId,
-  }) async {
-    return store.markJobSucceededIfCurrentAttempt(
-      args,
-      expectedAttemptId: attemptId,
-    );
   }
 
   Future<bool> _markJobFailedIfStillRunning(

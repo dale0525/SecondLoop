@@ -327,7 +327,7 @@ void main() {
     );
 
     expect(result.processed, 0);
-    expect(store.createdTodoIds, contains('todo:msg:finalize_race'));
+    expect(store.createdTodoIds, isEmpty);
     expect(store.lastSucceeded, isNull);
     expect(store.currentJobStatus('msg:finalize_race'), 'running');
     expect(store.currentJobUpdatedAtMs('msg:finalize_race'), 1002);
@@ -1042,6 +1042,216 @@ final class _FakeStore implements SemanticParseAutoActionsStore {
       return false;
     }
     await markJobCanceled(messageId: messageId, nowMs: nowMs);
+    return true;
+  }
+
+  @override
+  Future<List<String>?> completeNoActionIfCurrentAttempt({
+    required String messageId,
+    required int expectedAttemptId,
+    List<String>? pendingSuggestedTags,
+    List<String>? autoApplySuggestedTags,
+    double? suggestedTagConfidence,
+    required int nowMs,
+  }) async {
+    beforeMarkSucceededIfCurrentAttempt?.call(
+      messageId,
+      expectedAttemptId,
+      nowMs,
+    );
+    final current = _currentJobs[messageId];
+    if (current == null || current.attemptId.toInt() != expectedAttemptId) {
+      return null;
+    }
+
+    List<String> appliedTagIds = const <String>[];
+    List<String>? suggestedTags;
+    double? tagConfidence;
+    String tagSuggestionState = 'none';
+    if (autoApplySuggestedTags != null && autoApplySuggestedTags.isNotEmpty) {
+      final result = await applySemanticTags(
+        messageId: messageId,
+        suggestedTags: autoApplySuggestedTags,
+        expectedAttemptId: expectedAttemptId,
+      );
+      if (result.appliedTagIds.isNotEmpty) {
+        appliedTagIds = result.appliedTagIds;
+        suggestedTags = autoApplySuggestedTags;
+        tagConfidence = suggestedTagConfidence;
+        tagSuggestionState = 'applied';
+      }
+    } else if (pendingSuggestedTags != null &&
+        pendingSuggestedTags.isNotEmpty) {
+      suggestedTags = pendingSuggestedTags;
+      tagConfidence = suggestedTagConfidence;
+      tagSuggestionState = 'pending';
+    }
+
+    lastSucceeded = SemanticParseJobSucceededArgs(
+      messageId: messageId,
+      appliedActionKind: 'none',
+      appliedTodoId: null,
+      appliedTodoTitle: null,
+      appliedPrevTodoStatus: null,
+      suggestedTags: suggestedTags,
+      suggestedTagConfidence: tagConfidence,
+      tagSuggestionState: tagSuggestionState,
+      appliedTagIds: appliedTagIds.isEmpty ? null : appliedTagIds,
+      nowMs: nowMs,
+    );
+    _currentJobs[messageId] = _buildJob(
+      messageId: messageId,
+      status: 'succeeded',
+      attemptId: expectedAttemptId,
+      updatedAtMs: nowMs,
+    );
+    return appliedTagIds;
+  }
+
+  @override
+  Future<bool> completeCreateTodoIfCurrentAttempt({
+    required String messageId,
+    required int expectedAttemptId,
+    required String title,
+    required String status,
+    int? dueAtMs,
+    String? recurrenceRuleJson,
+    String? followupTaskTypeHint,
+    required List<String> checklistSuggestions,
+    required String checklistSource,
+    String? checklistGenerationKey,
+    List<String>? pendingSuggestedTags,
+    List<String>? autoApplySuggestedTags,
+    double? suggestedTagConfidence,
+    required int nowMs,
+  }) async {
+    beforeMarkSucceededIfCurrentAttempt?.call(
+      messageId,
+      expectedAttemptId,
+      nowMs,
+    );
+    final current = _currentJobs[messageId];
+    if (current == null || current.attemptId.toInt() != expectedAttemptId) {
+      return false;
+    }
+
+    List<String> appliedTagIds = const <String>[];
+    List<String>? suggestedTags;
+    double? tagConfidence;
+    String tagSuggestionState = 'none';
+    if (autoApplySuggestedTags != null && autoApplySuggestedTags.isNotEmpty) {
+      final result = await applySemanticTags(
+        messageId: messageId,
+        suggestedTags: autoApplySuggestedTags,
+        expectedAttemptId: expectedAttemptId,
+      );
+      if (result.appliedTagIds.isNotEmpty) {
+        appliedTagIds = result.appliedTagIds;
+        suggestedTags = autoApplySuggestedTags;
+        tagConfidence = suggestedTagConfidence;
+        tagSuggestionState = 'applied';
+      }
+    } else if (pendingSuggestedTags != null &&
+        pendingSuggestedTags.isNotEmpty) {
+      suggestedTags = pendingSuggestedTags;
+      tagConfidence = suggestedTagConfidence;
+      tagSuggestionState = 'pending';
+    }
+
+    final todoId = _upsertTodoResultByMessageId[messageId] ?? 'todo:$messageId';
+    createdTodoIds.add(todoId);
+    lastRecurrenceRuleJson = recurrenceRuleJson;
+    lastFollowupTaskTypeHint = followupTaskTypeHint;
+    if (checklistSuggestions.isNotEmpty) {
+      generatedChecklistSuggestionsByTodoId[todoId] =
+          List<String>.from(checklistSuggestions);
+    }
+    lastSucceeded = SemanticParseJobSucceededArgs(
+      messageId: messageId,
+      appliedActionKind: 'create',
+      appliedTodoId: todoId,
+      appliedTodoTitle: title,
+      appliedPrevTodoStatus: null,
+      suggestedTags: suggestedTags,
+      suggestedTagConfidence: tagConfidence,
+      tagSuggestionState: tagSuggestionState,
+      appliedTagIds: appliedTagIds.isEmpty ? null : appliedTagIds,
+      nowMs: nowMs,
+    );
+    _currentJobs[messageId] = _buildJob(
+      messageId: messageId,
+      status: 'succeeded',
+      attemptId: expectedAttemptId,
+      updatedAtMs: nowMs,
+    );
+    return true;
+  }
+
+  @override
+  Future<bool> completeFollowupIfCurrentAttempt({
+    required String messageId,
+    required int expectedAttemptId,
+    required String todoId,
+    String? todoTitle,
+    required String newStatus,
+    List<String>? pendingSuggestedTags,
+    List<String>? autoApplySuggestedTags,
+    double? suggestedTagConfidence,
+    required int nowMs,
+  }) async {
+    beforeMarkSucceededIfCurrentAttempt?.call(
+      messageId,
+      expectedAttemptId,
+      nowMs,
+    );
+    final current = _currentJobs[messageId];
+    if (current == null || current.attemptId.toInt() != expectedAttemptId) {
+      return false;
+    }
+
+    List<String> appliedTagIds = const <String>[];
+    List<String>? suggestedTags;
+    double? tagConfidence;
+    String tagSuggestionState = 'none';
+    if (autoApplySuggestedTags != null && autoApplySuggestedTags.isNotEmpty) {
+      final result = await applySemanticTags(
+        messageId: messageId,
+        suggestedTags: autoApplySuggestedTags,
+        expectedAttemptId: expectedAttemptId,
+      );
+      if (result.appliedTagIds.isNotEmpty) {
+        appliedTagIds = result.appliedTagIds;
+        suggestedTags = autoApplySuggestedTags;
+        tagConfidence = suggestedTagConfidence;
+        tagSuggestionState = 'applied';
+      }
+    } else if (pendingSuggestedTags != null &&
+        pendingSuggestedTags.isNotEmpty) {
+      suggestedTags = pendingSuggestedTags;
+      tagConfidence = suggestedTagConfidence;
+      tagSuggestionState = 'pending';
+    }
+
+    final previousStatus = _previousStatusByTodoId[todoId];
+    updatedStatusByTodoId[todoId] = newStatus;
+    lastSucceeded = SemanticParseJobSucceededArgs(
+      messageId: messageId,
+      appliedActionKind: 'followup',
+      appliedTodoId: todoId,
+      appliedTodoTitle: todoTitle,
+      appliedPrevTodoStatus: previousStatus,
+      suggestedTags: suggestedTags,
+      suggestedTagConfidence: tagConfidence,
+      tagSuggestionState: tagSuggestionState,
+      appliedTagIds: appliedTagIds.isEmpty ? null : appliedTagIds,
+      nowMs: nowMs,
+    );
+    _currentJobs[messageId] = _buildJob(
+      messageId: messageId,
+      status: 'succeeded',
+      attemptId: expectedAttemptId,
+      updatedAtMs: nowMs,
+    );
     return true;
   }
 

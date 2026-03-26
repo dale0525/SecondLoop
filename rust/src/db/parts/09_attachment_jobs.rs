@@ -61,6 +61,8 @@ fn normalize_tag_suggestion_state(raw: Option<&str>) -> Result<String> {
     }
 }
 
+pub const SEMANTIC_PARSE_RUNNING_LEASE_MS: i64 = 2 * 60 * 1000;
+
 pub fn enqueue_semantic_parse_job(conn: &Connection, message_id: &str, now_ms: i64) -> Result<()> {
     let message_id = message_id.trim();
     if message_id.is_empty() {
@@ -135,6 +137,7 @@ pub fn list_due_semantic_parse_jobs(
     limit: i64,
 ) -> Result<Vec<SemanticParseJob>> {
     let limit = limit.clamp(1, 500);
+    let running_lease_cutoff_ms = now_ms - SEMANTIC_PARSE_RUNNING_LEASE_MS;
     let mut stmt = conn.prepare(
         r#"
 SELECT message_id,
@@ -150,14 +153,23 @@ SELECT message_id,
        created_at_ms,
        updated_at_ms
 FROM semantic_parse_jobs
-WHERE status IN ('pending', 'failed', 'running')
-  AND (next_retry_at_ms IS NULL OR next_retry_at_ms <= ?1)
+WHERE (
+      status = 'pending'
+   OR (
+        status = 'failed'
+        AND (next_retry_at_ms IS NULL OR next_retry_at_ms <= ?1)
+      )
+   OR (
+        status = 'running'
+        AND updated_at_ms <= ?2
+      )
+)
 ORDER BY updated_at_ms ASC, message_id ASC
-LIMIT ?2
+LIMIT ?3
 "#,
     )?;
 
-    let mut rows = stmt.query(params![now_ms, limit])?;
+    let mut rows = stmt.query(params![now_ms, running_lease_cutoff_ms, limit])?;
     let mut result = Vec::new();
     while let Some(row) = rows.next()? {
         result.push(SemanticParseJob {
@@ -395,16 +407,22 @@ pub fn mark_semantic_parse_job_running(
     now_ms: i64,
 ) -> Result<i64> {
     run_immediate_transaction(conn, || {
+        let running_lease_cutoff_ms = now_ms - SEMANTIC_PARSE_RUNNING_LEASE_MS;
         let updated = conn.execute(
             r#"
 UPDATE semantic_parse_jobs
 SET status = 'running',
     attempt_id = attempt_id + 1,
+    next_retry_at_ms = NULL,
+    last_error = NULL,
     updated_at_ms = ?2
 WHERE message_id = ?1
-  AND status IN ('pending', 'failed', 'running')
+  AND (
+    status IN ('pending', 'failed')
+    OR (status = 'running' AND updated_at_ms <= ?3)
+  )
 "#,
-            params![message_id, now_ms],
+            params![message_id, now_ms, running_lease_cutoff_ms],
         )?;
         if updated == 0 {
             return Err(anyhow!("semantic parse job is not claimable: {message_id}"));
@@ -417,6 +435,236 @@ WHERE message_id = ?1
         )
         .map_err(Into::into)
     })
+}
+
+fn apply_semantic_parse_tags_in_existing_txn(
+    conn: &Connection,
+    key: &[u8; 32],
+    message_id: &str,
+    suggested_tags: &[String],
+) -> Result<Vec<String>> {
+    let manual_tag_names = list_manual_message_tag_names(conn, key, message_id)?;
+    if manual_tag_names.len() >= MAX_SUGGESTED_TAGS_PER_MESSAGE {
+        return Ok(Vec::new());
+    }
+
+    let manual_tag_name_set = manual_tag_names
+        .into_iter()
+        .map(|name| normalize_tag_name(&name))
+        .collect::<std::collections::HashSet<_>>();
+    let allowed_auto_fill_count = MAX_SUGGESTED_TAGS_PER_MESSAGE - manual_tag_name_set.len();
+    if allowed_auto_fill_count == 0 {
+        return Ok(Vec::new());
+    }
+
+    let existing_message_tags = list_message_tags(conn, key, message_id)?;
+    let mut next_tag_ids = existing_message_tags
+        .iter()
+        .map(|tag| tag.id.clone())
+        .collect::<std::collections::BTreeSet<_>>();
+
+    let mut applied_tag_ids = Vec::<String>::new();
+    for raw_tag_name in suggested_tags {
+        let normalized = normalize_tag_name(raw_tag_name);
+        if normalized.is_empty() || manual_tag_name_set.contains(&normalized) {
+            continue;
+        }
+
+        let tag = upsert_tag(conn, key, raw_tag_name)?;
+        if next_tag_ids.insert(tag.id.clone()) {
+            applied_tag_ids.push(tag.id);
+            if applied_tag_ids.len() >= allowed_auto_fill_count {
+                break;
+            }
+        }
+    }
+
+    if applied_tag_ids.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let next_tag_ids = next_tag_ids.into_iter().collect::<Vec<_>>();
+    set_message_tags_in_existing_txn(conn, key, message_id, &next_tag_ids)?;
+    Ok(applied_tag_ids)
+}
+
+struct SemanticParseTodoCreateUpsert<'a> {
+    message_id: &'a str,
+    todo_id: &'a str,
+    title: &'a str,
+    due_at_ms: Option<i64>,
+    status: &'a str,
+    review_stage: Option<i64>,
+    next_review_at_ms: Option<i64>,
+    last_review_at_ms: Option<i64>,
+    task_type_hint: Option<&'a str>,
+    recurrence_rule_json: Option<&'a str>,
+    now_ms: i64,
+}
+
+fn upsert_semantic_parse_todo_create_in_existing_txn(
+    conn: &Connection,
+    key: &[u8; 32],
+    params: SemanticParseTodoCreateUpsert<'_>,
+) -> Result<String> {
+    let SemanticParseTodoCreateUpsert {
+        message_id,
+        todo_id,
+        title,
+        due_at_ms,
+        status,
+        review_stage,
+        next_review_at_ms,
+        last_review_at_ms,
+        task_type_hint,
+        recurrence_rule_json,
+        now_ms,
+    } = params;
+    let todo = upsert_todo(
+        conn,
+        key,
+        todo_id,
+        title,
+        due_at_ms,
+        status,
+        Some(message_id),
+        review_stage,
+        next_review_at_ms,
+        last_review_at_ms,
+        None,
+        None,
+    )?;
+    if todo.created_at_ms == todo.updated_at_ms {
+        let normalized_task_type_hint = task_type_hint.map(str::trim).filter(|value| !value.is_empty());
+        enqueue_todo_followup_generation_job(
+            conn,
+            todo_id,
+            "auto_create",
+            false,
+            normalized_task_type_hint,
+            now_ms,
+        )?;
+    }
+
+    if let Some(rule_json) = recurrence_rule_json.map(str::trim).filter(|value| !value.is_empty()) {
+        let _ = upsert_todo_recurrence_with_sync_in_txn(
+            conn,
+            key,
+            todo_id,
+            &format!("series:{message_id}"),
+            rule_json,
+            None,
+        )?;
+    }
+
+    Ok(todo.id)
+}
+
+fn upsert_semantic_parse_checklist_suggestions_in_existing_txn(
+    conn: &Connection,
+    key: &[u8; 32],
+    todo_id: &str,
+    suggestions: &[String],
+    source: &str,
+    generation_key: Option<&str>,
+) -> Result<bool> {
+    if suggestions.is_empty() {
+        return Ok(false);
+    }
+
+    let existing = list_todo_checklist_suggestions(conn, key, todo_id)?;
+    let mut blocked_norms = existing
+        .iter()
+        .map(|item| normalize_checklist_suggestion_content(&item.content))
+        .collect::<std::collections::HashSet<_>>();
+
+    let base_sort_order: i64 = conn.query_row(
+        r#"SELECT COALESCE(MAX(sort_order), -1) + 1 FROM todo_checklist_suggestions WHERE todo_id = ?1"#,
+        params![todo_id],
+        |row| row.get(0),
+    )?;
+    let now = now_ms();
+    let device_id = get_or_create_device_id(conn)?;
+    let mut insert_index: i64 = 0;
+    let mut created_any = false;
+
+    for raw_content in suggestions {
+        let trimmed = raw_content.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        let normalized = normalize_checklist_suggestion_content(trimmed);
+        if normalized.is_empty() || !blocked_norms.insert(normalized) {
+            continue;
+        }
+
+        let id = uuid::Uuid::new_v4().to_string();
+        let content_blob = encrypt_bytes(
+            key,
+            trimmed.as_bytes(),
+            &todo_checklist_suggestion_content_aad(&id),
+        )?;
+        conn.execute(
+            r#"
+INSERT INTO todo_checklist_suggestions(
+  id, todo_id, content, sort_order, state, source, generation_key, created_at_ms, updated_at_ms, dismissed_at_ms, applied_checklist_item_id
+) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, NULL, NULL)
+"#,
+            params![
+                id,
+                todo_id,
+                content_blob,
+                base_sort_order + insert_index,
+                TODO_CHECKLIST_SUGGESTION_STATE_PENDING,
+                source,
+                generation_key,
+                now,
+                now,
+            ],
+        )?;
+        let suggestion = get_todo_checklist_suggestion_by_id(conn, key, &id)?;
+
+        let seq = next_device_seq(conn, &device_id)?;
+        let op = serde_json::json!({
+            "op_id": uuid::Uuid::new_v4().to_string(),
+            "device_id": device_id,
+            "seq": seq,
+            "ts_ms": now,
+            "type": "todo.checklist_suggestion.upsert.v1",
+            "payload": {
+                "suggestion_id": suggestion.id,
+                "todo_id": suggestion.todo_id,
+                "content": suggestion.content,
+                "sort_order": suggestion.sort_order,
+                "state": suggestion.state,
+                "source": suggestion.source,
+                "generation_key": suggestion.generation_key,
+                "created_at_ms": suggestion.created_at_ms,
+                "updated_at_ms": suggestion.updated_at_ms,
+                "dismissed_at_ms": suggestion.dismissed_at_ms,
+                "applied_checklist_item_id": suggestion.applied_checklist_item_id,
+            }
+        });
+        insert_oplog(conn, key, &op)?;
+
+        insert_index += 1;
+        created_any = true;
+    }
+
+    Ok(created_any)
+}
+
+fn set_semantic_parse_todo_status_in_existing_txn(
+    conn: &Connection,
+    key: &[u8; 32],
+    todo_id: &str,
+    new_status: &str,
+    source_message_id: &str,
+) -> Result<String> {
+    let existing = get_todo(conn, key, todo_id)?;
+    let previous_status = existing.status.clone();
+    let _ = set_todo_status_in_txn(conn, key, todo_id, new_status, Some(source_message_id))?;
+    Ok(previous_status)
 }
 
 pub fn mark_semantic_parse_job_failed(
@@ -783,50 +1031,7 @@ pub fn apply_semantic_parse_tags_if_current_attempt(
         if !semantic_parse_attempt_matches(conn, message_id, expected_attempt_id)? {
             return Ok(Vec::new());
         }
-
-        let manual_tag_names = list_manual_message_tag_names(conn, key, message_id)?;
-        if manual_tag_names.len() >= MAX_SUGGESTED_TAGS_PER_MESSAGE {
-            return Ok(Vec::new());
-        }
-
-        let manual_tag_name_set = manual_tag_names
-            .into_iter()
-            .map(|name| normalize_tag_name(&name))
-            .collect::<std::collections::HashSet<_>>();
-        let allowed_auto_fill_count = MAX_SUGGESTED_TAGS_PER_MESSAGE - manual_tag_name_set.len();
-        if allowed_auto_fill_count == 0 {
-            return Ok(Vec::new());
-        }
-
-        let existing_message_tags = list_message_tags(conn, key, message_id)?;
-        let mut next_tag_ids = existing_message_tags
-            .iter()
-            .map(|tag| tag.id.clone())
-            .collect::<std::collections::BTreeSet<_>>();
-
-        let mut applied_tag_ids = Vec::<String>::new();
-        for raw_tag_name in suggested_tags {
-            let normalized = normalize_tag_name(raw_tag_name);
-            if normalized.is_empty() || manual_tag_name_set.contains(&normalized) {
-                continue;
-            }
-
-            let tag = upsert_tag(conn, key, raw_tag_name)?;
-            if next_tag_ids.insert(tag.id.clone()) {
-                applied_tag_ids.push(tag.id);
-                if applied_tag_ids.len() >= allowed_auto_fill_count {
-                    break;
-                }
-            }
-        }
-
-        if applied_tag_ids.is_empty() {
-            return Ok(Vec::new());
-        }
-
-        let next_tag_ids = next_tag_ids.into_iter().collect::<Vec<_>>();
-        set_message_tags_in_existing_txn(conn, key, message_id, &next_tag_ids)?;
-        Ok(applied_tag_ids)
+        apply_semantic_parse_tags_in_existing_txn(conn, key, message_id, suggested_tags)
     })
 }
 
@@ -852,49 +1057,23 @@ pub fn upsert_semantic_parse_todo_create_if_current_attempt(
             return Ok(None);
         }
 
-        let todo = upsert_todo(
+        Ok(Some(upsert_semantic_parse_todo_create_in_existing_txn(
             conn,
             key,
-            todo_id,
-            title,
-            due_at_ms,
-            status,
-            Some(message_id),
-            review_stage,
-            next_review_at_ms,
-            last_review_at_ms,
-            None,
-            None,
-        )?;
-        if todo.created_at_ms == todo.updated_at_ms {
-            let normalized_task_type_hint = task_type_hint
-                .map(str::trim)
-                .filter(|value| !value.is_empty());
-            enqueue_todo_followup_generation_job(
-                conn,
+            SemanticParseTodoCreateUpsert {
+                message_id,
                 todo_id,
-                "auto_create",
-                false,
-                normalized_task_type_hint,
+                title,
+                due_at_ms,
+                status,
+                review_stage,
+                next_review_at_ms,
+                last_review_at_ms,
+                task_type_hint,
+                recurrence_rule_json,
                 now_ms,
-            )?;
-        }
-
-        if let Some(rule_json) = recurrence_rule_json
-            .map(str::trim)
-            .filter(|value| !value.is_empty())
-        {
-            let _ = upsert_todo_recurrence_with_sync_in_txn(
-                conn,
-                key,
-                todo_id,
-                &format!("series:{message_id}"),
-                rule_json,
-                None,
-            )?;
-        }
-
-        Ok(Some(todo.id))
+            },
+        )?))
     })
 }
 
@@ -912,90 +1091,14 @@ pub fn upsert_semantic_parse_checklist_suggestions_if_current_attempt(
         if !semantic_parse_attempt_matches(conn, message_id, expected_attempt_id)? {
             return Ok(false);
         }
-        if suggestions.is_empty() {
-            return Ok(false);
-        }
-
-        let existing = list_todo_checklist_suggestions(conn, key, todo_id)?;
-        let mut blocked_norms = existing
-            .iter()
-            .map(|item| normalize_checklist_suggestion_content(&item.content))
-            .collect::<std::collections::HashSet<_>>();
-
-        let base_sort_order: i64 = conn.query_row(
-            r#"SELECT COALESCE(MAX(sort_order), -1) + 1 FROM todo_checklist_suggestions WHERE todo_id = ?1"#,
-            params![todo_id],
-            |row| row.get(0),
-        )?;
-        let now = now_ms();
-        let device_id = get_or_create_device_id(conn)?;
-        let mut insert_index: i64 = 0;
-        let mut created_any = false;
-
-        for raw_content in suggestions {
-            let trimmed = raw_content.trim();
-            if trimmed.is_empty() {
-                continue;
-            }
-            let normalized = normalize_checklist_suggestion_content(trimmed);
-            if normalized.is_empty() || !blocked_norms.insert(normalized) {
-                continue;
-            }
-
-            let id = uuid::Uuid::new_v4().to_string();
-            let content_blob = encrypt_bytes(
-                key,
-                trimmed.as_bytes(),
-                &todo_checklist_suggestion_content_aad(&id),
-            )?;
-            conn.execute(
-                r#"
-INSERT INTO todo_checklist_suggestions(
-  id, todo_id, content, sort_order, state, source, generation_key, created_at_ms, updated_at_ms, dismissed_at_ms, applied_checklist_item_id
-) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, NULL, NULL)
-"#,
-                params![
-                    id,
-                    todo_id,
-                    content_blob,
-                    base_sort_order + insert_index,
-                    TODO_CHECKLIST_SUGGESTION_STATE_PENDING,
-                    source,
-                    generation_key,
-                    now,
-                    now,
-                ],
-            )?;
-            let suggestion = get_todo_checklist_suggestion_by_id(conn, key, &id)?;
-
-            let seq = next_device_seq(conn, &device_id)?;
-            let op = serde_json::json!({
-                "op_id": uuid::Uuid::new_v4().to_string(),
-                "device_id": device_id,
-                "seq": seq,
-                "ts_ms": now,
-                "type": "todo.checklist_suggestion.upsert.v1",
-                "payload": {
-                    "suggestion_id": suggestion.id,
-                    "todo_id": suggestion.todo_id,
-                    "content": suggestion.content,
-                    "sort_order": suggestion.sort_order,
-                    "state": suggestion.state,
-                    "source": suggestion.source,
-                    "generation_key": suggestion.generation_key,
-                    "created_at_ms": suggestion.created_at_ms,
-                    "updated_at_ms": suggestion.updated_at_ms,
-                    "dismissed_at_ms": suggestion.dismissed_at_ms,
-                    "applied_checklist_item_id": suggestion.applied_checklist_item_id,
-                }
-            });
-            insert_oplog(conn, key, &op)?;
-
-            insert_index += 1;
-            created_any = true;
-        }
-
-        Ok(created_any)
+        upsert_semantic_parse_checklist_suggestions_in_existing_txn(
+            conn,
+            key,
+            todo_id,
+            suggestions,
+            source,
+            generation_key,
+        )
     })
 }
 
@@ -1012,10 +1115,257 @@ pub fn set_semantic_parse_todo_status_if_current_attempt(
             return Ok(None);
         }
 
-        let existing = get_todo(conn, key, todo_id)?;
-        let previous_status = existing.status.clone();
-        let _ = set_todo_status_in_txn(conn, key, todo_id, new_status, Some(message_id))?;
-        Ok(Some(previous_status))
+        Ok(Some(set_semantic_parse_todo_status_in_existing_txn(
+            conn,
+            key,
+            todo_id,
+            new_status,
+            message_id,
+        )?))
+    })
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn complete_semantic_parse_no_action_if_current_attempt(
+    conn: &Connection,
+    key: &[u8; 32],
+    message_id: &str,
+    expected_attempt_id: i64,
+    pending_suggested_tags: Option<&[String]>,
+    auto_apply_suggested_tags: Option<&[String]>,
+    suggested_tag_confidence: Option<f64>,
+    now_ms: i64,
+) -> Result<Option<Vec<String>>> {
+    run_immediate_transaction(conn, || {
+        if !semantic_parse_attempt_matches(conn, message_id, expected_attempt_id)? {
+            return Ok(None);
+        }
+
+        let mut applied_tag_ids = Vec::<String>::new();
+        let mut stored_suggested_tags = pending_suggested_tags;
+        let mut stored_tag_confidence = pending_suggested_tags.and(suggested_tag_confidence);
+        let mut stored_tag_state = if pending_suggested_tags.is_some() {
+            Some("pending")
+        } else {
+            Some("none")
+        };
+
+        if let Some(auto_tags) = auto_apply_suggested_tags {
+            let applied = apply_semantic_parse_tags_in_existing_txn(conn, key, message_id, auto_tags)?;
+            if !applied.is_empty() {
+                stored_suggested_tags = Some(auto_tags);
+                stored_tag_confidence = suggested_tag_confidence;
+                stored_tag_state = Some("applied");
+                applied_tag_ids = applied;
+            } else {
+                stored_suggested_tags = None;
+                stored_tag_confidence = None;
+                stored_tag_state = Some("none");
+            }
+        }
+
+        let finalized = mark_semantic_parse_job_succeeded_with_tag_metadata_if_current_attempt(
+            conn,
+            key,
+            message_id,
+            expected_attempt_id,
+            "none",
+            None,
+            None,
+            None,
+            stored_suggested_tags,
+            stored_tag_confidence,
+            stored_tag_state,
+            if applied_tag_ids.is_empty() {
+                None
+            } else {
+                Some(applied_tag_ids.as_slice())
+            },
+            now_ms,
+        )?;
+        if !finalized {
+            return Err(anyhow!("semantic parse no-op finalize failed inside transaction"));
+        }
+        Ok(Some(applied_tag_ids))
+    })
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn complete_semantic_parse_create_if_current_attempt(
+    conn: &Connection,
+    key: &[u8; 32],
+    message_id: &str,
+    expected_attempt_id: i64,
+    todo_id: &str,
+    title: &str,
+    due_at_ms: Option<i64>,
+    status: &str,
+    review_stage: Option<i64>,
+    next_review_at_ms: Option<i64>,
+    last_review_at_ms: Option<i64>,
+    task_type_hint: Option<&str>,
+    recurrence_rule_json: Option<&str>,
+    checklist_suggestions: &[String],
+    checklist_source: &str,
+    checklist_generation_key: Option<&str>,
+    pending_suggested_tags: Option<&[String]>,
+    auto_apply_suggested_tags: Option<&[String]>,
+    suggested_tag_confidence: Option<f64>,
+    now_ms: i64,
+) -> Result<bool> {
+    run_immediate_transaction(conn, || {
+        if !semantic_parse_attempt_matches(conn, message_id, expected_attempt_id)? {
+            return Ok(false);
+        }
+
+        let mut applied_tag_ids = Vec::<String>::new();
+        let mut stored_suggested_tags = pending_suggested_tags;
+        let mut stored_tag_confidence = pending_suggested_tags.and(suggested_tag_confidence);
+        let mut stored_tag_state = if pending_suggested_tags.is_some() {
+            Some("pending")
+        } else {
+            Some("none")
+        };
+
+        if let Some(auto_tags) = auto_apply_suggested_tags {
+            let applied = apply_semantic_parse_tags_in_existing_txn(conn, key, message_id, auto_tags)?;
+            if !applied.is_empty() {
+                stored_suggested_tags = Some(auto_tags);
+                stored_tag_confidence = suggested_tag_confidence;
+                stored_tag_state = Some("applied");
+                applied_tag_ids = applied;
+            } else {
+                stored_suggested_tags = None;
+                stored_tag_confidence = None;
+                stored_tag_state = Some("none");
+            }
+        }
+
+        let applied_todo_id = upsert_semantic_parse_todo_create_in_existing_txn(
+            conn,
+            key,
+            SemanticParseTodoCreateUpsert {
+                message_id,
+                todo_id,
+                title,
+                due_at_ms,
+                status,
+                review_stage,
+                next_review_at_ms,
+                last_review_at_ms,
+                task_type_hint,
+                recurrence_rule_json,
+                now_ms,
+            },
+        )?;
+        let _ = upsert_semantic_parse_checklist_suggestions_in_existing_txn(
+            conn,
+            key,
+            applied_todo_id.as_str(),
+            checklist_suggestions,
+            checklist_source,
+            checklist_generation_key,
+        )?;
+
+        let finalized = mark_semantic_parse_job_succeeded_with_tag_metadata_if_current_attempt(
+            conn,
+            key,
+            message_id,
+            expected_attempt_id,
+            "create",
+            Some(applied_todo_id.as_str()),
+            Some(title),
+            None,
+            stored_suggested_tags,
+            stored_tag_confidence,
+            stored_tag_state,
+            if applied_tag_ids.is_empty() {
+                None
+            } else {
+                Some(applied_tag_ids.as_slice())
+            },
+            now_ms,
+        )?;
+        if !finalized {
+            return Err(anyhow!("semantic parse create finalize failed inside transaction"));
+        }
+        Ok(true)
+    })
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn complete_semantic_parse_followup_if_current_attempt(
+    conn: &Connection,
+    key: &[u8; 32],
+    message_id: &str,
+    expected_attempt_id: i64,
+    todo_id: &str,
+    todo_title: Option<&str>,
+    new_status: &str,
+    pending_suggested_tags: Option<&[String]>,
+    auto_apply_suggested_tags: Option<&[String]>,
+    suggested_tag_confidence: Option<f64>,
+    now_ms: i64,
+) -> Result<bool> {
+    run_immediate_transaction(conn, || {
+        if !semantic_parse_attempt_matches(conn, message_id, expected_attempt_id)? {
+            return Ok(false);
+        }
+
+        let mut applied_tag_ids = Vec::<String>::new();
+        let mut stored_suggested_tags = pending_suggested_tags;
+        let mut stored_tag_confidence = pending_suggested_tags.and(suggested_tag_confidence);
+        let mut stored_tag_state = if pending_suggested_tags.is_some() {
+            Some("pending")
+        } else {
+            Some("none")
+        };
+
+        if let Some(auto_tags) = auto_apply_suggested_tags {
+            let applied = apply_semantic_parse_tags_in_existing_txn(conn, key, message_id, auto_tags)?;
+            if !applied.is_empty() {
+                stored_suggested_tags = Some(auto_tags);
+                stored_tag_confidence = suggested_tag_confidence;
+                stored_tag_state = Some("applied");
+                applied_tag_ids = applied;
+            } else {
+                stored_suggested_tags = None;
+                stored_tag_confidence = None;
+                stored_tag_state = Some("none");
+            }
+        }
+
+        let previous_status = set_semantic_parse_todo_status_in_existing_txn(
+            conn,
+            key,
+            todo_id,
+            new_status,
+            message_id,
+        )?;
+
+        let finalized = mark_semantic_parse_job_succeeded_with_tag_metadata_if_current_attempt(
+            conn,
+            key,
+            message_id,
+            expected_attempt_id,
+            "followup",
+            Some(todo_id),
+            todo_title,
+            Some(previous_status.as_str()),
+            stored_suggested_tags,
+            stored_tag_confidence,
+            stored_tag_state,
+            if applied_tag_ids.is_empty() {
+                None
+            } else {
+                Some(applied_tag_ids.as_slice())
+            },
+            now_ms,
+        )?;
+        if !finalized {
+            return Err(anyhow!("semantic parse followup finalize failed inside transaction"));
+        }
+        Ok(true)
     })
 }
 

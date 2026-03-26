@@ -376,6 +376,110 @@ mixin _NativeAppBackendJobs on _NativeAppBackendAccess
   }
 
   @override
+  Future<List<String>?> completeSemanticParseNoActionIfCurrentAttempt(
+    Uint8List key, {
+    required String messageId,
+    required int expectedAttemptId,
+    List<String>? pendingSuggestedTags,
+    List<String>? autoApplySuggestedTags,
+    double? suggestedTagConfidence,
+    required int nowMs,
+  }) async {
+    final appDir = await _getAppDir();
+    return rust_core.dbCompleteSemanticParseNoActionIfCurrentAttempt(
+      appDir: appDir,
+      key: key,
+      messageId: messageId,
+      expectedAttemptId: PlatformInt64Util.from(expectedAttemptId),
+      pendingSuggestedTags: pendingSuggestedTags,
+      autoApplySuggestedTags: autoApplySuggestedTags,
+      suggestedTagConfidence: suggestedTagConfidence,
+      nowMs: PlatformInt64Util.from(nowMs),
+    );
+  }
+
+  @override
+  Future<bool> completeSemanticParseCreateIfCurrentAttempt(
+    Uint8List key, {
+    required String messageId,
+    required int expectedAttemptId,
+    required String todoId,
+    required String title,
+    required String status,
+    int? dueAtMs,
+    int? reviewStage,
+    int? nextReviewAtMs,
+    int? lastReviewAtMs,
+    String? recurrenceRuleJson,
+    String? followupTaskTypeHint,
+    required List<String> checklistSuggestions,
+    required String checklistSource,
+    String? checklistGenerationKey,
+    List<String>? pendingSuggestedTags,
+    List<String>? autoApplySuggestedTags,
+    double? suggestedTagConfidence,
+    required int nowMs,
+  }) async {
+    final appDir = await _getAppDir();
+    return rust_core.dbCompleteSemanticParseCreateIfCurrentAttempt(
+      appDir: appDir,
+      key: key,
+      messageId: messageId,
+      expectedAttemptId: PlatformInt64Util.from(expectedAttemptId),
+      todoId: todoId,
+      title: title,
+      dueAtMs: dueAtMs == null ? null : PlatformInt64Util.from(dueAtMs),
+      status: status,
+      reviewStage:
+          reviewStage == null ? null : PlatformInt64Util.from(reviewStage),
+      nextReviewAtMs: nextReviewAtMs == null
+          ? null
+          : PlatformInt64Util.from(nextReviewAtMs),
+      lastReviewAtMs: lastReviewAtMs == null
+          ? null
+          : PlatformInt64Util.from(lastReviewAtMs),
+      taskTypeHint: followupTaskTypeHint,
+      recurrenceRuleJson: recurrenceRuleJson,
+      checklistSuggestions: checklistSuggestions,
+      checklistSource: checklistSource,
+      checklistGenerationKey: checklistGenerationKey,
+      pendingSuggestedTags: pendingSuggestedTags,
+      autoApplySuggestedTags: autoApplySuggestedTags,
+      suggestedTagConfidence: suggestedTagConfidence,
+      nowMs: PlatformInt64Util.from(nowMs),
+    );
+  }
+
+  @override
+  Future<bool> completeSemanticParseFollowupIfCurrentAttempt(
+    Uint8List key, {
+    required String messageId,
+    required int expectedAttemptId,
+    required String todoId,
+    String? todoTitle,
+    required String newStatus,
+    List<String>? pendingSuggestedTags,
+    List<String>? autoApplySuggestedTags,
+    double? suggestedTagConfidence,
+    required int nowMs,
+  }) async {
+    final appDir = await _getAppDir();
+    return rust_core.dbCompleteSemanticParseFollowupIfCurrentAttempt(
+      appDir: appDir,
+      key: key,
+      messageId: messageId,
+      expectedAttemptId: PlatformInt64Util.from(expectedAttemptId),
+      todoId: todoId,
+      todoTitle: todoTitle,
+      newStatus: newStatus,
+      pendingSuggestedTags: pendingSuggestedTags,
+      autoApplySuggestedTags: autoApplySuggestedTags,
+      suggestedTagConfidence: suggestedTagConfidence,
+      nowMs: PlatformInt64Util.from(nowMs),
+    );
+  }
+
+  @override
   Future<List<String>> applySemanticParseTagsIfCurrentAttempt(
     Uint8List key, {
     required String messageId,

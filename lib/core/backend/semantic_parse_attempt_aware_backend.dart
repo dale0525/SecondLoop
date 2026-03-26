@@ -39,6 +39,51 @@ abstract interface class SemanticParseAttemptAwareBackend {
     required int nowMs,
   });
 
+  Future<List<String>?> completeSemanticParseNoActionIfCurrentAttempt(
+    Uint8List key, {
+    required String messageId,
+    required int expectedAttemptId,
+    List<String>? pendingSuggestedTags,
+    List<String>? autoApplySuggestedTags,
+    double? suggestedTagConfidence,
+    required int nowMs,
+  });
+
+  Future<bool> completeSemanticParseCreateIfCurrentAttempt(
+    Uint8List key, {
+    required String messageId,
+    required int expectedAttemptId,
+    required String todoId,
+    required String title,
+    required String status,
+    int? dueAtMs,
+    int? reviewStage,
+    int? nextReviewAtMs,
+    int? lastReviewAtMs,
+    String? recurrenceRuleJson,
+    String? followupTaskTypeHint,
+    required List<String> checklistSuggestions,
+    required String checklistSource,
+    String? checklistGenerationKey,
+    List<String>? pendingSuggestedTags,
+    List<String>? autoApplySuggestedTags,
+    double? suggestedTagConfidence,
+    required int nowMs,
+  });
+
+  Future<bool> completeSemanticParseFollowupIfCurrentAttempt(
+    Uint8List key, {
+    required String messageId,
+    required int expectedAttemptId,
+    required String todoId,
+    String? todoTitle,
+    required String newStatus,
+    List<String>? pendingSuggestedTags,
+    List<String>? autoApplySuggestedTags,
+    double? suggestedTagConfidence,
+    required int nowMs,
+  });
+
   Future<List<String>> applySemanticParseTagsIfCurrentAttempt(
     Uint8List key, {
     required String messageId,

@@ -1537,6 +1537,114 @@ pub fn db_mark_semantic_parse_job_canceled_if_current_attempt(
 }
 
 #[flutter_rust_bridge::frb]
+#[allow(clippy::too_many_arguments)]
+pub fn db_complete_semantic_parse_no_action_if_current_attempt(
+    app_dir: String,
+    key: Vec<u8>,
+    message_id: String,
+    expected_attempt_id: i64,
+    pending_suggested_tags: Option<Vec<String>>,
+    auto_apply_suggested_tags: Option<Vec<String>>,
+    suggested_tag_confidence: Option<f64>,
+    now_ms: i64,
+) -> Result<Option<Vec<String>>> {
+    let key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    db::complete_semantic_parse_no_action_if_current_attempt(
+        &conn,
+        &key,
+        &message_id,
+        expected_attempt_id,
+        pending_suggested_tags.as_deref(),
+        auto_apply_suggested_tags.as_deref(),
+        suggested_tag_confidence,
+        now_ms,
+    )
+}
+
+#[flutter_rust_bridge::frb]
+#[allow(clippy::too_many_arguments)]
+pub fn db_complete_semantic_parse_create_if_current_attempt(
+    app_dir: String,
+    key: Vec<u8>,
+    message_id: String,
+    expected_attempt_id: i64,
+    todo_id: String,
+    title: String,
+    due_at_ms: Option<i64>,
+    status: String,
+    review_stage: Option<i64>,
+    next_review_at_ms: Option<i64>,
+    last_review_at_ms: Option<i64>,
+    task_type_hint: Option<String>,
+    recurrence_rule_json: Option<String>,
+    checklist_suggestions: Vec<String>,
+    checklist_source: String,
+    checklist_generation_key: Option<String>,
+    pending_suggested_tags: Option<Vec<String>>,
+    auto_apply_suggested_tags: Option<Vec<String>>,
+    suggested_tag_confidence: Option<f64>,
+    now_ms: i64,
+) -> Result<bool> {
+    let key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    db::complete_semantic_parse_create_if_current_attempt(
+        &conn,
+        &key,
+        &message_id,
+        expected_attempt_id,
+        &todo_id,
+        &title,
+        due_at_ms,
+        &status,
+        review_stage,
+        next_review_at_ms,
+        last_review_at_ms,
+        task_type_hint.as_deref(),
+        recurrence_rule_json.as_deref(),
+        &checklist_suggestions,
+        &checklist_source,
+        checklist_generation_key.as_deref(),
+        pending_suggested_tags.as_deref(),
+        auto_apply_suggested_tags.as_deref(),
+        suggested_tag_confidence,
+        now_ms,
+    )
+}
+
+#[flutter_rust_bridge::frb]
+#[allow(clippy::too_many_arguments)]
+pub fn db_complete_semantic_parse_followup_if_current_attempt(
+    app_dir: String,
+    key: Vec<u8>,
+    message_id: String,
+    expected_attempt_id: i64,
+    todo_id: String,
+    todo_title: Option<String>,
+    new_status: String,
+    pending_suggested_tags: Option<Vec<String>>,
+    auto_apply_suggested_tags: Option<Vec<String>>,
+    suggested_tag_confidence: Option<f64>,
+    now_ms: i64,
+) -> Result<bool> {
+    let key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    db::complete_semantic_parse_followup_if_current_attempt(
+        &conn,
+        &key,
+        &message_id,
+        expected_attempt_id,
+        &todo_id,
+        todo_title.as_deref(),
+        &new_status,
+        pending_suggested_tags.as_deref(),
+        auto_apply_suggested_tags.as_deref(),
+        suggested_tag_confidence,
+        now_ms,
+    )
+}
+
+#[flutter_rust_bridge::frb]
 pub fn db_apply_semantic_parse_tags_if_current_attempt(
     app_dir: String,
     key: Vec<u8>,
