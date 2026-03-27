@@ -110,7 +110,6 @@ jobs:
           SECONDLOOP_REPO: ${{ github.repository }}
           SECONDLOOP_WEB_RUN_ID: ${{ github.run_id }}
           SECONDLOOP_WEB_HEAD_SHA: ${{ github.sha }}
-          SECONDLOOP_WEB_REF: ${{ github.event.release.target_commitish || github.ref_name }}
           SECONDLOOP_RELEASE_TAG: ${{ github.event.release.tag_name }}
         run: |
           set -euo pipefail
@@ -124,5 +123,4 @@ jobs:
             -F client_payload[secondloop_repo]="$SECONDLOOP_REPO" \
             -F client_payload[secondloop_web_run_id]="$SECONDLOOP_WEB_RUN_ID" \
             -F client_payload[secondloop_web_head_sha]="$SECONDLOOP_WEB_HEAD_SHA" \
-            -F client_payload[secondloop_web_ref]="$SECONDLOOP_WEB_REF" \
             -F client_payload[release_tag]="$SECONDLOOP_RELEASE_TAG"

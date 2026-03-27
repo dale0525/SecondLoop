@@ -48,6 +48,21 @@ void main() {
     expect(workflow, contains(r'repos/$SITE_REPO/dispatches'));
   });
 
+  test('web build workflow dispatches stable artifact selectors only', () {
+    final workflow = File('.github/workflows/web-build.yml').readAsStringSync();
+
+    expect(workflow, contains('secondloop_web_run_id'));
+    expect(workflow, contains('secondloop_web_head_sha'));
+    expect(
+      workflow,
+      isNot(contains('client_payload[secondloop_web_ref]')),
+    );
+    expect(
+      workflow,
+      isNot(contains('github.event.release.target_commitish')),
+    );
+  });
+
   test('web build workflow only builds for strict app release tags', () {
     final workflow = File('.github/workflows/web-build.yml').readAsStringSync();
 
