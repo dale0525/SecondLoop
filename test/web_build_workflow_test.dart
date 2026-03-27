@@ -48,6 +48,17 @@ void main() {
     expect(workflow, contains(r'repos/$SITE_REPO/dispatches'));
   });
 
+  test('web build workflow only builds for strict app release tags', () {
+    final workflow = File('.github/workflows/web-build.yml').readAsStringSync();
+
+    expect(workflow, contains('release.tag_name'));
+    expect(workflow, contains(r'^v[0-9]+\.[0-9]+\.[0-9]+$'));
+    expect(
+      workflow,
+      contains('Skipping web build for non-app release tag'),
+    );
+  });
+
   test('web build workflow skips release dispatch when site token is unset',
       () {
     final workflow = File('.github/workflows/web-build.yml').readAsStringSync();
