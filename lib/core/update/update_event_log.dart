@@ -3,7 +3,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'app_update_service.dart';
+import 'app_update_models.dart';
 
 enum UpdateEventType {
   checkStarted,

@@ -488,6 +488,10 @@ collect_related_flutter_tests_for_lib_file() {
   local package_import="package:secondloop/${file#lib/}"
   local match
 
+  if ! command -v rg >/dev/null 2>&1; then
+    return 0
+  fi
+
   match="test/${file#lib/}"
   match="${match%.dart}_test.dart"
   if [[ -f "${match}" ]]; then
@@ -510,6 +514,10 @@ collect_targeted_flutter_tests() {
   for file in "${staged_files[@]}"; do
     case "${file}" in
       lib/*.dart | lib/**/*.dart)
+        if ! command -v rg >/dev/null 2>&1; then
+          saw_unmapped_lib_change=1
+          break
+        fi
         related_targets=()
         while IFS= read -r candidate; do
           [[ -n "${candidate}" ]] || continue

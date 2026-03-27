@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:secondloop/core/update/app_update_models.dart';
 import 'package:secondloop/core/update/windows/velopack_paths.dart';
 import 'package:secondloop/core/update/windows/velopack_update_client.dart';
 
@@ -193,7 +194,7 @@ void main() {
     final applied = await client.applyPendingOnStartup(waitPid: 789);
 
     expect(calls, 1);
-    expect(applied, isFalse);
+    expect(applied.status, PendingUpdateStartupStatus.inProgress);
     expect(stagedPackage.existsSync(), isTrue);
     expect(_pendingApplyAttemptMarker(root).existsSync(), isTrue);
   });
@@ -309,9 +310,10 @@ void main() {
       },
     );
 
-    await client.applyPendingOnStartup(waitPid: 999);
+    final result = await client.applyPendingOnStartup(waitPid: 999);
 
     expect(calls, 0);
+    expect(result.status, PendingUpdateStartupStatus.none);
   });
 
   test(
@@ -340,9 +342,10 @@ void main() {
       },
     );
 
-    await client.applyPendingOnStartup(waitPid: 1000);
+    final result = await client.applyPendingOnStartup(waitPid: 1000);
 
     expect(calls, 1);
+    expect(result.status, PendingUpdateStartupStatus.dispatched);
     expect(actualMode, ProcessStartMode.detached);
     expect(actualArgs, containsAllInOrder(['apply', '--silent']));
     expect(actualArgs, contains('--restart'));

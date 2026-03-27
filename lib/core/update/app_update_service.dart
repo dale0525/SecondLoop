@@ -1,16 +1,20 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-import 'dart:math';
 
 import 'package:archive/archive_io.dart';
 import 'package:cryptography/cryptography.dart';
 import 'package:flutter/foundation.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
+import 'app_update_models.dart';
+import 'linux/linux_update_script.dart';
 import 'macos/macos_update_client.dart';
 import 'update_event_log.dart';
 import 'windows/velopack_update_client.dart';
+
+export 'app_update_models.dart';
+export 'linux/linux_update_script.dart';
 
 const _defaultReleaseApiOrigin = String.fromEnvironment(
   'SECONDLOOP_RELEASE_API_ORIGIN',
@@ -26,111 +30,10 @@ const _defaultUpdatePublicKey = String.fromEnvironment(
 );
 const _defaultUpdateNetworkTimeout = Duration(seconds: 15);
 
-enum AppUpdatePlatform {
-  windows,
-  macos,
-  linux,
-  android,
-  ios,
-  unsupported,
-}
-
-enum AppUpdateInstallMode {
-  seamlessRestart,
-  stagedNextLaunch,
-  externalDownload,
-}
-
-class AppRuntimeVersion {
-  const AppRuntimeVersion({
-    required this.version,
-    required this.buildNumber,
-  });
-
-  final String version;
-  final String buildNumber;
-
-  String get display {
-    final cleanBuild = buildNumber.trim();
-    if (cleanBuild.isEmpty) return version;
-    return '$version+$cleanBuild';
-  }
-}
-
-class AppUpdateAsset {
-  const AppUpdateAsset({
-    required this.name,
-    required this.downloadUri,
-    this.sha256,
-  });
-
-  final String name;
-  final Uri downloadUri;
-  final String? sha256;
-}
-
-class AppUpdateAvailability {
-  const AppUpdateAvailability({
-    required this.currentVersion,
-    required this.latestTag,
-    required this.releasePageUri,
-    required this.installMode,
-    this.asset,
-  });
-
-  final String currentVersion;
-  final String latestTag;
-  final Uri releasePageUri;
-  final AppUpdateInstallMode installMode;
-  final AppUpdateAsset? asset;
-
-  Uri get downloadUri => asset?.downloadUri ?? releasePageUri;
-  bool get canSeamlessInstall =>
-      installMode == AppUpdateInstallMode.seamlessRestart;
-  bool get canStageForNextLaunch =>
-      installMode == AppUpdateInstallMode.stagedNextLaunch;
-}
-
-class AppUpdateCheckResult {
-  const AppUpdateCheckResult({
-    required this.currentVersion,
-    this.update,
-    this.errorMessage,
-  });
-
-  final String currentVersion;
-  final AppUpdateAvailability? update;
-  final String? errorMessage;
-
-  bool get isUpToDate => update == null && errorMessage == null;
-}
-
 typedef AppUpdateReleaseJsonFetcher = Future<Map<String, Object?>> Function(
   Uri uri,
 );
 typedef AppRuntimeVersionLoader = Future<AppRuntimeVersion> Function();
-
-int compareReleaseTagWithCurrentVersion(
-    String releaseTag, String currentVersion) {
-  final releaseSegments = _parseVersionSegments(releaseTag);
-  final currentSegments = _parseVersionSegments(currentVersion);
-  if (releaseSegments.isEmpty || currentSegments.isEmpty) return 0;
-
-  final comparedLength = max(
-    min(3, releaseSegments.length),
-    min(3, currentSegments.length),
-  );
-
-  for (var i = 0; i < comparedLength; i++) {
-    final releaseValue = i < releaseSegments.length ? releaseSegments[i] : 0;
-    final currentValue = i < currentSegments.length ? currentSegments[i] : 0;
-    if (releaseValue != currentValue) {
-      return releaseValue.compareTo(currentValue);
-    }
-  }
-
-  return 0;
-}
 
 class AppUpdateService {
   AppUpdateService({
@@ -423,7 +326,7 @@ class AppUpdateService {
 
         final script = File('${tempRoot.path}/apply_update.sh');
         await script.writeAsString(
-          _buildLinuxUpdaterScript(
+          buildLinuxUpdaterScript(
             pid: pid,
             appDirPath: appDirPath,
             executablePath: executablePath,
@@ -510,22 +413,25 @@ class AppUpdateService {
     }
   }
 
-  Future<bool> applyPendingUpdateOnStartup() async {
+  Future<PendingUpdateStartupResult> applyPendingUpdateOnStartup() async {
     if (_platform != AppUpdatePlatform.windows) {
-      return false;
+      return const PendingUpdateStartupResult.noPendingUpdate();
     }
     final stagedClient = _resolvedWindowsStagedUpdateClient;
     if (stagedClient == null || !stagedClient.isAvailable()) {
-      return false;
+      return const PendingUpdateStartupResult.noPendingUpdate();
     }
     await _recordEvent(UpdateEventType.pendingApplyStarted);
     try {
-      final applied = await stagedClient.applyPendingOnStartup(waitPid: pid);
-      if (applied) {
+      final result = await stagedClient.applyPendingOnStartup(waitPid: pid);
+      if (result.didLaunchUpdater) {
         await _recordEvent(UpdateEventType.pendingApplyDispatched);
         _exitProcess(0);
       }
-      return applied;
+      if (result.isUpdateInProgress) {
+        _exitProcess(0);
+      }
+      return result;
     } catch (error) {
       await _recordFailure(UpdateEventType.pendingApplyFailed, error);
       rethrow;
@@ -1008,22 +914,6 @@ class AppUpdateService {
     return extractedDir;
   }
 
-  String _buildLinuxUpdaterScript({
-    required int pid,
-    required String appDirPath,
-    required String executablePath,
-    required String sourceDirPath,
-    required String tempRootPath,
-  }) {
-    return _buildLinuxUpdaterScriptImpl(
-      pid: pid,
-      appDirPath: appDirPath,
-      executablePath: executablePath,
-      sourceDirPath: sourceDirPath,
-      tempRootPath: tempRootPath,
-    );
-  }
-
   static String? _readString(Map<String, Object?> map, String key) {
     final value = map[key];
     if (value is! String) return null;
@@ -1100,22 +990,6 @@ class AppUpdateService {
   }
 }
 
-List<int> _parseVersionSegments(String input) {
-  final cleaned = input.trim();
-  if (cleaned.isEmpty) return const [];
-  final matches = RegExp(r'\d+').allMatches(cleaned);
-  if (matches.isEmpty) return const [];
-
-  final segments = <int>[];
-  for (final match in matches) {
-    final parsed = int.tryParse(match.group(0) ?? '');
-    if (parsed == null) continue;
-    segments.add(parsed);
-    if (segments.length >= 4) break;
-  }
-  return segments;
-}
-
 AppUpdatePlatform _detectPlatform() {
   if (kIsWeb) return AppUpdatePlatform.unsupported;
   if (Platform.isWindows) return AppUpdatePlatform.windows;
@@ -1126,98 +1000,7 @@ AppUpdatePlatform _detectPlatform() {
   return AppUpdatePlatform.unsupported;
 }
 
-String _shellQuote(String value) {
-  return "'${value.replaceAll("'", "'\\''")}'";
-}
-
-String buildLinuxUpdaterScriptForTest({
-  required int pid,
-  required String appDirPath,
-  required String executablePath,
-  required String sourceDirPath,
-  required String tempRootPath,
-}) {
-  return _buildLinuxUpdaterScriptImpl(
-    pid: pid,
-    appDirPath: appDirPath,
-    executablePath: executablePath,
-    sourceDirPath: sourceDirPath,
-    tempRootPath: tempRootPath,
-  );
-}
-
 Future<String> sha256FileHexForTest(File file) => _sha256FileHex(file);
-
-String _buildLinuxUpdaterScriptImpl({
-  required int pid,
-  required String appDirPath,
-  required String executablePath,
-  required String sourceDirPath,
-  required String tempRootPath,
-}) {
-  final safePid = pid.toString();
-  final appDir = _shellQuote(appDirPath);
-  final executable = _shellQuote(executablePath);
-  final sourceDir = _shellQuote(sourceDirPath);
-  final tempRoot = _shellQuote(tempRootPath);
-
-  return '''#!/usr/bin/env bash
-set -euo pipefail
-APP_PID=$safePid
-APP_DIR=$appDir
-EXE_PATH=$executable
-SOURCE_DIR=$sourceDir
-TEMP_ROOT=$tempRoot
-APP_PARENT=\$(dirname "\$APP_DIR")
-BACKUP_DIR="\$APP_PARENT/.secondloop-update-backup.\$APP_PID"
-STAGED_DIR="\$APP_PARENT/.secondloop-update-stage.\$APP_PID"
-MAX_WAIT=60
-waited=0
-APP_START=\$(/bin/ps -o lstart= -p "\$APP_PID" 2>/dev/null | sed 's/^ *//')
-
-cleanup() {
-  rm -rf "\$STAGED_DIR" "\$TEMP_ROOT" || true
-}
-
-restore_backup() {
-  if [ -d "\$BACKUP_DIR" ]; then
-    mv "\$APP_DIR" "\$APP_DIR.failed" 2>/dev/null || true
-    mv "\$BACKUP_DIR" "\$APP_DIR" || {
-      rm -rf "\$TEMP_ROOT" || true
-      exit 1
-    }
-    rm -rf "\$APP_DIR.failed" || true
-  fi
-}
-
-on_error() {
-  restore_backup
-  cleanup
-}
-
-trap on_error EXIT
-
-while kill -0 "\$APP_PID" 2>/dev/null && [ "\$waited" -lt "\$MAX_WAIT" ]; do
-  CURRENT_START=\$(/bin/ps -o lstart= -p "\$APP_PID" 2>/dev/null | sed 's/^ *//')
-  if [ -n "\$APP_START" ] && [ "\$CURRENT_START" != "\$APP_START" ]; then
-    break
-  fi
-  sleep 1
-  waited=\$((waited + 1))
-done
-
-rm -rf "\$STAGED_DIR" "\$BACKUP_DIR"
-mkdir -p "\$STAGED_DIR"
-cp -a "\$SOURCE_DIR"/. "\$STAGED_DIR"/
-mv "\$APP_DIR" "\$BACKUP_DIR"
-mv "\$STAGED_DIR" "\$APP_DIR"
-rm -rf "\$BACKUP_DIR" || true
-chmod +x "\$EXE_PATH" || true
-nohup "\$EXE_PATH" >/dev/null 2>&1 &
-trap - EXIT
-cleanup
-''';
-}
 
 Future<String> _sha256FileHex(File file) async {
   final sink = Sha256().newHashSink();

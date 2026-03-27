@@ -43,12 +43,15 @@ class _FakeWindowsStagedUpdateClient implements WindowsStagedUpdateClient {
   _FakeWindowsStagedUpdateClient({
     required this.available,
     this.pendingUpdateAvailable = false,
+    this.pendingApplyStartupResult =
+        const PendingUpdateStartupResult.noPendingUpdate(),
     this.onStageAsset,
     this.onInstallAsset,
   });
 
   final bool available;
   final bool pendingUpdateAvailable;
+  final PendingUpdateStartupResult pendingApplyStartupResult;
   final Future<void> Function(Uri assetDownloadUri)? onStageAsset;
   final Future<void> Function(Uri assetDownloadUri)? onInstallAsset;
   final List<Uri> stagedAssets = <Uri>[];
@@ -87,10 +90,12 @@ class _FakeWindowsStagedUpdateClient implements WindowsStagedUpdateClient {
   }
 
   @override
-  Future<bool> applyPendingOnStartup({required int waitPid}) async {
+  Future<PendingUpdateStartupResult> applyPendingOnStartup({
+    required int waitPid,
+  }) async {
     applyPendingCalls += 1;
     lastStartupWaitPid = waitPid;
-    return pendingUpdateAvailable;
+    return pendingApplyStartupResult;
   }
 
   @override
@@ -891,7 +896,8 @@ void main() {
       final logger = _InMemoryUpdateEventLogger();
       final stagedClient = _FakeWindowsStagedUpdateClient(
         available: true,
-        pendingUpdateAvailable: true,
+        pendingApplyStartupResult:
+            const PendingUpdateStartupResult.updateDispatched(),
       );
       var exitedCode = -1;
       final service = AppUpdateService(
@@ -905,7 +911,7 @@ void main() {
 
       expect(stagedClient.applyPendingCalls, 1);
       expect(stagedClient.lastStartupWaitPid, pid);
-      expect(applied, true);
+      expect(applied.status, PendingUpdateStartupStatus.dispatched);
       expect(exitedCode, 0);
       expect(
         logger.records.any(
@@ -927,7 +933,8 @@ void main() {
       );
       final stagedClient = _FakeWindowsStagedUpdateClient(
         available: true,
-        pendingUpdateAvailable: true,
+        pendingApplyStartupResult:
+            const PendingUpdateStartupResult.updateDispatched(),
       );
       var exitedCode = -1;
       final service = AppUpdateService(
@@ -939,7 +946,7 @@ void main() {
 
       final applied = await service.applyPendingUpdateOnStartup();
 
-      expect(applied, true);
+      expect(applied.status, PendingUpdateStartupStatus.dispatched);
       expect(exitedCode, 0);
       expect(
         logger.records.any(
@@ -966,7 +973,7 @@ void main() {
       final applied = await service.applyPendingUpdateOnStartup();
 
       expect(stagedClient.applyPendingCalls, 1);
-      expect(applied, false);
+      expect(applied.status, PendingUpdateStartupStatus.none);
       expect(exitedCode, -1);
       expect(
         logger.records.any(
@@ -988,8 +995,35 @@ void main() {
       final applied = await service.applyPendingUpdateOnStartup();
 
       expect(stagedClient.applyPendingCalls, 0);
-      expect(applied, false);
+      expect(applied.status, PendingUpdateStartupStatus.none);
       expect(exitedCode, -1);
+    });
+
+    test('exits when pending Windows apply is already in progress', () async {
+      final logger = _InMemoryUpdateEventLogger();
+      final stagedClient = _FakeWindowsStagedUpdateClient(
+        available: true,
+        pendingApplyStartupResult:
+            const PendingUpdateStartupResult.updateInProgress(),
+      );
+      var exitedCode = -1;
+      final service = AppUpdateService(
+        platformOverride: AppUpdatePlatform.windows,
+        windowsStagedUpdateClient: stagedClient,
+        updateEventLogger: logger,
+        processExit: (code) => exitedCode = code,
+      );
+
+      final applied = await service.applyPendingUpdateOnStartup();
+
+      expect(applied.status, PendingUpdateStartupStatus.inProgress);
+      expect(exitedCode, 0);
+      expect(
+        logger.records.any(
+          (entry) => entry.type == UpdateEventType.pendingApplyDispatched,
+        ),
+        isFalse,
+      );
     });
   });
 

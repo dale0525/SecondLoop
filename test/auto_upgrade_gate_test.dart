@@ -12,14 +12,15 @@ class _FakeAutoUpdateService extends AppUpdateService {
   _FakeAutoUpdateService({
     required this.result,
     this.throwOnApplyPending = false,
-    this.applyPendingResult = false,
+    this.applyPendingResult =
+        const PendingUpdateStartupResult.noPendingUpdate(),
     this.throwOnStage = false,
     this.releaseRepoValue = 'dale0525/SecondLoop',
   });
 
   final AppUpdateCheckResult result;
   final bool throwOnApplyPending;
-  final bool applyPendingResult;
+  final PendingUpdateStartupResult applyPendingResult;
   final bool throwOnStage;
   final String releaseRepoValue;
 
@@ -56,7 +57,7 @@ class _FakeAutoUpdateService extends AppUpdateService {
   }
 
   @override
-  Future<bool> applyPendingUpdateOnStartup() async {
+  Future<PendingUpdateStartupResult> applyPendingUpdateOnStartup() async {
     applyPendingCalls += 1;
     if (throwOnApplyPending) {
       throw StateError('apply_pending_failed');
@@ -293,7 +294,7 @@ void main() {
       ),
     );
     final service = _FakeAutoUpdateService(
-      applyPendingResult: true,
+      applyPendingResult: const PendingUpdateStartupResult.updateDispatched(),
       result: AppUpdateCheckResult(
         currentVersion: '1.0.1+99',
         update: update,
@@ -396,6 +397,25 @@ void main() {
     expect(service.checkCalls, 1);
     expect(find.text('home'), findsOneWidget);
   });
+
+  testWidgets('skips update check when pending apply is already in progress',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final service = _FakeAutoUpdateService(
+      applyPendingResult: const PendingUpdateStartupResult.updateInProgress(),
+      result: const AppUpdateCheckResult(currentVersion: '1.0.1+99'),
+    );
+
+    await pumpGate(tester, service: service);
+    await tester.pumpAndSettle();
+
+    expect(service.applyPendingCalls, 1);
+    expect(service.checkCalls, 0);
+    expect(find.byType(SnackBar), findsNothing);
+  },
+      variant: const TargetPlatformVariant(<TargetPlatform>{
+        TargetPlatform.windows,
+      }));
 
   testWidgets('macOS seamless update stays passive until user confirms',
       (tester) async {

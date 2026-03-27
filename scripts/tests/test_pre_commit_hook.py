@@ -176,6 +176,7 @@ class PreCommitHookTests(unittest.TestCase):
 
         self.assertIn('lib/*.dart | lib/**/*.dart)', script)
         self.assertIn('package_import="package:secondloop/${file#lib/}"', script)
+        self.assertIn('if ! command -v rg >/dev/null 2>&1; then', script)
         self.assertIn('rg -l --fixed-strings "${package_import}" test integration_test', script)
         self.assertIn('while IFS= read -r candidate; do', script)
         self.assertIn('done < <(collect_related_flutter_tests_for_lib_file "${file}")', script)
@@ -183,6 +184,13 @@ class PreCommitHookTests(unittest.TestCase):
         self.assertNotIn('readarray -t related_targets', script)
         self.assertIn('if [[ ${#flutter_test_targets[@]} -eq 0 ]]; then', script)
         self.assertIn('run_flutter_tool test --concurrency=1', script)
+
+    def test_pre_commit_hook_falls_back_to_full_flutter_test_when_rg_missing(self) -> None:
+        script = PRE_COMMIT_HOOK.read_text(encoding="utf-8")
+
+        self.assertIn('if ! command -v rg >/dev/null 2>&1; then', script)
+        self.assertIn('saw_unmapped_lib_change=1', script)
+        self.assertIn('return 0', script)
 
     def test_pre_commit_hook_only_targets_staged_test_files(self) -> None:
         script = PRE_COMMIT_HOOK.read_text(encoding="utf-8")

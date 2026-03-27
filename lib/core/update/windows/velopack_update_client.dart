@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import '../app_update_models.dart';
 import 'velopack_paths.dart';
 
 typedef VelopackProcessStarter = Future<Process> Function(
@@ -22,7 +23,7 @@ abstract class WindowsStagedUpdateClient {
     required int waitPid,
   });
 
-  Future<bool> applyPendingOnStartup({
+  Future<PendingUpdateStartupResult> applyPendingOnStartup({
     required int waitPid,
   });
 
@@ -102,7 +103,7 @@ class VelopackUpdateClient implements WindowsStagedUpdateClient {
   }
 
   @override
-  Future<bool> applyPendingOnStartup({
+  Future<PendingUpdateStartupResult> applyPendingOnStartup({
     required int waitPid,
   }) async {
     final updateExePath = _updateExePath;
@@ -113,23 +114,23 @@ class VelopackUpdateClient implements WindowsStagedUpdateClient {
     final appRoot = File(updateExePath).absolute.parent.path;
     final currentVersion = _readCurrentInstalledVersion(appRoot);
     if (currentVersion == null) {
-      return false;
+      return const PendingUpdateStartupResult.noPendingUpdate();
     }
 
     final pendingVersion = _readNewestPackageVersion(appRoot);
-    final skipRetry = _resolvePendingApplyAttempt(
+    final pendingAttemptResult = _resolvePendingApplyAttempt(
       updateExecutablePath: updateExePath,
       currentVersion: currentVersion,
       pendingVersion: pendingVersion,
       throwIfAttemptInProgress: false,
     );
-    if (skipRetry) {
-      return false;
+    if (pendingAttemptResult != null) {
+      return pendingAttemptResult;
     }
 
     if (pendingVersion == null ||
         _compareVersionStrings(pendingVersion, currentVersion) <= 0) {
-      return false;
+      return const PendingUpdateStartupResult.noPendingUpdate();
     }
 
     await _startDetachedApply(
@@ -137,7 +138,7 @@ class VelopackUpdateClient implements WindowsStagedUpdateClient {
       waitPid: waitPid,
       pendingVersion: pendingVersion,
     );
-    return true;
+    return const PendingUpdateStartupResult.updateDispatched();
   }
 
   @override
@@ -296,7 +297,7 @@ class VelopackUpdateClient implements WindowsStagedUpdateClient {
     return _compareVersionStrings(pendingVersion, currentVersion) > 0;
   }
 
-  bool _resolvePendingApplyAttempt({
+  PendingUpdateStartupResult? _resolvePendingApplyAttempt({
     required String updateExecutablePath,
     required String currentVersion,
     required String? pendingVersion,
@@ -304,7 +305,7 @@ class VelopackUpdateClient implements WindowsStagedUpdateClient {
   }) {
     final attempt = _readPendingApplyAttempt(updateExecutablePath);
     if (attempt == null) {
-      return false;
+      return null;
     }
 
     final attemptIsStale = pendingVersion == null ||
@@ -312,7 +313,7 @@ class VelopackUpdateClient implements WindowsStagedUpdateClient {
         _compareVersionStrings(currentVersion, attempt.version) >= 0;
     if (attemptIsStale) {
       _clearPendingApplyAttempt(updateExecutablePath);
-      return false;
+      return null;
     }
 
     final startedAtUtc = attempt.startedAtUtc;
@@ -324,7 +325,7 @@ class VelopackUpdateClient implements WindowsStagedUpdateClient {
           'windows_velopack_apply_already_in_progress_${attempt.version}',
         );
       }
-      return true;
+      return const PendingUpdateStartupResult.updateInProgress();
     }
 
     _deletePendingPackageUpdates(updateExecutablePath);
