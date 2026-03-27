@@ -13,6 +13,9 @@ PRE_COMMIT_HOOK = REPO_ROOT / ".githooks/pre-commit"
 PRE_PUSH_HOOK = REPO_ROOT / ".githooks/pre-push"
 VERIFY_CHANGED_SCRIPT = REPO_ROOT / "scripts/verify_changed.sh"
 VERIFY_FULL_SCRIPT = REPO_ROOT / "scripts/verify_full.sh"
+PRE_COMMIT_CHECK_MODE_SCRIPT = REPO_ROOT / "scripts/pre_commit_check_mode.sh"
+PRE_COMMIT_COMMIT_MODE_SCRIPT = REPO_ROOT / "scripts/pre_commit_commit_mode.sh"
+PRE_COMMIT_COMMON_SCRIPT = REPO_ROOT / "scripts/pre_commit_common.sh"
 INSTALL_GIT_HOOKS_SCRIPT = REPO_ROOT / "scripts/install_git_hooks.sh"
 
 
@@ -42,16 +45,15 @@ class PreCommitHookTests(unittest.TestCase):
         if rg is None:
             self.skipTest("rg is required to execute pre-commit hook function tests")
 
-        script = PRE_COMMIT_HOOK.read_text(encoding="utf-8")
-        start = script.index("append_unique_path() {")
-        end = script.index("if (( check_mode )); then")
-        functions = script[start:end].strip()
+        functions = PRE_COMMIT_COMMON_SCRIPT.read_text(encoding="utf-8").strip()
 
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
+            helper_script = root / "pre_commit_common.sh"
             (root / "lib/core/cloud").mkdir(parents=True, exist_ok=True)
             (root / "test/core/cloud").mkdir(parents=True, exist_ok=True)
             (root / "test/cloud_account").mkdir(parents=True, exist_ok=True)
+            helper_script.write_text(functions + "\n", encoding="utf-8")
 
             (root / "lib/core/cloud/firebase_identity_toolkit.dart").write_text(
                 "void stub() {}\n",
@@ -91,7 +93,8 @@ class PreCommitHookTests(unittest.TestCase):
                 set -euo pipefail
                 export PATH="{Path(rg).parent.as_posix()}:$PATH"
                 cd "{root.as_posix()}"
-                {functions}
+                repo_root="{root.as_posix()}"
+                source "{helper_script.as_posix()}"
                 staged_files=({staged_literal})
                 collect_targeted_flutter_tests
                 """
@@ -103,16 +106,25 @@ class PreCommitHookTests(unittest.TestCase):
                 text=True,
             )
 
-        return [line.strip().replace('\\', '/') for line in result.stdout.splitlines() if line.strip()]
+        filtered_lines = []
+        for line in result.stdout.splitlines():
+            stripped = line.strip().replace('\\', '/')
+            if not stripped:
+                continue
+            if stripped.startswith('\x1b['):
+                continue
+            filtered_lines.append(stripped)
+
+        return filtered_lines
 
     def test_pre_commit_hook_supports_pixi_windows_cargo_path(self) -> None:
-        script = PRE_COMMIT_HOOK.read_text(encoding="utf-8")
+        script = PRE_COMMIT_COMMON_SCRIPT.read_text(encoding="utf-8")
 
         self.assertIn(".pixi/envs/default/Library/bin/cargo.exe", script)
         self.assertIn(".pixi/envs/default/bin/cargo", script)
 
     def test_pre_commit_hook_resolves_windows_libclang_path(self) -> None:
-        script = PRE_COMMIT_HOOK.read_text(encoding="utf-8")
+        script = PRE_COMMIT_COMMON_SCRIPT.read_text(encoding="utf-8")
 
         self.assertIn(".pixi/envs/default/Library/bin", script)
         self.assertIn("libclang-*.dll", script)
@@ -120,7 +132,7 @@ class PreCommitHookTests(unittest.TestCase):
         self.assertIn("LIBCLANG_PATH", script)
 
     def test_pre_commit_hook_resolves_windows_vulkan_sdk_path(self) -> None:
-        script = PRE_COMMIT_HOOK.read_text(encoding="utf-8")
+        script = PRE_COMMIT_COMMON_SCRIPT.read_text(encoding="utf-8")
 
         self.assertIn(".tool/vulkan-sdk", script)
         self.assertIn("1.4.309.0", script)
@@ -133,49 +145,49 @@ class PreCommitHookTests(unittest.TestCase):
         self.assertIn("Ninja", script)
 
     def test_pre_commit_hook_refreshes_i18n_when_locale_sources_change(self) -> None:
-        script = PRE_COMMIT_HOOK.read_text(encoding="utf-8")
+        script = PRE_COMMIT_COMMON_SCRIPT.read_text(encoding="utf-8")
 
         self.assertIn("scripts/run_i18n_refresh.sh", script)
         self.assertIn("slang.yaml", script)
         self.assertIn(".i18n.json", script)
 
     def test_pre_commit_hook_refreshes_i18n_when_locale_sources_are_deleted(self) -> None:
-        script = PRE_COMMIT_HOOK.read_text(encoding="utf-8")
+        script = PRE_COMMIT_COMMIT_MODE_SCRIPT.read_text(encoding="utf-8")
 
         self.assertIn("--diff-filter=ACMRD", script)
 
     def test_pre_commit_hook_skips_deleted_dart_files_during_formatting(self) -> None:
-        script = PRE_COMMIT_HOOK.read_text(encoding="utf-8")
+        script = PRE_COMMIT_COMMIT_MODE_SCRIPT.read_text(encoding="utf-8")
 
         self.assertIn('if [[ "${file}" == *.dart && -f "${file}" ]]; then', script)
 
     def test_pre_commit_hook_regenerates_missing_i18n_outputs_before_flutter_checks(self) -> None:
-        script = PRE_COMMIT_HOOK.read_text(encoding="utf-8")
+        script = PRE_COMMIT_COMMON_SCRIPT.read_text(encoding="utf-8")
 
         self.assertIn('ensure_i18n_generated()', script)
         self.assertIn('lib/i18n/strings.g.dart missing; regenerating i18n outputs.', script)
         self.assertIn('if [[ -f "lib/i18n/strings.g.dart" ]]; then', script)
 
     def test_pre_commit_hook_check_mode_avoids_double_i18n_refresh_when_outputs_were_missing(self) -> None:
-        script = PRE_COMMIT_HOOK.read_text(encoding="utf-8")
+        script = PRE_COMMIT_HOOK.read_text(encoding="utf-8") + "\n" + PRE_COMMIT_CHECK_MODE_SCRIPT.read_text(encoding="utf-8")
 
         self.assertIn('i18n_generated_now=0', script)
         self.assertIn('if [[ ${i18n_generated_now} -eq 0 ]]; then', script)
 
     def test_pre_commit_hook_stages_generated_i18n_outputs_in_normal_commit_flow(self) -> None:
-        script = PRE_COMMIT_HOOK.read_text(encoding="utf-8")
+        script = PRE_COMMIT_COMMIT_MODE_SCRIPT.read_text(encoding="utf-8")
 
         self.assertIn('if [[ ${i18n_generated_now} -ne 0 ]]; then', script)
         self.assertIn('git add -- lib/i18n/strings.g.dart', script)
 
     def test_pre_commit_hook_only_runs_i18n_analyze_for_i18n_source_changes(self) -> None:
-        script = PRE_COMMIT_HOOK.read_text(encoding="utf-8")
+        script = PRE_COMMIT_COMMIT_MODE_SCRIPT.read_text(encoding="utf-8")
 
         self.assertIn('if [[ ${run_i18n_refresh_needed} -ne 0 ]]; then', script)
         self.assertIn('run_i18n_analyze', script)
 
     def test_pre_commit_hook_targets_related_flutter_tests_for_lib_changes(self) -> None:
-        script = PRE_COMMIT_HOOK.read_text(encoding="utf-8")
+        script = PRE_COMMIT_COMMON_SCRIPT.read_text(encoding="utf-8") + "\n" + PRE_COMMIT_COMMIT_MODE_SCRIPT.read_text(encoding="utf-8")
 
         self.assertIn('lib/*.dart | lib/**/*.dart)', script)
         self.assertIn('package_import="package:secondloop/${file#lib/}"', script)
@@ -189,7 +201,7 @@ class PreCommitHookTests(unittest.TestCase):
         self.assertIn('run_flutter_tool test --concurrency=1', script)
 
     def test_pre_commit_hook_skips_full_flutter_test_when_targets_cannot_be_mapped(self) -> None:
-        script = PRE_COMMIT_HOOK.read_text(encoding="utf-8")
+        script = PRE_COMMIT_COMMON_SCRIPT.read_text(encoding="utf-8") + "\n" + PRE_COMMIT_COMMIT_MODE_SCRIPT.read_text(encoding="utf-8")
 
         self.assertIn('if ! command -v rg >/dev/null 2>&1; then', script)
         self.assertIn('saw_unmapped_lib_change=1', script)
@@ -198,8 +210,7 @@ class PreCommitHookTests(unittest.TestCase):
         self.assertNotIn('if [[ ${#flutter_test_targets[@]} -eq 0 ]]; then', script)
 
     def test_pre_commit_hook_no_longer_runs_rust_clippy_in_normal_commit_flow(self) -> None:
-        script = PRE_COMMIT_HOOK.read_text(encoding="utf-8")
-        normal_commit_flow = script.split('if (( check_mode )); then', maxsplit=1)[1].split('staged_files=()', maxsplit=1)[1]
+        normal_commit_flow = PRE_COMMIT_COMMIT_MODE_SCRIPT.read_text(encoding="utf-8")
 
         self.assertNotIn('if ! "${cargo_bin}" clippy --manifest-path rust/Cargo.toml --all-targets --all-features -- -D warnings; then', normal_commit_flow)
         self.assertNotIn('if ! "${cargo_bin}" test --manifest-path rust/Cargo.toml --all; then', normal_commit_flow)
@@ -222,8 +233,18 @@ class PreCommitHookTests(unittest.TestCase):
 
         self.assertIn('bash .githooks/pre-commit --check --ci "$@"', script)
 
-    def test_pre_commit_hook_only_targets_staged_test_files(self) -> None:
+    def test_pre_commit_hook_delegates_check_mode_to_dedicated_script(self) -> None:
         script = PRE_COMMIT_HOOK.read_text(encoding="utf-8")
+
+        self.assertIn('source "${repo_root}/scripts/pre_commit_check_mode.sh"', script)
+
+    def test_pre_commit_hook_delegates_commit_mode_to_dedicated_script(self) -> None:
+        script = PRE_COMMIT_HOOK.read_text(encoding="utf-8")
+
+        self.assertIn('source "${repo_root}/scripts/pre_commit_commit_mode.sh"', script)
+
+    def test_pre_commit_hook_only_targets_staged_test_files(self) -> None:
+        script = PRE_COMMIT_COMMON_SCRIPT.read_text(encoding="utf-8") + "\n" + PRE_COMMIT_COMMIT_MODE_SCRIPT.read_text(encoding="utf-8")
 
         self.assertIn(
             'test/*_test.dart | test/**/*_test.dart | integration_test/*_test.dart | integration_test/**/*_test.dart)',
@@ -246,13 +267,13 @@ class PreCommitHookTests(unittest.TestCase):
         )
 
     def test_pre_commit_hook_warns_when_i18n_refresh_stages_additional_locale_files(self) -> None:
-        script = PRE_COMMIT_HOOK.read_text(encoding="utf-8")
+        script = PRE_COMMIT_COMMON_SCRIPT.read_text(encoding="utf-8")
 
         self.assertIn('git diff --name-only -- lib/i18n', script)
         self.assertIn('pre-commit: auto-staged i18n refresh changes:', script)
 
     def test_pre_commit_hook_quotes_pixi_cargo_fmt_suggestion(self) -> None:
-        script = PRE_COMMIT_HOOK.read_text(encoding="utf-8")
+        script = PRE_COMMIT_COMMIT_MODE_SCRIPT.read_text(encoding="utf-8") + "\n" + PRE_COMMIT_CHECK_MODE_SCRIPT.read_text(encoding="utf-8")
 
         self.assertIn(
             r'echo "Fix locally with: pixi run cargo fmt \"--manifest-path rust/Cargo.toml --all\"" >&2',
@@ -260,7 +281,7 @@ class PreCommitHookTests(unittest.TestCase):
         )
 
     def test_pre_commit_hook_supports_windows_local_fvm_batch_wrappers(self) -> None:
-        script = PRE_COMMIT_HOOK.read_text(encoding="utf-8")
+        script = PRE_COMMIT_COMMON_SCRIPT.read_text(encoding="utf-8")
 
         self.assertIn(".fvm/flutter_sdk/bin/dart.bat", script)
         self.assertIn(".fvm/flutter_sdk/bin/flutter.bat", script)
