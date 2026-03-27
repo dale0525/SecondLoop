@@ -92,8 +92,8 @@ jobs:
         run: |
           set -euo pipefail
           if [[ -z "${GH_TOKEN:-}" ]]; then
-            echo "SECONDLOOP_SERVER_DISPATCH_TOKEN is required to notify $SITE_REPO after a release web build."
-            exit 1
+            echo "SECONDLOOP_SERVER_DISPATCH_TOKEN is not configured; skipping site deploy dispatch."
+            exit 0
           fi
           gh api "repos/$SITE_REPO/dispatches" \
             --method POST \

@@ -47,4 +47,16 @@ void main() {
     expect(workflow, contains('secondloop_web_run_id'));
     expect(workflow, contains(r'repos/$SITE_REPO/dispatches'));
   });
+
+  test('web build workflow skips release dispatch when site token is unset',
+      () {
+    final workflow = File('.github/workflows/web-build.yml').readAsStringSync();
+
+    expect(
+      workflow,
+      contains(
+        'SECONDLOOP_SERVER_DISPATCH_TOKEN is not configured; skipping site deploy dispatch.',
+      ),
+    );
+  });
 }
