@@ -64,7 +64,7 @@ jobs:
         run: flutter pub get
       - name: "Guard: no python runtime process usage"
         run: bash scripts/check_no_python_runtime.sh
-      - name: Pre-commit hook (format + analyze + test)
+      - name: Full Flutter verification
         run: bash .githooks/pre-commit --check --ci --flutter
 
   flutter-web:
@@ -111,5 +111,5 @@ jobs:
           components: rustfmt, clippy
       - name: "Guard: no python runtime process usage"
         run: bash scripts/check_no_python_runtime.sh
-      - name: Pre-commit hook (rustfmt + clippy + test)
+      - name: Full Rust verification
         run: bash .githooks/pre-commit --check --ci --rust

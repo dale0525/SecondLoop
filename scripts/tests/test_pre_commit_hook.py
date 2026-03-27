@@ -10,6 +10,7 @@ import unittest
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 PRE_COMMIT_HOOK = REPO_ROOT / ".githooks/pre-commit"
+PRE_PUSH_HOOK = REPO_ROOT / ".githooks/pre-push"
 INSTALL_GIT_HOOKS_SCRIPT = REPO_ROOT / "scripts/install_git_hooks.sh"
 
 
@@ -182,15 +183,31 @@ class PreCommitHookTests(unittest.TestCase):
         self.assertIn('done < <(collect_related_flutter_tests_for_lib_file "${file}")', script)
         self.assertNotIn('mapfile -t related_targets', script)
         self.assertNotIn('readarray -t related_targets', script)
-        self.assertIn('if [[ ${#flutter_test_targets[@]} -eq 0 ]]; then', script)
+        self.assertIn('if [[ ${#flutter_test_targets[@]} -ne 0 ]]; then', script)
         self.assertIn('run_flutter_tool test --concurrency=1', script)
 
-    def test_pre_commit_hook_falls_back_to_full_flutter_test_when_rg_missing(self) -> None:
+    def test_pre_commit_hook_skips_full_flutter_test_when_targets_cannot_be_mapped(self) -> None:
         script = PRE_COMMIT_HOOK.read_text(encoding="utf-8")
 
         self.assertIn('if ! command -v rg >/dev/null 2>&1; then', script)
         self.assertIn('saw_unmapped_lib_change=1', script)
+        self.assertIn('pre-commit: skipping Flutter tests (no targeted tests found for staged lib changes).', script)
         self.assertIn('return 0', script)
+        self.assertNotIn('if [[ ${#flutter_test_targets[@]} -eq 0 ]]; then', script)
+
+    def test_pre_commit_hook_no_longer_runs_rust_clippy_in_normal_commit_flow(self) -> None:
+        script = PRE_COMMIT_HOOK.read_text(encoding="utf-8")
+        normal_commit_flow = script.split('if (( check_mode )); then', maxsplit=1)[1].split('staged_files=()', maxsplit=1)[1]
+
+        self.assertNotIn('if ! "${cargo_bin}" clippy --manifest-path rust/Cargo.toml --all-targets --all-features -- -D warnings; then', normal_commit_flow)
+        self.assertNotIn('if ! "${cargo_bin}" test --manifest-path rust/Cargo.toml --all; then', normal_commit_flow)
+
+    def test_pre_push_hook_runs_full_verification_by_default(self) -> None:
+        script = PRE_PUSH_HOOK.read_text(encoding="utf-8")
+
+        self.assertIn('bash .githooks/pre-commit --check --ci', script)
+        self.assertNotIn('SECONDLOOP_PRE_PUSH_FULL', script)
+        self.assertNotIn('pre-push: skipped (checks moved to pre-commit).', script)
 
     def test_pre_commit_hook_only_targets_staged_test_files(self) -> None:
         script = PRE_COMMIT_HOOK.read_text(encoding="utf-8")

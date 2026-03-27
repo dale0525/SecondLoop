@@ -13,10 +13,5 @@ fi
 
 cd "${repo_root}"
 
-if [[ "${SECONDLOOP_PRE_PUSH_FULL:-0}" == "1" ]]; then
-  bash .githooks/pre-commit --check --ci
-  exit 0
-fi
-
-echo "pre-push: skipped (checks moved to pre-commit)."
-echo "pre-push: set SECONDLOOP_PRE_PUSH_FULL=1 to run full pre-push verification."
+echo "pre-push: running full verification (format checks, analyze, tests, clippy)." >&2
+bash .githooks/pre-commit --check --ci

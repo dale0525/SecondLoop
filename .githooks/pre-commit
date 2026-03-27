@@ -332,12 +332,12 @@ while [[ $# -gt 0 ]]; do
       cat <<'EOF'
 Usage: .githooks/pre-commit [--check] [--flutter] [--rust] [--ci]
 
-Default (no flags): git pre-commit hook mode (format staged files + analyze + targeted Flutter tests when possible, otherwise full test suite, plus clippy).
+Default (no flags): git pre-commit hook mode (format staged files + analyze + targeted Flutter tests when possible, plus rustfmt).
 
 --check    CI-friendly mode: verify formatting/analyze without modifying files.
 --flutter  Limit --check to Dart format + flutter analyze.
 --rust     Limit --check to rustfmt.
---ci       In --check mode, also run tests/clippy to match CI.
+--ci       In --check mode, also run full tests/clippy to match CI and pre-push.
 EOF
       exit 0
       ;;
@@ -773,35 +773,15 @@ if [[ ${run_flutter_checks} -ne 0 ]]; then
     exit 1
   fi
 
-  if [[ ${#flutter_test_targets[@]} -eq 0 ]]; then
-    if ! run_flutter_tool test --concurrency=1; then
-      echo "" >&2
-      echo "pre-commit: flutter test failed." >&2
-      echo "Fix locally with: pixi run flutter test" >&2
-      exit 1
-    fi
-  else
+  if [[ ${#flutter_test_targets[@]} -ne 0 ]]; then
     if ! run_flutter_tool test --concurrency=1 "${flutter_test_targets[@]}"; then
       echo "" >&2
       echo "pre-commit: flutter test failed." >&2
       echo "Fix locally with: pixi run flutter test \"${flutter_test_targets[*]}\"" >&2
       exit 1
     fi
-  fi
-fi
-
-if [[ ${run_rust_fmt} -ne 0 ]]; then
-  if ! "${cargo_bin}" clippy --manifest-path rust/Cargo.toml --all-targets --all-features -- -D warnings; then
-    echo "" >&2
-    echo "pre-commit: rust clippy failed." >&2
-    echo "Fix locally with: pixi run cargo clippy \"--all-targets --all-features -- -D warnings\"" >&2
-    exit 1
-  fi
-
-  if ! "${cargo_bin}" test --manifest-path rust/Cargo.toml --all; then
-    echo "" >&2
-    echo "pre-commit: rust tests failed." >&2
-    echo "Fix locally with: pixi run cargo test" >&2
-    exit 1
+  else
+    echo "pre-commit: skipping Flutter tests (no targeted tests found for staged lib changes)." >&2
+    echo "Run full verification with: git push or pixi run ci" >&2
   fi
 fi

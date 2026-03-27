@@ -20,6 +20,16 @@ class CiI18nWorkflowTests(unittest.TestCase):
             workflow,
             'CI workflow must delegate Flutter i18n checks to the pre-commit hook',
         )
+        self.assertIn(
+            'name: Full Flutter verification',
+            workflow,
+            'CI should describe the shared full verification gate clearly',
+        )
+        self.assertIn(
+            'name: Full Rust verification',
+            workflow,
+            'CI should describe the shared full verification gate clearly',
+        )
         self.assertNotIn(
             'name: Refresh i18n generated files',
             workflow,
