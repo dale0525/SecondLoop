@@ -2,6 +2,8 @@ name: Web Build
 
 on:
   workflow_dispatch:
+  release:
+    types: [published]
   pull_request:
     branches: [main]
     paths:
@@ -58,22 +60,67 @@ jobs:
   build-web:
     runs-on: ubuntu-latest
     steps:
+      - name: Scope release trigger
+        id: release_scope
+        env:
+          SECONDLOOP_RELEASE_TAG: ${{ github.event.release.tag_name || '' }}
+        run: |
+          set -euo pipefail
+          should_build='true'
+          if [[ "$GITHUB_EVENT_NAME" == 'release' ]]; then
+            if [[ "$SECONDLOOP_RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              echo "App release tag detected: $SECONDLOOP_RELEASE_TAG"
+            else
+              echo "Skipping web build for non-app release tag: ${SECONDLOOP_RELEASE_TAG:-<missing>}"
+              should_build='false'
+            fi
+          fi
+          printf 'should_build=%s\n' "$should_build" >> "$GITHUB_OUTPUT"
       - uses: actions/checkout@v4
+        if: ${{ steps.release_scope.outputs.should_build == 'true' }}
       - uses: prefix-dev/setup-pixi@v0.9.3
+        if: ${{ steps.release_scope.outputs.should_build == 'true' }}
         with:
           cache: true
       - name: Setup Flutter
+        if: ${{ steps.release_scope.outputs.should_build == 'true' }}
         run: pixi run setup-flutter
       - name: "Guard: no python runtime process usage"
+        if: ${{ steps.release_scope.outputs.should_build == 'true' }}
         run: bash scripts/check_no_python_runtime.sh
       - name: Generate i18n
+        if: ${{ steps.release_scope.outputs.should_build == 'true' }}
         run: pixi run i18n-gen
       - name: Build Flutter Web
+        if: ${{ steps.release_scope.outputs.should_build == 'true' }}
         run: pixi run flutter build "web --base-href /app/"
       - name: Upload web artifact
+        if: ${{ steps.release_scope.outputs.should_build == 'true' }}
         uses: actions/upload-artifact@v4
         with:
           name: secondloop-web-build
           path: build/web
           if-no-files-found: error
           retention-days: 7
+      - name: Dispatch site deploy after release
+        if: ${{ steps.release_scope.outputs.should_build == 'true' && github.event_name == 'release' && github.event.action == 'published' }}
+        env:
+          GH_TOKEN: ${{ secrets.SECONDLOOP_SERVER_DISPATCH_TOKEN }}
+          SITE_REPO: ${{ vars.SECONDLOOP_SERVER_REPO || format('{0}/SecondLoopServer', github.repository_owner) }}
+          SECONDLOOP_REPO: ${{ github.repository }}
+          SECONDLOOP_WEB_RUN_ID: ${{ github.run_id }}
+          SECONDLOOP_WEB_HEAD_SHA: ${{ github.sha }}
+          SECONDLOOP_RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${GH_TOKEN:-}" ]]; then
+            echo "SECONDLOOP_SERVER_DISPATCH_TOKEN is not configured; skipping site deploy dispatch."
+            exit 0
+          fi
+          gh api "repos/$SITE_REPO/dispatches" \
+            --method POST \
+            -f event_type='secondloop_web_release_published' \
+            -F client_payload[secondloop_repo]="$SECONDLOOP_REPO" \
+            -F client_payload[secondloop_web_run_id]="$SECONDLOOP_WEB_RUN_ID" \
+            -F client_payload[secondloop_web_head_sha]="$SECONDLOOP_WEB_HEAD_SHA" \
+            -F client_payload[release_tag]="$SECONDLOOP_RELEASE_TAG"
