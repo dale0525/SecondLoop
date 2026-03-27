@@ -483,14 +483,45 @@ append_unique_path() {
   return 0
 }
 
+collect_related_flutter_tests_for_lib_file() {
+  local file="$1"
+  local package_import="package:secondloop/${file#lib/}"
+  local match
+
+  if [[ -f "test/${file#lib/}" ]]; then
+    match="test/${file#lib/}"
+    match="${match%.dart}_test.dart"
+    if [[ -f "${match}" ]]; then
+      printf '%s\n' "${match}"
+    fi
+  fi
+
+  while IFS= read -r match; do
+    [[ -n "${match}" && -f "${match}" ]] || continue
+    printf '%s\n' "${match}"
+  done < <(rg -l --fixed-strings "${package_import}" test integration_test 2>/dev/null || true)
+}
+
 collect_targeted_flutter_tests() {
   local file
   local targets=()
+  local saw_unmapped_lib_change=0
+  local related_targets=()
+  local candidate
 
   for file in "${staged_files[@]}"; do
     case "${file}" in
       lib/*.dart | lib/**/*.dart)
-        return 0
+        mapfile -t related_targets < <(collect_related_flutter_tests_for_lib_file "${file}")
+        if [[ ${#related_targets[@]} -eq 0 ]]; then
+          saw_unmapped_lib_change=1
+          break
+        fi
+        for candidate in "${related_targets[@]}"; do
+          if append_unique_path "${candidate}" "${targets[@]}"; then
+            targets+=("${candidate}")
+          fi
+        done
         ;;
       test/*_test.dart | test/**/*_test.dart | integration_test/*_test.dart | integration_test/**/*_test.dart)
         if [[ -f "${file}" ]] && append_unique_path "${file}" "${targets[@]}"; then
@@ -499,6 +530,10 @@ collect_targeted_flutter_tests() {
         ;;
     esac
   done
+
+  if [[ ${saw_unmapped_lib_change} -ne 0 ]]; then
+    return 0
+  fi
 
   printf '%s\n' "${targets[@]}"
 }

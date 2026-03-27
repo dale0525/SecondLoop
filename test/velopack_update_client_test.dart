@@ -29,6 +29,10 @@ void _createNupkg(Directory root, String fileName) {
   expect(pkgFile.existsSync(), isTrue);
 }
 
+File _pendingApplyAttemptMarker(Directory root) => File(
+      '${root.path}${Platform.pathSeparator}packages${Platform.pathSeparator}.secondloop_pending_apply',
+    );
+
 void main() {
   test('isAvailable requires Update.exe and current sq.version', () async {
     final root = await Directory.systemTemp.createTemp('velopack_available_');
@@ -160,8 +164,7 @@ void main() {
     );
   });
 
-  test(
-      'applyPendingOnStartup clears stale pending package after previous detached apply attempt',
+  test('applyPendingOnStartup skips retry while detached apply is still recent',
       () async {
     final root = await Directory.systemTemp.createTemp('velopack_apply_stale_');
     final updater = File('${root.path}${Platform.pathSeparator}Update.exe')
@@ -187,6 +190,45 @@ void main() {
 
     await client.applyPendingOnStartup(waitPid: 456);
 
+    final applied = await client.applyPendingOnStartup(waitPid: 789);
+
+    expect(calls, 1);
+    expect(applied, isFalse);
+    expect(stagedPackage.existsSync(), isTrue);
+    expect(_pendingApplyAttemptMarker(root).existsSync(), isTrue);
+  });
+
+  test(
+      'applyPendingOnStartup clears stale pending package after detached apply grace period expires',
+      () async {
+    final root =
+        await Directory.systemTemp.createTemp('velopack_apply_expired_');
+    final updater = File('${root.path}${Platform.pathSeparator}Update.exe')
+      ..writeAsStringSync('stub');
+    _writeSqVersion(root, '1.0.0');
+    _createNupkg(root, 'com.secondloop.secondloop-1.0.1-full.nupkg');
+    final stagedPackage = File(
+      '${root.path}${Platform.pathSeparator}packages${Platform.pathSeparator}com.secondloop.secondloop-1.0.1-full.nupkg',
+    );
+
+    var fakeNow = DateTime.utc(2026, 3, 27, 10, 0, 0);
+    var calls = 0;
+    final client = VelopackUpdateClient(
+      updateExecutablePath: updater.path,
+      now: () => fakeNow,
+      processStarter: (executable, arguments,
+          {mode = ProcessStartMode.normal}) async {
+        calls += 1;
+        return Process.start(
+          Platform.resolvedExecutable,
+          const ['--version'],
+        );
+      },
+    );
+
+    await client.applyPendingOnStartup(waitPid: 456);
+    fakeNow = fakeNow.add(const Duration(minutes: 6));
+
     await expectLater(
       client.applyPendingOnStartup(waitPid: 789),
       throwsA(
@@ -200,6 +242,7 @@ void main() {
 
     expect(calls, 1);
     expect(stagedPackage.existsSync(), isFalse);
+    expect(_pendingApplyAttemptMarker(root).existsSync(), isFalse);
   });
 
   test('applyPendingOnStartup skips apply when package version equals current',

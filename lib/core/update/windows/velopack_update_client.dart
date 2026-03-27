@@ -8,6 +8,8 @@ typedef VelopackProcessStarter = Future<Process> Function(
   ProcessStartMode mode,
 });
 
+typedef VelopackNowProvider = DateTime Function();
+
 abstract class WindowsStagedUpdateClient {
   bool isAvailable();
 
@@ -31,15 +33,19 @@ abstract class WindowsStagedUpdateClient {
 
 class VelopackUpdateClient implements WindowsStagedUpdateClient {
   static const _pendingApplyAttemptFileName = '.secondloop_pending_apply';
+  static const _pendingApplyRetryGracePeriod = Duration(minutes: 5);
 
   VelopackUpdateClient({
     String? updateExecutablePath,
     VelopackProcessStarter? processStarter,
+    VelopackNowProvider? now,
   })  : _updateExecutablePath = updateExecutablePath,
-        _processStarter = processStarter ?? _defaultProcessStarter;
+        _processStarter = processStarter ?? _defaultProcessStarter,
+        _now = now ?? DateTime.now;
 
   final String? _updateExecutablePath;
   final VelopackProcessStarter _processStarter;
+  final VelopackNowProvider _now;
 
   String get _updateExePath =>
       _updateExecutablePath ?? resolveVelopackUpdateExePath();
@@ -111,11 +117,14 @@ class VelopackUpdateClient implements WindowsStagedUpdateClient {
     }
 
     final pendingVersion = _readNewestPackageVersion(appRoot);
-    _resolvePendingApplyAttempt(
+    final skipRetry = _resolvePendingApplyAttempt(
       updateExecutablePath: updateExePath,
       currentVersion: currentVersion,
       pendingVersion: pendingVersion,
     );
+    if (skipRetry) {
+      return false;
+    }
 
     if (pendingVersion == null ||
         _compareVersionStrings(pendingVersion, currentVersion) <= 0) {
@@ -163,7 +172,13 @@ class VelopackUpdateClient implements WindowsStagedUpdateClient {
     String? packagePath,
   }) async {
     if (pendingVersion != null && pendingVersion.isNotEmpty) {
-      _writePendingApplyAttemptVersion(updateExecutablePath, pendingVersion);
+      _writePendingApplyAttempt(
+        updateExecutablePath,
+        _PendingApplyAttempt(
+          version: pendingVersion,
+          startedAtUtc: _now().toUtc(),
+        ),
+      );
     }
     try {
       await _processStarter(
@@ -172,7 +187,7 @@ class VelopackUpdateClient implements WindowsStagedUpdateClient {
         mode: ProcessStartMode.detached,
       );
     } catch (_) {
-      _clearPendingApplyAttemptVersion(updateExecutablePath);
+      _clearPendingApplyAttempt(updateExecutablePath);
       rethrow;
     }
   }
@@ -273,29 +288,35 @@ class VelopackUpdateClient implements WindowsStagedUpdateClient {
     return _compareVersionStrings(pendingVersion, currentVersion) > 0;
   }
 
-  static void _resolvePendingApplyAttempt({
+  bool _resolvePendingApplyAttempt({
     required String updateExecutablePath,
     required String currentVersion,
     required String? pendingVersion,
   }) {
-    final attemptedVersion =
-        _readPendingApplyAttemptVersion(updateExecutablePath);
-    if (attemptedVersion == null) {
-      return;
+    final attempt = _readPendingApplyAttempt(updateExecutablePath);
+    if (attempt == null) {
+      return false;
     }
 
     final attemptIsStale = pendingVersion == null ||
-        pendingVersion != attemptedVersion ||
-        _compareVersionStrings(currentVersion, attemptedVersion) >= 0;
+        pendingVersion != attempt.version ||
+        _compareVersionStrings(currentVersion, attempt.version) >= 0;
     if (attemptIsStale) {
-      _clearPendingApplyAttemptVersion(updateExecutablePath);
-      return;
+      _clearPendingApplyAttempt(updateExecutablePath);
+      return false;
+    }
+
+    final startedAtUtc = attempt.startedAtUtc;
+    if (startedAtUtc != null &&
+        _now().toUtc().difference(startedAtUtc) <
+            _pendingApplyRetryGracePeriod) {
+      return true;
     }
 
     _deletePendingPackageUpdates(updateExecutablePath);
-    _clearPendingApplyAttemptVersion(updateExecutablePath);
+    _clearPendingApplyAttempt(updateExecutablePath);
     throw StateError(
-        'windows_velopack_previous_apply_failed_$attemptedVersion');
+        'windows_velopack_previous_apply_failed_${attempt.version}');
   }
 
   static File _pendingApplyAttemptFile(String updateExecutablePath) {
@@ -305,33 +326,53 @@ class VelopackUpdateClient implements WindowsStagedUpdateClient {
     );
   }
 
-  static String? _readPendingApplyAttemptVersion(String updateExecutablePath) {
+  static _PendingApplyAttempt? _readPendingApplyAttempt(
+      String updateExecutablePath) {
     final markerFile = _pendingApplyAttemptFile(updateExecutablePath);
     if (!markerFile.existsSync()) {
       return null;
     }
 
     try {
-      final version = markerFile.readAsStringSync().trim();
-      if (version.isEmpty) {
+      final content = markerFile.readAsStringSync().trim();
+      if (content.isEmpty) {
         return null;
       }
-      return version;
+      final lines = content
+          .split(RegExp(r'\r?\n'))
+          .map((line) => line.trim())
+          .where((line) => line.isNotEmpty)
+          .toList(growable: false);
+      if (lines.isEmpty) {
+        return null;
+      }
+
+      final version = lines.first;
+      final startedAtUtc =
+          lines.length < 2 ? null : DateTime.tryParse(lines[1])?.toUtc();
+      return _PendingApplyAttempt(
+        version: version,
+        startedAtUtc: startedAtUtc,
+      );
     } catch (_) {
       return null;
     }
   }
 
-  static void _writePendingApplyAttemptVersion(
+  static void _writePendingApplyAttempt(
     String updateExecutablePath,
-    String version,
+    _PendingApplyAttempt attempt,
   ) {
     final markerFile = _pendingApplyAttemptFile(updateExecutablePath);
     markerFile.parent.createSync(recursive: true);
-    markerFile.writeAsStringSync(version);
+    final lines = <String>[attempt.version];
+    if (attempt.startedAtUtc != null) {
+      lines.add(attempt.startedAtUtc!.toIso8601String());
+    }
+    markerFile.writeAsStringSync(lines.join('\n'));
   }
 
-  static void _clearPendingApplyAttemptVersion(String updateExecutablePath) {
+  static void _clearPendingApplyAttempt(String updateExecutablePath) {
     final markerFile = _pendingApplyAttemptFile(updateExecutablePath);
     if (!markerFile.existsSync()) {
       return;
@@ -489,4 +530,14 @@ class VelopackUpdateClient implements WindowsStagedUpdateClient {
       mode: mode,
     );
   }
+}
+
+class _PendingApplyAttempt {
+  const _PendingApplyAttempt({
+    required this.version,
+    this.startedAtUtc,
+  });
+
+  final String version;
+  final DateTime? startedAtUtc;
 }

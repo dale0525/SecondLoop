@@ -79,11 +79,13 @@ class PreCommitHookTests(unittest.TestCase):
         self.assertIn('if [[ ${run_i18n_refresh_needed} -ne 0 ]]; then', script)
         self.assertIn('run_i18n_analyze', script)
 
-    def test_pre_commit_hook_falls_back_to_full_flutter_test_suite_for_lib_changes(self) -> None:
+    def test_pre_commit_hook_targets_related_flutter_tests_for_lib_changes(self) -> None:
         script = PRE_COMMIT_HOOK.read_text(encoding="utf-8")
 
         self.assertIn('lib/*.dart | lib/**/*.dart)', script)
-        self.assertIn('return 0', script)
+        self.assertIn('package_import="package:secondloop/${file#lib/}"', script)
+        self.assertIn('rg -l --fixed-strings "${package_import}" test integration_test', script)
+        self.assertIn('mapfile -t related_targets < <(collect_related_flutter_tests_for_lib_file "${file}")', script)
         self.assertIn('if [[ ${#flutter_test_targets[@]} -eq 0 ]]; then', script)
         self.assertIn('run_flutter_tool test --concurrency=1', script)
 
