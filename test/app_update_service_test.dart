@@ -21,6 +21,24 @@ class _InMemoryUpdateEventLogger implements UpdateEventLogger {
   Future<List<UpdateEventRecord>> readRecent() async => records;
 }
 
+class _ThrowingUpdateEventLogger implements UpdateEventLogger {
+  _ThrowingUpdateEventLogger({required this.failOnType});
+
+  final UpdateEventType failOnType;
+  final List<UpdateEventRecord> records = <UpdateEventRecord>[];
+
+  @override
+  Future<void> record(UpdateEventRecord record) async {
+    if (record.type == failOnType) {
+      throw StateError('logger_failed_${record.type.name}');
+    }
+    records.add(record);
+  }
+
+  @override
+  Future<List<UpdateEventRecord>> readRecent() async => records;
+}
+
 class _FakeWindowsStagedUpdateClient implements WindowsStagedUpdateClient {
   _FakeWindowsStagedUpdateClient({
     required this.available,
@@ -900,6 +918,34 @@ void main() {
           (entry) => entry.type == UpdateEventType.pendingApplySucceeded,
         ),
         isFalse,
+      );
+    });
+
+    test('still exits when dispatch event logging fails', () async {
+      final logger = _ThrowingUpdateEventLogger(
+        failOnType: UpdateEventType.pendingApplyDispatched,
+      );
+      final stagedClient = _FakeWindowsStagedUpdateClient(
+        available: true,
+        pendingUpdateAvailable: true,
+      );
+      var exitedCode = -1;
+      final service = AppUpdateService(
+        platformOverride: AppUpdatePlatform.windows,
+        windowsStagedUpdateClient: stagedClient,
+        updateEventLogger: logger,
+        processExit: (code) => exitedCode = code,
+      );
+
+      final applied = await service.applyPendingUpdateOnStartup();
+
+      expect(applied, true);
+      expect(exitedCode, 0);
+      expect(
+        logger.records.any(
+          (entry) => entry.type == UpdateEventType.pendingApplyStarted,
+        ),
+        isTrue,
       );
     });
 

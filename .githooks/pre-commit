@@ -485,28 +485,17 @@ append_unique_path() {
 
 collect_targeted_flutter_tests() {
   local file
-  local candidate
-  local base_name
   local targets=()
 
   for file in "${staged_files[@]}"; do
     case "${file}" in
+      lib/*.dart | lib/**/*.dart)
+        return 0
+        ;;
       test/*_test.dart | test/**/*_test.dart | integration_test/*_test.dart | integration_test/**/*_test.dart)
         if [[ -f "${file}" ]] && append_unique_path "${file}" "${targets[@]}"; then
           targets+=("${file}")
         fi
-        ;;
-      lib/*.dart | lib/**/*.dart)
-        if [[ ! -f "${file}" ]]; then
-          continue
-        fi
-        base_name="$(basename "${file}" .dart)_test.dart"
-        while IFS= read -r candidate; do
-          [[ -n "${candidate}" ]] || continue
-          if append_unique_path "${candidate}" "${targets[@]}"; then
-            targets+=("${candidate}")
-          fi
-        done < <(find test integration_test -type f -name "${base_name}" 2>/dev/null || true)
         ;;
     esac
   done

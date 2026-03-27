@@ -79,6 +79,24 @@ class PreCommitHookTests(unittest.TestCase):
         self.assertIn('if [[ ${run_i18n_refresh_needed} -ne 0 ]]; then', script)
         self.assertIn('run_i18n_analyze', script)
 
+    def test_pre_commit_hook_falls_back_to_full_flutter_test_suite_for_lib_changes(self) -> None:
+        script = PRE_COMMIT_HOOK.read_text(encoding="utf-8")
+
+        self.assertIn('lib/*.dart | lib/**/*.dart)', script)
+        self.assertIn('return 0', script)
+        self.assertIn('if [[ ${#flutter_test_targets[@]} -eq 0 ]]; then', script)
+        self.assertIn('run_flutter_tool test --concurrency=1', script)
+
+    def test_pre_commit_hook_only_targets_staged_test_files(self) -> None:
+        script = PRE_COMMIT_HOOK.read_text(encoding="utf-8")
+
+        self.assertIn(
+            'test/*_test.dart | test/**/*_test.dart | integration_test/*_test.dart | integration_test/**/*_test.dart)',
+            script,
+        )
+        self.assertNotIn('base_name="$(basename "${file}" .dart)_test.dart"', script)
+        self.assertNotIn('find test integration_test -type f -name "${base_name}"', script)
+
     def test_pre_commit_hook_warns_when_i18n_refresh_stages_additional_locale_files(self) -> None:
         script = PRE_COMMIT_HOOK.read_text(encoding="utf-8")
 
