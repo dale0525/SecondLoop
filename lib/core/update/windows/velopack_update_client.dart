@@ -121,6 +121,7 @@ class VelopackUpdateClient implements WindowsStagedUpdateClient {
       updateExecutablePath: updateExePath,
       currentVersion: currentVersion,
       pendingVersion: pendingVersion,
+      throwIfAttemptInProgress: false,
     );
     if (skipRetry) {
       return false;
@@ -157,6 +158,13 @@ class VelopackUpdateClient implements WindowsStagedUpdateClient {
         _compareVersionStrings(pendingVersion, currentVersion) <= 0) {
       throw StateError('windows_velopack_no_pending_update');
     }
+
+    _resolvePendingApplyAttempt(
+      updateExecutablePath: updateExePath,
+      currentVersion: currentVersion,
+      pendingVersion: pendingVersion,
+      throwIfAttemptInProgress: true,
+    );
 
     await _startDetachedApply(
       updateExecutablePath: updateExePath,
@@ -292,6 +300,7 @@ class VelopackUpdateClient implements WindowsStagedUpdateClient {
     required String updateExecutablePath,
     required String currentVersion,
     required String? pendingVersion,
+    required bool throwIfAttemptInProgress,
   }) {
     final attempt = _readPendingApplyAttempt(updateExecutablePath);
     if (attempt == null) {
@@ -310,6 +319,11 @@ class VelopackUpdateClient implements WindowsStagedUpdateClient {
     if (startedAtUtc != null &&
         _now().toUtc().difference(startedAtUtc) <
             _pendingApplyRetryGracePeriod) {
+      if (throwIfAttemptInProgress) {
+        throw StateError(
+          'windows_velopack_apply_already_in_progress_${attempt.version}',
+        );
+      }
       return true;
     }
 

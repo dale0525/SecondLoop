@@ -488,12 +488,10 @@ collect_related_flutter_tests_for_lib_file() {
   local package_import="package:secondloop/${file#lib/}"
   local match
 
-  if [[ -f "test/${file#lib/}" ]]; then
-    match="test/${file#lib/}"
-    match="${match%.dart}_test.dart"
-    if [[ -f "${match}" ]]; then
-      printf '%s\n' "${match}"
-    fi
+  match="test/${file#lib/}"
+  match="${match%.dart}_test.dart"
+  if [[ -f "${match}" ]]; then
+    printf '%s\n' "${match}"
   fi
 
   while IFS= read -r match; do

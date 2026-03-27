@@ -198,6 +198,49 @@ void main() {
     expect(_pendingApplyAttemptMarker(root).existsSync(), isTrue);
   });
 
+  test('applyPendingAndRestart rejects duplicate detached apply while recent',
+      () async {
+    final root =
+        await Directory.systemTemp.createTemp('velopack_apply_manual_');
+    final updater = File('${root.path}${Platform.pathSeparator}Update.exe')
+      ..writeAsStringSync('stub');
+    _writeSqVersion(root, '1.0.0');
+    _createNupkg(root, 'com.secondloop.secondloop-1.0.1-full.nupkg');
+    final stagedPackage = File(
+      '${root.path}${Platform.pathSeparator}packages${Platform.pathSeparator}com.secondloop.secondloop-1.0.1-full.nupkg',
+    );
+
+    var calls = 0;
+    final client = VelopackUpdateClient(
+      updateExecutablePath: updater.path,
+      processStarter: (executable, arguments,
+          {mode = ProcessStartMode.normal}) async {
+        calls += 1;
+        return Process.start(
+          Platform.resolvedExecutable,
+          const ['--version'],
+        );
+      },
+    );
+
+    await client.applyPendingOnStartup(waitPid: 456);
+
+    await expectLater(
+      client.applyPendingAndRestart(waitPid: 789),
+      throwsA(
+        isA<StateError>().having(
+          (error) => error.message,
+          'message',
+          contains('apply_already_in_progress'),
+        ),
+      ),
+    );
+
+    expect(calls, 1);
+    expect(stagedPackage.existsSync(), isTrue);
+    expect(_pendingApplyAttemptMarker(root).existsSync(), isTrue);
+  });
+
   test(
       'applyPendingOnStartup clears stale pending package after detached apply grace period expires',
       () async {
