@@ -2,11 +2,6 @@ import 'dart:io';
 
 import 'velopack_paths.dart';
 
-typedef VelopackProcessRunner = Future<ProcessResult> Function(
-  String executable,
-  List<String> arguments,
-);
-
 typedef VelopackProcessStarter = Future<Process> Function(
   String executable,
   List<String> arguments, {
@@ -25,7 +20,9 @@ abstract class WindowsStagedUpdateClient {
     required int waitPid,
   });
 
-  Future<bool> applyPendingOnStartup();
+  Future<bool> applyPendingOnStartup({
+    required int waitPid,
+  });
 
   Future<void> applyPendingAndRestart({
     required int waitPid,
@@ -35,14 +32,11 @@ abstract class WindowsStagedUpdateClient {
 class VelopackUpdateClient implements WindowsStagedUpdateClient {
   VelopackUpdateClient({
     String? updateExecutablePath,
-    VelopackProcessRunner? processRunner,
     VelopackProcessStarter? processStarter,
   })  : _updateExecutablePath = updateExecutablePath,
-        _processRunner = processRunner ?? _defaultProcessRunner,
         _processStarter = processStarter ?? _defaultProcessStarter;
 
   final String? _updateExecutablePath;
-  final VelopackProcessRunner _processRunner;
   final VelopackProcessStarter _processStarter;
 
   String get _updateExePath =>
@@ -92,20 +86,15 @@ class VelopackUpdateClient implements WindowsStagedUpdateClient {
     final packageFile = await _stageAssetFile(assetDownloadUri);
     await _processStarter(
       _updateExePath,
-      [
-        'apply',
-        '--silent',
-        '--waitPid',
-        waitPid.toString(),
-        '--package',
-        packageFile.path,
-      ],
+      _buildApplyArguments(waitPid: waitPid, packagePath: packageFile.path),
       mode: ProcessStartMode.detached,
     );
   }
 
   @override
-  Future<bool> applyPendingOnStartup() async {
+  Future<bool> applyPendingOnStartup({
+    required int waitPid,
+  }) async {
     final updateExePath = _updateExePath;
     if (!File(updateExePath).existsSync()) {
       throw StateError('windows_velopack_unavailable');
@@ -115,15 +104,11 @@ class VelopackUpdateClient implements WindowsStagedUpdateClient {
       return false;
     }
 
-    final result = await _processRunner(updateExePath, [
-      'apply',
-      '--silent',
-    ]);
-
-    if (result.exitCode != 0) {
-      _deletePendingPackageUpdates(updateExePath);
-      throw StateError('windows_velopack_apply_failed_${result.stderr}');
-    }
+    await _processStarter(
+      updateExePath,
+      _buildApplyArguments(waitPid: waitPid),
+      mode: ProcessStartMode.detached,
+    );
     return true;
   }
 
@@ -142,14 +127,28 @@ class VelopackUpdateClient implements WindowsStagedUpdateClient {
 
     await _processStarter(
       updateExePath,
-      [
-        'apply',
-        '--silent',
-        '--waitPid',
-        waitPid.toString(),
-      ],
+      _buildApplyArguments(waitPid: waitPid),
       mode: ProcessStartMode.detached,
     );
+  }
+
+  static List<String> _buildApplyArguments({
+    required int waitPid,
+    String? packagePath,
+  }) {
+    final arguments = <String>[
+      'apply',
+      '--silent',
+      '--restart',
+      '--waitPid',
+      waitPid.toString(),
+    ];
+    if (packagePath != null) {
+      arguments
+        ..add('--package')
+        ..add(packagePath);
+    }
+    return arguments;
   }
 
   Future<File> _stageAssetFile(Uri assetDownloadUri) async {
@@ -211,32 +210,6 @@ class VelopackUpdateClient implements WindowsStagedUpdateClient {
       }
     } finally {
       client.close(force: true);
-    }
-  }
-
-  static void _deletePendingPackageUpdates(String updateExecutablePath) {
-    final appRoot = File(updateExecutablePath).absolute.parent.path;
-    final currentVersion = _readCurrentInstalledVersion(appRoot);
-    final packagesDir = Directory(
-      '$appRoot${Platform.pathSeparator}packages',
-    );
-    if (!packagesDir.existsSync()) {
-      return;
-    }
-
-    for (final entity in packagesDir.listSync()) {
-      if (entity is! File) continue;
-      final fileName =
-          entity.uri.pathSegments.isEmpty ? '' : entity.uri.pathSegments.last;
-      final version = _extractVersionFromNupkgName(fileName);
-      if (version == null) continue;
-      if (currentVersion != null &&
-          _compareVersionStrings(version, currentVersion) <= 0) {
-        continue;
-      }
-      try {
-        entity.deleteSync();
-      } catch (_) {}
     }
   }
 
@@ -361,13 +334,6 @@ class VelopackUpdateClient implements WindowsStagedUpdateClient {
       }
     }
     return segments;
-  }
-
-  static Future<ProcessResult> _defaultProcessRunner(
-    String executable,
-    List<String> arguments,
-  ) {
-    return Process.run(executable, arguments);
   }
 
   static Future<Process> _defaultProcessStarter(

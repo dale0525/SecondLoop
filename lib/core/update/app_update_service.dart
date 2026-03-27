@@ -452,9 +452,7 @@ class AppUpdateService {
         _exitProcess(0);
       } catch (_) {
         try {
-          if (tempRoot.existsSync()) {
-            await tempRoot.delete(recursive: true);
-          }
+          await _deleteDirectoryIfExists(tempRoot);
         } catch (_) {}
         rethrow;
       }
@@ -522,8 +520,11 @@ class AppUpdateService {
     }
     await _recordEvent(UpdateEventType.pendingApplyStarted);
     try {
-      final applied = await stagedClient.applyPendingOnStartup();
+      final applied = await stagedClient.applyPendingOnStartup(waitPid: pid);
       await _recordEvent(UpdateEventType.pendingApplySucceeded);
+      if (applied) {
+        _exitProcess(0);
+      }
       return applied;
     } catch (error) {
       await _recordFailure(UpdateEventType.pendingApplyFailed, error);
@@ -888,10 +889,25 @@ class AppUpdateService {
     } finally {
       if (tempRoot != null) {
         try {
-          if (tempRoot.existsSync()) {
-            await tempRoot.delete(recursive: true);
-          }
+          await _deleteDirectoryIfExists(tempRoot);
         } catch (_) {}
+      }
+    }
+  }
+
+  Future<void> _deleteDirectoryIfExists(Directory dir) async {
+    for (var attempt = 0; attempt < 20; attempt += 1) {
+      if (!dir.existsSync()) {
+        return;
+      }
+      try {
+        await dir.delete(recursive: true);
+        return;
+      } catch (_) {
+        if (attempt == 19) {
+          rethrow;
+        }
+        await Future<void>.delayed(const Duration(milliseconds: 100));
       }
     }
   }

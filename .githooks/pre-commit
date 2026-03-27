@@ -332,7 +332,7 @@ while [[ $# -gt 0 ]]; do
       cat <<'EOF'
 Usage: .githooks/pre-commit [--check] [--flutter] [--rust] [--ci]
 
-Default (no flags): git pre-commit hook mode (format staged files + analyze + tests/clippy).
+Default (no flags): git pre-commit hook mode (format staged files + analyze + targeted Flutter tests/clippy).
 
 --check    CI-friendly mode: verify formatting/analyze without modifying files.
 --flutter  Limit --check to Dart format + flutter analyze.
@@ -467,6 +467,51 @@ run_flutter_tool() {
   fi
 
   env -u GIT_DIR -u GIT_WORK_TREE -u GIT_INDEX_FILE "${flutter_bin}" "$@"
+}
+
+append_unique_path() {
+  local candidate="$1"
+  shift
+
+  local existing
+  for existing in "$@"; do
+    if [[ "${existing}" == "${candidate}" ]]; then
+      return 1
+    fi
+  done
+
+  return 0
+}
+
+collect_targeted_flutter_tests() {
+  local file
+  local candidate
+  local base_name
+  local targets=()
+
+  for file in "${staged_files[@]}"; do
+    case "${file}" in
+      test/*_test.dart | test/**/*_test.dart | integration_test/*_test.dart | integration_test/**/*_test.dart)
+        if [[ -f "${file}" ]] && append_unique_path "${file}" "${targets[@]}"; then
+          targets+=("${file}")
+        fi
+        ;;
+      lib/*.dart | lib/**/*.dart)
+        if [[ ! -f "${file}" ]]; then
+          continue
+        fi
+        base_name="$(basename "${file}" .dart)_test.dart"
+        while IFS= read -r candidate; do
+          [[ -n "${candidate}" ]] || continue
+          if append_unique_path "${candidate}" "${targets[@]}"; then
+            targets+=("${candidate}")
+          fi
+        done < <(find test integration_test -type f -name "${base_name}" 2>/dev/null || true)
+        ;;
+    esac
+  done
+
+  printf '%s\n' "${targets[@]}"
 }
 
 if (( check_mode )); then
@@ -677,6 +722,12 @@ if [[ ${run_rust_fmt} -ne 0 ]]; then
 fi
 
 if [[ ${run_flutter_checks} -ne 0 ]]; then
+  flutter_test_targets=()
+  while IFS= read -r file; do
+    [[ -n "${file}" ]] || continue
+    flutter_test_targets+=("${file}")
+  done < <(collect_targeted_flutter_tests)
+
   if [[ ${run_i18n_refresh_needed} -ne 0 ]]; then
     run_i18n_analyze
   fi
@@ -688,11 +739,13 @@ if [[ ${run_flutter_checks} -ne 0 ]]; then
     exit 1
   fi
 
-  if ! run_flutter_tool test --concurrency=1; then
-    echo "" >&2
-    echo "pre-commit: flutter test failed." >&2
-    echo "Fix locally with: pixi run flutter test" >&2
-    exit 1
+  if [[ ${#flutter_test_targets[@]} -ne 0 ]]; then
+    if ! run_flutter_tool test --concurrency=1 "${flutter_test_targets[@]}"; then
+      echo "" >&2
+      echo "pre-commit: flutter test failed." >&2
+      echo "Fix locally with: pixi run flutter test \"${flutter_test_targets[*]}\"" >&2
+      exit 1
+    fi
   fi
 fi
 

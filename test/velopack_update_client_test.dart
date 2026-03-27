@@ -73,13 +73,8 @@ void main() {
       '${sourceDir.path}${Platform.pathSeparator}com.secondloop.secondloop-1.2.0-full.nupkg',
     )..writeAsStringSync('nupkg-content');
 
-    var runnerCalls = 0;
     final client = VelopackUpdateClient(
       updateExecutablePath: updater.path,
-      processRunner: (executable, arguments) async {
-        runnerCalls += 1;
-        return ProcessResult(123, 0, '', '');
-      },
     );
 
     await client.stageAsset(sourcePackage.uri);
@@ -89,7 +84,6 @@ void main() {
     );
     expect(stagedPackage.existsSync(), isTrue);
     expect(stagedPackage.readAsStringSync(), 'nupkg-content');
-    expect(runnerCalls, 0);
   });
 
   test('installAssetAndRestart starts detached apply command', () async {
@@ -131,6 +125,7 @@ void main() {
     expect(startedExecutable, updater.path);
     expect(startedMode, ProcessStartMode.detached);
     expect(startedArgs[0], 'apply');
+    expect(startedArgs, contains('--restart'));
     expect(startedArgs, containsAllInOrder(['--waitPid', '4321']));
     expect(startedArgs, contains('--package'));
     final packageIndex = startedArgs.indexOf('--package');
@@ -141,60 +136,26 @@ void main() {
     expect(stagedPackage.readAsStringSync(), 'nupkg-content');
   });
 
-  test(
-      'applyPendingOnStartup deletes staged package when updater exits non-zero',
-      () async {
+  test('applyPendingOnStartup throws when updater launch fails', () async {
     final root = await Directory.systemTemp.createTemp('velopack_apply_');
     final updater = File('${root.path}${Platform.pathSeparator}Update.exe')
       ..writeAsStringSync('stub');
     _writeSqVersion(root, '1.0.0');
     _createNupkg(root, 'com.secondloop.secondloop-1.0.1-full.nupkg');
-    final stagedPackage = File(
-      '${root.path}${Platform.pathSeparator}packages${Platform.pathSeparator}com.secondloop.secondloop-1.0.1-full.nupkg',
-    );
 
     final client = VelopackUpdateClient(
       updateExecutablePath: updater.path,
-      processRunner: (executable, arguments) async {
-        return ProcessResult(456, 1, '', 'apply_failed');
+      processStarter: (executable, arguments,
+          {mode = ProcessStartMode.normal}) async {
+        throw ProcessException(executable, arguments, 'apply_failed', 1);
       },
     );
 
     await expectLater(
-      client.applyPendingOnStartup(),
+      client.applyPendingOnStartup(waitPid: 456),
       throwsA(
-        isA<StateError>().having(
-          (error) => error.message,
-          'message',
-          contains('windows_velopack_apply_failed_'),
-        ),
-      ),
-    );
-    expect(stagedPackage.existsSync(), isFalse);
-  });
-
-  test('applyPendingOnStartup throws when updater exits non-zero', () async {
-    final root = await Directory.systemTemp.createTemp('velopack_apply_');
-    final updater = File('${root.path}${Platform.pathSeparator}Update.exe')
-      ..writeAsStringSync('stub');
-    _writeSqVersion(root, '1.0.0');
-    _createNupkg(root, 'com.secondloop.secondloop-1.0.1-full.nupkg');
-
-    final client = VelopackUpdateClient(
-      updateExecutablePath: updater.path,
-      processRunner: (executable, arguments) async {
-        return ProcessResult(456, 1, '', 'apply_failed');
-      },
-    );
-
-    expect(
-      client.applyPendingOnStartup,
-      throwsA(
-        isA<StateError>().having(
-          (error) => error.message,
-          'message',
-          contains('windows_velopack_apply_failed_'),
-        ),
+        isA<ProcessException>().having(
+            (error) => error.message, 'message', contains('apply_failed')),
       ),
     );
   });
@@ -210,18 +171,23 @@ void main() {
     var calls = 0;
     final client = VelopackUpdateClient(
       updateExecutablePath: updater.path,
-      processRunner: (executable, arguments) async {
+      processStarter: (executable, arguments,
+          {mode = ProcessStartMode.normal}) async {
         calls += 1;
-        return ProcessResult(999, 0, '', '');
+        return Process.start(
+          Platform.resolvedExecutable,
+          const ['--version'],
+        );
       },
     );
 
-    await client.applyPendingOnStartup();
+    await client.applyPendingOnStartup(waitPid: 999);
 
     expect(calls, 0);
   });
 
-  test('applyPendingOnStartup runs apply when newer package is present',
+  test(
+      'applyPendingOnStartup starts detached restart flow when newer package is present',
       () async {
     final root = await Directory.systemTemp.createTemp('velopack_apply_run_');
     final updater = File('${root.path}${Platform.pathSeparator}Update.exe')
@@ -231,18 +197,61 @@ void main() {
 
     var calls = 0;
     late List<String> actualArgs;
+    late ProcessStartMode actualMode;
     final client = VelopackUpdateClient(
       updateExecutablePath: updater.path,
-      processRunner: (executable, arguments) async {
+      processStarter: (executable, arguments,
+          {mode = ProcessStartMode.normal}) async {
         calls += 1;
         actualArgs = arguments;
-        return ProcessResult(1000, 0, '', '');
+        actualMode = mode;
+        return Process.start(
+          Platform.resolvedExecutable,
+          const ['--version'],
+        );
       },
     );
 
-    await client.applyPendingOnStartup();
+    await client.applyPendingOnStartup(waitPid: 1000);
 
     expect(calls, 1);
-    expect(actualArgs, ['apply', '--silent']);
+    expect(actualMode, ProcessStartMode.detached);
+    expect(actualArgs, containsAllInOrder(['apply', '--silent']));
+    expect(actualArgs, contains('--restart'));
+    expect(actualArgs, containsAllInOrder(['--waitPid', '1000']));
+  });
+
+  test('applyPendingAndRestart starts detached restart flow', () async {
+    final root =
+        await Directory.systemTemp.createTemp('velopack_apply_restart_');
+    final updater = File('${root.path}${Platform.pathSeparator}Update.exe')
+      ..writeAsStringSync('stub');
+    _writeSqVersion(root, '1.0.0');
+    _createNupkg(root, 'com.secondloop.secondloop-1.1.0-full.nupkg');
+
+    var calls = 0;
+    late List<String> actualArgs;
+    late ProcessStartMode actualMode;
+    final client = VelopackUpdateClient(
+      updateExecutablePath: updater.path,
+      processStarter: (executable, arguments,
+          {mode = ProcessStartMode.normal}) async {
+        calls += 1;
+        actualArgs = arguments;
+        actualMode = mode;
+        return Process.start(
+          Platform.resolvedExecutable,
+          const ['--version'],
+        );
+      },
+    );
+
+    await client.applyPendingAndRestart(waitPid: 4321);
+
+    expect(calls, 1);
+    expect(actualMode, ProcessStartMode.detached);
+    expect(actualArgs, containsAllInOrder(['apply', '--silent']));
+    expect(actualArgs, contains('--restart'));
+    expect(actualArgs, containsAllInOrder(['--waitPid', '4321']));
   });
 }

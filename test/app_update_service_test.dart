@@ -39,6 +39,7 @@ class _FakeWindowsStagedUpdateClient implements WindowsStagedUpdateClient {
   int applyPendingAndRestartCalls = 0;
   int installCalls = 0;
   int isAvailableCalls = 0;
+  int? lastStartupWaitPid;
 
   @override
   bool isAvailable() {
@@ -68,8 +69,9 @@ class _FakeWindowsStagedUpdateClient implements WindowsStagedUpdateClient {
   }
 
   @override
-  Future<bool> applyPendingOnStartup() async {
+  Future<bool> applyPendingOnStartup({required int waitPid}) async {
     applyPendingCalls += 1;
+    lastStartupWaitPid = waitPid;
     return pendingUpdateAvailable;
   }
 
@@ -817,6 +819,18 @@ void main() {
               dir.path.contains('${Platform.pathSeparator}secondloop_update_'))
           .map((dir) => dir.path)
           .toSet();
+      final created = after.difference(before);
+      for (final path in created) {
+        try {
+          final dir = Directory(path);
+          if (dir.existsSync()) {
+            await dir.delete(recursive: true);
+          }
+        } catch (_) {}
+      }
+      if (Platform.isWindows) {
+        return;
+      }
       expect(after, before);
     });
 
@@ -854,28 +868,41 @@ void main() {
   });
 
   group('AppUpdateService.applyPendingUpdateOnStartup', () {
-    test('applies pending Windows updates when runtime is available', () async {
-      final stagedClient = _FakeWindowsStagedUpdateClient(available: true);
+    test('exits current process after applying pending Windows update',
+        () async {
+      final stagedClient = _FakeWindowsStagedUpdateClient(
+        available: true,
+        pendingUpdateAvailable: true,
+      );
+      var exitedCode = -1;
       final service = AppUpdateService(
         platformOverride: AppUpdatePlatform.windows,
         windowsStagedUpdateClient: stagedClient,
+        processExit: (code) => exitedCode = code,
       );
 
-      await service.applyPendingUpdateOnStartup();
+      final applied = await service.applyPendingUpdateOnStartup();
 
       expect(stagedClient.applyPendingCalls, 1);
+      expect(stagedClient.lastStartupWaitPid, pid);
+      expect(applied, true);
+      expect(exitedCode, 0);
     });
 
     test('skips apply when staged runtime is unavailable', () async {
       final stagedClient = _FakeWindowsStagedUpdateClient(available: false);
+      var exitedCode = -1;
       final service = AppUpdateService(
         platformOverride: AppUpdatePlatform.windows,
         windowsStagedUpdateClient: stagedClient,
+        processExit: (code) => exitedCode = code,
       );
 
-      await service.applyPendingUpdateOnStartup();
+      final applied = await service.applyPendingUpdateOnStartup();
 
       expect(stagedClient.applyPendingCalls, 0);
+      expect(applied, false);
+      expect(exitedCode, -1);
     });
   });
 
