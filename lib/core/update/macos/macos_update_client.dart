@@ -105,9 +105,11 @@ class DefaultMacosManagedUpdateClient implements MacosManagedUpdateClient {
         ),
       );
 
-      final modeResult = await Process.run('chmod', ['+x', script.path]);
-      if (modeResult.exitCode != 0) {
-        throw StateError('macos_update_chmod_failed_${modeResult.stderr}');
+      if (!Platform.isWindows) {
+        final modeResult = await Process.run('chmod', ['+x', script.path]);
+        if (modeResult.exitCode != 0) {
+          throw StateError('macos_update_chmod_failed_${modeResult.stderr}');
+        }
       }
 
       await _processStarter(
@@ -130,21 +132,29 @@ class DefaultMacosManagedUpdateClient implements MacosManagedUpdateClient {
     Map<String, String>? environment,
   }) {
     final resolvedExecutablePath =
-        executablePath ?? Platform.resolvedExecutable;
+        _normalizePath((executablePath ?? Platform.resolvedExecutable).trim());
     final resolvedEnvironment = environment ?? Platform.environment;
-    final executableFile = File(resolvedExecutablePath).absolute;
-    final macosDir = executableFile.parent;
-    if (macosDir.path.split(Platform.pathSeparator).last != 'MacOS') {
+    if (resolvedExecutablePath.isEmpty) {
       return null;
     }
 
-    final contentsDir = macosDir.parent;
-    if (contentsDir.path.split(Platform.pathSeparator).last != 'Contents') {
+    final segments = resolvedExecutablePath
+        .split('/')
+        .where((segment) => segment.isNotEmpty)
+        .toList(growable: false);
+    if (segments.length < 4) {
       return null;
     }
 
-    final appBundleDir = contentsDir.parent;
-    final appBundlePath = appBundleDir.absolute.path;
+    final macosIndex = segments.length - 2;
+    final contentsIndex = segments.length - 3;
+    final appIndex = segments.length - 4;
+    if (segments[macosIndex] != 'MacOS' ||
+        segments[contentsIndex] != 'Contents') {
+      return null;
+    }
+
+    final appBundlePath = '/${segments.take(appIndex + 1).join('/')}';
     if (!appBundlePath.endsWith('.app')) {
       return null;
     }

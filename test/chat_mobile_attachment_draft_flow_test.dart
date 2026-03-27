@@ -71,7 +71,8 @@ void main() {
       final oldSkipRecoveryStore = chatDebugSkipAudioRecoveryStore;
       final oldSkipRuntimeGuards = chatDebugSkipAudioRecordingRuntimeGuards;
       debugDefaultTargetPlatformOverride = TargetPlatform.android;
-      final pathProvider = _TestPathProviderPlatform('/tmp');
+      final tempRoot = Directory.systemTemp.createTempSync('chat_record_test_');
+      final pathProvider = _TestPathProviderPlatform(tempRoot.path);
       PathProviderPlatform.instance = pathProvider;
 
       final recordPlatform = _TestRecordPlatform(
@@ -132,6 +133,9 @@ void main() {
         RecordPlatform.instance = oldRecordPlatform;
         PathProviderPlatform.instance = oldPathProviderPlatform;
         debugDefaultTargetPlatformOverride = oldPlatform;
+        if (tempRoot.existsSync()) {
+          tempRoot.deleteSync(recursive: true);
+        }
       }
     },
   );

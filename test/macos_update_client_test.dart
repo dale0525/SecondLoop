@@ -105,6 +105,9 @@ void main() {
           {mode = ProcessStartMode.normal}) async {
         capturedExecutable = executable;
         capturedArguments = arguments;
+        if (Platform.isWindows) {
+          return Process.start('cmd', const ['/c', 'exit', '0']);
+        }
         return Process.start('/usr/bin/true', const []);
       },
     );

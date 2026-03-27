@@ -193,10 +193,16 @@ Future<String> _writeAssetIfNeeded({
 
   final file = File('${assetDirectory.path}/$assetFilename');
   await file.writeAsBytes(bytes, flush: true);
-  final directoryName = assetDirectory.path.split(Platform.pathSeparator).last;
+  final directoryName = _pathBaseName(assetDirectory.path);
   final relativePath = '$directoryName/$assetFilename';
   writtenAssetPaths[assetKey] = relativePath;
   return relativePath;
+}
+
+String _pathBaseName(String value) {
+  final trimmed = value.trim();
+  if (trimmed.isEmpty) return trimmed;
+  return trimmed.split(RegExp(r'[\\/]')).last;
 }
 
 String _extensionForMimeType(String mimeType) {
