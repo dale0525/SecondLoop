@@ -160,6 +160,48 @@ void main() {
     );
   });
 
+  test(
+      'applyPendingOnStartup clears stale pending package after previous detached apply attempt',
+      () async {
+    final root = await Directory.systemTemp.createTemp('velopack_apply_stale_');
+    final updater = File('${root.path}${Platform.pathSeparator}Update.exe')
+      ..writeAsStringSync('stub');
+    _writeSqVersion(root, '1.0.0');
+    _createNupkg(root, 'com.secondloop.secondloop-1.0.1-full.nupkg');
+    final stagedPackage = File(
+      '${root.path}${Platform.pathSeparator}packages${Platform.pathSeparator}com.secondloop.secondloop-1.0.1-full.nupkg',
+    );
+
+    var calls = 0;
+    final client = VelopackUpdateClient(
+      updateExecutablePath: updater.path,
+      processStarter: (executable, arguments,
+          {mode = ProcessStartMode.normal}) async {
+        calls += 1;
+        return Process.start(
+          Platform.resolvedExecutable,
+          const ['--version'],
+        );
+      },
+    );
+
+    await client.applyPendingOnStartup(waitPid: 456);
+
+    await expectLater(
+      client.applyPendingOnStartup(waitPid: 789),
+      throwsA(
+        isA<StateError>().having(
+          (error) => error.message,
+          'message',
+          contains('previous_apply_failed'),
+        ),
+      ),
+    );
+
+    expect(calls, 1);
+    expect(stagedPackage.existsSync(), isFalse);
+  });
+
   test('applyPendingOnStartup skips apply when package version equals current',
       () async {
     final root = await Directory.systemTemp.createTemp('velopack_apply_skip_');

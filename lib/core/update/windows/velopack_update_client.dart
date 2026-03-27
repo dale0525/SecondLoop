@@ -30,6 +30,8 @@ abstract class WindowsStagedUpdateClient {
 }
 
 class VelopackUpdateClient implements WindowsStagedUpdateClient {
+  static const _pendingApplyAttemptFileName = '.secondloop_pending_apply';
+
   VelopackUpdateClient({
     String? updateExecutablePath,
     VelopackProcessStarter? processStarter,
@@ -84,10 +86,12 @@ class VelopackUpdateClient implements WindowsStagedUpdateClient {
     }
 
     final packageFile = await _stageAssetFile(assetDownloadUri);
-    await _processStarter(
-      _updateExePath,
-      _buildApplyArguments(waitPid: waitPid, packagePath: packageFile.path),
-      mode: ProcessStartMode.detached,
+    await _startDetachedApply(
+      updateExecutablePath: _updateExePath,
+      waitPid: waitPid,
+      packagePath: packageFile.path,
+      pendingVersion:
+          _extractVersionFromNupkgName(packageFile.uri.pathSegments.last),
     );
   }
 
@@ -100,14 +104,28 @@ class VelopackUpdateClient implements WindowsStagedUpdateClient {
       throw StateError('windows_velopack_unavailable');
     }
 
-    if (!_hasPendingPackageUpdate(updateExePath)) {
+    final appRoot = File(updateExePath).absolute.parent.path;
+    final currentVersion = _readCurrentInstalledVersion(appRoot);
+    if (currentVersion == null) {
       return false;
     }
 
-    await _processStarter(
-      updateExePath,
-      _buildApplyArguments(waitPid: waitPid),
-      mode: ProcessStartMode.detached,
+    final pendingVersion = _readNewestPackageVersion(appRoot);
+    _resolvePendingApplyAttempt(
+      updateExecutablePath: updateExePath,
+      currentVersion: currentVersion,
+      pendingVersion: pendingVersion,
+    );
+
+    if (pendingVersion == null ||
+        _compareVersionStrings(pendingVersion, currentVersion) <= 0) {
+      return false;
+    }
+
+    await _startDetachedApply(
+      updateExecutablePath: updateExePath,
+      waitPid: waitPid,
+      pendingVersion: pendingVersion,
     );
     return true;
   }
@@ -121,15 +139,42 @@ class VelopackUpdateClient implements WindowsStagedUpdateClient {
       throw StateError('windows_velopack_unavailable');
     }
 
-    if (!_hasPendingPackageUpdate(updateExePath)) {
+    final appRoot = File(updateExePath).absolute.parent.path;
+    final currentVersion = _readCurrentInstalledVersion(appRoot);
+    final pendingVersion = _readNewestPackageVersion(appRoot);
+
+    if (currentVersion == null ||
+        pendingVersion == null ||
+        _compareVersionStrings(pendingVersion, currentVersion) <= 0) {
       throw StateError('windows_velopack_no_pending_update');
     }
 
-    await _processStarter(
-      updateExePath,
-      _buildApplyArguments(waitPid: waitPid),
-      mode: ProcessStartMode.detached,
+    await _startDetachedApply(
+      updateExecutablePath: updateExePath,
+      waitPid: waitPid,
+      pendingVersion: pendingVersion,
     );
+  }
+
+  Future<void> _startDetachedApply({
+    required String updateExecutablePath,
+    required int waitPid,
+    required String? pendingVersion,
+    String? packagePath,
+  }) async {
+    if (pendingVersion != null && pendingVersion.isNotEmpty) {
+      _writePendingApplyAttemptVersion(updateExecutablePath, pendingVersion);
+    }
+    try {
+      await _processStarter(
+        updateExecutablePath,
+        _buildApplyArguments(waitPid: waitPid, packagePath: packagePath),
+        mode: ProcessStartMode.detached,
+      );
+    } catch (_) {
+      _clearPendingApplyAttemptVersion(updateExecutablePath);
+      rethrow;
+    }
   }
 
   static List<String> _buildApplyArguments({
@@ -226,6 +271,103 @@ class VelopackUpdateClient implements WindowsStagedUpdateClient {
     }
 
     return _compareVersionStrings(pendingVersion, currentVersion) > 0;
+  }
+
+  static void _resolvePendingApplyAttempt({
+    required String updateExecutablePath,
+    required String currentVersion,
+    required String? pendingVersion,
+  }) {
+    final attemptedVersion =
+        _readPendingApplyAttemptVersion(updateExecutablePath);
+    if (attemptedVersion == null) {
+      return;
+    }
+
+    final attemptIsStale = pendingVersion == null ||
+        pendingVersion != attemptedVersion ||
+        _compareVersionStrings(currentVersion, attemptedVersion) >= 0;
+    if (attemptIsStale) {
+      _clearPendingApplyAttemptVersion(updateExecutablePath);
+      return;
+    }
+
+    _deletePendingPackageUpdates(updateExecutablePath);
+    _clearPendingApplyAttemptVersion(updateExecutablePath);
+    throw StateError(
+        'windows_velopack_previous_apply_failed_$attemptedVersion');
+  }
+
+  static File _pendingApplyAttemptFile(String updateExecutablePath) {
+    final appRoot = File(updateExecutablePath).absolute.parent.path;
+    return File(
+      '$appRoot${Platform.pathSeparator}packages${Platform.pathSeparator}$_pendingApplyAttemptFileName',
+    );
+  }
+
+  static String? _readPendingApplyAttemptVersion(String updateExecutablePath) {
+    final markerFile = _pendingApplyAttemptFile(updateExecutablePath);
+    if (!markerFile.existsSync()) {
+      return null;
+    }
+
+    try {
+      final version = markerFile.readAsStringSync().trim();
+      if (version.isEmpty) {
+        return null;
+      }
+      return version;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static void _writePendingApplyAttemptVersion(
+    String updateExecutablePath,
+    String version,
+  ) {
+    final markerFile = _pendingApplyAttemptFile(updateExecutablePath);
+    markerFile.parent.createSync(recursive: true);
+    markerFile.writeAsStringSync(version);
+  }
+
+  static void _clearPendingApplyAttemptVersion(String updateExecutablePath) {
+    final markerFile = _pendingApplyAttemptFile(updateExecutablePath);
+    if (!markerFile.existsSync()) {
+      return;
+    }
+    try {
+      markerFile.deleteSync();
+    } catch (_) {}
+  }
+
+  static void _deletePendingPackageUpdates(String updateExecutablePath) {
+    final appRoot = File(updateExecutablePath).absolute.parent.path;
+    final currentVersion = _readCurrentInstalledVersion(appRoot);
+    if (currentVersion == null) {
+      return;
+    }
+
+    final packagesDir = Directory(
+      '$appRoot${Platform.pathSeparator}packages',
+    );
+    if (!packagesDir.existsSync()) {
+      return;
+    }
+
+    for (final entity in packagesDir.listSync()) {
+      if (entity is! File) continue;
+      final fileName =
+          entity.uri.pathSegments.isEmpty ? '' : entity.uri.pathSegments.last;
+      final version = _extractVersionFromNupkgName(fileName);
+      if (version == null ||
+          _compareVersionStrings(version, currentVersion) <= 0) {
+        continue;
+      }
+      try {
+        entity.deleteSync();
+      } catch (_) {}
+    }
   }
 
   static String? _readCurrentInstalledVersion(String appRootPath) {
