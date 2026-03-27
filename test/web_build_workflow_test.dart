@@ -36,4 +36,15 @@ void main() {
     expect(workflow, contains('run: dart run slang'));
     expect(smokeTests, greaterThan(generateI18n));
   });
+
+  test('web build workflow publishes site deploy dispatch after release', () {
+    final workflow = File('.github/workflows/web-build.yml').readAsStringSync();
+
+    expect(workflow, contains('release:'));
+    expect(workflow, contains('types: [published]'));
+    expect(workflow, contains('SECONDLOOP_SERVER_DISPATCH_TOKEN'));
+    expect(workflow, contains('secondloop_web_release_published'));
+    expect(workflow, contains('secondloop_web_run_id'));
+    expect(workflow, contains(r'repos/$SITE_REPO/dispatches'));
+  });
 }
