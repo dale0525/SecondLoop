@@ -512,7 +512,11 @@ collect_targeted_flutter_tests() {
   for file in "${staged_files[@]}"; do
     case "${file}" in
       lib/*.dart | lib/**/*.dart)
-        mapfile -t related_targets < <(collect_related_flutter_tests_for_lib_file "${file}")
+        related_targets=()
+        while IFS= read -r candidate; do
+          [[ -n "${candidate}" ]] || continue
+          related_targets+=("${candidate}")
+        done < <(collect_related_flutter_tests_for_lib_file "${file}")
         if [[ ${#related_targets[@]} -eq 0 ]]; then
           saw_unmapped_lib_change=1
           break

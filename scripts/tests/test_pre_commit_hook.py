@@ -85,7 +85,10 @@ class PreCommitHookTests(unittest.TestCase):
         self.assertIn('lib/*.dart | lib/**/*.dart)', script)
         self.assertIn('package_import="package:secondloop/${file#lib/}"', script)
         self.assertIn('rg -l --fixed-strings "${package_import}" test integration_test', script)
-        self.assertIn('mapfile -t related_targets < <(collect_related_flutter_tests_for_lib_file "${file}")', script)
+        self.assertIn('while IFS= read -r candidate; do', script)
+        self.assertIn('done < <(collect_related_flutter_tests_for_lib_file "${file}")', script)
+        self.assertNotIn('mapfile -t related_targets', script)
+        self.assertNotIn('readarray -t related_targets', script)
         self.assertIn('if [[ ${#flutter_test_targets[@]} -eq 0 ]]; then', script)
         self.assertIn('run_flutter_tool test --concurrency=1', script)
 
