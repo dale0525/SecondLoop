@@ -332,7 +332,7 @@ while [[ $# -gt 0 ]]; do
       cat <<'EOF'
 Usage: .githooks/pre-commit [--check] [--flutter] [--rust] [--ci]
 
-Default (no flags): git pre-commit hook mode (format staged files + analyze + targeted Flutter tests/clippy).
+Default (no flags): git pre-commit hook mode (format staged files + analyze + targeted Flutter tests when possible, otherwise full test suite, plus clippy).
 
 --check    CI-friendly mode: verify formatting/analyze without modifying files.
 --flutter  Limit --check to Dart format + flutter analyze.
@@ -739,7 +739,14 @@ if [[ ${run_flutter_checks} -ne 0 ]]; then
     exit 1
   fi
 
-  if [[ ${#flutter_test_targets[@]} -ne 0 ]]; then
+  if [[ ${#flutter_test_targets[@]} -eq 0 ]]; then
+    if ! run_flutter_tool test --concurrency=1; then
+      echo "" >&2
+      echo "pre-commit: flutter test failed." >&2
+      echo "Fix locally with: pixi run flutter test" >&2
+      exit 1
+    fi
+  else
     if ! run_flutter_tool test --concurrency=1 "${flutter_test_targets[@]}"; then
       echo "" >&2
       echo "pre-commit: flutter test failed." >&2

@@ -868,8 +868,9 @@ void main() {
   });
 
   group('AppUpdateService.applyPendingUpdateOnStartup', () {
-    test('exits current process after applying pending Windows update',
+    test('records pending apply dispatch before exiting current process',
         () async {
+      final logger = _InMemoryUpdateEventLogger();
       final stagedClient = _FakeWindowsStagedUpdateClient(
         available: true,
         pendingUpdateAvailable: true,
@@ -878,6 +879,7 @@ void main() {
       final service = AppUpdateService(
         platformOverride: AppUpdatePlatform.windows,
         windowsStagedUpdateClient: stagedClient,
+        updateEventLogger: logger,
         processExit: (code) => exitedCode = code,
       );
 
@@ -887,6 +889,45 @@ void main() {
       expect(stagedClient.lastStartupWaitPid, pid);
       expect(applied, true);
       expect(exitedCode, 0);
+      expect(
+        logger.records.any(
+          (entry) => entry.type == UpdateEventType.pendingApplyDispatched,
+        ),
+        isTrue,
+      );
+      expect(
+        logger.records.any(
+          (entry) => entry.type == UpdateEventType.pendingApplySucceeded,
+        ),
+        isFalse,
+      );
+    });
+
+    test('skips dispatch event when no pending update is available', () async {
+      final logger = _InMemoryUpdateEventLogger();
+      final stagedClient = _FakeWindowsStagedUpdateClient(
+        available: true,
+        pendingUpdateAvailable: false,
+      );
+      var exitedCode = -1;
+      final service = AppUpdateService(
+        platformOverride: AppUpdatePlatform.windows,
+        windowsStagedUpdateClient: stagedClient,
+        updateEventLogger: logger,
+        processExit: (code) => exitedCode = code,
+      );
+
+      final applied = await service.applyPendingUpdateOnStartup();
+
+      expect(stagedClient.applyPendingCalls, 1);
+      expect(applied, false);
+      expect(exitedCode, -1);
+      expect(
+        logger.records.any(
+          (entry) => entry.type == UpdateEventType.pendingApplyDispatched,
+        ),
+        isFalse,
+      );
     });
 
     test('skips apply when staged runtime is unavailable', () async {

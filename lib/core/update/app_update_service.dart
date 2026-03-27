@@ -521,8 +521,8 @@ class AppUpdateService {
     await _recordEvent(UpdateEventType.pendingApplyStarted);
     try {
       final applied = await stagedClient.applyPendingOnStartup(waitPid: pid);
-      await _recordEvent(UpdateEventType.pendingApplySucceeded);
       if (applied) {
+        await _recordEvent(UpdateEventType.pendingApplyDispatched);
         _exitProcess(0);
       }
       return applied;

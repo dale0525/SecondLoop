@@ -18,6 +18,7 @@ enum UpdateEventType {
   installDispatched,
   installFailed,
   pendingApplyStarted,
+  pendingApplyDispatched,
   pendingApplySucceeded,
   pendingApplyFailed,
   stagedRestartStarted,

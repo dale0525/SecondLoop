@@ -53,4 +53,24 @@ void main() {
     expect(recent.first.currentVersion, '1.0.5');
     expect(recent.last.currentVersion, '1.0.54');
   });
+
+  test('SharedPrefsUpdateEventLogger round-trips pending apply dispatch event',
+      () async {
+    SharedPreferences.setMockInitialValues({});
+    final logger = SharedPrefsUpdateEventLogger();
+
+    await logger.record(
+      UpdateEventRecord(
+        type: UpdateEventType.pendingApplyDispatched,
+        timestampUtc: DateTime.utc(2026, 3, 27, 8, 30),
+        platform: AppUpdatePlatform.windows,
+        message: 'detached_updater_started',
+      ),
+    );
+
+    final recent = await logger.readRecent();
+    expect(recent, hasLength(1));
+    expect(recent.single.type, UpdateEventType.pendingApplyDispatched);
+    expect(recent.single.message, 'detached_updater_started');
+  });
 }
