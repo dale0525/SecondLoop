@@ -11,6 +11,8 @@ import unittest
 REPO_ROOT = Path(__file__).resolve().parents[2]
 PRE_COMMIT_HOOK = REPO_ROOT / ".githooks/pre-commit"
 PRE_PUSH_HOOK = REPO_ROOT / ".githooks/pre-push"
+VERIFY_CHANGED_SCRIPT = REPO_ROOT / "scripts/verify_changed.sh"
+VERIFY_FULL_SCRIPT = REPO_ROOT / "scripts/verify_full.sh"
 INSTALL_GIT_HOOKS_SCRIPT = REPO_ROOT / "scripts/install_git_hooks.sh"
 
 
@@ -205,9 +207,20 @@ class PreCommitHookTests(unittest.TestCase):
     def test_pre_push_hook_runs_full_verification_by_default(self) -> None:
         script = PRE_PUSH_HOOK.read_text(encoding="utf-8")
 
-        self.assertIn('bash .githooks/pre-commit --check --ci', script)
+        self.assertIn('bash scripts/verify_full.sh', script)
         self.assertNotIn('SECONDLOOP_PRE_PUSH_FULL', script)
         self.assertNotIn('pre-push: skipped (checks moved to pre-commit).', script)
+
+    def test_verify_changed_script_delegates_to_pre_commit_default_mode(self) -> None:
+        script = VERIFY_CHANGED_SCRIPT.read_text(encoding="utf-8")
+
+        self.assertIn('bash .githooks/pre-commit "$@"', script)
+        self.assertNotIn('--check --ci', script)
+
+    def test_verify_full_script_delegates_to_pre_commit_check_ci_mode(self) -> None:
+        script = VERIFY_FULL_SCRIPT.read_text(encoding="utf-8")
+
+        self.assertIn('bash .githooks/pre-commit --check --ci "$@"', script)
 
     def test_pre_commit_hook_only_targets_staged_test_files(self) -> None:
         script = PRE_COMMIT_HOOK.read_text(encoding="utf-8")

@@ -65,7 +65,7 @@ jobs:
       - name: "Guard: no python runtime process usage"
         run: bash scripts/check_no_python_runtime.sh
       - name: Full Flutter verification
-        run: bash .githooks/pre-commit --check --ci --flutter
+        run: bash scripts/verify_full.sh --flutter
 
   flutter-web:
     needs: changes
@@ -112,4 +112,4 @@ jobs:
       - name: "Guard: no python runtime process usage"
         run: bash scripts/check_no_python_runtime.sh
       - name: Full Rust verification
-        run: bash .githooks/pre-commit --check --ci --rust
+        run: bash scripts/verify_full.sh --rust

@@ -13,6 +13,9 @@ By contributing to this repository, you agree that your contributions are licens
   - Flutter: `pixi run i18n-refresh` once on a fresh clone, then `pixi run flutter test`
   - Rust: `pixi run cargo test`
 - Run the full local CI suite (same scope as `pre-push` / CI): `pixi run ci`
+- Shared verification entrypoints:
+  - Changed-only local gate: `bash scripts/verify_changed.sh`
+  - Full local/CI gate: `bash scripts/verify_full.sh`
 
 ## Common development commands
 

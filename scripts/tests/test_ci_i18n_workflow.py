@@ -16,9 +16,14 @@ class CiI18nWorkflowTests(unittest.TestCase):
         workflow = CI_WORKFLOW.read_text(encoding="utf-8")
 
         self.assertIn(
-            'bash .githooks/pre-commit --check --ci --flutter',
+            'bash scripts/verify_full.sh --flutter',
             workflow,
             'CI workflow must delegate Flutter i18n checks to the pre-commit hook',
+        )
+        self.assertIn(
+            'bash scripts/verify_full.sh --rust',
+            workflow,
+            'CI workflow must delegate Rust full verification through the shared full-check script',
         )
         self.assertIn(
             'name: Full Flutter verification',
