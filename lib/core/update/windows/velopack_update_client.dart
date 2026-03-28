@@ -11,6 +11,10 @@ typedef VelopackProcessStarter = Future<Process> Function(
 });
 
 typedef VelopackNowProvider = DateTime Function();
+typedef VelopackProcessProbe = VelopackProcessProbeStatus Function(
+  int pid, {
+  required String expectedExecutablePath,
+});
 
 abstract class WindowsStagedUpdateClient {
   bool isAvailable();
@@ -45,13 +49,16 @@ class VelopackUpdateClient implements WindowsStagedUpdateClient {
     String? updateExecutablePath,
     VelopackProcessStarter? processStarter,
     VelopackNowProvider? now,
+    VelopackProcessProbe? processProbe,
   })  : _updateExecutablePath = updateExecutablePath,
         _processStarter = processStarter ?? _defaultProcessStarter,
-        _now = now ?? DateTime.now;
+        _now = now ?? DateTime.now,
+        _processProbe = processProbe ?? _probeProcessStatus;
 
   final String? _updateExecutablePath;
   final VelopackProcessStarter _processStarter;
   final VelopackNowProvider _now;
+  final VelopackProcessProbe _processProbe;
 
   String get _updateExePath =>
       _updateExecutablePath ?? resolveVelopackUpdateExePath();
@@ -365,12 +372,21 @@ class VelopackUpdateClient implements WindowsStagedUpdateClient {
     if (startedAtUtc != null &&
         _now().toUtc().difference(startedAtUtc) <
             _pendingApplyRetryGracePeriod) {
-      if (attempt.updaterPid != null &&
-          !_isProcessLikelyRunning(attempt.updaterPid!)) {
-        _deletePendingPackageUpdates(updateExecutablePath);
-        _clearPendingApplyAttempt(updateExecutablePath);
-        throw StateError(
-            'windows_velopack_previous_apply_failed_${attempt.version}');
+      if (attempt.updaterPid != null) {
+        final processStatus = _processProbe(
+          attempt.updaterPid!,
+          expectedExecutablePath: updateExecutablePath,
+        );
+        if (processStatus == VelopackProcessProbeStatus.notRunning) {
+          _deletePendingPackageUpdates(updateExecutablePath);
+          _clearPendingApplyAttempt(updateExecutablePath);
+          throw StateError(
+              'windows_velopack_previous_apply_failed_${attempt.version}');
+        }
+        if (processStatus == VelopackProcessProbeStatus.unknown) {
+          _clearPendingApplyAttempt(updateExecutablePath);
+          return null;
+        }
       }
       if (throwIfAttemptInProgress) {
         throw StateError(
@@ -444,28 +460,46 @@ class VelopackUpdateClient implements WindowsStagedUpdateClient {
     markerFile.writeAsStringSync(lines.join('\n'));
   }
 
-  static bool _isProcessLikelyRunning(int pid) {
+  static VelopackProcessProbeStatus _probeProcessStatus(
+    int pid, {
+    required String expectedExecutablePath,
+  }) {
     if (pid <= 0) {
-      return false;
+      return VelopackProcessProbeStatus.notRunning;
     }
 
     try {
       if (Platform.isWindows) {
         final escapedPid = pid.toString().replaceAll("'", "''");
+        final escapedPath =
+            expectedExecutablePath.replaceAll("'", "''").toLowerCase();
         final result = Process.runSync(
           'powershell.exe',
           [
             '-Command',
-            "Get-Process -Id '$escapedPid' -ErrorAction SilentlyContinue | Out-Null"
+            r"$process = Get-CimInstance Win32_Process -Filter "
+                "\"ProcessId = $escapedPid\"; "
+                r"if ($null -eq $process) { exit 2 } "
+                r"$path = $process.ExecutablePath; "
+                r"if ([string]::IsNullOrWhiteSpace($path)) { exit 3 } "
+                "if (\$path.ToLowerInvariant() -eq '$escapedPath') { exit 0 } "
+                r"exit 4"
           ],
         );
-        return result.exitCode == 0;
+        return switch (result.exitCode) {
+          0 => VelopackProcessProbeStatus.runningExpectedProcess,
+          2 => VelopackProcessProbeStatus.notRunning,
+          3 || 4 => VelopackProcessProbeStatus.unknown,
+          _ => VelopackProcessProbeStatus.unknown,
+        };
       }
 
       final result = Process.runSync('kill', ['-0', pid.toString()]);
-      return result.exitCode == 0;
+      return result.exitCode == 0
+          ? VelopackProcessProbeStatus.runningExpectedProcess
+          : VelopackProcessProbeStatus.notRunning;
     } catch (_) {
-      return true;
+      return VelopackProcessProbeStatus.unknown;
     }
   }
 
@@ -653,6 +687,12 @@ class VelopackUpdateClient implements WindowsStagedUpdateClient {
       mode: mode,
     );
   }
+}
+
+enum VelopackProcessProbeStatus {
+  runningExpectedProcess,
+  notRunning,
+  unknown,
 }
 
 class _PendingApplyAttempt {

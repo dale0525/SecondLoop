@@ -56,7 +56,11 @@
   }
 
   if (( scope_flutter )); then
-    ensure_i18n_generated
+    if [[ ! -f "lib/i18n/strings.g.dart" ]]; then
+      echo "pre-commit: lib/i18n/strings.g.dart is missing." >&2
+      echo "Fix locally with: pixi run i18n-refresh" >&2
+      exit 1
+    fi
     run_i18n_analyze
 
     if ! run_i18n_refresh_in_temp_copy; then

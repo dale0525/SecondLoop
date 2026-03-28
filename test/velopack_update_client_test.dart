@@ -206,6 +206,8 @@ void main() {
     var calls = 0;
     final client = VelopackUpdateClient(
       updateExecutablePath: updater.path,
+      processProbe: (pid, {required expectedExecutablePath}) =>
+          VelopackProcessProbeStatus.runningExpectedProcess,
       processStarter: (executable, arguments,
           {mode = ProcessStartMode.normal}) async {
         calls += 1;
@@ -243,6 +245,8 @@ void main() {
     var calls = 0;
     final client = VelopackUpdateClient(
       updateExecutablePath: updater.path,
+      processProbe: (pid, {required expectedExecutablePath}) =>
+          VelopackProcessProbeStatus.runningExpectedProcess,
       processStarter: (executable, arguments,
           {mode = ProcessStartMode.normal}) async {
         calls += 1;
@@ -327,6 +331,8 @@ void main() {
     var calls = 0;
     final client = VelopackUpdateClient(
       updateExecutablePath: updater.path,
+      processProbe: (pid, {required expectedExecutablePath}) =>
+          VelopackProcessProbeStatus.unknown,
       processStarter: (executable, arguments,
           {mode = ProcessStartMode.normal}) async {
         calls += 1;
@@ -385,8 +391,7 @@ void main() {
     );
   });
 
-  test('windows process probe no longer uses powershell automatic pid variable',
-      () async {
+  test('windows process probe validates executable path', () async {
     final source = File(
       'lib/core/update/windows/velopack_update_client.dart',
     ).readAsStringSync();
@@ -398,7 +403,11 @@ void main() {
     );
     expect(
       source,
-      contains('Get-Process -Id'),
+      contains('Get-CimInstance Win32_Process'),
+    );
+    expect(
+      source,
+      contains('ExecutablePath'),
     );
   });
 
@@ -413,6 +422,8 @@ void main() {
     var calls = 0;
     final client = VelopackUpdateClient(
       updateExecutablePath: updater.path,
+      processProbe: (pid, {required expectedExecutablePath}) =>
+          VelopackProcessProbeStatus.unknown,
       processStarter: (executable, arguments,
           {mode = ProcessStartMode.normal}) async {
         calls += 1;
@@ -427,6 +438,40 @@ void main() {
 
     expect(calls, 0);
     expect(result.status, PendingUpdateStartupStatus.none);
+  });
+
+  test('startup retries when pending apply process cannot be verified',
+      () async {
+    final root =
+        await Directory.systemTemp.createTemp('velopack_probe_unknown_');
+    final updater = File('${root.path}${Platform.pathSeparator}Update.exe')
+      ..writeAsStringSync('stub');
+    _writeSqVersion(root, '1.0.0');
+    _createNupkg(root, 'com.secondloop.secondloop-1.1.0-full.nupkg');
+
+    _pendingApplyAttemptMarker(root).writeAsStringSync(
+      '1.1.0\n${DateTime.now().toUtc().toIso8601String()}\n999999',
+    );
+
+    var calls = 0;
+    final client = VelopackUpdateClient(
+      updateExecutablePath: updater.path,
+      processProbe: (pid, {required expectedExecutablePath}) =>
+          VelopackProcessProbeStatus.unknown,
+      processStarter: (executable, arguments,
+          {mode = ProcessStartMode.normal}) async {
+        calls += 1;
+        return Process.start(
+          Platform.resolvedExecutable,
+          const ['--version'],
+        );
+      },
+    );
+
+    final result = await client.applyPendingOnStartup(waitPid: 2468);
+
+    expect(calls, 1);
+    expect(result.status, PendingUpdateStartupStatus.dispatched);
   });
 
   test('only SecondLoop full packages count as pending updates', () async {

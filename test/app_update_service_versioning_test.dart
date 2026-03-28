@@ -81,6 +81,17 @@ void main() {
       expect(sameNormalizedVersion('1.1.0.7', '1.1.0'), isFalse);
     });
 
+    test('prerelease identifiers keep semantic ordering', () {
+      expect(compareReleaseTagWithCurrentVersion('1.1.0-alpha', '1.1.0-beta'),
+          lessThan(0));
+      expect(compareReleaseTagWithCurrentVersion('1.1.0-beta', '1.1.0-rc.1'),
+          lessThan(0));
+      expect(compareReleaseTagWithCurrentVersion('1.1.0-rc.2', '1.1.0-rc.1'),
+          greaterThan(0));
+      expect(
+          compareReleaseTagWithCurrentVersion('1.1.0-beta', '1.1.0-beta'), 0);
+    });
+
     test(
         'sameNormalizedVersion does not treat prerelease build counters as equal',
         () {
