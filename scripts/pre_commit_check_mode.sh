@@ -36,16 +36,23 @@
 
     trap cleanup_temp_i18n_copy RETURN
 
-    mkdir -p "${temp_repo}"
-    cp -R "${repo_root}/." "${temp_repo}/"
+    mkdir -p "${temp_repo}/lib"
+    cp "${repo_root}/pubspec.yaml" "${temp_repo}/pubspec.yaml"
+    if [[ -f "${repo_root}/pubspec.lock" ]]; then
+      cp "${repo_root}/pubspec.lock" "${temp_repo}/pubspec.lock"
+    fi
+    cp "${repo_root}/slang.yaml" "${temp_repo}/slang.yaml"
+    cp -R "${repo_root}/lib/i18n" "${temp_repo}/lib/"
+    cp -R "${repo_root}/scripts" "${temp_repo}/"
 
     (
       cd "${temp_repo}"
       bash scripts/run_i18n_refresh.sh >/dev/null
     )
 
-    cmp -s "${repo_root}/lib/i18n/strings.g.dart" \
-      "${temp_repo}/lib/i18n/strings.g.dart"
+    git diff --no-index --exit-code -- \
+      "${repo_root}/lib/i18n" \
+      "${temp_repo}/lib/i18n" >/dev/null
   }
 
   if (( scope_flutter )); then

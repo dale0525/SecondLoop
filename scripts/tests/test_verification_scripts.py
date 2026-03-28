@@ -28,8 +28,10 @@ class VerificationScriptsTests(unittest.TestCase):
             encoding="utf-8"
         )
 
-        self.assertNotIn("run_i18n_refresh", check_mode)
-        self.assertIn("git diff --exit-code -- lib/i18n", check_mode)
+        self.assertIn("run_i18n_refresh_in_temp_copy", check_mode)
+        self.assertIn("git diff --no-index --exit-code --", check_mode)
+        self.assertIn('"${repo_root}/lib/i18n"', check_mode)
+        self.assertIn('"${temp_repo}/lib/i18n"', check_mode)
 
     def test_verify_changed_uses_non_mutating_check_mode(self) -> None:
         verify_changed = (REPO_ROOT / "scripts/verify_changed.sh").read_text(

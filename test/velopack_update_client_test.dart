@@ -385,21 +385,48 @@ void main() {
     );
   });
 
-  test('windows process probe expands pid into powershell command', () async {
+  test('windows process probe no longer uses powershell automatic pid variable',
+      () async {
     final source = File(
       'lib/core/update/windows/velopack_update_client.dart',
     ).readAsStringSync();
 
     expect(
       source,
-      contains(
-          r'Get-Process -Id $pid -ErrorAction SilentlyContinue | Out-Null'),
+      isNot(contains(
+          r'Get-Process -Id $pid -ErrorAction SilentlyContinue | Out-Null')),
     );
     expect(
       source,
-      isNot(contains(
-          r'Get-Process -Id ${pid} -ErrorAction SilentlyContinue | Out-Null')),
+      contains('Get-Process -Id'),
     );
+  });
+
+  test('pending prerelease package is not newer than installed final release',
+      () async {
+    final root = await Directory.systemTemp.createTemp('velopack_prerelease_');
+    final updater = File('${root.path}${Platform.pathSeparator}Update.exe')
+      ..writeAsStringSync('stub');
+    _writeSqVersion(root, '1.1.0');
+    _createNupkg(root, 'com.secondloop.secondloop-1.1.0-rc.1-full.nupkg');
+
+    var calls = 0;
+    final client = VelopackUpdateClient(
+      updateExecutablePath: updater.path,
+      processStarter: (executable, arguments,
+          {mode = ProcessStartMode.normal}) async {
+        calls += 1;
+        return Process.start(
+          Platform.resolvedExecutable,
+          const ['--version'],
+        );
+      },
+    );
+
+    final result = await client.applyPendingOnStartup(waitPid: 5678);
+
+    expect(calls, 0);
+    expect(result.status, PendingUpdateStartupStatus.none);
   });
 
   test('only SecondLoop full packages count as pending updates', () async {

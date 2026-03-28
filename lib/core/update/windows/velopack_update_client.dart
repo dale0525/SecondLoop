@@ -451,11 +451,12 @@ class VelopackUpdateClient implements WindowsStagedUpdateClient {
 
     try {
       if (Platform.isWindows) {
+        final escapedPid = pid.toString().replaceAll("'", "''");
         final result = Process.runSync(
           'powershell.exe',
           [
             '-Command',
-            'Get-Process -Id $pid -ErrorAction SilentlyContinue | Out-Null'
+            "Get-Process -Id '$escapedPid' -ErrorAction SilentlyContinue | Out-Null"
           ],
         );
         return result.exitCode == 0;
@@ -593,6 +594,12 @@ class VelopackUpdateClient implements WindowsStagedUpdateClient {
   }
 
   static int _compareVersionStrings(String left, String right) {
+    final compared = compareReleaseTagWithCurrentVersion(left, right);
+    if (parseComparableAppVersion(left) != null &&
+        parseComparableAppVersion(right) != null) {
+      return compared;
+    }
+
     final leftParts = _parseVersionSegments(left);
     final rightParts = _parseVersionSegments(right);
     if (leftParts.isEmpty || rightParts.isEmpty) {
