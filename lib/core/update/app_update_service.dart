@@ -11,6 +11,7 @@ import 'app_update_helpers.dart';
 import 'app_update_architecture.dart';
 import 'app_update_models.dart';
 import 'app_update_platform.dart';
+import 'app_update_resolution.dart';
 import 'linux/linux_update_script.dart';
 import 'macos/macos_update_client.dart';
 import 'update_event_log.dart';
@@ -167,7 +168,8 @@ class AppUpdateService {
     }
 
     final latestTag = normalizeLatestTag(
-      _readString(release, 'tag_name') ?? _readString(release, 'version'),
+      readUpdateString(release, 'tag_name') ??
+          readUpdateString(release, 'version'),
     );
     if (latestTag == null || latestTag.trim().isEmpty) {
       await _recordFailure(
@@ -195,8 +197,8 @@ class AppUpdateService {
     }
 
     final releasePageUri =
-        _parseUri(_readString(release, 'release_page_url')) ??
-            _parseUri(_readString(release, 'html_url')) ??
+        parseUpdateUri(readUpdateString(release, 'release_page_url')) ??
+            parseUpdateUri(readUpdateString(release, 'html_url')) ??
             _buildFallbackReleasePageUri();
 
     if (compareReleaseTagWithCurrentVersion(latestTag, currentVersion) <= 0) {
@@ -216,20 +218,28 @@ class AppUpdateService {
     final macosManagedInstallSupported = macosManagedClient != null &&
         macosManagedClient.isSupportedInstallLocation();
 
-    final manifestAsset = _matchManifestAssetForCurrentPlatform(release);
+    final manifestAsset = matchManifestAssetForCurrentPlatform(
+      _platform,
+      release,
+      currentArchitecture: _currentArchitecture,
+    );
     final assets = _parseAssets(release['assets']);
     final preferredAsset = manifestAsset ??
-        _matchAssetForCurrentPlatform(
+        matchAssetForCurrentPlatform(
+          _platform,
           assets,
           windowsManagedRuntimeAvailable: windowsManagedRuntimeAvailable,
         );
-    final installMode = _resolveInstallMode(
-      preferredAsset,
+    final installMode = resolveInstallMode(
+      _platform,
+      asset: preferredAsset,
+      isReleaseMode: _isReleaseMode,
       windowsManagedRuntimeAvailable: windowsManagedRuntimeAvailable,
       macosManagedInstallSupported: macosManagedInstallSupported,
     );
     final matchedAsset = installMode == AppUpdateInstallMode.externalDownload
-        ? _selectExternalDownloadAsset(
+        ? selectExternalDownloadAsset(
+              _platform,
               preferredAsset: preferredAsset,
               assets: assets,
             ) ??
@@ -256,7 +266,7 @@ class AppUpdateService {
         currentVersion: runtimeVersion.display,
         latestTag: latestTag,
         installMode: installMode,
-        message: _describeManualFallbackReason(matchedAsset),
+        message: describeManualFallbackReason(_platform, matchedAsset),
       );
     }
 
@@ -620,7 +630,7 @@ class AppUpdateService {
     final repo = _releaseRepo.trim();
 
     final endpoints = <Uri>[];
-    final apiOrigin = _parseUri(configuredOrigin);
+    final apiOrigin = parseUpdateUri(configuredOrigin);
     if (apiOrigin != null) {
       endpoints.add(apiOrigin.resolve('api/releases/latest'));
     }
@@ -640,7 +650,7 @@ class AppUpdateService {
   Uri _buildFallbackReleasePageUri() {
     final repo = _releaseRepo.trim();
     if (repo.isEmpty) {
-      final origin = _parseUri(_releaseApiOrigin.trim());
+      final origin = parseUpdateUri(_releaseApiOrigin.trim());
       if (origin != null) return origin;
       return Uri.parse('https://github.com');
     }
@@ -657,7 +667,7 @@ class AppUpdateService {
       final url = item['browser_download_url'];
       final sha256 = item['sha256'];
       if (name is! String || url is! String) continue;
-      final uri = _parseUri(url);
+      final uri = parseUpdateUri(url);
       if (uri == null) continue;
       parsed.add(
         AppUpdateAsset(
@@ -671,161 +681,6 @@ class AppUpdateService {
     }
 
     return parsed;
-  }
-
-  AppUpdateAsset? _matchAssetForCurrentPlatform(
-    List<AppUpdateAsset> assets, {
-    required bool windowsManagedRuntimeAvailable,
-  }) {
-    if (_platform == AppUpdatePlatform.windows) {
-      return _matchWindowsAssetForCurrentRuntime(
-        assets,
-        managedRuntimeAvailable: windowsManagedRuntimeAvailable,
-      );
-    }
-
-    if (_platform == AppUpdatePlatform.macos) {
-      for (final asset in assets) {
-        if (isMacosManagedArchiveName(asset.name)) return asset;
-      }
-      for (final asset in assets) {
-        if (isMacosManualInstallerName(asset.name)) return asset;
-      }
-      return null;
-    }
-
-    final matcher = switch (_platform) {
-      AppUpdatePlatform.linux => RegExp(r'^SecondLoop-linux-x64-.*\.tar\.gz$'),
-      AppUpdatePlatform.android => RegExp(r'^SecondLoop-android-.*\.apk$'),
-      _ => null,
-    };
-
-    if (matcher == null) return null;
-
-    for (final asset in assets) {
-      if (matcher.hasMatch(asset.name)) return asset;
-    }
-    return null;
-  }
-
-  AppUpdateAsset? _matchWindowsAssetForCurrentRuntime(
-    List<AppUpdateAsset> assets, {
-    required bool managedRuntimeAvailable,
-  }) {
-    AppUpdateAsset? findFirst(bool Function(String name) matcher) {
-      for (final asset in assets) {
-        if (matcher(asset.name)) return asset;
-      }
-      return null;
-    }
-
-    if (managedRuntimeAvailable) {
-      final stagedPackage = findFirst(isWindowsVelopackPackageName);
-      if (stagedPackage != null) {
-        return stagedPackage;
-      }
-    }
-
-    return findFirst(isWindowsMsiInstallerName);
-  }
-
-  AppUpdateAsset? _selectExternalDownloadAsset({
-    required AppUpdateAsset? preferredAsset,
-    required List<AppUpdateAsset> assets,
-  }) {
-    AppUpdateAsset? findFirst(bool Function(String name) matcher) {
-      for (final asset in assets) {
-        if (matcher(asset.name)) return asset;
-      }
-      return null;
-    }
-
-    return switch (_platform) {
-      AppUpdatePlatform.windows => findFirst(isWindowsMsiInstallerName) ??
-          (preferredAsset != null &&
-                  isWindowsMsiInstallerName(preferredAsset.name)
-              ? preferredAsset
-              : null),
-      AppUpdatePlatform.macos => findFirst(isMacosManualInstallerName) ??
-          (preferredAsset != null &&
-                  isMacosManualInstallerName(preferredAsset.name)
-              ? preferredAsset
-              : null),
-      _ => preferredAsset,
-    };
-  }
-
-  AppUpdateInstallMode _resolveInstallMode(
-    AppUpdateAsset? asset, {
-    required bool windowsManagedRuntimeAvailable,
-    required bool macosManagedInstallSupported,
-  }) {
-    if (!_isReleaseMode || asset == null) {
-      return AppUpdateInstallMode.externalDownload;
-    }
-
-    return switch (_platform) {
-      AppUpdatePlatform.windows
-          when isWindowsVelopackPackageName(asset.name) &&
-              windowsManagedRuntimeAvailable &&
-              _assetHasIntegrityMetadata(asset) =>
-        AppUpdateInstallMode.seamlessRestart,
-      AppUpdatePlatform.macos
-          when isMacosManagedArchiveName(asset.name) &&
-              macosManagedInstallSupported &&
-              _assetHasIntegrityMetadata(asset) =>
-        AppUpdateInstallMode.seamlessRestart,
-      AppUpdatePlatform.linux
-          when asset.name.endsWith('.tar.gz') &&
-              _assetHasIntegrityMetadata(asset) =>
-        AppUpdateInstallMode.seamlessRestart,
-      _ => AppUpdateInstallMode.externalDownload,
-    };
-  }
-
-  AppUpdateAsset? _matchManifestAssetForCurrentPlatform(
-    Map<String, Object?> release,
-  ) {
-    final platforms = release['platforms'];
-    if (platforms is! Map) {
-      return null;
-    }
-
-    final keys = switch (_platform) {
-      AppUpdatePlatform.windows => const ['windows-x64', 'windows-x86_64'],
-      AppUpdatePlatform.macos => _preferredMacosManifestKeys(),
-      AppUpdatePlatform.linux => const ['linux-x64', 'linux-x86_64'],
-      _ => const <String>[],
-    };
-
-    for (final key in keys) {
-      final rawEntry = platforms[key];
-      if (rawEntry is! Map) {
-        continue;
-      }
-      final url = readStringLoose(rawEntry, 'package_url') ??
-          readStringLoose(rawEntry, 'archive_url') ??
-          readStringLoose(rawEntry, 'url');
-      final parsedUrl = _parseUri(url);
-      if (parsedUrl == null) {
-        continue;
-      }
-
-      final name = readStringLoose(rawEntry, 'name') ??
-          (parsedUrl.pathSegments.isEmpty ? key : parsedUrl.pathSegments.last);
-      final sha256 = readStringLoose(rawEntry, 'sha256');
-      return AppUpdateAsset(
-        name: name,
-        downloadUri: parsedUrl,
-        sha256: sha256,
-      );
-    }
-
-    return null;
-  }
-
-  List<String> _preferredMacosManifestKeys() {
-    return preferredMacosManifestKeysForArchitecture(_currentArchitecture);
   }
 
   Future<T> _withPreparedAsset<T>(
@@ -945,25 +800,6 @@ class AppUpdateService {
     return uri.path.toLowerCase().endsWith('latest.json');
   }
 
-  bool _assetHasIntegrityMetadata(AppUpdateAsset asset) {
-    return asset.sha256 != null && asset.sha256!.trim().isNotEmpty;
-  }
-
-  static String? _readString(Map<String, Object?> map, String key) {
-    final value = map[key];
-    if (value is! String) return null;
-    final trimmed = value.trim();
-    if (trimmed.isEmpty) return null;
-    return trimmed;
-  }
-
-  static Uri? _parseUri(String? value) {
-    if (value == null) return null;
-    final uri = Uri.tryParse(value.trim());
-    if (uri == null || (!uri.hasScheme && !uri.hasAuthority)) return null;
-    return uri;
-  }
-
   Future<void> _recordEvent(
     UpdateEventType type, {
     String? currentVersion,
@@ -1007,21 +843,6 @@ class AppUpdateService {
         ),
       );
     } catch (_) {}
-  }
-
-  String _describeManualFallbackReason(AppUpdateAsset? asset) {
-    if (asset == null) {
-      return 'missing_platform_asset';
-    }
-    if (_platform == AppUpdatePlatform.windows &&
-        isWindowsVelopackPackageName(asset.name)) {
-      return 'windows_runtime_unavailable';
-    }
-    if (_platform == AppUpdatePlatform.macos &&
-        isMacosManagedArchiveName(asset.name)) {
-      return 'macos_install_location_unsupported_or_integrity_missing';
-    }
-    return 'manual_download_required';
   }
 }
 

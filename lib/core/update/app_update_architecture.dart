@@ -14,10 +14,10 @@ String normalizeArchitectureLabel(String? value) {
 List<String> preferredMacosManifestKeysForArchitecture(String architecture) {
   final normalized = normalizeArchitectureLabel(architecture);
   if (normalized == 'arm64') {
-    return const ['macos-universal', 'darwin-aarch64', 'darwin-x86_64'];
+    return const ['macos-universal', 'darwin-aarch64'];
   }
   if (normalized == 'x64') {
-    return const ['macos-universal', 'darwin-x86_64', 'darwin-aarch64'];
+    return const ['macos-universal', 'darwin-x86_64'];
   }
   return const ['macos-universal', 'darwin-aarch64', 'darwin-x86_64'];
 }

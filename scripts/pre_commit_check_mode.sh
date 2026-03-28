@@ -26,9 +26,11 @@
   fi
 
   run_i18n_refresh_in_temp_copy() {
-    local temp_root temp_repo
+    local temp_root temp_repo dart_bin flutter_bin
     temp_root="$(mktemp -d 2>/dev/null || mktemp -d -t secondloop_i18n_check)"
     temp_repo="${temp_root}/repo"
+    dart_bin="$(resolve_dart_bin)"
+    flutter_bin="$(resolve_flutter_bin)"
 
     cleanup_temp_i18n_copy() {
       rm -rf "${temp_root}" 2>/dev/null || true
@@ -43,10 +45,15 @@
     fi
     cp "${repo_root}/slang.yaml" "${temp_repo}/slang.yaml"
     cp -R "${repo_root}/lib/i18n" "${temp_repo}/lib/"
+    if [[ -d "${repo_root}/.dart_tool" ]]; then
+      cp -R "${repo_root}/.dart_tool" "${temp_repo}/"
+    fi
     cp -R "${repo_root}/scripts" "${temp_repo}/"
 
     (
       cd "${temp_repo}"
+      export SECONDLOOP_I18N_DART_BIN="${dart_bin}"
+      export SECONDLOOP_I18N_FLUTTER_BIN="${flutter_bin}"
       bash scripts/run_i18n_refresh.sh >/dev/null
     )
 

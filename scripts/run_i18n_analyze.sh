@@ -36,6 +36,11 @@ to_native_windows_path() {
 }
 
 resolve_flutter_bin() {
+  if [[ -n "${SECONDLOOP_I18N_FLUTTER_BIN:-}" ]]; then
+    printf '%s\n' "${SECONDLOOP_I18N_FLUTTER_BIN}"
+    return 0
+  fi
+
   if [[ -x "${repo_root}/.fvm/flutter_sdk/bin/flutter" ]]; then
     printf '%s\n' "${repo_root}/.fvm/flutter_sdk/bin/flutter"
     return 0

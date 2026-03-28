@@ -617,7 +617,7 @@ class VelopackUpdateClient implements WindowsStagedUpdateClient {
     }
 
     final match = RegExp(
-      r'^.+-(.+)-full\.nupkg$',
+      r'^.+-((?:\d+\.){2,7}\d+(?:-[0-9A-Za-z.-]+)?)-full\.nupkg$',
       caseSensitive: false,
     ).firstMatch(normalized);
     final version = match?.group(1)?.trim();

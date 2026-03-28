@@ -440,6 +440,34 @@ void main() {
     expect(result.status, PendingUpdateStartupStatus.none);
   });
 
+  test('pending prerelease package is newer than older installed final release',
+      () async {
+    final root =
+        await Directory.systemTemp.createTemp('velopack_prerelease_newer_');
+    final updater = File('${root.path}${Platform.pathSeparator}Update.exe')
+      ..writeAsStringSync('stub');
+    _writeSqVersion(root, '1.1.0');
+    _createNupkg(root, 'com.secondloop.secondloop-1.2.0-rc.1-full.nupkg');
+
+    var calls = 0;
+    final client = VelopackUpdateClient(
+      updateExecutablePath: updater.path,
+      processStarter: (executable, arguments,
+          {mode = ProcessStartMode.normal}) async {
+        calls += 1;
+        return Process.start(
+          Platform.resolvedExecutable,
+          const ['--version'],
+        );
+      },
+    );
+
+    final result = await client.applyPendingOnStartup(waitPid: 6789);
+
+    expect(calls, 1);
+    expect(result.status, PendingUpdateStartupStatus.dispatched);
+  });
+
   test('startup retries when pending apply process cannot be verified',
       () async {
     final root =
