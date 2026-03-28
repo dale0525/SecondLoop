@@ -53,11 +53,32 @@ void main() {
       expect(result.update!.latestTag, 'v1.0.1.1');
     });
 
-    test('sameNormalizedVersion accepts prerelease and fourth-segment variants',
-        () {
+    test('checkForUpdates treats fourth segment as newer when base matches',
+        () async {
+      final service = AppUpdateService(
+        platformOverride: AppUpdatePlatform.windows,
+        releaseModeOverride: true,
+        currentVersionLoader: () async =>
+            const AppRuntimeVersion(version: '1.0.1', buildNumber: '1'),
+        releaseJsonFetcher: (_) async => <String, Object?>{
+          'tag_name': 'v1.0.1.1',
+          'html_url':
+              'https://github.com/dale0525/SecondLoop/releases/tag/v1.0.1.1',
+          'assets': <Object?>[],
+        },
+      );
+
+      final result = await service.checkForUpdates();
+
+      expect(result.errorMessage, isNull);
+      expect(result.update, isNotNull);
+      expect(result.update!.latestTag, 'v1.0.1.1');
+    });
+
+    test('sameNormalizedVersion accepts prerelease variants only', () {
       expect(sameNormalizedVersion('1.1.0-beta', '1.1.0'), isTrue);
       expect(sameNormalizedVersion('1.1.0', '1.1.0-beta'), isTrue);
-      expect(sameNormalizedVersion('1.1.0.7', '1.1.0'), isTrue);
+      expect(sameNormalizedVersion('1.1.0.7', '1.1.0'), isFalse);
     });
 
     test('checkForUpdates accepts current versions outside strict x.y.z',

@@ -30,6 +30,10 @@ void main() {
       classifyUpdateFailure('macos_update_unsupported_install_location'),
       UpdateFailureCategory.unsupportedInstallLocation,
     );
+    expect(
+      classifyUpdateFailure('manual_installation_prompt_needed'),
+      UpdateFailureCategory.unknown,
+    );
   });
 
   test('SharedPrefsUpdateEventLogger stores and trims recent entries',

@@ -112,9 +112,19 @@ int compareReleaseTagWithCurrentVersion(
   final currentSegments = parseComparableAppVersion(currentVersion);
   if (releaseSegments == null || currentSegments == null) return 0;
 
-  for (var i = 0; i < 3; i++) {
-    if (releaseSegments[i] != currentSegments[i]) {
-      return releaseSegments[i].compareTo(currentSegments[i]);
+  final normalizedRelease = trimTrailingZeroSegments(releaseSegments);
+  final normalizedCurrent = trimTrailingZeroSegments(currentSegments);
+  final comparedLength = normalizedRelease.length > normalizedCurrent.length
+      ? normalizedRelease.length
+      : normalizedCurrent.length;
+
+  for (var i = 0; i < comparedLength; i += 1) {
+    final releaseValue =
+        i < normalizedRelease.length ? normalizedRelease[i] : 0;
+    final currentValue =
+        i < normalizedCurrent.length ? normalizedCurrent[i] : 0;
+    if (releaseValue != currentValue) {
+      return releaseValue.compareTo(currentValue);
     }
   }
 
@@ -143,7 +153,7 @@ List<int>? parseComparableAppVersion(String input) {
       continue;
     }
     segments.add(parsed);
-    if (segments.length >= 3) {
+    if (segments.length >= 8) {
       break;
     }
   }
@@ -152,11 +162,15 @@ List<int>? parseComparableAppVersion(String input) {
     return null;
   }
 
-  while (segments.length < 3) {
-    segments.add(0);
-  }
-
   return segments;
+}
+
+List<int> trimTrailingZeroSegments(List<int> segments) {
+  final normalized = List<int>.from(segments, growable: true);
+  while (normalized.length > 1 && normalized.last == 0) {
+    normalized.removeLast();
+  }
+  return normalized;
 }
 
 List<int>? tryParseStrictAppVersion(String input) {

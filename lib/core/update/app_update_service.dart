@@ -8,7 +8,9 @@ import 'package:flutter/foundation.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
 import 'app_update_helpers.dart';
+import 'app_update_architecture.dart';
 import 'app_update_models.dart';
+import 'app_update_platform.dart';
 import 'linux/linux_update_script.dart';
 import 'macos/macos_update_client.dart';
 import 'update_event_log.dart';
@@ -51,6 +53,7 @@ class AppUpdateService {
     UpdateEventLogger? updateEventLogger,
     void Function(int code)? processExit,
     Duration? networkTimeoutOverride,
+    String? currentArchitectureOverride,
   })  : _httpClient = httpClient ?? HttpClient(),
         _releaseJsonFetcher = releaseJsonFetcher,
         _currentVersionLoader = currentVersionLoader,
@@ -64,7 +67,8 @@ class AppUpdateService {
         _updateEventLogger =
             updateEventLogger ?? SharedPrefsUpdateEventLogger(),
         _processExit = processExit,
-        _networkTimeoutOverride = networkTimeoutOverride;
+        _networkTimeoutOverride = networkTimeoutOverride,
+        _currentArchitectureOverride = currentArchitectureOverride;
 
   final HttpClient _httpClient;
   final AppUpdateReleaseJsonFetcher? _releaseJsonFetcher;
@@ -79,8 +83,10 @@ class AppUpdateService {
   final UpdateEventLogger _updateEventLogger;
   final void Function(int code)? _processExit;
   final Duration? _networkTimeoutOverride;
+  final String? _currentArchitectureOverride;
 
-  AppUpdatePlatform get _platform => _platformOverride ?? _detectPlatform();
+  AppUpdatePlatform get _platform =>
+      _platformOverride ?? detectAppUpdatePlatform();
 
   bool get _isReleaseMode => _releaseModeOverride ?? kReleaseMode;
   String get _releaseApiOrigin =>
@@ -91,6 +97,9 @@ class AppUpdateService {
       _updatePublicKeyOverride ?? _defaultUpdatePublicKey;
   Duration get _networkTimeout =>
       _networkTimeoutOverride ?? _defaultUpdateNetworkTimeout;
+  String get _currentArchitecture => normalizeArchitectureLabel(
+        _currentArchitectureOverride ?? currentArchitectureForUpdates(),
+      );
   void _exitProcess(int code) => (_processExit ?? exit)(code);
 
   late final WindowsStagedUpdateClient? _resolvedWindowsStagedUpdateClient =
@@ -451,9 +460,11 @@ class AppUpdateService {
     if (stagedClient == null || !stagedClient.isAvailable()) {
       return const PendingUpdateStartupResult.noPendingUpdate();
     }
-    await _recordEvent(UpdateEventType.pendingApplyStarted);
     try {
       final result = await stagedClient.applyPendingOnStartup(waitPid: pid);
+      if (!result.hasNoPendingUpdate) {
+        await _recordEvent(UpdateEventType.pendingApplyStarted);
+      }
       if (result.didLaunchUpdater) {
         await _recordEvent(UpdateEventType.pendingApplyDispatched);
         _exitProcess(0);
@@ -488,6 +499,17 @@ class AppUpdateService {
       await _recordFailure(UpdateEventType.stagedRestartFailed, error);
       rethrow;
     }
+  }
+
+  bool canStageSilentlyForNextLaunch(AppUpdateAvailability update) {
+    if (_platform != AppUpdatePlatform.windows) {
+      return false;
+    }
+    final stagedClient = _resolvedWindowsStagedUpdateClient;
+    return update.installMode == AppUpdateInstallMode.seamlessRestart &&
+        update.asset != null &&
+        stagedClient != null &&
+        stagedClient.isAvailable();
   }
 
   void dispose() {
@@ -738,11 +760,7 @@ class AppUpdateService {
 
     final keys = switch (_platform) {
       AppUpdatePlatform.windows => const ['windows-x64', 'windows-x86_64'],
-      AppUpdatePlatform.macos => const [
-          'macos-universal',
-          'darwin-aarch64',
-          'darwin-x86_64',
-        ],
+      AppUpdatePlatform.macos => _preferredMacosManifestKeys(),
       AppUpdatePlatform.linux => const ['linux-x64', 'linux-x86_64'],
       _ => const <String>[],
     };
@@ -771,6 +789,10 @@ class AppUpdateService {
     }
 
     return null;
+  }
+
+  List<String> _preferredMacosManifestKeys() {
+    return preferredMacosManifestKeysForArchitecture(_currentArchitecture);
   }
 
   Future<T> _withPreparedAsset<T>(
@@ -968,16 +990,6 @@ class AppUpdateService {
     }
     return 'manual_download_required';
   }
-}
-
-AppUpdatePlatform _detectPlatform() {
-  if (kIsWeb) return AppUpdatePlatform.unsupported;
-  if (Platform.isWindows) return AppUpdatePlatform.windows;
-  if (Platform.isMacOS) return AppUpdatePlatform.macos;
-  if (Platform.isLinux) return AppUpdatePlatform.linux;
-  if (Platform.isAndroid) return AppUpdatePlatform.android;
-  if (Platform.isIOS) return AppUpdatePlatform.ios;
-  return AppUpdatePlatform.unsupported;
 }
 
 Future<String> sha256FileHexForTest(File file) => _sha256FileHex(file);

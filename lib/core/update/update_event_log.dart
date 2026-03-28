@@ -217,8 +217,9 @@ UpdateFailureCategory classifyUpdateFailure(Object error) {
     return UpdateFailureCategory.permissions;
   }
   if (raw.contains('apply_failed') ||
-      raw.contains('install') ||
-      raw.contains('restart') ||
+      raw.contains('install_failed') ||
+      raw.contains('restart_failed') ||
+      raw.contains('install_archive') ||
       raw.contains('chmod_failed') ||
       raw.contains('missing_app_bundle')) {
     return UpdateFailureCategory.installation;

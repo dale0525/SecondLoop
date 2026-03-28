@@ -156,8 +156,11 @@ void main() {
       );
     });
 
-    test('ignores fourth tag segment for compatibility', () {
-      expect(compareReleaseTagWithCurrentVersion('v1.2.3.9', '1.2.3'), 0);
+    test('treats fourth tag segment as newer when present', () {
+      expect(
+        compareReleaseTagWithCurrentVersion('v1.2.3.9', '1.2.3'),
+        greaterThan(0),
+      );
     });
 
     test('treats same version as up to date', () {
@@ -386,6 +389,44 @@ void main() {
         result.update!.downloadUri.toString(),
         'https://cdn.example.com/SecondLoop-macos-v1.1.0.app.tar.gz',
       );
+    });
+
+    test('prefers current macOS architecture over mismatched manifest entry',
+        () async {
+      final macosClient =
+          _FakeMacosManagedUpdateClient(supportedInstallLocation: true);
+      final service = AppUpdateService(
+        platformOverride: AppUpdatePlatform.macos,
+        releaseModeOverride: true,
+        macosManagedUpdateClient: macosClient,
+        currentVersionLoader: () async =>
+            const AppRuntimeVersion(version: '1.0.0', buildNumber: '21'),
+        currentArchitectureOverride: 'x86_64',
+        releaseJsonFetcher: (uri) async => {
+          'version': '1.1.0',
+          'release_page_url':
+              'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
+          'platforms': {
+            'darwin-aarch64': {
+              'archive_url':
+                  'https://cdn.example.com/SecondLoop-macos-arm64-v1.1.0.app.tar.gz',
+              'sha256': 'arm64sha',
+            },
+            'darwin-x86_64': {
+              'archive_url':
+                  'https://cdn.example.com/SecondLoop-macos-x64-v1.1.0.app.tar.gz',
+              'sha256': 'x64sha',
+            },
+          },
+        },
+      );
+
+      final result = await service.checkForUpdates();
+
+      expect(result.update, isNotNull);
+      expect(result.update!.asset?.downloadUri.toString(),
+          'https://cdn.example.com/SecondLoop-macos-x64-v1.1.0.app.tar.gz');
+      expect(result.update!.asset?.sha256, 'x64sha');
     });
 
     test('requires sha256 for seamless Linux archive installs', () async {
@@ -1106,6 +1147,12 @@ void main() {
       expect(
         logger.records.any(
           (entry) => entry.type == UpdateEventType.pendingApplyDispatched,
+        ),
+        isFalse,
+      );
+      expect(
+        logger.records.any(
+          (entry) => entry.type == UpdateEventType.pendingApplyStarted,
         ),
         isFalse,
       );

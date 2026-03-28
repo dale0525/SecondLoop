@@ -16,6 +16,7 @@ class _FakeAutoUpdateService extends AppUpdateService {
         const PendingUpdateStartupResult.noPendingUpdate(),
     this.throwOnStage = false,
     this.releaseRepoValue = 'dale0525/SecondLoop',
+    this.canStageSilentlyForNextLaunchValue = false,
   });
 
   final AppUpdateCheckResult result;
@@ -23,6 +24,7 @@ class _FakeAutoUpdateService extends AppUpdateService {
   final PendingUpdateStartupResult applyPendingResult;
   final bool throwOnStage;
   final String releaseRepoValue;
+  final bool canStageSilentlyForNextLaunchValue;
 
   int checkCalls = 0;
   int installCalls = 0;
@@ -34,6 +36,11 @@ class _FakeAutoUpdateService extends AppUpdateService {
 
   @override
   String get releaseRepo => releaseRepoValue;
+
+  @override
+  bool canStageSilentlyForNextLaunch(AppUpdateAvailability update) {
+    return canStageSilentlyForNextLaunchValue;
+  }
 
   @override
   Future<AppUpdateCheckResult> checkForUpdates() async {
@@ -175,6 +182,7 @@ void main() {
       ),
     );
     final service = _FakeAutoUpdateService(
+      canStageSilentlyForNextLaunchValue: true,
       throwOnStage: true,
       result: AppUpdateCheckResult(
         currentVersion: '1.0.1+99',
@@ -214,6 +222,7 @@ void main() {
       ),
     );
     final service = _FakeAutoUpdateService(
+      canStageSilentlyForNextLaunchValue: true,
       result: AppUpdateCheckResult(
         currentVersion: '1.0.1+99',
         update: update,
@@ -226,6 +235,45 @@ void main() {
     expect(service.checkCalls, 1);
     expect(service.installCalls, 0);
     expect(service.stageCalls, 1);
+    expect(service.applyPendingCalls, 1);
+    expect(UpdateBadgePrefs.value.value, 'v1.1.0');
+    expect(find.byType(SnackBar), findsOneWidget);
+  },
+      variant: const TargetPlatformVariant(<TargetPlatform>{
+        TargetPlatform.windows,
+      }));
+
+  testWidgets(
+      'windows seamless update does not stage when silent staging is unsupported',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    UpdateBadgePrefs.resetForTests();
+    final update = AppUpdateAvailability(
+      currentVersion: '1.0.1+99',
+      latestTag: 'v1.1.0',
+      releasePageUri: Uri.parse(
+        'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
+      ),
+      installMode: AppUpdateInstallMode.seamlessRestart,
+      asset: AppUpdateAsset(
+        name: 'com.secondloop.secondloop-1.1.0-full.nupkg',
+        downloadUri: Uri.parse('https://cdn.example.com/win.nupkg'),
+      ),
+    );
+    final service = _FakeAutoUpdateService(
+      canStageSilentlyForNextLaunchValue: false,
+      result: AppUpdateCheckResult(
+        currentVersion: '1.0.1+99',
+        update: update,
+      ),
+    );
+
+    await pumpGate(tester, service: service);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 120));
+
+    expect(service.installCalls, 0);
+    expect(service.stageCalls, 0);
     expect(service.applyPendingCalls, 1);
     expect(UpdateBadgePrefs.value.value, 'v1.1.0');
     expect(find.byType(SnackBar), findsOneWidget);

@@ -49,12 +49,7 @@ bool sameNormalizedVersion(String left, String right) {
   if (leftSegments == null || rightSegments == null) {
     return false;
   }
-  for (var index = 0; index < 3; index += 1) {
-    if (leftSegments[index] != rightSegments[index]) {
-      return false;
-    }
-  }
-  return true;
+  return compareReleaseTagWithCurrentVersion(left, right) == 0;
 }
 
 String? readStringLoose(Map<dynamic, dynamic> map, String key) {

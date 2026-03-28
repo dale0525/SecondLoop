@@ -127,7 +127,8 @@ class _AutoUpgradeGateState extends State<AutoUpgradeGate> {
 
       if (_usesPassiveManagedUpdates) {
         var stagedReady = false;
-        if (_isWindowsPlatform && update.canSeamlessInstall) {
+        if (_isWindowsPlatform &&
+            _updateService.canStageSilentlyForNextLaunch(update)) {
           try {
             await _updateService.stageUpdateForNextLaunch(update);
             stagedReady = true;
