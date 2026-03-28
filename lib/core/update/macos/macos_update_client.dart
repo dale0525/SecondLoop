@@ -271,6 +271,11 @@ while kill -0 "\$APP_PID" 2>/dev/null && [ "\$waited" -lt "\$MAX_WAIT" ]; do
   waited=\$((waited + 1))
 done
 
+if kill -0 "\$APP_PID" 2>/dev/null; then
+  rm -rf "\$TEMP_ROOT" || true
+  exit 1
+fi
+
 rm -rf "\$BACKUP_APP"
 mv "\$TARGET_APP" "\$BACKUP_APP"
 

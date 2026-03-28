@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import '../app_update_models.dart';
+import '../app_update_helpers.dart';
 import 'velopack_paths.dart';
 
 typedef VelopackProcessStarter = Future<Process> Function(
@@ -288,13 +289,22 @@ class VelopackUpdateClient implements WindowsStagedUpdateClient {
   }
 
   static Future<void> _downloadAssetToFile(Uri uri, File destination) async {
-    if (destination.existsSync()) {
-      await destination.delete();
-    }
     if (uri.scheme == 'file') {
-      final sourcePath = uri.toFilePath();
+      final sourcePath = File(uri.toFilePath()).absolute.path;
+      final destinationPath = destination.absolute.path;
+      if (_normalizePathForComparison(sourcePath) ==
+          _normalizePathForComparison(destinationPath)) {
+        return;
+      }
+      if (destination.existsSync()) {
+        await destination.delete();
+      }
       await File(sourcePath).copy(destination.path);
       return;
+    }
+
+    if (destination.existsSync()) {
+      await destination.delete();
     }
 
     final client = HttpClient();
@@ -546,6 +556,9 @@ class VelopackUpdateClient implements WindowsStagedUpdateClient {
       if (entity is! File) continue;
       final fileName =
           entity.uri.pathSegments.isEmpty ? '' : entity.uri.pathSegments.last;
+      if (!isWindowsVelopackPackageName(fileName)) {
+        continue;
+      }
       final version = _extractVersionFromNupkgName(fileName);
       if (version == null) continue;
       if (newestVersion == null ||
@@ -616,6 +629,10 @@ class VelopackUpdateClient implements WindowsStagedUpdateClient {
       }
     }
     return segments;
+  }
+
+  static String _normalizePathForComparison(String value) {
+    return value.replaceAll('\\', '/').toLowerCase();
   }
 
   static Future<Process> _defaultProcessStarter(

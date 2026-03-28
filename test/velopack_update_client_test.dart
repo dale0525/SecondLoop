@@ -91,6 +91,29 @@ void main() {
     expect(stagedPackage.readAsStringSync(), 'nupkg-content');
   });
 
+  test(
+      'stageAsset preserves existing package when source already matches target',
+      () async {
+    final root = await Directory.systemTemp.createTemp('velopack_stage_same_');
+    final updater = File('${root.path}${Platform.pathSeparator}Update.exe')
+      ..writeAsStringSync('stub');
+    _writeSqVersion(root, '1.0.0');
+    final stagedPackage = File(
+      '${root.path}${Platform.pathSeparator}packages${Platform.pathSeparator}com.secondloop.secondloop-1.2.0-full.nupkg',
+    )
+      ..createSync(recursive: true)
+      ..writeAsStringSync('nupkg-content');
+
+    final client = VelopackUpdateClient(
+      updateExecutablePath: updater.path,
+    );
+
+    await client.stageAsset(stagedPackage.uri);
+
+    expect(stagedPackage.existsSync(), isTrue);
+    expect(stagedPackage.readAsStringSync(), 'nupkg-content');
+  });
+
   test('installAssetAndRestart starts detached apply command', () async {
     final root = await Directory.systemTemp.createTemp('velopack_install_');
     final updater = File('${root.path}${Platform.pathSeparator}Update.exe')
@@ -377,6 +400,20 @@ void main() {
       isNot(contains(
           r'Get-Process -Id ${pid} -ErrorAction SilentlyContinue | Out-Null')),
     );
+  });
+
+  test('only SecondLoop full packages count as pending updates', () async {
+    final root = await Directory.systemTemp.createTemp('velopack_pkg_filter_');
+    final updater = File('${root.path}${Platform.pathSeparator}Update.exe')
+      ..writeAsStringSync('stub');
+    _writeSqVersion(root, '1.0.0');
+    _createNupkg(root, 'otherapp-9.9.9-full.nupkg');
+
+    final client = VelopackUpdateClient(updateExecutablePath: updater.path);
+
+    expect(client.hasPendingUpdate(), isFalse);
+    expect(client.pendingUpdateVersion(), isNull);
+    expect(client.pendingUpdatePackagePath(), isNull);
   });
 
   test(

@@ -175,7 +175,9 @@ class PreCommitHookTests(unittest.TestCase):
 
         self.assertIn('i18n_generated_now=0', script)
         self.assertNotIn('if [[ ${i18n_generated_now} -eq 0 ]]; then', script)
-        self.assertIn('git diff --exit-code -- lib/i18n', script)
+        self.assertIn('run_i18n_refresh_in_temp_copy', script)
+        self.assertIn('cmp -s', script)
+        self.assertNotIn('git diff --exit-code -- lib/i18n', script)
 
     def test_pre_commit_hook_stages_generated_i18n_outputs_in_normal_commit_flow(self) -> None:
         script = PRE_COMMIT_COMMIT_MODE_SCRIPT.read_text(encoding="utf-8")

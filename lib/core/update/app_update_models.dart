@@ -108,12 +108,13 @@ class PendingUpdateStartupResult {
 
 int compareReleaseTagWithCurrentVersion(
     String releaseTag, String currentVersion) {
-  final releaseSegments = parseComparableAppVersion(releaseTag);
-  final currentSegments = parseComparableAppVersion(currentVersion);
-  if (releaseSegments == null || currentSegments == null) return 0;
+  final releaseVersion = parseComparableAppVersion(releaseTag);
+  final currentAppVersion = parseComparableAppVersion(currentVersion);
+  if (releaseVersion == null || currentAppVersion == null) return 0;
 
-  final normalizedRelease = trimTrailingZeroSegments(releaseSegments);
-  final normalizedCurrent = trimTrailingZeroSegments(currentSegments);
+  final normalizedRelease = trimTrailingZeroSegments(releaseVersion.segments);
+  final normalizedCurrent =
+      trimTrailingZeroSegments(currentAppVersion.segments);
   final comparedLength = normalizedRelease.length > normalizedCurrent.length
       ? normalizedRelease.length
       : normalizedCurrent.length;
@@ -128,6 +129,28 @@ int compareReleaseTagWithCurrentVersion(
     }
   }
 
+  if (releaseVersion.isPrerelease != currentAppVersion.isPrerelease) {
+    return releaseVersion.isPrerelease ? -1 : 1;
+  }
+
+  if (releaseVersion.isPrerelease) {
+    final prereleaseComparedLength = releaseVersion.prereleaseSegments.length >
+            currentAppVersion.prereleaseSegments.length
+        ? releaseVersion.prereleaseSegments.length
+        : currentAppVersion.prereleaseSegments.length;
+    for (var i = 0; i < prereleaseComparedLength; i += 1) {
+      final releaseValue = i < releaseVersion.prereleaseSegments.length
+          ? releaseVersion.prereleaseSegments[i]
+          : 0;
+      final currentValue = i < currentAppVersion.prereleaseSegments.length
+          ? currentAppVersion.prereleaseSegments[i]
+          : 0;
+      if (releaseValue != currentValue) {
+        return releaseValue.compareTo(currentValue);
+      }
+    }
+  }
+
   return 0;
 }
 
@@ -135,34 +158,48 @@ bool isStrictAppVersion(String input) {
   return tryParseStrictAppVersion(input) != null;
 }
 
-List<int>? parseComparableAppVersion(String input) {
+ComparableAppVersion? parseComparableAppVersion(String input) {
   final trimmed = input.trim();
   if (trimmed.isEmpty) {
     return null;
   }
 
-  final matches = RegExp(r'\d+').allMatches(trimmed);
-  if (matches.isEmpty) {
+  final match = RegExp(
+    r'^[vV]?(\d+(?:\.\d+){2,7})(?:-([0-9A-Za-z.-]+))?(?:\+[0-9A-Za-z.-]+)?$',
+  ).firstMatch(trimmed);
+  if (match == null) {
     return null;
   }
 
   final segments = <int>[];
-  for (final match in matches) {
-    final parsed = int.tryParse(match.group(0) ?? '');
+  for (final value in (match.group(1) ?? '').split('.')) {
+    final parsed = int.tryParse(value);
     if (parsed == null) {
-      continue;
+      return null;
     }
     segments.add(parsed);
-    if (segments.length >= 8) {
-      break;
-    }
   }
 
   if (segments.isEmpty) {
     return null;
   }
 
-  return segments;
+  final prerelease = match.group(2)?.trim();
+  final prereleaseSegments = <int>[];
+  if (prerelease != null && prerelease.isNotEmpty) {
+    for (final value in prerelease.split('.')) {
+      final parsed = int.tryParse(value);
+      if (parsed != null) {
+        prereleaseSegments.add(parsed);
+      }
+    }
+  }
+
+  return ComparableAppVersion(
+    segments: segments,
+    prereleaseSegments: prereleaseSegments,
+    isPrerelease: prerelease != null && prerelease.isNotEmpty,
+  );
 }
 
 List<int> trimTrailingZeroSegments(List<int> segments) {
@@ -187,4 +224,18 @@ List<int>? tryParseStrictAppVersion(String input) {
   }
 
   return <int>[major, minor, patch];
+}
+
+class ComparableAppVersion {
+  const ComparableAppVersion({
+    required this.segments,
+    required this.prereleaseSegments,
+    required this.isPrerelease,
+  });
+
+  final List<int> segments;
+  final List<int> prereleaseSegments;
+  final bool isPrerelease;
+
+  bool get hasNumericPrereleaseSegments => prereleaseSegments.isNotEmpty;
 }

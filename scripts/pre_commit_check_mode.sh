@@ -25,13 +25,36 @@
     ensure_windows_short_build_paths
   fi
 
+  run_i18n_refresh_in_temp_copy() {
+    local temp_root temp_repo
+    temp_root="$(mktemp -d 2>/dev/null || mktemp -d -t secondloop_i18n_check)"
+    temp_repo="${temp_root}/repo"
+
+    cleanup_temp_i18n_copy() {
+      rm -rf "${temp_root}" 2>/dev/null || true
+    }
+
+    trap cleanup_temp_i18n_copy RETURN
+
+    mkdir -p "${temp_repo}"
+    cp -R "${repo_root}/." "${temp_repo}/"
+
+    (
+      cd "${temp_repo}"
+      bash scripts/run_i18n_refresh.sh >/dev/null
+    )
+
+    cmp -s "${repo_root}/lib/i18n/strings.g.dart" \
+      "${temp_repo}/lib/i18n/strings.g.dart"
+  }
+
   if (( scope_flutter )); then
     ensure_i18n_generated
     run_i18n_analyze
 
-    if ! git diff --exit-code -- lib/i18n; then
+    if ! run_i18n_refresh_in_temp_copy; then
       echo "" >&2
-      echo "pre-commit: i18n generated files differ from the current working tree or need refresh." >&2
+      echo "pre-commit: i18n generated files differ from refreshed outputs." >&2
       echo "Fix locally with: pixi run i18n-refresh" >&2
       exit 1
     fi

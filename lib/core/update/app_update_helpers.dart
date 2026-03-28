@@ -44,12 +44,39 @@ String? normalizeLatestTag(String? value) {
 }
 
 bool sameNormalizedVersion(String left, String right) {
-  final leftSegments = parseComparableAppVersion(left);
-  final rightSegments = parseComparableAppVersion(right);
-  if (leftSegments == null || rightSegments == null) {
+  final leftVersion = parseComparableAppVersion(left);
+  final rightVersion = parseComparableAppVersion(right);
+  if (leftVersion == null || rightVersion == null) {
     return false;
   }
+  final normalizedLeft = trimTrailingZeroSegments(leftVersion.segments);
+  final normalizedRight = trimTrailingZeroSegments(rightVersion.segments);
+  final sameBaseSegments = normalizedLeft.length == normalizedRight.length &&
+      _listEquals(normalizedLeft, normalizedRight);
+  if (leftVersion.isPrerelease != rightVersion.isPrerelease &&
+      (leftVersion.hasNumericPrereleaseSegments ||
+          rightVersion.hasNumericPrereleaseSegments)) {
+    return false;
+  }
+  if (sameBaseSegments &&
+      leftVersion.isPrerelease != rightVersion.isPrerelease &&
+      !leftVersion.hasNumericPrereleaseSegments &&
+      !rightVersion.hasNumericPrereleaseSegments) {
+    return true;
+  }
   return compareReleaseTagWithCurrentVersion(left, right) == 0;
+}
+
+bool _listEquals(List<int> left, List<int> right) {
+  if (left.length != right.length) {
+    return false;
+  }
+  for (var i = 0; i < left.length; i += 1) {
+    if (left[i] != right[i]) {
+      return false;
+    }
+  }
+  return true;
 }
 
 String? readStringLoose(Map<dynamic, dynamic> map, String key) {

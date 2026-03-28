@@ -81,6 +81,57 @@ void main() {
       expect(sameNormalizedVersion('1.1.0.7', '1.1.0'), isFalse);
     });
 
+    test(
+        'sameNormalizedVersion does not treat prerelease build counters as equal',
+        () {
+      expect(sameNormalizedVersion('1.1.0-rc.1', '1.1.0'), isFalse);
+      expect(sameNormalizedVersion('1.1.0', '1.1.0-rc.1'), isFalse);
+    });
+
+    test('checkForUpdates rejects non-version release tags', () async {
+      final service = AppUpdateService(
+        platformOverride: AppUpdatePlatform.windows,
+        releaseModeOverride: true,
+        currentVersionLoader: () async =>
+            const AppRuntimeVersion(version: '1.0.0', buildNumber: '1'),
+        releaseJsonFetcher: (_) async => <String, Object?>{
+          'tag_name': 'release-2026-03-28',
+          'html_url':
+              'https://github.com/dale0525/SecondLoop/releases/tag/release-2026-03-28',
+          'assets': <Object?>[],
+        },
+      );
+
+      final result = await service.checkForUpdates();
+
+      expect(result.update, isNull);
+      expect(result.errorMessage, 'unsupported_version_format');
+    });
+
+    test('checkForUpdates treats final release as newer than prerelease',
+        () async {
+      final service = AppUpdateService(
+        platformOverride: AppUpdatePlatform.windows,
+        releaseModeOverride: true,
+        currentVersionLoader: () async => const AppRuntimeVersion(
+          version: '1.1.0-rc.1',
+          buildNumber: '1',
+        ),
+        releaseJsonFetcher: (_) async => <String, Object?>{
+          'tag_name': 'v1.1.0',
+          'html_url':
+              'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
+          'assets': <Object?>[],
+        },
+      );
+
+      final result = await service.checkForUpdates();
+
+      expect(result.errorMessage, isNull);
+      expect(result.update, isNotNull);
+      expect(result.update!.latestTag, 'v1.1.0');
+    });
+
     test('checkForUpdates accepts current versions outside strict x.y.z',
         () async {
       final service = AppUpdateService(

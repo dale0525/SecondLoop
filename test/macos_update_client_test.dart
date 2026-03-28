@@ -143,6 +143,10 @@ void main() {
     expect(scriptText, contains('rm -rf "\$TEMP_ROOT" || true'));
     expect(scriptText, contains('rm -rf "\$BACKUP_APP" "\$TEMP_ROOT" || true'));
     expect(
+      scriptText,
+      contains('if kill -0 "\$APP_PID" 2>/dev/null; then'),
+    );
+    expect(
       File('${scriptDir.path}/SecondLoop-macos-v1.2.3.app.tar.gz').existsSync(),
       isFalse,
     );

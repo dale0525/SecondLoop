@@ -218,16 +218,23 @@ class AppUpdateService {
 
     final manifestAsset = _matchManifestAssetForCurrentPlatform(release);
     final assets = _parseAssets(release['assets']);
-    final matchedAsset = manifestAsset ??
+    final preferredAsset = manifestAsset ??
         _matchAssetForCurrentPlatform(
           assets,
           windowsManagedRuntimeAvailable: windowsManagedRuntimeAvailable,
         );
     final installMode = _resolveInstallMode(
-      matchedAsset,
+      preferredAsset,
       windowsManagedRuntimeAvailable: windowsManagedRuntimeAvailable,
       macosManagedInstallSupported: macosManagedInstallSupported,
     );
+    final matchedAsset = installMode == AppUpdateInstallMode.externalDownload
+        ? _selectExternalDownloadAsset(
+              preferredAsset: preferredAsset,
+              assets: assets,
+            ) ??
+            preferredAsset
+        : preferredAsset;
 
     await _recordEvent(
       UpdateEventType.updateAvailable,
@@ -720,6 +727,32 @@ class AppUpdateService {
     }
 
     return findFirst(isWindowsMsiInstallerName);
+  }
+
+  AppUpdateAsset? _selectExternalDownloadAsset({
+    required AppUpdateAsset? preferredAsset,
+    required List<AppUpdateAsset> assets,
+  }) {
+    AppUpdateAsset? findFirst(bool Function(String name) matcher) {
+      for (final asset in assets) {
+        if (matcher(asset.name)) return asset;
+      }
+      return null;
+    }
+
+    return switch (_platform) {
+      AppUpdatePlatform.windows => findFirst(isWindowsMsiInstallerName) ??
+          (preferredAsset != null &&
+                  isWindowsMsiInstallerName(preferredAsset.name)
+              ? preferredAsset
+              : null),
+      AppUpdatePlatform.macos => findFirst(isMacosManualInstallerName) ??
+          (preferredAsset != null &&
+                  isMacosManualInstallerName(preferredAsset.name)
+              ? preferredAsset
+              : null),
+      _ => preferredAsset,
+    };
   }
 
   AppUpdateInstallMode _resolveInstallMode(
