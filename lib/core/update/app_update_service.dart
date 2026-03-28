@@ -239,11 +239,10 @@ class AppUpdateService {
     );
     final matchedAsset = installMode == AppUpdateInstallMode.externalDownload
         ? selectExternalDownloadAsset(
-              _platform,
-              preferredAsset: preferredAsset,
-              assets: assets,
-            ) ??
-            preferredAsset
+            _platform,
+            preferredAsset: preferredAsset,
+            assets: assets,
+          )
         : preferredAsset;
 
     await _recordEvent(
@@ -266,7 +265,10 @@ class AppUpdateService {
         currentVersion: runtimeVersion.display,
         latestTag: latestTag,
         installMode: installMode,
-        message: describeManualFallbackReason(_platform, matchedAsset),
+        message: describeManualFallbackReason(
+          _platform,
+          preferredAsset ?? matchedAsset,
+        ),
       );
     }
 
@@ -436,6 +438,9 @@ class AppUpdateService {
       message: update.asset?.name,
     );
     try {
+      if (update.installMode != AppUpdateInstallMode.stagedNextLaunch) {
+        throw StateError('staged_update_not_supported');
+      }
       final asset = update.asset;
       if (_platform == AppUpdatePlatform.windows) {
         final stagedClient = _resolvedWindowsStagedUpdateClient;
@@ -632,7 +637,11 @@ class AppUpdateService {
     final endpoints = <Uri>[];
     final apiOrigin = parseUpdateUri(configuredOrigin);
     if (apiOrigin != null) {
-      endpoints.add(apiOrigin.resolve('api/releases/latest'));
+      final normalizedPath =
+          apiOrigin.path.endsWith('/') ? apiOrigin.path : '${apiOrigin.path}/';
+      endpoints.add(
+        apiOrigin.replace(path: '${normalizedPath}api/releases/latest'),
+      );
     }
 
     if (repo.isNotEmpty) {

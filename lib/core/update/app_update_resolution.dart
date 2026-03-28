@@ -25,7 +25,8 @@ AppUpdateAsset? matchAssetForCurrentPlatform(
   }
 
   final matcher = switch (platform) {
-    AppUpdatePlatform.linux => RegExp(r'^SecondLoop-linux-x64-.*\.tar\.gz$'),
+    AppUpdatePlatform.linux =>
+      RegExp(r'^SecondLoop-linux-(?:x64|x86_64)-.*\.tar\.gz$'),
     AppUpdatePlatform.android => RegExp(r'^SecondLoop-android-.*\.apk$'),
     _ => null,
   };

@@ -193,5 +193,35 @@ void main() {
         'https://updates.example.com/custom/base/api/releases/latest',
       );
     });
+
+    test(
+        'checkForUpdates keeps base path for custom release origins without trailing slash',
+        () async {
+      late Uri requestedUri;
+      final service = AppUpdateService(
+        platformOverride: AppUpdatePlatform.android,
+        releaseModeOverride: true,
+        releaseRepoOverride: '',
+        releaseApiOriginOverride: 'https://updates.example.com/custom/base',
+        currentVersionLoader: () async =>
+            const AppRuntimeVersion(version: '1.0.0', buildNumber: '1'),
+        releaseJsonFetcher: (uri) async {
+          requestedUri = uri;
+          return <String, Object?>{
+            'tag_name': 'v1.0.1',
+            'html_url':
+                'https://github.com/dale0525/SecondLoop/releases/tag/v1.0.1',
+            'assets': <Object?>[],
+          };
+        },
+      );
+
+      await service.checkForUpdates();
+
+      expect(
+        requestedUri.toString(),
+        'https://updates.example.com/custom/base/api/releases/latest',
+      );
+    });
   });
 }

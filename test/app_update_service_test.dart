@@ -387,7 +387,42 @@ void main() {
       expect(result.update!.installMode, AppUpdateInstallMode.externalDownload);
       expect(
         result.update!.downloadUri.toString(),
-        'https://cdn.example.com/SecondLoop-macos-v1.1.0.app.tar.gz',
+        'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
+      );
+      expect(result.update!.asset, isNull);
+    });
+
+    test(
+        'falls back to release page when Windows external download has no MSI asset',
+        () async {
+      final stagedClient = _FakeWindowsStagedUpdateClient(available: false);
+      final service = AppUpdateService(
+        platformOverride: AppUpdatePlatform.windows,
+        releaseModeOverride: true,
+        windowsStagedUpdateClient: stagedClient,
+        currentVersionLoader: () async =>
+            const AppRuntimeVersion(version: '1.0.0', buildNumber: '88'),
+        releaseJsonFetcher: (uri) async => {
+          'tag_name': 'v1.1.0',
+          'html_url':
+              'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
+          'assets': [
+            {
+              'name': 'com.secondloop.secondloop-1.1.0-full.nupkg',
+              'browser_download_url': 'https://cdn.example.com/win.nupkg',
+            },
+          ],
+        },
+      );
+
+      final result = await service.checkForUpdates();
+
+      expect(result.update, isNotNull);
+      expect(result.update!.installMode, AppUpdateInstallMode.externalDownload);
+      expect(result.update!.asset, isNull);
+      expect(
+        result.update!.downloadUri.toString(),
+        'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
       );
     });
 
@@ -496,6 +531,37 @@ void main() {
 
       expect(result.update, isNotNull);
       expect(result.update!.installMode, AppUpdateInstallMode.externalDownload);
+    });
+
+    test('matches linux x86_64 assets when manifest is missing', () async {
+      final service = AppUpdateService(
+        platformOverride: AppUpdatePlatform.linux,
+        releaseModeOverride: true,
+        currentVersionLoader: () async =>
+            const AppRuntimeVersion(version: '1.0.0', buildNumber: '7'),
+        releaseJsonFetcher: (uri) async => {
+          'tag_name': 'v1.1.0',
+          'html_url':
+              'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
+          'assets': [
+            {
+              'name': 'SecondLoop-linux-x86_64-v1.1.0.tar.gz',
+              'browser_download_url':
+                  'https://cdn.example.com/SecondLoop-linux-x86_64-v1.1.0.tar.gz',
+              'sha256': 'linuxsha',
+            },
+          ],
+        },
+      );
+
+      final result = await service.checkForUpdates();
+
+      expect(result.update, isNotNull);
+      expect(result.update!.installMode, AppUpdateInstallMode.seamlessRestart);
+      expect(
+        result.update!.asset?.downloadUri.toString(),
+        'https://cdn.example.com/SecondLoop-linux-x86_64-v1.1.0.tar.gz',
+      );
     });
 
     test('falls back to external release page when no platform asset exists',
@@ -723,6 +789,36 @@ void main() {
 
       expect(stagedPath, isNotNull);
       expect(Directory(File(stagedPath!).parent.path).existsSync(), isFalse);
+    });
+
+    test('rejects staging when update is not marked as staged-next-launch',
+        () async {
+      final stagedClient = _FakeWindowsStagedUpdateClient(available: true);
+      final service = AppUpdateService(
+        platformOverride: AppUpdatePlatform.windows,
+        windowsStagedUpdateClient: stagedClient,
+      );
+
+      await expectLater(
+        () => service.stageUpdateForNextLaunch(
+          AppUpdateAvailability(
+            currentVersion: '1.0.0',
+            latestTag: 'v1.1.0',
+            releasePageUri: Uri.parse(
+              'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
+            ),
+            installMode: AppUpdateInstallMode.externalDownload,
+            asset: AppUpdateAsset(
+              name: 'SecondLoop-win.msi',
+              downloadUri:
+                  Uri.parse('https://cdn.example.com/SecondLoop-win.msi'),
+            ),
+          ),
+        ),
+        throwsA(isA<StateError>()),
+      );
+
+      expect(stagedClient.stagedAssets, isEmpty);
     });
 
     test('cleans temporary downloaded asset when Windows handoff sha256 fails',
