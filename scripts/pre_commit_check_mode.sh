@@ -27,10 +27,14 @@
 
   if (( scope_flutter )); then
     ensure_i18n_generated
-    if [[ ${i18n_generated_now} -eq 0 ]]; then
-      run_i18n_refresh
-    fi
     run_i18n_analyze
+
+    if ! git diff --exit-code -- lib/i18n; then
+      echo "" >&2
+      echo "pre-commit: i18n generated files are out of date." >&2
+      echo "Fix locally with: pixi run i18n-refresh" >&2
+      exit 1
+    fi
 
     if ! bash scripts/check_no_python_runtime.sh; then
       echo "" >&2

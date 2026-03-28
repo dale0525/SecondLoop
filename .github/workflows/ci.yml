@@ -31,6 +31,7 @@ jobs:
             flutter:
               - ".fvm/fvm_config.json"
               - ".githooks/**"
+              - "scripts/**"
               - "analysis_options.yaml"
               - "pubspec.yaml"
               - "pubspec.lock"
@@ -47,6 +48,7 @@ jobs:
               - "windows/**"
             rust:
               - ".githooks/**"
+              - "scripts/**"
               - "rust/**"
 
   flutter:

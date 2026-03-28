@@ -12,8 +12,10 @@ run_rust_fmt=0
 run_flutter_checks=0
 run_i18n_refresh_needed=0
 for file in "${staged_files[@]}"; do
-  if [[ "${file}" == *.dart && -f "${file}" ]]; then
-    dart_files+=("${file}")
+  if [[ "${file}" == *.dart ]]; then
+    if [[ -f "${file}" ]]; then
+      dart_files+=("${file}")
+    fi
     run_flutter_checks=1
     continue
   fi
@@ -127,10 +129,18 @@ if [[ ${run_flutter_checks} -ne 0 ]]; then
   fi
 
   if [[ ${#flutter_test_targets[@]} -ne 0 ]]; then
+    if [[ ${#flutter_test_targets[@]} -eq 1 && "${flutter_test_targets[0]}" == "__FULL_SUITE__" ]]; then
+      flutter_test_targets=()
+    fi
+
     if ! run_flutter_tool test --concurrency=1 "${flutter_test_targets[@]}"; then
       echo "" >&2
       echo "pre-commit: flutter test failed." >&2
-      echo "Fix locally with: pixi run flutter test \"${flutter_test_targets[*]}\"" >&2
+      if [[ ${#flutter_test_targets[@]} -eq 0 ]]; then
+        echo "Fix locally with: pixi run flutter test" >&2
+      else
+        echo "Fix locally with: pixi run flutter test \"${flutter_test_targets[*]}\"" >&2
+      fi
       exit 1
     fi
   else

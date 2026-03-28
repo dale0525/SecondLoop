@@ -43,6 +43,7 @@ class _FakeWindowsStagedUpdateClient implements WindowsStagedUpdateClient {
   _FakeWindowsStagedUpdateClient({
     required this.available,
     this.pendingUpdateAvailable = false,
+    this.pendingUpdateVersionValue,
     this.pendingApplyStartupResult =
         const PendingUpdateStartupResult.noPendingUpdate(),
     this.onStageAsset,
@@ -51,6 +52,7 @@ class _FakeWindowsStagedUpdateClient implements WindowsStagedUpdateClient {
 
   final bool available;
   final bool pendingUpdateAvailable;
+  final String? pendingUpdateVersionValue;
   final PendingUpdateStartupResult pendingApplyStartupResult;
   final Future<void> Function(Uri assetDownloadUri)? onStageAsset;
   final Future<void> Function(Uri assetDownloadUri)? onInstallAsset;
@@ -71,6 +73,11 @@ class _FakeWindowsStagedUpdateClient implements WindowsStagedUpdateClient {
   @override
   bool hasPendingUpdate() {
     return pendingUpdateAvailable;
+  }
+
+  @override
+  String? pendingUpdateVersion() {
+    return pendingUpdateAvailable ? pendingUpdateVersionValue : null;
   }
 
   @override
@@ -686,6 +693,7 @@ void main() {
       final stagedClient = _FakeWindowsStagedUpdateClient(
         available: true,
         pendingUpdateAvailable: true,
+        pendingUpdateVersionValue: '1.1.0',
       );
       var exitedCode = -1;
       final service = AppUpdateService(
@@ -714,6 +722,54 @@ void main() {
 
       expect(stagedClient.installCalls, 0);
       expect(stagedClient.applyPendingAndRestartCalls, 1);
+      expect(exitedCode, 0);
+    });
+
+    test(
+        'downloads requested Windows update instead of reusing stale pending package',
+        () async {
+      String? installedPath;
+      final stagedClient = _FakeWindowsStagedUpdateClient(
+        available: true,
+        pendingUpdateAvailable: true,
+        pendingUpdateVersionValue: '1.1.0',
+        onInstallAsset: (assetDownloadUri) async {
+          installedPath = assetDownloadUri.toFilePath();
+          expect(File(installedPath!).existsSync(), isTrue);
+        },
+      );
+      var exitedCode = -1;
+      final service = AppUpdateService(
+        platformOverride: AppUpdatePlatform.windows,
+        windowsStagedUpdateClient: stagedClient,
+        httpClient: _FakeHttpClient(
+          handler: (uri) => const _FakeHttpResponse(
+            statusCode: 200,
+            body: 'windows-package',
+          ),
+        ),
+        processExit: (code) => exitedCode = code,
+      );
+
+      final update = AppUpdateAvailability(
+        currentVersion: '1.0.0',
+        latestTag: 'v1.2.0',
+        releasePageUri: Uri.parse(
+          'https://github.com/dale0525/SecondLoop/releases/tag/v1.2.0',
+        ),
+        installMode: AppUpdateInstallMode.seamlessRestart,
+        asset: AppUpdateAsset(
+          name: 'com.secondloop.secondloop-1.2.0-full.nupkg',
+          downloadUri: Uri.parse('https://cdn.example.com/win-1.2.0.nupkg'),
+        ),
+      );
+
+      await service.installAndRestart(update);
+
+      expect(stagedClient.applyPendingAndRestartCalls, 0);
+      expect(stagedClient.installCalls, 1);
+      expect(installedPath, isNotNull);
+      expect(Directory(File(installedPath!).parent.path).existsSync(), isFalse);
       expect(exitedCode, 0);
     });
 

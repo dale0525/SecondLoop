@@ -16,6 +16,8 @@ abstract class WindowsStagedUpdateClient {
 
   bool hasPendingUpdate();
 
+  String? pendingUpdateVersion();
+
   Future<void> stageAsset(Uri assetDownloadUri);
 
   Future<void> installAssetAndRestart(
@@ -72,6 +74,16 @@ class VelopackUpdateClient implements WindowsStagedUpdateClient {
       return false;
     }
     return _hasPendingPackageUpdate(updateExePath);
+  }
+
+  @override
+  String? pendingUpdateVersion() {
+    final updateExePath = _updateExePath;
+    if (!File(updateExePath).existsSync()) {
+      return null;
+    }
+    final appRoot = File(updateExePath).absolute.parent.path;
+    return _readNewestPackageVersion(appRoot);
   }
 
   @override
@@ -180,6 +192,7 @@ class VelopackUpdateClient implements WindowsStagedUpdateClient {
     required String? pendingVersion,
     String? packagePath,
   }) async {
+    Process? process;
     if (pendingVersion != null && pendingVersion.isNotEmpty) {
       _writePendingApplyAttempt(
         updateExecutablePath,
@@ -190,11 +203,21 @@ class VelopackUpdateClient implements WindowsStagedUpdateClient {
       );
     }
     try {
-      await _processStarter(
+      process = await _processStarter(
         updateExecutablePath,
         _buildApplyArguments(waitPid: waitPid, packagePath: packagePath),
         mode: ProcessStartMode.detached,
       );
+      if (pendingVersion != null && pendingVersion.isNotEmpty) {
+        _writePendingApplyAttempt(
+          updateExecutablePath,
+          _PendingApplyAttempt(
+            version: pendingVersion,
+            startedAtUtc: _now().toUtc(),
+            updaterPid: process.pid,
+          ),
+        );
+      }
     } catch (_) {
       _clearPendingApplyAttempt(updateExecutablePath);
       rethrow;
@@ -320,6 +343,11 @@ class VelopackUpdateClient implements WindowsStagedUpdateClient {
     if (startedAtUtc != null &&
         _now().toUtc().difference(startedAtUtc) <
             _pendingApplyRetryGracePeriod) {
+      if (attempt.updaterPid != null &&
+          !_isProcessLikelyRunning(attempt.updaterPid!)) {
+        _clearPendingApplyAttempt(updateExecutablePath);
+        return null;
+      }
       if (throwIfAttemptInProgress) {
         throw StateError(
           'windows_velopack_apply_already_in_progress_${attempt.version}',
@@ -365,9 +393,11 @@ class VelopackUpdateClient implements WindowsStagedUpdateClient {
       final version = lines.first;
       final startedAtUtc =
           lines.length < 2 ? null : DateTime.tryParse(lines[1])?.toUtc();
+      final updaterPid = lines.length < 3 ? null : int.tryParse(lines[2]);
       return _PendingApplyAttempt(
         version: version,
         startedAtUtc: startedAtUtc,
+        updaterPid: updaterPid,
       );
     } catch (_) {
       return null;
@@ -384,7 +414,34 @@ class VelopackUpdateClient implements WindowsStagedUpdateClient {
     if (attempt.startedAtUtc != null) {
       lines.add(attempt.startedAtUtc!.toIso8601String());
     }
+    if (attempt.updaterPid != null) {
+      lines.add(attempt.updaterPid!.toString());
+    }
     markerFile.writeAsStringSync(lines.join('\n'));
+  }
+
+  static bool _isProcessLikelyRunning(int pid) {
+    if (pid <= 0) {
+      return false;
+    }
+
+    try {
+      if (Platform.isWindows) {
+        final result = Process.runSync(
+          'powershell.exe',
+          [
+            '-Command',
+            'Get-Process -Id $pid -ErrorAction SilentlyContinue | Out-Null'
+          ],
+        );
+        return result.exitCode == 0;
+      }
+
+      final result = Process.runSync('kill', ['-0', pid.toString()]);
+      return result.exitCode == 0;
+    } catch (_) {
+      return true;
+    }
   }
 
   static void _clearPendingApplyAttempt(String updateExecutablePath) {
@@ -551,8 +608,10 @@ class _PendingApplyAttempt {
   const _PendingApplyAttempt({
     required this.version,
     this.startedAtUtc,
+    this.updaterPid,
   });
 
   final String version;
   final DateTime? startedAtUtc;
+  final int? updaterPid;
 }

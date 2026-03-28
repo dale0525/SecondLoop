@@ -159,7 +159,8 @@ class PreCommitHookTests(unittest.TestCase):
     def test_pre_commit_hook_skips_deleted_dart_files_during_formatting(self) -> None:
         script = PRE_COMMIT_COMMIT_MODE_SCRIPT.read_text(encoding="utf-8")
 
-        self.assertIn('if [[ "${file}" == *.dart && -f "${file}" ]]; then', script)
+        self.assertIn('if [[ "${file}" == *.dart ]]; then', script)
+        self.assertIn('if [[ -f "${file}" ]]; then', script)
 
     def test_pre_commit_hook_regenerates_missing_i18n_outputs_before_flutter_checks(self) -> None:
         script = PRE_COMMIT_COMMON_SCRIPT.read_text(encoding="utf-8")
@@ -172,7 +173,8 @@ class PreCommitHookTests(unittest.TestCase):
         script = PRE_COMMIT_HOOK.read_text(encoding="utf-8") + "\n" + PRE_COMMIT_CHECK_MODE_SCRIPT.read_text(encoding="utf-8")
 
         self.assertIn('i18n_generated_now=0', script)
-        self.assertIn('if [[ ${i18n_generated_now} -eq 0 ]]; then', script)
+        self.assertNotIn('if [[ ${i18n_generated_now} -eq 0 ]]; then', script)
+        self.assertIn('git diff --exit-code -- lib/i18n', script)
 
     def test_pre_commit_hook_stages_generated_i18n_outputs_in_normal_commit_flow(self) -> None:
         script = PRE_COMMIT_COMMIT_MODE_SCRIPT.read_text(encoding="utf-8")
@@ -200,14 +202,13 @@ class PreCommitHookTests(unittest.TestCase):
         self.assertIn('if [[ ${#flutter_test_targets[@]} -ne 0 ]]; then', script)
         self.assertIn('run_flutter_tool test --concurrency=1', script)
 
-    def test_pre_commit_hook_skips_full_flutter_test_when_targets_cannot_be_mapped(self) -> None:
+    def test_pre_commit_hook_runs_full_flutter_test_when_targets_cannot_be_mapped(self) -> None:
         script = PRE_COMMIT_COMMON_SCRIPT.read_text(encoding="utf-8") + "\n" + PRE_COMMIT_COMMIT_MODE_SCRIPT.read_text(encoding="utf-8")
 
         self.assertIn('if ! command -v rg >/dev/null 2>&1; then', script)
         self.assertIn('saw_unmapped_lib_change=1', script)
-        self.assertIn('pre-commit: skipping Flutter tests (no targeted tests found for staged lib changes).', script)
-        self.assertIn('return 0', script)
-        self.assertNotIn('if [[ ${#flutter_test_targets[@]} -eq 0 ]]; then', script)
+        self.assertIn('printf \'%s\\n\' "__FULL_SUITE__"', script)
+        self.assertIn('run_flutter_tool test --concurrency=1', script)
 
     def test_pre_commit_hook_no_longer_runs_rust_clippy_in_normal_commit_flow(self) -> None:
         normal_commit_flow = PRE_COMMIT_COMMIT_MODE_SCRIPT.read_text(encoding="utf-8")
@@ -266,11 +267,26 @@ class PreCommitHookTests(unittest.TestCase):
             ],
         )
 
+    def test_pre_commit_hook_falls_back_to_full_flutter_suite_for_unmapped_lib_change(
+        self,
+    ) -> None:
+        targets = self._run_collect_targeted_flutter_tests(
+            ["lib/core/cloud/new_service.dart"]
+        )
+
+        self.assertEqual(targets, ["__FULL_SUITE__"])
+
     def test_pre_commit_hook_warns_when_i18n_refresh_stages_additional_locale_files(self) -> None:
         script = PRE_COMMIT_COMMON_SCRIPT.read_text(encoding="utf-8")
 
         self.assertIn('git diff --name-only -- lib/i18n', script)
         self.assertIn('pre-commit: auto-staged i18n refresh changes:', script)
+
+    def test_pre_commit_hook_treats_deleted_dart_files_as_flutter_changes(self) -> None:
+        script = PRE_COMMIT_COMMIT_MODE_SCRIPT.read_text(encoding="utf-8")
+
+        self.assertIn('[[ "${file}" == *.dart ]]', script)
+        self.assertNotIn('[[ "${file}" == *.dart && -f "${file}" ]]', script)
 
     def test_pre_commit_hook_quotes_pixi_cargo_fmt_suggestion(self) -> None:
         script = PRE_COMMIT_COMMIT_MODE_SCRIPT.read_text(encoding="utf-8") + "\n" + PRE_COMMIT_CHECK_MODE_SCRIPT.read_text(encoding="utf-8")

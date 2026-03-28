@@ -46,6 +46,14 @@ class CiI18nWorkflowTests(unittest.TestCase):
             'CI workflow should not run a duplicate standalone i18n analyze step',
         )
 
+    def test_ci_changes_filters_include_shared_verification_scripts(self) -> None:
+        if not CI_WORKFLOW.exists():
+            self.skipTest(f"CI workflow not found at {CI_WORKFLOW}")
+
+        workflow = CI_WORKFLOW.read_text(encoding="utf-8")
+
+        self.assertIn('"scripts/**"', workflow)
+
 
 if __name__ == "__main__":
     unittest.main()

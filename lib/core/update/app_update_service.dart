@@ -266,7 +266,17 @@ class AppUpdateService {
         if (stagedClient == null || !stagedClient.isAvailable()) {
           throw StateError('windows_velopack_unavailable');
         }
-        if (stagedClient.hasPendingUpdate()) {
+        final targetVersion =
+            _normalizeLatestTag(update.latestTag)?.replaceFirst(
+                  RegExp(r'^v'),
+                  '',
+                ) ??
+                update.latestTag.replaceFirst(RegExp(r'^v'), '');
+        final pendingVersion = stagedClient.pendingUpdateVersion();
+        final canReusePendingUpdate = stagedClient.hasPendingUpdate() &&
+            pendingVersion != null &&
+            _sameNormalizedVersion(pendingVersion, targetVersion);
+        if (canReusePendingUpdate) {
           await stagedClient.applyPendingAndRestart(waitPid: pid);
         } else {
           await _withPreparedAsset(asset, (localUri) async {
@@ -882,6 +892,11 @@ class AppUpdateService {
     if (trimmed.isEmpty) return null;
     if (trimmed.startsWith('v')) return trimmed;
     return 'v$trimmed';
+  }
+
+  static bool _sameNormalizedVersion(String left, String right) {
+    return compareReleaseTagWithCurrentVersion(left, right) == 0 &&
+        compareReleaseTagWithCurrentVersion(right, left) == 0;
   }
 
   static String? _readStringLoose(Map<dynamic, dynamic> map, String key) {

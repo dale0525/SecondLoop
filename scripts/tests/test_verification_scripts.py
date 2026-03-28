@@ -21,6 +21,14 @@ class VerificationScriptsTests(unittest.TestCase):
         self.assertIn("fast pre-commit + full pre-push verification", contributing)
         self.assertIn("same scope as `pre-push` / CI", contributing)
 
+    def test_check_mode_does_not_refresh_i18n_outputs(self) -> None:
+        check_mode = (REPO_ROOT / "scripts/pre_commit_check_mode.sh").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertNotIn("run_i18n_refresh", check_mode)
+        self.assertIn("git diff --exit-code -- lib/i18n", check_mode)
+
 
 if __name__ == "__main__":
     unittest.main()
