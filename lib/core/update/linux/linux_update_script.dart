@@ -92,6 +92,10 @@ while kill -0 "\$APP_PID" 2>/dev/null && [ "\$waited" -lt "\$MAX_WAIT" ]; do
   waited=\$((waited + 1))
 done
 
+if kill -0 "\$APP_PID" 2>/dev/null; then
+  exit 1
+fi
+
 rm -rf "\$STAGED_DIR" "\$BACKUP_DIR"
 mkdir -p "\$STAGED_DIR"
 cp -a "\$SOURCE_DIR"/. "\$STAGED_DIR"/

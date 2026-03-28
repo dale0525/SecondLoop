@@ -286,10 +286,16 @@ class AppUpdateService {
                 ) ??
                 update.latestTag.replaceFirst(RegExp(r'^v'), '');
         final pendingVersion = stagedClient.pendingUpdateVersion();
-        final canReusePendingUpdate = stagedClient.hasPendingUpdate() &&
-            pendingVersion != null &&
-            sameNormalizedVersion(pendingVersion, targetVersion);
-        if (canReusePendingUpdate) {
+        final pendingPackagePath = stagedClient.pendingUpdatePackagePath();
+        final hasVerifiedReusablePendingUpdate =
+            stagedClient.hasPendingUpdate() &&
+                pendingVersion != null &&
+                sameNormalizedVersion(pendingVersion, targetVersion) &&
+                await _canReuseVerifiedPendingWindowsUpdate(
+                  asset: asset,
+                  pendingPackagePath: pendingPackagePath,
+                );
+        if (hasVerifiedReusablePendingUpdate) {
           await stagedClient.applyPendingAndRestart(waitPid: pid);
         } else {
           await _withPreparedAsset(asset, (localUri) async {
@@ -799,6 +805,25 @@ class AppUpdateService {
         } catch (_) {}
       }
     }
+  }
+
+  Future<bool> _canReuseVerifiedPendingWindowsUpdate({
+    required AppUpdateAsset asset,
+    required String? pendingPackagePath,
+  }) async {
+    if (pendingPackagePath == null || pendingPackagePath.trim().isEmpty) {
+      return false;
+    }
+    final pendingFile = File(pendingPackagePath);
+    if (!pendingFile.existsSync()) {
+      return false;
+    }
+    final expectedSha = asset.sha256?.trim();
+    if (expectedSha == null || expectedSha.isEmpty) {
+      return false;
+    }
+    final actualSha = await _sha256FileHex(pendingFile);
+    return actualSha.toLowerCase() == expectedSha.toLowerCase();
   }
 
   Future<void> _deleteDirectoryIfExists(Directory dir) async {

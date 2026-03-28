@@ -37,13 +37,24 @@ String? normalizeLatestTag(String? value) {
   if (value == null) return null;
   final trimmed = value.trim();
   if (trimmed.isEmpty) return null;
-  if (trimmed.startsWith('v')) return trimmed;
+  if (RegExp(r'^[vV]').hasMatch(trimmed)) {
+    return 'v${trimmed.substring(1)}';
+  }
   return 'v$trimmed';
 }
 
 bool sameNormalizedVersion(String left, String right) {
-  return compareReleaseTagWithCurrentVersion(left, right) == 0 &&
-      compareReleaseTagWithCurrentVersion(right, left) == 0;
+  final leftSegments = tryParseStrictAppVersion(left);
+  final rightSegments = tryParseStrictAppVersion(right);
+  if (leftSegments == null || rightSegments == null) {
+    return false;
+  }
+  for (var index = 0; index < 3; index += 1) {
+    if (leftSegments[index] != rightSegments[index]) {
+      return false;
+    }
+  }
+  return true;
 }
 
 String? readStringLoose(Map<dynamic, dynamic> map, String key) {

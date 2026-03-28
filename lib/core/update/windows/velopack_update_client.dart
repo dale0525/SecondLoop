@@ -18,6 +18,8 @@ abstract class WindowsStagedUpdateClient {
 
   String? pendingUpdateVersion();
 
+  String? pendingUpdatePackagePath();
+
   Future<void> stageAsset(Uri assetDownloadUri);
 
   Future<void> installAssetAndRestart(
@@ -84,6 +86,16 @@ class VelopackUpdateClient implements WindowsStagedUpdateClient {
     }
     final appRoot = File(updateExePath).absolute.parent.path;
     return _readNewestPackageVersion(appRoot);
+  }
+
+  @override
+  String? pendingUpdatePackagePath() {
+    final updateExePath = _updateExePath;
+    if (!File(updateExePath).existsSync()) {
+      return null;
+    }
+    final appRoot = File(updateExePath).absolute.parent.path;
+    return _readNewestPackageFile(appRoot)?.path;
   }
 
   @override
@@ -508,6 +520,17 @@ class VelopackUpdateClient implements WindowsStagedUpdateClient {
   }
 
   static String? _readNewestPackageVersion(String appRootPath) {
+    final newestPackage = _readNewestPackageFile(appRootPath);
+    if (newestPackage == null) {
+      return null;
+    }
+    final fileName = newestPackage.uri.pathSegments.isEmpty
+        ? ''
+        : newestPackage.uri.pathSegments.last;
+    return _extractVersionFromNupkgName(fileName);
+  }
+
+  static File? _readNewestPackageFile(String appRootPath) {
     final packagesDir = Directory(
       '$appRootPath${Platform.pathSeparator}packages',
     );
@@ -515,6 +538,7 @@ class VelopackUpdateClient implements WindowsStagedUpdateClient {
       return null;
     }
 
+    File? newestPackage;
     String? newestVersion;
     for (final entity in packagesDir.listSync()) {
       if (entity is! File) continue;
@@ -524,11 +548,12 @@ class VelopackUpdateClient implements WindowsStagedUpdateClient {
       if (version == null) continue;
       if (newestVersion == null ||
           _compareVersionStrings(version, newestVersion) > 0) {
+        newestPackage = entity;
         newestVersion = version;
       }
     }
 
-    return newestVersion;
+    return newestPackage;
   }
 
   static String? _extractVersionFromNupkgName(String fileName) {
