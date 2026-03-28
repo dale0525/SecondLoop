@@ -351,6 +351,23 @@ void main() {
     expect(calls, 1);
   });
 
+  test('windows process probe expands pid into powershell command', () async {
+    final source = File(
+      'lib/core/update/windows/velopack_update_client.dart',
+    ).readAsStringSync();
+
+    expect(
+      source,
+      contains(
+          r'Get-Process -Id $pid -ErrorAction SilentlyContinue | Out-Null'),
+    );
+    expect(
+      source,
+      isNot(contains(
+          r'Get-Process -Id ${pid} -ErrorAction SilentlyContinue | Out-Null')),
+    );
+  });
+
   test(
       'applyPendingOnStartup starts detached restart flow when newer package is present',
       () async {

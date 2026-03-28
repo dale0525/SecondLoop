@@ -123,6 +123,7 @@ dotnet-aspnetcore = "8.0.*"
 # - run-windows defaults to flutter hot-reload/debugger flow
 # - msi-dev packages + installs isolated local dev MSI
 # - uninstall-dev-msi removes isolated local dev MSI
+install-git-hooks = "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_bash.ps1 scripts/install_git_hooks.sh"
 frb-generate = "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/frb_generate.ps1"
 bootstrap-shared-worktree-env = "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/bootstrap_shared_worktree_env.ps1"
 init-env = "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/init_env.ps1"

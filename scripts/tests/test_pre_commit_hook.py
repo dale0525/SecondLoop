@@ -17,6 +17,7 @@ PRE_COMMIT_CHECK_MODE_SCRIPT = REPO_ROOT / "scripts/pre_commit_check_mode.sh"
 PRE_COMMIT_COMMIT_MODE_SCRIPT = REPO_ROOT / "scripts/pre_commit_commit_mode.sh"
 PRE_COMMIT_COMMON_SCRIPT = REPO_ROOT / "scripts/pre_commit_common.sh"
 INSTALL_GIT_HOOKS_SCRIPT = REPO_ROOT / "scripts/install_git_hooks.sh"
+RUN_BASH_PS1 = REPO_ROOT / "scripts/run_bash.ps1"
 
 
 class PreCommitHookTests(unittest.TestCase):
@@ -223,10 +224,10 @@ class PreCommitHookTests(unittest.TestCase):
         self.assertNotIn('SECONDLOOP_PRE_PUSH_FULL', script)
         self.assertNotIn('pre-push: skipped (checks moved to pre-commit).', script)
 
-    def test_verify_changed_script_delegates_to_pre_commit_default_mode(self) -> None:
+    def test_verify_changed_script_delegates_to_pre_commit_check_mode(self) -> None:
         script = VERIFY_CHANGED_SCRIPT.read_text(encoding="utf-8")
 
-        self.assertIn('bash .githooks/pre-commit "$@"', script)
+        self.assertIn('bash .githooks/pre-commit --check "$@"', script)
         self.assertNotIn('--check --ci', script)
 
     def test_verify_full_script_delegates_to_pre_commit_check_ci_mode(self) -> None:
@@ -308,6 +309,9 @@ class PreCommitHookTests(unittest.TestCase):
 
         self.assertIn(".githooks/post-checkout", script)
         self.assertIn(".githooks/post-merge", script)
+
+    def test_windows_bash_launcher_exists_for_local_hook_entrypoints(self) -> None:
+        self.assertTrue(RUN_BASH_PS1.exists())
 
 
 if __name__ == "__main__":

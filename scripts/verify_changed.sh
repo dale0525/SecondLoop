@@ -8,4 +8,4 @@ fi
 
 cd "${repo_root}"
 
-bash .githooks/pre-commit "$@"
+bash .githooks/pre-commit --check "$@"

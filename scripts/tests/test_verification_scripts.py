@@ -7,6 +7,7 @@ import unittest
 REPO_ROOT = Path(__file__).resolve().parents[2]
 PIXI_TOML = REPO_ROOT / "pixi.toml"
 CONTRIBUTING = REPO_ROOT / "CONTRIBUTING.md"
+RUN_BASH_PS1 = REPO_ROOT / "scripts/run_bash.ps1"
 
 
 class VerificationScriptsTests(unittest.TestCase):
@@ -20,6 +21,7 @@ class VerificationScriptsTests(unittest.TestCase):
 
         self.assertIn("fast pre-commit + full pre-push verification", contributing)
         self.assertIn("same scope as `pre-push` / CI", contributing)
+        self.assertIn("Check-only local gate", contributing)
 
     def test_check_mode_does_not_refresh_i18n_outputs(self) -> None:
         check_mode = (REPO_ROOT / "scripts/pre_commit_check_mode.sh").read_text(
@@ -28,6 +30,19 @@ class VerificationScriptsTests(unittest.TestCase):
 
         self.assertNotIn("run_i18n_refresh", check_mode)
         self.assertIn("git diff --exit-code -- lib/i18n", check_mode)
+
+    def test_verify_changed_uses_non_mutating_check_mode(self) -> None:
+        verify_changed = (REPO_ROOT / "scripts/verify_changed.sh").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn("bash .githooks/pre-commit --check", verify_changed)
+
+    def test_windows_pixi_install_hooks_uses_powershell_bash_launcher(self) -> None:
+        pixi = PIXI_TOML.read_text(encoding="utf-8")
+
+        self.assertTrue(RUN_BASH_PS1.exists())
+        self.assertIn("scripts/run_bash.ps1 scripts/install_git_hooks.sh", pixi)
 
 
 if __name__ == "__main__":

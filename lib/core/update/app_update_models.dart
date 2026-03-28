@@ -1,5 +1,3 @@
-import 'dart:math';
-
 enum AppUpdatePlatform {
   windows,
   macos,
@@ -110,40 +108,35 @@ class PendingUpdateStartupResult {
 
 int compareReleaseTagWithCurrentVersion(
     String releaseTag, String currentVersion) {
-  final releaseSegments = _parseVersionSegments(releaseTag);
-  final currentSegments = _parseVersionSegments(currentVersion);
-  if (releaseSegments.isEmpty || currentSegments.isEmpty) return 0;
+  final releaseSegments = tryParseStrictAppVersion(releaseTag);
+  final currentSegments = tryParseStrictAppVersion(currentVersion);
+  if (releaseSegments == null || currentSegments == null) return 0;
 
-  final comparedLength = max(
-    min(3, releaseSegments.length),
-    min(3, currentSegments.length),
-  );
-
-  for (var i = 0; i < comparedLength; i++) {
-    final releaseValue = i < releaseSegments.length ? releaseSegments[i] : 0;
-    final currentValue = i < currentSegments.length ? currentSegments[i] : 0;
-    if (releaseValue != currentValue) {
-      return releaseValue.compareTo(currentValue);
+  for (var i = 0; i < 3; i++) {
+    if (releaseSegments[i] != currentSegments[i]) {
+      return releaseSegments[i].compareTo(currentSegments[i]);
     }
   }
 
   return 0;
 }
 
-List<int> _parseVersionSegments(String input) {
-  final matches = RegExp(r'\d+').allMatches(input.trim());
-  if (matches.isEmpty) {
-    return const [];
+bool isStrictAppVersion(String input) {
+  return tryParseStrictAppVersion(input) != null;
+}
+
+List<int>? tryParseStrictAppVersion(String input) {
+  final match = RegExp(r'^[vV]?(\d+)\.(\d+)\.(\d+)$').firstMatch(input.trim());
+  if (match == null) {
+    return null;
   }
 
-  final segments = <int>[];
-  for (final match in matches) {
-    final parsed = int.tryParse(match.group(0) ?? '');
-    if (parsed == null) continue;
-    segments.add(parsed);
-    if (segments.length >= 8) {
-      break;
-    }
+  final major = int.tryParse(match.group(1) ?? '');
+  final minor = int.tryParse(match.group(2) ?? '');
+  final patch = int.tryParse(match.group(3) ?? '');
+  if (major == null || minor == null || patch == null) {
+    return null;
   }
-  return segments;
+
+  return <int>[major, minor, patch];
 }

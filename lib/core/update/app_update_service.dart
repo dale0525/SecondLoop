@@ -7,6 +7,7 @@ import 'package:cryptography/cryptography.dart';
 import 'package:flutter/foundation.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
+import 'app_update_helpers.dart';
 import 'app_update_models.dart';
 import 'linux/linux_update_script.dart';
 import 'macos/macos_update_client.dart';
@@ -156,7 +157,7 @@ class AppUpdateService {
       );
     }
 
-    final latestTag = _normalizeLatestTag(
+    final latestTag = normalizeLatestTag(
       _readString(release, 'tag_name') ?? _readString(release, 'version'),
     );
     if (latestTag == null || latestTag.trim().isEmpty) {
@@ -168,6 +169,18 @@ class AppUpdateService {
       return AppUpdateCheckResult(
         currentVersion: runtimeVersion.display,
         errorMessage: 'invalid_release_tag',
+      );
+    }
+
+    if (!isStrictAppVersion(latestTag) || !isStrictAppVersion(currentVersion)) {
+      await _recordFailure(
+        UpdateEventType.checkFailed,
+        'unsupported_version_format',
+        currentVersion: runtimeVersion.display,
+      );
+      return AppUpdateCheckResult(
+        currentVersion: runtimeVersion.display,
+        errorMessage: 'unsupported_version_format',
       );
     }
 
@@ -267,7 +280,7 @@ class AppUpdateService {
           throw StateError('windows_velopack_unavailable');
         }
         final targetVersion =
-            _normalizeLatestTag(update.latestTag)?.replaceFirst(
+            normalizeLatestTag(update.latestTag)?.replaceFirst(
                   RegExp(r'^v'),
                   '',
                 ) ??
@@ -275,7 +288,7 @@ class AppUpdateService {
         final pendingVersion = stagedClient.pendingUpdateVersion();
         final canReusePendingUpdate = stagedClient.hasPendingUpdate() &&
             pendingVersion != null &&
-            _sameNormalizedVersion(pendingVersion, targetVersion);
+            sameNormalizedVersion(pendingVersion, targetVersion);
         if (canReusePendingUpdate) {
           await stagedClient.applyPendingAndRestart(waitPid: pid);
         } else {
@@ -330,7 +343,7 @@ class AppUpdateService {
         }
         await extractFileToDisk(archiveFile.path, extractedDir.path);
 
-        final sourceDir = _resolveExtractedSourceDir(extractedDir, platform);
+        final sourceDir = resolveExtractedSourceDir(extractedDir, platform);
         final executablePath = File(Platform.resolvedExecutable).absolute.path;
         final appDirPath = File(executablePath).parent.path;
 
@@ -573,7 +586,7 @@ class AppUpdateService {
     final endpoints = <Uri>[];
     final apiOrigin = _parseUri(configuredOrigin);
     if (apiOrigin != null) {
-      endpoints.add(apiOrigin.resolve('/api/releases/latest'));
+      endpoints.add(apiOrigin.resolve('api/releases/latest'));
     }
 
     if (repo.isNotEmpty) {
@@ -637,10 +650,10 @@ class AppUpdateService {
 
     if (_platform == AppUpdatePlatform.macos) {
       for (final asset in assets) {
-        if (_isMacosManagedArchiveName(asset.name)) return asset;
+        if (isMacosManagedArchiveName(asset.name)) return asset;
       }
       for (final asset in assets) {
-        if (_isMacosManualInstallerName(asset.name)) return asset;
+        if (isMacosManualInstallerName(asset.name)) return asset;
       }
       return null;
     }
@@ -671,36 +684,13 @@ class AppUpdateService {
     }
 
     if (managedRuntimeAvailable) {
-      final stagedPackage = findFirst(_isWindowsVelopackPackageName);
+      final stagedPackage = findFirst(isWindowsVelopackPackageName);
       if (stagedPackage != null) {
         return stagedPackage;
       }
     }
 
-    return findFirst(_isWindowsMsiInstallerName);
-  }
-
-  static bool _isWindowsMsiInstallerName(String name) {
-    final normalized = name.trim().toLowerCase();
-    return normalized.endsWith('.msi') && normalized.contains('secondloop');
-  }
-
-  static bool _isWindowsVelopackPackageName(String name) {
-    final normalized = name.trim().toLowerCase();
-    return normalized.endsWith('-full.nupkg') &&
-        normalized.contains('secondloop');
-  }
-
-  static bool _isMacosManagedArchiveName(String name) {
-    final normalized = name.trim().toLowerCase();
-    return normalized.endsWith('.app.tar.gz') &&
-        normalized.contains('secondloop');
-  }
-
-  static bool _isMacosManualInstallerName(String name) {
-    final normalized = name.trim().toLowerCase();
-    return (normalized.endsWith('.dmg') || normalized.endsWith('.zip')) &&
-        normalized.contains('secondloop');
+    return findFirst(isWindowsMsiInstallerName);
   }
 
   AppUpdateInstallMode _resolveInstallMode(
@@ -714,12 +704,12 @@ class AppUpdateService {
 
     return switch (_platform) {
       AppUpdatePlatform.windows
-          when _isWindowsVelopackPackageName(asset.name) &&
+          when isWindowsVelopackPackageName(asset.name) &&
               windowsManagedRuntimeAvailable &&
               _assetHasIntegrityMetadata(asset) =>
         AppUpdateInstallMode.seamlessRestart,
       AppUpdatePlatform.macos
-          when _isMacosManagedArchiveName(asset.name) &&
+          when isMacosManagedArchiveName(asset.name) &&
               macosManagedInstallSupported &&
               _assetHasIntegrityMetadata(asset) =>
         AppUpdateInstallMode.seamlessRestart,
@@ -755,17 +745,17 @@ class AppUpdateService {
       if (rawEntry is! Map) {
         continue;
       }
-      final url = _readStringLoose(rawEntry, 'package_url') ??
-          _readStringLoose(rawEntry, 'archive_url') ??
-          _readStringLoose(rawEntry, 'url');
+      final url = readStringLoose(rawEntry, 'package_url') ??
+          readStringLoose(rawEntry, 'archive_url') ??
+          readStringLoose(rawEntry, 'url');
       final parsedUrl = _parseUri(url);
       if (parsedUrl == null) {
         continue;
       }
 
-      final name = _readStringLoose(rawEntry, 'name') ??
+      final name = readStringLoose(rawEntry, 'name') ??
           (parsedUrl.pathSegments.isEmpty ? key : parsedUrl.pathSegments.last);
-      final sha256 = _readStringLoose(rawEntry, 'sha256');
+      final sha256 = readStringLoose(rawEntry, 'sha256');
       return AppUpdateAsset(
         name: name,
         downloadUri: parsedUrl,
@@ -792,7 +782,7 @@ class AppUpdateService {
       } else {
         tempRoot = await Directory.systemTemp.createTemp('secondloop_asset_');
         final localPath =
-            '${tempRoot.path}${Platform.pathSeparator}${_sanitizeAssetFileName(asset.name)}';
+            '${tempRoot.path}${Platform.pathSeparator}${sanitizeUpdateAssetFileName(asset.name)}';
         final localFile = File(localPath);
         await _downloadToFile(asset.downloadUri, localFile);
         if (asset.sha256 != null) {
@@ -878,57 +868,6 @@ class AppUpdateService {
     return asset.sha256 != null && asset.sha256!.trim().isNotEmpty;
   }
 
-  static String _sanitizeAssetFileName(String value) {
-    final sanitized = value.replaceAll(RegExp(r'[<>:"/\\|?*]'), '_').trim();
-    if (sanitized.isEmpty) {
-      return 'secondloop-update.bin';
-    }
-    return sanitized;
-  }
-
-  static String? _normalizeLatestTag(String? value) {
-    if (value == null) return null;
-    final trimmed = value.trim();
-    if (trimmed.isEmpty) return null;
-    if (trimmed.startsWith('v')) return trimmed;
-    return 'v$trimmed';
-  }
-
-  static bool _sameNormalizedVersion(String left, String right) {
-    return compareReleaseTagWithCurrentVersion(left, right) == 0 &&
-        compareReleaseTagWithCurrentVersion(right, left) == 0;
-  }
-
-  static String? _readStringLoose(Map<dynamic, dynamic> map, String key) {
-    final value = map[key];
-    if (value is! String) return null;
-    final trimmed = value.trim();
-    if (trimmed.isEmpty) return null;
-    return trimmed;
-  }
-
-  Directory _resolveExtractedSourceDir(
-    Directory extractedDir,
-    AppUpdatePlatform platform,
-  ) {
-    if (platform == AppUpdatePlatform.linux) {
-      final bundle = Directory('${extractedDir.path}/bundle');
-      if (bundle.existsSync()) return bundle;
-    }
-
-    final entries = extractedDir
-        .listSync()
-        .where((entry) =>
-            entry.path.split(Platform.pathSeparator).last != '.DS_Store')
-        .toList(growable: false);
-
-    if (entries.length == 1 && entries.first is Directory) {
-      return entries.first as Directory;
-    }
-
-    return extractedDir;
-  }
-
   static String? _readString(Map<String, Object?> map, String key) {
     final value = map[key];
     if (value is! String) return null;
@@ -994,11 +933,11 @@ class AppUpdateService {
       return 'missing_platform_asset';
     }
     if (_platform == AppUpdatePlatform.windows &&
-        _isWindowsVelopackPackageName(asset.name)) {
+        isWindowsVelopackPackageName(asset.name)) {
       return 'windows_runtime_unavailable';
     }
     if (_platform == AppUpdatePlatform.macos &&
-        _isMacosManagedArchiveName(asset.name)) {
+        isMacosManagedArchiveName(asset.name)) {
       return 'macos_install_location_unsupported_or_integrity_missing';
     }
     return 'manual_download_required';

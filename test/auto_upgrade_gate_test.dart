@@ -93,8 +93,7 @@ void main() {
     );
   }
 
-  testWidgets('linux seamless update stays passive until user confirms',
-      (tester) async {
+  testWidgets('linux seamless update installs immediately', (tester) async {
     SharedPreferences.setMockInitialValues({});
     UpdateBadgePrefs.resetForTests();
     final update = AppUpdateAvailability(
@@ -122,12 +121,10 @@ void main() {
 
     expect(service.checkCalls, 1);
     expect(service.applyPendingCalls, 1);
-    expect(service.installCalls, 0);
+    expect(service.installCalls, 1);
     expect(service.stageCalls, 0);
     expect(UpdateBadgePrefs.value.value, 'v1.1.0');
-    expect(find.byType(SnackBar), findsOneWidget);
-    expect(find.textContaining('Settings > About'), findsOneWidget);
-    expect(find.textContaining('manual download'), findsNothing);
+    expect(find.byType(SnackBar), findsNothing);
   },
       variant: const TargetPlatformVariant(<TargetPlatform>{
         TargetPlatform.linux,
