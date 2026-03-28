@@ -289,6 +289,18 @@ class PreCommitHookTests(unittest.TestCase):
         self.assertIn('[[ "${file}" == *.dart ]]', script)
         self.assertNotIn('[[ "${file}" == *.dart && -f "${file}" ]]', script)
 
+    def test_pre_commit_hook_falls_back_to_full_suite_for_deleted_lib_file(self) -> None:
+        targets = self._run_collect_targeted_flutter_tests(
+            ["lib/core/cloud/firebase_identity_toolkit.dart"]
+        )
+
+        self.assertNotEqual(targets, [])
+        self.assertNotEqual(targets, ["__FULL_SUITE__"])
+
+        script = PRE_COMMIT_COMMON_SCRIPT.read_text(encoding="utf-8")
+        self.assertIn('if [[ ! -f "${file}" ]]; then', script)
+        self.assertIn('printf \'%s\\n\' "__FULL_SUITE__"', script)
+
     def test_pre_commit_hook_quotes_pixi_cargo_fmt_suggestion(self) -> None:
         script = PRE_COMMIT_COMMIT_MODE_SCRIPT.read_text(encoding="utf-8") + "\n" + PRE_COMMIT_CHECK_MODE_SCRIPT.read_text(encoding="utf-8")
 

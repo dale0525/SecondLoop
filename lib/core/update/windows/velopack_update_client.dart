@@ -357,8 +357,10 @@ class VelopackUpdateClient implements WindowsStagedUpdateClient {
             _pendingApplyRetryGracePeriod) {
       if (attempt.updaterPid != null &&
           !_isProcessLikelyRunning(attempt.updaterPid!)) {
+        _deletePendingPackageUpdates(updateExecutablePath);
         _clearPendingApplyAttempt(updateExecutablePath);
-        return null;
+        throw StateError(
+            'windows_velopack_previous_apply_failed_${attempt.version}');
       }
       if (throwIfAttemptInProgress) {
         throw StateError(

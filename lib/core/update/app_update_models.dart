@@ -108,8 +108,8 @@ class PendingUpdateStartupResult {
 
 int compareReleaseTagWithCurrentVersion(
     String releaseTag, String currentVersion) {
-  final releaseSegments = tryParseStrictAppVersion(releaseTag);
-  final currentSegments = tryParseStrictAppVersion(currentVersion);
+  final releaseSegments = parseComparableAppVersion(releaseTag);
+  final currentSegments = parseComparableAppVersion(currentVersion);
   if (releaseSegments == null || currentSegments == null) return 0;
 
   for (var i = 0; i < 3; i++) {
@@ -123,6 +123,40 @@ int compareReleaseTagWithCurrentVersion(
 
 bool isStrictAppVersion(String input) {
   return tryParseStrictAppVersion(input) != null;
+}
+
+List<int>? parseComparableAppVersion(String input) {
+  final trimmed = input.trim();
+  if (trimmed.isEmpty) {
+    return null;
+  }
+
+  final matches = RegExp(r'\d+').allMatches(trimmed);
+  if (matches.isEmpty) {
+    return null;
+  }
+
+  final segments = <int>[];
+  for (final match in matches) {
+    final parsed = int.tryParse(match.group(0) ?? '');
+    if (parsed == null) {
+      continue;
+    }
+    segments.add(parsed);
+    if (segments.length >= 3) {
+      break;
+    }
+  }
+
+  if (segments.isEmpty) {
+    return null;
+  }
+
+  while (segments.length < 3) {
+    segments.add(0);
+  }
+
+  return segments;
 }
 
 List<int>? tryParseStrictAppVersion(String input) {

@@ -172,7 +172,8 @@ class AppUpdateService {
       );
     }
 
-    if (!isStrictAppVersion(latestTag) || !isStrictAppVersion(currentVersion)) {
+    if (parseComparableAppVersion(latestTag) == null ||
+        parseComparableAppVersion(currentVersion) == null) {
       await _recordFailure(
         UpdateEventType.checkFailed,
         'unsupported_version_format',

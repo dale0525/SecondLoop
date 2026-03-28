@@ -44,8 +44,8 @@ String? normalizeLatestTag(String? value) {
 }
 
 bool sameNormalizedVersion(String left, String right) {
-  final leftSegments = tryParseStrictAppVersion(left);
-  final rightSegments = tryParseStrictAppVersion(right);
+  final leftSegments = parseComparableAppVersion(left);
+  final rightSegments = parseComparableAppVersion(right);
   if (leftSegments == null || rightSegments == null) {
     return false;
   }

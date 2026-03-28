@@ -31,7 +31,7 @@
 
     if ! git diff --exit-code -- lib/i18n; then
       echo "" >&2
-      echo "pre-commit: i18n generated files are out of date." >&2
+      echo "pre-commit: i18n generated files differ from the current working tree or need refresh." >&2
       echo "Fix locally with: pixi run i18n-refresh" >&2
       exit 1
     fi

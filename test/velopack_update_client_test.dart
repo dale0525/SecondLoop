@@ -321,7 +321,7 @@ void main() {
   });
 
   test(
-      'applyPendingOnStartup retries when recent marker pid is no longer running',
+      'applyPendingOnStartup treats recent marker with dead pid as previous apply failure',
       () async {
     final root = await Directory.systemTemp.createTemp('velopack_apply_retry_');
     final updater = File('${root.path}${Platform.pathSeparator}Update.exe')
@@ -332,12 +332,10 @@ void main() {
       '1.1.0\n${DateTime.now().toUtc().toIso8601String()}\n999999',
     );
 
-    var calls = 0;
     final client = VelopackUpdateClient(
       updateExecutablePath: updater.path,
       processStarter: (executable, arguments,
           {mode = ProcessStartMode.normal}) async {
-        calls += 1;
         return Process.start(
           Platform.resolvedExecutable,
           const ['--version'],
@@ -345,10 +343,23 @@ void main() {
       },
     );
 
-    final result = await client.applyPendingOnStartup(waitPid: 1234);
-
-    expect(result.status, PendingUpdateStartupStatus.dispatched);
-    expect(calls, 1);
+    await expectLater(
+      client.applyPendingOnStartup(waitPid: 1234),
+      throwsA(
+        isA<StateError>().having(
+          (error) => error.toString(),
+          'message',
+          contains('windows_velopack_previous_apply_failed_1.1.0'),
+        ),
+      ),
+    );
+    expect(_pendingApplyAttemptMarker(root).existsSync(), isFalse);
+    expect(
+      File(
+        '${root.path}${Platform.pathSeparator}packages${Platform.pathSeparator}com.secondloop.secondloop-1.1.0-full.nupkg',
+      ).existsSync(),
+      isFalse,
+    );
   });
 
   test('windows process probe expands pid into powershell command', () async {

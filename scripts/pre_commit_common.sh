@@ -478,6 +478,10 @@ collect_targeted_flutter_tests() {
           saw_unmapped_lib_change=1
           break
         fi
+        if [[ ! -f "${file}" ]]; then
+          saw_unmapped_lib_change=1
+          break
+        fi
         related_targets=()
         while IFS= read -r candidate; do
           [[ -n "${candidate}" ]] || continue
