@@ -242,6 +242,7 @@ class AppUpdateService {
             _platform,
             preferredAsset: preferredAsset,
             assets: assets,
+            currentArchitecture: _currentArchitecture,
           )
         : preferredAsset;
     final manualFallbackReason = describeManualFallbackReason(

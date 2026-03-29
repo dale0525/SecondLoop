@@ -69,6 +69,40 @@ void main() {
     expect(status, VelopackProcessProbeStatus.unknown);
   });
 
+  test('builds Windows process probe command with target pid', () {
+    final arguments = buildWindowsProcessProbeCommandArguments(4321);
+
+    expect(arguments, hasLength(3));
+    expect(arguments[0], '-NoProfile');
+    expect(arguments[1], '-Command');
+    expect(arguments[2], contains('Get-CimInstance Win32_Process'));
+    expect(arguments[2], contains('ProcessId = 4321'));
+  });
+
+  test('probes Windows updater status via injected async process runner',
+      () async {
+    final calls = <String>[];
+    final status = await probeWindowsProcessStatusForTest(
+      4321,
+      expectedExecutablePath:
+          'C:/Users/test/AppData/Local/SecondLoop/Update.exe',
+      processRunner: (executable, arguments) async {
+        calls.add('$executable ${arguments.join(' ')}');
+        return ProcessResult(
+          4321,
+          0,
+          'C:/Users/test/AppData/Local/SecondLoop/Update.exe\tUpdate.exe',
+          '',
+        );
+      },
+    );
+
+    expect(status, VelopackProcessProbeStatus.runningExpectedProcess);
+    expect(calls, hasLength(1));
+    expect(calls.single, contains('powershell.exe'));
+    expect(calls.single, contains('ProcessId = 4321'));
+  });
+
   test('isAvailable requires Update.exe and current sq.version', () async {
     final root = await Directory.systemTemp.createTemp('velopack_available_');
     final updater = File('${root.path}${Platform.pathSeparator}Update.exe')
@@ -240,7 +274,7 @@ void main() {
     var calls = 0;
     final client = VelopackUpdateClient(
       updateExecutablePath: updater.path,
-      processProbe: (pid, {required expectedExecutablePath}) =>
+      processProbe: (pid, {required expectedExecutablePath}) async =>
           VelopackProcessProbeStatus.runningExpectedProcess,
       processStarter: (executable, arguments,
           {mode = ProcessStartMode.normal}) async {
@@ -279,7 +313,7 @@ void main() {
     var calls = 0;
     final client = VelopackUpdateClient(
       updateExecutablePath: updater.path,
-      processProbe: (pid, {required expectedExecutablePath}) =>
+      processProbe: (pid, {required expectedExecutablePath}) async =>
           VelopackProcessProbeStatus.runningExpectedProcess,
       processStarter: (executable, arguments,
           {mode = ProcessStartMode.normal}) async {
@@ -365,7 +399,7 @@ void main() {
     var calls = 0;
     final client = VelopackUpdateClient(
       updateExecutablePath: updater.path,
-      processProbe: (pid, {required expectedExecutablePath}) =>
+      processProbe: (pid, {required expectedExecutablePath}) async =>
           VelopackProcessProbeStatus.unknown,
       processStarter: (executable, arguments,
           {mode = ProcessStartMode.normal}) async {
@@ -514,22 +548,6 @@ void main() {
     );
   });
 
-  test('windows process probe verifies executable identity via PowerShell',
-      () async {
-    final source = File(
-      'lib/core/update/windows/velopack_update_client.dart',
-    ).readAsStringSync();
-
-    expect(
-      source,
-      contains('powershell.exe'),
-    );
-    expect(
-      source,
-      contains('Get-CimInstance Win32_Process'),
-    );
-  });
-
   test('pending prerelease package is not newer than installed final release',
       () async {
     final root = await Directory.systemTemp.createTemp('velopack_prerelease_');
@@ -541,7 +559,7 @@ void main() {
     var calls = 0;
     final client = VelopackUpdateClient(
       updateExecutablePath: updater.path,
-      processProbe: (pid, {required expectedExecutablePath}) =>
+      processProbe: (pid, {required expectedExecutablePath}) async =>
           VelopackProcessProbeStatus.unknown,
       processStarter: (executable, arguments,
           {mode = ProcessStartMode.normal}) async {
@@ -603,7 +621,7 @@ void main() {
     var calls = 0;
     final client = VelopackUpdateClient(
       updateExecutablePath: updater.path,
-      processProbe: (pid, {required expectedExecutablePath}) =>
+      processProbe: (pid, {required expectedExecutablePath}) async =>
           VelopackProcessProbeStatus.unknown,
       processStarter: (executable, arguments,
           {mode = ProcessStartMode.normal}) async {
@@ -636,7 +654,7 @@ void main() {
 
     final client = VelopackUpdateClient(
       updateExecutablePath: updater.path,
-      processProbe: (pid, {required expectedExecutablePath}) =>
+      processProbe: (pid, {required expectedExecutablePath}) async =>
           VelopackProcessProbeStatus.runningExpectedProcess,
       processStarter: (executable, arguments,
           {mode = ProcessStartMode.normal}) async {

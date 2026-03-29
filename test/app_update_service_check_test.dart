@@ -155,6 +155,42 @@ void main() {
       );
     });
 
+    test('prefers x64 MSI fallback over arm64 installer on Windows x64',
+        () async {
+      final stagedClient = FakeWindowsStagedUpdateClient(available: false);
+      final service = AppUpdateService(
+        platformOverride: AppUpdatePlatform.windows,
+        releaseModeOverride: true,
+        windowsStagedUpdateClient: stagedClient,
+        currentArchitectureOverride: 'x86_64',
+        currentVersionLoader: () async =>
+            const AppRuntimeVersion(version: '1.0.0', buildNumber: '88'),
+        releaseJsonFetcher: (uri) async => {
+          'tag_name': 'v1.1.0',
+          'html_url':
+              'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
+          'assets': [
+            {
+              'name': 'SecondLoop-win-arm64-v1.1.0.msi',
+              'browser_download_url':
+                  'https://cdn.example.com/SecondLoop-win-arm64-v1.1.0.msi',
+            },
+            {
+              'name': 'SecondLoop-win-x64-v1.1.0.msi',
+              'browser_download_url':
+                  'https://cdn.example.com/SecondLoop-win-x64-v1.1.0.msi',
+            },
+          ],
+        },
+      );
+
+      final result = await service.checkForUpdates();
+
+      expect(result.update, isNotNull);
+      expect(result.update!.installMode, AppUpdateInstallMode.externalDownload);
+      expect(result.update!.asset?.name, 'SecondLoop-win-x64-v1.1.0.msi');
+    });
+
     test('ignores delta nupkg assets and falls back to MSI installers',
         () async {
       final stagedClient = FakeWindowsStagedUpdateClient(available: true);
@@ -377,6 +413,47 @@ void main() {
       expect(
         result.update!.downloadUri.toString(),
         'https://cdn.example.com/SecondLoop-macos-v1.1.0.dmg',
+      );
+    });
+
+    test('prefers x64 macOS manual fallback over arm64-only archive assets',
+        () async {
+      final macosClient =
+          FakeMacosManagedUpdateClient(supportedInstallLocation: false);
+      final service = AppUpdateService(
+        platformOverride: AppUpdatePlatform.macos,
+        releaseModeOverride: true,
+        macosManagedUpdateClient: macosClient,
+        currentVersionLoader: () async =>
+            const AppRuntimeVersion(version: '1.0.0', buildNumber: '21'),
+        currentArchitectureOverride: 'x86_64',
+        releaseJsonFetcher: (uri) async => {
+          'version': '1.1.0',
+          'release_page_url':
+              'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
+          'assets': [
+            {
+              'name': 'SecondLoop-macos-arm64-v1.1.0.dmg',
+              'browser_download_url':
+                  'https://cdn.example.com/SecondLoop-macos-arm64-v1.1.0.dmg',
+            },
+            {
+              'name': 'SecondLoop-macos-x64-v1.1.0.dmg',
+              'browser_download_url':
+                  'https://cdn.example.com/SecondLoop-macos-x64-v1.1.0.dmg',
+            },
+          ],
+        },
+      );
+
+      final result = await service.checkForUpdates();
+
+      expect(result.update, isNotNull);
+      expect(result.update!.installMode, AppUpdateInstallMode.externalDownload);
+      expect(result.update!.asset?.name, 'SecondLoop-macos-x64-v1.1.0.dmg');
+      expect(
+        result.update!.downloadUri.toString(),
+        'https://cdn.example.com/SecondLoop-macos-x64-v1.1.0.dmg',
       );
     });
 

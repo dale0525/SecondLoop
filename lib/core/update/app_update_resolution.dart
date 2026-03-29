@@ -43,26 +43,98 @@ AppUpdateAsset? selectExternalDownloadAsset(
   AppUpdatePlatform platform, {
   required AppUpdateAsset? preferredAsset,
   required List<AppUpdateAsset> assets,
+  String? currentArchitecture,
 }) {
-  AppUpdateAsset? findFirst(bool Function(String name) matcher) {
+  List<AppUpdateAsset> findAll(bool Function(String name) matcher) {
+    final matches = <AppUpdateAsset>[];
     for (final asset in assets) {
-      if (matcher(asset.name)) return asset;
+      if (matcher(asset.name)) {
+        matches.add(asset);
+      }
     }
-    return null;
+    return matches;
+  }
+
+  AppUpdateAsset? selectBestManualAsset(List<AppUpdateAsset> matches) {
+    if (matches.isEmpty) {
+      return null;
+    }
+
+    final architecture = currentArchitecture?.trim();
+    if (architecture == null || architecture.isEmpty) {
+      return matches.first;
+    }
+
+    AppUpdateAsset? bestAsset;
+    int? bestScore;
+    for (final asset in matches) {
+      final score = _scoreManualAssetForArchitecture(
+        platform,
+        asset.name,
+        architecture,
+      );
+      if (score == null) {
+        continue;
+      }
+      if (bestScore == null || score < bestScore) {
+        bestAsset = asset;
+        bestScore = score;
+      }
+    }
+
+    return bestAsset;
+  }
+
+  AppUpdateAsset? selectFromMatches(
+    bool Function(String name) matcher,
+    AppUpdateAsset? preferred,
+  ) {
+    final matches = findAll(matcher);
+    if (preferred != null &&
+        matcher(preferred.name) &&
+        !matches.contains(preferred)) {
+      matches.add(preferred);
+    }
+    return selectBestManualAsset(matches);
   }
 
   return switch (platform) {
-    AppUpdatePlatform.windows => findFirst(isWindowsMsiInstallerName) ??
-        (preferredAsset != null &&
-                isWindowsMsiInstallerName(preferredAsset.name)
-            ? preferredAsset
-            : null),
-    AppUpdatePlatform.macos => findFirst(isMacosManualInstallerName) ??
-        (preferredAsset != null &&
-                isMacosManualInstallerName(preferredAsset.name)
-            ? preferredAsset
-            : null),
+    AppUpdatePlatform.windows =>
+      selectFromMatches(isWindowsMsiInstallerName, preferredAsset),
+    AppUpdatePlatform.macos =>
+      selectFromMatches(isMacosManualInstallerName, preferredAsset),
     _ => preferredAsset,
+  };
+}
+
+int? _scoreManualAssetForArchitecture(
+  AppUpdatePlatform platform,
+  String assetName,
+  String architecture,
+) {
+  final normalizedName = assetName.trim().toLowerCase();
+  final normalizedArchitecture = normalizeArchitectureLabel(architecture);
+  final hasArm64Token =
+      normalizedName.contains('arm64') || normalizedName.contains('aarch64');
+  final hasX64Token = normalizedName.contains('x64') ||
+      normalizedName.contains('x86_64') ||
+      normalizedName.contains('amd64');
+  final hasUniversalToken = normalizedName.contains('universal');
+  final hasKnownArchitectureToken =
+      hasArm64Token || hasX64Token || hasUniversalToken;
+
+  if (platform == AppUpdatePlatform.macos && hasUniversalToken) {
+    return 0;
+  }
+
+  return switch (normalizedArchitecture) {
+    'arm64' when hasArm64Token => 0,
+    'arm64' when hasX64Token => null,
+    'arm64' => hasKnownArchitectureToken ? 2 : 1,
+    'x64' when hasX64Token => 0,
+    'x64' when hasArm64Token => null,
+    'x64' => hasKnownArchitectureToken ? 2 : 1,
+    _ => 0,
   };
 }
 

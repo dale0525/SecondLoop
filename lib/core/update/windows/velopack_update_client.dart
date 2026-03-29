@@ -9,12 +9,42 @@ typedef VelopackProcessStarter = Future<Process> Function(
   List<String> arguments, {
   ProcessStartMode mode,
 });
+typedef VelopackProcessRunner = Future<ProcessResult> Function(
+  String executable,
+  List<String> arguments,
+);
 
 typedef VelopackNowProvider = DateTime Function();
-typedef VelopackProcessProbe = VelopackProcessProbeStatus Function(
+typedef VelopackProcessProbe = Future<VelopackProcessProbeStatus> Function(
   int pid, {
   required String expectedExecutablePath,
 });
+
+const _windowsProcessProbeShellCandidates = <String>[
+  'powershell.exe',
+  'pwsh.exe',
+];
+
+List<String> buildWindowsProcessProbeCommandArguments(int pid) {
+  final command =
+      "\$p = Get-CimInstance Win32_Process -Filter \"ProcessId = $pid\" -ErrorAction SilentlyContinue; if (-not \$p) { Write-Output '__MISSING__'; exit 0 }; \$path = if (\$p.ExecutablePath) { [string]\$p.ExecutablePath } else { '' }; \$name = if (\$p.Name) { [string]\$p.Name } else { '' }; Write-Output (\$path + \"`t\" + \$name)";
+  return ['-NoProfile', '-Command', command];
+}
+
+Future<VelopackProcessProbeStatus> probeWindowsProcessStatusForTest(
+  int pid, {
+  required String expectedExecutablePath,
+  required VelopackProcessRunner processRunner,
+  List<String> shellCandidates = _windowsProcessProbeShellCandidates,
+}) {
+  return VelopackUpdateClient._probeProcessStatus(
+    pid,
+    expectedExecutablePath: expectedExecutablePath,
+    processRunner: processRunner,
+    shellCandidates: shellCandidates,
+    isWindowsOverride: true,
+  );
+}
 
 VelopackProcessProbeStatus interpretWindowsProcessQueryResult({
   required int exitCode,
@@ -93,11 +123,17 @@ class VelopackUpdateClient implements WindowsStagedUpdateClient {
     String? updateExecutablePath,
     VelopackProcessStarter? processStarter,
     VelopackNowProvider? now,
+    VelopackProcessRunner? processRunner,
     VelopackProcessProbe? processProbe,
   })  : _updateExecutablePath = updateExecutablePath,
         _processStarter = processStarter ?? _defaultProcessStarter,
         _now = now ?? DateTime.now,
-        _processProbe = processProbe ?? _probeProcessStatus;
+        _processProbe = processProbe ??
+            ((pid, {required expectedExecutablePath}) => _probeProcessStatus(
+                  pid,
+                  expectedExecutablePath: expectedExecutablePath,
+                  processRunner: processRunner ?? _defaultProcessRunner,
+                ));
 
   final String? _updateExecutablePath;
   final VelopackProcessStarter _processStarter;
@@ -194,7 +230,7 @@ class VelopackUpdateClient implements WindowsStagedUpdateClient {
     }
 
     final pendingVersion = _readNewestPackageVersion(appRoot);
-    final pendingAttemptResult = _resolvePendingApplyAttempt(
+    final pendingAttemptResult = await _resolvePendingApplyAttempt(
       updateExecutablePath: updateExePath,
       currentVersion: currentVersion,
       pendingVersion: pendingVersion,
@@ -236,7 +272,7 @@ class VelopackUpdateClient implements WindowsStagedUpdateClient {
       throw StateError('windows_velopack_no_pending_update');
     }
 
-    _resolvePendingApplyAttempt(
+    await _resolvePendingApplyAttempt(
       updateExecutablePath: updateExePath,
       currentVersion: currentVersion,
       pendingVersion: pendingVersion,
@@ -383,12 +419,12 @@ class VelopackUpdateClient implements WindowsStagedUpdateClient {
     return _compareVersionStrings(pendingVersion, currentVersion) > 0;
   }
 
-  PendingUpdateStartupResult? _resolvePendingApplyAttempt({
+  Future<PendingUpdateStartupResult?> _resolvePendingApplyAttempt({
     required String updateExecutablePath,
     required String currentVersion,
     required String? pendingVersion,
     required bool throwIfAttemptInProgress,
-  }) {
+  }) async {
     final attempt = _readPendingApplyAttempt(updateExecutablePath);
     if (attempt == null) {
       return null;
@@ -411,7 +447,7 @@ class VelopackUpdateClient implements WindowsStagedUpdateClient {
     if (startedAtUtc != null &&
         _now().toUtc().difference(startedAtUtc) <
             _pendingApplyRetryGracePeriod) {
-      final processStatus = _processProbe(
+      final processStatus = await _processProbe(
         attempt.updaterPid!,
         expectedExecutablePath: updateExecutablePath,
       );
@@ -507,26 +543,25 @@ class VelopackUpdateClient implements WindowsStagedUpdateClient {
     markerFile.writeAsStringSync(lines.join('\n'));
   }
 
-  static VelopackProcessProbeStatus _probeProcessStatus(
+  static Future<VelopackProcessProbeStatus> _probeProcessStatus(
     int pid, {
     required String expectedExecutablePath,
-  }) {
+    required VelopackProcessRunner processRunner,
+    List<String> shellCandidates = _windowsProcessProbeShellCandidates,
+    bool? isWindowsOverride,
+  }) async {
     if (pid <= 0) {
       return VelopackProcessProbeStatus.notRunning;
     }
 
     try {
-      if (Platform.isWindows) {
-        const shellCandidates = <String>['powershell.exe', 'pwsh.exe'];
+      final isWindowsPlatform = isWindowsOverride ?? Platform.isWindows;
+      if (isWindowsPlatform) {
         for (final shell in shellCandidates) {
           try {
-            final result = Process.runSync(
+            final result = await processRunner(
               shell,
-              [
-                '-NoProfile',
-                '-Command',
-                "\$p = Get-CimInstance Win32_Process -Filter 'ProcessId = $pid' -ErrorAction SilentlyContinue; if (-not \$p) { Write-Output '__MISSING__'; exit 0 }; \$path = if (\$p.ExecutablePath) { [string]\$p.ExecutablePath } else { '' }; \$name = if (\$p.Name) { [string]\$p.Name } else { '' }; Write-Output (\$path + \"`t\" + \$name)",
-              ],
+              buildWindowsProcessProbeCommandArguments(pid),
             );
             return interpretWindowsProcessQueryResult(
               exitCode: result.exitCode,
@@ -540,7 +575,7 @@ class VelopackUpdateClient implements WindowsStagedUpdateClient {
         return VelopackProcessProbeStatus.unknown;
       }
 
-      final result = Process.runSync('kill', ['-0', pid.toString()]);
+      final result = await processRunner('kill', ['-0', pid.toString()]);
       return result.exitCode == 0
           ? VelopackProcessProbeStatus.runningExpectedProcess
           : VelopackProcessProbeStatus.notRunning;
@@ -744,6 +779,13 @@ class VelopackUpdateClient implements WindowsStagedUpdateClient {
       arguments,
       mode: mode,
     );
+  }
+
+  static Future<ProcessResult> _defaultProcessRunner(
+    String executable,
+    List<String> arguments,
+  ) {
+    return Process.run(executable, arguments);
   }
 }
 

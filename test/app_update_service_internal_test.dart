@@ -25,7 +25,8 @@ void main() {
     expect(script, contains('mv "\$STAGED_DIR" "\$APP_DIR"'));
     expect(script, contains('rm -rf "\$BACKUP_DIR" || true'));
     expect(script, contains('rm -rf "\$STAGED_DIR" "\$TEMP_ROOT" || true'));
-    expect(script, contains('if kill -0 "\$APP_PID" 2>/dev/null; then'));
+    expect(script, contains('same_process_running()'));
+    expect(script, contains('if same_process_running; then'));
     expect(script, contains('exit 1'));
   });
 
