@@ -361,7 +361,7 @@ class VelopackUpdateClient implements WindowsStagedUpdateClient {
     }
 
     final attemptIsStale = pendingVersion == null ||
-        pendingVersion != attempt.version ||
+        !sameNormalizedVersion(pendingVersion, attempt.version) ||
         _compareVersionStrings(currentVersion, attempt.version) >= 0;
     if (attemptIsStale) {
       _clearPendingApplyAttempt(updateExecutablePath);
@@ -384,8 +384,12 @@ class VelopackUpdateClient implements WindowsStagedUpdateClient {
               'windows_velopack_previous_apply_failed_${attempt.version}');
         }
         if (processStatus == VelopackProcessProbeStatus.unknown) {
-          _clearPendingApplyAttempt(updateExecutablePath);
-          return null;
+          if (throwIfAttemptInProgress) {
+            throw StateError(
+              'windows_velopack_apply_already_in_progress_${attempt.version}',
+            );
+          }
+          return const PendingUpdateStartupResult.updateInProgress();
         }
       }
       if (throwIfAttemptInProgress) {

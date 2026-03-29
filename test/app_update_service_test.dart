@@ -1062,6 +1062,62 @@ void main() {
       expect(exitedCode, 0);
     });
 
+    test('does not reuse prerelease pending package for final Windows release',
+        () async {
+      final tempDir =
+          await Directory.systemTemp.createTemp('update_reuse_prerelease_');
+      addTearDown(() => tempDir.delete(recursive: true));
+      final pendingFile = File(
+        '${tempDir.path}${Platform.pathSeparator}com.secondloop.secondloop-1.1.0-beta-full.nupkg',
+      );
+      await pendingFile.writeAsString('windows-package');
+
+      String? installedPath;
+      final stagedClient = _FakeWindowsStagedUpdateClient(
+        available: true,
+        pendingUpdateAvailable: true,
+        pendingUpdateVersionValue: '1.1.0-beta',
+        pendingUpdatePackagePathValue: pendingFile.path,
+        onInstallAsset: (assetDownloadUri) async {
+          installedPath = assetDownloadUri.toFilePath();
+        },
+      );
+      var exitedCode = -1;
+      final service = AppUpdateService(
+        platformOverride: AppUpdatePlatform.windows,
+        windowsStagedUpdateClient: stagedClient,
+        httpClient: _FakeHttpClient(
+          handler: (uri) => const _FakeHttpResponse(
+            statusCode: 200,
+            body: 'windows-package',
+          ),
+        ),
+        processExit: (code) => exitedCode = code,
+      );
+
+      final update = AppUpdateAvailability(
+        currentVersion: '1.0.0',
+        latestTag: 'v1.1.0',
+        releasePageUri: Uri.parse(
+          'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
+        ),
+        installMode: AppUpdateInstallMode.seamlessRestart,
+        asset: AppUpdateAsset(
+          name: 'com.secondloop.secondloop-1.1.0-full.nupkg',
+          downloadUri: Uri.parse('https://cdn.example.com/win.nupkg'),
+          sha256:
+              '5399ae01b97abc674bd372c0621aeb3d5ff463e35dc90dc4c4186deccdab9e61',
+        ),
+      );
+
+      await service.installAndRestart(update);
+
+      expect(stagedClient.applyPendingAndRestartCalls, 0);
+      expect(stagedClient.installCalls, 1);
+      expect(installedPath, isNotNull);
+      expect(exitedCode, 0);
+    });
+
     test(
         'downloads requested Windows update instead of reusing stale pending package',
         () async {

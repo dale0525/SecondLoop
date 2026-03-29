@@ -53,16 +53,19 @@ bool sameNormalizedVersion(String left, String right) {
   final normalizedRight = trimTrailingZeroSegments(rightVersion.segments);
   final sameBaseSegments = normalizedLeft.length == normalizedRight.length &&
       _listEquals(normalizedLeft, normalizedRight);
-  if (leftVersion.isPrerelease != rightVersion.isPrerelease &&
-      (leftVersion.hasNumericPrereleaseSegments ||
-          rightVersion.hasNumericPrereleaseSegments)) {
+  if (leftVersion.isPrerelease != rightVersion.isPrerelease) {
     return false;
   }
   if (sameBaseSegments &&
-      leftVersion.isPrerelease != rightVersion.isPrerelease &&
-      !leftVersion.hasNumericPrereleaseSegments &&
-      !rightVersion.hasNumericPrereleaseSegments) {
-    return true;
+      leftVersion.isPrerelease == rightVersion.isPrerelease) {
+    if (!leftVersion.isPrerelease) {
+      return true;
+    }
+    return comparePrereleaseIdentifiers(
+          leftVersion.prereleaseIdentifiers,
+          rightVersion.prereleaseIdentifiers,
+        ) ==
+        0;
   }
   return compareReleaseTagWithCurrentVersion(left, right) == 0;
 }

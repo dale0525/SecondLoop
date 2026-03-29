@@ -468,7 +468,7 @@ void main() {
     expect(result.status, PendingUpdateStartupStatus.dispatched);
   });
 
-  test('startup retries when pending apply process cannot be verified',
+  test('startup treats unverified pending apply process as still in progress',
       () async {
     final root =
         await Directory.systemTemp.createTemp('velopack_probe_unknown_');
@@ -498,8 +498,40 @@ void main() {
 
     final result = await client.applyPendingOnStartup(waitPid: 2468);
 
-    expect(calls, 1);
-    expect(result.status, PendingUpdateStartupStatus.dispatched);
+    expect(calls, 0);
+    expect(result.status, PendingUpdateStartupStatus.inProgress);
+    expect(_pendingApplyAttemptMarker(root).existsSync(), isTrue);
+  });
+
+  test('pending apply marker uses normalized version comparison', () async {
+    final root =
+        await Directory.systemTemp.createTemp('velopack_marker_normalized_');
+    final updater = File('${root.path}${Platform.pathSeparator}Update.exe')
+      ..writeAsStringSync('stub');
+    _writeSqVersion(root, '1.0.0');
+    _createNupkg(root, 'com.secondloop.secondloop-1.1.0-full.nupkg');
+
+    _pendingApplyAttemptMarker(root).writeAsStringSync(
+      'v1.1.0\n${DateTime.now().toUtc().toIso8601String()}\n$pid',
+    );
+
+    final client = VelopackUpdateClient(
+      updateExecutablePath: updater.path,
+      processProbe: (pid, {required expectedExecutablePath}) =>
+          VelopackProcessProbeStatus.runningExpectedProcess,
+      processStarter: (executable, arguments,
+          {mode = ProcessStartMode.normal}) async {
+        return Process.start(
+          Platform.resolvedExecutable,
+          const ['--version'],
+        );
+      },
+    );
+
+    final result = await client.applyPendingOnStartup(waitPid: 2468);
+
+    expect(result.status, PendingUpdateStartupStatus.inProgress);
+    expect(_pendingApplyAttemptMarker(root).existsSync(), isTrue);
   });
 
   test('only SecondLoop full packages count as pending updates', () async {

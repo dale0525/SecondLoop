@@ -35,7 +35,9 @@ class VerificationScriptsTests(unittest.TestCase):
         self.assertIn('lib/i18n/strings.g.dart is missing', check_mode)
         self.assertIn('SECONDLOOP_I18N_DART_BIN', check_mode)
         self.assertIn('SECONDLOOP_I18N_FLUTTER_BIN', check_mode)
-        self.assertIn('cp -R "${repo_root}/.dart_tool"', check_mode)
+        self.assertIn('package_config.json', check_mode)
+        self.assertNotIn('cp -R "${repo_root}/.dart_tool"', check_mode)
+        self.assertIn('Fix locally with: pixi run ci', check_mode)
         self.assertNotIn("ensure_i18n_generated", check_mode)
 
     def test_verify_changed_uses_non_mutating_check_mode(self) -> None:

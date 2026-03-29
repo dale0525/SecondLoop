@@ -75,10 +75,15 @@ void main() {
       expect(result.update!.latestTag, 'v1.0.1.1');
     });
 
-    test('sameNormalizedVersion accepts prerelease variants only', () {
-      expect(sameNormalizedVersion('1.1.0-beta', '1.1.0'), isTrue);
-      expect(sameNormalizedVersion('1.1.0', '1.1.0-beta'), isTrue);
+    test('sameNormalizedVersion rejects prerelease and final variants', () {
+      expect(sameNormalizedVersion('1.1.0-beta', '1.1.0'), isFalse);
+      expect(sameNormalizedVersion('1.1.0', '1.1.0-beta'), isFalse);
       expect(sameNormalizedVersion('1.1.0.7', '1.1.0'), isFalse);
+    });
+
+    test('sameNormalizedVersion keeps exact prerelease matches only', () {
+      expect(sameNormalizedVersion('1.1.0-beta', '1.1.0-beta'), isTrue);
+      expect(sameNormalizedVersion('1.1.0-beta', '1.1.0-rc'), isFalse);
     });
 
     test('prerelease identifiers keep semantic ordering', () {
