@@ -489,7 +489,7 @@ class AppUpdateService {
     }
     try {
       final result = await stagedClient.applyPendingOnStartup(waitPid: pid);
-      if (!result.hasNoPendingUpdate) {
+      if (!result.hasNoPendingUpdate && !result.isProbeInconclusive) {
         await _recordEvent(UpdateEventType.pendingApplyStarted);
       }
       if (result.didLaunchUpdater) {

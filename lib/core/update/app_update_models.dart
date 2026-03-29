@@ -83,6 +83,7 @@ enum PendingUpdateStartupStatus {
   none,
   dispatched,
   inProgress,
+  probeInconclusive,
 }
 
 class PendingUpdateStartupResult {
@@ -97,15 +98,22 @@ class PendingUpdateStartupResult {
   const PendingUpdateStartupResult.updateInProgress()
       : this._(status: PendingUpdateStartupStatus.inProgress);
 
+  const PendingUpdateStartupResult.probeInconclusive()
+      : this._(status: PendingUpdateStartupStatus.probeInconclusive);
+
   final PendingUpdateStartupStatus status;
 
   bool get hasNoPendingUpdate => status == PendingUpdateStartupStatus.none;
   bool get didLaunchUpdater => status == PendingUpdateStartupStatus.dispatched;
   bool get isUpdateInProgress =>
       status == PendingUpdateStartupStatus.inProgress;
+  bool get isProbeInconclusive =>
+      status == PendingUpdateStartupStatus.probeInconclusive;
   bool get shouldTerminateStartup =>
       status == PendingUpdateStartupStatus.dispatched ||
       status == PendingUpdateStartupStatus.inProgress;
+  bool get shouldPauseFurtherUpdateWork =>
+      shouldTerminateStartup || isProbeInconclusive;
 }
 
 int compareReleaseTagWithCurrentVersion(

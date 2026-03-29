@@ -41,6 +41,10 @@ fi
 
 cd "${repo_root}"
 
+if (( check_mode )); then
+  export SECONDLOOP_PRECOMMIT_ALLOW_WORKTREE_WRITES=0
+fi
+
 source "${repo_root}/scripts/pre_commit_common.sh"
 
 if (( check_mode )); then

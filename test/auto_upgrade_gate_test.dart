@@ -537,6 +537,27 @@ void main() {
         TargetPlatform.windows,
       }));
 
+  testWidgets(
+      'skips update work but still shows app when pending apply probe is inconclusive',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final service = _FakeAutoUpdateService(
+      applyPendingResult: const PendingUpdateStartupResult.probeInconclusive(),
+      result: const AppUpdateCheckResult(currentVersion: '1.0.1+99'),
+    );
+
+    await pumpGate(tester, service: service);
+    await tester.pumpAndSettle();
+
+    expect(service.applyPendingCalls, 1);
+    expect(service.checkCalls, 0);
+    expect(find.text('home'), findsOneWidget);
+    expect(find.byType(SnackBar), findsNothing);
+  },
+      variant: const TargetPlatformVariant(<TargetPlatform>{
+        TargetPlatform.windows,
+      }));
+
   testWidgets('macOS seamless update stays passive until user confirms',
       (tester) async {
     SharedPreferences.setMockInitialValues({});

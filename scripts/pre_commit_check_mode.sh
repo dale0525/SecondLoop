@@ -1,4 +1,5 @@
 export SECONDLOOP_PRECOMMIT_ALLOW_WORKTREE_WRITES=0
+precommit_allow_worktree_writes=0
 
   if (( scope_flutter == 0 && scope_rust == 0 )); then
     scope_flutter=1

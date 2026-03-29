@@ -430,7 +430,7 @@ class VelopackUpdateClient implements WindowsStagedUpdateClient {
             'windows_velopack_apply_already_in_progress_${attempt.version}',
           );
         }
-        return const PendingUpdateStartupResult.updateInProgress();
+        return const PendingUpdateStartupResult.probeInconclusive();
       }
       if (throwIfAttemptInProgress) {
         throw StateError(

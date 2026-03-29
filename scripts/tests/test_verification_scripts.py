@@ -53,11 +53,19 @@ class VerificationScriptsTests(unittest.TestCase):
         check_mode = (REPO_ROOT / "scripts/pre_commit_check_mode.sh").read_text(
             encoding="utf-8"
         )
+        pre_commit = (REPO_ROOT / ".githooks/pre-commit").read_text(
+            encoding="utf-8"
+        )
         common = (REPO_ROOT / "scripts/pre_commit_common.sh").read_text(
             encoding="utf-8"
         )
 
         self.assertIn('SECONDLOOP_PRECOMMIT_ALLOW_WORKTREE_WRITES=0', check_mode)
+        self.assertIn('precommit_allow_worktree_writes=0', check_mode)
+        self.assertIn(
+            'if (( check_mode )); then\n  export SECONDLOOP_PRECOMMIT_ALLOW_WORKTREE_WRITES=0\nfi',
+            pre_commit,
+        )
         self.assertIn('precommit_allow_worktree_writes', common)
         self.assertIn('mktemp -d -t secondloop_libclang', common)
 

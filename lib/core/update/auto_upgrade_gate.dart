@@ -108,6 +108,9 @@ class _AutoUpgradeGateState extends State<AutoUpgradeGate> {
       await UpdateBadgePrefs.clear();
       return;
     }
+    if (startupApplyResult.shouldPauseFurtherUpdateWork) {
+      return;
+    }
 
     try {
       final result = await _updateService.checkForUpdates();

@@ -5,147 +5,8 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:secondloop/core/update/app_update_service.dart';
-import 'package:secondloop/core/update/macos/macos_update_client.dart';
 import 'package:secondloop/core/update/update_event_log.dart';
-import 'package:secondloop/core/update/windows/velopack_update_client.dart';
-
-class _InMemoryUpdateEventLogger implements UpdateEventLogger {
-  final List<UpdateEventRecord> records = <UpdateEventRecord>[];
-
-  @override
-  Future<void> record(UpdateEventRecord record) async {
-    records.add(record);
-  }
-
-  @override
-  Future<List<UpdateEventRecord>> readRecent() async => records;
-}
-
-class _ThrowingUpdateEventLogger implements UpdateEventLogger {
-  _ThrowingUpdateEventLogger({required this.failOnType});
-
-  final UpdateEventType failOnType;
-  final List<UpdateEventRecord> records = <UpdateEventRecord>[];
-
-  @override
-  Future<void> record(UpdateEventRecord record) async {
-    if (record.type == failOnType) {
-      throw StateError('logger_failed_${record.type.name}');
-    }
-    records.add(record);
-  }
-
-  @override
-  Future<List<UpdateEventRecord>> readRecent() async => records;
-}
-
-class _FakeWindowsStagedUpdateClient implements WindowsStagedUpdateClient {
-  _FakeWindowsStagedUpdateClient({
-    required this.available,
-    this.pendingUpdateAvailable = false,
-    this.pendingUpdateVersionValue,
-    this.pendingUpdatePackagePathValue,
-    this.pendingApplyStartupResult =
-        const PendingUpdateStartupResult.noPendingUpdate(),
-    this.onStageAsset,
-    this.onInstallAsset,
-  });
-
-  final bool available;
-  final bool pendingUpdateAvailable;
-  final String? pendingUpdateVersionValue;
-  final String? pendingUpdatePackagePathValue;
-  final PendingUpdateStartupResult pendingApplyStartupResult;
-  final Future<void> Function(Uri assetDownloadUri)? onStageAsset;
-  final Future<void> Function(Uri assetDownloadUri)? onInstallAsset;
-  final List<Uri> stagedAssets = <Uri>[];
-  final List<Uri> installedAssets = <Uri>[];
-  int applyPendingCalls = 0;
-  int applyPendingAndRestartCalls = 0;
-  int installCalls = 0;
-  int isAvailableCalls = 0;
-  int? lastStartupWaitPid;
-
-  @override
-  bool isAvailable() {
-    isAvailableCalls += 1;
-    return available;
-  }
-
-  @override
-  bool hasPendingUpdate() {
-    return pendingUpdateAvailable;
-  }
-
-  @override
-  String? pendingUpdateVersion() {
-    return pendingUpdateAvailable ? pendingUpdateVersionValue : null;
-  }
-
-  @override
-  String? pendingUpdatePackagePath() {
-    return pendingUpdateAvailable ? pendingUpdatePackagePathValue : null;
-  }
-
-  @override
-  Future<void> stageAsset(Uri assetDownloadUri) async {
-    stagedAssets.add(assetDownloadUri);
-    await onStageAsset?.call(assetDownloadUri);
-  }
-
-  @override
-  Future<void> installAssetAndRestart(
-    Uri assetDownloadUri, {
-    required int waitPid,
-  }) async {
-    installCalls += 1;
-    installedAssets.add(assetDownloadUri);
-    await onInstallAsset?.call(assetDownloadUri);
-  }
-
-  @override
-  Future<PendingUpdateStartupResult> applyPendingOnStartup({
-    required int waitPid,
-  }) async {
-    applyPendingCalls += 1;
-    lastStartupWaitPid = waitPid;
-    return pendingApplyStartupResult;
-  }
-
-  @override
-  Future<void> applyPendingAndRestart({required int waitPid}) async {
-    applyPendingAndRestartCalls += 1;
-  }
-}
-
-class _FakeMacosManagedUpdateClient implements MacosManagedUpdateClient {
-  _FakeMacosManagedUpdateClient({
-    required this.supportedInstallLocation,
-    this.onInstallArchive,
-  });
-
-  final bool supportedInstallLocation;
-  final Future<void> Function(Uri archiveUri)? onInstallArchive;
-  final List<Uri> installedAssets = <Uri>[];
-  int installCalls = 0;
-  int isSupportedInstallLocationCalls = 0;
-
-  @override
-  bool isSupportedInstallLocation() {
-    isSupportedInstallLocationCalls += 1;
-    return supportedInstallLocation;
-  }
-
-  @override
-  Future<void> installArchiveAndRestart(
-    Uri archiveUri, {
-    required int waitPid,
-  }) async {
-    installCalls += 1;
-    installedAssets.add(archiveUri);
-    await onInstallArchive?.call(archiveUri);
-  }
-}
+import 'support/app_update_service_test_support.dart';
 
 void main() {
   group('compareReleaseTagWithCurrentVersion', () {
@@ -168,666 +29,6 @@ void main() {
     });
   });
 
-  group('AppUpdateService.checkForUpdates', () {
-    test('returns seamless Windows nupkg update when runtime is available',
-        () async {
-      final stagedClient = _FakeWindowsStagedUpdateClient(available: true);
-      final service = AppUpdateService(
-        platformOverride: AppUpdatePlatform.windows,
-        releaseModeOverride: true,
-        windowsStagedUpdateClient: stagedClient,
-        currentVersionLoader: () async =>
-            const AppRuntimeVersion(version: '1.0.0', buildNumber: '42'),
-        releaseJsonFetcher: (uri) async => {
-          'version': '1.1.0',
-          'release_page_url':
-              'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
-          'platforms': {
-            'windows-x64': {
-              'install_mode': 'velopack',
-              'package_url':
-                  'https://cdn.example.com/com.secondloop.secondloop-1.1.0-full.nupkg',
-              'sha256': 'abc123',
-            },
-          },
-        },
-      );
-
-      final result = await service.checkForUpdates();
-
-      expect(result.errorMessage, isNull);
-      expect(result.update, isNotNull);
-      expect(result.update!.latestTag, 'v1.1.0');
-      expect(result.update!.installMode, AppUpdateInstallMode.seamlessRestart);
-      expect(
-        result.update!.downloadUri.toString(),
-        'https://cdn.example.com/com.secondloop.secondloop-1.1.0-full.nupkg',
-      );
-      expect(result.update!.asset?.sha256, 'abc123');
-    });
-
-    test(
-        'returns staged-next-launch update when manifest explicitly requests it',
-        () async {
-      final stagedClient = _FakeWindowsStagedUpdateClient(available: true);
-      final service = AppUpdateService(
-        platformOverride: AppUpdatePlatform.windows,
-        releaseModeOverride: true,
-        windowsStagedUpdateClient: stagedClient,
-        currentVersionLoader: () async =>
-            const AppRuntimeVersion(version: '1.0.0', buildNumber: '42'),
-        releaseJsonFetcher: (uri) async => {
-          'version': '1.1.0',
-          'release_page_url':
-              'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
-          'platforms': {
-            'windows-x64': {
-              'install_mode': 'staged-next-launch',
-              'package_url':
-                  'https://cdn.example.com/com.secondloop.secondloop-1.1.0-full.nupkg',
-              'sha256': 'abc123',
-            },
-          },
-        },
-      );
-
-      final result = await service.checkForUpdates();
-
-      expect(result.errorMessage, isNull);
-      expect(result.update, isNotNull);
-      expect(result.update!.installMode, AppUpdateInstallMode.stagedNextLaunch);
-      expect(
-        result.update!.downloadUri.toString(),
-        'https://cdn.example.com/com.secondloop.secondloop-1.1.0-full.nupkg',
-      );
-    });
-
-    test('checks Windows managed runtime once when picking release asset',
-        () async {
-      final stagedClient = _FakeWindowsStagedUpdateClient(available: true);
-      final service = AppUpdateService(
-        platformOverride: AppUpdatePlatform.windows,
-        releaseModeOverride: true,
-        windowsStagedUpdateClient: stagedClient,
-        currentVersionLoader: () async =>
-            const AppRuntimeVersion(version: '1.0.0', buildNumber: '88'),
-        releaseJsonFetcher: (uri) async => {
-          'tag_name': 'v1.1.0',
-          'html_url':
-              'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
-          'assets': [
-            {
-              'name': 'SecondLoop-win.msi',
-              'browser_download_url':
-                  'https://cdn.example.com/SecondLoop-win.msi',
-            },
-            {
-              'name': 'com.secondloop.secondloop-1.1.0-full.nupkg',
-              'browser_download_url': 'https://cdn.example.com/win.nupkg',
-              'sha256': 'abc123',
-            },
-          ],
-        },
-      );
-
-      final result = await service.checkForUpdates();
-
-      expect(result.update, isNotNull);
-      expect(result.update!.installMode, AppUpdateInstallMode.seamlessRestart);
-      expect(
-        result.update!.downloadUri.toString(),
-        'https://cdn.example.com/win.nupkg',
-      );
-      expect(stagedClient.isAvailableCalls, 1);
-    });
-
-    test('falls back to external MSI when Windows runtime is unavailable',
-        () async {
-      final stagedClient = _FakeWindowsStagedUpdateClient(available: false);
-      final service = AppUpdateService(
-        platformOverride: AppUpdatePlatform.windows,
-        releaseModeOverride: true,
-        windowsStagedUpdateClient: stagedClient,
-        currentVersionLoader: () async =>
-            const AppRuntimeVersion(version: '1.0.0', buildNumber: '88'),
-        releaseJsonFetcher: (uri) async => {
-          'tag_name': 'v1.1.0',
-          'html_url':
-              'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
-          'assets': [
-            {
-              'name': 'SecondLoop-win.msi',
-              'browser_download_url':
-                  'https://cdn.example.com/SecondLoop-win.msi',
-            },
-            {
-              'name': 'com.secondloop.secondloop-1.1.0-full.nupkg',
-              'browser_download_url': 'https://cdn.example.com/win.nupkg',
-            },
-          ],
-        },
-      );
-
-      final result = await service.checkForUpdates();
-
-      expect(result.update, isNotNull);
-      expect(result.update!.installMode, AppUpdateInstallMode.externalDownload);
-      expect(
-        result.update!.downloadUri.toString(),
-        'https://cdn.example.com/SecondLoop-win.msi',
-      );
-    });
-
-    test('ignores delta nupkg assets and falls back to MSI installers',
-        () async {
-      final stagedClient = _FakeWindowsStagedUpdateClient(available: true);
-      final service = AppUpdateService(
-        platformOverride: AppUpdatePlatform.windows,
-        releaseModeOverride: true,
-        windowsStagedUpdateClient: stagedClient,
-        currentVersionLoader: () async =>
-            const AppRuntimeVersion(version: '1.0.0', buildNumber: '88'),
-        releaseJsonFetcher: (uri) async => {
-          'tag_name': 'v1.1.0',
-          'html_url':
-              'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
-          'assets': [
-            {
-              'name': 'com.secondloop.secondloop-1.1.0-delta.nupkg',
-              'browser_download_url': 'https://cdn.example.com/win-delta.nupkg',
-            },
-            {
-              'name': 'SecondLoop-win.msi',
-              'browser_download_url':
-                  'https://cdn.example.com/SecondLoop-win.msi',
-            },
-          ],
-        },
-      );
-
-      final result = await service.checkForUpdates();
-
-      expect(result.update, isNotNull);
-      expect(result.update!.installMode, AppUpdateInstallMode.externalDownload);
-      expect(result.update!.asset?.name, 'SecondLoop-win.msi');
-      expect(
-        result.update!.downloadUri.toString(),
-        'https://cdn.example.com/SecondLoop-win.msi',
-      );
-    });
-
-    test('returns seamless macOS archive update for supported install paths',
-        () async {
-      final macosClient =
-          _FakeMacosManagedUpdateClient(supportedInstallLocation: true);
-      final service = AppUpdateService(
-        platformOverride: AppUpdatePlatform.macos,
-        releaseModeOverride: true,
-        macosManagedUpdateClient: macosClient,
-        currentVersionLoader: () async =>
-            const AppRuntimeVersion(version: '1.0.0', buildNumber: '21'),
-        releaseJsonFetcher: (uri) async => {
-          'version': '1.1.0',
-          'release_page_url':
-              'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
-          'platforms': {
-            'macos-universal': {
-              'install_mode': 'app-tar-gz',
-              'archive_url':
-                  'https://cdn.example.com/SecondLoop-macos-v1.1.0.app.tar.gz',
-              'sha256': 'def456',
-            },
-          },
-        },
-      );
-
-      final result = await service.checkForUpdates();
-
-      expect(result.update, isNotNull);
-      expect(result.update!.installMode, AppUpdateInstallMode.seamlessRestart);
-      expect(
-        result.update!.downloadUri.toString(),
-        'https://cdn.example.com/SecondLoop-macos-v1.1.0.app.tar.gz',
-      );
-      expect(result.update!.asset?.sha256, 'def456');
-    });
-
-    test('falls back to external download on macOS for unsupported paths',
-        () async {
-      final macosClient =
-          _FakeMacosManagedUpdateClient(supportedInstallLocation: false);
-      final service = AppUpdateService(
-        platformOverride: AppUpdatePlatform.macos,
-        releaseModeOverride: true,
-        macosManagedUpdateClient: macosClient,
-        currentVersionLoader: () async =>
-            const AppRuntimeVersion(version: '1.0.0', buildNumber: '21'),
-        releaseJsonFetcher: (uri) async => {
-          'version': '1.1.0',
-          'release_page_url':
-              'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
-          'platforms': {
-            'macos-universal': {
-              'install_mode': 'app-tar-gz',
-              'archive_url':
-                  'https://cdn.example.com/SecondLoop-macos-v1.1.0.app.tar.gz',
-              'sha256': 'def456',
-            },
-          },
-        },
-      );
-
-      final result = await service.checkForUpdates();
-
-      expect(result.update, isNotNull);
-      expect(result.update!.installMode, AppUpdateInstallMode.externalDownload);
-      expect(
-        result.update!.downloadUri.toString(),
-        'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
-      );
-      expect(result.update!.asset, isNull);
-    });
-
-    test(
-        'falls back to release page when Windows external download has no MSI asset',
-        () async {
-      final stagedClient = _FakeWindowsStagedUpdateClient(available: false);
-      final service = AppUpdateService(
-        platformOverride: AppUpdatePlatform.windows,
-        releaseModeOverride: true,
-        windowsStagedUpdateClient: stagedClient,
-        currentVersionLoader: () async =>
-            const AppRuntimeVersion(version: '1.0.0', buildNumber: '88'),
-        releaseJsonFetcher: (uri) async => {
-          'tag_name': 'v1.1.0',
-          'html_url':
-              'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
-          'assets': [
-            {
-              'name': 'com.secondloop.secondloop-1.1.0-full.nupkg',
-              'browser_download_url': 'https://cdn.example.com/win.nupkg',
-            },
-          ],
-        },
-      );
-
-      final result = await service.checkForUpdates();
-
-      expect(result.update, isNotNull);
-      expect(result.update!.installMode, AppUpdateInstallMode.externalDownload);
-      expect(result.update!.asset, isNull);
-      expect(
-        result.update!.downloadUri.toString(),
-        'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
-      );
-    });
-
-    test('prefers current macOS architecture over mismatched manifest entry',
-        () async {
-      final macosClient =
-          _FakeMacosManagedUpdateClient(supportedInstallLocation: true);
-      final service = AppUpdateService(
-        platformOverride: AppUpdatePlatform.macos,
-        releaseModeOverride: true,
-        macosManagedUpdateClient: macosClient,
-        currentVersionLoader: () async =>
-            const AppRuntimeVersion(version: '1.0.0', buildNumber: '21'),
-        currentArchitectureOverride: 'x86_64',
-        releaseJsonFetcher: (uri) async => {
-          'version': '1.1.0',
-          'release_page_url':
-              'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
-          'platforms': {
-            'darwin-aarch64': {
-              'archive_url':
-                  'https://cdn.example.com/SecondLoop-macos-arm64-v1.1.0.app.tar.gz',
-              'sha256': 'arm64sha',
-            },
-            'darwin-x86_64': {
-              'archive_url':
-                  'https://cdn.example.com/SecondLoop-macos-x64-v1.1.0.app.tar.gz',
-              'sha256': 'x64sha',
-            },
-          },
-        },
-      );
-
-      final result = await service.checkForUpdates();
-
-      expect(result.update, isNotNull);
-      expect(result.update!.asset?.downloadUri.toString(),
-          'https://cdn.example.com/SecondLoop-macos-x64-v1.1.0.app.tar.gz');
-      expect(result.update!.asset?.sha256, 'x64sha');
-    });
-
-    test('does not fall back from x64 macOS to arm64-only manifest entry',
-        () async {
-      final macosClient =
-          _FakeMacosManagedUpdateClient(supportedInstallLocation: true);
-      final service = AppUpdateService(
-        platformOverride: AppUpdatePlatform.macos,
-        releaseModeOverride: true,
-        macosManagedUpdateClient: macosClient,
-        currentVersionLoader: () async =>
-            const AppRuntimeVersion(version: '1.0.0', buildNumber: '21'),
-        currentArchitectureOverride: 'x86_64',
-        releaseJsonFetcher: (uri) async => {
-          'version': '1.1.0',
-          'release_page_url':
-              'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
-          'platforms': {
-            'darwin-aarch64': {
-              'archive_url':
-                  'https://cdn.example.com/SecondLoop-macos-arm64-v1.1.0.app.tar.gz',
-              'sha256': 'arm64sha',
-            },
-          },
-          'assets': [
-            {
-              'name': 'SecondLoop-macos-v1.1.0.dmg',
-              'browser_download_url':
-                  'https://cdn.example.com/SecondLoop-macos-v1.1.0.dmg',
-            },
-          ],
-        },
-      );
-
-      final result = await service.checkForUpdates();
-
-      expect(result.update, isNotNull);
-      expect(result.update!.installMode, AppUpdateInstallMode.externalDownload);
-      expect(result.update!.asset?.name, 'SecondLoop-macos-v1.1.0.dmg');
-      expect(
-        result.update!.downloadUri.toString(),
-        'https://cdn.example.com/SecondLoop-macos-v1.1.0.dmg',
-      );
-    });
-
-    test('requires sha256 for seamless Linux archive installs', () async {
-      final service = AppUpdateService(
-        platformOverride: AppUpdatePlatform.linux,
-        releaseModeOverride: true,
-        currentVersionLoader: () async =>
-            const AppRuntimeVersion(version: '1.0.0', buildNumber: '7'),
-        releaseJsonFetcher: (uri) async => {
-          'version': '1.1.0',
-          'release_page_url':
-              'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
-          'platforms': {
-            'linux-x64': {
-              'install_mode': 'bundle-tar-gz',
-              'archive_url':
-                  'https://cdn.example.com/SecondLoop-linux-x64-v1.1.0.tar.gz',
-            },
-          },
-        },
-      );
-
-      final result = await service.checkForUpdates();
-
-      expect(result.update, isNotNull);
-      expect(result.update!.installMode, AppUpdateInstallMode.externalDownload);
-    });
-
-    test('matches linux x86_64 assets when manifest is missing', () async {
-      final service = AppUpdateService(
-        platformOverride: AppUpdatePlatform.linux,
-        releaseModeOverride: true,
-        currentVersionLoader: () async =>
-            const AppRuntimeVersion(version: '1.0.0', buildNumber: '7'),
-        releaseJsonFetcher: (uri) async => {
-          'tag_name': 'v1.1.0',
-          'html_url':
-              'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
-          'assets': [
-            {
-              'name': 'SecondLoop-linux-x86_64-v1.1.0.tar.gz',
-              'browser_download_url':
-                  'https://cdn.example.com/SecondLoop-linux-x86_64-v1.1.0.tar.gz',
-              'sha256': 'linuxsha',
-            },
-          ],
-        },
-      );
-
-      final result = await service.checkForUpdates();
-
-      expect(result.update, isNotNull);
-      expect(result.update!.installMode, AppUpdateInstallMode.seamlessRestart);
-      expect(
-        result.update!.asset?.downloadUri.toString(),
-        'https://cdn.example.com/SecondLoop-linux-x86_64-v1.1.0.tar.gz',
-      );
-    });
-
-    test('falls back to external release page when no platform asset exists',
-        () async {
-      final service = AppUpdateService(
-        platformOverride: AppUpdatePlatform.linux,
-        releaseModeOverride: true,
-        currentVersionLoader: () async =>
-            const AppRuntimeVersion(version: '1.0.0', buildNumber: '7'),
-        releaseJsonFetcher: (uri) async => {
-          'tag_name': 'v1.1.0',
-          'html_url':
-              'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
-          'assets': [
-            {
-              'name': 'SecondLoop-win-Setup.exe',
-              'browser_download_url': 'https://cdn.example.com/setup.exe',
-            },
-          ],
-        },
-      );
-
-      final result = await service.checkForUpdates();
-
-      expect(result.update, isNotNull);
-      expect(result.update!.installMode, AppUpdateInstallMode.externalDownload);
-      expect(
-        result.update!.downloadUri.toString(),
-        'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
-      );
-    });
-
-    test('falls back to MSI when Windows managed package is not installable',
-        () async {
-      final stagedClient = _FakeWindowsStagedUpdateClient(available: false);
-      final service = AppUpdateService(
-        platformOverride: AppUpdatePlatform.windows,
-        releaseModeOverride: true,
-        windowsStagedUpdateClient: stagedClient,
-        currentVersionLoader: () async =>
-            const AppRuntimeVersion(version: '1.0.0', buildNumber: '7'),
-        releaseJsonFetcher: (uri) async => {
-          'version': '1.1.0',
-          'release_page_url':
-              'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
-          'platforms': {
-            'windows-x64': {
-              'package_url':
-                  'https://cdn.example.com/com.secondloop.secondloop-1.1.0-full.nupkg',
-              'sha256': 'abc123',
-            },
-          },
-          'assets': [
-            {
-              'name': 'SecondLoop-win.msi',
-              'browser_download_url':
-                  'https://cdn.example.com/SecondLoop-win.msi',
-            },
-          ],
-        },
-      );
-
-      final result = await service.checkForUpdates();
-
-      expect(result.update, isNotNull);
-      expect(result.update!.installMode, AppUpdateInstallMode.externalDownload);
-      expect(result.update!.asset?.name, 'SecondLoop-win.msi');
-      expect(
-        result.update!.downloadUri.toString(),
-        'https://cdn.example.com/SecondLoop-win.msi',
-      );
-    });
-
-    test(
-        'falls back to manual macOS installer when managed archive is not installable',
-        () async {
-      final macosClient =
-          _FakeMacosManagedUpdateClient(supportedInstallLocation: false);
-      final service = AppUpdateService(
-        platformOverride: AppUpdatePlatform.macos,
-        releaseModeOverride: true,
-        macosManagedUpdateClient: macosClient,
-        currentVersionLoader: () async =>
-            const AppRuntimeVersion(version: '1.0.0', buildNumber: '7'),
-        currentArchitectureOverride: 'arm64',
-        releaseJsonFetcher: (uri) async => {
-          'version': '1.1.0',
-          'release_page_url':
-              'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
-          'platforms': {
-            'darwin-aarch64': {
-              'archive_url':
-                  'https://cdn.example.com/SecondLoop-macos-arm64-v1.1.0.app.tar.gz',
-              'sha256': 'arm64sha',
-            },
-          },
-          'assets': [
-            {
-              'name': 'SecondLoop-macos-v1.1.0.dmg',
-              'browser_download_url':
-                  'https://cdn.example.com/SecondLoop-macos-v1.1.0.dmg',
-            },
-          ],
-        },
-      );
-
-      final result = await service.checkForUpdates();
-
-      expect(result.update, isNotNull);
-      expect(result.update!.installMode, AppUpdateInstallMode.externalDownload);
-      expect(result.update!.asset?.name, 'SecondLoop-macos-v1.1.0.dmg');
-      expect(
-        result.update!.downloadUri.toString(),
-        'https://cdn.example.com/SecondLoop-macos-v1.1.0.dmg',
-      );
-    });
-
-    test('tries fallback endpoint when first endpoint fails', () async {
-      final attempted = <Uri>[];
-      final service = AppUpdateService(
-        platformOverride: AppUpdatePlatform.android,
-        releaseModeOverride: true,
-        releaseApiOriginOverride: 'https://secondloop.app',
-        releaseRepoOverride: 'dale0525/SecondLoop',
-        currentVersionLoader: () async =>
-            const AppRuntimeVersion(version: '1.0.0', buildNumber: '9'),
-        releaseJsonFetcher: (uri) async {
-          attempted.add(uri);
-          if (attempted.length == 1) {
-            throw StateError('network_down');
-          }
-          return {
-            'tag_name': 'v1.0.0',
-            'html_url':
-                'https://github.com/dale0525/SecondLoop/releases/tag/v1.0.0',
-            'assets': const [],
-          };
-        },
-      );
-
-      final result = await service.checkForUpdates();
-
-      expect(result.update, isNull);
-      expect(result.errorMessage, isNull);
-      expect(attempted.length, 2);
-      expect(attempted.first.toString(), contains('/api/releases/latest'));
-      expect(attempted.last.toString(),
-          contains('/releases/latest/download/latest.json'));
-    });
-
-    test('records update available and manual fallback events', () async {
-      final logger = _InMemoryUpdateEventLogger();
-      final stagedClient = _FakeWindowsStagedUpdateClient(available: false);
-      final service = AppUpdateService(
-        platformOverride: AppUpdatePlatform.windows,
-        releaseModeOverride: true,
-        windowsStagedUpdateClient: stagedClient,
-        updateEventLogger: logger,
-        currentVersionLoader: () async =>
-            const AppRuntimeVersion(version: '1.0.0', buildNumber: '9'),
-        releaseJsonFetcher: (uri) async => {
-          'version': '1.1.0',
-          'platforms': {
-            'windows-x64': {
-              'package_url':
-                  'https://cdn.example.com/com.secondloop.secondloop-1.1.0-full.nupkg',
-              'sha256': 'abc123',
-            },
-          },
-        },
-      );
-
-      final result = await service.checkForUpdates();
-
-      expect(result.update, isNotNull);
-      expect(
-        logger.records
-            .any((entry) => entry.type == UpdateEventType.updateAvailable),
-        isTrue,
-      );
-      expect(
-        logger.records.any((entry) =>
-            entry.type == UpdateEventType.manualFallback &&
-            entry.message == 'windows_runtime_unavailable'),
-        isTrue,
-      );
-    });
-
-    test('records missing integrity metadata as manual fallback reason',
-        () async {
-      final logger = _InMemoryUpdateEventLogger();
-      final stagedClient = _FakeWindowsStagedUpdateClient(available: true);
-      final service = AppUpdateService(
-        platformOverride: AppUpdatePlatform.windows,
-        releaseModeOverride: true,
-        windowsStagedUpdateClient: stagedClient,
-        updateEventLogger: logger,
-        currentVersionLoader: () async =>
-            const AppRuntimeVersion(version: '1.0.0', buildNumber: '9'),
-        releaseJsonFetcher: (uri) async => {
-          'version': '1.1.0',
-          'platforms': {
-            'windows-x64': {
-              'package_url':
-                  'https://cdn.example.com/com.secondloop.secondloop-1.1.0-full.nupkg',
-            },
-          },
-          'assets': [
-            {
-              'name': 'SecondLoop-win.msi',
-              'browser_download_url':
-                  'https://cdn.example.com/SecondLoop-win.msi',
-            },
-          ],
-        },
-      );
-
-      final result = await service.checkForUpdates();
-
-      expect(result.update, isNotNull);
-      expect(result.update!.installMode, AppUpdateInstallMode.externalDownload);
-      expect(
-        logger.records.any((entry) =>
-            entry.type == UpdateEventType.manualFallback &&
-            entry.message == 'windows_integrity_missing'),
-        isTrue,
-      );
-    });
-  });
-
   group('AppUpdateService.downloaded asset handoff', () {
     test('stages Windows seamless updates when silent staging is supported',
         () async {
@@ -840,8 +41,8 @@ void main() {
 
       final assetFile = File('${tempDir.path}/SecondLoop-win.nupkg');
       await assetFile.writeAsString('windows package bytes');
-      final logger = _InMemoryUpdateEventLogger();
-      final stagedClient = _FakeWindowsStagedUpdateClient(available: true);
+      final logger = InMemoryUpdateEventLogger();
+      final stagedClient = FakeWindowsStagedUpdateClient(available: true);
       final service = AppUpdateService(
         platformOverride: AppUpdatePlatform.windows,
         windowsStagedUpdateClient: stagedClient,
@@ -875,7 +76,7 @@ void main() {
 
     test('cleans temporary downloaded asset after Windows staging', () async {
       String? stagedPath;
-      final stagedClient = _FakeWindowsStagedUpdateClient(
+      final stagedClient = FakeWindowsStagedUpdateClient(
         available: true,
         onStageAsset: (assetDownloadUri) async {
           stagedPath = assetDownloadUri.toFilePath();
@@ -914,7 +115,7 @@ void main() {
 
     test('rejects staging when update is not marked as staged-next-launch',
         () async {
-      final stagedClient = _FakeWindowsStagedUpdateClient(available: true);
+      final stagedClient = FakeWindowsStagedUpdateClient(available: true);
       final service = AppUpdateService(
         platformOverride: AppUpdatePlatform.windows,
         windowsStagedUpdateClient: stagedClient,
@@ -951,7 +152,7 @@ void main() {
               dir.path.contains('${Platform.pathSeparator}secondloop_asset_'))
           .map((dir) => dir.path)
           .toSet();
-      final stagedClient = _FakeWindowsStagedUpdateClient(available: true);
+      final stagedClient = FakeWindowsStagedUpdateClient(available: true);
       final service = AppUpdateService(
         platformOverride: AppUpdatePlatform.windows,
         windowsStagedUpdateClient: stagedClient,
@@ -997,7 +198,7 @@ void main() {
         () async {
       String? packagePath;
       var exitedCode = -1;
-      final stagedClient = _FakeWindowsStagedUpdateClient(
+      final stagedClient = FakeWindowsStagedUpdateClient(
         available: true,
         onInstallAsset: (assetDownloadUri) async {
           packagePath = assetDownloadUri.toFilePath();
@@ -1040,7 +241,7 @@ void main() {
         () async {
       String? archivePath;
       var exitedCode = -1;
-      final macosClient = _FakeMacosManagedUpdateClient(
+      final macosClient = FakeMacosManagedUpdateClient(
         supportedInstallLocation: true,
         onInstallArchive: (archiveUri) async {
           archivePath = archiveUri.toFilePath();
@@ -1089,7 +290,7 @@ void main() {
         '${tempDir.path}${Platform.pathSeparator}com.secondloop.secondloop-1.1.0-full.nupkg',
       );
       await pendingFile.writeAsString('windows-package');
-      final stagedClient = _FakeWindowsStagedUpdateClient(
+      final stagedClient = FakeWindowsStagedUpdateClient(
         available: true,
         pendingUpdateAvailable: true,
         pendingUpdateVersionValue: '1.1.0',
@@ -1138,7 +339,7 @@ void main() {
       await pendingFile.writeAsString('stale-package');
 
       String? installedPath;
-      final stagedClient = _FakeWindowsStagedUpdateClient(
+      final stagedClient = FakeWindowsStagedUpdateClient(
         available: true,
         pendingUpdateAvailable: true,
         pendingUpdateVersionValue: '1.1.0',
@@ -1194,7 +395,7 @@ void main() {
       await pendingFile.writeAsString('windows-package');
 
       String? installedPath;
-      final stagedClient = _FakeWindowsStagedUpdateClient(
+      final stagedClient = FakeWindowsStagedUpdateClient(
         available: true,
         pendingUpdateAvailable: true,
         pendingUpdateVersionValue: '1.1.0-beta',
@@ -1243,7 +444,7 @@ void main() {
         'downloads requested Windows update instead of reusing stale pending package',
         () async {
       String? installedPath;
-      final stagedClient = _FakeWindowsStagedUpdateClient(
+      final stagedClient = FakeWindowsStagedUpdateClient(
         available: true,
         pendingUpdateAvailable: true,
         pendingUpdateVersionValue: '1.1.0',
@@ -1288,8 +489,8 @@ void main() {
     });
 
     test('delegates Windows install to Velopack and exits', () async {
-      final stagedClient = _FakeWindowsStagedUpdateClient(available: true);
-      final logger = _InMemoryUpdateEventLogger();
+      final stagedClient = FakeWindowsStagedUpdateClient(available: true);
+      final logger = InMemoryUpdateEventLogger();
       var exitedCode = -1;
       final service = AppUpdateService(
         platformOverride: AppUpdatePlatform.windows,
@@ -1429,7 +630,7 @@ void main() {
 
     test('delegates macOS install to managed client and exits', () async {
       final macosClient =
-          _FakeMacosManagedUpdateClient(supportedInstallLocation: true);
+          FakeMacosManagedUpdateClient(supportedInstallLocation: true);
       var exitedCode = -1;
       final service = AppUpdateService(
         platformOverride: AppUpdatePlatform.macos,
@@ -1463,8 +664,8 @@ void main() {
   group('AppUpdateService.applyPendingUpdateOnStartup', () {
     test('records pending apply dispatch before exiting current process',
         () async {
-      final logger = _InMemoryUpdateEventLogger();
-      final stagedClient = _FakeWindowsStagedUpdateClient(
+      final logger = InMemoryUpdateEventLogger();
+      final stagedClient = FakeWindowsStagedUpdateClient(
         available: true,
         pendingApplyStartupResult:
             const PendingUpdateStartupResult.updateDispatched(),
@@ -1498,10 +699,10 @@ void main() {
     });
 
     test('still exits when dispatch event logging fails', () async {
-      final logger = _ThrowingUpdateEventLogger(
+      final logger = ThrowingUpdateEventLogger(
         failOnType: UpdateEventType.pendingApplyDispatched,
       );
-      final stagedClient = _FakeWindowsStagedUpdateClient(
+      final stagedClient = FakeWindowsStagedUpdateClient(
         available: true,
         pendingApplyStartupResult:
             const PendingUpdateStartupResult.updateDispatched(),
@@ -1527,8 +728,8 @@ void main() {
     });
 
     test('skips dispatch event when no pending update is available', () async {
-      final logger = _InMemoryUpdateEventLogger();
-      final stagedClient = _FakeWindowsStagedUpdateClient(
+      final logger = InMemoryUpdateEventLogger();
+      final stagedClient = FakeWindowsStagedUpdateClient(
         available: true,
         pendingUpdateAvailable: false,
       );
@@ -1560,7 +761,7 @@ void main() {
     });
 
     test('skips apply when staged runtime is unavailable', () async {
-      final stagedClient = _FakeWindowsStagedUpdateClient(available: false);
+      final stagedClient = FakeWindowsStagedUpdateClient(available: false);
       var exitedCode = -1;
       final service = AppUpdateService(
         platformOverride: AppUpdatePlatform.windows,
@@ -1576,8 +777,8 @@ void main() {
     });
 
     test('exits when pending Windows apply is already in progress', () async {
-      final logger = _InMemoryUpdateEventLogger();
-      final stagedClient = _FakeWindowsStagedUpdateClient(
+      final logger = InMemoryUpdateEventLogger();
+      final stagedClient = FakeWindowsStagedUpdateClient(
         available: true,
         pendingApplyStartupResult:
             const PendingUpdateStartupResult.updateInProgress(),
@@ -1601,12 +802,46 @@ void main() {
         isFalse,
       );
     });
+
+    test('does not exit when pending Windows apply probe is inconclusive',
+        () async {
+      final logger = InMemoryUpdateEventLogger();
+      final stagedClient = FakeWindowsStagedUpdateClient(
+        available: true,
+        pendingApplyStartupResult:
+            const PendingUpdateStartupResult.probeInconclusive(),
+      );
+      var exitedCode = -1;
+      final service = AppUpdateService(
+        platformOverride: AppUpdatePlatform.windows,
+        windowsStagedUpdateClient: stagedClient,
+        updateEventLogger: logger,
+        processExit: (code) => exitedCode = code,
+      );
+
+      final applied = await service.applyPendingUpdateOnStartup();
+
+      expect(applied.status, PendingUpdateStartupStatus.probeInconclusive);
+      expect(exitedCode, -1);
+      expect(
+        logger.records.any(
+          (entry) => entry.type == UpdateEventType.pendingApplyStarted,
+        ),
+        isFalse,
+      );
+      expect(
+        logger.records.any(
+          (entry) => entry.type == UpdateEventType.pendingApplyDispatched,
+        ),
+        isFalse,
+      );
+    });
   });
 
   group('AppUpdateService.applyStagedUpdateAndRestart', () {
     test('restarts into staged Windows update when runtime is available',
         () async {
-      final stagedClient = _FakeWindowsStagedUpdateClient(available: true);
+      final stagedClient = FakeWindowsStagedUpdateClient(available: true);
       var exitedCode = -1;
       final service = AppUpdateService(
         platformOverride: AppUpdatePlatform.windows,

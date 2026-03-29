@@ -94,4 +94,33 @@ void main() {
     expect(service.applyPendingCalls, 1);
     expect(service.checkCalls, 0);
   });
+
+  testWidgets(
+      'startup pauses update checks when pending apply probe is inconclusive',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final service = _StartupFlowUpdateService(
+      applyPendingResult: const PendingUpdateStartupResult.probeInconclusive(),
+      result: const AppUpdateCheckResult(currentVersion: '1.0.0+1'),
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AutoUpgradeGate(
+            updateService: service,
+            enableInDebug: true,
+            child: const Scaffold(
+              body: Text('home'),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('home'), findsOneWidget);
+    expect(service.applyPendingCalls, 1);
+    expect(service.checkCalls, 0);
+  });
 }

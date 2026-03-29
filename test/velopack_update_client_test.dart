@@ -587,7 +587,7 @@ void main() {
     expect(result.status, PendingUpdateStartupStatus.dispatched);
   });
 
-  test('startup treats unverified pending apply process as still in progress',
+  test('startup treats unverified pending apply process as probe inconclusive',
       () async {
     final root =
         await Directory.systemTemp.createTemp('velopack_probe_unknown_');
@@ -618,7 +618,7 @@ void main() {
     final result = await client.applyPendingOnStartup(waitPid: 2468);
 
     expect(calls, 0);
-    expect(result.status, PendingUpdateStartupStatus.inProgress);
+    expect(result.status, PendingUpdateStartupStatus.probeInconclusive);
     expect(_pendingApplyAttemptMarker(root).existsSync(), isTrue);
   });
 
