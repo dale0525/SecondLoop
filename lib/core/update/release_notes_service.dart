@@ -4,6 +4,9 @@ import 'dart:io';
 
 import 'package:flutter/widgets.dart';
 
+import 'app_update_helpers.dart';
+import 'app_update_models.dart';
+
 const _defaultReleaseApiOrigin = String.fromEnvironment(
   'SECONDLOOP_RELEASE_API_ORIGIN',
   defaultValue: 'https://secondloop.app',
@@ -12,6 +15,7 @@ const _defaultReleaseRepo = String.fromEnvironment(
   'SECONDLOOP_RELEASE_REPO',
   defaultValue: 'dale0525/SecondLoop',
 );
+const _defaultReleaseNotesNetworkTimeout = Duration(seconds: 15);
 
 class ReleaseNotesSection {
   const ReleaseNotesSection({
@@ -65,17 +69,23 @@ class ReleaseNotesService {
     ReleaseNotesJsonFetcher? notesJsonFetcher,
     String? releaseApiOriginOverride,
     String? releaseRepoOverride,
+    Duration? networkTimeoutOverride,
   })  : _httpClient = httpClient ?? HttpClient(),
         _releaseJsonFetcher = releaseJsonFetcher,
         _notesJsonFetcher = notesJsonFetcher,
         _releaseApiOriginOverride = releaseApiOriginOverride,
-        _releaseRepoOverride = releaseRepoOverride;
+        _releaseRepoOverride = releaseRepoOverride,
+        _networkTimeoutOverride = networkTimeoutOverride;
 
   final HttpClient _httpClient;
   final ReleaseNotesReleaseJsonFetcher? _releaseJsonFetcher;
   final ReleaseNotesJsonFetcher? _notesJsonFetcher;
   final String? _releaseApiOriginOverride;
   final String? _releaseRepoOverride;
+  final Duration? _networkTimeoutOverride;
+
+  Duration get _networkTimeout =>
+      _networkTimeoutOverride ?? _defaultReleaseNotesNetworkTimeout;
 
   Future<ReleaseNotesFetchResult> fetchReleaseNotes({
     required String tag,
@@ -110,7 +120,7 @@ class ReleaseNotesService {
 
     final releasePageUri = _parseUri(_readString(release, 'html_url'));
     final noteAsset = _matchReleaseNotesAsset(
-      assets: _parseAssets(release['assets']),
+      assets: _parseAssets(release['assets'], expectedTag: normalizedTag),
       tag: normalizedTag,
       locale: locale,
     );
@@ -154,7 +164,11 @@ class ReleaseNotesService {
       (_releaseApiOriginOverride ?? _defaultReleaseApiOrigin).trim(),
     );
     if (apiOrigin != null) {
-      endpoints.add(apiOrigin.resolve('/api/releases/latest'));
+      final normalizedPath =
+          apiOrigin.path.endsWith('/') ? apiOrigin.path : '${apiOrigin.path}/';
+      endpoints.add(
+        apiOrigin.replace(path: '${normalizedPath}api/releases/latest'),
+      );
     }
 
     final repo = (_releaseRepoOverride ?? _defaultReleaseRepo).trim();
@@ -169,33 +183,37 @@ class ReleaseNotesService {
   Future<Map<String, Object?>> _fetchReleaseJson(Uri uri) async {
     final fetcher = _releaseJsonFetcher;
     if (fetcher != null) {
-      return fetcher(uri);
+      return fetcher(uri).timeout(_networkTimeout);
     }
 
-    final req = await _httpClient.getUrl(uri);
+    final req = await _httpClient.getUrl(uri).timeout(_networkTimeout);
     req.headers.set(HttpHeaders.acceptHeader, 'application/vnd.github+json');
-    final resp = await req.close();
+    final resp = await req.close().timeout(_networkTimeout);
     if (resp.statusCode < 200 || resp.statusCode >= 300) {
       throw HttpException('http_${resp.statusCode}', uri: uri);
     }
 
-    return _decodeJsonMap(await utf8.decoder.bind(resp).join());
+    return _decodeJsonMap(
+      await utf8.decoder.bind(resp.timeout(_networkTimeout)).join(),
+    );
   }
 
   Future<Map<String, Object?>> _fetchNotesJson(Uri uri) async {
     final fetcher = _notesJsonFetcher;
     if (fetcher != null) {
-      return fetcher(uri);
+      return fetcher(uri).timeout(_networkTimeout);
     }
 
-    final req = await _httpClient.getUrl(uri);
+    final req = await _httpClient.getUrl(uri).timeout(_networkTimeout);
     req.headers.set(HttpHeaders.acceptHeader, 'application/json');
-    final resp = await req.close();
+    final resp = await req.close().timeout(_networkTimeout);
     if (resp.statusCode < 200 || resp.statusCode >= 300) {
       throw HttpException('http_${resp.statusCode}', uri: uri);
     }
 
-    return _decodeJsonMap(await utf8.decoder.bind(resp).join());
+    return _decodeJsonMap(
+      await utf8.decoder.bind(resp.timeout(_networkTimeout)).join(),
+    );
   }
 
   Map<String, Object?> _decodeJsonMap(String body) {
@@ -300,7 +318,10 @@ class ReleaseNotesService {
     return releaseAssets.first;
   }
 
-  List<_ReleaseNotesAsset> _parseAssets(Object? rawAssets) {
+  List<_ReleaseNotesAsset> _parseAssets(
+    Object? rawAssets, {
+    String? expectedTag,
+  }) {
     if (rawAssets is! List) return const [];
 
     final parsed = <_ReleaseNotesAsset>[];
@@ -310,18 +331,18 @@ class ReleaseNotesService {
       final url = item['browser_download_url'];
       if (name is! String || url is! String) continue;
 
-      final match = RegExp(
-        r'^release-notes-(v\d+\.\d+\.\d+)-([A-Za-z_-]+)\.json$',
-        caseSensitive: false,
-      ).firstMatch(name.trim());
-      if (match == null) continue;
-
       final uri = _parseUri(url.trim());
       if (uri == null) continue;
 
-      final tag = _normalizeTag(match.group(1));
-      final localeTag = match.group(2);
-      if (tag == null || localeTag == null) continue;
+      final parsedName = _parseReleaseNotesAssetFileName(
+        name.trim(),
+        expectedTag: expectedTag,
+      );
+      if (parsedName == null) continue;
+
+      final tag = _normalizeTag(parsedName.$1);
+      final localeTag = parsedName.$2;
+      if (tag == null) continue;
 
       parsed.add(
         _ReleaseNotesAsset(
@@ -344,6 +365,63 @@ class ReleaseNotesService {
   }
 }
 
+(String, String)? _parseReleaseNotesAssetFileName(
+  String value, {
+  String? expectedTag,
+}) {
+  const prefix = 'release-notes-';
+  const suffix = '.json';
+  final trimmed = value.trim();
+  if (!trimmed.toLowerCase().startsWith(prefix) ||
+      !trimmed.toLowerCase().endsWith(suffix)) {
+    return null;
+  }
+
+  final body = trimmed.substring(prefix.length, trimmed.length - suffix.length);
+  final normalizedExpectedTag = _normalizeTag(expectedTag);
+  if (normalizedExpectedTag != null) {
+    if (_normalizeTag(body) == normalizedExpectedTag) {
+      return (body, 'en-US');
+    }
+
+    final expectedPrefix = '$normalizedExpectedTag-';
+    if (body.length > expectedPrefix.length &&
+        body.toLowerCase().startsWith(expectedPrefix.toLowerCase())) {
+      final locale = body.substring(normalizedExpectedTag.length + 1).trim();
+      if (_isLikelyLocaleTag(locale)) {
+        return (normalizedExpectedTag, locale);
+      }
+    }
+  }
+
+  for (var index = body.indexOf('-');
+      index >= 0;
+      index = body.indexOf('-', index + 1)) {
+    final candidateTag = body.substring(0, index).trim();
+    final candidateLocale = body.substring(index + 1).trim();
+    if (_normalizeTag(candidateTag) == null ||
+        !_isLikelyLocaleTag(candidateLocale)) {
+      continue;
+    }
+    return (candidateTag, candidateLocale);
+  }
+
+  if (_normalizeTag(body) != null) {
+    return (body, 'en-US');
+  }
+
+  return null;
+}
+
+bool _isLikelyLocaleTag(String value) {
+  final normalized = value.trim();
+  if (normalized.isEmpty) {
+    return false;
+  }
+  return RegExp(r'^[A-Za-z]{2,3}(?:[-_][A-Za-z0-9]+)+$').hasMatch(normalized) ||
+      RegExp(r'^[A-Za-z]{2,3}$').hasMatch(normalized);
+}
+
 class _ReleaseNotesAsset {
   const _ReleaseNotesAsset({
     required this.tag,
@@ -357,13 +435,14 @@ class _ReleaseNotesAsset {
 }
 
 String? _normalizeTag(String? value) {
-  if (value == null) return null;
-  final trimmed = value.trim();
-  if (trimmed.isEmpty) return null;
-
-  final match = RegExp(r'^v?(\d+\.\d+\.\d+)$').firstMatch(trimmed);
-  if (match == null) return null;
-  return 'v${match.group(1)}';
+  final normalized = normalizeLatestTag(value);
+  if (normalized == null) {
+    return null;
+  }
+  if (parseComparableAppVersion(normalized) == null) {
+    return null;
+  }
+  return normalized;
 }
 
 String? normalizeReleaseTag(String? value) => _normalizeTag(value);

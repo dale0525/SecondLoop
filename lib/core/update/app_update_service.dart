@@ -229,6 +229,7 @@ class AppUpdateService {
           _platform,
           assets,
           windowsManagedRuntimeAvailable: windowsManagedRuntimeAvailable,
+          currentArchitecture: _currentArchitecture,
         );
     final installMode = resolveInstallMode(
       _platform,
@@ -370,58 +371,57 @@ class AppUpdateService {
         throw StateError('seamless_update_not_supported_for_$platform');
       }
 
-      final tempRoot =
-          await Directory.systemTemp.createTemp('secondloop_update_');
-      try {
-        final archiveFile = File('${tempRoot.path}/payload_${asset.name}');
-        final extractedDir = Directory('${tempRoot.path}/payload');
-        await extractedDir.create(recursive: true);
-
-        await _downloadToFile(asset.downloadUri, archiveFile);
-        if (asset.sha256 != null) {
-          await _verifyFileSha256(archiveFile, asset.sha256!);
-        }
-        await extractFileToDisk(archiveFile.path, extractedDir.path);
-
-        final sourceDir = resolveExtractedSourceDir(extractedDir, platform);
-        final executablePath = File(Platform.resolvedExecutable).absolute.path;
-        final appDirPath = File(executablePath).parent.path;
-
-        final script = File('${tempRoot.path}/apply_update.sh');
-        await script.writeAsString(
-          buildLinuxUpdaterScript(
-            pid: pid,
-            appDirPath: appDirPath,
-            executablePath: executablePath,
-            sourceDirPath: sourceDir.path,
-            tempRootPath: tempRoot.path,
-          ),
-        );
-        await script.setLastModified(DateTime.now());
-        final modeResult = await Process.run('chmod', ['+x', script.path]);
-        if (modeResult.exitCode != 0) {
-          throw StateError('chmod_failed_${modeResult.stderr}');
-        }
-
-        await Process.start(
-          '/bin/sh',
-          [script.path],
-          mode: ProcessStartMode.detached,
-        );
-        await _recordEvent(
-          UpdateEventType.installDispatched,
-          currentVersion: update.currentVersion,
-          latestTag: update.latestTag,
-          installMode: update.installMode,
-          message: asset.name,
-        );
-        _exitProcess(0);
-      } catch (_) {
+      await _withPreparedAsset(asset, (localUri) async {
+        final tempRoot =
+            await Directory.systemTemp.createTemp('secondloop_update_');
         try {
-          await _deleteDirectoryIfExists(tempRoot);
-        } catch (_) {}
-        rethrow;
-      }
+          final archiveFile = File(localUri.toFilePath());
+          final extractedDir = Directory('${tempRoot.path}/payload');
+          await extractedDir.create(recursive: true);
+
+          await extractFileToDisk(archiveFile.path, extractedDir.path);
+
+          final sourceDir = resolveExtractedSourceDir(extractedDir, platform);
+          final executablePath =
+              File(Platform.resolvedExecutable).absolute.path;
+          final appDirPath = File(executablePath).parent.path;
+
+          final script = File('${tempRoot.path}/apply_update.sh');
+          await script.writeAsString(
+            buildLinuxUpdaterScript(
+              pid: pid,
+              appDirPath: appDirPath,
+              executablePath: executablePath,
+              sourceDirPath: sourceDir.path,
+              tempRootPath: tempRoot.path,
+            ),
+          );
+          await script.setLastModified(DateTime.now());
+          final modeResult = await Process.run('chmod', ['+x', script.path]);
+          if (modeResult.exitCode != 0) {
+            throw StateError('chmod_failed_${modeResult.stderr}');
+          }
+
+          await Process.start(
+            '/bin/sh',
+            [script.path],
+            mode: ProcessStartMode.detached,
+          );
+          await _recordEvent(
+            UpdateEventType.installDispatched,
+            currentVersion: update.currentVersion,
+            latestTag: update.latestTag,
+            installMode: update.installMode,
+            message: asset.name,
+          );
+          _exitProcess(0);
+        } catch (_) {
+          try {
+            await _deleteDirectoryIfExists(tempRoot);
+          } catch (_) {}
+          rethrow;
+        }
+      });
     } catch (error) {
       await _recordFailure(
         UpdateEventType.installFailed,

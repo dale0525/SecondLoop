@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -105,6 +107,227 @@ void main() {
       expect(result.notes, isNotNull);
       expect(result.sourceLocaleTag, 'en-US');
       expect(result.notes!.summary, contains('startup'));
+    });
+
+    test('accepts fourth-segment release tags for release notes assets',
+        () async {
+      final service = ReleaseNotesService(
+        releaseJsonFetcher: (uri) async => {
+          'tag_name': 'v1.2.3.4',
+          'html_url':
+              'https://github.com/dale0525/SecondLoop/releases/tag/v1.2.3.4',
+          'assets': [
+            {
+              'name': 'release-notes-v1.2.3.4-en-US.json',
+              'browser_download_url': 'https://cdn.example.com/en-1234.json',
+            },
+          ],
+        },
+        notesJsonFetcher: (uri) async => {
+          'version': 'v1.2.3.4',
+          'summary': 'Fourth segment release notes.',
+          'highlights': [
+            {
+              'text': 'Supports four-part versions',
+              'change_ids': ['c1'],
+            },
+          ],
+          'sections': [
+            {
+              'title': 'Notes',
+              'items': [
+                {
+                  'text': 'Release notes match the update tag format',
+                  'change_ids': ['c1'],
+                },
+              ],
+            },
+          ],
+        },
+      );
+
+      final result = await service.fetchReleaseNotes(
+        tag: 'v1.2.3.4',
+        locale: const Locale('en', 'US'),
+      );
+
+      expect(result.notes, isNotNull);
+      expect(result.notes!.version, 'v1.2.3.4');
+      expect(result.sourceLocaleTag, 'en-US');
+    });
+
+    test('accepts prerelease tags for release notes assets', () async {
+      final service = ReleaseNotesService(
+        releaseJsonFetcher: (uri) async => {
+          'tag_name': 'v1.2.3-rc.1',
+          'html_url':
+              'https://github.com/dale0525/SecondLoop/releases/tag/v1.2.3-rc.1',
+          'assets': [
+            {
+              'name': 'release-notes-v1.2.3-rc.1-en-US.json',
+              'browser_download_url': 'https://cdn.example.com/en-rc1.json',
+            },
+          ],
+        },
+        notesJsonFetcher: (uri) async => {
+          'version': 'v1.2.3-rc.1',
+          'summary': 'Prerelease notes.',
+          'highlights': [
+            {
+              'text': 'Supports prerelease tags',
+              'change_ids': ['c1'],
+            },
+          ],
+          'sections': [
+            {
+              'title': 'Notes',
+              'items': [
+                {
+                  'text': 'Release notes match prerelease update tags',
+                  'change_ids': ['c1'],
+                },
+              ],
+            },
+          ],
+        },
+      );
+
+      final result = await service.fetchReleaseNotes(
+        tag: 'v1.2.3-rc.1',
+        locale: const Locale('en', 'US'),
+      );
+
+      expect(result.notes, isNotNull);
+      expect(result.notes!.version, 'v1.2.3-rc.1');
+      expect(result.sourceLocaleTag, 'en-US');
+    });
+
+    test('accepts short prerelease tags without misparsing locale', () async {
+      final service = ReleaseNotesService(
+        releaseJsonFetcher: (uri) async => {
+          'tag_name': 'v1.2.3-rc',
+          'html_url':
+              'https://github.com/dale0525/SecondLoop/releases/tag/v1.2.3-rc',
+          'assets': [
+            {
+              'name': 'release-notes-v1.2.3-rc.json',
+              'browser_download_url': 'https://cdn.example.com/en-rc.json',
+            },
+          ],
+        },
+        notesJsonFetcher: (uri) async => {
+          'version': 'v1.2.3-rc',
+          'summary': 'Short prerelease notes.',
+          'highlights': [
+            {
+              'text': 'Supports rc tags without numeric suffixes',
+              'change_ids': ['c1'],
+            },
+          ],
+          'sections': [
+            {
+              'title': 'Notes',
+              'items': [
+                {
+                  'text': 'Parses release note assets with rc suffixes',
+                  'change_ids': ['c1'],
+                },
+              ],
+            },
+          ],
+        },
+      );
+
+      final result = await service.fetchReleaseNotes(
+        tag: 'v1.2.3-rc',
+        locale: const Locale('en', 'US'),
+      );
+
+      expect(result.notes, isNotNull);
+      expect(result.notes!.version, 'v1.2.3-rc');
+      expect(result.sourceLocaleTag, 'en-US');
+    });
+
+    test('preserves custom release API base path before GitHub tag fallback',
+        () async {
+      final attempted = <Uri>[];
+      final service = ReleaseNotesService(
+        releaseApiOriginOverride: 'https://updates.example.com/custom/base/',
+        releaseRepoOverride: 'acme/SecondLoop',
+        releaseJsonFetcher: (uri) async {
+          attempted.add(uri);
+          if (attempted.length == 1) {
+            return {
+              'tag_name': 'v1.2.4',
+              'html_url': 'https://updates.example.com/releases/tag/v1.2.4',
+              'assets': const [],
+            };
+          }
+          return {
+            'tag_name': 'v1.2.3',
+            'html_url':
+                'https://github.com/acme/SecondLoop/releases/tag/v1.2.3',
+            'assets': [
+              {
+                'name': 'release-notes-v1.2.3-en-US.json',
+                'browser_download_url': 'https://cdn.example.com/en-123.json',
+              },
+            ],
+          };
+        },
+        notesJsonFetcher: (uri) async => {
+          'version': 'v1.2.3',
+          'summary': 'Fallback notes.',
+          'highlights': [
+            {
+              'text': 'Falls back from self-hosted latest to GitHub tag',
+              'change_ids': ['c1'],
+            },
+          ],
+          'sections': [
+            {
+              'title': 'Notes',
+              'items': [
+                {
+                  'text': 'Preserves the configured API base path',
+                  'change_ids': ['c1'],
+                },
+              ],
+            },
+          ],
+        },
+      );
+
+      final result = await service.fetchReleaseNotes(
+        tag: 'v1.2.3',
+        locale: const Locale('en', 'US'),
+      );
+
+      expect(result.notes, isNotNull);
+      expect(attempted, hasLength(2));
+      expect(
+        attempted.first.toString(),
+        'https://updates.example.com/custom/base/api/releases/latest',
+      );
+      expect(
+        attempted.last.toString(),
+        'https://api.github.com/repos/acme/SecondLoop/releases/tags/v1.2.3',
+      );
+    });
+
+    test('times out stalled release notes fetchers', () async {
+      final service = ReleaseNotesService(
+        networkTimeoutOverride: const Duration(milliseconds: 10),
+        releaseJsonFetcher: (uri) => Completer<Map<String, Object?>>().future,
+      );
+
+      final result = await service.fetchReleaseNotes(
+        tag: 'v1.2.3',
+        locale: const Locale('en', 'US'),
+      );
+
+      expect(result.notes, isNull);
+      expect(result.errorMessage, contains('TimeoutException'));
     });
   });
 }

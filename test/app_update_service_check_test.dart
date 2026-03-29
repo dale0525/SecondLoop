@@ -118,6 +118,47 @@ void main() {
       expect(stagedClient.isAvailableCalls, 1);
     });
 
+    test(
+        'prefers matching Windows velopack package over mismatched arm64 asset',
+        () async {
+      final stagedClient = FakeWindowsStagedUpdateClient(available: true);
+      final service = AppUpdateService(
+        platformOverride: AppUpdatePlatform.windows,
+        releaseModeOverride: true,
+        windowsStagedUpdateClient: stagedClient,
+        currentArchitectureOverride: 'x86_64',
+        currentVersionLoader: () async =>
+            const AppRuntimeVersion(version: '1.0.0', buildNumber: '88'),
+        releaseJsonFetcher: (uri) async => {
+          'tag_name': 'v1.1.0',
+          'html_url':
+              'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
+          'assets': [
+            {
+              'name': 'com.secondloop.secondloop-1.1.0-arm64-full.nupkg',
+              'browser_download_url': 'https://cdn.example.com/win-arm64.nupkg',
+              'sha256': 'arm64sha',
+            },
+            {
+              'name': 'com.secondloop.secondloop-1.1.0-x64-full.nupkg',
+              'browser_download_url': 'https://cdn.example.com/win-x64.nupkg',
+              'sha256': 'x64sha',
+            },
+          ],
+        },
+      );
+
+      final result = await service.checkForUpdates();
+
+      expect(result.update, isNotNull);
+      expect(result.update!.installMode, AppUpdateInstallMode.seamlessRestart);
+      expect(
+        result.update!.asset?.downloadUri.toString(),
+        'https://cdn.example.com/win-x64.nupkg',
+      );
+      expect(result.update!.asset?.sha256, 'x64sha');
+    });
+
     test('falls back to external MSI when Windows runtime is unavailable',
         () async {
       final stagedClient = FakeWindowsStagedUpdateClient(available: false);
@@ -189,6 +230,40 @@ void main() {
       expect(result.update, isNotNull);
       expect(result.update!.installMode, AppUpdateInstallMode.externalDownload);
       expect(result.update!.asset?.name, 'SecondLoop-win-x64-v1.1.0.msi');
+    });
+
+    test('does not offer arm64-only Windows MSI on x64', () async {
+      final stagedClient = FakeWindowsStagedUpdateClient(available: false);
+      final service = AppUpdateService(
+        platformOverride: AppUpdatePlatform.windows,
+        releaseModeOverride: true,
+        windowsStagedUpdateClient: stagedClient,
+        currentArchitectureOverride: 'x86_64',
+        currentVersionLoader: () async =>
+            const AppRuntimeVersion(version: '1.0.0', buildNumber: '88'),
+        releaseJsonFetcher: (uri) async => {
+          'tag_name': 'v1.1.0',
+          'html_url':
+              'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
+          'assets': [
+            {
+              'name': 'SecondLoop-win-arm64-v1.1.0.msi',
+              'browser_download_url':
+                  'https://cdn.example.com/SecondLoop-win-arm64-v1.1.0.msi',
+            },
+          ],
+        },
+      );
+
+      final result = await service.checkForUpdates();
+
+      expect(result.update, isNotNull);
+      expect(result.update!.installMode, AppUpdateInstallMode.externalDownload);
+      expect(result.update!.asset, isNull);
+      expect(
+        result.update!.downloadUri.toString(),
+        'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
+      );
     });
 
     test('ignores delta nupkg assets and falls back to MSI installers',
@@ -373,6 +448,49 @@ void main() {
       expect(result.update!.asset?.sha256, 'x64sha');
     });
 
+    test('prefers matching macOS managed archive over mismatched arm64 asset',
+        () async {
+      final macosClient =
+          FakeMacosManagedUpdateClient(supportedInstallLocation: true);
+      final service = AppUpdateService(
+        platformOverride: AppUpdatePlatform.macos,
+        releaseModeOverride: true,
+        macosManagedUpdateClient: macosClient,
+        currentVersionLoader: () async =>
+            const AppRuntimeVersion(version: '1.0.0', buildNumber: '21'),
+        currentArchitectureOverride: 'x86_64',
+        releaseJsonFetcher: (uri) async => {
+          'version': '1.1.0',
+          'release_page_url':
+              'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
+          'assets': [
+            {
+              'name': 'SecondLoop-macos-arm64-v1.1.0.app.tar.gz',
+              'browser_download_url':
+                  'https://cdn.example.com/SecondLoop-macos-arm64-v1.1.0.app.tar.gz',
+              'sha256': 'arm64sha',
+            },
+            {
+              'name': 'SecondLoop-macos-x64-v1.1.0.app.tar.gz',
+              'browser_download_url':
+                  'https://cdn.example.com/SecondLoop-macos-x64-v1.1.0.app.tar.gz',
+              'sha256': 'x64sha',
+            },
+          ],
+        },
+      );
+
+      final result = await service.checkForUpdates();
+
+      expect(result.update, isNotNull);
+      expect(result.update!.installMode, AppUpdateInstallMode.seamlessRestart);
+      expect(
+        result.update!.asset?.downloadUri.toString(),
+        'https://cdn.example.com/SecondLoop-macos-x64-v1.1.0.app.tar.gz',
+      );
+      expect(result.update!.asset?.sha256, 'x64sha');
+    });
+
     test('does not fall back from x64 macOS to arm64-only manifest entry',
         () async {
       final macosClient =
@@ -454,6 +572,51 @@ void main() {
       expect(
         result.update!.downloadUri.toString(),
         'https://cdn.example.com/SecondLoop-macos-x64-v1.1.0.dmg',
+      );
+    });
+
+    test('prefers generic macOS asset when architecture is unknown', () async {
+      final macosClient =
+          FakeMacosManagedUpdateClient(supportedInstallLocation: false);
+      final service = AppUpdateService(
+        platformOverride: AppUpdatePlatform.macos,
+        releaseModeOverride: true,
+        macosManagedUpdateClient: macosClient,
+        currentVersionLoader: () async =>
+            const AppRuntimeVersion(version: '1.0.0', buildNumber: '21'),
+        currentArchitectureOverride: 'mystery-cpu',
+        releaseJsonFetcher: (uri) async => {
+          'version': '1.1.0',
+          'release_page_url':
+              'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
+          'assets': [
+            {
+              'name': 'SecondLoop-macos-arm64-v1.1.0.dmg',
+              'browser_download_url':
+                  'https://cdn.example.com/SecondLoop-macos-arm64-v1.1.0.dmg',
+            },
+            {
+              'name': 'SecondLoop-macos-v1.1.0.dmg',
+              'browser_download_url':
+                  'https://cdn.example.com/SecondLoop-macos-v1.1.0.dmg',
+            },
+            {
+              'name': 'SecondLoop-macos-x64-v1.1.0.dmg',
+              'browser_download_url':
+                  'https://cdn.example.com/SecondLoop-macos-x64-v1.1.0.dmg',
+            },
+          ],
+        },
+      );
+
+      final result = await service.checkForUpdates();
+
+      expect(result.update, isNotNull);
+      expect(result.update!.installMode, AppUpdateInstallMode.externalDownload);
+      expect(result.update!.asset?.name, 'SecondLoop-macos-v1.1.0.dmg');
+      expect(
+        result.update!.downloadUri.toString(),
+        'https://cdn.example.com/SecondLoop-macos-v1.1.0.dmg',
       );
     });
 

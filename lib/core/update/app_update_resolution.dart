@@ -6,20 +6,33 @@ AppUpdateAsset? matchAssetForCurrentPlatform(
   AppUpdatePlatform platform,
   List<AppUpdateAsset> assets, {
   required bool windowsManagedRuntimeAvailable,
+  String? currentArchitecture,
 }) {
   if (platform == AppUpdatePlatform.windows) {
     return _matchWindowsAssetForCurrentRuntime(
       assets,
       managedRuntimeAvailable: windowsManagedRuntimeAvailable,
+      currentArchitecture: currentArchitecture,
     );
   }
 
   if (platform == AppUpdatePlatform.macos) {
-    for (final asset in assets) {
-      if (isMacosManagedArchiveName(asset.name)) return asset;
+    final managedArchive = _selectBestAssetForArchitecture(
+      platform,
+      assets.where((asset) => isMacosManagedArchiveName(asset.name)).toList(),
+      currentArchitecture: currentArchitecture,
+    );
+    if (managedArchive != null) {
+      return managedArchive;
     }
-    for (final asset in assets) {
-      if (isMacosManualInstallerName(asset.name)) return asset;
+
+    final manualInstaller = _selectBestAssetForArchitecture(
+      platform,
+      assets.where((asset) => isMacosManualInstallerName(asset.name)).toList(),
+      currentArchitecture: currentArchitecture,
+    );
+    if (manualInstaller != null) {
+      return manualInstaller;
     }
     return null;
   }
@@ -55,36 +68,6 @@ AppUpdateAsset? selectExternalDownloadAsset(
     return matches;
   }
 
-  AppUpdateAsset? selectBestManualAsset(List<AppUpdateAsset> matches) {
-    if (matches.isEmpty) {
-      return null;
-    }
-
-    final architecture = currentArchitecture?.trim();
-    if (architecture == null || architecture.isEmpty) {
-      return matches.first;
-    }
-
-    AppUpdateAsset? bestAsset;
-    int? bestScore;
-    for (final asset in matches) {
-      final score = _scoreManualAssetForArchitecture(
-        platform,
-        asset.name,
-        architecture,
-      );
-      if (score == null) {
-        continue;
-      }
-      if (bestScore == null || score < bestScore) {
-        bestAsset = asset;
-        bestScore = score;
-      }
-    }
-
-    return bestAsset;
-  }
-
   AppUpdateAsset? selectFromMatches(
     bool Function(String name) matcher,
     AppUpdateAsset? preferred,
@@ -95,7 +78,11 @@ AppUpdateAsset? selectExternalDownloadAsset(
         !matches.contains(preferred)) {
       matches.add(preferred);
     }
-    return selectBestManualAsset(matches);
+    return _selectBestAssetForArchitecture(
+      platform,
+      matches,
+      currentArchitecture: currentArchitecture,
+    );
   }
 
   return switch (platform) {
@@ -105,6 +92,40 @@ AppUpdateAsset? selectExternalDownloadAsset(
       selectFromMatches(isMacosManualInstallerName, preferredAsset),
     _ => preferredAsset,
   };
+}
+
+AppUpdateAsset? _selectBestAssetForArchitecture(
+  AppUpdatePlatform platform,
+  List<AppUpdateAsset> matches, {
+  String? currentArchitecture,
+}) {
+  if (matches.isEmpty) {
+    return null;
+  }
+
+  final architecture = currentArchitecture?.trim();
+  if (architecture == null || architecture.isEmpty) {
+    return matches.first;
+  }
+
+  AppUpdateAsset? bestAsset;
+  int? bestScore;
+  for (final asset in matches) {
+    final score = _scoreManualAssetForArchitecture(
+      platform,
+      asset.name,
+      architecture,
+    );
+    if (score == null) {
+      continue;
+    }
+    if (bestScore == null || score < bestScore) {
+      bestAsset = asset;
+      bestScore = score;
+    }
+  }
+
+  return bestAsset;
 }
 
 int? _scoreManualAssetForArchitecture(
@@ -134,7 +155,7 @@ int? _scoreManualAssetForArchitecture(
     'x64' when hasX64Token => 0,
     'x64' when hasArm64Token => null,
     'x64' => hasKnownArchitectureToken ? 2 : 1,
-    _ => 0,
+    _ => hasKnownArchitectureToken ? null : 1,
   };
 }
 
@@ -335,20 +356,32 @@ Uri? parseUpdateUri(String? value) {
 AppUpdateAsset? _matchWindowsAssetForCurrentRuntime(
   List<AppUpdateAsset> assets, {
   required bool managedRuntimeAvailable,
+  String? currentArchitecture,
 }) {
-  AppUpdateAsset? findFirst(bool Function(String name) matcher) {
+  List<AppUpdateAsset> findAll(bool Function(String name) matcher) {
+    final matches = <AppUpdateAsset>[];
     for (final asset in assets) {
-      if (matcher(asset.name)) return asset;
+      if (matcher(asset.name)) {
+        matches.add(asset);
+      }
     }
-    return null;
+    return matches;
   }
 
   if (managedRuntimeAvailable) {
-    final stagedPackage = findFirst(isWindowsVelopackPackageName);
+    final stagedPackage = _selectBestAssetForArchitecture(
+      AppUpdatePlatform.windows,
+      findAll(isWindowsVelopackPackageName),
+      currentArchitecture: currentArchitecture,
+    );
     if (stagedPackage != null) {
       return stagedPackage;
     }
   }
 
-  return findFirst(isWindowsMsiInstallerName);
+  return _selectBestAssetForArchitecture(
+    AppUpdatePlatform.windows,
+    findAll(isWindowsMsiInstallerName),
+    currentArchitecture: currentArchitecture,
+  );
 }

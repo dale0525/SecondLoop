@@ -471,7 +471,7 @@ collect_related_flutter_tests_for_lib_file() {
   while IFS= read -r match; do
     [[ -n "${match}" && -f "${match}" ]] || continue
     printf '%s\n' "${match}"
-  done < <(rg -l --fixed-strings "${package_import}" test integration_test 2>/dev/null || true)
+  done < <(rg -l --fixed-strings --glob '*_test.dart' "${package_import}" test integration_test 2>/dev/null || true)
 }
 
 collect_targeted_flutter_tests() {

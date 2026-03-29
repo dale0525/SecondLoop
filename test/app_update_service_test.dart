@@ -559,6 +559,56 @@ void main() {
       );
     });
 
+    test('accepts file URI for Linux seamless install without HTTP download',
+        () async {
+      final tempDir =
+          await Directory.systemTemp.createTemp('linux_file_update_');
+      addTearDown(() async {
+        if (tempDir.existsSync()) {
+          try {
+            await tempDir.delete(recursive: true);
+          } catch (_) {}
+        }
+      });
+
+      final archiveFile =
+          File('${tempDir.path}/SecondLoop-linux-x64-v1.1.0.tar.gz');
+      await archiveFile.writeAsString('not-a-valid-tar-archive');
+      final expectedSha = await sha256FileHexForTest(archiveFile);
+      var requestedUris = 0;
+      final service = AppUpdateService(
+        platformOverride: AppUpdatePlatform.linux,
+        httpClient: _FakeHttpClient(
+          handler: (uri) {
+            requestedUris += 1;
+            throw StateError('should_not_download:$uri');
+          },
+        ),
+        processExit: (_) {},
+      );
+
+      await expectLater(
+        () => service.installAndRestart(
+          AppUpdateAvailability(
+            currentVersion: '1.0.0',
+            latestTag: 'v1.1.0',
+            releasePageUri: Uri.parse(
+              'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
+            ),
+            installMode: AppUpdateInstallMode.seamlessRestart,
+            asset: AppUpdateAsset(
+              name: 'SecondLoop-linux-x64-v1.1.0.tar.gz',
+              downloadUri: archiveFile.uri,
+              sha256: expectedSha,
+            ),
+          ),
+        ),
+        throwsA(anything),
+      );
+
+      expect(requestedUris, 0);
+    });
+
     test('cleans Linux tempRoot when install throws before script handoff',
         () async {
       const body = 'not-a-valid-tar-archive';

@@ -88,6 +88,21 @@ class PreCommitHookTests(unittest.TestCase):
                 encoding="utf-8",
             )
 
+            (root / "test/support").mkdir(parents=True, exist_ok=True)
+            (root / "test/support/firebase_identity_toolkit_test_support.dart").write_text(
+                textwrap.dedent(
+                    """
+                    import 'package:secondloop/core/cloud/firebase_identity_toolkit.dart';
+
+                    void helper() {
+                      stub();
+                    }
+                    """
+                ).strip()
+                + "\n",
+                encoding="utf-8",
+            )
+
             staged_literal = " ".join(f'"{path}"' for path in staged_files)
             bash_script = textwrap.dedent(
                 f"""
@@ -199,7 +214,9 @@ class PreCommitHookTests(unittest.TestCase):
         self.assertIn('lib/*.dart | lib/**/*.dart)', script)
         self.assertIn('package_import="package:secondloop/${file#lib/}"', script)
         self.assertIn('if ! command -v rg >/dev/null 2>&1; then', script)
-        self.assertIn('rg -l --fixed-strings "${package_import}" test integration_test', script)
+        self.assertIn('rg -l --fixed-strings --glob', script)
+        self.assertIn("' *_test.dart'".replace(' ', ''), script.replace(' ', ''))
+        self.assertIn('"${package_import}" test integration_test', script)
         self.assertIn('while IFS= read -r candidate; do', script)
         self.assertIn('done < <(collect_related_flutter_tests_for_lib_file "${file}")', script)
         self.assertNotIn('mapfile -t related_targets', script)
@@ -270,6 +287,18 @@ class PreCommitHookTests(unittest.TestCase):
                 "test/core/cloud/firebase_identity_toolkit_test.dart",
                 "test/cloud_account/firebase_identity_toolkit_usage_test.dart",
             ],
+        )
+
+
+    def test_pre_commit_hook_excludes_support_dart_helpers_from_targeted_tests(
+        self,
+    ) -> None:
+        targets = self._run_collect_targeted_flutter_tests(
+            ["lib/core/cloud/firebase_identity_toolkit.dart"]
+        )
+
+        self.assertNotIn(
+            "test/support/firebase_identity_toolkit_test_support.dart", targets
         )
 
     def test_pre_commit_hook_falls_back_to_full_flutter_suite_for_unmapped_lib_change(
