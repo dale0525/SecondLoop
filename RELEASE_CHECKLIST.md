@@ -17,6 +17,17 @@
 - Confirm `SecondLoop-win.msi.sha256` is uploaded to the GitHub Release.
 - Confirm the release notes mention the MSI artifact and checksum file.
 - Confirm the generated WinGet manifest bundle references the exact Windows MSI asset.
+- Confirm local/dev Velopack packaging still emits channel-suffixed full packages such as `com.secondloop.secondloopdev-1.0.1-devwin-full.nupkg`, while `releases.<channel>.json` keeps the semantic version as `1.0.1`.
+- Confirm Windows Velopack packaging runs from a short mapped workspace path instead of a deep `%TEMP%` worktree path.
+
+## Windows auto-update smoke
+
+- Ensure the localhost development certificate used by the smoke feed is trusted for the current user, or explicitly use `-SkipCertificateTrust` when trust is already configured.
+- Run `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/windows_auto_update_smoke.ps1` on a local Windows machine.
+- Confirm the smoke feed responds at `https://localhost:8443/api/releases/latest`.
+- Confirm the install root is `%LOCALAPPDATA%\com.secondloop.secondloopdev`.
+- Confirm the final installed and running version is `1.0.1+1`.
+- If the smoke path fails, inspect `dist/windows-auto-update-smoke/install-v1.log` and `dist/windows-auto-update-smoke/apply-v2.log` before sign-off.
 
 ## External publication
 

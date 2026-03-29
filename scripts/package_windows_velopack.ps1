@@ -9,9 +9,26 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-$repoRoot = Resolve-Path (Join-Path $PSScriptRoot '..')
-$repoRootPath = $repoRoot.Path
-Set-Location $repoRootPath
+. (Join-Path $PSScriptRoot 'use_windows_short_workspace.ps1')
+
+$script:repoRootPath = Resolve-SecondLoopProjectDir -DefaultRepoRoot (Join-Path $PSScriptRoot '..')
+
+function Add-ToPathIfMissing {
+  param([string]$Directory)
+
+  if ([string]::IsNullOrWhiteSpace($Directory) -or
+      -not (Test-Path -LiteralPath $Directory -PathType Container)) {
+    return
+  }
+
+  $pathEntries = @($env:PATH -split ';')
+  $alreadyInPath = $pathEntries | Where-Object {
+    [string]::Equals($_, $Directory, [System.StringComparison]::OrdinalIgnoreCase)
+  }
+  if (-not $alreadyInPath) {
+    $env:PATH = "$Directory;$env:PATH"
+  }
+}
 
 function Import-DotEnvLocal {
   $envFile = Join-Path $repoRootPath '.env.local'
@@ -193,93 +210,147 @@ function Ensure-VpkTool([string]$RequiredVersion) {
   return $vpkPath
 }
 
-Import-DotEnvLocal
-
-if (-not $SkipBuild) {
-  & (Join-Path $PSScriptRoot 'setup_windows_libclang.ps1')
-
-  Write-Host 'Running: flutter pub get'
-  & dart pub global run fvm:main flutter pub get
-  if ($LASTEXITCODE -ne 0) {
-    exit $LASTEXITCODE
+function Ensure-DotnetRoot {
+  $dotnetCommand = Get-Command dotnet -ErrorAction SilentlyContinue
+  if (-not $dotnetCommand) {
+    throw 'dotnet CLI is required to install and run vpk. Install dotnet-sdk in pixi and run `pixi install`.'
   }
 
-  Write-Host 'Running: prepare_desktop_runtime.dart --platform windows --arch x64'
-  & dart pub global run fvm:main dart run tools/prepare_desktop_runtime.dart --platform=windows --arch=x64
-  if ($LASTEXITCODE -ne 0) {
-    exit $LASTEXITCODE
+  if ([string]::IsNullOrWhiteSpace($env:DOTNET_ROOT)) {
+    $dotnetRoot = Split-Path -Path $dotnetCommand.Source -Parent
+    Set-Item -Path Env:DOTNET_ROOT -Value $dotnetRoot
   }
 
-  Write-Host 'Running: sync_desktop_runtime_to_appdir.dart --platform windows'
-  & dart pub global run fvm:main dart run tools/sync_desktop_runtime_to_appdir.dart --platform=windows
-  if ($LASTEXITCODE -ne 0) {
-    exit $LASTEXITCODE
+  Add-ToPathIfMissing -Directory $env:DOTNET_ROOT
+}
+
+function Ensure-WindowsBuildEnvironment {
+  $flutterRoot = Join-Path $repoRootPath '.fvm/flutter_sdk'
+  if (-not (Test-Path -LiteralPath $flutterRoot -PathType Container)) {
+    throw "SecondLoop: missing $flutterRoot. Run `pixi install` and then `pixi run setup-flutter`."
   }
 
-  $buildArgs = @('build', 'windows', '--release')
-  $buildArgs += Build-DartDefines
-  Write-Host ('Running: flutter ' + ($buildArgs -join ' '))
-  & dart pub global run fvm:main flutter @buildArgs
-  if ($LASTEXITCODE -ne 0) {
-    exit $LASTEXITCODE
+  Set-Item -Path Env:FLUTTER_ROOT -Value $flutterRoot
+  Add-ToPathIfMissing -Directory (Join-Path $flutterRoot 'bin')
+  Ensure-DotnetRoot
+
+  foreach ($variableName in @(
+    'PROJECT_DIR',
+    'DOTNET_ROOT',
+    'FLUTTER_ROOT',
+    'LIBCLANG_PATH',
+    'VULKAN_SDK',
+    'CARGOKIT_TARGET_TEMP_DIR',
+    'CARGOKIT_TOOL_TEMP_DIR'
+  )) {
+    $entry = Get-Item -Path "Env:$variableName" -ErrorAction SilentlyContinue
+    if ($null -ne $entry -and -not [string]::IsNullOrWhiteSpace($entry.Value)) {
+      Write-Host "Using $variableName=$($entry.Value)"
+    }
   }
 }
 
-$releaseDir = Join-Path $repoRootPath 'build/windows/x64/runner/Release'
-if (-not (Test-Path $releaseDir)) {
-  throw "Windows release output not found: $releaseDir"
+Invoke-InWindowsShortWorkspace -RepoRootPath $script:repoRootPath -ScriptBlock {
+  $script:repoRootPath = Resolve-SecondLoopProjectDir -DefaultRepoRoot (Join-Path $PSScriptRoot '..')
+  $repoRootPath = $script:repoRootPath
+  Set-Location $repoRootPath
+  Import-DotEnvLocal
+  Ensure-WindowsBuildEnvironment
+
+  $runFvmToolScript = Join-Path $PSScriptRoot 'run_fvm_tool.ps1'
+  $resolvedOutputPath = if ([System.IO.Path]::IsPathRooted($OutputPath)) {
+    $OutputPath
+  } else {
+    Join-Path $repoRootPath $OutputPath
+  }
+
+  if (-not $SkipBuild) {
+    & (Join-Path $PSScriptRoot 'setup_windows_libclang.ps1')
+    Ensure-WindowsBuildEnvironment
+
+    Write-Host 'Running: flutter pub get'
+    & $runFvmToolScript flutter pub get
+    if ($LASTEXITCODE -ne 0) {
+      exit $LASTEXITCODE
+    }
+
+    Write-Host 'Running: prepare_desktop_runtime.dart --platform windows --arch x64'
+    & $runFvmToolScript dart run tools/prepare_desktop_runtime.dart --platform=windows --arch=x64
+    if ($LASTEXITCODE -ne 0) {
+      exit $LASTEXITCODE
+    }
+
+    Write-Host 'Running: sync_desktop_runtime_to_appdir.dart --platform windows'
+    & $runFvmToolScript dart run tools/sync_desktop_runtime_to_appdir.dart --platform=windows
+    if ($LASTEXITCODE -ne 0) {
+      exit $LASTEXITCODE
+    }
+
+    $buildArgs = @('build', 'windows', '--release')
+    $buildArgs += Build-DartDefines
+    Write-Host ('Running: flutter ' + ($buildArgs -join ' '))
+    & $runFvmToolScript flutter @buildArgs
+    if ($LASTEXITCODE -ne 0) {
+      exit $LASTEXITCODE
+    }
+  }
+
+  $releaseDir = Join-Path $repoRootPath 'build/windows/x64/runner/Release'
+  if (-not (Test-Path $releaseDir)) {
+    throw "Windows release output not found: $releaseDir"
+  }
+
+  $Channel = $Channel.Trim()
+  if ([string]::IsNullOrWhiteSpace($Channel)) {
+    throw 'Velopack channel must not be empty.'
+  }
+
+  $packIconPath = Join-Path $repoRootPath 'windows/runner/resources/app_icon.ico'
+  if (-not (Test-Path $packIconPath)) {
+    throw "Windows app icon not found: $packIconPath"
+  }
+
+  $resolvedVersion = Resolve-PackageVersion
+  $mainExe = Resolve-MainExeName -SourceDir $releaseDir
+  New-Item -ItemType Directory -Force -Path $resolvedOutputPath | Out-Null
+
+  $vpkPath = Ensure-VpkTool -RequiredVersion $VpkVersion
+
+  $packArgs = @(
+    'pack',
+    '--packId', $PackId,
+    '--packTitle', 'SecondLoop',
+    '--icon', $packIconPath,
+    '--packVersion', $resolvedVersion,
+    '--packDir', $releaseDir,
+    '--mainExe', $mainExe,
+    '--outputDir', $resolvedOutputPath,
+    '--channel', $Channel
+  )
+
+  Write-Host ('Running: ' + $vpkPath + ' ' + ($packArgs -join ' '))
+  & $vpkPath @packArgs
+  if ($LASTEXITCODE -ne 0) {
+    throw "vpk pack failed with exit code $LASTEXITCODE"
+  }
+
+  $setupExists = Get-ChildItem -Path $resolvedOutputPath -Filter '*Setup*.exe' -File | Select-Object -First 1
+  $packageExists = Get-ChildItem -Path $resolvedOutputPath -Filter '*.nupkg' -File | Select-Object -First 1
+  $releasesMetadataPath = Join-Path $resolvedOutputPath "releases.$Channel.json"
+  $assetsMetadataPath = Join-Path $resolvedOutputPath "assets.$Channel.json"
+
+  if ($null -eq $setupExists) {
+    throw "Velopack output missing setup exe in $resolvedOutputPath"
+  }
+  if (-not (Test-Path $releasesMetadataPath)) {
+    throw "Velopack output missing releases metadata: $releasesMetadataPath"
+  }
+  if (-not (Test-Path $assetsMetadataPath)) {
+    throw "Velopack output missing assets metadata: $assetsMetadataPath"
+  }
+  if ($null -eq $packageExists) {
+    throw "Velopack output missing nupkg in $resolvedOutputPath"
+  }
+
+  Write-Host "Velopack package ready in: $resolvedOutputPath"
 }
-
-$Channel = $Channel.Trim()
-if ([string]::IsNullOrWhiteSpace($Channel)) {
-  throw 'Velopack channel must not be empty.'
-}
-
-$packIconPath = Join-Path $repoRootPath 'windows/runner/resources/app_icon.ico'
-if (-not (Test-Path $packIconPath)) {
-  throw "Windows app icon not found: $packIconPath"
-}
-
-$resolvedVersion = Resolve-PackageVersion
-$mainExe = Resolve-MainExeName -SourceDir $releaseDir
-New-Item -ItemType Directory -Force -Path $OutputPath | Out-Null
-
-$vpkPath = Ensure-VpkTool -RequiredVersion $VpkVersion
-
-$packArgs = @(
-  'pack',
-  '--packId', $PackId,
-  '--packTitle', 'SecondLoop',
-  '--icon', $packIconPath,
-  '--packVersion', $resolvedVersion,
-  '--packDir', $releaseDir,
-  '--mainExe', $mainExe,
-  '--outputDir', $OutputPath,
-  '--channel', $Channel
-)
-
-Write-Host ('Running: ' + $vpkPath + ' ' + ($packArgs -join ' '))
-& $vpkPath @packArgs
-if ($LASTEXITCODE -ne 0) {
-  throw "vpk pack failed with exit code $LASTEXITCODE"
-}
-
-$setupExists = Get-ChildItem -Path $OutputPath -Filter '*Setup*.exe' -File | Select-Object -First 1
-$packageExists = Get-ChildItem -Path $OutputPath -Filter '*.nupkg' -File | Select-Object -First 1
-$releasesMetadataPath = Join-Path $OutputPath "releases.$Channel.json"
-$assetsMetadataPath = Join-Path $OutputPath "assets.$Channel.json"
-
-if ($null -eq $setupExists) {
-  throw "Velopack output missing setup exe in $OutputPath"
-}
-if (-not (Test-Path $releasesMetadataPath)) {
-  throw "Velopack output missing releases metadata: $releasesMetadataPath"
-}
-if (-not (Test-Path $assetsMetadataPath)) {
-  throw "Velopack output missing assets metadata: $assetsMetadataPath"
-}
-if ($null -eq $packageExists) {
-  throw "Velopack output missing nupkg in $OutputPath"
-}
-
-Write-Host "Velopack package ready in: $OutputPath"

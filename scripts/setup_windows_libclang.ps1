@@ -1,7 +1,8 @@
 $ErrorActionPreference = 'Stop'
 
-$repoRoot = Resolve-Path (Join-Path $PSScriptRoot '..')
-$repoRootPath = $repoRoot.Path
+. (Join-Path $PSScriptRoot 'use_windows_short_workspace.ps1')
+
+$repoRootPath = Resolve-SecondLoopProjectDir -DefaultRepoRoot (Join-Path $PSScriptRoot '..')
 $ciVulkanSdkVersion = '1.4.309.0'
 
 function Add-ToPathIfMissing {

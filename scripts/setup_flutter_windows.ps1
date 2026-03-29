@@ -2,11 +2,34 @@ param()
 
 $ErrorActionPreference = 'Stop'
 
-$repoRoot = Resolve-Path (Join-Path $PSScriptRoot '..')
-$repoRootPath = $repoRoot.Path
+. (Join-Path $PSScriptRoot 'use_windows_short_workspace.ps1')
+
+$repoRootPath = Resolve-SecondLoopProjectDir -DefaultRepoRoot (Join-Path $PSScriptRoot '..')
 Set-Location $repoRootPath
 
 $flutterPath = Join-Path $repoRootPath '.fvm/flutter_sdk/bin/flutter.bat'
+$flutterRoot = Split-Path -Path (Split-Path -Path $flutterPath -Parent) -Parent
+
+function Add-ToPathIfMissing {
+  param([string]$Directory)
+
+  if ([string]::IsNullOrWhiteSpace($Directory) -or
+      -not (Test-Path -LiteralPath $Directory -PathType Container)) {
+    return
+  }
+
+  $pathEntries = @($env:PATH -split ';')
+  $alreadyInPath = $pathEntries | Where-Object {
+    [string]::Equals($_, $Directory, [System.StringComparison]::OrdinalIgnoreCase)
+  }
+  if (-not $alreadyInPath) {
+    $env:PATH = "$Directory;$env:PATH"
+  }
+}
+
+if (-not (Get-Command dart -ErrorAction SilentlyContinue)) {
+  throw 'SecondLoop: missing dart in PATH. Your pixi environment is not ready. Run `pixi install` and retry `pixi run setup-flutter`.'
+}
 
 Write-Host 'Running: git config --global core.longpaths true'
 git config --global core.longpaths true
@@ -40,6 +63,10 @@ if (-not (Test-Path $flutterPath)) {
 } else {
   Write-Host "Using existing local FVM SDK: $flutterPath"
 }
+
+Set-Item -Path Env:FLUTTER_ROOT -Value $flutterRoot
+Add-ToPathIfMissing -Directory (Join-Path $flutterRoot 'bin')
+Write-Host "Using FLUTTER_ROOT=$flutterRoot"
 
 Write-Host 'Running: flutter pub get'
 & $flutterPath pub get

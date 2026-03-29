@@ -1,0 +1,429 @@
+param(
+  [string]$OldVersion = '1.0.0+1',
+  [string]$NewVersion = '1.0.1+1',
+  [string]$PackId = 'com.secondloop.secondloopdev',
+  [string]$Channel = 'devwin',
+  [int]$Port = 8443,
+  [string]$OutputRoot = 'dist/windows-auto-update-smoke',
+  [string]$CertificatePemPath = 'dist/auto-update-test/localhost-dev-cert.pem',
+  [string]$CertificateKeyPath = 'dist/auto-update-test/localhost-dev-cert.key',
+  [switch]$SkipBuild,
+  [switch]$SkipCertificateTrust,
+  [switch]$LeaveServerRunning
+)
+
+$ErrorActionPreference = 'Stop'
+
+. (Join-Path $PSScriptRoot 'use_windows_short_workspace.ps1')
+
+$repoRootPath = Resolve-SecondLoopProjectDir -DefaultRepoRoot (Join-Path $PSScriptRoot '..')
+Set-Location $repoRootPath
+
+function Get-VersionName([string]$SemanticVersionWithBuild) {
+  return ($SemanticVersionWithBuild -split '\+', 2)[0]
+}
+
+function Set-PubspecVersion {
+  param(
+    [string]$PubspecPath,
+    [string]$VersionValue
+  )
+
+  $content = Get-Content -LiteralPath $PubspecPath -Raw
+  $updated = [System.Text.RegularExpressions.Regex]::Replace(
+    $content,
+    '(?m)^version:\s*.+$',
+    "version: $VersionValue",
+    1
+  )
+  Set-Content -LiteralPath $PubspecPath -Value $updated -Encoding utf8
+}
+
+function Get-PixiPythonPath {
+  $pixiPython = Join-Path $repoRootPath '.pixi/envs/default/python.exe'
+  if (Test-Path -LiteralPath $pixiPython) {
+    return $pixiPython
+  }
+
+  $pythonCommand = Get-Command python -ErrorAction SilentlyContinue
+  if ($pythonCommand) {
+    return $pythonCommand.Source
+  }
+
+  throw 'Python is required for the local HTTPS update server. Run `pixi install` first.'
+}
+
+function Invoke-CheckedProcess {
+  param(
+    [string]$FilePath,
+    [string[]]$ArgumentList,
+    [string]$WorkingDirectory = $repoRootPath,
+    [string]$FailureMessage = 'Command failed.'
+  )
+
+  Write-Host ('Running: ' + $FilePath + ' ' + ($ArgumentList -join ' '))
+  $process = Start-Process -FilePath $FilePath -ArgumentList $ArgumentList -WorkingDirectory $WorkingDirectory -PassThru -Wait
+  if ($process.ExitCode -ne 0) {
+    throw "$FailureMessage ExitCode=$($process.ExitCode)"
+  }
+}
+
+function Start-ObservedProcess {
+  param(
+    [string]$FilePath,
+    [string[]]$ArgumentList,
+    [string]$WorkingDirectory = $repoRootPath,
+    [string]$FailureMessage = 'Command failed to start.',
+    [int]$StartupSeconds = 5
+  )
+
+  Write-Host ('Running (detached): ' + $FilePath + ' ' + ($ArgumentList -join ' '))
+  $process = Start-Process -FilePath $FilePath -ArgumentList $ArgumentList -WorkingDirectory $WorkingDirectory -PassThru
+  Start-Sleep -Seconds $StartupSeconds
+  if ($process.HasExited -and $process.ExitCode -ne 0) {
+    throw "$FailureMessage ExitCode=$($process.ExitCode)"
+  }
+  return $process
+}
+
+function Invoke-PackageBuild {
+  param(
+    [string]$VersionValue,
+    [string]$OutputDir
+  )
+
+  $packageScript = Join-Path $PSScriptRoot 'package_windows_velopack.ps1'
+  $versionName = Get-VersionName $VersionValue
+
+  $env:SECONDLOOP_APP_ID = $PackId
+  $env:SECONDLOOP_APP_NAME = 'SecondLoop Dev'
+  $env:SECONDLOOP_RELEASE_API_ORIGIN = "https://localhost:$Port"
+
+  $packageArgs = @(
+    '-NoProfile',
+    '-ExecutionPolicy', 'Bypass',
+    '-File', $packageScript,
+    '-Version', $versionName,
+    '-OutputPath', $OutputDir,
+    '-PackId', $PackId,
+    '-Channel', $Channel
+  )
+  Invoke-CheckedProcess -FilePath 'powershell.exe' -ArgumentList $packageArgs -FailureMessage "Velopack packaging failed for $VersionValue."
+}
+
+function Get-InstallRoot {
+  return Join-Path $env:LOCALAPPDATA $PackId
+}
+
+function Get-InstalledExePath {
+  return Join-Path (Get-InstallRoot) 'current\secondloop.exe'
+}
+
+function Get-UpdateExePath {
+  return Join-Path (Get-InstallRoot) 'Update.exe'
+}
+
+function Get-InstalledVersion {
+  $exePath = Get-InstalledExePath
+  if (-not (Test-Path -LiteralPath $exePath -PathType Leaf)) {
+    return ''
+  }
+
+  $versionInfo = (Get-Item -LiteralPath $exePath).VersionInfo
+  if (-not [string]::IsNullOrWhiteSpace($versionInfo.ProductVersion)) {
+    return $versionInfo.ProductVersion.Trim()
+  }
+  if (-not [string]::IsNullOrWhiteSpace($versionInfo.FileVersion)) {
+    return $versionInfo.FileVersion.Trim()
+  }
+  return ''
+}
+
+function Stop-InstalledSecondLoopProcess {
+  $expectedPath = Get-InstalledExePath
+  if (-not (Test-Path -LiteralPath $expectedPath -PathType Leaf)) {
+    return
+  }
+
+  $normalizedExpected = [System.IO.Path]::GetFullPath($expectedPath).ToLowerInvariant()
+  $running = @(
+    Get-Process -Name 'secondloop' -ErrorAction SilentlyContinue |
+      Where-Object {
+        try {
+          $_.Path -and ([System.IO.Path]::GetFullPath($_.Path).ToLowerInvariant() -eq $normalizedExpected)
+        } catch {
+          $false
+        }
+      }
+  )
+
+  foreach ($process in $running) {
+    Write-Host "Stopping installed SecondLoop process PID=$($process.Id)"
+    Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
+    Wait-Process -Id $process.Id -Timeout 10 -ErrorAction SilentlyContinue
+  }
+}
+
+function Remove-DirectoryWithRetry {
+  param(
+    [string]$PathValue,
+    [int]$MaxAttempts = 5
+  )
+
+  for ($attempt = 1; $attempt -le $MaxAttempts; $attempt += 1) {
+    try {
+      Remove-Item -LiteralPath $PathValue -Recurse -Force
+      return
+    } catch {
+      if ($attempt -ge $MaxAttempts) {
+        throw
+      }
+      Start-Sleep -Seconds $attempt
+    }
+  }
+}
+
+function Remove-ExistingInstallRoot {
+  $installRoot = Get-InstallRoot
+  Stop-InstalledSecondLoopProcess
+  if (Test-Path -LiteralPath $installRoot -PathType Container) {
+    Write-Host "Removing existing install root: $installRoot"
+    Remove-DirectoryWithRetry -PathValue $installRoot
+  }
+}
+
+function Wait-ForInstalledVersion {
+  param(
+    [string]$ExpectedVersion,
+    [int]$TimeoutSeconds = 90
+  )
+
+  $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+  while ((Get-Date) -lt $deadline) {
+    $currentVersion = Get-InstalledVersion
+    if ($currentVersion -eq $ExpectedVersion) {
+      return
+    }
+    Start-Sleep -Seconds 2
+  }
+
+  throw "Timed out waiting for installed version $ExpectedVersion. Current=$(Get-InstalledVersion)"
+}
+
+function Wait-ForRunningInstalledProcess {
+  param(
+    [string]$ExpectedVersion,
+    [int]$TimeoutSeconds = 90
+  )
+
+  $expectedPath = Get-InstalledExePath
+  $normalizedExpected = [System.IO.Path]::GetFullPath($expectedPath).ToLowerInvariant()
+  $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+
+  while ((Get-Date) -lt $deadline) {
+    $matching = @(
+      Get-Process -Name 'secondloop' -ErrorAction SilentlyContinue |
+        Where-Object {
+          try {
+            $_.Path -and ([System.IO.Path]::GetFullPath($_.Path).ToLowerInvariant() -eq $normalizedExpected)
+          } catch {
+            $false
+          }
+        }
+    )
+
+    if ($matching.Count -gt 0 -and (Get-InstalledVersion) -eq $ExpectedVersion) {
+      Start-Sleep -Seconds 5
+      return
+    }
+
+    Start-Sleep -Seconds 2
+  }
+
+  throw "Timed out waiting for running installed process at $expectedPath with version $ExpectedVersion."
+}
+
+function Ensure-LocalhostCertificateTrusted {
+  param([string]$PemPath)
+
+  if ($SkipCertificateTrust) {
+    Write-Host 'Skipping localhost certificate trust step.'
+    return
+  }
+
+  Write-Host "Trusting localhost certificate for current user: $PemPath"
+  & certutil -user -addstore Root $PemPath | Out-Null
+  if ($LASTEXITCODE -ne 0) {
+    throw "Failed to trust localhost certificate: $PemPath"
+  }
+}
+
+function Start-UpdateFeedServer {
+  param(
+    [string]$ServerRoot,
+    [string]$CertificatePath,
+    [string]$KeyPath,
+    [int]$ListenPort,
+    [string]$SmokeRoot
+  )
+
+  $pythonPath = Get-PixiPythonPath
+  $serverScript = Join-Path $repoRootPath 'tools/windows_https_update_server.py'
+  $stdoutPath = Join-Path $SmokeRoot 'https-server.out.log'
+  $stderrPath = Join-Path $SmokeRoot 'https-server.err.log'
+
+  Write-Host "Starting local HTTPS update server on https://localhost:$ListenPort"
+  return Start-Process -FilePath $pythonPath -ArgumentList @(
+    $serverScript,
+    '--root', $ServerRoot,
+    '--cert', $CertificatePath,
+    '--key', $KeyPath,
+    '--port', $ListenPort.ToString()
+  ) -WorkingDirectory $repoRootPath -PassThru -RedirectStandardOutput $stdoutPath -RedirectStandardError $stderrPath
+}
+
+function Wait-ForLatestEndpoint {
+  param([int]$ListenPort)
+
+  $endpoint = "https://localhost:$ListenPort/api/releases/latest"
+  $deadline = (Get-Date).AddSeconds(30)
+  while ((Get-Date) -lt $deadline) {
+    try {
+      $response = Invoke-RestMethod -Uri $endpoint -TimeoutSec 5
+      if ($null -ne $response.version) {
+        return $response
+      }
+    } catch {
+      Start-Sleep -Seconds 1
+    }
+  }
+
+  throw "Timed out waiting for $endpoint"
+}
+
+$pubspecPath = Join-Path $repoRootPath 'pubspec.yaml'
+$originalPubspec = Get-Content -LiteralPath $pubspecPath -Raw
+$smokeRoot = if ([System.IO.Path]::IsPathRooted($OutputRoot)) {
+  $OutputRoot
+} else {
+  Join-Path $repoRootPath $OutputRoot
+}
+$v1Output = Join-Path $smokeRoot 'v1'
+$v2Output = Join-Path $smokeRoot 'v2'
+$serverRoot = Join-Path $smokeRoot 'server-root'
+$downloadsRoot = Join-Path $serverRoot 'downloads'
+$certificatePem = if ([System.IO.Path]::IsPathRooted($CertificatePemPath)) { $CertificatePemPath } else { Join-Path $repoRootPath $CertificatePemPath }
+$certificateKey = if ([System.IO.Path]::IsPathRooted($CertificateKeyPath)) { $CertificateKeyPath } else { Join-Path $repoRootPath $CertificateKeyPath }
+
+if (-not (Test-Path -LiteralPath $certificatePem -PathType Leaf)) {
+  throw "Missing certificate PEM: $certificatePem"
+}
+if (-not (Test-Path -LiteralPath $certificateKey -PathType Leaf)) {
+  throw "Missing certificate key: $certificateKey"
+}
+
+$feedProcess = $null
+
+try {
+  New-Item -ItemType Directory -Force -Path $smokeRoot | Out-Null
+
+  if (-not $SkipBuild) {
+    if (Test-Path -LiteralPath $v1Output) {
+      Remove-Item -LiteralPath $v1Output -Recurse -Force
+    }
+    if (Test-Path -LiteralPath $v2Output) {
+      Remove-Item -LiteralPath $v2Output -Recurse -Force
+    }
+
+    Set-PubspecVersion -PubspecPath $pubspecPath -VersionValue $OldVersion
+    Invoke-PackageBuild -VersionValue $OldVersion -OutputDir $v1Output
+
+    Set-PubspecVersion -PubspecPath $pubspecPath -VersionValue $NewVersion
+    Invoke-PackageBuild -VersionValue $NewVersion -OutputDir $v2Output
+  } elseif ((-not (Test-Path -LiteralPath $v1Output)) -or (-not (Test-Path -LiteralPath $v2Output))) {
+    $v1Output = Join-Path $repoRootPath 'dist/auto-update-test/v1'
+    $v2Output = Join-Path $repoRootPath 'dist/auto-update-test/v2'
+  }
+
+  Set-Content -LiteralPath $pubspecPath -Value $originalPubspec -Encoding utf8
+
+  if (Test-Path -LiteralPath $serverRoot) {
+    Remove-Item -LiteralPath $serverRoot -Recurse -Force
+  }
+  New-Item -ItemType Directory -Force -Path $downloadsRoot | Out-Null
+  Copy-Item -Path (Join-Path $v2Output '*') -Destination $downloadsRoot -Recurse -Force
+
+  $newVersionName = Get-VersionName $NewVersion
+  $manifestArgs = @(
+    '-NoProfile',
+    '-ExecutionPolicy', 'Bypass',
+    '-File', (Join-Path $PSScriptRoot 'run_fvm_tool.ps1'),
+    'dart',
+    'run',
+    'tools/generate_update_manifest.dart',
+    '--input-dir', $v2Output,
+    '--output-dir', $downloadsRoot,
+    '--version', $newVersionName,
+    '--base-download-url', "https://localhost:$Port/downloads",
+    '--release-page-url', "https://localhost:$Port/releases/$newVersionName"
+  )
+  Invoke-CheckedProcess -FilePath 'powershell.exe' -ArgumentList $manifestArgs -FailureMessage 'Failed to generate latest.json for smoke feed.'
+
+  Ensure-LocalhostCertificateTrusted -PemPath $certificatePem
+  $feedProcess = Start-UpdateFeedServer -ServerRoot $serverRoot -CertificatePath $certificatePem -KeyPath $certificateKey -ListenPort $Port -SmokeRoot $smokeRoot
+
+  $latestManifest = Wait-ForLatestEndpoint -ListenPort $Port
+  Write-Host "Update feed version: $($latestManifest.version)"
+
+  Remove-ExistingInstallRoot
+
+  $setupExe = Get-ChildItem -LiteralPath $v1Output -Filter '*Setup*.exe' -File | Select-Object -First 1
+  if ($null -eq $setupExe) {
+    throw "Missing setup executable under $v1Output"
+  }
+
+  $installLog = Join-Path $smokeRoot 'install-v1.log'
+  $installArgs = @('--silent', '--log', $installLog)
+  Invoke-CheckedProcess -FilePath $setupExe.FullName -ArgumentList $installArgs -FailureMessage 'Initial Velopack installation failed.'
+
+  Wait-ForInstalledVersion -ExpectedVersion $OldVersion
+  Write-Host "Installed old version: $(Get-InstalledVersion)"
+
+  $installedExe = Get-InstalledExePath
+  $installedProcess = Start-Process -FilePath $installedExe -WorkingDirectory (Split-Path -Path $installedExe -Parent) -PassThru
+  Start-Sleep -Seconds 8
+
+  $packageFile = Get-ChildItem -LiteralPath $v2Output -Filter '*.nupkg' -File | Select-Object -First 1
+  if ($null -eq $packageFile) {
+    throw "Missing new nupkg under $v2Output"
+  }
+
+  $updateExe = Get-UpdateExePath
+  if (-not (Test-Path -LiteralPath $updateExe -PathType Leaf)) {
+    throw "Missing installed Update.exe at $updateExe"
+  }
+
+  $applyLog = Join-Path $smokeRoot 'apply-v2.log'
+  $applyArgs = @(
+    'apply',
+    '--silent',
+    '--restart',
+    '--waitPid', $installedProcess.Id.ToString(),
+    '--package', $packageFile.FullName,
+    '--log', $applyLog
+  )
+  $null = Start-ObservedProcess -FilePath $updateExe -ArgumentList $applyArgs -FailureMessage 'Velopack Update.exe apply failed.'
+
+  Wait-ForInstalledVersion -ExpectedVersion $NewVersion
+  Wait-ForRunningInstalledProcess -ExpectedVersion $NewVersion
+
+  Write-Host "Smoke test succeeded. Install root: $(Get-InstallRoot)"
+  Write-Host "Final running version: $(Get-InstalledVersion)"
+} finally {
+  Set-Content -LiteralPath $pubspecPath -Value $originalPubspec -Encoding utf8
+
+  if ($null -ne $feedProcess -and -not $LeaveServerRunning) {
+    Stop-Process -Id $feedProcess.Id -Force -ErrorAction SilentlyContinue
+    Wait-Process -Id $feedProcess.Id -Timeout 5 -ErrorAction SilentlyContinue
+  }
+}

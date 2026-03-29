@@ -31,6 +31,11 @@ const _windowsProcessProbeShellCandidates = <String>[
   'pwsh.exe',
 ];
 
+const _windowsVelopackChannelSuffixes = <String>[
+  'devwin',
+  'win',
+];
+
 List<String> buildWindowsProcessProbeCommandArguments(int pid) {
   final command =
       "\$p = Get-CimInstance Win32_Process -Filter \"ProcessId = $pid\" -ErrorAction SilentlyContinue; if (-not \$p) { Write-Output '__MISSING__'; exit 0 }; \$path = if (\$p.ExecutablePath) { [string]\$p.ExecutablePath } else { '' }; \$name = if (\$p.Name) { [string]\$p.Name } else { '' }; Write-Output (\$path + \"`t\" + \$name)";
@@ -729,6 +734,21 @@ class VelopackUpdateClient implements WindowsStagedUpdateClient {
     if (version == null || version.isEmpty) {
       return null;
     }
+
+    final lowerVersion = version.toLowerCase();
+    for (final channelSuffix in _windowsVelopackChannelSuffixes) {
+      final suffix = '-$channelSuffix';
+      if (!lowerVersion.endsWith(suffix) || version.length <= suffix.length) {
+        continue;
+      }
+
+      final strippedVersion =
+          version.substring(0, version.length - suffix.length);
+      if (parseComparableAppVersion(strippedVersion) != null) {
+        return strippedVersion;
+      }
+    }
+
     return version;
   }
 

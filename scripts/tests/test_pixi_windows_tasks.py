@@ -16,6 +16,7 @@ WINDOWS_VULKAN_SETUP_SCRIPT = REPO_ROOT / "scripts/setup_windows_vulkan_sdk.ps1"
 WINDOWS_FVM_TOOL_RUNNER_SCRIPT = REPO_ROOT / "scripts/run_fvm_tool.ps1"
 WINDOWS_UNINSTALL_MSI_SCRIPT = REPO_ROOT / "scripts/uninstall_windows_msi.ps1"
 WINDOWS_SETUP_FLUTTER_SCRIPT = REPO_ROOT / "scripts/setup_flutter_windows.ps1"
+WINDOWS_SHORT_WORKSPACE_SCRIPT = REPO_ROOT / "scripts/use_windows_short_workspace.ps1"
 
 
 class PixiWindowsTasksTests(unittest.TestCase):
@@ -240,6 +241,38 @@ class PixiWindowsTasksTests(unittest.TestCase):
             script.index("Test-Path $ToolPath"),
             script.index("Resolve-Path $ToolPath"),
         )
+
+    def test_windows_velopack_script_uses_short_workspace_helper_and_full_project_dir(self) -> None:
+        self.assertTrue(WINDOWS_SHORT_WORKSPACE_SCRIPT.exists())
+
+        helper_script = WINDOWS_SHORT_WORKSPACE_SCRIPT.read_text(encoding="utf-8")
+        velopack_script = WINDOWS_VELOPACK_SCRIPT.read_text(encoding="utf-8")
+
+        self.assertIn("cmd /c subst", helper_script)
+        self.assertIn('$shortProjectDir = "$shortDriveRoot$workspaceLeaf"', helper_script)
+        self.assertIn("Set-Item -Path Env:PROJECT_DIR -Value $shortProjectDir", helper_script)
+        self.assertNotIn("Set-Item -Path Env:PROJECT_DIR -Value $shortDriveRoot", helper_script)
+        self.assertIn("use_windows_short_workspace.ps1", velopack_script)
+        self.assertIn("Invoke-InWindowsShortWorkspace", velopack_script)
+
+    def test_windows_velopack_script_propagates_required_build_environment(self) -> None:
+        script = WINDOWS_VELOPACK_SCRIPT.read_text(encoding="utf-8")
+
+        self.assertIn("DOTNET_ROOT", script)
+        self.assertIn("FLUTTER_ROOT", script)
+        self.assertIn("LIBCLANG_PATH", script)
+        self.assertIn("VULKAN_SDK", script)
+        self.assertIn("CARGOKIT_TARGET_TEMP_DIR", script)
+        self.assertIn("CARGOKIT_TOOL_TEMP_DIR", script)
+        self.assertIn("run_fvm_tool.ps1", script)
+
+    def test_windows_setup_flutter_script_exports_flutter_root_and_checks_environment(self) -> None:
+        script = WINDOWS_SETUP_FLUTTER_SCRIPT.read_text(encoding="utf-8")
+
+        self.assertIn("Set-Item -Path Env:FLUTTER_ROOT", script)
+        self.assertIn("Get-Command dart", script)
+        self.assertIn("pixi install", script)
+        self.assertIn("pixi run setup-flutter", script)
 
     def test_windows_uninstall_msi_script_uses_registry_install_metadata(self) -> None:
         self.assertTrue(WINDOWS_UNINSTALL_MSI_SCRIPT.exists())
