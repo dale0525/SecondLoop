@@ -35,6 +35,29 @@ File _pendingApplyAttemptMarker(Directory root) => File(
     );
 
 void main() {
+  test('interprets mismatched Windows process path as not running', () {
+    final status = interpretWindowsProcessQueryResult(
+      exitCode: 0,
+      stdoutText: 'C:/Windows/System32/notepad.exe\tNOTEPAD.EXE',
+      expectedExecutablePath:
+          'C:/Users/test/AppData/Local/SecondLoop/Update.exe',
+    );
+
+    expect(status, VelopackProcessProbeStatus.notRunning);
+  });
+
+  test('interprets matching Windows process path as expected updater', () {
+    final status = interpretWindowsProcessQueryResult(
+      exitCode: 0,
+      stdoutText:
+          'C:/Users/test/AppData/Local/SecondLoop/Update.exe\tUpdate.exe',
+      expectedExecutablePath:
+          'C:/Users/test/AppData/Local/SecondLoop/Update.exe',
+    );
+
+    expect(status, VelopackProcessProbeStatus.runningExpectedProcess);
+  });
+
   test('isAvailable requires Update.exe and current sq.version', () async {
     final root = await Directory.systemTemp.createTemp('velopack_available_');
     final updater = File('${root.path}${Platform.pathSeparator}Update.exe')
@@ -436,18 +459,19 @@ void main() {
     );
   });
 
-  test('windows process probe uses lightweight tasklist lookup', () async {
+  test('windows process probe verifies executable identity via PowerShell',
+      () async {
     final source = File(
       'lib/core/update/windows/velopack_update_client.dart',
     ).readAsStringSync();
 
     expect(
       source,
-      contains('tasklist.exe'),
+      contains('powershell.exe'),
     );
     expect(
       source,
-      isNot(contains('Get-CimInstance Win32_Process')),
+      contains('Get-CimInstance Win32_Process'),
     );
   });
 
@@ -572,6 +596,43 @@ void main() {
 
     expect(result.status, PendingUpdateStartupStatus.inProgress);
     expect(_pendingApplyAttemptMarker(root).existsSync(), isTrue);
+  });
+
+  test('applyPendingOnStartup ignores recent marker without updater pid',
+      () async {
+    final root =
+        await Directory.systemTemp.createTemp('velopack_marker_missing_pid_');
+    final updater = File('${root.path}${Platform.pathSeparator}Update.exe')
+      ..writeAsStringSync('stub');
+    _writeSqVersion(root, '1.0.0');
+    _createNupkg(root, 'com.secondloop.secondloop-1.1.0-full.nupkg');
+    _pendingApplyAttemptMarker(root).writeAsStringSync(
+      '1.1.0\n${DateTime.now().toUtc().toIso8601String()}',
+    );
+
+    var calls = 0;
+    final client = VelopackUpdateClient(
+      updateExecutablePath: updater.path,
+      processStarter: (executable, arguments,
+          {mode = ProcessStartMode.normal}) async {
+        calls += 1;
+        return Process.start(
+          Platform.resolvedExecutable,
+          const ['--version'],
+        );
+      },
+    );
+
+    final result = await client.applyPendingOnStartup(waitPid: 2468);
+
+    expect(calls, 1);
+    expect(result.status, PendingUpdateStartupStatus.dispatched);
+    final markerLines = _pendingApplyAttemptMarker(root)
+        .readAsStringSync()
+        .split(RegExp(r'\r?\n'))
+        .where((line) => line.trim().isNotEmpty)
+        .toList(growable: false);
+    expect(markerLines, hasLength(3));
   });
 
   test('only SecondLoop full packages count as pending updates', () async {

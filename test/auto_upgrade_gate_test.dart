@@ -285,6 +285,45 @@ void main() {
         TargetPlatform.windows,
       }));
 
+  testWidgets(
+      'windows staged-next-launch update is passively staged on startup',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    UpdateBadgePrefs.resetForTests();
+    final update = AppUpdateAvailability(
+      currentVersion: '1.0.1+99',
+      latestTag: 'v1.1.0',
+      releasePageUri: Uri.parse(
+        'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
+      ),
+      installMode: AppUpdateInstallMode.stagedNextLaunch,
+      asset: AppUpdateAsset(
+        name: 'com.secondloop.secondloop-1.1.0-full.nupkg',
+        downloadUri: Uri.parse('https://cdn.example.com/win.nupkg'),
+      ),
+    );
+    final service = _FakeAutoUpdateService(
+      canStageSilentlyForNextLaunchValue: true,
+      result: AppUpdateCheckResult(
+        currentVersion: '1.0.1+99',
+        update: update,
+      ),
+    );
+
+    await pumpGate(tester, service: service);
+    await tester.pumpAndSettle();
+
+    expect(service.checkCalls, 1);
+    expect(service.installCalls, 0);
+    expect(service.stageCalls, 1);
+    expect(service.applyPendingCalls, 1);
+    expect(UpdateBadgePrefs.value.value, 'v1.1.0');
+    expect(find.byType(SnackBar), findsOneWidget);
+  },
+      variant: const TargetPlatformVariant(<TargetPlatform>{
+        TargetPlatform.windows,
+      }));
+
   testWidgets('windows external update shows manual reminder and badge state',
       (tester) async {
     SharedPreferences.setMockInitialValues({});

@@ -533,8 +533,11 @@ class AppUpdateService {
       return false;
     }
     final stagedClient = _resolvedWindowsStagedUpdateClient;
+    final supportedInstallMode =
+        update.installMode == AppUpdateInstallMode.seamlessRestart ||
+            update.installMode == AppUpdateInstallMode.stagedNextLaunch;
     return isWindowsVelopackPackageName(update.asset?.name ?? '') &&
-        update.installMode == AppUpdateInstallMode.seamlessRestart &&
+        supportedInstallMode &&
         update.asset != null &&
         stagedClient != null &&
         stagedClient.isAvailable();

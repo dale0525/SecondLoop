@@ -16,6 +16,51 @@ typedef VelopackProcessProbe = VelopackProcessProbeStatus Function(
   required String expectedExecutablePath,
 });
 
+VelopackProcessProbeStatus interpretWindowsProcessQueryResult({
+  required int exitCode,
+  required String stdoutText,
+  required String expectedExecutablePath,
+}) {
+  if (exitCode != 0) {
+    return VelopackProcessProbeStatus.unknown;
+  }
+
+  final outputLine =
+      stdoutText.split(RegExp(r'\r?\n')).map((line) => line.trim()).firstWhere(
+            (line) => line.isNotEmpty,
+            orElse: () => '',
+          );
+  if (outputLine.isEmpty || outputLine == '__MISSING__') {
+    return VelopackProcessProbeStatus.notRunning;
+  }
+
+  final fields = outputLine.split('\t');
+  final executablePath = fields.isEmpty ? '' : fields.first.trim();
+  final processName = fields.length < 2 ? '' : fields[1].trim();
+  final normalizedExpectedPath =
+      VelopackUpdateClient._normalizePathForComparison(expectedExecutablePath);
+
+  if (executablePath.isNotEmpty) {
+    return VelopackUpdateClient._normalizePathForComparison(executablePath) ==
+            normalizedExpectedPath
+        ? VelopackProcessProbeStatus.runningExpectedProcess
+        : VelopackProcessProbeStatus.notRunning;
+  }
+
+  if (processName.isNotEmpty) {
+    final expectedName = expectedExecutablePath
+        .split(RegExp(r'[\\/]'))
+        .last
+        .trim()
+        .toLowerCase();
+    return processName.toLowerCase() == expectedName
+        ? VelopackProcessProbeStatus.runningExpectedProcess
+        : VelopackProcessProbeStatus.notRunning;
+  }
+
+  return VelopackProcessProbeStatus.unknown;
+}
+
 abstract class WindowsStagedUpdateClient {
   bool isAvailable();
 
@@ -212,18 +257,8 @@ class VelopackUpdateClient implements WindowsStagedUpdateClient {
     required String? pendingVersion,
     String? packagePath,
   }) async {
-    Process? process;
-    if (pendingVersion != null && pendingVersion.isNotEmpty) {
-      _writePendingApplyAttempt(
-        updateExecutablePath,
-        _PendingApplyAttempt(
-          version: pendingVersion,
-          startedAtUtc: _now().toUtc(),
-        ),
-      );
-    }
     try {
-      process = await _processStarter(
+      final process = await _processStarter(
         updateExecutablePath,
         _buildApplyArguments(waitPid: waitPid, packagePath: packagePath),
         mode: ProcessStartMode.detached,
@@ -368,29 +403,32 @@ class VelopackUpdateClient implements WindowsStagedUpdateClient {
       return null;
     }
 
+    if (attempt.updaterPid == null) {
+      _clearPendingApplyAttempt(updateExecutablePath);
+      return null;
+    }
+
     final startedAtUtc = attempt.startedAtUtc;
     if (startedAtUtc != null &&
         _now().toUtc().difference(startedAtUtc) <
             _pendingApplyRetryGracePeriod) {
-      if (attempt.updaterPid != null) {
-        final processStatus = _processProbe(
-          attempt.updaterPid!,
-          expectedExecutablePath: updateExecutablePath,
-        );
-        if (processStatus == VelopackProcessProbeStatus.notRunning) {
-          _deletePendingPackageUpdates(updateExecutablePath);
-          _clearPendingApplyAttempt(updateExecutablePath);
+      final processStatus = _processProbe(
+        attempt.updaterPid!,
+        expectedExecutablePath: updateExecutablePath,
+      );
+      if (processStatus == VelopackProcessProbeStatus.notRunning) {
+        _deletePendingPackageUpdates(updateExecutablePath);
+        _clearPendingApplyAttempt(updateExecutablePath);
+        throw StateError(
+            'windows_velopack_previous_apply_failed_${attempt.version}');
+      }
+      if (processStatus == VelopackProcessProbeStatus.unknown) {
+        if (throwIfAttemptInProgress) {
           throw StateError(
-              'windows_velopack_previous_apply_failed_${attempt.version}');
+            'windows_velopack_apply_already_in_progress_${attempt.version}',
+          );
         }
-        if (processStatus == VelopackProcessProbeStatus.unknown) {
-          if (throwIfAttemptInProgress) {
-            throw StateError(
-              'windows_velopack_apply_already_in_progress_${attempt.version}',
-            );
-          }
-          return const PendingUpdateStartupResult.updateInProgress();
-        }
+        return const PendingUpdateStartupResult.updateInProgress();
       }
       if (throwIfAttemptInProgress) {
         throw StateError(
@@ -477,25 +515,27 @@ class VelopackUpdateClient implements WindowsStagedUpdateClient {
 
     try {
       if (Platform.isWindows) {
-        final result = Process.runSync(
-          'tasklist.exe',
-          [
-            '/FI',
-            'PID eq $pid',
-            '/FO',
-            'CSV',
-            '/NH',
-          ],
-        );
-        if (result.exitCode != 0) {
-          return VelopackProcessProbeStatus.unknown;
+        const shellCandidates = <String>['powershell.exe', 'pwsh.exe'];
+        for (final shell in shellCandidates) {
+          try {
+            final result = Process.runSync(
+              shell,
+              [
+                '-NoProfile',
+                '-Command',
+                "\$p = Get-CimInstance Win32_Process -Filter 'ProcessId = $pid' -ErrorAction SilentlyContinue; if (-not \$p) { Write-Output '__MISSING__'; exit 0 }; \$path = if (\$p.ExecutablePath) { [string]\$p.ExecutablePath } else { '' }; \$name = if (\$p.Name) { [string]\$p.Name } else { '' }; Write-Output (\$path + \"`t\" + \$name)",
+              ],
+            );
+            return interpretWindowsProcessQueryResult(
+              exitCode: result.exitCode,
+              stdoutText: '${result.stdout}',
+              expectedExecutablePath: expectedExecutablePath,
+            );
+          } catch (_) {
+            continue;
+          }
         }
-        final output = '${result.stdout}'.trim();
-        final pidPattern = RegExp('^"[^"]+","$pid",', multiLine: true);
-        if (pidPattern.hasMatch(output)) {
-          return VelopackProcessProbeStatus.unknown;
-        }
-        return VelopackProcessProbeStatus.notRunning;
+        return VelopackProcessProbeStatus.unknown;
       }
 
       final result = Process.runSync('kill', ['-0', pid.toString()]);
