@@ -368,9 +368,6 @@ Uri? parseUpdateUri(
     return uri;
   }
 
-  if (scheme.isEmpty) {
-    return null;
-  }
   return null;
 }
 

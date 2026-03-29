@@ -281,10 +281,6 @@ same_process_running() {
 }
 
 while same_process_running && [ "\$waited" -lt "\$MAX_WAIT" ]; do
-  CURRENT_START=\$(/bin/ps -o lstart= -p "\$APP_PID" 2>/dev/null | sed 's/^ *//')
-  if [ -n "\$APP_START" ] && [ "\$CURRENT_START" != "\$APP_START" ]; then
-    break
-  fi
   sleep 1
   waited=\$((waited + 1))
 done

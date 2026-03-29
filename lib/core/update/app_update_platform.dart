@@ -16,8 +16,25 @@ AppUpdatePlatform detectAppUpdatePlatform() {
 
 String currentArchitectureForUpdates() {
   try {
-    return Platform.version;
+    return parseArchitectureHintFromPlatformVersion(Platform.version);
   } catch (_) {
     return 'unknown';
   }
+}
+
+String parseArchitectureHintFromPlatformVersion(String value) {
+  final trimmed = value.trim();
+  if (trimmed.isEmpty) {
+    return 'unknown';
+  }
+
+  final onIndex = trimmed.lastIndexOf(' on "');
+  if (onIndex >= 0) {
+    final suffix = trimmed.substring(onIndex + 5).replaceAll('"', '').trim();
+    if (suffix.isNotEmpty) {
+      return suffix;
+    }
+  }
+
+  return trimmed;
 }

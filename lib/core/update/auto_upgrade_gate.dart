@@ -123,11 +123,12 @@ class _AutoUpgradeGateState extends State<AutoUpgradeGate> {
         return;
       }
 
+      await UpdateBadgePrefs.setAvailableVersion(update.latestTag);
+
       if (pendingApplyError != null) {
         await _showPendingApplyFailureNotice(pendingApplyError);
         return;
       }
-      await UpdateBadgePrefs.setAvailableVersion(update.latestTag);
 
       if (_usesPassiveManagedUpdates) {
         var stagedReady = false;

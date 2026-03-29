@@ -125,10 +125,6 @@ void main() {
       scriptText,
       contains(r'APP_START=$(/bin/ps -o lstart= -p "$APP_PID"'),
     );
-    expect(
-      scriptText,
-      contains(r'CURRENT_START=$(/bin/ps -o lstart= -p "$APP_PID"'),
-    );
     expect(scriptText, contains(r'waited=$((waited + 1))'));
     expect(scriptText, contains('mv "\$TARGET_APP" "\$BACKUP_APP"'));
     expect(scriptText, contains('ditto "\$REPLACEMENT_APP" "\$TARGET_APP"'));

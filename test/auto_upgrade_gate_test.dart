@@ -469,7 +469,8 @@ void main() {
     expect(service.checkCalls, 1);
   });
 
-  testWidgets('pending apply failure does not publish a fresh update badge',
+  testWidgets(
+      'pending apply failure still publishes the available update badge',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
     UpdateBadgePrefs.resetForTests();
@@ -498,7 +499,7 @@ void main() {
 
     expect(service.applyPendingCalls, 1);
     expect(service.checkCalls, 1);
-    expect(UpdateBadgePrefs.value.value, isNull);
+    expect(UpdateBadgePrefs.value.value, 'v1.4.0');
     expect(find.textContaining('Auto update failed'), findsOneWidget);
   });
 
