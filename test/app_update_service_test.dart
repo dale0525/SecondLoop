@@ -752,6 +752,50 @@ void main() {
   });
 
   group('AppUpdateService.downloaded asset handoff', () {
+    test('stages Windows seamless updates when silent staging is supported',
+        () async {
+      final tempDir = await Directory.systemTemp.createTemp('update_stage_');
+      addTearDown(() async {
+        if (tempDir.existsSync()) {
+          await tempDir.delete(recursive: true);
+        }
+      });
+
+      final assetFile = File('${tempDir.path}/SecondLoop-win.nupkg');
+      await assetFile.writeAsString('windows package bytes');
+      final logger = _InMemoryUpdateEventLogger();
+      final stagedClient = _FakeWindowsStagedUpdateClient(available: true);
+      final service = AppUpdateService(
+        platformOverride: AppUpdatePlatform.windows,
+        windowsStagedUpdateClient: stagedClient,
+        updateEventLogger: logger,
+      );
+      final update = AppUpdateAvailability(
+        currentVersion: '1.0.0+1',
+        latestTag: 'v1.1.0',
+        releasePageUri: Uri.parse(
+          'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
+        ),
+        installMode: AppUpdateInstallMode.seamlessRestart,
+        asset: AppUpdateAsset(
+          name: 'com.secondloop.secondloop-1.1.0-full.nupkg',
+          downloadUri: assetFile.uri,
+        ),
+      );
+
+      expect(service.canStageSilentlyForNextLaunch(update), isTrue);
+
+      await service.stageUpdateForNextLaunch(update);
+
+      expect(stagedClient.stagedAssets, hasLength(1));
+      expect(stagedClient.stagedAssets.single, assetFile.uri);
+      expect(
+        logger.records
+            .any((entry) => entry.type == UpdateEventType.stageSucceeded),
+        isTrue,
+      );
+    });
+
     test('cleans temporary downloaded asset after Windows staging', () async {
       String? stagedPath;
       final stagedClient = _FakeWindowsStagedUpdateClient(

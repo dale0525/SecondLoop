@@ -438,7 +438,8 @@ class AppUpdateService {
       message: update.asset?.name,
     );
     try {
-      if (update.installMode != AppUpdateInstallMode.stagedNextLaunch) {
+      if (update.installMode != AppUpdateInstallMode.stagedNextLaunch &&
+          !canStageSilentlyForNextLaunch(update)) {
         throw StateError('staged_update_not_supported');
       }
       final asset = update.asset;
@@ -528,7 +529,8 @@ class AppUpdateService {
       return false;
     }
     final stagedClient = _resolvedWindowsStagedUpdateClient;
-    return update.installMode == AppUpdateInstallMode.seamlessRestart &&
+    return isWindowsVelopackPackageName(update.asset?.name ?? '') &&
+        update.installMode == AppUpdateInstallMode.seamlessRestart &&
         update.asset != null &&
         stagedClient != null &&
         stagedClient.isAvailable();
