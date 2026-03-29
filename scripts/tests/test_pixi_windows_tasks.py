@@ -255,6 +255,14 @@ class PixiWindowsTasksTests(unittest.TestCase):
         self.assertIn("use_windows_short_workspace.ps1", velopack_script)
         self.assertIn("Invoke-InWindowsShortWorkspace", velopack_script)
 
+    def test_windows_short_workspace_helper_avoids_destructive_subst_cleanup(self) -> None:
+        script = WINDOWS_SHORT_WORKSPACE_SCRIPT.read_text(encoding="utf-8")
+
+        self.assertIn("Get-AvailableShortWorkspaceDrive", script)
+        self.assertIn("Get-PSDrive -PSProvider FileSystem", script)
+        self.assertIn("if ($resolvedRepoRoot -like \"$substDrive\\*\")", script)
+        self.assertNotIn("cmd /c subst $substDrive /d > $null 2>&1\n      cmd /c subst $substDrive \"$workspaceParent\"", script)
+
     def test_windows_velopack_script_propagates_required_build_environment(self) -> None:
         script = WINDOWS_VELOPACK_SCRIPT.read_text(encoding="utf-8")
 

@@ -8,6 +8,34 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 
+def resolve_request_path(
+    *,
+    root_dir: Path,
+    downloads_dir: Path,
+    request_path: str,
+) -> Path:
+    normalized = request_path.split("?", 1)[0].split("#", 1)[0]
+    if normalized.startswith("/downloads/"):
+        relative = normalized.removeprefix("/downloads/")
+        resolved = (downloads_dir / relative).resolve()
+        allowed_root = downloads_dir.resolve()
+    elif normalized in {"", "/"}:
+        resolved = root_dir.resolve()
+        allowed_root = root_dir.resolve()
+    else:
+        resolved = (root_dir / normalized.lstrip("/")).resolve()
+        allowed_root = root_dir.resolve()
+
+    try:
+        resolved.relative_to(allowed_root)
+    except ValueError as error:
+        raise PermissionError(
+            f"Request path escapes allowed root: {request_path}",
+        ) from error
+
+    return resolved
+
+
 class UpdateFeedHandler(SimpleHTTPRequestHandler):
     server_version = "SecondLoopUpdateServer/1.0"
 
@@ -24,13 +52,16 @@ class UpdateFeedHandler(SimpleHTTPRequestHandler):
         return self.downloads_dir / "latest.json"
 
     def translate_path(self, path: str) -> str:
-        normalized = path.split("?", 1)[0].split("#", 1)[0]
-        if normalized.startswith("/downloads/"):
-            relative = normalized.removeprefix("/downloads/")
-            return str((self.downloads_dir / relative).resolve())
-        if normalized in {"", "/"}:
-            return str(self.root_dir.resolve())
-        return str((self.root_dir / normalized.lstrip("/")).resolve())
+        try:
+            return str(
+                resolve_request_path(
+                    root_dir=self.root_dir,
+                    downloads_dir=self.downloads_dir,
+                    request_path=path,
+                ),
+            )
+        except PermissionError:
+            return str(self.root_dir / "__forbidden__")
 
     def do_GET(self) -> None:
         normalized = self.path.split("?", 1)[0].split("#", 1)[0]
@@ -55,6 +86,16 @@ class UpdateFeedHandler(SimpleHTTPRequestHandler):
             self.send_header("Content-Length", str(len(body)))
             self.end_headers()
             self.wfile.write(body)
+            return
+
+        try:
+            resolve_request_path(
+                root_dir=self.root_dir,
+                downloads_dir=self.downloads_dir,
+                request_path=self.path,
+            )
+        except PermissionError:
+            self.send_error(HTTPStatus.FORBIDDEN)
             return
 
         super().do_GET()

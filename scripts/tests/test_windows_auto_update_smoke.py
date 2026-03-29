@@ -10,7 +10,7 @@ HTTPS_SERVER = REPO_ROOT / "tools/windows_https_update_server.py"
 
 
 class WindowsAutoUpdateSmokeTests(unittest.TestCase):
-    def test_smoke_script_documents_two_version_build_and_update_apply_flow(self) -> None:
+    def test_smoke_script_uses_manifest_driven_stage_then_restart_flow(self) -> None:
         self.assertTrue(SMOKE_SCRIPT.exists())
 
         script = SMOKE_SCRIPT.read_text(encoding="utf-8")
@@ -20,9 +20,12 @@ class WindowsAutoUpdateSmokeTests(unittest.TestCase):
         self.assertIn("latest.json", script)
         self.assertIn("/api/releases/latest", script)
         self.assertIn("com.secondloop.secondloopdev", script)
-        self.assertIn("Update.exe", script)
-        self.assertIn("apply", script)
+        self.assertIn("Wait-ForStagedPackage", script)
+        self.assertIn("Wait-ForRunningInstalledProcess", script)
+        self.assertIn("Get-FullPackage", script)
         self.assertIn("tools/windows_https_update_server.py", script)
+        self.assertNotIn("'--package', $packageFile.FullName", script)
+        self.assertNotIn("Start-ObservedProcess -FilePath $updateExe", script)
 
     def test_https_server_exposes_latest_release_endpoint(self) -> None:
         self.assertTrue(HTTPS_SERVER.exists())

@@ -27,7 +27,7 @@
 - Confirm the smoke feed responds at `https://localhost:8443/api/releases/latest`.
 - Confirm the install root is `%LOCALAPPDATA%\com.secondloop.secondloopdev`.
 - Confirm the final installed and running version is `1.0.1+1`.
-- If the smoke path fails, inspect `dist/windows-auto-update-smoke/install-v1.log` and `dist/windows-auto-update-smoke/apply-v2.log` before sign-off.
+- If the smoke path fails, inspect `dist/windows-auto-update-smoke/install-v1.log`, `dist/windows-auto-update-smoke/https-server.out.log`, and `dist/windows-auto-update-smoke/https-server.err.log` before sign-off.
 
 ## External publication
 

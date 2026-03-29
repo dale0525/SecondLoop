@@ -111,6 +111,25 @@ function Invoke-PackageBuild {
   Invoke-CheckedProcess -FilePath 'powershell.exe' -ArgumentList $packageArgs -FailureMessage "Velopack packaging failed for $VersionValue."
 }
 
+function Get-FullPackage {
+  param([string]$OutputDir)
+
+  $packageFile = Get-ChildItem -LiteralPath $OutputDir -Filter '*-full.nupkg' -File |
+    Sort-Object -Property Name |
+    Select-Object -First 1
+  if ($null -eq $packageFile) {
+    throw "Missing full nupkg under $OutputDir"
+  }
+
+  return $packageFile
+}
+
+function Get-FileSha256Hex {
+  param([string]$PathValue)
+
+  return (Get-FileHash -LiteralPath $PathValue -Algorithm SHA256).Hash.ToLowerInvariant()
+}
+
 function Get-InstallRoot {
   return Join-Path $env:LOCALAPPDATA $PackId
 }
@@ -208,6 +227,30 @@ function Wait-ForInstalledVersion {
   }
 
   throw "Timed out waiting for installed version $ExpectedVersion. Current=$(Get-InstalledVersion)"
+}
+
+function Wait-ForStagedPackage {
+  param(
+    [string]$ExpectedFileName,
+    [string]$ExpectedSha256,
+    [int]$TimeoutSeconds = 120
+  )
+
+  $packagesRoot = Join-Path (Get-InstallRoot) 'packages'
+  $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+  while ((Get-Date) -lt $deadline) {
+    $candidate = Join-Path $packagesRoot $ExpectedFileName
+    if (Test-Path -LiteralPath $candidate -PathType Leaf) {
+      $actualSha256 = Get-FileSha256Hex -PathValue $candidate
+      if ($actualSha256 -eq $ExpectedSha256.ToLowerInvariant()) {
+        return Get-Item -LiteralPath $candidate
+      }
+    }
+
+    Start-Sleep -Seconds 2
+  }
+
+  throw "Timed out waiting for staged package $ExpectedFileName under $packagesRoot"
 }
 
 function Wait-ForRunningInstalledProcess {
@@ -382,6 +425,9 @@ try {
     throw "Missing setup executable under $v1Output"
   }
 
+  $expectedPackageFile = Get-FullPackage -OutputDir $v2Output
+  $expectedPackageSha256 = Get-FileSha256Hex -PathValue $expectedPackageFile.FullName
+
   $installLog = Join-Path $smokeRoot 'install-v1.log'
   $installArgs = @('--silent', '--log', $installLog)
   Invoke-CheckedProcess -FilePath $setupExe.FullName -ArgumentList $installArgs -FailureMessage 'Initial Velopack installation failed.'
@@ -390,29 +436,16 @@ try {
   Write-Host "Installed old version: $(Get-InstalledVersion)"
 
   $installedExe = Get-InstalledExePath
-  $installedProcess = Start-Process -FilePath $installedExe -WorkingDirectory (Split-Path -Path $installedExe -Parent) -PassThru
-  Start-Sleep -Seconds 8
+  $null = Start-Process -FilePath $installedExe -WorkingDirectory (Split-Path -Path $installedExe -Parent) -PassThru
+  Wait-ForRunningInstalledProcess -ExpectedVersion $OldVersion
 
-  $packageFile = Get-ChildItem -LiteralPath $v2Output -Filter '*.nupkg' -File | Select-Object -First 1
-  if ($null -eq $packageFile) {
-    throw "Missing new nupkg under $v2Output"
-  }
+  $stagedPackage = Wait-ForStagedPackage -ExpectedFileName $expectedPackageFile.Name -ExpectedSha256 $expectedPackageSha256
+  Write-Host "Staged package downloaded from feed: $($stagedPackage.FullName)"
 
-  $updateExe = Get-UpdateExePath
-  if (-not (Test-Path -LiteralPath $updateExe -PathType Leaf)) {
-    throw "Missing installed Update.exe at $updateExe"
-  }
+  Stop-InstalledSecondLoopProcess
+  Start-Sleep -Seconds 2
 
-  $applyLog = Join-Path $smokeRoot 'apply-v2.log'
-  $applyArgs = @(
-    'apply',
-    '--silent',
-    '--restart',
-    '--waitPid', $installedProcess.Id.ToString(),
-    '--package', $packageFile.FullName,
-    '--log', $applyLog
-  )
-  $null = Start-ObservedProcess -FilePath $updateExe -ArgumentList $applyArgs -FailureMessage 'Velopack Update.exe apply failed.'
+  $null = Start-Process -FilePath $installedExe -WorkingDirectory (Split-Path -Path $installedExe -Parent) -PassThru
 
   Wait-ForInstalledVersion -ExpectedVersion $NewVersion
   Wait-ForRunningInstalledProcess -ExpectedVersion $NewVersion
