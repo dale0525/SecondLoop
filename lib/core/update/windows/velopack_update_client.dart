@@ -37,10 +37,16 @@ VelopackProcessProbeStatus interpretWindowsProcessQueryResult({
   final fields = outputLine.split('\t');
   final executablePath = fields.isEmpty ? '' : fields.first.trim();
   final processName = fields.length < 2 ? '' : fields[1].trim();
+  final expectedName =
+      expectedExecutablePath.split(RegExp(r'[\\/]')).last.trim().toLowerCase();
   final normalizedExpectedPath =
       VelopackUpdateClient._normalizePathForComparison(expectedExecutablePath);
 
   if (executablePath.isNotEmpty) {
+    if (!executablePath.contains(RegExp(r'[\\/]')) &&
+        executablePath.trim().toLowerCase() == expectedName) {
+      return VelopackProcessProbeStatus.unknown;
+    }
     return VelopackUpdateClient._normalizePathForComparison(executablePath) ==
             normalizedExpectedPath
         ? VelopackProcessProbeStatus.runningExpectedProcess
@@ -48,14 +54,7 @@ VelopackProcessProbeStatus interpretWindowsProcessQueryResult({
   }
 
   if (processName.isNotEmpty) {
-    final expectedName = expectedExecutablePath
-        .split(RegExp(r'[\\/]'))
-        .last
-        .trim()
-        .toLowerCase();
-    return processName.toLowerCase() == expectedName
-        ? VelopackProcessProbeStatus.runningExpectedProcess
-        : VelopackProcessProbeStatus.notRunning;
+    return VelopackProcessProbeStatus.unknown;
   }
 
   return VelopackProcessProbeStatus.unknown;
@@ -417,7 +416,10 @@ class VelopackUpdateClient implements WindowsStagedUpdateClient {
         expectedExecutablePath: updateExecutablePath,
       );
       if (processStatus == VelopackProcessProbeStatus.notRunning) {
-        _deletePendingPackageUpdates(updateExecutablePath);
+        _deletePendingPackageUpdates(
+          updateExecutablePath,
+          targetVersion: attempt.version,
+        );
         _clearPendingApplyAttempt(updateExecutablePath);
         throw StateError(
             'windows_velopack_previous_apply_failed_${attempt.version}');
@@ -578,6 +580,9 @@ class VelopackUpdateClient implements WindowsStagedUpdateClient {
       if (entity is! File) continue;
       final fileName =
           entity.uri.pathSegments.isEmpty ? '' : entity.uri.pathSegments.last;
+      if (!isWindowsVelopackPackageName(fileName)) {
+        continue;
+      }
       final version = _extractVersionFromNupkgName(fileName);
       if (version == null) {
         continue;

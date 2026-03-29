@@ -40,6 +40,18 @@ class VerificationScriptsTests(unittest.TestCase):
         self.assertIn('Fix locally with: pixi run ci', check_mode)
         self.assertNotIn("ensure_i18n_generated", check_mode)
 
+    def test_check_mode_disables_worktree_writes_for_tooling_setup(self) -> None:
+        check_mode = (REPO_ROOT / "scripts/pre_commit_check_mode.sh").read_text(
+            encoding="utf-8"
+        )
+        common = (REPO_ROOT / "scripts/pre_commit_common.sh").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn('SECONDLOOP_PRECOMMIT_ALLOW_WORKTREE_WRITES=0', check_mode)
+        self.assertIn('precommit_allow_worktree_writes', common)
+        self.assertIn('mktemp -d -t secondloop_libclang', common)
+
     def test_verify_changed_uses_non_mutating_check_mode(self) -> None:
         verify_changed = (REPO_ROOT / "scripts/verify_changed.sh").read_text(
             encoding="utf-8"

@@ -3,6 +3,8 @@ die() {
   exit 1
 }
 
+precommit_allow_worktree_writes="${SECONDLOOP_PRECOMMIT_ALLOW_WORKTREE_WRITES:-1}"
+
 cargo_missing_message() {
   die "Missing 'cargo'. Install Rust in the project environment (recommended: \`pixi install\`) or add cargo to PATH."
 }
@@ -219,7 +221,11 @@ resolve_libclang_path() {
     shopt -u nullglob
     if (( ${#versioned_libclang_dlls[@]} > 0 )); then
       local shim_dir="${repo_root}/.tool/libclang"
-      mkdir -p "${shim_dir}"
+      if [[ "${precommit_allow_worktree_writes}" != "1" ]]; then
+        shim_dir="$(mktemp -d 2>/dev/null || mktemp -d -t secondloop_libclang)"
+      else
+        mkdir -p "${shim_dir}"
+      fi
       cp -f "${versioned_libclang_dlls[0]}" "${shim_dir}/libclang.dll"
       export LIBCLANG_PATH="${shim_dir}"
       prepend_path "${shim_dir}"
@@ -319,7 +325,9 @@ ensure_windows_short_build_paths() {
   fi
 
   if [[ -z "${CARGO_TARGET_DIR:-}" ]]; then
-    if [[ -n "${drive_prefix}" ]]; then
+    if [[ "${precommit_allow_worktree_writes}" != "1" ]]; then
+      export CARGO_TARGET_DIR="$(mktemp -d 2>/dev/null || mktemp -d -t secondloop_ct)"
+    elif [[ -n "${drive_prefix}" ]]; then
       export CARGO_TARGET_DIR="${drive_prefix}/ct"
     else
       export CARGO_TARGET_DIR="${repo_root}/.tool/ct"
@@ -328,7 +336,9 @@ ensure_windows_short_build_paths() {
   fi
 
   if [[ -z "${CARGOKIT_TARGET_TEMP_DIR:-}" ]]; then
-    if [[ -n "${drive_prefix}" ]]; then
+    if [[ "${precommit_allow_worktree_writes}" != "1" ]]; then
+      export CARGOKIT_TARGET_TEMP_DIR="$(mktemp -d 2>/dev/null || mktemp -d -t secondloop_ck)"
+    elif [[ -n "${drive_prefix}" ]]; then
       export CARGOKIT_TARGET_TEMP_DIR="${drive_prefix}/ck"
     else
       export CARGOKIT_TARGET_TEMP_DIR="${repo_root}/.tool/ck"

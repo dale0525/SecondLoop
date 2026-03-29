@@ -58,6 +58,17 @@ void main() {
     expect(status, VelopackProcessProbeStatus.runningExpectedProcess);
   });
 
+  test('treats process-name-only probe results as unknown', () {
+    final status = interpretWindowsProcessQueryResult(
+      exitCode: 0,
+      stdoutText: '\tUpdate.exe',
+      expectedExecutablePath:
+          'C:/Users/test/AppData/Local/SecondLoop/Update.exe',
+    );
+
+    expect(status, VelopackProcessProbeStatus.unknown);
+  });
+
   test('isAvailable requires Update.exe and current sq.version', () async {
     final root = await Directory.systemTemp.createTemp('velopack_available_');
     final updater = File('${root.path}${Platform.pathSeparator}Update.exe')
@@ -411,6 +422,50 @@ void main() {
         '${root.path}${Platform.pathSeparator}packages${Platform.pathSeparator}com.secondloop.secondloop-1.1.0-full.nupkg',
       ).existsSync(),
       isFalse,
+    );
+  });
+
+  test(
+      'recent dead-pid cleanup removes only failed target package and preserves unrelated packages',
+      () async {
+    final root = await Directory.systemTemp
+        .createTemp('velopack_recent_dead_pid_scope_');
+    final updater = File('${root.path}${Platform.pathSeparator}Update.exe')
+      ..writeAsStringSync('stub');
+    _writeSqVersion(root, '1.0.0');
+    _createNupkg(root, 'com.secondloop.secondloop-1.1.0-full.nupkg');
+    _createNupkg(root, 'otherapp-9.9.9-full.nupkg');
+    _pendingApplyAttemptMarker(root).writeAsStringSync(
+      '1.1.0\n${DateTime.now().toUtc().toIso8601String()}\n999999',
+    );
+
+    final client = VelopackUpdateClient(
+      updateExecutablePath: updater.path,
+      processStarter: (executable, arguments,
+          {mode = ProcessStartMode.normal}) async {
+        return Process.start(
+          Platform.resolvedExecutable,
+          const ['--version'],
+        );
+      },
+    );
+
+    await expectLater(
+      client.applyPendingOnStartup(waitPid: 1234),
+      throwsA(isA<StateError>()),
+    );
+
+    expect(
+      File(
+        '${root.path}${Platform.pathSeparator}packages${Platform.pathSeparator}com.secondloop.secondloop-1.1.0-full.nupkg',
+      ).existsSync(),
+      isFalse,
+    );
+    expect(
+      File(
+        '${root.path}${Platform.pathSeparator}packages${Platform.pathSeparator}otherapp-9.9.9-full.nupkg',
+      ).existsSync(),
+      isTrue,
     );
   });
 

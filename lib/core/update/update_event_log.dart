@@ -206,6 +206,7 @@ UpdateFailureCategory classifyUpdateFailure(Object error) {
   }
   if (raw.contains('velopack_unavailable') ||
       raw.contains('staged_update_not_supported') ||
+      raw.contains('staged_update_restart_not_supported') ||
       raw.contains('seamless_update_not_supported') ||
       raw.contains('no_pending_update')) {
     return UpdateFailureCategory.runtimeUnavailable;

@@ -77,4 +77,11 @@ void main() {
     expect(recent.single.type, UpdateEventType.pendingApplyDispatched);
     expect(recent.single.message, 'detached_updater_started');
   });
+
+  test('classifyUpdateFailure maps staged restart unsupported errors', () {
+    expect(
+      classifyUpdateFailure('staged_update_restart_not_supported_for_windows'),
+      UpdateFailureCategory.runtimeUnavailable,
+    );
+  });
 }
