@@ -191,9 +191,10 @@ class PreCommitHookTests(unittest.TestCase):
         self.assertIn('i18n_generated_now=0', script)
         self.assertNotIn('if [[ ${i18n_generated_now} -eq 0 ]]; then', script)
         self.assertIn('run_i18n_refresh_in_temp_copy', script)
+        self.assertIn('ensure_temp_i18n_strings_for_analysis', script)
         self.assertIn('git diff --no-index --exit-code --', script)
         self.assertIn('"${repo_root}/lib/i18n"', script)
-        self.assertIn('"${temp_repo}/lib/i18n"', script)
+        self.assertIn('"${i18n_temp_repo}/lib/i18n"', script)
         self.assertNotIn('git diff --exit-code -- lib/i18n', script)
 
     def test_pre_commit_hook_stages_generated_i18n_outputs_in_normal_commit_flow(self) -> None:

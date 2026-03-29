@@ -1,6 +1,11 @@
 export SECONDLOOP_PRECOMMIT_ALLOW_WORKTREE_WRITES=0
 precommit_allow_worktree_writes=0
 
+i18n_temp_root=""
+i18n_temp_repo=""
+i18n_temp_repo_prepared=0
+temp_generated_i18n_strings_path=""
+
   if (( scope_flutter == 0 && scope_rust == 0 )); then
     scope_flutter=1
     scope_rust=1
@@ -28,10 +33,23 @@ precommit_allow_worktree_writes=0
     ensure_windows_short_build_paths
   fi
 
-  run_i18n_refresh_in_temp_copy() {
-    local temp_root temp_repo dart_bin flutter_bin package_config_dir
-    temp_root="$(mktemp -d 2>/dev/null || mktemp -d -t secondloop_i18n_check)"
-    temp_repo="${temp_root}/repo"
+  cleanup_temp_i18n_artifacts() {
+    if [[ -n "${temp_generated_i18n_strings_path}" ]]; then
+      rm -f "${temp_generated_i18n_strings_path}" 2>/dev/null || true
+    fi
+    if [[ -n "${i18n_temp_root}" ]]; then
+      rm -rf "${i18n_temp_root}" 2>/dev/null || true
+    fi
+  }
+
+  prepare_i18n_temp_copy() {
+    local dart_bin flutter_bin package_config_dir
+    if [[ ${i18n_temp_repo_prepared} -eq 1 && -d "${i18n_temp_repo}" ]]; then
+      return 0
+    fi
+
+    i18n_temp_root="$(mktemp -d 2>/dev/null || mktemp -d -t secondloop_i18n_check)"
+    i18n_temp_repo="${i18n_temp_root}/repo"
     dart_bin="$(resolve_dart_bin)"
     flutter_bin="$(resolve_flutter_bin)"
     package_config_dir="${repo_root}/.dart_tool/package_config.json"
@@ -94,13 +112,13 @@ precommit_allow_worktree_writes=0
             continue
           fi
 
-          destination_parent="${temp_repo}/$(dirname "${normalized_path}")"
+          destination_parent="${i18n_temp_repo}/$(dirname "${normalized_path}")"
           mkdir -p "${destination_parent}"
-          if [[ ! -e "${temp_repo}/${normalized_path}" ]]; then
+          if [[ ! -e "${i18n_temp_repo}/${normalized_path}" ]]; then
             cp -R "${repo_root}/${normalized_path}" "${destination_parent}/"
           fi
 
-          dependency_pubspec="${temp_repo}/${normalized_path}/pubspec.yaml"
+          dependency_pubspec="${i18n_temp_repo}/${normalized_path}/pubspec.yaml"
           if [[ -f "${dependency_pubspec}" ]]; then
             append_pending_pubspec "${dependency_pubspec}"
           fi
@@ -108,44 +126,52 @@ precommit_allow_worktree_writes=0
       done
     }
 
-    cleanup_temp_i18n_copy() {
-      rm -rf "${temp_root}" 2>/dev/null || true
-    }
-
-    trap cleanup_temp_i18n_copy RETURN
-
-    mkdir -p "${temp_repo}/lib"
-    cp "${repo_root}/pubspec.yaml" "${temp_repo}/pubspec.yaml"
+    mkdir -p "${i18n_temp_repo}/lib"
+    cp "${repo_root}/pubspec.yaml" "${i18n_temp_repo}/pubspec.yaml"
     if [[ -f "${repo_root}/pubspec.lock" ]]; then
-      cp "${repo_root}/pubspec.lock" "${temp_repo}/pubspec.lock"
+      cp "${repo_root}/pubspec.lock" "${i18n_temp_repo}/pubspec.lock"
     fi
-    cp "${repo_root}/slang.yaml" "${temp_repo}/slang.yaml"
-    cp -R "${repo_root}/lib/i18n" "${temp_repo}/lib/"
+    cp "${repo_root}/slang.yaml" "${i18n_temp_repo}/slang.yaml"
+    cp -R "${repo_root}/lib/i18n" "${i18n_temp_repo}/lib/"
     copy_local_path_dependencies_to_temp_repo
     if [[ -f "${package_config_dir}" ]]; then
-      mkdir -p "${temp_repo}/.dart_tool"
-      cp "${package_config_dir}" "${temp_repo}/.dart_tool/package_config.json"
+      mkdir -p "${i18n_temp_repo}/.dart_tool"
+      cp "${package_config_dir}" "${i18n_temp_repo}/.dart_tool/package_config.json"
     fi
-    cp -R "${repo_root}/scripts" "${temp_repo}/"
+    cp -R "${repo_root}/scripts" "${i18n_temp_repo}/"
 
     (
-      cd "${temp_repo}"
+      cd "${i18n_temp_repo}"
       export SECONDLOOP_I18N_DART_BIN="${dart_bin}"
       export SECONDLOOP_I18N_FLUTTER_BIN="${flutter_bin}"
       bash scripts/run_i18n_refresh.sh >/dev/null
     )
 
-    git diff --no-index --exit-code -- \
-      "${repo_root}/lib/i18n" \
-      "${temp_repo}/lib/i18n" >/dev/null
+    i18n_temp_repo_prepared=1
   }
 
-  if (( scope_flutter )); then
-    if [[ ! -f "lib/i18n/strings.g.dart" ]]; then
-      echo "pre-commit: lib/i18n/strings.g.dart is missing." >&2
-      echo "Fix locally with: pixi run i18n-refresh" >&2
-      exit 1
+  run_i18n_refresh_in_temp_copy() {
+    prepare_i18n_temp_copy
+
+    git diff --no-index --exit-code -- \
+      "${repo_root}/lib/i18n" \
+      "${i18n_temp_repo}/lib/i18n" >/dev/null
+  }
+
+  ensure_temp_i18n_strings_for_analysis() {
+    if [[ -f "${repo_root}/lib/i18n/strings.g.dart" ]]; then
+      return 0
     fi
+
+    prepare_i18n_temp_copy
+    temp_generated_i18n_strings_path="${repo_root}/lib/i18n/strings.g.dart"
+    cp "${i18n_temp_repo}/lib/i18n/strings.g.dart" "${temp_generated_i18n_strings_path}"
+  }
+
+  trap cleanup_temp_i18n_artifacts EXIT
+
+  if (( scope_flutter )); then
+    ensure_temp_i18n_strings_for_analysis
     run_i18n_analyze
 
     if ! run_i18n_refresh_in_temp_copy; then

@@ -40,8 +40,10 @@ class VerificationScriptsTests(unittest.TestCase):
         self.assertIn("run_i18n_refresh_in_temp_copy", check_mode)
         self.assertIn("git diff --no-index --exit-code --", check_mode)
         self.assertIn('"${repo_root}/lib/i18n"', check_mode)
-        self.assertIn('"${temp_repo}/lib/i18n"', check_mode)
-        self.assertIn('lib/i18n/strings.g.dart is missing', check_mode)
+        self.assertIn('"${i18n_temp_repo}/lib/i18n"', check_mode)
+        self.assertIn("ensure_temp_i18n_strings_for_analysis", check_mode)
+        self.assertIn('cp "${i18n_temp_repo}/lib/i18n/strings.g.dart"', check_mode)
+        self.assertNotIn('lib/i18n/strings.g.dart is missing', check_mode)
         self.assertIn('SECONDLOOP_I18N_DART_BIN', check_mode)
         self.assertIn('SECONDLOOP_I18N_FLUTTER_BIN', check_mode)
         self.assertIn('package_config.json', check_mode)
@@ -77,7 +79,7 @@ class VerificationScriptsTests(unittest.TestCase):
         self.assertIn("copy_local_path_dependencies_to_temp_repo", check_mode)
         self.assertIn('cp -R "${repo_root}/${normalized_path}"', check_mode)
         self.assertIn("pending_pubspecs", check_mode)
-        self.assertIn('"${temp_repo}/${normalized_path}/pubspec.yaml"', check_mode)
+        self.assertIn('"${i18n_temp_repo}/${normalized_path}/pubspec.yaml"', check_mode)
         self.assertIn('path:', (REPO_ROOT / "pubspec.yaml").read_text(encoding="utf-8"))
 
     def test_verify_changed_uses_non_mutating_check_mode(self) -> None:
