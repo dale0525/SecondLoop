@@ -10,6 +10,39 @@ HTTPS_SERVER = REPO_ROOT / "tools/windows_https_update_server.py"
 
 
 class WindowsAutoUpdateSmokeTests(unittest.TestCase):
+    def test_smoke_script_parameterizes_installed_exe_name_and_process_name(self) -> None:
+        script = SMOKE_SCRIPT.read_text(encoding="utf-8")
+
+        self.assertIn("[string]$ExeName = 'secondloop.exe'", script)
+        self.assertIn("function Get-InstalledProcessName", script)
+        self.assertIn("Split-Path -Path $ExeName -LeafBase", script)
+        self.assertNotIn("Get-Process -Name 'secondloop'", script)
+
+    def test_smoke_script_targets_exact_channel_versioned_full_package(self) -> None:
+        script = SMOKE_SCRIPT.read_text(encoding="utf-8")
+
+        self.assertIn("function Get-ExpectedFullPackageFileName", script)
+        self.assertIn("return \"$PackId-$versionName-$Channel-full.nupkg\"", script)
+        self.assertIn(
+            "$expectedPackageFileName = Get-ExpectedFullPackageFileName -VersionValue $NewVersion",
+            script,
+        )
+
+    def test_smoke_script_requires_unambiguous_setup_executable(self) -> None:
+        script = SMOKE_SCRIPT.read_text(encoding="utf-8")
+
+        self.assertIn("function Get-SetupExecutable", script)
+        self.assertIn("$setupCandidates.Count -eq 0", script)
+        self.assertIn("$setupCandidates.Count -gt 1", script)
+        self.assertIn("Get-SetupExecutable -OutputDir $v1Output", script)
+
+    def test_smoke_script_rechecks_running_process_after_stabilization_delay(self) -> None:
+        script = SMOKE_SCRIPT.read_text(encoding="utf-8")
+
+        self.assertIn("function Get-RunningInstalledProcesses", script)
+        self.assertIn("$matching = @(Get-RunningInstalledProcesses)", script)
+        self.assertIn("$stableMatching = @(Get-RunningInstalledProcesses)", script)
+
     def test_smoke_script_uses_manifest_driven_stage_then_restart_flow(self) -> None:
         self.assertTrue(SMOKE_SCRIPT.exists())
 

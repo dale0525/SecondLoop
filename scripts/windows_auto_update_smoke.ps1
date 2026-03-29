@@ -3,6 +3,7 @@ param(
   [string]$NewVersion = '1.0.1+1',
   [string]$PackId = 'com.secondloop.secondloopdev',
   [string]$Channel = 'devwin',
+  [string]$ExeName = 'secondloop.exe',
   [int]$Port = 8443,
   [string]$OutputRoot = 'dist/windows-auto-update-smoke',
   [string]$CertificatePemPath = 'dist/auto-update-test/localhost-dev-cert.pem',
@@ -21,6 +22,10 @@ Set-Location $repoRootPath
 
 function Get-VersionName([string]$SemanticVersionWithBuild) {
   return ($SemanticVersionWithBuild -split '\+', 2)[0]
+}
+
+function Get-InstalledProcessName {
+  return Split-Path -Path $ExeName -LeafBase
 }
 
 function Set-PubspecVersion {
@@ -111,17 +116,40 @@ function Invoke-PackageBuild {
   Invoke-CheckedProcess -FilePath 'powershell.exe' -ArgumentList $packageArgs -FailureMessage "Velopack packaging failed for $VersionValue."
 }
 
-function Get-FullPackage {
-  param([string]$OutputDir)
+function Get-ExpectedFullPackageFileName {
+  param([string]$VersionValue)
 
-  $packageFile = Get-ChildItem -LiteralPath $OutputDir -Filter '*-full.nupkg' -File |
-    Sort-Object -Property Name |
-    Select-Object -First 1
-  if ($null -eq $packageFile) {
-    throw "Missing full nupkg under $OutputDir"
+  $versionName = Get-VersionName $VersionValue
+  return "$PackId-$versionName-$Channel-full.nupkg"
+}
+
+function Get-FullPackage {
+  param(
+    [string]$OutputDir,
+    [string]$ExpectedFileName
+  )
+
+  $packagePath = Join-Path $OutputDir $ExpectedFileName
+  if (-not (Test-Path -LiteralPath $packagePath -PathType Leaf)) {
+    throw "Missing expected full nupkg under $OutputDir: $ExpectedFileName"
   }
 
-  return $packageFile
+  return Get-Item -LiteralPath $packagePath
+}
+
+function Get-SetupExecutable {
+  param([string]$OutputDir)
+
+  $setupCandidates = @(Get-ChildItem -LiteralPath $OutputDir -Filter '*Setup*.exe' -File)
+  if ($setupCandidates.Count -eq 0) {
+    throw "Missing setup executable under $OutputDir"
+  }
+  if ($setupCandidates.Count -gt 1) {
+    $candidateNames = $setupCandidates | ForEach-Object { $_.Name }
+    throw "Expected exactly one setup executable under $OutputDir but found: $($candidateNames -join ', ')"
+  }
+
+  return $setupCandidates[0]
 }
 
 function Get-FileSha256Hex {
@@ -135,7 +163,7 @@ function Get-InstallRoot {
 }
 
 function Get-InstalledExePath {
-  return Join-Path (Get-InstallRoot) 'current\secondloop.exe'
+  return Join-Path (Get-InstallRoot) (Join-Path 'current' $ExeName)
 }
 
 function Get-UpdateExePath {
@@ -159,22 +187,7 @@ function Get-InstalledVersion {
 }
 
 function Stop-InstalledSecondLoopProcess {
-  $expectedPath = Get-InstalledExePath
-  if (-not (Test-Path -LiteralPath $expectedPath -PathType Leaf)) {
-    return
-  }
-
-  $normalizedExpected = [System.IO.Path]::GetFullPath($expectedPath).ToLowerInvariant()
-  $running = @(
-    Get-Process -Name 'secondloop' -ErrorAction SilentlyContinue |
-      Where-Object {
-        try {
-          $_.Path -and ([System.IO.Path]::GetFullPath($_.Path).ToLowerInvariant() -eq $normalizedExpected)
-        } catch {
-          $false
-        }
-      }
-  )
+  $running = @(Get-RunningInstalledProcesses)
 
   foreach ($process in $running) {
     Write-Host "Stopping installed SecondLoop process PID=$($process.Id)"
@@ -260,30 +273,43 @@ function Wait-ForRunningInstalledProcess {
   )
 
   $expectedPath = Get-InstalledExePath
-  $normalizedExpected = [System.IO.Path]::GetFullPath($expectedPath).ToLowerInvariant()
   $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
 
   while ((Get-Date) -lt $deadline) {
-    $matching = @(
-      Get-Process -Name 'secondloop' -ErrorAction SilentlyContinue |
-        Where-Object {
-          try {
-            $_.Path -and ([System.IO.Path]::GetFullPath($_.Path).ToLowerInvariant() -eq $normalizedExpected)
-          } catch {
-            $false
-          }
-        }
-    )
+    $matching = @(Get-RunningInstalledProcesses)
 
     if ($matching.Count -gt 0 -and (Get-InstalledVersion) -eq $ExpectedVersion) {
       Start-Sleep -Seconds 5
-      return
+      $stableMatching = @(Get-RunningInstalledProcesses)
+      if ($stableMatching.Count -gt 0 -and (Get-InstalledVersion) -eq $ExpectedVersion) {
+        return
+      }
     }
 
     Start-Sleep -Seconds 2
   }
 
   throw "Timed out waiting for running installed process at $expectedPath with version $ExpectedVersion."
+}
+
+function Get-RunningInstalledProcesses {
+  $expectedPath = Get-InstalledExePath
+  if (-not (Test-Path -LiteralPath $expectedPath -PathType Leaf)) {
+    return @()
+  }
+
+  $normalizedExpected = [System.IO.Path]::GetFullPath($expectedPath).ToLowerInvariant()
+  $processName = Get-InstalledProcessName
+  return @(
+    Get-Process -Name $processName -ErrorAction SilentlyContinue |
+      Where-Object {
+        try {
+          $_.Path -and ([System.IO.Path]::GetFullPath($_.Path).ToLowerInvariant() -eq $normalizedExpected)
+        } catch {
+          $false
+        }
+      }
+  )
 }
 
 function Ensure-LocalhostCertificateTrusted {
@@ -420,12 +446,10 @@ try {
 
   Remove-ExistingInstallRoot
 
-  $setupExe = Get-ChildItem -LiteralPath $v1Output -Filter '*Setup*.exe' -File | Select-Object -First 1
-  if ($null -eq $setupExe) {
-    throw "Missing setup executable under $v1Output"
-  }
+  $setupExe = Get-SetupExecutable -OutputDir $v1Output
 
-  $expectedPackageFile = Get-FullPackage -OutputDir $v2Output
+  $expectedPackageFileName = Get-ExpectedFullPackageFileName -VersionValue $NewVersion
+  $expectedPackageFile = Get-FullPackage -OutputDir $v2Output -ExpectedFileName $expectedPackageFileName
   $expectedPackageSha256 = Get-FileSha256Hex -PathValue $expectedPackageFile.FullName
 
   $installLog = Join-Path $smokeRoot 'install-v1.log'
