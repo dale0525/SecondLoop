@@ -25,7 +25,7 @@ function Get-VersionName([string]$SemanticVersionWithBuild) {
 }
 
 function Get-InstalledProcessName {
-  return Split-Path -Path $ExeName -LeafBase
+  return [System.IO.Path]::GetFileNameWithoutExtension($ExeName)
 }
 
 function Set-PubspecVersion {
@@ -131,7 +131,7 @@ function Get-FullPackage {
 
   $packagePath = Join-Path $OutputDir $ExpectedFileName
   if (-not (Test-Path -LiteralPath $packagePath -PathType Leaf)) {
-    throw "Missing expected full nupkg under $OutputDir: $ExpectedFileName"
+    throw "Missing expected full nupkg under ${OutputDir}: $ExpectedFileName"
   }
 
   return Get-Item -LiteralPath $packagePath
@@ -155,7 +155,19 @@ function Get-SetupExecutable {
 function Get-FileSha256Hex {
   param([string]$PathValue)
 
-  return (Get-FileHash -LiteralPath $PathValue -Algorithm SHA256).Hash.ToLowerInvariant()
+  $sha256 = [System.Security.Cryptography.SHA256]::Create()
+  try {
+    $stream = [System.IO.File]::OpenRead($PathValue)
+    try {
+      $hashBytes = $sha256.ComputeHash($stream)
+    } finally {
+      $stream.Dispose()
+    }
+  } finally {
+    $sha256.Dispose()
+  }
+
+  return ([System.BitConverter]::ToString($hashBytes)).Replace('-', '').ToLowerInvariant()
 }
 
 function Get-InstallRoot {

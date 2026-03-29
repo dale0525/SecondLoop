@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import subprocess
 import unittest
 
 
@@ -10,12 +11,36 @@ HTTPS_SERVER = REPO_ROOT / "tools/windows_https_update_server.py"
 
 
 class WindowsAutoUpdateSmokeTests(unittest.TestCase):
+    def test_smoke_script_parses_as_valid_powershell(self) -> None:
+        command = [
+            "powershell.exe",
+            "-NoProfile",
+            "-Command",
+            (
+                "$errors = $null; "
+                "[System.Management.Automation.Language.Parser]::ParseFile("
+                f"'{SMOKE_SCRIPT}', [ref]$null, [ref]$errors) | Out-Null; "
+                "if ($errors.Count -gt 0) { "
+                "  $errors | ForEach-Object { Write-Error $_.Message }; "
+                "  exit 1 "
+                "}"
+            ),
+        ]
+
+        completed = subprocess.run(command, capture_output=True, text=True, check=False)
+
+        self.assertEqual(
+            0,
+            completed.returncode,
+            msg=(completed.stdout + completed.stderr).strip(),
+        )
+
     def test_smoke_script_parameterizes_installed_exe_name_and_process_name(self) -> None:
         script = SMOKE_SCRIPT.read_text(encoding="utf-8")
 
         self.assertIn("[string]$ExeName = 'secondloop.exe'", script)
         self.assertIn("function Get-InstalledProcessName", script)
-        self.assertIn("Split-Path -Path $ExeName -LeafBase", script)
+        self.assertIn("[System.IO.Path]::GetFileNameWithoutExtension($ExeName)", script)
         self.assertNotIn("Get-Process -Name 'secondloop'", script)
 
     def test_smoke_script_targets_exact_channel_versioned_full_package(self) -> None:
@@ -27,6 +52,12 @@ class WindowsAutoUpdateSmokeTests(unittest.TestCase):
             "$expectedPackageFileName = Get-ExpectedFullPackageFileName -VersionValue $NewVersion",
             script,
         )
+
+    def test_smoke_script_uses_dotnet_sha256_for_powershell_compatibility(self) -> None:
+        script = SMOKE_SCRIPT.read_text(encoding="utf-8")
+
+        self.assertIn("[System.Security.Cryptography.SHA256]::Create()", script)
+        self.assertNotIn("Get-FileHash", script)
 
     def test_smoke_script_requires_unambiguous_setup_executable(self) -> None:
         script = SMOKE_SCRIPT.read_text(encoding="utf-8")
