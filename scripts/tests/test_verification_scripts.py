@@ -61,6 +61,15 @@ class VerificationScriptsTests(unittest.TestCase):
         self.assertIn('precommit_allow_worktree_writes', common)
         self.assertIn('mktemp -d -t secondloop_libclang', common)
 
+    def test_check_mode_temp_i18n_copy_includes_local_path_dependencies(self) -> None:
+        check_mode = (REPO_ROOT / "scripts/pre_commit_check_mode.sh").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn("copy_local_path_dependencies_to_temp_repo", check_mode)
+        self.assertIn('cp -R "${repo_root}/${normalized_path}"', check_mode)
+        self.assertIn('path:', (REPO_ROOT / "pubspec.yaml").read_text(encoding="utf-8"))
+
     def test_verify_changed_uses_non_mutating_check_mode(self) -> None:
         verify_changed = (REPO_ROOT / "scripts/verify_changed.sh").read_text(
             encoding="utf-8"

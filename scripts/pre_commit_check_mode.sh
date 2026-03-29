@@ -35,6 +35,29 @@ export SECONDLOOP_PRECOMMIT_ALLOW_WORKTREE_WRITES=0
     flutter_bin="$(resolve_flutter_bin)"
     package_config_dir="${repo_root}/.dart_tool/package_config.json"
 
+    copy_local_path_dependencies_to_temp_repo() {
+      local relative_path normalized_path destination_parent
+
+      while IFS= read -r relative_path; do
+        [[ -n "${relative_path}" ]] || continue
+
+        normalized_path="${relative_path%/}"
+        if [[ -z "${normalized_path}" ]]; then
+          continue
+        fi
+
+        if [[ ! -e "${repo_root}/${normalized_path}" ]]; then
+          continue
+        fi
+
+        destination_parent="${temp_repo}/$(dirname "${normalized_path}")"
+        mkdir -p "${destination_parent}"
+        cp -R "${repo_root}/${normalized_path}" "${destination_parent}/"
+      done < <(
+        sed -n -E 's/^[[:space:]]+path:[[:space:]]*["'"'"'" ]*([^"'"'"'"#]+)["'"'"'" ]*$/\1/p' "${repo_root}/pubspec.yaml"
+      )
+    }
+
     cleanup_temp_i18n_copy() {
       rm -rf "${temp_root}" 2>/dev/null || true
     }
@@ -48,6 +71,7 @@ export SECONDLOOP_PRECOMMIT_ALLOW_WORKTREE_WRITES=0
     fi
     cp "${repo_root}/slang.yaml" "${temp_repo}/slang.yaml"
     cp -R "${repo_root}/lib/i18n" "${temp_repo}/lib/"
+    copy_local_path_dependencies_to_temp_repo
     if [[ -f "${package_config_dir}" ]]; then
       mkdir -p "${temp_repo}/.dart_tool"
       cp "${package_config_dir}" "${temp_repo}/.dart_tool/package_config.json"
