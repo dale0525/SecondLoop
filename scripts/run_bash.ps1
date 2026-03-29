@@ -9,6 +9,24 @@ param(
 $ErrorActionPreference = 'Stop'
 
 function Resolve-GitBash {
+  param(
+    [Parameter(Mandatory = $true)]
+    [string]$RepoRootPath
+  )
+
+  $projectCandidates = @(
+    (Join-Path $RepoRootPath '.pixi/envs/default/Library/bin/bash.exe'),
+    (Join-Path $RepoRootPath '.pixi/envs/default/usr/bin/bash.exe'),
+    (Join-Path $RepoRootPath '.pixi/envs/default/bin/bash.exe'),
+    (Join-Path $RepoRootPath '.tool/git/bin/bash.exe'),
+    (Join-Path $RepoRootPath '.tool/git/usr/bin/bash.exe')
+  )
+  foreach ($candidate in $projectCandidates) {
+    if (Test-Path $candidate) {
+      return $candidate
+    }
+  }
+
   $bashFromPath = Get-Command bash.exe -ErrorAction SilentlyContinue
   if ($bashFromPath -and $bashFromPath.Source -notmatch 'System32|WindowsApps') {
     return $bashFromPath.Source
@@ -36,13 +54,13 @@ function Resolve-GitBash {
     }
   }
 
-  throw "SecondLoop: Git Bash not found. Install Git for Windows and ensure 'C:\Program Files\Git\bin\bash.exe' is available."
+  throw "SecondLoop: Bash runtime not found. Install project-managed bash via pixi/.tool or Git for Windows."
 }
 
 $repoRoot = Resolve-Path (Join-Path $PSScriptRoot '..')
 $repoRootPath = $repoRoot.Path
 $resolvedScriptPath = Resolve-Path (Join-Path $repoRootPath $ScriptPath)
-$bashExe = Resolve-GitBash
+$bashExe = Resolve-GitBash -RepoRootPath $repoRootPath
 
 & $bashExe $resolvedScriptPath.Path @ScriptArgs
 exit $LASTEXITCODE

@@ -55,6 +55,8 @@ class AppUpdateService {
     void Function(int code)? processExit,
     Duration? networkTimeoutOverride,
     String? currentArchitectureOverride,
+    bool? allowHttpUpdateUriOverride,
+    bool? allowFileUpdateUriOverride,
   })  : _httpClient = httpClient ?? HttpClient(),
         _releaseJsonFetcher = releaseJsonFetcher,
         _currentVersionLoader = currentVersionLoader,
@@ -69,7 +71,9 @@ class AppUpdateService {
             updateEventLogger ?? SharedPrefsUpdateEventLogger(),
         _processExit = processExit,
         _networkTimeoutOverride = networkTimeoutOverride,
-        _currentArchitectureOverride = currentArchitectureOverride;
+        _currentArchitectureOverride = currentArchitectureOverride,
+        _allowHttpUpdateUriOverride = allowHttpUpdateUriOverride,
+        _allowFileUpdateUriOverride = allowFileUpdateUriOverride;
 
   final HttpClient _httpClient;
   final AppUpdateReleaseJsonFetcher? _releaseJsonFetcher;
@@ -85,6 +89,8 @@ class AppUpdateService {
   final void Function(int code)? _processExit;
   final Duration? _networkTimeoutOverride;
   final String? _currentArchitectureOverride;
+  final bool? _allowHttpUpdateUriOverride;
+  final bool? _allowFileUpdateUriOverride;
 
   AppUpdatePlatform get _platform =>
       _platformOverride ?? detectAppUpdatePlatform();
@@ -98,6 +104,10 @@ class AppUpdateService {
       _updatePublicKeyOverride ?? _defaultUpdatePublicKey;
   Duration get _networkTimeout =>
       _networkTimeoutOverride ?? _defaultUpdateNetworkTimeout;
+  bool get _allowHttpUpdateUris =>
+      _allowHttpUpdateUriOverride ?? !_isReleaseMode;
+  bool get _allowFileUpdateUris =>
+      _allowFileUpdateUriOverride ?? !_isReleaseMode;
   String get _currentArchitecture => normalizeArchitectureLabel(
         _currentArchitectureOverride ?? currentArchitectureForUpdates(),
       );
@@ -196,10 +206,17 @@ class AppUpdateService {
       );
     }
 
-    final releasePageUri =
-        parseUpdateUri(readUpdateString(release, 'release_page_url')) ??
-            parseUpdateUri(readUpdateString(release, 'html_url')) ??
-            _buildFallbackReleasePageUri();
+    final releasePageUri = parseUpdateUri(
+          readUpdateString(release, 'release_page_url'),
+          allowHttp: _allowHttpUpdateUris,
+          allowFile: _allowFileUpdateUris,
+        ) ??
+        parseUpdateUri(
+          readUpdateString(release, 'html_url'),
+          allowHttp: _allowHttpUpdateUris,
+          allowFile: _allowFileUpdateUris,
+        ) ??
+        _buildFallbackReleasePageUri();
 
     if (compareReleaseTagWithCurrentVersion(latestTag, currentVersion) <= 0) {
       await _recordEvent(
@@ -222,6 +239,8 @@ class AppUpdateService {
       _platform,
       release,
       currentArchitecture: _currentArchitecture,
+      allowHttp: _allowHttpUpdateUris,
+      allowFile: _allowFileUpdateUris,
     );
     final assets = _parseAssets(release['assets']);
     final preferredAsset = manifestAsset ??
@@ -645,12 +664,19 @@ class AppUpdateService {
     final repo = _releaseRepo.trim();
 
     final endpoints = <Uri>[];
-    final apiOrigin = parseUpdateUri(configuredOrigin);
-    if (apiOrigin != null) {
-      final normalizedPath =
-          apiOrigin.path.endsWith('/') ? apiOrigin.path : '${apiOrigin.path}/';
+    final allowHttp = _allowHttpUpdateUris;
+    final allowFile = _allowFileUpdateUris;
+    final parsedApiOrigin = parseUpdateUri(
+      configuredOrigin,
+      allowHttp: allowHttp,
+      allowFile: allowFile,
+    );
+    if (parsedApiOrigin != null) {
+      final normalizedPath = parsedApiOrigin.path.endsWith('/')
+          ? parsedApiOrigin.path
+          : '${parsedApiOrigin.path}/';
       endpoints.add(
-        apiOrigin.replace(path: '${normalizedPath}api/releases/latest'),
+        parsedApiOrigin.replace(path: '${normalizedPath}api/releases/latest'),
       );
     }
 
@@ -669,7 +695,11 @@ class AppUpdateService {
   Uri _buildFallbackReleasePageUri() {
     final repo = _releaseRepo.trim();
     if (repo.isEmpty) {
-      final origin = parseUpdateUri(_releaseApiOrigin.trim());
+      final origin = parseUpdateUri(
+        _releaseApiOrigin.trim(),
+        allowHttp: _allowHttpUpdateUris,
+        allowFile: _allowFileUpdateUris,
+      );
       if (origin != null) return origin;
       return Uri.parse('https://github.com');
     }
@@ -686,7 +716,11 @@ class AppUpdateService {
       final url = item['browser_download_url'];
       final sha256 = item['sha256'];
       if (name is! String || url is! String) continue;
-      final uri = parseUpdateUri(url);
+      final uri = parseUpdateUri(
+        url,
+        allowHttp: _allowHttpUpdateUris,
+        allowFile: _allowFileUpdateUris,
+      );
       if (uri == null) continue;
       parsed.add(
         AppUpdateAsset(

@@ -76,6 +76,8 @@ class VerificationScriptsTests(unittest.TestCase):
 
         self.assertIn("copy_local_path_dependencies_to_temp_repo", check_mode)
         self.assertIn('cp -R "${repo_root}/${normalized_path}"', check_mode)
+        self.assertIn("pending_pubspecs", check_mode)
+        self.assertIn('"${temp_repo}/${normalized_path}/pubspec.yaml"', check_mode)
         self.assertIn('path:', (REPO_ROOT / "pubspec.yaml").read_text(encoding="utf-8"))
 
     def test_verify_changed_uses_non_mutating_check_mode(self) -> None:
@@ -90,6 +92,13 @@ class VerificationScriptsTests(unittest.TestCase):
 
         self.assertTrue(RUN_BASH_PS1.exists())
         self.assertIn("scripts/run_bash.ps1 scripts/install_git_hooks.sh", pixi)
+
+    def test_windows_bash_launcher_prefers_project_managed_bash_candidates(self) -> None:
+        launcher = RUN_BASH_PS1.read_text(encoding="utf-8")
+
+        self.assertIn('.pixi/envs/default/Library/bin/bash.exe', launcher)
+        self.assertIn('.pixi/envs/default/bin/bash.exe', launcher)
+        self.assertIn('.tool/git/bin/bash.exe', launcher)
 
 
 if __name__ == "__main__":

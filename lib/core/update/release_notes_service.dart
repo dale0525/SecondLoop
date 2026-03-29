@@ -6,6 +6,7 @@ import 'package:flutter/widgets.dart';
 
 import 'app_update_helpers.dart';
 import 'app_update_models.dart';
+import 'app_update_resolution.dart';
 
 const _defaultReleaseApiOrigin = String.fromEnvironment(
   'SECONDLOOP_RELEASE_API_ORIGIN',
@@ -70,12 +71,16 @@ class ReleaseNotesService {
     String? releaseApiOriginOverride,
     String? releaseRepoOverride,
     Duration? networkTimeoutOverride,
+    bool? allowHttpUriOverride,
+    bool? allowFileUriOverride,
   })  : _httpClient = httpClient ?? HttpClient(),
         _releaseJsonFetcher = releaseJsonFetcher,
         _notesJsonFetcher = notesJsonFetcher,
         _releaseApiOriginOverride = releaseApiOriginOverride,
         _releaseRepoOverride = releaseRepoOverride,
-        _networkTimeoutOverride = networkTimeoutOverride;
+        _networkTimeoutOverride = networkTimeoutOverride,
+        _allowHttpUriOverride = allowHttpUriOverride,
+        _allowFileUriOverride = allowFileUriOverride;
 
   final HttpClient _httpClient;
   final ReleaseNotesReleaseJsonFetcher? _releaseJsonFetcher;
@@ -83,9 +88,13 @@ class ReleaseNotesService {
   final String? _releaseApiOriginOverride;
   final String? _releaseRepoOverride;
   final Duration? _networkTimeoutOverride;
+  final bool? _allowHttpUriOverride;
+  final bool? _allowFileUriOverride;
 
   Duration get _networkTimeout =>
       _networkTimeoutOverride ?? _defaultReleaseNotesNetworkTimeout;
+  bool get _allowHttpUris => _allowHttpUriOverride ?? false;
+  bool get _allowFileUris => _allowFileUriOverride ?? false;
 
   Future<ReleaseNotesFetchResult> fetchReleaseNotes({
     required String tag,
@@ -356,6 +365,14 @@ class ReleaseNotesService {
     return parsed;
   }
 
+  Uri? _parseUri(String? value) {
+    return parseUpdateUri(
+      value,
+      allowHttp: _allowHttpUris,
+      allowFile: _allowFileUris,
+    );
+  }
+
   static String? _readString(Map<String, Object?> map, String key) {
     final value = map[key];
     if (value is! String) return null;
@@ -453,6 +470,7 @@ String _normalizeLocaleTag(String value) {
 
 List<String> _localeCandidates(Locale locale) {
   final languageCode = locale.languageCode.trim();
+  final scriptCode = (locale.scriptCode ?? '').trim();
   final countryCode = (locale.countryCode ?? '').trim();
 
   final candidates = <String>[];
@@ -462,6 +480,16 @@ List<String> _localeCandidates(Locale locale) {
     candidates.add(normalized);
   }
 
+  if (languageCode.isNotEmpty &&
+      scriptCode.isNotEmpty &&
+      countryCode.isNotEmpty) {
+    addCandidate('$languageCode-$scriptCode-$countryCode');
+    addCandidate('${languageCode}_${scriptCode}_$countryCode');
+  }
+  if (languageCode.isNotEmpty && scriptCode.isNotEmpty) {
+    addCandidate('$languageCode-$scriptCode');
+    addCandidate('${languageCode}_$scriptCode');
+  }
   if (languageCode.isNotEmpty && countryCode.isNotEmpty) {
     addCandidate('$languageCode-$countryCode');
     addCandidate('${languageCode}_$countryCode');
@@ -471,29 +499,4 @@ List<String> _localeCandidates(Locale locale) {
   }
 
   return candidates;
-}
-
-Uri? _parseUri(String? value) {
-  if (value == null) return null;
-  final trimmed = value.trim();
-  if (trimmed.isEmpty) return null;
-
-  final uri = Uri.tryParse(trimmed);
-  if (uri == null) return null;
-
-  final scheme = uri.scheme.toLowerCase();
-  if (scheme != 'https' && scheme != 'http' && scheme != 'file') {
-    return null;
-  }
-
-  if ((scheme == 'https' || scheme == 'http') &&
-      (!uri.hasScheme || !uri.hasAuthority)) {
-    return null;
-  }
-
-  if (scheme == 'file' && !uri.hasScheme) {
-    return null;
-  }
-
-  return uri;
 }

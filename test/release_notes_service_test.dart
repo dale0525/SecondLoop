@@ -109,6 +109,62 @@ void main() {
       expect(result.notes!.summary, contains('startup'));
     });
 
+    test('prefers script-specific release notes asset', () async {
+      final service = ReleaseNotesService(
+        releaseJsonFetcher: (uri) async => {
+          'tag_name': 'v1.2.3',
+          'html_url':
+              'https://github.com/dale0525/SecondLoop/releases/tag/v1.2.3',
+          'assets': [
+            {
+              'name': 'release-notes-v1.2.3-en-US.json',
+              'browser_download_url': 'https://cdn.example.com/en.json',
+            },
+            {
+              'name': 'release-notes-v1.2.3-zh-Hans.json',
+              'browser_download_url': 'https://cdn.example.com/zh-hans.json',
+            },
+          ],
+        },
+        notesJsonFetcher: (uri) async {
+          if (uri.toString().endsWith('/zh-hans.json')) {
+            return {
+              'version': 'v1.2.3',
+              'summary': '简体中文说明。',
+              'highlights': [
+                {
+                  'text': '优先匹配脚本语言资源',
+                  'change_ids': ['c1'],
+                },
+              ],
+              'sections': [
+                {
+                  'title': '说明',
+                  'items': [
+                    {
+                      'text': '命中 zh-Hans 资源',
+                      'change_ids': ['c1']
+                    },
+                  ],
+                },
+              ],
+            };
+          }
+          throw StateError('unexpected_url_$uri');
+        },
+      );
+
+      final result = await service.fetchReleaseNotes(
+        tag: 'v1.2.3',
+        locale:
+            const Locale.fromSubtags(languageCode: 'zh', scriptCode: 'Hans'),
+      );
+
+      expect(result.notes, isNotNull);
+      expect(result.notes!.summary, '简体中文说明。');
+      expect(result.sourceLocaleTag, 'zh-Hans');
+    });
+
     test('accepts fourth-segment release tags for release notes assets',
         () async {
       final service = ReleaseNotesService(

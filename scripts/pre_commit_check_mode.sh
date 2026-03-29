@@ -36,27 +36,76 @@ precommit_allow_worktree_writes=0
     flutter_bin="$(resolve_flutter_bin)"
     package_config_dir="${repo_root}/.dart_tool/package_config.json"
 
+    extract_local_path_dependencies_from_pubspec() {
+      local pubspec_path="$1"
+
+      [[ -f "${pubspec_path}" ]] || return 0
+
+      sed -n -E 's/^[[:space:]]+path:[[:space:]]*["'"'"'" ]*([^"'"'"'"#]+)["'"'"'" ]*$/\1/p' "${pubspec_path}"
+    }
+
+    append_pending_pubspec() {
+      local candidate="$1"
+      local existing
+
+      for existing in "${pending_pubspecs[@]}"; do
+        if [[ "${existing}" == "${candidate}" ]]; then
+          return 0
+        fi
+      done
+      for existing in "${processed_pubspecs[@]}"; do
+        if [[ "${existing}" == "${candidate}" ]]; then
+          return 0
+        fi
+      done
+
+      pending_pubspecs+=("${candidate}")
+    }
+
     copy_local_path_dependencies_to_temp_repo() {
-      local relative_path normalized_path destination_parent
+      local current_pubspec current_pubspec_dir relative_path resolved_path normalized_path destination_parent dependency_pubspec
+      local pending_pubspecs=("${repo_root}/pubspec.yaml")
+      local processed_pubspecs=()
 
-      while IFS= read -r relative_path; do
-        [[ -n "${relative_path}" ]] || continue
+      while [[ ${#pending_pubspecs[@]} -gt 0 ]]; do
+        current_pubspec="${pending_pubspecs[0]}"
+        pending_pubspecs=("${pending_pubspecs[@]:1}")
+        processed_pubspecs+=("${current_pubspec}")
+        current_pubspec_dir="$(dirname "${current_pubspec}")"
 
-        normalized_path="${relative_path%/}"
-        if [[ -z "${normalized_path}" ]]; then
-          continue
-        fi
+        while IFS= read -r relative_path; do
+          [[ -n "${relative_path}" ]] || continue
 
-        if [[ ! -e "${repo_root}/${normalized_path}" ]]; then
-          continue
-        fi
+          resolved_path="$(
+            cd "${current_pubspec_dir}" &&
+              cd "${relative_path}" 2>/dev/null &&
+              pwd -P
+          )"
+          [[ -n "${resolved_path}" ]] || continue
 
-        destination_parent="${temp_repo}/$(dirname "${normalized_path}")"
-        mkdir -p "${destination_parent}"
-        cp -R "${repo_root}/${normalized_path}" "${destination_parent}/"
-      done < <(
-        sed -n -E 's/^[[:space:]]+path:[[:space:]]*["'"'"'" ]*([^"'"'"'"#]+)["'"'"'" ]*$/\1/p' "${repo_root}/pubspec.yaml"
-      )
+          case "${resolved_path}" in
+            "${repo_root}"/*) ;;
+            *) continue ;;
+          esac
+
+          normalized_path="${resolved_path#${repo_root}/}"
+          normalized_path="${normalized_path%/}"
+          if [[ -z "${normalized_path}" || ! -e "${repo_root}/${normalized_path}" ]]; then
+            continue
+          fi
+
+          destination_parent="${temp_repo}/$(dirname "${normalized_path}")"
+          mkdir -p "${destination_parent}"
+          if [[ ! -e "${temp_repo}/${normalized_path}" ]]; then
+            cp -R "${repo_root}/${normalized_path}" "${destination_parent}/"
+          fi
+
+          dependency_pubspec="${temp_repo}/${normalized_path}/pubspec.yaml"
+          if [[ -f "${dependency_pubspec}" ]]; then
+            append_pending_pubspec "${dependency_pubspec}"
+          fi
+        done < <(extract_local_path_dependencies_from_pubspec "${current_pubspec}")
+      done
     }
 
     cleanup_temp_i18n_copy() {

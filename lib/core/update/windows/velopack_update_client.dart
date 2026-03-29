@@ -19,6 +19,12 @@ typedef VelopackProcessProbe = Future<VelopackProcessProbeStatus> Function(
   int pid, {
   required String expectedExecutablePath,
 });
+typedef PendingApplyAttemptWriter = void Function(
+  String updateExecutablePath, {
+  required String version,
+  DateTime? startedAtUtc,
+  int? updaterPid,
+});
 
 const _windowsProcessProbeShellCandidates = <String>[
   'powershell.exe',
@@ -125,9 +131,12 @@ class VelopackUpdateClient implements WindowsStagedUpdateClient {
     VelopackNowProvider? now,
     VelopackProcessRunner? processRunner,
     VelopackProcessProbe? processProbe,
+    PendingApplyAttemptWriter? pendingApplyAttemptWriter,
   })  : _updateExecutablePath = updateExecutablePath,
         _processStarter = processStarter ?? _defaultProcessStarter,
         _now = now ?? DateTime.now,
+        _pendingApplyAttemptWriter =
+            pendingApplyAttemptWriter ?? _writePendingApplyAttempt,
         _processProbe = processProbe ??
             ((pid, {required expectedExecutablePath}) => _probeProcessStatus(
                   pid,
@@ -138,6 +147,7 @@ class VelopackUpdateClient implements WindowsStagedUpdateClient {
   final String? _updateExecutablePath;
   final VelopackProcessStarter _processStarter;
   final VelopackNowProvider _now;
+  final PendingApplyAttemptWriter _pendingApplyAttemptWriter;
   final VelopackProcessProbe _processProbe;
 
   String get _updateExePath =>
@@ -299,14 +309,14 @@ class VelopackUpdateClient implements WindowsStagedUpdateClient {
         mode: ProcessStartMode.detached,
       );
       if (pendingVersion != null && pendingVersion.isNotEmpty) {
-        _writePendingApplyAttempt(
-          updateExecutablePath,
-          _PendingApplyAttempt(
+        try {
+          _pendingApplyAttemptWriter(
+            updateExecutablePath,
             version: pendingVersion,
             startedAtUtc: _now().toUtc(),
             updaterPid: process.pid,
-          ),
-        );
+          );
+        } catch (_) {}
       }
     } catch (_) {
       _clearPendingApplyAttempt(updateExecutablePath);
@@ -528,17 +538,19 @@ class VelopackUpdateClient implements WindowsStagedUpdateClient {
   }
 
   static void _writePendingApplyAttempt(
-    String updateExecutablePath,
-    _PendingApplyAttempt attempt,
-  ) {
+    String updateExecutablePath, {
+    required String version,
+    DateTime? startedAtUtc,
+    int? updaterPid,
+  }) {
     final markerFile = _pendingApplyAttemptFile(updateExecutablePath);
     markerFile.parent.createSync(recursive: true);
-    final lines = <String>[attempt.version];
-    if (attempt.startedAtUtc != null) {
-      lines.add(attempt.startedAtUtc!.toIso8601String());
+    final lines = <String>[version];
+    if (startedAtUtc != null) {
+      lines.add(startedAtUtc.toIso8601String());
     }
-    if (attempt.updaterPid != null) {
-      lines.add(attempt.updaterPid!.toString());
+    if (updaterPid != null) {
+      lines.add(updaterPid.toString());
     }
     markerFile.writeAsStringSync(lines.join('\n'));
   }

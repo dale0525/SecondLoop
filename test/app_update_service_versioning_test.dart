@@ -200,16 +200,33 @@ void main() {
       );
     });
 
-    test('parseUpdateUri rejects unsupported schemes and bare windows paths',
+    test(
+        'parseUpdateUri rejects unsupported schemes, http, and bare windows paths',
         () {
       expect(parseUpdateUri('javascript:alert(1)'), isNull);
+      expect(parseUpdateUri('http://updates.example.com/releases/latest.json'),
+          isNull);
       expect(parseUpdateUri('C:/temp/update.nupkg'), isNull);
       expect(
         parseUpdateUri('https://updates.example.com/releases/latest.json'),
         isNotNull,
       );
+    });
+
+    test('parseUpdateUri allows non-https schemes only when explicitly enabled',
+        () {
       expect(
-        parseUpdateUri('file:///C:/temp/update.nupkg')?.scheme,
+        parseUpdateUri(
+          'http://updates.example.com/releases/latest.json',
+          allowHttp: true,
+        )?.scheme,
+        'http',
+      );
+      expect(
+        parseUpdateUri(
+          'file:///C:/temp/update.nupkg',
+          allowFile: true,
+        )?.scheme,
         'file',
       );
     });

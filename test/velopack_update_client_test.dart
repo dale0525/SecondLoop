@@ -232,6 +232,49 @@ void main() {
     expect(stagedPackage.readAsStringSync(), 'nupkg-content');
   });
 
+  test('installAssetAndRestart tolerates pending marker write failures',
+      () async {
+    final root =
+        await Directory.systemTemp.createTemp('velopack_install_marker_');
+    final updater = File('${root.path}${Platform.pathSeparator}Update.exe')
+      ..writeAsStringSync('stub');
+    _writeSqVersion(root, '1.0.0');
+    final sourceDir = Directory('${root.path}${Platform.pathSeparator}source')
+      ..createSync(recursive: true);
+    final sourcePackage = File(
+      '${sourceDir.path}${Platform.pathSeparator}com.secondloop.secondloop-2.0.0-full.nupkg',
+    )..writeAsStringSync('nupkg-content');
+
+    var starterCalls = 0;
+    final client = VelopackUpdateClient(
+      updateExecutablePath: updater.path,
+      processStarter: (executable, arguments,
+          {mode = ProcessStartMode.normal}) async {
+        starterCalls += 1;
+        return Process.start(
+          Platform.resolvedExecutable,
+          const ['--version'],
+        );
+      },
+      pendingApplyAttemptWriter: (
+        _, {
+        required version,
+        startedAtUtc,
+        updaterPid,
+      }) {
+        throw const FileSystemException('disk_full');
+      },
+    );
+
+    await client.installAssetAndRestart(
+      sourcePackage.uri,
+      waitPid: 4321,
+    );
+
+    expect(starterCalls, 1);
+    expect(_pendingApplyAttemptMarker(root).existsSync(), isFalse);
+  });
+
   test('applyPendingOnStartup throws when updater launch fails', () async {
     final root = await Directory.systemTemp.createTemp('velopack_apply_');
     final updater = File('${root.path}${Platform.pathSeparator}Update.exe')

@@ -201,6 +201,8 @@ AppUpdateAsset? matchManifestAssetForCurrentPlatform(
   AppUpdatePlatform platform,
   Map<String, Object?> release, {
   required String currentArchitecture,
+  bool allowHttp = false,
+  bool allowFile = false,
 }) {
   final platforms = release['platforms'];
   if (platforms is! Map) {
@@ -223,7 +225,11 @@ AppUpdateAsset? matchManifestAssetForCurrentPlatform(
     final url = readStringLoose(rawEntry, 'package_url') ??
         readStringLoose(rawEntry, 'archive_url') ??
         readStringLoose(rawEntry, 'url');
-    final parsedUrl = parseUpdateUri(url);
+    final parsedUrl = parseUpdateUri(
+      url,
+      allowHttp: allowHttp,
+      allowFile: allowFile,
+    );
     if (parsedUrl == null) {
       continue;
     }
@@ -328,7 +334,11 @@ String? readUpdateString(Map<String, Object?> map, String key) {
   return trimmed;
 }
 
-Uri? parseUpdateUri(String? value) {
+Uri? parseUpdateUri(
+  String? value, {
+  bool allowHttp = false,
+  bool allowFile = false,
+}) {
   if (value == null) return null;
   final trimmed = value.trim();
   if (trimmed.isEmpty) return null;
@@ -337,20 +347,31 @@ Uri? parseUpdateUri(String? value) {
   if (uri == null) return null;
 
   final scheme = uri.scheme.toLowerCase();
-  if (scheme != 'https' && scheme != 'http' && scheme != 'file') {
-    return null;
+  if (scheme == 'https') {
+    if (!uri.hasScheme || !uri.hasAuthority) {
+      return null;
+    }
+    return uri;
   }
 
-  if ((scheme == 'https' || scheme == 'http') &&
-      (!uri.hasScheme || !uri.hasAuthority)) {
-    return null;
+  if (scheme == 'http') {
+    if (!allowHttp || !uri.hasScheme || !uri.hasAuthority) {
+      return null;
+    }
+    return uri;
   }
 
-  if (scheme == 'file' && !uri.hasScheme) {
-    return null;
+  if (scheme == 'file') {
+    if (!allowFile || !uri.hasScheme) {
+      return null;
+    }
+    return uri;
   }
 
-  return uri;
+  if (scheme.isEmpty) {
+    return null;
+  }
+  return null;
 }
 
 AppUpdateAsset? _matchWindowsAssetForCurrentRuntime(
