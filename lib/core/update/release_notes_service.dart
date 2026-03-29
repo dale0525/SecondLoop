@@ -396,7 +396,25 @@ List<String> _localeCandidates(Locale locale) {
 
 Uri? _parseUri(String? value) {
   if (value == null) return null;
-  final uri = Uri.tryParse(value.trim());
-  if (uri == null || (!uri.hasScheme && !uri.hasAuthority)) return null;
+  final trimmed = value.trim();
+  if (trimmed.isEmpty) return null;
+
+  final uri = Uri.tryParse(trimmed);
+  if (uri == null) return null;
+
+  final scheme = uri.scheme.toLowerCase();
+  if (scheme != 'https' && scheme != 'http' && scheme != 'file') {
+    return null;
+  }
+
+  if ((scheme == 'https' || scheme == 'http') &&
+      (!uri.hasScheme || !uri.hasAuthority)) {
+    return null;
+  }
+
+  if (scheme == 'file' && !uri.hasScheme) {
+    return null;
+  }
+
   return uri;
 }

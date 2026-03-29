@@ -16,6 +16,15 @@ class VerificationScriptsTests(unittest.TestCase):
 
         self.assertIn("scripts/verify_full.sh", pixi)
 
+    def test_windows_pixi_ci_uses_powershell_bash_launcher(self) -> None:
+        pixi = PIXI_TOML.read_text(encoding="utf-8")
+
+        self.assertTrue(RUN_BASH_PS1.exists())
+        self.assertIn(
+            'ci = "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_bash.ps1 scripts/verify_full.sh"',
+            pixi,
+        )
+
     def test_contributing_documents_fast_commit_and_full_push_flow(self) -> None:
         contributing = CONTRIBUTING.read_text(encoding="utf-8")
 

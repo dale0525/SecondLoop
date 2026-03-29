@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:secondloop/core/update/app_update_helpers.dart';
+import 'package:secondloop/core/update/app_update_resolution.dart';
 import 'package:secondloop/core/update/app_update_service.dart';
 
 void main() {
@@ -196,6 +197,20 @@ void main() {
       expect(
         requestedUri.toString(),
         'https://updates.example.com/custom/base/api/releases/latest',
+      );
+    });
+
+    test('parseUpdateUri rejects unsupported schemes and bare windows paths',
+        () {
+      expect(parseUpdateUri('javascript:alert(1)'), isNull);
+      expect(parseUpdateUri('C:/temp/update.nupkg'), isNull);
+      expect(
+        parseUpdateUri('https://updates.example.com/releases/latest.json'),
+        isNotNull,
+      );
+      expect(
+        parseUpdateUri('file:///C:/temp/update.nupkg')?.scheme,
+        'file',
       );
     });
 

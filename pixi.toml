@@ -120,9 +120,11 @@ dotnet-aspnetcore = "8.0.*"
 # - bootstrap-shared-worktree-env uses PowerShell (no bash dependency)
 # - init-env uses PowerShell (no bash dependency)
 # - setup-flutter enables git long-path support before FVM clone/checkouts
+# - ci routes bash-based full verification through PowerShell launcher
 # - run-windows defaults to flutter hot-reload/debugger flow
 # - msi-dev packages + installs isolated local dev MSI
 # - uninstall-dev-msi removes isolated local dev MSI
+ci = "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_bash.ps1 scripts/verify_full.sh"
 install-git-hooks = "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_bash.ps1 scripts/install_git_hooks.sh"
 frb-generate = "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/frb_generate.ps1"
 bootstrap-shared-worktree-env = "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/bootstrap_shared_worktree_env.ps1"
