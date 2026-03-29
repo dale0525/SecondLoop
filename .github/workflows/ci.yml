@@ -31,6 +31,7 @@ jobs:
             flutter:
               - ".fvm/fvm_config.json"
               - ".githooks/**"
+              - "scripts/**"
               - "analysis_options.yaml"
               - "pubspec.yaml"
               - "pubspec.lock"
@@ -47,6 +48,7 @@ jobs:
               - "windows/**"
             rust:
               - ".githooks/**"
+              - "scripts/**"
               - "rust/**"
 
   flutter:
@@ -64,8 +66,8 @@ jobs:
         run: flutter pub get
       - name: "Guard: no python runtime process usage"
         run: bash scripts/check_no_python_runtime.sh
-      - name: Pre-commit hook (format + analyze + test)
-        run: bash .githooks/pre-commit --check --ci --flutter
+      - name: Full Flutter verification
+        run: bash scripts/verify_full.sh --flutter
 
   flutter-web:
     needs: changes
@@ -111,5 +113,5 @@ jobs:
           components: rustfmt, clippy
       - name: "Guard: no python runtime process usage"
         run: bash scripts/check_no_python_runtime.sh
-      - name: Pre-commit hook (rustfmt + clippy + test)
-        run: bash .githooks/pre-commit --check --ci --rust
+      - name: Full Rust verification
+        run: bash scripts/verify_full.sh --rust

@@ -5,14 +5,17 @@ By contributing to this repository, you agree that your contributions are licens
 ## Quick start (no secrets needed)
 
 - Install Flutter via Pixi/FVM: `pixi run setup-flutter`
-- Install git hooks (auto-format + analyze on commit): `pixi run install-git-hooks`
+- Install git hooks (fast pre-commit + full pre-push verification): `pixi run install-git-hooks`
 - Run formatting:
   - Check (matches CI): `pixi run fmt-check`
   - Auto-fix: `pixi run fmt`
 - Run tests:
   - Flutter: `pixi run i18n-refresh` once on a fresh clone, then `pixi run flutter test`
   - Rust: `pixi run cargo test`
-- Run the full local CI suite: `pixi run ci`
+- Run the full local CI suite (same scope as `pre-push` / CI): `pixi run ci`
+- Shared verification entrypoints:
+  - Check-only local gate (same non-mutating engine as CI, narrower than `verify_full`): `bash scripts/verify_changed.sh`
+  - Full local/CI gate: `bash scripts/verify_full.sh`
 
 ## Common development commands
 

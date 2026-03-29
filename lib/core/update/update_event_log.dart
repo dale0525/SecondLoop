@@ -3,7 +3,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'app_update_service.dart';
+import 'app_update_models.dart';
 
 enum UpdateEventType {
   checkStarted,
@@ -18,6 +18,7 @@ enum UpdateEventType {
   installDispatched,
   installFailed,
   pendingApplyStarted,
+  pendingApplyDispatched,
   pendingApplySucceeded,
   pendingApplyFailed,
   stagedRestartStarted,
@@ -205,6 +206,7 @@ UpdateFailureCategory classifyUpdateFailure(Object error) {
   }
   if (raw.contains('velopack_unavailable') ||
       raw.contains('staged_update_not_supported') ||
+      raw.contains('staged_update_restart_not_supported') ||
       raw.contains('seamless_update_not_supported') ||
       raw.contains('no_pending_update')) {
     return UpdateFailureCategory.runtimeUnavailable;
@@ -216,8 +218,9 @@ UpdateFailureCategory classifyUpdateFailure(Object error) {
     return UpdateFailureCategory.permissions;
   }
   if (raw.contains('apply_failed') ||
-      raw.contains('install') ||
-      raw.contains('restart') ||
+      raw.contains('install_failed') ||
+      raw.contains('restart_failed') ||
+      raw.contains('install_archive') ||
       raw.contains('chmod_failed') ||
       raw.contains('missing_app_bundle')) {
     return UpdateFailureCategory.installation;

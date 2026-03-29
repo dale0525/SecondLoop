@@ -1,16 +1,24 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-import 'dart:math';
 
 import 'package:archive/archive_io.dart';
 import 'package:cryptography/cryptography.dart';
 import 'package:flutter/foundation.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
+import 'app_update_helpers.dart';
+import 'app_update_architecture.dart';
+import 'app_update_models.dart';
+import 'app_update_platform.dart';
+import 'app_update_resolution.dart';
+import 'linux/linux_update_script.dart';
 import 'macos/macos_update_client.dart';
 import 'update_event_log.dart';
 import 'windows/velopack_update_client.dart';
+
+export 'app_update_models.dart';
+export 'linux/linux_update_script.dart';
 
 const _defaultReleaseApiOrigin = String.fromEnvironment(
   'SECONDLOOP_RELEASE_API_ORIGIN',
@@ -26,111 +34,10 @@ const _defaultUpdatePublicKey = String.fromEnvironment(
 );
 const _defaultUpdateNetworkTimeout = Duration(seconds: 15);
 
-enum AppUpdatePlatform {
-  windows,
-  macos,
-  linux,
-  android,
-  ios,
-  unsupported,
-}
-
-enum AppUpdateInstallMode {
-  seamlessRestart,
-  stagedNextLaunch,
-  externalDownload,
-}
-
-class AppRuntimeVersion {
-  const AppRuntimeVersion({
-    required this.version,
-    required this.buildNumber,
-  });
-
-  final String version;
-  final String buildNumber;
-
-  String get display {
-    final cleanBuild = buildNumber.trim();
-    if (cleanBuild.isEmpty) return version;
-    return '$version+$cleanBuild';
-  }
-}
-
-class AppUpdateAsset {
-  const AppUpdateAsset({
-    required this.name,
-    required this.downloadUri,
-    this.sha256,
-  });
-
-  final String name;
-  final Uri downloadUri;
-  final String? sha256;
-}
-
-class AppUpdateAvailability {
-  const AppUpdateAvailability({
-    required this.currentVersion,
-    required this.latestTag,
-    required this.releasePageUri,
-    required this.installMode,
-    this.asset,
-  });
-
-  final String currentVersion;
-  final String latestTag;
-  final Uri releasePageUri;
-  final AppUpdateInstallMode installMode;
-  final AppUpdateAsset? asset;
-
-  Uri get downloadUri => asset?.downloadUri ?? releasePageUri;
-  bool get canSeamlessInstall =>
-      installMode == AppUpdateInstallMode.seamlessRestart;
-  bool get canStageForNextLaunch =>
-      installMode == AppUpdateInstallMode.stagedNextLaunch;
-}
-
-class AppUpdateCheckResult {
-  const AppUpdateCheckResult({
-    required this.currentVersion,
-    this.update,
-    this.errorMessage,
-  });
-
-  final String currentVersion;
-  final AppUpdateAvailability? update;
-  final String? errorMessage;
-
-  bool get isUpToDate => update == null && errorMessage == null;
-}
-
 typedef AppUpdateReleaseJsonFetcher = Future<Map<String, Object?>> Function(
   Uri uri,
 );
 typedef AppRuntimeVersionLoader = Future<AppRuntimeVersion> Function();
-
-int compareReleaseTagWithCurrentVersion(
-    String releaseTag, String currentVersion) {
-  final releaseSegments = _parseVersionSegments(releaseTag);
-  final currentSegments = _parseVersionSegments(currentVersion);
-  if (releaseSegments.isEmpty || currentSegments.isEmpty) return 0;
-
-  final comparedLength = max(
-    min(3, releaseSegments.length),
-    min(3, currentSegments.length),
-  );
-
-  for (var i = 0; i < comparedLength; i++) {
-    final releaseValue = i < releaseSegments.length ? releaseSegments[i] : 0;
-    final currentValue = i < currentSegments.length ? currentSegments[i] : 0;
-    if (releaseValue != currentValue) {
-      return releaseValue.compareTo(currentValue);
-    }
-  }
-
-  return 0;
-}
 
 class AppUpdateService {
   AppUpdateService({
@@ -147,6 +54,9 @@ class AppUpdateService {
     UpdateEventLogger? updateEventLogger,
     void Function(int code)? processExit,
     Duration? networkTimeoutOverride,
+    String? currentArchitectureOverride,
+    bool? allowHttpUpdateUriOverride,
+    bool? allowFileUpdateUriOverride,
   })  : _httpClient = httpClient ?? HttpClient(),
         _releaseJsonFetcher = releaseJsonFetcher,
         _currentVersionLoader = currentVersionLoader,
@@ -160,7 +70,10 @@ class AppUpdateService {
         _updateEventLogger =
             updateEventLogger ?? SharedPrefsUpdateEventLogger(),
         _processExit = processExit,
-        _networkTimeoutOverride = networkTimeoutOverride;
+        _networkTimeoutOverride = networkTimeoutOverride,
+        _currentArchitectureOverride = currentArchitectureOverride,
+        _allowHttpUpdateUriOverride = allowHttpUpdateUriOverride,
+        _allowFileUpdateUriOverride = allowFileUpdateUriOverride;
 
   final HttpClient _httpClient;
   final AppUpdateReleaseJsonFetcher? _releaseJsonFetcher;
@@ -175,8 +88,12 @@ class AppUpdateService {
   final UpdateEventLogger _updateEventLogger;
   final void Function(int code)? _processExit;
   final Duration? _networkTimeoutOverride;
+  final String? _currentArchitectureOverride;
+  final bool? _allowHttpUpdateUriOverride;
+  final bool? _allowFileUpdateUriOverride;
 
-  AppUpdatePlatform get _platform => _platformOverride ?? _detectPlatform();
+  AppUpdatePlatform get _platform =>
+      _platformOverride ?? detectAppUpdatePlatform();
 
   bool get _isReleaseMode => _releaseModeOverride ?? kReleaseMode;
   String get _releaseApiOrigin =>
@@ -187,6 +104,13 @@ class AppUpdateService {
       _updatePublicKeyOverride ?? _defaultUpdatePublicKey;
   Duration get _networkTimeout =>
       _networkTimeoutOverride ?? _defaultUpdateNetworkTimeout;
+  bool get _allowHttpUpdateUris =>
+      _allowHttpUpdateUriOverride ?? !_isReleaseMode;
+  bool get _allowFileUpdateUris =>
+      _allowFileUpdateUriOverride ?? !_isReleaseMode;
+  String get _currentArchitecture => normalizeArchitectureLabel(
+        _currentArchitectureOverride ?? currentArchitectureForUpdates(),
+      );
   void _exitProcess(int code) => (_processExit ?? exit)(code);
 
   late final WindowsStagedUpdateClient? _resolvedWindowsStagedUpdateClient =
@@ -253,8 +177,9 @@ class AppUpdateService {
       );
     }
 
-    final latestTag = _normalizeLatestTag(
-      _readString(release, 'tag_name') ?? _readString(release, 'version'),
+    final latestTag = normalizeLatestTag(
+      readUpdateString(release, 'tag_name') ??
+          readUpdateString(release, 'version'),
     );
     if (latestTag == null || latestTag.trim().isEmpty) {
       await _recordFailure(
@@ -268,10 +193,30 @@ class AppUpdateService {
       );
     }
 
-    final releasePageUri =
-        _parseUri(_readString(release, 'release_page_url')) ??
-            _parseUri(_readString(release, 'html_url')) ??
-            _buildFallbackReleasePageUri();
+    if (parseComparableAppVersion(latestTag) == null ||
+        parseComparableAppVersion(currentVersion) == null) {
+      await _recordFailure(
+        UpdateEventType.checkFailed,
+        'unsupported_version_format',
+        currentVersion: runtimeVersion.display,
+      );
+      return AppUpdateCheckResult(
+        currentVersion: runtimeVersion.display,
+        errorMessage: 'unsupported_version_format',
+      );
+    }
+
+    final releasePageUri = parseUpdateUri(
+          readUpdateString(release, 'release_page_url'),
+          allowHttp: _allowHttpUpdateUris,
+          allowFile: _allowFileUpdateUris,
+        ) ??
+        parseUpdateUri(
+          readUpdateString(release, 'html_url'),
+          allowHttp: _allowHttpUpdateUris,
+          allowFile: _allowFileUpdateUris,
+        ) ??
+        _buildFallbackReleasePageUri();
 
     if (compareReleaseTagWithCurrentVersion(latestTag, currentVersion) <= 0) {
       await _recordEvent(
@@ -290,15 +235,40 @@ class AppUpdateService {
     final macosManagedInstallSupported = macosManagedClient != null &&
         macosManagedClient.isSupportedInstallLocation();
 
-    final manifestAsset = _matchManifestAssetForCurrentPlatform(release);
+    final manifestAsset = matchManifestAssetForCurrentPlatform(
+      _platform,
+      release,
+      currentArchitecture: _currentArchitecture,
+      allowHttp: _allowHttpUpdateUris,
+      allowFile: _allowFileUpdateUris,
+    );
     final assets = _parseAssets(release['assets']);
-    final matchedAsset = manifestAsset ??
-        _matchAssetForCurrentPlatform(
+    final preferredAsset = manifestAsset ??
+        matchAssetForCurrentPlatform(
+          _platform,
           assets,
           windowsManagedRuntimeAvailable: windowsManagedRuntimeAvailable,
+          currentArchitecture: _currentArchitecture,
         );
-    final installMode = _resolveInstallMode(
-      matchedAsset,
+    final installMode = resolveInstallMode(
+      _platform,
+      asset: preferredAsset,
+      isReleaseMode: _isReleaseMode,
+      windowsManagedRuntimeAvailable: windowsManagedRuntimeAvailable,
+      macosManagedInstallSupported: macosManagedInstallSupported,
+    );
+    final matchedAsset = installMode == AppUpdateInstallMode.externalDownload
+        ? selectExternalDownloadAsset(
+            _platform,
+            preferredAsset: preferredAsset,
+            assets: assets,
+            currentArchitecture: _currentArchitecture,
+          )
+        : preferredAsset;
+    final manualFallbackReason = describeManualFallbackReason(
+      _platform,
+      preferredAsset ?? matchedAsset,
+      isReleaseMode: _isReleaseMode,
       windowsManagedRuntimeAvailable: windowsManagedRuntimeAvailable,
       macosManagedInstallSupported: macosManagedInstallSupported,
     );
@@ -308,7 +278,7 @@ class AppUpdateService {
       currentVersion: runtimeVersion.display,
       latestTag: latestTag,
       installMode: installMode,
-      message: matchedAsset?.name,
+      message: matchedAsset?.name ?? manualFallbackReason,
     );
     await _recordEvent(
       UpdateEventType.checkSucceeded,
@@ -323,7 +293,7 @@ class AppUpdateService {
         currentVersion: runtimeVersion.display,
         latestTag: latestTag,
         installMode: installMode,
-        message: _describeManualFallbackReason(matchedAsset),
+        message: manualFallbackReason,
       );
     }
 
@@ -363,7 +333,23 @@ class AppUpdateService {
         if (stagedClient == null || !stagedClient.isAvailable()) {
           throw StateError('windows_velopack_unavailable');
         }
-        if (stagedClient.hasPendingUpdate()) {
+        final targetVersion =
+            normalizeLatestTag(update.latestTag)?.replaceFirst(
+                  RegExp(r'^v'),
+                  '',
+                ) ??
+                update.latestTag.replaceFirst(RegExp(r'^v'), '');
+        final pendingVersion = stagedClient.pendingUpdateVersion();
+        final pendingPackagePath = stagedClient.pendingUpdatePackagePath();
+        final hasVerifiedReusablePendingUpdate =
+            stagedClient.hasPendingUpdate() &&
+                pendingVersion != null &&
+                sameNormalizedVersion(pendingVersion, targetVersion) &&
+                await _canReuseVerifiedPendingWindowsUpdate(
+                  asset: asset,
+                  pendingPackagePath: pendingPackagePath,
+                );
+        if (hasVerifiedReusablePendingUpdate) {
           await stagedClient.applyPendingAndRestart(waitPid: pid);
         } else {
           await _withPreparedAsset(asset, (localUri) async {
@@ -404,60 +390,57 @@ class AppUpdateService {
         throw StateError('seamless_update_not_supported_for_$platform');
       }
 
-      final tempRoot =
-          await Directory.systemTemp.createTemp('secondloop_update_');
-      try {
-        final archiveFile = File('${tempRoot.path}/payload_${asset.name}');
-        final extractedDir = Directory('${tempRoot.path}/payload');
-        await extractedDir.create(recursive: true);
-
-        await _downloadToFile(asset.downloadUri, archiveFile);
-        if (asset.sha256 != null) {
-          await _verifyFileSha256(archiveFile, asset.sha256!);
-        }
-        await extractFileToDisk(archiveFile.path, extractedDir.path);
-
-        final sourceDir = _resolveExtractedSourceDir(extractedDir, platform);
-        final executablePath = File(Platform.resolvedExecutable).absolute.path;
-        final appDirPath = File(executablePath).parent.path;
-
-        final script = File('${tempRoot.path}/apply_update.sh');
-        await script.writeAsString(
-          _buildLinuxUpdaterScript(
-            pid: pid,
-            appDirPath: appDirPath,
-            executablePath: executablePath,
-            sourceDirPath: sourceDir.path,
-            tempRootPath: tempRoot.path,
-          ),
-        );
-        await script.setLastModified(DateTime.now());
-        final modeResult = await Process.run('chmod', ['+x', script.path]);
-        if (modeResult.exitCode != 0) {
-          throw StateError('chmod_failed_${modeResult.stderr}');
-        }
-
-        await Process.start(
-          '/bin/sh',
-          [script.path],
-          mode: ProcessStartMode.detached,
-        );
-        await _recordEvent(
-          UpdateEventType.installDispatched,
-          currentVersion: update.currentVersion,
-          latestTag: update.latestTag,
-          installMode: update.installMode,
-          message: asset.name,
-        );
-        _exitProcess(0);
-      } catch (_) {
+      await _withPreparedAsset(asset, (localUri) async {
+        final tempRoot =
+            await Directory.systemTemp.createTemp('secondloop_update_');
         try {
-          if (tempRoot.existsSync()) {
-            await tempRoot.delete(recursive: true);
+          final archiveFile = File(localUri.toFilePath());
+          final extractedDir = Directory('${tempRoot.path}/payload');
+          await extractedDir.create(recursive: true);
+
+          await extractFileToDisk(archiveFile.path, extractedDir.path);
+
+          final sourceDir = resolveExtractedSourceDir(extractedDir, platform);
+          final executablePath =
+              File(Platform.resolvedExecutable).absolute.path;
+          final appDirPath = File(executablePath).parent.path;
+
+          final script = File('${tempRoot.path}/apply_update.sh');
+          await script.writeAsString(
+            buildLinuxUpdaterScript(
+              pid: pid,
+              appDirPath: appDirPath,
+              executablePath: executablePath,
+              sourceDirPath: sourceDir.path,
+              tempRootPath: tempRoot.path,
+            ),
+          );
+          await script.setLastModified(DateTime.now());
+          final modeResult = await Process.run('chmod', ['+x', script.path]);
+          if (modeResult.exitCode != 0) {
+            throw StateError('chmod_failed_${modeResult.stderr}');
           }
-        } catch (_) {}
-        rethrow;
-      }
+
+          await Process.start(
+            '/bin/sh',
+            [script.path],
+            mode: ProcessStartMode.detached,
+          );
+          await _recordEvent(
+            UpdateEventType.installDispatched,
+            currentVersion: update.currentVersion,
+            latestTag: update.latestTag,
+            installMode: update.installMode,
+            message: asset.name,
+          );
+          _exitProcess(0);
+        } catch (_) {
+          try {
+            await _deleteDirectoryIfExists(tempRoot);
+          } catch (_) {}
+          rethrow;
+        }
+      });
     } catch (error) {
       await _recordFailure(
         UpdateEventType.installFailed,
@@ -479,6 +462,10 @@ class AppUpdateService {
       message: update.asset?.name,
     );
     try {
+      if (update.installMode != AppUpdateInstallMode.stagedNextLaunch &&
+          !canStageSilentlyForNextLaunch(update)) {
+        throw StateError('staged_update_not_supported');
+      }
       final asset = update.asset;
       if (_platform == AppUpdatePlatform.windows) {
         final stagedClient = _resolvedWindowsStagedUpdateClient;
@@ -512,19 +499,27 @@ class AppUpdateService {
     }
   }
 
-  Future<bool> applyPendingUpdateOnStartup() async {
+  Future<PendingUpdateStartupResult> applyPendingUpdateOnStartup() async {
     if (_platform != AppUpdatePlatform.windows) {
-      return false;
+      return const PendingUpdateStartupResult.noPendingUpdate();
     }
     final stagedClient = _resolvedWindowsStagedUpdateClient;
     if (stagedClient == null || !stagedClient.isAvailable()) {
-      return false;
+      return const PendingUpdateStartupResult.noPendingUpdate();
     }
-    await _recordEvent(UpdateEventType.pendingApplyStarted);
     try {
-      final applied = await stagedClient.applyPendingOnStartup();
-      await _recordEvent(UpdateEventType.pendingApplySucceeded);
-      return applied;
+      final result = await stagedClient.applyPendingOnStartup(waitPid: pid);
+      if (!result.hasNoPendingUpdate && !result.isProbeInconclusive) {
+        await _recordEvent(UpdateEventType.pendingApplyStarted);
+      }
+      if (result.didLaunchUpdater) {
+        await _recordEvent(UpdateEventType.pendingApplyDispatched);
+        _exitProcess(0);
+      }
+      if (result.isUpdateInProgress) {
+        _exitProcess(0);
+      }
+      return result;
     } catch (error) {
       await _recordFailure(UpdateEventType.pendingApplyFailed, error);
       rethrow;
@@ -551,6 +546,21 @@ class AppUpdateService {
       await _recordFailure(UpdateEventType.stagedRestartFailed, error);
       rethrow;
     }
+  }
+
+  bool canStageSilentlyForNextLaunch(AppUpdateAvailability update) {
+    if (_platform != AppUpdatePlatform.windows) {
+      return false;
+    }
+    final stagedClient = _resolvedWindowsStagedUpdateClient;
+    final supportedInstallMode =
+        update.installMode == AppUpdateInstallMode.seamlessRestart ||
+            update.installMode == AppUpdateInstallMode.stagedNextLaunch;
+    return isWindowsVelopackPackageName(update.asset?.name ?? '') &&
+        supportedInstallMode &&
+        update.asset != null &&
+        stagedClient != null &&
+        stagedClient.isAvailable();
   }
 
   void dispose() {
@@ -654,9 +664,20 @@ class AppUpdateService {
     final repo = _releaseRepo.trim();
 
     final endpoints = <Uri>[];
-    final apiOrigin = _parseUri(configuredOrigin);
-    if (apiOrigin != null) {
-      endpoints.add(apiOrigin.resolve('/api/releases/latest'));
+    final allowHttp = _allowHttpUpdateUris;
+    final allowFile = _allowFileUpdateUris;
+    final parsedApiOrigin = parseUpdateUri(
+      configuredOrigin,
+      allowHttp: allowHttp,
+      allowFile: allowFile,
+    );
+    if (parsedApiOrigin != null) {
+      final normalizedPath = parsedApiOrigin.path.endsWith('/')
+          ? parsedApiOrigin.path
+          : '${parsedApiOrigin.path}/';
+      endpoints.add(
+        parsedApiOrigin.replace(path: '${normalizedPath}api/releases/latest'),
+      );
     }
 
     if (repo.isNotEmpty) {
@@ -674,7 +695,11 @@ class AppUpdateService {
   Uri _buildFallbackReleasePageUri() {
     final repo = _releaseRepo.trim();
     if (repo.isEmpty) {
-      final origin = _parseUri(_releaseApiOrigin.trim());
+      final origin = parseUpdateUri(
+        _releaseApiOrigin.trim(),
+        allowHttp: _allowHttpUpdateUris,
+        allowFile: _allowFileUpdateUris,
+      );
       if (origin != null) return origin;
       return Uri.parse('https://github.com');
     }
@@ -691,7 +716,11 @@ class AppUpdateService {
       final url = item['browser_download_url'];
       final sha256 = item['sha256'];
       if (name is! String || url is! String) continue;
-      final uri = _parseUri(url);
+      final uri = parseUpdateUri(
+        url,
+        allowHttp: _allowHttpUpdateUris,
+        allowFile: _allowFileUpdateUris,
+      );
       if (uri == null) continue;
       parsed.add(
         AppUpdateAsset(
@@ -705,158 +734,6 @@ class AppUpdateService {
     }
 
     return parsed;
-  }
-
-  AppUpdateAsset? _matchAssetForCurrentPlatform(
-    List<AppUpdateAsset> assets, {
-    required bool windowsManagedRuntimeAvailable,
-  }) {
-    if (_platform == AppUpdatePlatform.windows) {
-      return _matchWindowsAssetForCurrentRuntime(
-        assets,
-        managedRuntimeAvailable: windowsManagedRuntimeAvailable,
-      );
-    }
-
-    if (_platform == AppUpdatePlatform.macos) {
-      for (final asset in assets) {
-        if (_isMacosManagedArchiveName(asset.name)) return asset;
-      }
-      for (final asset in assets) {
-        if (_isMacosManualInstallerName(asset.name)) return asset;
-      }
-      return null;
-    }
-
-    final matcher = switch (_platform) {
-      AppUpdatePlatform.linux => RegExp(r'^SecondLoop-linux-x64-.*\.tar\.gz$'),
-      AppUpdatePlatform.android => RegExp(r'^SecondLoop-android-.*\.apk$'),
-      _ => null,
-    };
-
-    if (matcher == null) return null;
-
-    for (final asset in assets) {
-      if (matcher.hasMatch(asset.name)) return asset;
-    }
-    return null;
-  }
-
-  AppUpdateAsset? _matchWindowsAssetForCurrentRuntime(
-    List<AppUpdateAsset> assets, {
-    required bool managedRuntimeAvailable,
-  }) {
-    AppUpdateAsset? findFirst(bool Function(String name) matcher) {
-      for (final asset in assets) {
-        if (matcher(asset.name)) return asset;
-      }
-      return null;
-    }
-
-    if (managedRuntimeAvailable) {
-      final stagedPackage = findFirst(_isWindowsVelopackPackageName);
-      if (stagedPackage != null) {
-        return stagedPackage;
-      }
-    }
-
-    return findFirst(_isWindowsMsiInstallerName);
-  }
-
-  static bool _isWindowsMsiInstallerName(String name) {
-    final normalized = name.trim().toLowerCase();
-    return normalized.endsWith('.msi') && normalized.contains('secondloop');
-  }
-
-  static bool _isWindowsVelopackPackageName(String name) {
-    final normalized = name.trim().toLowerCase();
-    return normalized.endsWith('-full.nupkg') &&
-        normalized.contains('secondloop');
-  }
-
-  static bool _isMacosManagedArchiveName(String name) {
-    final normalized = name.trim().toLowerCase();
-    return normalized.endsWith('.app.tar.gz') &&
-        normalized.contains('secondloop');
-  }
-
-  static bool _isMacosManualInstallerName(String name) {
-    final normalized = name.trim().toLowerCase();
-    return (normalized.endsWith('.dmg') || normalized.endsWith('.zip')) &&
-        normalized.contains('secondloop');
-  }
-
-  AppUpdateInstallMode _resolveInstallMode(
-    AppUpdateAsset? asset, {
-    required bool windowsManagedRuntimeAvailable,
-    required bool macosManagedInstallSupported,
-  }) {
-    if (!_isReleaseMode || asset == null) {
-      return AppUpdateInstallMode.externalDownload;
-    }
-
-    return switch (_platform) {
-      AppUpdatePlatform.windows
-          when _isWindowsVelopackPackageName(asset.name) &&
-              windowsManagedRuntimeAvailable &&
-              _assetHasIntegrityMetadata(asset) =>
-        AppUpdateInstallMode.seamlessRestart,
-      AppUpdatePlatform.macos
-          when _isMacosManagedArchiveName(asset.name) &&
-              macosManagedInstallSupported &&
-              _assetHasIntegrityMetadata(asset) =>
-        AppUpdateInstallMode.seamlessRestart,
-      AppUpdatePlatform.linux
-          when asset.name.endsWith('.tar.gz') &&
-              _assetHasIntegrityMetadata(asset) =>
-        AppUpdateInstallMode.seamlessRestart,
-      _ => AppUpdateInstallMode.externalDownload,
-    };
-  }
-
-  AppUpdateAsset? _matchManifestAssetForCurrentPlatform(
-    Map<String, Object?> release,
-  ) {
-    final platforms = release['platforms'];
-    if (platforms is! Map) {
-      return null;
-    }
-
-    final keys = switch (_platform) {
-      AppUpdatePlatform.windows => const ['windows-x64', 'windows-x86_64'],
-      AppUpdatePlatform.macos => const [
-          'macos-universal',
-          'darwin-aarch64',
-          'darwin-x86_64',
-        ],
-      AppUpdatePlatform.linux => const ['linux-x64', 'linux-x86_64'],
-      _ => const <String>[],
-    };
-
-    for (final key in keys) {
-      final rawEntry = platforms[key];
-      if (rawEntry is! Map) {
-        continue;
-      }
-      final url = _readStringLoose(rawEntry, 'package_url') ??
-          _readStringLoose(rawEntry, 'archive_url') ??
-          _readStringLoose(rawEntry, 'url');
-      final parsedUrl = _parseUri(url);
-      if (parsedUrl == null) {
-        continue;
-      }
-
-      final name = _readStringLoose(rawEntry, 'name') ??
-          (parsedUrl.pathSegments.isEmpty ? key : parsedUrl.pathSegments.last);
-      final sha256 = _readStringLoose(rawEntry, 'sha256');
-      return AppUpdateAsset(
-        name: name,
-        downloadUri: parsedUrl,
-        sha256: sha256,
-      );
-    }
-
-    return null;
   }
 
   Future<T> _withPreparedAsset<T>(
@@ -875,7 +752,7 @@ class AppUpdateService {
       } else {
         tempRoot = await Directory.systemTemp.createTemp('secondloop_asset_');
         final localPath =
-            '${tempRoot.path}${Platform.pathSeparator}${_sanitizeAssetFileName(asset.name)}';
+            '${tempRoot.path}${Platform.pathSeparator}${sanitizeUpdateAssetFileName(asset.name)}';
         final localFile = File(localPath);
         await _downloadToFile(asset.downloadUri, localFile);
         if (asset.sha256 != null) {
@@ -888,10 +765,44 @@ class AppUpdateService {
     } finally {
       if (tempRoot != null) {
         try {
-          if (tempRoot.existsSync()) {
-            await tempRoot.delete(recursive: true);
-          }
+          await _deleteDirectoryIfExists(tempRoot);
         } catch (_) {}
+      }
+    }
+  }
+
+  Future<bool> _canReuseVerifiedPendingWindowsUpdate({
+    required AppUpdateAsset asset,
+    required String? pendingPackagePath,
+  }) async {
+    if (pendingPackagePath == null || pendingPackagePath.trim().isEmpty) {
+      return false;
+    }
+    final pendingFile = File(pendingPackagePath);
+    if (!pendingFile.existsSync()) {
+      return false;
+    }
+    final expectedSha = asset.sha256?.trim();
+    if (expectedSha == null || expectedSha.isEmpty) {
+      return false;
+    }
+    final actualSha = await _sha256FileHex(pendingFile);
+    return actualSha.toLowerCase() == expectedSha.toLowerCase();
+  }
+
+  Future<void> _deleteDirectoryIfExists(Directory dir) async {
+    for (var attempt = 0; attempt < 20; attempt += 1) {
+      if (!dir.existsSync()) {
+        return;
+      }
+      try {
+        await dir.delete(recursive: true);
+        return;
+      } catch (_) {
+        if (attempt == 19) {
+          rethrow;
+        }
+        await Future<void>.delayed(const Duration(milliseconds: 100));
       }
     }
   }
@@ -942,87 +853,6 @@ class AppUpdateService {
     return uri.path.toLowerCase().endsWith('latest.json');
   }
 
-  bool _assetHasIntegrityMetadata(AppUpdateAsset asset) {
-    return asset.sha256 != null && asset.sha256!.trim().isNotEmpty;
-  }
-
-  static String _sanitizeAssetFileName(String value) {
-    final sanitized = value.replaceAll(RegExp(r'[<>:"/\\|?*]'), '_').trim();
-    if (sanitized.isEmpty) {
-      return 'secondloop-update.bin';
-    }
-    return sanitized;
-  }
-
-  static String? _normalizeLatestTag(String? value) {
-    if (value == null) return null;
-    final trimmed = value.trim();
-    if (trimmed.isEmpty) return null;
-    if (trimmed.startsWith('v')) return trimmed;
-    return 'v$trimmed';
-  }
-
-  static String? _readStringLoose(Map<dynamic, dynamic> map, String key) {
-    final value = map[key];
-    if (value is! String) return null;
-    final trimmed = value.trim();
-    if (trimmed.isEmpty) return null;
-    return trimmed;
-  }
-
-  Directory _resolveExtractedSourceDir(
-    Directory extractedDir,
-    AppUpdatePlatform platform,
-  ) {
-    if (platform == AppUpdatePlatform.linux) {
-      final bundle = Directory('${extractedDir.path}/bundle');
-      if (bundle.existsSync()) return bundle;
-    }
-
-    final entries = extractedDir
-        .listSync()
-        .where((entry) =>
-            entry.path.split(Platform.pathSeparator).last != '.DS_Store')
-        .toList(growable: false);
-
-    if (entries.length == 1 && entries.first is Directory) {
-      return entries.first as Directory;
-    }
-
-    return extractedDir;
-  }
-
-  String _buildLinuxUpdaterScript({
-    required int pid,
-    required String appDirPath,
-    required String executablePath,
-    required String sourceDirPath,
-    required String tempRootPath,
-  }) {
-    return _buildLinuxUpdaterScriptImpl(
-      pid: pid,
-      appDirPath: appDirPath,
-      executablePath: executablePath,
-      sourceDirPath: sourceDirPath,
-      tempRootPath: tempRootPath,
-    );
-  }
-
-  static String? _readString(Map<String, Object?> map, String key) {
-    final value = map[key];
-    if (value is! String) return null;
-    final trimmed = value.trim();
-    if (trimmed.isEmpty) return null;
-    return trimmed;
-  }
-
-  static Uri? _parseUri(String? value) {
-    if (value == null) return null;
-    final uri = Uri.tryParse(value.trim());
-    if (uri == null || (!uri.hasScheme && !uri.hasAuthority)) return null;
-    return uri;
-  }
-
   Future<void> _recordEvent(
     UpdateEventType type, {
     String? currentVersion,
@@ -1067,141 +897,9 @@ class AppUpdateService {
       );
     } catch (_) {}
   }
-
-  String _describeManualFallbackReason(AppUpdateAsset? asset) {
-    if (asset == null) {
-      return 'missing_platform_asset';
-    }
-    if (_platform == AppUpdatePlatform.windows &&
-        _isWindowsVelopackPackageName(asset.name)) {
-      return 'windows_runtime_unavailable';
-    }
-    if (_platform == AppUpdatePlatform.macos &&
-        _isMacosManagedArchiveName(asset.name)) {
-      return 'macos_install_location_unsupported_or_integrity_missing';
-    }
-    return 'manual_download_required';
-  }
-}
-
-List<int> _parseVersionSegments(String input) {
-  final cleaned = input.trim();
-  if (cleaned.isEmpty) return const [];
-  final matches = RegExp(r'\d+').allMatches(cleaned);
-  if (matches.isEmpty) return const [];
-
-  final segments = <int>[];
-  for (final match in matches) {
-    final parsed = int.tryParse(match.group(0) ?? '');
-    if (parsed == null) continue;
-    segments.add(parsed);
-    if (segments.length >= 4) break;
-  }
-  return segments;
-}
-
-AppUpdatePlatform _detectPlatform() {
-  if (kIsWeb) return AppUpdatePlatform.unsupported;
-  if (Platform.isWindows) return AppUpdatePlatform.windows;
-  if (Platform.isMacOS) return AppUpdatePlatform.macos;
-  if (Platform.isLinux) return AppUpdatePlatform.linux;
-  if (Platform.isAndroid) return AppUpdatePlatform.android;
-  if (Platform.isIOS) return AppUpdatePlatform.ios;
-  return AppUpdatePlatform.unsupported;
-}
-
-String _shellQuote(String value) {
-  return "'${value.replaceAll("'", "'\\''")}'";
-}
-
-String buildLinuxUpdaterScriptForTest({
-  required int pid,
-  required String appDirPath,
-  required String executablePath,
-  required String sourceDirPath,
-  required String tempRootPath,
-}) {
-  return _buildLinuxUpdaterScriptImpl(
-    pid: pid,
-    appDirPath: appDirPath,
-    executablePath: executablePath,
-    sourceDirPath: sourceDirPath,
-    tempRootPath: tempRootPath,
-  );
 }
 
 Future<String> sha256FileHexForTest(File file) => _sha256FileHex(file);
-
-String _buildLinuxUpdaterScriptImpl({
-  required int pid,
-  required String appDirPath,
-  required String executablePath,
-  required String sourceDirPath,
-  required String tempRootPath,
-}) {
-  final safePid = pid.toString();
-  final appDir = _shellQuote(appDirPath);
-  final executable = _shellQuote(executablePath);
-  final sourceDir = _shellQuote(sourceDirPath);
-  final tempRoot = _shellQuote(tempRootPath);
-
-  return '''#!/usr/bin/env bash
-set -euo pipefail
-APP_PID=$safePid
-APP_DIR=$appDir
-EXE_PATH=$executable
-SOURCE_DIR=$sourceDir
-TEMP_ROOT=$tempRoot
-APP_PARENT=\$(dirname "\$APP_DIR")
-BACKUP_DIR="\$APP_PARENT/.secondloop-update-backup.\$APP_PID"
-STAGED_DIR="\$APP_PARENT/.secondloop-update-stage.\$APP_PID"
-MAX_WAIT=60
-waited=0
-APP_START=\$(/bin/ps -o lstart= -p "\$APP_PID" 2>/dev/null | sed 's/^ *//')
-
-cleanup() {
-  rm -rf "\$STAGED_DIR" "\$TEMP_ROOT" || true
-}
-
-restore_backup() {
-  if [ -d "\$BACKUP_DIR" ]; then
-    mv "\$APP_DIR" "\$APP_DIR.failed" 2>/dev/null || true
-    mv "\$BACKUP_DIR" "\$APP_DIR" || {
-      rm -rf "\$TEMP_ROOT" || true
-      exit 1
-    }
-    rm -rf "\$APP_DIR.failed" || true
-  fi
-}
-
-on_error() {
-  restore_backup
-  cleanup
-}
-
-trap on_error EXIT
-
-while kill -0 "\$APP_PID" 2>/dev/null && [ "\$waited" -lt "\$MAX_WAIT" ]; do
-  CURRENT_START=\$(/bin/ps -o lstart= -p "\$APP_PID" 2>/dev/null | sed 's/^ *//')
-  if [ -n "\$APP_START" ] && [ "\$CURRENT_START" != "\$APP_START" ]; then
-    break
-  fi
-  sleep 1
-  waited=\$((waited + 1))
-done
-
-rm -rf "\$STAGED_DIR" "\$BACKUP_DIR"
-mkdir -p "\$STAGED_DIR"
-cp -a "\$SOURCE_DIR"/. "\$STAGED_DIR"/
-mv "\$APP_DIR" "\$BACKUP_DIR"
-mv "\$STAGED_DIR" "\$APP_DIR"
-rm -rf "\$BACKUP_DIR" || true
-chmod +x "\$EXE_PATH" || true
-nohup "\$EXE_PATH" >/dev/null 2>&1 &
-trap - EXIT
-cleanup
-''';
-}
 
 Future<String> _sha256FileHex(File file) async {
   final sink = Sha256().newHashSink();

@@ -1,11 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-die() {
-  echo "pre-push: $*" >&2
-  exit 1
-}
-
 repo_root="$(git rev-parse --show-toplevel 2>/dev/null || true)"
 if [[ -z "${repo_root}" ]]; then
   exit 0
@@ -13,5 +8,4 @@ fi
 
 cd "${repo_root}"
 
-echo "pre-push: running full verification (format checks, analyze, tests, clippy)." >&2
-bash scripts/verify_full.sh
+bash .githooks/pre-commit --check "$@"

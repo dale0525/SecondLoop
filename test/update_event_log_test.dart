@@ -30,6 +30,10 @@ void main() {
       classifyUpdateFailure('macos_update_unsupported_install_location'),
       UpdateFailureCategory.unsupportedInstallLocation,
     );
+    expect(
+      classifyUpdateFailure('manual_installation_prompt_needed'),
+      UpdateFailureCategory.unknown,
+    );
   });
 
   test('SharedPrefsUpdateEventLogger stores and trims recent entries',
@@ -52,5 +56,32 @@ void main() {
     expect(recent, hasLength(50));
     expect(recent.first.currentVersion, '1.0.5');
     expect(recent.last.currentVersion, '1.0.54');
+  });
+
+  test('SharedPrefsUpdateEventLogger round-trips pending apply dispatch event',
+      () async {
+    SharedPreferences.setMockInitialValues({});
+    final logger = SharedPrefsUpdateEventLogger();
+
+    await logger.record(
+      UpdateEventRecord(
+        type: UpdateEventType.pendingApplyDispatched,
+        timestampUtc: DateTime.utc(2026, 3, 27, 8, 30),
+        platform: AppUpdatePlatform.windows,
+        message: 'detached_updater_started',
+      ),
+    );
+
+    final recent = await logger.readRecent();
+    expect(recent, hasLength(1));
+    expect(recent.single.type, UpdateEventType.pendingApplyDispatched);
+    expect(recent.single.message, 'detached_updater_started');
+  });
+
+  test('classifyUpdateFailure maps staged restart unsupported errors', () {
+    expect(
+      classifyUpdateFailure('staged_update_restart_not_supported_for_windows'),
+      UpdateFailureCategory.runtimeUnavailable,
+    );
   });
 }
