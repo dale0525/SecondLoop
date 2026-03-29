@@ -391,23 +391,63 @@ void main() {
     );
   });
 
-  test('windows process probe validates executable path', () async {
+  test(
+      'expired apply cleanup removes only the failed target package and preserves other pending downloads',
+      () async {
+    final root =
+        await Directory.systemTemp.createTemp('velopack_apply_cleanup_scope_');
+    final updater = File('${root.path}${Platform.pathSeparator}Update.exe')
+      ..writeAsStringSync('stub');
+    _writeSqVersion(root, '1.0.0');
+    _createNupkg(root, 'com.secondloop.secondloop-1.2.0-full.nupkg');
+    _createNupkg(root, 'com.secondloop.secondloop-1.2.1-full.nupkg');
+    _pendingApplyAttemptMarker(root).writeAsStringSync(
+      '1.2.1\n${DateTime.utc(2026, 3, 27, 10, 0, 0).toIso8601String()}\n999999',
+    );
+
+    final client = VelopackUpdateClient(
+      updateExecutablePath: updater.path,
+      now: () => DateTime.utc(2026, 3, 27, 10, 6, 0),
+      processStarter: (executable, arguments,
+          {mode = ProcessStartMode.normal}) async {
+        return Process.start(
+          Platform.resolvedExecutable,
+          const ['--version'],
+        );
+      },
+    );
+
+    await expectLater(
+      client.applyPendingOnStartup(waitPid: 1234),
+      throwsA(isA<StateError>()),
+    );
+
+    expect(
+      File(
+        '${root.path}${Platform.pathSeparator}packages${Platform.pathSeparator}com.secondloop.secondloop-1.2.1-full.nupkg',
+      ).existsSync(),
+      isFalse,
+    );
+    expect(
+      File(
+        '${root.path}${Platform.pathSeparator}packages${Platform.pathSeparator}com.secondloop.secondloop-1.2.0-full.nupkg',
+      ).existsSync(),
+      isTrue,
+    );
+  });
+
+  test('windows process probe uses lightweight tasklist lookup', () async {
     final source = File(
       'lib/core/update/windows/velopack_update_client.dart',
     ).readAsStringSync();
 
     expect(
       source,
-      isNot(contains(
-          r'Get-Process -Id $pid -ErrorAction SilentlyContinue | Out-Null')),
+      contains('tasklist.exe'),
     );
     expect(
       source,
-      contains('Get-CimInstance Win32_Process'),
-    );
-    expect(
-      source,
-      contains('ExecutablePath'),
+      isNot(contains('Get-CimInstance Win32_Process')),
     );
   });
 

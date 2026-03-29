@@ -71,6 +71,8 @@ cleanup() {
     if ! git stash pop -q; then
       trap - EXIT
       echo "pre-commit: Failed to restore unstaged changes from stash. Resolve conflicts and re-run commit." >&2
+      echo "pre-commit: Inspect saved changes with: git stash list --date=local" >&2
+      echo "pre-commit: Recover manually with: git stash show -p stash@{0}" >&2
       exit 1
     fi
   fi

@@ -430,6 +430,39 @@ void main() {
     expect(service.checkCalls, 1);
   });
 
+  testWidgets('pending apply failure does not publish a fresh update badge',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    UpdateBadgePrefs.resetForTests();
+    final update = AppUpdateAvailability(
+      currentVersion: '1.0.1+99',
+      latestTag: 'v1.4.0',
+      releasePageUri: Uri.parse(
+        'https://github.com/dale0525/SecondLoop/releases/tag/v1.4.0',
+      ),
+      installMode: AppUpdateInstallMode.seamlessRestart,
+      asset: AppUpdateAsset(
+        name: 'com.secondloop.secondloop-1.4.0-full.nupkg',
+        downloadUri: Uri.parse('https://cdn.example.com/win.nupkg'),
+      ),
+    );
+    final service = _FakeAutoUpdateService(
+      throwOnApplyPending: true,
+      result: AppUpdateCheckResult(
+        currentVersion: '1.0.1+99',
+        update: update,
+      ),
+    );
+
+    await pumpGate(tester, service: service);
+    await tester.pumpAndSettle();
+
+    expect(service.applyPendingCalls, 1);
+    expect(service.checkCalls, 1);
+    expect(UpdateBadgePrefs.value.value, isNull);
+    expect(find.textContaining('Auto update failed'), findsOneWidget);
+  });
+
   testWidgets('skips pending apply and still checks for updates',
       (tester) async {
     SharedPreferences.setMockInitialValues({});

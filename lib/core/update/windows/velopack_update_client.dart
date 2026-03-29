@@ -400,7 +400,10 @@ class VelopackUpdateClient implements WindowsStagedUpdateClient {
       return const PendingUpdateStartupResult.updateInProgress();
     }
 
-    _deletePendingPackageUpdates(updateExecutablePath);
+    _deletePendingPackageUpdates(
+      updateExecutablePath,
+      targetVersion: attempt.version,
+    );
     _clearPendingApplyAttempt(updateExecutablePath);
     throw StateError(
         'windows_velopack_previous_apply_failed_${attempt.version}');
@@ -474,28 +477,25 @@ class VelopackUpdateClient implements WindowsStagedUpdateClient {
 
     try {
       if (Platform.isWindows) {
-        final escapedPid = pid.toString().replaceAll("'", "''");
-        final escapedPath =
-            expectedExecutablePath.replaceAll("'", "''").toLowerCase();
         final result = Process.runSync(
-          'powershell.exe',
+          'tasklist.exe',
           [
-            '-Command',
-            r"$process = Get-CimInstance Win32_Process -Filter "
-                "\"ProcessId = $escapedPid\"; "
-                r"if ($null -eq $process) { exit 2 } "
-                r"$path = $process.ExecutablePath; "
-                r"if ([string]::IsNullOrWhiteSpace($path)) { exit 3 } "
-                "if (\$path.ToLowerInvariant() -eq '$escapedPath') { exit 0 } "
-                r"exit 4"
+            '/FI',
+            'PID eq $pid',
+            '/FO',
+            'CSV',
+            '/NH',
           ],
         );
-        return switch (result.exitCode) {
-          0 => VelopackProcessProbeStatus.runningExpectedProcess,
-          2 => VelopackProcessProbeStatus.notRunning,
-          3 || 4 => VelopackProcessProbeStatus.unknown,
-          _ => VelopackProcessProbeStatus.unknown,
-        };
+        if (result.exitCode != 0) {
+          return VelopackProcessProbeStatus.unknown;
+        }
+        final output = '${result.stdout}'.trim();
+        final pidPattern = RegExp('^"[^"]+","$pid",', multiLine: true);
+        if (pidPattern.hasMatch(output)) {
+          return VelopackProcessProbeStatus.unknown;
+        }
+        return VelopackProcessProbeStatus.notRunning;
       }
 
       final result = Process.runSync('kill', ['-0', pid.toString()]);
@@ -517,7 +517,10 @@ class VelopackUpdateClient implements WindowsStagedUpdateClient {
     } catch (_) {}
   }
 
-  static void _deletePendingPackageUpdates(String updateExecutablePath) {
+  static void _deletePendingPackageUpdates(
+    String updateExecutablePath, {
+    String? targetVersion,
+  }) {
     final appRoot = File(updateExecutablePath).absolute.parent.path;
     final currentVersion = _readCurrentInstalledVersion(appRoot);
     if (currentVersion == null) {
@@ -536,8 +539,14 @@ class VelopackUpdateClient implements WindowsStagedUpdateClient {
       final fileName =
           entity.uri.pathSegments.isEmpty ? '' : entity.uri.pathSegments.last;
       final version = _extractVersionFromNupkgName(fileName);
-      if (version == null ||
-          _compareVersionStrings(version, currentVersion) <= 0) {
+      if (version == null) {
+        continue;
+      }
+      if (targetVersion != null &&
+          !sameNormalizedVersion(version, targetVersion)) {
+        continue;
+      }
+      if (_compareVersionStrings(version, currentVersion) <= 0) {
         continue;
       }
       try {

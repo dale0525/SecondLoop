@@ -244,13 +244,20 @@ class AppUpdateService {
             assets: assets,
           )
         : preferredAsset;
+    final manualFallbackReason = describeManualFallbackReason(
+      _platform,
+      preferredAsset ?? matchedAsset,
+      isReleaseMode: _isReleaseMode,
+      windowsManagedRuntimeAvailable: windowsManagedRuntimeAvailable,
+      macosManagedInstallSupported: macosManagedInstallSupported,
+    );
 
     await _recordEvent(
       UpdateEventType.updateAvailable,
       currentVersion: runtimeVersion.display,
       latestTag: latestTag,
       installMode: installMode,
-      message: matchedAsset?.name,
+      message: matchedAsset?.name ?? manualFallbackReason,
     );
     await _recordEvent(
       UpdateEventType.checkSucceeded,
@@ -265,10 +272,7 @@ class AppUpdateService {
         currentVersion: runtimeVersion.display,
         latestTag: latestTag,
         installMode: installMode,
-        message: describeManualFallbackReason(
-          _platform,
-          preferredAsset ?? matchedAsset,
-        ),
+        message: manualFallbackReason,
       );
     }
 

@@ -77,6 +77,14 @@ AppUpdateInstallMode resolveInstallMode(
     return AppUpdateInstallMode.externalDownload;
   }
 
+  if (asset.installModeHint == AppUpdateInstallMode.stagedNextLaunch &&
+      platform == AppUpdatePlatform.windows &&
+      isWindowsVelopackPackageName(asset.name) &&
+      windowsManagedRuntimeAvailable &&
+      assetHasIntegrityMetadata(asset)) {
+    return AppUpdateInstallMode.stagedNextLaunch;
+  }
+
   return switch (platform) {
     AppUpdatePlatform.windows
         when isWindowsVelopackPackageName(asset.name) &&
@@ -130,10 +138,16 @@ AppUpdateAsset? matchManifestAssetForCurrentPlatform(
     final name = readStringLoose(rawEntry, 'name') ??
         (parsedUrl.pathSegments.isEmpty ? key : parsedUrl.pathSegments.last);
     final sha256 = readStringLoose(rawEntry, 'sha256');
+    final installModeHint = parseManifestInstallModeHint(
+      platform,
+      readStringLoose(rawEntry, 'install_mode'),
+      assetName: name,
+    );
     return AppUpdateAsset(
       name: name,
       downloadUri: parsedUrl,
       sha256: sha256,
+      installModeHint: installModeHint,
     );
   }
 
@@ -144,20 +158,71 @@ bool assetHasIntegrityMetadata(AppUpdateAsset asset) {
   return asset.sha256 != null && asset.sha256!.trim().isNotEmpty;
 }
 
+AppUpdateInstallMode? parseManifestInstallModeHint(
+  AppUpdatePlatform platform,
+  String? rawInstallMode, {
+  required String assetName,
+}) {
+  final normalized = rawInstallMode?.trim().toLowerCase();
+  if (normalized == null || normalized.isEmpty) {
+    return null;
+  }
+
+  return switch ((platform, normalized)) {
+    (AppUpdatePlatform.windows, 'velopack')
+        when isWindowsVelopackPackageName(assetName) =>
+      AppUpdateInstallMode.seamlessRestart,
+    (AppUpdatePlatform.windows, 'staged-next-launch') ||
+    (AppUpdatePlatform.windows, 'staged_next_launch')
+        when isWindowsVelopackPackageName(assetName) =>
+      AppUpdateInstallMode.stagedNextLaunch,
+    (AppUpdatePlatform.macos, 'app-tar-gz')
+        when isMacosManagedArchiveName(assetName) =>
+      AppUpdateInstallMode.seamlessRestart,
+    (AppUpdatePlatform.linux, 'bundle-tar-gz')
+        when assetName.toLowerCase().endsWith('.tar.gz') =>
+      AppUpdateInstallMode.seamlessRestart,
+    _ => null,
+  };
+}
+
 String describeManualFallbackReason(
   AppUpdatePlatform platform,
-  AppUpdateAsset? asset,
-) {
+  AppUpdateAsset? asset, {
+  required bool isReleaseMode,
+  required bool windowsManagedRuntimeAvailable,
+  required bool macosManagedInstallSupported,
+}) {
   if (asset == null) {
     return 'missing_platform_asset';
   }
+  if (!isReleaseMode) {
+    return 'not_release_mode';
+  }
   if (platform == AppUpdatePlatform.windows &&
       isWindowsVelopackPackageName(asset.name)) {
-    return 'windows_runtime_unavailable';
+    if (!windowsManagedRuntimeAvailable) {
+      return 'windows_runtime_unavailable';
+    }
+    if (!assetHasIntegrityMetadata(asset)) {
+      return 'windows_integrity_missing';
+    }
+    return 'windows_manual_download_required';
   }
   if (platform == AppUpdatePlatform.macos &&
       isMacosManagedArchiveName(asset.name)) {
-    return 'macos_install_location_unsupported_or_integrity_missing';
+    if (!macosManagedInstallSupported) {
+      return 'macos_install_location_unsupported';
+    }
+    if (!assetHasIntegrityMetadata(asset)) {
+      return 'macos_integrity_missing';
+    }
+    return 'macos_manual_download_required';
+  }
+  if (platform == AppUpdatePlatform.linux &&
+      asset.name.toLowerCase().endsWith('.tar.gz') &&
+      !assetHasIntegrityMetadata(asset)) {
+    return 'linux_integrity_missing';
   }
   return 'manual_download_required';
 }
