@@ -98,6 +98,10 @@ class VerificationScriptsTests(unittest.TestCase):
         )
 
         self.assertIn("bash .githooks/pre-commit --check", verify_changed)
+        self.assertIn(
+            "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_bash.ps1 .githooks/pre-commit --check",
+            verify_changed,
+        )
 
     def test_windows_pixi_install_hooks_uses_powershell_bash_launcher(self) -> None:
         pixi = PIXI_TOML.read_text(encoding="utf-8")

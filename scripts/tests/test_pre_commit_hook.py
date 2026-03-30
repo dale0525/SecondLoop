@@ -250,12 +250,20 @@ class PreCommitHookTests(unittest.TestCase):
         script = VERIFY_CHANGED_SCRIPT.read_text(encoding="utf-8")
 
         self.assertIn('bash .githooks/pre-commit --check "$@"', script)
+        self.assertIn(
+            'powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_bash.ps1 .githooks/pre-commit --check "$@"',
+            script,
+        )
         self.assertNotIn('--check --ci', script)
 
     def test_verify_full_script_delegates_to_pre_commit_check_ci_mode(self) -> None:
         script = VERIFY_FULL_SCRIPT.read_text(encoding="utf-8")
 
         self.assertIn('bash .githooks/pre-commit --check --ci "$@"', script)
+        self.assertIn(
+            'powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_bash.ps1 .githooks/pre-commit --check --ci "$@"',
+            script,
+        )
 
     def test_pre_commit_hook_delegates_check_mode_to_dedicated_script(self) -> None:
         script = PRE_COMMIT_HOOK.read_text(encoding="utf-8")

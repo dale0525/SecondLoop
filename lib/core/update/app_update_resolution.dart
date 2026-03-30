@@ -222,48 +222,52 @@ AppUpdateAsset? matchManifestAssetForCurrentPlatform(
 
   for (final key in keys) {
     final rawEntry = platforms[key];
-    if (rawEntry is! Map) {
-      continue;
-    }
-    final url = readStringLoose(rawEntry, 'package_url') ??
-        readStringLoose(rawEntry, 'archive_url') ??
-        readStringLoose(rawEntry, 'url');
-    final parsedUrl = parseUpdateUri(
-      url,
-      allowHttp: allowHttp,
-      allowFile: allowFile,
-    );
-    if (parsedUrl == null) {
-      continue;
-    }
+    final candidateEntries = switch (rawEntry) {
+      Map() => <Map>[rawEntry],
+      List() => rawEntry.whereType<Map>().toList(growable: false),
+      _ => const <Map>[],
+    };
+    for (final candidateEntry in candidateEntries) {
+      final url = readStringLoose(candidateEntry, 'package_url') ??
+          readStringLoose(candidateEntry, 'archive_url') ??
+          readStringLoose(candidateEntry, 'url');
+      final parsedUrl = parseUpdateUri(
+        url,
+        allowHttp: allowHttp,
+        allowFile: allowFile,
+      );
+      if (parsedUrl == null) {
+        continue;
+      }
 
-    final name = readStringLoose(rawEntry, 'name') ??
-        (parsedUrl.pathSegments.isEmpty ? key : parsedUrl.pathSegments.last);
-    final manifestAppId = readStringLoose(rawEntry, 'app_id');
-    if (platform == AppUpdatePlatform.windows) {
-      final expectedAppId = windowsAppId?.trim();
-      if (expectedAppId != null && expectedAppId.isNotEmpty) {
-        final exactAppIdMatch = manifestAppId != null &&
-            manifestAppId.trim().toLowerCase() == expectedAppId.toLowerCase();
-        final exactNameMatch =
-            isWindowsVelopackPackageNameForApp(name, appId: expectedAppId);
-        if (!exactAppIdMatch && !exactNameMatch) {
-          continue;
+      final name = readStringLoose(candidateEntry, 'name') ??
+          (parsedUrl.pathSegments.isEmpty ? key : parsedUrl.pathSegments.last);
+      final manifestAppId = readStringLoose(candidateEntry, 'app_id');
+      if (platform == AppUpdatePlatform.windows) {
+        final expectedAppId = windowsAppId?.trim();
+        if (expectedAppId != null && expectedAppId.isNotEmpty) {
+          final exactAppIdMatch = manifestAppId != null &&
+              manifestAppId.trim().toLowerCase() == expectedAppId.toLowerCase();
+          final exactNameMatch =
+              isWindowsVelopackPackageNameForApp(name, appId: expectedAppId);
+          if (!exactAppIdMatch && !exactNameMatch) {
+            continue;
+          }
         }
       }
+      final sha256 = readStringLoose(candidateEntry, 'sha256');
+      final installModeHint = parseManifestInstallModeHint(
+        platform,
+        readStringLoose(candidateEntry, 'install_mode'),
+        assetName: name,
+      );
+      return AppUpdateAsset(
+        name: name,
+        downloadUri: parsedUrl,
+        sha256: sha256,
+        installModeHint: installModeHint,
+      );
     }
-    final sha256 = readStringLoose(rawEntry, 'sha256');
-    final installModeHint = parseManifestInstallModeHint(
-      platform,
-      readStringLoose(rawEntry, 'install_mode'),
-      assetName: name,
-    );
-    return AppUpdateAsset(
-      name: name,
-      downloadUri: parsedUrl,
-      sha256: sha256,
-      installModeHint: installModeHint,
-    );
   }
 
   return null;
