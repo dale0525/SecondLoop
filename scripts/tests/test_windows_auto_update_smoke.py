@@ -59,6 +59,13 @@ class WindowsAutoUpdateSmokeTests(unittest.TestCase):
         self.assertIn("[System.Security.Cryptography.SHA256]::Create()", script)
         self.assertNotIn("Get-FileHash", script)
 
+    def test_smoke_script_writes_pubspec_without_utf8_bom(self) -> None:
+        script = SMOKE_SCRIPT.read_text(encoding="utf-8")
+
+        self.assertIn("function Write-Utf8NoBomFile", script)
+        self.assertIn("System.Text.UTF8Encoding($false)", script)
+        self.assertNotIn("Set-Content -LiteralPath $PubspecPath -Value $updated -Encoding utf8", script)
+
     def test_smoke_script_requires_unambiguous_setup_executable(self) -> None:
         script = SMOKE_SCRIPT.read_text(encoding="utf-8")
 
@@ -101,6 +108,20 @@ class WindowsAutoUpdateSmokeTests(unittest.TestCase):
             "$stagedPackage = Wait-ForStagedPackage -ExpectedFileName $expectedPackageFile.Name",
             script,
         )
+
+    def test_smoke_script_restores_certificate_trust_and_signing_env(self) -> None:
+        script = SMOKE_SCRIPT.read_text(encoding="utf-8")
+
+        self.assertIn("function Remove-TrustedCertificateByThumbprint", script)
+        self.assertIn("Remove-TrustedCertificateByThumbprint -Thumbprint $trustedCertificateThumbprint", script)
+        self.assertIn("Remove-Item Env:SECONDLOOP_UPDATE_PUBLIC_KEY -ErrorAction SilentlyContinue", script)
+        self.assertIn("Set-Item -Path Env:SECONDLOOP_UPDATE_PUBLIC_KEY -Value $originalUpdatePublicKey", script)
+
+    def test_smoke_script_fails_fast_when_https_server_exits_early(self) -> None:
+        script = SMOKE_SCRIPT.read_text(encoding="utf-8")
+
+        self.assertIn("HTTPS update server exited early.", script)
+        self.assertIn("$process.HasExited", script)
 
     def test_https_server_exposes_latest_release_endpoint(self) -> None:
         self.assertTrue(HTTPS_SERVER.exists())

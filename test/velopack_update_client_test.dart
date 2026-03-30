@@ -30,15 +30,26 @@ void _createNupkg(Directory root, String fileName) {
   expect(pkgFile.existsSync(), isTrue);
 }
 
-String? _pendingVersionForPackageName(String fileName) {
+String? _pendingVersionForPackageName(
+  String fileName, {
+  String appId = 'com.secondloop.secondloop',
+  List<String> channels = const <String>[],
+}) {
   final packageRoot = Directory.systemTemp.createTempSync('velopack_pkg_name_');
   try {
     final updater =
         File('${packageRoot.path}${Platform.pathSeparator}Update.exe')
           ..writeAsStringSync('stub');
     _writeSqVersion(packageRoot, '1.0.0');
+    for (final channel in channels) {
+      File('${packageRoot.path}${Platform.pathSeparator}releases.$channel.json')
+          .writeAsStringSync('{}');
+    }
     _createNupkg(packageRoot, fileName);
-    final client = VelopackUpdateClient(updateExecutablePath: updater.path);
+    final client = VelopackUpdateClient(
+      updateExecutablePath: updater.path,
+      appId: appId,
+    );
     return client.pendingUpdateVersion();
   } finally {
     packageRoot.deleteSync(recursive: true);
@@ -154,6 +165,7 @@ void main() {
     expect(
       _pendingVersionForPackageName(
         'com.secondloop.secondloopdev-1.0.0-full.nupkg',
+        appId: 'com.secondloop.secondloopdev',
       ),
       '1.0.0',
     );
@@ -163,6 +175,8 @@ void main() {
     expect(
       _pendingVersionForPackageName(
         'com.secondloop.secondloopdev-1.0.1-devwin-full.nupkg',
+        appId: 'com.secondloop.secondloopdev',
+        channels: const ['devwin'],
       ),
       '1.0.1',
     );
@@ -172,6 +186,7 @@ void main() {
     expect(
       _pendingVersionForPackageName(
         'com.secondloop.secondloop-1.0.1-win-full.nupkg',
+        channels: const ['win'],
       ),
       '1.0.1',
     );
@@ -183,8 +198,21 @@ void main() {
     expect(
       _pendingVersionForPackageName(
         'com.secondloop.secondloopdev-1.2.3-beta.1-devwin-full.nupkg',
+        appId: 'com.secondloop.secondloopdev',
+        channels: const ['devwin'],
       ),
       '1.2.3-beta.1',
+    );
+  });
+
+  test('extracts pending version from arbitrary channel discovered at runtime',
+      () {
+    expect(
+      _pendingVersionForPackageName(
+        'com.secondloop.secondloop-1.3.0-nightly-full.nupkg',
+        channels: const ['nightly'],
+      ),
+      '1.3.0',
     );
   });
 
@@ -195,9 +223,14 @@ void main() {
     final updater = File('${root.path}${Platform.pathSeparator}Update.exe')
       ..writeAsStringSync('stub');
     _writeSqVersion(root, '1.0.0');
+    File('${root.path}${Platform.pathSeparator}releases.devwin.json')
+        .writeAsStringSync('{}');
     _createNupkg(root, 'com.secondloop.secondloopdev-1.0.1-devwin-full.nupkg');
 
-    final client = VelopackUpdateClient(updateExecutablePath: updater.path);
+    final client = VelopackUpdateClient(
+      updateExecutablePath: updater.path,
+      appId: 'com.secondloop.secondloopdev',
+    );
 
     expect(client.hasPendingUpdate(), isTrue);
     expect(client.pendingUpdateVersion(), '1.0.1');
@@ -831,6 +864,23 @@ void main() {
     _createNupkg(root, 'otherapp-9.9.9-full.nupkg');
 
     final client = VelopackUpdateClient(updateExecutablePath: updater.path);
+
+    expect(client.hasPendingUpdate(), isFalse);
+    expect(client.pendingUpdateVersion(), isNull);
+    expect(client.pendingUpdatePackagePath(), isNull);
+  });
+
+  test('does not treat similar package ids as pending updates', () async {
+    final root = await Directory.systemTemp.createTemp('velopack_pkg_similar_');
+    final updater = File('${root.path}${Platform.pathSeparator}Update.exe')
+      ..writeAsStringSync('stub');
+    _writeSqVersion(root, '1.0.0');
+    _createNupkg(root, 'com.secondloop.secondloophelper-9.9.9-full.nupkg');
+
+    final client = VelopackUpdateClient(
+      updateExecutablePath: updater.path,
+      appId: 'com.secondloop.secondloop',
+    );
 
     expect(client.hasPendingUpdate(), isFalse);
     expect(client.pendingUpdateVersion(), isNull);

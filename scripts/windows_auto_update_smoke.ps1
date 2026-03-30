@@ -41,7 +41,17 @@ function Set-PubspecVersion {
     "version: $VersionValue",
     1
   )
-  Set-Content -LiteralPath $PubspecPath -Value $updated -Encoding utf8
+  Write-Utf8NoBomFile -Path $PubspecPath -Content $updated
+}
+
+function Write-Utf8NoBomFile {
+  param(
+    [string]$Path,
+    [string]$Content
+  )
+
+  $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+  [System.IO.File]::WriteAllText($Path, $Content, $utf8NoBom)
 }
 
 function Get-PixiPythonPath {
@@ -333,6 +343,31 @@ function Ensure-LocalhostCertificateTrusted {
   if ($LASTEXITCODE -ne 0) {
     throw "Failed to trust localhost certificate: $PemPath"
   }
+
+  $importedThumbprint = Get-CertificateThumbprint -PemPath $PemPath
+  if (-not [string]::IsNullOrWhiteSpace($importedThumbprint)) {
+    return $importedThumbprint
+  }
+
+  return $null
+}
+
+function Get-CertificateThumbprint {
+  param([string]$PemPath)
+
+  $cert = New-Object System.Security.Cryptography.X509Certificates.X509Certificate2($PemPath)
+  return $cert.Thumbprint
+}
+
+function Remove-TrustedCertificateByThumbprint {
+  param([string]$Thumbprint)
+
+  if ([string]::IsNullOrWhiteSpace($Thumbprint)) {
+    return
+  }
+
+  Write-Host "Removing localhost certificate from current user Root store: $Thumbprint"
+  & certutil -user -delstore Root $Thumbprint | Out-Null
 }
 
 function Start-UpdateFeedServer {
@@ -350,13 +385,20 @@ function Start-UpdateFeedServer {
   $stderrPath = Join-Path $SmokeRoot 'https-server.err.log'
 
   Write-Host "Starting local HTTPS update server on https://localhost:$ListenPort"
-  return Start-Process -FilePath $pythonPath -ArgumentList @(
+  $process = Start-Process -FilePath $pythonPath -ArgumentList @(
     $serverScript,
     '--root', $ServerRoot,
     '--cert', $CertificatePath,
     '--key', $KeyPath,
     '--port', $ListenPort.ToString()
   ) -WorkingDirectory $repoRootPath -PassThru -RedirectStandardOutput $stdoutPath -RedirectStandardError $stderrPath
+
+  Start-Sleep -Seconds 2
+  if ($process.HasExited) {
+    throw "HTTPS update server exited early. Check $stdoutPath and $stderrPath"
+  }
+
+  return $process
 }
 
 function Wait-ForLatestEndpoint {
@@ -400,9 +442,17 @@ if (-not (Test-Path -LiteralPath $certificateKey -PathType Leaf)) {
 }
 
 $feedProcess = $null
+$trustedCertificateThumbprint = $null
+$originalUpdatePublicKey = $null
+$hadOriginalUpdatePublicKey = Test-Path Env:SECONDLOOP_UPDATE_PUBLIC_KEY
 
 try {
   New-Item -ItemType Directory -Force -Path $smokeRoot | Out-Null
+
+  if ($hadOriginalUpdatePublicKey) {
+    $originalUpdatePublicKey = $env:SECONDLOOP_UPDATE_PUBLIC_KEY
+  }
+  Remove-Item Env:SECONDLOOP_UPDATE_PUBLIC_KEY -ErrorAction SilentlyContinue
 
   if (-not $SkipBuild) {
     if (Test-Path -LiteralPath $v1Output) {
@@ -422,7 +472,7 @@ try {
     $v2Output = Join-Path $repoRootPath 'dist/auto-update-test/v2'
   }
 
-  Set-Content -LiteralPath $pubspecPath -Value $originalPubspec -Encoding utf8
+  Write-Utf8NoBomFile -Path $pubspecPath -Content $originalPubspec
 
   if (Test-Path -LiteralPath $serverRoot) {
     Remove-Item -LiteralPath $serverRoot -Recurse -Force
@@ -446,7 +496,7 @@ try {
   )
   Invoke-CheckedProcess -FilePath 'powershell.exe' -ArgumentList $manifestArgs -FailureMessage 'Failed to generate latest.json for smoke feed.'
 
-  Ensure-LocalhostCertificateTrusted -PemPath $certificatePem
+  $trustedCertificateThumbprint = Ensure-LocalhostCertificateTrusted -PemPath $certificatePem
   $feedProcess = Start-UpdateFeedServer -ServerRoot $serverRoot -CertificatePath $certificatePem -KeyPath $certificateKey -ListenPort $Port -SmokeRoot $smokeRoot
 
   $latestManifest = Wait-ForLatestEndpoint -ListenPort $Port
@@ -484,10 +534,20 @@ try {
   Write-Host "Smoke test succeeded. Install root: $(Get-InstallRoot)"
   Write-Host "Final running version: $(Get-InstalledVersion)"
 } finally {
-  Set-Content -LiteralPath $pubspecPath -Value $originalPubspec -Encoding utf8
+  Write-Utf8NoBomFile -Path $pubspecPath -Content $originalPubspec
+
+  if ($hadOriginalUpdatePublicKey) {
+    Set-Item -Path Env:SECONDLOOP_UPDATE_PUBLIC_KEY -Value $originalUpdatePublicKey
+  } else {
+    Remove-Item Env:SECONDLOOP_UPDATE_PUBLIC_KEY -ErrorAction SilentlyContinue
+  }
 
   if ($null -ne $feedProcess -and -not $LeaveServerRunning) {
     Stop-Process -Id $feedProcess.Id -Force -ErrorAction SilentlyContinue
     Wait-Process -Id $feedProcess.Id -Timeout 5 -ErrorAction SilentlyContinue
+  }
+
+  if ($null -ne $trustedCertificateThumbprint -and -not $SkipCertificateTrust) {
+    Remove-TrustedCertificateByThumbprint -Thumbprint $trustedCertificateThumbprint
   }
 }

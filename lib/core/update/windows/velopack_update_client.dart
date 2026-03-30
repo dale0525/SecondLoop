@@ -31,10 +31,10 @@ const _windowsProcessProbeShellCandidates = <String>[
   'pwsh.exe',
 ];
 
-const _windowsVelopackChannelSuffixes = <String>[
-  'devwin',
-  'win',
-];
+const _defaultWindowsVelopackAppId = String.fromEnvironment(
+  'SECONDLOOP_APP_ID',
+  defaultValue: 'com.secondloop.secondloop',
+);
 
 List<String> buildWindowsProcessProbeCommandArguments(int pid) {
   final command =
@@ -132,12 +132,14 @@ class VelopackUpdateClient implements WindowsStagedUpdateClient {
 
   VelopackUpdateClient({
     String? updateExecutablePath,
+    String? appId,
     VelopackProcessStarter? processStarter,
     VelopackNowProvider? now,
     VelopackProcessRunner? processRunner,
     VelopackProcessProbe? processProbe,
     PendingApplyAttemptWriter? pendingApplyAttemptWriter,
   })  : _updateExecutablePath = updateExecutablePath,
+        _appId = appId,
         _processStarter = processStarter ?? _defaultProcessStarter,
         _now = now ?? DateTime.now,
         _pendingApplyAttemptWriter =
@@ -150,6 +152,7 @@ class VelopackUpdateClient implements WindowsStagedUpdateClient {
                 ));
 
   final String? _updateExecutablePath;
+  final String? _appId;
   final VelopackProcessStarter _processStarter;
   final VelopackNowProvider _now;
   final PendingApplyAttemptWriter _pendingApplyAttemptWriter;
@@ -157,6 +160,13 @@ class VelopackUpdateClient implements WindowsStagedUpdateClient {
 
   String get _updateExePath =>
       _updateExecutablePath ?? resolveVelopackUpdateExePath();
+  String get _resolvedAppId {
+    final configured = _appId?.trim();
+    if (configured != null && configured.isNotEmpty) {
+      return configured;
+    }
+    return _defaultWindowsVelopackAppId;
+  }
 
   @override
   bool isAvailable() {
@@ -178,7 +188,7 @@ class VelopackUpdateClient implements WindowsStagedUpdateClient {
     if (!File(updateExePath).existsSync()) {
       return false;
     }
-    return _hasPendingPackageUpdate(updateExePath);
+    return _hasPendingPackageUpdate(updateExePath, appId: _resolvedAppId);
   }
 
   @override
@@ -188,7 +198,7 @@ class VelopackUpdateClient implements WindowsStagedUpdateClient {
       return null;
     }
     final appRoot = File(updateExePath).absolute.parent.path;
-    return _readNewestPackageVersion(appRoot);
+    return _readNewestPackageVersion(appRoot, appId: _resolvedAppId);
   }
 
   @override
@@ -198,7 +208,7 @@ class VelopackUpdateClient implements WindowsStagedUpdateClient {
       return null;
     }
     final appRoot = File(updateExePath).absolute.parent.path;
-    return _readNewestPackageFile(appRoot)?.path;
+    return _readNewestPackageFile(appRoot, appId: _resolvedAppId)?.path;
   }
 
   @override
@@ -224,8 +234,13 @@ class VelopackUpdateClient implements WindowsStagedUpdateClient {
       updateExecutablePath: _updateExePath,
       waitPid: waitPid,
       packagePath: packageFile.path,
-      pendingVersion:
-          _extractVersionFromNupkgName(packageFile.uri.pathSegments.last),
+      pendingVersion: _extractVersionFromNupkgName(
+        packageFile.uri.pathSegments.last,
+        appId: _resolvedAppId,
+        channels: _detectInstalledChannels(
+          File(_updateExePath).absolute.parent.path,
+        ),
+      ),
     );
   }
 
@@ -244,7 +259,8 @@ class VelopackUpdateClient implements WindowsStagedUpdateClient {
       return const PendingUpdateStartupResult.noPendingUpdate();
     }
 
-    final pendingVersion = _readNewestPackageVersion(appRoot);
+    final pendingVersion =
+        _readNewestPackageVersion(appRoot, appId: _resolvedAppId);
     final pendingAttemptResult = await _resolvePendingApplyAttempt(
       updateExecutablePath: updateExePath,
       currentVersion: currentVersion,
@@ -279,7 +295,8 @@ class VelopackUpdateClient implements WindowsStagedUpdateClient {
 
     final appRoot = File(updateExePath).absolute.parent.path;
     final currentVersion = _readCurrentInstalledVersion(appRoot);
-    final pendingVersion = _readNewestPackageVersion(appRoot);
+    final pendingVersion =
+        _readNewestPackageVersion(appRoot, appId: _resolvedAppId);
 
     if (currentVersion == null ||
         pendingVersion == null ||
@@ -419,14 +436,17 @@ class VelopackUpdateClient implements WindowsStagedUpdateClient {
     }
   }
 
-  static bool _hasPendingPackageUpdate(String updateExecutablePath) {
+  static bool _hasPendingPackageUpdate(
+    String updateExecutablePath, {
+    required String appId,
+  }) {
     final appRoot = File(updateExecutablePath).absolute.parent.path;
     final currentVersion = _readCurrentInstalledVersion(appRoot);
     if (currentVersion == null) {
       return false;
     }
 
-    final pendingVersion = _readNewestPackageVersion(appRoot);
+    final pendingVersion = _readNewestPackageVersion(appRoot, appId: appId);
     if (pendingVersion == null) {
       return false;
     }
@@ -470,6 +490,7 @@ class VelopackUpdateClient implements WindowsStagedUpdateClient {
         _deletePendingPackageUpdates(
           updateExecutablePath,
           targetVersion: attempt.version,
+          appId: _resolvedAppId,
         );
         _clearPendingApplyAttempt(updateExecutablePath);
         throw StateError(
@@ -494,6 +515,7 @@ class VelopackUpdateClient implements WindowsStagedUpdateClient {
     _deletePendingPackageUpdates(
       updateExecutablePath,
       targetVersion: attempt.version,
+      appId: _resolvedAppId,
     );
     _clearPendingApplyAttempt(updateExecutablePath);
     throw StateError(
@@ -614,6 +636,7 @@ class VelopackUpdateClient implements WindowsStagedUpdateClient {
   static void _deletePendingPackageUpdates(
     String updateExecutablePath, {
     String? targetVersion,
+    required String appId,
   }) {
     final appRoot = File(updateExecutablePath).absolute.parent.path;
     final currentVersion = _readCurrentInstalledVersion(appRoot);
@@ -628,14 +651,19 @@ class VelopackUpdateClient implements WindowsStagedUpdateClient {
       return;
     }
 
+    final channels = _detectInstalledChannels(appRoot);
     for (final entity in packagesDir.listSync()) {
       if (entity is! File) continue;
       final fileName =
           entity.uri.pathSegments.isEmpty ? '' : entity.uri.pathSegments.last;
-      if (!isWindowsVelopackPackageName(fileName)) {
+      if (!isWindowsVelopackPackageNameForApp(fileName, appId: appId)) {
         continue;
       }
-      final version = _extractVersionFromNupkgName(fileName);
+      final version = _extractVersionFromNupkgName(
+        fileName,
+        appId: appId,
+        channels: channels,
+      );
       if (version == null) {
         continue;
       }
@@ -676,18 +704,28 @@ class VelopackUpdateClient implements WindowsStagedUpdateClient {
     }
   }
 
-  static String? _readNewestPackageVersion(String appRootPath) {
-    final newestPackage = _readNewestPackageFile(appRootPath);
+  static String? _readNewestPackageVersion(
+    String appRootPath, {
+    required String appId,
+  }) {
+    final newestPackage = _readNewestPackageFile(appRootPath, appId: appId);
     if (newestPackage == null) {
       return null;
     }
     final fileName = newestPackage.uri.pathSegments.isEmpty
         ? ''
         : newestPackage.uri.pathSegments.last;
-    return _extractVersionFromNupkgName(fileName);
+    return _extractVersionFromNupkgName(
+      fileName,
+      appId: appId,
+      channels: _detectInstalledChannels(appRootPath),
+    );
   }
 
-  static File? _readNewestPackageFile(String appRootPath) {
+  static File? _readNewestPackageFile(
+    String appRootPath, {
+    required String appId,
+  }) {
     final packagesDir = Directory(
       '$appRootPath${Platform.pathSeparator}packages',
     );
@@ -695,16 +733,21 @@ class VelopackUpdateClient implements WindowsStagedUpdateClient {
       return null;
     }
 
+    final channels = _detectInstalledChannels(appRootPath);
     File? newestPackage;
     String? newestVersion;
     for (final entity in packagesDir.listSync()) {
       if (entity is! File) continue;
       final fileName =
           entity.uri.pathSegments.isEmpty ? '' : entity.uri.pathSegments.last;
-      if (!isWindowsVelopackPackageName(fileName)) {
+      if (!isWindowsVelopackPackageNameForApp(fileName, appId: appId)) {
         continue;
       }
-      final version = _extractVersionFromNupkgName(fileName);
+      final version = _extractVersionFromNupkgName(
+        fileName,
+        appId: appId,
+        channels: channels,
+      );
       if (version == null) continue;
       if (newestVersion == null ||
           _compareVersionStrings(version, newestVersion) > 0) {
@@ -716,7 +759,11 @@ class VelopackUpdateClient implements WindowsStagedUpdateClient {
     return newestPackage;
   }
 
-  static String? _extractVersionFromNupkgName(String fileName) {
+  static String? _extractVersionFromNupkgName(
+    String fileName, {
+    required String appId,
+    Iterable<String> channels = const <String>[],
+  }) {
     final normalized = fileName.trim();
     if (normalized.isEmpty) {
       return null;
@@ -726,30 +773,79 @@ class VelopackUpdateClient implements WindowsStagedUpdateClient {
       return null;
     }
 
-    final match = RegExp(
-      r'^.+-((?:\d+\.){2,7}\d+(?:-[0-9A-Za-z.-]+)?)-full\.nupkg$',
-      caseSensitive: false,
-    ).firstMatch(normalized);
-    final version = match?.group(1)?.trim();
-    if (version == null || version.isEmpty) {
+    if (!isWindowsVelopackPackageNameForApp(normalized, appId: appId)) {
       return null;
     }
 
-    final lowerVersion = version.toLowerCase();
-    for (final channelSuffix in _windowsVelopackChannelSuffixes) {
-      final suffix = '-$channelSuffix';
-      if (!lowerVersion.endsWith(suffix) || version.length <= suffix.length) {
+    final prefix = '${appId.trim()}-';
+    final packageStem = normalized.substring(
+      prefix.length,
+      normalized.length - '.nupkg'.length,
+    );
+    if (!packageStem.toLowerCase().endsWith('-full')) {
+      return null;
+    }
+
+    final versionWithOptionalChannel =
+        packageStem.substring(0, packageStem.length - '-full'.length);
+    final knownChannels = channels
+        .map((channel) => channel.trim())
+        .where((channel) => channel.isNotEmpty)
+        .toSet()
+        .toList(growable: false)
+      ..sort((left, right) => right.length.compareTo(left.length));
+    final normalizedVersionWithOptionalChannel =
+        versionWithOptionalChannel.toLowerCase();
+    for (final channel in knownChannels) {
+      final suffix = '-${channel.toLowerCase()}';
+      if (!normalizedVersionWithOptionalChannel.endsWith(suffix) ||
+          versionWithOptionalChannel.length <= suffix.length) {
         continue;
       }
 
-      final strippedVersion =
-          version.substring(0, version.length - suffix.length);
+      final strippedVersion = versionWithOptionalChannel.substring(
+        0,
+        versionWithOptionalChannel.length - suffix.length,
+      );
       if (parseComparableAppVersion(strippedVersion) != null) {
         return strippedVersion;
       }
     }
 
-    return version;
+    if (parseComparableAppVersion(versionWithOptionalChannel) != null) {
+      return versionWithOptionalChannel;
+    }
+
+    return null;
+  }
+
+  static List<String> _detectInstalledChannels(String appRootPath) {
+    final appRoot = Directory(appRootPath);
+    if (!appRoot.existsSync()) {
+      return const <String>[];
+    }
+
+    final channels = <String>{};
+    for (final entity in appRoot.listSync()) {
+      if (entity is! File) continue;
+      final fileName =
+          entity.uri.pathSegments.isEmpty ? '' : entity.uri.pathSegments.last;
+      final releasesMatch = RegExp(
+        r'^releases\.(.+)\.json$',
+        caseSensitive: false,
+      ).firstMatch(fileName);
+      final assetsMatch = RegExp(
+        r'^assets\.(.+)\.json$',
+        caseSensitive: false,
+      ).firstMatch(fileName);
+      final channel = releasesMatch?.group(1)?.trim() ??
+          assetsMatch?.group(1)?.trim() ??
+          '';
+      if (channel.isNotEmpty) {
+        channels.add(channel);
+      }
+    }
+    return channels.toList(growable: false);
   }
 
   static int _compareVersionStrings(String left, String right) {

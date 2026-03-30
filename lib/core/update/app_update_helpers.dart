@@ -13,6 +13,20 @@ bool isWindowsVelopackPackageName(String name) {
       normalized.contains('secondloop');
 }
 
+bool isWindowsVelopackPackageNameForApp(
+  String name, {
+  required String appId,
+}) {
+  final normalizedName = name.trim().toLowerCase();
+  final normalizedAppId = appId.trim().toLowerCase();
+  if (normalizedName.isEmpty || normalizedAppId.isEmpty) {
+    return false;
+  }
+
+  return normalizedName.endsWith('-full.nupkg') &&
+      normalizedName.startsWith('$normalizedAppId-');
+}
+
 bool isMacosManagedArchiveName(String name) {
   final normalized = name.trim().toLowerCase();
   return normalized.endsWith('.app.tar.gz') &&
