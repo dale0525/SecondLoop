@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import argparse
-import json
 import ssl
 from http import HTTPStatus
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
@@ -84,15 +83,10 @@ class UpdateFeedHandler(SimpleHTTPRequestHandler):
         normalized = self.path.split("?", 1)[0].split("#", 1)[0]
         if normalized == "/api/releases/latest":
             try:
-                payload = json.loads(self.latest_json_path.read_text(encoding="utf-8"))
+                body = self.latest_json_path.read_bytes()
             except FileNotFoundError:
                 self.send_error(HTTPStatus.NOT_FOUND, "Missing latest.json")
                 return
-            except json.JSONDecodeError:
-                self.send_error(HTTPStatus.INTERNAL_SERVER_ERROR, "Invalid latest.json")
-                return
-
-            body = json.dumps(payload, indent=2).encode("utf-8")
             self._write_body(
                 status=HTTPStatus.OK,
                 body=body,

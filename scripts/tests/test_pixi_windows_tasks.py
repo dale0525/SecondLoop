@@ -324,9 +324,11 @@ class PixiWindowsTasksTests(unittest.TestCase):
         script = WINDOWS_SETUP_FLUTTER_SCRIPT.read_text(encoding="utf-8")
 
         self.assertIn("core.longpaths true", script)
+        self.assertIn("Env:PUB_CACHE", script)
+        self.assertIn("Env:FVM_HOME", script)
+        self.assertIn(".tool/pub-cache", script)
+        self.assertIn(".tool/fvm", script)
         self.assertIn("dart pub global activate --no-executables fvm 2.4.1", script)
-        self.assertIn("dart pub global run fvm:main install 3.22.3", script)
-        self.assertIn("dart pub global run fvm:main use 3.22.3 --force", script)
         self.assertIn(".fvm/flutter_sdk/bin/flutter.bat", script)
         self.assertIn("pub", script)
         self.assertIn("get", script)

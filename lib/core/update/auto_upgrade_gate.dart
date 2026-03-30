@@ -77,7 +77,7 @@ class _AutoUpgradeGateState extends State<AutoUpgradeGate> {
     super.didChangeDependencies();
     if (_checkScheduled) return;
     _checkScheduled = true;
-    scheduleMicrotask(() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       unawaited(_maybeAutoUpgrade());
     });

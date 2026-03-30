@@ -28,6 +28,13 @@ Invoke-InWindowsShortWorkspace -RepoRootPath $repoRootPath -ScriptBlock {
   $repoRootPath = Resolve-SecondLoopProjectDir -DefaultRepoRoot (Join-Path $PSScriptRoot '..')
   Set-Location $repoRootPath
 
+  $projectPubCache = Join-Path $repoRootPath '.tool/pub-cache'
+  $projectFvmHome = Join-Path $repoRootPath '.tool/fvm'
+  New-Item -ItemType Directory -Force -Path $projectPubCache | Out-Null
+  New-Item -ItemType Directory -Force -Path $projectFvmHome | Out-Null
+  Set-Item -Path Env:PUB_CACHE -Value $projectPubCache
+  Set-Item -Path Env:FVM_HOME -Value $projectFvmHome
+
   $flutterPath = Join-Path $repoRootPath '.fvm/flutter_sdk/bin/flutter.bat'
   $flutterRoot = Split-Path -Path (Split-Path -Path $flutterPath -Parent) -Parent
 

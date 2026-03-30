@@ -240,8 +240,7 @@ class AppUpdateService {
     final windowsStagedClient = _resolvedWindowsStagedUpdateClient;
     final windowsManagedRuntimeAvailable =
         windowsStagedClient != null && windowsStagedClient.isAvailable();
-    final effectiveWindowsAppId =
-        windowsManagedRuntimeAvailable ? _windowsAppId : null;
+    final effectiveWindowsAppId = _windowsAppId;
     final macosManagedClient = _resolvedMacosManagedUpdateClient;
     final macosManagedInstallSupported = macosManagedClient != null &&
         macosManagedClient.isSupportedInstallLocation();

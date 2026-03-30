@@ -32,11 +32,8 @@ void main() {
       );
     });
 
-    test('treats fourth tag segment as newer when present', () {
-      expect(
-        compareReleaseTagWithCurrentVersion('v1.2.3.9', '1.2.3'),
-        greaterThan(0),
-      );
+    test('treats unsupported version formats as incomparable', () {
+      expect(compareReleaseTagWithCurrentVersion('v1.2.3.9', '1.2.3'), 0);
     });
 
     test('treats same version as up to date', () {
@@ -470,7 +467,8 @@ void main() {
       expect(exitedCode, 0);
     });
 
-    test('does not reuse prerelease pending package for final Windows release',
+    test(
+        'does not reuse invalid-version pending package for final Windows release',
         () async {
       final tempDir =
           await Directory.systemTemp.createTemp('update_reuse_prerelease_');

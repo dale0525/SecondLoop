@@ -193,7 +193,7 @@ void main() {
   });
 
   test(
-      'extracts pending version from prerelease channel-suffixed full nupkg name',
+      'rejects pending version from prerelease channel-suffixed full nupkg name',
       () {
     expect(
       _pendingVersionForPackageName(
@@ -201,19 +201,17 @@ void main() {
         appId: 'com.secondloop.secondloopdev',
         channels: const ['devwin'],
       ),
-      '1.2.3-beta.1',
+      isNull,
     );
   });
 
-  test(
-      'extracts prerelease version without channel suffix even when channels are installed',
-      () {
+  test('rejects prerelease version without channel suffix', () {
     expect(
       _pendingVersionForPackageName(
         'com.secondloop.secondloop-1.2.3-beta.1-full.nupkg',
         channels: const ['win'],
       ),
-      '1.2.3-beta.1',
+      isNull,
     );
   });
 
@@ -720,7 +718,8 @@ void main() {
     );
   });
 
-  test('pending prerelease package is not newer than installed final release',
+  test(
+      'pending invalid-version package is not newer than installed final release',
       () async {
     final root = await Directory.systemTemp.createTemp('velopack_prerelease_');
     final updater = File('${root.path}${Platform.pathSeparator}Update.exe')
@@ -749,7 +748,7 @@ void main() {
     expect(result.status, PendingUpdateStartupStatus.none);
   });
 
-  test('pending prerelease package is newer than older installed final release',
+  test('pending invalid-version package is ignored even if numerically higher',
       () async {
     final root =
         await Directory.systemTemp.createTemp('velopack_prerelease_newer_');
@@ -773,8 +772,8 @@ void main() {
 
     final result = await client.applyPendingOnStartup(waitPid: 6789);
 
-    expect(calls, 1);
-    expect(result.status, PendingUpdateStartupStatus.dispatched);
+    expect(calls, 0);
+    expect(result.status, PendingUpdateStartupStatus.none);
   });
 
   test('startup treats unverified pending apply process as probe inconclusive',

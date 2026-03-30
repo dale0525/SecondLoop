@@ -63,25 +63,7 @@ bool sameNormalizedVersion(String left, String right) {
   if (leftVersion == null || rightVersion == null) {
     return false;
   }
-  final normalizedLeft = trimTrailingZeroSegments(leftVersion.segments);
-  final normalizedRight = trimTrailingZeroSegments(rightVersion.segments);
-  final sameBaseSegments = normalizedLeft.length == normalizedRight.length &&
-      _listEquals(normalizedLeft, normalizedRight);
-  if (leftVersion.isPrerelease != rightVersion.isPrerelease) {
-    return false;
-  }
-  if (sameBaseSegments &&
-      leftVersion.isPrerelease == rightVersion.isPrerelease) {
-    if (!leftVersion.isPrerelease) {
-      return true;
-    }
-    return comparePrereleaseIdentifiers(
-          leftVersion.prereleaseIdentifiers,
-          rightVersion.prereleaseIdentifiers,
-        ) ==
-        0;
-  }
-  return compareReleaseTagWithCurrentVersion(left, right) == 0;
+  return _listEquals(leftVersion.segments, rightVersion.segments);
 }
 
 bool _listEquals(List<int> left, List<int> right) {

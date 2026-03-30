@@ -100,8 +100,7 @@ void main() {
     );
   }
 
-  testWidgets(
-      'starts auto upgrade work without waiting for a post-frame callback',
+  testWidgets('starts auto upgrade work from the first post-frame callback',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
     final service = _FakeAutoUpdateService(
@@ -109,7 +108,6 @@ void main() {
     );
 
     await pumpGate(tester, service: service);
-    await tester.pump(const Duration(milliseconds: 10));
 
     expect(service.applyPendingCalls, 1);
     expect(service.checkCalls, 1);

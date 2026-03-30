@@ -33,7 +33,7 @@ void main() {
       expect(result.update!.latestTag, 'v1.0.1');
     });
 
-    test('checkForUpdates accepts release tags with fourth segment', () async {
+    test('checkForUpdates rejects release tags with fourth segment', () async {
       final service = AppUpdateService(
         platformOverride: AppUpdatePlatform.windows,
         releaseModeOverride: true,
@@ -49,60 +49,22 @@ void main() {
 
       final result = await service.checkForUpdates();
 
-      expect(result.errorMessage, isNull);
-      expect(result.update, isNotNull);
-      expect(result.update!.latestTag, 'v1.0.1.1');
+      expect(result.update, isNull);
+      expect(result.errorMessage, 'unsupported_version_format');
     });
 
-    test('checkForUpdates treats fourth segment as newer when base matches',
-        () async {
-      final service = AppUpdateService(
-        platformOverride: AppUpdatePlatform.windows,
-        releaseModeOverride: true,
-        currentVersionLoader: () async =>
-            const AppRuntimeVersion(version: '1.0.1', buildNumber: '1'),
-        releaseJsonFetcher: (_) async => <String, Object?>{
-          'tag_name': 'v1.0.1.1',
-          'html_url':
-              'https://github.com/dale0525/SecondLoop/releases/tag/v1.0.1.1',
-          'assets': <Object?>[],
-        },
-      );
-
-      final result = await service.checkForUpdates();
-
-      expect(result.errorMessage, isNull);
-      expect(result.update, isNotNull);
-      expect(result.update!.latestTag, 'v1.0.1.1');
-    });
-
-    test('sameNormalizedVersion rejects prerelease and final variants', () {
+    test('sameNormalizedVersion only matches strict x.y.z versions', () {
+      expect(sameNormalizedVersion('1.1.0', '1.1.0'), isTrue);
+      expect(sameNormalizedVersion('v1.1.0', '1.1.0+7'), isTrue);
       expect(sameNormalizedVersion('1.1.0-beta', '1.1.0'), isFalse);
-      expect(sameNormalizedVersion('1.1.0', '1.1.0-beta'), isFalse);
       expect(sameNormalizedVersion('1.1.0.7', '1.1.0'), isFalse);
     });
 
-    test('sameNormalizedVersion keeps exact prerelease matches only', () {
-      expect(sameNormalizedVersion('1.1.0-beta', '1.1.0-beta'), isTrue);
-      expect(sameNormalizedVersion('1.1.0-beta', '1.1.0-rc'), isFalse);
-    });
-
-    test('prerelease identifiers keep semantic ordering', () {
-      expect(compareReleaseTagWithCurrentVersion('1.1.0-alpha', '1.1.0-beta'),
-          lessThan(0));
-      expect(compareReleaseTagWithCurrentVersion('1.1.0-beta', '1.1.0-rc.1'),
-          lessThan(0));
-      expect(compareReleaseTagWithCurrentVersion('1.1.0-rc.2', '1.1.0-rc.1'),
-          greaterThan(0));
-      expect(
-          compareReleaseTagWithCurrentVersion('1.1.0-beta', '1.1.0-beta'), 0);
-    });
-
-    test(
-        'sameNormalizedVersion does not treat prerelease build counters as equal',
-        () {
-      expect(sameNormalizedVersion('1.1.0-rc.1', '1.1.0'), isFalse);
-      expect(sameNormalizedVersion('1.1.0', '1.1.0-rc.1'), isFalse);
+    test('parseComparableAppVersion only accepts strict x.y.z values', () {
+      expect(parseComparableAppVersion('v1.2.3'), isNotNull);
+      expect(parseComparableAppVersion('1.2.3+4'), isNotNull);
+      expect(parseComparableAppVersion('1.2.3.4'), isNull);
+      expect(parseComparableAppVersion('1.2.3-rc.1'), isNull);
     });
 
     test('checkForUpdates rejects non-version release tags', () async {
@@ -125,31 +87,7 @@ void main() {
       expect(result.errorMessage, 'unsupported_version_format');
     });
 
-    test('checkForUpdates treats final release as newer than prerelease',
-        () async {
-      final service = AppUpdateService(
-        platformOverride: AppUpdatePlatform.windows,
-        releaseModeOverride: true,
-        currentVersionLoader: () async => const AppRuntimeVersion(
-          version: '1.1.0-rc.1',
-          buildNumber: '1',
-        ),
-        releaseJsonFetcher: (_) async => <String, Object?>{
-          'tag_name': 'v1.1.0',
-          'html_url':
-              'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
-          'assets': <Object?>[],
-        },
-      );
-
-      final result = await service.checkForUpdates();
-
-      expect(result.errorMessage, isNull);
-      expect(result.update, isNotNull);
-      expect(result.update!.latestTag, 'v1.1.0');
-    });
-
-    test('checkForUpdates accepts current versions outside strict x.y.z',
+    test('checkForUpdates rejects current versions outside strict x.y.z',
         () async {
       final service = AppUpdateService(
         platformOverride: AppUpdatePlatform.windows,
@@ -166,9 +104,8 @@ void main() {
 
       final result = await service.checkForUpdates();
 
-      expect(result.errorMessage, isNull);
-      expect(result.update, isNotNull);
-      expect(result.update!.latestTag, 'v1.0.1');
+      expect(result.update, isNull);
+      expect(result.errorMessage, 'unsupported_version_format');
     });
 
     test('checkForUpdates keeps base path for custom release origins',

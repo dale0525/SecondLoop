@@ -122,32 +122,12 @@ int compareReleaseTagWithCurrentVersion(
   final currentAppVersion = parseComparableAppVersion(currentVersion);
   if (releaseVersion == null || currentAppVersion == null) return 0;
 
-  final normalizedRelease = trimTrailingZeroSegments(releaseVersion.segments);
-  final normalizedCurrent =
-      trimTrailingZeroSegments(currentAppVersion.segments);
-  final comparedLength = normalizedRelease.length > normalizedCurrent.length
-      ? normalizedRelease.length
-      : normalizedCurrent.length;
-
-  for (var i = 0; i < comparedLength; i += 1) {
-    final releaseValue =
-        i < normalizedRelease.length ? normalizedRelease[i] : 0;
-    final currentValue =
-        i < normalizedCurrent.length ? normalizedCurrent[i] : 0;
+  for (var i = 0; i < releaseVersion.segments.length; i += 1) {
+    final releaseValue = releaseVersion.segments[i];
+    final currentValue = currentAppVersion.segments[i];
     if (releaseValue != currentValue) {
       return releaseValue.compareTo(currentValue);
     }
-  }
-
-  if (releaseVersion.isPrerelease != currentAppVersion.isPrerelease) {
-    return releaseVersion.isPrerelease ? -1 : 1;
-  }
-
-  if (releaseVersion.isPrerelease) {
-    return comparePrereleaseIdentifiers(
-      releaseVersion.prereleaseIdentifiers,
-      currentAppVersion.prereleaseIdentifiers,
-    );
   }
 
   return 0;
@@ -163,76 +143,22 @@ ComparableAppVersion? parseComparableAppVersion(String input) {
     return null;
   }
 
-  final match = RegExp(
-    r'^[vV]?(\d+(?:\.\d+){2,7})(?:-([0-9A-Za-z.-]+))?(?:\+[0-9A-Za-z.-]+)?$',
-  ).firstMatch(trimmed);
+  final match = RegExp(r'^[vV]?(\d+)\.(\d+)\.(\d+)(?:\+[0-9A-Za-z.-]+)?$')
+      .firstMatch(trimmed);
   if (match == null) {
     return null;
   }
 
-  final segments = <int>[];
-  for (final value in (match.group(1) ?? '').split('.')) {
-    final parsed = int.tryParse(value);
-    if (parsed == null) {
-      return null;
-    }
-    segments.add(parsed);
-  }
-
-  if (segments.isEmpty) {
+  final major = int.tryParse(match.group(1) ?? '');
+  final minor = int.tryParse(match.group(2) ?? '');
+  final patch = int.tryParse(match.group(3) ?? '');
+  if (major == null || minor == null || patch == null) {
     return null;
   }
 
-  final prerelease = match.group(2)?.trim();
-  final prereleaseSegments = <int>[];
-  final prereleaseIdentifiers = <ComparablePrereleaseIdentifier>[];
-  if (prerelease != null && prerelease.isNotEmpty) {
-    for (final value in prerelease.split('.')) {
-      final trimmedValue = value.trim();
-      if (trimmedValue.isEmpty) {
-        return null;
-      }
-      final parsed = int.tryParse(value);
-      if (parsed != null) {
-        prereleaseSegments.add(parsed);
-        prereleaseIdentifiers.add(
-          ComparablePrereleaseIdentifier.numeric(parsed),
-        );
-      } else {
-        prereleaseIdentifiers.add(
-          ComparablePrereleaseIdentifier.alpha(trimmedValue.toLowerCase()),
-        );
-      }
-    }
-  }
-
   return ComparableAppVersion(
-    segments: segments,
-    prereleaseSegments: prereleaseSegments,
-    prereleaseIdentifiers: prereleaseIdentifiers,
-    isPrerelease: prerelease != null && prerelease.isNotEmpty,
+    segments: <int>[major, minor, patch],
   );
-}
-
-int comparePrereleaseIdentifiers(
-  List<ComparablePrereleaseIdentifier> left,
-  List<ComparablePrereleaseIdentifier> right,
-) {
-  final comparedLength =
-      left.length > right.length ? left.length : right.length;
-  for (var i = 0; i < comparedLength; i += 1) {
-    if (i >= left.length) {
-      return -1;
-    }
-    if (i >= right.length) {
-      return 1;
-    }
-    final compared = left[i].compareTo(right[i]);
-    if (compared != 0) {
-      return compared;
-    }
-  }
-  return 0;
 }
 
 List<int> trimTrailingZeroSegments(List<int> segments) {
@@ -262,43 +188,7 @@ List<int>? tryParseStrictAppVersion(String input) {
 class ComparableAppVersion {
   const ComparableAppVersion({
     required this.segments,
-    required this.prereleaseSegments,
-    required this.prereleaseIdentifiers,
-    required this.isPrerelease,
   });
 
   final List<int> segments;
-  final List<int> prereleaseSegments;
-  final List<ComparablePrereleaseIdentifier> prereleaseIdentifiers;
-  final bool isPrerelease;
-
-  bool get hasNumericPrereleaseSegments => prereleaseSegments.isNotEmpty;
-}
-
-class ComparablePrereleaseIdentifier {
-  const ComparablePrereleaseIdentifier._({
-    required this.value,
-    required this.numericValue,
-    required this.isNumeric,
-  });
-
-  const ComparablePrereleaseIdentifier.numeric(int value)
-      : this._(value: '$value', numericValue: value, isNumeric: true);
-
-  const ComparablePrereleaseIdentifier.alpha(String value)
-      : this._(value: value, numericValue: null, isNumeric: false);
-
-  final String value;
-  final int? numericValue;
-  final bool isNumeric;
-
-  int compareTo(ComparablePrereleaseIdentifier other) {
-    if (isNumeric && other.isNumeric) {
-      return numericValue!.compareTo(other.numericValue!);
-    }
-    if (isNumeric != other.isNumeric) {
-      return isNumeric ? -1 : 1;
-    }
-    return value.compareTo(other.value);
-  }
 }

@@ -65,16 +65,18 @@ class WindowsHttpsUpdateServerPathTests(unittest.TestCase):
 
             self.assertEqual(status, 404)
 
-    def test_api_latest_returns_500_for_invalid_manifest_json(self) -> None:
+    def test_api_latest_returns_raw_manifest_bytes(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             downloads = root / "downloads"
             downloads.mkdir()
-            (downloads / "latest.json").write_text("{invalid", encoding="utf-8")
+            expected = b'{"version":"1.0.1"}\n'
+            (downloads / "latest.json").write_bytes(expected)
 
-            status, _ = self._request(root, "/api/releases/latest")
+            status, body = self._request(root, "/api/releases/latest")
 
-            self.assertEqual(status, 500)
+            self.assertEqual(status, 200)
+            self.assertEqual(body, expected)
 
     def _request(self, root: Path, path: str) -> tuple[int, bytes]:
         server = ThreadingHTTPServer(("127.0.0.1", 0), UpdateFeedHandler)

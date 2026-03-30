@@ -3,6 +3,7 @@
 ## Before tagging
 
 - Confirm the release tag will be `vX.Y.Z`.
+- Confirm code review and manual verification both enforce `vX.Y.Z` as the only supported app update version format.
 - Confirm required release secrets and variables are present.
 - Confirm the Windows release artifact contract remains `SecondLoop-win.msi` and `SecondLoop-win.msi.sha256`.
 
