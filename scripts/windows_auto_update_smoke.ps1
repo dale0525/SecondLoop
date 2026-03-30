@@ -512,6 +512,7 @@ try {
     '--input-dir', $v2Output,
     '--output-dir', $downloadsRoot,
     '--version', $newVersionName,
+    '--windows-app-id', $PackId,
     '--base-download-url', "https://localhost:$Port/downloads",
     '--release-page-url', "https://localhost:$Port/releases/$newVersionName"
   )

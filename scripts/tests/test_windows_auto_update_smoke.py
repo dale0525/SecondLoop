@@ -95,6 +95,7 @@ class WindowsAutoUpdateSmokeTests(unittest.TestCase):
         self.assertIn("Wait-ForRunningInstalledProcess", script)
         self.assertIn("Get-FullPackage", script)
         self.assertIn("tools/windows_https_update_server.py", script)
+        self.assertIn("'--windows-app-id', $PackId", script)
         self.assertNotIn("'--package', $packageFile.FullName", script)
         self.assertNotIn("Start-ObservedProcess -FilePath $updateExe", script)
 
