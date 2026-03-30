@@ -78,6 +78,28 @@ class WindowsHttpsUpdateServerPathTests(unittest.TestCase):
             self.assertEqual(status, 200)
             self.assertEqual(body, expected)
 
+    def test_non_whitelisted_root_path_is_forbidden(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            downloads = root / "downloads"
+            downloads.mkdir()
+            (root / "secret.txt").write_text("secret", encoding="utf-8")
+
+            status, _ = self._request(root, "/secret.txt")
+
+            self.assertEqual(status, 403)
+
+    def test_release_page_route_still_returns_html(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            downloads = root / "downloads"
+            downloads.mkdir()
+
+            status, body = self._request(root, "/releases/v1.0.1")
+
+            self.assertEqual(status, 200)
+            self.assertIn(b"SecondLoop Dev v1.0.1", body)
+
     def _request(self, root: Path, path: str) -> tuple[int, bytes]:
         server = ThreadingHTTPServer(("127.0.0.1", 0), UpdateFeedHandler)
         server.root_dir = str(root)  # type: ignore[attr-defined]

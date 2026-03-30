@@ -19,11 +19,12 @@ def resolve_request_path(
         resolved = (downloads_dir / relative).resolve()
         allowed_root = downloads_dir.resolve()
     elif normalized in {"", "/"}:
+        raise PermissionError(f"Request path is not whitelisted: {request_path}")
+    elif normalized.startswith("/releases/"):
         resolved = root_dir.resolve()
         allowed_root = root_dir.resolve()
     else:
-        resolved = (root_dir / normalized.lstrip("/")).resolve()
-        allowed_root = root_dir.resolve()
+        raise PermissionError(f"Request path is not whitelisted: {request_path}")
 
     try:
         resolved.relative_to(allowed_root)

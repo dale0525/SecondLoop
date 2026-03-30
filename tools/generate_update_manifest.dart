@@ -13,6 +13,9 @@ Future<void> main(List<String> args) async {
         repo: parsed['repo'],
         version: version,
       );
+  final windowsAppId = parsed['windows-app-id'] ??
+      Platform.environment['SECONDLOOP_APP_ID'] ??
+      'com.secondloop.secondloop';
   final signingPrivateKey = parsed['signing-private-key'] ??
       Platform.environment['SECONDLOOP_UPDATE_SIGNING_PRIVATE_KEY'];
   final publishedAt = parsed['published-at'];
@@ -22,6 +25,7 @@ Future<void> main(List<String> args) async {
     version: version,
     baseDownloadUrl: baseDownloadUrl,
     releasePageUrl: releasePageUrl,
+    windowsAppId: windowsAppId,
     publishedAt: publishedAt == null || publishedAt.trim().isEmpty
         ? null
         : DateTime.parse(publishedAt).toUtc(),

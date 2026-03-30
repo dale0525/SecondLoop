@@ -145,6 +145,31 @@ void main() {
 
     expect(verified, isTrue);
   });
+
+  test('generateUpdateManifest records exact windows app id', () async {
+    final tempDir =
+        await Directory.systemTemp.createTemp('update_manifest_appid_');
+    addTearDown(() => tempDir.delete(recursive: true));
+
+    await File('${tempDir.path}/com.secondloop.secondloop-1.2.3-full.nupkg')
+        .writeAsString('stable');
+    await File(
+      '${tempDir.path}/com.secondloop.secondloopdev-1.2.3-devwin-full.nupkg',
+    ).writeAsString('dev');
+    await File('${tempDir.path}/releases.win.json').writeAsString('{}');
+
+    final generated = await generateUpdateManifest(
+      inputDirPath: tempDir.path,
+      version: '1.2.3',
+      baseDownloadUrl: 'https://example.com/downloads/',
+    );
+
+    final platforms = generated.manifest['platforms'] as Map<String, Object?>;
+    final windows = platforms['windows-x64'] as Map<String, Object?>;
+
+    expect(windows['name'], 'com.secondloop.secondloop-1.2.3-full.nupkg');
+    expect(windows['app_id'], 'com.secondloop.secondloop');
+  });
 }
 
 String _hexEncode(List<int> bytes) {

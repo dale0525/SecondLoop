@@ -20,6 +20,7 @@ Future<GeneratedUpdateManifest> generateUpdateManifest({
   required String version,
   required String baseDownloadUrl,
   String? releasePageUrl,
+  String windowsAppId = 'com.secondloop.secondloop',
   DateTime? publishedAt,
   String? signingPrivateKeyBase64,
 }) async {
@@ -39,8 +40,11 @@ Future<GeneratedUpdateManifest> generateUpdateManifest({
       releasePageUrl?.trim().isNotEmpty == true ? releasePageUrl!.trim() : null;
   manifest['pub_date'] =
       (publishedAt ?? DateTime.now().toUtc()).toUtc().toIso8601String();
-  manifest['platforms'] =
-      await _buildPlatforms(inputDir, baseDownloadUrl: normalizedBaseUrl);
+  manifest['platforms'] = await _buildPlatforms(
+    inputDir,
+    baseDownloadUrl: normalizedBaseUrl,
+    windowsAppId: windowsAppId,
+  );
 
   final jsonText = '${const JsonEncoder.withIndent('  ').convert(manifest)}\n';
   final signature = await _signManifest(
@@ -58,6 +62,7 @@ Future<GeneratedUpdateManifest> generateUpdateManifest({
 Future<Map<String, Object?>> _buildPlatforms(
   Directory inputDir, {
   required String baseDownloadUrl,
+  required String windowsAppId,
 }) async {
   final entries = inputDir
       .listSync()
@@ -71,11 +76,12 @@ Future<Map<String, Object?>> _buildPlatforms(
       entries,
       (name) =>
           name.toLowerCase().endsWith('-full.nupkg') &&
-          name.toLowerCase().contains('secondloop'));
+          name.toLowerCase().startsWith('${windowsAppId.toLowerCase()}-'));
   if (windowsPackage != null) {
     final windowsEntry = <String, Object?>{};
     windowsEntry['install_mode'] = 'velopack';
     windowsEntry['name'] = windowsPackage.uri.pathSegments.last;
+    windowsEntry['app_id'] = windowsAppId;
     windowsEntry['package_url'] =
         '$baseDownloadUrl${windowsPackage.uri.pathSegments.last}';
     final releasesFile = _firstFile(
