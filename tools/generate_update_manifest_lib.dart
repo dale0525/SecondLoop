@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:cryptography/cryptography.dart';
+import 'package:secondloop/core/update/app_update_models.dart';
 
 class GeneratedUpdateManifest {
   const GeneratedUpdateManifest({
@@ -72,11 +73,10 @@ Future<Map<String, Object?>> _buildPlatforms(
 
   final platforms = <String, Object?>{};
 
-  final windowsPackage = _firstFile(
-      entries,
-      (name) =>
-          name.toLowerCase().endsWith('-full.nupkg') &&
-          name.toLowerCase().startsWith('${windowsAppId.toLowerCase()}-'));
+  final windowsPackage = _selectNewestWindowsPackage(
+    entries,
+    windowsAppId: windowsAppId,
+  );
   if (windowsPackage != null) {
     final windowsEntry = <String, Object?>{};
     windowsEntry['install_mode'] = 'velopack';
@@ -84,11 +84,9 @@ Future<Map<String, Object?>> _buildPlatforms(
     windowsEntry['app_id'] = windowsAppId;
     windowsEntry['package_url'] =
         '$baseDownloadUrl${windowsPackage.uri.pathSegments.last}';
-    final releasesFile = _firstFile(
+    final releasesFile = _selectMatchingReleasesFile(
       entries,
-      (name) =>
-          name.toLowerCase().startsWith('releases.') &&
-          name.toLowerCase().endsWith('.json'),
+      packageName: windowsPackage.uri.pathSegments.last,
     );
     if (releasesFile != null) {
       windowsEntry['releases_url'] =
@@ -187,6 +185,117 @@ File? _firstFile(List<File> files, bool Function(String name) predicate) {
     }
   }
   return null;
+}
+
+File? _selectNewestWindowsPackage(
+  List<File> files, {
+  required String windowsAppId,
+}) {
+  File? newestFile;
+  List<int>? newestVersion;
+
+  for (final file in files) {
+    final name = file.uri.pathSegments.last;
+    final version = _extractWindowsPackageVersion(
+      name,
+      windowsAppId: windowsAppId,
+    );
+    if (version == null) {
+      continue;
+    }
+    if (newestVersion == null ||
+        _compareStrictVersionSegments(version, newestVersion) > 0) {
+      newestFile = file;
+      newestVersion = version;
+    }
+  }
+
+  return newestFile;
+}
+
+File? _selectMatchingReleasesFile(
+  List<File> files, {
+  required String packageName,
+}) {
+  final packageChannel = _extractWindowsPackageChannel(packageName);
+  if (packageChannel != null) {
+    final expectedName = 'releases.$packageChannel.json'.toLowerCase();
+    final exact = _firstFile(
+      files,
+      (name) => name.toLowerCase() == expectedName,
+    );
+    if (exact != null) {
+      return exact;
+    }
+  }
+
+  return _firstFile(
+    files,
+    (name) =>
+        name.toLowerCase().startsWith('releases.') &&
+        name.toLowerCase().endsWith('.json'),
+  );
+}
+
+List<int>? _extractWindowsPackageVersion(
+  String fileName, {
+  required String windowsAppId,
+}) {
+  final normalizedName = fileName.trim();
+  final normalizedAppId = windowsAppId.trim();
+  if (normalizedName.isEmpty || normalizedAppId.isEmpty) {
+    return null;
+  }
+
+  final prefix = '$normalizedAppId-';
+  if (!normalizedName.toLowerCase().startsWith(prefix.toLowerCase()) ||
+      !normalizedName.toLowerCase().endsWith('-full.nupkg')) {
+    return null;
+  }
+
+  final versionWithOptionalChannel = normalizedName.substring(
+    prefix.length,
+    normalizedName.length - '-full.nupkg'.length,
+  );
+  final directVersion = tryParseStrictAppVersion(versionWithOptionalChannel);
+  if (directVersion != null) {
+    return directVersion;
+  }
+
+  final separatorIndex = versionWithOptionalChannel.indexOf('-');
+  if (separatorIndex <= 0) {
+    return null;
+  }
+
+  final versionPart = versionWithOptionalChannel.substring(0, separatorIndex);
+  return tryParseStrictAppVersion(versionPart);
+}
+
+String? _extractWindowsPackageChannel(String fileName) {
+  final normalizedName = fileName.trim();
+  if (!normalizedName.toLowerCase().endsWith('-full.nupkg')) {
+    return null;
+  }
+
+  final packageStem =
+      normalizedName.substring(0, normalizedName.length - '-full.nupkg'.length);
+  final versionMatch =
+      RegExp(r'-(\d+\.\d+\.\d+)(?:-(.+))?$').firstMatch(packageStem);
+  final channel = versionMatch?.group(2)?.trim();
+  if (channel == null || channel.isEmpty) {
+    return null;
+  }
+  return channel;
+}
+
+int _compareStrictVersionSegments(List<int> left, List<int> right) {
+  for (var index = 0; index < 3; index += 1) {
+    final compared = left[index].compareTo(right[index]);
+    if (compared != 0) {
+      return compared;
+    }
+  }
+  return 0;
 }
 
 String _normalizeVersion(String value) {

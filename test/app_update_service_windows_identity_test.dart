@@ -41,6 +41,10 @@ void main() {
     expect(result.update, isNotNull);
     expect(result.update!.asset?.name,
         'com.secondloop.secondloopdev-1.1.0-full.nupkg');
+    expect(
+      result.update!.installMode,
+      AppUpdateInstallMode.seamlessRestart,
+    );
   });
 
   test('checkForUpdates prefers exact Windows app id asset from manifest',
@@ -75,6 +79,10 @@ void main() {
     expect(result.update, isNotNull);
     expect(result.update!.asset?.name,
         'com.secondloop.secondloopdev-1.1.0-full.nupkg');
+    expect(
+      result.update!.installMode,
+      AppUpdateInstallMode.seamlessRestart,
+    );
   });
 }
 

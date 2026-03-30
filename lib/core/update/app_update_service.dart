@@ -268,6 +268,7 @@ class AppUpdateService {
       isReleaseMode: _isReleaseMode,
       windowsManagedRuntimeAvailable: windowsManagedRuntimeAvailable,
       macosManagedInstallSupported: macosManagedInstallSupported,
+      windowsAppId: effectiveWindowsAppId,
     );
     final matchedAsset = installMode == AppUpdateInstallMode.externalDownload
         ? selectExternalDownloadAsset(
@@ -283,6 +284,7 @@ class AppUpdateService {
       isReleaseMode: _isReleaseMode,
       windowsManagedRuntimeAvailable: windowsManagedRuntimeAvailable,
       macosManagedInstallSupported: macosManagedInstallSupported,
+      windowsAppId: effectiveWindowsAppId,
     );
 
     await _recordEvent(

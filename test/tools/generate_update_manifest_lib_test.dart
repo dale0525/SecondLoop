@@ -170,6 +170,59 @@ void main() {
     expect(windows['name'], 'com.secondloop.secondloop-1.2.3-full.nupkg');
     expect(windows['app_id'], 'com.secondloop.secondloop');
   });
+
+  test('generateUpdateManifest picks newest matching windows package',
+      () async {
+    final tempDir =
+        await Directory.systemTemp.createTemp('update_manifest_latest_pkg_');
+    addTearDown(() => tempDir.delete(recursive: true));
+
+    await File('${tempDir.path}/com.secondloop.secondloop-1.2.2-full.nupkg')
+        .writeAsString('older');
+    await File('${tempDir.path}/com.secondloop.secondloop-1.2.3-full.nupkg')
+        .writeAsString('newer');
+    await File('${tempDir.path}/releases.win.json').writeAsString('{}');
+
+    final generated = await generateUpdateManifest(
+      inputDirPath: tempDir.path,
+      version: '1.2.3',
+      baseDownloadUrl: 'https://example.com/downloads/',
+    );
+
+    final platforms = generated.manifest['platforms'] as Map<String, Object?>;
+    final windows = platforms['windows-x64'] as Map<String, Object?>;
+
+    expect(windows['name'], 'com.secondloop.secondloop-1.2.3-full.nupkg');
+  });
+
+  test(
+      'generateUpdateManifest picks releases metadata for selected package channel',
+      () async {
+    final tempDir = await Directory.systemTemp
+        .createTemp('update_manifest_release_channel_');
+    addTearDown(() => tempDir.delete(recursive: true));
+
+    await File(
+      '${tempDir.path}/com.secondloop.secondloopdev-1.2.3-devwin-full.nupkg',
+    ).writeAsString('dev');
+    await File('${tempDir.path}/releases.win.json').writeAsString('stable');
+    await File('${tempDir.path}/releases.devwin.json').writeAsString('dev');
+
+    final generated = await generateUpdateManifest(
+      inputDirPath: tempDir.path,
+      version: '1.2.3',
+      baseDownloadUrl: 'https://example.com/downloads/',
+      windowsAppId: 'com.secondloop.secondloopdev',
+    );
+
+    final platforms = generated.manifest['platforms'] as Map<String, Object?>;
+    final windows = platforms['windows-x64'] as Map<String, Object?>;
+
+    expect(
+      windows['releases_url'],
+      'https://example.com/downloads/releases.devwin.json',
+    );
+  });
 }
 
 String _hexEncode(List<int> bytes) {

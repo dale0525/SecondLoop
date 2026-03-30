@@ -167,14 +167,18 @@ AppUpdateInstallMode resolveInstallMode(
   required AppUpdateAsset? asset,
   required bool windowsManagedRuntimeAvailable,
   required bool macosManagedInstallSupported,
+  String? windowsAppId,
 }) {
   if (!isReleaseMode || asset == null) {
     return AppUpdateInstallMode.externalDownload;
   }
 
+  final isMatchingWindowsManagedPackage =
+      _isMatchingWindowsManagedPackageName(asset.name, appId: windowsAppId);
+
   if (asset.installModeHint == AppUpdateInstallMode.stagedNextLaunch &&
       platform == AppUpdatePlatform.windows &&
-      isWindowsVelopackPackageName(asset.name) &&
+      isMatchingWindowsManagedPackage &&
       windowsManagedRuntimeAvailable &&
       assetHasIntegrityMetadata(asset)) {
     return AppUpdateInstallMode.stagedNextLaunch;
@@ -182,7 +186,7 @@ AppUpdateInstallMode resolveInstallMode(
 
   return switch (platform) {
     AppUpdatePlatform.windows
-        when isWindowsVelopackPackageName(asset.name) &&
+        when isMatchingWindowsManagedPackage &&
             windowsManagedRuntimeAvailable &&
             assetHasIntegrityMetadata(asset) =>
       AppUpdateInstallMode.seamlessRestart,
@@ -260,6 +264,7 @@ AppUpdateAsset? matchManifestAssetForCurrentPlatform(
         platform,
         readStringLoose(candidateEntry, 'install_mode'),
         assetName: name,
+        windowsAppId: windowsAppId,
       );
       return AppUpdateAsset(
         name: name,
@@ -281,19 +286,23 @@ AppUpdateInstallMode? parseManifestInstallModeHint(
   AppUpdatePlatform platform,
   String? rawInstallMode, {
   required String assetName,
+  String? windowsAppId,
 }) {
   final normalized = rawInstallMode?.trim().toLowerCase();
   if (normalized == null || normalized.isEmpty) {
     return null;
   }
 
+  final isMatchingWindowsManagedPackage =
+      _isMatchingWindowsManagedPackageName(assetName, appId: windowsAppId);
+
   return switch ((platform, normalized)) {
     (AppUpdatePlatform.windows, 'velopack')
-        when isWindowsVelopackPackageName(assetName) =>
+        when isMatchingWindowsManagedPackage =>
       AppUpdateInstallMode.seamlessRestart,
     (AppUpdatePlatform.windows, 'staged-next-launch') ||
     (AppUpdatePlatform.windows, 'staged_next_launch')
-        when isWindowsVelopackPackageName(assetName) =>
+        when isMatchingWindowsManagedPackage =>
       AppUpdateInstallMode.stagedNextLaunch,
     (AppUpdatePlatform.macos, 'app-tar-gz')
         when isMacosManagedArchiveName(assetName) =>
@@ -311,6 +320,7 @@ String describeManualFallbackReason(
   required bool isReleaseMode,
   required bool windowsManagedRuntimeAvailable,
   required bool macosManagedInstallSupported,
+  String? windowsAppId,
 }) {
   if (asset == null) {
     return 'missing_platform_asset';
@@ -318,8 +328,10 @@ String describeManualFallbackReason(
   if (!isReleaseMode) {
     return 'not_release_mode';
   }
+  final isMatchingWindowsManagedPackage =
+      _isMatchingWindowsManagedPackageName(asset.name, appId: windowsAppId);
   if (platform == AppUpdatePlatform.windows &&
-      isWindowsVelopackPackageName(asset.name)) {
+      isMatchingWindowsManagedPackage) {
     if (!windowsManagedRuntimeAvailable) {
       return 'windows_runtime_unavailable';
     }
@@ -344,6 +356,14 @@ String describeManualFallbackReason(
     return 'linux_integrity_missing';
   }
   return 'manual_download_required';
+}
+
+bool _isMatchingWindowsManagedPackageName(String assetName, {String? appId}) {
+  final exactAppId = appId?.trim();
+  if (exactAppId != null && exactAppId.isNotEmpty) {
+    return isWindowsVelopackPackageNameForApp(assetName, appId: exactAppId);
+  }
+  return isWindowsVelopackPackageName(assetName);
 }
 
 String? readUpdateString(Map<String, Object?> map, String key) {
