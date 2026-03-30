@@ -91,6 +91,10 @@ function Build-DartDefines {
     $defines += "--dart-define=SECONDLOOP_RELEASE_REPO=$($env:SECONDLOOP_RELEASE_REPO)"
   }
 
+  if ($env:SECONDLOOP_APP_ID) {
+    $defines += "--dart-define=SECONDLOOP_APP_ID=$($env:SECONDLOOP_APP_ID)"
+  }
+
   if (Test-Path Env:SECONDLOOP_RELEASE_API_ORIGIN) {
     $defines += "--dart-define=SECONDLOOP_RELEASE_API_ORIGIN=$($env:SECONDLOOP_RELEASE_API_ORIGIN)"
   }

@@ -274,6 +274,12 @@ class PixiWindowsTasksTests(unittest.TestCase):
         self.assertIn("CARGOKIT_TOOL_TEMP_DIR", script)
         self.assertIn("run_fvm_tool.ps1", script)
 
+    def test_windows_velopack_script_propagates_app_identity_to_dart_defines(self) -> None:
+        script = WINDOWS_VELOPACK_SCRIPT.read_text(encoding="utf-8")
+
+        self.assertIn("SECONDLOOP_APP_ID", script)
+        self.assertIn("--dart-define=SECONDLOOP_APP_ID=", script)
+
     def test_windows_velopack_script_adds_project_cargo_bin_to_path(self) -> None:
         script = WINDOWS_VELOPACK_SCRIPT.read_text(encoding="utf-8")
 
