@@ -211,17 +211,69 @@ function Ensure-VpkTool([string]$RequiredVersion) {
 }
 
 function Ensure-DotnetRoot {
-  $dotnetCommand = Get-Command dotnet -ErrorAction SilentlyContinue
-  if (-not $dotnetCommand) {
-    throw 'dotnet CLI is required to install and run vpk. Install dotnet-sdk in pixi and run `pixi install`.'
+  $pixiDotnetRoot = Join-Path $repoRootPath '.pixi/envs/default/dotnet'
+  $pixiDotnetExe = Join-Path $pixiDotnetRoot 'dotnet.exe'
+
+  if (Test-Path -LiteralPath $pixiDotnetExe -PathType Leaf) {
+    Set-Item -Path Env:DOTNET_ROOT -Value $pixiDotnetRoot
+  } else {
+    $dotnetCommand = Get-Command dotnet -ErrorAction SilentlyContinue
+    if (-not $dotnetCommand) {
+      throw 'dotnet CLI is required to install and run vpk. Install dotnet-sdk in pixi and run `pixi install`.'
+    }
+
+    if ([string]::IsNullOrWhiteSpace($env:DOTNET_ROOT)) {
+      $dotnetRoot = Split-Path -Path $dotnetCommand.Source -Parent
+      Set-Item -Path Env:DOTNET_ROOT -Value $dotnetRoot
+    }
   }
 
-  if ([string]::IsNullOrWhiteSpace($env:DOTNET_ROOT)) {
-    $dotnetRoot = Split-Path -Path $dotnetCommand.Source -Parent
-    Set-Item -Path Env:DOTNET_ROOT -Value $dotnetRoot
-  }
+  $dotnetTools = Join-Path $env:DOTNET_ROOT 'tools'
+  Set-Item -Path Env:DOTNET_TOOLS -Value $dotnetTools
+  Set-Item -Path Env:DOTNET_CLI_TELEMETRY_OPTOUT -Value 'true'
+  Set-Item -Path Env:DOTNET_SKIP_FIRST_TIME_EXPERIENCE -Value 'true'
+  Set-Item -Path Env:DOTNET_ADD_GLOBAL_TOOLS_TO_PATH -Value 'false'
+  Set-Item -Path Env:DOTNET_MULTILEVEL_LOOKUP -Value '0'
+  Set-Item -Path Env:DOTNET_NOLOGO -Value '1'
 
   Add-ToPathIfMissing -Directory $env:DOTNET_ROOT
+  Add-ToPathIfMissing -Directory $env:DOTNET_TOOLS
+}
+
+function Resolve-RustToolchainBinDirectory {
+  $candidates = @(
+    (Join-Path $repoRootPath '.pixi/envs/default/Library/bin'),
+    (Join-Path $repoRootPath '.pixi/envs/default/bin'),
+    (Join-Path (Join-Path (Join-Path $repoRootPath '.tool') 'cargo') 'bin')
+  )
+
+  if (-not [string]::IsNullOrWhiteSpace($env:USERPROFILE)) {
+    $candidates += (Join-Path (Join-Path $env:USERPROFILE '.cargo') 'bin')
+  }
+
+  foreach ($candidate in $candidates) {
+    if (-not (Test-Path -LiteralPath $candidate -PathType Container)) {
+      continue
+    }
+
+    $cargoPath = Join-Path $candidate 'cargo.exe'
+    $rustupPath = Join-Path $candidate 'rustup.exe'
+    if ((Test-Path -LiteralPath $cargoPath -PathType Leaf) -or
+        (Test-Path -LiteralPath $rustupPath -PathType Leaf)) {
+      return $candidate
+    }
+  }
+
+  return $null
+}
+
+function Ensure-RustToolchainPath {
+  $rustBinDirectory = Resolve-RustToolchainBinDirectory
+  if ([string]::IsNullOrWhiteSpace($rustBinDirectory)) {
+    throw 'Rust toolchain is required for Windows desktop builds. Install it in the project environment with `pixi install`.'
+  }
+
+  Add-ToPathIfMissing -Directory $rustBinDirectory
 }
 
 function Ensure-WindowsBuildEnvironment {
@@ -233,6 +285,7 @@ function Ensure-WindowsBuildEnvironment {
   Set-Item -Path Env:FLUTTER_ROOT -Value $flutterRoot
   Add-ToPathIfMissing -Directory (Join-Path $flutterRoot 'bin')
   Ensure-DotnetRoot
+  Ensure-RustToolchainPath
 
   foreach ($variableName in @(
     'PROJECT_DIR',

@@ -100,6 +100,21 @@ void main() {
     );
   }
 
+  testWidgets(
+      'starts auto upgrade work without waiting for a post-frame callback',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final service = _FakeAutoUpdateService(
+      result: const AppUpdateCheckResult(currentVersion: '1.0.0+1'),
+    );
+
+    await pumpGate(tester, service: service);
+    await tester.pump(const Duration(milliseconds: 10));
+
+    expect(service.applyPendingCalls, 1);
+    expect(service.checkCalls, 1);
+  });
+
   testWidgets('linux seamless update stays passive until user confirms',
       (tester) async {
     SharedPreferences.setMockInitialValues({});

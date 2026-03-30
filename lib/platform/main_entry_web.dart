@@ -3,6 +3,7 @@ import 'package:flutter/widgets.dart';
 import '../core/backend/app_backend.dart';
 import '../core/desktop/desktop_launch_args.dart';
 import '../core/quick_capture/quick_capture_controller.dart';
+import '../core/update/app_update_service.dart';
 import '../web_app/secondloop_web_app.dart';
 
 Future<void> runPlatformApp(List<String> args) async {
@@ -39,11 +40,13 @@ class MyApp extends StatelessWidget {
     super.key,
     this.backend,
     this.quickCaptureController,
+    this.updateService,
     this.launchArgs = const DesktopLaunchArgs(),
   });
 
   final AppBackend? backend;
   final QuickCaptureController? quickCaptureController;
+  final AppUpdateService? updateService;
   final DesktopLaunchArgs launchArgs;
 
   @override

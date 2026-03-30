@@ -274,6 +274,20 @@ class PixiWindowsTasksTests(unittest.TestCase):
         self.assertIn("CARGOKIT_TOOL_TEMP_DIR", script)
         self.assertIn("run_fvm_tool.ps1", script)
 
+    def test_windows_velopack_script_adds_project_cargo_bin_to_path(self) -> None:
+        script = WINDOWS_VELOPACK_SCRIPT.read_text(encoding="utf-8")
+
+        self.assertIn(".pixi/envs/default/Library/bin", script)
+        self.assertIn("cargo.exe", script)
+        self.assertIn("rustup.exe", script)
+
+    def test_windows_velopack_script_prefers_project_dotnet_sdk(self) -> None:
+        script = WINDOWS_VELOPACK_SCRIPT.read_text(encoding="utf-8")
+
+        self.assertIn(".pixi/envs/default/dotnet", script)
+        self.assertIn("dotnet.exe", script)
+        self.assertIn("DOTNET_MULTILEVEL_LOOKUP", script)
+
     def test_windows_setup_flutter_script_exports_flutter_root_and_checks_environment(self) -> None:
         script = WINDOWS_SETUP_FLUTTER_SCRIPT.read_text(encoding="utf-8")
 

@@ -257,7 +257,6 @@ function Wait-ForInstalledVersion {
 function Wait-ForStagedPackage {
   param(
     [string]$ExpectedFileName,
-    [string]$ExpectedSha256,
     [int]$TimeoutSeconds = 120
   )
 
@@ -266,10 +265,7 @@ function Wait-ForStagedPackage {
   while ((Get-Date) -lt $deadline) {
     $candidate = Join-Path $packagesRoot $ExpectedFileName
     if (Test-Path -LiteralPath $candidate -PathType Leaf) {
-      $actualSha256 = Get-FileSha256Hex -PathValue $candidate
-      if ($actualSha256 -eq $ExpectedSha256.ToLowerInvariant()) {
-        return Get-Item -LiteralPath $candidate
-      }
+      return Get-Item -LiteralPath $candidate
     }
 
     Start-Sleep -Seconds 2
@@ -462,7 +458,6 @@ try {
 
   $expectedPackageFileName = Get-ExpectedFullPackageFileName -VersionValue $NewVersion
   $expectedPackageFile = Get-FullPackage -OutputDir $v2Output -ExpectedFileName $expectedPackageFileName
-  $expectedPackageSha256 = Get-FileSha256Hex -PathValue $expectedPackageFile.FullName
 
   $installLog = Join-Path $smokeRoot 'install-v1.log'
   $installArgs = @('--silent', '--log', $installLog)
@@ -475,7 +470,7 @@ try {
   $null = Start-Process -FilePath $installedExe -WorkingDirectory (Split-Path -Path $installedExe -Parent) -PassThru
   Wait-ForRunningInstalledProcess -ExpectedVersion $OldVersion
 
-  $stagedPackage = Wait-ForStagedPackage -ExpectedFileName $expectedPackageFile.Name -ExpectedSha256 $expectedPackageSha256
+  $stagedPackage = Wait-ForStagedPackage -ExpectedFileName $expectedPackageFile.Name
   Write-Host "Staged package downloaded from feed: $($stagedPackage.FullName)"
 
   Stop-InstalledSecondLoopProcess

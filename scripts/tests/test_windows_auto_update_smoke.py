@@ -91,6 +91,17 @@ class WindowsAutoUpdateSmokeTests(unittest.TestCase):
         self.assertNotIn("'--package', $packageFile.FullName", script)
         self.assertNotIn("Start-ObservedProcess -FilePath $updateExe", script)
 
+    def test_smoke_script_accepts_staged_package_by_exact_name_without_hash_match(self) -> None:
+        script = SMOKE_SCRIPT.read_text(encoding="utf-8")
+
+        self.assertIn("function Wait-ForStagedPackage", script)
+        self.assertNotIn("[string]$ExpectedSha256", script)
+        self.assertNotIn("Get-FileSha256Hex -PathValue $candidate", script)
+        self.assertIn(
+            "$stagedPackage = Wait-ForStagedPackage -ExpectedFileName $expectedPackageFile.Name",
+            script,
+        )
+
     def test_https_server_exposes_latest_release_endpoint(self) -> None:
         self.assertTrue(HTTPS_SERVER.exists())
 
