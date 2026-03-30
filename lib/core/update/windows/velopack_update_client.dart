@@ -102,6 +102,8 @@ VelopackProcessProbeStatus interpretWindowsProcessQueryResult({
 }
 
 abstract class WindowsStagedUpdateClient {
+  String get appId;
+
   bool isAvailable();
 
   bool hasPendingUpdate();
@@ -167,6 +169,9 @@ class VelopackUpdateClient implements WindowsStagedUpdateClient {
     }
     return _defaultWindowsVelopackAppId;
   }
+
+  @override
+  String get appId => _resolvedAppId;
 
   @override
   bool isAvailable() {
@@ -810,6 +815,10 @@ class VelopackUpdateClient implements WindowsStagedUpdateClient {
       if (parseComparableAppVersion(strippedVersion) != null) {
         return strippedVersion;
       }
+    }
+
+    if (knownChannels.isNotEmpty && versionWithOptionalChannel.contains('-')) {
+      return null;
     }
 
     if (parseComparableAppVersion(versionWithOptionalChannel) != null) {

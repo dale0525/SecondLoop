@@ -59,7 +59,24 @@ temp_generated_i18n_strings_path=""
 
       [[ -f "${pubspec_path}" ]] || return 0
 
-      sed -n -E 's/^[[:space:]]+path:[[:space:]]*["'"'"'" ]*([^"'"'"'"#]+)["'"'"'" ]*$/\1/p' "${pubspec_path}"
+      awk '
+        /^[[:space:]]*(dependencies|dev_dependencies|dependency_overrides):[[:space:]]*$/ {
+          in_section=1
+          next
+        }
+        /^[^[:space:]]/ {
+          in_section=0
+        }
+        in_section && /^[[:space:]]+path:[[:space:]]*/ {
+          line=$0
+          sub(/^[[:space:]]+path:[[:space:]]*/, "", line)
+          sub(/[[:space:]]+#.*$/, "", line)
+          gsub(/^["'"'"'" ]+|["'"'"'" ]+$/, "", line)
+          if (length(line) > 0) {
+            print line
+          }
+        }
+      ' "${pubspec_path}"
     }
 
     append_pending_pubspec() {
@@ -144,7 +161,7 @@ temp_generated_i18n_strings_path=""
       cd "${i18n_temp_repo}"
       export SECONDLOOP_I18N_DART_BIN="${dart_bin}"
       export SECONDLOOP_I18N_FLUTTER_BIN="${flutter_bin}"
-      bash scripts/run_i18n_refresh.sh >/dev/null
+      bash scripts/run_i18n_refresh.sh >/dev/null 2>&1
     )
 
     i18n_temp_repo_prepared=1

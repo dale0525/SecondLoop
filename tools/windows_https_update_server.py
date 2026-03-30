@@ -51,6 +51,10 @@ class UpdateFeedHandler(SimpleHTTPRequestHandler):
     def latest_json_path(self) -> Path:
         return self.downloads_dir / "latest.json"
 
+    @property
+    def api_latest_signature_path(self) -> Path:
+        return self.downloads_dir / "latest.json.sig"
+
     def translate_path(self, path: str) -> str:
         try:
             return str(
@@ -70,6 +74,15 @@ class UpdateFeedHandler(SimpleHTTPRequestHandler):
             body = json.dumps(payload, indent=2).encode("utf-8")
             self.send_response(HTTPStatus.OK)
             self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+
+        if normalized == "/api/releases/latest.sig":
+            body = self.api_latest_signature_path.read_bytes()
+            self.send_response(HTTPStatus.OK)
+            self.send_header("Content-Type", "text/plain; charset=utf-8")
             self.send_header("Content-Length", str(len(body)))
             self.end_headers()
             self.wfile.write(body)

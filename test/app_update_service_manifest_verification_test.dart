@@ -124,6 +124,56 @@ void main() {
       contains('/dale0525/SecondLoop/releases/latest/download/latest.json.sig'),
     );
   });
+
+  test('verifies signatures for custom api latest endpoint', () async {
+    final requestedUris = <Uri>[];
+    final service = AppUpdateService(
+      httpClient: _FakeHttpClient(
+        handler: (uri) {
+          requestedUris.add(uri);
+          if (uri.path.endsWith('/api/releases/latest')) {
+            return _FakeHttpResponse(
+              statusCode: 200,
+              body: jsonEncode({
+                'version': '1.1.0',
+                'release_page_url':
+                    'https://updates.example.com/releases/v1.1.0',
+                'platforms': {
+                  'linux-x64': {
+                    'install_mode': 'bundle-tar-gz',
+                    'archive_url':
+                        'https://cdn.example.com/SecondLoop-linux-x64-v1.1.0.tar.gz',
+                    'sha256': 'abc123',
+                  },
+                },
+              }),
+            );
+          }
+          if (uri.path.endsWith('/api/releases/latest.sig')) {
+            return _FakeHttpResponse(
+                statusCode: 200, body: base64Encode(List.filled(64, 1)));
+          }
+          throw StateError('unexpected_uri:$uri');
+        },
+      ),
+      platformOverride: AppUpdatePlatform.linux,
+      releaseModeOverride: true,
+      releaseApiOriginOverride: 'https://updates.example.com/custom/base',
+      releaseRepoOverride: '',
+      updatePublicKeyOverride:
+          base64Encode(List<int>.generate(32, (i) => i + 1)),
+      currentVersionLoader: () async =>
+          const AppRuntimeVersion(version: '1.0.0', buildNumber: '1'),
+    );
+
+    final result = await service.checkForUpdates();
+
+    expect(result.update, isNull);
+    expect(result.errorMessage, contains('invalid_update_manifest_signature'));
+    final requestedPaths = requestedUris.map((uri) => uri.path).toList();
+    expect(requestedPaths, contains('/custom/base/api/releases/latest'));
+    expect(requestedPaths, contains('/custom/base/api/releases/latest.sig'));
+  });
 }
 
 final class _FakeHttpResponse {

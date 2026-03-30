@@ -82,6 +82,16 @@ class VerificationScriptsTests(unittest.TestCase):
         self.assertIn('"${i18n_temp_repo}/${normalized_path}/pubspec.yaml"', check_mode)
         self.assertIn('path:', (REPO_ROOT / "pubspec.yaml").read_text(encoding="utf-8"))
 
+    def test_check_mode_temp_i18n_copy_includes_dependency_overrides_path_dependencies(self) -> None:
+        check_mode = (REPO_ROOT / "scripts/pre_commit_check_mode.sh").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn("extract_local_path_dependencies_from_pubspec", check_mode)
+        self.assertIn("dependency_overrides", (REPO_ROOT / "pubspec.yaml").read_text(encoding="utf-8"))
+        self.assertIn("third_party/flutter_local_notifications_windows_patched", (REPO_ROOT / "pubspec.yaml").read_text(encoding="utf-8"))
+        self.assertIn("third_party/just_audio_windows_patched", (REPO_ROOT / "pubspec.yaml").read_text(encoding="utf-8"))
+
     def test_verify_changed_uses_non_mutating_check_mode(self) -> None:
         verify_changed = (REPO_ROOT / "scripts/verify_changed.sh").read_text(
             encoding="utf-8"

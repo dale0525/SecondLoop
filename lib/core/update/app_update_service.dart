@@ -111,6 +111,15 @@ class AppUpdateService {
   String get _currentArchitecture => normalizeArchitectureLabel(
         _currentArchitectureOverride ?? currentArchitectureForUpdates(),
       );
+  String? get _windowsAppId {
+    final stagedClient = _resolvedWindowsStagedUpdateClient;
+    if (stagedClient == null) {
+      return null;
+    }
+    final value = stagedClient.appId.trim();
+    return value.isEmpty ? null : value;
+  }
+
   void _exitProcess(int code) => (_processExit ?? exit)(code);
 
   late final WindowsStagedUpdateClient? _resolvedWindowsStagedUpdateClient =
@@ -241,6 +250,7 @@ class AppUpdateService {
       currentArchitecture: _currentArchitecture,
       allowHttp: _allowHttpUpdateUris,
       allowFile: _allowFileUpdateUris,
+      windowsAppId: _windowsAppId,
     );
     final assets = _parseAssets(release['assets']);
     final preferredAsset = manifestAsset ??
@@ -249,6 +259,7 @@ class AppUpdateService {
           assets,
           windowsManagedRuntimeAvailable: windowsManagedRuntimeAvailable,
           currentArchitecture: _currentArchitecture,
+          windowsAppId: _windowsAppId,
         );
     final installMode = resolveInstallMode(
       _platform,
@@ -556,9 +567,14 @@ class AppUpdateService {
     final supportedInstallMode =
         update.installMode == AppUpdateInstallMode.seamlessRestart ||
             update.installMode == AppUpdateInstallMode.stagedNextLaunch;
-    return isWindowsVelopackPackageName(update.asset?.name ?? '') &&
+    final asset = update.asset;
+    final appId = _windowsAppId;
+    final isMatchingWindowsPackage = asset != null &&
+        ((appId != null && appId.isNotEmpty)
+            ? isWindowsVelopackPackageNameForApp(asset.name, appId: appId)
+            : isWindowsVelopackPackageName(asset.name));
+    return isMatchingWindowsPackage &&
         supportedInstallMode &&
-        update.asset != null &&
         stagedClient != null &&
         stagedClient.isAvailable();
   }
@@ -850,7 +866,9 @@ class AppUpdateService {
   }
 
   bool _isSignedManifestUri(Uri uri) {
-    return uri.path.toLowerCase().endsWith('latest.json');
+    final normalizedPath = uri.path.toLowerCase();
+    return normalizedPath.endsWith('latest.json') ||
+        normalizedPath.endsWith('/api/releases/latest');
   }
 
   Future<void> _recordEvent(

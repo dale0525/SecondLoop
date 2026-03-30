@@ -4,7 +4,7 @@ from pathlib import Path
 import tempfile
 import unittest
 
-from tools.windows_https_update_server import resolve_request_path
+from tools.windows_https_update_server import UpdateFeedHandler, resolve_request_path
 
 
 class WindowsHttpsUpdateServerPathTests(unittest.TestCase):
@@ -47,6 +47,9 @@ class WindowsHttpsUpdateServerPathTests(unittest.TestCase):
                     downloads_dir=downloads,
                     request_path="/../secret.txt",
                 )
+
+    def test_handler_exposes_api_latest_signature_path(self) -> None:
+        self.assertTrue(hasattr(UpdateFeedHandler, "api_latest_signature_path"))
 
 
 if __name__ == "__main__":

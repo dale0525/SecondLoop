@@ -36,6 +36,7 @@ class ThrowingUpdateEventLogger implements UpdateEventLogger {
 class FakeWindowsStagedUpdateClient implements WindowsStagedUpdateClient {
   FakeWindowsStagedUpdateClient({
     required this.available,
+    this.appIdValue = 'com.secondloop.secondloop',
     this.pendingUpdateAvailable = false,
     this.pendingUpdateVersionValue,
     this.pendingUpdatePackagePathValue,
@@ -46,6 +47,7 @@ class FakeWindowsStagedUpdateClient implements WindowsStagedUpdateClient {
   });
 
   final bool available;
+  final String appIdValue;
   final bool pendingUpdateAvailable;
   final String? pendingUpdateVersionValue;
   final String? pendingUpdatePackagePathValue;
@@ -59,6 +61,9 @@ class FakeWindowsStagedUpdateClient implements WindowsStagedUpdateClient {
   int installCalls = 0;
   int isAvailableCalls = 0;
   int? lastStartupWaitPid;
+
+  @override
+  String get appId => appIdValue;
 
   @override
   bool isAvailable() {

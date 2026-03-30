@@ -277,7 +277,8 @@ class PixiWindowsTasksTests(unittest.TestCase):
     def test_windows_velopack_script_propagates_app_identity_to_dart_defines(self) -> None:
         script = WINDOWS_VELOPACK_SCRIPT.read_text(encoding="utf-8")
 
-        self.assertIn("SECONDLOOP_APP_ID", script)
+        self.assertIn("if ($PackId)", script)
+        self.assertIn('Set-Item -Path Env:SECONDLOOP_APP_ID -Value $PackId', script)
         self.assertIn("--dart-define=SECONDLOOP_APP_ID=", script)
 
     def test_windows_velopack_script_adds_project_cargo_bin_to_path(self) -> None:

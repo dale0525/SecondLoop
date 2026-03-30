@@ -216,6 +216,18 @@ void main() {
     );
   });
 
+  test(
+      'ignores package with unknown channel suffix when installed channels are known',
+      () {
+    expect(
+      _pendingVersionForPackageName(
+        'com.secondloop.secondloop-1.3.0-nightly-full.nupkg',
+        channels: const ['win'],
+      ),
+      isNull,
+    );
+  });
+
   test('prefers newer channel-suffixed pending package over installed version',
       () async {
     final root =

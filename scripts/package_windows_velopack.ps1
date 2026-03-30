@@ -312,6 +312,9 @@ Invoke-InWindowsShortWorkspace -RepoRootPath $script:repoRootPath -ScriptBlock {
   $repoRootPath = $script:repoRootPath
   Set-Location $repoRootPath
   Import-DotEnvLocal
+  if ($PackId) {
+    Set-Item -Path Env:SECONDLOOP_APP_ID -Value $PackId
+  }
   Ensure-WindowsBuildEnvironment
 
   $runFvmToolScript = Join-Path $PSScriptRoot 'run_fvm_tool.ps1'

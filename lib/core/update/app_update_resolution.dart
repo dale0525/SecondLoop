@@ -7,12 +7,14 @@ AppUpdateAsset? matchAssetForCurrentPlatform(
   List<AppUpdateAsset> assets, {
   required bool windowsManagedRuntimeAvailable,
   String? currentArchitecture,
+  String? windowsAppId,
 }) {
   if (platform == AppUpdatePlatform.windows) {
     return _matchWindowsAssetForCurrentRuntime(
       assets,
       managedRuntimeAvailable: windowsManagedRuntimeAvailable,
       currentArchitecture: currentArchitecture,
+      appId: windowsAppId,
     );
   }
 
@@ -203,6 +205,7 @@ AppUpdateAsset? matchManifestAssetForCurrentPlatform(
   required String currentArchitecture,
   bool allowHttp = false,
   bool allowFile = false,
+  String? windowsAppId,
 }) {
   final platforms = release['platforms'];
   if (platforms is! Map) {
@@ -236,6 +239,19 @@ AppUpdateAsset? matchManifestAssetForCurrentPlatform(
 
     final name = readStringLoose(rawEntry, 'name') ??
         (parsedUrl.pathSegments.isEmpty ? key : parsedUrl.pathSegments.last);
+    final manifestAppId = readStringLoose(rawEntry, 'app_id');
+    if (platform == AppUpdatePlatform.windows) {
+      final expectedAppId = windowsAppId?.trim();
+      if (expectedAppId != null && expectedAppId.isNotEmpty) {
+        final exactAppIdMatch = manifestAppId != null &&
+            manifestAppId.trim().toLowerCase() == expectedAppId.toLowerCase();
+        final exactNameMatch =
+            isWindowsVelopackPackageNameForApp(name, appId: expectedAppId);
+        if (!exactAppIdMatch && !exactNameMatch) {
+          continue;
+        }
+      }
+    }
     final sha256 = readStringLoose(rawEntry, 'sha256');
     final installModeHint = parseManifestInstallModeHint(
       platform,
@@ -375,6 +391,7 @@ AppUpdateAsset? _matchWindowsAssetForCurrentRuntime(
   List<AppUpdateAsset> assets, {
   required bool managedRuntimeAvailable,
   String? currentArchitecture,
+  String? appId,
 }) {
   List<AppUpdateAsset> findAll(bool Function(String name) matcher) {
     final matches = <AppUpdateAsset>[];
@@ -387,9 +404,15 @@ AppUpdateAsset? _matchWindowsAssetForCurrentRuntime(
   }
 
   if (managedRuntimeAvailable) {
+    final exactAppId = appId?.trim();
     final stagedPackage = _selectBestAssetForArchitecture(
       AppUpdatePlatform.windows,
-      findAll(isWindowsVelopackPackageName),
+      exactAppId == null || exactAppId.isEmpty
+          ? findAll(isWindowsVelopackPackageName)
+          : findAll(
+              (name) =>
+                  isWindowsVelopackPackageNameForApp(name, appId: exactAppId),
+            ),
       currentArchitecture: currentArchitecture,
     );
     if (stagedPackage != null) {
