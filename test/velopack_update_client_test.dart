@@ -205,6 +205,18 @@ void main() {
     );
   });
 
+  test(
+      'extracts prerelease version without channel suffix even when channels are installed',
+      () {
+    expect(
+      _pendingVersionForPackageName(
+        'com.secondloop.secondloop-1.2.3-beta.1-full.nupkg',
+        channels: const ['win'],
+      ),
+      '1.2.3-beta.1',
+    );
+  });
+
   test('extracts pending version from arbitrary channel discovered at runtime',
       () {
     expect(

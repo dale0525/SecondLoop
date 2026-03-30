@@ -240,6 +240,8 @@ class AppUpdateService {
     final windowsStagedClient = _resolvedWindowsStagedUpdateClient;
     final windowsManagedRuntimeAvailable =
         windowsStagedClient != null && windowsStagedClient.isAvailable();
+    final effectiveWindowsAppId =
+        windowsManagedRuntimeAvailable ? _windowsAppId : null;
     final macosManagedClient = _resolvedMacosManagedUpdateClient;
     final macosManagedInstallSupported = macosManagedClient != null &&
         macosManagedClient.isSupportedInstallLocation();
@@ -250,7 +252,7 @@ class AppUpdateService {
       currentArchitecture: _currentArchitecture,
       allowHttp: _allowHttpUpdateUris,
       allowFile: _allowFileUpdateUris,
-      windowsAppId: _windowsAppId,
+      windowsAppId: effectiveWindowsAppId,
     );
     final assets = _parseAssets(release['assets']);
     final preferredAsset = manifestAsset ??
@@ -259,7 +261,7 @@ class AppUpdateService {
           assets,
           windowsManagedRuntimeAvailable: windowsManagedRuntimeAvailable,
           currentArchitecture: _currentArchitecture,
-          windowsAppId: _windowsAppId,
+          windowsAppId: effectiveWindowsAppId,
         );
     final installMode = resolveInstallMode(
       _platform,

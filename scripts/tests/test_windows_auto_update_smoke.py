@@ -117,6 +117,15 @@ class WindowsAutoUpdateSmokeTests(unittest.TestCase):
         self.assertIn("Remove-Item Env:SECONDLOOP_UPDATE_PUBLIC_KEY -ErrorAction SilentlyContinue", script)
         self.assertIn("Set-Item -Path Env:SECONDLOOP_UPDATE_PUBLIC_KEY -Value $originalUpdatePublicKey", script)
 
+    def test_smoke_script_only_cleans_up_certificate_when_it_imported_it(self) -> None:
+        script = SMOKE_SCRIPT.read_text(encoding="utf-8")
+
+        self.assertIn("function Test-CertificateTrustedInCurrentUserRoot", script)
+        self.assertIn("$certificateTrustAddedByScript = $false", script)
+        self.assertIn("$wasCertificateTrustedBefore = Test-CertificateTrustedInCurrentUserRoot", script)
+        self.assertIn("$certificateTrustAddedByScript = -not $wasCertificateTrustedBefore", script)
+        self.assertIn("if ($certificateTrustAddedByScript) {", script)
+
     def test_smoke_script_fails_fast_when_https_server_exits_early(self) -> None:
         script = SMOKE_SCRIPT.read_text(encoding="utf-8")
 

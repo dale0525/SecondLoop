@@ -330,6 +330,27 @@ function Get-RunningInstalledProcesses {
   )
 }
 
+function Get-CertificateThumbprint {
+  param([string]$PemPath)
+
+  $cert = New-Object System.Security.Cryptography.X509Certificates.X509Certificate2($PemPath)
+  return $cert.Thumbprint
+}
+
+function Test-CertificateTrustedInCurrentUserRoot {
+  param([string]$Thumbprint)
+
+  if ([string]::IsNullOrWhiteSpace($Thumbprint)) {
+    return $false
+  }
+
+  return $null -ne (
+    Get-ChildItem Cert:\CurrentUser\Root -ErrorAction SilentlyContinue |
+      Where-Object { $_.Thumbprint -eq $Thumbprint } |
+      Select-Object -First 1
+  )
+}
+
 function Ensure-LocalhostCertificateTrusted {
   param([string]$PemPath)
 
@@ -338,25 +359,23 @@ function Ensure-LocalhostCertificateTrusted {
     return
   }
 
+  $thumbprint = Get-CertificateThumbprint -PemPath $PemPath
+  if (Test-CertificateTrustedInCurrentUserRoot -Thumbprint $thumbprint) {
+    Write-Host "Localhost certificate already trusted for current user: $thumbprint"
+    return $thumbprint
+  }
+
   Write-Host "Trusting localhost certificate for current user: $PemPath"
   & certutil -user -addstore Root $PemPath | Out-Null
   if ($LASTEXITCODE -ne 0) {
     throw "Failed to trust localhost certificate: $PemPath"
   }
 
-  $importedThumbprint = Get-CertificateThumbprint -PemPath $PemPath
-  if (-not [string]::IsNullOrWhiteSpace($importedThumbprint)) {
-    return $importedThumbprint
+  if (-not [string]::IsNullOrWhiteSpace($thumbprint)) {
+    return $thumbprint
   }
 
   return $null
-}
-
-function Get-CertificateThumbprint {
-  param([string]$PemPath)
-
-  $cert = New-Object System.Security.Cryptography.X509Certificates.X509Certificate2($PemPath)
-  return $cert.Thumbprint
 }
 
 function Remove-TrustedCertificateByThumbprint {
@@ -443,8 +462,10 @@ if (-not (Test-Path -LiteralPath $certificateKey -PathType Leaf)) {
 
 $feedProcess = $null
 $trustedCertificateThumbprint = $null
+$certificateTrustAddedByScript = $false
 $originalUpdatePublicKey = $null
 $hadOriginalUpdatePublicKey = Test-Path Env:SECONDLOOP_UPDATE_PUBLIC_KEY
+$wasCertificateTrustedBefore = $false
 
 try {
   New-Item -ItemType Directory -Force -Path $smokeRoot | Out-Null
@@ -496,7 +517,9 @@ try {
   )
   Invoke-CheckedProcess -FilePath 'powershell.exe' -ArgumentList $manifestArgs -FailureMessage 'Failed to generate latest.json for smoke feed.'
 
+  $wasCertificateTrustedBefore = Test-CertificateTrustedInCurrentUserRoot -Thumbprint (Get-CertificateThumbprint -PemPath $certificatePem)
   $trustedCertificateThumbprint = Ensure-LocalhostCertificateTrusted -PemPath $certificatePem
+  $certificateTrustAddedByScript = -not $wasCertificateTrustedBefore
   $feedProcess = Start-UpdateFeedServer -ServerRoot $serverRoot -CertificatePath $certificatePem -KeyPath $certificateKey -ListenPort $Port -SmokeRoot $smokeRoot
 
   $latestManifest = Wait-ForLatestEndpoint -ListenPort $Port
@@ -548,6 +571,8 @@ try {
   }
 
   if ($null -ne $trustedCertificateThumbprint -and -not $SkipCertificateTrust) {
-    Remove-TrustedCertificateByThumbprint -Thumbprint $trustedCertificateThumbprint
+    if ($certificateTrustAddedByScript) {
+      Remove-TrustedCertificateByThumbprint -Thumbprint $trustedCertificateThumbprint
+    }
   }
 }

@@ -817,16 +817,63 @@ class VelopackUpdateClient implements WindowsStagedUpdateClient {
       }
     }
 
+    if (parseComparableAppVersion(versionWithOptionalChannel) != null &&
+        !_looksLikeUnknownChannelSuffix(
+          versionWithOptionalChannel,
+          knownChannels: knownChannels,
+        )) {
+      return versionWithOptionalChannel;
+    }
+
     if (knownChannels.isNotEmpty && versionWithOptionalChannel.contains('-')) {
       return null;
     }
 
-    if (parseComparableAppVersion(versionWithOptionalChannel) != null) {
-      return versionWithOptionalChannel;
-    }
-
     return null;
   }
+
+  static bool _looksLikeUnknownChannelSuffix(
+    String versionWithOptionalChannel, {
+    required Iterable<String> knownChannels,
+  }) {
+    final hyphenIndex = versionWithOptionalChannel.indexOf('-');
+    if (hyphenIndex <= 0 ||
+        hyphenIndex >= versionWithOptionalChannel.length - 1) {
+      return false;
+    }
+
+    final suffix = versionWithOptionalChannel.substring(hyphenIndex + 1).trim();
+    if (suffix.isEmpty) {
+      return false;
+    }
+
+    final normalizedSuffix = suffix.toLowerCase();
+    if (knownChannels.any(
+      (channel) => channel.trim().toLowerCase() == normalizedSuffix,
+    )) {
+      return true;
+    }
+
+    if (_knownPrereleaseIdentifiers.contains(normalizedSuffix)) {
+      return false;
+    }
+
+    if (suffix.contains('.')) {
+      return false;
+    }
+
+    return RegExp(r'^[a-z][a-z0-9-]*$', caseSensitive: false)
+        .hasMatch(normalizedSuffix);
+  }
+
+  static const Set<String> _knownPrereleaseIdentifiers = <String>{
+    'alpha',
+    'beta',
+    'rc',
+    'pre',
+    'preview',
+    'dev',
+  };
 
   static List<String> _detectInstalledChannels(String appRootPath) {
     final appRoot = Directory(appRootPath);

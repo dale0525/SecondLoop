@@ -863,6 +863,54 @@ void main() {
       );
     });
 
+    test(
+        'falls back to MSI when Windows runtime is unavailable even with exact app id manifest package',
+        () async {
+      final stagedClient = FakeWindowsStagedUpdateClient(
+        available: false,
+        appIdValue: 'com.secondloop.secondloopdev',
+      );
+      final service = AppUpdateService(
+        platformOverride: AppUpdatePlatform.windows,
+        releaseModeOverride: true,
+        windowsStagedUpdateClient: stagedClient,
+        currentVersionLoader: () async =>
+            const AppRuntimeVersion(version: '1.0.0', buildNumber: '9'),
+        releaseJsonFetcher: (uri) async => {
+          'version': '1.1.0',
+          'release_page_url':
+              'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
+          'platforms': {
+            'windows-x64': {
+              'name': 'com.secondloop.secondloopdev-1.1.0-full.nupkg',
+              'package_url':
+                  'https://cdn.example.com/com.secondloop.secondloopdev-1.1.0-full.nupkg',
+              'sha256': 'abc123',
+              'app_id': 'com.secondloop.secondloopdev',
+              'install_mode': 'velopack',
+            },
+          },
+          'assets': [
+            {
+              'name': 'SecondLoop-win.msi',
+              'browser_download_url':
+                  'https://cdn.example.com/SecondLoop-win.msi',
+            },
+          ],
+        },
+      );
+
+      final result = await service.checkForUpdates();
+
+      expect(result.update, isNotNull);
+      expect(result.update!.installMode, AppUpdateInstallMode.externalDownload);
+      expect(result.update!.asset?.name, 'SecondLoop-win.msi');
+      expect(
+        result.update!.downloadUri.toString(),
+        'https://cdn.example.com/SecondLoop-win.msi',
+      );
+    });
+
     test('records missing integrity metadata as manual fallback reason',
         () async {
       final logger = InMemoryUpdateEventLogger();

@@ -302,6 +302,7 @@ class PixiWindowsTasksTests(unittest.TestCase):
         self.assertIn("Get-Command dart", script)
         self.assertIn("pixi install", script)
         self.assertIn("pixi run setup-flutter", script)
+        self.assertIn("Invoke-InWindowsShortWorkspace", script)
 
     def test_windows_uninstall_msi_script_uses_registry_install_metadata(self) -> None:
         self.assertTrue(WINDOWS_UNINSTALL_MSI_SCRIPT.exists())
@@ -330,6 +331,12 @@ class PixiWindowsTasksTests(unittest.TestCase):
         self.assertIn("pub", script)
         self.assertIn("get", script)
         self.assertIn("exit $LASTEXITCODE", script)
+
+    def test_windows_run_fvm_tool_script_uses_short_workspace_helper_for_execution(self) -> None:
+        script = WINDOWS_FVM_TOOL_RUNNER_SCRIPT.read_text(encoding="utf-8")
+
+        self.assertIn("use_windows_short_workspace.ps1", script)
+        self.assertIn("Invoke-InWindowsShortWorkspace", script)
 
     def test_prepare_ffmpeg_windows_script_uses_direct_fvm_dart_runner(self) -> None:
         script = (REPO_ROOT / "scripts/prepare_ffmpeg_windows.ps1").read_text(encoding="utf-8")
