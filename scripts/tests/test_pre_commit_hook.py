@@ -157,6 +157,10 @@ class PreCommitHookTests(unittest.TestCase):
         self.assertIn("CARGO_TARGET_DIR", script)
         self.assertIn("CARGOKIT_TARGET_TEMP_DIR", script)
         self.assertIn("CARGOKIT_TOOL_TEMP_DIR", script)
+        self.assertIn('short_temp_root="${drive_prefix}/stmp"', script)
+        self.assertIn('export TMPDIR="${short_temp_root}"', script)
+        self.assertIn('export TMP="${short_temp_root}"', script)
+        self.assertIn('export TEMP="${short_temp_root}"', script)
         self.assertIn("CMAKE_GENERATOR", script)
         self.assertIn("Ninja", script)
 

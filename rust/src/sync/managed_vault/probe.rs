@@ -220,6 +220,7 @@ mod tests {
     use std::time::{Duration, Instant};
 
     use super::*;
+    use reqwest::blocking::ClientBuilder;
 
     #[derive(Default)]
     struct ServerState {
@@ -325,7 +326,11 @@ mod tests {
             }
         });
 
-        let http = Client::new();
+        let http = ClientBuilder::new()
+            .timeout(Duration::from_secs(5))
+            .pool_max_idle_per_host(0)
+            .build()
+            .expect("http client");
         let exists = managed_remote_attachment_exists(
             &http,
             &format!("http://{addr}"),

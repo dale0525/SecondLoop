@@ -320,15 +320,25 @@ ensure_windows_short_build_paths() {
   fi
 
   local drive_prefix=""
+  local short_temp_root=""
   if [[ "${repo_root}" =~ ^/([a-zA-Z])(/|$) ]]; then
     drive_prefix="/${BASH_REMATCH[1]}"
   fi
 
+  if [[ -n "${drive_prefix}" ]]; then
+    short_temp_root="${drive_prefix}/stmp"
+  else
+    short_temp_root="${repo_root}/.tool/stmp"
+  fi
+  mkdir -p "${short_temp_root}"
+
   if [[ -z "${CARGO_TARGET_DIR:-}" ]]; then
-    if [[ "${precommit_allow_worktree_writes}" != "1" ]]; then
-      export CARGO_TARGET_DIR="$(mktemp -d 2>/dev/null || mktemp -d -t secondloop_ct)"
-    elif [[ -n "${drive_prefix}" ]]; then
+    if [[ -n "${drive_prefix}" ]]; then
       export CARGO_TARGET_DIR="${drive_prefix}/ct"
+    elif [[ -n "${short_temp_root}" ]]; then
+      export CARGO_TARGET_DIR="${repo_root}/.tool/ct"
+    elif [[ "${precommit_allow_worktree_writes}" != "1" ]]; then
+      export CARGO_TARGET_DIR="$(mktemp -d 2>/dev/null || mktemp -d -t secondloop_ct)"
     else
       export CARGO_TARGET_DIR="${repo_root}/.tool/ct"
     fi
@@ -336,10 +346,12 @@ ensure_windows_short_build_paths() {
   fi
 
   if [[ -z "${CARGOKIT_TARGET_TEMP_DIR:-}" ]]; then
-    if [[ "${precommit_allow_worktree_writes}" != "1" ]]; then
-      export CARGOKIT_TARGET_TEMP_DIR="$(mktemp -d 2>/dev/null || mktemp -d -t secondloop_ck)"
-    elif [[ -n "${drive_prefix}" ]]; then
+    if [[ -n "${drive_prefix}" ]]; then
       export CARGOKIT_TARGET_TEMP_DIR="${drive_prefix}/ck"
+    elif [[ -n "${short_temp_root}" ]]; then
+      export CARGOKIT_TARGET_TEMP_DIR="${repo_root}/.tool/ck"
+    elif [[ "${precommit_allow_worktree_writes}" != "1" ]]; then
+      export CARGOKIT_TARGET_TEMP_DIR="$(mktemp -d 2>/dev/null || mktemp -d -t secondloop_ck)"
     else
       export CARGOKIT_TARGET_TEMP_DIR="${repo_root}/.tool/ck"
     fi
@@ -350,6 +362,10 @@ ensure_windows_short_build_paths() {
     export CARGOKIT_TOOL_TEMP_DIR="${CARGOKIT_TARGET_TEMP_DIR}/tool"
     mkdir -p "${CARGOKIT_TOOL_TEMP_DIR}"
   fi
+
+  export TMPDIR="${short_temp_root}"
+  export TMP="${short_temp_root}"
+  export TEMP="${short_temp_root}"
 
   export CMAKE_GENERATOR="Ninja"
   unset CMAKE_GENERATOR_INSTANCE || true
