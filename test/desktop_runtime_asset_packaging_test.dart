@@ -94,4 +94,49 @@ void main() {
       }
     }
   });
+
+  test('runtime output replacement restores previous output when promote fails',
+      () async {
+    final outputDir = await Directory.systemTemp.createTemp(
+      'desktop_runtime_output_restore_',
+    );
+    final tempDir = await Directory.systemTemp.createTemp(
+      'desktop_runtime_temp_restore_',
+    );
+    final outputFile =
+        File('${outputDir.path}${Platform.pathSeparator}runtime.txt')
+          ..writeAsStringSync('existing');
+    final tempFile = File('${tempDir.path}${Platform.pathSeparator}runtime.txt')
+      ..writeAsStringSync('prepared');
+
+    try {
+      await expectLater(
+        () => runtime.replaceRuntimeOutputDirectoryForTest(
+          outputDir: outputDir,
+          tempDir: tempDir,
+          renameTempDir: (_, __) async {
+            throw PathAccessException(
+              tempDir.path,
+              const OSError('Access is denied.', 5),
+            );
+          },
+        ),
+        throwsA(isA<PathAccessException>()),
+      );
+
+      expect(Directory(outputDir.path).existsSync(), isTrue);
+      expect(outputFile.existsSync(), isTrue);
+      expect(outputFile.readAsStringSync(), 'existing');
+      expect(Directory(tempDir.path).existsSync(), isTrue);
+      expect(tempFile.existsSync(), isTrue);
+      expect(tempFile.readAsStringSync(), 'prepared');
+    } finally {
+      if (Directory(outputDir.path).existsSync()) {
+        await Directory(outputDir.path).delete(recursive: true);
+      }
+      if (Directory(tempDir.path).existsSync()) {
+        await Directory(tempDir.path).delete(recursive: true);
+      }
+    }
+  });
 }

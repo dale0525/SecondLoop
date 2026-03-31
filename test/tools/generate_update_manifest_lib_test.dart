@@ -171,7 +171,8 @@ void main() {
     expect(windows['app_id'], 'com.secondloop.secondloop');
   });
 
-  test('generateUpdateManifest picks newest matching windows package',
+  test(
+      'generateUpdateManifest picks matching windows package for manifest version',
       () async {
     final tempDir =
         await Directory.systemTemp.createTemp('update_manifest_latest_pkg_');
@@ -185,14 +186,64 @@ void main() {
 
     final generated = await generateUpdateManifest(
       inputDirPath: tempDir.path,
-      version: '1.2.3',
+      version: '1.2.2',
       baseDownloadUrl: 'https://example.com/downloads/',
     );
 
     final platforms = generated.manifest['platforms'] as Map<String, Object?>;
     final windows = platforms['windows-x64'] as Map<String, Object?>;
 
-    expect(windows['name'], 'com.secondloop.secondloop-1.2.3-full.nupkg');
+    expect(windows['name'], 'com.secondloop.secondloop-1.2.2-full.nupkg');
+  });
+
+  test('generateUpdateManifest rejects mixed-version macOS and Linux assets',
+      () async {
+    final tempDir = await Directory.systemTemp
+        .createTemp('update_manifest_mixed_archive_versions_');
+    addTearDown(() => tempDir.delete(recursive: true));
+
+    await File('${tempDir.path}/SecondLoop-macos-v1.2.2.app.tar.gz')
+        .writeAsString('macos-older');
+    await File('${tempDir.path}/SecondLoop-macos-v1.2.3.app.tar.gz')
+        .writeAsString('macos-newer');
+    await File('${tempDir.path}/SecondLoop-linux-x64-v1.2.2.tar.gz')
+        .writeAsString('linux-older');
+    await File('${tempDir.path}/SecondLoop-linux-x64-v1.2.3.tar.gz')
+        .writeAsString('linux-newer');
+
+    final generated = await generateUpdateManifest(
+      inputDirPath: tempDir.path,
+      version: '1.2.2',
+      baseDownloadUrl: 'https://example.com/downloads/',
+    );
+
+    final platforms = generated.manifest['platforms'] as Map<String, Object?>;
+    final macos = platforms['macos-universal'] as Map<String, Object?>;
+    final linux = platforms['linux-x64'] as Map<String, Object?>;
+
+    expect(macos['name'], 'SecondLoop-macos-v1.2.2.app.tar.gz');
+    expect(linux['name'], 'SecondLoop-linux-x64-v1.2.2.tar.gz');
+  });
+
+  test(
+      'generateUpdateManifest rejects missing matching windows package version',
+      () async {
+    final tempDir = await Directory.systemTemp
+        .createTemp('update_manifest_missing_windows_version_');
+    addTearDown(() => tempDir.delete(recursive: true));
+
+    await File('${tempDir.path}/com.secondloop.secondloop-1.2.4-full.nupkg')
+        .writeAsString('newer');
+    await File('${tempDir.path}/releases.win.json').writeAsString('{}');
+
+    await expectLater(
+      () => generateUpdateManifest(
+        inputDirPath: tempDir.path,
+        version: '1.2.3',
+        baseDownloadUrl: 'https://example.com/downloads/',
+      ),
+      throwsStateError,
+    );
   });
 
   test(

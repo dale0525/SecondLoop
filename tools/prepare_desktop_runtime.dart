@@ -552,13 +552,26 @@ Future<void> _replaceRuntimeOutputDirectory({
       };
   final deleteTemp =
       deleteTempDir ?? (directory) => directory.delete(recursive: true);
+  Directory? backupDir;
+  var promoted = false;
 
   try {
     if (await outputDir.exists()) {
-      await _deleteDirectoryWithRetry(
+      backupDir = Directory(
+        '${outputDir.path}.backup.${DateTime.now().microsecondsSinceEpoch}',
+      );
+      if (await backupDir.exists()) {
+        await _deleteDirectoryWithRetry(
+          backupDir,
+          reason: 'remove stale runtime backup directory',
+          deleteOperation: deleteOutput,
+          delay: delay,
+        );
+      }
+      await _renameDirectoryWithRetry(
         outputDir,
-        reason: 'remove previous runtime output directory',
-        deleteOperation: deleteOutput,
+        backupDir.path,
+        reason: 'stash previous runtime output directory',
         delay: delay,
       );
     }
@@ -569,8 +582,29 @@ Future<void> _replaceRuntimeOutputDirectory({
       renameOperation: renameTemp,
       delay: delay,
     );
+    promoted = true;
+    if (backupDir != null && await backupDir.exists()) {
+      await _deleteDirectoryWithRetry(
+        backupDir,
+        reason: 'remove previous runtime backup directory',
+        deleteOperation: deleteOutput,
+        delay: delay,
+      );
+    }
+  } catch (_) {
+    if (backupDir != null &&
+        await backupDir.exists() &&
+        !await outputDir.exists()) {
+      await _renameDirectoryWithRetry(
+        backupDir,
+        outputDir.path,
+        reason: 'restore previous runtime output directory',
+        delay: delay,
+      );
+    }
+    rethrow;
   } finally {
-    if (await tempDir.exists()) {
+    if (promoted && await tempDir.exists()) {
       await _deleteDirectoryWithRetry(
         tempDir,
         reason: 'clean up temporary runtime directory',

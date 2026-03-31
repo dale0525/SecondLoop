@@ -44,9 +44,12 @@ Future<GeneratedUpdateManifest> generateUpdateManifest({
       releasePageUrl?.trim().isNotEmpty == true ? releasePageUrl!.trim() : null;
   manifest['pub_date'] =
       (publishedAt ?? DateTime.now().toUtc()).toUtc().toIso8601String();
+  final normalizedVersionSegments =
+      tryParseStrictAppVersion(normalizedVersion)!;
   manifest['platforms'] = await _buildPlatforms(
     inputDir,
     baseDownloadUrl: normalizedBaseUrl,
+    requiredVersion: normalizedVersionSegments,
     windowsAppId: windowsAppId,
     windowsChannel: windowsChannel,
   );
@@ -67,6 +70,7 @@ Future<GeneratedUpdateManifest> generateUpdateManifest({
 Future<Map<String, Object?>> _buildPlatforms(
   Directory inputDir, {
   required String baseDownloadUrl,
+  required List<int> requiredVersion,
   required String windowsAppId,
   String? windowsChannel,
 }) async {
@@ -81,6 +85,7 @@ Future<Map<String, Object?>> _buildPlatforms(
 
   final windowsPackage = _selectNewestWindowsPackage(
     entries,
+    requiredVersion: requiredVersion,
     windowsAppId: windowsAppId,
     windowsChannel: windowsChannel,
     knownChannels: knownWindowsChannels,
@@ -106,11 +111,11 @@ Future<Map<String, Object?>> _buildPlatforms(
     platforms['windows-x64'] = windowsEntry;
   }
 
-  final macosArchive = _firstFile(
-      entries,
-      (name) =>
-          name.toLowerCase().endsWith('.app.tar.gz') &&
-          name.toLowerCase().contains('secondloop'));
+  final macosArchive = _selectMatchingArchive(
+    entries,
+    requiredVersion: requiredVersion,
+    platform: 'macos',
+  );
   if (macosArchive != null) {
     platforms['macos-universal'] = await _buildArchiveEntry(
       file: macosArchive,
@@ -119,11 +124,11 @@ Future<Map<String, Object?>> _buildPlatforms(
     );
   }
 
-  final linuxArchive = _firstFile(
-      entries,
-      (name) =>
-          name.toLowerCase().endsWith('.tar.gz') &&
-          name.toLowerCase().contains('secondloop-linux-x64'));
+  final linuxArchive = _selectMatchingArchive(
+    entries,
+    requiredVersion: requiredVersion,
+    platform: 'linux-x64',
+  );
   if (linuxArchive != null) {
     platforms['linux-x64'] = await _buildArchiveEntry(
       file: linuxArchive,
@@ -199,6 +204,7 @@ File? _firstFile(List<File> files, bool Function(String name) predicate) {
 
 File? _selectNewestWindowsPackage(
   List<File> files, {
+  required List<int> requiredVersion,
   required String windowsAppId,
   String? windowsChannel,
   Iterable<String> knownChannels = const <String>[],
@@ -209,29 +215,39 @@ File? _selectNewestWindowsPackage(
     if (requestedChannel != null) requestedChannel,
   };
   final matchingPackages = <File>[];
+  var sawMismatchedStrictVersion = false;
 
   for (final file in files) {
     final name = file.uri.pathSegments.last;
-    final version = _extractWindowsPackageVersion(
+    final packageInfo = _parseWindowsPackageInfo(
       name,
       windowsAppId: windowsAppId,
       knownChannels: resolvedKnownChannels,
     );
-    if (version == null) {
+    if (packageInfo == null) {
       continue;
     }
+    final version = packageInfo.version;
     final packageChannel = _effectiveWindowsChannel(
-      _extractWindowsPackageChannel(
-        name,
-        knownChannels: resolvedKnownChannels,
-      ),
+      packageInfo.channel,
     );
     if (requestedChannel != null) {
       if (packageChannel != requestedChannel) {
         continue;
       }
     }
+    if (_compareStrictVersionSegments(version, requiredVersion) != 0) {
+      sawMismatchedStrictVersion = true;
+      continue;
+    }
     matchingPackages.add(file);
+  }
+
+  if (matchingPackages.isEmpty && sawMismatchedStrictVersion) {
+    throw StateError(
+      'missing_matching_windows_package_version:'
+      '${requiredVersion.join('.')}',
+    );
   }
 
   if (requestedChannel == null) {
@@ -270,6 +286,60 @@ File? _selectNewestWindowsPackage(
   }
 
   return newestFile;
+}
+
+File? _selectMatchingArchive(
+  List<File> files, {
+  required List<int> requiredVersion,
+  required String platform,
+}) {
+  File? matched;
+  var sawMismatchedStrictVersion = false;
+  for (final file in files) {
+    final name = file.uri.pathSegments.last;
+    final version = _extractArchiveVersion(name, platform: platform);
+    if (version == null) {
+      continue;
+    }
+    if (_compareStrictVersionSegments(version, requiredVersion) != 0) {
+      sawMismatchedStrictVersion = true;
+      continue;
+    }
+    matched = file;
+    break;
+  }
+
+  if (matched == null && sawMismatchedStrictVersion) {
+    throw StateError(
+      'missing_matching_${platform}_archive_version:${requiredVersion.join('.')}',
+    );
+  }
+
+  return matched;
+}
+
+List<int>? _extractArchiveVersion(String fileName, {required String platform}) {
+  final normalizedName = fileName.trim();
+  if (normalizedName.isEmpty) {
+    return null;
+  }
+
+  final match = switch (platform) {
+    'macos' => RegExp(
+        r'^SecondLoop-macos-v(\d+\.\d+\.\d+)\.app\.tar\.gz$',
+        caseSensitive: false,
+      ).firstMatch(normalizedName),
+    'linux-x64' => RegExp(
+        r'^SecondLoop-linux-(?:x64|x86_64)-v(\d+\.\d+\.\d+)\.tar\.gz$',
+        caseSensitive: false,
+      ).firstMatch(normalizedName),
+    _ => null,
+  };
+  if (match == null) {
+    return null;
+  }
+
+  return tryParseStrictAppVersion(match.group(1) ?? '');
 }
 
 File? _selectMatchingReleasesFile(
