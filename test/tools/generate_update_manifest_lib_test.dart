@@ -120,6 +120,28 @@ void main() {
     expect(platforms['android-armeabi-v7a'], isNotNull);
   });
 
+  test('generateUpdateManifest rejects duplicate Android platform keys',
+      () async {
+    final tempDir =
+        await Directory.systemTemp.createTemp('update_manifest_android_dupe_');
+    addTearDown(() => tempDir.delete(recursive: true));
+
+    await File('${tempDir.path}/SecondLoop-android-arm64-v8a-v1.2.3.apk')
+        .writeAsString('arm64-a');
+    await File('${tempDir.path}/SecondLoop-android-arm64-v8a-hotfix-v1.2.3.apk')
+        .writeAsString('arm64-b');
+
+    await expectLater(
+      () => generateUpdateManifest(
+        inputDirPath: tempDir.path,
+        version: 'v1.2.3',
+        baseDownloadUrl:
+            'https://github.com/dale0525/SecondLoop/releases/download/v1.2.3',
+      ),
+      throwsA(isA<StateError>()),
+    );
+  });
+
   test(
       'generateUpdateManifest picks Velopack releases metadata json when present',
       () async {

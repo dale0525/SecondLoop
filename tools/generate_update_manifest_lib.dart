@@ -121,10 +121,14 @@ Future<Map<String, Object?>> _buildPlatforms(
   final androidApks = entries.where((file) {
     final name = file.uri.pathSegments.last.toLowerCase();
     return name.endsWith('.apk') && name.contains('secondloop-android');
-  }).toList(growable: false);
+  }).toList(growable: false)
+    ..sort((left, right) => left.path.compareTo(right.path));
   for (final androidApk in androidApks) {
     final androidKey =
         _resolveAndroidPlatformKey(androidApk.uri.pathSegments.last);
+    if (platforms.containsKey(androidKey)) {
+      throw StateError('duplicate_android_platform_asset_$androidKey');
+    }
     platforms[androidKey] = await _buildArchiveEntry(
       file: androidApk,
       baseDownloadUrl: baseDownloadUrl,

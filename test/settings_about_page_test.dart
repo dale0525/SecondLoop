@@ -21,6 +21,7 @@ class _FakeAboutUpdateService extends AppUpdateService {
   _FakeAboutUpdateService({required this.result});
 
   final AppUpdateCheckResult result;
+  Object? throwOnCheck;
 
   int checkCalls = 0;
   int installCalls = 0;
@@ -31,6 +32,9 @@ class _FakeAboutUpdateService extends AppUpdateService {
   @override
   Future<AppUpdateCheckResult> checkForUpdates() async {
     checkCalls += 1;
+    if (throwOnCheck != null) {
+      throw throwOnCheck!;
+    }
     return result;
   }
 
@@ -88,7 +92,7 @@ class _FakeAndroidApkDownloader implements AndroidApkDownloader {
 class _FakeAndroidApkInstaller implements AndroidApkInstaller {
   _FakeAndroidApkInstaller({this.error});
 
-  final Object? error;
+  Object? error;
   int installCalls = 0;
   String? installedPath;
 
@@ -99,6 +103,38 @@ class _FakeAndroidApkInstaller implements AndroidApkInstaller {
     if (error != null) {
       throw error!;
     }
+  }
+}
+
+class _CountingAndroidApkDownloader implements AndroidApkDownloader {
+  _CountingAndroidApkDownloader({this.completer});
+
+  final Completer<void>? completer;
+  int downloadCalls = 0;
+
+  @override
+  Future<File> downloadApk({
+    required Uri downloadUri,
+    required String fileName,
+    required AndroidApkDownloadProgressCallback onProgress,
+    AndroidApkDownloadCancelToken? cancelToken,
+  }) async {
+    downloadCalls += 1;
+    onProgress(
+      const AndroidApkDownloadProgress(receivedBytes: 1, totalBytes: 2),
+    );
+    if (completer != null) {
+      await completer!.future;
+    }
+    if (cancelToken?.isCancelled == true) {
+      throw const AndroidApkDownloadCancelledException();
+    }
+
+    final file = File(
+      '${Directory.systemTemp.path}${Platform.pathSeparator}$fileName',
+    );
+    await file.writeAsBytes(const <int>[1, 2, 3], flush: true);
+    return file;
   }
 }
 
@@ -666,4 +702,176 @@ void main() {
       variant: const TargetPlatformVariant(<TargetPlatform>{
         TargetPlatform.windows,
       }));
+
+  testWidgets(
+      'About page keeps update action disabled while cancellation settles',
+      (tester) async {
+    final oldPlatform = debugDefaultTargetPlatformOverride;
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+    SharedPreferences.setMockInitialValues({});
+
+    final downloadCompleter = Completer<void>();
+    final downloader =
+        _CountingAndroidApkDownloader(completer: downloadCompleter);
+    final installer = _FakeAndroidApkInstaller();
+    final update = AppUpdateAvailability(
+      currentVersion: '1.0.1+99',
+      latestTag: 'v1.1.0',
+      releasePageUri: Uri.parse(
+        'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
+      ),
+      installMode: AppUpdateInstallMode.externalDownload,
+      asset: AppUpdateAsset(
+        name: 'SecondLoop-android-arm64-v8a.apk',
+        downloadUri:
+            Uri.parse('https://cdn.example.com/SecondLoop-android.apk'),
+      ),
+    );
+    final service = _FakeAboutUpdateService(
+      result: AppUpdateCheckResult(currentVersion: '1.0.1+99', update: update),
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AboutPage(
+            updateService: service,
+            runtimeVersionLoader: () async =>
+                const AppRuntimeVersion(version: '1.0.1', buildNumber: '99'),
+            androidApkDownloader: downloader,
+            androidApkInstaller: installer,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('about_check_updates')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('about_auto_update')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 10));
+
+    await tester.tap(find.byKey(const ValueKey('about_android_cancel')));
+    await tester.pump();
+
+    final autoUpdateButton = tester.widget<FilledButton>(
+      find.byKey(const ValueKey('about_auto_update')),
+    );
+    expect(autoUpdateButton.onPressed, isNull);
+
+    downloadCompleter.complete();
+    await tester.pumpAndSettle();
+
+    expect(downloader.downloadCalls, 1);
+    debugDefaultTargetPlatformOverride = oldPlatform;
+  },
+      variant: const TargetPlatformVariant(<TargetPlatform>{
+        TargetPlatform.android,
+      }));
+
+  testWidgets('About page cancels in-flight Android update on dispose',
+      (tester) async {
+    final oldPlatform = debugDefaultTargetPlatformOverride;
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+    SharedPreferences.setMockInitialValues({});
+
+    final downloadCompleter = Completer<void>();
+    final downloader =
+        _CountingAndroidApkDownloader(completer: downloadCompleter);
+    final installer = _FakeAndroidApkInstaller();
+    final update = AppUpdateAvailability(
+      currentVersion: '1.0.1+99',
+      latestTag: 'v1.1.0',
+      releasePageUri: Uri.parse(
+        'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
+      ),
+      installMode: AppUpdateInstallMode.externalDownload,
+      asset: AppUpdateAsset(
+        name: 'SecondLoop-android-arm64-v8a.apk',
+        downloadUri:
+            Uri.parse('https://cdn.example.com/SecondLoop-android.apk'),
+      ),
+    );
+    final service = _FakeAboutUpdateService(
+      result: AppUpdateCheckResult(currentVersion: '1.0.1+99', update: update),
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AboutPage(
+            updateService: service,
+            runtimeVersionLoader: () async =>
+                const AppRuntimeVersion(version: '1.0.1', buildNumber: '99'),
+            androidApkDownloader: downloader,
+            androidApkInstaller: installer,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('about_check_updates')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('about_auto_update')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 10));
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    downloadCompleter.complete();
+    await tester.pumpAndSettle();
+
+    expect(installer.installCalls, 0);
+    debugDefaultTargetPlatformOverride = oldPlatform;
+  },
+      variant: const TargetPlatformVariant(<TargetPlatform>{
+        TargetPlatform.android,
+      }));
+
+  testWidgets('About page clears stale update result after check failure',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+
+    final service = _FakeAboutUpdateService(
+      result: AppUpdateCheckResult(
+        currentVersion: '1.0.1+99',
+        update: AppUpdateAvailability(
+          currentVersion: '1.0.1+99',
+          latestTag: 'v1.1.0',
+          releasePageUri: Uri.parse(
+            'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
+          ),
+          installMode: AppUpdateInstallMode.stagedNextLaunch,
+          asset: AppUpdateAsset(
+            name: 'pkg.nupkg',
+            downloadUri: Uri.parse('https://cdn.example.com/pkg.nupkg'),
+          ),
+        ),
+      ),
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AboutPage(
+            updateService: service,
+            runtimeVersionLoader: () async =>
+                const AppRuntimeVersion(version: '1.0.1', buildNumber: '99'),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('about_check_updates')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('about_auto_update')), findsOneWidget);
+
+    service.throwOnCheck = StateError('network_down');
+    await tester.tap(find.byKey(const ValueKey('about_check_updates')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('about_auto_update')), findsNothing);
+  });
 }

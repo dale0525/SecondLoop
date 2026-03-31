@@ -25,7 +25,7 @@ class AndroidApkUpdateException implements Exception {
 }
 
 class AndroidApkUpdateCoordinator {
-  const AndroidApkUpdateCoordinator({
+  AndroidApkUpdateCoordinator({
     required AndroidApkDownloader downloader,
     required AndroidApkInstaller installer,
   })  : _downloader = downloader,
@@ -33,30 +33,42 @@ class AndroidApkUpdateCoordinator {
 
   final AndroidApkDownloader _downloader;
   final AndroidApkInstaller _installer;
+  final Map<String, _CachedDownloadedApk> _verifiedApkCache =
+      <String, _CachedDownloadedApk>{};
 
   Future<void> performUpdate({
     required AppUpdateAsset asset,
     required AndroidApkDownloadProgressCallback onProgress,
     AndroidApkDownloadCancelToken? cancelToken,
   }) async {
+    final expectedSha256 = asset.sha256?.trim();
+    final cacheKey = _cacheKeyForAsset(asset, expectedSha256);
+    final cachedFile = _resolveCachedFile(cacheKey);
+
     late final File downloadedFile;
-    try {
-      downloadedFile = await _downloader.downloadApk(
-        downloadUri: asset.downloadUri,
-        fileName: asset.name,
-        onProgress: onProgress,
-        cancelToken: cancelToken,
+    if (cachedFile != null) {
+      downloadedFile = cachedFile;
+      onProgress(
+        const AndroidApkDownloadProgress(receivedBytes: 1, totalBytes: 1),
       );
-    } on AndroidApkDownloadCancelledException {
-      rethrow;
-    } catch (error) {
-      throw AndroidApkUpdateException(
-        type: AndroidApkUpdateFailureType.download,
-        cause: error,
-      );
+    } else {
+      try {
+        downloadedFile = await _downloader.downloadApk(
+          downloadUri: asset.downloadUri,
+          fileName: asset.name,
+          onProgress: onProgress,
+          cancelToken: cancelToken,
+        );
+      } on AndroidApkDownloadCancelledException {
+        rethrow;
+      } catch (error) {
+        throw AndroidApkUpdateException(
+          type: AndroidApkUpdateFailureType.download,
+          cause: error,
+        );
+      }
     }
 
-    final expectedSha256 = asset.sha256?.trim();
     _throwIfCancelled(cancelToken);
     if (expectedSha256 != null && expectedSha256.isNotEmpty) {
       try {
@@ -74,6 +86,9 @@ class AndroidApkUpdateCoordinator {
         );
       }
     }
+    _verifiedApkCache[cacheKey] = _CachedDownloadedApk(
+      path: downloadedFile.path,
+    );
 
     _throwIfCancelled(cancelToken);
     try {
@@ -105,4 +120,29 @@ class AndroidApkUpdateCoordinator {
       throw const AndroidApkDownloadCancelledException();
     }
   }
+
+  File? _resolveCachedFile(String cacheKey) {
+    final cached = _verifiedApkCache[cacheKey];
+    if (cached == null) return null;
+    final file = File(cached.path);
+    if (!file.existsSync()) {
+      _verifiedApkCache.remove(cacheKey);
+      return null;
+    }
+    return file;
+  }
+
+  String _cacheKeyForAsset(AppUpdateAsset asset, String? expectedSha256) {
+    final normalizedSha = expectedSha256?.trim().toLowerCase();
+    if (normalizedSha != null && normalizedSha.isNotEmpty) {
+      return 'sha256:$normalizedSha';
+    }
+    return 'url:${asset.downloadUri}|name:${asset.name.trim().toLowerCase()}';
+  }
+}
+
+class _CachedDownloadedApk {
+  const _CachedDownloadedApk({required this.path});
+
+  final String path;
 }

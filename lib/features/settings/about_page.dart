@@ -41,6 +41,7 @@ class AboutPage extends StatefulWidget {
 class _AboutPageState extends State<AboutPage> {
   bool _checkingUpdate = false;
   bool _updating = false;
+  bool _androidUpdateCancelling = false;
   AndroidApkDownloadProgress? _androidDownloadProgress;
   String? _androidUpdateError;
   AndroidApkDownloadCancelToken? _androidDownloadCancelToken;
@@ -92,6 +93,7 @@ class _AboutPageState extends State<AboutPage> {
 
   @override
   void dispose() {
+    _androidDownloadCancelToken?.cancel();
     _ownedUpdateService?.dispose();
     final ownedDownloader = _ownedAndroidApkDownloader;
     if (ownedDownloader is HttpAndroidApkDownloader) {
@@ -174,6 +176,11 @@ class _AboutPageState extends State<AboutPage> {
         );
       }
     } catch (error) {
+      if (mounted) {
+        setState(() {
+          _updateResult = null;
+        });
+      }
       _showMessage(_text.messages.checkFailed(error: '$error'));
     } finally {
       if (mounted) setState(() => _checkingUpdate = false);
@@ -193,18 +200,21 @@ class _AboutPageState extends State<AboutPage> {
     final update = _updateResult?.update;
     if (update == null) return;
 
+    final useAndroidApkUpdate = _canUseAndroidApkUpdate(update);
+    final cancelToken =
+        useAndroidApkUpdate ? AndroidApkDownloadCancelToken() : null;
+
     setState(() {
       _updating = true;
+      _androidUpdateCancelling = false;
       _androidDownloadProgress = null;
       _androidUpdateError = null;
-      _androidDownloadCancelToken = null;
+      _androidDownloadCancelToken = cancelToken;
     });
     var stagedFlow = false;
     try {
-      if (_canUseAndroidApkUpdate(update)) {
+      if (useAndroidApkUpdate) {
         _showMessage(_text.messages.installStarting);
-        final cancelToken = AndroidApkDownloadCancelToken();
-        _androidDownloadCancelToken = cancelToken;
         await _androidApkUpdateCoordinator.performUpdate(
           asset: update.asset!,
           onProgress: (progress) {
@@ -240,7 +250,12 @@ class _AboutPageState extends State<AboutPage> {
       }
     } finally {
       _androidDownloadCancelToken = null;
-      if (mounted) setState(() => _updating = false);
+      if (mounted) {
+        setState(() {
+          _updating = false;
+          _androidUpdateCancelling = false;
+        });
+      }
     }
   }
 
@@ -248,7 +263,7 @@ class _AboutPageState extends State<AboutPage> {
     _androidDownloadCancelToken?.cancel();
     if (!mounted) return;
     setState(() {
-      _updating = false;
+      _androidUpdateCancelling = true;
       _androidDownloadProgress = null;
       _androidUpdateError = null;
     });
@@ -413,7 +428,9 @@ class _AboutPageState extends State<AboutPage> {
                     children: [
                       OutlinedButton.icon(
                         key: const ValueKey('about_check_updates'),
-                        onPressed: (_checkingUpdate || _updating)
+                        onPressed: (_checkingUpdate ||
+                                _updating ||
+                                _androidUpdateCancelling)
                             ? null
                             : _checkForUpdates,
                         icon: _checkingUpdate
@@ -435,7 +452,9 @@ class _AboutPageState extends State<AboutPage> {
                           key: const ValueKey('about_auto_update'),
                           onPressed: (_checkingUpdate || _updating)
                               ? null
-                              : _applyManagedUpdate,
+                              : (_androidUpdateCancelling
+                                  ? null
+                                  : _applyManagedUpdate),
                           icon: _updating
                               ? const SizedBox(
                                   width: 16,

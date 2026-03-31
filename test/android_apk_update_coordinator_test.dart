@@ -30,12 +30,29 @@ class _FakeDownloader implements AndroidApkDownloader {
 class _FakeInstaller implements AndroidApkInstaller {
   _FakeInstaller({this.error});
 
-  final Object? error;
+  Object? error;
   int installCalls = 0;
 
   @override
   Future<void> installApk({required String apkPath}) async {
     installCalls += 1;
+    if (error != null) {
+      throw error!;
+    }
+  }
+}
+
+class _FakeCachedInstaller implements AndroidApkInstaller {
+  _FakeCachedInstaller({this.error});
+
+  Object? error;
+  int installCalls = 0;
+  String? lastPath;
+
+  @override
+  Future<void> installApk({required String apkPath}) async {
+    installCalls += 1;
+    lastPath = apkPath;
     if (error != null) {
       throw error!;
     }
@@ -161,5 +178,38 @@ void main() {
       throwsA(isA<AndroidApkDownloadCancelledException>()),
     );
     expect(installer.installCalls, 0);
+  });
+
+  test('reuses cached apk for repeated install launch retries', () async {
+    final installer = _FakeCachedInstaller(
+      error: StateError('android_apk_install_not_started'),
+    );
+    final coordinator = AndroidApkUpdateCoordinator(
+      downloader: _FakeDownloader(bytes: const <int>[1, 2, 3]),
+      installer: installer,
+    );
+    final asset = AppUpdateAsset(
+      name: 'SecondLoop-android-arm64-v8a.apk',
+      downloadUri: Uri.parse('https://cdn.example.com/app.apk'),
+    );
+
+    await expectLater(
+      () => coordinator.performUpdate(asset: asset, onProgress: (_) {}),
+      throwsA(
+        isA<AndroidApkUpdateException>().having(
+          (error) => error.type,
+          'type',
+          AndroidApkUpdateFailureType.installLaunch,
+        ),
+      ),
+    );
+    expect(installer.lastPath, isNotNull);
+    final firstPath = installer.lastPath;
+
+    installer.error = null;
+    await coordinator.performUpdate(asset: asset, onProgress: (_) {});
+
+    expect(installer.installCalls, 2);
+    expect(installer.lastPath, firstPath);
   });
 }
