@@ -500,6 +500,12 @@ if (-not (Test-Path -LiteralPath $certificateKey -PathType Leaf)) {
 $feedProcess = $null
 $trustedCertificateThumbprint = $null
 $certificateTrustAddedByScript = $false
+$originalReleaseApiOrigin = $null
+$hadOriginalReleaseApiOrigin = Test-Path Env:SECONDLOOP_RELEASE_API_ORIGIN
+$originalAppId = $null
+$hadOriginalAppId = Test-Path Env:SECONDLOOP_APP_ID
+$originalAppName = $null
+$hadOriginalAppName = Test-Path Env:SECONDLOOP_APP_NAME
 $originalUpdatePublicKey = $null
 $hadOriginalUpdatePublicKey = Test-Path Env:SECONDLOOP_UPDATE_PUBLIC_KEY
 $originalUpdateSigningPrivateKey = $null
@@ -509,6 +515,15 @@ $wasCertificateTrustedBefore = $false
 try {
   New-Item -ItemType Directory -Force -Path $smokeRoot | Out-Null
 
+  if ($hadOriginalReleaseApiOrigin) {
+    $originalReleaseApiOrigin = $env:SECONDLOOP_RELEASE_API_ORIGIN
+  }
+  if ($hadOriginalAppId) {
+    $originalAppId = $env:SECONDLOOP_APP_ID
+  }
+  if ($hadOriginalAppName) {
+    $originalAppName = $env:SECONDLOOP_APP_NAME
+  }
   if ($hadOriginalUpdatePublicKey) {
     $originalUpdatePublicKey = $env:SECONDLOOP_UPDATE_PUBLIC_KEY
   }
@@ -610,6 +625,24 @@ try {
   Write-Host "Final running version: $(Get-InstalledVersion)"
 } finally {
   Write-Utf8NoBomFile -Path $pubspecPath -Content $originalPubspec
+
+  if ($hadOriginalReleaseApiOrigin) {
+    Set-Item -Path Env:SECONDLOOP_RELEASE_API_ORIGIN -Value $originalReleaseApiOrigin
+  } else {
+    Remove-Item Env:SECONDLOOP_RELEASE_API_ORIGIN -ErrorAction SilentlyContinue
+  }
+
+  if ($hadOriginalAppId) {
+    Set-Item -Path Env:SECONDLOOP_APP_ID -Value $originalAppId
+  } else {
+    Remove-Item Env:SECONDLOOP_APP_ID -ErrorAction SilentlyContinue
+  }
+
+  if ($hadOriginalAppName) {
+    Set-Item -Path Env:SECONDLOOP_APP_NAME -Value $originalAppName
+  } else {
+    Remove-Item Env:SECONDLOOP_APP_NAME -ErrorAction SilentlyContinue
+  }
 
   if ($hadOriginalUpdatePublicKey) {
     Set-Item -Path Env:SECONDLOOP_UPDATE_PUBLIC_KEY -Value $originalUpdatePublicKey

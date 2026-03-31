@@ -323,6 +323,12 @@ String describeManualFallbackReason(
   String? windowsAppId,
 }) {
   if (asset == null) {
+    final exactWindowsAppId = windowsAppId?.trim();
+    if (platform == AppUpdatePlatform.windows &&
+        exactWindowsAppId != null &&
+        exactWindowsAppId.isNotEmpty) {
+      return 'windows_manifest_app_id_mismatch';
+    }
     return 'missing_platform_asset';
   }
   if (!isReleaseMode) {

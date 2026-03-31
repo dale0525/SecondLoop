@@ -8,7 +8,11 @@ import unittest
 
 from http.server import ThreadingHTTPServer
 
-from tools.windows_https_update_server import UpdateFeedHandler, resolve_request_path
+from tools.windows_https_update_server import (
+    UpdateFeedHandler,
+    ensure_server_root_is_complete,
+    resolve_request_path,
+)
 
 
 class WindowsHttpsUpdateServerPathTests(unittest.TestCase):
@@ -77,6 +81,16 @@ class WindowsHttpsUpdateServerPathTests(unittest.TestCase):
 
             self.assertEqual(status, 200)
             self.assertEqual(body, expected)
+
+    def test_server_root_validation_requires_manifest_signature(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            downloads = root / "downloads"
+            downloads.mkdir()
+            (downloads / "latest.json").write_text("{}", encoding="utf-8")
+
+            with self.assertRaises(FileNotFoundError):
+                ensure_server_root_is_complete(root)
 
     def test_non_whitelisted_root_path_is_forbidden(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

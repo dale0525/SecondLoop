@@ -39,6 +39,16 @@ def resolve_request_path(
     return resolved
 
 
+def ensure_server_root_is_complete(root_dir: Path) -> None:
+    downloads_dir = root_dir / "downloads"
+    latest_json = downloads_dir / "latest.json"
+    latest_signature = downloads_dir / "latest.json.sig"
+    if not latest_json.exists():
+        raise FileNotFoundError(f"Missing latest.json: {latest_json}")
+    if not latest_signature.exists():
+        raise FileNotFoundError(f"Missing latest.json.sig: {latest_signature}")
+
+
 class UpdateFeedHandler(SimpleHTTPRequestHandler):
     server_version = "SecondLoopUpdateServer/1.0"
 
@@ -156,10 +166,7 @@ def main() -> None:
     cert_path = Path(args.cert).resolve()
     key_path = Path(args.key).resolve()
 
-    downloads_dir = root / "downloads"
-    latest_json = downloads_dir / "latest.json"
-    if not latest_json.exists():
-        raise FileNotFoundError(f"Missing latest.json: {latest_json}")
+    ensure_server_root_is_complete(root)
 
     server = ThreadingHTTPServer((args.host, args.port), UpdateFeedHandler)
     server.root_dir = str(root)  # type: ignore[attr-defined]

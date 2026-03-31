@@ -137,6 +137,37 @@ class WindowsAutoUpdateSmokeTests(unittest.TestCase):
         self.assertIn("SECONDLOOP_UPDATE_SIGNING_PRIVATE_KEY", script)
         self.assertIn("Set-Item -Path Env:SECONDLOOP_UPDATE_PUBLIC_KEY -Value $originalUpdatePublicKey", script)
 
+    def test_smoke_script_restores_temporary_update_environment_variables(self) -> None:
+        script = SMOKE_SCRIPT.read_text(encoding="utf-8")
+
+        self.assertIn(
+            "$hadOriginalReleaseApiOrigin = Test-Path Env:SECONDLOOP_RELEASE_API_ORIGIN",
+            script,
+        )
+        self.assertIn("$hadOriginalAppId = Test-Path Env:SECONDLOOP_APP_ID", script)
+        self.assertIn("$hadOriginalAppName = Test-Path Env:SECONDLOOP_APP_NAME", script)
+        self.assertIn(
+            "Set-Item -Path Env:SECONDLOOP_RELEASE_API_ORIGIN -Value $originalReleaseApiOrigin",
+            script,
+        )
+        self.assertIn(
+            "Remove-Item Env:SECONDLOOP_RELEASE_API_ORIGIN -ErrorAction SilentlyContinue",
+            script,
+        )
+        self.assertIn("Set-Item -Path Env:SECONDLOOP_APP_ID -Value $originalAppId", script)
+        self.assertIn(
+            "Remove-Item Env:SECONDLOOP_APP_ID -ErrorAction SilentlyContinue",
+            script,
+        )
+        self.assertIn(
+            "Set-Item -Path Env:SECONDLOOP_APP_NAME -Value $originalAppName",
+            script,
+        )
+        self.assertIn(
+            "Remove-Item Env:SECONDLOOP_APP_NAME -ErrorAction SilentlyContinue",
+            script,
+        )
+
     def test_smoke_script_generates_and_uses_temporary_manifest_signing_keys(self) -> None:
         script = SMOKE_SCRIPT.read_text(encoding="utf-8")
 
