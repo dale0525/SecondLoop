@@ -688,6 +688,17 @@
       "openUpdateFailed": "Could not open update page"
     }
   },
+  "updateDialog": {
+    "title": "Update available: $version",
+    "message": "A newer Android version is available. You can download and install it now.",
+    "updateNow": "Update",
+    "downloading": "Downloading update…",
+    "installing": "Opening installer…",
+    "downloadProgress": "Downloaded: $percent%",
+    "downloadProgressUnknown": "Downloading…",
+    "downloadFailed": "Failed to download or open the installer.",
+    "releaseNotesUnavailable": "Release notes are temporarily unavailable."
+  },
   "updateNotice": {
     "stagedReady": "New version $version is ready and will apply on next launch.",
     "manualDownload": "New version $version is available. Open the update page or use manual download.",

@@ -23,6 +23,8 @@ import android.media.MediaMuxer
 import android.provider.Settings
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
+import androidx.core.content.FileProvider
+import android.webkit.MimeTypeMap
 import androidx.core.app.NotificationManagerCompat
 import androidx.exifinterface.media.ExifInterface
 import io.flutter.embedding.android.FlutterFragmentActivity
@@ -50,6 +52,7 @@ class MainActivity : FlutterFragmentActivity() {
   private var videoTranscodeChannel: MethodChannel? = null
   private var ocrChannel: MethodChannel? = null
   private var markdownPdfExportChannel: MethodChannel? = null
+  private var androidUpdateChannel: MethodChannel? = null
   private val ocrAndPdfChannelHandler by lazy {
     OcrAndPdfChannelHandler(cacheDir = cacheDir)
   }
@@ -264,6 +267,24 @@ class MainActivity : FlutterFragmentActivity() {
       MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "secondloop/markdown_pdf_export").apply {
         setMethodCallHandler { call, result ->
           markdownPdfExportChannelHandler.handle(call, result)
+        }
+      }
+
+    androidUpdateChannel =
+      MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "secondloop/android_update").apply {
+        setMethodCallHandler { call, result ->
+          when (call.method) {
+            "installApk" -> {
+              val args = call.arguments as? Map<*, *>
+              val path = (args?.get("path") as? String)?.trim().orEmpty()
+              if (path.isBlank()) {
+                result.success(false)
+                return@setMethodCallHandler
+              }
+              result.success(launchApkInstaller(path))
+            }
+            else -> result.notImplemented()
+          }
         }
       }
   }

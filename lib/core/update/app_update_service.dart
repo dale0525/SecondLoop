@@ -830,6 +830,11 @@ class AppUpdateService {
           'darwin-x86_64',
         ],
       AppUpdatePlatform.linux => const ['linux-x64', 'linux-x86_64'],
+      AppUpdatePlatform.android => const [
+          'android-arm64',
+          'android-arm64-v8a',
+          'android'
+        ],
       _ => const <String>[],
     };
 

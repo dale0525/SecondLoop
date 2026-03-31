@@ -405,6 +405,40 @@ void main() {
       );
     });
 
+    test('picks Android apk asset from release assets', () async {
+      final service = AppUpdateService(
+        platformOverride: AppUpdatePlatform.android,
+        releaseModeOverride: true,
+        currentVersionLoader: () async =>
+            const AppRuntimeVersion(version: '1.0.0', buildNumber: '9'),
+        releaseJsonFetcher: (uri) async => {
+          'tag_name': 'v1.1.0',
+          'html_url':
+              'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
+          'assets': [
+            {
+              'name': 'SecondLoop-win-Setup.exe',
+              'browser_download_url': 'https://cdn.example.com/setup.exe',
+            },
+            {
+              'name': 'SecondLoop-android-arm64-v8a.apk',
+              'browser_download_url': 'https://cdn.example.com/secondloop.apk',
+            },
+          ],
+        },
+      );
+
+      final result = await service.checkForUpdates();
+
+      expect(result.update, isNotNull);
+      expect(result.update!.installMode, AppUpdateInstallMode.externalDownload);
+      expect(
+        result.update!.downloadUri.toString(),
+        'https://cdn.example.com/secondloop.apk',
+      );
+      expect(result.update!.asset?.name, 'SecondLoop-android-arm64-v8a.apk');
+    });
+
     test('tries fallback endpoint when first endpoint fails', () async {
       final attempted = <Uri>[];
       final service = AppUpdateService(

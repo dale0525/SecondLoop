@@ -118,6 +118,19 @@ Future<Map<String, Object?>> _buildPlatforms(
     );
   }
 
+  final androidApk = _firstFile(
+      entries,
+      (name) =>
+          name.toLowerCase().endsWith('.apk') &&
+          name.toLowerCase().contains('secondloop-android'));
+  if (androidApk != null) {
+    platforms['android-arm64'] = await _buildArchiveEntry(
+      file: androidApk,
+      baseDownloadUrl: baseDownloadUrl,
+      installMode: 'apk',
+    );
+  }
+
   if (platforms.isEmpty) {
     throw StateError('no_update_assets_found');
   }

@@ -1,4 +1,4 @@
-import 'dart:typed_data';
+import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -6,6 +6,10 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:secondloop/core/backend/app_backend.dart';
 import 'package:secondloop/core/session/session_scope.dart';
+import 'dart:io';
+
+import 'package:flutter/foundation.dart';
+import 'package:secondloop/core/update/android/android_apk_installer.dart';
 import 'package:secondloop/core/update/app_update_service.dart';
 import 'package:secondloop/features/settings/about_page.dart';
 import 'package:secondloop/features/settings/settings_page.dart';
@@ -40,6 +44,55 @@ class _FakeAboutUpdateService extends AppUpdateService {
   Future<void> stageUpdateForNextLaunch(AppUpdateAvailability update) async {
     stageCalls += 1;
     staged = update;
+  }
+}
+
+class _FakeAndroidApkDownloader implements AndroidApkDownloader {
+  _FakeAndroidApkDownloader({this.completer, this.failuresBeforeSuccess = 0});
+
+  final Completer<void>? completer;
+  int failuresBeforeSuccess;
+  int downloadCalls = 0;
+  Uri? downloadedUri;
+
+  @override
+  Future<File> downloadApk({
+    required Uri downloadUri,
+    required String fileName,
+    required AndroidApkDownloadProgressCallback onProgress,
+    AndroidApkDownloadCancelToken? cancelToken,
+  }) async {
+    downloadCalls += 1;
+    downloadedUri = downloadUri;
+    onProgress(
+        const AndroidApkDownloadProgress(receivedBytes: 10, totalBytes: 100));
+    onProgress(
+        const AndroidApkDownloadProgress(receivedBytes: 55, totalBytes: 100));
+    if (completer != null) {
+      await completer!.future;
+    }
+    if (cancelToken?.isCancelled == true) {
+      throw const AndroidApkDownloadCancelledException();
+    }
+    if (failuresBeforeSuccess > 0) {
+      failuresBeforeSuccess -= 1;
+      throw StateError('download_failed');
+    }
+    onProgress(
+        const AndroidApkDownloadProgress(receivedBytes: 100, totalBytes: 100));
+    return File(
+        '${Directory.systemTemp.path}${Platform.pathSeparator}$fileName');
+  }
+}
+
+class _FakeAndroidApkInstaller implements AndroidApkInstaller {
+  int installCalls = 0;
+  String? installedPath;
+
+  @override
+  Future<void> installApk({required String apkPath}) async {
+    installCalls += 1;
+    installedPath = apkPath;
   }
 }
 
@@ -129,7 +182,9 @@ void main() {
     expect(find.byKey(const ValueKey('about_auto_update')), findsOneWidget);
 
     await tester.tap(find.byKey(const ValueKey('about_auto_update')));
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+    await tester.pump(const Duration(milliseconds: 100));
     expect(service.installCalls, 1);
     expect(service.installed?.latestTag, 'v1.1.0');
 
@@ -141,6 +196,203 @@ void main() {
     await tester.pumpAndSettle();
     expect(opened.last.toString(), 'https://secondloop.app');
   });
+
+  testWidgets('About page offers Android in-app update for apk releases',
+      (tester) async {
+    final oldPlatform = debugDefaultTargetPlatformOverride;
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+    SharedPreferences.setMockInitialValues({});
+
+    final downloadCompleter = Completer<void>();
+    final downloader = _FakeAndroidApkDownloader(completer: downloadCompleter);
+    final installer = _FakeAndroidApkInstaller();
+    final update = AppUpdateAvailability(
+      currentVersion: '1.0.1+99',
+      latestTag: 'v1.1.0',
+      releasePageUri: Uri.parse(
+        'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
+      ),
+      installMode: AppUpdateInstallMode.externalDownload,
+      asset: AppUpdateAsset(
+        name: 'SecondLoop-android-arm64-v8a.apk',
+        downloadUri:
+            Uri.parse('https://cdn.example.com/SecondLoop-android.apk'),
+      ),
+    );
+    final service = _FakeAboutUpdateService(
+      result: AppUpdateCheckResult(currentVersion: '1.0.1+99', update: update),
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AboutPage(
+            updateService: service,
+            runtimeVersionLoader: () async =>
+                const AppRuntimeVersion(version: '1.0.1', buildNumber: '99'),
+            androidApkDownloader: downloader,
+            androidApkInstaller: installer,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('about_check_updates')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('about_auto_update')), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('about_auto_update')));
+    await tester.pump();
+
+    expect(find.byKey(const ValueKey('about_android_progress_bar')),
+        findsOneWidget);
+    expect(find.textContaining('55%'), findsOneWidget);
+    expect(service.installCalls, 0);
+    expect(service.stageCalls, 0);
+    expect(downloader.downloadCalls, 1);
+    expect(installer.installCalls, 0);
+
+    downloadCompleter.complete();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+
+    expect(installer.installCalls, 1);
+    expect(installer.installedPath, isNotNull);
+
+    debugDefaultTargetPlatformOverride = oldPlatform;
+  },
+      variant: const TargetPlatformVariant(<TargetPlatform>{
+        TargetPlatform.android,
+      }));
+
+  testWidgets('About page shows retry button after Android update failure',
+      (tester) async {
+    final oldPlatform = debugDefaultTargetPlatformOverride;
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+    SharedPreferences.setMockInitialValues({});
+
+    final downloader = _FakeAndroidApkDownloader(failuresBeforeSuccess: 1);
+    final installer = _FakeAndroidApkInstaller();
+    final update = AppUpdateAvailability(
+      currentVersion: '1.0.1+99',
+      latestTag: 'v1.1.0',
+      releasePageUri: Uri.parse(
+        'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
+      ),
+      installMode: AppUpdateInstallMode.externalDownload,
+      asset: AppUpdateAsset(
+        name: 'SecondLoop-android-arm64-v8a.apk',
+        downloadUri:
+            Uri.parse('https://cdn.example.com/SecondLoop-android.apk'),
+      ),
+    );
+    final service = _FakeAboutUpdateService(
+      result: AppUpdateCheckResult(currentVersion: '1.0.1+99', update: update),
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AboutPage(
+            updateService: service,
+            runtimeVersionLoader: () async =>
+                const AppRuntimeVersion(version: '1.0.1', buildNumber: '99'),
+            androidApkDownloader: downloader,
+            androidApkInstaller: installer,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('about_check_updates')));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('about_auto_update')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+
+    expect(find.byKey(const ValueKey('about_android_retry')), findsOneWidget);
+    expect(installer.installCalls, 0);
+    expect(downloader.downloadCalls, 1);
+
+    await tester.tap(find.byKey(const ValueKey('about_android_retry')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+
+    expect(downloader.downloadCalls, 2);
+    expect(installer.installCalls, 1);
+
+    debugDefaultTargetPlatformOverride = oldPlatform;
+  },
+      variant: const TargetPlatformVariant(<TargetPlatform>{
+        TargetPlatform.android,
+      }));
+
+  testWidgets('About page can cancel Android apk download', (tester) async {
+    final oldPlatform = debugDefaultTargetPlatformOverride;
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+    SharedPreferences.setMockInitialValues({});
+
+    final downloadCompleter = Completer<void>();
+    final downloader = _FakeAndroidApkDownloader(completer: downloadCompleter);
+    final installer = _FakeAndroidApkInstaller();
+    final update = AppUpdateAvailability(
+      currentVersion: '1.0.1+99',
+      latestTag: 'v1.1.0',
+      releasePageUri: Uri.parse(
+        'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
+      ),
+      installMode: AppUpdateInstallMode.externalDownload,
+      asset: AppUpdateAsset(
+        name: 'SecondLoop-android-arm64-v8a.apk',
+        downloadUri:
+            Uri.parse('https://cdn.example.com/SecondLoop-android.apk'),
+      ),
+    );
+    final service = _FakeAboutUpdateService(
+      result: AppUpdateCheckResult(currentVersion: '1.0.1+99', update: update),
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AboutPage(
+            updateService: service,
+            runtimeVersionLoader: () async =>
+                const AppRuntimeVersion(version: '1.0.1', buildNumber: '99'),
+            androidApkDownloader: downloader,
+            androidApkInstaller: installer,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('about_check_updates')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('about_auto_update')));
+    await tester.pump();
+
+    expect(find.byKey(const ValueKey('about_android_cancel')), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('about_android_cancel')));
+    downloadCompleter.complete();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+
+    expect(
+        find.byKey(const ValueKey('about_android_progress_bar')), findsNothing);
+    expect(find.byKey(const ValueKey('about_android_retry')), findsNothing);
+    expect(installer.installCalls, 0);
+
+    debugDefaultTargetPlatformOverride = oldPlatform;
+  },
+      variant: const TargetPlatformVariant(<TargetPlatform>{
+        TargetPlatform.android,
+      }));
 
   testWidgets('About page stages update for next launch', (tester) async {
     SharedPreferences.setMockInitialValues({});
@@ -177,7 +429,9 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('about_check_updates')));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('about_auto_update')));
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+    await tester.pump(const Duration(milliseconds: 100));
 
     expect(service.installCalls, 0);
     expect(service.stageCalls, 1);
@@ -224,7 +478,9 @@ void main() {
     expect(find.byKey(const ValueKey('about_auto_update')), findsOneWidget);
 
     await tester.tap(find.byKey(const ValueKey('about_auto_update')));
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+    await tester.pump(const Duration(milliseconds: 100));
 
     expect(service.installCalls, 1);
     expect(service.stageCalls, 0);

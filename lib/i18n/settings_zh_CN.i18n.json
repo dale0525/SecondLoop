@@ -688,6 +688,17 @@
       "openUpdateFailed": "无法打开更新页面"
     }
   },
+  "updateDialog": {
+    "title": "发现新版本：$version",
+    "message": "检测到新的 Android 版本，现在可以下载并安装。",
+    "updateNow": "更新",
+    "downloading": "正在下载更新…",
+    "installing": "正在打开安装器…",
+    "downloadProgress": "已下载：$percent%",
+    "downloadProgressUnknown": "下载中…",
+    "downloadFailed": "下载失败，或无法打开安装器。",
+    "releaseNotesUnavailable": "暂时无法获取更新日志。"
+  },
   "updateNotice": {
     "stagedReady": "新版本 $version 已准备好，将在下次启动自动更新。",
     "manualDownload": "发现新版本 $version，可打开更新页面或手动下载安装。",

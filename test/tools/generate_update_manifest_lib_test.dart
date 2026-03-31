@@ -19,6 +19,8 @@ void main() {
         .writeAsString('macos');
     await File('${tempDir.path}/SecondLoop-linux-x64-v1.2.3.tar.gz')
         .writeAsString('linux');
+    await File('${tempDir.path}/SecondLoop-android-v1.2.3.apk')
+        .writeAsString('android');
 
     final generated = await generateUpdateManifest(
       inputDirPath: tempDir.path,
@@ -34,6 +36,7 @@ void main() {
     final windows = platforms['windows-x64'] as Map<String, Object?>;
     final macos = platforms['macos-universal'] as Map<String, Object?>;
     final linux = platforms['linux-x64'] as Map<String, Object?>;
+    final android = platforms['android-arm64'] as Map<String, Object?>;
 
     expect(generated.manifest['version'], '1.2.3');
     expect(generated.manifest['tag_name'], 'v1.2.3');
@@ -65,6 +68,11 @@ void main() {
     expect(
       linux['sha256'],
       _hexEncode((await Sha256().hash(utf8.encode('linux'))).bytes),
+    );
+    expect(android['install_mode'], 'apk');
+    expect(
+      android['archive_url'],
+      'https://github.com/dale0525/SecondLoop/releases/download/v1.2.3/SecondLoop-android-v1.2.3.apk',
     );
     expect(generated.signatureBase64, isNull);
   });
