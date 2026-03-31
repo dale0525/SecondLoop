@@ -20,7 +20,7 @@ import 'test_i18n.dart';
 class _FakeAboutUpdateService extends AppUpdateService {
   _FakeAboutUpdateService({required this.result});
 
-  final AppUpdateCheckResult result;
+  AppUpdateCheckResult result;
   Object? throwOnCheck;
 
   int checkCalls = 0;
@@ -992,4 +992,63 @@ void main() {
 
     expect(find.byKey(const ValueKey('about_auto_update')), findsNothing);
   });
+
+  testWidgets(
+      'About page clears stale Android retry after refresh result changes',
+      (tester) async {
+    final oldPlatform = debugDefaultTargetPlatformOverride;
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+    SharedPreferences.setMockInitialValues({});
+
+    final update = AppUpdateAvailability(
+      currentVersion: '1.0.1+99',
+      latestTag: 'v1.1.0',
+      releasePageUri: Uri.parse(
+        'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
+      ),
+      installMode: AppUpdateInstallMode.externalDownload,
+      asset: AppUpdateAsset(
+        name: 'SecondLoop-android-arm64-v8a.apk',
+        downloadUri:
+            Uri.parse('https://cdn.example.com/SecondLoop-android.apk'),
+      ),
+    );
+    final service = _FakeAboutUpdateService(
+      result: AppUpdateCheckResult(currentVersion: '1.0.1+99', update: update),
+    );
+    final downloader = _FakeAndroidApkDownloader(failuresBeforeSuccess: 1);
+    final installer = _FakeAndroidApkInstaller();
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AboutPage(
+            updateService: service,
+            runtimeVersionLoader: () async =>
+                const AppRuntimeVersion(version: '1.0.1', buildNumber: '99'),
+            androidApkDownloader: downloader,
+            androidApkInstaller: installer,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('about_check_updates')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('about_auto_update')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('about_android_retry')), findsOneWidget);
+
+    service.result = const AppUpdateCheckResult(currentVersion: '1.0.1+99');
+    await tester.tap(find.byKey(const ValueKey('about_check_updates')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('about_android_retry')), findsNothing);
+    debugDefaultTargetPlatformOverride = oldPlatform;
+  },
+      variant: const TargetPlatformVariant(<TargetPlatform>{
+        TargetPlatform.android,
+      }));
 }

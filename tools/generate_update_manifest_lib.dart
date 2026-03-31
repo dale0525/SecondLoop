@@ -223,7 +223,9 @@ String _normalizeBaseDownloadUrl(String value) {
 
 String _resolveAndroidPlatformKey(String fileName) {
   final normalized = fileName.trim().toLowerCase();
-  if (normalized.contains('arm64-v8a')) {
+  if (normalized.contains('arm64-v8a') ||
+      normalized.contains('arm64') ||
+      normalized.contains('aarch64')) {
     return 'android-arm64-v8a';
   }
   if (normalized.contains('armeabi-v7a') ||
@@ -231,7 +233,7 @@ String _resolveAndroidPlatformKey(String fileName) {
       normalized.contains('arm-v7a')) {
     return 'android-armeabi-v7a';
   }
-  if (normalized.contains('x86_64')) {
+  if (normalized.contains('x86_64') || normalized.contains('x64')) {
     return 'android-x86_64';
   }
   return 'android-universal';

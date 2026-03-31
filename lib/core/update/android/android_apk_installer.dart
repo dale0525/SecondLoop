@@ -84,7 +84,9 @@ class HttpAndroidApkDownloader implements AndroidApkDownloader {
   }
 
   Future<void> dispose() async {
-    _httpClient.close(force: true);
+    if (_providedHttpClient == null) {
+      _httpClient.close(force: true);
+    }
   }
 
   @override

@@ -155,7 +155,12 @@ class _AboutPageState extends State<AboutPage> {
 
   Future<void> _checkForUpdates() async {
     if (_checkingUpdate || _updating) return;
-    setState(() => _checkingUpdate = true);
+    setState(() {
+      _checkingUpdate = true;
+      _androidUpdateCancelling = false;
+      _androidDownloadProgress = null;
+      _androidUpdateError = null;
+    });
 
     try {
       final result = await _updateService.checkForUpdates();

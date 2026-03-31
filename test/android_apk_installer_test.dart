@@ -98,6 +98,16 @@ void main() {
           future, throwsA(isA<AndroidApkDownloadCancelledException>()));
       expect(httpClient.closeCalls, greaterThanOrEqualTo(1));
     });
+
+    test('dispose does not close externally owned http client', () async {
+      final request = _FakeHttpClientRequest();
+      final httpClient = _FakeHttpClient(request: request);
+      final downloader = HttpAndroidApkDownloader(httpClient: httpClient);
+
+      await downloader.dispose();
+
+      expect(httpClient.closeCalls, 0);
+    });
   });
 }
 
