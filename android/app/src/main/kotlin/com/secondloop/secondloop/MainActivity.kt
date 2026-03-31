@@ -520,7 +520,7 @@ class MainActivity : FlutterFragmentActivity() {
     }
   }
 
-  private fun settingsIntent(action: String): Intent {
+  internal fun settingsIntent(action: String): Intent {
     return Intent(action).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
   }
 
@@ -549,10 +549,6 @@ class MainActivity : FlutterFragmentActivity() {
       }
     }
     return false
-  }
-
-  internal fun settingsIntent(action: String): Intent {
-    return Intent(action).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
   }
 
   private fun startAudioRecordingForegroundService(): Boolean {
