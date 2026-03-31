@@ -395,7 +395,8 @@ Invoke-InWindowsShortWorkspace -RepoRootPath $script:repoRootPath -ScriptBlock {
   }
 
   $setupExists = Get-ChildItem -Path $resolvedOutputPath -Filter '*Setup*.exe' -File | Select-Object -First 1
-  $packageExists = Get-ChildItem -Path $resolvedOutputPath -Filter '*.nupkg' -File | Select-Object -First 1
+  $expectedPackageName = "$PackId-$resolvedVersion-$Channel-full.nupkg"
+  $expectedPackagePath = Join-Path $resolvedOutputPath $expectedPackageName
   $releasesMetadataPath = Join-Path $resolvedOutputPath "releases.$Channel.json"
   $assetsMetadataPath = Join-Path $resolvedOutputPath "assets.$Channel.json"
 
@@ -408,8 +409,8 @@ Invoke-InWindowsShortWorkspace -RepoRootPath $script:repoRootPath -ScriptBlock {
   if (-not (Test-Path $assetsMetadataPath)) {
     throw "Velopack output missing assets metadata: $assetsMetadataPath"
   }
-  if ($null -eq $packageExists) {
-    throw "Velopack output missing nupkg in $resolvedOutputPath"
+  if (-not (Test-Path -LiteralPath $expectedPackagePath -PathType Leaf)) {
+    throw "Velopack output missing expected nupkg: $expectedPackagePath"
   }
 
   Write-Host "Velopack package ready in: $resolvedOutputPath"

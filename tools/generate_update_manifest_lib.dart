@@ -82,6 +82,7 @@ Future<Map<String, Object?>> _buildPlatforms(
 
   final platforms = <String, Object?>{};
   final knownWindowsChannels = _detectWindowsChannels(entries);
+  final requestedWindowsChannel = _normalizeWindowsChannel(windowsChannel);
 
   final windowsPackage = _selectNewestWindowsPackage(
     entries,
@@ -90,6 +91,11 @@ Future<Map<String, Object?>> _buildPlatforms(
     windowsChannel: windowsChannel,
     knownChannels: knownWindowsChannels,
   );
+  if (windowsPackage == null && requestedWindowsChannel != null) {
+    throw StateError(
+      'missing_requested_windows_package_channel:$requestedWindowsChannel',
+    );
+  }
   if (windowsPackage != null) {
     final windowsEntry = <String, Object?>{};
     windowsEntry['install_mode'] = 'velopack';
@@ -103,6 +109,11 @@ Future<Map<String, Object?>> _buildPlatforms(
       windowsChannel: windowsChannel,
       knownChannels: knownWindowsChannels,
     );
+    if (releasesFile == null && requestedWindowsChannel != null) {
+      throw StateError(
+        'missing_requested_windows_releases_channel:$requestedWindowsChannel',
+      );
+    }
     if (releasesFile != null) {
       windowsEntry['releases_url'] =
           '$baseDownloadUrl${releasesFile.uri.pathSegments.last}';
@@ -247,6 +258,12 @@ File? _selectNewestWindowsPackage(
     throw StateError(
       'missing_matching_windows_package_version:'
       '${requiredVersion.join('.')}',
+    );
+  }
+
+  if (matchingPackages.isEmpty && requestedChannel != null) {
+    throw StateError(
+      'missing_requested_windows_package_channel:$requestedChannel',
     );
   }
 

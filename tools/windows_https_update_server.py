@@ -14,7 +14,10 @@ def resolve_request_path(
     request_path: str,
 ) -> Path:
     normalized = request_path.split("?", 1)[0].split("#", 1)[0]
-    if normalized.startswith("/downloads/"):
+    if normalized in {"/downloads", "/downloads/"}:
+        resolved = downloads_dir.resolve()
+        allowed_root = downloads_dir.resolve()
+    elif normalized.startswith("/downloads/"):
         relative = normalized.removeprefix("/downloads/")
         resolved = (downloads_dir / relative).resolve()
         allowed_root = downloads_dir.resolve()

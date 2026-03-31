@@ -321,7 +321,8 @@ void main() {
     );
   });
 
-  test('generateUpdateManifest ignores prerelease windows package names',
+  test(
+      'generateUpdateManifest rejects explicit windows channel with prerelease package names',
       () async {
     final tempDir =
         await Directory.systemTemp.createTemp('update_manifest_prerelease_');
@@ -334,17 +335,65 @@ void main() {
     await File('${tempDir.path}/SecondLoop-linux-x64-v1.2.3.tar.gz')
         .writeAsString('linux');
 
-    final generated = await generateUpdateManifest(
-      inputDirPath: tempDir.path,
-      version: '1.2.3',
-      baseDownloadUrl: 'https://example.com/downloads/',
-      windowsAppId: 'com.secondloop.secondloopdev',
-      windowsChannel: 'devwin',
+    await expectLater(
+      () => generateUpdateManifest(
+        inputDirPath: tempDir.path,
+        version: '1.2.3',
+        baseDownloadUrl: 'https://example.com/downloads/',
+        windowsAppId: 'com.secondloop.secondloopdev',
+        windowsChannel: 'devwin',
+      ),
+      throwsStateError,
     );
+  });
 
-    final platforms = generated.manifest['platforms'] as Map<String, Object?>;
-    expect(platforms.containsKey('windows-x64'), isFalse);
-    expect(platforms['linux-x64'], isNotNull);
+  test(
+      'generateUpdateManifest rejects explicit windows channel when package is missing',
+      () async {
+    final tempDir = await Directory.systemTemp
+        .createTemp('update_manifest_missing_explicit_windows_channel_');
+    addTearDown(() => tempDir.delete(recursive: true));
+
+    await File('${tempDir.path}/com.secondloop.secondloop-1.2.3-win-full.nupkg')
+        .writeAsString('stable');
+    await File('${tempDir.path}/releases.win.json').writeAsString('stable');
+    await File('${tempDir.path}/releases.nightly.json')
+        .writeAsString('nightly');
+    await File('${tempDir.path}/SecondLoop-linux-x64-v1.2.3.tar.gz')
+        .writeAsString('linux');
+
+    await expectLater(
+      () => generateUpdateManifest(
+        inputDirPath: tempDir.path,
+        version: '1.2.3',
+        baseDownloadUrl: 'https://example.com/downloads/',
+        windowsChannel: 'nightly',
+      ),
+      throwsStateError,
+    );
+  });
+
+  test(
+      'generateUpdateManifest rejects explicit windows channel when releases metadata is missing',
+      () async {
+    final tempDir = await Directory.systemTemp
+        .createTemp('update_manifest_missing_explicit_windows_metadata_');
+    addTearDown(() => tempDir.delete(recursive: true));
+
+    await File(
+            '${tempDir.path}/com.secondloop.secondloop-1.2.3-nightly-full.nupkg')
+        .writeAsString('nightly');
+    await File('${tempDir.path}/releases.win.json').writeAsString('stable');
+
+    await expectLater(
+      () => generateUpdateManifest(
+        inputDirPath: tempDir.path,
+        version: '1.2.3',
+        baseDownloadUrl: 'https://example.com/downloads/',
+        windowsChannel: 'nightly',
+      ),
+      throwsStateError,
+    );
   });
 
   test(

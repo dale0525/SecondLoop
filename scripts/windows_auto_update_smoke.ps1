@@ -544,8 +544,6 @@ try {
     $v2Output = Join-Path $repoRootPath 'dist/auto-update-test/v2'
   }
 
-  Write-Utf8NoBomFile -Path $pubspecPath -Content $originalPubspec
-
   if (Test-Path -LiteralPath $serverRoot) {
     Remove-Item -LiteralPath $serverRoot -Recurse -Force
   }

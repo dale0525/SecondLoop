@@ -610,6 +610,13 @@ class ReleaseWorkflowEnvTests(unittest.TestCase):
         self.assertIn('"releases.$Channel.json"', script_text)
         self.assertIn('"assets.$Channel.json"', script_text)
 
+    def test_windows_velopack_script_checks_exact_expected_nupkg_name(self) -> None:
+        script_text = (Path(__file__).resolve().parents[2] / "scripts/package_windows_velopack.ps1").read_text(encoding="utf-8")
+
+        self.assertIn('$expectedPackageName = "$PackId-$resolvedVersion-$Channel-full.nupkg"', script_text)
+        self.assertIn('Join-Path $resolvedOutputPath $expectedPackageName', script_text)
+        self.assertIn('Velopack output missing expected nupkg', script_text)
+
     def test_release_workflow_generates_signed_update_manifest(self) -> None:
         workflow_text = self._workflow_text()
 

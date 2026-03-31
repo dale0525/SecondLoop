@@ -66,6 +66,14 @@ class WindowsAutoUpdateSmokeTests(unittest.TestCase):
         self.assertIn("System.Text.UTF8Encoding($false)", script)
         self.assertNotIn("Set-Content -LiteralPath $PubspecPath -Value $updated -Encoding utf8", script)
 
+    def test_smoke_script_restores_pubspec_only_in_finally(self) -> None:
+        script = SMOKE_SCRIPT.read_text(encoding="utf-8")
+
+        self.assertEqual(
+            1,
+            script.count("Write-Utf8NoBomFile -Path $pubspecPath -Content $originalPubspec"),
+        )
+
     def test_smoke_script_requires_unambiguous_setup_executable(self) -> None:
         script = SMOKE_SCRIPT.read_text(encoding="utf-8")
 
@@ -167,6 +175,7 @@ class WindowsAutoUpdateSmokeTests(unittest.TestCase):
         self.assertIn("ThreadingHTTPServer", server)
         self.assertIn("ssl", server)
         self.assertIn("latest.json", server)
+        self.assertIn('normalized in {"/downloads", "/downloads/"}', server)
 
 
 if __name__ == "__main__":
