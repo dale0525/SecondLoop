@@ -81,6 +81,16 @@ class WindowsAutoUpdateSmokeTests(unittest.TestCase):
         self.assertIn("$matching = @(Get-RunningInstalledProcesses)", script)
         self.assertIn("$stableMatching = @(Get-RunningInstalledProcesses)", script)
 
+    def test_smoke_script_waits_for_installed_version_without_build_metadata(self) -> None:
+        script = SMOKE_SCRIPT.read_text(encoding="utf-8")
+
+        self.assertIn("$expectedVersionName = Get-VersionName $ExpectedVersion", script)
+        self.assertIn("if ($currentVersion -eq $expectedVersionName)", script)
+        self.assertIn(
+            'throw "Timed out waiting for installed version $expectedVersionName. Current=$(Get-InstalledVersion)"',
+            script,
+        )
+
     def test_smoke_script_uses_manifest_driven_stage_then_restart_flow(self) -> None:
         self.assertTrue(SMOKE_SCRIPT.exists())
 
@@ -96,6 +106,7 @@ class WindowsAutoUpdateSmokeTests(unittest.TestCase):
         self.assertIn("Get-FullPackage", script)
         self.assertIn("tools/windows_https_update_server.py", script)
         self.assertIn("'--windows-app-id', $PackId", script)
+        self.assertIn("'--windows-channel', $Channel", script)
         self.assertNotIn("'--package', $packageFile.FullName", script)
         self.assertNotIn("Start-ObservedProcess -FilePath $updateExe", script)
 

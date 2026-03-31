@@ -252,16 +252,17 @@ function Wait-ForInstalledVersion {
     [int]$TimeoutSeconds = 90
   )
 
+  $expectedVersionName = Get-VersionName $ExpectedVersion
   $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
   while ((Get-Date) -lt $deadline) {
     $currentVersion = Get-InstalledVersion
-    if ($currentVersion -eq $ExpectedVersion) {
+    if ($currentVersion -eq $expectedVersionName) {
       return
     }
     Start-Sleep -Seconds 2
   }
 
-  throw "Timed out waiting for installed version $ExpectedVersion. Current=$(Get-InstalledVersion)"
+  throw "Timed out waiting for installed version $expectedVersionName. Current=$(Get-InstalledVersion)"
 }
 
 function Wait-ForStagedPackage {
@@ -290,16 +291,17 @@ function Wait-ForRunningInstalledProcess {
     [int]$TimeoutSeconds = 90
   )
 
+  $expectedVersionName = Get-VersionName $ExpectedVersion
   $expectedPath = Get-InstalledExePath
   $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
 
   while ((Get-Date) -lt $deadline) {
     $matching = @(Get-RunningInstalledProcesses)
 
-    if ($matching.Count -gt 0 -and (Get-InstalledVersion) -eq $ExpectedVersion) {
+    if ($matching.Count -gt 0 -and (Get-InstalledVersion) -eq $expectedVersionName) {
       Start-Sleep -Seconds 5
       $stableMatching = @(Get-RunningInstalledProcesses)
-      if ($stableMatching.Count -gt 0 -and (Get-InstalledVersion) -eq $ExpectedVersion) {
+      if ($stableMatching.Count -gt 0 -and (Get-InstalledVersion) -eq $expectedVersionName) {
         return
       }
     }
@@ -307,7 +309,7 @@ function Wait-ForRunningInstalledProcess {
     Start-Sleep -Seconds 2
   }
 
-  throw "Timed out waiting for running installed process at $expectedPath with version $ExpectedVersion."
+  throw "Timed out waiting for running installed process at $expectedPath with version $expectedVersionName."
 }
 
 function Get-RunningInstalledProcesses {
@@ -513,6 +515,7 @@ try {
     '--output-dir', $downloadsRoot,
     '--version', $newVersionName,
     '--windows-app-id', $PackId,
+    '--windows-channel', $Channel,
     '--base-download-url', "https://localhost:$Port/downloads",
     '--release-page-url', "https://localhost:$Port/releases/$newVersionName"
   )

@@ -16,12 +16,15 @@ class GeneratedUpdateManifest {
   final String? signatureBase64;
 }
 
+const _defaultWindowsChannel = 'win';
+
 Future<GeneratedUpdateManifest> generateUpdateManifest({
   required String inputDirPath,
   required String version,
   required String baseDownloadUrl,
   String? releasePageUrl,
   String windowsAppId = 'com.secondloop.secondloop',
+  String? windowsChannel,
   DateTime? publishedAt,
   String? signingPrivateKeyBase64,
 }) async {
@@ -45,6 +48,7 @@ Future<GeneratedUpdateManifest> generateUpdateManifest({
     inputDir,
     baseDownloadUrl: normalizedBaseUrl,
     windowsAppId: windowsAppId,
+    windowsChannel: windowsChannel,
   );
 
   final jsonText = '${const JsonEncoder.withIndent('  ').convert(manifest)}\n';
@@ -64,6 +68,7 @@ Future<Map<String, Object?>> _buildPlatforms(
   Directory inputDir, {
   required String baseDownloadUrl,
   required String windowsAppId,
+  String? windowsChannel,
 }) async {
   final entries = inputDir
       .listSync()
@@ -76,6 +81,7 @@ Future<Map<String, Object?>> _buildPlatforms(
   final windowsPackage = _selectNewestWindowsPackage(
     entries,
     windowsAppId: windowsAppId,
+    windowsChannel: windowsChannel,
   );
   if (windowsPackage != null) {
     final windowsEntry = <String, Object?>{};
@@ -87,6 +93,7 @@ Future<Map<String, Object?>> _buildPlatforms(
     final releasesFile = _selectMatchingReleasesFile(
       entries,
       packageName: windowsPackage.uri.pathSegments.last,
+      windowsChannel: windowsChannel,
     );
     if (releasesFile != null) {
       windowsEntry['releases_url'] =
@@ -190,11 +197,47 @@ File? _firstFile(List<File> files, bool Function(String name) predicate) {
 File? _selectNewestWindowsPackage(
   List<File> files, {
   required String windowsAppId,
+  String? windowsChannel,
 }) {
+  final requestedChannel = _normalizeWindowsChannel(windowsChannel);
+  final matchingPackages = <File>[];
+
+  for (final file in files) {
+    final name = file.uri.pathSegments.last;
+    final version = _extractWindowsPackageVersion(
+      name,
+      windowsAppId: windowsAppId,
+    );
+    if (version == null) {
+      continue;
+    }
+    final packageChannel = _effectiveWindowsChannel(
+      _extractWindowsPackageChannel(name),
+    );
+    if (requestedChannel != null) {
+      if (packageChannel != requestedChannel) {
+        continue;
+      }
+    }
+    matchingPackages.add(file);
+  }
+
+  if (requestedChannel == null) {
+    final discoveredChannels = matchingPackages
+        .map((file) => _effectiveWindowsChannel(
+              _extractWindowsPackageChannel(file.uri.pathSegments.last),
+            ))
+        .toSet();
+    if (discoveredChannels.length > 1) {
+      throw StateError(
+          'ambiguous_windows_channels:${discoveredChannels.join(',')}');
+    }
+  }
+
   File? newestFile;
   List<int>? newestVersion;
 
-  for (final file in files) {
+  for (final file in matchingPackages) {
     final name = file.uri.pathSegments.last;
     final version = _extractWindowsPackageVersion(
       name,
@@ -216,25 +259,30 @@ File? _selectNewestWindowsPackage(
 File? _selectMatchingReleasesFile(
   List<File> files, {
   required String packageName,
+  String? windowsChannel,
 }) {
-  final packageChannel = _extractWindowsPackageChannel(packageName);
-  if (packageChannel != null) {
-    final expectedName = 'releases.$packageChannel.json'.toLowerCase();
-    final exact = _firstFile(
-      files,
-      (name) => name.toLowerCase() == expectedName,
-    );
-    if (exact != null) {
-      return exact;
-    }
-  }
+  final requestedChannel = _normalizeWindowsChannel(windowsChannel);
+  final packageChannel =
+      _effectiveWindowsChannel(_extractWindowsPackageChannel(packageName));
+  final resolvedChannel = requestedChannel ?? packageChannel;
 
   return _firstFile(
     files,
     (name) =>
-        name.toLowerCase().startsWith('releases.') &&
-        name.toLowerCase().endsWith('.json'),
+        name.toLowerCase() == 'releases.$resolvedChannel.json'.toLowerCase(),
   );
+}
+
+String? _normalizeWindowsChannel(String? value) {
+  final trimmed = value?.trim();
+  if (trimmed == null || trimmed.isEmpty) {
+    return null;
+  }
+  return trimmed.toLowerCase();
+}
+
+String _effectiveWindowsChannel(String? value) {
+  return _normalizeWindowsChannel(value) ?? _defaultWindowsChannel;
 }
 
 List<int>? _extractWindowsPackageVersion(
@@ -303,7 +351,10 @@ String _normalizeVersion(String value) {
   if (trimmed.isEmpty) {
     throw ArgumentError.value(value, 'version', 'version_must_not_be_empty');
   }
-  return trimmed.startsWith('v') ? trimmed.substring(1) : trimmed;
+  if (trimmed.startsWith('v') || trimmed.startsWith('V')) {
+    return trimmed.substring(1);
+  }
+  return trimmed;
 }
 
 String _normalizeBaseDownloadUrl(String value) {

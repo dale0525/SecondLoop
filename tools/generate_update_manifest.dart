@@ -16,6 +16,7 @@ Future<void> main(List<String> args) async {
   final windowsAppId = parsed['windows-app-id'] ??
       Platform.environment['SECONDLOOP_APP_ID'] ??
       'com.secondloop.secondloop';
+  final windowsChannel = parsed['windows-channel'];
   final signingPrivateKey = parsed['signing-private-key'] ??
       Platform.environment['SECONDLOOP_UPDATE_SIGNING_PRIVATE_KEY'];
   final publishedAt = parsed['published-at'];
@@ -26,6 +27,7 @@ Future<void> main(List<String> args) async {
     baseDownloadUrl: baseDownloadUrl,
     releasePageUrl: releasePageUrl,
     windowsAppId: windowsAppId,
+    windowsChannel: windowsChannel,
     publishedAt: publishedAt == null || publishedAt.trim().isEmpty
         ? null
         : DateTime.parse(publishedAt).toUtc(),
@@ -82,6 +84,16 @@ String? _releasePageUrlFromRepo({
   if (trimmedRepo == null || trimmedRepo.isEmpty) {
     return null;
   }
-  final normalizedVersion = version.startsWith('v') ? version : 'v$version';
+  final trimmedVersion = version.trim();
+  final normalizedVersion =
+      trimmedVersion.startsWith('v') || trimmedVersion.startsWith('V')
+          ? 'v${trimmedVersion.substring(1)}'
+          : 'v$trimmedVersion';
   return 'https://github.com/$trimmedRepo/releases/tag/$normalizedVersion';
 }
+
+String? releasePageUrlFromRepoForTest({
+  required String? repo,
+  required String version,
+}) =>
+    _releasePageUrlFromRepo(repo: repo, version: version);
