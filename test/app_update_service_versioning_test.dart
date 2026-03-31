@@ -45,6 +45,23 @@ void main() {
       expect(isWindowsMsiInstallerName('AnotherApp-win.msi'), isFalse);
     });
 
+    test('Windows MSI identity matcher avoids broad dev substring matches', () {
+      expect(
+        isWindowsMsiInstallerNameForApp(
+          'SecondLoop-device-win.msi',
+          appId: 'com.secondloop.secondloopdev',
+        ),
+        isFalse,
+      );
+      expect(
+        isWindowsMsiInstallerNameForApp(
+          'SecondLoop-devtools-win.msi',
+          appId: 'com.secondloop.secondloopdev',
+        ),
+        isFalse,
+      );
+    });
+
     test('checkForUpdates accepts uppercase V release tags', () async {
       final service = AppUpdateService(
         platformOverride: AppUpdatePlatform.windows,

@@ -22,13 +22,22 @@ bool isWindowsMsiInstallerNameForApp(
 
   final normalizedName = name.trim().toLowerCase();
   final isDevApp = normalizedAppId.endsWith('dev');
-  final hasDevToken = normalizedName.contains('dev');
+  final hasDevToken = _hasWindowsDevInstallerIdentity(normalizedName);
 
   if (isDevApp) {
     return hasDevToken;
   }
 
   return !hasDevToken;
+}
+
+bool _hasWindowsDevInstallerIdentity(String normalizedName) {
+  final tokens = normalizedName
+      .replaceAll('.msi', '')
+      .split(RegExp(r'[^a-z0-9]+'))
+      .where((token) => token.isNotEmpty)
+      .toList(growable: false);
+  return tokens.contains('secondloop') && tokens.contains('dev');
 }
 
 bool isWindowsVelopackPackageName(String name) {

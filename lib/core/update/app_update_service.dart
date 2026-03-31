@@ -280,6 +280,11 @@ class AppUpdateService {
             windowsAppId: effectiveWindowsAppId,
           )
         : preferredAsset;
+    final sawWindowsIdentityMismatch = _platform == AppUpdatePlatform.windows &&
+        releaseContainsWindowsIdentityMismatch(
+          release,
+          windowsAppId: effectiveWindowsAppId,
+        );
     final manualFallbackReason = describeManualFallbackReason(
       _platform,
       preferredAsset ?? matchedAsset,
@@ -287,6 +292,7 @@ class AppUpdateService {
       windowsManagedRuntimeAvailable: windowsManagedRuntimeAvailable,
       macosManagedInstallSupported: macosManagedInstallSupported,
       windowsAppId: effectiveWindowsAppId,
+      sawWindowsIdentityMismatch: sawWindowsIdentityMismatch,
     );
 
     await _recordEvent(

@@ -91,13 +91,10 @@ AppUpdateAsset? selectExternalDownloadAsset(
   if (platform == AppUpdatePlatform.windows) {
     final exactAppId = windowsAppId?.trim();
     if (exactAppId != null && exactAppId.isNotEmpty) {
-      final exactMatch = selectFromMatches(
+      return selectFromMatches(
         (name) => isWindowsMsiInstallerNameForApp(name, appId: exactAppId),
         preferredAsset,
       );
-      if (exactMatch != null) {
-        return exactMatch;
-      }
     }
 
     return selectFromMatches(isWindowsMsiInstallerName, preferredAsset);
@@ -332,12 +329,10 @@ String describeManualFallbackReason(
   required bool windowsManagedRuntimeAvailable,
   required bool macosManagedInstallSupported,
   String? windowsAppId,
+  bool sawWindowsIdentityMismatch = false,
 }) {
   if (asset == null) {
-    final exactWindowsAppId = windowsAppId?.trim();
-    if (platform == AppUpdatePlatform.windows &&
-        exactWindowsAppId != null &&
-        exactWindowsAppId.isNotEmpty) {
+    if (platform == AppUpdatePlatform.windows && sawWindowsIdentityMismatch) {
       return 'windows_manifest_app_id_mismatch';
     }
     return 'missing_platform_asset';
@@ -461,9 +456,85 @@ AppUpdateAsset? _matchWindowsAssetForCurrentRuntime(
     }
   }
 
+  final exactAppId = appId?.trim();
   return _selectBestAssetForArchitecture(
     AppUpdatePlatform.windows,
-    findAll(isWindowsMsiInstallerName),
+    exactAppId == null || exactAppId.isEmpty
+        ? findAll(isWindowsMsiInstallerName)
+        : findAll(
+            (name) => isWindowsMsiInstallerNameForApp(name, appId: exactAppId),
+          ),
     currentArchitecture: currentArchitecture,
   );
+}
+
+bool releaseContainsWindowsIdentityMismatch(
+  Map<String, Object?> release, {
+  String? windowsAppId,
+}) {
+  final expectedAppId = windowsAppId?.trim();
+  if (expectedAppId == null || expectedAppId.isEmpty) {
+    return false;
+  }
+
+  final normalizedExpectedAppId = expectedAppId.toLowerCase();
+  var sawWindowsCandidate = false;
+
+  final platforms = release['platforms'];
+  if (platforms is Map) {
+    for (final key in const ['windows-x64', 'windows-x86_64']) {
+      final rawEntry = platforms[key];
+      final candidateEntries = switch (rawEntry) {
+        Map() => <Map>[rawEntry],
+        List() => rawEntry.whereType<Map>().toList(growable: false),
+        _ => const <Map>[],
+      };
+      for (final candidateEntry in candidateEntries) {
+        final name = readStringLoose(candidateEntry, 'name') ??
+            readStringLoose(candidateEntry, 'package_url') ??
+            readStringLoose(candidateEntry, 'url') ??
+            '';
+        final manifestAppId = readStringLoose(candidateEntry, 'app_id');
+        final isWindowsCandidate =
+            isWindowsVelopackPackageName(name) || manifestAppId != null;
+        if (!isWindowsCandidate) {
+          continue;
+        }
+        sawWindowsCandidate = true;
+        final exactAppIdMatch = manifestAppId != null &&
+            manifestAppId.trim().toLowerCase() == normalizedExpectedAppId;
+        final exactNameMatch =
+            isWindowsVelopackPackageNameForApp(name, appId: expectedAppId);
+        if (!exactAppIdMatch && !exactNameMatch) {
+          return true;
+        }
+      }
+    }
+  }
+
+  final assets = release['assets'];
+  if (assets is List) {
+    for (final rawAsset in assets.whereType<Map>()) {
+      final name = readStringLoose(rawAsset, 'name');
+      if (name == null) {
+        continue;
+      }
+      final isWindowsCandidate =
+          isWindowsMsiInstallerName(name) || isWindowsVelopackPackageName(name);
+      if (!isWindowsCandidate) {
+        continue;
+      }
+      sawWindowsCandidate = true;
+      final isExactMatch = isWindowsMsiInstallerNameForApp(
+            name,
+            appId: expectedAppId,
+          ) ||
+          isWindowsVelopackPackageNameForApp(name, appId: expectedAppId);
+      if (!isExactMatch) {
+        return true;
+      }
+    }
+  }
+
+  return sawWindowsCandidate && false;
 }

@@ -374,6 +374,30 @@ void main() {
   });
 
   test(
+      'generateUpdateManifest rejects unknown channel-suffixed windows package when no metadata declares it',
+      () async {
+    final tempDir = await Directory.systemTemp
+        .createTemp('update_manifest_unknown_windows_channel_');
+    addTearDown(() => tempDir.delete(recursive: true));
+
+    await File('${tempDir.path}/com.secondloop.secondloop-1.2.3-full.nupkg')
+        .writeAsString('stable');
+    await File(
+            '${tempDir.path}/com.secondloop.secondloop-1.2.3-nightly-full.nupkg')
+        .writeAsString('nightly');
+    await File('${tempDir.path}/releases.win.json').writeAsString('stable');
+
+    await expectLater(
+      () => generateUpdateManifest(
+        inputDirPath: tempDir.path,
+        version: '1.2.3',
+        baseDownloadUrl: 'https://example.com/downloads/',
+      ),
+      throwsStateError,
+    );
+  });
+
+  test(
       'generateUpdateManifest rejects explicit windows channel when releases metadata is missing',
       () async {
     final tempDir = await Directory.systemTemp

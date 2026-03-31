@@ -904,10 +904,10 @@ void main() {
 
       expect(result.update, isNotNull);
       expect(result.update!.installMode, AppUpdateInstallMode.externalDownload);
-      expect(result.update!.asset?.name, 'SecondLoop-win.msi');
+      expect(result.update!.asset, isNull);
       expect(
         result.update!.downloadUri.toString(),
-        'https://cdn.example.com/SecondLoop-win.msi',
+        'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
       );
     });
 
@@ -1049,7 +1049,48 @@ void main() {
 
       expect(result.update, isNotNull);
       expect(result.update!.installMode, AppUpdateInstallMode.externalDownload);
-      expect(result.update!.asset?.name, 'SecondLoop-win.msi');
+      expect(result.update!.asset, isNull);
+    });
+
+    test('records missing Windows assets instead of app id mismatch', () async {
+      final logger = InMemoryUpdateEventLogger();
+      final stagedClient = FakeWindowsStagedUpdateClient(
+        available: false,
+        appIdValue: 'com.secondloop.secondloopdev',
+      );
+      final service = AppUpdateService(
+        platformOverride: AppUpdatePlatform.windows,
+        releaseModeOverride: true,
+        windowsStagedUpdateClient: stagedClient,
+        updateEventLogger: logger,
+        currentVersionLoader: () async =>
+            const AppRuntimeVersion(version: '1.0.0', buildNumber: '9'),
+        releaseJsonFetcher: (_) async => {
+          'version': '1.1.0',
+          'release_page_url':
+              'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
+          'platforms': <String, Object?>{},
+          'assets': <Object?>[],
+        },
+      );
+
+      final result = await service.checkForUpdates();
+
+      expect(result.update, isNotNull);
+      expect(result.update!.installMode, AppUpdateInstallMode.externalDownload);
+      expect(result.update!.asset, isNull);
+      expect(
+        logger.records.any((entry) =>
+            entry.type == UpdateEventType.manualFallback &&
+            entry.message == 'missing_platform_asset'),
+        isTrue,
+      );
+      expect(
+        logger.records.any((entry) =>
+            entry.type == UpdateEventType.manualFallback &&
+            entry.message == 'windows_manifest_app_id_mismatch'),
+        isFalse,
+      );
     });
 
     test('records missing integrity metadata as manual fallback reason',

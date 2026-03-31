@@ -227,6 +227,7 @@ File? _selectNewestWindowsPackage(
   };
   final matchingPackages = <File>[];
   var sawMismatchedStrictVersion = false;
+  var sawUnknownChannelVariant = false;
 
   for (final file in files) {
     final name = file.uri.pathSegments.last;
@@ -236,6 +237,13 @@ File? _selectNewestWindowsPackage(
       knownChannels: resolvedKnownChannels,
     );
     if (packageInfo == null) {
+      if (_isUnknownWindowsPackageChannelVariant(
+        name,
+        windowsAppId: windowsAppId,
+        requiredVersion: requiredVersion,
+      )) {
+        sawUnknownChannelVariant = true;
+      }
       continue;
     }
     final version = packageInfo.version;
@@ -258,6 +266,12 @@ File? _selectNewestWindowsPackage(
     throw StateError(
       'missing_matching_windows_package_version:'
       '${requiredVersion.join('.')}',
+    );
+  }
+
+  if (sawUnknownChannelVariant) {
+    throw StateError(
+      'unknown_windows_package_channel_variant:${requiredVersion.join('.')}',
     );
   }
 
@@ -485,6 +499,44 @@ _WindowsPackageInfo? _parseWindowsPackageInfo(
   }
 
   return null;
+}
+
+bool _isUnknownWindowsPackageChannelVariant(
+  String fileName, {
+  required String windowsAppId,
+  required List<int> requiredVersion,
+}) {
+  final normalizedName = fileName.trim();
+  final normalizedAppId = windowsAppId.trim();
+  if (normalizedName.isEmpty || normalizedAppId.isEmpty) {
+    return false;
+  }
+
+  final lowerName = normalizedName.toLowerCase();
+  final lowerAppId = normalizedAppId.toLowerCase();
+  const suffix = '-full.nupkg';
+  if (!lowerName.startsWith('$lowerAppId-') || !lowerName.endsWith(suffix)) {
+    return false;
+  }
+
+  final versionStart = normalizedAppId.length + 1;
+  final versionEnd = normalizedName.length - suffix.length;
+  if (versionEnd <= versionStart) {
+    return false;
+  }
+
+  final stem = normalizedName.substring(versionStart, versionEnd);
+  final dashIndex = stem.indexOf('-');
+  if (dashIndex <= 0 || dashIndex >= stem.length - 1) {
+    return false;
+  }
+
+  final version = tryParseStrictAppVersion(stem.substring(0, dashIndex));
+  if (version == null) {
+    return false;
+  }
+
+  return _compareStrictVersionSegments(version, requiredVersion) == 0;
 }
 
 String? _extractWindowsAppIdPrefix(String fileName) {
