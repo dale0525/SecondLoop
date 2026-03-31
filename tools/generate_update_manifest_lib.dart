@@ -77,11 +77,13 @@ Future<Map<String, Object?>> _buildPlatforms(
       .toList(growable: false);
 
   final platforms = <String, Object?>{};
+  final knownWindowsChannels = _detectWindowsChannels(entries);
 
   final windowsPackage = _selectNewestWindowsPackage(
     entries,
     windowsAppId: windowsAppId,
     windowsChannel: windowsChannel,
+    knownChannels: knownWindowsChannels,
   );
   if (windowsPackage != null) {
     final windowsEntry = <String, Object?>{};
@@ -94,6 +96,7 @@ Future<Map<String, Object?>> _buildPlatforms(
       entries,
       packageName: windowsPackage.uri.pathSegments.last,
       windowsChannel: windowsChannel,
+      knownChannels: knownWindowsChannels,
     );
     if (releasesFile != null) {
       windowsEntry['releases_url'] =
@@ -198,8 +201,13 @@ File? _selectNewestWindowsPackage(
   List<File> files, {
   required String windowsAppId,
   String? windowsChannel,
+  Iterable<String> knownChannels = const <String>[],
 }) {
   final requestedChannel = _normalizeWindowsChannel(windowsChannel);
+  final resolvedKnownChannels = <String>{
+    ...knownChannels.map((channel) => channel.trim().toLowerCase()),
+    if (requestedChannel != null) requestedChannel,
+  };
   final matchingPackages = <File>[];
 
   for (final file in files) {
@@ -207,12 +215,16 @@ File? _selectNewestWindowsPackage(
     final version = _extractWindowsPackageVersion(
       name,
       windowsAppId: windowsAppId,
+      knownChannels: resolvedKnownChannels,
     );
     if (version == null) {
       continue;
     }
     final packageChannel = _effectiveWindowsChannel(
-      _extractWindowsPackageChannel(name),
+      _extractWindowsPackageChannel(
+        name,
+        knownChannels: resolvedKnownChannels,
+      ),
     );
     if (requestedChannel != null) {
       if (packageChannel != requestedChannel) {
@@ -225,7 +237,10 @@ File? _selectNewestWindowsPackage(
   if (requestedChannel == null) {
     final discoveredChannels = matchingPackages
         .map((file) => _effectiveWindowsChannel(
-              _extractWindowsPackageChannel(file.uri.pathSegments.last),
+              _extractWindowsPackageChannel(
+                file.uri.pathSegments.last,
+                knownChannels: resolvedKnownChannels,
+              ),
             ))
         .toSet();
     if (discoveredChannels.length > 1) {
@@ -242,6 +257,7 @@ File? _selectNewestWindowsPackage(
     final version = _extractWindowsPackageVersion(
       name,
       windowsAppId: windowsAppId,
+      knownChannels: resolvedKnownChannels,
     );
     if (version == null) {
       continue;
@@ -260,10 +276,17 @@ File? _selectMatchingReleasesFile(
   List<File> files, {
   required String packageName,
   String? windowsChannel,
+  Iterable<String> knownChannels = const <String>[],
 }) {
   final requestedChannel = _normalizeWindowsChannel(windowsChannel);
-  final packageChannel =
-      _effectiveWindowsChannel(_extractWindowsPackageChannel(packageName));
+  final resolvedKnownChannels = <String>{
+    ...knownChannels.map((channel) => channel.trim().toLowerCase()),
+    if (requestedChannel != null) requestedChannel,
+  };
+  final packageChannel = _effectiveWindowsChannel(_extractWindowsPackageChannel(
+    packageName,
+    knownChannels: resolvedKnownChannels,
+  ));
   final resolvedChannel = requestedChannel ?? packageChannel;
 
   return _firstFile(
@@ -288,6 +311,48 @@ String _effectiveWindowsChannel(String? value) {
 List<int>? _extractWindowsPackageVersion(
   String fileName, {
   required String windowsAppId,
+  Iterable<String> knownChannels = const <String>[],
+}) {
+  return _parseWindowsPackageInfo(
+    fileName,
+    windowsAppId: windowsAppId,
+    knownChannels: knownChannels,
+  )?.version;
+}
+
+String? _extractWindowsPackageChannel(
+  String fileName, {
+  Iterable<String> knownChannels = const <String>[],
+}) {
+  return _parseWindowsPackageInfo(
+    fileName,
+    windowsAppId: _extractWindowsAppIdPrefix(fileName) ?? '',
+    knownChannels: knownChannels,
+  )?.channel;
+}
+
+Set<String> _detectWindowsChannels(List<File> files) {
+  final channels = <String>{};
+  for (final file in files) {
+    final name = file.uri.pathSegments.last;
+    final releasesMatch =
+        RegExp(r'^releases\.(.+)\.json$', caseSensitive: false)
+            .firstMatch(name);
+    final assetsMatch =
+        RegExp(r'^assets\.(.+)\.json$', caseSensitive: false).firstMatch(name);
+    final channel =
+        releasesMatch?.group(1)?.trim() ?? assetsMatch?.group(1)?.trim() ?? '';
+    if (channel.isNotEmpty) {
+      channels.add(channel.toLowerCase());
+    }
+  }
+  return channels;
+}
+
+_WindowsPackageInfo? _parseWindowsPackageInfo(
+  String fileName, {
+  required String windowsAppId,
+  Iterable<String> knownChannels = const <String>[],
 }) {
   final normalizedName = fileName.trim();
   final normalizedAppId = windowsAppId.trim();
@@ -307,33 +372,53 @@ List<int>? _extractWindowsPackageVersion(
   );
   final directVersion = tryParseStrictAppVersion(versionWithOptionalChannel);
   if (directVersion != null) {
-    return directVersion;
+    return _WindowsPackageInfo(version: directVersion);
   }
 
-  final separatorIndex = versionWithOptionalChannel.indexOf('-');
-  if (separatorIndex <= 0) {
-    return null;
+  final resolvedKnownChannels = knownChannels
+      .map((channel) => channel.trim().toLowerCase())
+      .where((channel) => channel.isNotEmpty)
+      .toList(growable: false)
+    ..sort((left, right) => right.length.compareTo(left.length));
+  final normalizedStem = versionWithOptionalChannel.toLowerCase();
+  for (final channel in resolvedKnownChannels) {
+    final suffix = '-$channel';
+    if (!normalizedStem.endsWith(suffix) ||
+        versionWithOptionalChannel.length <= suffix.length) {
+      continue;
+    }
+    final versionPart = versionWithOptionalChannel.substring(
+      0,
+      versionWithOptionalChannel.length - suffix.length,
+    );
+    final parsedVersion = tryParseStrictAppVersion(versionPart);
+    if (parsedVersion != null) {
+      return _WindowsPackageInfo(version: parsedVersion, channel: channel);
+    }
   }
 
-  final versionPart = versionWithOptionalChannel.substring(0, separatorIndex);
-  return tryParseStrictAppVersion(versionPart);
+  return null;
 }
 
-String? _extractWindowsPackageChannel(String fileName) {
+String? _extractWindowsAppIdPrefix(String fileName) {
   final normalizedName = fileName.trim();
-  if (!normalizedName.toLowerCase().endsWith('-full.nupkg')) {
+  final suffixIndex = normalizedName.toLowerCase().lastIndexOf('-full.nupkg');
+  if (suffixIndex <= 0) {
     return null;
   }
+  final firstVersionToken =
+      RegExp(r'-(\d+\.\d+\.\d+)').firstMatch(normalizedName);
+  if (firstVersionToken == null || firstVersionToken.start <= 0) {
+    return null;
+  }
+  return normalizedName.substring(0, firstVersionToken.start);
+}
 
-  final packageStem =
-      normalizedName.substring(0, normalizedName.length - '-full.nupkg'.length);
-  final versionMatch =
-      RegExp(r'-(\d+\.\d+\.\d+)(?:-(.+))?$').firstMatch(packageStem);
-  final channel = versionMatch?.group(2)?.trim();
-  if (channel == null || channel.isEmpty) {
-    return null;
-  }
-  return channel;
+class _WindowsPackageInfo {
+  const _WindowsPackageInfo({required this.version, this.channel});
+
+  final List<int> version;
+  final String? channel;
 }
 
 int _compareStrictVersionSegments(List<int> left, List<int> right) {
@@ -351,10 +436,11 @@ String _normalizeVersion(String value) {
   if (trimmed.isEmpty) {
     throw ArgumentError.value(value, 'version', 'version_must_not_be_empty');
   }
-  if (trimmed.startsWith('v') || trimmed.startsWith('V')) {
-    return trimmed.substring(1);
+  final parsedVersion = tryParseStrictAppVersion(trimmed);
+  if (parsedVersion == null) {
+    throw ArgumentError.value(value, 'version', 'version_must_be_strict_x_y_z');
   }
-  return trimmed;
+  return '${parsedVersion[0]}.${parsedVersion[1]}.${parsedVersion[2]}';
 }
 
 String _normalizeBaseDownloadUrl(String value) {

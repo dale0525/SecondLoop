@@ -60,12 +60,47 @@ function Get-PixiPythonPath {
     return $pixiPython
   }
 
-  $pythonCommand = Get-Command python -ErrorAction SilentlyContinue
-  if ($pythonCommand) {
-    return $pythonCommand.Source
+  throw 'Python is required for the local HTTPS update server. Run `pixi install` first.'
+}
+
+function Invoke-CheckedProcessCapture {
+  param(
+    [string]$FilePath,
+    [string[]]$ArgumentList,
+    [string]$WorkingDirectory = $repoRootPath,
+    [string]$FailureMessage = 'Command failed.'
+  )
+
+  Write-Host ('Running: ' + $FilePath + ' ' + ($ArgumentList -join ' '))
+  $captured = & $FilePath @ArgumentList 2>&1
+  if ($LASTEXITCODE -ne 0) {
+    $outputText = (($captured | ForEach-Object { $_.ToString() }) -join [Environment]::NewLine).Trim()
+    if ([string]::IsNullOrWhiteSpace($outputText)) {
+      throw "$FailureMessage ExitCode=$LASTEXITCODE"
+    }
+    throw "$FailureMessage ExitCode=$LASTEXITCODE`n$outputText"
+  }
+  return (($captured | ForEach-Object { $_.ToString() }) -join [Environment]::NewLine).Trim()
+}
+
+function New-TemporaryUpdateSigningKeyPair {
+  $keygenArgs = @(
+    '-NoProfile',
+    '-ExecutionPolicy', 'Bypass',
+    '-File', (Join-Path $PSScriptRoot 'run_fvm_tool.ps1'),
+    'dart',
+    'run',
+    'tools/generate_update_signing_keypair.dart'
+  )
+  $rawJson = Invoke-CheckedProcessCapture -FilePath 'powershell.exe' -ArgumentList $keygenArgs -FailureMessage 'Failed to generate temporary update signing key pair.'
+  $keyPair = $rawJson | ConvertFrom-Json
+  if ($null -eq $keyPair -or
+      [string]::IsNullOrWhiteSpace($keyPair.private_key_base64) -or
+      [string]::IsNullOrWhiteSpace($keyPair.public_key_base64)) {
+    throw 'Temporary update signing key pair output is invalid.'
   }
 
-  throw 'Python is required for the local HTTPS update server. Run `pixi install` first.'
+  return $keyPair
 }
 
 function Invoke-CheckedProcess {
@@ -467,6 +502,8 @@ $trustedCertificateThumbprint = $null
 $certificateTrustAddedByScript = $false
 $originalUpdatePublicKey = $null
 $hadOriginalUpdatePublicKey = Test-Path Env:SECONDLOOP_UPDATE_PUBLIC_KEY
+$originalUpdateSigningPrivateKey = $null
+$hadOriginalUpdateSigningPrivateKey = Test-Path Env:SECONDLOOP_UPDATE_SIGNING_PRIVATE_KEY
 $wasCertificateTrustedBefore = $false
 
 try {
@@ -475,7 +512,19 @@ try {
   if ($hadOriginalUpdatePublicKey) {
     $originalUpdatePublicKey = $env:SECONDLOOP_UPDATE_PUBLIC_KEY
   }
-  Remove-Item Env:SECONDLOOP_UPDATE_PUBLIC_KEY -ErrorAction SilentlyContinue
+  if ($hadOriginalUpdateSigningPrivateKey) {
+    $originalUpdateSigningPrivateKey = $env:SECONDLOOP_UPDATE_SIGNING_PRIVATE_KEY
+  }
+
+  if ($SkipBuild) {
+    if (-not $hadOriginalUpdatePublicKey -or -not $hadOriginalUpdateSigningPrivateKey) {
+      throw 'SkipBuild requires SECONDLOOP_UPDATE_PUBLIC_KEY and SECONDLOOP_UPDATE_SIGNING_PRIVATE_KEY so manifest verification stays enabled.'
+    }
+  } else {
+    $temporarySigningKeys = New-TemporaryUpdateSigningKeyPair
+    $env:SECONDLOOP_UPDATE_PUBLIC_KEY = $temporarySigningKeys.public_key_base64
+    $env:SECONDLOOP_UPDATE_SIGNING_PRIVATE_KEY = $temporarySigningKeys.private_key_base64
+  }
 
   if (-not $SkipBuild) {
     if (Test-Path -LiteralPath $v1Output) {
@@ -516,6 +565,7 @@ try {
     '--version', $newVersionName,
     '--windows-app-id', $PackId,
     '--windows-channel', $Channel,
+    '--signing-private-key', $env:SECONDLOOP_UPDATE_SIGNING_PRIVATE_KEY,
     '--base-download-url', "https://localhost:$Port/downloads",
     '--release-page-url', "https://localhost:$Port/releases/$newVersionName"
   )
@@ -567,6 +617,12 @@ try {
     Set-Item -Path Env:SECONDLOOP_UPDATE_PUBLIC_KEY -Value $originalUpdatePublicKey
   } else {
     Remove-Item Env:SECONDLOOP_UPDATE_PUBLIC_KEY -ErrorAction SilentlyContinue
+  }
+
+  if ($hadOriginalUpdateSigningPrivateKey) {
+    Set-Item -Path Env:SECONDLOOP_UPDATE_SIGNING_PRIVATE_KEY -Value $originalUpdateSigningPrivateKey
+  } else {
+    Remove-Item Env:SECONDLOOP_UPDATE_SIGNING_PRIVATE_KEY -ErrorAction SilentlyContinue
   }
 
   if ($null -ne $feedProcess -and -not $LeaveServerRunning) {

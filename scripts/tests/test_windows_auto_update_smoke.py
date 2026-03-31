@@ -126,8 +126,22 @@ class WindowsAutoUpdateSmokeTests(unittest.TestCase):
 
         self.assertIn("function Remove-TrustedCertificateByThumbprint", script)
         self.assertIn("Remove-TrustedCertificateByThumbprint -Thumbprint $trustedCertificateThumbprint", script)
-        self.assertIn("Remove-Item Env:SECONDLOOP_UPDATE_PUBLIC_KEY -ErrorAction SilentlyContinue", script)
+        self.assertIn("SECONDLOOP_UPDATE_SIGNING_PRIVATE_KEY", script)
         self.assertIn("Set-Item -Path Env:SECONDLOOP_UPDATE_PUBLIC_KEY -Value $originalUpdatePublicKey", script)
+
+    def test_smoke_script_generates_and_uses_temporary_manifest_signing_keys(self) -> None:
+        script = SMOKE_SCRIPT.read_text(encoding="utf-8")
+
+        self.assertIn("tools/generate_update_signing_keypair.dart", script)
+        self.assertIn("$env:SECONDLOOP_UPDATE_SIGNING_PRIVATE_KEY", script)
+        self.assertIn("$env:SECONDLOOP_UPDATE_PUBLIC_KEY", script)
+        self.assertIn("'--signing-private-key'", script)
+
+    def test_smoke_script_requires_pixi_managed_python(self) -> None:
+        script = SMOKE_SCRIPT.read_text(encoding="utf-8")
+
+        self.assertIn(".pixi/envs/default/python.exe", script)
+        self.assertNotIn("Get-Command python", script)
 
     def test_smoke_script_only_cleans_up_certificate_when_it_imported_it(self) -> None:
         script = SMOKE_SCRIPT.read_text(encoding="utf-8")

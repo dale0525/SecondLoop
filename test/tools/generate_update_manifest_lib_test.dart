@@ -243,6 +243,59 @@ void main() {
     expect(generated.manifest['tag_name'], 'v1.2.3');
   });
 
+  test('generateUpdateManifest rejects non-strict manifest versions', () async {
+    final tempDir = await Directory.systemTemp
+        .createTemp('update_manifest_reject_non_strict_versions_');
+    addTearDown(() => tempDir.delete(recursive: true));
+
+    await File('${tempDir.path}/SecondLoop-linux-x64-v1.2.3.tar.gz')
+        .writeAsString('linux');
+
+    await expectLater(
+      () => generateUpdateManifest(
+        inputDirPath: tempDir.path,
+        version: '1.2.3.4',
+        baseDownloadUrl: 'https://example.com/downloads/',
+      ),
+      throwsArgumentError,
+    );
+
+    await expectLater(
+      () => generateUpdateManifest(
+        inputDirPath: tempDir.path,
+        version: '1.2.3-rc.1',
+        baseDownloadUrl: 'https://example.com/downloads/',
+      ),
+      throwsArgumentError,
+    );
+  });
+
+  test('generateUpdateManifest ignores prerelease windows package names',
+      () async {
+    final tempDir =
+        await Directory.systemTemp.createTemp('update_manifest_prerelease_');
+    addTearDown(() => tempDir.delete(recursive: true));
+
+    await File(
+      '${tempDir.path}/com.secondloop.secondloopdev-1.2.3-rc.1-devwin-full.nupkg',
+    ).writeAsString('rc');
+    await File('${tempDir.path}/releases.devwin.json').writeAsString('{}');
+    await File('${tempDir.path}/SecondLoop-linux-x64-v1.2.3.tar.gz')
+        .writeAsString('linux');
+
+    final generated = await generateUpdateManifest(
+      inputDirPath: tempDir.path,
+      version: '1.2.3',
+      baseDownloadUrl: 'https://example.com/downloads/',
+      windowsAppId: 'com.secondloop.secondloopdev',
+      windowsChannel: 'devwin',
+    );
+
+    final platforms = generated.manifest['platforms'] as Map<String, Object?>;
+    expect(platforms.containsKey('windows-x64'), isFalse);
+    expect(platforms['linux-x64'], isNotNull);
+  });
+
   test(
       'generateUpdateManifest rejects ambiguous windows channels without explicit selection',
       () async {
