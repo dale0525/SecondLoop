@@ -122,11 +122,7 @@ Future<Map<String, Object?>> _buildPlatforms(
     final name = file.uri.pathSegments.last.toLowerCase();
     return name.endsWith('.apk') && name.contains('secondloop-android');
   }).toList(growable: false);
-  if (androidApks.length > 1) {
-    throw StateError('ambiguous_android_apk_assets');
-  }
-  if (androidApks.isNotEmpty) {
-    final androidApk = androidApks.single;
+  for (final androidApk in androidApks) {
     final androidKey =
         _resolveAndroidPlatformKey(androidApk.uri.pathSegments.last);
     platforms[androidKey] = await _buildArchiveEntry(

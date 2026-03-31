@@ -57,6 +57,7 @@ class AndroidApkUpdateCoordinator {
     }
 
     final expectedSha256 = asset.sha256?.trim();
+    _throwIfCancelled(cancelToken);
     if (expectedSha256 != null && expectedSha256.isNotEmpty) {
       try {
         final actualSha256 = await sha256FileHex(downloadedFile);
@@ -64,6 +65,9 @@ class AndroidApkUpdateCoordinator {
           throw StateError('android_apk_sha256_mismatch');
         }
       } catch (error) {
+        if (cancelToken?.isCancelled == true) {
+          throw const AndroidApkDownloadCancelledException();
+        }
         throw AndroidApkUpdateException(
           type: AndroidApkUpdateFailureType.integrityCheck,
           cause: error,
@@ -71,6 +75,7 @@ class AndroidApkUpdateCoordinator {
       }
     }
 
+    _throwIfCancelled(cancelToken);
     try {
       await _installer.installApk(apkPath: downloadedFile.path);
     } catch (error) {
@@ -93,5 +98,11 @@ class AndroidApkUpdateCoordinator {
       buffer.write(byte.toRadixString(16).padLeft(2, '0'));
     }
     return buffer.toString();
+  }
+
+  void _throwIfCancelled(AndroidApkDownloadCancelToken? cancelToken) {
+    if (cancelToken?.isCancelled == true) {
+      throw const AndroidApkDownloadCancelledException();
+    }
   }
 }

@@ -42,6 +42,19 @@ class _FakeInstaller implements AndroidApkInstaller {
   }
 }
 
+class _CancellingInstaller implements AndroidApkInstaller {
+  _CancellingInstaller(this.cancelToken);
+
+  final AndroidApkDownloadCancelToken cancelToken;
+  int installCalls = 0;
+
+  @override
+  Future<void> installApk({required String apkPath}) async {
+    installCalls += 1;
+    cancelToken.cancel();
+  }
+}
+
 void main() {
   test('verifies sha256 before installing apk', () async {
     const bytes = <int>[1, 2, 3, 4];
@@ -122,5 +135,31 @@ void main() {
         ),
       ),
     );
+  });
+
+  test('does not launch installer after cancellation', () async {
+    final cancelToken = AndroidApkDownloadCancelToken();
+    final installer = _CancellingInstaller(cancelToken);
+    final coordinator = AndroidApkUpdateCoordinator(
+      downloader: _FakeDownloader(bytes: const <int>[1, 2, 3]),
+      installer: installer,
+    );
+
+    cancelToken.cancel();
+
+    await expectLater(
+      () => coordinator.performUpdate(
+        asset: AppUpdateAsset(
+          name: 'SecondLoop-android-arm64-v8a.apk',
+          downloadUri: Uri.parse('https://cdn.example.com/app.apk'),
+          sha256:
+              '039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81',
+        ),
+        onProgress: (_) {},
+        cancelToken: cancelToken,
+      ),
+      throwsA(isA<AndroidApkDownloadCancelledException>()),
+    );
+    expect(installer.installCalls, 0);
   });
 }

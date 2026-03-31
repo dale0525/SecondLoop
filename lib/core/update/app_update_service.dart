@@ -13,6 +13,10 @@ import 'macos/macos_update_client.dart';
 import 'update_event_log.dart';
 import 'windows/velopack_update_client.dart';
 
+part 'app_update_service_android_support.dart';
+part 'app_update_service_asset_matching.dart';
+part 'app_update_service_utils.dart';
+
 const _defaultReleaseApiOrigin = String.fromEnvironment(
   'SECONDLOOP_RELEASE_API_ORIGIN',
   defaultValue: '',
@@ -279,7 +283,7 @@ class AppUpdateService {
     final releasePageUri =
         _parseUri(_readString(release, 'release_page_url')) ??
             _parseUri(_readString(release, 'html_url')) ??
-            _buildFallbackReleasePageUri();
+            _buildFallbackReleasePageUriImpl(_releaseRepo, _releaseApiOrigin);
 
     if (compareReleaseTagWithCurrentVersion(latestTag, currentVersion) <= 0) {
       await _recordEvent(
@@ -298,21 +302,28 @@ class AppUpdateService {
     final macosManagedInstallSupported = macosManagedClient != null &&
         macosManagedClient.isSupportedInstallLocation();
     final androidSupportedAbis = _platform == AppUpdatePlatform.android
-        ? await _loadAndroidSupportedAbis()
+        ? await _loadAndroidSupportedAbisImpl(
+            override: _androidSupportedAbisOverride,
+            loader: _androidSupportedAbisLoader,
+          )
         : const <String>[];
 
-    final manifestAsset = _matchManifestAssetForCurrentPlatform(
+    final manifestAsset = _matchManifestAssetForCurrentPlatformImpl(
+      _platform,
       release,
       androidSupportedAbis: androidSupportedAbis,
     );
-    final assets = _parseAssets(release['assets']);
+    final assets = _parseAssetsImpl(release['assets']);
     final matchedAsset = manifestAsset ??
-        _matchAssetForCurrentPlatform(
+        _matchAssetForCurrentPlatformImpl(
+          _platform,
           assets,
           windowsManagedRuntimeAvailable: windowsManagedRuntimeAvailable,
           androidSupportedAbis: androidSupportedAbis,
         );
-    final installMode = _resolveInstallMode(
+    final installMode = _resolveInstallModeImpl(
+      _platform,
+      _isReleaseMode,
       matchedAsset,
       windowsManagedRuntimeAvailable: windowsManagedRuntimeAvailable,
       macosManagedInstallSupported: macosManagedInstallSupported,
@@ -686,309 +697,6 @@ class AppUpdateService {
     return endpoints;
   }
 
-  Uri _buildFallbackReleasePageUri() {
-    final repo = _releaseRepo.trim();
-    if (repo.isEmpty) {
-      final origin = _parseUri(_releaseApiOrigin.trim());
-      if (origin != null) return origin;
-      return Uri.parse('https://github.com');
-    }
-    return Uri.parse('https://github.com/$repo/releases/latest');
-  }
-
-  List<AppUpdateAsset> _parseAssets(Object? rawAssets) {
-    if (rawAssets is! List) return const [];
-
-    final parsed = <AppUpdateAsset>[];
-    for (final item in rawAssets) {
-      if (item is! Map) continue;
-      final name = item['name'];
-      final url = item['browser_download_url'];
-      final sha256 = item['sha256'];
-      if (name is! String || url is! String) continue;
-      final uri = _parseUri(url);
-      if (uri == null) continue;
-      parsed.add(
-        AppUpdateAsset(
-          name: name,
-          downloadUri: uri,
-          sha256: sha256 is String && sha256.trim().isNotEmpty
-              ? sha256.trim()
-              : null,
-        ),
-      );
-    }
-
-    return parsed;
-  }
-
-  AppUpdateAsset? _matchAssetForCurrentPlatform(
-    List<AppUpdateAsset> assets, {
-    required bool windowsManagedRuntimeAvailable,
-    List<String> androidSupportedAbis = const <String>[],
-  }) {
-    if (_platform == AppUpdatePlatform.windows) {
-      return _matchWindowsAssetForCurrentRuntime(
-        assets,
-        managedRuntimeAvailable: windowsManagedRuntimeAvailable,
-      );
-    }
-
-    if (_platform == AppUpdatePlatform.macos) {
-      for (final asset in assets) {
-        if (_isMacosManagedArchiveName(asset.name)) return asset;
-      }
-      for (final asset in assets) {
-        if (_isMacosManualInstallerName(asset.name)) return asset;
-      }
-      return null;
-    }
-
-    if (_platform == AppUpdatePlatform.android) {
-      return _matchAndroidAssetForSupportedAbis(
-        assets,
-        supportedAbis: androidSupportedAbis,
-      );
-    }
-
-    final matcher = switch (_platform) {
-      AppUpdatePlatform.linux => RegExp(r'^SecondLoop-linux-x64-.*\.tar\.gz$'),
-      _ => null,
-    };
-
-    if (matcher == null) return null;
-
-    for (final asset in assets) {
-      if (matcher.hasMatch(asset.name)) return asset;
-    }
-    return null;
-  }
-
-  AppUpdateAsset? _matchWindowsAssetForCurrentRuntime(
-    List<AppUpdateAsset> assets, {
-    required bool managedRuntimeAvailable,
-  }) {
-    AppUpdateAsset? findFirst(bool Function(String name) matcher) {
-      for (final asset in assets) {
-        if (matcher(asset.name)) return asset;
-      }
-      return null;
-    }
-
-    if (managedRuntimeAvailable) {
-      final stagedPackage = findFirst(_isWindowsVelopackPackageName);
-      if (stagedPackage != null) {
-        return stagedPackage;
-      }
-    }
-
-    return findFirst(_isWindowsMsiInstallerName);
-  }
-
-  static bool _isWindowsMsiInstallerName(String name) {
-    final normalized = name.trim().toLowerCase();
-    return normalized.endsWith('.msi') && normalized.contains('secondloop');
-  }
-
-  static bool _isWindowsVelopackPackageName(String name) {
-    final normalized = name.trim().toLowerCase();
-    return normalized.endsWith('-full.nupkg') &&
-        normalized.contains('secondloop');
-  }
-
-  static bool _isMacosManagedArchiveName(String name) {
-    final normalized = name.trim().toLowerCase();
-    return normalized.endsWith('.app.tar.gz') &&
-        normalized.contains('secondloop');
-  }
-
-  static bool _isMacosManualInstallerName(String name) {
-    final normalized = name.trim().toLowerCase();
-    return (normalized.endsWith('.dmg') || normalized.endsWith('.zip')) &&
-        normalized.contains('secondloop');
-  }
-
-  AppUpdateInstallMode _resolveInstallMode(
-    AppUpdateAsset? asset, {
-    required bool windowsManagedRuntimeAvailable,
-    required bool macosManagedInstallSupported,
-  }) {
-    if (!_isReleaseMode || asset == null) {
-      return AppUpdateInstallMode.externalDownload;
-    }
-
-    return switch (_platform) {
-      AppUpdatePlatform.windows
-          when _isWindowsVelopackPackageName(asset.name) &&
-              windowsManagedRuntimeAvailable &&
-              _assetHasIntegrityMetadata(asset) =>
-        AppUpdateInstallMode.seamlessRestart,
-      AppUpdatePlatform.macos
-          when _isMacosManagedArchiveName(asset.name) &&
-              macosManagedInstallSupported &&
-              _assetHasIntegrityMetadata(asset) =>
-        AppUpdateInstallMode.seamlessRestart,
-      AppUpdatePlatform.linux
-          when asset.name.endsWith('.tar.gz') &&
-              _assetHasIntegrityMetadata(asset) =>
-        AppUpdateInstallMode.seamlessRestart,
-      _ => AppUpdateInstallMode.externalDownload,
-    };
-  }
-
-  AppUpdateAsset? _matchManifestAssetForCurrentPlatform(
-    Map<String, Object?> release, {
-    List<String> androidSupportedAbis = const <String>[],
-  }) {
-    final platforms = release['platforms'];
-    if (platforms is! Map) {
-      return null;
-    }
-
-    final keys = switch (_platform) {
-      AppUpdatePlatform.windows => const ['windows-x64', 'windows-x86_64'],
-      AppUpdatePlatform.macos => const [
-          'macos-universal',
-          'darwin-aarch64',
-          'darwin-x86_64',
-        ],
-      AppUpdatePlatform.linux => const ['linux-x64', 'linux-x86_64'],
-      AppUpdatePlatform.android => _androidManifestKeys(androidSupportedAbis),
-      _ => const <String>[],
-    };
-
-    for (final key in keys) {
-      final rawEntry = platforms[key];
-      if (rawEntry is! Map) {
-        continue;
-      }
-      final url = _readStringLoose(rawEntry, 'package_url') ??
-          _readStringLoose(rawEntry, 'archive_url') ??
-          _readStringLoose(rawEntry, 'url');
-      final parsedUrl = _parseUri(url);
-      if (parsedUrl == null) {
-        continue;
-      }
-
-      final name = _readStringLoose(rawEntry, 'name') ??
-          (parsedUrl.pathSegments.isEmpty ? key : parsedUrl.pathSegments.last);
-      final sha256 = _readStringLoose(rawEntry, 'sha256');
-      return AppUpdateAsset(
-        name: name,
-        downloadUri: parsedUrl,
-        sha256: sha256,
-      );
-    }
-
-    return null;
-  }
-
-  Future<List<String>> _loadAndroidSupportedAbis() async {
-    final override = _androidSupportedAbisOverride;
-    if (override != null) {
-      return _normalizeAndroidSupportedAbis(override);
-    }
-    final loader = _androidSupportedAbisLoader;
-    if (loader != null) {
-      return _normalizeAndroidSupportedAbis(await loader());
-    }
-    try {
-      const channel = MethodChannel('secondloop/android_update');
-      final values = await channel.invokeListMethod<String>('getSupportedAbis');
-      return _normalizeAndroidSupportedAbis(values ?? const <String>[]);
-    } on MissingPluginException {
-      return const <String>[];
-    } catch (_) {
-      return const <String>[];
-    }
-  }
-
-  List<String> _normalizeAndroidSupportedAbis(List<String> values) {
-    final normalized = <String>[];
-    for (final value in values) {
-      final abi = value.trim().toLowerCase();
-      if (abi.isEmpty || normalized.contains(abi)) {
-        continue;
-      }
-      normalized.add(abi);
-    }
-    return normalized;
-  }
-
-  AppUpdateAsset? _matchAndroidAssetForSupportedAbis(
-    List<AppUpdateAsset> assets, {
-    required List<String> supportedAbis,
-  }) {
-    final apkAssets = assets.where((asset) {
-      final name = asset.name.trim().toLowerCase();
-      return name.startsWith('secondloop-android-') && name.endsWith('.apk');
-    }).toList(growable: false);
-    if (apkAssets.isEmpty) return null;
-
-    for (final abi in supportedAbis) {
-      for (final asset in apkAssets) {
-        if (_androidAssetMatchesAbi(asset.name, abi)) {
-          return asset;
-        }
-      }
-    }
-
-    for (final asset in apkAssets) {
-      if (_isAndroidUniversalApkName(asset.name)) {
-        return asset;
-      }
-    }
-
-    return apkAssets.length == 1 ? apkAssets.first : null;
-  }
-
-  bool _androidAssetMatchesAbi(String assetName, String abi) {
-    final normalizedName = assetName.trim().toLowerCase();
-    final normalizedAbi = abi.trim().toLowerCase();
-    return normalizedName.contains('-$normalizedAbi') ||
-        (normalizedAbi == 'arm64-v8a' && normalizedName.contains('-arm64-'));
-  }
-
-  bool _isAndroidUniversalApkName(String assetName) {
-    final normalized = assetName.trim().toLowerCase();
-    return normalized.startsWith('secondloop-android-') &&
-        normalized.endsWith('.apk') &&
-        !normalized.contains('arm64-v8a') &&
-        !normalized.contains('armeabi-v7a') &&
-        !normalized.contains('x86_64');
-  }
-
-  List<String> _androidManifestKeys(List<String> supportedAbis) {
-    final keys = <String>[];
-    void add(String key) {
-      if (!keys.contains(key)) {
-        keys.add(key);
-      }
-    }
-
-    for (final abi in supportedAbis) {
-      switch (abi) {
-        case 'arm64-v8a':
-          add('android-arm64-v8a');
-          add('android-arm64');
-          break;
-        case 'armeabi-v7a':
-          add('android-armeabi-v7a');
-          add('android-armv7');
-          break;
-        case 'x86_64':
-          add('android-x86_64');
-          break;
-      }
-    }
-
-    add('android-universal');
-    add('android');
-    add('android-arm64-v8a');
-    add('android-arm64');
-    return keys;
-  }
-
   Future<T> _withPreparedAsset<T>(
     AppUpdateAsset asset,
     Future<T> Function(Uri localUri) action,
@@ -1072,10 +780,6 @@ class AppUpdateService {
     return uri.path.toLowerCase().endsWith('latest.json');
   }
 
-  bool _assetHasIntegrityMetadata(AppUpdateAsset asset) {
-    return asset.sha256 != null && asset.sha256!.trim().isNotEmpty;
-  }
-
   static String _sanitizeAssetFileName(String value) {
     final sanitized = value.replaceAll(RegExp(r'[<>:"/\\|?*]'), '_').trim();
     if (sanitized.isEmpty) {
@@ -1090,14 +794,6 @@ class AppUpdateService {
     if (trimmed.isEmpty) return null;
     if (trimmed.startsWith('v')) return trimmed;
     return 'v$trimmed';
-  }
-
-  static String? _readStringLoose(Map<dynamic, dynamic> map, String key) {
-    final value = map[key];
-    if (value is! String) return null;
-    final trimmed = value.trim();
-    if (trimmed.isEmpty) return null;
-    return trimmed;
   }
 
   Directory _resolveExtractedSourceDir(
@@ -1212,141 +908,4 @@ class AppUpdateService {
     }
     return 'manual_download_required';
   }
-}
-
-List<int> _parseVersionSegments(String input) {
-  final cleaned = input.trim();
-  if (cleaned.isEmpty) return const [];
-  final matches = RegExp(r'\d+').allMatches(cleaned);
-  if (matches.isEmpty) return const [];
-
-  final segments = <int>[];
-  for (final match in matches) {
-    final parsed = int.tryParse(match.group(0) ?? '');
-    if (parsed == null) continue;
-    segments.add(parsed);
-    if (segments.length >= 4) break;
-  }
-  return segments;
-}
-
-AppUpdatePlatform _detectPlatform() {
-  if (kIsWeb) return AppUpdatePlatform.unsupported;
-  if (Platform.isWindows) return AppUpdatePlatform.windows;
-  if (Platform.isMacOS) return AppUpdatePlatform.macos;
-  if (Platform.isLinux) return AppUpdatePlatform.linux;
-  if (Platform.isAndroid) return AppUpdatePlatform.android;
-  if (Platform.isIOS) return AppUpdatePlatform.ios;
-  return AppUpdatePlatform.unsupported;
-}
-
-String _shellQuote(String value) {
-  return "'${value.replaceAll("'", "'\\''")}'";
-}
-
-String buildLinuxUpdaterScriptForTest({
-  required int pid,
-  required String appDirPath,
-  required String executablePath,
-  required String sourceDirPath,
-  required String tempRootPath,
-}) {
-  return _buildLinuxUpdaterScriptImpl(
-    pid: pid,
-    appDirPath: appDirPath,
-    executablePath: executablePath,
-    sourceDirPath: sourceDirPath,
-    tempRootPath: tempRootPath,
-  );
-}
-
-Future<String> sha256FileHexForTest(File file) => _sha256FileHex(file);
-
-String _buildLinuxUpdaterScriptImpl({
-  required int pid,
-  required String appDirPath,
-  required String executablePath,
-  required String sourceDirPath,
-  required String tempRootPath,
-}) {
-  final safePid = pid.toString();
-  final appDir = _shellQuote(appDirPath);
-  final executable = _shellQuote(executablePath);
-  final sourceDir = _shellQuote(sourceDirPath);
-  final tempRoot = _shellQuote(tempRootPath);
-
-  return '''#!/usr/bin/env bash
-set -euo pipefail
-APP_PID=$safePid
-APP_DIR=$appDir
-EXE_PATH=$executable
-SOURCE_DIR=$sourceDir
-TEMP_ROOT=$tempRoot
-APP_PARENT=\$(dirname "\$APP_DIR")
-BACKUP_DIR="\$APP_PARENT/.secondloop-update-backup.\$APP_PID"
-STAGED_DIR="\$APP_PARENT/.secondloop-update-stage.\$APP_PID"
-MAX_WAIT=60
-waited=0
-APP_START=\$(/bin/ps -o lstart= -p "\$APP_PID" 2>/dev/null | sed 's/^ *//')
-
-cleanup() {
-  rm -rf "\$STAGED_DIR" "\$TEMP_ROOT" || true
-}
-
-restore_backup() {
-  if [ -d "\$BACKUP_DIR" ]; then
-    mv "\$APP_DIR" "\$APP_DIR.failed" 2>/dev/null || true
-    mv "\$BACKUP_DIR" "\$APP_DIR" || {
-      rm -rf "\$TEMP_ROOT" || true
-      exit 1
-    }
-    rm -rf "\$APP_DIR.failed" || true
-  fi
-}
-
-on_error() {
-  restore_backup
-  cleanup
-}
-
-trap on_error EXIT
-
-while kill -0 "\$APP_PID" 2>/dev/null && [ "\$waited" -lt "\$MAX_WAIT" ]; do
-  CURRENT_START=\$(/bin/ps -o lstart= -p "\$APP_PID" 2>/dev/null | sed 's/^ *//')
-  if [ -n "\$APP_START" ] && [ "\$CURRENT_START" != "\$APP_START" ]; then
-    break
-  fi
-  sleep 1
-  waited=\$((waited + 1))
-done
-
-rm -rf "\$STAGED_DIR" "\$BACKUP_DIR"
-mkdir -p "\$STAGED_DIR"
-cp -a "\$SOURCE_DIR"/. "\$STAGED_DIR"/
-mv "\$APP_DIR" "\$BACKUP_DIR"
-mv "\$STAGED_DIR" "\$APP_DIR"
-rm -rf "\$BACKUP_DIR" || true
-chmod +x "\$EXE_PATH" || true
-nohup "\$EXE_PATH" >/dev/null 2>&1 &
-trap - EXIT
-cleanup
-''';
-}
-
-Future<String> _sha256FileHex(File file) async {
-  final sink = Sha256().newHashSink();
-  await for (final chunk in file.openRead()) {
-    sink.add(chunk);
-  }
-  sink.close();
-  final digest = await sink.hash();
-  return _hexEncodeBytes(digest.bytes);
-}
-
-String _hexEncodeBytes(List<int> bytes) {
-  final buffer = StringBuffer();
-  for (final byte in bytes) {
-    buffer.write(byte.toRadixString(16).padLeft(2, '0'));
-  }
-  return buffer.toString();
 }

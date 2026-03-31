@@ -59,6 +59,7 @@ class _AutoUpgradeGateState extends State<AutoUpgradeGate>
   bool _updateNoticeDismissedInSession = false;
   bool _androidDialogOpen = false;
   bool _androidCheckInFlight = false;
+  String? _dismissedAndroidUpdateTagInSession;
 
   late final AppUpdateService _updateService;
   AppUpdateService? _ownedUpdateService;
@@ -186,6 +187,9 @@ class _AutoUpgradeGateState extends State<AutoUpgradeGate>
         }
 
         if (_isAndroidPlatform && _isAndroidUpdateCandidate(update)) {
+          if (_dismissedAndroidUpdateTagInSession == update.latestTag) {
+            return;
+          }
           await _showAndroidUpdateDialog(update);
           return;
         }
@@ -263,6 +267,9 @@ class _AutoUpgradeGateState extends State<AutoUpgradeGate>
             downloader: _androidApkDownloader,
             installer: _androidApkInstaller,
             externalUriLauncher: widget.externalUriLauncher,
+            onCancelled: () {
+              _dismissedAndroidUpdateTagInSession = update.latestTag;
+            },
           );
         },
       );
@@ -446,6 +453,7 @@ class _AndroidUpdateDialog extends StatefulWidget {
     required this.downloader,
     required this.installer,
     required this.externalUriLauncher,
+    required this.onCancelled,
   });
 
   final AppUpdateAvailability update;
@@ -453,6 +461,7 @@ class _AndroidUpdateDialog extends StatefulWidget {
   final AndroidApkDownloader downloader;
   final AndroidApkInstaller installer;
   final AutoUpgradeGateExternalUriLauncher? externalUriLauncher;
+  final VoidCallback onCancelled;
 
   @override
   State<_AndroidUpdateDialog> createState() => _AndroidUpdateDialogState();
@@ -582,7 +591,10 @@ class _AndroidUpdateDialogState extends State<_AndroidUpdateDialog> {
               : 'android_update_cancel'),
           onPressed: _isDownloading
               ? _cancelDownload
-              : () => Navigator.of(context).pop(),
+              : () {
+                  widget.onCancelled();
+                  Navigator.of(context).pop();
+                },
           child: Text(commonT.cancel),
         ),
         if (!_isDownloading)
@@ -648,6 +660,7 @@ class _AndroidUpdateDialogState extends State<_AndroidUpdateDialog> {
 
   void _cancelDownload() {
     _cancelToken?.cancel();
+    widget.onCancelled();
     if (!mounted) return;
     Navigator.of(context).pop();
   }

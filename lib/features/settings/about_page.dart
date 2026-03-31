@@ -270,7 +270,11 @@ class _AboutPageState extends State<AboutPage> {
 
   Future<void> _manualUpdate() {
     final update = _updateResult?.update;
-    final uri = update?.releasePageUri ?? AboutPage.releasePageUri;
+    final uri = update == null
+        ? AboutPage.releasePageUri
+        : (_canUseAndroidApkUpdate(update)
+            ? update.downloadUri
+            : update.releasePageUri);
     return _openExternalUri(
       uri,
       failedMessage: _text.messages.openUpdateFailed,

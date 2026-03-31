@@ -203,6 +203,60 @@ void main() {
     expect(opened.last.toString(), 'https://secondloop.app');
   });
 
+  testWidgets('About page manual update prefers Android apk download uri',
+      (tester) async {
+    final oldPlatform = debugDefaultTargetPlatformOverride;
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+    SharedPreferences.setMockInitialValues({});
+
+    final opened = <Uri>[];
+    final update = AppUpdateAvailability(
+      currentVersion: '1.0.1+99',
+      latestTag: 'v1.1.0',
+      releasePageUri: Uri.parse(
+        'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
+      ),
+      installMode: AppUpdateInstallMode.externalDownload,
+      asset: AppUpdateAsset(
+        name: 'SecondLoop-android-arm64-v8a.apk',
+        downloadUri:
+            Uri.parse('https://cdn.example.com/SecondLoop-android.apk'),
+      ),
+    );
+    final service = _FakeAboutUpdateService(
+      result: AppUpdateCheckResult(currentVersion: '1.0.1+99', update: update),
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AboutPage(
+            updateService: service,
+            runtimeVersionLoader: () async =>
+                const AppRuntimeVersion(version: '1.0.1', buildNumber: '99'),
+            externalUriLauncher: (uri) async {
+              opened.add(uri);
+              return true;
+            },
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('about_check_updates')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('about_manual_update')));
+    await tester.pumpAndSettle();
+
+    expect(opened.single.toString(),
+        'https://cdn.example.com/SecondLoop-android.apk');
+    debugDefaultTargetPlatformOverride = oldPlatform;
+  },
+      variant: const TargetPlatformVariant(<TargetPlatform>{
+        TargetPlatform.android,
+      }));
+
   testWidgets('About page offers Android in-app update for apk releases',
       (tester) async {
     final oldPlatform = debugDefaultTargetPlatformOverride;
