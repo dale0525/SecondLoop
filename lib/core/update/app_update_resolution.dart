@@ -59,6 +59,7 @@ AppUpdateAsset? selectExternalDownloadAsset(
   required AppUpdateAsset? preferredAsset,
   required List<AppUpdateAsset> assets,
   String? currentArchitecture,
+  String? windowsAppId,
 }) {
   List<AppUpdateAsset> findAll(bool Function(String name) matcher) {
     final matches = <AppUpdateAsset>[];
@@ -87,9 +88,22 @@ AppUpdateAsset? selectExternalDownloadAsset(
     );
   }
 
+  if (platform == AppUpdatePlatform.windows) {
+    final exactAppId = windowsAppId?.trim();
+    if (exactAppId != null && exactAppId.isNotEmpty) {
+      final exactMatch = selectFromMatches(
+        (name) => isWindowsMsiInstallerNameForApp(name, appId: exactAppId),
+        preferredAsset,
+      );
+      if (exactMatch != null) {
+        return exactMatch;
+      }
+    }
+
+    return selectFromMatches(isWindowsMsiInstallerName, preferredAsset);
+  }
+
   return switch (platform) {
-    AppUpdatePlatform.windows =>
-      selectFromMatches(isWindowsMsiInstallerName, preferredAsset),
     AppUpdatePlatform.macos =>
       selectFromMatches(isMacosManualInstallerName, preferredAsset),
     _ => preferredAsset,
@@ -105,10 +119,7 @@ AppUpdateAsset? _selectBestAssetForArchitecture(
     return null;
   }
 
-  final architecture = currentArchitecture?.trim();
-  if (architecture == null || architecture.isEmpty) {
-    return matches.first;
-  }
+  final architecture = normalizeArchitectureLabel(currentArchitecture);
 
   AppUpdateAsset? bestAsset;
   int? bestScore;

@@ -104,6 +104,7 @@ class AppUpdateService {
       _updatePublicKeyOverride ?? _defaultUpdatePublicKey;
   Duration get _networkTimeout =>
       _networkTimeoutOverride ?? _defaultUpdateNetworkTimeout;
+  Uri get fallbackReleasePageUri => _buildFallbackReleasePageUri();
   bool get _allowHttpUpdateUris =>
       _allowHttpUpdateUriOverride ?? !_isReleaseMode;
   bool get _allowFileUpdateUris =>
@@ -276,6 +277,7 @@ class AppUpdateService {
             preferredAsset: preferredAsset,
             assets: assets,
             currentArchitecture: _currentArchitecture,
+            windowsAppId: effectiveWindowsAppId,
           )
         : preferredAsset;
     final manualFallbackReason = describeManualFallbackReason(
@@ -712,16 +714,22 @@ class AppUpdateService {
   }
 
   Uri _buildFallbackReleasePageUri() {
+    final origin = parseUpdateUri(
+      _releaseApiOrigin.trim(),
+      allowHttp: _allowHttpUpdateUris,
+      allowFile: _allowFileUpdateUris,
+    );
+    if (origin != null) {
+      final normalizedPath =
+          origin.path.endsWith('/') ? origin.path : '${origin.path}/';
+      return origin.replace(path: '${normalizedPath}releases/latest');
+    }
+
     final repo = _releaseRepo.trim();
     if (repo.isEmpty) {
-      final origin = parseUpdateUri(
-        _releaseApiOrigin.trim(),
-        allowHttp: _allowHttpUpdateUris,
-        allowFile: _allowFileUpdateUris,
-      );
-      if (origin != null) return origin;
       return Uri.parse('https://github.com');
     }
+
     return Uri.parse('https://github.com/$repo/releases/latest');
   }
 

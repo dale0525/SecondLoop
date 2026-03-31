@@ -7,6 +7,30 @@ bool isWindowsMsiInstallerName(String name) {
   return normalized.endsWith('.msi') && normalized.contains('secondloop');
 }
 
+bool isWindowsMsiInstallerNameForApp(
+  String name, {
+  required String appId,
+}) {
+  if (!isWindowsMsiInstallerName(name)) {
+    return false;
+  }
+
+  final normalizedAppId = appId.trim().toLowerCase();
+  if (normalizedAppId.isEmpty) {
+    return false;
+  }
+
+  final normalizedName = name.trim().toLowerCase();
+  final isDevApp = normalizedAppId.endsWith('dev');
+  final hasDevToken = normalizedName.contains('dev');
+
+  if (isDevApp) {
+    return hasDevToken;
+  }
+
+  return !hasDevToken;
+}
+
 bool isWindowsVelopackPackageName(String name) {
   final normalized = name.trim().toLowerCase();
   return normalized.endsWith('-full.nupkg') &&

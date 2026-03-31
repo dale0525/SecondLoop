@@ -47,6 +47,7 @@ class _AutoUpgradeGateState extends State<AutoUpgradeGate> {
   bool _checkScheduled = false;
   bool _noticeSessionInitialized = false;
   bool _updateNoticeDismissedInSession = false;
+  Uri? _lastKnownReleasePageUri;
 
   late final AppUpdateService _updateService;
   AppUpdateService? _ownedUpdateService;
@@ -124,6 +125,7 @@ class _AutoUpgradeGateState extends State<AutoUpgradeGate> {
         return;
       }
 
+      _lastKnownReleasePageUri = update.releasePageUri;
       await UpdateBadgePrefs.setAvailableVersion(update.latestTag);
 
       if (pendingApplyError != null) {
@@ -213,9 +215,8 @@ class _AutoUpgradeGateState extends State<AutoUpgradeGate> {
     final aboutT = context.t.settings.about;
     try {
       final launcher = widget.externalUriLauncher;
-      final fallbackUri = AutoUpgradeGate.fallbackUpdateUri(
-        releaseRepo: _updateService.releaseRepo,
-      );
+      final fallbackUri =
+          _lastKnownReleasePageUri ?? _updateService.fallbackReleasePageUri;
       final opened = launcher != null
           ? await launcher(fallbackUri)
           : await launchUrl(

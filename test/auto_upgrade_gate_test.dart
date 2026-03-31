@@ -38,6 +38,10 @@ class _FakeAutoUpdateService extends AppUpdateService {
   String get releaseRepo => releaseRepoValue;
 
   @override
+  Uri get fallbackReleasePageUri =>
+      AutoUpgradeGate.fallbackUpdateUri(releaseRepo: releaseRepoValue);
+
+  @override
   bool canStageSilentlyForNextLaunch(AppUpdateAvailability update) {
     return canStageSilentlyForNextLaunchValue;
   }

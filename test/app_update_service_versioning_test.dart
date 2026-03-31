@@ -6,6 +6,45 @@ import 'package:secondloop/core/update/app_update_service.dart';
 
 void main() {
   group('AppUpdateService version constraints', () {
+    test('Windows MSI identity matcher distinguishes prod and dev installers',
+        () {
+      expect(
+        isWindowsMsiInstallerNameForApp(
+          'SecondLoop-win.msi',
+          appId: 'com.secondloop.secondloop',
+        ),
+        isTrue,
+      );
+      expect(
+        isWindowsMsiInstallerNameForApp(
+          'SecondLoop Dev-win.msi',
+          appId: 'com.secondloop.secondloop',
+        ),
+        isFalse,
+      );
+      expect(
+        isWindowsMsiInstallerNameForApp(
+          'SecondLoop Dev-win.msi',
+          appId: 'com.secondloop.secondloopdev',
+        ),
+        isTrue,
+      );
+      expect(
+        isWindowsMsiInstallerNameForApp(
+          'SecondLoop-win.msi',
+          appId: 'com.secondloop.secondloopdev',
+        ),
+        isFalse,
+      );
+    });
+
+    test('Windows MSI identity matcher falls back to generic matcher rules',
+        () {
+      expect(isWindowsMsiInstallerName('SecondLoop-win.msi'), isTrue);
+      expect(isWindowsMsiInstallerName('SecondLoop Dev-win.msi'), isTrue);
+      expect(isWindowsMsiInstallerName('AnotherApp-win.msi'), isFalse);
+    });
+
     test('checkForUpdates accepts uppercase V release tags', () async {
       final service = AppUpdateService(
         platformOverride: AppUpdatePlatform.windows,

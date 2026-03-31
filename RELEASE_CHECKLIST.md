@@ -18,6 +18,7 @@
 - Confirm `SecondLoop-win.msi.sha256` is uploaded to the GitHub Release.
 - Confirm the release notes mention the MSI artifact and checksum file.
 - Confirm the generated WinGet manifest bundle references the exact Windows MSI asset.
+- Confirm production MSI names stay free of `dev` tokens, while local/dev MSI names include a visible `Dev` token so update fallback can distinguish them from production installers.
 - Confirm local/dev Velopack packaging still emits channel-suffixed full packages such as `com.secondloop.secondloopdev-1.0.1-devwin-full.nupkg`, while `releases.<channel>.json` keeps the semantic version as `1.0.1`.
 - Confirm Windows Velopack packaging runs from a short mapped workspace path instead of a deep `%TEMP%` worktree path.
 
