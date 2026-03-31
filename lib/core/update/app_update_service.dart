@@ -6,6 +6,7 @@ import 'dart:math';
 import 'package:archive/archive_io.dart';
 import 'package:cryptography/cryptography.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
 import 'macos/macos_update_client.dart';
@@ -109,6 +110,7 @@ typedef AppUpdateReleaseJsonFetcher = Future<Map<String, Object?>> Function(
   Uri uri,
 );
 typedef AppRuntimeVersionLoader = Future<AppRuntimeVersion> Function();
+typedef AndroidSupportedAbisLoader = Future<List<String>> Function();
 
 int compareReleaseTagWithCurrentVersion(
     String releaseTag, String currentVersion) {
@@ -147,6 +149,8 @@ class AppUpdateService {
     UpdateEventLogger? updateEventLogger,
     void Function(int code)? processExit,
     Duration? networkTimeoutOverride,
+    AndroidSupportedAbisLoader? androidSupportedAbisLoader,
+    List<String>? androidSupportedAbisOverride,
   })  : _httpClient = httpClient ?? HttpClient(),
         _releaseJsonFetcher = releaseJsonFetcher,
         _currentVersionLoader = currentVersionLoader,
@@ -160,7 +164,9 @@ class AppUpdateService {
         _updateEventLogger =
             updateEventLogger ?? SharedPrefsUpdateEventLogger(),
         _processExit = processExit,
-        _networkTimeoutOverride = networkTimeoutOverride;
+        _networkTimeoutOverride = networkTimeoutOverride,
+        _androidSupportedAbisLoader = androidSupportedAbisLoader,
+        _androidSupportedAbisOverride = androidSupportedAbisOverride;
 
   final HttpClient _httpClient;
   final AppUpdateReleaseJsonFetcher? _releaseJsonFetcher;
@@ -175,6 +181,8 @@ class AppUpdateService {
   final UpdateEventLogger _updateEventLogger;
   final void Function(int code)? _processExit;
   final Duration? _networkTimeoutOverride;
+  final AndroidSupportedAbisLoader? _androidSupportedAbisLoader;
+  final List<String>? _androidSupportedAbisOverride;
 
   AppUpdatePlatform get _platform => _platformOverride ?? _detectPlatform();
 
@@ -289,13 +297,20 @@ class AppUpdateService {
     final macosManagedClient = _resolvedMacosManagedUpdateClient;
     final macosManagedInstallSupported = macosManagedClient != null &&
         macosManagedClient.isSupportedInstallLocation();
+    final androidSupportedAbis = _platform == AppUpdatePlatform.android
+        ? await _loadAndroidSupportedAbis()
+        : const <String>[];
 
-    final manifestAsset = _matchManifestAssetForCurrentPlatform(release);
+    final manifestAsset = _matchManifestAssetForCurrentPlatform(
+      release,
+      androidSupportedAbis: androidSupportedAbis,
+    );
     final assets = _parseAssets(release['assets']);
     final matchedAsset = manifestAsset ??
         _matchAssetForCurrentPlatform(
           assets,
           windowsManagedRuntimeAvailable: windowsManagedRuntimeAvailable,
+          androidSupportedAbis: androidSupportedAbis,
         );
     final installMode = _resolveInstallMode(
       matchedAsset,
@@ -710,6 +725,7 @@ class AppUpdateService {
   AppUpdateAsset? _matchAssetForCurrentPlatform(
     List<AppUpdateAsset> assets, {
     required bool windowsManagedRuntimeAvailable,
+    List<String> androidSupportedAbis = const <String>[],
   }) {
     if (_platform == AppUpdatePlatform.windows) {
       return _matchWindowsAssetForCurrentRuntime(
@@ -728,9 +744,15 @@ class AppUpdateService {
       return null;
     }
 
+    if (_platform == AppUpdatePlatform.android) {
+      return _matchAndroidAssetForSupportedAbis(
+        assets,
+        supportedAbis: androidSupportedAbis,
+      );
+    }
+
     final matcher = switch (_platform) {
       AppUpdatePlatform.linux => RegExp(r'^SecondLoop-linux-x64-.*\.tar\.gz$'),
-      AppUpdatePlatform.android => RegExp(r'^SecondLoop-android-.*\.apk$'),
       _ => null,
     };
 
@@ -815,8 +837,9 @@ class AppUpdateService {
   }
 
   AppUpdateAsset? _matchManifestAssetForCurrentPlatform(
-    Map<String, Object?> release,
-  ) {
+    Map<String, Object?> release, {
+    List<String> androidSupportedAbis = const <String>[],
+  }) {
     final platforms = release['platforms'];
     if (platforms is! Map) {
       return null;
@@ -830,11 +853,7 @@ class AppUpdateService {
           'darwin-x86_64',
         ],
       AppUpdatePlatform.linux => const ['linux-x64', 'linux-x86_64'],
-      AppUpdatePlatform.android => const [
-          'android-arm64',
-          'android-arm64-v8a',
-          'android'
-        ],
+      AppUpdatePlatform.android => _androidManifestKeys(androidSupportedAbis),
       _ => const <String>[],
     };
 
@@ -862,6 +881,112 @@ class AppUpdateService {
     }
 
     return null;
+  }
+
+  Future<List<String>> _loadAndroidSupportedAbis() async {
+    final override = _androidSupportedAbisOverride;
+    if (override != null) {
+      return _normalizeAndroidSupportedAbis(override);
+    }
+    final loader = _androidSupportedAbisLoader;
+    if (loader != null) {
+      return _normalizeAndroidSupportedAbis(await loader());
+    }
+    try {
+      const channel = MethodChannel('secondloop/android_update');
+      final values = await channel.invokeListMethod<String>('getSupportedAbis');
+      return _normalizeAndroidSupportedAbis(values ?? const <String>[]);
+    } on MissingPluginException {
+      return const <String>[];
+    } catch (_) {
+      return const <String>[];
+    }
+  }
+
+  List<String> _normalizeAndroidSupportedAbis(List<String> values) {
+    final normalized = <String>[];
+    for (final value in values) {
+      final abi = value.trim().toLowerCase();
+      if (abi.isEmpty || normalized.contains(abi)) {
+        continue;
+      }
+      normalized.add(abi);
+    }
+    return normalized;
+  }
+
+  AppUpdateAsset? _matchAndroidAssetForSupportedAbis(
+    List<AppUpdateAsset> assets, {
+    required List<String> supportedAbis,
+  }) {
+    final apkAssets = assets.where((asset) {
+      final name = asset.name.trim().toLowerCase();
+      return name.startsWith('secondloop-android-') && name.endsWith('.apk');
+    }).toList(growable: false);
+    if (apkAssets.isEmpty) return null;
+
+    for (final abi in supportedAbis) {
+      for (final asset in apkAssets) {
+        if (_androidAssetMatchesAbi(asset.name, abi)) {
+          return asset;
+        }
+      }
+    }
+
+    for (final asset in apkAssets) {
+      if (_isAndroidUniversalApkName(asset.name)) {
+        return asset;
+      }
+    }
+
+    return apkAssets.length == 1 ? apkAssets.first : null;
+  }
+
+  bool _androidAssetMatchesAbi(String assetName, String abi) {
+    final normalizedName = assetName.trim().toLowerCase();
+    final normalizedAbi = abi.trim().toLowerCase();
+    return normalizedName.contains('-$normalizedAbi') ||
+        (normalizedAbi == 'arm64-v8a' && normalizedName.contains('-arm64-'));
+  }
+
+  bool _isAndroidUniversalApkName(String assetName) {
+    final normalized = assetName.trim().toLowerCase();
+    return normalized.startsWith('secondloop-android-') &&
+        normalized.endsWith('.apk') &&
+        !normalized.contains('arm64-v8a') &&
+        !normalized.contains('armeabi-v7a') &&
+        !normalized.contains('x86_64');
+  }
+
+  List<String> _androidManifestKeys(List<String> supportedAbis) {
+    final keys = <String>[];
+    void add(String key) {
+      if (!keys.contains(key)) {
+        keys.add(key);
+      }
+    }
+
+    for (final abi in supportedAbis) {
+      switch (abi) {
+        case 'arm64-v8a':
+          add('android-arm64-v8a');
+          add('android-arm64');
+          break;
+        case 'armeabi-v7a':
+          add('android-armeabi-v7a');
+          add('android-armv7');
+          break;
+        case 'x86_64':
+          add('android-x86_64');
+          break;
+      }
+    }
+
+    add('android-universal');
+    add('android');
+    add('android-arm64-v8a');
+    add('android-arm64');
+    return keys;
   }
 
   Future<T> _withPreparedAsset<T>(

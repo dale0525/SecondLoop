@@ -274,6 +274,9 @@ class MainActivity : FlutterFragmentActivity() {
       MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "secondloop/android_update").apply {
         setMethodCallHandler { call, result ->
           when (call.method) {
+            "getSupportedAbis" -> {
+              result.success(getSupportedAbis())
+            }
             "installApk" -> {
               val args = call.arguments as? Map<*, *>
               val path = (args?.get("path") as? String)?.trim().orEmpty()
@@ -555,6 +558,62 @@ class MainActivity : FlutterFragmentActivity() {
       }
     }
     return false
+  }
+
+  private fun getSupportedAbis(): List<String> {
+    return try {
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+        Build.SUPPORTED_ABIS?.filter { it.isNotBlank() } ?: emptyList()
+      } else {
+        listOfNotNull(Build.CPU_ABI, Build.CPU_ABI2).filter { it.isNotBlank() }
+      }
+    } catch (_: Throwable) {
+      emptyList()
+    }
+  }
+
+  private fun launchApkInstaller(path: String): Boolean {
+    return try {
+      val apkFile = File(path)
+      if (!apkFile.exists() || !apkFile.isFile) {
+        return false
+      }
+
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && !packageManager.canRequestPackageInstalls()) {
+        val settingsShortcut =
+          settingsIntent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES).apply {
+            data = Uri.parse("package:$packageName")
+          }
+        if (settingsShortcut.resolveActivity(packageManager) != null) {
+          startActivity(settingsShortcut)
+        }
+        return false
+      }
+
+      val apkUri =
+        FileProvider.getUriForFile(
+          this,
+          "$packageName.update_file_provider",
+          apkFile,
+        )
+      val mimeType =
+        MimeTypeMap.getSingleton().getMimeTypeFromExtension(apkFile.extension.lowercase(Locale.US))
+          ?: "application/vnd.android.package-archive"
+      val installIntent =
+        Intent(Intent.ACTION_VIEW).apply {
+          setDataAndType(apkUri, mimeType)
+          addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+          addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+      if (installIntent.resolveActivity(packageManager) == null) {
+        return false
+      }
+
+      startActivity(installIntent)
+      true
+    } catch (_: Throwable) {
+      false
+    }
   }
 
   private fun startAudioRecordingForegroundService(): Boolean {

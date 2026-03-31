@@ -118,13 +118,18 @@ Future<Map<String, Object?>> _buildPlatforms(
     );
   }
 
-  final androidApk = _firstFile(
-      entries,
-      (name) =>
-          name.toLowerCase().endsWith('.apk') &&
-          name.toLowerCase().contains('secondloop-android'));
-  if (androidApk != null) {
-    platforms['android-arm64'] = await _buildArchiveEntry(
+  final androidApks = entries.where((file) {
+    final name = file.uri.pathSegments.last.toLowerCase();
+    return name.endsWith('.apk') && name.contains('secondloop-android');
+  }).toList(growable: false);
+  if (androidApks.length > 1) {
+    throw StateError('ambiguous_android_apk_assets');
+  }
+  if (androidApks.isNotEmpty) {
+    final androidApk = androidApks.single;
+    final androidKey =
+        _resolveAndroidPlatformKey(androidApk.uri.pathSegments.last);
+    platforms[androidKey] = await _buildArchiveEntry(
       file: androidApk,
       baseDownloadUrl: baseDownloadUrl,
       installMode: 'apk',
@@ -214,4 +219,18 @@ String _normalizeBaseDownloadUrl(String value) {
     );
   }
   return trimmed.endsWith('/') ? trimmed : '$trimmed/';
+}
+
+String _resolveAndroidPlatformKey(String fileName) {
+  final normalized = fileName.trim().toLowerCase();
+  if (normalized.contains('arm64-v8a')) {
+    return 'android-arm64-v8a';
+  }
+  if (normalized.contains('armeabi-v7a')) {
+    return 'android-armeabi-v7a';
+  }
+  if (normalized.contains('x86_64')) {
+    return 'android-x86_64';
+  }
+  return 'android-universal';
 }

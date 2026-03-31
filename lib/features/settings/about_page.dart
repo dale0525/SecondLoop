@@ -6,6 +6,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/update/android/android_apk_installer.dart';
+import '../../core/update/android/android_apk_update_coordinator.dart';
 import '../../core/update/app_update_service.dart';
 import '../../core/update/update_badge_prefs.dart';
 import '../../i18n/strings.g.dart';
@@ -52,6 +53,7 @@ class _AboutPageState extends State<AboutPage> {
   late final AndroidApkDownloader _androidApkDownloader;
   AndroidApkDownloader? _ownedAndroidApkDownloader;
   late final AndroidApkInstaller _androidApkInstaller;
+  late final AndroidApkUpdateCoordinator _androidApkUpdateCoordinator;
 
   _AboutText get _text => _AboutText.of(context);
   bool get _isAndroidPlatform =>
@@ -80,6 +82,10 @@ class _AboutPageState extends State<AboutPage> {
     }
     _androidApkInstaller =
         widget.androidApkInstaller ?? MethodChannelAndroidApkInstaller();
+    _androidApkUpdateCoordinator = AndroidApkUpdateCoordinator(
+      downloader: _androidApkDownloader,
+      installer: _androidApkInstaller,
+    );
 
     unawaited(_loadRuntimeVersion());
   }
@@ -199,9 +205,8 @@ class _AboutPageState extends State<AboutPage> {
         _showMessage(_text.messages.installStarting);
         final cancelToken = AndroidApkDownloadCancelToken();
         _androidDownloadCancelToken = cancelToken;
-        final file = await _androidApkDownloader.downloadApk(
-          downloadUri: update.asset!.downloadUri,
-          fileName: update.asset!.name,
+        await _androidApkUpdateCoordinator.performUpdate(
+          asset: update.asset!,
           onProgress: (progress) {
             if (!mounted) return;
             setState(() {
@@ -210,7 +215,6 @@ class _AboutPageState extends State<AboutPage> {
           },
           cancelToken: cancelToken,
         );
-        await _androidApkInstaller.installApk(apkPath: file.path);
       } else if (update.canSeamlessInstall) {
         _showMessage(_text.messages.installStarting);
         await _updateService.installAndRestart(update);
@@ -228,8 +232,7 @@ class _AboutPageState extends State<AboutPage> {
         if (_isAndroidPlatform && _canUseAndroidApkUpdate(update)) {
           if (mounted) {
             setState(() {
-              _androidUpdateError =
-                  context.t.settings.updateDialog.downloadFailed;
+              _androidUpdateError = _androidUpdateErrorText(error);
             });
           }
         }
@@ -249,6 +252,20 @@ class _AboutPageState extends State<AboutPage> {
       _androidDownloadProgress = null;
       _androidUpdateError = null;
     });
+  }
+
+  String _androidUpdateErrorText(Object error) {
+    final dialogText = context.t.settings.updateDialog;
+    if (error is AndroidApkUpdateException) {
+      switch (error.type) {
+        case AndroidApkUpdateFailureType.download:
+        case AndroidApkUpdateFailureType.integrityCheck:
+          return dialogText.downloadFailed;
+        case AndroidApkUpdateFailureType.installLaunch:
+          return context.t.settings.about.messages.openUpdateFailed;
+      }
+    }
+    return dialogText.downloadFailed;
   }
 
   Future<void> _manualUpdate() {

@@ -36,7 +36,7 @@ void main() {
     final windows = platforms['windows-x64'] as Map<String, Object?>;
     final macos = platforms['macos-universal'] as Map<String, Object?>;
     final linux = platforms['linux-x64'] as Map<String, Object?>;
-    final android = platforms['android-arm64'] as Map<String, Object?>;
+    final android = platforms['android-universal'] as Map<String, Object?>;
 
     expect(generated.manifest['version'], '1.2.3');
     expect(generated.manifest['tag_name'], 'v1.2.3');
@@ -95,6 +95,27 @@ void main() {
         ),
       ),
       throwsArgumentError,
+    );
+  });
+
+  test('generateUpdateManifest rejects ambiguous Android apk assets', () async {
+    final tempDir =
+        await Directory.systemTemp.createTemp('update_manifest_android_multi_');
+    addTearDown(() => tempDir.delete(recursive: true));
+
+    await File('${tempDir.path}/SecondLoop-android-arm64-v8a-v1.2.3.apk')
+        .writeAsString('arm64');
+    await File('${tempDir.path}/SecondLoop-android-armeabi-v7a-v1.2.3.apk')
+        .writeAsString('armeabi');
+
+    await expectLater(
+      () => generateUpdateManifest(
+        inputDirPath: tempDir.path,
+        version: 'v1.2.3',
+        baseDownloadUrl:
+            'https://github.com/dale0525/SecondLoop/releases/download/v1.2.3',
+      ),
+      throwsA(isA<StateError>()),
     );
   });
 

@@ -7,6 +7,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../i18n/strings.g.dart';
 import 'android/android_apk_installer.dart';
+import 'android/android_apk_update_coordinator.dart';
 import 'app_update_service.dart';
 import 'release_notes_service.dart';
 import 'update_badge_prefs.dart';
@@ -488,6 +489,16 @@ class _AndroidUpdateDialogState extends State<_AndroidUpdateDialog> {
   String? _statusMessage;
   String? _errorMessage;
   AndroidApkDownloadCancelToken? _cancelToken;
+  late final AndroidApkUpdateCoordinator _coordinator;
+
+  @override
+  void initState() {
+    super.initState();
+    _coordinator = AndroidApkUpdateCoordinator(
+      downloader: widget.downloader,
+      installer: widget.installer,
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -607,9 +618,8 @@ class _AndroidUpdateDialogState extends State<_AndroidUpdateDialog> {
     });
 
     try {
-      final file = await widget.downloader.downloadApk(
-        downloadUri: asset.downloadUri,
-        fileName: asset.name,
+      await _coordinator.performUpdate(
+        asset: asset,
         onProgress: (progress) {
           if (!mounted) return;
           setState(() {
@@ -622,18 +632,14 @@ class _AndroidUpdateDialogState extends State<_AndroidUpdateDialog> {
       setState(() {
         _statusMessage = context.t.settings.updateDialog.installing;
       });
-      await widget.installer.installApk(apkPath: file.path);
-      if (!mounted) return;
       Navigator.of(context).pop();
     } on AndroidApkDownloadCancelledException {
-      if (mounted) {
-        Navigator.of(context).pop();
-      }
-    } catch (_) {
+      return;
+    } catch (error) {
       if (!mounted) return;
       setState(() {
         _isDownloading = false;
-        _errorMessage = context.t.settings.updateDialog.downloadFailed;
+        _errorMessage = _buildErrorMessage(error);
       });
     } finally {
       _cancelToken = null;
@@ -644,6 +650,14 @@ class _AndroidUpdateDialogState extends State<_AndroidUpdateDialog> {
     _cancelToken?.cancel();
     if (!mounted) return;
     Navigator.of(context).pop();
+  }
+
+  String _buildErrorMessage(Object error) {
+    if (error is AndroidApkUpdateException &&
+        error.type == AndroidApkUpdateFailureType.installLaunch) {
+      return context.t.settings.about.messages.openUpdateFailed;
+    }
+    return context.t.settings.updateDialog.downloadFailed;
   }
 
   Future<void> _openManualUpdate() async {

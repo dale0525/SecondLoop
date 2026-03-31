@@ -86,6 +86,9 @@ class _FakeAndroidApkDownloader implements AndroidApkDownloader {
 }
 
 class _FakeAndroidApkInstaller implements AndroidApkInstaller {
+  _FakeAndroidApkInstaller({this.error});
+
+  final Object? error;
   int installCalls = 0;
   String? installedPath;
 
@@ -93,6 +96,9 @@ class _FakeAndroidApkInstaller implements AndroidApkInstaller {
   Future<void> installApk({required String apkPath}) async {
     installCalls += 1;
     installedPath = apkPath;
+    if (error != null) {
+      throw error!;
+    }
   }
 }
 
@@ -387,6 +393,65 @@ void main() {
         find.byKey(const ValueKey('about_android_progress_bar')), findsNothing);
     expect(find.byKey(const ValueKey('about_android_retry')), findsNothing);
     expect(installer.installCalls, 0);
+
+    debugDefaultTargetPlatformOverride = oldPlatform;
+  },
+      variant: const TargetPlatformVariant(<TargetPlatform>{
+        TargetPlatform.android,
+      }));
+
+  testWidgets('About page shows install handoff error separately',
+      (tester) async {
+    final oldPlatform = debugDefaultTargetPlatformOverride;
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+    SharedPreferences.setMockInitialValues({});
+
+    final downloader = _FakeAndroidApkDownloader();
+    final installer = _FakeAndroidApkInstaller(
+      error: StateError('android_apk_install_not_started'),
+    );
+    final update = AppUpdateAvailability(
+      currentVersion: '1.0.1+99',
+      latestTag: 'v1.1.0',
+      releasePageUri: Uri.parse(
+        'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
+      ),
+      installMode: AppUpdateInstallMode.externalDownload,
+      asset: AppUpdateAsset(
+        name: 'SecondLoop-android-arm64-v8a.apk',
+        downloadUri:
+            Uri.parse('https://cdn.example.com/SecondLoop-android.apk'),
+      ),
+    );
+    final service = _FakeAboutUpdateService(
+      result: AppUpdateCheckResult(currentVersion: '1.0.1+99', update: update),
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AboutPage(
+            updateService: service,
+            runtimeVersionLoader: () async =>
+                const AppRuntimeVersion(version: '1.0.1', buildNumber: '99'),
+            androidApkDownloader: downloader,
+            androidApkInstaller: installer,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('about_check_updates')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('about_auto_update')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+
+    expect(
+        find.text('Failed to download or open the installer.'), findsNothing);
+    expect(find.byKey(const ValueKey('about_android_retry')), findsOneWidget);
+    expect(installer.installCalls, 1);
 
     debugDefaultTargetPlatformOverride = oldPlatform;
   },
