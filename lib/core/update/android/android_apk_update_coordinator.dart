@@ -80,6 +80,8 @@ class AndroidApkUpdateCoordinator {
         if (cancelToken?.isCancelled == true) {
           throw const AndroidApkDownloadCancelledException();
         }
+        _verifiedApkCache.remove(cacheKey);
+        await _deleteDownloadedFileIfPresent(downloadedFile);
         throw AndroidApkUpdateException(
           type: AndroidApkUpdateFailureType.integrityCheck,
           cause: error,
@@ -132,6 +134,14 @@ class AndroidApkUpdateCoordinator {
       return null;
     }
     return file;
+  }
+
+  Future<void> _deleteDownloadedFileIfPresent(File file) async {
+    try {
+      if (await file.exists()) {
+        await file.delete();
+      }
+    } catch (_) {}
   }
 
   String _cacheKeyForAsset(AppUpdateAsset asset, String? expectedSha256) {

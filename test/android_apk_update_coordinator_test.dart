@@ -128,6 +128,11 @@ void main() {
       ),
     );
     expect(installer.installCalls, 0);
+
+    final downloadedFile = File(
+      '${Directory.systemTemp.path}${Platform.pathSeparator}SecondLoop-android-arm64-v8a.apk',
+    );
+    expect(downloadedFile.existsSync(), isFalse);
   });
 
   test('reports install-launch failure separately', () async {

@@ -243,7 +243,9 @@ class _AutoUpgradeGateState extends State<AutoUpgradeGate>
 
   bool _isAndroidUpdateCandidate(AppUpdateAvailability update) {
     final asset = update.asset;
-    return asset != null && asset.name.toLowerCase().endsWith('.apk');
+    return asset != null &&
+        update.installMode == AppUpdateInstallMode.externalDownload &&
+        asset.name.toLowerCase().endsWith('.apk');
   }
 
   Future<void> _showAndroidUpdateDialog(AppUpdateAvailability update) async {

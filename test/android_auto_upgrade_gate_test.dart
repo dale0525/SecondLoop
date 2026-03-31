@@ -425,6 +425,53 @@ void main() {
     debugDefaultTargetPlatformOverride = oldPlatform;
   });
 
+  testWidgets('does not show Android dialog for non-external apk update',
+      (tester) async {
+    final oldPlatform = debugDefaultTargetPlatformOverride;
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+    final service = _AndroidAutoUpdateService(
+      result: AppUpdateCheckResult(
+        currentVersion: '1.0.0+1',
+        update: AppUpdateAvailability(
+          currentVersion: '1.0.0+1',
+          latestTag: 'v1.1.0',
+          releasePageUri: Uri.parse(
+              'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0'),
+          installMode: AppUpdateInstallMode.seamlessRestart,
+          asset: AppUpdateAsset(
+            name: 'SecondLoop-android-arm64-v8a.apk',
+            downloadUri: Uri.parse('https://cdn.example.com/secondloop.apk'),
+          ),
+        ),
+      ),
+    );
+    final releaseNotesService = _FakeReleaseNotesService(
+      result: const ReleaseNotesFetchResult(),
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AutoUpgradeGate(
+            updateService: service,
+            releaseNotesService: releaseNotesService,
+            androidApkDownloader: _NoopAndroidApkDownloader(),
+            androidApkInstaller: _NoopAndroidApkInstaller(),
+            enableInDebug: true,
+            child: const Scaffold(body: Text('home')),
+          ),
+        ),
+      ),
+    );
+
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+
+    expect(find.byType(AlertDialog), findsNothing);
+    expect(releaseNotesService.fetchCalls, 0);
+    debugDefaultTargetPlatformOverride = oldPlatform;
+  });
+
   testWidgets(
       'shows Android update dialog again after resuming from permission settings',
       (tester) async {
