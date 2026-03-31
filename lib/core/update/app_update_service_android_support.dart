@@ -30,7 +30,7 @@ Future<List<String>> _loadAndroidSupportedAbisImpl({
 List<String> _normalizeAndroidSupportedAbisImpl(List<String> values) {
   final normalized = <String>[];
   for (final value in values) {
-    final abi = value.trim().toLowerCase();
+    final abi = _canonicalizeAndroidAbiImpl(value);
     if (abi.isEmpty || normalized.contains(abi)) {
       continue;
     }
@@ -68,7 +68,7 @@ AppUpdateAsset? _matchAndroidAssetForSupportedAbisImpl(
 
 bool _androidAssetMatchesAbiImpl(String assetName, String abi) {
   final normalizedName = assetName.trim().toLowerCase();
-  final normalizedAbi = abi.trim().toLowerCase();
+  final normalizedAbi = _canonicalizeAndroidAbiImpl(abi);
   final aliases = _androidAbiAliases[normalizedAbi] ?? <String>[normalizedAbi];
   for (final alias in aliases) {
     if (normalizedName.contains('-$alias-') ||
@@ -83,11 +83,11 @@ bool _androidAssetMatchesAbiImpl(String assetName, String abi) {
 
 bool _isAndroidUniversalApkNameImpl(String assetName) {
   final normalized = assetName.trim().toLowerCase();
+  final knownAbiMarkers =
+      _androidAbiAliases.values.expand((aliases) => aliases);
   return normalized.startsWith('secondloop-android-') &&
       normalized.endsWith('.apk') &&
-      !normalized.contains('arm64-v8a') &&
-      !normalized.contains('armeabi-v7a') &&
-      !normalized.contains('x86_64');
+      !knownAbiMarkers.any(normalized.contains);
 }
 
 List<String> _androidManifestKeysImpl(List<String> supportedAbis) {
@@ -99,7 +99,7 @@ List<String> _androidManifestKeysImpl(List<String> supportedAbis) {
   }
 
   for (final abi in supportedAbis) {
-    switch (abi) {
+    switch (_canonicalizeAndroidAbiImpl(abi)) {
       case 'arm64-v8a':
         add('android-arm64-v8a');
         add('android-arm64');
@@ -118,4 +118,17 @@ List<String> _androidManifestKeysImpl(List<String> supportedAbis) {
   add('android-universal');
   add('android');
   return keys;
+}
+
+String _canonicalizeAndroidAbiImpl(String value) {
+  final normalized = value.trim().toLowerCase();
+  if (normalized.isEmpty) {
+    return normalized;
+  }
+  for (final entry in _androidAbiAliases.entries) {
+    if (entry.key == normalized || entry.value.contains(normalized)) {
+      return entry.key;
+    }
+  }
+  return normalized;
 }

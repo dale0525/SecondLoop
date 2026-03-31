@@ -424,4 +424,65 @@ void main() {
 
     debugDefaultTargetPlatformOverride = oldPlatform;
   });
+
+  testWidgets(
+      'shows Android update dialog again after resuming from permission settings',
+      (tester) async {
+    final oldPlatform = debugDefaultTargetPlatformOverride;
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+    final service = _AndroidAutoUpdateService(
+      result: AppUpdateCheckResult(
+        currentVersion: '1.0.0+1',
+        update: AppUpdateAvailability(
+          currentVersion: '1.0.0+1',
+          latestTag: 'v1.1.0',
+          releasePageUri: Uri.parse(
+              'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0'),
+          installMode: AppUpdateInstallMode.externalDownload,
+          asset: AppUpdateAsset(
+            name: 'SecondLoop-android-arm64-v8a.apk',
+            downloadUri: Uri.parse('https://cdn.example.com/secondloop.apk'),
+          ),
+        ),
+      ),
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AutoUpgradeGate(
+            updateService: service,
+            releaseNotesService: _FakeReleaseNotesService(
+                result: const ReleaseNotesFetchResult()),
+            androidApkDownloader: _NoopAndroidApkDownloader(),
+            androidApkInstaller: _PermissionSettingsInstaller(),
+            enableInDebug: true,
+            child: const Scaffold(body: Text('home')),
+          ),
+        ),
+      ),
+    );
+
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(find.byType(AlertDialog), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('android_update_confirm')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(find.byType(AlertDialog), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('android_update_cancel')));
+    await tester.pumpAndSettle();
+    expect(find.byType(AlertDialog), findsNothing);
+
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+    await tester.pump();
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+
+    expect(find.byType(AlertDialog), findsOneWidget);
+    debugDefaultTargetPlatformOverride = oldPlatform;
+  });
 }

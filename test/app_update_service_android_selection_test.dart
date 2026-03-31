@@ -3,6 +3,36 @@ import 'package:secondloop/core/update/app_update_service.dart';
 
 void main() {
   group('AppUpdateService Android asset selection', () {
+    test('matches canonical arm64 manifest when device reports alias abi',
+        () async {
+      final service = AppUpdateService(
+        platformOverride: AppUpdatePlatform.android,
+        releaseModeOverride: true,
+        androidSupportedAbisOverride: const ['arm64'],
+        currentVersionLoader: () async =>
+            const AppRuntimeVersion(version: '1.0.0', buildNumber: '9'),
+        releaseJsonFetcher: (uri) async => {
+          'tag_name': 'v1.1.0',
+          'html_url':
+              'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
+          'platforms': {
+            'android-arm64-v8a': {
+              'install_mode': 'apk',
+              'archive_url': 'https://cdn.example.com/arm64.apk',
+              'sha256': 'abc123',
+            },
+          },
+        },
+      );
+
+      final result = await service.checkForUpdates();
+
+      expect(result.update, isNotNull);
+      expect(result.update!.asset, isNotNull);
+      expect(result.update!.asset!.downloadUri.toString(),
+          'https://cdn.example.com/arm64.apk');
+    });
+
     test('does not fall back to arm64 manifest for x86_64 devices', () async {
       final service = AppUpdateService(
         platformOverride: AppUpdatePlatform.android,
