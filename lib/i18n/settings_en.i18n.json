@@ -696,6 +696,7 @@
     "installing": "Opening installer…",
     "downloadProgress": "Downloaded: $percent%",
     "downloadProgressUnknown": "Downloading…",
+    "permissionRequired": "Allow installs from this app in system settings, then try again.",
     "downloadFailed": "Failed to download or open the installer.",
     "releaseNotesUnavailable": "Release notes are temporarily unavailable."
   },

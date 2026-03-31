@@ -696,6 +696,7 @@
     "installing": "正在打开安装器…",
     "downloadProgress": "已下载：$percent%",
     "downloadProgressUnknown": "下载中…",
+    "permissionRequired": "请先在系统设置中允许此应用安装未知应用，然后重试。",
     "downloadFailed": "下载失败，或无法打开安装器。",
     "releaseNotesUnavailable": "暂时无法获取更新日志。"
   },

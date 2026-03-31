@@ -236,6 +236,13 @@ class _AboutPageState extends State<AboutPage> {
       }
     } catch (error) {
       if (error is AndroidApkDownloadCancelledException) {
+      } else if (error
+          is AndroidApkInstallerRequiresPermissionSettingsException) {
+        if (mounted) {
+          setState(() {
+            _androidUpdateError = _androidUpdateErrorText(error);
+          });
+        }
       } else if (stagedFlow) {
         _showMessage(_text.messages.stageFailed(error: '$error'));
       } else {
@@ -279,6 +286,9 @@ class _AboutPageState extends State<AboutPage> {
         case AndroidApkUpdateFailureType.installLaunch:
           return context.t.settings.about.messages.openUpdateFailed;
       }
+    }
+    if (error is AndroidApkInstallerRequiresPermissionSettingsException) {
+      return dialogText.permissionRequired;
     }
     return dialogText.downloadFailed;
   }

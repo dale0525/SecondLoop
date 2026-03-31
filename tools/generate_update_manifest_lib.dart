@@ -226,7 +226,9 @@ String _resolveAndroidPlatformKey(String fileName) {
   if (normalized.contains('arm64-v8a')) {
     return 'android-arm64-v8a';
   }
-  if (normalized.contains('armeabi-v7a')) {
+  if (normalized.contains('armeabi-v7a') ||
+      normalized.contains('armv7') ||
+      normalized.contains('arm-v7a')) {
     return 'android-armeabi-v7a';
   }
   if (normalized.contains('x86_64')) {
@@ -234,3 +236,6 @@ String _resolveAndroidPlatformKey(String fileName) {
   }
   return 'android-universal';
 }
+
+String resolveAndroidPlatformKeyForTest(String fileName) =>
+    _resolveAndroidPlatformKey(fileName);

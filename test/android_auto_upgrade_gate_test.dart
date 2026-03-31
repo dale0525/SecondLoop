@@ -89,6 +89,13 @@ class _NoopAndroidApkInstaller implements AndroidApkInstaller {
   }
 }
 
+class _PermissionSettingsInstaller implements AndroidApkInstaller {
+  @override
+  Future<void> installApk({required String apkPath}) async {
+    throw const AndroidApkInstallerRequiresPermissionSettingsException();
+  }
+}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -363,6 +370,56 @@ void main() {
     await tester.pump(const Duration(milliseconds: 100));
 
     expect(find.text('Could not open update page'), findsOneWidget);
+    expect(find.byType(AlertDialog), findsOneWidget);
+
+    debugDefaultTargetPlatformOverride = oldPlatform;
+  });
+
+  testWidgets(
+      'does not show handoff error when installer opens permission settings',
+      (tester) async {
+    final oldPlatform = debugDefaultTargetPlatformOverride;
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+    final service = _AndroidAutoUpdateService(
+      result: AppUpdateCheckResult(
+        currentVersion: '1.0.0+1',
+        update: AppUpdateAvailability(
+          currentVersion: '1.0.0+1',
+          latestTag: 'v1.1.0',
+          releasePageUri: Uri.parse(
+              'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0'),
+          installMode: AppUpdateInstallMode.externalDownload,
+          asset: AppUpdateAsset(
+            name: 'SecondLoop-android-arm64-v8a.apk',
+            downloadUri: Uri.parse('https://cdn.example.com/secondloop.apk'),
+          ),
+        ),
+      ),
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AutoUpgradeGate(
+            updateService: service,
+            releaseNotesService: _FakeReleaseNotesService(
+                result: const ReleaseNotesFetchResult()),
+            androidApkDownloader: _NoopAndroidApkDownloader(),
+            androidApkInstaller: _PermissionSettingsInstaller(),
+            enableInDebug: true,
+            child: const Scaffold(body: Text('home')),
+          ),
+        ),
+      ),
+    );
+
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+    await tester.tap(find.byKey(const ValueKey('android_update_confirm')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+
+    expect(find.text('Could not open update page'), findsNothing);
     expect(find.byType(AlertDialog), findsOneWidget);
 
     debugDefaultTargetPlatformOverride = oldPlatform;

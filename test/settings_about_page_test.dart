@@ -106,6 +106,16 @@ class _FakeAndroidApkInstaller implements AndroidApkInstaller {
   }
 }
 
+class _PermissionSettingsAndroidApkInstaller implements AndroidApkInstaller {
+  int installCalls = 0;
+
+  @override
+  Future<void> installApk({required String apkPath}) async {
+    installCalls += 1;
+    throw const AndroidApkInstallerRequiresPermissionSettingsException();
+  }
+}
+
 class _CountingAndroidApkDownloader implements AndroidApkDownloader {
   _CountingAndroidApkDownloader({this.completer});
 
@@ -542,6 +552,63 @@ void main() {
         find.text('Failed to download or open the installer.'), findsNothing);
     expect(find.byKey(const ValueKey('about_android_retry')), findsOneWidget);
     expect(installer.installCalls, 1);
+
+    debugDefaultTargetPlatformOverride = oldPlatform;
+  },
+      variant: const TargetPlatformVariant(<TargetPlatform>{
+        TargetPlatform.android,
+      }));
+
+  testWidgets(
+      'About page keeps retry available after opening permission settings',
+      (tester) async {
+    final oldPlatform = debugDefaultTargetPlatformOverride;
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+    SharedPreferences.setMockInitialValues({});
+
+    final downloader = _FakeAndroidApkDownloader();
+    final installer = _PermissionSettingsAndroidApkInstaller();
+    final update = AppUpdateAvailability(
+      currentVersion: '1.0.1+99',
+      latestTag: 'v1.1.0',
+      releasePageUri: Uri.parse(
+        'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
+      ),
+      installMode: AppUpdateInstallMode.externalDownload,
+      asset: AppUpdateAsset(
+        name: 'SecondLoop-android-arm64-v8a.apk',
+        downloadUri:
+            Uri.parse('https://cdn.example.com/SecondLoop-android.apk'),
+      ),
+    );
+    final service = _FakeAboutUpdateService(
+      result: AppUpdateCheckResult(currentVersion: '1.0.1+99', update: update),
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AboutPage(
+            updateService: service,
+            runtimeVersionLoader: () async =>
+                const AppRuntimeVersion(version: '1.0.1', buildNumber: '99'),
+            androidApkDownloader: downloader,
+            androidApkInstaller: installer,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('about_check_updates')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('about_auto_update')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+
+    expect(installer.installCalls, 1);
+    expect(find.byKey(const ValueKey('about_android_retry')), findsOneWidget);
+    expect(find.text('Could not open update page'), findsNothing);
 
     debugDefaultTargetPlatformOverride = oldPlatform;
   },

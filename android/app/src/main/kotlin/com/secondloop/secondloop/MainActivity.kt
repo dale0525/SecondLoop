@@ -23,8 +23,6 @@ import android.media.MediaMuxer
 import android.provider.Settings
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
-import androidx.core.content.FileProvider
-import android.webkit.MimeTypeMap
 import androidx.core.app.NotificationManagerCompat
 import androidx.exifinterface.media.ExifInterface
 import io.flutter.embedding.android.FlutterFragmentActivity
@@ -35,7 +33,6 @@ import io.flutter.plugin.common.MethodCall
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
-import java.io.File
 import kotlin.math.abs
 
 private const val kAudioTranscodeDurationDriftToleranceRatio = 0.08
@@ -64,6 +61,9 @@ class MainActivity : FlutterFragmentActivity() {
       activity = this,
       cacheDir = cacheDir,
     )
+  }
+  private val androidUpdateChannelHandler by lazy {
+    AndroidUpdateChannelHandler(activity = this)
   }
 
   private var pendingMediaLocationPermissionResult: MethodChannel.Result? = null
@@ -273,20 +273,11 @@ class MainActivity : FlutterFragmentActivity() {
     androidUpdateChannel =
       MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "secondloop/android_update").apply {
         setMethodCallHandler { call, result ->
-          when (call.method) {
-            "getSupportedAbis" -> {
-              result.success(getSupportedAbis())
-            }
-            "installApk" -> {
-              val args = call.arguments as? Map<*, *>
-              val path = (args?.get("path") as? String)?.trim().orEmpty()
-              if (path.isBlank()) {
-                result.success(false)
-                return@setMethodCallHandler
-              }
-              result.success(launchApkInstaller(path))
-            }
-            else -> result.notImplemented()
+          val handled = androidUpdateChannelHandler.handle(call)
+          if (handled != null) {
+            result.success(handled)
+          } else {
+            result.notImplemented()
           }
         }
       }
@@ -560,60 +551,8 @@ class MainActivity : FlutterFragmentActivity() {
     return false
   }
 
-  private fun getSupportedAbis(): List<String> {
-    return try {
-      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-        Build.SUPPORTED_ABIS?.filter { it.isNotBlank() } ?: emptyList()
-      } else {
-        listOfNotNull(Build.CPU_ABI, Build.CPU_ABI2).filter { it.isNotBlank() }
-      }
-    } catch (_: Throwable) {
-      emptyList()
-    }
-  }
-
-  private fun launchApkInstaller(path: String): Boolean {
-    return try {
-      val apkFile = File(path)
-      if (!apkFile.exists() || !apkFile.isFile) {
-        return false
-      }
-
-      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && !packageManager.canRequestPackageInstalls()) {
-        val settingsShortcut =
-          settingsIntent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES).apply {
-            data = Uri.parse("package:$packageName")
-          }
-        if (settingsShortcut.resolveActivity(packageManager) != null) {
-          startActivity(settingsShortcut)
-        }
-        return false
-      }
-
-      val apkUri =
-        FileProvider.getUriForFile(
-          this,
-          "$packageName.update_file_provider",
-          apkFile,
-        )
-      val mimeType =
-        MimeTypeMap.getSingleton().getMimeTypeFromExtension(apkFile.extension.lowercase(Locale.US))
-          ?: "application/vnd.android.package-archive"
-      val installIntent =
-        Intent(Intent.ACTION_VIEW).apply {
-          setDataAndType(apkUri, mimeType)
-          addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-          addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        }
-      if (installIntent.resolveActivity(packageManager) == null) {
-        return false
-      }
-
-      startActivity(installIntent)
-      true
-    } catch (_: Throwable) {
-      false
-    }
+  internal fun settingsIntent(action: String): Intent {
+    return Intent(action).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
   }
 
   private fun startAudioRecordingForegroundService(): Boolean {

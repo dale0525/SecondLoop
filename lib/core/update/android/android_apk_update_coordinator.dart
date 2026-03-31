@@ -93,6 +93,8 @@ class AndroidApkUpdateCoordinator {
     _throwIfCancelled(cancelToken);
     try {
       await _installer.installApk(apkPath: downloadedFile.path);
+    } on AndroidApkInstallerRequiresPermissionSettingsException {
+      rethrow;
     } catch (error) {
       throw AndroidApkUpdateException(
         type: AndroidApkUpdateFailureType.installLaunch,

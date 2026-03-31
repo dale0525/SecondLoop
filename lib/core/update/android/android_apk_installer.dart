@@ -35,13 +35,24 @@ class AndroidApkDownloadCancelledException implements Exception {
   const AndroidApkDownloadCancelledException();
 }
 
+class AndroidApkInstallerRequiresPermissionSettingsException
+    implements Exception {
+  const AndroidApkInstallerRequiresPermissionSettingsException();
+}
+
 class AndroidApkDownloadCancelToken {
   bool _cancelled = false;
+  final Completer<void> _whenCancelled = Completer<void>();
 
   bool get isCancelled => _cancelled;
+  Future<void> get whenCancelled => _whenCancelled.future;
 
   void cancel() {
+    if (_cancelled) return;
     _cancelled = true;
+    if (!_whenCancelled.isCompleted) {
+      _whenCancelled.complete();
+    }
   }
 }
 
@@ -60,9 +71,17 @@ abstract class AndroidApkInstaller {
 
 class HttpAndroidApkDownloader implements AndroidApkDownloader {
   HttpAndroidApkDownloader({HttpClient? httpClient})
-      : _httpClient = httpClient ?? HttpClient();
+      : _providedHttpClient = httpClient,
+        _httpClient = httpClient ?? _createHttpClient();
 
-  final HttpClient _httpClient;
+  static const _connectionTimeout = Duration(seconds: 15);
+
+  final HttpClient? _providedHttpClient;
+  HttpClient _httpClient;
+
+  static HttpClient _createHttpClient() {
+    return HttpClient()..connectionTimeout = _connectionTimeout;
+  }
 
   Future<void> dispose() async {
     _httpClient.close(force: true);
@@ -88,8 +107,21 @@ class HttpAndroidApkDownloader implements AndroidApkDownloader {
     }
 
     _throwIfCancelled(cancelToken);
-    final request = await _httpClient.getUrl(downloadUri);
-    final response = await request.close();
+    final request = await _awaitWithCancellation(
+      _httpClient.getUrl(downloadUri),
+      cancelToken,
+      onCancel: _abortActiveClient,
+    );
+    final response = await _awaitWithCancellation(
+      request.close(),
+      cancelToken,
+      onCancel: () {
+        try {
+          request.abort();
+        } catch (_) {}
+        _abortActiveClient();
+      },
+    );
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw HttpException('apk_download_http_${response.statusCode}',
           uri: downloadUri);
@@ -139,6 +171,30 @@ class HttpAndroidApkDownloader implements AndroidApkDownloader {
     }
   }
 
+  Future<T> _awaitWithCancellation<T>(
+    Future<T> future,
+    AndroidApkDownloadCancelToken? cancelToken, {
+    void Function()? onCancel,
+  }) async {
+    if (cancelToken == null) {
+      return future;
+    }
+    return Future.any<T>([
+      future,
+      cancelToken.whenCancelled.then<T>((_) {
+        onCancel?.call();
+        throw const AndroidApkDownloadCancelledException();
+      }),
+    ]);
+  }
+
+  void _abortActiveClient() {
+    _httpClient.close(force: true);
+    if (_providedHttpClient == null) {
+      _httpClient = _createHttpClient();
+    }
+  }
+
   static String _sanitizeApkFileName(String value) {
     final sanitized = value.replaceAll(RegExp(r'[^A-Za-z0-9._-]+'), '_').trim();
     if (sanitized.isEmpty) {
@@ -159,11 +215,57 @@ class MethodChannelAndroidApkInstaller implements AndroidApkInstaller {
 
   @override
   Future<void> installApk({required String apkPath}) async {
-    final launched = await _channel.invokeMethod<bool>('installApk', {
+    final dynamic rawResult =
+        await _channel.invokeMethod<Object?>('installApk', {
       'path': apkPath,
     });
-    if (launched != true) {
-      throw StateError('android_apk_install_not_started');
+    final result = _parseInstallResult(rawResult);
+    switch (result) {
+      case _AndroidApkInstallResult.launchedInstaller:
+        return;
+      case _AndroidApkInstallResult.permissionSettingsOpened:
+        throw const AndroidApkInstallerRequiresPermissionSettingsException();
+      case _AndroidApkInstallResult.failed:
+        throw StateError('android_apk_install_not_started');
     }
+  }
+
+  _AndroidApkInstallResult _parseInstallResult(dynamic rawResult) {
+    if (rawResult == true) {
+      return _AndroidApkInstallResult.launchedInstaller;
+    }
+    if (rawResult == false || rawResult == null) {
+      return _AndroidApkInstallResult.failed;
+    }
+    if (rawResult is String) {
+      return _AndroidApkInstallResult.fromChannelValue(rawResult);
+    }
+    if (rawResult is Map) {
+      final status = rawResult['status'];
+      if (status is String) {
+        return _AndroidApkInstallResult.fromChannelValue(status);
+      }
+    }
+    throw StateError('android_apk_install_invalid_result');
+  }
+}
+
+enum _AndroidApkInstallResult {
+  launchedInstaller('launched_installer'),
+  permissionSettingsOpened('permission_settings_opened'),
+  failed('failed');
+
+  const _AndroidApkInstallResult(this.channelValue);
+
+  final String channelValue;
+
+  static _AndroidApkInstallResult fromChannelValue(String value) {
+    final normalized = value.trim();
+    for (final result in values) {
+      if (result.channelValue == normalized) {
+        return result;
+      }
+    }
+    throw StateError('android_apk_install_unknown_status_$value');
   }
 }

@@ -647,6 +647,13 @@ class _AndroidUpdateDialogState extends State<_AndroidUpdateDialog> {
       Navigator.of(context).pop();
     } on AndroidApkDownloadCancelledException {
       return;
+    } on AndroidApkInstallerRequiresPermissionSettingsException {
+      if (!mounted) return;
+      setState(() {
+        _isDownloading = false;
+        _errorMessage = context.t.settings.updateDialog.permissionRequired;
+      });
+      return;
     } catch (error) {
       if (!mounted) return;
       setState(() {

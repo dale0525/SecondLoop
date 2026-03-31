@@ -1,5 +1,11 @@
 part of 'app_update_service.dart';
 
+const Map<String, List<String>> _androidAbiAliases = <String, List<String>>{
+  'arm64-v8a': <String>['arm64-v8a', 'arm64', 'aarch64'],
+  'armeabi-v7a': <String>['armeabi-v7a', 'armv7', 'arm-v7a'],
+  'x86_64': <String>['x86_64', 'x64'],
+};
+
 Future<List<String>> _loadAndroidSupportedAbisImpl({
   required List<String>? override,
   required AndroidSupportedAbisLoader? loader,
@@ -63,8 +69,16 @@ AppUpdateAsset? _matchAndroidAssetForSupportedAbisImpl(
 bool _androidAssetMatchesAbiImpl(String assetName, String abi) {
   final normalizedName = assetName.trim().toLowerCase();
   final normalizedAbi = abi.trim().toLowerCase();
-  return normalizedName.contains('-$normalizedAbi') ||
-      (normalizedAbi == 'arm64-v8a' && normalizedName.contains('-arm64-'));
+  final aliases = _androidAbiAliases[normalizedAbi] ?? <String>[normalizedAbi];
+  for (final alias in aliases) {
+    if (normalizedName.contains('-$alias-') ||
+        normalizedName.endsWith('-$alias.apk') ||
+        normalizedName.contains('_$alias.') ||
+        normalizedName.contains('-$alias.')) {
+      return true;
+    }
+  }
+  return false;
 }
 
 bool _isAndroidUniversalApkNameImpl(String assetName) {
@@ -93,6 +107,7 @@ List<String> _androidManifestKeysImpl(List<String> supportedAbis) {
       case 'armeabi-v7a':
         add('android-armeabi-v7a');
         add('android-armv7');
+        add('android-arm-v7a');
         break;
       case 'x86_64':
         add('android-x86_64');
