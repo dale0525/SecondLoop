@@ -6,6 +6,17 @@ const Map<String, List<String>> _androidAbiAliases = <String, List<String>>{
   'x86_64': <String>['x86_64', 'x64'],
 };
 
+bool _isAndroidApkAssetImpl(AppUpdateAsset asset) {
+  final normalizedName = asset.name.trim().toLowerCase();
+  if (normalizedName.startsWith('secondloop-android-') &&
+      normalizedName.endsWith('.apk')) {
+    return true;
+  }
+  final normalizedPath = asset.downloadUri.path.toLowerCase();
+  return normalizedPath.contains('secondloop-android') &&
+      normalizedPath.endsWith('.apk');
+}
+
 Future<List<String>> _loadAndroidSupportedAbisImpl({
   required List<String>? override,
   required AndroidSupportedAbisLoader? loader,
@@ -43,10 +54,8 @@ AppUpdateAsset? _matchAndroidAssetForSupportedAbisImpl(
   List<AppUpdateAsset> assets, {
   required List<String> supportedAbis,
 }) {
-  final apkAssets = assets.where((asset) {
-    final name = asset.name.trim().toLowerCase();
-    return name.startsWith('secondloop-android-') && name.endsWith('.apk');
-  }).toList(growable: false);
+  final apkAssets =
+      assets.where(_isAndroidApkAssetImpl).toList(growable: false);
   if (apkAssets.isEmpty) return null;
 
   for (final abi in supportedAbis) {
@@ -132,3 +141,6 @@ String _canonicalizeAndroidAbiImpl(String value) {
   }
   return normalized;
 }
+
+bool isAndroidApkAssetForUpdate(AppUpdateAsset asset) =>
+    _isAndroidApkAssetImpl(asset);

@@ -8,6 +8,114 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:secondloop/core/update/app_update_service.dart';
 
 void main() {
+  test('falls back when custom manifest endpoint payload is invalid', () async {
+    final requestedUris = <Uri>[];
+    final service = AppUpdateService(
+      httpClient: _FakeHttpClient(
+        handler: (uri) {
+          requestedUris.add(uri);
+          if (uri.host == 'secondloop.app') {
+            return _FakeHttpResponse(
+              statusCode: 200,
+              body: jsonEncode({
+                'release_page_url':
+                    'https://secondloop.app/releases/invalid-payload',
+                'platforms': <String, Object?>{},
+              }),
+            );
+          }
+          if (uri.path.endsWith('latest.json')) {
+            return _FakeHttpResponse(
+              statusCode: 200,
+              body: jsonEncode({
+                'version': '1.1.0',
+                'release_page_url':
+                    'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
+                'platforms': {
+                  'linux-x64': {
+                    'install_mode': 'bundle-tar-gz',
+                    'archive_url':
+                        'https://cdn.example.com/SecondLoop-linux-x64-v1.1.0.tar.gz',
+                    'sha256': 'abc123',
+                  },
+                },
+              }),
+            );
+          }
+          throw StateError('unexpected_uri:$uri');
+        },
+      ),
+      platformOverride: AppUpdatePlatform.linux,
+      releaseModeOverride: true,
+      releaseApiOriginOverride: 'https://secondloop.app',
+      releaseRepoOverride: 'dale0525/SecondLoop',
+      updatePublicKeyOverride: '',
+      currentVersionLoader: () async =>
+          const AppRuntimeVersion(version: '1.0.0', buildNumber: '1'),
+    );
+
+    final result = await service.checkForUpdates();
+
+    expect(result.update, isNotNull);
+    expect(result.update!.latestTag, 'v1.1.0');
+    expect(
+        requestedUris.map((uri) => uri.toString()),
+        containsAll(<Matcher>[
+          contains('https://secondloop.app/api/releases/latest'),
+          contains('/dale0525/SecondLoop/releases/latest/download/latest.json'),
+        ]));
+  });
+
+  test('verifies signatures for custom manifest endpoint payloads', () async {
+    final requestedUris = <Uri>[];
+    final service = AppUpdateService(
+      httpClient: _FakeHttpClient(
+        handler: (uri) {
+          requestedUris.add(uri);
+          if (uri.host == 'secondloop.app' &&
+              uri.path == '/api/releases/latest') {
+            return _FakeHttpResponse(
+              statusCode: 200,
+              body: jsonEncode({
+                'version': '1.1.0',
+                'release_page_url': 'https://secondloop.app/releases/v1.1.0',
+                'platforms': {
+                  'linux-x64': {
+                    'archive_url':
+                        'https://cdn.example.com/SecondLoop-linux-x64-v1.1.0.tar.gz',
+                    'sha256': 'abc123',
+                  },
+                },
+              }),
+            );
+          }
+          if (uri.host == 'secondloop.app' &&
+              uri.path == '/api/releases/latest.sig') {
+            return const _FakeHttpResponse(statusCode: 404, body: 'missing');
+          }
+          throw StateError('unexpected_uri:$uri');
+        },
+      ),
+      platformOverride: AppUpdatePlatform.linux,
+      releaseModeOverride: true,
+      releaseApiOriginOverride: 'https://secondloop.app',
+      releaseRepoOverride: '',
+      updatePublicKeyOverride: base64Encode(List<int>.generate(32, (i) => i)),
+      currentVersionLoader: () async =>
+          const AppRuntimeVersion(version: '1.0.0', buildNumber: '1'),
+      networkTimeoutOverride: const Duration(milliseconds: 20),
+    );
+
+    final result = await service.checkForUpdates();
+
+    expect(result.update, isNull);
+    expect(result.errorMessage, contains('signature_fetch_failed_404'));
+    expect(
+      requestedUris.map((uri) => uri.toString()),
+      contains('https://secondloop.app/api/releases/latest.sig'),
+    );
+  });
+
   test('warns when latest.json signature verification is skipped', () async {
     final requestedUris = <Uri>[];
     final originalDebugPrint = debugPrint;

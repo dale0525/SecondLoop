@@ -197,7 +197,7 @@ class _AboutPageState extends State<AboutPage> {
     return _isAndroidPlatform &&
         update.installMode == AppUpdateInstallMode.externalDownload &&
         asset != null &&
-        asset.name.toLowerCase().endsWith('.apk');
+        isAndroidApkAssetForUpdate(asset);
   }
 
   Future<void> _applyManagedUpdate() async {

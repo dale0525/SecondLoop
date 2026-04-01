@@ -39,8 +39,11 @@ Future<GeneratedUpdateManifest> generateUpdateManifest({
       releasePageUrl?.trim().isNotEmpty == true ? releasePageUrl!.trim() : null;
   manifest['pub_date'] =
       (publishedAt ?? DateTime.now().toUtc()).toUtc().toIso8601String();
-  manifest['platforms'] =
-      await _buildPlatforms(inputDir, baseDownloadUrl: normalizedBaseUrl);
+  manifest['platforms'] = await _buildPlatforms(
+    inputDir,
+    baseDownloadUrl: normalizedBaseUrl,
+    normalizedVersion: normalizedVersion,
+  );
 
   final jsonText = '${const JsonEncoder.withIndent('  ').convert(manifest)}\n';
   final signature = await _signManifest(
@@ -58,12 +61,17 @@ Future<GeneratedUpdateManifest> generateUpdateManifest({
 Future<Map<String, Object?>> _buildPlatforms(
   Directory inputDir, {
   required String baseDownloadUrl,
+  required String normalizedVersion,
 }) async {
   final entries = inputDir
       .listSync()
       .whereType<File>()
       .where((file) => !file.path.endsWith('.sha256'))
-      .toList(growable: false);
+      .where((file) => _matchesRequestedVersion(file, normalizedVersion))
+      .toList(growable: false)
+    ..sort((left, right) => left.uri.pathSegments.last
+        .toLowerCase()
+        .compareTo(right.uri.pathSegments.last.toLowerCase()));
 
   final platforms = <String, Object?>{};
 
@@ -199,6 +207,18 @@ File? _firstFile(List<File> files, bool Function(String name) predicate) {
     }
   }
   return null;
+}
+
+bool _matchesRequestedVersion(File file, String normalizedVersion) {
+  final name = file.uri.pathSegments.last.toLowerCase();
+  final version = normalizedVersion.toLowerCase();
+  if (name.startsWith('releases.') && name.endsWith('.json')) {
+    return true;
+  }
+  return name.contains('-$version.') ||
+      name.contains('-v$version.') ||
+      name.contains('-$version-') ||
+      name.contains('-v$version-');
 }
 
 String _normalizeVersion(String value) {

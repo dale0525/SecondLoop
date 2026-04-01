@@ -246,7 +246,16 @@ class AppUpdateService {
     Object? lastError;
     for (final endpoint in _buildReleaseEndpoints()) {
       try {
-        release = await _fetchReleaseJson(endpoint);
+        final candidate = await _fetchReleaseJson(endpoint);
+        final candidateTag = _normalizeLatestTag(
+          _readString(candidate, 'tag_name') ??
+              _readString(candidate, 'version'),
+        );
+        if (candidateTag == null || candidateTag.trim().isEmpty) {
+          lastError = const FormatException('invalid_release_tag');
+          continue;
+        }
+        release = candidate;
         break;
       } catch (error) {
         lastError = error;
@@ -618,7 +627,7 @@ class AppUpdateService {
     }
 
     final bodyBytes = await _readResponseBytesWithTimeout(resp);
-    if (_isSignedManifestUri(uri)) {
+    if (_shouldVerifyManifestSignature(uri)) {
       await _verifySignedManifest(uri, bodyBytes);
     }
 
@@ -776,8 +785,10 @@ class AppUpdateService {
     }
   }
 
-  bool _isSignedManifestUri(Uri uri) {
-    return uri.path.toLowerCase().endsWith('latest.json');
+  bool _shouldVerifyManifestSignature(Uri uri) {
+    final normalizedPath = uri.path.toLowerCase();
+    return normalizedPath.endsWith('latest.json') ||
+        normalizedPath.endsWith('/api/releases/latest');
   }
 
   static String _sanitizeAssetFileName(String value) {

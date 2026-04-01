@@ -192,6 +192,32 @@ void main() {
     );
   });
 
+  test('generateUpdateManifest ignores stale assets from other versions',
+      () async {
+    final tempDir =
+        await Directory.systemTemp.createTemp('update_manifest_stale_version_');
+    addTearDown(() => tempDir.delete(recursive: true));
+
+    await File('${tempDir.path}/com.secondloop.secondloop-1.2.2-full.nupkg')
+        .writeAsString('old-windows');
+    await File('${tempDir.path}/SecondLoop-macos-v1.2.3.app.tar.gz')
+        .writeAsString('macos');
+    await File('${tempDir.path}/SecondLoop-linux-x64-v1.2.3.tar.gz')
+        .writeAsString('linux');
+
+    final generated = await generateUpdateManifest(
+      inputDirPath: tempDir.path,
+      version: 'v1.2.3',
+      baseDownloadUrl:
+          'https://github.com/dale0525/SecondLoop/releases/download/v1.2.3',
+    );
+
+    final platforms = generated.manifest['platforms'] as Map<String, Object?>;
+    expect(platforms['windows-x64'], isNull);
+    expect(platforms['macos-universal'], isNotNull);
+    expect(platforms['linux-x64'], isNotNull);
+  });
+
   test('generateUpdateManifest signs latest.json with ed25519 seed', () async {
     final tempDir =
         await Directory.systemTemp.createTemp('update_manifest_sig_');
