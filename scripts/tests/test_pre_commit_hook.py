@@ -105,6 +105,7 @@ class PreCommitHookTests(unittest.TestCase):
 
         self.assertIn("collect_related_flutter_tests_for_lib_file()", script)
         self.assertIn('package:secondloop/${file#lib/}', script)
+        self.assertIn("-g '*_test.dart'", script)
         self.assertIn('done < <(collect_targeted_flutter_tests)', script)
         self.assertIn('run_flutter_tool test --concurrency=1 "${flutter_test_targets[@]}"', script)
         self.assertIn('[[ ${#targets[@]} -eq 0 ]] || append_unique_path', script)

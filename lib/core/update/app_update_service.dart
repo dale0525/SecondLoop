@@ -67,11 +67,13 @@ class AppUpdateAsset {
     required this.name,
     required this.downloadUri,
     this.sha256,
+    this.installMode,
   });
 
   final String name;
   final Uri downloadUri;
   final String? sha256;
+  final String? installMode;
 }
 
 class AppUpdateAvailability {

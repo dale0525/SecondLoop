@@ -235,5 +235,38 @@ void main() {
         'https://cdn.example.com/x86.apk',
       );
     });
+
+    test(
+        'allows in-app Android install for manifest apk entries even when name is omitted',
+        () async {
+      final service = AppUpdateService(
+        platformOverride: AppUpdatePlatform.android,
+        releaseModeOverride: true,
+        androidSupportedAbisOverride: const ['arm64-v8a'],
+        currentVersionLoader: () async =>
+            const AppRuntimeVersion(version: '1.0.0', buildNumber: '9'),
+        releaseJsonFetcher: (uri) async => {
+          'tag_name': 'v1.1.0',
+          'html_url':
+              'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
+          'platforms': {
+            'android-arm64-v8a': {
+              'install_mode': 'apk',
+              'archive_url': 'https://cdn.example.com/download?id=arm64',
+              'sha256': 'abc123',
+            },
+          },
+        },
+      );
+
+      final result = await service.checkForUpdates();
+
+      expect(result.update, isNotNull);
+      expect(result.update!.canUseAndroidApkInstaller, isTrue);
+      expect(
+        result.update!.downloadUri.toString(),
+        'https://cdn.example.com/download?id=arm64',
+      );
+    });
   });
 }

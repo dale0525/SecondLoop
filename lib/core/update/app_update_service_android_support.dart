@@ -8,6 +8,11 @@ const Map<String, List<String>> _androidAbiAliases = <String, List<String>>{
 };
 
 bool _isAndroidApkAssetImpl(AppUpdateAsset asset) {
+  final normalizedInstallMode = asset.installMode?.trim().toLowerCase();
+  if (normalizedInstallMode == 'apk') {
+    return true;
+  }
+
   final normalizedName = asset.name.trim().toLowerCase();
   if (normalizedName.startsWith('secondloop-android-') &&
       normalizedName.endsWith('.apk')) {

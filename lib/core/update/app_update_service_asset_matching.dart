@@ -29,6 +29,7 @@ List<AppUpdateAsset> _parseAssetsImpl(Object? rawAssets) {
         downloadUri: uri,
         sha256:
             sha256 is String && sha256.trim().isNotEmpty ? sha256.trim() : null,
+        installMode: null,
       ),
     );
   }
@@ -168,10 +169,12 @@ AppUpdateAsset? _matchManifestAssetForCurrentPlatformImpl(
     final name = _readStringLooseStatic(rawEntry, 'name') ??
         (parsedUrl.pathSegments.isEmpty ? key : parsedUrl.pathSegments.last);
     final sha256 = _readStringLooseStatic(rawEntry, 'sha256');
+    final installMode = _readStringLooseStatic(rawEntry, 'install_mode');
     return AppUpdateAsset(
       name: name,
       downloadUri: parsedUrl,
       sha256: sha256,
+      installMode: installMode,
     );
   }
 
