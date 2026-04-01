@@ -10,6 +10,7 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:secondloop/core/update/android/android_apk_installer.dart';
+import 'package:secondloop/core/update/android/android_apk_update_coordinator.dart';
 import 'package:secondloop/core/update/app_update_service.dart';
 import 'package:secondloop/features/settings/about_page.dart';
 import 'package:secondloop/features/settings/settings_page.dart';
@@ -154,6 +155,10 @@ class _CountingAndroidApkDownloader implements AndroidApkDownloader {
 }
 
 void main() {
+  setUp(() {
+    AndroidApkUpdateCoordinator.clearCacheForTest();
+  });
+
   testWidgets('Settings support section includes About entry', (tester) async {
     SharedPreferences.setMockInitialValues({});
 
@@ -254,7 +259,7 @@ void main() {
     expect(opened.last.toString(), 'https://secondloop.app');
   });
 
-  testWidgets('About page manual update prefers Android apk download uri',
+  testWidgets('About page manual update prefers release page for Android apk',
       (tester) async {
     final oldPlatform = debugDefaultTargetPlatformOverride;
     debugDefaultTargetPlatformOverride = TargetPlatform.android;
@@ -301,8 +306,10 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('about_manual_update')));
     await tester.pumpAndSettle();
 
-    expect(opened.single.toString(),
-        'https://cdn.example.com/SecondLoop-android.apk');
+    expect(
+      opened.single.toString(),
+      'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
+    );
     debugDefaultTargetPlatformOverride = oldPlatform;
   },
       variant: const TargetPlatformVariant(<TargetPlatform>{

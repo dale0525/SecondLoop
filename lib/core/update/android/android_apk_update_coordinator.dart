@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:cryptography/cryptography.dart';
+import 'package:flutter/foundation.dart';
 
 import '../app_update_service.dart';
 import 'android_apk_installer.dart';
@@ -33,8 +34,20 @@ class AndroidApkUpdateCoordinator {
 
   final AndroidApkDownloader _downloader;
   final AndroidApkInstaller _installer;
-  final Map<String, _CachedDownloadedApk> _verifiedApkCache =
+  static final Map<String, _CachedDownloadedApk> _sharedVerifiedApkCache =
       <String, _CachedDownloadedApk>{};
+  final Map<String, _CachedDownloadedApk> _verifiedApkCache =
+      _sharedVerifiedApkCache;
+
+  @visibleForTesting
+  static void clearCacheForTest() {
+    _sharedVerifiedApkCache.clear();
+  }
+
+  @visibleForTesting
+  static int cacheSizeForTest() {
+    return _sharedVerifiedApkCache.length;
+  }
 
   Future<void> performUpdate({
     required AppUpdateAsset asset,

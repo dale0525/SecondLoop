@@ -75,6 +75,10 @@ class _CancellingInstaller implements AndroidApkInstaller {
 }
 
 void main() {
+  setUp(() {
+    AndroidApkUpdateCoordinator.clearCacheForTest();
+  });
+
   test('verifies sha256 before installing apk', () async {
     const bytes = <int>[1, 2, 3, 4];
     final tempFile = File(

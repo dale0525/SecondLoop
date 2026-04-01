@@ -24,6 +24,7 @@ class AutoUpgradeGate extends StatefulWidget {
     this.externalUriLauncher,
     this.androidApkDownloader,
     this.androidApkInstaller,
+    this.androidApkUpdateCoordinator,
   });
 
   final Widget child;
@@ -33,6 +34,7 @@ class AutoUpgradeGate extends StatefulWidget {
   final AutoUpgradeGateExternalUriLauncher? externalUriLauncher;
   final AndroidApkDownloader? androidApkDownloader;
   final AndroidApkInstaller? androidApkInstaller;
+  final AndroidApkUpdateCoordinator? androidApkUpdateCoordinator;
 
   static const updateNoticeLastTagPrefsKey = 'update_notice_last_tag_v1';
   static const updateNoticeLastShownAtMsPrefsKey =
@@ -68,6 +70,7 @@ class _AutoUpgradeGateState extends State<AutoUpgradeGate>
   AndroidApkDownloader? _ownedAndroidApkDownloader;
   late final AndroidApkDownloader _androidApkDownloader;
   late final AndroidApkInstaller _androidApkInstaller;
+  late final AndroidApkUpdateCoordinator _androidApkUpdateCoordinator;
 
   bool get _isWindowsPlatform =>
       !kIsWeb && defaultTargetPlatform == TargetPlatform.windows;
@@ -113,6 +116,11 @@ class _AutoUpgradeGateState extends State<AutoUpgradeGate>
 
     _androidApkInstaller =
         widget.androidApkInstaller ?? MethodChannelAndroidApkInstaller();
+    _androidApkUpdateCoordinator = widget.androidApkUpdateCoordinator ??
+        AndroidApkUpdateCoordinator(
+          downloader: _androidApkDownloader,
+          installer: _androidApkInstaller,
+        );
   }
 
   @override
@@ -251,10 +259,20 @@ class _AutoUpgradeGateState extends State<AutoUpgradeGate>
     try {
       final locale =
           Localizations.maybeLocaleOf(context) ?? AppLocale.en.flutterLocale;
-      final releaseNotes = await _releaseNotesService.fetchReleaseNotes(
-        tag: update.latestTag,
-        locale: locale,
-      );
+      ReleaseNotesFetchResult releaseNotes;
+      try {
+        releaseNotes = await _releaseNotesService.fetchReleaseNotes(
+          tag: update.latestTag,
+          locale: locale,
+        );
+      } catch (error, stackTrace) {
+        debugPrint('android_release_notes_skipped: $error');
+        debugPrintStack(stackTrace: stackTrace);
+        releaseNotes = ReleaseNotesFetchResult(
+          errorMessage: error.toString(),
+          releasePageUri: update.releasePageUri,
+        );
+      }
       if (!mounted) return;
       await showDialog<void>(
         context: context,
@@ -263,8 +281,7 @@ class _AutoUpgradeGateState extends State<AutoUpgradeGate>
           return _AndroidUpdateDialog(
             update: update,
             releaseNotes: releaseNotes,
-            downloader: _androidApkDownloader,
-            installer: _androidApkInstaller,
+            coordinator: _androidApkUpdateCoordinator,
             externalUriLauncher: widget.externalUriLauncher,
             onDismissed: () {
               _dismissedAndroidUpdateTagInSession = update.latestTag;
@@ -449,16 +466,14 @@ class _AndroidUpdateDialog extends StatefulWidget {
   const _AndroidUpdateDialog({
     required this.update,
     required this.releaseNotes,
-    required this.downloader,
-    required this.installer,
+    required this.coordinator,
     required this.externalUriLauncher,
     required this.onDismissed,
   });
 
   final AppUpdateAvailability update;
   final ReleaseNotesFetchResult releaseNotes;
-  final AndroidApkDownloader downloader;
-  final AndroidApkInstaller installer;
+  final AndroidApkUpdateCoordinator coordinator;
   final AutoUpgradeGateExternalUriLauncher? externalUriLauncher;
   final VoidCallback onDismissed;
 
@@ -498,16 +513,6 @@ class _AndroidUpdateDialogState extends State<_AndroidUpdateDialog> {
   String? _statusMessage;
   String? _errorMessage;
   AndroidApkDownloadCancelToken? _cancelToken;
-  late final AndroidApkUpdateCoordinator _coordinator;
-
-  @override
-  void initState() {
-    super.initState();
-    _coordinator = AndroidApkUpdateCoordinator(
-      downloader: widget.downloader,
-      installer: widget.installer,
-    );
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -607,6 +612,7 @@ class _AndroidUpdateDialogState extends State<_AndroidUpdateDialog> {
           ),
         if (_errorMessage != null && !_isDownloading)
           TextButton(
+            key: const ValueKey('android_update_manual'),
             onPressed: _openManualUpdate,
             child: Text(settingsT.about.actions.manualUpdate),
           ),
@@ -633,7 +639,7 @@ class _AndroidUpdateDialogState extends State<_AndroidUpdateDialog> {
     });
 
     try {
-      await _coordinator.performUpdate(
+      await widget.coordinator.performUpdate(
         asset: asset,
         onProgress: (progress) {
           if (!mounted) return;
@@ -683,7 +689,7 @@ class _AndroidUpdateDialogState extends State<_AndroidUpdateDialog> {
   }
 
   Future<void> _openManualUpdate() async {
-    final uri = widget.update.downloadUri;
+    final uri = widget.update.releasePageUri;
     try {
       final launcher = widget.externalUriLauncher;
       final opened = launcher != null
