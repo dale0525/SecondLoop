@@ -177,7 +177,17 @@ function Get-ExpectedFullPackageFileName {
   param([string]$VersionValue)
 
   $versionName = Get-VersionName $VersionValue
-  return "$PackId-$versionName-$Channel-full.nupkg"
+  $channelPackageName = "$PackId-$versionName-$Channel-full.nupkg"
+  $legacyPackageName = "$PackId-$versionName-full.nupkg"
+
+  if ($Channel -eq 'win') {
+    $legacyPackagePath = Join-Path $v2Output $legacyPackageName
+    if (Test-Path -LiteralPath $legacyPackagePath -PathType Leaf) {
+      return $legacyPackageName
+    }
+  }
+
+  return $channelPackageName
 }
 
 function Get-FullPackage {

@@ -58,12 +58,14 @@ class UpdateFeedHandler(SimpleHTTPRequestHandler):
         status: HTTPStatus,
         body: bytes,
         content_type: str,
+        include_body: bool = True,
     ) -> None:
         self.send_response(status)
         self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
-        self.wfile.write(body)
+        if include_body:
+            self.wfile.write(body)
 
     @property
     def root_dir(self) -> Path:
@@ -93,7 +95,7 @@ class UpdateFeedHandler(SimpleHTTPRequestHandler):
         except PermissionError:
             return str(self.root_dir / "__forbidden__")
 
-    def do_GET(self) -> None:
+    def _handle_request(self, *, include_body: bool) -> None:
         normalized = self.path.split("?", 1)[0].split("#", 1)[0]
         if normalized == "/api/releases/latest":
             try:
@@ -105,6 +107,7 @@ class UpdateFeedHandler(SimpleHTTPRequestHandler):
                 status=HTTPStatus.OK,
                 body=body,
                 content_type="application/json; charset=utf-8",
+                include_body=include_body,
             )
             return
 
@@ -119,6 +122,7 @@ class UpdateFeedHandler(SimpleHTTPRequestHandler):
                 status=HTTPStatus.OK,
                 body=body,
                 content_type="text/plain; charset=utf-8",
+                include_body=include_body,
             )
             return
 
@@ -132,6 +136,7 @@ class UpdateFeedHandler(SimpleHTTPRequestHandler):
                 status=HTTPStatus.OK,
                 body=body,
                 content_type="text/html; charset=utf-8",
+                include_body=include_body,
             )
             return
 
@@ -145,7 +150,16 @@ class UpdateFeedHandler(SimpleHTTPRequestHandler):
             self.send_error(HTTPStatus.FORBIDDEN)
             return
 
-        super().do_GET()
+        if include_body:
+            super().do_GET()
+        else:
+            super().do_HEAD()
+
+    def do_GET(self) -> None:
+        self._handle_request(include_body=True)
+
+    def do_HEAD(self) -> None:
+        self._handle_request(include_body=False)
 
 
 def parse_args() -> argparse.Namespace:

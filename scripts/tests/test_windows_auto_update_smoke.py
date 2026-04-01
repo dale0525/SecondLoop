@@ -64,7 +64,8 @@ class WindowsAutoUpdateSmokeTests(unittest.TestCase):
         script = SMOKE_SCRIPT.read_text(encoding="utf-8")
 
         self.assertIn("function Get-ExpectedFullPackageFileName", script)
-        self.assertIn("return \"$PackId-$versionName-$Channel-full.nupkg\"", script)
+        self.assertIn("$legacyPackageName = \"$PackId-$versionName-full.nupkg\"", script)
+        self.assertIn("if ($Channel -eq 'win')", script)
         self.assertIn(
             "$expectedPackageFileName = Get-ExpectedFullPackageFileName -VersionValue $NewVersion",
             script,

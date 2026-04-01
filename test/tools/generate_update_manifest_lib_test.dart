@@ -514,6 +514,42 @@ void main() {
       'https://example.com/downloads/releases.nightly.json',
     );
   });
+
+  test(
+      'generateUpdateManifest ignores unrelated unknown channel variants when explicit windows channel matches',
+      () async {
+    final tempDir = await Directory.systemTemp
+        .createTemp('update_manifest_explicit_channel_unknown_variant_');
+    addTearDown(() => tempDir.delete(recursive: true));
+
+    await File(
+            '${tempDir.path}/com.secondloop.secondloop-1.2.4-nightly-full.nupkg')
+        .writeAsString('nightly');
+    await File(
+            '${tempDir.path}/com.secondloop.secondloop-1.2.4-mystery-full.nupkg')
+        .writeAsString('mystery');
+    await File('${tempDir.path}/releases.nightly.json')
+        .writeAsString('nightly');
+
+    final generated = await generateUpdateManifest(
+      inputDirPath: tempDir.path,
+      version: '1.2.4',
+      baseDownloadUrl: 'https://example.com/downloads/',
+      windowsChannel: 'nightly',
+    );
+
+    final platforms = generated.manifest['platforms'] as Map<String, Object?>;
+    final windows = platforms['windows-x64'] as Map<String, Object?>;
+
+    expect(
+      windows['name'],
+      'com.secondloop.secondloop-1.2.4-nightly-full.nupkg',
+    );
+    expect(
+      windows['releases_url'],
+      'https://example.com/downloads/releases.nightly.json',
+    );
+  });
 }
 
 String _hexEncode(List<int> bytes) {

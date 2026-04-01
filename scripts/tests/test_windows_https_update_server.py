@@ -115,6 +115,27 @@ class WindowsHttpsUpdateServerPathTests(unittest.TestCase):
             self.assertIn(b"SecondLoop Dev v1.0.1", body)
 
     def _request(self, root: Path, path: str) -> tuple[int, bytes]:
+        status, _, body = self._request_with_method(root, "GET", path)
+        return status, body
+
+    def test_release_page_head_route_matches_get_status_without_directory_fallback(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            downloads = root / "downloads"
+            downloads.mkdir()
+
+            status, headers, body = self._request_with_method(root, "HEAD", "/releases/v1.0.1")
+
+            self.assertEqual(status, 200)
+            self.assertEqual(body, b"")
+            self.assertEqual(headers.get("Content-Type"), "text/html; charset=utf-8")
+
+    def _request_with_method(
+        self,
+        root: Path,
+        method: str,
+        path: str,
+    ) -> tuple[int, dict[str, str], bytes]:
         server = ThreadingHTTPServer(("127.0.0.1", 0), UpdateFeedHandler)
         server.root_dir = str(root)  # type: ignore[attr-defined]
         thread = threading.Thread(target=server.serve_forever, daemon=True)
@@ -126,10 +147,11 @@ class WindowsHttpsUpdateServerPathTests(unittest.TestCase):
                 timeout=5,
             )
             try:
-                connection.request("GET", path)
+                connection.request(method, path)
                 response = connection.getresponse()
                 body = response.read()
-                return response.status, body
+                headers = {name: value for name, value in response.getheaders()}
+                return response.status, headers, body
             finally:
                 connection.close()
         finally:
