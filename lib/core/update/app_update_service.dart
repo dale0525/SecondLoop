@@ -96,7 +96,9 @@ class AppUpdateAvailability {
       installMode == AppUpdateInstallMode.stagedNextLaunch;
 
   bool get canUseAndroidApkInstaller =>
-      asset != null && isAndroidApkAssetForUpdate(asset!);
+      asset != null &&
+      asset!.sha256?.trim().isNotEmpty == true &&
+      isAndroidApkAssetForUpdate(asset!);
 }
 
 class AppUpdateCheckResult {
@@ -247,6 +249,9 @@ class AppUpdateService {
 
     Map<String, Object?>? release;
     Object? lastError;
+    final windowsStagedClient = _resolvedWindowsStagedUpdateClient;
+    final windowsManagedRuntimeAvailable =
+        windowsStagedClient != null && windowsStagedClient.isAvailable();
     final androidSupportedAbis = _platform == AppUpdatePlatform.android
         ? await _loadAndroidSupportedAbisImpl(
             override: _androidSupportedAbisOverride,
@@ -266,6 +271,7 @@ class AppUpdateService {
         }
         if (!_releaseHasUsableAssetForCurrentPlatform(
           candidate,
+          windowsManagedRuntimeAvailable: windowsManagedRuntimeAvailable,
           androidSupportedAbis: androidSupportedAbis,
         )) {
           lastError = StateError('no_platform_asset_for_${_platform.name}');
@@ -319,9 +325,6 @@ class AppUpdateService {
       return AppUpdateCheckResult(currentVersion: runtimeVersion.display);
     }
 
-    final windowsStagedClient = _resolvedWindowsStagedUpdateClient;
-    final windowsManagedRuntimeAvailable =
-        windowsStagedClient != null && windowsStagedClient.isAvailable();
     final macosManagedClient = _resolvedMacosManagedUpdateClient;
     final macosManagedInstallSupported = macosManagedClient != null &&
         macosManagedClient.isSupportedInstallLocation();
@@ -720,6 +723,7 @@ class AppUpdateService {
 
   bool _releaseHasUsableAssetForCurrentPlatform(
     Map<String, Object?> release, {
+    required bool windowsManagedRuntimeAvailable,
     required List<String> androidSupportedAbis,
   }) {
     final manifestAsset = _matchManifestAssetForCurrentPlatformImpl(
@@ -735,7 +739,7 @@ class AppUpdateService {
     return _matchAssetForCurrentPlatformImpl(
           _platform,
           assets,
-          windowsManagedRuntimeAvailable: false,
+          windowsManagedRuntimeAvailable: windowsManagedRuntimeAvailable,
           androidSupportedAbis: androidSupportedAbis,
         ) !=
         null;

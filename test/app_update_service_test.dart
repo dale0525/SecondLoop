@@ -203,6 +203,41 @@ void main() {
       expect(stagedClient.isAvailableCalls, 1);
     });
 
+    test('accepts Windows nupkg-only release when runtime is available',
+        () async {
+      final stagedClient = _FakeWindowsStagedUpdateClient(available: true);
+      final service = AppUpdateService(
+        platformOverride: AppUpdatePlatform.windows,
+        releaseModeOverride: true,
+        windowsStagedUpdateClient: stagedClient,
+        currentVersionLoader: () async =>
+            const AppRuntimeVersion(version: '1.0.0', buildNumber: '88'),
+        releaseJsonFetcher: (uri) async => {
+          'tag_name': 'v1.1.0',
+          'html_url':
+              'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
+          'assets': [
+            {
+              'name': 'com.secondloop.secondloop-1.1.0-full.nupkg',
+              'browser_download_url': 'https://cdn.example.com/win.nupkg',
+              'sha256': 'abc123',
+            },
+          ],
+        },
+      );
+
+      final result = await service.checkForUpdates();
+
+      expect(result.errorMessage, isNull);
+      expect(result.update, isNotNull);
+      expect(result.update!.installMode, AppUpdateInstallMode.seamlessRestart);
+      expect(
+        result.update!.downloadUri.toString(),
+        'https://cdn.example.com/win.nupkg',
+      );
+      expect(stagedClient.isAvailableCalls, 1);
+    });
+
     test('falls back to external MSI when Windows runtime is unavailable',
         () async {
       final stagedClient = _FakeWindowsStagedUpdateClient(available: false);

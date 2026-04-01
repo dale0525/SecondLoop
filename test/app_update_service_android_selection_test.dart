@@ -119,6 +119,62 @@ void main() {
       );
     });
 
+    test('treats apk without sha256 as external download only', () async {
+      final service = AppUpdateService(
+        platformOverride: AppUpdatePlatform.android,
+        releaseModeOverride: true,
+        androidSupportedAbisOverride: const ['arm64-v8a'],
+        currentVersionLoader: () async =>
+            const AppRuntimeVersion(version: '1.0.0', buildNumber: '9'),
+        releaseJsonFetcher: (uri) async => {
+          'tag_name': 'v1.1.0',
+          'html_url':
+              'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
+          'assets': [
+            {
+              'name': 'SecondLoop-android-arm64-v8a.apk',
+              'browser_download_url': 'https://cdn.example.com/arm64.apk',
+            },
+          ],
+        },
+      );
+
+      final result = await service.checkForUpdates();
+
+      expect(result.update, isNotNull);
+      expect(result.update!.canUseAndroidApkInstaller, isFalse);
+      expect(result.update!.downloadUri.toString(),
+          'https://cdn.example.com/arm64.apk');
+    });
+
+    test('allows in-app Android install only when apk sha256 is present',
+        () async {
+      final service = AppUpdateService(
+        platformOverride: AppUpdatePlatform.android,
+        releaseModeOverride: true,
+        androidSupportedAbisOverride: const ['arm64-v8a'],
+        currentVersionLoader: () async =>
+            const AppRuntimeVersion(version: '1.0.0', buildNumber: '9'),
+        releaseJsonFetcher: (uri) async => {
+          'tag_name': 'v1.1.0',
+          'html_url':
+              'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
+          'assets': [
+            {
+              'name': 'SecondLoop-android-arm64-v8a.apk',
+              'browser_download_url': 'https://cdn.example.com/arm64.apk',
+              'sha256': 'abc123',
+            },
+          ],
+        },
+      );
+
+      final result = await service.checkForUpdates();
+
+      expect(result.update, isNotNull);
+      expect(result.update!.canUseAndroidApkInstaller, isTrue);
+    });
+
     test('matches x86 manifest when device reports x86 alias abi', () async {
       final service = AppUpdateService(
         platformOverride: AppUpdatePlatform.android,

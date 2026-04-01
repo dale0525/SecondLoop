@@ -96,7 +96,7 @@ void main() {
 
       await expectLater(
           future, throwsA(isA<AndroidApkDownloadCancelledException>()));
-      expect(httpClient.closeCalls, greaterThanOrEqualTo(1));
+      expect(request.abortCalls, 1);
     });
 
     test('dispose does not close externally owned http client', () async {
@@ -107,6 +107,33 @@ void main() {
       await downloader.dispose();
 
       expect(httpClient.closeCalls, 0);
+    });
+
+    test('cancelling does not close externally owned http client', () async {
+      final request = _FakeHttpClientRequest();
+      final httpClient = _FakeHttpClient(request: request);
+      final downloader = HttpAndroidApkDownloader(httpClient: httpClient);
+      addTearDown(() async {
+        await downloader.dispose();
+      });
+      final cancelToken = AndroidApkDownloadCancelToken();
+
+      final future = downloader.downloadApk(
+        downloadUri: Uri.parse('https://cdn.example.com/app.apk'),
+        fileName: 'SecondLoop-android-arm64-v8a.apk',
+        onProgress: (_) {},
+        cancelToken: cancelToken,
+      );
+
+      await request.closeStarted.future;
+      cancelToken.cancel();
+
+      await expectLater(
+        future,
+        throwsA(isA<AndroidApkDownloadCancelledException>()),
+      );
+      expect(httpClient.closeCalls, 0);
+      expect(request.abortCalls, 1);
     });
   });
 }
@@ -143,6 +170,7 @@ final class _FakeHttpClientRequest implements HttpClientRequest {
   final Completer<void> closeStarted = Completer<void>();
   final Completer<HttpClientResponse> responseCompleter =
       Completer<HttpClientResponse>();
+  int abortCalls = 0;
 
   void completeWithAbort() {
     if (!responseCompleter.isCompleted) {
@@ -160,6 +188,7 @@ final class _FakeHttpClientRequest implements HttpClientRequest {
 
   @override
   void abort([Object? exception, StackTrace? stackTrace]) {
+    abortCalls += 1;
     completeWithAbort();
   }
 

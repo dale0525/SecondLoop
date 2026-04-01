@@ -191,10 +191,11 @@ class HttpAndroidApkDownloader implements AndroidApkDownloader {
   }
 
   void _abortActiveClient() {
-    _httpClient.close(force: true);
-    if (_providedHttpClient == null) {
-      _httpClient = _createHttpClient();
+    if (_providedHttpClient != null) {
+      return;
     }
+    _httpClient.close(force: true);
+    _httpClient = _createHttpClient();
   }
 
   static String _sanitizeApkFileName(String value) {

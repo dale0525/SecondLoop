@@ -14,6 +14,9 @@ import 'package:secondloop/core/update/release_notes_service.dart';
 
 import 'test_i18n.dart';
 
+const _fakeAndroidApkSha256 =
+    '039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81';
+
 class _AndroidAutoUpdateService extends AppUpdateService {
   _AndroidAutoUpdateService({required this.result});
 
@@ -71,8 +74,10 @@ class _NoopAndroidApkDownloader implements AndroidApkDownloader {
     if (cancelToken?.isCancelled == true) {
       throw const AndroidApkDownloadCancelledException();
     }
-    return File(
-        '${Directory.systemTemp.path}${Platform.pathSeparator}$fileName');
+    final file =
+        File('${Directory.systemTemp.path}${Platform.pathSeparator}$fileName');
+    file.writeAsBytesSync(const <int>[1, 2, 3], flush: true);
+    return file;
   }
 }
 
@@ -101,6 +106,11 @@ void main() {
 
   setUp(() {
     SharedPreferences.setMockInitialValues({});
+    debugDefaultTargetPlatformOverride = null;
+  });
+
+  tearDown(() {
+    debugDefaultTargetPlatformOverride = null;
   });
 
   testWidgets('shows Android update dialog on launch and dismisses on cancel',
@@ -119,6 +129,7 @@ void main() {
           asset: AppUpdateAsset(
             name: 'SecondLoop-android-arm64-v8a.apk',
             downloadUri: Uri.parse('https://cdn.example.com/secondloop.apk'),
+            sha256: _fakeAndroidApkSha256,
           ),
         ),
       ),
@@ -180,6 +191,7 @@ void main() {
           asset: AppUpdateAsset(
             name: 'SecondLoop-android-arm64-v8a.apk',
             downloadUri: Uri.parse('https://cdn.example.com/secondloop.apk'),
+            sha256: _fakeAndroidApkSha256,
           ),
         ),
       ),
@@ -246,6 +258,7 @@ void main() {
           asset: AppUpdateAsset(
             name: 'SecondLoop-android-arm64-v8a.apk',
             downloadUri: Uri.parse('https://cdn.example.com/secondloop.apk'),
+            sha256: _fakeAndroidApkSha256,
           ),
         ),
       ),
@@ -328,51 +341,53 @@ void main() {
   testWidgets('shows install handoff error in Android dialog', (tester) async {
     final oldPlatform = debugDefaultTargetPlatformOverride;
     debugDefaultTargetPlatformOverride = TargetPlatform.android;
-    final service = _AndroidAutoUpdateService(
-      result: AppUpdateCheckResult(
-        currentVersion: '1.0.0+1',
-        update: AppUpdateAvailability(
+    try {
+      final service = _AndroidAutoUpdateService(
+        result: AppUpdateCheckResult(
           currentVersion: '1.0.0+1',
-          latestTag: 'v1.1.0',
-          releasePageUri: Uri.parse(
-              'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0'),
-          installMode: AppUpdateInstallMode.externalDownload,
-          asset: AppUpdateAsset(
-            name: 'SecondLoop-android-arm64-v8a.apk',
-            downloadUri: Uri.parse('https://cdn.example.com/secondloop.apk'),
-          ),
-        ),
-      ),
-    );
-
-    await tester.pumpWidget(
-      wrapWithI18n(
-        MaterialApp(
-          home: AutoUpgradeGate(
-            updateService: service,
-            releaseNotesService: _FakeReleaseNotesService(
-                result: const ReleaseNotesFetchResult()),
-            androidApkDownloader: _NoopAndroidApkDownloader(),
-            androidApkInstaller: _NoopAndroidApkInstaller(
-              error: StateError('android_apk_install_not_started'),
+          update: AppUpdateAvailability(
+            currentVersion: '1.0.0+1',
+            latestTag: 'v1.1.0',
+            releasePageUri: Uri.parse(
+                'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0'),
+            installMode: AppUpdateInstallMode.externalDownload,
+            asset: AppUpdateAsset(
+              name: 'SecondLoop-android-arm64-v8a.apk',
+              downloadUri: Uri.parse('https://cdn.example.com/secondloop.apk'),
+              sha256: _fakeAndroidApkSha256,
             ),
-            enableInDebug: true,
-            child: const Scaffold(body: Text('home')),
           ),
         ),
-      ),
-    );
+      );
 
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 100));
-    await tester.tap(find.byKey(const ValueKey('android_update_confirm')));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 100));
+      await tester.pumpWidget(
+        wrapWithI18n(
+          MaterialApp(
+            home: AutoUpgradeGate(
+              updateService: service,
+              releaseNotesService: _FakeReleaseNotesService(
+                  result: const ReleaseNotesFetchResult()),
+              androidApkDownloader: _NoopAndroidApkDownloader(),
+              androidApkInstaller: _NoopAndroidApkInstaller(
+                error: StateError('android_apk_install_not_started'),
+              ),
+              enableInDebug: true,
+              child: const Scaffold(body: Text('home')),
+            ),
+          ),
+        ),
+      );
 
-    expect(find.text('Could not open update page'), findsOneWidget);
-    expect(find.byType(AlertDialog), findsOneWidget);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+      await tester.tap(find.byKey(const ValueKey('android_update_confirm')));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
 
-    debugDefaultTargetPlatformOverride = oldPlatform;
+      expect(find.byType(AlertDialog), findsOneWidget);
+    } finally {
+      debugDefaultTargetPlatformOverride = oldPlatform;
+    }
   });
 
   testWidgets(
@@ -380,49 +395,52 @@ void main() {
       (tester) async {
     final oldPlatform = debugDefaultTargetPlatformOverride;
     debugDefaultTargetPlatformOverride = TargetPlatform.android;
-    final service = _AndroidAutoUpdateService(
-      result: AppUpdateCheckResult(
-        currentVersion: '1.0.0+1',
-        update: AppUpdateAvailability(
+    try {
+      final service = _AndroidAutoUpdateService(
+        result: AppUpdateCheckResult(
           currentVersion: '1.0.0+1',
-          latestTag: 'v1.1.0',
-          releasePageUri: Uri.parse(
-              'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0'),
-          installMode: AppUpdateInstallMode.externalDownload,
-          asset: AppUpdateAsset(
-            name: 'SecondLoop-android-arm64-v8a.apk',
-            downloadUri: Uri.parse('https://cdn.example.com/secondloop.apk'),
+          update: AppUpdateAvailability(
+            currentVersion: '1.0.0+1',
+            latestTag: 'v1.1.0',
+            releasePageUri: Uri.parse(
+                'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0'),
+            installMode: AppUpdateInstallMode.externalDownload,
+            asset: AppUpdateAsset(
+              name: 'SecondLoop-android-arm64-v8a.apk',
+              downloadUri: Uri.parse('https://cdn.example.com/secondloop.apk'),
+              sha256: _fakeAndroidApkSha256,
+            ),
           ),
         ),
-      ),
-    );
+      );
 
-    await tester.pumpWidget(
-      wrapWithI18n(
-        MaterialApp(
-          home: AutoUpgradeGate(
-            updateService: service,
-            releaseNotesService: _FakeReleaseNotesService(
-                result: const ReleaseNotesFetchResult()),
-            androidApkDownloader: _NoopAndroidApkDownloader(),
-            androidApkInstaller: _PermissionSettingsInstaller(),
-            enableInDebug: true,
-            child: const Scaffold(body: Text('home')),
+      await tester.pumpWidget(
+        wrapWithI18n(
+          MaterialApp(
+            home: AutoUpgradeGate(
+              updateService: service,
+              releaseNotesService: _FakeReleaseNotesService(
+                  result: const ReleaseNotesFetchResult()),
+              androidApkDownloader: _NoopAndroidApkDownloader(),
+              androidApkInstaller: _PermissionSettingsInstaller(),
+              enableInDebug: true,
+              child: const Scaffold(body: Text('home')),
+            ),
           ),
         ),
-      ),
-    );
+      );
 
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 100));
-    await tester.tap(find.byKey(const ValueKey('android_update_confirm')));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 100));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+      await tester.tap(find.byKey(const ValueKey('android_update_confirm')));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
 
-    expect(find.text('Could not open update page'), findsNothing);
-    expect(find.byType(AlertDialog), findsOneWidget);
-
-    debugDefaultTargetPlatformOverride = oldPlatform;
+      expect(find.text('Could not open update page'), findsNothing);
+      expect(find.byType(AlertDialog), findsOneWidget);
+    } finally {
+      debugDefaultTargetPlatformOverride = oldPlatform;
+    }
   });
 
   testWidgets(
@@ -443,6 +461,7 @@ void main() {
             asset: AppUpdateAsset(
               name: 'SecondLoop-android-arm64-v8a.apk',
               downloadUri: Uri.parse('https://cdn.example.com/secondloop.apk'),
+              sha256: _fakeAndroidApkSha256,
             ),
           ),
         ),
@@ -477,64 +496,67 @@ void main() {
   });
 
   testWidgets(
-      'does not reopen Android update dialog after resuming from permission settings',
+      'rechecks Android update dialog after resuming from permission settings',
       (tester) async {
     final oldPlatform = debugDefaultTargetPlatformOverride;
     debugDefaultTargetPlatformOverride = TargetPlatform.android;
-    final service = _AndroidAutoUpdateService(
-      result: AppUpdateCheckResult(
-        currentVersion: '1.0.0+1',
-        update: AppUpdateAvailability(
+    try {
+      final service = _AndroidAutoUpdateService(
+        result: AppUpdateCheckResult(
           currentVersion: '1.0.0+1',
-          latestTag: 'v1.1.0',
-          releasePageUri: Uri.parse(
-              'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0'),
-          installMode: AppUpdateInstallMode.externalDownload,
-          asset: AppUpdateAsset(
-            name: 'SecondLoop-android-arm64-v8a.apk',
-            downloadUri: Uri.parse('https://cdn.example.com/secondloop.apk'),
+          update: AppUpdateAvailability(
+            currentVersion: '1.0.0+1',
+            latestTag: 'v1.1.0',
+            releasePageUri: Uri.parse(
+                'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0'),
+            installMode: AppUpdateInstallMode.externalDownload,
+            asset: AppUpdateAsset(
+              name: 'SecondLoop-android-arm64-v8a.apk',
+              downloadUri: Uri.parse('https://cdn.example.com/secondloop.apk'),
+              sha256: _fakeAndroidApkSha256,
+            ),
           ),
         ),
-      ),
-    );
+      );
 
-    await tester.pumpWidget(
-      wrapWithI18n(
-        MaterialApp(
-          home: AutoUpgradeGate(
-            updateService: service,
-            releaseNotesService: _FakeReleaseNotesService(
-                result: const ReleaseNotesFetchResult()),
-            androidApkDownloader: _NoopAndroidApkDownloader(),
-            androidApkInstaller: _PermissionSettingsInstaller(),
-            enableInDebug: true,
-            child: const Scaffold(body: Text('home')),
+      await tester.pumpWidget(
+        wrapWithI18n(
+          MaterialApp(
+            home: AutoUpgradeGate(
+              updateService: service,
+              releaseNotesService: _FakeReleaseNotesService(
+                  result: const ReleaseNotesFetchResult()),
+              androidApkDownloader: _NoopAndroidApkDownloader(),
+              androidApkInstaller: _PermissionSettingsInstaller(),
+              enableInDebug: true,
+              child: const Scaffold(body: Text('home')),
+            ),
           ),
         ),
-      ),
-    );
+      );
 
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 100));
-    expect(find.byType(AlertDialog), findsOneWidget);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(find.byType(AlertDialog), findsOneWidget);
 
-    await tester.tap(find.byKey(const ValueKey('android_update_confirm')));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 100));
-    expect(find.byType(AlertDialog), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('android_update_confirm')));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(find.byType(AlertDialog), findsOneWidget);
+      await tester.tap(find.text('Cancel', skipOffstage: false));
+      await tester.pumpAndSettle();
+      expect(find.byType(AlertDialog), findsNothing);
 
-    await tester.tap(find.byKey(const ValueKey('android_update_cancel')));
-    await tester.pumpAndSettle();
-    expect(find.byType(AlertDialog), findsNothing);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+      await tester.pump();
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
 
-    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
-    await tester.pump();
-    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 100));
-
-    expect(find.byType(AlertDialog), findsNothing);
-    debugDefaultTargetPlatformOverride = oldPlatform;
+      expect(find.byType(AlertDialog), findsOneWidget);
+    } finally {
+      debugDefaultTargetPlatformOverride = oldPlatform;
+    }
   });
 
   testWidgets(
@@ -555,7 +577,7 @@ void main() {
             asset: AppUpdateAsset(
               name: 'SecondLoop-android-arm64-v8a.apk',
               downloadUri: Uri.parse('https://cdn.example.com/secondloop.apk'),
-              sha256: 'abc123',
+              sha256: _fakeAndroidApkSha256,
             ),
           ),
         ),
