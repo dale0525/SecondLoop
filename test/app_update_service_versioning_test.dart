@@ -78,6 +78,25 @@ void main() {
       );
     });
 
+    test(
+        'Windows MSI identity matcher rejects unrelated prod-like installer names',
+        () {
+      expect(
+        isWindowsMsiInstallerNameForApp(
+          'SecondLoop-helper-win.msi',
+          appId: 'com.secondloop.secondloop',
+        ),
+        isFalse,
+      );
+      expect(
+        isWindowsMsiInstallerNameForApp(
+          'SecondLoop-devtools-win.msi',
+          appId: 'com.secondloop.secondloop',
+        ),
+        isFalse,
+      );
+    });
+
     test('checkForUpdates accepts uppercase V release tags', () async {
       final service = AppUpdateService(
         platformOverride: AppUpdatePlatform.windows,

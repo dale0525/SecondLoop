@@ -138,6 +138,7 @@ AppUpdateAsset? _selectBestAssetForArchitecture(
 
   AppUpdateAsset? bestAsset;
   int? bestScore;
+  int? bestTieBreaker;
   for (final asset in matches) {
     final score = _scoreManualAssetForArchitecture(
       platform,
@@ -147,9 +148,14 @@ AppUpdateAsset? _selectBestAssetForArchitecture(
     if (score == null) {
       continue;
     }
-    if (bestScore == null || score < bestScore) {
+    final tieBreaker = _assetSelectionTieBreaker(asset);
+    if (bestScore == null ||
+        score < bestScore ||
+        (score == bestScore &&
+            (bestTieBreaker == null || tieBreaker < bestTieBreaker))) {
       bestAsset = asset;
       bestScore = score;
+      bestTieBreaker = tieBreaker;
     }
   }
 
@@ -186,6 +192,21 @@ AppUpdateAsset? _fallbackAssetForUnknownArchitecture(
   }
 
   return matches.first;
+}
+
+int _assetSelectionTieBreaker(AppUpdateAsset asset) {
+  final hasIntegrity = assetHasIntegrityMetadata(asset);
+  final installModeHint = asset.installModeHint;
+  if (hasIntegrity && installModeHint != null) {
+    return 0;
+  }
+  if (hasIntegrity) {
+    return 1;
+  }
+  if (installModeHint != null) {
+    return 2;
+  }
+  return 3;
 }
 
 int? _scoreManualAssetForArchitecture(
@@ -314,11 +335,7 @@ AppUpdateAsset? matchManifestAssetForCurrentPlatform(
       final manifestAppId = readStringLoose(candidateEntry, 'app_id');
       final packageFileName =
           parsedUrl.pathSegments.isEmpty ? key : parsedUrl.pathSegments.last;
-      final inferredName = _defaultWindowsManifestAssetName(
-        packageFileName: packageFileName,
-        manifestAppId: manifestAppId,
-      );
-      final name = readStringLoose(candidateEntry, 'name') ?? inferredName;
+      final name = readStringLoose(candidateEntry, 'name') ?? packageFileName;
       if (normalizedReleaseVersion != null &&
           !_assetMatchesReleaseVersion(
             platform,
@@ -692,31 +709,6 @@ String? _extractTaggedAssetVersion(String assetName) {
   return version;
 }
 
-String _defaultWindowsManifestAssetName({
-  required String packageFileName,
-  required String? manifestAppId,
-}) {
-  final normalizedFileName = packageFileName.trim();
-  final normalizedManifestAppId = normalizeSupportedSecondLoopAppId(
-    manifestAppId,
-  );
-  if (normalizedManifestAppId == null || normalizedFileName.isEmpty) {
-    return normalizedFileName;
-  }
-  if (normalizedFileName
-      .toLowerCase()
-      .startsWith('$normalizedManifestAppId-')) {
-    return normalizedFileName;
-  }
-
-  final inferredVersion = _extractWindowsAssetVersion(normalizedFileName);
-  if (inferredVersion == null) {
-    return normalizedFileName;
-  }
-
-  return '$normalizedManifestAppId-$inferredVersion-full.nupkg';
-}
-
 bool _matchesExpectedWindowsManifestIdentity({
   required String assetName,
   required String? manifestAppId,
@@ -739,7 +731,16 @@ bool _matchesExpectedWindowsManifestIdentity({
           assetName,
         ) ||
         isWindowsMsiInstallerName(assetName);
-    return !carriesRecognizedWindowsIdentity;
+    if (carriesRecognizedWindowsIdentity) {
+      return false;
+    }
+
+    final normalizedAssetName = assetName.trim().toLowerCase();
+    final looksLikeWindowsPackageFile =
+        normalizedAssetName.endsWith('.nupkg') ||
+            normalizedAssetName.endsWith('.msi') ||
+            normalizedAssetName.endsWith('.exe');
+    return !looksLikeWindowsPackageFile;
   }
 
   final exactNameMatch =

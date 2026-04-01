@@ -115,6 +115,31 @@ void main() {
     });
 
     test(
+        'matchManifestAssetForCurrentPlatform rejects mismatched Windows package basename even when app id matches',
+        () {
+      final release = <String, Object?>{
+        'platforms': <String, Object?>{
+          'windows-x64': <String, Object?>{
+            'app_id': 'com.secondloop.secondloopdev',
+            'package_url': 'https://cdn.example.com/otherapp-1.0.1-full.nupkg',
+            'sha256': 'badsha',
+          },
+        },
+      };
+
+      final asset = matchManifestAssetForCurrentPlatform(
+        AppUpdatePlatform.windows,
+        release,
+        currentArchitecture: 'x64',
+        allowHttp: false,
+        allowFile: false,
+        windowsAppId: 'com.secondloop.secondloopdev',
+      );
+
+      expect(asset, isNull);
+    });
+
+    test(
         'releaseContainsWindowsIdentityMismatch ignores matching manifest-only Windows MSI entries',
         () {
       final release = <String, Object?>{
@@ -172,6 +197,27 @@ void main() {
           windowsAppId: 'com.secondloop.secondloopdev',
         ),
         isFalse,
+      );
+    });
+
+    test(
+        'releaseContainsWindowsIdentityMismatch flags mismatched Windows package basename even when app id matches',
+        () {
+      final release = <String, Object?>{
+        'platforms': <String, Object?>{
+          'windows-x64': <String, Object?>{
+            'app_id': 'com.secondloop.secondloopdev',
+            'package_url': 'https://cdn.example.com/otherapp-1.0.1-full.nupkg',
+          },
+        },
+      };
+
+      expect(
+        releaseContainsWindowsIdentityMismatch(
+          release,
+          windowsAppId: 'com.secondloop.secondloopdev',
+        ),
+        isTrue,
       );
     });
   });

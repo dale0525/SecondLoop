@@ -238,19 +238,19 @@ void main() {
     );
   });
 
-  test(
-      'extracts pending version from channel-suffixed package without metadata files',
-      () {
+  test('rejects channel-suffixed package when metadata files are missing', () {
     expect(
       _pendingVersionForPackageName(
         'com.secondloop.secondloopdev-1.3.0-devwin-full.nupkg',
         appId: 'com.secondloop.secondloopdev',
       ),
-      '1.3.0',
+      isNull,
     );
   });
 
-  test('detects pending update without channel metadata files', () async {
+  test(
+      'does not detect pending update for channel package without metadata files',
+      () async {
     final root =
         await Directory.systemTemp.createTemp('velopack_pending_nometa_');
     addTearDown(() => root.delete(recursive: true));
@@ -264,8 +264,8 @@ void main() {
       appId: 'com.secondloop.secondloopdev',
     );
 
-    expect(client.hasPendingUpdate(), isTrue);
-    expect(client.pendingUpdateVersion(), '1.0.1');
+    expect(client.hasPendingUpdate(), isFalse);
+    expect(client.pendingUpdateVersion(), isNull);
   });
 
   test('prefers newer channel-suffixed pending package over installed version',

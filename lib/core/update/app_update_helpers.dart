@@ -37,13 +37,24 @@ bool isWindowsMsiInstallerNameForApp(
   }
 
   final normalizedName = name.trim().toLowerCase();
-  final hasDevToken = _hasWindowsDevInstallerIdentity(normalizedName);
-  return normalizedAppId == secondLoopProdAppId ? !hasDevToken : hasDevToken;
+  return switch (normalizedAppId) {
+    secondLoopProdAppId => _isWindowsProdInstallerIdentity(normalizedName),
+    secondLoopDevAppId => _hasWindowsDevInstallerIdentity(normalizedName),
+    _ => false,
+  };
+}
+
+bool _isWindowsProdInstallerIdentity(String normalizedName) {
+  final tokens = _windowsInstallerTokens(normalizedName);
+  return tokens.length >= 2 && tokens[0] == 'secondloop' && tokens[1] == 'win';
 }
 
 bool _hasWindowsDevInstallerIdentity(String normalizedName) {
   final tokens = _windowsInstallerTokens(normalizedName);
-  return tokens.contains('secondloop') && tokens.contains('dev');
+  return tokens.length >= 3 &&
+      tokens[0] == 'secondloop' &&
+      tokens[1] == 'dev' &&
+      tokens[2] == 'win';
 }
 
 List<String> _windowsInstallerTokens(String normalizedName) {

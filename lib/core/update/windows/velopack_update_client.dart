@@ -30,6 +30,7 @@ const _windowsProcessProbeShellCandidates = <String>[
   'powershell.exe',
   'pwsh.exe',
 ];
+const _defaultWindowsChannel = 'win';
 
 const _defaultWindowsVelopackAppId = String.fromEnvironment(
   'SECONDLOOP_APP_ID',
@@ -809,11 +810,13 @@ class VelopackUpdateClient implements WindowsStagedUpdateClient {
       if (channelSuffix.isNotEmpty &&
           looksLikeSimpleChannel &&
           parseComparableAppVersion(versionPrefix) != null) {
+        final normalizedChannelSuffix = channelSuffix.toLowerCase();
         if (channels.isEmpty) {
-          return versionPrefix;
+          return normalizedChannelSuffix == _defaultWindowsChannel
+              ? versionPrefix
+              : null;
         }
 
-        final normalizedChannelSuffix = channelSuffix.toLowerCase();
         final knownChannels = channels
             .map((channel) => channel.trim().toLowerCase())
             .where((channel) => channel.isNotEmpty)
