@@ -121,6 +121,36 @@ void main() {
       );
     });
 
+    test('unknown Windows architecture still falls back to x64 installer',
+        () async {
+      final service = AppUpdateService(
+        platformOverride: AppUpdatePlatform.windows,
+        releaseModeOverride: true,
+        currentArchitectureOverride: 'mystery-cpu',
+        currentVersionLoader: () async =>
+            const AppRuntimeVersion(version: '1.0.0', buildNumber: '7'),
+        releaseJsonFetcher: (_) async => <String, Object?>{
+          'version': '1.1.0',
+          'release_page_url': 'https://example.com/releases/v1.1.0',
+          'assets': <Object?>[
+            <String, Object?>{
+              'name': 'SecondLoop-win-x64-v1.1.0.msi',
+              'browser_download_url': 'https://cdn.example.com/x64.msi',
+            },
+          ],
+        },
+      );
+
+      final result = await service.checkForUpdates();
+
+      expect(result.update, isNotNull);
+      expect(result.update!.asset?.name, 'SecondLoop-win-x64-v1.1.0.msi');
+      expect(
+        result.update!.downloadUri.toString(),
+        'https://cdn.example.com/x64.msi',
+      );
+    });
+
     testWidgets(
         'manual fallback notice opens update release page from result when apply pending fails',
         (tester) async {

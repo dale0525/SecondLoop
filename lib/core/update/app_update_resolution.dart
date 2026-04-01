@@ -135,7 +135,39 @@ AppUpdateAsset? _selectBestAssetForArchitecture(
     }
   }
 
+  if (bestAsset == null && architecture != 'x64' && architecture != 'arm64') {
+    return _fallbackAssetForUnknownArchitecture(platform, matches);
+  }
+
   return bestAsset;
+}
+
+AppUpdateAsset? _fallbackAssetForUnknownArchitecture(
+  AppUpdatePlatform platform,
+  List<AppUpdateAsset> matches,
+) {
+  if (matches.isEmpty) {
+    return null;
+  }
+
+  if (platform == AppUpdatePlatform.macos) {
+    for (final asset in matches) {
+      if (asset.name.trim().toLowerCase().contains('universal')) {
+        return asset;
+      }
+    }
+  }
+
+  for (final asset in matches) {
+    final normalizedName = asset.name.trim().toLowerCase();
+    final hasArm64Token =
+        normalizedName.contains('arm64') || normalizedName.contains('aarch64');
+    if (!hasArm64Token) {
+      return asset;
+    }
+  }
+
+  return matches.first;
 }
 
 int? _scoreManualAssetForArchitecture(

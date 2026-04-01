@@ -797,6 +797,34 @@ class VelopackUpdateClient implements WindowsStagedUpdateClient {
       return versionWithOptionalChannel;
     }
 
+    final firstDashIndex = versionWithOptionalChannel.indexOf('-');
+    if (firstDashIndex > 0 &&
+        firstDashIndex < versionWithOptionalChannel.length - 1) {
+      final versionPrefix =
+          versionWithOptionalChannel.substring(0, firstDashIndex);
+      final channelSuffix =
+          versionWithOptionalChannel.substring(firstDashIndex + 1).trim();
+      final looksLikeSimpleChannel =
+          RegExp(r'^[A-Za-z][A-Za-z0-9_-]*$').hasMatch(channelSuffix);
+      if (channelSuffix.isNotEmpty &&
+          looksLikeSimpleChannel &&
+          parseComparableAppVersion(versionPrefix) != null) {
+        if (channels.isEmpty) {
+          return versionPrefix;
+        }
+
+        final normalizedChannelSuffix = channelSuffix.toLowerCase();
+        final knownChannels = channels
+            .map((channel) => channel.trim().toLowerCase())
+            .where((channel) => channel.isNotEmpty)
+            .toSet();
+        if (knownChannels.contains(normalizedChannelSuffix)) {
+          return versionPrefix;
+        }
+        return null;
+      }
+    }
+
     final knownChannels = channels
         .map((channel) => channel.trim())
         .where((channel) => channel.isNotEmpty)

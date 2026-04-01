@@ -238,6 +238,36 @@ void main() {
     );
   });
 
+  test(
+      'extracts pending version from channel-suffixed package without metadata files',
+      () {
+    expect(
+      _pendingVersionForPackageName(
+        'com.secondloop.secondloopdev-1.3.0-devwin-full.nupkg',
+        appId: 'com.secondloop.secondloopdev',
+      ),
+      '1.3.0',
+    );
+  });
+
+  test('detects pending update without channel metadata files', () async {
+    final root =
+        await Directory.systemTemp.createTemp('velopack_pending_nometa_');
+    addTearDown(() => root.delete(recursive: true));
+    final updater = File('${root.path}${Platform.pathSeparator}Update.exe')
+      ..writeAsStringSync('stub');
+    _writeSqVersion(root, '1.0.0');
+    _createNupkg(root, 'com.secondloop.secondloopdev-1.0.1-devwin-full.nupkg');
+
+    final client = VelopackUpdateClient(
+      updateExecutablePath: updater.path,
+      appId: 'com.secondloop.secondloopdev',
+    );
+
+    expect(client.hasPendingUpdate(), isTrue);
+    expect(client.pendingUpdateVersion(), '1.0.1');
+  });
+
   test('prefers newer channel-suffixed pending package over installed version',
       () async {
     final root =

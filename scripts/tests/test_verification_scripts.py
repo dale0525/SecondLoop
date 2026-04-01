@@ -25,12 +25,23 @@ class VerificationScriptsTests(unittest.TestCase):
             pixi,
         )
 
+    def test_pixi_verify_changed_documents_shared_check_only_entrypoint(self) -> None:
+        pixi = PIXI_TOML.read_text(encoding="utf-8")
+
+        self.assertIn('verify-changed = "bash scripts/verify_changed.sh"', pixi)
+        self.assertIn(
+            'verify-changed = "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_bash.ps1 scripts/verify_changed.sh"',
+            pixi,
+        )
+
     def test_contributing_documents_fast_commit_and_full_push_flow(self) -> None:
         contributing = CONTRIBUTING.read_text(encoding="utf-8")
 
         self.assertIn("fast pre-commit + full pre-push verification", contributing)
         self.assertIn("same scope as `pre-push` / CI", contributing)
         self.assertIn("Check-only local gate", contributing)
+        self.assertIn("`pixi run verify-changed`", contributing)
+        self.assertIn("`pixi run ci`", contributing)
 
     def test_check_mode_does_not_refresh_i18n_outputs(self) -> None:
         check_mode = (REPO_ROOT / "scripts/pre_commit_check_mode.sh").read_text(

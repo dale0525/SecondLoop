@@ -21,14 +21,16 @@ bool isWindowsMsiInstallerNameForApp(
   }
 
   final normalizedName = name.trim().toLowerCase();
-  final isDevApp = normalizedAppId.endsWith('dev');
   final hasDevToken = _hasWindowsDevInstallerIdentity(normalizedName);
 
-  if (isDevApp) {
-    return hasDevToken;
+  switch (normalizedAppId) {
+    case 'com.secondloop.secondloop':
+      return !hasDevToken;
+    case 'com.secondloop.secondloopdev':
+      return hasDevToken;
+    default:
+      return false;
   }
-
-  return !hasDevToken;
 }
 
 bool _hasWindowsDevInstallerIdentity(String normalizedName) {
