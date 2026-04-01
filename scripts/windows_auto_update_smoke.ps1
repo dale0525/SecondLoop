@@ -3,6 +3,7 @@ param(
   [string]$NewVersion = '1.0.1+1',
   [string]$PackId = 'com.secondloop.secondloopdev',
   [string]$Channel = 'devwin',
+  [string]$AppName = '',
   [string]$ExeName = 'secondloop.exe',
   [int]$Port = 8443,
   [string]$OutputRoot = 'dist/windows-auto-update-smoke',
@@ -26,6 +27,14 @@ function Get-VersionName([string]$SemanticVersionWithBuild) {
 
 function Get-InstalledProcessName {
   return [System.IO.Path]::GetFileNameWithoutExtension($ExeName)
+}
+
+function Get-DefaultAppName {
+  if ($PackId -eq 'com.secondloop.secondloopdev') {
+    return 'SecondLoop Dev'
+  }
+
+  return 'SecondLoop'
 }
 
 function Set-PubspecVersion {
@@ -144,9 +153,12 @@ function Invoke-PackageBuild {
 
   $packageScript = Join-Path $PSScriptRoot 'package_windows_velopack.ps1'
   $versionName = Get-VersionName $VersionValue
+  if ([string]::IsNullOrWhiteSpace($AppName)) {
+    $AppName = Get-DefaultAppName
+  }
 
   $env:SECONDLOOP_APP_ID = $PackId
-  $env:SECONDLOOP_APP_NAME = 'SecondLoop Dev'
+  $env:SECONDLOOP_APP_NAME = $AppName
   $env:SECONDLOOP_RELEASE_API_ORIGIN = "https://localhost:$Port"
 
   $packageArgs = @(

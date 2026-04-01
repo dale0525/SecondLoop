@@ -52,6 +52,14 @@ class WindowsAutoUpdateSmokeTests(unittest.TestCase):
         self.assertIn("[System.IO.Path]::GetFileNameWithoutExtension($ExeName)", script)
         self.assertNotIn("Get-Process -Name 'secondloop'", script)
 
+    def test_smoke_script_parameterizes_app_name_with_pack_id_default(self) -> None:
+        script = SMOKE_SCRIPT.read_text(encoding="utf-8")
+
+        self.assertIn("[string]$AppName = ''", script)
+        self.assertIn("function Get-DefaultAppName", script)
+        self.assertIn("$env:SECONDLOOP_APP_NAME = $AppName", script)
+        self.assertNotIn("$env:SECONDLOOP_APP_NAME = 'SecondLoop Dev'", script)
+
     def test_smoke_script_targets_exact_channel_versioned_full_package(self) -> None:
         script = SMOKE_SCRIPT.read_text(encoding="utf-8")
 

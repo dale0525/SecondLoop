@@ -6,7 +6,43 @@ import 'package:secondloop/core/update/app_update_service.dart';
 import 'package:secondloop/core/update/windows/velopack_update_client.dart';
 
 void main() {
-  test('checkForUpdates does not match unrelated non-dev Windows MSI by suffix',
+  test(
+      'checkForUpdates does not match unrelated dev Windows MSI for custom app id',
+      () async {
+    final stagedClient = VelopackUpdateClient(
+      updateExecutablePath: _stubUpdateExePath(),
+      appId: 'com.secondloop.secondloopbeta',
+    );
+    final service = AppUpdateService(
+      platformOverride: AppUpdatePlatform.windows,
+      releaseModeOverride: true,
+      windowsStagedUpdateClient: stagedClient,
+      releaseJsonFetcher: (_) async => <String, Object?>{
+        'tag_name': 'v1.1.0',
+        'html_url': 'https://example.com/releases/v1.1.0',
+        'assets': <Object?>[
+          <String, Object?>{
+            'name': 'SecondLoop Dev-win.msi',
+            'browser_download_url': 'https://cdn.example.com/dev.msi',
+          },
+        ],
+      },
+      currentVersionLoader: () async =>
+          const AppRuntimeVersion(version: '1.0.0', buildNumber: '1'),
+    );
+
+    final result = await service.checkForUpdates();
+
+    expect(result.update, isNotNull);
+    expect(result.update!.asset, isNull);
+    expect(result.update!.installMode, AppUpdateInstallMode.externalDownload);
+    expect(
+      result.update!.downloadUri,
+      Uri.parse('https://example.com/releases/v1.1.0'),
+    );
+  });
+
+  test('checkForUpdates falls back to generic Windows MSI for custom app id',
       () async {
     final stagedClient = VelopackUpdateClient(
       updateExecutablePath: _stubUpdateExePath(),
@@ -37,11 +73,11 @@ void main() {
     final result = await service.checkForUpdates();
 
     expect(result.update, isNotNull);
-    expect(result.update!.asset, isNull);
+    expect(result.update!.asset?.name, 'SecondLoop-win.msi');
     expect(result.update!.installMode, AppUpdateInstallMode.externalDownload);
     expect(
       result.update!.downloadUri,
-      Uri.parse('https://example.com/releases/v1.1.0'),
+      Uri.parse('https://cdn.example.com/prod.msi'),
     );
   });
 

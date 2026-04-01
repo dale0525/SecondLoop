@@ -307,6 +307,32 @@ function Ensure-WindowsBuildEnvironment {
   }
 }
 
+function Find-ExpectedVelopackPackage {
+  param(
+    [string]$ResolvedOutputPath,
+    [string]$PackId,
+    [string]$resolvedVersion,
+    [string]$Channel
+  )
+
+  $channelPackageName = "$PackId-$resolvedVersion-$Channel-full.nupkg"
+  $legacyPackageName = "$PackId-$resolvedVersion-full.nupkg"
+  $candidateNames = @($channelPackageName)
+
+  if ($Channel -eq 'win') {
+    $candidateNames += $legacyPackageName
+  }
+
+  foreach ($candidateName in $candidateNames) {
+    $candidatePath = Join-Path $ResolvedOutputPath $candidateName
+    if (Test-Path -LiteralPath $candidatePath -PathType Leaf) {
+      return $candidatePath
+    }
+  }
+
+  throw "Velopack output missing expected nupkg. Checked: $(($candidateNames | ForEach-Object { Join-Path $ResolvedOutputPath $_ }) -join ', ')"
+}
+
 Invoke-InWindowsShortWorkspace -RepoRootPath $script:repoRootPath -ScriptBlock {
   $script:repoRootPath = Resolve-SecondLoopProjectDir -DefaultRepoRoot (Join-Path $PSScriptRoot '..')
   $repoRootPath = $script:repoRootPath
@@ -395,8 +421,7 @@ Invoke-InWindowsShortWorkspace -RepoRootPath $script:repoRootPath -ScriptBlock {
   }
 
   $setupExists = Get-ChildItem -Path $resolvedOutputPath -Filter '*Setup*.exe' -File | Select-Object -First 1
-  $expectedPackageName = "$PackId-$resolvedVersion-$Channel-full.nupkg"
-  $expectedPackagePath = Join-Path $resolvedOutputPath $expectedPackageName
+  $expectedPackagePath = Find-ExpectedVelopackPackage -ResolvedOutputPath $resolvedOutputPath -PackId $PackId -ResolvedVersion $resolvedVersion -Channel $Channel
   $releasesMetadataPath = Join-Path $resolvedOutputPath "releases.$Channel.json"
   $assetsMetadataPath = Join-Path $resolvedOutputPath "assets.$Channel.json"
 
@@ -408,9 +433,6 @@ Invoke-InWindowsShortWorkspace -RepoRootPath $script:repoRootPath -ScriptBlock {
   }
   if (-not (Test-Path $assetsMetadataPath)) {
     throw "Velopack output missing assets metadata: $assetsMetadataPath"
-  }
-  if (-not (Test-Path -LiteralPath $expectedPackagePath -PathType Leaf)) {
-    throw "Velopack output missing expected nupkg: $expectedPackagePath"
   }
 
   Write-Host "Velopack package ready in: $resolvedOutputPath"
