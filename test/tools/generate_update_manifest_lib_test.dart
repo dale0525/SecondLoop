@@ -226,6 +226,39 @@ void main() {
   });
 
   test(
+      'generateUpdateManifest accepts architecture-specific macOS managed archives',
+      () async {
+    final tempDir = await Directory.systemTemp
+        .createTemp('update_manifest_macos_archives_');
+    addTearDown(() => tempDir.delete(recursive: true));
+
+    await File('${tempDir.path}/SecondLoop-macos-arm64-v1.2.3.app.tar.gz')
+        .writeAsString('macos-arm64');
+    await File('${tempDir.path}/SecondLoop-macos-x64-v1.2.3.app.tar.gz')
+        .writeAsString('macos-x64');
+    await File('${tempDir.path}/SecondLoop-linux-x64-v1.2.3.tar.gz')
+        .writeAsString('linux');
+
+    final generated = await generateUpdateManifest(
+      inputDirPath: tempDir.path,
+      version: '1.2.3',
+      baseDownloadUrl: 'https://example.com/downloads/',
+    );
+
+    final platforms = generated.manifest['platforms'] as Map<String, Object?>;
+    final macos = platforms['macos-universal'] as List<Object?>;
+
+    expect(macos, hasLength(2));
+    expect(
+      macos.whereType<Map<String, Object?>>().map((entry) => entry['name']),
+      containsAll(<String>[
+        'SecondLoop-macos-arm64-v1.2.3.app.tar.gz',
+        'SecondLoop-macos-x64-v1.2.3.app.tar.gz',
+      ]),
+    );
+  });
+
+  test(
       'generateUpdateManifest rejects missing matching windows package version',
       () async {
     final tempDir = await Directory.systemTemp

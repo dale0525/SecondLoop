@@ -50,5 +50,59 @@ void main() {
           asset.downloadUri.toString(), 'https://cdn.example.com/devwin.nupkg');
       expect(asset.sha256, 'devsha');
     });
+
+    test(
+        'matchManifestAssetForCurrentPlatform accepts manifest-only Windows MSI with matching app id',
+        () {
+      final release = <String, Object?>{
+        'platforms': <String, Object?>{
+          'windows-x64': <String, Object?>{
+            'name': 'SecondLoop Dev-win.msi',
+            'app_id': 'com.secondloop.secondloopdev',
+            'package_url': 'https://cdn.example.com/SecondLoop-Dev-win.msi',
+            'sha256': 'msisha',
+          },
+        },
+      };
+
+      final asset = matchManifestAssetForCurrentPlatform(
+        AppUpdatePlatform.windows,
+        release,
+        currentArchitecture: 'x64',
+        allowHttp: false,
+        allowFile: false,
+        windowsAppId: 'com.secondloop.secondloopdev',
+      );
+
+      expect(asset, isNotNull);
+      expect(asset!.name, 'SecondLoop Dev-win.msi');
+      expect(
+        asset.downloadUri.toString(),
+        'https://cdn.example.com/SecondLoop-Dev-win.msi',
+      );
+      expect(asset.sha256, 'msisha');
+    });
+
+    test(
+        'releaseContainsWindowsIdentityMismatch ignores matching manifest-only Windows MSI entries',
+        () {
+      final release = <String, Object?>{
+        'platforms': <String, Object?>{
+          'windows-x64': <String, Object?>{
+            'name': 'SecondLoop Dev-win.msi',
+            'app_id': 'com.secondloop.secondloopdev',
+            'package_url': 'https://cdn.example.com/SecondLoop-Dev-win.msi',
+          },
+        },
+      };
+
+      expect(
+        releaseContainsWindowsIdentityMismatch(
+          release,
+          windowsAppId: 'com.secondloop.secondloopdev',
+        ),
+        isFalse,
+      );
+    });
   });
 }

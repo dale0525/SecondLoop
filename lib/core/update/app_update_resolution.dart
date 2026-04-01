@@ -583,7 +583,8 @@ bool _matchesExpectedWindowsManifestIdentity({
   required String expectedAppId,
 }) {
   final exactNameMatch =
-      isWindowsVelopackPackageNameForApp(assetName, appId: expectedAppId);
+      isWindowsVelopackPackageNameForApp(assetName, appId: expectedAppId) ||
+          isWindowsMsiInstallerNameForApp(assetName, appId: expectedAppId);
   if (!exactNameMatch) {
     return false;
   }

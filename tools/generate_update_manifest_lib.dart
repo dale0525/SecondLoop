@@ -122,27 +122,27 @@ Future<Map<String, Object?>> _buildPlatforms(
     platforms['windows-x64'] = windowsEntry;
   }
 
-  final macosArchive = _selectMatchingArchive(
+  final macosArchives = _selectMatchingArchives(
     entries,
     requiredVersion: requiredVersion,
     platform: 'macos',
   );
-  if (macosArchive != null) {
-    platforms['macos-universal'] = await _buildArchiveEntry(
-      file: macosArchive,
+  if (macosArchives.isNotEmpty) {
+    platforms['macos-universal'] = await _buildArchiveEntries(
+      files: macosArchives,
       baseDownloadUrl: baseDownloadUrl,
       installMode: 'app-tar-gz',
     );
   }
 
-  final linuxArchive = _selectMatchingArchive(
+  final linuxArchives = _selectMatchingArchives(
     entries,
     requiredVersion: requiredVersion,
     platform: 'linux-x64',
   );
-  if (linuxArchive != null) {
-    platforms['linux-x64'] = await _buildArchiveEntry(
-      file: linuxArchive,
+  if (linuxArchives.isNotEmpty) {
+    platforms['linux-x64'] = await _buildArchiveEntries(
+      files: linuxArchives,
       baseDownloadUrl: baseDownloadUrl,
       installMode: 'bundle-tar-gz',
     );
@@ -165,6 +165,32 @@ Future<Map<String, Object?>> _buildArchiveEntry({
     'archive_url': '$baseDownloadUrl${file.uri.pathSegments.last}',
     'sha256': await _sha256FileHex(file),
   };
+}
+
+Future<Object> _buildArchiveEntries({
+  required List<File> files,
+  required String baseDownloadUrl,
+  required String installMode,
+}) async {
+  if (files.length == 1) {
+    return _buildArchiveEntry(
+      file: files.first,
+      baseDownloadUrl: baseDownloadUrl,
+      installMode: installMode,
+    );
+  }
+
+  final entries = <Map<String, Object?>>[];
+  for (final file in files) {
+    entries.add(
+      await _buildArchiveEntry(
+        file: file,
+        baseDownloadUrl: baseDownloadUrl,
+        installMode: installMode,
+      ),
+    );
+  }
+  return entries;
 }
 
 Future<String?> _signManifest(
@@ -319,12 +345,12 @@ File? _selectNewestWindowsPackage(
   return newestFile;
 }
 
-File? _selectMatchingArchive(
+List<File> _selectMatchingArchives(
   List<File> files, {
   required List<int> requiredVersion,
   required String platform,
 }) {
-  File? matched;
+  final matches = <File>[];
   var sawMismatchedStrictVersion = false;
   for (final file in files) {
     final name = file.uri.pathSegments.last;
@@ -336,17 +362,16 @@ File? _selectMatchingArchive(
       sawMismatchedStrictVersion = true;
       continue;
     }
-    matched = file;
-    break;
+    matches.add(file);
   }
 
-  if (matched == null && sawMismatchedStrictVersion) {
+  if (matches.isEmpty && sawMismatchedStrictVersion) {
     throw StateError(
       'missing_matching_${platform}_archive_version:${requiredVersion.join('.')}',
     );
   }
 
-  return matched;
+  return matches;
 }
 
 List<int>? _extractArchiveVersion(String fileName, {required String platform}) {
@@ -357,7 +382,7 @@ List<int>? _extractArchiveVersion(String fileName, {required String platform}) {
 
   final match = switch (platform) {
     'macos' => RegExp(
-        r'^SecondLoop-macos-v(\d+\.\d+\.\d+)\.app\.tar\.gz$',
+        r'^SecondLoop-macos-(?:(?:arm64|aarch64|x64|x86_64|universal)-)?v(\d+\.\d+\.\d+)\.app\.tar\.gz$',
         caseSensitive: false,
       ).firstMatch(normalizedName),
     'linux-x64' => RegExp(
