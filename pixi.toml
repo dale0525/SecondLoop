@@ -49,11 +49,11 @@ clean-unused-cache = "bash -lc 'set -euo pipefail; cleaned=0; while IFS= read -r
 # Quality gates (before sharing or opening a PR).
 # - fmt: auto-fix formatting
 # - fmt-check: check-only formatting (CI-aligned)
-# - ci: full local verification (same scope as pre-push / GitHub Actions)
+# - ci: full local verification (same scope as pre-push / GitHub Actions, runs Flutter/Rust in parallel locally)
 fmt = "dart pub global run fvm:main dart format lib test rust_builder integration_test test_driver && cargo fmt --manifest-path rust/Cargo.toml --all"
 fmt-check = "dart pub global run fvm:main dart format --output=none lib test rust_builder integration_test test_driver --set-exit-if-changed && cargo fmt --manifest-path rust/Cargo.toml --all -- --check"
 verify-changed = "bash scripts/verify_changed.sh"
-ci = "bash scripts/verify_full.sh"
+ci = "bash scripts/run_full_ci_parallel.sh"
 
 # Run/build workflows (auto-include setup-flutter + init-env).
 # Typical usage:
@@ -121,12 +121,12 @@ dotnet-aspnetcore = "8.0.*"
 # - bootstrap-shared-worktree-env uses PowerShell (no bash dependency)
 # - init-env uses PowerShell (no bash dependency)
 # - setup-flutter enables git long-path support before FVM clone/checkouts
-# - ci routes bash-based full verification through PowerShell launcher
+# - ci routes local parallel full verification through PowerShell launcher
 # - run-windows defaults to flutter hot-reload/debugger flow
 # - msi-dev packages + installs isolated local dev MSI
 # - uninstall-dev-msi removes isolated local dev MSI
 verify-changed = "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_bash.ps1 scripts/verify_changed.sh"
-ci = "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_bash.ps1 scripts/verify_full.sh"
+ci = "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_bash.ps1 scripts/run_full_ci_parallel.sh"
 install-git-hooks = "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_bash.ps1 scripts/install_git_hooks.sh"
 frb-generate = "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/frb_generate.ps1"
 bootstrap-shared-worktree-env = "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/bootstrap_shared_worktree_env.ps1"

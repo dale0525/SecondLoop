@@ -14,14 +14,14 @@ class VerificationScriptsTests(unittest.TestCase):
     def test_pixi_ci_documents_shared_full_verification_entrypoint(self) -> None:
         pixi = PIXI_TOML.read_text(encoding="utf-8")
 
-        self.assertIn("scripts/verify_full.sh", pixi)
+        self.assertIn("scripts/run_full_ci_parallel.sh", pixi)
 
     def test_windows_pixi_ci_uses_powershell_bash_launcher(self) -> None:
         pixi = PIXI_TOML.read_text(encoding="utf-8")
 
         self.assertTrue(RUN_BASH_PS1.exists())
         self.assertIn(
-            'ci = "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_bash.ps1 scripts/verify_full.sh"',
+            'ci = "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_bash.ps1 scripts/run_full_ci_parallel.sh"',
             pixi,
         )
 
@@ -42,6 +42,17 @@ class VerificationScriptsTests(unittest.TestCase):
         self.assertIn("Check-only local gate", contributing)
         self.assertIn("`pixi run verify-changed`", contributing)
         self.assertIn("`pixi run ci`", contributing)
+        self.assertIn("run in parallel locally", contributing)
+
+    def test_parallel_ci_wrapper_runs_flutter_and_rust_scopes(self) -> None:
+        script = (REPO_ROOT / "scripts/run_full_ci_parallel.sh").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn('bash scripts/verify_full.sh --flutter', script)
+        self.assertIn('bash scripts/verify_full.sh --rust', script)
+        self.assertIn('ci: starting Flutter verification...', script)
+        self.assertIn('ci: starting Rust verification...', script)
 
     def test_check_mode_does_not_refresh_i18n_outputs(self) -> None:
         check_mode = (REPO_ROOT / "scripts/pre_commit_check_mode.sh").read_text(

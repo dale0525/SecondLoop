@@ -12,7 +12,7 @@ By contributing to this repository, you agree that your contributions are licens
 - Run tests:
   - Flutter: `pixi run i18n-refresh` once on a fresh clone, then `pixi run flutter test`
   - Rust: `pixi run cargo test`
-- Run the full local CI suite (same scope as `pre-push` / CI): `pixi run ci`
+- Run the full local CI suite (same scope as `pre-push` / CI; Flutter and Rust run in parallel locally): `pixi run ci`
 - Shared verification entrypoints:
   - Check-only local gate (same non-mutating engine as CI, narrower than `verify_full`): `pixi run verify-changed`
   - Full local/CI gate: `pixi run ci`
