@@ -50,9 +50,19 @@ class VerificationScriptsTests(unittest.TestCase):
         )
 
         self.assertIn('bash scripts/verify_full.sh --flutter', script)
-        self.assertIn('bash scripts/verify_full.sh --rust', script)
+        self.assertIn('bash scripts/run_full_rust_ci_local.sh', script)
         self.assertIn('ci: starting Flutter verification...', script)
         self.assertIn('ci: starting Rust verification...', script)
+
+    def test_local_rust_ci_wrapper_compiles_once_and_runs_binaries_parallel(self) -> None:
+        script = (REPO_ROOT / "scripts/run_full_rust_ci_local.sh").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn('--no-run --message-format=json', script)
+        self.assertIn('scripts/run_rust_test_binaries_parallel.py', script)
+        self.assertIn('SECONDLOOP_LOCAL_RUST_TEST_JOBS', script)
+        self.assertIn('SECONDLOOP_LOCAL_RUST_TEST_MAX_BINARIES', script)
 
     def test_check_mode_does_not_refresh_i18n_outputs(self) -> None:
         check_mode = (REPO_ROOT / "scripts/pre_commit_check_mode.sh").read_text(

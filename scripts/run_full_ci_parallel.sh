@@ -35,7 +35,7 @@ bash scripts/verify_full.sh --flutter >"${flutter_log}" 2>&1 &
 flutter_pid=$!
 
 echo "ci: starting Rust verification..." >&2
-bash scripts/verify_full.sh --rust >"${rust_log}" 2>&1 &
+bash scripts/run_full_rust_ci_local.sh >"${rust_log}" 2>&1 &
 rust_pid=$!
 
 flutter_status=0
@@ -52,4 +52,3 @@ cat "${rust_log}"
 if [[ ${flutter_status} -ne 0 || ${rust_status} -ne 0 ]]; then
   exit 1
 fi
-
