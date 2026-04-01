@@ -105,4 +105,65 @@ void main() {
       debugDefaultTargetPlatformOverride = oldPlatform;
     }
   });
+
+  testWidgets(
+      'About page offers Android in-app update for apk asset even when install mode is seamless',
+      (tester) async {
+    final oldPlatform = debugDefaultTargetPlatformOverride;
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+    SharedPreferences.setMockInitialValues({});
+
+    try {
+      final downloader = _FakeAndroidApkDownloader();
+      final installer = _FakeAndroidApkInstaller();
+      final update = AppUpdateAvailability(
+        currentVersion: '1.0.1+99',
+        latestTag: 'v1.1.0',
+        releasePageUri: Uri.parse(
+          'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
+        ),
+        installMode: AppUpdateInstallMode.seamlessRestart,
+        asset: AppUpdateAsset(
+          name: 'download',
+          downloadUri: Uri.parse(
+            'https://cdn.example.com/SecondLoop-android-arm64-v8a.apk?token=1',
+          ),
+          sha256: 'abc123',
+        ),
+      );
+      final service = _FakeAboutUpdateService(
+        result:
+            AppUpdateCheckResult(currentVersion: '1.0.1+99', update: update),
+      );
+
+      await tester.pumpWidget(
+        wrapWithI18n(
+          MaterialApp(
+            home: AboutPage(
+              updateService: service,
+              runtimeVersionLoader: () async => const AppRuntimeVersion(
+                version: '1.0.1',
+                buildNumber: '99',
+              ),
+              androidApkDownloader: downloader,
+              androidApkInstaller: installer,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const ValueKey('about_check_updates')));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const ValueKey('about_auto_update')), findsOneWidget);
+
+      await tester.tap(find.byKey(const ValueKey('about_auto_update')));
+      await tester.pump();
+
+      expect(downloader.downloadCalls, 1);
+    } finally {
+      debugDefaultTargetPlatformOverride = oldPlatform;
+    }
+  });
 }

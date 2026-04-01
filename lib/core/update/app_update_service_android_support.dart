@@ -3,6 +3,7 @@ part of 'app_update_service.dart';
 const Map<String, List<String>> _androidAbiAliases = <String, List<String>>{
   'arm64-v8a': <String>['arm64-v8a', 'arm64', 'aarch64'],
   'armeabi-v7a': <String>['armeabi-v7a', 'armv7', 'arm-v7a'],
+  'x86': <String>['x86', 'i686', 'ia32'],
   'x86_64': <String>['x86_64', 'x64'],
 };
 
@@ -120,6 +121,9 @@ List<String> _androidManifestKeysImpl(List<String> supportedAbis) {
         break;
       case 'x86_64':
         add('android-x86_64');
+        break;
+      case 'x86':
+        add('android-x86');
         break;
     }
   }

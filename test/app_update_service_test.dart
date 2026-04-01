@@ -503,8 +503,10 @@ void main() {
       expect(result.errorMessage, isNull);
       expect(attempted.length, 2);
       expect(attempted.first.toString(), contains('/api/releases/latest'));
-      expect(attempted.last.toString(),
-          contains('/releases/latest/download/latest.json'));
+      expect(
+          attempted.last.toString(),
+          contains(
+              'https://api.github.com/repos/dale0525/SecondLoop/releases/latest'));
     });
 
     test('records update available and manual fallback events', () async {

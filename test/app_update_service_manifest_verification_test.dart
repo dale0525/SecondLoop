@@ -8,7 +8,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:secondloop/core/update/app_update_service.dart';
 
 void main() {
-  test('falls back when custom manifest endpoint payload is invalid', () async {
+  test(
+      'falls back to GitHub API when custom manifest endpoint payload is invalid',
+      () async {
     final requestedUris = <Uri>[];
     final service = AppUpdateService(
       httpClient: _FakeHttpClient(
@@ -42,6 +44,25 @@ void main() {
               }),
             );
           }
+          if (uri.host == 'api.github.com' &&
+              uri.path == '/repos/dale0525/SecondLoop/releases/latest') {
+            return _FakeHttpResponse(
+              statusCode: 200,
+              body: jsonEncode({
+                'tag_name': 'v1.1.0',
+                'html_url':
+                    'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
+                'assets': [
+                  {
+                    'name': 'SecondLoop-linux-x64-v1.1.0.tar.gz',
+                    'browser_download_url':
+                        'https://cdn.example.com/signed.tar.gz',
+                    'sha256': 'abc123',
+                  },
+                ],
+              }),
+            );
+          }
           throw StateError('unexpected_uri:$uri');
         },
       ),
@@ -62,7 +83,8 @@ void main() {
         requestedUris.map((uri) => uri.toString()),
         containsAll(<Matcher>[
           contains('https://secondloop.app/api/releases/latest'),
-          contains('/dale0525/SecondLoop/releases/latest/download/latest.json'),
+          contains(
+              'https://api.github.com/repos/dale0525/SecondLoop/releases/latest'),
         ]));
   });
 
@@ -116,7 +138,7 @@ void main() {
     );
   });
 
-  test('warns when latest.json signature verification is skipped', () async {
+  test('uses latest.json when public key is configured', () async {
     final requestedUris = <Uri>[];
     final originalDebugPrint = debugPrint;
     final messages = <String>[];
@@ -157,6 +179,70 @@ void main() {
       platformOverride: AppUpdatePlatform.linux,
       releaseModeOverride: true,
       releaseRepoOverride: 'dale0525/SecondLoop',
+      updatePublicKeyOverride: base64Encode(List<int>.generate(32, (i) => i)),
+      currentVersionLoader: () async =>
+          const AppRuntimeVersion(version: '1.0.0', buildNumber: '1'),
+    );
+
+    final result = await service.checkForUpdates();
+
+    expect(result.update, isNull);
+    expect(requestedUris.map((uri) => uri.path),
+        contains(endsWith('latest.json')));
+    expect(requestedUris.map((uri) => uri.path),
+        contains(endsWith('latest.json.sig')));
+    expect(messages, isEmpty);
+  });
+
+  test('prefers GitHub API over unsigned latest.json when public key is unset',
+      () async {
+    final requestedUris = <Uri>[];
+    final service = AppUpdateService(
+      httpClient: _FakeHttpClient(
+        handler: (uri) {
+          requestedUris.add(uri);
+          if (uri.path.endsWith('latest.json')) {
+            return _FakeHttpResponse(
+              statusCode: 200,
+              body: jsonEncode({
+                'version': '9.9.9',
+                'release_page_url':
+                    'https://github.com/dale0525/SecondLoop/releases/tag/v9.9.9',
+                'platforms': {
+                  'linux-x64': {
+                    'install_mode': 'bundle-tar-gz',
+                    'archive_url': 'https://cdn.example.com/unsigned.tar.gz',
+                    'sha256': 'unsigned',
+                  },
+                },
+              }),
+            );
+          }
+          if (uri.host == 'api.github.com' &&
+              uri.path == '/repos/dale0525/SecondLoop/releases/latest') {
+            return _FakeHttpResponse(
+              statusCode: 200,
+              body: jsonEncode({
+                'tag_name': 'v1.1.0',
+                'html_url':
+                    'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
+                'assets': [
+                  {
+                    'name': 'SecondLoop-linux-x64-v1.1.0.tar.gz',
+                    'browser_download_url':
+                        'https://cdn.example.com/signed.tar.gz',
+                    'sha256': 'abc123',
+                  },
+                ],
+              }),
+            );
+          }
+          throw StateError('unexpected_uri:$uri');
+        },
+      ),
+      platformOverride: AppUpdatePlatform.linux,
+      releaseModeOverride: true,
+      releaseRepoOverride: 'dale0525/SecondLoop',
       updatePublicKeyOverride: '',
       currentVersionLoader: () async =>
           const AppRuntimeVersion(version: '1.0.0', buildNumber: '1'),
@@ -165,13 +251,18 @@ void main() {
     final result = await service.checkForUpdates();
 
     expect(result.update, isNotNull);
-    expect(requestedUris, hasLength(1));
-    expect(requestedUris.single.path, endsWith('latest.json'));
+    expect(result.update!.latestTag, 'v1.1.0');
+    expect(result.update!.downloadUri.toString(),
+        'https://cdn.example.com/signed.tar.gz');
     expect(
-      messages,
+      requestedUris.map((uri) => uri.toString()),
       contains(
-        contains('SECONDLOOP_UPDATE_PUBLIC_KEY is not set'),
-      ),
+          'https://api.github.com/repos/dale0525/SecondLoop/releases/latest'),
+    );
+    expect(
+      requestedUris.map((uri) => uri.toString()),
+      isNot(contains(
+          'https://github.com/dale0525/SecondLoop/releases/latest/download/latest.json')),
     );
   });
 

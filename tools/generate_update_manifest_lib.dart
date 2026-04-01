@@ -256,6 +256,11 @@ String _resolveAndroidPlatformKey(String fileName) {
   if (normalized.contains('x86_64') || normalized.contains('x64')) {
     return 'android-x86_64';
   }
+  if (normalized.contains('x86') ||
+      normalized.contains('i686') ||
+      normalized.contains('ia32')) {
+    return 'android-x86';
+  }
   return 'android-universal';
 }
 

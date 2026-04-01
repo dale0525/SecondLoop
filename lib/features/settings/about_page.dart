@@ -193,11 +193,7 @@ class _AboutPageState extends State<AboutPage> {
   }
 
   bool _canUseAndroidApkUpdate(AppUpdateAvailability update) {
-    final asset = update.asset;
-    return _isAndroidPlatform &&
-        update.installMode == AppUpdateInstallMode.externalDownload &&
-        asset != null &&
-        isAndroidApkAssetForUpdate(asset);
+    return _isAndroidPlatform && update.canUseAndroidApkInstaller;
   }
 
   Future<void> _applyManagedUpdate() async {

@@ -127,5 +127,66 @@ void main() {
         'https://cdn.example.com/universal.apk',
       );
     });
+
+    test('matches x86 manifest when device reports x86 alias abi', () async {
+      final service = AppUpdateService(
+        platformOverride: AppUpdatePlatform.android,
+        releaseModeOverride: true,
+        androidSupportedAbisOverride: const ['x86'],
+        currentVersionLoader: () async =>
+            const AppRuntimeVersion(version: '1.0.0', buildNumber: '9'),
+        releaseJsonFetcher: (uri) async => {
+          'tag_name': 'v1.1.0',
+          'html_url':
+              'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
+          'platforms': {
+            'android-x86': {
+              'install_mode': 'apk',
+              'archive_url': 'https://cdn.example.com/x86.apk',
+              'sha256': 'abc123',
+            },
+          },
+        },
+      );
+
+      final result = await service.checkForUpdates();
+
+      expect(result.update, isNotNull);
+      expect(result.update!.asset, isNotNull);
+      expect(
+        result.update!.asset!.downloadUri.toString(),
+        'https://cdn.example.com/x86.apk',
+      );
+    });
+
+    test('matches x86 apk asset when device reports x86 alias abi', () async {
+      final service = AppUpdateService(
+        platformOverride: AppUpdatePlatform.android,
+        releaseModeOverride: true,
+        androidSupportedAbisOverride: const ['i686'],
+        currentVersionLoader: () async =>
+            const AppRuntimeVersion(version: '1.0.0', buildNumber: '9'),
+        releaseJsonFetcher: (uri) async => {
+          'tag_name': 'v1.1.0',
+          'html_url':
+              'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
+          'assets': [
+            {
+              'name': 'SecondLoop-android-x86-v1.1.0.apk',
+              'browser_download_url': 'https://cdn.example.com/x86.apk',
+            },
+          ],
+        },
+      );
+
+      final result = await service.checkForUpdates();
+
+      expect(result.update, isNotNull);
+      expect(result.update!.asset?.name, 'SecondLoop-android-x86-v1.1.0.apk');
+      expect(
+        result.update!.downloadUri.toString(),
+        'https://cdn.example.com/x86.apk',
+      );
+    });
   });
 }

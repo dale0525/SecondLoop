@@ -144,6 +144,26 @@ void main() {
     expect(platforms['android-universal'], isNull);
   });
 
+  test('generateUpdateManifest recognizes Android x86 alias file names',
+      () async {
+    final tempDir =
+        await Directory.systemTemp.createTemp('update_manifest_android_x86_');
+    addTearDown(() => tempDir.delete(recursive: true));
+
+    await File('${tempDir.path}/SecondLoop-android-i686-v1.2.3.apk')
+        .writeAsString('x86');
+
+    final generated = await generateUpdateManifest(
+      inputDirPath: tempDir.path,
+      version: 'v1.2.3',
+      baseDownloadUrl:
+          'https://github.com/dale0525/SecondLoop/releases/download/v1.2.3',
+    );
+
+    final platforms = generated.manifest['platforms'] as Map<String, Object?>;
+    expect(platforms['android-x86'], isNotNull);
+  });
+
   test('generateUpdateManifest rejects duplicate Android platform keys',
       () async {
     final tempDir =

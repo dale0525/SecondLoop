@@ -94,6 +94,9 @@ class AppUpdateAvailability {
       installMode == AppUpdateInstallMode.seamlessRestart;
   bool get canStageForNextLaunch =>
       installMode == AppUpdateInstallMode.stagedNextLaunch;
+
+  bool get canUseAndroidApkInstaller =>
+      asset != null && isAndroidApkAssetForUpdate(asset!);
 }
 
 class AppUpdateCheckResult {
@@ -352,7 +355,8 @@ class AppUpdateService {
       installMode: installMode,
       message: 'update_available',
     );
-    if (installMode == AppUpdateInstallMode.externalDownload) {
+    if (installMode == AppUpdateInstallMode.externalDownload &&
+        !_isAndroidApkInstallerCandidate(matchedAsset)) {
       await _recordEvent(
         UpdateEventType.manualFallback,
         currentVersion: runtimeVersion.display,
@@ -687,6 +691,7 @@ class AppUpdateService {
   List<Uri> _buildReleaseEndpoints() {
     final configuredOrigin = _releaseApiOrigin.trim();
     final repo = _releaseRepo.trim();
+    final hasPublicKey = _updatePublicKey.trim().isNotEmpty;
 
     final endpoints = <Uri>[];
     final apiOrigin = _parseUri(configuredOrigin);
@@ -695,12 +700,14 @@ class AppUpdateService {
     }
 
     if (repo.isNotEmpty) {
-      endpoints.add(
-        Uri.parse(
-            'https://github.com/$repo/releases/latest/download/latest.json'),
-      );
       endpoints
           .add(Uri.https('api.github.com', '/repos/$repo/releases/latest'));
+      if (hasPublicKey) {
+        endpoints.add(
+          Uri.parse(
+              'https://github.com/$repo/releases/latest/download/latest.json'),
+        );
+      }
     }
 
     return endpoints;
@@ -918,5 +925,11 @@ class AppUpdateService {
       return 'macos_install_location_unsupported_or_integrity_missing';
     }
     return 'manual_download_required';
+  }
+
+  bool _isAndroidApkInstallerCandidate(AppUpdateAsset? asset) {
+    return _platform == AppUpdatePlatform.android &&
+        asset != null &&
+        isAndroidApkAssetForUpdate(asset);
   }
 }
