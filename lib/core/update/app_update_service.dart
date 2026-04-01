@@ -249,6 +249,7 @@ class AppUpdateService {
     final manifestAsset = matchManifestAssetForCurrentPlatform(
       _platform,
       release,
+      releaseVersion: latestTag,
       currentArchitecture: _currentArchitecture,
       allowHttp: _allowHttpUpdateUris,
       allowFile: _allowFileUpdateUris,
@@ -260,6 +261,7 @@ class AppUpdateService {
           _platform,
           assets,
           windowsManagedRuntimeAvailable: windowsManagedRuntimeAvailable,
+          releaseVersion: latestTag,
           currentArchitecture: _currentArchitecture,
           windowsAppId: effectiveWindowsAppId,
         );
@@ -276,6 +278,7 @@ class AppUpdateService {
             _platform,
             preferredAsset: preferredAsset,
             assets: assets,
+            releaseVersion: latestTag,
             currentArchitecture: _currentArchitecture,
             windowsAppId: effectiveWindowsAppId,
           )

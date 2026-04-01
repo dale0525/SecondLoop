@@ -204,6 +204,92 @@ void main() {
       expect(result.update!.asset?.sha256, 'x64sha');
     });
 
+    test(
+        'ignores Windows release assets whose embedded version does not match the release tag',
+        () async {
+      final stagedClient = FakeWindowsStagedUpdateClient(available: true);
+      final service = AppUpdateService(
+        platformOverride: AppUpdatePlatform.windows,
+        releaseModeOverride: true,
+        windowsStagedUpdateClient: stagedClient,
+        currentArchitectureOverride: 'x86_64',
+        currentVersionLoader: () async =>
+            const AppRuntimeVersion(version: '1.0.0', buildNumber: '88'),
+        releaseJsonFetcher: (uri) async => {
+          'tag_name': 'v1.1.0',
+          'html_url':
+              'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
+          'assets': [
+            {
+              'name': 'com.secondloop.secondloop-1.2.0-x64-full.nupkg',
+              'browser_download_url': 'https://cdn.example.com/win-1.2.0.nupkg',
+              'sha256': 'wrongsha',
+            },
+            {
+              'name': 'com.secondloop.secondloop-1.1.0-x64-full.nupkg',
+              'browser_download_url': 'https://cdn.example.com/win-1.1.0.nupkg',
+              'sha256': 'correctsha',
+            },
+          ],
+        },
+      );
+
+      final result = await service.checkForUpdates();
+
+      expect(result.update, isNotNull);
+      expect(result.update!.installMode, AppUpdateInstallMode.seamlessRestart);
+      expect(
+        result.update!.asset?.downloadUri.toString(),
+        'https://cdn.example.com/win-1.1.0.nupkg',
+      );
+      expect(result.update!.asset?.sha256, 'correctsha');
+    });
+
+    test(
+        'ignores Windows manifest packages whose embedded version does not match the release version',
+        () async {
+      final stagedClient = FakeWindowsStagedUpdateClient(available: true);
+      final service = AppUpdateService(
+        platformOverride: AppUpdatePlatform.windows,
+        releaseModeOverride: true,
+        windowsStagedUpdateClient: stagedClient,
+        currentArchitectureOverride: 'x86_64',
+        currentVersionLoader: () async =>
+            const AppRuntimeVersion(version: '1.0.0', buildNumber: '88'),
+        releaseJsonFetcher: (uri) async => {
+          'version': '1.1.0',
+          'release_page_url':
+              'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
+          'platforms': {
+            'windows-x64': [
+              {
+                'name': 'com.secondloop.secondloop-1.2.0-x64-full.nupkg',
+                'package_url': 'https://cdn.example.com/win-1.2.0.nupkg',
+                'sha256': 'wrongsha',
+                'install_mode': 'velopack',
+              },
+              {
+                'name': 'com.secondloop.secondloop-1.1.0-x64-full.nupkg',
+                'package_url': 'https://cdn.example.com/win-1.1.0.nupkg',
+                'sha256': 'correctsha',
+                'install_mode': 'velopack',
+              },
+            ],
+          },
+        },
+      );
+
+      final result = await service.checkForUpdates();
+
+      expect(result.update, isNotNull);
+      expect(result.update!.installMode, AppUpdateInstallMode.seamlessRestart);
+      expect(
+        result.update!.asset?.downloadUri.toString(),
+        'https://cdn.example.com/win-1.1.0.nupkg',
+      );
+      expect(result.update!.asset?.sha256, 'correctsha');
+    });
+
     test('prefers matching macOS manifest archive over mismatched arm64 entry',
         () async {
       final service = AppUpdateService(
