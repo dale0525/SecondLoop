@@ -141,27 +141,28 @@ bool isStrictAppVersion(String input) {
 }
 
 ComparableAppVersion? parseComparableAppVersion(String input) {
-  final trimmed = input.trim();
-  if (trimmed.isEmpty) {
+  final segments = tryParseStrictAppVersion(input);
+  if (segments == null) {
     return null;
   }
-
-  final match = RegExp(r'^[vV]?(\d+)\.(\d+)\.(\d+)(?:\+[0-9A-Za-z.-]+)?$')
-      .firstMatch(trimmed);
-  if (match == null) {
-    return null;
-  }
-
-  final major = int.tryParse(match.group(1) ?? '');
-  final minor = int.tryParse(match.group(2) ?? '');
-  final patch = int.tryParse(match.group(3) ?? '');
-  if (major == null || minor == null || patch == null) {
-    return null;
-  }
-
   return ComparableAppVersion(
-    segments: <int>[major, minor, patch],
+    segments: segments,
   );
+}
+
+String normalizeStrictAppVersion(
+  String input, {
+  String argumentName = 'input',
+}) {
+  final segments = tryParseStrictAppVersion(input);
+  if (segments == null) {
+    throw ArgumentError.value(
+      input,
+      argumentName,
+      'version_must_be_strict_vx_y_z',
+    );
+  }
+  return '${segments[0]}.${segments[1]}.${segments[2]}';
 }
 
 List<int> trimTrailingZeroSegments(List<int> segments) {

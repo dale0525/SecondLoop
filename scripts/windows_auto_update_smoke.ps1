@@ -1,6 +1,7 @@
 param(
   [string]$OldVersion = '1.0.0+1',
   [string]$NewVersion = '1.0.1+1',
+  [ValidateSet('com.secondloop.secondloop', 'com.secondloop.secondloopdev')]
   [string]$PackId = 'com.secondloop.secondloopdev',
   [string]$Channel = 'devwin',
   [string]$AppName = '',
@@ -15,6 +16,10 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+
+if ($SkipCertificateTrust) {
+  throw 'SkipCertificateTrust cannot be used because the smoke test requires trusting the local HTTPS certificate for both feed probing and app update verification.'
+}
 
 . (Join-Path $PSScriptRoot 'use_windows_short_workspace.ps1')
 
@@ -413,11 +418,6 @@ function Test-CertificateTrustedInCurrentUserRoot {
 function Ensure-LocalhostCertificateTrusted {
   param([string]$PemPath)
 
-  if ($SkipCertificateTrust) {
-    Write-Host 'Skipping localhost certificate trust step.'
-    return
-  }
-
   $thumbprint = Get-CertificateThumbprint -PemPath $PemPath
   if (Test-CertificateTrustedInCurrentUserRoot -Thumbprint $thumbprint) {
     Write-Host "Localhost certificate already trusted for current user: $thumbprint"
@@ -683,7 +683,7 @@ try {
     Wait-Process -Id $feedProcess.Id -Timeout 5 -ErrorAction SilentlyContinue
   }
 
-  if ($null -ne $trustedCertificateThumbprint -and -not $SkipCertificateTrust) {
+  if ($null -ne $trustedCertificateThumbprint) {
     if ($certificateTrustAddedByScript) {
       Remove-TrustedCertificateByThumbprint -Thumbprint $trustedCertificateThumbprint
     }

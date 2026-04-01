@@ -1,6 +1,7 @@
 param(
   [string]$Version = '',
   [string]$OutputPath = 'dist',
+  [ValidateSet('com.secondloop.secondloop', 'com.secondloop.secondloopdev')]
   [string]$PackId = 'com.secondloop.secondloop',
   [string]$Channel = 'win',
   [string]$VpkVersion = '0.0.1298',

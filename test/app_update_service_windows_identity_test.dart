@@ -42,7 +42,7 @@ void main() {
     );
   });
 
-  test('checkForUpdates falls back to generic Windows MSI for custom app id',
+  test('checkForUpdates rejects generic Windows MSI for custom app id',
       () async {
     final stagedClient = VelopackUpdateClient(
       updateExecutablePath: _stubUpdateExePath(),
@@ -73,11 +73,11 @@ void main() {
     final result = await service.checkForUpdates();
 
     expect(result.update, isNotNull);
-    expect(result.update!.asset?.name, 'SecondLoop-win.msi');
+    expect(result.update!.asset, isNull);
     expect(result.update!.installMode, AppUpdateInstallMode.externalDownload);
     expect(
       result.update!.downloadUri,
-      Uri.parse('https://cdn.example.com/prod.msi'),
+      Uri.parse('https://example.com/releases/v1.1.0'),
     );
   });
 

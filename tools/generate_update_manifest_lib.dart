@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:cryptography/cryptography.dart';
+import 'package:secondloop/core/update/app_update_helpers.dart';
 import 'package:secondloop/core/update/app_update_models.dart';
 
 class GeneratedUpdateManifest {
@@ -35,6 +36,7 @@ Future<GeneratedUpdateManifest> generateUpdateManifest({
   }
 
   final normalizedVersion = _normalizeVersion(version);
+  final normalizedWindowsAppId = _normalizeWindowsAppId(windowsAppId);
   final normalizedTag = 'v$normalizedVersion';
   final normalizedBaseUrl = _normalizeBaseDownloadUrl(baseDownloadUrl);
   final manifest = <String, Object?>{};
@@ -50,7 +52,7 @@ Future<GeneratedUpdateManifest> generateUpdateManifest({
     inputDir,
     baseDownloadUrl: normalizedBaseUrl,
     requiredVersion: normalizedVersionSegments,
-    windowsAppId: windowsAppId,
+    windowsAppId: normalizedWindowsAppId,
     windowsChannel: windowsChannel,
   );
 
@@ -596,15 +598,19 @@ int _compareStrictVersionSegments(List<int> left, List<int> right) {
 }
 
 String _normalizeVersion(String value) {
-  final trimmed = value.trim();
-  if (trimmed.isEmpty) {
-    throw ArgumentError.value(value, 'version', 'version_must_not_be_empty');
+  return normalizeStrictAppVersion(value, argumentName: 'version');
+}
+
+String _normalizeWindowsAppId(String value) {
+  final normalized = normalizeSupportedSecondLoopAppId(value);
+  if (normalized == null) {
+    throw ArgumentError.value(
+      value,
+      'windowsAppId',
+      'unsupported_windows_app_id',
+    );
   }
-  final parsedVersion = tryParseStrictAppVersion(trimmed);
-  if (parsedVersion == null) {
-    throw ArgumentError.value(value, 'version', 'version_must_be_strict_x_y_z');
-  }
-  return '${parsedVersion[0]}.${parsedVersion[1]}.${parsedVersion[2]}';
+  return normalized;
 }
 
 String _normalizeBaseDownloadUrl(String value) {

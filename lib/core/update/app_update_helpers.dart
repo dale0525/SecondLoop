@@ -2,6 +2,22 @@ import 'dart:io';
 
 import 'app_update_models.dart';
 
+const secondLoopProdAppId = 'com.secondloop.secondloop';
+const secondLoopDevAppId = 'com.secondloop.secondloopdev';
+
+String? normalizeSupportedSecondLoopAppId(String? value) {
+  final normalized = value?.trim().toLowerCase();
+  return switch (normalized) {
+    secondLoopProdAppId => secondLoopProdAppId,
+    secondLoopDevAppId => secondLoopDevAppId,
+    _ => null,
+  };
+}
+
+bool isSupportedSecondLoopAppId(String? value) {
+  return normalizeSupportedSecondLoopAppId(value) != null;
+}
+
 bool isWindowsMsiInstallerName(String name) {
   final normalized = name.trim().toLowerCase();
   return normalized.endsWith('.msi') && normalized.contains('secondloop');
@@ -15,31 +31,14 @@ bool isWindowsMsiInstallerNameForApp(
     return false;
   }
 
-  final normalizedAppId = appId.trim().toLowerCase();
-  if (normalizedAppId.isEmpty) {
+  final normalizedAppId = normalizeSupportedSecondLoopAppId(appId);
+  if (normalizedAppId == null) {
     return false;
   }
 
   final normalizedName = name.trim().toLowerCase();
   final hasDevToken = _hasWindowsDevInstallerIdentity(normalizedName);
-  final tokens = _windowsInstallerTokens(normalizedName);
-
-  switch (normalizedAppId) {
-    case 'com.secondloop.secondloop':
-      return !hasDevToken;
-    case 'com.secondloop.secondloopdev':
-      return hasDevToken;
-    default:
-      final expectedTokens = _customWindowsInstallerIdentityTokens(
-        normalizedAppId,
-      );
-      if (expectedTokens.isNotEmpty &&
-          expectedTokens.every(tokens.contains) &&
-          (!hasDevToken || expectedTokens.contains('dev'))) {
-        return true;
-      }
-      return !hasDevToken && _isGenericWindowsInstallerName(tokens);
-  }
+  return normalizedAppId == secondLoopProdAppId ? !hasDevToken : hasDevToken;
 }
 
 bool _hasWindowsDevInstallerIdentity(String normalizedName) {
@@ -55,36 +54,6 @@ List<String> _windowsInstallerTokens(String normalizedName) {
       .toList(growable: false);
 }
 
-List<String> _customWindowsInstallerIdentityTokens(String normalizedAppId) {
-  const baseAppId = 'com.secondloop.secondloop';
-  final appIdSegments = normalizedAppId.split('.');
-  final suffix = normalizedAppId.startsWith(baseAppId)
-      ? normalizedAppId.substring(baseAppId.length)
-      : (appIdSegments.isEmpty ? '' : appIdSegments.last);
-  final normalizedSuffix = suffix.trim();
-  if (normalizedSuffix.isEmpty) {
-    return const <String>[];
-  }
-  return normalizedSuffix
-      .split(RegExp(r'[^a-z0-9]+'))
-      .where((token) => token.isNotEmpty)
-      .toList(growable: false);
-}
-
-bool _isGenericWindowsInstallerName(List<String> tokens) {
-  final meaningfulTokens = tokens
-      .where(
-        (token) =>
-            token != 'secondloop' &&
-            token != 'win' &&
-            token != 'x64' &&
-            token != 'arm64' &&
-            token != 'aarch64',
-      )
-      .toList(growable: false);
-  return meaningfulTokens.isEmpty;
-}
-
 bool isWindowsVelopackPackageName(String name) {
   final normalized = name.trim().toLowerCase();
   return normalized.endsWith('-full.nupkg') &&
@@ -96,8 +65,8 @@ bool isWindowsVelopackPackageNameForApp(
   required String appId,
 }) {
   final normalizedName = name.trim().toLowerCase();
-  final normalizedAppId = appId.trim().toLowerCase();
-  if (normalizedName.isEmpty || normalizedAppId.isEmpty) {
+  final normalizedAppId = normalizeSupportedSecondLoopAppId(appId);
+  if (normalizedName.isEmpty || normalizedAppId == null) {
     return false;
   }
 

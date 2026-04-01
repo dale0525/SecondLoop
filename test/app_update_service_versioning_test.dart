@@ -38,11 +38,27 @@ void main() {
       );
     });
 
-    test('Windows MSI identity matcher falls back to generic matcher rules',
-        () {
+    test('Windows MSI generic matcher still recognizes legacy filenames', () {
       expect(isWindowsMsiInstallerName('SecondLoop-win.msi'), isTrue);
       expect(isWindowsMsiInstallerName('SecondLoop Dev-win.msi'), isTrue);
       expect(isWindowsMsiInstallerName('AnotherApp-win.msi'), isFalse);
+    });
+
+    test('Windows MSI identity matcher only allows prod and dev app ids', () {
+      expect(
+        isWindowsMsiInstallerNameForApp(
+          'SecondLoop-win.msi',
+          appId: 'com.secondloop.secondloopbeta',
+        ),
+        isFalse,
+      );
+      expect(
+        isWindowsMsiInstallerNameForApp(
+          'SecondLoop Dev-win.msi',
+          appId: 'com.secondloop.secondloopbeta',
+        ),
+        isFalse,
+      );
     });
 
     test('Windows MSI identity matcher avoids broad dev substring matches', () {
@@ -111,14 +127,16 @@ void main() {
 
     test('sameNormalizedVersion only matches strict x.y.z versions', () {
       expect(sameNormalizedVersion('1.1.0', '1.1.0'), isTrue);
-      expect(sameNormalizedVersion('v1.1.0', '1.1.0+7'), isTrue);
+      expect(sameNormalizedVersion('v1.1.0', '1.1.0'), isTrue);
+      expect(sameNormalizedVersion('1.1.0', '1.1.0+7'), isFalse);
       expect(sameNormalizedVersion('1.1.0-beta', '1.1.0'), isFalse);
       expect(sameNormalizedVersion('1.1.0.7', '1.1.0'), isFalse);
     });
 
     test('parseComparableAppVersion only accepts strict x.y.z values', () {
       expect(parseComparableAppVersion('v1.2.3'), isNotNull);
-      expect(parseComparableAppVersion('1.2.3+4'), isNotNull);
+      expect(parseComparableAppVersion('V1.2.3'), isNotNull);
+      expect(parseComparableAppVersion('1.2.3+4'), isNull);
       expect(parseComparableAppVersion('1.2.3.4'), isNull);
       expect(parseComparableAppVersion('1.2.3-rc.1'), isNull);
     });

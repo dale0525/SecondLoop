@@ -171,6 +171,25 @@ void main() {
     expect(windows['app_id'], 'com.secondloop.secondloop');
   });
 
+  test('generateUpdateManifest rejects unsupported windows app ids', () async {
+    final tempDir =
+        await Directory.systemTemp.createTemp('update_manifest_invalid_appid_');
+    addTearDown(() => tempDir.delete(recursive: true));
+
+    await File('${tempDir.path}/com.secondloop.secondloop-1.2.3-full.nupkg')
+        .writeAsString('stable');
+
+    await expectLater(
+      () => generateUpdateManifest(
+        inputDirPath: tempDir.path,
+        version: '1.2.3',
+        baseDownloadUrl: 'https://example.com/downloads/',
+        windowsAppId: 'com.secondloop.secondloopbeta',
+      ),
+      throwsArgumentError,
+    );
+  });
+
   test(
       'generateUpdateManifest picks matching windows package for manifest version',
       () async {

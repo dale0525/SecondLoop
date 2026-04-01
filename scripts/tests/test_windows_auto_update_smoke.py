@@ -186,6 +186,12 @@ class WindowsAutoUpdateSmokeTests(unittest.TestCase):
             script,
         )
 
+    def test_smoke_script_rejects_skip_certificate_trust_mode(self) -> None:
+        script = SMOKE_SCRIPT.read_text(encoding="utf-8")
+
+        self.assertIn("SkipCertificateTrust cannot be used", script)
+        self.assertNotIn("Skipping localhost certificate trust step.", script)
+
     def test_smoke_script_generates_and_uses_temporary_manifest_signing_keys(self) -> None:
         script = SMOKE_SCRIPT.read_text(encoding="utf-8")
 

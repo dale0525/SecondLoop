@@ -1,5 +1,7 @@
 import 'dart:io';
 
+import 'package:secondloop/core/update/app_update_models.dart';
+
 import 'generate_update_manifest_lib.dart';
 
 Future<void> main(List<String> args) async {
@@ -84,12 +86,11 @@ String? _releasePageUrlFromRepo({
   if (trimmedRepo == null || trimmedRepo.isEmpty) {
     return null;
   }
-  final trimmedVersion = version.trim();
-  final normalizedVersion =
-      trimmedVersion.startsWith('v') || trimmedVersion.startsWith('V')
-          ? 'v${trimmedVersion.substring(1)}'
-          : 'v$trimmedVersion';
-  return 'https://github.com/$trimmedRepo/releases/tag/$normalizedVersion';
+  final normalizedVersion = normalizeStrictAppVersion(
+    version,
+    argumentName: 'version',
+  );
+  return 'https://github.com/$trimmedRepo/releases/tag/v$normalizedVersion';
 }
 
 String? releasePageUrlFromRepoForTest({
