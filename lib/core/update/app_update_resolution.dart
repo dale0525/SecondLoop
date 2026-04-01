@@ -256,6 +256,7 @@ AppUpdateAsset? matchManifestAssetForCurrentPlatform(
     return null;
   }
 
+  final candidates = <AppUpdateAsset>[];
   final keys = switch (platform) {
     AppUpdatePlatform.windows => const ['windows-x64', 'windows-x86_64'],
     AppUpdatePlatform.macos =>
@@ -290,11 +291,11 @@ AppUpdateAsset? matchManifestAssetForCurrentPlatform(
       if (platform == AppUpdatePlatform.windows) {
         final expectedAppId = windowsAppId?.trim();
         if (expectedAppId != null && expectedAppId.isNotEmpty) {
-          final exactAppIdMatch = manifestAppId != null &&
-              manifestAppId.trim().toLowerCase() == expectedAppId.toLowerCase();
-          final exactNameMatch =
-              isWindowsVelopackPackageNameForApp(name, appId: expectedAppId);
-          if (!exactAppIdMatch && !exactNameMatch) {
+          if (!_matchesExpectedWindowsManifestIdentity(
+            assetName: name,
+            manifestAppId: manifestAppId,
+            expectedAppId: expectedAppId,
+          )) {
             continue;
           }
         }
@@ -306,16 +307,22 @@ AppUpdateAsset? matchManifestAssetForCurrentPlatform(
         assetName: name,
         windowsAppId: windowsAppId,
       );
-      return AppUpdateAsset(
-        name: name,
-        downloadUri: parsedUrl,
-        sha256: sha256,
-        installModeHint: installModeHint,
+      candidates.add(
+        AppUpdateAsset(
+          name: name,
+          downloadUri: parsedUrl,
+          sha256: sha256,
+          installModeHint: installModeHint,
+        ),
       );
     }
   }
 
-  return null;
+  return _selectBestAssetForArchitecture(
+    platform,
+    candidates,
+    currentArchitecture: currentArchitecture,
+  );
 }
 
 bool assetHasIntegrityMetadata(AppUpdateAsset asset) {
@@ -509,7 +516,6 @@ bool releaseContainsWindowsIdentityMismatch(
     return false;
   }
 
-  final normalizedExpectedAppId = expectedAppId.toLowerCase();
   var sawWindowsCandidate = false;
 
   final platforms = release['platforms'];
@@ -533,11 +539,11 @@ bool releaseContainsWindowsIdentityMismatch(
           continue;
         }
         sawWindowsCandidate = true;
-        final exactAppIdMatch = manifestAppId != null &&
-            manifestAppId.trim().toLowerCase() == normalizedExpectedAppId;
-        final exactNameMatch =
-            isWindowsVelopackPackageNameForApp(name, appId: expectedAppId);
-        if (!exactAppIdMatch && !exactNameMatch) {
+        if (!_matchesExpectedWindowsManifestIdentity(
+          assetName: name,
+          manifestAppId: manifestAppId,
+          expectedAppId: expectedAppId,
+        )) {
           return true;
         }
       }
@@ -569,4 +575,23 @@ bool releaseContainsWindowsIdentityMismatch(
   }
 
   return sawWindowsCandidate && false;
+}
+
+bool _matchesExpectedWindowsManifestIdentity({
+  required String assetName,
+  required String? manifestAppId,
+  required String expectedAppId,
+}) {
+  final exactNameMatch =
+      isWindowsVelopackPackageNameForApp(assetName, appId: expectedAppId);
+  if (!exactNameMatch) {
+    return false;
+  }
+
+  final normalizedManifestAppId = manifestAppId?.trim();
+  if (normalizedManifestAppId == null || normalizedManifestAppId.isEmpty) {
+    return true;
+  }
+
+  return normalizedManifestAppId.toLowerCase() == expectedAppId.toLowerCase();
 }

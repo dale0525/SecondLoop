@@ -20,15 +20,17 @@ export CARGO_PROFILE_TEST_DEBUG="${CARGO_PROFILE_TEST_DEBUG:-0}"
 export RUSTFLAGS="${RUSTFLAGS:--C debuginfo=0}"
 
 python_bin=""
-for candidate in python python3; do
-  if command -v "${candidate}" >/dev/null 2>&1; then
-    python_bin="$(command -v "${candidate}")"
+for candidate in \
+  "${repo_root}/.pixi/envs/default/bin/python" \
+  "${repo_root}/.pixi/envs/default/python.exe"; do
+  if [[ -f "${candidate}" ]]; then
+    python_bin="${candidate}"
     break
   fi
 done
 
 if [[ -z "${python_bin}" ]]; then
-  die "Missing 'python'. Install project tooling with \`pixi install\`."
+  die "Missing project-managed Python at .pixi/envs/default. Run \`pixi install\`."
 fi
 
 if ! "${cargo_bin}" fmt --manifest-path rust/Cargo.toml --all -- --check; then

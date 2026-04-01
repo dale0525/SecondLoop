@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import shutil
 import subprocess
 import unittest
 
@@ -11,9 +12,17 @@ HTTPS_SERVER = REPO_ROOT / "tools/windows_https_update_server.py"
 
 
 class WindowsAutoUpdateSmokeTests(unittest.TestCase):
+    def _find_powershell(self) -> str:
+        for candidate in ("pwsh", "powershell.exe", "powershell"):
+            resolved = shutil.which(candidate)
+            if resolved:
+                return resolved
+        self.skipTest("PowerShell is not available in PATH")
+
     def test_smoke_script_parses_as_valid_powershell(self) -> None:
+        powershell = self._find_powershell()
         command = [
-            "powershell.exe",
+            powershell,
             "-NoProfile",
             "-Command",
             (

@@ -64,6 +64,25 @@ class VerificationScriptsTests(unittest.TestCase):
         self.assertIn('SECONDLOOP_LOCAL_RUST_TEST_JOBS', script)
         self.assertIn('SECONDLOOP_LOCAL_RUST_TEST_MAX_BINARIES', script)
 
+    def test_local_rust_ci_wrapper_prefers_project_managed_python(self) -> None:
+        script = (REPO_ROOT / "scripts/run_full_rust_ci_local.sh").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn('.pixi/envs/default/bin/python', script)
+        self.assertIn('.pixi/envs/default/python.exe', script)
+        self.assertNotIn('for candidate in python python3', script)
+
+    def test_windows_smoke_tests_resolve_powershell_portably(self) -> None:
+        script = (REPO_ROOT / "scripts/tests/test_windows_auto_update_smoke.py").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn('import shutil', script)
+        self.assertIn('shutil.which', script)
+        self.assertIn('self.skipTest', script)
+        self.assertIn('pwsh', script)
+
     def test_check_mode_does_not_refresh_i18n_outputs(self) -> None:
         check_mode = (REPO_ROOT / "scripts/pre_commit_check_mode.sh").read_text(
             encoding="utf-8"

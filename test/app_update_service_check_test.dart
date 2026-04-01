@@ -159,6 +159,96 @@ void main() {
       expect(result.update!.asset?.sha256, 'x64sha');
     });
 
+    test(
+        'prefers matching Windows manifest package over mismatched arm64 entry',
+        () async {
+      final stagedClient = FakeWindowsStagedUpdateClient(available: true);
+      final service = AppUpdateService(
+        platformOverride: AppUpdatePlatform.windows,
+        releaseModeOverride: true,
+        windowsStagedUpdateClient: stagedClient,
+        currentArchitectureOverride: 'x86_64',
+        currentVersionLoader: () async =>
+            const AppRuntimeVersion(version: '1.0.0', buildNumber: '88'),
+        releaseJsonFetcher: (uri) async => {
+          'version': '1.1.0',
+          'release_page_url':
+              'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
+          'platforms': {
+            'windows-x64': [
+              {
+                'name': 'com.secondloop.secondloop-1.1.0-arm64-full.nupkg',
+                'package_url': 'https://cdn.example.com/win-arm64.nupkg',
+                'sha256': 'arm64sha',
+                'install_mode': 'velopack',
+              },
+              {
+                'name': 'com.secondloop.secondloop-1.1.0-x64-full.nupkg',
+                'package_url': 'https://cdn.example.com/win-x64.nupkg',
+                'sha256': 'x64sha',
+                'install_mode': 'velopack',
+              },
+            ],
+          },
+        },
+      );
+
+      final result = await service.checkForUpdates();
+
+      expect(result.update, isNotNull);
+      expect(result.update!.installMode, AppUpdateInstallMode.seamlessRestart);
+      expect(
+        result.update!.asset?.downloadUri.toString(),
+        'https://cdn.example.com/win-x64.nupkg',
+      );
+      expect(result.update!.asset?.sha256, 'x64sha');
+    });
+
+    test('prefers matching macOS manifest archive over mismatched arm64 entry',
+        () async {
+      final service = AppUpdateService(
+        platformOverride: AppUpdatePlatform.macos,
+        releaseModeOverride: true,
+        currentArchitectureOverride: 'x86_64',
+        currentVersionLoader: () async =>
+            const AppRuntimeVersion(version: '1.0.0', buildNumber: '88'),
+        macosManagedUpdateClient: FakeMacosManagedUpdateClient(
+          supportedInstallLocation: true,
+        ),
+        releaseJsonFetcher: (uri) async => {
+          'version': '1.1.0',
+          'release_page_url':
+              'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
+          'platforms': {
+            'macos-universal': [
+              {
+                'name': 'SecondLoop-macos-arm64-v1.1.0.app.tar.gz',
+                'archive_url': 'https://cdn.example.com/macos-arm64.tar.gz',
+                'sha256': 'arm64sha',
+                'install_mode': 'app-tar-gz',
+              },
+              {
+                'name': 'SecondLoop-macos-x64-v1.1.0.app.tar.gz',
+                'archive_url': 'https://cdn.example.com/macos-x64.tar.gz',
+                'sha256': 'x64sha',
+                'install_mode': 'app-tar-gz',
+              },
+            ],
+          },
+        },
+      );
+
+      final result = await service.checkForUpdates();
+
+      expect(result.update, isNotNull);
+      expect(result.update!.installMode, AppUpdateInstallMode.seamlessRestart);
+      expect(
+        result.update!.asset?.downloadUri.toString(),
+        'https://cdn.example.com/macos-x64.tar.gz',
+      );
+      expect(result.update!.asset?.sha256, 'x64sha');
+    });
+
     test('falls back to external MSI when Windows runtime is unavailable',
         () async {
       final stagedClient = FakeWindowsStagedUpdateClient(available: false);
@@ -986,6 +1076,52 @@ void main() {
               'name': 'com.secondloop.secondloop-1.1.0-full.nupkg',
               'package_url':
                   'https://cdn.example.com/com.secondloop.secondloop-1.1.0-full.nupkg',
+              'sha256': 'abc123',
+              'app_id': 'com.secondloop.secondloop',
+              'install_mode': 'velopack',
+            },
+          },
+          'assets': <Object?>[],
+        },
+      );
+
+      final result = await service.checkForUpdates();
+
+      expect(result.update, isNotNull);
+      expect(result.update!.installMode, AppUpdateInstallMode.externalDownload);
+      expect(result.update!.asset, isNull);
+      expect(
+        logger.records.any((entry) =>
+            entry.type == UpdateEventType.manualFallback &&
+            entry.message == 'windows_manifest_app_id_mismatch'),
+        isTrue,
+      );
+    });
+
+    test(
+        'rejects contradictory Windows manifest identity when app id and package name disagree',
+        () async {
+      final logger = InMemoryUpdateEventLogger();
+      final stagedClient = FakeWindowsStagedUpdateClient(
+        available: true,
+        appIdValue: 'com.secondloop.secondloopdev',
+      );
+      final service = AppUpdateService(
+        platformOverride: AppUpdatePlatform.windows,
+        releaseModeOverride: true,
+        windowsStagedUpdateClient: stagedClient,
+        updateEventLogger: logger,
+        currentVersionLoader: () async =>
+            const AppRuntimeVersion(version: '1.0.0', buildNumber: '9'),
+        releaseJsonFetcher: (_) async => {
+          'version': '1.1.0',
+          'release_page_url':
+              'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
+          'platforms': {
+            'windows-x64': {
+              'name': 'com.secondloop.secondloopdev-1.1.0-full.nupkg',
+              'package_url':
+                  'https://cdn.example.com/com.secondloop.secondloopdev-1.1.0-full.nupkg',
               'sha256': 'abc123',
               'app_id': 'com.secondloop.secondloop',
               'install_mode': 'velopack',
