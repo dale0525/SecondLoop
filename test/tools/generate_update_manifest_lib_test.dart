@@ -407,7 +407,7 @@ void main() {
   });
 
   test(
-      'generateUpdateManifest rejects unknown channel-suffixed windows package when no metadata declares it',
+      'generateUpdateManifest ignores unknown channel-suffixed windows package when stable package is unambiguous',
       () async {
     final tempDir = await Directory.systemTemp
         .createTemp('update_manifest_unknown_windows_channel_');
@@ -420,13 +420,19 @@ void main() {
         .writeAsString('nightly');
     await File('${tempDir.path}/releases.win.json').writeAsString('stable');
 
-    await expectLater(
-      () => generateUpdateManifest(
-        inputDirPath: tempDir.path,
-        version: '1.2.3',
-        baseDownloadUrl: 'https://example.com/downloads/',
-      ),
-      throwsStateError,
+    final generated = await generateUpdateManifest(
+      inputDirPath: tempDir.path,
+      version: '1.2.3',
+      baseDownloadUrl: 'https://example.com/downloads/',
+    );
+
+    final platforms = generated.manifest['platforms'] as Map<String, Object?>;
+    final windows = platforms['windows-x64'] as Map<String, Object?>;
+
+    expect(windows['name'], 'com.secondloop.secondloop-1.2.3-full.nupkg');
+    expect(
+      windows['releases_url'],
+      'https://example.com/downloads/releases.win.json',
     );
   });
 

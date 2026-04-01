@@ -726,9 +726,7 @@ class AppUpdateService {
       allowFile: _allowFileUpdateUris,
     );
     if (origin != null) {
-      final normalizedPath =
-          origin.path.endsWith('/') ? origin.path : '${origin.path}/';
-      return origin.replace(path: '${normalizedPath}releases/latest');
+      return origin;
     }
 
     final repo = _releaseRepo.trim();

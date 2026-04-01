@@ -82,7 +82,7 @@ void main() {
       expect(result.update, isNotNull);
       expect(
         result.update!.releasePageUri,
-        Uri.parse('https://updates.example.com/custom/base/releases/latest'),
+        Uri.parse('https://updates.example.com/custom/base'),
       );
     });
 
@@ -158,8 +158,7 @@ void main() {
       final update = AppUpdateAvailability(
         currentVersion: '1.0.1+99',
         latestTag: 'v1.4.0',
-        releasePageUri: Uri.parse(
-            'https://updates.example.com/custom/base/releases/latest'),
+        releasePageUri: Uri.parse('https://updates.example.com/custom/base'),
         installMode: AppUpdateInstallMode.externalDownload,
       );
       final service = _FakeAutoUpdateServiceForRegression(
@@ -194,7 +193,7 @@ void main() {
 
       expect(
         openedUri,
-        Uri.parse('https://updates.example.com/custom/base/releases/latest'),
+        Uri.parse('https://updates.example.com/custom/base'),
       );
     });
   });

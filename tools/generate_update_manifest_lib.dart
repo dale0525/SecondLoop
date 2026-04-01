@@ -295,8 +295,7 @@ File? _selectNewestWindowsPackage(
     );
   }
 
-  if (sawUnknownChannelVariant &&
-      (requestedChannel == null || matchingPackages.isEmpty)) {
+  if (sawUnknownChannelVariant && matchingPackages.isEmpty) {
     throw StateError(
       'unknown_windows_package_channel_variant:${requiredVersion.join('.')}',
     );

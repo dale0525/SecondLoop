@@ -253,5 +253,21 @@ void main() {
         'https://updates.example.com/custom/base/api/releases/latest',
       );
     });
+
+    test(
+        'fallbackReleasePageUri uses configured origin root for self-hosted feeds',
+        () async {
+      final service = AppUpdateService(
+        platformOverride: AppUpdatePlatform.android,
+        releaseModeOverride: true,
+        releaseRepoOverride: '',
+        releaseApiOriginOverride: 'https://updates.example.com/custom/base/',
+      );
+
+      expect(
+        service.fallbackReleasePageUri.toString(),
+        'https://updates.example.com/custom/base/',
+      );
+    });
   });
 }
