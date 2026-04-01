@@ -104,6 +104,7 @@ class AndroidApkUpdateCoordinator {
       }
     }
     if (cacheKey != null) {
+      await _clearOtherCachedFiles(cacheKey, downloadedFile.path);
       _verifiedApkCache[cacheKey] = _CachedDownloadedApk(
         path: downloadedFile.path,
       );
@@ -159,6 +160,22 @@ class AndroidApkUpdateCoordinator {
         await file.delete();
       }
     } catch (_) {}
+  }
+
+  Future<void> _clearOtherCachedFiles(
+    String retainedCacheKey,
+    String retainedPath,
+  ) async {
+    final staleEntries = _verifiedApkCache.entries
+        .where((entry) => entry.key != retainedCacheKey)
+        .toList(growable: false);
+    for (final entry in staleEntries) {
+      _verifiedApkCache.remove(entry.key);
+      if (entry.value.path == retainedPath) {
+        continue;
+      }
+      await _deleteDownloadedFileIfPresent(File(entry.value.path));
+    }
   }
 
   String? _cacheKeyForAsset(String? expectedSha256) {

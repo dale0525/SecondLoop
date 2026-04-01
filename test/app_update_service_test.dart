@@ -630,6 +630,86 @@ void main() {
               'https://api.github.com/repos/dale0525/SecondLoop/releases/latest'));
     });
 
+    test('prefers newer release when earlier endpoint returns older version',
+        () async {
+      final attempted = <Uri>[];
+      final service = AppUpdateService(
+        platformOverride: AppUpdatePlatform.android,
+        releaseModeOverride: true,
+        releaseApiOriginOverride: 'https://secondloop.app',
+        releaseRepoOverride: 'dale0525/SecondLoop',
+        androidSupportedAbisOverride: const ['arm64-v8a'],
+        currentVersionLoader: () async =>
+            const AppRuntimeVersion(version: '1.0.0', buildNumber: '9'),
+        releaseJsonFetcher: (uri) async {
+          attempted.add(uri);
+          if (uri.host == 'secondloop.app') {
+            return {
+              'tag_name': 'v1.1.0',
+              'html_url': 'https://secondloop.app/releases/tag/v1.1.0',
+              'assets': [
+                {
+                  'name': 'SecondLoop-android-arm64-v8a.apk',
+                  'browser_download_url': 'https://cdn.example.com/old.apk',
+                  'sha256': 'abc123',
+                },
+              ],
+            };
+          }
+          return {
+            'tag_name': 'v1.2.0',
+            'html_url':
+                'https://github.com/dale0525/SecondLoop/releases/tag/v1.2.0',
+            'assets': [
+              {
+                'name': 'SecondLoop-android-arm64-v8a.apk',
+                'browser_download_url': 'https://cdn.example.com/new.apk',
+                'sha256': 'def456',
+              },
+            ],
+          };
+        },
+      );
+
+      final result = await service.checkForUpdates();
+
+      expect(attempted.length, 2);
+      expect(result.errorMessage, isNull);
+      expect(result.update, isNotNull);
+      expect(result.update!.latestTag, 'v1.2.0');
+      expect(result.update!.downloadUri.toString(),
+          'https://cdn.example.com/new.apk');
+    });
+
+    test(
+        'treats older release without platform asset as up to date instead of failure',
+        () async {
+      final service = AppUpdateService(
+        platformOverride: AppUpdatePlatform.android,
+        releaseModeOverride: true,
+        androidSupportedAbisOverride: const ['arm64-v8a'],
+        currentVersionLoader: () async =>
+            const AppRuntimeVersion(version: '1.1.0', buildNumber: '9'),
+        releaseJsonFetcher: (uri) async => {
+          'tag_name': 'v1.0.0',
+          'html_url':
+              'https://github.com/dale0525/SecondLoop/releases/tag/v1.0.0',
+          'assets': [
+            {
+              'name': 'SecondLoop-win.msi',
+              'browser_download_url': 'https://cdn.example.com/win.msi',
+            },
+          ],
+        },
+      );
+
+      final result = await service.checkForUpdates();
+
+      expect(result.errorMessage, isNull);
+      expect(result.update, isNull);
+      expect(result.isUpToDate, isTrue);
+    });
+
     test('records update available and manual fallback events', () async {
       final logger = _InMemoryUpdateEventLogger();
       final stagedClient = _FakeWindowsStagedUpdateClient(available: false);

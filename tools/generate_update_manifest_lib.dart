@@ -132,6 +132,9 @@ Future<Map<String, Object?>> _buildPlatforms(
   for (final androidApk in androidApks) {
     final androidKey =
         _resolveAndroidPlatformKey(androidApk.uri.pathSegments.last);
+    if (androidKey.isEmpty) {
+      continue;
+    }
     if (platforms.containsKey(androidKey)) {
       throw StateError('duplicate_android_platform_asset_$androidKey');
     }
@@ -267,10 +270,9 @@ String _resolveAndroidPlatformKey(String fileName) {
       return 'android-arm64-v8a';
     case 'armeabi-v7a':
       return 'android-armeabi-v7a';
-    case 'x86_64':
-      return 'android-x86_64';
-    case 'x86':
-      return 'android-x86';
+  }
+  if (_looksLikeUnsupportedAndroidApk(fileName)) {
+    return '';
   }
   return 'android-universal';
 }
@@ -294,8 +296,6 @@ String? _extractLeadingAndroidAbi(String fileName) {
   for (final candidate in const <String, List<String>>{
     'arm64-v8a': <String>['arm64-v8a', 'aarch64', 'arm64'],
     'armeabi-v7a': <String>['armeabi-v7a', 'arm-v7a', 'armv7'],
-    'x86_64': <String>['x86_64', 'x64'],
-    'x86': <String>['i686', 'ia32', 'x86'],
   }.entries) {
     for (final alias in candidate.value) {
       if (stem == alias || stem.startsWith('$alias-')) {
@@ -305,4 +305,26 @@ String? _extractLeadingAndroidAbi(String fileName) {
   }
 
   return null;
+}
+
+bool _looksLikeUnsupportedAndroidApk(String fileName) {
+  final normalized = fileName.trim().toLowerCase();
+  const prefix = 'secondloop-android-';
+  if (!normalized.startsWith(prefix) || !normalized.endsWith('.apk')) {
+    return false;
+  }
+
+  final stem = normalized.substring(prefix.length, normalized.length - 4);
+  for (final prefixValue in const <String>[
+    'x86_64',
+    'x64',
+    'x86',
+    'i686',
+    'ia32',
+  ]) {
+    if (stem == prefixValue || stem.startsWith('$prefixValue-')) {
+      return true;
+    }
+  }
+  return false;
 }

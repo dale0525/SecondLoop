@@ -264,4 +264,62 @@ void main() {
     expect(installer.installCalls, 2);
     expect(downloader.downloadCalls, 1);
   });
+
+  test('replaces stale cached apk file when newer sha256 is verified',
+      () async {
+    final firstFile = File(
+      '${Directory.systemTemp.path}${Platform.pathSeparator}android-update-cache-v1.apk',
+    );
+    final secondFile = File(
+      '${Directory.systemTemp.path}${Platform.pathSeparator}android-update-cache-v2.apk',
+    );
+    await firstFile.writeAsBytes(const <int>[1, 2, 3], flush: true);
+    await secondFile.writeAsBytes(const <int>[4, 5, 6], flush: true);
+    addTearDown(() async {
+      if (firstFile.existsSync()) {
+        await firstFile.delete();
+      }
+      if (secondFile.existsSync()) {
+        await secondFile.delete();
+      }
+    });
+
+    final firstDigest =
+        await AndroidApkUpdateCoordinator.sha256FileHex(firstFile);
+    final secondDigest =
+        await AndroidApkUpdateCoordinator.sha256FileHex(secondFile);
+    final installer = _FakeCachedInstaller();
+    final coordinator = AndroidApkUpdateCoordinator(
+      downloader: _FakeDownloader(bytes: const <int>[1, 2, 3]),
+      installer: installer,
+    );
+
+    await coordinator.performUpdate(
+      asset: AppUpdateAsset(
+        name: 'SecondLoop-android-arm64-v8a-v1.apk',
+        downloadUri: Uri.parse('https://cdn.example.com/app-v1.apk'),
+        sha256: firstDigest,
+      ),
+      onProgress: (_) {},
+    );
+
+    final cachedV1Path = installer.lastPath;
+    expect(cachedV1Path, isNotNull);
+    expect(File(cachedV1Path!).existsSync(), isTrue);
+
+    final coordinatorWithNewBytes = AndroidApkUpdateCoordinator(
+      downloader: _FakeDownloader(bytes: const <int>[4, 5, 6]),
+      installer: installer,
+    );
+    await coordinatorWithNewBytes.performUpdate(
+      asset: AppUpdateAsset(
+        name: 'SecondLoop-android-arm64-v8a-v2.apk',
+        downloadUri: Uri.parse('https://cdn.example.com/app-v2.apk'),
+        sha256: secondDigest,
+      ),
+      onProgress: (_) {},
+    );
+
+    expect(File(cachedV1Path).existsSync(), isFalse);
+  });
 }

@@ -5,7 +5,8 @@ import 'package:flutter_test/flutter_test.dart';
 import '../tools/generate_update_manifest_lib.dart';
 
 void main() {
-  test('generateUpdateManifest emits multiple Android ABI entries', () async {
+  test('generateUpdateManifest emits supported Android ARM ABI entries',
+      () async {
     final tempDir =
         await Directory.systemTemp.createTemp('update_manifest_android_multi_');
     addTearDown(() => tempDir.delete(recursive: true));
@@ -14,9 +15,6 @@ void main() {
         .writeAsString('arm64');
     await File('${tempDir.path}/SecondLoop-android-armeabi-v7a-v1.2.3.apk')
         .writeAsString('armeabi');
-    await File('${tempDir.path}/SecondLoop-android-x86_64-v1.2.3.apk')
-        .writeAsString('x86_64');
-
     final generated = await generateUpdateManifest(
       inputDirPath: tempDir.path,
       version: 'v1.2.3',
@@ -27,6 +25,5 @@ void main() {
     final platforms = generated.manifest['platforms'] as Map<String, Object?>;
     expect(platforms['android-arm64-v8a'], isNotNull);
     expect(platforms['android-armeabi-v7a'], isNotNull);
-    expect(platforms['android-x86_64'], isNotNull);
   });
 }

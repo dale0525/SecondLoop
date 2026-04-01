@@ -3,9 +3,15 @@ part of 'app_update_service.dart';
 const Map<String, List<String>> _androidAbiAliases = <String, List<String>>{
   'arm64-v8a': <String>['arm64-v8a', 'arm64', 'aarch64'],
   'armeabi-v7a': <String>['armeabi-v7a', 'armv7', 'arm-v7a'],
-  'x86': <String>['x86', 'i686', 'ia32'],
-  'x86_64': <String>['x86_64', 'x64'],
 };
+
+const List<String> _unsupportedAndroidAbiAliases = <String>[
+  'x86',
+  'x86_64',
+  'x64',
+  'i686',
+  'ia32',
+];
 
 bool _isAndroidApkAssetImpl(AppUpdateAsset asset) {
   final normalizedInstallMode = asset.installMode?.trim().toLowerCase();
@@ -88,8 +94,13 @@ bool _androidAssetMatchesAbiImpl(String assetName, String abi) {
 
 bool _isAndroidUniversalApkNameImpl(String assetName) {
   final normalized = assetName.trim().toLowerCase();
+  final stem = _androidApkStemImpl(assetName);
+  if (stem == null || !_looksLikeUniversalAndroidStemImpl(stem)) {
+    return false;
+  }
   return normalized.startsWith('secondloop-android-') &&
       normalized.endsWith('.apk') &&
+      !_hasUnsupportedAndroidAbiStemImpl(assetName) &&
       _extractLeadingAndroidAbiImpl(assetName) == null;
 }
 
@@ -111,12 +122,6 @@ List<String> _androidManifestKeysImpl(List<String> supportedAbis) {
         add('android-armeabi-v7a');
         add('android-armv7');
         add('android-arm-v7a');
-        break;
-      case 'x86_64':
-        add('android-x86_64');
-        break;
-      case 'x86':
-        add('android-x86');
         break;
     }
   }
@@ -156,6 +161,36 @@ String? _extractLeadingAndroidAbiImpl(String assetName) {
   }
 
   return null;
+}
+
+bool _hasUnsupportedAndroidAbiStemImpl(String assetName) {
+  final stem = _androidApkStemImpl(assetName);
+  if (stem == null) {
+    return false;
+  }
+
+  for (final alias in _unsupportedAndroidAbiAliases) {
+    if (stem == alias || stem.startsWith('$alias-')) {
+      return true;
+    }
+  }
+  return false;
+}
+
+String? _androidApkStemImpl(String assetName) {
+  final normalized = assetName.trim().toLowerCase();
+  const prefix = 'secondloop-android-';
+  if (!normalized.startsWith(prefix) || !normalized.endsWith('.apk')) {
+    return null;
+  }
+  return normalized.substring(prefix.length, normalized.length - 4);
+}
+
+bool _looksLikeUniversalAndroidStemImpl(String stem) {
+  if (stem == 'universal' || stem.startsWith('universal-')) {
+    return true;
+  }
+  return RegExp(r'^v?\d+\.\d+\.\d+$').hasMatch(stem);
 }
 
 bool isAndroidApkAssetForUpdate(AppUpdateAsset asset) =>

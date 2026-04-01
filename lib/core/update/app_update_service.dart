@@ -250,7 +250,9 @@ class AppUpdateService {
     }
 
     Map<String, Object?>? release;
+    String? releaseTag;
     Object? lastError;
+    var sawUpToDateOrOlderRelease = false;
     final windowsStagedClient = _resolvedWindowsStagedUpdateClient;
     final windowsManagedRuntimeAvailable =
         windowsStagedClient != null && windowsStagedClient.isAvailable();
@@ -272,6 +274,11 @@ class AppUpdateService {
           lastError = 'invalid_release_tag';
           continue;
         }
+        if (compareReleaseTagWithCurrentVersion(candidateTag, currentVersion) <=
+            0) {
+          sawUpToDateOrOlderRelease = true;
+          continue;
+        }
         if (!_releaseHasUsableAssetForCurrentPlatform(
           candidate,
           windowsManagedRuntimeAvailable: windowsManagedRuntimeAvailable,
@@ -280,13 +287,24 @@ class AppUpdateService {
           lastError = StateError('no_platform_asset_for_${_platform.name}');
           continue;
         }
-        release = candidate;
-        break;
+        if (releaseTag == null ||
+            compareReleaseTagWithCurrentVersion(candidateTag, releaseTag) > 0) {
+          release = candidate;
+          releaseTag = candidateTag;
+        }
       } catch (error) {
         lastError = error;
       }
     }
     if (release == null) {
+      if (sawUpToDateOrOlderRelease) {
+        await _recordEvent(
+          UpdateEventType.checkSucceeded,
+          currentVersion: runtimeVersion.display,
+          message: 'up_to_date',
+        );
+        return AppUpdateCheckResult(currentVersion: runtimeVersion.display);
+      }
       await _recordFailure(
         UpdateEventType.checkFailed,
         lastError ?? 'failed_to_fetch_release',

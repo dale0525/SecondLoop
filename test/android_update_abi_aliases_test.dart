@@ -70,42 +70,5 @@ void main() {
               'SecondLoop-android-arm-v7a-v1.2.3.apk'),
           'android-armeabi-v7a');
     });
-
-    test('matches x86 asset aliases for x86 devices', () async {
-      final service = AppUpdateService(
-        platformOverride: AppUpdatePlatform.android,
-        releaseModeOverride: true,
-        androidSupportedAbisOverride: const ['x86'],
-        currentVersionLoader: () async =>
-            const AppRuntimeVersion(version: '1.0.0', buildNumber: '9'),
-        releaseJsonFetcher: (uri) async => {
-          'tag_name': 'v1.1.0',
-          'html_url':
-              'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
-          'assets': [
-            {
-              'name': 'SecondLoop-android-i686.apk',
-              'browser_download_url': 'https://cdn.example.com/x86.apk',
-            },
-          ],
-        },
-      );
-
-      final result = await service.checkForUpdates();
-
-      expect(result.update, isNotNull);
-      expect(result.update!.asset?.name, 'SecondLoop-android-i686.apk');
-    });
-
-    test('resolves x86 file names to x86 manifest key', () {
-      expect(
-        resolveAndroidPlatformKeyForTest('SecondLoop-android-x86-v1.2.3.apk'),
-        'android-x86',
-      );
-      expect(
-        resolveAndroidPlatformKeyForTest('SecondLoop-android-i686-v1.2.3.apk'),
-        'android-x86',
-      );
-    });
   });
 }

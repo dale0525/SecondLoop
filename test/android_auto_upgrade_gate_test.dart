@@ -298,6 +298,15 @@ void main() {
     expect(find.byType(AlertDialog), findsNothing);
     expect(find.text('home'), findsOneWidget);
 
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+    await tester.pump();
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+
+    expect(service.checkCalls, 2);
+    expect(find.byType(AlertDialog), findsNothing);
+
     debugDefaultTargetPlatformOverride = oldPlatform;
   });
 
