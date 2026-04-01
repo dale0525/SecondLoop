@@ -9,6 +9,7 @@ class _FakeDownloader implements AndroidApkDownloader {
   _FakeDownloader({required this.bytes});
 
   final List<int> bytes;
+  int downloadCalls = 0;
 
   @override
   Future<File> downloadApk({
@@ -17,6 +18,7 @@ class _FakeDownloader implements AndroidApkDownloader {
     required AndroidApkDownloadProgressCallback onProgress,
     AndroidApkDownloadCancelToken? cancelToken,
   }) async {
+    downloadCalls += 1;
     onProgress(
       const AndroidApkDownloadProgress(receivedBytes: 10, totalBytes: 100),
     );
@@ -185,12 +187,14 @@ void main() {
     expect(installer.installCalls, 0);
   });
 
-  test('reuses cached apk for repeated install launch retries', () async {
+  test('re-downloads apk for repeated install launch retries without sha256',
+      () async {
+    final downloader = _FakeDownloader(bytes: const <int>[1, 2, 3]);
     final installer = _FakeCachedInstaller(
       error: StateError('android_apk_install_not_started'),
     );
     final coordinator = AndroidApkUpdateCoordinator(
-      downloader: _FakeDownloader(bytes: const <int>[1, 2, 3]),
+      downloader: downloader,
       installer: installer,
     );
     final asset = AppUpdateAsset(
@@ -216,5 +220,44 @@ void main() {
 
     expect(installer.installCalls, 2);
     expect(installer.lastPath, firstPath);
+    expect(downloader.downloadCalls, 2);
+  });
+
+  test('reuses cached apk only when sha256 is provided', () async {
+    final tempFile = File(
+      '${Directory.systemTemp.path}${Platform.pathSeparator}android-update-coordinator-cache.apk',
+    );
+    await tempFile.writeAsBytes(const <int>[1, 2, 3], flush: true);
+    addTearDown(() async {
+      if (tempFile.existsSync()) {
+        await tempFile.delete();
+      }
+    });
+
+    final digest = await AndroidApkUpdateCoordinator.sha256FileHex(tempFile);
+    final downloader = _FakeDownloader(bytes: const <int>[1, 2, 3]);
+    final installer = _FakeCachedInstaller(
+      error: StateError('android_apk_install_not_started'),
+    );
+    final coordinator = AndroidApkUpdateCoordinator(
+      downloader: downloader,
+      installer: installer,
+    );
+    final asset = AppUpdateAsset(
+      name: 'SecondLoop-android-arm64-v8a.apk',
+      downloadUri: Uri.parse('https://cdn.example.com/app.apk'),
+      sha256: digest,
+    );
+
+    await expectLater(
+      () => coordinator.performUpdate(asset: asset, onProgress: (_) {}),
+      throwsA(isA<AndroidApkUpdateException>()),
+    );
+
+    installer.error = null;
+    await coordinator.performUpdate(asset: asset, onProgress: (_) {});
+
+    expect(installer.installCalls, 2);
+    expect(downloader.downloadCalls, 1);
   });
 }

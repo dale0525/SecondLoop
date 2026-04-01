@@ -213,12 +213,30 @@ bool _matchesRequestedVersion(File file, String normalizedVersion) {
   final name = file.uri.pathSegments.last.toLowerCase();
   final version = normalizedVersion.toLowerCase();
   if (name.startsWith('releases.') && name.endsWith('.json')) {
-    return true;
+    return _matchesReleaseMetadataVersion(name, version);
   }
   return name.contains('-$version.') ||
       name.contains('-v$version.') ||
       name.contains('-$version-') ||
       name.contains('-v$version-');
+}
+
+bool _matchesReleaseMetadataVersion(String fileName, String normalizedVersion) {
+  final versionMarkers = <String>{
+    normalizedVersion,
+    'v$normalizedVersion',
+    normalizedVersion.replaceAll('.', '-'),
+    'v${normalizedVersion.replaceAll('.', '-')}',
+    normalizedVersion.replaceAll('.', '_'),
+    'v${normalizedVersion.replaceAll('.', '_')}',
+  };
+  for (final marker in versionMarkers) {
+    if (fileName.contains(marker)) {
+      return true;
+    }
+  }
+
+  return !RegExp(r'v?\d+(?:[._-]\d+){1,3}').hasMatch(fileName);
 }
 
 String _normalizeVersion(String value) {

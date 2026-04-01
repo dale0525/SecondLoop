@@ -298,6 +298,74 @@ void main() {
     );
   });
 
+  test('returns no update when all endpoints lack current platform assets',
+      () async {
+    final requestedUris = <Uri>[];
+    final service = AppUpdateService(
+      httpClient: _FakeHttpClient(
+        handler: (uri) {
+          requestedUris.add(uri);
+          if (uri.host == 'secondloop.app' &&
+              uri.path == '/api/releases/latest') {
+            return _FakeHttpResponse(
+              statusCode: 200,
+              body: jsonEncode({
+                'version': '1.1.0',
+                'release_page_url': 'https://secondloop.app/releases/v1.1.0',
+                'platforms': {
+                  'android-universal': {
+                    'archive_url':
+                        'https://cdn.example.com/SecondLoop-android-v1.1.0.apk',
+                    'sha256': 'android-only',
+                  },
+                },
+              }),
+            );
+          }
+          if (uri.host == 'api.github.com' &&
+              uri.path == '/repos/dale0525/SecondLoop/releases/latest') {
+            return _FakeHttpResponse(
+              statusCode: 200,
+              body: jsonEncode({
+                'tag_name': 'v1.1.0',
+                'html_url':
+                    'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
+                'assets': [
+                  {
+                    'name': 'SecondLoop-android-arm64-v8a-v1.1.0.apk',
+                    'browser_download_url':
+                        'https://cdn.example.com/from-github-api.apk',
+                    'sha256': 'android',
+                  },
+                ],
+              }),
+            );
+          }
+          throw StateError('unexpected_uri:$uri');
+        },
+      ),
+      platformOverride: AppUpdatePlatform.linux,
+      releaseModeOverride: true,
+      releaseApiOriginOverride: 'https://secondloop.app',
+      releaseRepoOverride: 'dale0525/SecondLoop',
+      updatePublicKeyOverride: '',
+      currentVersionLoader: () async =>
+          const AppRuntimeVersion(version: '1.0.0', buildNumber: '1'),
+    );
+
+    final result = await service.checkForUpdates();
+
+    expect(result.update, isNull);
+    expect(result.errorMessage, contains('no_platform_asset_for_linux'));
+    expect(
+      requestedUris.map((uri) => uri.toString()),
+      containsAll(<String>[
+        'https://secondloop.app/api/releases/latest',
+        'https://api.github.com/repos/dale0525/SecondLoop/releases/latest',
+      ]),
+    );
+  });
+
   test('prefers GitHub API over unsigned latest.json when public key is unset',
       () async {
     final requestedUris = <Uri>[];

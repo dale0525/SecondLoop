@@ -42,8 +42,8 @@ class AndroidApkUpdateCoordinator {
     AndroidApkDownloadCancelToken? cancelToken,
   }) async {
     final expectedSha256 = asset.sha256?.trim();
-    final cacheKey = _cacheKeyForAsset(asset, expectedSha256);
-    final cachedFile = _resolveCachedFile(cacheKey);
+    final cacheKey = _cacheKeyForAsset(expectedSha256);
+    final cachedFile = cacheKey == null ? null : _resolveCachedFile(cacheKey);
 
     late final File downloadedFile;
     if (cachedFile != null) {
@@ -80,7 +80,9 @@ class AndroidApkUpdateCoordinator {
         if (cancelToken?.isCancelled == true) {
           throw const AndroidApkDownloadCancelledException();
         }
-        _verifiedApkCache.remove(cacheKey);
+        if (cacheKey != null) {
+          _verifiedApkCache.remove(cacheKey);
+        }
         await _deleteDownloadedFileIfPresent(downloadedFile);
         throw AndroidApkUpdateException(
           type: AndroidApkUpdateFailureType.integrityCheck,
@@ -88,9 +90,11 @@ class AndroidApkUpdateCoordinator {
         );
       }
     }
-    _verifiedApkCache[cacheKey] = _CachedDownloadedApk(
-      path: downloadedFile.path,
-    );
+    if (cacheKey != null) {
+      _verifiedApkCache[cacheKey] = _CachedDownloadedApk(
+        path: downloadedFile.path,
+      );
+    }
 
     _throwIfCancelled(cancelToken);
     try {
@@ -144,12 +148,12 @@ class AndroidApkUpdateCoordinator {
     } catch (_) {}
   }
 
-  String _cacheKeyForAsset(AppUpdateAsset asset, String? expectedSha256) {
+  String? _cacheKeyForAsset(String? expectedSha256) {
     final normalizedSha = expectedSha256?.trim().toLowerCase();
     if (normalizedSha != null && normalizedSha.isNotEmpty) {
       return 'sha256:$normalizedSha';
     }
-    return 'url:${asset.downloadUri}|name:${asset.name.trim().toLowerCase()}';
+    return null;
   }
 }
 

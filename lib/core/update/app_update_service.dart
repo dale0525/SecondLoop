@@ -246,7 +246,6 @@ class AppUpdateService {
     }
 
     Map<String, Object?>? release;
-    Map<String, Object?>? fallbackReleaseWithoutPlatformAsset;
     Object? lastError;
     final androidSupportedAbis = _platform == AppUpdatePlatform.android
         ? await _loadAndroidSupportedAbisImpl(
@@ -269,7 +268,6 @@ class AppUpdateService {
           candidate,
           androidSupportedAbis: androidSupportedAbis,
         )) {
-          fallbackReleaseWithoutPlatformAsset ??= candidate;
           lastError = StateError('no_platform_asset_for_${_platform.name}');
           continue;
         }
@@ -279,9 +277,6 @@ class AppUpdateService {
         lastError = error;
       }
     }
-
-    release ??= fallbackReleaseWithoutPlatformAsset;
-
     if (release == null) {
       await _recordFailure(
         UpdateEventType.checkFailed,

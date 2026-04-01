@@ -375,8 +375,7 @@ void main() {
       expect(result.update!.installMode, AppUpdateInstallMode.externalDownload);
     });
 
-    test('falls back to external release page when no platform asset exists',
-        () async {
+    test('returns no update when no platform asset exists', () async {
       final service = AppUpdateService(
         platformOverride: AppUpdatePlatform.linux,
         releaseModeOverride: true,
@@ -397,12 +396,8 @@ void main() {
 
       final result = await service.checkForUpdates();
 
-      expect(result.update, isNotNull);
-      expect(result.update!.installMode, AppUpdateInstallMode.externalDownload);
-      expect(
-        result.update!.downloadUri.toString(),
-        'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
-      );
+      expect(result.update, isNull);
+      expect(result.errorMessage, contains('no_platform_asset_for_linux'));
     });
 
     test('picks Android apk asset from release assets', () async {
@@ -500,7 +495,6 @@ void main() {
       final result = await service.checkForUpdates();
 
       expect(result.update, isNull);
-      expect(result.errorMessage, isNull);
       expect(attempted.length, 2);
       expect(attempted.first.toString(), contains('/api/releases/latest'));
       expect(

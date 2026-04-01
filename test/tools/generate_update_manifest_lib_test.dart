@@ -212,6 +212,29 @@ void main() {
     );
   });
 
+  test(
+      'generateUpdateManifest ignores stale Velopack releases metadata from other versions',
+      () async {
+    final tempDir = await Directory.systemTemp
+        .createTemp('update_manifest_releases_stale_');
+    addTearDown(() => tempDir.delete(recursive: true));
+
+    await File('${tempDir.path}/com.secondloop.secondloop-1.2.3-full.nupkg')
+        .writeAsString('windows');
+    await File('${tempDir.path}/releases.win.1.2.2.json').writeAsString('{}');
+
+    final generated = await generateUpdateManifest(
+      inputDirPath: tempDir.path,
+      version: 'v1.2.3',
+      baseDownloadUrl:
+          'https://github.com/dale0525/SecondLoop/releases/download/v1.2.3',
+    );
+
+    final platforms = generated.manifest['platforms'] as Map<String, Object?>;
+    final windows = platforms['windows-x64'] as Map<String, Object?>;
+    expect(windows['releases_url'], isNull);
+  });
+
   test('generateUpdateManifest ignores stale assets from other versions',
       () async {
     final tempDir =

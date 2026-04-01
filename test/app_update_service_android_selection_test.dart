@@ -56,16 +56,12 @@ void main() {
 
       final result = await service.checkForUpdates();
 
-      expect(result.update, isNotNull);
-      expect(result.update!.asset, isNull);
-      expect(
-        result.update!.downloadUri.toString(),
-        'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
-      );
-      expect(result.update!.installMode, AppUpdateInstallMode.externalDownload);
+      expect(result.update, isNull);
+      expect(result.errorMessage, contains('no_platform_asset_for_android'));
     });
 
-    test('does not pick abi-specific apk when supported abis are unknown',
+    test(
+        'returns no update when only abi-specific apk exists and supported abis are unknown',
         () async {
       final service = AppUpdateService(
         platformOverride: AppUpdatePlatform.android,
@@ -88,13 +84,8 @@ void main() {
 
       final result = await service.checkForUpdates();
 
-      expect(result.update, isNotNull);
-      expect(result.update!.asset, isNull);
-      expect(
-        result.update!.downloadUri.toString(),
-        'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
-      );
-      expect(result.update!.installMode, AppUpdateInstallMode.externalDownload);
+      expect(result.update, isNull);
+      expect(result.errorMessage, contains('no_platform_asset_for_android'));
     });
 
     test('keeps universal apk fallback when supported abis are unknown',
