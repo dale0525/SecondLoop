@@ -469,6 +469,77 @@ run_flutter_tool() {
   env -u GIT_DIR -u GIT_WORK_TREE -u GIT_INDEX_FILE "${flutter_bin}" "$@"
 }
 
+append_unique_path() {
+  local candidate="$1"
+  shift
+
+  local existing
+  for existing in "$@"; do
+    if [[ "${existing}" == "${candidate}" ]]; then
+      return 1
+    fi
+  done
+
+  return 0
+}
+
+collect_related_flutter_tests_for_lib_file() {
+  local file="$1"
+  local package_import="package:secondloop/${file#lib/}"
+  local match
+
+  match="test/${file#lib/}"
+  match="${match%.dart}_test.dart"
+  if [[ -f "${match}" ]]; then
+    printf '%s\n' "${match}"
+  fi
+
+  while IFS= read -r match; do
+    [[ -n "${match}" && -f "${match}" ]] || continue
+    printf '%s\n' "${match}"
+  done < <(rg -l --fixed-strings "${package_import}" test integration_test 2>/dev/null || true)
+}
+
+collect_targeted_flutter_tests() {
+  local file
+  local targets=()
+  local saw_unmapped_lib_change=0
+  local related_targets=()
+  local candidate
+
+  for file in "${staged_files[@]}"; do
+    case "${file}" in
+      lib/*.dart | lib/**/*.dart)
+        related_targets=()
+        while IFS= read -r candidate; do
+          [[ -n "${candidate}" ]] || continue
+          related_targets+=("${candidate}")
+        done < <(collect_related_flutter_tests_for_lib_file "${file}")
+        if [[ ${#related_targets[@]} -eq 0 ]]; then
+          saw_unmapped_lib_change=1
+          break
+        fi
+        for candidate in "${related_targets[@]}"; do
+          if [[ ${#targets[@]} -eq 0 ]] || append_unique_path "${candidate}" "${targets[@]}"; then
+            targets+=("${candidate}")
+          fi
+        done
+        ;;
+      test/*_test.dart | test/**/*_test.dart | integration_test/*_test.dart | integration_test/**/*_test.dart)
+        if [[ -f "${file}" ]] && ([[ ${#targets[@]} -eq 0 ]] || append_unique_path "${file}" "${targets[@]}"); then
+          targets+=("${file}")
+        fi
+        ;;
+    esac
+  done
+
+  if [[ ${saw_unmapped_lib_change} -ne 0 ]]; then
+    return 0
+  fi
+
+  printf '%s\n' "${targets[@]}"
+}
+
 if (( check_mode )); then
   if (( scope_flutter == 0 && scope_rust == 0 )); then
     scope_flutter=1
@@ -677,6 +748,12 @@ if [[ ${run_rust_fmt} -ne 0 ]]; then
 fi
 
 if [[ ${run_flutter_checks} -ne 0 ]]; then
+  flutter_test_targets=()
+  while IFS= read -r file; do
+    [[ -n "${file}" ]] || continue
+    flutter_test_targets+=("${file}")
+  done < <(collect_targeted_flutter_tests)
+
   if [[ ${run_i18n_refresh_needed} -ne 0 ]]; then
     run_i18n_analyze
   fi
@@ -688,11 +765,20 @@ if [[ ${run_flutter_checks} -ne 0 ]]; then
     exit 1
   fi
 
-  if ! run_flutter_tool test --concurrency=1; then
-    echo "" >&2
-    echo "pre-commit: flutter test failed." >&2
-    echo "Fix locally with: pixi run flutter test" >&2
-    exit 1
+  if [[ ${#flutter_test_targets[@]} -eq 0 ]]; then
+    if ! run_flutter_tool test --concurrency=1; then
+      echo "" >&2
+      echo "pre-commit: flutter test failed." >&2
+      echo "Fix locally with: pixi run flutter test" >&2
+      exit 1
+    fi
+  else
+    if ! run_flutter_tool test --concurrency=1 "${flutter_test_targets[@]}"; then
+      echo "" >&2
+      echo "pre-commit: flutter test failed." >&2
+      echo "Fix locally with: pixi run flutter test \"${flutter_test_targets[*]}\"" >&2
+      exit 1
+    fi
   fi
 fi
 

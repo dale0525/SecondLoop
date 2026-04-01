@@ -60,6 +60,7 @@ class _AutoUpgradeGateState extends State<AutoUpgradeGate>
   bool _androidDialogOpen = false;
   bool _androidCheckInFlight = false;
   String? _dismissedAndroidUpdateTagInSession;
+  String? _suppressedAndroidUpdateTagUntilChange;
 
   late final AppUpdateService _updateService;
   AppUpdateService? _ownedUpdateService;
@@ -187,7 +188,8 @@ class _AutoUpgradeGateState extends State<AutoUpgradeGate>
         }
 
         if (_isAndroidPlatform && _isAndroidUpdateCandidate(update)) {
-          if (_dismissedAndroidUpdateTagInSession == update.latestTag) {
+          if (_dismissedAndroidUpdateTagInSession == update.latestTag ||
+              _suppressedAndroidUpdateTagUntilChange == update.latestTag) {
             return;
           }
           await _showAndroidUpdateDialog(update);
@@ -268,6 +270,9 @@ class _AutoUpgradeGateState extends State<AutoUpgradeGate>
             externalUriLauncher: widget.externalUriLauncher,
             onDismissed: () {
               _dismissedAndroidUpdateTagInSession = update.latestTag;
+            },
+            onPermissionFlowStarted: () {
+              _suppressedAndroidUpdateTagUntilChange = update.latestTag;
             },
           );
         },
@@ -453,6 +458,7 @@ class _AndroidUpdateDialog extends StatefulWidget {
     required this.installer,
     required this.externalUriLauncher,
     required this.onDismissed,
+    required this.onPermissionFlowStarted,
   });
 
   final AppUpdateAvailability update;
@@ -461,6 +467,7 @@ class _AndroidUpdateDialog extends StatefulWidget {
   final AndroidApkInstaller installer;
   final AutoUpgradeGateExternalUriLauncher? externalUriLauncher;
   final VoidCallback onDismissed;
+  final VoidCallback onPermissionFlowStarted;
 
   @override
   State<_AndroidUpdateDialog> createState() => _AndroidUpdateDialogState();
@@ -652,6 +659,7 @@ class _AndroidUpdateDialogState extends State<_AndroidUpdateDialog> {
       return;
     } on AndroidApkInstallerRequiresPermissionSettingsException {
       if (!mounted) return;
+      widget.onPermissionFlowStarted();
       setState(() {
         _isDownloading = false;
         _errorMessage = context.t.settings.updateDialog.permissionRequired;

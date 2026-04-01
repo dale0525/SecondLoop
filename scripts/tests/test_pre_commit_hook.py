@@ -100,6 +100,21 @@ class PreCommitHookTests(unittest.TestCase):
         self.assertIn(".fvm/flutter_sdk/bin/flutter.bat", script)
         self.assertIn("scripts/run_fvm_tool.ps1", script)
 
+    def test_pre_commit_hook_collects_targeted_flutter_tests_for_staged_lib_changes(self) -> None:
+        script = PRE_COMMIT_HOOK.read_text(encoding="utf-8")
+
+        self.assertIn("collect_related_flutter_tests_for_lib_file()", script)
+        self.assertIn('package:secondloop/${file#lib/}', script)
+        self.assertIn('done < <(collect_targeted_flutter_tests)', script)
+        self.assertIn('run_flutter_tool test --concurrency=1 "${flutter_test_targets[@]}"', script)
+        self.assertIn('[[ ${#targets[@]} -eq 0 ]] || append_unique_path', script)
+
+    def test_pre_commit_hook_falls_back_to_full_flutter_suite_when_targets_missing(self) -> None:
+        script = PRE_COMMIT_HOOK.read_text(encoding="utf-8")
+
+        self.assertIn('if [[ ${#flutter_test_targets[@]} -eq 0 ]]; then', script)
+        self.assertIn('run_flutter_tool test --concurrency=1; then', script)
+
     def test_install_git_hooks_configures_post_checkout_and_post_merge(self) -> None:
         script = INSTALL_GIT_HOOKS_SCRIPT.read_text(encoding="utf-8")
 

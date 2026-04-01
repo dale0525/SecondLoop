@@ -477,7 +477,7 @@ void main() {
   });
 
   testWidgets(
-      'shows Android update dialog again after resuming from permission settings',
+      'does not reopen Android update dialog after resuming from permission settings',
       (tester) async {
     final oldPlatform = debugDefaultTargetPlatformOverride;
     debugDefaultTargetPlatformOverride = TargetPlatform.android;
@@ -533,7 +533,7 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 100));
 
-    expect(find.byType(AlertDialog), findsOneWidget);
+    expect(find.byType(AlertDialog), findsNothing);
     debugDefaultTargetPlatformOverride = oldPlatform;
   });
 

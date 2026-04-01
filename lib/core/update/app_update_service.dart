@@ -246,7 +246,14 @@ class AppUpdateService {
     }
 
     Map<String, Object?>? release;
+    Map<String, Object?>? fallbackReleaseWithoutPlatformAsset;
     Object? lastError;
+    final androidSupportedAbis = _platform == AppUpdatePlatform.android
+        ? await _loadAndroidSupportedAbisImpl(
+            override: _androidSupportedAbisOverride,
+            loader: _androidSupportedAbisLoader,
+          )
+        : const <String>[];
     for (final endpoint in _buildReleaseEndpoints()) {
       try {
         final candidate = await _fetchReleaseJson(endpoint);
@@ -258,12 +265,22 @@ class AppUpdateService {
           lastError = const FormatException('invalid_release_tag');
           continue;
         }
+        if (!_releaseHasUsableAssetForCurrentPlatform(
+          candidate,
+          androidSupportedAbis: androidSupportedAbis,
+        )) {
+          fallbackReleaseWithoutPlatformAsset ??= candidate;
+          lastError = StateError('no_platform_asset_for_${_platform.name}');
+          continue;
+        }
         release = candidate;
         break;
       } catch (error) {
         lastError = error;
       }
     }
+
+    release ??= fallbackReleaseWithoutPlatformAsset;
 
     if (release == null) {
       await _recordFailure(
@@ -313,13 +330,6 @@ class AppUpdateService {
     final macosManagedClient = _resolvedMacosManagedUpdateClient;
     final macosManagedInstallSupported = macosManagedClient != null &&
         macosManagedClient.isSupportedInstallLocation();
-    final androidSupportedAbis = _platform == AppUpdatePlatform.android
-        ? await _loadAndroidSupportedAbisImpl(
-            override: _androidSupportedAbisOverride,
-            loader: _androidSupportedAbisLoader,
-          )
-        : const <String>[];
-
     final manifestAsset = _matchManifestAssetForCurrentPlatformImpl(
       _platform,
       release,
@@ -700,17 +710,40 @@ class AppUpdateService {
     }
 
     if (repo.isNotEmpty) {
-      endpoints
-          .add(Uri.https('api.github.com', '/repos/$repo/releases/latest'));
       if (hasPublicKey) {
         endpoints.add(
           Uri.parse(
               'https://github.com/$repo/releases/latest/download/latest.json'),
         );
       }
+      endpoints
+          .add(Uri.https('api.github.com', '/repos/$repo/releases/latest'));
     }
 
     return endpoints;
+  }
+
+  bool _releaseHasUsableAssetForCurrentPlatform(
+    Map<String, Object?> release, {
+    required List<String> androidSupportedAbis,
+  }) {
+    final manifestAsset = _matchManifestAssetForCurrentPlatformImpl(
+      _platform,
+      release,
+      androidSupportedAbis: androidSupportedAbis,
+    );
+    if (manifestAsset != null) {
+      return true;
+    }
+
+    final assets = _parseAssetsImpl(release['assets']);
+    return _matchAssetForCurrentPlatformImpl(
+          _platform,
+          assets,
+          windowsManagedRuntimeAvailable: false,
+          androidSupportedAbis: androidSupportedAbis,
+        ) !=
+        null;
   }
 
   Future<T> _withPreparedAsset<T>(
