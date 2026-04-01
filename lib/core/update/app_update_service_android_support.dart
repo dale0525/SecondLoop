@@ -82,27 +82,15 @@ AppUpdateAsset? _matchAndroidAssetForSupportedAbisImpl(
 }
 
 bool _androidAssetMatchesAbiImpl(String assetName, String abi) {
-  final normalizedName = assetName.trim().toLowerCase();
   final normalizedAbi = _canonicalizeAndroidAbiImpl(abi);
-  final aliases = _androidAbiAliases[normalizedAbi] ?? <String>[normalizedAbi];
-  for (final alias in aliases) {
-    if (normalizedName.contains('-$alias-') ||
-        normalizedName.endsWith('-$alias.apk') ||
-        normalizedName.contains('_$alias.') ||
-        normalizedName.contains('-$alias.')) {
-      return true;
-    }
-  }
-  return false;
+  return _extractLeadingAndroidAbiImpl(assetName) == normalizedAbi;
 }
 
 bool _isAndroidUniversalApkNameImpl(String assetName) {
   final normalized = assetName.trim().toLowerCase();
-  final knownAbiMarkers =
-      _androidAbiAliases.values.expand((aliases) => aliases);
   return normalized.startsWith('secondloop-android-') &&
       normalized.endsWith('.apk') &&
-      !knownAbiMarkers.any(normalized.contains);
+      _extractLeadingAndroidAbiImpl(assetName) == null;
 }
 
 List<String> _androidManifestKeysImpl(List<String> supportedAbis) {
@@ -149,6 +137,25 @@ String _canonicalizeAndroidAbiImpl(String value) {
     }
   }
   return normalized;
+}
+
+String? _extractLeadingAndroidAbiImpl(String assetName) {
+  final normalized = assetName.trim().toLowerCase();
+  const prefix = 'secondloop-android-';
+  if (!normalized.startsWith(prefix) || !normalized.endsWith('.apk')) {
+    return null;
+  }
+
+  final stem = normalized.substring(prefix.length, normalized.length - 4);
+  for (final entry in _androidAbiAliases.entries) {
+    for (final alias in entry.value) {
+      if (stem == alias || stem.startsWith('$alias-')) {
+        return entry.key;
+      }
+    }
+  }
+
+  return null;
 }
 
 bool isAndroidApkAssetForUpdate(AppUpdateAsset asset) =>

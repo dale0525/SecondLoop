@@ -88,9 +88,7 @@ Future<Map<String, Object?>> _buildPlatforms(
         '$baseDownloadUrl${windowsPackage.uri.pathSegments.last}';
     final releasesFile = _firstFile(
       entries,
-      (name) =>
-          name.toLowerCase().startsWith('releases.') &&
-          name.toLowerCase().endsWith('.json'),
+      _isWindowsReleasesMetadataFileName,
     );
     if (releasesFile != null) {
       windowsEntry['releases_url'] =
@@ -260,27 +258,47 @@ String _normalizeBaseDownloadUrl(String value) {
 }
 
 String _resolveAndroidPlatformKey(String fileName) {
-  final normalized = fileName.trim().toLowerCase();
-  if (normalized.contains('arm64-v8a') ||
-      normalized.contains('arm64') ||
-      normalized.contains('aarch64')) {
-    return 'android-arm64-v8a';
-  }
-  if (normalized.contains('armeabi-v7a') ||
-      normalized.contains('armv7') ||
-      normalized.contains('arm-v7a')) {
-    return 'android-armeabi-v7a';
-  }
-  if (normalized.contains('x86_64') || normalized.contains('x64')) {
-    return 'android-x86_64';
-  }
-  if (normalized.contains('x86') ||
-      normalized.contains('i686') ||
-      normalized.contains('ia32')) {
-    return 'android-x86';
+  switch (_extractLeadingAndroidAbi(fileName)) {
+    case 'arm64-v8a':
+      return 'android-arm64-v8a';
+    case 'armeabi-v7a':
+      return 'android-armeabi-v7a';
+    case 'x86_64':
+      return 'android-x86_64';
+    case 'x86':
+      return 'android-x86';
   }
   return 'android-universal';
 }
 
 String resolveAndroidPlatformKeyForTest(String fileName) =>
     _resolveAndroidPlatformKey(fileName);
+
+bool _isWindowsReleasesMetadataFileName(String fileName) {
+  final normalized = fileName.trim().toLowerCase();
+  return RegExp(r'^releases\.win(?:[._-].+)?\.json$').hasMatch(normalized);
+}
+
+String? _extractLeadingAndroidAbi(String fileName) {
+  final normalized = fileName.trim().toLowerCase();
+  const prefix = 'secondloop-android-';
+  if (!normalized.startsWith(prefix) || !normalized.endsWith('.apk')) {
+    return null;
+  }
+
+  final stem = normalized.substring(prefix.length, normalized.length - 4);
+  for (final candidate in const <String, List<String>>{
+    'arm64-v8a': <String>['arm64-v8a', 'aarch64', 'arm64'],
+    'armeabi-v7a': <String>['armeabi-v7a', 'arm-v7a', 'armv7'],
+    'x86_64': <String>['x86_64', 'x64'],
+    'x86': <String>['i686', 'ia32', 'x86'],
+  }.entries) {
+    for (final alias in candidate.value) {
+      if (stem == alias || stem.startsWith('$alias-')) {
+        return candidate.key;
+      }
+    }
+  }
+
+  return null;
+}

@@ -213,6 +213,33 @@ void main() {
   });
 
   test(
+      'generateUpdateManifest prefers Windows releases metadata over unrelated releases json files',
+      () async {
+    final tempDir = await Directory.systemTemp
+        .createTemp('update_manifest_releases_prefer_win_');
+    addTearDown(() => tempDir.delete(recursive: true));
+
+    await File('${tempDir.path}/com.secondloop.secondloop-1.2.3-full.nupkg')
+        .writeAsString('windows');
+    await File('${tempDir.path}/releases.android.json').writeAsString('{}');
+    await File('${tempDir.path}/releases.win.json').writeAsString('{}');
+
+    final generated = await generateUpdateManifest(
+      inputDirPath: tempDir.path,
+      version: 'v1.2.3',
+      baseDownloadUrl:
+          'https://github.com/dale0525/SecondLoop/releases/download/v1.2.3',
+    );
+
+    final platforms = generated.manifest['platforms'] as Map<String, Object?>;
+    final windows = platforms['windows-x64'] as Map<String, Object?>;
+    expect(
+      windows['releases_url'],
+      'https://github.com/dale0525/SecondLoop/releases/download/v1.2.3/releases.win.json',
+    );
+  });
+
+  test(
       'generateUpdateManifest ignores stale Velopack releases metadata from other versions',
       () async {
     final tempDir = await Directory.systemTemp
@@ -259,6 +286,28 @@ void main() {
     expect(platforms['windows-x64'], isNull);
     expect(platforms['macos-universal'], isNotNull);
     expect(platforms['linux-x64'], isNotNull);
+  });
+
+  test(
+      'generateUpdateManifest keeps universal Android apk universal when tag contains abi text',
+      () async {
+    final tempDir = await Directory.systemTemp
+        .createTemp('update_manifest_android_universal_tag_');
+    addTearDown(() => tempDir.delete(recursive: true));
+
+    await File('${tempDir.path}/SecondLoop-android-v1.2.3-arm64-hotfix.apk')
+        .writeAsString('android');
+
+    final generated = await generateUpdateManifest(
+      inputDirPath: tempDir.path,
+      version: 'v1.2.3-arm64-hotfix',
+      baseDownloadUrl:
+          'https://github.com/dale0525/SecondLoop/releases/download/v1.2.3-arm64-hotfix',
+    );
+
+    final platforms = generated.manifest['platforms'] as Map<String, Object?>;
+    expect(platforms['android-universal'], isNotNull);
+    expect(platforms['android-arm64-v8a'], isNull);
   });
 
   test('generateUpdateManifest signs latest.json with ed25519 seed', () async {

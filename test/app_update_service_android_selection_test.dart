@@ -119,6 +119,41 @@ void main() {
       );
     });
 
+    test('keeps universal apk fallback when release tag contains abi-like text',
+        () async {
+      final service = AppUpdateService(
+        platformOverride: AppUpdatePlatform.android,
+        releaseModeOverride: true,
+        androidSupportedAbisOverride: const <String>[],
+        currentVersionLoader: () async =>
+            const AppRuntimeVersion(version: '1.0.0', buildNumber: '9'),
+        releaseJsonFetcher: (uri) async => {
+          'tag_name': 'v1.1.0-arm64-hotfix',
+          'html_url':
+              'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0-arm64-hotfix',
+          'assets': [
+            {
+              'name': 'SecondLoop-android-v1.1.0-arm64-hotfix.apk',
+              'browser_download_url':
+                  'https://cdn.example.com/universal-hotfix.apk',
+            },
+          ],
+        },
+      );
+
+      final result = await service.checkForUpdates();
+
+      expect(result.update, isNotNull);
+      expect(
+        result.update!.asset?.name,
+        'SecondLoop-android-v1.1.0-arm64-hotfix.apk',
+      );
+      expect(
+        result.update!.downloadUri.toString(),
+        'https://cdn.example.com/universal-hotfix.apk',
+      );
+    });
+
     test('treats apk without sha256 as external download only', () async {
       final service = AppUpdateService(
         platformOverride: AppUpdatePlatform.android,

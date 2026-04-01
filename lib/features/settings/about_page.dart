@@ -329,11 +329,11 @@ class _AboutPageState extends State<AboutPage> {
     if (update == null) {
       return _text.status.upToDate;
     }
-    if (update.canSeamlessInstall) {
-      return _text.status.availableSeamless(version: update.latestTag);
-    }
     if (_canUseAndroidApkUpdate(update)) {
       return _text.status.availableExternal(version: update.latestTag);
+    }
+    if (update.canSeamlessInstall) {
+      return _text.status.availableSeamless(version: update.latestTag);
     }
     if (update.canStageForNextLaunch) {
       return _text.status.availableStaged(version: update.latestTag);
