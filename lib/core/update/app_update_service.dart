@@ -260,7 +260,8 @@ class AppUpdateService {
             loader: _androidSupportedAbisLoader,
           )
         : const <String>[];
-    for (final endpoint in _buildReleaseEndpoints()) {
+    final releaseEndpoints = _buildReleaseEndpoints();
+    for (final endpoint in releaseEndpoints) {
       try {
         final candidate = await _fetchReleaseJson(endpoint);
         final candidateTag = _normalizeLatestTag(
@@ -343,6 +344,43 @@ class AppUpdateService {
           windowsManagedRuntimeAvailable: windowsManagedRuntimeAvailable,
           androidSupportedAbis: androidSupportedAbis,
         );
+    if (_platform == AppUpdatePlatform.android &&
+        matchedAsset == null &&
+        _shouldOfferAndroidManualFallback(
+          release,
+          androidSupportedAbis: androidSupportedAbis,
+        )) {
+      await _recordEvent(
+        UpdateEventType.updateAvailable,
+        currentVersion: runtimeVersion.display,
+        latestTag: latestTag,
+        installMode: AppUpdateInstallMode.externalDownload,
+        message: 'android_manual_fallback',
+      );
+      await _recordEvent(
+        UpdateEventType.checkSucceeded,
+        currentVersion: runtimeVersion.display,
+        latestTag: latestTag,
+        installMode: AppUpdateInstallMode.externalDownload,
+        message: 'update_available',
+      );
+      await _recordEvent(
+        UpdateEventType.manualFallback,
+        currentVersion: runtimeVersion.display,
+        latestTag: latestTag,
+        installMode: AppUpdateInstallMode.externalDownload,
+        message: 'android_supported_abis_unknown',
+      );
+      return AppUpdateCheckResult(
+        currentVersion: runtimeVersion.display,
+        update: AppUpdateAvailability(
+          currentVersion: runtimeVersion.display,
+          latestTag: latestTag,
+          releasePageUri: releasePageUri,
+          installMode: AppUpdateInstallMode.externalDownload,
+        ),
+      );
+    }
     final installMode = _resolveInstallModeImpl(
       _platform,
       _isReleaseMode,
@@ -715,9 +753,10 @@ class AppUpdateService {
           Uri.parse(
               'https://github.com/$repo/releases/latest/download/latest.json'),
         );
+      } else {
+        endpoints
+            .add(Uri.https('api.github.com', '/repos/$repo/releases/latest'));
       }
-      endpoints
-          .add(Uri.https('api.github.com', '/repos/$repo/releases/latest'));
     }
 
     return endpoints;
@@ -728,6 +767,13 @@ class AppUpdateService {
     required bool windowsManagedRuntimeAvailable,
     required List<String> androidSupportedAbis,
   }) {
+    if (_shouldOfferAndroidManualFallback(
+      release,
+      androidSupportedAbis: androidSupportedAbis,
+    )) {
+      return true;
+    }
+
     final manifestAsset = _matchManifestAssetForCurrentPlatformImpl(
       _platform,
       release,
@@ -745,6 +791,28 @@ class AppUpdateService {
           androidSupportedAbis: androidSupportedAbis,
         ) !=
         null;
+  }
+
+  bool _shouldOfferAndroidManualFallback(
+    Map<String, Object?> release, {
+    required List<String> androidSupportedAbis,
+  }) {
+    if (_platform != AppUpdatePlatform.android ||
+        androidSupportedAbis.isNotEmpty) {
+      return false;
+    }
+
+    final manifestPlatforms = release['platforms'];
+    if (manifestPlatforms is Map) {
+      for (final key in manifestPlatforms.keys) {
+        if (key is String && key.startsWith('android-')) {
+          return true;
+        }
+      }
+    }
+
+    final assets = _parseAssetsImpl(release['assets']);
+    return assets.any(_isAndroidApkAssetImpl);
   }
 
   Future<T> _withPreparedAsset<T>(

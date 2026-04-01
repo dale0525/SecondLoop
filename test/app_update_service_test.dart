@@ -504,6 +504,42 @@ void main() {
       expect(result.update!.asset?.name, 'SecondLoop-android-armeabi-v7a.apk');
     });
 
+    test(
+        'keeps Android update as manual download when supported ABIs are unknown',
+        () async {
+      final service = AppUpdateService(
+        platformOverride: AppUpdatePlatform.android,
+        releaseModeOverride: true,
+        androidSupportedAbisOverride: const <String>[],
+        currentVersionLoader: () async =>
+            const AppRuntimeVersion(version: '1.0.0', buildNumber: '9'),
+        releaseJsonFetcher: (uri) async => {
+          'tag_name': 'v1.1.0',
+          'html_url':
+              'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
+          'assets': [
+            {
+              'name': 'SecondLoop-android-arm64-v8a.apk',
+              'browser_download_url': 'https://cdn.example.com/arm64.apk',
+              'sha256': 'abc123',
+            },
+          ],
+        },
+      );
+
+      final result = await service.checkForUpdates();
+
+      expect(result.errorMessage, isNull);
+      expect(result.update, isNotNull);
+      expect(result.update!.latestTag, 'v1.1.0');
+      expect(
+        result.update!.releasePageUri.toString(),
+        'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
+      );
+      expect(result.update!.asset, isNull);
+      expect(result.update!.installMode, AppUpdateInstallMode.externalDownload);
+    });
+
     test('tries fallback endpoint when first endpoint fails', () async {
       final attempted = <Uri>[];
       final service = AppUpdateService(

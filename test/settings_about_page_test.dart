@@ -352,6 +352,7 @@ void main() {
                 const AppRuntimeVersion(version: '1.0.1', buildNumber: '99'),
             androidApkDownloader: downloader,
             androidApkInstaller: installer,
+            enableAndroidApkInstallInDebug: true,
           ),
         ),
       ),
@@ -420,6 +421,7 @@ void main() {
                 const AppRuntimeVersion(version: '1.0.1', buildNumber: '99'),
             androidApkDownloader: downloader,
             androidApkInstaller: installer,
+            enableAndroidApkInstallInDebug: true,
           ),
         ),
       ),
@@ -483,6 +485,7 @@ void main() {
                 const AppRuntimeVersion(version: '1.0.1', buildNumber: '99'),
             androidApkDownloader: downloader,
             androidApkInstaller: installer,
+            enableAndroidApkInstallInDebug: true,
           ),
         ),
       ),
@@ -549,6 +552,7 @@ void main() {
                 const AppRuntimeVersion(version: '1.0.1', buildNumber: '99'),
             androidApkDownloader: downloader,
             androidApkInstaller: installer,
+            enableAndroidApkInstallInDebug: true,
           ),
         ),
       ),
@@ -606,6 +610,7 @@ void main() {
                 const AppRuntimeVersion(version: '1.0.1', buildNumber: '99'),
             androidApkDownloader: downloader,
             androidApkInstaller: installer,
+            enableAndroidApkInstallInDebug: true,
           ),
         ),
       ),
@@ -822,6 +827,7 @@ void main() {
                 const AppRuntimeVersion(version: '1.0.1', buildNumber: '99'),
             androidApkDownloader: downloader,
             androidApkInstaller: installer,
+            enableAndroidApkInstallInDebug: true,
           ),
         ),
       ),
@@ -889,6 +895,7 @@ void main() {
                 const AppRuntimeVersion(version: '1.0.1', buildNumber: '99'),
             androidApkDownloader: downloader,
             androidApkInstaller: installer,
+            enableAndroidApkInstallInDebug: true,
           ),
         ),
       ),
@@ -958,6 +965,56 @@ void main() {
       ),
       findsOneWidget,
     );
+    debugDefaultTargetPlatformOverride = oldPlatform;
+  },
+      variant: const TargetPlatformVariant(<TargetPlatform>{
+        TargetPlatform.android,
+      }));
+
+  testWidgets(
+      'About page hides Android in-app update action outside release mode',
+      (tester) async {
+    final oldPlatform = debugDefaultTargetPlatformOverride;
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+    SharedPreferences.setMockInitialValues({});
+
+    final update = AppUpdateAvailability(
+      currentVersion: '1.0.1+99',
+      latestTag: 'v1.1.0',
+      releasePageUri: Uri.parse(
+        'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
+      ),
+      installMode: AppUpdateInstallMode.seamlessRestart,
+      asset: AppUpdateAsset(
+        name: 'SecondLoop-android-arm64-v8a.apk',
+        downloadUri:
+            Uri.parse('https://cdn.example.com/SecondLoop-android.apk'),
+        sha256: _fakeAndroidApkSha256,
+      ),
+    );
+    final service = _FakeAboutUpdateService(
+      result: AppUpdateCheckResult(currentVersion: '1.0.1+99', update: update),
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AboutPage(
+            updateService: service,
+            runtimeVersionLoader: () async =>
+                const AppRuntimeVersion(version: '1.0.1', buildNumber: '99'),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('about_check_updates')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('about_auto_update')), findsNothing);
+    expect(find.byKey(const ValueKey('about_manual_update')), findsOneWidget);
+
     debugDefaultTargetPlatformOverride = oldPlatform;
   },
       variant: const TargetPlatformVariant(<TargetPlatform>{
@@ -1104,6 +1161,7 @@ void main() {
                 const AppRuntimeVersion(version: '1.0.1', buildNumber: '99'),
             androidApkDownloader: downloader,
             androidApkInstaller: installer,
+            enableAndroidApkInstallInDebug: true,
           ),
         ),
       ),

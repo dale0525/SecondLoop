@@ -227,6 +227,72 @@ void main() {
   });
 
   test(
+      'does not fall back to unsigned GitHub API when public key is configured',
+      () async {
+    final requestedUris = <Uri>[];
+    final signingSeed = List<int>.generate(32, (i) => i);
+    final signingPublicKey = await _publicKeyBase64FromSeed(signingSeed);
+    const invalidManifestBody = '{"version":"1.1.0","platforms":';
+    final invalidManifestSignature =
+        await _signBodyBase64(invalidManifestBody, seed: signingSeed);
+
+    final service = AppUpdateService(
+      httpClient: _FakeHttpClient(
+        handler: (uri) {
+          requestedUris.add(uri);
+          if (uri.path.endsWith('latest.json')) {
+            return const _FakeHttpResponse(
+              statusCode: 200,
+              body: invalidManifestBody,
+            );
+          }
+          if (uri.path.endsWith('latest.json.sig')) {
+            return _FakeHttpResponse(
+              statusCode: 200,
+              body: invalidManifestSignature,
+            );
+          }
+          if (uri.host == 'api.github.com' &&
+              uri.path == '/repos/dale0525/SecondLoop/releases/latest') {
+            return _FakeHttpResponse(
+              statusCode: 200,
+              body: jsonEncode({
+                'tag_name': 'v1.1.0',
+                'html_url':
+                    'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
+                'assets': [
+                  {
+                    'name': 'SecondLoop-linux-x64-v1.1.0.tar.gz',
+                    'browser_download_url':
+                        'https://cdn.example.com/from-github-api.tar.gz',
+                    'sha256': 'def456',
+                  },
+                ],
+              }),
+            );
+          }
+          throw StateError('unexpected_uri:$uri');
+        },
+      ),
+      platformOverride: AppUpdatePlatform.linux,
+      releaseModeOverride: true,
+      releaseRepoOverride: 'dale0525/SecondLoop',
+      updatePublicKeyOverride: signingPublicKey,
+      currentVersionLoader: () async =>
+          const AppRuntimeVersion(version: '1.0.0', buildNumber: '1'),
+    );
+
+    final result = await service.checkForUpdates();
+
+    expect(result.update, isNull);
+    expect(result.errorMessage, isNotNull);
+    expect(
+      requestedUris.where((uri) => uri.host == 'api.github.com'),
+      isEmpty,
+    );
+  });
+
+  test(
       'falls through to later endpoint when earlier payload lacks current platform asset',
       () async {
     final requestedUris = <Uri>[];

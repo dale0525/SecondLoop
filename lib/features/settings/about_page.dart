@@ -22,6 +22,7 @@ class AboutPage extends StatefulWidget {
     this.externalUriLauncher,
     this.androidApkDownloader,
     this.androidApkInstaller,
+    this.enableAndroidApkInstallInDebug = false,
   });
 
   static final Uri homepageUri = Uri.parse('https://secondloop.app');
@@ -33,6 +34,7 @@ class AboutPage extends StatefulWidget {
   final AboutExternalUriLauncher? externalUriLauncher;
   final AndroidApkDownloader? androidApkDownloader;
   final AndroidApkInstaller? androidApkInstaller;
+  final bool enableAndroidApkInstallInDebug;
 
   @override
   State<AboutPage> createState() => _AboutPageState();
@@ -193,7 +195,17 @@ class _AboutPageState extends State<AboutPage> {
   }
 
   bool _canUseAndroidApkUpdate(AppUpdateAvailability update) {
-    return _isAndroidPlatform && update.canUseAndroidApkInstaller;
+    final allowAndroidApkInstall =
+        kReleaseMode || widget.enableAndroidApkInstallInDebug;
+    return _isAndroidPlatform &&
+        allowAndroidApkInstall &&
+        update.canUseAndroidApkInstaller;
+  }
+
+  bool _isAndroidApkRelease(AppUpdateAvailability update) {
+    return _isAndroidPlatform &&
+        update.asset != null &&
+        isAndroidApkAssetForUpdate(update.asset!);
   }
 
   Future<void> _applyManagedUpdate() async {
@@ -325,6 +337,9 @@ class _AboutPageState extends State<AboutPage> {
     if (update == null) {
       return _text.status.upToDate;
     }
+    if (_isAndroidApkRelease(update) && !_canUseAndroidApkUpdate(update)) {
+      return _text.status.availableExternal(version: update.latestTag);
+    }
     if (_canUseAndroidApkUpdate(update)) {
       return _text.status.availableExternal(version: update.latestTag);
     }
@@ -342,9 +357,9 @@ class _AboutPageState extends State<AboutPage> {
     final text = _text;
     final update = _updateResult?.update;
     final showManagedAction = update != null &&
-        (update.canSeamlessInstall ||
-            update.canStageForNextLaunch ||
-            _canUseAndroidApkUpdate(update));
+        (_isAndroidApkRelease(update)
+            ? _canUseAndroidApkUpdate(update)
+            : (update.canSeamlessInstall || update.canStageForNextLaunch));
     final androidProgress = _androidDownloadProgress;
     final androidUpdateError = _androidUpdateError;
 
