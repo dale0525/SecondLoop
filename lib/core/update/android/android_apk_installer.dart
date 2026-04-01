@@ -139,9 +139,23 @@ class HttpAndroidApkDownloader implements AndroidApkDownloader {
     );
 
     final sink = outputFile.openWrite();
+    StreamIterator<List<int>>? responseIterator;
     try {
-      await for (final chunk in response) {
+      responseIterator = StreamIterator<List<int>>(response);
+      while (true) {
+        final hasNextChunk = await _awaitWithCancellation(
+          responseIterator.moveNext(),
+          cancelToken,
+          onCancel: () {
+            unawaited(responseIterator?.cancel());
+          },
+        );
+        if (!hasNextChunk) {
+          break;
+        }
+
         _throwIfCancelled(cancelToken);
+        final chunk = responseIterator.current;
         receivedBytes += chunk.length;
         sink.add(chunk);
         onProgress(
@@ -160,6 +174,11 @@ class HttpAndroidApkDownloader implements AndroidApkDownloader {
       } catch (_) {}
       rethrow;
     } finally {
+      if (responseIterator != null) {
+        try {
+          await responseIterator.cancel();
+        } catch (_) {}
+      }
       await sink.flush();
       await sink.close();
     }

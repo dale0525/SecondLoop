@@ -500,6 +500,18 @@ collect_related_flutter_tests_for_lib_file() {
   done < <(rg -l --fixed-strings "${package_import}" test integration_test -g '*_test.dart' 2>/dev/null || true)
 }
 
+should_run_full_flutter_suite_for_file() {
+  local file="$1"
+
+  case "${file}" in
+    lib/core/update/* | lib/core/update/**/* | lib/features/settings/* | lib/features/settings/**/*)
+      return 0
+      ;;
+  esac
+
+  return 1
+}
+
 collect_targeted_flutter_tests() {
   local file
   local targets=()
@@ -510,6 +522,10 @@ collect_targeted_flutter_tests() {
   for file in "${staged_files[@]}"; do
     case "${file}" in
       lib/*.dart | lib/**/*.dart)
+        if should_run_full_flutter_suite_for_file "${file}"; then
+          saw_unmapped_lib_change=1
+          break
+        fi
         related_targets=()
         while IFS= read -r candidate; do
           [[ -n "${candidate}" ]] || continue

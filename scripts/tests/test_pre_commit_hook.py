@@ -106,9 +106,17 @@ class PreCommitHookTests(unittest.TestCase):
         self.assertIn("collect_related_flutter_tests_for_lib_file()", script)
         self.assertIn('package:secondloop/${file#lib/}', script)
         self.assertIn("-g '*_test.dart'", script)
+        self.assertIn("should_run_full_flutter_suite_for_file()", script)
         self.assertIn('done < <(collect_targeted_flutter_tests)', script)
         self.assertIn('run_flutter_tool test --concurrency=1 "${flutter_test_targets[@]}"', script)
         self.assertIn('[[ ${#targets[@]} -eq 0 ]] || append_unique_path', script)
+
+    def test_pre_commit_hook_falls_back_to_full_flutter_suite_for_high_coupling_paths(self) -> None:
+        script = PRE_COMMIT_HOOK.read_text(encoding="utf-8")
+
+        self.assertIn("lib/core/update/* | lib/core/update/**/*", script)
+        self.assertIn("lib/features/settings/* | lib/features/settings/**/*", script)
+        self.assertIn('if should_run_full_flutter_suite_for_file "${file}"; then', script)
 
     def test_pre_commit_hook_falls_back_to_full_flutter_suite_when_targets_missing(self) -> None:
         script = PRE_COMMIT_HOOK.read_text(encoding="utf-8")

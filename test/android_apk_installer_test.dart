@@ -135,6 +135,44 @@ void main() {
       expect(httpClient.closeCalls, 0);
       expect(request.abortCalls, 1);
     });
+
+    test('cancels promptly while response body is idle between chunks',
+        () async {
+      final body = _ControllableResponseBody();
+      final request = _FakeHttpClientRequest(
+        response: _FakeHttpClientResponse(
+          body.stream,
+          statusCode: HttpStatus.ok,
+          contentLength: 100,
+        ),
+      );
+      final httpClient = _FakeHttpClient(request: request);
+      final downloader = HttpAndroidApkDownloader(httpClient: httpClient);
+      addTearDown(() async {
+        await downloader.dispose();
+      });
+      addTearDown(body.dispose);
+
+      final cancelToken = AndroidApkDownloadCancelToken();
+      final future = downloader.downloadApk(
+        downloadUri: Uri.parse('https://cdn.example.com/app.apk'),
+        fileName: 'SecondLoop-android-arm64-v8a.apk',
+        onProgress: (_) {},
+        cancelToken: cancelToken,
+      );
+
+      await request.closeStarted.future;
+      await body.listenStarted.future;
+
+      cancelToken.cancel();
+
+      await expectLater(
+        future.timeout(const Duration(milliseconds: 200)),
+        throwsA(isA<AndroidApkDownloadCancelledException>()),
+      );
+      expect(body.cancelCalls, 1);
+      expect(httpClient.closeCalls, 0);
+    });
   });
 }
 
@@ -167,7 +205,10 @@ final class _FakeHttpClient implements HttpClient {
 }
 
 final class _FakeHttpClientRequest implements HttpClientRequest {
+  _FakeHttpClientRequest({HttpClientResponse? response}) : _response = response;
+
   final Completer<void> closeStarted = Completer<void>();
+  final HttpClientResponse? _response;
   final Completer<HttpClientResponse> responseCompleter =
       Completer<HttpClientResponse>();
   int abortCalls = 0;
@@ -182,6 +223,9 @@ final class _FakeHttpClientRequest implements HttpClientRequest {
   Future<HttpClientResponse> close() {
     if (!closeStarted.isCompleted) {
       closeStarted.complete();
+    }
+    if (_response != null && !responseCompleter.isCompleted) {
+      responseCompleter.complete(_response);
     }
     return responseCompleter.future;
   }
@@ -230,4 +274,30 @@ final class _FakeHttpClientResponse extends Stream<List<int>>
 
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+final class _ControllableResponseBody {
+  final StreamController<List<int>> _controller = StreamController<List<int>>();
+  final Completer<void> listenStarted = Completer<void>();
+  int cancelCalls = 0;
+
+  Stream<List<int>> get stream => Stream<List<int>>.multi((multi) {
+        if (!listenStarted.isCompleted) {
+          listenStarted.complete();
+        }
+
+        final subscription = _controller.stream.listen(
+          multi.add,
+          onError: multi.addError,
+          onDone: multi.close,
+        );
+        multi.onCancel = () async {
+          cancelCalls += 1;
+          await subscription.cancel();
+        };
+      });
+
+  Future<void> dispose() async {
+    await _controller.close();
+  }
 }
