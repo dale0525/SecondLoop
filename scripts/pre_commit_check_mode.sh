@@ -223,7 +223,7 @@ temp_generated_i18n_strings_path=""
     fi
 
     if (( ci_mode )); then
-      if ! run_flutter_tool test --concurrency=1; then
+      if ! run_with_periodic_status "flutter test" run_flutter_tool test --concurrency=1; then
         echo "" >&2
         echo "pre-commit: flutter test failed." >&2
         echo "Fix locally with: pixi run flutter test" >&2
@@ -241,14 +241,14 @@ temp_generated_i18n_strings_path=""
     fi
 
     if (( ci_mode )); then
-      if ! "${cargo_bin}" clippy --manifest-path rust/Cargo.toml --all-targets --all-features -- -D warnings; then
+      if ! run_with_periodic_status "rust clippy" "${cargo_bin}" clippy --manifest-path rust/Cargo.toml --all-targets --all-features -- -D warnings; then
         echo "" >&2
         echo "pre-commit: rust clippy failed." >&2
         echo "Fix locally with: pixi run cargo clippy \"--all-targets --all-features -- -D warnings\"" >&2
         exit 1
       fi
 
-      if ! "${cargo_bin}" test --manifest-path rust/Cargo.toml --all; then
+      if ! run_with_periodic_status "rust tests" "${cargo_bin}" test --manifest-path rust/Cargo.toml --all; then
         echo "" >&2
         echo "pre-commit: rust tests failed." >&2
         echo "Fix locally with: pixi run cargo test" >&2

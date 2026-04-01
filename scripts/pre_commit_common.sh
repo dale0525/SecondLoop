@@ -3,6 +3,41 @@ die() {
   exit 1
 }
 
+run_with_periodic_status() {
+  local label="$1"
+  shift
+
+  local interval="${SECONDLOOP_PRECOMMIT_PROGRESS_INTERVAL:-60}"
+  local command_pid watcher_pid status
+
+  echo "pre-commit: starting ${label}..." >&2
+
+  "$@" &
+  command_pid=$!
+  watcher_pid=""
+
+  (
+    while kill -0 "${command_pid}" 2>/dev/null; do
+      sleep "${interval}"
+      if ! kill -0 "${command_pid}" 2>/dev/null; then
+        exit 0
+      fi
+      echo "pre-commit: still running ${label}..." >&2
+    done
+  ) &
+  watcher_pid=$!
+
+  wait "${command_pid}"
+  status=$?
+
+  if [[ -n "${watcher_pid}" ]]; then
+    kill "${watcher_pid}" 2>/dev/null || true
+    wait "${watcher_pid}" 2>/dev/null || true
+  fi
+
+  return "${status}"
+}
+
 precommit_allow_worktree_writes="${SECONDLOOP_PRECOMMIT_ALLOW_WORKTREE_WRITES:-1}"
 
 cargo_missing_message() {
