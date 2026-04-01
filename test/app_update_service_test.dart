@@ -124,9 +124,65 @@ void main() {
     test('treats same version as up to date', () {
       expect(compareReleaseTagWithCurrentVersion('v2.0.0', '2.0.0'), 0);
     });
+
+    test('rejects release tags with non-semver suffixes during normalization',
+        () async {
+      final service = AppUpdateService(
+        platformOverride: AppUpdatePlatform.android,
+        releaseModeOverride: true,
+        androidSupportedAbisOverride: const <String>[],
+        currentVersionLoader: () async =>
+            const AppRuntimeVersion(version: '1.0.0', buildNumber: '1'),
+        releaseJsonFetcher: (uri) async => {
+          'tag_name': 'v1.1.0-hotfix',
+          'html_url':
+              'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0-hotfix',
+          'assets': [
+            {
+              'name': 'SecondLoop-android-v1.1.0-hotfix.apk',
+              'browser_download_url':
+                  'https://cdn.example.com/SecondLoop-android-v1.1.0-hotfix.apk',
+            },
+          ],
+        },
+      );
+
+      final result = await service.checkForUpdates();
+
+      expect(result.update, isNull);
+      expect(result.errorMessage, 'invalid_release_tag');
+    });
   });
 
   group('AppUpdateService.checkForUpdates', () {
+    test('rejects non-semver release tags', () async {
+      final service = AppUpdateService(
+        platformOverride: AppUpdatePlatform.android,
+        releaseModeOverride: true,
+        androidSupportedAbisOverride: const <String>[],
+        currentVersionLoader: () async =>
+            const AppRuntimeVersion(version: '1.0.0', buildNumber: '1'),
+        releaseJsonFetcher: (uri) async => {
+          'tag_name': 'v1.1.0-hotfix',
+          'html_url':
+              'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0-hotfix',
+          'assets': [
+            {
+              'name': 'SecondLoop-android-v1.1.0-hotfix.apk',
+              'browser_download_url':
+                  'https://cdn.example.com/SecondLoop-android-v1.1.0-hotfix.apk',
+              'sha256': 'abc123',
+            },
+          ],
+        },
+      );
+
+      final result = await service.checkForUpdates();
+
+      expect(result.update, isNull);
+      expect(result.errorMessage, 'invalid_release_tag');
+    });
+
     test('returns seamless Windows nupkg update when runtime is available',
         () async {
       final stagedClient = _FakeWindowsStagedUpdateClient(available: true);

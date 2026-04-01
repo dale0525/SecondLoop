@@ -107,6 +107,8 @@ void main() {
         .writeAsString('arm64');
     await File('${tempDir.path}/SecondLoop-android-armeabi-v7a-v1.2.3.apk')
         .writeAsString('armeabi');
+    await File('${tempDir.path}/SecondLoop-android-v1.2.3.apk')
+        .writeAsString('universal');
 
     final generated = await generateUpdateManifest(
       inputDirPath: tempDir.path,
@@ -118,6 +120,7 @@ void main() {
     final platforms = generated.manifest['platforms'] as Map<String, Object?>;
     expect(platforms['android-arm64-v8a'], isNotNull);
     expect(platforms['android-armeabi-v7a'], isNotNull);
+    expect(platforms['android-universal'], isNotNull);
   });
 
   test('generateUpdateManifest recognizes Android ABI alias file names',
@@ -288,26 +291,23 @@ void main() {
     expect(platforms['linux-x64'], isNotNull);
   });
 
-  test(
-      'generateUpdateManifest keeps universal Android apk universal when tag contains abi text',
-      () async {
+  test('generateUpdateManifest rejects non-semver release versions', () async {
     final tempDir = await Directory.systemTemp
         .createTemp('update_manifest_android_universal_tag_');
     addTearDown(() => tempDir.delete(recursive: true));
 
-    await File('${tempDir.path}/SecondLoop-android-v1.2.3-arm64-hotfix.apk')
+    await File('${tempDir.path}/SecondLoop-android-v1.2.3.apk')
         .writeAsString('android');
 
-    final generated = await generateUpdateManifest(
-      inputDirPath: tempDir.path,
-      version: 'v1.2.3-arm64-hotfix',
-      baseDownloadUrl:
-          'https://github.com/dale0525/SecondLoop/releases/download/v1.2.3-arm64-hotfix',
+    await expectLater(
+      () => generateUpdateManifest(
+        inputDirPath: tempDir.path,
+        version: 'v1.2.3-arm64-hotfix',
+        baseDownloadUrl:
+            'https://github.com/dale0525/SecondLoop/releases/download/v1.2.3-arm64-hotfix',
+      ),
+      throwsArgumentError,
     );
-
-    final platforms = generated.manifest['platforms'] as Map<String, Object?>;
-    expect(platforms['android-universal'], isNotNull);
-    expect(platforms['android-arm64-v8a'], isNull);
   });
 
   test('generateUpdateManifest signs latest.json with ed25519 seed', () async {

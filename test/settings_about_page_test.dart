@@ -1053,6 +1053,7 @@ void main() {
             updateService: service,
             runtimeVersionLoader: () async =>
                 const AppRuntimeVersion(version: '1.0.1', buildNumber: '99'),
+            enableAndroidApkInstallInDebug: true,
           ),
         ),
       ),
@@ -1064,12 +1065,18 @@ void main() {
 
     expect(
       find.text(
-        'Update available (v1.1.0). Download the installer or open the release page manually.',
+        'Update available (v1.1.0). Download in-app and continue with the installer.',
       ),
       findsOneWidget,
     );
     expect(
       find.text('Update available (v1.1.0). Install and restart now.'),
+      findsNothing,
+    );
+    expect(
+      find.text(
+        'Update available (v1.1.0). Download the installer or open the release page manually.',
+      ),
       findsNothing,
     );
 

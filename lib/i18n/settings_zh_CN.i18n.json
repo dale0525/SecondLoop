@@ -663,6 +663,7 @@
       "checking": "正在检查更新…",
       "upToDate": "当前已是最新版本。",
       "availableSeamless": "发现新版本（$version）。可一键自动更新并重启。",
+      "availableAndroidApk": "发现新版本（$version）。可在应用内下载并继续安装。",
       "availableStaged": "发现新版本（$version）。可后台准备更新，下次启动自动生效。",
       "availableExternal": "发现新版本（$version）。请手动下载安装包，或前往发布页安装。",
       "failed": "检查更新失败：$error"

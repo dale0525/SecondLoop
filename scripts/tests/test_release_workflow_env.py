@@ -380,6 +380,10 @@ class ReleaseWorkflowEnvTests(unittest.TestCase):
             'bash scripts/build_android_release_apk.sh --split-per-abi "${build_args[@]}" "${defines[@]}"',
             workflow_text,
         )
+        self.assertIn(
+            'bash scripts/build_android_release_apk.sh "${build_args[@]}" "${defines[@]}"',
+            workflow_text,
+        )
         self.assertIn('--split-per-abi', workflow_text)
 
     def test_release_workflow_packages_split_android_apks(self) -> None:
@@ -394,10 +398,13 @@ class ReleaseWorkflowEnvTests(unittest.TestCase):
             workflow_text,
         )
         self.assertIn(
+            '[universal]="build/app/outputs/flutter-apk/app-release.apk"',
+            workflow_text,
+        )
+        self.assertIn(
             'cp "${source_path}" "dist/SecondLoop-android-${abi}-${safe_ref_name}.apk"',
             workflow_text,
         )
-        self.assertNotIn('app-release.apk', workflow_text)
 
     def test_release_workflow_sets_bindgen_clang_args_for_android_targets(self) -> None:
         workflow_text = self._workflow_text()

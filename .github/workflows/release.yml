@@ -207,6 +207,7 @@ jobs:
           export BINDGEN_EXTRA_CLANG_ARGS_aarch64_linux_android="--sysroot=${ndk_sysroot} --target=aarch64-linux-android23"
 
           bash scripts/build_android_release_apk.sh --split-per-abi "${build_args[@]}" "${defines[@]}"
+          bash scripts/build_android_release_apk.sh "${build_args[@]}" "${defines[@]}"
       - name: Package
         shell: bash
         run: |
@@ -220,6 +221,7 @@ jobs:
           declare -A abi_outputs=(
             [armeabi-v7a]="build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk"
             [arm64-v8a]="build/app/outputs/flutter-apk/app-arm64-v8a-release.apk"
+            [universal]="build/app/outputs/flutter-apk/app-release.apk"
           )
 
           for abi in "${!abi_outputs[@]}"; do

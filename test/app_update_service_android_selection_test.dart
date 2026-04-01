@@ -125,7 +125,7 @@ void main() {
       );
     });
 
-    test('keeps universal apk fallback when release tag contains abi-like text',
+    test('rejects Android updates when release tag is not strict semver',
         () async {
       final service = AppUpdateService(
         platformOverride: AppUpdatePlatform.android,
@@ -149,15 +149,8 @@ void main() {
 
       final result = await service.checkForUpdates();
 
-      expect(result.update, isNotNull);
-      expect(
-        result.update!.asset?.name,
-        'SecondLoop-android-v1.1.0-arm64-hotfix.apk',
-      );
-      expect(
-        result.update!.downloadUri.toString(),
-        'https://cdn.example.com/universal-hotfix.apk',
-      );
+      expect(result.update, isNull);
+      expect(result.errorMessage, 'invalid_release_tag');
     });
 
     test('treats apk without sha256 as external download only', () async {

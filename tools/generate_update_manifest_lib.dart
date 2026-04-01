@@ -242,7 +242,11 @@ String _normalizeVersion(String value) {
   if (trimmed.isEmpty) {
     throw ArgumentError.value(value, 'version', 'version_must_not_be_empty');
   }
-  return trimmed.startsWith('v') ? trimmed.substring(1) : trimmed;
+  final normalized = trimmed.startsWith('v') ? trimmed.substring(1) : trimmed;
+  if (!RegExp(r'^\d+\.\d+\.\d+$').hasMatch(normalized)) {
+    throw ArgumentError.value(value, 'version', 'version_must_be_vX_Y_Z');
+  }
+  return normalized;
 }
 
 String _normalizeBaseDownloadUrl(String value) {

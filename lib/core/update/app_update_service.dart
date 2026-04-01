@@ -269,7 +269,7 @@ class AppUpdateService {
               _readString(candidate, 'version'),
         );
         if (candidateTag == null || candidateTag.trim().isEmpty) {
-          lastError = const FormatException('invalid_release_tag');
+          lastError = 'invalid_release_tag';
           continue;
         }
         if (!_releaseHasUsableAssetForCurrentPlatform(
@@ -912,8 +912,11 @@ class AppUpdateService {
     if (value == null) return null;
     final trimmed = value.trim();
     if (trimmed.isEmpty) return null;
-    if (trimmed.startsWith('v')) return trimmed;
-    return 'v$trimmed';
+    final normalized = trimmed.startsWith('v') ? trimmed : 'v$trimmed';
+    if (!RegExp(r'^v\d+\.\d+\.\d+$').hasMatch(normalized)) {
+      return null;
+    }
+    return normalized;
   }
 
   Directory _resolveExtractedSourceDir(

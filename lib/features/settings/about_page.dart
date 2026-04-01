@@ -341,7 +341,7 @@ class _AboutPageState extends State<AboutPage> {
       return _text.status.availableExternal(version: update.latestTag);
     }
     if (_canUseAndroidApkUpdate(update)) {
-      return _text.status.availableExternal(version: update.latestTag);
+      return _text.status.availableAndroidApk(version: update.latestTag);
     }
     if (update.canSeamlessInstall) {
       return _text.status.availableSeamless(version: update.latestTag);
@@ -569,6 +569,8 @@ class _AboutStatusText {
   String get upToDate => _t.settings.about.status.upToDate;
   String availableSeamless({required Object version}) =>
       _t.settings.about.status.availableSeamless(version: version);
+  String availableAndroidApk({required Object version}) =>
+      _t.settings.about.status.availableAndroidApk(version: version);
   String availableStaged({required Object version}) =>
       _t.settings.about.status.availableStaged(version: version);
   String availableExternal({required Object version}) =>
