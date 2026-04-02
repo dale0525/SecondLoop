@@ -7,6 +7,7 @@ import 'package:flutter/widgets.dart';
 import 'app_update_helpers.dart';
 import 'app_update_models.dart';
 import 'app_update_resolution.dart';
+import 'release_endpoint_helpers.dart';
 
 const _defaultReleaseApiOrigin = String.fromEnvironment(
   'SECONDLOOP_RELEASE_API_ORIGIN',
@@ -173,11 +174,7 @@ class ReleaseNotesService {
       (_releaseApiOriginOverride ?? _defaultReleaseApiOrigin).trim(),
     );
     if (apiOrigin != null) {
-      final normalizedPath =
-          apiOrigin.path.endsWith('/') ? apiOrigin.path : '${apiOrigin.path}/';
-      endpoints.add(
-        apiOrigin.replace(path: '${normalizedPath}api/releases/latest'),
-      );
+      endpoints.add(buildLatestReleaseEndpoint(apiOrigin));
     }
 
     final repo = (_releaseRepoOverride ?? _defaultReleaseRepo).trim();

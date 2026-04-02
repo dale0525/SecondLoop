@@ -368,6 +368,144 @@ void main() {
       );
     });
 
+    test(
+        'accepts fully qualified custom release latest endpoint before GitHub tag fallback',
+        () async {
+      final attempted = <Uri>[];
+      final service = ReleaseNotesService(
+        releaseApiOriginOverride:
+            'https://updates.example.com/custom/base/api/releases/latest',
+        releaseRepoOverride: 'acme/SecondLoop',
+        releaseJsonFetcher: (uri) async {
+          attempted.add(uri);
+          if (attempted.length == 1) {
+            return {
+              'tag_name': 'v1.2.4',
+              'html_url': 'https://updates.example.com/releases/tag/v1.2.4',
+              'assets': const [],
+            };
+          }
+          return {
+            'tag_name': 'v1.2.3',
+            'html_url':
+                'https://github.com/acme/SecondLoop/releases/tag/v1.2.3',
+            'assets': [
+              {
+                'name': 'release-notes-v1.2.3-en-US.json',
+                'browser_download_url': 'https://cdn.example.com/en-123.json',
+              },
+            ],
+          };
+        },
+        notesJsonFetcher: (uri) async => {
+          'version': 'v1.2.3',
+          'summary': 'Fallback notes.',
+          'highlights': [
+            {
+              'text': 'Falls back from self-hosted latest to GitHub tag',
+              'change_ids': ['c1'],
+            },
+          ],
+          'sections': [
+            {
+              'title': 'Notes',
+              'items': [
+                {
+                  'text': 'Preserves the configured API base path',
+                  'change_ids': ['c1'],
+                },
+              ],
+            },
+          ],
+        },
+      );
+
+      final result = await service.fetchReleaseNotes(
+        tag: 'v1.2.3',
+        locale: const Locale('en', 'US'),
+      );
+
+      expect(result.notes, isNotNull);
+      expect(attempted, hasLength(2));
+      expect(
+        attempted.first.toString(),
+        'https://updates.example.com/custom/base/api/releases/latest',
+      );
+      expect(
+        attempted.last.toString(),
+        'https://api.github.com/repos/acme/SecondLoop/releases/tags/v1.2.3',
+      );
+    });
+
+    test(
+        'accepts a fully qualified self-hosted latest endpoint before GitHub tag fallback',
+        () async {
+      final attempted = <Uri>[];
+      final service = ReleaseNotesService(
+        releaseApiOriginOverride:
+            'https://updates.example.com/custom/base/api/releases/latest',
+        releaseRepoOverride: 'acme/SecondLoop',
+        releaseJsonFetcher: (uri) async {
+          attempted.add(uri);
+          if (attempted.length == 1) {
+            return {
+              'tag_name': 'v1.2.4',
+              'html_url': 'https://updates.example.com/releases/tag/v1.2.4',
+              'assets': const [],
+            };
+          }
+          return {
+            'tag_name': 'v1.2.3',
+            'html_url':
+                'https://github.com/acme/SecondLoop/releases/tag/v1.2.3',
+            'assets': [
+              {
+                'name': 'release-notes-v1.2.3-en-US.json',
+                'browser_download_url': 'https://cdn.example.com/en-123.json',
+              },
+            ],
+          };
+        },
+        notesJsonFetcher: (uri) async => {
+          'version': 'v1.2.3',
+          'summary': 'Fallback notes.',
+          'highlights': [
+            {
+              'text': 'Falls back from self-hosted latest to GitHub tag',
+              'change_ids': ['c1'],
+            },
+          ],
+          'sections': [
+            {
+              'title': 'Notes',
+              'items': [
+                {
+                  'text': 'Preserves a fully qualified latest endpoint',
+                  'change_ids': ['c1'],
+                },
+              ],
+            },
+          ],
+        },
+      );
+
+      final result = await service.fetchReleaseNotes(
+        tag: 'v1.2.3',
+        locale: const Locale('en', 'US'),
+      );
+
+      expect(result.notes, isNotNull);
+      expect(attempted, hasLength(2));
+      expect(
+        attempted.first.toString(),
+        'https://updates.example.com/custom/base/api/releases/latest',
+      );
+      expect(
+        attempted.last.toString(),
+        'https://api.github.com/repos/acme/SecondLoop/releases/tags/v1.2.3',
+      );
+    });
+
     test('times out stalled release notes fetchers', () async {
       final service = ReleaseNotesService(
         networkTimeoutOverride: const Duration(milliseconds: 10),

@@ -584,12 +584,19 @@ Future<void> _replaceRuntimeOutputDirectory({
     );
     promoted = true;
     if (backupDir != null && await backupDir.exists()) {
-      await _deleteDirectoryWithRetry(
-        backupDir,
-        reason: 'remove previous runtime backup directory',
-        deleteOperation: deleteOutput,
-        delay: delay,
-      );
+      try {
+        await _deleteDirectoryWithRetry(
+          backupDir,
+          reason: 'remove previous runtime backup directory',
+          deleteOperation: deleteOutput,
+          delay: delay,
+        );
+      } catch (error) {
+        stdout.writeln(
+          'prepare-desktop-runtime: leaving backup directory in place after '
+          'successful promote because cleanup failed: $error',
+        );
+      }
     }
   } catch (_) {
     if (backupDir != null &&

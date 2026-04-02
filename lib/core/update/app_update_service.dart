@@ -11,6 +11,7 @@ import 'app_update_helpers.dart';
 import 'app_update_architecture.dart';
 import 'app_update_models.dart';
 import 'app_update_platform.dart';
+import 'release_endpoint_helpers.dart';
 import 'app_update_resolution.dart';
 import 'linux/linux_update_script.dart';
 import 'macos/macos_update_client.dart';
@@ -743,12 +744,7 @@ class AppUpdateService {
       allowFile: allowFile,
     );
     if (parsedApiOrigin != null) {
-      final normalizedPath = parsedApiOrigin.path.endsWith('/')
-          ? parsedApiOrigin.path
-          : '${parsedApiOrigin.path}/';
-      endpoints.add(
-        parsedApiOrigin.replace(path: '${normalizedPath}api/releases/latest'),
-      );
+      endpoints.add(buildLatestReleaseEndpoint(parsedApiOrigin));
     }
 
     if (repo.isNotEmpty) {

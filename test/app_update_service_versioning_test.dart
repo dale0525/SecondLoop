@@ -292,6 +292,68 @@ void main() {
     });
 
     test(
+        'checkForUpdates accepts fully qualified custom release latest endpoint',
+        () async {
+      late Uri requestedUri;
+      final service = AppUpdateService(
+        platformOverride: AppUpdatePlatform.android,
+        releaseModeOverride: true,
+        releaseRepoOverride: '',
+        releaseApiOriginOverride:
+            'https://updates.example.com/custom/base/api/releases/latest',
+        currentVersionLoader: () async =>
+            const AppRuntimeVersion(version: '1.0.0', buildNumber: '1'),
+        releaseJsonFetcher: (uri) async {
+          requestedUri = uri;
+          return <String, Object?>{
+            'tag_name': 'v1.0.1',
+            'html_url':
+                'https://github.com/dale0525/SecondLoop/releases/tag/v1.0.1',
+            'assets': <Object?>[],
+          };
+        },
+      );
+
+      await service.checkForUpdates();
+
+      expect(
+        requestedUri.toString(),
+        'https://updates.example.com/custom/base/api/releases/latest',
+      );
+    });
+
+    test(
+        'checkForUpdates accepts a fully qualified self-hosted latest endpoint without duplicating the path',
+        () async {
+      late Uri requestedUri;
+      final service = AppUpdateService(
+        platformOverride: AppUpdatePlatform.android,
+        releaseModeOverride: true,
+        releaseRepoOverride: '',
+        releaseApiOriginOverride:
+            'https://updates.example.com/custom/base/api/releases/latest',
+        currentVersionLoader: () async =>
+            const AppRuntimeVersion(version: '1.0.0', buildNumber: '1'),
+        releaseJsonFetcher: (uri) async {
+          requestedUri = uri;
+          return <String, Object?>{
+            'tag_name': 'v1.0.1',
+            'html_url':
+                'https://github.com/dale0525/SecondLoop/releases/tag/v1.0.1',
+            'assets': <Object?>[],
+          };
+        },
+      );
+
+      await service.checkForUpdates();
+
+      expect(
+        requestedUri.toString(),
+        'https://updates.example.com/custom/base/api/releases/latest',
+      );
+    });
+
+    test(
         'fallbackReleasePageUri uses configured origin root for self-hosted feeds',
         () async {
       final service = AppUpdateService(

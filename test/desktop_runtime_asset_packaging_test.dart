@@ -139,4 +139,79 @@ void main() {
       }
     }
   });
+
+  test(
+      'runtime output replacement keeps promoted output when backup cleanup still fails',
+      () async {
+    final outputDir = await Directory.systemTemp.createTemp(
+      'desktop_runtime_output_cleanup_',
+    );
+    final tempDir = await Directory.systemTemp.createTemp(
+      'desktop_runtime_temp_cleanup_',
+    );
+    final staleOutputFile =
+        File('${outputDir.path}${Platform.pathSeparator}runtime.txt')
+          ..writeAsStringSync('existing');
+    final promotedFile = File(
+      '${tempDir.path}${Platform.pathSeparator}runtime.txt',
+    )..writeAsStringSync('prepared');
+
+    var deleteBackupAttempts = 0;
+    final backupPaths = <String>[];
+
+    try {
+      await runtime.replaceRuntimeOutputDirectoryForTest(
+        outputDir: outputDir,
+        tempDir: tempDir,
+        deleteOutputDir: (directory) async {
+          final normalizedPath = directory.path.toLowerCase();
+          if (normalizedPath.contains('.backup.')) {
+            deleteBackupAttempts += 1;
+            backupPaths.add(directory.path);
+            throw PathAccessException(
+              directory.path,
+              const OSError(
+                'The process cannot access the file because it is being used by another process.',
+                32,
+              ),
+            );
+          }
+          await directory.delete(recursive: true);
+        },
+        delay: (_) async {},
+      );
+
+      expect(deleteBackupAttempts, greaterThanOrEqualTo(1));
+      expect(Directory(outputDir.path).existsSync(), isTrue);
+      expect(staleOutputFile.readAsStringSync(), 'prepared');
+      expect(Directory(tempDir.path).existsSync(), isFalse);
+      expect(
+        File('${outputDir.path}${Platform.pathSeparator}runtime.txt')
+            .readAsStringSync(),
+        'prepared',
+      );
+      expect(promotedFile.existsSync(), isFalse);
+      expect(
+        backupPaths.any((path) => Directory(path).existsSync()),
+        isTrue,
+      );
+    } finally {
+      final parent = outputDir.parent;
+      final backupDirs = parent.listSync().whereType<Directory>().where(
+            (directory) =>
+                directory.path.startsWith('${outputDir.path}.backup.'),
+          );
+      for (final backupDir in backupDirs) {
+        if (backupDir.existsSync()) {
+          await backupDir.delete(recursive: true);
+        }
+      }
+      if (Directory(outputDir.path).existsSync()) {
+        await Directory(outputDir.path).delete(recursive: true);
+      }
+      if (Directory(tempDir.path).existsSync()) {
+        await Directory(tempDir.path).delete(recursive: true);
+      }
+    }
+  });
 }
