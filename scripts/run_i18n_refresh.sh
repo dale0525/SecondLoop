@@ -36,6 +36,11 @@ to_native_windows_path() {
 }
 
 resolve_dart_bin() {
+  if [[ -n "${SECONDLOOP_I18N_DART_BIN:-}" ]]; then
+    printf '%s\n' "${SECONDLOOP_I18N_DART_BIN}"
+    return 0
+  fi
+
   if [[ -x "${repo_root}/.fvm/flutter_sdk/bin/dart" ]]; then
     printf '%s\n' "${repo_root}/.fvm/flutter_sdk/bin/dart"
     return 0

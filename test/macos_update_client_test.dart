@@ -105,6 +105,9 @@ void main() {
           {mode = ProcessStartMode.normal}) async {
         capturedExecutable = executable;
         capturedArguments = arguments;
+        if (Platform.isWindows) {
+          return Process.start('cmd', const ['/c', 'exit', '0']);
+        }
         return Process.start('/usr/bin/true', const []);
       },
     );
@@ -122,10 +125,6 @@ void main() {
       scriptText,
       contains(r'APP_START=$(/bin/ps -o lstart= -p "$APP_PID"'),
     );
-    expect(
-      scriptText,
-      contains(r'CURRENT_START=$(/bin/ps -o lstart= -p "$APP_PID"'),
-    );
     expect(scriptText, contains(r'waited=$((waited + 1))'));
     expect(scriptText, contains('mv "\$TARGET_APP" "\$BACKUP_APP"'));
     expect(scriptText, contains('ditto "\$REPLACEMENT_APP" "\$TARGET_APP"'));
@@ -139,6 +138,8 @@ void main() {
     expect(scriptText, contains('rm -rf "\$TARGET_APP.failed" || true'));
     expect(scriptText, contains('rm -rf "\$TEMP_ROOT" || true'));
     expect(scriptText, contains('rm -rf "\$BACKUP_APP" "\$TEMP_ROOT" || true'));
+    expect(scriptText, contains('same_process_running()'));
+    expect(scriptText, contains('if same_process_running; then'));
     expect(
       File('${scriptDir.path}/SecondLoop-macos-v1.2.3.app.tar.gz').existsSync(),
       isFalse,

@@ -11,21 +11,24 @@ class _StartupFlowUpdateService extends AppUpdateService {
   _StartupFlowUpdateService({
     required this.result,
     this.throwOnApplyPending = false,
+    this.applyPendingResult =
+        const PendingUpdateStartupResult.noPendingUpdate(),
   });
 
   final AppUpdateCheckResult result;
   final bool throwOnApplyPending;
+  final PendingUpdateStartupResult applyPendingResult;
 
   int applyPendingCalls = 0;
   int checkCalls = 0;
 
   @override
-  Future<bool> applyPendingUpdateOnStartup() async {
+  Future<PendingUpdateStartupResult> applyPendingUpdateOnStartup() async {
     applyPendingCalls += 1;
     if (throwOnApplyPending) {
       throw StateError('apply_pending_failed');
     }
-    return false;
+    return applyPendingResult;
   }
 
   @override
@@ -62,5 +65,62 @@ void main() {
     expect(find.text('home'), findsOneWidget);
     expect(service.applyPendingCalls, 1);
     expect(service.checkCalls, 1);
+  });
+
+  testWidgets('startup stops update checks while pending apply is in progress',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final service = _StartupFlowUpdateService(
+      applyPendingResult: const PendingUpdateStartupResult.updateInProgress(),
+      result: const AppUpdateCheckResult(currentVersion: '1.0.0+1'),
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AutoUpgradeGate(
+            updateService: service,
+            enableInDebug: true,
+            child: const Scaffold(
+              body: Text('home'),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('home'), findsOneWidget);
+    expect(service.applyPendingCalls, 1);
+    expect(service.checkCalls, 0);
+  });
+
+  testWidgets(
+      'startup pauses update checks when pending apply probe is inconclusive',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final service = _StartupFlowUpdateService(
+      applyPendingResult: const PendingUpdateStartupResult.probeInconclusive(),
+      result: const AppUpdateCheckResult(currentVersion: '1.0.0+1'),
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AutoUpgradeGate(
+            updateService: service,
+            enableInDebug: true,
+            child: const Scaffold(
+              body: Text('home'),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('home'), findsOneWidget);
+    expect(service.applyPendingCalls, 1);
+    expect(service.checkCalls, 0);
   });
 }

@@ -27,9 +27,9 @@ class _AndroidAutoUpdateService extends AppUpdateService {
   int checkCalls = 0;
 
   @override
-  Future<bool> applyPendingUpdateOnStartup() async {
+  Future<PendingUpdateStartupResult> applyPendingUpdateOnStartup() async {
     applyPendingCalls += 1;
-    return false;
+    return const PendingUpdateStartupResult.noPendingUpdate();
   }
 
   @override

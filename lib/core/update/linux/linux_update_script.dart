@@ -1,33 +1,17 @@
-part of 'app_update_service.dart';
-
-List<int> _parseVersionSegments(String input) {
-  final cleaned = input.trim();
-  if (cleaned.isEmpty) return const [];
-  final matches = RegExp(r'\d+').allMatches(cleaned);
-  if (matches.isEmpty) return const [];
-
-  final segments = <int>[];
-  for (final match in matches) {
-    final parsed = int.tryParse(match.group(0) ?? '');
-    if (parsed == null) continue;
-    segments.add(parsed);
-    if (segments.length >= 4) break;
-  }
-  return segments;
-}
-
-AppUpdatePlatform _detectPlatform() {
-  if (kIsWeb) return AppUpdatePlatform.unsupported;
-  if (Platform.isWindows) return AppUpdatePlatform.windows;
-  if (Platform.isMacOS) return AppUpdatePlatform.macos;
-  if (Platform.isLinux) return AppUpdatePlatform.linux;
-  if (Platform.isAndroid) return AppUpdatePlatform.android;
-  if (Platform.isIOS) return AppUpdatePlatform.ios;
-  return AppUpdatePlatform.unsupported;
-}
-
-String _shellQuote(String value) {
-  return "'${value.replaceAll("'", "'\\''")}'";
+String buildLinuxUpdaterScript({
+  required int pid,
+  required String appDirPath,
+  required String executablePath,
+  required String sourceDirPath,
+  required String tempRootPath,
+}) {
+  return _buildLinuxUpdaterScriptImpl(
+    pid: pid,
+    appDirPath: appDirPath,
+    executablePath: executablePath,
+    sourceDirPath: sourceDirPath,
+    tempRootPath: tempRootPath,
+  );
 }
 
 String buildLinuxUpdaterScriptForTest({
@@ -46,7 +30,9 @@ String buildLinuxUpdaterScriptForTest({
   );
 }
 
-Future<String> sha256FileHexForTest(File file) => _sha256FileHex(file);
+String _shellQuote(String value) {
+  return "'${value.replaceAll("'", "'\\''")}'";
+}
 
 String _buildLinuxUpdaterScriptImpl({
   required int pid,
@@ -75,6 +61,24 @@ MAX_WAIT=60
 waited=0
 APP_START=\$(/bin/ps -o lstart= -p "\$APP_PID" 2>/dev/null | sed 's/^ *//')
 
+same_process_running() {
+  if ! kill -0 "\$APP_PID" 2>/dev/null; then
+    return 1
+  fi
+
+  if [ -z "\$APP_START" ]; then
+    return 0
+  fi
+
+  local current_start
+  current_start=\$(/bin/ps -o lstart= -p "\$APP_PID" 2>/dev/null | sed 's/^ *//')
+  if [ -z "\$current_start" ]; then
+    return 1
+  fi
+
+  [ "\$current_start" = "\$APP_START" ]
+}
+
 cleanup() {
   rm -rf "\$STAGED_DIR" "\$TEMP_ROOT" || true
 }
@@ -97,7 +101,7 @@ on_error() {
 
 trap on_error EXIT
 
-while kill -0 "\$APP_PID" 2>/dev/null && [ "\$waited" -lt "\$MAX_WAIT" ]; do
+while same_process_running && [ "\$waited" -lt "\$MAX_WAIT" ]; do
   CURRENT_START=\$(/bin/ps -o lstart= -p "\$APP_PID" 2>/dev/null | sed 's/^ *//')
   if [ -n "\$APP_START" ] && [ "\$CURRENT_START" != "\$APP_START" ]; then
     break
@@ -105,6 +109,10 @@ while kill -0 "\$APP_PID" 2>/dev/null && [ "\$waited" -lt "\$MAX_WAIT" ]; do
   sleep 1
   waited=\$((waited + 1))
 done
+
+if same_process_running; then
+  exit 1
+fi
 
 rm -rf "\$STAGED_DIR" "\$BACKUP_DIR"
 mkdir -p "\$STAGED_DIR"
@@ -117,22 +125,4 @@ nohup "\$EXE_PATH" >/dev/null 2>&1 &
 trap - EXIT
 cleanup
 ''';
-}
-
-Future<String> _sha256FileHex(File file) async {
-  final sink = Sha256().newHashSink();
-  await for (final chunk in file.openRead()) {
-    sink.add(chunk);
-  }
-  sink.close();
-  final digest = await sink.hash();
-  return _hexEncodeBytes(digest.bytes);
-}
-
-String _hexEncodeBytes(List<int> bytes) {
-  final buffer = StringBuffer();
-  for (final byte in bytes) {
-    buffer.write(byte.toRadixString(16).padLeft(2, '0'));
-  }
-  return buffer.toString();
 }

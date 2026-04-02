@@ -16,9 +16,24 @@ class CiI18nWorkflowTests(unittest.TestCase):
         workflow = CI_WORKFLOW.read_text(encoding="utf-8")
 
         self.assertIn(
-            'bash .githooks/pre-commit --check --ci --flutter',
+            'bash scripts/verify_full.sh --flutter',
             workflow,
             'CI workflow must delegate Flutter i18n checks to the pre-commit hook',
+        )
+        self.assertIn(
+            'bash scripts/verify_full.sh --rust',
+            workflow,
+            'CI workflow must delegate Rust full verification through the shared full-check script',
+        )
+        self.assertIn(
+            'name: Full Flutter verification',
+            workflow,
+            'CI should describe the shared full verification gate clearly',
+        )
+        self.assertIn(
+            'name: Full Rust verification',
+            workflow,
+            'CI should describe the shared full verification gate clearly',
         )
         self.assertNotIn(
             'name: Refresh i18n generated files',
@@ -30,6 +45,14 @@ class CiI18nWorkflowTests(unittest.TestCase):
             workflow,
             'CI workflow should not run a duplicate standalone i18n analyze step',
         )
+
+    def test_ci_changes_filters_include_shared_verification_scripts(self) -> None:
+        if not CI_WORKFLOW.exists():
+            self.skipTest(f"CI workflow not found at {CI_WORKFLOW}")
+
+        workflow = CI_WORKFLOW.read_text(encoding="utf-8")
+
+        self.assertIn('"scripts/**"', workflow)
 
 
 if __name__ == "__main__":

@@ -29,7 +29,7 @@ cargo = { cmd = "cargo {{ command }} --manifest-path rust/Cargo.toml {{ command_
 
 # Local developer helpers.
 # - init-env: creates .env.local (idempotent, no-op when file exists)
-# - install-git-hooks: installs local pre-commit hooks
+# - install-git-hooks: installs local fast pre-commit and full pre-push hooks
 # - bootstrap-shared-worktree-env: link .tool/.pixi/envs to git-common-dir shared storage and link .fvm/flutter_sdk + .env.local + Android signing files from primary worktree
 init-env = "bash scripts/init_env.sh"
 install-git-hooks = "bash scripts/install_git_hooks.sh"
@@ -49,10 +49,10 @@ clean-unused-cache = "bash -lc 'set -euo pipefail; cleaned=0; while IFS= read -r
 # Quality gates (before sharing or opening a PR).
 # - fmt: auto-fix formatting
 # - fmt-check: check-only formatting (CI-aligned)
-# - ci: local minimal CI (fmt-check + flutter analyze/test + rust clippy/test)
+# - ci: full local verification (same scope as pre-push / GitHub Actions)
 fmt = "dart pub global run fvm:main dart format lib test rust_builder integration_test test_driver && cargo fmt --manifest-path rust/Cargo.toml --all"
 fmt-check = "dart pub global run fvm:main dart format --output=none lib test rust_builder integration_test test_driver --set-exit-if-changed && cargo fmt --manifest-path rust/Cargo.toml --all -- --check"
-ci = { cmd = "bash scripts/run_i18n_refresh.sh && bash scripts/run_i18n_analyze.sh && dart pub global run fvm:main flutter analyze && dart pub global run fvm:main flutter test && cargo clippy --manifest-path rust/Cargo.toml --all-targets --all-features -- -D warnings && cargo test --manifest-path rust/Cargo.toml", depends-on = ["fmt-check"] }
+ci = "bash scripts/verify_full.sh"
 
 # Run/build workflows (auto-include setup-flutter + init-env).
 # Typical usage:
@@ -120,9 +120,12 @@ dotnet-aspnetcore = "8.0.*"
 # - bootstrap-shared-worktree-env uses PowerShell (no bash dependency)
 # - init-env uses PowerShell (no bash dependency)
 # - setup-flutter enables git long-path support before FVM clone/checkouts
+# - ci routes bash-based full verification through PowerShell launcher
 # - run-windows defaults to flutter hot-reload/debugger flow
 # - msi-dev packages + installs isolated local dev MSI
 # - uninstall-dev-msi removes isolated local dev MSI
+ci = "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_bash.ps1 scripts/verify_full.sh"
+install-git-hooks = "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_bash.ps1 scripts/install_git_hooks.sh"
 frb-generate = "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/frb_generate.ps1"
 bootstrap-shared-worktree-env = "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/bootstrap_shared_worktree_env.ps1"
 init-env = "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/init_env.ps1"

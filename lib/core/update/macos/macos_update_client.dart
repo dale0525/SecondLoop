@@ -105,9 +105,11 @@ class DefaultMacosManagedUpdateClient implements MacosManagedUpdateClient {
         ),
       );
 
-      final modeResult = await Process.run('chmod', ['+x', script.path]);
-      if (modeResult.exitCode != 0) {
-        throw StateError('macos_update_chmod_failed_${modeResult.stderr}');
+      if (!Platform.isWindows) {
+        final modeResult = await Process.run('chmod', ['+x', script.path]);
+        if (modeResult.exitCode != 0) {
+          throw StateError('macos_update_chmod_failed_${modeResult.stderr}');
+        }
       }
 
       await _processStarter(
@@ -130,21 +132,29 @@ class DefaultMacosManagedUpdateClient implements MacosManagedUpdateClient {
     Map<String, String>? environment,
   }) {
     final resolvedExecutablePath =
-        executablePath ?? Platform.resolvedExecutable;
+        _normalizePath((executablePath ?? Platform.resolvedExecutable).trim());
     final resolvedEnvironment = environment ?? Platform.environment;
-    final executableFile = File(resolvedExecutablePath).absolute;
-    final macosDir = executableFile.parent;
-    if (macosDir.path.split(Platform.pathSeparator).last != 'MacOS') {
+    if (resolvedExecutablePath.isEmpty) {
       return null;
     }
 
-    final contentsDir = macosDir.parent;
-    if (contentsDir.path.split(Platform.pathSeparator).last != 'Contents') {
+    final segments = resolvedExecutablePath
+        .split('/')
+        .where((segment) => segment.isNotEmpty)
+        .toList(growable: false);
+    if (segments.length < 4) {
       return null;
     }
 
-    final appBundleDir = contentsDir.parent;
-    final appBundlePath = appBundleDir.absolute.path;
+    final macosIndex = segments.length - 2;
+    final contentsIndex = segments.length - 3;
+    final appIndex = segments.length - 4;
+    if (segments[macosIndex] != 'MacOS' ||
+        segments[contentsIndex] != 'Contents') {
+      return null;
+    }
+
+    final appBundlePath = '/${segments.take(appIndex + 1).join('/')}';
     if (!appBundlePath.endsWith('.app')) {
       return null;
     }
@@ -252,14 +262,33 @@ MAX_WAIT=60
 waited=0
 APP_START=\$(/bin/ps -o lstart= -p "\$APP_PID" 2>/dev/null | sed 's/^ *//')
 
-while kill -0 "\$APP_PID" 2>/dev/null && [ "\$waited" -lt "\$MAX_WAIT" ]; do
-  CURRENT_START=\$(/bin/ps -o lstart= -p "\$APP_PID" 2>/dev/null | sed 's/^ *//')
-  if [ -n "\$APP_START" ] && [ "\$CURRENT_START" != "\$APP_START" ]; then
-    break
+same_process_running() {
+  if ! kill -0 "\$APP_PID" 2>/dev/null; then
+    return 1
   fi
+
+  if [ -z "\$APP_START" ]; then
+    return 0
+  fi
+
+  local current_start
+  current_start=\$(/bin/ps -o lstart= -p "\$APP_PID" 2>/dev/null | sed 's/^ *//')
+  if [ -z "\$current_start" ]; then
+    return 1
+  fi
+
+  [ "\$current_start" = "\$APP_START" ]
+}
+
+while same_process_running && [ "\$waited" -lt "\$MAX_WAIT" ]; do
   sleep 1
   waited=\$((waited + 1))
 done
+
+if same_process_running; then
+  rm -rf "\$TEMP_ROOT" || true
+  exit 1
+fi
 
 rm -rf "\$BACKUP_APP"
 mv "\$TARGET_APP" "\$BACKUP_APP"

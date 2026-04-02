@@ -12,16 +12,19 @@ class _FakeAutoUpdateService extends AppUpdateService {
   _FakeAutoUpdateService({
     required this.result,
     this.throwOnApplyPending = false,
-    this.applyPendingResult = false,
+    this.applyPendingResult =
+        const PendingUpdateStartupResult.noPendingUpdate(),
     this.throwOnStage = false,
     this.releaseRepoValue = 'dale0525/SecondLoop',
+    this.canStageSilentlyForNextLaunchValue = false,
   });
 
   final AppUpdateCheckResult result;
   final bool throwOnApplyPending;
-  final bool applyPendingResult;
+  final PendingUpdateStartupResult applyPendingResult;
   final bool throwOnStage;
   final String releaseRepoValue;
+  final bool canStageSilentlyForNextLaunchValue;
 
   int checkCalls = 0;
   int installCalls = 0;
@@ -33,6 +36,11 @@ class _FakeAutoUpdateService extends AppUpdateService {
 
   @override
   String get releaseRepo => releaseRepoValue;
+
+  @override
+  bool canStageSilentlyForNextLaunch(AppUpdateAvailability update) {
+    return canStageSilentlyForNextLaunchValue;
+  }
 
   @override
   Future<AppUpdateCheckResult> checkForUpdates() async {
@@ -56,7 +64,7 @@ class _FakeAutoUpdateService extends AppUpdateService {
   }
 
   @override
-  Future<bool> applyPendingUpdateOnStartup() async {
+  Future<PendingUpdateStartupResult> applyPendingUpdateOnStartup() async {
     applyPendingCalls += 1;
     if (throwOnApplyPending) {
       throw StateError('apply_pending_failed');
@@ -177,6 +185,7 @@ void main() {
       ),
     );
     final service = _FakeAutoUpdateService(
+      canStageSilentlyForNextLaunchValue: true,
       throwOnStage: true,
       result: AppUpdateCheckResult(
         currentVersion: '1.0.1+99',
@@ -216,6 +225,85 @@ void main() {
       ),
     );
     final service = _FakeAutoUpdateService(
+      canStageSilentlyForNextLaunchValue: true,
+      result: AppUpdateCheckResult(
+        currentVersion: '1.0.1+99',
+        update: update,
+      ),
+    );
+
+    await pumpGate(tester, service: service);
+    await tester.pumpAndSettle();
+
+    expect(service.checkCalls, 1);
+    expect(service.installCalls, 0);
+    expect(service.stageCalls, 1);
+    expect(service.applyPendingCalls, 1);
+    expect(UpdateBadgePrefs.value.value, 'v1.1.0');
+    expect(find.byType(SnackBar), findsOneWidget);
+  },
+      variant: const TargetPlatformVariant(<TargetPlatform>{
+        TargetPlatform.windows,
+      }));
+
+  testWidgets(
+      'windows seamless update does not stage when silent staging is unsupported',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    UpdateBadgePrefs.resetForTests();
+    final update = AppUpdateAvailability(
+      currentVersion: '1.0.1+99',
+      latestTag: 'v1.1.0',
+      releasePageUri: Uri.parse(
+        'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
+      ),
+      installMode: AppUpdateInstallMode.seamlessRestart,
+      asset: AppUpdateAsset(
+        name: 'com.secondloop.secondloop-1.1.0-full.nupkg',
+        downloadUri: Uri.parse('https://cdn.example.com/win.nupkg'),
+      ),
+    );
+    final service = _FakeAutoUpdateService(
+      canStageSilentlyForNextLaunchValue: false,
+      result: AppUpdateCheckResult(
+        currentVersion: '1.0.1+99',
+        update: update,
+      ),
+    );
+
+    await pumpGate(tester, service: service);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 120));
+
+    expect(service.installCalls, 0);
+    expect(service.stageCalls, 0);
+    expect(service.applyPendingCalls, 1);
+    expect(UpdateBadgePrefs.value.value, 'v1.1.0');
+    expect(find.byType(SnackBar), findsOneWidget);
+  },
+      variant: const TargetPlatformVariant(<TargetPlatform>{
+        TargetPlatform.windows,
+      }));
+
+  testWidgets(
+      'windows staged-next-launch update is passively staged on startup',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    UpdateBadgePrefs.resetForTests();
+    final update = AppUpdateAvailability(
+      currentVersion: '1.0.1+99',
+      latestTag: 'v1.1.0',
+      releasePageUri: Uri.parse(
+        'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
+      ),
+      installMode: AppUpdateInstallMode.stagedNextLaunch,
+      asset: AppUpdateAsset(
+        name: 'com.secondloop.secondloop-1.1.0-full.nupkg',
+        downloadUri: Uri.parse('https://cdn.example.com/win.nupkg'),
+      ),
+    );
+    final service = _FakeAutoUpdateService(
+      canStageSilentlyForNextLaunchValue: true,
       result: AppUpdateCheckResult(
         currentVersion: '1.0.1+99',
         update: update,
@@ -293,7 +381,7 @@ void main() {
       ),
     );
     final service = _FakeAutoUpdateService(
-      applyPendingResult: true,
+      applyPendingResult: const PendingUpdateStartupResult.updateDispatched(),
       result: AppUpdateCheckResult(
         currentVersion: '1.0.1+99',
         update: update,
@@ -381,6 +469,40 @@ void main() {
     expect(service.checkCalls, 1);
   });
 
+  testWidgets(
+      'pending apply failure still publishes the available update badge',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    UpdateBadgePrefs.resetForTests();
+    final update = AppUpdateAvailability(
+      currentVersion: '1.0.1+99',
+      latestTag: 'v1.4.0',
+      releasePageUri: Uri.parse(
+        'https://github.com/dale0525/SecondLoop/releases/tag/v1.4.0',
+      ),
+      installMode: AppUpdateInstallMode.seamlessRestart,
+      asset: AppUpdateAsset(
+        name: 'com.secondloop.secondloop-1.4.0-full.nupkg',
+        downloadUri: Uri.parse('https://cdn.example.com/win.nupkg'),
+      ),
+    );
+    final service = _FakeAutoUpdateService(
+      throwOnApplyPending: true,
+      result: AppUpdateCheckResult(
+        currentVersion: '1.0.1+99',
+        update: update,
+      ),
+    );
+
+    await pumpGate(tester, service: service);
+    await tester.pumpAndSettle();
+
+    expect(service.applyPendingCalls, 1);
+    expect(service.checkCalls, 1);
+    expect(UpdateBadgePrefs.value.value, 'v1.4.0');
+    expect(find.textContaining('Auto update failed'), findsOneWidget);
+  });
+
   testWidgets('skips pending apply and still checks for updates',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
@@ -396,6 +518,46 @@ void main() {
     expect(service.checkCalls, 1);
     expect(find.text('home'), findsOneWidget);
   });
+
+  testWidgets('skips update check when pending apply is already in progress',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final service = _FakeAutoUpdateService(
+      applyPendingResult: const PendingUpdateStartupResult.updateInProgress(),
+      result: const AppUpdateCheckResult(currentVersion: '1.0.1+99'),
+    );
+
+    await pumpGate(tester, service: service);
+    await tester.pumpAndSettle();
+
+    expect(service.applyPendingCalls, 1);
+    expect(service.checkCalls, 0);
+    expect(find.byType(SnackBar), findsNothing);
+  },
+      variant: const TargetPlatformVariant(<TargetPlatform>{
+        TargetPlatform.windows,
+      }));
+
+  testWidgets(
+      'skips update work but still shows app when pending apply probe is inconclusive',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final service = _FakeAutoUpdateService(
+      applyPendingResult: const PendingUpdateStartupResult.probeInconclusive(),
+      result: const AppUpdateCheckResult(currentVersion: '1.0.1+99'),
+    );
+
+    await pumpGate(tester, service: service);
+    await tester.pumpAndSettle();
+
+    expect(service.applyPendingCalls, 1);
+    expect(service.checkCalls, 0);
+    expect(find.text('home'), findsOneWidget);
+    expect(find.byType(SnackBar), findsNothing);
+  },
+      variant: const TargetPlatformVariant(<TargetPlatform>{
+        TargetPlatform.windows,
+      }));
 
   testWidgets('macOS seamless update stays passive until user confirms',
       (tester) async {
