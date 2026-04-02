@@ -46,6 +46,9 @@ class _FakeAndroidApkDownloader implements AndroidApkDownloader {
 class _FakeAndroidApkInstaller implements AndroidApkInstaller {
   @override
   Future<void> installApk({required String apkPath}) async {}
+
+  @override
+  Future<bool?> canRequestPackageInstalls() async => null;
 }
 
 void main() {

@@ -101,12 +101,16 @@ class _NoopAndroidApkDownloader implements AndroidApkDownloader {
 class _NoopAndroidApkInstaller implements AndroidApkInstaller {
   @override
   Future<void> installApk({required String apkPath}) async {}
+
+  @override
+  Future<bool?> canRequestPackageInstalls() async => null;
 }
 
 class _FakeAndroidApkUpdateCoordinator extends AndroidApkUpdateCoordinator {
   _FakeAndroidApkUpdateCoordinator({
     this.error,
     this.reuseVerifiedDownloads = false,
+    this.canRequestPackageInstallsResult,
   }) : super(
           downloader: _NoopAndroidApkDownloader(),
           installer: _NoopAndroidApkInstaller(),
@@ -114,10 +118,18 @@ class _FakeAndroidApkUpdateCoordinator extends AndroidApkUpdateCoordinator {
 
   Object? error;
   final bool reuseVerifiedDownloads;
+  bool? canRequestPackageInstallsResult;
 
   int performCalls = 0;
   int downloadCalls = 0;
+  int permissionCheckCalls = 0;
   final Set<String> _verifiedSha256 = <String>{};
+
+  @override
+  Future<bool?> canRequestPackageInstalls() async {
+    permissionCheckCalls += 1;
+    return canRequestPackageInstallsResult;
+  }
 
   @override
   Future<void> performUpdate({
@@ -632,13 +644,14 @@ void main() {
   });
 
   testWidgets(
-      'does not reopen Android update dialog after dismissing permission settings flow in same session',
+      'does not reopen Android update dialog while install permission is still missing',
       (tester) async {
     final oldPlatform = debugDefaultTargetPlatformOverride;
     debugDefaultTargetPlatformOverride = TargetPlatform.android;
     try {
       final coordinator = _FakeAndroidApkUpdateCoordinator(
         error: const AndroidApkInstallerRequiresPermissionSettingsException(),
+        canRequestPackageInstallsResult: false,
       );
       final service = _AndroidAutoUpdateService(
         result: AppUpdateCheckResult(
@@ -691,13 +704,14 @@ void main() {
       await tester.pump(const Duration(milliseconds: 100));
 
       expect(find.byType(AlertDialog), findsNothing);
+      expect(coordinator.permissionCheckCalls, 1);
     } finally {
       debugDefaultTargetPlatformOverride = oldPlatform;
     }
   });
 
   testWidgets(
-      'does not retry Android apk update automatically after permission settings dismissal in same session',
+      'does not retry Android apk update automatically while install permission is still missing',
       (tester) async {
     final oldPlatform = debugDefaultTargetPlatformOverride;
     debugDefaultTargetPlatformOverride = TargetPlatform.android;
@@ -705,6 +719,7 @@ void main() {
       final coordinator = _FakeAndroidApkUpdateCoordinator(
         error: const AndroidApkInstallerRequiresPermissionSettingsException(),
         reuseVerifiedDownloads: true,
+        canRequestPackageInstallsResult: false,
       );
       final service = _AndroidAutoUpdateService(
         result: AppUpdateCheckResult(
@@ -758,6 +773,76 @@ void main() {
 
       expect(find.byType(AlertDialog), findsNothing);
       expect(coordinator.downloadCalls, 1);
+      expect(coordinator.performCalls, 1);
+    } finally {
+      debugDefaultTargetPlatformOverride = oldPlatform;
+    }
+  });
+
+  testWidgets(
+      'reopens Android update dialog after install permission is granted',
+      (tester) async {
+    final oldPlatform = debugDefaultTargetPlatformOverride;
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+    try {
+      final coordinator = _FakeAndroidApkUpdateCoordinator(
+        error: const AndroidApkInstallerRequiresPermissionSettingsException(),
+        canRequestPackageInstallsResult: false,
+      );
+      final service = _AndroidAutoUpdateService(
+        result: AppUpdateCheckResult(
+          currentVersion: '1.0.0+1',
+          update: AppUpdateAvailability(
+            currentVersion: '1.0.0+1',
+            latestTag: 'v1.1.0',
+            releasePageUri: Uri.parse(
+                'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0'),
+            installMode: AppUpdateInstallMode.externalDownload,
+            asset: AppUpdateAsset(
+              name: 'SecondLoop-android-arm64-v8a.apk',
+              downloadUri: Uri.parse('https://cdn.example.com/secondloop.apk'),
+              sha256: _fakeAndroidApkSha256,
+            ),
+          ),
+        ),
+      );
+
+      await tester.pumpWidget(
+        wrapWithI18n(
+          MaterialApp(
+            home: AutoUpgradeGate(
+              updateService: service,
+              releaseNotesService: _FakeReleaseNotesService(
+                  result: const ReleaseNotesFetchResult()),
+              androidApkUpdateCoordinator: coordinator,
+              enableInDebug: true,
+              child: const Scaffold(body: Text('home')),
+            ),
+          ),
+        ),
+      );
+
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(find.byType(AlertDialog), findsOneWidget);
+
+      await tester.tap(find.byKey(const ValueKey('android_update_confirm')));
+      await _settleAndroidUpdateFlow(tester);
+      expect(find.byType(AlertDialog), findsOneWidget);
+
+      coordinator.canRequestPackageInstallsResult = true;
+      await tester.tap(find.text('Cancel', skipOffstage: false));
+      await tester.pumpAndSettle();
+      expect(find.byType(AlertDialog), findsNothing);
+
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+      await tester.pump();
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+
+      expect(coordinator.permissionCheckCalls, 1);
+      expect(find.byType(AlertDialog), findsOneWidget);
       expect(coordinator.performCalls, 1);
     } finally {
       debugDefaultTargetPlatformOverride = oldPlatform;

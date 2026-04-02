@@ -16,6 +16,7 @@ internal class AndroidUpdateChannelHandler(
   fun handle(call: MethodCall): Any? {
     return when (call.method) {
       "getSupportedAbis" -> getSupportedAbis()
+      "canRequestPackageInstalls" -> canRequestPackageInstalls()
       "installApk" -> {
         val args = call.arguments as? Map<*, *>
         val path = (args?.get("path") as? String)?.trim().orEmpty()
@@ -38,6 +39,18 @@ internal class AndroidUpdateChannelHandler(
       }
     } catch (_: Throwable) {
       emptyList()
+    }
+  }
+
+  private fun canRequestPackageInstalls(): Boolean? {
+    return try {
+      if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
+        true
+      } else {
+        activity.packageManager.canRequestPackageInstalls()
+      }
+    } catch (_: Throwable) {
+      null
     }
   }
 

@@ -67,6 +67,8 @@ abstract class AndroidApkDownloader {
 
 abstract class AndroidApkInstaller {
   Future<void> installApk({required String apkPath});
+
+  Future<bool?> canRequestPackageInstalls() async => null;
 }
 
 class HttpAndroidApkDownloader implements AndroidApkDownloader {
@@ -250,6 +252,19 @@ class MethodChannelAndroidApkInstaller implements AndroidApkInstaller {
       case _AndroidApkInstallResult.failed:
         throw StateError('android_apk_install_not_started');
     }
+  }
+
+  @override
+  Future<bool?> canRequestPackageInstalls() async {
+    final dynamic rawResult =
+        await _channel.invokeMethod<Object?>('canRequestPackageInstalls');
+    if (rawResult is bool) {
+      return rawResult;
+    }
+    if (rawResult == null) {
+      return null;
+    }
+    throw StateError('android_apk_install_invalid_permission_result');
   }
 
   _AndroidApkInstallResult _parseInstallResult(dynamic rawResult) {

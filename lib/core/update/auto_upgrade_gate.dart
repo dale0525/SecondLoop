@@ -62,6 +62,7 @@ class _AutoUpgradeGateState extends State<AutoUpgradeGate>
   bool _androidDialogOpen = false;
   bool _androidCheckInFlight = false;
   String? _dismissedAndroidUpdateTagInSession;
+  String? _androidInstallPermissionPendingTag;
 
   late final AppUpdateService _updateService;
   AppUpdateService? _ownedUpdateService;
@@ -181,6 +182,7 @@ class _AutoUpgradeGateState extends State<AutoUpgradeGate>
         final result = await _updateService.checkForUpdates();
         final update = result.update;
         if (update == null) {
+          _androidInstallPermissionPendingTag = null;
           await UpdateBadgePrefs.clear();
           if (pendingApplyError != null) {
             await _showPendingApplyFailureNotice(pendingApplyError);
@@ -195,12 +197,26 @@ class _AutoUpgradeGateState extends State<AutoUpgradeGate>
         }
 
         if (_isAndroidPlatform && _isAndroidUpdateCandidate(update)) {
+          if (_androidInstallPermissionPendingTag != null &&
+              _androidInstallPermissionPendingTag != update.latestTag) {
+            _androidInstallPermissionPendingTag = null;
+          }
           if (_dismissedAndroidUpdateTagInSession == update.latestTag) {
             return;
+          }
+          if (_androidInstallPermissionPendingTag == update.latestTag) {
+            final canInstall =
+                await _androidApkUpdateCoordinator.canRequestPackageInstalls();
+            if (canInstall != true) {
+              return;
+            }
+            _androidInstallPermissionPendingTag = null;
           }
           await _showAndroidUpdateDialog(update);
           return;
         }
+
+        _androidInstallPermissionPendingTag = null;
 
         if (_usesPassiveManagedUpdates) {
           var stagedReady = false;
@@ -283,7 +299,11 @@ class _AutoUpgradeGateState extends State<AutoUpgradeGate>
             releaseNotes: releaseNotes,
             coordinator: _androidApkUpdateCoordinator,
             externalUriLauncher: widget.externalUriLauncher,
+            onPermissionSettingsOpened: () {
+              _androidInstallPermissionPendingTag = update.latestTag;
+            },
             onDismissed: () {
+              _androidInstallPermissionPendingTag = null;
               _dismissedAndroidUpdateTagInSession = update.latestTag;
             },
           );
@@ -468,6 +488,7 @@ class _AndroidUpdateDialog extends StatefulWidget {
     required this.releaseNotes,
     required this.coordinator,
     required this.externalUriLauncher,
+    required this.onPermissionSettingsOpened,
     required this.onDismissed,
   });
 
@@ -475,6 +496,7 @@ class _AndroidUpdateDialog extends StatefulWidget {
   final ReleaseNotesFetchResult releaseNotes;
   final AndroidApkUpdateCoordinator coordinator;
   final AutoUpgradeGateExternalUriLauncher? externalUriLauncher;
+  final VoidCallback onPermissionSettingsOpened;
   final VoidCallback onDismissed;
 
   @override
@@ -510,6 +532,7 @@ class _AndroidUpdateDialogState extends State<_AndroidUpdateDialog> {
   AndroidApkDownloadProgress? _progress;
   bool _isDownloading = false;
   bool _hasAttemptedUpdate = false;
+  bool _awaitingInstallPermission = false;
   String? _statusMessage;
   String? _errorMessage;
   AndroidApkDownloadCancelToken? _cancelToken;
@@ -597,7 +620,7 @@ class _AndroidUpdateDialogState extends State<_AndroidUpdateDialog> {
           onPressed: _isDownloading
               ? _cancelDownload
               : () {
-                  if (!_hasAttemptedUpdate) {
+                  if (!_hasAttemptedUpdate || !_awaitingInstallPermission) {
                     widget.onDismissed();
                   }
                   Navigator.of(context).pop();
@@ -634,6 +657,7 @@ class _AndroidUpdateDialogState extends State<_AndroidUpdateDialog> {
     setState(() {
       _hasAttemptedUpdate = true;
       _isDownloading = true;
+      _awaitingInstallPermission = false;
       _errorMessage = null;
       _statusMessage = context.t.settings.updateDialog.downloading;
     });
@@ -661,14 +685,16 @@ class _AndroidUpdateDialogState extends State<_AndroidUpdateDialog> {
       if (!mounted) return;
       setState(() {
         _isDownloading = false;
+        _awaitingInstallPermission = true;
         _errorMessage = context.t.settings.updateDialog.permissionRequired;
       });
-      widget.onDismissed();
+      widget.onPermissionSettingsOpened();
       return;
     } catch (error) {
       if (!mounted) return;
       setState(() {
         _isDownloading = false;
+        _awaitingInstallPermission = false;
         _errorMessage = _buildErrorMessage(error);
       });
     } finally {

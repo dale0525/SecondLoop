@@ -42,6 +42,9 @@ class _FakeInstaller implements AndroidApkInstaller {
       throw error!;
     }
   }
+
+  @override
+  Future<bool?> canRequestPackageInstalls() async => null;
 }
 
 class _FakeCachedInstaller implements AndroidApkInstaller {
@@ -59,6 +62,9 @@ class _FakeCachedInstaller implements AndroidApkInstaller {
       throw error!;
     }
   }
+
+  @override
+  Future<bool?> canRequestPackageInstalls() async => null;
 }
 
 class _CancellingInstaller implements AndroidApkInstaller {
@@ -72,6 +78,9 @@ class _CancellingInstaller implements AndroidApkInstaller {
     installCalls += 1;
     cancelToken.cancel();
   }
+
+  @override
+  Future<bool?> canRequestPackageInstalls() async => null;
 }
 
 void main() {

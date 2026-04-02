@@ -108,6 +108,9 @@ class _FakeAndroidApkInstaller implements AndroidApkInstaller {
       throw error!;
     }
   }
+
+  @override
+  Future<bool?> canRequestPackageInstalls() async => null;
 }
 
 class _PermissionSettingsAndroidApkInstaller implements AndroidApkInstaller {
@@ -118,6 +121,9 @@ class _PermissionSettingsAndroidApkInstaller implements AndroidApkInstaller {
     installCalls += 1;
     throw const AndroidApkInstallerRequiresPermissionSettingsException();
   }
+
+  @override
+  Future<bool?> canRequestPackageInstalls() async => false;
 }
 
 class _CountingAndroidApkDownloader implements AndroidApkDownloader {

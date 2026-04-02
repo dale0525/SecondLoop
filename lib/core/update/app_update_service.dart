@@ -252,10 +252,11 @@ class AppUpdateService {
     }
 
     Map<String, Object?>? release;
-    String? releaseTag;
+    String? newestReleaseTag;
     Object? lastError;
     var sawUpToDateOrOlderRelease = false;
-    var sawNewerButUnusableRelease = false;
+    var sawNewerRelease = false;
+    var sawNewestReleaseUsable = false;
     final windowsStagedClient = _resolvedWindowsStagedUpdateClient;
     final windowsManagedRuntimeAvailable =
         windowsStagedClient != null && windowsStagedClient.isAvailable();
@@ -282,26 +283,44 @@ class AppUpdateService {
           sawUpToDateOrOlderRelease = true;
           continue;
         }
-        if (!_releaseHasUsableAssetForCurrentPlatform(
+        sawNewerRelease = true;
+        final isCandidateUsable = _releaseHasUsableAssetForCurrentPlatform(
           candidate,
           windowsManagedRuntimeAvailable: windowsManagedRuntimeAvailable,
           androidSupportedAbis: androidSupportedAbis,
-        )) {
-          sawNewerButUnusableRelease = true;
-          lastError = StateError('no_platform_asset_for_${_platform.name}');
+        );
+        if (newestReleaseTag == null ||
+            compareReleaseTagWithCurrentVersion(
+                    candidateTag, newestReleaseTag) >
+                0) {
+          newestReleaseTag = candidateTag;
+          sawNewestReleaseUsable = isCandidateUsable;
+          if (!isCandidateUsable) {
+            release = null;
+            lastError = StateError('no_platform_asset_for_${_platform.name}');
+            continue;
+          }
+          release = candidate;
           continue;
         }
-        if (releaseTag == null ||
-            compareReleaseTagWithCurrentVersion(candidateTag, releaseTag) > 0) {
+        if (compareReleaseTagWithCurrentVersion(
+                    candidateTag, newestReleaseTag) ==
+                0 &&
+            isCandidateUsable &&
+            !sawNewestReleaseUsable) {
+          sawNewestReleaseUsable = true;
           release = candidate;
-          releaseTag = candidateTag;
+          continue;
+        }
+        if (!isCandidateUsable) {
+          lastError = StateError('no_platform_asset_for_${_platform.name}');
         }
       } catch (error) {
         lastError = error;
       }
     }
     if (release == null) {
-      if (sawNewerButUnusableRelease) {
+      if (sawNewerRelease) {
         await _recordFailure(
           UpdateEventType.checkFailed,
           lastError ?? 'failed_to_fetch_release',

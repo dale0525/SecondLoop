@@ -46,6 +46,9 @@ AppUpdateAsset? _matchAndroidAssetForSupportedAbisImpl(
   if (apkAssets.isEmpty) return null;
 
   final normalizedSupportedAbis = normalizeAndroidSupportedAbis(supportedAbis);
+  if (normalizedSupportedAbis.isEmpty) {
+    return null;
+  }
 
   if (shouldRejectAndroidFallbackForSupportedAbis(normalizedSupportedAbis)) {
     return null;

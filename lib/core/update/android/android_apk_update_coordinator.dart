@@ -49,6 +49,10 @@ class AndroidApkUpdateCoordinator {
     return _sharedVerifiedApkCache.length;
   }
 
+  Future<bool?> canRequestPackageInstalls() {
+    return _installer.canRequestPackageInstalls();
+  }
+
   Future<void> performUpdate({
     required AppUpdateAsset asset,
     required AndroidApkDownloadProgressCallback onProgress,

@@ -186,7 +186,8 @@ void main() {
       expect(result.errorMessage, contains('no_platform_asset_for_android'));
     });
 
-    test('keeps universal apk fallback when supported abis are unknown',
+    test(
+        'falls back to manual update when only universal apk exists and supported abis are unknown',
         () async {
       final service = AppUpdateService(
         platformOverride: AppUpdatePlatform.android,
@@ -209,11 +210,13 @@ void main() {
 
       final result = await service.checkForUpdates();
 
+      expect(result.errorMessage, isNull);
       expect(result.update, isNotNull);
-      expect(result.update!.asset?.name, 'SecondLoop-android-v1.1.0.apk');
+      expect(result.update!.asset, isNull);
+      expect(result.update!.installMode, AppUpdateInstallMode.externalDownload);
       expect(
-        result.update!.downloadUri.toString(),
-        'https://cdn.example.com/universal.apk',
+        result.update!.releasePageUri.toString(),
+        'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
       );
     });
 
@@ -428,6 +431,59 @@ void main() {
         androidSupportedAbisOverride: const ['arm64-v8a'],
         currentVersionLoader: () async =>
             const AppRuntimeVersion(version: '1.1.0', buildNumber: '9'),
+        releaseJsonFetcher: (uri) async {
+          if (uri.toString() ==
+              'https://mirror.example.com/api/releases/latest') {
+            return {
+              'tag_name': 'v1.1.0',
+              'html_url':
+                  'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
+              'assets': [
+                {
+                  'name': 'SecondLoop-android-arm64-v8a.apk',
+                  'browser_download_url': 'https://cdn.example.com/v1.1.0.apk',
+                  'sha256': 'abc123',
+                },
+              ],
+            };
+          }
+
+          expect(
+            uri.toString(),
+            'https://api.github.com/repos/dale0525/SecondLoop/releases/latest',
+          );
+          return {
+            'tag_name': 'v1.2.0',
+            'html_url':
+                'https://github.com/dale0525/SecondLoop/releases/tag/v1.2.0',
+            'assets': [
+              {
+                'name': 'SecondLoop-android-x86_64-v1.2.0.apk',
+                'browser_download_url': 'https://cdn.example.com/x86_64.apk',
+                'sha256': 'def456',
+              },
+            ],
+          };
+        },
+      );
+
+      final result = await service.checkForUpdates();
+
+      expect(result.update, isNull);
+      expect(result.errorMessage, contains('no_platform_asset_for_android'));
+    });
+
+    test(
+        'does not fall back to older usable release when a newer release is unusable',
+        () async {
+      final service = AppUpdateService(
+        platformOverride: AppUpdatePlatform.android,
+        releaseModeOverride: true,
+        releaseApiOriginOverride: 'https://mirror.example.com',
+        releaseRepoOverride: 'dale0525/SecondLoop',
+        androidSupportedAbisOverride: const ['arm64-v8a'],
+        currentVersionLoader: () async =>
+            const AppRuntimeVersion(version: '1.0.0', buildNumber: '9'),
         releaseJsonFetcher: (uri) async {
           if (uri.toString() ==
               'https://mirror.example.com/api/releases/latest') {
