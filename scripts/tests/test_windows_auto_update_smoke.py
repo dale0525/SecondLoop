@@ -60,6 +60,12 @@ class WindowsAutoUpdateSmokeTests(unittest.TestCase):
         self.assertIn("$env:SECONDLOOP_APP_NAME = $AppName", script)
         self.assertNotIn("$env:SECONDLOOP_APP_NAME = 'SecondLoop Dev'", script)
 
+    def test_smoke_script_quotes_app_name_argument_when_starting_https_server(self) -> None:
+        script = SMOKE_SCRIPT.read_text(encoding="utf-8")
+
+        self.assertIn("'--app-name', ('\"{0}\"' -f $AppName)", script)
+        self.assertNotIn("'--app-name', $AppName", script)
+
     def test_smoke_script_targets_exact_channel_versioned_full_package(self) -> None:
         script = SMOKE_SCRIPT.read_text(encoding="utf-8")
 
@@ -111,9 +117,21 @@ class WindowsAutoUpdateSmokeTests(unittest.TestCase):
         script = SMOKE_SCRIPT.read_text(encoding="utf-8")
 
         self.assertIn("$expectedVersionName = Get-VersionName $ExpectedVersion", script)
-        self.assertIn("if ($currentVersion -eq $expectedVersionName)", script)
+        self.assertIn("if ((Get-VersionName $currentVersion) -eq $expectedVersionName)", script)
         self.assertIn(
             'throw "Timed out waiting for installed version $expectedVersionName. Current=$(Get-InstalledVersion)"',
+            script,
+        )
+
+    def test_smoke_script_normalizes_installed_version_when_waiting_for_running_process(self) -> None:
+        script = SMOKE_SCRIPT.read_text(encoding="utf-8")
+
+        self.assertIn(
+            "if ($matching.Count -gt 0 -and (Get-VersionName (Get-InstalledVersion)) -eq $expectedVersionName)",
+            script,
+        )
+        self.assertIn(
+            "if ($stableMatching.Count -gt 0 -and (Get-VersionName (Get-InstalledVersion)) -eq $expectedVersionName)",
             script,
         )
 
@@ -133,7 +151,7 @@ class WindowsAutoUpdateSmokeTests(unittest.TestCase):
         self.assertIn("tools/windows_https_update_server.py", script)
         self.assertIn("'--windows-app-id', $PackId", script)
         self.assertIn("'--windows-channel', $Channel", script)
-        self.assertIn("'--app-name', $AppName", script)
+        self.assertIn("'--app-name', ('\"{0}\"' -f $AppName)", script)
         self.assertNotIn("'--package', $packageFile.FullName", script)
         self.assertNotIn("Start-ObservedProcess -FilePath $updateExe", script)
 
@@ -155,6 +173,15 @@ class WindowsAutoUpdateSmokeTests(unittest.TestCase):
         self.assertIn("Remove-TrustedCertificateByThumbprint -Thumbprint $trustedCertificateThumbprint", script)
         self.assertIn("SECONDLOOP_UPDATE_SIGNING_PRIVATE_KEY", script)
         self.assertIn("Set-Item -Path Env:SECONDLOOP_UPDATE_PUBLIC_KEY -Value $originalUpdatePublicKey", script)
+
+    def test_smoke_script_uses_x509store_for_current_user_root_certificate_management(self) -> None:
+        script = SMOKE_SCRIPT.read_text(encoding="utf-8")
+
+        self.assertIn("X509Store('Root', 'CurrentUser')", script)
+        self.assertIn("$store.Add($cert)", script)
+        self.assertIn("$store.Remove($cert)", script)
+        self.assertNotIn("certutil -user -addstore Root", script)
+        self.assertNotIn("certutil -user -delstore Root", script)
 
     def test_smoke_script_restores_temporary_update_environment_variables(self) -> None:
         script = SMOKE_SCRIPT.read_text(encoding="utf-8")

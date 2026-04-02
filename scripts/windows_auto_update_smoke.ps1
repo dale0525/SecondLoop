@@ -425,9 +425,13 @@ function Ensure-LocalhostCertificateTrusted {
   }
 
   Write-Host "Trusting localhost certificate for current user: $PemPath"
-  & certutil -user -addstore Root $PemPath | Out-Null
-  if ($LASTEXITCODE -ne 0) {
-    throw "Failed to trust localhost certificate: $PemPath"
+  $cert = New-Object System.Security.Cryptography.X509Certificates.X509Certificate2($PemPath)
+  $store = New-Object System.Security.Cryptography.X509Certificates.X509Store('Root', 'CurrentUser')
+  $store.Open([System.Security.Cryptography.X509Certificates.OpenFlags]::ReadWrite)
+  try {
+    $store.Add($cert)
+  } finally {
+    $store.Close()
   }
 
   if (-not [string]::IsNullOrWhiteSpace($thumbprint)) {
@@ -445,7 +449,16 @@ function Remove-TrustedCertificateByThumbprint {
   }
 
   Write-Host "Removing localhost certificate from current user Root store: $Thumbprint"
-  & certutil -user -delstore Root $Thumbprint | Out-Null
+  $store = New-Object System.Security.Cryptography.X509Certificates.X509Store('Root', 'CurrentUser')
+  $store.Open([System.Security.Cryptography.X509Certificates.OpenFlags]::ReadWrite)
+  try {
+    $cert = $store.Certificates | Where-Object { $_.Thumbprint -eq $Thumbprint } | Select-Object -First 1
+    if ($null -ne $cert) {
+      $store.Remove($cert)
+    }
+  } finally {
+    $store.Close()
+  }
 }
 
 function Start-UpdateFeedServer {
@@ -470,7 +483,7 @@ function Start-UpdateFeedServer {
     '--cert', $CertificatePath,
     '--key', $KeyPath,
     '--port', $ListenPort.ToString(),
-    '--app-name', $AppName
+    '--app-name', ('"{0}"' -f $AppName)
   ) -WorkingDirectory $repoRootPath -PassThru -RedirectStandardOutput $stdoutPath -RedirectStandardError $stderrPath
 
   Start-Sleep -Seconds 2
