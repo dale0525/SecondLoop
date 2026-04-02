@@ -747,6 +747,8 @@ class VelopackUpdateClient implements WindowsStagedUpdateClient {
     final channels = _detectInstalledChannels(appRootPath);
     File? newestPackage;
     String? newestVersion;
+    int? newestTieBreaker;
+    String? newestPackageName;
     for (final entity in packagesDir.listSync()) {
       if (entity is! File) continue;
       final fileName =
@@ -760,14 +762,58 @@ class VelopackUpdateClient implements WindowsStagedUpdateClient {
         channels: channels,
       );
       if (version == null) continue;
+      final tieBreaker = _pendingPackageSelectionTieBreaker(
+        fileName,
+        appId: appId,
+        installedChannels: channels,
+      );
       if (newestVersion == null ||
-          _compareVersionStrings(version, newestVersion) > 0) {
+          _compareVersionStrings(version, newestVersion) > 0 ||
+          (_compareVersionStrings(version, newestVersion) == 0 &&
+              (newestTieBreaker == null ||
+                  tieBreaker < newestTieBreaker ||
+                  (tieBreaker == newestTieBreaker &&
+                      (newestPackageName == null ||
+                          fileName.toLowerCase().compareTo(
+                                    newestPackageName.toLowerCase(),
+                                  ) <
+                              0))))) {
         newestPackage = entity;
         newestVersion = version;
+        newestTieBreaker = tieBreaker;
+        newestPackageName = fileName;
       }
     }
 
     return newestPackage;
+  }
+
+  static int _pendingPackageSelectionTieBreaker(
+    String fileName, {
+    required String appId,
+    required List<String> installedChannels,
+  }) {
+    final normalizedInstalledChannels = installedChannels
+        .map((channel) => channel.trim().toLowerCase())
+        .where((channel) => channel.isNotEmpty)
+        .toSet();
+    final packageChannel = _extractChannelFromNupkgName(
+      fileName,
+      appId: appId,
+    );
+    if (packageChannel != null &&
+        normalizedInstalledChannels.contains(packageChannel)) {
+      return 0;
+    }
+    if (packageChannel == _defaultWindowsChannel) {
+      return 1;
+    }
+    if (packageChannel == null) {
+      return normalizedInstalledChannels.contains(_defaultWindowsChannel)
+          ? 2
+          : 1;
+    }
+    return 3;
   }
 
   static String? _extractVersionFromNupkgName(

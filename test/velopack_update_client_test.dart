@@ -292,6 +292,32 @@ void main() {
     );
   });
 
+  test(
+      'prefers channel-specific stable package over legacy stable package for the same version',
+      () async {
+    final root =
+        await Directory.systemTemp.createTemp('velopack_pending_samever_');
+    addTearDown(() => root.delete(recursive: true));
+    final updater = File('${root.path}${Platform.pathSeparator}Update.exe')
+      ..writeAsStringSync('stub');
+    _writeSqVersion(root, '1.0.0');
+    File('${root.path}${Platform.pathSeparator}releases.win.json')
+        .writeAsStringSync('{}');
+    _createNupkg(root, 'com.secondloop.secondloop-1.2.0-full.nupkg');
+    _createNupkg(root, 'com.secondloop.secondloop-1.2.0-win-full.nupkg');
+
+    final client = VelopackUpdateClient(
+      updateExecutablePath: updater.path,
+    );
+
+    expect(client.hasPendingUpdate(), isTrue);
+    expect(client.pendingUpdateVersion(), '1.2.0');
+    expect(
+      client.pendingUpdatePackagePath(),
+      endsWith('com.secondloop.secondloop-1.2.0-win-full.nupkg'),
+    );
+  });
+
   test('stageAsset downloads package into local packages directory', () async {
     final root = await Directory.systemTemp.createTemp('velopack_stage_');
     final updater = File('${root.path}${Platform.pathSeparator}Update.exe')
