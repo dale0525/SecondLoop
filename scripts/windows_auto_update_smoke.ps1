@@ -318,7 +318,7 @@ function Wait-ForInstalledVersion {
   $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
   while ((Get-Date) -lt $deadline) {
     $currentVersion = Get-InstalledVersion
-    if ($currentVersion -eq $expectedVersionName) {
+    if ((Get-VersionName $currentVersion) -eq $expectedVersionName) {
       return
     }
     Start-Sleep -Seconds 2
@@ -360,10 +360,10 @@ function Wait-ForRunningInstalledProcess {
   while ((Get-Date) -lt $deadline) {
     $matching = @(Get-RunningInstalledProcesses)
 
-    if ($matching.Count -gt 0 -and (Get-InstalledVersion) -eq $expectedVersionName) {
+    if ($matching.Count -gt 0 -and (Get-VersionName (Get-InstalledVersion)) -eq $expectedVersionName) {
       Start-Sleep -Seconds 5
       $stableMatching = @(Get-RunningInstalledProcesses)
-      if ($stableMatching.Count -gt 0 -and (Get-InstalledVersion) -eq $expectedVersionName) {
+      if ($stableMatching.Count -gt 0 -and (Get-VersionName (Get-InstalledVersion)) -eq $expectedVersionName) {
         return
       }
     }
