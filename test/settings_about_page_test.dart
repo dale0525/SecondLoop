@@ -22,16 +22,23 @@ const _fakeAndroidApkSha256 =
     '039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81';
 
 class _FakeAboutUpdateService extends AppUpdateService {
-  _FakeAboutUpdateService({required this.result});
+  _FakeAboutUpdateService({
+    required this.result,
+    this.releaseRepoValue = 'dale0525/SecondLoop',
+  });
 
   AppUpdateCheckResult result;
   Object? throwOnCheck;
+  final String releaseRepoValue;
 
   int checkCalls = 0;
   int installCalls = 0;
   int stageCalls = 0;
   AppUpdateAvailability? installed;
   AppUpdateAvailability? staged;
+
+  @override
+  String get releaseRepo => releaseRepoValue;
 
   @override
   Future<AppUpdateCheckResult> checkForUpdates() async {
@@ -315,6 +322,42 @@ void main() {
       variant: const TargetPlatformVariant(<TargetPlatform>{
         TargetPlatform.android,
       }));
+
+  testWidgets('About page manual update falls back to configured release repo',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+
+    final opened = <Uri>[];
+    final service = _FakeAboutUpdateService(
+      result: const AppUpdateCheckResult(currentVersion: '1.0.1+99'),
+      releaseRepoValue: 'acme/SecondLoopFork',
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AboutPage(
+            updateService: service,
+            runtimeVersionLoader: () async =>
+                const AppRuntimeVersion(version: '1.0.1', buildNumber: '99'),
+            externalUriLauncher: (uri) async {
+              opened.add(uri);
+              return true;
+            },
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('about_manual_update')));
+    await tester.pumpAndSettle();
+
+    expect(
+      opened.single,
+      Uri.parse('https://github.com/acme/SecondLoopFork/releases/latest'),
+    );
+  });
 
   testWidgets('About page offers Android in-app update for apk releases',
       (tester) async {

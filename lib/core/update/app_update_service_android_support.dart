@@ -70,7 +70,14 @@ AppUpdateAsset? _matchAndroidAssetForSupportedAbisImpl(
       assets.where(_isAndroidApkAssetImpl).toList(growable: false);
   if (apkAssets.isEmpty) return null;
 
-  for (final abi in supportedAbis) {
+  final normalizedSupportedAbis =
+      _normalizeAndroidSupportedAbisImpl(supportedAbis);
+
+  if (_containsUnsupportedOnlyAndroidAbisImpl(normalizedSupportedAbis)) {
+    return null;
+  }
+
+  for (final abi in normalizedSupportedAbis) {
     for (final asset in apkAssets) {
       if (_androidAssetMatchesAbiImpl(asset.name, abi)) {
         return asset;
@@ -112,7 +119,13 @@ List<String> _androidManifestKeysImpl(List<String> supportedAbis) {
     }
   }
 
-  for (final abi in supportedAbis) {
+  final normalizedSupportedAbis =
+      _normalizeAndroidSupportedAbisImpl(supportedAbis);
+  if (_containsUnsupportedOnlyAndroidAbisImpl(normalizedSupportedAbis)) {
+    return const <String>[];
+  }
+
+  for (final abi in normalizedSupportedAbis) {
     switch (_canonicalizeAndroidAbiImpl(abi)) {
       case 'arm64-v8a':
         add('android-arm64-v8a');
@@ -191,6 +204,32 @@ bool _looksLikeUniversalAndroidStemImpl(String stem) {
     return true;
   }
   return RegExp(r'^v?\d+\.\d+\.\d+$').hasMatch(stem);
+}
+
+bool _containsUnsupportedOnlyAndroidAbisImpl(List<String> supportedAbis) {
+  if (supportedAbis.isEmpty) {
+    return false;
+  }
+
+  var hasSupportedAbi = false;
+  for (final abi in supportedAbis) {
+    if (_androidAbiAliases.containsKey(abi)) {
+      hasSupportedAbi = true;
+      break;
+    }
+  }
+
+  if (hasSupportedAbi) {
+    return false;
+  }
+
+  for (final abi in supportedAbis) {
+    if (_unsupportedAndroidAbiAliases.contains(abi)) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 bool isAndroidApkAssetForUpdate(AppUpdateAsset asset) =>

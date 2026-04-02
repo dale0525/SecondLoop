@@ -308,11 +308,19 @@ class _AboutPageState extends State<AboutPage> {
 
   Future<void> _manualUpdate() {
     final uri =
-        _updateResult?.update?.releasePageUri ?? AboutPage.releasePageUri;
+        _updateResult?.update?.releasePageUri ?? _fallbackReleasePageUri();
     return _openExternalUri(
       uri,
       failedMessage: _text.messages.openUpdateFailed,
     );
+  }
+
+  Uri _fallbackReleasePageUri() {
+    final releaseRepo = _updateService.releaseRepo.trim();
+    if (releaseRepo.isEmpty) {
+      return AboutPage.releasePageUri;
+    }
+    return Uri.parse('https://github.com/$releaseRepo/releases/latest');
   }
 
   String _currentVersionText() {
