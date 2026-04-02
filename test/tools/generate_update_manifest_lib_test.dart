@@ -426,6 +426,37 @@ void main() {
   });
 
   test(
+      'generateUpdateManifest prioritizes missing requested windows channel over unrelated unknown variants',
+      () async {
+    final tempDir = await Directory.systemTemp
+        .createTemp('update_manifest_missing_requested_channel_priority_');
+    addTearDown(() => tempDir.delete(recursive: true));
+
+    await File(
+            '${tempDir.path}/com.secondloop.secondloop-1.2.3-mystery-full.nupkg')
+        .writeAsString('mystery');
+    await File('${tempDir.path}/releases.win.json').writeAsString('stable');
+    await File('${tempDir.path}/SecondLoop-linux-x64-v1.2.3.tar.gz')
+        .writeAsString('linux');
+
+    await expectLater(
+      () => generateUpdateManifest(
+        inputDirPath: tempDir.path,
+        version: '1.2.3',
+        baseDownloadUrl: 'https://example.com/downloads/',
+        windowsChannel: 'nightly',
+      ),
+      throwsA(
+        isA<StateError>().having(
+          (error) => error.toString(),
+          'message',
+          contains('missing_requested_windows_package_channel:nightly'),
+        ),
+      ),
+    );
+  });
+
+  test(
       'generateUpdateManifest ignores unknown channel-suffixed windows package when stable package is unambiguous',
       () async {
     final tempDir = await Directory.systemTemp

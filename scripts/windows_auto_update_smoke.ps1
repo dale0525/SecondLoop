@@ -454,7 +454,8 @@ function Start-UpdateFeedServer {
     [string]$CertificatePath,
     [string]$KeyPath,
     [int]$ListenPort,
-    [string]$SmokeRoot
+    [string]$SmokeRoot,
+    [string]$AppName
   )
 
   $pythonPath = Get-PixiPythonPath
@@ -468,7 +469,8 @@ function Start-UpdateFeedServer {
     '--root', $ServerRoot,
     '--cert', $CertificatePath,
     '--key', $KeyPath,
-    '--port', $ListenPort.ToString()
+    '--port', $ListenPort.ToString(),
+    '--app-name', $AppName
   ) -WorkingDirectory $repoRootPath -PassThru -RedirectStandardOutput $stdoutPath -RedirectStandardError $stderrPath
 
   Start-Sleep -Seconds 2
@@ -609,7 +611,7 @@ try {
   $wasCertificateTrustedBefore = Test-CertificateTrustedInCurrentUserRoot -Thumbprint (Get-CertificateThumbprint -PemPath $certificatePem)
   $trustedCertificateThumbprint = Ensure-LocalhostCertificateTrusted -PemPath $certificatePem
   $certificateTrustAddedByScript = -not $wasCertificateTrustedBefore
-  $feedProcess = Start-UpdateFeedServer -ServerRoot $serverRoot -CertificatePath $certificatePem -KeyPath $certificateKey -ListenPort $Port -SmokeRoot $smokeRoot
+  $feedProcess = Start-UpdateFeedServer -ServerRoot $serverRoot -CertificatePath $certificatePem -KeyPath $certificateKey -ListenPort $Port -SmokeRoot $smokeRoot -AppName $AppName
 
   $latestManifest = Wait-ForLatestEndpoint -ListenPort $Port
   Write-Host "Update feed version: $($latestManifest.version)"

@@ -301,17 +301,17 @@ File? _selectNewestWindowsPackage(
     );
   }
 
+  if (matchingPackages.isEmpty && requestedChannel != null) {
+    throw StateError(
+      'missing_requested_windows_package_channel:$requestedChannel',
+    );
+  }
+
   if (sawUnknownChannelVariant &&
       matchingPackages.isEmpty &&
       (requestedChannel != null || sawKnownChannelForRequestedVersion)) {
     throw StateError(
       'unknown_windows_package_channel_variant:${requiredVersion.join('.')}',
-    );
-  }
-
-  if (matchingPackages.isEmpty && requestedChannel != null) {
-    throw StateError(
-      'missing_requested_windows_package_channel:$requestedChannel',
     );
   }
 

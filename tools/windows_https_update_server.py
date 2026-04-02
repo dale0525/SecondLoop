@@ -83,6 +83,14 @@ class UpdateFeedHandler(SimpleHTTPRequestHandler):
     def api_latest_signature_path(self) -> Path:
         return self.downloads_dir / "latest.json.sig"
 
+    @property
+    def app_name(self) -> str:
+        raw = getattr(self.server, "app_name", "SecondLoop")
+        if not isinstance(raw, str):
+            return "SecondLoop"
+        trimmed = raw.strip()
+        return trimmed if trimmed else "SecondLoop"
+
     def translate_path(self, path: str) -> str:
         try:
             return str(
@@ -129,7 +137,7 @@ class UpdateFeedHandler(SimpleHTTPRequestHandler):
         if normalized.startswith("/releases/"):
             release_name = normalized.removeprefix("/releases/") or "latest"
             body = (
-                "<html><body><h1>SecondLoop Dev "
+                f"<html><body><h1>{self.app_name} "
                 f"{release_name}</h1></body></html>"
             ).encode("utf-8")
             self._write_body(
@@ -171,6 +179,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--key", required=True, help="TLS private key path")
     parser.add_argument("--host", default="localhost", help="Bind host")
     parser.add_argument("--port", type=int, default=8443, help="Bind port")
+    parser.add_argument("--app-name", default="SecondLoop", help="Release page app name")
     return parser.parse_args()
 
 
@@ -184,6 +193,7 @@ def main() -> None:
 
     server = ThreadingHTTPServer((args.host, args.port), UpdateFeedHandler)
     server.root_dir = str(root)  # type: ignore[attr-defined]
+    server.app_name = args.app_name  # type: ignore[attr-defined]
 
     context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
     context.load_cert_chain(certfile=str(cert_path), keyfile=str(key_path))

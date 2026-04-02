@@ -316,6 +316,34 @@ void main() {
     expect(stagedPackage.readAsStringSync(), 'nupkg-content');
   });
 
+  test('stageAsset makes channel-suffixed package discoverable on next launch',
+      () async {
+    final root =
+        await Directory.systemTemp.createTemp('velopack_stage_channel_');
+    final updater = File('${root.path}${Platform.pathSeparator}Update.exe')
+      ..writeAsStringSync('stub');
+    _writeSqVersion(root, '1.0.0');
+    final sourceDir = Directory('${root.path}${Platform.pathSeparator}source')
+      ..createSync(recursive: true);
+    final sourcePackage = File(
+      '${sourceDir.path}${Platform.pathSeparator}com.secondloop.secondloopdev-1.2.0-devwin-full.nupkg',
+    )..writeAsStringSync('nupkg-content');
+
+    final client = VelopackUpdateClient(
+      updateExecutablePath: updater.path,
+      appId: 'com.secondloop.secondloopdev',
+    );
+
+    await client.stageAsset(sourcePackage.uri);
+
+    expect(client.hasPendingUpdate(), isTrue);
+    expect(client.pendingUpdateVersion(), '1.2.0');
+    expect(
+      client.pendingUpdatePackagePath(),
+      endsWith('com.secondloop.secondloopdev-1.2.0-devwin-full.nupkg'),
+    );
+  });
+
   test(
       'stageAsset preserves existing package when source already matches target',
       () async {

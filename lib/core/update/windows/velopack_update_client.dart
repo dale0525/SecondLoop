@@ -380,6 +380,11 @@ class VelopackUpdateClient implements WindowsStagedUpdateClient {
       '${packagesDir.path}${Platform.pathSeparator}${_resolveLocalPackageFileName(assetDownloadUri)}',
     );
     await _downloadAssetToFile(assetDownloadUri, packageFile);
+    _ensureChannelMetadataForStagedPackage(
+      updateExecutablePath: updateExePath,
+      packageFileName: packageFile.uri.pathSegments.last,
+      appId: _resolvedAppId,
+    );
     return packageFile;
   }
 
@@ -882,6 +887,85 @@ class VelopackUpdateClient implements WindowsStagedUpdateClient {
       }
     }
     return channels.toList(growable: false);
+  }
+
+  static void _ensureChannelMetadataForStagedPackage({
+    required String updateExecutablePath,
+    required String packageFileName,
+    required String appId,
+  }) {
+    final channel = _extractChannelFromNupkgName(
+      packageFileName,
+      appId: appId,
+    );
+    if (channel == null || channel == _defaultWindowsChannel) {
+      return;
+    }
+
+    final appRoot = File(updateExecutablePath).absolute.parent.path;
+    final releasesMetadataFile = File(
+      '$appRoot${Platform.pathSeparator}releases.$channel.json',
+    );
+    if (releasesMetadataFile.existsSync()) {
+      return;
+    }
+
+    try {
+      releasesMetadataFile.writeAsStringSync('{}');
+    } catch (_) {}
+  }
+
+  static String? _extractChannelFromNupkgName(
+    String fileName, {
+    required String appId,
+  }) {
+    final normalized = fileName.trim();
+    if (normalized.isEmpty) {
+      return null;
+    }
+    final lower = normalized.toLowerCase();
+    if (!lower.endsWith('.nupkg') || lower.endsWith('.snupkg')) {
+      return null;
+    }
+
+    if (!isWindowsVelopackPackageNameForApp(normalized, appId: appId)) {
+      return null;
+    }
+
+    final prefix = '${appId.trim()}-';
+    final packageStem = normalized.substring(
+      prefix.length,
+      normalized.length - '.nupkg'.length,
+    );
+    if (!packageStem.toLowerCase().endsWith('-full')) {
+      return null;
+    }
+
+    final versionWithOptionalChannel =
+        packageStem.substring(0, packageStem.length - '-full'.length);
+    if (parseComparableAppVersion(versionWithOptionalChannel) != null) {
+      return null;
+    }
+
+    final firstDashIndex = versionWithOptionalChannel.indexOf('-');
+    if (firstDashIndex <= 0 ||
+        firstDashIndex >= versionWithOptionalChannel.length - 1) {
+      return null;
+    }
+
+    final versionPrefix =
+        versionWithOptionalChannel.substring(0, firstDashIndex);
+    final channelSuffix =
+        versionWithOptionalChannel.substring(firstDashIndex + 1).trim();
+    final looksLikeSimpleChannel =
+        RegExp(r'^[A-Za-z][A-Za-z0-9_-]*$').hasMatch(channelSuffix);
+    if (channelSuffix.isEmpty ||
+        !looksLikeSimpleChannel ||
+        parseComparableAppVersion(versionPrefix) == null) {
+      return null;
+    }
+
+    return channelSuffix.toLowerCase();
   }
 
   static int _compareVersionStrings(String left, String right) {

@@ -103,19 +103,20 @@ class WindowsHttpsUpdateServerPathTests(unittest.TestCase):
 
             self.assertEqual(status, 403)
 
-    def test_release_page_route_still_returns_html(self) -> None:
+    def test_release_page_route_uses_configured_app_name(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             downloads = root / "downloads"
             downloads.mkdir()
 
-            status, body = self._request(root, "/releases/v1.0.1")
+            status, body = self._request(root, "/releases/v1.0.1", app_name="SecondLoop")
 
             self.assertEqual(status, 200)
-            self.assertIn(b"SecondLoop Dev v1.0.1", body)
+            self.assertIn(b"SecondLoop v1.0.1", body)
+            self.assertNotIn(b"SecondLoop Dev v1.0.1", body)
 
-    def _request(self, root: Path, path: str) -> tuple[int, bytes]:
-        status, _, body = self._request_with_method(root, "GET", path)
+    def _request(self, root: Path, path: str, app_name: str = "SecondLoop Dev") -> tuple[int, bytes]:
+        status, _, body = self._request_with_method(root, "GET", path, app_name=app_name)
         return status, body
 
     def test_release_page_head_route_matches_get_status_without_directory_fallback(self) -> None:
@@ -124,7 +125,11 @@ class WindowsHttpsUpdateServerPathTests(unittest.TestCase):
             downloads = root / "downloads"
             downloads.mkdir()
 
-            status, headers, body = self._request_with_method(root, "HEAD", "/releases/v1.0.1")
+            status, headers, body = self._request_with_method(
+                root,
+                "HEAD",
+                "/releases/v1.0.1",
+            )
 
             self.assertEqual(status, 200)
             self.assertEqual(body, b"")
@@ -135,9 +140,11 @@ class WindowsHttpsUpdateServerPathTests(unittest.TestCase):
         root: Path,
         method: str,
         path: str,
+        app_name: str = "SecondLoop Dev",
     ) -> tuple[int, dict[str, str], bytes]:
         server = ThreadingHTTPServer(("127.0.0.1", 0), UpdateFeedHandler)
         server.root_dir = str(root)  # type: ignore[attr-defined]
+        server.app_name = app_name  # type: ignore[attr-defined]
         thread = threading.Thread(target=server.serve_forever, daemon=True)
         thread.start()
         try:

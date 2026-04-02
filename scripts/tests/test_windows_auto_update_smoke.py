@@ -133,6 +133,7 @@ class WindowsAutoUpdateSmokeTests(unittest.TestCase):
         self.assertIn("tools/windows_https_update_server.py", script)
         self.assertIn("'--windows-app-id', $PackId", script)
         self.assertIn("'--windows-channel', $Channel", script)
+        self.assertIn("'--app-name', $AppName", script)
         self.assertNotIn("'--package', $packageFile.FullName", script)
         self.assertNotIn("Start-ObservedProcess -FilePath $updateExe", script)
 
