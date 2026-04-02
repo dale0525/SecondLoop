@@ -125,7 +125,8 @@ void main() {
     );
   });
 
-  test('verifies signatures for custom api latest endpoint', () async {
+  test('does not require signature fetch for custom api latest endpoint',
+      () async {
     final requestedUris = <Uri>[];
     final service = AppUpdateService(
       httpClient: _FakeHttpClient(
@@ -149,10 +150,6 @@ void main() {
               }),
             );
           }
-          if (uri.path.endsWith('/api/releases/latest.sig')) {
-            return _FakeHttpResponse(
-                statusCode: 200, body: base64Encode(List.filled(64, 1)));
-          }
           throw StateError('unexpected_uri:$uri');
         },
       ),
@@ -168,14 +165,17 @@ void main() {
 
     final result = await service.checkForUpdates();
 
-    expect(result.update, isNull);
-    expect(result.errorMessage, contains('invalid_update_manifest_signature'));
+    expect(result.errorMessage, isNull);
+    expect(result.update, isNotNull);
     final requestedPaths = requestedUris.map((uri) => uri.path).toList();
     expect(requestedPaths, contains('/custom/base/api/releases/latest'));
-    expect(requestedPaths, contains('/custom/base/api/releases/latest.sig'));
+    expect(
+      requestedPaths,
+      isNot(contains('/custom/base/api/releases/latest.sig')),
+    );
   });
 
-  test('fails when custom api latest signature is missing', () async {
+  test('does not request missing custom api latest signature', () async {
     final requestedUris = <Uri>[];
     final service = AppUpdateService(
       httpClient: _FakeHttpClient(
@@ -199,9 +199,6 @@ void main() {
               }),
             );
           }
-          if (uri.path.endsWith('/api/releases/latest.sig')) {
-            return const _FakeHttpResponse(statusCode: 404, body: 'missing');
-          }
           throw StateError('unexpected_uri:$uri');
         },
       ),
@@ -217,11 +214,14 @@ void main() {
 
     final result = await service.checkForUpdates();
 
-    expect(result.update, isNull);
-    expect(result.errorMessage, contains('signature_fetch_failed_404'));
+    expect(result.errorMessage, isNull);
+    expect(result.update, isNotNull);
     final requestedPaths = requestedUris.map((uri) => uri.path).toList();
     expect(requestedPaths, contains('/custom/base/api/releases/latest'));
-    expect(requestedPaths, contains('/custom/base/api/releases/latest.sig'));
+    expect(
+      requestedPaths,
+      isNot(contains('/custom/base/api/releases/latest.sig')),
+    );
   });
 }
 

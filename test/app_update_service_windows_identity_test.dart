@@ -7,7 +7,7 @@ import 'package:secondloop/core/update/windows/velopack_update_client.dart';
 
 void main() {
   test(
-      'checkForUpdates does not match unrelated dev Windows MSI for custom app id',
+      'checkForUpdates rejects unsupported Windows app id before matching assets',
       () async {
     final stagedClient = VelopackUpdateClient(
       updateExecutablePath: _stubUpdateExePath(),
@@ -33,16 +33,12 @@ void main() {
 
     final result = await service.checkForUpdates();
 
-    expect(result.update, isNotNull);
-    expect(result.update!.asset, isNull);
-    expect(result.update!.installMode, AppUpdateInstallMode.externalDownload);
-    expect(
-      result.update!.downloadUri,
-      Uri.parse('https://example.com/releases/v1.1.0'),
-    );
+    expect(result.update, isNull);
+    expect(result.errorMessage, 'unsupported_windows_app_id');
   });
 
-  test('checkForUpdates rejects generic Windows MSI for custom app id',
+  test(
+      'checkForUpdates rejects unsupported Windows app id even with generic MSI assets',
       () async {
     final stagedClient = VelopackUpdateClient(
       updateExecutablePath: _stubUpdateExePath(),
@@ -72,13 +68,8 @@ void main() {
 
     final result = await service.checkForUpdates();
 
-    expect(result.update, isNotNull);
-    expect(result.update!.asset, isNull);
-    expect(result.update!.installMode, AppUpdateInstallMode.externalDownload);
-    expect(
-      result.update!.downloadUri,
-      Uri.parse('https://example.com/releases/v1.1.0'),
-    );
+    expect(result.update, isNull);
+    expect(result.errorMessage, 'unsupported_windows_app_id');
   });
 
   test('checkForUpdates prefers exact Windows app id asset from release assets',

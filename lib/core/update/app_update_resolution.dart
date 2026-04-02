@@ -797,13 +797,7 @@ bool _matchesExpectedWindowsManifestIdentity({
     if (carriesRecognizedWindowsIdentity) {
       return false;
     }
-
-    final normalizedAssetName = assetName.trim().toLowerCase();
-    final looksLikeWindowsPackageFile =
-        normalizedAssetName.endsWith('.nupkg') ||
-            normalizedAssetName.endsWith('.msi') ||
-            normalizedAssetName.endsWith('.exe');
-    return !looksLikeWindowsPackageFile;
+    return false;
   }
 
   final exactNameMatch =

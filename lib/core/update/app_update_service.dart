@@ -164,6 +164,21 @@ class AppUpdateService {
       return AppUpdateCheckResult(currentVersion: runtimeVersion.display);
     }
 
+    final effectiveWindowsAppId = _windowsAppId;
+    if (_platform == AppUpdatePlatform.windows &&
+        effectiveWindowsAppId != null &&
+        !isSupportedSecondLoopAppId(effectiveWindowsAppId)) {
+      await _recordFailure(
+        UpdateEventType.checkFailed,
+        'unsupported_windows_app_id',
+        currentVersion: runtimeVersion.display,
+      );
+      return AppUpdateCheckResult(
+        currentVersion: runtimeVersion.display,
+        errorMessage: 'unsupported_windows_app_id',
+      );
+    }
+
     Map<String, Object?>? release;
     Object? lastError;
     for (final endpoint in _buildReleaseEndpoints()) {
@@ -241,7 +256,6 @@ class AppUpdateService {
     final windowsStagedClient = _resolvedWindowsStagedUpdateClient;
     final windowsManagedRuntimeAvailable =
         windowsStagedClient != null && windowsStagedClient.isAvailable();
-    final effectiveWindowsAppId = _windowsAppId;
     final macosManagedClient = _resolvedMacosManagedUpdateClient;
     final macosManagedInstallSupported = macosManagedClient != null &&
         macosManagedClient.isSupportedInstallLocation();
@@ -885,8 +899,7 @@ class AppUpdateService {
 
   bool _isSignedManifestUri(Uri uri) {
     final normalizedPath = uri.path.toLowerCase();
-    return normalizedPath.endsWith('latest.json') ||
-        normalizedPath.endsWith('/api/releases/latest');
+    return normalizedPath.endsWith('latest.json');
   }
 
   Future<void> _recordEvent(

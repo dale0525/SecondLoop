@@ -84,7 +84,7 @@ void main() {
     });
 
     test(
-        'matchManifestAssetForCurrentPlatform accepts Windows manifest entry with matching app id when name is omitted',
+        'matchManifestAssetForCurrentPlatform rejects Windows manifest entry when name is omitted',
         () {
       final release = <String, Object?>{
         'platforms': <String, Object?>{
@@ -105,13 +105,7 @@ void main() {
         windowsAppId: 'com.secondloop.secondloopdev',
       );
 
-      expect(asset, isNotNull);
-      expect(asset!.name, 'latest-package');
-      expect(
-        asset.downloadUri.toString(),
-        'https://cdn.example.com/downloads/latest-package',
-      );
-      expect(asset.sha256, 'nupkgsha');
+      expect(asset, isNull);
     });
 
     test(
