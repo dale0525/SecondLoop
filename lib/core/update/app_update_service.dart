@@ -255,6 +255,7 @@ class AppUpdateService {
     String? releaseTag;
     Object? lastError;
     var sawUpToDateOrOlderRelease = false;
+    var sawNewerButUnusableRelease = false;
     final windowsStagedClient = _resolvedWindowsStagedUpdateClient;
     final windowsManagedRuntimeAvailable =
         windowsStagedClient != null && windowsStagedClient.isAvailable();
@@ -286,6 +287,7 @@ class AppUpdateService {
           windowsManagedRuntimeAvailable: windowsManagedRuntimeAvailable,
           androidSupportedAbis: androidSupportedAbis,
         )) {
+          sawNewerButUnusableRelease = true;
           lastError = StateError('no_platform_asset_for_${_platform.name}');
           continue;
         }
@@ -299,6 +301,17 @@ class AppUpdateService {
       }
     }
     if (release == null) {
+      if (sawNewerButUnusableRelease) {
+        await _recordFailure(
+          UpdateEventType.checkFailed,
+          lastError ?? 'failed_to_fetch_release',
+          currentVersion: runtimeVersion.display,
+        );
+        return AppUpdateCheckResult(
+          currentVersion: runtimeVersion.display,
+          errorMessage: lastError?.toString() ?? 'failed_to_fetch_release',
+        );
+      }
       if (sawUpToDateOrOlderRelease) {
         await _recordEvent(
           UpdateEventType.checkSucceeded,

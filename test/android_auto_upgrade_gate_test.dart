@@ -632,7 +632,7 @@ void main() {
   });
 
   testWidgets(
-      'rechecks Android update dialog after resuming from permission settings',
+      'does not reopen Android update dialog after dismissing permission settings flow in same session',
       (tester) async {
     final oldPlatform = debugDefaultTargetPlatformOverride;
     debugDefaultTargetPlatformOverride = TargetPlatform.android;
@@ -690,14 +690,14 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 100));
 
-      expect(find.byType(AlertDialog), findsOneWidget);
+      expect(find.byType(AlertDialog), findsNothing);
     } finally {
       debugDefaultTargetPlatformOverride = oldPlatform;
     }
   });
 
   testWidgets(
-      'reuses verified Android apk after resuming from permission settings',
+      'does not retry Android apk update automatically after permission settings dismissal in same session',
       (tester) async {
     final oldPlatform = debugDefaultTargetPlatformOverride;
     debugDefaultTargetPlatformOverride = TargetPlatform.android;
@@ -756,12 +756,9 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 100));
 
-      expect(find.byType(AlertDialog), findsOneWidget);
-      await tester.tap(find.byKey(const ValueKey('android_update_confirm')));
-      await _settleAndroidUpdateFlow(tester);
-
+      expect(find.byType(AlertDialog), findsNothing);
       expect(coordinator.downloadCalls, 1);
-      expect(coordinator.performCalls, 2);
+      expect(coordinator.performCalls, 1);
     } finally {
       debugDefaultTargetPlatformOverride = oldPlatform;
     }

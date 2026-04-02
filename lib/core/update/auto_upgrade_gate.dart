@@ -663,6 +663,7 @@ class _AndroidUpdateDialogState extends State<_AndroidUpdateDialog> {
         _isDownloading = false;
         _errorMessage = context.t.settings.updateDialog.permissionRequired;
       });
+      widget.onDismissed();
       return;
     } catch (error) {
       if (!mounted) return;
