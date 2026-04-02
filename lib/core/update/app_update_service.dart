@@ -164,20 +164,14 @@ class AppUpdateService {
       return AppUpdateCheckResult(currentVersion: runtimeVersion.display);
     }
 
-    final effectiveWindowsAppId = _windowsAppId;
-    if (_platform == AppUpdatePlatform.windows &&
-        effectiveWindowsAppId != null &&
-        !isSupportedSecondLoopAppId(effectiveWindowsAppId)) {
-      await _recordFailure(
-        UpdateEventType.checkFailed,
-        'unsupported_windows_app_id',
-        currentVersion: runtimeVersion.display,
-      );
-      return AppUpdateCheckResult(
-        currentVersion: runtimeVersion.display,
-        errorMessage: 'unsupported_windows_app_id',
-      );
-    }
+    final rawWindowsAppId =
+        _platform == AppUpdatePlatform.windows ? _windowsAppId : null;
+    final effectiveWindowsAppId = _platform == AppUpdatePlatform.windows
+        ? normalizeSupportedSecondLoopAppId(rawWindowsAppId)
+        : null;
+    final hasUnsupportedWindowsAppId = rawWindowsAppId != null &&
+        rawWindowsAppId.trim().isNotEmpty &&
+        effectiveWindowsAppId == null;
 
     Map<String, Object?>? release;
     Object? lastError;
@@ -251,6 +245,39 @@ class AppUpdateService {
         message: 'up_to_date',
       );
       return AppUpdateCheckResult(currentVersion: runtimeVersion.display);
+    }
+
+    if (hasUnsupportedWindowsAppId) {
+      await _recordEvent(
+        UpdateEventType.updateAvailable,
+        currentVersion: runtimeVersion.display,
+        latestTag: latestTag,
+        installMode: AppUpdateInstallMode.externalDownload,
+        message: 'unsupported_windows_app_id',
+      );
+      await _recordEvent(
+        UpdateEventType.checkSucceeded,
+        currentVersion: runtimeVersion.display,
+        latestTag: latestTag,
+        installMode: AppUpdateInstallMode.externalDownload,
+        message: 'update_available',
+      );
+      await _recordEvent(
+        UpdateEventType.manualFallback,
+        currentVersion: runtimeVersion.display,
+        latestTag: latestTag,
+        installMode: AppUpdateInstallMode.externalDownload,
+        message: 'unsupported_windows_app_id',
+      );
+      return AppUpdateCheckResult(
+        currentVersion: runtimeVersion.display,
+        update: AppUpdateAvailability(
+          currentVersion: runtimeVersion.display,
+          latestTag: latestTag,
+          releasePageUri: releasePageUri,
+          installMode: AppUpdateInstallMode.externalDownload,
+        ),
+      );
     }
 
     final windowsStagedClient = _resolvedWindowsStagedUpdateClient;

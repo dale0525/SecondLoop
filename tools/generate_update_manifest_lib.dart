@@ -256,7 +256,6 @@ File? _selectNewestWindowsPackage(
   final matchingPackages = <File>[];
   var sawMismatchedStrictVersion = false;
   var sawUnknownChannelVariant = false;
-  var sawKnownChannelForRequestedVersion = false;
 
   for (final file in files) {
     final name = file.uri.pathSegments.last;
@@ -279,9 +278,6 @@ File? _selectNewestWindowsPackage(
     final packageChannel = _effectiveWindowsChannel(
       packageInfo.channel,
     );
-    if (_compareStrictVersionSegments(version, requiredVersion) == 0) {
-      sawKnownChannelForRequestedVersion = true;
-    }
     if (requestedChannel != null) {
       if (packageChannel != requestedChannel) {
         continue;
@@ -307,9 +303,7 @@ File? _selectNewestWindowsPackage(
     );
   }
 
-  if (sawUnknownChannelVariant &&
-      matchingPackages.isEmpty &&
-      (requestedChannel != null || sawKnownChannelForRequestedVersion)) {
+  if (sawUnknownChannelVariant && matchingPackages.isEmpty) {
     throw StateError(
       'unknown_windows_package_channel_variant:${requiredVersion.join('.')}',
     );
