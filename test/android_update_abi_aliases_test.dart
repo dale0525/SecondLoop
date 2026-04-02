@@ -70,5 +70,38 @@ void main() {
               'SecondLoop-android-arm-v7a-v1.2.3.apk'),
           'android-armeabi-v7a');
     });
+
+    test('rejects unknown non-arm abi values consistently', () async {
+      final service = AppUpdateService(
+        platformOverride: AppUpdatePlatform.android,
+        releaseModeOverride: true,
+        androidSupportedAbisOverride: const ['riscv64'],
+        currentVersionLoader: () async =>
+            const AppRuntimeVersion(version: '1.0.0', buildNumber: '9'),
+        releaseJsonFetcher: (uri) async => {
+          'tag_name': 'v1.1.0',
+          'html_url':
+              'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
+          'platforms': {
+            'android-universal': {
+              'archive_url': 'https://cdn.example.com/universal.apk',
+              'sha256': 'abc123',
+              'install_mode': 'apk',
+            },
+          },
+        },
+      );
+
+      final result = await service.checkForUpdates();
+
+      expect(result.update, isNull);
+      expect(result.errorMessage, contains('no_platform_asset_for_android'));
+      expect(
+        () => resolveAndroidPlatformKeyForTest(
+          'SecondLoop-android-riscv64-v1.2.3.apk',
+        ),
+        throwsA(isA<StateError>()),
+      );
+    });
   });
 }

@@ -3,6 +3,8 @@ import 'dart:io';
 
 import 'package:cryptography/cryptography.dart';
 
+import 'package:secondloop/core/update/android/android_update_abi.dart';
+
 class GeneratedUpdateManifest {
   const GeneratedUpdateManifest({
     required this.manifest,
@@ -265,16 +267,16 @@ String _normalizeBaseDownloadUrl(String value) {
 }
 
 String _resolveAndroidPlatformKey(String fileName) {
-  switch (_extractLeadingAndroidAbi(fileName)) {
+  switch (extractLeadingAndroidAbi(fileName)) {
     case 'arm64-v8a':
       return 'android-arm64-v8a';
     case 'armeabi-v7a':
       return 'android-armeabi-v7a';
   }
-  if (_looksLikeUnsupportedAndroidApk(fileName)) {
+  if (hasUnsupportedAndroidAbiStem(fileName)) {
     return '';
   }
-  if (_looksLikeUniversalAndroidApk(fileName)) {
+  if (isUniversalAndroidApkName(fileName)) {
     return 'android-universal';
   }
   throw StateError('unsupported_android_platform_asset_$fileName');
@@ -286,62 +288,4 @@ String resolveAndroidPlatformKeyForTest(String fileName) =>
 bool _isWindowsReleasesMetadataFileName(String fileName) {
   final normalized = fileName.trim().toLowerCase();
   return RegExp(r'^releases\.win(?:[._-].+)?\.json$').hasMatch(normalized);
-}
-
-String? _extractLeadingAndroidAbi(String fileName) {
-  final normalized = fileName.trim().toLowerCase();
-  const prefix = 'secondloop-android-';
-  if (!normalized.startsWith(prefix) || !normalized.endsWith('.apk')) {
-    return null;
-  }
-
-  final stem = normalized.substring(prefix.length, normalized.length - 4);
-  for (final candidate in const <String, List<String>>{
-    'arm64-v8a': <String>['arm64-v8a', 'aarch64', 'arm64'],
-    'armeabi-v7a': <String>['armeabi-v7a', 'arm-v7a', 'armv7'],
-  }.entries) {
-    for (final alias in candidate.value) {
-      if (stem == alias || stem.startsWith('$alias-')) {
-        return candidate.key;
-      }
-    }
-  }
-
-  return null;
-}
-
-bool _looksLikeUnsupportedAndroidApk(String fileName) {
-  final normalized = fileName.trim().toLowerCase();
-  const prefix = 'secondloop-android-';
-  if (!normalized.startsWith(prefix) || !normalized.endsWith('.apk')) {
-    return false;
-  }
-
-  final stem = normalized.substring(prefix.length, normalized.length - 4);
-  for (final prefixValue in const <String>[
-    'x86_64',
-    'x64',
-    'x86',
-    'i686',
-    'ia32',
-  ]) {
-    if (stem == prefixValue || stem.startsWith('$prefixValue-')) {
-      return true;
-    }
-  }
-  return false;
-}
-
-bool _looksLikeUniversalAndroidApk(String fileName) {
-  final normalized = fileName.trim().toLowerCase();
-  const prefix = 'secondloop-android-';
-  if (!normalized.startsWith(prefix) || !normalized.endsWith('.apk')) {
-    return false;
-  }
-
-  final stem = normalized.substring(prefix.length, normalized.length - 4);
-  if (stem == 'universal' || stem.startsWith('universal-')) {
-    return true;
-  }
-  return RegExp(r'^v?\d+\.\d+\.\d+$').hasMatch(stem);
 }

@@ -245,6 +245,34 @@ void main() {
       expect(result.errorMessage, contains('no_platform_asset_for_android'));
     });
 
+    test('does not offer universal apk fallback to unknown non-arm devices',
+        () async {
+      final service = AppUpdateService(
+        platformOverride: AppUpdatePlatform.android,
+        releaseModeOverride: true,
+        androidSupportedAbisOverride: const ['riscv64'],
+        currentVersionLoader: () async =>
+            const AppRuntimeVersion(version: '1.0.0', buildNumber: '9'),
+        releaseJsonFetcher: (uri) async => {
+          'tag_name': 'v1.1.0',
+          'html_url':
+              'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
+          'assets': [
+            {
+              'name': 'SecondLoop-android-v1.1.0.apk',
+              'browser_download_url': 'https://cdn.example.com/universal.apk',
+              'sha256': 'abc123',
+            },
+          ],
+        },
+      );
+
+      final result = await service.checkForUpdates();
+
+      expect(result.update, isNull);
+      expect(result.errorMessage, contains('no_platform_asset_for_android'));
+    });
+
     test('rejects Android updates when release tag is not strict semver',
         () async {
       final service = AppUpdateService(
