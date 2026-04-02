@@ -256,10 +256,12 @@ AppUpdateInstallMode resolveInstallMode(
 
   final isMatchingWindowsManagedPackage =
       _isMatchingWindowsManagedPackageName(asset.name, appId: windowsAppId);
+  final isWindowsManagedManifestAsset =
+      _isWindowsManagedManifestAsset(asset, windowsAppId: windowsAppId);
 
   if (asset.installModeHint == AppUpdateInstallMode.stagedNextLaunch &&
       platform == AppUpdatePlatform.windows &&
-      isMatchingWindowsManagedPackage &&
+      (isMatchingWindowsManagedPackage || isWindowsManagedManifestAsset) &&
       windowsManagedRuntimeAvailable &&
       assetHasIntegrityMetadata(asset)) {
     return AppUpdateInstallMode.stagedNextLaunch;
@@ -267,7 +269,8 @@ AppUpdateInstallMode resolveInstallMode(
 
   return switch (platform) {
     AppUpdatePlatform.windows
-        when isMatchingWindowsManagedPackage &&
+        when (isMatchingWindowsManagedPackage ||
+                isWindowsManagedManifestAsset) &&
             windowsManagedRuntimeAvailable &&
             assetHasIntegrityMetadata(asset) =>
       AppUpdateInstallMode.seamlessRestart,
@@ -363,6 +366,7 @@ AppUpdateAsset? matchManifestAssetForCurrentPlatform(
         platform,
         readStringLoose(candidateEntry, 'install_mode'),
         assetName: name,
+        manifestAppId: manifestAppId,
         windowsAppId: windowsAppId,
       );
       candidates.add(
@@ -391,6 +395,7 @@ AppUpdateInstallMode? parseManifestInstallModeHint(
   AppUpdatePlatform platform,
   String? rawInstallMode, {
   required String assetName,
+  String? manifestAppId,
   String? windowsAppId,
 }) {
   final normalized = rawInstallMode?.trim().toLowerCase();
@@ -400,14 +405,25 @@ AppUpdateInstallMode? parseManifestInstallModeHint(
 
   final isMatchingWindowsManagedPackage =
       _isMatchingWindowsManagedPackageName(assetName, appId: windowsAppId);
+  final expectedWindowsAppId = windowsAppId?.trim();
+  final manifestDeclaresMatchingWindowsManagedPackage =
+      expectedWindowsAppId != null &&
+          expectedWindowsAppId.isNotEmpty &&
+          _matchesExpectedWindowsManifestIdentity(
+            assetName: assetName,
+            manifestAppId: manifestAppId,
+            expectedAppId: expectedWindowsAppId,
+          );
 
   return switch ((platform, normalized)) {
     (AppUpdatePlatform.windows, 'velopack')
-        when isMatchingWindowsManagedPackage =>
+        when isMatchingWindowsManagedPackage ||
+            manifestDeclaresMatchingWindowsManagedPackage =>
       AppUpdateInstallMode.seamlessRestart,
     (AppUpdatePlatform.windows, 'staged-next-launch') ||
     (AppUpdatePlatform.windows, 'staged_next_launch')
-        when isMatchingWindowsManagedPackage =>
+        when isMatchingWindowsManagedPackage ||
+            manifestDeclaresMatchingWindowsManagedPackage =>
       AppUpdateInstallMode.stagedNextLaunch,
     (AppUpdatePlatform.macos, 'app-tar-gz')
         when isMacosManagedArchiveName(assetName) =>
@@ -439,8 +455,10 @@ String describeManualFallbackReason(
   }
   final isMatchingWindowsManagedPackage =
       _isMatchingWindowsManagedPackageName(asset.name, appId: windowsAppId);
+  final isWindowsManagedManifestAsset =
+      _isWindowsManagedManifestAsset(asset, windowsAppId: windowsAppId);
   if (platform == AppUpdatePlatform.windows &&
-      isMatchingWindowsManagedPackage) {
+      (isMatchingWindowsManagedPackage || isWindowsManagedManifestAsset)) {
     if (!windowsManagedRuntimeAvailable) {
       return 'windows_runtime_unavailable';
     }
@@ -473,6 +491,20 @@ bool _isMatchingWindowsManagedPackageName(String assetName, {String? appId}) {
     return isWindowsVelopackPackageNameForApp(assetName, appId: exactAppId);
   }
   return isWindowsVelopackPackageName(assetName);
+}
+
+bool _isWindowsManagedManifestAsset(
+  AppUpdateAsset asset, {
+  String? windowsAppId,
+}) {
+  final expectedAppId = windowsAppId?.trim();
+  if (expectedAppId == null || expectedAppId.isEmpty) {
+    return false;
+  }
+
+  return (asset.installModeHint == AppUpdateInstallMode.seamlessRestart ||
+          asset.installModeHint == AppUpdateInstallMode.stagedNextLaunch) &&
+      !_isMatchingWindowsManagedPackageName(asset.name, appId: expectedAppId);
 }
 
 String? readUpdateString(Map<String, Object?> map, String key) {

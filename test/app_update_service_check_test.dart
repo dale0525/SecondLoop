@@ -1170,6 +1170,46 @@ void main() {
     });
 
     test(
+        'accepts manifest-only Windows managed package metadata without file-like package name',
+        () async {
+      final stagedClient = FakeWindowsStagedUpdateClient(
+        available: true,
+        appIdValue: 'com.secondloop.secondloopdev',
+      );
+      final service = AppUpdateService(
+        platformOverride: AppUpdatePlatform.windows,
+        releaseModeOverride: true,
+        windowsStagedUpdateClient: stagedClient,
+        currentVersionLoader: () async =>
+            const AppRuntimeVersion(version: '1.0.0', buildNumber: '9'),
+        releaseJsonFetcher: (_) async => {
+          'version': '1.1.0',
+          'release_page_url':
+              'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
+          'platforms': {
+            'windows-x64': {
+              'app_id': 'com.secondloop.secondloopdev',
+              'install_mode': 'velopack',
+              'package_url': 'https://cdn.example.com/downloads/latest-package',
+              'sha256': 'abc123',
+            },
+          },
+          'assets': <Object?>[],
+        },
+      );
+
+      final result = await service.checkForUpdates();
+
+      expect(result.update, isNotNull);
+      expect(result.update!.installMode, AppUpdateInstallMode.seamlessRestart);
+      expect(result.update!.asset, isNotNull);
+      expect(
+        result.update!.asset!.downloadUri.toString(),
+        'https://cdn.example.com/downloads/latest-package',
+      );
+    });
+
+    test(
         'records windows runtime unavailable fallback for exact app id manifest package',
         () async {
       final logger = InMemoryUpdateEventLogger();
