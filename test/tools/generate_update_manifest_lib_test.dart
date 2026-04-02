@@ -19,6 +19,8 @@ void main() {
         .writeAsString('macos');
     await File('${tempDir.path}/SecondLoop-linux-x64-v1.2.3.tar.gz')
         .writeAsString('linux');
+    await File('${tempDir.path}/SecondLoop-android-v1.2.3.apk')
+        .writeAsString('android');
 
     final generated = await generateUpdateManifest(
       inputDirPath: tempDir.path,
@@ -34,6 +36,7 @@ void main() {
     final windows = platforms['windows-x64'] as Map<String, Object?>;
     final macos = platforms['macos-universal'] as Map<String, Object?>;
     final linux = platforms['linux-x64'] as Map<String, Object?>;
+    final android = platforms['android-universal'] as Map<String, Object?>;
 
     expect(generated.manifest['version'], '1.2.3');
     expect(generated.manifest['tag_name'], 'v1.2.3');
@@ -66,6 +69,11 @@ void main() {
       linux['sha256'],
       _hexEncode((await Sha256().hash(utf8.encode('linux'))).bytes),
     );
+    expect(android['install_mode'], 'apk');
+    expect(
+      android['archive_url'],
+      'https://github.com/dale0525/SecondLoop/releases/download/v1.2.3/SecondLoop-android-v1.2.3.apk',
+    );
     expect(generated.signatureBase64, isNull);
   });
 
@@ -87,6 +95,118 @@ void main() {
         ),
       ),
       throwsArgumentError,
+    );
+  });
+
+  test('generateUpdateManifest emits Android ABI-specific entries', () async {
+    final tempDir =
+        await Directory.systemTemp.createTemp('update_manifest_android_multi_');
+    addTearDown(() => tempDir.delete(recursive: true));
+
+    await File('${tempDir.path}/SecondLoop-android-arm64-v8a-v1.2.3.apk')
+        .writeAsString('arm64');
+    await File('${tempDir.path}/SecondLoop-android-armeabi-v7a-v1.2.3.apk')
+        .writeAsString('armeabi');
+    await File('${tempDir.path}/SecondLoop-android-v1.2.3.apk')
+        .writeAsString('universal');
+
+    final generated = await generateUpdateManifest(
+      inputDirPath: tempDir.path,
+      version: 'v1.2.3',
+      baseDownloadUrl:
+          'https://github.com/dale0525/SecondLoop/releases/download/v1.2.3',
+    );
+
+    final platforms = generated.manifest['platforms'] as Map<String, Object?>;
+    expect(platforms['android-arm64-v8a'], isNotNull);
+    expect(platforms['android-armeabi-v7a'], isNotNull);
+    expect(platforms['android-universal'], isNotNull);
+  });
+
+  test('generateUpdateManifest recognizes Android ABI alias file names',
+      () async {
+    final tempDir =
+        await Directory.systemTemp.createTemp('update_manifest_android_alias_');
+    addTearDown(() => tempDir.delete(recursive: true));
+
+    await File('${tempDir.path}/SecondLoop-android-arm64-v1.2.3.apk')
+        .writeAsString('arm64');
+    await File('${tempDir.path}/SecondLoop-android-x64-v1.2.3.apk')
+        .writeAsString('x64');
+
+    final generated = await generateUpdateManifest(
+      inputDirPath: tempDir.path,
+      version: 'v1.2.3',
+      baseDownloadUrl:
+          'https://github.com/dale0525/SecondLoop/releases/download/v1.2.3',
+    );
+
+    final platforms = generated.manifest['platforms'] as Map<String, Object?>;
+    expect(platforms['android-arm64-v8a'], isNotNull);
+    expect(platforms['android-x86_64'], isNull);
+    expect(platforms['android-universal'], isNull);
+  });
+
+  test(
+      'generateUpdateManifest ignores unsupported Android x86 alias file names',
+      () async {
+    final tempDir =
+        await Directory.systemTemp.createTemp('update_manifest_android_x86_');
+    addTearDown(() => tempDir.delete(recursive: true));
+
+    await File('${tempDir.path}/SecondLoop-android-i686-v1.2.3.apk')
+        .writeAsString('x86');
+
+    await expectLater(
+      () => generateUpdateManifest(
+        inputDirPath: tempDir.path,
+        version: 'v1.2.3',
+        baseDownloadUrl:
+            'https://github.com/dale0525/SecondLoop/releases/download/v1.2.3',
+      ),
+      throwsA(isA<StateError>()),
+    );
+  });
+
+  test('generateUpdateManifest rejects duplicate Android platform keys',
+      () async {
+    final tempDir =
+        await Directory.systemTemp.createTemp('update_manifest_android_dupe_');
+    addTearDown(() => tempDir.delete(recursive: true));
+
+    await File('${tempDir.path}/SecondLoop-android-arm64-v8a-v1.2.3.apk')
+        .writeAsString('arm64-a');
+    await File('${tempDir.path}/SecondLoop-android-arm64-v8a-hotfix-v1.2.3.apk')
+        .writeAsString('arm64-b');
+
+    await expectLater(
+      () => generateUpdateManifest(
+        inputDirPath: tempDir.path,
+        version: 'v1.2.3',
+        baseDownloadUrl:
+            'https://github.com/dale0525/SecondLoop/releases/download/v1.2.3',
+      ),
+      throwsA(isA<StateError>()),
+    );
+  });
+
+  test('generateUpdateManifest rejects unknown Android package stems',
+      () async {
+    final tempDir = await Directory.systemTemp
+        .createTemp('update_manifest_android_unknown_stem_');
+    addTearDown(() => tempDir.delete(recursive: true));
+
+    await File('${tempDir.path}/SecondLoop-android-dev-v1.2.3.apk')
+        .writeAsString('android-dev');
+
+    await expectLater(
+      () => generateUpdateManifest(
+        inputDirPath: tempDir.path,
+        version: 'v1.2.3',
+        baseDownloadUrl:
+            'https://github.com/dale0525/SecondLoop/releases/download/v1.2.3',
+      ),
+      throwsA(isA<StateError>()),
     );
   });
 
@@ -113,6 +233,101 @@ void main() {
     expect(
       windows['releases_url'],
       'https://github.com/dale0525/SecondLoop/releases/download/v1.2.3/releases.win.json',
+    );
+  });
+
+  test(
+      'generateUpdateManifest prefers Windows releases metadata over unrelated releases json files',
+      () async {
+    final tempDir = await Directory.systemTemp
+        .createTemp('update_manifest_releases_prefer_win_');
+    addTearDown(() => tempDir.delete(recursive: true));
+
+    await File('${tempDir.path}/com.secondloop.secondloop-1.2.3-full.nupkg')
+        .writeAsString('windows');
+    await File('${tempDir.path}/releases.android.json').writeAsString('{}');
+    await File('${tempDir.path}/releases.win.json').writeAsString('{}');
+
+    final generated = await generateUpdateManifest(
+      inputDirPath: tempDir.path,
+      version: 'v1.2.3',
+      baseDownloadUrl:
+          'https://github.com/dale0525/SecondLoop/releases/download/v1.2.3',
+    );
+
+    final platforms = generated.manifest['platforms'] as Map<String, Object?>;
+    final windows = platforms['windows-x64'] as Map<String, Object?>;
+    expect(
+      windows['releases_url'],
+      'https://github.com/dale0525/SecondLoop/releases/download/v1.2.3/releases.win.json',
+    );
+  });
+
+  test(
+      'generateUpdateManifest ignores stale Velopack releases metadata from other versions',
+      () async {
+    final tempDir = await Directory.systemTemp
+        .createTemp('update_manifest_releases_stale_');
+    addTearDown(() => tempDir.delete(recursive: true));
+
+    await File('${tempDir.path}/com.secondloop.secondloop-1.2.3-full.nupkg')
+        .writeAsString('windows');
+    await File('${tempDir.path}/releases.win.1.2.2.json').writeAsString('{}');
+
+    final generated = await generateUpdateManifest(
+      inputDirPath: tempDir.path,
+      version: 'v1.2.3',
+      baseDownloadUrl:
+          'https://github.com/dale0525/SecondLoop/releases/download/v1.2.3',
+    );
+
+    final platforms = generated.manifest['platforms'] as Map<String, Object?>;
+    final windows = platforms['windows-x64'] as Map<String, Object?>;
+    expect(windows['releases_url'], isNull);
+  });
+
+  test('generateUpdateManifest ignores stale assets from other versions',
+      () async {
+    final tempDir =
+        await Directory.systemTemp.createTemp('update_manifest_stale_version_');
+    addTearDown(() => tempDir.delete(recursive: true));
+
+    await File('${tempDir.path}/com.secondloop.secondloop-1.2.2-full.nupkg')
+        .writeAsString('old-windows');
+    await File('${tempDir.path}/SecondLoop-macos-v1.2.3.app.tar.gz')
+        .writeAsString('macos');
+    await File('${tempDir.path}/SecondLoop-linux-x64-v1.2.3.tar.gz')
+        .writeAsString('linux');
+
+    final generated = await generateUpdateManifest(
+      inputDirPath: tempDir.path,
+      version: 'v1.2.3',
+      baseDownloadUrl:
+          'https://github.com/dale0525/SecondLoop/releases/download/v1.2.3',
+    );
+
+    final platforms = generated.manifest['platforms'] as Map<String, Object?>;
+    expect(platforms['windows-x64'], isNull);
+    expect(platforms['macos-universal'], isNotNull);
+    expect(platforms['linux-x64'], isNotNull);
+  });
+
+  test('generateUpdateManifest rejects non-semver release versions', () async {
+    final tempDir = await Directory.systemTemp
+        .createTemp('update_manifest_android_universal_tag_');
+    addTearDown(() => tempDir.delete(recursive: true));
+
+    await File('${tempDir.path}/SecondLoop-android-v1.2.3.apk')
+        .writeAsString('android');
+
+    await expectLater(
+      () => generateUpdateManifest(
+        inputDirPath: tempDir.path,
+        version: 'v1.2.3-arm64-hotfix',
+        baseDownloadUrl:
+            'https://github.com/dale0525/SecondLoop/releases/download/v1.2.3-arm64-hotfix',
+      ),
+      throwsArgumentError,
     );
   });
 

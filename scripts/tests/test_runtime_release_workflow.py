@@ -64,6 +64,10 @@ class RuntimeReleaseWorkflowTests(unittest.TestCase):
         self.assertIn("dist/latest.json", workflow_text)
         self.assertIn("dist/latest.json.sig", workflow_text)
         self.assertIn("SecondLoop-macos-${safe_ref_name}.app.tar.gz", workflow_text)
+        self.assertIn('[armeabi-v7a]="build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk"', workflow_text)
+        self.assertIn('[arm64-v8a]="build/app/outputs/flutter-apk/app-arm64-v8a-release.apk"', workflow_text)
+        self.assertIn('[universal]="build/app/outputs/flutter-apk/app-release.apk"', workflow_text)
+        self.assertIn('dist/SecondLoop-android-${abi}-${safe_ref_name}.apk', workflow_text)
 
     def test_release_workflow_limits_linux_tarball_publish_glob(self) -> None:
         workflow_text = self._release_workflow_text()

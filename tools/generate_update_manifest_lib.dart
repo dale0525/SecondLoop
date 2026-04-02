@@ -3,6 +3,8 @@ import 'dart:io';
 
 import 'package:cryptography/cryptography.dart';
 
+import 'package:secondloop/core/update/android/android_update_abi.dart';
+
 class GeneratedUpdateManifest {
   const GeneratedUpdateManifest({
     required this.manifest,
@@ -39,8 +41,11 @@ Future<GeneratedUpdateManifest> generateUpdateManifest({
       releasePageUrl?.trim().isNotEmpty == true ? releasePageUrl!.trim() : null;
   manifest['pub_date'] =
       (publishedAt ?? DateTime.now().toUtc()).toUtc().toIso8601String();
-  manifest['platforms'] =
-      await _buildPlatforms(inputDir, baseDownloadUrl: normalizedBaseUrl);
+  manifest['platforms'] = await _buildPlatforms(
+    inputDir,
+    baseDownloadUrl: normalizedBaseUrl,
+    normalizedVersion: normalizedVersion,
+  );
 
   final jsonText = '${const JsonEncoder.withIndent('  ').convert(manifest)}\n';
   final signature = await _signManifest(
@@ -58,12 +63,17 @@ Future<GeneratedUpdateManifest> generateUpdateManifest({
 Future<Map<String, Object?>> _buildPlatforms(
   Directory inputDir, {
   required String baseDownloadUrl,
+  required String normalizedVersion,
 }) async {
   final entries = inputDir
       .listSync()
       .whereType<File>()
       .where((file) => !file.path.endsWith('.sha256'))
-      .toList(growable: false);
+      .where((file) => _matchesRequestedVersion(file, normalizedVersion))
+      .toList(growable: false)
+    ..sort((left, right) => left.uri.pathSegments.last
+        .toLowerCase()
+        .compareTo(right.uri.pathSegments.last.toLowerCase()));
 
   final platforms = <String, Object?>{};
 
@@ -80,9 +90,7 @@ Future<Map<String, Object?>> _buildPlatforms(
         '$baseDownloadUrl${windowsPackage.uri.pathSegments.last}';
     final releasesFile = _firstFile(
       entries,
-      (name) =>
-          name.toLowerCase().startsWith('releases.') &&
-          name.toLowerCase().endsWith('.json'),
+      _isWindowsReleasesMetadataFileName,
     );
     if (releasesFile != null) {
       windowsEntry['releases_url'] =
@@ -115,6 +123,27 @@ Future<Map<String, Object?>> _buildPlatforms(
       file: linuxArchive,
       baseDownloadUrl: baseDownloadUrl,
       installMode: 'bundle-tar-gz',
+    );
+  }
+
+  final androidApks = entries.where((file) {
+    final name = file.uri.pathSegments.last.toLowerCase();
+    return name.endsWith('.apk') && name.contains('secondloop-android');
+  }).toList(growable: false)
+    ..sort((left, right) => left.path.compareTo(right.path));
+  for (final androidApk in androidApks) {
+    final androidKey =
+        _resolveAndroidPlatformKey(androidApk.uri.pathSegments.last);
+    if (androidKey.isEmpty) {
+      continue;
+    }
+    if (platforms.containsKey(androidKey)) {
+      throw StateError('duplicate_android_platform_asset_$androidKey');
+    }
+    platforms[androidKey] = await _buildArchiveEntry(
+      file: androidApk,
+      baseDownloadUrl: baseDownloadUrl,
+      installMode: 'apk',
     );
   }
 
@@ -183,12 +212,46 @@ File? _firstFile(List<File> files, bool Function(String name) predicate) {
   return null;
 }
 
+bool _matchesRequestedVersion(File file, String normalizedVersion) {
+  final name = file.uri.pathSegments.last.toLowerCase();
+  final version = normalizedVersion.toLowerCase();
+  if (name.startsWith('releases.') && name.endsWith('.json')) {
+    return _matchesReleaseMetadataVersion(name, version);
+  }
+  return name.contains('-$version.') ||
+      name.contains('-v$version.') ||
+      name.contains('-$version-') ||
+      name.contains('-v$version-');
+}
+
+bool _matchesReleaseMetadataVersion(String fileName, String normalizedVersion) {
+  final versionMarkers = <String>{
+    normalizedVersion,
+    'v$normalizedVersion',
+    normalizedVersion.replaceAll('.', '-'),
+    'v${normalizedVersion.replaceAll('.', '-')}',
+    normalizedVersion.replaceAll('.', '_'),
+    'v${normalizedVersion.replaceAll('.', '_')}',
+  };
+  for (final marker in versionMarkers) {
+    if (fileName.contains(marker)) {
+      return true;
+    }
+  }
+
+  return !RegExp(r'v?\d+(?:[._-]\d+){1,3}').hasMatch(fileName);
+}
+
 String _normalizeVersion(String value) {
   final trimmed = value.trim();
   if (trimmed.isEmpty) {
     throw ArgumentError.value(value, 'version', 'version_must_not_be_empty');
   }
-  return trimmed.startsWith('v') ? trimmed.substring(1) : trimmed;
+  final normalized = trimmed.startsWith('v') ? trimmed.substring(1) : trimmed;
+  if (!RegExp(r'^\d+\.\d+\.\d+$').hasMatch(normalized)) {
+    throw ArgumentError.value(value, 'version', 'version_must_be_vX_Y_Z');
+  }
+  return normalized;
 }
 
 String _normalizeBaseDownloadUrl(String value) {
@@ -201,4 +264,28 @@ String _normalizeBaseDownloadUrl(String value) {
     );
   }
   return trimmed.endsWith('/') ? trimmed : '$trimmed/';
+}
+
+String _resolveAndroidPlatformKey(String fileName) {
+  switch (extractLeadingAndroidAbi(fileName)) {
+    case 'arm64-v8a':
+      return 'android-arm64-v8a';
+    case 'armeabi-v7a':
+      return 'android-armeabi-v7a';
+  }
+  if (hasUnsupportedAndroidAbiStem(fileName)) {
+    return '';
+  }
+  if (isUniversalAndroidApkName(fileName)) {
+    return 'android-universal';
+  }
+  throw StateError('unsupported_android_platform_asset_$fileName');
+}
+
+String resolveAndroidPlatformKeyForTest(String fileName) =>
+    _resolveAndroidPlatformKey(fileName);
+
+bool _isWindowsReleasesMetadataFileName(String fileName) {
+  final normalized = fileName.trim().toLowerCase();
+  return RegExp(r'^releases\.win(?:[._-].+)?\.json$').hasMatch(normalized);
 }

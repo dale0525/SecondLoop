@@ -663,6 +663,7 @@
       "checking": "正在检查更新…",
       "upToDate": "当前已是最新版本。",
       "availableSeamless": "发现新版本（$version）。可一键自动更新并重启。",
+      "availableAndroidApk": "发现新版本（$version）。可在应用内下载并继续安装。",
       "availableStaged": "发现新版本（$version）。可后台准备更新，下次启动自动生效。",
       "availableExternal": "发现新版本（$version）。请手动下载安装包，或前往发布页安装。",
       "failed": "检查更新失败：$error"
@@ -687,6 +688,18 @@
       "openHomepageFailed": "无法打开项目主页",
       "openUpdateFailed": "无法打开更新页面"
     }
+  },
+  "updateDialog": {
+    "title": "发现新版本：$version",
+    "message": "检测到新的 Android 版本，现在可以下载并安装。",
+    "updateNow": "更新",
+    "downloading": "正在下载更新…",
+    "installing": "正在打开安装器…",
+    "downloadProgress": "已下载：$percent%",
+    "downloadProgressUnknown": "下载中…",
+    "permissionRequired": "请先在系统设置中允许此应用安装未知应用，然后重试。",
+    "downloadFailed": "下载失败，或无法打开安装器。",
+    "releaseNotesUnavailable": "暂时无法获取更新日志。"
   },
   "updateNotice": {
     "stagedReady": "新版本 $version 已准备好，将在下次启动自动更新。",

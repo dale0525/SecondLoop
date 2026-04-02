@@ -5,8 +5,10 @@ import 'dart:io';
 import 'package:archive/archive_io.dart';
 import 'package:cryptography/cryptography.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
+import 'android/android_update_abi.dart';
 import 'app_update_helpers.dart';
 import 'app_update_architecture.dart';
 import 'app_update_models.dart';
@@ -19,6 +21,8 @@ import 'windows/velopack_update_client.dart';
 
 export 'app_update_models.dart';
 export 'linux/linux_update_script.dart';
+
+part 'app_update_service_android_support.dart';
 
 const _defaultReleaseApiOrigin = String.fromEnvironment(
   'SECONDLOOP_RELEASE_API_ORIGIN',
@@ -38,6 +42,14 @@ typedef AppUpdateReleaseJsonFetcher = Future<Map<String, Object?>> Function(
   Uri uri,
 );
 typedef AppRuntimeVersionLoader = Future<AppRuntimeVersion> Function();
+typedef AndroidSupportedAbisLoader = Future<List<String>> Function();
+
+extension AppUpdateAvailabilityAndroidSupport on AppUpdateAvailability {
+  bool get canUseAndroidApkInstaller =>
+      asset != null &&
+      assetHasIntegrityMetadata(asset!) &&
+      isAndroidApkAssetForUpdate(asset!);
+}
 
 class AppUpdateService {
   AppUpdateService({
@@ -54,6 +66,8 @@ class AppUpdateService {
     UpdateEventLogger? updateEventLogger,
     void Function(int code)? processExit,
     Duration? networkTimeoutOverride,
+    AndroidSupportedAbisLoader? androidSupportedAbisLoader,
+    List<String>? androidSupportedAbisOverride,
     String? currentArchitectureOverride,
     bool? allowHttpUpdateUriOverride,
     bool? allowFileUpdateUriOverride,
@@ -71,6 +85,8 @@ class AppUpdateService {
             updateEventLogger ?? SharedPrefsUpdateEventLogger(),
         _processExit = processExit,
         _networkTimeoutOverride = networkTimeoutOverride,
+        _androidSupportedAbisLoader = androidSupportedAbisLoader,
+        _androidSupportedAbisOverride = androidSupportedAbisOverride,
         _currentArchitectureOverride = currentArchitectureOverride,
         _allowHttpUpdateUriOverride = allowHttpUpdateUriOverride,
         _allowFileUpdateUriOverride = allowFileUpdateUriOverride;
@@ -88,6 +104,8 @@ class AppUpdateService {
   final UpdateEventLogger _updateEventLogger;
   final void Function(int code)? _processExit;
   final Duration? _networkTimeoutOverride;
+  final AndroidSupportedAbisLoader? _androidSupportedAbisLoader;
+  final List<String>? _androidSupportedAbisOverride;
   final String? _currentArchitectureOverride;
   final bool? _allowHttpUpdateUriOverride;
   final bool? _allowFileUpdateUriOverride;
@@ -155,17 +173,110 @@ class AppUpdateService {
     }
 
     Map<String, Object?>? release;
+    String? newestReleaseTag;
     Object? lastError;
-    for (final endpoint in _buildReleaseEndpoints()) {
+    var sawUpToDateOrOlderRelease = false;
+    var sawNewerRelease = false;
+    var sawNewestReleaseUsable = false;
+    final windowsStagedClient = _resolvedWindowsStagedUpdateClient;
+    final windowsManagedRuntimeAvailable =
+        windowsStagedClient != null && windowsStagedClient.isAvailable();
+    final androidSupportedAbis = _platform == AppUpdatePlatform.android
+        ? await _loadAndroidSupportedAbisImpl(
+            override: _androidSupportedAbisOverride,
+            loader: _androidSupportedAbisLoader,
+          )
+        : const <String>[];
+    final releaseEndpoints = _buildReleaseEndpoints(
+      androidSupportedAbis: androidSupportedAbis,
+    );
+    final allowReleasePageFallbackWithoutPlatformAsset =
+        releaseEndpoints.length == 1;
+    for (final endpoint in releaseEndpoints) {
       try {
-        release = await _fetchReleaseJson(endpoint);
-        break;
+        final candidate = await _fetchReleaseJson(endpoint);
+        final candidateTag = normalizeLatestTag(
+          readUpdateString(candidate, 'tag_name') ??
+              readUpdateString(candidate, 'version'),
+        );
+        if (candidateTag == null || candidateTag.trim().isEmpty) {
+          lastError = 'invalid_release_tag';
+          continue;
+        }
+        if (_platform == AppUpdatePlatform.android &&
+            tryParseStrictAppVersion(candidateTag) == null) {
+          lastError = 'invalid_release_tag';
+          continue;
+        }
+        if (parseComparableAppVersion(candidateTag) == null ||
+            parseComparableAppVersion(currentVersion) == null) {
+          lastError = 'unsupported_version_format';
+          continue;
+        }
+        if (compareReleaseTagWithCurrentVersion(candidateTag, currentVersion) <=
+            0) {
+          sawUpToDateOrOlderRelease = true;
+          continue;
+        }
+        sawNewerRelease = true;
+        final isCandidateUsable = _releaseHasUsableAssetForCurrentPlatform(
+          candidate,
+          windowsManagedRuntimeAvailable: windowsManagedRuntimeAvailable,
+          androidSupportedAbis: androidSupportedAbis,
+          allowReleasePageFallbackWithoutPlatformAsset:
+              allowReleasePageFallbackWithoutPlatformAsset,
+        );
+        if (newestReleaseTag == null ||
+            compareReleaseTagWithCurrentVersion(
+                    candidateTag, newestReleaseTag) >
+                0) {
+          newestReleaseTag = candidateTag;
+          sawNewestReleaseUsable = isCandidateUsable;
+          if (!isCandidateUsable) {
+            release = null;
+            lastError = StateError('no_platform_asset_for_${_platform.name}');
+            continue;
+          }
+          release = candidate;
+          continue;
+        }
+        if (compareReleaseTagWithCurrentVersion(
+                    candidateTag, newestReleaseTag) ==
+                0 &&
+            isCandidateUsable &&
+            !sawNewestReleaseUsable) {
+          sawNewestReleaseUsable = true;
+          release = candidate;
+          continue;
+        }
+        if (!isCandidateUsable) {
+          lastError = StateError('no_platform_asset_for_${_platform.name}');
+        }
       } catch (error) {
         lastError = error;
       }
     }
 
     if (release == null) {
+      if (sawNewerRelease) {
+        await _recordFailure(
+          UpdateEventType.checkFailed,
+          lastError ?? 'failed_to_fetch_release',
+          currentVersion: runtimeVersion.display,
+        );
+        return AppUpdateCheckResult(
+          currentVersion: runtimeVersion.display,
+          errorMessage: lastError?.toString() ?? 'failed_to_fetch_release',
+        );
+      }
+      if (sawUpToDateOrOlderRelease) {
+        await _recordEvent(
+          UpdateEventType.checkSucceeded,
+          currentVersion: runtimeVersion.display,
+          message: 'up_to_date',
+        );
+        return AppUpdateCheckResult(currentVersion: runtimeVersion.display);
+      }
       await _recordFailure(
         UpdateEventType.checkFailed,
         lastError ?? 'failed_to_fetch_release',
@@ -182,6 +293,19 @@ class AppUpdateService {
           readUpdateString(release, 'version'),
     );
     if (latestTag == null || latestTag.trim().isEmpty) {
+      await _recordFailure(
+        UpdateEventType.checkFailed,
+        'invalid_release_tag',
+        currentVersion: runtimeVersion.display,
+      );
+      return AppUpdateCheckResult(
+        currentVersion: runtimeVersion.display,
+        errorMessage: 'invalid_release_tag',
+      );
+    }
+
+    if (_platform == AppUpdatePlatform.android &&
+        tryParseStrictAppVersion(latestTag) == null) {
       await _recordFailure(
         UpdateEventType.checkFailed,
         'invalid_release_tag',
@@ -228,28 +352,74 @@ class AppUpdateService {
       return AppUpdateCheckResult(currentVersion: runtimeVersion.display);
     }
 
-    final windowsStagedClient = _resolvedWindowsStagedUpdateClient;
-    final windowsManagedRuntimeAvailable =
-        windowsStagedClient != null && windowsStagedClient.isAvailable();
     final macosManagedClient = _resolvedMacosManagedUpdateClient;
     final macosManagedInstallSupported = macosManagedClient != null &&
         macosManagedClient.isSupportedInstallLocation();
 
-    final manifestAsset = matchManifestAssetForCurrentPlatform(
-      _platform,
-      release,
-      currentArchitecture: _currentArchitecture,
-      allowHttp: _allowHttpUpdateUris,
-      allowFile: _allowFileUpdateUris,
-    );
     final assets = _parseAssets(release['assets']);
-    final preferredAsset = manifestAsset ??
-        matchAssetForCurrentPlatform(
-          _platform,
-          assets,
-          windowsManagedRuntimeAvailable: windowsManagedRuntimeAvailable,
-          currentArchitecture: _currentArchitecture,
-        );
+    final preferredAsset = _platform == AppUpdatePlatform.android
+        ? (_matchAndroidManifestAssetForCurrentPlatform(
+              release,
+              supportedAbis: androidSupportedAbis,
+              allowHttp: _allowHttpUpdateUris,
+              allowFile: _allowFileUpdateUris,
+            ) ??
+            _matchAndroidAssetForSupportedAbisImpl(
+              assets,
+              supportedAbis: androidSupportedAbis,
+            ))
+        : (matchManifestAssetForCurrentPlatform(
+              _platform,
+              release,
+              currentArchitecture: _currentArchitecture,
+              allowHttp: _allowHttpUpdateUris,
+              allowFile: _allowFileUpdateUris,
+            ) ??
+            matchAssetForCurrentPlatform(
+              _platform,
+              assets,
+              windowsManagedRuntimeAvailable: windowsManagedRuntimeAvailable,
+              currentArchitecture: _currentArchitecture,
+            ));
+
+    if (_platform == AppUpdatePlatform.android &&
+        preferredAsset == null &&
+        _shouldOfferAndroidManualFallback(
+          release,
+          androidSupportedAbis: androidSupportedAbis,
+        )) {
+      await _recordEvent(
+        UpdateEventType.updateAvailable,
+        currentVersion: runtimeVersion.display,
+        latestTag: latestTag,
+        installMode: AppUpdateInstallMode.externalDownload,
+        message: 'android_manual_fallback',
+      );
+      await _recordEvent(
+        UpdateEventType.checkSucceeded,
+        currentVersion: runtimeVersion.display,
+        latestTag: latestTag,
+        installMode: AppUpdateInstallMode.externalDownload,
+        message: 'update_available',
+      );
+      await _recordEvent(
+        UpdateEventType.manualFallback,
+        currentVersion: runtimeVersion.display,
+        latestTag: latestTag,
+        installMode: AppUpdateInstallMode.externalDownload,
+        message: 'android_supported_abis_unknown',
+      );
+      return AppUpdateCheckResult(
+        currentVersion: runtimeVersion.display,
+        update: AppUpdateAvailability(
+          currentVersion: runtimeVersion.display,
+          latestTag: latestTag,
+          releasePageUri: releasePageUri,
+          installMode: AppUpdateInstallMode.externalDownload,
+        ),
+      );
+    }
+
     final installMode = resolveInstallMode(
       _platform,
       asset: preferredAsset,
@@ -258,20 +428,26 @@ class AppUpdateService {
       macosManagedInstallSupported: macosManagedInstallSupported,
     );
     final matchedAsset = installMode == AppUpdateInstallMode.externalDownload
-        ? selectExternalDownloadAsset(
-            _platform,
-            preferredAsset: preferredAsset,
-            assets: assets,
-            currentArchitecture: _currentArchitecture,
-          )
+        ? (_platform == AppUpdatePlatform.android
+            ? preferredAsset
+            : selectExternalDownloadAsset(
+                _platform,
+                preferredAsset: preferredAsset,
+                assets: assets,
+                currentArchitecture: _currentArchitecture,
+              ))
         : preferredAsset;
-    final manualFallbackReason = describeManualFallbackReason(
-      _platform,
-      preferredAsset ?? matchedAsset,
-      isReleaseMode: _isReleaseMode,
-      windowsManagedRuntimeAvailable: windowsManagedRuntimeAvailable,
-      macosManagedInstallSupported: macosManagedInstallSupported,
-    );
+    final manualFallbackReason = _platform == AppUpdatePlatform.android
+        ? (matchedAsset == null
+            ? 'missing_platform_asset'
+            : 'manual_download_required')
+        : describeManualFallbackReason(
+            _platform,
+            preferredAsset ?? matchedAsset,
+            isReleaseMode: _isReleaseMode,
+            windowsManagedRuntimeAvailable: windowsManagedRuntimeAvailable,
+            macosManagedInstallSupported: macosManagedInstallSupported,
+          );
 
     await _recordEvent(
       UpdateEventType.updateAvailable,
@@ -288,13 +464,15 @@ class AppUpdateService {
       message: 'update_available',
     );
     if (installMode == AppUpdateInstallMode.externalDownload) {
-      await _recordEvent(
-        UpdateEventType.manualFallback,
-        currentVersion: runtimeVersion.display,
-        latestTag: latestTag,
-        installMode: installMode,
-        message: manualFallbackReason,
-      );
+      if (!_isAndroidApkInstallerCandidate(matchedAsset)) {
+        await _recordEvent(
+          UpdateEventType.manualFallback,
+          currentVersion: runtimeVersion.display,
+          latestTag: latestTag,
+          installMode: installMode,
+          message: manualFallbackReason,
+        );
+      }
     }
 
     return AppUpdateCheckResult(
@@ -659,9 +837,15 @@ class AppUpdateService {
     return utf8.decoder.bind(response.timeout(_networkTimeout)).join();
   }
 
-  List<Uri> _buildReleaseEndpoints() {
+  List<Uri> _buildReleaseEndpoints({
+    required List<String> androidSupportedAbis,
+  }) {
     final configuredOrigin = _releaseApiOrigin.trim();
     final repo = _releaseRepo.trim();
+    final hasConfiguredManifestSignatureKey =
+        _updatePublicKey.trim().isNotEmpty;
+    final prefersLatestJsonWithoutSignatureKey =
+        _platform == AppUpdatePlatform.android && androidSupportedAbis.isEmpty;
 
     final endpoints = <Uri>[];
     final allowHttp = _allowHttpUpdateUris;
@@ -681,15 +865,138 @@ class AppUpdateService {
     }
 
     if (repo.isNotEmpty) {
-      endpoints.add(
-        Uri.parse(
-            'https://github.com/$repo/releases/latest/download/latest.json'),
-      );
-      endpoints
-          .add(Uri.https('api.github.com', '/repos/$repo/releases/latest'));
+      if (hasConfiguredManifestSignatureKey) {
+        endpoints.add(
+          Uri.parse(
+            'https://github.com/$repo/releases/latest/download/latest.json',
+          ),
+        );
+      } else {
+        if (parsedApiOrigin != null && prefersLatestJsonWithoutSignatureKey) {
+          endpoints.add(
+            Uri.parse(
+              'https://github.com/$repo/releases/latest/download/latest.json',
+            ),
+          );
+        } else {
+          endpoints.add(
+            Uri.https('api.github.com', '/repos/$repo/releases/latest'),
+          );
+        }
+      }
     }
 
     return endpoints;
+  }
+
+  bool _releaseHasUsableAssetForCurrentPlatform(
+    Map<String, Object?> release, {
+    required bool windowsManagedRuntimeAvailable,
+    required List<String> androidSupportedAbis,
+    required bool allowReleasePageFallbackWithoutPlatformAsset,
+  }) {
+    if (_platform == AppUpdatePlatform.android &&
+        _shouldOfferAndroidManualFallback(
+          release,
+          androidSupportedAbis: androidSupportedAbis,
+        )) {
+      return true;
+    }
+
+    if (_platform == AppUpdatePlatform.android) {
+      final manifestAsset = _matchAndroidManifestAssetForCurrentPlatform(
+        release,
+        supportedAbis: androidSupportedAbis,
+        allowHttp: _allowHttpUpdateUris,
+        allowFile: _allowFileUpdateUris,
+      );
+      if (manifestAsset != null) {
+        return true;
+      }
+
+      final assets = _parseAssets(release['assets']);
+      return _matchAndroidAssetForSupportedAbisImpl(
+            assets,
+            supportedAbis: androidSupportedAbis,
+          ) !=
+          null;
+    }
+
+    final manifestAsset = matchManifestAssetForCurrentPlatform(
+      _platform,
+      release,
+      currentArchitecture: _currentArchitecture,
+      allowHttp: _allowHttpUpdateUris,
+      allowFile: _allowFileUpdateUris,
+    );
+    if (manifestAsset != null) {
+      return true;
+    }
+
+    final assets = _parseAssets(release['assets']);
+    final matchedAsset = matchAssetForCurrentPlatform(
+      _platform,
+      assets,
+      windowsManagedRuntimeAvailable: windowsManagedRuntimeAvailable,
+      currentArchitecture: _currentArchitecture,
+    );
+    if (matchedAsset != null) {
+      return true;
+    }
+
+    return allowReleasePageFallbackWithoutPlatformAsset;
+  }
+
+  bool _shouldOfferAndroidManualFallback(
+    Map<String, Object?> release, {
+    required List<String> androidSupportedAbis,
+  }) {
+    if (_platform != AppUpdatePlatform.android ||
+        androidSupportedAbis.isNotEmpty) {
+      return false;
+    }
+
+    final manifestPlatforms = release['platforms'];
+    if (manifestPlatforms is Map) {
+      for (final key in manifestPlatforms.keys) {
+        if (key is String && _isAndroidManualFallbackPlatformKey(key)) {
+          return true;
+        }
+      }
+    }
+
+    final assets = _parseAssets(release['assets']);
+    return assets.any(_isAndroidManualFallbackAssetCandidate);
+  }
+
+  bool _isAndroidApkInstallerCandidate(AppUpdateAsset? asset) {
+    return _platform == AppUpdatePlatform.android &&
+        asset != null &&
+        assetHasIntegrityMetadata(asset) &&
+        isAndroidApkAssetForUpdate(asset);
+  }
+
+  bool _isAndroidManualFallbackPlatformKey(String key) {
+    final normalized = key.trim().toLowerCase();
+    return normalized == 'android' ||
+        normalized == 'android-universal' ||
+        normalized == 'android-arm64-v8a' ||
+        normalized == 'android-arm64' ||
+        normalized == 'android-armeabi-v7a' ||
+        normalized == 'android-armv7' ||
+        normalized == 'android-arm-v7a';
+  }
+
+  bool _isAndroidManualFallbackAssetCandidate(AppUpdateAsset asset) {
+    if (!isAndroidApkAssetForUpdate(asset)) {
+      return false;
+    }
+
+    if (extractLeadingAndroidAbi(asset.name) != null) {
+      return true;
+    }
+
+    return isUniversalAndroidApkName(asset.name);
   }
 
   Uri _buildFallbackReleasePageUri() {
@@ -850,7 +1157,12 @@ class AppUpdateService {
   }
 
   bool _isSignedManifestUri(Uri uri) {
-    return uri.path.toLowerCase().endsWith('latest.json');
+    if (_updatePublicKey.trim().isEmpty) {
+      return false;
+    }
+    final normalizedPath = uri.path.toLowerCase();
+    return normalizedPath.endsWith('latest.json') ||
+        normalizedPath.endsWith('/api/releases/latest');
   }
 
   Future<void> _recordEvent(
