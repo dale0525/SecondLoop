@@ -190,6 +190,26 @@ void main() {
     );
   });
 
+  test('generateUpdateManifest rejects unknown Android package stems',
+      () async {
+    final tempDir = await Directory.systemTemp
+        .createTemp('update_manifest_android_unknown_stem_');
+    addTearDown(() => tempDir.delete(recursive: true));
+
+    await File('${tempDir.path}/SecondLoop-android-dev-v1.2.3.apk')
+        .writeAsString('android-dev');
+
+    await expectLater(
+      () => generateUpdateManifest(
+        inputDirPath: tempDir.path,
+        version: 'v1.2.3',
+        baseDownloadUrl:
+            'https://github.com/dale0525/SecondLoop/releases/download/v1.2.3',
+      ),
+      throwsA(isA<StateError>()),
+    );
+  });
+
   test(
       'generateUpdateManifest picks Velopack releases metadata json when present',
       () async {

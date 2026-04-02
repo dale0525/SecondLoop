@@ -406,6 +406,11 @@ class ReleaseWorkflowEnvTests(unittest.TestCase):
             workflow_text,
         )
 
+    def test_release_workflow_cleans_unversioned_windows_releases_metadata_before_manifest_generation(self) -> None:
+        workflow_text = self._workflow_text()
+
+        self.assertIn('rm -f dist/releases.win.json', workflow_text)
+
     def test_release_workflow_sets_bindgen_clang_args_for_android_targets(self) -> None:
         workflow_text = self._workflow_text()
 

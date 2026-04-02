@@ -823,14 +823,14 @@ class AppUpdateService {
     final manifestPlatforms = release['platforms'];
     if (manifestPlatforms is Map) {
       for (final key in manifestPlatforms.keys) {
-        if (key is String && key.startsWith('android-')) {
+        if (key is String && _isAndroidManualFallbackPlatformKey(key)) {
           return true;
         }
       }
     }
 
     final assets = _parseAssetsImpl(release['assets']);
-    return assets.any(_isAndroidApkAssetImpl);
+    return assets.any(_isAndroidManualFallbackAssetCandidate);
   }
 
   Future<T> _withPreparedAsset<T>(
@@ -1054,5 +1054,28 @@ class AppUpdateService {
     return _platform == AppUpdatePlatform.android &&
         asset != null &&
         isAndroidApkAssetForUpdate(asset);
+  }
+
+  bool _isAndroidManualFallbackPlatformKey(String key) {
+    final normalized = key.trim().toLowerCase();
+    return normalized == 'android' ||
+        normalized == 'android-universal' ||
+        normalized == 'android-arm64-v8a' ||
+        normalized == 'android-arm64' ||
+        normalized == 'android-armeabi-v7a' ||
+        normalized == 'android-armv7' ||
+        normalized == 'android-arm-v7a';
+  }
+
+  bool _isAndroidManualFallbackAssetCandidate(AppUpdateAsset asset) {
+    if (!_isAndroidApkAssetImpl(asset)) {
+      return false;
+    }
+
+    if (_extractLeadingAndroidAbiImpl(asset.name) != null) {
+      return true;
+    }
+
+    return _isAndroidUniversalApkNameImpl(asset.name);
   }
 }

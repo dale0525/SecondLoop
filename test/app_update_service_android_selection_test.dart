@@ -122,6 +122,70 @@ void main() {
       );
     });
 
+    test(
+        'does not offer manual Android fallback when only unsupported x86 assets exist and supported abis are unknown',
+        () async {
+      final service = AppUpdateService(
+        platformOverride: AppUpdatePlatform.android,
+        releaseModeOverride: true,
+        androidSupportedAbisOverride: const <String>[],
+        currentVersionLoader: () async =>
+            const AppRuntimeVersion(version: '1.0.0', buildNumber: '9'),
+        releaseJsonFetcher: (uri) async => {
+          'tag_name': 'v1.1.0',
+          'html_url':
+              'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
+          'assets': [
+            {
+              'name': 'SecondLoop-android-x86-v1.1.0.apk',
+              'browser_download_url': 'https://cdn.example.com/x86.apk',
+            },
+            {
+              'name': 'SecondLoop-android-x86_64-v1.1.0.apk',
+              'browser_download_url': 'https://cdn.example.com/x86_64.apk',
+            },
+          ],
+        },
+      );
+
+      final result = await service.checkForUpdates();
+
+      expect(result.update, isNull);
+      expect(result.errorMessage, contains('no_platform_asset_for_android'));
+    });
+
+    test(
+        'does not offer manual Android fallback when manifest only exposes unsupported x86 assets and supported abis are unknown',
+        () async {
+      final service = AppUpdateService(
+        platformOverride: AppUpdatePlatform.android,
+        releaseModeOverride: true,
+        androidSupportedAbisOverride: const <String>[],
+        currentVersionLoader: () async =>
+            const AppRuntimeVersion(version: '1.0.0', buildNumber: '9'),
+        releaseJsonFetcher: (uri) async => {
+          'tag_name': 'v1.1.0',
+          'html_url':
+              'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
+          'platforms': {
+            'android-x86': {
+              'install_mode': 'apk',
+              'archive_url': 'https://cdn.example.com/x86.apk',
+            },
+            'android-x86_64': {
+              'install_mode': 'apk',
+              'archive_url': 'https://cdn.example.com/x86_64.apk',
+            },
+          },
+        },
+      );
+
+      final result = await service.checkForUpdates();
+
+      expect(result.update, isNull);
+      expect(result.errorMessage, contains('no_platform_asset_for_android'));
+    });
+
     test('keeps universal apk fallback when supported abis are unknown',
         () async {
       final service = AppUpdateService(

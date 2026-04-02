@@ -825,6 +825,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          rm -f dist/releases.win.json
           dart run tools/generate_update_manifest.dart \
             --input-dir dist \
             --output-dir dist \

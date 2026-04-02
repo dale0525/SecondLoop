@@ -274,7 +274,10 @@ String _resolveAndroidPlatformKey(String fileName) {
   if (_looksLikeUnsupportedAndroidApk(fileName)) {
     return '';
   }
-  return 'android-universal';
+  if (_looksLikeUniversalAndroidApk(fileName)) {
+    return 'android-universal';
+  }
+  throw StateError('unsupported_android_platform_asset_$fileName');
 }
 
 String resolveAndroidPlatformKeyForTest(String fileName) =>
@@ -327,4 +330,18 @@ bool _looksLikeUnsupportedAndroidApk(String fileName) {
     }
   }
   return false;
+}
+
+bool _looksLikeUniversalAndroidApk(String fileName) {
+  final normalized = fileName.trim().toLowerCase();
+  const prefix = 'secondloop-android-';
+  if (!normalized.startsWith(prefix) || !normalized.endsWith('.apk')) {
+    return false;
+  }
+
+  final stem = normalized.substring(prefix.length, normalized.length - 4);
+  if (stem == 'universal' || stem.startsWith('universal-')) {
+    return true;
+  }
+  return RegExp(r'^v?\d+\.\d+\.\d+$').hasMatch(stem);
 }
