@@ -707,7 +707,6 @@ class _AndroidUpdateDialogState extends State<_AndroidUpdateDialog> {
   }
 
   void _cancelDownload() {
-    widget.onDismissed();
     _cancelToken?.cancel();
     if (!mounted) return;
     Navigator.of(context).pop();

@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 
@@ -141,6 +142,7 @@ class HttpAndroidApkDownloader implements AndroidApkDownloader {
     );
 
     final sink = outputFile.openWrite();
+    var sinkClosed = false;
     StreamIterator<List<int>>? responseIterator;
     try {
       responseIterator = StreamIterator<List<int>>(response);
@@ -169,11 +171,10 @@ class HttpAndroidApkDownloader implements AndroidApkDownloader {
       }
       _throwIfCancelled(cancelToken);
     } catch (_) {
-      try {
-        if (outputFile.existsSync()) {
-          await outputFile.delete();
-        }
-      } catch (_) {}
+      sinkClosed = await discardPartialApkDownload(
+        sink: sink,
+        outputFile: outputFile,
+      );
       rethrow;
     } finally {
       if (responseIterator != null) {
@@ -181,8 +182,10 @@ class HttpAndroidApkDownloader implements AndroidApkDownloader {
           await responseIterator.cancel();
         } catch (_) {}
       }
-      await sink.flush();
-      await sink.close();
+      if (!sinkClosed) {
+        await sink.flush();
+        await sink.close();
+      }
     }
 
     return outputFile;
@@ -229,6 +232,40 @@ class HttpAndroidApkDownloader implements AndroidApkDownloader {
     }
     return '$sanitized.apk';
   }
+}
+
+@visibleForTesting
+Future<bool> discardPartialApkDownload({
+  required IOSink sink,
+  required File outputFile,
+}) async {
+  var sinkClosed = false;
+  await closeSinkBeforeDeleting(
+    closeSink: () async {
+      await sink.flush();
+      await sink.close();
+      sinkClosed = true;
+    },
+    deleteFile: () async {
+      if (outputFile.existsSync()) {
+        await outputFile.delete();
+      }
+    },
+  );
+  return sinkClosed;
+}
+
+@visibleForTesting
+Future<void> closeSinkBeforeDeleting({
+  required Future<void> Function() closeSink,
+  required Future<void> Function() deleteFile,
+}) async {
+  try {
+    await closeSink();
+  } catch (_) {}
+  try {
+    await deleteFile();
+  } catch (_) {}
 }
 
 class MethodChannelAndroidApkInstaller implements AndroidApkInstaller {

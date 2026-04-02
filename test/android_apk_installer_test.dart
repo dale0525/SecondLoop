@@ -173,6 +173,20 @@ void main() {
       expect(body.cancelCalls, 1);
       expect(httpClient.closeCalls, 0);
     });
+
+    test('closeSinkBeforeDeleting closes sink before deleting file', () async {
+      final events = <String>[];
+      await closeSinkBeforeDeleting(
+        closeSink: () async {
+          events.add('close');
+        },
+        deleteFile: () async {
+          events.add('delete');
+        },
+      );
+
+      expect(events.indexOf('close'), lessThan(events.indexOf('delete')));
+    });
   });
 }
 

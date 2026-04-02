@@ -66,11 +66,12 @@ internal class AndroidUpdateChannelHandler(
           activity.settingsIntent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES).apply {
             data = Uri.parse("package:${activity.packageName}")
           }
-        if (settingsShortcut.resolveActivity(activity.packageManager) != null) {
+        try {
           activity.startActivity(settingsShortcut)
           return AndroidApkInstallLaunchStatus.permissionSettingsOpened
+        } catch (_: ActivityNotFoundException) {
+          return AndroidApkInstallLaunchStatus.failed
         }
-        return AndroidApkInstallLaunchStatus.failed
       }
 
       val apkUri =
@@ -88,11 +89,11 @@ internal class AndroidUpdateChannelHandler(
           addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
           addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
-      if (installIntent.resolveActivity(activity.packageManager) == null) {
+      try {
+        activity.startActivity(installIntent)
+      } catch (_: ActivityNotFoundException) {
         return AndroidApkInstallLaunchStatus.failed
       }
-
-      activity.startActivity(installIntent)
       AndroidApkInstallLaunchStatus.launchedInstaller
     } catch (_: Throwable) {
       AndroidApkInstallLaunchStatus.failed

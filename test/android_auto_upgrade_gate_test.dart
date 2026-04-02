@@ -246,7 +246,8 @@ void main() {
     debugDefaultTargetPlatformOverride = oldPlatform;
   });
 
-  testWidgets('can cancel Android update download from dialog', (tester) async {
+  testWidgets('re-prompts after cancelling Android update download',
+      (tester) async {
     final oldPlatform = debugDefaultTargetPlatformOverride;
     debugDefaultTargetPlatformOverride = TargetPlatform.android;
     final downloadCompleter = Completer<void>();
@@ -317,7 +318,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 100));
 
     expect(service.checkCalls, 2);
-    expect(find.byType(AlertDialog), findsNothing);
+    expect(find.byType(AlertDialog), findsOneWidget);
 
     debugDefaultTargetPlatformOverride = oldPlatform;
   });
