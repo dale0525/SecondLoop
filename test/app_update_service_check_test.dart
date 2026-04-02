@@ -1084,7 +1084,7 @@ void main() {
     });
 
     test(
-        'falls back to MSI when Windows runtime is unavailable even with exact app id manifest package',
+        'falls back to release page when exact app id manifest package has no matching MSI fallback',
         () async {
       final stagedClient = FakeWindowsStagedUpdateClient(
         available: false,
@@ -1124,19 +1124,13 @@ void main() {
 
       expect(result.update, isNotNull);
       expect(result.update!.installMode, AppUpdateInstallMode.externalDownload);
-      expect(result.update!.asset, isNotNull);
-      expect(
-        result.update!.asset!.name,
-        'com.secondloop.secondloopdev-1.1.0-full.nupkg',
-      );
-      expect(
-        result.update!.downloadUri.toString(),
-        'https://cdn.example.com/com.secondloop.secondloopdev-1.1.0-full.nupkg',
-      );
+      expect(result.update!.asset, isNull);
+      expect(result.update!.downloadUri.toString(),
+          'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0');
     });
 
     test(
-        'preserves manifest-only windows download asset when runtime is unavailable',
+        'falls back to release page when only manifest nupkg exists and runtime is unavailable',
         () async {
       final stagedClient = FakeWindowsStagedUpdateClient(
         available: false,
@@ -1168,11 +1162,10 @@ void main() {
 
       expect(result.update, isNotNull);
       expect(result.update!.installMode, AppUpdateInstallMode.externalDownload);
-      expect(result.update!.asset, isNotNull);
-      expect(result.update!.asset!.name, 'manifest-only-package');
+      expect(result.update!.asset, isNull);
       expect(
         result.update!.downloadUri.toString(),
-        'https://cdn.example.com/downloads/manifest-only-package',
+        'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
       );
     });
 

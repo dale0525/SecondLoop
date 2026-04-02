@@ -456,6 +456,31 @@ void main() {
   });
 
   test(
+      'generateUpdateManifest ignores unknown channel variants when no stable package matches the requested version',
+      () async {
+    final tempDir = await Directory.systemTemp
+        .createTemp('update_manifest_ignore_unknown_channel_variant_');
+    addTearDown(() => tempDir.delete(recursive: true));
+
+    await File(
+            '${tempDir.path}/com.secondloop.secondloop-1.2.3-mystery-full.nupkg')
+        .writeAsString('mystery');
+    await File('${tempDir.path}/SecondLoop-linux-x64-v1.2.3.tar.gz')
+        .writeAsString('linux');
+    await File('${tempDir.path}/releases.win.json').writeAsString('stable');
+
+    final generated = await generateUpdateManifest(
+      inputDirPath: tempDir.path,
+      version: '1.2.3',
+      baseDownloadUrl: 'https://example.com/downloads/',
+    );
+
+    final platforms = generated.manifest['platforms'] as Map<String, Object?>;
+    expect(platforms.containsKey('windows-x64'), isFalse);
+    expect(platforms['linux-x64'], isNotNull);
+  });
+
+  test(
       'generateUpdateManifest rejects explicit windows channel when releases metadata is missing',
       () async {
     final tempDir = await Directory.systemTemp

@@ -117,23 +117,6 @@ AppUpdateAsset? selectExternalDownloadAsset(
     if (matchedMsi != null) {
       return matchedMsi;
     }
-
-    final shouldPreservePreferredManifestAsset = preferredAsset != null &&
-        !assets.contains(preferredAsset) &&
-        (releaseVersion == null ||
-            releaseVersion.trim().isEmpty ||
-            _assetMatchesReleaseVersion(
-              platform,
-              preferredAsset.name,
-              releaseVersion: normalizeStrictAppVersion(
-                releaseVersion,
-                argumentName: 'releaseVersion',
-              ),
-            ));
-    if (shouldPreservePreferredManifestAsset) {
-      return preferredAsset;
-    }
-
     return null;
   }
 
@@ -609,8 +592,9 @@ bool releaseContainsWindowsIdentityMismatch(
             readStringLoose(candidateEntry, 'url') ??
             '';
         final manifestAppId = readStringLoose(candidateEntry, 'app_id');
-        final isWindowsCandidate =
-            isWindowsVelopackPackageName(name) || manifestAppId != null;
+        final isWindowsCandidate = isWindowsVelopackPackageName(name) ||
+            isWindowsMsiInstallerName(name) ||
+            manifestAppId != null;
         if (!isWindowsCandidate) {
           continue;
         }

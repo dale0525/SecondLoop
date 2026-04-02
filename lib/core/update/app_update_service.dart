@@ -723,6 +723,11 @@ class AppUpdateService {
   }
 
   Uri _buildFallbackReleasePageUri() {
+    final repo = _releaseRepo.trim();
+    if (repo.isNotEmpty) {
+      return Uri.parse('https://github.com/$repo/releases/latest');
+    }
+
     final origin = parseUpdateUri(
       _releaseApiOrigin.trim(),
       allowHttp: _allowHttpUpdateUris,
@@ -732,12 +737,7 @@ class AppUpdateService {
       return origin;
     }
 
-    final repo = _releaseRepo.trim();
-    if (repo.isEmpty) {
-      return Uri.parse('https://github.com');
-    }
-
-    return Uri.parse('https://github.com/$repo/releases/latest');
+    return Uri.parse('https://github.com');
   }
 
   List<AppUpdateAsset> _parseAssets(Object? rawAssets) {

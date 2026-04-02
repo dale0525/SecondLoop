@@ -55,7 +55,7 @@ void main() {
     });
 
     test(
-        'uses release api origin as fallback release page for self-hosted feeds',
+        'uses GitHub release page as fallback release page when self-hosted feed omits one',
         () async {
       final service = AppUpdateService(
         platformOverride: AppUpdatePlatform.linux,
@@ -82,7 +82,7 @@ void main() {
       expect(result.update, isNotNull);
       expect(
         result.update!.releasePageUri,
-        Uri.parse('https://updates.example.com/custom/base'),
+        Uri.parse('https://github.com/dale0525/SecondLoop/releases/latest'),
       );
     });
 

@@ -222,6 +222,27 @@ void main() {
     });
 
     test(
+        'releaseContainsWindowsIdentityMismatch flags MSI-only manifest entries for the wrong app identity',
+        () {
+      final release = <String, Object?>{
+        'platforms': <String, Object?>{
+          'windows-x64': <String, Object?>{
+            'name': 'SecondLoop-win.msi',
+            'package_url': 'https://cdn.example.com/SecondLoop-win.msi',
+          },
+        },
+      };
+
+      expect(
+        releaseContainsWindowsIdentityMismatch(
+          release,
+          windowsAppId: 'com.secondloop.secondloopdev',
+        ),
+        isTrue,
+      );
+    });
+
+    test(
         'matchAssetForCurrentPlatform ignores prerelease-looking windows assets during strict release matching',
         () {
       final asset = matchAssetForCurrentPlatform(
