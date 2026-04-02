@@ -12,6 +12,10 @@ flutter_log=""
 rust_log=""
 flutter_pid=""
 rust_pid=""
+flutter_done=0
+rust_done=0
+flutter_status=0
+rust_status=0
 
 cleanup() {
   local pid
@@ -38,16 +42,37 @@ echo "ci: starting Rust verification..." >&2
 bash scripts/run_full_rust_ci_local.sh >"${rust_log}" 2>&1 &
 rust_pid=$!
 
-flutter_status=0
-rust_status=0
+handle_finished_job() {
+  local job_name="$1"
+  local job_pid="$2"
+  local job_log="$3"
+  local job_status_var="$4"
 
-wait "${flutter_pid}" || flutter_status=$?
-echo "ci: Flutter verification finished with status ${flutter_status}" >&2
-cat "${flutter_log}"
+  local status=0
+  wait "${job_pid}" || status=$?
+  printf -v "${job_status_var}" '%s' "${status}"
+  echo "ci: ${job_name} verification finished with status ${status}" >&2
+  cat "${job_log}"
+}
 
-wait "${rust_pid}" || rust_status=$?
-echo "ci: Rust verification finished with status ${rust_status}" >&2
-cat "${rust_log}"
+remaining_jobs=2
+while [[ ${remaining_jobs} -gt 0 ]]; do
+  if [[ ${flutter_done} -eq 0 ]] && ! kill -0 "${flutter_pid}" 2>/dev/null; then
+    handle_finished_job "Flutter" "${flutter_pid}" "${flutter_log}" flutter_status
+    flutter_done=1
+    remaining_jobs=$((remaining_jobs - 1))
+    continue
+  fi
+
+  if [[ ${rust_done} -eq 0 ]] && ! kill -0 "${rust_pid}" 2>/dev/null; then
+    handle_finished_job "Rust" "${rust_pid}" "${rust_log}" rust_status
+    rust_done=1
+    remaining_jobs=$((remaining_jobs - 1))
+    continue
+  fi
+
+  sleep 1
+done
 
 if [[ ${flutter_status} -ne 0 || ${rust_status} -ne 0 ]]; then
   exit 1

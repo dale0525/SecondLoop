@@ -141,6 +141,7 @@ bool isStrictAppVersion(String input) {
 }
 
 ComparableAppVersion? parseComparableAppVersion(String input) {
+  // Update feeds and runtime versions are intentionally limited to vX.Y.Z.
   final segments = tryParseStrictAppVersion(input);
   if (segments == null) {
     return null;

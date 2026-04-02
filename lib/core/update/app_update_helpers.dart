@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'app_update_models.dart';
 
+// SecondLoop only ships Windows auto-update feeds for these two package ids.
 const secondLoopProdAppId = 'com.secondloop.secondloop';
 const secondLoopDevAppId = 'com.secondloop.secondloopdev';
 

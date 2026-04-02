@@ -54,6 +54,17 @@ class VerificationScriptsTests(unittest.TestCase):
         self.assertIn('ci: starting Flutter verification...', script)
         self.assertIn('ci: starting Rust verification...', script)
 
+    def test_parallel_ci_wrapper_emits_logs_as_each_scope_finishes(self) -> None:
+        script = (REPO_ROOT / "scripts/run_full_ci_parallel.sh").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn('handle_finished_job()', script)
+        self.assertIn('remaining_jobs=', script)
+        self.assertIn('wait "${job_pid}"', script)
+        self.assertNotIn('wait "${flutter_pid}"', script)
+        self.assertNotIn('wait "${rust_pid}"', script)
+
     def test_local_rust_ci_wrapper_compiles_once_and_runs_binaries_parallel(self) -> None:
         script = (REPO_ROOT / "scripts/run_full_rust_ci_local.sh").read_text(
             encoding="utf-8"
