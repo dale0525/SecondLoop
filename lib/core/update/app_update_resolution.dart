@@ -409,6 +409,10 @@ AppUpdateInstallMode? parseManifestInstallModeHint(
   final manifestDeclaresMatchingWindowsManagedPackage =
       expectedWindowsAppId != null &&
           expectedWindowsAppId.isNotEmpty &&
+          _isMatchingWindowsManagedPackageName(
+            assetName,
+            appId: expectedWindowsAppId,
+          ) &&
           _matchesExpectedWindowsManifestIdentity(
             assetName: assetName,
             manifestAppId: manifestAppId,
@@ -502,9 +506,10 @@ bool _isWindowsManagedManifestAsset(
     return false;
   }
 
-  return (asset.installModeHint == AppUpdateInstallMode.seamlessRestart ||
-          asset.installModeHint == AppUpdateInstallMode.stagedNextLaunch) &&
-      !_isMatchingWindowsManagedPackageName(asset.name, appId: expectedAppId);
+  return _isMatchingWindowsManagedPackageName(asset.name,
+          appId: expectedAppId) &&
+      (asset.installModeHint == AppUpdateInstallMode.seamlessRestart ||
+          asset.installModeHint == AppUpdateInstallMode.stagedNextLaunch);
 }
 
 String? readUpdateString(Map<String, Object?> map, String key) {

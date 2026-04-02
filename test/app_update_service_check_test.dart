@@ -1170,7 +1170,7 @@ void main() {
     });
 
     test(
-        'accepts manifest-only Windows managed package metadata without file-like package name',
+        'rejects manifest-only Windows managed package metadata without file-like package name',
         () async {
       final stagedClient = FakeWindowsStagedUpdateClient(
         available: true,
@@ -1201,11 +1201,11 @@ void main() {
       final result = await service.checkForUpdates();
 
       expect(result.update, isNotNull);
-      expect(result.update!.installMode, AppUpdateInstallMode.seamlessRestart);
-      expect(result.update!.asset, isNotNull);
+      expect(result.update!.installMode, AppUpdateInstallMode.externalDownload);
+      expect(result.update!.asset, isNull);
       expect(
-        result.update!.asset!.downloadUri.toString(),
-        'https://cdn.example.com/downloads/latest-package',
+        result.update!.downloadUri.toString(),
+        'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
       );
     });
 

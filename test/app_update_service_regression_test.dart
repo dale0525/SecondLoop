@@ -298,5 +298,33 @@ void main() {
       expect(
           asset.downloadUri.toString(), 'https://cdn.example.com/stable.msi');
     });
+
+    test(
+        'parseManifestInstallModeHint rejects Windows MSI entries mislabeled as velopack',
+        () {
+      final installMode = parseManifestInstallModeHint(
+        AppUpdatePlatform.windows,
+        'velopack',
+        assetName: 'SecondLoop Dev-win.msi',
+        manifestAppId: 'com.secondloop.secondloopdev',
+        windowsAppId: 'com.secondloop.secondloopdev',
+      );
+
+      expect(installMode, isNull);
+    });
+
+    test(
+        'parseManifestInstallModeHint rejects manifest-only Windows URLs without Velopack package names',
+        () {
+      final installMode = parseManifestInstallModeHint(
+        AppUpdatePlatform.windows,
+        'velopack',
+        assetName: 'latest-package',
+        manifestAppId: 'com.secondloop.secondloopdev',
+        windowsAppId: 'com.secondloop.secondloopdev',
+      );
+
+      expect(installMode, isNull);
+    });
   });
 }
