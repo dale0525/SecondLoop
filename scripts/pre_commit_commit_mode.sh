@@ -135,14 +135,17 @@ if [[ ${run_flutter_checks} -ne 0 ]]; then
       flutter_test_targets=()
     fi
 
-    if ! run_flutter_tool test --concurrency=1 "${flutter_test_targets[@]}"; then
+    if [[ ${#flutter_test_targets[@]} -eq 0 ]]; then
+      if ! run_flutter_tool test --concurrency=1; then
+        echo "" >&2
+        echo "pre-commit: flutter test failed." >&2
+        echo "Fix locally with: pixi run flutter test" >&2
+        exit 1
+      fi
+    elif ! run_flutter_tool test --concurrency=1 "${flutter_test_targets[@]}"; then
       echo "" >&2
       echo "pre-commit: flutter test failed." >&2
-      if [[ ${#flutter_test_targets[@]} -eq 0 ]]; then
-        echo "Fix locally with: pixi run flutter test" >&2
-      else
-        echo "Fix locally with: pixi run flutter test \"${flutter_test_targets[*]}\"" >&2
-      fi
+      echo "Fix locally with: pixi run flutter test \"${flutter_test_targets[*]}\"" >&2
       exit 1
     fi
   else
