@@ -926,7 +926,8 @@ class AppUpdateService {
 
   bool _isSignedManifestUri(Uri uri) {
     final normalizedPath = uri.path.toLowerCase();
-    return normalizedPath.endsWith('latest.json');
+    return normalizedPath.endsWith('latest.json') ||
+        normalizedPath.endsWith('/api/releases/latest');
   }
 
   Future<void> _recordEvent(

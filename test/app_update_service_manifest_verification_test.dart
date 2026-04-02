@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:cryptography/cryptography.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -125,8 +126,66 @@ void main() {
     );
   });
 
-  test('does not require signature fetch for custom api latest endpoint',
-      () async {
+  test('verifies signature for custom api latest endpoint', () async {
+    final requestedUris = <Uri>[];
+    final seed = List<int>.generate(32, (index) => index + 11);
+    final manifestBody = jsonEncode({
+      'version': '1.1.0',
+      'release_page_url': 'https://updates.example.com/releases/v1.1.0',
+      'platforms': {
+        'linux-x64': {
+          'install_mode': 'bundle-tar-gz',
+          'archive_url':
+              'https://cdn.example.com/SecondLoop-linux-x64-v1.1.0.tar.gz',
+          'sha256': 'abc123',
+        },
+      },
+    });
+    final signatureBase64 = await _signEd25519Base64(
+      payload: utf8.encode(manifestBody),
+      seed: seed,
+    );
+    final service = AppUpdateService(
+      httpClient: _FakeHttpClient(
+        handler: (uri) {
+          requestedUris.add(uri);
+          if (uri.path.endsWith('/api/releases/latest')) {
+            return _FakeHttpResponse(
+              statusCode: 200,
+              body: manifestBody,
+            );
+          }
+          if (uri.path.endsWith('/api/releases/latest.sig')) {
+            return _FakeHttpResponse(
+              statusCode: 200,
+              body: signatureBase64,
+            );
+          }
+          throw StateError('unexpected_uri:$uri');
+        },
+      ),
+      platformOverride: AppUpdatePlatform.linux,
+      releaseModeOverride: true,
+      releaseApiOriginOverride: 'https://updates.example.com/custom/base',
+      releaseRepoOverride: '',
+      updatePublicKeyOverride: await _ed25519PublicKeyBase64FromSeed(seed),
+      currentVersionLoader: () async =>
+          const AppRuntimeVersion(version: '1.0.0', buildNumber: '1'),
+    );
+
+    final result = await service.checkForUpdates();
+
+    expect(result.errorMessage, isNull);
+    expect(result.update, isNotNull);
+    final requestedPaths = requestedUris.map((uri) => uri.path).toList();
+    expect(requestedPaths, contains('/custom/base/api/releases/latest'));
+    expect(
+      requestedPaths,
+      contains('/custom/base/api/releases/latest.sig'),
+    );
+  });
+
+  test('fails when custom api latest signature is missing', () async {
     final requestedUris = <Uri>[];
     final service = AppUpdateService(
       httpClient: _FakeHttpClient(
@@ -150,53 +209,10 @@ void main() {
               }),
             );
           }
-          throw StateError('unexpected_uri:$uri');
-        },
-      ),
-      platformOverride: AppUpdatePlatform.linux,
-      releaseModeOverride: true,
-      releaseApiOriginOverride: 'https://updates.example.com/custom/base',
-      releaseRepoOverride: '',
-      updatePublicKeyOverride:
-          base64Encode(List<int>.generate(32, (i) => i + 1)),
-      currentVersionLoader: () async =>
-          const AppRuntimeVersion(version: '1.0.0', buildNumber: '1'),
-    );
-
-    final result = await service.checkForUpdates();
-
-    expect(result.errorMessage, isNull);
-    expect(result.update, isNotNull);
-    final requestedPaths = requestedUris.map((uri) => uri.path).toList();
-    expect(requestedPaths, contains('/custom/base/api/releases/latest'));
-    expect(
-      requestedPaths,
-      isNot(contains('/custom/base/api/releases/latest.sig')),
-    );
-  });
-
-  test('does not request missing custom api latest signature', () async {
-    final requestedUris = <Uri>[];
-    final service = AppUpdateService(
-      httpClient: _FakeHttpClient(
-        handler: (uri) {
-          requestedUris.add(uri);
-          if (uri.path.endsWith('/api/releases/latest')) {
-            return _FakeHttpResponse(
-              statusCode: 200,
-              body: jsonEncode({
-                'version': '1.1.0',
-                'release_page_url':
-                    'https://updates.example.com/releases/v1.1.0',
-                'platforms': {
-                  'linux-x64': {
-                    'install_mode': 'bundle-tar-gz',
-                    'archive_url':
-                        'https://cdn.example.com/SecondLoop-linux-x64-v1.1.0.tar.gz',
-                    'sha256': 'abc123',
-                  },
-                },
-              }),
+          if (uri.path.endsWith('/api/releases/latest.sig')) {
+            return const _FakeHttpResponse(
+              statusCode: 404,
+              body: 'missing',
             );
           }
           throw StateError('unexpected_uri:$uri');
@@ -214,15 +230,30 @@ void main() {
 
     final result = await service.checkForUpdates();
 
-    expect(result.errorMessage, isNull);
-    expect(result.update, isNotNull);
+    expect(result.update, isNull);
+    expect(result.errorMessage, contains('signature_fetch_failed_404'));
     final requestedPaths = requestedUris.map((uri) => uri.path).toList();
     expect(requestedPaths, contains('/custom/base/api/releases/latest'));
     expect(
       requestedPaths,
-      isNot(contains('/custom/base/api/releases/latest.sig')),
+      contains('/custom/base/api/releases/latest.sig'),
     );
   });
+}
+
+Future<String> _ed25519PublicKeyBase64FromSeed(List<int> seed) async {
+  final keyPair = await Ed25519().newKeyPairFromSeed(seed);
+  final publicKey = await keyPair.extractPublicKey();
+  return base64Encode(publicKey.bytes);
+}
+
+Future<String> _signEd25519Base64({
+  required List<int> payload,
+  required List<int> seed,
+}) async {
+  final keyPair = await Ed25519().newKeyPairFromSeed(seed);
+  final signature = await Ed25519().sign(payload, keyPair: keyPair);
+  return base64Encode(signature.bytes);
 }
 
 final class _FakeHttpResponse {

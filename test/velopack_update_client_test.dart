@@ -192,6 +192,16 @@ void main() {
     );
   });
 
+  test('extracts pending version from architecture-suffixed full nupkg name',
+      () {
+    expect(
+      _pendingVersionForPackageName(
+        'com.secondloop.secondloop-1.0.1-x64-full.nupkg',
+      ),
+      '1.0.1',
+    );
+  });
+
   test(
       'rejects pending version from prerelease channel-suffixed full nupkg name',
       () {
@@ -315,6 +325,27 @@ void main() {
     expect(
       client.pendingUpdatePackagePath(),
       endsWith('com.secondloop.secondloop-1.2.0-win-full.nupkg'),
+    );
+  });
+
+  test('detects pending update from architecture-suffixed package', () async {
+    final root =
+        await Directory.systemTemp.createTemp('velopack_pending_arch_');
+    addTearDown(() => root.delete(recursive: true));
+    final updater = File('${root.path}${Platform.pathSeparator}Update.exe')
+      ..writeAsStringSync('stub');
+    _writeSqVersion(root, '1.0.0');
+    _createNupkg(root, 'com.secondloop.secondloop-1.2.0-x64-full.nupkg');
+
+    final client = VelopackUpdateClient(
+      updateExecutablePath: updater.path,
+    );
+
+    expect(client.hasPendingUpdate(), isTrue);
+    expect(client.pendingUpdateVersion(), '1.2.0');
+    expect(
+      client.pendingUpdatePackagePath(),
+      endsWith('com.secondloop.secondloop-1.2.0-x64-full.nupkg'),
     );
   });
 

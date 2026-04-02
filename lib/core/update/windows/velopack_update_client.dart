@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import '../app_update_architecture.dart';
 import '../app_update_models.dart';
 import '../app_update_helpers.dart';
 import 'velopack_paths.dart';
@@ -821,89 +822,29 @@ class VelopackUpdateClient implements WindowsStagedUpdateClient {
     required String appId,
     Iterable<String> channels = const <String>[],
   }) {
-    final normalized = fileName.trim();
-    if (normalized.isEmpty) {
-      return null;
-    }
-    final lower = normalized.toLowerCase();
-    if (!lower.endsWith('.nupkg') || lower.endsWith('.snupkg')) {
-      return null;
-    }
-
-    if (!isWindowsVelopackPackageNameForApp(normalized, appId: appId)) {
-      return null;
-    }
-
-    final prefix = '${appId.trim()}-';
-    final packageStem = normalized.substring(
-      prefix.length,
-      normalized.length - '.nupkg'.length,
+    final packageInfo = _parsePackageInfoFromNupkgName(
+      fileName,
+      appId: appId,
+      channels: channels,
     );
-    if (!packageStem.toLowerCase().endsWith('-full')) {
+    if (packageInfo == null) {
       return null;
     }
 
-    final versionWithOptionalChannel =
-        packageStem.substring(0, packageStem.length - '-full'.length);
-    if (parseComparableAppVersion(versionWithOptionalChannel) != null) {
-      return versionWithOptionalChannel;
+    final channel = packageInfo.channel;
+    if (channel == null) {
+      return packageInfo.version;
     }
 
-    final firstDashIndex = versionWithOptionalChannel.indexOf('-');
-    if (firstDashIndex > 0 &&
-        firstDashIndex < versionWithOptionalChannel.length - 1) {
-      final versionPrefix =
-          versionWithOptionalChannel.substring(0, firstDashIndex);
-      final channelSuffix =
-          versionWithOptionalChannel.substring(firstDashIndex + 1).trim();
-      final looksLikeSimpleChannel =
-          RegExp(r'^[A-Za-z][A-Za-z0-9_-]*$').hasMatch(channelSuffix);
-      if (channelSuffix.isNotEmpty &&
-          looksLikeSimpleChannel &&
-          parseComparableAppVersion(versionPrefix) != null) {
-        final normalizedChannelSuffix = channelSuffix.toLowerCase();
-        if (channels.isEmpty) {
-          return normalizedChannelSuffix == _defaultWindowsChannel
-              ? versionPrefix
-              : null;
-        }
-
-        final knownChannels = channels
-            .map((channel) => channel.trim().toLowerCase())
-            .where((channel) => channel.isNotEmpty)
-            .toSet();
-        if (knownChannels.contains(normalizedChannelSuffix)) {
-          return versionPrefix;
-        }
-        return null;
-      }
+    if (channels.isEmpty) {
+      return channel == _defaultWindowsChannel ? packageInfo.version : null;
     }
 
     final knownChannels = channels
-        .map((channel) => channel.trim())
-        .where((channel) => channel.isNotEmpty)
-        .toSet()
-        .toList(growable: false)
-      ..sort((left, right) => right.length.compareTo(left.length));
-    final normalizedVersionWithOptionalChannel =
-        versionWithOptionalChannel.toLowerCase();
-    for (final channel in knownChannels) {
-      final suffix = '-${channel.toLowerCase()}';
-      if (!normalizedVersionWithOptionalChannel.endsWith(suffix) ||
-          versionWithOptionalChannel.length <= suffix.length) {
-        continue;
-      }
-
-      final strippedVersion = versionWithOptionalChannel.substring(
-        0,
-        versionWithOptionalChannel.length - suffix.length,
-      );
-      if (parseComparableAppVersion(strippedVersion) != null) {
-        return strippedVersion;
-      }
-    }
-
-    return null;
+        .map((knownChannel) => knownChannel.trim().toLowerCase())
+        .where((knownChannel) => knownChannel.isNotEmpty)
+        .toSet();
+    return knownChannels.contains(channel) ? packageInfo.version : null;
   }
 
   static List<String> _detectInstalledChannels(String appRootPath) {
@@ -965,6 +906,17 @@ class VelopackUpdateClient implements WindowsStagedUpdateClient {
     String fileName, {
     required String appId,
   }) {
+    return _parsePackageInfoFromNupkgName(
+      fileName,
+      appId: appId,
+    )?.channel;
+  }
+
+  static _ParsedVelopackPackageInfo? _parsePackageInfoFromNupkgName(
+    String fileName, {
+    required String appId,
+    Iterable<String> channels = const <String>[],
+  }) {
     final normalized = fileName.trim();
     if (normalized.isEmpty) {
       return null;
@@ -987,31 +939,85 @@ class VelopackUpdateClient implements WindowsStagedUpdateClient {
       return null;
     }
 
-    final versionWithOptionalChannel =
+    final versionAndSuffix =
         packageStem.substring(0, packageStem.length - '-full'.length);
-    if (parseComparableAppVersion(versionWithOptionalChannel) != null) {
+    final versionMatch =
+        RegExp(r'^(\d+\.\d+\.\d+)(?:-(.+))?$').firstMatch(versionAndSuffix);
+    final version = versionMatch?.group(1);
+    if (version == null || parseComparableAppVersion(version) == null) {
       return null;
     }
 
-    final firstDashIndex = versionWithOptionalChannel.indexOf('-');
-    if (firstDashIndex <= 0 ||
-        firstDashIndex >= versionWithOptionalChannel.length - 1) {
-      return null;
+    final rawSuffix = versionMatch?.group(2)?.trim();
+    if (rawSuffix == null || rawSuffix.isEmpty) {
+      return _ParsedVelopackPackageInfo(version: version);
     }
 
-    final versionPrefix =
-        versionWithOptionalChannel.substring(0, firstDashIndex);
-    final channelSuffix =
-        versionWithOptionalChannel.substring(firstDashIndex + 1).trim();
-    final looksLikeSimpleChannel =
-        RegExp(r'^[A-Za-z][A-Za-z0-9_-]*$').hasMatch(channelSuffix);
-    if (channelSuffix.isEmpty ||
-        !looksLikeSimpleChannel ||
-        parseComparableAppVersion(versionPrefix) == null) {
-      return null;
+    final normalizedSuffix = rawSuffix.toLowerCase();
+    final knownChannels = channels
+        .map((knownChannel) => knownChannel.trim().toLowerCase())
+        .where((knownChannel) => knownChannel.isNotEmpty)
+        .toList(growable: false)
+      ..sort((left, right) => right.length.compareTo(left.length));
+    for (final knownChannel in knownChannels) {
+      if (normalizedSuffix == knownChannel) {
+        return _ParsedVelopackPackageInfo(
+          version: version,
+          channel: knownChannel,
+        );
+      }
+      if (normalizedSuffix.startsWith('$knownChannel-')) {
+        final trailingSuffix = rawSuffix.substring(knownChannel.length + 1);
+        if (_isArchitectureSuffix(trailingSuffix)) {
+          return _ParsedVelopackPackageInfo(
+            version: version,
+            channel: knownChannel,
+          );
+        }
+      }
+      if (normalizedSuffix.endsWith('-$knownChannel')) {
+        final trailingStart = rawSuffix.length - knownChannel.length - 1;
+        final leadingSuffix = rawSuffix.substring(0, trailingStart);
+        if (_isArchitectureSuffix(leadingSuffix)) {
+          return _ParsedVelopackPackageInfo(
+            version: version,
+            channel: knownChannel,
+          );
+        }
+      }
     }
 
-    return channelSuffix.toLowerCase();
+    if (_isArchitectureSuffix(rawSuffix)) {
+      return _ParsedVelopackPackageInfo(version: version);
+    }
+
+    final firstDashIndex = rawSuffix.indexOf('-');
+    if (firstDashIndex > 0 && firstDashIndex < rawSuffix.length - 1) {
+      final leadingSuffix = rawSuffix.substring(0, firstDashIndex);
+      final trailingSuffix = rawSuffix.substring(firstDashIndex + 1);
+      if (_isArchitectureSuffix(leadingSuffix)) {
+        return _ParsedVelopackPackageInfo(
+          version: version,
+          channel: trailingSuffix.toLowerCase(),
+        );
+      }
+      if (_isArchitectureSuffix(trailingSuffix)) {
+        return _ParsedVelopackPackageInfo(
+          version: version,
+          channel: leadingSuffix.toLowerCase(),
+        );
+      }
+    }
+
+    return _ParsedVelopackPackageInfo(
+      version: version,
+      channel: rawSuffix.toLowerCase(),
+    );
+  }
+
+  static bool _isArchitectureSuffix(String value) {
+    final normalized = normalizeArchitectureLabel(value);
+    return normalized == 'x64' || normalized == 'arm64';
   }
 
   static int _compareVersionStrings(String left, String right) {
@@ -1099,4 +1105,14 @@ class _PendingApplyAttempt {
   final String version;
   final DateTime? startedAtUtc;
   final int? updaterPid;
+}
+
+class _ParsedVelopackPackageInfo {
+  const _ParsedVelopackPackageInfo({
+    required this.version,
+    this.channel,
+  });
+
+  final String version;
+  final String? channel;
 }
