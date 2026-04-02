@@ -90,6 +90,7 @@ extension AppUpdateServiceHelperMethods on AppUpdateService {
   bool _isAndroidApkInstallerCandidate(AppUpdateAsset? asset) {
     return _platform == AppUpdatePlatform.android &&
         asset != null &&
+        asset.sha256?.trim().isNotEmpty == true &&
         isAndroidApkAssetForUpdate(asset);
   }
 

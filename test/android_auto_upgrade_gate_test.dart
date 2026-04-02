@@ -767,6 +767,68 @@ void main() {
     }
   });
 
+  testWidgets(
+      'does not reopen Android dialog after installer handoff for same version',
+      (tester) async {
+    final oldPlatform = debugDefaultTargetPlatformOverride;
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+    try {
+      final coordinator = _FakeAndroidApkUpdateCoordinator();
+      final service = _AndroidAutoUpdateService(
+        result: AppUpdateCheckResult(
+          currentVersion: '1.0.0+1',
+          update: AppUpdateAvailability(
+            currentVersion: '1.0.0+1',
+            latestTag: 'v1.1.0',
+            releasePageUri: Uri.parse(
+                'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0'),
+            installMode: AppUpdateInstallMode.externalDownload,
+            asset: AppUpdateAsset(
+              name: 'SecondLoop-android-arm64-v8a.apk',
+              downloadUri: Uri.parse('https://cdn.example.com/secondloop.apk'),
+              sha256: _fakeAndroidApkSha256,
+            ),
+          ),
+        ),
+      );
+
+      await tester.pumpWidget(
+        wrapWithI18n(
+          MaterialApp(
+            home: AutoUpgradeGate(
+              updateService: service,
+              releaseNotesService: _FakeReleaseNotesService(
+                result: const ReleaseNotesFetchResult(),
+              ),
+              androidApkUpdateCoordinator: coordinator,
+              enableInDebug: true,
+              child: const Scaffold(body: Text('home')),
+            ),
+          ),
+        ),
+      );
+
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(find.byType(AlertDialog), findsOneWidget);
+
+      await tester.tap(find.byKey(const ValueKey('android_update_confirm')));
+      await _settleAndroidUpdateFlow(tester);
+      expect(find.byType(AlertDialog), findsNothing);
+
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+      await tester.pump();
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+
+      expect(service.checkCalls, 2);
+      expect(find.byType(AlertDialog), findsNothing);
+    } finally {
+      debugDefaultTargetPlatformOverride = oldPlatform;
+    }
+  });
+
   testWidgets('shows Android dialog even when release notes fetch throws',
       (tester) async {
     final oldPlatform = debugDefaultTargetPlatformOverride;

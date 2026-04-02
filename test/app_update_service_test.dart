@@ -747,6 +747,38 @@ void main() {
         isTrue,
       );
     });
+
+    test('records Android manual fallback when apk lacks sha256', () async {
+      final logger = _InMemoryUpdateEventLogger();
+      final service = AppUpdateService(
+        platformOverride: AppUpdatePlatform.android,
+        releaseModeOverride: true,
+        updateEventLogger: logger,
+        androidSupportedAbisOverride: const ['arm64-v8a'],
+        currentVersionLoader: () async =>
+            const AppRuntimeVersion(version: '1.0.0', buildNumber: '9'),
+        releaseJsonFetcher: (uri) async => {
+          'version': '1.1.0',
+          'assets': [
+            {
+              'name': 'SecondLoop-android-arm64-v8a.apk',
+              'browser_download_url': 'https://cdn.example.com/arm64.apk',
+            },
+          ],
+        },
+      );
+
+      final result = await service.checkForUpdates();
+
+      expect(result.update, isNotNull);
+      expect(result.update!.canUseAndroidApkInstaller, isFalse);
+      expect(
+        logger.records.any((entry) =>
+            entry.type == UpdateEventType.manualFallback &&
+            entry.message == 'manual_download_required'),
+        isTrue,
+      );
+    });
   });
 
   group('AppUpdateService.downloaded asset handoff', () {

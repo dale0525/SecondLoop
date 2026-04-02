@@ -653,6 +653,7 @@ class _AndroidUpdateDialogState extends State<_AndroidUpdateDialog> {
       setState(() {
         _statusMessage = context.t.settings.updateDialog.installing;
       });
+      widget.onDismissed();
       Navigator.of(context).pop();
     } on AndroidApkDownloadCancelledException {
       return;
