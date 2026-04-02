@@ -220,5 +220,62 @@ void main() {
         isTrue,
       );
     });
+
+    test(
+        'matchAssetForCurrentPlatform ignores prerelease-looking windows assets during strict release matching',
+        () {
+      final asset = matchAssetForCurrentPlatform(
+        AppUpdatePlatform.windows,
+        [
+          AppUpdateAsset(
+            name: 'com.secondloop.secondloop-1.2.3-rc.1-full.nupkg',
+            downloadUri: Uri.parse('https://cdn.example.com/rc.nupkg'),
+            sha256: 'rcsha',
+          ),
+          AppUpdateAsset(
+            name: 'com.secondloop.secondloop-1.2.3-full.nupkg',
+            downloadUri: Uri.parse('https://cdn.example.com/stable.nupkg'),
+            sha256: 'stablesha',
+          ),
+        ],
+        windowsManagedRuntimeAvailable: true,
+        releaseVersion: '1.2.3',
+        currentArchitecture: 'x64',
+        windowsAppId: 'com.secondloop.secondloop',
+      );
+
+      expect(asset, isNotNull);
+      expect(asset!.name, 'com.secondloop.secondloop-1.2.3-full.nupkg');
+      expect(
+        asset.downloadUri.toString(),
+        'https://cdn.example.com/stable.nupkg',
+      );
+    });
+
+    test(
+        'selectExternalDownloadAsset ignores prerelease-looking windows MSI during strict release matching',
+        () {
+      final asset = selectExternalDownloadAsset(
+        AppUpdatePlatform.windows,
+        preferredAsset: null,
+        assets: [
+          AppUpdateAsset(
+            name: 'SecondLoop-win-1.2.3-rc.1.msi',
+            downloadUri: Uri.parse('https://cdn.example.com/rc.msi'),
+          ),
+          AppUpdateAsset(
+            name: 'SecondLoop-win-1.2.3.msi',
+            downloadUri: Uri.parse('https://cdn.example.com/stable.msi'),
+          ),
+        ],
+        releaseVersion: '1.2.3',
+        currentArchitecture: 'x64',
+      );
+
+      expect(asset, isNotNull);
+      expect(asset!.name, 'SecondLoop-win-1.2.3.msi');
+      expect(
+          asset.downloadUri.toString(), 'https://cdn.example.com/stable.msi');
+    });
   });
 }

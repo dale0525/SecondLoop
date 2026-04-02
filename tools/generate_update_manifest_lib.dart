@@ -326,9 +326,14 @@ File? _selectNewestWindowsPackage(
 
   File? newestFile;
   List<int>? newestVersion;
+  int? newestTieBreaker;
 
   for (final file in matchingPackages) {
     final name = file.uri.pathSegments.last;
+    final channel = _extractWindowsPackageChannel(
+      name,
+      knownChannels: resolvedKnownChannels,
+    );
     final version = _extractWindowsPackageVersion(
       name,
       windowsAppId: windowsAppId,
@@ -337,14 +342,36 @@ File? _selectNewestWindowsPackage(
     if (version == null) {
       continue;
     }
+    final tieBreaker = _windowsPackageSelectionTieBreaker(
+      channel: channel,
+      requestedChannel: requestedChannel,
+    );
     if (newestVersion == null ||
-        _compareStrictVersionSegments(version, newestVersion) > 0) {
+        _compareStrictVersionSegments(version, newestVersion) > 0 ||
+        (_compareStrictVersionSegments(version, newestVersion) == 0 &&
+            (newestTieBreaker == null || tieBreaker < newestTieBreaker))) {
       newestFile = file;
       newestVersion = version;
+      newestTieBreaker = tieBreaker;
     }
   }
 
   return newestFile;
+}
+
+int _windowsPackageSelectionTieBreaker({
+  required String? channel,
+  required String? requestedChannel,
+}) {
+  final effectiveChannel = _effectiveWindowsChannel(channel);
+  final effectiveRequestedChannel = _effectiveWindowsChannel(requestedChannel);
+  if (effectiveChannel == effectiveRequestedChannel && channel != null) {
+    return 0;
+  }
+  if (effectiveChannel == _defaultWindowsChannel && channel == null) {
+    return 1;
+  }
+  return 2;
 }
 
 List<File> _selectMatchingArchives(

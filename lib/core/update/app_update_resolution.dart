@@ -108,14 +108,33 @@ AppUpdateAsset? selectExternalDownloadAsset(
 
   if (platform == AppUpdatePlatform.windows) {
     final exactAppId = windowsAppId?.trim();
-    if (exactAppId != null && exactAppId.isNotEmpty) {
-      return selectFromMatches(
-        (name) => isWindowsMsiInstallerNameForApp(name, appId: exactAppId),
-        preferredAsset,
-      );
+    final matchedMsi = exactAppId != null && exactAppId.isNotEmpty
+        ? selectFromMatches(
+            (name) => isWindowsMsiInstallerNameForApp(name, appId: exactAppId),
+            preferredAsset,
+          )
+        : selectFromMatches(isWindowsMsiInstallerName, preferredAsset);
+    if (matchedMsi != null) {
+      return matchedMsi;
     }
 
-    return selectFromMatches(isWindowsMsiInstallerName, preferredAsset);
+    final shouldPreservePreferredManifestAsset = preferredAsset != null &&
+        !assets.contains(preferredAsset) &&
+        (releaseVersion == null ||
+            releaseVersion.trim().isEmpty ||
+            _assetMatchesReleaseVersion(
+              platform,
+              preferredAsset.name,
+              releaseVersion: normalizeStrictAppVersion(
+                releaseVersion,
+                argumentName: 'releaseVersion',
+              ),
+            ));
+    if (shouldPreservePreferredManifestAsset) {
+      return preferredAsset;
+    }
+
+    return null;
   }
 
   return switch (platform) {
@@ -666,10 +685,33 @@ bool _assetMatchesReleaseVersion(
 }) {
   final assetVersion = _extractAssetVersionForPlatform(platform, assetName);
   if (assetVersion == null) {
-    return true;
+    return !_assetNameContainsNonStrictVersionToken(platform, assetName);
   }
 
   return sameNormalizedVersion(assetVersion, releaseVersion);
+}
+
+bool _assetNameContainsNonStrictVersionToken(
+  AppUpdatePlatform platform,
+  String assetName,
+) {
+  final normalizedName = assetName.trim();
+  if (normalizedName.isEmpty) {
+    return false;
+  }
+
+  final matcher = switch (platform) {
+    AppUpdatePlatform.windows => RegExp(
+        r'(?<!\d)\d+\.\d+\.\d+(?:[.+-][A-Za-z0-9][A-Za-z0-9._-]*)+',
+        caseSensitive: false,
+      ),
+    AppUpdatePlatform.macos || AppUpdatePlatform.linux => RegExp(
+        r'v\d+\.\d+\.\d+(?:[.+-][A-Za-z0-9][A-Za-z0-9._-]*)+',
+        caseSensitive: false,
+      ),
+    _ => null,
+  };
+  return matcher?.hasMatch(normalizedName) ?? false;
 }
 
 String? _extractAssetVersionForPlatform(

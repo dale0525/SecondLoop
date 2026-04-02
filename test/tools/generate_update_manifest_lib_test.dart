@@ -575,6 +575,35 @@ void main() {
       'https://example.com/downloads/releases.nightly.json',
     );
   });
+
+  test(
+      'generateUpdateManifest prefers channel-specific stable package over legacy stable package',
+      () async {
+    final tempDir = await Directory.systemTemp
+        .createTemp('update_manifest_prefer_channel_specific_stable_');
+    addTearDown(() => tempDir.delete(recursive: true));
+
+    await File('${tempDir.path}/com.secondloop.secondloop-1.2.3-full.nupkg')
+        .writeAsString('legacy-stable');
+    await File('${tempDir.path}/com.secondloop.secondloop-1.2.3-win-full.nupkg')
+        .writeAsString('channel-stable');
+    await File('${tempDir.path}/releases.win.json').writeAsString('stable');
+
+    final generated = await generateUpdateManifest(
+      inputDirPath: tempDir.path,
+      version: '1.2.3',
+      baseDownloadUrl: 'https://example.com/downloads/',
+    );
+
+    final platforms = generated.manifest['platforms'] as Map<String, Object?>;
+    final windows = platforms['windows-x64'] as Map<String, Object?>;
+
+    expect(windows['name'], 'com.secondloop.secondloop-1.2.3-win-full.nupkg');
+    expect(
+      windows['package_url'],
+      'https://example.com/downloads/com.secondloop.secondloop-1.2.3-win-full.nupkg',
+    );
+  });
 }
 
 String _hexEncode(List<int> bytes) {
