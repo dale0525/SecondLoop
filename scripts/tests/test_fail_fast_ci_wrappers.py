@@ -176,6 +176,62 @@ class FailFastCiWrapperTests(unittest.TestCase):
             self.assertFalse((marker_dir / "nextest-started").exists(), msg=result.stdout + result.stderr)
             self.assertIn("failing-clippy", result.stdout)
 
+    def test_local_rust_ci_wrapper_keeps_rustfmt_in_gate_while_skipping_duplicate_tests(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            repo_root = Path(temp_dir)
+            self._init_repo(repo_root)
+
+            scripts_dir = repo_root / "scripts"
+            hooks_dir = repo_root / ".githooks"
+            marker_dir = repo_root / "markers"
+            marker_dir.mkdir(parents=True, exist_ok=True)
+
+            self._write_script(
+                scripts_dir / "run_full_rust_ci_local.sh",
+                RUN_FULL_RUST_CI_LOCAL.read_text(encoding="utf-8"),
+            )
+            self._write_script(
+                hooks_dir / "pre-commit",
+                "\n".join(
+                    [
+                        "#!/usr/bin/env bash",
+                        "set -euo pipefail",
+                        f"printf '%s\\n' \"$*\" > \"{(marker_dir / 'gate-args.txt').as_posix()}\"",
+                    ]
+                )
+                + "\n",
+            )
+            self._write_script(
+                scripts_dir / "pre_commit_common.sh",
+                "#!/usr/bin/env bash\nset -euo pipefail\n",
+            )
+            self._write_script(
+                scripts_dir / "run_rust_ci_nextest.sh",
+                "\n".join(
+                    [
+                        "#!/usr/bin/env bash",
+                        "set -euo pipefail",
+                        f"printf 'started\\n' > \"{(marker_dir / 'nextest-started').as_posix()}\"",
+                    ]
+                )
+                + "\n",
+            )
+
+            self._commit_all(repo_root, "fixture")
+
+            result = self._run(
+                ["bash", "scripts/run_full_rust_ci_local.sh"],
+                cwd=repo_root,
+                timeout=5,
+            )
+
+            self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+            self.assertTrue((marker_dir / "nextest-started").exists(), msg=result.stdout + result.stderr)
+
+            gate_args = (marker_dir / "gate-args.txt").read_text(encoding="utf-8")
+            self.assertIn("--check --rust --ci --skip-tests", gate_args)
+            self.assertNotIn("--clippy-only", gate_args)
+
     def test_local_flutter_ci_wrapper_stops_remaining_shards_after_first_failure(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             repo_root = Path(temp_dir)

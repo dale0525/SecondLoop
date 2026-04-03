@@ -130,12 +130,13 @@ class VerificationScriptsTests(unittest.TestCase):
         self.assertIn('lib/i18n/strings.g.dart is required before running shards', script)
         self.assertNotIn('failed to regenerate lib/i18n/strings.g.dart', script)
 
-    def test_local_rust_ci_wrapper_uses_nextest_and_doc_tests(self) -> None:
+    def test_local_rust_ci_wrapper_keeps_rustfmt_before_nextest_and_doc_tests(self) -> None:
         script = (REPO_ROOT / "scripts/run_full_rust_ci_local.sh").read_text(
             encoding="utf-8"
         )
 
-        self.assertIn('bash .githooks/pre-commit --check --rust --ci --skip-tests --clippy-only', script)
+        self.assertIn('bash .githooks/pre-commit --check --rust --ci --skip-tests', script)
+        self.assertNotIn('--clippy-only', script)
         self.assertIn('bash scripts/run_rust_ci_nextest.sh', script)
         self.assertNotIn('clippy_pid=', script)
         self.assertNotIn('nextest_pid=', script)

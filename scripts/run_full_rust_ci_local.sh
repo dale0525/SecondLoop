@@ -16,7 +16,7 @@ mkdir -p "${rust_target_dir}"
 
 echo "ci: starting Rust gate..." >&2
 if env CARGO_TARGET_DIR="${rust_target_dir}" \
-  bash .githooks/pre-commit --check --rust --ci --skip-tests --clippy-only; then
+  bash .githooks/pre-commit --check --rust --ci --skip-tests; then
   :
 else
   status=$?
