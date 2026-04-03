@@ -70,10 +70,19 @@ class VerificationScriptsTests(unittest.TestCase):
         )
 
         self.assertIn('handle_finished_job()', script)
+        self.assertIn('cancel_remaining_jobs()', script)
         self.assertIn('remaining_jobs=', script)
         self.assertIn('wait "${job_pid}"', script)
         self.assertNotIn('wait "${flutter_pid}"', script)
         self.assertNotIn('wait "${rust_pid}"', script)
+
+    def test_parallel_ci_wrapper_cancels_other_scopes_after_first_failure(self) -> None:
+        script = (REPO_ROOT / "scripts/run_full_ci_parallel.sh").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn('overall_status=0', script)
+        self.assertIn('cancelling ${name} verification after ${failed_job} failure', script)
 
     def test_local_flutter_ci_wrapper_runs_gate_and_shards(self) -> None:
         script = (REPO_ROOT / "scripts/run_flutter_ci_local.sh").read_text(
@@ -110,6 +119,8 @@ class VerificationScriptsTests(unittest.TestCase):
 
         self.assertIn('for pid in "${flutter_gate_pid:-}" "${flutter_test_pids[@]-}"; do', script)
         self.assertIn("trap cleanup EXIT INT TERM", script)
+        self.assertIn('cancel_remaining_shards()', script)
+        self.assertIn('overall_status=0', script)
 
     def test_flutter_test_shard_requires_prepared_i18n_outputs(self) -> None:
         script = (REPO_ROOT / "scripts/run_flutter_test_shard.sh").read_text(
@@ -126,6 +137,8 @@ class VerificationScriptsTests(unittest.TestCase):
 
         self.assertIn('bash .githooks/pre-commit --check --rust --ci --skip-tests', script)
         self.assertIn('bash scripts/run_rust_ci_nextest.sh', script)
+        self.assertIn('cancel_remaining_job()', script)
+        self.assertIn('overall_status=0', script)
 
     def test_local_rust_ci_wrapper_cleanup_reaps_background_jobs(self) -> None:
         script = (REPO_ROOT / "scripts/run_full_rust_ci_local.sh").read_text(

@@ -24,6 +24,7 @@ flutter_test_pids=()
 flutter_test_worktrees=()
 prepared_worktree=""
 flutter_gate_pid=""
+overall_status=0
 
 cleanup() {
   local pid worktree
@@ -123,12 +124,11 @@ for (( shard_index = 0; shard_index < flutter_shards; shard_index++ )); do
   flutter_test_pids+=("$!")
 done
 
-status=0
-
-wait "${flutter_gate_pid}" || status=$?
+gate_status=0
+wait "${flutter_gate_pid}" || gate_status=$?
 cat "${flutter_gate_log}"
 
-if [[ ${status} -ne 0 ]]; then
+if [[ ${gate_status} -ne 0 ]]; then
   for pid in "${flutter_test_pids[@]}"; do
     if kill -0 "${pid}" 2>/dev/null; then
       kill "${pid}" 2>/dev/null || true
@@ -140,16 +140,56 @@ if [[ ${status} -ne 0 ]]; then
     cat "${flutter_test_logs[$index]}"
   done
 
-  exit "${status}"
+  exit "${gate_status}"
 fi
 
-for index in "${!flutter_test_pids[@]}"; do
-  shard_status=0
-  wait "${flutter_test_pids[$index]}" || shard_status=$?
-  cat "${flutter_test_logs[$index]}"
-  if [[ ${shard_status} -ne 0 ]]; then
-    status=${shard_status}
+shard_done=()
+for _ in "${flutter_test_pids[@]}"; do
+  shard_done+=(0)
+done
+
+cancel_remaining_shards() {
+  local failed_index="$1"
+  local pid
+
+  for index in "${!flutter_test_pids[@]}"; do
+    if [[ "${index}" == "${failed_index}" || "${shard_done[$index]}" -ne 0 ]]; then
+      continue
+    fi
+    pid="${flutter_test_pids[$index]}"
+    if kill -0 "${pid}" 2>/dev/null; then
+      echo "ci: cancelling Flutter shard ${index}/${flutter_shards} after shard ${failed_index} failure..." >&2
+      kill "${pid}" 2>/dev/null || true
+    fi
+  done
+}
+
+remaining_shards="${#flutter_test_pids[@]}"
+while [[ ${remaining_shards} -gt 0 ]]; do
+  for index in "${!flutter_test_pids[@]}"; do
+    if [[ "${shard_done[$index]}" -ne 0 ]]; then
+      continue
+    fi
+
+    if kill -0 "${flutter_test_pids[$index]}" 2>/dev/null; then
+      continue
+    fi
+
+    shard_status=0
+    wait "${flutter_test_pids[$index]}" || shard_status=$?
+    cat "${flutter_test_logs[$index]}"
+    shard_done[index]=1
+    remaining_shards=$((remaining_shards - 1))
+
+    if [[ ${shard_status} -ne 0 && ${overall_status} -eq 0 ]]; then
+      overall_status="${shard_status}"
+      cancel_remaining_shards "${index}"
+    fi
+  done
+
+  if [[ ${remaining_shards} -gt 0 ]]; then
+    sleep 1
   fi
 done
 
-exit "${status}"
+exit "${overall_status}"

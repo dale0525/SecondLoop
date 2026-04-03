@@ -17,9 +17,34 @@ python_pid=""
 flutter_done=0
 rust_done=0
 python_done=0
-flutter_status=0
-rust_status=0
-python_status=0
+overall_status=0
+
+cancel_remaining_jobs() {
+  local failed_job="$1"
+  local pid name
+
+  for pid_var in flutter_pid rust_pid python_pid; do
+    pid="${!pid_var:-}"
+    [[ -n "${pid}" ]] || continue
+    if ! kill -0 "${pid}" 2>/dev/null; then
+      continue
+    fi
+
+    case "${pid_var}" in
+      flutter_pid) name="Flutter" ;;
+      rust_pid) name="Rust" ;;
+      python_pid) name="Python tooling" ;;
+      *) name="${pid_var}" ;;
+    esac
+
+    if [[ "${name}" == "${failed_job}" ]]; then
+      continue
+    fi
+
+    echo "ci: cancelling ${name} verification after ${failed_job} failure..." >&2
+    kill "${pid}" 2>/dev/null || true
+  done
+}
 
 cleanup() {
   local pid
@@ -56,33 +81,36 @@ handle_finished_job() {
   local job_name="$1"
   local job_pid="$2"
   local job_log="$3"
-  local job_status_var="$4"
 
   local status=0
   wait "${job_pid}" || status=$?
-  printf -v "${job_status_var}" '%s' "${status}"
   echo "ci: ${job_name} verification finished with status ${status}" >&2
   cat "${job_log}"
+
+  if [[ ${status} -ne 0 && ${overall_status} -eq 0 ]]; then
+    overall_status="${status}"
+    cancel_remaining_jobs "${job_name}"
+  fi
 }
 
 remaining_jobs=3
 while [[ ${remaining_jobs} -gt 0 ]]; do
   if [[ ${flutter_done} -eq 0 ]] && ! kill -0 "${flutter_pid}" 2>/dev/null; then
-    handle_finished_job "Flutter" "${flutter_pid}" "${flutter_log}" flutter_status
+    handle_finished_job "Flutter" "${flutter_pid}" "${flutter_log}"
     flutter_done=1
     remaining_jobs=$((remaining_jobs - 1))
     continue
   fi
 
   if [[ ${rust_done} -eq 0 ]] && ! kill -0 "${rust_pid}" 2>/dev/null; then
-    handle_finished_job "Rust" "${rust_pid}" "${rust_log}" rust_status
+    handle_finished_job "Rust" "${rust_pid}" "${rust_log}"
     rust_done=1
     remaining_jobs=$((remaining_jobs - 1))
     continue
   fi
 
   if [[ ${python_done} -eq 0 ]] && ! kill -0 "${python_pid}" 2>/dev/null; then
-    handle_finished_job "Python tooling" "${python_pid}" "${python_log}" python_status
+    handle_finished_job "Python tooling" "${python_pid}" "${python_log}"
     python_done=1
     remaining_jobs=$((remaining_jobs - 1))
     continue
@@ -91,6 +119,6 @@ while [[ ${remaining_jobs} -gt 0 ]]; do
   sleep 1
 done
 
-if [[ ${flutter_status} -ne 0 || ${rust_status} -ne 0 || ${python_status} -ne 0 ]]; then
-  exit 1
+if [[ ${overall_status} -ne 0 ]]; then
+  exit "${overall_status}"
 fi
