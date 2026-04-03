@@ -14,6 +14,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 RUN_FULL_CI_PARALLEL = REPO_ROOT / "scripts/run_full_ci_parallel.sh"
 RUN_FULL_RUST_CI_LOCAL = REPO_ROOT / "scripts/run_full_rust_ci_local.sh"
 RUN_FLUTTER_CI_LOCAL = REPO_ROOT / "scripts/run_flutter_ci_local.sh"
+RUN_PYTHON_TOOLING_CHECKS = REPO_ROOT / "scripts/run_python_tooling_checks.sh"
 
 
 @unittest.skipUnless(shutil.which("bash"), "bash is required")
@@ -353,6 +354,80 @@ class FailFastCiWrapperTests(unittest.TestCase):
             self.assertFalse((marker_dir / "flutter-shard-completed").exists(), msg=result.stdout + result.stderr)
             self.assertIn("failing-shard-0", result.stdout)
             self.assertIn("cancelling Flutter shard 1/2 after shard 0 failure", result.stderr)
+
+    def test_python_tooling_wrapper_strips_git_hook_environment(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            repo_root = Path(temp_dir)
+            self._init_repo(repo_root)
+
+            scripts_dir = repo_root / "scripts"
+            marker_dir = repo_root / "markers"
+            marker_dir.mkdir(parents=True, exist_ok=True)
+
+            self._write_script(
+                scripts_dir / "run_python_tooling_checks.sh",
+                RUN_PYTHON_TOOLING_CHECKS.read_text(encoding="utf-8"),
+            )
+            self._write_script(
+                scripts_dir / "pre_commit_common.sh",
+                "\n".join(
+                    [
+                        "#!/usr/bin/env bash",
+                        "set -euo pipefail",
+                        "die() {",
+                        "  echo \"pre-commit: $*\" >&2",
+                        "  exit 1",
+                        "}",
+                        f"resolve_python_bin() {{ printf '%s\\n' \"{(repo_root / 'fake-python').as_posix()}\"; }}",
+                        "run_with_periodic_status() {",
+                        "  local _label=\"$1\"",
+                        "  shift",
+                        "  \"$@\"",
+                        "}",
+                    ]
+                )
+                + "\n",
+            )
+            self._write_script(
+                repo_root / "fake-python",
+                "\n".join(
+                    [
+                        "#!/usr/bin/env bash",
+                        "set -euo pipefail",
+                        f"marker_file=\"{(marker_dir / 'git-env.txt').as_posix()}\"",
+                        "printf 'GIT_DIR=%s\\n' \"${GIT_DIR:-}\" > \"${marker_file}\"",
+                        "printf 'GIT_WORK_TREE=%s\\n' \"${GIT_WORK_TREE:-}\" >> \"${marker_file}\"",
+                        "printf 'GIT_INDEX_FILE=%s\\n' \"${GIT_INDEX_FILE:-}\" >> \"${marker_file}\"",
+                        "printf 'GIT_COMMON_DIR=%s\\n' \"${GIT_COMMON_DIR:-}\" >> \"${marker_file}\"",
+                    ]
+                )
+                + "\n",
+            )
+
+            self._commit_all(repo_root, "fixture")
+            git_dir = self._run(["git", "rev-parse", "--git-dir"], cwd=repo_root)
+            self.assertEqual(git_dir.returncode, 0, msg=git_dir.stderr)
+            git_common_dir = self._run(["git", "rev-parse", "--git-common-dir"], cwd=repo_root)
+            self.assertEqual(git_common_dir.returncode, 0, msg=git_common_dir.stderr)
+
+            result = self._run(
+                ["bash", "scripts/run_python_tooling_checks.sh"],
+                cwd=repo_root,
+                env={
+                    **os.environ,
+                    "GIT_DIR": git_dir.stdout.strip(),
+                    "GIT_WORK_TREE": repo_root.as_posix(),
+                    "GIT_INDEX_FILE": "/tmp/hook-index",
+                    "GIT_COMMON_DIR": git_common_dir.stdout.strip(),
+                },
+            )
+
+            self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+            env_log = (marker_dir / "git-env.txt").read_text(encoding="utf-8")
+            self.assertEqual(
+                env_log,
+                "GIT_DIR=\nGIT_WORK_TREE=\nGIT_INDEX_FILE=\nGIT_COMMON_DIR=\n",
+            )
 
 
 if __name__ == "__main__":
