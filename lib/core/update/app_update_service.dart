@@ -13,6 +13,7 @@ import 'app_update_helpers.dart';
 import 'app_update_architecture.dart';
 import 'app_update_models.dart';
 import 'app_update_platform.dart';
+import 'release_endpoint_helpers.dart';
 import 'app_update_resolution.dart';
 import 'linux/linux_update_script.dart';
 import 'macos/macos_update_client.dart';
@@ -35,6 +36,10 @@ const _defaultReleaseRepo = String.fromEnvironment(
 const _defaultUpdatePublicKey = String.fromEnvironment(
   'SECONDLOOP_UPDATE_PUBLIC_KEY',
   defaultValue: '',
+);
+const _defaultAllowHttpUpdateUris = bool.fromEnvironment(
+  'SECONDLOOP_ALLOW_HTTP_UPDATE_URIS',
+  defaultValue: false,
 );
 const _defaultUpdateNetworkTimeout = Duration(seconds: 15);
 
@@ -122,13 +127,24 @@ class AppUpdateService {
       _updatePublicKeyOverride ?? _defaultUpdatePublicKey;
   Duration get _networkTimeout =>
       _networkTimeoutOverride ?? _defaultUpdateNetworkTimeout;
+  Uri get fallbackReleasePageUri => _buildFallbackReleasePageUri();
   bool get _allowHttpUpdateUris =>
-      _allowHttpUpdateUriOverride ?? !_isReleaseMode;
+      _allowHttpUpdateUriOverride ??
+      (_defaultAllowHttpUpdateUris || !_isReleaseMode);
   bool get _allowFileUpdateUris =>
       _allowFileUpdateUriOverride ?? !_isReleaseMode;
   String get _currentArchitecture => normalizeArchitectureLabel(
         _currentArchitectureOverride ?? currentArchitectureForUpdates(),
       );
+  String? get _windowsAppId {
+    final stagedClient = _resolvedWindowsStagedUpdateClient;
+    if (stagedClient == null) {
+      return null;
+    }
+    final value = stagedClient.appId.trim();
+    return value.isEmpty ? null : value;
+  }
+
   void _exitProcess(int code) => (_processExit ?? exit)(code);
 
   late final WindowsStagedUpdateClient? _resolvedWindowsStagedUpdateClient =
@@ -171,6 +187,15 @@ class AppUpdateService {
       );
       return AppUpdateCheckResult(currentVersion: runtimeVersion.display);
     }
+
+    final rawWindowsAppId =
+        _platform == AppUpdatePlatform.windows ? _windowsAppId : null;
+    final effectiveWindowsAppId = _platform == AppUpdatePlatform.windows
+        ? normalizeSupportedSecondLoopAppId(rawWindowsAppId)
+        : null;
+    final hasUnsupportedWindowsAppId = rawWindowsAppId != null &&
+        rawWindowsAppId.trim().isNotEmpty &&
+        effectiveWindowsAppId == null;
 
     Map<String, Object?>? release;
     String? newestReleaseTag;
@@ -352,6 +377,39 @@ class AppUpdateService {
       return AppUpdateCheckResult(currentVersion: runtimeVersion.display);
     }
 
+    if (hasUnsupportedWindowsAppId) {
+      await _recordEvent(
+        UpdateEventType.updateAvailable,
+        currentVersion: runtimeVersion.display,
+        latestTag: latestTag,
+        installMode: AppUpdateInstallMode.externalDownload,
+        message: 'unsupported_windows_app_id',
+      );
+      await _recordEvent(
+        UpdateEventType.checkSucceeded,
+        currentVersion: runtimeVersion.display,
+        latestTag: latestTag,
+        installMode: AppUpdateInstallMode.externalDownload,
+        message: 'update_available',
+      );
+      await _recordEvent(
+        UpdateEventType.manualFallback,
+        currentVersion: runtimeVersion.display,
+        latestTag: latestTag,
+        installMode: AppUpdateInstallMode.externalDownload,
+        message: 'unsupported_windows_app_id',
+      );
+      return AppUpdateCheckResult(
+        currentVersion: runtimeVersion.display,
+        update: AppUpdateAvailability(
+          currentVersion: runtimeVersion.display,
+          latestTag: latestTag,
+          releasePageUri: releasePageUri,
+          installMode: AppUpdateInstallMode.externalDownload,
+        ),
+      );
+    }
+
     final macosManagedClient = _resolvedMacosManagedUpdateClient;
     final macosManagedInstallSupported = macosManagedClient != null &&
         macosManagedClient.isSupportedInstallLocation();
@@ -371,15 +429,19 @@ class AppUpdateService {
         : (matchManifestAssetForCurrentPlatform(
               _platform,
               release,
+              releaseVersion: latestTag,
               currentArchitecture: _currentArchitecture,
               allowHttp: _allowHttpUpdateUris,
               allowFile: _allowFileUpdateUris,
+              windowsAppId: effectiveWindowsAppId,
             ) ??
             matchAssetForCurrentPlatform(
               _platform,
               assets,
               windowsManagedRuntimeAvailable: windowsManagedRuntimeAvailable,
+              releaseVersion: latestTag,
               currentArchitecture: _currentArchitecture,
+              windowsAppId: effectiveWindowsAppId,
             ));
 
     if (_platform == AppUpdatePlatform.android &&
@@ -426,6 +488,7 @@ class AppUpdateService {
       isReleaseMode: _isReleaseMode,
       windowsManagedRuntimeAvailable: windowsManagedRuntimeAvailable,
       macosManagedInstallSupported: macosManagedInstallSupported,
+      windowsAppId: effectiveWindowsAppId,
     );
     final matchedAsset = installMode == AppUpdateInstallMode.externalDownload
         ? (_platform == AppUpdatePlatform.android
@@ -434,9 +497,16 @@ class AppUpdateService {
                 _platform,
                 preferredAsset: preferredAsset,
                 assets: assets,
+                releaseVersion: latestTag,
                 currentArchitecture: _currentArchitecture,
+                windowsAppId: effectiveWindowsAppId,
               ))
         : preferredAsset;
+    final sawWindowsIdentityMismatch = _platform == AppUpdatePlatform.windows &&
+        releaseContainsWindowsIdentityMismatch(
+          release,
+          windowsAppId: effectiveWindowsAppId,
+        );
     final manualFallbackReason = _platform == AppUpdatePlatform.android
         ? (matchedAsset == null
             ? 'missing_platform_asset'
@@ -447,6 +517,8 @@ class AppUpdateService {
             isReleaseMode: _isReleaseMode,
             windowsManagedRuntimeAvailable: windowsManagedRuntimeAvailable,
             macosManagedInstallSupported: macosManagedInstallSupported,
+            windowsAppId: effectiveWindowsAppId,
+            sawWindowsIdentityMismatch: sawWindowsIdentityMismatch,
           );
 
     await _recordEvent(
@@ -734,9 +806,14 @@ class AppUpdateService {
     final supportedInstallMode =
         update.installMode == AppUpdateInstallMode.seamlessRestart ||
             update.installMode == AppUpdateInstallMode.stagedNextLaunch;
-    return isWindowsVelopackPackageName(update.asset?.name ?? '') &&
+    final asset = update.asset;
+    final appId = _windowsAppId;
+    final isMatchingWindowsPackage = asset != null &&
+        ((appId != null && appId.isNotEmpty)
+            ? isWindowsVelopackPackageNameForApp(asset.name, appId: appId)
+            : isWindowsVelopackPackageName(asset.name));
+    return isMatchingWindowsPackage &&
         supportedInstallMode &&
-        update.asset != null &&
         stagedClient != null &&
         stagedClient.isAvailable();
   }
@@ -856,12 +933,7 @@ class AppUpdateService {
       allowFile: allowFile,
     );
     if (parsedApiOrigin != null) {
-      final normalizedPath = parsedApiOrigin.path.endsWith('/')
-          ? parsedApiOrigin.path
-          : '${parsedApiOrigin.path}/';
-      endpoints.add(
-        parsedApiOrigin.replace(path: '${normalizedPath}api/releases/latest'),
-      );
+      endpoints.add(buildLatestReleaseEndpoint(parsedApiOrigin));
     }
 
     if (repo.isNotEmpty) {
@@ -1001,16 +1073,20 @@ class AppUpdateService {
 
   Uri _buildFallbackReleasePageUri() {
     final repo = _releaseRepo.trim();
-    if (repo.isEmpty) {
-      final origin = parseUpdateUri(
-        _releaseApiOrigin.trim(),
-        allowHttp: _allowHttpUpdateUris,
-        allowFile: _allowFileUpdateUris,
-      );
-      if (origin != null) return origin;
-      return Uri.parse('https://github.com');
+    if (repo.isNotEmpty) {
+      return Uri.parse('https://github.com/$repo/releases/latest');
     }
-    return Uri.parse('https://github.com/$repo/releases/latest');
+
+    final origin = parseUpdateUri(
+      _releaseApiOrigin.trim(),
+      allowHttp: _allowHttpUpdateUris,
+      allowFile: _allowFileUpdateUris,
+    );
+    if (origin != null) {
+      return origin;
+    }
+
+    return Uri.parse('https://github.com');
   }
 
   List<AppUpdateAsset> _parseAssets(Object? rawAssets) {

@@ -38,6 +38,10 @@ class _FakeAutoUpdateService extends AppUpdateService {
   String get releaseRepo => releaseRepoValue;
 
   @override
+  Uri get fallbackReleasePageUri =>
+      AutoUpgradeGate.fallbackUpdateUri(releaseRepo: releaseRepoValue);
+
+  @override
   bool canStageSilentlyForNextLaunch(AppUpdateAvailability update) {
     return canStageSilentlyForNextLaunchValue;
   }
@@ -99,6 +103,19 @@ void main() {
       ),
     );
   }
+
+  testWidgets('starts auto upgrade work from the first post-frame callback',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final service = _FakeAutoUpdateService(
+      result: const AppUpdateCheckResult(currentVersion: '1.0.0+1'),
+    );
+
+    await pumpGate(tester, service: service);
+
+    expect(service.applyPendingCalls, 1);
+    expect(service.checkCalls, 1);
+  });
 
   testWidgets('linux seamless update stays passive until user confirms',
       (tester) async {

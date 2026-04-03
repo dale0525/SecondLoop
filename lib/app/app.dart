@@ -25,6 +25,7 @@ import '../core/desktop/desktop_launch_args.dart';
 import '../core/desktop/desktop_quick_capture_service.dart';
 import '../core/quick_capture/quick_capture_controller.dart';
 import '../core/quick_capture/quick_capture_scope.dart';
+import '../core/update/app_update_service.dart';
 import '../core/update/auto_upgrade_gate.dart';
 import '../core/update/update_badge_prefs.dart';
 import '../core/update/release_notes_first_launch_gate.dart';
@@ -53,12 +54,14 @@ class SecondLoopApp extends StatefulWidget {
     super.key,
     AppBackend? backend,
     QuickCaptureController? quickCaptureController,
+    this.updateService,
     this.launchArgs = const DesktopLaunchArgs(),
   })  : _backend = backend ?? NativeAppBackend(),
         _quickCaptureController = quickCaptureController;
 
   final AppBackend _backend;
   final QuickCaptureController? _quickCaptureController;
+  final AppUpdateService? updateService;
   final DesktopLaunchArgs launchArgs;
 
   @override
@@ -147,217 +150,224 @@ class _SecondLoopAppState extends State<SecondLoopApp> {
                             AppTheme.dark(locale: locale, palette: palette),
                         themeMode: themeMode,
                         navigatorKey: _navigatorKey,
-                        home: const AutoUpgradeGate(
-                          child: ReleaseNotesFirstLaunchGate(
-                            child: AppShell(),
-                          ),
+                        home: const ReleaseNotesFirstLaunchGate(
+                          child: AppShell(),
                         ),
                         builder: (context, child) {
                           // NOTE: On some platforms (notably macOS), modifier keys
                           // might not be correctly reflected in `KeyEvent` state.
                           // We add a RawKeyEvent fallback to keep standard text
                           // editing shortcuts working.
-                          return Focus(
-                            canRequestFocus: false,
-                            skipTraversal: true,
-                            // ignore: deprecated_member_use
-                            onKey: (node, event) {
+                          return AutoUpgradeGate(
+                            updateService: widget.updateService,
+                            child: Focus(
+                              canRequestFocus: false,
+                              skipTraversal: true,
                               // ignore: deprecated_member_use
-                              if (event is! RawKeyDownEvent) {
-                                return KeyEventResult.ignored;
-                              }
-                              if (event.repeat) {
-                                return KeyEventResult.ignored;
-                              }
+                              onKey: (node, event) {
+                                // ignore: deprecated_member_use
+                                if (event is! RawKeyDownEvent) {
+                                  return KeyEventResult.ignored;
+                                }
+                                if (event.repeat) {
+                                  return KeyEventResult.ignored;
+                                }
 
-                              if (shouldIgnoreTextEditingShortcutEvent(event)) {
+                                if (shouldIgnoreTextEditingShortcutEvent(
+                                    event)) {
+                                  return KeyEventResult.handled;
+                                }
+
+                                // ignore: deprecated_member_use
+                                final metaPressed = event.isMetaPressed;
+                                // ignore: deprecated_member_use
+                                final controlPressed = event.isControlPressed;
+                                // ignore: deprecated_member_use
+                                final shiftPressed = event.isShiftPressed;
+                                final key = event.logicalKey;
+                                final shortcut = resolveTextEditingShortcut(
+                                  key: key,
+                                  keyLabel: event.data.keyLabel,
+                                  character: event.character,
+                                  metaPressed: metaPressed,
+                                  controlPressed: controlPressed,
+                                  shiftPressed: shiftPressed,
+                                  supportedShortcuts: const <TextEditingShortcut>{
+                                    TextEditingShortcut.selectAll,
+                                    TextEditingShortcut.copy,
+                                    TextEditingShortcut.paste,
+                                    TextEditingShortcut.cut,
+                                    TextEditingShortcut.undo,
+                                    TextEditingShortcut.redo,
+                                  },
+                                );
+                                if (shortcut == null) {
+                                  return KeyEventResult.ignored;
+                                }
+
+                                Intent? intent;
+                                switch (shortcut) {
+                                  case TextEditingShortcut.selectAll:
+                                    intent = const SelectAllTextIntent(
+                                      SelectionChangedCause.keyboard,
+                                    );
+                                    break;
+                                  case TextEditingShortcut.copy:
+                                    intent = CopySelectionTextIntent.copy;
+                                    break;
+                                  case TextEditingShortcut.paste:
+                                    intent = const PasteTextIntent(
+                                      SelectionChangedCause.keyboard,
+                                    );
+                                    break;
+                                  case TextEditingShortcut.cut:
+                                    intent = const CopySelectionTextIntent.cut(
+                                      SelectionChangedCause.keyboard,
+                                    );
+                                    break;
+                                  case TextEditingShortcut.undo:
+                                    intent = const UndoTextIntent(
+                                      SelectionChangedCause.keyboard,
+                                    );
+                                    break;
+                                  case TextEditingShortcut.redo:
+                                    intent = const RedoTextIntent(
+                                      SelectionChangedCause.keyboard,
+                                    );
+                                    break;
+                                }
+
+                                final focusContext =
+                                    FocusManager.instance.primaryFocus?.context;
+                                if (focusContext == null) {
+                                  return KeyEventResult.ignored;
+                                }
+
+                                final action = Actions.maybeFind<Intent>(
+                                  focusContext,
+                                  intent: intent,
+                                );
+                                if (action == null ||
+                                    !action.isEnabled(intent)) {
+                                  return KeyEventResult.ignored;
+                                }
+
+                                Actions.invoke(focusContext, intent);
                                 return KeyEventResult.handled;
-                              }
-
-                              // ignore: deprecated_member_use
-                              final metaPressed = event.isMetaPressed;
-                              // ignore: deprecated_member_use
-                              final controlPressed = event.isControlPressed;
-                              // ignore: deprecated_member_use
-                              final shiftPressed = event.isShiftPressed;
-                              final key = event.logicalKey;
-                              final shortcut = resolveTextEditingShortcut(
-                                key: key,
-                                keyLabel: event.data.keyLabel,
-                                character: event.character,
-                                metaPressed: metaPressed,
-                                controlPressed: controlPressed,
-                                shiftPressed: shiftPressed,
-                                supportedShortcuts: const <TextEditingShortcut>{
-                                  TextEditingShortcut.selectAll,
-                                  TextEditingShortcut.copy,
-                                  TextEditingShortcut.paste,
-                                  TextEditingShortcut.cut,
-                                  TextEditingShortcut.undo,
-                                  TextEditingShortcut.redo,
-                                },
-                              );
-                              if (shortcut == null) {
-                                return KeyEventResult.ignored;
-                              }
-
-                              Intent? intent;
-                              switch (shortcut) {
-                                case TextEditingShortcut.selectAll:
-                                  intent = const SelectAllTextIntent(
-                                    SelectionChangedCause.keyboard,
-                                  );
-                                  break;
-                                case TextEditingShortcut.copy:
-                                  intent = CopySelectionTextIntent.copy;
-                                  break;
-                                case TextEditingShortcut.paste:
-                                  intent = const PasteTextIntent(
-                                    SelectionChangedCause.keyboard,
-                                  );
-                                  break;
-                                case TextEditingShortcut.cut:
-                                  intent = const CopySelectionTextIntent.cut(
-                                    SelectionChangedCause.keyboard,
-                                  );
-                                  break;
-                                case TextEditingShortcut.undo:
-                                  intent = const UndoTextIntent(
-                                    SelectionChangedCause.keyboard,
-                                  );
-                                  break;
-                                case TextEditingShortcut.redo:
-                                  intent = const RedoTextIntent(
-                                    SelectionChangedCause.keyboard,
-                                  );
-                                  break;
-                              }
-
-                              final focusContext =
-                                  FocusManager.instance.primaryFocus?.context;
-                              if (focusContext == null) {
-                                return KeyEventResult.ignored;
-                              }
-
-                              final action = Actions.maybeFind<Intent>(
-                                focusContext,
-                                intent: intent,
-                              );
-                              if (action == null || !action.isEnabled(intent)) {
-                                return KeyEventResult.ignored;
-                              }
-
-                              Actions.invoke(focusContext, intent);
-                              return KeyEventResult.handled;
-                            },
-                            child: Shortcuts(
-                              shortcuts: const <ShortcutActivator, Intent>{
-                                SingleActivator(LogicalKeyboardKey.keyC,
-                                        control: true):
-                                    CopySelectionTextIntent.copy,
-                                SingleActivator(LogicalKeyboardKey.keyC,
-                                    meta: true): CopySelectionTextIntent.copy,
-                                SingleActivator(LogicalKeyboardKey.copy):
-                                    CopySelectionTextIntent.copy,
-                                SingleActivator(LogicalKeyboardKey.keyV,
-                                        control: true):
-                                    PasteTextIntent(
-                                        SelectionChangedCause.keyboard),
-                                SingleActivator(LogicalKeyboardKey.keyV,
-                                        meta: true):
-                                    PasteTextIntent(
-                                        SelectionChangedCause.keyboard),
-                                SingleActivator(LogicalKeyboardKey.paste):
-                                    PasteTextIntent(
-                                        SelectionChangedCause.keyboard),
-                                SingleActivator(LogicalKeyboardKey.keyX,
-                                    control: true): CopySelectionTextIntent.cut(
-                                  SelectionChangedCause.keyboard,
-                                ),
-                                SingleActivator(LogicalKeyboardKey.keyX,
-                                    meta: true): CopySelectionTextIntent.cut(
-                                  SelectionChangedCause.keyboard,
-                                ),
-                                SingleActivator(LogicalKeyboardKey.cut):
-                                    CopySelectionTextIntent.cut(
-                                  SelectionChangedCause.keyboard,
-                                ),
-                                SingleActivator(LogicalKeyboardKey.keyA,
-                                    control: true): SelectAllTextIntent(
-                                  SelectionChangedCause.keyboard,
-                                ),
-                                SingleActivator(LogicalKeyboardKey.keyA,
-                                    meta: true): SelectAllTextIntent(
-                                  SelectionChangedCause.keyboard,
-                                ),
                               },
-                              child: SlBackground(
-                                child: AppBootstrap(
-                                  child: DesktopBackgroundService(
-                                    silentStartupRequested: widget
-                                        .launchArgs.silentStartupRequested,
-                                    onOpenSettingsRequested: () async {
-                                      final navigator =
-                                          _navigatorKey.currentState;
-                                      if (navigator == null) return;
-                                      var capturedScopes =
-                                          resolveRootSettingsInheritedScopes(
-                                        _sessionScopedCapture,
-                                      );
-                                      if (capturedScopes == null) {
-                                        await WidgetsBinding
-                                            .instance.endOfFrame;
-                                        capturedScopes =
+                              child: Shortcuts(
+                                shortcuts: const <ShortcutActivator, Intent>{
+                                  SingleActivator(LogicalKeyboardKey.keyC,
+                                          control: true):
+                                      CopySelectionTextIntent.copy,
+                                  SingleActivator(LogicalKeyboardKey.keyC,
+                                      meta: true): CopySelectionTextIntent.copy,
+                                  SingleActivator(LogicalKeyboardKey.copy):
+                                      CopySelectionTextIntent.copy,
+                                  SingleActivator(LogicalKeyboardKey.keyV,
+                                          control: true):
+                                      PasteTextIntent(
+                                          SelectionChangedCause.keyboard),
+                                  SingleActivator(LogicalKeyboardKey.keyV,
+                                          meta: true):
+                                      PasteTextIntent(
+                                          SelectionChangedCause.keyboard),
+                                  SingleActivator(LogicalKeyboardKey.paste):
+                                      PasteTextIntent(
+                                          SelectionChangedCause.keyboard),
+                                  SingleActivator(LogicalKeyboardKey.keyX,
+                                          control: true):
+                                      CopySelectionTextIntent.cut(
+                                    SelectionChangedCause.keyboard,
+                                  ),
+                                  SingleActivator(LogicalKeyboardKey.keyX,
+                                      meta: true): CopySelectionTextIntent.cut(
+                                    SelectionChangedCause.keyboard,
+                                  ),
+                                  SingleActivator(LogicalKeyboardKey.cut):
+                                      CopySelectionTextIntent.cut(
+                                    SelectionChangedCause.keyboard,
+                                  ),
+                                  SingleActivator(LogicalKeyboardKey.keyA,
+                                      control: true): SelectAllTextIntent(
+                                    SelectionChangedCause.keyboard,
+                                  ),
+                                  SingleActivator(LogicalKeyboardKey.keyA,
+                                      meta: true): SelectAllTextIntent(
+                                    SelectionChangedCause.keyboard,
+                                  ),
+                                },
+                                child: SlBackground(
+                                  child: AppBootstrap(
+                                    child: DesktopBackgroundService(
+                                      silentStartupRequested: widget
+                                          .launchArgs.silentStartupRequested,
+                                      onOpenSettingsRequested: () async {
+                                        final navigator =
+                                            _navigatorKey.currentState;
+                                        if (navigator == null) return;
+                                        var capturedScopes =
                                             resolveRootSettingsInheritedScopes(
                                           _sessionScopedCapture,
                                         );
-                                      }
-                                      await pushPageWithCapturedInheritedScopesOrFallback(
-                                        navigator,
-                                        null,
-                                        const SettingsPage(),
-                                        capturedScopes: capturedScopes,
-                                      );
-                                    },
-                                    child: DesktopQuickCaptureService(
-                                      child: ShareIntentListener(
-                                        child: LockGate(
-                                          child: SyncEngineGate(
-                                            child: Builder(
-                                              builder: (sessionScopedContext) {
-                                                _sessionScopedCapture =
-                                                    captureInheritedScopes(
-                                                  sessionScopedContext,
-                                                );
-                                                return DetachedAskRecoveryGate(
-                                                  child:
-                                                      ReviewReminderNotificationsGate(
-                                                    navigatorKey: _navigatorKey,
-                                                    child: MediaEnrichmentGate(
+                                        if (capturedScopes == null) {
+                                          await WidgetsBinding
+                                              .instance.endOfFrame;
+                                          capturedScopes =
+                                              resolveRootSettingsInheritedScopes(
+                                            _sessionScopedCapture,
+                                          );
+                                        }
+                                        await pushPageWithCapturedInheritedScopesOrFallback(
+                                          navigator,
+                                          null,
+                                          const SettingsPage(),
+                                          capturedScopes: capturedScopes,
+                                        );
+                                      },
+                                      child: DesktopQuickCaptureService(
+                                        child: ShareIntentListener(
+                                          child: LockGate(
+                                            child: SyncEngineGate(
+                                              child: Builder(
+                                                builder:
+                                                    (sessionScopedContext) {
+                                                  _sessionScopedCapture =
+                                                      captureInheritedScopes(
+                                                    sessionScopedContext,
+                                                  );
+                                                  return DetachedAskRecoveryGate(
+                                                    child:
+                                                        ReviewReminderNotificationsGate(
+                                                      navigatorKey:
+                                                          _navigatorKey,
                                                       child:
-                                                          SemanticParseAutoActionsGate(
+                                                          MediaEnrichmentGate(
                                                         child:
-                                                            TodoFollowupGenerationGate(
+                                                            SemanticParseAutoActionsGate(
                                                           child:
-                                                              KnowledgeIndexGate(
+                                                              TodoFollowupGenerationGate(
                                                             child:
-                                                                MessageEmbeddingsIndexGate(
+                                                                KnowledgeIndexGate(
                                                               child:
-                                                                  EmbeddingsIndexGate(
+                                                                  MessageEmbeddingsIndexGate(
                                                                 child:
-                                                                    CloudSyncSwitchPromptGate(
-                                                                  navigatorKey:
-                                                                      _navigatorKey,
+                                                                    EmbeddingsIndexGate(
                                                                   child:
-                                                                      ShareIngestGate(
+                                                                      CloudSyncSwitchPromptGate(
+                                                                    navigatorKey:
+                                                                        _navigatorKey,
                                                                     child:
-                                                                        QuickCaptureOverlay(
-                                                                      navigatorKey:
-                                                                          _navigatorKey,
+                                                                        ShareIngestGate(
                                                                       child:
-                                                                          FirstLaunchWelcomeGate(
-                                                                        child: child ??
-                                                                            const SizedBox.shrink(),
+                                                                          QuickCaptureOverlay(
+                                                                        navigatorKey:
+                                                                            _navigatorKey,
+                                                                        child:
+                                                                            FirstLaunchWelcomeGate(
+                                                                          child:
+                                                                              child ?? const SizedBox.shrink(),
+                                                                        ),
                                                                       ),
                                                                     ),
                                                                   ),
@@ -368,9 +378,9 @@ class _SecondLoopAppState extends State<SecondLoopApp> {
                                                         ),
                                                       ),
                                                     ),
-                                                  ),
-                                                );
-                                              },
+                                                  );
+                                                },
+                                              ),
                                             ),
                                           ),
                                         ),

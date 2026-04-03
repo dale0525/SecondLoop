@@ -11,6 +11,8 @@ const _runtimeTagPattern =
 const _defaultOutputDir = 'assets/ocr/desktop_runtime';
 const _defaultCacheDir = '.tool/cache/desktop-runtime';
 const _installMarkerFile = '_secondloop_desktop_runtime_release.json';
+const _fileLockRetryMaxAttempts = 4;
+const _fileLockRetryBaseDelay = Duration(milliseconds: 250);
 const _detModelAliases = <String>[
   'ch_PP-OCRv5_mobile_det.onnx',
   'ch_PP-OCRv4_det_infer.onnx',
@@ -223,13 +225,16 @@ Future<void> _installRuntimeTag({
     await _extractArchive(assembledArchive, tempDir.path);
     await _validateRuntimePayload(tempDir);
 
-    if (await outputDir.exists()) {
-      await outputDir.delete(recursive: true);
-    }
-    await tempDir.rename(outputDir.path);
+    await _replaceRuntimeOutputDirectory(
+      outputDir: outputDir,
+      tempDir: tempDir,
+    );
   } finally {
     if (await tempDir.exists()) {
-      await tempDir.delete(recursive: true);
+      await _deleteDirectoryWithRetry(
+        tempDir,
+        reason: 'clean up temporary runtime directory',
+      );
     }
   }
 
@@ -513,6 +518,209 @@ Future<String?> resolveInstalledRuntimeTagForTest({
     );
 
 String joinForTest(String base, String part) => _join(base, part);
+
+Future<void> replaceRuntimeOutputDirectoryForTest({
+  required Directory outputDir,
+  required Directory tempDir,
+  Future<void> Function(Directory directory)? deleteOutputDir,
+  Future<void> Function(Directory directory, String newPath)? renameTempDir,
+  Future<void> Function(Directory directory)? deleteTempDir,
+  Future<void> Function(Duration duration)? delay,
+}) =>
+    _replaceRuntimeOutputDirectory(
+      outputDir: outputDir,
+      tempDir: tempDir,
+      deleteOutputDir: deleteOutputDir,
+      renameTempDir: renameTempDir,
+      deleteTempDir: deleteTempDir,
+      delay: delay,
+    );
+
+Future<void> _replaceRuntimeOutputDirectory({
+  required Directory outputDir,
+  required Directory tempDir,
+  Future<void> Function(Directory directory)? deleteOutputDir,
+  Future<void> Function(Directory directory, String newPath)? renameTempDir,
+  Future<void> Function(Directory directory)? deleteTempDir,
+  Future<void> Function(Duration duration)? delay,
+}) async {
+  final deleteOutput =
+      deleteOutputDir ?? (directory) => directory.delete(recursive: true);
+  final renameTemp = renameTempDir ??
+      (directory, newPath) async {
+        await directory.rename(newPath);
+      };
+  final deleteTemp =
+      deleteTempDir ?? (directory) => directory.delete(recursive: true);
+  Directory? backupDir;
+  var promoted = false;
+
+  try {
+    if (await outputDir.exists()) {
+      backupDir = Directory(
+        '${outputDir.path}.backup.${DateTime.now().microsecondsSinceEpoch}',
+      );
+      if (await backupDir.exists()) {
+        await _deleteDirectoryWithRetry(
+          backupDir,
+          reason: 'remove stale runtime backup directory',
+          deleteOperation: deleteOutput,
+          delay: delay,
+        );
+      }
+      await _renameDirectoryWithRetry(
+        outputDir,
+        backupDir.path,
+        reason: 'stash previous runtime output directory',
+        delay: delay,
+      );
+    }
+    await _renameDirectoryWithRetry(
+      tempDir,
+      outputDir.path,
+      reason: 'promote prepared runtime directory',
+      renameOperation: renameTemp,
+      delay: delay,
+    );
+    promoted = true;
+    if (backupDir != null && await backupDir.exists()) {
+      try {
+        await _deleteDirectoryWithRetry(
+          backupDir,
+          reason: 'remove previous runtime backup directory',
+          deleteOperation: deleteOutput,
+          delay: delay,
+        );
+      } catch (error) {
+        stdout.writeln(
+          'prepare-desktop-runtime: leaving backup directory in place after '
+          'successful promote because cleanup failed: $error',
+        );
+      }
+    }
+  } catch (_) {
+    if (backupDir != null &&
+        await backupDir.exists() &&
+        !await outputDir.exists()) {
+      await _renameDirectoryWithRetry(
+        backupDir,
+        outputDir.path,
+        reason: 'restore previous runtime output directory',
+        delay: delay,
+      );
+    }
+    rethrow;
+  } finally {
+    if (promoted && await tempDir.exists()) {
+      await _deleteDirectoryWithRetry(
+        tempDir,
+        reason: 'clean up temporary runtime directory',
+        deleteOperation: deleteTemp,
+        delay: delay,
+      );
+    }
+  }
+}
+
+Future<void> _deleteDirectoryWithRetry(
+  Directory directory, {
+  required String reason,
+  Future<void> Function(Directory directory)? deleteOperation,
+  Future<void> Function(Duration duration)? delay,
+}) async {
+  final operation =
+      deleteOperation ?? (target) => target.delete(recursive: true);
+  await _runFileSystemOperationWithRetry(
+    description: '$reason: ${directory.path}',
+    operation: () => operation(directory),
+    delay: delay,
+  );
+}
+
+Future<void> _renameDirectoryWithRetry(
+  Directory directory,
+  String newPath, {
+  required String reason,
+  Future<void> Function(Directory directory, String newPath)? renameOperation,
+  Future<void> Function(Duration duration)? delay,
+}) async {
+  final operation = renameOperation ??
+      (target, nextPath) async {
+        await target.rename(nextPath);
+      };
+  await _runFileSystemOperationWithRetry(
+    description: '$reason: ${directory.path} -> $newPath',
+    operation: () => operation(directory, newPath),
+    delay: delay,
+  );
+}
+
+Future<void> _runFileSystemOperationWithRetry({
+  required String description,
+  required Future<void> Function() operation,
+  Future<void> Function(Duration duration)? delay,
+}) async {
+  for (var attempt = 1; attempt <= _fileLockRetryMaxAttempts; attempt += 1) {
+    try {
+      await operation();
+      return;
+    } on Object catch (error) {
+      final isLastAttempt = attempt >= _fileLockRetryMaxAttempts;
+      if (isLastAttempt || !_isRetryableFileLockError(error)) {
+        rethrow;
+      }
+
+      final backoff = Duration(
+        milliseconds: _fileLockRetryBaseDelay.inMilliseconds * attempt,
+      );
+      stdout.writeln(
+        'prepare-desktop-runtime: retrying filesystem operation '
+        '($attempt/$_fileLockRetryMaxAttempts) for $description after '
+        '${backoff.inMilliseconds}ms because of transient file lock: $error',
+      );
+      if (delay != null) {
+        await delay(backoff);
+      } else {
+        await Future<void>.delayed(backoff);
+      }
+    }
+  }
+}
+
+bool _isRetryableFileLockError(Object error) {
+  if (error is PathAccessException) {
+    return _isRetryableFileLockMessage(
+            error.osError?.message ?? error.message) ||
+        _isRetryableFileLockCode(error.osError?.errorCode);
+  }
+
+  if (error is FileSystemException) {
+    return _isRetryableFileLockMessage(
+            error.osError?.message ?? error.message) ||
+        _isRetryableFileLockCode(error.osError?.errorCode);
+  }
+
+  return false;
+}
+
+bool _isRetryableFileLockCode(int? errorCode) {
+  return errorCode == 5 || errorCode == 32 || errorCode == 33;
+}
+
+bool _isRetryableFileLockMessage(String? message) {
+  final normalized = message?.trim().toLowerCase() ?? '';
+  if (normalized.isEmpty) {
+    return false;
+  }
+
+  return normalized.contains('used by another process') ||
+      normalized.contains('being used by another process') ||
+      normalized.contains('access is denied') ||
+      normalized.contains('sharing violation') ||
+      normalized.contains('lock violation') ||
+      normalized.contains('resource busy') ||
+      normalized.contains('text file busy');
+}
 
 Future<bool> _hasRequiredRuntimePayload(Directory outputDir) async {
   if (!await outputDir.exists()) return false;

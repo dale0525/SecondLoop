@@ -1,0 +1,755 @@
+param(
+  [string]$OldVersion = '1.0.0+1',
+  [string]$NewVersion = '1.0.1+1',
+  [ValidateSet('com.secondloop.secondloop', 'com.secondloop.secondloopdev')]
+  [string]$PackId = 'com.secondloop.secondloopdev',
+  [string]$Channel = 'devwin',
+  [ValidateSet('http', 'https')]
+  [string]$FeedProtocol = 'https',
+  [string]$AppName = '',
+  [string]$ExeName = 'secondloop.exe',
+  [int]$Port = 8443,
+  [string]$OutputRoot = 'dist/windows-auto-update-smoke',
+  [string]$CertificatePemPath = 'dist/auto-update-test/localhost-dev-cert.pem',
+  [string]$CertificateKeyPath = 'dist/auto-update-test/localhost-dev-cert.key',
+  [switch]$SkipBuild,
+  [switch]$SkipCertificateTrust,
+  [switch]$LeaveServerRunning
+)
+
+$ErrorActionPreference = 'Stop'
+
+. (Join-Path $PSScriptRoot 'use_windows_short_workspace.ps1')
+
+$repoRootPath = Resolve-SecondLoopProjectDir -DefaultRepoRoot (Join-Path $PSScriptRoot '..')
+Set-Location $repoRootPath
+
+function Get-VersionName([string]$SemanticVersionWithBuild) {
+  return ($SemanticVersionWithBuild -split '\+', 2)[0]
+}
+
+function Get-InstalledProcessName {
+  return [System.IO.Path]::GetFileNameWithoutExtension($ExeName)
+}
+
+function Get-DefaultAppName {
+  if ($PackId -eq 'com.secondloop.secondloopdev') {
+    return 'SecondLoop Dev'
+  }
+
+  return 'SecondLoop'
+}
+
+function Set-PubspecVersion {
+  param(
+    [string]$PubspecPath,
+    [string]$VersionValue
+  )
+
+  $content = Get-Content -LiteralPath $PubspecPath -Raw
+  $updated = [System.Text.RegularExpressions.Regex]::Replace(
+    $content,
+    '(?m)^version:\s*.+$',
+    "version: $VersionValue",
+    1
+  )
+  Write-Utf8NoBomFile -Path $PubspecPath -Content $updated
+}
+
+function Write-Utf8NoBomFile {
+  param(
+    [string]$Path,
+    [string]$Content
+  )
+
+  $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+  [System.IO.File]::WriteAllText($Path, $Content, $utf8NoBom)
+}
+
+function ConvertTo-StartProcessArgumentString {
+  param([string[]]$Arguments)
+
+  $quotedArguments = foreach ($argument in $Arguments) {
+    if ($null -eq $argument -or $argument -eq '') {
+      '""'
+      continue
+    }
+
+    $escaped = $argument.Replace('"', '\"')
+    if ($escaped -match '[\s"]') {
+      '"' + $escaped + '"'
+    } else {
+      $escaped
+    }
+  }
+
+  return ($quotedArguments -join ' ')
+}
+
+function Get-PixiPythonPath {
+  $pixiPython = Join-Path $repoRootPath '.pixi/envs/default/python.exe'
+  if (Test-Path -LiteralPath $pixiPython) {
+    return $pixiPython
+  }
+
+  throw 'Python is required for the local HTTPS update server. Run `pixi install` first.'
+}
+
+function Invoke-CheckedProcessCapture {
+  param(
+    [string]$FilePath,
+    [string[]]$ArgumentList,
+    [string]$WorkingDirectory = $repoRootPath,
+    [string]$FailureMessage = 'Command failed.'
+  )
+
+  Write-Host ('Running: ' + $FilePath + ' ' + ($ArgumentList -join ' '))
+  $captured = & $FilePath @ArgumentList 2>&1
+  if ($LASTEXITCODE -ne 0) {
+    $outputText = (($captured | ForEach-Object { $_.ToString() }) -join [Environment]::NewLine).Trim()
+    if ([string]::IsNullOrWhiteSpace($outputText)) {
+      throw "$FailureMessage ExitCode=$LASTEXITCODE"
+    }
+    throw "$FailureMessage ExitCode=$LASTEXITCODE`n$outputText"
+  }
+  return (($captured | ForEach-Object { $_.ToString() }) -join [Environment]::NewLine).Trim()
+}
+
+function New-TemporaryUpdateSigningKeyPair {
+  $keygenArgs = @(
+    '-NoProfile',
+    '-ExecutionPolicy', 'Bypass',
+    '-File', (Join-Path $PSScriptRoot 'run_fvm_tool.ps1'),
+    'dart',
+    'run',
+    'tools/generate_update_signing_keypair.dart'
+  )
+  $rawJson = Invoke-CheckedProcessCapture -FilePath 'powershell.exe' -ArgumentList $keygenArgs -FailureMessage 'Failed to generate temporary update signing key pair.'
+  $keyPair = $rawJson | ConvertFrom-Json
+  if ($null -eq $keyPair -or
+      [string]::IsNullOrWhiteSpace($keyPair.private_key_base64) -or
+      [string]::IsNullOrWhiteSpace($keyPair.public_key_base64)) {
+    throw 'Temporary update signing key pair output is invalid.'
+  }
+
+  return $keyPair
+}
+
+function Invoke-CheckedProcess {
+  param(
+    [string]$FilePath,
+    [string[]]$ArgumentList,
+    [string]$WorkingDirectory = $repoRootPath,
+    [string]$FailureMessage = 'Command failed.'
+  )
+
+  Write-Host ('Running: ' + $FilePath + ' ' + ($ArgumentList -join ' '))
+  $process = Start-Process -FilePath $FilePath -ArgumentList $ArgumentList -WorkingDirectory $WorkingDirectory -PassThru -Wait
+  if ($process.ExitCode -ne 0) {
+    throw "$FailureMessage ExitCode=$($process.ExitCode)"
+  }
+}
+
+function Start-ObservedProcess {
+  param(
+    [string]$FilePath,
+    [string[]]$ArgumentList,
+    [string]$WorkingDirectory = $repoRootPath,
+    [string]$FailureMessage = 'Command failed to start.',
+    [int]$StartupSeconds = 5
+  )
+
+  Write-Host ('Running (detached): ' + $FilePath + ' ' + ($ArgumentList -join ' '))
+  $process = Start-Process -FilePath $FilePath -ArgumentList $ArgumentList -WorkingDirectory $WorkingDirectory -PassThru
+  Start-Sleep -Seconds $StartupSeconds
+  if ($process.HasExited -and $process.ExitCode -ne 0) {
+    throw "$FailureMessage ExitCode=$($process.ExitCode)"
+  }
+  return $process
+}
+
+function Invoke-PackageBuild {
+  param(
+    [string]$VersionValue,
+    [string]$OutputDir
+  )
+
+  $packageScript = Join-Path $PSScriptRoot 'package_windows_velopack.ps1'
+  $versionName = Get-VersionName $VersionValue
+  if ([string]::IsNullOrWhiteSpace($AppName)) {
+    $AppName = Get-DefaultAppName
+  }
+
+  $env:SECONDLOOP_APP_ID = $PackId
+  $env:SECONDLOOP_APP_NAME = $AppName
+  $env:SECONDLOOP_RELEASE_API_ORIGIN = "${FeedProtocol}://localhost:$Port"
+  $env:SECONDLOOP_ALLOW_HTTP_UPDATE_URIS = 'true'
+
+  $packageArgs = @(
+    '-NoProfile',
+    '-ExecutionPolicy', 'Bypass',
+    '-File', $packageScript,
+    '-Version', $versionName,
+    '-OutputPath', $OutputDir,
+    '-PackId', $PackId,
+    '-Channel', $Channel
+  )
+  Invoke-CheckedProcess -FilePath 'powershell.exe' -ArgumentList $packageArgs -FailureMessage "Velopack packaging failed for $VersionValue."
+}
+
+function Get-ExpectedFullPackageFileName {
+  param([string]$VersionValue)
+
+  $versionName = Get-VersionName $VersionValue
+  $channelPackageName = "$PackId-$versionName-$Channel-full.nupkg"
+  $legacyPackageName = "$PackId-$versionName-full.nupkg"
+
+  if ($Channel -eq 'win') {
+    $legacyPackagePath = Join-Path $v2Output $legacyPackageName
+    if (Test-Path -LiteralPath $legacyPackagePath -PathType Leaf) {
+      return $legacyPackageName
+    }
+  }
+
+  return $channelPackageName
+}
+
+function Get-FullPackage {
+  param(
+    [string]$OutputDir,
+    [string]$ExpectedFileName
+  )
+
+  $packagePath = Join-Path $OutputDir $ExpectedFileName
+  if (-not (Test-Path -LiteralPath $packagePath -PathType Leaf)) {
+    throw "Missing expected full nupkg under ${OutputDir}: $ExpectedFileName"
+  }
+
+  return Get-Item -LiteralPath $packagePath
+}
+
+function Get-SetupExecutable {
+  param([string]$OutputDir)
+
+  $setupCandidates = @(Get-ChildItem -LiteralPath $OutputDir -Filter '*Setup*.exe' -File)
+  if ($setupCandidates.Count -eq 0) {
+    throw "Missing setup executable under $OutputDir"
+  }
+  if ($setupCandidates.Count -gt 1) {
+    $candidateNames = $setupCandidates | ForEach-Object { $_.Name }
+    throw "Expected exactly one setup executable under $OutputDir but found: $($candidateNames -join ', ')"
+  }
+
+  return $setupCandidates[0]
+}
+
+function Get-FileSha256Hex {
+  param([string]$PathValue)
+
+  $sha256 = [System.Security.Cryptography.SHA256]::Create()
+  try {
+    $stream = [System.IO.File]::OpenRead($PathValue)
+    try {
+      $hashBytes = $sha256.ComputeHash($stream)
+    } finally {
+      $stream.Dispose()
+    }
+  } finally {
+    $sha256.Dispose()
+  }
+
+  return ([System.BitConverter]::ToString($hashBytes)).Replace('-', '').ToLowerInvariant()
+}
+
+function Get-InstallRoot {
+  return Join-Path $env:LOCALAPPDATA $PackId
+}
+
+function Get-InstalledExePath {
+  return Join-Path (Get-InstallRoot) (Join-Path 'current' $ExeName)
+}
+
+function Get-UpdateExePath {
+  return Join-Path (Get-InstallRoot) 'Update.exe'
+}
+
+function Get-InstalledVersion {
+  $exePath = Get-InstalledExePath
+  if (-not (Test-Path -LiteralPath $exePath -PathType Leaf)) {
+    return ''
+  }
+
+  $versionInfo = (Get-Item -LiteralPath $exePath).VersionInfo
+  if (-not [string]::IsNullOrWhiteSpace($versionInfo.ProductVersion)) {
+    return $versionInfo.ProductVersion.Trim()
+  }
+  if (-not [string]::IsNullOrWhiteSpace($versionInfo.FileVersion)) {
+    return $versionInfo.FileVersion.Trim()
+  }
+  return ''
+}
+
+function Stop-InstalledSecondLoopProcess {
+  $running = @(Get-RunningInstalledProcesses)
+
+  foreach ($process in $running) {
+    Write-Host "Stopping installed SecondLoop process PID=$($process.Id)"
+    Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
+    Wait-Process -Id $process.Id -Timeout 10 -ErrorAction SilentlyContinue
+  }
+}
+
+function Remove-DirectoryWithRetry {
+  param(
+    [string]$PathValue,
+    [int]$MaxAttempts = 5
+  )
+
+  for ($attempt = 1; $attempt -le $MaxAttempts; $attempt += 1) {
+    try {
+      Remove-Item -LiteralPath $PathValue -Recurse -Force
+      return
+    } catch {
+      if ($attempt -ge $MaxAttempts) {
+        throw
+      }
+      Start-Sleep -Seconds $attempt
+    }
+  }
+}
+
+function Remove-ExistingInstallRoot {
+  $installRoot = Get-InstallRoot
+  Stop-InstalledSecondLoopProcess
+  if (Test-Path -LiteralPath $installRoot -PathType Container) {
+    Write-Host "Removing existing install root: $installRoot"
+    Remove-DirectoryWithRetry -PathValue $installRoot
+  }
+}
+
+function Wait-ForInstalledVersion {
+  param(
+    [string]$ExpectedVersion,
+    [int]$TimeoutSeconds = 90
+  )
+
+  $expectedVersionName = Get-VersionName $ExpectedVersion
+  $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+  while ((Get-Date) -lt $deadline) {
+    $currentVersion = Get-InstalledVersion
+    if ((Get-VersionName $currentVersion) -eq $expectedVersionName) {
+      return
+    }
+    Start-Sleep -Seconds 2
+  }
+
+  throw "Timed out waiting for installed version $expectedVersionName. Current=$(Get-InstalledVersion)"
+}
+
+function Wait-ForStagedPackage {
+  param(
+    [string]$ExpectedFileName,
+    [int]$TimeoutSeconds = 120
+  )
+
+  $packagesRoot = Join-Path (Get-InstallRoot) 'packages'
+  $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+  while ((Get-Date) -lt $deadline) {
+    $candidate = Join-Path $packagesRoot $ExpectedFileName
+    if (Test-Path -LiteralPath $candidate -PathType Leaf) {
+      return Get-Item -LiteralPath $candidate
+    }
+
+    Start-Sleep -Seconds 2
+  }
+
+  throw "Timed out waiting for staged package $ExpectedFileName under $packagesRoot"
+}
+
+function Wait-ForRunningInstalledProcess {
+  param(
+    [string]$ExpectedVersion,
+    [int]$TimeoutSeconds = 90
+  )
+
+  $expectedVersionName = Get-VersionName $ExpectedVersion
+  $expectedPath = Get-InstalledExePath
+  $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+
+  while ((Get-Date) -lt $deadline) {
+    $matching = @(Get-RunningInstalledProcesses)
+
+    if ($matching.Count -gt 0 -and (Get-VersionName (Get-InstalledVersion)) -eq $expectedVersionName) {
+      Start-Sleep -Seconds 5
+      $stableMatching = @(Get-RunningInstalledProcesses)
+      if ($stableMatching.Count -gt 0 -and (Get-VersionName (Get-InstalledVersion)) -eq $expectedVersionName) {
+        return
+      }
+    }
+
+    Start-Sleep -Seconds 2
+  }
+
+  throw "Timed out waiting for running installed process at $expectedPath with version $expectedVersionName."
+}
+
+function Get-RunningInstalledProcesses {
+  $expectedPath = Get-InstalledExePath
+  if (-not (Test-Path -LiteralPath $expectedPath -PathType Leaf)) {
+    return @()
+  }
+
+  $normalizedExpected = [System.IO.Path]::GetFullPath($expectedPath).ToLowerInvariant()
+  $processName = Get-InstalledProcessName
+  return @(
+    Get-Process -Name $processName -ErrorAction SilentlyContinue |
+      Where-Object {
+        try {
+          $_.Path -and ([System.IO.Path]::GetFullPath($_.Path).ToLowerInvariant() -eq $normalizedExpected)
+        } catch {
+          $false
+        }
+      }
+  )
+}
+
+function Get-CertificateThumbprint {
+  param([string]$PemPath)
+
+  $cert = New-Object System.Security.Cryptography.X509Certificates.X509Certificate2($PemPath)
+  return $cert.Thumbprint
+}
+
+function Test-CertificateTrustedInCurrentUserRoot {
+  param([string]$Thumbprint)
+
+  if ([string]::IsNullOrWhiteSpace($Thumbprint)) {
+    return $false
+  }
+
+  return $null -ne (
+    Get-ChildItem Cert:\CurrentUser\Root -ErrorAction SilentlyContinue |
+      Where-Object { $_.Thumbprint -eq $Thumbprint } |
+      Select-Object -First 1
+  )
+}
+
+function Ensure-LocalhostCertificateTrusted {
+  param([string]$PemPath)
+
+  $thumbprint = Get-CertificateThumbprint -PemPath $PemPath
+  if (Test-CertificateTrustedInCurrentUserRoot -Thumbprint $thumbprint) {
+    Write-Host "Localhost certificate already trusted for current user: $thumbprint"
+    return $thumbprint
+  }
+
+  Write-Host "Trusting localhost certificate for current user: $PemPath"
+  $cert = New-Object System.Security.Cryptography.X509Certificates.X509Certificate2($PemPath)
+  $store = New-Object System.Security.Cryptography.X509Certificates.X509Store('Root', 'CurrentUser')
+  $store.Open([System.Security.Cryptography.X509Certificates.OpenFlags]::ReadWrite)
+  try {
+    $store.Add($cert)
+  } finally {
+    $store.Close()
+  }
+
+  if (-not [string]::IsNullOrWhiteSpace($thumbprint)) {
+    return $thumbprint
+  }
+
+  return $null
+}
+
+function Remove-TrustedCertificateByThumbprint {
+  param([string]$Thumbprint)
+
+  if ([string]::IsNullOrWhiteSpace($Thumbprint)) {
+    return
+  }
+
+  Write-Host "Removing localhost certificate from current user Root store: $Thumbprint"
+  $store = New-Object System.Security.Cryptography.X509Certificates.X509Store('Root', 'CurrentUser')
+  $store.Open([System.Security.Cryptography.X509Certificates.OpenFlags]::ReadWrite)
+  try {
+    $cert = $store.Certificates | Where-Object { $_.Thumbprint -eq $Thumbprint } | Select-Object -First 1
+    if ($null -ne $cert) {
+      $store.Remove($cert)
+    }
+  } finally {
+    $store.Close()
+  }
+}
+
+function Start-UpdateFeedServer {
+  param(
+    [string]$ServerRoot,
+    [ValidateSet('http', 'https')]
+    [string]$FeedProtocol,
+    [string]$CertificatePath,
+    [string]$KeyPath,
+    [int]$ListenPort,
+    [string]$SmokeRoot,
+    [string]$AppName
+  )
+
+  $pythonPath = Get-PixiPythonPath
+  $serverScript = Join-Path $repoRootPath 'tools/windows_https_update_server.py'
+  $stdoutPath = Join-Path $SmokeRoot 'https-server.out.log'
+  $stderrPath = Join-Path $SmokeRoot 'https-server.err.log'
+
+  $serverArgs = @(
+    $serverScript,
+    '--scheme', $FeedProtocol,
+    '--root', $ServerRoot,
+    '--port', $ListenPort.ToString(),
+    '--app-name', $AppName
+  )
+  if ($FeedProtocol -eq 'https') {
+    $serverArgs += @(
+      '--cert', $CertificatePath,
+      '--key', $KeyPath
+    )
+  }
+
+  $argumentString = ConvertTo-StartProcessArgumentString -Arguments @($serverArgs)
+  Write-Host "Starting local $($FeedProtocol.ToUpperInvariant()) update server on ${FeedProtocol}://localhost:$ListenPort"
+  $process = Start-Process -FilePath $pythonPath -ArgumentList $argumentString -WorkingDirectory $repoRootPath -PassThru -RedirectStandardOutput $stdoutPath -RedirectStandardError $stderrPath
+
+  Start-Sleep -Seconds 2
+  if ($process.HasExited) {
+    throw "Update server exited early. Check $stdoutPath and $stderrPath"
+  }
+
+  return $process
+}
+
+function Wait-ForLatestEndpoint {
+  param(
+    [ValidateSet('http', 'https')]
+    [string]$FeedProtocol,
+    [int]$ListenPort
+  )
+
+  $endpoint = "${FeedProtocol}://localhost:$ListenPort/api/releases/latest"
+  $deadline = (Get-Date).AddSeconds(30)
+  while ((Get-Date) -lt $deadline) {
+    try {
+      $response = Invoke-RestMethod -Uri $endpoint -TimeoutSec 5
+      if ($null -ne $response.version) {
+        return $response
+      }
+    } catch {
+      Start-Sleep -Seconds 1
+    }
+  }
+
+  throw "Timed out waiting for $endpoint"
+}
+
+$pubspecPath = Join-Path $repoRootPath 'pubspec.yaml'
+$originalPubspec = Get-Content -LiteralPath $pubspecPath -Raw
+$smokeRoot = if ([System.IO.Path]::IsPathRooted($OutputRoot)) {
+  $OutputRoot
+} else {
+  Join-Path $repoRootPath $OutputRoot
+}
+$v1Output = Join-Path $smokeRoot 'v1'
+$v2Output = Join-Path $smokeRoot 'v2'
+$serverRoot = Join-Path $smokeRoot 'server-root'
+$downloadsRoot = Join-Path $serverRoot 'downloads'
+$certificatePem = if ([System.IO.Path]::IsPathRooted($CertificatePemPath)) { $CertificatePemPath } else { Join-Path $repoRootPath $CertificatePemPath }
+$certificateKey = if ([System.IO.Path]::IsPathRooted($CertificateKeyPath)) { $CertificateKeyPath } else { Join-Path $repoRootPath $CertificateKeyPath }
+$feedOrigin = "${FeedProtocol}://localhost:$Port"
+
+if ($FeedProtocol -eq 'https') {
+  if (-not (Test-Path -LiteralPath $certificatePem -PathType Leaf)) {
+    throw "Missing certificate PEM: $certificatePem"
+  }
+  if (-not (Test-Path -LiteralPath $certificateKey -PathType Leaf)) {
+    throw "Missing certificate key: $certificateKey"
+  }
+}
+
+$feedProcess = $null
+$trustedCertificateThumbprint = $null
+$certificateTrustAddedByScript = $false
+$originalReleaseApiOrigin = $null
+$hadOriginalReleaseApiOrigin = Test-Path Env:SECONDLOOP_RELEASE_API_ORIGIN
+$originalAppId = $null
+$hadOriginalAppId = Test-Path Env:SECONDLOOP_APP_ID
+$originalAppName = $null
+$hadOriginalAppName = Test-Path Env:SECONDLOOP_APP_NAME
+$originalUpdatePublicKey = $null
+$hadOriginalUpdatePublicKey = Test-Path Env:SECONDLOOP_UPDATE_PUBLIC_KEY
+$originalUpdateSigningPrivateKey = $null
+$hadOriginalUpdateSigningPrivateKey = Test-Path Env:SECONDLOOP_UPDATE_SIGNING_PRIVATE_KEY
+$originalAllowHttpUpdateUris = $null
+$hadOriginalAllowHttpUpdateUris = Test-Path Env:SECONDLOOP_ALLOW_HTTP_UPDATE_URIS
+$wasCertificateTrustedBefore = $false
+
+try {
+  New-Item -ItemType Directory -Force -Path $smokeRoot | Out-Null
+
+  if ($hadOriginalReleaseApiOrigin) {
+    $originalReleaseApiOrigin = $env:SECONDLOOP_RELEASE_API_ORIGIN
+  }
+  if ($hadOriginalAppId) {
+    $originalAppId = $env:SECONDLOOP_APP_ID
+  }
+  if ($hadOriginalAppName) {
+    $originalAppName = $env:SECONDLOOP_APP_NAME
+  }
+  if ($hadOriginalUpdatePublicKey) {
+    $originalUpdatePublicKey = $env:SECONDLOOP_UPDATE_PUBLIC_KEY
+  }
+  if ($hadOriginalUpdateSigningPrivateKey) {
+    $originalUpdateSigningPrivateKey = $env:SECONDLOOP_UPDATE_SIGNING_PRIVATE_KEY
+  }
+  if ($hadOriginalAllowHttpUpdateUris) {
+    $originalAllowHttpUpdateUris = $env:SECONDLOOP_ALLOW_HTTP_UPDATE_URIS
+  }
+
+  if ($SkipBuild) {
+    if (-not $hadOriginalUpdatePublicKey -or -not $hadOriginalUpdateSigningPrivateKey) {
+      throw 'SkipBuild requires SECONDLOOP_UPDATE_PUBLIC_KEY and SECONDLOOP_UPDATE_SIGNING_PRIVATE_KEY so manifest verification stays enabled.'
+    }
+  } else {
+    $temporarySigningKeys = New-TemporaryUpdateSigningKeyPair
+    $env:SECONDLOOP_UPDATE_PUBLIC_KEY = $temporarySigningKeys.public_key_base64
+    $env:SECONDLOOP_UPDATE_SIGNING_PRIVATE_KEY = $temporarySigningKeys.private_key_base64
+  }
+
+  if (-not $SkipBuild) {
+    if (Test-Path -LiteralPath $v1Output) {
+      Remove-Item -LiteralPath $v1Output -Recurse -Force
+    }
+    if (Test-Path -LiteralPath $v2Output) {
+      Remove-Item -LiteralPath $v2Output -Recurse -Force
+    }
+
+    Set-PubspecVersion -PubspecPath $pubspecPath -VersionValue $OldVersion
+    Invoke-PackageBuild -VersionValue $OldVersion -OutputDir $v1Output
+
+    Set-PubspecVersion -PubspecPath $pubspecPath -VersionValue $NewVersion
+    Invoke-PackageBuild -VersionValue $NewVersion -OutputDir $v2Output
+  } elseif ((-not (Test-Path -LiteralPath $v1Output)) -or (-not (Test-Path -LiteralPath $v2Output))) {
+    $v1Output = Join-Path $repoRootPath 'dist/auto-update-test/v1'
+    $v2Output = Join-Path $repoRootPath 'dist/auto-update-test/v2'
+  }
+
+  if (Test-Path -LiteralPath $serverRoot) {
+    Remove-Item -LiteralPath $serverRoot -Recurse -Force
+  }
+  New-Item -ItemType Directory -Force -Path $downloadsRoot | Out-Null
+  Copy-Item -Path (Join-Path $v2Output '*') -Destination $downloadsRoot -Recurse -Force
+
+  $newVersionName = Get-VersionName $NewVersion
+  $manifestArgs = @(
+    '-NoProfile',
+    '-ExecutionPolicy', 'Bypass',
+    '-File', (Join-Path $PSScriptRoot 'run_fvm_tool.ps1'),
+    'dart',
+    'run',
+    'tools/generate_update_manifest.dart',
+    '--input-dir', $v2Output,
+    '--output-dir', $downloadsRoot,
+    '--version', $newVersionName,
+    '--windows-app-id', $PackId,
+    '--windows-channel', $Channel,
+    '--signing-private-key', $env:SECONDLOOP_UPDATE_SIGNING_PRIVATE_KEY,
+    '--base-download-url', "$feedOrigin/downloads",
+    '--release-page-url', "$feedOrigin/releases/$newVersionName"
+  )
+  Invoke-CheckedProcess -FilePath 'powershell.exe' -ArgumentList $manifestArgs -FailureMessage 'Failed to generate latest.json for smoke feed.'
+
+  if ($FeedProtocol -eq 'https' -and -not $SkipCertificateTrust) {
+    $wasCertificateTrustedBefore = Test-CertificateTrustedInCurrentUserRoot -Thumbprint (Get-CertificateThumbprint -PemPath $certificatePem)
+    $trustedCertificateThumbprint = Ensure-LocalhostCertificateTrusted -PemPath $certificatePem
+    $certificateTrustAddedByScript = -not $wasCertificateTrustedBefore
+  }
+  $feedProcess = Start-UpdateFeedServer -ServerRoot $serverRoot -FeedProtocol $FeedProtocol -CertificatePath $certificatePem -KeyPath $certificateKey -ListenPort $Port -SmokeRoot $smokeRoot -AppName $AppName
+
+  $latestManifest = Wait-ForLatestEndpoint -FeedProtocol $FeedProtocol -ListenPort $Port
+  Write-Host "Update feed version: $($latestManifest.version)"
+
+  Remove-ExistingInstallRoot
+
+  $setupExe = Get-SetupExecutable -OutputDir $v1Output
+
+  $expectedPackageFileName = Get-ExpectedFullPackageFileName -VersionValue $NewVersion
+  $expectedPackageFile = Get-FullPackage -OutputDir $v2Output -ExpectedFileName $expectedPackageFileName
+
+  $installLog = Join-Path $smokeRoot 'install-v1.log'
+  $installArgs = @('--silent', '--log', $installLog)
+  Invoke-CheckedProcess -FilePath $setupExe.FullName -ArgumentList $installArgs -FailureMessage 'Initial Velopack installation failed.'
+
+  Wait-ForInstalledVersion -ExpectedVersion $OldVersion
+  Write-Host "Installed old version: $(Get-InstalledVersion)"
+
+  $installedExe = Get-InstalledExePath
+  $null = Start-Process -FilePath $installedExe -WorkingDirectory (Split-Path -Path $installedExe -Parent) -PassThru
+  Wait-ForRunningInstalledProcess -ExpectedVersion $OldVersion
+
+  $stagedPackage = Wait-ForStagedPackage -ExpectedFileName $expectedPackageFile.Name
+  Write-Host "Staged package downloaded from feed: $($stagedPackage.FullName)"
+
+  Stop-InstalledSecondLoopProcess
+  Start-Sleep -Seconds 2
+
+  $null = Start-Process -FilePath $installedExe -WorkingDirectory (Split-Path -Path $installedExe -Parent) -PassThru
+
+  Wait-ForInstalledVersion -ExpectedVersion $NewVersion
+  Wait-ForRunningInstalledProcess -ExpectedVersion $NewVersion
+
+  Write-Host "Smoke test succeeded. Install root: $(Get-InstallRoot)"
+  Write-Host "Final running version: $(Get-InstalledVersion)"
+} finally {
+  Write-Utf8NoBomFile -Path $pubspecPath -Content $originalPubspec
+
+  if ($hadOriginalReleaseApiOrigin) {
+    Set-Item -Path Env:SECONDLOOP_RELEASE_API_ORIGIN -Value $originalReleaseApiOrigin
+  } else {
+    Remove-Item Env:SECONDLOOP_RELEASE_API_ORIGIN -ErrorAction SilentlyContinue
+  }
+
+  if ($hadOriginalAppId) {
+    Set-Item -Path Env:SECONDLOOP_APP_ID -Value $originalAppId
+  } else {
+    Remove-Item Env:SECONDLOOP_APP_ID -ErrorAction SilentlyContinue
+  }
+
+  if ($hadOriginalAppName) {
+    Set-Item -Path Env:SECONDLOOP_APP_NAME -Value $originalAppName
+  } else {
+    Remove-Item Env:SECONDLOOP_APP_NAME -ErrorAction SilentlyContinue
+  }
+
+  if ($hadOriginalUpdatePublicKey) {
+    Set-Item -Path Env:SECONDLOOP_UPDATE_PUBLIC_KEY -Value $originalUpdatePublicKey
+  } else {
+    Remove-Item Env:SECONDLOOP_UPDATE_PUBLIC_KEY -ErrorAction SilentlyContinue
+  }
+
+  if ($hadOriginalUpdateSigningPrivateKey) {
+    Set-Item -Path Env:SECONDLOOP_UPDATE_SIGNING_PRIVATE_KEY -Value $originalUpdateSigningPrivateKey
+  } else {
+    Remove-Item Env:SECONDLOOP_UPDATE_SIGNING_PRIVATE_KEY -ErrorAction SilentlyContinue
+  }
+
+  if ($hadOriginalAllowHttpUpdateUris) {
+    Set-Item -Path Env:SECONDLOOP_ALLOW_HTTP_UPDATE_URIS -Value $originalAllowHttpUpdateUris
+  } else {
+    Remove-Item Env:SECONDLOOP_ALLOW_HTTP_UPDATE_URIS -ErrorAction SilentlyContinue
+  }
+
+  if ($null -ne $feedProcess -and -not $LeaveServerRunning) {
+    Stop-Process -Id $feedProcess.Id -Force -ErrorAction SilentlyContinue
+    Wait-Process -Id $feedProcess.Id -Timeout 5 -ErrorAction SilentlyContinue
+  }
+
+  if ($null -ne $trustedCertificateThumbprint) {
+    if ($certificateTrustAddedByScript) {
+      Remove-TrustedCertificateByThumbprint -Thumbprint $trustedCertificateThumbprint
+    }
+  }
+}

@@ -5,6 +5,9 @@ import 'package:secondloop/core/update/windows/velopack_update_client.dart';
 
 class _AvailableWindowsStagedUpdateClient implements WindowsStagedUpdateClient {
   @override
+  String get appId => 'com.secondloop.secondloop';
+
+  @override
   bool hasPendingUpdate() => false;
 
   @override

@@ -157,6 +157,10 @@ class PreCommitHookTests(unittest.TestCase):
         self.assertIn("CARGO_TARGET_DIR", script)
         self.assertIn("CARGOKIT_TARGET_TEMP_DIR", script)
         self.assertIn("CARGOKIT_TOOL_TEMP_DIR", script)
+        self.assertIn('short_temp_root="${drive_prefix}/stmp"', script)
+        self.assertIn('export TMPDIR="${short_temp_root}"', script)
+        self.assertIn('export TMP="${short_temp_root}"', script)
+        self.assertIn('export TEMP="${short_temp_root}"', script)
         self.assertIn("CMAKE_GENERATOR", script)
         self.assertIn("Ninja", script)
 
@@ -251,12 +255,43 @@ class PreCommitHookTests(unittest.TestCase):
         script = VERIFY_CHANGED_SCRIPT.read_text(encoding="utf-8")
 
         self.assertIn('bash .githooks/pre-commit --check "$@"', script)
+        self.assertIn(
+            'powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_bash.ps1 .githooks/pre-commit --check "$@"',
+            script,
+        )
         self.assertNotIn('--check --ci', script)
 
     def test_verify_full_script_delegates_to_pre_commit_check_ci_mode(self) -> None:
         script = VERIFY_FULL_SCRIPT.read_text(encoding="utf-8")
 
         self.assertIn('bash .githooks/pre-commit --check --ci "$@"', script)
+        self.assertIn(
+            'powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_bash.ps1 .githooks/pre-commit --check --ci "$@"',
+            script,
+        )
+
+    def test_pre_commit_common_exposes_periodic_progress_helper(self) -> None:
+        common = PRE_COMMIT_COMMON_SCRIPT.read_text(encoding="utf-8")
+
+        self.assertIn('run_with_periodic_status()', common)
+        self.assertIn('SECONDLOOP_PRECOMMIT_PROGRESS_INTERVAL', common)
+        self.assertIn('pre-commit: still running ${label}...', common)
+
+    def test_pre_commit_check_mode_wraps_long_ci_steps_with_progress(self) -> None:
+        check_mode = PRE_COMMIT_CHECK_MODE_SCRIPT.read_text(encoding="utf-8")
+
+        self.assertIn(
+            'run_with_periodic_status "flutter test" run_flutter_tool test --concurrency=1',
+            check_mode,
+        )
+        self.assertIn(
+            'run_with_periodic_status "rust clippy" "${cargo_bin}" clippy --manifest-path rust/Cargo.toml --all-targets --all-features -- -D warnings',
+            check_mode,
+        )
+        self.assertIn(
+            'run_with_periodic_status "rust tests" "${cargo_bin}" test --manifest-path rust/Cargo.toml --all',
+            check_mode,
+        )
 
     def test_pre_commit_hook_delegates_check_mode_to_dedicated_script(self) -> None:
         script = PRE_COMMIT_HOOK.read_text(encoding="utf-8")

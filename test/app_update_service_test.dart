@@ -6,7 +6,22 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:secondloop/core/update/app_update_service.dart';
 import 'package:secondloop/core/update/update_event_log.dart';
+import 'package:secondloop/core/update/windows/velopack_update_client.dart';
 import 'support/app_update_service_test_support.dart';
+
+void _writeSqVersionForAppUpdateServiceTest(Directory root, String version) {
+  final currentDir = Directory('${root.path}${Platform.pathSeparator}current')
+    ..createSync(recursive: true);
+  File('${currentDir.path}${Platform.pathSeparator}sq.version')
+      .writeAsStringSync('''
+<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://schemas.microsoft.com/packaging/2010/07/nuspec.xsd">
+<metadata>
+<version>$version</version>
+</metadata>
+</package>
+''');
+}
 
 void main() {
   group('compareReleaseTagWithCurrentVersion', () {
@@ -17,11 +32,8 @@ void main() {
       );
     });
 
-    test('treats fourth tag segment as newer when present', () {
-      expect(
-        compareReleaseTagWithCurrentVersion('v1.2.3.9', '1.2.3'),
-        greaterThan(0),
-      );
+    test('treats unsupported version formats as incomparable', () {
+      expect(compareReleaseTagWithCurrentVersion('v1.2.3.9', '1.2.3'), 0);
     });
 
     test('treats same version as up to date', () {
@@ -283,6 +295,77 @@ void main() {
   });
 
   group('AppUpdateService.installAndRestart', () {
+    test(
+        'reuses verified pending Windows update for exact app id and custom channel',
+        () async {
+      final tempDir =
+          await Directory.systemTemp.createTemp('update_reuse_custom_channel_');
+      addTearDown(() => tempDir.delete(recursive: true));
+
+      final updateExe =
+          File('${tempDir.path}${Platform.pathSeparator}Update.exe')
+            ..writeAsStringSync('stub');
+      _writeSqVersionForAppUpdateServiceTest(tempDir, '1.0.0');
+      File('${tempDir.path}${Platform.pathSeparator}releases.nightly.json')
+          .writeAsStringSync('{}');
+
+      final pendingFile = File(
+        '${tempDir.path}${Platform.pathSeparator}packages${Platform.pathSeparator}com.secondloop.secondloopdev-1.1.0-nightly-full.nupkg',
+      )
+        ..createSync(recursive: true)
+        ..writeAsStringSync('windows-package');
+
+      String? startedExecutable;
+      List<String>? startedArguments;
+      ProcessStartMode? startedMode;
+      var exitedCode = -1;
+
+      final stagedClient = VelopackUpdateClient(
+        updateExecutablePath: updateExe.path,
+        appId: 'com.secondloop.secondloopdev',
+        processStarter: (executable, arguments,
+            {mode = ProcessStartMode.normal}) async {
+          startedExecutable = executable;
+          startedArguments = List<String>.from(arguments);
+          startedMode = mode;
+          return Process.start(
+              Platform.resolvedExecutable, const ['--version']);
+        },
+      );
+      final service = AppUpdateService(
+        platformOverride: AppUpdatePlatform.windows,
+        windowsStagedUpdateClient: stagedClient,
+        httpClient: _FakeHttpClient(
+          handler: (uri) => throw StateError('should_not_download:$uri'),
+        ),
+        processExit: (code) => exitedCode = code,
+      );
+
+      final update = AppUpdateAvailability(
+        currentVersion: '1.0.0',
+        latestTag: 'v1.1.0',
+        releasePageUri: Uri.parse(
+          'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
+        ),
+        installMode: AppUpdateInstallMode.seamlessRestart,
+        asset: AppUpdateAsset(
+          name: 'com.secondloop.secondloopdev-1.1.0-nightly-full.nupkg',
+          downloadUri: Uri.parse('https://cdn.example.com/win-nightly.nupkg'),
+          sha256: await sha256FileHexForTest(pendingFile),
+        ),
+      );
+
+      await service.installAndRestart(update);
+
+      expect(startedExecutable, updateExe.path);
+      expect(startedArguments, isNotNull);
+      expect(startedArguments,
+          containsAllInOrder(const ['apply', '--silent', '--restart']));
+      expect(startedArguments, isNot(contains('--package')));
+      expect(startedMode, ProcessStartMode.detached);
+      expect(exitedCode, 0);
+    });
+
     test('applies staged Windows update without re-downloading', () async {
       final tempDir = await Directory.systemTemp.createTemp('update_reuse_');
       addTearDown(() => tempDir.delete(recursive: true));
@@ -384,7 +467,8 @@ void main() {
       expect(exitedCode, 0);
     });
 
-    test('does not reuse prerelease pending package for final Windows release',
+    test(
+        'does not reuse invalid-version pending package for final Windows release',
         () async {
       final tempDir =
           await Directory.systemTemp.createTemp('update_reuse_prerelease_');

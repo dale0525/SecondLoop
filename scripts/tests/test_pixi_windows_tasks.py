@@ -16,6 +16,7 @@ WINDOWS_VULKAN_SETUP_SCRIPT = REPO_ROOT / "scripts/setup_windows_vulkan_sdk.ps1"
 WINDOWS_FVM_TOOL_RUNNER_SCRIPT = REPO_ROOT / "scripts/run_fvm_tool.ps1"
 WINDOWS_UNINSTALL_MSI_SCRIPT = REPO_ROOT / "scripts/uninstall_windows_msi.ps1"
 WINDOWS_SETUP_FLUTTER_SCRIPT = REPO_ROOT / "scripts/setup_flutter_windows.ps1"
+WINDOWS_SHORT_WORKSPACE_SCRIPT = REPO_ROOT / "scripts/use_windows_short_workspace.ps1"
 
 
 class PixiWindowsTasksTests(unittest.TestCase):
@@ -241,6 +242,74 @@ class PixiWindowsTasksTests(unittest.TestCase):
             script.index("Resolve-Path $ToolPath"),
         )
 
+    def test_windows_velopack_script_uses_short_workspace_helper_and_full_project_dir(self) -> None:
+        self.assertTrue(WINDOWS_SHORT_WORKSPACE_SCRIPT.exists())
+
+        helper_script = WINDOWS_SHORT_WORKSPACE_SCRIPT.read_text(encoding="utf-8")
+        velopack_script = WINDOWS_VELOPACK_SCRIPT.read_text(encoding="utf-8")
+
+        self.assertIn("cmd /c subst", helper_script)
+        self.assertIn('$shortProjectDir = "$shortDriveRoot$workspaceLeaf"', helper_script)
+        self.assertIn("Set-Item -Path Env:PROJECT_DIR -Value $shortProjectDir", helper_script)
+        self.assertNotIn("Set-Item -Path Env:PROJECT_DIR -Value $shortDriveRoot", helper_script)
+        self.assertIn("use_windows_short_workspace.ps1", velopack_script)
+        self.assertIn("Invoke-InWindowsShortWorkspace", velopack_script)
+
+    def test_windows_short_workspace_helper_avoids_destructive_subst_cleanup(self) -> None:
+        script = WINDOWS_SHORT_WORKSPACE_SCRIPT.read_text(encoding="utf-8")
+
+        self.assertIn("Get-AvailableShortWorkspaceDrive", script)
+        self.assertIn("Get-PSDrive -PSProvider FileSystem", script)
+        self.assertIn("if ($resolvedRepoRoot -like \"$substDrive\\*\")", script)
+        self.assertNotIn("cmd /c subst $substDrive /d > $null 2>&1\n      cmd /c subst $substDrive \"$workspaceParent\"", script)
+
+    def test_windows_velopack_script_propagates_required_build_environment(self) -> None:
+        script = WINDOWS_VELOPACK_SCRIPT.read_text(encoding="utf-8")
+
+        self.assertIn("DOTNET_ROOT", script)
+        self.assertIn("FLUTTER_ROOT", script)
+        self.assertIn("LIBCLANG_PATH", script)
+        self.assertIn("VULKAN_SDK", script)
+        self.assertIn("CARGOKIT_TARGET_TEMP_DIR", script)
+        self.assertIn("CARGOKIT_TOOL_TEMP_DIR", script)
+        self.assertIn("run_fvm_tool.ps1", script)
+
+    def test_windows_velopack_script_propagates_app_identity_to_dart_defines(self) -> None:
+        script = WINDOWS_VELOPACK_SCRIPT.read_text(encoding="utf-8")
+
+        self.assertIn("if ($PackId)", script)
+        self.assertIn('Set-Item -Path Env:SECONDLOOP_APP_ID -Value $PackId', script)
+        self.assertIn("--dart-define=SECONDLOOP_APP_ID=", script)
+
+    def test_windows_velopack_script_can_forward_http_update_override_define(self) -> None:
+        script = WINDOWS_VELOPACK_SCRIPT.read_text(encoding="utf-8")
+
+        self.assertIn("SECONDLOOP_ALLOW_HTTP_UPDATE_URIS", script)
+        self.assertIn("--dart-define=SECONDLOOP_ALLOW_HTTP_UPDATE_URIS=", script)
+
+    def test_windows_velopack_script_adds_project_cargo_bin_to_path(self) -> None:
+        script = WINDOWS_VELOPACK_SCRIPT.read_text(encoding="utf-8")
+
+        self.assertIn(".pixi/envs/default/Library/bin", script)
+        self.assertIn("cargo.exe", script)
+        self.assertIn("rustup.exe", script)
+
+    def test_windows_velopack_script_prefers_project_dotnet_sdk(self) -> None:
+        script = WINDOWS_VELOPACK_SCRIPT.read_text(encoding="utf-8")
+
+        self.assertIn(".pixi/envs/default/dotnet", script)
+        self.assertIn("dotnet.exe", script)
+        self.assertIn("DOTNET_MULTILEVEL_LOOKUP", script)
+
+    def test_windows_setup_flutter_script_exports_flutter_root_and_checks_environment(self) -> None:
+        script = WINDOWS_SETUP_FLUTTER_SCRIPT.read_text(encoding="utf-8")
+
+        self.assertIn("Set-Item -Path Env:FLUTTER_ROOT", script)
+        self.assertIn("Get-Command dart", script)
+        self.assertIn("pixi install", script)
+        self.assertIn("pixi run setup-flutter", script)
+        self.assertIn("Invoke-InWindowsShortWorkspace", script)
+
     def test_windows_uninstall_msi_script_uses_registry_install_metadata(self) -> None:
         self.assertTrue(WINDOWS_UNINSTALL_MSI_SCRIPT.exists())
 
@@ -261,13 +330,21 @@ class PixiWindowsTasksTests(unittest.TestCase):
         script = WINDOWS_SETUP_FLUTTER_SCRIPT.read_text(encoding="utf-8")
 
         self.assertIn("core.longpaths true", script)
+        self.assertIn("Env:PUB_CACHE", script)
+        self.assertIn("Env:FVM_HOME", script)
+        self.assertIn(".tool/pub-cache", script)
+        self.assertIn(".tool/fvm", script)
         self.assertIn("dart pub global activate --no-executables fvm 2.4.1", script)
-        self.assertIn("dart pub global run fvm:main install 3.22.3", script)
-        self.assertIn("dart pub global run fvm:main use 3.22.3 --force", script)
         self.assertIn(".fvm/flutter_sdk/bin/flutter.bat", script)
         self.assertIn("pub", script)
         self.assertIn("get", script)
         self.assertIn("exit $LASTEXITCODE", script)
+
+    def test_windows_run_fvm_tool_script_uses_short_workspace_helper_for_execution(self) -> None:
+        script = WINDOWS_FVM_TOOL_RUNNER_SCRIPT.read_text(encoding="utf-8")
+
+        self.assertIn("use_windows_short_workspace.ps1", script)
+        self.assertIn("Invoke-InWindowsShortWorkspace", script)
 
     def test_prepare_ffmpeg_windows_script_uses_direct_fvm_dart_runner(self) -> None:
         script = (REPO_ROOT / "scripts/prepare_ffmpeg_windows.ps1").read_text(encoding="utf-8")

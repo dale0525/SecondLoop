@@ -217,9 +217,10 @@ mod tests {
     use std::net::TcpListener;
     use std::sync::{Arc, Mutex};
     use std::thread;
-    use std::time::{Duration, Instant};
+    use std::time::Duration;
 
     use super::*;
+    use reqwest::blocking::ClientBuilder;
 
     #[derive(Default)]
     struct ServerState {
@@ -275,57 +276,57 @@ mod tests {
     #[test]
     fn managed_remote_attachment_exists_uses_range_get_when_head_is_unsupported() {
         let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
-        listener.set_nonblocking(true).expect("nonblocking");
         let addr = listener.local_addr().expect("local addr");
         let state = Arc::new(Mutex::new(ServerState::default()));
         let state_clone = Arc::clone(&state);
 
         let handle = thread::spawn(move || {
-            let started = Instant::now();
-            while started.elapsed() < Duration::from_secs(2) {
-                match listener.accept() {
-                    Ok((mut stream, _)) => {
-                        let headers = read_http_headers(&mut stream);
-                        let first_line = headers.lines().next().unwrap_or("");
-                        let mut parts = first_line.split_whitespace();
-                        let method = parts.next().unwrap_or("");
-                        let path = parts.next().unwrap_or("");
+            for _ in 0..8 {
+                let (mut stream, _) = listener.accept().expect("accept");
+                stream
+                    .set_read_timeout(Some(Duration::from_secs(30)))
+                    .expect("set read timeout");
+                let headers = read_http_headers(&mut stream);
+                let first_line = headers.lines().next().unwrap_or("");
+                let mut parts = first_line.split_whitespace();
+                let method = parts.next().unwrap_or("");
+                let path = parts.next().unwrap_or("");
 
-                        match (method, path) {
-                            ("HEAD", "/v1/vaults/v1/attachments/abc") => {
-                                state_clone.lock().expect("lock").saw_head = true;
-                                respond(&mut stream, "HTTP/1.1 405 Method Not Allowed", b"");
-                            }
-                            ("GET", "/v1/vaults/v1/attachments/abc") => {
-                                let range = headers.lines().find_map(|line| {
-                                    let (name, value) = line.split_once(':')?;
-                                    if name.eq_ignore_ascii_case("range") {
-                                        Some(value.trim().to_string())
-                                    } else {
-                                        None
-                                    }
-                                });
-                                let mut st = state_clone.lock().expect("lock");
-                                st.saw_get = true;
-                                st.saw_range = range;
-                                drop(st);
-                                respond(&mut stream, "HTTP/1.1 206 Partial Content", b"x");
-                                break;
-                            }
-                            _ => {
-                                respond(&mut stream, "HTTP/1.1 404 Not Found", b"");
-                            }
-                        }
+                match (method, path) {
+                    ("HEAD", "/v1/vaults/v1/attachments/abc") => {
+                        state_clone.lock().expect("lock").saw_head = true;
+                        respond(&mut stream, "HTTP/1.1 405 Method Not Allowed", b"");
                     }
-                    Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
-                        thread::sleep(Duration::from_millis(10));
+                    ("GET", "/v1/vaults/v1/attachments/abc") => {
+                        let range = headers.lines().find_map(|line| {
+                            let (name, value) = line.split_once(':')?;
+                            if name.eq_ignore_ascii_case("range") {
+                                Some(value.trim().to_string())
+                            } else {
+                                None
+                            }
+                        });
+                        let mut st = state_clone.lock().expect("lock");
+                        st.saw_get = true;
+                        st.saw_range = range;
+                        drop(st);
+                        respond(&mut stream, "HTTP/1.1 206 Partial Content", b"x");
+                        return;
                     }
-                    Err(e) => panic!("accept failed: {e}"),
+                    _ => {
+                        respond(&mut stream, "HTTP/1.1 404 Not Found", b"");
+                    }
                 }
             }
+
+            panic!("expected HEAD then GET probe requests before server loop ended");
         });
 
-        let http = Client::new();
+        let http = ClientBuilder::new()
+            .timeout(Duration::from_secs(30))
+            .pool_max_idle_per_host(0)
+            .build()
+            .expect("http client");
         let exists = managed_remote_attachment_exists(
             &http,
             &format!("http://{addr}"),

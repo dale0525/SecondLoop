@@ -8,4 +8,8 @@ fi
 
 cd "${repo_root}"
 
-bash .githooks/pre-commit --check "$@"
+if [[ "$(uname -s 2>/dev/null || echo unknown)" == MINGW* || "$(uname -s 2>/dev/null || echo unknown)" == MSYS* || "$(uname -s 2>/dev/null || echo unknown)" == CYGWIN* ]]; then
+  powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_bash.ps1 .githooks/pre-commit --check "$@"
+else
+  bash .githooks/pre-commit --check "$@"
+fi

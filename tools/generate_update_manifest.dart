@@ -1,5 +1,7 @@
 import 'dart:io';
 
+import 'package:secondloop/core/update/app_update_models.dart';
+
 import 'generate_update_manifest_lib.dart';
 
 Future<void> main(List<String> args) async {
@@ -13,6 +15,10 @@ Future<void> main(List<String> args) async {
         repo: parsed['repo'],
         version: version,
       );
+  final windowsAppId = parsed['windows-app-id'] ??
+      Platform.environment['SECONDLOOP_APP_ID'] ??
+      'com.secondloop.secondloop';
+  final windowsChannel = parsed['windows-channel'];
   final signingPrivateKey = parsed['signing-private-key'] ??
       Platform.environment['SECONDLOOP_UPDATE_SIGNING_PRIVATE_KEY'];
   final publishedAt = parsed['published-at'];
@@ -22,6 +28,8 @@ Future<void> main(List<String> args) async {
     version: version,
     baseDownloadUrl: baseDownloadUrl,
     releasePageUrl: releasePageUrl,
+    windowsAppId: windowsAppId,
+    windowsChannel: windowsChannel,
     publishedAt: publishedAt == null || publishedAt.trim().isEmpty
         ? null
         : DateTime.parse(publishedAt).toUtc(),
@@ -78,6 +86,15 @@ String? _releasePageUrlFromRepo({
   if (trimmedRepo == null || trimmedRepo.isEmpty) {
     return null;
   }
-  final normalizedVersion = version.startsWith('v') ? version : 'v$version';
-  return 'https://github.com/$trimmedRepo/releases/tag/$normalizedVersion';
+  final normalizedVersion = normalizeStrictAppVersion(
+    version,
+    argumentName: 'version',
+  );
+  return 'https://github.com/$trimmedRepo/releases/tag/v$normalizedVersion';
 }
+
+String? releasePageUrlFromRepoForTest({
+  required String? repo,
+  required String version,
+}) =>
+    _releasePageUrlFromRepo(repo: repo, version: version);

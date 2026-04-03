@@ -2,15 +2,88 @@ import 'dart:io';
 
 import 'app_update_models.dart';
 
+// SecondLoop only ships Windows auto-update feeds for these two package ids.
+const secondLoopProdAppId = 'com.secondloop.secondloop';
+const secondLoopDevAppId = 'com.secondloop.secondloopdev';
+
+String? normalizeSupportedSecondLoopAppId(String? value) {
+  final normalized = value?.trim().toLowerCase();
+  return switch (normalized) {
+    secondLoopProdAppId => secondLoopProdAppId,
+    secondLoopDevAppId => secondLoopDevAppId,
+    _ => null,
+  };
+}
+
+bool isSupportedSecondLoopAppId(String? value) {
+  return normalizeSupportedSecondLoopAppId(value) != null;
+}
+
 bool isWindowsMsiInstallerName(String name) {
   final normalized = name.trim().toLowerCase();
   return normalized.endsWith('.msi') && normalized.contains('secondloop');
+}
+
+bool isWindowsMsiInstallerNameForApp(
+  String name, {
+  required String appId,
+}) {
+  if (!isWindowsMsiInstallerName(name)) {
+    return false;
+  }
+
+  final normalizedAppId = normalizeSupportedSecondLoopAppId(appId);
+  if (normalizedAppId == null) {
+    return false;
+  }
+
+  final normalizedName = name.trim().toLowerCase();
+  return switch (normalizedAppId) {
+    secondLoopProdAppId => _isWindowsProdInstallerIdentity(normalizedName),
+    secondLoopDevAppId => _hasWindowsDevInstallerIdentity(normalizedName),
+    _ => false,
+  };
+}
+
+bool _isWindowsProdInstallerIdentity(String normalizedName) {
+  final tokens = _windowsInstallerTokens(normalizedName);
+  return tokens.length >= 2 && tokens[0] == 'secondloop' && tokens[1] == 'win';
+}
+
+bool _hasWindowsDevInstallerIdentity(String normalizedName) {
+  final tokens = _windowsInstallerTokens(normalizedName);
+  return tokens.length >= 3 &&
+      tokens[0] == 'secondloop' &&
+      tokens[1] == 'dev' &&
+      tokens[2] == 'win';
+}
+
+List<String> _windowsInstallerTokens(String normalizedName) {
+  return normalizedName
+      .replaceAll('.msi', '')
+      .split(RegExp(r'[^a-z0-9]+'))
+      .where((token) => token.isNotEmpty)
+      .toList(growable: false);
 }
 
 bool isWindowsVelopackPackageName(String name) {
   final normalized = name.trim().toLowerCase();
   return normalized.endsWith('-full.nupkg') &&
       normalized.contains('secondloop');
+}
+
+bool isWindowsVelopackPackageNameForApp(
+  String name, {
+  required String appId,
+}) {
+  final normalizedName = name.trim().toLowerCase();
+  final normalizedAppId = normalizeSupportedSecondLoopAppId(appId);
+  if (normalizedName.isEmpty || normalizedAppId == null) {
+    return false;
+  }
+
+  return normalizedName.endsWith('-full.nupkg') &&
+      normalizedName.startsWith('$normalizedAppId-');
 }
 
 bool isMacosManagedArchiveName(String name) {
@@ -49,25 +122,7 @@ bool sameNormalizedVersion(String left, String right) {
   if (leftVersion == null || rightVersion == null) {
     return false;
   }
-  final normalizedLeft = trimTrailingZeroSegments(leftVersion.segments);
-  final normalizedRight = trimTrailingZeroSegments(rightVersion.segments);
-  final sameBaseSegments = normalizedLeft.length == normalizedRight.length &&
-      _listEquals(normalizedLeft, normalizedRight);
-  if (leftVersion.isPrerelease != rightVersion.isPrerelease) {
-    return false;
-  }
-  if (sameBaseSegments &&
-      leftVersion.isPrerelease == rightVersion.isPrerelease) {
-    if (!leftVersion.isPrerelease) {
-      return true;
-    }
-    return comparePrereleaseIdentifiers(
-          leftVersion.prereleaseIdentifiers,
-          rightVersion.prereleaseIdentifiers,
-        ) ==
-        0;
-  }
-  return compareReleaseTagWithCurrentVersion(left, right) == 0;
+  return _listEquals(leftVersion.segments, rightVersion.segments);
 }
 
 bool _listEquals(List<int> left, List<int> right) {

@@ -427,7 +427,16 @@ fn migration_archive_import_rolls_back_when_archive_restore_fails() {
 
     let err = import_migration_archive(&app_dir, &key, &bad_archive_path)
         .expect_err("import should fail and rollback");
-    assert!(err.to_string().contains("No such file") || err.to_string().contains("missing-sha"));
+    let err_text = err.to_string();
+    assert!(
+        err_text.contains("missing-sha")
+            || err_text.contains("No such file")
+            || err_text.contains("cannot find the file")
+            || err_text.contains("系统找不到指定的文件")
+            || err_text.contains("系统找不到指定的路径")
+            || err_text.contains("os error 2"),
+        "unexpected error: {err_text}"
+    );
 
     let rollback_dir = app_dir.join("migration_archive/rollback");
     let rollback_entries = fs::read_dir(&rollback_dir)

@@ -6,6 +6,97 @@ import 'package:secondloop/core/update/app_update_service.dart';
 
 void main() {
   group('AppUpdateService version constraints', () {
+    test('Windows MSI identity matcher distinguishes prod and dev installers',
+        () {
+      expect(
+        isWindowsMsiInstallerNameForApp(
+          'SecondLoop-win.msi',
+          appId: 'com.secondloop.secondloop',
+        ),
+        isTrue,
+      );
+      expect(
+        isWindowsMsiInstallerNameForApp(
+          'SecondLoop Dev-win.msi',
+          appId: 'com.secondloop.secondloop',
+        ),
+        isFalse,
+      );
+      expect(
+        isWindowsMsiInstallerNameForApp(
+          'SecondLoop Dev-win.msi',
+          appId: 'com.secondloop.secondloopdev',
+        ),
+        isTrue,
+      );
+      expect(
+        isWindowsMsiInstallerNameForApp(
+          'SecondLoop-win.msi',
+          appId: 'com.secondloop.secondloopdev',
+        ),
+        isFalse,
+      );
+    });
+
+    test('Windows MSI generic matcher still recognizes legacy filenames', () {
+      expect(isWindowsMsiInstallerName('SecondLoop-win.msi'), isTrue);
+      expect(isWindowsMsiInstallerName('SecondLoop Dev-win.msi'), isTrue);
+      expect(isWindowsMsiInstallerName('AnotherApp-win.msi'), isFalse);
+    });
+
+    test('Windows MSI identity matcher only allows prod and dev app ids', () {
+      expect(
+        isWindowsMsiInstallerNameForApp(
+          'SecondLoop-win.msi',
+          appId: 'com.secondloop.secondloopbeta',
+        ),
+        isFalse,
+      );
+      expect(
+        isWindowsMsiInstallerNameForApp(
+          'SecondLoop Dev-win.msi',
+          appId: 'com.secondloop.secondloopbeta',
+        ),
+        isFalse,
+      );
+    });
+
+    test('Windows MSI identity matcher avoids broad dev substring matches', () {
+      expect(
+        isWindowsMsiInstallerNameForApp(
+          'SecondLoop-device-win.msi',
+          appId: 'com.secondloop.secondloopdev',
+        ),
+        isFalse,
+      );
+      expect(
+        isWindowsMsiInstallerNameForApp(
+          'SecondLoop-devtools-win.msi',
+          appId: 'com.secondloop.secondloopdev',
+        ),
+        isFalse,
+      );
+    });
+
+    test(
+        'Windows MSI identity matcher rejects unrelated prod-like installer names',
+        () {
+      expect(
+        isWindowsMsiInstallerNameForApp(
+          'SecondLoop-helper-win.msi',
+          appId: 'com.secondloop.secondloop',
+        ),
+        isFalse,
+      );
+      expect(
+        isWindowsMsiInstallerNameForApp(
+          'SecondLoop-devtools-win.msi',
+          appId: 'com.secondloop.secondloop',
+        ),
+        isFalse,
+      );
+    });
+
     test('checkForUpdates accepts uppercase V release tags', () async {
       final service = AppUpdateService(
         platformOverride: AppUpdatePlatform.windows,
@@ -33,7 +124,7 @@ void main() {
       expect(result.update!.latestTag, 'v1.0.1');
     });
 
-    test('checkForUpdates accepts release tags with fourth segment', () async {
+    test('checkForUpdates rejects release tags with fourth segment', () async {
       final service = AppUpdateService(
         platformOverride: AppUpdatePlatform.windows,
         releaseModeOverride: true,
@@ -49,60 +140,24 @@ void main() {
 
       final result = await service.checkForUpdates();
 
-      expect(result.errorMessage, isNull);
-      expect(result.update, isNotNull);
-      expect(result.update!.latestTag, 'v1.0.1.1');
+      expect(result.update, isNull);
+      expect(result.errorMessage, 'unsupported_version_format');
     });
 
-    test('checkForUpdates treats fourth segment as newer when base matches',
-        () async {
-      final service = AppUpdateService(
-        platformOverride: AppUpdatePlatform.windows,
-        releaseModeOverride: true,
-        currentVersionLoader: () async =>
-            const AppRuntimeVersion(version: '1.0.1', buildNumber: '1'),
-        releaseJsonFetcher: (_) async => <String, Object?>{
-          'tag_name': 'v1.0.1.1',
-          'html_url':
-              'https://github.com/dale0525/SecondLoop/releases/tag/v1.0.1.1',
-          'assets': <Object?>[],
-        },
-      );
-
-      final result = await service.checkForUpdates();
-
-      expect(result.errorMessage, isNull);
-      expect(result.update, isNotNull);
-      expect(result.update!.latestTag, 'v1.0.1.1');
-    });
-
-    test('sameNormalizedVersion rejects prerelease and final variants', () {
+    test('sameNormalizedVersion only matches strict x.y.z versions', () {
+      expect(sameNormalizedVersion('1.1.0', '1.1.0'), isTrue);
+      expect(sameNormalizedVersion('v1.1.0', '1.1.0'), isTrue);
+      expect(sameNormalizedVersion('1.1.0', '1.1.0+7'), isFalse);
       expect(sameNormalizedVersion('1.1.0-beta', '1.1.0'), isFalse);
-      expect(sameNormalizedVersion('1.1.0', '1.1.0-beta'), isFalse);
       expect(sameNormalizedVersion('1.1.0.7', '1.1.0'), isFalse);
     });
 
-    test('sameNormalizedVersion keeps exact prerelease matches only', () {
-      expect(sameNormalizedVersion('1.1.0-beta', '1.1.0-beta'), isTrue);
-      expect(sameNormalizedVersion('1.1.0-beta', '1.1.0-rc'), isFalse);
-    });
-
-    test('prerelease identifiers keep semantic ordering', () {
-      expect(compareReleaseTagWithCurrentVersion('1.1.0-alpha', '1.1.0-beta'),
-          lessThan(0));
-      expect(compareReleaseTagWithCurrentVersion('1.1.0-beta', '1.1.0-rc.1'),
-          lessThan(0));
-      expect(compareReleaseTagWithCurrentVersion('1.1.0-rc.2', '1.1.0-rc.1'),
-          greaterThan(0));
-      expect(
-          compareReleaseTagWithCurrentVersion('1.1.0-beta', '1.1.0-beta'), 0);
-    });
-
-    test(
-        'sameNormalizedVersion does not treat prerelease build counters as equal',
-        () {
-      expect(sameNormalizedVersion('1.1.0-rc.1', '1.1.0'), isFalse);
-      expect(sameNormalizedVersion('1.1.0', '1.1.0-rc.1'), isFalse);
+    test('parseComparableAppVersion only accepts strict x.y.z values', () {
+      expect(parseComparableAppVersion('v1.2.3'), isNotNull);
+      expect(parseComparableAppVersion('V1.2.3'), isNotNull);
+      expect(parseComparableAppVersion('1.2.3+4'), isNull);
+      expect(parseComparableAppVersion('1.2.3.4'), isNull);
+      expect(parseComparableAppVersion('1.2.3-rc.1'), isNull);
     });
 
     test('checkForUpdates rejects non-version release tags', () async {
@@ -125,31 +180,7 @@ void main() {
       expect(result.errorMessage, 'unsupported_version_format');
     });
 
-    test('checkForUpdates treats final release as newer than prerelease',
-        () async {
-      final service = AppUpdateService(
-        platformOverride: AppUpdatePlatform.windows,
-        releaseModeOverride: true,
-        currentVersionLoader: () async => const AppRuntimeVersion(
-          version: '1.1.0-rc.1',
-          buildNumber: '1',
-        ),
-        releaseJsonFetcher: (_) async => <String, Object?>{
-          'tag_name': 'v1.1.0',
-          'html_url':
-              'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
-          'assets': <Object?>[],
-        },
-      );
-
-      final result = await service.checkForUpdates();
-
-      expect(result.errorMessage, isNull);
-      expect(result.update, isNotNull);
-      expect(result.update!.latestTag, 'v1.1.0');
-    });
-
-    test('checkForUpdates accepts current versions outside strict x.y.z',
+    test('checkForUpdates rejects current versions outside strict x.y.z',
         () async {
       final service = AppUpdateService(
         platformOverride: AppUpdatePlatform.windows,
@@ -166,9 +197,8 @@ void main() {
 
       final result = await service.checkForUpdates();
 
-      expect(result.errorMessage, isNull);
-      expect(result.update, isNotNull);
-      expect(result.update!.latestTag, 'v1.0.1');
+      expect(result.update, isNull);
+      expect(result.errorMessage, 'unsupported_version_format');
     });
 
     test('checkForUpdates keeps base path for custom release origins',
@@ -258,6 +288,84 @@ void main() {
       expect(
         requestedUri.toString(),
         'https://updates.example.com/custom/base/api/releases/latest',
+      );
+    });
+
+    test(
+        'checkForUpdates accepts fully qualified custom release latest endpoint',
+        () async {
+      late Uri requestedUri;
+      final service = AppUpdateService(
+        platformOverride: AppUpdatePlatform.android,
+        releaseModeOverride: true,
+        releaseRepoOverride: '',
+        releaseApiOriginOverride:
+            'https://updates.example.com/custom/base/api/releases/latest',
+        currentVersionLoader: () async =>
+            const AppRuntimeVersion(version: '1.0.0', buildNumber: '1'),
+        releaseJsonFetcher: (uri) async {
+          requestedUri = uri;
+          return <String, Object?>{
+            'tag_name': 'v1.0.1',
+            'html_url':
+                'https://github.com/dale0525/SecondLoop/releases/tag/v1.0.1',
+            'assets': <Object?>[],
+          };
+        },
+      );
+
+      await service.checkForUpdates();
+
+      expect(
+        requestedUri.toString(),
+        'https://updates.example.com/custom/base/api/releases/latest',
+      );
+    });
+
+    test(
+        'checkForUpdates accepts a fully qualified self-hosted latest endpoint without duplicating the path',
+        () async {
+      late Uri requestedUri;
+      final service = AppUpdateService(
+        platformOverride: AppUpdatePlatform.android,
+        releaseModeOverride: true,
+        releaseRepoOverride: '',
+        releaseApiOriginOverride:
+            'https://updates.example.com/custom/base/api/releases/latest',
+        currentVersionLoader: () async =>
+            const AppRuntimeVersion(version: '1.0.0', buildNumber: '1'),
+        releaseJsonFetcher: (uri) async {
+          requestedUri = uri;
+          return <String, Object?>{
+            'tag_name': 'v1.0.1',
+            'html_url':
+                'https://github.com/dale0525/SecondLoop/releases/tag/v1.0.1',
+            'assets': <Object?>[],
+          };
+        },
+      );
+
+      await service.checkForUpdates();
+
+      expect(
+        requestedUri.toString(),
+        'https://updates.example.com/custom/base/api/releases/latest',
+      );
+    });
+
+    test(
+        'fallbackReleasePageUri uses configured origin root for self-hosted feeds',
+        () async {
+      final service = AppUpdateService(
+        platformOverride: AppUpdatePlatform.android,
+        releaseModeOverride: true,
+        releaseRepoOverride: '',
+        releaseApiOriginOverride: 'https://updates.example.com/custom/base/',
+      );
+
+      expect(
+        service.fallbackReleasePageUri.toString(),
+        'https://updates.example.com/custom/base/',
       );
     });
   });

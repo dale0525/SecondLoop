@@ -59,6 +59,7 @@ class _AutoUpgradeGateState extends State<AutoUpgradeGate>
   bool _checkScheduled = false;
   bool _noticeSessionInitialized = false;
   bool _updateNoticeDismissedInSession = false;
+  Uri? _lastKnownReleasePageUri;
   bool _androidDialogOpen = false;
   bool _androidCheckInFlight = false;
   String? _dismissedAndroidUpdateTagInSession;
@@ -130,6 +131,7 @@ class _AutoUpgradeGateState extends State<AutoUpgradeGate>
     if (_checkScheduled) return;
     _checkScheduled = true;
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
       unawaited(_maybeAutoUpgrade());
     });
   }
@@ -193,6 +195,7 @@ class _AutoUpgradeGateState extends State<AutoUpgradeGate>
           return;
         }
 
+        _lastKnownReleasePageUri = update.releasePageUri;
         await UpdateBadgePrefs.setAvailableVersion(update.latestTag);
         if (pendingApplyError != null) {
           await _showPendingApplyFailureNotice(pendingApplyError);
@@ -355,9 +358,8 @@ class _AutoUpgradeGateState extends State<AutoUpgradeGate>
     final aboutT = context.t.settings.about;
     try {
       final launcher = widget.externalUriLauncher;
-      final fallbackUri = AutoUpgradeGate.fallbackUpdateUri(
-        releaseRepo: _updateService.releaseRepo,
-      );
+      final fallbackUri =
+          _lastKnownReleasePageUri ?? _updateService.fallbackReleasePageUri;
       final opened = launcher != null
           ? await launcher(fallbackUri)
           : await launchUrl(
