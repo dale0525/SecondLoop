@@ -195,13 +195,13 @@ class _AutoUpgradeGateState extends State<AutoUpgradeGate>
           return;
         }
 
+        _lastKnownReleasePageUri = update.releasePageUri;
         await UpdateBadgePrefs.setAvailableVersion(update.latestTag);
         if (pendingApplyError != null) {
           await _showPendingApplyFailureNotice(pendingApplyError);
           return;
         }
 
-        _lastKnownReleasePageUri = update.releasePageUri;
         if (_isAndroidPlatform && _isAndroidUpdateCandidate(update)) {
           if (_androidInstallPermissionPendingTag != null &&
               _androidInstallPermissionPendingTag != update.latestTag) {
