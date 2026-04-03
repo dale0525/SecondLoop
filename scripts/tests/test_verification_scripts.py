@@ -72,6 +72,14 @@ class VerificationScriptsTests(unittest.TestCase):
         self.assertIn('bash scripts/run_rust_builder_package_tests.sh', script)
         self.assertIn('ci: starting Rust builder verification...', script)
 
+    def test_parallel_ci_wrapper_runs_web_scope(self) -> None:
+        script = (REPO_ROOT / "scripts/run_full_ci_parallel.sh").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn('bash scripts/run_flutter_web_ci_local.sh', script)
+        self.assertIn('ci: starting Web verification...', script)
+
     def test_parallel_ci_wrapper_emits_logs_as_each_scope_finishes(self) -> None:
         script = (REPO_ROOT / "scripts/run_full_ci_parallel.sh").read_text(
             encoding="utf-8"
@@ -347,6 +355,17 @@ class VerificationScriptsTests(unittest.TestCase):
         self.assertIn('      rust_builder_package: ${{ steps.filter.outputs.rust_builder_package }}', workflow)
         self.assertIn("  rust-builder-tests:\n", workflow)
         self.assertIn("run: pixi run rust-builder-test", workflow)
+
+    def test_ci_workflow_rust_builder_scope_covers_support_scripts(self) -> None:
+        workflow = (REPO_ROOT / ".github/workflows/ci.yml").read_text(
+            encoding="utf-8"
+        )
+
+        rust_builder_section = workflow.split("            rust_builder_package:\n", maxsplit=1)[1]
+        rust_builder_section = rust_builder_section.split("\n\n  python-tooling:\n", maxsplit=1)[0]
+
+        self.assertIn('              - "scripts/run_rust_builder_package_tests.sh"', rust_builder_section)
+        self.assertIn('              - "scripts/pre_commit_common.sh"', rust_builder_section)
 
     def test_ci_workflow_limits_rust_parallelism_to_reduce_peak_disk_usage(self) -> None:
         workflow = (REPO_ROOT / ".github/workflows/ci.yml").read_text(

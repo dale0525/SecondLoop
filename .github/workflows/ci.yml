@@ -115,6 +115,8 @@ jobs:
               - ".github/workflows/**"
               - "pixi.toml"
               - "pixi.lock"
+              - "scripts/pre_commit_common.sh"
+              - "scripts/run_rust_builder_package_tests.sh"
               - "rust_builder/cargokit/build_tool/**"
 
   python-tooling:
