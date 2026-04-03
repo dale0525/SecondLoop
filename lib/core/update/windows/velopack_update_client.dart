@@ -725,7 +725,12 @@ class VelopackUpdateClient implements WindowsStagedUpdateClient {
     String appRootPath, {
     required String appId,
   }) {
-    final newestPackage = _readNewestPackageFile(appRootPath, appId: appId);
+    final channels = _detectInstalledChannels(appRootPath);
+    final newestPackage = _readNewestPackageFile(
+      appRootPath,
+      appId: appId,
+      installedChannels: channels,
+    );
     if (newestPackage == null) {
       return null;
     }
@@ -735,13 +740,14 @@ class VelopackUpdateClient implements WindowsStagedUpdateClient {
     return _extractVersionFromNupkgName(
       fileName,
       appId: appId,
-      channels: _detectInstalledChannels(appRootPath),
+      channels: channels,
     );
   }
 
   static File? _readNewestPackageFile(
     String appRootPath, {
     required String appId,
+    List<String>? installedChannels,
   }) {
     final packagesDir = Directory(
       '$appRootPath${Platform.pathSeparator}packages',
@@ -750,7 +756,7 @@ class VelopackUpdateClient implements WindowsStagedUpdateClient {
       return null;
     }
 
-    final channels = _detectInstalledChannels(appRootPath);
+    final channels = installedChannels ?? _detectInstalledChannels(appRootPath);
     File? newestPackage;
     String? newestVersion;
     int? newestTieBreaker;

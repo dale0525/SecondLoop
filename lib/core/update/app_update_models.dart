@@ -123,9 +123,6 @@ int compareReleaseTagWithCurrentVersion(
   final releaseVersion = parseComparableAppVersion(releaseTag);
   final currentAppVersion = parseComparableAppVersion(currentVersion);
   if (releaseVersion == null || currentAppVersion == null) return 0;
-  if (releaseVersion.segments.length != currentAppVersion.segments.length) {
-    return 0;
-  }
 
   for (var i = 0; i < releaseVersion.segments.length; i += 1) {
     final releaseValue = releaseVersion.segments[i];
