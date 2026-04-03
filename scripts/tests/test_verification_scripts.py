@@ -64,6 +64,14 @@ class VerificationScriptsTests(unittest.TestCase):
         self.assertIn('bash scripts/run_python_tooling_checks.sh', script)
         self.assertIn('ci: starting Python tooling verification...', script)
 
+    def test_parallel_ci_wrapper_runs_rust_builder_scope(self) -> None:
+        script = (REPO_ROOT / "scripts/run_full_ci_parallel.sh").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn('bash scripts/run_rust_builder_package_tests.sh', script)
+        self.assertIn('ci: starting Rust builder verification...', script)
+
     def test_parallel_ci_wrapper_emits_logs_as_each_scope_finishes(self) -> None:
         script = (REPO_ROOT / "scripts/run_full_ci_parallel.sh").read_text(
             encoding="utf-8"
@@ -101,6 +109,8 @@ class VerificationScriptsTests(unittest.TestCase):
         self.assertIn('echo "ci: preparing i18n outputs in a temporary Flutter worktree..." >&2', script)
         self.assertIn('git worktree add --detach', script)
         self.assertIn('copy_prepared_i18n_tree()', script)
+        self.assertIn('run_flutter_tool pub get', script)
+        self.assertIn('copy_prepared_flutter_tool_state()', script)
         self.assertIn('bash scripts/run_i18n_refresh.sh', script)
 
     def test_local_flutter_ci_wrapper_syncs_workspace_state_into_temp_worktrees(self) -> None:
@@ -325,7 +335,18 @@ class VerificationScriptsTests(unittest.TestCase):
 
         self.assertIn('tooling-test = "bash scripts/run_python_tooling_checks.sh"', pixi)
         self.assertIn('rust-nextest = "bash scripts/run_rust_ci_nextest.sh"', pixi)
+        self.assertIn('rust-builder-test = "bash scripts/run_rust_builder_package_tests.sh"', pixi)
         self.assertIn('cargo-nextest', pixi)
+
+    def test_ci_workflow_adds_rust_builder_specific_scope(self) -> None:
+        workflow = (REPO_ROOT / ".github/workflows/ci.yml").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn("rust_builder_package:", workflow)
+        self.assertIn('      rust_builder_package: ${{ steps.filter.outputs.rust_builder_package }}', workflow)
+        self.assertIn("  rust-builder-tests:\n", workflow)
+        self.assertIn("run: pixi run rust-builder-test", workflow)
 
     def test_ci_workflow_limits_rust_parallelism_to_reduce_peak_disk_usage(self) -> None:
         workflow = (REPO_ROOT / ".github/workflows/ci.yml").read_text(

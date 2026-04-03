@@ -55,6 +55,7 @@ fmt-check = "dart pub global run fvm:main dart format --output=none lib test rus
 verify-changed = "bash scripts/verify_changed.sh"
 tooling-test = "bash scripts/run_python_tooling_checks.sh"
 rust-nextest = "bash scripts/run_rust_ci_nextest.sh"
+rust-builder-test = "bash scripts/run_rust_builder_package_tests.sh"
 ci = "bash scripts/run_full_ci_parallel.sh"
 
 # Run/build workflows (auto-include setup-flutter + init-env).
@@ -131,6 +132,7 @@ dotnet-aspnetcore = "8.0.*"
 verify-changed = "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_bash.ps1 scripts/verify_changed.sh"
 tooling-test = "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_bash.ps1 scripts/run_python_tooling_checks.sh"
 rust-nextest = "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_bash.ps1 scripts/run_rust_ci_nextest.sh"
+rust-builder-test = "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_bash.ps1 scripts/run_rust_builder_package_tests.sh"
 ci = "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_bash.ps1 scripts/run_full_ci_parallel.sh"
 install-git-hooks = "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_bash.ps1 scripts/install_git_hooks.sh"
 frb-generate = "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/frb_generate.ps1"

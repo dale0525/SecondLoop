@@ -84,6 +84,7 @@ class FailFastCiWrapperTests(unittest.TestCase):
             for relative_path, marker_name in [
                 ("scripts/run_full_rust_ci_local.sh", "rust-cancelled"),
                 ("scripts/run_python_tooling_checks.sh", "python-cancelled"),
+                ("scripts/run_rust_builder_package_tests.sh", "rust-builder-cancelled"),
             ]:
                 self._write_script(
                     repo_root / relative_path,
@@ -118,6 +119,7 @@ class FailFastCiWrapperTests(unittest.TestCase):
             self.assertLess(elapsed, 5, msg=result.stdout + result.stderr)
             self.assertTrue((marker_dir / "rust-cancelled").exists(), msg=result.stdout + result.stderr)
             self.assertTrue((marker_dir / "python-cancelled").exists(), msg=result.stdout + result.stderr)
+            self.assertTrue((marker_dir / "rust-builder-cancelled").exists(), msg=result.stdout + result.stderr)
             self.assertIn("failing-flutter", result.stdout)
 
     def test_local_rust_ci_wrapper_does_not_start_nextest_after_gate_failure(self) -> None:

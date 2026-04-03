@@ -24,6 +24,7 @@ jobs:
       flutter: ${{ steps.filter.outputs.flutter }}
       rust: ${{ steps.filter.outputs.rust }}
       web: ${{ steps.filter.outputs.web }}
+      rust_builder_package: ${{ steps.filter.outputs.rust_builder_package }}
     steps:
       - uses: actions/checkout@v4
       - uses: dorny/paths-filter@v3
@@ -110,6 +111,11 @@ jobs:
               - "macos/**"
               - "windows/**"
               - "web/**"
+            rust_builder_package:
+              - ".github/workflows/**"
+              - "pixi.toml"
+              - "pixi.lock"
+              - "rust_builder/cargokit/build_tool/**"
 
   python-tooling:
     needs: changes
@@ -122,6 +128,23 @@ jobs:
           cache: true
       - name: Python tooling checks
         run: pixi run tooling-test
+
+  rust-builder-tests:
+    needs: changes
+    if: needs.changes.outputs.rust_builder_package == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.22.3"
+          channel: stable
+          cache: true
+      - uses: prefix-dev/setup-pixi@v0.9.3
+        with:
+          cache: true
+      - name: Rust builder package tests
+        run: pixi run rust-builder-test
 
   flutter-gate:
     needs: changes

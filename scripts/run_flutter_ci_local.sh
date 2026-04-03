@@ -84,6 +84,18 @@ copy_prepared_i18n_tree() {
   cp -R "${prepared_worktree}/lib/i18n" "${destination_root}/lib/"
 }
 
+copy_prepared_flutter_tool_state() {
+  local destination_root="$1"
+  local relative_path
+
+  for relative_path in .dart_tool .flutter-plugins .flutter-plugins-dependencies; do
+    rm -rf "${destination_root}/${relative_path}"
+    [[ -e "${prepared_worktree}/${relative_path}" ]] || continue
+    mkdir -p "${destination_root}/$(dirname "${relative_path}")"
+    cp -R "${prepared_worktree}/${relative_path}" "${destination_root}/${relative_path}"
+  done
+}
+
 echo "ci: starting Flutter gate..." >&2
 bash .githooks/pre-commit --check --flutter --skip-tests >"${flutter_gate_log}" 2>&1 &
 flutter_gate_pid=$!
@@ -93,6 +105,8 @@ prepared_worktree="$(create_flutter_worktree "prepared-shard-0")"
 sync_workspace_state_into_worktree "${prepared_worktree}"
 if ! (
   cd "${prepared_worktree}"
+  export SECONDLOOP_FLUTTER_BIN="${flutter_bin}"
+  run_with_periodic_status "flutter pub get (prepared Flutter worktree)" run_flutter_tool pub get >/dev/null
   export SECONDLOOP_I18N_DART_BIN="${dart_bin}"
   export SECONDLOOP_I18N_FLUTTER_BIN="${flutter_bin}"
   bash scripts/run_i18n_refresh.sh >/dev/null
@@ -110,6 +124,7 @@ for (( shard_index = 0; shard_index < flutter_shards; shard_index++ )); do
   if (( shard_index > 0 )); then
     shard_worktree="$(create_flutter_worktree "shard-${shard_index}")"
     sync_workspace_state_into_worktree "${shard_worktree}"
+    copy_prepared_flutter_tool_state "${shard_worktree}"
     copy_prepared_i18n_tree "${shard_worktree}"
   fi
 

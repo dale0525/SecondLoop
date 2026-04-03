@@ -15,6 +15,7 @@ PRE_COMMIT_COMMON = REPO_ROOT / "scripts/pre_commit_common.sh"
 RUN_FLUTTER_CI_LOCAL = REPO_ROOT / "scripts/run_flutter_ci_local.sh"
 RUN_FLUTTER_TEST_SHARD = REPO_ROOT / "scripts/run_flutter_test_shard.sh"
 RUN_I18N_REFRESH = REPO_ROOT / "scripts/run_i18n_refresh.sh"
+RUN_RUST_BUILDER_PACKAGE_TESTS = REPO_ROOT / "scripts/run_rust_builder_package_tests.sh"
 SELECT_FLUTTER_TEST_TARGETS = REPO_ROOT / "scripts/select_flutter_test_targets.sh"
 
 
@@ -624,6 +625,245 @@ class ScopedCiScriptBehaviorTests(unittest.TestCase):
                 "// stale\n",
             )
 
+    def test_local_flutter_ci_runs_pub_get_once_before_preparing_and_sharding(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            repo_root = Path(temp_dir)
+            self._init_repo(repo_root, "main")
+
+            scripts_dir = repo_root / "scripts"
+            hooks_dir = repo_root / ".githooks"
+            test_dir = repo_root / "test"
+            fake_bin_dir = repo_root / "fake-bin"
+            scripts_dir.mkdir(parents=True, exist_ok=True)
+            hooks_dir.mkdir(parents=True, exist_ok=True)
+            test_dir.mkdir(parents=True, exist_ok=True)
+            fake_bin_dir.mkdir(parents=True, exist_ok=True)
+
+            (test_dir / "sample_test.dart").write_text("// stub\n", encoding="utf-8")
+
+            (scripts_dir / "run_flutter_ci_local.sh").write_text(
+                RUN_FLUTTER_CI_LOCAL.read_text(encoding="utf-8"),
+                encoding="utf-8",
+            )
+            self._make_executable(scripts_dir / "run_flutter_ci_local.sh")
+
+            (scripts_dir / "pre_commit_common.sh").write_text(
+                "\n".join(
+                    [
+                        "die() {",
+                        "  echo \"pre-commit: $*\" >&2",
+                        "  exit 1",
+                        "}",
+                        "",
+                        f"resolve_dart_bin() {{ printf '%s\\n' \"{(fake_bin_dir / 'dart').as_posix()}\"; }}",
+                        f"resolve_flutter_bin() {{ printf '%s\\n' \"{(fake_bin_dir / 'flutter').as_posix()}\"; }}",
+                        "",
+                        "run_with_periodic_status() {",
+                        "  local _label=\"$1\"",
+                        "  shift",
+                        "  \"$@\"",
+                        "}",
+                        "",
+                        "run_flutter_tool() {",
+                        "  local flutter_bin",
+                        "  flutter_bin=\"$(resolve_flutter_bin)\"",
+                        "  env -u GIT_DIR -u GIT_WORK_TREE -u GIT_INDEX_FILE \"${flutter_bin}\" \"$@\"",
+                        "}",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            common_dir_expr = "$(git rev-parse --git-common-dir)"
+            (fake_bin_dir / "flutter").write_text(
+                "\n".join(
+                    [
+                        "#!/usr/bin/env bash",
+                        "set -euo pipefail",
+                        'repo_root="$(git rev-parse --show-toplevel)"',
+                        f'common_dir="{common_dir_expr}"',
+                        'printf \'%s|%s\\n\' "$repo_root" "$*" >> "${common_dir}/flutter.log"',
+                        'if [[ "$1" == "pub" && "${2:-}" == "get" ]]; then',
+                        '  mkdir -p "${repo_root}/.dart_tool"',
+                        '  printf \'{}\\n\' > "${repo_root}/.dart_tool/package_config.json"',
+                        '  printf \'plugins\\n\' > "${repo_root}/.flutter-plugins-dependencies"',
+                        "  exit 0",
+                        "fi",
+                        "exit 0",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            self._make_executable(fake_bin_dir / "flutter")
+
+            (fake_bin_dir / "dart").write_text(
+                "#!/usr/bin/env bash\nset -euo pipefail\nexit 0\n",
+                encoding="utf-8",
+            )
+            self._make_executable(fake_bin_dir / "dart")
+
+            (scripts_dir / "run_i18n_refresh.sh").write_text(
+                "\n".join(
+                    [
+                        "#!/usr/bin/env bash",
+                        "set -euo pipefail",
+                        'repo_root="$(git rev-parse --show-toplevel)"',
+                        'common_dir="$(git rev-parse --git-common-dir)"',
+                        'if [[ ! -f "${repo_root}/.dart_tool/package_config.json" ]]; then',
+                        '  echo missing-package-config >&2',
+                        "  exit 9",
+                        "fi",
+                        'mkdir -p "${repo_root}/lib/i18n"',
+                        'printf \'// generated\\n\' > "${repo_root}/lib/i18n/strings.g.dart"',
+                        'printf \'refresh:%s\\n\' "${repo_root}" >> "${common_dir}/package-config.log"',
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            self._make_executable(scripts_dir / "run_i18n_refresh.sh")
+
+            (scripts_dir / "run_flutter_test_shard.sh").write_text(
+                "\n".join(
+                    [
+                        "#!/usr/bin/env bash",
+                        "set -euo pipefail",
+                        'repo_root="$(git rev-parse --show-toplevel)"',
+                        'common_dir="$(git rev-parse --git-common-dir)"',
+                        'if [[ ! -f "${repo_root}/.dart_tool/package_config.json" ]]; then',
+                        '  echo missing-package-config >&2',
+                        "  exit 11",
+                        "fi",
+                        'printf \'shard:%s\\n\' "${repo_root}" >> "${common_dir}/package-config.log"',
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            self._make_executable(scripts_dir / "run_flutter_test_shard.sh")
+
+            (hooks_dir / "pre-commit").write_text(
+                "#!/usr/bin/env bash\nset -euo pipefail\nexit 0\n",
+                encoding="utf-8",
+            )
+            self._make_executable(hooks_dir / "pre-commit")
+
+            self._commit_all(repo_root, "fixture")
+
+            result = subprocess.run(
+                ["bash", "scripts/run_flutter_ci_local.sh"],
+                cwd=repo_root,
+                check=False,
+                capture_output=True,
+                text=True,
+                env={
+                    **os.environ,
+                    "SECONDLOOP_LOCAL_FLUTTER_TEST_SHARDS": "2",
+                },
+            )
+
+            self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+            flutter_log = (repo_root / ".git/flutter.log").read_text(encoding="utf-8").splitlines()
+            self.assertEqual(sum("|pub get" in line for line in flutter_log), 1)
+            package_config_log = (repo_root / ".git/package-config.log").read_text(encoding="utf-8").splitlines()
+            self.assertEqual(len([line for line in package_config_log if line.startswith("refresh:")]), 1)
+            self.assertEqual(len([line for line in package_config_log if line.startswith("shard:")]), 2)
+
+    def test_rust_builder_package_tests_run_pub_get_before_dart_test(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            repo_root = Path(temp_dir)
+            self._init_repo(repo_root, "main")
+
+            scripts_dir = repo_root / "scripts"
+            rust_builder_test_dir = repo_root / "rust_builder/cargokit/build_tool/test"
+            rust_builder_package_dir = repo_root / "rust_builder/cargokit/build_tool"
+            fake_bin_dir = repo_root / "fake-bin"
+            scripts_dir.mkdir(parents=True, exist_ok=True)
+            rust_builder_test_dir.mkdir(parents=True, exist_ok=True)
+            fake_bin_dir.mkdir(parents=True, exist_ok=True)
+
+            (rust_builder_package_dir / "pubspec.yaml").write_text(
+                "name: build_tool\n",
+                encoding="utf-8",
+            )
+            (rust_builder_test_dir / "builder_sqlite_cleanup_test.dart").write_text(
+                "// stub\n",
+                encoding="utf-8",
+            )
+
+            (scripts_dir / "run_rust_builder_package_tests.sh").write_text(
+                RUN_RUST_BUILDER_PACKAGE_TESTS.read_text(encoding="utf-8"),
+                encoding="utf-8",
+            )
+            self._make_executable(scripts_dir / "run_rust_builder_package_tests.sh")
+
+            (scripts_dir / "pre_commit_common.sh").write_text(
+                "\n".join(
+                    [
+                        "die() {",
+                        "  echo \"pre-commit: $*\" >&2",
+                        "  exit 1",
+                        "}",
+                        "",
+                        f"resolve_dart_bin() {{ printf '%s\\n' \"{(fake_bin_dir / 'dart').as_posix()}\"; }}",
+                        "run_dart_tool() {",
+                        "  local dart_bin",
+                        "  dart_bin=\"$(resolve_dart_bin)\"",
+                        "  env -u GIT_DIR -u GIT_WORK_TREE -u GIT_INDEX_FILE \"${dart_bin}\" \"$@\"",
+                        "}",
+                        "run_with_periodic_status() {",
+                        "  local _label=\"$1\"",
+                        "  shift",
+                        "  \"$@\"",
+                        "}",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            (fake_bin_dir / "dart").write_text(
+                "\n".join(
+                    [
+                        "#!/usr/bin/env bash",
+                        "set -euo pipefail",
+                        'repo_root="$(git rev-parse --show-toplevel)"',
+                        'if [[ "$1" == "pub" && "${2:-}" == "get" ]]; then',
+                        '  printf \'pub-get\\n\' >> "${repo_root}/dart.log"',
+                        '  printf \'ok\\n\' > "${repo_root}/rust_builder/cargokit/build_tool/.packages-ready"',
+                        "  exit 0",
+                        "fi",
+                        'if [[ "$1" == "test" ]]; then',
+                        '  if [[ ! -f "${repo_root}/rust_builder/cargokit/build_tool/.packages-ready" ]]; then',
+                        '    echo missing-pub-get >&2',
+                        "    exit 7",
+                        "  fi",
+                        '  printf \'test\\n\' >> "${repo_root}/dart.log"',
+                        "  exit 0",
+                        "fi",
+                        "exit 0",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            self._make_executable(fake_bin_dir / "dart")
+
+            self._commit_all(repo_root, "fixture")
+
+            result = self._run(
+                ["bash", "scripts/run_rust_builder_package_tests.sh"],
+                cwd=repo_root,
+            )
+
+            self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+            self.assertEqual(
+                (repo_root / "dart.log").read_text(encoding="utf-8").splitlines(),
+                ["pub-get", "test"],
+            )
+
     def test_flutter_test_shard_fails_when_selector_script_fails(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             repo_root = Path(temp_dir)
@@ -868,7 +1108,9 @@ class ScopedCiScriptBehaviorTests(unittest.TestCase):
             ).read_text(encoding="utf-8").splitlines()
 
             self.assertTrue(dart_invocations)
-            self.assertEqual(len(flutter_invocations), 1)
+            self.assertEqual(len(flutter_invocations), 2)
+            self.assertTrue(any(line.endswith("|pub get") for line in flutter_invocations))
+            self.assertTrue(any("test --concurrency=1 test/sample_test.dart" in line for line in flutter_invocations))
             self.assertTrue(
                 all(not line.startswith(f"{repo_root.as_posix()}|") for line in dart_invocations)
             )
