@@ -104,6 +104,10 @@ function Build-DartDefines {
     $defines += "--dart-define=SECONDLOOP_UPDATE_PUBLIC_KEY=$($env:SECONDLOOP_UPDATE_PUBLIC_KEY)"
   }
 
+  if (Test-Path Env:SECONDLOOP_ALLOW_HTTP_UPDATE_URIS) {
+    $defines += "--dart-define=SECONDLOOP_ALLOW_HTTP_UPDATE_URIS=$($env:SECONDLOOP_ALLOW_HTTP_UPDATE_URIS)"
+  }
+
   return $defines
 }
 

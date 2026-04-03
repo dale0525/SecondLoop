@@ -11,11 +11,37 @@ from http.server import ThreadingHTTPServer
 from tools.windows_https_update_server import (
     UpdateFeedHandler,
     ensure_server_root_is_complete,
+    parse_args,
     resolve_request_path,
 )
 
 
 class WindowsHttpsUpdateServerPathTests(unittest.TestCase):
+    def test_parse_args_allows_http_mode_without_certificates(self) -> None:
+        parsed = parse_args(
+            [
+                "--root",
+                "C:/tmp/server-root",
+                "--scheme",
+                "http",
+            ]
+        )
+
+        self.assertEqual(parsed.scheme, "http")
+        self.assertIsNone(parsed.cert)
+        self.assertIsNone(parsed.key)
+
+    def test_parse_args_requires_certificates_for_https_mode(self) -> None:
+        with self.assertRaises(SystemExit):
+            parse_args(
+                [
+                    "--root",
+                    "C:/tmp/server-root",
+                    "--scheme",
+                    "https",
+                ]
+            )
+
     def test_resolve_request_path_keeps_downloads_within_download_root(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)

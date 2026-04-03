@@ -63,8 +63,26 @@ class WindowsAutoUpdateSmokeTests(unittest.TestCase):
     def test_smoke_script_quotes_app_name_argument_when_starting_https_server(self) -> None:
         script = SMOKE_SCRIPT.read_text(encoding="utf-8")
 
-        self.assertIn("'--app-name', ('\"{0}\"' -f $AppName)", script)
-        self.assertNotIn("'--app-name', $AppName", script)
+        self.assertIn("function ConvertTo-StartProcessArgumentString", script)
+        self.assertIn("$argumentString = ConvertTo-StartProcessArgumentString -Arguments @(", script)
+        self.assertIn("'--app-name', $AppName", script)
+        self.assertNotIn("'--app-name', ('\"{0}\"' -f $AppName)", script)
+
+    def test_smoke_script_defaults_to_http_local_feed_and_allows_http_update_uris(self) -> None:
+        script = SMOKE_SCRIPT.read_text(encoding="utf-8")
+
+        self.assertIn("[ValidateSet('http', 'https')]", script)
+        self.assertIn("[string]$FeedProtocol = 'http'", script)
+        self.assertIn("$env:SECONDLOOP_ALLOW_HTTP_UPDATE_URIS = 'true'", script)
+        self.assertIn('$env:SECONDLOOP_RELEASE_API_ORIGIN = "${FeedProtocol}://localhost:$Port"', script)
+
+    def test_smoke_script_only_requires_certificate_when_https_feed_selected(self) -> None:
+        script = SMOKE_SCRIPT.read_text(encoding="utf-8")
+
+        self.assertIn("if ($FeedProtocol -eq 'https') {", script)
+        self.assertIn('throw "Missing certificate PEM: $certificatePem"', script)
+        self.assertIn('throw "Missing certificate key: $certificateKey"', script)
+        self.assertNotIn("SkipCertificateTrust cannot be used", script)
 
     def test_smoke_script_targets_exact_channel_versioned_full_package(self) -> None:
         script = SMOKE_SCRIPT.read_text(encoding="utf-8")
@@ -151,7 +169,8 @@ class WindowsAutoUpdateSmokeTests(unittest.TestCase):
         self.assertIn("tools/windows_https_update_server.py", script)
         self.assertIn("'--windows-app-id', $PackId", script)
         self.assertIn("'--windows-channel', $Channel", script)
-        self.assertIn("'--app-name', ('\"{0}\"' -f $AppName)", script)
+        self.assertIn("'--app-name', $AppName", script)
+        self.assertIn("'--scheme', $FeedProtocol", script)
         self.assertNotIn("'--package', $packageFile.FullName", script)
         self.assertNotIn("Start-ObservedProcess -FilePath $updateExe", script)
 
@@ -172,6 +191,7 @@ class WindowsAutoUpdateSmokeTests(unittest.TestCase):
         self.assertIn("function Remove-TrustedCertificateByThumbprint", script)
         self.assertIn("Remove-TrustedCertificateByThumbprint -Thumbprint $trustedCertificateThumbprint", script)
         self.assertIn("SECONDLOOP_UPDATE_SIGNING_PRIVATE_KEY", script)
+        self.assertIn("SECONDLOOP_ALLOW_HTTP_UPDATE_URIS", script)
         self.assertIn("Set-Item -Path Env:SECONDLOOP_UPDATE_PUBLIC_KEY -Value $originalUpdatePublicKey", script)
 
     def test_smoke_script_uses_x509store_for_current_user_root_certificate_management(self) -> None:
@@ -214,11 +234,10 @@ class WindowsAutoUpdateSmokeTests(unittest.TestCase):
             script,
         )
 
-    def test_smoke_script_rejects_skip_certificate_trust_mode(self) -> None:
+    def test_smoke_script_does_not_require_certificate_skip_mode_with_http_feed(self) -> None:
         script = SMOKE_SCRIPT.read_text(encoding="utf-8")
 
-        self.assertIn("SkipCertificateTrust cannot be used", script)
-        self.assertNotIn("Skipping localhost certificate trust step.", script)
+        self.assertNotIn("SkipCertificateTrust cannot be used", script)
 
     def test_smoke_script_generates_and_uses_temporary_manifest_signing_keys(self) -> None:
         script = SMOKE_SCRIPT.read_text(encoding="utf-8")
@@ -246,7 +265,7 @@ class WindowsAutoUpdateSmokeTests(unittest.TestCase):
     def test_smoke_script_fails_fast_when_https_server_exits_early(self) -> None:
         script = SMOKE_SCRIPT.read_text(encoding="utf-8")
 
-        self.assertIn("HTTPS update server exited early.", script)
+        self.assertIn("Update server exited early.", script)
         self.assertIn("$process.HasExited", script)
 
     def test_https_server_exposes_latest_release_endpoint(self) -> None:

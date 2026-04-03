@@ -4,6 +4,8 @@ param(
   [ValidateSet('com.secondloop.secondloop', 'com.secondloop.secondloopdev')]
   [string]$PackId = 'com.secondloop.secondloopdev',
   [string]$Channel = 'devwin',
+  [ValidateSet('http', 'https')]
+  [string]$FeedProtocol = 'http',
   [string]$AppName = '',
   [string]$ExeName = 'secondloop.exe',
   [int]$Port = 8443,
@@ -16,10 +18,6 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-
-if ($SkipCertificateTrust) {
-  throw 'SkipCertificateTrust cannot be used because the smoke test requires trusting the local HTTPS certificate for both feed probing and app update verification.'
-}
 
 . (Join-Path $PSScriptRoot 'use_windows_short_workspace.ps1')
 
@@ -66,6 +64,26 @@ function Write-Utf8NoBomFile {
 
   $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
   [System.IO.File]::WriteAllText($Path, $Content, $utf8NoBom)
+}
+
+function ConvertTo-StartProcessArgumentString {
+  param([string[]]$Arguments)
+
+  $quotedArguments = foreach ($argument in $Arguments) {
+    if ($null -eq $argument -or $argument -eq '') {
+      '""'
+      continue
+    }
+
+    $escaped = $argument.Replace('"', '\"')
+    if ($escaped -match '[\s"]') {
+      '"' + $escaped + '"'
+    } else {
+      $escaped
+    }
+  }
+
+  return ($quotedArguments -join ' ')
 }
 
 function Get-PixiPythonPath {
@@ -164,7 +182,8 @@ function Invoke-PackageBuild {
 
   $env:SECONDLOOP_APP_ID = $PackId
   $env:SECONDLOOP_APP_NAME = $AppName
-  $env:SECONDLOOP_RELEASE_API_ORIGIN = "https://localhost:$Port"
+  $env:SECONDLOOP_RELEASE_API_ORIGIN = "${FeedProtocol}://localhost:$Port"
+  $env:SECONDLOOP_ALLOW_HTTP_UPDATE_URIS = 'true'
 
   $packageArgs = @(
     '-NoProfile',
@@ -464,6 +483,8 @@ function Remove-TrustedCertificateByThumbprint {
 function Start-UpdateFeedServer {
   param(
     [string]$ServerRoot,
+    [ValidateSet('http', 'https')]
+    [string]$FeedProtocol,
     [string]$CertificatePath,
     [string]$KeyPath,
     [int]$ListenPort,
@@ -476,28 +497,40 @@ function Start-UpdateFeedServer {
   $stdoutPath = Join-Path $SmokeRoot 'https-server.out.log'
   $stderrPath = Join-Path $SmokeRoot 'https-server.err.log'
 
-  Write-Host "Starting local HTTPS update server on https://localhost:$ListenPort"
-  $process = Start-Process -FilePath $pythonPath -ArgumentList @(
+  $serverArgs = @(
     $serverScript,
+    '--scheme', $FeedProtocol,
     '--root', $ServerRoot,
-    '--cert', $CertificatePath,
-    '--key', $KeyPath,
     '--port', $ListenPort.ToString(),
-    '--app-name', ('"{0}"' -f $AppName)
-  ) -WorkingDirectory $repoRootPath -PassThru -RedirectStandardOutput $stdoutPath -RedirectStandardError $stderrPath
+    '--app-name', $AppName
+  )
+  if ($FeedProtocol -eq 'https') {
+    $serverArgs += @(
+      '--cert', $CertificatePath,
+      '--key', $KeyPath
+    )
+  }
+
+  $argumentString = ConvertTo-StartProcessArgumentString -Arguments @($serverArgs)
+  Write-Host "Starting local $($FeedProtocol.ToUpperInvariant()) update server on ${FeedProtocol}://localhost:$ListenPort"
+  $process = Start-Process -FilePath $pythonPath -ArgumentList $argumentString -WorkingDirectory $repoRootPath -PassThru -RedirectStandardOutput $stdoutPath -RedirectStandardError $stderrPath
 
   Start-Sleep -Seconds 2
   if ($process.HasExited) {
-    throw "HTTPS update server exited early. Check $stdoutPath and $stderrPath"
+    throw "Update server exited early. Check $stdoutPath and $stderrPath"
   }
 
   return $process
 }
 
 function Wait-ForLatestEndpoint {
-  param([int]$ListenPort)
+  param(
+    [ValidateSet('http', 'https')]
+    [string]$FeedProtocol,
+    [int]$ListenPort
+  )
 
-  $endpoint = "https://localhost:$ListenPort/api/releases/latest"
+  $endpoint = "${FeedProtocol}://localhost:$ListenPort/api/releases/latest"
   $deadline = (Get-Date).AddSeconds(30)
   while ((Get-Date) -lt $deadline) {
     try {
@@ -526,12 +559,15 @@ $serverRoot = Join-Path $smokeRoot 'server-root'
 $downloadsRoot = Join-Path $serverRoot 'downloads'
 $certificatePem = if ([System.IO.Path]::IsPathRooted($CertificatePemPath)) { $CertificatePemPath } else { Join-Path $repoRootPath $CertificatePemPath }
 $certificateKey = if ([System.IO.Path]::IsPathRooted($CertificateKeyPath)) { $CertificateKeyPath } else { Join-Path $repoRootPath $CertificateKeyPath }
+$feedOrigin = "${FeedProtocol}://localhost:$Port"
 
-if (-not (Test-Path -LiteralPath $certificatePem -PathType Leaf)) {
-  throw "Missing certificate PEM: $certificatePem"
-}
-if (-not (Test-Path -LiteralPath $certificateKey -PathType Leaf)) {
-  throw "Missing certificate key: $certificateKey"
+if ($FeedProtocol -eq 'https') {
+  if (-not (Test-Path -LiteralPath $certificatePem -PathType Leaf)) {
+    throw "Missing certificate PEM: $certificatePem"
+  }
+  if (-not (Test-Path -LiteralPath $certificateKey -PathType Leaf)) {
+    throw "Missing certificate key: $certificateKey"
+  }
 }
 
 $feedProcess = $null
@@ -547,6 +583,8 @@ $originalUpdatePublicKey = $null
 $hadOriginalUpdatePublicKey = Test-Path Env:SECONDLOOP_UPDATE_PUBLIC_KEY
 $originalUpdateSigningPrivateKey = $null
 $hadOriginalUpdateSigningPrivateKey = Test-Path Env:SECONDLOOP_UPDATE_SIGNING_PRIVATE_KEY
+$originalAllowHttpUpdateUris = $null
+$hadOriginalAllowHttpUpdateUris = Test-Path Env:SECONDLOOP_ALLOW_HTTP_UPDATE_URIS
 $wasCertificateTrustedBefore = $false
 
 try {
@@ -566,6 +604,9 @@ try {
   }
   if ($hadOriginalUpdateSigningPrivateKey) {
     $originalUpdateSigningPrivateKey = $env:SECONDLOOP_UPDATE_SIGNING_PRIVATE_KEY
+  }
+  if ($hadOriginalAllowHttpUpdateUris) {
+    $originalAllowHttpUpdateUris = $env:SECONDLOOP_ALLOW_HTTP_UPDATE_URIS
   }
 
   if ($SkipBuild) {
@@ -616,17 +657,19 @@ try {
     '--windows-app-id', $PackId,
     '--windows-channel', $Channel,
     '--signing-private-key', $env:SECONDLOOP_UPDATE_SIGNING_PRIVATE_KEY,
-    '--base-download-url', "https://localhost:$Port/downloads",
-    '--release-page-url', "https://localhost:$Port/releases/$newVersionName"
+    '--base-download-url', "$feedOrigin/downloads",
+    '--release-page-url', "$feedOrigin/releases/$newVersionName"
   )
   Invoke-CheckedProcess -FilePath 'powershell.exe' -ArgumentList $manifestArgs -FailureMessage 'Failed to generate latest.json for smoke feed.'
 
-  $wasCertificateTrustedBefore = Test-CertificateTrustedInCurrentUserRoot -Thumbprint (Get-CertificateThumbprint -PemPath $certificatePem)
-  $trustedCertificateThumbprint = Ensure-LocalhostCertificateTrusted -PemPath $certificatePem
-  $certificateTrustAddedByScript = -not $wasCertificateTrustedBefore
-  $feedProcess = Start-UpdateFeedServer -ServerRoot $serverRoot -CertificatePath $certificatePem -KeyPath $certificateKey -ListenPort $Port -SmokeRoot $smokeRoot -AppName $AppName
+  if ($FeedProtocol -eq 'https' -and -not $SkipCertificateTrust) {
+    $wasCertificateTrustedBefore = Test-CertificateTrustedInCurrentUserRoot -Thumbprint (Get-CertificateThumbprint -PemPath $certificatePem)
+    $trustedCertificateThumbprint = Ensure-LocalhostCertificateTrusted -PemPath $certificatePem
+    $certificateTrustAddedByScript = -not $wasCertificateTrustedBefore
+  }
+  $feedProcess = Start-UpdateFeedServer -ServerRoot $serverRoot -FeedProtocol $FeedProtocol -CertificatePath $certificatePem -KeyPath $certificateKey -ListenPort $Port -SmokeRoot $smokeRoot -AppName $AppName
 
-  $latestManifest = Wait-ForLatestEndpoint -ListenPort $Port
+  $latestManifest = Wait-ForLatestEndpoint -FeedProtocol $FeedProtocol -ListenPort $Port
   Write-Host "Update feed version: $($latestManifest.version)"
 
   Remove-ExistingInstallRoot
@@ -691,6 +734,12 @@ try {
     Set-Item -Path Env:SECONDLOOP_UPDATE_SIGNING_PRIVATE_KEY -Value $originalUpdateSigningPrivateKey
   } else {
     Remove-Item Env:SECONDLOOP_UPDATE_SIGNING_PRIVATE_KEY -ErrorAction SilentlyContinue
+  }
+
+  if ($hadOriginalAllowHttpUpdateUris) {
+    Set-Item -Path Env:SECONDLOOP_ALLOW_HTTP_UPDATE_URIS -Value $originalAllowHttpUpdateUris
+  } else {
+    Remove-Item Env:SECONDLOOP_ALLOW_HTTP_UPDATE_URIS -ErrorAction SilentlyContinue
   }
 
   if ($null -ne $feedProcess -and -not $LeaveServerRunning) {

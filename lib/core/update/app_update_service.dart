@@ -33,6 +33,10 @@ const _defaultUpdatePublicKey = String.fromEnvironment(
   'SECONDLOOP_UPDATE_PUBLIC_KEY',
   defaultValue: '',
 );
+const _defaultAllowHttpUpdateUris = bool.fromEnvironment(
+  'SECONDLOOP_ALLOW_HTTP_UPDATE_URIS',
+  defaultValue: false,
+);
 const _defaultUpdateNetworkTimeout = Duration(seconds: 15);
 
 typedef AppUpdateReleaseJsonFetcher = Future<Map<String, Object?>> Function(
@@ -107,7 +111,8 @@ class AppUpdateService {
       _networkTimeoutOverride ?? _defaultUpdateNetworkTimeout;
   Uri get fallbackReleasePageUri => _buildFallbackReleasePageUri();
   bool get _allowHttpUpdateUris =>
-      _allowHttpUpdateUriOverride ?? !_isReleaseMode;
+      _allowHttpUpdateUriOverride ??
+      (_defaultAllowHttpUpdateUris || !_isReleaseMode);
   bool get _allowFileUpdateUris =>
       _allowFileUpdateUriOverride ?? !_isReleaseMode;
   String get _currentArchitecture => normalizeArchitectureLabel(

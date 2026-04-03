@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import ssl
+from collections.abc import Sequence
 from http import HTTPStatus
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -170,24 +171,31 @@ class UpdateFeedHandler(SimpleHTTPRequestHandler):
         self._handle_request(include_body=False)
 
 
-def parse_args() -> argparse.Namespace:
+def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Serve a local HTTPS update feed for Windows auto-update smoke tests.",
+        description="Serve a local HTTP(S) update feed for Windows auto-update smoke tests.",
     )
     parser.add_argument("--root", required=True, help="Root directory containing downloads/latest.json")
-    parser.add_argument("--cert", required=True, help="TLS certificate PEM path")
-    parser.add_argument("--key", required=True, help="TLS private key path")
+    parser.add_argument(
+        "--scheme",
+        choices=("http", "https"),
+        default="https",
+        help="Whether to serve plain HTTP or HTTPS.",
+    )
+    parser.add_argument("--cert", help="TLS certificate PEM path")
+    parser.add_argument("--key", help="TLS private key path")
     parser.add_argument("--host", default="localhost", help="Bind host")
     parser.add_argument("--port", type=int, default=8443, help="Bind port")
     parser.add_argument("--app-name", default="SecondLoop", help="Release page app name")
-    return parser.parse_args()
+    parsed = parser.parse_args(argv)
+    if parsed.scheme == "https" and (not parsed.cert or not parsed.key):
+        parser.error("--cert and --key are required when --scheme=https")
+    return parsed
 
 
 def main() -> None:
     args = parse_args()
     root = Path(args.root).resolve()
-    cert_path = Path(args.cert).resolve()
-    key_path = Path(args.key).resolve()
 
     ensure_server_root_is_complete(root)
 
@@ -195,12 +203,15 @@ def main() -> None:
     server.root_dir = str(root)  # type: ignore[attr-defined]
     server.app_name = args.app_name  # type: ignore[attr-defined]
 
-    context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
-    context.load_cert_chain(certfile=str(cert_path), keyfile=str(key_path))
-    server.socket = context.wrap_socket(server.socket, server_side=True)
+    if args.scheme == "https":
+        cert_path = Path(args.cert).resolve()
+        key_path = Path(args.key).resolve()
+        context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+        context.load_cert_chain(certfile=str(cert_path), keyfile=str(key_path))
+        server.socket = context.wrap_socket(server.socket, server_side=True)
 
     print(
-        f"HTTPS update server listening on https://{args.host}:{args.port}",
+        f"{args.scheme.upper()} update server listening on {args.scheme}://{args.host}:{args.port}",
         flush=True,
     )
     server.serve_forever()
