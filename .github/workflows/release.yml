@@ -206,16 +206,32 @@ jobs:
           export BINDGEN_EXTRA_CLANG_ARGS_armv7_linux_androideabi="--sysroot=${ndk_sysroot} --target=armv7a-linux-androideabi23"
           export BINDGEN_EXTRA_CLANG_ARGS_aarch64_linux_android="--sysroot=${ndk_sysroot} --target=aarch64-linux-android23"
 
+          bash scripts/build_android_release_apk.sh --split-per-abi "${build_args[@]}" "${defines[@]}"
           bash scripts/build_android_release_apk.sh "${build_args[@]}" "${defines[@]}"
       - name: Package
         shell: bash
         run: |
+          set -euo pipefail
           mkdir -p dist
           safe_ref_name="$(printf "%s" "${GITHUB_REF_NAME}" | sed -E "s/[^[:alnum:]._-]+/-/g; s/^-+//; s/-+$//")"
           if [[ -z "${safe_ref_name}" ]]; then
             safe_ref_name="run-${GITHUB_RUN_ID}"
           fi
-          cp build/app/outputs/flutter-apk/app-release.apk "dist/SecondLoop-android-${safe_ref_name}.apk"
+
+          declare -A abi_outputs=(
+            [armeabi-v7a]="build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk"
+            [arm64-v8a]="build/app/outputs/flutter-apk/app-arm64-v8a-release.apk"
+            [universal]="build/app/outputs/flutter-apk/app-release.apk"
+          )
+
+          for abi in "${!abi_outputs[@]}"; do
+            source_path="${abi_outputs[$abi]}"
+            if [[ ! -f "${source_path}" ]]; then
+              echo "Android split APK not found: ${source_path}"
+              exit 1
+            fi
+            cp "${source_path}" "dist/SecondLoop-android-${abi}-${safe_ref_name}.apk"
+          done
       - uses: actions/upload-artifact@v4
         with:
           name: android

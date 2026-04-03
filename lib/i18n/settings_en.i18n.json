@@ -663,6 +663,7 @@
       "checking": "Checking for updates…",
       "upToDate": "You're on the latest version.",
       "availableSeamless": "Update available ($version). You can auto-update and restart.",
+      "availableAndroidApk": "Update available ($version). Download in-app and continue with the installer.",
       "availableStaged": "Update available ($version). Prepare in background and apply next launch.",
       "availableExternal": "Update available ($version). Download the installer or open the release page manually.",
       "failed": "Update check failed: $error"
@@ -687,6 +688,18 @@
       "openHomepageFailed": "Could not open project homepage",
       "openUpdateFailed": "Could not open update page"
     }
+  },
+  "updateDialog": {
+    "title": "Update available: $version",
+    "message": "A newer Android version is available. You can download and install it now.",
+    "updateNow": "Update",
+    "downloading": "Downloading update…",
+    "installing": "Opening installer…",
+    "downloadProgress": "Downloaded: $percent%",
+    "downloadProgressUnknown": "Downloading…",
+    "permissionRequired": "Allow installs from this app in system settings, then try again.",
+    "downloadFailed": "Failed to download or open the installer.",
+    "releaseNotesUnavailable": "Release notes are temporarily unavailable."
   },
   "updateNotice": {
     "stagedReady": "New version $version is ready and will apply on next launch.",

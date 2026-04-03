@@ -26,6 +26,7 @@ typedef PendingApplyAttemptWriter = void Function(
   DateTime? startedAtUtc,
   int? updaterPid,
 });
+typedef VelopackWarningLogger = void Function(String message);
 
 const _windowsProcessProbeShellCandidates = <String>[
   'powershell.exe',
@@ -142,12 +143,14 @@ class VelopackUpdateClient implements WindowsStagedUpdateClient {
     VelopackProcessRunner? processRunner,
     VelopackProcessProbe? processProbe,
     PendingApplyAttemptWriter? pendingApplyAttemptWriter,
+    VelopackWarningLogger? warningLogger,
   })  : _updateExecutablePath = updateExecutablePath,
         _appId = appId,
         _processStarter = processStarter ?? _defaultProcessStarter,
         _now = now ?? DateTime.now,
         _pendingApplyAttemptWriter =
             pendingApplyAttemptWriter ?? _writePendingApplyAttempt,
+        _warningLogger = warningLogger ?? _defaultWarningLogger,
         _processProbe = processProbe ??
             ((pid, {required expectedExecutablePath}) => _probeProcessStatus(
                   pid,
@@ -160,6 +163,7 @@ class VelopackUpdateClient implements WindowsStagedUpdateClient {
   final VelopackProcessStarter _processStarter;
   final VelopackNowProvider _now;
   final PendingApplyAttemptWriter _pendingApplyAttemptWriter;
+  final VelopackWarningLogger _warningLogger;
   final VelopackProcessProbe _processProbe;
 
   String get _updateExePath =>
@@ -385,6 +389,7 @@ class VelopackUpdateClient implements WindowsStagedUpdateClient {
       updateExecutablePath: updateExePath,
       packageFileName: packageFile.uri.pathSegments.last,
       appId: _resolvedAppId,
+      warningLogger: _warningLogger,
     );
     return packageFile;
   }
@@ -880,6 +885,7 @@ class VelopackUpdateClient implements WindowsStagedUpdateClient {
     required String updateExecutablePath,
     required String packageFileName,
     required String appId,
+    required VelopackWarningLogger warningLogger,
   }) {
     final channel = _extractChannelFromNupkgName(
       packageFileName,
@@ -899,7 +905,12 @@ class VelopackUpdateClient implements WindowsStagedUpdateClient {
 
     try {
       releasesMetadataFile.writeAsStringSync('{}');
-    } catch (_) {}
+    } catch (error) {
+      warningLogger(
+        'Warning: could not write channel metadata '
+        '${releasesMetadataFile.path}: $error',
+      );
+    }
   }
 
   static String? _extractChannelFromNupkgName(
@@ -1086,6 +1097,10 @@ class VelopackUpdateClient implements WindowsStagedUpdateClient {
     List<String> arguments,
   ) {
     return Process.run(executable, arguments);
+  }
+
+  static void _defaultWarningLogger(String message) {
+    stderr.writeln(message);
   }
 }
 

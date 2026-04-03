@@ -401,6 +401,35 @@ void main() {
     );
   });
 
+  test('stageAsset logs metadata write failures for channel packages',
+      () async {
+    final root =
+        await Directory.systemTemp.createTemp('velopack_stage_channel_log_');
+    final updater = File('${root.path}${Platform.pathSeparator}Update.exe')
+      ..writeAsStringSync('stub');
+    _writeSqVersion(root, '1.0.0');
+    final sourceDir = Directory('${root.path}${Platform.pathSeparator}source')
+      ..createSync(recursive: true);
+    final sourcePackage = File(
+      '${sourceDir.path}${Platform.pathSeparator}com.secondloop.secondloopdev-1.2.0-devwin-full.nupkg',
+    )..writeAsStringSync('nupkg-content');
+    Directory('${root.path}${Platform.pathSeparator}releases.devwin.json')
+        .createSync(recursive: true);
+    final warnings = <String>[];
+
+    final client = VelopackUpdateClient(
+      updateExecutablePath: updater.path,
+      appId: 'com.secondloop.secondloopdev',
+      warningLogger: warnings.add,
+    );
+
+    await client.stageAsset(sourcePackage.uri);
+
+    expect(warnings, hasLength(1));
+    expect(warnings.single, contains('releases.devwin.json'));
+    expect(client.hasPendingUpdate(), isFalse);
+  });
+
   test(
       'stageAsset preserves existing package when source already matches target',
       () async {

@@ -33,7 +33,6 @@ import io.flutter.plugin.common.MethodCall
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
-import java.io.File
 import kotlin.math.abs
 
 private const val kAudioTranscodeDurationDriftToleranceRatio = 0.08
@@ -50,6 +49,7 @@ class MainActivity : FlutterFragmentActivity() {
   private var videoTranscodeChannel: MethodChannel? = null
   private var ocrChannel: MethodChannel? = null
   private var markdownPdfExportChannel: MethodChannel? = null
+  private var androidUpdateChannel: MethodChannel? = null
   private val ocrAndPdfChannelHandler by lazy {
     OcrAndPdfChannelHandler(cacheDir = cacheDir)
   }
@@ -61,6 +61,9 @@ class MainActivity : FlutterFragmentActivity() {
       activity = this,
       cacheDir = cacheDir,
     )
+  }
+  private val androidUpdateChannelHandler by lazy {
+    AndroidUpdateChannelHandler(activity = this)
   }
 
   private var pendingMediaLocationPermissionResult: MethodChannel.Result? = null
@@ -264,6 +267,18 @@ class MainActivity : FlutterFragmentActivity() {
       MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "secondloop/markdown_pdf_export").apply {
         setMethodCallHandler { call, result ->
           markdownPdfExportChannelHandler.handle(call, result)
+        }
+      }
+
+    androidUpdateChannel =
+      MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "secondloop/android_update").apply {
+        setMethodCallHandler { call, result ->
+          val handled = androidUpdateChannelHandler.handle(call)
+          if (handled != null) {
+            result.success(handled)
+          } else {
+            result.notImplemented()
+          }
         }
       }
   }
@@ -505,7 +520,7 @@ class MainActivity : FlutterFragmentActivity() {
     }
   }
 
-  private fun settingsIntent(action: String): Intent {
+  internal fun settingsIntent(action: String): Intent {
     return Intent(action).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
   }
 

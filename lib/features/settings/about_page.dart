@@ -1,9 +1,12 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../core/update/android/android_apk_installer.dart';
+import '../../core/update/android/android_apk_update_coordinator.dart';
 import '../../core/update/app_update_service.dart';
 import '../../core/update/update_badge_prefs.dart';
 import '../../i18n/strings.g.dart';
@@ -17,6 +20,9 @@ class AboutPage extends StatefulWidget {
     this.updateService,
     this.runtimeVersionLoader,
     this.externalUriLauncher,
+    this.androidApkDownloader,
+    this.androidApkInstaller,
+    this.enableAndroidApkInstallInDebug = false,
   });
 
   static final Uri homepageUri = Uri.parse('https://secondloop.app');
@@ -26,6 +32,9 @@ class AboutPage extends StatefulWidget {
   final AppUpdateService? updateService;
   final AboutRuntimeVersionLoader? runtimeVersionLoader;
   final AboutExternalUriLauncher? externalUriLauncher;
+  final AndroidApkDownloader? androidApkDownloader;
+  final AndroidApkInstaller? androidApkInstaller;
+  final bool enableAndroidApkInstallInDebug;
 
   @override
   State<AboutPage> createState() => _AboutPageState();
@@ -34,14 +43,24 @@ class AboutPage extends StatefulWidget {
 class _AboutPageState extends State<AboutPage> {
   bool _checkingUpdate = false;
   bool _updating = false;
+  bool _androidUpdateCancelling = false;
+  AndroidApkDownloadProgress? _androidDownloadProgress;
+  String? _androidUpdateError;
+  AndroidApkDownloadCancelToken? _androidDownloadCancelToken;
 
   AppRuntimeVersion? _runtimeVersion;
   AppUpdateCheckResult? _updateResult;
 
   late final AppUpdateService _updateService;
   AppUpdateService? _ownedUpdateService;
+  late final AndroidApkDownloader _androidApkDownloader;
+  AndroidApkDownloader? _ownedAndroidApkDownloader;
+  late final AndroidApkInstaller _androidApkInstaller;
+  late final AndroidApkUpdateCoordinator _androidApkUpdateCoordinator;
 
   _AboutText get _text => _AboutText.of(context);
+  bool get _isAndroidPlatform =>
+      !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
 
   @override
   void initState() {
@@ -56,12 +75,32 @@ class _AboutPageState extends State<AboutPage> {
       _ownedUpdateService = owned;
     }
 
+    final providedDownloader = widget.androidApkDownloader;
+    if (providedDownloader != null) {
+      _androidApkDownloader = providedDownloader;
+    } else {
+      final owned = HttpAndroidApkDownloader();
+      _androidApkDownloader = owned;
+      _ownedAndroidApkDownloader = owned;
+    }
+    _androidApkInstaller =
+        widget.androidApkInstaller ?? MethodChannelAndroidApkInstaller();
+    _androidApkUpdateCoordinator = AndroidApkUpdateCoordinator(
+      downloader: _androidApkDownloader,
+      installer: _androidApkInstaller,
+    );
+
     unawaited(_loadRuntimeVersion());
   }
 
   @override
   void dispose() {
+    _androidDownloadCancelToken?.cancel();
     _ownedUpdateService?.dispose();
+    final ownedDownloader = _ownedAndroidApkDownloader;
+    if (ownedDownloader is HttpAndroidApkDownloader) {
+      unawaited(ownedDownloader.dispose());
+    }
     super.dispose();
   }
 
@@ -118,7 +157,12 @@ class _AboutPageState extends State<AboutPage> {
 
   Future<void> _checkForUpdates() async {
     if (_checkingUpdate || _updating) return;
-    setState(() => _checkingUpdate = true);
+    setState(() {
+      _checkingUpdate = true;
+      _androidUpdateCancelling = false;
+      _androidDownloadProgress = null;
+      _androidUpdateError = null;
+    });
 
     try {
       final result = await _updateService.checkForUpdates();
@@ -139,10 +183,29 @@ class _AboutPageState extends State<AboutPage> {
         );
       }
     } catch (error) {
+      if (mounted) {
+        setState(() {
+          _updateResult = null;
+        });
+      }
       _showMessage(_text.messages.checkFailed(error: '$error'));
     } finally {
       if (mounted) setState(() => _checkingUpdate = false);
     }
+  }
+
+  bool _canUseAndroidApkUpdate(AppUpdateAvailability update) {
+    final allowAndroidApkInstall =
+        kReleaseMode || widget.enableAndroidApkInstallInDebug;
+    return _isAndroidPlatform &&
+        allowAndroidApkInstall &&
+        update.canUseAndroidApkInstaller;
+  }
+
+  bool _isAndroidApkRelease(AppUpdateAvailability update) {
+    return _isAndroidPlatform &&
+        update.asset != null &&
+        isAndroidApkAssetForUpdate(update.asset!);
   }
 
   Future<void> _applyManagedUpdate() async {
@@ -150,10 +213,32 @@ class _AboutPageState extends State<AboutPage> {
     final update = _updateResult?.update;
     if (update == null) return;
 
-    setState(() => _updating = true);
+    final useAndroidApkUpdate = _canUseAndroidApkUpdate(update);
+    final cancelToken =
+        useAndroidApkUpdate ? AndroidApkDownloadCancelToken() : null;
+
+    setState(() {
+      _updating = true;
+      _androidUpdateCancelling = false;
+      _androidDownloadProgress = null;
+      _androidUpdateError = null;
+      _androidDownloadCancelToken = cancelToken;
+    });
     var stagedFlow = false;
     try {
-      if (update.canSeamlessInstall) {
+      if (useAndroidApkUpdate) {
+        _showMessage(_text.messages.installStarting);
+        await _androidApkUpdateCoordinator.performUpdate(
+          asset: update.asset!,
+          onProgress: (progress) {
+            if (!mounted) return;
+            setState(() {
+              _androidDownloadProgress = progress;
+            });
+          },
+          cancelToken: cancelToken,
+        );
+      } else if (update.canSeamlessInstall) {
         _showMessage(_text.messages.installStarting);
         await _updateService.installAndRestart(update);
       } else if (update.canStageForNextLaunch) {
@@ -163,23 +248,79 @@ class _AboutPageState extends State<AboutPage> {
         _showMessage(_text.messages.stageReady);
       }
     } catch (error) {
-      if (stagedFlow) {
+      if (error is AndroidApkDownloadCancelledException) {
+      } else if (error
+          is AndroidApkInstallerRequiresPermissionSettingsException) {
+        if (mounted) {
+          setState(() {
+            _androidUpdateError = _androidUpdateErrorText(error);
+          });
+        }
+      } else if (stagedFlow) {
         _showMessage(_text.messages.stageFailed(error: '$error'));
       } else {
+        if (_isAndroidPlatform && _canUseAndroidApkUpdate(update)) {
+          if (mounted) {
+            setState(() {
+              _androidUpdateError = _androidUpdateErrorText(error);
+            });
+          }
+        }
         _showMessage(_text.messages.installFailed(error: '$error'));
       }
     } finally {
-      if (mounted) setState(() => _updating = false);
+      _androidDownloadCancelToken = null;
+      if (mounted) {
+        setState(() {
+          _updating = false;
+          _androidUpdateCancelling = false;
+        });
+      }
     }
+  }
+
+  void _cancelAndroidUpdate() {
+    _androidDownloadCancelToken?.cancel();
+    if (!mounted) return;
+    setState(() {
+      _androidUpdateCancelling = true;
+      _androidDownloadProgress = null;
+      _androidUpdateError = null;
+    });
+  }
+
+  String _androidUpdateErrorText(Object error) {
+    final dialogText = context.t.settings.updateDialog;
+    if (error is AndroidApkUpdateException) {
+      switch (error.type) {
+        case AndroidApkUpdateFailureType.download:
+        case AndroidApkUpdateFailureType.integrityCheck:
+          return dialogText.downloadFailed;
+        case AndroidApkUpdateFailureType.installLaunch:
+          return context.t.settings.about.messages.openUpdateFailed;
+      }
+    }
+    if (error is AndroidApkInstallerRequiresPermissionSettingsException) {
+      return dialogText.permissionRequired;
+    }
+    return dialogText.downloadFailed;
   }
 
   Future<void> _manualUpdate() {
     final uri =
-        _updateResult?.update?.releasePageUri ?? AboutPage.releasePageUri;
+        _updateResult?.update?.releasePageUri ?? _fallbackReleasePageUri();
     return _openExternalUri(
       uri,
       failedMessage: _text.messages.openUpdateFailed,
     );
+  }
+
+  Uri _fallbackReleasePageUri() {
+    final releaseRepo = _updateService.releaseRepo.trim();
+    if (releaseRepo.isEmpty) {
+      return AboutPage.releasePageUri;
+    }
+    return Uri.parse('https://github.com/$releaseRepo/releases/latest');
   }
 
   String _currentVersionText() {
@@ -204,6 +345,12 @@ class _AboutPageState extends State<AboutPage> {
     if (update == null) {
       return _text.status.upToDate;
     }
+    if (_isAndroidApkRelease(update) && !_canUseAndroidApkUpdate(update)) {
+      return _text.status.availableExternal(version: update.latestTag);
+    }
+    if (_canUseAndroidApkUpdate(update)) {
+      return _text.status.availableAndroidApk(version: update.latestTag);
+    }
     if (update.canSeamlessInstall) {
       return _text.status.availableSeamless(version: update.latestTag);
     }
@@ -217,6 +364,12 @@ class _AboutPageState extends State<AboutPage> {
   Widget build(BuildContext context) {
     final text = _text;
     final update = _updateResult?.update;
+    final showManagedAction = update != null &&
+        (_isAndroidApkRelease(update)
+            ? _canUseAndroidApkUpdate(update)
+            : (update.canSeamlessInstall || update.canStageForNextLaunch));
+    final androidProgress = _androidDownloadProgress;
+    final androidUpdateError = _androidUpdateError;
 
     return Scaffold(
       key: const ValueKey('about_page'),
@@ -284,13 +437,33 @@ class _AboutPageState extends State<AboutPage> {
                   const SizedBox(height: 8),
                   Text(_updateStatusText()),
                   const SizedBox(height: 12),
+                  if (_updating &&
+                      _isAndroidPlatform &&
+                      androidProgress != null) ...[
+                    LinearProgressIndicator(
+                      key: const ValueKey('about_android_progress_bar'),
+                      value: androidProgress.fraction,
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      androidProgress.percent == null
+                          ? context
+                              .t.settings.updateDialog.downloadProgressUnknown
+                          : context.t.settings.updateDialog.downloadProgress(
+                              percent: androidProgress.percent!,
+                            ),
+                    ),
+                    const SizedBox(height: 12),
+                  ],
                   Wrap(
                     spacing: 8,
                     runSpacing: 8,
                     children: [
                       OutlinedButton.icon(
                         key: const ValueKey('about_check_updates'),
-                        onPressed: (_checkingUpdate || _updating)
+                        onPressed: (_checkingUpdate ||
+                                _updating ||
+                                _androidUpdateCancelling)
                             ? null
                             : _checkForUpdates,
                         icon: _checkingUpdate
@@ -307,14 +480,14 @@ class _AboutPageState extends State<AboutPage> {
                               : text.actions.check,
                         ),
                       ),
-                      if (update != null &&
-                          (update.canSeamlessInstall ||
-                              update.canStageForNextLaunch))
+                      if (showManagedAction)
                         FilledButton.icon(
                           key: const ValueKey('about_auto_update'),
                           onPressed: (_checkingUpdate || _updating)
                               ? null
-                              : _applyManagedUpdate,
+                              : (_androidUpdateCancelling
+                                  ? null
+                                  : _applyManagedUpdate),
                           icon: _updating
                               ? const SizedBox(
                                   width: 16,
@@ -323,17 +496,33 @@ class _AboutPageState extends State<AboutPage> {
                                       CircularProgressIndicator(strokeWidth: 2),
                                 )
                               : Icon(
-                                  update.canSeamlessInstall
-                                      ? Icons.restart_alt_rounded
-                                      : Icons.download_done_rounded,
+                                  update.canStageForNextLaunch
+                                      ? Icons.download_done_rounded
+                                      : Icons.restart_alt_rounded,
                                 ),
                           label: Text(
                             _updating
                                 ? text.actions.updating
-                                : update.canSeamlessInstall
-                                    ? text.actions.autoUpdate
-                                    : text.actions.stageUpdate,
+                                : update.canStageForNextLaunch
+                                    ? text.actions.stageUpdate
+                                    : text.actions.autoUpdate,
                           ),
+                        ),
+                      if (_updating && _isAndroidPlatform)
+                        OutlinedButton.icon(
+                          key: const ValueKey('about_android_cancel'),
+                          onPressed: _cancelAndroidUpdate,
+                          icon: const Icon(Icons.close_rounded),
+                          label: Text(context.t.common.actions.cancel),
+                        ),
+                      if (!_updating &&
+                          _isAndroidPlatform &&
+                          androidUpdateError != null)
+                        OutlinedButton.icon(
+                          key: const ValueKey('about_android_retry'),
+                          onPressed: _applyManagedUpdate,
+                          icon: const Icon(Icons.refresh_rounded),
+                          label: Text(context.t.common.actions.retry),
                         ),
                       TextButton.icon(
                         key: const ValueKey('about_manual_update'),
@@ -369,13 +558,10 @@ class _AboutText {
   String get updatesTitle => _t.settings.about.updatesTitle;
   String get openHomepage => _t.settings.about.openHomepage;
   String get unknownVersion => _t.settings.about.unknownVersion;
-
-  String currentVersion({required String version}) =>
+  String currentVersion({required Object version}) =>
       _t.settings.about.currentVersion(version: version);
-
-  String latestVersion({required String version}) =>
+  String latestVersion({required Object version}) =>
       _t.settings.about.latestVersion(version: version);
-
   _AboutStatusText get status => _AboutStatusText(_t);
   _AboutActionText get actions => _AboutActionText(_t);
   _AboutMessageText get messages => _AboutMessageText(_t);
@@ -389,17 +575,15 @@ class _AboutStatusText {
   String get idle => _t.settings.about.status.idle;
   String get checking => _t.settings.about.status.checking;
   String get upToDate => _t.settings.about.status.upToDate;
-
-  String availableSeamless({required String version}) =>
+  String availableSeamless({required Object version}) =>
       _t.settings.about.status.availableSeamless(version: version);
-
-  String availableStaged({required String version}) =>
+  String availableAndroidApk({required Object version}) =>
+      _t.settings.about.status.availableAndroidApk(version: version);
+  String availableStaged({required Object version}) =>
       _t.settings.about.status.availableStaged(version: version);
-
-  String availableExternal({required String version}) =>
+  String availableExternal({required Object version}) =>
       _t.settings.about.status.availableExternal(version: version);
-
-  String failed({required String error}) =>
+  String failed({required Object error}) =>
       _t.settings.about.status.failed(error: error);
 }
 
@@ -422,23 +606,17 @@ class _AboutMessageText {
   final Translations _t;
 
   String get upToDate => _t.settings.about.messages.upToDate;
-
-  String updateAvailable({required String version}) =>
+  String updateAvailable({required Object version}) =>
       _t.settings.about.messages.updateAvailable(version: version);
-
-  String checkFailed({required String error}) =>
+  String checkFailed({required Object error}) =>
       _t.settings.about.messages.checkFailed(error: error);
-
   String get installStarting => _t.settings.about.messages.installStarting;
   String get stageStarting => _t.settings.about.messages.stageStarting;
   String get stageReady => _t.settings.about.messages.stageReady;
-
-  String installFailed({required String error}) =>
+  String installFailed({required Object error}) =>
       _t.settings.about.messages.installFailed(error: error);
-
-  String stageFailed({required String error}) =>
+  String stageFailed({required Object error}) =>
       _t.settings.about.messages.stageFailed(error: error);
-
   String get openHomepageFailed =>
       _t.settings.about.messages.openHomepageFailed;
   String get openUpdateFailed => _t.settings.about.messages.openUpdateFailed;

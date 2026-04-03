@@ -5,7 +5,7 @@ param(
   [string]$PackId = 'com.secondloop.secondloopdev',
   [string]$Channel = 'devwin',
   [ValidateSet('http', 'https')]
-  [string]$FeedProtocol = 'http',
+  [string]$FeedProtocol = 'https',
   [string]$AppName = '',
   [string]$ExeName = 'secondloop.exe',
   [int]$Port = 8443,

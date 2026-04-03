@@ -68,11 +68,11 @@ class WindowsAutoUpdateSmokeTests(unittest.TestCase):
         self.assertIn("'--app-name', $AppName", script)
         self.assertNotIn("'--app-name', ('\"{0}\"' -f $AppName)", script)
 
-    def test_smoke_script_defaults_to_http_local_feed_and_allows_http_update_uris(self) -> None:
+    def test_smoke_script_defaults_to_https_local_feed_and_allows_http_update_uris(self) -> None:
         script = SMOKE_SCRIPT.read_text(encoding="utf-8")
 
         self.assertIn("[ValidateSet('http', 'https')]", script)
-        self.assertIn("[string]$FeedProtocol = 'http'", script)
+        self.assertIn("[string]$FeedProtocol = 'https'", script)
         self.assertIn("$env:SECONDLOOP_ALLOW_HTTP_UPDATE_URIS = 'true'", script)
         self.assertIn('$env:SECONDLOOP_RELEASE_API_ORIGIN = "${FeedProtocol}://localhost:$Port"', script)
 

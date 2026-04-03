@@ -553,13 +553,13 @@ collect_targeted_flutter_tests() {
           break
         fi
         for candidate in "${related_targets[@]}"; do
-          if append_unique_path "${candidate}" "${targets[@]}"; then
+          if append_unique_path "${candidate}" "${targets[@]-}"; then
             targets+=("${candidate}")
           fi
         done
         ;;
       test/*_test.dart | test/**/*_test.dart | integration_test/*_test.dart | integration_test/**/*_test.dart)
-        if [[ -f "${file}" ]] && append_unique_path "${file}" "${targets[@]}"; then
+        if [[ -f "${file}" ]] && append_unique_path "${file}" "${targets[@]-}"; then
           targets+=("${file}")
         fi
         ;;

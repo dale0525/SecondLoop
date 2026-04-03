@@ -790,13 +790,6 @@ bool _matchesExpectedWindowsManifestIdentity({
       return true;
     }
 
-    final carriesRecognizedWindowsIdentity = isWindowsVelopackPackageName(
-          assetName,
-        ) ||
-        isWindowsMsiInstallerName(assetName);
-    if (carriesRecognizedWindowsIdentity) {
-      return false;
-    }
     return false;
   }
 

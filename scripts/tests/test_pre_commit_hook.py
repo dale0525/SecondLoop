@@ -236,6 +236,7 @@ class PreCommitHookTests(unittest.TestCase):
         self.assertIn('saw_unmapped_lib_change=1', script)
         self.assertIn('printf \'%s\\n\' "__FULL_SUITE__"', script)
         self.assertIn('run_flutter_tool test --concurrency=1', script)
+        self.assertIn('if [[ ${#flutter_test_targets[@]} -eq 0 ]]; then', script)
 
     def test_pre_commit_hook_no_longer_runs_rust_clippy_in_normal_commit_flow(self) -> None:
         normal_commit_flow = PRE_COMMIT_COMMIT_MODE_SCRIPT.read_text(encoding="utf-8")

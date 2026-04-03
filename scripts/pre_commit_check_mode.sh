@@ -83,12 +83,12 @@ temp_generated_i18n_strings_path=""
       local candidate="$1"
       local existing
 
-      for existing in "${pending_pubspecs[@]}"; do
+      for existing in "${pending_pubspecs[@]-}"; do
         if [[ "${existing}" == "${candidate}" ]]; then
           return 0
         fi
       done
-      for existing in "${processed_pubspecs[@]}"; do
+      for existing in "${processed_pubspecs[@]-}"; do
         if [[ "${existing}" == "${candidate}" ]]; then
           return 0
         fi
