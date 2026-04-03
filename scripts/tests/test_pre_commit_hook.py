@@ -282,6 +282,11 @@ class PreCommitHookTests(unittest.TestCase):
 
         self.assertIn('--skip-tests', script)
 
+    def test_pre_commit_hook_supports_clippy_only_in_check_mode(self) -> None:
+        script = PRE_COMMIT_HOOK.read_text(encoding="utf-8")
+
+        self.assertIn('--clippy-only', script)
+
     def test_pre_commit_common_exposes_periodic_progress_helper(self) -> None:
         common = PRE_COMMIT_COMMON_SCRIPT.read_text(encoding="utf-8")
 

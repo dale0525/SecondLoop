@@ -235,14 +235,16 @@ temp_generated_i18n_strings_path=""
   fi
 
   if (( scope_rust )); then
-    if ! "${cargo_bin}" fmt --manifest-path rust/Cargo.toml --all -- --check; then
-      echo "" >&2
-      echo "pre-commit: rustfmt failed." >&2
-      echo "Fix locally with: pixi run cargo fmt \"--manifest-path rust/Cargo.toml --all\"" >&2
-      exit 1
+    if (( clippy_only == 0 )); then
+      if ! "${cargo_bin}" fmt --manifest-path rust/Cargo.toml --all -- --check; then
+        echo "" >&2
+        echo "pre-commit: rustfmt failed." >&2
+        echo "Fix locally with: pixi run cargo fmt \"--manifest-path rust/Cargo.toml --all\"" >&2
+        exit 1
+      fi
     fi
 
-    if (( ci_mode )); then
+    if (( ci_mode || clippy_only )); then
       if ! run_with_periodic_status "rust clippy" "${cargo_bin}" clippy --manifest-path rust/Cargo.toml --all-targets --all-features -- -D warnings; then
         echo "" >&2
         echo "pre-commit: rust clippy failed." >&2
@@ -250,7 +252,9 @@ temp_generated_i18n_strings_path=""
         exit 1
       fi
 
-      if (( skip_tests != 0 )); then
+      if (( clippy_only != 0 )); then
+        echo "pre-commit: skipping Rust tests (--clippy-only)." >&2
+      elif (( skip_tests != 0 )); then
         echo "pre-commit: skipping Rust tests (--skip-tests)." >&2
       elif ! run_with_periodic_status "rust tests" "${cargo_bin}" test --manifest-path rust/Cargo.toml --all; then
         echo "" >&2

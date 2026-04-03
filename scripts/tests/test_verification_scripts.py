@@ -135,18 +135,20 @@ class VerificationScriptsTests(unittest.TestCase):
             encoding="utf-8"
         )
 
-        self.assertIn('bash .githooks/pre-commit --check --rust --ci --skip-tests', script)
+        self.assertIn('bash .githooks/pre-commit --check --rust --ci --skip-tests --clippy-only', script)
         self.assertIn('bash scripts/run_rust_ci_nextest.sh', script)
-        self.assertIn('cancel_remaining_job()', script)
-        self.assertIn('overall_status=0', script)
+        self.assertNotIn('clippy_pid=', script)
+        self.assertNotIn('nextest_pid=', script)
 
-    def test_local_rust_ci_wrapper_cleanup_reaps_background_jobs(self) -> None:
+    def test_local_rust_ci_wrapper_runs_gate_before_nextest(self) -> None:
         script = (REPO_ROOT / "scripts/run_full_rust_ci_local.sh").read_text(
             encoding="utf-8"
         )
 
-        self.assertIn('for pid in "${clippy_pid:-}" "${nextest_pid:-}"; do', script)
-        self.assertIn("trap cleanup EXIT INT TERM", script)
+        self.assertIn('echo "ci: starting Rust gate..." >&2', script)
+        self.assertIn('echo "ci: Rust gate passed; starting Rust nextest..." >&2', script)
+        self.assertIn('if env CARGO_TARGET_DIR="${rust_target_dir}" \\', script)
+        self.assertIn('if env CARGO_TARGET_DIR="${rust_target_dir}" bash scripts/run_rust_ci_nextest.sh; then', script)
 
     def test_rust_nextest_wrapper_prefers_project_managed_cargo_environment(self) -> None:
         script = (REPO_ROOT / "scripts/run_rust_ci_nextest.sh").read_text(
@@ -362,6 +364,26 @@ class VerificationScriptsTests(unittest.TestCase):
         self.assertIn("needs: [changes, rust-format]", rust_clippy_section)
         self.assertIn("needs: [changes, rust-clippy]", rust_tests_section)
 
+    def test_ci_workflow_flutter_test_matrix_uses_fail_fast(self) -> None:
+        workflow = (REPO_ROOT / ".github/workflows/ci.yml").read_text(
+            encoding="utf-8"
+        )
+
+        flutter_tests_section = workflow.split("  flutter-tests:\n", maxsplit=1)[1]
+        flutter_tests_section = flutter_tests_section.split("\n\n  flutter-web:\n", maxsplit=1)[0]
+
+        self.assertNotIn("fail-fast: false", flutter_tests_section)
+
+    def test_ci_workflow_rust_clippy_job_avoids_repeating_rustfmt(self) -> None:
+        workflow = (REPO_ROOT / ".github/workflows/ci.yml").read_text(
+            encoding="utf-8"
+        )
+
+        rust_clippy_section = workflow.split("  rust-clippy:\n", maxsplit=1)[1]
+        rust_clippy_section = rust_clippy_section.split("\n\n  rust-tests:\n", maxsplit=1)[0]
+
+        self.assertIn("--clippy-only", rust_clippy_section)
+
     def test_ci_workflow_retains_rust_python_runtime_guard_in_gate(self) -> None:
         workflow = (REPO_ROOT / ".github/workflows/ci.yml").read_text(
             encoding="utf-8"
@@ -372,16 +394,16 @@ class VerificationScriptsTests(unittest.TestCase):
 
         self.assertIn('run: bash scripts/check_no_python_runtime.sh', rust_format_section)
 
-    def test_local_rust_ci_wrapper_uses_separate_target_dirs_for_parallel_jobs(self) -> None:
+    def test_local_rust_ci_wrapper_reuses_one_target_dir_for_gate_and_nextest(self) -> None:
         script = (REPO_ROOT / "scripts/run_full_rust_ci_local.sh").read_text(
             encoding="utf-8"
         )
 
         self.assertIn('worktree_cache_key=', script)
-        self.assertIn('clippy_target_dir=', script)
-        self.assertIn('nextest_target_dir=', script)
-        self.assertIn('CARGO_TARGET_DIR="${clippy_target_dir}"', script)
-        self.assertIn('CARGO_TARGET_DIR="${nextest_target_dir}"', script)
+        self.assertIn('rust_target_dir=', script)
+        self.assertIn('CARGO_TARGET_DIR="${rust_target_dir}"', script)
+        self.assertNotIn('clippy_target_dir=', script)
+        self.assertNotIn('nextest_target_dir=', script)
 
     def test_windows_bash_launcher_prefers_project_managed_bash_candidates(self) -> None:
         launcher = RUN_BASH_PS1.read_text(encoding="utf-8")

@@ -144,7 +144,6 @@ jobs:
     if: needs.changes.outputs.flutter == 'true'
     runs-on: ubuntu-latest
     strategy:
-      fail-fast: false
       matrix:
         shard_index: [0, 1, 2, 3]
     steps:
@@ -224,7 +223,7 @@ jobs:
           sudo apt-get install -y libvulkan-dev glslc
           command -v glslc
       - name: Rust clippy
-        run: bash .githooks/pre-commit --check --rust --ci --skip-tests
+        run: bash .githooks/pre-commit --check --rust --ci --skip-tests --clippy-only
 
   rust-tests:
     needs: [changes, rust-clippy]

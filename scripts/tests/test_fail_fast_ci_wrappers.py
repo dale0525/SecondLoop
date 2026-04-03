@@ -119,7 +119,7 @@ class FailFastCiWrapperTests(unittest.TestCase):
             self.assertTrue((marker_dir / "python-cancelled").exists(), msg=result.stdout + result.stderr)
             self.assertIn("failing-flutter", result.stdout)
 
-    def test_local_rust_ci_wrapper_stops_nextest_after_clippy_failure(self) -> None:
+    def test_local_rust_ci_wrapper_does_not_start_nextest_after_gate_failure(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             repo_root = Path(temp_dir)
             self._init_repo(repo_root)
@@ -155,14 +155,7 @@ class FailFastCiWrapperTests(unittest.TestCase):
                     [
                         "#!/usr/bin/env bash",
                         "set -euo pipefail",
-                        f"marker_file=\"{(marker_dir / 'nextest-cancelled').as_posix()}\"",
-                        "cleanup() {",
-                        "  printf 'cancelled\\n' > \"${marker_file}\"",
-                        "  exit 0",
-                        "}",
-                        "trap cleanup TERM INT",
-                        "sleep 30 &",
-                        "wait $!",
+                        f"printf 'started\\n' > \"{(marker_dir / 'nextest-started').as_posix()}\"",
                     ]
                 )
                 + "\n",
@@ -180,7 +173,7 @@ class FailFastCiWrapperTests(unittest.TestCase):
 
             self.assertNotEqual(result.returncode, 0, msg=result.stdout + result.stderr)
             self.assertLess(elapsed, 5, msg=result.stdout + result.stderr)
-            self.assertTrue((marker_dir / "nextest-cancelled").exists(), msg=result.stdout + result.stderr)
+            self.assertFalse((marker_dir / "nextest-started").exists(), msg=result.stdout + result.stderr)
             self.assertIn("failing-clippy", result.stdout)
 
     def test_local_flutter_ci_wrapper_stops_remaining_shards_after_first_failure(self) -> None:
