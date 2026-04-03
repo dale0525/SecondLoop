@@ -6,6 +6,79 @@ die() {
   exit 1
 }
 
+is_zero_oid() {
+  local oid="$1"
+  [[ -z "${oid}" || "${oid}" =~ ^0+$ ]]
+}
+
+append_unique_file() {
+  local candidate="$1"
+  local existing
+  for existing in "${push_changed_files[@]-}"; do
+    if [[ "${existing}" == "${candidate}" ]]; then
+      return 0
+    fi
+  done
+  push_changed_files+=("${candidate}")
+}
+
+append_changed_files_from_range() {
+  local diff_range="$1"
+  local file
+  while IFS= read -r file; do
+    [[ -n "${file}" ]] || continue
+    append_unique_file "${file}"
+  done < <(git diff --name-only "${diff_range}" 2>/dev/null || true)
+}
+
+append_changed_files_from_base_ref() {
+  local local_sha="$1"
+  local base_ref="$2"
+  local merge_base
+
+  merge_base="$(git merge-base "${local_sha}" "${base_ref}" 2>/dev/null || true)"
+  [[ -n "${merge_base}" ]] || return 1
+
+  append_changed_files_from_range "${merge_base}..${local_sha}"
+}
+
+is_tooling_python_file() {
+  local path="$1"
+  case "${path}" in
+    scripts/tests/*.py | scripts/tests/**/*.py) return 0 ;;
+    tools/check_icon_corners.py | tools/i18n_translate.py | tools/round_icon.py | tools/week11_gateway_smoke.py | tools/windows_https_update_server.py)
+      return 0
+      ;;
+    *) return 1 ;;
+  esac
+}
+
+requires_full_verification() {
+  local path="$1"
+  case "${path}" in
+    .fvm/fvm_config.json | .githooks/* | .github/workflows/* | analysis_options.yaml | pubspec.yaml | pubspec.lock | flutter_rust_bridge.yaml | pixi.toml | pixi.lock | slang.yaml)
+      return 0
+      ;;
+    lib/* | test/* | integration_test/* | test_driver/* | rust_builder/* | third_party/* | assets/* | android/* | ios/* | linux/* | macos/* | windows/* | rust/* | web/*)
+      return 0
+      ;;
+    scripts/*)
+      is_tooling_python_file "${path}" && return 1
+      return 0
+      ;;
+    tools/*.dart)
+      return 0
+      ;;
+    tools/*.py | tools/**/*.py)
+      is_tooling_python_file "${path}" && return 1
+      return 0
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
 repo_root="$(git rev-parse --show-toplevel 2>/dev/null || true)"
 if [[ -z "${repo_root}" ]]; then
   exit 0
@@ -13,5 +86,77 @@ fi
 
 cd "${repo_root}"
 
-echo "pre-push: running full verification (format checks, analyze, tests, clippy)." >&2
-bash scripts/verify_full.sh
+push_changed_files=()
+scope_reliable=1
+saw_non_delete_update=0
+
+while read -r local_ref local_sha remote_ref remote_sha; do
+  [[ -n "${local_ref}" ]] || continue
+
+  if is_zero_oid "${local_sha}"; then
+    continue
+  fi
+
+  saw_non_delete_update=1
+
+  if is_zero_oid "${remote_sha}"; then
+    if git show-ref --verify --quiet refs/remotes/origin/main &&
+      append_changed_files_from_base_ref "${local_sha}" refs/remotes/origin/main; then
+      continue
+    fi
+
+    if git show-ref --verify --quiet refs/heads/main &&
+      append_changed_files_from_base_ref "${local_sha}" refs/heads/main; then
+      continue
+    fi
+
+    scope_reliable=0
+    break
+  fi
+
+  append_changed_files_from_range "${remote_sha}..${local_sha}"
+done
+
+if [[ ${saw_non_delete_update} -eq 0 ]]; then
+  echo "pre-push: delete-only push detected; skipping verification." >&2
+  exit 0
+fi
+
+if [[ ${scope_reliable} -eq 0 ]]; then
+  echo "pre-push: unable to determine pushed range for new branch; running full verification." >&2
+  bash scripts/run_full_ci_parallel.sh
+  exit $?
+fi
+
+if [[ ${#push_changed_files[@]} -eq 0 ]]; then
+  echo "pre-push: unable to scope pushed changes; running full verification." >&2
+  bash scripts/run_full_ci_parallel.sh
+  exit $?
+fi
+
+needs_tooling_python=0
+needs_full_verification=0
+
+for file in "${push_changed_files[@]}"; do
+  if is_tooling_python_file "${file}"; then
+    needs_tooling_python=1
+  fi
+
+  if requires_full_verification "${file}"; then
+    needs_full_verification=1
+  fi
+done
+
+if [[ ${needs_full_verification} -ne 0 ]]; then
+  echo "pre-push: running full verification for pushed changes." >&2
+  bash scripts/run_full_ci_parallel.sh
+  exit $?
+fi
+
+if [[ ${needs_tooling_python} -ne 0 ]]; then
+  echo "pre-push: tooling-python-only changes detected; running lightweight tooling checks." >&2
+  bash scripts/run_python_tooling_checks.sh
+  exit $?
+fi
+
+echo "pre-push: no scoped verification required for pushed changes." >&2

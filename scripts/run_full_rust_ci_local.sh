@@ -9,62 +9,50 @@ fi
 cd "${repo_root}"
 source "${repo_root}/scripts/pre_commit_common.sh"
 
-resolve_cargo_bin >/dev/null || cargo_missing_message
-resolve_libclang_path >/dev/null || libclang_missing_message
-resolve_vulkan_sdk_root >/dev/null || vulkan_sdk_missing_message
-ensure_windows_short_build_paths
+worktree_cache_key="$(printf '%s\n' "${repo_root}" | cksum | awk '{print $1}')"
+clippy_log="$(mktemp -t secondloop_rust_clippy.XXXXXX.log)"
+nextest_log="$(mktemp -t secondloop_rust_nextest.XXXXXX.log)"
+clippy_target_dir="${repo_root}/.tool/cache/rust-ci-clippy-target-${worktree_cache_key}"
+nextest_target_dir="${repo_root}/.tool/cache/rust-ci-nextest-target-${worktree_cache_key}"
+clippy_pid=""
+nextest_pid=""
 
-export CARGO_INCREMENTAL="${CARGO_INCREMENTAL:-0}"
-export CARGO_PROFILE_DEV_DEBUG="${CARGO_PROFILE_DEV_DEBUG:-0}"
-export CARGO_PROFILE_TEST_DEBUG="${CARGO_PROFILE_TEST_DEBUG:-0}"
-export RUSTFLAGS="${RUSTFLAGS:--C debuginfo=0}"
+cleanup() {
+  local pid
 
-python_bin=""
-for candidate in \
-  "${repo_root}/.pixi/envs/default/bin/python" \
-  "${repo_root}/.pixi/envs/default/python.exe"; do
-  if [[ -f "${candidate}" ]]; then
-    python_bin="${candidate}"
-    break
-  fi
-done
+  for pid in "${clippy_pid:-}" "${nextest_pid:-}"; do
+    if [[ -n "${pid}" ]] && kill -0 "${pid}" 2>/dev/null; then
+      kill "${pid}" 2>/dev/null || true
+      wait "${pid}" 2>/dev/null || true
+    fi
+  done
 
-if [[ -z "${python_bin}" ]]; then
-  die "Missing project-managed Python at .pixi/envs/default. Run \`pixi install\`."
+  rm -f "${clippy_log}" "${nextest_log}" 2>/dev/null || true
+}
+trap cleanup EXIT INT TERM
+
+mkdir -p "${clippy_target_dir}" "${nextest_target_dir}"
+
+echo "ci: starting Rust clippy..." >&2
+env CARGO_TARGET_DIR="${clippy_target_dir}" \
+  bash .githooks/pre-commit --check --rust --ci --skip-tests >"${clippy_log}" 2>&1 &
+clippy_pid=$!
+
+echo "ci: starting Rust nextest..." >&2
+env CARGO_TARGET_DIR="${nextest_target_dir}" \
+  bash scripts/run_rust_ci_nextest.sh >"${nextest_log}" 2>&1 &
+nextest_pid=$!
+
+status=0
+wait "${clippy_pid}" || status=$?
+cat "${clippy_log}"
+
+nextest_status=0
+wait "${nextest_pid}" || nextest_status=$?
+cat "${nextest_log}"
+
+if [[ ${nextest_status} -ne 0 ]]; then
+  status=${nextest_status}
 fi
 
-if ! "${cargo_bin}" fmt --manifest-path rust/Cargo.toml --all -- --check; then
-  echo "" >&2
-  echo "pre-commit: rustfmt failed." >&2
-  echo "Fix locally with: pixi run cargo fmt \"--manifest-path rust/Cargo.toml --all\"" >&2
-  exit 1
-fi
-
-if ! run_with_periodic_status "rust clippy" "${cargo_bin}" clippy --manifest-path rust/Cargo.toml --all-targets --all-features -- -D warnings; then
-  echo "" >&2
-  echo "pre-commit: rust clippy failed." >&2
-  echo "Fix locally with: pixi run cargo clippy \"--all-targets --all-features -- -D warnings\"" >&2
-  exit 1
-fi
-
-jsonl_path="$(mktemp -t secondloop_rust_tests.XXXXXX.jsonl)"
-trap 'rm -f "${jsonl_path}" 2>/dev/null || true' EXIT
-
-echo "pre-commit: compiling Rust test binaries once for parallel execution..." >&2
-if ! run_with_periodic_status "rust test compile" bash -lc '"$1" test --manifest-path rust/Cargo.toml --all --no-run --message-format=json > "$2"' _ "${cargo_bin}" "${jsonl_path}"; then
-  echo "" >&2
-  echo "pre-commit: rust test compilation failed." >&2
-  echo "Fix locally with: pixi run cargo test" >&2
-  exit 1
-fi
-
-rust_test_jobs="${SECONDLOOP_LOCAL_RUST_TEST_JOBS:-2}"
-rust_test_max_binaries="${SECONDLOOP_LOCAL_RUST_TEST_MAX_BINARIES:-0}"
-
-echo "pre-commit: running Rust test binaries in parallel (jobs=${rust_test_jobs})..." >&2
-if ! run_with_periodic_status "rust tests" "${python_bin}" scripts/run_rust_test_binaries_parallel.py --jsonl "${jsonl_path}" --jobs "${rust_test_jobs}" --max-binaries "${rust_test_max_binaries}"; then
-  echo "" >&2
-  echo "pre-commit: rust tests failed." >&2
-  echo "Fix locally with: pixi run cargo test" >&2
-  exit 1
-fi
+exit "${status}"

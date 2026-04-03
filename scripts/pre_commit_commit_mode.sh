@@ -113,12 +113,6 @@ if [[ ${run_rust_fmt} -ne 0 ]]; then
 fi
 
 if [[ ${run_flutter_checks} -ne 0 ]]; then
-  flutter_test_targets=()
-  while IFS= read -r file; do
-    [[ -n "${file}" ]] || continue
-    flutter_test_targets+=("${file}")
-  done < <(collect_targeted_flutter_tests)
-
   if [[ ${run_i18n_refresh_needed} -ne 0 ]]; then
     run_i18n_analyze
   fi
@@ -130,26 +124,6 @@ if [[ ${run_flutter_checks} -ne 0 ]]; then
     exit 1
   fi
 
-  if [[ ${#flutter_test_targets[@]} -ne 0 ]]; then
-    if [[ ${#flutter_test_targets[@]} -eq 1 && "${flutter_test_targets[0]}" == "__FULL_SUITE__" ]]; then
-      flutter_test_targets=()
-    fi
-
-    if [[ ${#flutter_test_targets[@]} -eq 0 ]]; then
-      if ! run_flutter_tool test --concurrency=1; then
-        echo "" >&2
-        echo "pre-commit: flutter test failed." >&2
-        echo "Fix locally with: pixi run flutter test" >&2
-        exit 1
-      fi
-    elif ! run_flutter_tool test --concurrency=1 "${flutter_test_targets[@]}"; then
-      echo "" >&2
-      echo "pre-commit: flutter test failed." >&2
-      echo "Fix locally with: pixi run flutter test \"${flutter_test_targets[*]}\"" >&2
-      exit 1
-    fi
-  else
-    echo "pre-commit: skipping Flutter tests (no targeted tests found for staged lib changes)." >&2
-    echo "Run full verification with: git push or pixi run ci" >&2
-  fi
+  echo "pre-commit: deferred Flutter tests to scoped pre-push / full CI." >&2
+  echo "Run full verification with: git push or pixi run ci" >&2
 fi

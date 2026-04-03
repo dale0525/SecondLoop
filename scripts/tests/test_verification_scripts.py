@@ -37,22 +37,32 @@ class VerificationScriptsTests(unittest.TestCase):
     def test_contributing_documents_fast_commit_and_full_push_flow(self) -> None:
         contributing = CONTRIBUTING.read_text(encoding="utf-8")
 
-        self.assertIn("fast pre-commit + full pre-push verification", contributing)
+        self.assertIn("fast pre-commit + scoped pre-push verification", contributing)
         self.assertIn("same scope as `pre-push` / CI", contributing)
         self.assertIn("Check-only local gate", contributing)
         self.assertIn("`pixi run verify-changed`", contributing)
         self.assertIn("`pixi run ci`", contributing)
         self.assertIn("run in parallel locally", contributing)
+        self.assertIn("scoped pre-push", contributing)
+        self.assertIn("Python tooling-only changes", contributing)
 
     def test_parallel_ci_wrapper_runs_flutter_and_rust_scopes(self) -> None:
         script = (REPO_ROOT / "scripts/run_full_ci_parallel.sh").read_text(
             encoding="utf-8"
         )
 
-        self.assertIn('bash scripts/verify_full.sh --flutter', script)
+        self.assertIn('bash scripts/run_flutter_ci_local.sh', script)
         self.assertIn('bash scripts/run_full_rust_ci_local.sh', script)
         self.assertIn('ci: starting Flutter verification...', script)
         self.assertIn('ci: starting Rust verification...', script)
+
+    def test_parallel_ci_wrapper_runs_python_tooling_scope(self) -> None:
+        script = (REPO_ROOT / "scripts/run_full_ci_parallel.sh").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn('bash scripts/run_python_tooling_checks.sh', script)
+        self.assertIn('ci: starting Python tooling verification...', script)
 
     def test_parallel_ci_wrapper_emits_logs_as_each_scope_finishes(self) -> None:
         script = (REPO_ROOT / "scripts/run_full_ci_parallel.sh").read_text(
@@ -65,24 +75,74 @@ class VerificationScriptsTests(unittest.TestCase):
         self.assertNotIn('wait "${flutter_pid}"', script)
         self.assertNotIn('wait "${rust_pid}"', script)
 
-    def test_local_rust_ci_wrapper_compiles_once_and_runs_binaries_parallel(self) -> None:
+    def test_local_flutter_ci_wrapper_runs_gate_and_shards(self) -> None:
+        script = (REPO_ROOT / "scripts/run_flutter_ci_local.sh").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn('bash .githooks/pre-commit --check --flutter --skip-tests', script)
+        self.assertIn('SECONDLOOP_LOCAL_FLUTTER_TEST_SHARDS', script)
+        self.assertIn('bash scripts/run_flutter_test_shard.sh', script)
+
+    def test_local_flutter_ci_wrapper_prepares_i18n_outputs_before_shards(self) -> None:
+        script = (REPO_ROOT / "scripts/run_flutter_ci_local.sh").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn('echo "ci: preparing i18n outputs in a temporary Flutter worktree..." >&2', script)
+        self.assertIn('git worktree add --detach', script)
+        self.assertIn('copy_prepared_i18n_tree()', script)
+        self.assertIn('bash scripts/run_i18n_refresh.sh', script)
+
+    def test_local_flutter_ci_wrapper_syncs_workspace_state_into_temp_worktrees(self) -> None:
+        script = (REPO_ROOT / "scripts/run_flutter_ci_local.sh").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn('sync_workspace_state_into_worktree()', script)
+        self.assertIn('git diff --binary --relative HEAD', script)
+        self.assertIn('git ls-files --others --exclude-standard -z', script)
+
+    def test_local_flutter_ci_wrapper_cleanup_reaps_gate_and_shards(self) -> None:
+        script = (REPO_ROOT / "scripts/run_flutter_ci_local.sh").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn('for pid in "${flutter_gate_pid:-}" "${flutter_test_pids[@]-}"; do', script)
+        self.assertIn("trap cleanup EXIT INT TERM", script)
+
+    def test_flutter_test_shard_requires_prepared_i18n_outputs(self) -> None:
+        script = (REPO_ROOT / "scripts/run_flutter_test_shard.sh").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn('lib/i18n/strings.g.dart is required before running shards', script)
+        self.assertNotIn('failed to regenerate lib/i18n/strings.g.dart', script)
+
+    def test_local_rust_ci_wrapper_uses_nextest_and_doc_tests(self) -> None:
         script = (REPO_ROOT / "scripts/run_full_rust_ci_local.sh").read_text(
             encoding="utf-8"
         )
 
-        self.assertIn('--no-run --message-format=json', script)
-        self.assertIn('scripts/run_rust_test_binaries_parallel.py', script)
-        self.assertIn('SECONDLOOP_LOCAL_RUST_TEST_JOBS', script)
-        self.assertIn('SECONDLOOP_LOCAL_RUST_TEST_MAX_BINARIES', script)
+        self.assertIn('bash .githooks/pre-commit --check --rust --ci --skip-tests', script)
+        self.assertIn('bash scripts/run_rust_ci_nextest.sh', script)
 
-    def test_local_rust_ci_wrapper_prefers_project_managed_python(self) -> None:
+    def test_local_rust_ci_wrapper_cleanup_reaps_background_jobs(self) -> None:
         script = (REPO_ROOT / "scripts/run_full_rust_ci_local.sh").read_text(
             encoding="utf-8"
         )
 
-        self.assertIn('.pixi/envs/default/bin/python', script)
-        self.assertIn('.pixi/envs/default/python.exe', script)
-        self.assertNotIn('for candidate in python python3', script)
+        self.assertIn('for pid in "${clippy_pid:-}" "${nextest_pid:-}"; do', script)
+        self.assertIn("trap cleanup EXIT INT TERM", script)
+
+    def test_rust_nextest_wrapper_prefers_project_managed_cargo_environment(self) -> None:
+        script = (REPO_ROOT / "scripts/run_rust_ci_nextest.sh").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn('"${cargo_bin}" nextest run', script)
+        self.assertIn('"${cargo_bin}" test --manifest-path rust/Cargo.toml --doc', script)
+        self.assertIn('resolve_cargo_bin', script)
 
     def test_windows_smoke_tests_resolve_powershell_portably(self) -> None:
         script = (REPO_ROOT / "scripts/tests/test_windows_auto_update_smoke.py").read_text(
@@ -170,6 +230,145 @@ class VerificationScriptsTests(unittest.TestCase):
 
         self.assertTrue(RUN_BASH_PS1.exists())
         self.assertIn("scripts/run_bash.ps1 scripts/install_git_hooks.sh", pixi)
+
+    def test_ci_workflow_scoped_filters_cover_i18n_lockfiles_and_tool_dart(self) -> None:
+        workflow = (REPO_ROOT / ".github/workflows/ci.yml").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn('              - "slang.yaml"', workflow)
+        self.assertIn('              - "pixi.lock"', workflow)
+        self.assertIn('              - "tools/*.dart"', workflow)
+        self.assertIn('              - "third_party/**"', workflow)
+        self.assertIn('              - "assets/**"', workflow)
+        self.assertIn('              - ".github/workflows/ci.yml"', workflow)
+
+    def test_ci_workflow_tooling_python_filter_covers_git_hooks(self) -> None:
+        workflow = (REPO_ROOT / ".github/workflows/ci.yml").read_text(
+            encoding="utf-8"
+        )
+
+        tooling_section = workflow.split("            tooling_python:\n", maxsplit=1)[1]
+        tooling_section = tooling_section.split("            flutter:\n", maxsplit=1)[0]
+
+        self.assertIn('              - ".githooks/**"', tooling_section)
+        self.assertIn('              - "tools/check_icon_corners.py"', tooling_section)
+        self.assertIn('              - "tools/round_icon.py"', tooling_section)
+        self.assertIn('              - "tools/week11_gateway_smoke.py"', tooling_section)
+        self.assertNotIn('              - "tools/**/*.py"', tooling_section)
+
+    def test_ci_workflow_uses_pixi_tasks_for_cold_start_safe_tooling_jobs(self) -> None:
+        workflow = (REPO_ROOT / ".github/workflows/ci.yml").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn("run: pixi run tooling-test", workflow)
+        self.assertIn("run: pixi run rust-nextest", workflow)
+        self.assertNotIn("run: bash scripts/run_python_tooling_checks.sh", workflow)
+        self.assertNotIn("run: bash scripts/run_rust_ci_nextest.sh", workflow)
+
+    def test_ci_workflow_treats_all_workflow_changes_as_full_scope_inputs(self) -> None:
+        workflow = (REPO_ROOT / ".github/workflows/ci.yml").read_text(
+            encoding="utf-8"
+        )
+
+        for start, end in [
+            ("            tooling_python:\n", "            flutter:\n"),
+            ("            flutter:\n", "            rust:\n"),
+            ("            rust:\n", "            web:\n"),
+        ]:
+            section = workflow.split(start, maxsplit=1)[1]
+            section = section.split(end, maxsplit=1)[0]
+            self.assertIn('              - ".github/workflows/**"', section)
+
+    def test_ci_workflow_web_filter_avoids_generic_script_changes(self) -> None:
+        workflow = (REPO_ROOT / ".github/workflows/ci.yml").read_text(
+            encoding="utf-8"
+        )
+
+        web_section = workflow.split("            web:\n", maxsplit=1)[1]
+        web_section = web_section.split("\n\n  python-tooling:\n", maxsplit=1)[0]
+
+        self.assertNotIn('              - "scripts/**"', web_section)
+
+    def test_web_build_workflow_paths_cover_i18n_and_lockfiles(self) -> None:
+        workflow = (REPO_ROOT / ".github/workflows/web-build.yml").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn('      - "slang.yaml"', workflow)
+        self.assertIn('      - "pixi.lock"', workflow)
+        self.assertIn('      - "pixi.toml"', workflow)
+        self.assertIn('      - "third_party/**"', workflow)
+        self.assertIn('      - "assets/**"', workflow)
+        self.assertIn('      - "scripts/check_no_python_runtime.sh"', workflow)
+        self.assertNotIn('      - "scripts/**"', workflow)
+
+    def test_pixi_adds_tooling_and_nextest_entrypoints(self) -> None:
+        pixi = PIXI_TOML.read_text(encoding="utf-8")
+
+        self.assertIn('tooling-test = "bash scripts/run_python_tooling_checks.sh"', pixi)
+        self.assertIn('rust-nextest = "bash scripts/run_rust_ci_nextest.sh"', pixi)
+        self.assertIn('cargo-nextest', pixi)
+
+    def test_ci_workflow_limits_rust_parallelism_to_reduce_peak_disk_usage(self) -> None:
+        workflow = (REPO_ROOT / ".github/workflows/ci.yml").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn('      CARGO_BUILD_JOBS: "1"', workflow)
+
+    def test_ci_workflow_serializes_flutter_gate_before_expensive_jobs(self) -> None:
+        workflow = (REPO_ROOT / ".github/workflows/ci.yml").read_text(
+            encoding="utf-8"
+        )
+
+        flutter_gate_section = workflow.split("  flutter-gate:\n", maxsplit=1)[1]
+        flutter_gate_section = flutter_gate_section.split("\n\n  flutter-tests:\n", maxsplit=1)[0]
+        flutter_tests_section = workflow.split("  flutter-tests:\n", maxsplit=1)[1]
+        flutter_tests_section = flutter_tests_section.split("\n\n  flutter-web:\n", maxsplit=1)[0]
+        flutter_web_section = workflow.split("  flutter-web:\n", maxsplit=1)[1]
+        flutter_web_section = flutter_web_section.split("\n\n  rust-format:\n", maxsplit=1)[0]
+
+        self.assertIn(
+            "if: needs.changes.outputs.flutter == 'true' || needs.changes.outputs.web == 'true'",
+            flutter_gate_section,
+        )
+        self.assertIn("needs: [changes, flutter-gate]", flutter_tests_section)
+        self.assertIn("needs: [changes, flutter-gate]", flutter_web_section)
+
+    def test_ci_workflow_serializes_rust_gate_before_expensive_tests(self) -> None:
+        workflow = (REPO_ROOT / ".github/workflows/ci.yml").read_text(
+            encoding="utf-8"
+        )
+
+        rust_clippy_section = workflow.split("  rust-clippy:\n", maxsplit=1)[1]
+        rust_clippy_section = rust_clippy_section.split("\n\n  rust-tests:\n", maxsplit=1)[0]
+        rust_tests_section = workflow.split("  rust-tests:\n", maxsplit=1)[1]
+
+        self.assertIn("needs: [changes, rust-format]", rust_clippy_section)
+        self.assertIn("needs: [changes, rust-clippy]", rust_tests_section)
+
+    def test_ci_workflow_retains_rust_python_runtime_guard_in_gate(self) -> None:
+        workflow = (REPO_ROOT / ".github/workflows/ci.yml").read_text(
+            encoding="utf-8"
+        )
+
+        rust_format_section = workflow.split("  rust-format:\n", maxsplit=1)[1]
+        rust_format_section = rust_format_section.split("\n\n  rust-clippy:\n", maxsplit=1)[0]
+
+        self.assertIn('run: bash scripts/check_no_python_runtime.sh', rust_format_section)
+
+    def test_local_rust_ci_wrapper_uses_separate_target_dirs_for_parallel_jobs(self) -> None:
+        script = (REPO_ROOT / "scripts/run_full_rust_ci_local.sh").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn('worktree_cache_key=', script)
+        self.assertIn('clippy_target_dir=', script)
+        self.assertIn('nextest_target_dir=', script)
+        self.assertIn('CARGO_TARGET_DIR="${clippy_target_dir}"', script)
+        self.assertIn('CARGO_TARGET_DIR="${nextest_target_dir}"', script)
 
     def test_windows_bash_launcher_prefers_project_managed_bash_candidates(self) -> None:
         launcher = RUN_BASH_PS1.read_text(encoding="utf-8")

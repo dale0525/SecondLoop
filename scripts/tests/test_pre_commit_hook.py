@@ -226,8 +226,7 @@ class PreCommitHookTests(unittest.TestCase):
         self.assertIn('done < <(collect_related_flutter_tests_for_lib_file "${file}")', script)
         self.assertNotIn('mapfile -t related_targets', script)
         self.assertNotIn('readarray -t related_targets', script)
-        self.assertIn('if [[ ${#flutter_test_targets[@]} -ne 0 ]]; then', script)
-        self.assertIn('run_flutter_tool test --concurrency=1', script)
+        self.assertIn('collect_targeted_flutter_tests()', script)
 
     def test_pre_commit_hook_runs_full_flutter_test_when_targets_cannot_be_mapped(self) -> None:
         script = PRE_COMMIT_COMMON_SCRIPT.read_text(encoding="utf-8") + "\n" + PRE_COMMIT_COMMIT_MODE_SCRIPT.read_text(encoding="utf-8")
@@ -235,8 +234,7 @@ class PreCommitHookTests(unittest.TestCase):
         self.assertIn('if ! command -v rg >/dev/null 2>&1; then', script)
         self.assertIn('saw_unmapped_lib_change=1', script)
         self.assertIn('printf \'%s\\n\' "__FULL_SUITE__"', script)
-        self.assertIn('run_flutter_tool test --concurrency=1', script)
-        self.assertIn('if [[ ${#flutter_test_targets[@]} -eq 0 ]]; then', script)
+        self.assertNotIn('run_flutter_tool test --concurrency=1', script)
 
     def test_pre_commit_hook_no_longer_runs_rust_clippy_in_normal_commit_flow(self) -> None:
         normal_commit_flow = PRE_COMMIT_COMMIT_MODE_SCRIPT.read_text(encoding="utf-8")
@@ -244,12 +242,21 @@ class PreCommitHookTests(unittest.TestCase):
         self.assertNotIn('if ! "${cargo_bin}" clippy --manifest-path rust/Cargo.toml --all-targets --all-features -- -D warnings; then', normal_commit_flow)
         self.assertNotIn('if ! "${cargo_bin}" test --manifest-path rust/Cargo.toml --all; then', normal_commit_flow)
 
-    def test_pre_push_hook_runs_full_verification_by_default(self) -> None:
+    def test_pre_commit_hook_no_longer_runs_flutter_tests_in_normal_commit_flow(self) -> None:
+        normal_commit_flow = PRE_COMMIT_COMMIT_MODE_SCRIPT.read_text(encoding="utf-8")
+
+        self.assertNotIn('run_flutter_tool test --concurrency=1', normal_commit_flow)
+
+    def test_pre_push_hook_runs_scoped_verification_by_default(self) -> None:
         script = PRE_PUSH_HOOK.read_text(encoding="utf-8")
 
-        self.assertIn('bash scripts/verify_full.sh', script)
-        self.assertNotIn('SECONDLOOP_PRE_PUSH_FULL', script)
-        self.assertNotIn('pre-push: skipped (checks moved to pre-commit).', script)
+        self.assertIn('bash scripts/run_full_ci_parallel.sh', script)
+        self.assertIn('bash scripts/run_python_tooling_checks.sh', script)
+        self.assertIn('tooling-python-only changes detected', script)
+        self.assertIn('running full verification for pushed changes', script)
+        self.assertIn('delete-only push detected', script)
+        self.assertIn('scripts/tests/**/*.py', script)
+        self.assertIn('tools/**/*.py', script)
 
     def test_verify_changed_script_delegates_to_pre_commit_check_mode(self) -> None:
         script = VERIFY_CHANGED_SCRIPT.read_text(encoding="utf-8")
@@ -269,6 +276,11 @@ class PreCommitHookTests(unittest.TestCase):
             'powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_bash.ps1 .githooks/pre-commit --check --ci "$@"',
             script,
         )
+
+    def test_pre_commit_hook_supports_skip_tests_in_check_mode(self) -> None:
+        script = PRE_COMMIT_HOOK.read_text(encoding="utf-8")
+
+        self.assertIn('--skip-tests', script)
 
     def test_pre_commit_common_exposes_periodic_progress_helper(self) -> None:
         common = PRE_COMMIT_COMMON_SCRIPT.read_text(encoding="utf-8")

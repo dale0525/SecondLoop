@@ -16,24 +16,24 @@ class CiI18nWorkflowTests(unittest.TestCase):
         workflow = CI_WORKFLOW.read_text(encoding="utf-8")
 
         self.assertIn(
-            'bash scripts/verify_full.sh --flutter',
+            'bash .githooks/pre-commit --check --flutter --skip-tests',
             workflow,
-            'CI workflow must delegate Flutter i18n checks to the pre-commit hook',
+            'CI workflow must delegate Flutter i18n checks to the shared pre-commit engine',
         )
         self.assertIn(
-            'bash scripts/verify_full.sh --rust',
+            'bash scripts/run_flutter_test_shard.sh',
             workflow,
-            'CI workflow must delegate Rust full verification through the shared full-check script',
+            'CI workflow must run Flutter test shards explicitly',
         )
         self.assertIn(
-            'name: Full Flutter verification',
+            'name: Flutter gate',
             workflow,
-            'CI should describe the shared full verification gate clearly',
+            'CI should describe the shared Flutter gate clearly',
         )
         self.assertIn(
-            'name: Full Rust verification',
+            'name: Python tooling checks',
             workflow,
-            'CI should describe the shared full verification gate clearly',
+            'CI should run a lightweight tooling-only job for script changes',
         )
         self.assertNotIn(
             'name: Refresh i18n generated files',
@@ -53,6 +53,8 @@ class CiI18nWorkflowTests(unittest.TestCase):
         workflow = CI_WORKFLOW.read_text(encoding="utf-8")
 
         self.assertIn('"scripts/**"', workflow)
+        self.assertIn('"!scripts/tests/**"', workflow)
+        self.assertIn('"tools/**/*.py"', workflow)
 
 
 if __name__ == "__main__":

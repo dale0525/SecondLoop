@@ -222,13 +222,15 @@ temp_generated_i18n_strings_path=""
       exit 1
     fi
 
-    if (( ci_mode )); then
+    if (( ci_mode && skip_tests == 0 )); then
       if ! run_with_periodic_status "flutter test" run_flutter_tool test --concurrency=1; then
         echo "" >&2
         echo "pre-commit: flutter test failed." >&2
         echo "Fix locally with: pixi run flutter test" >&2
         exit 1
       fi
+    elif (( ci_mode && skip_tests != 0 )); then
+      echo "pre-commit: skipping Flutter tests (--skip-tests)." >&2
     fi
   fi
 
@@ -248,7 +250,9 @@ temp_generated_i18n_strings_path=""
         exit 1
       fi
 
-      if ! run_with_periodic_status "rust tests" "${cargo_bin}" test --manifest-path rust/Cargo.toml --all; then
+      if (( skip_tests != 0 )); then
+        echo "pre-commit: skipping Rust tests (--skip-tests)." >&2
+      elif ! run_with_periodic_status "rust tests" "${cargo_bin}" test --manifest-path rust/Cargo.toml --all; then
         echo "" >&2
         echo "pre-commit: rust tests failed." >&2
         echo "Fix locally with: pixi run cargo test" >&2

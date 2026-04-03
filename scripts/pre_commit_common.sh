@@ -17,8 +17,23 @@ run_with_periodic_status() {
   watcher_pid=""
 
   (
+    local sleep_pid=""
+
+    cleanup_watcher() {
+      if [[ -n "${sleep_pid}" ]] && kill -0 "${sleep_pid}" 2>/dev/null; then
+        kill "${sleep_pid}" 2>/dev/null || true
+        wait "${sleep_pid}" 2>/dev/null || true
+      fi
+      exit 0
+    }
+
+    trap cleanup_watcher TERM INT
+
     while kill -0 "${command_pid}" 2>/dev/null; do
-      sleep "${interval}"
+      sleep "${interval}" &
+      sleep_pid=$!
+      wait "${sleep_pid}" 2>/dev/null || exit 0
+      sleep_pid=""
       if ! kill -0 "${command_pid}" 2>/dev/null; then
         exit 0
       fi
@@ -122,6 +137,11 @@ to_native_windows_path() {
 }
 
 resolve_dart_bin() {
+  if [[ -n "${SECONDLOOP_DART_BIN:-}" ]]; then
+    printf '%s\n' "${SECONDLOOP_DART_BIN}"
+    return 0
+  fi
+
   if [[ -x "${repo_root}/.fvm/flutter_sdk/bin/dart" ]]; then
     printf '%s\n' "${repo_root}/.fvm/flutter_sdk/bin/dart"
     return 0
@@ -146,6 +166,11 @@ resolve_dart_bin() {
 }
 
 resolve_flutter_bin() {
+  if [[ -n "${SECONDLOOP_FLUTTER_BIN:-}" ]]; then
+    printf '%s\n' "${SECONDLOOP_FLUTTER_BIN}"
+    return 0
+  fi
+
   if [[ -x "${repo_root}/.fvm/flutter_sdk/bin/flutter" ]]; then
     printf '%s\n' "${repo_root}/.fvm/flutter_sdk/bin/flutter"
     return 0
@@ -165,6 +190,24 @@ resolve_flutter_bin() {
     command -v flutter.bat
     return 0
   fi
+
+  return 1
+}
+
+resolve_python_bin() {
+  local candidate
+  local python_candidates=(
+    "${repo_root}/.pixi/envs/default/bin/python"
+    "${repo_root}/.pixi/envs/default/python.exe"
+    "${repo_root}/.pixi/envs/default/bin/python3"
+  )
+
+  for candidate in "${python_candidates[@]}"; do
+    if [[ -x "${candidate}" || -f "${candidate}" ]]; then
+      printf '%s\n' "${candidate}"
+      return 0
+    fi
+  done
 
   return 1
 }

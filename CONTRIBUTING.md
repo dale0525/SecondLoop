@@ -5,7 +5,7 @@ By contributing to this repository, you agree that your contributions are licens
 ## Quick start (no secrets needed)
 
 - Install Flutter via Pixi/FVM: `pixi run setup-flutter`
-- Install git hooks (fast pre-commit + full pre-push verification): `pixi run install-git-hooks`
+- Install git hooks (fast pre-commit + scoped pre-push verification): `pixi run install-git-hooks`
 - Run formatting:
   - Check (matches CI): `pixi run fmt-check`
   - Auto-fix: `pixi run fmt`
@@ -15,8 +15,11 @@ By contributing to this repository, you agree that your contributions are licens
 - Run the full local CI suite (same scope as `pre-push` / CI; Flutter and Rust run in parallel locally): `pixi run ci`
 - Shared verification entrypoints:
   - Check-only local gate (same non-mutating engine as CI, narrower than `verify_full`): `pixi run verify-changed`
+  - Python tooling-only changes: `pixi run tooling-test`
   - Full local/CI gate: `pixi run ci`
   - Direct script forms: `bash scripts/verify_changed.sh` / `bash scripts/verify_full.sh`
+
+`pre-commit` stays fast by limiting itself to formatting/analyze checks. `pre-push` is scoped pre-push verification: Python tooling-only changes under `scripts/tests/*.py` and the covered tool entrypoints (`tools/check_icon_corners.py`, `tools/i18n_translate.py`, `tools/round_icon.py`, `tools/week11_gateway_smoke.py`, `tools/windows_https_update_server.py`) run lightweight tooling tests, while app/runtime, uncovered tool changes, and gate changes still run the full suite.
 
 ## Common development commands
 

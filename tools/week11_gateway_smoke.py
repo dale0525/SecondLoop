@@ -279,7 +279,7 @@ def _extract_error(body: dict[str, Any] | None, fallback_text: str) -> str | Non
     try:
         import re
 
-        match = re.search(r'"error"\\s*:\\s*"([^"]+)"', fallback_text)
+        match = re.search(r'"error"\s*:\s*"([^"]+)"', fallback_text)
     except Exception:
         match = None
     return match.group(1) if match else None
