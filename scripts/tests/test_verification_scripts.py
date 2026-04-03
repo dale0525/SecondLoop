@@ -289,7 +289,7 @@ class VerificationScriptsTests(unittest.TestCase):
         self.assertIn('              - "tools/check_icon_corners.py"', tooling_section)
         self.assertIn('              - "tools/round_icon.py"', tooling_section)
         self.assertIn('              - "tools/week11_gateway_smoke.py"', tooling_section)
-        self.assertNotIn('              - "tools/**/*.py"', tooling_section)
+        self.assertIn('              - "tools/**/*.py"', tooling_section)
 
     def test_ci_workflow_uses_pixi_tasks_for_cold_start_safe_tooling_jobs(self) -> None:
         workflow = (REPO_ROOT / ".github/workflows/ci.yml").read_text(

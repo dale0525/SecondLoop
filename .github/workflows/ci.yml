@@ -37,6 +37,7 @@ jobs:
               - "pixi.toml"
               - "pixi.lock"
               - "scripts/**"
+              - "tools/**/*.py"
               - "tools/check_icon_corners.py"
               - "tools/i18n_translate.py"
               - "tools/round_icon.py"
