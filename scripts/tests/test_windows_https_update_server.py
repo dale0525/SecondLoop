@@ -141,6 +141,25 @@ class WindowsHttpsUpdateServerPathTests(unittest.TestCase):
             self.assertIn(b"SecondLoop v1.0.1", body)
             self.assertNotIn(b"SecondLoop Dev v1.0.1", body)
 
+    def test_release_page_route_escapes_html_fragments(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            downloads = root / "downloads"
+            downloads.mkdir()
+
+            status, body = self._request(
+                root,
+                "/releases/v1.0.1<script>alert(1)</script>",
+                app_name='SecondLoop <Dev>',
+            )
+
+            self.assertEqual(status, 200)
+            self.assertIn(
+                b"SecondLoop &lt;Dev&gt; v1.0.1&lt;script&gt;alert(1)&lt;/script&gt;",
+                body,
+            )
+            self.assertNotIn(b"<script>alert(1)</script>", body)
+
     def _request(self, root: Path, path: str, app_name: str = "SecondLoop Dev") -> tuple[int, bytes]:
         status, _, body = self._request_with_method(root, "GET", path, app_name=app_name)
         return status, body

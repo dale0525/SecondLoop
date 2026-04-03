@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import html
 import ssl
 from collections.abc import Sequence
 from http import HTTPStatus
@@ -138,8 +139,8 @@ class UpdateFeedHandler(SimpleHTTPRequestHandler):
         if normalized.startswith("/releases/"):
             release_name = normalized.removeprefix("/releases/") or "latest"
             body = (
-                f"<html><body><h1>{self.app_name} "
-                f"{release_name}</h1></body></html>"
+                f"<html><body><h1>{html.escape(self.app_name)} "
+                f"{html.escape(release_name)}</h1></body></html>"
             ).encode("utf-8")
             self._write_body(
                 status=HTTPStatus.OK,
