@@ -165,14 +165,6 @@ String normalizeStrictAppVersion(
   return '${segments[0]}.${segments[1]}.${segments[2]}';
 }
 
-List<int> trimTrailingZeroSegments(List<int> segments) {
-  final normalized = List<int>.from(segments, growable: true);
-  while (normalized.length > 1 && normalized.last == 0) {
-    normalized.removeLast();
-  }
-  return normalized;
-}
-
 List<int>? tryParseStrictAppVersion(String input) {
   final match = RegExp(r'^[vV]?(\d+)\.(\d+)\.(\d+)$').firstMatch(input.trim());
   if (match == null) {
