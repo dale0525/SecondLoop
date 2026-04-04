@@ -140,6 +140,7 @@ void main() {
       scriptText,
       contains(r'current_start=$(process_start_time "$APP_PID")'),
     );
+    expect(scriptText, contains("sed 's/^ *//' || true"));
     expect(
       scriptText,
       contains(r'if [ -z "$current_start" ]; then'),
@@ -168,6 +169,38 @@ void main() {
       isFalse,
     );
   });
+
+  test(
+    'updater script keeps ps start-time lookup non-fatal for wait pid races',
+    () async {
+      final tempDir =
+          await Directory.systemTemp.createTemp('macos_update_test_');
+      addTearDown(() => tempDir.delete(recursive: true));
+
+      final archiveFile = await _createMacosArchive(tempDir);
+      String? capturedScriptPath;
+
+      final client = DefaultMacosManagedUpdateClient(
+        executablePath:
+            '/Applications/SecondLoop.app/Contents/MacOS/SecondLoop',
+        environment: const {'HOME': '/Users/tester'},
+        processStarter: (executable, arguments,
+            {mode = ProcessStartMode.normal}) async {
+          capturedScriptPath = arguments.single;
+          return Process.start('/usr/bin/true', const []);
+        },
+      );
+
+      await client.installArchiveAndRestart(archiveFile.uri, waitPid: 4321);
+
+      final scriptText = await File(capturedScriptPath!).readAsString();
+      expect(
+        scriptText,
+        contains(
+            "/bin/ps -o lstart= -p \"\$1\" 2>/dev/null | sed 's/^ *//' || true"),
+      );
+    },
+  );
 
   test(
     'updater script still installs when waited pid is already gone',

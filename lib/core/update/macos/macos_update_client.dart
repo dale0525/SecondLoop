@@ -262,7 +262,7 @@ MAX_WAIT=60
 waited=0
 
 process_start_time() {
-  /bin/ps -o lstart= -p "\$1" 2>/dev/null | sed 's/^ *//'
+  /bin/ps -o lstart= -p "\$1" 2>/dev/null | sed 's/^ *//' || true
 }
 
 copy_app_bundle() {
