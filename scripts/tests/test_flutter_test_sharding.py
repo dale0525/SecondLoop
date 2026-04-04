@@ -31,7 +31,7 @@ class FlutterTestShardingTests(unittest.TestCase):
         )
         return [line.strip() for line in result.stdout.splitlines() if line.strip()]
 
-    def test_select_flutter_test_targets_uses_round_robin_shards(self) -> None:
+    def test_select_flutter_test_targets_shards_unit_tests_and_serializes_integration_tests(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             repo_root = Path(temp_dir)
             (repo_root / "integration_test").mkdir(parents=True)
@@ -52,11 +52,39 @@ class FlutterTestShardingTests(unittest.TestCase):
         self.assertEqual(
             shard_zero,
             [
+                "test/beta_test.dart",
                 "integration_test/alpha_test.dart",
-                "test/nested/gamma_test.dart",
             ],
         )
-        self.assertEqual(shard_one, ["test/beta_test.dart"])
+        self.assertEqual(shard_one, ["test/nested/gamma_test.dart"])
+
+    def test_select_flutter_test_targets_keeps_all_integration_tests_on_first_shard(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            repo_root = Path(temp_dir)
+            (repo_root / "integration_test").mkdir(parents=True)
+            (repo_root / "test").mkdir(parents=True)
+
+            for relative_path in [
+                "integration_test/alpha_test.dart",
+                "integration_test/beta_test.dart",
+                "test/unit_test.dart",
+            ]:
+                (repo_root / relative_path).write_text("// stub\n", encoding="utf-8")
+
+            shard_zero = self._run_shard(repo_root, 0, 3)
+            shard_one = self._run_shard(repo_root, 1, 3)
+            shard_two = self._run_shard(repo_root, 2, 3)
+
+        self.assertEqual(
+            shard_zero,
+            [
+                "test/unit_test.dart",
+                "integration_test/alpha_test.dart",
+                "integration_test/beta_test.dart",
+            ],
+        )
+        self.assertEqual(shard_one, [])
+        self.assertEqual(shard_two, [])
 
     def test_select_flutter_test_targets_rejects_out_of_range_shard_index(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

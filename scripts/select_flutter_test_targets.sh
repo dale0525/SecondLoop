@@ -40,19 +40,29 @@ done
 
 cd "${repo_root}"
 
-search_roots=()
-for candidate in test integration_test; do
-  if [[ -d "${candidate}" ]]; then
-    search_roots+=("${candidate}")
-  fi
-done
+unit_search_roots=()
+if [[ -d "test" ]]; then
+  unit_search_roots+=("test")
+fi
 
-if [[ ${#search_roots[@]} -eq 0 ]]; then
+integration_search_roots=()
+if [[ -d "integration_test" ]]; then
+  integration_search_roots+=("integration_test")
+fi
+
+if [[ ${#unit_search_roots[@]} -eq 0 && ${#integration_search_roots[@]} -eq 0 ]]; then
   exit 0
 fi
 
-find "${search_roots[@]}" -type f -name '*_test.dart' | LC_ALL=C sort | awk -v shard_count="${shard_count}" -v shard_index="${shard_index}" '
-  ((NR - 1) % shard_count) == shard_index {
-    print $0
-  }
-'
+if [[ ${#unit_search_roots[@]} -ne 0 ]]; then
+  find "${unit_search_roots[@]}" -type f -name '*_test.dart' | LC_ALL=C sort | awk -v shard_count="${shard_count}" -v shard_index="${shard_index}" '
+    ((NR - 1) % shard_count) == shard_index {
+      print $0
+    }
+  '
+fi
+
+# Desktop integration tests target a single host device, so keep them on one shard.
+if [[ ${shard_index} -eq 0 && ${#integration_search_roots[@]} -ne 0 ]]; then
+  find "${integration_search_roots[@]}" -type f -name '*_test.dart' | LC_ALL=C sort
+fi
