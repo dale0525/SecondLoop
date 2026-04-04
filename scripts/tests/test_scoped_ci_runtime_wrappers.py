@@ -481,6 +481,109 @@ class ScopedCiRuntimeWrapperBehaviorTests(unittest.TestCase):
                 ],
             )
 
+    def test_flutter_test_shard_uses_dev_app_id_defaults_for_macos_integration(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            repo_root = Path(temp_dir)
+            self._init_repo(repo_root, "main")
+
+            scripts_dir = repo_root / "scripts"
+            lib_i18n_dir = repo_root / "lib/i18n"
+            fake_bin_dir = repo_root / "fake-bin"
+            scripts_dir.mkdir(parents=True, exist_ok=True)
+            lib_i18n_dir.mkdir(parents=True, exist_ok=True)
+            fake_bin_dir.mkdir(parents=True, exist_ok=True)
+            (lib_i18n_dir / "strings.g.dart").write_text("// generated\n", encoding="utf-8")
+
+            shard_script = scripts_dir / "run_flutter_test_shard.sh"
+            shard_script.write_text(
+                RUN_FLUTTER_TEST_SHARD.read_text(encoding="utf-8"),
+                encoding="utf-8",
+            )
+            self._make_executable(shard_script)
+
+            (scripts_dir / "pre_commit_common.sh").write_text(
+                "\n".join(
+                    [
+                        "die() {",
+                        "  echo \"pre-commit: $*\" >&2",
+                        "  exit 1",
+                        "}",
+                        "",
+                        f"resolve_flutter_bin() {{ printf '%s\\n' \"{(fake_bin_dir / 'flutter').as_posix()}\"; }}",
+                        "",
+                        "resolve_default_flutter_test_device() {",
+                        "  printf '%s\\n' macos",
+                        "}",
+                        "",
+                        "run_with_periodic_status() {",
+                        "  local _label=\"$1\"",
+                        "  shift",
+                        "  \"$@\"",
+                        "}",
+                        "",
+                        "run_flutter_tool() {",
+                        "  local flutter_bin",
+                        "  flutter_bin=\"$(resolve_flutter_bin)\"",
+                        "  env -u GIT_DIR -u GIT_WORK_TREE -u GIT_INDEX_FILE \"${flutter_bin}\" \"$@\"",
+                        "}",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            (scripts_dir / "select_flutter_test_targets.sh").write_text(
+                (
+                    "#!/usr/bin/env bash\n"
+                    "set -euo pipefail\n"
+                    "printf 'integration_test/app_flow_test.dart\\n'"
+                ),
+                encoding="utf-8",
+            )
+            self._make_executable(scripts_dir / "select_flutter_test_targets.sh")
+
+            (fake_bin_dir / "flutter").write_text(
+                "\n".join(
+                    [
+                        "#!/usr/bin/env bash",
+                        "set -euo pipefail",
+                        'repo_root="$(git rev-parse --show-toplevel)"',
+                        (
+                            'printf \'%s|%s|%s|%s\\n\' '
+                            '"${SECONDLOOP_APP_ID-}" "${SECONDLOOP_APP_NAME-}" "$(command -v xcrun)" "$*" '
+                            '>> "${repo_root}/flutter.log"'
+                        ),
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            self._make_executable(fake_bin_dir / "flutter")
+
+            result = self._run(
+                [
+                    "bash",
+                    "scripts/run_flutter_test_shard.sh",
+                    "--shard-index",
+                    "0",
+                    "--shard-count",
+                    "1",
+                ],
+                cwd=repo_root,
+            )
+
+            self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+            lines = (repo_root / "flutter.log").read_text(encoding="utf-8").splitlines()
+            self.assertEqual(len(lines), 1)
+            self.assertRegex(
+                lines[0],
+                (
+                    r"^com\.secondloop\.secondloopdev\|SecondLoop Dev\|"
+                    r".*/secondloop_xcrun\.[^/]+/xcrun\|"
+                    r"test -d macos --concurrency=1 integration_test/app_flow_test\.dart$"
+                ),
+            )
+
     def test_local_flutter_ci_stops_shards_early_when_gate_fails(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             repo_root = Path(temp_dir)

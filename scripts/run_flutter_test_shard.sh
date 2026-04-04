@@ -11,6 +11,15 @@ if [[ -z "${repo_root}" ]]; then
   exit 0
 fi
 
+macos_xcrun_wrapper_dir=""
+
+cleanup() {
+  if [[ -n "${macos_xcrun_wrapper_dir}" ]]; then
+    rm -rf "${macos_xcrun_wrapper_dir}" 2>/dev/null || true
+  fi
+}
+trap cleanup EXIT
+
 shard_index=""
 shard_count=""
 
@@ -35,6 +44,25 @@ done
 
 cd "${repo_root}"
 source "${repo_root}/scripts/pre_commit_common.sh"
+
+create_macos_xcrun_wrapper() {
+  local wrapper_dir
+  wrapper_dir="$(mktemp -d -t secondloop_xcrun.XXXXXX)" ||
+    die "failed to create temporary xcrun wrapper"
+  cat > "${wrapper_dir}/xcrun" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [[ "${1:-}" == "xcodebuild" ]]; then
+  shift
+  exec /usr/bin/xcrun xcodebuild -allowProvisioningUpdates "$@"
+fi
+
+exec /usr/bin/xcrun "$@"
+EOF
+  chmod +x "${wrapper_dir}/xcrun" || die "failed to mark temporary xcrun wrapper as executable"
+  printf '%s\n' "${wrapper_dir}"
+}
 
 if [[ ! -f "${repo_root}/lib/i18n/strings.g.dart" ]]; then
   die "lib/i18n/strings.g.dart is required before running shards. Run \`pixi run i18n-refresh\` or use scripts/run_flutter_ci_local.sh."
@@ -77,6 +105,13 @@ fi
 if [[ ${#integration_test_targets[@]} -ne 0 ]]; then
   integration_test_device="$(resolve_default_flutter_test_device)" ||
     die "unable to determine a default Flutter integration test device. Set SECONDLOOP_FLUTTER_TEST_DEVICE_ID."
+  if [[ "${integration_test_device}" == "macos" ]]; then
+    # Local desktop runs use the dev app identity and allow Xcode to refresh provisioning data.
+    export SECONDLOOP_APP_ID="${SECONDLOOP_APP_ID:-com.secondloop.secondloopdev}"
+    export SECONDLOOP_APP_NAME="${SECONDLOOP_APP_NAME:-SecondLoop Dev}"
+    macos_xcrun_wrapper_dir="$(create_macos_xcrun_wrapper)"
+    export PATH="${macos_xcrun_wrapper_dir}:${PATH}"
+  fi
   for target in "${integration_test_targets[@]}"; do
     run_with_periodic_status \
       "flutter test shard ${shard_index}/${shard_count} (integration: ${target})" \
