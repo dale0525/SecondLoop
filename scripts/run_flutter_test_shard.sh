@@ -64,6 +64,20 @@ EOF
   printf '%s\n' "${wrapper_dir}"
 }
 
+run_linux_integration_test() {
+  local integration_test_device="$1"
+  local target="$2"
+  local flutter_bin
+
+  flutter_bin="$(resolve_flutter_bin)" || die "Missing 'flutter'. Install Flutter (recommended: \`pixi run setup-flutter\`) or add Flutter to PATH."
+  command -v xvfb-run >/dev/null 2>&1 ||
+    die "xvfb-run is required for Linux integration tests. Install xvfb or add xvfb-run to PATH."
+
+  env -u GIT_DIR -u GIT_WORK_TREE -u GIT_INDEX_FILE \
+    xvfb-run -a --server-args="-screen 0 1280x720x24" \
+    "${flutter_bin}" test -d "${integration_test_device}" --concurrency=1 "${target}"
+}
+
 if [[ ! -f "${repo_root}/lib/i18n/strings.g.dart" ]]; then
   die "lib/i18n/strings.g.dart is required before running shards. Run \`pixi run i18n-refresh\` or use scripts/run_flutter_ci_local.sh."
 fi
@@ -113,8 +127,14 @@ if [[ ${#integration_test_targets[@]} -ne 0 ]]; then
     export PATH="${macos_xcrun_wrapper_dir}:${PATH}"
   fi
   for target in "${integration_test_targets[@]}"; do
-    run_with_periodic_status \
-      "flutter test shard ${shard_index}/${shard_count} (integration: ${target})" \
-      run_flutter_tool test -d "${integration_test_device}" --concurrency=1 "${target}"
+    if [[ "${integration_test_device}" == "linux" ]]; then
+      run_with_periodic_status \
+        "flutter test shard ${shard_index}/${shard_count} (integration: ${target})" \
+        run_linux_integration_test "${integration_test_device}" "${target}"
+    else
+      run_with_periodic_status \
+        "flutter test shard ${shard_index}/${shard_count} (integration: ${target})" \
+        run_flutter_tool test -d "${integration_test_device}" --concurrency=1 "${target}"
+    fi
   done
 fi

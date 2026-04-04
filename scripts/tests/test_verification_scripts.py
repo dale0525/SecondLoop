@@ -149,6 +149,14 @@ class VerificationScriptsTests(unittest.TestCase):
         self.assertIn('lib/i18n/strings.g.dart is required before running shards', script)
         self.assertNotIn('failed to regenerate lib/i18n/strings.g.dart', script)
 
+    def test_flutter_test_shard_uses_xvfb_for_linux_integration_targets(self) -> None:
+        script = (REPO_ROOT / "scripts/run_flutter_test_shard.sh").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn('if [[ "${integration_test_device}" == "linux" ]]; then', script)
+        self.assertIn('xvfb-run -a', script)
+
     def test_local_rust_ci_wrapper_keeps_rustfmt_before_nextest_and_doc_tests(self) -> None:
         script = (REPO_ROOT / "scripts/run_full_rust_ci_local.sh").read_text(
             encoding="utf-8"
@@ -434,6 +442,7 @@ class VerificationScriptsTests(unittest.TestCase):
         self.assertIn("libvulkan-dev", flutter_tests_section)
         self.assertIn("glslc", flutter_tests_section)
         self.assertIn("pkg-config", flutter_tests_section)
+        self.assertIn("xvfb", flutter_tests_section)
 
     def test_ci_workflow_rust_clippy_job_avoids_repeating_rustfmt(self) -> None:
         workflow = (REPO_ROOT / ".github/workflows/ci.yml").read_text(

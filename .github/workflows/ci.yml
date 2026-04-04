@@ -190,7 +190,8 @@ jobs:
             libkeybinder-3.0-dev \
             libsecret-1-dev \
             libvulkan-dev \
-            pkg-config
+            pkg-config \
+            xvfb
       - name: Pub get
         run: flutter pub get
       - name: Generate i18n
