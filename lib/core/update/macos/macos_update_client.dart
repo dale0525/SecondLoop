@@ -262,10 +262,26 @@ MAX_WAIT=60
 waited=0
 
 process_start_time() {
-  /bin/ps -o lstart= -p "\$1" 2>/dev/null | sed 's/^ *//' || true
+  /bin/ps -o lstart= -p "\$1" 2>/dev/null | sed 's/^ *//'
 }
 
-APP_START=\$(process_start_time "\$APP_PID")
+copy_app_bundle() {
+  if command -v ditto >/dev/null 2>&1; then
+    ditto "\$REPLACEMENT_APP" "\$TARGET_APP"
+    return
+  fi
+
+  cp -R "\$REPLACEMENT_APP" "\$TARGET_APP"
+}
+
+APP_START=""
+if kill -0 "\$APP_PID" 2>/dev/null; then
+  APP_START=\$(process_start_time "\$APP_PID")
+  if [ -z "\$APP_START" ]; then
+    rm -rf "\$TEMP_ROOT" || true
+    exit 1
+  fi
+fi
 
 same_process_running() {
   if ! kill -0 "\$APP_PID" 2>/dev/null; then
@@ -273,13 +289,13 @@ same_process_running() {
   fi
 
   if [ -z "\$APP_START" ]; then
-    return 0
+    return 1
   fi
 
   local current_start
   current_start=\$(process_start_time "\$APP_PID")
   if [ -z "\$current_start" ]; then
-    return 1
+    return 0
   fi
 
   [ "\$current_start" = "\$APP_START" ]
@@ -298,7 +314,7 @@ fi
 rm -rf "\$BACKUP_APP"
 mv "\$TARGET_APP" "\$BACKUP_APP"
 
-if ditto "\$REPLACEMENT_APP" "\$TARGET_APP"; then
+if copy_app_bundle; then
   /usr/bin/xattr -dr com.apple.quarantine "\$TARGET_APP" >/dev/null 2>&1 || true
   open -a "\$TARGET_APP" >/dev/null 2>&1 || nohup "\$TARGET_EXECUTABLE" >/dev/null 2>&1 &
   rm -rf "\$BACKUP_APP" "\$TEMP_ROOT" || true

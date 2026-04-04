@@ -122,17 +122,35 @@ void main() {
     expect(scriptText, contains('APP_PID=4321'));
     expect(scriptText, contains('MAX_WAIT=60'));
     expect(scriptText, contains('process_start_time()'));
+    expect(scriptText, contains('copy_app_bundle()'));
+    expect(
+      scriptText,
+      contains('if kill -0 "\$APP_PID" 2>/dev/null; then'),
+    );
+    expect(scriptText, contains('APP_START=""'));
     expect(
       scriptText,
       contains(r'APP_START=$(process_start_time "$APP_PID")'),
     );
     expect(
       scriptText,
+      contains(r'if [ -z "$APP_START" ]; then'),
+    );
+    expect(
+      scriptText,
       contains(r'current_start=$(process_start_time "$APP_PID")'),
+    );
+    expect(
+      scriptText,
+      contains(r'if [ -z "$current_start" ]; then'),
+    );
+    expect(
+      scriptText,
+      contains(r'return 0'),
     );
     expect(scriptText, contains(r'waited=$((waited + 1))'));
     expect(scriptText, contains('mv "\$TARGET_APP" "\$BACKUP_APP"'));
-    expect(scriptText, contains('ditto "\$REPLACEMENT_APP" "\$TARGET_APP"'));
+    expect(scriptText, contains('copy_app_bundle'));
     expect(scriptText, contains('xattr -dr com.apple.quarantine'));
     expect(scriptText, contains('open -a "\$TARGET_APP"'));
     expect(
@@ -154,8 +172,6 @@ void main() {
   test(
     'updater script still installs when waited pid is already gone',
     () async {
-      if (!Platform.isMacOS) return;
-
       final tempDir =
           await Directory.systemTemp.createTemp('macos_update_script_');
       addTearDown(() => tempDir.delete(recursive: true));
