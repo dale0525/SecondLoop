@@ -26,14 +26,62 @@ prepared_worktree=""
 flutter_gate_pid=""
 overall_status=0
 
+terminate_process_tree() {
+  local pid="$1"
+  local signal="${2:-TERM}"
+  local child_pid
+  local child_pids=()
+
+  [[ -n "${pid}" ]] || return 0
+
+  if command -v pgrep >/dev/null 2>&1; then
+    while IFS= read -r child_pid; do
+      [[ -n "${child_pid}" ]] || continue
+      child_pids+=("${child_pid}")
+    done < <(pgrep -P "${pid}" 2>/dev/null || true)
+  fi
+
+  if kill -0 "${pid}" 2>/dev/null; then
+    kill "-${signal}" "${pid}" 2>/dev/null || kill "${pid}" 2>/dev/null || true
+  fi
+
+  for child_pid in "${child_pids[@]-}"; do
+    [[ -n "${child_pid}" ]] || continue
+    terminate_process_tree "${child_pid}" "${signal}"
+  done
+}
+
+terminate_tracked_process() {
+  local pid="$1"
+  local attempts
+
+  [[ -n "${pid}" ]] || return 0
+
+  if ! kill -0 "${pid}" 2>/dev/null; then
+    wait "${pid}" 2>/dev/null || true
+    return 0
+  fi
+
+  terminate_process_tree "${pid}" TERM
+
+  attempts=20
+  while kill -0 "${pid}" 2>/dev/null && (( attempts > 0 )); do
+    sleep 0.1
+    attempts=$((attempts - 1))
+  done
+
+  if kill -0 "${pid}" 2>/dev/null; then
+    terminate_process_tree "${pid}" KILL
+  fi
+
+  wait "${pid}" 2>/dev/null || true
+}
+
 cleanup() {
   local pid worktree
 
   for pid in "${flutter_gate_pid:-}" "${flutter_test_pids[@]-}"; do
-    if [[ -n "${pid}" ]] && kill -0 "${pid}" 2>/dev/null; then
-      kill "${pid}" 2>/dev/null || true
-      wait "${pid}" 2>/dev/null || true
-    fi
+    terminate_tracked_process "${pid}"
   done
 
   for worktree in "${flutter_test_worktrees[@]-}"; do
@@ -145,13 +193,10 @@ cat "${flutter_gate_log}"
 
 if [[ ${gate_status} -ne 0 ]]; then
   for pid in "${flutter_test_pids[@]}"; do
-    if kill -0 "${pid}" 2>/dev/null; then
-      kill "${pid}" 2>/dev/null || true
-    fi
+    terminate_tracked_process "${pid}"
   done
 
   for index in "${!flutter_test_pids[@]}"; do
-    wait "${flutter_test_pids[$index]}" 2>/dev/null || true
     cat "${flutter_test_logs[$index]}"
   done
 
@@ -174,7 +219,7 @@ cancel_remaining_shards() {
     pid="${flutter_test_pids[$index]}"
     if kill -0 "${pid}" 2>/dev/null; then
       echo "ci: cancelling Flutter shard ${index}/${flutter_shards} after shard ${failed_index} failure..." >&2
-      kill "${pid}" 2>/dev/null || true
+      terminate_process_tree "${pid}" TERM
     fi
   done
 }

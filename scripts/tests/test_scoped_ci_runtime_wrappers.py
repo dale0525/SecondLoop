@@ -620,6 +620,18 @@ class ScopedCiRuntimeWrapperBehaviorTests(unittest.TestCase):
                         "resolve_flutter_bin() {",
                         "  printf '%s\\n' /bin/true",
                         "}",
+                        "",
+                        "run_with_periodic_status() {",
+                        "  local _label=\"$1\"",
+                        "  shift",
+                        "  \"$@\"",
+                        "}",
+                        "",
+                        "run_flutter_tool() {",
+                        "  local flutter_bin",
+                        "  flutter_bin=\"$(resolve_flutter_bin)\"",
+                        "  env -u GIT_DIR -u GIT_WORK_TREE -u GIT_INDEX_FILE \"${flutter_bin}\" \"$@\"",
+                        "}",
                     ]
                 )
                 + "\n",
@@ -637,8 +649,8 @@ class ScopedCiRuntimeWrapperBehaviorTests(unittest.TestCase):
                     [
                         "#!/usr/bin/env bash",
                         "set -euo pipefail",
-                        "repo_root=\"$(git rev-parse --show-toplevel)\"",
-                        "trap 'printf terminated >> \"${repo_root}/terminated.log\"; exit 143' TERM",
+                        "common_dir=\"$(git rev-parse --git-common-dir)\"",
+                        "trap 'printf \"terminated\\n\" >> \"${common_dir}/terminated.log\"; exit 143' TERM",
                         "sleep 10",
                     ]
                 )
@@ -670,6 +682,11 @@ class ScopedCiRuntimeWrapperBehaviorTests(unittest.TestCase):
 
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("gate-failed", result.stdout + result.stderr)
+            self.assertTrue((repo_root / ".git/terminated.log").exists())
+            self.assertEqual(
+                (repo_root / ".git/terminated.log").read_text(encoding="utf-8").splitlines(),
+                ["terminated", "terminated"],
+            )
 
     def test_local_flutter_ci_uses_repo_managed_fvm_toolchain_inside_temp_worktrees(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
