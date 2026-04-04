@@ -431,6 +431,8 @@ class VerificationScriptsTests(unittest.TestCase):
         self.assertIn("libgtk-3-dev", flutter_tests_section)
         self.assertIn("libsecret-1-dev", flutter_tests_section)
         self.assertIn("libkeybinder-3.0-dev", flutter_tests_section)
+        self.assertIn("libvulkan-dev", flutter_tests_section)
+        self.assertIn("glslc", flutter_tests_section)
         self.assertIn("pkg-config", flutter_tests_section)
 
     def test_ci_workflow_rust_clippy_job_avoids_repeating_rustfmt(self) -> None:

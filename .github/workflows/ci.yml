@@ -184,10 +184,12 @@ jobs:
             indicator_pkg='libappindicator3-dev'
           fi
           sudo apt-get install -y \
+            glslc \
             libgtk-3-dev \
             "${indicator_pkg}" \
             libkeybinder-3.0-dev \
             libsecret-1-dev \
+            libvulkan-dev \
             pkg-config
       - name: Pub get
         run: flutter pub get
