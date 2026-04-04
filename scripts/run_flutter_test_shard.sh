@@ -58,6 +58,24 @@ fi
 
 resolve_flutter_bin >/dev/null || die "Missing 'flutter'. Install Flutter (recommended: \`pixi run setup-flutter\`) or add Flutter to PATH."
 
-run_with_periodic_status \
-  "flutter test shard ${shard_index}/${shard_count}" \
-  run_flutter_tool test --concurrency=1 "${test_targets[@]}"
+unit_test_targets=()
+integration_test_targets=()
+
+for target in "${test_targets[@]}"; do
+  case "${target}" in
+    integration_test/*) integration_test_targets+=("${target}") ;;
+    *) unit_test_targets+=("${target}") ;;
+  esac
+done
+
+if [[ ${#unit_test_targets[@]} -ne 0 ]]; then
+  run_with_periodic_status \
+    "flutter test shard ${shard_index}/${shard_count} (unit)" \
+    run_flutter_tool test --concurrency=1 "${unit_test_targets[@]}"
+fi
+
+if [[ ${#integration_test_targets[@]} -ne 0 ]]; then
+  run_with_periodic_status \
+    "flutter test shard ${shard_index}/${shard_count} (integration)" \
+    run_flutter_tool test --concurrency=1 "${integration_test_targets[@]}"
+fi
