@@ -259,25 +259,59 @@ BACKUP_APP=$backupApp
 TEMP_ROOT=$tempRoot
 TARGET_EXECUTABLE=$targetExecutable
 MAX_WAIT=60
+PS_BIN="\${PS_BIN:-/bin/ps}"
+DITTO_BIN="\${DITTO_BIN:-ditto}"
+XATTR_BIN="\${XATTR_BIN:-/usr/bin/xattr}"
+OPEN_BIN="\${OPEN_BIN:-open}"
+INITIAL_START_MAX_RETRIES="\${INITIAL_START_MAX_RETRIES:-3}"
+INITIAL_START_RETRY_DELAY="\${INITIAL_START_RETRY_DELAY:-1}"
 waited=0
 
 process_start_time() {
-  /bin/ps -o lstart= -p "\$1" 2>/dev/null | sed 's/^ *//' || true
+  "\$PS_BIN" -o lstart= -p "\$1" 2>/dev/null | sed 's/^ *//' || true
+}
+
+capture_initial_process_start_time() {
+  local attempts=0
+  local start_time
+  while true; do
+    if ! kill -0 "\$APP_PID" 2>/dev/null; then
+      return 2
+    fi
+
+    start_time=\$(process_start_time "\$APP_PID")
+    if [ -n "\$start_time" ]; then
+      printf '%s\n' "\$start_time"
+      return 0
+    fi
+
+    attempts=\$((attempts + 1))
+    if [ "\$attempts" -ge "\$INITIAL_START_MAX_RETRIES" ]; then
+      return 1
+    fi
+
+    sleep "\$INITIAL_START_RETRY_DELAY"
+  done
 }
 
 copy_app_bundle() {
-  if command -v ditto >/dev/null 2>&1; then
-    ditto "\$REPLACEMENT_APP" "\$TARGET_APP"
-    return
-  fi
-
-  cp -R "\$REPLACEMENT_APP" "\$TARGET_APP"
+  "\$DITTO_BIN" "\$REPLACEMENT_APP" "\$TARGET_APP"
 }
 
 APP_START=""
 if kill -0 "\$APP_PID" 2>/dev/null; then
-  APP_START=\$(process_start_time "\$APP_PID")
-  if [ -z "\$APP_START" ]; then
+  if APP_START=\$(capture_initial_process_start_time); then
+    :
+  else
+    capture_status=\$?
+    if [ "\$capture_status" -eq 1 ]; then
+      rm -rf "\$TEMP_ROOT" || true
+      exit 1
+    fi
+
+    APP_START=""
+  fi
+  if [ -z "\$APP_START" ] && kill -0 "\$APP_PID" 2>/dev/null; then
     rm -rf "\$TEMP_ROOT" || true
     exit 1
   fi
@@ -315,8 +349,8 @@ rm -rf "\$BACKUP_APP"
 mv "\$TARGET_APP" "\$BACKUP_APP"
 
 if copy_app_bundle; then
-  /usr/bin/xattr -dr com.apple.quarantine "\$TARGET_APP" >/dev/null 2>&1 || true
-  open -a "\$TARGET_APP" >/dev/null 2>&1 || nohup "\$TARGET_EXECUTABLE" >/dev/null 2>&1 &
+  "\$XATTR_BIN" -dr com.apple.quarantine "\$TARGET_APP" >/dev/null 2>&1 || true
+  "\$OPEN_BIN" -a "\$TARGET_APP" >/dev/null 2>&1 || nohup "\$TARGET_EXECUTABLE" >/dev/null 2>&1 &
   rm -rf "\$BACKUP_APP" "\$TEMP_ROOT" || true
 else
   mv "\$TARGET_APP" "\$TARGET_APP.failed" 2>/dev/null || true
@@ -325,7 +359,7 @@ else
     exit 1
   }
   rm -rf "\$TARGET_APP.failed" || true
-  open -a "\$TARGET_APP" >/dev/null 2>&1 || true
+  "\$OPEN_BIN" -a "\$TARGET_APP" >/dev/null 2>&1 || true
   rm -rf "\$TEMP_ROOT" || true
   exit 1
 fi
