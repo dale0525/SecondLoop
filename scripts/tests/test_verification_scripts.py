@@ -419,6 +419,18 @@ class VerificationScriptsTests(unittest.TestCase):
 
         self.assertNotIn("fail-fast: false", flutter_tests_section)
 
+    def test_ci_workflow_flutter_tests_install_linux_desktop_dependencies(self) -> None:
+        workflow = (REPO_ROOT / ".github/workflows/ci.yml").read_text(
+            encoding="utf-8"
+        )
+
+        flutter_tests_section = workflow.split("  flutter-tests:\n", maxsplit=1)[1]
+        flutter_tests_section = flutter_tests_section.split("\n\n  flutter-web:\n", maxsplit=1)[0]
+
+        self.assertIn("Install Linux desktop dependencies", flutter_tests_section)
+        self.assertIn("libgtk-3-dev", flutter_tests_section)
+        self.assertIn("pkg-config", flutter_tests_section)
+
     def test_ci_workflow_rust_clippy_job_avoids_repeating_rustfmt(self) -> None:
         workflow = (REPO_ROOT / ".github/workflows/ci.yml").read_text(
             encoding="utf-8"
@@ -443,6 +455,16 @@ class VerificationScriptsTests(unittest.TestCase):
         self.assertIn("SECONDLOOP_CARGO_BIN", rust_format_section)
         self.assertIn("pixi exec bash -lc", rust_clippy_section)
         self.assertIn("SECONDLOOP_CARGO_BIN", rust_clippy_section)
+
+    def test_ci_workflow_rust_tests_expose_system_vulkan_linker_paths(self) -> None:
+        workflow = (REPO_ROOT / ".github/workflows/ci.yml").read_text(
+            encoding="utf-8"
+        )
+
+        rust_tests_section = workflow.split("  rust-tests:\n", maxsplit=1)[1]
+
+        self.assertIn("LIBRARY_PATH", rust_tests_section)
+        self.assertIn("/usr/lib/x86_64-linux-gnu", rust_tests_section)
 
     def test_ci_workflow_retains_rust_python_runtime_guard_in_gate(self) -> None:
         workflow = (REPO_ROOT / ".github/workflows/ci.yml").read_text(
