@@ -142,9 +142,9 @@ void main() {
       contains(r'current_start=$(process_start_time "$APP_PID")'),
     );
     expect(scriptText, contains(r'PS_BIN="${PS_BIN:-/bin/ps}"'));
-    expect(scriptText, contains(r'DITTO_BIN="${DITTO_BIN:-ditto}"'));
+    expect(scriptText, contains(r'DITTO_BIN="${DITTO_BIN:-/usr/bin/ditto}"'));
     expect(scriptText, contains(r'XATTR_BIN="${XATTR_BIN:-/usr/bin/xattr}"'));
-    expect(scriptText, contains(r'OPEN_BIN="${OPEN_BIN:-open}"'));
+    expect(scriptText, contains(r'OPEN_BIN="${OPEN_BIN:-/usr/bin/open}"'));
     expect(scriptText, contains('INITIAL_START_MAX_RETRIES='));
     expect(scriptText, contains('INITIAL_START_RETRY_DELAY='));
     expect(
@@ -296,6 +296,63 @@ cp -R "\$src" "\$dst"
       expect(await psCountFile.readAsString(), isNot('1'));
       expect(
           int.parse(await psCountFile.readAsString()), greaterThanOrEqualTo(3));
+      expect(Directory('${appBundle.path}.backup').existsSync(), isFalse);
+      expect(Directory('${appBundle.path}.failed').existsSync(), isFalse);
+      expect(tempRoot.existsSync(), isFalse);
+    },
+  );
+
+  test(
+    'updater script installs successfully when invoked via /bin/sh',
+    () async {
+      final tempDir =
+          await Directory.systemTemp.createTemp('macos_update_script_');
+      addTearDown(() => tempDir.delete(recursive: true));
+
+      final homeDir = Directory('${tempDir.path}/home');
+      final appBundle =
+          Directory('${homeDir.path}/Applications/SecondLoop.app');
+      final currentExecutable = File(
+        '${appBundle.path}/Contents/MacOS/SecondLoop',
+      );
+      final currentMarker = File(
+        '${appBundle.path}/Contents/Resources/version.txt',
+      );
+      await currentExecutable.parent.create(recursive: true);
+      await currentExecutable.writeAsString('#!/bin/sh\nexit 0\n');
+      final currentMode =
+          await Process.run('chmod', ['+x', currentExecutable.path]);
+      if (currentMode.exitCode != 0) {
+        throw StateError('chmod_failed_${currentMode.stderr}');
+      }
+      await currentMarker.parent.create(recursive: true);
+      await currentMarker.writeAsString('old');
+
+      final archiveFile = await _createMacosArchive(
+        tempDir,
+        markerText: 'new',
+      );
+      String? capturedScriptPath;
+
+      final client = DefaultMacosManagedUpdateClient(
+        executablePath: currentExecutable.path,
+        environment: {'HOME': homeDir.path},
+        processStarter: (executable, arguments,
+            {mode = ProcessStartMode.normal}) async {
+          capturedScriptPath = arguments.single;
+          return Process.start('/usr/bin/true', const []);
+        },
+      );
+
+      await client.installArchiveAndRestart(archiveFile.uri, waitPid: 999999);
+
+      final scriptPath = capturedScriptPath;
+      expect(scriptPath, isNotNull);
+      final tempRoot = Directory(File(scriptPath!).parent.path);
+
+      final result = await Process.run('/bin/sh', [scriptPath]);
+      expect(result.exitCode, 0, reason: '${result.stdout}\n${result.stderr}');
+      expect(await currentMarker.readAsString(), 'new');
       expect(Directory('${appBundle.path}.backup').existsSync(), isFalse);
       expect(Directory('${appBundle.path}.failed').existsSync(), isFalse);
       expect(tempRoot.existsSync(), isFalse);
