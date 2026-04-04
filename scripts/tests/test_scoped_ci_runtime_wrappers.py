@@ -422,7 +422,13 @@ class ScopedCiRuntimeWrapperBehaviorTests(unittest.TestCase):
             )
 
             (scripts_dir / "select_flutter_test_targets.sh").write_text(
-                "#!/usr/bin/env bash\nset -euo pipefail\nprintf 'test/unit_a_test.dart\\nintegration_test/app_flow_test.dart\\n'",
+                (
+                    "#!/usr/bin/env bash\n"
+                    "set -euo pipefail\n"
+                    "printf 'test/unit_a_test.dart\\n"
+                    "integration_test/app_flow_test.dart\\n"
+                    "integration_test/second_flow_test.dart\\n'"
+                ),
                 encoding="utf-8",
             )
             self._make_executable(scripts_dir / "select_flutter_test_targets.sh")
@@ -471,6 +477,7 @@ class ScopedCiRuntimeWrapperBehaviorTests(unittest.TestCase):
                 [
                     "test --concurrency=1 test/unit_a_test.dart",
                     "test -d macos --concurrency=1 integration_test/app_flow_test.dart",
+                    "test -d macos --concurrency=1 integration_test/second_flow_test.dart",
                 ],
             )
 
