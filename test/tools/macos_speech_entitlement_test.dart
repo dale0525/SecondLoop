@@ -3,7 +3,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test('macos entitlements enable speech recognition access', () {
+  test('macos entitlements enable required desktop capabilities', () {
     const files = <String>[
       'macos/Runner/DebugProfile.entitlements',
       'macos/Runner/Release.entitlements',
@@ -20,6 +20,16 @@ void main() {
           ),
         ),
         reason: 'missing speech-recognition entitlement in $path',
+      );
+      expect(
+        content,
+        contains(
+          RegExp(
+            r'<key>keychain-access-groups</key>\s*<array\s*/>',
+            multiLine: true,
+          ),
+        ),
+        reason: 'missing keychain access groups entitlement in $path',
       );
     }
   });
