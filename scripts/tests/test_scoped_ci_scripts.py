@@ -434,6 +434,105 @@ class ScopedCiScriptBehaviorTests(unittest.TestCase):
             )
             self.assertFalse((lib_i18n_dir / "strings.g.dart").exists())
 
+    def test_local_flutter_ci_removes_temporary_git_worktrees_on_cleanup(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            repo_root = Path(temp_dir)
+            self._init_repo(repo_root, "main")
+
+            scripts_dir = repo_root / "scripts"
+            hooks_dir = repo_root / ".githooks"
+            lib_i18n_dir = repo_root / "lib/i18n"
+            test_dir = repo_root / "test"
+            scripts_dir.mkdir(parents=True, exist_ok=True)
+            hooks_dir.mkdir(parents=True, exist_ok=True)
+            lib_i18n_dir.mkdir(parents=True, exist_ok=True)
+            test_dir.mkdir(parents=True, exist_ok=True)
+
+            (test_dir / "sample_test.dart").write_text("// stub\n", encoding="utf-8")
+
+            (scripts_dir / "run_flutter_ci_local.sh").write_text(
+                RUN_FLUTTER_CI_LOCAL.read_text(encoding="utf-8"),
+                encoding="utf-8",
+            )
+            self._make_executable(scripts_dir / "run_flutter_ci_local.sh")
+
+            (scripts_dir / "pre_commit_common.sh").write_text(
+                "\n".join(
+                    [
+                        "die() {",
+                        "  echo \"pre-commit: $*\" >&2",
+                        "  exit 1",
+                        "}",
+                        "",
+                        "resolve_dart_bin() {",
+                        "  printf '%s\\n' /bin/true",
+                        "}",
+                        "",
+                        "resolve_flutter_bin() {",
+                        "  printf '%s\\n' /bin/true",
+                        "}",
+                        "",
+                        "run_with_periodic_status() {",
+                        "  local _label=\"$1\"",
+                        "  shift",
+                        "  \"$@\"",
+                        "}",
+                        "",
+                        "run_flutter_tool() {",
+                        "  return 0",
+                        "}",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            (scripts_dir / "run_i18n_refresh.sh").write_text(
+                "\n".join(
+                    [
+                        "#!/usr/bin/env bash",
+                        "set -euo pipefail",
+                        "repo_root=\"$(git rev-parse --show-toplevel)\"",
+                        "mkdir -p \"${repo_root}/lib/i18n\"",
+                        "printf '// generated\\n' > \"${repo_root}/lib/i18n/strings.g.dart\"",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            self._make_executable(scripts_dir / "run_i18n_refresh.sh")
+
+            (scripts_dir / "run_flutter_test_shard.sh").write_text(
+                "#!/usr/bin/env bash\nset -euo pipefail\nexit 0\n",
+                encoding="utf-8",
+            )
+            self._make_executable(scripts_dir / "run_flutter_test_shard.sh")
+
+            (hooks_dir / "pre-commit").write_text(
+                "#!/usr/bin/env bash\nset -euo pipefail\nexit 0\n",
+                encoding="utf-8",
+            )
+            self._make_executable(hooks_dir / "pre-commit")
+
+            self._commit_all(repo_root, "fixture")
+
+            result = subprocess.run(
+                ["bash", "scripts/run_flutter_ci_local.sh"],
+                cwd=repo_root,
+                check=False,
+                capture_output=True,
+                text=True,
+                env={
+                    **os.environ,
+                    "SECONDLOOP_LOCAL_FLUTTER_TEST_SHARDS": "2",
+                },
+            )
+
+            self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+            worktrees_dir = repo_root / ".git" / "worktrees"
+            worktree_entries = sorted(path.name for path in worktrees_dir.iterdir()) if worktrees_dir.exists() else []
+            self.assertEqual(worktree_entries, [])
+
     def test_local_flutter_ci_syncs_dirty_workspace_state_into_parallel_shards(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             repo_root = Path(temp_dir)

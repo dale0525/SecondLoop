@@ -22,6 +22,7 @@ flutter_shards="${SECONDLOOP_LOCAL_FLUTTER_TEST_SHARDS:-4}"
 flutter_test_logs=()
 flutter_test_pids=()
 flutter_test_worktrees=()
+created_flutter_worktree=""
 prepared_worktree=""
 flutter_gate_pid=""
 overall_status=0
@@ -103,7 +104,7 @@ create_flutter_worktree() {
   fi
 
   flutter_test_worktrees+=("${worktree_path}")
-  printf '%s\n' "${worktree_path}"
+  created_flutter_worktree="${worktree_path}"
 }
 
 sync_workspace_state_into_worktree() {
@@ -149,7 +150,8 @@ bash .githooks/pre-commit --check --flutter >"${flutter_gate_log}" 2>&1 &
 flutter_gate_pid=$!
 
 echo "ci: preparing i18n outputs in a temporary Flutter worktree..." >&2
-prepared_worktree="$(create_flutter_worktree "prepared-shard-0")"
+create_flutter_worktree "prepared-shard-0"
+prepared_worktree="${created_flutter_worktree}"
 sync_workspace_state_into_worktree "${prepared_worktree}"
 if ! (
   cd "${prepared_worktree}"
@@ -170,7 +172,8 @@ fi
 for (( shard_index = 0; shard_index < flutter_shards; shard_index++ )); do
   shard_worktree="${prepared_worktree}"
   if (( shard_index > 0 )); then
-    shard_worktree="$(create_flutter_worktree "shard-${shard_index}")"
+    create_flutter_worktree "shard-${shard_index}"
+    shard_worktree="${created_flutter_worktree}"
     sync_workspace_state_into_worktree "${shard_worktree}"
     copy_prepared_flutter_tool_state "${shard_worktree}"
     copy_prepared_i18n_tree "${shard_worktree}"
