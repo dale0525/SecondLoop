@@ -113,9 +113,8 @@ jobs:
               - "windows/**"
               - "web/**"
             rust_builder_package:
+              - ".fvm/fvm_config.json"
               - ".github/workflows/**"
-              - "pixi.toml"
-              - "pixi.lock"
               - "scripts/pre_commit_common.sh"
               - "scripts/run_rust_builder_package_tests.sh"
               - "rust_builder/cargokit/build_tool/**"
@@ -143,11 +142,8 @@ jobs:
           flutter-version: "3.22.3"
           channel: stable
           cache: true
-      - uses: prefix-dev/setup-pixi@v0.9.3
-        with:
-          cache: true
       - name: Rust builder package tests
-        run: pixi run rust-builder-test
+        run: SECONDLOOP_DART_BIN="$(command -v dart)" bash scripts/run_rust_builder_package_tests.sh
 
   flutter-gate:
     needs: changes
@@ -222,7 +218,11 @@ jobs:
       - name: "Guard: no python runtime process usage"
         run: bash scripts/check_no_python_runtime.sh
       - name: Rust fmt
-        run: bash .githooks/pre-commit --check --rust
+        run: |
+          pixi exec bash -lc '
+            export SECONDLOOP_CARGO_BIN="$(command -v cargo)"
+            bash .githooks/pre-commit --check --rust
+          '
 
   rust-clippy:
     needs: [changes, rust-format]
@@ -249,7 +249,11 @@ jobs:
           sudo apt-get install -y libvulkan-dev glslc
           command -v glslc
       - name: Rust clippy
-        run: bash .githooks/pre-commit --check --rust --ci --skip-tests --clippy-only
+        run: |
+          pixi exec bash -lc '
+            export SECONDLOOP_CARGO_BIN="$(command -v cargo)"
+            bash .githooks/pre-commit --check --rust --ci --skip-tests --clippy-only
+          '
 
   rust-tests:
     needs: [changes, rust-clippy]

@@ -79,6 +79,12 @@ prepend_path() {
 }
 
 resolve_cargo_bin() {
+  if [[ -n "${SECONDLOOP_CARGO_BIN:-}" ]]; then
+    cargo_bin="${SECONDLOOP_CARGO_BIN}"
+    prepend_path "$(dirname "${cargo_bin}")"
+    return 0
+  fi
+
   local candidate
   local cargo_candidates=(
     "${repo_root}/.tool/cargo/bin/cargo"

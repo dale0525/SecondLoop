@@ -138,6 +138,84 @@ class ScopedCiRuntimeWrapperBehaviorTests(unittest.TestCase):
                 ["pub-get", "test"],
             )
 
+    def test_rust_builder_package_tests_honor_explicit_dart_bin_override(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            repo_root = Path(temp_dir)
+            self._init_repo(repo_root, "main")
+
+            scripts_dir = repo_root / "scripts"
+            rust_builder_package_dir = repo_root / "rust_builder/cargokit/build_tool"
+            fake_bin_dir = repo_root / "fake-bin"
+            scripts_dir.mkdir(parents=True, exist_ok=True)
+            rust_builder_package_dir.mkdir(parents=True, exist_ok=True)
+            fake_bin_dir.mkdir(parents=True, exist_ok=True)
+
+            (rust_builder_package_dir / "pubspec.yaml").write_text(
+                "name: build_tool\n",
+                encoding="utf-8",
+            )
+
+            (scripts_dir / "run_rust_builder_package_tests.sh").write_text(
+                RUN_RUST_BUILDER_PACKAGE_TESTS.read_text(encoding="utf-8"),
+                encoding="utf-8",
+            )
+            self._make_executable(scripts_dir / "run_rust_builder_package_tests.sh")
+
+            (scripts_dir / "pre_commit_common.sh").write_text(
+                PRE_COMMIT_COMMON.read_text(encoding="utf-8"),
+                encoding="utf-8",
+            )
+
+            (fake_bin_dir / "dart").write_text(
+                "\n".join(
+                    [
+                        "#!/usr/bin/env bash",
+                        "set -euo pipefail",
+                        'repo_root="$(git rev-parse --show-toplevel)"',
+                        'printf \'%s\\n\' "$*" >> "${repo_root}/dart.log"',
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            self._make_executable(fake_bin_dir / "dart")
+
+            self._commit_all(repo_root, "fixture")
+
+            result = subprocess.run(
+                ["bash", "scripts/run_rust_builder_package_tests.sh"],
+                cwd=repo_root,
+                check=False,
+                capture_output=True,
+                text=True,
+                timeout=5,
+                env={
+                    **os.environ,
+                    "PATH": "/usr/bin:/bin",
+                },
+            )
+            self.assertNotEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+
+            result = subprocess.run(
+                ["bash", "scripts/run_rust_builder_package_tests.sh"],
+                cwd=repo_root,
+                check=False,
+                capture_output=True,
+                text=True,
+                timeout=5,
+                env={
+                    **os.environ,
+                    "SECONDLOOP_DART_BIN": (fake_bin_dir / "dart").as_posix(),
+                    "PATH": f"/usr/bin:/bin:{fake_bin_dir.as_posix()}",
+                },
+            )
+
+            self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+            self.assertEqual(
+                (repo_root / "dart.log").read_text(encoding="utf-8").splitlines(),
+                ["pub get", "test"],
+            )
+
     def test_flutter_test_shard_fails_when_selector_script_fails(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             repo_root = Path(temp_dir)

@@ -177,6 +177,7 @@ class VerificationScriptsTests(unittest.TestCase):
         self.assertIn('"${cargo_bin}" nextest run', script)
         self.assertIn('"${cargo_bin}" test --manifest-path rust/Cargo.toml --doc', script)
         self.assertIn('resolve_cargo_bin', script)
+        self.assertIn('SECONDLOOP_CARGO_BIN', (REPO_ROOT / "scripts/pre_commit_common.sh").read_text(encoding="utf-8"))
 
     def test_windows_smoke_tests_resolve_powershell_portably(self) -> None:
         script = (REPO_ROOT / "scripts/tests/test_windows_auto_update_smoke.py").read_text(
@@ -354,7 +355,8 @@ class VerificationScriptsTests(unittest.TestCase):
         self.assertIn("rust_builder_package:", workflow)
         self.assertIn('      rust_builder_package: ${{ steps.filter.outputs.rust_builder_package }}', workflow)
         self.assertIn("  rust-builder-tests:\n", workflow)
-        self.assertIn("run: pixi run rust-builder-test", workflow)
+        self.assertIn('SECONDLOOP_DART_BIN="$(command -v dart)" bash scripts/run_rust_builder_package_tests.sh', workflow)
+        self.assertNotIn("run: pixi run rust-builder-test", workflow)
 
     def test_ci_workflow_rust_builder_scope_covers_support_scripts(self) -> None:
         workflow = (REPO_ROOT / ".github/workflows/ci.yml").read_text(
@@ -366,6 +368,7 @@ class VerificationScriptsTests(unittest.TestCase):
 
         self.assertIn('              - "scripts/run_rust_builder_package_tests.sh"', rust_builder_section)
         self.assertIn('              - "scripts/pre_commit_common.sh"', rust_builder_section)
+        self.assertIn('              - ".fvm/fvm_config.json"', rust_builder_section)
 
     def test_ci_workflow_limits_rust_parallelism_to_reduce_peak_disk_usage(self) -> None:
         workflow = (REPO_ROOT / ".github/workflows/ci.yml").read_text(
@@ -424,6 +427,21 @@ class VerificationScriptsTests(unittest.TestCase):
         rust_clippy_section = rust_clippy_section.split("\n\n  rust-tests:\n", maxsplit=1)[0]
 
         self.assertIn("--clippy-only", rust_clippy_section)
+
+    def test_ci_workflow_rust_hook_jobs_bind_to_pixi_managed_cargo(self) -> None:
+        workflow = (REPO_ROOT / ".github/workflows/ci.yml").read_text(
+            encoding="utf-8"
+        )
+
+        rust_format_section = workflow.split("  rust-format:\n", maxsplit=1)[1]
+        rust_format_section = rust_format_section.split("\n\n  rust-clippy:\n", maxsplit=1)[0]
+        rust_clippy_section = workflow.split("  rust-clippy:\n", maxsplit=1)[1]
+        rust_clippy_section = rust_clippy_section.split("\n\n  rust-tests:\n", maxsplit=1)[0]
+
+        self.assertIn("pixi exec bash -lc", rust_format_section)
+        self.assertIn("SECONDLOOP_CARGO_BIN", rust_format_section)
+        self.assertIn("pixi exec bash -lc", rust_clippy_section)
+        self.assertIn("SECONDLOOP_CARGO_BIN", rust_clippy_section)
 
     def test_ci_workflow_retains_rust_python_runtime_guard_in_gate(self) -> None:
         workflow = (REPO_ROOT / ".github/workflows/ci.yml").read_text(
