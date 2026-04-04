@@ -260,7 +260,12 @@ TEMP_ROOT=$tempRoot
 TARGET_EXECUTABLE=$targetExecutable
 MAX_WAIT=60
 waited=0
-APP_START=\$(/bin/ps -o lstart= -p "\$APP_PID" 2>/dev/null | sed 's/^ *//')
+
+process_start_time() {
+  /bin/ps -o lstart= -p "\$1" 2>/dev/null | sed 's/^ *//' || true
+}
+
+APP_START=\$(process_start_time "\$APP_PID")
 
 same_process_running() {
   if ! kill -0 "\$APP_PID" 2>/dev/null; then
@@ -272,7 +277,7 @@ same_process_running() {
   fi
 
   local current_start
-  current_start=\$(/bin/ps -o lstart= -p "\$APP_PID" 2>/dev/null | sed 's/^ *//')
+  current_start=\$(process_start_time "\$APP_PID")
   if [ -z "\$current_start" ]; then
     return 1
   fi

@@ -121,9 +121,14 @@ void main() {
     final scriptText = await File(scriptPath).readAsString();
     expect(scriptText, contains('APP_PID=4321'));
     expect(scriptText, contains('MAX_WAIT=60'));
+    expect(scriptText, contains('process_start_time()'));
     expect(
       scriptText,
-      contains(r'APP_START=$(/bin/ps -o lstart= -p "$APP_PID"'),
+      contains(r'APP_START=$(process_start_time "$APP_PID")'),
+    );
+    expect(
+      scriptText,
+      contains(r'current_start=$(process_start_time "$APP_PID")'),
     );
     expect(scriptText, contains(r'waited=$((waited + 1))'));
     expect(scriptText, contains('mv "\$TARGET_APP" "\$BACKUP_APP"'));
@@ -145,6 +150,61 @@ void main() {
       isFalse,
     );
   });
+
+  test(
+    'updater script still installs when waited pid is already gone',
+    () async {
+      if (!Platform.isMacOS) return;
+
+      final tempDir =
+          await Directory.systemTemp.createTemp('macos_update_script_');
+      addTearDown(() => tempDir.delete(recursive: true));
+
+      final homeDir = Directory('${tempDir.path}/home');
+      final appBundle =
+          Directory('${homeDir.path}/Applications/SecondLoop.app');
+      final currentExecutable = File(
+        '${appBundle.path}/Contents/MacOS/SecondLoop',
+      );
+      final currentMarker = File(
+        '${appBundle.path}/Contents/Resources/version.txt',
+      );
+      await currentExecutable.parent.create(recursive: true);
+      await currentExecutable.writeAsString('#!/bin/sh\nexit 0\n');
+      await Process.run('chmod', ['+x', currentExecutable.path]);
+      await currentMarker.parent.create(recursive: true);
+      await currentMarker.writeAsString('old');
+
+      final archiveFile = await _createMacosArchive(
+        tempDir,
+        markerText: 'new',
+      );
+      String? capturedScriptPath;
+
+      final client = DefaultMacosManagedUpdateClient(
+        executablePath: currentExecutable.path,
+        environment: {'HOME': homeDir.path},
+        processStarter: (executable, arguments,
+            {mode = ProcessStartMode.normal}) async {
+          capturedScriptPath = arguments.single;
+          return Process.start('/usr/bin/true', const []);
+        },
+      );
+
+      await client.installArchiveAndRestart(archiveFile.uri, waitPid: 999999);
+
+      final scriptPath = capturedScriptPath;
+      expect(scriptPath, isNotNull);
+      final tempRoot = Directory(File(scriptPath!).parent.path);
+
+      final result = await Process.run('/bin/bash', [scriptPath]);
+      expect(result.exitCode, 0, reason: '${result.stdout}\n${result.stderr}');
+      expect(await currentMarker.readAsString(), 'new');
+      expect(Directory('${appBundle.path}.backup').existsSync(), isFalse);
+      expect(Directory('${appBundle.path}.failed').existsSync(), isFalse);
+      expect(tempRoot.existsSync(), isFalse);
+    },
+  );
 }
 
 Set<String> _listMacosUpdateTempDirs() {
@@ -158,13 +218,25 @@ Set<String> _listMacosUpdateTempDirs() {
       .toSet();
 }
 
-Future<File> _createMacosArchive(Directory tempDir) async {
+Future<File> _createMacosArchive(
+  Directory tempDir, {
+  String markerText = 'binary',
+}) async {
   final sourceRoot = Directory('${tempDir.path}/source');
   final executable = File(
     '${sourceRoot.path}/SecondLoop.app/Contents/MacOS/SecondLoop',
   );
+  final markerFile = File(
+    '${sourceRoot.path}/SecondLoop.app/Contents/Resources/version.txt',
+  );
   await executable.parent.create(recursive: true);
-  await executable.writeAsString('binary');
+  await executable.writeAsString('#!/bin/sh\nexit 0\n');
+  await markerFile.parent.create(recursive: true);
+  await markerFile.writeAsString(markerText);
+  final modeResult = await Process.run('chmod', ['+x', executable.path]);
+  if (modeResult.exitCode != 0) {
+    throw StateError('chmod_failed_${modeResult.stderr}');
+  }
 
   final archiveFile =
       File('${tempDir.path}/SecondLoop-macos-v1.2.3.app.tar.gz');
