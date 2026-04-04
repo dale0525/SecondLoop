@@ -105,7 +105,8 @@ class VerificationScriptsTests(unittest.TestCase):
             encoding="utf-8"
         )
 
-        self.assertIn('bash .githooks/pre-commit --check --flutter --skip-tests', script)
+        self.assertIn('bash .githooks/pre-commit --check --flutter', script)
+        self.assertNotIn('bash .githooks/pre-commit --check --flutter --skip-tests', script)
         self.assertIn('SECONDLOOP_LOCAL_FLUTTER_TEST_SHARDS', script)
         self.assertIn('bash scripts/run_flutter_test_shard.sh', script)
 

@@ -159,7 +159,7 @@ jobs:
       - name: Pub get
         run: flutter pub get
       - name: Flutter gate
-        run: bash .githooks/pre-commit --check --flutter --skip-tests
+        run: bash .githooks/pre-commit --check --flutter
 
   flutter-tests:
     needs: [changes, flutter-gate]

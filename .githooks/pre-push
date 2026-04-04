@@ -129,9 +129,8 @@ if [[ ${scope_reliable} -eq 0 ]]; then
 fi
 
 if [[ ${#push_changed_files[@]} -eq 0 ]]; then
-  echo "pre-push: unable to scope pushed changes; running full verification." >&2
-  bash scripts/run_full_ci_parallel.sh
-  exit $?
+  echo "pre-push: no file changes in pushed range; skipping verification." >&2
+  exit 0
 fi
 
 needs_tooling_python=0

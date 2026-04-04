@@ -16,7 +16,7 @@ class CiI18nWorkflowTests(unittest.TestCase):
         workflow = CI_WORKFLOW.read_text(encoding="utf-8")
 
         self.assertIn(
-            'bash .githooks/pre-commit --check --flutter --skip-tests',
+            'bash .githooks/pre-commit --check --flutter',
             workflow,
             'CI workflow must delegate Flutter i18n checks to the shared pre-commit engine',
         )

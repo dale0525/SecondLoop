@@ -97,7 +97,7 @@ copy_prepared_flutter_tool_state() {
 }
 
 echo "ci: starting Flutter gate..." >&2
-bash .githooks/pre-commit --check --flutter --skip-tests >"${flutter_gate_log}" 2>&1 &
+bash .githooks/pre-commit --check --flutter >"${flutter_gate_log}" 2>&1 &
 flutter_gate_pid=$!
 
 echo "ci: preparing i18n outputs in a temporary Flutter worktree..." >&2

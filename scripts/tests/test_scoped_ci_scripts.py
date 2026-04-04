@@ -214,6 +214,40 @@ class ScopedCiScriptBehaviorTests(unittest.TestCase):
             self.assertFalse((repo_root / "hook.log").exists(), msg=result.stderr)
             self.assertIn("delete-only push detected", result.stderr)
 
+    def test_pre_push_skips_verification_when_pushed_range_has_no_file_changes(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            repo_root = Path(temp_dir)
+            self._init_repo(repo_root, "main")
+            self._write_pre_push_fixture_scripts(repo_root)
+
+            self._commit_file(repo_root, "README.md", "base\n", "base")
+
+            result = self._run(["git", "checkout", "-b", "feature"], cwd=repo_root)
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+
+            self._commit_file(repo_root, "README.md", "branch change\n", "branch change")
+            feature_remote_sha = self._run(["git", "rev-parse", "HEAD"], cwd=repo_root)
+            self.assertEqual(feature_remote_sha.returncode, 0, msg=feature_remote_sha.stderr)
+
+            result = self._run(["git", "commit", "--allow-empty", "-m", "empty"], cwd=repo_root)
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+
+            head_sha = self._run(["git", "rev-parse", "HEAD"], cwd=repo_root)
+            self.assertEqual(head_sha.returncode, 0, msg=head_sha.stderr)
+
+            result = self._run(
+                ["bash", ".githooks/pre-push"],
+                cwd=repo_root,
+                input_text=(
+                    f"refs/heads/feature {head_sha.stdout.strip()} "
+                    f"refs/heads/feature {feature_remote_sha.stdout.strip()}\n"
+                ),
+            )
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            self.assertFalse((repo_root / "hook.log").exists(), msg=result.stderr)
+            self.assertIn("no file changes in pushed range", result.stderr)
+
     def test_pre_push_runs_tooling_checks_only_for_covered_python_tools(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             repo_root = Path(temp_dir)
