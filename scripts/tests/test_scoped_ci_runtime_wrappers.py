@@ -15,6 +15,7 @@ RUN_FLUTTER_CI_LOCAL = REPO_ROOT / "scripts/run_flutter_ci_local.sh"
 RUN_FLUTTER_TEST_SHARD = REPO_ROOT / "scripts/run_flutter_test_shard.sh"
 RUN_FLUTTER_WEB_CI_LOCAL = REPO_ROOT / "scripts/run_flutter_web_ci_local.sh"
 RUN_I18N_REFRESH = REPO_ROOT / "scripts/run_i18n_refresh.sh"
+RUN_RUST_CI_NEXTEST = REPO_ROOT / "scripts/run_rust_ci_nextest.sh"
 RUN_RUST_BUILDER_PACKAGE_TESTS = REPO_ROOT / "scripts/run_rust_builder_package_tests.sh"
 SELECT_FLUTTER_TEST_TARGETS = REPO_ROOT / "scripts/select_flutter_test_targets.sh"
 
@@ -214,6 +215,93 @@ class ScopedCiRuntimeWrapperBehaviorTests(unittest.TestCase):
             self.assertEqual(
                 (repo_root / "dart.log").read_text(encoding="utf-8").splitlines(),
                 ["pub get", "test"],
+            )
+
+    def test_rust_nextest_wrapper_finds_project_managed_cargo_nextest_plugin(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            repo_root = Path(temp_dir)
+            self._init_repo(repo_root, "main")
+
+            scripts_dir = repo_root / "scripts"
+            tool_cargo_bin_dir = repo_root / ".tool/cargo/bin"
+            pixi_bin_dir = repo_root / ".pixi/envs/default/bin"
+            scripts_dir.mkdir(parents=True, exist_ok=True)
+            tool_cargo_bin_dir.mkdir(parents=True, exist_ok=True)
+            pixi_bin_dir.mkdir(parents=True, exist_ok=True)
+
+            (scripts_dir / "run_rust_ci_nextest.sh").write_text(
+                RUN_RUST_CI_NEXTEST.read_text(encoding="utf-8"),
+                encoding="utf-8",
+            )
+            self._make_executable(scripts_dir / "run_rust_ci_nextest.sh")
+
+            (scripts_dir / "pre_commit_common.sh").write_text(
+                PRE_COMMIT_COMMON.read_text(encoding="utf-8"),
+                encoding="utf-8",
+            )
+
+            (tool_cargo_bin_dir / "cargo").write_text(
+                "\n".join(
+                    [
+                        "#!/usr/bin/env bash",
+                        "set -euo pipefail",
+                        'repo_root="$(git rev-parse --show-toplevel)"',
+                        'printf \'%s\\n\' \"$*\" >> "${repo_root}/cargo.log"',
+                        'if [[ "${1:-}" == "nextest" ]]; then',
+                        '  if ! command -v cargo-nextest >/dev/null 2>&1; then',
+                        "    echo 'error: no such command: `nextest`' >&2",
+                        "    exit 101",
+                        "  fi",
+                        '  exec cargo-nextest "${@:2}"',
+                        "fi",
+                        'if [[ "${1:-}" == "test" && "${*: -1}" == "--doc" ]]; then',
+                        "  exit 0",
+                        "fi",
+                        "exit 0",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            self._make_executable(tool_cargo_bin_dir / "cargo")
+
+            (pixi_bin_dir / "cargo-nextest").write_text(
+                "\n".join(
+                    [
+                        "#!/usr/bin/env bash",
+                        "set -euo pipefail",
+                        'repo_root="$(git rev-parse --show-toplevel)"',
+                        'printf \'%s\\n\' \"$*\" >> "${repo_root}/nextest.log"',
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            self._make_executable(pixi_bin_dir / "cargo-nextest")
+
+            self._commit_all(repo_root, "fixture")
+
+            result = subprocess.run(
+                ["bash", "scripts/run_rust_ci_nextest.sh"],
+                cwd=repo_root,
+                check=False,
+                capture_output=True,
+                text=True,
+                timeout=5,
+                env={
+                    **os.environ,
+                    "PATH": "/usr/bin:/bin",
+                },
+            )
+
+            self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
+            self.assertIn(
+                "run --manifest-path rust/Cargo.toml --all-features",
+                (repo_root / "nextest.log").read_text(encoding="utf-8"),
+            )
+            self.assertIn(
+                "test --manifest-path rust/Cargo.toml --doc",
+                (repo_root / "cargo.log").read_text(encoding="utf-8"),
             )
 
     def test_flutter_test_shard_fails_when_selector_script_fails(self) -> None:

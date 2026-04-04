@@ -111,6 +111,34 @@ resolve_cargo_bin() {
   return 1
 }
 
+resolve_cargo_plugin_bin() {
+  local plugin_name="$1"
+  local candidate
+  local plugin_candidates=(
+    "${repo_root}/.tool/cargo/bin/${plugin_name}"
+    "${repo_root}/.tool/cargo/bin/${plugin_name}.exe"
+    "${repo_root}/.pixi/envs/default/bin/${plugin_name}"
+    "${repo_root}/.pixi/envs/default/bin/${plugin_name}.exe"
+    "${repo_root}/.pixi/envs/default/Library/bin/${plugin_name}"
+    "${repo_root}/.pixi/envs/default/Library/bin/${plugin_name}.exe"
+  )
+
+  for candidate in "${plugin_candidates[@]}"; do
+    if [[ -x "${candidate}" ]]; then
+      prepend_path "$(dirname "${candidate}")"
+      printf '%s\n' "${candidate}"
+      return 0
+    fi
+  done
+
+  if command -v "${plugin_name}" >/dev/null 2>&1; then
+    command -v "${plugin_name}"
+    return 0
+  fi
+
+  return 1
+}
+
 is_windows_env() {
   local uname_value
   uname_value="$(uname -s 2>/dev/null || true)"

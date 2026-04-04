@@ -10,6 +10,7 @@ cd "${repo_root}"
 source "${repo_root}/scripts/pre_commit_common.sh"
 
 resolve_cargo_bin >/dev/null || cargo_missing_message
+resolve_cargo_plugin_bin cargo-nextest >/dev/null || die "Missing 'cargo-nextest'. Run \`pixi install\`."
 resolve_libclang_path >/dev/null || libclang_missing_message
 resolve_vulkan_sdk_root >/dev/null || vulkan_sdk_missing_message
 ensure_windows_short_build_paths
