@@ -293,15 +293,15 @@ class VerificationScriptsTests(unittest.TestCase):
         self.assertIn('              - "tools/week11_gateway_smoke.py"', tooling_section)
         self.assertIn('              - "tools/**/*.py"', tooling_section)
 
-    def test_ci_workflow_uses_pixi_tasks_for_cold_start_safe_tooling_jobs(self) -> None:
+    def test_ci_workflow_uses_pixi_for_tooling_and_rust_runtime_jobs(self) -> None:
         workflow = (REPO_ROOT / ".github/workflows/ci.yml").read_text(
             encoding="utf-8"
         )
 
         self.assertIn("run: pixi run tooling-test", workflow)
-        self.assertIn("run: pixi run rust-nextest", workflow)
         self.assertNotIn("run: bash scripts/run_python_tooling_checks.sh", workflow)
-        self.assertNotIn("run: bash scripts/run_rust_ci_nextest.sh", workflow)
+        self.assertIn("pixi exec bash -lc", workflow)
+        self.assertIn("bash scripts/run_rust_ci_nextest.sh", workflow)
 
     def test_ci_workflow_treats_all_workflow_changes_as_full_scope_inputs(self) -> None:
         workflow = (REPO_ROOT / ".github/workflows/ci.yml").read_text(
@@ -430,6 +430,7 @@ class VerificationScriptsTests(unittest.TestCase):
         self.assertIn("Install Linux desktop dependencies", flutter_tests_section)
         self.assertIn("libgtk-3-dev", flutter_tests_section)
         self.assertIn("libsecret-1-dev", flutter_tests_section)
+        self.assertIn("libkeybinder-3.0-dev", flutter_tests_section)
         self.assertIn("pkg-config", flutter_tests_section)
 
     def test_ci_workflow_rust_clippy_job_avoids_repeating_rustfmt(self) -> None:
@@ -464,13 +465,15 @@ class VerificationScriptsTests(unittest.TestCase):
 
         rust_tests_section = workflow.split("  rust-tests:\n", maxsplit=1)[1]
 
-        self.assertIn("CC: /usr/bin/gcc", rust_tests_section)
-        self.assertIn("CXX: /usr/bin/g++", rust_tests_section)
+        self.assertIn("pixi exec bash -lc", rust_tests_section)
+        self.assertIn('export SECONDLOOP_CARGO_BIN="$(command -v cargo)"', rust_tests_section)
+        self.assertIn('export CC=/usr/bin/gcc', rust_tests_section)
+        self.assertIn('export CXX=/usr/bin/g++', rust_tests_section)
         self.assertIn(
-            "CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER: /usr/bin/gcc",
+            "export CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER=/usr/bin/gcc",
             rust_tests_section,
         )
-        self.assertNotIn("LIBRARY_PATH", rust_tests_section)
+        self.assertNotIn("run: pixi run rust-nextest", rust_tests_section)
 
     def test_ci_workflow_retains_rust_python_runtime_guard_in_gate(self) -> None:
         workflow = (REPO_ROOT / ".github/workflows/ci.yml").read_text(
