@@ -75,7 +75,9 @@ if [[ ${#unit_test_targets[@]} -ne 0 ]]; then
 fi
 
 if [[ ${#integration_test_targets[@]} -ne 0 ]]; then
+  integration_test_device="$(resolve_default_flutter_test_device)" ||
+    die "unable to determine a default Flutter integration test device. Set SECONDLOOP_FLUTTER_TEST_DEVICE_ID."
   run_with_periodic_status \
     "flutter test shard ${shard_index}/${shard_count} (integration)" \
-    run_flutter_tool test --concurrency=1 "${integration_test_targets[@]}"
+    run_flutter_tool test -d "${integration_test_device}" --concurrency=1 "${integration_test_targets[@]}"
 fi

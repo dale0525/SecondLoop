@@ -400,6 +400,10 @@ class ScopedCiRuntimeWrapperBehaviorTests(unittest.TestCase):
                         "",
                         f"resolve_flutter_bin() {{ printf '%s\\n' \"{(fake_bin_dir / 'flutter').as_posix()}\"; }}",
                         "",
+                        "resolve_default_flutter_test_device() {",
+                        "  printf '%s\\n' macos",
+                        "}",
+                        "",
                         "run_with_periodic_status() {",
                         "  local _label=\"$1\"",
                         "  shift",
@@ -466,7 +470,7 @@ class ScopedCiRuntimeWrapperBehaviorTests(unittest.TestCase):
                 (repo_root / "flutter.log").read_text(encoding="utf-8").splitlines(),
                 [
                     "test --concurrency=1 test/unit_a_test.dart",
-                    "test --concurrency=1 integration_test/app_flow_test.dart",
+                    "test -d macos --concurrency=1 integration_test/app_flow_test.dart",
                 ],
             )
 

@@ -149,6 +149,31 @@ is_windows_env() {
   [[ "${OS:-}" == "Windows_NT" ]]
 }
 
+resolve_default_flutter_test_device() {
+  if [[ -n "${SECONDLOOP_FLUTTER_TEST_DEVICE_ID:-}" ]]; then
+    printf '%s\n' "${SECONDLOOP_FLUTTER_TEST_DEVICE_ID}"
+    return 0
+  fi
+
+  if is_windows_env; then
+    printf '%s\n' "windows"
+    return 0
+  fi
+
+  case "$(uname -s 2>/dev/null || true)" in
+    Darwin)
+      printf '%s\n' "macos"
+      return 0
+      ;;
+    Linux)
+      printf '%s\n' "linux"
+      return 0
+      ;;
+  esac
+
+  return 1
+}
+
 resolve_powershell_bin() {
   local candidate
   for candidate in powershell.exe pwsh.exe powershell pwsh; do
