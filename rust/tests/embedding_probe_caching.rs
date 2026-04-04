@@ -106,6 +106,7 @@ impl EmbeddingsServer {
             while !stop2.load(Ordering::Relaxed) {
                 match listener.accept() {
                     Ok((mut stream, _)) => {
+                        stream.set_nonblocking(false).expect("blocking stream");
                         let (path, _headers, body) = read_http_request(&mut stream);
                         if path != expected_path {
                             panic!("unexpected path: {path} (expected {expected_path})");

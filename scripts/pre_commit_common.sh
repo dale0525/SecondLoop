@@ -17,8 +17,23 @@ run_with_periodic_status() {
   watcher_pid=""
 
   (
+    local sleep_pid=""
+
+    cleanup_watcher() {
+      if [[ -n "${sleep_pid}" ]] && kill -0 "${sleep_pid}" 2>/dev/null; then
+        kill "${sleep_pid}" 2>/dev/null || true
+        wait "${sleep_pid}" 2>/dev/null || true
+      fi
+      exit 0
+    }
+
+    trap cleanup_watcher TERM INT
+
     while kill -0 "${command_pid}" 2>/dev/null; do
-      sleep "${interval}"
+      sleep "${interval}" &
+      sleep_pid=$!
+      wait "${sleep_pid}" 2>/dev/null || exit 0
+      sleep_pid=""
       if ! kill -0 "${command_pid}" 2>/dev/null; then
         exit 0
       fi
@@ -64,6 +79,12 @@ prepend_path() {
 }
 
 resolve_cargo_bin() {
+  if [[ -n "${SECONDLOOP_CARGO_BIN:-}" ]]; then
+    cargo_bin="${SECONDLOOP_CARGO_BIN}"
+    prepend_path "$(dirname "${cargo_bin}")"
+    return 0
+  fi
+
   local candidate
   local cargo_candidates=(
     "${repo_root}/.tool/cargo/bin/cargo"
@@ -90,6 +111,34 @@ resolve_cargo_bin() {
   return 1
 }
 
+resolve_cargo_plugin_bin() {
+  local plugin_name="$1"
+  local candidate
+  local plugin_candidates=(
+    "${repo_root}/.tool/cargo/bin/${plugin_name}"
+    "${repo_root}/.tool/cargo/bin/${plugin_name}.exe"
+    "${repo_root}/.pixi/envs/default/bin/${plugin_name}"
+    "${repo_root}/.pixi/envs/default/bin/${plugin_name}.exe"
+    "${repo_root}/.pixi/envs/default/Library/bin/${plugin_name}"
+    "${repo_root}/.pixi/envs/default/Library/bin/${plugin_name}.exe"
+  )
+
+  for candidate in "${plugin_candidates[@]}"; do
+    if [[ -x "${candidate}" ]]; then
+      prepend_path "$(dirname "${candidate}")"
+      printf '%s\n' "${candidate}"
+      return 0
+    fi
+  done
+
+  if command -v "${plugin_name}" >/dev/null 2>&1; then
+    command -v "${plugin_name}"
+    return 0
+  fi
+
+  return 1
+}
+
 is_windows_env() {
   local uname_value
   uname_value="$(uname -s 2>/dev/null || true)"
@@ -98,6 +147,31 @@ is_windows_env() {
   esac
 
   [[ "${OS:-}" == "Windows_NT" ]]
+}
+
+resolve_default_flutter_test_device() {
+  if [[ -n "${SECONDLOOP_FLUTTER_TEST_DEVICE_ID:-}" ]]; then
+    printf '%s\n' "${SECONDLOOP_FLUTTER_TEST_DEVICE_ID}"
+    return 0
+  fi
+
+  if is_windows_env; then
+    printf '%s\n' "windows"
+    return 0
+  fi
+
+  case "$(uname -s 2>/dev/null || true)" in
+    Darwin)
+      printf '%s\n' "macos"
+      return 0
+      ;;
+    Linux)
+      printf '%s\n' "linux"
+      return 0
+      ;;
+  esac
+
+  return 1
 }
 
 resolve_powershell_bin() {
@@ -122,6 +196,11 @@ to_native_windows_path() {
 }
 
 resolve_dart_bin() {
+  if [[ -n "${SECONDLOOP_DART_BIN:-}" ]]; then
+    printf '%s\n' "${SECONDLOOP_DART_BIN}"
+    return 0
+  fi
+
   if [[ -x "${repo_root}/.fvm/flutter_sdk/bin/dart" ]]; then
     printf '%s\n' "${repo_root}/.fvm/flutter_sdk/bin/dart"
     return 0
@@ -146,6 +225,11 @@ resolve_dart_bin() {
 }
 
 resolve_flutter_bin() {
+  if [[ -n "${SECONDLOOP_FLUTTER_BIN:-}" ]]; then
+    printf '%s\n' "${SECONDLOOP_FLUTTER_BIN}"
+    return 0
+  fi
+
   if [[ -x "${repo_root}/.fvm/flutter_sdk/bin/flutter" ]]; then
     printf '%s\n' "${repo_root}/.fvm/flutter_sdk/bin/flutter"
     return 0
@@ -165,6 +249,24 @@ resolve_flutter_bin() {
     command -v flutter.bat
     return 0
   fi
+
+  return 1
+}
+
+resolve_python_bin() {
+  local candidate
+  local python_candidates=(
+    "${repo_root}/.pixi/envs/default/bin/python"
+    "${repo_root}/.pixi/envs/default/python.exe"
+    "${repo_root}/.pixi/envs/default/bin/python3"
+  )
+
+  for candidate in "${python_candidates[@]}"; do
+    if [[ -x "${candidate}" ]]; then
+      printf '%s\n' "${candidate}"
+      return 0
+    fi
+  done
 
   return 1
 }

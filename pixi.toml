@@ -53,6 +53,9 @@ clean-unused-cache = "bash -lc 'set -euo pipefail; cleaned=0; while IFS= read -r
 fmt = "dart pub global run fvm:main dart format lib test rust_builder integration_test test_driver && cargo fmt --manifest-path rust/Cargo.toml --all"
 fmt-check = "dart pub global run fvm:main dart format --output=none lib test rust_builder integration_test test_driver --set-exit-if-changed && cargo fmt --manifest-path rust/Cargo.toml --all -- --check"
 verify-changed = "bash scripts/verify_changed.sh"
+tooling-test = "bash scripts/run_python_tooling_checks.sh"
+rust-nextest = "bash scripts/run_rust_ci_nextest.sh"
+rust-builder-test = "bash scripts/run_rust_builder_package_tests.sh"
 ci = "bash scripts/run_full_ci_parallel.sh"
 
 # Run/build workflows (auto-include setup-flutter + init-env).
@@ -94,6 +97,7 @@ cmake = ">=4.2.1,<5"
 ninja = ">=1.13.2,<2"
 dart-sdk = "2.18.2.*"
 openjdk = "17.*"
+cargo-nextest = "0.9.*"
 
 [target.osx-arm64.dependencies]
 ruby = ">=3.4.8,<4"
@@ -126,6 +130,9 @@ dotnet-aspnetcore = "8.0.*"
 # - msi-dev packages + installs isolated local dev MSI
 # - uninstall-dev-msi removes isolated local dev MSI
 verify-changed = "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_bash.ps1 scripts/verify_changed.sh"
+tooling-test = "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_bash.ps1 scripts/run_python_tooling_checks.sh"
+rust-nextest = "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_bash.ps1 scripts/run_rust_ci_nextest.sh"
+rust-builder-test = "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_bash.ps1 scripts/run_rust_builder_package_tests.sh"
 ci = "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_bash.ps1 scripts/run_full_ci_parallel.sh"
 install-git-hooks = "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/run_bash.ps1 scripts/install_git_hooks.sh"
 frb-generate = "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/frb_generate.ps1"

@@ -60,6 +60,7 @@ void main() {
       final service = AppUpdateService(
         platformOverride: AppUpdatePlatform.linux,
         releaseModeOverride: true,
+        currentArchitectureOverride: 'x64',
         releaseApiOriginOverride: 'https://updates.example.com/custom/base',
         releaseRepoOverride: 'dale0525/SecondLoop',
         currentVersionLoader: () async =>

@@ -222,25 +222,29 @@ temp_generated_i18n_strings_path=""
       exit 1
     fi
 
-    if (( ci_mode )); then
+    if (( ci_mode && skip_tests == 0 )); then
       if ! run_with_periodic_status "flutter test" run_flutter_tool test --concurrency=1; then
         echo "" >&2
         echo "pre-commit: flutter test failed." >&2
         echo "Fix locally with: pixi run flutter test" >&2
         exit 1
       fi
+    elif (( ci_mode && skip_tests != 0 )); then
+      echo "pre-commit: skipping Flutter tests (--skip-tests)." >&2
     fi
   fi
 
   if (( scope_rust )); then
-    if ! "${cargo_bin}" fmt --manifest-path rust/Cargo.toml --all -- --check; then
-      echo "" >&2
-      echo "pre-commit: rustfmt failed." >&2
-      echo "Fix locally with: pixi run cargo fmt \"--manifest-path rust/Cargo.toml --all\"" >&2
-      exit 1
+    if (( clippy_only == 0 )); then
+      if ! "${cargo_bin}" fmt --manifest-path rust/Cargo.toml --all -- --check; then
+        echo "" >&2
+        echo "pre-commit: rustfmt failed." >&2
+        echo "Fix locally with: pixi run cargo fmt \"--manifest-path rust/Cargo.toml --all\"" >&2
+        exit 1
+      fi
     fi
 
-    if (( ci_mode )); then
+    if (( ci_mode || clippy_only )); then
       if ! run_with_periodic_status "rust clippy" "${cargo_bin}" clippy --manifest-path rust/Cargo.toml --all-targets --all-features -- -D warnings; then
         echo "" >&2
         echo "pre-commit: rust clippy failed." >&2
@@ -248,7 +252,11 @@ temp_generated_i18n_strings_path=""
         exit 1
       fi
 
-      if ! run_with_periodic_status "rust tests" "${cargo_bin}" test --manifest-path rust/Cargo.toml --all; then
+      if (( clippy_only != 0 )); then
+        echo "pre-commit: skipping Rust tests (--clippy-only)." >&2
+      elif (( skip_tests != 0 )); then
+        echo "pre-commit: skipping Rust tests (--skip-tests)." >&2
+      elif ! run_with_periodic_status "rust tests" "${cargo_bin}" test --manifest-path rust/Cargo.toml --all; then
         echo "" >&2
         echo "pre-commit: rust tests failed." >&2
         echo "Fix locally with: pixi run cargo test" >&2

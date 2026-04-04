@@ -17,28 +17,31 @@ def resolve_request_path(
 ) -> Path:
     normalized = request_path.split("?", 1)[0].split("#", 1)[0]
     if normalized in {"/downloads", "/downloads/"}:
-        resolved = downloads_dir.resolve()
-        allowed_root = downloads_dir.resolve()
+        candidate = downloads_dir
+        allowed_root = downloads_dir
     elif normalized.startswith("/downloads/"):
         relative = normalized.removeprefix("/downloads/")
-        resolved = (downloads_dir / relative).resolve()
-        allowed_root = downloads_dir.resolve()
+        candidate = downloads_dir / relative
+        allowed_root = downloads_dir
     elif normalized in {"", "/"}:
         raise PermissionError(f"Request path is not whitelisted: {request_path}")
     elif normalized.startswith("/releases/"):
-        resolved = root_dir.resolve()
-        allowed_root = root_dir.resolve()
+        candidate = root_dir
+        allowed_root = root_dir
     else:
         raise PermissionError(f"Request path is not whitelisted: {request_path}")
 
+    resolved = candidate.resolve()
+    resolved_allowed_root = allowed_root.resolve()
+
     try:
-        resolved.relative_to(allowed_root)
+        resolved.relative_to(resolved_allowed_root)
     except ValueError as error:
         raise PermissionError(
             f"Request path escapes allowed root: {request_path}",
         ) from error
 
-    return resolved
+    return candidate
 
 
 def ensure_server_root_is_complete(root_dir: Path) -> None:

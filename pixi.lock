@@ -15,6 +15,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/linux-64/c-ares-1.34.6-hb03c661_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/ca-certificates-2026.1.4-hbd8a1cb_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/cairo-1.18.4-he90730b_1.conda
+      - conda: https://conda.anaconda.org/conda-forge/linux-64/cargo-nextest-0.9.132-hb17b654_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/cmake-4.2.1-hc85cc9f_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/dart-sdk-2.18.2-ha770c72_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/font-ttf-dejavu-sans-mono-2.37-hab24e00_0.tar.bz2
@@ -115,6 +116,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/bzip2-1.0.8-hd037594_8.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/c-ares-1.34.6-hc919400_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/ca-certificates-2026.1.4-hbd8a1cb_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/osx-arm64/cargo-nextest-0.9.132-h6fdd925_0.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/cctools_impl_osx-arm64-1030.6.3-llvm21_1_haddd2d4_3.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/cctools_osx-arm64-1030.6.3-llvm21_1_h6d92914_3.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/clang-21-21.1.8-default_hb52604d_1.conda
@@ -199,6 +201,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/win-64/_openmp_mutex-4.5-2_gnu.conda
       - conda: https://conda.anaconda.org/conda-forge/win-64/bzip2-1.0.8-h0ad9c76_8.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/ca-certificates-2026.1.4-h4c7d964_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/win-64/cargo-nextest-0.9.132-h18a1a76_0.conda
       - conda: https://conda.anaconda.org/conda-forge/win-64/cmake-4.2.1-hdcbee5b_0.conda
       - conda: https://conda.anaconda.org/conda-forge/win-64/dart-sdk-2.18.2-h57928b3_0.conda
       - conda: https://conda.anaconda.org/conda-forge/win-64/dotnet-aspnetcore-8.0.15-h57928b3_1.conda
@@ -399,6 +402,40 @@ packages:
   license: LGPL-2.1-only or MPL-1.1
   size: 989514
   timestamp: 1766415934926
+- conda: https://conda.anaconda.org/conda-forge/linux-64/cargo-nextest-0.9.132-hb17b654_0.conda
+  sha256: a77214b86490ccf69d3f3fe90cdd25fb537d9b55a717b9ba86cc1b7ade0e45a1
+  md5: e5fa0fe51bea820f04df66b6378cc0a3
+  depends:
+  - __glibc >=2.17,<3.0.a0
+  - libgcc >=14
+  constrains:
+  - __glibc >=2.17
+  license: MIT
+  license_family: MIT
+  size: 6823116
+  timestamp: 1774343412610
+- conda: https://conda.anaconda.org/conda-forge/osx-arm64/cargo-nextest-0.9.132-h6fdd925_0.conda
+  sha256: bb052c1fee762ebbfc22147e00af42f457ab5d70a4c976baebb2c4ee3fb532ff
+  md5: 7b7eda340d28a0c2e98a94b1d3f2f29c
+  depends:
+  - __osx >=11.0
+  constrains:
+  - __osx >=11.0
+  license: MIT
+  license_family: MIT
+  size: 6268364
+  timestamp: 1774343430461
+- conda: https://conda.anaconda.org/conda-forge/win-64/cargo-nextest-0.9.132-h18a1a76_0.conda
+  sha256: 8357f85a67b9ac1fad31d824a92e5827bf8d2087cae919a21a2b3545a90ddb51
+  md5: d88e65027975316a587b7a99ea73a05d
+  depends:
+  - vc >=14.3,<15
+  - vc14_runtime >=14.44.35208
+  - ucrt >=10.0.20348.0
+  license: MIT
+  license_family: MIT
+  size: 6876471
+  timestamp: 1774343483631
 - conda: https://conda.anaconda.org/conda-forge/osx-arm64/cctools_impl_osx-arm64-1030.6.3-llvm21_1_haddd2d4_3.conda
   sha256: 5ffadada3f34750d463acda25436b5aca0531835f51f80d0a1f95a2ade1d6a0b
   md5: 099cb4d8a64917b012b482c5929bf04f

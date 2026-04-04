@@ -20,40 +20,134 @@ jobs:
   changes:
     runs-on: ubuntu-latest
     outputs:
+      tooling_python: ${{ steps.filter.outputs.tooling_python }}
       flutter: ${{ steps.filter.outputs.flutter }}
       rust: ${{ steps.filter.outputs.rust }}
+      web: ${{ steps.filter.outputs.web }}
+      rust_builder_package: ${{ steps.filter.outputs.rust_builder_package }}
     steps:
       - uses: actions/checkout@v4
       - uses: dorny/paths-filter@v3
         id: filter
         with:
           filters: |
+            tooling_python:
+              - ".githooks/**"
+              - ".github/workflows/**"
+              - "pixi.toml"
+              - "pixi.lock"
+              - "scripts/**"
+              - "tools/**/*.py"
+              - "tools/check_icon_corners.py"
+              - "tools/i18n_translate.py"
+              - "tools/round_icon.py"
+              - "tools/week11_gateway_smoke.py"
+              - "tools/windows_https_update_server.py"
             flutter:
               - ".fvm/fvm_config.json"
               - ".githooks/**"
-              - "scripts/**"
+              - ".github/workflows/**"
               - "analysis_options.yaml"
               - "pubspec.yaml"
               - "pubspec.lock"
+              - "pixi.lock"
               - "flutter_rust_bridge.yaml"
+              - "slang.yaml"
               - "lib/**"
               - "test/**"
               - "integration_test/**"
               - "test_driver/**"
               - "rust_builder/**"
+              - "third_party/**"
+              - "assets/**"
               - "android/**"
               - "ios/**"
               - "linux/**"
               - "macos/**"
               - "windows/**"
+              - "pixi.toml"
+              - "scripts/**"
+              - "tools/**/*.py"
+              - "tools/*.dart"
+              - "!scripts/tests/**"
+              - "!tools/check_icon_corners.py"
+              - "!tools/i18n_translate.py"
+              - "!tools/round_icon.py"
+              - "!tools/week11_gateway_smoke.py"
+              - "!tools/windows_https_update_server.py"
             rust:
               - ".githooks/**"
-              - "scripts/**"
+              - ".github/workflows/**"
+              - "pixi.toml"
+              - "pixi.lock"
               - "rust/**"
+              - "scripts/**"
+              - "tools/**/*.py"
+              - "!scripts/tests/**"
+              - "!tools/check_icon_corners.py"
+              - "!tools/i18n_translate.py"
+              - "!tools/round_icon.py"
+              - "!tools/week11_gateway_smoke.py"
+              - "!tools/windows_https_update_server.py"
+            web:
+              - ".fvm/fvm_config.json"
+              - ".github/workflows/ci.yml"
+              - ".github/workflows/web-build.yml"
+              - "analysis_options.yaml"
+              - "pubspec.yaml"
+              - "pubspec.lock"
+              - "pixi.lock"
+              - "flutter_rust_bridge.yaml"
+              - "slang.yaml"
+              - "lib/**"
+              - "test/**"
+              - "integration_test/**"
+              - "test_driver/**"
+              - "rust_builder/**"
+              - "third_party/**"
+              - "assets/**"
+              - "android/**"
+              - "ios/**"
+              - "linux/**"
+              - "macos/**"
+              - "windows/**"
+              - "web/**"
+            rust_builder_package:
+              - ".fvm/fvm_config.json"
+              - ".github/workflows/**"
+              - "scripts/pre_commit_common.sh"
+              - "scripts/run_rust_builder_package_tests.sh"
+              - "rust_builder/cargokit/build_tool/**"
 
-  flutter:
+  python-tooling:
     needs: changes
-    if: needs.changes.outputs.flutter == 'true'
+    if: needs.changes.outputs.tooling_python == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: prefix-dev/setup-pixi@v0.9.3
+        with:
+          cache: true
+      - name: Python tooling checks
+        run: pixi run tooling-test
+
+  rust-builder-tests:
+    needs: changes
+    if: needs.changes.outputs.rust_builder_package == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.22.3"
+          channel: stable
+          cache: true
+      - name: Rust builder package tests
+        run: SECONDLOOP_DART_BIN="$(command -v dart)" bash scripts/run_rust_builder_package_tests.sh
+
+  flutter-gate:
+    needs: changes
+    if: needs.changes.outputs.flutter == 'true' || needs.changes.outputs.web == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -64,14 +158,50 @@ jobs:
           cache: true
       - name: Pub get
         run: flutter pub get
-      - name: "Guard: no python runtime process usage"
-        run: bash scripts/check_no_python_runtime.sh
-      - name: Full Flutter verification
-        run: bash scripts/verify_full.sh --flutter
+      - name: Flutter gate
+        run: bash .githooks/pre-commit --check --flutter
+
+  flutter-tests:
+    needs: [changes, flutter-gate]
+    if: needs.changes.outputs.flutter == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        shard_index: [0, 1, 2, 3]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.22.3"
+          channel: stable
+          cache: true
+      - name: Install Linux desktop dependencies
+        if: matrix.shard_index == 0
+        run: |
+          sudo apt-get update
+          indicator_pkg='libayatana-appindicator3-dev'
+          if ! apt-cache show "${indicator_pkg}" >/dev/null 2>&1; then
+            indicator_pkg='libappindicator3-dev'
+          fi
+          sudo apt-get install -y \
+            glslc \
+            libgtk-3-dev \
+            "${indicator_pkg}" \
+            libkeybinder-3.0-dev \
+            libsecret-1-dev \
+            libvulkan-dev \
+            pkg-config \
+            xvfb
+      - name: Pub get
+        run: flutter pub get
+      - name: Generate i18n
+        run: dart run slang
+      - name: Flutter test shard
+        run: bash scripts/run_flutter_test_shard.sh --shard-index "${{ matrix.shard_index }}" --shard-count 4
 
   flutter-web:
-    needs: changes
-    if: needs.changes.outputs.flutter == 'true'
+    needs: [changes, flutter-gate]
+    if: needs.changes.outputs.web == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -89,12 +219,33 @@ jobs:
       - name: Build web
         run: flutter build web --base-href /app/
 
-  rust:
+  rust-format:
     needs: changes
     if: needs.changes.outputs.rust == 'true'
     runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: prefix-dev/setup-pixi@v0.9.3
+        with:
+          cache: true
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            rust -> rust/target
+      - name: "Guard: no python runtime process usage"
+        run: bash scripts/check_no_python_runtime.sh
+      - name: Rust fmt
+        run: |
+          pixi exec bash -lc '
+            export SECONDLOOP_CARGO_BIN="$(command -v cargo)"
+            bash .githooks/pre-commit --check --rust
+          '
+
+  rust-clippy:
+    needs: [changes, rust-format]
+    if: needs.changes.outputs.rust == 'true'
+    runs-on: ubuntu-latest
     env:
-      # Keep CI peak disk usage under runner limits during Rust test linking.
       CARGO_BUILD_JOBS: "1"
       CARGO_INCREMENTAL: "0"
       CARGO_PROFILE_DEV_DEBUG: "0"
@@ -102,16 +253,55 @@ jobs:
       RUSTFLAGS: "-C debuginfo=0"
     steps:
       - uses: actions/checkout@v4
+      - uses: prefix-dev/setup-pixi@v0.9.3
+        with:
+          cache: true
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            rust -> rust/target
       - name: Install Vulkan development toolchain
         run: |
           sudo apt-get update
           sudo apt-get install -y libvulkan-dev glslc
           command -v glslc
-      - uses: dtolnay/rust-toolchain@stable
+      - name: Rust clippy
+        run: |
+          pixi exec bash -lc '
+            export SECONDLOOP_CARGO_BIN="$(command -v cargo)"
+            bash .githooks/pre-commit --check --rust --ci --skip-tests --clippy-only
+          '
+
+  rust-tests:
+    needs: [changes, rust-clippy]
+    if: needs.changes.outputs.rust == 'true'
+    runs-on: ubuntu-latest
+    env:
+      CARGO_BUILD_JOBS: "1"
+      CARGO_INCREMENTAL: "0"
+      CARGO_PROFILE_DEV_DEBUG: "0"
+      CARGO_PROFILE_TEST_DEBUG: "0"
+      RUSTFLAGS: "-C debuginfo=0"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: prefix-dev/setup-pixi@v0.9.3
         with:
-          toolchain: "1.85.1"
-          components: rustfmt, clippy
-      - name: "Guard: no python runtime process usage"
-        run: bash scripts/check_no_python_runtime.sh
-      - name: Full Rust verification
-        run: bash scripts/verify_full.sh --rust
+          cache: true
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            rust -> rust/target
+      - name: Install Vulkan development toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libvulkan-dev glslc
+          command -v glslc
+      - name: Rust tests
+        run: |
+          pixi exec bash -lc '
+            export SECONDLOOP_CARGO_BIN="$(command -v cargo)"
+            export CC=/usr/bin/gcc
+            export CXX=/usr/bin/g++
+            export CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER=/usr/bin/gcc
+            bash scripts/run_rust_ci_nextest.sh
+          '

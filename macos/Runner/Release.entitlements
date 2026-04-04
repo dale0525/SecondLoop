@@ -6,5 +6,7 @@
 	<true/>
 	<key>com.apple.security.personal-information.speech-recognition</key>
 	<true/>
+	<key>keychain-access-groups</key>
+	<array/>
 </dict>
 </plist>
