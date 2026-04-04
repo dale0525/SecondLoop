@@ -262,7 +262,7 @@ resolve_python_bin() {
   )
 
   for candidate in "${python_candidates[@]}"; do
-    if [[ -x "${candidate}" || -f "${candidate}" ]]; then
+    if [[ -x "${candidate}" ]]; then
       printf '%s\n' "${candidate}"
       return 0
     fi

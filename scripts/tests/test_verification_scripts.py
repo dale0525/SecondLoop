@@ -485,6 +485,14 @@ class VerificationScriptsTests(unittest.TestCase):
 
         self.assertIn('run: bash scripts/check_no_python_runtime.sh', rust_format_section)
 
+    def test_pre_commit_common_resolve_python_bin_requires_executable_candidates(self) -> None:
+        common = (REPO_ROOT / "scripts/pre_commit_common.sh").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn('if [[ -x "${candidate}" ]]; then', common)
+        self.assertNotIn('if [[ -x "${candidate}" || -f "${candidate}" ]]; then', common)
+
     def test_local_rust_ci_wrapper_reuses_one_target_dir_for_gate_and_nextest(self) -> None:
         script = (REPO_ROOT / "scripts/run_full_rust_ci_local.sh").read_text(
             encoding="utf-8"
