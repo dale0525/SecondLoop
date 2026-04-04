@@ -429,6 +429,7 @@ class VerificationScriptsTests(unittest.TestCase):
 
         self.assertIn("Install Linux desktop dependencies", flutter_tests_section)
         self.assertIn("libgtk-3-dev", flutter_tests_section)
+        self.assertIn("libsecret-1-dev", flutter_tests_section)
         self.assertIn("pkg-config", flutter_tests_section)
 
     def test_ci_workflow_rust_clippy_job_avoids_repeating_rustfmt(self) -> None:
@@ -456,15 +457,20 @@ class VerificationScriptsTests(unittest.TestCase):
         self.assertIn("pixi exec bash -lc", rust_clippy_section)
         self.assertIn("SECONDLOOP_CARGO_BIN", rust_clippy_section)
 
-    def test_ci_workflow_rust_tests_expose_system_vulkan_linker_paths(self) -> None:
+    def test_ci_workflow_rust_tests_use_host_gcc_linker(self) -> None:
         workflow = (REPO_ROOT / ".github/workflows/ci.yml").read_text(
             encoding="utf-8"
         )
 
         rust_tests_section = workflow.split("  rust-tests:\n", maxsplit=1)[1]
 
-        self.assertIn("LIBRARY_PATH", rust_tests_section)
-        self.assertIn("/usr/lib/x86_64-linux-gnu", rust_tests_section)
+        self.assertIn("CC: /usr/bin/gcc", rust_tests_section)
+        self.assertIn("CXX: /usr/bin/g++", rust_tests_section)
+        self.assertIn(
+            "CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER: /usr/bin/gcc",
+            rust_tests_section,
+        )
+        self.assertNotIn("LIBRARY_PATH", rust_tests_section)
 
     def test_ci_workflow_retains_rust_python_runtime_guard_in_gate(self) -> None:
         workflow = (REPO_ROOT / ".github/workflows/ci.yml").read_text(

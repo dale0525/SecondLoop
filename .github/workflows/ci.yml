@@ -179,7 +179,7 @@ jobs:
         if: matrix.shard_index == 0
         run: |
           sudo apt-get update
-          sudo apt-get install -y libgtk-3-dev pkg-config
+          sudo apt-get install -y libgtk-3-dev libsecret-1-dev pkg-config
       - name: Pub get
         run: flutter pub get
       - name: Generate i18n
@@ -270,7 +270,9 @@ jobs:
       CARGO_PROFILE_DEV_DEBUG: "0"
       CARGO_PROFILE_TEST_DEBUG: "0"
       RUSTFLAGS: "-C debuginfo=0"
-      LIBRARY_PATH: "/usr/lib/x86_64-linux-gnu:/lib/x86_64-linux-gnu"
+      CC: /usr/bin/gcc
+      CXX: /usr/bin/g++
+      CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER: /usr/bin/gcc
     steps:
       - uses: actions/checkout@v4
       - uses: prefix-dev/setup-pixi@v0.9.3
