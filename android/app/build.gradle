@@ -38,6 +38,7 @@ if (keystorePropertiesFile.exists()) {
 def isReleaseBuildRequested = gradle.startParameter.taskNames.any { taskName ->
     taskName.toLowerCase().contains("release")
 }
+def isSplitPerAbiBuild = project.findProperty("split-per-abi")?.toBoolean() ?: false
 
 def secondloopApplicationId = System.getenv("SECONDLOOP_APP_ID")
 if (secondloopApplicationId == null || secondloopApplicationId.trim().isEmpty()) {
@@ -91,7 +92,7 @@ android {
         versionName flutterVersionName
         manifestPlaceholders += [appName: secondloopApplicationName]
 
-        if (isReleaseBuildRequested) {
+        if (isReleaseBuildRequested && !isSplitPerAbiBuild) {
             ndk {
                 abiFilters "armeabi-v7a", "arm64-v8a"
             }

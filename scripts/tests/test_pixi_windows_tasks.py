@@ -301,6 +301,13 @@ class PixiWindowsTasksTests(unittest.TestCase):
         self.assertIn("dotnet.exe", script)
         self.assertIn("DOTNET_MULTILEVEL_LOOKUP", script)
 
+    def test_windows_velopack_script_accepts_existing_flutter_root_before_local_fvm(self) -> None:
+        script = WINDOWS_VELOPACK_SCRIPT.read_text(encoding="utf-8")
+
+        self.assertIn('if (-not [string]::IsNullOrWhiteSpace($env:FLUTTER_ROOT))', script)
+        self.assertIn('Test-Path -LiteralPath $env:FLUTTER_ROOT -PathType Container', script)
+        self.assertIn("Join-Path $repoRootPath '.fvm/flutter_sdk'", script)
+
     def test_windows_setup_flutter_script_exports_flutter_root_and_checks_environment(self) -> None:
         script = WINDOWS_SETUP_FLUTTER_SCRIPT.read_text(encoding="utf-8")
 

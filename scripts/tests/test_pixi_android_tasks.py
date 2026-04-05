@@ -166,6 +166,13 @@ class PixiAndroidTasksTests(unittest.TestCase):
             gradle_file,
         )
 
+    def test_android_gradle_skips_release_abi_filters_for_split_per_abi_builds(self) -> None:
+        gradle_file = ANDROID_BUILD_GRADLE.read_text(encoding="utf-8")
+
+        self.assertIn('def isSplitPerAbiBuild = project.findProperty("split-per-abi")?.toBoolean() ?: false', gradle_file)
+        self.assertIn('if (isReleaseBuildRequested && !isSplitPerAbiBuild)', gradle_file)
+        self.assertIn('abiFilters "armeabi-v7a", "arm64-v8a"', gradle_file)
+
     def test_android_manifest_uses_app_name_placeholder(self) -> None:
         manifest_file = ANDROID_MANIFEST.read_text(encoding="utf-8")
 
