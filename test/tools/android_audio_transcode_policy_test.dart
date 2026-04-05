@@ -7,7 +7,7 @@ void main() {
     'android native transcode preserves source pcm timing when re-encoding to m4a',
     () {
       final content = File(
-        'android/app/src/main/kotlin/com/secondloop/secondloop/MainActivity.kt',
+        'android/app/src/main/kotlin/com/secondloop/secondloop/MainActivity+AudioTranscode.kt',
       ).readAsStringSync();
 
       expect(content, contains('val targetSampleRate = inputSampleRate'));
