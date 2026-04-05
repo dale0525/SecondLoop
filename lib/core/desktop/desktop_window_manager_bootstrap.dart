@@ -8,11 +8,38 @@ final class DesktopWindowManagerBootstrap {
   static Future<void>? _waitingUntilReadyToShow;
 
   static Future<void> ensureInitialized() {
-    return _initializing ??= _initialize();
+    final current = _initializing;
+    if (current != null) {
+      return current;
+    }
+
+    late final Future<void> initializing;
+    initializing = _initialize().catchError((Object error, StackTrace stack) {
+      if (identical(_initializing, initializing)) {
+        _initializing = null;
+      }
+      Error.throwWithStackTrace(error, stack);
+    });
+    _initializing = initializing;
+    return initializing;
   }
 
   static Future<void> waitUntilReadyToShow() {
-    return _waitingUntilReadyToShow ??= _waitUntilReadyToShow();
+    final current = _waitingUntilReadyToShow;
+    if (current != null) {
+      return current;
+    }
+
+    late final Future<void> waitingUntilReadyToShow;
+    waitingUntilReadyToShow =
+        _waitUntilReadyToShow().catchError((Object error, StackTrace stack) {
+      if (identical(_waitingUntilReadyToShow, waitingUntilReadyToShow)) {
+        _waitingUntilReadyToShow = null;
+      }
+      Error.throwWithStackTrace(error, stack);
+    });
+    _waitingUntilReadyToShow = waitingUntilReadyToShow;
+    return waitingUntilReadyToShow;
   }
 
   static Future<void> _initialize() async {

@@ -47,4 +47,48 @@ void main() {
       hasLength(1),
     );
   });
+
+  test('retries initialization after a failed attempt', () async {
+    var failEnsureInitialized = true;
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (methodCall) async {
+      calls.add(methodCall.method);
+      if (methodCall.method == 'ensureInitialized' && failEnsureInitialized) {
+        failEnsureInitialized = false;
+        throw PlatformException(
+          code: 'bootstrap-failed',
+          message: 'failed to initialize window manager',
+        );
+      }
+
+      switch (methodCall.method) {
+        case 'getBounds':
+          return <String, double>{
+            'x': 0,
+            'y': 0,
+            'width': 1280,
+            'height': 720,
+          };
+        default:
+          return true;
+      }
+    });
+
+    await expectLater(
+      DesktopWindowManagerBootstrap.ensureInitialized(),
+      throwsA(isA<PlatformException>()),
+    );
+
+    await DesktopWindowManagerBootstrap.ensureInitialized();
+    await DesktopWindowManagerBootstrap.waitUntilReadyToShow();
+
+    expect(
+      calls.take(3),
+      <String>[
+        'ensureInitialized',
+        'ensureInitialized',
+        'waitUntilReadyToShow'
+      ],
+    );
+  });
 }

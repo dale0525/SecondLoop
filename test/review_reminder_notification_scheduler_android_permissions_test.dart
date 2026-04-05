@@ -56,6 +56,31 @@ void main() {
     expect(androidPlugin.requestExactAlarmsPermissionCalls, 0);
   });
 
+  test(
+      'ensureInitialized marks notifications unavailable when plugin init returns false',
+      () async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+    addTearDown(() {
+      debugDefaultTargetPlatformOverride = null;
+    });
+
+    final windowsPlugin = _FakeAndroidNotificationsPlugin(
+      canScheduleExactNotificationsResult: true,
+      initializeResult: false,
+    );
+    FlutterLocalNotificationsPlatform.instance = windowsPlugin;
+
+    final scheduler = FlutterLocalNotificationsReviewReminderScheduler(
+      plugin: FlutterLocalNotificationsPlugin(),
+    );
+
+    await scheduler.ensureInitialized();
+
+    expect(windowsPlugin.initializeCalls, 1);
+    expect(windowsPlugin.getNotificationAppLaunchDetailsCalls, 0);
+    expect(scheduler.supportsSystemNotifications, isFalse);
+  });
+
   test('same todo keeps stable notification id across reminder updates', () {
     const first = ReviewReminderItem(
       todoId: 'todo:1',
@@ -329,9 +354,11 @@ final class _FakeAndroidNotificationsPlugin
     extends AndroidFlutterLocalNotificationsPlugin {
   _FakeAndroidNotificationsPlugin({
     required this.canScheduleExactNotificationsResult,
+    this.initializeResult = true,
   });
 
   final bool canScheduleExactNotificationsResult;
+  final bool initializeResult;
 
   int initializeCalls = 0;
   int getNotificationAppLaunchDetailsCalls = 0;
@@ -351,7 +378,7 @@ final class _FakeAndroidNotificationsPlugin
         onDidReceiveBackgroundNotificationResponse,
   }) async {
     initializeCalls += 1;
-    return true;
+    return initializeResult;
   }
 
   @override
