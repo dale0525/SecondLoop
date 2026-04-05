@@ -27,8 +27,9 @@ Future<void> runPlatformApp(
 
   WidgetsFlutterBinding.ensureInitialized();
   installMacOsKeyEventChannelNormalizer();
-  await (initializeDesktopWindowManager ??
-      _initializeDesktopWindowManagerForStartup)();
+  await _runDesktopWindowManagerInitialization(
+    initializeDesktopWindowManager ?? _initializeDesktopWindowManagerForStartup,
+  );
   unawaited((startupBootstrapRunner ?? runStartupBootstrap)());
 
   (appRunner ?? runApp)(MyApp(launchArgs: launchArgs));
@@ -50,6 +51,25 @@ Future<void> _initializeDesktopWindowManagerForStartup() async {
     case TargetPlatform.iOS:
     case TargetPlatform.fuchsia:
       return;
+  }
+}
+
+Future<void> _runDesktopWindowManagerInitialization(
+  Future<void> Function() initializer,
+) async {
+  try {
+    await initializer();
+  } catch (error, stackTrace) {
+    FlutterError.reportError(
+      FlutterErrorDetails(
+        exception: error,
+        stack: stackTrace,
+        library: 'secondloop.startup',
+        context: ErrorDescription(
+          'while initializing desktop window manager for startup',
+        ),
+      ),
+    );
   }
 }
 

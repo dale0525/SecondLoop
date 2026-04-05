@@ -8,6 +8,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 I18N_REFRESH_SCRIPT = REPO_ROOT / "scripts/run_i18n_refresh.sh"
 I18N_ANALYZE_SCRIPT = REPO_ROOT / "scripts/run_i18n_analyze.sh"
 WINDOWS_FVM_TOOL_RUNNER_SCRIPT = REPO_ROOT / "scripts/run_fvm_tool.ps1"
+GITIGNORE_FILE = REPO_ROOT / ".gitignore"
 
 
 class I18nWindowsSupportTests(unittest.TestCase):
@@ -47,6 +48,11 @@ class I18nWindowsSupportTests(unittest.TestCase):
         self.assertIn('-WorkingDirectory "${native_working_dir}"', analyze_script)
         self.assertIn("[string]$WorkingDirectory = ''", runner_script)
         self.assertIn("Set-Location $WorkingDirectory", runner_script)
+
+    def test_gitignore_excludes_temporary_desktop_runtime_directories(self) -> None:
+        gitignore = GITIGNORE_FILE.read_text(encoding="utf-8")
+
+        self.assertIn("assets/ocr/desktop_runtime.tmp-*/", gitignore)
 
 
 if __name__ == "__main__":

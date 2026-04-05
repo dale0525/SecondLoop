@@ -112,12 +112,18 @@ NativeUpdateResult updateNotification(NativePlugin* plugin, int id, NativeString
 
 void cancelAll(NativePlugin* plugin) {
   if (!plugin->isReady) return;
+
   try {
     if (plugin->hasIdentity) {
       plugin->history.value().Clear();
     } else {
       plugin->history.value().Clear(plugin->aumid);
     }
+  } catch (...) {
+    // Keep cancellation best-effort at the FFI boundary.
+  }
+
+  try {
     for (const auto notification : plugin->notifier.value().GetScheduledToastNotifications()) {
       plugin->notifier.value().RemoveFromSchedule(notification);
     }

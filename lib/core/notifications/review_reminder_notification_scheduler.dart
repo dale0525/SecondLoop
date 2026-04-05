@@ -106,27 +106,9 @@ final class FlutterLocalNotificationsReviewReminderScheduler
   bool get supportsSystemNotifications => _available;
   final Set<int> _managedNotificationIds = <int>{};
 
-  static bool shouldEnableSystemNotificationBackend({
-    required TargetPlatform platform,
-    required String appId,
-  }) {
-    return true;
-  }
-
   @override
   Future<void> ensureInitialized() async {
     if (_initialized) return;
-
-    if (!kIsWeb &&
-        shouldEnableSystemNotificationBackend(
-              platform: defaultTargetPlatform,
-              appId: _windowsAppUserModelId,
-            ) ==
-            false) {
-      _available = false;
-      _initialized = true;
-      return;
-    }
 
     const initializationSettings = InitializationSettings(
       android: AndroidInitializationSettings(androidNotificationIcon),
