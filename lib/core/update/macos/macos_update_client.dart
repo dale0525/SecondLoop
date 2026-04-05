@@ -113,7 +113,7 @@ class DefaultMacosManagedUpdateClient implements MacosManagedUpdateClient {
       }
 
       await _processStarter(
-        '/bin/sh',
+        '/bin/bash',
         [script.path],
         mode: ProcessStartMode.detached,
       );

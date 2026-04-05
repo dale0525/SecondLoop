@@ -114,7 +114,7 @@ void main() {
 
     await client.installArchiveAndRestart(archiveFile.uri, waitPid: 4321);
 
-    expect(capturedExecutable, '/bin/sh');
+    expect(capturedExecutable, '/bin/bash');
     expect(capturedArguments, isNotNull);
     final scriptPath = capturedArguments!.single;
     final scriptDir = Directory(File(scriptPath).parent.path);
@@ -303,7 +303,7 @@ cp -R "\$src" "\$dst"
   );
 
   test(
-    'updater script installs successfully when invoked via /bin/sh',
+    'updater script installs successfully when invoked via /bin/bash',
     () async {
       final tempDir =
           await Directory.systemTemp.createTemp('macos_update_script_');
@@ -350,7 +350,36 @@ cp -R "\$src" "\$dst"
       expect(scriptPath, isNotNull);
       final tempRoot = Directory(File(scriptPath!).parent.path);
 
-      final result = await Process.run('/bin/sh', [scriptPath]);
+      final fakeDitto = await _writeExecutableScript(
+        tempDir,
+        'fake-ditto-success.sh',
+        '''
+#!/bin/sh
+src=\$1
+dst=\$2
+cp -R "\$src" "\$dst"
+''',
+      );
+      final fakeOpen = await _writeExecutableScript(
+        tempDir,
+        'fake-open-success.sh',
+        '#!/bin/sh\nexit 0\n',
+      );
+      final fakeXattr = await _writeExecutableScript(
+        tempDir,
+        'fake-xattr-success.sh',
+        '#!/bin/sh\nexit 0\n',
+      );
+
+      final result = await Process.run(
+        '/bin/bash',
+        [scriptPath],
+        environment: {
+          'DITTO_BIN': fakeDitto.path,
+          'OPEN_BIN': fakeOpen.path,
+          'XATTR_BIN': fakeXattr.path,
+        },
+      );
       expect(result.exitCode, 0, reason: '${result.stdout}\n${result.stderr}');
       expect(await currentMarker.readAsString(), 'new');
       expect(Directory('${appBundle.path}.backup').existsSync(), isFalse);
@@ -403,7 +432,36 @@ cp -R "\$src" "\$dst"
       expect(scriptPath, isNotNull);
       final tempRoot = Directory(File(scriptPath!).parent.path);
 
-      final result = await Process.run('/bin/bash', [scriptPath]);
+      final fakeDitto = await _writeExecutableScript(
+        tempDir,
+        'fake-ditto-gone-pid.sh',
+        '''
+#!/bin/sh
+src=\$1
+dst=\$2
+cp -R "\$src" "\$dst"
+''',
+      );
+      final fakeOpen = await _writeExecutableScript(
+        tempDir,
+        'fake-open-gone-pid.sh',
+        '#!/bin/sh\nexit 0\n',
+      );
+      final fakeXattr = await _writeExecutableScript(
+        tempDir,
+        'fake-xattr-gone-pid.sh',
+        '#!/bin/sh\nexit 0\n',
+      );
+
+      final result = await Process.run(
+        '/bin/bash',
+        [scriptPath],
+        environment: {
+          'DITTO_BIN': fakeDitto.path,
+          'OPEN_BIN': fakeOpen.path,
+          'XATTR_BIN': fakeXattr.path,
+        },
+      );
       expect(result.exitCode, 0, reason: '${result.stdout}\n${result.stderr}');
       expect(await currentMarker.readAsString(), 'new');
       expect(Directory('${appBundle.path}.backup').existsSync(), isFalse);
