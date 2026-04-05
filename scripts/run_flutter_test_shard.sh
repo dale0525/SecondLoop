@@ -120,6 +120,12 @@ if [[ ${#integration_test_targets[@]} -ne 0 ]]; then
   integration_test_device="$(resolve_default_flutter_test_device)" ||
     die "unable to determine a default Flutter integration test device. Set SECONDLOOP_FLUTTER_TEST_DEVICE_ID."
   if [[ "${integration_test_device}" == "macos" ]]; then
+    if [[ "${SECONDLOOP_ENABLE_MACOS_INTEGRATION_TESTS:-0}" != "1" ]]; then
+      echo \
+        "flutter-test-shard: skipping macOS integration tests by default; set SECONDLOOP_ENABLE_MACOS_INTEGRATION_TESTS=1 to run them locally." \
+        >&2
+      exit 0
+    fi
     # Local desktop runs use the dev app identity and allow Xcode to refresh provisioning data.
     export SECONDLOOP_APP_ID="${SECONDLOOP_APP_ID:-com.secondloop.secondloopdev}"
     export SECONDLOOP_APP_NAME="${SECONDLOOP_APP_NAME:-SecondLoop Dev}"
