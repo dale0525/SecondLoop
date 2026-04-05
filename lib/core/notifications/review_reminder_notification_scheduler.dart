@@ -134,6 +134,7 @@ final class FlutterLocalNotificationsReviewReminderScheduler
         return;
       }
       if (didInitialize != true) {
+        _available = false;
         throw StateError(
           'Flutter Local Notifications failed to initialize system notifications',
         );
@@ -468,7 +469,16 @@ final class FlutterLocalNotificationsReviewReminderScheduler
       return;
     } on PlatformException {
       // Exact alarms can be blocked on newer Android versions.
-    } catch (_) {
+    } catch (error, stackTrace) {
+      _reportSchedulingError(
+        error,
+        stackTrace,
+        notificationId: notificationId,
+        payload: payload,
+      );
+      if (defaultTargetPlatform == TargetPlatform.windows) {
+        _available = false;
+      }
       return;
     }
 
@@ -479,8 +489,16 @@ final class FlutterLocalNotificationsReviewReminderScheduler
       _available = false;
     } on PlatformException {
       // ignore
-    } catch (_) {
-      // ignore
+    } catch (error, stackTrace) {
+      _reportSchedulingError(
+        error,
+        stackTrace,
+        notificationId: notificationId,
+        payload: payload,
+      );
+      if (defaultTargetPlatform == TargetPlatform.windows) {
+        _available = false;
+      }
     }
   }
 
@@ -592,5 +610,31 @@ final class FlutterLocalNotificationsReviewReminderScheduler
       value = (value * 0x01000193) & 0x7fffffff;
     }
     return value;
+  }
+
+  void _reportSchedulingError(
+    Object error,
+    StackTrace stackTrace, {
+    required int notificationId,
+    required String? payload,
+  }) {
+    FlutterError.reportError(
+      FlutterErrorDetails(
+        exception: error,
+        stack: stackTrace,
+        library: 'secondloop.notifications',
+        context: ErrorDescription(
+          'while scheduling review reminder system notification',
+        ),
+        informationCollector: () sync* {
+          yield DiagnosticsProperty<int>('notificationId', notificationId);
+          yield DiagnosticsProperty<String?>('payload', payload);
+          yield DiagnosticsProperty<TargetPlatform>(
+            'platform',
+            defaultTargetPlatform,
+          );
+        },
+      ),
+    );
   }
 }

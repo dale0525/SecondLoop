@@ -42,10 +42,10 @@ Future<void> _initializeDesktopWindowManagerForStartup() async {
 
   switch (defaultTargetPlatform) {
     case TargetPlatform.windows:
-    case TargetPlatform.macOS:
-    case TargetPlatform.linux:
       await DesktopWindowManagerBootstrap.ensureInitialized();
       return;
+    case TargetPlatform.macOS:
+    case TargetPlatform.linux:
     case TargetPlatform.android:
     case TargetPlatform.iOS:
     case TargetPlatform.fuchsia:

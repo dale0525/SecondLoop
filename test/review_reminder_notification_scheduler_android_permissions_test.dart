@@ -1,8 +1,12 @@
 // ignore_for_file: depend_on_referenced_packages
 
+import 'dart:ffi' as ffi;
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_local_notifications_windows/src/plugin/ffi.dart'
+    as windows_plugin;
 import 'package:plugin_platform_interface/plugin_platform_interface.dart';
 import 'package:timezone/timezone.dart' as tz;
 
@@ -80,7 +84,7 @@ void main() {
   });
 
   test(
-      'ensureInitialized retries after plugin init returns false without disabling notifications',
+      'ensureInitialized marks notifications unavailable after init returns false and restores them on retry',
       () async {
     debugDefaultTargetPlatformOverride = TargetPlatform.android;
     addTearDown(() {
@@ -98,11 +102,57 @@ void main() {
     );
 
     await expectLater(scheduler.ensureInitialized(), throwsStateError);
+    expect(scheduler.supportsSystemNotifications, isFalse);
+
     await scheduler.ensureInitialized();
 
     expect(windowsPlugin.initializeCalls, 2);
     expect(windowsPlugin.getNotificationAppLaunchDetailsCalls, 1);
     expect(scheduler.supportsSystemNotifications, isTrue);
+  });
+
+  test(
+      'schedule reports Windows scheduling failures and disables notifications',
+      () async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.windows;
+    addTearDown(() {
+      debugDefaultTargetPlatformOverride = null;
+    });
+
+    final errors = <FlutterErrorDetails>[];
+    final previousOnError = FlutterError.onError;
+    addTearDown(() => FlutterError.onError = previousOnError);
+    FlutterError.onError = errors.add;
+
+    final windowsPlugin = _ThrowingWindowsNotificationsPlugin();
+    FlutterLocalNotificationsPlatform.instance = windowsPlugin;
+
+    final scheduler = FlutterLocalNotificationsReviewReminderScheduler(
+      plugin: FlutterLocalNotificationsPlugin(),
+    );
+
+    await scheduler.schedule(
+      const ReviewReminderPlan(
+        pendingCount: 1,
+        items: <ReviewReminderItem>[
+          ReviewReminderItem(
+            todoId: 'todo:review',
+            todoTitle: 'review this',
+            sourceAtUtcMs: 10000,
+            scheduleAtUtcMs: 20000,
+            kind: ReviewReminderItemKind.reviewQueue,
+            todoStatus: 'open',
+          ),
+        ],
+      ),
+    );
+
+    expect(windowsPlugin.initializeCalls, 1);
+    expect(windowsPlugin.zonedScheduleCalls, 1);
+    expect(scheduler.supportsSystemNotifications, isFalse);
+    expect(errors, hasLength(1));
+    expect(
+        errors.single.exceptionAsString(), contains('native schedule failed'));
   });
 
   test('same todo keeps stable notification id across reminder updates', () {
@@ -376,6 +426,48 @@ void main() {
 
 final class _FallbackNotificationsPlatform
     extends FlutterLocalNotificationsPlatform with MockPlatformInterfaceMixin {}
+
+final class _ThrowingWindowsNotificationsPlugin
+    extends windows_plugin.FlutterLocalNotificationsWindows {
+  _ThrowingWindowsNotificationsPlugin()
+      : super(library: ffi.DynamicLibrary.process());
+
+  int initializeCalls = 0;
+  int zonedScheduleCalls = 0;
+
+  @override
+  Future<bool> initialize(
+    WindowsInitializationSettings settings, {
+    DidReceiveNotificationResponseCallback? onNotificationReceived,
+  }) async {
+    initializeCalls += 1;
+    return true;
+  }
+
+  @override
+  Future<NotificationAppLaunchDetails?>
+      getNotificationAppLaunchDetails() async {
+    return null;
+  }
+
+  @override
+  Future<List<PendingNotificationRequest>> pendingNotificationRequests() async {
+    return const <PendingNotificationRequest>[];
+  }
+
+  @override
+  Future<void> zonedSchedule(
+    int id,
+    String? title,
+    String? body,
+    tz.TZDateTime scheduledDate,
+    WindowsNotificationDetails? details, {
+    String? payload,
+  }) async {
+    zonedScheduleCalls += 1;
+    throw Exception('native schedule failed');
+  }
+}
 
 final class _FakeAndroidNotificationsPlugin
     extends AndroidFlutterLocalNotificationsPlugin {

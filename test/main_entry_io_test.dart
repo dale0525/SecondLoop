@@ -1,9 +1,11 @@
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:secondloop/platform/main_entry_io.dart' as io_entry;
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  const channel = MethodChannel('window_manager');
 
   test('initializes desktop window manager before running the app', () async {
     final calls = <String>[];
@@ -54,5 +56,30 @@ void main() {
       errors.single.exceptionAsString(),
       contains('desktop bootstrap failed'),
     );
+  });
+
+  test('skips startup window manager bootstrap on non-Windows platforms',
+      () async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.linux;
+    addTearDown(() {
+      debugDefaultTargetPlatformOverride = null;
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, null);
+    });
+
+    final calls = <String>[];
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (methodCall) async {
+      calls.add(methodCall.method);
+      return true;
+    });
+
+    await io_entry.runPlatformApp(
+      const <String>[],
+      startupBootstrapRunner: () async {},
+      appRunner: (_) {},
+    );
+
+    expect(calls, isEmpty);
   });
 }
