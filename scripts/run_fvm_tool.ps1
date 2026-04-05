@@ -7,6 +7,7 @@ param(
   [string]$Command,
 
   [string]$ToolPath = '',
+  [string]$WorkingDirectory = '',
 
   [Parameter(ValueFromRemainingArguments = $true)]
   [string[]]$CommandArgs = @()
@@ -62,6 +63,14 @@ Invoke-InWindowsShortWorkspace -RepoRootPath $repoRootPath -ScriptBlock {
   if (Test-Path -LiteralPath $flutterRoot -PathType Container) {
     Set-Item -Path Env:FLUTTER_ROOT -Value $flutterRoot
     Add-ToPathIfMissing -Directory (Join-Path $flutterRoot 'bin')
+  }
+
+  if (-not [string]::IsNullOrWhiteSpace($WorkingDirectory)) {
+    if (-not (Test-Path -LiteralPath $WorkingDirectory -PathType Container)) {
+      Write-Error "SecondLoop: working directory not found: $WorkingDirectory"
+      exit 1
+    }
+    Set-Location $WorkingDirectory
   }
 
   & $toolPath $Command @CommandArgs

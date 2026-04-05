@@ -323,6 +323,33 @@ void main() {
       isEmpty,
     );
   });
+
+  test('Windows notification backend stays enabled for supported app ids', () {
+    expect(
+      FlutterLocalNotificationsReviewReminderScheduler
+          .shouldEnableSystemNotificationBackend(
+        platform: TargetPlatform.windows,
+        appId: 'com.secondloop.secondloop',
+      ),
+      isTrue,
+    );
+    expect(
+      FlutterLocalNotificationsReviewReminderScheduler
+          .shouldEnableSystemNotificationBackend(
+        platform: TargetPlatform.windows,
+        appId: 'com.secondloop.secondloopdev',
+      ),
+      isTrue,
+    );
+    expect(
+      FlutterLocalNotificationsReviewReminderScheduler
+          .shouldEnableSystemNotificationBackend(
+        platform: TargetPlatform.android,
+        appId: 'com.secondloop.secondloop',
+      ),
+      isTrue,
+    );
+  });
 }
 
 final class _FakeAndroidNotificationsPlugin

@@ -80,6 +80,8 @@ run_windows_batch_tool() {
   script_path="$(to_native_windows_path "${repo_root}/scripts/run_fvm_tool.ps1")"
   local native_tool_path
   native_tool_path="$(to_native_windows_path "${tool_bin}")"
+  local native_working_dir
+  native_working_dir="$(to_native_windows_path "$(pwd)")"
 
   env -u GIT_DIR -u GIT_WORK_TREE -u GIT_INDEX_FILE \
     "${powershell_bin}" \
@@ -88,6 +90,7 @@ run_windows_batch_tool() {
     -File "${script_path}" \
     -Tool "${tool_name}" \
     -ToolPath "${native_tool_path}" \
+    -WorkingDirectory "${native_working_dir}" \
     -Command "$@"
 }
 

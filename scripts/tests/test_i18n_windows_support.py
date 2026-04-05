@@ -7,6 +7,7 @@ import unittest
 REPO_ROOT = Path(__file__).resolve().parents[2]
 I18N_REFRESH_SCRIPT = REPO_ROOT / "scripts/run_i18n_refresh.sh"
 I18N_ANALYZE_SCRIPT = REPO_ROOT / "scripts/run_i18n_analyze.sh"
+WINDOWS_FVM_TOOL_RUNNER_SCRIPT = REPO_ROOT / "scripts/run_fvm_tool.ps1"
 
 
 class I18nWindowsSupportTests(unittest.TestCase):
@@ -36,6 +37,16 @@ class I18nWindowsSupportTests(unittest.TestCase):
 
         self.assertIn(".fvm/flutter_sdk/bin/flutter.bat", script)
         self.assertIn("scripts/run_fvm_tool.ps1", script)
+
+    def test_i18n_scripts_forward_the_current_working_directory_on_windows(self) -> None:
+        refresh_script = I18N_REFRESH_SCRIPT.read_text(encoding="utf-8")
+        analyze_script = I18N_ANALYZE_SCRIPT.read_text(encoding="utf-8")
+        runner_script = WINDOWS_FVM_TOOL_RUNNER_SCRIPT.read_text(encoding="utf-8")
+
+        self.assertIn('-WorkingDirectory "${native_working_dir}"', refresh_script)
+        self.assertIn('-WorkingDirectory "${native_working_dir}"', analyze_script)
+        self.assertIn("[string]$WorkingDirectory = ''", runner_script)
+        self.assertIn("Set-Location $WorkingDirectory", runner_script)
 
 
 if __name__ == "__main__":

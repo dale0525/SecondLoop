@@ -1,3 +1,4 @@
+#include <charconv>
 #include <winrt/Windows.Foundation.Collections.h>
 
 #include "utils.hpp"
@@ -95,4 +96,26 @@ winrt::guid parseGuid(const std::string& guidString) {
       hex_to_uint8(guidString[34], guidString[35]),
     }
   };
+}
+
+bool tryParseNotificationId(const winrt::hstring& tag, int* value) {
+  if (value == nullptr) {
+    return false;
+  }
+
+  const auto rawTag = winrt::to_string(tag);
+  if (rawTag.empty()) {
+    return false;
+  }
+
+  int parsedValue = 0;
+  const auto* begin = rawTag.data();
+  const auto* end = begin + rawTag.size();
+  const auto parseResult = std::from_chars(begin, end, parsedValue);
+  if (parseResult.ec != std::errc() || parseResult.ptr != end) {
+    return false;
+  }
+
+  *value = parsedValue;
+  return true;
 }

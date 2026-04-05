@@ -15,7 +15,17 @@ void main() {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(channel, (methodCall) async {
       calls.add(methodCall.method);
-      return true;
+      switch (methodCall.method) {
+        case 'getBounds':
+          return <String, double>{
+            'x': 0,
+            'y': 0,
+            'width': 1280,
+            'height': 720,
+          };
+        default:
+          return true;
+      }
     });
   });
 
@@ -24,11 +34,17 @@ void main() {
         .setMockMethodCallHandler(channel, null);
   });
 
-  test('initializes window manager channel once with taskbar bootstrap',
+  test('initializes window manager and waits until ready to show once',
       () async {
     await DesktopWindowManagerBootstrap.ensureInitialized();
-    await DesktopWindowManagerBootstrap.ensureInitialized();
+    await DesktopWindowManagerBootstrap.waitUntilReadyToShow();
+    await DesktopWindowManagerBootstrap.waitUntilReadyToShow();
 
-    expect(calls, <String>['ensureInitialized', 'waitUntilReadyToShow']);
+    expect(
+        calls.take(2), <String>['ensureInitialized', 'waitUntilReadyToShow']);
+    expect(
+      calls.where((method) => method == 'waitUntilReadyToShow'),
+      hasLength(1),
+    );
   });
 }

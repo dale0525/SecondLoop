@@ -11,7 +11,10 @@ const _runtimeTagPattern =
 const _defaultOutputDir = 'assets/ocr/desktop_runtime';
 const _defaultCacheDir = '.tool/cache/desktop-runtime';
 const _installMarkerFile = '_secondloop_desktop_runtime_release.json';
-const _fileLockRetryMaxAttempts = 4;
+// Windows background scanners can hold freshly extracted runtime files for
+// multiple seconds, so keep retrying long enough to survive those transient
+// locks during release packaging.
+const _fileLockRetryMaxAttempts = 12;
 const _fileLockRetryBaseDelay = Duration(milliseconds: 250);
 const _detModelAliases = <String>[
   'ch_PP-OCRv5_mobile_det.onnx',
