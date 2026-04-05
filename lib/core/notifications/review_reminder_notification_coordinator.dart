@@ -20,15 +20,11 @@ final class ReviewReminderNotificationCoordinator {
 
   ReviewReminderPlan? get currentPlan => _lastPlan;
 
-  bool _initialized = false;
   ReviewReminderPlan? _lastPlan;
   final Map<String, int> _overdueScheduleBySourceKey = <String, int>{};
 
   Future<void> refresh() async {
-    if (!_initialized) {
-      await _scheduler.ensureInitialized();
-      _initialized = true;
-    }
+    await _scheduler.ensureInitialized();
 
     final nowUtcMs = _nowUtcMs();
     final todos = await _readTodos();

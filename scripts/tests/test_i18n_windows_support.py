@@ -49,6 +49,27 @@ class I18nWindowsSupportTests(unittest.TestCase):
         self.assertIn("[string]$WorkingDirectory = ''", runner_script)
         self.assertIn("Set-Location $WorkingDirectory", runner_script)
 
+    def test_i18n_scripts_prefer_windows_batch_flutter_and_dart_wrappers(self) -> None:
+        refresh_script = I18N_REFRESH_SCRIPT.read_text(encoding="utf-8")
+        analyze_script = I18N_ANALYZE_SCRIPT.read_text(encoding="utf-8")
+
+        self.assertLess(
+            refresh_script.find(
+                'if is_windows_env && [[ -f "${repo_root}/.fvm/flutter_sdk/bin/dart.bat" ]]; then'
+            ),
+            refresh_script.find(
+                'if [[ -x "${repo_root}/.fvm/flutter_sdk/bin/dart" ]]; then'
+            ),
+        )
+        self.assertLess(
+            analyze_script.find(
+                'if is_windows_env && [[ -f "${repo_root}/.fvm/flutter_sdk/bin/flutter.bat" ]]; then'
+            ),
+            analyze_script.find(
+                'if [[ -x "${repo_root}/.fvm/flutter_sdk/bin/flutter" ]]; then'
+            ),
+        )
+
     def test_gitignore_excludes_temporary_desktop_runtime_directories(self) -> None:
         gitignore = GITIGNORE_FILE.read_text(encoding="utf-8")
 

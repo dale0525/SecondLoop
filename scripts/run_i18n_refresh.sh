@@ -41,23 +41,23 @@ resolve_dart_bin() {
     return 0
   fi
 
-  if [[ -x "${repo_root}/.fvm/flutter_sdk/bin/dart" ]]; then
-    printf '%s\n' "${repo_root}/.fvm/flutter_sdk/bin/dart"
-    return 0
-  fi
-
   if is_windows_env && [[ -f "${repo_root}/.fvm/flutter_sdk/bin/dart.bat" ]]; then
     printf '%s\n' "${repo_root}/.fvm/flutter_sdk/bin/dart.bat"
     return 0
   fi
 
-  if command -v dart >/dev/null 2>&1; then
-    command -v dart
+  if [[ -x "${repo_root}/.fvm/flutter_sdk/bin/dart" ]]; then
+    printf '%s\n' "${repo_root}/.fvm/flutter_sdk/bin/dart"
     return 0
   fi
 
   if is_windows_env && command -v dart.bat >/dev/null 2>&1; then
     command -v dart.bat
+    return 0
+  fi
+
+  if command -v dart >/dev/null 2>&1; then
+    command -v dart
     return 0
   fi
 

@@ -84,6 +84,10 @@ if ! git diff --quiet || [[ -n "$(git ls-files --others --exclude-standard)" ]];
   stashed=1
 fi
 
+if [[ ${run_flutter_checks} -ne 0 || ${#dart_files[@]} -ne 0 || ${run_i18n_refresh_needed} -ne 0 ]]; then
+  ensure_flutter_package_config
+fi
+
 if [[ ${run_i18n_refresh_needed} -ne 0 ]]; then
   run_i18n_refresh
   warn_auto_staged_i18n_refresh_changes

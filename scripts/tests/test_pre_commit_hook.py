@@ -403,6 +403,38 @@ class PreCommitHookTests(unittest.TestCase):
         self.assertNotIn(".fvm/flutter_sdk/bin/dart.bat", script)
         self.assertNotIn(".fvm/flutter_sdk/bin/flutter.bat", script)
 
+    def test_commit_mode_restores_flutter_package_config_after_stash(self) -> None:
+        script = PRE_COMMIT_COMMON_SCRIPT.read_text(
+            encoding="utf-8"
+        ) + "\n" + PRE_COMMIT_COMMIT_MODE_SCRIPT.read_text(encoding="utf-8")
+
+        self.assertIn('package_config_path="${repo_root}/.dart_tool/package_config.json"', script)
+        self.assertIn('if [[ ! -f "${package_config_path}" ]]; then', script)
+        self.assertIn('run_flutter_tool pub get', script)
+
+    def test_windows_pre_commit_prefers_batch_flutter_and_dart_wrappers(self) -> None:
+        script = PRE_COMMIT_COMMON_SCRIPT.read_text(encoding="utf-8")
+
+        flutter_bat_idx = script.find(
+            'if is_windows_env && [[ -f "${repo_root}/.fvm/flutter_sdk/bin/flutter.bat" ]]; then'
+        )
+        flutter_shell_idx = script.find(
+            'if [[ -x "${repo_root}/.fvm/flutter_sdk/bin/flutter" ]]; then'
+        )
+        dart_bat_idx = script.find(
+            'if is_windows_env && [[ -f "${repo_root}/.fvm/flutter_sdk/bin/dart.bat" ]]; then'
+        )
+        dart_shell_idx = script.find(
+            'if [[ -x "${repo_root}/.fvm/flutter_sdk/bin/dart" ]]; then'
+        )
+
+        self.assertNotEqual(-1, flutter_bat_idx)
+        self.assertNotEqual(-1, flutter_shell_idx)
+        self.assertLess(flutter_bat_idx, flutter_shell_idx)
+        self.assertNotEqual(-1, dart_bat_idx)
+        self.assertNotEqual(-1, dart_shell_idx)
+        self.assertLess(dart_bat_idx, dart_shell_idx)
+
     def test_install_git_hooks_configures_post_checkout_and_post_merge(self) -> None:
         script = INSTALL_GIT_HOOKS_SCRIPT.read_text(encoding="utf-8")
 

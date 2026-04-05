@@ -41,23 +41,23 @@ resolve_flutter_bin() {
     return 0
   fi
 
-  if [[ -x "${repo_root}/.fvm/flutter_sdk/bin/flutter" ]]; then
-    printf '%s\n' "${repo_root}/.fvm/flutter_sdk/bin/flutter"
-    return 0
-  fi
-
   if is_windows_env && [[ -f "${repo_root}/.fvm/flutter_sdk/bin/flutter.bat" ]]; then
     printf '%s\n' "${repo_root}/.fvm/flutter_sdk/bin/flutter.bat"
     return 0
   fi
 
-  if command -v flutter >/dev/null 2>&1; then
-    command -v flutter
+  if [[ -x "${repo_root}/.fvm/flutter_sdk/bin/flutter" ]]; then
+    printf '%s\n' "${repo_root}/.fvm/flutter_sdk/bin/flutter"
     return 0
   fi
 
   if is_windows_env && command -v flutter.bat >/dev/null 2>&1; then
     command -v flutter.bat
+    return 0
+  fi
+
+  if command -v flutter >/dev/null 2>&1; then
+    command -v flutter
     return 0
   fi
 

@@ -57,7 +57,7 @@ void main() {
   });
 
   test(
-      'ensureInitialized marks notifications unavailable when plugin init returns false',
+      'ensureInitialized retries after plugin init returns false without disabling notifications',
       () async {
     debugDefaultTargetPlatformOverride = TargetPlatform.android;
     addTearDown(() {
@@ -66,7 +66,7 @@ void main() {
 
     final windowsPlugin = _FakeAndroidNotificationsPlugin(
       canScheduleExactNotificationsResult: true,
-      initializeResult: false,
+      initializeResults: <bool>[false, true],
     );
     FlutterLocalNotificationsPlatform.instance = windowsPlugin;
 
@@ -74,11 +74,12 @@ void main() {
       plugin: FlutterLocalNotificationsPlugin(),
     );
 
+    await expectLater(scheduler.ensureInitialized(), throwsStateError);
     await scheduler.ensureInitialized();
 
-    expect(windowsPlugin.initializeCalls, 1);
-    expect(windowsPlugin.getNotificationAppLaunchDetailsCalls, 0);
-    expect(scheduler.supportsSystemNotifications, isFalse);
+    expect(windowsPlugin.initializeCalls, 2);
+    expect(windowsPlugin.getNotificationAppLaunchDetailsCalls, 1);
+    expect(scheduler.supportsSystemNotifications, isTrue);
   });
 
   test('same todo keeps stable notification id across reminder updates', () {
@@ -354,11 +355,12 @@ final class _FakeAndroidNotificationsPlugin
     extends AndroidFlutterLocalNotificationsPlugin {
   _FakeAndroidNotificationsPlugin({
     required this.canScheduleExactNotificationsResult,
-    this.initializeResult = true,
-  });
+    bool initializeResult = true,
+    List<bool>? initializeResults,
+  }) : initializeResults = initializeResults ?? <bool>[initializeResult];
 
   final bool canScheduleExactNotificationsResult;
-  final bool initializeResult;
+  final List<bool> initializeResults;
 
   int initializeCalls = 0;
   int getNotificationAppLaunchDetailsCalls = 0;
@@ -378,7 +380,11 @@ final class _FakeAndroidNotificationsPlugin
         onDidReceiveBackgroundNotificationResponse,
   }) async {
     initializeCalls += 1;
-    return initializeResult;
+    final index = initializeCalls - 1;
+    if (index < initializeResults.length) {
+      return initializeResults[index];
+    }
+    return initializeResults.last;
   }
 
   @override

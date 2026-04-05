@@ -201,23 +201,23 @@ resolve_dart_bin() {
     return 0
   fi
 
-  if [[ -x "${repo_root}/.fvm/flutter_sdk/bin/dart" ]]; then
-    printf '%s\n' "${repo_root}/.fvm/flutter_sdk/bin/dart"
-    return 0
-  fi
-
   if is_windows_env && [[ -f "${repo_root}/.fvm/flutter_sdk/bin/dart.bat" ]]; then
     printf '%s\n' "${repo_root}/.fvm/flutter_sdk/bin/dart.bat"
     return 0
   fi
 
-  if command -v dart >/dev/null 2>&1; then
-    command -v dart
+  if [[ -x "${repo_root}/.fvm/flutter_sdk/bin/dart" ]]; then
+    printf '%s\n' "${repo_root}/.fvm/flutter_sdk/bin/dart"
     return 0
   fi
 
   if is_windows_env && command -v dart.bat >/dev/null 2>&1; then
     command -v dart.bat
+    return 0
+  fi
+
+  if command -v dart >/dev/null 2>&1; then
+    command -v dart
     return 0
   fi
 
@@ -230,23 +230,23 @@ resolve_flutter_bin() {
     return 0
   fi
 
-  if [[ -x "${repo_root}/.fvm/flutter_sdk/bin/flutter" ]]; then
-    printf '%s\n' "${repo_root}/.fvm/flutter_sdk/bin/flutter"
-    return 0
-  fi
-
   if is_windows_env && [[ -f "${repo_root}/.fvm/flutter_sdk/bin/flutter.bat" ]]; then
     printf '%s\n' "${repo_root}/.fvm/flutter_sdk/bin/flutter.bat"
     return 0
   fi
 
-  if command -v flutter >/dev/null 2>&1; then
-    command -v flutter
+  if [[ -x "${repo_root}/.fvm/flutter_sdk/bin/flutter" ]]; then
+    printf '%s\n' "${repo_root}/.fvm/flutter_sdk/bin/flutter"
     return 0
   fi
 
   if is_windows_env && command -v flutter.bat >/dev/null 2>&1; then
     command -v flutter.bat
+    return 0
+  fi
+
+  if command -v flutter >/dev/null 2>&1; then
+    command -v flutter
     return 0
   fi
 
@@ -316,6 +316,19 @@ run_flutter_tool() {
   fi
 
   env -u GIT_DIR -u GIT_WORK_TREE -u GIT_INDEX_FILE "${flutter_bin}" "$@"
+}
+
+ensure_flutter_package_config() {
+  local package_config_path="${repo_root}/.dart_tool/package_config.json"
+  if [[ ! -f "${package_config_path}" ]]; then
+    echo "pre-commit: restoring Flutter package config after stash..." >&2
+    if ! run_flutter_tool pub get; then
+      echo "" >&2
+      echo "pre-commit: flutter pub get failed." >&2
+      echo "Fix locally with: pixi run flutter pub get" >&2
+      exit 1
+    fi
+  fi
 }
 
 resolve_libclang_path() {

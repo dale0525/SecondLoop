@@ -91,4 +91,49 @@ void main() {
       ],
     );
   });
+
+  test('retries ready-to-show bootstrap after a failed wait attempt', () async {
+    var failWaitUntilReadyToShow = true;
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (methodCall) async {
+      calls.add(methodCall.method);
+      if (methodCall.method == 'waitUntilReadyToShow' &&
+          failWaitUntilReadyToShow) {
+        failWaitUntilReadyToShow = false;
+        throw PlatformException(
+          code: 'ready-to-show-failed',
+          message: 'failed while waiting for ready-to-show',
+        );
+      }
+
+      switch (methodCall.method) {
+        case 'getBounds':
+          return <String, double>{
+            'x': 0,
+            'y': 0,
+            'width': 1280,
+            'height': 720,
+          };
+        default:
+          return true;
+      }
+    });
+
+    await expectLater(
+      DesktopWindowManagerBootstrap.ensureInitialized(),
+      throwsA(isA<PlatformException>()),
+    );
+
+    await DesktopWindowManagerBootstrap.ensureInitialized();
+
+    expect(
+      calls.take(4),
+      <String>[
+        'ensureInitialized',
+        'waitUntilReadyToShow',
+        'ensureInitialized',
+        'waitUntilReadyToShow',
+      ],
+    );
+  });
 }

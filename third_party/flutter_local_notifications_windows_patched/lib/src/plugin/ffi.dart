@@ -25,7 +25,22 @@ extension on String {
 /// The Windows implementation of `package:flutter_local_notifications`.
 class FlutterLocalNotificationsWindows extends WindowsNotificationsBase {
   /// Creates an instance of the native plugin.
-  FlutterLocalNotificationsWindows();
+  FlutterLocalNotificationsWindows({
+    DynamicLibrary? library,
+    NotificationsPluginBindings? bindings,
+  }) : this._(
+          library: library ??
+              DynamicLibrary.open(
+                'flutter_local_notifications_windows.dll',
+              ),
+          bindings: bindings,
+        );
+
+  FlutterLocalNotificationsWindows._({
+    required DynamicLibrary library,
+    NotificationsPluginBindings? bindings,
+  })  : _library = library,
+        _bindings = bindings ?? NotificationsPluginBindings(library);
 
   /// Registers the Windows implementation with Flutter.
   static void registerWith() {
@@ -36,12 +51,10 @@ class FlutterLocalNotificationsWindows extends WindowsNotificationsBase {
   /// The global instance of this plugin. Used in [_globalLaunchCallback].
   static FlutterLocalNotificationsWindows? instance;
 
-  /// The FFI generated bindings to the native code.
-  late final NotificationsPluginBindings _bindings =
-      NotificationsPluginBindings(_library);
+  final DynamicLibrary _library;
 
-  final DynamicLibrary _library =
-      DynamicLibrary.open('flutter_local_notifications_windows.dll');
+  /// The FFI generated bindings to the native code.
+  final NotificationsPluginBindings _bindings;
 
   /// A pointer to the C++ handler class.
   late final Pointer<NativePlugin> _plugin;
@@ -335,12 +348,17 @@ class FlutterLocalNotificationsWindows extends WindowsNotificationsBase {
         );
         final int secondsSinceEpoch =
             scheduledDate.millisecondsSinceEpoch ~/ 1000;
-        _bindings.scheduleNotification(
+        final bool result = _bindings.scheduleNotification(
           _plugin,
           id,
           xml.toNativeUtf8(allocator: arena),
           secondsSinceEpoch,
         );
+        if (!result) {
+          throw Exception(
+            'Flutter Local Notifications could not schedule notification',
+          );
+        }
       });
 
   @override
@@ -364,12 +382,17 @@ class FlutterLocalNotificationsWindows extends WindowsNotificationsBase {
         }
         final int secondsSinceEpoch =
             scheduledDate.millisecondsSinceEpoch ~/ 1000;
-        _bindings.scheduleNotification(
+        final bool result = _bindings.scheduleNotification(
           _plugin,
           id,
           xml.toNativeUtf8(allocator: arena),
           secondsSinceEpoch,
         );
+        if (!result) {
+          throw Exception(
+            'Flutter Local Notifications could not schedule notification',
+          );
+        }
       });
 
   @override

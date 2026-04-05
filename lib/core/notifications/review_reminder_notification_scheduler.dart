@@ -129,9 +129,9 @@ final class FlutterLocalNotificationsReviewReminderScheduler
         },
       );
       if (didInitialize != true) {
-        _available = false;
-        _initialized = true;
-        return;
+        throw StateError(
+          'Flutter Local Notifications failed to initialize system notifications',
+        );
       }
 
       await _cleanupLegacyWindowsArtifactsBestEffort();
@@ -150,6 +150,7 @@ final class FlutterLocalNotificationsReviewReminderScheduler
 
     await _requestPermissionsBestEffort();
     _configureTimeZone();
+    _available = true;
     _initialized = true;
   }
 
