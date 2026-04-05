@@ -17,7 +17,8 @@ $ErrorActionPreference = 'Stop'
 
 . (Join-Path $PSScriptRoot 'use_windows_short_workspace.ps1')
 
-$repoRootPath = Resolve-SecondLoopProjectDir -DefaultRepoRoot (Join-Path $PSScriptRoot '..')
+$defaultRepoRootPath = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')).Path
+$repoRootPath = Resolve-SecondLoopProjectDir -DefaultRepoRoot $defaultRepoRootPath
 
 function Add-ToPathIfMissing {
   param([string]$Directory)
@@ -34,6 +35,53 @@ function Add-ToPathIfMissing {
   if (-not $alreadyInPath) {
     $env:PATH = "$Directory;$env:PATH"
   }
+}
+
+function Resolve-ExecutionWorkingDirectory {
+  param(
+    [string]$RepoRootPath,
+    [string]$WorkingDirectory
+  )
+
+  if ([string]::IsNullOrWhiteSpace($WorkingDirectory)) {
+    return ''
+  }
+
+  if (-not (Test-Path -LiteralPath $WorkingDirectory -PathType Container)) {
+    Write-Error "SecondLoop: working directory not found: $WorkingDirectory"
+    exit 1
+  }
+
+  $resolvedWorkingDirectory = (Resolve-Path -LiteralPath $WorkingDirectory).Path
+  $resolvedRepoRoot = (Resolve-Path -LiteralPath $RepoRootPath).Path
+  $projectDir = $env:PROJECT_DIR
+  if ([string]::IsNullOrWhiteSpace($projectDir) -or
+      -not (Test-Path -LiteralPath $projectDir -PathType Container)) {
+    return $resolvedWorkingDirectory
+  }
+
+  $resolvedProjectDir = (Resolve-Path -LiteralPath $projectDir).Path
+  if ([string]::Equals($resolvedWorkingDirectory, $resolvedRepoRoot, [System.StringComparison]::OrdinalIgnoreCase)) {
+    return $resolvedProjectDir
+  }
+
+  $repoRootWithSeparator = if ($resolvedRepoRoot.EndsWith('\')) {
+    $resolvedRepoRoot
+  } else {
+    "$resolvedRepoRoot\"
+  }
+
+  if (-not $resolvedWorkingDirectory.StartsWith($repoRootWithSeparator, [System.StringComparison]::OrdinalIgnoreCase)) {
+    return $resolvedWorkingDirectory
+  }
+
+  $relativeWorkingPath = $resolvedWorkingDirectory.Substring($repoRootWithSeparator.Length)
+  $resolvedShortWorkingDirectory = Join-Path $resolvedProjectDir $relativeWorkingPath
+  if (Test-Path -LiteralPath $resolvedShortWorkingDirectory -PathType Container) {
+    return $resolvedShortWorkingDirectory
+  }
+
+  return $resolvedWorkingDirectory
 }
 
 Invoke-InWindowsShortWorkspace -RepoRootPath $repoRootPath -ScriptBlock {
@@ -66,11 +114,8 @@ Invoke-InWindowsShortWorkspace -RepoRootPath $repoRootPath -ScriptBlock {
   }
 
   if (-not [string]::IsNullOrWhiteSpace($WorkingDirectory)) {
-    if (-not (Test-Path -LiteralPath $WorkingDirectory -PathType Container)) {
-      Write-Error "SecondLoop: working directory not found: $WorkingDirectory"
-      exit 1
-    }
-    Set-Location $WorkingDirectory
+    $executionWorkingDirectory = Resolve-ExecutionWorkingDirectory -RepoRootPath $defaultRepoRootPath -WorkingDirectory $WorkingDirectory
+    Set-Location $executionWorkingDirectory
   }
 
   & $toolPath $Command @CommandArgs

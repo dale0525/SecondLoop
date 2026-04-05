@@ -128,6 +128,11 @@ final class FlutterLocalNotificationsReviewReminderScheduler
           _onTap?.call(eventFromResponse(response));
         },
       );
+      if (didInitialize == null) {
+        _available = false;
+        _initialized = true;
+        return;
+      }
       if (didInitialize != true) {
         throw StateError(
           'Flutter Local Notifications failed to initialize system notifications',

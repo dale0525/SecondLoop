@@ -1,6 +1,10 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
+import shutil
+import subprocess
+import tempfile
 import tomllib
 import unittest
 
@@ -352,6 +356,76 @@ class PixiWindowsTasksTests(unittest.TestCase):
 
         self.assertIn("use_windows_short_workspace.ps1", script)
         self.assertIn("Invoke-InWindowsShortWorkspace", script)
+
+    @unittest.skipUnless(os.name == "nt", "Windows-only short workspace behavior")
+    def test_windows_run_fvm_tool_maps_repo_relative_working_directory_into_short_workspace(self) -> None:
+        powershell = shutil.which("powershell.exe") or shutil.which("powershell")
+        if powershell is None:
+            self.skipTest("PowerShell is required to verify Windows tool runner")
+
+        tool_output_dir = Path(tempfile.mkdtemp(prefix="secondloop_run_fvm_tool_"))
+        fake_tool = tool_output_dir / "fake_tool.cmd"
+        output_file = tool_output_dir / "cwd.txt"
+        working_dir = REPO_ROOT / "scripts"
+
+        fake_tool.write_text(
+            "@echo off\n"
+            "setlocal\n"
+            "if /I \"%~1\"==\"record\" (\n"
+            "  > \"%~2\" echo CD=%CD%\n"
+            "  >> \"%~2\" echo PROJECT_DIR=%PROJECT_DIR%\n"
+            "  exit /b 0\n"
+            ")\n"
+            "exit /b 1\n",
+            encoding="utf-8",
+        )
+
+        try:
+            subprocess.run(
+                [
+                    powershell,
+                    "-NoProfile",
+                    "-ExecutionPolicy",
+                    "Bypass",
+                    "-File",
+                    str(WINDOWS_FVM_TOOL_RUNNER_SCRIPT),
+                    "-Tool",
+                    "dart",
+                    "-ToolPath",
+                    str(fake_tool),
+                    "-WorkingDirectory",
+                    str(working_dir),
+                    "-Command",
+                    "record",
+                    str(output_file),
+                ],
+                check=True,
+                cwd=REPO_ROOT,
+            )
+            lines = output_file.read_text(encoding="utf-8").splitlines()
+        finally:
+            fake_tool.unlink(missing_ok=True)
+            output_file.unlink(missing_ok=True)
+            tool_output_dir.rmdir()
+
+        recorded = dict(
+            line.split("=", 1)
+            for line in lines
+            if "=" in line
+        )
+        recorded_cwd = recorded["CD"]
+        recorded_project_dir = recorded["PROJECT_DIR"]
+
+        self.assertTrue(recorded_project_dir)
+        self.assertTrue(
+            recorded_cwd.lower().startswith(recorded_project_dir.lower()),
+            msg=f"expected {recorded_cwd!r} to stay inside short workspace {recorded_project_dir!r}",
+        )
+        self.assertTrue(
+            recorded_cwd.lower().endswith("\\scripts"),
+            msg=f"expected repo-relative working directory suffix to be preserved, got {recorded_cwd!r}",
+        )
+        self.assertNotEqual(str(working_dir).lower(), recorded_cwd.lower())
 
     def test_prepare_ffmpeg_windows_script_uses_direct_fvm_dart_runner(self) -> None:
         script = (REPO_ROOT / "scripts/prepare_ffmpeg_windows.ps1").read_text(encoding="utf-8")

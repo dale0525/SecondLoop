@@ -80,7 +80,6 @@ class FlutterLocalNotificationsWindows extends WindowsNotificationsBase {
         if (_isReady) {
           return true;
         }
-        _plugin = _bindings.createPlugin();
         // The C++ code will crash if there's an invalid GUID, so check it here
         if (!settings.guid.isValidGuid) {
           throw ArgumentError.value(
@@ -90,23 +89,43 @@ class FlutterLocalNotificationsWindows extends WindowsNotificationsBase {
                 ' format.\nYou can get one by searching GUID generators online',
           );
         }
-        instance = this;
-        userCallback = onNotificationReceived;
-        final Pointer<Utf8> appName =
-            settings.appName.toNativeUtf8(allocator: arena);
-        final Pointer<Utf8> aumId =
-            settings.appUserModelId.toNativeUtf8(allocator: arena);
-        final Pointer<Utf8> guid = settings.guid.toNativeUtf8(allocator: arena);
-        final Pointer<Utf8> iconPath =
-            settings.iconPath?.toNativeUtf8(allocator: arena) ?? nullptr;
-        final NativeNotificationCallback callback =
-            NativeCallable<NativeNotificationCallbackFunction>.listener(
-          _globalLaunchCallback,
-        ).nativeFunction;
-        final bool result =
-            _bindings.init(_plugin, appName, aumId, guid, iconPath, callback);
-        _isReady = result;
-        return result;
+        final plugin = _bindings.createPlugin();
+        var shouldDisposePlugin = true;
+        try {
+          instance = this;
+          userCallback = onNotificationReceived;
+          final Pointer<Utf8> appName =
+              settings.appName.toNativeUtf8(allocator: arena);
+          final Pointer<Utf8> aumId =
+              settings.appUserModelId.toNativeUtf8(allocator: arena);
+          final Pointer<Utf8> guid =
+              settings.guid.toNativeUtf8(allocator: arena);
+          final Pointer<Utf8> iconPath =
+              settings.iconPath?.toNativeUtf8(allocator: arena) ?? nullptr;
+          final NativeNotificationCallback callback =
+              NativeCallable<NativeNotificationCallbackFunction>.listener(
+            _globalLaunchCallback,
+          ).nativeFunction;
+          final bool result =
+              _bindings.init(plugin, appName, aumId, guid, iconPath, callback);
+          if (!result) {
+            instance = null;
+            userCallback = null;
+            return false;
+          }
+          _plugin = plugin;
+          _isReady = true;
+          shouldDisposePlugin = false;
+          return true;
+        } catch (_) {
+          instance = null;
+          userCallback = null;
+          rethrow;
+        } finally {
+          if (shouldDisposePlugin) {
+            _bindings.disposePlugin(plugin);
+          }
+        }
       });
 
   @override

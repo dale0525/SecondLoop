@@ -10,10 +10,48 @@ import 'package:flutter_local_notifications_windows/src/plugin/ffi.dart'
 import 'package:timezone/data/latest.dart' as tz_data;
 import 'package:timezone/timezone.dart' as tz;
 
+var _createPluginCalls = 0;
+var _disposePluginCalls = 0;
+var _initShouldSucceed = true;
+
 void main() {
   setUpAll(() {
     tz_data.initializeTimeZones();
     tz.setLocalLocation(tz.UTC);
+  });
+
+  setUp(() {
+    _createPluginCalls = 0;
+    _disposePluginCalls = 0;
+    _initShouldSucceed = true;
+    windows_plugin.FlutterLocalNotificationsWindows.instance = null;
+  });
+
+  test('initialize disposes native plugin when native init reports failure',
+      () async {
+    _initShouldSucceed = false;
+
+    final plugin = windows_plugin.FlutterLocalNotificationsWindows(
+      library: ffi.DynamicLibrary.process(),
+      bindings: windows_bindings.NotificationsPluginBindings.fromLookup(
+        _lookupTestSymbol,
+      ),
+    );
+
+    expect(
+      await plugin.initialize(
+        const WindowsInitializationSettings(
+          appName: 'SecondLoop',
+          appUserModelId: 'com.secondloop.secondloop',
+          guid: 'd49b5b4a-0ea5-4e31-b5c9-945cc5405f59',
+        ),
+      ),
+      isFalse,
+    );
+
+    expect(_createPluginCalls, 1);
+    expect(_disposePluginCalls, 1);
+    expect(windows_plugin.FlutterLocalNotificationsWindows.instance, isNull);
   });
 
   test('zonedSchedule throws when native Windows scheduling reports failure',
@@ -80,10 +118,14 @@ ffi.Pointer<T> _lookupTestSymbol<T extends ffi.NativeType>(String symbolName) {
   };
 }
 
-ffi.Pointer<windows_bindings.NativePlugin> _createPlugin() =>
-    ffi.Pointer<windows_bindings.NativePlugin>.fromAddress(1);
+ffi.Pointer<windows_bindings.NativePlugin> _createPlugin() => (() {
+      _createPluginCalls += 1;
+      return ffi.Pointer<windows_bindings.NativePlugin>.fromAddress(1);
+    })();
 
-void _disposePlugin(ffi.Pointer<windows_bindings.NativePlugin> _) {}
+void _disposePlugin(ffi.Pointer<windows_bindings.NativePlugin> _) {
+  _disposePluginCalls += 1;
+}
 
 bool _init(
   ffi.Pointer<windows_bindings.NativePlugin> _,
@@ -93,7 +135,7 @@ bool _init(
   ffi.Pointer<pkg_ffi.Utf8> _____,
   windows_bindings.NativeNotificationCallback ______,
 ) {
-  return true;
+  return _initShouldSucceed;
 }
 
 bool _scheduleNotification(

@@ -1,6 +1,9 @@
+// ignore_for_file: depend_on_referenced_packages
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:plugin_platform_interface/plugin_platform_interface.dart';
 import 'package:timezone/timezone.dart' as tz;
 
 import 'package:secondloop/core/notifications/review_notification_plan.dart';
@@ -54,6 +57,26 @@ void main() {
     expect(androidPlugin.requestNotificationsPermissionCalls, 1);
     expect(androidPlugin.canScheduleExactNotificationsCalls, 1);
     expect(androidPlugin.requestExactAlarmsPermissionCalls, 0);
+  });
+
+  test(
+      'ensureInitialized disables notifications when the current platform implementation is missing',
+      () async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.windows;
+    addTearDown(() {
+      debugDefaultTargetPlatformOverride = null;
+    });
+
+    FlutterLocalNotificationsPlatform.instance =
+        _FallbackNotificationsPlatform();
+
+    final scheduler = FlutterLocalNotificationsReviewReminderScheduler(
+      plugin: FlutterLocalNotificationsPlugin(),
+    );
+
+    await scheduler.ensureInitialized();
+
+    expect(scheduler.supportsSystemNotifications, isFalse);
   });
 
   test(
@@ -350,6 +373,9 @@ void main() {
     );
   });
 }
+
+final class _FallbackNotificationsPlatform
+    extends FlutterLocalNotificationsPlatform with MockPlatformInterfaceMixin {}
 
 final class _FakeAndroidNotificationsPlugin
     extends AndroidFlutterLocalNotificationsPlugin {

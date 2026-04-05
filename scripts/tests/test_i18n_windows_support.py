@@ -47,7 +47,8 @@ class I18nWindowsSupportTests(unittest.TestCase):
         self.assertIn('-WorkingDirectory "${native_working_dir}"', refresh_script)
         self.assertIn('-WorkingDirectory "${native_working_dir}"', analyze_script)
         self.assertIn("[string]$WorkingDirectory = ''", runner_script)
-        self.assertIn("Set-Location $WorkingDirectory", runner_script)
+        self.assertIn("Resolve-ExecutionWorkingDirectory", runner_script)
+        self.assertIn("Set-Location $executionWorkingDirectory", runner_script)
 
     def test_i18n_scripts_prefer_windows_batch_flutter_and_dart_wrappers(self) -> None:
         refresh_script = I18N_REFRESH_SCRIPT.read_text(encoding="utf-8")
