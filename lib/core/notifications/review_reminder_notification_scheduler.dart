@@ -236,6 +236,7 @@ final class FlutterLocalNotificationsReviewReminderScheduler
     if (!_timeZoneInitialized) return;
 
     await _cancelManagedNotifications();
+    final scheduledThisBatch = <int>[];
 
     for (var i = 0; i < plan.items.length; i++) {
       final item = plan.items[i];
@@ -251,7 +252,7 @@ final class FlutterLocalNotificationsReviewReminderScheduler
           : t.actions.agenda.title;
       final details = notificationDetailsForItem(item);
 
-      await _scheduleSingleNotification(
+      final didSchedule = await _scheduleSingleNotification(
         notificationId: notificationId,
         title: title,
         body: item.todoTitle,
@@ -259,6 +260,11 @@ final class FlutterLocalNotificationsReviewReminderScheduler
         details: details,
         payload: payload,
       );
+      if (!didSchedule) {
+        await _rollbackScheduledBatchIfNeeded(scheduledThisBatch);
+        break;
+      }
+      scheduledThisBatch.add(notificationId);
     }
   }
 
@@ -440,7 +446,7 @@ final class FlutterLocalNotificationsReviewReminderScheduler
     );
   }
 
-  Future<void> _scheduleSingleNotification({
+  Future<bool> _scheduleSingleNotification({
     required int notificationId,
     required String title,
     required String body,
@@ -463,10 +469,10 @@ final class FlutterLocalNotificationsReviewReminderScheduler
     try {
       await scheduleWithMode(AndroidScheduleMode.exactAllowWhileIdle);
       _managedNotificationIds.add(notificationId);
-      return;
+      return true;
     } on MissingPluginException {
       _available = false;
-      return;
+      return false;
     } on PlatformException {
       // Exact alarms can be blocked on newer Android versions.
     } catch (error, stackTrace) {
@@ -477,16 +483,19 @@ final class FlutterLocalNotificationsReviewReminderScheduler
         payload: payload,
       );
       if (defaultTargetPlatform == TargetPlatform.windows) {
-        _available = false;
+        _markWindowsNotificationsUnavailableForRetry();
+        return false;
       }
-      return;
+      return true;
     }
 
     try {
       await scheduleWithMode(AndroidScheduleMode.inexactAllowWhileIdle);
       _managedNotificationIds.add(notificationId);
+      return true;
     } on MissingPluginException {
       _available = false;
+      return false;
     } on PlatformException {
       // ignore
     } catch (error, stackTrace) {
@@ -497,9 +506,11 @@ final class FlutterLocalNotificationsReviewReminderScheduler
         payload: payload,
       );
       if (defaultTargetPlatform == TargetPlatform.windows) {
-        _available = false;
+        _markWindowsNotificationsUnavailableForRetry();
+        return false;
       }
     }
+    return true;
   }
 
   @override
@@ -555,6 +566,25 @@ final class FlutterLocalNotificationsReviewReminderScheduler
     } catch (_) {
       // ignore
     }
+  }
+
+  Future<void> _rollbackScheduledBatchIfNeeded(
+    List<int> scheduledNotificationIds,
+  ) async {
+    if (defaultTargetPlatform != TargetPlatform.windows ||
+        scheduledNotificationIds.isEmpty) {
+      return;
+    }
+
+    for (final notificationId in scheduledNotificationIds.reversed) {
+      await _cancelNotification(notificationId);
+      _managedNotificationIds.remove(notificationId);
+    }
+  }
+
+  void _markWindowsNotificationsUnavailableForRetry() {
+    _available = false;
+    _initialized = false;
   }
 
   static _WindowsQuickActionLaunch? _decodeWindowsQuickActionArguments(
