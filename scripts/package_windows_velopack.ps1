@@ -285,12 +285,23 @@ function Ensure-RustToolchainPath {
   Add-ToPathIfMissing -Directory $rustBinDirectory
 }
 
-function Ensure-WindowsBuildEnvironment {
-  $flutterRoot = Join-Path $repoRootPath '.fvm/flutter_sdk'
-  if (-not (Test-Path -LiteralPath $flutterRoot -PathType Container)) {
-    throw "SecondLoop: missing $flutterRoot. Run `pixi install` and then `pixi run setup-flutter`."
+function Resolve-FlutterRoot {
+  if (-not [string]::IsNullOrWhiteSpace($env:FLUTTER_ROOT)) {
+    if (Test-Path -LiteralPath $env:FLUTTER_ROOT -PathType Container) {
+      return $env:FLUTTER_ROOT
+    }
   }
 
+  $projectFlutterRoot = Join-Path $repoRootPath '.fvm/flutter_sdk'
+  if (Test-Path -LiteralPath $projectFlutterRoot -PathType Container) {
+    return $projectFlutterRoot
+  }
+
+  throw "SecondLoop: missing $projectFlutterRoot. Run `pixi install` and then `pixi run setup-flutter`."
+}
+
+function Ensure-WindowsBuildEnvironment {
+  $flutterRoot = Resolve-FlutterRoot
   Set-Item -Path Env:FLUTTER_ROOT -Value $flutterRoot
   Add-ToPathIfMissing -Directory (Join-Path $flutterRoot 'bin')
   Ensure-DotnetRoot
