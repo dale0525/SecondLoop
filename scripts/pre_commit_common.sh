@@ -226,6 +226,14 @@ make_precommit_temp_dir() {
   mktemp -d -p "${temp_root}" "${prefix}.XXXXXX"
 }
 
+make_precommit_short_path_dir() {
+  local prefix="$1"
+  local temp_root
+  temp_root="$(resolve_precommit_temp_root)"
+  mkdir -p "${temp_root}"
+  mktemp -d -p "${temp_root}" "${prefix}.XXXXXX"
+}
+
 resolve_dart_bin() {
   if [[ -n "${SECONDLOOP_DART_BIN:-}" ]]; then
     printf '%s\n' "${SECONDLOOP_DART_BIN}"
@@ -533,12 +541,11 @@ ensure_windows_short_build_paths() {
   local temp_root=""
   local short_temp_root=""
   temp_root="$(resolve_precommit_temp_root)"
-  short_temp_root="${temp_root%/}/sl-t"
-  mkdir -p "${short_temp_root}"
+  short_temp_root="$(make_precommit_short_path_dir sl-t)"
 
   if [[ -z "${CARGO_TARGET_DIR:-}" ]]; then
     if [[ -n "${temp_root}" ]]; then
-      export CARGO_TARGET_DIR="${temp_root%/}/sl-ct"
+      export CARGO_TARGET_DIR="$(make_precommit_short_path_dir sl-ct)"
     elif [[ "${precommit_allow_worktree_writes}" != "1" ]]; then
       export CARGO_TARGET_DIR="$(mktemp -d 2>/dev/null || mktemp -d -t secondloop_ct)"
     else
@@ -549,7 +556,7 @@ ensure_windows_short_build_paths() {
 
   if [[ -z "${CARGOKIT_TARGET_TEMP_DIR:-}" ]]; then
     if [[ -n "${temp_root}" ]]; then
-      export CARGOKIT_TARGET_TEMP_DIR="${temp_root%/}/sl-ck"
+      export CARGOKIT_TARGET_TEMP_DIR="$(make_precommit_short_path_dir sl-ck)"
     elif [[ "${precommit_allow_worktree_writes}" != "1" ]]; then
       export CARGOKIT_TARGET_TEMP_DIR="$(mktemp -d 2>/dev/null || mktemp -d -t secondloop_ck)"
     else
