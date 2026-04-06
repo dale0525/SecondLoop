@@ -443,6 +443,12 @@ class PreCommitHookTests(unittest.TestCase):
         self.assertNotEqual(-1, dart_shell_idx)
         self.assertLess(dart_bat_idx, dart_shell_idx)
 
+    def test_windows_pre_commit_forwards_current_working_directory_to_batch_runner(self) -> None:
+        script = PRE_COMMIT_COMMON_SCRIPT.read_text(encoding="utf-8")
+
+        self.assertIn('native_working_dir="$(to_native_windows_path "$(pwd)")"', script)
+        self.assertIn('-WorkingDirectory "${native_working_dir}"', script)
+
     def test_install_git_hooks_configures_post_checkout_and_post_merge(self) -> None:
         script = INSTALL_GIT_HOOKS_SCRIPT.read_text(encoding="utf-8")
 
