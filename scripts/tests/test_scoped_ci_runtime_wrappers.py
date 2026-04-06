@@ -1234,6 +1234,7 @@ class ScopedCiRuntimeWrapperBehaviorTests(unittest.TestCase):
                 )
             )
             self.assertTrue(any("build web --base-href /app/" in line for line in flutter_invocations))
+            self.assertTrue(any("MSYS2_ARG_CONV_EXCL=*" in line for line in flutter_invocations))
             self.assertTrue(all(not line.startswith(f"{repo_root.as_posix()}|") for line in flutter_invocations))
             self.assertTrue(all(path != repo_root.as_posix() for path in i18n_invocations))
             self.assertFalse((repo_root / "lib/i18n/strings.g.dart").exists())
