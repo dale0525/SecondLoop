@@ -3,6 +3,8 @@ part of '../review_reminder_notification_scheduler_android_permissions_test.dart
 final class _FallbackNotificationsPlatform
     extends FlutterLocalNotificationsPlatform with MockPlatformInterfaceMixin {}
 
+enum _AndroidScheduleOutcome { success, throwError }
+
 enum _WindowsScheduleOutcome { success, throwError }
 
 final class _ThrowingWindowsNotificationsPlugin
@@ -52,16 +54,19 @@ final class _SequencedWindowsNotificationsPlugin
   _SequencedWindowsNotificationsPlugin({
     required this.scheduleOutcomes,
     this.initialPendingItems = const <ReviewReminderItem>[],
+    this.initialActiveItems = const <ReviewReminderItem>[],
   }) : super(library: ffi.DynamicLibrary.process());
 
   final List<_WindowsScheduleOutcome> scheduleOutcomes;
   final List<ReviewReminderItem> initialPendingItems;
+  final List<ReviewReminderItem> initialActiveItems;
 
   int initializeCalls = 0;
   int zonedScheduleCalls = 0;
   final List<int> scheduledIds = <int>[];
   final List<int> cancelledIds = <int>[];
   final Set<int> pendingIds = <int>{};
+  final Set<int> activeIds = <int>{};
   final Map<int, String?> payloadsById = <int, String?>{};
 
   @override
@@ -79,6 +84,13 @@ final class _SequencedWindowsNotificationsPlugin
       payloadsById[notificationId] =
           FlutterLocalNotificationsReviewReminderScheduler.encodePayload(item);
     }
+    for (final item in initialActiveItems) {
+      activeIds.add(
+        FlutterLocalNotificationsReviewReminderScheduler.notificationIdForItem(
+          item,
+        ),
+      );
+    }
     return true;
   }
 
@@ -86,6 +98,14 @@ final class _SequencedWindowsNotificationsPlugin
   Future<NotificationAppLaunchDetails?>
       getNotificationAppLaunchDetails() async {
     return null;
+  }
+
+  @override
+  Future<List<ActiveNotification>> getActiveNotifications() async {
+    return <ActiveNotification>[
+      for (final notificationId in activeIds)
+        ActiveNotification(id: notificationId),
+    ];
   }
 
   @override
@@ -105,6 +125,7 @@ final class _SequencedWindowsNotificationsPlugin
   Future<void> cancel(int id) async {
     cancelledIds.add(id);
     pendingIds.remove(id);
+    activeIds.remove(id);
     payloadsById.remove(id);
   }
 
@@ -130,6 +151,109 @@ final class _SequencedWindowsNotificationsPlugin
         return;
       case _WindowsScheduleOutcome.throwError:
         throw Exception('native schedule failed');
+    }
+  }
+}
+
+final class _SequencedAndroidNotificationsPlugin
+    extends AndroidFlutterLocalNotificationsPlugin {
+  _SequencedAndroidNotificationsPlugin({
+    required this.canScheduleExactNotificationsResult,
+    required this.scheduleOutcomes,
+  });
+
+  final bool canScheduleExactNotificationsResult;
+  final List<_AndroidScheduleOutcome> scheduleOutcomes;
+
+  int initializeCalls = 0;
+  int getNotificationAppLaunchDetailsCalls = 0;
+  int requestNotificationsPermissionCalls = 0;
+  int canScheduleExactNotificationsCalls = 0;
+  int requestExactAlarmsPermissionCalls = 0;
+  int zonedScheduleCalls = 0;
+  final List<int> cancelledIds = <int>[];
+  final Set<int> pendingIds = <int>{};
+  final Map<int, String?> payloadsById = <int, String?>{};
+
+  @override
+  Future<bool> initialize(
+    AndroidInitializationSettings initializationSettings, {
+    DidReceiveNotificationResponseCallback? onDidReceiveNotificationResponse,
+    DidReceiveBackgroundNotificationResponseCallback?
+        onDidReceiveBackgroundNotificationResponse,
+  }) async {
+    initializeCalls += 1;
+    return true;
+  }
+
+  @override
+  Future<NotificationAppLaunchDetails?>
+      getNotificationAppLaunchDetails() async {
+    getNotificationAppLaunchDetailsCalls += 1;
+    return null;
+  }
+
+  @override
+  Future<bool?> requestNotificationsPermission() async {
+    requestNotificationsPermissionCalls += 1;
+    return true;
+  }
+
+  @override
+  Future<bool?> canScheduleExactNotifications() async {
+    canScheduleExactNotificationsCalls += 1;
+    return canScheduleExactNotificationsResult;
+  }
+
+  @override
+  Future<bool?> requestExactAlarmsPermission() async {
+    requestExactAlarmsPermissionCalls += 1;
+    return true;
+  }
+
+  @override
+  Future<List<PendingNotificationRequest>> pendingNotificationRequests() async {
+    return <PendingNotificationRequest>[
+      for (final notificationId in pendingIds)
+        PendingNotificationRequest(
+          notificationId,
+          null,
+          null,
+          payloadsById[notificationId],
+        ),
+    ];
+  }
+
+  @override
+  Future<void> cancel(int id, {String? tag}) async {
+    cancelledIds.add(id);
+    pendingIds.remove(id);
+    payloadsById.remove(id);
+  }
+
+  @override
+  Future<void> zonedSchedule(
+    int id,
+    String? title,
+    String? body,
+    tz.TZDateTime scheduledDate,
+    AndroidNotificationDetails? notificationDetails, {
+    required AndroidScheduleMode scheduleMode,
+    String? payload,
+    DateTimeComponents? matchDateTimeComponents,
+  }) async {
+    zonedScheduleCalls += 1;
+    final index = zonedScheduleCalls - 1;
+    final outcome = index < scheduleOutcomes.length
+        ? scheduleOutcomes[index]
+        : scheduleOutcomes.last;
+    switch (outcome) {
+      case _AndroidScheduleOutcome.success:
+        pendingIds.add(id);
+        payloadsById[id] = payload;
+        return;
+      case _AndroidScheduleOutcome.throwError:
+        throw Exception('android native schedule failed');
     }
   }
 }

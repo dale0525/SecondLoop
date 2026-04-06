@@ -570,6 +570,151 @@ void main() {
     expect(windowsPlugin.cancelledIds, isEmpty);
   });
 
+  test('schedule restores the previous Android batch when replacement fails',
+      () async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+    addTearDown(() {
+      debugDefaultTargetPlatformOverride = null;
+    });
+
+    final errors = <FlutterErrorDetails>[];
+    final previousOnError = FlutterError.onError;
+    addTearDown(() => FlutterError.onError = previousOnError);
+    FlutterError.onError = errors.add;
+
+    final androidPlugin = _SequencedAndroidNotificationsPlugin(
+      canScheduleExactNotificationsResult: true,
+      scheduleOutcomes: <_AndroidScheduleOutcome>[
+        _AndroidScheduleOutcome.success,
+        _AndroidScheduleOutcome.success,
+        _AndroidScheduleOutcome.throwError,
+        _AndroidScheduleOutcome.success,
+      ],
+    );
+    FlutterLocalNotificationsPlatform.instance = androidPlugin;
+
+    final scheduler = FlutterLocalNotificationsReviewReminderScheduler(
+      plugin: FlutterLocalNotificationsPlugin(),
+    );
+    const previous = ReviewReminderItem(
+      todoId: 'todo:android-previous',
+      todoTitle: 'previous',
+      sourceAtUtcMs: 10000,
+      scheduleAtUtcMs: 20000,
+      kind: ReviewReminderItemKind.reviewQueue,
+      todoStatus: 'open',
+    );
+    const replacementOne = ReviewReminderItem(
+      todoId: 'todo:android-new-1',
+      todoTitle: 'replacement one',
+      sourceAtUtcMs: 10001,
+      scheduleAtUtcMs: 20001,
+      kind: ReviewReminderItemKind.reviewQueue,
+      todoStatus: 'open',
+    );
+    const replacementTwo = ReviewReminderItem(
+      todoId: 'todo:android-new-2',
+      todoTitle: 'replacement two',
+      sourceAtUtcMs: 10002,
+      scheduleAtUtcMs: 20002,
+      kind: ReviewReminderItemKind.reviewQueue,
+      todoStatus: 'open',
+    );
+
+    final previousId =
+        FlutterLocalNotificationsReviewReminderScheduler.notificationIdForItem(
+      previous,
+    );
+    final replacementOneId =
+        FlutterLocalNotificationsReviewReminderScheduler.notificationIdForItem(
+      replacementOne,
+    );
+    final replacementTwoId =
+        FlutterLocalNotificationsReviewReminderScheduler.notificationIdForItem(
+      replacementTwo,
+    );
+
+    final firstScheduleSucceeded = await scheduler.schedule(
+      const ReviewReminderPlan(
+        pendingCount: 1,
+        items: <ReviewReminderItem>[previous],
+      ),
+    );
+    final replacementSucceeded = await scheduler.schedule(
+      const ReviewReminderPlan(
+        pendingCount: 2,
+        items: <ReviewReminderItem>[replacementOne, replacementTwo],
+      ),
+    );
+
+    expect(firstScheduleSucceeded, isTrue);
+    expect(replacementSucceeded, isFalse);
+    expect(androidPlugin.pendingIds, <int>{previousId});
+    expect(androidPlugin.cancelledIds, contains(previousId));
+    expect(androidPlugin.cancelledIds, contains(replacementOneId));
+    expect(androidPlugin.pendingIds, isNot(contains(replacementOneId)));
+    expect(androidPlugin.pendingIds, isNot(contains(replacementTwoId)));
+    expect(errors, hasLength(1));
+  });
+
+  test(
+      'schedule cancels stale Windows active notifications discovered on cold start',
+      () async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.windows;
+    addTearDown(() {
+      debugDefaultTargetPlatformOverride = null;
+    });
+
+    const activeOnly = ReviewReminderItem(
+      todoId: 'todo:active-only',
+      todoTitle: 'active only',
+      sourceAtUtcMs: 10000,
+      scheduleAtUtcMs: 20000,
+      kind: ReviewReminderItemKind.reviewQueue,
+      todoStatus: 'open',
+    );
+    const replacement = ReviewReminderItem(
+      todoId: 'todo:active-replacement',
+      todoTitle: 'replacement',
+      sourceAtUtcMs: 10001,
+      scheduleAtUtcMs: 20001,
+      kind: ReviewReminderItemKind.reviewQueue,
+      todoStatus: 'open',
+    );
+    final activeOnlyId =
+        FlutterLocalNotificationsReviewReminderScheduler.notificationIdForItem(
+      activeOnly,
+    );
+    final replacementId =
+        FlutterLocalNotificationsReviewReminderScheduler.notificationIdForItem(
+      replacement,
+    );
+
+    final windowsPlugin = _SequencedWindowsNotificationsPlugin(
+      scheduleOutcomes: <_WindowsScheduleOutcome>[
+        _WindowsScheduleOutcome.success,
+      ],
+      initialActiveItems: const <ReviewReminderItem>[activeOnly],
+    );
+    FlutterLocalNotificationsPlatform.instance = windowsPlugin;
+
+    final scheduler = FlutterLocalNotificationsReviewReminderScheduler(
+      plugin: FlutterLocalNotificationsPlugin(),
+    );
+
+    final didSchedule = await scheduler.schedule(
+      const ReviewReminderPlan(
+        pendingCount: 1,
+        items: <ReviewReminderItem>[replacement],
+      ),
+    );
+
+    expect(didSchedule, isTrue);
+    expect(windowsPlugin.activeIds, isNot(contains(activeOnlyId)));
+    expect(windowsPlugin.cancelledIds, contains(activeOnlyId));
+    expect(windowsPlugin.pendingIds, <int>{replacementId});
+  });
+
   test('schedule reports generic Android scheduling errors as failures',
       () async {
     debugDefaultTargetPlatformOverride = TargetPlatform.android;

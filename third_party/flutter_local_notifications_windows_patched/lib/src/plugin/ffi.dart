@@ -127,10 +127,11 @@ class FlutterLocalNotificationsWindows extends WindowsNotificationsBase {
           );
         }
         final plugin = _bindings.createPlugin();
-        final callbackHandle = _callbackHandleFactory(_globalLaunchCallback);
+        NativeNotificationCallbackHandle? callbackHandle;
         var shouldDisposePlugin = true;
         var shouldCloseCallbackHandle = true;
         try {
+          callbackHandle = _callbackHandleFactory(_globalLaunchCallback);
           instance = this;
           userCallback = onNotificationReceived;
           final Pointer<Utf8> appName =
@@ -170,7 +171,7 @@ class FlutterLocalNotificationsWindows extends WindowsNotificationsBase {
             _bindings.disposePlugin(plugin);
           }
           if (shouldCloseCallbackHandle) {
-            callbackHandle.close();
+            callbackHandle?.close();
           }
         }
       });

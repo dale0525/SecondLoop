@@ -227,6 +227,34 @@ void main() {
 
     expect(_callbackHandleCloseCalls, 1);
   });
+
+  test('initialize disposes native plugin when callback handle creation throws',
+      () async {
+    final plugin = windows_plugin.FlutterLocalNotificationsWindows(
+      library: ffi.DynamicLibrary.process(),
+      bindings: windows_bindings.NotificationsPluginBindings.fromLookup(
+        _lookupTestSymbol,
+      ),
+      callbackHandleFactory: (_) {
+        throw StateError('callback handle creation failed');
+      },
+    );
+
+    await expectLater(
+      plugin.initialize(
+        const WindowsInitializationSettings(
+          appName: 'SecondLoop',
+          appUserModelId: 'com.secondloop.secondloop',
+          guid: 'd49b5b4a-0ea5-4e31-b5c9-945cc5405f59',
+        ),
+        onNotificationReceived: (_) {},
+      ),
+      throwsStateError,
+    );
+
+    expect(_createPluginCalls, 1);
+    expect(_disposePluginCalls, 1);
+  });
 }
 
 windows_plugin.NativeNotificationCallbackHandle _fakeCallbackHandleFactory(
