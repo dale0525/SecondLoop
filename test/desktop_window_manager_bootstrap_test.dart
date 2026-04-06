@@ -40,8 +40,7 @@ void main() {
     await DesktopWindowManagerBootstrap.waitUntilReadyToShow();
     await DesktopWindowManagerBootstrap.waitUntilReadyToShow();
 
-    expect(
-        calls.take(2), <String>['ensureInitialized', 'waitUntilReadyToShow']);
+    expect(calls, <String>['ensureInitialized', 'waitUntilReadyToShow']);
     expect(
       calls.where((method) => method == 'waitUntilReadyToShow'),
       hasLength(1),

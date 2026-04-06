@@ -168,12 +168,7 @@ void main() {
     addTearDown(() => FlutterError.onError = previousOnError);
     FlutterError.onError = errors.add;
 
-    final windowsPlugin = _SequencedWindowsNotificationsPlugin(
-      scheduleOutcomes: <_WindowsScheduleOutcome>[
-        _WindowsScheduleOutcome.throwError,
-        _WindowsScheduleOutcome.success,
-      ],
-    );
+    final windowsPlugin = _ResetRequiredWindowsNotificationsPlugin();
     FlutterLocalNotificationsPlatform.instance = windowsPlugin;
 
     final scheduler = FlutterLocalNotificationsReviewReminderScheduler(
@@ -195,7 +190,8 @@ void main() {
       ),
     );
 
-    expect(windowsPlugin.initializeCalls, 1);
+    expect(windowsPlugin.initializeAttempts, 1);
+    expect(windowsPlugin.nativeInitializeCalls, 1);
     expect(windowsPlugin.zonedScheduleCalls, 1);
     expect(scheduler.supportsSystemNotifications, isFalse);
 
@@ -206,7 +202,9 @@ void main() {
       ),
     );
 
-    expect(windowsPlugin.initializeCalls, 2);
+    expect(windowsPlugin.initializeAttempts, 2);
+    expect(windowsPlugin.nativeInitializeCalls, 2);
+    expect(windowsPlugin.disposeCalls, 1);
     expect(windowsPlugin.zonedScheduleCalls, 2);
     expect(scheduler.supportsSystemNotifications, isTrue);
     expect(errors, hasLength(1));
@@ -282,6 +280,91 @@ void main() {
     expect(windowsPlugin.scheduledIds, <int>[firstId]);
     expect(windowsPlugin.cancelledIds, contains(firstId));
     expect(windowsPlugin.cancelledIds, isNot(contains(thirdId)));
+    expect(errors, hasLength(1));
+  });
+
+  test('schedule restores the previous Windows batch when replacing it fails',
+      () async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.windows;
+    addTearDown(() {
+      debugDefaultTargetPlatformOverride = null;
+    });
+
+    final errors = <FlutterErrorDetails>[];
+    final previousOnError = FlutterError.onError;
+    addTearDown(() => FlutterError.onError = previousOnError);
+    FlutterError.onError = errors.add;
+
+    final windowsPlugin = _SequencedWindowsNotificationsPlugin(
+      scheduleOutcomes: <_WindowsScheduleOutcome>[
+        _WindowsScheduleOutcome.success,
+        _WindowsScheduleOutcome.success,
+        _WindowsScheduleOutcome.throwError,
+        _WindowsScheduleOutcome.success,
+      ],
+    );
+    FlutterLocalNotificationsPlatform.instance = windowsPlugin;
+
+    final scheduler = FlutterLocalNotificationsReviewReminderScheduler(
+      plugin: FlutterLocalNotificationsPlugin(),
+    );
+    const previous = ReviewReminderItem(
+      todoId: 'todo:previous',
+      todoTitle: 'previous',
+      sourceAtUtcMs: 10000,
+      scheduleAtUtcMs: 20000,
+      kind: ReviewReminderItemKind.reviewQueue,
+      todoStatus: 'open',
+    );
+    const replacementOne = ReviewReminderItem(
+      todoId: 'todo:new-1',
+      todoTitle: 'new one',
+      sourceAtUtcMs: 10001,
+      scheduleAtUtcMs: 20001,
+      kind: ReviewReminderItemKind.reviewQueue,
+      todoStatus: 'open',
+    );
+    const replacementTwo = ReviewReminderItem(
+      todoId: 'todo:new-2',
+      todoTitle: 'new two',
+      sourceAtUtcMs: 10002,
+      scheduleAtUtcMs: 20002,
+      kind: ReviewReminderItemKind.reviewQueue,
+      todoStatus: 'open',
+    );
+
+    await scheduler.schedule(
+      const ReviewReminderPlan(
+        pendingCount: 1,
+        items: <ReviewReminderItem>[previous],
+      ),
+    );
+
+    await scheduler.schedule(
+      const ReviewReminderPlan(
+        pendingCount: 2,
+        items: <ReviewReminderItem>[replacementOne, replacementTwo],
+      ),
+    );
+
+    final previousId =
+        FlutterLocalNotificationsReviewReminderScheduler.notificationIdForItem(
+      previous,
+    );
+    final replacementOneId =
+        FlutterLocalNotificationsReviewReminderScheduler.notificationIdForItem(
+      replacementOne,
+    );
+    final replacementTwoId =
+        FlutterLocalNotificationsReviewReminderScheduler.notificationIdForItem(
+      replacementTwo,
+    );
+
+    expect(windowsPlugin.pendingIds, <int>{previousId});
+    expect(windowsPlugin.cancelledIds, contains(previousId));
+    expect(windowsPlugin.cancelledIds, contains(replacementOneId));
+    expect(windowsPlugin.pendingIds, isNot(contains(replacementOneId)));
+    expect(windowsPlugin.pendingIds, isNot(contains(replacementTwoId)));
     expect(errors, hasLength(1));
   });
 
@@ -613,6 +696,8 @@ final class _SequencedWindowsNotificationsPlugin
   int zonedScheduleCalls = 0;
   final List<int> scheduledIds = <int>[];
   final List<int> cancelledIds = <int>[];
+  final Set<int> pendingIds = <int>{};
+  final Map<int, String?> payloadsById = <int, String?>{};
 
   @override
   Future<bool> initialize(
@@ -631,12 +716,22 @@ final class _SequencedWindowsNotificationsPlugin
 
   @override
   Future<List<PendingNotificationRequest>> pendingNotificationRequests() async {
-    return const <PendingNotificationRequest>[];
+    return <PendingNotificationRequest>[
+      for (final notificationId in pendingIds)
+        PendingNotificationRequest(
+          notificationId,
+          null,
+          null,
+          payloadsById[notificationId],
+        ),
+    ];
   }
 
   @override
   Future<void> cancel(int id) async {
     cancelledIds.add(id);
+    pendingIds.remove(id);
+    payloadsById.remove(id);
   }
 
   @override
@@ -656,9 +751,79 @@ final class _SequencedWindowsNotificationsPlugin
     switch (outcome) {
       case _WindowsScheduleOutcome.success:
         scheduledIds.add(id);
+        pendingIds.add(id);
+        payloadsById[id] = payload;
         return;
       case _WindowsScheduleOutcome.throwError:
         throw Exception('native schedule failed');
+    }
+  }
+}
+
+final class _ResetRequiredWindowsNotificationsPlugin
+    extends windows_plugin.FlutterLocalNotificationsWindows {
+  _ResetRequiredWindowsNotificationsPlugin()
+      : super(library: ffi.DynamicLibrary.process());
+
+  int initializeAttempts = 0;
+  int nativeInitializeCalls = 0;
+  int disposeCalls = 0;
+  int zonedScheduleCalls = 0;
+
+  bool _ready = false;
+  bool _mustResetBeforeScheduling = false;
+
+  @override
+  Future<bool> initialize(
+    WindowsInitializationSettings settings, {
+    DidReceiveNotificationResponseCallback? onNotificationReceived,
+  }) async {
+    initializeAttempts += 1;
+    if (_ready) {
+      return true;
+    }
+
+    nativeInitializeCalls += 1;
+    _ready = true;
+    _mustResetBeforeScheduling = false;
+    return true;
+  }
+
+  @override
+  void dispose() {
+    disposeCalls += 1;
+    _ready = false;
+    _mustResetBeforeScheduling = false;
+  }
+
+  @override
+  Future<NotificationAppLaunchDetails?>
+      getNotificationAppLaunchDetails() async {
+    return null;
+  }
+
+  @override
+  Future<List<PendingNotificationRequest>> pendingNotificationRequests() async {
+    return const <PendingNotificationRequest>[];
+  }
+
+  @override
+  Future<void> zonedSchedule(
+    int id,
+    String? title,
+    String? body,
+    tz.TZDateTime scheduledDate,
+    WindowsNotificationDetails? details, {
+    String? payload,
+  }) async {
+    zonedScheduleCalls += 1;
+    if (_mustResetBeforeScheduling) {
+      throw Exception('stale native schedule failed');
+    }
+
+    if (zonedScheduleCalls == 1) {
+      _mustResetBeforeScheduling = true;
+      throw Exception('native schedule failed');
     }
   }
 }

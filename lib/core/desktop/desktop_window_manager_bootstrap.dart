@@ -1,9 +1,11 @@
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:window_manager/window_manager.dart';
 
 /// Ensures the Windows taskbar integration in `window_manager` is initialized
 /// before any `setSkipTaskbar` calls.
 final class DesktopWindowManagerBootstrap {
+  static const MethodChannel _channel = MethodChannel('window_manager');
   static Future<void>? _ready;
 
   static Future<void> ensureInitialized() {
@@ -27,7 +29,7 @@ final class DesktopWindowManagerBootstrap {
 
   static Future<void> _initialize() async {
     await windowManager.ensureInitialized();
-    await windowManager.waitUntilReadyToShow();
+    await _channel.invokeMethod<void>('waitUntilReadyToShow');
   }
 
   @visibleForTesting

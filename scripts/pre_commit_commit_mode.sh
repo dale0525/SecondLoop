@@ -86,6 +86,7 @@ fi
 
 if [[ ${run_flutter_checks} -ne 0 || ${#dart_files[@]} -ne 0 || ${run_i18n_refresh_needed} -ne 0 ]]; then
   ensure_flutter_package_config
+  stage_restored_flutter_dependency_outputs
 fi
 
 if [[ ${run_i18n_refresh_needed} -ne 0 ]]; then

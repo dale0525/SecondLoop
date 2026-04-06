@@ -331,6 +331,19 @@ ensure_flutter_package_config() {
   fi
 }
 
+stage_restored_flutter_dependency_outputs() {
+  if [[ ! -f "${repo_root}/pubspec.lock" ]]; then
+    return 0
+  fi
+
+  if git diff --quiet -- pubspec.lock; then
+    return 0
+  fi
+
+  echo "pre-commit: auto-staged pubspec.lock after restoring Flutter package config." >&2
+  git add -- pubspec.lock
+}
+
 resolve_libclang_path() {
   if ! is_windows_env; then
     return 0

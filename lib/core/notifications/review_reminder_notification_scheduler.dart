@@ -101,6 +101,7 @@ final class FlutterLocalNotificationsReviewReminderScheduler
   bool _initialized = false;
   bool _available = true;
   bool _timeZoneInitialized = false;
+  ReviewReminderPlan? _lastSuccessfulPlan;
 
   @override
   bool get supportsSystemNotifications => _available;
@@ -235,6 +236,8 @@ final class FlutterLocalNotificationsReviewReminderScheduler
     _configureTimeZone();
     if (!_timeZoneInitialized) return;
 
+    final previousPlan = _lastSuccessfulPlan;
+    var completed = true;
     await _cancelManagedNotifications();
     final scheduledThisBatch = <int>[];
 
@@ -261,10 +264,16 @@ final class FlutterLocalNotificationsReviewReminderScheduler
         payload: payload,
       );
       if (!didSchedule) {
+        completed = false;
         await _rollbackScheduledBatchIfNeeded(scheduledThisBatch);
+        await _restorePreviousWindowsPlanIfNeeded(previousPlan);
         break;
       }
       scheduledThisBatch.add(notificationId);
+    }
+
+    if (completed && _available) {
+      _lastSuccessfulPlan = plan;
     }
   }
 
@@ -483,7 +492,7 @@ final class FlutterLocalNotificationsReviewReminderScheduler
         payload: payload,
       );
       if (defaultTargetPlatform == TargetPlatform.windows) {
-        _markWindowsNotificationsUnavailableForRetry();
+        await _markWindowsNotificationsUnavailableForRetry();
         return false;
       }
       return true;
@@ -506,7 +515,7 @@ final class FlutterLocalNotificationsReviewReminderScheduler
         payload: payload,
       );
       if (defaultTargetPlatform == TargetPlatform.windows) {
-        _markWindowsNotificationsUnavailableForRetry();
+        await _markWindowsNotificationsUnavailableForRetry();
         return false;
       }
     }
@@ -519,6 +528,7 @@ final class FlutterLocalNotificationsReviewReminderScheduler
     if (!_available) return;
 
     await _cancelManagedNotifications();
+    _lastSuccessfulPlan = null;
   }
 
   Future<void> _cancelManagedNotifications() async {
@@ -582,9 +592,63 @@ final class FlutterLocalNotificationsReviewReminderScheduler
     }
   }
 
-  void _markWindowsNotificationsUnavailableForRetry() {
+  Future<void> _markWindowsNotificationsUnavailableForRetry() async {
     _available = false;
     _initialized = false;
+    await _disposeWindowsNotificationsPluginBestEffort();
+  }
+
+  Future<void> _disposeWindowsNotificationsPluginBestEffort() async {
+    if (defaultTargetPlatform != TargetPlatform.windows) {
+      return;
+    }
+
+    try {
+      final windowsImpl = _plugin.resolvePlatformSpecificImplementation<
+          FlutterLocalNotificationsWindows>();
+      windowsImpl?.dispose();
+    } catch (_) {
+      // ignore
+    }
+  }
+
+  Future<void> _restorePreviousWindowsPlanIfNeeded(
+    ReviewReminderPlan? previousPlan,
+  ) async {
+    if (defaultTargetPlatform != TargetPlatform.windows ||
+        previousPlan == null ||
+        previousPlan.items.isEmpty) {
+      return;
+    }
+
+    await ensureInitialized();
+    if (!_available) {
+      return;
+    }
+
+    for (final item in previousPlan.items) {
+      final didRestore = await _scheduleSingleNotification(
+        notificationId: notificationIdForItem(item),
+        title: item.kind == ReviewReminderItemKind.reviewQueue
+            ? t.actions.reviewQueue.title
+            : t.actions.agenda.title,
+        body: item.todoTitle,
+        scheduleAt: tz.TZDateTime.from(
+          DateTime.fromMillisecondsSinceEpoch(
+            item.scheduleAtUtcMs,
+            isUtc: true,
+          ),
+          tz.local,
+        ),
+        details: notificationDetailsForItem(item),
+        payload: encodePayload(item),
+      );
+      if (!didRestore) {
+        return;
+      }
+    }
+
+    _lastSuccessfulPlan = previousPlan;
   }
 
   static _WindowsQuickActionLaunch? _decodeWindowsQuickActionArguments(

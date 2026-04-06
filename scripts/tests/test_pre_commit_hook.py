@@ -412,6 +412,14 @@ class PreCommitHookTests(unittest.TestCase):
         self.assertIn('if [[ ! -f "${package_config_path}" ]]; then', script)
         self.assertIn('run_flutter_tool pub get', script)
 
+    def test_commit_mode_auto_stages_pubspec_lock_after_restoring_package_config(self) -> None:
+        script = PRE_COMMIT_COMMON_SCRIPT.read_text(
+            encoding="utf-8"
+        ) + "\n" + PRE_COMMIT_COMMIT_MODE_SCRIPT.read_text(encoding="utf-8")
+
+        self.assertIn('git diff --quiet -- pubspec.lock', script)
+        self.assertIn('git add -- pubspec.lock', script)
+
     def test_windows_pre_commit_prefers_batch_flutter_and_dart_wrappers(self) -> None:
         script = PRE_COMMIT_COMMON_SCRIPT.read_text(encoding="utf-8")
 
