@@ -45,8 +45,10 @@ final class ReviewReminderNotificationCoordinator {
 
     if (_lastPlan == plan) return;
 
-    _lastPlan = plan;
-    await _scheduler.schedule(plan);
+    final didSchedule = await _scheduler.schedule(plan);
+    if (didSchedule) {
+      _lastPlan = plan;
+    }
   }
 
   ReviewReminderPlan _stabilizePlanForOverdueCatchUp(

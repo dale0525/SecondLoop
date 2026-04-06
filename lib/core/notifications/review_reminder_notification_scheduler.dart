@@ -47,7 +47,7 @@ abstract interface class ReviewReminderNotificationScheduler {
 
   Future<void> ensureInitialized();
 
-  Future<void> schedule(ReviewReminderPlan plan);
+  Future<bool> schedule(ReviewReminderPlan plan);
 
   Future<void> cancel();
 }
@@ -229,12 +229,12 @@ final class FlutterLocalNotificationsReviewReminderScheduler
   }
 
   @override
-  Future<void> schedule(ReviewReminderPlan plan) async {
+  Future<bool> schedule(ReviewReminderPlan plan) async {
     await ensureInitialized();
-    if (!_available) return;
+    if (!_available) return false;
 
     _configureTimeZone();
-    if (!_timeZoneInitialized) return;
+    if (!_timeZoneInitialized) return false;
 
     final previousPlan = _lastSuccessfulPlan;
     var completed = true;
@@ -275,6 +275,7 @@ final class FlutterLocalNotificationsReviewReminderScheduler
     if (completed && _available) {
       _lastSuccessfulPlan = plan;
     }
+    return completed && _available;
   }
 
   @visibleForTesting

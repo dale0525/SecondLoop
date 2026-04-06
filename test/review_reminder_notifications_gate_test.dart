@@ -707,8 +707,9 @@ final class _FakeScheduler implements ReviewReminderNotificationScheduler {
   }
 
   @override
-  Future<void> schedule(ReviewReminderPlan plan) async {
+  Future<bool> schedule(ReviewReminderPlan plan) async {
     scheduleCalls += 1;
+    return true;
   }
 }
 

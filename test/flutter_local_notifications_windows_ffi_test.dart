@@ -70,6 +70,7 @@ void main() {
           appUserModelId: 'com.secondloop.secondloop',
           guid: 'd49b5b4a-0ea5-4e31-b5c9-945cc5405f59',
         ),
+        onNotificationReceived: (_) {},
       ),
       isTrue,
     );
@@ -84,6 +85,55 @@ void main() {
       ),
       throwsA(isA<Exception>()),
     );
+
+    plugin.dispose();
+  });
+
+  test('dispose clears Windows plugin registration state before reinit',
+      () async {
+    final plugin = windows_plugin.FlutterLocalNotificationsWindows(
+      library: ffi.DynamicLibrary.process(),
+      bindings: windows_bindings.NotificationsPluginBindings.fromLookup(
+        _lookupTestSymbol,
+      ),
+    );
+
+    expect(
+      await plugin.initialize(
+        const WindowsInitializationSettings(
+          appName: 'SecondLoop',
+          appUserModelId: 'com.secondloop.secondloop',
+          guid: 'd49b5b4a-0ea5-4e31-b5c9-945cc5405f59',
+        ),
+        onNotificationReceived: (_) {},
+      ),
+      isTrue,
+    );
+
+    expect(plugin.userCallback, isNotNull);
+    expect(
+        windows_plugin.FlutterLocalNotificationsWindows.instance, same(plugin));
+
+    plugin.dispose();
+
+    expect(plugin.userCallback, isNull);
+    expect(windows_plugin.FlutterLocalNotificationsWindows.instance, isNull);
+
+    expect(
+      await plugin.initialize(
+        const WindowsInitializationSettings(
+          appName: 'SecondLoop',
+          appUserModelId: 'com.secondloop.secondloop',
+          guid: 'd49b5b4a-0ea5-4e31-b5c9-945cc5405f59',
+        ),
+        onNotificationReceived: (_) {},
+      ),
+      isTrue,
+    );
+
+    expect(plugin.userCallback, isNotNull);
+    expect(
+        windows_plugin.FlutterLocalNotificationsWindows.instance, same(plugin));
 
     plugin.dispose();
   });

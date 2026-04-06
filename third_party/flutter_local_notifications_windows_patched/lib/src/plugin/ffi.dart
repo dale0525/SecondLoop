@@ -57,7 +57,7 @@ class FlutterLocalNotificationsWindows extends WindowsNotificationsBase {
   final NotificationsPluginBindings _bindings;
 
   /// A pointer to the C++ handler class.
-  late final Pointer<NativePlugin> _plugin;
+  Pointer<NativePlugin>? _plugin;
 
   bool _isReady = false;
 
@@ -130,11 +130,17 @@ class FlutterLocalNotificationsWindows extends WindowsNotificationsBase {
 
   @override
   void dispose() {
+    if (_details != null) {
+      _bindings.freeLaunchDetails(_details!);
+      _details = null;
+    }
+    userCallback = null;
+    instance = null;
     if (!_isReady) {
       return;
     }
-    _bindings.disposePlugin(_plugin);
-    instance = null;
+    _bindings.disposePlugin(_plugin!);
+    _plugin = null;
     _isReady = false;
   }
 
@@ -183,7 +189,7 @@ class FlutterLocalNotificationsWindows extends WindowsNotificationsBase {
         'Flutter Local Notifications must be initialized before use',
       );
     }
-    _bindings.cancelNotification(_plugin, id);
+    _bindings.cancelNotification(_plugin!, id);
   }
 
   @override
@@ -193,7 +199,7 @@ class FlutterLocalNotificationsWindows extends WindowsNotificationsBase {
         'Flutter Local Notifications must be initialized before use',
       );
     }
-    _bindings.cancelAll(_plugin);
+    _bindings.cancelAll(_plugin!);
   }
 
   @override
@@ -206,7 +212,7 @@ class FlutterLocalNotificationsWindows extends WindowsNotificationsBase {
         }
         final Pointer<Int> length = arena<Int>();
         final Pointer<NativeNotificationDetails> array =
-            _bindings.getActiveNotifications(_plugin, length);
+            _bindings.getActiveNotifications(_plugin!, length);
         final List<ActiveNotification> result =
             array.asActiveNotifications(length.value);
         _bindings.freeDetailsArray(array);
@@ -223,7 +229,7 @@ class FlutterLocalNotificationsWindows extends WindowsNotificationsBase {
             }
             final Pointer<Int> length = arena<Int>();
             final Pointer<NativeNotificationDetails> array =
-                _bindings.getPendingNotifications(_plugin, length);
+                _bindings.getPendingNotifications(_plugin!, length);
             final List<PendingNotificationRequest> result =
                 array.asPendingRequests(length.value);
             _bindings.freeDetailsArray(array);
@@ -301,7 +307,7 @@ class FlutterLocalNotificationsWindows extends WindowsNotificationsBase {
           details: details,
         );
         final bool result = _bindings.showNotification(
-          _plugin,
+          _plugin!,
           id,
           xml.toNativeUtf8(allocator: arena),
           nativeMap,
@@ -325,7 +331,7 @@ class FlutterLocalNotificationsWindows extends WindowsNotificationsBase {
             'Flutter Local Notifications must be initialized before use',
           );
         }
-        final bool result = _bindings.showNotification(_plugin, id,
+        final bool result = _bindings.showNotification(_plugin!, id,
             xml.toNativeUtf8(allocator: arena), bindings.toNativeMap(arena));
         if (!result) {
           throw ArgumentError('Flutter Local Notifications: Invalid XML');
@@ -368,7 +374,7 @@ class FlutterLocalNotificationsWindows extends WindowsNotificationsBase {
         final int secondsSinceEpoch =
             scheduledDate.millisecondsSinceEpoch ~/ 1000;
         final bool result = _bindings.scheduleNotification(
-          _plugin,
+          _plugin!,
           id,
           xml.toNativeUtf8(allocator: arena),
           secondsSinceEpoch,
@@ -402,7 +408,7 @@ class FlutterLocalNotificationsWindows extends WindowsNotificationsBase {
         final int secondsSinceEpoch =
             scheduledDate.millisecondsSinceEpoch ~/ 1000;
         final bool result = _bindings.scheduleNotification(
-          _plugin,
+          _plugin!,
           id,
           xml.toNativeUtf8(allocator: arena),
           secondsSinceEpoch,
@@ -426,7 +432,7 @@ class FlutterLocalNotificationsWindows extends WindowsNotificationsBase {
           );
         }
         final NativeUpdateResult result = _bindings.updateNotification(
-            _plugin, id, bindings.toNativeMap(arena));
+            _plugin!, id, bindings.toNativeMap(arena));
         return getUpdateResult(result);
       });
 }
