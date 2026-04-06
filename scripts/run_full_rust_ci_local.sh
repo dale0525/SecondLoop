@@ -12,8 +12,7 @@ source "${repo_root}/scripts/pre_commit_common.sh"
 worktree_cache_key="$(printf '%s\n' "${repo_root}" | cksum | awk '{print $1}')"
 if is_windows_env; then
   ensure_windows_short_build_paths
-  rust_target_root="${CARGO_TARGET_DIR%/}"
-  rust_target_dir="${rust_target_root}/rust-ci-${worktree_cache_key}"
+  rust_target_dir="${CARGO_TARGET_DIR%/}"
 else
   rust_target_dir="${repo_root}/.tool/cache/rust-ci-target-${worktree_cache_key}"
 fi

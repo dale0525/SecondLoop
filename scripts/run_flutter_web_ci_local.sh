@@ -61,7 +61,7 @@ sync_workspace_state_into_worktree "${web_worktree}"
   run_with_periodic_status \
     "flutter web smoke tests" \
     run_flutter_tool test test/web_app/web_app_gate_test.dart test/web_app/web_app_service_http_test.dart
-  run_with_periodic_status \
+  MSYS2_ARG_CONV_EXCL='*' run_with_periodic_status \
     "flutter build web" \
-    env MSYS2_ARG_CONV_EXCL='*' run_flutter_tool build web --base-href /app/
+    run_flutter_tool build web --base-href /app/
 )

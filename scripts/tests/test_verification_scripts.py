@@ -176,10 +176,17 @@ class VerificationScriptsTests(unittest.TestCase):
         self.assertIn('echo "ci: starting Rust gate..." >&2', script)
         self.assertIn('echo "ci: Rust gate passed; starting Rust nextest..." >&2', script)
         self.assertIn("ensure_windows_short_build_paths", script)
-        self.assertIn('rust_target_root="${CARGO_TARGET_DIR%/}"', script)
-        self.assertIn('rust_target_dir="${rust_target_root}/rust-ci-${worktree_cache_key}"', script)
+        self.assertIn('rust_target_dir="${CARGO_TARGET_DIR%/}"', script)
         self.assertIn('if env CARGO_TARGET_DIR="${rust_target_dir}" \\', script)
         self.assertIn('if env CARGO_TARGET_DIR="${rust_target_dir}" bash scripts/run_rust_ci_nextest.sh; then', script)
+
+    def test_local_flutter_web_ci_wrapper_disables_git_bash_path_rewriting_for_base_href(self) -> None:
+        script = (REPO_ROOT / "scripts/run_flutter_web_ci_local.sh").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn("MSYS2_ARG_CONV_EXCL='*' run_with_periodic_status", script)
+        self.assertIn("run_flutter_tool build web --base-href /app/", script)
 
     def test_rust_nextest_wrapper_prefers_project_managed_cargo_environment(self) -> None:
         script = (REPO_ROOT / "scripts/run_rust_ci_nextest.sh").read_text(

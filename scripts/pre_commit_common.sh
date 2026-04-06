@@ -489,6 +489,8 @@ ensure_windows_short_build_paths() {
   local short_temp_root=""
   if [[ "${repo_root}" =~ ^/([a-zA-Z])(/|$) ]]; then
     drive_prefix="/${BASH_REMATCH[1]}"
+  elif [[ "${repo_root}" =~ ^([a-zA-Z]):[\\/] ]]; then
+    drive_prefix="/${BASH_REMATCH[1],,}"
   fi
 
   if [[ -n "${drive_prefix}" ]]; then
