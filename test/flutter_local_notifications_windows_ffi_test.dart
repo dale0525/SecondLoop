@@ -13,6 +13,7 @@ import 'package:timezone/timezone.dart' as tz;
 var _createPluginCalls = 0;
 var _disposePluginCalls = 0;
 var _initShouldSucceed = true;
+var _callbackHandleCloseCalls = 0;
 
 void main() {
   setUpAll(() {
@@ -24,6 +25,7 @@ void main() {
     _createPluginCalls = 0;
     _disposePluginCalls = 0;
     _initShouldSucceed = true;
+    _callbackHandleCloseCalls = 0;
     windows_plugin.FlutterLocalNotificationsWindows.instance = null;
   });
 
@@ -137,7 +139,82 @@ void main() {
 
     plugin.dispose();
   });
+
+  test('dispose closes native notification callback handles', () async {
+    final plugin = windows_plugin.FlutterLocalNotificationsWindows(
+      library: ffi.DynamicLibrary.process(),
+      bindings: windows_bindings.NotificationsPluginBindings.fromLookup(
+        _lookupTestSymbol,
+      ),
+      callbackHandleFactory: _fakeCallbackHandleFactory,
+    );
+
+    expect(
+      await plugin.initialize(
+        const WindowsInitializationSettings(
+          appName: 'SecondLoop',
+          appUserModelId: 'com.secondloop.secondloop',
+          guid: 'd49b5b4a-0ea5-4e31-b5c9-945cc5405f59',
+        ),
+        onNotificationReceived: (_) {},
+      ),
+      isTrue,
+    );
+
+    plugin.dispose();
+
+    expect(_callbackHandleCloseCalls, 1);
+  });
+
+  test('failed initialize closes native notification callback handles',
+      () async {
+    _initShouldSucceed = false;
+
+    final plugin = windows_plugin.FlutterLocalNotificationsWindows(
+      library: ffi.DynamicLibrary.process(),
+      bindings: windows_bindings.NotificationsPluginBindings.fromLookup(
+        _lookupTestSymbol,
+      ),
+      callbackHandleFactory: _fakeCallbackHandleFactory,
+    );
+
+    expect(
+      await plugin.initialize(
+        const WindowsInitializationSettings(
+          appName: 'SecondLoop',
+          appUserModelId: 'com.secondloop.secondloop',
+          guid: 'd49b5b4a-0ea5-4e31-b5c9-945cc5405f59',
+        ),
+        onNotificationReceived: (_) {},
+      ),
+      isFalse,
+    );
+
+    expect(_callbackHandleCloseCalls, 1);
+  });
 }
+
+windows_plugin.NativeNotificationCallbackHandle _fakeCallbackHandleFactory(
+  void Function(windows_bindings.NativeLaunchDetails) _,
+) {
+  return _FakeNativeNotificationCallbackHandle();
+}
+
+final class _FakeNativeNotificationCallbackHandle
+    implements windows_plugin.NativeNotificationCallbackHandle {
+  @override
+  windows_bindings.NativeNotificationCallback get nativeFunction => ffi.Pointer
+          .fromFunction<windows_bindings.NativeNotificationCallbackFunction>(
+        _noopNativeNotificationCallback,
+      );
+
+  @override
+  void close() {
+    _callbackHandleCloseCalls += 1;
+  }
+}
+
+void _noopNativeNotificationCallback(windows_bindings.NativeLaunchDetails _) {}
 
 ffi.Pointer<T> _lookupTestSymbol<T extends ffi.NativeType>(String symbolName) {
   return switch (symbolName) {

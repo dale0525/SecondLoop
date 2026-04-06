@@ -237,8 +237,14 @@ final class FlutterLocalNotificationsReviewReminderScheduler
     if (!_timeZoneInitialized) return false;
 
     final previousPlan = _lastSuccessfulPlan;
+    final isWindowsColdStart =
+        defaultTargetPlatform == TargetPlatform.windows && previousPlan == null;
+    final existingWindowsNotificationIds =
+        isWindowsColdStart ? await _discoverManagedNotificationIds() : <int>{};
     var completed = true;
-    await _cancelManagedNotifications();
+    if (!isWindowsColdStart) {
+      await _cancelManagedNotifications();
+    }
     final scheduledThisBatch = <int>[];
 
     for (var i = 0; i < plan.items.length; i++) {
@@ -266,13 +272,21 @@ final class FlutterLocalNotificationsReviewReminderScheduler
       if (!didSchedule) {
         completed = false;
         await _rollbackScheduledBatchIfNeeded(scheduledThisBatch);
-        await _restorePreviousWindowsPlanIfNeeded(previousPlan);
+        if (!isWindowsColdStart) {
+          await _restorePreviousWindowsPlanIfNeeded(previousPlan);
+        }
         break;
       }
       scheduledThisBatch.add(notificationId);
     }
 
     if (completed && _available) {
+      if (isWindowsColdStart) {
+        final staleExistingIds = existingWindowsNotificationIds.difference(
+          scheduledThisBatch.toSet(),
+        );
+        await _cancelNotificationBatch(staleExistingIds);
+      }
       _lastSuccessfulPlan = plan;
     }
     return completed && _available;
@@ -496,7 +510,7 @@ final class FlutterLocalNotificationsReviewReminderScheduler
         await _markWindowsNotificationsUnavailableForRetry();
         return false;
       }
-      return true;
+      return false;
     }
 
     try {
@@ -519,8 +533,9 @@ final class FlutterLocalNotificationsReviewReminderScheduler
         await _markWindowsNotificationsUnavailableForRetry();
         return false;
       }
+      return false;
     }
-    return true;
+    return false;
   }
 
   @override
@@ -537,17 +552,7 @@ final class FlutterLocalNotificationsReviewReminderScheduler
         ? await _discoverManagedNotificationIds()
         : _managedNotificationIds.toSet();
 
-    if (notificationIds.isEmpty) {
-      for (var i = 0; i < kReviewReminderMaxItems; i++) {
-        await _cancelNotification(notificationIdBase + i);
-      }
-      return;
-    }
-
-    for (final notificationId in notificationIds) {
-      await _cancelNotification(notificationId);
-    }
-    _managedNotificationIds.clear();
+    await _cancelNotificationBatch(notificationIds, clearManagedIds: true);
   }
 
   Future<Set<int>> _discoverManagedNotificationIds() async {
@@ -576,6 +581,31 @@ final class FlutterLocalNotificationsReviewReminderScheduler
       // ignore
     } catch (_) {
       // ignore
+    }
+  }
+
+  Future<void> _cancelNotificationBatch(
+    Set<int> notificationIds, {
+    bool clearManagedIds = false,
+  }) async {
+    if (notificationIds.isEmpty) {
+      for (var i = 0; i < kReviewReminderMaxItems; i++) {
+        await _cancelNotification(notificationIdBase + i);
+      }
+      if (clearManagedIds) {
+        _managedNotificationIds.clear();
+      }
+      return;
+    }
+
+    for (final notificationId in notificationIds) {
+      await _cancelNotification(notificationId);
+      if (!clearManagedIds) {
+        _managedNotificationIds.remove(notificationId);
+      }
+    }
+    if (clearManagedIds) {
+      _managedNotificationIds.clear();
     }
   }
 

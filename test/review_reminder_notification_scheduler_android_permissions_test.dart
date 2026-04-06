@@ -368,6 +368,108 @@ void main() {
     expect(errors, hasLength(1));
   });
 
+  test(
+      'schedule restores discovered Windows notifications after a cold-start replacement failure',
+      () async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.windows;
+    addTearDown(() {
+      debugDefaultTargetPlatformOverride = null;
+    });
+
+    final errors = <FlutterErrorDetails>[];
+    final previousOnError = FlutterError.onError;
+    addTearDown(() => FlutterError.onError = previousOnError);
+    FlutterError.onError = errors.add;
+
+    const previous = ReviewReminderItem(
+      todoId: 'todo:cold-start-previous',
+      todoTitle: 'previous',
+      sourceAtUtcMs: 10000,
+      scheduleAtUtcMs: 20000,
+      kind: ReviewReminderItemKind.reviewQueue,
+      todoStatus: 'open',
+    );
+    const replacement = ReviewReminderItem(
+      todoId: 'todo:cold-start-new',
+      todoTitle: 'replacement',
+      sourceAtUtcMs: 10001,
+      scheduleAtUtcMs: 20001,
+      kind: ReviewReminderItemKind.reviewQueue,
+      todoStatus: 'open',
+    );
+    final previousId =
+        FlutterLocalNotificationsReviewReminderScheduler.notificationIdForItem(
+      previous,
+    );
+    final windowsPlugin = _SequencedWindowsNotificationsPlugin(
+      scheduleOutcomes: <_WindowsScheduleOutcome>[
+        _WindowsScheduleOutcome.throwError,
+        _WindowsScheduleOutcome.success,
+      ],
+      initialPendingItems: const <ReviewReminderItem>[previous],
+    );
+    FlutterLocalNotificationsPlatform.instance = windowsPlugin;
+
+    final scheduler = FlutterLocalNotificationsReviewReminderScheduler(
+      plugin: FlutterLocalNotificationsPlugin(),
+    );
+
+    final didSchedule = await scheduler.schedule(
+      const ReviewReminderPlan(
+        pendingCount: 1,
+        items: <ReviewReminderItem>[replacement],
+      ),
+    );
+
+    expect(didSchedule, isFalse);
+    expect(windowsPlugin.cancelledIds, isNot(contains(previousId)));
+    expect(windowsPlugin.pendingIds, <int>{previousId});
+    expect(errors, hasLength(1));
+  });
+
+  test('schedule reports generic Android scheduling errors as failures',
+      () async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+    addTearDown(() {
+      debugDefaultTargetPlatformOverride = null;
+    });
+
+    final errors = <FlutterErrorDetails>[];
+    final previousOnError = FlutterError.onError;
+    addTearDown(() => FlutterError.onError = previousOnError);
+    FlutterError.onError = errors.add;
+
+    final androidPlugin = _FakeAndroidNotificationsPlugin(
+      canScheduleExactNotificationsResult: true,
+      scheduleError: Exception('android schedule failed'),
+    );
+    FlutterLocalNotificationsPlatform.instance = androidPlugin;
+
+    final scheduler = FlutterLocalNotificationsReviewReminderScheduler(
+      plugin: FlutterLocalNotificationsPlugin(),
+    );
+
+    final didSchedule = await scheduler.schedule(
+      const ReviewReminderPlan(
+        pendingCount: 1,
+        items: <ReviewReminderItem>[
+          ReviewReminderItem(
+            todoId: 'todo:android-error',
+            todoTitle: 'android failure',
+            sourceAtUtcMs: 10000,
+            scheduleAtUtcMs: 20000,
+            kind: ReviewReminderItemKind.reviewQueue,
+            todoStatus: 'open',
+          ),
+        ],
+      ),
+    );
+
+    expect(didSchedule, isFalse);
+    expect(androidPlugin.zonedScheduleCalls, 1);
+    expect(errors, hasLength(1));
+  });
+
   test('same todo keeps stable notification id across reminder updates', () {
     const first = ReviewReminderItem(
       todoId: 'todo:1',
@@ -688,9 +790,11 @@ final class _SequencedWindowsNotificationsPlugin
     extends windows_plugin.FlutterLocalNotificationsWindows {
   _SequencedWindowsNotificationsPlugin({
     required this.scheduleOutcomes,
+    this.initialPendingItems = const <ReviewReminderItem>[],
   }) : super(library: ffi.DynamicLibrary.process());
 
   final List<_WindowsScheduleOutcome> scheduleOutcomes;
+  final List<ReviewReminderItem> initialPendingItems;
 
   int initializeCalls = 0;
   int zonedScheduleCalls = 0;
@@ -705,6 +809,15 @@ final class _SequencedWindowsNotificationsPlugin
     DidReceiveNotificationResponseCallback? onNotificationReceived,
   }) async {
     initializeCalls += 1;
+    for (final item in initialPendingItems) {
+      final notificationId = FlutterLocalNotificationsReviewReminderScheduler
+          .notificationIdForItem(
+        item,
+      );
+      pendingIds.add(notificationId);
+      payloadsById[notificationId] =
+          FlutterLocalNotificationsReviewReminderScheduler.encodePayload(item);
+    }
     return true;
   }
 
@@ -834,10 +947,12 @@ final class _FakeAndroidNotificationsPlugin
     required this.canScheduleExactNotificationsResult,
     bool initializeResult = true,
     List<bool>? initializeResults,
+    this.scheduleError,
   }) : initializeResults = initializeResults ?? <bool>[initializeResult];
 
   final bool canScheduleExactNotificationsResult;
   final List<bool> initializeResults;
+  final Object? scheduleError;
 
   int initializeCalls = 0;
   int getNotificationAppLaunchDetailsCalls = 0;
@@ -906,6 +1021,9 @@ final class _FakeAndroidNotificationsPlugin
     DateTimeComponents? matchDateTimeComponents,
   }) async {
     zonedScheduleCalls += 1;
+    if (scheduleError != null) {
+      throw scheduleError!;
+    }
     lastId = id;
     lastPayload = payload;
     lastNotificationDetails = notificationDetails;
