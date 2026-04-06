@@ -21,9 +21,13 @@ WINDOWS_FVM_TOOL_RUNNER_SCRIPT = REPO_ROOT / "scripts/run_fvm_tool.ps1"
 WINDOWS_UNINSTALL_MSI_SCRIPT = REPO_ROOT / "scripts/uninstall_windows_msi.ps1"
 WINDOWS_SETUP_FLUTTER_SCRIPT = REPO_ROOT / "scripts/setup_flutter_windows.ps1"
 WINDOWS_SHORT_WORKSPACE_SCRIPT = REPO_ROOT / "scripts/use_windows_short_workspace.ps1"
+WINDOWS_CARGOKIT_BUILD_TOOL = REPO_ROOT / "rust_builder/cargokit/run_build_tool.cmd"
 
 
 class PixiWindowsTasksTests(unittest.TestCase):
+    def _write_windows_tool_args_file(self, path: Path, *args: str) -> None:
+        path.write_bytes(b"\0".join(arg.encode("utf-8") for arg in args) + b"\0")
+
     def _load_pixi_config(self) -> dict[str, object]:
         with PIXI_TOML.open("rb") as fh:
             return tomllib.load(fh)
@@ -234,6 +238,9 @@ class PixiWindowsTasksTests(unittest.TestCase):
         self.assertIn("flutter.bat", script)
         self.assertIn("dart.bat", script)
         self.assertIn("ValueFromRemainingArguments", script)
+        self.assertIn("[string]$ArgumentsFile = ''", script)
+        self.assertIn("Read-ArgumentFile", script)
+        self.assertIn("& $toolPath @resolvedCommand", script)
         self.assertIn("exit $LASTEXITCODE", script)
 
     def test_windows_fvm_tool_runner_checks_tool_path_before_resolve_path(self) -> None:
@@ -245,6 +252,12 @@ class PixiWindowsTasksTests(unittest.TestCase):
             script.index("Test-Path $ToolPath"),
             script.index("Resolve-Path $ToolPath"),
         )
+
+    def test_windows_cargokit_build_tool_prepares_dart_tool_in_temp_workspace(self) -> None:
+        script = WINDOWS_CARGOKIT_BUILD_TOOL.read_text(encoding="utf-8")
+
+        self.assertIn("if not exist .dart_tool (", script)
+        self.assertIn("mkdir .dart_tool", script)
 
     def test_windows_velopack_script_uses_short_workspace_helper_and_full_project_dir(self) -> None:
         self.assertTrue(WINDOWS_SHORT_WORKSPACE_SCRIPT.exists())
@@ -368,6 +381,7 @@ class PixiWindowsTasksTests(unittest.TestCase):
         tool_output_dir = Path(tempfile.mkdtemp(prefix="secondloop_run_fvm_tool_"))
         fake_tool = tool_output_dir / "fake_tool.cmd"
         output_file = tool_output_dir / "cwd.txt"
+        args_file = tool_output_dir / "args.bin"
         working_dir = REPO_ROOT / "scripts"
 
         fake_tool.write_text(
@@ -381,6 +395,7 @@ class PixiWindowsTasksTests(unittest.TestCase):
             "exit /b 1\n",
             encoding="utf-8",
         )
+        self._write_windows_tool_args_file(args_file, "record", str(output_file))
 
         try:
             subprocess.run(
@@ -397,9 +412,8 @@ class PixiWindowsTasksTests(unittest.TestCase):
                     str(fake_tool),
                     "-WorkingDirectory",
                     str(working_dir),
-                    "-Command",
-                    "record",
-                    str(output_file),
+                    "-ArgumentsFile",
+                    str(args_file),
                 ],
                 check=True,
                 cwd=REPO_ROOT,
@@ -408,6 +422,7 @@ class PixiWindowsTasksTests(unittest.TestCase):
         finally:
             fake_tool.unlink(missing_ok=True)
             output_file.unlink(missing_ok=True)
+            args_file.unlink(missing_ok=True)
             tool_output_dir.rmdir()
 
         recorded = dict(
@@ -428,6 +443,77 @@ class PixiWindowsTasksTests(unittest.TestCase):
             msg=f"expected repo-relative working directory suffix to be preserved, got {recorded_cwd!r}",
         )
         self.assertNotEqual(str(working_dir).lower(), recorded_cwd.lower())
+
+    @unittest.skipUnless(os.name == "nt", "Windows-only argument forwarding behavior")
+    def test_windows_run_fvm_tool_preserves_dash_prefixed_command_arguments(self) -> None:
+        powershell = shutil.which("powershell.exe") or shutil.which("powershell")
+        if powershell is None:
+            self.skipTest("PowerShell is required to verify Windows tool runner")
+
+        tool_output_dir = Path(tempfile.mkdtemp(prefix="secondloop_run_fvm_tool_args_"))
+        fake_tool = tool_output_dir / "fake_tool.cmd"
+        output_file = tool_output_dir / "args.txt"
+        args_file = tool_output_dir / "args.bin"
+
+        fake_tool.write_text(
+            "@echo off\n"
+            "setlocal\n"
+            "> \"%~1\" echo STAR=%*\n"
+            ">> \"%~1\" echo ONE=%1\n"
+            ">> \"%~1\" echo TWO=%2\n"
+            ">> \"%~1\" echo THREE=%3\n"
+            ">> \"%~1\" echo FOUR=%4\n"
+            ">> \"%~1\" echo FIVE=%5\n"
+            "exit /b 0\n",
+            encoding="utf-8",
+        )
+        self._write_windows_tool_args_file(
+            args_file,
+            str(output_file),
+            "test",
+            "-d",
+            "windows",
+            "--concurrency=1",
+            "integration_test/simple_test.dart",
+        )
+
+        try:
+            subprocess.run(
+                [
+                    powershell,
+                    "-NoProfile",
+                    "-ExecutionPolicy",
+                    "Bypass",
+                    "-File",
+                    str(WINDOWS_FVM_TOOL_RUNNER_SCRIPT),
+                    "-Tool",
+                    "flutter",
+                    "-ToolPath",
+                    str(fake_tool),
+                    "-ArgumentsFile",
+                    str(args_file),
+                ],
+                check=True,
+                cwd=REPO_ROOT,
+            )
+            lines = output_file.read_text(encoding="utf-8").splitlines()
+        finally:
+            fake_tool.unlink(missing_ok=True)
+            output_file.unlink(missing_ok=True)
+            args_file.unlink(missing_ok=True)
+            tool_output_dir.rmdir()
+
+        recorded = dict(
+            line.split("=", 1)
+            for line in lines
+            if "=" in line
+        )
+
+        self.assertIn("-d windows --concurrency=1 integration_test/simple_test.dart", recorded["STAR"])
+        self.assertEqual(recorded["TWO"], "test")
+        self.assertEqual(recorded["THREE"], "-d")
+        self.assertEqual(recorded["FOUR"], "windows")
+        self.assertEqual(recorded["FIVE"], "--concurrency")
 
     def test_prepare_ffmpeg_windows_script_uses_direct_fvm_dart_runner(self) -> None:
         script = (REPO_ROOT / "scripts/prepare_ffmpeg_windows.ps1").read_text(encoding="utf-8")

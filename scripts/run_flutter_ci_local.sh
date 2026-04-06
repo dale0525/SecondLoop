@@ -9,11 +9,18 @@ fi
 cd "${repo_root}"
 source "${repo_root}/scripts/pre_commit_common.sh"
 
+if is_windows_env; then
+  resolve_cargo_bin || cargo_missing_message
+  export SECONDLOOP_CARGO_BIN="${cargo_bin}"
+  resolve_libclang_path || libclang_missing_message
+  resolve_vulkan_sdk_root || vulkan_sdk_missing_message
+fi
+
 dart_bin="$(resolve_dart_bin)" || die "Missing 'dart'. Install Flutter (recommended: \`pixi run setup-flutter\`) or add Dart to PATH."
 flutter_bin="$(resolve_flutter_bin)" || die "Missing 'flutter'. Install Flutter (recommended: \`pixi run setup-flutter\`) or add Flutter to PATH."
 
 flutter_gate_log="$(mktemp -t secondloop_flutter_gate.XXXXXX.log)"
-flutter_ci_temp_root="$(mktemp -d -t secondloop_flutter_ci.XXXXXX)"
+flutter_ci_temp_root="$(make_precommit_temp_dir secondloop_flutter_ci)"
 
 flutter_shards="${SECONDLOOP_LOCAL_FLUTTER_TEST_SHARDS:-4}"
 [[ "${flutter_shards}" =~ ^[0-9]+$ ]] || die "SECONDLOOP_LOCAL_FLUTTER_TEST_SHARDS must be a positive integer"

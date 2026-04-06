@@ -3,12 +3,10 @@ param(
   [ValidateSet('flutter', 'dart')]
   [string]$Tool,
 
-  [Parameter(Mandatory = $true, Position = 1)]
-  [string]$Command,
-
+  [string]$Command = '',
   [string]$ToolPath = '',
   [string]$WorkingDirectory = '',
-
+  [string]$ArgumentsFile = '',
   [Parameter(ValueFromRemainingArguments = $true)]
   [string[]]$CommandArgs = @()
 )
@@ -84,8 +82,42 @@ function Resolve-ExecutionWorkingDirectory {
   return $resolvedWorkingDirectory
 }
 
+function Read-ArgumentFile {
+  param(
+    [Parameter(Mandatory = $true)]
+    [string]$Path
+  )
+
+  if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) {
+    Write-Error "SecondLoop: argument file not found: $Path"
+    exit 1
+  }
+
+  $rawBytes = [System.IO.File]::ReadAllBytes((Resolve-Path -LiteralPath $Path).Path)
+  if ($rawBytes.Length -eq 0) {
+    return @()
+  }
+
+  $decoded = [System.Text.Encoding]::UTF8.GetString($rawBytes)
+  return @(
+    $decoded.Split([char]0, [System.StringSplitOptions]::RemoveEmptyEntries)
+  )
+}
+
 Invoke-InWindowsShortWorkspace -RepoRootPath $repoRootPath -ScriptBlock {
   $repoRootPath = Resolve-SecondLoopProjectDir -DefaultRepoRoot (Join-Path $PSScriptRoot '..')
+
+  $resolvedCommand = @()
+  if (-not [string]::IsNullOrWhiteSpace($ArgumentsFile)) {
+    $resolvedCommand = Read-ArgumentFile -Path $ArgumentsFile
+  } elseif (-not [string]::IsNullOrWhiteSpace($Command)) {
+    $resolvedCommand = @($Command) + $CommandArgs
+  }
+
+  if ($resolvedCommand.Count -eq 0) {
+    Write-Error 'SecondLoop: missing tool command.'
+    exit 1
+  }
 
   if ($ToolPath -ne '') {
     if (-not (Test-Path $ToolPath)) {
@@ -118,6 +150,6 @@ Invoke-InWindowsShortWorkspace -RepoRootPath $repoRootPath -ScriptBlock {
     Set-Location $executionWorkingDirectory
   }
 
-  & $toolPath $Command @CommandArgs
+  & $toolPath @resolvedCommand
   exit $LASTEXITCODE
 }

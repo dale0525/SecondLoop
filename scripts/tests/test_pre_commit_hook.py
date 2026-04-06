@@ -150,6 +150,8 @@ class PreCommitHookTests(unittest.TestCase):
     def test_pre_commit_hook_resolves_windows_vulkan_sdk_path(self) -> None:
         script = PRE_COMMIT_COMMON_SCRIPT.read_text(encoding="utf-8")
 
+        self.assertIn('resolve_precommit_temp_root()', script)
+        self.assertIn('make_precommit_temp_dir()', script)
         self.assertIn(".tool/vulkan-sdk", script)
         self.assertIn("1.4.309.0", script)
         self.assertIn("VULKAN_SDK", script)
@@ -157,7 +159,8 @@ class PreCommitHookTests(unittest.TestCase):
         self.assertIn("CARGO_TARGET_DIR", script)
         self.assertIn("CARGOKIT_TARGET_TEMP_DIR", script)
         self.assertIn("CARGOKIT_TOOL_TEMP_DIR", script)
-        self.assertIn('short_temp_root="${drive_prefix}/stmp"', script)
+        self.assertIn('temp_root="$(resolve_precommit_temp_root)"', script)
+        self.assertIn('short_temp_root="${temp_root%/}/sl-t"', script)
         self.assertIn('export TMPDIR="${short_temp_root}"', script)
         self.assertIn('export TMP="${short_temp_root}"', script)
         self.assertIn('export TEMP="${short_temp_root}"', script)

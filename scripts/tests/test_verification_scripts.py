@@ -136,6 +136,9 @@ class VerificationScriptsTests(unittest.TestCase):
             encoding="utf-8"
         )
 
+        self.assertIn('export SECONDLOOP_CARGO_BIN="${cargo_bin}"', script)
+        self.assertIn("resolve_libclang_path || libclang_missing_message", script)
+        self.assertIn("resolve_vulkan_sdk_root || vulkan_sdk_missing_message", script)
         self.assertIn('for pid in "${flutter_gate_pid:-}" "${flutter_test_pids[@]-}"; do', script)
         self.assertIn("trap cleanup EXIT INT TERM", script)
         self.assertIn('cancel_remaining_shards()', script)
@@ -154,6 +157,10 @@ class VerificationScriptsTests(unittest.TestCase):
             encoding="utf-8"
         )
 
+        self.assertIn("resolve_cargo_bin || cargo_missing_message", script)
+        self.assertIn("resolve_libclang_path || libclang_missing_message", script)
+        self.assertIn("resolve_vulkan_sdk_root || vulkan_sdk_missing_message", script)
+        self.assertIn("ensure_windows_short_build_paths", script)
         self.assertIn('if [[ "${integration_test_device}" == "linux" ]]; then', script)
         self.assertIn('xvfb-run -a', script)
 

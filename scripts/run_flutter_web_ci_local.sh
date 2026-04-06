@@ -12,7 +12,7 @@ source "${repo_root}/scripts/pre_commit_common.sh"
 dart_bin="$(resolve_dart_bin)" || die "Missing 'dart'. Install Flutter (recommended: \`pixi run setup-flutter\`) or add Dart to PATH."
 flutter_bin="$(resolve_flutter_bin)" || die "Missing 'flutter'. Install Flutter (recommended: \`pixi run setup-flutter\`) or add Flutter to PATH."
 
-web_ci_temp_root="$(mktemp -d -t secondloop_flutter_web_ci.XXXXXX)"
+web_ci_temp_root="$(make_precommit_temp_dir secondloop_flutter_web_ci)"
 web_worktree=""
 
 cleanup() {

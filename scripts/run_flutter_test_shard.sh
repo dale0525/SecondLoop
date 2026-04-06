@@ -45,6 +45,13 @@ done
 cd "${repo_root}"
 source "${repo_root}/scripts/pre_commit_common.sh"
 
+if is_windows_env; then
+  resolve_cargo_bin || cargo_missing_message
+  resolve_libclang_path || libclang_missing_message
+  resolve_vulkan_sdk_root || vulkan_sdk_missing_message
+  ensure_windows_short_build_paths
+fi
+
 create_macos_xcrun_wrapper() {
   local wrapper_dir
   wrapper_dir="$(mktemp -d -t secondloop_xcrun.XXXXXX)" ||

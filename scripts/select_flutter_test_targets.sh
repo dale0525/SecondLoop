@@ -55,7 +55,7 @@ if [[ ${#unit_search_roots[@]} -eq 0 && ${#integration_search_roots[@]} -eq 0 ]]
 fi
 
 if [[ ${#unit_search_roots[@]} -ne 0 ]]; then
-  find "${unit_search_roots[@]}" -type f -name '*_test.dart' | LC_ALL=C sort | awk -v shard_count="${shard_count}" -v shard_index="${shard_index}" '
+  find "${unit_search_roots[@]}" -type f -name '*_test.dart' ! -path 'test/web_app/*' | LC_ALL=C sort | awk -v shard_count="${shard_count}" -v shard_index="${shard_index}" '
     ((NR - 1) % shard_count) == shard_index {
       print $0
     }
