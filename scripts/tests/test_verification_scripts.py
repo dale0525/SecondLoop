@@ -175,6 +175,9 @@ class VerificationScriptsTests(unittest.TestCase):
 
         self.assertIn('echo "ci: starting Rust gate..." >&2', script)
         self.assertIn('echo "ci: Rust gate passed; starting Rust nextest..." >&2', script)
+        self.assertIn("ensure_windows_short_build_paths", script)
+        self.assertIn('rust_target_root="${CARGO_TARGET_DIR%/}"', script)
+        self.assertIn('rust_target_dir="${rust_target_root}/rust-ci-${worktree_cache_key}"', script)
         self.assertIn('if env CARGO_TARGET_DIR="${rust_target_dir}" \\', script)
         self.assertIn('if env CARGO_TARGET_DIR="${rust_target_dir}" bash scripts/run_rust_ci_nextest.sh; then', script)
 

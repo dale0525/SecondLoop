@@ -124,17 +124,29 @@ function Invoke-InWindowsShortWorkspace {
       $shortProjectDir = $resolvedRepoRoot
     }
     else {
-      $driveSelection = Get-AvailableShortWorkspaceDrive -PreferredDrive $DriveLetter -TargetPath $workspaceParent
-      $substDrive = $driveSelection.Drive
-      $shortDriveRoot = "$substDrive\"
-      $shortProjectDir = "$shortDriveRoot$workspaceLeaf"
+      $mappingAttempts = 0
+      while ($true) {
+        $driveSelection = Get-AvailableShortWorkspaceDrive -PreferredDrive $DriveLetter -TargetPath $workspaceParent
+        $substDrive = $driveSelection.Drive
+        $shortDriveRoot = "$substDrive\"
+        $shortProjectDir = "$shortDriveRoot$workspaceLeaf"
 
-      if ($driveSelection.NeedsMapping) {
-        cmd /c subst $substDrive "$workspaceParent" | Out-Null
-        if ($LASTEXITCODE -ne 0) {
-          throw "Failed to map short workspace drive $substDrive to $workspaceParent"
+        if (-not $driveSelection.NeedsMapping) {
+          break
         }
-        $mappedDrive = $true
+
+        cmd /c subst $substDrive "$workspaceParent" | Out-Null
+        if ($LASTEXITCODE -eq 0) {
+          $mappedDrive = $true
+          break
+        }
+
+        $mappingAttempts += 1
+        if ($mappingAttempts -ge 8) {
+          throw "Failed to map a short workspace drive to $workspaceParent after $mappingAttempts attempts"
+        }
+
+        Start-Sleep -Milliseconds 50
       }
     }
 
