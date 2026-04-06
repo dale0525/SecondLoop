@@ -82,7 +82,17 @@ function Get-AvailableShortWorkspaceDrive {
     'Z:',
     'V:',
     'U:',
-    'T:'
+    'T:',
+    'S:',
+    'R:',
+    'Q:',
+    'P:',
+    'O:',
+    'N:',
+    'M:',
+    'L:',
+    'K:',
+    'J:'
   ) | Select-Object -Unique
 
   foreach ($candidateDrive in $candidateDrives) {
