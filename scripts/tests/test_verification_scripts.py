@@ -121,6 +121,12 @@ class VerificationScriptsTests(unittest.TestCase):
         self.assertIn('run_flutter_tool pub get', script)
         self.assertIn('copy_prepared_flutter_tool_state()', script)
         self.assertIn('bash scripts/run_i18n_refresh.sh', script)
+        self.assertIn('create_flutter_worktree "shard-${shard_index}"', script)
+        self.assertNotIn('shard_worktree="${prepared_worktree}"', script)
+        self.assertIn('flutter pub get (Flutter shard ${shard_index}/${flutter_shards})', script)
+        self.assertIn('elif is_windows_env; then', script)
+        self.assertIn('flutter_shards=2', script)
+        self.assertIn('export SECONDLOOP_SHORT_WORKSPACE_DRIVE="${SECONDLOOP_SHORT_WORKSPACE_DRIVE:-Y}"', script)
 
     def test_local_flutter_ci_wrapper_syncs_workspace_state_into_temp_worktrees(self) -> None:
         script = (REPO_ROOT / "scripts/run_flutter_ci_local.sh").read_text(
@@ -161,6 +167,9 @@ class VerificationScriptsTests(unittest.TestCase):
         self.assertIn("resolve_libclang_path || libclang_missing_message", script)
         self.assertIn("resolve_vulkan_sdk_root || vulkan_sdk_missing_message", script)
         self.assertIn("ensure_windows_short_build_paths", script)
+        self.assertIn("run_flutter_unit_tests_in_batches()", script)
+        self.assertIn("max_batch_chars=6000", script)
+        self.assertIn("max_batch_targets=48", script)
         self.assertIn('if [[ "${integration_test_device}" == "linux" ]]; then', script)
         self.assertIn('xvfb-run -a', script)
 

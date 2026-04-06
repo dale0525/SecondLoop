@@ -277,6 +277,12 @@ class PixiWindowsTasksTests(unittest.TestCase):
 
         self.assertIn("Get-AvailableShortWorkspaceDrive", script)
         self.assertIn("Get-PSDrive -PSProvider FileSystem", script)
+        self.assertIn("New-ShortWorkspaceLease", script)
+        self.assertIn("Remove-ShortWorkspaceLease", script)
+        self.assertIn("secondloop_short_workspace_refs", script)
+        self.assertIn("OwnsMapping", script)
+        self.assertIn("if ((Test-Path -LiteralPath $Lease.OwnerPath -PathType Leaf) -and $remainingLeases.Count -eq 0)", script)
+        self.assertIn("$DriveLetter = $env:SECONDLOOP_SHORT_WORKSPACE_DRIVE", script)
         self.assertIn("if ($resolvedRepoRoot -like \"$substDrive\\*\")", script)
         self.assertNotIn("cmd /c subst $substDrive /d > $null 2>&1\n      cmd /c subst $substDrive \"$workspaceParent\"", script)
         self.assertIn("$mappingAttempts = 0", script)
