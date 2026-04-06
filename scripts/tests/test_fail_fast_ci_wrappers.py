@@ -154,8 +154,8 @@ class FailFastCiWrapperTests(unittest.TestCase):
             self.assertLess(elapsed, 5, msg=result.stdout + result.stderr)
             self.assertTrue((marker_dir / "web-cancelled").exists(), msg=result.stdout + result.stderr)
             self.assertTrue((marker_dir / "rust-cancelled").exists(), msg=result.stdout + result.stderr)
-            self.assertTrue((marker_dir / "python-cancelled").exists(), msg=result.stdout + result.stderr)
             self.assertIn("failing-flutter", result.stdout)
+            self.assertIn("ci: cancelling Python tooling verification after Flutter failure", result.stderr)
             self.assertIn("ci: Rust builder verification finished with status 143", result.stderr)
 
     def test_local_rust_ci_wrapper_does_not_start_nextest_after_gate_failure(self) -> None:
