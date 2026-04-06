@@ -33,6 +33,13 @@ NativePlugin* createPlugin() { return new NativePlugin(); }
 
 void disposePlugin(NativePlugin* plugin) { delete plugin; }
 
+void clearPluginRegistration(NativePlugin* plugin) {
+  if (plugin == nullptr) {
+    return;
+  }
+  plugin->clearCallbackRegistration();
+}
+
 bool init(
   NativePlugin* plugin, char* appName, char* aumId, char* guid, char* iconPath,
   NativeNotificationCallback callback

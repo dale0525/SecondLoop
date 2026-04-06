@@ -272,8 +272,16 @@ final class FlutterLocalNotificationsReviewReminderScheduler
       if (!didSchedule) {
         completed = false;
         await _rollbackScheduledBatchIfNeeded(scheduledThisBatch);
+        if (defaultTargetPlatform == TargetPlatform.windows) {
+          await _markWindowsNotificationsUnavailableForRetry();
+        }
         if (!isWindowsColdStart) {
-          await _restorePreviousWindowsPlanIfNeeded(previousPlan);
+          final didRestore = await _restorePreviousWindowsPlanIfNeeded(
+            previousPlan,
+          );
+          if (!didRestore) {
+            _lastSuccessfulPlan = null;
+          }
         }
         break;
       }
@@ -285,7 +293,9 @@ final class FlutterLocalNotificationsReviewReminderScheduler
         final staleExistingIds = existingWindowsNotificationIds.difference(
           scheduledThisBatch.toSet(),
         );
-        await _cancelNotificationBatch(staleExistingIds);
+        if (staleExistingIds.isNotEmpty) {
+          await _cancelNotificationBatch(staleExistingIds);
+        }
       }
       _lastSuccessfulPlan = plan;
     }
@@ -506,10 +516,6 @@ final class FlutterLocalNotificationsReviewReminderScheduler
         notificationId: notificationId,
         payload: payload,
       );
-      if (defaultTargetPlatform == TargetPlatform.windows) {
-        await _markWindowsNotificationsUnavailableForRetry();
-        return false;
-      }
       return false;
     }
 
@@ -529,10 +535,6 @@ final class FlutterLocalNotificationsReviewReminderScheduler
         notificationId: notificationId,
         payload: payload,
       );
-      if (defaultTargetPlatform == TargetPlatform.windows) {
-        await _markWindowsNotificationsUnavailableForRetry();
-        return false;
-      }
       return false;
     }
     return false;
@@ -552,7 +554,11 @@ final class FlutterLocalNotificationsReviewReminderScheduler
         ? await _discoverManagedNotificationIds()
         : _managedNotificationIds.toSet();
 
-    await _cancelNotificationBatch(notificationIds, clearManagedIds: true);
+    await _cancelNotificationBatch(
+      notificationIds,
+      clearManagedIds: true,
+      allowFallbackRange: true,
+    );
   }
 
   Future<Set<int>> _discoverManagedNotificationIds() async {
@@ -587,10 +593,13 @@ final class FlutterLocalNotificationsReviewReminderScheduler
   Future<void> _cancelNotificationBatch(
     Set<int> notificationIds, {
     bool clearManagedIds = false,
+    bool allowFallbackRange = false,
   }) async {
     if (notificationIds.isEmpty) {
-      for (var i = 0; i < kReviewReminderMaxItems; i++) {
-        await _cancelNotification(notificationIdBase + i);
+      if (allowFallbackRange) {
+        for (var i = 0; i < kReviewReminderMaxItems; i++) {
+          await _cancelNotification(notificationIdBase + i);
+        }
       }
       if (clearManagedIds) {
         _managedNotificationIds.clear();
@@ -643,23 +652,25 @@ final class FlutterLocalNotificationsReviewReminderScheduler
     }
   }
 
-  Future<void> _restorePreviousWindowsPlanIfNeeded(
+  Future<bool> _restorePreviousWindowsPlanIfNeeded(
     ReviewReminderPlan? previousPlan,
   ) async {
     if (defaultTargetPlatform != TargetPlatform.windows ||
         previousPlan == null ||
         previousPlan.items.isEmpty) {
-      return;
+      return false;
     }
 
     await ensureInitialized();
     if (!_available) {
-      return;
+      return false;
     }
 
+    final restoredNotificationIds = <int>[];
     for (final item in previousPlan.items) {
+      final notificationId = notificationIdForItem(item);
       final didRestore = await _scheduleSingleNotification(
-        notificationId: notificationIdForItem(item),
+        notificationId: notificationId,
         title: item.kind == ReviewReminderItemKind.reviewQueue
             ? t.actions.reviewQueue.title
             : t.actions.agenda.title,
@@ -675,11 +686,16 @@ final class FlutterLocalNotificationsReviewReminderScheduler
         payload: encodePayload(item),
       );
       if (!didRestore) {
-        return;
+        await _rollbackScheduledBatchIfNeeded(restoredNotificationIds);
+        _lastSuccessfulPlan = null;
+        await _markWindowsNotificationsUnavailableForRetry();
+        return false;
       }
+      restoredNotificationIds.add(notificationId);
     }
 
     _lastSuccessfulPlan = previousPlan;
+    return true;
   }
 
   static _WindowsQuickActionLaunch? _decodeWindowsQuickActionArguments(

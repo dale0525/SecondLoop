@@ -14,6 +14,8 @@ var _createPluginCalls = 0;
 var _disposePluginCalls = 0;
 var _initShouldSucceed = true;
 var _callbackHandleCloseCalls = 0;
+var _clearPluginRegistrationCalls = 0;
+final List<String> _nativeLifecycleEvents = <String>[];
 
 void main() {
   setUpAll(() {
@@ -26,6 +28,8 @@ void main() {
     _disposePluginCalls = 0;
     _initShouldSucceed = true;
     _callbackHandleCloseCalls = 0;
+    _clearPluginRegistrationCalls = 0;
+    _nativeLifecycleEvents.clear();
     windows_plugin.FlutterLocalNotificationsWindows.instance = null;
   });
 
@@ -166,6 +170,37 @@ void main() {
     expect(_callbackHandleCloseCalls, 1);
   });
 
+  test('dispose clears native callback registration before closing handles',
+      () async {
+    final plugin = windows_plugin.FlutterLocalNotificationsWindows(
+      library: ffi.DynamicLibrary.process(),
+      bindings: windows_bindings.NotificationsPluginBindings.fromLookup(
+        _lookupTestSymbol,
+      ),
+      callbackHandleFactory: _fakeCallbackHandleFactory,
+    );
+
+    expect(
+      await plugin.initialize(
+        const WindowsInitializationSettings(
+          appName: 'SecondLoop',
+          appUserModelId: 'com.secondloop.secondloop',
+          guid: 'd49b5b4a-0ea5-4e31-b5c9-945cc5405f59',
+        ),
+        onNotificationReceived: (_) {},
+      ),
+      isTrue,
+    );
+
+    plugin.dispose();
+
+    expect(_clearPluginRegistrationCalls, 1);
+    expect(
+      _nativeLifecycleEvents,
+      <String>['clear-registration', 'close-callback-handle', 'dispose-plugin'],
+    );
+  });
+
   test('failed initialize closes native notification callback handles',
       () async {
     _initShouldSucceed = false;
@@ -211,6 +246,7 @@ final class _FakeNativeNotificationCallbackHandle
   @override
   void close() {
     _callbackHandleCloseCalls += 1;
+    _nativeLifecycleEvents.add('close-callback-handle');
   }
 }
 
@@ -225,6 +261,10 @@ ffi.Pointer<T> _lookupTestSymbol<T extends ffi.NativeType>(String symbolName) {
             ffi.Void Function(
                 ffi.Pointer<windows_bindings.NativePlugin>)>(_disposePlugin)
         as ffi.Pointer<T>,
+    'clearPluginRegistration' => ffi.Pointer.fromFunction<
+          ffi.Void Function(ffi.Pointer<windows_bindings.NativePlugin>)>(
+        _clearPluginRegistration,
+      ) as ffi.Pointer<T>,
     'init' => ffi.Pointer.fromFunction<
         ffi.Bool Function(
           ffi.Pointer<windows_bindings.NativePlugin>,
@@ -252,6 +292,12 @@ ffi.Pointer<windows_bindings.NativePlugin> _createPlugin() => (() {
 
 void _disposePlugin(ffi.Pointer<windows_bindings.NativePlugin> _) {
   _disposePluginCalls += 1;
+  _nativeLifecycleEvents.add('dispose-plugin');
+}
+
+void _clearPluginRegistration(ffi.Pointer<windows_bindings.NativePlugin> _) {
+  _clearPluginRegistrationCalls += 1;
+  _nativeLifecycleEvents.add('clear-registration');
 }
 
 bool _init(

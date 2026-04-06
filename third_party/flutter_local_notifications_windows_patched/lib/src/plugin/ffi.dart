@@ -166,6 +166,7 @@ class FlutterLocalNotificationsWindows extends WindowsNotificationsBase {
           rethrow;
         } finally {
           if (shouldDisposePlugin) {
+            _bindings.clearPluginRegistration(plugin);
             _bindings.disposePlugin(plugin);
           }
           if (shouldCloseCallbackHandle) {
@@ -180,13 +181,17 @@ class FlutterLocalNotificationsWindows extends WindowsNotificationsBase {
       _bindings.freeLaunchDetails(_details!);
       _details = null;
     }
+    final plugin = _plugin;
+    if (plugin != null) {
+      _bindings.clearPluginRegistration(plugin);
+    }
     userCallback = null;
     instance = null;
     _disposeCallbackHandle();
     if (!_isReady) {
       return;
     }
-    _bindings.disposePlugin(_plugin!);
+    _bindings.disposePlugin(plugin!);
     _plugin = null;
     _isReady = false;
   }

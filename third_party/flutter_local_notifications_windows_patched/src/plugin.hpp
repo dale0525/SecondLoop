@@ -38,13 +38,16 @@ struct NativePlugin {
 
   /// A callback to run when a notification is pressed, when the app is or is not running.
   NativeNotificationCallback callback;
+  DWORD callbackRegistration = 0;
 
   NativePlugin() {}
-  ~NativePlugin() {}
+  ~NativePlugin();
 
   /// Registers the given [callback] to run when a notification is pressed.
   bool registerApp(
     const string& aumid, const string& appName, const string& guid,
     const optional<string>& iconPath, NativeNotificationCallback callback
   );
+
+  void clearCallbackRegistration() noexcept;
 };
