@@ -3,116 +3,15 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:secondloop/core/update/app_update_service.dart';
-import 'package:secondloop/core/update/auto_upgrade_gate.dart';
 import 'package:secondloop/core/update/update_badge_prefs.dart';
 import 'package:secondloop/core/update/update_restart_activity.dart';
-import 'test_i18n.dart';
-
-class _FakeAutoUpdateService extends AppUpdateService {
-  _FakeAutoUpdateService({
-    required this.result,
-    this.throwOnApplyPending = false,
-    this.applyPendingResult =
-        const PendingUpdateStartupResult.noPendingUpdate(),
-    this.throwOnInstall = false,
-    this.throwOnStage = false,
-    this.releaseRepoValue = 'dale0525/SecondLoop',
-    this.canStageSilentlyForNextLaunchValue = false,
-  });
-
-  final AppUpdateCheckResult result;
-  final bool throwOnApplyPending;
-  final PendingUpdateStartupResult applyPendingResult;
-  final bool throwOnInstall;
-  final bool throwOnStage;
-  final String releaseRepoValue;
-  final bool canStageSilentlyForNextLaunchValue;
-
-  int checkCalls = 0;
-  int installCalls = 0;
-  int stageCalls = 0;
-  int applyStagedRestartCalls = 0;
-  int applyPendingCalls = 0;
-  AppUpdateAvailability? installed;
-  AppUpdateAvailability? staged;
-
-  @override
-  String get releaseRepo => releaseRepoValue;
-
-  @override
-  Uri get fallbackReleasePageUri =>
-      AutoUpgradeGate.fallbackUpdateUri(releaseRepo: releaseRepoValue);
-
-  @override
-  bool canStageSilentlyForNextLaunch(AppUpdateAvailability update) {
-    return canStageSilentlyForNextLaunchValue;
-  }
-
-  @override
-  Future<AppUpdateCheckResult> checkForUpdates() async {
-    checkCalls += 1;
-    return result;
-  }
-
-  @override
-  Future<void> installAndRestart(AppUpdateAvailability update) async {
-    installCalls += 1;
-    if (throwOnInstall) {
-      throw StateError('install_failed');
-    }
-    installed = update;
-  }
-
-  @override
-  Future<void> stageUpdateForNextLaunch(AppUpdateAvailability update) async {
-    stageCalls += 1;
-    if (throwOnStage) {
-      throw StateError('stage_failed');
-    }
-    staged = update;
-  }
-
-  @override
-  Future<PendingUpdateStartupResult> applyPendingUpdateOnStartup() async {
-    applyPendingCalls += 1;
-    if (throwOnApplyPending) {
-      throw StateError('apply_pending_failed');
-    }
-    return applyPendingResult;
-  }
-
-  @override
-  Future<void> applyStagedUpdateAndRestart() async {
-    applyStagedRestartCalls += 1;
-  }
-}
+import 'support/auto_upgrade_gate_test_support.dart';
 
 void main() {
-  Future<void> pumpGate(
-    WidgetTester tester, {
-    required _FakeAutoUpdateService service,
-    AutoUpgradeGateExternalUriLauncher? externalUriLauncher,
-  }) {
-    return tester.pumpWidget(
-      wrapWithI18n(
-        MaterialApp(
-          home: AutoUpgradeGate(
-            updateService: service,
-            enableInDebug: true,
-            externalUriLauncher: externalUriLauncher,
-            child: const Scaffold(
-              body: Text('home'),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
   testWidgets('starts auto upgrade work from the first post-frame callback',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
-    final service = _FakeAutoUpdateService(
+    final service = FakeAutoUpdateService(
       result: const AppUpdateCheckResult(currentVersion: '1.0.0+1'),
     );
 
@@ -138,7 +37,7 @@ void main() {
         downloadUri: Uri.parse('https://cdn.example.com/linux.tar.gz'),
       ),
     );
-    final service = _FakeAutoUpdateService(
+    final service = FakeAutoUpdateService(
       result: AppUpdateCheckResult(
         currentVersion: '1.0.1+99',
         update: update,
@@ -174,7 +73,7 @@ void main() {
       ),
       installMode: AppUpdateInstallMode.externalDownload,
     );
-    final service = _FakeAutoUpdateService(
+    final service = FakeAutoUpdateService(
       result: AppUpdateCheckResult(
         currentVersion: '1.0.1+99',
         update: update,
@@ -207,7 +106,7 @@ void main() {
         downloadUri: Uri.parse('https://cdn.example.com/win.nupkg'),
       ),
     );
-    final service = _FakeAutoUpdateService(
+    final service = FakeAutoUpdateService(
       canStageSilentlyForNextLaunchValue: true,
       throwOnStage: true,
       result: AppUpdateCheckResult(
@@ -248,7 +147,7 @@ void main() {
         downloadUri: Uri.parse('https://cdn.example.com/win.nupkg'),
       ),
     );
-    final service = _FakeAutoUpdateService(
+    final service = FakeAutoUpdateService(
       canStageSilentlyForNextLaunchValue: true,
       result: AppUpdateCheckResult(
         currentVersion: '1.0.1+99',
@@ -287,7 +186,7 @@ void main() {
         downloadUri: Uri.parse('https://cdn.example.com/win.nupkg'),
       ),
     );
-    final service = _FakeAutoUpdateService(
+    final service = FakeAutoUpdateService(
       canStageSilentlyForNextLaunchValue: false,
       result: AppUpdateCheckResult(
         currentVersion: '1.0.1+99',
@@ -326,7 +225,7 @@ void main() {
         downloadUri: Uri.parse('https://cdn.example.com/win.nupkg'),
       ),
     );
-    final service = _FakeAutoUpdateService(
+    final service = FakeAutoUpdateService(
       canStageSilentlyForNextLaunchValue: true,
       result: AppUpdateCheckResult(
         currentVersion: '1.0.1+99',
@@ -366,7 +265,7 @@ void main() {
             Uri.parse('https://cdn.example.com/SecondLoop-win-v1.2.0.msi'),
       ),
     );
-    final service = _FakeAutoUpdateService(
+    final service = FakeAutoUpdateService(
       result: AppUpdateCheckResult(
         currentVersion: '1.0.1+99',
         update: update,
@@ -404,7 +303,7 @@ void main() {
         downloadUri: Uri.parse('https://cdn.example.com/win.nupkg'),
       ),
     );
-    final service = _FakeAutoUpdateService(
+    final service = FakeAutoUpdateService(
       applyPendingResult: const PendingUpdateStartupResult.updateDispatched(),
       result: AppUpdateCheckResult(
         currentVersion: '1.0.1+99',
@@ -444,7 +343,7 @@ void main() {
             Uri.parse('https://cdn.example.com/SecondLoop-win-v1.3.0.msi'),
       ),
     );
-    final service = _FakeAutoUpdateService(
+    final service = FakeAutoUpdateService(
       result: AppUpdateCheckResult(
         currentVersion: '1.0.1+99',
         update: update,
@@ -465,7 +364,7 @@ void main() {
   testWidgets('shows manual fallback notice when pending apply fails',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
-    final service = _FakeAutoUpdateService(
+    final service = FakeAutoUpdateService(
       throwOnApplyPending: true,
       releaseRepoValue: 'acme/SecondLoopFork',
       result: const AppUpdateCheckResult(currentVersion: '1.0.1+99'),
@@ -510,7 +409,7 @@ void main() {
         downloadUri: Uri.parse('https://cdn.example.com/win.nupkg'),
       ),
     );
-    final service = _FakeAutoUpdateService(
+    final service = FakeAutoUpdateService(
       throwOnApplyPending: true,
       result: AppUpdateCheckResult(
         currentVersion: '1.0.1+99',
@@ -530,7 +429,7 @@ void main() {
   testWidgets('skips pending apply and still checks for updates',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
-    final service = _FakeAutoUpdateService(
+    final service = FakeAutoUpdateService(
       throwOnApplyPending: true,
       result: const AppUpdateCheckResult(currentVersion: '1.0.1+99'),
     );
@@ -546,7 +445,7 @@ void main() {
   testWidgets('skips update check when pending apply is already in progress',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
-    final service = _FakeAutoUpdateService(
+    final service = FakeAutoUpdateService(
       applyPendingResult: const PendingUpdateStartupResult.updateInProgress(),
       result: const AppUpdateCheckResult(currentVersion: '1.0.1+99'),
     );
@@ -566,7 +465,7 @@ void main() {
       'skips update work but still shows app when pending apply probe is inconclusive',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
-    final service = _FakeAutoUpdateService(
+    final service = FakeAutoUpdateService(
       applyPendingResult: const PendingUpdateStartupResult.probeInconclusive(),
       result: const AppUpdateCheckResult(currentVersion: '1.0.1+99'),
     );
@@ -602,7 +501,7 @@ void main() {
         ),
       ),
     );
-    final service = _FakeAutoUpdateService(
+    final service = FakeAutoUpdateService(
       result: AppUpdateCheckResult(
         currentVersion: '1.0.1+99',
         update: update,
@@ -625,445 +524,4 @@ void main() {
       variant: const TargetPlatformVariant(<TargetPlatform>{
         TargetPlatform.macOS,
       }));
-
-  testWidgets('shows passive reminder when update is available',
-      (tester) async {
-    SharedPreferences.setMockInitialValues({});
-    final update = AppUpdateAvailability(
-      currentVersion: '1.0.1+99',
-      latestTag: 'v1.1.0',
-      releasePageUri: Uri.parse(
-        'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
-      ),
-      installMode: AppUpdateInstallMode.externalDownload,
-    );
-    final service = _FakeAutoUpdateService(
-      result: AppUpdateCheckResult(
-        currentVersion: '1.0.1+99',
-        update: update,
-      ),
-    );
-
-    await pumpGate(tester, service: service);
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 120));
-
-    expect(find.byType(SnackBar), findsOneWidget);
-    expect(find.byKey(const ValueKey('update_notice_primary_action')),
-        findsOneWidget);
-    expect(find.text('Manual update'), findsOneWidget);
-  });
-
-  testWidgets('passive reminder does not persist cooldown before interaction',
-      (tester) async {
-    SharedPreferences.setMockInitialValues({});
-    final service = _FakeAutoUpdateService(
-      result: AppUpdateCheckResult(
-        currentVersion: '1.0.1+99',
-        update: AppUpdateAvailability(
-          currentVersion: '1.0.1+99',
-          latestTag: 'v1.1.0',
-          releasePageUri: Uri.parse(
-            'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
-          ),
-          installMode: AppUpdateInstallMode.externalDownload,
-        ),
-      ),
-    );
-
-    await pumpGate(tester, service: service);
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 120));
-
-    final prefs = await SharedPreferences.getInstance();
-    expect(
-      prefs.getString(AutoUpgradeGate.updateNoticeLastTagPrefsKey),
-      isNull,
-    );
-    expect(
-      prefs.getInt(AutoUpgradeGate.updateNoticeLastShownAtMsPrefsKey),
-      isNull,
-    );
-  });
-
-  testWidgets('dismissing passive reminder persists cooldown', (tester) async {
-    SharedPreferences.setMockInitialValues({});
-    final service = _FakeAutoUpdateService(
-      result: AppUpdateCheckResult(
-        currentVersion: '1.0.1+99',
-        update: AppUpdateAvailability(
-          currentVersion: '1.0.1+99',
-          latestTag: 'v1.1.0',
-          releasePageUri: Uri.parse(
-            'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
-          ),
-          installMode: AppUpdateInstallMode.externalDownload,
-        ),
-      ),
-    );
-
-    await pumpGate(tester, service: service);
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 120));
-
-    await tester
-        .tap(find.byKey(const ValueKey('update_notice_secondary_action')));
-    await tester.pumpAndSettle();
-
-    final prefs = await SharedPreferences.getInstance();
-    expect(
-      prefs.getString(AutoUpgradeGate.updateNoticeLastTagPrefsKey),
-      'v1.1.0',
-    );
-    expect(
-      prefs.getInt(AutoUpgradeGate.updateNoticeLastShownAtMsPrefsKey),
-      isNotNull,
-    );
-  });
-
-  testWidgets('staged update reminder explains next-launch apply behavior',
-      (tester) async {
-    SharedPreferences.setMockInitialValues({});
-    final update = AppUpdateAvailability(
-      currentVersion: '1.0.1+99',
-      latestTag: 'v1.1.0',
-      releasePageUri: Uri.parse(
-        'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
-      ),
-      installMode: AppUpdateInstallMode.stagedNextLaunch,
-      asset: AppUpdateAsset(
-        name: 'com.secondloop.secondloop-1.1.0-full.nupkg',
-        downloadUri: Uri.parse('https://cdn.example.com/win.nupkg'),
-      ),
-    );
-    final service = _FakeAutoUpdateService(
-      canStageSilentlyForNextLaunchValue: false,
-      result: AppUpdateCheckResult(
-        currentVersion: '1.0.1+99',
-        update: update,
-      ),
-    );
-
-    await pumpGate(tester, service: service);
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 120));
-
-    expect(find.byType(SnackBar), findsOneWidget);
-    expect(find.text('Prepare update'), findsOneWidget);
-    expect(
-      find.textContaining('apply next launch'),
-      findsOneWidget,
-    );
-    expect(find.textContaining('download it now'), findsNothing);
-  },
-      variant: const TargetPlatformVariant(<TargetPlatform>{
-        TargetPlatform.windows,
-      }));
-
-  testWidgets('passive reminder opens release page from primary action',
-      (tester) async {
-    SharedPreferences.setMockInitialValues({});
-    final opened = <Uri>[];
-    final update = AppUpdateAvailability(
-      currentVersion: '1.0.1+99',
-      latestTag: 'v1.1.0',
-      releasePageUri: Uri.parse(
-        'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
-      ),
-      installMode: AppUpdateInstallMode.externalDownload,
-    );
-    final service = _FakeAutoUpdateService(
-      result: AppUpdateCheckResult(
-        currentVersion: '1.0.1+99',
-        update: update,
-      ),
-    );
-
-    await pumpGate(
-      tester,
-      service: service,
-      externalUriLauncher: (uri) async {
-        opened.add(uri);
-        return true;
-      },
-    );
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 120));
-
-    await tester
-        .tap(find.byKey(const ValueKey('update_notice_primary_action')));
-    await tester.pumpAndSettle();
-
-    expect(opened, <Uri>[update.releasePageUri]);
-    expect(service.installCalls, 0);
-    expect(service.stageCalls, 0);
-  });
-
-  testWidgets('manual update action keeps retry controls when opening fails',
-      (tester) async {
-    SharedPreferences.setMockInitialValues({});
-    final update = AppUpdateAvailability(
-      currentVersion: '1.0.1+99',
-      latestTag: 'v1.1.0',
-      releasePageUri: Uri.parse(
-        'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
-      ),
-      installMode: AppUpdateInstallMode.externalDownload,
-    );
-    final service = _FakeAutoUpdateService(
-      result: AppUpdateCheckResult(
-        currentVersion: '1.0.1+99',
-        update: update,
-      ),
-    );
-
-    await pumpGate(
-      tester,
-      service: service,
-      externalUriLauncher: (uri) async => false,
-    );
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 120));
-
-    await tester
-        .tap(find.byKey(const ValueKey('update_notice_primary_action')));
-    await tester.pumpAndSettle();
-
-    expect(find.text('Could not open update page'), findsOneWidget);
-    expect(find.byKey(const ValueKey('update_notice_primary_action')),
-        findsOneWidget);
-    expect(find.text('Manual update'), findsOneWidget);
-  });
-
-  testWidgets('linux passive reminder installs immediately from primary action',
-      (tester) async {
-    SharedPreferences.setMockInitialValues({});
-    final update = AppUpdateAvailability(
-      currentVersion: '1.0.1+99',
-      latestTag: 'v1.1.0',
-      releasePageUri: Uri.parse(
-        'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
-      ),
-      installMode: AppUpdateInstallMode.seamlessRestart,
-      asset: AppUpdateAsset(
-        name: 'SecondLoop-linux-x64-v1.1.0.tar.gz',
-        downloadUri: Uri.parse('https://cdn.example.com/linux.tar.gz'),
-      ),
-    );
-    final service = _FakeAutoUpdateService(
-      result: AppUpdateCheckResult(
-        currentVersion: '1.0.1+99',
-        update: update,
-      ),
-    );
-
-    await pumpGate(tester, service: service);
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 120));
-
-    await tester
-        .tap(find.byKey(const ValueKey('update_notice_primary_action')));
-    await tester.pumpAndSettle();
-
-    expect(service.installCalls, 1);
-    expect(service.installed?.latestTag, 'v1.1.0');
-  },
-      variant: const TargetPlatformVariant(<TargetPlatform>{
-        TargetPlatform.linux,
-      }));
-
-  testWidgets('linux passive reminder keeps retry controls when install fails',
-      (tester) async {
-    SharedPreferences.setMockInitialValues({});
-    final update = AppUpdateAvailability(
-      currentVersion: '1.0.1+99',
-      latestTag: 'v1.1.0',
-      releasePageUri: Uri.parse(
-        'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
-      ),
-      installMode: AppUpdateInstallMode.seamlessRestart,
-      asset: AppUpdateAsset(
-        name: 'SecondLoop-linux-x64-v1.1.0.tar.gz',
-        downloadUri: Uri.parse('https://cdn.example.com/linux.tar.gz'),
-      ),
-    );
-    final service = _FakeAutoUpdateService(
-      throwOnInstall: true,
-      result: AppUpdateCheckResult(
-        currentVersion: '1.0.1+99',
-        update: update,
-      ),
-    );
-
-    await pumpGate(tester, service: service);
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 120));
-
-    await tester
-        .tap(find.byKey(const ValueKey('update_notice_primary_action')));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 120));
-
-    expect(service.installCalls, 1);
-    expect(find.byKey(const ValueKey('update_notice_primary_action')),
-        findsOneWidget);
-    expect(find.text('Update now'), findsOneWidget);
-    final prefs = await SharedPreferences.getInstance();
-    expect(
-      prefs.getInt(AutoUpgradeGate.updateNoticeLastShownAtMsPrefsKey),
-      isNull,
-    );
-  },
-      variant: const TargetPlatformVariant(<TargetPlatform>{
-        TargetPlatform.linux,
-      }));
-
-  testWidgets(
-      'windows staged reminder applies staged update from primary action',
-      (tester) async {
-    SharedPreferences.setMockInitialValues({});
-    final update = AppUpdateAvailability(
-      currentVersion: '1.0.1+99',
-      latestTag: 'v1.1.0',
-      releasePageUri: Uri.parse(
-        'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
-      ),
-      installMode: AppUpdateInstallMode.seamlessRestart,
-      asset: AppUpdateAsset(
-        name: 'com.secondloop.secondloop-1.1.0-full.nupkg',
-        downloadUri: Uri.parse('https://cdn.example.com/win.nupkg'),
-      ),
-    );
-    final service = _FakeAutoUpdateService(
-      canStageSilentlyForNextLaunchValue: true,
-      result: AppUpdateCheckResult(
-        currentVersion: '1.0.1+99',
-        update: update,
-      ),
-    );
-
-    await pumpGate(tester, service: service);
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 120));
-
-    await tester
-        .tap(find.byKey(const ValueKey('update_notice_primary_action')));
-    await tester.pumpAndSettle();
-
-    expect(service.stageCalls, 1);
-    expect(service.applyStagedRestartCalls, 1);
-  },
-      variant: const TargetPlatformVariant(<TargetPlatform>{
-        TargetPlatform.windows,
-      }));
-
-  testWidgets(
-      'windows staged-next-launch action keeps retry controls on failure',
-      (tester) async {
-    SharedPreferences.setMockInitialValues({});
-    final update = AppUpdateAvailability(
-      currentVersion: '1.0.1+99',
-      latestTag: 'v1.1.0',
-      releasePageUri: Uri.parse(
-        'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
-      ),
-      installMode: AppUpdateInstallMode.stagedNextLaunch,
-      asset: AppUpdateAsset(
-        name: 'com.secondloop.secondloop-1.1.0-full.nupkg',
-        downloadUri: Uri.parse('https://cdn.example.com/win.nupkg'),
-      ),
-    );
-    final service = _FakeAutoUpdateService(
-      throwOnStage: true,
-      canStageSilentlyForNextLaunchValue: false,
-      result: AppUpdateCheckResult(
-        currentVersion: '1.0.1+99',
-        update: update,
-      ),
-    );
-
-    await pumpGate(tester, service: service);
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 120));
-
-    await tester
-        .tap(find.byKey(const ValueKey('update_notice_primary_action')));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 120));
-
-    expect(service.stageCalls, 1);
-    expect(find.byKey(const ValueKey('update_notice_primary_action')),
-        findsOneWidget);
-    expect(find.text('Prepare update'), findsOneWidget);
-    final prefs = await SharedPreferences.getInstance();
-    expect(
-      prefs.getInt(AutoUpgradeGate.updateNoticeLastShownAtMsPrefsKey),
-      isNull,
-    );
-  },
-      variant: const TargetPlatformVariant(<TargetPlatform>{
-        TargetPlatform.windows,
-      }));
-
-  testWidgets('shows reminder when same tag was shown over 24h ago',
-      (tester) async {
-    final nowMs = DateTime.now().millisecondsSinceEpoch;
-    SharedPreferences.setMockInitialValues({
-      AutoUpgradeGate.updateNoticeLastTagPrefsKey: 'v1.1.0',
-      AutoUpgradeGate.updateNoticeLastShownAtMsPrefsKey:
-          nowMs - const Duration(hours: 25).inMilliseconds,
-    });
-
-    final update = AppUpdateAvailability(
-      currentVersion: '1.0.1+99',
-      latestTag: 'v1.1.0',
-      releasePageUri: Uri.parse(
-        'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
-      ),
-      installMode: AppUpdateInstallMode.externalDownload,
-    );
-    final service = _FakeAutoUpdateService(
-      result: AppUpdateCheckResult(
-        currentVersion: '1.0.1+99',
-        update: update,
-      ),
-    );
-
-    await pumpGate(tester, service: service);
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 120));
-
-    expect(find.byType(SnackBar), findsOneWidget);
-  });
-
-  testWidgets('skips reminder when same tag was shown within 24h',
-      (tester) async {
-    final nowMs = DateTime.now().millisecondsSinceEpoch;
-    SharedPreferences.setMockInitialValues({
-      AutoUpgradeGate.updateNoticeLastTagPrefsKey: 'v1.1.0',
-      AutoUpgradeGate.updateNoticeLastShownAtMsPrefsKey:
-          nowMs - const Duration(hours: 1).inMilliseconds,
-    });
-
-    final update = AppUpdateAvailability(
-      currentVersion: '1.0.1+99',
-      latestTag: 'v1.1.0',
-      releasePageUri: Uri.parse(
-        'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
-      ),
-      installMode: AppUpdateInstallMode.externalDownload,
-    );
-    final service = _FakeAutoUpdateService(
-      result: AppUpdateCheckResult(
-        currentVersion: '1.0.1+99',
-        update: update,
-      ),
-    );
-
-    await pumpGate(tester, service: service);
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 120));
-
-    expect(find.byType(SnackBar), findsNothing);
-  });
 }
