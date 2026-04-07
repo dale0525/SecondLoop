@@ -273,8 +273,15 @@ function Invoke-InWindowsShortWorkspace {
       }
     }
 
+    $pathVisibilityAttempts = 20
+    while ($pathVisibilityAttempts -gt 0 -and
+           -not (Test-Path -LiteralPath $shortProjectDir -PathType Container)) {
+      Start-Sleep -Milliseconds 50
+      $pathVisibilityAttempts -= 1
+    }
+
     if (-not (Test-Path -LiteralPath $shortProjectDir -PathType Container)) {
-      throw "Short workspace path not found: $shortProjectDir"
+      throw "Short workspace path not found after drive mapping: $shortProjectDir"
     }
 
     if ($null -eq $shortWorkspaceLease) {
