@@ -178,18 +178,22 @@ class FlutterLocalNotificationsWindows extends WindowsNotificationsBase {
 
   @override
   void dispose() {
+    final wasReady = _isReady;
+
     if (_details != null) {
       _bindings.freeLaunchDetails(_details!);
       _details = null;
     }
     final plugin = _plugin;
-    if (plugin != null) {
+    if (wasReady && plugin != null) {
       _bindings.clearPluginRegistration(plugin);
     }
     userCallback = null;
-    instance = null;
+    if (identical(instance, this)) {
+      instance = null;
+    }
     _disposeCallbackHandle();
-    if (!_isReady) {
+    if (!wasReady) {
       return;
     }
     _bindings.disposePlugin(plugin!);

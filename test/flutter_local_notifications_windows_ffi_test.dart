@@ -170,6 +170,44 @@ void main() {
     expect(_callbackHandleCloseCalls, 1);
   });
 
+  test('disposing an uninitialized instance does not clear another singleton',
+      () async {
+    final initializedPlugin = windows_plugin.FlutterLocalNotificationsWindows(
+      library: ffi.DynamicLibrary.process(),
+      bindings: windows_bindings.NotificationsPluginBindings.fromLookup(
+        _lookupTestSymbol,
+      ),
+    );
+    final uninitializedPlugin = windows_plugin.FlutterLocalNotificationsWindows(
+      library: ffi.DynamicLibrary.process(),
+      bindings: windows_bindings.NotificationsPluginBindings.fromLookup(
+        _lookupTestSymbol,
+      ),
+    );
+
+    expect(
+      await initializedPlugin.initialize(
+        const WindowsInitializationSettings(
+          appName: 'SecondLoop',
+          appUserModelId: 'com.secondloop.secondloop',
+          guid: 'd49b5b4a-0ea5-4e31-b5c9-945cc5405f59',
+        ),
+        onNotificationReceived: (_) {},
+      ),
+      isTrue,
+    );
+
+    uninitializedPlugin.dispose();
+
+    expect(
+      windows_plugin.FlutterLocalNotificationsWindows.instance,
+      same(initializedPlugin),
+    );
+    expect(initializedPlugin.userCallback, isNotNull);
+
+    initializedPlugin.dispose();
+  });
+
   test('dispose clears native callback registration before closing handles',
       () async {
     final plugin = windows_plugin.FlutterLocalNotificationsWindows(
