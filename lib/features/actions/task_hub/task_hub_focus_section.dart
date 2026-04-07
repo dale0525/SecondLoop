@@ -21,6 +21,7 @@ class TaskHubFocusSection extends StatelessWidget {
     this.onFeedback,
     this.restoredTodoId,
     this.anchorRegistry,
+    this.anchorId,
     this.inlineAnimation,
     this.onInlineAnimationCompleted,
     super.key,
@@ -37,6 +38,7 @@ class TaskHubFocusSection extends StatelessWidget {
   )? onFeedback;
   final String? restoredTodoId;
   final TaskHubCardAnchorRegistry? anchorRegistry;
+  final String? anchorId;
   final TaskHubPriorityInlineAnimationState? inlineAnimation;
   final VoidCallback? onInlineAnimationCompleted;
 
@@ -44,7 +46,7 @@ class TaskHubFocusSection extends StatelessWidget {
   Widget build(BuildContext context) {
     if (entries.isEmpty) return const SizedBox.shrink();
     final tokens = SlTokens.of(context);
-    return Padding(
+    Widget section = Padding(
       padding: const EdgeInsets.only(bottom: 16),
       child: SlSurface(
         key: const ValueKey('task_hub_page_section_focus'),
@@ -82,5 +84,13 @@ class TaskHubFocusSection extends StatelessWidget {
         ),
       ),
     );
+    if (anchorRegistry != null && anchorId != null) {
+      section = TaskHubCardAnchor(
+        todoId: anchorId!,
+        registry: anchorRegistry!,
+        child: section,
+      );
+    }
+    return section;
   }
 }

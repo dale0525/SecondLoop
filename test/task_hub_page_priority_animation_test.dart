@@ -241,7 +241,7 @@ void main() {
     expect((overlayRect.left - sourceRect.left).abs(), lessThan(8));
   });
 
-  testWidgets('offscreen destination degrades to non-flight animation',
+  testWidgets('offscreen destination still shows directional animation',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
     final backend = TaskHubTestBackend(
@@ -265,14 +265,21 @@ void main() {
     await tester.pumpWidget(wrapTaskHubTestApp(backend));
     await pumpUntilTaskHubReady(tester);
 
+    final sourceRect =
+        tester.getRect(find.byKey(const ValueKey('task_hub_page_item_focus')));
     await tester
         .tap(find.byKey(const ValueKey('task_hub_page_quick_focus_done')));
-    await tester.pump(const Duration(milliseconds: 400));
-
-    expect(
+    await tester.pump();
+    await pumpUntilFound(
+      tester,
       find.byKey(const ValueKey('task_hub_priority_animation_overlay')),
-      findsNothing,
     );
+
+    final overlayRect = tester.getRect(
+      find.byKey(const ValueKey('task_hub_priority_animation_overlay')),
+    );
+    expect((overlayRect.top - sourceRect.top).abs(), lessThan(8));
+    expect((overlayRect.left - sourceRect.left).abs(), lessThan(8));
   });
 
   testWidgets('reduced motion disables emphasized flight', (tester) async {
@@ -325,7 +332,7 @@ void main() {
     );
   });
 
-  testWidgets('destination outside animation layer does not show flight',
+  testWidgets('destination outside animation layer falls back to source motion',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
     tester.view.physicalSize = const Size(390, 320);
@@ -375,16 +382,21 @@ void main() {
     await tester.drag(find.byType(Scrollable).first, const Offset(0, 84));
     await tester.pumpAndSettle();
 
+    final sourceRect =
+        tester.getRect(find.byKey(const ValueKey('task_hub_page_item_done')));
     await tester
         .tap(find.byKey(const ValueKey('task_hub_page_quick_done_reopen')));
+    await tester.pump();
+    await pumpUntilFound(
+      tester,
+      find.byKey(const ValueKey('task_hub_priority_animation_overlay')),
+    );
 
-    for (var i = 0; i < 6; i += 1) {
-      await tester.pump(const Duration(milliseconds: 50));
-      expect(
-        find.byKey(const ValueKey('task_hub_priority_animation_overlay')),
-        findsNothing,
-      );
-    }
+    final overlayRect = tester.getRect(
+      find.byKey(const ValueKey('task_hub_priority_animation_overlay')),
+    );
+    expect((overlayRect.top - sourceRect.top).abs(), lessThan(8));
+    expect((overlayRect.left - sourceRect.left).abs(), lessThan(8));
   });
 
   testWidgets('redo animates from the done card to the inserted task',

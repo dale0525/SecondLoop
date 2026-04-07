@@ -100,7 +100,8 @@ class TaskHubPriorityAnimationController extends ChangeNotifier {
       reducedMotion: capture.reducedMotion,
     );
     if ((_lastPlan?.kind == TaskHubPriorityAnimationKind.crossSectionMove ||
-            _lastPlan?.kind == TaskHubPriorityAnimationKind.visibleInsertion) &&
+            _lastPlan?.kind == TaskHubPriorityAnimationKind.visibleInsertion ||
+            _lastPlan?.kind == TaskHubPriorityAnimationKind.visibleRemoval) &&
         capture.sourceRect != null &&
         targetRect != null) {
       _activeOverlay = TaskHubPriorityOverlayState(

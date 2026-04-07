@@ -30,6 +30,7 @@ class TaskHubPageSection extends StatelessWidget {
     this.restoredTodoId,
     this.footer,
     this.anchorRegistry,
+    this.anchorId,
     this.inlineAnimation,
     this.onInlineAnimationCompleted,
     super.key,
@@ -52,6 +53,7 @@ class TaskHubPageSection extends StatelessWidget {
   final String? restoredTodoId;
   final Widget? footer;
   final TaskHubCardAnchorRegistry? anchorRegistry;
+  final String? anchorId;
   final TaskHubPriorityInlineAnimationState? inlineAnimation;
   final VoidCallback? onInlineAnimationCompleted;
 
@@ -59,7 +61,7 @@ class TaskHubPageSection extends StatelessWidget {
   Widget build(BuildContext context) {
     if (entries.isEmpty && footer == null) return const SizedBox.shrink();
     final sectionCount = entries.length;
-    return Padding(
+    Widget section = Padding(
       padding: const EdgeInsets.only(bottom: 16),
       child: SlSurface(
         key: sectionKey,
@@ -99,6 +101,14 @@ class TaskHubPageSection extends StatelessWidget {
         ),
       ),
     );
+    if (anchorRegistry != null && anchorId != null) {
+      section = TaskHubCardAnchor(
+        todoId: anchorId!,
+        registry: anchorRegistry!,
+        child: section,
+      );
+    }
+    return section;
   }
 }
 

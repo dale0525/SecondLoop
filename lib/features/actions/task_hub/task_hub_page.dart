@@ -312,6 +312,84 @@ class _TaskHubPageState extends State<TaskHubPage> {
     return Rect.fromPoints(topLeft, bottomRight);
   }
 
+  String _sectionAnchorId(TaskHubPriorityAnimationSection section) {
+    return 'task_hub_section_anchor_${section.name}';
+  }
+
+  int _sectionOrder(TaskHubPriorityAnimationSection section) {
+    return switch (section) {
+      TaskHubPriorityAnimationSection.focus => 0,
+      TaskHubPriorityAnimationSection.nextUp => 1,
+      TaskHubPriorityAnimationSection.backlog => 2,
+      TaskHubPriorityAnimationSection.done => 3,
+    };
+  }
+
+  Rect? _visibleCardOrSectionRect(
+    String todoId, {
+    TaskHubPriorityAnimationSection? fallbackSection,
+  }) {
+    final todoRect = _rectInAnimationLayer(
+      _rectIfVisibleInAnimationLayer(_cardAnchorRegistry.rectFor(todoId)),
+    );
+    if (todoRect != null) {
+      return todoRect;
+    }
+    if (fallbackSection == null) {
+      return null;
+    }
+    return _rectInAnimationLayer(
+      _rectIfVisibleInAnimationLayer(
+        _cardAnchorRegistry.rectFor(_sectionAnchorId(fallbackSection)),
+      ),
+    );
+  }
+
+  Rect? _fallbackAnimationRect(
+    TaskHubPriorityAnimationPlan plan,
+    Rect? sourceRect,
+  ) {
+    if (sourceRect == null) {
+      return null;
+    }
+    switch (plan.kind) {
+      case TaskHubPriorityAnimationKind.sameSectionReorder:
+        final fromIndex = plan.fromIndex ?? 0;
+        final toIndex = plan.toIndex ?? fromIndex;
+        final direction = toIndex >= fromIndex ? -1.0 : 1.0;
+        return sourceRect.shift(Offset(0, 28 * direction));
+      case TaskHubPriorityAnimationKind.crossSectionMove:
+      case TaskHubPriorityAnimationKind.visibleInsertion:
+      case TaskHubPriorityAnimationKind.visibleRemoval:
+        final fromSection = plan.fromSection;
+        final toSection = plan.toSection ?? fromSection;
+        if (toSection == null) {
+          return sourceRect.shift(const Offset(0, -28));
+        }
+        final fromOrder = fromSection == null
+            ? _sectionOrder(toSection)
+            : _sectionOrder(fromSection);
+        final delta = _sectionOrder(toSection) - fromOrder;
+        final direction = delta == 0 ? 1.0 : delta.sign.toDouble();
+        return sourceRect.shift(Offset(0, 32 * direction));
+      case TaskHubPriorityAnimationKind.none:
+      case TaskHubPriorityAnimationKind.noEmphasis:
+        return null;
+    }
+  }
+
+  Rect? _resolveAnimationTargetRect({
+    required String animatedTodoId,
+    required TaskHubPriorityAnimationPlan plan,
+    required Rect? sourceRect,
+  }) {
+    final targetRect = _visibleCardOrSectionRect(
+      animatedTodoId,
+      fallbackSection: plan.toSection,
+    );
+    return targetRect ?? _fallbackAnimationRect(plan, sourceRect);
+  }
+
   Future<void> _waitForNextFrame() {
     final completer = Completer<void>();
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -386,15 +464,22 @@ class _TaskHubPageState extends State<TaskHubPage> {
       if (currentStore == null) return;
       final animatedTodoId =
           appliedTicket.createdTodoId ?? appliedTicket.updatedTodo.id;
-      _refreshCardAnchors(todoIds: <String>[animatedTodoId]);
+      _refreshCardAnchors();
+      final nextSnapshot = _visibleAnimationSnapshot(currentStore.snapshot);
+      final plan = buildTaskHubPriorityAnimationPlan(
+        previous: previousSnapshot,
+        next: nextSnapshot,
+        actedTodoId: animatedTodoId,
+        reducedMotion: animationCapture.reducedMotion,
+      );
       _priorityAnimationController.completeAction(
         animationCapture,
         animatedTodoId: animatedTodoId,
-        next: _visibleAnimationSnapshot(currentStore.snapshot),
-        targetRect: _rectInAnimationLayer(
-          _rectIfVisibleInAnimationLayer(
-            _cardAnchorRegistry.rectFor(animatedTodoId),
-          ),
+        next: nextSnapshot,
+        targetRect: _resolveAnimationTargetRect(
+          animatedTodoId: animatedTodoId,
+          plan: plan,
+          sourceRect: animationCapture.sourceRect,
         ),
       );
     }());
@@ -621,6 +706,9 @@ class _TaskHubPageState extends State<TaskHubPage> {
                               checklistProgressByTodoId:
                                   store.checklistProgressByTodoId,
                               anchorRegistry: _cardAnchorRegistry,
+                              anchorId: _sectionAnchorId(
+                                TaskHubPriorityAnimationSection.focus,
+                              ),
                               inlineAnimation: activeInlineAnimation,
                               onInlineAnimationCompleted:
                                   activeInlineAnimation == null
@@ -683,6 +771,9 @@ class _TaskHubPageState extends State<TaskHubPage> {
                             checklistProgressByTodoId:
                                 store.checklistProgressByTodoId,
                             anchorRegistry: _cardAnchorRegistry,
+                            anchorId: _sectionAnchorId(
+                              TaskHubPriorityAnimationSection.nextUp,
+                            ),
                             inlineAnimation: activeInlineAnimation,
                             onInlineAnimationCompleted:
                                 activeInlineAnimation == null
@@ -706,6 +797,9 @@ class _TaskHubPageState extends State<TaskHubPage> {
                             checklistProgressByTodoId:
                                 store.checklistProgressByTodoId,
                             anchorRegistry: _cardAnchorRegistry,
+                            anchorId: _sectionAnchorId(
+                              TaskHubPriorityAnimationSection.backlog,
+                            ),
                             inlineAnimation: activeInlineAnimation,
                             onInlineAnimationCompleted:
                                 activeInlineAnimation == null
@@ -729,6 +823,9 @@ class _TaskHubPageState extends State<TaskHubPage> {
                             checklistProgressByTodoId:
                                 store.checklistProgressByTodoId,
                             anchorRegistry: _cardAnchorRegistry,
+                            anchorId: _sectionAnchorId(
+                              TaskHubPriorityAnimationSection.done,
+                            ),
                             inlineAnimation: activeInlineAnimation,
                             onInlineAnimationCompleted:
                                 activeInlineAnimation == null
