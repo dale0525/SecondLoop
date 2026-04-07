@@ -33,6 +33,63 @@ void main() {
           'https://cdn.example.com/arm64.apk');
     });
 
+    test(
+        'prefers latest.json manifest for Android installer metadata even when supported abi is known',
+        () async {
+      final requestedUris = <Uri>[];
+      final service = AppUpdateService(
+        platformOverride: AppUpdatePlatform.android,
+        releaseModeOverride: true,
+        releaseRepoOverride: 'dale0525/SecondLoop',
+        androidSupportedAbisOverride: const ['arm64-v8a'],
+        currentVersionLoader: () async =>
+            const AppRuntimeVersion(version: '1.0.0', buildNumber: '9'),
+        releaseJsonFetcher: (uri) async {
+          requestedUris.add(uri);
+          if (uri.path.endsWith('/latest.json')) {
+            return {
+              'tag_name': 'v1.1.0',
+              'release_page_url':
+                  'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
+              'platforms': {
+                'android-arm64-v8a': {
+                  'install_mode': 'apk',
+                  'name': 'SecondLoop-android-arm64-v8a-v1.1.0.apk',
+                  'archive_url': 'https://cdn.example.com/arm64.apk',
+                  'sha256': 'abc123',
+                },
+              },
+            };
+          }
+          if (uri.host == 'api.github.com') {
+            return {
+              'tag_name': 'v1.1.0',
+              'html_url':
+                  'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
+              'assets': [
+                {
+                  'name': 'SecondLoop-android-arm64-v8a-v1.1.0.apk',
+                  'browser_download_url': 'https://cdn.example.com/arm64.apk',
+                },
+              ],
+            };
+          }
+          throw StateError('unexpected_uri:$uri');
+        },
+      );
+
+      final result = await service.checkForUpdates();
+
+      expect(
+        requestedUris.first.toString(),
+        'https://github.com/dale0525/SecondLoop/releases/latest/download/latest.json',
+      );
+      expect(result.update, isNotNull);
+      expect(result.update!.asset, isNotNull);
+      expect(result.update!.asset!.sha256, 'abc123');
+      expect(result.update!.canUseAndroidApkInstaller, isTrue);
+    });
+
     test('does not fall back to arm64 manifest for x86_64 devices', () async {
       final service = AppUpdateService(
         platformOverride: AppUpdatePlatform.android,
