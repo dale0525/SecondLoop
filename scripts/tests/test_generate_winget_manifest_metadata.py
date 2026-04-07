@@ -102,6 +102,44 @@ class GenerateWingetManifestMetadataTests(unittest.TestCase):
             self.assertIn('Publisher: SecondLoop', locale_manifest)
             self.assertIn('PackageName: SecondLoop', locale_manifest)
 
+    def test_generate_winget_manifest_script_emits_vcredist_dependency_for_msi(self) -> None:
+        script_path = (
+            Path(__file__).resolve().parents[2] / 'scripts/generate_winget_manifests.py'
+        )
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            tmp_root = Path(tmp_dir)
+            installer_path = tmp_root / 'SecondLoop-win.msi'
+            installer_path.write_bytes(b'test-installer')
+            output_dir = tmp_root / 'out'
+
+            subprocess.run(
+                [
+                    sys.executable,
+                    str(script_path),
+                    '--release-tag',
+                    'v1.20.0',
+                    '--repo',
+                    'dale0525/SecondLoop',
+                    '--installer-path',
+                    str(installer_path),
+                    '--output-dir',
+                    str(output_dir),
+                    '--package-identifier',
+                    'SecondLoop.SecondLoop',
+                ],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+
+            installer_manifest = (
+                output_dir / 'SecondLoop.SecondLoop.installer.yaml'
+            ).read_text(encoding='utf-8')
+
+            self.assertIn('Dependencies:', installer_manifest)
+            self.assertIn('PackageDependencies:', installer_manifest)
+            self.assertIn('Microsoft.VCRedist.2015+.x64', installer_manifest)
+
 
 if __name__ == '__main__':
     unittest.main()
