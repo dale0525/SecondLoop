@@ -702,9 +702,9 @@
     "releaseNotesUnavailable": "Release notes are temporarily unavailable."
   },
   "updateNotice": {
-    "stagedReady": "New version $version is ready and will apply on next launch.",
-    "manualDownload": "New version $version is available. Open the update page or use manual download.",
-    "seamlessAvailable": "New version $version is available. Open Settings > About to install it in-app."
+    "stagedReady": "New version $version is ready. Restart now to finish the update.",
+    "manualDownload": "New version $version is available. Open the update page to download it now.",
+    "seamlessAvailable": "New version $version is available. Install it now in the app and restart."
   },
   "diagnostics": {
     "title": "Diagnostics",

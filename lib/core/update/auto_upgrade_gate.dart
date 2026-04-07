@@ -354,6 +354,19 @@ class _AutoUpgradeGateState extends State<AutoUpgradeGate>
     );
   }
 
+  void _showUpdateActionMessage(String message) {
+    if (!mounted) return;
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    if (messenger == null) return;
+    messenger.hideCurrentSnackBar();
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(message),
+        duration: const Duration(seconds: 3),
+      ),
+    );
+  }
+
   Future<void> _openFallbackUpdateUri() async {
     final aboutT = context.t.settings.about;
     try {
@@ -385,6 +398,61 @@ class _AutoUpgradeGateState extends State<AutoUpgradeGate>
     }
   }
 
+  String _updateNoticePrimaryActionLabel({
+    required AppUpdateAvailability update,
+    required bool stagedReady,
+  }) {
+    final aboutActionsT = context.t.settings.about.actions;
+    if (stagedReady || update.canSeamlessInstall) {
+      return aboutActionsT.autoUpdate;
+    }
+    if (update.canStageForNextLaunch) {
+      return aboutActionsT.stageUpdate;
+    }
+    return aboutActionsT.manualUpdate;
+  }
+
+  Future<void> _handleUpdateNoticePrimaryAction({
+    required AppUpdateAvailability update,
+    required bool stagedReady,
+  }) async {
+    final aboutT = context.t.settings.about;
+    ScaffoldMessenger.maybeOf(context)?.hideCurrentSnackBar();
+
+    try {
+      if (stagedReady) {
+        _showUpdateActionMessage(aboutT.messages.installStarting);
+        await _updateService.applyStagedUpdateAndRestart();
+        return;
+      }
+
+      if (update.canSeamlessInstall) {
+        _showUpdateActionMessage(aboutT.messages.installStarting);
+        await _updateService.installAndRestart(update);
+        return;
+      }
+
+      if (update.canStageForNextLaunch) {
+        _showUpdateActionMessage(aboutT.messages.stageStarting);
+        await _updateService.stageUpdateForNextLaunch(update);
+        _showUpdateActionMessage(aboutT.messages.stageReady);
+        return;
+      }
+
+      await _openFallbackUpdateUri();
+    } catch (error) {
+      if (!mounted) return;
+      if (stagedReady || update.canSeamlessInstall) {
+        _showUpdateActionMessage(
+            aboutT.messages.installFailed(error: '$error'));
+        return;
+      }
+      if (update.canStageForNextLaunch) {
+        _showUpdateActionMessage(aboutT.messages.stageFailed(error: '$error'));
+      }
+    }
+  }
+
   Future<void> _maybeShowPassiveUpdateNotice({
     required SharedPreferences prefs,
     required AppUpdateAvailability update,
@@ -406,6 +474,10 @@ class _AutoUpgradeGateState extends State<AutoUpgradeGate>
     if (messenger == null) return;
     final updateNoticeT = context.t.settings.updateNotice;
     final commonActionsT = context.t.common.actions;
+    final primaryActionLabel = _updateNoticePrimaryActionLabel(
+      update: update,
+      stagedReady: stagedReady,
+    );
     final message = stagedReady
         ? updateNoticeT.stagedReady(version: update.latestTag)
         : (_isWindowsPlatform || _isMacosPlatform || _isLinuxPlatform) &&
@@ -427,16 +499,42 @@ class _AutoUpgradeGateState extends State<AutoUpgradeGate>
     messenger.hideCurrentSnackBar();
     messenger.showSnackBar(
       SnackBar(
-        content: Text(message),
-        duration: const Duration(seconds: 3),
-        action: SnackBarAction(
-          label: notNowLabel,
-          onPressed: () {
-            unawaited(_dismissUpdateNoticeForSession(
-              prefs: prefs,
-              updateTag: stagedReady ? update.latestTag : null,
-            ));
-          },
+        duration: const Duration(seconds: 4),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(message),
+            const SizedBox(height: 8),
+            OverflowBar(
+              alignment: MainAxisAlignment.end,
+              spacing: 8,
+              overflowAlignment: OverflowBarAlignment.end,
+              children: [
+                TextButton(
+                  key: const ValueKey('update_notice_secondary_action'),
+                  onPressed: () {
+                    ScaffoldMessenger.maybeOf(context)?.hideCurrentSnackBar();
+                    unawaited(_dismissUpdateNoticeForSession(
+                      prefs: prefs,
+                      updateTag: stagedReady ? update.latestTag : null,
+                    ));
+                  },
+                  child: Text(notNowLabel),
+                ),
+                FilledButton.tonal(
+                  key: const ValueKey('update_notice_primary_action'),
+                  onPressed: () {
+                    unawaited(_handleUpdateNoticePrimaryAction(
+                      update: update,
+                      stagedReady: stagedReady,
+                    ));
+                  },
+                  child: Text(primaryActionLabel),
+                ),
+              ],
+            ),
+          ],
         ),
       ),
     );
