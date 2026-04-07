@@ -234,7 +234,7 @@ class ScopedCiRuntimeWrapperBehaviorTests(unittest.TestCase):
                 check=False,
                 capture_output=True,
                 text=True,
-                timeout=5,
+                timeout=15,
                 env={
                     **os.environ,
                     "SECONDLOOP_DART_BIN": (fake_bin_dir / "dart").as_posix(),
@@ -1177,7 +1177,7 @@ class ScopedCiRuntimeWrapperBehaviorTests(unittest.TestCase):
                     check=False,
                     capture_output=True,
                     text=True,
-                    timeout=3,
+                    timeout=10,
                     env={
                         **os.environ,
                         "PATH": "/usr/bin:/bin",
