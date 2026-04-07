@@ -322,6 +322,10 @@ class _TaskHubPageState extends State<TaskHubPage> {
     return completer.future;
   }
 
+  void _refreshCardAnchors({Iterable<String>? todoIds}) {
+    _cardAnchorRegistry.refresh(todoIds: todoIds);
+  }
+
   Future<void> _openTodoDetail(TaskPriorityEntry entry) async {
     await Navigator.of(context).push(
       MaterialPageRoute(
@@ -339,6 +343,7 @@ class _TaskHubPageState extends State<TaskHubPage> {
     TaskPriorityEntry entry,
     TaskHubQuickAction action,
   ) async {
+    _refreshCardAnchors(todoIds: <String>[entry.todo.id]);
     final previousSnapshot = _store == null
         ? const TaskHubPriorityAnimationSnapshot()
         : _visibleAnimationSnapshot(_store!.snapshot);
@@ -380,6 +385,7 @@ class _TaskHubPageState extends State<TaskHubPage> {
       if (!mounted) return;
       final currentStore = _store;
       if (currentStore == null) return;
+      _refreshCardAnchors(todoIds: <String>[entry.todo.id]);
       _priorityAnimationController.completeAction(
         animationCapture,
         next: _visibleAnimationSnapshot(currentStore.snapshot),
@@ -567,43 +573,111 @@ class _TaskHubPageState extends State<TaskHubPage> {
             return Stack(
               key: _animationLayerKey,
               children: [
-                RefreshIndicator(
-                  onRefresh: _refresh,
-                  child: ListView(
-                    key: const ValueKey('task_hub_page'),
-                    padding: const EdgeInsets.all(12),
-                    children: [
-                      if (store.isRefreshing && snapshot.allEntries.isEmpty)
-                        const Padding(
-                          padding: EdgeInsets.only(top: 32),
-                          child: Center(child: CircularProgressIndicator()),
-                        )
-                      else ...[
-                        if (_aiSourceLabel(snapshot)
-                            case final aiSourceLabel?) ...[
-                          SlSurface(
-                            key: const ValueKey('task_hub_page_ai_source'),
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 8,
+                NotificationListener<ScrollNotification>(
+                  onNotification: (notification) {
+                    if (notification.depth != 0) return false;
+                    _refreshCardAnchors();
+                    return false;
+                  },
+                  child: RefreshIndicator(
+                    onRefresh: _refresh,
+                    child: ListView(
+                      key: const ValueKey('task_hub_page'),
+                      padding: const EdgeInsets.all(12),
+                      children: [
+                        if (store.isRefreshing && snapshot.allEntries.isEmpty)
+                          const Padding(
+                            padding: EdgeInsets.only(top: 32),
+                            child: Center(child: CircularProgressIndicator()),
+                          )
+                        else ...[
+                          if (_aiSourceLabel(snapshot)
+                              case final aiSourceLabel?) ...[
+                            SlSurface(
+                              key: const ValueKey('task_hub_page_ai_source'),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 8,
+                              ),
+                              child: Text(
+                                aiSourceLabel,
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .labelMedium
+                                    ?.copyWith(
+                                      color:
+                                          Theme.of(context).colorScheme.primary,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                              ),
                             ),
-                            child: Text(
-                              aiSourceLabel,
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .labelMedium
-                                  ?.copyWith(
-                                    color:
-                                        Theme.of(context).colorScheme.primary,
-                                    fontWeight: FontWeight.w700,
+                            const SizedBox(height: 12),
+                          ],
+                          if (snapshot.primaryFocus != null)
+                            TaskHubFocusSection(
+                              entries: visibleFocus,
+                              checklistProgressByTodoId:
+                                  store.checklistProgressByTodoId,
+                              anchorRegistry: _cardAnchorRegistry,
+                              inlineAnimation: activeInlineAnimation,
+                              onInlineAnimationCompleted:
+                                  activeInlineAnimation == null
+                                      ? null
+                                      : () => _priorityAnimationController
+                                              .clearInlineAnimation(
+                                            activeInlineAnimation.todoId,
+                                            activeInlineAnimation.token,
+                                          ),
+                              restoredTodoId: _restoredTodoId,
+                              onOpenTodo: _openTodoDetail,
+                              onQuickAction: _applyQuickAction,
+                              onFeedback: _recordFeedback,
+                            )
+                          else
+                            SlSurface(
+                              key: const ValueKey('task_hub_page_wrap_up'),
+                              padding: const EdgeInsets.all(12),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    context.t.actions.taskHub.wrapUpTitle,
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .titleMedium
+                                        ?.copyWith(
+                                          fontWeight: FontWeight.w800,
+                                        ),
                                   ),
+                                  const SizedBox(height: 6),
+                                  Text(
+                                    context.t.actions.taskHub.wrapUpSubtitle(
+                                      upcoming: visibleNextUp.length,
+                                      backlog: visibleBacklog.length,
+                                      done: snapshot.done.length,
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
-                          ),
+                          if (store.shouldShowAiUpgradeHint) ...[
+                            const SizedBox(height: 12),
+                            SlSurface(
+                              key: const ValueKey(
+                                  'task_hub_page_ai_upgrade_hint'),
+                              padding: const EdgeInsets.all(12),
+                              child: Text(
+                                context.t.actions.taskHub.aiUpgradeHint,
+                                style: Theme.of(context).textTheme.bodySmall,
+                              ),
+                            ),
+                          ],
                           const SizedBox(height: 12),
-                        ],
-                        if (snapshot.primaryFocus != null)
-                          TaskHubFocusSection(
-                            entries: visibleFocus,
+                          TaskHubPageSection(
+                            title: context.t.actions.taskHub.scheduledSection,
+                            sectionKey: const ValueKey(
+                                'task_hub_page_section_upcoming'),
+                            entries: visibleNextUp,
                             checklistProgressByTodoId:
                                 store.checklistProgressByTodoId,
                             anchorRegistry: _cardAnchorRegistry,
@@ -617,137 +691,76 @@ class _TaskHubPageState extends State<TaskHubPage> {
                                           activeInlineAnimation.token,
                                         ),
                             restoredTodoId: _restoredTodoId,
+                            sectionKind: TaskHubPageSectionKind.scheduled,
                             onOpenTodo: _openTodoDetail,
                             onQuickAction: _applyQuickAction,
                             onFeedback: _recordFeedback,
-                          )
-                        else
-                          SlSurface(
-                            key: const ValueKey('task_hub_page_wrap_up'),
-                            padding: const EdgeInsets.all(12),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  context.t.actions.taskHub.wrapUpTitle,
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .titleMedium
-                                      ?.copyWith(
-                                        fontWeight: FontWeight.w800,
-                                      ),
-                                ),
-                                const SizedBox(height: 6),
-                                Text(
-                                  context.t.actions.taskHub.wrapUpSubtitle(
-                                    upcoming: visibleNextUp.length,
-                                    backlog: visibleBacklog.length,
-                                    done: snapshot.done.length,
-                                  ),
-                                ),
-                              ],
-                            ),
                           ),
-                        if (store.shouldShowAiUpgradeHint) ...[
-                          const SizedBox(height: 12),
-                          SlSurface(
-                            key:
-                                const ValueKey('task_hub_page_ai_upgrade_hint'),
-                            padding: const EdgeInsets.all(12),
-                            child: Text(
-                              context.t.actions.taskHub.aiUpgradeHint,
-                              style: Theme.of(context).textTheme.bodySmall,
-                            ),
+                          TaskHubPageSection(
+                            title: context.t.actions.taskHub.unscheduledSection,
+                            sectionKey:
+                                const ValueKey('task_hub_page_section_backlog'),
+                            entries: visibleBacklog,
+                            checklistProgressByTodoId:
+                                store.checklistProgressByTodoId,
+                            anchorRegistry: _cardAnchorRegistry,
+                            inlineAnimation: activeInlineAnimation,
+                            onInlineAnimationCompleted:
+                                activeInlineAnimation == null
+                                    ? null
+                                    : () => _priorityAnimationController
+                                            .clearInlineAnimation(
+                                          activeInlineAnimation.todoId,
+                                          activeInlineAnimation.token,
+                                        ),
+                            restoredTodoId: _restoredTodoId,
+                            sectionKind: TaskHubPageSectionKind.decide,
+                            onOpenTodo: _openTodoDetail,
+                            onQuickAction: _applyQuickAction,
+                            onFeedback: _recordFeedback,
+                          ),
+                          TaskHubPageSection(
+                            title: context.t.actions.taskHub.doneSection,
+                            sectionKey:
+                                const ValueKey('task_hub_page_section_done'),
+                            entries: visibleDone,
+                            checklistProgressByTodoId:
+                                store.checklistProgressByTodoId,
+                            anchorRegistry: _cardAnchorRegistry,
+                            inlineAnimation: activeInlineAnimation,
+                            onInlineAnimationCompleted:
+                                activeInlineAnimation == null
+                                    ? null
+                                    : () => _priorityAnimationController
+                                            .clearInlineAnimation(
+                                          activeInlineAnimation.todoId,
+                                          activeInlineAnimation.token,
+                                        ),
+                            restoredTodoId: _restoredTodoId,
+                            sectionKind: TaskHubPageSectionKind.done,
+                            onOpenTodo: _openTodoDetail,
+                            onQuickAction: _applyQuickAction,
+                            footer: snapshot.done.length > _doneVisibleCount
+                                ? Align(
+                                    alignment: Alignment.centerLeft,
+                                    child: SlButton(
+                                      buttonKey: const ValueKey(
+                                          'task_hub_page_done_load_more'),
+                                      variant: SlButtonVariant.outline,
+                                      onPressed: () {
+                                        setState(() {
+                                          _doneVisibleCount += _kDonePageSize;
+                                        });
+                                      },
+                                      child: Text(
+                                          context.t.common.actions.showMore),
+                                    ),
+                                  )
+                                : null,
                           ),
                         ],
-                        const SizedBox(height: 12),
-                        TaskHubPageSection(
-                          title: context.t.actions.taskHub.scheduledSection,
-                          sectionKey:
-                              const ValueKey('task_hub_page_section_upcoming'),
-                          entries: visibleNextUp,
-                          checklistProgressByTodoId:
-                              store.checklistProgressByTodoId,
-                          anchorRegistry: _cardAnchorRegistry,
-                          inlineAnimation: activeInlineAnimation,
-                          onInlineAnimationCompleted:
-                              activeInlineAnimation == null
-                                  ? null
-                                  : () => _priorityAnimationController
-                                          .clearInlineAnimation(
-                                        activeInlineAnimation.todoId,
-                                        activeInlineAnimation.token,
-                                      ),
-                          restoredTodoId: _restoredTodoId,
-                          sectionKind: TaskHubPageSectionKind.scheduled,
-                          onOpenTodo: _openTodoDetail,
-                          onQuickAction: _applyQuickAction,
-                          onFeedback: _recordFeedback,
-                        ),
-                        TaskHubPageSection(
-                          title: context.t.actions.taskHub.unscheduledSection,
-                          sectionKey:
-                              const ValueKey('task_hub_page_section_backlog'),
-                          entries: visibleBacklog,
-                          checklistProgressByTodoId:
-                              store.checklistProgressByTodoId,
-                          anchorRegistry: _cardAnchorRegistry,
-                          inlineAnimation: activeInlineAnimation,
-                          onInlineAnimationCompleted:
-                              activeInlineAnimation == null
-                                  ? null
-                                  : () => _priorityAnimationController
-                                          .clearInlineAnimation(
-                                        activeInlineAnimation.todoId,
-                                        activeInlineAnimation.token,
-                                      ),
-                          restoredTodoId: _restoredTodoId,
-                          sectionKind: TaskHubPageSectionKind.decide,
-                          onOpenTodo: _openTodoDetail,
-                          onQuickAction: _applyQuickAction,
-                          onFeedback: _recordFeedback,
-                        ),
-                        TaskHubPageSection(
-                          title: context.t.actions.taskHub.doneSection,
-                          sectionKey:
-                              const ValueKey('task_hub_page_section_done'),
-                          entries: visibleDone,
-                          checklistProgressByTodoId:
-                              store.checklistProgressByTodoId,
-                          anchorRegistry: _cardAnchorRegistry,
-                          inlineAnimation: activeInlineAnimation,
-                          onInlineAnimationCompleted:
-                              activeInlineAnimation == null
-                                  ? null
-                                  : () => _priorityAnimationController
-                                          .clearInlineAnimation(
-                                        activeInlineAnimation.todoId,
-                                        activeInlineAnimation.token,
-                                      ),
-                          restoredTodoId: _restoredTodoId,
-                          sectionKind: TaskHubPageSectionKind.done,
-                          onOpenTodo: _openTodoDetail,
-                          onQuickAction: _applyQuickAction,
-                          footer: snapshot.done.length > _doneVisibleCount
-                              ? Align(
-                                  alignment: Alignment.centerLeft,
-                                  child: SlButton(
-                                    buttonKey: const ValueKey(
-                                        'task_hub_page_done_load_more'),
-                                    variant: SlButtonVariant.outline,
-                                    onPressed: () {
-                                      setState(() {
-                                        _doneVisibleCount += _kDonePageSize;
-                                      });
-                                    },
-                                    child:
-                                        Text(context.t.common.actions.showMore),
-                                  ),
-                                )
-                              : null,
-                        ),
                       ],
-                    ],
+                    ),
                   ),
                 ),
                 if (_priorityAnimationController.activeOverlay

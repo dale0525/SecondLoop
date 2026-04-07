@@ -85,6 +85,92 @@ void main() {
     );
   });
 
+  testWidgets('done flight starts from the scrolled source position',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    tester.view.physicalSize = const Size(1200, 720);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final backend = TaskHubTestBackend(
+      todos: const <Todo>[
+        Todo(
+          id: 'focus',
+          title: 'Fix prod issue',
+          dueAtMs: null,
+          status: 'in_progress',
+          sourceEntryId: null,
+          createdAtMs: 0,
+          updatedAtMs: 100,
+          reviewStage: null,
+          nextReviewAtMs: null,
+          lastReviewAtMs: null,
+        ),
+        Todo(
+          id: 'backlog-a',
+          title: 'Backlog A',
+          dueAtMs: null,
+          status: 'open',
+          sourceEntryId: null,
+          createdAtMs: 0,
+          updatedAtMs: 30,
+          reviewStage: null,
+          nextReviewAtMs: null,
+          lastReviewAtMs: null,
+        ),
+        Todo(
+          id: 'backlog-b',
+          title: 'Backlog B',
+          dueAtMs: null,
+          status: 'open',
+          sourceEntryId: null,
+          createdAtMs: 0,
+          updatedAtMs: 20,
+          reviewStage: null,
+          nextReviewAtMs: null,
+          lastReviewAtMs: null,
+        ),
+        Todo(
+          id: 'done',
+          title: 'Already shipped',
+          dueAtMs: null,
+          status: 'done',
+          sourceEntryId: null,
+          createdAtMs: 0,
+          updatedAtMs: 10,
+          reviewStage: null,
+          nextReviewAtMs: null,
+          lastReviewAtMs: null,
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(wrapTaskHubTestApp(backend));
+    await pumpUntilTaskHubReady(tester);
+
+    final sourceFinder = find.byKey(const ValueKey('task_hub_page_item_focus'));
+    final preScrollRect = tester.getRect(sourceFinder);
+    await tester.drag(find.byType(Scrollable).first, const Offset(0, -24));
+    await tester.pumpAndSettle();
+
+    final sourceRect = tester.getRect(sourceFinder);
+    expect((preScrollRect.top - sourceRect.top).abs(), greaterThan(0));
+    await tester.tap(
+      find.byKey(const ValueKey('task_hub_page_quick_focus_done')),
+    );
+    await tester.pump();
+    await pumpUntilFound(
+      tester,
+      find.byKey(const ValueKey('task_hub_priority_animation_overlay')),
+    );
+
+    final overlayRect = tester.getRect(
+      find.byKey(const ValueKey('task_hub_priority_animation_overlay')),
+    );
+    expect((overlayRect.top - sourceRect.top).abs(), lessThan(8));
+    expect((overlayRect.left - sourceRect.left).abs(), lessThan(8));
+  });
+
   testWidgets('done action shows a flying overlay before settling in done',
       (tester) async {
     SharedPreferences.setMockInitialValues({});

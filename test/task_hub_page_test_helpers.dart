@@ -57,9 +57,22 @@ Future<void> pumpUntilTaskHubReady(WidgetTester tester) {
   );
 }
 
-void useLargeViewport(WidgetTester tester) {
+VoidCallback useLargeViewport(WidgetTester tester) {
+  final originalSize = tester.view.physicalSize;
+  final originalDevicePixelRatio = tester.view.devicePixelRatio;
   tester.view.physicalSize = const Size(1200, 1000);
   tester.view.devicePixelRatio = 1.0;
+  var cleanedUp = false;
+
+  void cleanup() {
+    if (cleanedUp) return;
+    cleanedUp = true;
+    tester.view.physicalSize = originalSize;
+    tester.view.devicePixelRatio = originalDevicePixelRatio;
+  }
+
+  addTearDown(cleanup);
+  return cleanup;
 }
 
 Widget wrapTaskHubTestApp(
