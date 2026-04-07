@@ -5,9 +5,7 @@ extension _TaskHubPageStatePriorityAnimation on _TaskHubPageState {
     final pending = _pendingPriorityAnimation;
     final computedAtLocal = snapshot.computedAtLocal;
     if (pending == null || computedAtLocal == null) return;
-    if (pending.baselineComputedAtLocal != null &&
-        computedAtLocal.isAtSameMomentAs(pending.baselineComputedAtLocal!) &&
-        snapshot.resolutionPhase == pending.baselineResolutionPhase) {
+    if (snapshot.refreshGeneration <= pending.baselineRefreshGeneration) {
       return;
     }
 
@@ -123,6 +121,7 @@ final class _TaskHubPendingPriorityAnimation {
     required this.previousSnapshot,
     required this.baselineComputedAtLocal,
     required this.baselineResolutionPhase,
+    required this.baselineRefreshGeneration,
     this.localSnapshot,
   });
 
@@ -132,6 +131,7 @@ final class _TaskHubPendingPriorityAnimation {
   final TaskHubPriorityAnimationSnapshot previousSnapshot;
   final DateTime? baselineComputedAtLocal;
   final TaskPriorityResolutionPhase baselineResolutionPhase;
+  final int baselineRefreshGeneration;
   final TaskHubPriorityAnimationSnapshot? localSnapshot;
 
   int get actionId => localCapture.generation;
@@ -146,6 +146,7 @@ final class _TaskHubPendingPriorityAnimation {
       previousSnapshot: previousSnapshot,
       baselineComputedAtLocal: baselineComputedAtLocal,
       baselineResolutionPhase: baselineResolutionPhase,
+      baselineRefreshGeneration: baselineRefreshGeneration,
       localSnapshot: localSnapshot ?? this.localSnapshot,
     );
   }

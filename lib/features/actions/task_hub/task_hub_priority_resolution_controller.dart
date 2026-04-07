@@ -16,6 +16,7 @@ class TaskHubPriorityResolutionState {
     required this.status,
     required this.baselineComputedAtLocal,
     required this.baselineResolutionPhase,
+    required this.baselineRefreshGeneration,
   });
 
   const TaskHubPriorityResolutionState.idle()
@@ -23,13 +24,15 @@ class TaskHubPriorityResolutionState {
         actionToken = 0,
         status = TaskHubPriorityResolutionStatus.idle,
         baselineComputedAtLocal = null,
-        baselineResolutionPhase = TaskPriorityResolutionPhase.idle;
+        baselineResolutionPhase = TaskPriorityResolutionPhase.idle,
+        baselineRefreshGeneration = 0;
 
   final String? todoId;
   final int actionToken;
   final TaskHubPriorityResolutionStatus status;
   final DateTime? baselineComputedAtLocal;
   final TaskPriorityResolutionPhase baselineResolutionPhase;
+  final int baselineRefreshGeneration;
 
   bool get isIdle =>
       todoId == null || status == TaskHubPriorityResolutionStatus.idle;
@@ -40,6 +43,7 @@ class TaskHubPriorityResolutionState {
     TaskHubPriorityResolutionStatus? status,
     DateTime? baselineComputedAtLocal,
     TaskPriorityResolutionPhase? baselineResolutionPhase,
+    int? baselineRefreshGeneration,
     bool clearTodoId = false,
     bool clearBaselineComputedAtLocal = false,
   }) {
@@ -52,6 +56,8 @@ class TaskHubPriorityResolutionState {
           : (baselineComputedAtLocal ?? this.baselineComputedAtLocal),
       baselineResolutionPhase:
           baselineResolutionPhase ?? this.baselineResolutionPhase,
+      baselineRefreshGeneration:
+          baselineRefreshGeneration ?? this.baselineRefreshGeneration,
     );
   }
 }
@@ -62,6 +68,7 @@ class TaskHubPriorityResolutionController extends ChangeNotifier {
   TaskHubPriorityResolutionState get state => _state;
 
   int _nextActionToken = 0;
+  int? _lastConsumedRefreshGeneration;
   DateTime? _lastConsumedComputedAtLocal;
   TaskPriorityResolutionPhase? _lastConsumedPhase;
 
@@ -81,7 +88,9 @@ class TaskHubPriorityResolutionController extends ChangeNotifier {
     required String todoId,
     required DateTime? baselineComputedAtLocal,
     required TaskPriorityResolutionPhase baselineResolutionPhase,
+    required int baselineRefreshGeneration,
   }) {
+    _lastConsumedRefreshGeneration = null;
     _lastConsumedComputedAtLocal = null;
     _lastConsumedPhase = null;
     _setState(
@@ -91,6 +100,7 @@ class TaskHubPriorityResolutionController extends ChangeNotifier {
         status: TaskHubPriorityResolutionStatus.awaitingLocalFeedback,
         baselineComputedAtLocal: baselineComputedAtLocal,
         baselineResolutionPhase: baselineResolutionPhase,
+        baselineRefreshGeneration: baselineRefreshGeneration,
       ),
     );
   }
@@ -99,11 +109,19 @@ class TaskHubPriorityResolutionController extends ChangeNotifier {
     final current = _state;
     final computedAtLocal = snapshot.computedAtLocal;
     if (current.isIdle || computedAtLocal == null) return;
+    if (snapshot.refreshGeneration <= current.baselineRefreshGeneration) {
+      return;
+    }
 
     final baseline = current.baselineComputedAtLocal;
     if (baseline != null &&
         computedAtLocal.isAtSameMomentAs(baseline) &&
         snapshot.resolutionPhase == current.baselineResolutionPhase) {
+      return;
+    }
+    if (_lastConsumedRefreshGeneration != null &&
+        _lastConsumedRefreshGeneration == snapshot.refreshGeneration &&
+        _lastConsumedPhase == snapshot.resolutionPhase) {
       return;
     }
     if (_lastConsumedComputedAtLocal != null &&
@@ -113,6 +131,7 @@ class TaskHubPriorityResolutionController extends ChangeNotifier {
       return;
     }
 
+    _lastConsumedRefreshGeneration = snapshot.refreshGeneration;
     _lastConsumedComputedAtLocal = computedAtLocal;
     _lastConsumedPhase = snapshot.resolutionPhase;
 
@@ -144,6 +163,7 @@ class TaskHubPriorityResolutionController extends ChangeNotifier {
   }
 
   void clear() {
+    _lastConsumedRefreshGeneration = null;
     _lastConsumedComputedAtLocal = null;
     _lastConsumedPhase = null;
     _setState(const TaskHubPriorityResolutionState.idle());
@@ -168,7 +188,8 @@ class TaskHubPriorityResolutionController extends ChangeNotifier {
         _state.actionToken == next.actionToken &&
         _state.status == next.status &&
         _state.baselineComputedAtLocal == next.baselineComputedAtLocal &&
-        _state.baselineResolutionPhase == next.baselineResolutionPhase) {
+        _state.baselineResolutionPhase == next.baselineResolutionPhase &&
+        _state.baselineRefreshGeneration == next.baselineRefreshGeneration) {
       return;
     }
     _state = next;

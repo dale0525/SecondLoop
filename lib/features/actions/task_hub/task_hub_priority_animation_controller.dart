@@ -77,7 +77,7 @@ class TaskHubPriorityAnimationController extends ChangeNotifier {
   int _animationToken = 0;
   int _actionGeneration = 0;
 
-  TaskHubPriorityAnimationCapture beginAction({
+  TaskHubPriorityAnimationCapture captureAction({
     required String sourceTodoId,
     required String title,
     required TaskHubPriorityAnimationSnapshot snapshot,
@@ -85,18 +85,6 @@ class TaskHubPriorityAnimationController extends ChangeNotifier {
     Rect? sourceRect,
   }) {
     final generation = ++_actionGeneration;
-    _activeOverlay = null;
-    _activeInlineAnimation = reducedMotion
-        ? null
-        : TaskHubPriorityInlineAnimationState(
-            todoId: sourceTodoId,
-            beginOffset: const Offset(0, -18),
-            token: ++_animationToken,
-            duration: const Duration(milliseconds: 180),
-          );
-    _lastPlan = null;
-    _lastAnimationSource = null;
-    notifyListeners();
     return TaskHubPriorityAnimationCapture(
       generation: generation,
       source: TaskHubPriorityAnimationSource.localConfirmation,
@@ -106,6 +94,42 @@ class TaskHubPriorityAnimationController extends ChangeNotifier {
       reducedMotion: reducedMotion,
       sourceRect: sourceRect,
     );
+  }
+
+  void activateLocalFeedback(TaskHubPriorityAnimationCapture capture) {
+    if (capture.generation != _actionGeneration) {
+      return;
+    }
+    _activeOverlay = null;
+    _activeInlineAnimation = capture.reducedMotion
+        ? null
+        : TaskHubPriorityInlineAnimationState(
+            todoId: capture.sourceTodoId,
+            beginOffset: const Offset(0, -18),
+            token: ++_animationToken,
+            duration: const Duration(milliseconds: 180),
+          );
+    _lastPlan = null;
+    _lastAnimationSource = null;
+    notifyListeners();
+  }
+
+  TaskHubPriorityAnimationCapture beginAction({
+    required String sourceTodoId,
+    required String title,
+    required TaskHubPriorityAnimationSnapshot snapshot,
+    required bool reducedMotion,
+    Rect? sourceRect,
+  }) {
+    final capture = captureAction(
+      sourceTodoId: sourceTodoId,
+      title: title,
+      snapshot: snapshot,
+      reducedMotion: reducedMotion,
+      sourceRect: sourceRect,
+    );
+    activateLocalFeedback(capture);
+    return capture;
   }
 
   TaskHubPriorityAnimationCapture prepareAction({
@@ -216,5 +240,20 @@ class TaskHubPriorityAnimationController extends ChangeNotifier {
     }
     _activeInlineAnimation = null;
     notifyListeners();
+  }
+
+  void reset() {
+    final hadState = _activeOverlay != null ||
+        _activeInlineAnimation != null ||
+        _lastPlan != null ||
+        _lastAnimationSource != null;
+    _activeOverlay = null;
+    _activeInlineAnimation = null;
+    _lastPlan = null;
+    _lastAnimationSource = null;
+    _actionGeneration += 1;
+    if (hadState) {
+      notifyListeners();
+    }
   }
 }

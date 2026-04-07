@@ -104,7 +104,7 @@ void main() {
     );
   });
 
-  testWidgets('urgency increase into focus animates with overlay',
+  testWidgets('same-section urgency increase animates inline without overlay',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
     useLargeViewport(tester);
@@ -165,12 +165,16 @@ void main() {
     await tester.pump();
     await pumpUntilFound(
       tester,
-      find.byKey(const ValueKey('task_hub_priority_animation_overlay')),
+      find.byKey(const ValueKey('task_hub_priority_inline_animation_a')),
     );
 
     expect(
-      find.byKey(const ValueKey('task_hub_priority_animation_overlay')),
+      find.byKey(const ValueKey('task_hub_priority_inline_animation_a')),
       findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('task_hub_priority_animation_overlay')),
+      findsNothing,
     );
   });
 
@@ -238,12 +242,12 @@ void main() {
     await tester.pump();
     await pumpUntilFound(
       tester,
-      find.byKey(const ValueKey('task_hub_priority_animation_overlay')),
+      find.byKey(const ValueKey('task_hub_priority_inline_animation_a')),
     );
     await pumpUntil(
       tester,
       () => find
-          .byKey(const ValueKey('task_hub_priority_animation_overlay'))
+          .byKey(const ValueKey('task_hub_priority_inline_animation_a'))
           .evaluate()
           .isEmpty,
     );

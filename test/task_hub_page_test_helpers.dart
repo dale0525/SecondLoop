@@ -113,11 +113,15 @@ final class TaskHubTestBackend extends TestAppBackend {
     this.failTransition = false,
     this.taskPriorityAiResponseJson,
     this.taskPriorityAiResponseCompleter,
+    List<Future<String>> taskPriorityAiResponseFutures =
+        const <Future<String>>[],
     this.listTodosDelay = Duration.zero,
     List<LlmProfile>? llmProfiles,
   })  : _todos = {for (final todo in todos) todo.id: todo},
         _checklistProgress =
             List<TodoChecklistProgress>.from(checklistProgress),
+        _taskPriorityAiResponseFutures =
+            List<Future<String>>.from(taskPriorityAiResponseFutures),
         _llmProfiles = List<LlmProfile>.from(llmProfiles ??
             const <LlmProfile>[
               LlmProfile(
@@ -135,6 +139,8 @@ final class TaskHubTestBackend extends TestAppBackend {
   final Map<String, Todo> _todos;
   int listTodosCallCount = 0;
   final List<TodoChecklistProgress> _checklistProgress;
+  final List<Future<String>> _taskPriorityAiResponseFutures;
+  int _taskPriorityAiResponseFutureIndex = 0;
   final List<LlmProfile> _llmProfiles;
   final bool failTransition;
   final String? taskPriorityAiResponseJson;
@@ -257,6 +263,11 @@ final class TaskHubTestBackend extends TestAppBackend {
     taskPriorityAiCallCount += 1;
     if (taskPriorityAiCallCount == 1 && taskPriorityAiResponseJson != null) {
       return taskPriorityAiResponseJson!;
+    }
+    if (_taskPriorityAiResponseFutureIndex <
+        _taskPriorityAiResponseFutures.length) {
+      return _taskPriorityAiResponseFutures[
+          _taskPriorityAiResponseFutureIndex++];
     }
     final completer = taskPriorityAiResponseCompleter;
     if (completer != null) {

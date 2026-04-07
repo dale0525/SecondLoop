@@ -222,6 +222,7 @@ class TaskPrioritySnapshot {
     required this.orderedActive,
     this.enhancementSource = TaskPriorityEnhancementSource.none,
     this.resolutionPhase = TaskPriorityResolutionPhase.localPublished,
+    this.refreshGeneration = 0,
     List<TaskPriorityEntry>? baseFocus,
     List<TaskPriorityEntry>? baseScheduled,
     List<TaskPriorityEntry>? baseDecide,
@@ -250,11 +251,13 @@ class TaskPrioritySnapshot {
         baseDone = const <TaskPriorityEntry>[],
         baseOrderedActive = const <TaskPriorityEntry>[],
         selectedFocusTodoId = null,
-        computedAtLocal = null;
+        computedAtLocal = null,
+        refreshGeneration = 0;
 
   final TaskPrioritySnapshotSource source;
   final TaskPriorityEnhancementSource enhancementSource;
   final TaskPriorityResolutionPhase resolutionPhase;
+  final int refreshGeneration;
   final List<TaskPriorityEntry> focus;
   final List<TaskPriorityEntry> scheduled;
   final List<TaskPriorityEntry> decide;
@@ -291,6 +294,7 @@ class TaskPrioritySnapshot {
         resolutionPhase: resolutionPhase == TaskPriorityResolutionPhase.idle
             ? TaskPriorityResolutionPhase.idle
             : TaskPriorityResolutionPhase.localPublished,
+        refreshGeneration: refreshGeneration,
         focus: baseFocus,
         scheduled: baseScheduled,
         decide: baseDecide,
@@ -352,6 +356,7 @@ class TaskPrioritySnapshot {
     TaskPrioritySnapshotSource? source,
     TaskPriorityEnhancementSource? enhancementSource,
     TaskPriorityResolutionPhase? resolutionPhase,
+    int? refreshGeneration,
     List<TaskPriorityEntry>? focus,
     List<TaskPriorityEntry>? scheduled,
     List<TaskPriorityEntry>? decide,
@@ -370,6 +375,7 @@ class TaskPrioritySnapshot {
       source: source ?? this.source,
       enhancementSource: enhancementSource ?? this.enhancementSource,
       resolutionPhase: resolutionPhase ?? this.resolutionPhase,
+      refreshGeneration: refreshGeneration ?? this.refreshGeneration,
       focus: focus ?? this.focus,
       scheduled: scheduled ?? this.scheduled,
       decide: decide ?? this.decide,

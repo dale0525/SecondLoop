@@ -157,6 +157,7 @@ class TaskPriorityStore extends ChangeNotifier {
 
   Future<void>? _inflightRefresh;
   bool _refreshQueuedAfterInflight = false;
+  int _refreshGeneration = 0;
   bool _disposed = false;
 
   void markDirty() {
@@ -209,6 +210,7 @@ class TaskPriorityStore extends ChangeNotifier {
 
     try {
       final nowLocal = _nowLocal();
+      final refreshGeneration = ++_refreshGeneration;
       final todos = await _loadTodos();
       try {
         final checklistProgressRows = await _loadChecklistProgress?.call() ??
@@ -226,7 +228,7 @@ class TaskPriorityStore extends ChangeNotifier {
         todos,
         nowLocal: nowLocal,
         feedbackState: feedbackState,
-      );
+      ).copyWith(refreshGeneration: refreshGeneration);
       _dirty = false;
 
       final aiEnhancementEnabled =
@@ -311,6 +313,7 @@ class TaskPriorityStore extends ChangeNotifier {
           feedbackState: feedbackState,
         ).copyWith(
           resolutionPhase: TaskPriorityResolutionPhase.aiResolved,
+          refreshGeneration: refreshGeneration,
         );
       } else {
         _snapshot = rulesSnapshot.copyWith(
@@ -521,6 +524,7 @@ class TaskPriorityStore extends ChangeNotifier {
       hybridSnapshot = _applyStickyFocus(
         hybridSnapshot.copyWith(
           resolutionPhase: TaskPriorityResolutionPhase.aiResolved,
+          refreshGeneration: refreshGeneration,
         ),
         nowLocal: nowLocal,
       );

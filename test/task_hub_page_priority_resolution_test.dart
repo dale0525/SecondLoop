@@ -84,7 +84,7 @@ void main() {
     );
 
     expect(
-      find.byKey(const ValueKey('task_hub_priority_animation_overlay')),
+      find.byKey(const ValueKey('task_hub_priority_inline_animation_a')),
       findsOneWidget,
     );
     expect(

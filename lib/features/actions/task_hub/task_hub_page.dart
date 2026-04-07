@@ -426,6 +426,16 @@ class _TaskHubPageState extends State<TaskHubPage> {
     _cardAnchorRegistry.refresh(todoIds: todoIds);
   }
 
+  void _clearPendingPriorityUiState({bool clearAnimationFeedback = false}) {
+    _priorityAiPendingTimeoutTimer?.cancel();
+    _priorityAiPendingTimeoutTimer = null;
+    _pendingPriorityAnimation = null;
+    _priorityResolutionController.clear();
+    if (clearAnimationFeedback) {
+      _priorityAnimationController.reset();
+    }
+  }
+
   Future<void> _openTodoDetail(TaskPriorityEntry entry) async {
     await Navigator.of(context).push(
       MaterialPageRoute(
@@ -444,17 +454,13 @@ class _TaskHubPageState extends State<TaskHubPage> {
     TaskHubQuickAction action,
   ) async {
     _refreshCardAnchors(todoIds: <String>[entry.todo.id]);
-    final previousSnapshot = _store == null
+    final storeSnapshot = _store?.snapshot;
+    final previousSnapshot = storeSnapshot == null
         ? const TaskHubPriorityAnimationSnapshot()
-        : _visibleAnimationSnapshot(_store!.snapshot);
-    final animationCapture = _priorityAnimationController.beginAction(
-      sourceTodoId: entry.todo.id,
-      title: entry.todo.title,
-      snapshot: previousSnapshot,
-      reducedMotion: _shouldReduceTaskHubMotion(context),
-      sourceRect:
-          _rectInAnimationLayer(_cardAnchorRegistry.rectFor(entry.todo.id)),
-    );
+        : _visibleAnimationSnapshot(storeSnapshot);
+    final sourceRect =
+        _rectInAnimationLayer(_cardAnchorRegistry.rectFor(entry.todo.id));
+    final reducedMotion = _shouldReduceTaskHubMotion(context);
     final backend = AppBackendScope.of(context);
     final sessionKey = SessionScope.of(context).sessionKey;
     final syncEngine = SyncEngineScope.maybeOf(context);
@@ -465,22 +471,47 @@ class _TaskHubPageState extends State<TaskHubPage> {
       checklistProgressByTodoId: _store?.checklistProgressByTodoId ??
           const <String, TodoChecklistProgress>{},
     );
+    final delayAnimationUntilApplied = action == TaskHubQuickAction.done &&
+        await controller.hasIncompleteChecklist(entry.todo);
+    final animationCapture = delayAnimationUntilApplied
+        ? _priorityAnimationController.captureAction(
+            sourceTodoId: entry.todo.id,
+            title: entry.todo.title,
+            snapshot: previousSnapshot,
+            reducedMotion: reducedMotion,
+            sourceRect: sourceRect,
+          )
+        : _priorityAnimationController.beginAction(
+            sourceTodoId: entry.todo.id,
+            title: entry.todo.title,
+            snapshot: previousSnapshot,
+            reducedMotion: reducedMotion,
+            sourceRect: sourceRect,
+          );
     TaskHubUndoTicket? ticket;
     try {
       ticket = await controller.apply(entry.todo, action);
     } catch (error) {
+      _priorityAnimationController.reset();
       _showQuickActionError(error);
       return;
     }
-    if (ticket == null || !mounted) return;
+    if (ticket == null || !mounted) {
+      _priorityAnimationController.reset();
+      return;
+    }
     final appliedTicket = ticket;
     final animatedTodoId =
         appliedTicket.createdTodoId ?? appliedTicket.updatedTodo.id;
+    if (delayAnimationUntilApplied) {
+      _priorityAnimationController.activateLocalFeedback(animationCapture);
+    }
     _priorityResolutionController.startAction(
       todoId: animatedTodoId,
-      baselineComputedAtLocal: _store?.snapshot.computedAtLocal,
+      baselineComputedAtLocal: storeSnapshot?.computedAtLocal,
       baselineResolutionPhase:
-          _store?.snapshot.resolutionPhase ?? TaskPriorityResolutionPhase.idle,
+          storeSnapshot?.resolutionPhase ?? TaskPriorityResolutionPhase.idle,
+      baselineRefreshGeneration: storeSnapshot?.refreshGeneration ?? 0,
     );
     _priorityAiPendingTimeoutTimer?.cancel();
     _priorityAiPendingTimeoutTimer = null;
@@ -489,9 +520,10 @@ class _TaskHubPageState extends State<TaskHubPage> {
       title: appliedTicket.updatedTodo.title,
       localCapture: animationCapture,
       previousSnapshot: previousSnapshot,
-      baselineComputedAtLocal: _store?.snapshot.computedAtLocal,
+      baselineComputedAtLocal: storeSnapshot?.computedAtLocal,
       baselineResolutionPhase:
-          _store?.snapshot.resolutionPhase ?? TaskPriorityResolutionPhase.idle,
+          storeSnapshot?.resolutionPhase ?? TaskPriorityResolutionPhase.idle,
+      baselineRefreshGeneration: storeSnapshot?.refreshGeneration ?? 0,
     );
     _undoTicket = appliedTicket;
     if (appliedTicket.shouldNotifySync) {
@@ -532,6 +564,7 @@ class _TaskHubPageState extends State<TaskHubPage> {
               _showQuickActionError(error);
               return;
             }
+            _clearPendingPriorityUiState(clearAnimationFeedback: true);
             _undoTicket = null;
             if (appliedTicket.shouldNotifySync) {
               syncEngine?.notifyLocalMutation();

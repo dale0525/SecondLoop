@@ -175,9 +175,84 @@ void main() {
         const ValueKey('task_hub_page_quick_focus_tomorrow'),
       ),
     );
+    await tester.pump();
+
+    expect(
+      find.byKey(const ValueKey('task_hub_priority_inline_animation_focus')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey('task_hub_priority_animation_overlay')),
+      findsNothing,
+    );
+
     await _pumpUntilFound(tester, find.textContaining('Save failed'));
 
     expect(find.textContaining('Save failed'), findsOneWidget);
+  });
+
+  testWidgets('cancelling incomplete checklist confirmation does not animate',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final backend = _TaskHubBackend(
+      todos: const <Todo>[
+        Todo(
+          id: 'focus',
+          title: 'Checklist task',
+          dueAtMs: null,
+          status: 'in_progress',
+          sourceEntryId: null,
+          createdAtMs: 0,
+          updatedAtMs: 10,
+          reviewStage: null,
+          nextReviewAtMs: null,
+          lastReviewAtMs: null,
+        ),
+      ],
+      checklistProgress: const <TodoChecklistProgress>[
+        TodoChecklistProgress(
+          todoId: 'focus',
+          doneCount: 0,
+          totalCount: 2,
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(_wrap(backend));
+    await _pumpUntilTaskHubReady(tester);
+
+    await tester.tap(
+      find.byKey(
+        const ValueKey('task_hub_page_quick_focus_done'),
+      ),
+    );
+    await tester.pump();
+
+    expect(
+      find.byKey(const ValueKey('task_hub_priority_inline_animation_focus')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey('task_hub_priority_animation_overlay')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey('task_hub_incomplete_checklist_dialog')),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('task_hub_priority_inline_animation_focus')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey('task_hub_priority_animation_overlay')),
+      findsNothing,
+    );
+    expect(find.byType(SnackBar), findsNothing);
   });
 
   testWidgets('unfinished tasks show score-driven priority controls',
