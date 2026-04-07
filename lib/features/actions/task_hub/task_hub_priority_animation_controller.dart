@@ -1,0 +1,137 @@
+import 'dart:ui';
+
+import 'package:flutter/foundation.dart';
+
+import 'task_hub_priority_animation_plan.dart';
+
+class TaskHubPriorityAnimationCapture {
+  const TaskHubPriorityAnimationCapture({
+    required this.todoId,
+    required this.title,
+    required this.previous,
+    required this.reducedMotion,
+    this.sourceRect,
+  });
+
+  final String todoId;
+  final String title;
+  final TaskHubPriorityAnimationSnapshot previous;
+  final bool reducedMotion;
+  final Rect? sourceRect;
+}
+
+class TaskHubPriorityOverlayState {
+  const TaskHubPriorityOverlayState({
+    required this.todoId,
+    required this.title,
+    required this.beginRect,
+    required this.endRect,
+    this.duration = const Duration(milliseconds: 320),
+  });
+
+  final String todoId;
+  final String title;
+  final Rect beginRect;
+  final Rect endRect;
+  final Duration duration;
+}
+
+class TaskHubPriorityInlineAnimationState {
+  const TaskHubPriorityInlineAnimationState({
+    required this.todoId,
+    required this.beginOffset,
+    required this.token,
+    this.duration = const Duration(milliseconds: 240),
+  });
+
+  final String todoId;
+  final Offset beginOffset;
+  final int token;
+  final Duration duration;
+}
+
+class TaskHubPriorityAnimationController extends ChangeNotifier {
+  TaskHubPriorityOverlayState? _activeOverlay;
+  TaskHubPriorityOverlayState? get activeOverlay => _activeOverlay;
+  TaskHubPriorityInlineAnimationState? _activeInlineAnimation;
+  TaskHubPriorityInlineAnimationState? get activeInlineAnimation =>
+      _activeInlineAnimation;
+
+  TaskHubPriorityAnimationPlan? _lastPlan;
+  TaskHubPriorityAnimationPlan? get lastPlan => _lastPlan;
+  int _animationToken = 0;
+
+  TaskHubPriorityAnimationCapture beginAction({
+    required String todoId,
+    required String title,
+    required TaskHubPriorityAnimationSnapshot snapshot,
+    required bool reducedMotion,
+    Rect? sourceRect,
+  }) {
+    _activeOverlay = null;
+    _activeInlineAnimation = null;
+    _lastPlan = null;
+    notifyListeners();
+    return TaskHubPriorityAnimationCapture(
+      todoId: todoId,
+      title: title,
+      previous: snapshot,
+      reducedMotion: reducedMotion,
+      sourceRect: sourceRect,
+    );
+  }
+
+  void completeAction(
+    TaskHubPriorityAnimationCapture capture, {
+    required TaskHubPriorityAnimationSnapshot next,
+    Rect? targetRect,
+  }) {
+    _lastPlan = buildTaskHubPriorityAnimationPlan(
+      previous: capture.previous,
+      next: next,
+      actedTodoId: capture.todoId,
+      reducedMotion: capture.reducedMotion,
+    );
+    if (_lastPlan?.kind == TaskHubPriorityAnimationKind.crossSectionMove &&
+        capture.sourceRect != null &&
+        targetRect != null) {
+      _activeOverlay = TaskHubPriorityOverlayState(
+        todoId: capture.todoId,
+        title: capture.title,
+        beginRect: capture.sourceRect!,
+        endRect: targetRect,
+      );
+      _activeInlineAnimation = null;
+    } else if (_lastPlan?.kind ==
+            TaskHubPriorityAnimationKind.sameSectionReorder &&
+        capture.sourceRect != null &&
+        targetRect != null) {
+      final delta = capture.sourceRect!.topLeft - targetRect.topLeft;
+      _activeOverlay = null;
+      _activeInlineAnimation = TaskHubPriorityInlineAnimationState(
+        todoId: capture.todoId,
+        beginOffset: delta,
+        token: ++_animationToken,
+      );
+    } else {
+      _activeOverlay = null;
+      _activeInlineAnimation = null;
+    }
+    notifyListeners();
+  }
+
+  void clearOverlay(String todoId) {
+    if (_activeOverlay?.todoId != todoId) return;
+    _activeOverlay = null;
+    notifyListeners();
+  }
+
+  void clearInlineAnimation(String todoId, int token) {
+    final active = _activeInlineAnimation;
+    if (active == null || active.todoId != todoId || active.token != token) {
+      return;
+    }
+    _activeInlineAnimation = null;
+    notifyListeners();
+  }
+}

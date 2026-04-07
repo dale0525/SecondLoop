@@ -4,7 +4,10 @@ import '../../../i18n/strings.g.dart';
 import '../../../src/rust/db.dart';
 import '../../../ui/sl_surface.dart';
 import '../../../ui/sl_tokens.dart';
+import 'task_hub_card_anchor.dart';
+import 'task_hub_entry_card.dart';
 import 'task_hub_page_sections.dart';
+import 'task_hub_priority_animation_controller.dart';
 import 'task_hub_quick_actions.dart';
 import 'task_priority_feedback_store.dart';
 import 'task_priority_models.dart';
@@ -17,6 +20,9 @@ class TaskHubFocusSection extends StatelessWidget {
     required this.onQuickAction,
     this.onFeedback,
     this.restoredTodoId,
+    this.anchorRegistry,
+    this.inlineAnimation,
+    this.onInlineAnimationCompleted,
     super.key,
   });
 
@@ -30,6 +36,9 @@ class TaskHubFocusSection extends StatelessWidget {
     TaskPriorityFeedbackKind feedback,
   )? onFeedback;
   final String? restoredTodoId;
+  final TaskHubCardAnchorRegistry? anchorRegistry;
+  final TaskHubPriorityInlineAnimationState? inlineAnimation;
+  final VoidCallback? onInlineAnimationCompleted;
 
   @override
   Widget build(BuildContext context) {
@@ -61,6 +70,9 @@ class TaskHubFocusSection extends StatelessWidget {
                 onFeedback: onFeedback == null
                     ? null
                     : (feedback) => onFeedback!(entries[i], feedback),
+                anchorRegistry: anchorRegistry,
+                inlineAnimation: inlineAnimation,
+                onInlineAnimationCompleted: onInlineAnimationCompleted,
               ),
               if (i != entries.length - 1)
                 Divider(
