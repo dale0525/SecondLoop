@@ -8,6 +8,7 @@ from pathlib import Path
 from textwrap import dedent
 
 MANIFEST_VERSION = "1.10.0"
+VCREDIST_X64_PACKAGE_IDENTIFIER = "Microsoft.VCRedist.2015+.x64"
 
 
 def compute_sha256_upper(path: Path) -> str:
@@ -177,6 +178,9 @@ def main() -> int:
         f"PackageVersion: {version}",
         f"InstallerType: {installer_type}",
         "UpgradeBehavior: install",
+        "Dependencies:",
+        "  PackageDependencies:",
+        f"    - PackageIdentifier: {VCREDIST_X64_PACKAGE_IDENTIFIER}",
     ]
     if installer_type == "exe":
         installer_manifest_parts.extend(
@@ -189,9 +193,6 @@ def main() -> int:
                 "InstallerSwitches:",
                 "  Silent: --silent",
                 "  SilentWithProgress: --silent",
-                "Dependencies:",
-                "  PackageDependencies:",
-                "    - PackageIdentifier: Microsoft.VCRedist.2015+.x64",
             ],
         )
     if installer_type == "msi":
