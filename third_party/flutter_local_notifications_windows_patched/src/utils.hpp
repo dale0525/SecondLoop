@@ -25,3 +25,4 @@ NotificationData dataFromMap(NativeStringMap map);
 
 std::wstring utf8_to_wstring(const std::string& utf8);
 winrt::guid parseGuid(const std::string& guidString);
+bool tryParseNotificationId(const winrt::hstring& tag, int* value);

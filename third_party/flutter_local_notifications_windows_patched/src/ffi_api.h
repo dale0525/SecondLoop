@@ -86,6 +86,9 @@ FFI_PLUGIN_EXPORT NativePlugin* createPlugin();
 /// Releases the plugin and any resources it was holding onto.
 FFI_PLUGIN_EXPORT void disposePlugin(NativePlugin* ptr);
 
+/// Revokes any registered native notification activation callback for this plugin.
+FFI_PLUGIN_EXPORT void clearPluginRegistration(NativePlugin* ptr);
+
 /// Initializes the plugin and registers the callback to be run when a notification is pressed.
 FFI_PLUGIN_EXPORT bool init(
   NativePlugin* plugin, char* appName, char* aumId, char* guid, char* iconPath,

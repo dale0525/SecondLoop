@@ -6,6 +6,7 @@ import 'package:flutter/widgets.dart';
 
 import '../app/app.dart';
 import '../core/backend/app_backend.dart';
+import '../core/desktop/desktop_window_manager_bootstrap.dart';
 import '../core/desktop/desktop_launch_args.dart';
 import '../core/keyboard/macos_key_event_channel_normalizer.dart';
 import '../core/quick_capture/quick_capture_controller.dart';
@@ -13,7 +14,12 @@ import '../core/update/app_update_service.dart';
 import '../core/sync/background_sync.dart';
 import '../i18n/locale_prefs.dart';
 
-Future<void> runPlatformApp(List<String> args) async {
+Future<void> runPlatformApp(
+  List<String> args, {
+  Future<void> Function()? initializeDesktopWindowManager,
+  Future<void> Function()? startupBootstrapRunner,
+  void Function(Widget app)? appRunner,
+}) async {
   final launchArgs = DesktopLaunchArgs.fromMainArgs(args);
   if (handleDesktopHookInvocationAndExit(launchArgs)) {
     return;
@@ -21,9 +27,49 @@ Future<void> runPlatformApp(List<String> args) async {
 
   WidgetsFlutterBinding.ensureInitialized();
   installMacOsKeyEventChannelNormalizer();
-  unawaited(runStartupBootstrap());
+  await _runDesktopWindowManagerInitialization(
+    initializeDesktopWindowManager ?? _initializeDesktopWindowManagerForStartup,
+  );
+  unawaited((startupBootstrapRunner ?? runStartupBootstrap)());
 
-  runApp(MyApp(launchArgs: launchArgs));
+  (appRunner ?? runApp)(MyApp(launchArgs: launchArgs));
+}
+
+Future<void> _initializeDesktopWindowManagerForStartup() async {
+  if (kIsWeb) {
+    return;
+  }
+
+  switch (defaultTargetPlatform) {
+    case TargetPlatform.windows:
+      await DesktopWindowManagerBootstrap.ensureInitialized();
+      return;
+    case TargetPlatform.macOS:
+    case TargetPlatform.linux:
+    case TargetPlatform.android:
+    case TargetPlatform.iOS:
+    case TargetPlatform.fuchsia:
+      return;
+  }
+}
+
+Future<void> _runDesktopWindowManagerInitialization(
+  Future<void> Function() initializer,
+) async {
+  try {
+    await initializer();
+  } catch (error, stackTrace) {
+    FlutterError.reportError(
+      FlutterErrorDetails(
+        exception: error,
+        stack: stackTrace,
+        library: 'secondloop.startup',
+        context: ErrorDescription(
+          'while initializing desktop window manager for startup',
+        ),
+      ),
+    );
+  }
 }
 
 @visibleForTesting

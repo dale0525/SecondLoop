@@ -10,7 +10,12 @@ cd "${repo_root}"
 source "${repo_root}/scripts/pre_commit_common.sh"
 
 worktree_cache_key="$(printf '%s\n' "${repo_root}" | cksum | awk '{print $1}')"
-rust_target_dir="${repo_root}/.tool/cache/rust-ci-target-${worktree_cache_key}"
+if is_windows_env; then
+  ensure_windows_short_build_paths
+  rust_target_dir="${CARGO_TARGET_DIR%/}"
+else
+  rust_target_dir="${repo_root}/.tool/cache/rust-ci-target-${worktree_cache_key}"
+fi
 
 mkdir -p "${rust_target_dir}"
 

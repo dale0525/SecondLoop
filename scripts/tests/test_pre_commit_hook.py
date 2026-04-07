@@ -150,14 +150,22 @@ class PreCommitHookTests(unittest.TestCase):
     def test_pre_commit_hook_resolves_windows_vulkan_sdk_path(self) -> None:
         script = PRE_COMMIT_COMMON_SCRIPT.read_text(encoding="utf-8")
 
+        self.assertIn('resolve_precommit_temp_root()', script)
+        self.assertIn('make_precommit_temp_dir()', script)
         self.assertIn(".tool/vulkan-sdk", script)
         self.assertIn("1.4.309.0", script)
         self.assertIn("VULKAN_SDK", script)
         self.assertIn("vulkan-1.lib", script)
+        self.assertIn("git rev-parse --git-common-dir", script)
+        self.assertIn("secondloop-precommit-tmp", script)
         self.assertIn("CARGO_TARGET_DIR", script)
         self.assertIn("CARGOKIT_TARGET_TEMP_DIR", script)
         self.assertIn("CARGOKIT_TOOL_TEMP_DIR", script)
-        self.assertIn('short_temp_root="${drive_prefix}/stmp"', script)
+        self.assertIn('temp_root="$(resolve_precommit_temp_root)"', script)
+        self.assertIn("make_precommit_short_path_dir()", script)
+        self.assertIn('short_temp_root="$(make_precommit_short_path_dir sl-t)"', script)
+        self.assertIn('export CARGO_TARGET_DIR="$(make_precommit_short_path_dir sl-ct)"', script)
+        self.assertIn('export CARGOKIT_TARGET_TEMP_DIR="$(make_precommit_short_path_dir sl-ck)"', script)
         self.assertIn('export TMPDIR="${short_temp_root}"', script)
         self.assertIn('export TMP="${short_temp_root}"', script)
         self.assertIn('export TEMP="${short_temp_root}"', script)
@@ -402,6 +410,52 @@ class PreCommitHookTests(unittest.TestCase):
         self.assertIn('source "${repo_root}/scripts/pre_commit_common.sh"', script)
         self.assertNotIn(".fvm/flutter_sdk/bin/dart.bat", script)
         self.assertNotIn(".fvm/flutter_sdk/bin/flutter.bat", script)
+
+    def test_commit_mode_restores_flutter_package_config_after_stash(self) -> None:
+        script = PRE_COMMIT_COMMON_SCRIPT.read_text(
+            encoding="utf-8"
+        ) + "\n" + PRE_COMMIT_COMMIT_MODE_SCRIPT.read_text(encoding="utf-8")
+
+        self.assertIn('package_config_path="${repo_root}/.dart_tool/package_config.json"', script)
+        self.assertIn('if [[ ! -f "${package_config_path}" ]]; then', script)
+        self.assertIn('run_flutter_tool pub get', script)
+
+    def test_commit_mode_auto_stages_pubspec_lock_after_restoring_package_config(self) -> None:
+        script = PRE_COMMIT_COMMON_SCRIPT.read_text(
+            encoding="utf-8"
+        ) + "\n" + PRE_COMMIT_COMMIT_MODE_SCRIPT.read_text(encoding="utf-8")
+
+        self.assertIn('git diff --quiet -- pubspec.lock', script)
+        self.assertIn('git add -- pubspec.lock', script)
+
+    def test_windows_pre_commit_prefers_batch_flutter_and_dart_wrappers(self) -> None:
+        script = PRE_COMMIT_COMMON_SCRIPT.read_text(encoding="utf-8")
+
+        flutter_bat_idx = script.find(
+            'if is_windows_env && [[ -f "${repo_root}/.fvm/flutter_sdk/bin/flutter.bat" ]]; then'
+        )
+        flutter_shell_idx = script.find(
+            'if [[ -x "${repo_root}/.fvm/flutter_sdk/bin/flutter" ]]; then'
+        )
+        dart_bat_idx = script.find(
+            'if is_windows_env && [[ -f "${repo_root}/.fvm/flutter_sdk/bin/dart.bat" ]]; then'
+        )
+        dart_shell_idx = script.find(
+            'if [[ -x "${repo_root}/.fvm/flutter_sdk/bin/dart" ]]; then'
+        )
+
+        self.assertNotEqual(-1, flutter_bat_idx)
+        self.assertNotEqual(-1, flutter_shell_idx)
+        self.assertLess(flutter_bat_idx, flutter_shell_idx)
+        self.assertNotEqual(-1, dart_bat_idx)
+        self.assertNotEqual(-1, dart_shell_idx)
+        self.assertLess(dart_bat_idx, dart_shell_idx)
+
+    def test_windows_pre_commit_forwards_current_working_directory_to_batch_runner(self) -> None:
+        script = PRE_COMMIT_COMMON_SCRIPT.read_text(encoding="utf-8")
+
+        self.assertIn('native_working_dir="$(to_native_windows_path "$(pwd)")"', script)
+        self.assertIn('-WorkingDirectory "${native_working_dir}"', script)
 
     def test_install_git_hooks_configures_post_checkout_and_post_merge(self) -> None:
         script = INSTALL_GIT_HOOKS_SCRIPT.read_text(encoding="utf-8")

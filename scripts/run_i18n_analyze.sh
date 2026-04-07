@@ -41,23 +41,23 @@ resolve_flutter_bin() {
     return 0
   fi
 
-  if [[ -x "${repo_root}/.fvm/flutter_sdk/bin/flutter" ]]; then
-    printf '%s\n' "${repo_root}/.fvm/flutter_sdk/bin/flutter"
-    return 0
-  fi
-
   if is_windows_env && [[ -f "${repo_root}/.fvm/flutter_sdk/bin/flutter.bat" ]]; then
     printf '%s\n' "${repo_root}/.fvm/flutter_sdk/bin/flutter.bat"
     return 0
   fi
 
-  if command -v flutter >/dev/null 2>&1; then
-    command -v flutter
+  if [[ -x "${repo_root}/.fvm/flutter_sdk/bin/flutter" ]]; then
+    printf '%s\n' "${repo_root}/.fvm/flutter_sdk/bin/flutter"
     return 0
   fi
 
   if is_windows_env && command -v flutter.bat >/dev/null 2>&1; then
     command -v flutter.bat
+    return 0
+  fi
+
+  if command -v flutter >/dev/null 2>&1; then
+    command -v flutter
     return 0
   fi
 
@@ -69,6 +69,9 @@ run_windows_batch_tool() {
   local tool_name="$1"
   local tool_bin="$2"
   shift 2
+  local args_dir=""
+  local args_file=""
+  local arg=""
 
   local powershell_bin
   powershell_bin="$(resolve_powershell_bin)" || {
@@ -80,6 +83,16 @@ run_windows_batch_tool() {
   script_path="$(to_native_windows_path "${repo_root}/scripts/run_fvm_tool.ps1")"
   local native_tool_path
   native_tool_path="$(to_native_windows_path "${tool_bin}")"
+  local native_working_dir
+  native_working_dir="$(to_native_windows_path "$(pwd)")"
+  args_dir="$(mktemp -d -t secondloop_i18n_analyze_args.XXXXXX)"
+  args_file="${args_dir}/argv.txt"
+  : > "${args_file}"
+  for arg in "$@"; do
+    printf '%s\0' "${arg}" >> "${args_file}"
+  done
+  local native_args_file
+  native_args_file="$(to_native_windows_path "${args_file}")"
 
   env -u GIT_DIR -u GIT_WORK_TREE -u GIT_INDEX_FILE \
     "${powershell_bin}" \
@@ -88,7 +101,11 @@ run_windows_batch_tool() {
     -File "${script_path}" \
     -Tool "${tool_name}" \
     -ToolPath "${native_tool_path}" \
-    -Command "$@"
+    -WorkingDirectory "${native_working_dir}" \
+    -ArgumentsFile "${native_args_file}"
+  local status=$?
+  rm -rf "${args_dir}" 2>/dev/null || true
+  return "${status}"
 }
 
 run_flutter() {

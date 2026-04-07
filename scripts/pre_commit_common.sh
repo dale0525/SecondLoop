@@ -195,14 +195,62 @@ to_native_windows_path() {
   printf '%s\n' "${path}"
 }
 
-resolve_dart_bin() {
-  if [[ -n "${SECONDLOOP_DART_BIN:-}" ]]; then
-    printf '%s\n' "${SECONDLOOP_DART_BIN}"
+resolve_precommit_temp_root() {
+  local temp_root="${SECONDLOOP_PRECOMMIT_TEMP_ROOT:-}"
+  local git_common_dir=""
+
+  if [[ -n "${temp_root}" ]]; then
+    if command -v cygpath >/dev/null 2>&1; then
+      cygpath -u "${temp_root}" 2>/dev/null && return 0
+    fi
+    printf '%s\n' "${temp_root}"
     return 0
   fi
 
-  if [[ -x "${repo_root}/.fvm/flutter_sdk/bin/dart" ]]; then
-    printf '%s\n' "${repo_root}/.fvm/flutter_sdk/bin/dart"
+  if is_windows_env; then
+    git_common_dir="$(git rev-parse --git-common-dir 2>/dev/null || true)"
+    if [[ -n "${git_common_dir}" ]]; then
+      if command -v cygpath >/dev/null 2>&1; then
+        git_common_dir="$(cygpath -u "${git_common_dir}" 2>/dev/null || echo "${git_common_dir}")"
+      fi
+      printf '%s\n' "${git_common_dir}/secondloop-precommit-tmp"
+      return 0
+    fi
+
+    printf '%s\n' "${repo_root}/.tool/tmp"
+    return 0
+  fi
+
+  if [[ -z "${temp_root}" ]]; then
+    temp_root="${TMPDIR:-${TMP:-${TEMP:-}}}"
+  fi
+
+  if [[ -n "${temp_root}" ]]; then
+    if command -v cygpath >/dev/null 2>&1; then
+      cygpath -u "${temp_root}" 2>/dev/null && return 0
+    fi
+    printf '%s\n' "${temp_root}"
+    return 0
+  fi
+
+  printf '%s\n' "/tmp"
+}
+
+make_precommit_temp_dir() {
+  local prefix="$1"
+  local temp_root
+  temp_root="$(resolve_precommit_temp_root)"
+  mkdir -p "${temp_root}"
+  mktemp -d -p "${temp_root}" "${prefix}.XXXXXX"
+}
+
+make_precommit_short_path_dir() {
+  make_precommit_temp_dir "$1"
+}
+
+resolve_dart_bin() {
+  if [[ -n "${SECONDLOOP_DART_BIN:-}" ]]; then
+    printf '%s\n' "${SECONDLOOP_DART_BIN}"
     return 0
   fi
 
@@ -211,13 +259,18 @@ resolve_dart_bin() {
     return 0
   fi
 
-  if command -v dart >/dev/null 2>&1; then
-    command -v dart
+  if [[ -x "${repo_root}/.fvm/flutter_sdk/bin/dart" ]]; then
+    printf '%s\n' "${repo_root}/.fvm/flutter_sdk/bin/dart"
     return 0
   fi
 
   if is_windows_env && command -v dart.bat >/dev/null 2>&1; then
     command -v dart.bat
+    return 0
+  fi
+
+  if command -v dart >/dev/null 2>&1; then
+    command -v dart
     return 0
   fi
 
@@ -230,23 +283,23 @@ resolve_flutter_bin() {
     return 0
   fi
 
-  if [[ -x "${repo_root}/.fvm/flutter_sdk/bin/flutter" ]]; then
-    printf '%s\n' "${repo_root}/.fvm/flutter_sdk/bin/flutter"
-    return 0
-  fi
-
   if is_windows_env && [[ -f "${repo_root}/.fvm/flutter_sdk/bin/flutter.bat" ]]; then
     printf '%s\n' "${repo_root}/.fvm/flutter_sdk/bin/flutter.bat"
     return 0
   fi
 
-  if command -v flutter >/dev/null 2>&1; then
-    command -v flutter
+  if [[ -x "${repo_root}/.fvm/flutter_sdk/bin/flutter" ]]; then
+    printf '%s\n' "${repo_root}/.fvm/flutter_sdk/bin/flutter"
     return 0
   fi
 
   if is_windows_env && command -v flutter.bat >/dev/null 2>&1; then
     command -v flutter.bat
+    return 0
+  fi
+
+  if command -v flutter >/dev/null 2>&1; then
+    command -v flutter
     return 0
   fi
 
@@ -275,6 +328,9 @@ run_windows_batch_tool() {
   local tool_name="$1"
   local tool_bin="$2"
   shift 2
+  local args_dir=""
+  local args_file=""
+  local arg=""
 
   local powershell_bin
   powershell_bin="$(resolve_powershell_bin)" || die "Missing PowerShell. Install PowerShell or add Flutter/Dart shell shims to PATH."
@@ -283,6 +339,16 @@ run_windows_batch_tool() {
   script_path="$(to_native_windows_path "${repo_root}/scripts/run_fvm_tool.ps1")"
   local native_tool_path
   native_tool_path="$(to_native_windows_path "${tool_bin}")"
+  local native_working_dir
+  native_working_dir="$(to_native_windows_path "$(pwd)")"
+  args_dir="$(make_precommit_temp_dir secondloop_tool_args)"
+  args_file="${args_dir}/argv.txt"
+  : > "${args_file}"
+  for arg in "$@"; do
+    printf '%s\0' "${arg}" >> "${args_file}"
+  done
+  local native_args_file
+  native_args_file="$(to_native_windows_path "${args_file}")"
 
   env -u GIT_DIR -u GIT_WORK_TREE -u GIT_INDEX_FILE \
     "${powershell_bin}" \
@@ -291,7 +357,11 @@ run_windows_batch_tool() {
     -File "${script_path}" \
     -Tool "${tool_name}" \
     -ToolPath "${native_tool_path}" \
-    -Command "$@"
+    -WorkingDirectory "${native_working_dir}" \
+    -ArgumentsFile "${native_args_file}"
+  local status=$?
+  rm -rf "${args_dir}" 2>/dev/null || true
+  return "${status}"
 }
 
 run_dart_tool() {
@@ -316,6 +386,32 @@ run_flutter_tool() {
   fi
 
   env -u GIT_DIR -u GIT_WORK_TREE -u GIT_INDEX_FILE "${flutter_bin}" "$@"
+}
+
+ensure_flutter_package_config() {
+  local package_config_path="${repo_root}/.dart_tool/package_config.json"
+  if [[ ! -f "${package_config_path}" ]]; then
+    echo "pre-commit: restoring Flutter package config after stash..." >&2
+    if ! run_flutter_tool pub get; then
+      echo "" >&2
+      echo "pre-commit: flutter pub get failed." >&2
+      echo "Fix locally with: pixi run flutter pub get" >&2
+      exit 1
+    fi
+  fi
+}
+
+stage_restored_flutter_dependency_outputs() {
+  if [[ ! -f "${repo_root}/pubspec.lock" ]]; then
+    return 0
+  fi
+
+  if git diff --quiet -- pubspec.lock; then
+    return 0
+  fi
+
+  echo "pre-commit: auto-staged pubspec.lock after restoring Flutter package config." >&2
+  git add -- pubspec.lock
 }
 
 resolve_libclang_path() {
@@ -456,24 +552,14 @@ ensure_windows_short_build_paths() {
     return 0
   fi
 
-  local drive_prefix=""
+  local temp_root=""
   local short_temp_root=""
-  if [[ "${repo_root}" =~ ^/([a-zA-Z])(/|$) ]]; then
-    drive_prefix="/${BASH_REMATCH[1]}"
-  fi
-
-  if [[ -n "${drive_prefix}" ]]; then
-    short_temp_root="${drive_prefix}/stmp"
-  else
-    short_temp_root="${repo_root}/.tool/stmp"
-  fi
-  mkdir -p "${short_temp_root}"
+  temp_root="$(resolve_precommit_temp_root)"
+  short_temp_root="$(make_precommit_short_path_dir sl-t)"
 
   if [[ -z "${CARGO_TARGET_DIR:-}" ]]; then
-    if [[ -n "${drive_prefix}" ]]; then
-      export CARGO_TARGET_DIR="${drive_prefix}/ct"
-    elif [[ -n "${short_temp_root}" ]]; then
-      export CARGO_TARGET_DIR="${repo_root}/.tool/ct"
+    if [[ -n "${temp_root}" ]]; then
+      export CARGO_TARGET_DIR="$(make_precommit_short_path_dir sl-ct)"
     elif [[ "${precommit_allow_worktree_writes}" != "1" ]]; then
       export CARGO_TARGET_DIR="$(mktemp -d 2>/dev/null || mktemp -d -t secondloop_ct)"
     else
@@ -483,10 +569,8 @@ ensure_windows_short_build_paths() {
   fi
 
   if [[ -z "${CARGOKIT_TARGET_TEMP_DIR:-}" ]]; then
-    if [[ -n "${drive_prefix}" ]]; then
-      export CARGOKIT_TARGET_TEMP_DIR="${drive_prefix}/ck"
-    elif [[ -n "${short_temp_root}" ]]; then
-      export CARGOKIT_TARGET_TEMP_DIR="${repo_root}/.tool/ck"
+    if [[ -n "${temp_root}" ]]; then
+      export CARGOKIT_TARGET_TEMP_DIR="$(make_precommit_short_path_dir sl-ck)"
     elif [[ "${precommit_allow_worktree_writes}" != "1" ]]; then
       export CARGOKIT_TARGET_TEMP_DIR="$(mktemp -d 2>/dev/null || mktemp -d -t secondloop_ck)"
     else

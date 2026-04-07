@@ -11,12 +11,32 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 SHARD_SCRIPT = REPO_ROOT / "scripts/select_flutter_test_targets.sh"
 
 
-@unittest.skipUnless(shutil.which("bash"), "bash is required")
 class FlutterTestShardingTests(unittest.TestCase):
+    def _resolve_bash(self) -> str | None:
+        bash = shutil.which("bash")
+        if bash is not None and Path(bash).name.lower() == "bash.exe":
+            bash_path = Path(bash)
+            if "system32" not in bash_path.as_posix().lower():
+                return bash
+
+        git = shutil.which("git")
+        if git is None:
+            return bash
+
+        git_bash = Path(git).resolve().parents[1] / "bin" / "bash.exe"
+        if git_bash.exists():
+            return str(git_bash)
+
+        return bash
+
     def _run_shard(self, repo_root: Path, shard_index: int, shard_count: int) -> list[str]:
+        bash = self._resolve_bash()
+        if bash is None:
+            self.skipTest("bash is required")
+
         result = subprocess.run(
             [
-                "bash",
+                bash,
                 SHARD_SCRIPT.as_posix(),
                 "--repo-root",
                 repo_root.as_posix(),
@@ -87,6 +107,10 @@ class FlutterTestShardingTests(unittest.TestCase):
         self.assertEqual(shard_two, [])
 
     def test_select_flutter_test_targets_rejects_out_of_range_shard_index(self) -> None:
+        bash = self._resolve_bash()
+        if bash is None:
+            self.skipTest("bash is required")
+
         with tempfile.TemporaryDirectory() as temp_dir:
             repo_root = Path(temp_dir)
             (repo_root / "test").mkdir(parents=True)
@@ -94,7 +118,7 @@ class FlutterTestShardingTests(unittest.TestCase):
 
             result = subprocess.run(
                 [
-                    "bash",
+                    bash,
                     SHARD_SCRIPT.as_posix(),
                     "--repo-root",
                     repo_root.as_posix(),
@@ -112,6 +136,10 @@ class FlutterTestShardingTests(unittest.TestCase):
         self.assertIn("shard-index must be between 0 and shard-count - 1", result.stderr)
 
     def test_select_flutter_test_targets_allows_missing_integration_test_directory(self) -> None:
+        bash = self._resolve_bash()
+        if bash is None:
+            self.skipTest("bash is required")
+
         with tempfile.TemporaryDirectory() as temp_dir:
             repo_root = Path(temp_dir)
             (repo_root / "test").mkdir(parents=True)
@@ -119,7 +147,7 @@ class FlutterTestShardingTests(unittest.TestCase):
 
             result = subprocess.run(
                 [
-                    "bash",
+                    bash,
                     SHARD_SCRIPT.as_posix(),
                     "--repo-root",
                     repo_root.as_posix(),
@@ -150,6 +178,21 @@ class FlutterTestShardingTests(unittest.TestCase):
             shard_targets = self._run_shard(repo_root, 0, 1)
 
         self.assertEqual(shard_targets, ["test/sample_test.dart"])
+
+    def test_select_flutter_test_targets_excludes_web_app_tests_from_regular_shards(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            repo_root = Path(temp_dir)
+            (repo_root / "test/web_app").mkdir(parents=True)
+            (repo_root / "test/unit").mkdir(parents=True)
+            (repo_root / "test/unit/unit_test.dart").write_text("// stub\n", encoding="utf-8")
+            (repo_root / "test/web_app/web_app_gate_contract_test.dart").write_text(
+                "// web stub\n",
+                encoding="utf-8",
+            )
+
+            shard_targets = self._run_shard(repo_root, 0, 1)
+
+        self.assertEqual(shard_targets, ["test/unit/unit_test.dart"])
 
 
 if __name__ == "__main__":

@@ -17,7 +17,38 @@ RUN_FLUTTER_CI_LOCAL = REPO_ROOT / "scripts/run_flutter_ci_local.sh"
 RUN_PYTHON_TOOLING_CHECKS = REPO_ROOT / "scripts/run_python_tooling_checks.sh"
 
 
-@unittest.skipUnless(shutil.which("bash"), "bash is required")
+def _resolve_git_bash() -> str | None:
+    bash_from_path = shutil.which("bash.exe") or shutil.which("bash")
+    normalized_bash = bash_from_path.lower() if bash_from_path else ""
+    if bash_from_path and all(
+        marker not in normalized_bash for marker in ("system32", "windowsapps")
+    ):
+        return bash_from_path
+
+    git_from_path = shutil.which("git.exe") or shutil.which("git")
+    if git_from_path:
+        git_root = Path(git_from_path).resolve().parent.parent
+        for relative in ("bin/bash.exe", "usr/bin/bash.exe"):
+            candidate = git_root / relative
+            if candidate.exists():
+                return str(candidate)
+
+    for candidate in [
+        Path("C:/Program Files/Git/bin/bash.exe"),
+        Path("C:/Program Files/Git/usr/bin/bash.exe"),
+        Path("C:/Program Files (x86)/Git/bin/bash.exe"),
+        Path("C:/Program Files (x86)/Git/usr/bin/bash.exe"),
+    ]:
+        if candidate.exists():
+            return str(candidate)
+
+    return None
+
+
+BASH_BIN = _resolve_git_bash()
+
+
+@unittest.skipUnless(BASH_BIN, "bash is required")
 @unittest.skipUnless(shutil.which("git"), "git is required")
 class FailFastCiWrapperTests(unittest.TestCase):
     def _run(
@@ -28,8 +59,11 @@ class FailFastCiWrapperTests(unittest.TestCase):
         env: dict[str, str] | None = None,
         timeout: float | None = None,
     ) -> subprocess.CompletedProcess[str]:
+        resolved_args = list(args)
+        if resolved_args and resolved_args[0] == "bash":
+            resolved_args[0] = BASH_BIN or "bash"
         return subprocess.run(
-            args,
+            resolved_args,
             cwd=cwd,
             check=False,
             capture_output=True,
@@ -82,6 +116,7 @@ class FailFastCiWrapperTests(unittest.TestCase):
                 + "\n",
             )
             for relative_path, marker_name in [
+                ("scripts/run_flutter_web_ci_local.sh", "web-cancelled"),
                 ("scripts/run_full_rust_ci_local.sh", "rust-cancelled"),
                 ("scripts/run_python_tooling_checks.sh", "python-cancelled"),
                 ("scripts/run_rust_builder_package_tests.sh", "rust-builder-cancelled"),
@@ -117,10 +152,11 @@ class FailFastCiWrapperTests(unittest.TestCase):
 
             self.assertNotEqual(result.returncode, 0, msg=result.stdout + result.stderr)
             self.assertLess(elapsed, 5, msg=result.stdout + result.stderr)
+            self.assertTrue((marker_dir / "web-cancelled").exists(), msg=result.stdout + result.stderr)
             self.assertTrue((marker_dir / "rust-cancelled").exists(), msg=result.stdout + result.stderr)
-            self.assertTrue((marker_dir / "python-cancelled").exists(), msg=result.stdout + result.stderr)
-            self.assertTrue((marker_dir / "rust-builder-cancelled").exists(), msg=result.stdout + result.stderr)
             self.assertIn("failing-flutter", result.stdout)
+            self.assertIn("ci: cancelling Python tooling verification after Flutter failure", result.stderr)
+            self.assertIn("ci: cancelling Rust builder verification after Flutter failure", result.stderr)
 
     def test_local_rust_ci_wrapper_does_not_start_nextest_after_gate_failure(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -277,6 +313,12 @@ class FailFastCiWrapperTests(unittest.TestCase):
                         "}",
                         "run_flutter_tool() {",
                         "  return 0",
+                        "}",
+                        "is_windows_env() {",
+                        "  return 1",
+                        "}",
+                        "make_precommit_temp_dir() {",
+                        "  mktemp -d",
                         "}",
                     ]
                 )

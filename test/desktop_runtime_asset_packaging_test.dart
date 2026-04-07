@@ -95,6 +95,56 @@ void main() {
     }
   });
 
+  test(
+      'runtime output replacement tolerates extended transient Windows file locks',
+      () async {
+    final outputDir = await Directory.systemTemp.createTemp(
+      'desktop_runtime_output_extended_',
+    );
+    final tempDir = await Directory.systemTemp.createTemp(
+      'desktop_runtime_temp_extended_',
+    );
+    final sourceFile =
+        File('${tempDir.path}${Platform.pathSeparator}runtime.txt')
+          ..writeAsStringSync('ready');
+
+    var renameAttempts = 0;
+
+    try {
+      await runtime.replaceRuntimeOutputDirectoryForTest(
+        outputDir: outputDir,
+        tempDir: tempDir,
+        renameTempDir: (directory, newPath) async {
+          renameAttempts += 1;
+          if (renameAttempts <= 5) {
+            throw PathAccessException(
+              directory.path,
+              const OSError('Access is denied.', 5),
+            );
+          }
+          await directory.rename(newPath);
+        },
+        delay: (_) async {},
+      );
+
+      expect(renameAttempts, 6);
+      expect(Directory(outputDir.path).existsSync(), isTrue);
+      expect(
+        File('${outputDir.path}${Platform.pathSeparator}runtime.txt')
+            .readAsStringSync(),
+        'ready',
+      );
+      expect(sourceFile.existsSync(), isFalse);
+    } finally {
+      if (Directory(outputDir.path).existsSync()) {
+        await Directory(outputDir.path).delete(recursive: true);
+      }
+      if (Directory(tempDir.path).existsSync()) {
+        await Directory(tempDir.path).delete(recursive: true);
+      }
+    }
+  });
+
   test('runtime output replacement restores previous output when promote fails',
       () async {
     final outputDir = await Directory.systemTemp.createTemp(

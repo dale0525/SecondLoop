@@ -176,6 +176,61 @@ void main() {
     expect(scheduler.scheduledPlans.length, 1);
     expect(scheduler.cancelCount, 1);
   });
+
+  test(
+      'retries scheduler initialization on later refresh after a transient startup miss',
+      () async {
+    final scheduler = _RetryingFakeScheduler();
+    final coordinator = ReviewReminderNotificationCoordinator(
+      scheduler: scheduler,
+      nowUtcMs: () => 10000,
+      readTodos: () async => const <Todo>[
+        Todo(
+          id: 'todo:1',
+          title: 'review me',
+          status: 'inbox',
+          createdAtMs: 1,
+          updatedAtMs: 1,
+          reviewStage: 0,
+          nextReviewAtMs: 11000,
+        ),
+      ],
+    );
+
+    await expectLater(coordinator.refresh(), throwsStateError);
+    await coordinator.refresh();
+
+    expect(scheduler.initializedCount, 2);
+    expect(scheduler.scheduledPlans, hasLength(1));
+    expect(scheduler.scheduledPlans.single.items.single.todoId, 'todo:1');
+  });
+
+  test('retries scheduling the same plan after a transient schedule failure',
+      () async {
+    final scheduler = _RetryingScheduleFakeScheduler();
+    final coordinator = ReviewReminderNotificationCoordinator(
+      scheduler: scheduler,
+      nowUtcMs: () => 10000,
+      readTodos: () async => const <Todo>[
+        Todo(
+          id: 'todo:1',
+          title: 'review me',
+          status: 'inbox',
+          createdAtMs: 1,
+          updatedAtMs: 1,
+          reviewStage: 0,
+          nextReviewAtMs: 11000,
+        ),
+      ],
+    );
+
+    await coordinator.refresh();
+    await coordinator.refresh();
+
+    expect(scheduler.scheduleAttempts, 2);
+    expect(scheduler.scheduledPlans, hasLength(1));
+    expect(scheduler.scheduledPlans.single.items.single.todoId, 'todo:1');
+  });
 }
 
 final class _FakeScheduler implements ReviewReminderNotificationScheduler {
@@ -197,7 +252,67 @@ final class _FakeScheduler implements ReviewReminderNotificationScheduler {
   }
 
   @override
-  Future<void> schedule(ReviewReminderPlan plan) async {
+  Future<bool> schedule(ReviewReminderPlan plan) async {
     scheduledPlans.add(plan);
+    return true;
+  }
+}
+
+final class _RetryingFakeScheduler
+    implements ReviewReminderNotificationScheduler {
+  @override
+  bool supportsSystemNotifications = true;
+
+  int initializedCount = 0;
+  final List<ReviewReminderPlan> scheduledPlans = <ReviewReminderPlan>[];
+  bool _ready = false;
+
+  @override
+  Future<void> cancel() async {}
+
+  @override
+  Future<void> ensureInitialized() async {
+    initializedCount += 1;
+    if (initializedCount < 2) {
+      throw StateError('transient init miss');
+    }
+    _ready = true;
+  }
+
+  @override
+  Future<bool> schedule(ReviewReminderPlan plan) async {
+    if (!_ready) {
+      return false;
+    }
+    scheduledPlans.add(plan);
+    return true;
+  }
+}
+
+final class _RetryingScheduleFakeScheduler
+    implements ReviewReminderNotificationScheduler {
+  @override
+  bool supportsSystemNotifications = true;
+
+  int initializedCount = 0;
+  int scheduleAttempts = 0;
+  final List<ReviewReminderPlan> scheduledPlans = <ReviewReminderPlan>[];
+
+  @override
+  Future<void> cancel() async {}
+
+  @override
+  Future<void> ensureInitialized() async {
+    initializedCount += 1;
+  }
+
+  @override
+  Future<bool> schedule(ReviewReminderPlan plan) async {
+    scheduleAttempts += 1;
+    if (scheduleAttempts == 1) {
+      return false;
+    }
+    scheduledPlans.add(plan);
+    return true;
   }
 }

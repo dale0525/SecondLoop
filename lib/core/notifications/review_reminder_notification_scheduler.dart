@@ -47,7 +47,7 @@ abstract interface class ReviewReminderNotificationScheduler {
 
   Future<void> ensureInitialized();
 
-  Future<void> schedule(ReviewReminderPlan plan);
+  Future<bool> schedule(ReviewReminderPlan plan);
 
   Future<void> cancel();
 }
@@ -61,6 +61,7 @@ final class FlutterLocalNotificationsReviewReminderScheduler
         _onTap = onTap;
 
   static const int notificationIdBase = 2026021100;
+  static const int _managedNotificationIdModulo = 1000000;
   static const String reviewQueuePayloadPrefix = 'review_queue:';
   static const String dueTodoPayloadPrefix = 'due_todo:';
 
@@ -101,6 +102,7 @@ final class FlutterLocalNotificationsReviewReminderScheduler
   bool _initialized = false;
   bool _available = true;
   bool _timeZoneInitialized = false;
+  ReviewReminderPlan? _lastSuccessfulPlan;
 
   @override
   bool get supportsSystemNotifications => _available;
@@ -122,12 +124,23 @@ final class FlutterLocalNotificationsReviewReminderScheduler
     );
 
     try {
-      await _plugin.initialize(
+      final didInitialize = await _plugin.initialize(
         initializationSettings,
         onDidReceiveNotificationResponse: (response) {
           _onTap?.call(eventFromResponse(response));
         },
       );
+      if (didInitialize == null) {
+        _available = false;
+        _initialized = true;
+        return;
+      }
+      if (didInitialize != true) {
+        _available = false;
+        throw StateError(
+          'Flutter Local Notifications failed to initialize system notifications',
+        );
+      }
 
       await _cleanupLegacyWindowsArtifactsBestEffort();
 
@@ -145,6 +158,7 @@ final class FlutterLocalNotificationsReviewReminderScheduler
 
     await _requestPermissionsBestEffort();
     _configureTimeZone();
+    _available = true;
     _initialized = true;
   }
 
@@ -216,14 +230,23 @@ final class FlutterLocalNotificationsReviewReminderScheduler
   }
 
   @override
-  Future<void> schedule(ReviewReminderPlan plan) async {
+  Future<bool> schedule(ReviewReminderPlan plan) async {
     await ensureInitialized();
-    if (!_available) return;
+    if (!_available) return false;
 
     _configureTimeZone();
-    if (!_timeZoneInitialized) return;
+    if (!_timeZoneInitialized) return false;
 
-    await _cancelManagedNotifications();
+    final previousPlan = _lastSuccessfulPlan;
+    final isWindowsColdStart =
+        defaultTargetPlatform == TargetPlatform.windows && previousPlan == null;
+    final existingWindowsNotificationIds =
+        isWindowsColdStart ? await _discoverManagedNotificationIds() : <int>{};
+    var completed = true;
+    if (!isWindowsColdStart) {
+      await _cancelManagedNotifications();
+    }
+    final scheduledThisBatch = <int>[];
 
     for (var i = 0; i < plan.items.length; i++) {
       final item = plan.items[i];
@@ -239,7 +262,7 @@ final class FlutterLocalNotificationsReviewReminderScheduler
           : t.actions.agenda.title;
       final details = notificationDetailsForItem(item);
 
-      await _scheduleSingleNotification(
+      final didSchedule = await _scheduleSingleNotification(
         notificationId: notificationId,
         title: title,
         body: item.todoTitle,
@@ -247,13 +270,42 @@ final class FlutterLocalNotificationsReviewReminderScheduler
         details: details,
         payload: payload,
       );
+      if (!didSchedule) {
+        completed = false;
+        await _rollbackScheduledBatch(scheduledThisBatch);
+        if (defaultTargetPlatform == TargetPlatform.windows) {
+          await _markWindowsNotificationsUnavailableForRetry();
+        }
+        if (!isWindowsColdStart) {
+          final didRestore = await _restorePreviousPlanIfNeeded(previousPlan);
+          if (!didRestore) {
+            _lastSuccessfulPlan = null;
+          }
+        }
+        break;
+      }
+      scheduledThisBatch.add(notificationId);
     }
+
+    if (completed && _available) {
+      if (isWindowsColdStart) {
+        final staleExistingIds = existingWindowsNotificationIds.difference(
+          scheduledThisBatch.toSet(),
+        );
+        if (staleExistingIds.isNotEmpty) {
+          await _cancelNotificationBatch(staleExistingIds);
+        }
+      }
+      _lastSuccessfulPlan = plan;
+    }
+    return completed && _available;
   }
 
   @visibleForTesting
   static int notificationIdForItem(ReviewReminderItem item) {
     final key = '${item.kind.name}:${item.todoId}';
-    return notificationIdBase + (_stableHash(key) % 1000000);
+    return notificationIdBase +
+        (_stableHash(key) % _managedNotificationIdModulo);
   }
 
   @visibleForTesting
@@ -428,7 +480,7 @@ final class FlutterLocalNotificationsReviewReminderScheduler
     );
   }
 
-  Future<void> _scheduleSingleNotification({
+  Future<bool> _scheduleSingleNotification({
     required int notificationId,
     required String title,
     required String body,
@@ -451,26 +503,42 @@ final class FlutterLocalNotificationsReviewReminderScheduler
     try {
       await scheduleWithMode(AndroidScheduleMode.exactAllowWhileIdle);
       _managedNotificationIds.add(notificationId);
-      return;
+      return true;
     } on MissingPluginException {
       _available = false;
-      return;
+      return false;
     } on PlatformException {
       // Exact alarms can be blocked on newer Android versions.
-    } catch (_) {
-      return;
+    } catch (error, stackTrace) {
+      _reportSchedulingError(
+        error,
+        stackTrace,
+        notificationId: notificationId,
+        payload: payload,
+      );
+      return false;
     }
 
     try {
       await scheduleWithMode(AndroidScheduleMode.inexactAllowWhileIdle);
       _managedNotificationIds.add(notificationId);
+      return true;
     } on MissingPluginException {
       _available = false;
+      return false;
     } on PlatformException {
-      // ignore
-    } catch (_) {
-      // ignore
+      // Let the caller keep the schedule failure non-fatal when even the inexact
+      // fallback is rejected by the platform.
+    } catch (error, stackTrace) {
+      _reportSchedulingError(
+        error,
+        stackTrace,
+        notificationId: notificationId,
+        payload: payload,
+      );
+      return false;
     }
+    return false;
   }
 
   @override
@@ -479,6 +547,7 @@ final class FlutterLocalNotificationsReviewReminderScheduler
     if (!_available) return;
 
     await _cancelManagedNotifications();
+    _lastSuccessfulPlan = null;
   }
 
   Future<void> _cancelManagedNotifications() async {
@@ -486,26 +555,22 @@ final class FlutterLocalNotificationsReviewReminderScheduler
         ? await _discoverManagedNotificationIds()
         : _managedNotificationIds.toSet();
 
-    if (notificationIds.isEmpty) {
-      for (var i = 0; i < kReviewReminderMaxItems; i++) {
-        await _cancelNotification(notificationIdBase + i);
-      }
-      return;
-    }
-
-    for (final notificationId in notificationIds) {
-      await _cancelNotification(notificationId);
-    }
-    _managedNotificationIds.clear();
+    await _cancelNotificationBatch(
+      notificationIds,
+      clearManagedIds: true,
+      allowFallbackRange: true,
+    );
   }
 
   Future<Set<int>> _discoverManagedNotificationIds() async {
+    final notificationIds = <int>{};
     try {
       final pending = await _plugin.pendingNotificationRequests();
-      return pending
-          .where((request) => decodePayload(request.payload) != null)
-          .map((request) => request.id)
-          .toSet();
+      notificationIds.addAll(
+        pending
+            .where((request) => decodePayload(request.payload) != null)
+            .map((request) => request.id),
+      );
     } on MissingPluginException {
       _available = false;
     } on PlatformException {
@@ -513,7 +578,26 @@ final class FlutterLocalNotificationsReviewReminderScheduler
     } catch (_) {
       // ignore
     }
-    return <int>{};
+
+    if (defaultTargetPlatform == TargetPlatform.windows) {
+      try {
+        final active = await _plugin.getActiveNotifications();
+        notificationIds.addAll(
+          active
+              .map((notification) => notification.id)
+              .whereType<int>()
+              .where(_isManagedNotificationId),
+        );
+      } on MissingPluginException {
+        _available = false;
+      } on PlatformException {
+        // ignore
+      } catch (_) {
+        // ignore
+      }
+    }
+
+    return notificationIds;
   }
 
   Future<void> _cancelNotification(int notificationId) async {
@@ -526,6 +610,115 @@ final class FlutterLocalNotificationsReviewReminderScheduler
     } catch (_) {
       // ignore
     }
+  }
+
+  Future<void> _cancelNotificationBatch(
+    Set<int> notificationIds, {
+    bool clearManagedIds = false,
+    bool allowFallbackRange = false,
+  }) async {
+    if (notificationIds.isEmpty) {
+      if (allowFallbackRange) {
+        for (var i = 0; i < kReviewReminderMaxItems; i++) {
+          await _cancelNotification(notificationIdBase + i);
+        }
+      }
+      if (clearManagedIds) {
+        _managedNotificationIds.clear();
+      }
+      return;
+    }
+
+    for (final notificationId in notificationIds) {
+      await _cancelNotification(notificationId);
+      if (!clearManagedIds) {
+        _managedNotificationIds.remove(notificationId);
+      }
+    }
+    if (clearManagedIds) {
+      _managedNotificationIds.clear();
+    }
+  }
+
+  Future<void> _rollbackScheduledBatch(
+    List<int> scheduledNotificationIds,
+  ) async {
+    if (scheduledNotificationIds.isEmpty) {
+      return;
+    }
+
+    for (final notificationId in scheduledNotificationIds.reversed) {
+      await _cancelNotification(notificationId);
+      _managedNotificationIds.remove(notificationId);
+    }
+  }
+
+  Future<void> _markWindowsNotificationsUnavailableForRetry() async {
+    _available = false;
+    _initialized = false;
+    await _disposeWindowsNotificationsPluginBestEffort();
+  }
+
+  Future<void> _disposeWindowsNotificationsPluginBestEffort() async {
+    if (defaultTargetPlatform != TargetPlatform.windows) {
+      return;
+    }
+
+    try {
+      final windowsImpl = _plugin.resolvePlatformSpecificImplementation<
+          FlutterLocalNotificationsWindows>();
+      windowsImpl?.dispose();
+    } catch (_) {
+      // ignore
+    }
+  }
+
+  Future<bool> _restorePreviousPlanIfNeeded(
+    ReviewReminderPlan? previousPlan,
+  ) async {
+    if (previousPlan == null || previousPlan.items.isEmpty) {
+      return false;
+    }
+
+    if (defaultTargetPlatform == TargetPlatform.windows) {
+      await ensureInitialized();
+      if (!_available) {
+        return false;
+      }
+    }
+
+    final restoredNotificationIds = <int>[];
+    for (final item in previousPlan.items) {
+      final notificationId = notificationIdForItem(item);
+      final didRestore = await _scheduleSingleNotification(
+        notificationId: notificationId,
+        title: item.kind == ReviewReminderItemKind.reviewQueue
+            ? t.actions.reviewQueue.title
+            : t.actions.agenda.title,
+        body: item.todoTitle,
+        scheduleAt: tz.TZDateTime.from(
+          DateTime.fromMillisecondsSinceEpoch(
+            item.scheduleAtUtcMs,
+            isUtc: true,
+          ),
+          tz.local,
+        ),
+        details: notificationDetailsForItem(item),
+        payload: encodePayload(item),
+      );
+      if (!didRestore) {
+        await _rollbackScheduledBatch(restoredNotificationIds);
+        _lastSuccessfulPlan = null;
+        if (defaultTargetPlatform == TargetPlatform.windows) {
+          await _markWindowsNotificationsUnavailableForRetry();
+        }
+        return false;
+      }
+      restoredNotificationIds.add(notificationId);
+    }
+
+    _lastSuccessfulPlan = previousPlan;
+    return true;
   }
 
   static _WindowsQuickActionLaunch? _decodeWindowsQuickActionArguments(
@@ -581,5 +774,36 @@ final class FlutterLocalNotificationsReviewReminderScheduler
       value = (value * 0x01000193) & 0x7fffffff;
     }
     return value;
+  }
+
+  static bool _isManagedNotificationId(int notificationId) {
+    return notificationId >= notificationIdBase &&
+        notificationId < notificationIdBase + _managedNotificationIdModulo;
+  }
+
+  void _reportSchedulingError(
+    Object error,
+    StackTrace stackTrace, {
+    required int notificationId,
+    required String? payload,
+  }) {
+    FlutterError.reportError(
+      FlutterErrorDetails(
+        exception: error,
+        stack: stackTrace,
+        library: 'secondloop.notifications',
+        context: ErrorDescription(
+          'while scheduling review reminder system notification',
+        ),
+        informationCollector: () sync* {
+          yield DiagnosticsProperty<int>('notificationId', notificationId);
+          yield DiagnosticsProperty<String?>('payload', payload);
+          yield DiagnosticsProperty<TargetPlatform>(
+            'platform',
+            defaultTargetPlatform,
+          );
+        },
+      ),
+    );
   }
 }

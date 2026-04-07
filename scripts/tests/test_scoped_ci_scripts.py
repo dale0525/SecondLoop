@@ -19,12 +19,46 @@ RUN_RUST_BUILDER_PACKAGE_TESTS = REPO_ROOT / "scripts/run_rust_builder_package_t
 SELECT_FLUTTER_TEST_TARGETS = REPO_ROOT / "scripts/select_flutter_test_targets.sh"
 
 
-@unittest.skipUnless(shutil.which("bash"), "bash is required")
+def _resolve_git_bash() -> str | None:
+    bash_from_path = shutil.which("bash.exe") or shutil.which("bash")
+    normalized_bash = bash_from_path.lower() if bash_from_path else ""
+    if bash_from_path and all(
+        marker not in normalized_bash for marker in ("system32", "windowsapps")
+    ):
+        return bash_from_path
+
+    git_from_path = shutil.which("git.exe") or shutil.which("git")
+    if git_from_path:
+        git_root = Path(git_from_path).resolve().parent.parent
+        for relative in ("bin/bash.exe", "usr/bin/bash.exe"):
+            candidate = git_root / relative
+            if candidate.exists():
+                return str(candidate)
+
+    for candidate in [
+        Path("C:/Program Files/Git/bin/bash.exe"),
+        Path("C:/Program Files/Git/usr/bin/bash.exe"),
+        Path("C:/Program Files (x86)/Git/bin/bash.exe"),
+        Path("C:/Program Files (x86)/Git/usr/bin/bash.exe"),
+    ]:
+        if candidate.exists():
+            return str(candidate)
+
+    return None
+
+
+BASH_BIN = _resolve_git_bash()
+
+
+@unittest.skipUnless(BASH_BIN, "bash is required")
 @unittest.skipUnless(shutil.which("git"), "git is required")
 class ScopedCiScriptBehaviorTests(unittest.TestCase):
     def _run(self, args: list[str], *, cwd: Path, input_text: str | None = None) -> subprocess.CompletedProcess[str]:
+        resolved_args = list(args)
+        if resolved_args and resolved_args[0] == "bash":
+            resolved_args[0] = BASH_BIN or "bash"
         return subprocess.run(
-            args,
+            resolved_args,
             cwd=cwd,
             input=input_text,
             check=False,
@@ -73,7 +107,7 @@ class ScopedCiScriptBehaviorTests(unittest.TestCase):
                     [
                         "#!/usr/bin/env bash",
                         "set -euo pipefail",
-                        f"printf '%s\\n' '{marker}' >> \"{repo_root / 'hook.log'}\"",
+                        f"printf '%s\\n' '{marker}' >> \"{(repo_root / 'hook.log').as_posix()}\"",
                     ]
                 )
                 + "\n",
@@ -355,6 +389,14 @@ class ScopedCiScriptBehaviorTests(unittest.TestCase):
                         "run_flutter_tool() {",
                         "  return 0",
                         "}",
+                        "",
+                        "is_windows_env() {",
+                        "  return 1",
+                        "}",
+                        "",
+                        "make_precommit_temp_dir() {",
+                        "  mktemp -d",
+                        "}",
                     ]
                 )
                 + "\n",
@@ -409,7 +451,7 @@ class ScopedCiScriptBehaviorTests(unittest.TestCase):
             self._commit_all(repo_root, "fixture")
 
             result = subprocess.run(
-                ["bash", "scripts/run_flutter_ci_local.sh"],
+                [BASH_BIN or "bash", "scripts/run_flutter_ci_local.sh"],
                 cwd=repo_root,
                 check=False,
                 capture_output=True,
@@ -481,6 +523,14 @@ class ScopedCiScriptBehaviorTests(unittest.TestCase):
                         "run_flutter_tool() {",
                         "  return 0",
                         "}",
+                        "",
+                        "is_windows_env() {",
+                        "  return 1",
+                        "}",
+                        "",
+                        "make_precommit_temp_dir() {",
+                        "  mktemp -d",
+                        "}",
                     ]
                 )
                 + "\n",
@@ -517,7 +567,7 @@ class ScopedCiScriptBehaviorTests(unittest.TestCase):
             self._commit_all(repo_root, "fixture")
 
             result = subprocess.run(
-                ["bash", "scripts/run_flutter_ci_local.sh"],
+                [BASH_BIN or "bash", "scripts/run_flutter_ci_local.sh"],
                 cwd=repo_root,
                 check=False,
                 capture_output=True,
@@ -580,6 +630,14 @@ class ScopedCiScriptBehaviorTests(unittest.TestCase):
                         "run_flutter_tool() {",
                         "  return 0",
                         "}",
+                        "",
+                        "is_windows_env() {",
+                        "  return 1",
+                        "}",
+                        "",
+                        "make_precommit_temp_dir() {",
+                        "  mktemp -d",
+                        "}",
                     ]
                 )
                 + "\n",
@@ -631,7 +689,7 @@ class ScopedCiScriptBehaviorTests(unittest.TestCase):
             (test_dir / "new_test.dart").write_text("new test\n", encoding="utf-8")
 
             result = subprocess.run(
-                ["bash", "scripts/run_flutter_ci_local.sh"],
+                [BASH_BIN or "bash", "scripts/run_flutter_ci_local.sh"],
                 cwd=repo_root,
                 check=False,
                 capture_output=True,
@@ -694,6 +752,14 @@ class ScopedCiScriptBehaviorTests(unittest.TestCase):
                         "run_flutter_tool() {",
                         "  return 0",
                         "}",
+                        "",
+                        "is_windows_env() {",
+                        "  return 1",
+                        "}",
+                        "",
+                        "make_precommit_temp_dir() {",
+                        "  mktemp -d",
+                        "}",
                     ]
                 )
                 + "\n",
@@ -737,7 +803,7 @@ class ScopedCiScriptBehaviorTests(unittest.TestCase):
             self._commit_all(repo_root, "fixture")
 
             result = subprocess.run(
-                ["bash", "scripts/run_flutter_ci_local.sh"],
+                [BASH_BIN or "bash", "scripts/run_flutter_ci_local.sh"],
                 cwd=repo_root,
                 check=False,
                 capture_output=True,
@@ -801,6 +867,14 @@ class ScopedCiScriptBehaviorTests(unittest.TestCase):
                         "  local flutter_bin",
                         "  flutter_bin=\"$(resolve_flutter_bin)\"",
                         "  env -u GIT_DIR -u GIT_WORK_TREE -u GIT_INDEX_FILE \"${flutter_bin}\" \"$@\"",
+                        "}",
+                        "",
+                        "is_windows_env() {",
+                        "  return 1",
+                        "}",
+                        "",
+                        "make_precommit_temp_dir() {",
+                        "  mktemp -d",
                         "}",
                     ]
                 )
@@ -886,7 +960,7 @@ class ScopedCiScriptBehaviorTests(unittest.TestCase):
             self._commit_all(repo_root, "fixture")
 
             result = subprocess.run(
-                ["bash", "scripts/run_flutter_ci_local.sh"],
+                [BASH_BIN or "bash", "scripts/run_flutter_ci_local.sh"],
                 cwd=repo_root,
                 check=False,
                 capture_output=True,
@@ -899,7 +973,7 @@ class ScopedCiScriptBehaviorTests(unittest.TestCase):
 
             self.assertEqual(result.returncode, 0, msg=result.stdout + result.stderr)
             flutter_log = (repo_root / ".git/flutter.log").read_text(encoding="utf-8").splitlines()
-            self.assertEqual(sum("|pub get" in line for line in flutter_log), 1)
+            self.assertEqual(sum("|pub get" in line for line in flutter_log), 3)
             package_config_log = (repo_root / ".git/package-config.log").read_text(encoding="utf-8").splitlines()
             self.assertEqual(len([line for line in package_config_log if line.startswith("refresh:")]), 1)
             self.assertEqual(len([line for line in package_config_log if line.startswith("shard:")]), 2)

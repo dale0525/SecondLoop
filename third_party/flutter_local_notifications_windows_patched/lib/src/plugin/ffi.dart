@@ -9,6 +9,36 @@ import '../ffi/utils.dart';
 
 import 'base.dart';
 
+typedef NativeNotificationCallbackHandleFactory
+    = NativeNotificationCallbackHandle Function(
+  void Function(NativeLaunchDetails details) callback,
+);
+
+abstract interface class NativeNotificationCallbackHandle {
+  NativeNotificationCallback get nativeFunction;
+
+  void close();
+}
+
+final class _ListenerNativeNotificationCallbackHandle
+    implements NativeNotificationCallbackHandle {
+  _ListenerNativeNotificationCallbackHandle(
+    void Function(NativeLaunchDetails details) callback,
+  ) : _callable = NativeCallable<NativeNotificationCallbackFunction>.listener(
+          callback,
+        );
+
+  final NativeCallable<NativeNotificationCallbackFunction> _callable;
+
+  @override
+  NativeNotificationCallback get nativeFunction => _callable.nativeFunction;
+
+  @override
+  void close() {
+    _callable.close();
+  }
+}
+
 void _globalLaunchCallback(NativeLaunchDetails details) {
   FlutterLocalNotificationsWindows.instance?._onNotificationReceived(details);
 }
@@ -25,7 +55,27 @@ extension on String {
 /// The Windows implementation of `package:flutter_local_notifications`.
 class FlutterLocalNotificationsWindows extends WindowsNotificationsBase {
   /// Creates an instance of the native plugin.
-  FlutterLocalNotificationsWindows();
+  FlutterLocalNotificationsWindows({
+    DynamicLibrary? library,
+    NotificationsPluginBindings? bindings,
+    NativeNotificationCallbackHandleFactory? callbackHandleFactory,
+  }) : this._(
+          library: library ??
+              DynamicLibrary.open(
+                'flutter_local_notifications_windows.dll',
+              ),
+          bindings: bindings,
+          callbackHandleFactory: callbackHandleFactory,
+        );
+
+  FlutterLocalNotificationsWindows._({
+    required DynamicLibrary library,
+    NotificationsPluginBindings? bindings,
+    NativeNotificationCallbackHandleFactory? callbackHandleFactory,
+  })  : _library = library,
+        _bindings = bindings ?? NotificationsPluginBindings(library),
+        _callbackHandleFactory = callbackHandleFactory ??
+            _ListenerNativeNotificationCallbackHandle.new;
 
   /// Registers the Windows implementation with Flutter.
   static void registerWith() {
@@ -36,15 +86,15 @@ class FlutterLocalNotificationsWindows extends WindowsNotificationsBase {
   /// The global instance of this plugin. Used in [_globalLaunchCallback].
   static FlutterLocalNotificationsWindows? instance;
 
-  /// The FFI generated bindings to the native code.
-  late final NotificationsPluginBindings _bindings =
-      NotificationsPluginBindings(_library);
+  final DynamicLibrary _library;
 
-  final DynamicLibrary _library =
-      DynamicLibrary.open('flutter_local_notifications_windows.dll');
+  /// The FFI generated bindings to the native code.
+  final NotificationsPluginBindings _bindings;
+  final NativeNotificationCallbackHandleFactory _callbackHandleFactory;
 
   /// A pointer to the C++ handler class.
-  late final Pointer<NativePlugin> _plugin;
+  Pointer<NativePlugin>? _plugin;
+  NativeNotificationCallbackHandle? _callbackHandle;
 
   bool _isReady = false;
 
@@ -67,7 +117,6 @@ class FlutterLocalNotificationsWindows extends WindowsNotificationsBase {
         if (_isReady) {
           return true;
         }
-        _plugin = _bindings.createPlugin();
         // The C++ code will crash if there's an invalid GUID, so check it here
         if (!settings.guid.isValidGuid) {
           throw ArgumentError.value(
@@ -77,33 +126,84 @@ class FlutterLocalNotificationsWindows extends WindowsNotificationsBase {
                 ' format.\nYou can get one by searching GUID generators online',
           );
         }
-        instance = this;
-        userCallback = onNotificationReceived;
-        final Pointer<Utf8> appName =
-            settings.appName.toNativeUtf8(allocator: arena);
-        final Pointer<Utf8> aumId =
-            settings.appUserModelId.toNativeUtf8(allocator: arena);
-        final Pointer<Utf8> guid = settings.guid.toNativeUtf8(allocator: arena);
-        final Pointer<Utf8> iconPath =
-            settings.iconPath?.toNativeUtf8(allocator: arena) ?? nullptr;
-        final NativeNotificationCallback callback =
-            NativeCallable<NativeNotificationCallbackFunction>.listener(
-          _globalLaunchCallback,
-        ).nativeFunction;
-        final bool result =
-            _bindings.init(_plugin, appName, aumId, guid, iconPath, callback);
-        _isReady = result;
-        return result;
+        final plugin = _bindings.createPlugin();
+        NativeNotificationCallbackHandle? callbackHandle;
+        var shouldDisposePlugin = true;
+        var shouldCloseCallbackHandle = true;
+        try {
+          callbackHandle = _callbackHandleFactory(_globalLaunchCallback);
+          instance = this;
+          userCallback = onNotificationReceived;
+          final Pointer<Utf8> appName =
+              settings.appName.toNativeUtf8(allocator: arena);
+          final Pointer<Utf8> aumId =
+              settings.appUserModelId.toNativeUtf8(allocator: arena);
+          final Pointer<Utf8> guid =
+              settings.guid.toNativeUtf8(allocator: arena);
+          final Pointer<Utf8> iconPath =
+              settings.iconPath?.toNativeUtf8(allocator: arena) ?? nullptr;
+          final bool result = _bindings.init(
+            plugin,
+            appName,
+            aumId,
+            guid,
+            iconPath,
+            callbackHandle.nativeFunction,
+          );
+          if (!result) {
+            instance = null;
+            userCallback = null;
+            return false;
+          }
+          _plugin = plugin;
+          _callbackHandle = callbackHandle;
+          _isReady = true;
+          shouldDisposePlugin = false;
+          shouldCloseCallbackHandle = false;
+          return true;
+        } catch (_) {
+          instance = null;
+          userCallback = null;
+          rethrow;
+        } finally {
+          if (shouldDisposePlugin) {
+            _bindings.clearPluginRegistration(plugin);
+            _bindings.disposePlugin(plugin);
+          }
+          if (shouldCloseCallbackHandle) {
+            callbackHandle?.close();
+          }
+        }
       });
 
   @override
   void dispose() {
-    if (!_isReady) {
+    final wasReady = _isReady;
+
+    if (_details != null) {
+      _bindings.freeLaunchDetails(_details!);
+      _details = null;
+    }
+    final plugin = _plugin;
+    if (wasReady && plugin != null) {
+      _bindings.clearPluginRegistration(plugin);
+    }
+    userCallback = null;
+    if (identical(instance, this)) {
+      instance = null;
+    }
+    _disposeCallbackHandle();
+    if (!wasReady) {
       return;
     }
-    _bindings.disposePlugin(_plugin);
-    instance = null;
+    _bindings.disposePlugin(plugin!);
+    _plugin = null;
     _isReady = false;
+  }
+
+  void _disposeCallbackHandle() {
+    _callbackHandle?.close();
+    _callbackHandle = null;
   }
 
   void _onNotificationReceived(NativeLaunchDetails details) {
@@ -151,7 +251,7 @@ class FlutterLocalNotificationsWindows extends WindowsNotificationsBase {
         'Flutter Local Notifications must be initialized before use',
       );
     }
-    _bindings.cancelNotification(_plugin, id);
+    _bindings.cancelNotification(_plugin!, id);
   }
 
   @override
@@ -161,7 +261,7 @@ class FlutterLocalNotificationsWindows extends WindowsNotificationsBase {
         'Flutter Local Notifications must be initialized before use',
       );
     }
-    _bindings.cancelAll(_plugin);
+    _bindings.cancelAll(_plugin!);
   }
 
   @override
@@ -174,7 +274,7 @@ class FlutterLocalNotificationsWindows extends WindowsNotificationsBase {
         }
         final Pointer<Int> length = arena<Int>();
         final Pointer<NativeNotificationDetails> array =
-            _bindings.getActiveNotifications(_plugin, length);
+            _bindings.getActiveNotifications(_plugin!, length);
         final List<ActiveNotification> result =
             array.asActiveNotifications(length.value);
         _bindings.freeDetailsArray(array);
@@ -191,7 +291,7 @@ class FlutterLocalNotificationsWindows extends WindowsNotificationsBase {
             }
             final Pointer<Int> length = arena<Int>();
             final Pointer<NativeNotificationDetails> array =
-                _bindings.getPendingNotifications(_plugin, length);
+                _bindings.getPendingNotifications(_plugin!, length);
             final List<PendingNotificationRequest> result =
                 array.asPendingRequests(length.value);
             _bindings.freeDetailsArray(array);
@@ -269,7 +369,7 @@ class FlutterLocalNotificationsWindows extends WindowsNotificationsBase {
           details: details,
         );
         final bool result = _bindings.showNotification(
-          _plugin,
+          _plugin!,
           id,
           xml.toNativeUtf8(allocator: arena),
           nativeMap,
@@ -293,7 +393,7 @@ class FlutterLocalNotificationsWindows extends WindowsNotificationsBase {
             'Flutter Local Notifications must be initialized before use',
           );
         }
-        final bool result = _bindings.showNotification(_plugin, id,
+        final bool result = _bindings.showNotification(_plugin!, id,
             xml.toNativeUtf8(allocator: arena), bindings.toNativeMap(arena));
         if (!result) {
           throw ArgumentError('Flutter Local Notifications: Invalid XML');
@@ -335,12 +435,17 @@ class FlutterLocalNotificationsWindows extends WindowsNotificationsBase {
         );
         final int secondsSinceEpoch =
             scheduledDate.millisecondsSinceEpoch ~/ 1000;
-        _bindings.scheduleNotification(
-          _plugin,
+        final bool result = _bindings.scheduleNotification(
+          _plugin!,
           id,
           xml.toNativeUtf8(allocator: arena),
           secondsSinceEpoch,
         );
+        if (!result) {
+          throw Exception(
+            'Flutter Local Notifications could not schedule notification',
+          );
+        }
       });
 
   @override
@@ -364,12 +469,17 @@ class FlutterLocalNotificationsWindows extends WindowsNotificationsBase {
         }
         final int secondsSinceEpoch =
             scheduledDate.millisecondsSinceEpoch ~/ 1000;
-        _bindings.scheduleNotification(
-          _plugin,
+        final bool result = _bindings.scheduleNotification(
+          _plugin!,
           id,
           xml.toNativeUtf8(allocator: arena),
           secondsSinceEpoch,
         );
+        if (!result) {
+          throw Exception(
+            'Flutter Local Notifications could not schedule notification',
+          );
+        }
       });
 
   @override
@@ -384,7 +494,7 @@ class FlutterLocalNotificationsWindows extends WindowsNotificationsBase {
           );
         }
         final NativeUpdateResult result = _bindings.updateNotification(
-            _plugin, id, bindings.toNativeMap(arena));
+            _plugin!, id, bindings.toNativeMap(arena));
         return getUpdateResult(result);
       });
 }

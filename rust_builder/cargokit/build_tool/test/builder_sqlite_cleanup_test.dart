@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:path/path.dart' as path;
 import 'package:test/test.dart';
 
 import '../lib/src/builder.dart';
@@ -123,7 +124,10 @@ void main() {
     );
 
     final outputDir = await builder.build();
-    expect(outputDir, '$targetTempDir/armv7-linux-androideabi/release');
+    expect(
+      path.normalize(outputDir),
+      path.normalize('$targetTempDir/armv7-linux-androideabi/release'),
+    );
     expect(buildAttempts, 2);
 
     for (final stale in [...staleDirs, ...staleFiles]) {

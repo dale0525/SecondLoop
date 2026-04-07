@@ -300,6 +300,7 @@ cp -R "\$src" "\$dst"
       expect(Directory('${appBundle.path}.failed').existsSync(), isFalse);
       expect(tempRoot.existsSync(), isFalse);
     },
+    skip: Platform.isWindows ? 'requires POSIX shell host' : false,
   );
 
   test(
@@ -386,6 +387,7 @@ cp -R "\$src" "\$dst"
       expect(Directory('${appBundle.path}.failed').existsSync(), isFalse);
       expect(tempRoot.existsSync(), isFalse);
     },
+    skip: Platform.isWindows ? 'requires POSIX shell host' : false,
   );
 
   test(
@@ -468,6 +470,7 @@ cp -R "\$src" "\$dst"
       expect(Directory('${appBundle.path}.failed').existsSync(), isFalse);
       expect(tempRoot.existsSync(), isFalse);
     },
+    skip: Platform.isWindows ? 'requires POSIX shell host' : false,
   );
 
   test(
@@ -586,6 +589,7 @@ cp -R "\$src" "\$dst"
       expect(Directory('${appBundle.path}.failed').existsSync(), isFalse);
       expect(tempRoot.existsSync(), isFalse);
     },
+    skip: Platform.isWindows ? 'requires POSIX shell host' : false,
   );
 }
 

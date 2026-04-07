@@ -45,6 +45,13 @@ done
 cd "${repo_root}"
 source "${repo_root}/scripts/pre_commit_common.sh"
 
+if is_windows_env; then
+  resolve_cargo_bin || cargo_missing_message
+  resolve_libclang_path || libclang_missing_message
+  resolve_vulkan_sdk_root || vulkan_sdk_missing_message
+  ensure_windows_short_build_paths
+fi
+
 create_macos_xcrun_wrapper() {
   local wrapper_dir
   wrapper_dir="$(mktemp -d -t secondloop_xcrun.XXXXXX)" ||
@@ -76,6 +83,49 @@ run_linux_integration_test() {
   env -u GIT_DIR -u GIT_WORK_TREE -u GIT_INDEX_FILE \
     xvfb-run -a --server-args="-screen 0 1280x720x24" \
     "${flutter_bin}" test -d "${integration_test_device}" --concurrency=1 "${target}"
+}
+
+run_flutter_unit_tests_in_batches() {
+  local batch_index=1
+  local batch_chars=0
+  local max_batch_chars=1000000
+  local max_batch_targets=1000000
+  local target
+  local target_chars
+  local -a batch_targets=()
+
+  if is_windows_env; then
+    # flutter.bat ultimately runs through cmd.exe, which still enforces a small
+    # command-line limit even though our PowerShell wrapper passes args safely.
+    max_batch_chars=6000
+    max_batch_targets=48
+  fi
+
+  run_batch() {
+    local current_batch_index="$1"
+    shift
+    run_with_periodic_status \
+      "flutter test shard ${shard_index}/${shard_count} (unit batch ${current_batch_index})" \
+      run_flutter_tool test --concurrency=1 "$@"
+  }
+
+  for target in "$@"; do
+    target_chars=$(( ${#target} + 1 ))
+    if (( ${#batch_targets[@]} > 0 )) && \
+      (( ${#batch_targets[@]} >= max_batch_targets || batch_chars + target_chars > max_batch_chars )); then
+      run_batch "${batch_index}" "${batch_targets[@]}"
+      batch_targets=()
+      batch_chars=0
+      batch_index=$((batch_index + 1))
+    fi
+
+    batch_targets+=("${target}")
+    batch_chars=$((batch_chars + target_chars))
+  done
+
+  if (( ${#batch_targets[@]} > 0 )); then
+    run_batch "${batch_index}" "${batch_targets[@]}"
+  fi
 }
 
 if [[ ! -f "${repo_root}/lib/i18n/strings.g.dart" ]]; then
@@ -111,9 +161,7 @@ for target in "${test_targets[@]}"; do
 done
 
 if [[ ${#unit_test_targets[@]} -ne 0 ]]; then
-  run_with_periodic_status \
-    "flutter test shard ${shard_index}/${shard_count} (unit)" \
-    run_flutter_tool test --concurrency=1 "${unit_test_targets[@]}"
+  run_flutter_unit_tests_in_batches "${unit_test_targets[@]}"
 fi
 
 if [[ ${#integration_test_targets[@]} -ne 0 ]]; then

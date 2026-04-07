@@ -12,7 +12,7 @@ source "${repo_root}/scripts/pre_commit_common.sh"
 dart_bin="$(resolve_dart_bin)" || die "Missing 'dart'. Install Flutter (recommended: \`pixi run setup-flutter\`) or add Dart to PATH."
 flutter_bin="$(resolve_flutter_bin)" || die "Missing 'flutter'. Install Flutter (recommended: \`pixi run setup-flutter\`) or add Flutter to PATH."
 
-web_ci_temp_root="$(mktemp -d -t secondloop_flutter_web_ci.XXXXXX)"
+web_ci_temp_root="$(make_precommit_temp_dir secondloop_flutter_web_ci)"
 web_worktree=""
 
 cleanup() {
@@ -61,5 +61,7 @@ sync_workspace_state_into_worktree "${web_worktree}"
   run_with_periodic_status \
     "flutter web smoke tests" \
     run_flutter_tool test test/web_app/web_app_gate_test.dart test/web_app/web_app_service_http_test.dart
-  run_with_periodic_status "flutter build web" run_flutter_tool build web --base-href /app/
+  MSYS2_ARG_CONV_EXCL='*' run_with_periodic_status \
+    "flutter build web" \
+    run_flutter_tool build web --base-href /app/
 )

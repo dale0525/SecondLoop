@@ -32,6 +32,10 @@ if not exist bin (
     mkdir bin
 )
 
+if not exist .dart_tool (
+    mkdir .dart_tool
+)
+
 (
     echo import 'package:build_tool/build_tool.dart' as build_tool;
     echo void main^(List^<String^> args^) ^{

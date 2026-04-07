@@ -121,6 +121,12 @@ class VerificationScriptsTests(unittest.TestCase):
         self.assertIn('run_flutter_tool pub get', script)
         self.assertIn('copy_prepared_flutter_tool_state()', script)
         self.assertIn('bash scripts/run_i18n_refresh.sh', script)
+        self.assertIn('create_flutter_worktree "shard-${shard_index}"', script)
+        self.assertNotIn('shard_worktree="${prepared_worktree}"', script)
+        self.assertIn('flutter pub get (Flutter shard ${shard_index}/${flutter_shards})', script)
+        self.assertIn('elif is_windows_env; then', script)
+        self.assertIn('flutter_shards=2', script)
+        self.assertIn('export SECONDLOOP_SHORT_WORKSPACE_DRIVE="${SECONDLOOP_SHORT_WORKSPACE_DRIVE:-Y}"', script)
 
     def test_local_flutter_ci_wrapper_syncs_workspace_state_into_temp_worktrees(self) -> None:
         script = (REPO_ROOT / "scripts/run_flutter_ci_local.sh").read_text(
@@ -136,6 +142,9 @@ class VerificationScriptsTests(unittest.TestCase):
             encoding="utf-8"
         )
 
+        self.assertIn('export SECONDLOOP_CARGO_BIN="${cargo_bin}"', script)
+        self.assertIn("resolve_libclang_path || libclang_missing_message", script)
+        self.assertIn("resolve_vulkan_sdk_root || vulkan_sdk_missing_message", script)
         self.assertIn('for pid in "${flutter_gate_pid:-}" "${flutter_test_pids[@]-}"; do', script)
         self.assertIn("trap cleanup EXIT INT TERM", script)
         self.assertIn('cancel_remaining_shards()', script)
@@ -154,6 +163,13 @@ class VerificationScriptsTests(unittest.TestCase):
             encoding="utf-8"
         )
 
+        self.assertIn("resolve_cargo_bin || cargo_missing_message", script)
+        self.assertIn("resolve_libclang_path || libclang_missing_message", script)
+        self.assertIn("resolve_vulkan_sdk_root || vulkan_sdk_missing_message", script)
+        self.assertIn("ensure_windows_short_build_paths", script)
+        self.assertIn("run_flutter_unit_tests_in_batches()", script)
+        self.assertIn("max_batch_chars=6000", script)
+        self.assertIn("max_batch_targets=48", script)
         self.assertIn('if [[ "${integration_test_device}" == "linux" ]]; then', script)
         self.assertIn('xvfb-run -a', script)
 
@@ -175,8 +191,18 @@ class VerificationScriptsTests(unittest.TestCase):
 
         self.assertIn('echo "ci: starting Rust gate..." >&2', script)
         self.assertIn('echo "ci: Rust gate passed; starting Rust nextest..." >&2', script)
+        self.assertIn("ensure_windows_short_build_paths", script)
+        self.assertIn('rust_target_dir="${CARGO_TARGET_DIR%/}"', script)
         self.assertIn('if env CARGO_TARGET_DIR="${rust_target_dir}" \\', script)
         self.assertIn('if env CARGO_TARGET_DIR="${rust_target_dir}" bash scripts/run_rust_ci_nextest.sh; then', script)
+
+    def test_local_flutter_web_ci_wrapper_disables_git_bash_path_rewriting_for_base_href(self) -> None:
+        script = (REPO_ROOT / "scripts/run_flutter_web_ci_local.sh").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn("MSYS2_ARG_CONV_EXCL='*' run_with_periodic_status", script)
+        self.assertIn("run_flutter_tool build web --base-href /app/", script)
 
     def test_rust_nextest_wrapper_prefers_project_managed_cargo_environment(self) -> None:
         script = (REPO_ROOT / "scripts/run_rust_ci_nextest.sh").read_text(

@@ -82,6 +82,21 @@ class NotificationsPluginBindings {
   late final _disposePlugin =
       _disposePluginPtr.asFunction<void Function(ffi.Pointer<NativePlugin>)>();
 
+  /// Revokes any registered native notification activation callback for this plugin.
+  void clearPluginRegistration(
+    ffi.Pointer<NativePlugin> ptr,
+  ) {
+    return _clearPluginRegistration(
+      ptr,
+    );
+  }
+
+  late final _clearPluginRegistrationPtr =
+      _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Pointer<NativePlugin>)>>(
+          'clearPluginRegistration');
+  late final _clearPluginRegistration = _clearPluginRegistrationPtr
+      .asFunction<void Function(ffi.Pointer<NativePlugin>)>();
+
   /// Initializes the plugin and registers the callback to be run when a notification is pressed.
   bool init(
     ffi.Pointer<NativePlugin> plugin,
