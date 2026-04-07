@@ -64,6 +64,7 @@ class _AutoUpgradeGateState extends State<AutoUpgradeGate>
   bool _androidCheckInFlight = false;
   String? _dismissedAndroidUpdateTagInSession;
   String? _androidInstallPermissionPendingTag;
+  bool _updateNoticePrimaryActionInFlight = false;
 
   late final AppUpdateService _updateService;
   AppUpdateService? _ownedUpdateService;
@@ -493,6 +494,8 @@ class _AutoUpgradeGateState extends State<AutoUpgradeGate>
         stagedReady: stagedReady,
         errorMessage: errorMessage,
       );
+    } finally {
+      _updateNoticePrimaryActionInFlight = false;
     }
   }
 
@@ -584,6 +587,11 @@ class _AutoUpgradeGateState extends State<AutoUpgradeGate>
           FilledButton.tonal(
             key: const ValueKey('update_notice_primary_action'),
             onPressed: () {
+              if (_updateNoticePrimaryActionInFlight) {
+                return;
+              }
+              _updateNoticePrimaryActionInFlight = true;
+              ScaffoldMessenger.maybeOf(context)?.hideCurrentMaterialBanner();
               unawaited(_handleUpdateNoticePrimaryAction(
                 prefs: prefs,
                 update: update,

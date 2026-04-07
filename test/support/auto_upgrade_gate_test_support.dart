@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -16,6 +18,9 @@ class FakeAutoUpdateService extends AppUpdateService {
     this.throwOnStage = false,
     this.releaseRepoValue = 'dale0525/SecondLoop',
     this.canStageSilentlyForNextLaunchValue = false,
+    this.installCompleter,
+    this.stageCompleter,
+    this.applyStagedRestartCompleter,
   });
 
   final AppUpdateCheckResult result;
@@ -25,6 +30,9 @@ class FakeAutoUpdateService extends AppUpdateService {
   final bool throwOnStage;
   final String releaseRepoValue;
   final bool canStageSilentlyForNextLaunchValue;
+  final Completer<void>? installCompleter;
+  final Completer<void>? stageCompleter;
+  final Completer<void>? applyStagedRestartCompleter;
 
   int checkCalls = 0;
   int installCalls = 0;
@@ -55,6 +63,10 @@ class FakeAutoUpdateService extends AppUpdateService {
   @override
   Future<void> installAndRestart(AppUpdateAvailability update) async {
     installCalls += 1;
+    final pending = installCompleter;
+    if (pending != null) {
+      await pending.future;
+    }
     if (throwOnInstall) {
       throw StateError('install_failed');
     }
@@ -64,6 +76,10 @@ class FakeAutoUpdateService extends AppUpdateService {
   @override
   Future<void> stageUpdateForNextLaunch(AppUpdateAvailability update) async {
     stageCalls += 1;
+    final pending = stageCompleter;
+    if (pending != null) {
+      await pending.future;
+    }
     if (throwOnStage) {
       throw StateError('stage_failed');
     }
@@ -82,6 +98,10 @@ class FakeAutoUpdateService extends AppUpdateService {
   @override
   Future<void> applyStagedUpdateAndRestart() async {
     applyStagedRestartCalls += 1;
+    final pending = applyStagedRestartCompleter;
+    if (pending != null) {
+      await pending.future;
+    }
   }
 }
 

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:async';
 
 import 'package:secondloop/core/update/app_update_service.dart';
 import 'package:secondloop/core/update/auto_upgrade_gate.dart';
@@ -319,6 +320,50 @@ void main() {
 
     expect(service.installCalls, 1);
     expect(service.installed?.latestTag, 'v1.1.0');
+  },
+      variant: const TargetPlatformVariant(<TargetPlatform>{
+        TargetPlatform.linux,
+      }));
+
+  testWidgets(
+      'linux passive reminder ignores rapid repeated primary-action taps',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final installCompleter = Completer<void>();
+    final update = AppUpdateAvailability(
+      currentVersion: '1.0.1+99',
+      latestTag: 'v1.1.0',
+      releasePageUri: Uri.parse(
+        'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
+      ),
+      installMode: AppUpdateInstallMode.seamlessRestart,
+      asset: AppUpdateAsset(
+        name: 'SecondLoop-linux-x64-v1.1.0.tar.gz',
+        downloadUri: Uri.parse('https://cdn.example.com/linux.tar.gz'),
+      ),
+    );
+    final service = FakeAutoUpdateService(
+      result: AppUpdateCheckResult(
+        currentVersion: '1.0.1+99',
+        update: update,
+      ),
+      installCompleter: installCompleter,
+    );
+
+    await pumpGate(tester, service: service);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 120));
+
+    final primaryAction =
+        find.byKey(const ValueKey('update_notice_primary_action'));
+    await tester.tap(primaryAction);
+    await tester.tap(primaryAction);
+    await tester.pump();
+
+    expect(service.installCalls, 1);
+
+    installCompleter.complete();
+    await tester.pumpAndSettle();
   },
       variant: const TargetPlatformVariant(<TargetPlatform>{
         TargetPlatform.linux,
