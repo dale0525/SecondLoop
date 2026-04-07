@@ -36,7 +36,7 @@ void main() {
     expect(find.text('Manual update'), findsOneWidget);
   });
 
-  testWidgets('passive reminder does not persist cooldown before interaction',
+  testWidgets('passive reminder persists cooldown when first shown',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
     final service = FakeAutoUpdateService(
@@ -60,13 +60,51 @@ void main() {
     final prefs = await SharedPreferences.getInstance();
     expect(
       prefs.getString(AutoUpgradeGate.updateNoticeLastTagPrefsKey),
-      isNull,
+      'v1.1.0',
     );
     expect(
       prefs.getInt(AutoUpgradeGate.updateNoticeLastShownAtMsPrefsKey),
-      isNull,
+      isNotNull,
     );
   });
+
+  testWidgets('android resume does not reshow reminder within cooldown',
+      (tester) async {
+    final nowMs = DateTime.now().millisecondsSinceEpoch;
+    SharedPreferences.setMockInitialValues({
+      AutoUpgradeGate.updateNoticeLastTagPrefsKey: 'v1.1.0',
+      AutoUpgradeGate.updateNoticeLastShownAtMsPrefsKey:
+          nowMs - const Duration(hours: 1).inMilliseconds,
+    });
+    final service = FakeAutoUpdateService(
+      result: AppUpdateCheckResult(
+        currentVersion: '1.0.1+99',
+        update: AppUpdateAvailability(
+          currentVersion: '1.0.1+99',
+          latestTag: 'v1.1.0',
+          releasePageUri: Uri.parse(
+            'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
+          ),
+          installMode: AppUpdateInstallMode.externalDownload,
+        ),
+      ),
+    );
+
+    await pumpGate(tester, service: service);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 120));
+    expect(find.byType(SnackBar), findsNothing);
+
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 120));
+
+    expect(service.checkCalls, 2);
+    expect(find.byType(SnackBar), findsNothing);
+  },
+      variant: const TargetPlatformVariant(<TargetPlatform>{
+        TargetPlatform.android,
+      }));
 
   testWidgets('dismissing passive reminder persists cooldown', (tester) async {
     SharedPreferences.setMockInitialValues({});
@@ -293,7 +331,7 @@ void main() {
     final prefs = await SharedPreferences.getInstance();
     expect(
       prefs.getInt(AutoUpgradeGate.updateNoticeLastShownAtMsPrefsKey),
-      isNull,
+      isNotNull,
     );
   },
       variant: const TargetPlatformVariant(<TargetPlatform>{
@@ -380,7 +418,7 @@ void main() {
     final prefs = await SharedPreferences.getInstance();
     expect(
       prefs.getInt(AutoUpgradeGate.updateNoticeLastShownAtMsPrefsKey),
-      isNull,
+      isNotNull,
     );
   },
       variant: const TargetPlatformVariant(<TargetPlatform>{

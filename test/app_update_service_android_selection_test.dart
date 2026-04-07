@@ -90,7 +90,8 @@ void main() {
       expect(result.update!.canUseAndroidApkInstaller, isTrue);
     });
 
-    test('stops after successful Android latest.json response', () async {
+    test('keeps latest.json metadata when API reports the same Android tag',
+        () async {
       final requestedUris = <Uri>[];
       final service = AppUpdateService(
         platformOverride: AppUpdatePlatform.android,
@@ -109,10 +110,24 @@ void main() {
               'platforms': {
                 'android-arm64-v8a': {
                   'install_mode': 'apk',
+                  'name': 'SecondLoop-android-arm64-v8a-v1.1.0.apk',
                   'archive_url': 'https://cdn.example.com/arm64.apk',
                   'sha256': 'abc123',
                 },
               },
+            };
+          }
+          if (uri.host == 'api.github.com') {
+            return {
+              'tag_name': 'v1.1.0',
+              'html_url':
+                  'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
+              'assets': [
+                {
+                  'name': 'SecondLoop-android-arm64-v8a-v1.1.0.apk',
+                  'browser_download_url': 'https://cdn.example.com/api.apk',
+                },
+              ],
             };
           }
           throw StateError('unexpected_uri:$uri');
@@ -122,10 +137,14 @@ void main() {
       final result = await service.checkForUpdates();
 
       expect(result.update, isNotNull);
-      expect(requestedUris, hasLength(1));
+      expect(result.update!.asset!.downloadUri.toString(),
+          'https://cdn.example.com/arm64.apk');
+      expect(result.update!.asset!.sha256, 'abc123');
+      expect(requestedUris, hasLength(2));
+      expect(requestedUris.first.path, endsWith('/latest.json'));
       expect(
-        requestedUris.single.toString(),
-        'https://github.com/dale0525/SecondLoop/releases/latest/download/latest.json',
+        requestedUris.last.toString(),
+        'https://api.github.com/repos/dale0525/SecondLoop/releases/latest',
       );
     });
 
@@ -180,6 +199,117 @@ void main() {
         result.update!.asset!.downloadUri.toString(),
         'https://cdn.example.com/fresh.apk',
       );
+      expect(requestedUris, hasLength(2));
+      expect(requestedUris.first.path, endsWith('/latest.json'));
+      expect(requestedUris.last.host, 'api.github.com');
+    });
+
+    test('does not stop at older usable latest.json when API has newer release',
+        () async {
+      final requestedUris = <Uri>[];
+      final service = AppUpdateService(
+        platformOverride: AppUpdatePlatform.android,
+        releaseModeOverride: true,
+        releaseRepoOverride: 'dale0525/SecondLoop',
+        androidSupportedAbisOverride: const ['arm64-v8a'],
+        currentVersionLoader: () async =>
+            const AppRuntimeVersion(version: '1.0.0', buildNumber: '9'),
+        releaseJsonFetcher: (uri) async {
+          requestedUris.add(uri);
+          if (uri.path.endsWith('/latest.json')) {
+            return {
+              'tag_name': 'v1.1.0',
+              'release_page_url':
+                  'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
+              'platforms': {
+                'android-arm64-v8a': {
+                  'install_mode': 'apk',
+                  'archive_url': 'https://cdn.example.com/old.apk',
+                  'sha256': 'old123',
+                },
+              },
+            };
+          }
+          if (uri.host == 'api.github.com') {
+            return {
+              'tag_name': 'v1.2.0',
+              'html_url':
+                  'https://github.com/dale0525/SecondLoop/releases/tag/v1.2.0',
+              'platforms': {
+                'android-arm64-v8a': {
+                  'install_mode': 'apk',
+                  'archive_url': 'https://cdn.example.com/new.apk',
+                  'sha256': 'new123',
+                },
+              },
+            };
+          }
+          throw StateError('unexpected_uri:$uri');
+        },
+      );
+
+      final result = await service.checkForUpdates();
+
+      expect(result.update, isNotNull);
+      expect(result.update!.latestTag, 'v1.2.0');
+      expect(
+        result.update!.asset!.downloadUri.toString(),
+        'https://cdn.example.com/new.apk',
+      );
+      expect(requestedUris, hasLength(2));
+      expect(requestedUris.first.path, endsWith('/latest.json'));
+      expect(requestedUris.last.host, 'api.github.com');
+    });
+
+    test(
+        'does not accept older usable latest.json when API exposes newer unusable release',
+        () async {
+      final requestedUris = <Uri>[];
+      final service = AppUpdateService(
+        platformOverride: AppUpdatePlatform.android,
+        releaseModeOverride: true,
+        releaseRepoOverride: 'dale0525/SecondLoop',
+        androidSupportedAbisOverride: const ['arm64-v8a'],
+        currentVersionLoader: () async =>
+            const AppRuntimeVersion(version: '1.0.0', buildNumber: '9'),
+        releaseJsonFetcher: (uri) async {
+          requestedUris.add(uri);
+          if (uri.path.endsWith('/latest.json')) {
+            return {
+              'tag_name': 'v1.1.0',
+              'release_page_url':
+                  'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
+              'platforms': {
+                'android-arm64-v8a': {
+                  'install_mode': 'apk',
+                  'archive_url': 'https://cdn.example.com/old.apk',
+                  'sha256': 'old123',
+                },
+              },
+            };
+          }
+          if (uri.host == 'api.github.com') {
+            return {
+              'tag_name': 'v1.2.0',
+              'html_url':
+                  'https://github.com/dale0525/SecondLoop/releases/tag/v1.2.0',
+              'assets': [
+                {
+                  'name': 'SecondLoop-android-x86_64-v1.2.0.apk',
+                  'browser_download_url': 'https://cdn.example.com/x86_64.apk',
+                  'sha256': 'bad999',
+                },
+              ],
+            };
+          }
+          throw StateError('unexpected_uri:$uri');
+        },
+      );
+
+      final result = await service.checkForUpdates();
+
+      expect(result.update, isNull);
+      expect(result.errorMessage, contains('no_platform_asset_for_android'));
       expect(requestedUris, hasLength(2));
       expect(requestedUris.first.path, endsWith('/latest.json'));
       expect(requestedUris.last.host, 'api.github.com');

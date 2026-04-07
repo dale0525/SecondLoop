@@ -543,7 +543,9 @@ class _AutoUpgradeGateState extends State<AutoUpgradeGate>
                 ? updateNoticeT.seamlessAvailable(version: update.latestTag)
                 : updateNoticeT.manualDownload(version: update.latestTag);
     final notNowLabel = commonActionsT.notNow;
+    final errorColor = Theme.of(context).colorScheme.error;
 
+    await _persistUpdateNoticeCooldown(prefs, latestTag: update.latestTag);
     messenger.hideCurrentSnackBar();
     messenger.showSnackBar(
       SnackBar(
@@ -555,7 +557,7 @@ class _AutoUpgradeGateState extends State<AutoUpgradeGate>
             if (errorMessage != null) ...[
               Text(
                 errorMessage,
-                style: TextStyle(color: Theme.of(context).colorScheme.error),
+                style: TextStyle(color: errorColor),
               ),
               const SizedBox(height: 8),
             ],
