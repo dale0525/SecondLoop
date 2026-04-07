@@ -527,7 +527,8 @@ final class FlutterLocalNotificationsReviewReminderScheduler
       _available = false;
       return false;
     } on PlatformException {
-      // ignore
+      // Let the caller keep the schedule failure non-fatal when even the inexact
+      // fallback is rejected by the platform.
     } catch (error, stackTrace) {
       _reportSchedulingError(
         error,

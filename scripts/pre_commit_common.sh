@@ -227,11 +227,7 @@ make_precommit_temp_dir() {
 }
 
 make_precommit_short_path_dir() {
-  local prefix="$1"
-  local temp_root
-  temp_root="$(resolve_precommit_temp_root)"
-  mkdir -p "${temp_root}"
-  mktemp -d -p "${temp_root}" "${prefix}.XXXXXX"
+  make_precommit_temp_dir "$1"
 }
 
 resolve_dart_bin() {
