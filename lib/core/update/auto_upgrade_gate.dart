@@ -64,6 +64,7 @@ class _AutoUpgradeGateState extends State<AutoUpgradeGate>
   bool _androidCheckInFlight = false;
   String? _dismissedAndroidUpdateTagInSession;
   String? _androidInstallPermissionPendingTag;
+  bool _updateNoticePrimaryActionInFlight = false;
 
   late final AppUpdateService _updateService;
   AppUpdateService? _ownedUpdateService;
@@ -354,7 +355,37 @@ class _AutoUpgradeGateState extends State<AutoUpgradeGate>
     );
   }
 
-  Future<void> _openFallbackUpdateUri() async {
+  void _showUpdateActionMessage(String message) {
+    if (!mounted) return;
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    if (messenger == null) return;
+    messenger.hideCurrentSnackBar();
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(message),
+        duration: const Duration(seconds: 3),
+      ),
+    );
+  }
+
+  Future<void> _persistUpdateNoticeCooldown(
+    SharedPreferences prefs, {
+    required String latestTag,
+  }) async {
+    final nowMs = DateTime.now().millisecondsSinceEpoch;
+    await prefs.setString(
+      AutoUpgradeGate.updateNoticeLastTagPrefsKey,
+      latestTag,
+    );
+    await prefs.setInt(
+      AutoUpgradeGate.updateNoticeLastShownAtMsPrefsKey,
+      nowMs,
+    );
+  }
+
+  Future<bool> _openFallbackUpdateUri({
+    bool showFailureMessage = true,
+  }) async {
     final aboutT = context.t.settings.about;
     try {
       final launcher = widget.externalUriLauncher;
@@ -367,6 +398,19 @@ class _AutoUpgradeGateState extends State<AutoUpgradeGate>
               mode: LaunchMode.externalApplication,
             );
       if (!opened && mounted) {
+        if (showFailureMessage) {
+          ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+            SnackBar(
+              content: Text(aboutT.messages.openUpdateFailed),
+              duration: const Duration(seconds: 3),
+            ),
+          );
+        }
+        return false;
+      }
+      return opened;
+    } catch (_) {
+      if (mounted && showFailureMessage) {
         ScaffoldMessenger.maybeOf(context)?.showSnackBar(
           SnackBar(
             content: Text(aboutT.messages.openUpdateFailed),
@@ -374,14 +418,84 @@ class _AutoUpgradeGateState extends State<AutoUpgradeGate>
           ),
         );
       }
-    } catch (_) {
+      return false;
+    }
+  }
+
+  String _updateNoticePrimaryActionLabel({
+    required AppUpdateAvailability update,
+    required bool stagedReady,
+  }) {
+    final aboutActionsT = context.t.settings.about.actions;
+    if (stagedReady || update.canSeamlessInstall) {
+      return aboutActionsT.autoUpdate;
+    }
+    if (update.canStageForNextLaunch) {
+      return aboutActionsT.stageUpdate;
+    }
+    return aboutActionsT.manualUpdate;
+  }
+
+  Future<void> _handleUpdateNoticePrimaryAction({
+    required SharedPreferences prefs,
+    required AppUpdateAvailability update,
+    required bool stagedReady,
+  }) async {
+    final aboutT = context.t.settings.about;
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    messenger?.hideCurrentMaterialBanner();
+    messenger?.hideCurrentSnackBar();
+
+    try {
+      if (stagedReady) {
+        _showUpdateActionMessage(aboutT.messages.installStarting);
+        await _updateService.applyStagedUpdateAndRestart();
+        await _persistUpdateNoticeCooldown(prefs, latestTag: update.latestTag);
+        return;
+      }
+
+      if (update.canSeamlessInstall) {
+        _showUpdateActionMessage(aboutT.messages.installStarting);
+        await _updateService.installAndRestart(update);
+        await _persistUpdateNoticeCooldown(prefs, latestTag: update.latestTag);
+        return;
+      }
+
+      if (update.canStageForNextLaunch) {
+        _showUpdateActionMessage(aboutT.messages.stageStarting);
+        await _updateService.stageUpdateForNextLaunch(update);
+        await _persistUpdateNoticeCooldown(prefs, latestTag: update.latestTag);
+        _showUpdateActionMessage(aboutT.messages.stageReady);
+        return;
+      }
+
+      final opened = await _openFallbackUpdateUri(showFailureMessage: false);
+      if (opened) {
+        await _persistUpdateNoticeCooldown(prefs, latestTag: update.latestTag);
+        return;
+      }
       if (!mounted) return;
-      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-        SnackBar(
-          content: Text(aboutT.messages.openUpdateFailed),
-          duration: const Duration(seconds: 3),
-        ),
+      await _showPassiveUpdateNotice(
+        prefs: prefs,
+        update: update,
+        stagedReady: stagedReady,
+        errorMessage: aboutT.messages.openUpdateFailed,
       );
+    } catch (error) {
+      if (!mounted) return;
+      final errorMessage = stagedReady || update.canSeamlessInstall
+          ? aboutT.messages.installFailed(error: '$error')
+          : update.canStageForNextLaunch
+              ? aboutT.messages.stageFailed(error: '$error')
+              : aboutT.messages.openUpdateFailed;
+      await _showPassiveUpdateNotice(
+        prefs: prefs,
+        update: update,
+        stagedReady: stagedReady,
+        errorMessage: errorMessage,
+      );
+    } finally {
+      _updateNoticePrimaryActionInFlight = false;
     }
   }
 
@@ -402,42 +516,91 @@ class _AutoUpgradeGateState extends State<AutoUpgradeGate>
       return;
     }
 
+    await _showPassiveUpdateNotice(
+      prefs: prefs,
+      update: update,
+      stagedReady: stagedReady,
+    );
+  }
+
+  Future<void> _showPassiveUpdateNotice({
+    required SharedPreferences prefs,
+    required AppUpdateAvailability update,
+    required bool stagedReady,
+    String? errorMessage,
+  }) async {
+    if (!mounted) return;
     final messenger = ScaffoldMessenger.maybeOf(context);
     if (messenger == null) return;
+    final aboutStatusT = context.t.settings.about.status;
     final updateNoticeT = context.t.settings.updateNotice;
     final commonActionsT = context.t.common.actions;
+    final primaryActionLabel = _updateNoticePrimaryActionLabel(
+      update: update,
+      stagedReady: stagedReady,
+    );
     final message = stagedReady
         ? updateNoticeT.stagedReady(version: update.latestTag)
-        : (_isWindowsPlatform || _isMacosPlatform || _isLinuxPlatform) &&
-                update.canSeamlessInstall
-            ? updateNoticeT.seamlessAvailable(version: update.latestTag)
-            : updateNoticeT.manualDownload(version: update.latestTag);
+        : update.canStageForNextLaunch
+            ? aboutStatusT.availableStaged(version: update.latestTag)
+            : (_isWindowsPlatform || _isMacosPlatform || _isLinuxPlatform) &&
+                    update.canSeamlessInstall
+                ? updateNoticeT.seamlessAvailable(version: update.latestTag)
+                : updateNoticeT.manualDownload(version: update.latestTag);
     final notNowLabel = commonActionsT.notNow;
-    final nowMs = DateTime.now().millisecondsSinceEpoch;
-    await prefs.setString(
-      AutoUpgradeGate.updateNoticeLastTagPrefsKey,
-      update.latestTag,
-    );
-    await prefs.setInt(
-      AutoUpgradeGate.updateNoticeLastShownAtMsPrefsKey,
-      nowMs,
-    );
-    if (!mounted) return;
+    final errorColor = Theme.of(context).colorScheme.error;
 
+    await _persistUpdateNoticeCooldown(prefs, latestTag: update.latestTag);
     messenger.hideCurrentSnackBar();
-    messenger.showSnackBar(
-      SnackBar(
-        content: Text(message),
-        duration: const Duration(seconds: 3),
-        action: SnackBarAction(
-          label: notNowLabel,
-          onPressed: () {
-            unawaited(_dismissUpdateNoticeForSession(
-              prefs: prefs,
-              updateTag: stagedReady ? update.latestTag : null,
-            ));
-          },
+    messenger.hideCurrentMaterialBanner();
+    messenger.showMaterialBanner(
+      MaterialBanner(
+        key: const ValueKey('update_notice_banner'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (errorMessage != null) ...[
+              Text(
+                errorMessage,
+                style: TextStyle(color: errorColor),
+              ),
+              const SizedBox(height: 8),
+            ],
+            Text(message),
+          ],
         ),
+        forceActionsBelow: true,
+        actions: [
+          TextButton(
+            key: const ValueKey('update_notice_secondary_action'),
+            onPressed: () {
+              ScaffoldMessenger.maybeOf(context)?.hideCurrentMaterialBanner();
+              unawaited(_dismissUpdateNoticeForSession(
+                prefs: prefs,
+                latestTag: update.latestTag,
+                updateTag: stagedReady ? update.latestTag : null,
+              ));
+            },
+            child: Text(notNowLabel),
+          ),
+          FilledButton.tonal(
+            key: const ValueKey('update_notice_primary_action'),
+            onPressed: () {
+              if (_updateNoticePrimaryActionInFlight) {
+                return;
+              }
+              _updateNoticePrimaryActionInFlight = true;
+              ScaffoldMessenger.maybeOf(context)?.hideCurrentMaterialBanner();
+              unawaited(_handleUpdateNoticePrimaryAction(
+                prefs: prefs,
+                update: update,
+                stagedReady: stagedReady,
+              ));
+            },
+            child: Text(primaryActionLabel),
+          ),
+        ],
       ),
     );
   }
@@ -471,8 +634,10 @@ class _AutoUpgradeGateState extends State<AutoUpgradeGate>
 
   Future<void> _dismissUpdateNoticeForSession({
     required SharedPreferences prefs,
+    required String latestTag,
     required String? updateTag,
   }) async {
+    await _persistUpdateNoticeCooldown(prefs, latestTag: latestTag);
     _updateNoticeDismissedInSession = true;
     await prefs.setBool(
       AutoUpgradeGate.updateNoticeDismissedInSessionPrefsKey,

@@ -168,10 +168,36 @@ class VerificationScriptsTests(unittest.TestCase):
         self.assertIn("resolve_vulkan_sdk_root || vulkan_sdk_missing_message", script)
         self.assertIn("ensure_windows_short_build_paths", script)
         self.assertIn("run_flutter_unit_tests_in_batches()", script)
-        self.assertIn("max_batch_chars=6000", script)
-        self.assertIn("max_batch_targets=48", script)
+        self.assertIn(
+            'local max_batch_chars="${SECONDLOOP_FLUTTER_TEST_MAX_BATCH_CHARS:-1000000}"',
+            script,
+        )
+        self.assertIn(
+            'local max_batch_targets="${SECONDLOOP_FLUTTER_TEST_MAX_BATCH_TARGETS:-1000000}"',
+            script,
+        )
+        self.assertIn(
+            'max_batch_chars="${SECONDLOOP_FLUTTER_TEST_MAX_BATCH_CHARS:-6000}"',
+            script,
+        )
+        self.assertIn(
+            'max_batch_targets="${SECONDLOOP_FLUTTER_TEST_MAX_BATCH_TARGETS:-48}"',
+            script,
+        )
+        self.assertIn('SECONDLOOP_FLUTTER_TEST_MAX_BATCH_CHARS', script)
+        self.assertIn('SECONDLOOP_FLUTTER_TEST_MAX_BATCH_TARGETS', script)
         self.assertIn('if [[ "${integration_test_device}" == "linux" ]]; then', script)
         self.assertIn('xvfb-run -a', script)
+
+    def test_local_flutter_ci_sets_default_batch_target_limit(self) -> None:
+        script = (REPO_ROOT / "scripts/run_flutter_ci_local.sh").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn(
+            'export SECONDLOOP_FLUTTER_TEST_MAX_BATCH_TARGETS="${SECONDLOOP_FLUTTER_TEST_MAX_BATCH_TARGETS:-48}"',
+            script,
+        )
 
     def test_local_rust_ci_wrapper_keeps_rustfmt_before_nextest_and_doc_tests(self) -> None:
         script = (REPO_ROOT / "scripts/run_full_rust_ci_local.sh").read_text(

@@ -45,7 +45,20 @@ def _resolve_git_bash() -> str | None:
     return None
 
 
+def _resolve_true_bin() -> str:
+    candidate = shutil.which("true") or shutil.which("true.exe")
+    if candidate:
+        return candidate
+
+    for fallback in (Path("/usr/bin/true"), Path("/bin/true")):
+        if fallback.exists():
+            return str(fallback)
+
+    return "true"
+
+
 BASH_BIN = _resolve_git_bash()
+TRUE_BIN = _resolve_true_bin()
 
 
 @unittest.skipUnless(BASH_BIN, "bash is required")
@@ -301,10 +314,10 @@ class FailFastCiWrapperTests(unittest.TestCase):
                         "  exit 1",
                         "}",
                         "resolve_dart_bin() {",
-                        "  command -v true",
+                        f"  printf '%s\\n' {TRUE_BIN}",
                         "}",
                         "resolve_flutter_bin() {",
-                        "  command -v true",
+                        f"  printf '%s\\n' {TRUE_BIN}",
                         "}",
                         "run_with_periodic_status() {",
                         "  local _label=\"$1\"",

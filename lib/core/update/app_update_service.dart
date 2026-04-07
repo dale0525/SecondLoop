@@ -42,7 +42,6 @@ const _defaultAllowHttpUpdateUris = bool.fromEnvironment(
   defaultValue: false,
 );
 const _defaultUpdateNetworkTimeout = Duration(seconds: 15);
-
 typedef AppUpdateReleaseJsonFetcher = Future<Map<String, Object?>> Function(
   Uri uri,
 );
@@ -921,8 +920,7 @@ class AppUpdateService {
     final repo = _releaseRepo.trim();
     final hasConfiguredManifestSignatureKey =
         _updatePublicKey.trim().isNotEmpty;
-    final prefersLatestJsonWithoutSignatureKey =
-        _platform == AppUpdatePlatform.android && androidSupportedAbis.isEmpty;
+    final prefersLatestJsonForAndroid = _platform == AppUpdatePlatform.android;
 
     final endpoints = <Uri>[];
     final allowHttp = _allowHttpUpdateUris;
@@ -944,11 +942,14 @@ class AppUpdateService {
           ),
         );
       } else {
-        if (parsedApiOrigin != null && prefersLatestJsonWithoutSignatureKey) {
+        if (prefersLatestJsonForAndroid) {
           endpoints.add(
             Uri.parse(
               'https://github.com/$repo/releases/latest/download/latest.json',
             ),
+          );
+          endpoints.add(
+            Uri.https('api.github.com', '/repos/$repo/releases/latest'),
           );
         } else {
           endpoints.add(
