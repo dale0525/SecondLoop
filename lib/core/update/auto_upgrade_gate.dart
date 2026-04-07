@@ -441,7 +441,9 @@ class _AutoUpgradeGateState extends State<AutoUpgradeGate>
     required bool stagedReady,
   }) async {
     final aboutT = context.t.settings.about;
-    ScaffoldMessenger.maybeOf(context)?.hideCurrentSnackBar();
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    messenger?.hideCurrentMaterialBanner();
+    messenger?.hideCurrentSnackBar();
 
     try {
       if (stagedReady) {
@@ -547,9 +549,10 @@ class _AutoUpgradeGateState extends State<AutoUpgradeGate>
 
     await _persistUpdateNoticeCooldown(prefs, latestTag: update.latestTag);
     messenger.hideCurrentSnackBar();
-    messenger.showSnackBar(
-      SnackBar(
-        duration: const Duration(seconds: 3),
+    messenger.hideCurrentMaterialBanner();
+    messenger.showMaterialBanner(
+      MaterialBanner(
+        key: const ValueKey('update_notice_banner'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -562,39 +565,34 @@ class _AutoUpgradeGateState extends State<AutoUpgradeGate>
               const SizedBox(height: 8),
             ],
             Text(message),
-            const SizedBox(height: 8),
-            OverflowBar(
-              alignment: MainAxisAlignment.end,
-              spacing: 8,
-              overflowAlignment: OverflowBarAlignment.end,
-              children: [
-                TextButton(
-                  key: const ValueKey('update_notice_secondary_action'),
-                  onPressed: () {
-                    ScaffoldMessenger.maybeOf(context)?.hideCurrentSnackBar();
-                    unawaited(_dismissUpdateNoticeForSession(
-                      prefs: prefs,
-                      latestTag: update.latestTag,
-                      updateTag: stagedReady ? update.latestTag : null,
-                    ));
-                  },
-                  child: Text(notNowLabel),
-                ),
-                FilledButton.tonal(
-                  key: const ValueKey('update_notice_primary_action'),
-                  onPressed: () {
-                    unawaited(_handleUpdateNoticePrimaryAction(
-                      prefs: prefs,
-                      update: update,
-                      stagedReady: stagedReady,
-                    ));
-                  },
-                  child: Text(primaryActionLabel),
-                ),
-              ],
-            ),
           ],
         ),
+        forceActionsBelow: true,
+        actions: [
+          TextButton(
+            key: const ValueKey('update_notice_secondary_action'),
+            onPressed: () {
+              ScaffoldMessenger.maybeOf(context)?.hideCurrentMaterialBanner();
+              unawaited(_dismissUpdateNoticeForSession(
+                prefs: prefs,
+                latestTag: update.latestTag,
+                updateTag: stagedReady ? update.latestTag : null,
+              ));
+            },
+            child: Text(notNowLabel),
+          ),
+          FilledButton.tonal(
+            key: const ValueKey('update_notice_primary_action'),
+            onPressed: () {
+              unawaited(_handleUpdateNoticePrimaryAction(
+                prefs: prefs,
+                update: update,
+                stagedReady: stagedReady,
+              ));
+            },
+            child: Text(primaryActionLabel),
+          ),
+        ],
       ),
     );
   }

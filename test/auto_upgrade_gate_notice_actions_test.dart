@@ -30,10 +30,42 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 120));
 
-    expect(find.byType(SnackBar), findsOneWidget);
+    expect(find.byType(MaterialBanner), findsOneWidget);
     expect(find.byKey(const ValueKey('update_notice_primary_action')),
         findsOneWidget);
     expect(find.text('Manual update'), findsOneWidget);
+  });
+
+  testWidgets(
+      'passive reminder stays visible beyond transient snackbar timeout',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final update = AppUpdateAvailability(
+      currentVersion: '1.0.1+99',
+      latestTag: 'v1.1.0',
+      releasePageUri: Uri.parse(
+        'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
+      ),
+      installMode: AppUpdateInstallMode.externalDownload,
+    );
+    final service = FakeAutoUpdateService(
+      result: AppUpdateCheckResult(
+        currentVersion: '1.0.1+99',
+        update: update,
+      ),
+    );
+
+    await pumpGate(tester, service: service);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 120));
+
+    expect(find.byType(MaterialBanner), findsOneWidget);
+
+    await tester.pump(const Duration(seconds: 4));
+
+    expect(find.byType(MaterialBanner), findsOneWidget);
+    expect(find.byKey(const ValueKey('update_notice_primary_action')),
+        findsOneWidget);
   });
 
   testWidgets('passive reminder persists cooldown when first shown',
@@ -93,14 +125,14 @@ void main() {
     await pumpGate(tester, service: service);
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 120));
-    expect(find.byType(SnackBar), findsNothing);
+    expect(find.byType(MaterialBanner), findsNothing);
 
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 120));
 
     expect(service.checkCalls, 2);
-    expect(find.byType(SnackBar), findsNothing);
+    expect(find.byType(MaterialBanner), findsNothing);
   },
       variant: const TargetPlatformVariant(<TargetPlatform>{
         TargetPlatform.android,
@@ -168,7 +200,7 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 120));
 
-    expect(find.byType(SnackBar), findsOneWidget);
+    expect(find.byType(MaterialBanner), findsOneWidget);
     expect(find.text('Prepare update'), findsOneWidget);
     expect(
       find.textContaining('apply next launch'),
@@ -453,7 +485,7 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 120));
 
-    expect(find.byType(SnackBar), findsOneWidget);
+    expect(find.byType(MaterialBanner), findsOneWidget);
   });
 
   testWidgets('skips reminder when same tag was shown within 24h',
@@ -484,6 +516,6 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 120));
 
-    expect(find.byType(SnackBar), findsNothing);
+    expect(find.byType(MaterialBanner), findsNothing);
   });
 }

@@ -53,7 +53,7 @@ void main() {
     expect(service.installCalls, 0);
     expect(service.stageCalls, 0);
     expect(UpdateBadgePrefs.value.value, 'v1.1.0');
-    expect(find.byType(SnackBar), findsOneWidget);
+    expect(find.byType(MaterialBanner), findsOneWidget);
     expect(find.byKey(const ValueKey('update_notice_primary_action')),
         findsOneWidget);
     expect(find.text('Update now'), findsOneWidget);
@@ -122,7 +122,7 @@ void main() {
     expect(service.installCalls, 0);
     expect(service.stageCalls, 1);
     expect(service.applyPendingCalls, 1);
-    expect(find.byType(SnackBar), findsOneWidget);
+    expect(find.byType(MaterialBanner), findsOneWidget);
     expect(find.byKey(const ValueKey('update_notice_primary_action')),
         findsOneWidget);
     expect(find.text('Update now'), findsOneWidget);
@@ -163,7 +163,7 @@ void main() {
     expect(service.stageCalls, 1);
     expect(service.applyPendingCalls, 1);
     expect(UpdateBadgePrefs.value.value, 'v1.1.0');
-    expect(find.byType(SnackBar), findsOneWidget);
+    expect(find.byType(MaterialBanner), findsOneWidget);
   },
       variant: const TargetPlatformVariant(<TargetPlatform>{
         TargetPlatform.windows,
@@ -202,7 +202,7 @@ void main() {
     expect(service.stageCalls, 0);
     expect(service.applyPendingCalls, 1);
     expect(UpdateBadgePrefs.value.value, 'v1.1.0');
-    expect(find.byType(SnackBar), findsOneWidget);
+    expect(find.byType(MaterialBanner), findsOneWidget);
   },
       variant: const TargetPlatformVariant(<TargetPlatform>{
         TargetPlatform.windows,
@@ -241,7 +241,7 @@ void main() {
     expect(service.stageCalls, 1);
     expect(service.applyPendingCalls, 1);
     expect(UpdateBadgePrefs.value.value, 'v1.1.0');
-    expect(find.byType(SnackBar), findsOneWidget);
+    expect(find.byType(MaterialBanner), findsOneWidget);
   },
       variant: const TargetPlatformVariant(<TargetPlatform>{
         TargetPlatform.windows,
@@ -280,7 +280,7 @@ void main() {
     expect(service.stageCalls, 0);
     expect(service.applyPendingCalls, 1);
     expect(UpdateBadgePrefs.value.value, 'v1.2.0');
-    expect(find.byType(SnackBar), findsOneWidget);
+    expect(find.byType(MaterialBanner), findsOneWidget);
   },
       variant: const TargetPlatformVariant(<TargetPlatform>{
         TargetPlatform.windows,
@@ -516,7 +516,7 @@ void main() {
     expect(service.stageCalls, 0);
     expect(service.applyPendingCalls, 1);
     expect(UpdateBadgePrefs.value.value, 'v1.2.0');
-    expect(find.byType(SnackBar), findsOneWidget);
+    expect(find.byType(MaterialBanner), findsOneWidget);
     expect(find.byKey(const ValueKey('update_notice_primary_action')),
         findsOneWidget);
     expect(find.text('Update now'), findsOneWidget);
