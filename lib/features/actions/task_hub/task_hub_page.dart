@@ -348,7 +348,6 @@ class _TaskHubPageState extends State<TaskHubPage> {
         ? const TaskHubPriorityAnimationSnapshot()
         : _visibleAnimationSnapshot(_store!.snapshot);
     final animationCapture = _priorityAnimationController.beginAction(
-      todoId: entry.todo.id,
       title: entry.todo.title,
       snapshot: previousSnapshot,
       reducedMotion: _shouldReduceTaskHubMotion(context),
@@ -385,13 +384,16 @@ class _TaskHubPageState extends State<TaskHubPage> {
       if (!mounted) return;
       final currentStore = _store;
       if (currentStore == null) return;
-      _refreshCardAnchors(todoIds: <String>[entry.todo.id]);
+      final animatedTodoId =
+          appliedTicket.createdTodoId ?? appliedTicket.updatedTodo.id;
+      _refreshCardAnchors(todoIds: <String>[animatedTodoId]);
       _priorityAnimationController.completeAction(
         animationCapture,
+        animatedTodoId: animatedTodoId,
         next: _visibleAnimationSnapshot(currentStore.snapshot),
         targetRect: _rectInAnimationLayer(
           _rectIfVisibleInAnimationLayer(
-            _cardAnchorRegistry.rectFor(entry.todo.id),
+            _cardAnchorRegistry.rectFor(animatedTodoId),
           ),
         ),
       );

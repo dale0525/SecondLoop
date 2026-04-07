@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:secondloop/features/actions/task_hub/task_hub_quick_actions.dart';
 import 'package:secondloop/src/rust/db.dart';
 
 import 'task_hub_page_test_helpers.dart';
@@ -384,5 +385,76 @@ void main() {
         findsNothing,
       );
     }
+  });
+
+  testWidgets('redo animates from the done card to the inserted task',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    useLargeViewport(tester);
+    final backend = TaskHubTestBackend(
+      todos: const <Todo>[
+        Todo(
+          id: 'focus',
+          title: 'Fix prod issue',
+          dueAtMs: null,
+          status: 'in_progress',
+          sourceEntryId: null,
+          createdAtMs: 0,
+          updatedAtMs: 10,
+          reviewStage: null,
+          nextReviewAtMs: null,
+          lastReviewAtMs: null,
+        ),
+        Todo(
+          id: 'done',
+          title: 'Shipped',
+          dueAtMs: null,
+          status: 'done',
+          sourceEntryId: null,
+          createdAtMs: 0,
+          updatedAtMs: 40,
+          reviewStage: null,
+          nextReviewAtMs: null,
+          lastReviewAtMs: null,
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(wrapTaskHubTestApp(backend));
+    await pumpUntilTaskHubReady(tester);
+
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('task_hub_page_section_done')),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
+
+    final sourceRect =
+        tester.getRect(find.byKey(const ValueKey('task_hub_page_item_done')));
+
+    final moreButtonState =
+        tester.state<PopupMenuButtonState<TaskHubQuickAction>>(
+      find.descendant(
+        of: find.byKey(const ValueKey('task_hub_page_quick_done_more')),
+        matching: find.byType(PopupMenuButton<TaskHubQuickAction>),
+      ),
+    );
+    moreButtonState.showButtonMenu();
+    await pumpUntilFound(tester, find.text('Do again'));
+    Navigator.of(tester.element(find.byType(ListView))).pop(
+      TaskHubQuickAction.redo,
+    );
+    await tester.pump();
+    await pumpUntilFound(
+      tester,
+      find.byKey(const ValueKey('task_hub_priority_animation_overlay')),
+    );
+
+    final overlayRect = tester.getRect(
+      find.byKey(const ValueKey('task_hub_priority_animation_overlay')),
+    );
+    expect((overlayRect.top - sourceRect.top).abs(), lessThan(8));
+    expect((overlayRect.left - sourceRect.left).abs(), lessThan(8));
   });
 }

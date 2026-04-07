@@ -11,6 +11,7 @@ enum TaskHubPriorityAnimationKind {
   none,
   sameSectionReorder,
   crossSectionMove,
+  visibleInsertion,
   visibleRemoval,
   noEmphasis,
 }
@@ -101,6 +102,14 @@ TaskHubPriorityAnimationPlan buildTaskHubPriorityAnimationPlan({
       todoId: actedTodoId,
       fromSection: from.section,
       fromIndex: from.index,
+    );
+  }
+  if (from == null && to != null) {
+    return TaskHubPriorityAnimationPlan(
+      kind: TaskHubPriorityAnimationKind.visibleInsertion,
+      todoId: actedTodoId,
+      toSection: to.section,
+      toIndex: to.index,
     );
   }
   if (from == null || to == null) {

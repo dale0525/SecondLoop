@@ -7,7 +7,6 @@ import 'task_hub_priority_animation_plan.dart';
 class TaskHubPriorityAnimationCapture {
   const TaskHubPriorityAnimationCapture({
     required this.generation,
-    required this.todoId,
     required this.title,
     required this.previous,
     required this.reducedMotion,
@@ -15,7 +14,6 @@ class TaskHubPriorityAnimationCapture {
   });
 
   final int generation;
-  final String todoId;
   final String title;
   final TaskHubPriorityAnimationSnapshot previous;
   final bool reducedMotion;
@@ -67,7 +65,6 @@ class TaskHubPriorityAnimationController extends ChangeNotifier {
   int _actionGeneration = 0;
 
   TaskHubPriorityAnimationCapture beginAction({
-    required String todoId,
     required String title,
     required TaskHubPriorityAnimationSnapshot snapshot,
     required bool reducedMotion,
@@ -80,7 +77,6 @@ class TaskHubPriorityAnimationController extends ChangeNotifier {
     notifyListeners();
     return TaskHubPriorityAnimationCapture(
       generation: generation,
-      todoId: todoId,
       title: title,
       previous: snapshot,
       reducedMotion: reducedMotion,
@@ -90,6 +86,7 @@ class TaskHubPriorityAnimationController extends ChangeNotifier {
 
   void completeAction(
     TaskHubPriorityAnimationCapture capture, {
+    required String animatedTodoId,
     required TaskHubPriorityAnimationSnapshot next,
     Rect? targetRect,
   }) {
@@ -99,14 +96,15 @@ class TaskHubPriorityAnimationController extends ChangeNotifier {
     _lastPlan = buildTaskHubPriorityAnimationPlan(
       previous: capture.previous,
       next: next,
-      actedTodoId: capture.todoId,
+      actedTodoId: animatedTodoId,
       reducedMotion: capture.reducedMotion,
     );
-    if (_lastPlan?.kind == TaskHubPriorityAnimationKind.crossSectionMove &&
+    if ((_lastPlan?.kind == TaskHubPriorityAnimationKind.crossSectionMove ||
+            _lastPlan?.kind == TaskHubPriorityAnimationKind.visibleInsertion) &&
         capture.sourceRect != null &&
         targetRect != null) {
       _activeOverlay = TaskHubPriorityOverlayState(
-        todoId: capture.todoId,
+        todoId: animatedTodoId,
         title: capture.title,
         token: ++_animationToken,
         beginRect: capture.sourceRect!,
@@ -120,7 +118,7 @@ class TaskHubPriorityAnimationController extends ChangeNotifier {
       final delta = capture.sourceRect!.topLeft - targetRect.topLeft;
       _activeOverlay = null;
       _activeInlineAnimation = TaskHubPriorityInlineAnimationState(
-        todoId: capture.todoId,
+        todoId: animatedTodoId,
         beginOffset: delta,
         token: ++_animationToken,
       );

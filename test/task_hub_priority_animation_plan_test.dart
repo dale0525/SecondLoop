@@ -83,6 +83,34 @@ void main() {
     expect(plan.toSection, isNull);
   });
 
+  test('planner returns visibleInsertion when target becomes visible', () {
+    const previous = TaskHubPriorityAnimationSnapshot(
+      focusTodoId: 'focus',
+      nextUpTodoIds: <String>['a'],
+      backlogTodoIds: <String>[],
+      doneTodoIds: <String>['done'],
+    );
+    const next = TaskHubPriorityAnimationSnapshot(
+      focusTodoId: 'focus',
+      nextUpTodoIds: <String>['redo-copy', 'a'],
+      backlogTodoIds: <String>[],
+      doneTodoIds: <String>['done'],
+    );
+
+    final plan = buildTaskHubPriorityAnimationPlan(
+      previous: previous,
+      next: next,
+      actedTodoId: 'redo-copy',
+      reducedMotion: false,
+    );
+
+    expect(plan.kind, TaskHubPriorityAnimationKind.visibleInsertion);
+    expect(plan.fromSection, isNull);
+    expect(plan.toSection, TaskHubPriorityAnimationSection.nextUp);
+    expect(plan.fromIndex, isNull);
+    expect(plan.toIndex, 0);
+  });
+
   test('planner degrades when reduced motion is enabled', () {
     const previous = TaskHubPriorityAnimationSnapshot(
       focusTodoId: 'focus',
