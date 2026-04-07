@@ -129,6 +129,62 @@ void main() {
       );
     });
 
+    test('falls back to GitHub API when latest.json is stale', () async {
+      final requestedUris = <Uri>[];
+      final service = AppUpdateService(
+        platformOverride: AppUpdatePlatform.android,
+        releaseModeOverride: true,
+        releaseRepoOverride: 'dale0525/SecondLoop',
+        androidSupportedAbisOverride: const ['arm64-v8a'],
+        currentVersionLoader: () async =>
+            const AppRuntimeVersion(version: '1.1.0', buildNumber: '9'),
+        releaseJsonFetcher: (uri) async {
+          requestedUris.add(uri);
+          if (uri.path.endsWith('/latest.json')) {
+            return {
+              'tag_name': 'v1.1.0',
+              'release_page_url':
+                  'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
+              'platforms': {
+                'android-arm64-v8a': {
+                  'install_mode': 'apk',
+                  'archive_url': 'https://cdn.example.com/stale.apk',
+                  'sha256': 'stale123',
+                },
+              },
+            };
+          }
+          if (uri.host == 'api.github.com') {
+            return {
+              'tag_name': 'v1.2.0',
+              'html_url':
+                  'https://github.com/dale0525/SecondLoop/releases/tag/v1.2.0',
+              'platforms': {
+                'android-arm64-v8a': {
+                  'install_mode': 'apk',
+                  'archive_url': 'https://cdn.example.com/fresh.apk',
+                  'sha256': 'fresh123',
+                },
+              },
+            };
+          }
+          throw StateError('unexpected_uri:$uri');
+        },
+      );
+
+      final result = await service.checkForUpdates();
+
+      expect(result.update, isNotNull);
+      expect(result.update!.latestTag, 'v1.2.0');
+      expect(
+        result.update!.asset!.downloadUri.toString(),
+        'https://cdn.example.com/fresh.apk',
+      );
+      expect(requestedUris, hasLength(2));
+      expect(requestedUris.first.path, endsWith('/latest.json'));
+      expect(requestedUris.last.host, 'api.github.com');
+    });
+
     test('does not fall back to arm64 manifest for x86_64 devices', () async {
       final service = AppUpdateService(
         platformOverride: AppUpdatePlatform.android,

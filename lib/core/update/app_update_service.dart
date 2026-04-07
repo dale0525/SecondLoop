@@ -244,9 +244,6 @@ class AppUpdateService {
         if (compareReleaseTagWithCurrentVersion(candidateTag, currentVersion) <=
             0) {
           sawUpToDateOrOlderRelease = true;
-          if (isGitHubLatestJsonEndpoint) {
-            break;
-          }
           continue;
         }
         sawNewerRelease = true;
