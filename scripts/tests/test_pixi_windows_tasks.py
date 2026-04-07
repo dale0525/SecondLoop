@@ -196,6 +196,7 @@ class PixiWindowsTasksTests(unittest.TestCase):
         self.assertNotIn(".tools", script)
         self.assertIn("7z", script)
         self.assertIn("VkPhysicalDeviceCooperativeMatrixFeaturesKHR", script)
+        self.assertIn('${installerFileName}?Human=true', script)
 
     def test_platform_whisper_dependency_configuration(self) -> None:
         cargo_config = self._load_rust_cargo_config()

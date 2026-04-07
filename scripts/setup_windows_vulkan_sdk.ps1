@@ -59,7 +59,7 @@ $installerFileName = "VulkanSDK-$Version-Installer.exe"
 $installerPath = Join-Path $cacheDir $installerFileName
 $downloadUrl = $env:SECONDLOOP_WINDOWS_VULKAN_SDK_URL
 if ([string]::IsNullOrWhiteSpace($downloadUrl)) {
-  $downloadUrl = "https://sdk.lunarg.com/sdk/download/$Version/windows/$installerFileName?Human=true"
+  $downloadUrl = "https://sdk.lunarg.com/sdk/download/$Version/windows/${installerFileName}?Human=true"
 }
 
 if ((-not $ForceReinstall) -and (Test-VulkanSdkLayout -Root $InstallDir) -and (Test-VulkanKhrCooperativeMatrixSupport -Root $InstallDir)) {
