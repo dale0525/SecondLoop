@@ -149,12 +149,8 @@ void cancelNotification(NativePlugin* plugin, int id) {
     } else {
       plugin->history.value().Remove(tag, winrt::hstring(), plugin->aumid);
     }
-  } catch (const winrt::hresult_error& error) {
-    if (!isIgnorableNotificationHistoryError(error)) {
-      // Keep cancellation best-effort at the FFI boundary.
-    }
   } catch (...) {
-    // ignore history removal failures
+    // Keep cancellation best-effort at the FFI boundary.
   }
 
   try {
