@@ -15,7 +15,6 @@ extension _TaskHubPageStatePriorityAnimation on _TaskHubPageState {
         return;
       case TaskPriorityResolutionPhase.awaitingAi:
       case TaskPriorityResolutionPhase.localPublished:
-      case TaskPriorityResolutionPhase.localFallback:
         if (pending.localSnapshot != null) {
           return;
         }
@@ -27,6 +26,27 @@ extension _TaskHubPageStatePriorityAnimation on _TaskHubPageState {
           nextSnapshot: nextSnapshot,
           clearPendingAfterRun: snapshot.resolutionPhase !=
               TaskPriorityResolutionPhase.awaitingAi,
+        );
+        return;
+      case TaskPriorityResolutionPhase.localFallback:
+        final localSnapshot = pending.localSnapshot;
+        if (localSnapshot == null) {
+          final updatedPending = pending.copyWith(localSnapshot: nextSnapshot);
+          _pendingPriorityAnimation = updatedPending;
+          _schedulePriorityAnimationCompletion(
+            pending: updatedPending,
+            capture: updatedPending.localCapture,
+            nextSnapshot: nextSnapshot,
+            clearPendingAfterRun: true,
+          );
+          return;
+        }
+        if (pending.localAnimationSettled) {
+          _pendingPriorityAnimation = null;
+          return;
+        }
+        _pendingPriorityAnimation = pending.copyWith(
+          clearPendingAfterLocalAnimation: true,
         );
         return;
       case TaskPriorityResolutionPhase.aiResolved:
@@ -88,13 +108,18 @@ extension _TaskHubPageStatePriorityAnimation on _TaskHubPageState {
       if (activePending == null || activePending.actionId != pending.actionId) {
         return;
       }
-      _refreshCardAnchors(todoIds: <String>[pending.todoId]);
       final plan = buildTaskHubPriorityAnimationPlan(
         previous: capture.previous,
         next: nextSnapshot,
         actedTodoId: pending.todoId,
         reducedMotion: capture.reducedMotion,
       );
+      final anchorIds = <String>{pending.todoId};
+      final targetSection = plan.toSection;
+      if (targetSection != null) {
+        anchorIds.add(_sectionAnchorId(targetSection));
+      }
+      _refreshCardAnchors(todoIds: anchorIds);
       _priorityAnimationController.completeAction(
         capture,
         animatedTodoId: pending.todoId,
@@ -105,8 +130,21 @@ extension _TaskHubPageStatePriorityAnimation on _TaskHubPageState {
           sourceRect: capture.sourceRect,
         ),
       );
-      if (clearPendingAfterRun &&
-          _pendingPriorityAnimation?.actionId == pending.actionId) {
+      final latestPending = _pendingPriorityAnimation;
+      if (latestPending == null || latestPending.actionId != pending.actionId) {
+        return;
+      }
+      if (capture.source == TaskHubPriorityAnimationSource.localConfirmation) {
+        _pendingPriorityAnimation = latestPending.copyWith(
+          localAnimationSettled: true,
+        );
+      }
+      final updatedPending = _pendingPriorityAnimation;
+      final shouldClearPending = clearPendingAfterRun ||
+          (updatedPending != null &&
+              updatedPending.actionId == pending.actionId &&
+              updatedPending.clearPendingAfterLocalAnimation);
+      if (shouldClearPending) {
         _pendingPriorityAnimation = null;
       }
     }());
@@ -123,6 +161,8 @@ final class _TaskHubPendingPriorityAnimation {
     required this.baselineResolutionPhase,
     required this.baselineRefreshGeneration,
     this.localSnapshot,
+    this.localAnimationSettled = false,
+    this.clearPendingAfterLocalAnimation = false,
   });
 
   final String todoId;
@@ -133,11 +173,15 @@ final class _TaskHubPendingPriorityAnimation {
   final TaskPriorityResolutionPhase baselineResolutionPhase;
   final int baselineRefreshGeneration;
   final TaskHubPriorityAnimationSnapshot? localSnapshot;
+  final bool localAnimationSettled;
+  final bool clearPendingAfterLocalAnimation;
 
   int get actionId => localCapture.generation;
 
   _TaskHubPendingPriorityAnimation copyWith({
     TaskHubPriorityAnimationSnapshot? localSnapshot,
+    bool? localAnimationSettled,
+    bool? clearPendingAfterLocalAnimation,
   }) {
     return _TaskHubPendingPriorityAnimation(
       todoId: todoId,
@@ -148,6 +192,10 @@ final class _TaskHubPendingPriorityAnimation {
       baselineResolutionPhase: baselineResolutionPhase,
       baselineRefreshGeneration: baselineRefreshGeneration,
       localSnapshot: localSnapshot ?? this.localSnapshot,
+      localAnimationSettled:
+          localAnimationSettled ?? this.localAnimationSettled,
+      clearPendingAfterLocalAnimation: clearPendingAfterLocalAnimation ??
+          this.clearPendingAfterLocalAnimation,
     );
   }
 }

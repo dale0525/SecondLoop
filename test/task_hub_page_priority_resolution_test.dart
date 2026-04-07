@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:secondloop/core/sync/sync_engine.dart';
 import 'package:secondloop/src/rust/db.dart';
 
 import 'task_hub_page_test_helpers.dart';
@@ -190,5 +191,91 @@ void main() {
       findsNothing,
     );
     expect(find.text('Using local priority for now.'), findsOneWidget);
+  });
+
+  testWidgets(
+      'resolved refresh after local fallback does not replay stale animation',
+      (tester) async {
+    useLargeViewport(tester);
+    final engine = SyncEngine(
+      syncRunner: NoopSyncRunner(),
+      loadConfig: () async => null,
+      pullOnStart: false,
+    );
+    final backend = TaskHubTestBackend(
+      todos: <Todo>[
+        todo(
+          id: 'focus',
+          title: 'Fix prod issue',
+          updatedAtMs: 30,
+          status: 'in_progress',
+        ),
+        todo(
+          id: 'a',
+          title: 'Call vendor',
+          updatedAtMs: 20,
+        ),
+        todo(
+          id: 'b',
+          title: 'Draft note',
+          updatedAtMs: 10,
+        ),
+      ],
+      taskPriorityAiResponseJson: '{"entries":[]}',
+      taskPriorityAiResponseCallbacks: <Future<String> Function()>[
+        () async => throw StateError('AI down'),
+        () async => Future<String>.value(
+              '{"entries":[{"todo_id":"b","semantic_adjustment":30,"reason":"AI promotes B","confidence":"high","is_important":true,"is_urgent":true}]}',
+            ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      wrapTaskHubTestApp(
+        backend,
+        syncEngine: engine,
+      ),
+    );
+    await pumpUntilTaskHubReady(tester);
+
+    await tester.tap(
+      find.byKey(
+        const ValueKey('task_hub_page_priority_a_importance_increase'),
+      ),
+    );
+    await tester.pump();
+    await pumpUntilFound(
+      tester,
+      find.byKey(const ValueKey('task_hub_priority_local_fallback_badge_a')),
+    );
+    await pumpUntil(
+      tester,
+      () => find
+          .byKey(const ValueKey('task_hub_priority_inline_animation_a'))
+          .evaluate()
+          .isEmpty,
+    );
+
+    expect(
+      find.byKey(const ValueKey('task_hub_priority_inline_animation_a')),
+      findsNothing,
+    );
+
+    engine.notifyExternalChange();
+    await tester.pump(const Duration(milliseconds: 300));
+    await pumpUntil(
+      tester,
+      () => backend.taskPriorityAiCallCount >= 3,
+    );
+    await tester.pump(const Duration(milliseconds: 50));
+
+    expect(
+      find.byKey(const ValueKey('task_hub_priority_inline_animation_a')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey('task_hub_priority_animation_overlay')),
+      findsNothing,
+    );
   });
 }
