@@ -120,6 +120,8 @@ void main() {
 
     await tester.pumpWidget(wrapTaskHubTestApp(backend));
     await pumpUntilTaskHubReady(tester);
+    final sourceRect =
+        tester.getRect(find.byKey(const ValueKey('task_hub_page_item_focus')));
 
     await tester
         .tap(find.byKey(const ValueKey('task_hub_page_quick_focus_done')));
@@ -133,6 +135,11 @@ void main() {
       find.byKey(const ValueKey('task_hub_priority_animation_overlay')),
       findsOneWidget,
     );
+    final overlayRect = tester.getRect(
+      find.byKey(const ValueKey('task_hub_priority_animation_overlay')),
+    );
+    expect((overlayRect.top - sourceRect.top).abs(), lessThan(8));
+    expect((overlayRect.left - sourceRect.left).abs(), lessThan(8));
   });
 
   testWidgets('offscreen destination degrades to non-flight animation',

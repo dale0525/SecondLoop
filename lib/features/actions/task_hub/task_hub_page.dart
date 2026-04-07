@@ -52,6 +52,7 @@ class _TaskHubPageState extends State<TaskHubPage> {
   String? _restoredTodoId;
   final GlobalKey<ScaffoldMessengerState> _scaffoldMessengerKey =
       GlobalKey<ScaffoldMessengerState>();
+  final GlobalKey _animationLayerKey = GlobalKey();
   ScaffoldMessengerState? _quickActionSnackMessenger;
   Object? _quickActionSnackToken;
   var _doneVisibleCount = _kDonePageSize;
@@ -290,6 +291,19 @@ class _TaskHubPageState extends State<TaskHubPage> {
     return rect.overlaps(viewport) ? rect : null;
   }
 
+  Rect? _rectInAnimationLayer(Rect? globalRect) {
+    if (globalRect == null) return null;
+    final renderObject = _animationLayerKey.currentContext?.findRenderObject();
+    if (renderObject is! RenderBox ||
+        !renderObject.attached ||
+        !renderObject.hasSize) {
+      return globalRect;
+    }
+    final topLeft = renderObject.globalToLocal(globalRect.topLeft);
+    final bottomRight = renderObject.globalToLocal(globalRect.bottomRight);
+    return Rect.fromPoints(topLeft, bottomRight);
+  }
+
   Future<void> _waitForNextFrame() {
     final completer = Completer<void>();
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -325,7 +339,8 @@ class _TaskHubPageState extends State<TaskHubPage> {
       title: entry.todo.title,
       snapshot: previousSnapshot,
       reducedMotion: _shouldReduceTaskHubMotion(context),
-      sourceRect: _cardAnchorRegistry.rectFor(entry.todo.id),
+      sourceRect:
+          _rectInAnimationLayer(_cardAnchorRegistry.rectFor(entry.todo.id)),
     );
     final backend = AppBackendScope.of(context);
     final sessionKey = SessionScope.of(context).sessionKey;
@@ -360,8 +375,8 @@ class _TaskHubPageState extends State<TaskHubPage> {
       _priorityAnimationController.completeAction(
         animationCapture,
         next: _visibleAnimationSnapshot(currentStore.snapshot),
-        targetRect: _rectIfVisibleInViewport(
-          _cardAnchorRegistry.rectFor(entry.todo.id),
+        targetRect: _rectInAnimationLayer(
+          _rectIfVisibleInViewport(_cardAnchorRegistry.rectFor(entry.todo.id)),
         ),
       );
     }());
@@ -540,6 +555,7 @@ class _TaskHubPageState extends State<TaskHubPage> {
             final activeInlineAnimation =
                 _priorityAnimationController.activeInlineAnimation;
             return Stack(
+              key: _animationLayerKey,
               children: [
                 RefreshIndicator(
                   onRefresh: _refresh,
@@ -729,8 +745,11 @@ class _TaskHubPageState extends State<TaskHubPage> {
                   Positioned.fill(
                     child: TaskHubPriorityAnimationOverlay(
                       animation: activeOverlay,
-                      onCompleted: () => _priorityAnimationController
-                          .clearOverlay(activeOverlay.todoId),
+                      onCompleted: () =>
+                          _priorityAnimationController.clearOverlay(
+                        activeOverlay.todoId,
+                        activeOverlay.token,
+                      ),
                     ),
                   ),
               ],

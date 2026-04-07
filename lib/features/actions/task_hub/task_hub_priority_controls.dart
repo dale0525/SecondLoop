@@ -417,7 +417,8 @@ class _TaskHubPriorityControl extends StatelessWidget {
   bool get _isUp => direction == TaskPriorityNudgeDirection.up;
   bool get _isDown => direction == TaskPriorityNudgeDirection.down;
   String get _label {
-    if (_isDown) return decreaseTooltip;
+    if (_isUp) return raisedLabel;
+    if (_isDown) return loweredLabel;
     return neutralLabel;
   }
 

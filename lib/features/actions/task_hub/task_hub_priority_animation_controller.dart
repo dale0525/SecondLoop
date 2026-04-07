@@ -24,6 +24,7 @@ class TaskHubPriorityOverlayState {
   const TaskHubPriorityOverlayState({
     required this.todoId,
     required this.title,
+    required this.token,
     required this.beginRect,
     required this.endRect,
     this.duration = const Duration(milliseconds: 320),
@@ -31,6 +32,7 @@ class TaskHubPriorityOverlayState {
 
   final String todoId;
   final String title;
+  final int token;
   final Rect beginRect;
   final Rect endRect;
   final Duration duration;
@@ -98,6 +100,7 @@ class TaskHubPriorityAnimationController extends ChangeNotifier {
       _activeOverlay = TaskHubPriorityOverlayState(
         todoId: capture.todoId,
         title: capture.title,
+        token: ++_animationToken,
         beginRect: capture.sourceRect!,
         endRect: targetRect,
       );
@@ -120,8 +123,11 @@ class TaskHubPriorityAnimationController extends ChangeNotifier {
     notifyListeners();
   }
 
-  void clearOverlay(String todoId) {
-    if (_activeOverlay?.todoId != todoId) return;
+  void clearOverlay(String todoId, int token) {
+    final active = _activeOverlay;
+    if (active == null || active.todoId != todoId || active.token != token) {
+      return;
+    }
     _activeOverlay = null;
     notifyListeners();
   }

@@ -303,8 +303,70 @@ void main() {
     await tester.pumpWidget(_wrap(backend));
     await _pumpUntilTaskHubReady(tester);
 
-    expect(find.text('Urgency raised'), findsOneWidget);
-    expect(find.text('Importance lowered'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byKey(
+          const ValueKey('task_hub_page_nudge_nudged_urgency_up'),
+        ),
+        matching: find.text('Urgency raised'),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: find.byKey(
+          const ValueKey('task_hub_page_nudge_nudged_importance_down'),
+        ),
+        matching: find.text('Importance lowered'),
+      ),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('priority controls show state wording inside the control',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final backend = _TaskHubBackend(
+      todos: const <Todo>[
+        Todo(
+          id: 'nudged-control',
+          title: 'Nudged task',
+          dueAtMs: null,
+          status: 'open',
+          sourceEntryId: null,
+          createdAtMs: 0,
+          updatedAtMs: 10,
+          reviewStage: null,
+          nextReviewAtMs: null,
+          lastReviewAtMs: null,
+          manualUrgencyNudgeScore: 1,
+          manualImportanceNudgeScore: -1,
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(_wrap(backend));
+    await _pumpUntilTaskHubReady(tester);
+
+    expect(
+      find.descendant(
+        of: find.byKey(
+          const ValueKey('task_hub_page_priority_nudged-control_urgency_up'),
+        ),
+        matching: find.text('Urgency raised'),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: find.byKey(
+          const ValueKey(
+              'task_hub_page_priority_nudged-control_importance_down'),
+        ),
+        matching: find.text('Importance lowered'),
+      ),
+      findsOneWidget,
+    );
   });
 
   testWidgets('undo highlights the restored card without extra snackbar',
