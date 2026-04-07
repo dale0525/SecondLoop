@@ -368,7 +368,7 @@ class ScopedCiRuntimeWrapperBehaviorTests(unittest.TestCase):
                         "}",
                         "",
                         "resolve_flutter_bin() {",
-                        "  printf '%s\\n' /bin/true",
+                        "  command -v true",
                         "}",
                         "",
                         "run_with_periodic_status() {",
@@ -898,19 +898,11 @@ class ScopedCiRuntimeWrapperBehaviorTests(unittest.TestCase):
             hooks_dir = repo_root / ".githooks"
             lib_i18n_dir = repo_root / "lib/i18n"
             test_dir = repo_root / "test"
-            fake_bin_dir = repo_root / "fake-bin"
             scripts_dir.mkdir(parents=True, exist_ok=True)
             hooks_dir.mkdir(parents=True, exist_ok=True)
             lib_i18n_dir.mkdir(parents=True, exist_ok=True)
             test_dir.mkdir(parents=True, exist_ok=True)
-            fake_bin_dir.mkdir(parents=True, exist_ok=True)
             (test_dir / "sample_test.dart").write_text("// stub\n", encoding="utf-8")
-            noop_tool = fake_bin_dir / "noop-tool"
-            noop_tool.write_text(
-                "#!/usr/bin/env bash\nset -euo pipefail\nexit 0\n",
-                encoding="utf-8",
-            )
-            self._make_executable(noop_tool)
 
             (scripts_dir / "run_flutter_ci_local.sh").write_text(
                 RUN_FLUTTER_CI_LOCAL.read_text(encoding="utf-8"),
@@ -927,11 +919,11 @@ class ScopedCiRuntimeWrapperBehaviorTests(unittest.TestCase):
                         "}",
                         "",
                         "resolve_dart_bin() {",
-                        f"  printf '%s\\n' '{noop_tool.as_posix()}'",
+                        "  command -v true",
                         "}",
                         "",
                         "resolve_flutter_bin() {",
-                        f"  printf '%s\\n' '{noop_tool.as_posix()}'",
+                        "  command -v true",
                         "}",
                         "",
                         "run_with_periodic_status() {",
