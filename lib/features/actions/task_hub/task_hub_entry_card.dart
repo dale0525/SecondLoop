@@ -20,6 +20,8 @@ class TaskHubEntryCard extends StatelessWidget {
     this.emphasize = false,
     this.recentlyRestored = false,
     this.showPriorityControls = true,
+    this.showPriorityPendingBadge = false,
+    this.showPriorityLocalFallbackBadge = false,
     this.anchorRegistry,
     this.inlineAnimation,
     this.onInlineAnimationCompleted,
@@ -34,6 +36,8 @@ class TaskHubEntryCard extends StatelessWidget {
   final bool emphasize;
   final bool recentlyRestored;
   final bool showPriorityControls;
+  final bool showPriorityPendingBadge;
+  final bool showPriorityLocalFallbackBadge;
   final TaskHubCardAnchorRegistry? anchorRegistry;
   final TaskHubPriorityInlineAnimationState? inlineAnimation;
   final VoidCallback? onInlineAnimationCompleted;
@@ -58,6 +62,22 @@ class TaskHubEntryCard extends StatelessWidget {
           child: Text(
             checklistProgressText,
             key: ValueKey('task_hub_checklist_progress_${entry.todo.id}'),
+          ),
+        ),
+      if (showPriorityPendingBadge)
+        _TaskHubMetaChip(
+          child: Text(
+            context.t.actions.taskHub.priorityPending,
+            key: ValueKey('task_hub_priority_pending_badge_${entry.todo.id}'),
+          ),
+        ),
+      if (showPriorityLocalFallbackBadge)
+        _TaskHubMetaChip(
+          child: Text(
+            context.t.actions.taskHub.priorityLocalFallback,
+            key: ValueKey(
+              'task_hub_priority_local_fallback_badge_${entry.todo.id}',
+            ),
           ),
         ),
     ];

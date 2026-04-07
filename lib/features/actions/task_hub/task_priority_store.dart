@@ -232,7 +232,9 @@ class TaskPriorityStore extends ChangeNotifier {
       final aiEnhancementEnabled =
           await _isAiEnhancementEnabled?.call() ?? true;
       if (!aiEnhancementEnabled) {
-        _snapshot = rulesSnapshot;
+        _snapshot = rulesSnapshot.copyWith(
+          resolutionPhase: TaskPriorityResolutionPhase.localPublished,
+        );
         _aiAvailability = TaskPriorityAiAvailability.disabled;
         _rememberStickyFocus(nowLocal);
         _safeNotify();
@@ -240,7 +242,9 @@ class TaskPriorityStore extends ChangeNotifier {
       }
 
       if (rulesSnapshot.activeEntries.isEmpty) {
-        _snapshot = rulesSnapshot;
+        _snapshot = rulesSnapshot.copyWith(
+          resolutionPhase: TaskPriorityResolutionPhase.localPublished,
+        );
         _rememberStickyFocus(nowLocal);
         _safeNotify();
         return;
@@ -251,7 +255,9 @@ class TaskPriorityStore extends ChangeNotifier {
         nowLocal: nowLocal,
       );
       if (request.candidates.isEmpty) {
-        _snapshot = rulesSnapshot;
+        _snapshot = rulesSnapshot.copyWith(
+          resolutionPhase: TaskPriorityResolutionPhase.localPublished,
+        );
         _rememberStickyFocus(nowLocal);
         _safeNotify();
         return;
@@ -303,9 +309,15 @@ class TaskPriorityStore extends ChangeNotifier {
           ),
           enhancementSource: TaskPriorityEnhancementSource.aiLocalCache,
           feedbackState: feedbackState,
+        ).copyWith(
+          resolutionPhase: TaskPriorityResolutionPhase.aiResolved,
         );
       } else {
-        _snapshot = rulesSnapshot;
+        _snapshot = rulesSnapshot.copyWith(
+          resolutionPhase: aiService == null
+              ? TaskPriorityResolutionPhase.localPublished
+              : TaskPriorityResolutionPhase.awaitingAi,
+        );
       }
       _safeNotify();
 
@@ -413,6 +425,7 @@ class TaskPriorityStore extends ChangeNotifier {
         localCacheTodoIds.remove(todoId);
       }
 
+      var didLiveRerankFail = false;
       if (aiService != null && staleCandidates.isNotEmpty) {
         try {
           final result = await aiService.rerank(
@@ -445,7 +458,7 @@ class TaskPriorityStore extends ChangeNotifier {
           }
         } catch (_) {
           _aiAvailability = TaskPriorityAiAvailability.unavailable;
-          // Keep the already-published rules snapshot.
+          didLiveRerankFail = true;
         }
       }
 
@@ -483,7 +496,13 @@ class TaskPriorityStore extends ChangeNotifier {
       }
       if (aiEntries.isEmpty) {
         _aiAvailability = TaskPriorityAiAvailability.unavailable;
+        _snapshot = rulesSnapshot.copyWith(
+          resolutionPhase: didLiveRerankFail
+              ? TaskPriorityResolutionPhase.localFallback
+              : TaskPriorityResolutionPhase.localPublished,
+        );
         _rememberStickyFocus(nowLocal);
+        _safeNotify();
         return;
       }
 
@@ -499,7 +518,12 @@ class TaskPriorityStore extends ChangeNotifier {
         enhancementSource: enhancementSource,
         feedbackState: feedbackState,
       );
-      hybridSnapshot = _applyStickyFocus(hybridSnapshot, nowLocal: nowLocal);
+      hybridSnapshot = _applyStickyFocus(
+        hybridSnapshot.copyWith(
+          resolutionPhase: TaskPriorityResolutionPhase.aiResolved,
+        ),
+        nowLocal: nowLocal,
+      );
       _snapshot = hybridSnapshot;
       _rememberStickyFocus(nowLocal);
       _safeNotify();

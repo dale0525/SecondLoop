@@ -22,6 +22,7 @@ import 'task_hub_page_sections.dart';
 import 'task_hub_priority_animation_controller.dart';
 import 'task_hub_priority_animation_overlay.dart';
 import 'task_hub_priority_animation_plan.dart';
+import 'task_hub_priority_resolution_controller.dart';
 import 'task_hub_quick_actions.dart';
 import 'task_priority_ai.dart';
 import 'task_priority_feedback_store.dart';
@@ -30,6 +31,8 @@ import 'task_priority_store.dart';
 import '../todo/todo_detail_page.dart';
 
 part 'task_hub_page_navigation.dart';
+part 'task_hub_page_priority_animation.dart';
+part 'task_hub_page_priority_resolution.dart';
 
 class TaskHubPage extends StatefulWidget {
   const TaskHubPage({super.key});
@@ -41,6 +44,7 @@ class TaskHubPage extends StatefulWidget {
 class _TaskHubPageState extends State<TaskHubPage> {
   static const _kDonePageSize = 20;
   static const _kSyncRefreshDebounce = Duration(milliseconds: 250);
+  static const _kPriorityAiPendingTimeout = Duration(seconds: 4);
 
   TaskPriorityStore? _store;
   final TaskPriorityFeedbackStore _feedbackStore =
@@ -49,6 +53,7 @@ class _TaskHubPageState extends State<TaskHubPage> {
   Timer? _quickActionSnackAutoDismissTimer;
   Timer? _restoreHighlightTimer;
   Timer? _syncRefreshDebounceTimer;
+  Timer? _priorityAiPendingTimeoutTimer;
   String? _restoredTodoId;
   final GlobalKey<ScaffoldMessengerState> _scaffoldMessengerKey =
       GlobalKey<ScaffoldMessengerState>();
@@ -60,9 +65,14 @@ class _TaskHubPageState extends State<TaskHubPage> {
       TaskHubCardAnchorRegistry();
   final TaskHubPriorityAnimationController _priorityAnimationController =
       TaskHubPriorityAnimationController();
+  final TaskHubPriorityResolutionController _priorityResolutionController =
+      TaskHubPriorityResolutionController();
+  _TaskHubPendingPriorityAnimation? _pendingPriorityAnimation;
 
   SyncEngine? _syncEngine;
   VoidCallback? _syncListener;
+  TaskPriorityStore? _observedStore;
+  VoidCallback? _storeListener;
 
   @override
   void dispose() {
@@ -83,9 +93,20 @@ class _TaskHubPageState extends State<TaskHubPage> {
     _restoreHighlightTimer = null;
     _syncRefreshDebounceTimer?.cancel();
     _syncRefreshDebounceTimer = null;
+    _priorityAiPendingTimeoutTimer?.cancel();
+    _priorityAiPendingTimeoutTimer = null;
     _quickActionSnackMessenger = null;
     _quickActionSnackToken = null;
     _priorityAnimationController.dispose();
+    _pendingPriorityAnimation = null;
+    final observedStore = _observedStore;
+    final storeListener = _storeListener;
+    if (observedStore != null && storeListener != null) {
+      observedStore.removeListener(storeListener);
+    }
+    _observedStore = null;
+    _storeListener = null;
+    _priorityResolutionController.dispose();
     _store?.dispose();
     super.dispose();
   }
@@ -125,6 +146,7 @@ class _TaskHubPageState extends State<TaskHubPage> {
       },
       feedbackStore: _feedbackStore,
     );
+    _attachStoreListener();
 
     unawaited(_store?.refresh() ?? Future<void>.value());
   }
@@ -452,38 +474,31 @@ class _TaskHubPageState extends State<TaskHubPage> {
     }
     if (ticket == null || !mounted) return;
     final appliedTicket = ticket;
+    final animatedTodoId =
+        appliedTicket.createdTodoId ?? appliedTicket.updatedTodo.id;
+    _priorityResolutionController.startAction(
+      todoId: animatedTodoId,
+      baselineComputedAtLocal: _store?.snapshot.computedAtLocal,
+      baselineResolutionPhase:
+          _store?.snapshot.resolutionPhase ?? TaskPriorityResolutionPhase.idle,
+    );
+    _priorityAiPendingTimeoutTimer?.cancel();
+    _priorityAiPendingTimeoutTimer = null;
+    _pendingPriorityAnimation = _TaskHubPendingPriorityAnimation(
+      todoId: animatedTodoId,
+      title: appliedTicket.updatedTodo.title,
+      localCapture: animationCapture,
+      previousSnapshot: previousSnapshot,
+      baselineComputedAtLocal: _store?.snapshot.computedAtLocal,
+      baselineResolutionPhase:
+          _store?.snapshot.resolutionPhase ?? TaskPriorityResolutionPhase.idle,
+    );
     _undoTicket = appliedTicket;
     if (appliedTicket.shouldNotifySync) {
       syncEngine?.notifyLocalMutation();
     }
     await _refresh();
     if (!mounted) return;
-    unawaited(() async {
-      await _waitForNextFrame();
-      if (!mounted) return;
-      final currentStore = _store;
-      if (currentStore == null) return;
-      final animatedTodoId =
-          appliedTicket.createdTodoId ?? appliedTicket.updatedTodo.id;
-      _refreshCardAnchors();
-      final nextSnapshot = _visibleAnimationSnapshot(currentStore.snapshot);
-      final plan = buildTaskHubPriorityAnimationPlan(
-        previous: previousSnapshot,
-        next: nextSnapshot,
-        actedTodoId: animatedTodoId,
-        reducedMotion: animationCapture.reducedMotion,
-      );
-      _priorityAnimationController.completeAction(
-        animationCapture,
-        animatedTodoId: animatedTodoId,
-        next: nextSnapshot,
-        targetRect: _resolveAnimationTargetRect(
-          animatedTodoId: animatedTodoId,
-          plan: plan,
-          sourceRect: animationCapture.sourceRect,
-        ),
-      );
-    }());
     final messenger = _scaffoldMessengerKey.currentState;
     messenger?.hideCurrentSnackBar();
     _quickActionSnackAutoDismissTimer?.cancel();
@@ -647,6 +662,7 @@ class _TaskHubPageState extends State<TaskHubPage> {
           listenable: Listenable.merge([
             store,
             _priorityAnimationController,
+            _priorityResolutionController,
           ]),
           builder: (context, _) {
             final snapshot = store.snapshot;
@@ -658,6 +674,10 @@ class _TaskHubPageState extends State<TaskHubPage> {
             final visibleDone = snapshot.done.take(_doneVisibleCount).toList();
             final activeInlineAnimation =
                 _priorityAnimationController.activeInlineAnimation;
+            final pendingPriorityTodoId =
+                _priorityResolutionController.pendingTodoId;
+            final localFallbackPriorityTodoId =
+                _priorityResolutionController.localFallbackTodoId;
             return Stack(
               key: _animationLayerKey,
               children: [
@@ -711,6 +731,9 @@ class _TaskHubPageState extends State<TaskHubPage> {
                                 TaskHubPriorityAnimationSection.focus,
                               ),
                               inlineAnimation: activeInlineAnimation,
+                              priorityPendingTodoId: pendingPriorityTodoId,
+                              priorityLocalFallbackTodoId:
+                                  localFallbackPriorityTodoId,
                               onInlineAnimationCompleted:
                                   activeInlineAnimation == null
                                       ? null
@@ -786,6 +809,9 @@ class _TaskHubPageState extends State<TaskHubPage> {
                                         ),
                             restoredTodoId: _restoredTodoId,
                             sectionKind: TaskHubPageSectionKind.scheduled,
+                            priorityPendingTodoId: pendingPriorityTodoId,
+                            priorityLocalFallbackTodoId:
+                                localFallbackPriorityTodoId,
                             onOpenTodo: _openTodoDetail,
                             onQuickAction: _applyQuickAction,
                             onFeedback: _recordFeedback,
@@ -812,6 +838,9 @@ class _TaskHubPageState extends State<TaskHubPage> {
                                         ),
                             restoredTodoId: _restoredTodoId,
                             sectionKind: TaskHubPageSectionKind.decide,
+                            priorityPendingTodoId: pendingPriorityTodoId,
+                            priorityLocalFallbackTodoId:
+                                localFallbackPriorityTodoId,
                             onOpenTodo: _openTodoDetail,
                             onQuickAction: _applyQuickAction,
                             onFeedback: _recordFeedback,
@@ -838,6 +867,9 @@ class _TaskHubPageState extends State<TaskHubPage> {
                                         ),
                             restoredTodoId: _restoredTodoId,
                             sectionKind: TaskHubPageSectionKind.done,
+                            priorityPendingTodoId: pendingPriorityTodoId,
+                            priorityLocalFallbackTodoId:
+                                localFallbackPriorityTodoId,
                             onOpenTodo: _openTodoDetail,
                             onQuickAction: _applyQuickAction,
                             footer: snapshot.done.length > _doneVisibleCount

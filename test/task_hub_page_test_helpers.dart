@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -111,6 +112,7 @@ final class TaskHubTestBackend extends TestAppBackend {
         const <TodoChecklistProgress>[],
     this.failTransition = false,
     this.taskPriorityAiResponseJson,
+    this.taskPriorityAiResponseCompleter,
     this.listTodosDelay = Duration.zero,
     List<LlmProfile>? llmProfiles,
   })  : _todos = {for (final todo in todos) todo.id: todo},
@@ -136,6 +138,8 @@ final class TaskHubTestBackend extends TestAppBackend {
   final List<LlmProfile> _llmProfiles;
   final bool failTransition;
   final String? taskPriorityAiResponseJson;
+  final Completer<String>? taskPriorityAiResponseCompleter;
+  int taskPriorityAiCallCount = 0;
   Duration listTodosDelay;
 
   @override
@@ -250,6 +254,14 @@ final class TaskHubTestBackend extends TestAppBackend {
     Uint8List key, {
     required String prompt,
   }) async {
+    taskPriorityAiCallCount += 1;
+    if (taskPriorityAiCallCount == 1 && taskPriorityAiResponseJson != null) {
+      return taskPriorityAiResponseJson!;
+    }
+    final completer = taskPriorityAiResponseCompleter;
+    if (completer != null) {
+      return completer.future;
+    }
     if (taskPriorityAiResponseJson == null) {
       throw UnimplementedError('taskPriorityRerankAi');
     }

@@ -32,6 +32,8 @@ class TaskHubPageSection extends StatelessWidget {
     this.anchorRegistry,
     this.anchorId,
     this.inlineAnimation,
+    this.priorityPendingTodoId,
+    this.priorityLocalFallbackTodoId,
     this.onInlineAnimationCompleted,
     super.key,
   });
@@ -55,6 +57,8 @@ class TaskHubPageSection extends StatelessWidget {
   final TaskHubCardAnchorRegistry? anchorRegistry;
   final String? anchorId;
   final TaskHubPriorityInlineAnimationState? inlineAnimation;
+  final String? priorityPendingTodoId;
+  final String? priorityLocalFallbackTodoId;
   final VoidCallback? onInlineAnimationCompleted;
 
   @override
@@ -88,6 +92,10 @@ class TaskHubPageSection extends StatelessWidget {
                       : (feedback) => onFeedback!(entries[i], feedback),
                   anchorRegistry: anchorRegistry,
                   inlineAnimation: inlineAnimation,
+                  showPriorityPendingBadge:
+                      entries[i].todo.id == priorityPendingTodoId,
+                  showPriorityLocalFallbackBadge:
+                      entries[i].todo.id == priorityLocalFallbackTodoId,
                   onInlineAnimationCompleted: onInlineAnimationCompleted,
                 ),
                 if (i != entries.length - 1) const SizedBox(height: 10),

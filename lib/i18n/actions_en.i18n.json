@@ -170,6 +170,8 @@
     "aiInsightLive": "Live AI insight",
     "aiInsightShared": "Shared AI insight",
     "aiInsightCached": "Cached AI insight",
+    "priorityPending": "Re-evaluating",
+    "priorityLocalFallback": "Using local priority for now.",
     "aiUpgradeHint": "Connect Cloud or BYOK to unlock smarter priority suggestions.",
     "snackActionApplied": "$action \"$title\"",
     "actions": {

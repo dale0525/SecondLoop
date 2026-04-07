@@ -4,9 +4,15 @@ import 'package:flutter/foundation.dart';
 
 import 'task_hub_priority_animation_plan.dart';
 
+enum TaskHubPriorityAnimationSource {
+  localConfirmation,
+  aiReconciliation,
+}
+
 class TaskHubPriorityAnimationCapture {
   const TaskHubPriorityAnimationCapture({
     required this.generation,
+    required this.source,
     required this.sourceTodoId,
     required this.title,
     required this.previous,
@@ -15,6 +21,7 @@ class TaskHubPriorityAnimationCapture {
   });
 
   final int generation;
+  final TaskHubPriorityAnimationSource source;
   final String sourceTodoId;
   final String title;
   final TaskHubPriorityAnimationSnapshot previous;
@@ -63,6 +70,10 @@ class TaskHubPriorityAnimationController extends ChangeNotifier {
 
   TaskHubPriorityAnimationPlan? _lastPlan;
   TaskHubPriorityAnimationPlan? get lastPlan => _lastPlan;
+  TaskHubPriorityAnimationSource? _lastAnimationSource;
+  @visibleForTesting
+  TaskHubPriorityAnimationSource? get lastAnimationSource =>
+      _lastAnimationSource;
   int _animationToken = 0;
   int _actionGeneration = 0;
 
@@ -84,9 +95,36 @@ class TaskHubPriorityAnimationController extends ChangeNotifier {
             duration: const Duration(milliseconds: 180),
           );
     _lastPlan = null;
+    _lastAnimationSource = null;
     notifyListeners();
     return TaskHubPriorityAnimationCapture(
       generation: generation,
+      source: TaskHubPriorityAnimationSource.localConfirmation,
+      sourceTodoId: sourceTodoId,
+      title: title,
+      previous: snapshot,
+      reducedMotion: reducedMotion,
+      sourceRect: sourceRect,
+    );
+  }
+
+  TaskHubPriorityAnimationCapture prepareAction({
+    required TaskHubPriorityAnimationSource source,
+    required String sourceTodoId,
+    required String title,
+    required TaskHubPriorityAnimationSnapshot snapshot,
+    required bool reducedMotion,
+    Rect? sourceRect,
+  }) {
+    final generation = ++_actionGeneration;
+    _activeOverlay = null;
+    _activeInlineAnimation = null;
+    _lastPlan = null;
+    _lastAnimationSource = null;
+    notifyListeners();
+    return TaskHubPriorityAnimationCapture(
+      generation: generation,
+      source: source,
       sourceTodoId: sourceTodoId,
       title: title,
       previous: snapshot,
@@ -110,6 +148,14 @@ class TaskHubPriorityAnimationController extends ChangeNotifier {
       actedTodoId: animatedTodoId,
       reducedMotion: capture.reducedMotion,
     );
+    final overlayDuration =
+        capture.source == TaskHubPriorityAnimationSource.aiReconciliation
+            ? const Duration(milliseconds: 220)
+            : const Duration(milliseconds: 320);
+    final inlineDuration =
+        capture.source == TaskHubPriorityAnimationSource.aiReconciliation
+            ? const Duration(milliseconds: 160)
+            : const Duration(milliseconds: 240);
     if ((_lastPlan?.kind == TaskHubPriorityAnimationKind.crossSectionMove ||
             _lastPlan?.kind == TaskHubPriorityAnimationKind.visibleInsertion ||
             _lastPlan?.kind == TaskHubPriorityAnimationKind.visibleRemoval) &&
@@ -121,6 +167,7 @@ class TaskHubPriorityAnimationController extends ChangeNotifier {
         token: ++_animationToken,
         beginRect: capture.sourceRect!,
         endRect: targetRect,
+        duration: overlayDuration,
       );
       _activeInlineAnimation = null;
     } else if (_lastPlan?.kind ==
@@ -133,11 +180,23 @@ class TaskHubPriorityAnimationController extends ChangeNotifier {
         todoId: animatedTodoId,
         beginOffset: delta,
         token: ++_animationToken,
+        duration: inlineDuration,
       );
+    } else if (capture.source ==
+            TaskHubPriorityAnimationSource.localConfirmation &&
+        _activeInlineAnimation?.todoId == animatedTodoId) {
+      _activeOverlay = null;
     } else {
       _activeOverlay = null;
       _activeInlineAnimation = null;
     }
+    _lastAnimationSource =
+        _lastPlan?.kind == TaskHubPriorityAnimationKind.none &&
+                !(capture.source ==
+                        TaskHubPriorityAnimationSource.localConfirmation &&
+                    _activeInlineAnimation?.todoId == animatedTodoId)
+            ? null
+            : capture.source;
     notifyListeners();
   }
 

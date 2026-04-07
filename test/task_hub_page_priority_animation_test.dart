@@ -1,7 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:secondloop/features/actions/task_hub/task_hub_priority_animation_controller.dart';
+import 'package:secondloop/features/actions/task_hub/task_hub_priority_animation_plan.dart';
 import 'package:secondloop/features/actions/task_hub/task_hub_quick_actions.dart';
 import 'package:secondloop/src/rust/db.dart';
 
@@ -12,7 +16,95 @@ void main() {
     clearTaskHubSharedAiCacheForTest();
   });
 
-  testWidgets('same-section urgency increase animates without overlay',
+  test('ai reconciliation animations use shorter durations', () {
+    const previous = TaskHubPriorityAnimationSnapshot(
+      nextUpTodoIds: <String>['a', 'b'],
+    );
+    const next = TaskHubPriorityAnimationSnapshot(
+      nextUpTodoIds: <String>['b', 'a'],
+    );
+    final controller = TaskHubPriorityAnimationController();
+
+    final localCapture = controller.beginAction(
+      sourceTodoId: 'a',
+      title: 'Task A',
+      snapshot: previous,
+      reducedMotion: false,
+      sourceRect: const Rect.fromLTWH(0, 0, 100, 40),
+    );
+    controller.completeAction(
+      localCapture,
+      animatedTodoId: 'a',
+      next: next,
+      targetRect: const Rect.fromLTWH(0, 44, 100, 40),
+    );
+
+    expect(
+      controller.activeInlineAnimation?.duration,
+      const Duration(milliseconds: 240),
+    );
+
+    final aiCapture = controller.prepareAction(
+      source: TaskHubPriorityAnimationSource.aiReconciliation,
+      sourceTodoId: 'a',
+      title: 'Task A',
+      snapshot: previous,
+      reducedMotion: false,
+      sourceRect: const Rect.fromLTWH(0, 0, 100, 40),
+    );
+    controller.completeAction(
+      aiCapture,
+      animatedTodoId: 'a',
+      next: next,
+      targetRect: const Rect.fromLTWH(0, 44, 100, 40),
+    );
+
+    expect(
+      controller.activeInlineAnimation?.duration,
+      const Duration(milliseconds: 160),
+    );
+    expect(
+      controller.lastAnimationSource,
+      TaskHubPriorityAnimationSource.aiReconciliation,
+    );
+  });
+
+  test('local confirmation keeps immediate inline feedback when plan is none',
+      () {
+    const snapshot = TaskHubPriorityAnimationSnapshot(
+      nextUpTodoIds: <String>['a', 'b'],
+    );
+    final controller = TaskHubPriorityAnimationController();
+
+    final capture = controller.beginAction(
+      sourceTodoId: 'a',
+      title: 'Task A',
+      snapshot: snapshot,
+      reducedMotion: false,
+      sourceRect: const Rect.fromLTWH(0, 0, 100, 40),
+    );
+    final initialAnimation = controller.activeInlineAnimation;
+
+    controller.completeAction(
+      capture,
+      animatedTodoId: 'a',
+      next: snapshot,
+      targetRect: const Rect.fromLTWH(0, 0, 100, 40),
+    );
+
+    expect(controller.activeInlineAnimation, same(initialAnimation));
+    expect(controller.activeInlineAnimation?.todoId, 'a');
+    expect(
+      controller.activeInlineAnimation?.duration,
+      const Duration(milliseconds: 180),
+    );
+    expect(
+      controller.lastAnimationSource,
+      TaskHubPriorityAnimationSource.localConfirmation,
+    );
+  });
+
+  testWidgets('urgency increase into focus animates with overlay',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
     useLargeViewport(tester);
@@ -73,16 +165,100 @@ void main() {
     await tester.pump();
     await pumpUntilFound(
       tester,
-      find.byKey(const ValueKey('task_hub_priority_inline_animation_a')),
+      find.byKey(const ValueKey('task_hub_priority_animation_overlay')),
     );
 
     expect(
       find.byKey(const ValueKey('task_hub_priority_animation_overlay')),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('matching ai result clears pending without a second move',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    useLargeViewport(tester);
+    final tomorrowMorning = DateTime.now()
+        .add(const Duration(days: 1))
+        .toUtc()
+        .millisecondsSinceEpoch;
+    final aiRelease = Completer<String>();
+    final backend = TaskHubTestBackend(
+      todos: <Todo>[
+        Todo(
+          id: 'focus',
+          title: 'Today task',
+          dueAtMs: DateTime.now()
+              .add(const Duration(hours: 1))
+              .toUtc()
+              .millisecondsSinceEpoch,
+          status: 'open',
+          sourceEntryId: null,
+          createdAtMs: 0,
+          updatedAtMs: 100,
+          reviewStage: null,
+          nextReviewAtMs: null,
+          lastReviewAtMs: null,
+        ),
+        Todo(
+          id: 'a',
+          title: 'Call vendor',
+          dueAtMs: tomorrowMorning,
+          status: 'open',
+          sourceEntryId: null,
+          createdAtMs: 0,
+          updatedAtMs: 10,
+          reviewStage: null,
+          nextReviewAtMs: null,
+          lastReviewAtMs: null,
+        ),
+        Todo(
+          id: 'b',
+          title: 'Draft note',
+          dueAtMs: tomorrowMorning,
+          status: 'open',
+          sourceEntryId: null,
+          createdAtMs: 0,
+          updatedAtMs: 20,
+          reviewStage: null,
+          nextReviewAtMs: null,
+          lastReviewAtMs: null,
+        ),
+      ],
+      taskPriorityAiResponseJson: '{"entries":[]}',
+      taskPriorityAiResponseCompleter: aiRelease,
+    );
+
+    await tester.pumpWidget(wrapTaskHubTestApp(backend));
+    await pumpUntilTaskHubReady(tester);
+
+    await tester.tap(
+      find.byKey(const ValueKey('task_hub_page_priority_a_urgency_increase')),
+    );
+    await tester.pump();
+    await pumpUntilFound(
+      tester,
+      find.byKey(const ValueKey('task_hub_priority_animation_overlay')),
+    );
+    await pumpUntil(
+      tester,
+      () => find
+          .byKey(const ValueKey('task_hub_priority_animation_overlay'))
+          .evaluate()
+          .isEmpty,
+    );
+
+    aiRelease.complete('{"entries":[]}');
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 250));
+
+    expect(
+      find.byKey(const ValueKey('task_hub_priority_inline_animation_a')),
       findsNothing,
     );
     expect(
-      find.byKey(const ValueKey('task_hub_priority_inline_animation_a')),
-      findsOneWidget,
+      find.byKey(const ValueKey('task_hub_priority_animation_overlay')),
+      findsNothing,
     );
   });
 
