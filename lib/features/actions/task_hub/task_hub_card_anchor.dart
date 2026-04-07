@@ -61,6 +61,8 @@ class TaskHubCardAnchor extends StatefulWidget {
 }
 
 class _TaskHubCardAnchorState extends State<TaskHubCardAnchor> {
+  bool _measurementScheduled = false;
+
   @override
   void initState() {
     super.initState();
@@ -81,8 +83,12 @@ class _TaskHubCardAnchorState extends State<TaskHubCardAnchor> {
         oldWidget.registry != widget.registry) {
       oldWidget.registry.detach(oldWidget.todoId, _measureRect);
       widget.registry.attach(widget.todoId, _measureRect);
+      _scheduleMeasurement();
+      return;
     }
-    _scheduleMeasurement();
+    if (oldWidget.child.key != widget.child.key) {
+      _scheduleMeasurement();
+    }
   }
 
   @override
@@ -103,7 +109,12 @@ class _TaskHubCardAnchorState extends State<TaskHubCardAnchor> {
   }
 
   void _scheduleMeasurement() {
+    if (_measurementScheduled) {
+      return;
+    }
+    _measurementScheduled = true;
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      _measurementScheduled = false;
       if (!mounted) return;
       final rect = _measureRect();
       if (rect == null) {
@@ -116,7 +127,6 @@ class _TaskHubCardAnchorState extends State<TaskHubCardAnchor> {
 
   @override
   Widget build(BuildContext context) {
-    _scheduleMeasurement();
     return widget.child;
   }
 }

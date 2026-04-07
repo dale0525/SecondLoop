@@ -6,6 +6,50 @@ import 'package:secondloop/features/actions/task_hub/task_hub_priority_animation
 import 'package:secondloop/features/actions/task_hub/task_hub_priority_animation_plan.dart';
 
 void main() {
+  test('stale completeAction does not override a newer animation', () {
+    const previous = TaskHubPriorityAnimationSnapshot(
+      focusTodoId: 'focus',
+      nextUpTodoIds: <String>['a'],
+    );
+    const next = TaskHubPriorityAnimationSnapshot(
+      focusTodoId: 'focus',
+      doneTodoIds: <String>['a'],
+    );
+    final controller = TaskHubPriorityAnimationController();
+
+    final firstCapture = controller.beginAction(
+      todoId: 'a',
+      title: 'Task A',
+      snapshot: previous,
+      reducedMotion: false,
+      sourceRect: const Rect.fromLTWH(10, 20, 120, 48),
+    );
+    final secondCapture = controller.beginAction(
+      todoId: 'a',
+      title: 'Task A',
+      snapshot: previous,
+      reducedMotion: false,
+      sourceRect: const Rect.fromLTWH(40, 80, 120, 48),
+    );
+
+    controller.completeAction(
+      secondCapture,
+      next: next,
+      targetRect: const Rect.fromLTWH(40, 280, 120, 48),
+    );
+    final currentOverlay = controller.activeOverlay!;
+
+    controller.completeAction(
+      firstCapture,
+      next: next,
+      targetRect: const Rect.fromLTWH(10, 220, 120, 48),
+    );
+
+    expect(controller.activeOverlay?.token, currentOverlay.token);
+    expect(controller.activeOverlay?.beginRect, currentOverlay.beginRect);
+    expect(controller.activeOverlay?.endRect, currentOverlay.endRect);
+  });
+
   test('stale overlay completion does not clear a newer animation', () {
     const previous = TaskHubPriorityAnimationSnapshot(
       focusTodoId: 'focus',
