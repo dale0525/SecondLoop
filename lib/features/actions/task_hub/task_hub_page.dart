@@ -283,20 +283,28 @@ class _TaskHubPageState extends State<TaskHubPage> {
     return mediaQuery?.disableAnimations ?? false;
   }
 
-  Rect? _rectIfVisibleInViewport(Rect? rect) {
-    if (rect == null) return null;
-    final mediaQuery = MediaQuery.maybeOf(context);
-    if (mediaQuery == null) return rect;
-    final viewport = Offset.zero & mediaQuery.size;
-    return rect.overlaps(viewport) ? rect : null;
-  }
-
-  Rect? _rectInAnimationLayer(Rect? globalRect) {
-    if (globalRect == null) return null;
+  RenderBox? _animationLayerRenderBox() {
     final renderObject = _animationLayerKey.currentContext?.findRenderObject();
     if (renderObject is! RenderBox ||
         !renderObject.attached ||
         !renderObject.hasSize) {
+      return null;
+    }
+    return renderObject;
+  }
+
+  Rect? _rectIfVisibleInAnimationLayer(Rect? rect) {
+    if (rect == null) return null;
+    final renderBox = _animationLayerRenderBox();
+    if (renderBox == null) return rect;
+    final layerRect = renderBox.localToGlobal(Offset.zero) & renderBox.size;
+    return rect.overlaps(layerRect) ? rect : null;
+  }
+
+  Rect? _rectInAnimationLayer(Rect? globalRect) {
+    if (globalRect == null) return null;
+    final renderObject = _animationLayerRenderBox();
+    if (renderObject == null) {
       return globalRect;
     }
     final topLeft = renderObject.globalToLocal(globalRect.topLeft);
@@ -376,7 +384,9 @@ class _TaskHubPageState extends State<TaskHubPage> {
         animationCapture,
         next: _visibleAnimationSnapshot(currentStore.snapshot),
         targetRect: _rectInAnimationLayer(
-          _rectIfVisibleInViewport(_cardAnchorRegistry.rectFor(entry.todo.id)),
+          _rectIfVisibleInAnimationLayer(
+            _cardAnchorRegistry.rectFor(entry.todo.id),
+          ),
         ),
       );
     }());

@@ -19,8 +19,9 @@ class TaskHubPriorityAnimationOverlay extends StatelessWidget {
     final tokens = SlTokens.of(context);
     return IgnorePointer(
       child: TweenAnimationBuilder<Rect?>(
-        key:
-            ValueKey('task_hub_priority_animation_overlay_${animation.todoId}'),
+        key: ValueKey(
+          'task_hub_priority_animation_overlay_${animation.todoId}_${animation.token}',
+        ),
         tween: RectTween(begin: animation.beginRect, end: animation.endRect),
         duration: animation.duration,
         curve: Curves.easeOutCubic,
