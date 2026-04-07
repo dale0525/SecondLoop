@@ -278,4 +278,81 @@ void main() {
       findsNothing,
     );
   });
+
+  testWidgets(
+      'inflight pre-action ai refresh does not clear pending state for a newer action',
+      (tester) async {
+    useLargeViewport(tester);
+    final firstAiRelease = Completer<String>();
+    final secondAiRelease = Completer<String>();
+    final backend = TaskHubTestBackend(
+      todos: <Todo>[
+        todo(
+          id: 'focus',
+          title: 'Fix prod issue',
+          updatedAtMs: 30,
+          status: 'in_progress',
+        ),
+        todo(
+          id: 'a',
+          title: 'Call vendor',
+          updatedAtMs: 20,
+        ),
+        todo(
+          id: 'b',
+          title: 'Draft note',
+          updatedAtMs: 10,
+        ),
+      ],
+      taskPriorityAiResponseCallbacks: <Future<String> Function()>[
+        () => firstAiRelease.future,
+        () => secondAiRelease.future,
+      ],
+    );
+
+    await tester.pumpWidget(wrapTaskHubTestApp(backend));
+    await pumpUntilTaskHubReady(tester);
+
+    await tester.tap(
+      find.byKey(
+        const ValueKey('task_hub_page_priority_a_importance_increase'),
+      ),
+    );
+    await tester.pump();
+    expect(
+      find.byKey(const ValueKey('task_hub_priority_pending_badge_a')),
+      findsNothing,
+    );
+
+    firstAiRelease.complete(
+      '{"entries":[{"todo_id":"b","semantic_adjustment":30,"reason":"AI promotes B","confidence":"high","is_important":true,"is_urgent":true}]}',
+    );
+    await tester.pump();
+    await pumpUntil(
+      tester,
+      () => backend.taskPriorityAiCallCount >= 2,
+    );
+    await pumpUntilFound(
+      tester,
+      find.byKey(const ValueKey('task_hub_priority_pending_badge_a')),
+    );
+
+    expect(
+      find.byKey(const ValueKey('task_hub_priority_pending_badge_a')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('task_hub_priority_local_fallback_badge_a')),
+      findsNothing,
+    );
+
+    secondAiRelease.complete('{"entries":[]}');
+    await tester.pump();
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('task_hub_priority_pending_badge_a')),
+      findsNothing,
+    );
+  });
 }

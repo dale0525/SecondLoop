@@ -1,3 +1,5 @@
+import 'dart:ui';
+
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:secondloop/features/actions/task_hub/task_hub_priority_animation_plan.dart';
@@ -133,5 +135,59 @@ void main() {
     );
 
     expect(plan.kind, TaskHubPriorityAnimationKind.noEmphasis);
+  });
+
+  test('fallback rect moves downward when same-section target index increases',
+      () {
+    final rect = resolveTaskHubPriorityFallbackRect(
+      plan: const TaskHubPriorityAnimationPlan(
+        kind: TaskHubPriorityAnimationKind.sameSectionReorder,
+        todoId: 'a',
+        fromSection: TaskHubPriorityAnimationSection.nextUp,
+        toSection: TaskHubPriorityAnimationSection.nextUp,
+        fromIndex: 0,
+        toIndex: 2,
+      ),
+      sourceRect: const Rect.fromLTWH(10, 20, 120, 48),
+      sourceSection: TaskHubPriorityAnimationSection.nextUp,
+      sourceIndex: 0,
+    );
+
+    expect(rect, isNotNull);
+    expect(rect!.top, greaterThan(20));
+  });
+
+  test('fallback rect moves upward when done item reopens offscreen', () {
+    final rect = resolveTaskHubPriorityFallbackRect(
+      plan: const TaskHubPriorityAnimationPlan(
+        kind: TaskHubPriorityAnimationKind.visibleRemoval,
+        todoId: 'done',
+        fromSection: TaskHubPriorityAnimationSection.done,
+        fromIndex: 0,
+      ),
+      sourceRect: const Rect.fromLTWH(10, 220, 120, 48),
+      sourceSection: TaskHubPriorityAnimationSection.done,
+      sourceIndex: 0,
+    );
+
+    expect(rect, isNotNull);
+    expect(rect!.top, lessThan(220));
+  });
+
+  test('fallback rect uses source section for offscreen redo insertion', () {
+    final rect = resolveTaskHubPriorityFallbackRect(
+      plan: const TaskHubPriorityAnimationPlan(
+        kind: TaskHubPriorityAnimationKind.visibleInsertion,
+        todoId: 'redo-copy',
+        toSection: TaskHubPriorityAnimationSection.nextUp,
+        toIndex: 0,
+      ),
+      sourceRect: const Rect.fromLTWH(10, 220, 120, 48),
+      sourceSection: TaskHubPriorityAnimationSection.done,
+      sourceIndex: 0,
+    );
+
+    expect(rect, isNotNull);
+    expect(rect!.top, lessThan(220));
   });
 }

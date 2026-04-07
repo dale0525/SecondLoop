@@ -68,6 +68,7 @@ class _TaskHubPageState extends State<TaskHubPage> {
   final TaskHubPriorityResolutionController _priorityResolutionController =
       TaskHubPriorityResolutionController();
   _TaskHubPendingPriorityAnimation? _pendingPriorityAnimation;
+  _TaskHubPendingPriorityMutation? _pendingPriorityMutation;
 
   SyncEngine? _syncEngine;
   VoidCallback? _syncListener;
@@ -99,6 +100,7 @@ class _TaskHubPageState extends State<TaskHubPage> {
     _quickActionSnackToken = null;
     _priorityAnimationController.dispose();
     _pendingPriorityAnimation = null;
+    _pendingPriorityMutation = null;
     final observedStore = _observedStore;
     final storeListener = _storeListener;
     if (observedStore != null && storeListener != null) {
@@ -338,15 +340,6 @@ class _TaskHubPageState extends State<TaskHubPage> {
     return 'task_hub_section_anchor_${section.name}';
   }
 
-  int _sectionOrder(TaskHubPriorityAnimationSection section) {
-    return switch (section) {
-      TaskHubPriorityAnimationSection.focus => 0,
-      TaskHubPriorityAnimationSection.nextUp => 1,
-      TaskHubPriorityAnimationSection.backlog => 2,
-      TaskHubPriorityAnimationSection.done => 3,
-    };
-  }
-
   Rect? _visibleCardOrSectionRect(
     String todoId, {
     TaskHubPriorityAnimationSection? fallbackSection,
@@ -371,33 +364,18 @@ class _TaskHubPageState extends State<TaskHubPage> {
     TaskHubPriorityAnimationPlan plan,
     Rect? sourceRect,
   ) {
-    if (sourceRect == null) {
-      return null;
-    }
-    switch (plan.kind) {
-      case TaskHubPriorityAnimationKind.sameSectionReorder:
-        final fromIndex = plan.fromIndex ?? 0;
-        final toIndex = plan.toIndex ?? fromIndex;
-        final direction = toIndex >= fromIndex ? -1.0 : 1.0;
-        return sourceRect.shift(Offset(0, 28 * direction));
-      case TaskHubPriorityAnimationKind.crossSectionMove:
-      case TaskHubPriorityAnimationKind.visibleInsertion:
-      case TaskHubPriorityAnimationKind.visibleRemoval:
-        final fromSection = plan.fromSection;
-        final toSection = plan.toSection ?? fromSection;
-        if (toSection == null) {
-          return sourceRect.shift(const Offset(0, -28));
-        }
-        final fromOrder = fromSection == null
-            ? _sectionOrder(toSection)
-            : _sectionOrder(fromSection);
-        final delta = _sectionOrder(toSection) - fromOrder;
-        final direction = delta == 0 ? 1.0 : delta.sign.toDouble();
-        return sourceRect.shift(Offset(0, 32 * direction));
-      case TaskHubPriorityAnimationKind.none:
-      case TaskHubPriorityAnimationKind.noEmphasis:
-        return null;
-    }
+    final pending = _pendingPriorityAnimation;
+    final sourceTodoId = pending?.activeCaptureSourceTodoId;
+    final sourceSnapshot = pending?.currentSourceSnapshot;
+    final sourcePosition = sourceTodoId == null || sourceSnapshot == null
+        ? null
+        : locateTaskHubPriorityVisibleEntry(sourceSnapshot, sourceTodoId);
+    return resolveTaskHubPriorityFallbackRect(
+      plan: plan,
+      sourceRect: sourceRect,
+      sourceSection: sourcePosition?.section,
+      sourceIndex: sourcePosition?.index,
+    );
   }
 
   Rect? _resolveAnimationTargetRect({
@@ -426,10 +404,75 @@ class _TaskHubPageState extends State<TaskHubPage> {
     _cardAnchorRegistry.refresh(todoIds: todoIds);
   }
 
+  void _refreshTrackedCardAnchors() {
+    final trackedIds = <String>{};
+    final pending = _pendingPriorityAnimation;
+    if (pending != null) {
+      trackedIds.add(pending.todoId);
+      trackedIds.add(pending.activeCaptureSourceTodoId);
+    }
+    final overlay = _priorityAnimationController.activeOverlay;
+    if (overlay != null) {
+      trackedIds.add(overlay.todoId);
+    }
+    final inline = _priorityAnimationController.activeInlineAnimation;
+    if (inline != null) {
+      trackedIds.add(inline.todoId);
+    }
+    final plan = _priorityAnimationController.lastPlan;
+    if (plan != null) {
+      if (plan.fromSection != null) {
+        trackedIds.add(_sectionAnchorId(plan.fromSection!));
+      }
+      if (plan.toSection != null) {
+        trackedIds.add(_sectionAnchorId(plan.toSection!));
+      }
+    }
+    if (trackedIds.isEmpty) {
+      return;
+    }
+    _refreshCardAnchors(todoIds: trackedIds);
+  }
+
+  bool _matchesPendingPriorityMutation(TaskPrioritySnapshot snapshot) {
+    final pendingMutation = _pendingPriorityMutation;
+    if (pendingMutation == null) {
+      return true;
+    }
+    if (snapshot.refreshGeneration <=
+        pendingMutation.baselineRefreshGeneration) {
+      return false;
+    }
+    TaskPriorityEntry? matchingEntry;
+    for (final entry in snapshot.allEntries) {
+      if (entry.todo.id == pendingMutation.todoId) {
+        matchingEntry = entry;
+        break;
+      }
+    }
+    if (!pendingMutation.shouldExistInSnapshot) {
+      return matchingEntry == null;
+    }
+    if (matchingEntry == null) {
+      return false;
+    }
+    final todo = matchingEntry.todo;
+    return todo.status == pendingMutation.status &&
+        todo.dueAtMs == pendingMutation.dueAtMs &&
+        todo.reviewStage == pendingMutation.reviewStage &&
+        todo.nextReviewAtMs == pendingMutation.nextReviewAtMs &&
+        todo.lastReviewAtMs == pendingMutation.lastReviewAtMs &&
+        (todo.manualImportanceNudgeScore ?? 0) ==
+            pendingMutation.manualImportanceNudgeScore &&
+        (todo.manualUrgencyNudgeScore ?? 0) ==
+            pendingMutation.manualUrgencyNudgeScore;
+  }
+
   void _clearPendingPriorityUiState({bool clearAnimationFeedback = false}) {
     _priorityAiPendingTimeoutTimer?.cancel();
     _priorityAiPendingTimeoutTimer = null;
     _pendingPriorityAnimation = null;
+    _pendingPriorityMutation = null;
     _priorityResolutionController.clear();
     if (clearAnimationFeedback) {
       _priorityAnimationController.reset();
@@ -520,9 +563,14 @@ class _TaskHubPageState extends State<TaskHubPage> {
       title: appliedTicket.updatedTodo.title,
       localCapture: animationCapture,
       previousSnapshot: previousSnapshot,
+      currentSourceSnapshot: previousSnapshot,
       baselineComputedAtLocal: storeSnapshot?.computedAtLocal,
       baselineResolutionPhase:
           storeSnapshot?.resolutionPhase ?? TaskPriorityResolutionPhase.idle,
+      baselineRefreshGeneration: storeSnapshot?.refreshGeneration ?? 0,
+    );
+    _pendingPriorityMutation = _TaskHubPendingPriorityMutation.fromUndoTicket(
+      appliedTicket,
       baselineRefreshGeneration: storeSnapshot?.refreshGeneration ?? 0,
     );
     _undoTicket = appliedTicket;
@@ -717,7 +765,7 @@ class _TaskHubPageState extends State<TaskHubPage> {
                 NotificationListener<ScrollNotification>(
                   onNotification: (notification) {
                     if (notification.depth != 0) return false;
-                    _refreshCardAnchors();
+                    _refreshTrackedCardAnchors();
                     return false;
                   },
                   child: RefreshIndicator(

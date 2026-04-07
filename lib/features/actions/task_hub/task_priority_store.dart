@@ -430,18 +430,15 @@ class TaskPriorityStore extends ChangeNotifier {
 
       var didLiveRerankFail = false;
       if (aiService != null && staleCandidates.isNotEmpty) {
+        final staleCandidateByTodoId = <String, TaskPriorityAiCandidate>{
+          for (final candidate in staleCandidates) candidate.todoId: candidate,
+        };
         try {
           final result = await aiService.rerank(
             request.copyWith(candidates: staleCandidates),
           );
           for (final entry in result.entries) {
-            TaskPriorityAiCandidate? candidate;
-            for (final item in staleCandidates) {
-              if (item.todoId == entry.todoId) {
-                candidate = item;
-                break;
-              }
-            }
+            final candidate = staleCandidateByTodoId[entry.todoId];
             if (candidate == null) continue;
             final requestSignature = _buildCandidateRequestSignature(
               candidate,

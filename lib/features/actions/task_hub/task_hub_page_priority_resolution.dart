@@ -17,8 +17,14 @@ extension _TaskHubPageStatePriorityResolution on _TaskHubPageState {
       final currentStore = _store;
       if (!mounted || currentStore == null) return;
       final snapshot = currentStore.snapshot;
+      if (!_matchesPendingPriorityMutation(snapshot)) {
+        return;
+      }
       final previousState = _priorityResolutionController.state;
       _priorityResolutionController.consumeSnapshot(snapshot);
+      if (_priorityResolutionController.state.isIdle) {
+        _pendingPriorityMutation = null;
+      }
       _syncPriorityResolutionTimeout(
         previous: previousState,
         current: _priorityResolutionController.state,

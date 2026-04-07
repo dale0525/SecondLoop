@@ -85,8 +85,12 @@ extension _TaskHubPageStatePriorityAnimation on _TaskHubPageState {
           sourceRect: _rectInAnimationLayer(
               _cardAnchorRegistry.rectFor(pending.todoId)),
         );
+        _pendingPriorityAnimation = pending.copyWith(
+          currentSourceSnapshot: localSnapshot,
+          activeCaptureSourceTodoId: pending.todoId,
+        );
         _schedulePriorityAnimationCompletion(
-          pending: pending,
+          pending: _pendingPriorityAnimation!,
           capture: capture,
           nextSnapshot: nextSnapshot,
           clearPendingAfterRun: true,
@@ -152,26 +156,31 @@ extension _TaskHubPageStatePriorityAnimation on _TaskHubPageState {
 }
 
 final class _TaskHubPendingPriorityAnimation {
-  const _TaskHubPendingPriorityAnimation({
+  _TaskHubPendingPriorityAnimation({
     required this.todoId,
     required this.title,
     required this.localCapture,
     required this.previousSnapshot,
+    required this.currentSourceSnapshot,
     required this.baselineComputedAtLocal,
     required this.baselineResolutionPhase,
     required this.baselineRefreshGeneration,
+    String? activeCaptureSourceTodoId,
     this.localSnapshot,
     this.localAnimationSettled = false,
     this.clearPendingAfterLocalAnimation = false,
-  });
+  }) : activeCaptureSourceTodoId =
+            activeCaptureSourceTodoId ?? localCapture.sourceTodoId;
 
   final String todoId;
   final String title;
   final TaskHubPriorityAnimationCapture localCapture;
   final TaskHubPriorityAnimationSnapshot previousSnapshot;
+  final TaskHubPriorityAnimationSnapshot currentSourceSnapshot;
   final DateTime? baselineComputedAtLocal;
   final TaskPriorityResolutionPhase baselineResolutionPhase;
   final int baselineRefreshGeneration;
+  final String activeCaptureSourceTodoId;
   final TaskHubPriorityAnimationSnapshot? localSnapshot;
   final bool localAnimationSettled;
   final bool clearPendingAfterLocalAnimation;
@@ -180,6 +189,8 @@ final class _TaskHubPendingPriorityAnimation {
 
   _TaskHubPendingPriorityAnimation copyWith({
     TaskHubPriorityAnimationSnapshot? localSnapshot,
+    TaskHubPriorityAnimationSnapshot? currentSourceSnapshot,
+    String? activeCaptureSourceTodoId,
     bool? localAnimationSettled,
     bool? clearPendingAfterLocalAnimation,
   }) {
@@ -188,9 +199,13 @@ final class _TaskHubPendingPriorityAnimation {
       title: title,
       localCapture: localCapture,
       previousSnapshot: previousSnapshot,
+      currentSourceSnapshot:
+          currentSourceSnapshot ?? this.currentSourceSnapshot,
       baselineComputedAtLocal: baselineComputedAtLocal,
       baselineResolutionPhase: baselineResolutionPhase,
       baselineRefreshGeneration: baselineRefreshGeneration,
+      activeCaptureSourceTodoId:
+          activeCaptureSourceTodoId ?? this.activeCaptureSourceTodoId,
       localSnapshot: localSnapshot ?? this.localSnapshot,
       localAnimationSettled:
           localAnimationSettled ?? this.localAnimationSettled,
@@ -198,4 +213,49 @@ final class _TaskHubPendingPriorityAnimation {
           this.clearPendingAfterLocalAnimation,
     );
   }
+}
+
+final class _TaskHubPendingPriorityMutation {
+  const _TaskHubPendingPriorityMutation({
+    required this.todoId,
+    required this.status,
+    required this.dueAtMs,
+    required this.reviewStage,
+    required this.nextReviewAtMs,
+    required this.lastReviewAtMs,
+    required this.manualImportanceNudgeScore,
+    required this.manualUrgencyNudgeScore,
+    required this.shouldExistInSnapshot,
+    required this.baselineRefreshGeneration,
+  });
+
+  factory _TaskHubPendingPriorityMutation.fromUndoTicket(
+    TaskHubUndoTicket ticket, {
+    required int baselineRefreshGeneration,
+  }) {
+    final todo = ticket.updatedTodo;
+    return _TaskHubPendingPriorityMutation(
+      todoId: ticket.createdTodoId ?? todo.id,
+      status: todo.status,
+      dueAtMs: todo.dueAtMs,
+      reviewStage: todo.reviewStage,
+      nextReviewAtMs: todo.nextReviewAtMs,
+      lastReviewAtMs: todo.lastReviewAtMs,
+      manualImportanceNudgeScore: todo.manualImportanceNudgeScore ?? 0,
+      manualUrgencyNudgeScore: todo.manualUrgencyNudgeScore ?? 0,
+      shouldExistInSnapshot: todo.status != 'dismissed',
+      baselineRefreshGeneration: baselineRefreshGeneration,
+    );
+  }
+
+  final String todoId;
+  final String status;
+  final int? dueAtMs;
+  final int? reviewStage;
+  final int? nextReviewAtMs;
+  final int? lastReviewAtMs;
+  final int manualImportanceNudgeScore;
+  final int manualUrgencyNudgeScore;
+  final bool shouldExistInSnapshot;
+  final int baselineRefreshGeneration;
 }
