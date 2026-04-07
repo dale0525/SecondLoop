@@ -197,10 +197,7 @@ to_native_windows_path() {
 
 resolve_precommit_temp_root() {
   local temp_root="${SECONDLOOP_PRECOMMIT_TEMP_ROOT:-}"
-
-  if [[ -z "${temp_root}" ]]; then
-    temp_root="${TMPDIR:-${TMP:-${TEMP:-}}}"
-  fi
+  local git_common_dir=""
 
   if [[ -n "${temp_root}" ]]; then
     if command -v cygpath >/dev/null 2>&1; then
@@ -211,7 +208,28 @@ resolve_precommit_temp_root() {
   fi
 
   if is_windows_env; then
+    git_common_dir="$(git rev-parse --git-common-dir 2>/dev/null || true)"
+    if [[ -n "${git_common_dir}" ]]; then
+      if command -v cygpath >/dev/null 2>&1; then
+        git_common_dir="$(cygpath -u "${git_common_dir}" 2>/dev/null || echo "${git_common_dir}")"
+      fi
+      printf '%s\n' "${git_common_dir}/secondloop-precommit-tmp"
+      return 0
+    fi
+
     printf '%s\n' "${repo_root}/.tool/tmp"
+    return 0
+  fi
+
+  if [[ -z "${temp_root}" ]]; then
+    temp_root="${TMPDIR:-${TMP:-${TEMP:-}}}"
+  fi
+
+  if [[ -n "${temp_root}" ]]; then
+    if command -v cygpath >/dev/null 2>&1; then
+      cygpath -u "${temp_root}" 2>/dev/null && return 0
+    fi
+    printf '%s\n' "${temp_root}"
     return 0
   fi
 

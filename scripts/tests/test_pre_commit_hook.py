@@ -156,6 +156,8 @@ class PreCommitHookTests(unittest.TestCase):
         self.assertIn("1.4.309.0", script)
         self.assertIn("VULKAN_SDK", script)
         self.assertIn("vulkan-1.lib", script)
+        self.assertIn("git rev-parse --git-common-dir", script)
+        self.assertIn("secondloop-precommit-tmp", script)
         self.assertIn("CARGO_TARGET_DIR", script)
         self.assertIn("CARGOKIT_TARGET_TEMP_DIR", script)
         self.assertIn("CARGOKIT_TOOL_TEMP_DIR", script)
