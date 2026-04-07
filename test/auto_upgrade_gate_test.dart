@@ -649,6 +649,45 @@ void main() {
     expect(find.text('Manual update'), findsOneWidget);
   });
 
+  testWidgets('staged update reminder explains next-launch apply behavior',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final update = AppUpdateAvailability(
+      currentVersion: '1.0.1+99',
+      latestTag: 'v1.1.0',
+      releasePageUri: Uri.parse(
+        'https://github.com/dale0525/SecondLoop/releases/tag/v1.1.0',
+      ),
+      installMode: AppUpdateInstallMode.stagedNextLaunch,
+      asset: AppUpdateAsset(
+        name: 'com.secondloop.secondloop-1.1.0-full.nupkg',
+        downloadUri: Uri.parse('https://cdn.example.com/win.nupkg'),
+      ),
+    );
+    final service = _FakeAutoUpdateService(
+      canStageSilentlyForNextLaunchValue: false,
+      result: AppUpdateCheckResult(
+        currentVersion: '1.0.1+99',
+        update: update,
+      ),
+    );
+
+    await pumpGate(tester, service: service);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 120));
+
+    expect(find.byType(SnackBar), findsOneWidget);
+    expect(find.text('Prepare update'), findsOneWidget);
+    expect(
+      find.textContaining('apply next launch'),
+      findsOneWidget,
+    );
+    expect(find.textContaining('download it now'), findsNothing);
+  },
+      variant: const TargetPlatformVariant(<TargetPlatform>{
+        TargetPlatform.windows,
+      }));
+
   testWidgets('passive reminder opens release page from primary action',
       (tester) async {
     SharedPreferences.setMockInitialValues({});

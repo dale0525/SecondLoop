@@ -42,6 +42,7 @@ const _defaultAllowHttpUpdateUris = bool.fromEnvironment(
   defaultValue: false,
 );
 const _defaultUpdateNetworkTimeout = Duration(seconds: 15);
+const _githubLatestJsonPathSuffix = '/releases/latest/download/latest.json';
 
 typedef AppUpdateReleaseJsonFetcher = Future<Map<String, Object?>> Function(
   Uri uri,
@@ -218,6 +219,8 @@ class AppUpdateService {
     final allowReleasePageFallbackWithoutPlatformAsset =
         releaseEndpoints.length == 1;
     for (final endpoint in releaseEndpoints) {
+      final isGitHubLatestJsonEndpoint = endpoint.host == 'github.com' &&
+          endpoint.path.endsWith(_githubLatestJsonPathSuffix);
       try {
         final candidate = await _fetchReleaseJson(endpoint);
         final candidateTag = normalizeLatestTag(
@@ -241,6 +244,9 @@ class AppUpdateService {
         if (compareReleaseTagWithCurrentVersion(candidateTag, currentVersion) <=
             0) {
           sawUpToDateOrOlderRelease = true;
+          if (isGitHubLatestJsonEndpoint) {
+            break;
+          }
           continue;
         }
         sawNewerRelease = true;
@@ -263,6 +269,9 @@ class AppUpdateService {
             continue;
           }
           release = candidate;
+          if (isGitHubLatestJsonEndpoint) {
+            break;
+          }
           continue;
         }
         if (compareReleaseTagWithCurrentVersion(
@@ -272,6 +281,9 @@ class AppUpdateService {
             !sawNewestReleaseUsable) {
           sawNewestReleaseUsable = true;
           release = candidate;
+          if (isGitHubLatestJsonEndpoint) {
+            break;
+          }
           continue;
         }
         if (!isCandidateUsable) {

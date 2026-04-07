@@ -472,6 +472,7 @@ class _AutoUpgradeGateState extends State<AutoUpgradeGate>
 
     final messenger = ScaffoldMessenger.maybeOf(context);
     if (messenger == null) return;
+    final aboutStatusT = context.t.settings.about.status;
     final updateNoticeT = context.t.settings.updateNotice;
     final commonActionsT = context.t.common.actions;
     final primaryActionLabel = _updateNoticePrimaryActionLabel(
@@ -480,10 +481,12 @@ class _AutoUpgradeGateState extends State<AutoUpgradeGate>
     );
     final message = stagedReady
         ? updateNoticeT.stagedReady(version: update.latestTag)
-        : (_isWindowsPlatform || _isMacosPlatform || _isLinuxPlatform) &&
-                update.canSeamlessInstall
-            ? updateNoticeT.seamlessAvailable(version: update.latestTag)
-            : updateNoticeT.manualDownload(version: update.latestTag);
+        : update.canStageForNextLaunch
+            ? aboutStatusT.availableStaged(version: update.latestTag)
+            : (_isWindowsPlatform || _isMacosPlatform || _isLinuxPlatform) &&
+                    update.canSeamlessInstall
+                ? updateNoticeT.seamlessAvailable(version: update.latestTag)
+                : updateNoticeT.manualDownload(version: update.latestTag);
     final notNowLabel = commonActionsT.notNow;
     final nowMs = DateTime.now().millisecondsSinceEpoch;
     await prefs.setString(
