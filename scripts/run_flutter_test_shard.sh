@@ -88,8 +88,8 @@ run_linux_integration_test() {
 run_flutter_unit_tests_in_batches() {
   local batch_index=1
   local batch_chars=0
-  local max_batch_chars=1000000
-  local max_batch_targets=1000000
+  local max_batch_chars="${SECONDLOOP_FLUTTER_TEST_MAX_BATCH_CHARS:-1000000}"
+  local max_batch_targets="${SECONDLOOP_FLUTTER_TEST_MAX_BATCH_TARGETS:-1000000}"
   local target
   local target_chars
   local -a batch_targets=()
@@ -97,9 +97,18 @@ run_flutter_unit_tests_in_batches() {
   if is_windows_env; then
     # flutter.bat ultimately runs through cmd.exe, which still enforces a small
     # command-line limit even though our PowerShell wrapper passes args safely.
-    max_batch_chars=6000
-    max_batch_targets=48
+    max_batch_chars="${SECONDLOOP_FLUTTER_TEST_MAX_BATCH_CHARS:-6000}"
+    max_batch_targets="${SECONDLOOP_FLUTTER_TEST_MAX_BATCH_TARGETS:-48}"
   fi
+
+  [[ "${max_batch_chars}" =~ ^[0-9]+$ ]] ||
+    die "SECONDLOOP_FLUTTER_TEST_MAX_BATCH_CHARS must be a positive integer"
+  [[ "${max_batch_targets}" =~ ^[0-9]+$ ]] ||
+    die "SECONDLOOP_FLUTTER_TEST_MAX_BATCH_TARGETS must be a positive integer"
+  (( max_batch_chars > 0 )) ||
+    die "SECONDLOOP_FLUTTER_TEST_MAX_BATCH_CHARS must be greater than 0"
+  (( max_batch_targets > 0 )) ||
+    die "SECONDLOOP_FLUTTER_TEST_MAX_BATCH_TARGETS must be greater than 0"
 
   run_batch() {
     local current_batch_index="$1"
