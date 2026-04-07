@@ -51,6 +51,8 @@ final class _TodoChecklistEditDialogState
 }
 
 extension _TodoDetailPageStateChecklist on _TodoDetailPageState {
+  static const double _narrowChecklistItemBreakpoint = 600;
+
   Future<bool> _confirmDoneWithIncompleteChecklist() async {
     final backend = AppBackendScope.maybeOf(context);
     final session = SessionScope.maybeOf(context);
@@ -237,6 +239,145 @@ extension _TodoDetailPageStateChecklist on _TodoDetailPageState {
     _refreshChecklistItems();
   }
 
+  Widget _buildChecklistItemActionButtons(
+    BuildContext context,
+    List<TodoChecklistItem> items,
+    int index,
+  ) {
+    final item = items[index];
+    return Wrap(
+      key: ValueKey('todo_detail_checklist_actions_${item.id}'),
+      alignment: WrapAlignment.end,
+      children: [
+        IconButton(
+          key: ValueKey('todo_detail_checklist_move_up_${item.id}'),
+          icon: const Icon(Icons.arrow_upward_rounded),
+          tooltip: context.t.actions.todoDetail.checklistMoveUp,
+          onPressed: index == 0
+              ? null
+              : () => unawaited(
+                    _moveChecklistItem(
+                      items,
+                      item,
+                      -1,
+                    ),
+                  ),
+        ),
+        IconButton(
+          key: ValueKey('todo_detail_checklist_move_down_${item.id}'),
+          icon: const Icon(Icons.arrow_downward_rounded),
+          tooltip: context.t.actions.todoDetail.checklistMoveDown,
+          onPressed: index == items.length - 1
+              ? null
+              : () => unawaited(
+                    _moveChecklistItem(
+                      items,
+                      item,
+                      1,
+                    ),
+                  ),
+        ),
+        IconButton(
+          key: ValueKey('todo_detail_checklist_edit_${item.id}'),
+          icon: const Icon(Icons.edit_outlined),
+          tooltip: context.t.actions.todoDetail.checklistEdit,
+          onPressed: () => unawaited(_editChecklistItem(item)),
+        ),
+        IconButton(
+          key: ValueKey('todo_detail_checklist_delete_${item.id}'),
+          icon: const Icon(Icons.delete_outline_rounded),
+          tooltip: context.t.actions.todoDetail.checklistDelete,
+          onPressed: () => unawaited(_deleteChecklistItem(item)),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildChecklistItem(
+    BuildContext context,
+    SlTokens tokens,
+    List<TodoChecklistItem> items,
+    int index,
+    bool useStackedLayout,
+  ) {
+    final item = items[index];
+    final textStyle = item.isDone
+        ? Theme.of(context).textTheme.bodyMedium?.copyWith(
+              decoration: TextDecoration.lineThrough,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            )
+        : Theme.of(context).textTheme.bodyMedium;
+    final content = Text(item.content, style: textStyle);
+    final checkbox = Checkbox(
+      key: ValueKey('todo_detail_checklist_toggle_${item.id}'),
+      value: item.isDone,
+      onChanged: (value) => unawaited(
+        _toggleChecklistItem(
+          item,
+          value ?? false,
+        ),
+      ),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(tokens.radiusSm),
+      ),
+    );
+    final actionButtons = _buildChecklistItemActionButtons(
+      context,
+      items,
+      index,
+    );
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: DecoratedBox(
+        key: ValueKey('todo_detail_checklist_item_${item.id}'),
+        decoration: BoxDecoration(
+          color: Theme.of(context)
+              .colorScheme
+              .surfaceContainerHighest
+              .withOpacity(0.35),
+          borderRadius: BorderRadius.circular(tokens.radiusLg),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 4),
+          child: useStackedLayout
+              ? Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        checkbox,
+                        Expanded(
+                          child: Padding(
+                            padding: const EdgeInsets.only(top: 12, right: 12),
+                            child: content,
+                          ),
+                        ),
+                      ],
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.only(right: 4, bottom: 4),
+                      child: Align(
+                        alignment: Alignment.centerRight,
+                        child: actionButtons,
+                      ),
+                    ),
+                  ],
+                )
+              : Row(
+                  children: [
+                    checkbox,
+                    Expanded(child: content),
+                    actionButtons,
+                    const SizedBox(width: 4),
+                  ],
+                ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildChecklistSection(BuildContext context) {
     final tokens = SlTokens.of(context);
     return SlSurface(
@@ -254,190 +395,88 @@ extension _TodoDetailPageStateChecklist on _TodoDetailPageState {
             builder: (context, suggestionsSnapshot) {
               final suggestions =
                   suggestionsSnapshot.data ?? const <TodoChecklistSuggestion>[];
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
+              return LayoutBuilder(
+                builder: (context, constraints) {
+                  final useStackedChecklistItemLayout =
+                      constraints.maxWidth < _narrowChecklistItemBreakpoint;
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Expanded(
-                        child: Text(
-                          context.t.actions.todoDetail.checklistTitle,
-                          style: Theme.of(context).textTheme.titleMedium,
-                        ),
-                      ),
-                      if (progressText != null)
-                        Text(
-                          progressText,
-                          key: const ValueKey('todo_detail_checklist_progress'),
-                          style:
-                              Theme.of(context).textTheme.bodySmall?.copyWith(
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              context.t.actions.todoDetail.checklistTitle,
+                              style: Theme.of(context).textTheme.titleMedium,
+                            ),
+                          ),
+                          if (progressText != null)
+                            Text(
+                              progressText,
+                              key: const ValueKey(
+                                'todo_detail_checklist_progress',
+                              ),
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .bodySmall
+                                  ?.copyWith(
                                     color: Theme.of(context)
                                         .colorScheme
                                         .onSurfaceVariant,
                                     fontWeight: FontWeight.w600,
                                   ),
-                        ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: TextField(
-                          key: const ValueKey('todo_detail_checklist_input'),
-                          controller: _checklistController,
-                          decoration: InputDecoration(
-                            hintText:
-                                context.t.actions.todoDetail.checklistHint,
-                            isDense: true,
-                            border: const OutlineInputBorder(),
-                          ),
-                          onSubmitted: (_) => unawaited(_addChecklistItem()),
-                        ),
+                            ),
+                        ],
                       ),
-                      const SizedBox(width: 8),
-                      SlButton(
-                        buttonKey: const ValueKey('todo_detail_checklist_add'),
-                        onPressed: _creatingChecklistItem
-                            ? null
-                            : () => unawaited(_addChecklistItem()),
-                        child: Text(context.t.actions.todoDetail.checklistAdd),
-                      ),
-                    ],
-                  ),
-                  if (items.isNotEmpty) ...[
-                    const SizedBox(height: 12),
-                    Column(
-                      children: [
-                        for (var index = 0; index < items.length; index++)
-                          Padding(
-                            padding: const EdgeInsets.only(bottom: 8),
-                            child: DecoratedBox(
-                              key: ValueKey(
-                                'todo_detail_checklist_item_${items[index].id}',
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: TextField(
+                              key:
+                                  const ValueKey('todo_detail_checklist_input'),
+                              controller: _checklistController,
+                              decoration: InputDecoration(
+                                hintText:
+                                    context.t.actions.todoDetail.checklistHint,
+                                isDense: true,
+                                border: const OutlineInputBorder(),
                               ),
-                              decoration: BoxDecoration(
-                                color: Theme.of(context)
-                                    .colorScheme
-                                    .surfaceContainerHighest
-                                    .withOpacity(0.35),
-                                borderRadius:
-                                    BorderRadius.circular(tokens.radiusLg),
-                              ),
-                              child: Padding(
-                                padding:
-                                    const EdgeInsets.symmetric(vertical: 4),
-                                child: Row(
-                                  children: [
-                                    Checkbox(
-                                      key: ValueKey(
-                                        'todo_detail_checklist_toggle_${items[index].id}',
-                                      ),
-                                      value: items[index].isDone,
-                                      onChanged: (value) => unawaited(
-                                        _toggleChecklistItem(
-                                          items[index],
-                                          value ?? false,
-                                        ),
-                                      ),
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(
-                                          tokens.radiusSm,
-                                        ),
-                                      ),
-                                    ),
-                                    Expanded(
-                                      child: Text(
-                                        items[index].content,
-                                        style: items[index].isDone
-                                            ? Theme.of(context)
-                                                .textTheme
-                                                .bodyMedium
-                                                ?.copyWith(
-                                                  decoration: TextDecoration
-                                                      .lineThrough,
-                                                  color: Theme.of(context)
-                                                      .colorScheme
-                                                      .onSurfaceVariant,
-                                                )
-                                            : Theme.of(context)
-                                                .textTheme
-                                                .bodyMedium,
-                                      ),
-                                    ),
-                                    IconButton(
-                                      key: ValueKey(
-                                        'todo_detail_checklist_move_up_${items[index].id}',
-                                      ),
-                                      icon: const Icon(
-                                        Icons.arrow_upward_rounded,
-                                      ),
-                                      tooltip: context
-                                          .t.actions.todoDetail.checklistMoveUp,
-                                      onPressed: index == 0
-                                          ? null
-                                          : () => unawaited(
-                                                _moveChecklistItem(
-                                                  items,
-                                                  items[index],
-                                                  -1,
-                                                ),
-                                              ),
-                                    ),
-                                    IconButton(
-                                      key: ValueKey(
-                                        'todo_detail_checklist_move_down_${items[index].id}',
-                                      ),
-                                      icon: const Icon(
-                                        Icons.arrow_downward_rounded,
-                                      ),
-                                      tooltip: context.t.actions.todoDetail
-                                          .checklistMoveDown,
-                                      onPressed: index == items.length - 1
-                                          ? null
-                                          : () => unawaited(
-                                                _moveChecklistItem(
-                                                  items,
-                                                  items[index],
-                                                  1,
-                                                ),
-                                              ),
-                                    ),
-                                    IconButton(
-                                      key: ValueKey(
-                                        'todo_detail_checklist_edit_${items[index].id}',
-                                      ),
-                                      icon: const Icon(Icons.edit_outlined),
-                                      tooltip: context
-                                          .t.actions.todoDetail.checklistEdit,
-                                      onPressed: () => unawaited(
-                                        _editChecklistItem(items[index]),
-                                      ),
-                                    ),
-                                    IconButton(
-                                      key: ValueKey(
-                                        'todo_detail_checklist_delete_${items[index].id}',
-                                      ),
-                                      icon: const Icon(
-                                        Icons.delete_outline_rounded,
-                                      ),
-                                      tooltip: context
-                                          .t.actions.todoDetail.checklistDelete,
-                                      onPressed: () => unawaited(
-                                        _deleteChecklistItem(items[index]),
-                                      ),
-                                    ),
-                                    const SizedBox(width: 4),
-                                  ],
-                                ),
-                              ),
+                              onSubmitted: (_) =>
+                                  unawaited(_addChecklistItem()),
                             ),
                           ),
+                          const SizedBox(width: 8),
+                          SlButton(
+                            buttonKey:
+                                const ValueKey('todo_detail_checklist_add'),
+                            onPressed: _creatingChecklistItem
+                                ? null
+                                : () => unawaited(_addChecklistItem()),
+                            child:
+                                Text(context.t.actions.todoDetail.checklistAdd),
+                          ),
+                        ],
+                      ),
+                      if (items.isNotEmpty) ...[
+                        const SizedBox(height: 12),
+                        Column(
+                          children: [
+                            for (var index = 0; index < items.length; index++)
+                              _buildChecklistItem(
+                                context,
+                                tokens,
+                                items,
+                                index,
+                                useStackedChecklistItemLayout,
+                              ),
+                          ],
+                        ),
                       ],
-                    ),
-                  ],
-                  _buildChecklistSuggestionsSection(context, suggestions),
-                ],
+                      _buildChecklistSuggestionsSection(context, suggestions),
+                    ],
+                  );
+                },
               );
             },
           );
