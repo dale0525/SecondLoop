@@ -35,6 +35,33 @@ void main() {
 
     expect(registry.updateCount, 1);
   });
+
+  testWidgets('measurement returns null after anchor is unmounted',
+      (tester) async {
+    final registry = _CapturingTaskHubCardAnchorRegistry();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Center(
+          child: TaskHubCardAnchor(
+            todoId: 'todo-1',
+            registry: registry,
+            child: const SizedBox(width: 120, height: 48),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    final measure = registry.lastMeasurement;
+    expect(measure, isNotNull);
+
+    await tester.pumpWidget(const MaterialApp(home: SizedBox.shrink()));
+    await tester.pump();
+
+    expect(measure!.call, returnsNormally);
+    expect(measure(), isNull);
+  });
 }
 
 class _CountingTaskHubCardAnchorRegistry extends TaskHubCardAnchorRegistry {
@@ -44,5 +71,15 @@ class _CountingTaskHubCardAnchorRegistry extends TaskHubCardAnchorRegistry {
   void update(String todoId, Rect rect) {
     updateCount += 1;
     super.update(todoId, rect);
+  }
+}
+
+class _CapturingTaskHubCardAnchorRegistry extends TaskHubCardAnchorRegistry {
+  TaskHubCardAnchorMeasurement? lastMeasurement;
+
+  @override
+  void attach(String todoId, TaskHubCardAnchorMeasurement measure) {
+    lastMeasurement = measure;
+    super.attach(todoId, measure);
   }
 }

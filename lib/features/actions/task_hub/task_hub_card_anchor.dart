@@ -98,6 +98,9 @@ class _TaskHubCardAnchorState extends State<TaskHubCardAnchor> {
   }
 
   Rect? _measureRect() {
+    if (!mounted) {
+      return null;
+    }
     final renderObject = context.findRenderObject();
     if (renderObject is! RenderBox ||
         !renderObject.attached ||
