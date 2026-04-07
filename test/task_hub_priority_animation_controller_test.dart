@@ -18,12 +18,14 @@ void main() {
     final controller = TaskHubPriorityAnimationController();
 
     final firstCapture = controller.beginAction(
+      sourceTodoId: 'a',
       title: 'Task A',
       snapshot: previous,
       reducedMotion: false,
       sourceRect: const Rect.fromLTWH(10, 20, 120, 48),
     );
     final secondCapture = controller.beginAction(
+      sourceTodoId: 'a',
       title: 'Task A',
       snapshot: previous,
       reducedMotion: false,
@@ -62,6 +64,7 @@ void main() {
     final controller = TaskHubPriorityAnimationController();
 
     final firstCapture = controller.beginAction(
+      sourceTodoId: 'a',
       title: 'Task A',
       snapshot: previous,
       reducedMotion: false,
@@ -76,6 +79,7 @@ void main() {
     final firstOverlay = controller.activeOverlay!;
 
     final secondCapture = controller.beginAction(
+      sourceTodoId: 'a',
       title: 'Task A',
       snapshot: previous,
       reducedMotion: false,

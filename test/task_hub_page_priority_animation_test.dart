@@ -86,6 +86,58 @@ void main() {
     );
   });
 
+  testWidgets('slow refresh still shows immediate feedback animation',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    useLargeViewport(tester);
+    final backend = TaskHubTestBackend(
+      todos: const <Todo>[
+        Todo(
+          id: 'focus',
+          title: 'Fix prod issue',
+          dueAtMs: null,
+          status: 'in_progress',
+          sourceEntryId: null,
+          createdAtMs: 0,
+          updatedAtMs: 10,
+          reviewStage: null,
+          nextReviewAtMs: null,
+          lastReviewAtMs: null,
+        ),
+        Todo(
+          id: 'done',
+          title: 'Already shipped',
+          dueAtMs: null,
+          status: 'done',
+          sourceEntryId: null,
+          createdAtMs: 0,
+          updatedAtMs: 40,
+          reviewStage: null,
+          nextReviewAtMs: null,
+          lastReviewAtMs: null,
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(wrapTaskHubTestApp(backend));
+    await pumpUntilTaskHubReady(tester);
+
+    backend.listTodosDelay = const Duration(milliseconds: 600);
+
+    await tester
+        .tap(find.byKey(const ValueKey('task_hub_page_quick_focus_done')));
+    await tester.pump(const Duration(milliseconds: 50));
+
+    expect(
+      find.byKey(const ValueKey('task_hub_priority_inline_animation_focus')),
+      findsOneWidget,
+    );
+
+    backend.listTodosDelay = Duration.zero;
+    await tester.pump(const Duration(milliseconds: 650));
+    await tester.pumpAndSettle();
+  });
+
   testWidgets('done flight starts from the scrolled source position',
       (tester) async {
     SharedPreferences.setMockInitialValues({});

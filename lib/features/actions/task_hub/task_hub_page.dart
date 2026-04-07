@@ -426,6 +426,7 @@ class _TaskHubPageState extends State<TaskHubPage> {
         ? const TaskHubPriorityAnimationSnapshot()
         : _visibleAnimationSnapshot(_store!.snapshot);
     final animationCapture = _priorityAnimationController.beginAction(
+      sourceTodoId: entry.todo.id,
       title: entry.todo.title,
       snapshot: previousSnapshot,
       reducedMotion: _shouldReduceTaskHubMotion(context),

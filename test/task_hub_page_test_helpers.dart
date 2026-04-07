@@ -111,6 +111,7 @@ final class TaskHubTestBackend extends TestAppBackend {
         const <TodoChecklistProgress>[],
     this.failTransition = false,
     this.taskPriorityAiResponseJson,
+    this.listTodosDelay = Duration.zero,
     List<LlmProfile>? llmProfiles,
   })  : _todos = {for (final todo in todos) todo.id: todo},
         _checklistProgress =
@@ -135,6 +136,7 @@ final class TaskHubTestBackend extends TestAppBackend {
   final List<LlmProfile> _llmProfiles;
   final bool failTransition;
   final String? taskPriorityAiResponseJson;
+  Duration listTodosDelay;
 
   @override
   Future<List<LlmProfile>> listLlmProfiles(Uint8List key) async =>
@@ -142,6 +144,9 @@ final class TaskHubTestBackend extends TestAppBackend {
 
   @override
   Future<List<Todo>> listTodos(Uint8List key) async {
+    if (listTodosDelay > Duration.zero) {
+      await Future<void>.delayed(listTodosDelay);
+    }
     listTodosCallCount += 1;
     return _todos.values.toList(growable: false);
   }

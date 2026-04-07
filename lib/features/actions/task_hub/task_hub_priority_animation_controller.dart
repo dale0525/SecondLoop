@@ -7,6 +7,7 @@ import 'task_hub_priority_animation_plan.dart';
 class TaskHubPriorityAnimationCapture {
   const TaskHubPriorityAnimationCapture({
     required this.generation,
+    required this.sourceTodoId,
     required this.title,
     required this.previous,
     required this.reducedMotion,
@@ -14,6 +15,7 @@ class TaskHubPriorityAnimationCapture {
   });
 
   final int generation;
+  final String sourceTodoId;
   final String title;
   final TaskHubPriorityAnimationSnapshot previous;
   final bool reducedMotion;
@@ -65,6 +67,7 @@ class TaskHubPriorityAnimationController extends ChangeNotifier {
   int _actionGeneration = 0;
 
   TaskHubPriorityAnimationCapture beginAction({
+    required String sourceTodoId,
     required String title,
     required TaskHubPriorityAnimationSnapshot snapshot,
     required bool reducedMotion,
@@ -72,11 +75,19 @@ class TaskHubPriorityAnimationController extends ChangeNotifier {
   }) {
     final generation = ++_actionGeneration;
     _activeOverlay = null;
-    _activeInlineAnimation = null;
+    _activeInlineAnimation = reducedMotion
+        ? null
+        : TaskHubPriorityInlineAnimationState(
+            todoId: sourceTodoId,
+            beginOffset: const Offset(0, -18),
+            token: ++_animationToken,
+            duration: const Duration(milliseconds: 180),
+          );
     _lastPlan = null;
     notifyListeners();
     return TaskHubPriorityAnimationCapture(
       generation: generation,
+      sourceTodoId: sourceTodoId,
       title: title,
       previous: snapshot,
       reducedMotion: reducedMotion,
