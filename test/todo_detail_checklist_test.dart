@@ -14,6 +14,66 @@ import 'test_i18n.dart';
 import 'noop_sync_runner.dart';
 
 void main() {
+  testWidgets(
+      'TodoDetailPage stacks checklist item actions below text on narrow screens',
+      (tester) async {
+    tester.view.physicalSize = const Size(640, 1200);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    const longContent =
+        'Draft launch post with final copy, screenshot list, and review checklist';
+    final backend = _Backend(
+      initialItems: const <TodoChecklistItem>[
+        TodoChecklistItem(
+          id: 'item_1',
+          todoId: 't1',
+          content: longContent,
+          isDone: false,
+          sortOrder: 0,
+          createdAtMs: 1,
+          updatedAtMs: 1,
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: backend,
+            child: SessionScope(
+              sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+              lock: () {},
+              child: const TodoDetailPage(
+                initialTodo: Todo(
+                  id: 't1',
+                  title: 'Task',
+                  status: 'open',
+                  createdAtMs: 0,
+                  updatedAtMs: 0,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final textFinder = find.text(longContent);
+    final actionsFinder = find.byKey(
+      const ValueKey('todo_detail_checklist_actions_item_1'),
+    );
+
+    expect(textFinder, findsOneWidget);
+    expect(actionsFinder, findsOneWidget);
+    expect(
+      tester.getTopLeft(actionsFinder).dy,
+      greaterThanOrEqualTo(tester.getBottomLeft(textFinder).dy),
+    );
+  });
+
   testWidgets('TodoDetailPage renders checklist section and supports item CRUD',
       (tester) async {
     tester.view.physicalSize = const Size(1600, 2400);
