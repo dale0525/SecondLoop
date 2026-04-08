@@ -114,10 +114,15 @@ class TaskPriorityEntry {
   final int manualUrgencyNudgeScore;
   final int dueDerivedUrgencyScore;
 
+  bool get suppressesAutomaticUrgencyBoost =>
+      manualUrgencyNudgeDirection == TaskPriorityNudgeDirection.down;
+
   double get totalScore => ruleScore + semanticScore;
 
   int get effectiveUrgency =>
-      urgencyScore + manualUrgencyNudgeScore + dueDerivedUrgencyScore;
+      urgencyScore +
+      manualUrgencyNudgeScore +
+      (suppressesAutomaticUrgencyBoost ? 0 : dueDerivedUrgencyScore);
 
   int get effectiveImportance => importanceScore + manualImportanceNudgeScore;
 
@@ -144,8 +149,8 @@ class TaskPriorityEntry {
   bool get isUrgent => effectiveUrgency > 0;
 
   bool get hasHardFocusGuard => hasTaskPriorityHardGuard(
-        isOverdue: isOverdue,
-        isDueToday: isDueToday,
+        isOverdue: !suppressesAutomaticUrgencyBoost && isOverdue,
+        isDueToday: !suppressesAutomaticUrgencyBoost && isDueToday,
       );
 
   TaskPriorityDisplayBucket get displayBucket {
