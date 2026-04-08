@@ -608,6 +608,15 @@ class TaskPriorityStore extends ChangeNotifier {
       return;
     }
 
+    if (_publishSnapshot(
+      rulesSnapshot.copyWith(
+        resolutionPhase: TaskPriorityResolutionPhase.awaitingAi,
+      ),
+      nowLocal: nowLocal,
+    )) {
+      _safeNotify();
+    }
+
     TaskPriorityAiService? aiService;
     try {
       aiService = await _resolveAiService?.call();
@@ -619,14 +628,13 @@ class TaskPriorityStore extends ChangeNotifier {
       aiService = null;
     }
 
-    if (_publishSnapshot(
-      rulesSnapshot.copyWith(
-        resolutionPhase: aiService == null
-            ? TaskPriorityResolutionPhase.localPublished
-            : TaskPriorityResolutionPhase.awaitingAi,
-      ),
-      nowLocal: nowLocal,
-    )) {
+    if (aiService == null &&
+        _publishSnapshot(
+          rulesSnapshot.copyWith(
+            resolutionPhase: TaskPriorityResolutionPhase.localPublished,
+          ),
+          nowLocal: nowLocal,
+        )) {
       _safeNotify();
     }
   }

@@ -112,13 +112,6 @@ class TaskHubPriorityResolutionController extends ChangeNotifier {
     if (snapshot.refreshGeneration <= current.baselineRefreshGeneration) {
       return;
     }
-
-    final baseline = current.baselineComputedAtLocal;
-    if (baseline != null &&
-        computedAtLocal.isAtSameMomentAs(baseline) &&
-        snapshot.resolutionPhase == current.baselineResolutionPhase) {
-      return;
-    }
     if (_lastConsumedRefreshGeneration != null &&
         _lastConsumedRefreshGeneration == snapshot.refreshGeneration &&
         _lastConsumedPhase == snapshot.resolutionPhase) {

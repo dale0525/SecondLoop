@@ -88,8 +88,7 @@ extension _TaskHubPageStatePriorityAnimation on _TaskHubPageState {
           title: pending.title,
           snapshot: localSnapshot,
           reducedMotion: pending.localCapture.reducedMotion,
-          sourceRect: _rectInAnimationLayer(
-              _cardAnchorRegistry.rectFor(pending.todoId)),
+          sourceRect: _visibleCardOrSectionRect(pending.todoId),
         );
         _pendingPriorityAnimation = pending.copyWith(
           currentSourceSnapshot: localSnapshot,

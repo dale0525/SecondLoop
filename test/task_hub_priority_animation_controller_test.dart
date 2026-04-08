@@ -173,4 +173,39 @@ void main() {
       TaskHubPriorityAnimationSource.localConfirmation,
     );
   });
+
+  test(
+      'ai reconciliation with no visible source rect falls back without overlay',
+      () {
+    const previous = TaskHubPriorityAnimationSnapshot(
+      nextUpTodoIds: <String>['a', 'b'],
+    );
+    const next = TaskHubPriorityAnimationSnapshot(
+      focusTodoId: 'a',
+      nextUpTodoIds: <String>['b'],
+    );
+    final controller = TaskHubPriorityAnimationController();
+
+    final capture = controller.prepareAction(
+      source: TaskHubPriorityAnimationSource.aiReconciliation,
+      sourceTodoId: 'a',
+      title: 'Task A',
+      snapshot: previous,
+      reducedMotion: false,
+      sourceRect: null,
+    );
+    controller.completeAction(
+      capture,
+      animatedTodoId: 'a',
+      next: next,
+      targetRect: const Rect.fromLTWH(0, 0, 100, 40),
+    );
+
+    expect(controller.activeOverlay, isNull);
+    expect(controller.activeInlineAnimation, isNull);
+    expect(
+      controller.lastAnimationSource,
+      TaskHubPriorityAnimationSource.aiReconciliation,
+    );
+  });
 }

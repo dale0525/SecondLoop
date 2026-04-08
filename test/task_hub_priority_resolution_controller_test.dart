@@ -68,4 +68,28 @@ void main() {
       TaskHubPriorityResolutionStatus.awaitingAiResolution,
     );
   });
+
+  test(
+      'same computedAtLocal still clears pending local feedback when refresh generation advances',
+      () {
+    final controller = TaskHubPriorityResolutionController();
+    final baseline = DateTime(2026, 4, 8, 10);
+
+    controller.startAction(
+      todoId: 'todo-a',
+      baselineComputedAtLocal: baseline,
+      baselineResolutionPhase: TaskPriorityResolutionPhase.localPublished,
+      baselineRefreshGeneration: 1,
+    );
+    controller.consumeSnapshot(
+      const TaskPrioritySnapshot.empty().copyWith(
+        computedAtLocal: DateTime(2026, 4, 8, 10),
+        resolutionPhase: TaskPriorityResolutionPhase.localPublished,
+        refreshGeneration: 2,
+      ),
+    );
+
+    expect(controller.state.isIdle, isTrue);
+    expect(controller.pendingTodoId, isNull);
+  });
 }

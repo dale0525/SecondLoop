@@ -108,6 +108,72 @@ void main() {
     );
     expect(store.snapshot.primaryFocus?.todo.id, 'focus');
   });
+
+  test(
+      'forced refresh publishes local snapshot before inflight resolver finishes',
+      () async {
+    final firstAiRelease = Completer<void>();
+    final secondResolveRelease = Completer<void>();
+    final secondLocalPublished = Completer<void>();
+    final published = <TaskPrioritySnapshot>[];
+    var resolveCallCount = 0;
+
+    late final TaskPriorityStore store;
+    store = TaskPriorityStore.fromLoaders(
+      loadTodos: () async => <Todo>[
+        todo(id: 'a', title: 'Alpha task', updatedAtMs: 20),
+        todo(id: 'b', title: 'Beta task', updatedAtMs: 10),
+      ],
+      nowLocal: () => DateTime(2026, 4, 7, 12),
+      resolveAiService: () async {
+        resolveCallCount += 1;
+        if (resolveCallCount == 1) {
+          return _DelayedAiService(
+            release: firstAiRelease.future,
+            result: const TaskPriorityAiBatchResult(
+                entries: <TaskPriorityAiEntry>[]),
+          );
+        }
+        await secondResolveRelease.future;
+        return const _FailingAiService();
+      },
+    )..addListener(() {
+        final snapshot = store.snapshot;
+        if (snapshot.computedAtLocal == null) return;
+        published.add(snapshot);
+        if (snapshot.refreshGeneration == 2 &&
+            snapshot.resolutionPhase ==
+                TaskPriorityResolutionPhase.awaitingAi &&
+            !secondLocalPublished.isCompleted) {
+          secondLocalPublished.complete();
+        }
+      });
+
+    final firstRefresh = store.refresh(force: true);
+    await Future<void>.microtask(() {});
+    await Future<void>.microtask(() {});
+
+    final forcedRefresh = store.refresh(force: true);
+
+    await expectLater(
+      secondLocalPublished.future.timeout(const Duration(milliseconds: 100)),
+      completes,
+    );
+
+    secondResolveRelease.complete();
+    firstAiRelease.complete();
+    await forcedRefresh;
+    await firstRefresh;
+
+    expect(
+      published.any(
+        (snapshot) =>
+            snapshot.refreshGeneration == 2 &&
+            snapshot.resolutionPhase == TaskPriorityResolutionPhase.awaitingAi,
+      ),
+      isTrue,
+    );
+  });
 }
 
 final class _DelayedAiService extends TaskPriorityAiService {
