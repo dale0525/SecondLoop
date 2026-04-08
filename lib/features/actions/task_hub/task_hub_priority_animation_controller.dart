@@ -36,7 +36,8 @@ class TaskHubPriorityOverlayState {
     required this.token,
     required this.beginRect,
     required this.endRect,
-    this.duration = const Duration(milliseconds: 320),
+    this.flightDuration = const Duration(milliseconds: 340),
+    this.settleDuration = Duration.zero,
   });
 
   final String todoId;
@@ -44,7 +45,10 @@ class TaskHubPriorityOverlayState {
   final int token;
   final Rect beginRect;
   final Rect endRect;
-  final Duration duration;
+  final Duration flightDuration;
+  final Duration settleDuration;
+
+  Duration get totalDuration => flightDuration + settleDuration;
 }
 
 class TaskHubPriorityInlineAnimationState {
@@ -174,8 +178,12 @@ class TaskHubPriorityAnimationController extends ChangeNotifier {
     );
     final overlayDuration =
         capture.source == TaskHubPriorityAnimationSource.aiReconciliation
-            ? const Duration(milliseconds: 220)
-            : const Duration(milliseconds: 320);
+            ? const Duration(milliseconds: 240)
+            : const Duration(milliseconds: 340);
+    final overlaySettleDuration =
+        capture.source == TaskHubPriorityAnimationSource.aiReconciliation
+            ? Duration.zero
+            : Duration.zero;
     final inlineDuration =
         capture.source == TaskHubPriorityAnimationSource.aiReconciliation
             ? const Duration(milliseconds: 160)
@@ -191,7 +199,8 @@ class TaskHubPriorityAnimationController extends ChangeNotifier {
         token: ++_animationToken,
         beginRect: capture.sourceRect!,
         endRect: targetRect,
-        duration: overlayDuration,
+        flightDuration: overlayDuration,
+        settleDuration: overlaySettleDuration,
       );
       _activeInlineAnimation = null;
     } else if (_lastPlan?.kind ==
