@@ -496,6 +496,9 @@ class _TaskHubPageState extends State<TaskHubPage> {
     TaskPriorityEntry entry,
     TaskHubQuickAction action,
   ) async {
+    if (_isPriorityNudgeNoOp(entry, action)) {
+      return;
+    }
     _refreshCardAnchors(todoIds: <String>[entry.todo.id]);
     final storeSnapshot = _store?.snapshot;
     final previousSnapshot = storeSnapshot == null
@@ -646,6 +649,24 @@ class _TaskHubPageState extends State<TaskHubPage> {
         }
       }),
     );
+  }
+
+  bool _isPriorityNudgeNoOp(
+    TaskPriorityEntry entry,
+    TaskHubQuickAction action,
+  ) {
+    final todo = entry.todo;
+    return switch (action) {
+      TaskHubQuickAction.increaseUrgency =>
+        (todo.manualUrgencyNudgeScore ?? 0) >= 1,
+      TaskHubQuickAction.decreaseUrgency =>
+        (todo.manualUrgencyNudgeScore ?? 0) <= -1,
+      TaskHubQuickAction.increaseImportance =>
+        (todo.manualImportanceNudgeScore ?? 0) >= 1,
+      TaskHubQuickAction.decreaseImportance =>
+        (todo.manualImportanceNudgeScore ?? 0) <= -1,
+      _ => false,
+    };
   }
 
   void _showRestoreHighlight(String todoId) {

@@ -178,6 +178,61 @@ void main() {
     );
   });
 
+  testWidgets(
+      're-applying an existing urgency up nudge does not show local feedback',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    useLargeViewport(tester);
+    final backend = TaskHubTestBackend(
+      todos: const <Todo>[
+        Todo(
+          id: 'focus',
+          title: 'Fix prod issue',
+          dueAtMs: null,
+          status: 'in_progress',
+          sourceEntryId: null,
+          createdAtMs: 0,
+          updatedAtMs: 20,
+          reviewStage: null,
+          nextReviewAtMs: null,
+          lastReviewAtMs: null,
+        ),
+        Todo(
+          id: 'a',
+          title: 'Call vendor',
+          dueAtMs: null,
+          status: 'open',
+          sourceEntryId: null,
+          createdAtMs: 0,
+          updatedAtMs: 10,
+          reviewStage: null,
+          nextReviewAtMs: null,
+          lastReviewAtMs: null,
+          manualUrgencyNudgeScore: 1,
+        ),
+      ],
+      transitionTodoDelay: const Duration(milliseconds: 200),
+    );
+
+    await tester.pumpWidget(wrapTaskHubTestApp(backend));
+    await pumpUntilTaskHubReady(tester);
+
+    await tester.tap(
+      find.byKey(const ValueKey('task_hub_page_priority_a_urgency_increase')),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+
+    expect(
+      find.byKey(const ValueKey('task_hub_priority_inline_animation_a')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey('task_hub_priority_animation_overlay')),
+      findsNothing,
+    );
+  });
+
   testWidgets('matching ai result clears pending without a second move',
       (tester) async {
     SharedPreferences.setMockInitialValues({});

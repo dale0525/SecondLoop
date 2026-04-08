@@ -118,6 +118,7 @@ final class TaskHubTestBackend extends TestAppBackend {
     List<Future<String>> taskPriorityAiResponseFutures =
         const <Future<String>>[],
     this.listTodosDelay = Duration.zero,
+    this.transitionTodoDelay = Duration.zero,
     List<LlmProfile>? llmProfiles,
   })  : _todos = {for (final todo in todos) todo.id: todo},
         _checklistProgress =
@@ -153,6 +154,7 @@ final class TaskHubTestBackend extends TestAppBackend {
   final Completer<String>? taskPriorityAiResponseCompleter;
   int taskPriorityAiCallCount = 0;
   Duration listTodosDelay;
+  Duration transitionTodoDelay;
 
   @override
   Future<List<LlmProfile>> listLlmProfiles(Uint8List key) async =>
@@ -228,6 +230,9 @@ final class TaskHubTestBackend extends TestAppBackend {
     bool clearManualUrgencyNudgeScore = false,
     String? sourceMessageId,
   }) async {
+    if (transitionTodoDelay > Duration.zero) {
+      await Future<void>.delayed(transitionTodoDelay);
+    }
     if (failTransition) {
       throw StateError('apply failed');
     }
