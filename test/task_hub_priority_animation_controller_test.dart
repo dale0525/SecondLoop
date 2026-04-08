@@ -101,4 +101,76 @@ void main() {
     controller.clearOverlay(secondOverlay.todoId, secondOverlay.token);
     expect(controller.activeOverlay, isNull);
   });
+
+  test(
+      'local confirmation keeps immediate feedback when reorder resolves to zero offset',
+      () {
+    const previous = TaskHubPriorityAnimationSnapshot(
+      nextUpTodoIds: <String>['focus', 'a', 'b'],
+    );
+    const next = TaskHubPriorityAnimationSnapshot(
+      nextUpTodoIds: <String>['focus', 'b', 'a'],
+    );
+    final controller = TaskHubPriorityAnimationController();
+
+    final capture = controller.beginAction(
+      sourceTodoId: 'a',
+      title: 'Task A',
+      snapshot: previous,
+      reducedMotion: false,
+      sourceRect: const Rect.fromLTWH(0, 0, 100, 40),
+    );
+    final initialAnimation = controller.activeInlineAnimation;
+
+    controller.completeAction(
+      capture,
+      animatedTodoId: 'a',
+      next: next,
+      targetRect: const Rect.fromLTWH(0, 0, 100, 40),
+    );
+
+    expect(controller.activeInlineAnimation, same(initialAnimation));
+    expect(controller.activeInlineAnimation?.todoId, 'a');
+    expect(
+      controller.lastAnimationSource,
+      TaskHubPriorityAnimationSource.localConfirmation,
+    );
+  });
+
+  test(
+      'local confirmation keeps immediate feedback when a secondary task becomes focus',
+      () {
+    const previous = TaskHubPriorityAnimationSnapshot(
+      focusTodoId: 'focus',
+      nextUpTodoIds: <String>['a', 'b'],
+    );
+    const next = TaskHubPriorityAnimationSnapshot(
+      focusTodoId: 'a',
+      nextUpTodoIds: <String>['focus', 'b'],
+    );
+    final controller = TaskHubPriorityAnimationController();
+
+    final capture = controller.beginAction(
+      sourceTodoId: 'a',
+      title: 'Task A',
+      snapshot: previous,
+      reducedMotion: false,
+      sourceRect: const Rect.fromLTWH(0, 40, 100, 40),
+    );
+    final initialAnimation = controller.activeInlineAnimation;
+
+    controller.completeAction(
+      capture,
+      animatedTodoId: 'a',
+      next: next,
+      targetRect: const Rect.fromLTWH(0, 0, 100, 40),
+    );
+
+    expect(controller.activeInlineAnimation, same(initialAnimation));
+    expect(controller.activeOverlay, isNull);
+    expect(
+      controller.lastAnimationSource,
+      TaskHubPriorityAnimationSource.localConfirmation,
+    );
+  });
 }

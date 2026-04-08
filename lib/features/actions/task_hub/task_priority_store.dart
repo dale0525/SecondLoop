@@ -14,6 +14,7 @@ import 'task_priority_ai_models.dart';
 import 'task_priority_engine.dart';
 import 'task_priority_feedback_store.dart';
 import 'task_priority_models.dart';
+import 'task_priority_sticky_focus.dart';
 
 enum TaskPriorityAiAvailability {
   unknown,
@@ -144,17 +145,12 @@ class TaskPriorityStore extends ChangeNotifier {
       _aiAvailability != TaskPriorityAiAvailability.unknown;
   bool get isAiEnhancementAvailable =>
       _aiAvailability == TaskPriorityAiAvailability.available;
-
   bool _dirty = true;
   bool get isDirty => _dirty;
-
   bool _isRefreshing = false;
   bool get isRefreshing => _isRefreshing;
-
-  String? _stickyFocusTodoId;
-  DateTime? _stickyFocusDayLocal;
-  Map<String, String> _stickyFocusDueStateByTodoId = const <String, String>{};
-
+  final TaskPriorityStickyFocusState _stickyFocus =
+      TaskPriorityStickyFocusState();
   Future<void>? _inflightRefresh;
   Future<void>? _inflightForcedLocalRefresh;
   bool _refreshQueuedAfterInflight = false;
@@ -337,6 +333,7 @@ class TaskPriorityStore extends ChangeNotifier {
                 resolutionPhase: TaskPriorityResolutionPhase.aiResolved,
                 refreshGeneration: refreshGeneration,
               ),
+              nowLocal: nowLocal,
             )
           : _publishSnapshot(
               rulesSnapshot.copyWith(
@@ -344,6 +341,7 @@ class TaskPriorityStore extends ChangeNotifier {
                     ? TaskPriorityResolutionPhase.localPublished
                     : TaskPriorityResolutionPhase.awaitingAi,
               ),
+              nowLocal: nowLocal,
             );
       if (publishedBootstrap) {
         _safeNotify();
@@ -548,7 +546,7 @@ class TaskPriorityStore extends ChangeNotifier {
         enhancementSource: enhancementSource,
         feedbackState: feedbackState,
       );
-      hybridSnapshot = _applyStickyFocus(
+      hybridSnapshot = _stickyFocus.apply(
         hybridSnapshot.copyWith(
           resolutionPhase: TaskPriorityResolutionPhase.aiResolved,
           refreshGeneration: refreshGeneration,
@@ -600,6 +598,7 @@ class TaskPriorityStore extends ChangeNotifier {
         rulesSnapshot.copyWith(
           resolutionPhase: TaskPriorityResolutionPhase.localPublished,
         ),
+        nowLocal: nowLocal,
       )) {
         if (!aiEnhancementEnabled) {
           _aiAvailability = TaskPriorityAiAvailability.disabled;
@@ -626,6 +625,7 @@ class TaskPriorityStore extends ChangeNotifier {
             ? TaskPriorityResolutionPhase.localPublished
             : TaskPriorityResolutionPhase.awaitingAi,
       ),
+      nowLocal: nowLocal,
     )) {
       _safeNotify();
     }
@@ -637,21 +637,18 @@ class TaskPriorityStore extends ChangeNotifier {
     bool rememberStickyFocus = false,
   }) {
     if (_disposed) return false;
+    if (nowLocal != null &&
+        snapshot.resolutionPhase != TaskPriorityResolutionPhase.idle) {
+      snapshot = _stickyFocus.apply(snapshot, nowLocal: nowLocal);
+    }
     if (snapshot.refreshGeneration < _snapshot.refreshGeneration) {
       return false;
     }
     _snapshot = snapshot;
     if (rememberStickyFocus && nowLocal != null) {
-      _rememberStickyFocus(nowLocal);
+      _stickyFocus.remember(_snapshot, nowLocal);
     }
     return true;
-  }
-
-  void _rememberStickyFocus(DateTime nowLocal) {
-    _stickyFocusTodoId = _snapshot.primaryFocus?.todo.id;
-    _stickyFocusDayLocal =
-        DateTime(nowLocal.year, nowLocal.month, nowLocal.day);
-    _stickyFocusDueStateByTodoId = _buildStickyStateSignatures(_snapshot);
   }
 
   Future<Map<String, TaskPriorityAiCachedAssessment>>
@@ -916,78 +913,6 @@ class TaskPriorityStore extends ChangeNotifier {
     return jsonEncode(<String, Object?>{
       'candidate': candidate.toJson(),
     });
-  }
-
-  TaskPrioritySnapshot _applyStickyFocus(
-    TaskPrioritySnapshot snapshot, {
-    required DateTime nowLocal,
-  }) {
-    final stickyTodoId = _stickyFocusTodoId;
-    final stickyDay = _stickyFocusDayLocal;
-    if (stickyTodoId == null || stickyDay == null) return snapshot;
-
-    final today = DateTime(nowLocal.year, nowLocal.month, nowLocal.day);
-    if (today != stickyDay) return snapshot;
-    final primary = snapshot.primaryFocus;
-    if (primary == null || primary.todo.id == stickyTodoId) return snapshot;
-    if (primary.hasHardFocusGuard ||
-        primary.confidence == TaskPriorityConfidence.high) {
-      return snapshot;
-    }
-    if (_didStickyDueStateChange(snapshot)) return snapshot;
-
-    final stickyExists = snapshot.activeEntries.any(
-      (entry) => entry.todo.id == stickyTodoId,
-    );
-    if (!stickyExists) return snapshot;
-
-    return snapshot.copyWith(selectedFocusTodoId: stickyTodoId);
-  }
-
-  Map<String, String> _buildStickyStateSignatures(
-    TaskPrioritySnapshot snapshot,
-  ) {
-    return <String, String>{
-      for (final entry in snapshot.activeEntries)
-        entry.todo.id: jsonEncode(<Object?>[
-          entry.todo.status,
-          entry.todo.dueAtMs,
-          entry.todo.reviewStage,
-          entry.todo.nextReviewAtMs,
-          entry.isOverdue,
-          entry.isDueToday,
-          entry.isReviewDue,
-          entry.isFutureScheduled,
-          entry.isInProgress,
-          entry.effectiveUrgency,
-          entry.effectiveImportance,
-          entry.urgencyScore,
-          entry.importanceScore,
-          entry.dueDerivedUrgencyScore,
-          _stickySemanticDirection(entry.semanticScore),
-          entry.isUrgent,
-          entry.isImportant,
-        ]),
-    };
-  }
-
-  int _stickySemanticDirection(double semanticScore) {
-    if (semanticScore > 0) return 1;
-    if (semanticScore < 0) return -1;
-    return 0;
-  }
-
-  bool _didStickyDueStateChange(TaskPrioritySnapshot snapshot) {
-    final previous = _stickyFocusDueStateByTodoId;
-    if (previous.isEmpty) return false;
-    final current = _buildStickyStateSignatures(snapshot);
-    if (current.length != previous.length) return true;
-    for (final entry in current.entries) {
-      if (previous[entry.key] != entry.value) {
-        return true;
-      }
-    }
-    return false;
   }
 
   static Future<List<Todo>> _loadAndNormalizeTodos(

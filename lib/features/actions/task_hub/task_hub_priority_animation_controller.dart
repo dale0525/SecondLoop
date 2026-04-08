@@ -66,6 +66,8 @@ class TaskHubPriorityInlineAnimationState {
 }
 
 class TaskHubPriorityAnimationController extends ChangeNotifier {
+  static const double _kMeaningfulInlineOffsetDistance = 0.5;
+
   TaskHubPriorityOverlayState? _activeOverlay;
   TaskHubPriorityOverlayState? get activeOverlay => _activeOverlay;
   TaskHubPriorityInlineAnimationState? _activeInlineAnimation;
@@ -188,7 +190,12 @@ class TaskHubPriorityAnimationController extends ChangeNotifier {
         capture.source == TaskHubPriorityAnimationSource.aiReconciliation
             ? const Duration(milliseconds: 160)
             : const Duration(milliseconds: 240);
-    if ((_lastPlan?.kind == TaskHubPriorityAnimationKind.crossSectionMove ||
+    final preserveImmediateFeedback =
+        _shouldPreserveImmediateLocalFeedback(animatedTodoId);
+    if (preserveImmediateFeedback) {
+      _activeOverlay = null;
+    } else if ((_lastPlan?.kind ==
+                TaskHubPriorityAnimationKind.crossSectionMove ||
             _lastPlan?.kind == TaskHubPriorityAnimationKind.visibleInsertion ||
             _lastPlan?.kind == TaskHubPriorityAnimationKind.visibleRemoval) &&
         capture.sourceRect != null &&
@@ -208,13 +215,19 @@ class TaskHubPriorityAnimationController extends ChangeNotifier {
         capture.sourceRect != null &&
         targetRect != null) {
       final delta = capture.sourceRect!.topLeft - targetRect.topLeft;
-      _activeOverlay = null;
-      _activeInlineAnimation = TaskHubPriorityInlineAnimationState(
-        todoId: animatedTodoId,
-        beginOffset: delta,
-        token: ++_animationToken,
-        duration: inlineDuration,
-      );
+      if (capture.source == TaskHubPriorityAnimationSource.localConfirmation &&
+          _activeInlineAnimation?.todoId == animatedTodoId &&
+          delta.distance <= _kMeaningfulInlineOffsetDistance) {
+        _activeOverlay = null;
+      } else {
+        _activeOverlay = null;
+        _activeInlineAnimation = TaskHubPriorityInlineAnimationState(
+          todoId: animatedTodoId,
+          beginOffset: delta,
+          token: ++_animationToken,
+          duration: inlineDuration,
+        );
+      }
     } else if (capture.source ==
             TaskHubPriorityAnimationSource.localConfirmation &&
         _activeInlineAnimation?.todoId == animatedTodoId) {
@@ -249,6 +262,19 @@ class TaskHubPriorityAnimationController extends ChangeNotifier {
     }
     _activeInlineAnimation = null;
     notifyListeners();
+  }
+
+  bool _shouldPreserveImmediateLocalFeedback(String animatedTodoId) {
+    final plan = _lastPlan;
+    if (plan?.kind != TaskHubPriorityAnimationKind.crossSectionMove) {
+      return false;
+    }
+    if (_activeInlineAnimation?.todoId != animatedTodoId) {
+      return false;
+    }
+    return plan?.fromSection != TaskHubPriorityAnimationSection.focus &&
+        plan?.fromSection != TaskHubPriorityAnimationSection.done &&
+        plan?.toSection == TaskHubPriorityAnimationSection.focus;
   }
 
   void reset() {
