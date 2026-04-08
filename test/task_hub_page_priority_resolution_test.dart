@@ -319,9 +319,13 @@ void main() {
       ),
     );
     await tester.pump();
+    await pumpUntilFound(
+      tester,
+      find.byKey(const ValueKey('task_hub_priority_pending_badge_a')),
+    );
     expect(
       find.byKey(const ValueKey('task_hub_priority_pending_badge_a')),
-      findsNothing,
+      findsOneWidget,
     );
 
     firstAiRelease.complete(
@@ -331,10 +335,6 @@ void main() {
     await pumpUntil(
       tester,
       () => backend.taskPriorityAiCallCount >= 2,
-    );
-    await pumpUntilFound(
-      tester,
-      find.byKey(const ValueKey('task_hub_priority_pending_badge_a')),
     );
 
     expect(

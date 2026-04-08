@@ -246,7 +246,8 @@ void main() {
     expect(store.snapshot.source, TaskPrioritySnapshotSource.rules);
   });
 
-  test('force refresh waits for inflight refresh then recomputes', () async {
+  test('force refresh publishes immediately and still queues recompute',
+      () async {
     SharedPreferences.setMockInitialValues({});
     var loadCount = 0;
     final completer = Completer<void>();
@@ -264,12 +265,19 @@ void main() {
     final firstRefresh = store.refresh();
     await Future<void>.delayed(Duration.zero);
     final forcedRefresh = store.refresh(force: true);
-    completer.complete();
 
-    await Future.wait(<Future<void>>[firstRefresh, forcedRefresh]);
+    await expectLater(
+      forcedRefresh.timeout(const Duration(milliseconds: 200)),
+      completes,
+    );
 
-    expect(loadCount, 2);
     expect(store.snapshot.decide.first.todo.id, 't2');
+
+    completer.complete();
+    await firstRefresh;
+
+    expect(loadCount, 3);
+    expect(store.snapshot.decide.first.todo.id, 't3');
   });
 
   test(
@@ -294,10 +302,8 @@ void main() {
     final forcedRefresh1 = store.refresh(force: true);
     final forcedRefresh2 = store.refresh(force: true);
     final forcedRefresh3 = store.refresh(force: true);
-    completer.complete();
 
     await Future.wait(<Future<void>>[
-      firstRefresh,
       forcedRefresh1,
       forcedRefresh2,
       forcedRefresh3,
@@ -305,6 +311,98 @@ void main() {
 
     expect(loadCount, 2);
     expect(store.snapshot.decide.first.todo.id, 't2');
+
+    completer.complete();
+    await firstRefresh;
+
+    expect(loadCount, 3);
+    expect(store.snapshot.decide.first.todo.id, 't3');
+  });
+
+  test(
+      'forced refresh while ai rerank is inflight publishes latest local snapshot immediately',
+      () async {
+    SharedPreferences.setMockInitialValues({});
+    var loadCount = 0;
+    var aiEnabled = false;
+    final aiRelease = Completer<void>();
+    final aiService = _FirstDelayedAiService(
+      release: aiRelease.future,
+      result: const TaskPriorityAiBatchResult(
+        entries: <TaskPriorityAiEntry>[
+          TaskPriorityAiEntry(
+            todoId: 'b',
+            semanticAdjustment: 20,
+            reason: 'B is now the priority.',
+            confidence: TaskPriorityAiConfidence.high,
+          ),
+        ],
+      ),
+    );
+    final store = TaskPriorityStore.fromLoaders(
+      nowLocal: () => DateTime(2026, 3, 13, 10, 0),
+      loadTodos: () async {
+        loadCount += 1;
+        switch (loadCount) {
+          case 1:
+          case 2:
+            return <Todo>[
+              todo(id: 'a', title: 'Alpha task', updatedAtMs: 20),
+              todo(id: 'b', title: 'Beta task', updatedAtMs: 10),
+            ];
+          default:
+            return <Todo>[
+              todo(id: 'a', title: 'Alpha task', updatedAtMs: 20),
+              todo(
+                id: 'b',
+                title: 'Beta task',
+                updatedAtMs: 10,
+                manualUrgencyNudgeScore: 1,
+              ),
+            ];
+        }
+      },
+      isAiEnhancementEnabled: () async => aiEnabled,
+      resolveAiService: () async => aiService,
+    );
+
+    await store.refresh();
+    expect(store.snapshot.primaryFocus?.todo.id, 'a');
+
+    aiEnabled = true;
+    store.markDirty();
+    final backgroundRefresh = store.refresh(force: true);
+    await Future<void>.delayed(Duration.zero);
+    expect(
+      store.snapshot.resolutionPhase,
+      TaskPriorityResolutionPhase.awaitingAi,
+    );
+    expect(store.snapshot.primaryFocus?.todo.id, 'a');
+
+    store.markDirty();
+    final forcedRefresh = store.refresh(force: true);
+
+    await expectLater(
+      forcedRefresh.timeout(const Duration(milliseconds: 200)),
+      completes,
+    );
+
+    expect(store.snapshot.primaryFocus?.todo.id, 'b');
+    expect(store.snapshot.refreshGeneration, greaterThan(2));
+    expect(
+      store.snapshot.resolutionPhase,
+      anyOf(
+        TaskPriorityResolutionPhase.awaitingAi,
+        TaskPriorityResolutionPhase.localPublished,
+      ),
+    );
+
+    aiRelease.complete();
+    await backgroundRefresh;
+
+    expect(store.snapshot.primaryFocus?.todo.id, 'b');
+    expect(loadCount, 4);
+    expect(aiService.calls, 2);
   });
 
   test('reuses cached AI rerank while task signature stays unchanged',
@@ -1038,6 +1136,30 @@ final class _CountingAiService extends TaskPriorityAiService {
       TaskPriorityAiRequest request) async {
     calls += 1;
     return _result;
+  }
+}
+
+final class _FirstDelayedAiService extends TaskPriorityAiService {
+  _FirstDelayedAiService({
+    required this.release,
+    required this.result,
+  });
+
+  final Future<void> release;
+  final TaskPriorityAiBatchResult result;
+  int calls = 0;
+
+  @override
+  String get cacheScopeKey => 'first-delayed';
+
+  @override
+  Future<TaskPriorityAiBatchResult> rerank(
+      TaskPriorityAiRequest request) async {
+    calls += 1;
+    if (calls == 1) {
+      await release;
+    }
+    return result;
   }
 }
 

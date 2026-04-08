@@ -156,6 +156,7 @@ class TaskPriorityStore extends ChangeNotifier {
   Map<String, String> _stickyFocusDueStateByTodoId = const <String, String>{};
 
   Future<void>? _inflightRefresh;
+  Future<void>? _inflightForcedLocalRefresh;
   bool _refreshQueuedAfterInflight = false;
   int _refreshGeneration = 0;
   bool _disposed = false;
@@ -182,6 +183,11 @@ class TaskPriorityStore extends ChangeNotifier {
     if (_inflightRefresh != null) {
       if (force) {
         _refreshQueuedAfterInflight = true;
+        _inflightForcedLocalRefresh ??=
+            _publishLatestLocalSnapshotWhileInflight().whenComplete(() {
+          _inflightForcedLocalRefresh = null;
+        });
+        return _inflightForcedLocalRefresh!;
       }
       return _inflightRefresh!;
     }
@@ -234,21 +240,31 @@ class TaskPriorityStore extends ChangeNotifier {
       final aiEnhancementEnabled =
           await _isAiEnhancementEnabled?.call() ?? true;
       if (!aiEnhancementEnabled) {
-        _snapshot = rulesSnapshot.copyWith(
-          resolutionPhase: TaskPriorityResolutionPhase.localPublished,
+        final published = _publishSnapshot(
+          rulesSnapshot.copyWith(
+            resolutionPhase: TaskPriorityResolutionPhase.localPublished,
+          ),
+          nowLocal: nowLocal,
+          rememberStickyFocus: true,
         );
         _aiAvailability = TaskPriorityAiAvailability.disabled;
-        _rememberStickyFocus(nowLocal);
-        _safeNotify();
+        if (published) {
+          _safeNotify();
+        }
         return;
       }
 
       if (rulesSnapshot.activeEntries.isEmpty) {
-        _snapshot = rulesSnapshot.copyWith(
-          resolutionPhase: TaskPriorityResolutionPhase.localPublished,
+        final published = _publishSnapshot(
+          rulesSnapshot.copyWith(
+            resolutionPhase: TaskPriorityResolutionPhase.localPublished,
+          ),
+          nowLocal: nowLocal,
+          rememberStickyFocus: true,
         );
-        _rememberStickyFocus(nowLocal);
-        _safeNotify();
+        if (published) {
+          _safeNotify();
+        }
         return;
       }
 
@@ -257,11 +273,16 @@ class TaskPriorityStore extends ChangeNotifier {
         nowLocal: nowLocal,
       );
       if (request.candidates.isEmpty) {
-        _snapshot = rulesSnapshot.copyWith(
-          resolutionPhase: TaskPriorityResolutionPhase.localPublished,
+        final published = _publishSnapshot(
+          rulesSnapshot.copyWith(
+            resolutionPhase: TaskPriorityResolutionPhase.localPublished,
+          ),
+          nowLocal: nowLocal,
+          rememberStickyFocus: true,
         );
-        _rememberStickyFocus(nowLocal);
-        _safeNotify();
+        if (published) {
+          _safeNotify();
+        }
         return;
       }
 
@@ -300,29 +321,33 @@ class TaskPriorityStore extends ChangeNotifier {
               candidateByTodoId: candidateByTodoId,
               nowLocal: nowLocal,
             );
-      if (bootstrapPersisted.isNotEmpty) {
-        _snapshot = buildTaskPrioritySnapshot(
-          todos,
-          nowLocal: nowLocal,
-          aiResult: TaskPriorityAiBatchResult(
-            entries: bootstrapPersisted.values
-                .map((value) => value.entry)
-                .toList(growable: false),
-          ),
-          enhancementSource: TaskPriorityEnhancementSource.aiLocalCache,
-          feedbackState: feedbackState,
-        ).copyWith(
-          resolutionPhase: TaskPriorityResolutionPhase.aiResolved,
-          refreshGeneration: refreshGeneration,
-        );
-      } else {
-        _snapshot = rulesSnapshot.copyWith(
-          resolutionPhase: aiService == null
-              ? TaskPriorityResolutionPhase.localPublished
-              : TaskPriorityResolutionPhase.awaitingAi,
-        );
+      final publishedBootstrap = bootstrapPersisted.isNotEmpty
+          ? _publishSnapshot(
+              buildTaskPrioritySnapshot(
+                todos,
+                nowLocal: nowLocal,
+                aiResult: TaskPriorityAiBatchResult(
+                  entries: bootstrapPersisted.values
+                      .map((value) => value.entry)
+                      .toList(growable: false),
+                ),
+                enhancementSource: TaskPriorityEnhancementSource.aiLocalCache,
+                feedbackState: feedbackState,
+              ).copyWith(
+                resolutionPhase: TaskPriorityResolutionPhase.aiResolved,
+                refreshGeneration: refreshGeneration,
+              ),
+            )
+          : _publishSnapshot(
+              rulesSnapshot.copyWith(
+                resolutionPhase: aiService == null
+                    ? TaskPriorityResolutionPhase.localPublished
+                    : TaskPriorityResolutionPhase.awaitingAi,
+              ),
+            );
+      if (publishedBootstrap) {
+        _safeNotify();
       }
-      _safeNotify();
 
       final sharedPersisted = canUseSharedCache
           ? await _readSharedAiAssessments?.call(
@@ -404,7 +429,7 @@ class TaskPriorityStore extends ChangeNotifier {
       }
 
       final stalePersistedTodoIds = <String>{};
-      for (final activeEntry in _snapshot.activeEntries) {
+      for (final activeEntry in rulesSnapshot.activeEntries) {
         final cached = mergedPersisted[activeEntry.todo.id];
         if (cached == null) continue;
         final candidate = candidateByTodoId[activeEntry.todo.id];
@@ -496,13 +521,18 @@ class TaskPriorityStore extends ChangeNotifier {
       }
       if (aiEntries.isEmpty) {
         _aiAvailability = TaskPriorityAiAvailability.unavailable;
-        _snapshot = rulesSnapshot.copyWith(
-          resolutionPhase: didLiveRerankFail
-              ? TaskPriorityResolutionPhase.localFallback
-              : TaskPriorityResolutionPhase.localPublished,
+        final published = _publishSnapshot(
+          rulesSnapshot.copyWith(
+            resolutionPhase: didLiveRerankFail
+                ? TaskPriorityResolutionPhase.localFallback
+                : TaskPriorityResolutionPhase.localPublished,
+          ),
+          nowLocal: nowLocal,
+          rememberStickyFocus: true,
         );
-        _rememberStickyFocus(nowLocal);
-        _safeNotify();
+        if (published) {
+          _safeNotify();
+        }
         return;
       }
 
@@ -525,13 +555,96 @@ class TaskPriorityStore extends ChangeNotifier {
         ),
         nowLocal: nowLocal,
       );
-      _snapshot = hybridSnapshot;
-      _rememberStickyFocus(nowLocal);
-      _safeNotify();
+      final published = _publishSnapshot(
+        hybridSnapshot,
+        nowLocal: nowLocal,
+        rememberStickyFocus: true,
+      );
+      if (published) {
+        _safeNotify();
+      }
     } finally {
       _isRefreshing = false;
       _safeNotify();
     }
+  }
+
+  Future<void> _publishLatestLocalSnapshotWhileInflight() async {
+    if (_disposed) return;
+
+    final nowLocal = _nowLocal();
+    final refreshGeneration = ++_refreshGeneration;
+    final todos = await _loadTodos();
+    try {
+      final checklistProgressRows = await _loadChecklistProgress?.call() ??
+          const <TodoChecklistProgress>[];
+      _checklistProgressByTodoId = {
+        for (final item in checklistProgressRows) item.todoId: item,
+      };
+    } catch (_) {
+      // Keep the previously loaded checklist progress on transient failures.
+    }
+
+    await _feedbackStore.pruneToTodoIds(todos.map((todo) => todo.id));
+    final feedbackState = await _feedbackStore.read();
+    final rulesSnapshot = buildTaskPrioritySnapshot(
+      todos,
+      nowLocal: nowLocal,
+      feedbackState: feedbackState,
+    ).copyWith(refreshGeneration: refreshGeneration);
+    _dirty = false;
+
+    final aiEnhancementEnabled = await _isAiEnhancementEnabled?.call() ?? true;
+    if (!aiEnhancementEnabled || rulesSnapshot.activeEntries.isEmpty) {
+      if (_publishSnapshot(
+        rulesSnapshot.copyWith(
+          resolutionPhase: TaskPriorityResolutionPhase.localPublished,
+        ),
+      )) {
+        if (!aiEnhancementEnabled) {
+          _aiAvailability = TaskPriorityAiAvailability.disabled;
+        }
+        _safeNotify();
+      }
+      return;
+    }
+
+    TaskPriorityAiService? aiService;
+    try {
+      aiService = await _resolveAiService?.call();
+      _aiAvailability = aiService == null
+          ? TaskPriorityAiAvailability.unavailable
+          : TaskPriorityAiAvailability.available;
+    } catch (_) {
+      _aiAvailability = TaskPriorityAiAvailability.unavailable;
+      aiService = null;
+    }
+
+    if (_publishSnapshot(
+      rulesSnapshot.copyWith(
+        resolutionPhase: aiService == null
+            ? TaskPriorityResolutionPhase.localPublished
+            : TaskPriorityResolutionPhase.awaitingAi,
+      ),
+    )) {
+      _safeNotify();
+    }
+  }
+
+  bool _publishSnapshot(
+    TaskPrioritySnapshot snapshot, {
+    DateTime? nowLocal,
+    bool rememberStickyFocus = false,
+  }) {
+    if (_disposed) return false;
+    if (snapshot.refreshGeneration < _snapshot.refreshGeneration) {
+      return false;
+    }
+    _snapshot = snapshot;
+    if (rememberStickyFocus && nowLocal != null) {
+      _rememberStickyFocus(nowLocal);
+    }
+    return true;
   }
 
   void _rememberStickyFocus(DateTime nowLocal) {
