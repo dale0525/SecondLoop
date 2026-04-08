@@ -42,6 +42,33 @@ extension _TaskHubPageStatePriorityResolution on _TaskHubPageState {
     required TaskHubPriorityResolutionState current,
   }) {
     if (current.status ==
+        TaskHubPriorityResolutionStatus.awaitingLocalFeedback) {
+      final alreadyTrackingSameAction =
+          previous.actionToken == current.actionToken &&
+              previous.status == current.status;
+      if (alreadyTrackingSameAction) {
+        return;
+      }
+      _priorityAiPendingTimeoutTimer?.cancel();
+      final actionToken = current.actionToken;
+      _priorityAiPendingTimeoutTimer = Timer(
+        _TaskHubPageState._kPriorityAiPendingTimeout,
+        () {
+          if (!mounted) return;
+          final latestState = _priorityResolutionController.state;
+          if (latestState.actionToken != actionToken ||
+              latestState.status !=
+                  TaskHubPriorityResolutionStatus.awaitingLocalFeedback) {
+            return;
+          }
+          _priorityAiPendingTimeoutTimer = null;
+          _clearPendingPriorityUiState(clearAnimationFeedback: true);
+        },
+      );
+      return;
+    }
+
+    if (current.status ==
         TaskHubPriorityResolutionStatus.awaitingAiResolution) {
       final alreadyTrackingSameAction =
           previous.actionToken == current.actionToken &&
@@ -55,6 +82,12 @@ extension _TaskHubPageStatePriorityResolution on _TaskHubPageState {
         _TaskHubPageState._kPriorityAiPendingTimeout,
         () {
           if (!mounted) return;
+          final latestState = _priorityResolutionController.state;
+          if (latestState.actionToken != actionToken ||
+              latestState.status !=
+                  TaskHubPriorityResolutionStatus.awaitingAiResolution) {
+            return;
+          }
           _priorityAiPendingTimeoutTimer = null;
           _pendingPriorityAnimation = null;
           _priorityResolutionController.markLocalFallback(

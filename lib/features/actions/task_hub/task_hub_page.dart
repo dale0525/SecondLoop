@@ -309,7 +309,6 @@ class _TaskHubPageState extends State<TaskHubPage> {
         todo.dueAtMs == pendingMutation.dueAtMs &&
         todo.reviewStage == pendingMutation.reviewStage &&
         todo.nextReviewAtMs == pendingMutation.nextReviewAtMs &&
-        todo.lastReviewAtMs == pendingMutation.lastReviewAtMs &&
         (todo.manualImportanceNudgeScore ?? 0) ==
             pendingMutation.manualImportanceNudgeScore &&
         (todo.manualUrgencyNudgeScore ?? 0) ==
@@ -432,7 +431,13 @@ class _TaskHubPageState extends State<TaskHubPage> {
     if (appliedTicket.shouldNotifySync) {
       syncEngine?.notifyLocalMutation();
     }
-    await _refresh();
+    try {
+      await _refresh();
+    } catch (error) {
+      _clearPendingPriorityUiState(clearAnimationFeedback: true);
+      _showQuickActionError(error);
+      return;
+    }
     if (!mounted) return;
     final messenger = _scaffoldMessengerKey.currentState;
     messenger?.hideCurrentSnackBar();
@@ -472,7 +477,12 @@ class _TaskHubPageState extends State<TaskHubPage> {
             if (appliedTicket.shouldNotifySync) {
               syncEngine?.notifyLocalMutation();
             }
-            await _refresh();
+            try {
+              await _refresh();
+            } catch (error) {
+              _showQuickActionError(error);
+              return;
+            }
             if (!mounted) return;
             _showRestoreHighlight(appliedTicket.todo.id);
           },

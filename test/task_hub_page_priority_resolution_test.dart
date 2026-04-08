@@ -144,6 +144,74 @@ void main() {
     );
   });
 
+  testWidgets(
+      'pending badge still appears when refreshed todo normalizes last review timestamp',
+      (tester) async {
+    useLargeViewport(tester);
+    final aiRelease = Completer<String>();
+    final backend = TaskHubTestBackend(
+      todos: <Todo>[
+        todo(
+          id: 'focus',
+          title: 'Fix prod issue',
+          updatedAtMs: 20,
+          status: 'in_progress',
+        ),
+        todo(
+          id: 'a',
+          title: 'Call vendor',
+          updatedAtMs: 10,
+        ),
+      ],
+      taskPriorityAiResponseJson: '{"entries":[]}',
+      taskPriorityAiResponseCompleter: aiRelease,
+      listTodosBehavior: (callCount, todos) async {
+        final listed = todos.values.toList(growable: false);
+        if (callCount != 2) {
+          return listed;
+        }
+        return listed.map((todo) {
+          if (todo.id != 'a') return todo;
+          return Todo(
+            id: todo.id,
+            title: todo.title,
+            dueAtMs: todo.dueAtMs,
+            status: todo.status,
+            sourceEntryId: todo.sourceEntryId,
+            createdAtMs: todo.createdAtMs,
+            updatedAtMs: todo.updatedAtMs,
+            reviewStage: todo.reviewStage,
+            nextReviewAtMs: todo.nextReviewAtMs,
+            lastReviewAtMs: (todo.lastReviewAtMs ?? 0) + 1,
+            manualImportanceNudgeScore: todo.manualImportanceNudgeScore,
+            manualUrgencyNudgeScore: todo.manualUrgencyNudgeScore,
+          );
+        }).toList(growable: false);
+      },
+    );
+
+    await tester.pumpWidget(wrapTaskHubTestApp(backend));
+    await pumpUntilTaskHubReady(tester);
+
+    await tester.tap(
+      find.byKey(const ValueKey('task_hub_page_quick_a_tomorrow')),
+    );
+    await tester.pump();
+    await pumpUntilFound(
+      tester,
+      find.byKey(const ValueKey('task_hub_priority_pending_badge_a')),
+    );
+
+    expect(
+      find.byKey(const ValueKey('task_hub_priority_pending_badge_a')),
+      findsOneWidget,
+    );
+
+    aiRelease.complete('{"entries":[]}');
+    await tester.pump();
+    await tester.pumpAndSettle();
+  });
+
   testWidgets('pending badge falls back to local-only when ai never resolves',
       (tester) async {
     useLargeViewport(tester);

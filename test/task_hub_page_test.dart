@@ -191,6 +191,70 @@ void main() {
     expect(find.textContaining('Save failed'), findsOneWidget);
   });
 
+  testWidgets(
+      'task hub clears pending priority UI state when post-action refresh fails',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final backend = _TaskHubBackend(
+      todos: const <Todo>[
+        Todo(
+          id: 'focus',
+          title: 'Fix prod issue',
+          dueAtMs: null,
+          status: 'open',
+          sourceEntryId: null,
+          createdAtMs: 0,
+          updatedAtMs: 10,
+          reviewStage: null,
+          nextReviewAtMs: null,
+          lastReviewAtMs: null,
+        ),
+      ],
+      taskPriorityAiResponseJson: '{"entries":[]}',
+      listTodosBehavior: (callCount, todos) async {
+        if (callCount == 2) {
+          throw StateError('refresh failed');
+        }
+        return todos.values.toList(growable: false);
+      },
+    );
+
+    await tester.pumpWidget(_wrap(backend));
+    await _pumpUntilTaskHubReady(tester);
+
+    await tester.tap(
+      find.byKey(
+        const ValueKey('task_hub_page_quick_focus_tomorrow'),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+
+    expect(tester.takeException(), isNull);
+    await _pumpUntilFound(tester, find.byType(SnackBar));
+
+    expect(find.byType(SnackBar), findsOneWidget);
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('task_hub_priority_inline_animation_focus')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey('task_hub_priority_animation_overlay')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey('task_hub_priority_pending_badge_focus')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(
+        const ValueKey('task_hub_priority_local_fallback_badge_focus'),
+      ),
+      findsNothing,
+    );
+  });
+
   testWidgets('cancelling incomplete checklist confirmation does not animate',
       (tester) async {
     SharedPreferences.setMockInitialValues({});

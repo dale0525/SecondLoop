@@ -111,6 +111,7 @@ final class TaskHubTestBackend extends TestAppBackend {
     List<TodoChecklistProgress> checklistProgress =
         const <TodoChecklistProgress>[],
     this.failTransition = false,
+    this.listTodosBehavior,
     this.taskPriorityAiResponseJson,
     this.taskPriorityAiResponseCompleter,
     List<Future<String> Function()> taskPriorityAiResponseCallbacks =
@@ -150,6 +151,8 @@ final class TaskHubTestBackend extends TestAppBackend {
   int _taskPriorityAiResponseFutureIndex = 0;
   final List<LlmProfile> _llmProfiles;
   final bool failTransition;
+  final Future<List<Todo>> Function(int callCount, Map<String, Todo> todos)?
+      listTodosBehavior;
   final String? taskPriorityAiResponseJson;
   final Completer<String>? taskPriorityAiResponseCompleter;
   int taskPriorityAiCallCount = 0;
@@ -166,6 +169,13 @@ final class TaskHubTestBackend extends TestAppBackend {
       await Future<void>.delayed(listTodosDelay);
     }
     listTodosCallCount += 1;
+    final behavior = listTodosBehavior;
+    if (behavior != null) {
+      return behavior(
+        listTodosCallCount,
+        Map<String, Todo>.unmodifiable(_todos),
+      );
+    }
     return _todos.values.toList(growable: false);
   }
 

@@ -228,7 +228,6 @@ final class _TaskHubPendingPriorityMutation {
     required this.dueAtMs,
     required this.reviewStage,
     required this.nextReviewAtMs,
-    required this.lastReviewAtMs,
     required this.manualImportanceNudgeScore,
     required this.manualUrgencyNudgeScore,
     required this.shouldExistInSnapshot,
@@ -246,7 +245,6 @@ final class _TaskHubPendingPriorityMutation {
       dueAtMs: todo.dueAtMs,
       reviewStage: todo.reviewStage,
       nextReviewAtMs: todo.nextReviewAtMs,
-      lastReviewAtMs: todo.lastReviewAtMs,
       manualImportanceNudgeScore: todo.manualImportanceNudgeScore ?? 0,
       manualUrgencyNudgeScore: todo.manualUrgencyNudgeScore ?? 0,
       shouldExistInSnapshot: todo.status != 'dismissed',
@@ -259,7 +257,6 @@ final class _TaskHubPendingPriorityMutation {
   final int? dueAtMs;
   final int? reviewStage;
   final int? nextReviewAtMs;
-  final int? lastReviewAtMs;
   final int manualImportanceNudgeScore;
   final int manualUrgencyNudgeScore;
   final bool shouldExistInSnapshot;
