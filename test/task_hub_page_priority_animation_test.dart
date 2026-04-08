@@ -233,6 +233,77 @@ void main() {
     );
   });
 
+  testWidgets('decreasing focus urgency animates into the next-up list',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    useLargeViewport(tester);
+    final backend = TaskHubTestBackend(
+      todos: <Todo>[
+        Todo(
+          id: 'upload',
+          title: 'Upload short video',
+          dueAtMs: DateTime(2026, 4, 8, 0, 0).toUtc().millisecondsSinceEpoch,
+          status: 'open',
+          sourceEntryId: null,
+          createdAtMs: 0,
+          updatedAtMs: 300,
+          reviewStage: null,
+          nextReviewAtMs: null,
+          lastReviewAtMs: null,
+          manualUrgencyNudgeScore: 1,
+        ),
+        Todo(
+          id: 'suit',
+          title: 'Wear suit today',
+          dueAtMs: DateTime(2026, 4, 7, 13, 0).toUtc().millisecondsSinceEpoch,
+          status: 'in_progress',
+          sourceEntryId: null,
+          createdAtMs: 0,
+          updatedAtMs: 200,
+          reviewStage: null,
+          nextReviewAtMs: null,
+          lastReviewAtMs: null,
+          manualUrgencyNudgeScore: 1,
+        ),
+        Todo(
+          id: 'script',
+          title: 'Make a Chinese short video',
+          dueAtMs: DateTime(2026, 3, 14, 13, 0).toUtc().millisecondsSinceEpoch,
+          status: 'open',
+          sourceEntryId: null,
+          createdAtMs: 0,
+          updatedAtMs: 100,
+          reviewStage: null,
+          nextReviewAtMs: null,
+          lastReviewAtMs: null,
+          manualImportanceNudgeScore: -1,
+          manualUrgencyNudgeScore: -1,
+        ),
+      ],
+      taskPriorityAiResponseJson:
+          '{"entries":[{"todo_id":"upload","semantic_adjustment":10,"reason":"Overdue execution task","confidence":"high","is_important":true,"is_urgent":true},{"todo_id":"suit","semantic_adjustment":-10,"reason":"Personal reminder","confidence":"high","is_important":false,"is_urgent":true},{"todo_id":"script","semantic_adjustment":20,"reason":"Core creative task","confidence":"high","is_important":true,"is_urgent":true}]}',
+    );
+
+    await tester.pumpWidget(wrapTaskHubTestApp(backend));
+    await pumpUntilTaskHubReady(tester);
+
+    await tester.tap(
+      find.byKey(
+        const ValueKey('task_hub_page_priority_upload_urgency_decrease'),
+      ),
+    );
+    await tester.pump();
+    await pumpUntilFound(
+      tester,
+      find.byKey(const ValueKey('task_hub_priority_animation_overlay')),
+    );
+
+    expect(
+      find.byKey(const ValueKey('task_hub_priority_animation_overlay')),
+      findsOneWidget,
+    );
+  });
+
   testWidgets('matching ai result clears pending without a second move',
       (tester) async {
     SharedPreferences.setMockInitialValues({});

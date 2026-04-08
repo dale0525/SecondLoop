@@ -504,8 +504,12 @@ class _TaskHubPageState extends State<TaskHubPage> {
     final previousSnapshot = storeSnapshot == null
         ? const TaskHubPriorityAnimationSnapshot()
         : _visibleAnimationSnapshot(storeSnapshot);
-    final sourceRect =
-        _rectInAnimationLayer(_cardAnchorRegistry.rectFor(entry.todo.id));
+    final sourcePosition =
+        locateTaskHubPriorityVisibleEntry(previousSnapshot, entry.todo.id);
+    final sourceRect = _visibleCardOrSectionRect(
+      entry.todo.id,
+      fallbackSection: sourcePosition?.section,
+    );
     final reducedMotion = _shouldReduceTaskHubMotion(context);
     final backend = AppBackendScope.of(context);
     final sessionKey = SessionScope.of(context).sessionKey;

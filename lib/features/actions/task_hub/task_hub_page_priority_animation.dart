@@ -72,7 +72,13 @@ extension _TaskHubPageStatePriorityAnimation on _TaskHubPageState {
         if (reconciliationPlan.kind == TaskHubPriorityAnimationKind.none ||
             reconciliationPlan.kind ==
                 TaskHubPriorityAnimationKind.noEmphasis) {
-          _pendingPriorityAnimation = null;
+          if (pending.localAnimationSettled) {
+            _pendingPriorityAnimation = null;
+            return;
+          }
+          _pendingPriorityAnimation = pending.copyWith(
+            clearPendingAfterLocalAnimation: true,
+          );
           return;
         }
 
