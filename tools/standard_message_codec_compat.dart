@@ -2,6 +2,11 @@ import 'dart:convert';
 import 'dart:math' as math;
 import 'dart:typed_data';
 
+// Keep this narrow compatibility layer in sync with Flutter's
+// StandardMessageCodec. The prune tool runs via `flutter pub run`, where
+// importing the full Flutter services codec directly pulls in dart:ui-bound
+// symbols that are unavailable in this CLI context. The tests encode and decode
+// fixtures with Flutter's official codec to verify wire-format compatibility.
 const int _kValueNull = 0;
 const int _kValueTrue = 1;
 const int _kValueFalse = 2;

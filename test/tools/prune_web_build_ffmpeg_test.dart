@@ -1,10 +1,8 @@
 import 'dart:convert';
 import 'dart:io';
-import 'dart:typed_data';
 
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-
-import '../../tools/standard_message_codec_compat.dart';
 
 void main() {
   test('prune web build ffmpeg script removes payloads and stale references',
@@ -58,7 +56,7 @@ void main() {
         <String, Object>{'asset': 'assets/bin/ffmpeg/README.md'},
       ],
       'assets/icon/tray_icon.png': <Map<String, Object>>[
-        <String, Object>{'asset': 'assets/icon/tray_icon.png'},
+        <String, Object>{'asset': 'assets/icon/tray_icon.png', 'dpr': 2.0},
       ],
     });
     await assetManifestBin.writeAsBytes(encodedAssetManifestBin);
@@ -119,6 +117,15 @@ const RESOURCES = {
         isFalse);
     expect(updatedAssetManifestBin.containsKey('assets/icon/tray_icon.png'),
         isTrue);
+    expect(
+      updatedAssetManifestBin['assets/icon/tray_icon.png'],
+      <Map<Object?, Object?>>[
+        <Object?, Object?>{
+          'asset': 'assets/icon/tray_icon.png',
+          'dpr': 2.0,
+        },
+      ],
+    );
 
     final updatedAssetManifestBinJson = _decodeBinaryManifest(
       base64.decode(
@@ -133,6 +140,15 @@ const RESOURCES = {
         isFalse);
     expect(updatedAssetManifestBinJson.containsKey('assets/icon/tray_icon.png'),
         isTrue);
+    expect(
+      updatedAssetManifestBinJson['assets/icon/tray_icon.png'],
+      <Map<Object?, Object?>>[
+        <Object?, Object?>{
+          'asset': 'assets/icon/tray_icon.png',
+          'dpr': 2.0,
+        },
+      ],
+    );
   });
 
   test(
@@ -167,7 +183,7 @@ const RESOURCES = {
           <String, Object>{'asset': 'assets/bin/ffmpeg/linux/ffmpeg'},
         ],
         'assets/icon/tray_icon.png': <Map<String, Object>>[
-          <String, Object>{'asset': 'assets/icon/tray_icon.png'},
+          <String, Object>{'asset': 'assets/icon/tray_icon.png', 'dpr': 3.0},
         ],
       }),
     );
@@ -184,7 +200,10 @@ const RESOURCES = {
               <String, Object>{'asset': 'assets/bin/ffmpeg/linux/ffmpeg'},
             ],
             'assets/icon/tray_icon.png': <Map<String, Object>>[
-              <String, Object>{'asset': 'assets/icon/tray_icon.png'},
+              <String, Object>{
+                'asset': 'assets/icon/tray_icon.png',
+                'dpr': 3.0
+              },
             ],
           }),
         ),
@@ -255,7 +274,7 @@ const RESOURCES = {
         <String, Object>{'asset': 'assets/bin/ffmpeg/README.md'},
       ],
       'assets/icon/tray_icon.png': <Map<String, Object>>[
-        <String, Object>{'asset': 'assets/icon/tray_icon.png'},
+        <String, Object>{'asset': 'assets/icon/tray_icon.png', 'dpr': 1.5},
       ],
     });
     await assetManifestBin.writeAsBytes(encodedAssetManifestBin);
@@ -378,12 +397,12 @@ Future<ProcessResult> _runPruneTool(Directory buildDir) {
 }
 
 List<int> _encodeBinaryManifest(Map<String, Object> manifest) {
-  final message = const StandardMessageCodecCompat().encodeMessage(manifest)!;
+  final message = const StandardMessageCodec().encodeMessage(manifest)!;
   return message.buffer.asUint8List(0, message.lengthInBytes);
 }
 
 Map<Object?, Object?> _decodeBinaryManifest(List<int> bytes) {
   final data = ByteData.sublistView(Uint8List.fromList(bytes));
-  return const StandardMessageCodecCompat().decodeMessage(data)!
+  return const StandardMessageCodec().decodeMessage(data)!
       as Map<Object?, Object?>;
 }
