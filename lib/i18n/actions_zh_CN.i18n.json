@@ -170,6 +170,8 @@
     "aiInsightLive": "实时 AI 洞察",
     "aiInsightShared": "共享 AI 洞察",
     "aiInsightCached": "缓存 AI 洞察",
+    "priorityPending": "重新评估中",
+    "priorityLocalFallback": "暂时先按本地优先级显示。",
     "aiUpgradeHint": "连接 Cloud 或配置 BYOK 后，可获得更智能的优先级建议。",
     "snackActionApplied": "$action「$title」",
     "actions": {

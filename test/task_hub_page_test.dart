@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -7,197 +6,54 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:secondloop/core/ai/ai_routing.dart';
 import 'package:secondloop/core/backend/app_backend.dart';
-import 'package:secondloop/core/session/session_scope.dart';
 import 'package:secondloop/core/sync/sync_engine.dart';
-import 'package:secondloop/core/sync/sync_engine_gate.dart';
-import 'package:secondloop/features/actions/task_hub/task_hub_page.dart';
 import 'package:secondloop/features/actions/task_hub/task_priority_ai.dart';
 import 'package:secondloop/features/actions/task_hub/task_priority_ai_models.dart';
 import 'package:secondloop/features/actions/task_hub/task_priority_engine.dart';
 import 'package:secondloop/src/rust/db.dart';
 
-import 'test_backend.dart';
-import 'test_i18n.dart';
+import 'task_hub_page_test_helpers.dart';
 
 Future<void> _pumpUntil(
   WidgetTester tester,
   bool Function() condition, {
   Duration step = const Duration(milliseconds: 50),
   int maxPumps = 120,
-}) async {
-  for (var i = 0; i < maxPumps; i += 1) {
-    await tester.pump(step);
-    if (condition()) {
-      return;
-    }
-  }
-  expect(condition(), isTrue);
-}
+}) =>
+    pumpUntil(
+      tester,
+      condition,
+      step: step,
+      maxPumps: maxPumps,
+    );
 
 Future<void> _pumpUntilFound(
   WidgetTester tester,
   Finder finder, {
   Duration step = const Duration(milliseconds: 50),
   int maxPumps = 120,
-}) async {
-  for (var i = 0; i < maxPumps; i += 1) {
-    await tester.pump(step);
-    if (finder.evaluate().isNotEmpty) {
-      return;
-    }
-  }
-  expect(finder, findsOneWidget);
-}
+}) =>
+    pumpUntilFound(
+      tester,
+      finder,
+      step: step,
+      maxPumps: maxPumps,
+    );
 
-Future<void> _pumpUntilTaskHubReady(WidgetTester tester) {
-  return _pumpUntil(
-    tester,
-    () =>
-        find.byKey(const ValueKey('task_hub_page')).evaluate().isNotEmpty &&
-        find.byType(CircularProgressIndicator).evaluate().isEmpty,
-  );
-}
+Future<void> _pumpUntilTaskHubReady(WidgetTester tester) =>
+    pumpUntilTaskHubReady(tester);
 
-void _useLargeViewport(WidgetTester tester) {
-  tester.view.physicalSize = const Size(1200, 1000);
-  tester.view.devicePixelRatio = 1.0;
-}
+void _useLargeViewport(WidgetTester tester) => useLargeViewport(tester);
+
+Widget _wrap(AppBackend backend, {SyncEngine? syncEngine}) =>
+    wrapTaskHubTestApp(backend, syncEngine: syncEngine);
+
+typedef _TaskHubBackend = TaskHubTestBackend;
+typedef _NoopSyncRunner = NoopSyncRunner;
 
 void main() {
   setUp(() {
-    BackendTaskPriorityAiService.clearSharedCacheForTest();
-  });
-
-  testWidgets('task hub shows primary focus plus remaining sections',
-      (tester) async {
-    SharedPreferences.setMockInitialValues({});
-    final now = DateTime.now();
-    final todayLater = now.add(const Duration(hours: 2));
-    final tomorrowNoon = DateTime(now.year, now.month, now.day + 1, 12);
-    final backend = _TaskHubBackend(
-      todos: <Todo>[
-        Todo(
-          id: 'focus',
-          title: 'Fix prod issue',
-          dueAtMs: todayLater.toUtc().millisecondsSinceEpoch,
-          status: 'open',
-          sourceEntryId: null,
-          createdAtMs: 0,
-          updatedAtMs: 10,
-          reviewStage: null,
-          nextReviewAtMs: null,
-          lastReviewAtMs: null,
-        ),
-        Todo(
-          id: 'scheduled',
-          title: 'Draft roadmap',
-          dueAtMs: tomorrowNoon.toUtc().millisecondsSinceEpoch,
-          status: 'open',
-          sourceEntryId: null,
-          createdAtMs: 0,
-          updatedAtMs: 20,
-          reviewStage: null,
-          nextReviewAtMs: null,
-          lastReviewAtMs: null,
-        ),
-        Todo(
-          id: 'review',
-          title: 'Review follow-up',
-          dueAtMs: null,
-          status: 'inbox',
-          sourceEntryId: null,
-          createdAtMs: 0,
-          updatedAtMs: 30,
-          reviewStage: 0,
-          nextReviewAtMs: now
-              .subtract(const Duration(hours: 1))
-              .toUtc()
-              .millisecondsSinceEpoch,
-          lastReviewAtMs: null,
-        ),
-        const Todo(
-          id: 'done',
-          title: 'Shipped',
-          dueAtMs: null,
-          status: 'done',
-          sourceEntryId: null,
-          createdAtMs: 0,
-          updatedAtMs: 40,
-          reviewStage: null,
-          nextReviewAtMs: null,
-          lastReviewAtMs: null,
-        ),
-      ],
-      checklistProgress: const <TodoChecklistProgress>[
-        TodoChecklistProgress(todoId: 'focus', totalCount: 2, doneCount: 1),
-      ],
-    );
-
-    await tester.pumpWidget(_wrap(backend));
-    await _pumpUntilTaskHubReady(tester);
-
-    expect(find.byKey(const ValueKey('task_hub_page')), findsOneWidget);
-    expect(find.byKey(const ValueKey('task_hub_page_section_focus')),
-        findsOneWidget);
-    expect(
-        find.byKey(const ValueKey('task_hub_page_item_focus')), findsOneWidget);
-    expect(
-      find.byKey(const ValueKey('task_hub_checklist_progress_focus')),
-      findsOneWidget,
-    );
-    expect(find.text('1/2'), findsOneWidget);
-    expect(find.text('Draft roadmap'), findsOneWidget);
-    await tester.scrollUntilVisible(
-      find.byKey(const ValueKey('task_hub_page_section_done')),
-      300,
-      scrollable: find.byType(Scrollable).first,
-    );
-    await tester.pump();
-    expect(find.byKey(const ValueKey('task_hub_page_section_done')),
-        findsOneWidget);
-    expect(
-        find.byKey(const ValueKey('task_hub_page_item_done')), findsOneWidget);
-  });
-
-  testWidgets('task hub shows live ai source label when rerank succeeds',
-      (tester) async {
-    SharedPreferences.setMockInitialValues({});
-    final backend = _TaskHubBackend(
-      todos: const <Todo>[
-        Todo(
-          id: 'focus',
-          title: 'Fix prod issue',
-          dueAtMs: null,
-          status: 'open',
-          sourceEntryId: null,
-          createdAtMs: 0,
-          updatedAtMs: 10,
-          reviewStage: null,
-          nextReviewAtMs: null,
-          lastReviewAtMs: null,
-        ),
-      ],
-      taskPriorityAiResponseJson: jsonEncode(
-        const TaskPriorityAiBatchResult(
-          entries: <TaskPriorityAiEntry>[
-            TaskPriorityAiEntry(
-              todoId: 'focus',
-              semanticAdjustment: 16,
-              reason: 'Live AI result.',
-              confidence: TaskPriorityAiConfidence.high,
-            ),
-          ],
-        ).toJson(),
-      ),
-    );
-
-    await tester.pumpWidget(_wrap(backend));
-    await _pumpUntilTaskHubReady(tester);
-
-    expect(
-        find.byKey(const ValueKey('task_hub_page_ai_source')), findsOneWidget);
-    expect(find.text('Live AI insight'), findsOneWidget);
-    expect(find.text('Live AI result.'), findsOneWidget);
+    clearTaskHubSharedAiCacheForTest();
   });
 
   testWidgets(
@@ -319,9 +175,148 @@ void main() {
         const ValueKey('task_hub_page_quick_focus_tomorrow'),
       ),
     );
+    await tester.pump();
+
+    expect(
+      find.byKey(const ValueKey('task_hub_priority_inline_animation_focus')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey('task_hub_priority_animation_overlay')),
+      findsNothing,
+    );
+
     await _pumpUntilFound(tester, find.textContaining('Save failed'));
 
     expect(find.textContaining('Save failed'), findsOneWidget);
+  });
+
+  testWidgets(
+      'task hub clears pending priority UI state when post-action refresh fails',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final backend = _TaskHubBackend(
+      todos: const <Todo>[
+        Todo(
+          id: 'focus',
+          title: 'Fix prod issue',
+          dueAtMs: null,
+          status: 'open',
+          sourceEntryId: null,
+          createdAtMs: 0,
+          updatedAtMs: 10,
+          reviewStage: null,
+          nextReviewAtMs: null,
+          lastReviewAtMs: null,
+        ),
+      ],
+      taskPriorityAiResponseJson: '{"entries":[]}',
+      listTodosBehavior: (callCount, todos) async {
+        if (callCount == 2) {
+          throw StateError('refresh failed');
+        }
+        return todos.values.toList(growable: false);
+      },
+    );
+
+    await tester.pumpWidget(_wrap(backend));
+    await _pumpUntilTaskHubReady(tester);
+
+    await tester.tap(
+      find.byKey(
+        const ValueKey('task_hub_page_quick_focus_tomorrow'),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+
+    expect(tester.takeException(), isNull);
+    await _pumpUntilFound(tester, find.byType(SnackBar));
+
+    expect(find.byType(SnackBar), findsOneWidget);
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('task_hub_priority_inline_animation_focus')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey('task_hub_priority_animation_overlay')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey('task_hub_priority_pending_badge_focus')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(
+        const ValueKey('task_hub_priority_local_fallback_badge_focus'),
+      ),
+      findsNothing,
+    );
+  });
+
+  testWidgets('cancelling incomplete checklist confirmation does not animate',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final backend = _TaskHubBackend(
+      todos: const <Todo>[
+        Todo(
+          id: 'focus',
+          title: 'Checklist task',
+          dueAtMs: null,
+          status: 'in_progress',
+          sourceEntryId: null,
+          createdAtMs: 0,
+          updatedAtMs: 10,
+          reviewStage: null,
+          nextReviewAtMs: null,
+          lastReviewAtMs: null,
+        ),
+      ],
+      checklistProgress: const <TodoChecklistProgress>[
+        TodoChecklistProgress(
+          todoId: 'focus',
+          doneCount: 0,
+          totalCount: 2,
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(_wrap(backend));
+    await _pumpUntilTaskHubReady(tester);
+
+    await tester.tap(
+      find.byKey(
+        const ValueKey('task_hub_page_quick_focus_done'),
+      ),
+    );
+    await tester.pump();
+
+    expect(
+      find.byKey(const ValueKey('task_hub_priority_inline_animation_focus')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey('task_hub_priority_animation_overlay')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey('task_hub_incomplete_checklist_dialog')),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('task_hub_priority_inline_animation_focus')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey('task_hub_priority_animation_overlay')),
+      findsNothing,
+    );
+    expect(find.byType(SnackBar), findsNothing);
   });
 
   testWidgets('unfinished tasks show score-driven priority controls',
@@ -447,8 +442,70 @@ void main() {
     await tester.pumpWidget(_wrap(backend));
     await _pumpUntilTaskHubReady(tester);
 
-    expect(find.text('Urgency raised'), findsOneWidget);
-    expect(find.text('Importance lowered'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byKey(
+          const ValueKey('task_hub_page_nudge_nudged_urgency_up'),
+        ),
+        matching: find.text('Urgency raised'),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: find.byKey(
+          const ValueKey('task_hub_page_nudge_nudged_importance_down'),
+        ),
+        matching: find.text('Importance lowered'),
+      ),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('priority controls show state wording inside the control',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final backend = _TaskHubBackend(
+      todos: const <Todo>[
+        Todo(
+          id: 'nudged-control',
+          title: 'Nudged task',
+          dueAtMs: null,
+          status: 'open',
+          sourceEntryId: null,
+          createdAtMs: 0,
+          updatedAtMs: 10,
+          reviewStage: null,
+          nextReviewAtMs: null,
+          lastReviewAtMs: null,
+          manualUrgencyNudgeScore: 1,
+          manualImportanceNudgeScore: -1,
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(_wrap(backend));
+    await _pumpUntilTaskHubReady(tester);
+
+    expect(
+      find.descendant(
+        of: find.byKey(
+          const ValueKey('task_hub_page_priority_nudged-control_urgency_up'),
+        ),
+        matching: find.text('Urgency raised'),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: find.byKey(
+          const ValueKey(
+              'task_hub_page_priority_nudged-control_importance_down'),
+        ),
+        matching: find.text('Importance lowered'),
+      ),
+      findsOneWidget,
+    );
   });
 
   testWidgets('undo highlights the restored card without extra snackbar',
@@ -1005,204 +1062,4 @@ void main() {
     expect(find.byKey(const ValueKey('task_hub_page_item_done-0')),
         findsOneWidget);
   });
-}
-
-Widget _wrap(AppBackend backend, {SyncEngine? syncEngine}) {
-  return wrapWithI18n(
-    MaterialApp(
-      home: AppBackendScope(
-        backend: backend,
-        child: SessionScope(
-          sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
-          lock: () {},
-          child: SyncEngineScope(
-            engine: syncEngine,
-            child: const TaskHubPage(),
-          ),
-        ),
-      ),
-    ),
-  );
-}
-
-final class _TaskHubBackend extends TestAppBackend {
-  _TaskHubBackend({
-    required List<Todo> todos,
-    List<TodoChecklistProgress> checklistProgress =
-        const <TodoChecklistProgress>[],
-    this.failTransition = false,
-    this.taskPriorityAiResponseJson,
-    List<LlmProfile>? llmProfiles,
-  })  : _todos = {for (final todo in todos) todo.id: todo},
-        _checklistProgress =
-            List<TodoChecklistProgress>.from(checklistProgress),
-        _llmProfiles = List<LlmProfile>.from(llmProfiles ??
-            const <LlmProfile>[
-              LlmProfile(
-                id: 'p1',
-                name: 'OpenAI',
-                providerType: 'openai-compatible',
-                baseUrl: 'https://api.openai.com/v1',
-                modelName: 'gpt-4o-mini',
-                isActive: true,
-                createdAtMs: 0,
-                updatedAtMs: 0,
-              ),
-            ]);
-
-  final Map<String, Todo> _todos;
-  int listTodosCallCount = 0;
-  final List<TodoChecklistProgress> _checklistProgress;
-  final List<LlmProfile> _llmProfiles;
-  final bool failTransition;
-  final String? taskPriorityAiResponseJson;
-
-  @override
-  Future<List<LlmProfile>> listLlmProfiles(Uint8List key) async =>
-      List<LlmProfile>.from(_llmProfiles);
-
-  @override
-  Future<List<Todo>> listTodos(Uint8List key) async {
-    listTodosCallCount += 1;
-    return _todos.values.toList(growable: false);
-  }
-
-  @override
-  Future<List<TodoChecklistProgress>> listTodoChecklistProgress(
-    Uint8List key,
-  ) async {
-    return List<TodoChecklistProgress>.from(_checklistProgress);
-  }
-
-  @override
-  Future<Todo> upsertTodo(
-    Uint8List key, {
-    required String id,
-    required String title,
-    int? dueAtMs,
-    required String status,
-    String? sourceEntryId,
-    int? reviewStage,
-    int? nextReviewAtMs,
-    int? lastReviewAtMs,
-    int? manualImportanceNudgeScore,
-    int? manualUrgencyNudgeScore,
-  }) async {
-    final updated = Todo(
-      id: id,
-      title: title,
-      dueAtMs: dueAtMs,
-      status: status,
-      sourceEntryId: sourceEntryId,
-      createdAtMs: _todos[id]?.createdAtMs ?? 0,
-      updatedAtMs: DateTime.now().toUtc().millisecondsSinceEpoch,
-      reviewStage: reviewStage,
-      nextReviewAtMs: nextReviewAtMs,
-      lastReviewAtMs: lastReviewAtMs,
-      manualImportanceNudgeScore: manualImportanceNudgeScore ??
-          _todos[id]?.manualImportanceNudgeScore ??
-          0,
-      manualUrgencyNudgeScore:
-          manualUrgencyNudgeScore ?? _todos[id]?.manualUrgencyNudgeScore ?? 0,
-    );
-    _todos[id] = updated;
-    return updated;
-  }
-
-  @override
-  Future<Todo> transitionTodo(
-    Uint8List key, {
-    required String todoId,
-    String? newStatus,
-    int? dueAtMs,
-    bool clearDueAtMs = false,
-    int? reviewStage,
-    bool clearReviewStage = false,
-    int? nextReviewAtMs,
-    bool clearNextReviewAtMs = false,
-    int? lastReviewAtMs,
-    bool clearLastReviewAtMs = false,
-    int? manualImportanceNudgeScore,
-    bool clearManualImportanceNudgeScore = false,
-    int? manualUrgencyNudgeScore,
-    bool clearManualUrgencyNudgeScore = false,
-    String? sourceMessageId,
-  }) async {
-    if (failTransition) {
-      throw StateError('apply failed');
-    }
-    final existing = _todos[todoId]!;
-    final updated = Todo(
-      id: existing.id,
-      title: existing.title,
-      dueAtMs: clearDueAtMs ? null : (dueAtMs ?? existing.dueAtMs),
-      status: newStatus ?? existing.status,
-      sourceEntryId: existing.sourceEntryId,
-      createdAtMs: existing.createdAtMs,
-      updatedAtMs: DateTime.now().toUtc().millisecondsSinceEpoch,
-      reviewStage:
-          clearReviewStage ? null : (reviewStage ?? existing.reviewStage),
-      nextReviewAtMs: clearNextReviewAtMs
-          ? null
-          : (nextReviewAtMs ?? existing.nextReviewAtMs),
-      lastReviewAtMs: clearLastReviewAtMs
-          ? null
-          : (lastReviewAtMs ?? existing.lastReviewAtMs),
-      manualImportanceNudgeScore: clearManualImportanceNudgeScore
-          ? 0
-          : (manualImportanceNudgeScore ??
-              existing.manualImportanceNudgeScore ??
-              0),
-      manualUrgencyNudgeScore: clearManualUrgencyNudgeScore
-          ? 0
-          : (manualUrgencyNudgeScore ?? existing.manualUrgencyNudgeScore ?? 0),
-    );
-    _todos[todoId] = updated;
-    return updated;
-  }
-
-  @override
-  Future<String> taskPriorityRerankAi(
-    Uint8List key, {
-    required String prompt,
-  }) async {
-    if (taskPriorityAiResponseJson == null) {
-      throw UnimplementedError('taskPriorityRerankAi');
-    }
-    return taskPriorityAiResponseJson!;
-  }
-
-  @override
-  Future<Todo> setTodoStatus(
-    Uint8List key, {
-    required String todoId,
-    required String newStatus,
-    String? sourceMessageId,
-  }) async {
-    final existing = _todos[todoId]!;
-    final updated = Todo(
-      id: existing.id,
-      title: existing.title,
-      dueAtMs: existing.dueAtMs,
-      status: newStatus,
-      sourceEntryId: existing.sourceEntryId,
-      createdAtMs: existing.createdAtMs,
-      updatedAtMs: DateTime.now().toUtc().millisecondsSinceEpoch,
-      reviewStage: existing.reviewStage,
-      nextReviewAtMs: existing.nextReviewAtMs,
-      lastReviewAtMs: existing.lastReviewAtMs,
-      manualImportanceNudgeScore: existing.manualImportanceNudgeScore,
-      manualUrgencyNudgeScore: existing.manualUrgencyNudgeScore,
-    );
-    _todos[todoId] = updated;
-    return updated;
-  }
-}
-
-final class _NoopSyncRunner implements SyncRunner {
-  @override
-  Future<int> pull(SyncConfig config) async => 0;
-
-  @override
-  Future<int> push(SyncConfig config) async => 0;
 }

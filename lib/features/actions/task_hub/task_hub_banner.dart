@@ -7,7 +7,7 @@ import '../../../src/rust/db.dart';
 import '../../../ui/sl_button.dart';
 import '../../../ui/sl_surface.dart';
 import '../../../ui/sl_tokens.dart';
-import 'task_hub_page_sections.dart';
+import 'task_hub_entry_card.dart';
 import 'task_hub_quick_action_layout.dart';
 import 'task_hub_quick_actions.dart';
 import 'task_priority_feedback_store.dart';

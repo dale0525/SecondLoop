@@ -14,6 +14,7 @@ import 'task_priority_ai_models.dart';
 import 'task_priority_engine.dart';
 import 'task_priority_feedback_store.dart';
 import 'task_priority_models.dart';
+import 'task_priority_sticky_focus.dart';
 
 enum TaskPriorityAiAvailability {
   unknown,
@@ -144,19 +145,16 @@ class TaskPriorityStore extends ChangeNotifier {
       _aiAvailability != TaskPriorityAiAvailability.unknown;
   bool get isAiEnhancementAvailable =>
       _aiAvailability == TaskPriorityAiAvailability.available;
-
   bool _dirty = true;
   bool get isDirty => _dirty;
-
   bool _isRefreshing = false;
   bool get isRefreshing => _isRefreshing;
-
-  String? _stickyFocusTodoId;
-  DateTime? _stickyFocusDayLocal;
-  Map<String, String> _stickyFocusDueStateByTodoId = const <String, String>{};
-
+  final TaskPriorityStickyFocusState _stickyFocus =
+      TaskPriorityStickyFocusState();
   Future<void>? _inflightRefresh;
+  Future<void>? _inflightForcedLocalRefresh;
   bool _refreshQueuedAfterInflight = false;
+  int _refreshGeneration = 0;
   bool _disposed = false;
 
   void markDirty() {
@@ -181,6 +179,11 @@ class TaskPriorityStore extends ChangeNotifier {
     if (_inflightRefresh != null) {
       if (force) {
         _refreshQueuedAfterInflight = true;
+        _inflightForcedLocalRefresh ??=
+            _publishLatestLocalSnapshotWhileInflight().whenComplete(() {
+          _inflightForcedLocalRefresh = null;
+        });
+        return _inflightForcedLocalRefresh!;
       }
       return _inflightRefresh!;
     }
@@ -209,6 +212,7 @@ class TaskPriorityStore extends ChangeNotifier {
 
     try {
       final nowLocal = _nowLocal();
+      final refreshGeneration = ++_refreshGeneration;
       final todos = await _loadTodos();
       try {
         final checklistProgressRows = await _loadChecklistProgress?.call() ??
@@ -226,23 +230,37 @@ class TaskPriorityStore extends ChangeNotifier {
         todos,
         nowLocal: nowLocal,
         feedbackState: feedbackState,
-      );
+      ).copyWith(refreshGeneration: refreshGeneration);
       _dirty = false;
 
       final aiEnhancementEnabled =
           await _isAiEnhancementEnabled?.call() ?? true;
       if (!aiEnhancementEnabled) {
-        _snapshot = rulesSnapshot;
+        final published = _publishSnapshot(
+          rulesSnapshot.copyWith(
+            resolutionPhase: TaskPriorityResolutionPhase.localPublished,
+          ),
+          nowLocal: nowLocal,
+          rememberStickyFocus: true,
+        );
         _aiAvailability = TaskPriorityAiAvailability.disabled;
-        _rememberStickyFocus(nowLocal);
-        _safeNotify();
+        if (published) {
+          _safeNotify();
+        }
         return;
       }
 
       if (rulesSnapshot.activeEntries.isEmpty) {
-        _snapshot = rulesSnapshot;
-        _rememberStickyFocus(nowLocal);
-        _safeNotify();
+        final published = _publishSnapshot(
+          rulesSnapshot.copyWith(
+            resolutionPhase: TaskPriorityResolutionPhase.localPublished,
+          ),
+          nowLocal: nowLocal,
+          rememberStickyFocus: true,
+        );
+        if (published) {
+          _safeNotify();
+        }
         return;
       }
 
@@ -251,9 +269,16 @@ class TaskPriorityStore extends ChangeNotifier {
         nowLocal: nowLocal,
       );
       if (request.candidates.isEmpty) {
-        _snapshot = rulesSnapshot;
-        _rememberStickyFocus(nowLocal);
-        _safeNotify();
+        final published = _publishSnapshot(
+          rulesSnapshot.copyWith(
+            resolutionPhase: TaskPriorityResolutionPhase.localPublished,
+          ),
+          nowLocal: nowLocal,
+          rememberStickyFocus: true,
+        );
+        if (published) {
+          _safeNotify();
+        }
         return;
       }
 
@@ -292,22 +317,35 @@ class TaskPriorityStore extends ChangeNotifier {
               candidateByTodoId: candidateByTodoId,
               nowLocal: nowLocal,
             );
-      if (bootstrapPersisted.isNotEmpty) {
-        _snapshot = buildTaskPrioritySnapshot(
-          todos,
-          nowLocal: nowLocal,
-          aiResult: TaskPriorityAiBatchResult(
-            entries: bootstrapPersisted.values
-                .map((value) => value.entry)
-                .toList(growable: false),
-          ),
-          enhancementSource: TaskPriorityEnhancementSource.aiLocalCache,
-          feedbackState: feedbackState,
-        );
-      } else {
-        _snapshot = rulesSnapshot;
+      final publishedBootstrap = bootstrapPersisted.isNotEmpty
+          ? _publishSnapshot(
+              buildTaskPrioritySnapshot(
+                todos,
+                nowLocal: nowLocal,
+                aiResult: TaskPriorityAiBatchResult(
+                  entries: bootstrapPersisted.values
+                      .map((value) => value.entry)
+                      .toList(growable: false),
+                ),
+                enhancementSource: TaskPriorityEnhancementSource.aiLocalCache,
+                feedbackState: feedbackState,
+              ).copyWith(
+                resolutionPhase: TaskPriorityResolutionPhase.aiResolved,
+                refreshGeneration: refreshGeneration,
+              ),
+              nowLocal: nowLocal,
+            )
+          : _publishSnapshot(
+              rulesSnapshot.copyWith(
+                resolutionPhase: aiService == null
+                    ? TaskPriorityResolutionPhase.localPublished
+                    : TaskPriorityResolutionPhase.awaitingAi,
+              ),
+              nowLocal: nowLocal,
+            );
+      if (publishedBootstrap) {
+        _safeNotify();
       }
-      _safeNotify();
 
       final sharedPersisted = canUseSharedCache
           ? await _readSharedAiAssessments?.call(
@@ -389,7 +427,7 @@ class TaskPriorityStore extends ChangeNotifier {
       }
 
       final stalePersistedTodoIds = <String>{};
-      for (final activeEntry in _snapshot.activeEntries) {
+      for (final activeEntry in rulesSnapshot.activeEntries) {
         final cached = mergedPersisted[activeEntry.todo.id];
         if (cached == null) continue;
         final candidate = candidateByTodoId[activeEntry.todo.id];
@@ -413,19 +451,17 @@ class TaskPriorityStore extends ChangeNotifier {
         localCacheTodoIds.remove(todoId);
       }
 
+      var didLiveRerankFail = false;
       if (aiService != null && staleCandidates.isNotEmpty) {
+        final staleCandidateByTodoId = <String, TaskPriorityAiCandidate>{
+          for (final candidate in staleCandidates) candidate.todoId: candidate,
+        };
         try {
           final result = await aiService.rerank(
             request.copyWith(candidates: staleCandidates),
           );
           for (final entry in result.entries) {
-            TaskPriorityAiCandidate? candidate;
-            for (final item in staleCandidates) {
-              if (item.todoId == entry.todoId) {
-                candidate = item;
-                break;
-              }
-            }
+            final candidate = staleCandidateByTodoId[entry.todoId];
             if (candidate == null) continue;
             final requestSignature = _buildCandidateRequestSignature(
               candidate,
@@ -445,7 +481,7 @@ class TaskPriorityStore extends ChangeNotifier {
           }
         } catch (_) {
           _aiAvailability = TaskPriorityAiAvailability.unavailable;
-          // Keep the already-published rules snapshot.
+          didLiveRerankFail = true;
         }
       }
 
@@ -483,7 +519,18 @@ class TaskPriorityStore extends ChangeNotifier {
       }
       if (aiEntries.isEmpty) {
         _aiAvailability = TaskPriorityAiAvailability.unavailable;
-        _rememberStickyFocus(nowLocal);
+        final published = _publishSnapshot(
+          rulesSnapshot.copyWith(
+            resolutionPhase: didLiveRerankFail
+                ? TaskPriorityResolutionPhase.localFallback
+                : TaskPriorityResolutionPhase.localPublished,
+          ),
+          nowLocal: nowLocal,
+          rememberStickyFocus: true,
+        );
+        if (published) {
+          _safeNotify();
+        }
         return;
       }
 
@@ -499,21 +546,102 @@ class TaskPriorityStore extends ChangeNotifier {
         enhancementSource: enhancementSource,
         feedbackState: feedbackState,
       );
-      hybridSnapshot = _applyStickyFocus(hybridSnapshot, nowLocal: nowLocal);
-      _snapshot = hybridSnapshot;
-      _rememberStickyFocus(nowLocal);
-      _safeNotify();
+      hybridSnapshot = _stickyFocus.apply(
+        hybridSnapshot.copyWith(
+          resolutionPhase: TaskPriorityResolutionPhase.aiResolved,
+          refreshGeneration: refreshGeneration,
+        ),
+        nowLocal: nowLocal,
+      );
+      final published = _publishSnapshot(
+        hybridSnapshot,
+        nowLocal: nowLocal,
+        rememberStickyFocus: true,
+      );
+      if (published) {
+        _safeNotify();
+      }
     } finally {
       _isRefreshing = false;
       _safeNotify();
     }
   }
 
-  void _rememberStickyFocus(DateTime nowLocal) {
-    _stickyFocusTodoId = _snapshot.primaryFocus?.todo.id;
-    _stickyFocusDayLocal =
-        DateTime(nowLocal.year, nowLocal.month, nowLocal.day);
-    _stickyFocusDueStateByTodoId = _buildStickyStateSignatures(_snapshot);
+  Future<void> _publishLatestLocalSnapshotWhileInflight() async {
+    if (_disposed) return;
+
+    final nowLocal = _nowLocal();
+    final refreshGeneration = ++_refreshGeneration;
+    final todos = await _loadTodos();
+    final previewFeedbackState = await _feedbackStore.read();
+    final rulesSnapshot = buildTaskPrioritySnapshot(
+      todos,
+      nowLocal: nowLocal,
+      feedbackState: previewFeedbackState,
+    ).copyWith(refreshGeneration: refreshGeneration);
+    _dirty = false;
+
+    // Keep the preview path read-only with respect to shared store state.
+    // The queued full refresh owns checklist-progress publication and feedback
+    // pruning once the current in-flight refresh settles.
+    await _publishLocalPreviewSnapshot(
+      rulesSnapshot: rulesSnapshot,
+      nowLocal: nowLocal,
+      aiEnhancementEnabled: await _isAiEnhancementEnabled?.call() ?? true,
+    );
+  }
+
+  Future<void> _publishLocalPreviewSnapshot({
+    required TaskPrioritySnapshot rulesSnapshot,
+    required DateTime nowLocal,
+    required bool aiEnhancementEnabled,
+  }) async {
+    if (!aiEnhancementEnabled || rulesSnapshot.activeEntries.isEmpty) {
+      if (_publishSnapshot(
+        rulesSnapshot.copyWith(
+          resolutionPhase: TaskPriorityResolutionPhase.localPublished,
+        ),
+        nowLocal: nowLocal,
+      )) {
+        if (!aiEnhancementEnabled) {
+          _aiAvailability = TaskPriorityAiAvailability.disabled;
+        }
+        _safeNotify();
+      }
+      return;
+    }
+
+    if (_publishSnapshot(
+      rulesSnapshot.copyWith(
+        resolutionPhase: TaskPriorityResolutionPhase.awaitingAi,
+      ),
+      nowLocal: nowLocal,
+    )) {
+      _safeNotify();
+    }
+    // The active refresh cycle already owns AI service resolution and reranking.
+    // Avoid resolving it again here so force-refresh only republishes the newest
+    // local snapshot while the in-flight refresh completes or reruns.
+  }
+
+  bool _publishSnapshot(
+    TaskPrioritySnapshot snapshot, {
+    DateTime? nowLocal,
+    bool rememberStickyFocus = false,
+  }) {
+    if (_disposed) return false;
+    if (nowLocal != null &&
+        snapshot.resolutionPhase != TaskPriorityResolutionPhase.idle) {
+      snapshot = _stickyFocus.apply(snapshot, nowLocal: nowLocal);
+    }
+    if (snapshot.refreshGeneration < _snapshot.refreshGeneration) {
+      return false;
+    }
+    _snapshot = snapshot;
+    if (rememberStickyFocus && nowLocal != null) {
+      _stickyFocus.remember(_snapshot, nowLocal);
+    }
+    return true;
   }
 
   Future<Map<String, TaskPriorityAiCachedAssessment>>
@@ -778,78 +906,6 @@ class TaskPriorityStore extends ChangeNotifier {
     return jsonEncode(<String, Object?>{
       'candidate': candidate.toJson(),
     });
-  }
-
-  TaskPrioritySnapshot _applyStickyFocus(
-    TaskPrioritySnapshot snapshot, {
-    required DateTime nowLocal,
-  }) {
-    final stickyTodoId = _stickyFocusTodoId;
-    final stickyDay = _stickyFocusDayLocal;
-    if (stickyTodoId == null || stickyDay == null) return snapshot;
-
-    final today = DateTime(nowLocal.year, nowLocal.month, nowLocal.day);
-    if (today != stickyDay) return snapshot;
-    final primary = snapshot.primaryFocus;
-    if (primary == null || primary.todo.id == stickyTodoId) return snapshot;
-    if (primary.hasHardFocusGuard ||
-        primary.confidence == TaskPriorityConfidence.high) {
-      return snapshot;
-    }
-    if (_didStickyDueStateChange(snapshot)) return snapshot;
-
-    final stickyExists = snapshot.activeEntries.any(
-      (entry) => entry.todo.id == stickyTodoId,
-    );
-    if (!stickyExists) return snapshot;
-
-    return snapshot.copyWith(selectedFocusTodoId: stickyTodoId);
-  }
-
-  Map<String, String> _buildStickyStateSignatures(
-    TaskPrioritySnapshot snapshot,
-  ) {
-    return <String, String>{
-      for (final entry in snapshot.activeEntries)
-        entry.todo.id: jsonEncode(<Object?>[
-          entry.todo.status,
-          entry.todo.dueAtMs,
-          entry.todo.reviewStage,
-          entry.todo.nextReviewAtMs,
-          entry.isOverdue,
-          entry.isDueToday,
-          entry.isReviewDue,
-          entry.isFutureScheduled,
-          entry.isInProgress,
-          entry.effectiveUrgency,
-          entry.effectiveImportance,
-          entry.urgencyScore,
-          entry.importanceScore,
-          entry.dueDerivedUrgencyScore,
-          _stickySemanticDirection(entry.semanticScore),
-          entry.isUrgent,
-          entry.isImportant,
-        ]),
-    };
-  }
-
-  int _stickySemanticDirection(double semanticScore) {
-    if (semanticScore > 0) return 1;
-    if (semanticScore < 0) return -1;
-    return 0;
-  }
-
-  bool _didStickyDueStateChange(TaskPrioritySnapshot snapshot) {
-    final previous = _stickyFocusDueStateByTodoId;
-    if (previous.isEmpty) return false;
-    final current = _buildStickyStateSignatures(snapshot);
-    if (current.length != previous.length) return true;
-    for (final entry in current.entries) {
-      if (previous[entry.key] != entry.value) {
-        return true;
-      }
-    }
-    return false;
   }
 
   static Future<List<Todo>> _loadAndNormalizeTodos(

@@ -4,7 +4,10 @@ import '../../../i18n/strings.g.dart';
 import '../../../src/rust/db.dart';
 import '../../../ui/sl_surface.dart';
 import '../../../ui/sl_tokens.dart';
+import 'task_hub_card_anchor.dart';
+import 'task_hub_entry_card.dart';
 import 'task_hub_page_sections.dart';
+import 'task_hub_priority_animation_controller.dart';
 import 'task_hub_quick_actions.dart';
 import 'task_priority_feedback_store.dart';
 import 'task_priority_models.dart';
@@ -17,6 +20,12 @@ class TaskHubFocusSection extends StatelessWidget {
     required this.onQuickAction,
     this.onFeedback,
     this.restoredTodoId,
+    this.anchorRegistry,
+    this.anchorId,
+    this.inlineAnimation,
+    this.priorityPendingTodoId,
+    this.priorityLocalFallbackTodoId,
+    this.onInlineAnimationCompleted,
     super.key,
   });
 
@@ -30,12 +39,18 @@ class TaskHubFocusSection extends StatelessWidget {
     TaskPriorityFeedbackKind feedback,
   )? onFeedback;
   final String? restoredTodoId;
+  final TaskHubCardAnchorRegistry? anchorRegistry;
+  final String? anchorId;
+  final TaskHubPriorityInlineAnimationState? inlineAnimation;
+  final String? priorityPendingTodoId;
+  final String? priorityLocalFallbackTodoId;
+  final VoidCallback? onInlineAnimationCompleted;
 
   @override
   Widget build(BuildContext context) {
     if (entries.isEmpty) return const SizedBox.shrink();
     final tokens = SlTokens.of(context);
-    return Padding(
+    Widget section = Padding(
       padding: const EdgeInsets.only(bottom: 16),
       child: SlSurface(
         key: const ValueKey('task_hub_page_section_focus'),
@@ -61,6 +76,13 @@ class TaskHubFocusSection extends StatelessWidget {
                 onFeedback: onFeedback == null
                     ? null
                     : (feedback) => onFeedback!(entries[i], feedback),
+                anchorRegistry: anchorRegistry,
+                inlineAnimation: inlineAnimation,
+                showPriorityPendingBadge:
+                    entries[i].todo.id == priorityPendingTodoId,
+                showPriorityLocalFallbackBadge:
+                    entries[i].todo.id == priorityLocalFallbackTodoId,
+                onInlineAnimationCompleted: onInlineAnimationCompleted,
               ),
               if (i != entries.length - 1)
                 Divider(
@@ -70,5 +92,13 @@ class TaskHubFocusSection extends StatelessWidget {
         ),
       ),
     );
+    if (anchorRegistry != null && anchorId != null) {
+      section = TaskHubCardAnchor(
+        todoId: anchorId!,
+        registry: anchorRegistry!,
+        child: section,
+      );
+    }
+    return section;
   }
 }

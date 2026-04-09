@@ -345,6 +345,100 @@ void main() {
     expect(snapshot.source, TaskPrioritySnapshotSource.hybrid);
   });
 
+  test(
+      'manual urgency down yields to user-raised next-up work despite overdue date pressure',
+      () {
+    final nowLocal = DateTime(2026, 4, 8, 12, 0);
+    final snapshot = buildTaskPrioritySnapshot(
+      <Todo>[
+        todo(
+          id: 'upload',
+          title: 'Upload short video',
+          updatedAtMs: 300,
+          dueAtMs: nowLocal
+              .subtract(const Duration(hours: 2))
+              .toUtc()
+              .millisecondsSinceEpoch,
+          manualUrgencyNudgeScore: -1,
+        ),
+        todo(
+          id: 'suit',
+          title: 'Wear suit today',
+          updatedAtMs: 200,
+          status: 'in_progress',
+          dueAtMs: nowLocal
+              .subtract(const Duration(hours: 3))
+              .toUtc()
+              .millisecondsSinceEpoch,
+          manualUrgencyNudgeScore: 1,
+        ),
+        todo(
+          id: 'script',
+          title: 'Make a Chinese short video',
+          updatedAtMs: 100,
+          dueAtMs: nowLocal
+              .subtract(const Duration(days: 1))
+              .toUtc()
+              .millisecondsSinceEpoch,
+          manualImportanceNudgeScore: -1,
+          manualUrgencyNudgeScore: -1,
+        ),
+        todo(
+          id: 'research',
+          title: 'Research recent scripts',
+          updatedAtMs: 80,
+          status: 'in_progress',
+          manualImportanceNudgeScore: 1,
+          manualUrgencyNudgeScore: 1,
+        ),
+      ],
+      nowLocal: nowLocal,
+      aiResult: const TaskPriorityAiBatchResult(
+        entries: <TaskPriorityAiEntry>[
+          TaskPriorityAiEntry(
+            todoId: 'upload',
+            semanticAdjustment: 15,
+            reason: 'Potential blocker.',
+            confidence: TaskPriorityAiConfidence.high,
+            isImportant: true,
+            isUrgent: true,
+          ),
+          TaskPriorityAiEntry(
+            todoId: 'suit',
+            semanticAdjustment: -1,
+            reason: 'Personal reminder.',
+            confidence: TaskPriorityAiConfidence.high,
+            isImportant: false,
+            isUrgent: true,
+          ),
+          TaskPriorityAiEntry(
+            todoId: 'script',
+            semanticAdjustment: 2,
+            reason: 'Core creative task.',
+            confidence: TaskPriorityAiConfidence.high,
+            isImportant: true,
+            isUrgent: true,
+          ),
+          TaskPriorityAiEntry(
+            todoId: 'research',
+            semanticAdjustment: 1,
+            reason: 'Important preparation task.',
+            confidence: TaskPriorityAiConfidence.high,
+            isImportant: true,
+            isUrgent: true,
+          ),
+        ],
+      ),
+    );
+
+    expect(snapshot.primaryFocus?.todo.id, 'suit');
+    expect(snapshot.nextUpEntries.map((entry) => entry.todo.id).take(3), [
+      'research',
+      'upload',
+      'script',
+    ]);
+  });
+
   test('low-confidence ai semantic score does not take over primary focus', () {
     final nowLocal = DateTime(2026, 3, 13, 10, 0);
     final snapshot = buildTaskPrioritySnapshot(

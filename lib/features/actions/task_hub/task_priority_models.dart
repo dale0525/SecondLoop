@@ -54,6 +54,14 @@ enum TaskPriorityEnhancementSource {
   aiLocalCache,
 }
 
+enum TaskPriorityResolutionPhase {
+  idle,
+  localPublished,
+  awaitingAi,
+  aiResolved,
+  localFallback,
+}
+
 enum TaskPriorityDisplayBucket {
   nextUp,
   backlog,
@@ -106,10 +114,15 @@ class TaskPriorityEntry {
   final int manualUrgencyNudgeScore;
   final int dueDerivedUrgencyScore;
 
+  bool get suppressesAutomaticUrgencyBoost =>
+      manualUrgencyNudgeDirection == TaskPriorityNudgeDirection.down;
+
   double get totalScore => ruleScore + semanticScore;
 
   int get effectiveUrgency =>
-      urgencyScore + manualUrgencyNudgeScore + dueDerivedUrgencyScore;
+      urgencyScore +
+      manualUrgencyNudgeScore +
+      (suppressesAutomaticUrgencyBoost ? 0 : dueDerivedUrgencyScore);
 
   int get effectiveImportance => importanceScore + manualImportanceNudgeScore;
 
@@ -136,8 +149,8 @@ class TaskPriorityEntry {
   bool get isUrgent => effectiveUrgency > 0;
 
   bool get hasHardFocusGuard => hasTaskPriorityHardGuard(
-        isOverdue: isOverdue,
-        isDueToday: isDueToday,
+        isOverdue: !suppressesAutomaticUrgencyBoost && isOverdue,
+        isDueToday: !suppressesAutomaticUrgencyBoost && isDueToday,
       );
 
   TaskPriorityDisplayBucket get displayBucket {
@@ -213,6 +226,8 @@ class TaskPrioritySnapshot {
     required this.done,
     required this.orderedActive,
     this.enhancementSource = TaskPriorityEnhancementSource.none,
+    this.resolutionPhase = TaskPriorityResolutionPhase.localPublished,
+    this.refreshGeneration = 0,
     List<TaskPriorityEntry>? baseFocus,
     List<TaskPriorityEntry>? baseScheduled,
     List<TaskPriorityEntry>? baseDecide,
@@ -229,6 +244,7 @@ class TaskPrioritySnapshot {
   const TaskPrioritySnapshot.empty()
       : source = TaskPrioritySnapshotSource.rules,
         enhancementSource = TaskPriorityEnhancementSource.none,
+        resolutionPhase = TaskPriorityResolutionPhase.idle,
         focus = const <TaskPriorityEntry>[],
         scheduled = const <TaskPriorityEntry>[],
         decide = const <TaskPriorityEntry>[],
@@ -240,10 +256,13 @@ class TaskPrioritySnapshot {
         baseDone = const <TaskPriorityEntry>[],
         baseOrderedActive = const <TaskPriorityEntry>[],
         selectedFocusTodoId = null,
-        computedAtLocal = null;
+        computedAtLocal = null,
+        refreshGeneration = 0;
 
   final TaskPrioritySnapshotSource source;
   final TaskPriorityEnhancementSource enhancementSource;
+  final TaskPriorityResolutionPhase resolutionPhase;
+  final int refreshGeneration;
   final List<TaskPriorityEntry> focus;
   final List<TaskPriorityEntry> scheduled;
   final List<TaskPriorityEntry> decide;
@@ -277,6 +296,10 @@ class TaskPrioritySnapshot {
   TaskPrioritySnapshot get baseSnapshot => TaskPrioritySnapshot(
         source: TaskPrioritySnapshotSource.rules,
         enhancementSource: TaskPriorityEnhancementSource.none,
+        resolutionPhase: resolutionPhase == TaskPriorityResolutionPhase.idle
+            ? TaskPriorityResolutionPhase.idle
+            : TaskPriorityResolutionPhase.localPublished,
+        refreshGeneration: refreshGeneration,
         focus: baseFocus,
         scheduled: baseScheduled,
         decide: baseDecide,
@@ -337,6 +360,8 @@ class TaskPrioritySnapshot {
   TaskPrioritySnapshot copyWith({
     TaskPrioritySnapshotSource? source,
     TaskPriorityEnhancementSource? enhancementSource,
+    TaskPriorityResolutionPhase? resolutionPhase,
+    int? refreshGeneration,
     List<TaskPriorityEntry>? focus,
     List<TaskPriorityEntry>? scheduled,
     List<TaskPriorityEntry>? decide,
@@ -354,6 +379,8 @@ class TaskPrioritySnapshot {
     return TaskPrioritySnapshot(
       source: source ?? this.source,
       enhancementSource: enhancementSource ?? this.enhancementSource,
+      resolutionPhase: resolutionPhase ?? this.resolutionPhase,
+      refreshGeneration: refreshGeneration ?? this.refreshGeneration,
       focus: focus ?? this.focus,
       scheduled: scheduled ?? this.scheduled,
       decide: decide ?? this.decide,
