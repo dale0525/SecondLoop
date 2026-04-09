@@ -124,27 +124,26 @@ TaskHubPriorityAnimationPlan buildTaskHubPriorityAnimationPlan({
       toIndex: to.index,
     );
   }
-  if (from == null || to == null) {
-    return TaskHubPriorityAnimationPlan.none(todoId: actedTodoId);
-  }
-  if (from.section != to.section) {
+  final fromPosition = from!;
+  final toPosition = to!;
+  if (fromPosition.section != toPosition.section) {
     return TaskHubPriorityAnimationPlan(
       kind: TaskHubPriorityAnimationKind.crossSectionMove,
       todoId: actedTodoId,
-      fromSection: from.section,
-      toSection: to.section,
-      fromIndex: from.index,
-      toIndex: to.index,
+      fromSection: fromPosition.section,
+      toSection: toPosition.section,
+      fromIndex: fromPosition.index,
+      toIndex: toPosition.index,
     );
   }
-  if (from.index != to.index) {
+  if (fromPosition.index != toPosition.index) {
     return TaskHubPriorityAnimationPlan(
       kind: TaskHubPriorityAnimationKind.sameSectionReorder,
       todoId: actedTodoId,
-      fromSection: from.section,
-      toSection: to.section,
-      fromIndex: from.index,
-      toIndex: to.index,
+      fromSection: fromPosition.section,
+      toSection: toPosition.section,
+      fromIndex: fromPosition.index,
+      toIndex: toPosition.index,
     );
   }
   return TaskHubPriorityAnimationPlan.none(todoId: actedTodoId);

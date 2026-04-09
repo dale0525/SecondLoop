@@ -573,26 +573,29 @@ class TaskPriorityStore extends ChangeNotifier {
     final nowLocal = _nowLocal();
     final refreshGeneration = ++_refreshGeneration;
     final todos = await _loadTodos();
-    try {
-      final checklistProgressRows = await _loadChecklistProgress?.call() ??
-          const <TodoChecklistProgress>[];
-      _checklistProgressByTodoId = {
-        for (final item in checklistProgressRows) item.todoId: item,
-      };
-    } catch (_) {
-      // Keep the previously loaded checklist progress on transient failures.
-    }
-
-    await _feedbackStore.pruneToTodoIds(todos.map((todo) => todo.id));
-    final feedbackState = await _feedbackStore.read();
+    final previewFeedbackState = await _feedbackStore.read();
     final rulesSnapshot = buildTaskPrioritySnapshot(
       todos,
       nowLocal: nowLocal,
-      feedbackState: feedbackState,
+      feedbackState: previewFeedbackState,
     ).copyWith(refreshGeneration: refreshGeneration);
     _dirty = false;
 
-    final aiEnhancementEnabled = await _isAiEnhancementEnabled?.call() ?? true;
+    // Keep the preview path read-only with respect to shared store state.
+    // The queued full refresh owns checklist-progress publication and feedback
+    // pruning once the current in-flight refresh settles.
+    await _publishLocalPreviewSnapshot(
+      rulesSnapshot: rulesSnapshot,
+      nowLocal: nowLocal,
+      aiEnhancementEnabled: await _isAiEnhancementEnabled?.call() ?? true,
+    );
+  }
+
+  Future<void> _publishLocalPreviewSnapshot({
+    required TaskPrioritySnapshot rulesSnapshot,
+    required DateTime nowLocal,
+    required bool aiEnhancementEnabled,
+  }) async {
     if (!aiEnhancementEnabled || rulesSnapshot.activeEntries.isEmpty) {
       if (_publishSnapshot(
         rulesSnapshot.copyWith(

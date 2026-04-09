@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:secondloop/features/actions/task_hub/task_priority_ai.dart';
 import 'package:secondloop/features/actions/task_hub/task_priority_ai_models.dart';
+import 'package:secondloop/features/actions/task_hub/task_priority_feedback_store.dart';
 import 'package:secondloop/features/actions/task_hub/task_priority_models.dart';
 import 'package:secondloop/features/actions/task_hub/task_priority_store.dart';
 import 'package:secondloop/src/rust/db.dart';
@@ -115,7 +116,9 @@ void main() {
     final firstAiRelease = Completer<void>();
     final secondLocalPublished = Completer<void>();
     final published = <TaskPrioritySnapshot>[];
+    var checklistProgressCallCount = 0;
     var resolveCallCount = 0;
+    final feedbackStore = _TrackingFeedbackStore();
 
     late final TaskPriorityStore store;
     store = TaskPriorityStore.fromLoaders(
@@ -123,7 +126,18 @@ void main() {
         todo(id: 'a', title: 'Alpha task', updatedAtMs: 20),
         todo(id: 'b', title: 'Beta task', updatedAtMs: 10),
       ],
+      loadChecklistProgress: () async {
+        checklistProgressCallCount += 1;
+        return <TodoChecklistProgress>[
+          TodoChecklistProgress(
+            todoId: 'a',
+            doneCount: checklistProgressCallCount,
+            totalCount: 3,
+          ),
+        ];
+      },
       nowLocal: () => DateTime(2026, 4, 7, 12),
+      feedbackStore: feedbackStore,
       resolveAiService: () async {
         resolveCallCount += 1;
         if (resolveCallCount == 1) {
@@ -158,6 +172,8 @@ void main() {
       completes,
     );
 
+    expect(store.checklistProgressByTodoId['a']?.doneCount, 1);
+    expect(feedbackStore.pruneCallCount, 1);
     expect(resolveCallCount, 1);
 
     firstAiRelease.complete();
@@ -172,6 +188,8 @@ void main() {
       ),
       isTrue,
     );
+    expect(store.checklistProgressByTodoId['a']?.doneCount, 2);
+    expect(feedbackStore.pruneCallCount, 2);
     expect(resolveCallCount, 2);
   });
 }
@@ -202,5 +220,15 @@ final class _FailingAiService extends TaskPriorityAiService {
   @override
   Future<TaskPriorityAiBatchResult> rerank(TaskPriorityAiRequest request) {
     throw StateError('AI unavailable');
+  }
+}
+
+final class _TrackingFeedbackStore extends TaskPriorityFeedbackStore {
+  int pruneCallCount = 0;
+
+  @override
+  Future<void> pruneToTodoIds(Iterable<String> todoIds) async {
+    pruneCallCount += 1;
+    await super.pruneToTodoIds(todoIds);
   }
 }
