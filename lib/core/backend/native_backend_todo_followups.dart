@@ -191,25 +191,6 @@ DbUpsertTodoWithAutoFollowupJobFn _resolveDbUpsertTodoWithAutoFollowupJob({
       followupTaskTypeHint: normalizedTaskTypeHint,
     );
     if (!resolvedTaskType.allowsAutoFollowup) {
-      if (dbUpsertTodo == null && dbUpsertTodoWithAutoFollowupJob != null) {
-        return resolvedUpsertTodoWithAutoFollowupJob(
-          appDir: appDir,
-          key: key,
-          id: id,
-          title: title,
-          dueAtMs: dueAtMs,
-          status: status,
-          sourceEntryId: sourceEntryId,
-          reviewStage: reviewStage,
-          nextReviewAtMs: nextReviewAtMs,
-          lastReviewAtMs: lastReviewAtMs,
-          taskTypeHint:
-              normalizedTaskTypeHint == null || normalizedTaskTypeHint.isEmpty
-                  ? null
-                  : normalizedTaskTypeHint,
-          nowMs: nowMs,
-        );
-      }
       return resolvedUpsertTodo(
         appDir: appDir,
         key: key,
