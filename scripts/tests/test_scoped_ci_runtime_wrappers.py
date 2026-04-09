@@ -49,6 +49,7 @@ def _resolve_git_bash() -> str | None:
 
 
 BASH_BIN = _resolve_git_bash()
+TRUE_BIN = shutil.which("true") or "true"
 
 
 @unittest.skipUnless(BASH_BIN, "bash is required")
@@ -368,7 +369,7 @@ class ScopedCiRuntimeWrapperBehaviorTests(unittest.TestCase):
                         "}",
                         "",
                         "resolve_flutter_bin() {",
-                        "  printf '%s\\n' /bin/true",
+                        f"  printf '%s\\n' {TRUE_BIN}",
                         "}",
                         "",
                         "run_with_periodic_status() {",
@@ -919,11 +920,11 @@ class ScopedCiRuntimeWrapperBehaviorTests(unittest.TestCase):
                         "}",
                         "",
                         "resolve_dart_bin() {",
-                        "  printf '%s\\n' /bin/true",
+                        f"  printf '%s\\n' {TRUE_BIN}",
                         "}",
                         "",
                         "resolve_flutter_bin() {",
-                        "  printf '%s\\n' /bin/true",
+                        f"  printf '%s\\n' {TRUE_BIN}",
                         "}",
                         "",
                         "run_with_periodic_status() {",
