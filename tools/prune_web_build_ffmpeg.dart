@@ -182,10 +182,12 @@ Future<int> _pruneServiceWorkerResources(
     ),
   );
   final originalHashes = Map<String, String>.from(resources);
+  final removedEntries = originalHashes.keys
+      .where((key) => key.startsWith(_kWebResourcePrefix))
+      .length;
   resources.removeWhere((key, _) => key.startsWith(_kWebResourcePrefix));
   resources.addAll(refreshedHashes);
 
-  final removedEntries = originalHashes.length - resources.length;
   final hashesChanged = refreshedHashes.entries.any(
     (entry) => originalHashes[entry.key] != entry.value,
   );

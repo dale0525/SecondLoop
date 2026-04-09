@@ -40,6 +40,12 @@ void main() {
     );
   });
 
+  test('web build workflow reruns when Dart tool scripts change', () {
+    final workflow = File('.github/workflows/web-build.yml').readAsStringSync();
+
+    expect(workflow, contains('- "tools/**"'));
+  });
+
   test('web build workflow quotes step names containing colons', () {
     final workflow = File('.github/workflows/web-build.yml').readAsStringSync();
 

@@ -320,6 +320,82 @@ const RESOURCES = {
   });
 
   test(
+      'prune web build ffmpeg script counts removed service worker resources without going negative',
+      () async {
+    final buildDir = await _createTempBuildDir();
+    final ffmpegDir = Directory(
+      '${buildDir.path}${Platform.pathSeparator}assets${Platform.pathSeparator}assets${Platform.pathSeparator}bin${Platform.pathSeparator}ffmpeg',
+    );
+    await ffmpegDir.create(recursive: true);
+    await File(
+      '${ffmpegDir.path}${Platform.pathSeparator}linux${Platform.pathSeparator}ffmpeg',
+    ).create(recursive: true);
+    await File(
+      '${ffmpegDir.path}${Platform.pathSeparator}README.md',
+    ).writeAsString('desktop ffmpeg payload');
+
+    final assetManifest = File(
+      '${buildDir.path}${Platform.pathSeparator}assets${Platform.pathSeparator}AssetManifest.json',
+    );
+    await assetManifest.create(recursive: true);
+    await assetManifest.writeAsString(jsonEncode(<String, Object>{
+      'assets/bin/ffmpeg/linux/ffmpeg': <String>[
+        'assets/bin/ffmpeg/linux/ffmpeg'
+      ],
+      'assets/bin/ffmpeg/README.md': <String>['assets/bin/ffmpeg/README.md'],
+      'assets/icon/tray_icon.png': <String>['assets/icon/tray_icon.png'],
+    }));
+
+    final assetManifestBin = File(
+      '${buildDir.path}${Platform.pathSeparator}assets${Platform.pathSeparator}AssetManifest.bin',
+    );
+    final encodedAssetManifestBin = _encodeBinaryManifest(<String, Object>{
+      'assets/bin/ffmpeg/linux/ffmpeg': <Map<String, Object>>[
+        <String, Object>{'asset': 'assets/bin/ffmpeg/linux/ffmpeg'},
+      ],
+      'assets/bin/ffmpeg/README.md': <Map<String, Object>>[
+        <String, Object>{'asset': 'assets/bin/ffmpeg/README.md'},
+      ],
+      'assets/icon/tray_icon.png': <Map<String, Object>>[
+        <String, Object>{'asset': 'assets/icon/tray_icon.png'},
+      ],
+    });
+    await assetManifestBin.writeAsBytes(encodedAssetManifestBin);
+
+    final assetManifestBinJson = File(
+      '${buildDir.path}${Platform.pathSeparator}assets${Platform.pathSeparator}AssetManifest.bin.json',
+    );
+    await assetManifestBinJson.create(recursive: true);
+    await assetManifestBinJson.writeAsString(
+      jsonEncode(base64.encode(encodedAssetManifestBin)),
+    );
+
+    final serviceWorker = File(
+      '${buildDir.path}${Platform.pathSeparator}flutter_service_worker.js',
+    );
+    await serviceWorker.writeAsString(
+      'const RESOURCES = {"assets/assets/bin/ffmpeg/linux/ffmpeg": "hash-a",\n'
+      '"assets/assets/bin/ffmpeg/README.md": "hash-b",\n'
+      '"assets/assets/icon/tray_icon.png": "hash-c"};\n',
+    );
+
+    final result = await _runPruneTool(buildDir);
+    expect(
+      result.exitCode,
+      0,
+      reason: 'stdout: ${result.stdout}\nstderr: ${result.stderr}',
+    );
+    expect(
+      result.stdout,
+      contains('2 service worker resources'),
+    );
+    expect(
+      result.stdout,
+      isNot(contains('pruned -')),
+    );
+  });
+
+  test(
       'prune web build ffmpeg script accepts empty AssetManifest.bin.json payload',
       () async {
     final buildDir = await _createTempBuildDir();
