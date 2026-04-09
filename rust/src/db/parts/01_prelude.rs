@@ -27,13 +27,27 @@ fn normalize_todo_followup_task_type_hint<'a>(task_type_hint: Option<&'a str>) -
     task_type_hint.map(str::trim).filter(|value| !value.is_empty())
 }
 
-fn todo_followup_task_type_allows_auto_followup(title: &str, task_type_hint: Option<&str>) -> bool {
+fn resolved_todo_followup_task_type_hint(task_type_hint: Option<&str>) -> Option<&'static str> {
     match normalize_todo_followup_task_type_hint(task_type_hint) {
+        Some(value) if value.eq_ignore_ascii_case("research") => Some("research"),
+        Some(value) if value.eq_ignore_ascii_case("comparison") => Some("comparison"),
+        Some(value) if value.eq_ignore_ascii_case("live_info_lookup") => Some("live_info_lookup"),
+        Some(value) if value.eq_ignore_ascii_case("reference_collection") => Some("reference_collection"),
+        Some(value) if value.eq_ignore_ascii_case("execution") => Some("execution"),
+        Some(value) if value.eq_ignore_ascii_case("coordination") => Some("coordination"),
+        Some(value) if value.eq_ignore_ascii_case("planning") => Some("planning"),
+        Some(value) if value.eq_ignore_ascii_case("unknown") => None,
+        Some(_) | None => None,
+    }
+}
+
+fn todo_followup_task_type_allows_auto_followup(title: &str, task_type_hint: Option<&str>) -> bool {
+    match resolved_todo_followup_task_type_hint(task_type_hint) {
         Some("research")
         | Some("comparison")
         | Some("live_info_lookup")
         | Some("reference_collection") => true,
-        Some("execution") | Some("coordination") | Some("planning") | Some("unknown") => false,
+        Some("execution") | Some("coordination") | Some("planning") => false,
         Some(_) | None => classify_todo_followup_task_type_for_create(title),
     }
 }
@@ -62,8 +76,8 @@ fn classify_todo_followup_task_type_for_create(title: &str) -> bool {
             "材料要求",
             "资料要求",
         ],
-    ) || ((normalized.contains("收集") || normalized.contains("搜集")) && normalized.contains("链接"))
-        || (normalized.contains("collect") && normalized.contains("link"))
+    ) || contains_in_order(&normalized, "收集", "链接")
+        || contains_in_order(&normalized, "collect", "link")
     {
         return true;
     }
@@ -114,6 +128,13 @@ fn classify_todo_followup_task_type_for_create(title: &str) -> bool {
 
 fn contains_any(haystack: &str, needles: &[&str]) -> bool {
     needles.iter().any(|needle| haystack.contains(needle))
+}
+
+fn contains_in_order(haystack: &str, first: &str, second: &str) -> bool {
+    let Some(index) = haystack.find(first) else {
+        return false;
+    };
+    haystack[index + first.len()..].contains(second)
 }
 
 #[derive(Clone, Debug)]

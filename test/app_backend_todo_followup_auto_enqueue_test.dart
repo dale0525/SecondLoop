@@ -102,6 +102,66 @@ void main() {
   });
 
   test(
+      'createTodoWithFollowup treats unknown hint as fallback to title classification',
+      () async {
+    final backend = _FollowupCapabilityBackend();
+    final key = Uint8List.fromList(List<int>.filled(32, 21));
+
+    final todo = await createTodoWithFollowup(
+      backend,
+      key,
+      id: 'todo_unknown_hint',
+      title: '调研一下当前主流的 llm 模型',
+      status: 'open',
+      followupTaskTypeHint: 'unknown',
+    );
+
+    expect(todo.id, 'todo_unknown_hint');
+    expect(backend.enqueueTodoIds, const <String>['todo_unknown_hint']);
+    expect(backend.enqueueTaskTypeHints, const <String?>['unknown']);
+    expect(backend.enqueueTriggerKinds, const <String>['auto_create']);
+  });
+
+  test('createTodoWithFollowup lets explicit execution hint suppress enqueue',
+      () async {
+    final backend = _FollowupCapabilityBackend();
+    final key = Uint8List.fromList(List<int>.filled(32, 22));
+
+    await createTodoWithFollowup(
+      backend,
+      key,
+      id: 'todo_execution_hint',
+      title: '调研一下当前主流的 llm 模型',
+      status: 'open',
+      followupTaskTypeHint: 'execution',
+    );
+
+    expect(backend.enqueueTodoIds, isEmpty);
+    expect(backend.enqueueTaskTypeHints, isEmpty);
+    expect(backend.enqueueTriggerKinds, isEmpty);
+  });
+
+  test('createTodoWithFollowup lets explicit research hint override title',
+      () async {
+    final backend = _FollowupCapabilityBackend();
+    final key = Uint8List.fromList(List<int>.filled(32, 23));
+
+    final todo = await createTodoWithFollowup(
+      backend,
+      key,
+      id: 'todo_research_hint',
+      title: '修复登录页闪退',
+      status: 'open',
+      followupTaskTypeHint: 'research',
+    );
+
+    expect(todo.id, 'todo_research_hint');
+    expect(backend.enqueueTodoIds, const <String>['todo_research_hint']);
+    expect(backend.enqueueTaskTypeHints, const <String?>['research']);
+    expect(backend.enqueueTriggerKinds, const <String>['auto_create']);
+  });
+
+  test(
       'createTodoWithFollowup avoids duplicate enqueue when backend already auto-enqueues',
       () async {
     final backend = _FollowupCapabilityBackend(autoEnqueuesOnCreate: true);
