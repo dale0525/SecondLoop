@@ -713,3 +713,75 @@ fn semantic_parse_jobs_guarded_finalize_returns_applied_flag() {
     .expect("current finalize applied");
     assert!(current_succeeded);
 }
+
+#[test]
+fn upsert_todo_with_auto_followup_job_skips_execution_task_auto_enqueue() {
+    let dir = tempdir().expect("tempdir");
+    let conn = open(dir.path()).expect("open");
+    let key = [2u8; 32];
+
+    let todo = upsert_todo_with_auto_followup_job(
+        &conn,
+        &key,
+        "todo:execution",
+        "修复登录页闪退",
+        None,
+        "open",
+        None,
+        None,
+        None,
+        None,
+        None,
+        10_000,
+    )
+    .expect("upsert todo");
+
+    assert_eq!(todo.id, "todo:execution");
+    assert!(find_todo_followup_generation_job(&conn, &todo.id)
+        .expect("find followup job")
+        .is_none());
+}
+
+#[test]
+fn semantic_parse_create_skips_execution_task_auto_enqueue() {
+    let dir = tempdir().expect("tempdir");
+    let conn = open(dir.path()).expect("open");
+    let key = [9u8; 32];
+
+    let conversation = get_or_create_loop_home_conversation(&conn, &key).expect("conversation");
+    let message = insert_message(&conn, &key, &conversation.id, "user", "修复登录页闪退")
+        .expect("insert message");
+    enqueue_semantic_parse_job(&conn, &message.id, 11_000).expect("enqueue");
+    let attempt_id = mark_semantic_parse_job_running(&conn, &message.id, 11_001).expect("running");
+
+    let created = complete_semantic_parse_create_if_current_attempt(
+        &conn,
+        &key,
+        &message.id,
+        attempt_id,
+        "todo:execution-semantic",
+        "修复登录页闪退",
+        None,
+        "inbox",
+        Some(0),
+        Some(11_100),
+        Some(11_050),
+        None,
+        None,
+        &[],
+        "byok",
+        None,
+        None,
+        None,
+        None,
+        11_002,
+    )
+    .expect("complete create");
+    assert!(created);
+
+    let todo = get_todo(&conn, &key, "todo:execution-semantic").expect("get todo");
+    assert_eq!(todo.title, "修复登录页闪退");
+    assert!(find_todo_followup_generation_job(&conn, &todo.id)
+        .expect("find followup job")
+        .is_none());
+}
