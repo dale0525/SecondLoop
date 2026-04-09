@@ -23,7 +23,7 @@ const KV_CLOUD_GATEWAY_EMBEDDINGS_CACHE_REQUESTED_MODEL_NAME: &str =
 const KV_CLOUD_GATEWAY_EMBEDDINGS_CACHE_MODEL_ID: &str = "embedding.cloud_gateway.embeddings.model_id";
 const KV_CLOUD_GATEWAY_EMBEDDINGS_CACHE_DIM: &str = "embedding.cloud_gateway.embeddings.dim";
 
-fn normalize_todo_followup_task_type_hint<'a>(task_type_hint: Option<&'a str>) -> Option<&'a str> {
+fn normalize_todo_followup_task_type_hint(task_type_hint: Option<&str>) -> Option<&str> {
     task_type_hint.map(str::trim).filter(|value| !value.is_empty())
 }
 
