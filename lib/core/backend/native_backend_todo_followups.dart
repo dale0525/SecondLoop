@@ -163,14 +163,10 @@ DbUpsertTodoWithAutoFollowupJobFn _resolveDbUpsertTodoWithAutoFollowupJob({
   DbUpsertTodoFn? dbUpsertTodo,
   DbEnqueueTodoFollowupGenerationJobFn? dbEnqueueTodoFollowupGenerationJob,
 }) {
-  if (dbUpsertTodoWithAutoFollowupJob != null) {
-    return dbUpsertTodoWithAutoFollowupJob;
-  }
-  if (dbUpsertTodo == null && dbEnqueueTodoFollowupGenerationJob == null) {
-    return rust_core.dbUpsertTodoWithAutoFollowupJob;
-  }
-
   final resolvedUpsertTodo = dbUpsertTodo ?? rust_core.dbUpsertTodo;
+  final resolvedUpsertTodoWithAutoFollowupJob =
+      dbUpsertTodoWithAutoFollowupJob ??
+          rust_core.dbUpsertTodoWithAutoFollowupJob;
   final resolvedEnqueueTodoFollowupGenerationJob =
       dbEnqueueTodoFollowupGenerationJob ??
           rust_core.dbEnqueueTodoFollowupGenerationJob;
@@ -189,6 +185,47 @@ DbUpsertTodoWithAutoFollowupJobFn _resolveDbUpsertTodoWithAutoFollowupJob({
     bool manualOverrideFollowup = false,
     required PlatformInt64 nowMs,
   }) async {
+    final normalizedTaskTypeHint = taskTypeHint?.trim();
+    final resolvedTaskType = resolveTodoFollowupTaskTypeForCreate(
+      title: title,
+      followupTaskTypeHint: normalizedTaskTypeHint,
+    );
+    if (!resolvedTaskType.allowsAutoFollowup) {
+      return resolvedUpsertTodo(
+        appDir: appDir,
+        key: key,
+        id: id,
+        title: title,
+        dueAtMs: dueAtMs,
+        status: status,
+        sourceEntryId: sourceEntryId,
+        reviewStage: reviewStage,
+        nextReviewAtMs: nextReviewAtMs,
+        lastReviewAtMs: lastReviewAtMs,
+      );
+    }
+
+    if (dbUpsertTodoWithAutoFollowupJob != null ||
+        (dbUpsertTodo == null && dbEnqueueTodoFollowupGenerationJob == null)) {
+      return resolvedUpsertTodoWithAutoFollowupJob(
+        appDir: appDir,
+        key: key,
+        id: id,
+        title: title,
+        dueAtMs: dueAtMs,
+        status: status,
+        sourceEntryId: sourceEntryId,
+        reviewStage: reviewStage,
+        nextReviewAtMs: nextReviewAtMs,
+        lastReviewAtMs: lastReviewAtMs,
+        taskTypeHint:
+            normalizedTaskTypeHint == null || normalizedTaskTypeHint.isEmpty
+                ? null
+                : normalizedTaskTypeHint,
+        nowMs: nowMs,
+      );
+    }
+
     final todo = await resolvedUpsertTodo(
       appDir: appDir,
       key: key,
@@ -203,15 +240,6 @@ DbUpsertTodoWithAutoFollowupJobFn _resolveDbUpsertTodoWithAutoFollowupJob({
     );
     final wasCreated = todo.createdAtMs == todo.updatedAtMs;
     if (!wasCreated) {
-      return todo;
-    }
-
-    final normalizedTaskTypeHint = taskTypeHint?.trim();
-    final resolvedTaskType = resolveTodoFollowupTaskTypeForCreate(
-      title: title,
-      followupTaskTypeHint: normalizedTaskTypeHint,
-    );
-    if (!resolvedTaskType.allowsAutoFollowup) {
       return todo;
     }
     try {

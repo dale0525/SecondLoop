@@ -140,6 +140,84 @@ void main() {
     expect(enqueueCount, 0);
   });
 
+  test(
+      'NativeAppBackend skips atomic auto-enqueue for execution-focused todo create',
+      () async {
+    var plainUpsertCallCount = 0;
+    var atomicUpsertCallCount = 0;
+
+    final backend = NativeAppBackend(
+      appDirProvider: () async => '/tmp/secondloop_test',
+      rustLibInit: () async {},
+      dbUpsertTodo: ({
+        required String appDir,
+        required List<int> key,
+        required String id,
+        required String title,
+        int? dueAtMs,
+        required String status,
+        String? sourceEntryId,
+        int? reviewStage,
+        int? nextReviewAtMs,
+        int? lastReviewAtMs,
+      }) async {
+        plainUpsertCallCount += 1;
+        return Todo(
+          id: id,
+          title: title,
+          dueAtMs: dueAtMs,
+          status: status,
+          sourceEntryId: sourceEntryId,
+          createdAtMs: 1,
+          updatedAtMs: 1,
+          reviewStage: reviewStage,
+          nextReviewAtMs: nextReviewAtMs,
+          lastReviewAtMs: lastReviewAtMs,
+        );
+      },
+      dbUpsertTodoWithAutoFollowupJob: ({
+        required String appDir,
+        required List<int> key,
+        required String id,
+        required String title,
+        int? dueAtMs,
+        required String status,
+        String? sourceEntryId,
+        int? reviewStage,
+        int? nextReviewAtMs,
+        int? lastReviewAtMs,
+        String? taskTypeHint,
+        required int nowMs,
+      }) async {
+        atomicUpsertCallCount += 1;
+        return Todo(
+          id: id,
+          title: title,
+          dueAtMs: dueAtMs,
+          status: status,
+          sourceEntryId: sourceEntryId,
+          createdAtMs: 1,
+          updatedAtMs: 1,
+          reviewStage: reviewStage,
+          nextReviewAtMs: nextReviewAtMs,
+          lastReviewAtMs: lastReviewAtMs,
+        );
+      },
+    );
+
+    final key = Uint8List.fromList(List<int>.filled(32, 19));
+
+    await backend.upsertTodo(
+      key,
+      id: 'todo_execution_atomic',
+      title: '修复登录页闪退',
+      status: 'open',
+    );
+
+    expect(plainUpsertCallCount, 1);
+    expect(atomicUpsertCallCount, 0);
+  });
+
   test('NativeAppBackend ignores auto-enqueue failures after todo create',
       () async {
     final backend = NativeAppBackend(
