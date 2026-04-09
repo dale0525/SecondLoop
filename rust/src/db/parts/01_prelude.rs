@@ -23,6 +23,120 @@ const KV_CLOUD_GATEWAY_EMBEDDINGS_CACHE_REQUESTED_MODEL_NAME: &str =
 const KV_CLOUD_GATEWAY_EMBEDDINGS_CACHE_MODEL_ID: &str = "embedding.cloud_gateway.embeddings.model_id";
 const KV_CLOUD_GATEWAY_EMBEDDINGS_CACHE_DIM: &str = "embedding.cloud_gateway.embeddings.dim";
 
+fn normalize_todo_followup_task_type_hint(task_type_hint: Option<&str>) -> Option<&str> {
+    task_type_hint.map(str::trim).filter(|value| !value.is_empty())
+}
+
+fn resolved_todo_followup_task_type_hint(task_type_hint: Option<&str>) -> Option<&'static str> {
+    match normalize_todo_followup_task_type_hint(task_type_hint) {
+        Some(value) if value.eq_ignore_ascii_case("research") => Some("research"),
+        Some(value) if value.eq_ignore_ascii_case("comparison") => Some("comparison"),
+        Some(value) if value.eq_ignore_ascii_case("live_info_lookup") => Some("live_info_lookup"),
+        Some(value) if value.eq_ignore_ascii_case("reference_collection") => Some("reference_collection"),
+        Some(value) if value.eq_ignore_ascii_case("execution") => Some("execution"),
+        Some(value) if value.eq_ignore_ascii_case("coordination") => Some("coordination"),
+        Some(value) if value.eq_ignore_ascii_case("planning") => Some("planning"),
+        Some(value) if value.eq_ignore_ascii_case("unknown") => None,
+        Some(_) | None => None,
+    }
+}
+
+fn todo_followup_task_type_allows_auto_followup(title: &str, task_type_hint: Option<&str>) -> bool {
+    match resolved_todo_followup_task_type_hint(task_type_hint) {
+        Some("research")
+        | Some("comparison")
+        | Some("live_info_lookup")
+        | Some("reference_collection") => true,
+        Some("execution") | Some("coordination") | Some("planning") => false,
+        Some(_) | None => classify_todo_followup_task_type_for_create(title),
+    }
+}
+
+fn classify_todo_followup_task_type_for_create(title: &str) -> bool {
+    let normalized = title.trim().to_lowercase();
+    if normalized.is_empty() {
+        return false;
+    }
+
+    if contains_any(
+        &normalized,
+        &["对比", "比较", "选型", "benchmark", "compare", "comparison"],
+    ) {
+        return true;
+    }
+
+    if contains_any(
+        &normalized,
+        &[
+            "收集资料",
+            "搜集资料",
+            "参考资料",
+            "资料收集",
+            "官网链接",
+            "材料要求",
+            "资料要求",
+        ],
+    ) || contains_in_order(&normalized, "收集", "链接")
+        || contains_in_order(&normalized, "collect", "link")
+    {
+        return true;
+    }
+
+    if contains_any(
+        &normalized,
+        &[
+            "机场",
+            "航班",
+            "航站楼",
+            "到达时间",
+            "停车",
+            "入园时间",
+            "检票入口",
+            "接机",
+            "车次",
+            "高铁",
+            "火车",
+            "terminal",
+            "arrival",
+            "parking",
+        ],
+    ) {
+        return true;
+    }
+
+    if contains_any(
+        &normalized,
+        &["调研", "研究", "分析", "了解", "盘点", "survey", "research", "investigate"],
+    ) {
+        return true;
+    }
+
+    if contains_any(&normalized, &["开会", "约时间", "沟通", "联系", "同步", "coordinate", "meeting"]) {
+        return false;
+    }
+
+    if contains_any(&normalized, &["计划", "安排", "规划", "roadmap", "plan"]) {
+        return false;
+    }
+
+    if contains_any(&normalized, &["修复", "修一下", "修理", "提交", "发送", "付款", "上线", "实现", "fix", "ship", "submit", "pay"]) {
+        return false;
+    }
+
+    false
+}
+
+fn contains_any(haystack: &str, needles: &[&str]) -> bool {
+    needles.iter().any(|needle| haystack.contains(needle))
+}
+
+fn contains_in_order(haystack: &str, first: &str, second: &str) -> bool {
+    let Some(index) = haystack.find(first) else {
+        return false;
+    };
+    haystack[index + first.len()..].contains(second)
+}
+
 #[derive(Clone, Debug)]
 pub struct CloudGatewayEmbeddingsCache {
     pub base_url: String,

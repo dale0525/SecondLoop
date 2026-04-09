@@ -524,8 +524,10 @@ fn upsert_semantic_parse_todo_create_in_existing_txn(
         None,
         None,
     )?;
-    if todo.created_at_ms == todo.updated_at_ms {
-        let normalized_task_type_hint = task_type_hint.map(str::trim).filter(|value| !value.is_empty());
+    let normalized_task_type_hint = normalize_todo_followup_task_type_hint(task_type_hint);
+    if todo.created_at_ms == todo.updated_at_ms
+        && todo_followup_task_type_allows_auto_followup(title, normalized_task_type_hint)
+    {
         enqueue_todo_followup_generation_job(
             conn,
             todo_id,
@@ -681,4 +683,3 @@ WHERE message_id = ?1
     )?;
     Ok(())
 }
-

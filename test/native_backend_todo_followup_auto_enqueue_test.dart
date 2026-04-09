@@ -84,6 +84,316 @@ void main() {
     expect(listTodosCalls, 0);
   });
 
+  test('NativeAppBackend skips auto-enqueue for execution-focused todo create',
+      () async {
+    var enqueueCount = 0;
+
+    final backend = NativeAppBackend(
+      appDirProvider: () async => '/tmp/secondloop_test',
+      rustLibInit: () async {},
+      dbUpsertTodo: ({
+        required String appDir,
+        required List<int> key,
+        required String id,
+        required String title,
+        int? dueAtMs,
+        required String status,
+        String? sourceEntryId,
+        int? reviewStage,
+        int? nextReviewAtMs,
+        int? lastReviewAtMs,
+      }) async =>
+          Todo(
+        id: id,
+        title: title,
+        dueAtMs: dueAtMs,
+        status: status,
+        sourceEntryId: sourceEntryId,
+        createdAtMs: 1,
+        updatedAtMs: 1,
+        reviewStage: reviewStage,
+        nextReviewAtMs: nextReviewAtMs,
+        lastReviewAtMs: lastReviewAtMs,
+      ),
+      dbEnqueueTodoFollowupGenerationJob: ({
+        required String appDir,
+        required List<int> key,
+        required String todoId,
+        required String triggerKind,
+        required bool manualOverrideFollowup,
+        String? taskTypeHint,
+        required int nowMs,
+      }) async {
+        enqueueCount += 1;
+      },
+    );
+
+    final key = Uint8List.fromList(List<int>.filled(32, 17));
+
+    await backend.upsertTodo(
+      key,
+      id: 'todo_execution',
+      title: '修复登录页闪退',
+      status: 'open',
+    );
+
+    expect(enqueueCount, 0);
+  });
+
+  test(
+      'NativeAppBackend treats unknown hint as fallback to title classification',
+      () async {
+    var enqueueCount = 0;
+    final enqueueTaskTypeHints = <String?>[];
+
+    final backend = NativeAppBackend(
+      appDirProvider: () async => '/tmp/secondloop_test',
+      rustLibInit: () async {},
+      dbUpsertTodo: ({
+        required String appDir,
+        required List<int> key,
+        required String id,
+        required String title,
+        int? dueAtMs,
+        required String status,
+        String? sourceEntryId,
+        int? reviewStage,
+        int? nextReviewAtMs,
+        int? lastReviewAtMs,
+      }) async =>
+          Todo(
+        id: id,
+        title: title,
+        dueAtMs: dueAtMs,
+        status: status,
+        sourceEntryId: sourceEntryId,
+        createdAtMs: 1,
+        updatedAtMs: 1,
+        reviewStage: reviewStage,
+        nextReviewAtMs: nextReviewAtMs,
+        lastReviewAtMs: lastReviewAtMs,
+      ),
+      dbEnqueueTodoFollowupGenerationJob: ({
+        required String appDir,
+        required List<int> key,
+        required String todoId,
+        required String triggerKind,
+        required bool manualOverrideFollowup,
+        String? taskTypeHint,
+        required int nowMs,
+      }) async {
+        enqueueCount += 1;
+        enqueueTaskTypeHints.add(taskTypeHint);
+      },
+    );
+
+    final key = Uint8List.fromList(List<int>.filled(32, 18));
+
+    await backend.upsertTodoFromSemanticCreate(
+      key,
+      id: 'todo_unknown_hint',
+      title: '调研一下当前主流的 llm 模型',
+      status: 'open',
+      followupTaskTypeHint: 'unknown',
+    );
+
+    expect(enqueueCount, 1);
+    expect(enqueueTaskTypeHints, const <String?>['unknown']);
+  });
+
+  test('NativeAppBackend explicit execution hint suppresses enqueue', () async {
+    var enqueueCount = 0;
+
+    final backend = NativeAppBackend(
+      appDirProvider: () async => '/tmp/secondloop_test',
+      rustLibInit: () async {},
+      dbUpsertTodo: ({
+        required String appDir,
+        required List<int> key,
+        required String id,
+        required String title,
+        int? dueAtMs,
+        required String status,
+        String? sourceEntryId,
+        int? reviewStage,
+        int? nextReviewAtMs,
+        int? lastReviewAtMs,
+      }) async =>
+          Todo(
+        id: id,
+        title: title,
+        dueAtMs: dueAtMs,
+        status: status,
+        sourceEntryId: sourceEntryId,
+        createdAtMs: 1,
+        updatedAtMs: 1,
+        reviewStage: reviewStage,
+        nextReviewAtMs: nextReviewAtMs,
+        lastReviewAtMs: lastReviewAtMs,
+      ),
+      dbEnqueueTodoFollowupGenerationJob: ({
+        required String appDir,
+        required List<int> key,
+        required String todoId,
+        required String triggerKind,
+        required bool manualOverrideFollowup,
+        String? taskTypeHint,
+        required int nowMs,
+      }) async {
+        enqueueCount += 1;
+      },
+    );
+
+    final key = Uint8List.fromList(List<int>.filled(32, 24));
+
+    await backend.upsertTodoFromSemanticCreate(
+      key,
+      id: 'todo_execution_hint',
+      title: '调研一下当前主流的 llm 模型',
+      status: 'open',
+      followupTaskTypeHint: 'execution',
+    );
+
+    expect(enqueueCount, 0);
+  });
+
+  test('NativeAppBackend explicit research hint overrides title', () async {
+    var enqueueCount = 0;
+    final enqueueTaskTypeHints = <String?>[];
+
+    final backend = NativeAppBackend(
+      appDirProvider: () async => '/tmp/secondloop_test',
+      rustLibInit: () async {},
+      dbUpsertTodo: ({
+        required String appDir,
+        required List<int> key,
+        required String id,
+        required String title,
+        int? dueAtMs,
+        required String status,
+        String? sourceEntryId,
+        int? reviewStage,
+        int? nextReviewAtMs,
+        int? lastReviewAtMs,
+      }) async =>
+          Todo(
+        id: id,
+        title: title,
+        dueAtMs: dueAtMs,
+        status: status,
+        sourceEntryId: sourceEntryId,
+        createdAtMs: 1,
+        updatedAtMs: 1,
+        reviewStage: reviewStage,
+        nextReviewAtMs: nextReviewAtMs,
+        lastReviewAtMs: lastReviewAtMs,
+      ),
+      dbEnqueueTodoFollowupGenerationJob: ({
+        required String appDir,
+        required List<int> key,
+        required String todoId,
+        required String triggerKind,
+        required bool manualOverrideFollowup,
+        String? taskTypeHint,
+        required int nowMs,
+      }) async {
+        enqueueCount += 1;
+        enqueueTaskTypeHints.add(taskTypeHint);
+      },
+    );
+
+    final key = Uint8List.fromList(List<int>.filled(32, 25));
+
+    await backend.upsertTodoFromSemanticCreate(
+      key,
+      id: 'todo_research_hint',
+      title: '修复登录页闪退',
+      status: 'open',
+      followupTaskTypeHint: 'research',
+    );
+
+    expect(enqueueCount, 1);
+    expect(enqueueTaskTypeHints, const <String?>['research']);
+  });
+
+  test(
+      'NativeAppBackend skips atomic auto-enqueue for execution-focused todo create',
+      () async {
+    var plainUpsertCallCount = 0;
+    var atomicUpsertCallCount = 0;
+
+    final backend = NativeAppBackend(
+      appDirProvider: () async => '/tmp/secondloop_test',
+      rustLibInit: () async {},
+      dbUpsertTodo: ({
+        required String appDir,
+        required List<int> key,
+        required String id,
+        required String title,
+        int? dueAtMs,
+        required String status,
+        String? sourceEntryId,
+        int? reviewStage,
+        int? nextReviewAtMs,
+        int? lastReviewAtMs,
+      }) async {
+        plainUpsertCallCount += 1;
+        return Todo(
+          id: id,
+          title: title,
+          dueAtMs: dueAtMs,
+          status: status,
+          sourceEntryId: sourceEntryId,
+          createdAtMs: 1,
+          updatedAtMs: 1,
+          reviewStage: reviewStage,
+          nextReviewAtMs: nextReviewAtMs,
+          lastReviewAtMs: lastReviewAtMs,
+        );
+      },
+      dbUpsertTodoWithAutoFollowupJob: ({
+        required String appDir,
+        required List<int> key,
+        required String id,
+        required String title,
+        int? dueAtMs,
+        required String status,
+        String? sourceEntryId,
+        int? reviewStage,
+        int? nextReviewAtMs,
+        int? lastReviewAtMs,
+        String? taskTypeHint,
+        required int nowMs,
+      }) async {
+        atomicUpsertCallCount += 1;
+        return Todo(
+          id: id,
+          title: title,
+          dueAtMs: dueAtMs,
+          status: status,
+          sourceEntryId: sourceEntryId,
+          createdAtMs: 1,
+          updatedAtMs: 1,
+          reviewStage: reviewStage,
+          nextReviewAtMs: nextReviewAtMs,
+          lastReviewAtMs: lastReviewAtMs,
+        );
+      },
+    );
+
+    final key = Uint8List.fromList(List<int>.filled(32, 19));
+
+    await backend.upsertTodo(
+      key,
+      id: 'todo_execution_atomic',
+      title: '修复登录页闪退',
+      status: 'open',
+    );
+
+    expect(plainUpsertCallCount, 1);
+    expect(atomicUpsertCallCount, 0);
+  });
+
   test('NativeAppBackend ignores auto-enqueue failures after todo create',
       () async {
     final backend = NativeAppBackend(

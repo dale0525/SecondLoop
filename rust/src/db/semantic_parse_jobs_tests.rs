@@ -713,3 +713,207 @@ fn semantic_parse_jobs_guarded_finalize_returns_applied_flag() {
     .expect("current finalize applied");
     assert!(current_succeeded);
 }
+
+#[test]
+fn upsert_todo_with_auto_followup_job_skips_execution_task_auto_enqueue() {
+    let dir = tempdir().expect("tempdir");
+    let conn = open(dir.path()).expect("open");
+    let key = [2u8; 32];
+
+    let todo = upsert_todo_with_auto_followup_job(
+        &conn,
+        &key,
+        "todo:execution",
+        "修复登录页闪退",
+        None,
+        "open",
+        None,
+        None,
+        None,
+        None,
+        None,
+        10_000,
+    )
+    .expect("upsert todo");
+
+    assert_eq!(todo.id, "todo:execution");
+    assert!(find_todo_followup_generation_job(&conn, &todo.id)
+        .expect("find followup job")
+        .is_none());
+}
+
+#[test]
+fn semantic_parse_create_skips_execution_task_auto_enqueue() {
+    let dir = tempdir().expect("tempdir");
+    let conn = open(dir.path()).expect("open");
+    let key = [9u8; 32];
+
+    let conversation = get_or_create_loop_home_conversation(&conn, &key).expect("conversation");
+    let message = insert_message(&conn, &key, &conversation.id, "user", "修复登录页闪退")
+        .expect("insert message");
+    enqueue_semantic_parse_job(&conn, &message.id, 11_000).expect("enqueue");
+    let attempt_id = mark_semantic_parse_job_running(&conn, &message.id, 11_001).expect("running");
+
+    let created = complete_semantic_parse_create_if_current_attempt(
+        &conn,
+        &key,
+        &message.id,
+        attempt_id,
+        "todo:execution-semantic",
+        "修复登录页闪退",
+        None,
+        "inbox",
+        Some(0),
+        Some(11_100),
+        Some(11_050),
+        None,
+        None,
+        &[],
+        "byok",
+        None,
+        None,
+        None,
+        None,
+        11_002,
+    )
+    .expect("complete create");
+    assert!(created);
+
+    let todo = get_todo(&conn, &key, "todo:execution-semantic").expect("get todo");
+    assert_eq!(todo.title, "修复登录页闪退");
+    assert!(find_todo_followup_generation_job(&conn, &todo.id)
+        .expect("find followup job")
+        .is_none());
+}
+
+#[test]
+fn semantic_parse_create_with_unknown_hint_falls_back_to_title_classification() {
+    let dir = tempdir().expect("tempdir");
+    let conn = open(dir.path()).expect("open");
+    let key = [6u8; 32];
+
+    let conversation = get_or_create_loop_home_conversation(&conn, &key).expect("conversation");
+    let message = insert_message(
+        &conn,
+        &key,
+        &conversation.id,
+        "user",
+        "调研一下当前主流的 llm 模型",
+    )
+    .expect("insert message");
+    enqueue_semantic_parse_job(&conn, &message.id, 15_000).expect("enqueue");
+    let attempt_id = mark_semantic_parse_job_running(&conn, &message.id, 15_001).expect("running");
+
+    let created = complete_semantic_parse_create_if_current_attempt(
+        &conn,
+        &key,
+        &message.id,
+        attempt_id,
+        "todo:semantic-unknown-hint",
+        "调研一下当前主流的 llm 模型",
+        None,
+        "inbox",
+        Some(0),
+        Some(15_100),
+        Some(15_050),
+        Some("unknown"),
+        None,
+        &[],
+        "byok",
+        None,
+        None,
+        None,
+        None,
+        15_002,
+    )
+    .expect("complete create");
+    assert!(created);
+
+    let job = find_todo_followup_generation_job(&conn, "todo:semantic-unknown-hint")
+        .expect("find followup job")
+        .expect("job");
+    assert_eq!(job.task_type_hint.as_deref(), Some("unknown"));
+}
+
+#[test]
+fn upsert_todo_with_unknown_hint_falls_back_to_title_classification() {
+    let dir = tempdir().expect("tempdir");
+    let conn = open(dir.path()).expect("open");
+    let key = [3u8; 32];
+
+    let todo = upsert_todo_with_auto_followup_job(
+        &conn,
+        &key,
+        "todo:unknown-hint",
+        "调研一下当前主流的 llm 模型",
+        None,
+        "open",
+        None,
+        None,
+        None,
+        None,
+        Some("unknown"),
+        12_000,
+    )
+    .expect("upsert todo");
+
+    let job = find_todo_followup_generation_job(&conn, &todo.id)
+        .expect("find followup job")
+        .expect("job");
+    assert_eq!(job.task_type_hint.as_deref(), Some("unknown"));
+}
+
+#[test]
+fn upsert_todo_with_explicit_execution_hint_suppresses_auto_enqueue() {
+    let dir = tempdir().expect("tempdir");
+    let conn = open(dir.path()).expect("open");
+    let key = [4u8; 32];
+
+    let todo = upsert_todo_with_auto_followup_job(
+        &conn,
+        &key,
+        "todo:explicit-execution",
+        "调研一下当前主流的 llm 模型",
+        None,
+        "open",
+        None,
+        None,
+        None,
+        None,
+        Some("execution"),
+        13_000,
+    )
+    .expect("upsert todo");
+
+    assert!(find_todo_followup_generation_job(&conn, &todo.id)
+        .expect("find followup job")
+        .is_none());
+}
+
+#[test]
+fn upsert_todo_with_explicit_research_hint_overrides_execution_title() {
+    let dir = tempdir().expect("tempdir");
+    let conn = open(dir.path()).expect("open");
+    let key = [5u8; 32];
+
+    let todo = upsert_todo_with_auto_followup_job(
+        &conn,
+        &key,
+        "todo:explicit-research",
+        "修复登录页闪退",
+        None,
+        "open",
+        None,
+        None,
+        None,
+        None,
+        Some("research"),
+        14_000,
+    )
+    .expect("upsert todo");
+
+    let job = find_todo_followup_generation_job(&conn, &todo.id)
+        .expect("find followup job")
+        .expect("job");
+    assert_eq!(job.task_type_hint.as_deref(), Some("research"));
+}
