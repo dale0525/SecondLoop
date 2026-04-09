@@ -7,6 +7,64 @@ use std::time::Duration;
 use secondloop_rust::api::{audio_transcribe, core};
 use secondloop_rust::db;
 
+fn read_http_request(stream: &mut std::net::TcpStream) -> String {
+    stream
+        .set_read_timeout(Some(Duration::from_millis(200)))
+        .expect("set read timeout");
+
+    let mut request = Vec::<u8>::new();
+    let mut buf = [0u8; 8192];
+    let mut expected_total_len: Option<usize> = None;
+
+    loop {
+        match stream.read(&mut buf) {
+            Ok(0) => break,
+            Ok(n) => {
+                request.extend_from_slice(&buf[..n]);
+                if expected_total_len.is_none() {
+                    if let Some(headers_end) = request
+                        .windows(4)
+                        .position(|window| window == b"\r\n\r\n")
+                        .map(|index| index + 4)
+                    {
+                        let headers = String::from_utf8_lossy(&request[..headers_end]);
+                        let content_length = headers
+                            .lines()
+                            .find_map(|line| {
+                                let (name, value) = line.split_once(':')?;
+                                if !name.trim().eq_ignore_ascii_case("content-length") {
+                                    return None;
+                                }
+                                value.trim().parse::<usize>().ok()
+                            })
+                            .unwrap_or(0);
+                        expected_total_len = Some(headers_end + content_length);
+                    }
+                }
+
+                if let Some(total_len) = expected_total_len {
+                    if request.len() >= total_len {
+                        break;
+                    }
+                }
+            }
+            Err(err)
+                if matches!(
+                    err.kind(),
+                    std::io::ErrorKind::WouldBlock | std::io::ErrorKind::TimedOut
+                ) =>
+            {
+                if !request.is_empty() {
+                    break;
+                }
+            }
+            Err(err) => panic!("read request: {err}"),
+        }
+    }
+
+    String::from_utf8_lossy(&request).to_string()
+}
+
 fn start_one_shot_server(
     body: String,
     content_type: &'static str,
@@ -17,9 +75,7 @@ fn start_one_shot_server(
 
     let handle = thread::spawn(move || {
         let (mut stream, _) = listener.accept().expect("accept");
-        let mut buf = [0u8; 65536];
-        let n = stream.read(&mut buf).unwrap_or(0);
-        let _ = tx.send(String::from_utf8_lossy(&buf[..n]).to_string());
+        let _ = tx.send(read_http_request(&mut stream));
 
         let resp = format!(
             "HTTP/1.1 200 OK\r\nContent-Type: {content_type}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",

@@ -17,6 +17,35 @@ void main() {
     );
   });
 
+  test('web build workflow prunes desktop ffmpeg assets before upload', () {
+    final workflow = File('.github/workflows/web-build.yml').readAsStringSync();
+
+    expect(
+      workflow,
+      contains('- name: Prune desktop ffmpeg assets from web build artifact'),
+    );
+    expect(
+      workflow,
+      contains('pixi run flutter pub "run tools/prune_web_build_ffmpeg.dart"'),
+    );
+    expect(
+      workflow,
+      isNot(contains('rm -rf build/web/assets/assets/bin/ffmpeg')),
+    );
+    expect(
+      workflow.indexOf(
+        '- name: Prune desktop ffmpeg assets from web build artifact',
+      ),
+      lessThan(workflow.indexOf('- name: Upload web artifact')),
+    );
+  });
+
+  test('web build workflow reruns when Dart tool scripts change', () {
+    final workflow = File('.github/workflows/web-build.yml').readAsStringSync();
+
+    expect(workflow, contains('- "tools/**"'));
+  });
+
   test('web build workflow quotes step names containing colons', () {
     final workflow = File('.github/workflows/web-build.yml').readAsStringSync();
 

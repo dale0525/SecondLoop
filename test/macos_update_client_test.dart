@@ -223,7 +223,7 @@ void main() {
 
       final waitedProcess = await Process.start(
         '/bin/sh',
-        ['-c', 'sleep 1'],
+        ['-c', 'sleep 5'],
       );
       addTearDown(() async {
         waitedProcess.kill();
