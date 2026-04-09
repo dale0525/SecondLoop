@@ -104,9 +104,9 @@ jobs:
       - name: Build Flutter Web
         if: ${{ steps.release_scope.outputs.should_build == 'true' }}
         run: pixi run flutter build "web --base-href /app/"
-      - name: Prune desktop ffmpeg assets from web build
+      - name: Prune desktop ffmpeg assets from web build artifact
         if: ${{ steps.release_scope.outputs.should_build == 'true' }}
-        run: rm -rf build/web/assets/assets/bin/ffmpeg
+        run: pixi run flutter pub "run tools/prune_web_build_ffmpeg.dart"
       - name: Upload web artifact
         if: ${{ steps.release_scope.outputs.should_build == 'true' }}
         uses: actions/upload-artifact@v4
