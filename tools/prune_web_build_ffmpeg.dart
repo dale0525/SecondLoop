@@ -2,10 +2,15 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:cryptography/cryptography.dart';
+
 import 'standard_message_codec_compat.dart';
 
 const String _kManifestAssetPrefix = 'assets/bin/ffmpeg/';
 const String _kWebResourcePrefix = 'assets/assets/bin/ffmpeg/';
+const String _kAssetManifestJsonResource = 'assets/AssetManifest.json';
+const String _kAssetManifestBinResource = 'assets/AssetManifest.bin';
+const String _kAssetManifestBinJsonResource = 'assets/AssetManifest.bin.json';
 
 Future<void> main(List<String> args) async {
   final config = _parseArgs(args);
@@ -51,8 +56,14 @@ Future<void> pruneWebBuildFfmpegArtifacts({
   final prunedBinEntries = await _pruneAssetManifestBin(assetManifestBin);
   final prunedBinJsonEntries =
       await _pruneAssetManifestBinJson(assetManifestBinJson);
-  final prunedServiceWorkerEntries =
-      await _pruneServiceWorkerResources(serviceWorker);
+  final prunedServiceWorkerEntries = await _pruneServiceWorkerResources(
+    serviceWorker,
+    refreshedHashes: await _computeUpdatedServiceWorkerHashes(<File, String>{
+      assetManifestJson: _kAssetManifestJsonResource,
+      assetManifestBin: _kAssetManifestBinResource,
+      assetManifestBinJson: _kAssetManifestBinJsonResource,
+    }),
+  );
 
   stdoutSink.writeln(
     'prune-web-build-ffmpeg: removed $removedFileCount payload files; '
@@ -122,8 +133,9 @@ Future<int> _pruneAssetManifestBinJson(File file) async {
       'Expected ${file.path} to contain a base64 JSON string',
     );
   }
-  final decodedManifest =
-      _decodeStandardMessageCodec(base64.decode(decodedJson));
+  final decodedManifest = decodedJson.isEmpty
+      ? <Object?, Object?>{}
+      : _decodeStandardMessageCodec(base64.decode(decodedJson));
   final pruned = _pruneBinaryManifest(decodedManifest);
   final removedEntries = decodedManifest.length - pruned.length;
   if (removedEntries > 0) {
@@ -134,24 +146,92 @@ Future<int> _pruneAssetManifestBinJson(File file) async {
   return removedEntries;
 }
 
-Future<int> _pruneServiceWorkerResources(File file) async {
+Future<int> _pruneServiceWorkerResources(
+  File file, {
+  required Map<String, String> refreshedHashes,
+}) async {
   if (!await file.exists()) {
     return 0;
   }
-  final lines = await file.readAsLines();
-  final filtered = <String>[];
-  var removedEntries = 0;
-  for (final line in lines) {
-    if (line.contains('"$_kWebResourcePrefix')) {
-      removedEntries += 1;
-      continue;
-    }
-    filtered.add(line);
+  final raw = await file.readAsString();
+  final match =
+      RegExp(r'const RESOURCES = (?<resources>\{[\s\S]*?\});').firstMatch(raw);
+  if (match == null) {
+    throw FormatException(
+      'Expected ${file.path} to contain a RESOURCES object literal',
+    );
   }
-  if (removedEntries > 0) {
-    await file.writeAsString('${filtered.join('\n')}\n');
+
+  final resourcesLiteral = match.namedGroup('resources');
+  if (resourcesLiteral == null) {
+    throw FormatException(
+      'Expected ${file.path} to contain a RESOURCES object literal',
+    );
+  }
+
+  final decoded = jsonDecode(resourcesLiteral);
+  if (decoded is! Map<String, dynamic>) {
+    throw FormatException(
+      'Expected ${file.path} RESOURCES to decode to a JSON object',
+    );
+  }
+
+  final resources = Map<String, String>.fromEntries(
+    decoded.entries.map(
+      (entry) => MapEntry(entry.key, entry.value as String),
+    ),
+  );
+  final originalHashes = Map<String, String>.from(resources);
+  resources.removeWhere((key, _) => key.startsWith(_kWebResourcePrefix));
+  resources.addAll(refreshedHashes);
+
+  final removedEntries = originalHashes.length - resources.length;
+  final hashesChanged = refreshedHashes.entries.any(
+    (entry) => originalHashes[entry.key] != entry.value,
+  );
+  if (removedEntries > 0 || hashesChanged) {
+    final updated = raw.replaceRange(
+      match.start,
+      match.end,
+      'const RESOURCES = ${_encodeResourceMap(resources)};',
+    );
+    await file.writeAsString(updated);
   }
   return removedEntries;
+}
+
+String _encodeResourceMap(Map<String, String> resources) {
+  final entries = resources.entries.map(
+    (entry) => '${jsonEncode(entry.key)}: ${jsonEncode(entry.value)}',
+  );
+  return '{${entries.join(',\n')}}';
+}
+
+Future<Map<String, String>> _computeUpdatedServiceWorkerHashes(
+  Map<File, String> filesByResourceKey,
+) async {
+  final hashes = <String, String>{};
+  for (final entry in filesByResourceKey.entries) {
+    if (!await entry.key.exists()) {
+      continue;
+    }
+    hashes[entry.value] = await _sha256FileHex(entry.key);
+  }
+  return hashes;
+}
+
+Future<String> _sha256FileHex(File file) async {
+  final sink = Sha256().newHashSink();
+  await for (final chunk in file.openRead()) {
+    sink.add(chunk);
+  }
+  sink.close();
+  final digest = await sink.hash();
+  final buffer = StringBuffer();
+  for (final byte in digest.bytes) {
+    buffer.write(byte.toRadixString(16).padLeft(2, '0'));
+  }
+  return buffer.toString();
 }
 
 Map<String, List<String>> _pruneJsonManifest(Map<String, dynamic> manifest) {
