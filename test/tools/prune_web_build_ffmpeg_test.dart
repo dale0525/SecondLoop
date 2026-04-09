@@ -75,16 +75,7 @@ const RESOURCES = {
 };
 ''');
 
-    final result = await Process.run(
-      'pixi',
-      <String>[
-        'run',
-        'flutter',
-        'pub',
-        'run tools/prune_web_build_ffmpeg.dart --build-dir ${buildDir.path}',
-      ],
-      workingDirectory: Directory.current.path,
-    );
+    final result = await _runPruneTool(buildDir);
 
     expect(
       result.exitCode,
@@ -384,6 +375,21 @@ Future<Directory> _createTempBuildDir() async {
 }
 
 Future<ProcessResult> _runPruneTool(Directory buildDir) {
+  final flutterBin = Platform.environment['SECONDLOOP_FLUTTER_BIN']?.trim();
+  if (flutterBin != null && flutterBin.isNotEmpty) {
+    return Process.run(
+      flutterBin,
+      <String>[
+        'pub',
+        'run',
+        'tools/prune_web_build_ffmpeg.dart',
+        '--build-dir',
+        buildDir.path,
+      ],
+      workingDirectory: Directory.current.path,
+    );
+  }
+
   return Process.run(
     'pixi',
     <String>[
