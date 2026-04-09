@@ -17,6 +17,18 @@ void main() {
     );
   });
 
+  test('web build workflow prunes desktop ffmpeg assets before upload', () {
+    final workflow = File('.github/workflows/web-build.yml').readAsStringSync();
+
+    expect(workflow,
+        contains('- name: Prune desktop ffmpeg assets from web build'));
+    expect(workflow, contains('rm -rf build/web/assets/assets/bin/ffmpeg'));
+    expect(
+      workflow.indexOf('- name: Prune desktop ffmpeg assets from web build'),
+      lessThan(workflow.indexOf('- name: Upload web artifact')),
+    );
+  });
+
   test('web build workflow quotes step names containing colons', () {
     final workflow = File('.github/workflows/web-build.yml').readAsStringSync();
 
