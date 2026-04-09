@@ -2,6 +2,7 @@ import 'dart:typed_data';
 
 import 'package:flutter/widgets.dart';
 
+import '../ai/todo_followup_task_classifier.dart';
 import '../../features/actions/todo/todo_thread_match.dart';
 import '../../src/rust/db.dart';
 import '../../src/rust/semantic_parse.dart';
@@ -33,10 +34,22 @@ String? normalizeTodoFollowupTaskTypeHint(String? followupTaskTypeHint) {
   return normalized;
 }
 
+TodoFollowupTaskType resolveTodoFollowupTaskTypeForCreate({
+  required String title,
+  String? followupTaskTypeHint,
+}) {
+  final hinted = TodoFollowupTaskType.fromWireValue(followupTaskTypeHint);
+  if (hinted != TodoFollowupTaskType.unknown) {
+    return hinted;
+  }
+  return classifyTodoFollowupTaskType(title);
+}
+
 Future<void> maybeEnqueueTodoFollowupGenerationOnCreate(
   AppBackend backend,
   Uint8List key, {
   required String todoId,
+  required String title,
   String? followupTaskTypeHint,
 }) async {
   if (!backend.supportsTodoFollowupSuggestions ||
@@ -45,6 +58,13 @@ Future<void> maybeEnqueueTodoFollowupGenerationOnCreate(
   }
 
   final taskTypeHint = normalizeTodoFollowupTaskTypeHint(followupTaskTypeHint);
+  final taskType = resolveTodoFollowupTaskTypeForCreate(
+    title: title,
+    followupTaskTypeHint: taskTypeHint,
+  );
+  if (!taskType.allowsAutoFollowup) {
+    return;
+  }
   try {
     await backend.enqueueTodoFollowupGenerationJob(
       key,
@@ -99,6 +119,7 @@ Future<Todo> createTodoWithFollowup(
     backend,
     key,
     todoId: id,
+    title: title,
     followupTaskTypeHint: followupTaskTypeHint,
   );
   return todo;
@@ -245,9 +266,14 @@ abstract class AppBackend {
 
     final taskTypeHint =
         normalizeTodoFollowupTaskTypeHint(followupTaskTypeHint);
+    final taskType = resolveTodoFollowupTaskTypeForCreate(
+      title: title,
+      followupTaskTypeHint: taskTypeHint,
+    );
     final wasCreated = todo.createdAtMs == todo.updatedAtMs;
     if (supportsTodoFollowupSuggestions &&
         !autoEnqueuesTodoFollowupGenerationOnCreate &&
+        taskType.allowsAutoFollowup &&
         wasCreated) {
       try {
         await enqueueTodoFollowupGenerationJob(

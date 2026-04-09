@@ -84,6 +84,62 @@ void main() {
     expect(listTodosCalls, 0);
   });
 
+  test('NativeAppBackend skips auto-enqueue for execution-focused todo create',
+      () async {
+    var enqueueCount = 0;
+
+    final backend = NativeAppBackend(
+      appDirProvider: () async => '/tmp/secondloop_test',
+      rustLibInit: () async {},
+      dbUpsertTodo: ({
+        required String appDir,
+        required List<int> key,
+        required String id,
+        required String title,
+        int? dueAtMs,
+        required String status,
+        String? sourceEntryId,
+        int? reviewStage,
+        int? nextReviewAtMs,
+        int? lastReviewAtMs,
+      }) async =>
+          Todo(
+        id: id,
+        title: title,
+        dueAtMs: dueAtMs,
+        status: status,
+        sourceEntryId: sourceEntryId,
+        createdAtMs: 1,
+        updatedAtMs: 1,
+        reviewStage: reviewStage,
+        nextReviewAtMs: nextReviewAtMs,
+        lastReviewAtMs: lastReviewAtMs,
+      ),
+      dbEnqueueTodoFollowupGenerationJob: ({
+        required String appDir,
+        required List<int> key,
+        required String todoId,
+        required String triggerKind,
+        required bool manualOverrideFollowup,
+        String? taskTypeHint,
+        required int nowMs,
+      }) async {
+        enqueueCount += 1;
+      },
+    );
+
+    final key = Uint8List.fromList(List<int>.filled(32, 17));
+
+    await backend.upsertTodo(
+      key,
+      id: 'todo_execution',
+      title: '修复登录页闪退',
+      status: 'open',
+    );
+
+    expect(enqueueCount, 0);
+  });
+
   test('NativeAppBackend ignores auto-enqueue failures after todo create',
       () async {
     final backend = NativeAppBackend(

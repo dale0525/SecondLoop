@@ -207,6 +207,13 @@ DbUpsertTodoWithAutoFollowupJobFn _resolveDbUpsertTodoWithAutoFollowupJob({
     }
 
     final normalizedTaskTypeHint = taskTypeHint?.trim();
+    final resolvedTaskType = resolveTodoFollowupTaskTypeForCreate(
+      title: title,
+      followupTaskTypeHint: normalizedTaskTypeHint,
+    );
+    if (!resolvedTaskType.allowsAutoFollowup) {
+      return todo;
+    }
     try {
       await resolvedEnqueueTodoFollowupGenerationJob(
         appDir: appDir,

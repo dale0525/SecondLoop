@@ -82,6 +82,25 @@ void main() {
     expect(backend.enqueueTriggerKinds, const <String>['auto_create']);
   });
 
+  test('createTodoWithFollowup skips auto-enqueue for execution tasks',
+      () async {
+    final backend = _FollowupCapabilityBackend();
+    final key = Uint8List.fromList(List<int>.filled(32, 13));
+
+    final todo = await createTodoWithFollowup(
+      backend,
+      key,
+      id: 'todo_execution',
+      title: '修复登录页闪退',
+      status: 'open',
+    );
+
+    expect(todo.id, 'todo_execution');
+    expect(backend.enqueueTodoIds, isEmpty);
+    expect(backend.enqueueTaskTypeHints, isEmpty);
+    expect(backend.enqueueTriggerKinds, isEmpty);
+  });
+
   test(
       'createTodoWithFollowup avoids duplicate enqueue when backend already auto-enqueues',
       () async {
