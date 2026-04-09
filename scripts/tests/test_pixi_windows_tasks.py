@@ -196,6 +196,7 @@ class PixiWindowsTasksTests(unittest.TestCase):
         self.assertNotIn(".tools", script)
         self.assertIn("7z", script)
         self.assertIn("VkPhysicalDeviceCooperativeMatrixFeaturesKHR", script)
+        self.assertIn('${installerFileName}?Human=true', script)
 
     def test_platform_whisper_dependency_configuration(self) -> None:
         cargo_config = self._load_rust_cargo_config()
@@ -287,6 +288,8 @@ class PixiWindowsTasksTests(unittest.TestCase):
         self.assertNotIn("cmd /c subst $substDrive /d > $null 2>&1\n      cmd /c subst $substDrive \"$workspaceParent\"", script)
         self.assertIn("$mappingAttempts = 0", script)
         self.assertIn("Failed to map a short workspace drive to $workspaceParent after $mappingAttempts attempts", script)
+        self.assertIn("$pathVisibilityAttempts = 20", script)
+        self.assertIn("Short workspace path not found after drive mapping", script)
 
     def test_windows_velopack_script_propagates_required_build_environment(self) -> None:
         script = WINDOWS_VELOPACK_SCRIPT.read_text(encoding="utf-8")

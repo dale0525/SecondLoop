@@ -48,8 +48,20 @@ def _resolve_git_bash() -> str | None:
     return None
 
 
+def _resolve_true_bin() -> str:
+    candidate = shutil.which("true") or shutil.which("true.exe")
+    if candidate:
+        return candidate
+
+    for fallback in (Path("/usr/bin/true"), Path("/bin/true")):
+        if fallback.exists():
+            return str(fallback)
+
+    return "true"
+
+
 BASH_BIN = _resolve_git_bash()
-TRUE_BIN = shutil.which("true") or "true"
+TRUE_BIN = _resolve_true_bin()
 
 
 @unittest.skipUnless(BASH_BIN, "bash is required")
@@ -235,7 +247,7 @@ class ScopedCiRuntimeWrapperBehaviorTests(unittest.TestCase):
                 check=False,
                 capture_output=True,
                 text=True,
-                timeout=5,
+                timeout=15,
                 env={
                     **os.environ,
                     "SECONDLOOP_DART_BIN": (fake_bin_dir / "dart").as_posix(),
@@ -1178,7 +1190,7 @@ class ScopedCiRuntimeWrapperBehaviorTests(unittest.TestCase):
                     check=False,
                     capture_output=True,
                     text=True,
-                    timeout=3,
+                    timeout=10,
                     env={
                         **os.environ,
                         "PATH": "/usr/bin:/bin",

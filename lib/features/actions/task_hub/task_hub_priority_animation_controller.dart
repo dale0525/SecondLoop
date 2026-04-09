@@ -182,10 +182,6 @@ class TaskHubPriorityAnimationController extends ChangeNotifier {
         capture.source == TaskHubPriorityAnimationSource.aiReconciliation
             ? const Duration(milliseconds: 240)
             : const Duration(milliseconds: 340);
-    final overlaySettleDuration =
-        capture.source == TaskHubPriorityAnimationSource.aiReconciliation
-            ? Duration.zero
-            : Duration.zero;
     final inlineDuration =
         capture.source == TaskHubPriorityAnimationSource.aiReconciliation
             ? const Duration(milliseconds: 160)
@@ -207,7 +203,6 @@ class TaskHubPriorityAnimationController extends ChangeNotifier {
         beginRect: capture.sourceRect!,
         endRect: targetRect,
         flightDuration: overlayDuration,
-        settleDuration: overlaySettleDuration,
       );
       _activeInlineAnimation = null;
     } else if (_lastPlan?.kind ==

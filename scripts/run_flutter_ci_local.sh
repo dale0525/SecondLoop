@@ -32,6 +32,10 @@ fi
 [[ "${flutter_shards}" =~ ^[0-9]+$ ]] || die "SECONDLOOP_LOCAL_FLUTTER_TEST_SHARDS must be a positive integer"
 (( flutter_shards > 0 )) || die "SECONDLOOP_LOCAL_FLUTTER_TEST_SHARDS must be greater than 0"
 
+# Large single `flutter test` invocations are prone to unstable runner teardown
+# on desktop hosts, so keep shard batches bounded unless the caller overrides it.
+export SECONDLOOP_FLUTTER_TEST_MAX_BATCH_TARGETS="${SECONDLOOP_FLUTTER_TEST_MAX_BATCH_TARGETS:-48}"
+
 flutter_test_logs=()
 flutter_test_pids=()
 flutter_test_worktrees=()

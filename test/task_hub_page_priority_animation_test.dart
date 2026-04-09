@@ -752,8 +752,13 @@ void main() {
 
     final sourceRect =
         tester.getRect(find.byKey(const ValueKey('task_hub_page_item_done')));
-    await tester
-        .tap(find.byKey(const ValueKey('task_hub_page_quick_done_reopen')));
+    final reopenButton = find.byKey(
+      const ValueKey('task_hub_page_quick_done_reopen'),
+    );
+    final reopenRect = tester.getRect(reopenButton);
+    await tester.tapAt(
+      Offset(reopenRect.center.dx, reopenRect.top + (reopenRect.height * 0.25)),
+    );
     await tester.pump();
     await pumpUntilFound(
       tester,

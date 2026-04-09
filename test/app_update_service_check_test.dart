@@ -1039,10 +1039,12 @@ void main() {
 
       expect(result.update, isNull);
       expect(result.errorMessage, isNull);
-      expect(attempted.length, 2);
+      expect(attempted.length, 3);
       expect(attempted.first.toString(), contains('/api/releases/latest'));
-      expect(attempted.last.toString(),
+      expect(attempted[1].toString(),
           contains('/releases/latest/download/latest.json'));
+      expect(attempted.last.toString(),
+          contains('/repos/dale0525/SecondLoop/releases/latest'));
     });
 
     test('records update available and manual fallback events', () async {

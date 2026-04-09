@@ -300,6 +300,7 @@ class _TaskHubQuickMenu extends StatelessWidget {
         .toList(growable: false);
     return PopupMenuButton<TaskHubQuickAction>(
       tooltip: context.t.actions.taskHub.actions.more,
+      padding: EdgeInsets.zero,
       onSelected: onSelected,
       itemBuilder: (_) => <PopupMenuEntry<TaskHubQuickAction>>[
         for (final item in safeItems) _taskHubQuickMenuItem(context, item),
@@ -313,6 +314,13 @@ class _TaskHubQuickMenu extends StatelessWidget {
           onPressed: () {},
           style: ButtonStyle(
             minimumSize: const MaterialStatePropertyAll(Size(40, 34)),
+            padding: const MaterialStatePropertyAll(
+              EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            ),
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            shape: MaterialStatePropertyAll(
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(99)),
+            ),
             side: MaterialStatePropertyAll(
               BorderSide(color: tokens.borderSubtle.withOpacity(0.9)),
             ),
