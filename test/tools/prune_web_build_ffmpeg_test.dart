@@ -354,6 +354,54 @@ const RESOURCES = {
       reason: 'stdout: ${result.stdout}\nstderr: ${result.stderr}',
     );
   });
+
+  test(
+      'prune web build ffmpeg helper prefers flutter on PATH when injected flutter is unset',
+      () {
+    final invocation = _resolvePruneToolInvocation(
+      buildDirPath: '/tmp/build/web',
+      environment: <String, String>{
+        'PATH': '/usr/local/bin:/usr/bin',
+      },
+      executableExists: (candidate) =>
+          candidate == '/usr/local/bin/flutter' || candidate == '/usr/bin/pixi',
+    );
+
+    expect(invocation.executable, 'flutter');
+    expect(
+      invocation.arguments,
+      <String>[
+        'pub',
+        'run',
+        'tools/prune_web_build_ffmpeg.dart',
+        '--build-dir',
+        '/tmp/build/web',
+      ],
+    );
+  });
+
+  test(
+      'prune web build ffmpeg helper falls back to pixi when flutter is unavailable',
+      () {
+    final invocation = _resolvePruneToolInvocation(
+      buildDirPath: '/tmp/build/web',
+      environment: <String, String>{
+        'PATH': '/usr/local/bin:/usr/bin',
+      },
+      executableExists: (candidate) => candidate == '/usr/bin/pixi',
+    );
+
+    expect(invocation.executable, 'pixi');
+    expect(
+      invocation.arguments,
+      <String>[
+        'run',
+        'flutter',
+        'pub',
+        'run tools/prune_web_build_ffmpeg.dart --build-dir /tmp/build/web',
+      ],
+    );
+  });
 }
 
 Future<Directory> _createTempBuildDir() async {
@@ -375,31 +423,123 @@ Future<Directory> _createTempBuildDir() async {
 }
 
 Future<ProcessResult> _runPruneTool(Directory buildDir) {
-  final flutterBin = Platform.environment['SECONDLOOP_FLUTTER_BIN']?.trim();
+  final invocation = _resolvePruneToolInvocation(
+    buildDirPath: buildDir.path,
+    environment: Platform.environment,
+    executableExists: (candidate) => File(candidate).existsSync(),
+  );
+  return Process.run(
+    invocation.executable,
+    invocation.arguments,
+    workingDirectory: Directory.current.path,
+  );
+}
+
+_PruneToolInvocation _resolvePruneToolInvocation({
+  required String buildDirPath,
+  required Map<String, String> environment,
+  required bool Function(String candidate) executableExists,
+}) {
+  final flutterBin = environment['SECONDLOOP_FLUTTER_BIN']?.trim();
   if (flutterBin != null && flutterBin.isNotEmpty) {
-    return Process.run(
-      flutterBin,
-      <String>[
+    return _PruneToolInvocation(
+      executable: flutterBin,
+      arguments: <String>[
         'pub',
         'run',
         'tools/prune_web_build_ffmpeg.dart',
         '--build-dir',
-        buildDir.path,
+        buildDirPath,
       ],
-      workingDirectory: Directory.current.path,
     );
   }
 
-  return Process.run(
-    'pixi',
-    <String>[
+  if (_hasExecutableOnPath(
+    executableName: 'flutter',
+    environment: environment,
+    executableExists: executableExists,
+  )) {
+    return _PruneToolInvocation(
+      executable: 'flutter',
+      arguments: <String>[
+        'pub',
+        'run',
+        'tools/prune_web_build_ffmpeg.dart',
+        '--build-dir',
+        buildDirPath,
+      ],
+    );
+  }
+
+  return _PruneToolInvocation(
+    executable: 'pixi',
+    arguments: <String>[
       'run',
       'flutter',
       'pub',
-      'run tools/prune_web_build_ffmpeg.dart --build-dir ${buildDir.path}',
+      'run tools/prune_web_build_ffmpeg.dart --build-dir $buildDirPath',
     ],
-    workingDirectory: Directory.current.path,
   );
+}
+
+bool _hasExecutableOnPath({
+  required String executableName,
+  required Map<String, String> environment,
+  required bool Function(String candidate) executableExists,
+}) {
+  for (final candidate
+      in _executableCandidatesOnPath(executableName, environment)) {
+    if (executableExists(candidate)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+Iterable<String> _executableCandidatesOnPath(
+  String executableName,
+  Map<String, String> environment,
+) sync* {
+  final path = environment['PATH'];
+  if (path == null || path.isEmpty) {
+    return;
+  }
+
+  final pathSeparator = Platform.isWindows ? ';' : ':';
+  final pathext = Platform.isWindows
+      ? (environment['PATHEXT']
+              ?.split(';')
+              .where((entry) => entry.isNotEmpty) ??
+          const <String>['.EXE', '.BAT', '.CMD', '.COM'])
+      : const <String>[''];
+  final hasExplicitExtension =
+      Platform.isWindows && executableName.contains('.');
+
+  for (final rawDirectory in path.split(pathSeparator)) {
+    final directory = rawDirectory.trim();
+    if (directory.isEmpty) {
+      continue;
+    }
+
+    if (hasExplicitExtension) {
+      yield '$directory${Platform.pathSeparator}$executableName';
+      continue;
+    }
+
+    for (final extension in pathext) {
+      yield '$directory${Platform.pathSeparator}$executableName$extension';
+    }
+  }
+}
+
+class _PruneToolInvocation {
+  const _PruneToolInvocation({
+    required this.executable,
+    required this.arguments,
+  });
+
+  final String executable;
+  final List<String> arguments;
 }
 
 List<int> _encodeBinaryManifest(Map<String, Object> manifest) {
