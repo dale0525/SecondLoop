@@ -616,27 +616,9 @@ class TaskPriorityStore extends ChangeNotifier {
     )) {
       _safeNotify();
     }
-
-    TaskPriorityAiService? aiService;
-    try {
-      aiService = await _resolveAiService?.call();
-      _aiAvailability = aiService == null
-          ? TaskPriorityAiAvailability.unavailable
-          : TaskPriorityAiAvailability.available;
-    } catch (_) {
-      _aiAvailability = TaskPriorityAiAvailability.unavailable;
-      aiService = null;
-    }
-
-    if (aiService == null &&
-        _publishSnapshot(
-          rulesSnapshot.copyWith(
-            resolutionPhase: TaskPriorityResolutionPhase.localPublished,
-          ),
-          nowLocal: nowLocal,
-        )) {
-      _safeNotify();
-    }
+    // The active refresh cycle already owns AI service resolution and reranking.
+    // Avoid resolving it again here so force-refresh only republishes the newest
+    // local snapshot while the in-flight refresh completes or reruns.
   }
 
   bool _publishSnapshot(

@@ -113,7 +113,6 @@ void main() {
       'forced refresh publishes local snapshot before inflight resolver finishes',
       () async {
     final firstAiRelease = Completer<void>();
-    final secondResolveRelease = Completer<void>();
     final secondLocalPublished = Completer<void>();
     final published = <TaskPrioritySnapshot>[];
     var resolveCallCount = 0;
@@ -134,7 +133,6 @@ void main() {
                 entries: <TaskPriorityAiEntry>[]),
           );
         }
-        await secondResolveRelease.future;
         return const _FailingAiService();
       },
     )..addListener(() {
@@ -160,7 +158,8 @@ void main() {
       completes,
     );
 
-    secondResolveRelease.complete();
+    expect(resolveCallCount, 1);
+
     firstAiRelease.complete();
     await forcedRefresh;
     await firstRefresh;
@@ -173,6 +172,7 @@ void main() {
       ),
       isTrue,
     );
+    expect(resolveCallCount, 2);
   });
 }
 

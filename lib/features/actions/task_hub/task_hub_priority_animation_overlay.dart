@@ -3,6 +3,11 @@ import 'package:flutter/material.dart';
 import '../../../ui/sl_tokens.dart';
 import 'task_hub_priority_animation_controller.dart';
 
+Color _colorWithOpacity(Color color, double opacity) {
+  final clampedOpacity = opacity.clamp(0.0, 1.0);
+  return color.withAlpha((clampedOpacity * 255).round());
+}
+
 class TaskHubPriorityAnimationOverlay extends StatelessWidget {
   const TaskHubPriorityAnimationOverlay({
     required this.animation,
@@ -48,17 +53,20 @@ class TaskHubPriorityAnimationOverlay extends StatelessWidget {
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(tokens.radiusLg + 6),
                       border: Border.all(
-                        color: theme.colorScheme.primary.withOpacity(
+                        color: _colorWithOpacity(
+                          theme.colorScheme.primary,
                           targetOpacity,
                         ),
                         width: 2,
                       ),
-                      color: theme.colorScheme.primary.withOpacity(
+                      color: _colorWithOpacity(
+                        theme.colorScheme.primary,
                         targetOpacity * 0.22,
                       ),
                       boxShadow: [
                         BoxShadow(
-                          color: theme.colorScheme.primary.withOpacity(
+                          color: _colorWithOpacity(
+                            theme.colorScheme.primary,
                             targetOpacity * 0.45,
                           ),
                           blurRadius: 18,
@@ -75,7 +83,8 @@ class TaskHubPriorityAnimationOverlay extends StatelessWidget {
                   key: const ValueKey('task_hub_priority_animation_overlay'),
                   elevation: 12,
                   color: theme.colorScheme.surface,
-                  shadowColor: theme.colorScheme.shadow.withOpacity(
+                  shadowColor: _colorWithOpacity(
+                    theme.colorScheme.shadow,
                     shadowOpacity,
                   ),
                   borderRadius: BorderRadius.circular(tokens.radiusLg),
@@ -87,14 +96,17 @@ class TaskHubPriorityAnimationOverlay extends StatelessWidget {
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(tokens.radiusLg),
                       border: Border.all(
-                        color: theme.colorScheme.primary.withOpacity(0.30),
+                        color: _colorWithOpacity(
+                          theme.colorScheme.primary,
+                          0.30,
+                        ),
                         width: 1.5,
                       ),
                       gradient: LinearGradient(
                         begin: Alignment.centerLeft,
                         end: Alignment.centerRight,
                         colors: [
-                          theme.colorScheme.primary.withOpacity(0.10),
+                          _colorWithOpacity(theme.colorScheme.primary, 0.10),
                           theme.colorScheme.surface,
                         ],
                       ),
