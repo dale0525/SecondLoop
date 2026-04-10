@@ -78,6 +78,15 @@ void main() {
     expect(workflow, contains(r'repos/$SITE_REPO/dispatches'));
   });
 
+  test('web build workflow also dispatches site deploys after main pushes', () {
+    final workflow = File('.github/workflows/web-build.yml').readAsStringSync();
+
+    expect(workflow, contains("github.event_name == 'push'"));
+    expect(workflow, contains("github.ref_name == 'main'"));
+    expect(workflow, contains('secondloop_web_release_published'));
+    expect(workflow, contains(r'repos/$SITE_REPO/dispatches'));
+  });
+
   test('web build workflow dispatches stable artifact selectors only', () {
     final workflow = File('.github/workflows/web-build.yml').readAsStringSync();
 

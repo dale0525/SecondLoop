@@ -400,6 +400,16 @@ class VerificationScriptsTests(unittest.TestCase):
         self.assertIn('      - "scripts/check_no_python_runtime.sh"', workflow)
         self.assertNotIn('      - "scripts/**"', workflow)
 
+    def test_web_build_workflow_dispatches_site_deploys_after_main_pushes(self) -> None:
+        workflow = (REPO_ROOT / ".github/workflows/web-build.yml").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn("github.event_name == 'push'", workflow)
+        self.assertIn("github.ref_name == 'main'", workflow)
+        self.assertIn("secondloop_web_release_published", workflow)
+        self.assertIn('gh api "repos/$SITE_REPO/dispatches"', workflow)
+
     def test_pixi_adds_tooling_and_nextest_entrypoints(self) -> None:
         pixi = PIXI_TOML.read_text(encoding="utf-8")
 
