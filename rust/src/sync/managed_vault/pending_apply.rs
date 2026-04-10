@@ -183,12 +183,7 @@ pub(super) fn maybe_recover_remote_ahead_since_map(
 
     let mut changed = false;
     for device_id in ahead_devices {
-        if remote_ahead_cursor_repair_marker_attempted(conn, scope_id, &device_id)? {
-            continue;
-        }
-
         since.insert(device_id.clone(), 0);
-        mark_remote_ahead_cursor_repair_attempted(conn, scope_id, &device_id)?;
         changed = true;
     }
 
@@ -207,10 +202,6 @@ fn cursor_repair_marker_key_v2(scope_id: &str, device_id: &str) -> String {
     format!("managed_vault.cursor_repair_attempted:{scope_id}:{device_id}")
 }
 
-fn remote_ahead_cursor_repair_marker_key(scope_id: &str, device_id: &str) -> String {
-    format!("managed_vault.remote_ahead_cursor_repair_attempted:{scope_id}:{device_id}")
-}
-
 pub(super) fn cursor_repair_marker_attempted(
     conn: &Connection,
     scope_id: &str,
@@ -225,15 +216,6 @@ pub(super) fn cursor_repair_marker_attempted(
     Ok(super::super::kv_get_i64(conn, &v2)?.unwrap_or(0) > 0)
 }
 
-pub(super) fn remote_ahead_cursor_repair_marker_attempted(
-    conn: &Connection,
-    scope_id: &str,
-    device_id: &str,
-) -> Result<bool> {
-    let key = remote_ahead_cursor_repair_marker_key(scope_id, device_id);
-    Ok(super::super::kv_get_i64(conn, &key)?.unwrap_or(0) > 0)
-}
-
 pub(super) fn mark_cursor_repair_attempted(
     conn: &Connection,
     scope_id: &str,
@@ -244,16 +226,6 @@ pub(super) fn mark_cursor_repair_attempted(
 
     let v2 = cursor_repair_marker_key_v2(scope_id, device_id);
     super::super::kv_set_i64(conn, &v2, 1)?;
-    Ok(())
-}
-
-pub(super) fn mark_remote_ahead_cursor_repair_attempted(
-    conn: &Connection,
-    scope_id: &str,
-    device_id: &str,
-) -> Result<()> {
-    let key = remote_ahead_cursor_repair_marker_key(scope_id, device_id);
-    super::super::kv_set_i64(conn, &key, 1)?;
     Ok(())
 }
 
@@ -305,27 +277,6 @@ mod cursor_repair_marker_tests {
             )
             .expect("get v2"),
             Some(1)
-        );
-    }
-
-    #[test]
-    fn stale_and_remote_ahead_repair_markers_are_isolated() {
-        let dir = tempfile::tempdir().expect("tempdir");
-        let conn = crate::db::open(dir.path()).expect("open");
-
-        mark_cursor_repair_attempted(&conn, "scope-c", "device-c").expect("mark stale attempted");
-        assert!(cursor_repair_marker_attempted(&conn, "scope-c", "device-c")
-            .expect("stale marker attempted"));
-        assert!(
-            !remote_ahead_cursor_repair_marker_attempted(&conn, "scope-c", "device-c")
-                .expect("remote-ahead marker absent")
-        );
-
-        mark_remote_ahead_cursor_repair_attempted(&conn, "scope-c", "device-c")
-            .expect("mark remote-ahead attempted");
-        assert!(
-            remote_ahead_cursor_repair_marker_attempted(&conn, "scope-c", "device-c")
-                .expect("remote-ahead marker attempted")
         );
     }
 }

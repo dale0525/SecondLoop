@@ -29,6 +29,18 @@ fn pull_progress_counts(
     (done, total)
 }
 
+fn report_pull_progress(
+    progress: &mut dyn FnMut(u64, u64),
+    reported_done: &mut u64,
+    done: u64,
+    total: u64,
+) -> u64 {
+    let clamped_done = done.max(*reported_done).min(total);
+    *reported_done = clamped_done;
+    progress(clamped_done, total);
+    clamped_done
+}
+
 pub fn pull_with_progress(
     conn: &Connection,
     db_key: &[u8; 32],
@@ -52,13 +64,14 @@ pub fn pull_with_progress(
 
     let scope_id = super::runtime::scope_id(base_url, vault_id);
     let mut since = super::load_since_map(conn, &scope_id)?;
-    let mut progress_start_since = since.clone();
+    let progress_start_since = since.clone();
 
     let endpoint_json = super::runtime::url(base_url, &format!("/v1/vaults/{vault_id}/ops:pull"))?;
     let mut applied: u64 = 0;
 
     let mut total_ops: Option<u64> = None;
     let mut done_ops = 0u64;
+    let mut reported_done = 0u64;
 
     loop {
         let request = super::PullRequest {
@@ -86,8 +99,8 @@ pub fn pull_with_progress(
             let (computed_done, computed_total) =
                 pull_progress_counts(&progress_start_since, &since, &parsed.max);
             total_ops = Some(computed_total);
-            done_ops = computed_done;
-            progress(done_ops.min(computed_total), computed_total);
+            done_ops =
+                report_pull_progress(progress, &mut reported_done, computed_done, computed_total);
         }
 
         let mut next_since = since.clone();
@@ -102,7 +115,6 @@ pub fn pull_with_progress(
         let stalled_devices =
             super::remote_ahead_cursor_devices(&since, &parsed.max, &local_device_id);
         if parsed.ops.is_empty() && next_since == since && !stalled_devices.is_empty() {
-            let previous_since = since.clone();
             if super::maybe_recover_remote_ahead_since_map(
                 conn,
                 &scope_id,
@@ -110,17 +122,15 @@ pub fn pull_with_progress(
                 &mut since,
                 &parsed.max,
             )? {
-                for (device_id, repaired_since) in &since {
-                    let previous_value = previous_since.get(device_id).copied().unwrap_or(0);
-                    if *repaired_since < previous_value {
-                        progress_start_since.insert(device_id.clone(), *repaired_since);
-                    }
-                }
                 let (computed_done, computed_total) =
                     pull_progress_counts(&progress_start_since, &since, &parsed.max);
                 total_ops = Some(computed_total);
-                done_ops = computed_done;
-                progress(done_ops.min(computed_total), computed_total);
+                done_ops = report_pull_progress(
+                    progress,
+                    &mut reported_done,
+                    computed_done,
+                    computed_total,
+                );
                 continue;
             }
 
@@ -191,8 +201,8 @@ pub fn pull_with_progress(
             let (computed_done, computed_total) =
                 pull_progress_counts(&progress_start_since, &next_since, &parsed.max);
             total_ops = Some(computed_total);
-            done_ops = computed_done;
-            progress(done_ops.min(computed_total), computed_total);
+            done_ops =
+                report_pull_progress(progress, &mut reported_done, computed_done, computed_total);
         } else {
             let mut delta = 0u64;
             for (device_id, next_seq) in &next_since {
@@ -204,6 +214,7 @@ pub fn pull_with_progress(
             done_ops += delta;
             if delta > 0 {
                 progress(done_ops, done_ops.saturating_add(1));
+                reported_done = done_ops;
             }
         }
 
@@ -838,7 +849,7 @@ mod tests {
 
         assert_eq!(applied, 1);
         assert_eq!(seen_progress.first().copied(), Some((0, 88)));
-        assert_eq!(seen_progress.last().copied(), Some((262, 262)));
+        assert_eq!(seen_progress.last().copied(), Some((88, 88)));
 
         let conversations =
             crate::db::list_conversations(&conn, &db_key).expect("list conversations");
@@ -962,7 +973,7 @@ mod tests {
                 .all(|window| window[1].0 >= window[0].0),
             "progress should not go backwards: {seen_progress:?}"
         );
-        assert_eq!(seen_progress.last().copied(), Some((762, 762)));
+        assert_eq!(seen_progress.last().copied(), Some((588, 588)));
 
         let conversations =
             crate::db::list_conversations(&conn, &db_key).expect("list conversations");
