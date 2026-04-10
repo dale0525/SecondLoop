@@ -697,6 +697,17 @@ pub fn pull(
                             }
                         }
                         Err(_) => {
+                            if !stale_cursor_recovery_attempted
+                                && maybe_recover_stale_since_map(
+                                    conn,
+                                    &scope_id,
+                                    &local_device_id,
+                                    &mut since,
+                                )?
+                            {
+                                stale_cursor_recovery_attempted = true;
+                                continue;
+                            }
                             pull_bin_supported = Some(false);
                             continue;
                         }
@@ -795,10 +806,7 @@ pub fn pull(
                                 RemoteAheadRepairOutcome::NotNeeded => {}
                             }
                         }
-                        Err(_) => {
-                            pull_bin_supported = Some(false);
-                            continue;
-                        }
+                        Err(_) => break,
                     }
                     break;
                 }

@@ -1,7 +1,7 @@
 use super::progress_metrics::{pull_progress_counts, report_pull_progress};
 use super::pull_recovery::{
-    attempt_remote_ahead_repair, repeated_remote_ahead_repair_error, PullResponseWithMax,
-    RemoteAheadRepairOutcome, RemoteAheadRepairTracker,
+    attempt_remote_ahead_repair, maybe_recover_stale_since_map, repeated_remote_ahead_repair_error,
+    PullResponseWithMax, RemoteAheadRepairOutcome, RemoteAheadRepairTracker,
 };
 use crate::crypto::{decrypt_bytes, encrypt_bytes};
 use anyhow::{anyhow, Result};
@@ -41,6 +41,7 @@ pub fn pull_with_progress(
     let mut done_ops = 0u64;
     let mut reported_done = 0u64;
     let mut remote_ahead_repair_tracker = RemoteAheadRepairTracker::default();
+    let mut stale_cursor_recovery_attempted = false;
 
     loop {
         let request = super::PullRequest {
@@ -107,6 +108,13 @@ pub fn pull_with_progress(
                 }
                 RemoteAheadRepairOutcome::NotNeeded => {}
             }
+
+            if !stale_cursor_recovery_attempted
+                && maybe_recover_stale_since_map(conn, &scope_id, &local_device_id, &mut since)?
+            {
+                stale_cursor_recovery_attempted = true;
+                continue;
+            }
         }
 
         let mut batch_applied = 0u64;
@@ -125,7 +133,8 @@ pub fn pull_with_progress(
                 let op_id = op_json["op_id"]
                     .as_str()
                     .ok_or_else(|| anyhow!("sync op missing op_id"))?;
-                if op_id != op.op_id.as_str() {
+                let envelope_op_id = op.op_id.trim();
+                if !envelope_op_id.is_empty() && op_id != envelope_op_id {
                     return Err(anyhow!(
                         "managed vault pull op_id mismatch: envelope={} plaintext={}",
                         op.op_id,
@@ -203,6 +212,13 @@ pub fn pull_with_progress(
                     return Err(repeated_remote_ahead_repair_error(&devices));
                 }
                 RemoteAheadRepairOutcome::NotNeeded => {}
+            }
+
+            if !stale_cursor_recovery_attempted
+                && maybe_recover_stale_since_map(conn, &scope_id, &local_device_id, &mut since)?
+            {
+                stale_cursor_recovery_attempted = true;
+                continue;
             }
             break;
         }
