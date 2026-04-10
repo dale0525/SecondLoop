@@ -1,4 +1,8 @@
 use super::progress_metrics::{pull_progress_counts, report_pull_progress};
+use super::pull_recovery::{
+    attempt_remote_ahead_repair, repeated_remote_ahead_repair_error, PullResponseWithMax,
+    RemoteAheadRepairOutcome, RemoteAheadRepairTracker,
+};
 use crate::crypto::{decrypt_bytes, encrypt_bytes};
 use anyhow::{anyhow, Result};
 use base64::engine::general_purpose::STANDARD as B64_STD;
@@ -36,6 +40,7 @@ pub fn pull_with_progress(
     let mut total_ops: Option<u64> = None;
     let mut done_ops = 0u64;
     let mut reported_done = 0u64;
+    let mut remote_ahead_repair_tracker = RemoteAheadRepairTracker::default();
 
     loop {
         let request = super::PullRequest {
@@ -57,7 +62,7 @@ pub fn pull_with_progress(
         }
 
         let body = resp.bytes()?;
-        let parsed: super::PullResponseWithMax = serde_json::from_slice(body.as_ref())?;
+        let parsed: PullResponseWithMax = serde_json::from_slice(body.as_ref())?;
 
         if !parsed.max.is_empty() {
             let (computed_done, computed_total) =
@@ -76,32 +81,32 @@ pub fn pull_with_progress(
             return Err(anyhow!("managed-vault pull made no progress"));
         }
 
-        let stalled_devices =
-            super::remote_ahead_cursor_devices(&since, &parsed.max, &local_device_id);
-        if parsed.ops.is_empty() && !stalled_devices.is_empty() {
-            if super::maybe_recover_remote_ahead_since_map(
+        if parsed.ops.is_empty() {
+            match attempt_remote_ahead_repair(
+                &mut remote_ahead_repair_tracker,
                 conn,
                 &scope_id,
                 &local_device_id,
                 &mut since,
                 &parsed.max,
             )? {
-                let (computed_done, computed_total) =
-                    pull_progress_counts(&progress_start_since, &since, &parsed.max);
-                total_ops = Some(computed_total);
-                done_ops = report_pull_progress(
-                    progress,
-                    &mut reported_done,
-                    computed_done,
-                    computed_total,
-                );
-                continue;
+                RemoteAheadRepairOutcome::Recovered => {
+                    let (computed_done, computed_total) =
+                        pull_progress_counts(&progress_start_since, &since, &parsed.max);
+                    total_ops = Some(computed_total);
+                    done_ops = report_pull_progress(
+                        progress,
+                        &mut reported_done,
+                        computed_done,
+                        computed_total,
+                    );
+                    continue;
+                }
+                RemoteAheadRepairOutcome::Exhausted(devices) => {
+                    return Err(repeated_remote_ahead_repair_error(&devices));
+                }
+                RemoteAheadRepairOutcome::NotNeeded => {}
             }
-
-            return Err(anyhow!(
-                "managed-vault pull stalled: remote cursor ahead for device(s): {}",
-                stalled_devices.join(", ")
-            ));
         }
 
         let mut batch_applied = 0u64;
@@ -185,14 +190,19 @@ pub fn pull_with_progress(
         since = next_since;
 
         if parsed.ops.len() < (PULL_LIMIT as usize) {
-            if super::maybe_recover_remote_ahead_since_map(
+            match attempt_remote_ahead_repair(
+                &mut remote_ahead_repair_tracker,
                 conn,
                 &scope_id,
                 &local_device_id,
                 &mut since,
                 &parsed.max,
             )? {
-                continue;
+                RemoteAheadRepairOutcome::Recovered => continue,
+                RemoteAheadRepairOutcome::Exhausted(devices) => {
+                    return Err(repeated_remote_ahead_repair_error(&devices));
+                }
+                RemoteAheadRepairOutcome::NotNeeded => {}
             }
             break;
         }

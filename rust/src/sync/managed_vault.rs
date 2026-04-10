@@ -14,17 +14,21 @@ mod pending_apply;
 mod probe;
 mod progress;
 mod progress_metrics;
+mod pull_recovery;
 mod runtime;
 
 pub use admin::{clear_device, clear_vault};
 pub use attachments::{download_attachment_bytes, upload_attachment_bytes};
 use pending_apply::{
-    apply_pending_ops_until_stable, cursor_repair_marker_attempted, has_local_oplog_for_device,
-    is_foreign_key_constraint_error, load_pending_apply_op_ids, mark_cursor_repair_attempted,
-    maybe_recover_remote_ahead_since_map, pending_apply_key, remote_ahead_cursor_devices,
-    rewind_since_for_unresolved_pending_devices, update_since_map,
+    apply_pending_ops_until_stable, is_foreign_key_constraint_error, load_pending_apply_op_ids,
+    pending_apply_key, rewind_since_for_unresolved_pending_devices, update_since_map,
 };
 pub use progress::{pull_with_progress, push_ops_only_with_progress};
+use pull_recovery::{
+    attempt_remote_ahead_repair, decode_pull_bin_response, maybe_recover_stale_since_map,
+    probe_pull_response_with_max, repeated_remote_ahead_repair_error, PullResponseWithMax,
+    RemoteAheadRepairOutcome, RemoteAheadRepairTracker,
+};
 
 #[derive(Debug, Serialize)]
 struct RegisterDeviceRequest<'a> {
@@ -72,14 +76,6 @@ struct PullRequest<'a> {
 }
 
 #[derive(Debug, Deserialize)]
-struct PullResponseWithMax {
-    ops: Vec<PullOp>,
-    next: BTreeMap<String, i64>,
-    #[serde(default)]
-    max: BTreeMap<String, i64>,
-}
-
-#[derive(Debug, Deserialize)]
 struct PullOp {
     device_id: String,
     seq: i64,
@@ -99,14 +95,6 @@ struct PushErrorResponse {
 }
 
 const PULL_BIN_MAGIC_V1: &[u8; 5] = b"SLVB1";
-
-#[derive(Debug)]
-struct PullOpBin {
-    device_id: String,
-    seq: i64,
-    op_id: String,
-    ciphertext: Vec<u8>,
-}
 
 fn load_since_map(conn: &Connection, scope_id: &str) -> Result<BTreeMap<String, i64>> {
     let prefix = format!("managed_vault.last_pulled_seq:{scope_id}:");
@@ -129,158 +117,6 @@ fn load_since_map(conn: &Connection, scope_id: &str) -> Result<BTreeMap<String, 
             out.insert(device_id.to_string(), seq);
         }
     }
-    Ok(out)
-}
-
-fn maybe_recover_stale_since_map(
-    conn: &Connection,
-    scope_id: &str,
-    local_device_id: &str,
-    since: &mut BTreeMap<String, i64>,
-) -> Result<bool> {
-    if since.is_empty() {
-        return Ok(false);
-    }
-
-    let mut changed = false;
-    for (device_id, last_seq) in since.clone() {
-        if device_id == local_device_id || last_seq <= 0 {
-            continue;
-        }
-
-        if cursor_repair_marker_attempted(conn, scope_id, &device_id)? {
-            continue;
-        }
-
-        if has_local_oplog_for_device(conn, &device_id)? {
-            continue;
-        }
-
-        since.insert(device_id.clone(), 0);
-        mark_cursor_repair_attempted(conn, scope_id, &device_id)?;
-        changed = true;
-    }
-
-    if changed {
-        update_since_map(conn, scope_id, since)?;
-    }
-
-    Ok(changed)
-}
-
-fn probe_pull_response_with_max(
-    http: &reqwest::blocking::Client,
-    endpoint_json: &str,
-    id_token: &str,
-    request: &PullRequest<'_>,
-) -> Result<PullResponseWithMax> {
-    let resp = http
-        .post(endpoint_json)
-        .bearer_auth(id_token)
-        .json(request)
-        .send()?;
-
-    let status = resp.status();
-    if !status.is_success() {
-        let text = resp.text().unwrap_or_default();
-        return Err(anyhow!("managed-vault pull failed: HTTP {status} {text}"));
-    }
-
-    let body = resp.bytes()?;
-    serde_json::from_slice(body.as_ref())
-        .map_err(|e| anyhow!("managed-vault pull response decode failed: {e}"))
-}
-
-fn decode_pull_bin_response(bytes: &[u8]) -> Result<Vec<PullOpBin>> {
-    if bytes.len() < PULL_BIN_MAGIC_V1.len() + 4 {
-        return Err(anyhow!("invalid pull_bin response: too short"));
-    }
-    if &bytes[..PULL_BIN_MAGIC_V1.len()] != PULL_BIN_MAGIC_V1 {
-        return Err(anyhow!("invalid pull_bin response: bad magic"));
-    }
-
-    let mut cursor = PULL_BIN_MAGIC_V1.len();
-    let count = u32::from_le_bytes(
-        bytes[cursor..cursor + 4]
-            .try_into()
-            .map_err(|_| anyhow!("invalid pull_bin response: count"))?,
-    ) as usize;
-    cursor += 4;
-
-    let mut out: Vec<PullOpBin> = Vec::with_capacity(count);
-    for _ in 0..count {
-        if cursor + 2 > bytes.len() {
-            return Err(anyhow!(
-                "invalid pull_bin response: truncated device_id_len"
-            ));
-        }
-        let device_len = u16::from_le_bytes(
-            bytes[cursor..cursor + 2]
-                .try_into()
-                .map_err(|_| anyhow!("invalid pull_bin response: device_id_len"))?,
-        ) as usize;
-        cursor += 2;
-
-        if cursor + device_len > bytes.len() {
-            return Err(anyhow!("invalid pull_bin response: truncated device_id"));
-        }
-        let device_id = String::from_utf8(bytes[cursor..cursor + device_len].to_vec())
-            .map_err(|_| anyhow!("invalid pull_bin response: device_id not utf-8"))?;
-        cursor += device_len;
-
-        if cursor + 8 > bytes.len() {
-            return Err(anyhow!("invalid pull_bin response: truncated seq"));
-        }
-        let seq = i64::from_le_bytes(
-            bytes[cursor..cursor + 8]
-                .try_into()
-                .map_err(|_| anyhow!("invalid pull_bin response: seq"))?,
-        );
-        cursor += 8;
-
-        if cursor + 2 > bytes.len() {
-            return Err(anyhow!("invalid pull_bin response: truncated op_id_len"));
-        }
-        let op_id_len = u16::from_le_bytes(
-            bytes[cursor..cursor + 2]
-                .try_into()
-                .map_err(|_| anyhow!("invalid pull_bin response: op_id_len"))?,
-        ) as usize;
-        cursor += 2;
-
-        if cursor + op_id_len > bytes.len() {
-            return Err(anyhow!("invalid pull_bin response: truncated op_id"));
-        }
-        let op_id = String::from_utf8(bytes[cursor..cursor + op_id_len].to_vec())
-            .map_err(|_| anyhow!("invalid pull_bin response: op_id not utf-8"))?;
-        cursor += op_id_len;
-
-        if cursor + 4 > bytes.len() {
-            return Err(anyhow!(
-                "invalid pull_bin response: truncated ciphertext_len"
-            ));
-        }
-        let cipher_len = u32::from_le_bytes(
-            bytes[cursor..cursor + 4]
-                .try_into()
-                .map_err(|_| anyhow!("invalid pull_bin response: ciphertext_len"))?,
-        ) as usize;
-        cursor += 4;
-
-        if cursor + cipher_len > bytes.len() {
-            return Err(anyhow!("invalid pull_bin response: truncated ciphertext"));
-        }
-        let ciphertext = bytes[cursor..cursor + cipher_len].to_vec();
-        cursor += cipher_len;
-
-        out.push(PullOpBin {
-            device_id,
-            seq,
-            op_id,
-            ciphertext,
-        });
-    }
-
     Ok(out)
 }
 
@@ -800,6 +636,7 @@ pub fn pull(
     let mut applied: u64 = 0;
     let mut pull_bin_supported: Option<bool> = None;
     let mut stale_cursor_recovery_attempted = false;
+    let mut remote_ahead_repair_tracker = RemoteAheadRepairTracker::default();
     loop {
         let request = PullRequest {
             device_id: local_device_id.as_str(),
@@ -844,23 +681,19 @@ pub fn pull(
                 if ops.is_empty() {
                     match probe_pull_response_with_max(&http, &endpoint_json, id_token, &request) {
                         Ok(probe) => {
-                            let stalled_devices =
-                                remote_ahead_cursor_devices(&since, &probe.max, &local_device_id);
-                            if !stalled_devices.is_empty() {
-                                if maybe_recover_remote_ahead_since_map(
-                                    conn,
-                                    &scope_id,
-                                    &local_device_id,
-                                    &mut since,
-                                    &probe.max,
-                                )? {
-                                    continue;
+                            match attempt_remote_ahead_repair(
+                                &mut remote_ahead_repair_tracker,
+                                conn,
+                                &scope_id,
+                                &local_device_id,
+                                &mut since,
+                                &probe.max,
+                            )? {
+                                RemoteAheadRepairOutcome::Recovered => continue,
+                                RemoteAheadRepairOutcome::Exhausted(devices) => {
+                                    return Err(repeated_remote_ahead_repair_error(&devices));
                                 }
-
-                                return Err(anyhow!(
-                                    "managed-vault pull stalled: remote cursor ahead for device(s): {}",
-                                    stalled_devices.join(", ")
-                                ));
+                                RemoteAheadRepairOutcome::NotNeeded => {}
                             }
                         }
                         Err(_) => {
@@ -947,14 +780,19 @@ pub fn pull(
                         &probe_request,
                     ) {
                         Ok(probe) => {
-                            if maybe_recover_remote_ahead_since_map(
+                            match attempt_remote_ahead_repair(
+                                &mut remote_ahead_repair_tracker,
                                 conn,
                                 &scope_id,
                                 &local_device_id,
                                 &mut since,
                                 &probe.max,
                             )? {
-                                continue;
+                                RemoteAheadRepairOutcome::Recovered => continue,
+                                RemoteAheadRepairOutcome::Exhausted(devices) => {
+                                    return Err(repeated_remote_ahead_repair_error(&devices));
+                                }
+                                RemoteAheadRepairOutcome::NotNeeded => {}
                             }
                         }
                         Err(_) => {
@@ -993,23 +831,19 @@ pub fn pull(
         }
 
         if parsed.ops.is_empty() {
-            let stalled_devices =
-                remote_ahead_cursor_devices(&since, &parsed.max, &local_device_id);
-            if !stalled_devices.is_empty() {
-                if maybe_recover_remote_ahead_since_map(
-                    conn,
-                    &scope_id,
-                    &local_device_id,
-                    &mut since,
-                    &parsed.max,
-                )? {
-                    continue;
+            match attempt_remote_ahead_repair(
+                &mut remote_ahead_repair_tracker,
+                conn,
+                &scope_id,
+                &local_device_id,
+                &mut since,
+                &parsed.max,
+            )? {
+                RemoteAheadRepairOutcome::Recovered => continue,
+                RemoteAheadRepairOutcome::Exhausted(devices) => {
+                    return Err(repeated_remote_ahead_repair_error(&devices));
                 }
-
-                return Err(anyhow!(
-                    "managed-vault pull stalled: remote cursor ahead for device(s): {}",
-                    stalled_devices.join(", ")
-                ));
+                RemoteAheadRepairOutcome::NotNeeded => {}
             }
 
             if !stale_cursor_recovery_attempted
@@ -1075,14 +909,19 @@ pub fn pull(
         since = next_since;
 
         if parsed.ops.len() < (PULL_LIMIT as usize) {
-            if maybe_recover_remote_ahead_since_map(
+            match attempt_remote_ahead_repair(
+                &mut remote_ahead_repair_tracker,
                 conn,
                 &scope_id,
                 &local_device_id,
                 &mut since,
                 &parsed.max,
             )? {
-                continue;
+                RemoteAheadRepairOutcome::Recovered => continue,
+                RemoteAheadRepairOutcome::Exhausted(devices) => {
+                    return Err(repeated_remote_ahead_repair_error(&devices));
+                }
+                RemoteAheadRepairOutcome::NotNeeded => {}
             }
             break;
         }

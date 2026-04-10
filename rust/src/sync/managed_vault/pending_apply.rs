@@ -169,31 +169,6 @@ pub(super) fn remote_ahead_cursor_devices(
         .collect()
 }
 
-pub(super) fn maybe_recover_remote_ahead_since_map(
-    conn: &Connection,
-    scope_id: &str,
-    local_device_id: &str,
-    since: &mut BTreeMap<String, i64>,
-    remote_max: &BTreeMap<String, i64>,
-) -> Result<bool> {
-    let ahead_devices = remote_ahead_cursor_devices(since, remote_max, local_device_id);
-    if ahead_devices.is_empty() {
-        return Ok(false);
-    }
-
-    let mut changed = false;
-    for device_id in ahead_devices {
-        since.insert(device_id.clone(), 0);
-        changed = true;
-    }
-
-    if changed {
-        update_since_map(conn, scope_id, since)?;
-    }
-
-    Ok(changed)
-}
-
 pub(super) fn cursor_repair_marker_key(scope_id: &str, device_id: &str) -> String {
     format!("managed_vault.cursor_repaired:{scope_id}:{device_id}")
 }
