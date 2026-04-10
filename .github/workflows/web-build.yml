@@ -117,15 +117,15 @@ jobs:
           path: build/web
           if-no-files-found: error
           retention-days: 7
-      - name: Dispatch site deploy after release
-        if: ${{ steps.release_scope.outputs.should_build == 'true' && github.event_name == 'release' && github.event.action == 'published' }}
+      - name: Dispatch site deploy after successful main web build or release
+        if: ${{ steps.release_scope.outputs.should_build == 'true' && ((github.event_name == 'release' && github.event.action == 'published') || (github.event_name == 'push' && github.ref_name == 'main')) }}
         env:
           GH_TOKEN: ${{ secrets.SECONDLOOP_SERVER_DISPATCH_TOKEN }}
           SITE_REPO: ${{ vars.SECONDLOOP_SERVER_REPO || format('{0}/SecondLoopServer', github.repository_owner) }}
           SECONDLOOP_REPO: ${{ github.repository }}
           SECONDLOOP_WEB_RUN_ID: ${{ github.run_id }}
           SECONDLOOP_WEB_HEAD_SHA: ${{ github.sha }}
-          SECONDLOOP_RELEASE_TAG: ${{ github.event.release.tag_name }}
+          SECONDLOOP_RELEASE_TAG: ${{ github.event.release.tag_name || '' }}
         run: |
           set -euo pipefail
           if [[ -z "${GH_TOKEN:-}" ]]; then
