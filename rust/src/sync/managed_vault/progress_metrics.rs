@@ -15,9 +15,11 @@ pub(super) fn pull_progress_counts(
 
     let mut total = done;
     for (device_id, max_seq) in remote_max {
+        let start_seq = progress_start_since.get(device_id).copied().unwrap_or(0);
         let current_seq = current_since.get(device_id).copied().unwrap_or(0);
-        if *max_seq > current_seq {
-            total += (*max_seq - current_seq) as u64;
+        let remaining_from = current_seq.max(start_seq);
+        if *max_seq > remaining_from {
+            total += (*max_seq - remaining_from) as u64;
         }
     }
 

@@ -20,6 +20,7 @@ enum RecoveryScenario {
     JsonRemoteAheadRecovery,
     PullBinProbeRemoteAheadRecovery,
     PullBinProbeFailureFallsBackToJson,
+    PullBinProbeReturnsJsonOps,
 }
 
 #[derive(Default)]
@@ -257,6 +258,9 @@ fn start_recovery_server(
                         RecoveryScenario::PullBinProbeFailureFallsBackToJson => {
                             write_bytes_response(&mut stream, encode_pull_bin(&[]));
                         }
+                        RecoveryScenario::PullBinProbeReturnsJsonOps => {
+                            write_bytes_response(&mut stream, encode_pull_bin(&[]));
+                        }
                     }
                     continue;
                 }
@@ -321,6 +325,34 @@ fn start_recovery_server(
                                     serde_json::json!({ "error": "temporarily_unavailable" }),
                                 );
                             } else if since_seq == 0 {
+                                write_json_response(
+                                    &mut stream,
+                                    200,
+                                    serde_json::json!({
+                                        "ops": [{
+                                            "device_id": op.device_id,
+                                            "seq": op.seq,
+                                            "op_id": op.op_id,
+                                            "ciphertext_b64": op.ciphertext_b64,
+                                        }],
+                                        "next": { remote_device_id.clone(): 262 },
+                                        "max": { remote_device_id.clone(): 262 }
+                                    }),
+                                );
+                            } else {
+                                write_json_response(
+                                    &mut stream,
+                                    200,
+                                    serde_json::json!({
+                                        "ops": [],
+                                        "next": { remote_device_id.clone(): 262 },
+                                        "max": { remote_device_id.clone(): 262 }
+                                    }),
+                                );
+                            }
+                        }
+                        RecoveryScenario::PullBinProbeReturnsJsonOps => {
+                            if since_seq == 174 {
                                 write_json_response(
                                     &mut stream,
                                     200,
@@ -620,6 +652,83 @@ fn managed_vault_pull_bin_recovers_remote_ahead_cursor_without_resetting_to_json
     assert_eq!(snapshot.pull_requests, 2);
     assert_eq!(snapshot.pull_bin_since_values, vec![174, 0]);
     assert_eq!(snapshot.json_since_values, vec![174, 262]);
+    drop(snapshot);
+
+    let _ = stop_tx.send(());
+    handle.join().expect("join");
+}
+
+#[test]
+fn managed_vault_pull_consumes_json_probe_ops_after_pull_bin_short_page() {
+    let vault_id = "vault-probe-ops";
+    let id_token = "test_uid";
+    let sync_key = derive_root_key(
+        "sync-passphrase",
+        b"secondloop-sync1",
+        &KdfParams::for_test(),
+    )
+    .expect("sync key");
+    let remote_device_id = "remote-probe-ops-device";
+    let remote_op = synthetic_remote_op(&sync_key, remote_device_id);
+    let (base_url, stop_tx, state, handle) = start_recovery_server(
+        RecoveryScenario::PullBinProbeReturnsJsonOps,
+        remote_device_id.to_string(),
+        remote_op,
+    );
+
+    let (_temp, _app_dir, db_key, conn) = setup_local_client("probe_ops_client");
+    conn.execute(
+        r#"INSERT INTO kv(key, value) VALUES ('device_id', 'local-probe-ops-device')"#,
+        [],
+    )
+    .expect("set local device id");
+
+    insert_raw_op(
+        &conn,
+        &db_key,
+        serde_json::json!({
+            "op_id": "existing-remote-op",
+            "device_id": remote_device_id,
+            "seq": 100,
+            "ts_ms": now_ms(),
+            "type": "noop.v1",
+            "payload": {}
+        }),
+    );
+
+    let scope = scope_id(&base_url, vault_id);
+    conn.execute(
+        r#"INSERT INTO kv(key, value) VALUES (?1, ?2)
+           ON CONFLICT(key) DO UPDATE SET value = excluded.value"#,
+        params![
+            format!("managed_vault.last_pulled_seq:{scope}:{remote_device_id}"),
+            "174"
+        ],
+    )
+    .expect("set stale cursor");
+
+    let applied =
+        sync::managed_vault::pull(&conn, &db_key, &sync_key, &base_url, vault_id, id_token)
+            .expect("pull succeeds");
+    assert_eq!(applied, 1);
+    assert_recovered_conversation_exists(&conn, &db_key, "Recovered title");
+
+    let repaired_cursor: String = conn
+        .query_row(
+            r#"SELECT value FROM kv WHERE key = ?1"#,
+            params![format!(
+                "managed_vault.last_pulled_seq:{scope}:{remote_device_id}"
+            )],
+            |row| row.get(0),
+        )
+        .expect("read repaired cursor");
+    assert_eq!(repaired_cursor, "262");
+
+    let snapshot = state.lock().expect("lock");
+    assert_eq!(snapshot.pull_bin_requests, 1);
+    assert_eq!(snapshot.pull_requests, 2);
+    assert_eq!(snapshot.pull_bin_since_values, vec![174]);
+    assert_eq!(snapshot.json_since_values, vec![174, 174]);
     drop(snapshot);
 
     let _ = stop_tx.send(());

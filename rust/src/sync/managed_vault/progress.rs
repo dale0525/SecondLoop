@@ -8,7 +8,6 @@ use anyhow::{anyhow, Result};
 use base64::engine::general_purpose::STANDARD as B64_STD;
 use base64::Engine as _;
 use rusqlite::{params, Connection, OptionalExtension};
-
 pub fn pull_with_progress(
     conn: &Connection,
     db_key: &[u8; 32],
@@ -19,7 +18,6 @@ pub fn pull_with_progress(
     progress: &mut dyn FnMut(u64, u64),
 ) -> Result<u64> {
     const PULL_LIMIT: i64 = 500;
-
     let http = super::runtime::client()?;
     let local_device_id = super::super::get_or_create_device_id(conn)?;
     let _ = super::runtime::ensure_device_registered(
@@ -29,42 +27,34 @@ pub fn pull_with_progress(
         id_token,
         &local_device_id,
     )?;
-
     let scope_id = super::runtime::scope_id(base_url, vault_id);
     let mut since = super::load_since_map(conn, &scope_id)?;
     let progress_start_since = since.clone();
-
     let endpoint_json = super::runtime::url(base_url, &format!("/v1/vaults/{vault_id}/ops:pull"))?;
     let mut applied: u64 = 0;
-
     let mut total_ops: Option<u64> = None;
     let mut done_ops = 0u64;
     let mut reported_done = 0u64;
     let mut remote_ahead_repair_tracker = RemoteAheadRepairTracker::default();
     let mut stale_cursor_recovery_attempted = false;
-
     loop {
         let request = super::PullRequest {
             device_id: local_device_id.as_str(),
             since: since.clone(),
             limit: PULL_LIMIT,
         };
-
         let resp = http
             .post(&endpoint_json)
             .bearer_auth(id_token)
             .json(&request)
             .send()?;
-
         let status = resp.status();
         if !status.is_success() {
             let text = resp.text().unwrap_or_default();
             return Err(anyhow!("managed-vault pull failed: HTTP {status} {text}"));
         }
-
         let body = resp.bytes()?;
         let parsed: PullResponseWithMax = serde_json::from_slice(body.as_ref())?;
-
         if !parsed.max.is_empty() {
             let (computed_done, computed_total) =
                 pull_progress_counts(&progress_start_since, &since, &parsed.max);
@@ -72,7 +62,6 @@ pub fn pull_with_progress(
             done_ops =
                 report_pull_progress(progress, &mut reported_done, computed_done, computed_total);
         }
-
         let mut next_since = since.clone();
         for (device_id, last_seq) in &parsed.next {
             next_since.insert(device_id.to_string(), *last_seq);
@@ -181,6 +170,16 @@ pub fn pull_with_progress(
             total_ops = Some(computed_total);
             done_ops =
                 report_pull_progress(progress, &mut reported_done, computed_done, computed_total);
+        } else if let Some(total) = total_ops {
+            let mut delta = 0u64;
+            for (device_id, next_seq) in &next_since {
+                let prev = since.get(device_id).copied().unwrap_or(0);
+                if *next_seq > prev {
+                    delta += (*next_seq - prev) as u64;
+                }
+            }
+            done_ops += delta;
+            done_ops = report_pull_progress(progress, &mut reported_done, done_ops, total);
         } else {
             let mut delta = 0u64;
             for (device_id, next_seq) in &next_since {

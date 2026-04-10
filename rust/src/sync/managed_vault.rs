@@ -26,8 +26,8 @@ use pending_apply::{
 pub use progress::{pull_with_progress, push_ops_only_with_progress};
 use pull_recovery::{
     attempt_remote_ahead_repair, decode_pull_bin_response, maybe_recover_stale_since_map,
-    probe_pull_response_with_max, repeated_remote_ahead_repair_error, PullResponseWithMax,
-    RemoteAheadRepairOutcome, RemoteAheadRepairTracker,
+    probe_pull_response_with_max, probe_requires_json_retry, repeated_remote_ahead_repair_error,
+    PullResponseWithMax, RemoteAheadRepairOutcome, RemoteAheadRepairTracker,
 };
 
 #[derive(Debug, Serialize)]
@@ -681,6 +681,10 @@ pub fn pull(
                 if ops.is_empty() {
                     match probe_pull_response_with_max(&http, &endpoint_json, id_token, &request) {
                         Ok(probe) => {
+                            if probe_requires_json_retry(&since, &probe) {
+                                pull_bin_supported = Some(false);
+                                continue;
+                            }
                             match attempt_remote_ahead_repair(
                                 &mut remote_ahead_repair_tracker,
                                 conn,
@@ -791,6 +795,10 @@ pub fn pull(
                         &probe_request,
                     ) {
                         Ok(probe) => {
+                            if probe_requires_json_retry(&since, &probe) {
+                                pull_bin_supported = Some(false);
+                                continue;
+                            }
                             match attempt_remote_ahead_repair(
                                 &mut remote_ahead_repair_tracker,
                                 conn,

@@ -142,6 +142,17 @@ pub(super) fn probe_pull_response_with_max(
         .map_err(|error| anyhow!("managed-vault pull response decode failed: {error}"))
 }
 
+pub(super) fn probe_requires_json_retry(
+    since: &BTreeMap<String, i64>,
+    probe: &PullResponseWithMax,
+) -> bool {
+    !probe.ops.is_empty()
+        || probe
+            .next
+            .iter()
+            .any(|(device_id, next_seq)| *next_seq > since.get(device_id).copied().unwrap_or(0))
+}
+
 pub(super) fn decode_pull_bin_response(bytes: &[u8]) -> Result<Vec<PullOpBin>> {
     if bytes.len() < super::PULL_BIN_MAGIC_V1.len() + 4 {
         return Err(anyhow!("invalid pull_bin response: too short"));
