@@ -101,8 +101,7 @@ void main() {
     await tester.pump();
     expect(find.byKey(const ValueKey('task_hub_page_section_done')),
         findsOneWidget);
-    expect(
-        find.byKey(const ValueKey('task_hub_page_item_done')), findsOneWidget);
+    expect(find.byKey(const ValueKey('task_hub_page_item_done')), findsNothing);
   });
 
   testWidgets('task hub shows live ai source label when rerank succeeds',

@@ -62,6 +62,7 @@ class _TaskHubPageState extends State<TaskHubPage> {
   ScaffoldMessengerState? _quickActionSnackMessenger;
   Object? _quickActionSnackToken;
   var _doneVisibleCount = _kDonePageSize;
+  var _doneSectionCollapsed = true;
   final TaskHubCardAnchorRegistry _cardAnchorRegistry =
       TaskHubCardAnchorRegistry();
   final TaskHubPriorityAnimationController _priorityAnimationController =
@@ -635,7 +636,11 @@ class _TaskHubPageState extends State<TaskHubPage> {
                 : <TaskPriorityEntry>[snapshot.primaryFocus!];
             final visibleNextUp = snapshot.nextUpEntries;
             final visibleBacklog = snapshot.backlogEntries;
-            final visibleDone = snapshot.done.take(_doneVisibleCount).toList();
+            final visibleDone = _doneSectionVisibleCount(snapshot) == 0
+                ? const <TaskPriorityEntry>[]
+                : snapshot.done
+                    .take(_doneSectionVisibleCount(snapshot))
+                    .toList();
             final activeInlineAnimation =
                 _priorityAnimationController.activeInlineAnimation;
             final pendingPriorityTodoId =
@@ -755,6 +760,7 @@ class _TaskHubPageState extends State<TaskHubPage> {
                             title: context.t.actions.taskHub.scheduledSection,
                             sectionKey: const ValueKey(
                                 'task_hub_page_section_upcoming'),
+                            headerCount: visibleNextUp.length,
                             entries: visibleNextUp,
                             checklistProgressByTodoId:
                                 store.checklistProgressByTodoId,
@@ -784,6 +790,7 @@ class _TaskHubPageState extends State<TaskHubPage> {
                             title: context.t.actions.taskHub.unscheduledSection,
                             sectionKey:
                                 const ValueKey('task_hub_page_section_backlog'),
+                            headerCount: visibleBacklog.length,
                             entries: visibleBacklog,
                             checklistProgressByTodoId:
                                 store.checklistProgressByTodoId,
@@ -813,6 +820,7 @@ class _TaskHubPageState extends State<TaskHubPage> {
                             title: context.t.actions.taskHub.doneSection,
                             sectionKey:
                                 const ValueKey('task_hub_page_section_done'),
+                            headerCount: snapshot.done.length,
                             entries: visibleDone,
                             checklistProgressByTodoId:
                                 store.checklistProgressByTodoId,
@@ -831,6 +839,18 @@ class _TaskHubPageState extends State<TaskHubPage> {
                                         ),
                             restoredTodoId: _restoredTodoId,
                             sectionKind: TaskHubPageSectionKind.done,
+                            collapsed: _doneSectionCollapsed,
+                            onToggleCollapsed: snapshot.done.isEmpty
+                                ? null
+                                : () {
+                                    setState(() {
+                                      _doneSectionCollapsed =
+                                          !_doneSectionCollapsed;
+                                    });
+                                  },
+                            toggleKey: const ValueKey(
+                              'task_hub_page_section_done_toggle',
+                            ),
                             priorityPendingTodoId: pendingPriorityTodoId,
                             priorityLocalFallbackTodoId:
                                 localFallbackPriorityTodoId,
