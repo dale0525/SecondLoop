@@ -3,6 +3,31 @@ use anyhow::{anyhow, Result};
 use base64::engine::general_purpose::STANDARD as B64_STD;
 use base64::Engine as _;
 use rusqlite::{params, Connection, OptionalExtension};
+use std::collections::BTreeMap;
+
+fn pull_progress_counts(
+    progress_start_since: &BTreeMap<String, i64>,
+    current_since: &BTreeMap<String, i64>,
+    remote_max: &BTreeMap<String, i64>,
+) -> (u64, u64) {
+    let mut done = 0u64;
+    for (device_id, current_seq) in current_since {
+        let start_seq = progress_start_since.get(device_id).copied().unwrap_or(0);
+        if *current_seq > start_seq {
+            done += (*current_seq - start_seq) as u64;
+        }
+    }
+
+    let mut total = done;
+    for (device_id, max_seq) in remote_max {
+        let current_seq = current_since.get(device_id).copied().unwrap_or(0);
+        if *max_seq > current_seq {
+            total += (*max_seq - current_seq) as u64;
+        }
+    }
+
+    (done, total)
+}
 
 pub fn pull_with_progress(
     conn: &Connection,
@@ -27,6 +52,7 @@ pub fn pull_with_progress(
 
     let scope_id = super::runtime::scope_id(base_url, vault_id);
     let mut since = super::load_since_map(conn, &scope_id)?;
+    let mut progress_start_since = since.clone();
 
     let endpoint_json = super::runtime::url(base_url, &format!("/v1/vaults/{vault_id}/ops:pull"))?;
     let mut applied: u64 = 0;
@@ -56,16 +82,12 @@ pub fn pull_with_progress(
         let body = resp.bytes()?;
         let parsed: super::PullResponseWithMax = serde_json::from_slice(body.as_ref())?;
 
-        if total_ops.is_none() && !parsed.max.is_empty() {
-            let mut total = 0u64;
-            for (device_id, max_seq) in &parsed.max {
-                let last_pulled_seq = since.get(device_id).copied().unwrap_or(0);
-                if *max_seq > last_pulled_seq {
-                    total += (*max_seq - last_pulled_seq) as u64;
-                }
-            }
-            total_ops = Some(total);
-            progress(0, total);
+        if !parsed.max.is_empty() {
+            let (computed_done, computed_total) =
+                pull_progress_counts(&progress_start_since, &since, &parsed.max);
+            total_ops = Some(computed_total);
+            done_ops = computed_done;
+            progress(done_ops.min(computed_total), computed_total);
         }
 
         let mut next_since = since.clone();
@@ -80,6 +102,7 @@ pub fn pull_with_progress(
         let stalled_devices =
             super::remote_ahead_cursor_devices(&since, &parsed.max, &local_device_id);
         if parsed.ops.is_empty() && next_since == since && !stalled_devices.is_empty() {
+            let previous_since = since.clone();
             if super::maybe_recover_remote_ahead_since_map(
                 conn,
                 &scope_id,
@@ -87,8 +110,17 @@ pub fn pull_with_progress(
                 &mut since,
                 &parsed.max,
             )? {
-                total_ops = None;
-                done_ops = 0;
+                for (device_id, repaired_since) in &since {
+                    let previous_value = previous_since.get(device_id).copied().unwrap_or(0);
+                    if *repaired_since < previous_value {
+                        progress_start_since.insert(device_id.clone(), *repaired_since);
+                    }
+                }
+                let (computed_done, computed_total) =
+                    pull_progress_counts(&progress_start_since, &since, &parsed.max);
+                total_ops = Some(computed_total);
+                done_ops = computed_done;
+                progress(done_ops.min(computed_total), computed_total);
                 continue;
             }
 
@@ -155,19 +187,24 @@ pub fn pull_with_progress(
         })?;
         applied += batch_applied;
 
-        let mut delta = 0u64;
-        for (device_id, next_seq) in &next_since {
-            let prev = since.get(device_id).copied().unwrap_or(0);
-            if *next_seq > prev {
-                delta += (*next_seq - prev) as u64;
+        if !parsed.max.is_empty() {
+            let (computed_done, computed_total) =
+                pull_progress_counts(&progress_start_since, &next_since, &parsed.max);
+            total_ops = Some(computed_total);
+            done_ops = computed_done;
+            progress(done_ops.min(computed_total), computed_total);
+        } else {
+            let mut delta = 0u64;
+            for (device_id, next_seq) in &next_since {
+                let prev = since.get(device_id).copied().unwrap_or(0);
+                if *next_seq > prev {
+                    delta += (*next_seq - prev) as u64;
+                }
             }
-        }
-        done_ops += delta;
-
-        if let Some(total) = total_ops {
-            progress(done_ops.min(total), total);
-        } else if delta > 0 {
-            progress(done_ops, done_ops.saturating_add(1));
+            done_ops += delta;
+            if delta > 0 {
+                progress(done_ops, done_ops.saturating_add(1));
+            }
         }
 
         since = next_since;
@@ -490,6 +527,7 @@ mod tests {
     #[derive(Default)]
     struct ServerState {
         seen_since_values: Vec<i64>,
+        seen_secondary_since_values: Vec<i64>,
     }
 
     fn read_http_request(stream: &mut TcpStream) -> (String, Vec<u8>) {
@@ -622,6 +660,120 @@ mod tests {
         (addr, state)
     }
 
+    fn spawn_progress_partial_then_recovery_server(
+        first_device_id: String,
+        first_ops: Vec<(i64, String, String)>,
+        stalled_device_id: String,
+        stalled_encrypted_op_b64: String,
+        stalled_op_id: String,
+    ) -> (String, Arc<Mutex<ServerState>>) {
+        let listener = TcpListener::bind("127.0.0.1:0").expect("bind listener");
+        let addr = format!("http://{}", listener.local_addr().expect("local addr"));
+        let state = Arc::new(Mutex::new(ServerState::default()));
+        let state_for_thread = Arc::clone(&state);
+
+        thread::spawn(move || {
+            for _ in 0..4 {
+                let (mut stream, _) = listener.accept().expect("accept");
+                let (headers, body) = read_http_request(&mut stream);
+                let request_line = headers.lines().next().unwrap_or_default().to_string();
+
+                if request_line.starts_with("POST /v1/vaults/test-vault/devices ") {
+                    respond_json(
+                        &mut stream,
+                        "200 OK",
+                        r#"{"device_id":"local-device-progress"}"#,
+                    );
+                    continue;
+                }
+
+                if request_line.starts_with("POST /v1/vaults/test-vault/ops:pull ") {
+                    let payload: serde_json::Value =
+                        serde_json::from_slice(&body).expect("parse pull body");
+                    let first_since = payload["since"][first_device_id.as_str()]
+                        .as_i64()
+                        .unwrap_or(0);
+                    let stalled_since = payload["since"][stalled_device_id.as_str()]
+                        .as_i64()
+                        .unwrap_or(174);
+
+                    let mut snapshot = state_for_thread.lock().expect("lock state");
+                    snapshot.seen_since_values.push(stalled_since);
+                    snapshot.seen_secondary_since_values.push(first_since);
+                    drop(snapshot);
+
+                    if first_since == 0 && stalled_since == 174 {
+                        let first_ops_json = first_ops
+                            .iter()
+                            .map(|(seq, op_id, ciphertext_b64)| {
+                                serde_json::json!({
+                                    "device_id": first_device_id,
+                                    "seq": seq,
+                                    "op_id": op_id,
+                                    "ciphertext_b64": ciphertext_b64,
+                                })
+                            })
+                            .collect::<Vec<_>>();
+                        respond_json(
+                            &mut stream,
+                            "200 OK",
+                            &format!(
+                                r#"{{"ops":{first_ops_json},"next":{{"{first_device_id}":500}},"max":{{"{first_device_id}":500,"{stalled_device_id}":262}}}}"#,
+                                first_device_id = first_device_id,
+                                first_ops_json = serde_json::Value::Array(first_ops_json),
+                                stalled_device_id = stalled_device_id,
+                            ),
+                        );
+                        continue;
+                    }
+
+                    if first_since == 500 && stalled_since == 174 {
+                        respond_json(
+                            &mut stream,
+                            "200 OK",
+                            &format!(
+                                r#"{{"ops":[],"next":{{}},"max":{{"{first_device_id}":500,"{stalled_device_id}":262}}}}"#,
+                                first_device_id = first_device_id,
+                                stalled_device_id = stalled_device_id,
+                            ),
+                        );
+                        continue;
+                    }
+
+                    if first_since == 500 && stalled_since == 0 {
+                        respond_json(
+                            &mut stream,
+                            "200 OK",
+                            &format!(
+                                r#"{{"ops":[{{"device_id":"{stalled_device_id}","seq":262,"op_id":"{stalled_op_id}","ciphertext_b64":"{stalled_ciphertext}"}}],"next":{{"{stalled_device_id}":262}},"max":{{"{first_device_id}":500,"{stalled_device_id}":262}}}}"#,
+                                first_device_id = first_device_id,
+                                stalled_device_id = stalled_device_id,
+                                stalled_op_id = stalled_op_id,
+                                stalled_ciphertext = stalled_encrypted_op_b64,
+                            ),
+                        );
+                        continue;
+                    }
+
+                    respond_json(
+                        &mut stream,
+                        "200 OK",
+                        &format!(
+                            r#"{{"ops":[],"next":{{"{first_device_id}":500,"{stalled_device_id}":262}},"max":{{"{first_device_id}":500,"{stalled_device_id}":262}}}}"#,
+                            first_device_id = first_device_id,
+                            stalled_device_id = stalled_device_id,
+                        ),
+                    );
+                    continue;
+                }
+
+                respond_json(&mut stream, "404 Not Found", r#"{"error":"not_found"}"#);
+            }
+        });
+
+        (addr, state)
+    }
+
     #[test]
     fn pull_with_progress_recovers_when_remote_cursor_is_ahead_but_first_response_is_empty() {
         let db_key = [41u8; 32];
@@ -710,5 +862,125 @@ mod tests {
             .seen_since_values
             .clone();
         assert_eq!(seen_since_values, vec![174, 0]);
+    }
+
+    #[test]
+    fn pull_with_progress_does_not_reset_completed_work_when_remote_cursor_is_repaired() {
+        let db_key = [51u8; 32];
+        let sync_key = [52u8; 32];
+        let first_device_id = "remote-device-fast";
+        let stalled_device_id = "remote-device-stalled";
+
+        let dir = tempdir().expect("tempdir");
+        let conn = crate::db::open(dir.path()).expect("open");
+        conn.execute(
+            r#"INSERT INTO kv(key, value) VALUES ('device_id', 'local-device-progress')"#,
+            [],
+        )
+        .expect("set local device id");
+
+        let first_ops = (1..=500)
+            .map(|seq| {
+                let op_id = format!("op-progress-first-{seq}");
+                let op_json = serde_json::json!({
+                    "op_id": op_id,
+                    "device_id": first_device_id,
+                    "seq": seq,
+                    "ts_ms": 1_775_811_648_824i64 + seq,
+                    "type": "conversation.upsert.v1",
+                    "payload": {
+                        "conversation_id": format!("conversation-progress-first-{seq}"),
+                        "title": format!("First title {seq}"),
+                        "created_at_ms": 1_775_811_648_824i64 + seq,
+                        "updated_at_ms": 1_775_811_648_824i64 + seq,
+                    }
+                });
+                let plaintext = serde_json::to_vec(&op_json).expect("serialize first op");
+                let ciphertext = encrypt_bytes(
+                    &sync_key,
+                    &plaintext,
+                    format!("sync.ops:{first_device_id}:{seq}").as_bytes(),
+                )
+                .expect("encrypt first op");
+                (seq, op_id, B64_STD.encode(ciphertext))
+            })
+            .collect::<Vec<_>>();
+
+        let stalled_op_id = "op-progress-stalled";
+        let stalled_op_json = serde_json::json!({
+            "op_id": stalled_op_id,
+            "device_id": stalled_device_id,
+            "seq": 262,
+            "ts_ms": 1_775_811_648_825i64,
+            "type": "conversation.upsert.v1",
+            "payload": {
+                "conversation_id": "conversation-progress-stalled",
+                "title": "Stalled title",
+                "created_at_ms": 1_775_811_648_825i64,
+                "updated_at_ms": 1_775_811_648_825i64,
+            }
+        });
+        let stalled_plaintext = serde_json::to_vec(&stalled_op_json).expect("serialize stalled op");
+        let stalled_ciphertext = encrypt_bytes(
+            &sync_key,
+            &stalled_plaintext,
+            format!("sync.ops:{stalled_device_id}:262").as_bytes(),
+        )
+        .expect("encrypt stalled op");
+
+        let (base_url, server_state) = spawn_progress_partial_then_recovery_server(
+            first_device_id.to_string(),
+            first_ops,
+            stalled_device_id.to_string(),
+            B64_STD.encode(stalled_ciphertext),
+            stalled_op_id.to_string(),
+        );
+        let scope_id = crate::sync::managed_vault::runtime::scope_id(&base_url, "test-vault");
+        kv_set_i64(
+            &conn,
+            &format!("managed_vault.last_pulled_seq:{scope_id}:{stalled_device_id}"),
+            174,
+        )
+        .expect("set stalled cursor");
+
+        let mut seen_progress = Vec::new();
+        let applied = pull_with_progress(
+            &conn,
+            &db_key,
+            &sync_key,
+            &base_url,
+            "test-vault",
+            "test-token",
+            &mut |done, total| seen_progress.push((done, total)),
+        )
+        .expect("pull with recovery");
+
+        assert!(applied >= 500);
+        assert!(
+            seen_progress
+                .windows(2)
+                .all(|window| window[1].0 >= window[0].0),
+            "progress should not go backwards: {seen_progress:?}"
+        );
+        assert_eq!(seen_progress.last().copied(), Some((762, 762)));
+
+        let conversations =
+            crate::db::list_conversations(&conn, &db_key).expect("list conversations");
+        assert!(
+            conversations
+                .iter()
+                .any(|conversation| conversation.id == "conversation-progress-first-1"),
+            "expected first conversation to exist, got {conversations:?}"
+        );
+        assert!(
+            conversations
+                .iter()
+                .any(|conversation| conversation.id == "conversation-progress-stalled"),
+            "expected stalled conversation to exist, got {conversations:?}"
+        );
+
+        let snapshot = server_state.lock().expect("lock state");
+        assert_eq!(snapshot.seen_secondary_since_values, vec![0, 500, 500]);
+        assert_eq!(snapshot.seen_since_values, vec![174, 174, 0]);
     }
 }

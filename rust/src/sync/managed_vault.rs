@@ -841,25 +841,27 @@ pub fn pull(
                 }
 
                 if ops.is_empty() {
-                    let probe =
-                        probe_pull_response_with_max(&http, &endpoint_json, id_token, &request)?;
-                    let stalled_devices =
-                        remote_ahead_cursor_devices(&since, &probe.max, &local_device_id);
-                    if !stalled_devices.is_empty() {
-                        if maybe_recover_remote_ahead_since_map(
-                            conn,
-                            &scope_id,
-                            &local_device_id,
-                            &mut since,
-                            &probe.max,
-                        )? {
-                            continue;
-                        }
+                    if let Ok(probe) =
+                        probe_pull_response_with_max(&http, &endpoint_json, id_token, &request)
+                    {
+                        let stalled_devices =
+                            remote_ahead_cursor_devices(&since, &probe.max, &local_device_id);
+                        if !stalled_devices.is_empty() {
+                            if maybe_recover_remote_ahead_since_map(
+                                conn,
+                                &scope_id,
+                                &local_device_id,
+                                &mut since,
+                                &probe.max,
+                            )? {
+                                continue;
+                            }
 
-                        return Err(anyhow!(
-                            "managed-vault pull stalled: remote cursor ahead for device(s): {}",
-                            stalled_devices.join(", ")
-                        ));
+                            return Err(anyhow!(
+                                "managed-vault pull stalled: remote cursor ahead for device(s): {}",
+                                stalled_devices.join(", ")
+                            ));
+                        }
                     }
 
                     if !stale_cursor_recovery_attempted
