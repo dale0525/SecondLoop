@@ -636,11 +636,10 @@ class _TaskHubPageState extends State<TaskHubPage> {
                 : <TaskPriorityEntry>[snapshot.primaryFocus!];
             final visibleNextUp = snapshot.nextUpEntries;
             final visibleBacklog = snapshot.backlogEntries;
-            final visibleDone = _doneSectionVisibleCount(snapshot) == 0
+            final doneSectionVisibleCount = _doneSectionVisibleCount(snapshot);
+            final visibleDone = doneSectionVisibleCount == 0
                 ? const <TaskPriorityEntry>[]
-                : snapshot.done
-                    .take(_doneSectionVisibleCount(snapshot))
-                    .toList();
+                : snapshot.done.take(doneSectionVisibleCount).toList();
             final activeInlineAnimation =
                 _priorityAnimationController.activeInlineAnimation;
             final pendingPriorityTodoId =
