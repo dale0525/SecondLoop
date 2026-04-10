@@ -149,6 +149,56 @@ pub(super) fn update_since_map(
     Ok(())
 }
 
+pub(super) fn remote_ahead_cursor_devices(
+    since: &BTreeMap<String, i64>,
+    remote_max: &BTreeMap<String, i64>,
+    local_device_id: &str,
+) -> Vec<String> {
+    remote_max
+        .iter()
+        .filter_map(|(device_id, max_seq)| {
+            if device_id == local_device_id {
+                return None;
+            }
+            let last_pulled_seq = since.get(device_id).copied().unwrap_or(0);
+            if last_pulled_seq <= 0 || *max_seq <= last_pulled_seq {
+                return None;
+            }
+            Some(device_id.clone())
+        })
+        .collect()
+}
+
+pub(super) fn maybe_recover_remote_ahead_since_map(
+    conn: &Connection,
+    scope_id: &str,
+    local_device_id: &str,
+    since: &mut BTreeMap<String, i64>,
+    remote_max: &BTreeMap<String, i64>,
+) -> Result<bool> {
+    let ahead_devices = remote_ahead_cursor_devices(since, remote_max, local_device_id);
+    if ahead_devices.is_empty() {
+        return Ok(false);
+    }
+
+    let mut changed = false;
+    for device_id in ahead_devices {
+        if cursor_repair_marker_attempted(conn, scope_id, &device_id)? {
+            continue;
+        }
+
+        since.insert(device_id.clone(), 0);
+        mark_cursor_repair_attempted(conn, scope_id, &device_id)?;
+        changed = true;
+    }
+
+    if changed {
+        update_since_map(conn, scope_id, since)?;
+    }
+
+    Ok(changed)
+}
+
 pub(super) fn cursor_repair_marker_key(scope_id: &str, device_id: &str) -> String {
     format!("managed_vault.cursor_repaired:{scope_id}:{device_id}")
 }

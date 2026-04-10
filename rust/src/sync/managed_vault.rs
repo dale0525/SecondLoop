@@ -20,7 +20,8 @@ pub use attachments::{download_attachment_bytes, upload_attachment_bytes};
 use pending_apply::{
     apply_pending_ops_until_stable, cursor_repair_marker_attempted, has_local_oplog_for_device,
     is_foreign_key_constraint_error, load_pending_apply_op_ids, mark_cursor_repair_attempted,
-    pending_apply_key, rewind_since_for_unresolved_pending_devices, update_since_map,
+    maybe_recover_remote_ahead_since_map, pending_apply_key, remote_ahead_cursor_devices,
+    rewind_since_for_unresolved_pending_devices, update_since_map,
 };
 pub use progress::{pull_with_progress, push_ops_only_with_progress};
 
@@ -70,9 +71,11 @@ struct PullRequest<'a> {
 }
 
 #[derive(Debug, Deserialize)]
-struct PullResponse {
+struct PullResponseWithMax {
     ops: Vec<PullOp>,
     next: BTreeMap<String, i64>,
+    #[serde(default)]
+    max: BTreeMap<String, i64>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -162,6 +165,29 @@ fn maybe_recover_stale_since_map(
     }
 
     Ok(changed)
+}
+
+fn probe_pull_response_with_max(
+    http: &reqwest::blocking::Client,
+    endpoint_json: &str,
+    id_token: &str,
+    request: &PullRequest<'_>,
+) -> Result<PullResponseWithMax> {
+    let resp = http
+        .post(endpoint_json)
+        .bearer_auth(id_token)
+        .json(request)
+        .send()?;
+
+    let status = resp.status();
+    if !status.is_success() {
+        let text = resp.text().unwrap_or_default();
+        return Err(anyhow!("managed-vault pull failed: HTTP {status} {text}"));
+    }
+
+    let body = resp.bytes()?;
+    serde_json::from_slice(body.as_ref())
+        .map_err(|e| anyhow!("managed-vault pull response decode failed: {e}"))
 }
 
 fn decode_pull_bin_response(bytes: &[u8]) -> Result<Vec<PullOpBin>> {
@@ -814,12 +840,39 @@ pub fn pull(
                     return Err(anyhow!("managed-vault pull made no progress"));
                 }
 
-                if ops.is_empty()
-                    && !stale_cursor_recovery_attempted
-                    && maybe_recover_stale_since_map(conn, &scope_id, &local_device_id, &mut since)?
-                {
-                    stale_cursor_recovery_attempted = true;
-                    continue;
+                if ops.is_empty() {
+                    let probe =
+                        probe_pull_response_with_max(&http, &endpoint_json, id_token, &request)?;
+                    let stalled_devices =
+                        remote_ahead_cursor_devices(&since, &probe.max, &local_device_id);
+                    if !stalled_devices.is_empty() {
+                        if maybe_recover_remote_ahead_since_map(
+                            conn,
+                            &scope_id,
+                            &local_device_id,
+                            &mut since,
+                            &probe.max,
+                        )? {
+                            continue;
+                        }
+
+                        return Err(anyhow!(
+                            "managed-vault pull stalled: remote cursor ahead for device(s): {}",
+                            stalled_devices.join(", ")
+                        ));
+                    }
+
+                    if !stale_cursor_recovery_attempted
+                        && maybe_recover_stale_since_map(
+                            conn,
+                            &scope_id,
+                            &local_device_id,
+                            &mut since,
+                        )?
+                    {
+                        stale_cursor_recovery_attempted = true;
+                        continue;
+                    }
                 }
 
                 let mut batch_applied = 0u64;
@@ -894,7 +947,7 @@ pub fn pull(
         }
 
         let body = resp.bytes()?;
-        let parsed: PullResponse = serde_json::from_slice(body.as_ref())?;
+        let parsed: PullResponseWithMax = serde_json::from_slice(body.as_ref())?;
 
         let mut next_since = since.clone();
         for (device_id, last_seq) in &parsed.next {
@@ -905,12 +958,32 @@ pub fn pull(
             return Err(anyhow!("managed-vault pull made no progress"));
         }
 
-        if parsed.ops.is_empty()
-            && !stale_cursor_recovery_attempted
-            && maybe_recover_stale_since_map(conn, &scope_id, &local_device_id, &mut since)?
-        {
-            stale_cursor_recovery_attempted = true;
-            continue;
+        if parsed.ops.is_empty() {
+            let stalled_devices =
+                remote_ahead_cursor_devices(&since, &parsed.max, &local_device_id);
+            if !stalled_devices.is_empty() {
+                if maybe_recover_remote_ahead_since_map(
+                    conn,
+                    &scope_id,
+                    &local_device_id,
+                    &mut since,
+                    &parsed.max,
+                )? {
+                    continue;
+                }
+
+                return Err(anyhow!(
+                    "managed-vault pull stalled: remote cursor ahead for device(s): {}",
+                    stalled_devices.join(", ")
+                ));
+            }
+
+            if !stale_cursor_recovery_attempted
+                && maybe_recover_stale_since_map(conn, &scope_id, &local_device_id, &mut since)?
+            {
+                stale_cursor_recovery_attempted = true;
+                continue;
+            }
         }
 
         let mut batch_applied = 0u64;
