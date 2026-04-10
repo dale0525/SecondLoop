@@ -34,6 +34,12 @@ struct ProgressRegressionState {
     seen_since_values: Vec<i64>,
 }
 
+#[derive(Default)]
+struct TwoDeviceRecoveryState {
+    first_since_values: Vec<i64>,
+    stalled_since_values: Vec<i64>,
+}
+
 fn now_ms() -> i64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -456,6 +462,269 @@ fn start_progress_repair_server(
     (format!("http://{}", addr), stop_tx, state, handle)
 }
 
+fn start_nonempty_page_recovery_server(
+    first_device_id: String,
+    first_op: StoredOp,
+    stalled_device_id: String,
+    stalled_op: StoredOp,
+) -> (
+    String,
+    mpsc::Sender<()>,
+    Arc<Mutex<TwoDeviceRecoveryState>>,
+    thread::JoinHandle<()>,
+) {
+    let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
+    listener.set_nonblocking(true).expect("nonblocking");
+    let addr = listener.local_addr().expect("local addr");
+
+    let (stop_tx, stop_rx) = mpsc::channel::<()>();
+    let state = Arc::new(Mutex::new(TwoDeviceRecoveryState::default()));
+    let state_clone = Arc::clone(&state);
+
+    let handle = thread::spawn(move || loop {
+        if stop_rx.try_recv().is_ok() {
+            break;
+        }
+
+        match listener.accept() {
+            Ok((mut stream, _)) => {
+                stream.set_nonblocking(false).expect("blocking stream");
+                let (method, path, body) = read_request(&mut stream);
+                if method != "POST" {
+                    write_json_response(
+                        &mut stream,
+                        404,
+                        serde_json::json!({ "error": "method_not_allowed" }),
+                    );
+                    continue;
+                }
+
+                let segments: Vec<&str> = path.split('/').filter(|s| !s.is_empty()).collect();
+                if segments.len() < 4 || segments[0] != "v1" || segments[1] != "vaults" {
+                    write_json_response(
+                        &mut stream,
+                        404,
+                        serde_json::json!({ "error": "not_found" }),
+                    );
+                    continue;
+                }
+                let tail = segments[3..].join("/");
+
+                if tail == "devices" {
+                    write_json_response(
+                        &mut stream,
+                        200,
+                        serde_json::json!({
+                            "device_id": "local-nonempty-page-device",
+                            "ws_url": "wss://example.test/events",
+                            "sse_url": "https://example.test/events"
+                        }),
+                    );
+                    continue;
+                }
+
+                if tail == "ops:pull_bin" {
+                    write_json_response(
+                        &mut stream,
+                        404,
+                        serde_json::json!({ "error": "not_found" }),
+                    );
+                    continue;
+                }
+
+                if tail == "ops:pull" {
+                    let decoded: serde_json::Value =
+                        serde_json::from_slice(&body).expect("pull json");
+                    let first_since = decoded["since"][first_device_id.as_str()]
+                        .as_i64()
+                        .unwrap_or(0);
+                    let stalled_since = decoded["since"][stalled_device_id.as_str()]
+                        .as_i64()
+                        .unwrap_or(174);
+
+                    let mut snapshot = state_clone.lock().expect("lock");
+                    snapshot.first_since_values.push(first_since);
+                    snapshot.stalled_since_values.push(stalled_since);
+
+                    let response = if first_since == 0 && stalled_since == 174 {
+                        serde_json::json!({
+                            "ops": [{
+                                "device_id": first_op.device_id,
+                                "seq": first_op.seq,
+                                "op_id": first_op.op_id,
+                                "ciphertext_b64": first_op.ciphertext_b64,
+                            }],
+                            "next": { first_device_id.clone(): first_op.seq },
+                            "max": {
+                                first_device_id.clone(): first_op.seq,
+                                stalled_device_id.clone(): stalled_op.seq
+                            }
+                        })
+                    } else if first_since == first_op.seq && stalled_since == 0 {
+                        serde_json::json!({
+                            "ops": [{
+                                "device_id": stalled_op.device_id,
+                                "seq": stalled_op.seq,
+                                "op_id": stalled_op.op_id,
+                                "ciphertext_b64": stalled_op.ciphertext_b64,
+                            }],
+                            "next": { stalled_device_id.clone(): stalled_op.seq },
+                            "max": {
+                                first_device_id.clone(): first_op.seq,
+                                stalled_device_id.clone(): stalled_op.seq
+                            }
+                        })
+                    } else {
+                        serde_json::json!({
+                            "ops": [],
+                            "next": {
+                                first_device_id.clone(): first_op.seq,
+                                stalled_device_id.clone(): stalled_op.seq
+                            },
+                            "max": {
+                                first_device_id.clone(): first_op.seq,
+                                stalled_device_id.clone(): stalled_op.seq
+                            }
+                        })
+                    };
+                    drop(snapshot);
+
+                    write_json_response(&mut stream, 200, response);
+                    continue;
+                }
+
+                write_json_response(
+                    &mut stream,
+                    404,
+                    serde_json::json!({ "error": "not_found" }),
+                );
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
+                thread::sleep(Duration::from_millis(5));
+            }
+            Err(e) => panic!("accept failed: {e}"),
+        }
+    });
+
+    (format!("http://{}", addr), stop_tx, state, handle)
+}
+
+fn start_progress_empty_page_recovery_server(
+    remote_device_id: String,
+    repaired_op: StoredOp,
+) -> (
+    String,
+    mpsc::Sender<()>,
+    Arc<Mutex<ProgressRegressionState>>,
+    thread::JoinHandle<()>,
+) {
+    let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
+    listener.set_nonblocking(true).expect("nonblocking");
+    let addr = listener.local_addr().expect("local addr");
+
+    let (stop_tx, stop_rx) = mpsc::channel::<()>();
+    let state = Arc::new(Mutex::new(ProgressRegressionState::default()));
+    let state_clone = Arc::clone(&state);
+
+    let handle = thread::spawn(move || loop {
+        if stop_rx.try_recv().is_ok() {
+            break;
+        }
+
+        match listener.accept() {
+            Ok((mut stream, _)) => {
+                stream.set_nonblocking(false).expect("blocking stream");
+                let (method, path, body) = read_request(&mut stream);
+                if method != "POST" {
+                    write_json_response(
+                        &mut stream,
+                        404,
+                        serde_json::json!({ "error": "method_not_allowed" }),
+                    );
+                    continue;
+                }
+
+                let segments: Vec<&str> = path.split('/').filter(|s| !s.is_empty()).collect();
+                if segments.len() < 4 || segments[0] != "v1" || segments[1] != "vaults" {
+                    write_json_response(
+                        &mut stream,
+                        404,
+                        serde_json::json!({ "error": "not_found" }),
+                    );
+                    continue;
+                }
+                let tail = segments[3..].join("/");
+
+                if tail == "devices" {
+                    write_json_response(
+                        &mut stream,
+                        200,
+                        serde_json::json!({
+                            "device_id": "local-progress-empty-device",
+                            "ws_url": "wss://example.test/events",
+                            "sse_url": "https://example.test/events"
+                        }),
+                    );
+                    continue;
+                }
+
+                if tail == "ops:pull" {
+                    let decoded: serde_json::Value =
+                        serde_json::from_slice(&body).expect("pull json");
+                    let since_seq = decoded["since"][remote_device_id.as_str()]
+                        .as_i64()
+                        .unwrap_or(0);
+
+                    let mut snapshot = state_clone.lock().expect("lock");
+                    snapshot.seen_since_values.push(since_seq);
+
+                    let response = if since_seq == 174 {
+                        serde_json::json!({
+                            "ops": [],
+                            "next": { remote_device_id.clone(): 262 },
+                            "max": { remote_device_id.clone(): repaired_op.seq }
+                        })
+                    } else if since_seq == 0 && !snapshot.delivered_repair {
+                        snapshot.delivered_repair = true;
+                        serde_json::json!({
+                            "ops": [{
+                                "device_id": repaired_op.device_id,
+                                "seq": repaired_op.seq,
+                                "op_id": repaired_op.op_id,
+                                "ciphertext_b64": repaired_op.ciphertext_b64,
+                            }],
+                            "next": { remote_device_id.clone(): repaired_op.seq },
+                            "max": { remote_device_id.clone(): repaired_op.seq }
+                        })
+                    } else {
+                        serde_json::json!({
+                            "ops": [],
+                            "next": { remote_device_id.clone(): repaired_op.seq },
+                            "max": { remote_device_id.clone(): repaired_op.seq }
+                        })
+                    };
+                    drop(snapshot);
+
+                    write_json_response(&mut stream, 200, response);
+                    continue;
+                }
+
+                write_json_response(
+                    &mut stream,
+                    404,
+                    serde_json::json!({ "error": "not_found" }),
+                );
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
+                thread::sleep(Duration::from_millis(5));
+            }
+            Err(e) => panic!("accept failed: {e}"),
+        }
+    });
+
+    (format!("http://{}", addr), stop_tx, state, handle)
+}
+
 #[test]
 fn managed_vault_pull_can_repair_same_remote_device_more_than_once() {
     let db_key = [61u8; 32];
@@ -632,6 +901,139 @@ fn managed_vault_pull_with_progress_keeps_done_monotonic_when_same_device_cursor
 
     let snapshot = state.lock().expect("lock");
     assert_eq!(snapshot.seen_since_values, vec![174, 674, 0]);
+    drop(snapshot);
+
+    let _ = stop_tx.send(());
+    handle.join().expect("join");
+}
+
+#[test]
+fn managed_vault_pull_repairs_stalled_device_even_when_current_page_has_other_device_ops() {
+    let db_key = [81u8; 32];
+    let sync_key = [82u8; 32];
+    let first_device_id = "remote-first-device";
+    let stalled_device_id = "remote-stalled-device";
+    let first_op = synthetic_remote_op(&sync_key, first_device_id, 10, "First page op");
+    let stalled_op = synthetic_remote_op(&sync_key, stalled_device_id, 262, "Recovered stalled op");
+    let (base_url, stop_tx, state, handle) = start_nonempty_page_recovery_server(
+        first_device_id.to_string(),
+        first_op.clone(),
+        stalled_device_id.to_string(),
+        stalled_op.clone(),
+    );
+
+    let dir = tempfile::tempdir().expect("tempdir");
+    let conn = db::open(dir.path()).expect("open");
+    conn.execute(
+        r#"INSERT INTO kv(key, value) VALUES ('device_id', 'local-nonempty-page-device')"#,
+        [],
+    )
+    .expect("set local device id");
+
+    let scope_id = scope_id(&base_url, "test-vault");
+    set_kv_i64(
+        &conn,
+        &format!("managed_vault.last_pulled_seq:{scope_id}:{stalled_device_id}"),
+        174,
+    );
+
+    let applied = sync::managed_vault::pull(
+        &conn,
+        &db_key,
+        &sync_key,
+        &base_url,
+        "test-vault",
+        "test-token",
+    )
+    .expect("pull succeeds");
+
+    assert_eq!(applied, 2);
+    let conversations = db::list_conversations(&conn, &db_key).expect("list conversations");
+    assert!(
+        conversations
+            .iter()
+            .any(|conversation| conversation.id == first_op.conversation_id),
+        "expected first-page conversation, got {conversations:?}"
+    );
+    assert!(
+        conversations
+            .iter()
+            .any(|conversation| conversation.id == stalled_op.conversation_id),
+        "expected stalled conversation, got {conversations:?}"
+    );
+
+    let snapshot = state.lock().expect("lock");
+    assert_eq!(snapshot.first_since_values, vec![0, first_op.seq]);
+    assert_eq!(snapshot.stalled_since_values, vec![174, 0]);
+    drop(snapshot);
+
+    let _ = stop_tx.send(());
+    handle.join().expect("join");
+}
+
+#[test]
+fn managed_vault_pull_with_progress_repairs_remote_ahead_when_empty_page_advances_next_cursor() {
+    let db_key = [91u8; 32];
+    let sync_key = [92u8; 32];
+    let remote_device_id = "remote-progress-empty-device";
+    let repaired_op = synthetic_remote_op(
+        &sync_key,
+        remote_device_id,
+        350,
+        "Recovered after empty page",
+    );
+    let (base_url, stop_tx, state, handle) = start_progress_empty_page_recovery_server(
+        remote_device_id.to_string(),
+        repaired_op.clone(),
+    );
+
+    let dir = tempfile::tempdir().expect("tempdir");
+    let conn = db::open(dir.path()).expect("open");
+    conn.execute(
+        r#"INSERT INTO kv(key, value) VALUES ('device_id', 'local-progress-empty-device')"#,
+        [],
+    )
+    .expect("set local device id");
+
+    let scope_id = scope_id(&base_url, "test-vault");
+    set_kv_i64(
+        &conn,
+        &format!("managed_vault.last_pulled_seq:{scope_id}:{remote_device_id}"),
+        174,
+    );
+
+    let mut seen_progress = Vec::new();
+    let applied = sync::managed_vault::pull_with_progress(
+        &conn,
+        &db_key,
+        &sync_key,
+        &base_url,
+        "test-vault",
+        "test-token",
+        &mut |done, total| seen_progress.push((done, total)),
+    )
+    .expect("pull with progress succeeds");
+
+    assert_eq!(applied, 1);
+    assert!(
+        seen_progress
+            .windows(2)
+            .all(|window| window[1].0 >= window[0].0),
+        "progress should not go backwards: {seen_progress:?}"
+    );
+    assert_eq!(seen_progress.first().copied(), Some((0, 176)));
+    assert_eq!(seen_progress.last().copied(), Some((176, 176)));
+
+    let conversations = db::list_conversations(&conn, &db_key).expect("list conversations");
+    assert!(
+        conversations
+            .iter()
+            .any(|conversation| conversation.id == repaired_op.conversation_id),
+        "expected repaired conversation, got {conversations:?}"
+    );
+
+    let snapshot = state.lock().expect("lock");
+    assert_eq!(snapshot.seen_since_values, vec![174, 0]);
     drop(snapshot);
 
     let _ = stop_tx.send(());

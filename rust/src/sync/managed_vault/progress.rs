@@ -1,45 +1,9 @@
+use super::progress_metrics::{pull_progress_counts, report_pull_progress};
 use crate::crypto::{decrypt_bytes, encrypt_bytes};
 use anyhow::{anyhow, Result};
 use base64::engine::general_purpose::STANDARD as B64_STD;
 use base64::Engine as _;
 use rusqlite::{params, Connection, OptionalExtension};
-use std::collections::BTreeMap;
-
-fn pull_progress_counts(
-    progress_start_since: &BTreeMap<String, i64>,
-    current_since: &BTreeMap<String, i64>,
-    remote_max: &BTreeMap<String, i64>,
-) -> (u64, u64) {
-    let mut done = 0u64;
-    for (device_id, current_seq) in current_since {
-        let start_seq = progress_start_since.get(device_id).copied().unwrap_or(0);
-        if *current_seq > start_seq {
-            done += (*current_seq - start_seq) as u64;
-        }
-    }
-
-    let mut total = done;
-    for (device_id, max_seq) in remote_max {
-        let current_seq = current_since.get(device_id).copied().unwrap_or(0);
-        if *max_seq > current_seq {
-            total += (*max_seq - current_seq) as u64;
-        }
-    }
-
-    (done, total)
-}
-
-fn report_pull_progress(
-    progress: &mut dyn FnMut(u64, u64),
-    reported_done: &mut u64,
-    done: u64,
-    total: u64,
-) -> u64 {
-    let clamped_done = done.max(*reported_done).min(total);
-    *reported_done = clamped_done;
-    progress(clamped_done, total);
-    clamped_done
-}
 
 pub fn pull_with_progress(
     conn: &Connection,
@@ -114,7 +78,7 @@ pub fn pull_with_progress(
 
         let stalled_devices =
             super::remote_ahead_cursor_devices(&since, &parsed.max, &local_device_id);
-        if parsed.ops.is_empty() && next_since == since && !stalled_devices.is_empty() {
+        if parsed.ops.is_empty() && !stalled_devices.is_empty() {
             if super::maybe_recover_remote_ahead_since_map(
                 conn,
                 &scope_id,
@@ -221,6 +185,15 @@ pub fn pull_with_progress(
         since = next_since;
 
         if parsed.ops.len() < (PULL_LIMIT as usize) {
+            if super::maybe_recover_remote_ahead_since_map(
+                conn,
+                &scope_id,
+                &local_device_id,
+                &mut since,
+                &parsed.max,
+            )? {
+                continue;
+            }
             break;
         }
     }

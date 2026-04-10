@@ -13,6 +13,7 @@ mod attachments;
 mod pending_apply;
 mod probe;
 mod progress;
+mod progress_metrics;
 mod runtime;
 
 pub use admin::{clear_device, clear_vault};
@@ -841,26 +842,30 @@ pub fn pull(
                 }
 
                 if ops.is_empty() {
-                    if let Ok(probe) =
-                        probe_pull_response_with_max(&http, &endpoint_json, id_token, &request)
-                    {
-                        let stalled_devices =
-                            remote_ahead_cursor_devices(&since, &probe.max, &local_device_id);
-                        if !stalled_devices.is_empty() {
-                            if maybe_recover_remote_ahead_since_map(
-                                conn,
-                                &scope_id,
-                                &local_device_id,
-                                &mut since,
-                                &probe.max,
-                            )? {
-                                continue;
-                            }
+                    match probe_pull_response_with_max(&http, &endpoint_json, id_token, &request) {
+                        Ok(probe) => {
+                            let stalled_devices =
+                                remote_ahead_cursor_devices(&since, &probe.max, &local_device_id);
+                            if !stalled_devices.is_empty() {
+                                if maybe_recover_remote_ahead_since_map(
+                                    conn,
+                                    &scope_id,
+                                    &local_device_id,
+                                    &mut since,
+                                    &probe.max,
+                                )? {
+                                    continue;
+                                }
 
-                            return Err(anyhow!(
-                                "managed-vault pull stalled: remote cursor ahead for device(s): {}",
-                                stalled_devices.join(", ")
-                            ));
+                                return Err(anyhow!(
+                                    "managed-vault pull stalled: remote cursor ahead for device(s): {}",
+                                    stalled_devices.join(", ")
+                                ));
+                            }
+                        }
+                        Err(_) => {
+                            pull_bin_supported = Some(false);
+                            continue;
                         }
                     }
 
@@ -930,6 +935,33 @@ pub fn pull(
                 since = next_since;
 
                 if ops.len() < (PULL_LIMIT as usize) {
+                    let probe_request = PullRequest {
+                        device_id: local_device_id.as_str(),
+                        since: since.clone(),
+                        limit: PULL_LIMIT,
+                    };
+                    match probe_pull_response_with_max(
+                        &http,
+                        &endpoint_json,
+                        id_token,
+                        &probe_request,
+                    ) {
+                        Ok(probe) => {
+                            if maybe_recover_remote_ahead_since_map(
+                                conn,
+                                &scope_id,
+                                &local_device_id,
+                                &mut since,
+                                &probe.max,
+                            )? {
+                                continue;
+                            }
+                        }
+                        Err(_) => {
+                            pull_bin_supported = Some(false);
+                            continue;
+                        }
+                    }
                     break;
                 }
                 continue;
@@ -1043,6 +1075,15 @@ pub fn pull(
         since = next_since;
 
         if parsed.ops.len() < (PULL_LIMIT as usize) {
+            if maybe_recover_remote_ahead_since_map(
+                conn,
+                &scope_id,
+                &local_device_id,
+                &mut since,
+                &parsed.max,
+            )? {
+                continue;
+            }
             break;
         }
     }

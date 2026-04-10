@@ -19,7 +19,7 @@ const PULL_BIN_MAGIC_V1: &[u8; 5] = b"SLVB1";
 enum RecoveryScenario {
     JsonRemoteAheadRecovery,
     PullBinProbeRemoteAheadRecovery,
-    PullBinProbeFailureNoop,
+    PullBinProbeFailureFallsBackToJson,
 }
 
 #[derive(Default)]
@@ -254,7 +254,7 @@ fn start_recovery_server(
                                 write_bytes_response(&mut stream, encode_pull_bin(&[]));
                             }
                         }
-                        RecoveryScenario::PullBinProbeFailureNoop => {
+                        RecoveryScenario::PullBinProbeFailureFallsBackToJson => {
                             write_bytes_response(&mut stream, encode_pull_bin(&[]));
                         }
                     }
@@ -270,16 +270,10 @@ fn start_recovery_server(
                     let mut snapshot = state_clone.lock().expect("lock");
                     snapshot.pull_requests += 1;
                     snapshot.json_since_values.push(since_seq);
+                    let pull_requests = snapshot.pull_requests;
                     drop(snapshot);
 
                     match scenario {
-                        RecoveryScenario::PullBinProbeFailureNoop => {
-                            write_json_response(
-                                &mut stream,
-                                503,
-                                serde_json::json!({ "error": "temporarily_unavailable" }),
-                            );
-                        }
                         RecoveryScenario::JsonRemoteAheadRecovery
                         | RecoveryScenario::PullBinProbeRemoteAheadRecovery => {
                             if since_seq == 174 {
@@ -291,6 +285,40 @@ fn start_recovery_server(
                                         "next": {},
                                         "max": { remote_device_id.clone(): 262 }
                                     }),
+                                );
+                            } else if since_seq == 0 {
+                                write_json_response(
+                                    &mut stream,
+                                    200,
+                                    serde_json::json!({
+                                        "ops": [{
+                                            "device_id": op.device_id,
+                                            "seq": op.seq,
+                                            "op_id": op.op_id,
+                                            "ciphertext_b64": op.ciphertext_b64,
+                                        }],
+                                        "next": { remote_device_id.clone(): 262 },
+                                        "max": { remote_device_id.clone(): 262 }
+                                    }),
+                                );
+                            } else {
+                                write_json_response(
+                                    &mut stream,
+                                    200,
+                                    serde_json::json!({
+                                        "ops": [],
+                                        "next": { remote_device_id.clone(): 262 },
+                                        "max": { remote_device_id.clone(): 262 }
+                                    }),
+                                );
+                            }
+                        }
+                        RecoveryScenario::PullBinProbeFailureFallsBackToJson => {
+                            if pull_requests == 1 {
+                                write_json_response(
+                                    &mut stream,
+                                    503,
+                                    serde_json::json!({ "error": "temporarily_unavailable" }),
                                 );
                             } else if since_seq == 0 {
                                 write_json_response(
@@ -385,6 +413,20 @@ fn setup_local_client(
     (temp, app_dir, key, conn)
 }
 
+fn assert_recovered_conversation_exists(
+    conn: &rusqlite::Connection,
+    db_key: &[u8; 32],
+    expected_title: &str,
+) {
+    let conversations = db::list_conversations(conn, db_key).expect("list conversations");
+    assert!(
+        conversations
+            .iter()
+            .any(|conversation| conversation.title == expected_title),
+        "expected recovered conversation, got {conversations:?}"
+    );
+}
+
 #[test]
 fn managed_vault_pull_recovers_remote_ahead_cursor_on_json_path_even_with_local_remote_history() {
     let vault_id = "vault-json";
@@ -470,7 +512,7 @@ fn managed_vault_pull_recovers_remote_ahead_cursor_on_json_path_even_with_local_
 }
 
 #[test]
-fn managed_vault_pull_bin_empty_response_does_not_fail_when_probe_fails() {
+fn managed_vault_pull_bin_empty_response_falls_back_to_json_when_probe_fails() {
     let vault_id = "vault-noop";
     let id_token = "test_uid";
     let sync_key = derive_root_key(
@@ -482,7 +524,7 @@ fn managed_vault_pull_bin_empty_response_does_not_fail_when_probe_fails() {
     let remote_device_id = "remote-noop-device";
     let remote_op = synthetic_remote_op(&sync_key, remote_device_id);
     let (base_url, stop_tx, state, handle) = start_recovery_server(
-        RecoveryScenario::PullBinProbeFailureNoop,
+        RecoveryScenario::PullBinProbeFailureFallsBackToJson,
         remote_device_id.to_string(),
         remote_op,
     );
@@ -496,14 +538,15 @@ fn managed_vault_pull_bin_empty_response_does_not_fail_when_probe_fails() {
 
     let applied =
         sync::managed_vault::pull(&conn, &db_key, &sync_key, &base_url, vault_id, id_token)
-            .expect("no-op pull should still succeed");
-    assert_eq!(applied, 0);
+            .expect("pull succeeds after json fallback");
+    assert_eq!(applied, 1);
+    assert_recovered_conversation_exists(&conn, &db_key, "Recovered title");
 
     let snapshot = state.lock().expect("lock");
     assert_eq!(snapshot.pull_bin_requests, 1);
-    assert_eq!(snapshot.pull_requests, 1);
+    assert_eq!(snapshot.pull_requests, 2);
     assert_eq!(snapshot.pull_bin_since_values, vec![0]);
-    assert_eq!(snapshot.json_since_values, vec![0]);
+    assert_eq!(snapshot.json_since_values, vec![0, 0]);
     drop(snapshot);
 
     let _ = stop_tx.send(());
@@ -574,9 +617,9 @@ fn managed_vault_pull_bin_recovers_remote_ahead_cursor_without_resetting_to_json
 
     let snapshot = state.lock().expect("lock");
     assert_eq!(snapshot.pull_bin_requests, 2);
-    assert_eq!(snapshot.pull_requests, 1);
+    assert_eq!(snapshot.pull_requests, 2);
     assert_eq!(snapshot.pull_bin_since_values, vec![174, 0]);
-    assert_eq!(snapshot.json_since_values, vec![174]);
+    assert_eq!(snapshot.json_since_values, vec![174, 262]);
     drop(snapshot);
 
     let _ = stop_tx.send(());
