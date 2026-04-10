@@ -236,6 +236,136 @@ fn spawn_missing_max_after_large_first_page_server(
     addr
 }
 
+fn spawn_missing_max_after_cursor_rewind_server(
+    first_device_id: String,
+    first_page_ops: Vec<(i64, String, String)>,
+    rewound_page_ops: Vec<(String, i64, String, String)>,
+    stalled_device_id: String,
+    final_ciphertext_b64: String,
+) -> String {
+    let listener = TcpListener::bind("127.0.0.1:0").expect("bind listener");
+    let addr = format!("http://{}", listener.local_addr().expect("local addr"));
+
+    thread::spawn(move || {
+        for _ in 0..5 {
+            let (mut stream, _) = listener.accept().expect("accept");
+            let (headers, body) = read_http_request(&mut stream);
+            let request_line = headers.lines().next().unwrap_or_default().to_string();
+
+            if request_line.starts_with("POST /v1/vaults/test-vault/devices ") {
+                respond_json(
+                    &mut stream,
+                    "200 OK",
+                    r#"{"device_id":"local-device-progress"}"#,
+                );
+                continue;
+            }
+
+            if request_line.starts_with("POST /v1/vaults/test-vault/ops:pull ") {
+                let payload: serde_json::Value =
+                    serde_json::from_slice(&body).expect("parse pull body");
+                let first_since = payload["since"][first_device_id.as_str()]
+                    .as_i64()
+                    .unwrap_or(0);
+                let stalled_since = payload["since"][stalled_device_id.as_str()]
+                    .as_i64()
+                    .unwrap_or(174);
+
+                if first_since == 0 && stalled_since == 174 {
+                    let ops_json = first_page_ops
+                        .iter()
+                        .map(|(seq, op_id, ciphertext_b64)| {
+                            serde_json::json!({
+                                "device_id": first_device_id,
+                                "seq": seq,
+                                "op_id": op_id,
+                                "ciphertext_b64": ciphertext_b64,
+                            })
+                        })
+                        .collect::<Vec<_>>();
+                    respond_json(
+                        &mut stream,
+                        "200 OK",
+                        &format!(
+                            r#"{{"ops":{ops_json},"next":{{"{first_device_id}":500}},"max":{{"{first_device_id}":1000,"{stalled_device_id}":262}}}}"#,
+                            first_device_id = first_device_id,
+                            stalled_device_id = stalled_device_id,
+                            ops_json = serde_json::Value::Array(ops_json),
+                        ),
+                    );
+                    continue;
+                }
+
+                if first_since == 500 && stalled_since == 174 {
+                    respond_json(
+                        &mut stream,
+                        "200 OK",
+                        &format!(
+                            r#"{{"ops":[],"next":{{}},"max":{{"{first_device_id}":1000,"{stalled_device_id}":262}}}}"#,
+                            first_device_id = first_device_id,
+                            stalled_device_id = stalled_device_id,
+                        ),
+                    );
+                    continue;
+                }
+
+                if first_since == 0 && stalled_since == 0 {
+                    let ops_json = rewound_page_ops
+                        .iter()
+                        .map(|(device_id, seq, op_id, ciphertext_b64)| {
+                            serde_json::json!({
+                                "device_id": device_id,
+                                "seq": seq,
+                                "op_id": op_id,
+                                "ciphertext_b64": ciphertext_b64,
+                            })
+                        })
+                        .collect::<Vec<_>>();
+                    respond_json(
+                        &mut stream,
+                        "200 OK",
+                        &format!(
+                            r#"{{"ops":{ops_json},"next":{{"{first_device_id}":999,"{stalled_device_id}":262}}}}"#,
+                            first_device_id = first_device_id,
+                            stalled_device_id = stalled_device_id,
+                            ops_json = serde_json::Value::Array(ops_json),
+                        ),
+                    );
+                    continue;
+                }
+
+                if first_since == 999 && stalled_since == 262 {
+                    respond_json(
+                        &mut stream,
+                        "200 OK",
+                        &format!(
+                            r#"{{"ops":[{{"device_id":"{first_device_id}","seq":1000,"op_id":"op-conversation-rewind-final-1000","ciphertext_b64":"{ciphertext}"}}],"next":{{"{first_device_id}":1000}}}}"#,
+                            first_device_id = first_device_id,
+                            ciphertext = final_ciphertext_b64,
+                        ),
+                    );
+                    continue;
+                }
+
+                respond_json(
+                    &mut stream,
+                    "200 OK",
+                    &format!(
+                        r#"{{"ops":[],"next":{{"{first_device_id}":1000,"{stalled_device_id}":262}}}}"#,
+                        first_device_id = first_device_id,
+                        stalled_device_id = stalled_device_id,
+                    ),
+                );
+                continue;
+            }
+
+            respond_json(&mut stream, "404 Not Found", r#"{"error":"not_found"}"#);
+        }
+    });
+
+    addr
+}
+
 fn encrypted_conversation_op(
     sync_key: &[u8; 32],
     remote_device_id: &str,
@@ -399,4 +529,127 @@ fn managed_vault_pull_with_progress_preserves_known_total_when_later_pages_omit_
     assert!(conversations
         .iter()
         .any(|conversation| conversation.id == "conversation-missing-max-501"));
+}
+
+#[test]
+fn managed_vault_pull_with_progress_does_not_finish_early_after_cursor_rewind_when_max_disappears()
+{
+    let db_key = [81u8; 32];
+    let sync_key = [82u8; 32];
+    let first_device_id = "remote-progress-main";
+    let stalled_device_id = "remote-progress-stalled";
+
+    let dir = tempdir().expect("tempdir");
+    let conn = db::open(dir.path()).expect("open");
+    conn.execute(
+        r#"INSERT INTO kv(key, value) VALUES ('device_id', 'local-device-progress')"#,
+        [],
+    )
+    .expect("set local device id");
+
+    let first_page_ops = (1..=500)
+        .map(|seq| {
+            let conversation_id = format!("conversation-rewind-first-{seq}");
+            let title = format!("First title {seq}");
+            (
+                seq,
+                format!("op-{conversation_id}"),
+                encrypted_conversation_op(
+                    &sync_key,
+                    first_device_id,
+                    seq,
+                    &conversation_id,
+                    &title,
+                    1_775_811_650_000 + seq,
+                ),
+            )
+        })
+        .collect::<Vec<_>>();
+
+    let rewound_page_ops = (501..=999)
+        .map(|seq| {
+            let conversation_id = format!("conversation-rewind-main-{seq}");
+            let title = format!("Main title {seq}");
+            (
+                first_device_id.to_string(),
+                seq,
+                format!("op-{conversation_id}"),
+                encrypted_conversation_op(
+                    &sync_key,
+                    first_device_id,
+                    seq,
+                    &conversation_id,
+                    &title,
+                    1_775_811_651_000 + seq,
+                ),
+            )
+        })
+        .chain(std::iter::once((
+            stalled_device_id.to_string(),
+            262,
+            "op-conversation-rewind-stalled-262".to_string(),
+            encrypted_conversation_op(
+                &sync_key,
+                stalled_device_id,
+                262,
+                "conversation-rewind-stalled-262",
+                "Stalled title",
+                1_775_811_652_262,
+            ),
+        )))
+        .collect::<Vec<_>>();
+
+    let final_ciphertext_b64 = encrypted_conversation_op(
+        &sync_key,
+        first_device_id,
+        1000,
+        "conversation-rewind-final-1000",
+        "Final title",
+        1_775_811_653_000,
+    );
+
+    let base_url = spawn_missing_max_after_cursor_rewind_server(
+        first_device_id.to_string(),
+        first_page_ops,
+        rewound_page_ops,
+        stalled_device_id.to_string(),
+        final_ciphertext_b64,
+    );
+    let scope_id = scope_id(&base_url, "test-vault");
+    conn.execute(
+        r#"INSERT INTO kv(key, value) VALUES (?1, ?2)
+           ON CONFLICT(key) DO UPDATE SET value = excluded.value"#,
+        [
+            format!("managed_vault.last_pulled_seq:{scope_id}:{stalled_device_id}"),
+            "174".to_string(),
+        ],
+    )
+    .expect("set stale cursor");
+
+    let mut seen_progress = Vec::new();
+    let applied = sync::managed_vault::pull_with_progress(
+        &conn,
+        &db_key,
+        &sync_key,
+        &base_url,
+        "test-vault",
+        "test-token",
+        &mut |done, total| seen_progress.push((done, total)),
+    )
+    .expect("pull with cursor rewind");
+
+    assert_eq!(applied, 1001);
+    assert!(
+        seen_progress.contains(&(1087, 1088)),
+        "expected progress to stay one unit short before the final page, got {seen_progress:?}"
+    );
+    assert_eq!(seen_progress.last().copied(), Some((1088, 1088)));
+
+    let conversations = db::list_conversations(&conn, &db_key).expect("list conversations");
+    assert!(conversations
+        .iter()
+        .any(|conversation| conversation.id == "conversation-rewind-final-1000"));
+    assert!(conversations
+        .iter()
+        .any(|conversation| conversation.id == "conversation-rewind-stalled-262"));
 }

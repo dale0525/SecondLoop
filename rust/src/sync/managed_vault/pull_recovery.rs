@@ -42,6 +42,10 @@ pub(super) fn repeated_remote_ahead_repair_error(devices: &[String]) -> anyhow::
     )
 }
 
+pub(super) fn probe_failure_indicates_json_unavailable(error: &anyhow::Error) -> bool {
+    error.to_string().contains("HTTP 404")
+}
+
 pub(super) fn maybe_recover_stale_since_map(
     conn: &Connection,
     scope_id: &str,

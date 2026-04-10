@@ -26,8 +26,9 @@ use pending_apply::{
 pub use progress::{pull_with_progress, push_ops_only_with_progress};
 use pull_recovery::{
     attempt_remote_ahead_repair, decode_pull_bin_response, maybe_recover_stale_since_map,
-    probe_pull_response_with_max, probe_requires_json_retry, repeated_remote_ahead_repair_error,
-    PullResponseWithMax, RemoteAheadRepairOutcome, RemoteAheadRepairTracker,
+    probe_failure_indicates_json_unavailable, probe_pull_response_with_max,
+    probe_requires_json_retry, repeated_remote_ahead_repair_error, PullResponseWithMax,
+    RemoteAheadRepairOutcome, RemoteAheadRepairTracker,
 };
 
 #[derive(Debug, Serialize)]
@@ -643,14 +644,13 @@ pub fn pull(
             since: since.clone(),
             limit: PULL_LIMIT,
         };
-
+        let mut parsed_json_override: Option<PullResponseWithMax> = None;
         if pull_bin_supported != Some(false) {
             let resp = http
                 .post(&endpoint_bin)
                 .bearer_auth(id_token)
                 .json(&request)
                 .send()?;
-
             let status = resp.status();
             if should_fallback_to_json_pull(status) {
                 pull_bin_supported = Some(false);
@@ -683,21 +683,22 @@ pub fn pull(
                         Ok(probe) => {
                             if probe_requires_json_retry(&since, &probe) {
                                 pull_bin_supported = Some(false);
-                                continue;
-                            }
-                            match attempt_remote_ahead_repair(
-                                &mut remote_ahead_repair_tracker,
-                                conn,
-                                &scope_id,
-                                &local_device_id,
-                                &mut since,
-                                &probe.max,
-                            )? {
-                                RemoteAheadRepairOutcome::Recovered => continue,
-                                RemoteAheadRepairOutcome::Exhausted(devices) => {
-                                    return Err(repeated_remote_ahead_repair_error(&devices));
+                                parsed_json_override = Some(probe);
+                            } else {
+                                match attempt_remote_ahead_repair(
+                                    &mut remote_ahead_repair_tracker,
+                                    conn,
+                                    &scope_id,
+                                    &local_device_id,
+                                    &mut since,
+                                    &probe.max,
+                                )? {
+                                    RemoteAheadRepairOutcome::Recovered => continue,
+                                    RemoteAheadRepairOutcome::Exhausted(devices) => {
+                                        return Err(repeated_remote_ahead_repair_error(&devices));
+                                    }
+                                    RemoteAheadRepairOutcome::NotNeeded => {}
                                 }
-                                RemoteAheadRepairOutcome::NotNeeded => {}
                             }
                         }
                         Err(_) => {
@@ -717,7 +718,8 @@ pub fn pull(
                         }
                     }
 
-                    if !stale_cursor_recovery_attempted
+                    if parsed_json_override.is_none()
+                        && !stale_cursor_recovery_attempted
                         && maybe_recover_stale_since_map(
                             conn,
                             &scope_id,
@@ -730,113 +732,151 @@ pub fn pull(
                     }
                 }
 
-                let mut batch_applied = 0u64;
-                with_immediate_transaction(conn, || {
-                    let mut pending = load_pending_apply_op_ids(conn, &scope_id)?;
-                    for op in &ops {
-                        let plaintext = decrypt_bytes(
-                            sync_key,
-                            &op.ciphertext,
-                            format!("sync.ops:{}:{}", op.device_id, op.seq).as_bytes(),
+                if parsed_json_override.is_none() {
+                    let mut batch_applied = 0u64;
+                    with_immediate_transaction(conn, || {
+                        let mut pending = load_pending_apply_op_ids(conn, &scope_id)?;
+                        for op in &ops {
+                            let plaintext = decrypt_bytes(
+                                sync_key,
+                                &op.ciphertext,
+                                format!("sync.ops:{}:{}", op.device_id, op.seq).as_bytes(),
+                            )?;
+                            let op_json: serde_json::Value = serde_json::from_slice(&plaintext)?;
+                            let op_id = op_json["op_id"]
+                                .as_str()
+                                .ok_or_else(|| anyhow!("sync op missing op_id"))?;
+                            let envelope_op_id = op.op_id.trim();
+                            if !envelope_op_id.is_empty() && op_id != envelope_op_id {
+                                return Err(anyhow!(
+                                    "managed vault pull op_id mismatch: envelope={} plaintext={}",
+                                    op.op_id,
+                                    op_id
+                                ));
+                            }
+
+                            let inserted =
+                                super::insert_remote_oplog(conn, db_key, &plaintext, &op_json)?;
+                            if !inserted {
+                                continue;
+                            }
+
+                            match super::apply_op(conn, db_key, &op_json) {
+                                Ok(_) => {
+                                    batch_applied += 1;
+                                }
+                                Err(e) if is_foreign_key_constraint_error(&e) => {
+                                    pending.insert(op_id.to_string());
+                                    super::kv_set_i64(
+                                        conn,
+                                        &pending_apply_key(&scope_id, op_id),
+                                        1,
+                                    )?;
+                                }
+                                Err(e) => return Err(e),
+                            }
+                        }
+
+                        apply_pending_ops_until_stable(conn, db_key, &scope_id, &mut pending)?;
+                        rewind_since_for_unresolved_pending_devices(
+                            conn,
+                            &pending,
+                            &mut next_since,
                         )?;
-                        let op_json: serde_json::Value = serde_json::from_slice(&plaintext)?;
-                        let op_id = op_json["op_id"]
-                            .as_str()
-                            .ok_or_else(|| anyhow!("sync op missing op_id"))?;
-                        let envelope_op_id = op.op_id.trim();
-                        if !envelope_op_id.is_empty() && op_id != envelope_op_id {
-                            return Err(anyhow!(
-                                "managed vault pull op_id mismatch: envelope={} plaintext={}",
-                                op.op_id,
-                                op_id
-                            ));
+
+                        if next_since != since {
+                            update_since_map(conn, &scope_id, &next_since)?;
                         }
 
-                        let inserted =
-                            super::insert_remote_oplog(conn, db_key, &plaintext, &op_json)?;
-                        if !inserted {
-                            continue;
-                        }
+                        Ok(())
+                    })?;
+                    applied += batch_applied;
+                    since = next_since;
 
-                        match super::apply_op(conn, db_key, &op_json) {
-                            Ok(_) => {
-                                batch_applied += 1;
+                    if ops.len() < (PULL_LIMIT as usize) {
+                        let probe_request = PullRequest {
+                            device_id: local_device_id.as_str(),
+                            since: since.clone(),
+                            limit: PULL_LIMIT,
+                        };
+                        match probe_pull_response_with_max(
+                            &http,
+                            &endpoint_json,
+                            id_token,
+                            &probe_request,
+                        ) {
+                            Ok(probe) => {
+                                if probe_requires_json_retry(&since, &probe) {
+                                    pull_bin_supported = Some(false);
+                                    parsed_json_override = Some(probe);
+                                } else {
+                                    match attempt_remote_ahead_repair(
+                                        &mut remote_ahead_repair_tracker,
+                                        conn,
+                                        &scope_id,
+                                        &local_device_id,
+                                        &mut since,
+                                        &probe.max,
+                                    )? {
+                                        RemoteAheadRepairOutcome::Recovered => continue,
+                                        RemoteAheadRepairOutcome::Exhausted(devices) => {
+                                            return Err(repeated_remote_ahead_repair_error(
+                                                &devices,
+                                            ));
+                                        }
+                                        RemoteAheadRepairOutcome::NotNeeded => {}
+                                    }
+                                }
                             }
-                            Err(e) if is_foreign_key_constraint_error(&e) => {
-                                pending.insert(op_id.to_string());
-                                super::kv_set_i64(conn, &pending_apply_key(&scope_id, op_id), 1)?;
-                            }
-                            Err(e) => return Err(e),
-                        }
-                    }
-
-                    apply_pending_ops_until_stable(conn, db_key, &scope_id, &mut pending)?;
-                    rewind_since_for_unresolved_pending_devices(conn, &pending, &mut next_since)?;
-
-                    if next_since != since {
-                        update_since_map(conn, &scope_id, &next_since)?;
-                    }
-
-                    Ok(())
-                })?;
-                applied += batch_applied;
-                since = next_since;
-
-                if ops.len() < (PULL_LIMIT as usize) {
-                    let probe_request = PullRequest {
-                        device_id: local_device_id.as_str(),
-                        since: since.clone(),
-                        limit: PULL_LIMIT,
-                    };
-                    match probe_pull_response_with_max(
-                        &http,
-                        &endpoint_json,
-                        id_token,
-                        &probe_request,
-                    ) {
-                        Ok(probe) => {
-                            if probe_requires_json_retry(&since, &probe) {
+                            Err(error) => {
+                                if !stale_cursor_recovery_attempted
+                                    && maybe_recover_stale_since_map(
+                                        conn,
+                                        &scope_id,
+                                        &local_device_id,
+                                        &mut since,
+                                    )?
+                                {
+                                    stale_cursor_recovery_attempted = true;
+                                    continue;
+                                }
+                                if probe_failure_indicates_json_unavailable(&error) {
+                                    break;
+                                }
                                 pull_bin_supported = Some(false);
                                 continue;
                             }
-                            match attempt_remote_ahead_repair(
-                                &mut remote_ahead_repair_tracker,
-                                conn,
-                                &scope_id,
-                                &local_device_id,
-                                &mut since,
-                                &probe.max,
-                            )? {
-                                RemoteAheadRepairOutcome::Recovered => continue,
-                                RemoteAheadRepairOutcome::Exhausted(devices) => {
-                                    return Err(repeated_remote_ahead_repair_error(&devices));
-                                }
-                                RemoteAheadRepairOutcome::NotNeeded => {}
-                            }
                         }
-                        Err(_) => break,
+                        if parsed_json_override.is_none() {
+                            break;
+                        }
                     }
-                    break;
+
+                    if parsed_json_override.is_none() {
+                        continue;
+                    }
                 }
-                continue;
             }
         }
 
-        let resp = http
-            .post(&endpoint_json)
-            .bearer_auth(id_token)
-            .json(&request)
-            .send()?;
+        let parsed: PullResponseWithMax = if let Some(parsed) = parsed_json_override.take() {
+            parsed
+        } else {
+            let resp = http
+                .post(&endpoint_json)
+                .bearer_auth(id_token)
+                .json(&request)
+                .send()?;
 
-        let status = resp.status();
-        if !status.is_success() {
-            let text = resp.text().unwrap_or_default();
-            return Err(anyhow!("managed-vault pull failed: HTTP {status} {text}"));
-        }
+            let status = resp.status();
+            if !status.is_success() {
+                let text = resp.text().unwrap_or_default();
+                return Err(anyhow!("managed-vault pull failed: HTTP {status} {text}"));
+            }
 
-        let body = resp.bytes()?;
-        let parsed: PullResponseWithMax = serde_json::from_slice(body.as_ref())?;
-
+            let body = resp.bytes()?;
+            serde_json::from_slice(body.as_ref())?
+        };
         let mut next_since = since.clone();
         for (device_id, last_seq) in &parsed.next {
             next_since.insert(device_id.to_string(), *last_seq);

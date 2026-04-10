@@ -163,6 +163,146 @@ fn encode_pull_bin(ops: &[StoredOp]) -> Vec<u8> {
     out
 }
 
+fn start_short_page_probe_failure_server(
+    first_op: StoredOp,
+    second_op: StoredOp,
+) -> (
+    String,
+    mpsc::Sender<()>,
+    Arc<Mutex<ServerState>>,
+    thread::JoinHandle<()>,
+) {
+    let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
+    listener.set_nonblocking(true).expect("nonblocking");
+    let addr = listener.local_addr().expect("local addr");
+
+    let (stop_tx, stop_rx) = mpsc::channel::<()>();
+    let state = Arc::new(Mutex::new(ServerState::default()));
+    let state_clone = Arc::clone(&state);
+
+    let handle = thread::spawn(move || loop {
+        if stop_rx.try_recv().is_ok() {
+            break;
+        }
+        match listener.accept() {
+            Ok((mut stream, _)) => {
+                stream.set_nonblocking(false).expect("blocking stream");
+                let (_raw_headers, method, path, body) = read_request(&mut stream);
+                if method != "POST" {
+                    write_json_response(
+                        &mut stream,
+                        404,
+                        serde_json::json!({ "error": "method_not_allowed" }),
+                    );
+                    continue;
+                }
+
+                let segments: Vec<&str> = path.split('/').filter(|s| !s.is_empty()).collect();
+                if segments.len() < 4 || segments[0] != "v1" || segments[1] != "vaults" {
+                    write_json_response(
+                        &mut stream,
+                        404,
+                        serde_json::json!({ "error": "not_found" }),
+                    );
+                    continue;
+                }
+                let tail = segments[3..].join("/");
+
+                if tail == "devices" {
+                    write_json_response(
+                        &mut stream,
+                        200,
+                        serde_json::json!({
+                            "device_id": "local-short-page-device",
+                            "ws_url": "wss://example.test/events",
+                            "sse_url": "https://example.test/events"
+                        }),
+                    );
+                    continue;
+                }
+
+                if tail == "ops:pull_bin" {
+                    let decoded: serde_json::Value =
+                        serde_json::from_slice(&body).expect("pull_bin json");
+                    let since_seq = decoded["since"][first_op.device_id.as_str()]
+                        .as_i64()
+                        .unwrap_or(0);
+                    let mut snapshot = state_clone.lock().expect("lock");
+                    snapshot.pull_bin_requests += 1;
+                    snapshot.pull_bin_since_values.push(since_seq);
+                    drop(snapshot);
+
+                    if since_seq == 0 {
+                        write_bytes_response(&mut stream, encode_pull_bin(&[first_op.clone()]));
+                    } else {
+                        write_bytes_response(&mut stream, encode_pull_bin(&[]));
+                    }
+                    continue;
+                }
+
+                if tail == "ops:pull" {
+                    let decoded: serde_json::Value =
+                        serde_json::from_slice(&body).expect("pull json");
+                    let since_seq = decoded["since"][first_op.device_id.as_str()]
+                        .as_i64()
+                        .unwrap_or(0);
+                    let mut snapshot = state_clone.lock().expect("lock");
+                    snapshot.pull_requests += 1;
+                    snapshot.json_since_values.push(since_seq);
+                    let pull_requests = snapshot.pull_requests;
+                    drop(snapshot);
+
+                    if pull_requests == 1 {
+                        write_json_response(
+                            &mut stream,
+                            503,
+                            serde_json::json!({ "error": "temporarily_unavailable" }),
+                        );
+                    } else if since_seq == 1 {
+                        write_json_response(
+                            &mut stream,
+                            200,
+                            serde_json::json!({
+                                "ops": [{
+                                    "device_id": second_op.device_id,
+                                    "seq": second_op.seq,
+                                    "op_id": second_op.op_id,
+                                    "ciphertext_b64": second_op.ciphertext_b64,
+                                }],
+                                "next": { second_op.device_id.clone(): second_op.seq },
+                                "max": { second_op.device_id.clone(): second_op.seq }
+                            }),
+                        );
+                    } else {
+                        write_json_response(
+                            &mut stream,
+                            200,
+                            serde_json::json!({
+                                "ops": [],
+                                "next": { second_op.device_id.clone(): second_op.seq },
+                                "max": { second_op.device_id.clone(): second_op.seq }
+                            }),
+                        );
+                    }
+                    continue;
+                }
+
+                write_json_response(
+                    &mut stream,
+                    404,
+                    serde_json::json!({ "error": "not_found" }),
+                );
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
+                thread::sleep(Duration::from_millis(5));
+            }
+            Err(e) => panic!("accept failed: {e}"),
+        }
+    });
+
+    (format!("http://{}", addr), stop_tx, state, handle)
+}
+
 fn start_recovery_server(
     scenario: RecoveryScenario,
     remote_device_id: String,
@@ -400,16 +540,25 @@ fn start_recovery_server(
 }
 
 fn synthetic_remote_op(sync_key: &[u8; 32], remote_device_id: &str) -> StoredOp {
-    let op_id = format!("remote-op-{remote_device_id}");
+    synthetic_remote_op_with_seq(sync_key, remote_device_id, 262, "Recovered title")
+}
+
+fn synthetic_remote_op_with_seq(
+    sync_key: &[u8; 32],
+    remote_device_id: &str,
+    seq: i64,
+    title: &str,
+) -> StoredOp {
+    let op_id = format!("remote-op-{remote_device_id}-{seq}");
     let op_json = serde_json::json!({
         "op_id": op_id,
         "device_id": remote_device_id,
-        "seq": 262,
+        "seq": seq,
         "ts_ms": now_ms(),
         "type": "conversation.upsert.v1",
         "payload": {
-            "conversation_id": format!("conversation-{remote_device_id}"),
-            "title": "Recovered title",
+            "conversation_id": format!("conversation-{remote_device_id}-{seq}"),
+            "title": title,
             "created_at_ms": now_ms(),
             "updated_at_ms": now_ms(),
         }
@@ -418,12 +567,12 @@ fn synthetic_remote_op(sync_key: &[u8; 32], remote_device_id: &str) -> StoredOp 
     let ciphertext = encrypt_bytes(
         sync_key,
         &plaintext,
-        format!("sync.ops:{remote_device_id}:262").as_bytes(),
+        format!("sync.ops:{remote_device_id}:{seq}").as_bytes(),
     )
     .expect("encrypt op");
     StoredOp {
         device_id: remote_device_id.to_string(),
-        seq: 262,
+        seq,
         op_id,
         ciphertext_b64: base64::engine::general_purpose::STANDARD.encode(ciphertext),
     }
@@ -726,9 +875,49 @@ fn managed_vault_pull_consumes_json_probe_ops_after_pull_bin_short_page() {
 
     let snapshot = state.lock().expect("lock");
     assert_eq!(snapshot.pull_bin_requests, 1);
-    assert_eq!(snapshot.pull_requests, 2);
+    assert_eq!(snapshot.pull_requests, 1);
     assert_eq!(snapshot.pull_bin_since_values, vec![174]);
-    assert_eq!(snapshot.json_since_values, vec![174, 174]);
+    assert_eq!(snapshot.json_since_values, vec![174]);
+    drop(snapshot);
+
+    let _ = stop_tx.send(());
+    handle.join().expect("join");
+}
+
+#[test]
+fn managed_vault_pull_short_page_probe_failure_falls_back_to_json_instead_of_exiting_early() {
+    let vault_id = "vault-short-page-probe-failure";
+    let id_token = "test_uid";
+    let sync_key = derive_root_key(
+        "sync-passphrase",
+        b"secondloop-sync1",
+        &KdfParams::for_test(),
+    )
+    .expect("sync key");
+    let remote_device_id = "remote-short-page-probe-failure-device";
+    let first_op = synthetic_remote_op_with_seq(&sync_key, remote_device_id, 1, "First title");
+    let second_op = synthetic_remote_op_with_seq(&sync_key, remote_device_id, 2, "Second title");
+    let (base_url, stop_tx, state, handle) =
+        start_short_page_probe_failure_server(first_op, second_op);
+
+    let (_temp, _app_dir, db_key, conn) = setup_local_client("short_page_probe_failure_client");
+    conn.execute(
+        r#"INSERT INTO kv(key, value) VALUES ('device_id', 'local-short-page-device')"#,
+        [],
+    )
+    .expect("set local device id");
+
+    let applied =
+        sync::managed_vault::pull(&conn, &db_key, &sync_key, &base_url, vault_id, id_token)
+            .expect("pull succeeds");
+    assert_eq!(applied, 2);
+    assert_recovered_conversation_exists(&conn, &db_key, "Second title");
+
+    let snapshot = state.lock().expect("lock");
+    assert_eq!(snapshot.pull_bin_requests, 1);
+    assert_eq!(snapshot.pull_requests, 2);
+    assert_eq!(snapshot.pull_bin_since_values, vec![0]);
+    assert_eq!(snapshot.json_since_values, vec![1, 1]);
     drop(snapshot);
 
     let _ = stop_tx.send(());

@@ -30,6 +30,7 @@ pub fn pull_with_progress(
     let scope_id = super::runtime::scope_id(base_url, vault_id);
     let mut since = super::load_since_map(conn, &scope_id)?;
     let progress_start_since = since.clone();
+    let mut progress_high_water_since = progress_start_since.clone();
     let endpoint_json = super::runtime::url(base_url, &format!("/v1/vaults/{vault_id}/ops:pull"))?;
     let mut applied: u64 = 0;
     let mut total_ops: Option<u64> = None;
@@ -66,11 +67,9 @@ pub fn pull_with_progress(
         for (device_id, last_seq) in &parsed.next {
             next_since.insert(device_id.to_string(), *last_seq);
         }
-
         if next_since == since && !parsed.ops.is_empty() {
             return Err(anyhow!("managed-vault pull made no progress"));
         }
-
         if parsed.ops.is_empty() {
             match attempt_remote_ahead_repair(
                 &mut remote_ahead_repair_tracker,
@@ -105,7 +104,6 @@ pub fn pull_with_progress(
                 continue;
             }
         }
-
         let mut batch_applied = 0u64;
         super::with_immediate_transaction(conn, || {
             let mut pending = super::load_pending_apply_op_ids(conn, &scope_id)?;
@@ -173,7 +171,10 @@ pub fn pull_with_progress(
         } else if let Some(total) = total_ops {
             let mut delta = 0u64;
             for (device_id, next_seq) in &next_since {
-                let prev = since.get(device_id).copied().unwrap_or(0);
+                let prev = progress_high_water_since
+                    .get(device_id)
+                    .copied()
+                    .unwrap_or(0);
                 if *next_seq > prev {
                     delta += (*next_seq - prev) as u64;
                 }
@@ -194,9 +195,13 @@ pub fn pull_with_progress(
                 reported_done = done_ops;
             }
         }
-
+        for (device_id, next_seq) in &next_since {
+            progress_high_water_since
+                .entry(device_id.clone())
+                .and_modify(|seq| *seq = (*seq).max(*next_seq))
+                .or_insert(*next_seq);
+        }
         since = next_since;
-
         if parsed.ops.len() < (PULL_LIMIT as usize) {
             match attempt_remote_ahead_repair(
                 &mut remote_ahead_repair_tracker,
