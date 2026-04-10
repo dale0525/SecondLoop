@@ -21,6 +21,7 @@ class TaskHubPageSection extends StatelessWidget {
   const TaskHubPageSection({
     required this.title,
     required this.sectionKey,
+    required this.headerCount,
     required this.entries,
     required this.checklistProgressByTodoId,
     required this.sectionKind,
@@ -29,6 +30,9 @@ class TaskHubPageSection extends StatelessWidget {
     this.onFeedback,
     this.restoredTodoId,
     this.footer,
+    this.collapsed = false,
+    this.onToggleCollapsed,
+    this.toggleKey,
     this.anchorRegistry,
     this.anchorId,
     this.inlineAnimation,
@@ -40,6 +44,7 @@ class TaskHubPageSection extends StatelessWidget {
 
   final String title;
   final Key sectionKey;
+  final int headerCount;
   final List<TaskPriorityEntry> entries;
   final Map<String, TodoChecklistProgress> checklistProgressByTodoId;
   final TaskHubPageSectionKind sectionKind;
@@ -54,6 +59,9 @@ class TaskHubPageSection extends StatelessWidget {
   )? onFeedback;
   final String? restoredTodoId;
   final Widget? footer;
+  final bool collapsed;
+  final VoidCallback? onToggleCollapsed;
+  final Key? toggleKey;
   final TaskHubCardAnchorRegistry? anchorRegistry;
   final String? anchorId;
   final TaskHubPriorityInlineAnimationState? inlineAnimation;
@@ -63,8 +71,9 @@ class TaskHubPageSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (entries.isEmpty && footer == null) return const SizedBox.shrink();
-    final sectionCount = entries.length;
+    if (headerCount == 0 && entries.isEmpty && footer == null) {
+      return const SizedBox.shrink();
+    }
     Widget section = Padding(
       padding: const EdgeInsets.only(bottom: 16),
       child: SlSurface(
@@ -75,10 +84,13 @@ class TaskHubPageSection extends StatelessWidget {
           children: [
             TaskHubSectionHeader(
               title: title,
-              count: sectionCount,
+              count: headerCount,
               kind: sectionKind,
+              collapsed: collapsed,
+              onToggleCollapsed: onToggleCollapsed,
+              toggleKey: toggleKey,
             ),
-            if (entries.isNotEmpty) ...[
+            if (!collapsed && entries.isNotEmpty) ...[
               const SizedBox(height: 10),
               for (var i = 0; i < entries.length; i++) ...[
                 TaskHubEntryCard(
@@ -101,7 +113,7 @@ class TaskHubPageSection extends StatelessWidget {
                 if (i != entries.length - 1) const SizedBox(height: 10),
               ],
             ],
-            if (footer != null) ...[
+            if (!collapsed && footer != null) ...[
               if (entries.isNotEmpty) const SizedBox(height: 8),
               footer!,
             ],
@@ -126,6 +138,9 @@ class TaskHubSectionHeader extends StatelessWidget {
     required this.count,
     required this.kind,
     this.hint,
+    this.collapsed = false,
+    this.onToggleCollapsed,
+    this.toggleKey,
     super.key,
   });
 
@@ -133,6 +148,9 @@ class TaskHubSectionHeader extends StatelessWidget {
   final int count;
   final TaskHubPageSectionKind kind;
   final String? hint;
+  final bool collapsed;
+  final VoidCallback? onToggleCollapsed;
+  final Key? toggleKey;
 
   @override
   Widget build(BuildContext context) {
@@ -179,6 +197,21 @@ class TaskHubSectionHeader extends StatelessWidget {
                 ),
               ),
             ),
+            if (onToggleCollapsed != null) ...[
+              const SizedBox(width: 4),
+              IconButton(
+                key: toggleKey,
+                onPressed: onToggleCollapsed,
+                icon: Icon(
+                  collapsed
+                      ? Icons.expand_more_rounded
+                      : Icons.expand_less_rounded,
+                  color: tone.foreground,
+                ),
+                visualDensity: VisualDensity.compact,
+                splashRadius: 18,
+              ),
+            ],
           ],
         ),
         if (hint != null) ...[

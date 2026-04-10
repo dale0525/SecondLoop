@@ -79,6 +79,7 @@ void main() {
                   TaskHubPageSection(
                     title: 'Focus Tone',
                     sectionKey: const ValueKey('theme_palette_section_focus'),
+                    headerCount: snapshot.focus.length,
                     entries: snapshot.focus,
                     checklistProgressByTodoId: const <String,
                         TodoChecklistProgress>{},
@@ -89,6 +90,7 @@ void main() {
                   TaskHubPageSection(
                     title: 'Next Tone',
                     sectionKey: const ValueKey('theme_palette_section_next_up'),
+                    headerCount: snapshot.scheduled.length,
                     entries: snapshot.scheduled,
                     checklistProgressByTodoId: const <String,
                         TodoChecklistProgress>{},

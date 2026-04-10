@@ -18,8 +18,15 @@ extension _TaskHubPageStateHelpers on _TaskHubPageState {
   ) {
     return TaskHubPriorityAnimationSnapshot.fromTaskPrioritySnapshot(
       snapshot,
-      doneVisibleCount: _doneVisibleCount,
+      doneVisibleCount: _doneSectionVisibleCount(snapshot),
     );
+  }
+
+  int _doneSectionVisibleCount(TaskPrioritySnapshot snapshot) {
+    if (_doneSectionCollapsed || snapshot.done.isEmpty) {
+      return 0;
+    }
+    return _doneVisibleCount;
   }
 
   bool _shouldReduceTaskHubMotion(BuildContext context) {
