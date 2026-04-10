@@ -11,6 +11,19 @@ import 'package:secondloop/src/rust/db.dart';
 
 import 'task_hub_page_test_helpers.dart';
 
+Future<void> _expandDoneSection(WidgetTester tester) async {
+  await tester.scrollUntilVisible(
+    find.byKey(const ValueKey('task_hub_page_section_done')),
+    300,
+    scrollable: find.byType(Scrollable).first,
+  );
+  await tester.pumpAndSettle();
+  await tester.tap(
+    find.byKey(const ValueKey('task_hub_page_section_done_toggle')),
+  );
+  await tester.pumpAndSettle();
+}
+
 void main() {
   setUp(() {
     clearTaskHubSharedAiCacheForTest();
@@ -742,6 +755,16 @@ void main() {
     await tester.drag(find.byType(Scrollable).first, const Offset(0, -132));
     await tester.pumpAndSettle();
     await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('task_hub_page_section_done')),
+      24,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey('task_hub_page_section_done_toggle')),
+    );
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
       find.byKey(const ValueKey('task_hub_page_quick_done_reopen')),
       24,
       scrollable: find.byType(Scrollable).first,
@@ -808,12 +831,7 @@ void main() {
     await tester.pumpWidget(wrapTaskHubTestApp(backend));
     await pumpUntilTaskHubReady(tester);
 
-    await tester.scrollUntilVisible(
-      find.byKey(const ValueKey('task_hub_page_section_done')),
-      300,
-      scrollable: find.byType(Scrollable).first,
-    );
-    await tester.pumpAndSettle();
+    await _expandDoneSection(tester);
 
     final sourceRect =
         tester.getRect(find.byKey(const ValueKey('task_hub_page_item_done')));
