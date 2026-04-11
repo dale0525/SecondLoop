@@ -58,6 +58,9 @@ pub(super) fn decode_pull_bin_v2_response(bytes: &[u8]) -> Result<PullOpBinV2> {
     let meta: PullEnvelopeMetaV2 = serde_json::from_slice(&bytes[cursor..cursor + metadata_len])?;
     cursor += metadata_len;
 
+    if cursor + 4 > bytes.len() {
+        return Err(anyhow!("invalid pull_bin_v2 response: truncated count"));
+    }
     let count = u32::from_le_bytes(
         bytes[cursor..cursor + 4]
             .try_into()
@@ -142,4 +145,33 @@ pub(super) fn decode_pull_bin_v2_response(bytes: &[u8]) -> Result<PullOpBinV2> {
     }
 
     Ok(PullOpBinV2 { meta, ops })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn decode_pull_bin_v2_response_rejects_truncated_count_after_metadata() {
+        let meta = PullEnvelopeMetaV2 {
+            protocol_version: 2,
+            generation_id: "generation-a".to_string(),
+            checkpoint_token: Some("checkpoint-a".to_string()),
+            has_more: false,
+            high_water: Some(7),
+            history_lower_bound: None,
+            reseed_required: false,
+        };
+
+        let metadata = serde_json::to_vec(&meta).expect("serialize metadata");
+        let mut payload = Vec::new();
+        payload.extend_from_slice(PULL_BIN_MAGIC_V2);
+        payload.extend_from_slice(&(metadata.len() as u32).to_le_bytes());
+        payload.extend_from_slice(&metadata);
+
+        let error = decode_pull_bin_v2_response(&payload).expect_err("truncated count should fail");
+        assert!(error
+            .to_string()
+            .contains("invalid pull_bin_v2 response: truncated count"));
+    }
 }
