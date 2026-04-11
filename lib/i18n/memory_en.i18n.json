@@ -61,6 +61,13 @@
     "responseLanguage": "Response language",
     "responseStyle": "Response style",
     "responseFormat": "Response format",
-    "selfProfile": "Self profile"
+    "selfProfile": "Self profile",
+    "decisionMemory": "Decision memory"
+  },
+  "generatedSummaries": {
+    "responseLanguage": "User prefers responses in $language.",
+    "responseStyle": "User prefers concise, practical responses.",
+    "responseFormat": "User prefers bullet-style structure when possible.",
+    "activeTaskPattern": "User is actively working across these task threads:"
   }
 }

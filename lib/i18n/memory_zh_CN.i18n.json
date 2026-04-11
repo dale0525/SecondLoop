@@ -61,6 +61,13 @@
     "responseLanguage": "回复语言",
     "responseStyle": "回复风格",
     "responseFormat": "回复格式",
-    "selfProfile": "自我画像"
+    "selfProfile": "自我画像",
+    "decisionMemory": "决策记录"
+  },
+  "generatedSummaries": {
+    "responseLanguage": "用户偏好使用$language回复。",
+    "responseStyle": "用户偏好简洁、务实的回复风格。",
+    "responseFormat": "用户偏好尽量使用要点式结构。",
+    "activeTaskPattern": "用户当前主要在推进这些任务："
   }
 }

@@ -235,7 +235,12 @@ class _ChatAnswerEvidencePanelState extends State<ChatAnswerEvidencePanel> {
                             ),
                             const SizedBox(height: 6),
                             Text(
-                              item.displaySummary,
+                              resolveMemoryDisplaySummary(
+                                context.t,
+                                documentId: item.documentId,
+                                explicitSummary: item.summary,
+                                rawText: item.summary,
+                              ),
                               style: theme.textTheme.bodyMedium,
                             ),
                             if (whyUsed.isNotEmpty) ...[

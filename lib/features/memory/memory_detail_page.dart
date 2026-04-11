@@ -185,12 +185,23 @@ class _MemoryDetailPageState extends State<MemoryDetailPage> {
         final doc = data.document.document;
         final feedback = doc.memoryFeedback;
         final status = effectiveMemoryStatus(doc);
-        final summary = (doc.summary ?? '').trim();
         final title = resolveMemoryDisplayTitle(
           context.t,
           documentId: doc.documentId,
           explicitTitle: doc.title,
           correctedTitle: doc.memoryFeedback.correctedTitle,
+        );
+        final summary = resolveMemoryDisplaySummary(
+          context.t,
+          documentId: doc.documentId,
+          explicitSummary: doc.summary,
+          rawText: doc.rawText,
+          correctedSummary: doc.memoryFeedback.correctedSummary,
+        );
+        final detailBody = resolveMemoryDisplayBody(
+          context.t,
+          documentId: doc.documentId,
+          rawText: doc.rawText,
         );
 
         if (widget.startInEditMode && !_didAutoOpenEdit) {
@@ -255,10 +266,10 @@ class _MemoryDetailPageState extends State<MemoryDetailPage> {
                       const SizedBox(height: 12),
                       Text(summary),
                     ],
-                    if (doc.rawText.trim().isNotEmpty) ...[
+                    if (detailBody.isNotEmpty) ...[
                       const SizedBox(height: 12),
                       Text(
-                        doc.rawText.trim(),
+                        detailBody,
                         style: Theme.of(context).textTheme.bodySmall,
                       ),
                     ],
@@ -378,10 +389,11 @@ class _MemoryDetailPageState extends State<MemoryDetailPage> {
                                   maxLines: 4,
                                   overflow: TextOverflow.ellipsis,
                                 ),
-                                if (_unitAnchorLabel(unit).isNotEmpty) ...[
+                                if (_unitAnchorLabel(context, unit)
+                                    .isNotEmpty) ...[
                                   const SizedBox(height: 8),
                                   Text(
-                                    _unitAnchorLabel(unit),
+                                    _unitAnchorLabel(context, unit),
                                     style:
                                         Theme.of(context).textTheme.bodySmall,
                                   ),
@@ -473,9 +485,12 @@ bool _unitHasOpenableSource(KnowledgeUnit unit) {
       null;
 }
 
-String _unitAnchorLabel(KnowledgeUnit unit) {
+String _unitAnchorLabel(BuildContext context, KnowledgeUnit unit) {
   final parts = <String>[];
-  final sectionLabel = unit.anchors.sectionLabel?.trim();
+  final sectionLabel = resolveMemorySectionLabel(
+    context.t,
+    rawSectionLabel: unit.anchors.sectionLabel,
+  );
   if (sectionLabel != null && sectionLabel.isNotEmpty) {
     parts.add(sectionLabel);
   }
@@ -495,7 +510,12 @@ String _unitAnchorLabel(KnowledgeUnit unit) {
   if (attachmentSha != null && attachmentSha.isNotEmpty && parts.isEmpty) {
     parts.add('attachment');
   }
-  return parts.isEmpty ? unit.unitKind.name : parts.join(' · ');
+  if (parts.isEmpty) {
+    return unit.sourceKind == KnowledgeSourceKind.summary
+        ? context.t.memory.detail.sourceTitles.summary
+        : unit.unitKind.name;
+  }
+  return parts.join(' · ');
 }
 
 String _unitSnippet(KnowledgeUnit unit) {
@@ -524,7 +544,10 @@ String _unitSourceTitle(BuildContext context, KnowledgeUnit unit) {
   if (filename != null && filename.isNotEmpty) {
     return filename;
   }
-  final sectionLabel = unit.anchors.sectionLabel?.trim();
+  final sectionLabel = resolveMemorySectionLabel(
+    context.t,
+    rawSectionLabel: unit.anchors.sectionLabel,
+  );
   if (sectionLabel != null && sectionLabel.isNotEmpty) {
     return sectionLabel;
   }

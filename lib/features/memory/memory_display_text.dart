@@ -31,6 +31,78 @@ String resolveMemoryDisplayTitle(
   return _fallbackMemoryTitleFromDocumentId(documentId);
 }
 
+String resolveMemoryDisplaySummary(
+  Translations t, {
+  required String documentId,
+  String? explicitSummary,
+  String? rawText,
+  String? correctedSummary,
+}) {
+  final normalizedCorrected = correctedSummary?.trim();
+  if (normalizedCorrected != null && normalizedCorrected.isNotEmpty) {
+    return normalizedCorrected;
+  }
+
+  final localizedBody = resolveMemoryDisplayBody(
+    t,
+    documentId: documentId,
+    rawText: rawText ?? explicitSummary ?? '',
+  ).trim();
+  if (localizedBody.isNotEmpty) {
+    final firstLine = localizedBody.split('\n').first.trim();
+    if (firstLine.isNotEmpty) {
+      return firstLine;
+    }
+  }
+
+  final normalizedSummary = explicitSummary?.trim();
+  if (normalizedSummary != null && normalizedSummary.isNotEmpty) {
+    return normalizedSummary;
+  }
+
+  return '';
+}
+
+String resolveMemoryDisplayBody(
+  Translations t, {
+  required String documentId,
+  required String rawText,
+}) {
+  final normalized = rawText.trim();
+  if (normalized.isEmpty) return '';
+
+  switch (documentId.trim()) {
+    case 'generated:preference:response-language':
+      final language = _extractGeneratedResponseLanguage(normalized);
+      if (language == null) return normalized;
+      return t.memory.generatedSummaries.responseLanguage(language: language);
+    case 'generated:preference:response-style':
+      return t.memory.generatedSummaries.responseStyle;
+    case 'generated:preference:response-format':
+      return t.memory.generatedSummaries.responseFormat;
+    case 'generated:pattern:active-task-focus':
+      return _localizeActiveTaskPatternBody(t, normalized);
+  }
+
+  return normalized;
+}
+
+String? resolveMemorySectionLabel(
+  Translations t, {
+  required String? rawSectionLabel,
+}) {
+  final normalized = rawSectionLabel?.trim();
+  if (normalized == null || normalized.isEmpty) return null;
+  return switch (normalized) {
+    'generated_preference' ||
+    'generated_profile' ||
+    'generated_event' ||
+    'generated_pattern' =>
+      t.memory.detail.sourceTitles.summary,
+    _ => normalized,
+  };
+}
+
 String? _localizedKnownGeneratedMemoryTitle(
   Translations t,
   String documentId,
@@ -46,6 +118,7 @@ String? _localizedKnownGeneratedMemoryTitle(
     'generated:preference:response-format' =>
       t.memory.generatedTitles.responseFormat,
     'generated:profile:self-profile' => t.memory.generatedTitles.selfProfile,
+    'generated:event:decision' => t.memory.generatedTitles.decisionMemory,
     _ => null,
   };
 }
@@ -60,17 +133,79 @@ bool _matchesKnownGeneratedEnglishTitle(String documentId, String title) {
       ],
     'generated:pattern:weekly-focus' => const <String>['weekly focus'],
     'generated:preference:response-language' => const <String>[
-        'response language'
+        'response language',
+        'response language preference',
       ],
-    'generated:preference:response-style' => const <String>['response style'],
-    'generated:preference:response-format' => const <String>['response format'],
+    'generated:preference:response-style' => const <String>[
+        'response style',
+        'response style preference',
+      ],
+    'generated:preference:response-format' => const <String>[
+        'response format',
+        'response format preference',
+      ],
     'generated:profile:self-profile' => const <String>[
         'self profile',
         'profile',
+        'user profile',
+      ],
+    'generated:event:decision' => const <String>[
+        'decision memory',
       ],
     _ => const <String>[],
   };
   return aliases.contains(normalized);
+}
+
+String? _extractGeneratedResponseLanguage(String text) {
+  final match = RegExp(
+    r'^User prefers responses in\s+(.+?)\.$',
+    caseSensitive: false,
+  ).firstMatch(text);
+  if (match == null) return null;
+  final rawLanguage = match.group(1)?.trim().toLowerCase();
+  return switch (rawLanguage) {
+    'chinese' => '中文',
+    'english' => 'English',
+    final value? when value.isNotEmpty => match.group(1)!.trim(),
+    _ => null,
+  };
+}
+
+String _localizeActiveTaskPatternBody(Translations t, String text) {
+  final lines = text.split('\n');
+  if (lines.isEmpty) {
+    return t.memory.generatedSummaries.activeTaskPattern;
+  }
+
+  final localizedLines = <String>[
+    t.memory.generatedSummaries.activeTaskPattern,
+  ];
+  final bulletPattern = RegExp(r'^-\s+(.*?)\s+\[([a-z_]+)\]\s*$');
+  for (final line in lines.skip(1)) {
+    final trimmed = line.trim();
+    if (trimmed.isEmpty) continue;
+    final match = bulletPattern.firstMatch(trimmed);
+    if (match == null) {
+      localizedLines.add(line);
+      continue;
+    }
+    final title = match.group(1)!.trim();
+    final status = match.group(2)!.trim();
+    localizedLines.add('- $title [${_localizedTodoStatusLabel(t, status)}]');
+  }
+  return localizedLines.join('\n');
+}
+
+String _localizedTodoStatusLabel(Translations t, String status) {
+  return switch (status.trim()) {
+    'inbox' => t.actions.todoStatus.inbox,
+    'open' => t.actions.todoStatus.open,
+    'in_progress' => t.actions.todoStatus.inProgress,
+    'done' => t.actions.todoStatus.done,
+    'dismissed' => t.actions.todoStatus.dismissed,
+    _ => status,
+  };
 }
 
 String _fallbackMemoryTitleFromDocumentId(String documentId) {

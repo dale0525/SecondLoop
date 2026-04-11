@@ -8,6 +8,8 @@ import 'package:secondloop/core/backend/knowledge_backend.dart';
 import 'package:secondloop/core/backend/knowledge_viewer_backend.dart';
 import 'package:secondloop/core/session/session_scope.dart';
 import 'package:secondloop/features/memory/memory_center_page.dart';
+import 'package:secondloop/features/memory/memory_center_models.dart';
+import 'package:secondloop/i18n/strings.g.dart';
 import 'package:secondloop/src/rust/knowledge/models.dart';
 
 import 'test_backend.dart';
@@ -80,6 +82,33 @@ void main() {
     expect(find.text('Launch work'), findsOneWidget);
     expect(find.textContaining('2 sources'), findsWidgets);
     expect(find.textContaining('Updated today'), findsWidgets);
+  });
+
+  test(
+      'buildMemoryCenterSections localizes generated memory titles and summaries',
+      () {
+    final nowMs = DateTime.now().millisecondsSinceEpoch;
+    final sections = buildMemoryCenterSections(
+      [
+        _document(
+          documentId: 'generated:pattern:active-task-focus',
+          title: 'Active task pattern',
+          summary: 'User is actively working across these task threads:',
+          rawText:
+              'User is actively working across these task threads:\n- 做视频 [in_progress]\n- 复盘选题 [open]',
+          updatedAtMs: nowMs,
+          memoryDisplay: const KnowledgeMemoryDisplay(
+            section: KnowledgeMemorySection.project,
+            sourceCount: 2,
+            status: KnowledgeMemoryStatus.inferred,
+          ),
+        ),
+      ],
+      AppLocale.zhCn.build(),
+    );
+
+    expect(sections.single.cards.single.title, '当前任务模式');
+    expect(sections.single.cards.single.summary, '用户当前主要在推进这些任务：');
   });
 
   testWidgets(
@@ -379,6 +408,7 @@ ContentKnowledgeDocument _document({
   required String title,
   required String summary,
   required int updatedAtMs,
+  String? rawText,
   KnowledgeOriginType originType = KnowledgeOriginType.generated,
   KnowledgeMemoryDisplay? memoryDisplay,
 }) {
@@ -401,8 +431,8 @@ ContentKnowledgeDocument _document({
     anchors: const KnowledgeAnchorSet(),
     title: title,
     summary: summary,
-    rawText: summary,
-    normalizedText: summary,
+    rawText: rawText ?? summary,
+    normalizedText: rawText ?? summary,
     memoryDisplay: memoryDisplay,
     memoryFeedback: const KnowledgeMemoryFeedback(
       useForAskAi: true,

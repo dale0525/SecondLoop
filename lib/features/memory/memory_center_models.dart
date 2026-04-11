@@ -1,4 +1,6 @@
+import '../../i18n/strings.g.dart';
 import '../../src/rust/knowledge/models.dart';
+import 'memory_display_text.dart';
 
 enum MemoryCenterSection {
   preferences,
@@ -46,6 +48,7 @@ class MemoryCenterSectionData {
 
 List<MemoryCenterSectionData> buildMemoryCenterSections(
   List<ContentKnowledgeDocument> documents,
+  Translations t,
 ) {
   final bySection = <MemoryCenterSection, List<MemoryCenterCard>>{};
   for (final document in documents) {
@@ -55,8 +58,19 @@ List<MemoryCenterSectionData> buildMemoryCenterSections(
     bySection.putIfAbsent(section, () => <MemoryCenterCard>[]).add(
           MemoryCenterCard(
             documentId: document.documentId,
-            title: _memoryTitleForDocument(document),
-            summary: _memorySummaryForDocument(document),
+            title: resolveMemoryDisplayTitle(
+              t,
+              documentId: document.documentId,
+              explicitTitle: document.title,
+              correctedTitle: document.memoryFeedback.correctedTitle,
+            ),
+            summary: resolveMemoryDisplaySummary(
+              t,
+              documentId: document.documentId,
+              explicitSummary: document.summary,
+              rawText: document.rawText,
+              correctedSummary: document.memoryFeedback.correctedSummary,
+            ),
             updatedAtMs: document.updatedAtMs,
             sourceCount: display?.sourceCount.toInt() ?? 1,
             section: section,
@@ -143,45 +157,4 @@ MemoryCardStatus _deriveStatus(ContentKnowledgeDocument document) {
     return MemoryCardStatus.maybeOutdated;
   }
   return MemoryCardStatus.inferred;
-}
-
-String _memoryTitleForDocument(ContentKnowledgeDocument document) {
-  final explicit = document.title?.trim();
-  if (explicit != null && explicit.isNotEmpty) return explicit;
-
-  final parts = document.documentId.split(':');
-  if (parts.length >= 3) {
-    return _titleCase(parts.sublist(2).join(' '));
-  }
-  return _titleCase(document.documentId.replaceAll(':', ' '));
-}
-
-String _memorySummaryForDocument(ContentKnowledgeDocument document) {
-  final summary = document.summary?.trim();
-  if (summary != null && summary.isNotEmpty) {
-    return summary;
-  }
-
-  final raw = document.rawText.trim();
-  if (raw.isNotEmpty) {
-    return raw.split('\n').first.trim();
-  }
-  return document.normalizedText.trim();
-}
-
-String _titleCase(String value) {
-  final words = value
-      .trim()
-      .replaceAll(RegExp(r'[_\-]+'), ' ')
-      .split(RegExp(r'\s+'))
-      .where((word) => word.isNotEmpty)
-      .toList(growable: false);
-  if (words.isEmpty) return value.trim();
-  return words
-      .map(
-        (word) => word.length == 1
-            ? word.toUpperCase()
-            : '${word[0].toUpperCase()}${word.substring(1).toLowerCase()}',
-      )
-      .join(' ');
 }

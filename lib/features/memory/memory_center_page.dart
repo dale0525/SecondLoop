@@ -32,6 +32,7 @@ class _MemoryCenterPageState extends State<MemoryCenterPage> {
   Future<List<MemoryCenterSectionData>>? _future;
 
   Future<List<MemoryCenterSectionData>> _load(BuildContext context) async {
+    final t = context.t;
     final backend = AppBackendScope.of(context);
     final knowledgeBackend = maybeKnowledgeBackendFor(backend);
     final sessionKey = SessionScope.of(context).sessionKey;
@@ -55,7 +56,7 @@ class _MemoryCenterPageState extends State<MemoryCenterPage> {
       }
       offset += pageSize;
     }
-    return buildMemoryCenterSections(memoryDocuments);
+    return buildMemoryCenterSections(memoryDocuments, t);
   }
 
   void _reload() {
