@@ -11,6 +11,7 @@ mod admin;
 mod apply_batch;
 mod artifacts;
 mod attachments;
+mod blob_repair;
 mod checkpoint;
 mod pending_apply;
 mod probe;
@@ -20,7 +21,7 @@ mod protocol;
 mod pull_recovery;
 mod reseed;
 mod runtime;
-mod state_machine;
+pub(crate) mod state_machine;
 mod v2_client;
 
 pub use admin::{clear_device, clear_vault};
@@ -345,6 +346,7 @@ fn push_internal(
         }
 
         if ops.is_empty() {
+            let _ = blob_repair::process_pending_blob_repairs(&upload_ctx, 8)?;
             if pushed_total > 0 {
                 maybe_run_managed_vault_retention(conn, &scope_id)?;
             }
@@ -636,6 +638,11 @@ pub fn pull(
         runtime::ensure_device_registered(&http, base_url, vault_id, id_token, &local_device_id)?;
 
     let scope_id = runtime::scope_id(base_url, vault_id);
+    let _ = state_machine::transition(
+        conn,
+        &scope_id,
+        state_machine::ManagedVaultSyncState::PullingIncremental,
+    );
     let mut since = load_since_map(conn, &scope_id)?;
 
     let endpoint_json = runtime::url(base_url, &format!("/v1/vaults/{vault_id}/ops:pull"))?;
@@ -662,9 +669,18 @@ pub fn pull(
                 Some(parsed) => {
                     checkpoint::mark_pull_bin_v2_supported(conn, &scope_id, "ops:pull_bin_v2")?;
                     if parsed.meta.reseed_required {
-                        reseed::clear_protocol_checkpoint_state(conn, &scope_id)?;
+                        let _ = state_machine::transition(
+                            conn,
+                            &scope_id,
+                            state_machine::ManagedVaultSyncState::ReseedRequired,
+                        );
+                        reseed::restart_incremental_pull(conn, &scope_id)?;
+                        let _ = state_machine::transition(
+                            conn,
+                            &scope_id,
+                            state_machine::ManagedVaultSyncState::Rebootstraping,
+                        );
                         since.clear();
-                        update_since_map(conn, &scope_id, &since)?;
                         stale_cursor_recovery_attempted = false;
                         remote_ahead_repair_tracker = RemoteAheadRepairTracker::default();
                         continue;
@@ -719,9 +735,18 @@ pub fn pull(
                 Some(parsed) => {
                     checkpoint::mark_pull_v2_supported(conn, &scope_id, "ops:pull_v2")?;
                     if parsed.meta.reseed_required {
-                        reseed::clear_protocol_checkpoint_state(conn, &scope_id)?;
+                        let _ = state_machine::transition(
+                            conn,
+                            &scope_id,
+                            state_machine::ManagedVaultSyncState::ReseedRequired,
+                        );
+                        reseed::restart_incremental_pull(conn, &scope_id)?;
+                        let _ = state_machine::transition(
+                            conn,
+                            &scope_id,
+                            state_machine::ManagedVaultSyncState::Rebootstraping,
+                        );
                         since.clear();
-                        update_since_map(conn, &scope_id, &since)?;
                         stale_cursor_recovery_attempted = false;
                         remote_ahead_repair_tracker = RemoteAheadRepairTracker::default();
                         continue;
@@ -1053,6 +1078,11 @@ pub fn pull(
         }
     }
 
+    let _ = state_machine::transition(
+        conn,
+        &scope_id,
+        state_machine::ManagedVaultSyncState::BlobBackfill,
+    );
     let app_dir = super::app_dir_from_conn(conn)?;
     let download_ctx = attachments::AttachmentUploadContext {
         conn,
@@ -1065,6 +1095,12 @@ pub fn pull(
         app_dir: app_dir.as_path(),
     };
     let _ = artifacts::download_missing_embedding_artifact_blobs(&download_ctx)?;
+    let _ = blob_repair::process_pending_blob_repairs(&download_ctx, 8)?;
+    let _ = state_machine::transition(
+        conn,
+        &scope_id,
+        state_machine::ManagedVaultSyncState::Completed,
+    );
 
     Ok(applied)
 }

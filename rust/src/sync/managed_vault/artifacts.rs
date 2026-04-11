@@ -26,6 +26,14 @@ pub(super) fn upload_embedding_artifact_blob_if_present(
     blob_ref: &str,
 ) -> Result<bool> {
     if !crate::db::has_embedding_artifact_blob(ctx.app_dir, blob_ref) {
+        let scope_id = super::runtime::scope_id(ctx.base_url, ctx.vault_id);
+        super::super::blob_repair::enqueue_blob_repair(
+            ctx.conn,
+            &scope_id,
+            super::super::blob_repair::BlobRepairKind::UploadArtifact {
+                blob_ref: blob_ref.to_string(),
+            },
+        )?;
         return Ok(false);
     }
 
@@ -102,6 +110,14 @@ pub(super) fn download_embedding_artifact_blobs_by_refs(
         let status = resp.status();
         if status.as_u16() == 404 {
             missing_remote += 1;
+            let scope_id = super::runtime::scope_id(ctx.base_url, ctx.vault_id);
+            super::super::blob_repair::enqueue_blob_repair(
+                ctx.conn,
+                &scope_id,
+                super::super::blob_repair::BlobRepairKind::DownloadArtifact {
+                    blob_ref: blob_ref.to_string(),
+                },
+            )?;
             continue;
         }
         if !status.is_success() {

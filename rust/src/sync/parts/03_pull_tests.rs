@@ -37,6 +37,46 @@ mod pull_progress_tests {
     use super::*;
     use tempfile::tempdir;
 
+    struct FixedTargetRemote {
+        target_id: String,
+        inner: InMemoryRemoteStore,
+    }
+
+    impl FixedTargetRemote {
+        fn new(target_id: &str) -> Self {
+            Self {
+                target_id: target_id.to_string(),
+                inner: InMemoryRemoteStore::new(),
+            }
+        }
+    }
+
+    impl RemoteStore for FixedTargetRemote {
+        fn target_id(&self) -> &str {
+            &self.target_id
+        }
+
+        fn mkdir_all(&self, path: &str) -> Result<()> {
+            self.inner.mkdir_all(path)
+        }
+
+        fn list(&self, dir: &str) -> Result<Vec<String>> {
+            self.inner.list(dir)
+        }
+
+        fn get(&self, path: &str) -> Result<Vec<u8>> {
+            self.inner.get(path)
+        }
+
+        fn put(&self, path: &str, bytes: Vec<u8>) -> Result<()> {
+            self.inner.put(path, bytes)
+        }
+
+        fn delete(&self, path: &str) -> Result<()> {
+            self.inner.delete(path)
+        }
+    }
+
     #[test]
     fn pull_with_progress_reports_total_ops_from_cursor_json() {
         let db_key = [7u8; 32];
@@ -74,6 +114,66 @@ mod pull_progress_tests {
         assert!(!seen.is_empty());
         assert_eq!(seen[0].1, 1);
         assert_eq!(*seen.last().unwrap(), (1, 1));
+    }
+
+    #[test]
+    fn pull_resets_local_cursor_when_manifest_generation_changes() {
+        let db_key = [21u8; 32];
+        let sync_key = [22u8; 32];
+        let target_id = "webdav:https://example.invalid/dav/";
+        let remote = FixedTargetRemote::new(target_id);
+
+        let dir_a = tempdir().expect("tempdir A");
+        let conn_a = crate::db::open(dir_a.path()).expect("open A");
+        let _conversation =
+            crate::db::create_conversation(&conn_a, &db_key, "Test").expect("create A");
+        let pushed = push_ops_only(&conn_a, &db_key, &sync_key, &remote, "SecondLoop")
+            .expect("push A");
+        assert_eq!(pushed, 1);
+
+        let dir_b = tempdir().expect("tempdir B");
+        let conn_b = crate::db::open(dir_b.path()).expect("open B");
+        let scope_id = sync_scope_id(&remote, &normalize_dir("SecondLoop"));
+        let remote_device_id: String = conn_a
+            .query_row(
+                r#"SELECT value FROM kv WHERE key = 'device_id'"#,
+                [],
+                |row| row.get(0),
+            )
+            .expect("device id A");
+        kv_set_i64(
+            &conn_b,
+            &format!("sync.last_pulled_seq:{scope_id}:{remote_device_id}"),
+            999,
+        )
+        .expect("set stale last pulled");
+        webdav_manifest::store_local_generation_id(&conn_b, &scope_id, "generation-stale")
+            .expect("set stale generation");
+
+        let manifest_path = webdav_manifest::sync_manifest_path("SecondLoop");
+        let mut manifest: webdav_manifest::WebDavSyncManifest =
+            serde_json::from_slice(&remote.get(&manifest_path).expect("manifest bytes"))
+                .expect("parse manifest");
+        manifest.generation_id = "generation-new".to_string();
+        remote
+            .put(&manifest_path, serde_json::to_vec(&manifest).expect("manifest json"))
+            .expect("write manifest");
+
+        let applied = pull(&conn_b, &db_key, &sync_key, &remote, "SecondLoop").expect("pull B");
+        assert_eq!(applied, 1);
+
+        let last_pulled_key = format!(
+            "sync.last_pulled_seq:{scope_id}:{remote_device_id}"
+        );
+        assert_eq!(
+            kv_get_i64(&conn_b, &last_pulled_key).expect("last pulled"),
+            Some(1)
+        );
+        assert_eq!(
+            webdav_manifest::load_local_generation_id(&conn_b, &scope_id)
+                .expect("load generation"),
+            Some("generation-new".to_string())
+        );
     }
 
     #[test]

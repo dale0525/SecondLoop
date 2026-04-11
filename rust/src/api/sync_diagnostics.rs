@@ -45,6 +45,10 @@ struct ManagedVaultCursorRemoteDiagnostics {
     managed_vault_generation_id: Option<String>,
     managed_vault_checkpoint_token_present: bool,
     managed_vault_last_route: Option<String>,
+    managed_vault_last_state: Option<String>,
+    blob_repair_queue_depth: u64,
+    blob_repair_last_attempted_at_ms: Option<i64>,
+    blob_repair_last_error: Option<String>,
     webdav_generation_id: Option<String>,
     webdav_manifest_status: Option<String>,
     remote_device_seq_map: Option<RemoteDeviceSeqMap>,
@@ -249,6 +253,10 @@ fn build_managed_vault_cursor_remote_diagnostics(
         kv_get_string(conn, &format!("managed_vault.checkpoint_token:{scope_id}"))?.is_some();
     let managed_vault_last_route =
         kv_get_string(conn, &format!("managed_vault.last_route:{scope_id}"))?;
+    let managed_vault_last_state =
+        crate::sync::managed_vault::state_machine::load_state(conn, &scope_id)?
+            .map(|state| state.as_str().to_string());
+    let blob_repair = crate::sync::blob_repair::load_blob_repair_diagnostics(conn, &scope_id)?;
     let local_device_id = read_local_device_id(conn)?;
     let local_device_id_for_output = local_device_id
         .clone()
@@ -293,6 +301,10 @@ fn build_managed_vault_cursor_remote_diagnostics(
         managed_vault_generation_id,
         managed_vault_checkpoint_token_present,
         managed_vault_last_route,
+        managed_vault_last_state,
+        blob_repair_queue_depth: blob_repair.queued_count,
+        blob_repair_last_attempted_at_ms: blob_repair.last_attempted_at_ms,
+        blob_repair_last_error: blob_repair.last_error,
         webdav_generation_id: None,
         webdav_manifest_status: Some("unavailable".to_string()),
         remote_device_seq_map,

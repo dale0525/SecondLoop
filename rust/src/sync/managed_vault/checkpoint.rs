@@ -146,6 +146,9 @@ pub(super) fn store_checkpoint_success(
     state.protocol_version = Some(protocol_version);
     state.last_route = Some(last_route.to_string());
     state.supports_pull_v2 = Some(true);
+    if last_route == "ops:pull_bin_v2" {
+        state.supports_pull_bin_v2 = Some(true);
+    }
     store_protocol_state(conn, scope_id, &state)
 }
 

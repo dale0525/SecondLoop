@@ -1,4 +1,5 @@
 use anyhow::{anyhow, Result};
+use rusqlite::{params, Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -29,6 +30,55 @@ pub fn device_manifest_path(remote_root: &str, device_id: &str) -> String {
         super::normalize_dir(remote_root),
         device_id.trim()
     )
+}
+
+pub(crate) fn local_generation_key(scope_id: &str) -> String {
+    format!("sync.webdav.generation_id:{scope_id}")
+}
+
+pub(crate) fn load_local_generation_id(
+    conn: &Connection,
+    scope_id: &str,
+) -> Result<Option<String>> {
+    conn.query_row(
+        r#"SELECT value FROM kv WHERE key = ?1"#,
+        params![local_generation_key(scope_id)],
+        |row| row.get(0),
+    )
+    .optional()
+    .map_err(Into::into)
+}
+
+pub(crate) fn store_local_generation_id(
+    conn: &Connection,
+    scope_id: &str,
+    generation_id: &str,
+) -> Result<()> {
+    conn.execute(
+        r#"INSERT INTO kv(key, value) VALUES (?1, ?2)
+           ON CONFLICT(key) DO UPDATE SET value = excluded.value"#,
+        params![local_generation_key(scope_id), generation_id],
+    )?;
+    Ok(())
+}
+
+pub(crate) fn clear_local_scope_state(conn: &Connection, scope_id: &str) -> Result<()> {
+    let exact_keys = [
+        format!("sync.last_pushed_seq:{scope_id}"),
+        format!("sync.attachments.bytes_backfilled:{scope_id}"),
+        format!("sync.embedding_artifacts.bytes_backfilled:{scope_id}"),
+        format!("sync.ops_packs_backfilled:{scope_id}"),
+        local_generation_key(scope_id),
+    ];
+    for key in exact_keys {
+        let _ = conn.execute(r#"DELETE FROM kv WHERE key = ?1"#, params![key])?;
+    }
+    let prefixes = [format!("sync.last_pulled_seq:{scope_id}:")];
+    for prefix in prefixes {
+        let pattern = format!("{prefix}%");
+        let _ = conn.execute(r#"DELETE FROM kv WHERE key LIKE ?1"#, params![pattern])?;
+    }
+    Ok(())
 }
 
 pub fn read_sync_manifest(

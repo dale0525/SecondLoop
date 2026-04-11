@@ -33,10 +33,7 @@ fn pull_internal(
     let local_device_id = get_or_create_device_id(conn)?;
     let remote_root_dir = normalize_dir(remote_root);
     let scope_id = sync_scope_id(remote, &remote_root_dir);
-    if let Some(sync_manifest) = webdav_manifest::read_sync_manifest(remote, &remote_root_dir)? {
-        let generation_key = format!("sync.webdav.generation_id:{scope_id}");
-        kv_set_string(conn, &generation_key, &sync_manifest.generation_id)?;
-    }
+    reconcile_remote_generation_before_pull(conn, remote, &remote_root_dir, &scope_id)?;
     let remote_device_ids = list_remote_sync_device_ids(remote, &remote_root_dir)?;
 
     let total_ops = if progress.is_some() {
@@ -258,6 +255,7 @@ fn pull_internal(
             }
         };
         let outcome = download_embedding_artifact_blobs_by_refs(
+            conn,
             db_key,
             sync_key,
             remote,
@@ -269,6 +267,8 @@ fn pull_internal(
         total_units = total_units.saturating_sub(outcome.missing_remote);
         done_units = done_units.min(total_units);
     }
+
+    let _ = process_pending_blob_repairs_for_scope(conn, db_key, sync_key, remote, remote_root, 8)?;
 
     if let Some(cb) = progress {
         cb(done_units, total_units);
@@ -417,6 +417,33 @@ fn read_remote_cursor_max_seq(
         Err(e) if e.is::<NotFound>() => Ok(None),
         Err(e) => Err(e),
     }
+}
+
+fn reconcile_remote_generation_before_pull(
+    conn: &Connection,
+    remote: &impl RemoteStore,
+    remote_root_dir: &str,
+    scope_id: &str,
+) -> Result<()> {
+    let local_generation = webdav_manifest::load_local_generation_id(conn, scope_id)?;
+    let remote_generation = webdav_manifest::read_sync_manifest(remote, remote_root_dir)?
+        .map(|manifest| manifest.generation_id);
+
+    match (local_generation, remote_generation) {
+        (Some(local), Some(remote)) if local != remote => {
+            webdav_manifest::clear_local_scope_state(conn, scope_id)?;
+            webdav_manifest::store_local_generation_id(conn, scope_id, &remote)?;
+        }
+        (None, Some(remote)) => {
+            webdav_manifest::store_local_generation_id(conn, scope_id, &remote)?;
+        }
+        (Some(_), None) => {
+            webdav_manifest::clear_local_scope_state(conn, scope_id)?;
+        }
+        (None, None) => {}
+        (Some(_), Some(_)) => {}
+    }
+    Ok(())
 }
 
 fn read_remote_device_max_seq(

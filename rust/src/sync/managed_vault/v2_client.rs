@@ -25,7 +25,7 @@ pub(super) fn fetch_pull_v2_json(
         .json(request)
         .send()?;
     let status = resp.status();
-    if status.as_u16() == 404 {
+    if matches!(status.as_u16(), 404 | 405) {
         return Ok(None);
     }
     if !status.is_success() {
@@ -51,7 +51,7 @@ pub(super) fn fetch_pull_bin_v2(
         .json(request)
         .send()?;
     let status = resp.status();
-    if status.as_u16() == 404 {
+    if matches!(status.as_u16(), 404 | 405) {
         return Ok(None);
     }
     if !status.is_success() {

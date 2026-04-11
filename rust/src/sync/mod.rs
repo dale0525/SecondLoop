@@ -1,6 +1,7 @@
 // This module is split into smaller files to keep each file under ~1000 lines.
 // The pieces are `include!`'d so everything remains in `crate::sync`.
 
+pub mod blob_repair;
 pub mod localdir;
 pub mod managed_vault;
 pub mod recovery_key;

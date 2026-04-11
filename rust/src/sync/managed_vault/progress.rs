@@ -28,6 +28,11 @@ pub fn pull_with_progress(
         &local_device_id,
     )?;
     let scope_id = super::runtime::scope_id(base_url, vault_id);
+    let _ = super::state_machine::transition(
+        conn,
+        &scope_id,
+        super::state_machine::ManagedVaultSyncState::PullingIncremental,
+    );
     let mut since = super::load_since_map(conn, &scope_id)?;
     let progress_start_since = since.clone();
     let mut progress_high_water_since = progress_start_since.clone();
@@ -71,9 +76,18 @@ pub fn pull_with_progress(
                     }
 
                     if parsed.meta.reseed_required {
-                        super::reseed::clear_protocol_checkpoint_state(conn, &scope_id)?;
+                        let _ = super::state_machine::transition(
+                            conn,
+                            &scope_id,
+                            super::state_machine::ManagedVaultSyncState::ReseedRequired,
+                        );
+                        super::reseed::restart_incremental_pull(conn, &scope_id)?;
+                        let _ = super::state_machine::transition(
+                            conn,
+                            &scope_id,
+                            super::state_machine::ManagedVaultSyncState::Rebootstraping,
+                        );
                         since.clear();
-                        super::update_since_map(conn, &scope_id, &since)?;
                         stale_cursor_recovery_attempted = false;
                         remote_ahead_repair_tracker = RemoteAheadRepairTracker::default();
                         continue;
@@ -301,6 +315,11 @@ pub fn pull_with_progress(
         }
     }
 
+    let _ = super::state_machine::transition(
+        conn,
+        &scope_id,
+        super::state_machine::ManagedVaultSyncState::BlobBackfill,
+    );
     let app_dir = super::super::app_dir_from_conn(conn)?;
     let download_ctx = super::attachments::AttachmentUploadContext {
         conn,
@@ -338,7 +357,14 @@ pub fn pull_with_progress(
         done_units = done_units.min(total_units);
     }
 
+    let _ = super::blob_repair::process_pending_blob_repairs(&download_ctx, 8)?;
+
     progress(done_units, total_units);
+    let _ = super::state_machine::transition(
+        conn,
+        &scope_id,
+        super::state_machine::ManagedVaultSyncState::Completed,
+    );
 
     Ok(applied)
 }
