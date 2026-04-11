@@ -299,6 +299,104 @@ void main() {
       );
     },
   );
+
+  testWidgets(
+    'ChatAnswerEvidencePanel uses updated body for subsequent corrections',
+    (tester) async {
+      await tester.pumpWidget(
+        wrapWithI18n(
+          const MaterialApp(
+            home: ChatAnswerEvidencePanel(
+              evidence: ChatAnswerEvidence(
+                directSources: [],
+                memoryCards: [
+                  ChatAnswerEvidenceMemoryCard(
+                    documentId: 'generated:pattern:active-task-focus',
+                    title: 'Active task focus',
+                    summary: 'Initial summary',
+                    body: 'Initial body',
+                    sourceKind: 'summary',
+                    role: 'summary',
+                    createdAtMs: 3,
+                    updatedAtMs: 4,
+                    status: 'confirmed',
+                    sourceCount: 2,
+                    whyUsed: 'Summarize the current focus',
+                  ),
+                ],
+              ),
+              initialTab: ChatAnswerEvidenceTab.memoryCards,
+              onOpenDirectSource: _noopOpenDirectSource,
+              onOpenMemoryCard: _noopOpenMemoryCard,
+              onCorrectMemoryCard: _returnUpdatedCard,
+            ),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Correct'));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const ValueKey('memory_correction_summary_field')),
+        'Updated body from correction',
+      );
+      await tester.tap(find.text('Save'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Correct'));
+      await tester.pumpAndSettle();
+
+      final summaryField = tester.widget<TextField>(
+        find.byKey(const ValueKey('memory_correction_summary_field')),
+      );
+      expect(summaryField.controller?.text, 'Updated body from correction');
+    },
+  );
+
+  testWidgets(
+    'ChatAnswerEvidencePanel refreshes memory card state on load',
+    (tester) async {
+      await tester.pumpWidget(
+        wrapWithI18n(
+          const MaterialApp(
+            home: ChatAnswerEvidencePanel(
+              evidence: ChatAnswerEvidence(
+                directSources: [],
+                memoryCards: [
+                  ChatAnswerEvidenceMemoryCard(
+                    documentId: 'generated:preference:response-language',
+                    title: 'Response language',
+                    summary: 'User prefers Chinese.',
+                    sourceKind: 'summary',
+                    role: 'summary',
+                    createdAtMs: 3,
+                    updatedAtMs: 4,
+                    status: 'confirmed',
+                    sourceCount: 2,
+                    whyUsed: '用中文总结一下最近变化',
+                  ),
+                ],
+              ),
+              initialTab: ChatAnswerEvidenceTab.memoryCards,
+              onOpenDirectSource: _noopOpenDirectSource,
+              onOpenMemoryCard: _noopOpenMemoryCard,
+              onRefreshMemoryCard: _refreshDisabledDeletedCard,
+            ),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text('This memory was deleted after the answer was generated.'),
+        findsOneWidget,
+      );
+      expect(find.text('User prefers Chinese.'), findsNothing);
+    },
+  );
 }
 
 Future<void> _noopOpenDirectSource(String _) async {}
@@ -311,3 +409,13 @@ Future<ChatAnswerEvidenceMemoryCard?> _returnUpdatedCard(
   String summary,
 ) async =>
     card.copyWith(title: title, summary: summary, body: summary);
+
+Future<ChatAnswerEvidenceMemoryCard?> _refreshDisabledDeletedCard(
+  ChatAnswerEvidenceMemoryCard card,
+) async =>
+    card.copyWith(
+      summary: 'This memory was deleted after the answer was generated.',
+      body: 'This memory was deleted after the answer was generated.',
+      isDeleted: true,
+      useForAskAi: false,
+    );

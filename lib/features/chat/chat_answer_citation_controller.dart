@@ -26,6 +26,9 @@ class ChatAnswerCitationController {
       String title,
       String summary,
     )? onCorrectMemoryCard,
+    Future<ChatAnswerEvidenceMemoryCard?> Function(
+      ChatAnswerEvidenceMemoryCard card,
+    )? onRefreshMemoryCard,
     Future<void> Function(String documentId)? onDisableMemoryCard,
     Future<void> Function(String documentId)? onDeleteMemoryCard,
   }) async {
@@ -39,6 +42,7 @@ class ChatAnswerCitationController {
       onOpenDirectSource: onOpenDirectSource,
       onOpenMemoryCard: onOpenMemoryCard,
       onCorrectMemoryCard: onCorrectMemoryCard,
+      onRefreshMemoryCard: onRefreshMemoryCard,
       onDisableMemoryCard: onDisableMemoryCard,
       onDeleteMemoryCard: onDeleteMemoryCard,
     );
@@ -56,6 +60,9 @@ class ChatAnswerCitationController {
       String title,
       String summary,
     )? onCorrectMemoryCard,
+    Future<ChatAnswerEvidenceMemoryCard?> Function(
+      ChatAnswerEvidenceMemoryCard card,
+    )? onRefreshMemoryCard,
     Future<void> Function(String documentId)? onDisableMemoryCard,
     Future<void> Function(String documentId)? onDeleteMemoryCard,
   }) async {
@@ -69,6 +76,7 @@ class ChatAnswerCitationController {
       onOpenDirectSource: onOpenDirectSource,
       onOpenMemoryCard: onOpenMemoryCard,
       onCorrectMemoryCard: onCorrectMemoryCard,
+      onRefreshMemoryCard: onRefreshMemoryCard,
       onDisableMemoryCard: onDisableMemoryCard,
       onDeleteMemoryCard: onDeleteMemoryCard,
     );

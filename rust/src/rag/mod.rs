@@ -232,6 +232,63 @@ fn build_attachment_resource_direct_source(
     }
 }
 
+fn build_external_document_direct_source(
+    doc_id: &str,
+    chunk_index: i64,
+    title: &str,
+    snippet: &str,
+    created_at_ms: i64,
+) -> AnswerEvidenceDirectSource {
+    let document_id = format!("external:{doc_id}");
+    let normalized_title = title.trim();
+    let normalized_snippet = compact_snippet(snippet, 180);
+    AnswerEvidenceDirectSource {
+        id: format!("external-document:{doc_id}:{chunk_index}"),
+        href: format!(
+            "secondloop://knowledge-document/{}?chunk={chunk_index}",
+            document_id
+        ),
+        source_type: "document".to_string(),
+        label: "Document".to_string(),
+        source_type_label: Some("document".to_string()),
+        scope_label: None,
+        confidence_label: None,
+        title: Some(normalized_title.to_string()).filter(|value| !value.is_empty()),
+        snippet: normalized_snippet.clone(),
+        highlighted_text: Some(normalized_snippet),
+        created_at_ms: Some(created_at_ms),
+        updated_at_ms: Some(created_at_ms),
+        anchors: None,
+        document_id: Some(document_id),
+        unit_id: Some(format!("chunk:{chunk_index}")),
+    }
+}
+
+fn build_external_document_direct_source_from_context(
+    doc_id: &str,
+    chunk_index: i64,
+    context: &str,
+    created_at_ms: i64,
+) -> AnswerEvidenceDirectSource {
+    let mut title = "";
+    let mut snippet = "";
+    for line in context.lines() {
+        let trimmed = line.trim();
+        if let Some(value) = trimmed.strip_prefix("title:") {
+            title = value.trim();
+            continue;
+        }
+        if let Some(value) = trimmed.strip_prefix("content:") {
+            snippet = value.trim();
+            break;
+        }
+    }
+    if snippet.is_empty() {
+        snippet = context.trim();
+    }
+    build_external_document_direct_source(doc_id, chunk_index, title, snippet, created_at_ms)
+}
+
 fn build_memory_card_from_document(
     conn: &Connection,
     key: &[u8; 32],
@@ -1063,7 +1120,13 @@ pub fn ask_ai_with_provider(
                 chunk.distance,
                 ContextWithEvidence {
                     text: context,
-                    direct_sources: Vec::new(),
+                    direct_sources: vec![build_external_document_direct_source(
+                        &chunk.doc_id,
+                        chunk.chunk_index,
+                        &chunk.title,
+                        &chunk.snippet,
+                        chunk.created_at_ms,
+                    )],
                     memory_cards: Vec::new(),
                 },
             ));
@@ -1285,7 +1348,13 @@ pub fn ask_ai_with_provider_using_embedder<E: Embedder + ?Sized>(
                     chunk.distance,
                     ContextWithEvidence {
                         text: context,
-                        direct_sources: Vec::new(),
+                        direct_sources: vec![build_external_document_direct_source(
+                            &chunk.doc_id,
+                            chunk.chunk_index,
+                            &chunk.title,
+                            &chunk.snippet,
+                            chunk.created_at_ms,
+                        )],
                         memory_cards: Vec::new(),
                     },
                 ));
@@ -1561,6 +1630,20 @@ pub fn ask_ai_with_provider_using_active_embeddings(
                             kind,
                             chunk_index,
                             &text,
+                            candidate.created_at_ms,
+                        )]
+                    }
+                    ContextSource::ExternalDocument => {
+                        let mut parts = candidate.id.splitn(2, ':');
+                        let doc_id = parts.next().unwrap_or_default();
+                        let chunk_index = parts
+                            .next()
+                            .and_then(|value| value.parse::<i64>().ok())
+                            .unwrap_or_default();
+                        vec![build_external_document_direct_source_from_context(
+                            doc_id,
+                            chunk_index,
+                            &candidate.text,
                             candidate.created_at_ms,
                         )]
                     }

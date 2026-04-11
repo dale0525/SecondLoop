@@ -449,6 +449,7 @@ extension _ChatPageStateMethodsA on _ChatPageState {
             title: title,
             summary: summary,
           ),
+          onRefreshMemoryCard: _refreshMemoryFromEvidence,
           onDisableMemoryCard: (documentId) =>
               _disableMemoryFromEvidence(documentId),
           onDeleteMemoryCard: (documentId) =>
@@ -561,13 +562,41 @@ extension _ChatPageStateMethodsA on _ChatPageState {
       sessionKey,
       documentId: card.documentId,
     );
-    final memoryDisplay = refreshed.document.memoryDisplay;
+    return _memoryCardFromViewerDocument(card, refreshed.document);
+  }
+
+  Future<ChatAnswerEvidenceMemoryCard?> _refreshMemoryFromEvidence(
+    ChatAnswerEvidenceMemoryCard card,
+  ) async {
+    final viewerBackend =
+        maybeKnowledgeViewerBackendFor(AppBackendScope.of(context));
+    if (viewerBackend == null) return card;
+    final sessionKey = SessionScope.of(context).sessionKey;
+    final refreshed = await viewerBackend.getKnowledgeViewerDocument(
+      sessionKey,
+      documentId: card.documentId,
+    );
+    return _memoryCardFromViewerDocument(card, refreshed.document);
+  }
+
+  ChatAnswerEvidenceMemoryCard _memoryCardFromViewerDocument(
+    ChatAnswerEvidenceMemoryCard card,
+    ContentKnowledgeDocument document,
+  ) {
+    final memoryDisplay = document.memoryDisplay;
     return card.copyWith(
-      title: refreshed.document.title,
-      summary: refreshed.document.summary,
-      status: (memoryDisplay?.status ?? KnowledgeMemoryStatus.confirmed).name,
+      title: document.title,
+      summary: document.summary,
+      body: document.rawText,
+      status: (memoryDisplay?.status ??
+              document.memoryFeedback.status ??
+              KnowledgeMemoryStatus.confirmed)
+          .name,
       sourceCount: memoryDisplay?.sourceCount.toInt() ?? card.sourceCount,
-      updatedAtMs: refreshed.document.updatedAtMs.toInt(),
+      updatedAtMs: document.updatedAtMs.toInt(),
+      useForAskAi: document.memoryFeedback.useForAskAi,
+      isDeleted: document.memoryFeedback.isDeleted,
+      markedInaccurate: document.memoryFeedback.markedInaccurate,
     );
   }
 

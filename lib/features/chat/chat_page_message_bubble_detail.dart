@@ -50,6 +50,15 @@ extension _ChatPageStateMessageBubbleDetail on _ChatPageState {
       return true;
     }
 
+    final knowledgeDocumentLink = parseKnowledgeDocumentDeepLink(href);
+    if (knowledgeDocumentLink != null) {
+      await KnowledgeDocumentViewerPage.openDocumentId(
+        context,
+        documentId: knowledgeDocumentLink.documentId,
+      );
+      return true;
+    }
+
     final messageLink = parseMessageDeepLink(href);
     if (messageLink == null) {
       return false;

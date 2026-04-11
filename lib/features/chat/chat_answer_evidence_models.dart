@@ -117,6 +117,9 @@ class ChatAnswerEvidenceMemoryCard {
     required this.status,
     required this.sourceCount,
     required this.whyUsed,
+    this.useForAskAi = true,
+    this.isDeleted = false,
+    this.markedInaccurate = false,
   });
 
   final String documentId;
@@ -130,6 +133,9 @@ class ChatAnswerEvidenceMemoryCard {
   final String status;
   final int sourceCount;
   final String? whyUsed;
+  final bool useForAskAi;
+  final bool isDeleted;
+  final bool markedInaccurate;
 
   ChatAnswerEvidenceMemoryCard copyWith({
     String? title,
@@ -139,6 +145,9 @@ class ChatAnswerEvidenceMemoryCard {
     int? sourceCount,
     String? whyUsed,
     int? updatedAtMs,
+    bool? useForAskAi,
+    bool? isDeleted,
+    bool? markedInaccurate,
   }) {
     return ChatAnswerEvidenceMemoryCard(
       documentId: documentId,
@@ -152,6 +161,9 @@ class ChatAnswerEvidenceMemoryCard {
       status: status ?? this.status,
       sourceCount: sourceCount ?? this.sourceCount,
       whyUsed: whyUsed ?? this.whyUsed,
+      useForAskAi: useForAskAi ?? this.useForAskAi,
+      isDeleted: isDeleted ?? this.isDeleted,
+      markedInaccurate: markedInaccurate ?? this.markedInaccurate,
     );
   }
 

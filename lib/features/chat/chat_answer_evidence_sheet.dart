@@ -23,6 +23,9 @@ Future<void> showChatAnswerEvidenceSheet(
     String title,
     String summary,
   )? onCorrectMemoryCard,
+  Future<ChatAnswerEvidenceMemoryCard?> Function(
+    ChatAnswerEvidenceMemoryCard card,
+  )? onRefreshMemoryCard,
   Future<void> Function(String documentId)? onDisableMemoryCard,
   Future<void> Function(String documentId)? onDeleteMemoryCard,
 }) {
@@ -34,6 +37,7 @@ Future<void> showChatAnswerEvidenceSheet(
     onOpenDirectSource: onOpenDirectSource,
     onOpenMemoryCard: onOpenMemoryCard,
     onCorrectMemoryCard: onCorrectMemoryCard,
+    onRefreshMemoryCard: onRefreshMemoryCard,
     onDisableMemoryCard: onDisableMemoryCard,
     onDeleteMemoryCard: onDeleteMemoryCard,
   );
@@ -88,6 +92,7 @@ class ChatAnswerEvidencePanel extends StatefulWidget {
     required this.onOpenDirectSource,
     required this.onOpenMemoryCard,
     this.onCorrectMemoryCard,
+    this.onRefreshMemoryCard,
     this.onDisableMemoryCard,
     this.onDeleteMemoryCard,
     this.highlightedHref,
@@ -104,6 +109,9 @@ class ChatAnswerEvidencePanel extends StatefulWidget {
     String title,
     String summary,
   )? onCorrectMemoryCard;
+  final Future<ChatAnswerEvidenceMemoryCard?> Function(
+    ChatAnswerEvidenceMemoryCard card,
+  )? onRefreshMemoryCard;
   final Future<void> Function(String documentId)? onDisableMemoryCard;
   final Future<void> Function(String documentId)? onDeleteMemoryCard;
 
@@ -113,8 +121,6 @@ class ChatAnswerEvidencePanel extends StatefulWidget {
 }
 
 class _ChatAnswerEvidencePanelState extends State<ChatAnswerEvidencePanel> {
-  final Set<String> _disabledMemoryIds = <String>{};
-  final Set<String> _deletedMemoryIds = <String>{};
   late List<ChatAnswerEvidenceMemoryCard> _memoryCards;
 
   @override
@@ -123,6 +129,7 @@ class _ChatAnswerEvidencePanelState extends State<ChatAnswerEvidencePanel> {
     _memoryCards = List<ChatAnswerEvidenceMemoryCard>.from(
       widget.evidence.memoryCards,
     );
+    _refreshMemoryCards();
   }
 
   @override
@@ -133,7 +140,26 @@ class _ChatAnswerEvidencePanelState extends State<ChatAnswerEvidencePanel> {
       _memoryCards = List<ChatAnswerEvidenceMemoryCard>.from(
         widget.evidence.memoryCards,
       );
+      _refreshMemoryCards();
     }
+  }
+
+  Future<void> _refreshMemoryCards() async {
+    final refresh = widget.onRefreshMemoryCard;
+    if (refresh == null || _memoryCards.isEmpty) return;
+
+    final refreshed = <ChatAnswerEvidenceMemoryCard>[];
+    for (final card in _memoryCards) {
+      try {
+        refreshed.add(await refresh(card) ?? card);
+      } catch (_) {
+        refreshed.add(card);
+      }
+    }
+    if (!mounted) return;
+    setState(() {
+      _memoryCards = refreshed;
+    });
   }
 
   @override
@@ -187,10 +213,8 @@ class _ChatAnswerEvidencePanelState extends State<ChatAnswerEvidencePanel> {
                     itemBuilder: (context, index) {
                       final item = _memoryCards[index];
                       final whyUsed = item.whyUsed?.trim() ?? '';
-                      final isDisabled =
-                          _disabledMemoryIds.contains(item.documentId);
-                      final isDeleted =
-                          _deletedMemoryIds.contains(item.documentId);
+                      final isDisabled = !item.useForAskAi;
+                      final isDeleted = item.isDeleted;
                       return SlSurface(
                         padding: const EdgeInsets.all(12),
                         child: Column(
@@ -306,8 +330,10 @@ class _ChatAnswerEvidencePanelState extends State<ChatAnswerEvidencePanel> {
                                             );
                                             if (!mounted) return;
                                             setState(() {
-                                              _disabledMemoryIds
-                                                  .add(item.documentId);
+                                              _memoryCards[index] =
+                                                  item.copyWith(
+                                                useForAskAi: false,
+                                              );
                                             });
                                           },
                                     child: Text(
@@ -325,8 +351,10 @@ class _ChatAnswerEvidencePanelState extends State<ChatAnswerEvidencePanel> {
                                             );
                                             if (!mounted) return;
                                             setState(() {
-                                              _deletedMemoryIds
-                                                  .add(item.documentId);
+                                              _memoryCards[index] =
+                                                  item.copyWith(
+                                                isDeleted: true,
+                                              );
                                             });
                                           },
                                     child: Text(

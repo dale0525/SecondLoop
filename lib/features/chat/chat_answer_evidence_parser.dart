@@ -83,6 +83,9 @@ ChatAnswerEvidenceMemoryCard? _parseMemoryCard(Object? raw) {
     status: _readString(raw['status']) ?? 'inferred',
     sourceCount: _readInt(raw['source_count']) ?? 0,
     whyUsed: _readString(raw['why_used']),
+    useForAskAi: _readBool(raw['use_for_ask_ai']) ?? true,
+    isDeleted: _readBool(raw['is_deleted']) ?? false,
+    markedInaccurate: _readBool(raw['marked_inaccurate']) ?? false,
   );
 }
 
@@ -95,5 +98,10 @@ String? _readString(Object? value) {
 int? _readInt(Object? value) {
   if (value is int) return value;
   if (value is num) return value.toInt();
+  return null;
+}
+
+bool? _readBool(Object? value) {
+  if (value is bool) return value;
   return null;
 }

@@ -584,6 +584,8 @@ extension _ChatPageStateMessageItemBuilder on _ChatPageState {
                                     title: title,
                                     summary: summary,
                                   ),
+                                  onRefreshMemoryCard:
+                                      _refreshMemoryFromEvidence,
                                   onDisableMemoryCard: (documentId) =>
                                       _disableMemoryFromEvidence(documentId),
                                   onDeleteMemoryCard: (documentId) =>
@@ -608,6 +610,8 @@ extension _ChatPageStateMessageItemBuilder on _ChatPageState {
                                     title: title,
                                     summary: summary,
                                   ),
+                                  onRefreshMemoryCard:
+                                      _refreshMemoryFromEvidence,
                                   onDisableMemoryCard: (documentId) =>
                                       _disableMemoryFromEvidence(documentId),
                                   onDeleteMemoryCard: (documentId) =>
@@ -631,6 +635,8 @@ extension _ChatPageStateMessageItemBuilder on _ChatPageState {
                                     title: title,
                                     summary: summary,
                                   ),
+                                  onRefreshMemoryCard:
+                                      _refreshMemoryFromEvidence,
                                   onDisableMemoryCard: (documentId) =>
                                       _disableMemoryFromEvidence(documentId),
                                   onDeleteMemoryCard: (documentId) =>

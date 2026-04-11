@@ -16,12 +16,14 @@ import '../actions/assistant_message_actions.dart';
 import '../attachments/attachment_deeplink.dart';
 import '../attachments/attachment_viewer_page.dart';
 import '../knowledge_viewer/knowledge_document_viewer.dart';
+import '../knowledge_viewer/knowledge_document_viewer_page.dart';
 import '../memory/memory_detail_page.dart';
 import 'chat_answer_citation_controller.dart';
 import 'chat_answer_evidence_models.dart';
 import 'chat_answer_evidence_parser.dart';
 import 'chat_answer_evidence_sheet.dart';
 import 'chat_markdown_link_handler.dart';
+import 'knowledge_document_deeplink.dart';
 import 'message_deeplink.dart';
 import 'chat_markdown_rich_rendering.dart';
 import 'chat_markdown_sanitizer.dart';
@@ -217,18 +219,69 @@ class MessageViewerPage extends StatelessWidget {
       sessionKey,
       documentId: card.documentId,
     );
-    final memoryDisplay = refreshed.document.memoryDisplay;
-    return card.copyWith(
-      title: refreshed.document.title,
-      summary: refreshed.document.summary,
-      status: (memoryDisplay?.status ?? KnowledgeMemoryStatus.confirmed).name,
-      sourceCount: memoryDisplay?.sourceCount.toInt() ?? card.sourceCount,
-      updatedAtMs: refreshed.document.updatedAtMs.toInt(),
+    return _memoryCardFromViewerDocument(card, refreshed.document);
+  }
+
+  Future<ChatAnswerEvidenceMemoryCard?> _refreshMemoryFromEvidence(
+    BuildContext context,
+    ChatAnswerEvidenceMemoryCard card,
+  ) async {
+    final viewerBackend =
+        maybeKnowledgeViewerBackendFor(AppBackendScope.of(context));
+    final sessionKey = SessionScope.maybeOf(context)?.sessionKey;
+    if (viewerBackend == null || sessionKey == null) {
+      return card;
+    }
+    final refreshed = await viewerBackend.getKnowledgeViewerDocument(
+      sessionKey,
+      documentId: card.documentId,
     );
+    return _memoryCardFromViewerDocument(card, refreshed.document);
+  }
+
+  ChatAnswerEvidenceMemoryCard _memoryCardFromViewerDocument(
+    ChatAnswerEvidenceMemoryCard card,
+    ContentKnowledgeDocument document,
+  ) {
+    final memoryDisplay = document.memoryDisplay;
+    return card.copyWith(
+      title: document.title,
+      summary: document.summary,
+      body: document.rawText,
+      status: (memoryDisplay?.status ??
+              document.memoryFeedback.status ??
+              KnowledgeMemoryStatus.confirmed)
+          .name,
+      sourceCount: memoryDisplay?.sourceCount.toInt() ?? card.sourceCount,
+      updatedAtMs: document.updatedAtMs.toInt(),
+      useForAskAi: document.memoryFeedback.useForAskAi,
+      isDeleted: document.memoryFeedback.isDeleted,
+      markedInaccurate: document.memoryFeedback.markedInaccurate,
+    );
+  }
+
+  Future<bool> _openInAppKnowledgeDocument(
+    BuildContext context,
+    String href,
+  ) async {
+    final parsed = parseKnowledgeDocumentDeepLink(href);
+    if (parsed == null) return false;
+
+    await KnowledgeDocumentViewerPage.openDocumentId(
+      context,
+      documentId: parsed.documentId,
+    );
+    return true;
   }
 
   Future<bool> _openInAppLink(BuildContext context, String href) async {
     if (await _openInAppAttachment(context, href)) {
+      return true;
+    }
+    if (!context.mounted) {
+      return false;
+    }
+    if (await _openInAppKnowledgeDocument(context, href)) {
       return true;
     }
     if (!context.mounted) {
@@ -304,6 +357,8 @@ class MessageViewerPage extends StatelessWidget {
               title: title,
               summary: summary,
             ),
+            onRefreshMemoryCard: (card) =>
+                _refreshMemoryFromEvidence(context, card),
             onDisableMemoryCard: (documentId) =>
                 _disableMemoryFromEvidence(context, documentId),
             onDeleteMemoryCard: (documentId) =>
@@ -442,6 +497,8 @@ class MessageViewerPage extends StatelessWidget {
                         title: title,
                         summary: summary,
                       ),
+                      onRefreshMemoryCard: (card) =>
+                          _refreshMemoryFromEvidence(context, card),
                       onDisableMemoryCard: (documentId) =>
                           _disableMemoryFromEvidence(context, documentId),
                       onDeleteMemoryCard: (documentId) =>
@@ -463,6 +520,8 @@ class MessageViewerPage extends StatelessWidget {
                         title: title,
                         summary: summary,
                       ),
+                      onRefreshMemoryCard: (card) =>
+                          _refreshMemoryFromEvidence(context, card),
                       onDisableMemoryCard: (documentId) =>
                           _disableMemoryFromEvidence(context, documentId),
                       onDeleteMemoryCard: (documentId) =>
@@ -483,6 +542,8 @@ class MessageViewerPage extends StatelessWidget {
                         title: title,
                         summary: summary,
                       ),
+                      onRefreshMemoryCard: (card) =>
+                          _refreshMemoryFromEvidence(context, card),
                       onDisableMemoryCard: (documentId) =>
                           _disableMemoryFromEvidence(context, documentId),
                       onDeleteMemoryCard: (documentId) =>
