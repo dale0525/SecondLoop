@@ -47,9 +47,7 @@ pub fn pull_with_progress(
     let mut stale_cursor_recovery_attempted = false;
     loop {
         let checkpoint_state = super::checkpoint::load_checkpoint_state(conn, &scope_id)?;
-        let should_try_v2 = checkpoint_state.supports_pull_v2 == Some(true)
-            || checkpoint_state.checkpoint_token.is_some()
-            || checkpoint_state.generation_id.is_some();
+        let should_try_v2 = checkpoint_state.supports_pull_v2 != Some(false);
         if should_try_v2 {
             let request_v2 = super::v2_client::PullRequestV2 {
                 device_id: local_device_id.as_str(),

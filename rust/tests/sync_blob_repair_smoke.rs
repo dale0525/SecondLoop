@@ -95,3 +95,95 @@ fn webdav_blob_repair_queue_recovers_missing_attachment_on_next_pull() {
     assert_eq!(diagnostics.queued_count, 0);
     assert!(diagnostics.last_attempted_at_ms.is_some());
 }
+
+#[test]
+fn webdav_generation_reset_clears_blob_repair_queue() {
+    let target_id = "webdav:https://example.invalid/dav/".to_string();
+    let remote_root = "SecondLoopTest";
+    let remote = FixedTargetRemote::new(target_id.clone());
+    let scope_id = scope_id(&remote, remote_root);
+
+    let temp = tempfile::tempdir().expect("tempdir");
+    let app_dir = temp.path().join("secondloop");
+    let key = auth::init_master_password(&app_dir, "pw", KdfParams::for_test()).expect("init");
+    let conn = db::open(&app_dir).expect("open db");
+    let sync_key = derive_root_key(
+        "sync-passphrase",
+        b"secondloop-sync1",
+        &KdfParams::for_test(),
+    )
+    .expect("derive sync key");
+
+    let conversation = db::get_or_create_loop_home_conversation(&conn, &key).expect("conversation");
+    let _message =
+        db::insert_message(&conn, &key, &conversation.id, "user", "repair me").expect("insert msg");
+
+    let pushed = sync::push(&conn, &key, &sync_key, &remote, remote_root).expect("push");
+    assert!(pushed > 0);
+
+    sync::blob_repair::enqueue_blob_repair(
+        &conn,
+        &scope_id,
+        sync::blob_repair::BlobRepairKind::DownloadAttachment {
+            sha256: "missing-from-previous-generation".to_string(),
+        },
+    )
+    .expect("enqueue repair");
+    sync::blob_repair::record_blob_repair_error(&conn, &scope_id, "stale remote")
+        .expect("record repair error");
+
+    let diagnostics = sync::blob_repair::load_blob_repair_diagnostics(&conn, &scope_id)
+        .expect("diagnostics before reset");
+    assert_eq!(diagnostics.queued_count, 1);
+    assert_eq!(diagnostics.last_error.as_deref(), Some("stale remote"));
+
+    let reset_remote = FixedTargetRemote::new(target_id);
+    let pushed_after_reset =
+        sync::push(&conn, &key, &sync_key, &reset_remote, remote_root).expect("push after reset");
+    assert!(pushed_after_reset > 0);
+
+    let diagnostics = sync::blob_repair::load_blob_repair_diagnostics(&conn, &scope_id)
+        .expect("diagnostics after reset");
+    assert_eq!(diagnostics.queued_count, 0);
+    assert_eq!(diagnostics.last_error, None);
+}
+
+struct FixedTargetRemote {
+    target_id: String,
+    inner: sync::InMemoryRemoteStore,
+}
+
+impl FixedTargetRemote {
+    fn new(target_id: String) -> Self {
+        Self {
+            target_id,
+            inner: sync::InMemoryRemoteStore::new(),
+        }
+    }
+}
+
+impl RemoteStore for FixedTargetRemote {
+    fn target_id(&self) -> &str {
+        &self.target_id
+    }
+
+    fn mkdir_all(&self, path: &str) -> anyhow::Result<()> {
+        self.inner.mkdir_all(path)
+    }
+
+    fn list(&self, dir: &str) -> anyhow::Result<Vec<String>> {
+        self.inner.list(dir)
+    }
+
+    fn get(&self, path: &str) -> anyhow::Result<Vec<u8>> {
+        self.inner.get(path)
+    }
+
+    fn put(&self, path: &str, bytes: Vec<u8>) -> anyhow::Result<()> {
+        self.inner.put(path, bytes)
+    }
+
+    fn delete(&self, path: &str) -> anyhow::Result<()> {
+        self.inner.delete(path)
+    }
+}

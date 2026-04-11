@@ -142,6 +142,9 @@ pub(super) fn update_since_map(
     scope_id: &str,
     next: &BTreeMap<String, i64>,
 ) -> Result<()> {
+    let prefix = format!("managed_vault.last_pulled_seq:{scope_id}:");
+    let pattern = format!("{prefix}%");
+    let _ = conn.execute(r#"DELETE FROM kv WHERE key LIKE ?1"#, params![pattern])?;
     for (device_id, last_seq) in next {
         let key = format!("managed_vault.last_pulled_seq:{scope_id}:{device_id}");
         super::super::kv_set_i64(conn, &key, *last_seq)?;

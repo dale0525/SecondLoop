@@ -81,7 +81,7 @@ fn spawn_progress_recovery_server(
     let state_for_thread = Arc::clone(&state);
 
     thread::spawn(move || {
-        for _ in 0..3 {
+        for _ in 0..4 {
             let (mut stream, _) = listener.accept().expect("accept");
             let (headers, body) = read_http_request(&mut stream);
             let request_line = headers.lines().next().unwrap_or_default().to_string();
@@ -92,6 +92,11 @@ fn spawn_progress_recovery_server(
                     "200 OK",
                     r#"{"device_id":"local-device-progress"}"#,
                 );
+                continue;
+            }
+
+            if request_line.starts_with("POST /v1/vaults/test-vault/ops:pull_v2 ") {
+                respond_json(&mut stream, "404 Not Found", r#"{"error":"not_found"}"#);
                 continue;
             }
 
@@ -160,7 +165,7 @@ fn spawn_missing_max_after_large_first_page_server(
     let addr = format!("http://{}", listener.local_addr().expect("local addr"));
 
     thread::spawn(move || {
-        for _ in 0..3 {
+        for _ in 0..4 {
             let (mut stream, _) = listener.accept().expect("accept");
             let (headers, body) = read_http_request(&mut stream);
             let request_line = headers.lines().next().unwrap_or_default().to_string();
@@ -171,6 +176,11 @@ fn spawn_missing_max_after_large_first_page_server(
                     "200 OK",
                     r#"{"device_id":"local-device-progress"}"#,
                 );
+                continue;
+            }
+
+            if request_line.starts_with("POST /v1/vaults/test-vault/ops:pull_v2 ") {
+                respond_json(&mut stream, "404 Not Found", r#"{"error":"not_found"}"#);
                 continue;
             }
 
@@ -247,7 +257,7 @@ fn spawn_missing_max_after_cursor_rewind_server(
     let addr = format!("http://{}", listener.local_addr().expect("local addr"));
 
     thread::spawn(move || {
-        for _ in 0..5 {
+        for _ in 0..6 {
             let (mut stream, _) = listener.accept().expect("accept");
             let (headers, body) = read_http_request(&mut stream);
             let request_line = headers.lines().next().unwrap_or_default().to_string();
@@ -258,6 +268,11 @@ fn spawn_missing_max_after_cursor_rewind_server(
                     "200 OK",
                     r#"{"device_id":"local-device-progress"}"#,
                 );
+                continue;
+            }
+
+            if request_line.starts_with("POST /v1/vaults/test-vault/ops:pull_v2 ") {
+                respond_json(&mut stream, "404 Not Found", r#"{"error":"not_found"}"#);
                 continue;
             }
 

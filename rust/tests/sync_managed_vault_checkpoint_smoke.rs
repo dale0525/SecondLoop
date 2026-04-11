@@ -230,3 +230,71 @@ fn managed_vault_pull_uses_v2_checkpoint_route_when_available() {
     let _ = stop_tx.send(());
     handle.join().expect("join");
 }
+
+#[test]
+fn managed_vault_pull_with_progress_probes_v2_before_any_checkpoint_state_exists() {
+    let vault_id = "v1".to_string();
+    let id_token = "test_uid".to_string();
+
+    let temp_b = tempfile::tempdir().expect("tempdir B");
+    let app_dir_b = temp_b.path().join("secondloop_b");
+    let key_b =
+        auth::init_master_password(&app_dir_b, "pw-b", KdfParams::for_test()).expect("init B");
+    let conn_b = db::open(&app_dir_b).expect("open B db");
+
+    let sync_key = derive_root_key(
+        "sync-passphrase",
+        b"secondloop-sync1",
+        &KdfParams::for_test(),
+    )
+    .expect("derive sync key");
+    let encrypted_op_b64 = encrypted_conversation_op(
+        &sync_key,
+        "remote-a",
+        1,
+        "conversation-progress-v2-a",
+        "op-conversation-a",
+    );
+    let (base_url, stop_tx, handle) = start_v2_pull_server(encrypted_op_b64);
+
+    let mut seen_progress = Vec::new();
+    let applied = sync::managed_vault::pull_with_progress(
+        &conn_b,
+        &key_b,
+        &sync_key,
+        &base_url,
+        &vault_id,
+        &id_token,
+        &mut |done, total| seen_progress.push((done, total)),
+    )
+    .expect("pull with progress");
+    assert!(applied > 0);
+    assert!(!seen_progress.is_empty());
+    assert_eq!(seen_progress.last().copied(), Some((1, 1)));
+
+    let diagnostics =
+        secondloop_rust::api::sync_diagnostics::sync_managed_vault_cursor_diagnostics(
+            app_dir_b.to_string_lossy().to_string(),
+            base_url.clone(),
+            vault_id.clone(),
+            Some(id_token.clone()),
+        )
+        .expect("diagnostics");
+    let diagnostics_json: serde_json::Value =
+        serde_json::from_str(&diagnostics).expect("parse diagnostics");
+    assert_eq!(
+        diagnostics_json["managed_vault_protocol_version"].as_u64(),
+        Some(2)
+    );
+    assert_eq!(
+        diagnostics_json["managed_vault_generation_id"].as_str(),
+        Some("generation-a")
+    );
+    assert_eq!(
+        diagnostics_json["managed_vault_checkpoint_token_present"].as_bool(),
+        Some(true)
+    );
+
+    let _ = stop_tx.send(());
+    handle.join().expect("join");
+}

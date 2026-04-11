@@ -78,6 +78,7 @@ pub(crate) fn clear_local_scope_state(conn: &Connection, scope_id: &str) -> Resu
         let pattern = format!("{prefix}%");
         let _ = conn.execute(r#"DELETE FROM kv WHERE key LIKE ?1"#, params![pattern])?;
     }
+    super::blob_repair::clear_blob_repairs_for_scope(conn, scope_id)?;
     Ok(())
 }
 
