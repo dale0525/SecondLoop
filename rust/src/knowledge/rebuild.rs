@@ -74,6 +74,10 @@ fn decode_document_row(
     let source_kind = serde_json::from_str(&format!("\"{source_kind_json}\""))?;
     let role = serde_json::from_str(&format!("\"{role_json}\""))?;
     let memory_feedback = decode_memory_feedback(row, 20)?;
+    let effective_updated_at_ms = memory_feedback
+        .updated_at_ms
+        .map(|value| value.max(updated_at_ms))
+        .unwrap_or(updated_at_ms);
     let mut title = title;
     let mut summary = summary;
     let mut raw_text =
@@ -128,7 +132,7 @@ fn decode_document_row(
         language,
         quality_score,
         created_at_ms,
-        updated_at_ms,
+        updated_at_ms: effective_updated_at_ms,
         versions,
         anchors: serde_json::from_str(&anchor_json)?,
         title,
@@ -218,7 +222,8 @@ pub fn list_knowledge_documents(
            LEFT JOIN knowledge_document_feedback f
              ON f.document_id = d.document_id
            WHERE COALESCE(f.is_deleted, 0) = 0
-           ORDER BY d.updated_at_ms DESC, d.document_id ASC
+           ORDER BY MAX(d.updated_at_ms, COALESCE(f.updated_at_ms, 0)) DESC,
+                    d.document_id ASC
            LIMIT ?1 OFFSET ?2"#,
     )?;
     let mut rows = stmt.query(params![limit as i64, offset as i64])?;
@@ -276,7 +281,8 @@ pub fn list_knowledge_documents_by_origin(
              ON f.document_id = d.document_id
            WHERE d.origin_type = ?1
              AND COALESCE(f.is_deleted, 0) = 0
-           ORDER BY d.updated_at_ms DESC, d.document_id ASC
+           ORDER BY MAX(d.updated_at_ms, COALESCE(f.updated_at_ms, 0)) DESC,
+                    d.document_id ASC
            LIMIT ?2 OFFSET ?3"#,
     )?;
     let mut rows = stmt.query(params![origin_type, limit as i64, offset as i64])?;

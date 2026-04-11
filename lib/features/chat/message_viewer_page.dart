@@ -151,8 +151,8 @@ class MessageViewerPage extends StatelessWidget {
       useForAskAi: false,
       isDeleted: feedback.isDeleted,
       markedInaccurate: feedback.markedInaccurate,
-      correctedTitle: feedback.correctedTitle ?? document.document.title,
-      correctedSummary: feedback.correctedSummary ?? document.document.summary,
+      correctedTitle: feedback.correctedTitle,
+      correctedSummary: feedback.correctedSummary,
     );
   }
 
@@ -177,8 +177,8 @@ class MessageViewerPage extends StatelessWidget {
       useForAskAi: feedback.useForAskAi,
       isDeleted: true,
       markedInaccurate: feedback.markedInaccurate,
-      correctedTitle: feedback.correctedTitle ?? document.document.title,
-      correctedSummary: feedback.correctedSummary ?? document.document.summary,
+      correctedTitle: feedback.correctedTitle,
+      correctedSummary: feedback.correctedSummary,
     );
   }
 

@@ -125,10 +125,8 @@ class _MemoryDetailPageState extends State<MemoryDetailPage> {
       useForAskAi: useForAskAi ?? feedback.useForAskAi,
       isDeleted: isDeleted ?? feedback.isDeleted,
       markedInaccurate: markedInaccurate ?? feedback.markedInaccurate,
-      correctedTitle:
-          correctedTitle ?? feedback.correctedTitle ?? document.title,
-      correctedSummary:
-          correctedSummary ?? feedback.correctedSummary ?? document.summary,
+      correctedTitle: correctedTitle ?? feedback.correctedTitle,
+      correctedSummary: correctedSummary ?? feedback.correctedSummary,
     );
     if (!mounted) return;
     _reload();

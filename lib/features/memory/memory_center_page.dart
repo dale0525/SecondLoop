@@ -5,6 +5,7 @@ import '../../core/backend/knowledge_backend.dart';
 import '../../core/navigation/inherited_scope_page_wrapper.dart';
 import '../../core/session/session_scope.dart';
 import '../../i18n/strings.g.dart';
+import '../../src/rust/knowledge/models.dart';
 import '../../ui/sl_surface.dart';
 import 'memory_center_models.dart';
 import 'memory_detail_page.dart';
@@ -27,15 +28,27 @@ class MemoryCenterPage extends StatelessWidget {
     final backend = AppBackendScope.of(context);
     final knowledgeBackend = maybeKnowledgeBackendFor(backend);
     final sessionKey = SessionScope.of(context).sessionKey;
+    const pageSize = 200;
     if (knowledgeBackend == null) {
       throw StateError('knowledge_backend_unavailable');
     }
-    final documents = await knowledgeBackend.listKnowledgeDocuments(
-      sessionKey,
-      limit: 200,
-      offset: 0,
-    );
-    return buildMemoryCenterSections(documents);
+    final memoryDocuments = <ContentKnowledgeDocument>[];
+    var offset = 0;
+    while (true) {
+      final page = await knowledgeBackend.listKnowledgeDocuments(
+        sessionKey,
+        limit: pageSize,
+        offset: offset,
+      );
+      memoryDocuments.addAll(
+        page.where(isMemoryCenterDocument),
+      );
+      if (page.length < pageSize) {
+        break;
+      }
+      offset += pageSize;
+    }
+    return buildMemoryCenterSections(memoryDocuments);
   }
 
   @override

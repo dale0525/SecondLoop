@@ -89,6 +89,9 @@ List<MemoryCenterSectionData> buildMemoryCenterSections(
       .toList(growable: false);
 }
 
+bool isMemoryCenterDocument(ContentKnowledgeDocument document) =>
+    memoryCenterSectionForData(document) != null;
+
 MemoryCenterSection? memoryCenterSectionForDocument(String documentId) {
   final normalized = documentId.trim();
   if (normalized.startsWith('generated:preference:')) {

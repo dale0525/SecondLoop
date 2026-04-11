@@ -504,8 +504,8 @@ extension _ChatPageStateMethodsA on _ChatPageState {
       useForAskAi: false,
       isDeleted: feedback.isDeleted,
       markedInaccurate: feedback.markedInaccurate,
-      correctedTitle: feedback.correctedTitle ?? document.document.title,
-      correctedSummary: feedback.correctedSummary ?? document.document.summary,
+      correctedTitle: feedback.correctedTitle,
+      correctedSummary: feedback.correctedSummary,
     );
   }
 
@@ -527,8 +527,8 @@ extension _ChatPageStateMethodsA on _ChatPageState {
       useForAskAi: feedback.useForAskAi,
       isDeleted: true,
       markedInaccurate: feedback.markedInaccurate,
-      correctedTitle: feedback.correctedTitle ?? document.document.title,
-      correctedSummary: feedback.correctedSummary ?? document.document.summary,
+      correctedTitle: feedback.correctedTitle,
+      correctedSummary: feedback.correctedSummary,
     );
   }
 

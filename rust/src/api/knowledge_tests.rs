@@ -488,6 +488,78 @@ fn knowledge_memory_delete_hides_cards_from_list_but_keeps_detail_restorable() {
 }
 
 #[test]
+fn knowledge_memory_feedback_bumps_effective_updated_at_and_sort_order() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let app_dir = dir.path().to_path_buf();
+    let app_dir_string = app_dir.to_string_lossy().into_owned();
+    let conn = db::open(&app_dir).expect("open");
+    let key = [24u8; 32];
+
+    let conv = db::create_conversation(&conn, &key, "Inbox").expect("conversation");
+    db::insert_message(
+        &conn,
+        &key,
+        &conv.id,
+        "user",
+        "Please answer in Chinese and keep responses short and practical.",
+    )
+    .expect("preference");
+    db::insert_message(
+        &conn,
+        &key,
+        &conv.id,
+        "user",
+        "I'm a developer building a release companion for launch week.",
+    )
+    .expect("profile");
+
+    crate::knowledge::ensure_knowledge_rebuild_requested(&conn).expect("request rebuild");
+    crate::knowledge::process_pending_knowledge_index_jobs_active(&conn, &key, 256)
+        .expect("process jobs");
+
+    let target_document_id = "generated:preference:response-language";
+    let other_document_id = "generated:profile:self-profile";
+    conn.execute(
+        "UPDATE knowledge_documents SET updated_at_ms = ?2 WHERE document_id = ?1",
+        params![target_document_id, 10_i64],
+    )
+    .expect("age target document");
+    conn.execute(
+        "UPDATE knowledge_documents SET updated_at_ms = ?2 WHERE document_id = ?1",
+        params![other_document_id, 20_i64],
+    )
+    .expect("age comparison document");
+
+    let feedback = crate::api::knowledge::db_upsert_knowledge_memory_feedback(
+        app_dir_string.clone(),
+        key.to_vec(),
+        target_document_id.to_string(),
+        Some(crate::knowledge::KnowledgeMemoryStatus::Confirmed),
+        true,
+        false,
+        false,
+        None,
+        None,
+    )
+    .expect("update feedback");
+    let feedback_updated_at = feedback.updated_at_ms.expect("feedback timestamp");
+
+    let listed =
+        crate::api::knowledge::db_list_knowledge_documents(app_dir_string, key.to_vec(), 100, 0)
+            .expect("list documents");
+    let target = listed
+        .iter()
+        .find(|document| document.document_id == target_document_id)
+        .expect("target document");
+
+    assert_eq!(
+        listed.first().map(|document| document.document_id.as_str()),
+        Some(target_document_id)
+    );
+    assert!(target.updated_at_ms >= feedback_updated_at);
+}
+
+#[test]
 fn generated_memory_cards_expose_backend_native_section_status_and_source_count() {
     let dir = tempfile::tempdir().expect("tempdir");
     let app_dir = dir.path().to_path_buf();
