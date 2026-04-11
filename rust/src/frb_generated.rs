@@ -33,7 +33,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.0.0-dev.38";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 496447031;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 228876067;
 
 // Section: executor
 
@@ -9055,6 +9055,58 @@ fn wire__crate__api__knowledge__db_search_knowledge_document_units_impl(
         },
     )
 }
+fn wire__crate__api__knowledge__db_upsert_knowledge_memory_feedback_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "db_upsert_knowledge_memory_feedback",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_app_dir = <String>::sse_decode(&mut deserializer);
+            let api_key = <Vec<u8>>::sse_decode(&mut deserializer);
+            let api_document_id = <String>::sse_decode(&mut deserializer);
+            let api_status = <Option<crate::knowledge::models::KnowledgeMemoryStatus>>::sse_decode(
+                &mut deserializer,
+            );
+            let api_use_for_ask_ai = <bool>::sse_decode(&mut deserializer);
+            let api_is_deleted = <bool>::sse_decode(&mut deserializer);
+            let api_marked_inaccurate = <bool>::sse_decode(&mut deserializer);
+            let api_corrected_title = <Option<String>>::sse_decode(&mut deserializer);
+            let api_corrected_summary = <Option<String>>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse((move || {
+                    crate::api::knowledge::db_upsert_knowledge_memory_feedback(
+                        api_app_dir,
+                        api_key,
+                        api_document_id,
+                        api_status,
+                        api_use_for_ask_ai,
+                        api_is_deleted,
+                        api_marked_inaccurate,
+                        api_corrected_title,
+                        api_corrected_summary,
+                    )
+                })())
+            }
+        },
+    )
+}
 fn wire__crate__api__media_annotation__db_get_media_annotation_config_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -10833,6 +10885,10 @@ impl SseDecode for crate::knowledge::models::ContentKnowledgeDocument {
         let mut var_summary = <Option<String>>::sse_decode(deserializer);
         let mut var_rawText = <String>::sse_decode(deserializer);
         let mut var_normalizedText = <String>::sse_decode(deserializer);
+        let mut var_memoryDisplay =
+            <Option<crate::knowledge::models::KnowledgeMemoryDisplay>>::sse_decode(deserializer);
+        let mut var_memoryFeedback =
+            <crate::knowledge::models::KnowledgeMemoryFeedback>::sse_decode(deserializer);
         return crate::knowledge::models::ContentKnowledgeDocument {
             document_id: var_documentId,
             origin_type: var_originType,
@@ -10848,6 +10904,8 @@ impl SseDecode for crate::knowledge::models::ContentKnowledgeDocument {
             summary: var_summary,
             raw_text: var_rawText,
             normalized_text: var_normalizedText,
+            memory_display: var_memoryDisplay,
+            memory_feedback: var_memoryFeedback,
         };
     }
 }
@@ -11088,6 +11146,73 @@ impl SseDecode for crate::knowledge::models::KnowledgeIndexStatus {
             last_indexed_model_name: var_lastIndexedModelName,
             last_indexed_dim: var_lastIndexedDim,
             versions: var_versions,
+        };
+    }
+}
+
+impl SseDecode for crate::knowledge::models::KnowledgeMemoryDisplay {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_section =
+            <crate::knowledge::models::KnowledgeMemorySection>::sse_decode(deserializer);
+        let mut var_sourceCount = <i64>::sse_decode(deserializer);
+        let mut var_status =
+            <crate::knowledge::models::KnowledgeMemoryStatus>::sse_decode(deserializer);
+        return crate::knowledge::models::KnowledgeMemoryDisplay {
+            section: var_section,
+            source_count: var_sourceCount,
+            status: var_status,
+        };
+    }
+}
+
+impl SseDecode for crate::knowledge::models::KnowledgeMemoryFeedback {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_status =
+            <Option<crate::knowledge::models::KnowledgeMemoryStatus>>::sse_decode(deserializer);
+        let mut var_useForAskAi = <bool>::sse_decode(deserializer);
+        let mut var_isDeleted = <bool>::sse_decode(deserializer);
+        let mut var_markedInaccurate = <bool>::sse_decode(deserializer);
+        let mut var_correctedTitle = <Option<String>>::sse_decode(deserializer);
+        let mut var_correctedSummary = <Option<String>>::sse_decode(deserializer);
+        let mut var_updatedAtMs = <Option<i64>>::sse_decode(deserializer);
+        return crate::knowledge::models::KnowledgeMemoryFeedback {
+            status: var_status,
+            use_for_ask_ai: var_useForAskAi,
+            is_deleted: var_isDeleted,
+            marked_inaccurate: var_markedInaccurate,
+            corrected_title: var_correctedTitle,
+            corrected_summary: var_correctedSummary,
+            updated_at_ms: var_updatedAtMs,
+        };
+    }
+}
+
+impl SseDecode for crate::knowledge::models::KnowledgeMemorySection {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut inner = <i32>::sse_decode(deserializer);
+        return match inner {
+            0 => crate::knowledge::models::KnowledgeMemorySection::Preference,
+            1 => crate::knowledge::models::KnowledgeMemorySection::Person,
+            2 => crate::knowledge::models::KnowledgeMemorySection::Project,
+            3 => crate::knowledge::models::KnowledgeMemorySection::Topic,
+            4 => crate::knowledge::models::KnowledgeMemorySection::RecentEvent,
+            _ => unreachable!("Invalid variant for KnowledgeMemorySection: {}", inner),
+        };
+    }
+}
+
+impl SseDecode for crate::knowledge::models::KnowledgeMemoryStatus {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut inner = <i32>::sse_decode(deserializer);
+        return match inner {
+            0 => crate::knowledge::models::KnowledgeMemoryStatus::Confirmed,
+            1 => crate::knowledge::models::KnowledgeMemoryStatus::Inferred,
+            2 => crate::knowledge::models::KnowledgeMemoryStatus::MaybeOutdated,
+            _ => unreachable!("Invalid variant for KnowledgeMemoryStatus: {}", inner),
         };
     }
 }
@@ -11798,6 +11923,7 @@ impl SseDecode for crate::db::Message {
         let mut var_content = <String>::sse_decode(deserializer);
         let mut var_createdAtMs = <i64>::sse_decode(deserializer);
         let mut var_isMemory = <bool>::sse_decode(deserializer);
+        let mut var_citationsJson = <Option<String>>::sse_decode(deserializer);
         return crate::db::Message {
             id: var_id,
             conversation_id: var_conversationId,
@@ -11805,6 +11931,7 @@ impl SseDecode for crate::db::Message {
             content: var_content,
             created_at_ms: var_createdAtMs,
             is_memory: var_isMemory,
+            citations_json: var_citationsJson,
         };
     }
 }
@@ -12020,6 +12147,32 @@ impl SseDecode for Option<i64> {
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         if (<bool>::sse_decode(deserializer)) {
             return Some(<i64>::sse_decode(deserializer));
+        } else {
+            return None;
+        }
+    }
+}
+
+impl SseDecode for Option<crate::knowledge::models::KnowledgeMemoryDisplay> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        if (<bool>::sse_decode(deserializer)) {
+            return Some(
+                <crate::knowledge::models::KnowledgeMemoryDisplay>::sse_decode(deserializer),
+            );
+        } else {
+            return None;
+        }
+    }
+}
+
+impl SseDecode for Option<crate::knowledge::models::KnowledgeMemoryStatus> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        if (<bool>::sse_decode(deserializer)) {
+            return Some(
+                <crate::knowledge::models::KnowledgeMemoryStatus>::sse_decode(deserializer),
+            );
         } else {
             return None;
         }
@@ -12678,43 +12831,44 @@ fn pde_ffi_dispatcher_primary_impl(
 216 => wire__crate__api__knowledge__db_request_knowledge_rebuild_impl(port, ptr, rust_vec_len, data_len),
 217 => wire__crate__api__knowledge__db_search_knowledge_impl(port, ptr, rust_vec_len, data_len),
 218 => wire__crate__api__knowledge__db_search_knowledge_document_units_impl(port, ptr, rust_vec_len, data_len),
-219 => wire__crate__api__media_annotation__db_get_media_annotation_config_impl(port, ptr, rust_vec_len, data_len),
-220 => wire__crate__api__media_annotation__db_set_media_annotation_config_impl(port, ptr, rust_vec_len, data_len),
-221 => wire__crate__api__media_annotation__media_annotation_byok_profile_impl(port, ptr, rust_vec_len, data_len),
-222 => wire__crate__api__media_annotation__url_enrichment_byok_profile_impl(port, ptr, rust_vec_len, data_len),
-223 => wire__crate__api__media_annotation__url_enrichment_cloud_gateway_impl(port, ptr, rust_vec_len, data_len),
-224 => wire__crate__api__migration_archive__migration_archive_export_impl(port, ptr, rust_vec_len, data_len),
-225 => wire__crate__api__migration_archive__migration_archive_export_estimate_impl(port, ptr, rust_vec_len, data_len),
-226 => wire__crate__api__migration_archive__migration_archive_export_progress_impl(port, ptr, rust_vec_len, data_len),
-227 => wire__crate__api__migration_archive__migration_archive_import_impl(port, ptr, rust_vec_len, data_len),
-228 => wire__crate__api__migration_archive__migration_archive_import_progress_impl(port, ptr, rust_vec_len, data_len),
-229 => wire__crate__api__migration_archive__migration_archive_inspect_impl(port, ptr, rust_vec_len, data_len),
-230 => wire__crate__api__migration_archive__migration_archive_markdown_path_for_item_id_impl(port, ptr, rust_vec_len, data_len),
-231 => wire__crate__api__migration_archive__migration_archive_parse_manifest_json_impl(port, ptr, rust_vec_len, data_len),
-232 => wire__crate__api__migration_archive__migration_archive_wikilink_for_item_impl(port, ptr, rust_vec_len, data_len),
-233 => wire__crate__api__oplog_maintenance__db_run_oplog_maintenance_impl(port, ptr, rust_vec_len, data_len),
-235 => wire__crate__api__simple__init_app_impl(port, ptr, rust_vec_len, data_len),
-236 => wire__crate__api__sync_diagnostics__sync_managed_vault_cursor_diagnostics_impl(port, ptr, rust_vec_len, data_len),
-237 => wire__crate__api__sync_progress__sync_localdir_pull_progress_impl(port, ptr, rust_vec_len, data_len),
-238 => wire__crate__api__sync_progress__sync_localdir_push_progress_impl(port, ptr, rust_vec_len, data_len),
-239 => wire__crate__api__sync_progress__sync_managed_vault_pull_progress_impl(port, ptr, rust_vec_len, data_len),
-240 => wire__crate__api__sync_progress__sync_managed_vault_push_ops_only_progress_impl(port, ptr, rust_vec_len, data_len),
-241 => wire__crate__api__sync_progress__sync_webdav_pull_progress_impl(port, ptr, rust_vec_len, data_len),
-242 => wire__crate__api__sync_progress__sync_webdav_push_ops_only_progress_impl(port, ptr, rust_vec_len, data_len),
-243 => wire__crate__api__tags__db_clear_tag_merge_feedback_impl(port, ptr, rust_vec_len, data_len),
-244 => wire__crate__api__tags__db_delete_tag_impl(port, ptr, rust_vec_len, data_len),
-245 => wire__crate__api__tags__db_list_hidden_tag_merge_suggestions_impl(port, ptr, rust_vec_len, data_len),
-246 => wire__crate__api__tags__db_list_manual_message_tag_names_impl(port, ptr, rust_vec_len, data_len),
-247 => wire__crate__api__tags__db_list_message_ids_by_tag_ids_impl(port, ptr, rust_vec_len, data_len),
-248 => wire__crate__api__tags__db_list_message_suggested_tags_impl(port, ptr, rust_vec_len, data_len),
-249 => wire__crate__api__tags__db_list_message_tags_impl(port, ptr, rust_vec_len, data_len),
-250 => wire__crate__api__tags__db_list_tag_merge_suggestions_impl(port, ptr, rust_vec_len, data_len),
-251 => wire__crate__api__tags__db_list_tags_impl(port, ptr, rust_vec_len, data_len),
-252 => wire__crate__api__tags__db_merge_tags_impl(port, ptr, rust_vec_len, data_len),
-253 => wire__crate__api__tags__db_record_tag_merge_feedback_impl(port, ptr, rust_vec_len, data_len),
-254 => wire__crate__api__tags__db_set_message_tags_impl(port, ptr, rust_vec_len, data_len),
-255 => wire__crate__api__tags__db_upsert_tag_impl(port, ptr, rust_vec_len, data_len),
-256 => wire__crate__api__todo_followup_generation__db_list_due_auto_todo_followup_generation_jobs_impl(port, ptr, rust_vec_len, data_len),
+219 => wire__crate__api__knowledge__db_upsert_knowledge_memory_feedback_impl(port, ptr, rust_vec_len, data_len),
+220 => wire__crate__api__media_annotation__db_get_media_annotation_config_impl(port, ptr, rust_vec_len, data_len),
+221 => wire__crate__api__media_annotation__db_set_media_annotation_config_impl(port, ptr, rust_vec_len, data_len),
+222 => wire__crate__api__media_annotation__media_annotation_byok_profile_impl(port, ptr, rust_vec_len, data_len),
+223 => wire__crate__api__media_annotation__url_enrichment_byok_profile_impl(port, ptr, rust_vec_len, data_len),
+224 => wire__crate__api__media_annotation__url_enrichment_cloud_gateway_impl(port, ptr, rust_vec_len, data_len),
+225 => wire__crate__api__migration_archive__migration_archive_export_impl(port, ptr, rust_vec_len, data_len),
+226 => wire__crate__api__migration_archive__migration_archive_export_estimate_impl(port, ptr, rust_vec_len, data_len),
+227 => wire__crate__api__migration_archive__migration_archive_export_progress_impl(port, ptr, rust_vec_len, data_len),
+228 => wire__crate__api__migration_archive__migration_archive_import_impl(port, ptr, rust_vec_len, data_len),
+229 => wire__crate__api__migration_archive__migration_archive_import_progress_impl(port, ptr, rust_vec_len, data_len),
+230 => wire__crate__api__migration_archive__migration_archive_inspect_impl(port, ptr, rust_vec_len, data_len),
+231 => wire__crate__api__migration_archive__migration_archive_markdown_path_for_item_id_impl(port, ptr, rust_vec_len, data_len),
+232 => wire__crate__api__migration_archive__migration_archive_parse_manifest_json_impl(port, ptr, rust_vec_len, data_len),
+233 => wire__crate__api__migration_archive__migration_archive_wikilink_for_item_impl(port, ptr, rust_vec_len, data_len),
+234 => wire__crate__api__oplog_maintenance__db_run_oplog_maintenance_impl(port, ptr, rust_vec_len, data_len),
+236 => wire__crate__api__simple__init_app_impl(port, ptr, rust_vec_len, data_len),
+237 => wire__crate__api__sync_diagnostics__sync_managed_vault_cursor_diagnostics_impl(port, ptr, rust_vec_len, data_len),
+238 => wire__crate__api__sync_progress__sync_localdir_pull_progress_impl(port, ptr, rust_vec_len, data_len),
+239 => wire__crate__api__sync_progress__sync_localdir_push_progress_impl(port, ptr, rust_vec_len, data_len),
+240 => wire__crate__api__sync_progress__sync_managed_vault_pull_progress_impl(port, ptr, rust_vec_len, data_len),
+241 => wire__crate__api__sync_progress__sync_managed_vault_push_ops_only_progress_impl(port, ptr, rust_vec_len, data_len),
+242 => wire__crate__api__sync_progress__sync_webdav_pull_progress_impl(port, ptr, rust_vec_len, data_len),
+243 => wire__crate__api__sync_progress__sync_webdav_push_ops_only_progress_impl(port, ptr, rust_vec_len, data_len),
+244 => wire__crate__api__tags__db_clear_tag_merge_feedback_impl(port, ptr, rust_vec_len, data_len),
+245 => wire__crate__api__tags__db_delete_tag_impl(port, ptr, rust_vec_len, data_len),
+246 => wire__crate__api__tags__db_list_hidden_tag_merge_suggestions_impl(port, ptr, rust_vec_len, data_len),
+247 => wire__crate__api__tags__db_list_manual_message_tag_names_impl(port, ptr, rust_vec_len, data_len),
+248 => wire__crate__api__tags__db_list_message_ids_by_tag_ids_impl(port, ptr, rust_vec_len, data_len),
+249 => wire__crate__api__tags__db_list_message_suggested_tags_impl(port, ptr, rust_vec_len, data_len),
+250 => wire__crate__api__tags__db_list_message_tags_impl(port, ptr, rust_vec_len, data_len),
+251 => wire__crate__api__tags__db_list_tag_merge_suggestions_impl(port, ptr, rust_vec_len, data_len),
+252 => wire__crate__api__tags__db_list_tags_impl(port, ptr, rust_vec_len, data_len),
+253 => wire__crate__api__tags__db_merge_tags_impl(port, ptr, rust_vec_len, data_len),
+254 => wire__crate__api__tags__db_record_tag_merge_feedback_impl(port, ptr, rust_vec_len, data_len),
+255 => wire__crate__api__tags__db_set_message_tags_impl(port, ptr, rust_vec_len, data_len),
+256 => wire__crate__api__tags__db_upsert_tag_impl(port, ptr, rust_vec_len, data_len),
+257 => wire__crate__api__todo_followup_generation__db_list_due_auto_todo_followup_generation_jobs_impl(port, ptr, rust_vec_len, data_len),
                         _ => unreachable!(),
                     }
 }
@@ -12727,7 +12881,7 @@ fn pde_ffi_dispatcher_sync_impl(
 ) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
     // Codec=Pde (Serialization + dispatch), see doc to use other codecs
     match func_id {
-        234 => wire__crate__api__simple__greet_impl(ptr, rust_vec_len, data_len),
+        235 => wire__crate__api__simple__greet_impl(ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }
@@ -12983,6 +13137,8 @@ impl flutter_rust_bridge::IntoDart for crate::knowledge::models::ContentKnowledg
             self.summary.into_into_dart().into_dart(),
             self.raw_text.into_into_dart().into_dart(),
             self.normalized_text.into_into_dart().into_dart(),
+            self.memory_display.into_into_dart().into_dart(),
+            self.memory_feedback.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -13215,6 +13371,100 @@ impl flutter_rust_bridge::IntoIntoDart<crate::knowledge::models::KnowledgeIndexS
     for crate::knowledge::models::KnowledgeIndexStatus
 {
     fn into_into_dart(self) -> crate::knowledge::models::KnowledgeIndexStatus {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::knowledge::models::KnowledgeMemoryDisplay {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.section.into_into_dart().into_dart(),
+            self.source_count.into_into_dart().into_dart(),
+            self.status.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::knowledge::models::KnowledgeMemoryDisplay
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::knowledge::models::KnowledgeMemoryDisplay>
+    for crate::knowledge::models::KnowledgeMemoryDisplay
+{
+    fn into_into_dart(self) -> crate::knowledge::models::KnowledgeMemoryDisplay {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::knowledge::models::KnowledgeMemoryFeedback {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.status.into_into_dart().into_dart(),
+            self.use_for_ask_ai.into_into_dart().into_dart(),
+            self.is_deleted.into_into_dart().into_dart(),
+            self.marked_inaccurate.into_into_dart().into_dart(),
+            self.corrected_title.into_into_dart().into_dart(),
+            self.corrected_summary.into_into_dart().into_dart(),
+            self.updated_at_ms.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::knowledge::models::KnowledgeMemoryFeedback
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::knowledge::models::KnowledgeMemoryFeedback>
+    for crate::knowledge::models::KnowledgeMemoryFeedback
+{
+    fn into_into_dart(self) -> crate::knowledge::models::KnowledgeMemoryFeedback {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::knowledge::models::KnowledgeMemorySection {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        match self {
+            Self::Preference => 0.into_dart(),
+            Self::Person => 1.into_dart(),
+            Self::Project => 2.into_dart(),
+            Self::Topic => 3.into_dart(),
+            Self::RecentEvent => 4.into_dart(),
+            _ => unreachable!(),
+        }
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::knowledge::models::KnowledgeMemorySection
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::knowledge::models::KnowledgeMemorySection>
+    for crate::knowledge::models::KnowledgeMemorySection
+{
+    fn into_into_dart(self) -> crate::knowledge::models::KnowledgeMemorySection {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::knowledge::models::KnowledgeMemoryStatus {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        match self {
+            Self::Confirmed => 0.into_dart(),
+            Self::Inferred => 1.into_dart(),
+            Self::MaybeOutdated => 2.into_dart(),
+            _ => unreachable!(),
+        }
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::knowledge::models::KnowledgeMemoryStatus
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::knowledge::models::KnowledgeMemoryStatus>
+    for crate::knowledge::models::KnowledgeMemoryStatus
+{
+    fn into_into_dart(self) -> crate::knowledge::models::KnowledgeMemoryStatus {
         self
     }
 }
@@ -13557,6 +13807,7 @@ impl flutter_rust_bridge::IntoDart for crate::db::Message {
             self.content.into_into_dart().into_dart(),
             self.created_at_ms.into_into_dart().into_dart(),
             self.is_memory.into_into_dart().into_dart(),
+            self.citations_json.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -14299,6 +14550,14 @@ impl SseEncode for crate::knowledge::models::ContentKnowledgeDocument {
         <Option<String>>::sse_encode(self.summary, serializer);
         <String>::sse_encode(self.raw_text, serializer);
         <String>::sse_encode(self.normalized_text, serializer);
+        <Option<crate::knowledge::models::KnowledgeMemoryDisplay>>::sse_encode(
+            self.memory_display,
+            serializer,
+        );
+        <crate::knowledge::models::KnowledgeMemoryFeedback>::sse_encode(
+            self.memory_feedback,
+            serializer,
+        );
     }
 }
 
@@ -14445,6 +14704,67 @@ impl SseEncode for crate::knowledge::models::KnowledgeIndexStatus {
         <Option<String>>::sse_encode(self.last_indexed_model_name, serializer);
         <Option<i64>>::sse_encode(self.last_indexed_dim, serializer);
         <crate::knowledge::models::KnowledgeVersionSet>::sse_encode(self.versions, serializer);
+    }
+}
+
+impl SseEncode for crate::knowledge::models::KnowledgeMemoryDisplay {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <crate::knowledge::models::KnowledgeMemorySection>::sse_encode(self.section, serializer);
+        <i64>::sse_encode(self.source_count, serializer);
+        <crate::knowledge::models::KnowledgeMemoryStatus>::sse_encode(self.status, serializer);
+    }
+}
+
+impl SseEncode for crate::knowledge::models::KnowledgeMemoryFeedback {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <Option<crate::knowledge::models::KnowledgeMemoryStatus>>::sse_encode(
+            self.status,
+            serializer,
+        );
+        <bool>::sse_encode(self.use_for_ask_ai, serializer);
+        <bool>::sse_encode(self.is_deleted, serializer);
+        <bool>::sse_encode(self.marked_inaccurate, serializer);
+        <Option<String>>::sse_encode(self.corrected_title, serializer);
+        <Option<String>>::sse_encode(self.corrected_summary, serializer);
+        <Option<i64>>::sse_encode(self.updated_at_ms, serializer);
+    }
+}
+
+impl SseEncode for crate::knowledge::models::KnowledgeMemorySection {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(
+            match self {
+                crate::knowledge::models::KnowledgeMemorySection::Preference => 0,
+                crate::knowledge::models::KnowledgeMemorySection::Person => 1,
+                crate::knowledge::models::KnowledgeMemorySection::Project => 2,
+                crate::knowledge::models::KnowledgeMemorySection::Topic => 3,
+                crate::knowledge::models::KnowledgeMemorySection::RecentEvent => 4,
+                _ => {
+                    unimplemented!("");
+                }
+            },
+            serializer,
+        );
+    }
+}
+
+impl SseEncode for crate::knowledge::models::KnowledgeMemoryStatus {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(
+            match self {
+                crate::knowledge::models::KnowledgeMemoryStatus::Confirmed => 0,
+                crate::knowledge::models::KnowledgeMemoryStatus::Inferred => 1,
+                crate::knowledge::models::KnowledgeMemoryStatus::MaybeOutdated => 2,
+                _ => {
+                    unimplemented!("");
+                }
+            },
+            serializer,
+        );
     }
 }
 
@@ -15001,6 +15321,7 @@ impl SseEncode for crate::db::Message {
         <String>::sse_encode(self.content, serializer);
         <i64>::sse_encode(self.created_at_ms, serializer);
         <bool>::sse_encode(self.is_memory, serializer);
+        <Option<String>>::sse_encode(self.citations_json, serializer);
     }
 }
 
@@ -15158,6 +15479,26 @@ impl SseEncode for Option<i64> {
         <bool>::sse_encode(self.is_some(), serializer);
         if let Some(value) = self {
             <i64>::sse_encode(value, serializer);
+        }
+    }
+}
+
+impl SseEncode for Option<crate::knowledge::models::KnowledgeMemoryDisplay> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <bool>::sse_encode(self.is_some(), serializer);
+        if let Some(value) = self {
+            <crate::knowledge::models::KnowledgeMemoryDisplay>::sse_encode(value, serializer);
+        }
+    }
+}
+
+impl SseEncode for Option<crate::knowledge::models::KnowledgeMemoryStatus> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <bool>::sse_encode(self.is_some(), serializer);
+        if let Some(value) = self {
+            <crate::knowledge::models::KnowledgeMemoryStatus>::sse_encode(value, serializer);
         }
     }
 }

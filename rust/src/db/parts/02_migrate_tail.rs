@@ -290,6 +290,61 @@ ALTER TABLE semantic_parse_jobs
     Ok(())
 }
 
+fn migrate_from_v37_to_v38(conn: &Connection) -> Result<()> {
+    let mut stmt = conn.prepare("PRAGMA table_info(messages)")?;
+    let columns: Vec<String> = stmt
+        .query_map([], |row| row.get(1))?
+        .collect::<std::result::Result<Vec<_>, _>>()?;
+
+    if !columns.iter().any(|column| column == "citations_json") {
+        conn.execute_batch(
+            r#"
+ALTER TABLE messages
+  ADD COLUMN citations_json TEXT;
+"#,
+        )?;
+    }
+
+    conn.execute_batch("PRAGMA user_version = 38;")?;
+    Ok(())
+}
+
+fn migrate_from_v38_to_v39(conn: &Connection) -> Result<()> {
+    conn.execute_batch(
+        r#"
+CREATE TABLE IF NOT EXISTS knowledge_document_feedback (
+  document_id TEXT PRIMARY KEY,
+  status TEXT,
+  use_for_ask_ai INTEGER NOT NULL DEFAULT 1,
+  is_deleted INTEGER NOT NULL DEFAULT 0,
+  marked_inaccurate INTEGER NOT NULL DEFAULT 0,
+  corrected_title TEXT,
+  corrected_summary TEXT,
+  created_at_ms INTEGER NOT NULL,
+  updated_at_ms INTEGER NOT NULL,
+  FOREIGN KEY(document_id) REFERENCES knowledge_documents(document_id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_knowledge_document_feedback_visibility
+  ON knowledge_document_feedback(is_deleted, use_for_ask_ai, updated_at_ms DESC);
+
+PRAGMA user_version = 39;
+"#,
+    )?;
+    Ok(())
+}
+
+fn migrate_from_v39_to_v40(conn: &Connection) -> Result<()> {
+    conn.execute_batch(
+        r#"
+ALTER TABLE knowledge_documents ADD COLUMN memory_section TEXT;
+ALTER TABLE knowledge_documents ADD COLUMN memory_source_count INTEGER NOT NULL DEFAULT 0;
+
+PRAGMA user_version = 40;
+"#,
+    )?;
+    Ok(())
+}
+
 pub(crate) fn app_dir_from_conn(conn: &Connection) -> Result<PathBuf> {
     let mut stmt = conn.prepare("PRAGMA database_list")?;
     let mut rows = stmt.query([])?;
@@ -356,6 +411,7 @@ DELETE FROM events;
 DELETE FROM detached_ask_completion_claims;
 DELETE FROM embedding_artifact_manifests;
 DELETE FROM knowledge_document_usage;
+DELETE FROM knowledge_document_feedback;
 DELETE FROM knowledge_embeddings;
 DELETE FROM knowledge_index_jobs;
 DELETE FROM knowledge_units;

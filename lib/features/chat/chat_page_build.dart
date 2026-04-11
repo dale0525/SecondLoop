@@ -59,6 +59,13 @@ extension _ChatPageStateBuild on _ChatPageState {
             ),
             if (!isDesktopPlatform)
               IconButton(
+                key: const ValueKey('chat_open_memory'),
+                tooltip: context.t.app.tabs.memory,
+                onPressed: () => unawaited(MemoryCenterPage.open(context)),
+                icon: const Icon(Icons.auto_stories_outlined),
+              ),
+            if (!isDesktopPlatform)
+              IconButton(
                 key: const ValueKey('chat_open_settings'),
                 tooltip: context.t.app.tabs.settings,
                 onPressed: () {

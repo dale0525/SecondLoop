@@ -4,9 +4,12 @@ use std::path::Path;
 
 use crate::db;
 use crate::embedding::Embedder;
+use crate::knowledge;
 use crate::llm::ChatDelta;
 use crate::message_citations::{
-    append_message_citation_if_missing as append_message_citation, message_citation_link,
+    append_message_citation_if_missing as append_message_citation, encode_answer_evidence_json,
+    message_citation_href, message_citation_link, AnswerEvidenceDirectSource,
+    AnswerEvidenceMemoryCard,
 };
 
 mod attachment_resources;
@@ -23,7 +26,10 @@ use attachment_resources::{
 };
 use citations_prompt::{build_prompt as build_prompt_base, build_prompt_with_actions_and_history};
 use context_selection::{build_contexts_v2, ContextItem, ContextSource};
-use knowledge_contexts::{merge_knowledge_and_legacy_contexts, try_build_knowledge_contexts};
+use knowledge_contexts::{
+    merge_knowledge_and_legacy_contexts, try_build_knowledge_context_entries,
+    KnowledgeRenderedContextEntry,
+};
 
 const DEFAULT_MAX_HISTORY_MESSAGES: usize = 6;
 const DEFAULT_MAX_HISTORY_MESSAGE_CHARS: usize = 1200;
@@ -61,12 +67,303 @@ pub struct AskAiResult {
     pub assistant_message_id: String,
 }
 
+#[cfg(test)]
+pub(crate) fn try_build_knowledge_contexts_for_tests(
+    conn: &Connection,
+    key: &[u8; 32],
+    question: &str,
+    top_k: usize,
+    focus: Focus,
+    conversation_id: &str,
+    time_window: Option<(i64, i64)>,
+) -> Result<Vec<String>> {
+    knowledge_contexts::try_build_knowledge_contexts(
+        conn,
+        key,
+        question,
+        top_k,
+        focus,
+        conversation_id,
+        time_window,
+    )
+}
+
 pub trait AnswerProvider {
     fn stream_answer(
         &self,
         prompt: &str,
         on_event: &mut dyn FnMut(ChatDelta) -> Result<()>,
     ) -> Result<()>;
+}
+
+#[derive(Clone, Debug, Default)]
+struct ContextWithEvidence {
+    text: String,
+    direct_sources: Vec<AnswerEvidenceDirectSource>,
+    memory_cards: Vec<AnswerEvidenceMemoryCard>,
+}
+
+fn compact_snippet(value: &str, max_chars: usize) -> String {
+    let normalized = value
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty() && !line.starts_with('['))
+        .collect::<Vec<_>>()
+        .join(" ");
+    let trimmed = normalized.trim();
+    if trimmed.chars().count() <= max_chars {
+        return trimmed.to_string();
+    }
+    let mut out = String::new();
+    for ch in trimmed.chars().take(max_chars.saturating_sub(1)) {
+        out.push(ch);
+    }
+    out.push('…');
+    out
+}
+
+fn context_usage_reason(question: &str) -> String {
+    let trimmed = question.trim();
+    if trimmed.is_empty() {
+        return "Retrieved as relevant context for this answer.".to_string();
+    }
+    format!("Retrieved as relevant context for: {trimmed}")
+}
+
+fn build_message_direct_source(message: &db::Message) -> Option<AnswerEvidenceDirectSource> {
+    let href = message_citation_href(&message.id)?;
+    let snippet = compact_snippet(&message.content, 180);
+    let title = message
+        .content
+        .lines()
+        .map(str::trim)
+        .find(|line| !line.is_empty())
+        .map(|line| compact_snippet(line, 80));
+    Some(AnswerEvidenceDirectSource {
+        id: format!("message:{}", message.id),
+        href,
+        source_type: "message".to_string(),
+        label: "History".to_string(),
+        source_type_label: Some("Chat message".to_string()),
+        scope_label: None,
+        confidence_label: None,
+        title,
+        snippet: snippet.clone(),
+        highlighted_text: Some(snippet),
+        created_at_ms: Some(message.created_at_ms),
+        updated_at_ms: Some(message.created_at_ms),
+        anchors: None,
+        document_id: None,
+        unit_id: None,
+    })
+}
+
+fn build_attachment_direct_source(
+    attachment_sha256: &str,
+    kind: &str,
+    chunk_index: i64,
+    text: &str,
+    created_at_ms: i64,
+) -> AnswerEvidenceDirectSource {
+    let snippet = compact_snippet(text, 180);
+    AnswerEvidenceDirectSource {
+        id: format!("attachment:{attachment_sha256}:{kind}:{chunk_index}"),
+        href: format!(
+            "secondloop://attachment/{attachment_sha256}?kind={kind}&chunk={chunk_index}"
+        ),
+        source_type: "attachment".to_string(),
+        label: "Attachment".to_string(),
+        source_type_label: Some(readable_attachment_label(kind)),
+        scope_label: None,
+        confidence_label: None,
+        title: Some(format!("{kind} #{chunk_index}")),
+        snippet: snippet.clone(),
+        highlighted_text: Some(snippet),
+        created_at_ms: Some(created_at_ms),
+        updated_at_ms: Some(created_at_ms),
+        anchors: None,
+        document_id: None,
+        unit_id: None,
+    }
+}
+
+fn build_memory_card_from_document(
+    conn: &Connection,
+    key: &[u8; 32],
+    document_id: &str,
+    why_used: &str,
+) -> Option<AnswerEvidenceMemoryCard> {
+    if !document_id.starts_with("generated:")
+        || document_id.starts_with("generated:session-digest:")
+    {
+        return None;
+    }
+    let document = knowledge::get_knowledge_document(conn, key, document_id)
+        .ok()
+        .flatten()?;
+    let display = document.memory_display.as_ref();
+    Some(AnswerEvidenceMemoryCard {
+        document_id: document.document_id,
+        title: document.title,
+        summary: document.summary,
+        source_kind: document.source_kind,
+        role: document.role,
+        created_at_ms: document.created_at_ms,
+        updated_at_ms: document.updated_at_ms,
+        status: display.map(|value| value.status).unwrap_or_else(|| {
+            knowledge::infer_memory_status(
+                document_id,
+                document.updated_at_ms,
+                &document.memory_feedback,
+            )
+        }),
+        source_count: display.map(|value| value.source_count).unwrap_or(1),
+        why_used: Some(why_used.to_string()),
+        anchors: document.anchors,
+    })
+}
+
+fn build_direct_sources_from_knowledge_entry(
+    conn: &Connection,
+    key: &[u8; 32],
+    entry: &KnowledgeRenderedContextEntry,
+) -> Vec<AnswerEvidenceDirectSource> {
+    let mut out = Vec::<AnswerEvidenceDirectSource>::new();
+    let block = &entry.block;
+    let highlighted_text = rendered_highlighted_text(&entry.rendered_text);
+    let snippet = highlighted_text
+        .clone()
+        .unwrap_or_else(|| compact_snippet(&entry.rendered_text, 180));
+    let scope_label = readable_scope_label(&block.anchors);
+    let confidence_label = readable_confidence_label(block.score);
+    if let Some(message_id) = block.anchors.message_id.as_deref() {
+        if let Ok(Some(message)) = db::get_message_by_id_optional(conn, key, message_id) {
+            if let Some(mut source) = build_message_direct_source(&message) {
+                if scope_label.is_some() {
+                    source.scope_label = scope_label.clone();
+                }
+                if confidence_label.is_some() {
+                    source.confidence_label = confidence_label.clone();
+                }
+                if highlighted_text.is_some() {
+                    source.highlighted_text = highlighted_text.clone();
+                    source.snippet = snippet.clone();
+                }
+                out.push(source);
+            }
+        }
+    }
+    if let Some(attachment_sha256) = block.anchors.attachment_sha256.as_deref() {
+        out.push(AnswerEvidenceDirectSource {
+            id: format!(
+                "knowledge-attachment:{}:{}",
+                block.document_id,
+                block.unit_id.as_deref().unwrap_or("document")
+            ),
+            href: format!("secondloop://attachment/{attachment_sha256}"),
+            source_type: "attachment".to_string(),
+            label: "Attachment".to_string(),
+            source_type_label: Some(readable_source_type_label(
+                "attachment",
+                Some(block.source_kind),
+                block.unit_kind,
+            )),
+            scope_label,
+            confidence_label,
+            title: block.anchors.source_filename.clone(),
+            snippet,
+            highlighted_text,
+            created_at_ms: Some(block.anchors.start_ms.unwrap_or_default()),
+            updated_at_ms: Some(block.anchors.end_ms.unwrap_or_default()),
+            anchors: Some(block.anchors.clone()),
+            document_id: Some(block.document_id.clone()),
+            unit_id: block.unit_id.clone(),
+        });
+    }
+    out
+}
+
+fn readable_attachment_label(kind: &str) -> String {
+    match kind.trim().to_lowercase().as_str() {
+        "ocr_text" => "Attachment OCR".to_string(),
+        "transcript" => "Attachment transcript".to_string(),
+        "readable_text" | "readable_text_full" => "Attachment text".to_string(),
+        other if !other.is_empty() => format!("Attachment {}", other.replace('_', " ")),
+        _ => "Attachment".to_string(),
+    }
+}
+
+fn readable_source_type_label(
+    source_type: &str,
+    source_kind: Option<knowledge::KnowledgeSourceKind>,
+    unit_kind: Option<knowledge::KnowledgeUnitKind>,
+) -> String {
+    match source_type {
+        "message" => "Chat message".to_string(),
+        "attachment" => match source_kind {
+            Some(knowledge::KnowledgeSourceKind::Transcript) => "Transcript excerpt".to_string(),
+            Some(knowledge::KnowledgeSourceKind::OcrText) => "Attachment OCR".to_string(),
+            Some(knowledge::KnowledgeSourceKind::ReadableText) => "Attachment text".to_string(),
+            Some(knowledge::KnowledgeSourceKind::Summary) => "Attachment summary".to_string(),
+            Some(knowledge::KnowledgeSourceKind::Metadata) => "Attachment metadata".to_string(),
+            _ => match unit_kind {
+                Some(knowledge::KnowledgeUnitKind::Chunk) => "Attachment excerpt".to_string(),
+                _ => "Attachment".to_string(),
+            },
+        },
+        _ => source_type.to_string(),
+    }
+}
+
+fn readable_scope_label(anchors: &knowledge::KnowledgeAnchorSet) -> Option<String> {
+    anchors
+        .conversation_id
+        .as_ref()
+        .map(|_| "This thread".to_string())
+}
+
+fn readable_confidence_label(score: f64) -> Option<String> {
+    if score >= 0.85 {
+        return Some("High relevance".to_string());
+    }
+    if score >= 0.45 {
+        return Some("Relevant".to_string());
+    }
+    if score > 0.0 {
+        return Some("Possible match".to_string());
+    }
+    None
+}
+
+fn rendered_highlighted_text(rendered_text: &str) -> Option<String> {
+    let cleaned = rendered_text
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+        .filter(|line| {
+            !line.starts_with("conversation_id=")
+                && !line.starts_with("generated_memory=")
+                && !line.starts_with("[knowledge ")
+                && !line.starts_with("[History](")
+                && !line.starts_with("[Attachment](")
+        })
+        .collect::<Vec<_>>()
+        .join(" ");
+    let normalized = compact_snippet(cleaned.trim(), 220);
+    if normalized.trim().is_empty() {
+        return None;
+    }
+    Some(normalized)
+}
+
+fn encode_context_evidence_json(contexts: &[ContextWithEvidence]) -> Option<String> {
+    let mut direct_sources = Vec::<AnswerEvidenceDirectSource>::new();
+    let mut memory_cards = Vec::<AnswerEvidenceMemoryCard>::new();
+    for context in contexts {
+        direct_sources.extend(context.direct_sources.clone());
+        memory_cards.extend(context.memory_cards.clone());
+    }
+    encode_answer_evidence_json(direct_sources, memory_cards)
 }
 
 fn now_ms() -> i64 {
@@ -327,6 +624,7 @@ fn ask_ai_stream_and_persist(
     conversation_id: &str,
     question: &str,
     prompt: &str,
+    contexts: &[ContextWithEvidence],
     provider: &(impl AnswerProvider + ?Sized),
     on_event: &mut dyn FnMut(ChatDelta) -> Result<()>,
 ) -> Result<AskAiResult> {
@@ -353,12 +651,14 @@ fn ask_ai_stream_and_persist(
 
             let user_message =
                 db::insert_message_non_memory(conn, key, conversation_id, "user", question)?;
-            let assistant_message = db::insert_message_non_memory(
+            let citations_json = encode_context_evidence_json(contexts);
+            let assistant_message = db::insert_message_non_memory_with_citations(
                 conn,
                 key,
                 conversation_id,
                 "assistant",
                 &assistant_text,
+                citations_json.as_deref(),
             )?;
 
             Ok(AskAiResult {
@@ -413,12 +713,22 @@ pub fn ask_ai_with_provider(
         })
         .unwrap_or_default();
 
-    let mut contexts_with_distance: Vec<(f64, String)> = Vec::new();
+    let mut contexts_with_distance: Vec<(f64, ContextWithEvidence)> = Vec::new();
     for sm in similar_messages {
         let context = db::build_message_rag_context(conn, key, &sm.message.id, &sm.message.content)
             .unwrap_or_else(|_| sm.message.content.clone());
         let context = append_message_citation(context, &sm.message.id);
-        contexts_with_distance.push((sm.distance, context));
+        let direct_sources = build_message_direct_source(&sm.message)
+            .into_iter()
+            .collect::<Vec<_>>();
+        contexts_with_distance.push((
+            sm.distance,
+            ContextWithEvidence {
+                text: context,
+                direct_sources,
+                memory_cards: Vec::new(),
+            },
+        ));
     }
     let mut seen_todos = std::collections::HashSet::new();
     for st in similar_todos {
@@ -429,7 +739,14 @@ pub fn ask_ai_with_provider(
             Ok(v) => v,
             Err(_) => continue,
         };
-        contexts_with_distance.push((st.distance, ctx));
+        contexts_with_distance.push((
+            st.distance,
+            ContextWithEvidence {
+                text: ctx,
+                direct_sources: Vec::new(),
+                memory_cards: Vec::new(),
+            },
+        ));
     }
     for chunk in attachment_resources.chunks {
         let citation = format!(
@@ -440,7 +757,20 @@ pub fn ask_ai_with_provider(
             "ATTACHMENT_CHUNK {} {}#{}\n{}\n{}",
             chunk.attachment_sha256, chunk.kind, chunk.chunk_index, chunk.text, citation
         );
-        contexts_with_distance.push((chunk.distance, context));
+        contexts_with_distance.push((
+            chunk.distance,
+            ContextWithEvidence {
+                text: context,
+                direct_sources: vec![build_attachment_direct_source(
+                    &chunk.attachment_sha256,
+                    &chunk.kind,
+                    chunk.chunk_index,
+                    &chunk.text,
+                    chunk.created_at_ms,
+                )],
+                memory_cards: Vec::new(),
+            },
+        ));
     }
     if let Some(app_dir) = app_dir.as_ref() {
         for chunk in external_chunks {
@@ -453,13 +783,20 @@ pub fn ask_ai_with_provider(
                 Ok(v) => v,
                 Err(_) => continue,
             };
-            contexts_with_distance.push((chunk.distance, context));
+            contexts_with_distance.push((
+                chunk.distance,
+                ContextWithEvidence {
+                    text: context,
+                    direct_sources: Vec::new(),
+                    memory_cards: Vec::new(),
+                },
+            ));
         }
     }
     contexts_with_distance
         .sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal));
     contexts_with_distance.truncate(top_k);
-    let contexts: Vec<String> = contexts_with_distance
+    let contexts: Vec<ContextWithEvidence> = contexts_with_distance
         .into_iter()
         .map(|(_, ctx)| ctx)
         .collect();
@@ -467,7 +804,10 @@ pub fn ask_ai_with_provider(
     let history = build_recent_conversation_history(conn, key, conversation_id)?;
     let prompt = build_prompt_with_actions_and_history(
         question,
-        &contexts,
+        &contexts
+            .iter()
+            .map(|ctx| ctx.text.clone())
+            .collect::<Vec<_>>(),
         actions.as_deref(),
         history.as_deref(),
         attachment_resources.catalog_markdown.as_deref(),
@@ -479,6 +819,7 @@ pub fn ask_ai_with_provider(
         conversation_id,
         question,
         &prompt,
+        &contexts,
         provider,
         on_event,
     )
@@ -496,7 +837,7 @@ pub fn ask_ai_with_provider_using_embedder<E: Embedder + ?Sized>(
     provider: &(impl AnswerProvider + ?Sized),
     on_event: &mut dyn FnMut(ChatDelta) -> Result<()>,
 ) -> Result<AskAiResult> {
-    let mut contexts: Vec<String> = Vec::new();
+    let mut contexts: Vec<ContextWithEvidence> = Vec::new();
     let mut resources_catalog: Option<String> = None;
     if top_k > 0 {
         // Avoid wiping the current index if the embedder is misconfigured/unreachable.
@@ -569,13 +910,23 @@ pub fn ask_ai_with_provider_using_embedder<E: Embedder + ?Sized>(
             })
             .unwrap_or_default();
 
-        let mut contexts_with_distance: Vec<(f64, String)> = Vec::new();
+        let mut contexts_with_distance: Vec<(f64, ContextWithEvidence)> = Vec::new();
         for sm in similar_messages {
             let context =
                 db::build_message_rag_context(conn, key, &sm.message.id, &sm.message.content)
                     .unwrap_or_else(|_| sm.message.content.clone());
             let context = append_message_citation(context, &sm.message.id);
-            contexts_with_distance.push((sm.distance, context));
+            let direct_sources = build_message_direct_source(&sm.message)
+                .into_iter()
+                .collect::<Vec<_>>();
+            contexts_with_distance.push((
+                sm.distance,
+                ContextWithEvidence {
+                    text: context,
+                    direct_sources,
+                    memory_cards: Vec::new(),
+                },
+            ));
         }
         let mut seen_todos = std::collections::HashSet::new();
         for st in similar_todos {
@@ -586,7 +937,14 @@ pub fn ask_ai_with_provider_using_embedder<E: Embedder + ?Sized>(
                 Ok(v) => v,
                 Err(_) => continue,
             };
-            contexts_with_distance.push((st.distance, ctx));
+            contexts_with_distance.push((
+                st.distance,
+                ContextWithEvidence {
+                    text: ctx,
+                    direct_sources: Vec::new(),
+                    memory_cards: Vec::new(),
+                },
+            ));
         }
         for chunk in attachment_resources.chunks {
             let citation = format!(
@@ -597,7 +955,20 @@ pub fn ask_ai_with_provider_using_embedder<E: Embedder + ?Sized>(
                 "ATTACHMENT_CHUNK {} {}#{}\n{}\n{}",
                 chunk.attachment_sha256, chunk.kind, chunk.chunk_index, chunk.text, citation
             );
-            contexts_with_distance.push((chunk.distance, context));
+            contexts_with_distance.push((
+                chunk.distance,
+                ContextWithEvidence {
+                    text: context,
+                    direct_sources: vec![build_attachment_direct_source(
+                        &chunk.attachment_sha256,
+                        &chunk.kind,
+                        chunk.chunk_index,
+                        &chunk.text,
+                        chunk.created_at_ms,
+                    )],
+                    memory_cards: Vec::new(),
+                },
+            ));
         }
         if let Some(app_dir) = app_dir.as_ref() {
             for chunk in external_chunks {
@@ -610,7 +981,14 @@ pub fn ask_ai_with_provider_using_embedder<E: Embedder + ?Sized>(
                     Ok(v) => v,
                     Err(_) => continue,
                 };
-                contexts_with_distance.push((chunk.distance, context));
+                contexts_with_distance.push((
+                    chunk.distance,
+                    ContextWithEvidence {
+                        text: context,
+                        direct_sources: Vec::new(),
+                        memory_cards: Vec::new(),
+                    },
+                ));
             }
         }
         contexts_with_distance
@@ -627,7 +1005,10 @@ pub fn ask_ai_with_provider_using_embedder<E: Embedder + ?Sized>(
     let history = build_recent_conversation_history(conn, key, conversation_id)?;
     let prompt = build_prompt_with_actions_and_history(
         question,
-        &contexts,
+        &contexts
+            .iter()
+            .map(|ctx| ctx.text.clone())
+            .collect::<Vec<_>>(),
         actions.as_deref(),
         history.as_deref(),
         resources_catalog.as_deref(),
@@ -639,6 +1020,7 @@ pub fn ask_ai_with_provider_using_embedder<E: Embedder + ?Sized>(
         conversation_id,
         question,
         &prompt,
+        &contexts,
         provider,
         on_event,
     )
@@ -656,13 +1038,39 @@ pub fn ask_ai_with_provider_using_active_embeddings(
     provider: &(impl AnswerProvider + ?Sized),
     on_event: &mut dyn FnMut(ChatDelta) -> Result<()>,
 ) -> Result<AskAiResult> {
-    let mut contexts: Vec<String> = Vec::new();
+    let mut contexts: Vec<ContextWithEvidence> = Vec::new();
     let mut resources_catalog: Option<String> = None;
     if top_k > 0 {
-        let knowledge_contexts =
-            try_build_knowledge_contexts(conn, key, question, top_k, focus, conversation_id, None)?;
+        let knowledge_entries = try_build_knowledge_context_entries(
+            conn,
+            key,
+            question,
+            top_k,
+            focus,
+            conversation_id,
+            None,
+        )?;
+        let knowledge_contexts = knowledge_entries
+            .iter()
+            .map(|entry| entry.rendered_text.clone())
+            .collect::<Vec<_>>();
         if !fallback::should_use_legacy_retrieval_fallback(&knowledge_contexts) {
-            contexts = knowledge_contexts;
+            let why_used = context_usage_reason(question);
+            contexts = knowledge_entries
+                .into_iter()
+                .map(|entry| ContextWithEvidence {
+                    text: entry.rendered_text.clone(),
+                    direct_sources: build_direct_sources_from_knowledge_entry(conn, key, &entry),
+                    memory_cards: build_memory_card_from_document(
+                        conn,
+                        key,
+                        &entry.block.document_id,
+                        &why_used,
+                    )
+                    .into_iter()
+                    .collect(),
+                })
+                .collect();
             resources_catalog = collect_attachment_resources_recent(conn, key)
                 .unwrap_or_default()
                 .catalog_markdown;
@@ -790,9 +1198,77 @@ pub fn ask_ai_with_provider_using_active_embeddings(
                 });
             }
 
-            let legacy_contexts = build_contexts_v2(question, candidates, legacy_top_k);
-            contexts =
-                merge_knowledge_and_legacy_contexts(knowledge_contexts, legacy_contexts, top_k);
+            let legacy_contexts = build_contexts_v2(question, candidates.clone(), legacy_top_k);
+            let merged = merge_knowledge_and_legacy_contexts(
+                knowledge_contexts.clone(),
+                legacy_contexts,
+                top_k,
+            );
+            let why_used = context_usage_reason(question);
+            let mut context_by_text =
+                std::collections::HashMap::<String, ContextWithEvidence>::new();
+            for entry in knowledge_entries {
+                context_by_text.insert(
+                    entry.rendered_text.clone(),
+                    ContextWithEvidence {
+                        text: entry.rendered_text.clone(),
+                        direct_sources: build_direct_sources_from_knowledge_entry(
+                            conn, key, &entry,
+                        ),
+                        memory_cards: build_memory_card_from_document(
+                            conn,
+                            key,
+                            &entry.block.document_id,
+                            &why_used,
+                        )
+                        .into_iter()
+                        .collect(),
+                    },
+                );
+            }
+            for candidate in candidates {
+                let direct_sources = match candidate.source {
+                    ContextSource::Message => {
+                        let message_id = candidate.id.clone();
+                        match db::get_message_by_id_optional(conn, key, &message_id) {
+                            Ok(Some(message)) => build_message_direct_source(&message)
+                                .into_iter()
+                                .collect::<Vec<_>>(),
+                            _ => Vec::new(),
+                        }
+                    }
+                    ContextSource::AttachmentChunk => {
+                        let text = candidate.text.clone();
+                        let mut parts = candidate.id.splitn(3, ':');
+                        let attachment_sha256 = parts.next().unwrap_or_default();
+                        let kind = parts.next().unwrap_or("chunk");
+                        let chunk_index = parts
+                            .next()
+                            .and_then(|value| value.parse::<i64>().ok())
+                            .unwrap_or_default();
+                        vec![build_attachment_direct_source(
+                            attachment_sha256,
+                            kind,
+                            chunk_index,
+                            &text,
+                            candidate.created_at_ms,
+                        )]
+                    }
+                    _ => Vec::new(),
+                };
+                context_by_text.insert(
+                    candidate.text.clone(),
+                    ContextWithEvidence {
+                        text: candidate.text,
+                        direct_sources,
+                        memory_cards: Vec::new(),
+                    },
+                );
+            }
+            contexts = merged
+                .into_iter()
+                .filter_map(|text| context_by_text.remove(&text))
+                .collect();
             resources_catalog = attachment_resources.catalog_markdown;
         }
     }
@@ -800,7 +1276,10 @@ pub fn ask_ai_with_provider_using_active_embeddings(
     let history = build_recent_conversation_history(conn, key, conversation_id)?;
     let prompt = build_prompt_with_actions_and_history(
         question,
-        &contexts,
+        &contexts
+            .iter()
+            .map(|ctx| ctx.text.clone())
+            .collect::<Vec<_>>(),
         actions.as_deref(),
         history.as_deref(),
         resources_catalog.as_deref(),
@@ -812,6 +1291,7 @@ pub fn ask_ai_with_provider_using_active_embeddings(
         conversation_id,
         question,
         &prompt,
+        &contexts,
         provider,
         on_event,
     )
@@ -831,9 +1311,9 @@ pub fn ask_ai_with_provider_using_active_embeddings_time_window(
     provider: &(impl AnswerProvider + ?Sized),
     on_event: &mut dyn FnMut(ChatDelta) -> Result<()>,
 ) -> Result<AskAiResult> {
-    let mut contexts: Vec<String> = Vec::new();
+    let mut contexts: Vec<ContextWithEvidence> = Vec::new();
     if top_k > 0 {
-        let knowledge_contexts = try_build_knowledge_contexts(
+        let knowledge_entries = try_build_knowledge_context_entries(
             conn,
             key,
             question,
@@ -842,6 +1322,10 @@ pub fn ask_ai_with_provider_using_active_embeddings_time_window(
             conversation_id,
             Some((time_start_ms, time_end_ms)),
         )?;
+        let knowledge_contexts = knowledge_entries
+            .iter()
+            .map(|entry| entry.rendered_text.clone())
+            .collect::<Vec<_>>();
         if fallback::should_use_legacy_retrieval_fallback(&knowledge_contexts) {
             let conversation_filter = match focus {
                 Focus::AllMemories => None,
@@ -944,14 +1428,76 @@ pub fn ask_ai_with_provider_using_active_embeddings_time_window(
                 });
             }
 
-            let legacy_contexts = build_contexts_v2(question, candidates, legacy_top_k);
-            contexts = merge_knowledge_and_legacy_contexts(
-                knowledge_contexts,
+            let legacy_contexts = build_contexts_v2(question, candidates.clone(), legacy_top_k);
+            let merged = merge_knowledge_and_legacy_contexts(
+                knowledge_contexts.clone(),
                 legacy_contexts,
                 top_k.max(1),
             );
+            let why_used = context_usage_reason(question);
+            let mut context_by_text =
+                std::collections::HashMap::<String, ContextWithEvidence>::new();
+            for entry in knowledge_entries {
+                context_by_text.insert(
+                    entry.rendered_text.clone(),
+                    ContextWithEvidence {
+                        text: entry.rendered_text.clone(),
+                        direct_sources: build_direct_sources_from_knowledge_entry(
+                            conn, key, &entry,
+                        ),
+                        memory_cards: build_memory_card_from_document(
+                            conn,
+                            key,
+                            &entry.block.document_id,
+                            &why_used,
+                        )
+                        .into_iter()
+                        .collect(),
+                    },
+                );
+            }
+            for candidate in candidates {
+                let direct_sources = match candidate.source {
+                    ContextSource::Message => {
+                        match db::get_message_by_id_optional(conn, key, &candidate.id) {
+                            Ok(Some(message)) => build_message_direct_source(&message)
+                                .into_iter()
+                                .collect::<Vec<_>>(),
+                            _ => Vec::new(),
+                        }
+                    }
+                    _ => Vec::new(),
+                };
+                context_by_text.insert(
+                    candidate.text.clone(),
+                    ContextWithEvidence {
+                        text: candidate.text,
+                        direct_sources,
+                        memory_cards: Vec::new(),
+                    },
+                );
+            }
+            contexts = merged
+                .into_iter()
+                .filter_map(|text| context_by_text.remove(&text))
+                .collect();
         } else {
-            contexts = knowledge_contexts;
+            let why_used = context_usage_reason(question);
+            contexts = knowledge_entries
+                .into_iter()
+                .map(|entry| ContextWithEvidence {
+                    text: entry.rendered_text.clone(),
+                    direct_sources: build_direct_sources_from_knowledge_entry(conn, key, &entry),
+                    memory_cards: build_memory_card_from_document(
+                        conn,
+                        key,
+                        &entry.block.document_id,
+                        &why_used,
+                    )
+                    .into_iter()
+                    .collect(),
+                })
+                .collect();
         }
     }
 
@@ -966,7 +1512,10 @@ pub fn ask_ai_with_provider_using_active_embeddings_time_window(
     )?;
     let prompt = build_prompt_with_actions_and_history(
         question,
-        &contexts,
+        &contexts
+            .iter()
+            .map(|ctx| ctx.text.clone())
+            .collect::<Vec<_>>(),
         actions.as_deref(),
         history.as_deref(),
         attachment_resources.catalog_markdown.as_deref(),
@@ -978,6 +1527,7 @@ pub fn ask_ai_with_provider_using_active_embeddings_time_window(
         conversation_id,
         question,
         &prompt,
+        &contexts,
         provider,
         on_event,
     )

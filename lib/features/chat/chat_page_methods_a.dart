@@ -424,11 +424,44 @@ extension _ChatPageStateMethodsA on _ChatPageState {
   Widget _buildMessageMarkdown(
     String content, {
     required bool isDesktopPlatform,
+    String? citationsJson,
   }) {
+    final citationController = ChatAnswerCitationController(
+      parseChatAnswerEvidence(citationsJson),
+    );
     final markdown = buildChatMarkdownPreviewBody(
       context,
       text: content,
       selectable: false,
+      citationLabelResolver: citationController.chipLabelForHref,
+      onTapRichLink: (href) async {
+        final handledCitation = await citationController.handleCitationTap(
+          context,
+          href: href,
+          onOpenDirectSource: (target) async {
+            await _handleMarkdownInAppLink(target);
+          },
+          onOpenMemoryCard: (documentId) =>
+              MemoryDetailPage.openDocumentId(context, documentId: documentId),
+          onCorrectMemoryCard: (card, title, summary) =>
+              _correctMemoryFromEvidence(
+            card,
+            title: title,
+            summary: summary,
+          ),
+          onDisableMemoryCard: (documentId) =>
+              _disableMemoryFromEvidence(documentId),
+          onDeleteMemoryCard: (documentId) =>
+              _deleteMemoryFromEvidence(documentId),
+        );
+        if (handledCitation) {
+          return;
+        }
+        await handleChatMarkdownTapLink(
+          href,
+          handleInApp: _handleMarkdownInAppLink,
+        );
+      },
       onTapLink: (text, href, title) {
         unawaited(
           handleChatMarkdownTapLink(
@@ -453,12 +486,104 @@ extension _ChatPageStateMethodsA on _ChatPageState {
     );
   }
 
-  Future<void> _openMessageViewer(String content) async {
+  Future<void> _disableMemoryFromEvidence(String documentId) async {
+    final backend = maybeKnowledgeBackendFor(AppBackendScope.of(context));
+    final viewerBackend =
+        maybeKnowledgeViewerBackendFor(AppBackendScope.of(context));
+    if (backend == null || viewerBackend == null) return;
+    final sessionKey = SessionScope.of(context).sessionKey;
+    final document = await viewerBackend.getKnowledgeViewerDocument(
+      sessionKey,
+      documentId: documentId,
+    );
+    final feedback = document.document.memoryFeedback;
+    await backend.upsertKnowledgeMemoryFeedback(
+      sessionKey,
+      documentId: documentId,
+      status: feedback.status,
+      useForAskAi: false,
+      isDeleted: feedback.isDeleted,
+      markedInaccurate: feedback.markedInaccurate,
+      correctedTitle: feedback.correctedTitle ?? document.document.title,
+      correctedSummary: feedback.correctedSummary ?? document.document.summary,
+    );
+  }
+
+  Future<void> _deleteMemoryFromEvidence(String documentId) async {
+    final backend = maybeKnowledgeBackendFor(AppBackendScope.of(context));
+    final viewerBackend =
+        maybeKnowledgeViewerBackendFor(AppBackendScope.of(context));
+    if (backend == null || viewerBackend == null) return;
+    final sessionKey = SessionScope.of(context).sessionKey;
+    final document = await viewerBackend.getKnowledgeViewerDocument(
+      sessionKey,
+      documentId: documentId,
+    );
+    final feedback = document.document.memoryFeedback;
+    await backend.upsertKnowledgeMemoryFeedback(
+      sessionKey,
+      documentId: documentId,
+      status: feedback.status,
+      useForAskAi: feedback.useForAskAi,
+      isDeleted: true,
+      markedInaccurate: feedback.markedInaccurate,
+      correctedTitle: feedback.correctedTitle ?? document.document.title,
+      correctedSummary: feedback.correctedSummary ?? document.document.summary,
+    );
+  }
+
+  Future<ChatAnswerEvidenceMemoryCard?> _correctMemoryFromEvidence(
+    ChatAnswerEvidenceMemoryCard card, {
+    required String title,
+    required String summary,
+  }) async {
+    final backend = maybeKnowledgeBackendFor(AppBackendScope.of(context));
+    final viewerBackend =
+        maybeKnowledgeViewerBackendFor(AppBackendScope.of(context));
+    if (backend == null || viewerBackend == null) return null;
+    final sessionKey = SessionScope.of(context).sessionKey;
+    final document = await viewerBackend.getKnowledgeViewerDocument(
+      sessionKey,
+      documentId: card.documentId,
+    );
+    final feedback = document.document.memoryFeedback;
+    await backend.upsertKnowledgeMemoryFeedback(
+      sessionKey,
+      documentId: card.documentId,
+      status: KnowledgeMemoryStatus.confirmed,
+      useForAskAi: feedback.useForAskAi,
+      isDeleted: false,
+      markedInaccurate: feedback.markedInaccurate,
+      correctedTitle: title,
+      correctedSummary: summary,
+    );
+    final refreshed = await viewerBackend.getKnowledgeViewerDocument(
+      sessionKey,
+      documentId: card.documentId,
+    );
+    final memoryDisplay = refreshed.document.memoryDisplay;
+    return card.copyWith(
+      title: refreshed.document.title,
+      summary: refreshed.document.summary,
+      status: (memoryDisplay?.status ?? KnowledgeMemoryStatus.confirmed).name,
+      sourceCount: memoryDisplay?.sourceCount.toInt() ?? card.sourceCount,
+      updatedAtMs: refreshed.document.updatedAtMs.toInt(),
+    );
+  }
+
+  Future<void> _openMessageViewer(
+    Message message,
+    String content,
+  ) async {
     await _pushRouteFromChat(
       MaterialPageRoute(
         builder: (_) => wrapPushedPageWithInheritedScopes(
           context,
-          MessageViewerPage(content: content),
+          MessageViewerPage(
+            content: content,
+            messageId: message.id,
+            citationsJson: message.citationsJson,
+          ),
         ),
       ),
     );

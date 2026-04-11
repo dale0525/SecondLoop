@@ -139,6 +139,33 @@ pub fn db_list_knowledge_documents(
 }
 
 #[flutter_rust_bridge::frb]
+#[allow(clippy::too_many_arguments)]
+pub fn db_upsert_knowledge_memory_feedback(
+    app_dir: String,
+    key: Vec<u8>,
+    document_id: String,
+    status: Option<knowledge::KnowledgeMemoryStatus>,
+    use_for_ask_ai: bool,
+    is_deleted: bool,
+    marked_inaccurate: bool,
+    corrected_title: Option<String>,
+    corrected_summary: Option<String>,
+) -> Result<knowledge::KnowledgeMemoryFeedback> {
+    let _validated_key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    db::upsert_knowledge_memory_feedback(
+        &conn,
+        &document_id,
+        status,
+        use_for_ask_ai,
+        is_deleted,
+        marked_inaccurate,
+        corrected_title,
+        corrected_summary,
+    )
+}
+
+#[flutter_rust_bridge::frb]
 pub fn db_list_knowledge_units(
     app_dir: String,
     key: Vec<u8>,

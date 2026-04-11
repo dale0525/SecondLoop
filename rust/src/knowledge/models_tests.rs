@@ -1,7 +1,7 @@
 use crate::knowledge::models::GeneratedMemoryKind;
 use crate::knowledge::{
-    ContentKnowledgeDocument, KnowledgeAnchorSet, KnowledgeOriginType, KnowledgeRole,
-    KnowledgeSourceKind, KnowledgeUnit, KnowledgeUnitKind, KnowledgeVersionSet,
+    ContentKnowledgeDocument, KnowledgeAnchorSet, KnowledgeMemoryFeedback, KnowledgeOriginType,
+    KnowledgeRole, KnowledgeSourceKind, KnowledgeUnit, KnowledgeUnitKind, KnowledgeVersionSet,
 };
 
 #[test]
@@ -32,6 +32,8 @@ fn knowledge_model_document_round_trips_through_json() {
         summary: None,
         raw_text: "raw text".to_string(),
         normalized_text: "raw text".to_string(),
+        memory_display: None,
+        memory_feedback: KnowledgeMemoryFeedback::default(),
     };
 
     let json = serde_json::to_string(&value).expect("serialize");

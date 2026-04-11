@@ -230,6 +230,7 @@ fn migration_archive_build_stage(
                         "role": message.role,
                         "is_memory": message.is_memory,
                         "content": message.content,
+                        "citations_json": message.citations_json,
                     })
                     .to_string(),
                 ),
@@ -745,14 +746,16 @@ fn migration_archive_restore_message(
         .as_str()
         .ok_or_else(|| anyhow!("message extra_json missing content"))?;
     let is_memory = extra["is_memory"].as_bool().unwrap_or(true);
+    let citations_json = extra["citations_json"].as_str();
     let device_id = get_or_create_device_id(conn)?;
     let seq = next_device_seq(conn, &device_id)?;
     let content_blob = encrypt_bytes(key, content.as_bytes(), b"message.content")?;
     conn.execute(
         r#"INSERT OR REPLACE INTO messages(
              id, conversation_id, role, content, created_at, updated_at,
-             updated_by_device_id, updated_by_seq, is_deleted, needs_embedding, is_memory
-           ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 0, ?9, ?10)"#,
+             updated_by_device_id, updated_by_seq, is_deleted, needs_embedding, is_memory,
+             citations_json
+           ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 0, ?9, ?10, ?11)"#,
         params![
             item.id,
             conversation_id,
@@ -764,6 +767,7 @@ fn migration_archive_restore_message(
             seq,
             if is_memory { 1 } else { 0 },
             if is_memory { 1 } else { 0 },
+            citations_json,
         ],
     )?;
     if !item.tags.is_empty() {

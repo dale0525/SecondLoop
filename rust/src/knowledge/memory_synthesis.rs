@@ -1,13 +1,14 @@
 use anyhow::Result;
 use rusqlite::Connection;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use crate::crypto::decrypt_bytes;
 use crate::db;
 use crate::knowledge::models::GeneratedMemoryKind;
 use crate::knowledge::{
-    memory_dedup, ContentKnowledgeDocument, KnowledgeAnchorSet, KnowledgeOriginType, KnowledgeRole,
-    KnowledgeSourceKind, KnowledgeVersionSet,
+    infer_generated_memory_section, infer_memory_status, memory_dedup, ContentKnowledgeDocument,
+    KnowledgeAnchorSet, KnowledgeMemoryDisplay, KnowledgeMemoryFeedback, KnowledgeOriginType,
+    KnowledgeRole, KnowledgeSourceKind, KnowledgeVersionSet,
 };
 
 struct GeneratedMemoryDraft {
@@ -19,6 +20,7 @@ struct GeneratedMemoryDraft {
     updated_at_ms: i64,
     anchors: KnowledgeAnchorSet,
     source_id: Option<String>,
+    source_keys: BTreeSet<String>,
 }
 
 struct RawUserMessage {
@@ -36,6 +38,17 @@ impl GeneratedMemoryDraft {
             &self.facet_key,
             self.source_id.as_deref(),
         );
+        let title = self.title;
+        let raw_text = self.raw_text;
+        let summary = raw_text.lines().next().unwrap_or_default().to_string();
+        let memory_feedback = KnowledgeMemoryFeedback::default();
+        let memory_display =
+            infer_generated_memory_section(&document_id, Some(&title), Some(&summary), &raw_text)
+                .map(|section| KnowledgeMemoryDisplay {
+                    section,
+                    source_count: self.source_keys.len().max(1) as i64,
+                    status: infer_memory_status(&document_id, self.updated_at_ms, &memory_feedback),
+                });
         ContentKnowledgeDocument {
             document_id,
             origin_type: KnowledgeOriginType::Generated,
@@ -47,10 +60,12 @@ impl GeneratedMemoryDraft {
             updated_at_ms: self.updated_at_ms,
             versions: KnowledgeVersionSet::current(),
             anchors: self.anchors,
-            title: Some(self.title),
-            summary: Some(self.raw_text.lines().next().unwrap_or_default().to_string()),
-            raw_text: self.raw_text.clone(),
-            normalized_text: self.raw_text,
+            title: Some(title),
+            summary: Some(summary.clone()),
+            raw_text: raw_text.clone(),
+            normalized_text: raw_text,
+            memory_display,
+            memory_feedback,
         }
     }
 }
@@ -107,6 +122,9 @@ fn merge_generated_memory_draft(
             existing.updated_at_ms = existing.updated_at_ms.max(incoming.updated_at_ms);
         }
     }
+    existing
+        .source_keys
+        .extend(incoming.source_keys.iter().cloned());
 }
 
 fn collect_raw_user_messages(conn: &Connection, key: &[u8; 32]) -> Result<Vec<RawUserMessage>> {
@@ -194,6 +212,7 @@ fn collect_preference_memories(messages: &[RawUserMessage], out: &mut Vec<Genera
                     updated_at_ms: message.updated_at_ms,
                     anchors: anchors.clone(),
                     source_id: Some(message.message_id.clone()),
+                    source_keys: BTreeSet::from([message.message_id.clone()]),
                 });
             }
         }
@@ -212,6 +231,7 @@ fn collect_preference_memories(messages: &[RawUserMessage], out: &mut Vec<Genera
                 updated_at_ms: message.updated_at_ms,
                 anchors: anchors.clone(),
                 source_id: Some(message.message_id.clone()),
+                source_keys: BTreeSet::from([message.message_id.clone()]),
             });
         }
 
@@ -237,6 +257,7 @@ fn collect_preference_memories(messages: &[RawUserMessage], out: &mut Vec<Genera
                 updated_at_ms: message.updated_at_ms,
                 anchors,
                 source_id: Some(message.message_id.clone()),
+                source_keys: BTreeSet::from([message.message_id.clone()]),
             });
         }
     }
@@ -328,6 +349,7 @@ fn collect_profile_memories(messages: &[RawUserMessage], out: &mut Vec<Generated
                 ..KnowledgeAnchorSet::default()
             },
             source_id: Some(message.message_id.clone()),
+            source_keys: BTreeSet::from([message.message_id.clone()]),
         });
     }
 }
@@ -362,6 +384,7 @@ fn collect_event_memories(messages: &[RawUserMessage], out: &mut Vec<GeneratedMe
                 ..KnowledgeAnchorSet::default()
             },
             source_id: Some(message.message_id.clone()),
+            source_keys: BTreeSet::from([message.message_id.clone()]),
         });
     }
 }
@@ -396,6 +419,11 @@ fn collect_pattern_memories(
         .take(4)
         .map(|todo| format!("- {} [{}]", todo.title, todo.status))
         .collect::<Vec<_>>();
+    let source_keys = recent_active
+        .iter()
+        .take(4)
+        .map(|todo| todo.id.clone())
+        .collect::<BTreeSet<_>>();
     out.push(GeneratedMemoryDraft {
         kind: GeneratedMemoryKind::Pattern,
         facet_key: "active_task_focus".to_string(),
@@ -411,6 +439,7 @@ fn collect_pattern_memories(
             ..KnowledgeAnchorSet::default()
         },
         source_id: None,
+        source_keys,
     });
     Ok(())
 }

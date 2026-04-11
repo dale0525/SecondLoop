@@ -24,6 +24,17 @@ abstract interface class KnowledgeBackend {
     int offset = 0,
   });
 
+  Future<KnowledgeMemoryFeedback> upsertKnowledgeMemoryFeedback(
+    Uint8List key, {
+    required String documentId,
+    KnowledgeMemoryStatus? status,
+    required bool useForAskAi,
+    required bool isDeleted,
+    required bool markedInaccurate,
+    String? correctedTitle,
+    String? correctedSummary,
+  });
+
   Future<List<KnowledgeUnit>> listKnowledgeUnits(
     Uint8List key, {
     required String documentId,
@@ -74,6 +85,28 @@ final class NativeKnowledgeBackend implements KnowledgeBackend {
     int offset = 0,
   }) =>
       _backend.listKnowledgeDocuments(key, limit: limit, offset: offset);
+
+  @override
+  Future<KnowledgeMemoryFeedback> upsertKnowledgeMemoryFeedback(
+    Uint8List key, {
+    required String documentId,
+    KnowledgeMemoryStatus? status,
+    required bool useForAskAi,
+    required bool isDeleted,
+    required bool markedInaccurate,
+    String? correctedTitle,
+    String? correctedSummary,
+  }) =>
+      _backend.upsertKnowledgeMemoryFeedback(
+        key,
+        documentId: documentId,
+        status: status,
+        useForAskAi: useForAskAi,
+        isDeleted: isDeleted,
+        markedInaccurate: markedInaccurate,
+        correctedTitle: correctedTitle,
+        correctedSummary: correctedSummary,
+      );
 
   @override
   Future<List<KnowledgeUnit>> listKnowledgeUnits(

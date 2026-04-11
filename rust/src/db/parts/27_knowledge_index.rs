@@ -6,6 +6,49 @@ fn knowledge_unit_text_aad(unit_id: &str, field: &str) -> Vec<u8> {
     format!("knowledge.unit.{field}:{unit_id}").into_bytes()
 }
 
+fn default_knowledge_memory_feedback() -> crate::knowledge::KnowledgeMemoryFeedback {
+    crate::knowledge::KnowledgeMemoryFeedback {
+        status: None,
+        use_for_ask_ai: true,
+        is_deleted: false,
+        marked_inaccurate: false,
+        corrected_title: None,
+        corrected_summary: None,
+        updated_at_ms: None,
+    }
+}
+
+fn normalize_optional_trimmed(value: Option<String>) -> Option<String> {
+    value.and_then(|raw| {
+        let trimmed = raw.trim();
+        if trimmed.is_empty() {
+            None
+        } else {
+            Some(trimmed.to_string())
+        }
+    })
+}
+
+fn encode_knowledge_memory_status(
+    status: Option<crate::knowledge::KnowledgeMemoryStatus>,
+) -> Result<Option<String>> {
+    status
+        .map(|value| -> Result<String> {
+            Ok(serde_json::to_string(&value)?.trim_matches('"').to_string())
+        })
+        .transpose()
+}
+
+fn decode_knowledge_memory_status(
+    raw: Option<String>,
+) -> Result<Option<crate::knowledge::KnowledgeMemoryStatus>> {
+    raw.map(|value| {
+        serde_json::from_str::<crate::knowledge::KnowledgeMemoryStatus>(&format!("\"{value}\""))
+            .map_err(anyhow::Error::from)
+    })
+    .transpose()
+}
+
 pub fn encode_knowledge_document_text(
     key: &[u8; 32],
     document_id: &str,
@@ -42,6 +85,98 @@ pub fn decode_knowledge_unit_text(
 ) -> Result<String> {
     let bytes = decrypt_bytes(key, blob, &knowledge_unit_text_aad(unit_id, field))?;
     String::from_utf8(bytes).map_err(|_| anyhow!("knowledge unit text is not valid utf-8"))
+}
+
+pub fn get_knowledge_memory_feedback(
+    conn: &Connection,
+    document_id: &str,
+) -> Result<crate::knowledge::KnowledgeMemoryFeedback> {
+    let row = conn
+        .query_row(
+            r#"SELECT status,
+                      use_for_ask_ai,
+                      is_deleted,
+                      marked_inaccurate,
+                      corrected_title,
+                      corrected_summary,
+                      updated_at_ms
+               FROM knowledge_document_feedback
+               WHERE document_id = ?1"#,
+            params![document_id],
+            |row| {
+                Ok((
+                    row.get::<_, Option<String>>(0)?,
+                    row.get::<_, i64>(1)?,
+                    row.get::<_, i64>(2)?,
+                    row.get::<_, i64>(3)?,
+                    row.get::<_, Option<String>>(4)?,
+                    row.get::<_, Option<String>>(5)?,
+                    row.get::<_, Option<i64>>(6)?,
+                ))
+            },
+        )
+        .optional()?;
+    let Some((status, use_for_ask_ai, is_deleted, marked_inaccurate, corrected_title, corrected_summary, updated_at_ms)) = row else {
+        return Ok(default_knowledge_memory_feedback());
+    };
+    Ok(crate::knowledge::KnowledgeMemoryFeedback {
+        status: decode_knowledge_memory_status(status)?,
+        use_for_ask_ai: use_for_ask_ai != 0,
+        is_deleted: is_deleted != 0,
+        marked_inaccurate: marked_inaccurate != 0,
+        corrected_title: normalize_optional_trimmed(corrected_title),
+        corrected_summary: normalize_optional_trimmed(corrected_summary),
+        updated_at_ms,
+    })
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn upsert_knowledge_memory_feedback(
+    conn: &Connection,
+    document_id: &str,
+    status: Option<crate::knowledge::KnowledgeMemoryStatus>,
+    use_for_ask_ai: bool,
+    is_deleted: bool,
+    marked_inaccurate: bool,
+    corrected_title: Option<String>,
+    corrected_summary: Option<String>,
+) -> Result<crate::knowledge::KnowledgeMemoryFeedback> {
+    let now = now_ms();
+    let encoded_status = encode_knowledge_memory_status(status)?;
+    let corrected_title = normalize_optional_trimmed(corrected_title);
+    let corrected_summary = normalize_optional_trimmed(corrected_summary);
+    conn.execute(
+        r#"INSERT INTO knowledge_document_feedback(
+               document_id,
+               status,
+               use_for_ask_ai,
+               is_deleted,
+               marked_inaccurate,
+               corrected_title,
+               corrected_summary,
+               created_at_ms,
+               updated_at_ms
+           ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?8)
+           ON CONFLICT(document_id) DO UPDATE SET
+             status = excluded.status,
+             use_for_ask_ai = excluded.use_for_ask_ai,
+             is_deleted = excluded.is_deleted,
+             marked_inaccurate = excluded.marked_inaccurate,
+             corrected_title = excluded.corrected_title,
+             corrected_summary = excluded.corrected_summary,
+             updated_at_ms = excluded.updated_at_ms"#,
+        params![
+            document_id,
+            encoded_status,
+            if use_for_ask_ai { 1 } else { 0 },
+            if is_deleted { 1 } else { 0 },
+            if marked_inaccurate { 1 } else { 0 },
+            corrected_title,
+            corrected_summary,
+            now,
+        ],
+    )?;
+    get_knowledge_memory_feedback(conn, document_id)
 }
 
 pub fn ensure_knowledge_rebuild_state_defaults(conn: &Connection) -> Result<()> {

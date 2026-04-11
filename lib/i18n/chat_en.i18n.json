@@ -257,5 +257,28 @@
   },
   "recordingRecovery": {
     "recoveredToDraftSnack": "Recovered recording was added to draft. Tap Send to submit."
+  },
+  "answerEvidence": {
+    "title": "Evidence",
+    "summary": {
+      "sourcesUsed": "$count sources",
+      "memoryCardsUsed": "$count memory cards",
+      "openEvidence": "Open evidence"
+    },
+    "tabs": {
+      "directSources": "Direct sources ($count)",
+      "memoryCards": "Memory cards ($count)"
+    },
+    "actions": {
+      "viewOriginal": "View original",
+      "inspectMemory": "Inspect memory",
+      "correct": "Correct",
+      "dontUse": "Don't use",
+      "deleteMemory": "Delete"
+    },
+    "labels": {
+      "whyUsed": "Why it was used",
+      "sourceCount": "$count sources"
+    }
   }
 }

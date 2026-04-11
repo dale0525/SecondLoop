@@ -52,6 +52,31 @@ extension NativeAppBackendKnowledgeExtension on NativeAppBackend {
     );
   }
 
+  Future<rust_knowledge_models.KnowledgeMemoryFeedback>
+      upsertKnowledgeMemoryFeedback(
+    Uint8List key, {
+    required String documentId,
+    rust_knowledge_models.KnowledgeMemoryStatus? status,
+    required bool useForAskAi,
+    required bool isDeleted,
+    required bool markedInaccurate,
+    String? correctedTitle,
+    String? correctedSummary,
+  }) async {
+    final appDir = await _getAppDir();
+    return rust_knowledge.dbUpsertKnowledgeMemoryFeedback(
+      appDir: appDir,
+      key: key,
+      documentId: documentId,
+      status: status,
+      useForAskAi: useForAskAi,
+      isDeleted: isDeleted,
+      markedInaccurate: markedInaccurate,
+      correctedTitle: correctedTitle,
+      correctedSummary: correctedSummary,
+    );
+  }
+
   Future<List<rust_knowledge_models.KnowledgeUnit>> listKnowledgeUnits(
     Uint8List key, {
     required String documentId,

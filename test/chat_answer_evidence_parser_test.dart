@@ -1,0 +1,83 @@
+import 'package:flutter_test/flutter_test.dart';
+
+import 'package:secondloop/features/chat/chat_answer_evidence_parser.dart';
+
+void main() {
+  test('parseChatAnswerEvidence parses direct sources and memory cards', () {
+    const raw = '''
+{
+  "direct_sources": [
+    {
+      "id": "message:history-1",
+      "href": "secondloop://message/history-1",
+      "source_type": "message",
+      "label": "History",
+      "source_type_label": "Chat message",
+      "scope_label": "This thread",
+      "confidence_label": "High relevance",
+      "title": "Kickoff notes",
+      "snippet": "Kickoff moved to Friday afternoon.",
+      "highlighted_text": "Kickoff moved to Friday afternoon.",
+      "created_at_ms": 1,
+      "updated_at_ms": 2
+    }
+  ],
+  "memory_cards": [
+    {
+      "document_id": "generated:preference:response-language",
+      "title": "Response language",
+      "summary": "User prefers Chinese.",
+      "source_kind": "summary",
+      "role": "summary",
+      "created_at_ms": 3,
+      "updated_at_ms": 4,
+      "status": "confirmed",
+      "source_count": 2,
+      "why_used": "The user asked for style alignment."
+    }
+  ]
+}
+''';
+
+    final evidence = parseChatAnswerEvidence(raw);
+
+    expect(evidence, isNotNull);
+    expect(evidence!.directSources, hasLength(1));
+    expect(evidence.memoryCards, hasLength(1));
+    expect(
+      evidence.directSources.single.displayTitle,
+      'Kickoff notes',
+    );
+    expect(
+      evidence.directSources.single.sourceTypeLabel,
+      'Chat message',
+    );
+    expect(
+      evidence.directSources.single.scopeLabel,
+      'This thread',
+    );
+    expect(
+      evidence.directSources.single.confidenceLabel,
+      'High relevance',
+    );
+    expect(
+      evidence.directSources.single.displaySnippet,
+      'Kickoff moved to Friday afternoon.',
+    );
+    expect(
+      evidence.chipLabelForHref('secondloop://message/history-1'),
+      '[1]',
+    );
+    expect(
+      evidence.memoryCards.single.displaySummary,
+      'User prefers Chinese.',
+    );
+    expect(evidence.memoryCards.single.status, 'confirmed');
+  });
+
+  test('parseChatAnswerEvidence returns null for invalid payload', () {
+    expect(parseChatAnswerEvidence('not-json'), isNull);
+    expect(parseChatAnswerEvidence('{"direct_sources":[],"memory_cards":[]}'),
+        isNull);
+  });
+}

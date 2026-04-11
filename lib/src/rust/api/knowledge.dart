@@ -42,6 +42,27 @@ Future<List<ContentKnowledgeDocument>> dbListKnowledgeDocuments(
     RustLib.instance.api.crateApiKnowledgeDbListKnowledgeDocuments(
         appDir: appDir, key: key, limit: limit, offset: offset);
 
+Future<KnowledgeMemoryFeedback> dbUpsertKnowledgeMemoryFeedback(
+        {required String appDir,
+        required List<int> key,
+        required String documentId,
+        KnowledgeMemoryStatus? status,
+        required bool useForAskAi,
+        required bool isDeleted,
+        required bool markedInaccurate,
+        String? correctedTitle,
+        String? correctedSummary}) =>
+    RustLib.instance.api.crateApiKnowledgeDbUpsertKnowledgeMemoryFeedback(
+        appDir: appDir,
+        key: key,
+        documentId: documentId,
+        status: status,
+        useForAskAi: useForAskAi,
+        isDeleted: isDeleted,
+        markedInaccurate: markedInaccurate,
+        correctedTitle: correctedTitle,
+        correctedSummary: correctedSummary);
+
 Future<List<KnowledgeUnit>> dbListKnowledgeUnits(
         {required String appDir,
         required List<int> key,

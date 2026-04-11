@@ -160,6 +160,19 @@ final class _KnowledgeBackend extends TestAppBackend
   bool running = false;
 
   @override
+  Future<KnowledgeMemoryFeedback> upsertKnowledgeMemoryFeedback(
+    Uint8List key, {
+    required String documentId,
+    KnowledgeMemoryStatus? status,
+    required bool useForAskAi,
+    required bool isDeleted,
+    required bool markedInaccurate,
+    String? correctedTitle,
+    String? correctedSummary,
+  }) async =>
+      throw UnimplementedError();
+
+  @override
   Future<void> cancelKnowledgeRebuild(Uint8List key) async {
     running = false;
   }
@@ -246,6 +259,19 @@ final class _KnowledgeBackend extends TestAppBackend
 final class _PollingKnowledgeBackend extends TestAppBackend
     implements KnowledgeBackend {
   int statusRequests = 0;
+
+  @override
+  Future<KnowledgeMemoryFeedback> upsertKnowledgeMemoryFeedback(
+    Uint8List key, {
+    required String documentId,
+    KnowledgeMemoryStatus? status,
+    required bool useForAskAi,
+    required bool isDeleted,
+    required bool markedInaccurate,
+    String? correctedTitle,
+    String? correctedSummary,
+  }) async =>
+      throw UnimplementedError();
 
   @override
   Future<void> cancelKnowledgeRebuild(Uint8List key) async {}
@@ -346,6 +372,19 @@ final class _CappedDebugKnowledgeBackend extends TestAppBackend
   int listRequests = 0;
 
   @override
+  Future<KnowledgeMemoryFeedback> upsertKnowledgeMemoryFeedback(
+    Uint8List key, {
+    required String documentId,
+    KnowledgeMemoryStatus? status,
+    required bool useForAskAi,
+    required bool isDeleted,
+    required bool markedInaccurate,
+    String? correctedTitle,
+    String? correctedSummary,
+  }) async =>
+      throw UnimplementedError();
+
+  @override
   Future<void> cancelKnowledgeRebuild(Uint8List key) async {}
 
   @override
@@ -425,6 +464,11 @@ final class _CappedDebugKnowledgeBackend extends TestAppBackend
         anchors: const KnowledgeAnchorSet(),
         rawText: 'Raw ${offset + index}',
         normalizedText: 'Raw ${offset + index}',
+        memoryFeedback: const KnowledgeMemoryFeedback(
+          useForAskAi: true,
+          isDeleted: false,
+          markedInaccurate: false,
+        ),
       ),
       growable: false,
     );

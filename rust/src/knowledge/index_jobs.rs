@@ -9,9 +9,11 @@ use crate::knowledge::embedding_batch::{
 };
 use crate::knowledge::source_adapters::{snippet, visit_source_knowledge_documents_with_external};
 use crate::knowledge::{
-    build_chunk_units, build_section_units, build_segment_units, list_knowledge_units,
-    normalize_text_for_source, segment_document_text, ContentKnowledgeDocument, KnowledgeUnit,
-    KnowledgeUnitKind, KnowledgeVersionSet, SegmentDraft,
+    build_chunk_units, build_section_units, build_segment_units, infer_generated_memory_section,
+    infer_memory_status, list_knowledge_units, normalize_text_for_source, segment_document_text,
+    ContentKnowledgeDocument, KnowledgeMemoryDisplay, KnowledgeMemoryFeedback,
+    KnowledgeMemorySection, KnowledgeOriginType, KnowledgeUnit, KnowledgeUnitKind,
+    KnowledgeVersionSet, SegmentDraft,
 };
 
 const JOB_STAGES: &[&str] = &["normalize", "segment", "chunk", "embed", "finalize"];
@@ -131,13 +133,15 @@ fn upsert_document(
                normalized_text,
                created_at_ms,
                updated_at_ms,
+               memory_section,
+               memory_source_count,
                schema_version,
                normalization_version,
                segmentation_version,
                embedding_policy_version,
                retrieval_policy_version,
                last_indexed_at_ms
-           ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19)
+           ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21)
            ON CONFLICT(document_id) DO UPDATE SET
                origin_type = excluded.origin_type,
                source_kind = excluded.source_kind,
@@ -151,6 +155,8 @@ fn upsert_document(
                normalized_text = excluded.normalized_text,
                created_at_ms = excluded.created_at_ms,
                updated_at_ms = excluded.updated_at_ms,
+               memory_section = excluded.memory_section,
+               memory_source_count = excluded.memory_source_count,
                schema_version = excluded.schema_version,
                normalization_version = excluded.normalization_version,
                segmentation_version = excluded.segmentation_version,
@@ -176,6 +182,17 @@ fn upsert_document(
             )?,
             document.created_at_ms,
             document.updated_at_ms,
+            document
+                .memory_display
+                .as_ref()
+                .map(|display| serde_json::to_string(&display.section))
+                .transpose()?
+                .map(|value| value.trim_matches('"').to_string()),
+            document
+                .memory_display
+                .as_ref()
+                .map(|display| display.source_count)
+                .unwrap_or(0),
             document.versions.schema_version,
             document.versions.normalization_version,
             document.versions.segmentation_version,
@@ -528,6 +545,8 @@ fn document_by_id(
                   normalized_text,
                   created_at_ms,
                   updated_at_ms,
+                  memory_section,
+                  memory_source_count,
                   schema_version,
                   normalization_version,
                   segmentation_version,
@@ -551,16 +570,45 @@ fn document_by_id(
             row.get::<_, Vec<u8>>(10)?,
             row.get::<_, i64>(11)?,
             row.get::<_, i64>(12)?,
-            row.get::<_, i64>(13)?,
+            row.get::<_, Option<String>>(13)?,
             row.get::<_, i64>(14)?,
             row.get::<_, i64>(15)?,
             row.get::<_, i64>(16)?,
             row.get::<_, i64>(17)?,
+            row.get::<_, i64>(18)?,
+            row.get::<_, i64>(19)?,
         ))
     })?;
+    let raw_text = crate::db::decode_knowledge_document_text(key, &row.0, "raw", &row.9)?;
+    let normalized_text =
+        crate::db::decode_knowledge_document_text(key, &row.0, "normalized", &row.10)?;
+    let origin_type: KnowledgeOriginType = serde_json::from_str(&format!("\"{}\"", row.1))?;
+    let memory_feedback = KnowledgeMemoryFeedback::default();
+    let memory_display = if origin_type == KnowledgeOriginType::Generated {
+        let section = row
+            .13
+            .as_deref()
+            .map(|value| serde_json::from_str::<KnowledgeMemorySection>(&format!("\"{value}\"")))
+            .transpose()?
+            .or_else(|| {
+                infer_generated_memory_section(
+                    &row.0,
+                    row.6.as_deref(),
+                    row.7.as_deref(),
+                    &raw_text,
+                )
+            });
+        section.map(|section| KnowledgeMemoryDisplay {
+            section,
+            source_count: row.14.max(1),
+            status: infer_memory_status(&row.0, row.12, &memory_feedback),
+        })
+    } else {
+        None
+    };
     let doc = ContentKnowledgeDocument {
         document_id: row.0.clone(),
-        origin_type: serde_json::from_str(&format!("\"{}\"", row.1))?,
+        origin_type,
         source_kind: serde_json::from_str(&format!("\"{}\"", row.2))?,
         role: serde_json::from_str(&format!("\"{}\"", row.3))?,
         language: row.4,
@@ -568,21 +616,18 @@ fn document_by_id(
         title: row.6,
         summary: row.7,
         anchors: serde_json::from_str(&row.8)?,
-        raw_text: crate::db::decode_knowledge_document_text(key, &row.0, "raw", &row.9)?,
-        normalized_text: crate::db::decode_knowledge_document_text(
-            key,
-            &row.0,
-            "normalized",
-            &row.10,
-        )?,
+        raw_text,
+        normalized_text,
+        memory_display,
+        memory_feedback,
         created_at_ms: row.11,
         updated_at_ms: row.12,
         versions: KnowledgeVersionSet {
-            schema_version: row.13,
-            normalization_version: row.14,
-            segmentation_version: row.15,
-            embedding_policy_version: row.16,
-            retrieval_policy_version: row.17,
+            schema_version: row.15,
+            normalization_version: row.16,
+            segmentation_version: row.17,
+            embedding_policy_version: row.18,
+            retrieval_policy_version: row.19,
         },
     };
     Ok(doc)

@@ -158,6 +158,19 @@ final class _SemanticSearchPrepBackend extends TestAppBackend
   final List<KnowledgeSearchResult> _results;
 
   @override
+  Future<KnowledgeMemoryFeedback> upsertKnowledgeMemoryFeedback(
+    Uint8List key, {
+    required String documentId,
+    KnowledgeMemoryStatus? status,
+    required bool useForAskAi,
+    required bool isDeleted,
+    required bool markedInaccurate,
+    String? correctedTitle,
+    String? correctedSummary,
+  }) async =>
+      throw UnimplementedError();
+
+  @override
   Future<KnowledgeIndexStatus> getKnowledgeIndexStatus(Uint8List key) async {
     return const KnowledgeIndexStatus(
       status: 'complete',
@@ -293,6 +306,11 @@ final class _SemanticSearchPrepBackend extends TestAppBackend
         summary: 'Viewer summary',
         rawText: 'Viewer raw text',
         normalizedText: 'viewer raw text',
+        memoryFeedback: const KnowledgeMemoryFeedback(
+          useForAskAi: true,
+          isDeleted: false,
+          markedInaccurate: false,
+        ),
       ),
       totalUnits: 1,
       sectionCount: 1,

@@ -6,6 +6,7 @@ import '../core/quick_capture/quick_capture_scope.dart';
 import '../core/session/session_scope.dart';
 import '../core/update/update_badge_prefs.dart';
 import '../features/chat/chat_page.dart';
+import '../features/memory/memory_center_page.dart';
 import '../features/settings/settings_page.dart';
 import '../i18n/strings.g.dart';
 import '../src/rust/db.dart';
@@ -17,6 +18,7 @@ const _kDesktopShellMaxWidth = 1240.0;
 
 enum AppTab {
   chat(Icons.chat_bubble_outline, Icons.chat_bubble),
+  memory(Icons.auto_stories_outlined, Icons.auto_stories_rounded),
   settings(Icons.settings_outlined, Icons.settings);
 
   const AppTab(this.icon, this.selectedIcon);
@@ -26,6 +28,7 @@ enum AppTab {
 
   String label(BuildContext context) => switch (this) {
         AppTab.chat => context.t.app.tabs.main,
+        AppTab.memory => context.t.app.tabs.memory,
         AppTab.settings => context.t.app.tabs.settings,
       };
 }
@@ -86,6 +89,7 @@ class _AppShellState extends State<AppShell> {
                 index: _selectedIndex,
                 children: <Widget>[
                   _ChatTab(isActive: _selectedIndex == 0),
+                  const _MemoryTab(),
                   const _SettingsTab(),
                 ],
               )
@@ -285,5 +289,14 @@ final class _SettingsTab extends StatelessWidget {
       appBar: AppBar(title: Text(context.t.settings.title)),
       body: const SettingsPage(),
     );
+  }
+}
+
+final class _MemoryTab extends StatelessWidget {
+  const _MemoryTab();
+
+  @override
+  Widget build(BuildContext context) {
+    return const MemoryCenterPage();
   }
 }

@@ -207,6 +207,11 @@ final class _LargeContentBackend extends TestAppBackend
     summary: 'Paged PDF summary.',
     rawText: longText,
     normalizedText: longText.toLowerCase(),
+    memoryFeedback: const KnowledgeMemoryFeedback(
+      useForAskAi: true,
+      isDeleted: false,
+      markedInaccurate: false,
+    ),
   );
 
   late final KnowledgeViewerDocument _viewerDocument = KnowledgeViewerDocument(
@@ -351,6 +356,11 @@ final class _LargeMessageBackend extends TestAppBackend
       summary: 'Message body stored in the knowledge index.',
       rawText: longText,
       normalizedText: longText.toLowerCase(),
+      memoryFeedback: const KnowledgeMemoryFeedback(
+        useForAskAi: true,
+        isDeleted: false,
+        markedInaccurate: false,
+      ),
     ),
     totalUnits: 3,
     sectionCount: 1,
@@ -475,6 +485,11 @@ final class _LargeAudioTranscriptBackend extends TestAppBackend
       summary: 'Transcript stored in the knowledge index.',
       rawText: longTranscript,
       normalizedText: longTranscript.toLowerCase(),
+      memoryFeedback: const KnowledgeMemoryFeedback(
+        useForAskAi: true,
+        isDeleted: false,
+        markedInaccurate: false,
+      ),
     ),
     totalUnits: 3,
     sectionCount: 1,

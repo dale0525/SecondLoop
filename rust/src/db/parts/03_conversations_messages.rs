@@ -133,6 +133,7 @@ pub fn insert_message(
         role,
         content,
         role != "assistant",
+        None,
     )
 }
 
@@ -143,7 +144,26 @@ pub fn insert_message_non_memory(
     role: &str,
     content: &str,
 ) -> Result<Message> {
-    insert_message_with_is_memory(conn, key, conversation_id, role, content, false)
+    insert_message_with_is_memory(conn, key, conversation_id, role, content, false, None)
+}
+
+pub fn insert_message_non_memory_with_citations(
+    conn: &Connection,
+    key: &[u8; 32],
+    conversation_id: &str,
+    role: &str,
+    content: &str,
+    citations_json: Option<&str>,
+) -> Result<Message> {
+    insert_message_with_is_memory(
+        conn,
+        key,
+        conversation_id,
+        role,
+        content,
+        false,
+        citations_json,
+    )
 }
 
 fn insert_message_with_is_memory(
@@ -153,6 +173,7 @@ fn insert_message_with_is_memory(
     role: &str,
     content: &str,
     is_memory: bool,
+    citations_json: Option<&str>,
 ) -> Result<Message> {
     let id = uuid::Uuid::new_v4().to_string();
     let now = now_ms();
@@ -163,8 +184,8 @@ fn insert_message_with_is_memory(
     let content_blob = encrypt_bytes(key, content.as_bytes(), b"message.content")?;
     conn.execute(
         r#"INSERT INTO messages
-           (id, conversation_id, role, content, created_at, updated_at, updated_by_device_id, updated_by_seq, is_deleted, needs_embedding, is_memory)
-           VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 0, ?9, ?10)"#,
+           (id, conversation_id, role, content, created_at, updated_at, updated_by_device_id, updated_by_seq, is_deleted, needs_embedding, is_memory, citations_json)
+           VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 0, ?9, ?10, ?11)"#,
         params![
             id,
             conversation_id,
@@ -175,7 +196,8 @@ fn insert_message_with_is_memory(
             device_id,
             seq,
             if is_memory { 1 } else { 0 },
-            if is_memory { 1 } else { 0 }
+            if is_memory { 1 } else { 0 },
+            citations_json,
         ],
     )?;
 
@@ -197,6 +219,7 @@ fn insert_message_with_is_memory(
             "content": content,
             "created_at_ms": now,
             "is_memory": is_memory,
+            "citations_json": citations_json,
         }
     });
     insert_oplog(conn, key, &op)?;
@@ -213,6 +236,7 @@ fn insert_message_with_is_memory(
         content: content.to_string(),
         created_at_ms: now,
         is_memory,
+        citations_json: citations_json.map(ToOwned::to_owned),
     })
 }
 

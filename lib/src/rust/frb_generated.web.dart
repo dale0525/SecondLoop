@@ -96,6 +96,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   KnowledgeAnchorSet dco_decode_box_autoadd_knowledge_anchor_set(dynamic raw);
 
   @protected
+  KnowledgeMemoryDisplay dco_decode_box_autoadd_knowledge_memory_display(
+      dynamic raw);
+
+  @protected
+  KnowledgeMemoryStatus dco_decode_box_autoadd_knowledge_memory_status(
+      dynamic raw);
+
+  @protected
   KnowledgeUnitKind dco_decode_box_autoadd_knowledge_unit_kind(dynamic raw);
 
   @protected
@@ -161,6 +169,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   KnowledgeIndexStatus dco_decode_knowledge_index_status(dynamic raw);
+
+  @protected
+  KnowledgeMemoryDisplay dco_decode_knowledge_memory_display(dynamic raw);
+
+  @protected
+  KnowledgeMemoryFeedback dco_decode_knowledge_memory_feedback(dynamic raw);
+
+  @protected
+  KnowledgeMemorySection dco_decode_knowledge_memory_section(dynamic raw);
+
+  @protected
+  KnowledgeMemoryStatus dco_decode_knowledge_memory_status(dynamic raw);
 
   @protected
   KnowledgeOriginType dco_decode_knowledge_origin_type(dynamic raw);
@@ -365,6 +385,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   PlatformInt64? dco_decode_opt_box_autoadd_i_64(dynamic raw);
 
   @protected
+  KnowledgeMemoryDisplay? dco_decode_opt_box_autoadd_knowledge_memory_display(
+      dynamic raw);
+
+  @protected
+  KnowledgeMemoryStatus? dco_decode_opt_box_autoadd_knowledge_memory_status(
+      dynamic raw);
+
+  @protected
   KnowledgeUnitKind? dco_decode_opt_box_autoadd_knowledge_unit_kind(
       dynamic raw);
 
@@ -501,6 +529,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  KnowledgeMemoryDisplay sse_decode_box_autoadd_knowledge_memory_display(
+      SseDeserializer deserializer);
+
+  @protected
+  KnowledgeMemoryStatus sse_decode_box_autoadd_knowledge_memory_status(
+      SseDeserializer deserializer);
+
+  @protected
   KnowledgeUnitKind sse_decode_box_autoadd_knowledge_unit_kind(
       SseDeserializer deserializer);
 
@@ -573,6 +609,22 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   KnowledgeIndexStatus sse_decode_knowledge_index_status(
+      SseDeserializer deserializer);
+
+  @protected
+  KnowledgeMemoryDisplay sse_decode_knowledge_memory_display(
+      SseDeserializer deserializer);
+
+  @protected
+  KnowledgeMemoryFeedback sse_decode_knowledge_memory_feedback(
+      SseDeserializer deserializer);
+
+  @protected
+  KnowledgeMemorySection sse_decode_knowledge_memory_section(
+      SseDeserializer deserializer);
+
+  @protected
+  KnowledgeMemoryStatus sse_decode_knowledge_memory_status(
       SseDeserializer deserializer);
 
   @protected
@@ -808,6 +860,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   PlatformInt64? sse_decode_opt_box_autoadd_i_64(SseDeserializer deserializer);
 
   @protected
+  KnowledgeMemoryDisplay? sse_decode_opt_box_autoadd_knowledge_memory_display(
+      SseDeserializer deserializer);
+
+  @protected
+  KnowledgeMemoryStatus? sse_decode_opt_box_autoadd_knowledge_memory_status(
+      SseDeserializer deserializer);
+
+  @protected
   KnowledgeUnitKind? sse_decode_opt_box_autoadd_knowledge_unit_kind(
       SseDeserializer deserializer);
 
@@ -957,6 +1017,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       KnowledgeAnchorSet self, SseSerializer serializer);
 
   @protected
+  void sse_encode_box_autoadd_knowledge_memory_display(
+      KnowledgeMemoryDisplay self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_knowledge_memory_status(
+      KnowledgeMemoryStatus self, SseSerializer serializer);
+
+  @protected
   void sse_encode_box_autoadd_knowledge_unit_kind(
       KnowledgeUnitKind self, SseSerializer serializer);
 
@@ -1032,6 +1100,22 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_knowledge_index_status(
       KnowledgeIndexStatus self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_knowledge_memory_display(
+      KnowledgeMemoryDisplay self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_knowledge_memory_feedback(
+      KnowledgeMemoryFeedback self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_knowledge_memory_section(
+      KnowledgeMemorySection self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_knowledge_memory_status(
+      KnowledgeMemoryStatus self, SseSerializer serializer);
 
   @protected
   void sse_encode_knowledge_origin_type(
@@ -1267,6 +1351,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_opt_box_autoadd_i_64(
       PlatformInt64? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_knowledge_memory_display(
+      KnowledgeMemoryDisplay? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_knowledge_memory_status(
+      KnowledgeMemoryStatus? self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_box_autoadd_knowledge_unit_kind(

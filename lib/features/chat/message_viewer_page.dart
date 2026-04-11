@@ -5,15 +5,21 @@ import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter/services.dart';
 
 import '../../core/backend/app_backend.dart';
+import '../../core/backend/knowledge_backend.dart';
 import '../../core/backend/knowledge_viewer_backend.dart';
-import '../../core/session/session_scope.dart';
 import '../../core/navigation/inherited_scope_page_wrapper.dart';
+import '../../core/session/session_scope.dart';
 import '../../i18n/strings.g.dart';
 import '../../src/rust/knowledge/models.dart';
 import '../../ui/sl_markdown_style.dart';
 import '../attachments/attachment_deeplink.dart';
 import '../attachments/attachment_viewer_page.dart';
 import '../knowledge_viewer/knowledge_document_viewer.dart';
+import '../memory/memory_detail_page.dart';
+import 'chat_answer_citation_controller.dart';
+import 'chat_answer_evidence_models.dart';
+import 'chat_answer_evidence_parser.dart';
+import 'chat_answer_evidence_sheet.dart';
 import 'chat_markdown_link_handler.dart';
 import 'message_deeplink.dart';
 import 'chat_markdown_rich_rendering.dart';
@@ -35,6 +41,7 @@ class MessageViewerPage extends StatelessWidget {
   const MessageViewerPage({
     required this.content,
     this.messageId,
+    this.citationsJson,
     this.navigationTrail = const <String>[],
     super.key,
   });
@@ -43,6 +50,7 @@ class MessageViewerPage extends StatelessWidget {
 
   final String content;
   final String? messageId;
+  final String? citationsJson;
   final List<String> navigationTrail;
 
   List<String> get _effectiveNavigationTrail {
@@ -91,6 +99,7 @@ class MessageViewerPage extends StatelessWidget {
           MessageViewerPage(
             content: message.content,
             messageId: message.id,
+            citationsJson: message.citationsJson,
             navigationTrail: <String>[...navigationTrail, normalizedMessageId],
           ),
         ),
@@ -121,6 +130,100 @@ class MessageViewerPage extends StatelessWidget {
     return true;
   }
 
+  Future<void> _disableMemoryFromEvidence(
+    BuildContext context,
+    String documentId,
+  ) async {
+    final backend = maybeKnowledgeBackendFor(AppBackendScope.of(context));
+    final viewerBackend =
+        maybeKnowledgeViewerBackendFor(AppBackendScope.of(context));
+    final sessionKey = SessionScope.maybeOf(context)?.sessionKey;
+    if (backend == null || viewerBackend == null || sessionKey == null) return;
+    final document = await viewerBackend.getKnowledgeViewerDocument(
+      sessionKey,
+      documentId: documentId,
+    );
+    final feedback = document.document.memoryFeedback;
+    await backend.upsertKnowledgeMemoryFeedback(
+      sessionKey,
+      documentId: documentId,
+      status: feedback.status,
+      useForAskAi: false,
+      isDeleted: feedback.isDeleted,
+      markedInaccurate: feedback.markedInaccurate,
+      correctedTitle: feedback.correctedTitle ?? document.document.title,
+      correctedSummary: feedback.correctedSummary ?? document.document.summary,
+    );
+  }
+
+  Future<void> _deleteMemoryFromEvidence(
+    BuildContext context,
+    String documentId,
+  ) async {
+    final backend = maybeKnowledgeBackendFor(AppBackendScope.of(context));
+    final viewerBackend =
+        maybeKnowledgeViewerBackendFor(AppBackendScope.of(context));
+    final sessionKey = SessionScope.maybeOf(context)?.sessionKey;
+    if (backend == null || viewerBackend == null || sessionKey == null) return;
+    final document = await viewerBackend.getKnowledgeViewerDocument(
+      sessionKey,
+      documentId: documentId,
+    );
+    final feedback = document.document.memoryFeedback;
+    await backend.upsertKnowledgeMemoryFeedback(
+      sessionKey,
+      documentId: documentId,
+      status: feedback.status,
+      useForAskAi: feedback.useForAskAi,
+      isDeleted: true,
+      markedInaccurate: feedback.markedInaccurate,
+      correctedTitle: feedback.correctedTitle ?? document.document.title,
+      correctedSummary: feedback.correctedSummary ?? document.document.summary,
+    );
+  }
+
+  Future<ChatAnswerEvidenceMemoryCard?> _correctMemoryFromEvidence(
+    BuildContext context,
+    ChatAnswerEvidenceMemoryCard card, {
+    required String title,
+    required String summary,
+  }) async {
+    final backend = maybeKnowledgeBackendFor(AppBackendScope.of(context));
+    final viewerBackend =
+        maybeKnowledgeViewerBackendFor(AppBackendScope.of(context));
+    final sessionKey = SessionScope.maybeOf(context)?.sessionKey;
+    if (backend == null || viewerBackend == null || sessionKey == null) {
+      return null;
+    }
+    final document = await viewerBackend.getKnowledgeViewerDocument(
+      sessionKey,
+      documentId: card.documentId,
+    );
+    final feedback = document.document.memoryFeedback;
+    await backend.upsertKnowledgeMemoryFeedback(
+      sessionKey,
+      documentId: card.documentId,
+      status: KnowledgeMemoryStatus.confirmed,
+      useForAskAi: feedback.useForAskAi,
+      isDeleted: false,
+      markedInaccurate: feedback.markedInaccurate,
+      correctedTitle: title,
+      correctedSummary: summary,
+    );
+    final refreshed = await viewerBackend.getKnowledgeViewerDocument(
+      sessionKey,
+      documentId: card.documentId,
+    );
+    final memoryDisplay = refreshed.document.memoryDisplay;
+    return card.copyWith(
+      title: refreshed.document.title,
+      summary: refreshed.document.summary,
+      status: (memoryDisplay?.status ?? KnowledgeMemoryStatus.confirmed).name,
+      sourceCount: memoryDisplay?.sourceCount.toInt() ?? card.sourceCount,
+      updatedAtMs: refreshed.document.updatedAtMs.toInt(),
+    );
+  }
+
   Future<bool> _openInAppLink(BuildContext context, String href) async {
     if (await _openInAppAttachment(context, href)) {
       return true;
@@ -129,6 +232,10 @@ class MessageViewerPage extends StatelessWidget {
       return false;
     }
     return _openInAppMessage(context, href);
+  }
+
+  Future<void> _openMemoryCard(BuildContext context, String documentId) {
+    return MemoryDetailPage.openDocumentId(context, documentId: documentId);
   }
 
   Future<_ResolvedMessageKnowledgeDocument?> _resolveKnowledgeDocument(
@@ -162,6 +269,7 @@ class MessageViewerPage extends StatelessWidget {
   Widget _buildMarkdownBody(
     BuildContext context, {
     required String normalized,
+    required ChatAnswerCitationController citationController,
   }) {
     final previewTheme = resolveChatMarkdownTheme(
         ChatMarkdownThemePreset.studio, Theme.of(context));
@@ -178,6 +286,34 @@ class MessageViewerPage extends StatelessWidget {
       builders: buildChatMarkdownElementBuilders(
         previewTheme: previewTheme,
         exportRenderMode: false,
+        citationLabelResolver: citationController.chipLabelForHref,
+        onTapLink: (href) async {
+          final handledCitation = await citationController.handleCitationTap(
+            context,
+            href: href,
+            onOpenDirectSource: (target) => _openInAppLink(context, target),
+            onOpenMemoryCard: (documentId) =>
+                _openMemoryCard(context, documentId),
+            onCorrectMemoryCard: (card, title, summary) =>
+                _correctMemoryFromEvidence(
+              context,
+              card,
+              title: title,
+              summary: summary,
+            ),
+            onDisableMemoryCard: (documentId) =>
+                _disableMemoryFromEvidence(context, documentId),
+            onDeleteMemoryCard: (documentId) =>
+                _deleteMemoryFromEvidence(context, documentId),
+          );
+          if (handledCitation) {
+            return;
+          }
+          await handleChatMarkdownTapLink(
+            href,
+            handleInApp: (target) => _openInAppLink(context, target),
+          );
+        },
       ),
       onTapLink: (text, href, title) {
         unawaited(
@@ -193,12 +329,14 @@ class MessageViewerPage extends StatelessWidget {
   Widget _buildBody(
     BuildContext context, {
     required String normalized,
+    required ChatAnswerCitationController citationController,
   }) {
     if (!_shouldUseMessageKnowledgeViewer(content) ||
         (messageId?.trim().isEmpty ?? true)) {
       return _buildMarkdownBody(
         context,
         normalized: normalized,
+        citationController: citationController,
       );
     }
 
@@ -216,6 +354,7 @@ class MessageViewerPage extends StatelessWidget {
           return _buildMarkdownBody(
             context,
             normalized: normalized,
+            citationController: citationController,
           );
         }
 
@@ -227,6 +366,7 @@ class MessageViewerPage extends StatelessWidget {
           return _buildMarkdownBody(
             context,
             normalized: normalized,
+            citationController: citationController,
           );
         }
 
@@ -244,6 +384,10 @@ class MessageViewerPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final normalized = sanitizeChatMarkdown(content);
+    final citationController = ChatAnswerCitationController(
+      parseChatAnswerEvidence(citationsJson),
+    );
+    final evidence = citationController.evidence;
 
     return Scaffold(
       key: const ValueKey('message_viewer_page'),
@@ -271,9 +415,88 @@ class MessageViewerPage extends StatelessWidget {
           ),
         ],
       ),
-      body: _buildBody(
-        context,
-        normalized: normalized,
+      body: Column(
+        children: [
+          if (evidence != null && evidence.hasEvidence)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: ChatAnswerEvidenceSummaryBar(
+                  evidence: evidence,
+                  onOpenSources: () => unawaited(
+                    citationController.openEvidence(
+                      context,
+                      initialTab: ChatAnswerEvidenceTab.directSources,
+                      onOpenDirectSource: (href) =>
+                          _openInAppLink(context, href),
+                      onOpenMemoryCard: (documentId) =>
+                          _openMemoryCard(context, documentId),
+                      onCorrectMemoryCard: (card, title, summary) =>
+                          _correctMemoryFromEvidence(
+                        context,
+                        card,
+                        title: title,
+                        summary: summary,
+                      ),
+                      onDisableMemoryCard: (documentId) =>
+                          _disableMemoryFromEvidence(context, documentId),
+                      onDeleteMemoryCard: (documentId) =>
+                          _deleteMemoryFromEvidence(context, documentId),
+                    ),
+                  ),
+                  onOpenMemory: () => unawaited(
+                    citationController.openEvidence(
+                      context,
+                      initialTab: ChatAnswerEvidenceTab.memoryCards,
+                      onOpenDirectSource: (href) =>
+                          _openInAppLink(context, href),
+                      onOpenMemoryCard: (documentId) =>
+                          _openMemoryCard(context, documentId),
+                      onCorrectMemoryCard: (card, title, summary) =>
+                          _correctMemoryFromEvidence(
+                        context,
+                        card,
+                        title: title,
+                        summary: summary,
+                      ),
+                      onDisableMemoryCard: (documentId) =>
+                          _disableMemoryFromEvidence(context, documentId),
+                      onDeleteMemoryCard: (documentId) =>
+                          _deleteMemoryFromEvidence(context, documentId),
+                    ),
+                  ),
+                  onOpenEvidence: () => unawaited(
+                    citationController.openEvidence(
+                      context,
+                      onOpenDirectSource: (href) =>
+                          _openInAppLink(context, href),
+                      onOpenMemoryCard: (documentId) =>
+                          _openMemoryCard(context, documentId),
+                      onCorrectMemoryCard: (card, title, summary) =>
+                          _correctMemoryFromEvidence(
+                        context,
+                        card,
+                        title: title,
+                        summary: summary,
+                      ),
+                      onDisableMemoryCard: (documentId) =>
+                          _disableMemoryFromEvidence(context, documentId),
+                      onDeleteMemoryCard: (documentId) =>
+                          _deleteMemoryFromEvidence(context, documentId),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          Expanded(
+            child: _buildBody(
+              context,
+              normalized: normalized,
+              citationController: citationController,
+            ),
+          ),
+        ],
       ),
     );
   }

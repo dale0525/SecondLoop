@@ -83,6 +83,11 @@ ContentKnowledgeDocument _doc(String id) => ContentKnowledgeDocument(
       summary: null,
       rawText: '',
       normalizedText: '',
+      memoryFeedback: const KnowledgeMemoryFeedback(
+        useForAskAi: true,
+        isDeleted: false,
+        markedInaccurate: false,
+      ),
     );
 
 KnowledgeUnit _unit(String documentId, String unitId) => KnowledgeUnit(

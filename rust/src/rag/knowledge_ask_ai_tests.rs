@@ -1,6 +1,6 @@
 use crate::knowledge::retrieval::test_support::seeded_fixture;
 
-use super::{try_build_knowledge_contexts, Focus};
+use super::{knowledge_contexts::try_build_knowledge_contexts, Focus};
 
 fn source_from_context(value: &str) -> Option<String> {
     let header = value

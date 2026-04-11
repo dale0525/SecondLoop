@@ -238,6 +238,10 @@ extension _ChatPageStateMessageItemBuilder on _ChatPageState {
           : rawDisplayText;
       final actionSuggestions = assistantActions?.suggestions?.suggestions ??
           const <ActionSuggestion>[];
+      final citationController = ChatAnswerCitationController(
+        parseChatAnswerEvidence(stableMsg.citationsJson),
+      );
+      final evidence = citationController.evidence;
       final todoBadgeMeta = _todoMessageBadgeMetaForMessage(
           message: stableMsg,
           jobsByMessageId: jobsByMessageId,
@@ -375,7 +379,7 @@ extension _ChatPageStateMessageItemBuilder on _ChatPageState {
                           );
                           if (openedDetail) return;
                           if (shouldCollapse && !isDesktopPlatform) {
-                            await _openMessageViewer(displayText);
+                            await _openMessageViewer(stableMsg, displayText);
                           }
                         }(),
                       ),
@@ -448,6 +452,8 @@ extension _ChatPageStateMessageItemBuilder on _ChatPageState {
                                         child: _buildMessageMarkdown(
                                           displayText,
                                           isDesktopPlatform: isDesktopPlatform,
+                                          citationsJson:
+                                              stableMsg.citationsJson,
                                         ),
                                       ),
                                     ),
@@ -504,6 +510,8 @@ extension _ChatPageStateMessageItemBuilder on _ChatPageState {
                                               displayText,
                                               isDesktopPlatform:
                                                   isDesktopPlatform,
+                                              citationsJson:
+                                                  stableMsg.citationsJson,
                                             ),
                                           if (showAskAiTypingIndicator)
                                             Padding(
@@ -533,7 +541,91 @@ extension _ChatPageStateMessageItemBuilder on _ChatPageState {
                                     : _buildMessageMarkdown(
                                         displayText,
                                         isDesktopPlatform: isDesktopPlatform,
+                                        citationsJson: stableMsg.citationsJson,
                                       )),
+                          if (evidence != null && evidence.hasEvidence)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 10),
+                              child: ChatAnswerEvidenceSummaryBar(
+                                evidence: evidence,
+                                onOpenSources: () => unawaited(
+                                  citationController.openEvidence(
+                                    context,
+                                    initialTab:
+                                        ChatAnswerEvidenceTab.directSources,
+                                    onOpenDirectSource: (href) async {
+                                      await _handleMarkdownInAppLink(href);
+                                    },
+                                    onOpenMemoryCard: (documentId) =>
+                                        MemoryDetailPage.openDocumentId(
+                                      context,
+                                      documentId: documentId,
+                                    ),
+                                    onCorrectMemoryCard:
+                                        (card, title, summary) =>
+                                            _correctMemoryFromEvidence(
+                                      card,
+                                      title: title,
+                                      summary: summary,
+                                    ),
+                                    onDisableMemoryCard: (documentId) =>
+                                        _disableMemoryFromEvidence(documentId),
+                                    onDeleteMemoryCard: (documentId) =>
+                                        _deleteMemoryFromEvidence(documentId),
+                                  ),
+                                ),
+                                onOpenMemory: () => unawaited(
+                                  citationController.openEvidence(
+                                    context,
+                                    initialTab:
+                                        ChatAnswerEvidenceTab.memoryCards,
+                                    onOpenDirectSource: (href) async {
+                                      await _handleMarkdownInAppLink(href);
+                                    },
+                                    onOpenMemoryCard: (documentId) =>
+                                        MemoryDetailPage.openDocumentId(
+                                      context,
+                                      documentId: documentId,
+                                    ),
+                                    onCorrectMemoryCard:
+                                        (card, title, summary) =>
+                                            _correctMemoryFromEvidence(
+                                      card,
+                                      title: title,
+                                      summary: summary,
+                                    ),
+                                    onDisableMemoryCard: (documentId) =>
+                                        _disableMemoryFromEvidence(documentId),
+                                    onDeleteMemoryCard: (documentId) =>
+                                        _deleteMemoryFromEvidence(documentId),
+                                  ),
+                                ),
+                                onOpenEvidence: () => unawaited(
+                                  citationController.openEvidence(
+                                    context,
+                                    onOpenDirectSource: (href) async {
+                                      await _handleMarkdownInAppLink(href);
+                                    },
+                                    onOpenMemoryCard: (documentId) =>
+                                        MemoryDetailPage.openDocumentId(
+                                      context,
+                                      documentId: documentId,
+                                    ),
+                                    onCorrectMemoryCard:
+                                        (card, title, summary) =>
+                                            _correctMemoryFromEvidence(
+                                      card,
+                                      title: title,
+                                      summary: summary,
+                                    ),
+                                    onDisableMemoryCard: (documentId) =>
+                                        _disableMemoryFromEvidence(documentId),
+                                    onDeleteMemoryCard: (documentId) =>
+                                        _deleteMemoryFromEvidence(documentId),
+                                  ),
+                                ),
+                              ),
+                            ),
                           if (todoBadgeMeta != null)
                             _buildRelatedTodoRootQuote(
                                 message: stableMsg,
@@ -547,7 +639,7 @@ extension _ChatPageStateMessageItemBuilder on _ChatPageState {
                                   'message_view_full_${stableMsg.id}',
                                 ),
                                 onPressed: () => unawaited(
-                                  _openMessageViewer(displayText),
+                                  _openMessageViewer(stableMsg, displayText),
                                 ),
                                 child: Text(context.t.chat.viewFull),
                               ),

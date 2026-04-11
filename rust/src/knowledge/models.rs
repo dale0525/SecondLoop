@@ -92,6 +92,56 @@ pub enum KnowledgeRetrievalLayer {
     Chunk,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum KnowledgeMemoryStatus {
+    Confirmed,
+    Inferred,
+    MaybeOutdated,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum KnowledgeMemorySection {
+    Preference,
+    Person,
+    Project,
+    Topic,
+    RecentEvent,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct KnowledgeMemoryFeedback {
+    pub status: Option<KnowledgeMemoryStatus>,
+    pub use_for_ask_ai: bool,
+    pub is_deleted: bool,
+    pub marked_inaccurate: bool,
+    pub corrected_title: Option<String>,
+    pub corrected_summary: Option<String>,
+    pub updated_at_ms: Option<i64>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct KnowledgeMemoryDisplay {
+    pub section: KnowledgeMemorySection,
+    pub source_count: i64,
+    pub status: KnowledgeMemoryStatus,
+}
+
+impl Default for KnowledgeMemoryFeedback {
+    fn default() -> Self {
+        Self {
+            status: None,
+            use_for_ask_ai: true,
+            is_deleted: false,
+            marked_inaccurate: false,
+            corrected_title: None,
+            corrected_summary: None,
+            updated_at_ms: None,
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct KnowledgeVersionSet {
     pub schema_version: i64,
@@ -129,6 +179,79 @@ pub struct ContentKnowledgeDocument {
     pub summary: Option<String>,
     pub raw_text: String,
     pub normalized_text: String,
+    pub memory_display: Option<KnowledgeMemoryDisplay>,
+    pub memory_feedback: KnowledgeMemoryFeedback,
+}
+
+pub fn infer_memory_status(
+    document_id: &str,
+    updated_at_ms: i64,
+    feedback: &KnowledgeMemoryFeedback,
+) -> KnowledgeMemoryStatus {
+    if let Some(status) = feedback.status {
+        return status;
+    }
+    let now_ms = crate::knowledge::usage::now_ms();
+    let age_ms = now_ms.saturating_sub(updated_at_ms);
+    if document_id.starts_with("generated:event:") && age_ms > 30_i64 * 24 * 60 * 60 * 1000 {
+        return KnowledgeMemoryStatus::MaybeOutdated;
+    }
+    KnowledgeMemoryStatus::Inferred
+}
+
+pub fn infer_generated_memory_section(
+    document_id: &str,
+    title: Option<&str>,
+    summary: Option<&str>,
+    raw_text: &str,
+) -> Option<KnowledgeMemorySection> {
+    if document_id.starts_with("generated:preference:") {
+        return Some(KnowledgeMemorySection::Preference);
+    }
+    if document_id.starts_with("generated:event:") {
+        return Some(KnowledgeMemorySection::RecentEvent);
+    }
+
+    let project_signal = [
+        document_id,
+        title.unwrap_or_default(),
+        summary.unwrap_or_default(),
+        raw_text,
+    ]
+    .join("\n")
+    .to_lowercase();
+
+    if document_id.starts_with("generated:profile:") {
+        if looks_like_project_memory(&project_signal) {
+            return Some(KnowledgeMemorySection::Project);
+        }
+        return Some(KnowledgeMemorySection::Person);
+    }
+
+    if document_id.starts_with("generated:pattern:") {
+        if document_id == "generated:pattern:active-task-focus"
+            || looks_like_project_memory(&project_signal)
+        {
+            return Some(KnowledgeMemorySection::Project);
+        }
+        return Some(KnowledgeMemorySection::Topic);
+    }
+
+    None
+}
+
+fn looks_like_project_memory(value: &str) -> bool {
+    const SIGNALS: [&str; 8] = [
+        "project",
+        "prototype",
+        "launch",
+        "roadmap",
+        "build",
+        "product",
+        "app",
+        "rollout",
+    ];
+    SIGNALS.iter().any(|signal| value.contains(signal))
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]

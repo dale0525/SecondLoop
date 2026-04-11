@@ -23,9 +23,11 @@ pub use index_jobs::{
     ensure_knowledge_rebuild_requested, process_pending_knowledge_index_jobs_active,
 };
 pub use models::{
-    ContentKnowledgeDocument, KnowledgeAnchorSet, KnowledgeContextBlock, KnowledgeDebugStats,
-    KnowledgeIndexStatus, KnowledgeOriginType, KnowledgeQueryScope, KnowledgeRetrievalLayer,
-    KnowledgeRole, KnowledgeSearchResult, KnowledgeSourceKind, KnowledgeUnit, KnowledgeUnitKind,
+    infer_generated_memory_section, infer_memory_status, ContentKnowledgeDocument,
+    KnowledgeAnchorSet, KnowledgeContextBlock, KnowledgeDebugStats, KnowledgeIndexStatus,
+    KnowledgeMemoryDisplay, KnowledgeMemoryFeedback, KnowledgeMemorySection, KnowledgeMemoryStatus,
+    KnowledgeOriginType, KnowledgeQueryScope, KnowledgeRetrievalLayer, KnowledgeRole,
+    KnowledgeSearchResult, KnowledgeSourceKind, KnowledgeUnit, KnowledgeUnitKind,
     KnowledgeVersionSet, KnowledgeViewerDocument, KnowledgeViewerPage,
 };
 pub use normalize::normalize_text_for_source;

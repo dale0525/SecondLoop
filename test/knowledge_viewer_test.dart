@@ -113,6 +113,11 @@ final class _FakeKnowledgeViewerBackend implements KnowledgeViewerBackend {
     summary: 'Quarterly planning discussion.',
     rawText: 'Chunk one\nChunk two\nChunk three\nChunk four',
     normalizedText: 'chunk one chunk two chunk three chunk four',
+    memoryFeedback: const KnowledgeMemoryFeedback(
+      useForAskAi: true,
+      isDeleted: false,
+      markedInaccurate: false,
+    ),
   );
 
   late final KnowledgeViewerDocument viewerDocument = KnowledgeViewerDocument(

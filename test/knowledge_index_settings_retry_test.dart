@@ -69,6 +69,19 @@ final class _RetryKnowledgeBackend extends TestAppBackend
   bool running = false;
 
   @override
+  Future<KnowledgeMemoryFeedback> upsertKnowledgeMemoryFeedback(
+    Uint8List key, {
+    required String documentId,
+    KnowledgeMemoryStatus? status,
+    required bool useForAskAi,
+    required bool isDeleted,
+    required bool markedInaccurate,
+    String? correctedTitle,
+    String? correctedSummary,
+  }) async =>
+      throw UnimplementedError();
+
+  @override
   Future<void> cancelKnowledgeRebuild(Uint8List key) async {
     running = false;
   }
