@@ -54,5 +54,13 @@
       "title": "Title",
       "summary": "Summary"
     }
+  },
+  "generatedTitles": {
+    "activeTaskPattern": "Active task pattern",
+    "weeklyFocus": "Weekly focus",
+    "responseLanguage": "Response language",
+    "responseStyle": "Response style",
+    "responseFormat": "Response format",
+    "selfProfile": "Self profile"
   }
 }

@@ -54,5 +54,13 @@
       "title": "标题",
       "summary": "摘要"
     }
+  },
+  "generatedTitles": {
+    "activeTaskPattern": "当前任务模式",
+    "weeklyFocus": "每周重点",
+    "responseLanguage": "回复语言",
+    "responseStyle": "回复风格",
+    "responseFormat": "回复格式",
+    "selfProfile": "自我画像"
   }
 }

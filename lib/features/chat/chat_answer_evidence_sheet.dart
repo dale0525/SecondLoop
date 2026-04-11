@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../i18n/strings.g.dart';
 import '../../ui/sl_surface.dart';
+import '../memory/memory_display_text.dart';
 import '../memory/memory_correction_dialog.dart';
 import 'chat_answer_evidence_models.dart';
 
@@ -225,7 +226,11 @@ class _ChatAnswerEvidencePanelState extends State<ChatAnswerEvidencePanel> {
                             ),
                             const SizedBox(height: 10),
                             Text(
-                              item.displayTitle,
+                              resolveMemoryDisplayTitle(
+                                context.t,
+                                documentId: item.documentId,
+                                explicitTitle: item.title,
+                              ),
                               style: theme.textTheme.titleSmall,
                             ),
                             const SizedBox(height: 6),

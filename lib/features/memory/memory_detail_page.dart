@@ -16,6 +16,7 @@ import '../chat/message_deeplink.dart';
 import '../chat/message_viewer_page.dart';
 import 'memory_correction_dialog.dart';
 import 'memory_center_models.dart';
+import 'memory_display_text.dart';
 
 class MemoryDetailPage extends StatefulWidget {
   const MemoryDetailPage({
@@ -185,9 +186,12 @@ class _MemoryDetailPageState extends State<MemoryDetailPage> {
         final feedback = doc.memoryFeedback;
         final status = effectiveMemoryStatus(doc);
         final summary = (doc.summary ?? '').trim();
-        final title = (doc.title ?? '').trim().isNotEmpty
-            ? doc.title!.trim()
-            : data.fallbackTitle;
+        final title = resolveMemoryDisplayTitle(
+          context.t,
+          documentId: doc.documentId,
+          explicitTitle: doc.title,
+          correctedTitle: doc.memoryFeedback.correctedTitle,
+        );
 
         if (widget.startInEditMode && !_didAutoOpenEdit) {
           _didAutoOpenEdit = true;

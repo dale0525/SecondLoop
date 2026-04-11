@@ -12,6 +12,7 @@ import '../../core/session/session_scope.dart';
 import '../../i18n/strings.g.dart';
 import '../../src/rust/knowledge/models.dart';
 import '../../ui/sl_markdown_style.dart';
+import '../actions/assistant_message_actions.dart';
 import '../attachments/attachment_deeplink.dart';
 import '../attachments/attachment_viewer_page.dart';
 import '../knowledge_viewer/knowledge_document_viewer.dart';
@@ -97,7 +98,9 @@ class MessageViewerPage extends StatelessWidget {
         builder: (_) => wrapPushedPageWithInheritedScopes(
           context,
           MessageViewerPage(
-            content: message.content,
+            content: message.role == 'assistant'
+                ? parseAssistantMessageActions(message.content).displayText
+                : message.content,
             messageId: message.id,
             citationsJson: message.citationsJson,
             navigationTrail: <String>[...navigationTrail, normalizedMessageId],

@@ -543,89 +543,6 @@ extension _ChatPageStateMessageItemBuilder on _ChatPageState {
                                         isDesktopPlatform: isDesktopPlatform,
                                         citationsJson: stableMsg.citationsJson,
                                       )),
-                          if (evidence != null && evidence.hasEvidence)
-                            Padding(
-                              padding: const EdgeInsets.only(top: 10),
-                              child: ChatAnswerEvidenceSummaryBar(
-                                evidence: evidence,
-                                onOpenSources: () => unawaited(
-                                  citationController.openEvidence(
-                                    context,
-                                    initialTab:
-                                        ChatAnswerEvidenceTab.directSources,
-                                    onOpenDirectSource: (href) async {
-                                      await _handleMarkdownInAppLink(href);
-                                    },
-                                    onOpenMemoryCard: (documentId) =>
-                                        MemoryDetailPage.openDocumentId(
-                                      context,
-                                      documentId: documentId,
-                                    ),
-                                    onCorrectMemoryCard:
-                                        (card, title, summary) =>
-                                            _correctMemoryFromEvidence(
-                                      card,
-                                      title: title,
-                                      summary: summary,
-                                    ),
-                                    onDisableMemoryCard: (documentId) =>
-                                        _disableMemoryFromEvidence(documentId),
-                                    onDeleteMemoryCard: (documentId) =>
-                                        _deleteMemoryFromEvidence(documentId),
-                                  ),
-                                ),
-                                onOpenMemory: () => unawaited(
-                                  citationController.openEvidence(
-                                    context,
-                                    initialTab:
-                                        ChatAnswerEvidenceTab.memoryCards,
-                                    onOpenDirectSource: (href) async {
-                                      await _handleMarkdownInAppLink(href);
-                                    },
-                                    onOpenMemoryCard: (documentId) =>
-                                        MemoryDetailPage.openDocumentId(
-                                      context,
-                                      documentId: documentId,
-                                    ),
-                                    onCorrectMemoryCard:
-                                        (card, title, summary) =>
-                                            _correctMemoryFromEvidence(
-                                      card,
-                                      title: title,
-                                      summary: summary,
-                                    ),
-                                    onDisableMemoryCard: (documentId) =>
-                                        _disableMemoryFromEvidence(documentId),
-                                    onDeleteMemoryCard: (documentId) =>
-                                        _deleteMemoryFromEvidence(documentId),
-                                  ),
-                                ),
-                                onOpenEvidence: () => unawaited(
-                                  citationController.openEvidence(
-                                    context,
-                                    onOpenDirectSource: (href) async {
-                                      await _handleMarkdownInAppLink(href);
-                                    },
-                                    onOpenMemoryCard: (documentId) =>
-                                        MemoryDetailPage.openDocumentId(
-                                      context,
-                                      documentId: documentId,
-                                    ),
-                                    onCorrectMemoryCard:
-                                        (card, title, summary) =>
-                                            _correctMemoryFromEvidence(
-                                      card,
-                                      title: title,
-                                      summary: summary,
-                                    ),
-                                    onDisableMemoryCard: (documentId) =>
-                                        _disableMemoryFromEvidence(documentId),
-                                    onDeleteMemoryCard: (documentId) =>
-                                        _deleteMemoryFromEvidence(documentId),
-                                  ),
-                                ),
-                              ),
-                            ),
                           if (todoBadgeMeta != null)
                             _buildRelatedTodoRootQuote(
                                 message: stableMsg,
@@ -644,42 +561,88 @@ extension _ChatPageStateMessageItemBuilder on _ChatPageState {
                                 child: Text(context.t.chat.viewFull),
                               ),
                             ),
-                          if (actionSuggestions.isNotEmpty)
-                            Padding(
-                              padding: const EdgeInsets.only(top: 8),
-                              child: Wrap(
-                                spacing: 8,
-                                runSpacing: 8,
-                                children: [
-                                  for (var i = 0;
-                                      i < actionSuggestions.length;
-                                      i++)
-                                    SlButton(
-                                      variant: SlButtonVariant.outline,
-                                      onPressed: () =>
-                                          _handleAssistantSuggestion(
-                                        stableMsg,
-                                        actionSuggestions[i],
-                                        i,
-                                      ),
-                                      icon: Icon(
-                                        actionSuggestions[i].type == 'event'
-                                            ? Icons.event_rounded
-                                            : Icons
-                                                .check_circle_outline_rounded,
-                                        size: 18,
-                                      ),
-                                      child: Text(
-                                        actionSuggestions[i]
-                                                    .whenText
-                                                    ?.trim()
-                                                    .isNotEmpty ==
-                                                true
-                                            ? '${actionSuggestions[i].title} (${actionSuggestions[i].whenText})'
-                                            : actionSuggestions[i].title,
-                                      ),
-                                    ),
-                                ],
+                          if ((evidence != null && evidence.hasEvidence) ||
+                              actionSuggestions.isNotEmpty)
+                            ChatAssistantMessageFooter(
+                              evidence: evidence,
+                              onOpenSources: () => unawaited(
+                                citationController.openEvidence(
+                                  context,
+                                  initialTab:
+                                      ChatAnswerEvidenceTab.directSources,
+                                  onOpenDirectSource: (href) async {
+                                    await _handleMarkdownInAppLink(href);
+                                  },
+                                  onOpenMemoryCard: (documentId) =>
+                                      MemoryDetailPage.openDocumentId(
+                                    context,
+                                    documentId: documentId,
+                                  ),
+                                  onCorrectMemoryCard: (card, title, summary) =>
+                                      _correctMemoryFromEvidence(
+                                    card,
+                                    title: title,
+                                    summary: summary,
+                                  ),
+                                  onDisableMemoryCard: (documentId) =>
+                                      _disableMemoryFromEvidence(documentId),
+                                  onDeleteMemoryCard: (documentId) =>
+                                      _deleteMemoryFromEvidence(documentId),
+                                ),
+                              ),
+                              onOpenMemory: () => unawaited(
+                                citationController.openEvidence(
+                                  context,
+                                  initialTab: ChatAnswerEvidenceTab.memoryCards,
+                                  onOpenDirectSource: (href) async {
+                                    await _handleMarkdownInAppLink(href);
+                                  },
+                                  onOpenMemoryCard: (documentId) =>
+                                      MemoryDetailPage.openDocumentId(
+                                    context,
+                                    documentId: documentId,
+                                  ),
+                                  onCorrectMemoryCard: (card, title, summary) =>
+                                      _correctMemoryFromEvidence(
+                                    card,
+                                    title: title,
+                                    summary: summary,
+                                  ),
+                                  onDisableMemoryCard: (documentId) =>
+                                      _disableMemoryFromEvidence(documentId),
+                                  onDeleteMemoryCard: (documentId) =>
+                                      _deleteMemoryFromEvidence(documentId),
+                                ),
+                              ),
+                              onOpenEvidence: () => unawaited(
+                                citationController.openEvidence(
+                                  context,
+                                  onOpenDirectSource: (href) async {
+                                    await _handleMarkdownInAppLink(href);
+                                  },
+                                  onOpenMemoryCard: (documentId) =>
+                                      MemoryDetailPage.openDocumentId(
+                                    context,
+                                    documentId: documentId,
+                                  ),
+                                  onCorrectMemoryCard: (card, title, summary) =>
+                                      _correctMemoryFromEvidence(
+                                    card,
+                                    title: title,
+                                    summary: summary,
+                                  ),
+                                  onDisableMemoryCard: (documentId) =>
+                                      _disableMemoryFromEvidence(documentId),
+                                  onDeleteMemoryCard: (documentId) =>
+                                      _deleteMemoryFromEvidence(documentId),
+                                ),
+                              ),
+                              actionSuggestions: actionSuggestions,
+                              onTapActionSuggestion: (suggestion, index) =>
+                                  _handleAssistantSuggestion(
+                                stableMsg,
+                                suggestion,
+                                index,
                               ),
                             ),
                           if (supportsAttachments)
