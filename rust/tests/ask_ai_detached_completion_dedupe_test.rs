@@ -132,3 +132,77 @@ fn detached_recovery_inserted_first_blocks_stream_completion_reinsertion() {
         "Recovered answer should not be inserted twice."
     );
 }
+
+#[test]
+fn detached_recovery_keeps_exact_message_ids_for_duplicate_content() {
+    let temp_dir = tempfile::tempdir().expect("tempdir");
+    let app_dir = temp_dir.path().join("secondloop");
+
+    let key = auth::init_master_password(&app_dir, "pw", KdfParams::for_test()).expect("init");
+    let conn = db::open(&app_dir).expect("open db");
+    let conversation = db::create_conversation(&conn, &key, "Inbox").expect("conversation");
+
+    let existing_user =
+        db::insert_message_non_memory(&conn, &key, &conversation.id, "user", "Only ask once")
+            .expect("seed user");
+    let existing_assistant = db::insert_message_non_memory(
+        &conn,
+        &key,
+        &conversation.id,
+        "assistant",
+        "Recovered answer should not be inserted twice.",
+    )
+    .expect("seed assistant");
+
+    let applied = db::apply_detached_ask_completion_once(
+        &conn,
+        &key,
+        STREAM_REQUEST_ID,
+        &conversation.id,
+        "Only ask once",
+        "Recovered answer should not be inserted twice.",
+    )
+    .expect("apply detached completion first");
+    assert!(
+        applied,
+        "detached recovery should insert the request-bound pair"
+    );
+
+    let distracting_user =
+        db::insert_message_non_memory(&conn, &key, &conversation.id, "user", "Only ask once")
+            .expect("distracting user");
+    let distracting_assistant = db::insert_message_non_memory(
+        &conn,
+        &key,
+        &conversation.id,
+        "assistant",
+        "Recovered answer should not be inserted twice.",
+    )
+    .expect("distracting assistant");
+
+    let provider = FakeProviderWithRequestId;
+    let result = rag::ask_ai_with_provider(
+        &conn,
+        &key,
+        &conversation.id,
+        "Only ask once",
+        1,
+        rag::Focus::ThisThread,
+        &provider,
+        &mut |_event| Ok(()),
+    )
+    .expect("stream ask ai after detached recovery");
+
+    let messages = db::list_messages(&conn, &key, &conversation.id).expect("list messages");
+    assert_eq!(
+        messages.len(),
+        6,
+        "existing duplicate-content messages should remain untouched"
+    );
+    assert_eq!(result.user_message_id, messages[2].id);
+    assert_eq!(result.assistant_message_id, messages[3].id);
+    assert_ne!(result.user_message_id, existing_user.id);
+    assert_ne!(result.assistant_message_id, existing_assistant.id);
+    assert_ne!(result.user_message_id, distracting_user.id);
+    assert_ne!(result.assistant_message_id, distracting_assistant.id);
+}

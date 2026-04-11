@@ -358,6 +358,19 @@ fn migrate_from_v39_to_v40(conn: &Connection) -> Result<()> {
     Ok(())
 }
 
+fn migrate_from_v40_to_v41(conn: &Connection) -> Result<()> {
+    execute_batch_allowing_duplicate_columns(
+        conn,
+        "ALTER TABLE detached_ask_completion_claims ADD COLUMN user_message_id TEXT;",
+    )?;
+    execute_batch_allowing_duplicate_columns(
+        conn,
+        "ALTER TABLE detached_ask_completion_claims ADD COLUMN assistant_message_id TEXT;",
+    )?;
+    conn.execute_batch("PRAGMA user_version = 41;")?;
+    Ok(())
+}
+
 pub(crate) fn app_dir_from_conn(conn: &Connection) -> Result<PathBuf> {
     let mut stmt = conn.prepare("PRAGMA database_list")?;
     let mut rows = stmt.query([])?;

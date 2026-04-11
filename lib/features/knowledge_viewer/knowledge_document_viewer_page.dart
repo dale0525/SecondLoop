@@ -11,20 +11,26 @@ import 'knowledge_document_viewer.dart';
 class KnowledgeDocumentViewerPage extends StatelessWidget {
   const KnowledgeDocumentViewerPage({
     required this.documentId,
+    this.initialHighlightedUnitId,
     super.key,
   });
 
   final String documentId;
+  final String? initialHighlightedUnitId;
 
   static Future<void> openDocumentId(
     BuildContext context, {
     required String documentId,
+    String? initialHighlightedUnitId,
   }) {
     return Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => wrapPushedPageWithInheritedScopes(
           context,
-          KnowledgeDocumentViewerPage(documentId: documentId),
+          KnowledgeDocumentViewerPage(
+            documentId: documentId,
+            initialHighlightedUnitId: initialHighlightedUnitId,
+          ),
         ),
       ),
     );
@@ -97,6 +103,7 @@ class KnowledgeDocumentViewerPage extends StatelessWidget {
             documentId: documentId,
             initialDocument: resolved,
             fallbackText: doc.rawText,
+            initialHighlightedUnitId: initialHighlightedUnitId,
           ),
         );
       },

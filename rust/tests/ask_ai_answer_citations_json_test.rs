@@ -137,5 +137,11 @@ fn ask_ai_citations_json_includes_external_document_direct_sources() {
             && source["document_id"]
                 .as_str()
                 .is_some_and(|value| value.starts_with("external:"))
+            && source["unit_id"]
+                .as_str()
+                .is_some_and(|value| value.starts_with("external:") && value.contains(":chunk:"))
+            && source["href"].as_str().is_some_and(|value| {
+                value.contains("secondloop://knowledge-document/") && value.contains("unit=")
+            })
     }));
 }

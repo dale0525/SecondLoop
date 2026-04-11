@@ -1,6 +1,7 @@
 use anyhow::Result;
 use rusqlite::params;
 use secondloop_rust::crypto::KdfParams;
+use secondloop_rust::embedding;
 use secondloop_rust::llm::ChatDelta;
 use secondloop_rust::{auth, db, rag};
 
@@ -37,6 +38,8 @@ fn ask_ai_time_window_prompt_filters_conversation_history_by_range() {
 
     let key = auth::init_master_password(&app_dir, "pw", KdfParams::for_test()).expect("init");
     let conn = db::open(&app_dir).expect("open db");
+    db::set_active_embedding_model_name(&conn, embedding::DEFAULT_MODEL_NAME).expect("model");
+    db::set_active_embedding_model_name(&conn, embedding::DEFAULT_MODEL_NAME).expect("model");
 
     let conversation = db::create_conversation(&conn, &key, "Inbox").expect("conversation");
     let attachment = db::insert_attachment(&conn, &key, &app_dir, b"window resource", "text/plain")
@@ -136,6 +139,7 @@ fn ask_ai_time_window_prompt_includes_attachments_linked_inside_range() {
 
     let key = auth::init_master_password(&app_dir, "pw", KdfParams::for_test()).expect("init");
     let conn = db::open(&app_dir).expect("open db");
+    db::set_active_embedding_model_name(&conn, embedding::DEFAULT_MODEL_NAME).expect("model");
 
     let conversation = db::create_conversation(&conn, &key, "Inbox").expect("conversation");
 
@@ -226,6 +230,7 @@ fn ask_ai_time_window_prompt_keeps_latest_in_range_attachment_when_window_is_lar
 
     let key = auth::init_master_password(&app_dir, "pw", KdfParams::for_test()).expect("init");
     let conn = db::open(&app_dir).expect("open db");
+    db::set_active_embedding_model_name(&conn, embedding::DEFAULT_MODEL_NAME).expect("model");
 
     let conversation = db::create_conversation(&conn, &key, "Inbox").expect("conversation");
     let time_start_ms: i64 = 3_000_000;

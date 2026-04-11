@@ -241,7 +241,7 @@ pub fn infer_generated_memory_section(
 }
 
 fn looks_like_project_memory(value: &str) -> bool {
-    const SIGNALS: [&str; 8] = [
+    const SIGNALS: [&str; 19] = [
         "project",
         "prototype",
         "launch",
@@ -250,6 +250,17 @@ fn looks_like_project_memory(value: &str) -> bool {
         "product",
         "app",
         "rollout",
+        "项目",
+        "產品",
+        "产品",
+        "原型",
+        "上线",
+        "發布",
+        "发布",
+        "路線圖",
+        "路线图",
+        "版本",
+        "迭代",
     ];
     SIGNALS.iter().any(|signal| value.contains(signal))
 }

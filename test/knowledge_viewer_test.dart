@@ -83,6 +83,37 @@ void main() {
     );
     expect(find.textContaining('00:44'), findsWidgets);
   });
+
+  testWidgets(
+      'Knowledge Viewer loads additional pages for an initial unit target',
+      (tester) async {
+    final backend = _FakeKnowledgeViewerBackend();
+    final sessionKey = Uint8List.fromList(List<int>.filled(32, 1));
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: Scaffold(
+            body: KnowledgeDocumentViewer(
+              backend: backend,
+              sessionKey: sessionKey,
+              documentId: backend.documentId,
+              initialDocument: backend.viewerDocument,
+              fallbackText: backend.viewerDocument.document.rawText,
+              pageSize: 2,
+              initialHighlightedUnitId: 'chunk-5',
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('knowledge_viewer_unit_highlight_chunk-5')),
+      findsOneWidget,
+    );
+  });
 }
 
 final class _FakeKnowledgeViewerBackend implements KnowledgeViewerBackend {

@@ -104,27 +104,6 @@ struct ContextWithEvidence {
     memory_cards: Vec<AnswerEvidenceMemoryCard>,
 }
 
-fn find_latest_message_id_by_role_and_content(
-    conn: &Connection,
-    key: &[u8; 32],
-    conversation_id: &str,
-    role: &str,
-    content: &str,
-) -> Result<Option<String>> {
-    let target_role = role.trim();
-    let target_content = content.trim();
-    if target_role.is_empty() || target_content.is_empty() {
-        return Ok(None);
-    }
-
-    let messages = db::list_messages(conn, key, conversation_id)?;
-    Ok(messages
-        .into_iter()
-        .rev()
-        .find(|message| message.role == target_role && message.content.trim() == target_content)
-        .map(|message| message.id))
-}
-
 fn compact_snippet(value: &str, max_chars: usize) -> String {
     let normalized = value
         .lines()
@@ -240,13 +219,14 @@ fn build_external_document_direct_source(
     created_at_ms: i64,
 ) -> AnswerEvidenceDirectSource {
     let document_id = format!("external:{doc_id}");
+    let unit_id = format!("{document_id}:chunk:{chunk_index:04}");
     let normalized_title = title.trim();
     let normalized_snippet = compact_snippet(snippet, 180);
     AnswerEvidenceDirectSource {
         id: format!("external-document:{doc_id}:{chunk_index}"),
         href: format!(
-            "secondloop://knowledge-document/{}?chunk={chunk_index}",
-            document_id
+            "secondloop://knowledge-document/{}?chunk={chunk_index}&unit={unit_id}",
+            document_id,
         ),
         source_type: "document".to_string(),
         label: "Document".to_string(),
@@ -260,7 +240,7 @@ fn build_external_document_direct_source(
         updated_at_ms: Some(created_at_ms),
         anchors: None,
         document_id: Some(document_id),
-        unit_id: Some(format!("chunk:{chunk_index}")),
+        unit_id: Some(unit_id),
     }
 }
 
@@ -877,6 +857,23 @@ fn collect_time_window_attachment_resources(
     time_start_ms: i64,
     time_end_ms: i64,
 ) -> Result<attachment_resources::AttachmentResourcesBundle> {
+    let attachment_shas = list_attachment_shas_in_time_window(
+        conn,
+        key,
+        conversation_id,
+        time_start_ms,
+        time_end_ms,
+    )?;
+    collect_attachment_resources_for_attachment_shas(conn, key, attachment_shas)
+}
+
+fn list_attachment_shas_in_time_window(
+    conn: &Connection,
+    key: &[u8; 32],
+    conversation_id: Option<&str>,
+    time_start_ms: i64,
+    time_end_ms: i64,
+) -> Result<Vec<String>> {
     let mut attachment_shas = Vec::<String>::new();
     for message in db::list_memory_messages_in_range_recent(
         conn,
@@ -890,8 +887,53 @@ fn collect_time_window_attachment_resources(
             attachment_shas.push(attachment.sha256);
         }
     }
+    Ok(attachment_shas)
+}
 
-    collect_attachment_resources_for_attachment_shas(conn, key, attachment_shas)
+fn build_direct_sources_for_context_candidate(
+    conn: &Connection,
+    key: &[u8; 32],
+    candidate: &ContextItem,
+) -> Vec<AnswerEvidenceDirectSource> {
+    match candidate.source {
+        ContextSource::Message => match db::get_message_by_id_optional(conn, key, &candidate.id) {
+            Ok(Some(message)) => build_message_direct_source(&message)
+                .into_iter()
+                .collect::<Vec<_>>(),
+            _ => Vec::new(),
+        },
+        ContextSource::AttachmentChunk => {
+            let mut parts = candidate.id.splitn(3, ':');
+            let attachment_sha256 = parts.next().unwrap_or_default();
+            let kind = parts.next().unwrap_or("chunk");
+            let chunk_index = parts
+                .next()
+                .and_then(|value| value.parse::<i64>().ok())
+                .unwrap_or_default();
+            vec![build_attachment_direct_source(
+                attachment_sha256,
+                kind,
+                chunk_index,
+                &candidate.text,
+                candidate.created_at_ms,
+            )]
+        }
+        ContextSource::ExternalDocument => {
+            let mut parts = candidate.id.splitn(2, ':');
+            let doc_id = parts.next().unwrap_or_default();
+            let chunk_index = parts
+                .next()
+                .and_then(|value| value.parse::<i64>().ok())
+                .unwrap_or_default();
+            vec![build_external_document_direct_source_from_context(
+                doc_id,
+                chunk_index,
+                &candidate.text,
+                candidate.created_at_ms,
+            )]
+        }
+        _ => Vec::new(),
+    }
 }
 
 fn ask_ai_stream_and_persist(
@@ -945,23 +987,12 @@ fn ask_ai_stream_and_persist(
                         conversation_id,
                     )?;
                     if !claimed {
+                        let (user_message_id, assistant_message_id) =
+                            db::get_detached_ask_completion_message_ids(conn, request_id)?
+                                .unwrap_or_default();
                         return Ok(AskAiResult {
-                            user_message_id: find_latest_message_id_by_role_and_content(
-                                conn,
-                                key,
-                                conversation_id,
-                                "user",
-                                question,
-                            )?
-                            .unwrap_or_default(),
-                            assistant_message_id: find_latest_message_id_by_role_and_content(
-                                conn,
-                                key,
-                                conversation_id,
-                                "assistant",
-                                &assistant_text,
-                            )?
-                            .unwrap_or_default(),
+                            user_message_id,
+                            assistant_message_id,
                         });
                     }
                 }
@@ -981,6 +1012,14 @@ fn ask_ai_stream_and_persist(
                     &assistant_text,
                     citations_json.as_deref(),
                 )?;
+                if let Some(request_id) = detached_request_id.as_deref() {
+                    db::record_detached_ask_completion_message_ids(
+                        conn,
+                        request_id,
+                        &user_message.id,
+                        &assistant_message.id,
+                    )?;
+                }
 
                 Ok(AskAiResult {
                     user_message_id: user_message.id,
@@ -1606,49 +1645,8 @@ pub fn ask_ai_with_provider_using_active_embeddings(
                 );
             }
             for candidate in candidates {
-                let direct_sources = match candidate.source {
-                    ContextSource::Message => {
-                        let message_id = candidate.id.clone();
-                        match db::get_message_by_id_optional(conn, key, &message_id) {
-                            Ok(Some(message)) => build_message_direct_source(&message)
-                                .into_iter()
-                                .collect::<Vec<_>>(),
-                            _ => Vec::new(),
-                        }
-                    }
-                    ContextSource::AttachmentChunk => {
-                        let text = candidate.text.clone();
-                        let mut parts = candidate.id.splitn(3, ':');
-                        let attachment_sha256 = parts.next().unwrap_or_default();
-                        let kind = parts.next().unwrap_or("chunk");
-                        let chunk_index = parts
-                            .next()
-                            .and_then(|value| value.parse::<i64>().ok())
-                            .unwrap_or_default();
-                        vec![build_attachment_direct_source(
-                            attachment_sha256,
-                            kind,
-                            chunk_index,
-                            &text,
-                            candidate.created_at_ms,
-                        )]
-                    }
-                    ContextSource::ExternalDocument => {
-                        let mut parts = candidate.id.splitn(2, ':');
-                        let doc_id = parts.next().unwrap_or_default();
-                        let chunk_index = parts
-                            .next()
-                            .and_then(|value| value.parse::<i64>().ok())
-                            .unwrap_or_default();
-                        vec![build_external_document_direct_source_from_context(
-                            doc_id,
-                            chunk_index,
-                            &candidate.text,
-                            candidate.created_at_ms,
-                        )]
-                    }
-                    _ => Vec::new(),
-                };
+                let direct_sources =
+                    build_direct_sources_for_context_candidate(conn, key, &candidate);
                 context_by_text.insert(
                     candidate.text.clone(),
                     ContextWithEvidence {
@@ -1695,7 +1693,7 @@ pub fn ask_ai_with_provider_using_active_embeddings(
 pub fn ask_ai_with_provider_using_active_embeddings_time_window(
     conn: &Connection,
     key: &[u8; 32],
-    _app_dir: &Path,
+    app_dir: &Path,
     conversation_id: &str,
     question: &str,
     top_k: usize,
@@ -1821,6 +1819,94 @@ pub fn ask_ai_with_provider_using_active_embeddings_time_window(
                 });
             }
 
+            let attachment_shas = list_attachment_shas_in_time_window(
+                conn,
+                key,
+                conversation_filter,
+                time_start_ms,
+                time_end_ms,
+            )?;
+            if !attachment_shas.is_empty() {
+                let allowed_attachment_shas = attachment_shas
+                    .into_iter()
+                    .collect::<std::collections::HashSet<_>>();
+                db::process_attachment_text_chunks(conn, key, 256)?;
+                for chunk in db::search_similar_attachment_chunks_active(
+                    conn,
+                    key,
+                    app_dir,
+                    question,
+                    legacy_top_k.saturating_mul(2).max(legacy_top_k),
+                )?
+                .into_iter()
+                .filter(|chunk| allowed_attachment_shas.contains(&chunk.attachment_sha256))
+                .take(legacy_top_k)
+                {
+                    let text = match db::read_attachment_chunk_text(
+                        conn,
+                        key,
+                        &chunk.attachment_sha256,
+                        &chunk.kind,
+                        chunk.chunk_index,
+                    ) {
+                        Ok(value) => value,
+                        Err(_) => continue,
+                    };
+                    let created_at_ms =
+                        db::read_attachment_by_sha256(conn, &chunk.attachment_sha256)
+                            .ok()
+                            .flatten()
+                            .map(|attachment| attachment.created_at_ms)
+                            .unwrap_or_default();
+                    let citation = format!(
+                        "[Attachment](secondloop://attachment/{}?kind={}&chunk={})",
+                        chunk.attachment_sha256, chunk.kind, chunk.chunk_index
+                    );
+                    let context = format!(
+                        "ATTACHMENT_CHUNK {} {}#{}\n{}\n{}",
+                        chunk.attachment_sha256, chunk.kind, chunk.chunk_index, text, citation
+                    );
+                    candidates.push(ContextItem {
+                        source: ContextSource::AttachmentChunk,
+                        id: format!(
+                            "{}:{}:{}",
+                            chunk.attachment_sha256, chunk.kind, chunk.chunk_index
+                        ),
+                        created_at_ms,
+                        distance: Some(chunk.distance),
+                        text: context,
+                        citation_suffix: None,
+                    });
+                }
+            }
+
+            for chunk in db::search_similar_external_document_chunks_active(
+                app_dir,
+                key,
+                question,
+                legacy_top_k,
+            )
+            .unwrap_or_default()
+            {
+                let context = match db::build_external_document_chunk_rag_context(
+                    app_dir,
+                    key,
+                    &chunk.doc_id,
+                    chunk.chunk_index,
+                ) {
+                    Ok(value) => value,
+                    Err(_) => continue,
+                };
+                candidates.push(ContextItem {
+                    source: ContextSource::ExternalDocument,
+                    id: format!("{}:{}", chunk.doc_id, chunk.chunk_index),
+                    created_at_ms: chunk.created_at_ms,
+                    distance: Some(chunk.distance),
+                    text: context,
+                    citation_suffix: None,
+                });
+            }
+
             let legacy_contexts = build_contexts_v2(question, candidates.clone(), legacy_top_k);
             let merged = merge_knowledge_and_legacy_contexts(
                 knowledge_contexts.clone(),
@@ -1850,17 +1936,8 @@ pub fn ask_ai_with_provider_using_active_embeddings_time_window(
                 );
             }
             for candidate in candidates {
-                let direct_sources = match candidate.source {
-                    ContextSource::Message => {
-                        match db::get_message_by_id_optional(conn, key, &candidate.id) {
-                            Ok(Some(message)) => build_message_direct_source(&message)
-                                .into_iter()
-                                .collect::<Vec<_>>(),
-                            _ => Vec::new(),
-                        }
-                    }
-                    _ => Vec::new(),
-                };
+                let direct_sources =
+                    build_direct_sources_for_context_candidate(conn, key, &candidate);
                 context_by_text.insert(
                     candidate.text.clone(),
                     ContextWithEvidence {

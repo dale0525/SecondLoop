@@ -270,6 +270,7 @@ class MessageViewerPage extends StatelessWidget {
     await KnowledgeDocumentViewerPage.openDocumentId(
       context,
       documentId: parsed.documentId,
+      initialHighlightedUnitId: parsed.unitId,
     );
     return true;
   }
