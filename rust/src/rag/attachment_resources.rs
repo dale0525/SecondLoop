@@ -4,7 +4,6 @@ use rusqlite::Connection;
 use crate::db;
 
 const RESOURCES_CATALOG_CAP: usize = 20;
-const RECENT_RESOURCES_FALLBACK: usize = 10;
 const CHUNK_EVIDENCE_CAP: usize = 12;
 
 #[derive(Clone, Debug)]
@@ -71,19 +70,6 @@ fn build_catalog_markdown(
             resource_shas.push(hit.attachment_sha256.clone());
             if resource_shas.len() >= RESOURCES_CATALOG_CAP {
                 break;
-            }
-        }
-    }
-
-    if resource_shas.len() < RESOURCES_CATALOG_CAP {
-        for attachment in
-            db::list_recent_attachments_for_resources(conn, RECENT_RESOURCES_FALLBACK)?
-        {
-            if seen.insert(attachment.sha256.clone()) {
-                resource_shas.push(attachment.sha256);
-                if resource_shas.len() >= RESOURCES_CATALOG_CAP {
-                    break;
-                }
             }
         }
     }
