@@ -557,6 +557,62 @@ fn push_internal(
         Ok(())
     }
 
+    fn write_sync_manifests(
+        conn: &Connection,
+        remote: &impl RemoteStore,
+        remote_root_dir: &str,
+        scope_id: &str,
+        device_id: &str,
+        max_seq: i64,
+    ) -> Result<()> {
+        let generation_key = format!("sync.webdav.generation_id:{scope_id}");
+        let generation_id = if let Some(existing) = kv_get_string(conn, &generation_key)? {
+            existing
+        } else if let Some(existing) = webdav_manifest::read_sync_manifest(remote, remote_root_dir)?
+            .map(|manifest| manifest.generation_id)
+        {
+            kv_set_string(conn, &generation_key, &existing)?;
+            existing
+        } else {
+            let generated = uuid::Uuid::new_v4().to_string();
+            kv_set_string(conn, &generation_key, &generated)?;
+            generated
+        };
+
+        let updated_at_ms = current_unix_ms();
+        webdav_manifest::write_sync_manifest(
+            remote,
+            remote_root_dir,
+            &webdav_manifest::WebDavSyncManifest {
+                protocol_version: 1,
+                backend: "webdav".to_string(),
+                generation_id,
+                updated_at_ms,
+            },
+        )?;
+
+        let history_min_seq = conn
+            .query_row(
+                r#"SELECT min(seq) FROM oplog WHERE device_id = ?1"#,
+                params![device_id],
+                |row| row.get::<_, Option<i64>>(0),
+            )?
+            .unwrap_or(1)
+            .max(1);
+        webdav_manifest::write_device_manifest(
+            remote,
+            remote_root_dir,
+            &webdav_manifest::WebDavDeviceManifest {
+                protocol_version: 1,
+                device_id: device_id.to_string(),
+                max_seq: max_seq.max(0),
+                history_min_seq,
+                updated_at_ms,
+            },
+        )?;
+        Ok(())
+    }
+
     let mut pushed_out = 0u64;
     let mut final_max_seq = last_pushed_seq;
 
@@ -589,6 +645,14 @@ fn push_internal(
 
     // Best-effort: this is only metadata for progress reporting.
     let _ = write_cursor_json(remote, &remote_root_dir, &device_id, final_max_seq);
+    let _ = write_sync_manifests(
+        conn,
+        remote,
+        &remote_root_dir,
+        &scope_id,
+        &device_id,
+        final_max_seq,
+    );
 
     if pushed_out > 0 {
         maybe_run_oplog_retention_after_push(conn, &scope_id, remote)?;

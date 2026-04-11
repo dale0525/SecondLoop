@@ -32,6 +32,8 @@ pub fn pull_with_progress(
     let progress_start_since = since.clone();
     let mut progress_high_water_since = progress_start_since.clone();
     let endpoint_json = super::runtime::url(base_url, &format!("/v1/vaults/{vault_id}/ops:pull"))?;
+    let endpoint_json_v2 =
+        super::runtime::url(base_url, &format!("/v1/vaults/{vault_id}/ops:pull_v2"))?;
     let mut applied: u64 = 0;
     let mut total_ops: Option<u64> = None;
     let mut done_ops = 0u64;
@@ -39,6 +41,110 @@ pub fn pull_with_progress(
     let mut remote_ahead_repair_tracker = RemoteAheadRepairTracker::default();
     let mut stale_cursor_recovery_attempted = false;
     loop {
+        let checkpoint_state = super::checkpoint::load_checkpoint_state(conn, &scope_id)?;
+        let should_try_v2 = checkpoint_state.supports_pull_v2 == Some(true)
+            || checkpoint_state.checkpoint_token.is_some()
+            || checkpoint_state.generation_id.is_some();
+        if should_try_v2 {
+            let request_v2 = super::v2_client::PullRequestV2 {
+                device_id: local_device_id.as_str(),
+                checkpoint_token: checkpoint_state.checkpoint_token.as_deref(),
+                limit: PULL_LIMIT,
+            };
+            match super::v2_client::fetch_pull_v2_json(
+                &http,
+                &endpoint_json_v2,
+                id_token,
+                &request_v2,
+            )? {
+                Some(parsed) => {
+                    super::checkpoint::mark_pull_v2_supported(conn, &scope_id, "ops:pull_v2")?;
+                    if let Some(high_water) = parsed.meta.high_water {
+                        let computed_done = super::v2_client::sum_since(&since);
+                        total_ops = Some(high_water);
+                        done_ops = report_pull_progress(
+                            progress,
+                            &mut reported_done,
+                            computed_done.min(high_water),
+                            high_water,
+                        );
+                    }
+
+                    if parsed.meta.reseed_required {
+                        super::reseed::clear_protocol_checkpoint_state(conn, &scope_id)?;
+                        since.clear();
+                        super::update_since_map(conn, &scope_id, &since)?;
+                        stale_cursor_recovery_attempted = false;
+                        remote_ahead_repair_tracker = RemoteAheadRepairTracker::default();
+                        continue;
+                    }
+
+                    let decoded_ops: Vec<super::apply_batch::PullCipherOp> = parsed
+                        .ops
+                        .iter()
+                        .map(|op| {
+                            Ok(super::apply_batch::PullCipherOp {
+                                device_id: op.device_id.clone(),
+                                seq: op.seq,
+                                op_id: op.op_id.clone(),
+                                ciphertext: B64_STD
+                                    .decode(op.ciphertext_b64.as_bytes())
+                                    .map_err(|e| anyhow!("invalid ciphertext_b64: {e}"))?,
+                            })
+                        })
+                        .collect::<Result<Vec<_>>>()?;
+                    let mut next_since =
+                        super::apply_batch::next_since_from_ops(&since, &decoded_ops);
+                    if next_since == since && (!decoded_ops.is_empty() || parsed.meta.has_more) {
+                        return Err(anyhow!("managed-vault pull_v2 made no progress"));
+                    }
+
+                    let batch_applied = super::apply_batch::apply_pull_cipher_ops(
+                        conn,
+                        db_key,
+                        sync_key,
+                        &scope_id,
+                        &since,
+                        &mut next_since,
+                        &decoded_ops,
+                    )?;
+                    applied += batch_applied;
+
+                    if let Some(high_water) = parsed.meta.high_water {
+                        let computed_done = super::v2_client::sum_since(&next_since);
+                        total_ops = Some(high_water);
+                        done_ops = report_pull_progress(
+                            progress,
+                            &mut reported_done,
+                            computed_done.min(high_water),
+                            high_water,
+                        );
+                    }
+                    for (device_id, next_seq) in &next_since {
+                        progress_high_water_since
+                            .entry(device_id.clone())
+                            .and_modify(|seq| *seq = (*seq).max(*next_seq))
+                            .or_insert(*next_seq);
+                    }
+                    super::checkpoint::store_checkpoint_success(
+                        conn,
+                        &scope_id,
+                        &parsed.meta.generation_id,
+                        parsed.meta.checkpoint_token.as_deref(),
+                        parsed.meta.protocol_version,
+                        "ops:pull_v2",
+                    )?;
+                    since = next_since;
+
+                    if parsed.meta.has_more {
+                        continue;
+                    }
+                    break;
+                }
+                None => super::checkpoint::mark_pull_v2_unsupported(conn, &scope_id)?,
+            }
+        }
+
         let request = super::PullRequest {
             device_id: local_device_id.as_str(),
             since: since.clone(),
@@ -104,62 +210,29 @@ pub fn pull_with_progress(
                 continue;
             }
         }
-        let mut batch_applied = 0u64;
-        super::with_immediate_transaction(conn, || {
-            let mut pending = super::load_pending_apply_op_ids(conn, &scope_id)?;
-            for op in &parsed.ops {
-                let ciphertext = B64_STD
-                    .decode(op.ciphertext_b64.as_bytes())
-                    .map_err(|e| anyhow!("invalid ciphertext_b64: {e}"))?;
-                let plaintext = decrypt_bytes(
-                    sync_key,
-                    &ciphertext,
-                    format!("sync.ops:{}:{}", op.device_id, op.seq).as_bytes(),
-                )?;
-                let op_json: serde_json::Value = serde_json::from_slice(&plaintext)?;
-                let op_id = op_json["op_id"]
-                    .as_str()
-                    .ok_or_else(|| anyhow!("sync op missing op_id"))?;
-                let envelope_op_id = op.op_id.trim();
-                if !envelope_op_id.is_empty() && op_id != envelope_op_id {
-                    return Err(anyhow!(
-                        "managed vault pull op_id mismatch: envelope={} plaintext={}",
-                        op.op_id,
-                        op_id
-                    ));
-                }
-
-                let inserted =
-                    super::super::insert_remote_oplog(conn, db_key, &plaintext, &op_json)?;
-                if !inserted {
-                    continue;
-                }
-
-                match super::super::apply_op(conn, db_key, &op_json) {
-                    Ok(_) => {
-                        batch_applied += 1;
-                    }
-                    Err(e) if super::is_foreign_key_constraint_error(&e) => {
-                        pending.insert(op_id.to_string());
-                        super::super::kv_set_i64(
-                            conn,
-                            &super::pending_apply_key(&scope_id, op_id),
-                            1,
-                        )?;
-                    }
-                    Err(e) => return Err(e),
-                }
-            }
-
-            super::apply_pending_ops_until_stable(conn, db_key, &scope_id, &mut pending)?;
-            super::rewind_since_for_unresolved_pending_devices(conn, &pending, &mut next_since)?;
-
-            if next_since != since {
-                super::update_since_map(conn, &scope_id, &next_since)?;
-            }
-
-            Ok(())
-        })?;
+        let decoded_ops: Vec<super::apply_batch::PullCipherOp> = parsed
+            .ops
+            .iter()
+            .map(|op| {
+                Ok(super::apply_batch::PullCipherOp {
+                    device_id: op.device_id.clone(),
+                    seq: op.seq,
+                    op_id: op.op_id.clone(),
+                    ciphertext: B64_STD
+                        .decode(op.ciphertext_b64.as_bytes())
+                        .map_err(|e| anyhow!("invalid ciphertext_b64: {e}"))?,
+                })
+            })
+            .collect::<Result<Vec<_>>>()?;
+        let batch_applied = super::apply_batch::apply_pull_cipher_ops(
+            conn,
+            db_key,
+            sync_key,
+            &scope_id,
+            &since,
+            &mut next_since,
+            &decoded_ops,
+        )?;
         applied += batch_applied;
 
         if !parsed.max.is_empty() {

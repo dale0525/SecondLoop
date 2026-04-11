@@ -16,7 +16,7 @@ pub(super) struct PullResponseWithMax {
     pub(super) max: BTreeMap<String, i64>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) struct PullOpBin {
     pub(super) device_id: String,
     pub(super) seq: i64,
