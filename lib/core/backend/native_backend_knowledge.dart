@@ -159,6 +159,23 @@ extension NativeAppBackendKnowledgeExtension on NativeAppBackend {
     );
   }
 
+  Future<List<rust_knowledge_models.KnowledgeUnit>>
+      listRecentKnowledgeViewerUnits(
+    Uint8List key, {
+    required String documentId,
+    rust_knowledge_models.KnowledgeUnitKind? unitKind,
+    int limit = 16,
+  }) async {
+    final appDir = await _getAppDir();
+    return rust_knowledge.dbListRecentKnowledgeViewerUnits(
+      appDir: appDir,
+      key: key,
+      documentId: documentId,
+      unitKind: unitKind,
+      limit: limit,
+    );
+  }
+
   Future<List<rust_knowledge_models.KnowledgeSearchResult>>
       searchKnowledgeDocumentUnits(
     Uint8List key, {

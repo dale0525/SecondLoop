@@ -123,6 +123,19 @@ Future<KnowledgeViewerPage> dbListKnowledgeViewerUnits(
         limit: limit,
         offset: offset);
 
+Future<List<KnowledgeUnit>> dbListRecentKnowledgeViewerUnits(
+        {required String appDir,
+        required List<int> key,
+        required String documentId,
+        KnowledgeUnitKind? unitKind,
+        required int limit}) =>
+    RustLib.instance.api.crateApiKnowledgeDbListRecentKnowledgeViewerUnits(
+        appDir: appDir,
+        key: key,
+        documentId: documentId,
+        unitKind: unitKind,
+        limit: limit);
+
 Future<List<KnowledgeSearchResult>> dbSearchKnowledgeDocumentUnits(
         {required String appDir,
         required List<int> key,

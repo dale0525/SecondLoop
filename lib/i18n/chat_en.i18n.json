@@ -278,7 +278,26 @@
     },
     "labels": {
       "whyUsed": "Why it was used",
+      "whyUsedForQuery": "Used because it was relevant to this question: $query",
       "sourceCount": "$count sources"
+    },
+    "sourceTypeLabels": {
+      "chatMessage": "Chat message",
+      "attachment": "Attachment",
+      "attachmentOcr": "Attachment OCR",
+      "attachmentTranscript": "Attachment transcript",
+      "attachmentText": "Attachment text",
+      "attachmentSummary": "Attachment summary",
+      "attachmentMetadata": "Attachment metadata",
+      "attachmentExcerpt": "Attachment excerpt"
+    },
+    "scopeLabels": {
+      "thisThread": "This thread"
+    },
+    "confidenceLabels": {
+      "highRelevance": "High relevance",
+      "relevant": "Relevant",
+      "possibleMatch": "Possible match"
     }
   }
 }

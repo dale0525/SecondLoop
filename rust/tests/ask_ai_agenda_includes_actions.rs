@@ -95,3 +95,58 @@ fn ask_ai_agenda_includes_actions_context() {
     assert!(prompt.contains("Buy milk"));
     assert!(prompt.contains("Lunch with Alice"));
 }
+
+#[test]
+fn ask_ai_project_plan_question_does_not_inject_actions_context() {
+    let temp_dir = tempfile::tempdir().expect("tempdir");
+    let app_dir = temp_dir.path().join("secondloop");
+
+    let key = auth::init_master_password(&app_dir, "pw", KdfParams::for_test()).expect("init");
+    let conn = db::open(&app_dir).expect("open db");
+
+    let conversation = db::create_conversation(&conn, &key, "Inbox").expect("conversation");
+
+    db::upsert_todo(
+        &conn,
+        &key,
+        "todo:1",
+        "Ship the release checklist",
+        Some(0),
+        "open",
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("todo");
+
+    let provider = FakeProvider::default();
+    rag::ask_ai_with_provider(
+        &conn,
+        &key,
+        &conversation.id,
+        "帮我写项目计划",
+        0,
+        rag::Focus::AllMemories,
+        &provider,
+        &mut |_ev| Ok(()),
+    )
+    .expect("ask");
+
+    let prompt = provider
+        .last_prompt
+        .lock()
+        .unwrap()
+        .clone()
+        .expect("prompt");
+    assert!(
+        !prompt.contains("Upcoming actions (from local todos/events):"),
+        "project-planning prompts should not inject agenda context: {prompt}"
+    );
+    assert!(
+        !prompt.contains("Ship the release checklist"),
+        "project-planning prompts should not inject todo titles: {prompt}"
+    );
+}

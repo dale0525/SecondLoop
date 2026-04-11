@@ -42,6 +42,15 @@ abstract interface class KnowledgeViewerBackend {
   });
 }
 
+abstract interface class RecentKnowledgeViewerBackend {
+  Future<List<KnowledgeUnit>> listRecentKnowledgeViewerUnits(
+    Uint8List key, {
+    required String documentId,
+    KnowledgeUnitKind? unitKind,
+    int limit = 16,
+  });
+}
+
 KnowledgeViewerBackend? maybeKnowledgeViewerBackendFor(AppBackend backend) {
   if (backend is KnowledgeViewerBackend) {
     return backend as KnowledgeViewerBackend;
@@ -52,7 +61,8 @@ KnowledgeViewerBackend? maybeKnowledgeViewerBackendFor(AppBackend backend) {
   return null;
 }
 
-final class NativeKnowledgeViewerBackend implements KnowledgeViewerBackend {
+final class NativeKnowledgeViewerBackend
+    implements KnowledgeViewerBackend, RecentKnowledgeViewerBackend {
   NativeKnowledgeViewerBackend(this._backend);
 
   final NativeAppBackend _backend;
@@ -124,5 +134,19 @@ final class NativeKnowledgeViewerBackend implements KnowledgeViewerBackend {
         anchor: anchor,
         before: before,
         after: after,
+      );
+
+  @override
+  Future<List<KnowledgeUnit>> listRecentKnowledgeViewerUnits(
+    Uint8List key, {
+    required String documentId,
+    KnowledgeUnitKind? unitKind,
+    int limit = 16,
+  }) =>
+      _backend.listRecentKnowledgeViewerUnits(
+        key,
+        documentId: documentId,
+        unitKind: unitKind,
+        limit: limit,
       );
 }

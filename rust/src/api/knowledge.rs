@@ -259,6 +259,25 @@ pub fn db_list_knowledge_viewer_units(
 }
 
 #[flutter_rust_bridge::frb]
+pub fn db_list_recent_knowledge_viewer_units(
+    app_dir: String,
+    key: Vec<u8>,
+    document_id: String,
+    unit_kind: Option<knowledge::KnowledgeUnitKind>,
+    limit: u32,
+) -> Result<Vec<knowledge::KnowledgeUnit>> {
+    let key = key_from_bytes(key)?;
+    let conn = db::open(Path::new(&app_dir))?;
+    knowledge::list_recent_knowledge_viewer_units(
+        &conn,
+        &key,
+        &document_id,
+        unit_kind,
+        limit as usize,
+    )
+}
+
+#[flutter_rust_bridge::frb]
 pub fn db_search_knowledge_document_units(
     app_dir: String,
     key: Vec<u8>,

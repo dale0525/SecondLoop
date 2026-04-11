@@ -69,4 +69,8 @@ fn ask_ai_saves_structured_citations_json_on_assistant_message() {
 
     assert!(!direct_sources.is_empty());
     assert_eq!(direct_sources[0]["source_type"].as_str(), Some("message"));
+    assert_eq!(
+        direct_sources[0]["source_type_label"].as_str(),
+        Some("chat_message")
+    );
 }

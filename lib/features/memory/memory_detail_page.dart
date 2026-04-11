@@ -66,25 +66,35 @@ class _MemoryDetailPageState extends State<MemoryDetailPage> {
       sessionKey,
       documentId: widget.documentId,
     );
-    const pageSize = 48;
-    final allUnits = <KnowledgeUnit>[];
-    var offset = 0;
-    while (true) {
-      final page = await viewerBackend.listKnowledgeViewerUnits(
+    List<KnowledgeUnit> sortedUnits;
+    if (viewerBackend case RecentKnowledgeViewerBackend recentBackend) {
+      sortedUnits = await recentBackend.listRecentKnowledgeViewerUnits(
         sessionKey,
         documentId: widget.documentId,
         unitKind: KnowledgeUnitKind.segment,
-        limit: pageSize,
-        offset: offset,
+        limit: 16,
       );
-      allUnits.addAll(page.units);
-      if (page.units.length < pageSize || allUnits.length >= page.total) {
-        break;
+    } else {
+      const pageSize = 48;
+      final allUnits = <KnowledgeUnit>[];
+      var offset = 0;
+      while (true) {
+        final page = await viewerBackend.listKnowledgeViewerUnits(
+          sessionKey,
+          documentId: widget.documentId,
+          unitKind: KnowledgeUnitKind.segment,
+          limit: pageSize,
+          offset: offset,
+        );
+        allUnits.addAll(page.units);
+        if (page.units.length < pageSize || allUnits.length >= page.total) {
+          break;
+        }
+        offset += page.units.length;
       }
-      offset += page.units.length;
+      sortedUnits = List<KnowledgeUnit>.from(allUnits)
+        ..sort((left, right) => right.updatedAtMs.compareTo(left.updatedAtMs));
     }
-    final sortedUnits = List<KnowledgeUnit>.from(allUnits)
-      ..sort((left, right) => right.updatedAtMs.compareTo(left.updatedAtMs));
     return _MemoryDetailData(document: document, units: sortedUnits);
   }
 

@@ -449,6 +449,48 @@ pub fn list_knowledge_viewer_units(
     })
 }
 
+pub fn list_recent_knowledge_viewer_units(
+    conn: &Connection,
+    key: &[u8; 32],
+    document_id: &str,
+    unit_kind: Option<KnowledgeUnitKind>,
+    limit: usize,
+) -> Result<Vec<KnowledgeUnit>> {
+    let kind_filter = unit_kind
+        .map(|value| -> Result<String> {
+            Ok(serde_json::to_string(&value)?.trim_matches('"').to_string())
+        })
+        .transpose()?;
+    let mut stmt = conn.prepare(
+        r#"SELECT unit_id,
+                  document_id,
+                  parent_unit_id,
+                  unit_kind,
+                  source_kind,
+                  role,
+                  ordinal,
+                  token_count,
+                  anchor_json,
+                  raw_text,
+                  normalized_text,
+                  prev_unit_id,
+                  next_unit_id,
+                  created_at_ms,
+                  updated_at_ms
+           FROM knowledge_units
+           WHERE document_id = ?1
+             AND (?2 IS NULL OR unit_kind = ?2)
+           ORDER BY updated_at_ms DESC, ordinal DESC, unit_id DESC
+           LIMIT ?3"#,
+    )?;
+    let mut rows = stmt.query(params![document_id, kind_filter, limit as i64])?;
+    let mut out = Vec::<KnowledgeUnit>::new();
+    while let Some(row) = rows.next()? {
+        out.push(decode_unit_row(key, row)?);
+    }
+    Ok(out)
+}
+
 fn anchor_match_score(query: &KnowledgeAnchorSet, candidate: &KnowledgeAnchorSet) -> i64 {
     let mut score = 0i64;
     if let Some(message_id) = query.message_id.as_deref() {

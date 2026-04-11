@@ -218,3 +218,92 @@ fn ask_ai_time_window_prompt_includes_attachments_linked_inside_range() {
         "expected unrelated attachment to stay out of prompt: {prompt}"
     );
 }
+
+#[test]
+fn ask_ai_time_window_prompt_keeps_latest_in_range_attachment_when_window_is_large() {
+    let temp_dir = tempfile::tempdir().expect("tempdir");
+    let app_dir = temp_dir.path().join("secondloop");
+
+    let key = auth::init_master_password(&app_dir, "pw", KdfParams::for_test()).expect("init");
+    let conn = db::open(&app_dir).expect("open db");
+
+    let conversation = db::create_conversation(&conn, &key, "Inbox").expect("conversation");
+    let time_start_ms: i64 = 3_000_000;
+    let time_end_ms: i64 = time_start_ms + 86_400_000;
+
+    for index in 0..805 {
+        let message = db::insert_message(
+            &conn,
+            &key,
+            &conversation.id,
+            "user",
+            &format!("Window message {index}"),
+        )
+        .expect("message");
+        conn.execute(
+            "UPDATE messages SET created_at = ?2, updated_at = ?2 WHERE id = ?1",
+            rusqlite::params![message.id, time_start_ms + index as i64],
+        )
+        .expect("update message ts");
+    }
+
+    let latest_message = db::insert_message(
+        &conn,
+        &key,
+        &conversation.id,
+        "user",
+        "Please inspect the latest in-range attachment.",
+    )
+    .expect("latest message");
+    conn.execute(
+        "UPDATE messages SET created_at = ?2, updated_at = ?2 WHERE id = ?1",
+        rusqlite::params![latest_message.id, time_end_ms - 10],
+    )
+    .expect("update latest message ts");
+
+    let latest_attachment =
+        db::insert_attachment(&conn, &key, &app_dir, b"latest attachment", "text/plain")
+            .expect("latest attachment");
+    db::link_attachment_to_message(&conn, &key, &latest_message.id, &latest_attachment.sha256)
+        .expect("link latest attachment");
+    db::upsert_attachment_metadata(
+        &conn,
+        &key,
+        &latest_attachment.sha256,
+        Some("Latest in-range attachment"),
+        &["latest.txt".to_string()],
+        &[],
+    )
+    .expect("latest metadata");
+
+    let provider = FakeProvider::default();
+    rag::ask_ai_with_provider_using_active_embeddings_time_window(
+        &conn,
+        &key,
+        &app_dir,
+        &conversation.id,
+        "今天这个时间范围里的附件讲了什么？",
+        4,
+        rag::Focus::ThisThread,
+        time_start_ms,
+        time_end_ms,
+        &provider,
+        &mut |_ev| Ok(()),
+    )
+    .expect("ask");
+
+    let prompt = provider
+        .last_prompt
+        .lock()
+        .unwrap()
+        .clone()
+        .expect("prompt");
+
+    assert!(
+        prompt.contains(&format!(
+            "secondloop://attachment/{}",
+            latest_attachment.sha256
+        )),
+        "latest in-range attachment should stay in prompt even with many older window messages: {prompt}"
+    );
+}

@@ -12,9 +12,9 @@ void main() {
       "href": "secondloop://message/history-1",
       "source_type": "message",
       "label": "History",
-      "source_type_label": "Chat message",
-      "scope_label": "This thread",
-      "confidence_label": "High relevance",
+      "source_type_label": "chat_message",
+      "scope_label": "this_thread",
+      "confidence_label": "high_relevance",
       "title": "Kickoff notes",
       "snippet": "Kickoff moved to Friday afternoon.",
       "highlighted_text": "Kickoff moved to Friday afternoon.",
@@ -33,7 +33,7 @@ void main() {
       "updated_at_ms": 4,
       "status": "confirmed",
       "source_count": 2,
-      "why_used": "The user asked for style alignment."
+      "why_used": "用中文总结一下最近变化"
     }
   ]
 }
@@ -48,18 +48,9 @@ void main() {
       evidence.directSources.single.displayTitle,
       'Kickoff notes',
     );
-    expect(
-      evidence.directSources.single.sourceTypeLabel,
-      'Chat message',
-    );
-    expect(
-      evidence.directSources.single.scopeLabel,
-      'This thread',
-    );
-    expect(
-      evidence.directSources.single.confidenceLabel,
-      'High relevance',
-    );
+    expect(evidence.directSources.single.sourceTypeLabel, 'chat_message');
+    expect(evidence.directSources.single.scopeLabel, 'this_thread');
+    expect(evidence.directSources.single.confidenceLabel, 'high_relevance');
     expect(
       evidence.directSources.single.displaySnippet,
       'Kickoff moved to Friday afternoon.',
@@ -73,6 +64,7 @@ void main() {
       'User prefers Chinese.',
     );
     expect(evidence.memoryCards.single.status, 'confirmed');
+    expect(evidence.memoryCards.single.whyUsed, '用中文总结一下最近变化');
   });
 
   test('parseChatAnswerEvidence returns null for invalid payload', () {

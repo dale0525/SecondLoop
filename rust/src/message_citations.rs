@@ -164,9 +164,9 @@ mod tests {
             href: "secondloop://message/abc".to_string(),
             source_type: "message".to_string(),
             label: "History".to_string(),
-            source_type_label: Some("Chat message".to_string()),
-            scope_label: Some("This thread".to_string()),
-            confidence_label: Some("High relevance".to_string()),
+            source_type_label: Some("chat_message".to_string()),
+            scope_label: Some("this_thread".to_string()),
+            confidence_label: Some("high_relevance".to_string()),
             title: None,
             snippet: "hello".to_string(),
             highlighted_text: Some("hello".to_string()),
@@ -186,7 +186,7 @@ mod tests {
             updated_at_ms: 1,
             status: KnowledgeMemoryStatus::Inferred,
             source_count: 1,
-            why_used: Some("The question asked for the user's usual style.".to_string()),
+            why_used: Some("What style should I use?".to_string()),
             anchors: KnowledgeAnchorSet::default(),
         };
 

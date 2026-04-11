@@ -104,7 +104,7 @@ fn ask_ai_citations_json_includes_generated_memory_entries() {
 }
 
 #[test]
-fn ask_ai_citations_json_preserves_readable_source_labels_and_highlight_text() {
+fn ask_ai_citations_json_preserves_stable_source_labels_and_highlight_text() {
     let value = ask_ai_citations_json_fixture();
 
     let direct_sources = value["direct_sources"]
@@ -113,7 +113,7 @@ fn ask_ai_citations_json_preserves_readable_source_labels_and_highlight_text() {
     let first = &direct_sources[0];
 
     assert_eq!(first["source_type"].as_str(), Some("message"));
-    assert_eq!(first["source_type_label"].as_str(), Some("Chat message"));
+    assert_eq!(first["source_type_label"].as_str(), Some("chat_message"));
     assert!(first["highlighted_text"]
         .as_str()
         .is_some_and(|value| value.contains("Chinese") || value.contains("budget")));

@@ -124,11 +124,7 @@ fn compact_snippet(value: &str, max_chars: usize) -> String {
 }
 
 fn context_usage_reason(question: &str) -> String {
-    let trimmed = question.trim();
-    if trimmed.is_empty() {
-        return "Retrieved as relevant context for this answer.".to_string();
-    }
-    format!("Retrieved as relevant context for: {trimmed}")
+    question.trim().to_string()
 }
 
 fn build_message_direct_source(message: &db::Message) -> Option<AnswerEvidenceDirectSource> {
@@ -148,7 +144,7 @@ fn build_message_direct_source(message: &db::Message) -> Option<AnswerEvidenceDi
         href,
         source_type: "message".to_string(),
         label: "History".to_string(),
-        source_type_label: Some("Chat message".to_string()),
+        source_type_label: Some("chat_message".to_string()),
         scope_label: None,
         confidence_label: None,
         title,
@@ -206,6 +202,7 @@ fn build_memory_card_from_document(
         .ok()
         .flatten()?;
     let display = document.memory_display.as_ref();
+    let why_used = why_used.trim();
     Some(AnswerEvidenceMemoryCard {
         document_id: document.document_id,
         title: document.title,
@@ -222,7 +219,11 @@ fn build_memory_card_from_document(
             )
         }),
         source_count: display.map(|value| value.source_count).unwrap_or(1),
-        why_used: Some(why_used.to_string()),
+        why_used: if why_used.is_empty() {
+            None
+        } else {
+            Some(why_used.to_string())
+        },
         anchors: document.anchors,
     })
 }
@@ -289,11 +290,13 @@ fn build_direct_sources_from_knowledge_entry(
 
 fn readable_attachment_label(kind: &str) -> String {
     match kind.trim().to_lowercase().as_str() {
-        "ocr_text" => "Attachment OCR".to_string(),
-        "transcript" => "Attachment transcript".to_string(),
-        "readable_text" | "readable_text_full" => "Attachment text".to_string(),
-        other if !other.is_empty() => format!("Attachment {}", other.replace('_', " ")),
-        _ => "Attachment".to_string(),
+        "ocr_text" => "attachment_ocr".to_string(),
+        "transcript" => "attachment_transcript".to_string(),
+        "readable_text" | "readable_text_full" => "attachment_text".to_string(),
+        "summary" => "attachment_summary".to_string(),
+        "metadata" => "attachment_metadata".to_string(),
+        "chunk" => "attachment_excerpt".to_string(),
+        _ => "attachment".to_string(),
     }
 }
 
@@ -303,16 +306,16 @@ fn readable_source_type_label(
     unit_kind: Option<knowledge::KnowledgeUnitKind>,
 ) -> String {
     match source_type {
-        "message" => "Chat message".to_string(),
+        "message" => "chat_message".to_string(),
         "attachment" => match source_kind {
-            Some(knowledge::KnowledgeSourceKind::Transcript) => "Transcript excerpt".to_string(),
-            Some(knowledge::KnowledgeSourceKind::OcrText) => "Attachment OCR".to_string(),
-            Some(knowledge::KnowledgeSourceKind::ReadableText) => "Attachment text".to_string(),
-            Some(knowledge::KnowledgeSourceKind::Summary) => "Attachment summary".to_string(),
-            Some(knowledge::KnowledgeSourceKind::Metadata) => "Attachment metadata".to_string(),
+            Some(knowledge::KnowledgeSourceKind::Transcript) => "attachment_transcript".to_string(),
+            Some(knowledge::KnowledgeSourceKind::OcrText) => "attachment_ocr".to_string(),
+            Some(knowledge::KnowledgeSourceKind::ReadableText) => "attachment_text".to_string(),
+            Some(knowledge::KnowledgeSourceKind::Summary) => "attachment_summary".to_string(),
+            Some(knowledge::KnowledgeSourceKind::Metadata) => "attachment_metadata".to_string(),
             _ => match unit_kind {
-                Some(knowledge::KnowledgeUnitKind::Chunk) => "Attachment excerpt".to_string(),
-                _ => "Attachment".to_string(),
+                Some(knowledge::KnowledgeUnitKind::Chunk) => "attachment_excerpt".to_string(),
+                _ => "attachment".to_string(),
             },
         },
         _ => source_type.to_string(),
@@ -323,18 +326,18 @@ fn readable_scope_label(anchors: &knowledge::KnowledgeAnchorSet) -> Option<Strin
     anchors
         .conversation_id
         .as_ref()
-        .map(|_| "This thread".to_string())
+        .map(|_| "this_thread".to_string())
 }
 
 fn readable_confidence_label(score: f64) -> Option<String> {
     if score >= 0.85 {
-        return Some("High relevance".to_string());
+        return Some("high_relevance".to_string());
     }
     if score >= 0.45 {
-        return Some("Relevant".to_string());
+        return Some("relevant".to_string());
     }
     if score > 0.0 {
-        return Some("Possible match".to_string());
+        return Some("possible_match".to_string());
     }
     None
 }
@@ -484,41 +487,6 @@ fn agenda_horizon_ms(question: &str, now_ms: i64) -> Option<i64> {
         return None;
     }
 
-    let has_agenda_intent = q.contains("agenda")
-        || q.contains("schedule")
-        || q.contains("calendar")
-        || q.contains("todo")
-        || q.contains("to-do")
-        || q.contains("task")
-        || q.contains("tasks")
-        || q.contains("priority")
-        || q.contains("priorities")
-        || q.contains("what should i do")
-        || q.contains("what do i need to do")
-        || q.contains("what's on my schedule")
-        || q.contains("what is on my schedule")
-        || q.contains("what's on my calendar")
-        || q.contains("what is on my calendar")
-        || q.contains("upcoming")
-        || q.contains("due today")
-        || question.contains("待办")
-        || question.contains("待辦")
-        || question.contains("任务")
-        || question.contains("任務")
-        || question.contains("日程")
-        || question.contains("行程")
-        || question.contains("安排")
-        || question.contains("计划")
-        || question.contains("計劃")
-        || question.contains("提醒")
-        || question.contains("优先级")
-        || question.contains("優先級")
-        || question.contains("要做")
-        || question.contains("有哪些事");
-    if !has_agenda_intent {
-        return None;
-    }
-
     let is_today = q.contains("today")
         || q.contains("tonight")
         || q.contains("today's")
@@ -545,6 +513,49 @@ fn agenda_horizon_ms(question: &str, now_ms: i64) -> Option<i64> {
         || question.contains("日程")
         || question.contains("行程")
         || question.contains("安排");
+    let has_timeframe = is_today
+        || is_this_week
+        || q.contains("tomorrow")
+        || q.contains("next week")
+        || question.contains("明天")
+        || question.contains("本周")
+        || question.contains("这周")
+        || question.contains("這週")
+        || question.contains("今天")
+        || question.contains("今日");
+    let has_explicit_agenda_intent = q.contains("agenda")
+        || q.contains("schedule")
+        || q.contains("calendar")
+        || q.contains("todo")
+        || q.contains("to-do")
+        || q.contains("priority")
+        || q.contains("priorities")
+        || q.contains("what should i do")
+        || q.contains("what do i need to do")
+        || q.contains("what's on my schedule")
+        || q.contains("what is on my schedule")
+        || q.contains("what's on my calendar")
+        || q.contains("what is on my calendar")
+        || q.contains("upcoming")
+        || q.contains("due today")
+        || question.contains("待办")
+        || question.contains("待辦")
+        || question.contains("日程")
+        || question.contains("行程")
+        || question.contains("提醒")
+        || question.contains("优先级")
+        || question.contains("優先級")
+        || question.contains("要做")
+        || question.contains("有哪些事");
+    let has_generic_task_words = q.contains("task")
+        || q.contains("tasks")
+        || question.contains("任务")
+        || question.contains("任務")
+        || question.contains("计划")
+        || question.contains("計劃");
+    if !(has_explicit_agenda_intent || (has_generic_task_words && has_timeframe)) {
+        return None;
+    }
     if is_agenda {
         return Some(now_ms.saturating_add(8 * 24 * 60 * 60 * 1000));
     }
@@ -762,7 +773,7 @@ fn collect_time_window_attachment_resources(
     time_end_ms: i64,
 ) -> Result<attachment_resources::AttachmentResourcesBundle> {
     let mut attachment_shas = Vec::<String>::new();
-    for message in db::list_memory_messages_in_range(
+    for message in db::list_memory_messages_in_range_recent(
         conn,
         key,
         conversation_id,
@@ -1780,6 +1791,14 @@ mod tests {
     }
 
     #[test]
+    fn project_planning_queries_do_not_trigger_actions_context() {
+        assert!(!should_include_actions_context("帮我写项目计划"));
+        assert!(!should_include_actions_context(
+            "Summarize the active task pattern"
+        ));
+    }
+
+    #[test]
     fn filter_direct_sources_prefers_question_matching_messages() {
         fn source(id: &str, text: &str) -> AnswerEvidenceDirectSource {
             AnswerEvidenceDirectSource {
@@ -1787,7 +1806,7 @@ mod tests {
                 href: format!("secondloop://message/{id}"),
                 source_type: "message".to_string(),
                 label: "History".to_string(),
-                source_type_label: Some("Chat message".to_string()),
+                source_type_label: Some("chat_message".to_string()),
                 scope_label: None,
                 confidence_label: None,
                 title: Some(text.to_string()),

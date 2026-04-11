@@ -172,6 +172,74 @@ pub fn list_memory_messages_in_range(
     Ok(result)
 }
 
+pub fn list_memory_messages_in_range_recent(
+    conn: &Connection,
+    key: &[u8; 32],
+    conversation_id: Option<&str>,
+    start_at_ms_inclusive: i64,
+    end_at_ms_exclusive: i64,
+    limit: i64,
+) -> Result<Vec<Message>> {
+    let limit = limit.clamp(1, 2000);
+
+    let mut stmt = match conversation_id {
+        Some(_) => conn.prepare(
+            r#"SELECT id, conversation_id, role, content, created_at
+               FROM messages
+               WHERE conversation_id = ?1
+                 AND created_at >= ?2 AND created_at < ?3
+                 AND COALESCE(is_deleted, 0) = 0
+                 AND COALESCE(is_memory, 1) = 1
+               ORDER BY created_at DESC, id DESC
+               LIMIT ?4"#,
+        )?,
+        None => conn.prepare(
+            r#"SELECT id, conversation_id, role, content, created_at
+               FROM messages
+               WHERE created_at >= ?1 AND created_at < ?2
+                 AND COALESCE(is_deleted, 0) = 0
+                 AND COALESCE(is_memory, 1) = 1
+               ORDER BY created_at DESC, id DESC
+               LIMIT ?3"#,
+        )?,
+    };
+
+    let mut rows = match conversation_id {
+        Some(cid) => stmt.query(params![
+            cid,
+            start_at_ms_inclusive,
+            end_at_ms_exclusive,
+            limit
+        ])?,
+        None => stmt.query(params![start_at_ms_inclusive, end_at_ms_exclusive, limit])?,
+    };
+
+    let mut result = Vec::new();
+    while let Some(row) = rows.next()? {
+        let id: String = row.get(0)?;
+        let conversation_id: String = row.get(1)?;
+        let role: String = row.get(2)?;
+        let content_blob: Vec<u8> = row.get(3)?;
+        let created_at_ms: i64 = row.get(4)?;
+
+        let content_bytes = decrypt_bytes(key, &content_blob, b"message.content")?;
+        let content = String::from_utf8(content_bytes)
+            .map_err(|_| anyhow!("message content is not valid utf-8"))?;
+
+        result.push(Message {
+            id,
+            conversation_id,
+            role,
+            content,
+            created_at_ms,
+            is_memory: true,
+            citations_json: None,
+        });
+    }
+
+    Ok(result)
+}
+
 pub fn get_message_by_id_optional(
     conn: &Connection,
     key: &[u8; 32],

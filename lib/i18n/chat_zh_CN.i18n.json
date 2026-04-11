@@ -278,7 +278,26 @@
     },
     "labels": {
       "whyUsed": "为何使用",
+      "whyUsedForQuery": "因与这个问题相关而被使用：$query",
       "sourceCount": "$count 个来源"
+    },
+    "sourceTypeLabels": {
+      "chatMessage": "聊天消息",
+      "attachment": "附件",
+      "attachmentOcr": "附件 OCR",
+      "attachmentTranscript": "附件转录",
+      "attachmentText": "附件文本",
+      "attachmentSummary": "附件摘要",
+      "attachmentMetadata": "附件元数据",
+      "attachmentExcerpt": "附件片段"
+    },
+    "scopeLabels": {
+      "thisThread": "当前线程"
+    },
+    "confidenceLabels": {
+      "highRelevance": "高相关性",
+      "relevant": "相关",
+      "possibleMatch": "可能匹配"
     }
   }
 }

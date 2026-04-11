@@ -251,7 +251,7 @@ class _ChatAnswerEvidencePanelState extends State<ChatAnswerEvidencePanel> {
                               ),
                               const SizedBox(height: 4),
                               Text(
-                                whyUsed,
+                                _localizedWhyUsed(context, whyUsed),
                                 style: theme.textTheme.bodySmall,
                               ),
                             ],
@@ -387,11 +387,20 @@ class _DirectSourceList extends StatelessWidget {
                     label:
                         '[${evidence.directSourceIndexForHref(item.href) ?? index + 1}]',
                   ),
-                  _MetaPill(label: item.displaySourceTypeLabel),
+                  _MetaPill(
+                    label: _localizedSourceTypeLabel(context, item),
+                  ),
                   if ((item.scopeLabel ?? '').trim().isNotEmpty)
-                    _MetaPill(label: item.scopeLabel!.trim()),
+                    _MetaPill(
+                      label: _localizedScopeLabel(context, item.scopeLabel!),
+                    ),
                   if ((item.confidenceLabel ?? '').trim().isNotEmpty)
-                    _MetaPill(label: item.confidenceLabel!.trim()),
+                    _MetaPill(
+                      label: _localizedConfidenceLabel(
+                        context,
+                        item.confidenceLabel!,
+                      ),
+                    ),
                 ],
               ),
               const SizedBox(height: 10),
@@ -460,4 +469,79 @@ String _memoryStatusLabel(BuildContext context, String rawStatus) {
     default:
       return context.t.memory.status.inferred;
   }
+}
+
+String _localizedSourceTypeLabel(
+  BuildContext context,
+  ChatAnswerEvidenceDirectSource item,
+) {
+  switch (item.sourceTypeLabel?.trim().toLowerCase()) {
+    case 'chat_message':
+      return context.t.chat.answerEvidence.sourceTypeLabels.chatMessage;
+    case 'attachment':
+      return context.t.chat.answerEvidence.sourceTypeLabels.attachment;
+    case 'attachment_ocr':
+      return context.t.chat.answerEvidence.sourceTypeLabels.attachmentOcr;
+    case 'attachment_transcript':
+      return context
+          .t.chat.answerEvidence.sourceTypeLabels.attachmentTranscript;
+    case 'attachment_text':
+      return context.t.chat.answerEvidence.sourceTypeLabels.attachmentText;
+    case 'attachment_summary':
+      return context.t.chat.answerEvidence.sourceTypeLabels.attachmentSummary;
+    case 'attachment_metadata':
+      return context.t.chat.answerEvidence.sourceTypeLabels.attachmentMetadata;
+    case 'attachment_excerpt':
+      return context.t.chat.answerEvidence.sourceTypeLabels.attachmentExcerpt;
+    default:
+      return item.displaySourceTypeLabel;
+  }
+}
+
+String _localizedScopeLabel(BuildContext context, String rawScope) {
+  switch (rawScope.trim().toLowerCase()) {
+    case 'this_thread':
+      return context.t.chat.answerEvidence.scopeLabels.thisThread;
+    default:
+      return rawScope.trim();
+  }
+}
+
+String _localizedConfidenceLabel(BuildContext context, String rawConfidence) {
+  switch (rawConfidence.trim().toLowerCase()) {
+    case 'high_relevance':
+      return context.t.chat.answerEvidence.confidenceLabels.highRelevance;
+    case 'relevant':
+      return context.t.chat.answerEvidence.confidenceLabels.relevant;
+    case 'possible_match':
+      return context.t.chat.answerEvidence.confidenceLabels.possibleMatch;
+    default:
+      return rawConfidence.trim();
+  }
+}
+
+String _localizedWhyUsed(BuildContext context, String rawWhyUsed) {
+  final trimmed = rawWhyUsed.trim();
+  if (trimmed.isEmpty) return trimmed;
+
+  const legacyPrefix = 'Retrieved as relevant context for:';
+  if (trimmed.startsWith(legacyPrefix)) {
+    final query = trimmed.substring(legacyPrefix.length).trim();
+    if (query.isNotEmpty) {
+      return context.t.chat.answerEvidence.labels.whyUsedForQuery(query: query);
+    }
+  }
+
+  if (!trimmed.contains(' ') &&
+      !trimmed.contains('\n') &&
+      trimmed.toLowerCase().startsWith('retrieved_as_')) {
+    return trimmed;
+  }
+
+  if (trimmed.startsWith('The user asked') ||
+      trimmed.startsWith('Used because it was relevant')) {
+    return trimmed;
+  }
+
+  return context.t.chat.answerEvidence.labels.whyUsedForQuery(query: trimmed);
 }

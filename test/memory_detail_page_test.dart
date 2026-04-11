@@ -214,6 +214,55 @@ void main() {
       expect(backend.correctedSummary, isNull);
     },
   );
+
+  testWidgets('MemoryDetailPage prefers recent-evidence loading when available',
+      (tester) async {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final backend = _RecentMemoryDetailBackend(
+      recentUnits: [
+        KnowledgeUnit(
+          unitId: 'recent-u1',
+          documentId: 'generated:preference:response-language',
+          parentUnitId: null,
+          unitKind: KnowledgeUnitKind.segment,
+          sourceKind: KnowledgeSourceKind.summary,
+          role: KnowledgeRole.evidence,
+          ordinal: 1,
+          tokenCount: 12,
+          rawText: 'Most recent evidence only.',
+          normalizedText: 'Most recent evidence only.',
+          anchors: const KnowledgeAnchorSet(messageId: 'history-1'),
+          prevUnitId: null,
+          nextUnitId: null,
+          createdAtMs: now,
+          updatedAtMs: now,
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: backend,
+            child: SessionScope(
+              sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+              lock: () {},
+              child: const MemoryDetailPage(
+                documentId: 'generated:preference:response-language',
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    expect(find.text('Most recent evidence only.'), findsOneWidget);
+    expect(backend.recentListRequestCount, 1);
+    expect(backend.viewerListOffsets, isEmpty);
+  });
 }
 
 final class _MemoryDetailBackend extends TestAppBackend
@@ -429,4 +478,23 @@ final class _MemoryDetailBackend extends TestAppBackend
     int limit = 20,
   }) async =>
       const <KnowledgeSearchResult>[];
+}
+
+final class _RecentMemoryDetailBackend extends _MemoryDetailBackend
+    implements RecentKnowledgeViewerBackend {
+  _RecentMemoryDetailBackend({required this.recentUnits});
+
+  final List<KnowledgeUnit> recentUnits;
+  int recentListRequestCount = 0;
+
+  @override
+  Future<List<KnowledgeUnit>> listRecentKnowledgeViewerUnits(
+    Uint8List key, {
+    required String documentId,
+    KnowledgeUnitKind? unitKind,
+    int limit = 16,
+  }) async {
+    recentListRequestCount += 1;
+    return recentUnits.take(limit).toList(growable: false);
+  }
 }

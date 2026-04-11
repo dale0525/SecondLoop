@@ -320,6 +320,113 @@ void main() {
       reason: 'parent rebuilds should reuse the cached load future',
     );
   });
+
+  testWidgets('MemoryCenterPage reloads when the session changes', (
+    tester,
+  ) async {
+    final backend = _MemoryBackend(
+      documentBuilderForKey: (key) => <ContentKnowledgeDocument>[
+        _document(
+          documentId: 'generated:preference:response-language',
+          title: key.first == 1 ? 'Session one memory' : 'Session two memory',
+          summary: 'User prefers Chinese.',
+          updatedAtMs: DateTime.now().millisecondsSinceEpoch,
+          memoryDisplay: const KnowledgeMemoryDisplay(
+            section: KnowledgeMemorySection.preference,
+            sourceCount: 1,
+            status: KnowledgeMemoryStatus.inferred,
+          ),
+        ),
+      ],
+      documents: const <ContentKnowledgeDocument>[],
+    );
+
+    Widget buildApp(Uint8List sessionKey) => wrapWithI18n(
+          MaterialApp(
+            home: AppBackendScope(
+              backend: backend,
+              child: SessionScope(
+                sessionKey: sessionKey,
+                lock: () {},
+                child: const MemoryCenterPage(),
+              ),
+            ),
+          ),
+        );
+
+    await tester
+        .pumpWidget(buildApp(Uint8List.fromList(List<int>.filled(32, 1))));
+
+    await tester.pumpAndSettle();
+    expect(find.text('Session one memory'), findsOneWidget);
+
+    await tester
+        .pumpWidget(buildApp(Uint8List.fromList(List<int>.filled(32, 2))));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Session two memory'), findsOneWidget);
+    expect(
+      backend.requestedSessionLeads,
+      <int>[1, 2],
+    );
+  });
+
+  testWidgets(
+    'MemoryCenterPage refreshes localized generated labels on locale changes',
+    (
+      tester,
+    ) async {
+      LocaleSettings.setLocale(AppLocale.en);
+      addTearDown(() => LocaleSettings.setLocale(AppLocale.en));
+
+      final backend = _MemoryBackend(
+        documents: [
+          _document(
+            documentId: 'generated:preference:response-language',
+            title: 'Response language',
+            summary: 'User prefers responses in Chinese.',
+            rawText: 'User prefers responses in Chinese.',
+            updatedAtMs: DateTime.now().millisecondsSinceEpoch,
+            memoryDisplay: const KnowledgeMemoryDisplay(
+              section: KnowledgeMemorySection.preference,
+              sourceCount: 1,
+              status: KnowledgeMemoryStatus.inferred,
+            ),
+          ),
+        ],
+      );
+
+      Widget buildApp() => wrapWithI18n(
+            MaterialApp(
+              home: AppBackendScope(
+                backend: backend,
+                child: SessionScope(
+                  sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+                  lock: () {},
+                  child: const MemoryCenterPage(),
+                ),
+              ),
+            ),
+          );
+
+      await tester.pumpWidget(buildApp());
+
+      await tester.pumpAndSettle();
+      expect(find.text('Response language'), findsOneWidget);
+
+      LocaleSettings.setLocale(AppLocale.zhCn);
+      await tester.pumpWidget(buildApp());
+      await tester.pumpAndSettle();
+
+      expect(find.text('回复语言'), findsOneWidget);
+      expect(find.text('Response language'), findsNothing);
+      expect(
+        backend.listOffsets,
+        <int>[0],
+        reason: 'locale-only refreshes should reuse the loaded documents',
+      );
+    },
+  );
 }
 
 class _MemoryCenterHarness extends StatefulWidget {
@@ -349,10 +456,16 @@ class _MemoryCenterHarnessState extends State<_MemoryCenterHarness> {
 
 final class _MemoryBackend extends TestAppBackend
     implements KnowledgeBackend, KnowledgeViewerBackend {
-  _MemoryBackend({required this.documents});
+  _MemoryBackend({
+    required this.documents,
+    this.documentBuilderForKey,
+  });
 
   final List<ContentKnowledgeDocument> documents;
+  final List<ContentKnowledgeDocument> Function(Uint8List key)?
+      documentBuilderForKey;
   final List<int> listOffsets = <int>[];
+  final List<int> requestedSessionLeads = <int>[];
 
   @override
   Future<KnowledgeMemoryFeedback> upsertKnowledgeMemoryFeedback(
@@ -391,8 +504,10 @@ final class _MemoryBackend extends TestAppBackend
     int limit = 100,
     int offset = 0,
   }) async {
+    requestedSessionLeads.add(key.first);
     listOffsets.add(offset);
-    return documents.skip(offset).take(limit).toList(growable: false);
+    final currentDocuments = documentBuilderForKey?.call(key) ?? documents;
+    return currentDocuments.skip(offset).take(limit).toList(growable: false);
   }
 
   @override

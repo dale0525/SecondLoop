@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:secondloop/features/chat/chat_answer_evidence_models.dart';
 import 'package:secondloop/features/chat/chat_answer_evidence_sheet.dart';
+import 'package:secondloop/i18n/strings.g.dart';
 
 import 'test_i18n.dart';
 
@@ -28,9 +29,9 @@ void main() {
                   href: 'secondloop://message/history-1',
                   sourceType: 'message',
                   label: 'History',
-                  sourceTypeLabel: 'Chat message',
-                  scopeLabel: 'This thread',
-                  confidenceLabel: 'High relevance',
+                  sourceTypeLabel: 'chat_message',
+                  scopeLabel: 'this_thread',
+                  confidenceLabel: 'high_relevance',
                   title: 'Kickoff notes',
                   snippet: 'Kickoff moved to Friday afternoon.',
                   highlightedText: 'Kickoff moved to Friday afternoon.',
@@ -51,7 +52,7 @@ void main() {
                   updatedAtMs: 4,
                   status: 'confirmed',
                   sourceCount: 2,
-                  whyUsed: 'The user asked in Chinese.',
+                  whyUsed: '用中文总结一下最近变化',
                 ),
               ],
             ),
@@ -128,6 +129,70 @@ void main() {
     expect(deletedMemoryDocument, 'generated:preference:response-language');
   });
 
+  testWidgets('ChatAnswerEvidencePanel localizes stable evidence codes', (
+    tester,
+  ) async {
+    LocaleSettings.setLocale(AppLocale.zhCn);
+    addTearDown(() => LocaleSettings.setLocale(AppLocale.en));
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        const MaterialApp(
+          home: ChatAnswerEvidencePanel(
+            evidence: ChatAnswerEvidence(
+              directSources: [
+                ChatAnswerEvidenceDirectSource(
+                  id: 'message:history-1',
+                  href: 'secondloop://message/history-1',
+                  sourceType: 'message',
+                  label: 'History',
+                  sourceTypeLabel: 'chat_message',
+                  scopeLabel: 'this_thread',
+                  confidenceLabel: 'high_relevance',
+                  title: 'Kickoff notes',
+                  snippet: 'Kickoff moved to Friday afternoon.',
+                  highlightedText: 'Kickoff moved to Friday afternoon.',
+                  createdAtMs: 1,
+                  updatedAtMs: 2,
+                  documentId: null,
+                  unitId: null,
+                ),
+              ],
+              memoryCards: [
+                ChatAnswerEvidenceMemoryCard(
+                  documentId: 'generated:preference:response-language',
+                  title: 'Response language',
+                  summary: 'User prefers Chinese.',
+                  sourceKind: 'summary',
+                  role: 'summary',
+                  createdAtMs: 3,
+                  updatedAtMs: 4,
+                  status: 'confirmed',
+                  sourceCount: 2,
+                  whyUsed: '用中文总结一下最近变化',
+                ),
+              ],
+            ),
+            initialTab: ChatAnswerEvidenceTab.directSources,
+            onOpenDirectSource: _noopOpenDirectSource,
+            onOpenMemoryCard: _noopOpenMemoryCard,
+          ),
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    expect(find.text('聊天消息'), findsOneWidget);
+    expect(find.text('当前线程'), findsOneWidget);
+    expect(find.text('高相关性'), findsOneWidget);
+
+    await tester.tap(find.textContaining('记忆卡'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('因与这个问题相关而被使用：用中文总结一下最近变化'), findsOneWidget);
+  });
+
   testWidgets('showChatAnswerEvidenceSheet uses right drawer on wide layouts',
       (tester) async {
     await tester.pumpWidget(
@@ -184,3 +249,7 @@ void main() {
     expect(find.byType(Dialog), findsNothing);
   });
 }
+
+Future<void> _noopOpenDirectSource(String _) async {}
+
+Future<void> _noopOpenMemoryCard(String _) async {}

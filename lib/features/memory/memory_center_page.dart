@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../core/backend/app_backend.dart';
@@ -29,10 +30,11 @@ class MemoryCenterPage extends StatefulWidget {
 }
 
 class _MemoryCenterPageState extends State<MemoryCenterPage> {
-  Future<List<MemoryCenterSectionData>>? _future;
+  Future<List<ContentKnowledgeDocument>>? _future;
+  Uint8List? _loadedSessionKey;
+  AppBackend? _loadedBackend;
 
-  Future<List<MemoryCenterSectionData>> _load(BuildContext context) async {
-    final t = context.t;
+  Future<List<ContentKnowledgeDocument>> _load(BuildContext context) async {
     final backend = AppBackendScope.of(context);
     final knowledgeBackend = maybeKnowledgeBackendFor(backend);
     final sessionKey = SessionScope.of(context).sessionKey;
@@ -62,7 +64,7 @@ class _MemoryCenterPageState extends State<MemoryCenterPage> {
       }
       offset += pageSize;
     }
-    return buildMemoryCenterSections(memoryDocuments, t);
+    return memoryDocuments;
   }
 
   void _reload() {
@@ -74,12 +76,21 @@ class _MemoryCenterPageState extends State<MemoryCenterPage> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    _future ??= _load(context);
+    final sessionKey = Uint8List.fromList(SessionScope.of(context).sessionKey);
+    final backend = AppBackendScope.of(context);
+    final shouldReload = _future == null ||
+        !listEquals(_loadedSessionKey, sessionKey) ||
+        !identical(_loadedBackend, backend);
+    if (shouldReload) {
+      _loadedSessionKey = sessionKey;
+      _loadedBackend = backend;
+      _future = _load(context);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<List<MemoryCenterSectionData>>(
+    return FutureBuilder<List<ContentKnowledgeDocument>>(
       future: _future,
       builder: (context, snapshot) {
         if (snapshot.connectionState != ConnectionState.done) {
@@ -97,7 +108,10 @@ class _MemoryCenterPageState extends State<MemoryCenterPage> {
           );
         }
 
-        final sections = snapshot.data ?? const <MemoryCenterSectionData>[];
+        final sections = buildMemoryCenterSections(
+          snapshot.data ?? const <ContentKnowledgeDocument>[],
+          context.t,
+        );
         return Scaffold(
           appBar: AppBar(
             title: Text(context.t.memory.title),
