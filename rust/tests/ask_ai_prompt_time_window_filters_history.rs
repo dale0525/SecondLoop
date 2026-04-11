@@ -120,11 +120,11 @@ fn ask_ai_time_window_prompt_filters_conversation_history_by_range() {
         "expected old history to be filtered out: {prompt}"
     );
     assert!(
-        prompt.contains("Resources catalog (attachments):"),
-        "expected resources catalog section in prompt: {prompt}"
+        !prompt.contains("Resources catalog (attachments):"),
+        "expected unrelated recent attachments to stay out of prompt: {prompt}"
     );
     assert!(
-        prompt.contains(&format!("secondloop://attachment/{}", attachment.sha256)),
-        "expected attachment deep link in prompt: {prompt}"
+        !prompt.contains(&format!("secondloop://attachment/{}", attachment.sha256)),
+        "expected unrelated attachment deep link to stay out of prompt: {prompt}"
     );
 }

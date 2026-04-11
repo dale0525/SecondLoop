@@ -200,18 +200,6 @@ pub(crate) fn collect_attachment_resources_active(
     bundle_from_hits(conn, key, hits)
 }
 
-pub(crate) fn collect_attachment_resources_recent(
-    conn: &Connection,
-    key: &[u8; 32],
-) -> Result<AttachmentResourcesBundle> {
-    let hits = Vec::<db::SimilarAttachmentChunk>::new();
-    let catalog_markdown = build_catalog_markdown(conn, key, &hits)?;
-    Ok(AttachmentResourcesBundle {
-        chunks: Vec::new(),
-        catalog_markdown,
-    })
-}
-
 pub(crate) fn collect_attachment_resources_by_embedding(
     conn: &Connection,
     key: &[u8; 32],

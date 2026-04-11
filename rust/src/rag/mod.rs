@@ -22,7 +22,7 @@ mod knowledge_contexts;
 
 use attachment_resources::{
     collect_attachment_resources_active, collect_attachment_resources_by_embedding,
-    collect_attachment_resources_default, collect_attachment_resources_recent,
+    collect_attachment_resources_default,
 };
 use citations_prompt::{build_prompt as build_prompt_base, build_prompt_with_actions_and_history};
 use context_selection::{build_contexts_v2, ContextItem, ContextSource};
@@ -481,6 +481,41 @@ fn now_ms() -> i64 {
 fn agenda_horizon_ms(question: &str, now_ms: i64) -> Option<i64> {
     let q = question.trim().to_lowercase();
     if q.is_empty() {
+        return None;
+    }
+
+    let has_agenda_intent = q.contains("agenda")
+        || q.contains("schedule")
+        || q.contains("calendar")
+        || q.contains("todo")
+        || q.contains("to-do")
+        || q.contains("task")
+        || q.contains("tasks")
+        || q.contains("priority")
+        || q.contains("priorities")
+        || q.contains("what should i do")
+        || q.contains("what do i need to do")
+        || q.contains("what's on my schedule")
+        || q.contains("what is on my schedule")
+        || q.contains("what's on my calendar")
+        || q.contains("what is on my calendar")
+        || q.contains("upcoming")
+        || q.contains("due today")
+        || question.contains("待办")
+        || question.contains("待辦")
+        || question.contains("任务")
+        || question.contains("任務")
+        || question.contains("日程")
+        || question.contains("行程")
+        || question.contains("安排")
+        || question.contains("计划")
+        || question.contains("計劃")
+        || question.contains("提醒")
+        || question.contains("优先级")
+        || question.contains("優先級")
+        || question.contains("要做")
+        || question.contains("有哪些事");
+    if !has_agenda_intent {
         return None;
     }
 
@@ -1189,9 +1224,6 @@ pub fn ask_ai_with_provider_using_active_embeddings(
                     .collect(),
                 })
                 .collect();
-            resources_catalog = collect_attachment_resources_recent(conn, key)
-                .unwrap_or_default()
-                .catalog_markdown;
         } else {
             db::process_pending_message_embeddings_active(conn, key, app_dir, 1024)?;
             db::process_pending_todo_embeddings_active(conn, key, app_dir, 1024)?;
@@ -1619,7 +1651,6 @@ pub fn ask_ai_with_provider_using_active_embeddings_time_window(
         }
     }
 
-    let attachment_resources = collect_attachment_resources_recent(conn, key).unwrap_or_default();
     let actions = build_actions_context(conn, key, question)?;
     let history = build_recent_conversation_history_in_range(
         conn,
@@ -1636,7 +1667,7 @@ pub fn ask_ai_with_provider_using_active_embeddings_time_window(
             .collect::<Vec<_>>(),
         actions.as_deref(),
         history.as_deref(),
-        attachment_resources.catalog_markdown.as_deref(),
+        None,
     );
 
     ask_ai_stream_and_persist(
@@ -1655,6 +1686,7 @@ pub fn ask_ai_with_provider_using_active_embeddings_time_window(
 mod tests {
     use super::{
         build_message_direct_source, filter_direct_sources_for_question, format_history_line,
+        should_include_actions_context,
     };
     use crate::db;
     use crate::message_citations::AnswerEvidenceDirectSource;
@@ -1699,6 +1731,22 @@ mod tests {
         };
 
         assert!(build_message_direct_source(&message).is_none());
+    }
+
+    #[test]
+    fn generic_today_query_does_not_trigger_actions_context() {
+        assert!(!should_include_actions_context(
+            "分析一下我今天拍的视频开头台词"
+        ));
+        assert!(!should_include_actions_context(
+            "Summarize today's video intro"
+        ));
+    }
+
+    #[test]
+    fn today_task_query_triggers_actions_context() {
+        assert!(should_include_actions_context("今天有哪些事要做？"));
+        assert!(should_include_actions_context("What should I do today?"));
     }
 
     #[test]
