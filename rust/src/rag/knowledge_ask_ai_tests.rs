@@ -1,6 +1,38 @@
 use crate::knowledge::retrieval::test_support::seeded_fixture;
+use crate::llm::ChatDelta;
 
-use super::{knowledge_contexts::try_build_knowledge_contexts, Focus};
+use anyhow::Result;
+
+use super::{
+    ask_ai_with_provider_using_active_embeddings, knowledge_contexts::try_build_knowledge_contexts,
+    AnswerProvider, Focus,
+};
+
+#[derive(Default)]
+struct CaptureProvider {
+    prompt: std::sync::Mutex<Option<String>>,
+}
+
+impl AnswerProvider for CaptureProvider {
+    fn stream_answer(
+        &self,
+        prompt: &str,
+        on_event: &mut dyn FnMut(ChatDelta) -> Result<()>,
+    ) -> Result<()> {
+        *self.prompt.lock().expect("lock prompt") = Some(prompt.to_string());
+        on_event(ChatDelta {
+            role: Some("assistant".to_string()),
+            text_delta: "ok".to_string(),
+            done: false,
+        })?;
+        on_event(ChatDelta {
+            role: None,
+            text_delta: String::new(),
+            done: true,
+        })?;
+        Ok(())
+    }
+}
 
 fn source_from_context(value: &str) -> Option<String> {
     let header = value
@@ -146,4 +178,51 @@ fn knowledge_ask_ai_contexts_include_generated_preferences_for_planning_queries(
     assert!(contexts.iter().any(|ctx| {
         ctx.contains("source=summary") && ctx.to_lowercase().contains("prefers responses")
     }));
+}
+
+#[test]
+fn knowledge_ask_ai_prompt_does_not_include_recent_attachment_catalog_noise() {
+    let fixture = seeded_fixture();
+    let noise = crate::db::insert_attachment(
+        &fixture.conn,
+        &fixture.key,
+        &fixture.app_dir,
+        b"noise bytes",
+        "audio/wav",
+    )
+    .expect("noise attachment");
+
+    let provider = CaptureProvider::default();
+    ask_ai_with_provider_using_active_embeddings(
+        &fixture.conn,
+        &fixture.key,
+        &fixture.app_dir,
+        &fixture.conversation_id,
+        "freeze-signal budget decision",
+        6,
+        Focus::ThisThread,
+        &provider,
+        &mut |_ev| Ok(()),
+    )
+    .expect("ask");
+
+    let prompt = provider
+        .prompt
+        .lock()
+        .expect("lock prompt")
+        .clone()
+        .expect("captured prompt");
+
+    assert!(
+        prompt.contains("freeze-signal"),
+        "expected knowledge evidence in prompt: {prompt}"
+    );
+    assert!(
+        !prompt.contains("Resources catalog (attachments):"),
+        "knowledge path should not inject recent attachment catalog: {prompt}"
+    );
+    assert!(
+        !prompt.contains(&format!("secondloop://attachment/{}", noise.sha256)),
+        "prompt should not contain unrelated recent attachment link: {prompt}"
+    );
 }
