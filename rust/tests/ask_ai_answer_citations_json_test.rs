@@ -1,4 +1,5 @@
 use anyhow::Result;
+use rusqlite::params;
 use secondloop_rust::crypto::KdfParams;
 use secondloop_rust::llm::ChatDelta;
 use secondloop_rust::{auth, db, rag};
@@ -144,4 +145,94 @@ fn ask_ai_citations_json_includes_external_document_direct_sources() {
                 value.contains("secondloop://knowledge-document/") && value.contains("unit=")
             })
     }));
+}
+
+#[test]
+fn ask_ai_citations_json_includes_attachment_resource_direct_sources_for_time_window_catalog() {
+    let temp_dir = tempfile::tempdir().expect("tempdir");
+    let app_dir = temp_dir.path().join("secondloop");
+
+    let key = auth::init_master_password(&app_dir, "pw", KdfParams::for_test()).expect("init");
+    let conn = db::open(&app_dir).expect("open db");
+    db::set_active_embedding_model_name(&conn, secondloop_rust::embedding::DEFAULT_MODEL_NAME)
+        .expect("model");
+    let conversation = db::create_conversation(&conn, &key, "Inbox").expect("conversation");
+
+    let message = db::insert_message(
+        &conn,
+        &key,
+        &conversation.id,
+        "user",
+        "Please summarize the launch brief attachment.",
+    )
+    .expect("message");
+    let time_start_ms: i64 = 5_000_000;
+    let time_end_ms: i64 = time_start_ms + 86_400_000;
+    conn.execute(
+        "UPDATE messages SET created_at = ?2, updated_at = ?2 WHERE id = ?1",
+        params![message.id, time_start_ms + 10],
+    )
+    .expect("update message ts");
+    let attachment = db::insert_attachment(
+        &conn,
+        &key,
+        &app_dir,
+        b"Launch brief line one.\nLaunch brief line two.",
+        "text/plain",
+    )
+    .expect("attachment");
+    db::link_attachment_to_message(&conn, &key, &message.id, &attachment.sha256)
+        .expect("link attachment");
+    db::upsert_attachment_metadata(
+        &conn,
+        &key,
+        &attachment.sha256,
+        Some("Launch brief"),
+        &["launch-brief.txt".to_string()],
+        &[],
+    )
+    .expect("metadata");
+    db::process_attachment_text_chunks(&conn, &key, 256).expect("chunk attachment");
+
+    let provider = FakeProvider;
+    let result = rag::ask_ai_with_provider_using_active_embeddings_time_window(
+        &conn,
+        &key,
+        &app_dir,
+        &conversation.id,
+        "What does the launch brief say?",
+        4,
+        rag::Focus::ThisThread,
+        time_start_ms,
+        time_end_ms,
+        &provider,
+        &mut |_event| Ok(()),
+    )
+    .expect("ask ai");
+
+    let assistant = db::get_message_by_id_optional(&conn, &key, &result.assistant_message_id)
+        .expect("message lookup")
+        .expect("assistant message");
+    let raw = assistant.citations_json.as_deref().expect("citations json");
+    let value: serde_json::Value = serde_json::from_str(raw).expect("valid json");
+    let direct_sources = value["direct_sources"]
+        .as_array()
+        .expect("direct_sources array");
+    let attachment_source = direct_sources
+        .iter()
+        .find(|source| source["source_type"].as_str() == Some("attachment"))
+        .unwrap_or_else(|| panic!("attachment direct source missing from {value}"));
+    let snippet = attachment_source["snippet"]
+        .as_str()
+        .expect("attachment snippet");
+
+    assert!(
+        attachment_source["href"].as_str()
+            == Some(&format!("secondloop://attachment/{}", attachment.sha256)),
+        "expected attachment resource deep link: {value}"
+    );
+    assert!(
+        snippet == "Launch brief",
+        "expected attachment resource label snippet: {snippet}"
+    );
 }

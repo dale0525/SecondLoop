@@ -394,35 +394,9 @@ pub(crate) fn build_contexts_v2(
 
     for idx in selected_indices {
         let item = &candidates[idx];
-        let mut text = compress_context_text(question, &item.text);
-        if text.is_empty() {
+        let Some(text) = render_context_item_for_prompt(question, item) else {
             continue;
-        }
-
-        // Add lightweight source tags for debugability without bloating too much.
-        let prefix = match item.source {
-            ContextSource::Message => None,
-            ContextSource::TodoThread => Some(format!("TODO_THREAD id={}\n", item.id)),
-            ContextSource::Event => Some(format!("EVENT id={}\n", item.id)),
-            ContextSource::TodoActivity => Some(format!("TODO_ACTIVITY id={}\n", item.id)),
-            ContextSource::AttachmentChunk => Some(format!("ATTACHMENT_CHUNK id={}\n", item.id)),
-            ContextSource::ExternalDocument => Some(format!("EXTERNAL_DOCUMENT id={}\n", item.id)),
         };
-        if let Some(p) = prefix {
-            let mut combined = String::with_capacity(p.len() + text.len());
-            combined.push_str(&p);
-            combined.push_str(&text);
-            text = combined;
-        }
-
-        if let Some(suffix) = item.citation_suffix.as_deref() {
-            if !suffix.is_empty() && !text.contains(suffix) {
-                if !text.is_empty() && !text.ends_with('\n') {
-                    text.push('\n');
-                }
-                text.push_str(suffix);
-            }
-        }
 
         if !seen.insert(text.clone()) {
             continue;
@@ -443,6 +417,39 @@ pub(crate) fn build_contexts_v2(
     }
 
     out
+}
+
+pub(crate) fn render_context_item_for_prompt(question: &str, item: &ContextItem) -> Option<String> {
+    let mut text = compress_context_text(question, &item.text);
+    if text.is_empty() {
+        return None;
+    }
+
+    let prefix = match item.source {
+        ContextSource::Message => None,
+        ContextSource::TodoThread => Some(format!("TODO_THREAD id={}\n", item.id)),
+        ContextSource::Event => Some(format!("EVENT id={}\n", item.id)),
+        ContextSource::TodoActivity => Some(format!("TODO_ACTIVITY id={}\n", item.id)),
+        ContextSource::AttachmentChunk => Some(format!("ATTACHMENT_CHUNK id={}\n", item.id)),
+        ContextSource::ExternalDocument => Some(format!("EXTERNAL_DOCUMENT id={}\n", item.id)),
+    };
+    if let Some(prefix) = prefix {
+        let mut combined = String::with_capacity(prefix.len() + text.len());
+        combined.push_str(&prefix);
+        combined.push_str(&text);
+        text = combined;
+    }
+
+    if let Some(suffix) = item.citation_suffix.as_deref() {
+        if !suffix.is_empty() && !text.contains(suffix) {
+            if !text.is_empty() && !text.ends_with('\n') {
+                text.push('\n');
+            }
+            text.push_str(suffix);
+        }
+    }
+
+    Some(text)
 }
 
 #[cfg(test)]

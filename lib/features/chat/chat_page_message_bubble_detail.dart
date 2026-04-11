@@ -36,17 +36,15 @@ extension _ChatPageStateMessageBubbleDetail on _ChatPageState {
     );
   }
 
-  Future<void> _openAttachmentBySha(String attachmentSha256) async {
-    await AttachmentViewerPage.openBySha(
-      context,
-      attachmentSha256: attachmentSha256,
-    );
-  }
-
   Future<bool> _handleMarkdownInAppLink(String href) async {
     final attachmentLink = parseAttachmentDeepLink(href);
     if (attachmentLink != null) {
-      await _openAttachmentBySha(attachmentLink.attachmentSha256);
+      await AttachmentViewerPage.openBySha(
+        context,
+        attachmentSha256: attachmentLink.attachmentSha256,
+        initialContentKind: attachmentLink.kind,
+        initialChunkIndex: attachmentLink.chunk,
+      );
       return true;
     }
 
@@ -55,6 +53,7 @@ extension _ChatPageStateMessageBubbleDetail on _ChatPageState {
       await KnowledgeDocumentViewerPage.openDocumentId(
         context,
         documentId: knowledgeDocumentLink.documentId,
+        initialHighlightedUnitId: knowledgeDocumentLink.unitId,
       );
       return true;
     }

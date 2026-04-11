@@ -119,6 +119,8 @@ class MessageViewerPage extends StatelessWidget {
     await AttachmentViewerPage.openBySha(
       context,
       attachmentSha256: parsed.attachmentSha256,
+      initialContentKind: parsed.kind,
+      initialChunkIndex: parsed.chunk,
     );
     return true;
   }

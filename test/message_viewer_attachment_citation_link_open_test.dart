@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:secondloop/core/backend/app_backend.dart';
 import 'package:secondloop/core/backend/attachments_backend.dart';
 import 'package:secondloop/core/session/session_scope.dart';
+import 'package:secondloop/features/attachments/attachment_viewer_page.dart';
 import 'package:secondloop/features/chat/message_viewer_page.dart';
 import 'package:secondloop/src/rust/db.dart';
 
@@ -53,6 +54,11 @@ void main() {
     expect(
         find.byKey(const ValueKey('attachment_detail_action_open_with_system')),
         findsOneWidget);
+    final page = tester.widget<AttachmentViewerPage>(
+      find.byType(AttachmentViewerPage),
+    );
+    expect(page.initialContentKind, 'readable_text_full');
+    expect(page.initialChunkIndex, 1);
   });
 }
 

@@ -4,6 +4,8 @@ use secondloop_rust::crypto::KdfParams;
 use secondloop_rust::embedding;
 use secondloop_rust::llm::ChatDelta;
 use secondloop_rust::{auth, db, rag};
+use std::fs;
+use std::path::{Path, PathBuf};
 
 #[derive(Default)]
 struct FakeProvider {
@@ -29,6 +31,26 @@ impl rag::AnswerProvider for FakeProvider {
         })?;
         Ok(())
     }
+}
+
+fn write_text(path: &Path, text: &str) {
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).expect("create parent");
+    }
+    fs::write(path, text).expect("write text");
+}
+
+fn create_external_markdown_source(root: &Path) -> PathBuf {
+    let source = root.join("markdown-library");
+    write_text(
+        &source.join("travel/old-plan.md"),
+        "# Old Travel Plan\n\nThe stale budget cap was 1000.\n",
+    );
+    write_text(
+        &source.join("travel/today-plan.md"),
+        "# Today Travel Plan\n\nThe current budget cap is 600.\n",
+    );
+    source
 }
 
 #[test]
@@ -385,5 +407,69 @@ fn ask_ai_time_window_persists_attachment_evidence_for_catalog_resources() {
                 == Some(&format!("secondloop://attachment/{}", attachment.sha256))
         }),
         "expected time-window attachment catalog resource in citations json: {value}"
+    );
+}
+
+#[test]
+fn ask_ai_time_window_prompt_filters_external_documents_by_range() {
+    let temp_dir = tempfile::tempdir().expect("tempdir");
+    let app_dir = temp_dir.path().join("secondloop");
+    let source = create_external_markdown_source(temp_dir.path());
+
+    let key = auth::init_master_password(&app_dir, "pw", KdfParams::for_test()).expect("init");
+    let conn = db::open(&app_dir).expect("open db");
+    db::set_active_embedding_model_name(&conn, embedding::DEFAULT_MODEL_NAME).expect("model");
+
+    let conversation = db::create_conversation(&conn, &key, "Inbox").expect("conversation");
+    db::run_external_import_with_callbacks(&app_dir, &key, &source, &mut |_| {}, &|| false)
+        .expect("import external docs");
+
+    let external = db::open_external_readonly_db(&app_dir).expect("open external db");
+    external
+        .execute(
+            "UPDATE external_documents SET created_at_ms = ?2 WHERE source_rel_path = ?1",
+            params!["travel/old-plan.md", 1_000_i64],
+        )
+        .expect("update old document ts");
+    external
+        .execute(
+            "UPDATE external_documents SET created_at_ms = ?2 WHERE source_rel_path = ?1",
+            params!["travel/today-plan.md", 2_000_010_i64],
+        )
+        .expect("update in-range document ts");
+
+    let time_start_ms: i64 = 2_000_000;
+    let time_end_ms: i64 = time_start_ms + 86_400_000;
+
+    let provider = FakeProvider::default();
+    rag::ask_ai_with_provider_using_active_embeddings_time_window(
+        &conn,
+        &key,
+        &app_dir,
+        &conversation.id,
+        "Where is the current budget cap documented?",
+        4,
+        rag::Focus::AllMemories,
+        time_start_ms,
+        time_end_ms,
+        &provider,
+        &mut |_ev| Ok(()),
+    )
+    .expect("ask");
+
+    let prompt = provider
+        .last_prompt
+        .lock()
+        .unwrap()
+        .clone()
+        .expect("prompt");
+
+    assert!(
+        prompt.contains("current budget cap is 600"),
+        "expected in-range external document in prompt: {prompt}"
+    );
+    assert!(
+        !prompt.contains("stale budget cap was 1000"),
+        "expected out-of-range external document to stay out of prompt: {prompt}"
     );
 }

@@ -59,16 +59,22 @@ class AttachmentViewerPage extends StatefulWidget {
     required this.attachment,
     this.cloudMediaDownload,
     this.isWebOverride,
+    this.initialContentKind,
+    this.initialChunkIndex,
     super.key,
   });
 
   final Attachment attachment;
   final CloudMediaDownload? cloudMediaDownload;
   final bool? isWebOverride;
+  final String? initialContentKind;
+  final int? initialChunkIndex;
 
   static Future<void> openBySha(
     BuildContext context, {
     required String attachmentSha256,
+    String? initialContentKind,
+    int? initialChunkIndex,
   }) async {
     final backend = AppBackendScope.of(context);
     final attachment = await backend.readAttachmentBySha256(attachmentSha256);
@@ -80,7 +86,11 @@ class AttachmentViewerPage extends StatefulWidget {
       MaterialPageRoute(
         builder: (_) => wrapPushedPageWithInheritedScopes(
           context,
-          AttachmentViewerPage(attachment: attachment),
+          AttachmentViewerPage(
+            attachment: attachment,
+            initialContentKind: initialContentKind,
+            initialChunkIndex: initialChunkIndex,
+          ),
         ),
       ),
     );
@@ -392,10 +402,30 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
     Map<String, Object?>? payload,
   ) {
     return resolveAttachmentDetailTextContent(
-      payload,
+      _decoratePayloadWithCitationTarget(payload),
       annotationCaption: null,
       mimeTypeOverride: widget.attachment.mimeType,
     );
+  }
+
+  Map<String, Object?>? _decoratePayloadWithCitationTarget(
+    Map<String, Object?>? payload,
+  ) {
+    final initialContentKind = widget.initialContentKind?.trim() ?? '';
+    final initialChunkIndex = widget.initialChunkIndex;
+    if (payload == null ||
+        (initialContentKind.isEmpty && initialChunkIndex == null)) {
+      return payload;
+    }
+
+    final next = Map<String, Object?>.from(payload);
+    if (initialContentKind.isNotEmpty) {
+      next[kPreferredAttachmentContentKindKey] = initialContentKind;
+    }
+    if (initialChunkIndex != null) {
+      next[kPreferredAttachmentChunkIndexKey] = initialChunkIndex;
+    }
+    return next;
   }
 
   void _startAnnotationCaptionLoad() {
@@ -926,7 +956,7 @@ class _AttachmentViewerPageState extends State<AttachmentViewerPage> {
 
   AttachmentDetailTextContent _currentAttachmentTextContent() {
     return resolveAttachmentDetailTextContent(
-      _annotationPayload,
+      _decoratePayloadWithCitationTarget(_annotationPayload),
       annotationCaption: _annotationCaption,
       mimeTypeOverride: widget.attachment.mimeType,
     );

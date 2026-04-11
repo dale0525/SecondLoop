@@ -25,7 +25,9 @@ use attachment_resources::{
     collect_attachment_resources_default, collect_attachment_resources_for_attachment_shas,
 };
 use citations_prompt::{build_prompt as build_prompt_base, build_prompt_with_actions_and_history};
-use context_selection::{build_contexts_v2, ContextItem, ContextSource};
+use context_selection::{
+    build_contexts_v2, render_context_item_for_prompt, ContextItem, ContextSource,
+};
 use knowledge_contexts::{
     merge_knowledge_and_legacy_contexts, try_build_knowledge_context_entries,
     KnowledgeRenderedContextEntry,
@@ -185,6 +187,18 @@ fn build_attachment_direct_source(
         document_id: None,
         unit_id: None,
     }
+}
+
+fn strip_attachment_context_markup(text: &str) -> String {
+    let cleaned = text
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+        .filter(|line| !line.starts_with("ATTACHMENT_CHUNK "))
+        .filter(|line| !line.starts_with("[Attachment]("))
+        .collect::<Vec<_>>()
+        .join(" ");
+    compact_snippet(cleaned.trim(), 180)
 }
 
 fn build_attachment_resource_direct_source(
@@ -910,11 +924,16 @@ fn build_direct_sources_for_context_candidate(
                 .next()
                 .and_then(|value| value.parse::<i64>().ok())
                 .unwrap_or_default();
+            let text =
+                db::read_attachment_chunk_text(conn, key, attachment_sha256, kind, chunk_index)
+                    .ok()
+                    .filter(|value| !value.trim().is_empty())
+                    .unwrap_or_else(|| strip_attachment_context_markup(&candidate.text));
             vec![build_attachment_direct_source(
                 attachment_sha256,
                 kind,
                 chunk_index,
-                &candidate.text,
+                &text,
                 candidate.created_at_ms,
             )]
         }
@@ -1622,7 +1641,16 @@ pub fn ask_ai_with_provider_using_active_embeddings(
                 });
             }
 
-            let legacy_contexts = build_contexts_v2(question, candidates.clone(), legacy_top_k);
+            let ranking_created_at_ms = now_ms();
+            let ranking_candidates = candidates
+                .iter()
+                .cloned()
+                .map(|mut candidate| {
+                    candidate.created_at_ms = ranking_created_at_ms;
+                    candidate
+                })
+                .collect::<Vec<_>>();
+            let legacy_contexts = build_contexts_v2(question, ranking_candidates, legacy_top_k);
             let merged = merge_knowledge_and_legacy_contexts(
                 knowledge_contexts.clone(),
                 legacy_contexts,
@@ -1651,12 +1679,14 @@ pub fn ask_ai_with_provider_using_active_embeddings(
                 );
             }
             for candidate in candidates {
+                let rendered_text = render_context_item_for_prompt(question, &candidate)
+                    .unwrap_or_else(|| candidate.text.clone());
                 let direct_sources =
                     build_direct_sources_for_context_candidate(conn, key, &candidate);
                 context_by_text.insert(
-                    candidate.text.clone(),
+                    rendered_text.clone(),
                     ContextWithEvidence {
-                        text: candidate.text,
+                        text: rendered_text,
                         direct_sources,
                         memory_cards: Vec::new(),
                     },
@@ -1893,7 +1923,10 @@ pub fn ask_ai_with_provider_using_active_embeddings_time_window(
                 legacy_top_k,
             )
             .unwrap_or_default()
-            {
+            .into_iter()
+            .filter(|chunk| {
+                chunk.created_at_ms >= time_start_ms && chunk.created_at_ms < time_end_ms
+            }) {
                 let context = match db::build_external_document_chunk_rag_context(
                     app_dir,
                     key,
@@ -1942,12 +1975,14 @@ pub fn ask_ai_with_provider_using_active_embeddings_time_window(
                 );
             }
             for candidate in candidates {
+                let rendered_text = render_context_item_for_prompt(question, &candidate)
+                    .unwrap_or_else(|| candidate.text.clone());
                 let direct_sources =
                     build_direct_sources_for_context_candidate(conn, key, &candidate);
                 context_by_text.insert(
-                    candidate.text.clone(),
+                    rendered_text.clone(),
                     ContextWithEvidence {
-                        text: candidate.text,
+                        text: rendered_text,
                         direct_sources,
                         memory_cards: Vec::new(),
                     },
@@ -2030,11 +2065,15 @@ pub fn ask_ai_with_provider_using_active_embeddings_time_window(
 #[cfg(test)]
 mod tests {
     use super::{
-        build_message_direct_source, filter_direct_sources_for_question, format_history_line,
-        should_include_actions_context,
+        build_direct_sources_for_context_candidate, build_message_direct_source,
+        filter_direct_sources_for_question, format_history_line, should_include_actions_context,
+        ContextItem, ContextSource,
     };
+    use crate::auth;
+    use crate::crypto::KdfParams;
     use crate::db;
     use crate::message_citations::AnswerEvidenceDirectSource;
+    use rusqlite::params;
 
     #[test]
     fn format_history_line_moves_citation_below_content() {
@@ -2140,5 +2179,114 @@ mod tests {
             .map(|source| source.id)
             .collect::<Vec<_>>();
         assert_eq!(ids, vec!["video-1".to_string(), "video-2".to_string()]);
+    }
+
+    #[test]
+    fn attachment_direct_sources_use_plain_chunk_text_from_storage() {
+        let temp_dir = tempfile::tempdir().expect("tempdir");
+        let app_dir = temp_dir.path().join("secondloop");
+        let key = auth::init_master_password(&app_dir, "pw", KdfParams::for_test()).expect("init");
+        let conn = db::open(&app_dir).expect("open db");
+        let attachment = db::insert_attachment(
+            &conn,
+            &key,
+            &app_dir,
+            b"Launch brief line one.\nLaunch brief line two.",
+            "text/plain",
+        )
+        .expect("attachment");
+        db::mark_attachment_annotation_ok(
+            &conn,
+            &key,
+            &attachment.sha256,
+            "en",
+            "test-model",
+            &serde_json::json!({
+                "mime_type": "text/plain",
+                "readable_text_full": "Launch brief line one.\nLaunch brief line two.",
+            }),
+            1,
+        )
+        .expect("store attachment annotation");
+        db::process_attachment_text_chunks(&conn, &key, 256).expect("chunk attachment");
+
+        let (kind, chunk_index): (String, i64) = conn
+            .query_row(
+                r#"SELECT kind, chunk_index
+                   FROM attachment_text_chunks
+                   WHERE attachment_sha256 = ?1
+                   ORDER BY chunk_index ASC
+                   LIMIT 1"#,
+                params![attachment.sha256],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .expect("chunk row");
+        let candidate = ContextItem {
+            source: ContextSource::AttachmentChunk,
+            id: format!("{}:{}:{}", attachment.sha256, kind, chunk_index),
+            created_at_ms: attachment.created_at_ms,
+            distance: Some(0.1),
+            text: format!(
+                "ATTACHMENT_CHUNK {} {}#{}\nLaunch brief line one.\n[Attachment](secondloop://attachment/{}?kind={}&chunk={})",
+                attachment.sha256, kind, chunk_index, attachment.sha256, kind, chunk_index
+            ),
+            citation_suffix: None,
+        };
+
+        let direct_sources = build_direct_sources_for_context_candidate(&conn, &key, &candidate);
+        let source = direct_sources.first().expect("attachment direct source");
+
+        assert!(
+            source.snippet.contains("Launch brief line one."),
+            "expected plain attachment text snippet: {}",
+            source.snippet
+        );
+        assert!(
+            !source.snippet.contains("ATTACHMENT_CHUNK"),
+            "expected internal attachment marker to stay out of snippet: {}",
+            source.snippet
+        );
+        assert!(
+            !source.snippet.contains("[Attachment]("),
+            "expected markdown citation suffix to stay out of snippet: {}",
+            source.snippet
+        );
+    }
+
+    #[test]
+    fn attachment_direct_sources_strip_internal_markup_when_chunk_text_is_unavailable() {
+        let temp_dir = tempfile::tempdir().expect("tempdir");
+        let app_dir = temp_dir.path().join("secondloop");
+        let key = auth::init_master_password(&app_dir, "pw", KdfParams::for_test()).expect("init");
+        let conn = db::open(&app_dir).expect("open db");
+
+        let candidate = ContextItem {
+            source: ContextSource::AttachmentChunk,
+            id: "missing-sha:readable_text_full:99".to_string(),
+            created_at_ms: 1,
+            distance: Some(0.1),
+            text: "ATTACHMENT_CHUNK missing-sha readable_text_full#99\nLaunch brief line one.\nLaunch brief line two.\n[Attachment](secondloop://attachment/missing-sha?kind=readable_text_full&chunk=99)"
+                .to_string(),
+            citation_suffix: None,
+        };
+
+        let direct_sources = build_direct_sources_for_context_candidate(&conn, &key, &candidate);
+        let source = direct_sources.first().expect("attachment direct source");
+
+        assert!(
+            source.snippet.contains("Launch brief line one."),
+            "expected fallback snippet to keep plain attachment text: {}",
+            source.snippet
+        );
+        assert!(
+            !source.snippet.contains("ATTACHMENT_CHUNK"),
+            "expected internal attachment marker to stay out of fallback snippet: {}",
+            source.snippet
+        );
+        assert!(
+            !source.snippet.contains("[Attachment]("),
+            "expected markdown citation suffix to stay out of fallback snippet: {}",
+            source.snippet
+        );
     }
 }
