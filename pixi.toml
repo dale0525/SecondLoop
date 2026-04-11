@@ -8,6 +8,9 @@ version = "0.1.0"
 [target.unix.activation.env]
 PUB_CACHE = "$PIXI_PROJECT_ROOT/.tool/pub-cache"
 FVM_HOME = "$PIXI_PROJECT_ROOT/.tool/fvm"
+CARGO_TARGET_DIR = "$PIXI_PROJECT_ROOT/.tool/cache/rust-dev-target"
+CARGOKIT_TARGET_TEMP_DIR = "$PIXI_PROJECT_ROOT/.tool/cache/cargokit-target-temp"
+CARGOKIT_TOOL_TEMP_DIR = "$PIXI_PROJECT_ROOT/.tool/cache/cargokit-target-temp/tool"
 
 [target.win.activation.env]
 PUB_CACHE = "%PIXI_PROJECT_ROOT%/.tool/pub-cache"
@@ -44,7 +47,7 @@ release-runtime = { cmd = "bash scripts/release_runtime_tag.sh", depends-on = ["
 release-preflight = { cmd = "bash scripts/release_preflight.sh", depends-on = ["bootstrap-shared-worktree-env"] }
 
 # Cache cleanup (use when disk usage grows during long dev cycles).
-clean-unused-cache = "bash -lc 'set -euo pipefail; cleaned=0; while IFS= read -r -d \"\" cache_tag; do cleaned=1; target_dir=\"${cache_tag%/CACHEDIR.TAG}\"; rm -rf \"$target_dir/release\" \"$target_dir/doc\" \"$target_dir/package\"; find \"$target_dir\" -mindepth 2 -maxdepth 2 -type d \\( -name release -o -name doc -o -name package \\) -prune -exec rm -rf {} +; done < <(find . -type f -path \"*/target/CACHEDIR.TAG\" -print0); if [ -n \"${CARGO_TARGET_DIR:-}\" ] && [ -d \"${CARGO_TARGET_DIR}\" ]; then cleaned=1; target_dir=\"${CARGO_TARGET_DIR}\"; rm -rf \"$target_dir/release\" \"$target_dir/doc\" \"$target_dir/package\"; find \"$target_dir\" -mindepth 2 -maxdepth 2 -type d \\( -name release -o -name doc -o -name package \\) -prune -exec rm -rf {} +; fi; while IFS= read -r -d \"\" pycache_dir; do cleaned=1; rm -rf \"$pycache_dir\"; done < <(find ./tools -type d -name \"__pycache__\" -print0 2>/dev/null || true); while IFS= read -r -d \"\" gradle_cold_dir; do cleaned=1; rm -rf \"$gradle_cold_dir\"; done < <(find .tool -maxdepth 1 -mindepth 1 -type d -name \"gradle-cold-*\" -print0 2>/dev/null || true); while IFS= read -r -d \"\" tool_cache_dir; do cleaned=1; rm -rf \"$tool_cache_dir\"; done < <(find .tool/cache -maxdepth 1 -mindepth 1 -type d \\( -name android -o -name rustup \\) -print0 2>/dev/null || true); if [ \"$cleaned\" -eq 0 ]; then echo \"No unused cache found under $PWD or CARGO_TARGET_DIR\"; fi'"
+clean-unused-cache = "bash scripts/clean_unused_cache.sh"
 
 # Quality gates (before sharing or opening a PR).
 # - fmt: auto-fix formatting
