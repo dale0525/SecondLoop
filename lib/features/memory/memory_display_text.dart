@@ -173,16 +173,25 @@ String? _extractGeneratedResponseLanguage(String text) {
 }
 
 String _localizeActiveTaskPatternBody(Translations t, String text) {
-  final lines = text.split('\n');
-  if (lines.isEmpty) {
+  final rawLines = text
+      .split('\n')
+      .map((line) => line.trimRight())
+      .where((line) => line.trim().isNotEmpty)
+      .toList(growable: false);
+  if (rawLines.isEmpty) {
     return t.memory.generatedSummaries.activeTaskPattern;
   }
+
+  const legacyPrefix = 'User is actively working across these task threads:';
+  final lines = rawLines.first.trim() == legacyPrefix
+      ? rawLines.skip(1).toList(growable: false)
+      : rawLines;
 
   final localizedLines = <String>[
     t.memory.generatedSummaries.activeTaskPattern,
   ];
   final bulletPattern = RegExp(r'^-\s+(.*?)\s+\[([a-z_]+)\]\s*$');
-  for (final line in lines.skip(1)) {
+  for (final line in lines) {
     final trimmed = line.trim();
     if (trimmed.isEmpty) continue;
     final match = bulletPattern.firstMatch(trimmed);

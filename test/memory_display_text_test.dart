@@ -88,4 +88,17 @@ void main() {
       '摘要来源',
     );
   });
+
+  test('localizes bullet-only active task pattern bodies in zh_CN', () {
+    final t = AppLocale.zhCn.build();
+
+    expect(
+      resolveMemoryDisplayBody(
+        t,
+        documentId: 'generated:pattern:active-task-focus',
+        rawText: '- 做视频 [in_progress]\n- 复盘选题 [open]',
+      ),
+      '用户当前主要在推进这些任务：\n- 做视频 [进行中]\n- 复盘选题 [未开始]',
+    );
+  });
 }

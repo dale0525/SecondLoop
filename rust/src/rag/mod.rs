@@ -140,6 +140,9 @@ fn build_message_direct_source(message: &db::Message) -> Option<AnswerEvidenceDi
         .map(str::trim)
         .find(|line| !line.is_empty())
         .map(|line| compact_snippet(line, 80));
+    if snippet.trim().is_empty() && title.as_deref().unwrap_or_default().trim().is_empty() {
+        return None;
+    }
     Some(AnswerEvidenceDirectSource {
         id: format!("message:{}", message.id),
         href,
@@ -357,14 +360,111 @@ fn rendered_highlighted_text(rendered_text: &str) -> Option<String> {
     Some(normalized)
 }
 
-fn encode_context_evidence_json(contexts: &[ContextWithEvidence]) -> Option<String> {
+fn encode_context_evidence_json_for_question(
+    question: &str,
+    contexts: &[ContextWithEvidence],
+) -> Option<String> {
     let mut direct_sources = Vec::<AnswerEvidenceDirectSource>::new();
     let mut memory_cards = Vec::<AnswerEvidenceMemoryCard>::new();
     for context in contexts {
         direct_sources.extend(context.direct_sources.clone());
         memory_cards.extend(context.memory_cards.clone());
     }
-    encode_answer_evidence_json(direct_sources, memory_cards)
+    let filtered_sources = filter_direct_sources_for_question(question, direct_sources);
+    encode_answer_evidence_json(filtered_sources, memory_cards)
+}
+
+fn filter_direct_sources_for_question(
+    question: &str,
+    direct_sources: Vec<AnswerEvidenceDirectSource>,
+) -> Vec<AnswerEvidenceDirectSource> {
+    let mut seen_ids = std::collections::HashSet::<String>::new();
+    let mut kept_non_messages = Vec::<AnswerEvidenceDirectSource>::new();
+    let mut matched_messages = Vec::<(u64, AnswerEvidenceDirectSource)>::new();
+    let mut fallback_messages = Vec::<AnswerEvidenceDirectSource>::new();
+
+    for source in direct_sources {
+        if !seen_ids.insert(source.id.clone()) {
+            continue;
+        }
+
+        if source.source_type != "message" {
+            kept_non_messages.push(source);
+            continue;
+        }
+
+        let search_text = direct_source_search_text(&source);
+        if search_text.trim().is_empty() {
+            continue;
+        }
+
+        let score = context_selection::lite_score(question, &search_text);
+        if score > 0 {
+            matched_messages.push((score, source));
+            continue;
+        }
+
+        if !is_low_signal_message_evidence_text(&search_text) {
+            fallback_messages.push(source);
+        }
+    }
+
+    matched_messages.sort_by(|left, right| right.0.cmp(&left.0));
+
+    let mut out = kept_non_messages;
+    if matched_messages.is_empty() {
+        out.extend(fallback_messages.into_iter().take(3));
+    } else {
+        out.extend(
+            matched_messages
+                .into_iter()
+                .map(|(_, source)| source)
+                .take(5),
+        );
+    }
+    out
+}
+
+fn direct_source_search_text(source: &AnswerEvidenceDirectSource) -> String {
+    [
+        source.title.as_deref(),
+        source.highlighted_text.as_deref(),
+        Some(source.snippet.as_str()),
+    ]
+    .into_iter()
+    .flatten()
+    .map(str::trim)
+    .filter(|value| !value.is_empty())
+    .collect::<Vec<_>>()
+    .join("\n")
+}
+
+fn is_low_signal_message_evidence_text(text: &str) -> bool {
+    let trimmed = text.trim();
+    if trimmed.is_empty() {
+        return true;
+    }
+
+    let lowercase = trimmed.to_lowercase();
+    if matches!(
+        lowercase.as_str(),
+        "test" | "todo" | "hello" | "hi" | "ok" | "okay"
+    ) {
+        return true;
+    }
+
+    let without_urls = trimmed
+        .split_whitespace()
+        .filter(|token| {
+            let token = token.trim();
+            !token.starts_with("http://")
+                && !token.starts_with("https://")
+                && !token.starts_with("secondloop://")
+        })
+        .collect::<Vec<_>>()
+        .join(" ");
+
+    without_urls.trim().is_empty()
 }
 
 fn now_ms() -> i64 {
@@ -662,7 +762,7 @@ fn ask_ai_stream_and_persist(
 
             let user_message =
                 db::insert_message_non_memory(conn, key, conversation_id, "user", question)?;
-            let citations_json = encode_context_evidence_json(contexts);
+            let citations_json = encode_context_evidence_json_for_question(question, contexts);
             let assistant_message = db::insert_message_non_memory_with_citations(
                 conn,
                 key,
@@ -1553,7 +1653,11 @@ pub fn ask_ai_with_provider_using_active_embeddings_time_window(
 
 #[cfg(test)]
 mod tests {
-    use super::format_history_line;
+    use super::{
+        build_message_direct_source, filter_direct_sources_for_question, format_history_line,
+    };
+    use crate::db;
+    use crate::message_citations::AnswerEvidenceDirectSource;
 
     #[test]
     fn format_history_line_moves_citation_below_content() {
@@ -1580,5 +1684,60 @@ mod tests {
 [History](secondloop://message/history-2)
 "
         );
+    }
+
+    #[test]
+    fn build_message_direct_source_omits_blank_messages() {
+        let message = db::Message {
+            id: "blank-message".to_string(),
+            conversation_id: "conv".to_string(),
+            role: "user".to_string(),
+            content: "   \n\t  ".to_string(),
+            created_at_ms: 1,
+            is_memory: true,
+            citations_json: None,
+        };
+
+        assert!(build_message_direct_source(&message).is_none());
+    }
+
+    #[test]
+    fn filter_direct_sources_prefers_question_matching_messages() {
+        fn source(id: &str, text: &str) -> AnswerEvidenceDirectSource {
+            AnswerEvidenceDirectSource {
+                id: id.to_string(),
+                href: format!("secondloop://message/{id}"),
+                source_type: "message".to_string(),
+                label: "History".to_string(),
+                source_type_label: Some("Chat message".to_string()),
+                scope_label: None,
+                confidence_label: None,
+                title: Some(text.to_string()),
+                snippet: text.to_string(),
+                highlighted_text: Some(text.to_string()),
+                created_at_ms: Some(1),
+                updated_at_ms: Some(1),
+                anchors: None,
+                document_id: None,
+                unit_id: None,
+            }
+        }
+
+        let filtered = filter_direct_sources_for_question(
+            "分析最近的视频开头台词",
+            vec![
+                source("video-1", "分析叁月聚粮最近的视频，尤其是开头部分的台词"),
+                source("video-2", "今天要上传短视频"),
+                source("work", "今天要上班"),
+                source("url", "https://github.com/QwenLM/Qwen3-ASR"),
+                source("test", "test"),
+            ],
+        );
+
+        let ids = filtered
+            .into_iter()
+            .map(|source| source.id)
+            .collect::<Vec<_>>();
+        assert_eq!(ids, vec!["video-1".to_string(), "video-2".to_string()]);
     }
 }

@@ -62,7 +62,7 @@ fn lite_collect_bigrams(chars: &[char]) -> std::collections::HashSet<u64> {
     set
 }
 
-fn lite_score(query: &str, candidate: &str) -> u64 {
+pub(crate) fn lite_score(query: &str, candidate: &str) -> u64 {
     let query_norm = lite_normalize_text(query);
     let query_compact = lite_compact_text(&query_norm);
     if query_compact.is_empty() {

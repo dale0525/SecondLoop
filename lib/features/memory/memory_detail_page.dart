@@ -385,7 +385,7 @@ class _MemoryDetailPageState extends State<MemoryDetailPage> {
                                 ),
                                 const SizedBox(height: 6),
                                 Text(
-                                  _unitSnippet(unit),
+                                  _unitSnippet(context, unit),
                                   maxLines: 4,
                                   overflow: TextOverflow.ellipsis,
                                 ),
@@ -518,9 +518,15 @@ String _unitAnchorLabel(BuildContext context, KnowledgeUnit unit) {
   return parts.join(' · ');
 }
 
-String _unitSnippet(KnowledgeUnit unit) {
+String _unitSnippet(BuildContext context, KnowledgeUnit unit) {
   final raw = unit.rawText.trim();
-  if (raw.isNotEmpty) return raw;
+  if (raw.isNotEmpty) {
+    return resolveMemoryDisplayBody(
+      context.t,
+      documentId: unit.documentId,
+      rawText: raw,
+    );
+  }
   return unit.normalizedText.trim();
 }
 

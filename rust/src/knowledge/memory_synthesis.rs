@@ -428,10 +428,7 @@ fn collect_pattern_memories(
         kind: GeneratedMemoryKind::Pattern,
         facet_key: "active_task_focus".to_string(),
         title: "Active task pattern".to_string(),
-        raw_text: format!(
-            "User is actively working across these task threads:\n{}",
-            lines.join("\n")
-        ),
+        raw_text: lines.join("\n"),
         created_at_ms,
         updated_at_ms,
         anchors: KnowledgeAnchorSet {
@@ -621,6 +618,9 @@ mod tests {
         assert!(doc.raw_text.contains("Middle task [open]"));
         assert!(doc.raw_text.contains("Second oldest task [open]"));
         assert!(!doc.raw_text.contains("Oldest task [open]"));
+        assert!(!doc
+            .raw_text
+            .contains("User is actively working across these task threads:"));
     }
 
     #[test]
