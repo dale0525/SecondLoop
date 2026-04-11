@@ -188,6 +188,82 @@ void main() {
     expect(find.textContaining('Confirmed'), findsOneWidget);
     expect(find.textContaining('Maybe outdated'), findsOneWidget);
   });
+
+  testWidgets('MemoryCenterPage does not reload on an unrelated parent rebuild',
+      (
+    tester,
+  ) async {
+    final nowMs = DateTime.now().millisecondsSinceEpoch;
+    final backend = _MemoryBackend(
+      documents: [
+        _document(
+          documentId: 'generated:preference:response-language',
+          title: 'Response language',
+          summary: 'User prefers Chinese.',
+          updatedAtMs: nowMs,
+          memoryDisplay: const KnowledgeMemoryDisplay(
+            section: KnowledgeMemorySection.preference,
+            sourceCount: 1,
+            status: KnowledgeMemoryStatus.inferred,
+          ),
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      wrapWithI18n(
+        MaterialApp(
+          home: AppBackendScope(
+            backend: backend,
+            child: SessionScope(
+              sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+              lock: () {},
+              child: const _MemoryCenterHarness(),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+    expect(backend.listOffsets, <int>[0]);
+
+    await tester
+        .tap(find.byKey(const ValueKey('memory_center_harness_rebuild')));
+    await tester.pump();
+    await tester.pumpAndSettle();
+
+    expect(
+      backend.listOffsets,
+      <int>[0],
+      reason: 'parent rebuilds should reuse the cached load future',
+    );
+  });
+}
+
+class _MemoryCenterHarness extends StatefulWidget {
+  const _MemoryCenterHarness();
+
+  @override
+  State<_MemoryCenterHarness> createState() => _MemoryCenterHarnessState();
+}
+
+class _MemoryCenterHarnessState extends State<_MemoryCenterHarness> {
+  int _counter = 0;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        TextButton(
+          key: const ValueKey('memory_center_harness_rebuild'),
+          onPressed: () => setState(() => _counter += 1),
+          child: Text('Rebuild $_counter'),
+        ),
+        const Expanded(child: MemoryCenterPage()),
+      ],
+    );
+  }
 }
 
 final class _MemoryBackend extends TestAppBackend

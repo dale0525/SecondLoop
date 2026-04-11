@@ -158,9 +158,11 @@ fn apply_message_set_v2(
         .as_bool()
         .ok_or_else(|| anyhow!("message.set.v2 missing is_deleted"))?;
     let incoming_is_memory = payload["is_memory"].as_bool();
-    let incoming_citations_json = payload["citations_json"]
-        .as_str()
-        .map(ToOwned::to_owned);
+    let incoming_citations_json = if payload.get("citations_json").is_some() {
+        Some(payload["citations_json"].as_str().map(ToOwned::to_owned))
+    } else {
+        None
+    };
 
     let payload_conversation_id = payload["conversation_id"].as_str();
     let existing_conversation_id: Option<String> = conn
@@ -214,7 +216,7 @@ fn apply_message_set_v2(
         let is_memory = incoming_is_memory.unwrap_or(existing_is_memory_i64 != 0);
         let citations_json = incoming_citations_json
             .clone()
-            .or(existing_citations_json);
+            .unwrap_or(existing_citations_json);
         let content_blob = encrypt_bytes(db_key, content.as_bytes(), b"message.content")?;
         conn.execute(
             r#"UPDATE messages
@@ -244,7 +246,7 @@ fn apply_message_set_v2(
         let content_blob = encrypt_bytes(db_key, content.as_bytes(), b"message.content")?;
         let is_memory = incoming_is_memory.unwrap_or_else(|| role != "assistant");
         let needs_embedding = !is_deleted && is_memory;
-        let citations_json = incoming_citations_json.as_deref();
+        let citations_json = incoming_citations_json.flatten();
         let insert_result = conn.execute(
             r#"INSERT INTO messages
                (id, conversation_id, role, content, created_at, updated_at, updated_by_device_id, updated_by_seq, is_deleted, needs_embedding, is_memory, citations_json)
@@ -261,7 +263,7 @@ fn apply_message_set_v2(
                 if is_deleted { 1 } else { 0 },
                 if needs_embedding { 1 } else { 0 },
                 if is_memory { 1 } else { 0 },
-                citations_json,
+                citations_json.as_deref(),
             ],
         );
         match insert_result {

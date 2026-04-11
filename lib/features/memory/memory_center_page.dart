@@ -10,7 +10,7 @@ import '../../ui/sl_surface.dart';
 import 'memory_center_models.dart';
 import 'memory_detail_page.dart';
 
-class MemoryCenterPage extends StatelessWidget {
+class MemoryCenterPage extends StatefulWidget {
   const MemoryCenterPage({super.key});
 
   static Future<void> open(BuildContext context) {
@@ -23,6 +23,13 @@ class MemoryCenterPage extends StatelessWidget {
       ),
     );
   }
+
+  @override
+  State<MemoryCenterPage> createState() => _MemoryCenterPageState();
+}
+
+class _MemoryCenterPageState extends State<MemoryCenterPage> {
+  Future<List<MemoryCenterSectionData>>? _future;
 
   Future<List<MemoryCenterSectionData>> _load(BuildContext context) async {
     final backend = AppBackendScope.of(context);
@@ -51,10 +58,22 @@ class MemoryCenterPage extends StatelessWidget {
     return buildMemoryCenterSections(memoryDocuments);
   }
 
+  void _reload() {
+    setState(() {
+      _future = _load(context);
+    });
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _future ??= _load(context);
+  }
+
   @override
   Widget build(BuildContext context) {
     return FutureBuilder<List<MemoryCenterSectionData>>(
-      future: _load(context),
+      future: _future,
       builder: (context, snapshot) {
         if (snapshot.connectionState != ConnectionState.done) {
           return const Scaffold(
@@ -124,10 +143,14 @@ class MemoryCenterPage extends StatelessWidget {
                               ],
                             ),
                             trailing: const Icon(Icons.chevron_right_rounded),
-                            onTap: () => MemoryDetailPage.openDocumentId(
-                              context,
-                              documentId: card.documentId,
-                            ),
+                            onTap: () async {
+                              await MemoryDetailPage.openDocumentId(
+                                context,
+                                documentId: card.documentId,
+                              );
+                              if (!mounted) return;
+                              _reload();
+                            },
                           ),
                         ),
                         const SizedBox(height: 10),

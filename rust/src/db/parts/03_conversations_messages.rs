@@ -275,6 +275,7 @@ fn edit_message_internal(
             "updated_at_ms": now,
             "is_deleted": false,
             "is_memory": is_memory,
+            "citations_json": serde_json::Value::Null,
         }
     });
     insert_oplog(conn, key, &op)?;
@@ -287,7 +288,8 @@ fn edit_message_internal(
                updated_by_device_id = ?4,
                updated_by_seq = ?5,
                is_deleted = 0,
-               needs_embedding = CASE WHEN COALESCE(is_memory, 1) = 1 THEN 1 ELSE 0 END
+               needs_embedding = CASE WHEN COALESCE(is_memory, 1) = 1 THEN 1 ELSE 0 END,
+               citations_json = NULL
            WHERE id = ?1"#,
         params![message_id, content_blob, now, device_id, seq],
     )?;

@@ -96,4 +96,28 @@ fn sync_rag_final_answer_is_synced_via_message_set_v2() {
     assert_eq!(assistant_b.id, assistant_a.id);
     assert_eq!(assistant_b.content, "OK");
     assert_eq!(assistant_b.citations_json, assistant_a.citations_json);
+
+    db::edit_message(&conn_a, &key_a, &assistant_a.id, "Edited answer")
+        .expect("edit assistant message");
+
+    let edited_a = db::get_message_by_id_optional(&conn_a, &key_a, &assistant_a.id)
+        .expect("edited assistant on A lookup")
+        .expect("edited assistant on A");
+    assert_eq!(edited_a.content, "Edited answer");
+    assert_eq!(
+        edited_a.citations_json, None,
+        "editing assistant content should clear stale citations"
+    );
+
+    sync::push(&conn_a, &key_a, &sync_key, &remote, remote_root).expect("push A3");
+    sync::pull(&conn_b, &key_b, &sync_key, &remote, remote_root).expect("pull B3");
+
+    let edited_b = db::get_message_by_id_optional(&conn_b, &key_b, &assistant_a.id)
+        .expect("edited assistant on B lookup")
+        .expect("edited assistant on B");
+    assert_eq!(edited_b.content, "Edited answer");
+    assert_eq!(
+        edited_b.citations_json, None,
+        "editing assistant content should also clear citations after sync"
+    );
 }

@@ -54,8 +54,8 @@ class _MemoryDetailPageState extends State<MemoryDetailPage> {
   bool _didAutoOpenEdit = false;
 
   Future<_MemoryDetailData> _load() async {
-    final backend = AppBackendScope.of(context);
-    final viewerBackend = maybeKnowledgeViewerBackendFor(backend);
+    final viewerBackend =
+        maybeKnowledgeViewerBackendFor(AppBackendScope.of(context));
     final sessionKey = SessionScope.of(context).sessionKey;
     if (viewerBackend == null) {
       throw StateError('knowledge_viewer_backend_unavailable');
@@ -65,13 +65,24 @@ class _MemoryDetailPageState extends State<MemoryDetailPage> {
       sessionKey,
       documentId: widget.documentId,
     );
-    final units = await viewerBackend.listKnowledgeViewerUnits(
-      sessionKey,
-      documentId: widget.documentId,
-      unitKind: KnowledgeUnitKind.segment,
-      limit: 48,
-    );
-    final sortedUnits = List<KnowledgeUnit>.from(units.units)
+    const pageSize = 48;
+    final allUnits = <KnowledgeUnit>[];
+    var offset = 0;
+    while (true) {
+      final page = await viewerBackend.listKnowledgeViewerUnits(
+        sessionKey,
+        documentId: widget.documentId,
+        unitKind: KnowledgeUnitKind.segment,
+        limit: pageSize,
+        offset: offset,
+      );
+      allUnits.addAll(page.units);
+      if (page.units.length < pageSize || allUnits.length >= page.total) {
+        break;
+      }
+      offset += page.units.length;
+    }
+    final sortedUnits = List<KnowledgeUnit>.from(allUnits)
       ..sort((left, right) => right.updatedAtMs.compareTo(left.updatedAtMs));
     return _MemoryDetailData(document: document, units: sortedUnits);
   }

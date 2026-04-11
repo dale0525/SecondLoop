@@ -49,6 +49,83 @@ void main() {
     expect(find.text('View original'), findsOneWidget);
   });
 
+  testWidgets(
+    'MemoryDetailPage loads later pages before sorting the latest evidence timeline',
+    (tester) async {
+      final backend = _MemoryDetailBackend(
+        unitsPageBuilder: ({required int limit, required int offset}) {
+          final now = DateTime.now().millisecondsSinceEpoch;
+          if (offset == 0) {
+            return List<KnowledgeUnit>.generate(
+              limit,
+              (index) => KnowledgeUnit(
+                unitId: 'older-$index',
+                documentId: 'generated:preference:response-language',
+                parentUnitId: null,
+                unitKind: KnowledgeUnitKind.segment,
+                sourceKind: KnowledgeSourceKind.summary,
+                role: KnowledgeRole.evidence,
+                ordinal: index,
+                tokenCount: 8,
+                rawText: 'Older evidence $index',
+                normalizedText: 'Older evidence $index',
+                anchors: const KnowledgeAnchorSet(messageId: 'history-1'),
+                prevUnitId: null,
+                nextUnitId: null,
+                createdAtMs: now - 1000 - index,
+                updatedAtMs: now - 1000 - index,
+              ),
+            );
+          }
+          if (offset == limit) {
+            return <KnowledgeUnit>[
+              KnowledgeUnit(
+                unitId: 'newest',
+                documentId: 'generated:preference:response-language',
+                parentUnitId: null,
+                unitKind: KnowledgeUnitKind.segment,
+                sourceKind: KnowledgeSourceKind.summary,
+                role: KnowledgeRole.evidence,
+                ordinal: limit,
+                tokenCount: 12,
+                rawText: 'Newest evidence from a later page.',
+                normalizedText: 'Newest evidence from a later page.',
+                anchors: const KnowledgeAnchorSet(messageId: 'history-latest'),
+                prevUnitId: null,
+                nextUnitId: null,
+                createdAtMs: now + 1000,
+                updatedAtMs: now + 1000,
+              ),
+            ];
+          }
+          return const <KnowledgeUnit>[];
+        },
+      );
+
+      await tester.pumpWidget(
+        wrapWithI18n(
+          MaterialApp(
+            home: AppBackendScope(
+              backend: backend,
+              child: SessionScope(
+                sessionKey: Uint8List.fromList(List<int>.filled(32, 1)),
+                lock: () {},
+                child: const MemoryDetailPage(
+                  documentId: 'generated:preference:response-language',
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      expect(find.text('Newest evidence from a later page.'), findsOneWidget);
+      expect(backend.viewerListOffsets, <int>[0, 48]);
+    },
+  );
+
   testWidgets('MemoryDetailPage edits memory and toggles usage actions',
       (tester) async {
     final backend = _MemoryDetailBackend();
@@ -141,6 +218,12 @@ void main() {
 
 final class _MemoryDetailBackend extends TestAppBackend
     implements KnowledgeBackend, KnowledgeViewerBackend {
+  _MemoryDetailBackend({this.unitsPageBuilder});
+
+  final List<KnowledgeUnit> Function({required int limit, required int offset})?
+      unitsPageBuilder;
+  final List<int> viewerListOffsets = <int>[];
+
   KnowledgeViewerDocument _document(String documentId) =>
       KnowledgeViewerDocument(
         document: ContentKnowledgeDocument(
@@ -285,6 +368,20 @@ final class _MemoryDetailBackend extends TestAppBackend
     int limit = 100,
     int offset = 0,
   }) async {
+    viewerListOffsets.add(offset);
+    final customPage = unitsPageBuilder?.call(limit: limit, offset: offset);
+    if (customPage != null) {
+      return KnowledgeViewerPage(
+        documentId: documentId,
+        unitKind: KnowledgeUnitKind.segment,
+        offset: offset,
+        limit: limit,
+        total: customPage.length < limit
+            ? offset + customPage.length
+            : offset + limit + 1,
+        units: customPage,
+      );
+    }
     final now = DateTime.now().millisecondsSinceEpoch;
     return KnowledgeViewerPage(
       documentId: documentId,
