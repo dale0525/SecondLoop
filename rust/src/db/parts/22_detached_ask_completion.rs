@@ -16,7 +16,7 @@ INSERT INTO detached_ask_completion_claims (
   request_id, conversation_id, user_message_id, assistant_message_id, created_at_ms, updated_at_ms
 )
 VALUES (?1, ?2, NULL, NULL, ?3, ?3)
-ON CONFLICT(request_id) DO NOTHING
+ON CONFLICT(request_id, conversation_id) DO NOTHING
 "#,
         params![request_id, conversation_id, now],
     )?;
@@ -27,17 +27,20 @@ ON CONFLICT(request_id) DO NOTHING
 pub fn get_detached_ask_completion_message_ids(
     conn: &Connection,
     request_id: &str,
+    conversation_id: &str,
 ) -> Result<Option<(String, String)>> {
     let request_id = request_id.trim();
-    if request_id.is_empty() {
+    let conversation_id = conversation_id.trim();
+    if request_id.is_empty() || conversation_id.is_empty() {
         return Ok(None);
     }
 
     conn.query_row(
         r#"SELECT user_message_id, assistant_message_id
            FROM detached_ask_completion_claims
-           WHERE request_id = ?1"#,
-        params![request_id],
+           WHERE request_id = ?1
+             AND conversation_id = ?2"#,
+        params![request_id, conversation_id],
         |row| {
             Ok((
                 row.get::<_, Option<String>>(0)?,
@@ -57,13 +60,19 @@ pub fn get_detached_ask_completion_message_ids(
 pub fn record_detached_ask_completion_message_ids(
     conn: &Connection,
     request_id: &str,
+    conversation_id: &str,
     user_message_id: &str,
     assistant_message_id: &str,
 ) -> Result<()> {
     let request_id = request_id.trim();
+    let conversation_id = conversation_id.trim();
     let user_message_id = user_message_id.trim();
     let assistant_message_id = assistant_message_id.trim();
-    if request_id.is_empty() || user_message_id.is_empty() || assistant_message_id.is_empty() {
+    if request_id.is_empty()
+        || conversation_id.is_empty()
+        || user_message_id.is_empty()
+        || assistant_message_id.is_empty()
+    {
         return Ok(());
     }
 
@@ -72,8 +81,15 @@ pub fn record_detached_ask_completion_message_ids(
            SET user_message_id = ?2,
                assistant_message_id = ?3,
                updated_at_ms = ?4
-           WHERE request_id = ?1"#,
-        params![request_id, user_message_id, assistant_message_id, now_ms()],
+           WHERE request_id = ?1
+             AND conversation_id = ?5"#,
+        params![
+            request_id,
+            user_message_id,
+            assistant_message_id,
+            now_ms(),
+            conversation_id
+        ],
     )?;
     Ok(())
 }
@@ -99,7 +115,10 @@ pub fn apply_detached_ask_completion_once(
 
     let result: Result<bool> = (|| {
         if !claim_detached_ask_completion_request_id(conn, request_id, conversation_id)? {
-            return Ok(false);
+            if get_detached_ask_completion_message_ids(conn, request_id, conversation_id)?.is_some()
+            {
+                return Ok(false);
+            }
         }
 
         let user_message = insert_message_non_memory(conn, key, conversation_id, "user", question)?;
@@ -108,6 +127,7 @@ pub fn apply_detached_ask_completion_once(
         record_detached_ask_completion_message_ids(
             conn,
             request_id,
+            conversation_id,
             &user_message.id,
             &assistant_message.id,
         )?;

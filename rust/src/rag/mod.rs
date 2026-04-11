@@ -987,13 +987,18 @@ fn ask_ai_stream_and_persist(
                         conversation_id,
                     )?;
                     if !claimed {
-                        let (user_message_id, assistant_message_id) =
-                            db::get_detached_ask_completion_message_ids(conn, request_id)?
-                                .unwrap_or_default();
-                        return Ok(AskAiResult {
-                            user_message_id,
-                            assistant_message_id,
-                        });
+                        if let Some((user_message_id, assistant_message_id)) =
+                            db::get_detached_ask_completion_message_ids(
+                                conn,
+                                request_id,
+                                conversation_id,
+                            )?
+                        {
+                            return Ok(AskAiResult {
+                                user_message_id,
+                                assistant_message_id,
+                            });
+                        }
                     }
                 }
 
@@ -1016,6 +1021,7 @@ fn ask_ai_stream_and_persist(
                     db::record_detached_ask_completion_message_ids(
                         conn,
                         request_id,
+                        conversation_id,
                         &user_message.id,
                         &assistant_message.id,
                     )?;

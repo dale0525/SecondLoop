@@ -371,6 +371,46 @@ fn migrate_from_v40_to_v41(conn: &Connection) -> Result<()> {
     Ok(())
 }
 
+fn migrate_from_v41_to_v42(conn: &Connection) -> Result<()> {
+    conn.execute_batch(
+        r#"
+CREATE TABLE detached_ask_completion_claims_v42 (
+  request_id TEXT NOT NULL,
+  conversation_id TEXT NOT NULL,
+  user_message_id TEXT,
+  assistant_message_id TEXT,
+  created_at_ms INTEGER NOT NULL,
+  updated_at_ms INTEGER NOT NULL,
+  PRIMARY KEY(request_id, conversation_id)
+);
+
+INSERT INTO detached_ask_completion_claims_v42(
+  request_id,
+  conversation_id,
+  user_message_id,
+  assistant_message_id,
+  created_at_ms,
+  updated_at_ms
+)
+SELECT request_id,
+       conversation_id,
+       user_message_id,
+       assistant_message_id,
+       created_at_ms,
+       updated_at_ms
+  FROM detached_ask_completion_claims;
+
+DROP TABLE detached_ask_completion_claims;
+ALTER TABLE detached_ask_completion_claims_v42 RENAME TO detached_ask_completion_claims;
+CREATE INDEX IF NOT EXISTS idx_detached_ask_completion_claims_conversation
+  ON detached_ask_completion_claims(conversation_id, created_at_ms DESC);
+
+PRAGMA user_version = 42;
+"#,
+    )?;
+    Ok(())
+}
+
 pub(crate) fn app_dir_from_conn(conn: &Connection) -> Result<PathBuf> {
     let mut stmt = conn.prepare("PRAGMA database_list")?;
     let mut rows = stmt.query([])?;
